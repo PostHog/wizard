@@ -226,21 +226,25 @@ export async function offerSeededTask(
   // No one to show the notice to: a step nobody can answer for must not run.
   // The same answer a non-interactive host gives today.
   if (!interaction?.taskNotice) return { keep: false, timedOut: false };
-  const { taskNotice, cancelTaskNotice } = interaction;
+  const { taskNotice } = interaction;
 
+  const controller = new AbortController();
   let timer: ReturnType<typeof setTimeout> | undefined;
   let timedOut = false;
   const timeout = new Promise<boolean>((resolve) => {
     timer = setTimeout(() => {
       timedOut = true;
-      // Dismisses the overlay and settles the showTaskNotice promise too, so
-      // the losing side of the race cannot leave a modal on screen.
-      cancelTaskNotice?.();
+      // The host dismisses this notice's overlay and settles its promise too,
+      // so the losing side of the race cannot leave a modal on screen.
+      controller.abort();
       resolve(false);
     }, timeoutMs);
   });
   try {
-    const keep = await Promise.race([taskNotice(notice), timeout]);
+    const keep = await Promise.race([
+      taskNotice(notice, { signal: controller.signal }),
+      timeout,
+    ]);
     return { keep, timedOut };
   } finally {
     if (timer) clearTimeout(timer);
@@ -1298,6 +1302,5 @@ async function executeOrchestrator(
   };
   emit({ kind: 'completion', outro });
   emit({ kind: 'lifecycle', phase: 'completed', message });
-  await analytics.shutdown('success');
   return { outcome: RunOutcome.Success, outro };
 }

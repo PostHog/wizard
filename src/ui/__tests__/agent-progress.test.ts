@@ -1,10 +1,20 @@
 vi.mock('@ui', () => ({ getUI: vi.fn() }));
 vi.mock('@utils/debug');
+vi.mock('@utils/analytics', () => ({ analytics: { wizardCapture: vi.fn() } }));
 
 import { createUiReducer, uiInteraction } from '../agent-progress';
 import { LoggingUI } from '../logging-ui';
 import type { AgentProgress } from '@lib/agent/progress';
+import {
+  CANCELLED_SENTINEL,
+  createWizardAskBridge,
+} from '@lib/wizard-ask-bridge';
 import { OutroKind } from '@lib/wizard-session';
+import { logToFile } from '@utils/debug';
+
+beforeEach(() => {
+  vi.mocked(logToFile).mockClear();
+});
 
 it('projects every progress event onto the matching UI call, in order', () => {
   const ui = new LoggingUI();
@@ -102,28 +112,104 @@ it('projects every progress event onto the matching UI call, in order', () => {
   ]);
 });
 
-it('forwards answers, notices and their dismissals', async () => {
+const question = { id: 'q', source: 'test', questions: [] };
+const notice = {
+  title: 'Optional',
+  body: [],
+  items: [],
+  prompt: 'Continue?',
+  confirmLabel: 'Yes',
+  cancelLabel: 'No',
+};
+
+it('forwards answers and notices, leaving the host alone once they settle', async () => {
   const ui = new LoggingUI();
-  const question = { id: 'q', source: 'test', questions: [] };
-  const notice = {
-    title: 'Optional',
-    body: [],
-    items: [],
-    prompt: 'Continue?',
-    confirmLabel: 'Yes',
-    cancelLabel: 'No',
-  };
   const ask = vi.spyOn(ui, 'requestQuestion').mockResolvedValue({ q: 'yes' });
   const cancelAsk = vi.spyOn(ui, 'cancelPendingQuestion');
   const show = vi.spyOn(ui, 'showTaskNotice').mockResolvedValue(true);
   const cancelNotice = vi.spyOn(ui, 'cancelTaskNotice');
   const interaction = uiInteraction(ui);
-  await expect(interaction.ask?.(question)).resolves.toEqual({ q: 'yes' });
-  await expect(interaction.taskNotice?.(notice)).resolves.toBe(true);
-  interaction.cancelAsk?.();
-  interaction.cancelTaskNotice?.();
+  const asked = new AbortController();
+  const noticed = new AbortController();
+  await expect(
+    interaction.ask?.(question, { signal: asked.signal }),
+  ).resolves.toEqual({ q: 'yes' });
+  await expect(
+    interaction.taskNotice?.(notice, { signal: noticed.signal }),
+  ).resolves.toBe(true);
+  // A late abort must not dismiss whatever the host shows next.
+  asked.abort();
+  noticed.abort();
   expect(ask).toHaveBeenCalledWith(question);
   expect(show).toHaveBeenCalledWith(notice);
+  expect(cancelAsk).not.toHaveBeenCalled();
+  expect(cancelNotice).not.toHaveBeenCalled();
+});
+
+it('dismisses an open question or notice when its signal aborts', () => {
+  const ui = new LoggingUI();
+  vi.spyOn(ui, 'requestQuestion').mockReturnValue(new Promise(() => undefined));
+  const cancelAsk = vi.spyOn(ui, 'cancelPendingQuestion');
+  vi.spyOn(ui, 'showTaskNotice').mockReturnValue(new Promise(() => undefined));
+  const cancelNotice = vi.spyOn(ui, 'cancelTaskNotice');
+  const interaction = uiInteraction(ui);
+  const asked = new AbortController();
+  const noticed = new AbortController();
+  void interaction.ask?.(question, { signal: asked.signal });
+  void interaction.taskNotice?.(notice, { signal: noticed.signal });
+
+  asked.abort();
   expect(cancelAsk).toHaveBeenCalledOnce();
+  expect(cancelNotice).not.toHaveBeenCalled();
+  noticed.abort();
   expect(cancelNotice).toHaveBeenCalledOnce();
+});
+
+it('settles a timed-out question when the host dismissal throws', async () => {
+  vi.useFakeTimers();
+  try {
+    const ui = new LoggingUI();
+    vi.spyOn(ui, 'requestQuestion').mockReturnValue(
+      new Promise(() => undefined),
+    );
+    const broken = new Error('overlay broken');
+    vi.spyOn(ui, 'cancelPendingQuestion').mockImplementation(() => {
+      throw broken;
+    });
+    const { ask } = uiInteraction(ui);
+    if (!ask) throw new Error('uiInteraction answers questions');
+    const bridge = createWizardAskBridge({
+      getSource: () => 'test',
+      showQuestion: ask,
+      timeoutMs: 1000,
+    });
+    const result = bridge.request({
+      questions: [{ id: 'goal', prompt: 'Goal?', kind: 'text' }],
+    });
+    vi.advanceTimersByTime(1000);
+    await expect(result).resolves.toEqual({
+      answers: { goal: CANCELLED_SENTINEL },
+      timedOut: true,
+    });
+    expect(bridge.getPendingQuestion()).toBeNull();
+    // Node rethrows an abort listener's error as an uncaught exception the
+    // bridge cannot catch, so the answerer logs it instead.
+    expect(logToFile).toHaveBeenCalledWith(expect.any(String), broken);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it('logs a throwing notice dismissal instead of throwing from the abort', () => {
+  const ui = new LoggingUI();
+  vi.spyOn(ui, 'showTaskNotice').mockReturnValue(new Promise(() => undefined));
+  const broken = new Error('overlay broken');
+  vi.spyOn(ui, 'cancelTaskNotice').mockImplementation(() => {
+    throw broken;
+  });
+  const noticed = new AbortController();
+  void uiInteraction(ui).taskNotice?.(notice, { signal: noticed.signal });
+
+  noticed.abort();
+  expect(logToFile).toHaveBeenCalledWith(expect.any(String), broken);
 });
