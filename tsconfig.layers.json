@@ -1,0 +1,29 @@
+{
+  "files": [],
+  "references": [
+    {
+      "path": "src/tsconfig.env.layer.json"
+    },
+    {
+      "path": "src/shared/tsconfig.layer.json"
+    },
+    {
+      "path": "src/agent/tsconfig.layer.json"
+    },
+    {
+      "path": "src/programs/tsconfig.layer.json"
+    },
+    {
+      "path": "src/tui/tsconfig.layer.json"
+    },
+    {
+      "path": "src/headless/tsconfig.layer.json"
+    },
+    {
+      "path": "src/cli/tsconfig.layer.json"
+    },
+    {
+      "path": "tsconfig.bin.layer.json"
+    }
+  ]
+}

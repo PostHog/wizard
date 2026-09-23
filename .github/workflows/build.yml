@@ -57,6 +57,9 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Run Linter
         run: pnpm lint
+      # Layer boundaries are compile errors: one project per layer, then the probes.
+      - name: Typecheck
+        run: node scripts/generate-version.cjs && pnpm typecheck
 
   job_test:
     name: Node (${{ matrix.node }}) Unit Tests

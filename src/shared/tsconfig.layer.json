@@ -1,0 +1,50 @@
+{
+  "extends": "../../tsconfig.layers.base.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "../../.tsbuild/shared",
+    "tsBuildInfoFile": "../../.tsbuild/shared/.tsbuildinfo",
+    "paths": {
+      "@env": [
+        "../../.tsbuild/env/env.d.ts"
+      ],
+      "@shared/*": [
+        "./*"
+      ],
+      "@utils/*": [
+        "./utils/*"
+      ],
+      "ink": [
+        "../../types/boundaries/ink.d.ts"
+      ],
+      "ink/*": [
+        "../../types/boundaries/ink-subpath.d.ts"
+      ],
+      "react": [
+        "../../types/boundaries/react.d.ts"
+      ],
+      "react/*": [
+        "../../types/boundaries/react-subpath.d.ts"
+      ],
+      "@inkjs/ui": [
+        "../../types/boundaries/inkjs-ui.d.ts"
+      ],
+      "ink-testing-library": [
+        "../../types/boundaries/ink-testing-library.d.ts"
+      ]
+    }
+  },
+  "include": [
+    "./**/*.ts",
+    "./**/*.tsx",
+    "../../types/read-env.d.ts",
+    "../../types/xcode.d.ts"
+  ],
+  "exclude": [
+    "**/__tests__/**",
+    "**/__mocks__/**",
+    "**/*.no-jest.*",
+    "**/*.test.ts",
+    "**/*.test.tsx"
+  ]
+}

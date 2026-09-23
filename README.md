@@ -503,23 +503,20 @@ To add a new runtime env var, add its key to `RuntimeEnvKey` in `src/env.ts`.
 
 ### Import aliases
 
-Path aliases defined in `tsconfig.build.json`, resolved by tsdown:
+Path aliases defined in `tsconfig.build.json`, resolved by tsdown. Source
+outside a layer imports only its public entries; `pnpm typecheck` builds each
+layer against the others' declarations and rejects anything deeper. Tests may
+use the deep aliases.
 
 | Alias | Maps to |
 |---|---|
 | `@env` | `src/env.ts` |
-| `@agent` | `src/agent/index.ts`, the agent's runtime entry; the only agent import outside `src/agent` besides types |
-| `@agent/types` | `src/agent/types.ts`, type-only |
-| `@agent/*` | `src/agent/*`, inside `src/agent` and its tests only |
-| `@programs` | `src/programs/index.ts`, the programs runtime entry |
-| `@programs/types` | `src/programs/types.ts`, type-only |
-| `@programs/*` | `src/programs/*`, retained for internal imports and tracked migration edges |
-| `@shared/*` | `src/shared/*` |
-| `@utils/*` | `src/shared/utils/*` |
-| `@tui/*` | `src/tui/*` |
-| `@headless/*` | `src/headless/*` |
-| `@cli/*` | `src/cli/*` |
-| `@ui`, `@ui/*` | `src/ui/*`, the legacy `getUI()` singleton until Release C removes it |
+| `@shared/*`, `@utils/*` | `src/shared/*`, `src/shared/utils/*`; shared has no barrel |
+| `@agent`, `@agent/types` | `src/agent/index.ts` (runtime), `src/agent/types.ts` (types) |
+| `@programs`, `@programs/types` | `src/programs/index.ts`, `src/programs/types.ts` |
+| `@tui`, `@tui/types` | `src/tui/index.ts`, `src/tui/types.ts`; imported by the CLI only |
+| `@headless`, `@headless/types` | `src/headless/index.ts`, `src/headless/types.ts`; imported by the CLI only |
+| `@cli/*` | `src/cli/*`; imported by `bin.ts` |
 
 ## Running locally
 

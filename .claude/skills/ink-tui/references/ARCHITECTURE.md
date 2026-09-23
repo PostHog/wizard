@@ -9,7 +9,7 @@
 | [screen-sequences.ts](../../../../src/tui/screen-sequences.ts) | `ScreenId`, `Screen`, `Sequence`, and the derived `PROGRAM_SEQUENCES`         |
 | [WizardRouter](../../../../src/tui/router.ts)                  | Resolution and the `Overlay` stack                                            |
 | [WizardStore](../../../../src/tui/store.ts)                    | Reactive state, gate promises, display observations, and pending interactions |
-| [WizardUI](../../../../src/ui/wizard-ui.ts)                       | Typed operations available to business logic                                  |
+| [WizardUI](../../../../src/cli/wizard-ui.ts)                       | Typed operations available to business logic                                  |
 
 ## Program screens
 

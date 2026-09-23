@@ -1,0 +1,74 @@
+{
+  "extends": "../../tsconfig.layers.base.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "../../.tsbuild/cli",
+    "tsBuildInfoFile": "../../.tsbuild/cli/.tsbuildinfo",
+    "paths": {
+      "@env": [
+        "../../.tsbuild/env/env.d.ts"
+      ],
+      "@shared/*": [
+        "../../.tsbuild/shared/*"
+      ],
+      "@utils/*": [
+        "../../.tsbuild/shared/utils/*"
+      ],
+      "@agent": [
+        "../../.tsbuild/agent/index.d.ts"
+      ],
+      "@agent/types": [
+        "../../.tsbuild/agent/types.d.ts"
+      ],
+      "@programs": [
+        "../../.tsbuild/programs/index.d.ts"
+      ],
+      "@programs/types": [
+        "../../.tsbuild/programs/types.d.ts"
+      ],
+      "@tui": [
+        "../../.tsbuild/tui/index.d.ts"
+      ],
+      "@tui/types": [
+        "../../.tsbuild/tui/types.d.ts"
+      ],
+      "@headless": [
+        "../../.tsbuild/headless/index.d.ts"
+      ],
+      "@headless/types": [
+        "../../.tsbuild/headless/types.d.ts"
+      ],
+      "ink": [
+        "../../types/boundaries/ink.d.ts"
+      ],
+      "ink/*": [
+        "../../types/boundaries/ink-subpath.d.ts"
+      ],
+      "react": [
+        "../../types/boundaries/react.d.ts"
+      ],
+      "react/*": [
+        "../../types/boundaries/react-subpath.d.ts"
+      ],
+      "@inkjs/ui": [
+        "../../types/boundaries/inkjs-ui.d.ts"
+      ],
+      "ink-testing-library": [
+        "../../types/boundaries/ink-testing-library.d.ts"
+      ]
+    }
+  },
+  "include": [
+    "./**/*.ts",
+    "./**/*.tsx",
+    "../../types/read-env.d.ts",
+    "../../types/xcode.d.ts"
+  ],
+  "exclude": [
+    "**/__tests__/**",
+    "**/__mocks__/**",
+    "**/*.no-jest.*",
+    "**/*.test.ts",
+    "**/*.test.tsx"
+  ]
+}

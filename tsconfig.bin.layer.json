@@ -1,0 +1,45 @@
+{
+  "extends": "./tsconfig.layers.base.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "./.tsbuild/bin",
+    "tsBuildInfoFile": "./.tsbuild/bin/.tsbuildinfo",
+    "paths": {
+      "@env": [
+        "./.tsbuild/env/env.d.ts"
+      ],
+      "@shared/*": [
+        "./.tsbuild/shared/*"
+      ],
+      "@utils/*": [
+        "./.tsbuild/shared/utils/*"
+      ],
+      "@cli/*": [
+        "./.tsbuild/cli/*"
+      ],
+      "ink": [
+        "./types/boundaries/ink.d.ts"
+      ],
+      "ink/*": [
+        "./types/boundaries/ink-subpath.d.ts"
+      ],
+      "react": [
+        "./types/boundaries/react.d.ts"
+      ],
+      "react/*": [
+        "./types/boundaries/react-subpath.d.ts"
+      ],
+      "@inkjs/ui": [
+        "./types/boundaries/inkjs-ui.d.ts"
+      ],
+      "ink-testing-library": [
+        "./types/boundaries/ink-testing-library.d.ts"
+      ]
+    }
+  },
+  "files": [
+    "bin.ts",
+    "./types/read-env.d.ts",
+    "./types/xcode.d.ts"
+  ]
+}

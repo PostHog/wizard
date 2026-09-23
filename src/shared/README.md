@@ -52,7 +52,7 @@ debug('resolving host', host); // rendered and handed to the sink
 setDebugSink(restore);
 ```
 
-`src/ui/index.ts` installs the current UI's info log as the debug sink at load,
+`src/cli/ui.ts` installs the current UI's info log as the debug sink at load,
 so `debug()` follows `setUI()` without shared code knowing a UI exists. Until
 the UI module loads, lines go to stdout.
 
@@ -65,11 +65,10 @@ dependency, and would otherwise be copied.
 
 ## Architecture
 
-Shared imports `src/env.ts` and itself. The architecture test classifies
-`src/shared` as its own surface and lists the remaining upward edges in
-`src/__tests__/architecture/known-violations.json`; each has an owner in the
-stack plan. `utils/setup-utils.ts`, `utils/oauth.ts` and `utils/wizard-abort.ts`
-are TUI and CLI flow code that leave in Release C. `utils/analytics.ts` accepts
-the legacy session shape as a type only; scan consent and cleanup registration
-live in shared modules so callable programs load no session or UI code.
-`errors/agent-map.ts` still imports an agent leaf module until Release B.
+Shared imports `src/env.ts` and itself, and the compiler holds it there:
+its layer project (`tsconfig.layer.json`) maps no other layer, so an import of
+the agent, programs or a surface does not compile. Other layers import shared
+modules deep through `@shared/*` and `@utils/*`; there is no barrel.
+`utils/analytics.ts` reads the session through a structural type, and scan
+consent, the outro contract, the control protocol and cleanup registration live
+here so programs and surfaces share them without importing each other.

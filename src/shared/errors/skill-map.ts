@@ -1,5 +1,5 @@
 import { ErrorCodes, type ErrorCode } from './codes';
-import type { InstallSkillResult } from '@agent/types';
+import type { InstallSkillResult } from '../skill-install';
 
 const SKILL_CODES: Record<
   Exclude<InstallSkillResult['kind'], 'ok'>,
