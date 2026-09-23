@@ -1,4 +1,5 @@
 import { runNonInteractive } from '@lib/runners/run-non-interactive';
+import { runWizard } from '@lib/runners/run-wizard';
 import { authenticate } from '@lib/programs/authenticate';
 import { runProgramAgent } from '../run-agent-legacy';
 import { runAgent, RunOutcome, type RunResult } from '@agent/runner';
@@ -6,9 +7,12 @@ import { Harness, Sequence } from '@shared/constants';
 import { buildSession, OutroKind } from '@lib/wizard-session';
 import { HostResolution } from '@shared/host-resolution';
 import { LoggingUI } from '@ui/logging-ui';
+import { InkUI } from '@ui/tui/ink-ui';
+import { startTUI } from '@ui/tui/start-tui';
+import { WizardStore } from '@ui/tui/store';
 import { getUI, setUI } from '@ui';
 import { analytics } from '@utils/analytics';
-import { initLogFile } from '@utils/debug';
+import { initLogFile, logToFile } from '@utils/debug';
 import { wizardAbort } from '@utils/wizard-abort';
 import { ErrorCodes } from '@shared/errors';
 import type { ProgramConfig } from '../program-step';
@@ -38,6 +42,7 @@ vi.mock('@lib/task-stream/index', () => ({
   PostHogDestination: class {},
   createFileDestination: () => null,
 }));
+vi.mock('@ui/tui/start-tui', () => ({ startTUI: vi.fn() }));
 vi.mock('@utils/debug');
 vi.mock('@utils/analytics', () => ({
   analytics: {
@@ -347,3 +352,59 @@ it.each([
     expect(logSpy).toHaveBeenCalledWith('└  Done');
   },
 );
+
+it('keeps a headless run a success when its terminal analytics flush fails', async () => {
+  const flushError = new Error('flush timed out');
+  vi.mocked(analytics.shutdown).mockRejectedValueOnce(flushError);
+  runNonInteractive(
+    program(),
+    {
+      apiKey: 'phx_test',
+      projectId: '1',
+      installDir: '/tmp/adapter-test',
+      telemetry: false,
+    },
+    'headless',
+  );
+  await vi.waitFor(() => expect(streamShutdown).toHaveBeenCalledOnce());
+  expect(wizardAbort).not.toHaveBeenCalled();
+  expect(analytics.shutdown).toHaveBeenCalledExactlyOnceWith('success');
+  expect(logToFile).toHaveBeenCalledWith(
+    expect.stringContaining('analytics shutdown failed'),
+    flushError,
+  );
+});
+
+it('keeps a TUI run a success when its terminal analytics flush fails', async () => {
+  const flushError = new Error('flush timed out');
+  vi.mocked(analytics.shutdown).mockRejectedValueOnce(flushError);
+  const store = new WizardStore('metrics');
+  const ui = new InkUI(store);
+  setUI(ui);
+  const outroError = vi.spyOn(ui, 'outroError');
+  vi.spyOn(store, 'runReadyHooks').mockResolvedValue(undefined);
+  vi.spyOn(store, 'getGate').mockResolvedValue(undefined);
+  vi.mocked(startTUI).mockReturnValue({
+    store,
+    unmount: vi.fn(),
+    waitForSetup: () => Promise.resolve(),
+  });
+  const exit = vi
+    .spyOn(process, 'exit')
+    .mockImplementation(() => undefined as never);
+
+  runWizard(program(), { installDir: '/tmp/adapter-test', telemetry: false });
+  await vi.waitFor(() => expect(analytics.shutdown).toHaveBeenCalled());
+  store.setSkillsComplete(true);
+  await vi.waitFor(() => expect(exit).toHaveBeenCalled());
+
+  expect(exit).toHaveBeenCalledExactlyOnceWith(0);
+  expect(outroError).not.toHaveBeenCalled();
+  expect(store.session.outroData?.kind).toBe(OutroKind.Success);
+  expect(analytics.shutdown).toHaveBeenCalledExactlyOnceWith('success');
+  expect(logToFile).toHaveBeenCalledWith(
+    expect.stringContaining('analytics shutdown failed'),
+    flushError,
+  );
+  exit.mockRestore();
+});
