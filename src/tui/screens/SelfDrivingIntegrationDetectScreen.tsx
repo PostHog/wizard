@@ -16,13 +16,15 @@ import { LoadingBox, PickerMenu } from '@tui/primitives/index';
 import { Colors, Icons } from '@tui/styles';
 import { createUiReducer, getUI } from '@ui';
 import { Integration } from '@shared/constants';
-import { FRAMEWORK_REGISTRY } from '@programs/registry';
-import { SELF_DRIVING_INTEGRATE_PATH_KEY } from '@programs/self-driving/detect';
 import {
+  FRAMEWORK_REGISTRY,
+  SELF_DRIVING_INTEGRATE_PATH_KEY,
   detectSelfDrivingIntegrationProjects,
-  type IntegrationProject,
-  type IntegrationDetectionReport,
-} from '@programs/self-driving/detect-agentic';
+} from '@programs';
+import type {
+  IntegrationProject,
+  IntegrationDetectionReport,
+} from '@programs/types';
 
 interface SelfDrivingIntegrationDetectScreenProps {
   store: WizardStore;

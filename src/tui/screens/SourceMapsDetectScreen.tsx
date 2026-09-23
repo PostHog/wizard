@@ -17,12 +17,9 @@ import {
   SOURCE_MAPS_CONTEXT_KEYS,
   VARIANT_DISPLAY_NAME,
   MANUAL_SDK_VARIANTS,
-} from '@programs/error-tracking-upload-source-maps/index';
-import {
   detectSourceMapsProjects,
-  type DetectedProject,
-  type DetectionReport,
-} from '@programs/error-tracking-upload-source-maps/detect-agentic';
+} from '@programs';
+import type { DetectedProject, DetectionReport } from '@programs/types';
 
 interface SourceMapsDetectScreenProps {
   store: WizardStore;

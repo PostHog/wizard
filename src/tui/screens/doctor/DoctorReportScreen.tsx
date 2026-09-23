@@ -3,14 +3,12 @@ import { useEffect, useState, useSyncExternalStore } from 'react';
 import type { WizardStore } from '@tui/store';
 import { LoadingBox, PickerMenu } from '@tui/primitives/index';
 import { Colors, Icons } from '@tui/styles';
-import {
-  fetchHealthIssues,
-  type HealthIssue,
-} from '@programs/posthog-doctor/index';
 import { OutroKind } from '@lib/wizard-session';
 import { ApiError } from '@shared/api';
 import { POSTHOG_DOCS_URL } from '@shared/constants';
 import { IssueTable, SEVERITY_LABEL, SEVERITY_ORDER } from './IssueTable.js';
+import { fetchHealthIssues } from '@programs';
+import type { HealthIssue } from '@programs/types';
 
 interface DoctorReportScreenProps {
   store: WizardStore;

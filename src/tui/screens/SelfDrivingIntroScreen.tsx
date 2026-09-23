@@ -19,7 +19,7 @@ import {
   PRICING_LONG,
   PRICING_SHORT,
 } from '@tui/decks/self-driving/pricing.js';
-import type { SelfDrivingDetectError } from '@programs/self-driving/index';
+import type { SelfDrivingDetectError } from '@programs/types';
 
 interface SelfDrivingIntroScreenProps {
   store: WizardStore;

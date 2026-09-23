@@ -51,9 +51,8 @@ import {
 } from './router.js';
 import { analytics, sessionProperties } from '@utils/analytics';
 import type { StoreInitContext, ProgramReadyContext } from '@programs/types';
-import { getProgramConfig } from '@programs';
+import { getProgramConfig, reportWarehouseSourcesDetected } from '@programs';
 import { withAiOptInGate } from '@programs/ai-opt-in-gate';
-import { reportWarehouseSourcesDetected } from '@programs/posthog-integration/detect';
 import { appendStatus } from '@shared/status-history';
 import { IS_DEV } from '@shared/constants';
 import { computeTokenCostUsd } from '@shared/token-pricing';

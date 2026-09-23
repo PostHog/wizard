@@ -14,11 +14,8 @@ import { useState, useSyncExternalStore } from 'react';
 import type { WizardStore } from '@tui/store';
 import { PickerMenu } from '@tui/primitives/index';
 import { IntroScreenLayout, type DetectionRow } from './IntroScreenLayout.js';
-import {
-  POSTHOG_SDKS,
-  STRIPE_SDKS,
-  type RevenueDetectError,
-} from '@programs/revenue-analytics/index';
+import { POSTHOG_SDKS, STRIPE_SDKS } from '@programs';
+import type { RevenueDetectError } from '@programs/types';
 
 interface RevenueIntroScreenProps {
   store: WizardStore;

@@ -10,13 +10,15 @@ import type { WizardStore } from '@tui/store';
 import { LoadingBox, PickerMenu } from '@tui/primitives/index';
 import { Colors, Icons } from '@tui/styles';
 import { createUiReducer, getUI } from '@ui';
-import { FRAMEWORK_REGISTRY } from '@programs/registry';
 import {
+  FRAMEWORK_REGISTRY,
   detectErrorTrackingProjects,
   ERROR_TRACKING_PROJECT_PATH_KEY,
-  type ErrorTrackingDetectionReport,
-  type ErrorTrackingProject,
-} from '@programs/error-tracking/detect-agentic';
+} from '@programs';
+import type {
+  ErrorTrackingDetectionReport,
+  ErrorTrackingProject,
+} from '@programs/types';
 
 interface ErrorTrackingDetectScreenProps {
   store: WizardStore;

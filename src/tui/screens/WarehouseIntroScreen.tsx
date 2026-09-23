@@ -15,10 +15,8 @@ import { useState, useSyncExternalStore } from 'react';
 import type { WizardStore } from '@tui/store';
 import { PickerMenu } from '@tui/primitives/index';
 import { IntroScreenLayout } from './IntroScreenLayout.js';
-import {
-  getDetectedWarehouseSources,
-  type WarehouseDetectError,
-} from '@programs/warehouse-source/index';
+import { getDetectedWarehouseSources } from '@programs';
+import type { WarehouseDetectError } from '@programs/types';
 
 interface WarehouseIntroScreenProps {
   store: WizardStore;

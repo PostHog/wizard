@@ -11,9 +11,9 @@ import { useSyncExternalStore } from 'react';
 import type { WizardStore } from '@tui/store';
 import { OutroKind } from '@lib/wizard-session';
 import { Colors } from '@tui/styles';
-import { getAuditChecks } from '@programs/audit/types';
 import { AuditChecksOutroSection } from './AuditChecksOutroSection.js';
 import { useDismissOnAnyKey } from '@tui/hooks/useDismissOnAnyKey';
+import { getAuditChecks } from '@programs';
 
 interface AuditOutroScreenProps {
   store: WizardStore;

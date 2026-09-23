@@ -1,6 +1,6 @@
 import { Box, Text } from 'ink';
-import type { AuditCheck, AuditStatus } from '@programs/audit/types';
 import type { ViewerLayout } from './layout.js';
+import type { AuditCheck, AuditStatus } from '@programs/types';
 
 interface HeaderProps {
   layout: ViewerLayout;

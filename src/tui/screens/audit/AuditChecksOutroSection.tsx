@@ -1,6 +1,7 @@
 import { Box, Text } from 'ink';
-import { AUDIT_SEVERITY_STYLE, type AuditCheck } from '@programs/audit/types';
 import { relativeToInstallDir } from '@utils/paths';
+import { AUDIT_SEVERITY_STYLE } from '@programs';
+import type { AuditCheck } from '@programs/types';
 
 interface AuditChecksOutroSectionProps {
   checks: AuditCheck[];
