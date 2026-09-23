@@ -305,8 +305,8 @@ export function runWizard(
       await activeStream.shutdown(2000);
       if (signalled) return;
       exitInProgress = true;
-      process.off('SIGINT', onSignal);
-      process.off('SIGTERM', onSignal);
+      // Keep the handlers until process.exit so a signal cannot take the
+      // default termination path before cleanup is disarmed.
       if (runFailed) {
         runCleanups();
         await analytics.shutdown('error');
