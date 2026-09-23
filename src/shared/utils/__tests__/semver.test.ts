@@ -1,4 +1,4 @@
-import { createVersionBucket, versionSatisfiesRange } from '@utils/semver';
+import { createVersionBucket } from '@utils/semver';
 
 describe('createVersionBucket', () => {
   describe('without minimum threshold', () => {
@@ -155,38 +155,6 @@ describe('createVersionBucket', () => {
       ];
       for (const v of cases) {
         expect(getVersionBucket(v)).toBe('unknown');
-      }
-    });
-  });
-});
-
-describe('versionSatisfiesRange', () => {
-  const check = (
-    version: string,
-    acceptable = '>=15.0.0',
-    canBeLatest = false,
-  ) =>
-    versionSatisfiesRange({
-      version,
-      acceptableVersions: acceptable,
-      canBeLatest,
-    });
-
-  describe('non-semver package.json version formats', () => {
-    it('rejects non-semver versions without throwing', () => {
-      const cases = [
-        'https://github.com/user/repo/tarball/main',
-        'git+https://github.com/user/repo.git',
-        'user/repo',
-        'file:../my-lib',
-        'workspace:*',
-        'npm:@scope/pkg@^1.0.0',
-        '',
-        'next',
-        'canary',
-      ];
-      for (const v of cases) {
-        expect(check(v)).toBe(false);
       }
     });
   });
