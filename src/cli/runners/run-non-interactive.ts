@@ -311,11 +311,7 @@ export function runNonInteractive(
             session.posthogSdkDetected = detected;
           },
         };
-        for (const step of config.steps) {
-          if (step.onReady) {
-            await step.onReady(readyCtx);
-          }
-        }
+        await config.onReady?.(readyCtx);
 
         const detectError = session.frameworkContext.detectError as
           | { kind: string; [k: string]: unknown }

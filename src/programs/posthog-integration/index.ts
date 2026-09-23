@@ -33,6 +33,7 @@ import {
   type PosthogIntegrationRunInput,
 } from './run.js';
 import { EVENT_PLAN_FILE } from './constants.js';
+import { detectPostHogIntegration } from './detect.js';
 
 const DASHBOARD_DEEP_LINK_KEY = 'dashboardDeepLink';
 
@@ -77,6 +78,7 @@ export const posthogIntegrationConfig: ProgramConfig = {
   agentFlow: 'integration-v2',
   eventPlanFile: EVENT_PLAN_FILE,
   steps: POSTHOG_INTEGRATION_PROGRAM,
+  onReady: (ctx) => detectPostHogIntegration(ctx),
   // Basic integration runs without structured user input; drop wizard_ask
   // so the model can't pop modal prompts mid-run. The runner forwards this
   // list to the general-purpose subagent as well, so dispatched subagents
@@ -85,8 +87,7 @@ export const posthogIntegrationConfig: ProgramConfig = {
 
   seedTasks: warehouseSeedTasks,
 
-  // CI-mode prerequisite work: the headless equivalent of the detect step's
-  // onReady hook. Auto-detect the framework, then gather context.
+  // CI-mode prerequisite work: the headless equivalent of onReady. Auto-detect the framework, then gather context.
   ciPreRun: async (
     session: IntegrationCiSession,
     host: ProgramCiHost,
@@ -206,8 +207,6 @@ export const integrationRunStep: ProgramStep = {
   id: 'run',
   label: 'Integration',
   screenId: 'run',
-  // The host runs this child without its terminal outro or analytics shutdown.
-  runProgramId: 'posthog-integration',
   isComplete: (session) =>
     session.runPhase === RunPhase.Completed ||
     session.runPhase === RunPhase.Error,

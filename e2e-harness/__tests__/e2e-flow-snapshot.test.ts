@@ -113,14 +113,14 @@ function traceFlow(
       // child program, e.g. self-driving's integrate-run) and the program's own
       // run. Complete the active run step the way the runner would: a composed
       // step via completeRunStep, the main run via runPhase.
-      const steps = getProgramConfig(store.router.activeProgram).steps;
-      const runStep = steps.find(
+      const config = getProgramConfig(store.router.activeProgram);
+      const runStep = config.steps.find(
         (s) =>
           s.screenId === 'run' &&
           (!s.show || s.show(store.session)) &&
           (!s.isComplete || !s.isComplete(store.session)),
       );
-      if (runStep?.runProgramId) {
+      if (runStep && config.runSteps?.[runStep.id]?.runProgramId) {
         store.completeRunStep(runStep.id);
       } else {
         store.setRunPhase(RunPhase.Completed);

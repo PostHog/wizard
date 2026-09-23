@@ -247,13 +247,13 @@ export class WizardStore {
   }
 
   /**
-   * Run all `onReady` hooks declared by the current flow's steps, in
-   * order. Must be called after `store.session = session` so hooks see
-   * the real installDir. bin.ts calls this generically — it doesn't
-   * need to know which program has which pre-flow work.
+   * Run the current program's `onReady` detection. Must be called after
+   * `store.session = session` so it sees the real installDir. bin.ts calls
+   * this generically — it doesn't need to know which program has which
+   * pre-flow work.
    */
   async runReadyHooks(): Promise<void> {
-    const steps = getProgramConfig(this.router.activeProgram).steps;
+    const config = getProgramConfig(this.router.activeProgram);
     const ctx: ProgramReadyContext = {
       session: this.session,
       setFrameworkContext: (k, v) => this.setFrameworkContext(k, v),
@@ -265,11 +265,7 @@ export class WizardStore {
       addDiscoveredFeature: (f) => this.addDiscoveredFeature(f),
       setDetectionComplete: () => this.setDetectionComplete(),
     };
-    for (const step of steps) {
-      if (step.onReady) {
-        await step.onReady(ctx);
-      }
-    }
+    await config.onReady?.(ctx);
   }
 
   // ── Gate API ────────────────────────────────────────────────────

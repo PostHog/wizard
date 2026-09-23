@@ -210,7 +210,6 @@ describe('selfDrivingConfig', () => {
     const stepIds = selfDrivingConfig.steps.map((s) => s.id);
     expect(stepIds).not.toContain('skills');
     expect(stepIds).toEqual([
-      'detect',
       'intro',
       'integration-check',
       'health-check',
@@ -630,9 +629,7 @@ describe('manifest list sync', () => {
 });
 
 describe('integrate-run targetDir', () => {
-  const targetDir = selfDrivingConfig.steps.find(
-    (s) => s.id === 'integrate-run',
-  )?.targetDir;
+  const targetDir = selfDrivingConfig.runSteps?.['integrate-run']?.targetDir;
 
   const dirFor = (picked: string): string | undefined => {
     const session = buildSession({ installDir: '/repo' });

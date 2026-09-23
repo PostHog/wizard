@@ -91,7 +91,7 @@ describe('error-tracking program', () => {
   });
 
   test('runs the agent in the picked project, else the repo root', () => {
-    const targetDir = step('run')?.targetDir;
+    const targetDir = errorTrackingConfig.runSteps?.run?.targetDir;
     const picked = {
       installDir: '/repo',
       frameworkContext: { [ERROR_TRACKING_PROJECT_PATH_KEY]: 'apps/web' },

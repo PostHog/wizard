@@ -10,7 +10,6 @@ import type { ProgramStep } from '@programs/program-step';
 import type { FrameworkConfig } from '@programs/framework-config';
 import { RunPhase } from '@shared/run-state';
 import { HEALTH_CHECK_STEP } from '@programs/shared/health-check-step';
-import { detectPostHogIntegration } from './detect.js';
 
 function needsSetup(session: {
   frameworkConfig: FrameworkConfig | null;
@@ -25,15 +24,6 @@ function needsSetup(session: {
 }
 
 export const POSTHOG_INTEGRATION_PROGRAM: ProgramStep[] = [
-  {
-    id: 'detect',
-    label: 'Detecting framework',
-    // Headless step: no screen. onReady fires after bin.ts assigns the
-    // session — runs framework detection, context gathering, version
-    // check, and feature discovery. Results are written to the store
-    // for the IntroScreen to render.
-    onReady: (ctx) => detectPostHogIntegration(ctx),
-  },
   {
     id: 'intro',
     label: 'Welcome',

@@ -118,14 +118,14 @@ function advance(store: WizardStore, screen: string): boolean {
       return true;
     case ScreenId.Run:
     case ScreenId.AuditRun: {
-      const steps = getProgramConfig(store.router.activeProgram).steps;
-      const runStep = steps.find(
+      const config = getProgramConfig(store.router.activeProgram);
+      const runStep = config.steps.find(
         (st) =>
           st.screenId === screen &&
           (!st.show || st.show(s)) &&
           (!st.isComplete || !st.isComplete(s)),
       );
-      if (runStep?.runProgramId) {
+      if (runStep && config.runSteps?.[runStep.id]?.runProgramId) {
         store.completeRunStep(runStep.id);
       } else {
         store.setRunPhase(RunPhase.Running);

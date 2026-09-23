@@ -48,7 +48,6 @@ describe('createProgramSequence', () => {
         screenId: 'intro',
         gate: () => true,
         onInit: vi.fn(),
-        onReady: vi.fn(),
       },
     ];
 
@@ -57,6 +56,5 @@ describe('createProgramSequence', () => {
     expect(entry).not.toHaveProperty('label');
     expect(entry).not.toHaveProperty('gate');
     expect(entry).not.toHaveProperty('onInit');
-    expect(entry).not.toHaveProperty('onReady');
   });
 });

@@ -2,6 +2,7 @@
 export type { ProgramId, SubcommandProgram } from './program-registry';
 export type {
   ProgramConfig,
+  ProgramRunStep,
   ProgramStep,
   ProgramReadyContext,
   StoreInitContext,

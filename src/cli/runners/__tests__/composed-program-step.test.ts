@@ -16,19 +16,22 @@ it('dispatches the declared integration child with a scoped session and records 
   );
   expect(step).toBeDefined();
   if (!step) throw new Error('missing integration run step');
-  expect(step).toHaveProperty('runProgramId', 'posthog-integration');
-  expect(step).not.toHaveProperty('run');
+  expect(selfDrivingConfig.runSteps?.['integrate-run']?.runProgramId).toBe(
+    'posthog-integration',
+  );
 
   const store = new WizardStore('self-driving');
   const session = buildSession({ installDir: '/repo' });
   session.frameworkContext[SELF_DRIVING_INTEGRATE_PATH_KEY] = 'apps/web';
   store.session = session;
 
-  await advanceStep(
-    { ...step, onRunPrep: () => Promise.resolve() },
-    store,
-    selfDrivingConfig,
-  );
+  const runStep = selfDrivingConfig.runSteps?.['integrate-run'];
+  await advanceStep(step, store, {
+    ...selfDrivingConfig,
+    runSteps: {
+      'integrate-run': { ...runStep, onRunPrep: () => Promise.resolve() },
+    },
+  });
 
   expect(runProgramAgent).toHaveBeenCalledWith(
     posthogIntegrationConfig,

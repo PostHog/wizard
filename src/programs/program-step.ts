@@ -73,27 +73,6 @@ export interface ProgramStep {
   screenId?: string;
 
   /**
-   * For a composed run step (`screenId: 'run'`): identifies the child program
-   * whose agent the host runs. Omit to run this program's own agent.
-   */
-  runProgramId?: ProgramId;
-
-  /**
-   * For a run step: prepare a derived session before its agent runs — e.g.
-   * gather framework context for the chosen project. The session it receives is
-   * the run's own, so writes don't leak into later runs.
-   */
-  onRunPrep?: (session: ProgramSession) => Promise<void>;
-
-  /**
-   * For a run step: the working directory its agent runs in, resolved from the
-   * session (e.g. self-driving's integration runs in the picked monorepo
-   * sub-app, not the repo root). The runner scopes a derived session to this
-   * dir for that run only. Defaults to `session.installDir`.
-   */
-  targetDir?: (session: ProgramSession) => string;
-
-  /**
    * Whether this step should be visible in the current program.
    * If omitted, the step is always visible.
    */
@@ -122,14 +101,6 @@ export interface ProgramStep {
   onInit?: (ctx: StoreInitContext) => void;
 
   /**
-   * Called once after bin.ts has assigned the real session to the store,
-   * before any gate is awaited. Awaited in sequence with other steps'
-   * onReady callbacks. Use for session-dependent pre-program work like
-   * scanning the installDir for prerequisites. May be sync or async.
-   */
-  onReady?: (ctx: ProgramReadyContext) => void | Promise<void>;
-
-  /**
    * Report this step's analytics under a different program than its host, for
    * steps shared across programs (the MCP tutorial is all of `mcp-tutorial`
    * and the last step of `mcp-add`). Attribution only — scopes, bindings, and
@@ -137,6 +108,27 @@ export interface ProgramStep {
    * are unaffected.
    */
   reportsAsProgramId?: ProgramId;
+}
+
+/**
+ * How one of a flow's run steps runs: which program's agent, in which
+ * directory, after what preparation. Keyed by the flow step id.
+ */
+export interface ProgramRunStep {
+  /** The child program whose agent runs. Omit to run this program's own agent. */
+  runProgramId?: ProgramId;
+  /**
+   * Prepare a derived session before the agent runs, e.g. gather framework
+   * context for the chosen project. The session is the run's own, so writes
+   * don't leak into later runs.
+   */
+  onRunPrep?: (session: ProgramSession) => Promise<void>;
+  /**
+   * The directory the agent runs in (e.g. a picked monorepo sub-app). The
+   * runner scopes a derived session to it for that run only. Defaults to
+   * `session.installDir`.
+   */
+  targetDir?: (session: ProgramSession) => string;
 }
 
 /**
@@ -235,6 +227,13 @@ export interface ProgramConfig {
   skillId?: string;
   /** The ordered step list */
   steps: ProgramStep[];
+  /**
+   * Detection before the flow: runs once after the host assigns the real
+   * session, before any gate is awaited. May be sync or async.
+   */
+  onReady?: (ctx: ProgramReadyContext) => void | Promise<void>;
+  /** Run steps that compose a child program or scope a run, keyed by step id. */
+  runSteps?: Record<string, ProgramRunStep>;
   /** Agent run config. Static object or async function for dynamic config. */
   run?:
     | ProgramRun

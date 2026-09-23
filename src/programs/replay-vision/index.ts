@@ -18,7 +18,6 @@ import { detectPostHogIntegration } from '@programs/posthog-integration/detect';
 import type {
   ProgramConfig,
   ProgramReadyContext,
-  ProgramStep,
 } from '@programs/program-step';
 import { analytics } from '@utils/analytics';
 import { wizardAbort } from '@utils/wizard-abort';
@@ -98,24 +97,21 @@ async function abortUnsupportedPlatform(
  * detected framework id before the run arm starts, because the runner
  * resolves the reference integration skill and every task's mini-skill
  * variants (`integration-v2-install`, `integration-v2-init`, …) against it in
- * preflight. Without this step the session would still carry the program's
- * own skill id and preflight would abort.
+ * preflight. Without it the session would still carry the program's own
+ * skill id and preflight would abort.
+ *
+ * The platform gate runs on a direct detectFramework call BEFORE the full
+ * detect writes to the store: store setters replace the session with a
+ * shallow copy, so `ctx.session` read after detectPostHogIntegration would
+ * be the stale pre-copy object (see the warning in detect.ts).
  */
-const DETECT_STEP: ProgramStep = {
-  id: 'detect',
-  label: 'Detecting framework',
-  // The platform gate runs on a direct detectFramework call BEFORE the full
-  // detect writes to the store: store setters replace the session with a
-  // shallow copy, so `ctx.session` read after detectPostHogIntegration would
-  // be the stale pre-copy object (see the warning in detect.ts).
-  onReady: async (ctx: ProgramReadyContext) => {
-    const integration = await detectFramework(ctx.session.installDir);
-    if (integration && !REPLAY_VISION_SUPPORTED.has(integration)) {
-      await abortUnsupportedPlatform(integration);
-      return;
-    }
-    await detectPostHogIntegration(ctx);
-  },
+const detectBeforeFlow = async (ctx: ProgramReadyContext) => {
+  const integration = await detectFramework(ctx.session.installDir);
+  if (integration && !REPLAY_VISION_SUPPORTED.has(integration)) {
+    await abortUnsupportedPlatform(integration);
+    return;
+  }
+  await detectPostHogIntegration(ctx);
 };
 
 const base = createSkillProgram(REPLAY_VISION_OPTIONS);
@@ -132,18 +128,19 @@ const base = createSkillProgram(REPLAY_VISION_OPTIONS);
  * aborting.
  *
  * Departures from a plain `createSkillProgram`:
- * - `DETECT_STEP` in front, so `session.skillId` carries the framework id the
+ * - `onReady` detection, so `session.skillId` carries the framework id the
  *   orchestrator's preflight resolves reference + mini-skill variants with.
  * - `agentFlow` pinned (the id would default to the same value — explicit so
  *   renaming the program can't silently detach the flow).
  * - `ciPreRun` mirrors the default integration program: scope the install dir
  *   to the right project (monorepos), then detect the framework — the
- *   headless equivalent of the detect step's onReady hook.
+ *   headless equivalent of onReady.
  */
 export const replayVisionConfig: ProgramConfig = {
   ...base,
   agentFlow: 'replay-vision',
-  steps: [DETECT_STEP, ...AGENT_SKILL_STEPS],
+  steps: AGENT_SKILL_STEPS,
+  onReady: detectBeforeFlow,
 
   ciPreRun: async (
     session: ReplayVisionCiSession,

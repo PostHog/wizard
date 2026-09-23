@@ -196,7 +196,6 @@ describe('flow shape', () => {
   it('adds no steps — the suggestion never becomes an inline run', () => {
     const ids = POSTHOG_INTEGRATION_PROGRAM.map((s) => s.id);
     expect(ids).toEqual([
-      'detect',
       'intro',
       'health-check',
       'setup',
@@ -212,7 +211,7 @@ describe('flow shape', () => {
   it('keeps the program single-run, so the outro stays terminal', () => {
     // A step declaring a child program would flip run-wizard into the composed
     // walk, where a second agent run could abort before the outro is pushed.
-    expect(POSTHOG_INTEGRATION_PROGRAM.some((s) => s.runProgramId)).toBe(false);
+    expect(posthogIntegrationConfig.runSteps).toBeUndefined();
   });
 });
 

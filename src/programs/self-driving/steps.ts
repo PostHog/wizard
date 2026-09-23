@@ -15,42 +15,20 @@
  */
 
 import type { ProgramStep } from '@programs/program-step';
-import { resolveProjectDir } from '@programs/detection/agentic';
 import { RunPhase } from '@shared/run-state';
 import { HEALTH_CHECK_STEP } from '@programs/shared/health-check-step';
 import { integrationRunStep } from '@programs/posthog-integration/index';
-import {
-  detectSelfDrivingPrerequisites,
-  POSTHOG_PRESENT_KEY,
-  SELF_DRIVING_INTEGRATE_PATH_KEY,
-} from './detect.js';
-import { prepSelfDrivingIntegration } from './detect-agentic.js';
+import { POSTHOG_PRESENT_KEY } from './detect.js';
 
 /** True once detection found PostHog already present in the project. */
 type SelfDrivingStepContext = {
-  installDir: string;
   frameworkContext: Record<string, unknown>;
 };
 
 const postHogPresent = (session: SelfDrivingStepContext): boolean =>
   session.frameworkContext[POSTHOG_PRESENT_KEY] === true;
 
-/** Absolute dir to integrate into: the picked sub-app (LLM output — the shared resolver clamps escapes), else the repo root. */
-const integrationDir = (session: SelfDrivingStepContext): string =>
-  resolveProjectDir(
-    session.installDir,
-    session.frameworkContext[SELF_DRIVING_INTEGRATE_PATH_KEY],
-  );
-
 export const SELF_DRIVING_PROGRAM: ProgramStep[] = [
-  {
-    id: 'detect',
-    label: 'Detecting prerequisites',
-    // Headless: validates the install dir and runs the deterministic
-    // PostHog-presence check (writes frameworkContext.postHogPresent).
-    onReady: (ctx) =>
-      detectSelfDrivingPrerequisites(ctx.session, ctx.setFrameworkContext),
-  },
   {
     id: 'intro',
     label: 'Welcome',
@@ -102,8 +80,6 @@ export const SELF_DRIVING_PROGRAM: ProgramStep[] = [
     // Self-driving run's `runPhase`.
     ...integrationRunStep,
     id: 'integrate-run',
-    onRunPrep: prepSelfDrivingIntegration,
-    targetDir: integrationDir,
     show: (session) => session.integrate === true,
     isComplete: (session) => session.completedRuns.includes('integrate-run'),
   },

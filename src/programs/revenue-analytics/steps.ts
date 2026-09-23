@@ -8,19 +8,8 @@
 import type { ProgramStep } from '@programs/program-step';
 import { RunPhase } from '@shared/run-state';
 import { HEALTH_CHECK_STEP } from '@programs/shared/health-check-step';
-import { detectRevenuePrerequisites } from './detect.js';
 
 export const REVENUE_ANALYTICS_PROGRAM: ProgramStep[] = [
-  {
-    id: 'detect',
-    label: 'Detecting prerequisites',
-    // Headless step: no screen, no gate. onReady fires after bin.ts
-    // assigns the session — the hook scans for PostHog + Stripe SDKs
-    // and writes the results (or a detectError) to frameworkContext
-    // for the intro screen to render.
-    onReady: (ctx) =>
-      detectRevenuePrerequisites(ctx.session, ctx.setFrameworkContext),
-  },
   {
     id: 'intro',
     label: 'Welcome',

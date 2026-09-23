@@ -104,16 +104,6 @@ const ERROR_TRACKING_STEPS: ProgramStep[] = AGENT_SKILL_STEPS.flatMap(
       return [{ ...step, screenId: 'error-tracking-intro' }];
     }
     if (step.id === 'auth') return [step, PICK_PROJECT_STEP];
-    if (step.id === 'run') {
-      // targetDir makes run-wizard walk the steps and run in the picked project.
-      return [
-        {
-          ...step,
-          targetDir: errorTrackingProjectDir,
-          onRunPrep: gatherErrorTrackingContext,
-        },
-      ];
-    }
     return [step];
   },
 );
@@ -150,6 +140,13 @@ export const errorTrackingConfig: ProgramConfig = {
   id: 'error-tracking',
   agentFlow: 'error-tracking',
   steps: ERROR_TRACKING_STEPS,
+  // Scoping the run makes run-wizard walk the steps and run in the picked project.
+  runSteps: {
+    run: {
+      targetDir: errorTrackingProjectDir,
+      onRunPrep: gatherErrorTrackingContext,
+    },
+  },
   reportFile: ERROR_TRACKING_REPORT_FILE,
 
   run: (

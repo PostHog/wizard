@@ -5,7 +5,7 @@ import { authenticate } from '@programs/authenticate';
 import { getProgramConfig } from '@programs';
 import { getAuditChecks } from '@programs/audit/types';
 import { maybeStampAiSdkDetected } from '@programs/posthog-integration/detect';
-import type { ProgramConfig } from '@programs/types';
+import type { ProgramConfig, ProgramRunStep } from '@programs/types';
 import type { Harness, Sequence } from '@shared/constants';
 import type { startTUI as StartTUIFn } from '@tui/start-tui';
 import type { WizardStore } from '@tui/store';
@@ -26,24 +26,24 @@ const WIZARD_VERSION = VERSION;
 
 type Step = ProgramConfig['steps'][number];
 
-/** The session a run step's agent runs in: scoped to the step's target dir
+/** The session a run step's agent runs in: scoped to the run step's target dir
  * (e.g. a monorepo sub-app) with its own framework context, after any prep.
- * A step without `targetDir` runs in the live session, unchanged.
+ * A run step without `targetDir` runs in the live session, unchanged.
  * The frameworkContext copy is shallow and unfiltered — name keys per owning program. */
 async function prepareRunSession(
-  step: Step,
+  runStep: ProgramRunStep | undefined,
   store: WizardStore,
 ): Promise<WizardSession> {
   const live = store.session;
   const previousLabel = live.detectedFrameworkLabel;
-  const session = step.targetDir
+  const session = runStep?.targetDir
     ? {
         ...live,
-        installDir: step.targetDir(live),
+        installDir: runStep.targetDir(live),
         frameworkContext: { ...live.frameworkContext },
       }
     : live;
-  if (step.onRunPrep) await step.onRunPrep(session);
+  if (runStep?.onRunPrep) await runStep.onRunPrep(session);
   if (
     session.detectedFrameworkLabel &&
     session.detectedFrameworkLabel !== previousLabel
@@ -63,18 +63,19 @@ export async function advanceStep(
   store: WizardStore,
   config: ProgramConfig,
 ): Promise<void> {
+  const runStep = config.runSteps?.[step.id];
   if (step.screenId === 'auth') {
     await authenticate(store.session, config.id, cliAuthHost());
     maybeStampAiSdkDetected(store.session);
-  } else if (step.runProgramId) {
+  } else if (runStep?.runProgramId) {
     await runProgramAgent(
-      getProgramConfig(step.runProgramId),
-      await prepareRunSession(step, store),
+      getProgramConfig(runStep.runProgramId),
+      await prepareRunSession(runStep, store),
       { composed: true },
     );
     store.completeRunStep(step.id);
   } else if (step.screenId === 'run') {
-    await runProgramAgent(config, await prepareRunSession(step, store));
+    await runProgramAgent(config, await prepareRunSession(runStep, store));
   } else if (step.isComplete) {
     await store.waitUntil(step.isComplete);
   }
@@ -249,7 +250,7 @@ export function runWizard(
       const shown = (s: ProgramConfig['steps'][number]) =>
         !s.show || s.show(activeTui.store.session);
 
-      if (config.steps.some((s) => s.runProgramId || s.targetDir)) {
+      if (config.runSteps && Object.keys(config.runSteps).length > 0) {
         // A composed program: its step list includes a child program run
         // (self-driving runs the integration before its own
         // run), or scopes its own run to a picked project (error-tracking).
