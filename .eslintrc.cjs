@@ -33,10 +33,10 @@ module.exports = {
     {
       // The agent surface. It takes resolved data in, reports through
       // progress events and asks through an injected answerer, so nothing
-      // here may reach a UI, the session, detection, the CLI or a program at
-      // runtime. Program types stay importable until B1 moves
-      // PROGRAM_BINDINGS to programs. Today's paths; A2b collapses them to
-      // src/agent/**.
+      // here may import a UI, the session, detection, the CLI or a program.
+      // Only direct static imports are checked. Program types stay importable
+      // until B1 moves PROGRAM_BINDINGS to programs. Today's paths; A2b
+      // collapses them to src/agent/**.
       files: [
         'src/lib/agent/**/*.ts',
         'src/lib/middleware/**/*.ts',
@@ -65,18 +65,25 @@ module.exports = {
                 group: [
                   '@ui',
                   '@ui/**',
+                  '**/ui',
                   '**/ui/**',
                   '@lib/wizard-session',
                   '**/wizard-session',
+                  '@lib/detection',
                   '@lib/detection/**',
+                  '**/detection',
                   '**/detection/**',
                   '@lib/registry',
                   '**/lib/registry',
+                  '@lib/runners',
                   '@lib/runners/**',
+                  '**/runners',
                   '**/runners/**',
                   '**/commands/**',
                   '@steps',
                   '@steps/**',
+                  '**/steps',
+                  '**/steps/**',
                   '@frameworks/**',
                   '**/frameworks/**',
                   '@utils/setup-utils',
