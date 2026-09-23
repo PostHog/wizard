@@ -159,6 +159,10 @@ export interface RunHooks {
     credentials: Credentials,
     completedSeededTypes: readonly string[],
   ) => { heading: string; items: string[] } | undefined;
+  /** Receives the drained queue's final outcomes before the cache wipe (orchestrated only). */
+  recordTaskOutcomes?: (
+    outcomes: import('../sequence/orchestrator/queue').TaskOutcome[],
+  ) => void;
 }
 
 /** The run-level routing decision the caller made. */
@@ -204,6 +208,8 @@ export interface RunConfig {
   disallowedTools?: readonly string[];
   /** Context-mill flow the orchestrator loads. Defaults to `programId`. */
   agentFlow?: string;
+  /** Task types the program excludes for these flags. The orchestrator adds the CI gates. */
+  excludedTaskTypes?: (flags: Record<string, string>) => readonly string[];
   /** Tasks to queue before the orchestrator's planner runs. */
   seedTasks?: () => SeedTaskEntry[];
   /** Completion hooks, bound by the caller. */
