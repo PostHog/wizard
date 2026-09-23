@@ -33,6 +33,7 @@ export type {
   ProgramSwitchboardTrace,
 } from './binding';
 export type { ProgramRun } from './program-run';
+export type { ProgramLaunchArgs, ProgramSession } from './program-session';
 export type { AuditCheck, AuditStatus } from './audit/types';
 export type {
   DetectedProject,

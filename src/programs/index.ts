@@ -61,6 +61,7 @@ export {
 } from './authenticate';
 export { detectErrorCode } from './detect-map';
 export { getOrAskForProjectData } from './project-data';
+export { buildProgramSession } from './program-session';
 export {
   AUDIT_CHECKS_KEY,
   AUDIT_REPORT_FILE,
