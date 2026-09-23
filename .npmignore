@@ -9,4 +9,3 @@ docs
 .prettierrc
 .eslintrc.js
 tsconfig*
-e2e-tests
