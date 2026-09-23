@@ -73,6 +73,20 @@ vi.mock('@shared/claude-settings', () => ({
   checkAllSettingsConflicts: vi.fn().mockReturnValue([]),
   restoreClaudeSettings: vi.fn(),
 }));
+// Fixture ids such as `metrics` are health-check programs, so preflight probes readiness.
+vi.mock('@shared/health-checks/readiness', async (original) => {
+  const actual = await original<
+    typeof import('@shared/health-checks/readiness')
+  >();
+  return {
+    ...actual,
+    evaluateWizardReadiness: vi.fn().mockResolvedValue({
+      decision: actual.WizardReadiness.Yes,
+      health: {},
+      reasons: [],
+    }),
+  };
+});
 vi.mock('@utils/wizard-abort', async (original) => {
   const actual = await original<typeof import('@utils/wizard-abort')>();
   return {

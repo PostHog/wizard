@@ -24,3 +24,7 @@ export type {
   ProgramSwitchboardCtx,
   ProgramSwitchboardTrace,
 } from './binding';
+export type {
+  ProgramPreflightDecision,
+  ProgramPreflightHost,
+} from './preflight';

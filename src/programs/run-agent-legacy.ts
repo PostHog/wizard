@@ -27,22 +27,10 @@ import { getProgramCommandments } from './commandments';
 import { captureSwitchboardDecision } from './binding-telemetry';
 import { areSeededTasksEnabled, resolveStageOverrides } from './experiments';
 import type { ProgramRun } from './program-run';
-import {
-  backupAndFixClaudeSettings,
-  checkAllSettingsConflicts,
-  classifySettingsConflicts,
-  restoreClaudeSettings,
-} from '@shared/claude-settings';
-import {
-  evaluateWizardReadiness,
-  WizardReadiness,
-  SIGNUP_WIZARD_READINESS_CONFIG,
-  getBlockingServiceKeys,
-  SERVICE_LABELS,
-} from '@shared/health-checks/readiness';
+import { restoreClaudeSettings } from '@shared/claude-settings';
+import { preflight, type ProgramPreflightHost } from './preflight';
 import { enableDebugLogs, logToFile, initLogFile } from '@utils/debug';
 import { registerCleanup, wizardAbort } from '@utils/wizard-abort';
-import { ErrorCodes } from '@shared/errors';
 import { isNonInteractiveEnvironment } from '@utils/environment';
 import {
   getSkillsBaseUrl,
@@ -136,13 +124,9 @@ async function runLegacyStep(
     enableDebugLogs();
   }
 
-  // 2. Health check (guarded — skip if TUI already ran it). Only
-  // programs that declare a health-check screen get pre-flight checks;
-  // for everything else the checks never fire and never block.
-  await runHealthGate(session, programConfig);
-
-  // 3. Settings conflicts
-  await runSettingsGate(session);
+  // 2–3. Health check (skipped when the TUI already ran it), then settings conflicts.
+  const pre = await preflight(programConfig.id, legacyPreflightHost(session));
+  if (pre.kind === 'abort') await wizardAbort(pre.failure);
 
   analytics.wizardCapture('agent started', {
     integration: run.integrationLabel,
@@ -380,13 +364,8 @@ async function runLegacyStep(
 
 // ── Gates ─────────────────────────────────────────────────────────────
 
-async function runHealthGate(
-  session: WizardSession,
-  programConfig: ProgramConfig,
-): Promise<void> {
-  const hasHealthCheckScreen = programConfig.steps.some(
-    (s) => s.screenId === 'health-check',
-  );
+/** Map the preflight port onto the session and `getUI()`. */
+function legacyPreflightHost(session: WizardSession): ProgramPreflightHost {
   if (session.readinessResult) {
     logToFile(
       `[agent-runner] readiness pre-computed by TUI: decision=${session.readinessResult.decision}` +
@@ -395,119 +374,15 @@ async function runHealthGate(
         } — skipping re-check`,
     );
   }
-  if (!hasHealthCheckScreen || session.readinessResult) return;
-
-  logToFile('[agent-runner] evaluating wizard readiness');
-  const readinessConfig = session.signup
-    ? SIGNUP_WIZARD_READINESS_CONFIG
-    : undefined;
-  const readiness = await evaluateWizardReadiness(readinessConfig);
-  logToFile(`[agent-runner] readiness=${readiness.decision}`);
-  if (readiness.decision === WizardReadiness.No) {
-    const blockingKeys = getBlockingServiceKeys(
-      readiness.health,
-      readinessConfig,
-    );
-    const blockingLabels = blockingKeys.map(
-      (k) => `${SERVICE_LABELS[k]} (${readiness.health[k].status})`,
-    );
-    logToFile(`[agent-runner] blocked by: ${blockingLabels.join(', ')}`);
-
-    await getUI().showBlockingOutage(readiness);
-
-    // The TUI lets the user continue past an outage; non-interactive runs
-    // (CI) do the same automatically — the degraded services are reported
-    // above, but we proceed rather than aborting on a transient upstream blip.
-    if (!isNonInteractiveEnvironment()) {
-      await wizardAbort({
-        code: ErrorCodes.EnvServiceOutage,
-        message:
-          'Cannot start — external services are down:\n' +
-          blockingLabels.map((l) => `  - ${l}`).join('\n') +
-          '\n\nPlease try again later.',
-      });
-    }
-  } else if (readiness.decision === WizardReadiness.YesWithWarnings) {
-    getUI().setReadinessWarnings(readiness);
-  }
-}
-
-async function runSettingsGate(session: WizardSession): Promise<void> {
-  const settingsConflicts = checkAllSettingsConflicts(session.installDir);
-  logToFile(
-    `[agent-runner] settings conflicts: ${
-      settingsConflicts.length > 0
-        ? settingsConflicts
-            .map((c) => `${c.source}(${c.keys.join(',')})`)
-            .join('; ')
-        : 'none'
-    }`,
-  );
-  if (settingsConflicts.length === 0) return;
-
-  for (const conflict of settingsConflicts) {
-    const level = conflict.source === 'managed' ? 'org' : conflict.source;
-    analytics.wizardCapture('settings conflict detected', {
-      level,
-      keys: conflict.keys,
-    });
-  }
-
-  const { autoFix, failClosed, warnOnly } =
-    classifySettingsConflicts(settingsConflicts);
-
-  // User-global and project-local files are already neutralized — the agent
-  // runs with settingSources:['project'], so the SDK never reads them. Record
-  // it and move on; don't make the user act on a setting that can't bite.
-  for (const conflict of warnOnly) {
-    logToFile(
-      `[agent-runner] settings conflict in ${conflict.source} (${conflict.path}) ` +
-        `neutralized by settingSources:['project'] — not blocking`,
-    );
-    analytics.wizardCapture('settings conflict neutralized', {
-      level: conflict.source,
-      keys: conflict.keys,
-    });
-  }
-
-  // Writable project settings.json — the SDK *does* read it, but we can back
-  // it up and remove it (restored at outro). Neutralize without prompting.
-  let unfixable = failClosed;
-  if (autoFix.length > 0) {
-    const fixed = backupAndFixClaudeSettings(session.installDir);
-    if (fixed) {
-      logToFile('[agent-runner] auto-neutralized writable settings conflict');
-      analytics.wizardCapture('settings conflict auto-neutralized', {
-        keys: autoFix.flatMap((c) => c.keys),
-      });
-    } else {
-      // Couldn't remove it — don't run into the redirect; fail closed instead.
-      logToFile(
-        '[agent-runner] could not back up writable settings conflict — failing closed',
-      );
-      unfixable = [...failClosed, ...autoFix];
-    }
-  }
-
-  // What we cannot neutralize (org-managed, always read by the SDK; or a
-  // writable file we failed to back up) must be fixed by the user. Fail
-  // closed: the screen names the file + keys and exits.
-  if (unfixable.length > 0) {
-    if (isNonInteractiveEnvironment()) {
-      await wizardAbort({
-        code: ErrorCodes.SettingsUnfixableConflict,
-        message:
-          'Cannot start — a Claude settings file redirects the agent away ' +
-          'from the PostHog gateway and cannot be neutralized automatically:\n' +
-          unfixable
-            .map((c) => `  - ${c.source} (${c.path}): ${c.keys.join(', ')}`)
-            .join('\n') +
-          '\n\nRemove the conflicting keys and re-run the wizard.',
-      });
-    }
-    await getUI().showSettingsOverride(unfixable, () =>
-      backupAndFixClaudeSettings(session.installDir),
-    );
-    logToFile('[agent-runner] settings override resolved');
-  }
+  return {
+    installDir: session.installDir,
+    signup: session.signup,
+    interactive: !isNonInteractiveEnvironment(),
+    readiness: session.readinessResult,
+    showOutage: (readiness) => getUI().showBlockingOutage(readiness),
+    setReadinessWarnings: (readiness) =>
+      getUI().setReadinessWarnings(readiness),
+    showSettingsOverride: (conflicts, fix) =>
+      getUI().showSettingsOverride(conflicts, fix),
+  };
 }
