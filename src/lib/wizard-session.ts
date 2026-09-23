@@ -65,6 +65,7 @@ export enum RunPhase {
 export enum DiscoveredFeature {
   Stripe = 'stripe',
   LLM = 'llm',
+  HttpLog = 'http_log',
 }
 
 /** Consent to report what local detection found (see `scanConsent` below). */
@@ -77,16 +78,19 @@ export enum ScanConsent {
 /** Additional features the agent can integrate after the main setup */
 export enum AdditionalFeature {
   LLM = 'llm',
+  HttpLog = 'http_log',
 }
 
 /** Human-readable labels for additional features (used in TUI progress) */
 export const ADDITIONAL_FEATURE_LABELS: Record<AdditionalFeature, string> = {
   [AdditionalFeature.LLM]: 'AI observability',
+  [AdditionalFeature.HttpLog]: 'Bot analytics (server logs)',
 };
 
 /** Agent prompts for each additional feature, injected via the stop hook */
 export const ADDITIONAL_FEATURE_PROMPTS: Record<AdditionalFeature, string> = {
   [AdditionalFeature.LLM]: `Now integrate AI observability with PostHog. Use the PostHog MCP server to find the appropriate AI observability skill, install it, and follow its workflow. PostHog basics are already installed. Update the setup report markdown file when complete with additions from this task. `,
+  [AdditionalFeature.HttpLog]: `Now integrate server-side HTTP log capture with PostHog so bots, crawlers, and AI agents show up in web analytics. Follow https://posthog.com/docs/web-analytics/sending-http-logs: send one $http_log event per request to the capture API, with $raw_user_agent, $current_url, $ip, and $process_person_profile set to false, using a hashed per-client distinct ID. Prefer the platform's native hook (a Cloudflare Worker on Workers projects, otherwise server middleware), keep it off the request path, and skip static asset requests. PostHog basics are already installed. Update the setup report markdown file when complete with additions from this task. `,
 };
 
 /** Outcome of the MCP server installation step */
