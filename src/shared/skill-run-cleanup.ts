@@ -1,6 +1,10 @@
 import { lstatSync, readdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { logToFile } from '@utils/debug';
+import { registerCleanup } from '@utils/wizard-abort';
+
+export type RunSkillCleanup = (() => void) & { commit: () => void };
+const registeredSkillCleanups = new Set<RunSkillCleanup>();
 
 /** An absent directory is an empty snapshot; a symlink is never a skill root. */
 function skillEntries(root: string) {
@@ -14,13 +18,15 @@ function skillEntries(root: string) {
 }
 
 /** Preserve every entry that existed before the run, including older Wizard installs. */
-export function captureRunSkillCleanup(installDir: string): () => void {
+export function captureRunSkillCleanup(installDir: string): RunSkillCleanup {
   const root = join(installDir, '.claude', 'skills');
   const before = skillEntries(root);
-  if (!before) return () => undefined;
-  const preexisting = new Set(before.map((entry) => entry.name));
+  const preexisting = new Set(before?.map((entry) => entry.name));
+  let committed = false;
 
-  return () => {
+  const cleanup = (() => {
+    registeredSkillCleanups.delete(cleanup);
+    if (committed || !before) return;
     const current = skillEntries(root);
     if (!current) return;
     for (const entry of current) {
@@ -35,5 +41,22 @@ export function captureRunSkillCleanup(installDir: string): () => void {
       rmSync(skillDir, { recursive: true, force: true });
       logToFile(`[agent-runner] removed failed-run skill ${entry.name}`);
     }
+  }) as RunSkillCleanup;
+  cleanup.commit = () => {
+    committed = true;
+    registeredSkillCleanups.delete(cleanup);
   };
+  return cleanup;
+}
+
+export function registerRunSkillCleanup(installDir: string): RunSkillCleanup {
+  const cleanup = captureRunSkillCleanup(installDir);
+  registeredSkillCleanups.add(cleanup);
+  registerCleanup(cleanup);
+  return cleanup;
+}
+
+/** Disarm only skill callbacks; other abort cleanup remains registered. */
+export function commitRegisteredRunSkillCleanups(): void {
+  for (const cleanup of registeredSkillCleanups) cleanup.commit();
 }

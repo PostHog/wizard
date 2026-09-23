@@ -89,6 +89,51 @@ it('cleans only new marked skills if TUI setup fails before the agent starts', a
   }
 });
 
+it('keeps a completed run skill when SIGTERM arrives on the completion screen', async () => {
+  const installDir = fs.mkdtempSync(
+    path.join(os.tmpdir(), 'wizard-tui-complete-'),
+  );
+  const skillDir = path.join(installDir, '.claude', 'skills', 'completed');
+  const store = new WizardStore();
+  setUI(new InkUI(store));
+  vi.spyOn(store, 'runReadyHooks').mockResolvedValue(undefined);
+  vi.spyOn(store, 'getGate').mockResolvedValue(undefined);
+  let dismiss!: () => void;
+  const completionWait = vi.spyOn(store, 'waitUntil').mockImplementation(
+    () =>
+      new Promise<void>((resolve) => {
+        dismiss = resolve;
+      }),
+  );
+  vi.mocked(startTUI).mockReturnValue({
+    store,
+    unmount: vi.fn(),
+    waitForSetup: () => Promise.resolve(),
+  });
+  vi.mocked(runProgramAgent).mockImplementation(() => {
+    fs.mkdirSync(skillDir, { recursive: true });
+    fs.writeFileSync(path.join(skillDir, '.posthog-wizard'), '');
+    return Promise.resolve();
+  });
+  const exit = vi
+    .spyOn(process, 'exit')
+    .mockImplementation(() => undefined as never);
+  try {
+    runWizard(posthogIntegrationConfig, { installDir, telemetry: false });
+    await vi.waitFor(() => expect(completionWait).toHaveBeenCalled());
+
+    process.emit('SIGTERM');
+    await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(130));
+    expect(fs.existsSync(skillDir)).toBe(true);
+
+    dismiss();
+    await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(0));
+  } finally {
+    exit.mockRestore();
+    fs.rmSync(installDir, { recursive: true, force: true });
+  }
+});
+
 it.each(['continue', 'exit'] as const)(
   'catches a failed run, shows the handoff screen, and exits 1 after %s',
   async (action) => {

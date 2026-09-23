@@ -331,6 +331,25 @@ it('registers cleanup before the agent starts so a signal removes only new marke
   }
 });
 
+it('disarms registered skill cleanup after a successful standalone program run', async () => {
+  const installDir = fs.mkdtempSync(
+    path.join(os.tmpdir(), 'wizard-run-complete-'),
+  );
+  const skillDir = path.join(installDir, '.claude', 'skills', 'installed');
+  vi.mocked(runAgent).mockImplementationOnce(() => {
+    fs.mkdirSync(skillDir, { recursive: true });
+    fs.writeFileSync(path.join(skillDir, '.posthog-wizard'), '');
+    return Promise.resolve({ outcome: RunOutcome.Success, snapshot });
+  });
+  try {
+    await runProgramAgent(program(), { ...session(), installDir });
+    for (const [cleanup] of vi.mocked(registerCleanup).mock.calls) cleanup();
+    expect(fs.existsSync(skillDir)).toBe(true);
+  } finally {
+    fs.rmSync(installDir, { recursive: true, force: true });
+  }
+});
+
 it('cleans a marked install when program setup throws before the functional runner', async () => {
   const installDir = fs.mkdtempSync(
     path.join(os.tmpdir(), 'wizard-setup-cleanup-'),
