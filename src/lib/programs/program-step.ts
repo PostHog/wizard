@@ -3,9 +3,9 @@ import type {
   DiscoveredFeature,
   TaskNotice,
 } from '@lib/wizard-session';
-import type { WizardReadinessResult } from '@lib/health-checks/readiness';
-import type { ProgramRun } from '@lib/agent/agent-runner';
-import type { Integration } from '@lib/constants';
+import type { WizardReadinessResult } from '@shared/health-checks/readiness';
+import type { ProgramRun } from '@lib/programs/program-run';
+import type { Integration } from '@shared/constants';
 import type { FrameworkConfig } from '@lib/framework-config';
 import type { ContentBlock } from '@ui/tui/primitives/index';
 import type { WizardStore } from '@ui/tui/store';

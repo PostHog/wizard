@@ -4,13 +4,13 @@ vi.mock('../commands/basic-integration/skill', () => ({
   runSkillMode: vi.fn(),
 }));
 
-vi.mock('@lib/wizard-tools', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@lib/wizard-tools')>();
+vi.mock('@shared/skill-menu', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@shared/skill-menu')>();
   return { ...actual, fetchSkillMenu: vi.fn() };
 });
 
 import { runSkillMode } from '../commands/basic-integration/skill';
-import { fetchSkillMenu } from '@lib/wizard-tools';
+import { fetchSkillMenu } from '@shared/skill-menu';
 import { analytics } from '@utils/analytics';
 import { skillCommand } from '../commands/skill';
 import { parseCommand } from './helpers/parse-command.no-jest';

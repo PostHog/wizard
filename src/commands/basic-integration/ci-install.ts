@@ -5,8 +5,8 @@ import { API_KEY_HINT, runWizardCI, runWizardHeadless } from '@lib/runners';
 import type { NonInteractiveMode } from '@lib/runners';
 import { provisionNewAccount } from '@utils/provisioning';
 import { posthogIntegrationConfig } from '@lib/programs/posthog-integration/index';
-import { ErrorCodes, type ErrorCode } from '@lib/errors';
-import { emitWizardError } from '@lib/errors';
+import { ErrorCodes, type ErrorCode } from '@shared/errors';
+import { emitWizardError } from '@shared/errors';
 
 type Options = Arguments & {
   region?: string;

@@ -59,7 +59,7 @@ vi.mock('../lib/wizard-session', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../lib/wizard-session')>()),
   buildSession: mockBuildSessionCli,
 }));
-vi.mock('../utils/provisioning', () => ({
+vi.mock('@utils/provisioning', () => ({
   provisionNewAccount: mockProvisionNewAccountCli,
 }));
 vi.mock('../ui/tui/start-tui', () => ({
@@ -88,32 +88,33 @@ vi.mock('../lib/programs/posthog-integration/index', () => ({
     run: () => Promise.resolve(),
   },
 }));
-vi.mock('../utils/environment', () => ({
+vi.mock('@utils/environment', () => ({
   isNonInteractiveEnvironment: () => false,
   readEnvironment: () => ({}),
 }));
 // CI-path dynamic imports need mocks to prevent unhandled rejections
-vi.mock('../utils/env-api-key', () => ({
+vi.mock('@utils/env-api-key', () => ({
   readApiKeyFromEnv: () => undefined,
 }));
-vi.mock('../utils/debug', () => ({
+vi.mock('@utils/debug', () => ({
   configureLogFileFromEnvironment: vi.fn(),
   logToFile: vi.fn(),
+  setDebugSink: vi.fn(),
 }));
 vi.mock('../lib/registry', () => ({ FRAMEWORK_REGISTRY: {} }));
 vi.mock('../lib/detection/index', () => ({
   detectFramework: vi.fn().mockResolvedValue(null),
   gatherFrameworkContext: vi.fn().mockResolvedValue({}),
 }));
-vi.mock('../utils/analytics', () => ({
+vi.mock('@utils/analytics', () => ({
   analytics: { setTag: vi.fn() },
 }));
-vi.mock('../utils/wizard-abort', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../utils/wizard-abort')>()),
+vi.mock('@utils/wizard-abort', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@utils/wizard-abort')>()),
   wizardAbort: vi.fn(),
 }));
-vi.mock('../lib/agent/agent-runner', () => ({
-  runAgent: vi.fn().mockResolvedValue(undefined),
+vi.mock('../lib/programs/run-agent-legacy', () => ({
+  runProgramAgent: vi.fn().mockResolvedValue(undefined),
 }));
 
 describe('CLI argument parsing', () => {
@@ -285,7 +286,7 @@ describe('CLI argument parsing', () => {
     // from a buildSession arg — so assert the URL the run would actually fetch.
     async function skillsBaseUrl(): Promise<{ actual: string; local: string }> {
       const { getSkillsBaseUrl, LOCAL_SKILLS_BASE_URL } = await import(
-        '../lib/constants'
+        '@shared/constants'
       );
       return { actual: getSkillsBaseUrl(), local: LOCAL_SKILLS_BASE_URL };
     }
@@ -444,7 +445,7 @@ describe('CLI argument parsing', () => {
         '/tmp/test',
       ]);
 
-      const { analytics } = await import('../utils/analytics');
+      const { analytics } = await import('@utils/analytics');
       expect(analytics.setTag).toHaveBeenCalledWith('build', 'ci');
     });
 
@@ -527,7 +528,7 @@ describe('CLI argument parsing', () => {
         '/tmp/test',
       ]);
 
-      const { analytics } = await import('../utils/analytics');
+      const { analytics } = await import('@utils/analytics');
       expect(analytics.setTag).toHaveBeenCalledWith('build', 'headless');
       expect(analytics.setTag).not.toHaveBeenCalledWith('build', 'ci');
     });
@@ -544,7 +545,7 @@ describe('CLI argument parsing', () => {
         '/tmp/test',
       ]);
 
-      const { analytics } = await import('../utils/analytics');
+      const { analytics } = await import('@utils/analytics');
       expect(analytics.setTag).toHaveBeenCalledWith('build', 'headless');
       expect(analytics.setTag).not.toHaveBeenCalledWith('build', 'ci');
     });

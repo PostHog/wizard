@@ -1,9 +1,9 @@
 import type { ProgramConfig, ProgramStep } from '@lib/programs/program-step';
-import { runAgent, type ProgramRun } from '@lib/agent/agent-runner';
-import { WIZARD_TOOL_NAMES } from '@lib/wizard-tools';
+import { runProgramAgent } from '@lib/programs/run-agent-legacy';
+import type { ProgramRun } from '@lib/programs/program-run';
+import { AgentSignals, shouldDisableAsk, WIZARD_TOOL_NAMES } from '@agent';
 import type { WizardSession } from '@lib/wizard-session';
 import { mayReportScanResults, OutroKind, RunPhase } from '@lib/wizard-session';
-import { AgentSignals } from '@lib/agent/agent-interface';
 import {
   DEFAULT_PACKAGE_INSTALLATION,
   SPINNER_MESSAGE,
@@ -14,17 +14,16 @@ import { detectFramework, gatherFrameworkContext } from '@lib/detection/index';
 import { scopeInstallDirToProject } from '@lib/detection/project-scope';
 import { FRAMEWORK_REGISTRY } from '@lib/registry';
 import { wizardAbort } from '@utils/wizard-abort';
-import { ErrorCodes } from '@lib/errors';
+import { ErrorCodes } from '@shared/errors';
 import {
   WIZARD_DEFAULT_AIO_LOGS_FLAG_KEY,
   WIZARD_INTERACTION_EVENT_NAME,
-} from '@lib/constants';
+} from '@shared/constants';
 import { getUI } from '@ui/index';
 import { requestDeepLink } from '@utils/provisioning';
 import { openTrackedLink, withUtm } from '@utils/links';
-import type { HostResolution } from '@lib/host-resolution';
+import type { HostResolution } from '@shared/host-resolution';
 import { getDetectedWarehouseSources } from '@lib/programs/warehouse-source/detect';
-import { shouldDisableAsk } from '@lib/agent/runner/shared/bootstrap';
 import { POSTHOG_INTEGRATION_PROGRAM } from './steps.js';
 import { getContentBlocks } from './content/index.js';
 import { buildCodingAgentPrompt } from './handoff.js';
@@ -534,7 +533,7 @@ export const integrationRunStep: ProgramStep = {
   // composed: runs inside the host program (self-driving), so skip the
   // integration's terminal outro + analytics shutdown of the shared client.
   run: (session) =>
-    runAgent(posthogIntegrationConfig, session, { composed: true }),
+    runProgramAgent(posthogIntegrationConfig, session, { composed: true }),
   isComplete: (session) =>
     session.runPhase === RunPhase.Completed ||
     session.runPhase === RunPhase.Error,

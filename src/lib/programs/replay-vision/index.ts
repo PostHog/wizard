@@ -1,5 +1,5 @@
-import type { AbortCase } from '@lib/agent/agent-runner';
-import { Integration } from '@lib/constants';
+import type { AbortCase } from '@agent/types';
+import { Integration } from '@shared/constants';
 import { detectFramework, gatherFrameworkContext } from '@lib/detection/index';
 import { scopeInstallDirToProject } from '@lib/detection/project-scope';
 import { FRAMEWORK_REGISTRY } from '@lib/registry';
@@ -14,7 +14,7 @@ import type {
 import type { WizardSession } from '@lib/wizard-session';
 import { analytics } from '@utils/analytics';
 import { wizardAbort } from '@utils/wizard-abort';
-import { ErrorCodes } from '@lib/errors';
+import { ErrorCodes } from '@shared/errors';
 
 const REPLAY_VISION_REPORT_FILE = 'posthog-replay-vision-report.md';
 

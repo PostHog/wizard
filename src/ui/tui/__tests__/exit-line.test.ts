@@ -1,9 +1,9 @@
 import { getExitLine } from '@ui/tui/exit-line';
 import { WizardStore, Program } from '@ui/tui/store';
 import { OutroKind } from '@lib/wizard-session';
-import { HostResolution } from '@lib/host-resolution';
+import { HostResolution } from '@shared/host-resolution';
 
-vi.mock('../../../utils/analytics.js', () => ({
+vi.mock('@utils/analytics.js', () => ({
   analytics: {
     capture: vi.fn(),
     wizardCapture: vi.fn(),

@@ -22,8 +22,8 @@ infrastructure should consume those boundaries.
 | Framework detection, context, env conventions         | [FrameworkConfig](../../../src/lib/framework-config.ts) and [framework configs](../../../src/frameworks/)                                                                       |
 | Integration instructions and orchestrator flows/tasks | [context-mill](https://github.com/PostHog/context-mill)                                                                                                                         |
 | Programs, steps, prerequisites and outcomes           | [programs](../../../src/lib/programs/)                                                                                                                                          |
-| Sequence, harness, model and effort selection         | [switchboard](../../../src/lib/agent/runner/switchboard/)                                                                                                                       |
-| Local tool permissions and scanner adapters           | [agent-interface](../../../src/lib/agent/agent-interface.ts), [YARA hooks](../../../src/lib/yara-hooks.ts), [Pi security](../../../src/lib/agent/runner/harness/pi/security.ts) |
+| Sequence, harness, model and effort selection         | [switchboard](../../../src/agent/runner/switchboard/)                                                                                                                       |
+| Local tool permissions and scanner adapters           | [agent-interface](../../../src/agent/agent-interface.ts), [YARA hooks](../../../src/agent/yara-hooks.ts), [Pi security](../../../src/agent/runner/harness/pi/security.ts) |
 | Scanner rules                                         | [warlock](https://github.com/PostHog/warlock)                                                                                                                                   |
 | Token admission and budgets                           | [PostHog mint endpoint](https://github.com/PostHog/posthog/blob/master/posthog/llm/wizard_gateway_token.py) and [ai-gateway](https://github.com/PostHog/ai-gateway)             |
 | Screen resolution and rendering                       | [TUI](../../../src/ui/tui/) through [WizardUI](../../../src/ui/wizard-ui.ts)                                                                                                    |
@@ -43,7 +43,7 @@ infrastructure should consume those boundaries.
   new Anthropic models.
 
 Existing routing has not all migrated:
-[DEFAULT_BINDING](../../../src/lib/agent/runner/switchboard/index.ts) still
+[DEFAULT_BINDING](../../../src/agent/runner/switchboard/index.ts) still
 selects Anthropic + linear, with per-program and flag overrides. Set new
 bindings explicitly. Migrating an existing program requires checking its flow,
 tasks, and lifecycle hooks; changing the default constant alone is insufficient.
@@ -52,8 +52,8 @@ Both harnesses implement `run` and `runTask`.
 Adding a model or effort is a cross-repository change:
 
 1. Define the Wizard model ID and capabilities in
-   [constants](../../../src/lib/constants.ts) and
-   [models](../../../src/lib/agent/runner/switchboard/models.ts); select it
+   [constants](../../../src/shared/constants.ts) and
+   [models](../../../src/agent/runner/switchboard/models.ts); select it
    through the switchboard or supported context-mill stage metadata.
 2. Check the PostHog mint's `WIZARD_MODEL_ALLOWLIST` and allowed efforts. The
    token's policy is enforced by the gateway; a local constant or CLI override
@@ -65,7 +65,7 @@ Adding a model or effort is a cross-repository change:
 4. Verify the chosen harness transport and effective effort with the same
    admission policy used by the target environment.
 
-Local [commandments](../../../src/lib/agent/runner/switchboard/commandments.ts)
+Local [commandments](../../../src/agent/runner/switchboard/commandments.ts)
 provide runtime and tool guidance. They do not replace the gateway's required
 safety prompt. Keep gateway policy owned there rather than copying it into
 skills. Do not infer per-model effort authorization merely from the local
@@ -94,7 +94,7 @@ only when it gives a real owner a smaller, reusable boundary.
 
 ## Lifecycle and security
 
-[runner/index.ts](../../../src/lib/agent/runner/index.ts) bootstraps, resolves a
+[runner/index.ts](../../../src/agent/runner/index.ts) bootstraps, resolves a
 binding, and dispatches to a sequence. `agent-runner.ts` is a compatibility
 re-export, not the implementation. Sequences own their lifecycle; harnesses own
 SDK calls. `ProgramRun.postRun`, `buildOutroData`, `customPrompt`, and
@@ -109,10 +109,10 @@ than assuming every rejection terminates the run. New scanner rules belong in
 warlock; changes to how a match is handled belong in Wizard.
 
 User-provided secrets should travel through
-[secret-vault](../../../src/lib/secret-vault.ts) references. Tool
+[secret-vault](../../../src/shared/secret-vault.ts) references. Tool
 implementations resolve values host-side where they are used; they must not
 return the raw value to the model. Inspect the
-[wizard-tools](../../../src/lib/wizard-tools/) implementations and the Pi
+[wizard-tools](../../../src/agent/tools/) implementations and the Pi
 adapter when extending this shared tool surface.
 
 ## Verification and maintenance

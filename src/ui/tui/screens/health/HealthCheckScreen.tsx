@@ -20,12 +20,13 @@ import { ServiceHealthList } from '@ui/tui/components/ServiceHealthList';
 import {
   getBlockingServiceKeys,
   SIGNUP_WIZARD_READINESS_CONFIG,
-} from '@lib/health-checks/readiness';
-import { ServiceHealthStatus } from '@lib/health-checks/types';
+} from '@shared/health-checks/readiness';
+import { ServiceHealthStatus } from '@shared/health-checks/types';
 import { wizardAbort } from '@utils/wizard-abort';
-import { ErrorCodes } from '@lib/errors';
-import { fetchSkillMenu, downloadSkill } from '@lib/wizard-tools';
-import { GITHUB_SKILLS_BASE_URL } from '@lib/constants';
+import { ErrorCodes } from '@shared/errors';
+import { downloadSkill } from '@agent';
+import { fetchSkillMenu } from '@shared/skill-menu';
+import { GITHUB_SKILLS_BASE_URL } from '@shared/constants';
 import { useDismissOnAnyKey } from '@ui/tui/hooks/useDismissOnAnyKey';
 
 interface HealthCheckScreenProps {

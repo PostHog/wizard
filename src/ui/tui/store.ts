@@ -34,12 +34,12 @@ import {
   buildSession,
   type TaskNotice,
 } from '@lib/wizard-session';
-import type { SettingsConflict } from '@lib/agent/claude-settings';
+import type { SettingsConflict } from '@shared/claude-settings';
 import {
   WizardReadiness,
   getBlockingServiceKeys,
   type WizardReadinessResult,
-} from '@lib/health-checks/readiness';
+} from '@shared/health-checks/readiness';
 import {
   WizardRouter,
   type ScreenName,
@@ -56,9 +56,9 @@ import type {
 import { getProgramConfig } from '@lib/programs/program-registry';
 import { withAiOptInGate } from '@lib/programs/ai-opt-in-gate';
 import { reportWarehouseSourcesDetected } from '@lib/programs/posthog-integration/detect';
-import { EXPANDED_COUNT } from '@ui/tui/constants';
-import { IS_DEV } from '@lib/constants';
-import { computeTokenCostUsd } from '@lib/agent/token-pricing';
+import { appendStatus } from '@shared/status-history';
+import { IS_DEV } from '@shared/constants';
+import { computeTokenCostUsd } from '@shared/token-pricing';
 
 export { TaskStatus, ScreenId, Overlay, Program, RunPhase, McpOutcome };
 export type { ScreenName, OutroData, WizardSession, ProgramId };
@@ -118,13 +118,6 @@ interface GateEntry {
   resolve: () => void;
   resolved: boolean;
 }
-
-/**
- * FIFO cap on retained status lines. The status bar is the only consumer and
- * renders at most EXPANDED_COUNT lines, so there is no reason to retain more —
- * the cap is tied to the window it feeds.
- */
-const MAX_STATUS_MESSAGES = EXPANDED_COUNT;
 
 // Capture blocked skill downloads once per readiness result.
 function captureHealthCheckBlocked(result: WizardReadinessResult): void {
@@ -1029,15 +1022,8 @@ export class WizardStore {
 
   pushStatus(message: string): void {
     const msgs = this.$statusMessages.get();
-    // Skip consecutive duplicate messages (no allocation on the hot path)
-    if (msgs.length > 0 && msgs[msgs.length - 1] === message) return;
-    // Nanostore detects change by reference equality, so a new array is
-    // required. At the cap, allocate exactly once at the final size (dropping
-    // the oldest entry) rather than push-then-truncate.
-    const next =
-      msgs.length >= MAX_STATUS_MESSAGES
-        ? [...msgs.slice(msgs.length - MAX_STATUS_MESSAGES + 1), message]
-        : [...msgs, message];
+    const next = appendStatus(msgs, message);
+    if (next === msgs) return;
     this.$statusMessages.set(next);
     this.emitChange();
   }

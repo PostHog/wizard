@@ -11,7 +11,7 @@
  */
 
 import type { ProgramConfig } from './program-step.js';
-import { POSTHOG_DOCS_URL } from '../constants.js';
+import { POSTHOG_DOCS_URL } from '@shared/constants.js';
 import { posthogIntegrationConfig } from './posthog-integration/index.js';
 import { revenueAnalyticsConfig } from './revenue-analytics/index.js';
 import { warehouseSourceConfig } from './warehouse-source/index.js';

@@ -11,14 +11,14 @@ import {
   type AuthErrorDetail,
   type TokenUsageDelta,
 } from './wizard-ui';
-import type { SettingsConflict } from '@lib/agent/claude-settings';
-import type { ApiUser } from '@lib/api';
-import { OAUTH_TIMEOUT_MS } from '@lib/constants';
+import type { SettingsConflict } from '@shared/claude-settings';
+import type { ApiUser } from '@shared/api';
+import { OAUTH_TIMEOUT_MS } from '@shared/constants';
 import {
   type WizardReadinessResult,
   getBlockingServiceKeys,
   SERVICE_LABELS,
-} from '@lib/health-checks/readiness';
+} from '@shared/health-checks/readiness';
 import type {
   AskAnswers,
   Credentials,

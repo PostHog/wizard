@@ -4,10 +4,10 @@ import {
   OutroKind,
   RunPhase,
 } from '@lib/wizard-session';
-import { HostResolution } from '@lib/host-resolution';
-import { WizardReadiness } from '@lib/health-checks/readiness';
+import { HostResolution } from '@shared/host-resolution';
+import { WizardReadiness } from '@shared/health-checks/readiness';
 import { WizardRouter, ScreenId, Overlay, Program } from '@ui/tui/router';
-import { Integration } from '@lib/constants';
+import { Integration } from '@shared/constants';
 import { FRAMEWORK_REGISTRY } from '@lib/registry';
 import { PROGRAM_REGISTRY } from '@lib/programs/program-registry';
 

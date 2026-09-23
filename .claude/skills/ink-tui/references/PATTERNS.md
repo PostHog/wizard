@@ -48,6 +48,6 @@ layout must update on terminal resize; reading `useStdout` alone does not
 subscribe. Account for the shell's title, hints, tabs, status expansion, and
 optional HUD rather than allocating the full terminal height to screen content.
 
-Write diagnostics through [logToFile](../../../../src/utils/debug.ts), which
+Write diagnostics through [logToFile](../../../../src/shared/utils/debug.ts), which
 uses the configured wizard log destination. Avoid introducing a separate
 hardcoded temporary log or writing debug lines into the live TUI.

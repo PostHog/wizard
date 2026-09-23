@@ -6,8 +6,8 @@ import {
   dispatchFamily,
   pickerChildrenToShow,
 } from '@lib/programs/dispatch-family';
-import { getSkillsBaseUrl } from '@lib/constants';
-import { fetchSkillMenu } from '@lib/wizard-tools';
+import { getSkillsBaseUrl } from '@shared/constants';
+import { fetchSkillMenu } from '@shared/skill-menu';
 
 import type { Command } from '../command';
 import { createFamilyPickerDefault } from './family-picker';

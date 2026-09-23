@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
-import type { ProgramRun } from '@lib/agent/runner/shared/types';
-import { Integration } from '@lib/constants';
+import type { ProgramRun } from '@lib/programs/program-run';
+import { Integration } from '@shared/constants';
 import type { AgenticDetectionReport } from '@lib/detection/agentic';
 import { detectFramework } from '@lib/detection/index';
-import { ErrorCodes } from '@lib/errors';
+import { ErrorCodes } from '@shared/errors';
 import { ERROR_TRACKING_TIPS } from '@lib/programs/error-tracking/content/tips';
 import {
   ERROR_TRACKING_PROJECT_PATH_KEY,

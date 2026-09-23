@@ -17,26 +17,26 @@ import fs from 'fs';
 import net from 'net';
 import { spawnSync } from 'child_process';
 import { startTUI } from '@ui/tui/start-tui';
-import { VERSION } from '@lib/version';
+import { VERSION } from '@shared/version';
 import {
   Program,
   getProgramConfig,
   type ProgramId,
 } from '@lib/programs/program-registry';
-import type { Harness, Sequence } from '@lib/constants';
+import type { Harness, Sequence } from '@shared/constants';
 import { buildSession } from '@lib/wizard-session';
-import { initLocalDev } from '@lib/local-dev';
-import { configureGatewayFromCIEnvironment } from '@lib/gateway-session';
-import { runAgent } from '@lib/agent/agent-runner';
+import { initLocalDev } from '@shared/local-dev';
+import { configureGatewayFromCIEnvironment } from '@agent/gateway-session';
+import { runProgramAgent } from '@lib/programs/run-agent-legacy';
 import { TaskStreamPush, createFileDestination } from '@lib/task-stream/index';
 import { getAuditChecks } from '@lib/programs/audit/types';
-import { authenticate } from '@lib/agent/runner/shared/authenticate';
+import { authenticate } from '@lib/programs/authenticate';
 import { getOrAskForProjectData } from '@utils/setup-utils';
 import { logToFile } from '@utils/debug';
 import { join } from 'path';
 import { detectFramework } from '@lib/detection/index';
 import { FRAMEWORK_REGISTRY } from '@lib/registry';
-import type { Integration } from '@lib/constants';
+import type { Integration } from '@shared/constants';
 import { SELF_DRIVING_INTEGRATE_PATH_KEY } from '@lib/programs/self-driving/detect';
 import { ERROR_TRACKING_PROJECT_PATH_KEY } from '@lib/programs/error-tracking/detect-agentic';
 import {
@@ -334,13 +334,13 @@ async function main() {
           await step.run(await runSessionFor(step));
           store.completeRunStep(step.id);
         } else if (step.screenId === 'run') {
-          await runAgent(programConfig, await runSessionFor(step));
+          await runProgramAgent(programConfig, await runSessionFor(step));
         } else if (step.isComplete) {
           await store.waitUntil(step.isComplete);
         }
       }
     } else {
-      await runAgent(programConfig, store.session);
+      await runProgramAgent(programConfig, store.session);
     }
   };
 

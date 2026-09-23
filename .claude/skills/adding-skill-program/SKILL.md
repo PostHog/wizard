@@ -21,7 +21,7 @@ guide owns the fallback criteria and gateway model/effort/system-prompt
 contract.
 
 These are contribution defaults. Current runtime
-[bindings](../../../src/lib/agent/runner/switchboard/index.ts) still default
+[bindings](../../../src/agent/runner/switchboard/index.ts) still default
 many programs to Anthropic plus linear; documentation changes do not migrate
 them.
 
@@ -56,14 +56,14 @@ changing execution behavior.
    agent work.
 2. Supply the flow's seed and task prompts in context-mill, including the task
    dependencies and applicable skill variants. The
-   [orchestrator](../../../src/lib/agent/runner/sequence/orchestrator/orchestrator-runner.ts)
+   [orchestrator](../../../src/agent/runner/sequence/orchestrator/orchestrator-runner.ts)
    loads `agentFlow ?? id`, requires a seed prompt, and checks task-skill
    variants before running. `run.skillId` alone does not define this flow.
 3. Register the config in
    [PROGRAM_REGISTRY](../../../src/lib/programs/program-registry.ts) and add its
    Pi/orchestrator entry to
-   [PROGRAM_BINDINGS](../../../src/lib/agent/runner/switchboard/index.ts).
-   [Existing binding checks](../../../src/lib/agent/runner/__tests__/switchboard.test.ts)
+   [PROGRAM_BINDINGS](../../../src/agent/runner/switchboard/index.ts).
+   [Existing binding checks](../../../src/agent/runner/__tests__/switchboard.test.ts)
    enforce coverage; `ProgramId` currently widens to `string`.
 4. For a standalone native command, create a command module with
    [nativeCommandFactory](../../../src/commands/factories/native-command-factory.ts)
@@ -93,7 +93,7 @@ config directly and adds prerequisite detection.
 
 `ProgramRun.customPrompt`, `abortCases`, `postRun`, and `buildOutroData` are
 consumed by the
-[linear sequence](../../../src/lib/agent/runner/sequence/linear.ts). `postRun`
+[linear sequence](../../../src/agent/runner/sequence/linear.ts). `postRun`
 runs after success; `buildOutroData` receives session and credentials, with host
 information inside credentials. The orchestrator currently uses its own task
 prompts, failure handling, and outro, and does not invoke those hooks. Check

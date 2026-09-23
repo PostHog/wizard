@@ -1,4 +1,4 @@
-import { VERSION } from '@lib/version';
+import { VERSION } from '@shared/version';
 import { startPlayground } from '@ui/tui/playground/start-playground';
 
 /** Launch the TUI primitives playground. */

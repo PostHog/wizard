@@ -1,6 +1,6 @@
-import type { Integration } from '@lib/constants';
+import type { Integration } from '@shared/constants';
 import type { CloudRegion } from '@utils/types';
-import { withProgress } from '../../telemetry';
+import { withProgress } from '@utils/telemetry';
 import { analytics } from '@utils/analytics';
 import { getUI } from '@ui';
 import { MCPClient } from './MCPClient';

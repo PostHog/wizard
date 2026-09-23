@@ -15,11 +15,11 @@
 
 import {
   initializeAgent,
-  runAgent as executeAgent,
+  executeAgent,
   buildRunTags,
   AgentSignals,
   AgentErrorType,
-} from '@lib/agent/agent-interface';
+} from '@agent';
 import { isAbsolute, resolve, sep } from 'path';
 import { detectNodePackageManagers } from './package-manager.js';
 import {
@@ -28,11 +28,12 @@ import {
   CallType,
   getSkillsBaseUrl,
   HAIKU_MODEL,
-} from '@lib/constants';
+} from '@shared/constants';
 import { analytics } from '@utils/analytics';
 import type { WizardSession } from '@lib/wizard-session';
 import type { WizardRunOptions } from '@utils/types';
-import type { SpinnerHandle } from '@ui';
+import { getUI, type SpinnerHandle } from '@ui';
+import { createUiReducer } from '@ui/agent-progress';
 
 /** A category the agent classifies each project into (id the agent returns). */
 export type DetectTarget = { id: string; name: string };
@@ -382,6 +383,7 @@ export async function detectProjectsWithAgent(
         : AGENTIC_DETECTION_RETRY_TIMEOUT_MS;
     const agent = await initializeAgent(
       {
+        emit: createUiReducer(getUI()),
         workingDirectory: cwd,
         posthogMcpUrl: host.mcpUrl,
         posthogApiKey: accessToken,
@@ -452,15 +454,24 @@ export async function detectProjectsWithAgent(
       middleware,
     );
 
-    if (result.error === AgentErrorType.AGENTIC_DETECTION_TIMEOUT) {
+    if (
+      result.kind === 'failure' &&
+      result.classification === AgentErrorType.AGENTIC_DETECTION_TIMEOUT
+    ) {
       if (attempt === 0) {
         onEvent?.('Project scan timed out; retrying...');
         continue;
       }
       throw new AgenticDetectionTimeoutError(attempt + 1, timeoutMs);
     }
-    if (result.error) {
-      throw new Error(result.message || `Agent error: ${result.error}`);
+    if (result.kind !== 'success') {
+      if (result.kind === 'decided_failure') {
+        throw result.failure.error ?? new Error(result.failure.message);
+      }
+      throw (
+        result.error ??
+        new Error(result.message || `Agent error: ${result.classification}`)
+      );
     }
 
     // Transcript first, final message last — its verdicts win path conflicts.

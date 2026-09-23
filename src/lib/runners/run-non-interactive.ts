@@ -1,9 +1,13 @@
-import { POSTHOG_DOCS_URL, type Harness, type Sequence } from '@lib/constants';
+import {
+  POSTHOG_DOCS_URL,
+  type Harness,
+  type Sequence,
+} from '@shared/constants';
 import {
   checkLocalServices,
   getLocalDev,
   POSTHOG_LOCAL_URL,
-} from '@lib/local-dev';
+} from '@shared/local-dev';
 import type { CloudRegion } from '@utils/types';
 import { getUI, setUI } from '@ui';
 import { LoggingUI } from '@ui/logging-ui';
@@ -17,9 +21,9 @@ import { join } from 'node:path';
 import {
   ErrorCodes,
   classifyRunFailure,
-  detectErrorCode,
   emitWizardError,
-} from '@lib/errors';
+} from '@shared/errors';
+import { detectErrorCode } from '@lib/programs/detect-map';
 import type { OutroData, RunPhase as RunPhaseT } from '@lib/wizard-session';
 
 /**
@@ -79,7 +83,7 @@ export function validateNonInteractiveOptions(
  * (`runWizardHeadless`) runs.
  *
  * Validates flags, builds a `ci:true` session, runs `config.ciPreRun` (or the
- * program's `onReady` hooks by default), executes `runAgent`, and routes any
+ * program's `onReady` hooks by default), executes `runProgramAgent`, and routes any
  * failure through `wizardAbort`. `wizardAbort` owns all exits — never add a
  * raw `process.exit` here.
  *
@@ -238,9 +242,7 @@ export function runNonInteractive(
 
     try {
       if (mode === 'ci') {
-        const { configureGatewayFromCIEnvironment } = await import(
-          '@lib/gateway-session'
-        );
+        const { configureGatewayFromCIEnvironment } = await import('@agent');
         configureGatewayFromCIEnvironment(
           Number(session.projectId),
           session.region ?? 'us',
@@ -335,8 +337,10 @@ export function runNonInteractive(
         }
       }
 
-      const { runAgent } = await import('@lib/agent/agent-runner');
-      await runAgent(config, session);
+      const { runProgramAgent } = await import(
+        '@lib/programs/run-agent-legacy'
+      );
+      await runProgramAgent(config, session);
       await settleStream(RunPhase.Completed);
     } catch (error) {
       const errorMessage =

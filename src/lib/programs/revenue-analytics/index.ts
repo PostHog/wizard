@@ -1,5 +1,5 @@
 import type { ProgramConfig } from '@lib/programs/program-step';
-import { WIZARD_TOOL_NAMES } from '@lib/wizard-tools';
+import { WIZARD_TOOL_NAMES } from '@agent';
 import { REVENUE_ANALYTICS_PROGRAM } from './steps.js';
 import { REVENUE_ABORT_CASES } from './detect.js';
 import { getContentBlocks } from './content/index.js';

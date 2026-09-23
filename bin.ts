@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 import { satisfies } from 'semver';
 import { Agent, setGlobalDispatcher } from 'undici';
-import { ErrorCodes } from './src/lib/errors/codes.js';
-import { emitWizardError } from './src/lib/errors/emit.js';
+import { ErrorCodes } from '@shared/errors/codes.js';
+import { emitWizardError } from '@shared/errors/emit.js';
 
 // Keep in sync with `engines.node` in package.json. npx does not enforce
 // engines, so this preflight is the only thing standing between an old Node
@@ -83,7 +83,7 @@ import { uploadSourcemapsCommand } from './src/commands/upload-sourcemaps';
 import { errorTrackingCommand } from './src/commands/error-tracking';
 import { skillCommand } from './src/commands/skill';
 import { cliCommand } from './src/commands/cli';
-import { recoverOrphanedSettingsBackups } from './src/lib/agent/claude-settings';
+import { recoverOrphanedSettingsBackups } from '@shared/claude-settings';
 
 // Heal any .claude/settings backup a previous interrupted run left orphaned,
 // before anything else reads Claude settings — conflict detection, OAuth, and

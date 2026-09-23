@@ -1,19 +1,19 @@
 import { vi, it, expect, afterEach } from 'vitest';
 import { runWizard } from '../run-wizard';
-import { runAgent } from '@lib/agent/agent-runner';
+import { runProgramAgent } from '@lib/programs/run-agent-legacy';
 import { startTUI } from '@ui/tui/start-tui';
 import { WizardStore } from '@ui/tui/store';
 import { InkUI } from '@ui/tui/ink-ui';
 import { setUI } from '@ui';
 import { posthogIntegrationConfig } from '@lib/programs/posthog-integration';
 import { ScreenId } from '@ui/tui/router';
-import { HostResolution } from '@lib/host-resolution';
+import { HostResolution } from '@shared/host-resolution';
 import { analytics } from '@utils/analytics';
 
-vi.mock('@lib/agent/agent-runner', () => ({ runAgent: vi.fn() }));
+vi.mock('@lib/programs/run-agent-legacy', () => ({ runProgramAgent: vi.fn() }));
 vi.mock('@ui/tui/start-tui', () => ({ startTUI: vi.fn() }));
-vi.mock('@lib/local-dev', async (original) => ({
-  ...(await original<typeof import('@lib/local-dev')>()),
+vi.mock('@shared/local-dev', async (original) => ({
+  ...(await original<typeof import('@shared/local-dev')>()),
   getLocalDev: () => ({}),
   checkLocalServices: () => Promise.resolve(null),
 }));
@@ -59,7 +59,7 @@ it.each(['continue', 'exit'] as const)(
     });
     // runWizard installs its own session first; auth then sets credentials,
     // and the agent dies after that.
-    vi.mocked(runAgent).mockImplementation(() => {
+    vi.mocked(runProgramAgent).mockImplementation(() => {
       store.setCredentials({
         accessToken: 'tok',
         projectApiKey: 'pk',

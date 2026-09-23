@@ -32,14 +32,7 @@ function resolveTsForJs(): Plugin {
 // Per-surface Vitest projects keyed by today's directories. Each project runs
 // alone with `vitest run --project <name>`; `vitest run` runs them all.
 const TESTS = '__tests__/**/*.{js,jsx,ts,tsx}';
-const AGENT_TESTS = [
-  `src/lib/agent/**/${TESTS}`,
-  `src/lib/middleware/**/${TESTS}`,
-  'src/lib/__tests__/agent-*.test.ts',
-  'src/lib/__tests__/gateway-session.test.ts',
-  'src/lib/__tests__/wizard-can-use-tool.test.ts',
-  'src/lib/__tests__/yara-*.test.ts',
-];
+const AGENT_TESTS = [`src/agent/**/${TESTS}`];
 const TUI_TESTS = [`src/ui/tui/**/${TESTS}`];
 const CLI_TESTS = [
   `src/commands/**/${TESTS}`,
@@ -85,11 +78,15 @@ export default defineConfig({
         replacement: r('__mocks__/@posthog/warlock.ts'),
       },
       { find: /^ink$/, replacement: r('__mocks__/ink.ts') },
+      { find: /^@shared\/(.*)$/, replacement: `${r('src/shared')}/$1` },
+      { find: /^@agent$/, replacement: r('src/agent/index.ts') },
+      { find: /^@agent\/types$/, replacement: r('src/agent/types.ts') },
+      { find: /^@agent\/(.*)$/, replacement: `${r('src/agent')}/$1` },
       // Path aliases — mirror tsconfig `paths`.
       { find: /^@env$/, replacement: r('src/env.ts') },
       { find: /^@lib\/(.*)$/, replacement: `${r('src/lib')}/$1` },
       { find: /^@e2e-harness\/(.*)$/, replacement: `${r('e2e-harness')}/$1` },
-      { find: /^@utils\/(.*)$/, replacement: `${r('src/utils')}/$1` },
+      { find: /^@utils\/(.*)$/, replacement: `${r('src/shared/utils')}/$1` },
       { find: /^@ui$/, replacement: r('src/ui/index.ts') },
       { find: /^@ui\/(.*)$/, replacement: `${r('src/ui')}/$1` },
       { find: /^@steps$/, replacement: r('src/steps/index.ts') },

@@ -14,29 +14,17 @@ import type { Credentials } from '@lib/wizard-session';
 import { getOrAskForProjectData } from '@utils/setup-utils';
 import { Program } from '@lib/programs/program-registry';
 import type { WizardStore } from '@ui/tui/store';
-import type { ApiUser } from '@lib/api';
+import type { ApiUser } from '@shared/api';
 import {
   probeProjectData as runProbe,
   type ProjectDataProfile,
 } from '@lib/mcp-project-profile';
 import { seedDemoEvents as runSeed } from '@lib/mcp-seed-events';
 
-/**
- * Discriminated union covering every kind of streamed event the screen
- * needs to render. Production yields these from Claude SDK messages;
- * the playground yields them from canned scripts.
- */
-export type AgentChunk =
-  | { kind: 'text'; text: string }
-  /** `command` carries CLI mode's exec command string (`call <tool> …`) so the
-   *  screen can recover the inner tool for context-aware follow-ups. */
-  | { kind: 'tool-call'; toolName: string; detail: string; command?: string }
-  | { kind: 'tool-result'; toolName: string; detail: string }
-  | { kind: 'error'; text: string }
-  /** Stream completed. `sessionId` is the SDK session ID of the just-
-   *  completed turn; pass it back as `resumeSessionId` on a follow-up
-   *  call to continue the conversation with full history. */
-  | { kind: 'done'; sessionId?: string };
+// The streamed event shape is the agent's; re-exported so the screen and the
+// playground keep their import path.
+import type { AgentChunk } from '@agent/types';
+export type { AgentChunk };
 
 export interface McpSuggestedPromptsServices {
   /**
@@ -173,8 +161,6 @@ async function* runProductionPromptStreaming(args: {
   // Defer the SDK import to call time — the playground never hits
   // this path (it overrides the whole service object), so demo
   // sessions don't pay the SDK load cost.
-  const { runMcpPromptViaSdk } = await import(
-    '@lib/agent/mcp-prompt-streaming'
-  );
+  const { runMcpPromptViaSdk } = await import('@agent');
   yield* runMcpPromptViaSdk(args);
 }

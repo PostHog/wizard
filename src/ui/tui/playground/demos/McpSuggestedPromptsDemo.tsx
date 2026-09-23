@@ -36,9 +36,9 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { WizardStore } from '@ui/tui/store';
 import { McpSuggestedPromptsScreen } from '@ui/tui/screens/McpSuggestedPromptsScreen';
 import { Colors } from '@ui/tui/styles';
-import { Integration } from '@lib/constants';
+import { Integration } from '@shared/constants';
 import { McpOutcome } from '@lib/wizard-session';
-import { HostResolution } from '@lib/host-resolution';
+import { HostResolution } from '@shared/host-resolution';
 import { TAILORED_ROLES } from '@lib/mcp-role-prompts';
 import {
   assembleProfile,

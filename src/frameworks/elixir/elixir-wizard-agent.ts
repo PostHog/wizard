@@ -4,7 +4,7 @@ import * as path from 'node:path';
 import type { WizardRunOptions } from '@utils/types';
 import type { FrameworkConfig } from '@lib/framework-config';
 import { mixPackageManager } from '@lib/detection/package-manager';
-import { Integration } from '@lib/constants';
+import { Integration } from '@shared/constants';
 
 type ElixirContext = {
   phoenix?: boolean;

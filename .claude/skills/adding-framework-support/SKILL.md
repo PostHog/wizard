@@ -25,7 +25,7 @@ example under [src/frameworks](../../../src/frameworks/). Framework-specific
 detection, context, environment conventions, and UI metadata belong here.
 Integration instructions and examples belong in context-mill.
 
-1. Add the integration to [Integration](../../../src/lib/constants.ts). Its
+1. Add the integration to [Integration](../../../src/shared/constants.ts). Its
    order controls first-match detection and the framework picker. Keep specific
    frameworks before language fallbacks and generic Node last; preserve the
    overlap rules in the
@@ -59,7 +59,7 @@ itself.
 | [Laravel](../../../src/frameworks/laravel/) | Composer and framework-specific filesystem signals                                                                          |
 | [Rails](../../../src/frameworks/rails/)     | Gemfile detection and Ruby conventions                                                                                      |
 
-Use [bounded filesystem helpers](../../../src/utils/bounded-fs.ts) for project
+Use [bounded filesystem helpers](../../../src/shared/utils/bounded-fs.ts) for project
 scans and reads. They bound traversal and skip dependency/build directories; add
 framework-specific exclusions with `extraIgnore`. Keep complex parsers and
 detectors beside the config so they can be checked independently.
@@ -71,7 +71,7 @@ matching integration reference and task-skill variants for the framework. A
 registry entry alone does not provide integration knowledge. The orchestrator
 resolves framework variants from the skill menu and rejects missing task
 variants; see the
-[orchestrator runner](../../../src/lib/agent/runner/sequence/orchestrator/orchestrator-runner.ts).
+[orchestrator runner](../../../src/agent/runner/sequence/orchestrator/orchestrator-runner.ts).
 
 Keep project-specific facts in configuration and reusable integration guidance
 in that content. Model IDs, reasoning efforts, and gateway-required system
