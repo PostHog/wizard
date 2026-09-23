@@ -78,8 +78,12 @@ handoff. An AI program whose organization lacks AI-processing approval needs
 `ProgramRunOutcome.outcome` is `success`, `aborted`, `failed`, or `crashed`.
 Decided pre-run failures, such as an unknown program or missing credentials,
 return `failed` with `failure.message`. An agent crash appears as `crashed`.
-External host capabilities can still reject, so callers should also handle a
-rejected promise.
+Non-success agent outcomes carry the agent's `failure`, including any attached
+`Error`. `failure.error` is optional, as are its code and message. Read the
+outcome to decide how the run ended, and use the attached error for diagnostics
+or an upstream rethrow. The host owns logging and user-facing error messages.
+External host capabilities and failures outside the agent's run-body catch can
+still reject, so callers should also handle a rejected promise.
 
 `options.signal` accepts an `AbortSignal`. A signal aborted before the run
 starts returns `aborted` with an agent-abort failure code. During an agent run,
@@ -136,6 +140,7 @@ export async function runMetrics(
   );
 
   if (result.outcome !== 'success') {
+    if (result.failure?.error) throw result.failure.error;
     throw new Error(result.failure?.message ?? `Metrics ${result.outcome}`);
   }
   return result;
@@ -151,8 +156,7 @@ The callable host does not discover credentials, choose a project, or render
 questions itself. The host supplies those data and capabilities. Some legacy
 recipes still need an explicit data-only run definition; unsupported
 combinations return a failed outcome. Existing terminal and CI callers route
-their agent work through this host via
-`src/lib/runners/run-program-agent.ts`, which still owns session gates and UI
-translation. There is no socket controller or step-by-step
-control API. For the existing process-owned CI runner, see the
+their agent work through this host via `src/lib/runners/run-program-agent.ts`,
+which still owns session gates and UI translation. There is no socket controller
+or step-by-step control API. For the existing process-owned CI runner, see the
 [non-interactive developer interfaces](../../docs/developer-interfaces.md).
