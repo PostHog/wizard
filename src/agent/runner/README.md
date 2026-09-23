@@ -23,7 +23,7 @@ retained for very simple tasks and legacy support. The Anthropic Agent SDK is a
 supported legacy fallback, deprecated as the default, retained for major Pi
 vulnerabilities or gaps in support for new Anthropic models.
 
-`DEFAULT_AGENT_BINDING`, the standalone default, is Pi + linear; explicit
+`DEFAULT_AGENT_BINDING`, the standalone default, is Pi + linear. Explicit
 program bindings and flags determine actual behavior. Both harnesses implement
 `run` and `runTask`. Composed sub-runs are clamped to linear, and linear-only
 post-run/outro hooks do not automatically transfer to an orchestrated flow.
@@ -44,9 +44,11 @@ Five layers, each with its own job. Nothing crosses layers unless it has to.
 takes resolved execution data and an invocation snapshot (`shared/types.ts`),
 reports through `onProgress` and asks through `interaction` (`../progress.ts`),
 and returns decided outcomes and caught run-body crashes as results. It never
-renders, reads a session or exits. `src/programs/run-program.ts` resolves
-credentials through a host provider, awaits the host's gates, loads flags and
-resolves the binding from caller data. The legacy
+renders, reads a session or exits. Its caller does the host work. For a program
+run, `runProgram` in `src/programs/run-program.ts` calls the host's credentials
+provider once, identifies the user, stamps the AI SDK evidence, awaits the
+host's approval and workflow connector, loads flags, refreshes an OAuth token
+near expiry, and resolves the binding. The legacy
 `src/lib/runners/run-program-agent.ts` supplies those capabilities from the
 session and maps progress back onto `getUI()`.
 
@@ -59,10 +61,10 @@ the same.
 and the harness and model resolution helper, `resolveHarness` (CLI > flag >
 program config > default). The program layer owns the sequence precedence
 (`resolveProgramBinding`) and turns its program ID, validated flag route and CLI
-overrides into a resolved binding before calling `runAgent`; `harnessRunsTasks`
-tells it which harnesses the orchestrator can drive. Agent code uses that
-binding to select a sequence and harness; it does not read the program registry
-or parse feature flags.
+overrides into a resolved binding before it calls `runAgent`. The CLI overrides
+arrive as `ProgramInput.overrides`. `harnessRunsTasks` tells it which harnesses
+the orchestrator can drive. Agent code uses that binding to select a sequence
+and harness. It doesn't read the program registry or parse feature flags.
 
 **Sequences** (`sequence/`) are LLM query shapes. Once the binding has picked
 one, that sequence takes over the run and owns _how the LLM's work is shaped_.
@@ -83,7 +85,7 @@ gateway.
 
 ## How they connect
 
-- Programs supply inference auth; prepare resolves it and builds triage for the
+- Programs supply inference auth. Prepare resolves it and builds triage for the
   resolved harness.
 - The program layer resolves the binding with the switchboard helpers. Agent
   code dispatches the selected sequence and harness.
@@ -137,30 +139,33 @@ block-beta
 
 Calls descend on the left, results return through the middle, and a host-owned
 abort signal descends on the right. A standalone caller invokes `runAgent`
-without `runProgram`. A program may return a pre-run failure without starting
-the agent, and a caught preparation error produces `RunResult` without a
-`SequenceResult`. The orchestrator stops scheduling on the first fatal task
-result, cancels active siblings and pending asks, and waits for them to settle
-before returning that failure. A host signal can also cancel active harness
-work.
+without `runProgram`, and so does agentic detection. A program may return a
+pre-run failure without starting the agent, and a caught preparation error
+produces `RunResult` without a `SequenceResult`. The orchestrator stops
+scheduling on the first fatal task result, cancels active siblings and pending
+asks, and waits for them to settle before returning that failure. A host signal
+can also cancel active harness work.
 
 ## Flow
 
-1. The caller runs its gates, authenticates, fetches PostHog flags and resolves
-   a `ProgramBinding { sequence, harness, model }`; analytics tags the run.
+1. The host runs `preflight`. `runProgram` then resolves credentials, awaits the
+   host's gates, loads PostHog flags, refreshes a token near expiry and resolves
+   a `ProgramBinding { sequence, harness, model }` from `input.overrides` and
+   the flags. It tags the run and captures the switchboard decision.
 2. `runAgent(config, input, options)` resolves the supplied inference auth and
    prepares triage.
-3. Sequence takes over — shapes the LLM's work into one conversation (linear) or
-   many (orchestrator), reporting through `onProgress`.
+3. The sequence takes over. It shapes the LLM's work into one conversation
+   (linear) or many (orchestrator), and reports through `onProgress`.
 4. Harness drives each conversation through its SDK, using the bound model, on
    the PostHog LLM gateway.
 5. The scan report flushes once, on a best-effort basis: as the run ends, or
    earlier when a process drain runs the cleanups, unless `RunConfig.scanReport`
    defers it to the host run. Its line arrives as `log` progress. `runAgent`
    resolves a `RunResult` with an outcome and progress snapshot. A non-success
-   result carries a code and message; a caught error remains attached.
-6. The caller applies it. The legacy runner sends a decided failure to
-   `wizardAbort` with the terminal status its outcome names; for a crash it
-   rethrows the attached `Error` when present; after a non-composed success it
-   sends the terminal success analytics. Other hosts can log, present, or
-   rethrow the failure as they need. The agent sends no terminal analytics.
+   result carries a code and message, and a caught error stays attached.
+6. `runProgram` records the result in its outcome, and the host applies it. The
+   legacy runner sends a decided failure to `wizardAbort` with the terminal
+   status its outcome names. For a crash, it rethrows the attached `Error` when
+   present. After a non-composed success, it sends the terminal success
+   analytics. Other hosts can log, present, or rethrow the failure as they need.
+   Neither `runAgent` nor `runProgram` sends terminal analytics.
