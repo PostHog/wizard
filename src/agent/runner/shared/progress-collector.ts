@@ -23,7 +23,7 @@ export interface ProgressCollector {
 }
 
 export function createProgressCollector(
-  onProgress?: (event: AgentProgress) => void,
+  onProgress?: (event: AgentProgress) => unknown,
 ): ProgressCollector {
   const snapshot: RunSnapshot = {
     tasks: [],
@@ -75,14 +75,33 @@ export function createProgressCollector(
     apply(event);
     if (!onProgress) return;
     try {
-      onProgress(structuredClone(event));
+      const observed = onProgress(structuredClone(event));
+      if (
+        observed &&
+        typeof (observed as PromiseLike<unknown>).then === 'function'
+      ) {
+        void Promise.resolve(observed).catch((error: unknown) => {
+          try {
+            logToFile(
+              `[agent] progress observer rejected on ${event.kind}:`,
+              error,
+            );
+          } catch {
+            // Logging is best effort.
+          }
+        });
+      }
     } catch (error) {
       // A broken projection is the host's problem, not the run's. Say so in
       // the log and carry on; the snapshot above is the source of truth.
-      logToFile(
-        `[agent] progress observer threw on ${event.kind}:`,
-        error instanceof Error ? error.message : error,
-      );
+      try {
+        logToFile(
+          `[agent] progress observer threw on ${event.kind}:`,
+          error instanceof Error ? error.message : error,
+        );
+      } catch {
+        // Logging is best effort.
+      }
     }
   };
 
