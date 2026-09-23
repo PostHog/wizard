@@ -230,6 +230,7 @@ import type { RunConfig, RunInput } from '@agent/runner';
 import { analytics } from '@utils/analytics';
 import { initLogFile } from '@utils/debug';
 import { flushScanReport } from '@agent/yara-hooks';
+import { clearCleanup, runCleanups } from '@utils/cleanup-registry';
 import { QUEUE_DIR_NAME } from '../runner/sequence/orchestrator/queue';
 
 let tmp: string;
@@ -868,6 +869,45 @@ describe('runAgent standalone', () => {
       cacheCreationTokens: 0,
     });
     expect(analytics.shutdown).not.toHaveBeenCalled();
+  });
+
+  it('a process drain during a run writes the scan report once, through progress', async () => {
+    clearCleanup();
+    harnessState.waitForAbort = true;
+    vi.mocked(flushScanReport).mockReturnValueOnce(
+      'YARA scan report: /tmp/scan.json',
+    );
+    const controller = new AbortController();
+    const events: AgentProgress[] = [];
+    const running = runAgent(
+      config(),
+      input({ flags: { ...input().flags, yaraReport: true } }),
+      {
+        signal: controller.signal,
+        onProgress: (event) => events.push(event),
+      },
+    );
+    await vi.waitFor(() => expect(harnessState.lastInputs).toBeTruthy());
+
+    runCleanups();
+
+    expect(flushScanReport).toHaveBeenCalledExactlyOnceWith({
+      yaraReport: true,
+    });
+    expect(events).toContainEqual({
+      kind: 'log',
+      level: 'info',
+      message: 'YARA scan report: /tmp/scan.json',
+    });
+    controller.abort();
+    expect((await running).outcome).toBe(RunOutcome.Aborted);
+    expect(flushScanReport).toHaveBeenCalledTimes(1);
+    expect(
+      events.filter(
+        (event) =>
+          event.kind === 'log' && event.message.startsWith('YARA scan report'),
+      ),
+    ).toHaveLength(1);
   });
 
   it('runs to a complete result with no options at all', async () => {

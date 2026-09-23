@@ -18,7 +18,7 @@ import type { WizardSession } from '@lib/wizard-session';
 import { analytics } from '@utils/analytics';
 import { getUI } from '@ui';
 import { createUiReducer, uiInteraction } from '@ui/agent-progress';
-import { buildRunTags, flushScanReport, RunOutcome } from '@agent';
+import { RunOutcome } from '@agent';
 import type { InferenceAuthProvider, RunConfig, RunInput } from '@agent/types';
 import { runProgram } from './run-program';
 import { createPosthogInferenceAuthProvider } from './credentials';
@@ -182,15 +182,6 @@ async function runLegacyStep(
   const wizardFlags = await analytics.getAllFlagsForWizard();
   const wizardFlagPayloads = analytics.getWizardFlagPayloads();
 
-  // Gateway trace tags for this run; the binding below stamps its axes on.
-  const wizardMetadata = buildRunTags({
-    programId: programConfig.id,
-    integration: run.integrationLabel,
-    runId: analytics.runId,
-    build: analytics.build,
-    skillId: run.skillId,
-  });
-
   // The agent can't swap tokens mid-run, so freshness is measured after every
   // park above, right before the agent mints.
   await refreshAccessTokenIfNeeded(session);
@@ -219,19 +210,9 @@ async function runLegacyStep(
   const binding = resolveProgramBinding(switchboard);
   analytics.setTag('sequence', binding.sequence);
   analytics.setTag('harness', binding.harness);
-  wizardMetadata.SEQUENCE = binding.sequence;
-  wizardMetadata.HARNESS = binding.harness;
   captureSwitchboardDecision(switchboard, binding);
 
   const ui = getUI();
-
-  // Cleanup coverage for the abort/cancel path: `wizardAbort` runs the
-  // registered cleanups, and the agent's own `finally` covers completion.
-  // flushScanReport is idempotent, so the overlap is a harmless no-op.
-  registerCleanup(() => {
-    const report = flushScanReport({ yaraReport: session.yaraReport });
-    if (report) ui.log.info(report);
-  });
 
   // Linear settings restoration fires on entry to the outro screen, so it
   // is registered before the run can reach that screen. Same owner, same
@@ -242,7 +223,8 @@ async function runLegacyStep(
   }
 
   const framework = session.integration ?? session.skillId ?? undefined;
-  const config: RunConfig = {
+  // runProgram builds the gateway trace tags.
+  const config: Omit<RunConfig, 'wizardMetadata'> = {
     programId: programConfig.id,
     run,
     composed,
@@ -257,7 +239,6 @@ async function runLegacyStep(
     skillsBaseUrl: getSkillsBaseUrl(),
     wizardFlags,
     wizardFlagPayloads,
-    wizardMetadata,
     allowedTools: programConfig.allowedTools,
     disallowedTools: programConfig.disallowedTools,
     agentFlow: programConfig.agentFlow,
@@ -328,7 +309,6 @@ async function runLegacyStep(
       host: input.host,
       wizardFlags: config.wizardFlags,
       wizardFlagPayloads: config.wizardFlagPayloads,
-      wizardMetadata: config.wizardMetadata,
       seedTasks: config.seedTasks,
       hooks: config.hooks,
       allowedTools: config.allowedTools,

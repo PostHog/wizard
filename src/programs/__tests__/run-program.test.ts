@@ -194,6 +194,59 @@ describe('runProgram', () => {
     });
   });
 
+  it('every run carries the standard trace tags', async () => {
+    vi.mocked(runAgent).mockResolvedValue({
+      outcome: RunOutcome.Success,
+      snapshot,
+    });
+
+    await runProgram('metrics', {
+      installDir: '/project',
+      credentials,
+      binding: {
+        sequence: Sequence.linear,
+        harness: Harness.anthropic,
+        model: 'claude-test',
+      },
+    });
+
+    expect(vi.mocked(runAgent).mock.calls[0][0].wizardMetadata).toEqual({
+      program_id: 'metrics',
+      integration: 'metrics',
+      run_id: 'analytics-run-id',
+      build: 'test',
+      call_type: 'agent',
+      SEQUENCE: Sequence.linear,
+      HARNESS: Harness.anthropic,
+    });
+  });
+
+  it('lets input metadata override the standard tags but not the route', async () => {
+    vi.mocked(runAgent).mockResolvedValue({
+      outcome: RunOutcome.Success,
+      snapshot,
+    });
+
+    await runProgram('metrics', {
+      installDir: '/project',
+      credentials,
+      run: { ...run, skillId: 'metrics-skill' },
+      binding: {
+        sequence: Sequence.linear,
+        harness: Harness.anthropic,
+        model: 'claude-test',
+      },
+      wizardMetadata: { run_id: 'host-run', SEQUENCE: 'not-the-route' },
+    });
+
+    expect(vi.mocked(runAgent).mock.calls[0][0].wizardMetadata).toMatchObject({
+      program_id: 'metrics',
+      skill_id: 'metrics-skill',
+      run_id: 'host-run',
+      SEQUENCE: Sequence.linear,
+    });
+  });
+
   it('returns a decided failure for an unknown program before invoking the agent', async () => {
     vi.mocked(getRuntimeProgramConfig).mockReturnValueOnce(undefined as never);
 

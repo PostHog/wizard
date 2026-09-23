@@ -13,6 +13,7 @@ import type {
 import { getSkillsBaseUrl } from '@shared/constants';
 import type { Harness, Integration, Sequence } from '@shared/constants';
 import { ErrorCodes } from '@shared/errors';
+import { buildRunTags } from '@shared/run-tags';
 import { captureRunSkillCleanup } from '@shared/skill-run-cleanup';
 import type { DiscoveredFeature } from '@shared/scan-consent';
 import { analytics, groupsFromUser } from '@utils/analytics';
@@ -603,6 +604,13 @@ async function runProgramWithStore(
       credentials.inferenceAuth ??
       createPosthogInferenceAuthProvider(posthog, programId);
     const wizardMetadata = {
+      ...buildRunTags({
+        programId,
+        integration: run.integrationLabel,
+        runId: analytics.runId,
+        build: analytics.build,
+        skillId: run.skillId,
+      }),
       ...input.wizardMetadata,
       SEQUENCE: binding.sequence,
       HARNESS: binding.harness,
