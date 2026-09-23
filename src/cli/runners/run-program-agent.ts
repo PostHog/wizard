@@ -26,9 +26,18 @@ import {
   areSeededTasksEnabled,
   resolveStageOverrides,
   type ProgramSwitchboardCtx,
+  FRAMEWORK_REGISTRY,
+  authenticate,
+  refreshAccessTokenIfNeeded,
+  maybeStampAiSdkDetected,
+  startAuditLedgerWatcher,
+  AUDIT_CHECKS_KEY,
 } from '@programs';
-import type { ProgramCompletionContext, ProgramRunHost } from '@programs/types';
-import type { ProgramRun } from '@programs/program-run';
+import type {
+  ProgramCompletionContext,
+  ProgramRunHost,
+  ProgramRun,
+} from '@programs/types';
 import {
   backupAndFixClaudeSettings,
   checkAllSettingsConflicts,
@@ -51,17 +60,7 @@ import {
   Sequence,
   type Integration,
 } from '@shared/constants';
-import { FRAMEWORK_REGISTRY } from '@programs/registry';
-import { postAuthGateSteps } from '@tui/flow';
-import { rawProgramFlow } from '@tui/flows/index';
 import type { ProgramConfig } from '@programs/types';
-import {
-  authenticate,
-  refreshAccessTokenIfNeeded,
-} from '@programs/authenticate';
-import { maybeStampAiSdkDetected } from '@programs/posthog-integration/detect';
-import { startAuditLedgerWatcher } from '@programs/audit/ledger-watcher';
-import { AUDIT_CHECKS_KEY } from '@programs/audit/types';
 import { captureRunSkillCleanup } from '@shared/skill-run-cleanup';
 import { cliAuthHost } from './auth-host';
 import type { WizardSession } from '@tui/session';
@@ -183,6 +182,9 @@ async function runProgram(
   // but BEFORE the agent runs — e.g. the source-maps project picker, which
   // needs credentials to scan and writes its choice to frameworkContext that
   // the run prompt reads. Generic: await every gated step between auth and run.
+  // The program's TUI flow names its post-auth gates; loaded here, not at startup.
+  const { postAuthGateSteps } = await import('@tui/flow');
+  const { rawProgramFlow } = await import('@tui/flows/index');
   for (const step of postAuthGateSteps(rawProgramFlow(programConfig.id))) {
     logToFile(`[agent-runner] awaiting post-auth gate: ${step.id}`);
     await getUI().waitForGate(step.id);
@@ -389,6 +391,7 @@ async function runHealthGate(
   session: WizardSession,
   programConfig: ProgramConfig,
 ): Promise<void> {
+  const { rawProgramFlow } = await import('@tui/flows/index');
   const hasHealthCheckScreen = rawProgramFlow(programConfig.id).some(
     (s) => s.screenId === 'health-check',
   );

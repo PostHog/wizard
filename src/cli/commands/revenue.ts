@@ -1,7 +1,6 @@
-import { revenueAnalyticsConfig } from '@programs/revenue-analytics/index';
-
 import type { Command } from './command';
 import { nativeCommandFactory } from './factories/native-command-factory';
+import { revenueAnalyticsConfig } from '@programs';
 
 /**
  * `wizard revenue-analytics` — flat skill command, Stripe today.

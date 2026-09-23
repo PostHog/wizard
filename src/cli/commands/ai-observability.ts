@@ -1,8 +1,8 @@
-import { aiObservabilityConfig } from '@programs/ai-observability/index';
 import { headlessOption, regionOption } from '@cli/headless-mode';
 
 import type { Command } from './command';
 import { nativeCommandFactory } from './factories/native-command-factory';
+import { aiObservabilityConfig } from '@programs';
 
 /**
  * `wizard ai-observability` — flat skill command, wire AI Observability into a

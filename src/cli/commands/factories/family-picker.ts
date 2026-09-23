@@ -18,7 +18,6 @@
 
 import type { Arguments } from 'yargs';
 
-import { renderFamilyPicker } from '@tui/family-picker';
 import { commandKeys, type Command } from '../command';
 
 function describe(child: Command): string {
@@ -47,13 +46,15 @@ export function orderFamilyChildren(children: readonly Command[]): Command[] {
  * selected a child; dispatching the child's handler is the caller's
  * responsibility.
  */
-export function chooseFamilyChild(
+export async function chooseFamilyChild(
   parentLabel: string,
   children: readonly Command[],
 ): Promise<Command | null> {
   const ordered = orderFamilyChildren(children);
-  if (ordered.length === 0) return Promise.resolve(null);
+  if (ordered.length === 0) return null;
 
+  // Ink loads with the picker, not with the CLI.
+  const { renderFamilyPicker } = await import('@tui/family-picker');
   return renderFamilyPicker(
     parentLabel,
     ordered.map((child) => ({

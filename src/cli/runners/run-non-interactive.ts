@@ -11,24 +11,22 @@ import {
 import type { CloudRegion } from '@utils/types';
 import { createUiReducer, getUI, setUI } from '@ui';
 import { LoggingUI } from '@headless/renderers/logging-ui';
-import type { ProgramConfig } from '@programs/types';
+import type { ProgramConfig, TaskStreamPush } from '@programs/types';
 import type { InferenceAuthProvider } from '@agent/types';
-import { getAuditChecks } from '@programs/audit/types';
 import { analytics } from '@utils/analytics';
 import { resolveNoTelemetry } from './resolve-no-telemetry';
 import type { WizardStore } from '@tui/store';
-import type { TaskStreamPush } from '@programs/task-stream/task-stream-push';
 import { join } from 'node:path';
 import {
   ErrorCodes,
   classifyRunFailure,
   emitWizardError,
 } from '@shared/errors';
-import { detectErrorCode } from '@programs/detect-map';
 import { captureRunSkillCleanup } from '@shared/skill-run-cleanup';
 import { cliAuthHost } from './auth-host';
 import type { OutroData } from '@shared/outro';
 import type { RunPhase as RunPhaseT } from '@shared/run-state';
+import { getAuditChecks, detectErrorCode } from '@programs';
 
 /**
  * The two non-interactive run modes. Both drive the same pipeline today; the
@@ -210,8 +208,9 @@ export function runNonInteractive(
     {
       const { WizardStore } = await import('@tui/store');
       const { HeadlessUI } = await import('@headless/renderers/headless-ui');
+      const { loadTaskStream } = await import('@programs');
       const { TaskStreamPush, PostHogDestination, createFileDestination } =
-        await import('@programs/task-stream/index');
+        await loadTaskStream();
 
       // `''` resolves to the default path, so `--ci` always dumps.
       const logTarget =

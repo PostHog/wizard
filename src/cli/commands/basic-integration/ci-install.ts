@@ -4,9 +4,9 @@ import { LoggingUI } from '@headless/renderers/logging-ui';
 import { API_KEY_HINT, runWizardCI, runWizardHeadless } from '@cli/runners';
 import type { NonInteractiveMode } from '@cli/runners';
 import { provisionNewAccount } from '@utils/provisioning';
-import { posthogIntegrationConfig } from '@programs/posthog-integration/index';
 import { ErrorCodes, type ErrorCode } from '@shared/errors';
 import { emitWizardError } from '@shared/errors';
+import { posthogIntegrationConfig } from '@programs';
 
 type Options = Arguments & {
   region?: string;

@@ -31,15 +31,14 @@ vi.mock('@utils/analytics', () => ({
   },
   sessionProperties: () => ({}),
 }));
-vi.mock('@programs/task-stream/index', () => ({
+vi.mock('@programs/task-stream/index', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@programs/task-stream/index')>()),
   TaskStreamPush: class {
     attach = vi.fn();
     shutdown() {
       return Promise.resolve();
     }
   },
-}));
-vi.mock('@programs/task-stream/destinations/posthog', () => ({
   PostHogDestination: class {},
 }));
 

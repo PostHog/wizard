@@ -1,7 +1,6 @@
-import { metricsConfig } from '@programs/metrics/index';
-
 import type { Command } from './command';
 import { nativeCommandFactory } from './factories/native-command-factory';
+import { metricsConfig } from '@programs';
 
 /**
  * `wizard metrics` — flat skill command, wire PostHog application metrics
