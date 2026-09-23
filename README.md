@@ -167,9 +167,7 @@ route review to their owning team instead.
 | `src/programs/warehouse-source/` | `@PostHog/team-warehouse-sources` |
 | `src/programs/web-analytics-doctor/` | `@PostHog/team-web-analytics` |
 | `src/ui/tui/decks/error-tracking-upload-source-maps/` | `@PostHog/team-error-tracking` |
-| `src/ui/tui/decks/revenue-analytics/` | `@PostHog/team-web-analytics` |
 | `src/ui/tui/decks/self-driving/` | `@PostHog/team-self-driving` |
-| `src/ui/tui/decks/warehouse-source/` | `@PostHog/team-warehouse-sources` |
 
 Ownership is by directory. Programs not listed above
 (`agent-skill`, `audit`, `events-audit`, `mcp`, `migration`, `posthog-doctor`,
