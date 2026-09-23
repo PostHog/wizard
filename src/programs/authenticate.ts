@@ -16,16 +16,11 @@ import type { CloudRegion } from '@utils/types';
 import { getOrAskForProjectData } from '@utils/setup-utils';
 import { analytics, groupsFromUser } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
-import { refreshCredentialsIfNeeded } from './token-refresh';
 
 export type AuthProjection = {
   setCredentials(credentials: Credentials): void;
   setRoleAtOrganization(role: string | null): void;
   setApiUser(user: ApiUser | null): void;
-};
-
-export type TokenRefreshProjection = {
-  setAccessToken(credentials: Credentials): void;
 };
 
 /** Authentication state shared with the CLI host, without TUI session fields. */
@@ -98,19 +93,4 @@ export async function authenticate(
   // target the individual user and not just $app_name.
   if (user) analytics.identifyUser(user);
   analytics.setGroups(groupsFromUser(user, host.apiHost));
-}
-
-// Pre-run refresh for a session; a refreshed token reaches the session and the projection.
-export async function refreshAccessTokenIfNeeded(
-  session: Pick<AuthSession, 'credentials' | 'baseUrl'>,
-  projection: TokenRefreshProjection,
-): Promise<void> {
-  const credentials = session.credentials;
-  if (!credentials) return;
-  const refreshed = await refreshCredentialsIfNeeded(credentials, {
-    baseUrl: session.baseUrl,
-  });
-  if (refreshed === credentials) return;
-  session.credentials = refreshed;
-  projection.setAccessToken(refreshed);
 }

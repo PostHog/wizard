@@ -18,7 +18,6 @@ import { analytics } from '@utils/analytics';
 import { resolveNoTelemetry } from './resolve-no-telemetry';
 import type { WizardStore } from '@ui/tui/store';
 import type { TaskStreamPush } from '@programs/task-stream/task-stream-push';
-import { join } from 'node:path';
 import {
   ErrorCodes,
   classifyRunFailure,
@@ -136,6 +135,7 @@ export function runNonInteractive(
       ? (options.installDir as string)
       : path.join(process.cwd(), options.installDir as string);
 
+    // Covers installs before runProgram registers its own, such as the outage skill.
     registerRunSkillCleanup(installDir);
     const onSigint = () => {
       runCleanups();
@@ -239,9 +239,6 @@ export function runNonInteractive(
         store: headlessStore,
         programId: config.streamWorkflowId ?? config.id,
         destinations,
-        eventPlanPath: config.eventPlanFile
-          ? join(session.installDir, config.eventPlanFile)
-          : undefined,
         auditChecks: config.auditLedgerFile
           ? () => getAuditChecks(headlessStore.session)
           : undefined,

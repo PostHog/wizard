@@ -14,7 +14,10 @@ import { getSkillsBaseUrl } from '@shared/constants';
 import type { Harness, Integration, Sequence } from '@shared/constants';
 import { ErrorCodes } from '@shared/errors';
 import { buildRunTags } from '@shared/run-tags';
-import { captureRunSkillCleanup } from '@shared/skill-run-cleanup';
+import {
+  registerRunSkillCleanup,
+  type RunSkillCleanup,
+} from '@shared/skill-run-cleanup';
 import type { DiscoveredFeature } from '@shared/scan-consent';
 import { analytics, groupsFromUser } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
@@ -44,6 +47,7 @@ import {
   type PosthogIntegrationRunEffects,
 } from './posthog-integration/run';
 import { resolveSelfDrivingRun } from './self-driving/run';
+import { snapshotProgramInput } from './snapshot-program-input';
 import {
   ProgramStore,
   type ProgramInvocationData,
@@ -65,6 +69,7 @@ export type WizardFlagSnapshot = {
   payloads: Record<string, unknown>;
 };
 
+/** Copied when runProgram receives it; functions stay by reference. */
 export interface ProgramInput extends ProgramRunDefinitionInput {
   installDir: string;
   /** Run-scoped credentials, or provide options.credentials instead. */
@@ -92,6 +97,8 @@ export interface ProgramInput extends ProgramRunDefinitionInput {
   allowedTools?: RunConfig['allowedTools'];
   disallowedTools?: RunConfig['disallowedTools'];
   agentFlow?: string;
+  /** A ledger the host lays over a generic program, such as an audit-family skill. */
+  auditLedgerFile?: string;
   frameworkConfig?: FrameworkConfig;
   frameworkContext?: Record<string, unknown>;
   warehouseSources?: readonly DetectedSource[];
@@ -150,6 +157,7 @@ export interface ProgramOptions {
   mcp?: NoAgentMcpPort;
   workflow?: ProgramWorkflowConnector;
   noAgentWorkflow?: NoAgentProgramOptions['workflow'];
+  /** Without getNotebookUrl, the outro reads the notebook URL the run emitted. */
   integrationEffects?: PosthogIntegrationRunEffects;
   /** Wait for the host's AI-processing approval gate when org approval is absent. */
   awaitAiApproval?: (context: {
@@ -158,6 +166,8 @@ export interface ProgramOptions {
   }) => Promise<boolean>;
   /** Evaluate feature flags for a run whose input carries none. */
   featureFlags?: () => Promise<WizardFlagSnapshot>;
+  /** Leave new skills armed after success; the host commits them at exit. */
+  deferSkillCommit?: boolean;
   signal?: AbortSignal;
 }
 
@@ -194,17 +204,19 @@ const DEFAULT_FLAGS: RunInput['flags'] = {
 /** Run a registered program from explicit inputs, with invocation-owned state. */
 export async function runProgram(
   programId: string,
-  input: ProgramInput,
+  hostInput: ProgramInput,
   options: ProgramOptions = {},
 ): Promise<ProgramRunOutcome> {
+  const input = snapshotProgramInput(hostInput);
   const store = new ProgramStore(
     { aiSdkStampReported: input.aiSdkStampReported },
     { onData: options.onProgress },
   );
-  const cleanups = new Map<string, () => void>();
+  // Registered, so a process drain mid-run (wizardAbort, a signal) removes new skills too.
+  const cleanups = new Map<string, RunSkillCleanup>();
   const captureSkills = (installDir: string) => {
     if (cleanups.has(installDir)) return;
-    cleanups.set(installDir, captureRunSkillCleanup(installDir));
+    cleanups.set(installDir, registerRunSkillCleanup(installDir));
   };
   captureSkills(input.installDir);
   const cleanFailedInvocation = () => {
@@ -223,6 +235,9 @@ export async function runProgram(
       captureSkills,
     });
     if (result.outcome !== RunOutcome.Success) cleanFailedInvocation();
+    else if (!options.deferSkillCommit) {
+      for (const cleanup of cleanups.values()) cleanup.commit();
+    }
     return result;
   } catch (error) {
     cleanFailedInvocation();
@@ -284,6 +299,14 @@ async function runProgramWithStore(
   }
   for (const [key, value] of Object.entries(input.frameworkContext ?? {})) {
     store.setFrameworkContext(key, value);
+  }
+
+  if (program.strategy !== 'no-agent') {
+    analytics.wizardCapture('agent started', {
+      integration: input.run?.integrationLabel ?? programId,
+      program_id: programId,
+      skill_id: input.run?.skillId ?? null,
+    });
   }
 
   let credentials = input.credentials;
@@ -394,7 +417,7 @@ async function runProgramWithStore(
         },
         signal,
       );
-      const patch = decision.frameworkContext ?? {};
+      const patch = structuredClone(decision.frameworkContext ?? {});
       for (const [key, value] of Object.entries(patch)) {
         store.setFrameworkContext(key, value);
       }
@@ -422,22 +445,23 @@ async function runProgramWithStore(
     };
     try {
       for (const composed of program.composedRuns ?? []) {
-        // A null answer means the host ran the child itself.
-        const childInput = workflow
-          ? (
-              await askWorkflow(
-                workflow,
-                {
-                  kind: 'child-run',
-                  programId,
-                  stepId: composed.stepId,
-                  runProgramId: composed.runProgramId,
-                  installDir: input.installDir,
-                },
-                signal,
-              )
-            ).input
-          : composition.integration;
+        // A prepared child was copied with this input. A connector's answer is
+        // copied as it arrives; null means the host ran the child itself.
+        let childInput = composition.integration;
+        if (workflow) {
+          const { input: answered } = await askWorkflow(
+            workflow,
+            {
+              kind: 'child-run',
+              programId,
+              stepId: composed.stepId,
+              runProgramId: composed.runProgramId,
+              installDir: input.installDir,
+            },
+            signal,
+          );
+          childInput = answered ? snapshotProgramInput(answered) : undefined;
+        }
         if (!childInput) continue;
         store.setComposition({ parentProgramId: programId });
         invocation.captureSkills(childInput.installDir);
@@ -494,7 +518,10 @@ async function runProgramWithStore(
   }
 
   const fileWatchers = startProgramFileWatchers(
-    program,
+    {
+      ...program,
+      auditLedgerFile: input.auditLedgerFile ?? program.auditLedgerFile,
+    },
     input.installDir,
     store,
   );
@@ -505,7 +532,8 @@ async function runProgramWithStore(
     let hooks: RunHooks | undefined = input.hooks;
     let seedTasks = input.seedTasks;
     if (!run && program.strategy === 'integration') {
-      if (!input.frameworkConfig || !options.integrationEffects) {
+      const effects = options.integrationEffects;
+      if (!input.frameworkConfig || !effects) {
         return fail(
           'PostHog integration requires prepared framework configuration and host effects.',
         );
@@ -522,7 +550,14 @@ async function runProgramWithStore(
             flags: { ...DEFAULT_FLAGS, ...input.flags },
             mayReportScanResults: input.mayReportScanResults ?? false,
           },
-          options.integrationEffects,
+          {
+            ...effects,
+            // The outro is built before runAgent returns, so it reads the URL
+            // this run emitted, unless the host has its own live getter.
+            getNotebookUrl:
+              effects.getNotebookUrl ??
+              (() => store.activeRunSnapshot()?.notebookUrl),
+          },
         );
         run = resolved.run;
         hooks ??= resolved.hooks;
@@ -569,6 +604,22 @@ async function runProgramWithStore(
     }
     const wizardFlags = { ...flagSnapshot.flags };
     const wizardFlagPayloads = { ...flagSnapshot.payloads };
+
+    // The agent can't swap tokens mid-run, so freshness is measured after every
+    // park above, right before the agent mints.
+    const posthog = await refreshCredentialsIfNeeded(credentials.posthog, {
+      baseUrl: input.host?.baseUrl,
+    });
+    if (posthog !== credentials.posthog) {
+      credentials = { ...credentials, posthog };
+      store.setAuthenticated({
+        credentials: posthog,
+        apiProject: credentials.project,
+        apiUser: credentials.apiUser,
+      });
+    }
+    if (signal.aborted) return cancelled();
+
     const switchboard = {
       program: programId,
       composed: input.composed ?? false,
@@ -586,20 +637,6 @@ async function runProgramWithStore(
     }
     store.setBinding(binding);
 
-    // The agent can't swap tokens mid-run, so freshness is measured after every
-    // park above, right before the agent mints.
-    const posthog = await refreshCredentialsIfNeeded(credentials.posthog, {
-      baseUrl: input.host?.baseUrl,
-    });
-    if (posthog !== credentials.posthog) {
-      credentials = { ...credentials, posthog };
-      store.setAuthenticated({
-        credentials: posthog,
-        apiProject: credentials.project,
-        apiUser: credentials.apiUser,
-      });
-    }
-    if (signal.aborted) return cancelled();
     const inferenceAuth =
       credentials.inferenceAuth ??
       createPosthogInferenceAuthProvider(posthog, programId);

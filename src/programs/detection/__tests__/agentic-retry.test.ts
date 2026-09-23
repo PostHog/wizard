@@ -18,19 +18,10 @@ vi.mock('@agent/agent-interface', async (importOriginal) => ({
   initializeAgent: vi.fn(),
   runAgent: vi.fn(),
 }));
-// The entry's runAgent is the real one; its pre-runAgent surface refuses.
+// The entry's runAgent is the real one, spied so each attempt is visible.
 vi.mock('@agent', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@agent')>();
-  const refuse = (name: string) =>
-    vi.fn(() => {
-      throw new Error(`detection called ${name} directly`);
-    });
-  return {
-    ...actual,
-    runAgent: vi.fn(actual.runAgent),
-    initializeAgent: refuse('initializeAgent'),
-    executeAgent: refuse('executeAgent'),
-  };
+  return { ...actual, runAgent: vi.fn(actual.runAgent) };
 });
 vi.mock('@programs/credentials', () => ({
   createPosthogInferenceAuthProvider: vi.fn(() => ({
@@ -114,8 +105,6 @@ describe('agentic detection retry', () => {
     const report = await detectProjectsWithAgent(session(), options);
 
     expect(report.projects).toHaveLength(1);
-    expect(agentEntry.initializeAgent).not.toHaveBeenCalled();
-    expect(agentEntry.executeAgent).not.toHaveBeenCalled();
     const calls = vi.mocked(agentEntry.runAgent).mock.calls;
     expect(calls).toHaveLength(2);
     for (const [config] of calls) {

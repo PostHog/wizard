@@ -372,8 +372,6 @@ type AgentRunConfig = {
 
 const NO_PROGRESS: ProgressEmitter = () => undefined;
 
-export { buildRunTags } from '@shared/run-tags';
-
 /**
  * Whether Warlock/YARA scanning is disabled for this run. Off by default:
  * scanning is disabled only by the local POSTHOG_WIZARD_WARLOCK_DISABLED env

@@ -35,11 +35,11 @@ export type {
   TokenUsageDelta,
 } from './progress';
 
-/** Generic switchboard input types retained for the B2 compatibility export. */
+/** Input types of the exported resolveHarness. */
 export type { ProgramBinding, SwitchboardCtx } from './runner';
 export type { EffortLevel } from './runner/switchboard/models';
 
-/** Leaves in B2 with downloadSkill. */
+/** Leaves in C3 with downloadSkill. */
 export type { InstallSkillResult } from './tools';
 
 /** Leaves in C2 with runMcpPromptViaSdk. */

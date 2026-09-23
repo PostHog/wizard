@@ -18,9 +18,9 @@
  * `RunResult.failure` with the same fields `wizardAbort` takes; an error the
  * agent did not decide (a refused mint, an SDK crash) comes back as
  * `outcome: RunOutcome.Crashed` with the original error attached, so a caller can keep
- * handling it the way it always did. The legacy adapter in
- * `src/lib/runners/run-program-agent.ts` rebuilds today's session-driven
- * behavior on top of this call for every existing caller.
+ * handling it the way it always did. Every host reaches this call through
+ * programs' `runProgram`, which builds the config and input; a standalone
+ * caller builds them itself.
  */
 
 import { Sequence } from '@shared/constants';
@@ -70,8 +70,6 @@ export type {
   AgentProgress,
   ProgressEmitter,
 } from '@agent/progress';
-export { shouldDisableAsk } from './shared/bootstrap';
-export { resolveBinding } from './switchboard';
 export type { ProgramBinding, SwitchboardCtx } from './switchboard';
 
 /**
@@ -132,7 +130,7 @@ export async function runAgent(
         collector?.emit(event),
       );
     }
-    // Capture before preparation so pre-harness failures also clean new skills.
+    // The standalone contract: capture before preparation so pre-harness failures clean new skills too.
     cleanupInstalledSkills = captureRunSkillCleanup(input.installDir);
     collector = createProgressCollector(options.onProgress);
     const { emit } = collector;

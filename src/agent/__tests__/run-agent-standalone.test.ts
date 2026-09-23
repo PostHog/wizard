@@ -167,6 +167,15 @@ vi.mock('@agent/runner/switchboard/harness', () => {
         },
       });
       await askIfRequested(inputs);
+      // A real harness feeds the benchmark middleware every SDK message.
+      inputs.middleware?.onMessage({
+        type: 'assistant',
+        message: { role: 'assistant', content: [{ type: 'text', text: 'hi' }] },
+      });
+      inputs.middleware?.finalize(
+        { type: 'result', modelUsage: {}, num_turns: 1 },
+        10,
+      );
       if (harnessState.throws) throw harnessState.throws;
       spinner.stop('Done');
       return harnessState.result;
@@ -182,16 +191,6 @@ vi.mock('@agent/runner/switchboard/harness', () => {
         runTask: harnessState.taskCapability ? fake.runTask : undefined,
       };
     },
-    resolveHarness: (ctx: { cliHarness?: Harness }) => ({
-      harness: ctx.cliHarness ?? Harness.pi,
-      model: DEFAULT_AGENT_MODEL,
-    }),
-    resolveRoleHarness: (binding: RunConfig['binding'], role: string) =>
-      binding.roleBindings?.[role] ?? {
-        harness: binding.harness,
-        model: binding.model,
-        thinkingLevel: binding.thinkingLevel,
-      },
   };
 });
 
@@ -226,7 +225,7 @@ vi.mock('@shared/skill-menu', async (original) => ({
 }));
 
 import { runAgent, RunOutcome } from '@agent/runner';
-import type { RunConfig, RunInput } from '@agent/runner';
+import type { RunAgentOptions, RunConfig, RunInput } from '@agent/runner';
 import { analytics } from '@utils/analytics';
 import { initLogFile } from '@utils/debug';
 import { flushScanReport } from '@agent/yara-hooks';
@@ -1324,4 +1323,115 @@ describe('runAgent standalone', () => {
     expect(result.outcome).toBe(RunOutcome.Success);
     expect(fs.existsSync(skillDir)).toBe(true);
   });
+
+  it('sends benchmark output to onProgress when benchmarking', async () => {
+    const benchmarkPath = path.join(tmp, 'benchmark.json');
+    const configPath = path.join(tmp, '.benchmark-config.json');
+    fs.writeFileSync(
+      configPath,
+      JSON.stringify({ output: { benchmarkPath, logEnabled: false } }),
+    );
+    vi.stubEnv('POSTHOG_WIZARD_BENCHMARK_CONFIG', configPath);
+    vi.stubEnv('POSTHOG_WIZARD_BENCHMARK_FILE', benchmarkPath);
+    vi.stubEnv('POSTHOG_WIZARD_LOG_DIR', tmp);
+    const runInput = input();
+    runInput.flags.benchmark = true;
+    const events: AgentProgress[] = [];
+    try {
+      const result = await runAgent(config(), runInput, {
+        onProgress: (e) => events.push(e),
+      });
+
+      expect(result.outcome).toBe('success');
+      const logs = events.flatMap((e) => (e.kind === 'log' ? [e.message] : []));
+      expect(logs).toContainEqual(
+        expect.stringContaining(
+          `Benchmark data will be written to: ${benchmarkPath}`,
+        ),
+      );
+      expect(logs).toContainEqual(
+        expect.stringContaining(`Results written to ${benchmarkPath}`),
+      );
+      expect(fs.existsSync(benchmarkPath)).toBe(true);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it.each<
+    [string, (host: AbortController) => Partial<RunAgentOptions>, string]
+  >([
+    ['completes', () => ({}), 'success'],
+    [
+      'stops itself',
+      () => {
+        harnessState.result = {
+          kind: 'abort',
+          classification: AgentErrorType.ABORT,
+          message: 'No Stripe found',
+        };
+        return {};
+      },
+      'failed',
+    ],
+    [
+      'crashes',
+      () => {
+        harnessState.throws = new Error('SDK exploded');
+        return {};
+      },
+      'crashed',
+    ],
+    [
+      'is cancelled mid-run',
+      (host) => {
+        harnessState.askQuestions = [
+          { id: 'q1', prompt: 'Continue?', kind: 'text' },
+        ];
+        return {
+          interaction: {
+            ask: () => {
+              host.abort();
+              return new Promise<AskAnswers>(() => undefined);
+            },
+          },
+        };
+      },
+      'aborted',
+    ],
+    [
+      'is cancelled before it starts',
+      (host) => {
+        host.abort();
+        return {};
+      },
+      'aborted',
+    ],
+  ])(
+    'sends the scan summary to onProgress when the run %s',
+    async (_ending, arrange, outcome) => {
+      const summary =
+        'YARA scan report: /tmp/yara.json\n— YARA Scanner Summary —';
+      vi.mocked(flushScanReport).mockReturnValueOnce(summary);
+      const host = new AbortController();
+      const options = arrange(host);
+      const runInput = input();
+      runInput.flags.yaraReport = true;
+      const events: AgentProgress[] = [];
+
+      const result = await runAgent(config(), runInput, {
+        ...options,
+        signal: host.signal,
+        onProgress: (e) => events.push(e),
+      });
+
+      expect(result.outcome).toBe(outcome);
+      expect(flushScanReport).toHaveBeenCalledWith({ yaraReport: true });
+      expect(events).toContainEqual({
+        kind: 'log',
+        level: 'info',
+        message: summary,
+      });
+    },
+  );
 });

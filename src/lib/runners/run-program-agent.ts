@@ -1,66 +1,52 @@
 /**
  * The session-driven host adapter for legacy TUI and CI runs.
  *
- * `runProgramAgent(programConfig, session)` bridges the host to the callable
- * program: it
- * runs the gates the TUI owns (health, settings, AI opt-in, post-auth steps),
- * authenticates, resolves the program's binding, builds the agent's inputs
- * from the session, maps every progress event back onto `getUI()` one call
- * per event, answers the agent's questions through `getUI()`, and applies the
- * result — `wizardAbort` with the outcome's terminal status for a decided
- * failure, the terminal analytics event for a finished top-level run.
+ * `runProgramAgent(programConfig, session)` runs the program through the
+ * callable `runProgram(programId, input, options)` and keeps only the host's
+ * part: it runs preflight through `getUI()`, builds `ProgramInput` from the
+ * session, and supplies the session's login as the credentials provider, the
+ * TUI's AI opt-in and post-auth gates as awaited capabilities, the feature-flag
+ * loader, and `getUI()` as the answerer. It maps every progress event back
+ * onto `getUI()` one call per event and mirrors program data, including the
+ * event plan and audit checks runProgram watches, onto the session and the UI,
+ * then applies the result — `wizardAbort` with the outcome's terminal status
+ * for a decided failure, the terminal analytics event for a finished top-level
+ * run.
  *
  * The host owns `getUI()`, the legacy session, and `wizardAbort`; the callable
  * program receives explicit input and effects.
  */
 
+import { isDeepStrictEqual } from 'node:util';
 import type { WizardSession } from '@lib/wizard-session';
 import { analytics } from '@utils/analytics';
-import { createUiReducer, getUI, uiInteraction } from '@ui';
+import { createUiReducer, getUI, uiInteraction, type WizardUI } from '@ui';
 import { RunOutcome } from '@agent';
-import type { InferenceAuthProvider, RunConfig, RunInput } from '@agent/types';
-import {
-  runProgram,
-  createPosthogInferenceAuthProvider,
-  resolveProgramBinding,
-  getProgramCommandments,
-  captureSwitchboardDecision,
-  areSeededTasksEnabled,
-  resolveStageOverrides,
-  preflight,
-  type ProgramSwitchboardCtx,
-} from '@programs';
+import type { InferenceAuthProvider } from '@agent/types';
+import { runProgram, preflight } from '@programs';
 import type {
   ProgramCompletionContext,
+  ProgramConfig,
+  ProgramInvocationData,
+  ProgramOptions,
   ProgramPreflightHost,
   ProgramRunHost,
+  ProgramWorkflowConnector,
+  WizardFlagSnapshot,
 } from '@programs/types';
 import type { ProgramRun } from '@programs/program-run';
 import { restoreClaudeSettings } from '@shared/claude-settings';
 import { enableDebugLogs, logToFile, initLogFile } from '@utils/debug';
-import { registerCleanup, wizardAbort } from '@utils/wizard-abort';
+import { wizardAbort } from '@utils/wizard-abort';
 import { isNonInteractiveEnvironment } from '@utils/environment';
-import {
-  getSkillsBaseUrl,
-  Sequence,
-  type Integration,
-} from '@shared/constants';
+import { Sequence, type Integration } from '@shared/constants';
 import { FRAMEWORK_REGISTRY } from '@programs/registry';
-import { postAuthGateSteps } from '@programs/program-step';
-import type { ProgramConfig } from '@programs/types';
-import {
-  authenticate,
-  refreshAccessTokenIfNeeded,
-} from '@programs/authenticate';
-import { maybeStampAiSdkDetected } from '@programs/posthog-integration/detect';
+import { authenticate } from '@programs/authenticate';
 import { getDetectedWarehouseSources } from '@programs/warehouse-source/detect';
 import { mayReportScanResults } from '@shared/scan-consent';
-import { watchAuditLedger } from '@programs/audit/watch-ledger';
 import { AUDIT_CHECKS_KEY } from '@programs/audit/types';
-import {
-  commitRegisteredRunSkillCleanups,
-  registerRunSkillCleanup,
-} from '@shared/skill-run-cleanup';
+
+type CredentialsProvider = NonNullable<ProgramOptions['credentials']>;
 
 /**
  * Resolve a ProgramConfig's agent run definition and execute the pipeline.
@@ -79,66 +65,40 @@ export async function runProgramAgent(
     throw new Error(`Program "${programConfig.id}" has no run configuration.`);
   }
 
-  // wizardAbort and TUI signal handlers drain this registry on interruption.
-  const cleanupInstalledSkills = registerRunSkillCleanup(session.installDir);
+  const ui = getUI();
+  const runHost: ProgramRunHost = {
+    getFrameworkContext: (key) => ui.getFrameworkContext(key),
+    setFrameworkContext: (key, value) => ui.setFrameworkContext(key, value),
+    warn: (message) => ui.log.warn(message),
+    uploadEnvironmentVariables: async (envVars, integration, installDir) => {
+      const { uploadEnvironmentVariablesStep } = await import(
+        '@steps/upload-environment-variables'
+      );
+      return uploadEnvironmentVariablesStep(envVars, {
+        integration,
+        session: { installDir },
+      });
+    },
+  };
+  const runDef =
+    typeof programConfig.run === 'function'
+      ? await programConfig.run(session, runHost)
+      : programConfig.run;
 
-  // Before `run()` resolves: an audit seeds the ledger from inside its recipe,
-  // and a watcher started later would ignore that write as pre-existing.
-  const ledger = programConfig.auditLedgerFile
-    ? watchAuditLedger(
-        session.installDir,
-        programConfig.auditLedgerFile,
-        (checks) => getUI().setFrameworkContext(AUDIT_CHECKS_KEY, checks),
-      )
-    : null;
-  if (ledger) registerCleanup(() => ledger.stop());
-
-  try {
-    const ui = getUI();
-    const runHost: ProgramRunHost = {
-      getFrameworkContext: (key) => ui.getFrameworkContext(key),
-      setFrameworkContext: (key, value) => ui.setFrameworkContext(key, value),
-      warn: (message) => ui.log.warn(message),
-      uploadEnvironmentVariables: async (envVars, integration, installDir) => {
-        const { uploadEnvironmentVariablesStep } = await import(
-          '@steps/upload-environment-variables'
-        );
-        return uploadEnvironmentVariablesStep(envVars, {
-          integration,
-          session: { installDir },
-        });
-      },
-    };
-    const runDef =
-      typeof programConfig.run === 'function'
-        ? await programConfig.run(session, runHost)
-        : programConfig.run;
-
-    const succeeded = await runLegacyStep(
-      session,
-      runDef,
-      programConfig,
-      options.composed ?? false,
-      options.inferenceAuth,
-    );
-    if (succeeded && !options.deferSkillCleanupCommit) {
-      commitRegisteredRunSkillCleanups();
-    }
-  } catch (error) {
-    try {
-      cleanupInstalledSkills();
-    } catch (cleanupError) {
-      logToFile('[agent-runner] failed-run skill cleanup error:', cleanupError);
-    }
-    throw error;
-  } finally {
-    ledger?.stop();
-  }
+  await runLegacyStep(
+    session,
+    runDef,
+    programConfig,
+    options.composed ?? false,
+    options.inferenceAuth,
+    options.deferSkillCleanupCommit,
+  );
 }
 
 /**
- * Gates → authenticate → flags → binding → the functional run → apply result.
- * Every step happens in the order it did inside the agent's bootstrap.
+ * Preflight → runProgram with the session's capabilities → apply the result.
+ * runProgram authenticates, stamps, parks, routes, refreshes and runs, in the
+ * order the agent's bootstrap did.
  */
 async function runLegacyStep(
   session: WizardSession,
@@ -146,7 +106,8 @@ async function runLegacyStep(
   programConfig: ProgramConfig,
   composed: boolean,
   inferenceAuth?: InferenceAuthProvider,
-): Promise<boolean> {
+  deferSkillCommit?: boolean,
+): Promise<void> {
   // 1. Init logging + debug
   initLogFile();
   session.skillId = run.skillId ?? run.integrationLabel;
@@ -162,205 +123,113 @@ async function runLegacyStep(
   const pre = await preflight(programConfig.id, legacyPreflightHost(session));
   if (pre.kind === 'abort') await wizardAbort(pre.failure);
 
-  analytics.wizardCapture('agent started', {
-    integration: run.integrationLabel,
-    program_id: programConfig.id,
-    skill_id: run.skillId ?? null,
-  });
-
-  // 4. Authenticate — idempotent within a run (see authenticate()). A second
-  // agent run in the same invocation (self-driving's integration phase) reuses
-  // the first login; it does not launch another OAuth. authenticate() also
-  // identifies the user and sets analytics groups.
-  await authenticate(session, programConfig.id, getUI());
-  maybeStampAiSdkDetected(session);
-
-  // 4.5. AI opt-in enforcement. Parks here while AiOptInRequiredScreen is
-  // up if the org hasn't approved third-party AI — BEFORE the skill
-  // install and agent start, so no source leaves the machine. The screen
-  // alone is cosmetic; this await is the actual gate. Resolves
-  // immediately when the program declared requiresAi: false or in CI.
-  logToFile('[agent-runner] checking AI opt-in gate');
-  await getUI().waitForAiOptIn();
-  logToFile('[agent-runner] AI opt-in gate cleared');
-
-  // Park for any interactive step the user must complete AFTER authenticating
-  // but BEFORE the agent runs — e.g. the source-maps project picker, which
-  // needs credentials to scan and writes its choice to frameworkContext that
-  // the run prompt reads. Generic: await every gated step between auth and run.
-  for (const step of postAuthGateSteps(programConfig.steps)) {
-    logToFile(`[agent-runner] awaiting post-auth gate: ${step.id}`);
-    await getUI().waitForGate(step.id);
-    logToFile(`[agent-runner] post-auth gate cleared: ${step.id}`);
-  }
-
-  // Feature flags. Both arms need these, and the routing decision reads them.
-  const wizardFlags = await analytics.getAllFlagsForWizard();
-  const wizardFlagPayloads = analytics.getWizardFlagPayloads();
-
-  // The agent can't swap tokens mid-run, so freshness is measured after every
-  // park above, right before the agent mints.
-  await refreshAccessTokenIfNeeded(session, getUI());
-
-  // Credentials (incl. the resolved host family and its MCP url) live on
-  // `session.credentials`; narrow once at this boundary — `authenticate` above
-  // set them — so downstream readers get a non-null type without asserting.
-  const credentials = session.credentials!;
-  const resolvedInferenceAuth =
-    inferenceAuth ??
-    session.inferenceAuth ??
-    createPosthogInferenceAuthProvider(credentials, programConfig.id);
-
-  // Resolve which sequence and harness will run a program (CLI → PostHog flag →
-  // per-program binding → default), tag both axes onto analytics, and hand the
-  // binding to the agent for dispatch.
-  const switchboard: ProgramSwitchboardCtx = {
-    program: programConfig.id,
-    composed,
-    flags: wizardFlags,
-    flagPayloads: wizardFlagPayloads,
-    cliHarness: session.harness,
-    cliSequence: session.sequence,
-    cliModel: session.model,
-  };
-  const binding = resolveProgramBinding(switchboard);
-  analytics.setTag('sequence', binding.sequence);
-  analytics.setTag('harness', binding.harness);
-  captureSwitchboardDecision(switchboard, binding);
-
   const ui = getUI();
+  const reduceUi = createUiReducer(ui);
+  const projectData = projectProgramData(ui, session, () =>
+    restoreClaudeSettings(session.installDir),
+  );
 
-  // Linear settings restoration fires on entry to the outro screen, so it
-  // is registered before the run can reach that screen. Same owner, same
-  // timing as before; the abort path still restores through the cleanup
-  // `backupAndFixClaudeSettings` registered.
-  if (binding.sequence === Sequence.linear) {
-    ui.onEnterScreen('outro', () => restoreClaudeSettings(session.installDir));
-  }
+  // runProgram turns a host capability that throws into a failed run; the CLI
+  // roots expect the throw, so keep the error and rethrow it below.
+  let hostFailure: { error: unknown } | undefined;
+  const keepFailure = <T>(work: Promise<T>): Promise<T> =>
+    work.catch((error: unknown) => {
+      hostFailure ??= { error };
+      throw error;
+    });
+  const provider = sessionCredentialsProvider(session, ui, inferenceAuth);
 
   const framework = session.integration ?? session.skillId ?? undefined;
+  // Each hook reads the session when it runs, so URLs the run emitted reach it.
   const completionContext = (): ProgramCompletionContext => ({
     signup: session.signup,
     dashboardUrl: session.dashboardUrl,
     notebookUrl: session.notebookUrl,
   });
-  // runProgram builds the gateway trace tags.
-  const config: Omit<RunConfig, 'wizardMetadata'> = {
-    programId: programConfig.id,
-    run,
-    composed,
-    binding,
-    programCommandments: getProgramCommandments(programConfig.id),
-    stageOverrides: resolveStageOverrides(
-      programConfig.id,
-      wizardFlags,
-      wizardFlagPayloads,
-    ),
-    seededTasksEnabled: areSeededTasksEnabled(wizardFlags),
-    skillsBaseUrl: getSkillsBaseUrl(),
-    wizardFlags,
-    wizardFlagPayloads,
-    allowedTools: programConfig.allowedTools,
-    disallowedTools: programConfig.disallowedTools,
-    agentFlow: programConfig.agentFlow,
-    seedTasks: programConfig.seedTasks
-      ? () => programConfig.seedTasks!(session)
-      : undefined,
-    hooks: {
-      postRun: run.postRun
-        ? (creds) => run.postRun!(completionContext(), creds)
-        : undefined,
-      buildOutroData: run.buildOutroData
-        ? (creds) =>
-            run.buildOutroData!(completionContext(), creds) ?? undefined
-        : undefined,
-      buildOutroNextSteps: run.buildOutroNextSteps
-        ? (creds, completed) =>
-            run.buildOutroNextSteps!(completionContext(), creds, completed)
-        : undefined,
-    },
-  };
-  const input: RunInput = {
-    installDir: session.installDir,
-    credentials,
-    inferenceAuth: resolvedInferenceAuth,
-    project: session.apiProject,
-    apiUser: session.apiUser,
-    skillId: session.skillId ?? undefined,
-    integration: session.integration,
-    frameworkDocsUrl: framework
-      ? FRAMEWORK_REGISTRY[framework as Integration]?.metadata.docsUrl
-      : undefined,
-    flags: {
-      ci: session.ci,
-      signup: session.signup,
-      debug: session.debug,
-      e2eAsk: session.e2eAsk,
-      localMcp: session.localMcp,
-      captureAio: session.captureAio,
-      benchmark: session.benchmark,
-      yaraReport: session.yaraReport,
-    },
-    host: {
-      baseUrl: session.baseUrl,
-      region: session.region,
-      email: session.email,
-      projectId: session.projectId,
-      apiKey: session.apiKey,
-    },
-  };
-
-  const reduceUi = createUiReducer(ui);
   const programResult = await runProgram(
     programConfig.id,
     {
-      installDir: input.installDir,
-      credentials: {
-        posthog: input.credentials,
-        inferenceAuth: input.inferenceAuth,
-        project: input.project,
-        apiUser: input.apiUser,
+      installDir: session.installDir,
+      run,
+      composed,
+      overrides: {
+        harness: session.harness,
+        sequence: session.sequence,
+        model: session.model,
       },
-      run: config.run,
-      binding: config.binding,
-      composed: config.composed,
-      skillId: input.skillId,
-      integration: input.integration,
-      frameworkDocsUrl: input.frameworkDocsUrl,
-      flags: input.flags,
-      host: input.host,
-      wizardFlags: config.wizardFlags,
-      wizardFlagPayloads: config.wizardFlagPayloads,
-      seedTasks: config.seedTasks,
-      hooks: config.hooks,
-      allowedTools: config.allowedTools,
-      disallowedTools: config.disallowedTools,
-      agentFlow: config.agentFlow,
-      // The stamp already ran above, so runProgram finds it latched.
+      skillId: session.skillId ?? undefined,
+      integration: session.integration,
+      frameworkDocsUrl: framework
+        ? FRAMEWORK_REGISTRY[framework as Integration]?.metadata.docsUrl
+        : undefined,
+      flags: {
+        ci: session.ci,
+        signup: session.signup,
+        debug: session.debug,
+        e2eAsk: session.e2eAsk,
+        localMcp: session.localMcp,
+        captureAio: session.captureAio,
+        benchmark: session.benchmark,
+        yaraReport: session.yaraReport,
+      },
+      host: {
+        baseUrl: session.baseUrl,
+        region: session.region,
+        email: session.email,
+        projectId: session.projectId,
+        apiKey: session.apiKey,
+      },
+      seedTasks: programConfig.seedTasks
+        ? () => programConfig.seedTasks!(session)
+        : undefined,
+      hooks: {
+        postRun: run.postRun
+          ? (creds) => run.postRun!(completionContext(), creds)
+          : undefined,
+        buildOutroData: run.buildOutroData
+          ? (creds) =>
+              run.buildOutroData!(completionContext(), creds) ?? undefined
+          : undefined,
+        buildOutroNextSteps: run.buildOutroNextSteps
+          ? (creds, completed) =>
+              run.buildOutroNextSteps!(completionContext(), creds, completed)
+          : undefined,
+      },
+      allowedTools: programConfig.allowedTools,
+      disallowedTools: programConfig.disallowedTools,
+      agentFlow: programConfig.agentFlow,
+      auditLedgerFile: programConfig.auditLedgerFile,
       aiSdkStampReported: session.aiSdkStampReported,
       discoveredFeatures: session.discoveredFeatures,
       warehouseSources: getDetectedWarehouseSources(session),
       mayReportScanResults: mayReportScanResults(session),
-      // Carry the actual TUI gate state into the callable host. A non-TUI
-      // caller of this legacy adapter must not be treated as connected.
-      composition:
-        programConfig.id === 'self-driving'
-          ? {
-              githubConnected: session.githubConnected === true,
-            }
-          : undefined,
     },
     {
+      credentials: {
+        resolve: (programId, context) =>
+          keepFailure(provider.resolve(programId, context)),
+      },
+      featureFlags: () => keepFailure(loadWizardFlags()),
+      workflow: legacyWorkflowConnector(ui, session),
       onProgress: (progress) => {
         if (progress.kind === 'run') reduceUi(progress.event);
+        else projectData(progress.data);
       },
       interaction: uiInteraction(ui),
+      deferSkillCommit,
+      // AI opt-in enforcement. Parks while AiOptInRequiredScreen is up if the
+      // org hasn't approved third-party AI — before the skill install and agent
+      // start, so no source leaves the machine. The screen alone is cosmetic;
+      // this await is the actual gate.
       awaitAiApproval: async () => {
+        logToFile('[agent-runner] checking AI opt-in gate');
         await ui.waitForAiOptIn();
+        logToFile('[agent-runner] AI opt-in gate cleared');
         return true;
       },
     },
   );
+  if (hostFailure) throw hostFailure.error;
 
   // The host owns process exits, terminal analytics and rethrowing crashes.
   if (programResult.outcome === RunOutcome.Crashed) {
@@ -388,8 +257,121 @@ async function runLegacyStep(
       logToFile('[agent-runner] analytics shutdown failed:', error);
     }
   }
-  return programResult.outcome === RunOutcome.Success;
 }
+
+// ── Host capabilities ─────────────────────────────────────────────────
+
+/**
+ * The session's login as a credentials provider. authenticate() is idempotent
+ * within a run: a second agent run in the same invocation (self-driving's
+ * integration phase) reuses the first login instead of another OAuth.
+ */
+function sessionCredentialsProvider(
+  session: WizardSession,
+  ui: WizardUI,
+  inferenceAuth?: InferenceAuthProvider,
+): CredentialsProvider {
+  return {
+    resolve: async (programId) => {
+      await authenticate(session, programId, ui);
+      return {
+        posthog: session.credentials!,
+        inferenceAuth: inferenceAuth ?? session.inferenceAuth,
+        project: session.apiProject,
+        apiUser: session.apiUser,
+      };
+    },
+  };
+}
+
+/**
+ * Answers runProgram's pauses from the TUI. Post-auth parks on each gated step
+ * the user completes after login, such as the source-maps project picker; the
+ * legacy run reads that pick live when it builds its prompt. The TUI walks
+ * composed steps itself (advanceStep) and gated the handoff and GitHub steps
+ * before this run screen.
+ */
+function legacyWorkflowConnector(
+  ui: WizardUI,
+  session: WizardSession,
+): ProgramWorkflowConnector {
+  return {
+    async step(request) {
+      switch (request.kind) {
+        case 'post-auth':
+          for (const gate of request.gates) {
+            logToFile(`[agent-runner] awaiting post-auth gate: ${gate.id}`);
+            await ui.waitForGate(gate.id);
+            logToFile(`[agent-runner] post-auth gate cleared: ${gate.id}`);
+          }
+          return { kind: 'post-auth' };
+        case 'child-run':
+          return { kind: 'child-run', input: null };
+        case 'confirm':
+          // Answer with the actual TUI gate state: a non-TUI caller of this
+          // adapter must not be treated as connected.
+          return {
+            kind: 'confirm',
+            confirmed:
+              request.id === 'self-driving-github'
+                ? session.githubConnected === true
+                : true,
+          };
+      }
+    },
+  };
+}
+
+/** Mirror the invocation's data onto the session and the UI the TUI reads. */
+function projectProgramData(
+  ui: WizardUI,
+  session: WizardSession,
+  restoreSettings: () => void,
+): (data: ProgramInvocationData) => void {
+  let outroRestoreRegistered = false;
+  // Snapshots are copies, so forward by value; the store starts with no plan.
+  let eventPlan: ProgramInvocationData['eventPlan'] = [];
+  let auditChecks: unknown;
+  return (data) => {
+    const current = session.credentials;
+    if (
+      current &&
+      data.credentials &&
+      data.credentials.accessToken !== current.accessToken
+    ) {
+      // A refresh replaces only the token fields; the login keeps its host.
+      session.credentials = {
+        ...current,
+        accessToken: data.credentials.accessToken,
+        refreshToken: data.credentials.refreshToken,
+        expiresAt: data.credentials.expiresAt,
+      };
+      ui.setAccessToken(session.credentials);
+    }
+    if (data.aiSdkStampReported) session.aiSdkStampReported = true;
+    // Linear settings restoration fires on entry to the outro screen, so it is
+    // registered before the run can reach that screen; the abort path still
+    // restores through the cleanup backupAndFixClaudeSettings registered.
+    if (data.binding?.sequence === Sequence.linear && !outroRestoreRegistered) {
+      outroRestoreRegistered = true;
+      ui.onEnterScreen('outro', restoreSettings);
+    }
+    if (!isDeepStrictEqual(data.eventPlan, eventPlan)) {
+      eventPlan = data.eventPlan;
+      ui.setEventPlan(eventPlan);
+    }
+    const checks = data.detection.frameworkContext[AUDIT_CHECKS_KEY];
+    if (checks !== undefined && !isDeepStrictEqual(checks, auditChecks)) {
+      auditChecks = checks;
+      ui.setFrameworkContext(AUDIT_CHECKS_KEY, checks);
+    }
+  };
+}
+
+const loadWizardFlags = async (): Promise<WizardFlagSnapshot> => ({
+  flags: await analytics.getAllFlagsForWizard(),
+  payloads: analytics.getWizardFlagPayloads(),
+});
 
 // ── Gates ─────────────────────────────────────────────────────────────
 

@@ -30,9 +30,9 @@ module.exports = {
     {
       // The agent surface. It takes resolved data in, reports through
       // progress events and asks through an injected answerer, so nothing
-      // here may reach a UI, the session, detection, the CLI or a program at
-      // runtime. ProgramId remains a type-only exception until B2 moves
-      // PROGRAM_BINDINGS to programs.
+      // here may import a UI, the session, detection, the CLI or a program.
+      // Only direct static imports are checked. ProgramId remains a type-only
+      // exception until B2 moves PROGRAM_BINDINGS to programs.
       files: ['src/agent/**/*.ts'],
       excludedFiles: ['**/__tests__/**'],
       rules: {
@@ -58,15 +58,20 @@ module.exports = {
                 group: [
                   '@ui',
                   '@ui/**',
+                  '**/ui',
                   '**/ui/**',
                   '@lib/**',
                   '**/lib/**',
                   '**/wizard-session',
+                  '**/detection',
                   '**/detection/**',
+                  '**/runners',
                   '**/runners/**',
                   '**/commands/**',
                   '@steps',
                   '@steps/**',
+                  '**/steps',
+                  '**/steps/**',
                   '**/frameworks/**',
                   '@utils/setup-utils',
                   '@shared/utils/setup-utils',

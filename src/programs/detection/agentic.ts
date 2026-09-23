@@ -13,7 +13,7 @@
  * program uses, which needs credentials.
  */
 
-import { buildRunTags, AgentSignals, runAgent, RunOutcome } from '@agent';
+import { AgentSignals, runAgent, RunOutcome } from '@agent';
 import type {
   AgentProgress,
   InferenceAuthProvider,
@@ -32,6 +32,7 @@ import {
   getSkillsBaseUrl,
 } from '@shared/constants';
 import type { Credentials } from '@shared/api';
+import { buildRunTags } from '@shared/run-tags';
 import { analytics } from '@utils/analytics';
 import type { WizardRunOptions } from '@utils/types';
 import { createPosthogInferenceAuthProvider } from '@programs/credentials';

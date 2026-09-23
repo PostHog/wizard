@@ -23,7 +23,8 @@ import { assemblePrompt, type PromptContext } from '../../agent-prompt';
 import type { SequenceResult, SequenceContext } from '../shared/types';
 import { failed, hostAborted, installFailure } from '../shared/errors';
 import { RunOutcome } from '../shared/types';
-import { shouldDisableAsk, runOptions } from '../shared/bootstrap';
+import { runOptions } from '../shared/bootstrap';
+import { isAskDisabled } from '@shared/ask-policy';
 import { createEmitSpinner } from '../shared/progress-collector';
 import { createAskBridge } from '../shared/ask';
 import { withTranscript } from '../shared/transcript-tail';
@@ -93,7 +94,7 @@ async function executeLinear(
   // CI/signup with neither has no answerer, so we omit the bridge and the tool
   // returns an actionable error rather than hanging on a never-resolving prompt.
   const askDisabled =
-    shouldDisableAsk(input.flags) && process.env.WIZARD_ASK_AUTODRIVE !== '1';
+    isAskDisabled(input.flags) && process.env.WIZARD_ASK_AUTODRIVE !== '1';
   const ask = askDisabled
     ? undefined
     : createAskBridge(interaction, {

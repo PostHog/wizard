@@ -6,10 +6,13 @@ import { EVENT_PLAN_FILE, Harness, Sequence } from '@shared/constants';
 import { AUDIT_CHECKS_FILE } from '@shared/audit-ledger';
 import { HostResolution } from '@shared/host-resolution';
 import type { ApiUser } from '@shared/api';
+import type { OutroData, SeedTaskEntry } from '@agent/types';
 import type { FrameworkConfig } from '../framework-config';
+import type { DetectedSource } from '../warehouse-sources/types';
 import type { ResolvedProgramCredentials } from '../credentials';
 import type { ProgramProgress } from '../program-store';
 import type {
+  ProgramInput,
   ProgramWorkflowConnector,
   ProgramWorkflowDecision,
   ProgramWorkflowRequest,
@@ -26,11 +29,14 @@ import {
 import * as auditWatcher from '../audit/watch-ledger';
 import { ProgramEventPlanWatcher } from '../posthog-integration/watch-event-plan';
 import { runProgram } from '@programs';
+import { runProgram as runProgramDirect } from '../run-program';
 import { analytics } from '@utils/analytics';
 import { refreshAccessToken } from '@utils/oauth-token';
 import { DiscoveredFeature } from '@shared/scan-consent';
 import { captureSwitchboardDecision } from '../binding-telemetry';
 import { gatewayAuth } from '../gateway-session';
+import { clearCleanup, runCleanups } from '@utils/cleanup-registry';
+import { commitRegisteredRunSkillCleanups } from '@shared/skill-run-cleanup';
 
 vi.mock('@agent', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@agent')>()),
@@ -117,6 +123,47 @@ const credentials: ResolvedProgramCredentials = {
     organization: { is_ai_data_processing_approved: true },
   } as ApiUser,
 };
+
+/** A framework whose prompt and outro changes read the framework context. */
+const integrationFrameworkConfig = (): FrameworkConfig =>
+  ({
+    metadata: { name: 'Next.js', integration: 'nextjs', docsUrl: 'docs' },
+    detection: { usesPackageJson: false, getVersion: () => '15' },
+    analytics: { getTags: () => ({}) },
+    prompts: {
+      projectTypeDetection: 'app',
+      getAdditionalContextLines: (context: Record<string, unknown>) =>
+        context.router ? [`Router: ${String(context.router)}`] : [],
+    },
+    environment: { uploadToHosting: false, getEnvVars: () => ({}) },
+    ui: {
+      successMessage: 'Done',
+      estimatedDurationMinutes: 5,
+      getOutroChanges: (context: Record<string, unknown>) =>
+        context.router
+          ? [`Configured the ${String(context.router)} router`]
+          : [],
+    },
+  } as unknown as FrameworkConfig);
+
+/** Integration host effects without a live notebook getter. */
+const integrationEffects = () => ({
+  readPackageJson: vi.fn().mockResolvedValue(null),
+  hasDeclaredDependency: vi.fn().mockReturnValue(true),
+  warn: vi.fn(),
+  setTag: vi.fn(),
+  capture: vi.fn(),
+  uploadEnvironmentVariables: vi.fn().mockResolvedValue([]),
+  requestDeepLink: vi.fn().mockResolvedValue(null),
+  openDashboardDeepLink: vi.fn(),
+});
+
+const warehouseSource = (kind: string): DetectedSource => ({
+  kind,
+  label: kind,
+  mode: 'in-cli',
+  matchedSignal: `dependency: ${kind.toLowerCase()}`,
+});
 
 describe('runProgram', () => {
   beforeEach(() => {
@@ -386,6 +433,42 @@ describe('runProgram', () => {
     }
   });
 
+  it('watches the audit ledger a host lays over a program without one', async () => {
+    const installDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'wizard-audit-overlay-'),
+    );
+    const checks = [
+      { id: 'events', area: 'Events', label: 'Events', status: 'pass' },
+    ];
+    vi.mocked(getRuntimeProgramConfig).mockReturnValueOnce({
+      id: 'agent-skill',
+      strategy: 'resolved',
+      resolve: (input) => resolveAgentSkillRunDefinition(input.skillId),
+    });
+    vi.mocked(runAgent).mockImplementation(() => {
+      fs.writeFileSync(
+        path.join(installDir, AUDIT_CHECKS_FILE),
+        JSON.stringify(checks),
+      );
+      return Promise.resolve({ outcome: RunOutcome.Success, snapshot });
+    });
+
+    try {
+      const result = await runProgram('agent-skill', {
+        installDir,
+        credentials,
+        run,
+        auditLedgerFile: AUDIT_CHECKS_FILE,
+      });
+
+      expect(result.data.detection.frameworkContext.auditChecks).toEqual(
+        checks,
+      );
+    } finally {
+      fs.rmSync(installDir, { recursive: true, force: true });
+    }
+  });
+
   it('returns the current integration event plan and stops its watcher on settlement', async () => {
     const installDir = fs.mkdtempSync(
       path.join(os.tmpdir(), 'wizard-plan-host-'),
@@ -614,7 +697,7 @@ describe('runProgram', () => {
       overrides: { harness: Harness.pi },
     });
 
-    expect(vi.mocked(runAgent).mock.calls[0][0].binding).toBe(binding);
+    expect(vi.mocked(runAgent).mock.calls[0][0].binding).toEqual(binding);
     expect(captureSwitchboardDecision).not.toHaveBeenCalled();
     expect(setTag).not.toHaveBeenCalledWith('harness', expect.anything());
     expect(result.data.binding).toEqual(binding);
@@ -654,6 +737,121 @@ describe('runProgram', () => {
       wizardFlags: { 'wizard-test-flag': 'on' },
       wizardFlagPayloads: { 'wizard-test-flag': { variant: 'b' } },
     });
+  });
+
+  it('captures agent started before credentials resolve, for agent programs only', async () => {
+    vi.mocked(runAgent).mockResolvedValue({
+      outcome: RunOutcome.Success,
+      snapshot,
+    });
+    const resolve = vi.fn().mockResolvedValue(credentials);
+    const capture = vi.mocked(analytics.wizardCapture);
+    const started = () =>
+      capture.mock.calls.flatMap(([event, properties], index) =>
+        event === 'agent started'
+          ? [{ properties, at: capture.mock.invocationCallOrder[index] }]
+          : [],
+      );
+
+    await runProgram(
+      'metrics',
+      {
+        installDir: '/project',
+        run: { ...run, integrationLabel: 'custom-label', skillId: 'skill-x' },
+      },
+      { credentials: { resolve } },
+    );
+    await runProgram(
+      'replay-vision',
+      { installDir: '/project' },
+      { credentials: { resolve } },
+    );
+    vi.mocked(getRuntimeProgramConfig).mockReturnValueOnce({
+      id: 'mcp-add',
+      strategy: 'no-agent',
+      requiresAi: false,
+    });
+    await runProgram(
+      'mcp-add',
+      { installDir: '/project' },
+      {
+        mcp: {
+          detectSupportedClients: vi.fn().mockResolvedValue([]),
+          add: vi.fn().mockResolvedValue([]),
+          detectInstalledClients: vi.fn(),
+          remove: vi.fn(),
+        },
+      },
+    );
+
+    expect(started().map(({ properties }) => properties)).toEqual([
+      {
+        integration: 'custom-label',
+        program_id: 'metrics',
+        skill_id: 'skill-x',
+      },
+      {
+        integration: 'replay-vision',
+        program_id: 'replay-vision',
+        skill_id: null,
+      },
+    ]);
+    const [first, second] = started();
+    expect(first.at).toBeLessThan(resolve.mock.invocationCallOrder[0]);
+    expect(second.at).toBeLessThan(resolve.mock.invocationCallOrder[1]);
+  });
+
+  it('refreshes an aging token after the flags load and before the route is tagged', async () => {
+    const order: string[] = [];
+    vi.mocked(refreshAccessToken).mockImplementationOnce(() => {
+      order.push('refresh');
+      return Promise.resolve({
+        access_token: 'pha_refreshed',
+        expires_in: 3600,
+        token_type: 'Bearer',
+        scope: 'project:read',
+      });
+    });
+    vi.mocked(runAgent).mockImplementation(() => {
+      order.push('runAgent');
+      return Promise.resolve({ outcome: RunOutcome.Success, snapshot });
+    });
+    const featureFlags = vi.fn(() => {
+      order.push('flags');
+      return Promise.resolve({ flags: {}, payloads: {} });
+    });
+
+    await runProgram(
+      'metrics',
+      {
+        installDir: '/project',
+        credentials: {
+          ...credentials,
+          posthog: {
+            ...credentials.posthog,
+            refreshToken: 'phr_aging',
+            expiresAt: Date.now() + 10 * 60 * 1000,
+          },
+        },
+      },
+      { featureFlags },
+    );
+
+    expect(order).toEqual(['flags', 'refresh', 'runAgent']);
+    const setTag = vi.mocked(analytics.setTag).mock;
+    const tagged =
+      setTag.invocationCallOrder[
+        setTag.calls.findIndex(([key]) => key === 'sequence')
+      ];
+    expect(
+      vi.mocked(refreshAccessToken).mock.invocationCallOrder[0],
+    ).toBeLessThan(tagged);
+    expect(captureSwitchboardDecision).toHaveBeenCalledOnce();
+    expect(
+      vi.mocked(captureSwitchboardDecision).mock.invocationCallOrder[0],
+    ).toBeGreaterThan(
+      vi.mocked(refreshAccessToken).mock.invocationCallOrder[0],
+    );
   });
 
   it('prefers the input flags over the loader', async () => {
@@ -1023,39 +1221,17 @@ describe('runProgram', () => {
       outcome: RunOutcome.Success,
       snapshot,
     });
-    const frameworkConfig = {
-      metadata: { name: 'Next.js', integration: 'nextjs', docsUrl: 'docs' },
-      detection: { usesPackageJson: false, getVersion: () => '15' },
-      analytics: { getTags: () => ({}) },
-      prompts: { projectTypeDetection: 'app' },
-      environment: { uploadToHosting: false, getEnvVars: () => ({}) },
-      ui: {
-        successMessage: 'Done',
-        estimatedDurationMinutes: 5,
-        getOutroChanges: () => [],
-      },
-    } as unknown as FrameworkConfig;
-    const effects = {
-      readPackageJson: vi.fn().mockResolvedValue(null),
-      hasDeclaredDependency: vi.fn().mockReturnValue(true),
-      warn: vi.fn(),
-      setTag: vi.fn(),
-      capture: vi.fn(),
-      uploadEnvironmentVariables: vi.fn().mockResolvedValue([]),
-      requestDeepLink: vi.fn().mockResolvedValue(null),
-      openDashboardDeepLink: vi.fn(),
-    };
 
     const result = await runProgram(
       'posthog-integration',
       {
         installDir: '/project',
         credentials,
-        frameworkConfig,
+        frameworkConfig: integrationFrameworkConfig(),
         frameworkContext: {},
         flags: { ci: true },
       },
-      { integrationEffects: effects },
+      { integrationEffects: integrationEffects() },
     );
 
     expect(result.outcome).toBe('success');
@@ -1063,6 +1239,177 @@ describe('runProgram', () => {
     expect(config.run.integrationLabel).toBe('nextjs');
     expect(config.hooks?.buildOutroData).toBeTypeOf('function');
     expect(config.seedTasks?.()).toEqual([]);
+  });
+
+  it('the outro reads the notebook URL emitted during the run', async () => {
+    vi.mocked(getRuntimeProgramConfig).mockReturnValueOnce({
+      id: 'posthog-integration',
+      strategy: 'integration',
+    });
+    let outro: OutroData | undefined;
+    vi.mocked(runAgent).mockImplementation((config, input, options) => {
+      options?.onProgress?.({
+        kind: 'url',
+        which: 'notebook',
+        url: 'https://us.posthog.com/notebook/7',
+      });
+      outro = config.hooks?.buildOutroData?.(input.credentials);
+      return Promise.resolve({ outcome: RunOutcome.Success, snapshot });
+    });
+
+    const result = await runProgram(
+      'posthog-integration',
+      {
+        installDir: '/project',
+        credentials,
+        frameworkConfig: integrationFrameworkConfig(),
+        flags: { ci: true },
+      },
+      { integrationEffects: integrationEffects() },
+    );
+
+    expect(result.outcome).toBe(RunOutcome.Success);
+    expect(outro).toMatchObject({
+      notebookUrl: 'https://us.posthog.com/notebook/7',
+      handoffPrompt: expect.stringContaining(
+        'https://us.posthog.com/notebook/7',
+      ),
+    });
+  });
+
+  it('keeps the host’s own notebook getter ahead of the run’s URL', async () => {
+    vi.mocked(getRuntimeProgramConfig).mockReturnValueOnce({
+      id: 'posthog-integration',
+      strategy: 'integration',
+    });
+    let outro: OutroData | undefined;
+    vi.mocked(runAgent).mockImplementation((config, input, options) => {
+      options?.onProgress?.({
+        kind: 'url',
+        which: 'notebook',
+        url: 'https://us.posthog.com/notebook/7',
+      });
+      outro = config.hooks?.buildOutroData?.(input.credentials);
+      return Promise.resolve({ outcome: RunOutcome.Success, snapshot });
+    });
+
+    await runProgram(
+      'posthog-integration',
+      {
+        installDir: '/project',
+        credentials,
+        frameworkConfig: integrationFrameworkConfig(),
+        flags: { ci: true },
+      },
+      {
+        integrationEffects: {
+          ...integrationEffects(),
+          getNotebookUrl: () => 'https://us.posthog.com/notebook/host',
+        },
+      },
+    );
+
+    expect(outro?.notebookUrl).toBe('https://us.posthog.com/notebook/host');
+  });
+
+  it.each([
+    ['the lazy entry', runProgram],
+    ['run-program', runProgramDirect],
+  ])(
+    'a host mutation after the call does not reach run resolution, through %s',
+    async (_entry, callProgram) => {
+      vi.mocked(getRuntimeProgramConfig).mockReturnValueOnce({
+        id: 'posthog-integration',
+        strategy: 'integration',
+      });
+      let prompt: string | undefined;
+      let seeded: SeedTaskEntry[] | undefined;
+      let outro: OutroData | undefined;
+      let nextSteps: { heading: string; items: string[] } | undefined;
+      vi.mocked(runAgent).mockImplementation((config, input) => {
+        prompt = config.run.customPrompt?.(credentials.posthog);
+        seeded = config.seedTasks?.();
+        outro = config.hooks?.buildOutroData?.(input.credentials);
+        nextSteps = config.hooks?.buildOutroNextSteps?.(input.credentials, []);
+        return Promise.resolve({ outcome: RunOutcome.Success, snapshot });
+      });
+      const frameworkContext = { router: 'app' };
+      const warehouseSources = [warehouseSource('Stripe')];
+      const flags = { ci: false };
+      const host: NonNullable<ProgramInput['host']> = { region: 'us' };
+
+      const pending = callProgram(
+        'posthog-integration',
+        {
+          installDir: '/project',
+          frameworkConfig: integrationFrameworkConfig(),
+          frameworkContext,
+          warehouseSources,
+          flags,
+          host,
+        },
+        {
+          credentials: { resolve: () => Promise.resolve(credentials) },
+          integrationEffects: integrationEffects(),
+        },
+      );
+      frameworkContext.router = 'pages';
+      warehouseSources.push(warehouseSource('Postgres'));
+      flags.ci = true;
+      host.region = 'eu';
+      const result = await pending;
+
+      expect(result.outcome).toBe(RunOutcome.Success);
+      expect(prompt).toContain('Router: app');
+      expect(outro?.changes).toEqual(['Configured the app router']);
+      expect(seeded).toMatchObject([
+        { type: 'warehouse', inputs: { sources: [{ kind: 'Stripe' }] } },
+      ]);
+      expect(nextSteps?.items[0]).toContain('Connect Stripe');
+      expect(nextSteps?.items.join('\n')).not.toContain('Postgres');
+      const [, runInput] = vi.mocked(runAgent).mock.calls[0];
+      expect(runInput.flags.ci).toBe(false);
+      expect(runInput.host.region).toBe('us');
+      expect(result.data.detection.frameworkContext).toEqual({ router: 'app' });
+    },
+  );
+
+  it('copies a composed child’s input when the connector hands it over', async () => {
+    vi.mocked(getRuntimeProgramConfig).mockImplementation(
+      composedRuntimeConfig,
+    );
+    const childContext = { router: 'app' };
+    const child: ProgramInput = {
+      installDir: '/project/app',
+      frameworkConfig: integrationFrameworkConfig(),
+      frameworkContext: childContext,
+    };
+    const prompts: string[] = [];
+    vi.mocked(runAgent).mockImplementation((config) => {
+      // The host keeps writing the object it handed over.
+      childContext.router = 'pages';
+      if (config.programId === 'posthog-integration') {
+        prompts.push(config.run.customPrompt?.(credentials.posthog) ?? '');
+      }
+      return Promise.resolve({ outcome: RunOutcome.Success, snapshot });
+    });
+    const workflow: ProgramWorkflowConnector = {
+      step: (request) =>
+        Promise.resolve(
+          request.kind === 'child-run'
+            ? { kind: 'child-run', input: child }
+            : { kind: 'confirm', confirmed: true },
+        ),
+    };
+
+    const result = await runProgram(
+      'self-driving',
+      { installDir: '/project', credentials },
+      { workflow, integrationEffects: integrationEffects() },
+    );
+
+    expect(result.outcome).toBe(RunOutcome.Success);
+    expect(prompts).toEqual([expect.stringContaining('Router: app')]);
   });
 
   it('composes an integration run before self-driving with one attributed ledger', async () => {
@@ -1538,6 +1885,43 @@ describe('runProgram', () => {
     });
   });
 
+  it('copies the post-auth patch the connector answers with', async () => {
+    const patch = { selection: { project: 'apps/web' } };
+    vi.mocked(getRuntimeProgramConfig).mockReturnValue({
+      id: 'error-tracking-upload-source-maps',
+      strategy: 'resolved',
+      // runProgram hands resolve the whole input, patched framework context included.
+      resolve: (input) => ({
+        ...run,
+        customPrompt: () =>
+          JSON.stringify((input as ProgramInput).frameworkContext),
+      }),
+      postAuthGates: ['detect'],
+    });
+    let prompt: string | undefined;
+    vi.mocked(runAgent).mockImplementation((config) => {
+      // The host keeps writing the object it answered with.
+      patch.selection.project = 'apps/api';
+      prompt = config.run.customPrompt?.(credentials.posthog);
+      return Promise.resolve({ outcome: RunOutcome.Success, snapshot });
+    });
+
+    await runProgram(
+      'error-tracking-upload-source-maps',
+      { installDir: '/project', credentials },
+      {
+        workflow: {
+          step: () =>
+            Promise.resolve({ kind: 'post-auth', frameworkContext: patch }),
+        },
+      },
+    );
+
+    expect(JSON.parse(prompt ?? 'null')).toEqual({
+      selection: { project: 'apps/web' },
+    });
+  });
+
   it('sends no post-auth request for a program without gates', async () => {
     vi.mocked(runAgent).mockResolvedValue({
       outcome: RunOutcome.Success,
@@ -1691,5 +2075,80 @@ describe('runProgram', () => {
     } finally {
       fs.rmSync(installDir, { recursive: true, force: true });
     }
+  });
+
+  describe('skill cleanup', () => {
+    let installDir: string;
+    let newSkill: string;
+    let oldSkill: string;
+    const markSkill = (dir: string) => {
+      fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(path.join(dir, '.posthog-wizard'), '');
+    };
+
+    beforeEach(() => {
+      clearCleanup();
+      installDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wizard-skills-'));
+      const skillRoot = path.join(installDir, '.claude', 'skills');
+      oldSkill = path.join(skillRoot, 'before-run');
+      newSkill = path.join(skillRoot, 'during-run');
+      markSkill(oldSkill);
+    });
+    afterEach(() => {
+      clearCleanup();
+      fs.rmSync(installDir, { recursive: true, force: true });
+    });
+
+    it("a process drain mid-run removes this invocation's new skills", async () => {
+      vi.mocked(runAgent).mockImplementation(() => {
+        markSkill(newSkill);
+        // What wizardAbort and the CLI roots' signal handlers call.
+        runCleanups();
+        return Promise.resolve({ outcome: RunOutcome.Success, snapshot });
+      });
+
+      await runProgram('metrics', { installDir, credentials });
+
+      expect(fs.existsSync(newSkill)).toBe(false);
+      expect(fs.existsSync(oldSkill)).toBe(true);
+    });
+
+    it('deferSkillCommit keeps the handle until the host commits', async () => {
+      vi.mocked(runAgent).mockImplementation(() => {
+        markSkill(newSkill);
+        return Promise.resolve({ outcome: RunOutcome.Success, snapshot });
+      });
+
+      await runProgram(
+        'metrics',
+        { installDir, credentials },
+        { deferSkillCommit: true },
+      );
+      // A host that fails after the run still drains this invocation's skills.
+      runCleanups();
+      expect(fs.existsSync(newSkill)).toBe(false);
+
+      await runProgram(
+        'metrics',
+        { installDir, credentials },
+        { deferSkillCommit: true },
+      );
+      commitRegisteredRunSkillCleanups();
+      runCleanups();
+      expect(fs.existsSync(newSkill)).toBe(true);
+      expect(fs.existsSync(oldSkill)).toBe(true);
+    });
+
+    it('commits its own handles after a successful run', async () => {
+      vi.mocked(runAgent).mockImplementation(() => {
+        markSkill(newSkill);
+        return Promise.resolve({ outcome: RunOutcome.Success, snapshot });
+      });
+
+      await runProgram('metrics', { installDir, credentials });
+      runCleanups();
+
+      expect(fs.existsSync(newSkill)).toBe(true);
+    });
   });
 });

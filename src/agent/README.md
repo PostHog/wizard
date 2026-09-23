@@ -58,12 +58,10 @@ runAgent(config: RunConfig, input: RunInput, options?: {
   `setup wizard finished` event. The host sends it from the outcome: `Success`
   is `success`, `Aborted` is `cancelled`, `Failed` and `Crashed` are `error`.
 
-Other runtime exports: `DEFAULT_AGENT_BINDING` for standalone callers, the
-generic `resolveBinding` and `resolveHarness` helpers, `shouldDisableAsk`,
-`initializeAgent`, `executeAgent`, `buildRunTags`, `AgentSignals`,
-`AgentErrorType`, `downloadSkill`, `WIZARD_TOOL_NAMES`, `LONGER_ASK_TIMEOUT_MS`,
-`flushScanReport`, and `runMcpPromptViaSdk`, which loads the streaming module on
-first call.
+Other runtime exports: `DEFAULT_AGENT_BINDING` for standalone callers,
+`resolveHarness` and `harnessRunsTasks`, which programs resolve a binding with,
+`AgentSignals`, `WIZARD_TOOL_NAMES`, `downloadSkill`, and `runMcpPromptViaSdk`,
+which loads the streaming module on first call.
 
 Minimal invocation:
 
