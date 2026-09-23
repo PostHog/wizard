@@ -1,8 +1,8 @@
 import { Box, Text } from 'ink';
 import { useState, useSyncExternalStore } from 'react';
-import type { WizardStore } from '@tui/store';
-import { IntroScreenLayout } from '@tui/screens/IntroScreenLayout';
-import { SkillSourceInfo, useSkillEntry } from '@tui/screens/SkillSourceInfo';
+import type { WizardStore } from '../store';
+import { IntroScreenLayout } from './IntroScreenLayout';
+import { SkillSourceInfo, useSkillEntry } from './SkillSourceInfo';
 
 interface AiObservabilityIntroScreenProps {
   store: WizardStore;

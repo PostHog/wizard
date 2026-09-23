@@ -5,9 +5,9 @@
  */
 
 import { Text } from 'ink';
-import type { WizardStore } from '@tui/store';
-import { TextRevealMode } from '@tui/primitives/TextBlock';
-import type { ContentBlock } from '@tui/primitives/content-types';
+import type { WizardStore } from '../../store';
+import { TextRevealMode } from '../../primitives/TextBlock';
+import type { ContentBlock } from '../../primitives/content-types';
 
 export const getContentBlocks = (store?: WizardStore): ContentBlock[] => {
   const skillId = store?.session.skillId ?? 'unknown';

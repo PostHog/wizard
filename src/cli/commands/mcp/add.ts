@@ -1,12 +1,12 @@
 import type { Arguments } from 'yargs';
-import { LoggingUI } from '@headless/renderers/logging-ui';
-import { headlessOption, isHeadless } from '@cli/headless-mode';
+import { LoggingUI } from '@headless';
+import { headlessOption, isHeadless } from '../../headless-mode';
 import { Program } from '@programs';
 import { VERSION } from '@shared/version';
 import type { Command } from '../command';
 import { isTUIUnavailable } from './tui-availability';
-import { cliTuiHost } from '@cli/tui-host';
-import { setUI } from '@cli/ui';
+import { cliTuiHost } from '../../tui-host';
+import { setUI } from '../../ui';
 
 export const mcpAddCommand: Command = {
   name: 'add',
@@ -51,8 +51,8 @@ function runMcpAdd(argv: Arguments): void {
     }
 
     try {
-      const { startTUI } = await import('@tui/start-tui');
-      const { buildSession } = await import('@tui/session');
+      const { startTUI } = await (await import('@tui')).loadStartTui();
+      const { buildSession } = await import('@tui');
       const tui = startTUI(VERSION, Program.McpAdd, cliTuiHost());
       tui.store.session = buildSession({
         debug,

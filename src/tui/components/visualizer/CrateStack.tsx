@@ -7,7 +7,7 @@
 
 import { Box, Text } from 'ink';
 import { useRef } from 'react';
-import { useTick } from '@tui/hooks/useTick';
+import { useTick } from '../../hooks/useTick';
 import { Panel, type VisualProps } from './panel';
 import { createGrid, plot } from './grid';
 import { VISUALIZER_PALETTE } from './palette';

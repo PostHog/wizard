@@ -1,6 +1,6 @@
 import { Box, Text } from 'ink';
-import { Colors, Icons } from '@tui/styles';
-import { IssueTable } from '@tui/screens/doctor/IssueTable';
+import { Colors, Icons } from '../../styles';
+import { IssueTable } from '../../screens/doctor/IssueTable';
 import type { HealthIssue } from '@programs/types';
 
 const NOW = '2026-04-27T15:00:00Z';

@@ -30,8 +30,8 @@ import { join } from 'path';
 import { analytics } from '@utils/analytics';
 import type { AbortCase } from '@agent/types';
 import { ErrorCodes } from '@shared/errors';
-import { detectWarehouseSources } from '@programs/warehouse-sources/detect';
-import type { DetectedSource } from '@programs/warehouse-sources/types';
+import { detectWarehouseSources } from '../warehouse-sources/detect';
+import type { DetectedSource } from '../warehouse-sources/types';
 
 /** frameworkContext key holding the deterministic PostHog-presence result. */
 export const POSTHOG_PRESENT_KEY = 'postHogPresent';

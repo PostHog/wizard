@@ -11,14 +11,14 @@
 
 import { Box, Text } from 'ink';
 import { useState, useSyncExternalStore } from 'react';
-import type { WizardStore } from '@tui/store';
-import { PickerMenu } from '@tui/primitives/index';
+import type { WizardStore } from '../store';
+import { PickerMenu } from '../primitives/index';
 import { IntroScreenLayout } from './IntroScreenLayout.js';
 import {
   NO_DEFAULT_LIMIT,
   PRICING_LONG,
   PRICING_SHORT,
-} from '@tui/decks/self-driving/pricing.js';
+} from '../decks/self-driving/pricing.js';
 import type { SelfDrivingDetectError } from '@programs/types';
 
 interface SelfDrivingIntroScreenProps {

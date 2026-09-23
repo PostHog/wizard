@@ -6,7 +6,7 @@
  * A finding is progress, not a failure, so an area never reports `failed`.
  */
 
-import type { AuditCheck, AuditStatus } from '@programs/audit/types';
+import type { AuditCheck, AuditStatus } from '../audit/types';
 import { StreamTaskStatus, type StreamTask } from './types';
 
 export const MAX_AUDIT_AREAS = 24;

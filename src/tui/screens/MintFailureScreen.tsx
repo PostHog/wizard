@@ -1,15 +1,15 @@
 import { Box, Text } from 'ink';
 import { useRef, useState, useSyncExternalStore } from 'react';
-import type { WizardStore } from '@tui/store';
-import { PickerMenu } from '@tui/primitives/index';
-import { useStdoutDimensions } from '@tui/hooks/useStdoutDimensions';
-import { Colors } from '@tui/styles';
+import type { WizardStore } from '../store';
+import { PickerMenu } from '../primitives/index';
+import { useStdoutDimensions } from '../hooks/useStdoutDimensions';
+import { Colors } from '../styles';
 import {
   MINT_FAILURE_MESSAGE,
   MINT_FAILURE_BODY,
   MINT_FAILURE_CONTACT,
-} from '@tui/mint-failure';
-import type { WizardSpellbook } from '@tui/services/wizard-spellbook';
+} from '../mint-failure';
+import type { WizardSpellbook } from '../services/wizard-spellbook';
 import type { CodingAgent } from '../services/coding-agent-launcher';
 
 export type MintFailureServices = {

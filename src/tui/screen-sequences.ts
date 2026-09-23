@@ -9,7 +9,7 @@
 import { PROGRAM_REGISTRY, type ProgramId } from '@programs';
 import { createProgramSequence } from './flow.js';
 import { getProgramFlow } from './flows/index.js';
-import type { WizardSession } from '@tui/session';
+import type { WizardSession } from './session';
 
 /** Screens that participate in linear programs. */
 export enum ScreenId {

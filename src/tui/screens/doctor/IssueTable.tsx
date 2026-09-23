@@ -1,6 +1,6 @@
 import { Box, Text } from 'ink';
-import { useStdoutDimensions } from '@tui/hooks/useStdoutDimensions';
-import { Colors, Icons } from '@tui/styles';
+import { useStdoutDimensions } from '../../hooks/useStdoutDimensions';
+import { Colors, Icons } from '../../styles';
 import { getKindMeta } from '@programs';
 import type { HealthIssue, HealthIssueSeverity } from '@programs/types';
 

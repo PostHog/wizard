@@ -1,4 +1,4 @@
-import type { ProgramRun } from '@programs/program-run';
+import type { ProgramRun } from '../program-run';
 
 export const AI_OBSERVABILITY_REPORT_FILE =
   'posthog-ai-observability-report.md';

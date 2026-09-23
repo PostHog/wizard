@@ -11,9 +11,9 @@
 
 import { Box, Text } from 'ink';
 import { useEffect, useSyncExternalStore } from 'react';
-import type { WizardStore } from '@tui/store';
-import { ConfirmationInput, ModalOverlay } from '@tui/primitives/index';
-import { Icons } from '@tui/styles';
+import type { WizardStore } from '../store';
+import { ConfirmationInput, ModalOverlay } from '../primitives/index';
+import { Icons } from '../styles';
 import type { SettingsConflict } from '@shared/claude-settings';
 import { analytics } from '@utils/analytics';
 

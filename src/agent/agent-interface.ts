@@ -16,7 +16,7 @@ import type { WizardRunOptions } from '@utils/types';
 import { analytics } from '@utils/analytics';
 import { isTemplateEnvFileName } from '@utils/env-scan';
 import { runtimeEnv } from '@env';
-import type { AioCapture } from '@agent/aio-capture';
+import type { AioCapture } from './aio-capture';
 import {
   Harness,
   CallType,
@@ -41,12 +41,12 @@ import {
   type GatewayAuth,
 } from '@shared/gateway-auth';
 import { evaluateBashCommand } from './bash-fence';
-import { createWizardToolsServer, WIZARD_TOOL_NAMES } from '@agent/tools';
+import { createWizardToolsServer, WIZARD_TOOL_NAMES } from './tools';
 import {
   createPreToolUseYaraHooks,
   createPostToolUseYaraHooks,
   prewarmYaraScanner,
-} from '@agent/yara-hooks';
+} from './yara-hooks';
 import { scanProjectSkills } from './skill-preflight';
 import { createTriageLLMProvider } from './triage-provider';
 import type { LLMProvider } from '@posthog/warlock';
@@ -226,7 +226,7 @@ export type AgentConfig = {
    */
   modelOverride?: string;
   /** Bridge that drives the `wizard_ask` overlay. Omit in non-interactive hosts. */
-  askBridge?: import('@agent/wizard-ask-bridge').WizardAskBridge;
+  askBridge?: import('./wizard-ask-bridge').WizardAskBridge;
   /** Per-run cap on `wizard_ask` invocations. Defaults to 10. */
   askMaxQuestions?: number;
   /** Extra tools added on top of BASE_ALLOWED_TOOLS for this run. */
@@ -243,7 +243,7 @@ export type AgentConfig = {
    * flag routes the run here; threaded into wizard-tools so the orchestrator
    * tools register.
    */
-  orchestrator?: import('@agent/runner/sequence/orchestrator/queue-tools').OrchestratorToolsContext;
+  orchestrator?: import('./runner/sequence/orchestrator/queue-tools').OrchestratorToolsContext;
   /**
    * Optional AIO capture — mirrors each assistant SDK message into the
    * authenticated project as `$ai_generation`. No-op instance when

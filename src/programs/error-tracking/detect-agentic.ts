@@ -18,13 +18,13 @@ import {
   type AgenticDetectOptions,
   type AgenticDetectionReport,
   type DetectEvent,
-} from '@programs/detection/agentic';
-import { gatherFrameworkContext } from '@programs/detection/index';
-import type { FrameworkDetectionState } from '@programs/detection/context';
+} from '../detection/agentic';
+import { gatherFrameworkContext } from '../detection/index';
+import type { FrameworkDetectionState } from '../detection/context';
 import {
   detectIntegrationProjects,
   toIntegrationCandidates,
-} from '@programs/detection/project-scope';
+} from '../detection/project-scope';
 
 /** frameworkContext key for the picked project's path, relative to the repo root. */
 export const ERROR_TRACKING_PROJECT_PATH_KEY = 'errorTrackingProjectPath';

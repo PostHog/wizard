@@ -1,6 +1,6 @@
 /* Android (Kotlin) wizard using posthog-agent with PostHog MCP */
 import type { WizardRunOptions } from '@utils/types';
-import type { FrameworkConfig } from '@programs/framework-config';
+import type { FrameworkConfig } from '../../framework-config';
 import { Integration } from '@shared/constants';
 import { boundedGlob } from '@utils/bounded-fs';
 import * as fs from 'node:fs';
@@ -10,7 +10,7 @@ import {
   getKotlinVersionBucket,
   getMinSdkVersion,
 } from './utils';
-import { gradlePackageManager } from '@programs/detection/package-manager';
+import { gradlePackageManager } from '../../detection/package-manager';
 
 type AndroidContext = {
   kotlinVersion?: string;

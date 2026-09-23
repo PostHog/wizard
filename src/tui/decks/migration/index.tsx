@@ -16,14 +16,14 @@
  */
 
 import { Text } from 'ink';
-import type { WizardStore } from '@tui/store';
-import { Colors } from '@tui/styles';
-import { TextRevealMode } from '@tui/primitives/TextBlock';
-import type { ContentBlock } from '@tui/primitives/content-types';
-import { StatusPeekTrigger } from '@tui/components/StatusPeekTrigger';
-import { PRODUCT_SUITE_BLOCK } from '@tui/decks/posthog-integration/product-suite';
-import { LINE_CHART_BLOCK } from '@tui/decks/posthog-integration/line-chart';
-import { FUNNEL_BLOCK } from '@tui/decks/posthog-integration/funnel';
+import type { WizardStore } from '../../store';
+import { Colors } from '../../styles';
+import { TextRevealMode } from '../../primitives/TextBlock';
+import type { ContentBlock } from '../../primitives/content-types';
+import { StatusPeekTrigger } from '../../components/StatusPeekTrigger';
+import { PRODUCT_SUITE_BLOCK } from '../posthog-integration/product-suite';
+import { LINE_CHART_BLOCK } from '../posthog-integration/line-chart';
+import { FUNNEL_BLOCK } from '../posthog-integration/funnel';
 import { VENDOR_STACK_BLOCK } from './vendor-stack.js';
 import { FREE_TIER_BLOCK } from './free-tier.js';
 import { PRICING_STRUCTURE_BLOCK } from './pricing-structure.js';

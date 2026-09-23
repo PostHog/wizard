@@ -2,7 +2,7 @@
  * Shared error helpers for the runner pipeline.
  */
 
-import type { InstallSkillResult } from '@agent/tools';
+import type { InstallSkillResult } from '../../tools';
 import { ErrorCodes, skillErrorCode } from '@shared/errors';
 import { RunOutcome, type AgentFailure, type SequenceResult } from './types';
 

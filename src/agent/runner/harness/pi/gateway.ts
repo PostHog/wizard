@@ -15,7 +15,7 @@ import {
   modelCapabilities,
   type ThinkingLevel,
 } from '../../switchboard/models';
-import { AgentErrorType } from '@agent/signals';
+import { AgentErrorType } from '../../../signals';
 
 /** Provider registered on the in-memory registry for this run. */
 export const GATEWAY_PROVIDER = 'posthog-gateway';

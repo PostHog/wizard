@@ -21,7 +21,7 @@ import type {
   TaskStreamDestination,
   TaskStreamUpdate,
   StreamEvent,
-} from '@programs/task-stream/types';
+} from '../types';
 import type { Credentials } from '@shared/api';
 import { logToFile } from '@utils/debug';
 

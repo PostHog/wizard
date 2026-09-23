@@ -28,11 +28,11 @@ import {
   publishHandoff,
 } from './handoff';
 import { createSecretVault, type SecretVault } from '@shared/secret-vault';
-import type { ProgressEmitter } from '@agent/progress';
+import type { ProgressEmitter } from '../progress';
 import {
   buildOrchestratorTools,
   type OrchestratorToolsContext,
-} from '@agent/runner/sequence/orchestrator/queue-tools';
+} from '../runner/sequence/orchestrator/queue-tools';
 import type { LLMProvider } from '@posthog/warlock';
 import {
   DEFAULT_ASK_MAX_QUESTIONS,

@@ -14,7 +14,7 @@ import type {
   AgentProgress,
   ProgressEmitter,
   SpinnerHandle,
-} from '@agent/progress';
+} from '../../progress';
 import type { RunSnapshot } from './types';
 
 export interface ProgressCollector {

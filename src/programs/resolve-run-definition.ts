@@ -4,7 +4,7 @@ import type { AgentRunDefinition } from '@agent/types';
 import { LONGER_ASK_TIMEOUT_MS } from '@agent';
 import { POSTHOG_DOCS_URL, type AdditionalFeature } from '@shared/constants';
 import type { SkillProgramOptions } from './agent-skill/index.js';
-import { SPINNER_MESSAGE } from '@programs/framework-config';
+import { SPINNER_MESSAGE } from './framework-config';
 import { AUDIT_ABORT_CASES } from './audit/detect.js';
 import { AUDIT_REPORT_FILE } from './audit/types.js';
 import { SETUP_REPORT_FILE } from './events-audit/constants.js';

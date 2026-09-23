@@ -5,7 +5,7 @@
  * and can publish data to a shared store for downstream middleware to read.
  */
 
-import type { ProgressEmitter, SpinnerHandle } from '@agent/progress';
+import type { ProgressEmitter, SpinnerHandle } from '../progress';
 
 export type SDKMessage = any;
 

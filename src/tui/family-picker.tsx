@@ -7,8 +7,8 @@
 import { Box, Text, render } from 'ink';
 import { createElement } from 'react';
 
-import { Colors } from '@tui/styles';
-import { PickerMenu } from '@tui/primitives/PickerMenu';
+import { Colors } from './styles';
+import { PickerMenu } from './primitives/PickerMenu';
 
 export interface FamilyPickerOption<T> {
   label: string;

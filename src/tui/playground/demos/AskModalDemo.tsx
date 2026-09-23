@@ -11,8 +11,8 @@ import {
   ModalOverlay,
   PickerMenu,
   GroupedPickerMenu,
-} from '@tui/primitives/index';
-import { Colors, Icons } from '@tui/styles';
+} from '../../primitives/index';
+import { Colors, Icons } from '../../styles';
 import { LONG_OPTIONS } from './InputDemo.js';
 
 enum DemoStep {

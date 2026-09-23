@@ -42,17 +42,17 @@ import { Spinner } from '@inkjs/ui';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSyncExternalStore } from 'react';
 
-import type { WizardStore } from '@tui/store';
+import type { WizardStore } from '../store';
 import { Program } from '@programs';
-import { Colors, Icons } from '@tui/styles';
-import { useKeyBindings, KeyMatch } from '@tui/hooks/useKeyBindings';
+import { Colors, Icons } from '../styles';
+import { useKeyBindings, KeyMatch } from '../hooks/useKeyBindings';
 import {
   ContentSequencer,
   LoadingBox,
   PickerMenu,
   TextRevealMode,
   type ContentBlock,
-} from '@tui/primitives/index';
+} from '../primitives/index';
 import {
   getRolePrompts,
   getRoleGreeting,
@@ -63,19 +63,19 @@ import {
   FOLLOW_UP_EXIT_SENTINEL,
   type PromptOption,
   type RoleGreeting,
-} from '@tui/services/mcp-role-prompts';
+} from '../services/mcp-role-prompts';
 import {
   degradedProfile,
   isKnownCloudHost,
   type ProjectDataProfile,
-} from '@tui/services/mcp-project-profile';
+} from '../services/mcp-project-profile';
 import type { Integration } from '@shared/constants';
 import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
 import type {
   AgentChunk,
   McpSuggestedPromptsServices,
-} from '@tui/services/mcp-suggested-prompts-services';
+} from '../services/mcp-suggested-prompts-services';
 
 interface McpSuggestedPromptsScreenProps {
   store: WizardStore;

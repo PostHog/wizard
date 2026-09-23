@@ -14,9 +14,9 @@ import { readdir, rm, access } from 'node:fs/promises';
 import { join } from 'node:path';
 
 const WIZARD_MARKER = '.posthog-wizard';
-import type { WizardStore } from '@tui/store';
-import { ConfirmationInput } from '@tui/primitives/index';
-import { Colors } from '@tui/styles';
+import type { WizardStore } from '../store';
+import { ConfirmationInput } from '../primitives/index';
+import { Colors } from '../styles';
 import { CONTEXT_MILL_URL } from '@shared/constants';
 
 interface KeepSkillsScreenProps {

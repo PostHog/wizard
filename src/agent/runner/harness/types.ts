@@ -20,20 +20,17 @@
 
 import type { AdditionalFeature } from '@shared/constants';
 import type { Harness } from '@shared/constants';
-import type { WizardAskBridge } from '@agent/wizard-ask-bridge';
-import type { AgentErrorType } from '@agent/agent-interface';
-import type { ProgressEmitter, SpinnerHandle } from '@agent/progress';
-import type { OrchestratorToolsContext } from '@agent/runner/sequence/orchestrator/queue-tools';
-import type {
-  EffortLevel,
-  ThinkingLevel,
-} from '@agent/runner/switchboard/models';
+import type { WizardAskBridge } from '../../wizard-ask-bridge';
+import type { AgentErrorType } from '../../agent-interface';
+import type { ProgressEmitter, SpinnerHandle } from '../../progress';
+import type { OrchestratorToolsContext } from '../sequence/orchestrator/queue-tools';
+import type { EffortLevel, ThinkingLevel } from '../switchboard/models';
 import type {
   AgentFailure,
   BootstrapResult,
   RunConfig,
   RunInput,
-} from '@agent/runner/shared/types';
+} from '../shared/types';
 
 /** The benchmark/telemetry hook threaded through a run, if enabled. */
 export interface RunMiddleware {

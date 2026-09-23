@@ -7,13 +7,10 @@ import {
   getInstalledClients,
   getSupportedClients,
   removeMCPServer,
-} from '@tui/add-mcp-server-to-clients/index';
-import { ALL_FEATURE_VALUES } from '@tui/add-mcp-server-to-clients/defaults';
-import {
-  McpClientStatus,
-  namesWithStatus,
-} from '@tui/add-mcp-server-to-clients/results';
-import { getUI } from '@cli/ui';
+} from '@tui';
+import { ALL_FEATURE_VALUES } from '@tui';
+import { McpClientStatus, namesWithStatus } from '@tui';
+import { getUI } from '../../ui';
 
 /** Per-client outcome, so a scripted caller can turn a failure into an exit code. */
 export interface McpStepOutcome {

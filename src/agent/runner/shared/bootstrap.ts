@@ -8,7 +8,7 @@
  * arrives already resolved in `RunConfig` and `RunInput`.
  */
 
-import { createTriageLLMProvider } from '@agent/triage-provider';
+import { createTriageLLMProvider } from '../../triage-provider';
 import { logToFile } from '@utils/debug';
 import { CallType, IS_DEV } from '@shared/constants';
 import { VERSION } from '@shared/version';

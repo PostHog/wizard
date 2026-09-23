@@ -11,25 +11,18 @@
 import { Box, Text } from 'ink';
 import type { ReactNode } from 'react';
 import { useState, useSyncExternalStore } from 'react';
-import type { WizardStore } from '@tui/store';
+import type { WizardStore } from '../store';
 import { Integration } from '@shared/constants';
 import { getCommandPath, getLaunchablePrograms } from '@programs';
-import {
-  PickerMenu,
-  LoadingBox,
-  type PickerOption,
-} from '@tui/primitives/index';
+import { PickerMenu, LoadingBox, type PickerOption } from '../primitives/index';
 import { IntroScreenLayout, type DetectionRow } from './IntroScreenLayout.js';
 import { SkillSourceInfo, useSkillEntry } from './SkillSourceInfo.js';
-import { KeyMatch, useKeyBindings } from '@tui/hooks/useKeyBindings';
-import { Icons } from '@tui/styles';
+import { KeyMatch, useKeyBindings } from '../hooks/useKeyBindings';
+import { Icons } from '../styles';
 import { analytics } from '@utils/analytics';
-import { PRIVACY_PANEL_LABEL } from '@tui/components/PrivacyPanel';
-import type { IntroMenuView } from '@tui/posthog-integration-intro';
-import {
-  introHeadline,
-  introMenuOptions,
-} from '@tui/posthog-integration-intro';
+import { PRIVACY_PANEL_LABEL } from '../components/PrivacyPanel';
+import type { IntroMenuView } from '../posthog-integration-intro';
+import { introHeadline, introMenuOptions } from '../posthog-integration-intro';
 import { ScanConsent } from '@shared/scan-consent';
 
 /**

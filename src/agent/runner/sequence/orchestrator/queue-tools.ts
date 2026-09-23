@@ -8,7 +8,7 @@
  */
 import { z } from 'zod';
 import { analytics } from '@utils/analytics';
-import { isValidModel, VALID_MODELS } from '@agent/runner/switchboard/models';
+import { isValidModel, VALID_MODELS } from '../../switchboard/models';
 import {
   isNotNeededReason,
   NotNeededReason,

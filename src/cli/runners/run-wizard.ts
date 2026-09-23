@@ -12,10 +12,10 @@ import type {
   ProgramRunStep,
   TaskStreamPush as TaskStreamPushClass,
 } from '@programs/types';
-import type { FlowStep } from '@tui/flow';
+import type { FlowStep } from '@tui/types';
 import type { Harness, Sequence } from '@shared/constants';
-import type { startTUI as StartTUIFn } from '@tui/start-tui';
-import type { WizardStore } from '@tui/store';
+import type { TuiHandle } from '@tui/types';
+import type { WizardStore } from '@tui/types';
 import { resolveNoTelemetry } from './resolve-no-telemetry';
 import { checkLocalServices, getLocalDev } from '@shared/local-dev';
 import {
@@ -23,15 +23,14 @@ import {
   registerRunSkillCleanup,
 } from '@shared/skill-run-cleanup';
 import { classifyRunFailure, emitWizardError } from '@shared/errors';
-import { isRunFailure } from '@tui/mint-failure';
 import { analytics } from '@utils/analytics';
 import { join } from 'node:path';
 import { cliAuthHost } from './auth-host';
 import { OutroKind } from '@shared/outro';
-import type { WizardSession } from '@tui/session';
-import { cliTuiHost } from '@cli/tui-host';
+import type { WizardSession } from '@tui/types';
+import { cliTuiHost } from '../tui-host';
 import { runCleanups } from '@utils/cleanup-registry';
-import { getUI } from '@cli/ui';
+import { getUI } from '../ui';
 import { IS_PRODUCTION_BUILD } from '@env';
 
 const WIZARD_VERSION = VERSION;
@@ -104,7 +103,7 @@ export function runWizard(
   config: ProgramConfig,
   options: Record<string, unknown>,
 ): void {
-  let tui: ReturnType<typeof StartTUIFn> | null = null;
+  let tui: TuiHandle | null = null;
   let taskStream: TaskStreamPushClass | null = null;
   let onSignal: (() => void) | null = null;
   let exitInProgress = false;
@@ -114,8 +113,8 @@ export function runWizard(
       const installDir = (options.installDir as string) || process.cwd();
       registerRunSkillCleanup(installDir);
 
-      const { startTUI } = await import('@tui/start-tui');
-      const { buildSession } = await import('@tui/session');
+      const { startTUI } = await (await import('@tui')).loadStartTui();
+      const { buildSession } = await import('@tui');
       const { RunPhase } = await import('@shared/run-state');
       const { loadTaskStream } = await import('@programs');
       const { TaskStreamPush, PostHogDestination, createFileDestination } =
@@ -132,7 +131,7 @@ export function runWizard(
         localPosthog: local.localPosthog && !options.baseUrl,
       });
       if (localServicesError) {
-        const { wizardAbort } = await import('@cli/wizard-abort');
+        const { wizardAbort } = await import('../wizard-abort');
         await wizardAbort({ message: localServicesError });
         return;
       }
@@ -173,10 +172,12 @@ export function runWizard(
 
       // A controlled TUI serves its store's actions over the socket; the flow still runs here.
       if (!IS_PRODUCTION_BUILD && options.controlSocket) {
-        const { attachControlServer } = await import('@headless/control');
-        const { wizardStoreControlTarget } = await import('@tui/control/index');
-        const { createControlHooks } = await import('@cli/control-hooks');
-        const { controlMode } = await import('@cli/control-flags');
+        const { attachControlServer } = await (
+          await import('@headless')
+        ).loadControl();
+        const { wizardStoreControlTarget } = await import('@tui');
+        const { createControlHooks } = await import('../control-hooks');
+        const { controlMode } = await import('../control-flags');
         await attachControlServer(
           wizardStoreControlTarget(activeTui.store, { screens: true }),
           {
@@ -291,7 +292,7 @@ export function runWizard(
         // (self-driving runs the integration before its own
         // run), or scopes its own run to a picked project (error-tracking).
         // Walk the list once, advancing each step to completion.
-        const { rawProgramFlow } = await import('@tui/flows/index');
+        const { rawProgramFlow } = await import('@tui');
         for (const step of rawProgramFlow(config.id)) {
           if (step.screenId === 'outro') break; // run-completion wait owns it
           if (shown(step)) await advanceStep(step, activeTui.store, config);
@@ -339,6 +340,7 @@ export function runWizard(
         }
       }
 
+      const { isRunFailure } = await import('@tui');
       const runFailed = isRunFailure(activeTui.store.session);
       await activeTui.store.waitUntil((s) => {
         if (s.mintHandoff === 'exit') return true;

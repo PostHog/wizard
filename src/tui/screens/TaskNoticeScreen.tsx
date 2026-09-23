@@ -8,9 +8,9 @@
 
 import { Box, Text } from 'ink';
 import { useSyncExternalStore } from 'react';
-import type { WizardStore } from '@tui/store';
-import { Colors } from '@tui/styles';
-import { ConfirmationInput, ModalOverlay } from '@tui/primitives/index';
+import type { WizardStore } from '../store';
+import { Colors } from '../styles';
+import { ConfirmationInput, ModalOverlay } from '../primitives/index';
 
 interface TaskNoticeScreenProps {
   store: WizardStore;

@@ -37,7 +37,7 @@ import { getProgramFlow, rawProgramFlow } from './flows/index.js';
 import { appendStatus } from '@shared/status-history';
 import { IS_DEV, AdditionalFeature } from '@shared/constants';
 import { computeTokenCostUsd } from '@shared/token-pricing';
-import type { WizardSession } from '@tui/session';
+import type { WizardSession } from './session';
 import type { OutroData } from '@shared/outro';
 import type { DiscoveredFeature } from '@shared/scan-consent';
 import type {
@@ -55,7 +55,7 @@ import {
   isTaskStatus,
 } from '@shared/run-state';
 import { ScanConsent } from '@shared/scan-consent';
-import { buildSession } from '@tui/session';
+import { buildSession } from './session';
 
 export { TaskStatus, ScreenId, Overlay, Program, RunPhase, McpOutcome };
 export type { ScreenName, OutroData, WizardSession, ProgramId };

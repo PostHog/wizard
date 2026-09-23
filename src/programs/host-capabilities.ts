@@ -1,6 +1,6 @@
 import type { AgentProgress, OutroData, SpinnerHandle } from '@agent/types';
 import type { ErrorCode } from '@shared/errors';
-import type { AuthHost } from '@programs/authenticate';
+import type { AuthHost } from './authenticate';
 
 /** Effects the non-interactive host supplies while a program scopes its project. */
 export type ProgramCiHost = {

@@ -1,23 +1,17 @@
 import { Integration } from '@shared/constants';
-import {
-  detectFramework,
-  gatherFrameworkContext,
-} from '@programs/detection/index';
+import { detectFramework, gatherFrameworkContext } from '../detection/index';
 import {
   scopeInstallDirToProject,
   type ProjectScopeSession,
-} from '@programs/detection/project-scope';
-import type { FrameworkDetectionState } from '@programs/detection/context';
-import type { ProgramCiHost } from '@programs/host-capabilities';
-import { FRAMEWORK_REGISTRY } from '@programs/registry';
-import { createSkillProgram } from '@programs/agent-skill/index';
+} from '../detection/project-scope';
+import type { FrameworkDetectionState } from '../detection/context';
+import type { ProgramCiHost } from '../host-capabilities';
+import { FRAMEWORK_REGISTRY } from '../registry';
+import { createSkillProgram } from '../agent-skill/index';
 import { REPLAY_VISION_OPTIONS } from './run.js';
 export { REPLAY_VISION_ABORT_CASES } from './run.js';
-import { detectPostHogIntegration } from '@programs/posthog-integration/detect';
-import type {
-  ProgramConfig,
-  ProgramReadyContext,
-} from '@programs/program-step';
+import { detectPostHogIntegration } from '../posthog-integration/detect';
+import type { ProgramConfig, ProgramReadyContext } from '../program-step';
 import { analytics } from '@utils/analytics';
 import { ErrorCodes } from '@shared/errors';
 

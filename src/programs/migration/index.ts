@@ -1,4 +1,4 @@
-import type { ProgramConfig } from '@programs/program-step';
+import type { ProgramConfig } from '../program-step';
 import {
   MIGRATION_REPORT_FILE,
   DEFAULT_MIGRATE_SKILL_ID,

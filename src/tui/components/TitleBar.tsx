@@ -1,5 +1,5 @@
 import { Box, Text } from 'ink';
-import { Colors } from '@tui/styles';
+import { Colors } from '../styles';
 
 const FEEDBACK = 'Feedback: wizard@posthog.com ';
 const FEEDBACK_SHORT = ' wizard@posthog.com ';

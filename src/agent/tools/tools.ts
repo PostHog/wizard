@@ -19,11 +19,11 @@ import {
   type EnvKeyDefinition,
   type EnvKeyLocations,
 } from '@utils/env-scan';
-import { scanInstalledSkill } from '@agent/yara-hooks';
+import { scanInstalledSkill } from '../yara-hooks';
 import {
   forgetCleanProjectSkill,
   scanAndCacheInstalledProjectSkill,
-} from '@agent/skill-preflight';
+} from '../skill-preflight';
 import type { LLMProvider } from '@posthog/warlock';
 import { writeJsonAtomic, makeMutex } from '@utils/atomic-ledger';
 import {
@@ -124,11 +124,8 @@ export async function downloadSkill(
  * - `download-failed`: found the skill but download/extract failed;
  *   `message` has the underlying error.
  */
-export type InstallSkillResult =
-  | { kind: 'ok'; path: string }
-  | { kind: 'menu-fetch-failed' }
-  | { kind: 'skill-not-found'; skillId: string }
-  | { kind: 'download-failed'; message: string };
+export type { InstallSkillResult } from '@shared/skill-install';
+import type { InstallSkillResult } from '@shared/skill-install';
 
 /**
  * High-level "install a skill by ID" helper. Fetches the skill menu,

@@ -1,0 +1,42 @@
+{
+  "extends": "../../tsconfig.layers.base.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "../../.tsbuild/tui",
+    "tsBuildInfoFile": "../../.tsbuild/tui/.tsbuildinfo",
+    "paths": {
+      "@env": [
+        "../../.tsbuild/env/env.d.ts"
+      ],
+      "@shared/*": [
+        "../../.tsbuild/shared/*"
+      ],
+      "@utils/*": [
+        "../../.tsbuild/shared/utils/*"
+      ],
+      "@agent/types": [
+        "../../.tsbuild/agent/types.d.ts"
+      ],
+      "@programs": [
+        "../../.tsbuild/programs/index.d.ts"
+      ],
+      "@programs/types": [
+        "../../.tsbuild/programs/types.d.ts"
+      ]
+    }
+  },
+  "include": [
+    "./**/*.ts",
+    "./**/*.tsx",
+    "./**/*.json",
+    "../../types/read-env.d.ts",
+    "../../types/xcode.d.ts"
+  ],
+  "exclude": [
+    "**/__tests__/**",
+    "**/__mocks__/**",
+    "**/*.no-jest.*",
+    "**/*.test.ts",
+    "**/*.test.tsx"
+  ]
+}

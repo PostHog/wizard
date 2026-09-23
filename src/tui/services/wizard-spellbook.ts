@@ -8,7 +8,7 @@ import {
   type SkillEntry,
   type SkillMenu,
 } from '@shared/skill-menu';
-import type { WizardSession } from '@tui/session';
+import type { WizardSession } from '../session';
 
 export type WizardSpellbook = { path: string; skillsIncluded: boolean };
 type SpellbookSession = Pick<

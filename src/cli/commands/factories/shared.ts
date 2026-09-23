@@ -1,7 +1,7 @@
 import type { Arguments, Options } from 'yargs';
 
-import { runWizard, runWizardCI, runWizardHeadless } from '@cli/runners';
-import { isHeadless } from '@cli/headless-mode';
+import { runWizard, runWizardCI, runWizardHeadless } from '../../runners';
+import { isHeadless } from '../../headless-mode';
 import type { ProgramConfig } from '@programs/types';
 
 import { skillProgramOptions } from '../skill-program-options';

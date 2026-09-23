@@ -6,7 +6,7 @@
  */
 
 import { Box, Text } from 'ink';
-import { useTick } from '@tui/hooks/useTick';
+import { useTick } from '../../hooks/useTick';
 import { MATRIX_FADE, Panel, type VisualProps } from './panel';
 import { createGrid, plot, writeText } from './grid';
 import { VISUALIZER_PALETTE } from './palette';

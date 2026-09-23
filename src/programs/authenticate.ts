@@ -11,7 +11,7 @@
  */
 
 import type { ApiProject, ApiUser, Credentials } from '@shared/api';
-import type { ProgramId } from '@programs/program-registry';
+import type { ProgramId } from './program-registry';
 import type { CloudRegion } from '@utils/types';
 import { getOrAskForProjectData, type ProjectDataHost } from './project-data';
 import { refreshAccessToken } from '@utils/oauth';

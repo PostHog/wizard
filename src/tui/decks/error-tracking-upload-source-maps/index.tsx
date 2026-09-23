@@ -12,11 +12,14 @@
  */
 
 import { Text } from 'ink';
-import { Colors } from '@tui/styles';
-import type { WizardStore } from '@tui/store';
-import { TextRevealMode } from '@tui/primitives/TextBlock';
-import { isClearBlock, type ContentBlock } from '@tui/primitives/content-types';
-import { StatusPeekTrigger } from '@tui/components/StatusPeekTrigger';
+import { Colors } from '../../styles';
+import type { WizardStore } from '../../store';
+import { TextRevealMode } from '../../primitives/TextBlock';
+import {
+  isClearBlock,
+  type ContentBlock,
+} from '../../primitives/content-types';
+import { StatusPeekTrigger } from '../../components/StatusPeekTrigger';
 
 /**
  * Per-slide dwell multiplier. Each block stays on screen for `pause * SLIDE_PACE`

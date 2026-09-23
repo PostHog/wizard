@@ -8,7 +8,7 @@
 
 import * as semver from 'semver';
 import { DETECTION_TIMEOUT_MS } from '@shared/constants';
-import type { FrameworkConfig } from '@programs/framework-config';
+import type { FrameworkConfig } from '../framework-config';
 import type { WizardRunOptions } from '@utils/types';
 
 /** Host data used when gathering context for a chosen project. */

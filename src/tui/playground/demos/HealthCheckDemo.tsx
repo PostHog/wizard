@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import { Box, Text } from 'ink';
-import { LoadingBox, ModalOverlay } from '@tui/primitives/index';
-import { Icons } from '@tui/styles';
-import { ServiceHealthList } from '@tui/components/ServiceHealthList';
+import { LoadingBox, ModalOverlay } from '../../primitives/index';
+import { Icons } from '../../styles';
+import { ServiceHealthList } from '../../components/ServiceHealthList';
 import { getBlockingServiceKeys } from '@shared/health-checks/readiness';
 import { ServiceHealthStatus } from '@shared/health-checks/types';
 import type { AllServicesHealth } from '@shared/health-checks/types';

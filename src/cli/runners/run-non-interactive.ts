@@ -9,7 +9,7 @@ import {
   POSTHOG_LOCAL_URL,
 } from '@shared/local-dev';
 import type { CloudRegion } from '@utils/types';
-import { LoggingUI } from '@headless/renderers/logging-ui';
+import { LoggingUI } from '@headless';
 import type {
   HostFailure,
   ProgramConfig,
@@ -18,7 +18,7 @@ import type {
 import type { InferenceAuthProvider } from '@agent/types';
 import { analytics } from '@utils/analytics';
 import { resolveNoTelemetry } from './resolve-no-telemetry';
-import type { WizardStore } from '@tui/store';
+import type { WizardStore } from '@tui/types';
 import { join } from 'node:path';
 import {
   ErrorCodes,
@@ -33,7 +33,7 @@ import { cliAuthHost } from './auth-host';
 import type { OutroData } from '@shared/outro';
 import type { RunPhase as RunPhaseT } from '@shared/run-state';
 import { getAuditChecks, detectErrorCode, createUiReducer } from '@programs';
-import { getUI, setUI } from '@cli/ui';
+import { getUI, setUI } from '../ui';
 
 /**
  * The two non-interactive run modes. Both drive the same pipeline today; the
@@ -118,7 +118,7 @@ export function runNonInteractive(
 
   void (async () => {
     const path = await import('path');
-    const { buildSession } = await import('@tui/session');
+    const { buildSession } = await import('@tui');
     const { RunPhase } = await import('@shared/run-state');
     const { OutroKind } = await import('@shared/outro');
     const { readEnvironment } = await import('@utils/environment');
@@ -127,7 +127,7 @@ export function runNonInteractive(
       '@utils/debug'
     );
     const { runCleanups, wizardAbort, WizardError } = await import(
-      '@cli/wizard-abort'
+      '../wizard-abort'
     );
     runRegisteredCleanups = runCleanups;
 
@@ -214,8 +214,8 @@ export function runNonInteractive(
     let store: WizardStore | null = null;
     let taskStream: TaskStreamPush | null = null;
     {
-      const { WizardStore } = await import('@tui/store');
-      const { HeadlessUI } = await import('@headless/renderers/headless-ui');
+      const { WizardStore } = await import('@tui');
+      const { HeadlessUI } = await import('@headless');
       const { loadTaskStream } = await import('@programs');
       const { TaskStreamPush, PostHogDestination, createFileDestination } =
         await loadTaskStream();
@@ -445,11 +445,13 @@ async function serveControl(
   config: ProgramConfig,
   options: Record<string, unknown>,
 ): Promise<void> {
-  const { attachControlServer } = await import('@headless/control');
-  const { wizardStoreControlTarget } = await import('@tui/control/index');
-  const { InkUI } = await import('@tui/ink-ui');
-  const { createControlHooks } = await import('@cli/control-hooks');
-  const { controlMode } = await import('@cli/control-flags');
+  const { attachControlServer } = await (
+    await import('@headless')
+  ).loadControl();
+  const { wizardStoreControlTarget } = await import('@tui');
+  const { InkUI } = await import('@tui');
+  const { createControlHooks } = await import('../control-hooks');
+  const { controlMode } = await import('../control-flags');
   const { runProgramAgent } = await import('./run-program-agent');
   const { VERSION } = await import('@shared/version');
   const { logToFile } = await import('@utils/debug');

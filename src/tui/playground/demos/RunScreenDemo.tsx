@@ -21,7 +21,7 @@ import {
   useSyncExternalStore,
 } from 'react';
 import { Box, Text, useInput } from 'ink';
-import { WizardStore, TaskStatus } from '@tui/store';
+import { WizardStore, TaskStatus } from '../../store';
 import { AgentPhase } from '@shared/agent-phase';
 import {
   SplitView,
@@ -29,13 +29,13 @@ import {
   LogViewer,
   EventPlanViewer,
   HNViewer,
-} from '@tui/primitives/index';
-import type { ProgressItem, TabDefinition } from '@tui/primitives/index';
-import { LearnCard } from '@tui/components/LearnCard';
-import { TipsCard } from '@tui/components/TipsCard';
-import { VisualizerTab } from '@tui/components/PhaseVisuals';
-import { getProgramContentBlocks } from '@tui/decks/registry';
-import { Colors } from '@tui/styles';
+} from '../../primitives/index';
+import type { ProgressItem, TabDefinition } from '../../primitives/index';
+import { LearnCard } from '../../components/LearnCard';
+import { TipsCard } from '../../components/TipsCard';
+import { VisualizerTab } from '../../components/PhaseVisuals';
+import { getProgramContentBlocks } from '../../decks/registry';
+import { Colors } from '../../styles';
 import { WIZARD_LOG_FILE } from '@utils/paths';
 import { DiscoveredFeature } from '@shared/scan-consent';
 

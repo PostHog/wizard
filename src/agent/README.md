@@ -9,7 +9,7 @@ the callable program host and development CI runner, see the
 ## Signatures
 
 Import runtime values from `@agent` and types from `@agent/types`. Nothing
-outside `src/agent` imports deeper; lint and the architecture test reject it.
+outside `src/agent` imports deeper; the compiler rejects it (`pnpm typecheck`).
 
 ```ts
 import { runAgent, RunOutcome } from '@agent';

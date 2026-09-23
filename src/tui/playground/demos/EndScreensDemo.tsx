@@ -22,10 +22,10 @@
 
 import { Box, Text, useInput } from 'ink';
 import { useEffect, useState, useSyncExternalStore } from 'react';
-import type { WizardStore } from '@tui/store';
-import { SlackConnectScreen } from '@tui/screens/SlackConnectScreen';
-import { OutroScreen } from '@tui/screens/OutroScreen';
-import { Colors } from '@tui/styles';
+import type { WizardStore } from '../../store';
+import { SlackConnectScreen } from '../../screens/SlackConnectScreen';
+import { OutroScreen } from '../../screens/OutroScreen';
+import { Colors } from '../../styles';
 import { HostResolution } from '@shared/host-resolution';
 import { OutroKind } from '@shared/outro';
 import type { OutroData } from '@shared/outro';

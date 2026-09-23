@@ -7,7 +7,7 @@
 
 import { Box, Text } from 'ink';
 import { Component, type ReactNode } from 'react';
-import type { WizardStore } from '@tui/store';
+import type { WizardStore } from '../store';
 import { logToFile } from '@utils/debug';
 import { OutroKind } from '@shared/outro';
 import { RunPhase } from '@shared/run-state';

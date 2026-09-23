@@ -9,7 +9,7 @@
 import { Type } from 'typebox';
 import { defineTool } from '@earendil-works/pi-coding-agent';
 import type { ToolDefinition } from '@earendil-works/pi-coding-agent';
-import type { TaskSnapshot } from '@agent/progress';
+import type { TaskSnapshot } from '../../../progress';
 
 export type TaskStatus = 'pending' | 'in_progress' | 'completed';
 export interface TaskEntry {

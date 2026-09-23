@@ -13,7 +13,7 @@
 import { Box, Text } from 'ink';
 import { useState, useEffect } from 'react';
 import * as fs from 'fs';
-import { useStdoutDimensions } from '@tui/hooks/useStdoutDimensions';
+import { useStdoutDimensions } from '../hooks/useStdoutDimensions';
 
 /** Rows consumed by TitleBar + spacer + ScreenContainer padding + status bar +
  *  tab bar, with a couple rows of headroom so the tail never crowds the status

@@ -12,14 +12,14 @@
 import type { AdditionalFeature } from '@shared/constants';
 import type { CloudRegion } from '@utils/types';
 import type { Credentials } from '@shared/api';
-import type { AuthErrorDetail, OutroData, TaskNotice } from '@agent/progress';
-import type { PromptContext } from '@agent/agent-prompt';
+import type { AuthErrorDetail, OutroData, TaskNotice } from '../../progress';
+import type { PromptContext } from '../../agent-prompt';
 import type { PackageManagerDetector } from '@utils/package-manager';
 import type { ApiProject, ApiUser } from '@shared/api';
 import type { Harness, Integration, Sequence } from '@shared/constants';
 import type { ErrorCode } from '@shared/errors';
 import type { LLMProvider } from '@posthog/warlock';
-import type { AgentInteraction, ProgressEmitter } from '@agent/progress';
+import type { AgentInteraction, ProgressEmitter } from '../../progress';
 import type { EffortLevel } from '../switchboard/models';
 import type { GatewayAuth } from '@shared/gateway-auth';
 
@@ -288,7 +288,7 @@ export interface TokenUsageTotals {
 
 /** What the agent reported, accumulated independently of any observer. */
 export interface RunSnapshot {
-  tasks: import('@agent/progress').TaskSnapshot[];
+  tasks: import('../../progress').TaskSnapshot[];
   statusMessages: string[];
   stage?: string;
   usage: TokenUsageTotals;
@@ -326,7 +326,7 @@ export interface RunAgentOptions {
   /** Cancels this run, including its active harness operation. */
   signal?: AbortSignal;
   /** Receives every progress event in emission order. Never awaited. */
-  onProgress?: (event: import('@agent/progress').AgentProgress) => unknown;
+  onProgress?: (event: import('../../progress').AgentProgress) => unknown;
   /** Answers the agent's questions. Absent → no ask bridge, notices declined. */
   interaction?: AgentInteraction;
 }

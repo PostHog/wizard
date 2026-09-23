@@ -8,11 +8,11 @@
 
 import { Box, Text } from 'ink';
 import { useSyncExternalStore } from 'react';
-import type { WizardStore } from '@tui/store';
-import { Colors } from '@tui/styles';
+import type { WizardStore } from '../store';
+import { Colors } from '../styles';
 import { withUtm } from '@utils/links';
-import { LinkText } from '@tui/primitives/LinkText';
-import { useDismissOnAnyKey } from '@tui/hooks/useDismissOnAnyKey';
+import { LinkText } from '../primitives/LinkText';
+import { useDismissOnAnyKey } from '../hooks/useDismissOnAnyKey';
 import { OutroKind } from '@shared/outro';
 
 interface OutroScreenProps {

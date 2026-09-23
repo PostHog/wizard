@@ -23,6 +23,10 @@
     "e2e-harness/**/*",
     "types/**/*"
   ],
+  "exclude": [
+    // Layer declarations the compiler enforcement builds (tsconfig.layers.json).
+    ".tsbuild/**/*"
+  ],
   "ts-node": {
     "files": true
   }

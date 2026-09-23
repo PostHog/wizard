@@ -1,13 +1,7 @@
-import {
-  DefaultMCPClient,
-  MCPServerConfig,
-} from '@tui/add-mcp-server-to-clients/MCPClient';
+import { DefaultMCPClient, MCPServerConfig } from '../MCPClient';
 import * as path from 'path';
 import * as os from 'os';
-import {
-  DefaultMCPClientConfig,
-  getNativeHTTPServerConfig,
-} from '@tui/add-mcp-server-to-clients/defaults';
+import { DefaultMCPClientConfig, getNativeHTTPServerConfig } from '../defaults';
 import { z } from 'zod';
 
 export const CursorMCPConfig = DefaultMCPClientConfig;

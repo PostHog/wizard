@@ -7,8 +7,8 @@ import { OutroKind } from '@shared/outro';
 import { RunPhase } from '@shared/run-state';
 import { runCleanups } from '@utils/cleanup-registry';
 import { logToFile } from '@utils/debug';
-import type { WizardSession } from '@tui/session';
-import type { WizardStore } from '@tui/store';
+import type { WizardSession } from '@tui/types';
+import type { WizardStore } from '@tui/types';
 import { getUI } from './ui';
 import { cliAuthHost } from './runners/auth-host';
 

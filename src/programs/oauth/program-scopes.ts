@@ -31,7 +31,7 @@
 // read as `undefined` at module init. Keep this type-only and reference
 // program IDs by their string-literal value below — TypeScript still
 // catches renames via the `Partial<Record<ProgramId, ...>>` keying.
-import type { ProgramId } from '@programs/program-registry';
+import type { ProgramId } from '../program-registry';
 import {
   WIZARD_OAUTH_SCOPES,
   WIZARD_PROVISIONING_SCOPES,

@@ -51,20 +51,20 @@ import {
   WIZARD_ASK_SENSITIVE_DESCRIPTION,
   WIZARD_ASK_SUBJECT_DESCRIPTION,
   WIZARD_ASK_TOOL_DESCRIPTION,
-} from '@agent/tools/tools';
+} from '../../../tools/tools';
 import { fetchSkillMenu } from '@shared/skill-menu';
 import type { LLMProvider } from '@posthog/warlock';
-import type { ProgressEmitter } from '@agent/progress';
+import type { ProgressEmitter } from '../../../progress';
 import {
   isFullyCancelled,
   type WizardAskBridge,
-} from '@agent/wizard-ask-bridge';
+} from '../../../wizard-ask-bridge';
 import {
   PUBLISH_HANDOFF_CONTENT_DESCRIPTION,
   PUBLISH_HANDOFF_DESCRIPTION,
   PUBLISH_HANDOFF_TOOL_NAME,
   publishHandoff,
-} from '@agent/tools/handoff';
+} from '../../../tools/handoff';
 import { createSecretVault } from '@shared/secret-vault';
 import {
   AUDIT_CHECKS_FILE,

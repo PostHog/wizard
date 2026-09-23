@@ -19,14 +19,14 @@
 import { Box, Text } from 'ink';
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 
-import type { WizardStore } from '@tui/store';
-import { Colors, Icons } from '@tui/styles';
-import { PickerMenu, LoadingBox } from '@tui/primitives/index';
-import { useKeyBindings, KeyMatch } from '@tui/hooks/useKeyBindings';
+import type { WizardStore } from '../store';
+import { Colors, Icons } from '../styles';
+import { PickerMenu, LoadingBox } from '../primitives/index';
+import { useKeyBindings, KeyMatch } from '../hooks/useKeyBindings';
 import {
   useGithubConnection,
   fetchLoginUrl,
-} from '@tui/hooks/useGithubConnection';
+} from '../hooks/useGithubConnection';
 import { analytics } from '@utils/analytics';
 import { openTrackedLink } from '@utils/links';
 import { getIntegrationAuthorizeUrl } from '@utils/urls';

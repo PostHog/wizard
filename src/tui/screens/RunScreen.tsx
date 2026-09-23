@@ -8,7 +8,7 @@
 
 import { useMemo, useSyncExternalStore } from 'react';
 import { Box } from 'ink';
-import type { WizardStore } from '@tui/store';
+import type { WizardStore } from '../store';
 import {
   TabContainer,
   SplitView,
@@ -16,14 +16,14 @@ import {
   LogViewer,
   EventPlanViewer,
   HNViewer,
-} from '@tui/primitives/index';
-import type { ProgressItem } from '@tui/primitives/index';
-import { LearnCard } from '@tui/components/LearnCard';
-import { VisualizerTab } from '@tui/components/PhaseVisuals';
-import { TipsCard } from '@tui/components/TipsCard';
-import { useStdoutDimensions } from '@tui/hooks/useStdoutDimensions';
+} from '../primitives/index';
+import type { ProgressItem } from '../primitives/index';
+import { LearnCard } from '../components/LearnCard';
+import { VisualizerTab } from '../components/PhaseVisuals';
+import { TipsCard } from '../components/TipsCard';
+import { useStdoutDimensions } from '../hooks/useStdoutDimensions';
 
-import { getProgramContentBlocks, getProgramTips } from '@tui/decks/registry';
+import { getProgramContentBlocks, getProgramTips } from '../decks/registry';
 
 import { WIZARD_LOG_FILE } from '@utils/paths';
 import { ADDITIONAL_FEATURE_LABELS } from '@shared/constants';

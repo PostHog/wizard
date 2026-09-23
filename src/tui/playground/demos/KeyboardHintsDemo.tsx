@@ -13,8 +13,8 @@ import {
   PickerMenu,
   GroupedPickerMenu,
   ConfirmationInput,
-} from '@tui/primitives/index';
-import { Colors } from '@tui/styles';
+} from '../../primitives/index';
+import { Colors } from '../../styles';
 
 enum DemoStep {
   SingleSelect = 'single',

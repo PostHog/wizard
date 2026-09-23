@@ -1,6 +1,6 @@
 import { Box, Text } from 'ink';
 import { useSyncExternalStore } from 'react';
-import type { WizardStore } from '@tui/store';
+import type { WizardStore } from '../store';
 import { IntroScreenLayout } from './IntroScreenLayout.js';
 
 interface MigrationIntroScreenProps {

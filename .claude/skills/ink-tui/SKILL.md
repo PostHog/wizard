@@ -49,8 +49,8 @@ service wiring depends on the screen's needs; `App` remains the shared shell.
 
 ## Preserve the UI boundary
 
-Business logic calls [WizardUI](../../../src/ui/wizard-ui.ts) through
-[getUI](../../../src/ui/index.ts). Screens use
+CLI runners call [WizardUI](../../../src/cli/wizard-ui.ts) through
+[getUI](../../../src/cli/ui.ts); TUI code never looks the UI up. Screens use
 [WizardStore](../../../src/tui/store.ts) setters for reactive changes. The
 router resolves program screens from session predicates; overlays interrupt that
 resolution. Local state is appropriate for presentation details such as tab

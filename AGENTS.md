@@ -205,13 +205,18 @@ wizard run points. Full catalog: [`docs/local-dev.md`](docs/local-dev.md).
 
 - TypeScript everywhere. Use `type` (not `interface`) for framework context
   types so they satisfy `Record<string, unknown>`.
-- All UI calls go through `getUI()` (returns `WizardUI` interface). Never import
-  the store directly from business logic.
-- Shared helpers never call `getUI()`; they take a sink or return data. `debug()`
-  reaches the UI through the sink `src/ui/index.ts` installs.
-- Outside `src/agent`, import the agent through `@agent` or `@agent/types`. Add
-  to those entry modules rather than deep-importing; lint and
-  `pnpm test:arch` reject `@agent/*` paths elsewhere.
+- Layers import each other only through public entries, and the compiler
+  enforces it: `pnpm typecheck` builds one project per layer
+  (`src/<layer>/tsconfig.layer.json`) that sees other layers only through their
+  built declarations, then runs `scripts/boundary-probes.ts`. Entries are
+  `@env`, `@shared/*` and `@utils/*` (shared has no barrel), `@agent` and
+  `@agent/types`, `@programs` and `@programs/types`, `@tui` and `@tui/types`,
+  `@headless` and `@headless/types`. Inside a layer, import its own modules by
+  relative path. Ink and React compile only in `src/tui`. Tests may import deep.
+- Only CLI code calls `getUI()` (`src/cli/ui.ts`). Programs, the TUI and
+  headless code take the host they need as an argument; shared helpers take a
+  sink or return data. `debug()` reaches the UI through the sink `src/cli/ui.ts`
+  installs.
 - Session mutations go through explicit store setters that call `emitChange()`.
   Never mutate `session` directly — nanostore holds a shallow copy.
 - The router resolves the active screen from session state. No imperative

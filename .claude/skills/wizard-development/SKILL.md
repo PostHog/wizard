@@ -26,7 +26,7 @@ infrastructure should consume those boundaries.
 | Local tool permissions and scanner adapters           | [agent-interface](../../../src/agent/agent-interface.ts), [YARA hooks](../../../src/agent/yara-hooks.ts), [Pi security](../../../src/agent/runner/harness/pi/security.ts) |
 | Scanner rules                                         | [warlock](https://github.com/PostHog/warlock)                                                                                                                                   |
 | Token admission and budgets                           | [PostHog mint endpoint](https://github.com/PostHog/posthog/blob/master/posthog/llm/wizard_gateway_token.py) and [ai-gateway](https://github.com/PostHog/ai-gateway)             |
-| Screen resolution and rendering                       | [TUI](../../../src/tui/) through [WizardUI](../../../src/ui/wizard-ui.ts)                                                                                                    |
+| Screen resolution and rendering                       | [TUI](../../../src/tui/) through [WizardUI](../../../src/cli/wizard-ui.ts)                                                                                                    |
 
 ## Execution policy and model admission
 

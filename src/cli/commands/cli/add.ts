@@ -1,7 +1,7 @@
 import * as path from 'node:path';
 import * as readline from 'node:readline/promises';
 import type { Arguments } from 'yargs';
-import { LoggingUI } from '@headless/renderers/logging-ui';
+import { LoggingUI } from '@headless';
 import { analytics } from '@utils/analytics';
 import {
   CLI_STEERING_TARGETS,
@@ -10,9 +10,9 @@ import {
   findTarget,
   installOrUpdatePostHogCli,
   installSteeringSnippet,
-} from '@cli/install-cli-steering';
+} from '../../install-cli-steering';
 import type { Command } from '../command';
-import { getUI, setUI } from '@cli/ui';
+import { getUI, setUI } from '../../ui';
 
 export const cliAddCommand: Command = {
   name: 'add',

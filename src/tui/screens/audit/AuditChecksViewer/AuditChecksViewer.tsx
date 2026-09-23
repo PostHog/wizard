@@ -17,12 +17,12 @@
 
 import { Box, Text } from 'ink';
 import { Fragment, useMemo, useState, type ReactNode } from 'react';
-import { useStdoutDimensions } from '@tui/hooks/useStdoutDimensions';
+import { useStdoutDimensions } from '../../../hooks/useStdoutDimensions';
 import {
   KeyMatch,
   useKeyBindings,
   type KeyBinding,
-} from '@tui/hooks/useKeyBindings';
+} from '../../../hooks/useKeyBindings';
 import { AreaHeaderRow } from './AreaHeaderRow.js';
 import { CheckRow } from './CheckRow.js';
 import { DetailRow } from './DetailRow.js';

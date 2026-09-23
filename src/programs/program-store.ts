@@ -1,7 +1,7 @@
-import type { AgentProgress, RunResult } from '../agent/types.js';
-import type { ApiProject, ApiUser, Credentials } from '../shared/api.js';
-import type { Integration } from '../shared/constants.js';
-import { appendStatus } from '../shared/status-history.js';
+import type { AgentProgress, RunResult } from '@agent/types';
+import type { ApiProject, ApiUser, Credentials } from '@shared/api';
+import type { Integration } from '@shared/constants';
+import { appendStatus } from '@shared/status-history';
 import type { PlannedEvent } from './posthog-integration/watch-event-plan.js';
 
 export type ProgramProgress = {

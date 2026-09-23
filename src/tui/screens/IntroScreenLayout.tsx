@@ -13,11 +13,8 @@
 import path from 'path';
 import { Box, Text } from 'ink';
 import { useState, type ReactNode } from 'react';
-import { PickerMenu, type PickerOption } from '@tui/primitives/index';
-import {
-  PrivacyPanel,
-  PRIVACY_PANEL_LABEL,
-} from '@tui/components/PrivacyPanel';
+import { PickerMenu, type PickerOption } from '../primitives/index';
+import { PrivacyPanel, PRIVACY_PANEL_LABEL } from '../components/PrivacyPanel';
 
 export interface DetectionRow {
   label: string;

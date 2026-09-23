@@ -8,8 +8,8 @@ import { useEffect, useState } from 'react';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { LogViewer } from '@tui/primitives/index';
-import { Colors } from '@tui/styles';
+import { LogViewer } from '../../primitives/index';
+import { Colors } from '../../styles';
 
 const DEMO_LOG_PATH = path.join(os.tmpdir(), 'posthog-playground.log');
 

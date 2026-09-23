@@ -11,18 +11,18 @@ import {
   getInstalledClients,
   getSupportedPluginClients,
   installPlugins as runPluginInstall,
-} from '@tui/add-mcp-server-to-clients/index';
-import { ALL_FEATURE_VALUES } from '@tui/add-mcp-server-to-clients/defaults';
+} from '../add-mcp-server-to-clients/index';
+import { ALL_FEATURE_VALUES } from '../add-mcp-server-to-clients/defaults';
 import {
   McpClientStatus,
   namesWithStatus,
   redactSecrets,
   toClientResult,
   type McpClientResult,
-} from '@tui/add-mcp-server-to-clients/results';
-import { isPluginCapable } from '@tui/add-mcp-server-to-clients/plugin-client';
-import { isLoginCapable } from '@tui/add-mcp-server-to-clients/login-client';
-import { isBrowserFinishable } from '@tui/add-mcp-server-to-clients/browser-client';
+} from '../add-mcp-server-to-clients/results';
+import { isPluginCapable } from '../add-mcp-server-to-clients/plugin-client';
+import { isLoginCapable } from '../add-mcp-server-to-clients/login-client';
+import { isBrowserFinishable } from '../add-mcp-server-to-clients/browser-client';
 import { logToFile } from '@utils/debug';
 import { analytics } from '@utils/analytics';
 

@@ -1,10 +1,10 @@
 /* Flutter wizard using posthog-agent with PostHog MCP */
 import type { WizardRunOptions } from '@utils/types';
-import type { FrameworkConfig } from '@programs/framework-config';
+import type { FrameworkConfig } from '../../framework-config';
 import { Integration } from '@shared/constants';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { pubPackageManager } from '@programs/detection/package-manager';
+import { pubPackageManager } from '../../detection/package-manager';
 
 /** Platform subtrees `flutter create` scaffolds; each needs its own setup notes. */
 const FLUTTER_PLATFORM_DIRS = [

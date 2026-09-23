@@ -23,3 +23,10 @@ export function isSkillInstallCommand(command: string): boolean {
     /^http:\/\/localhost:\d+\//.test(url)
   );
 }
+
+/** Outcome of installing a skill by id: the path it landed at, or why it did not. */
+export type InstallSkillResult =
+  | { kind: 'ok'; path: string }
+  | { kind: 'menu-fetch-failed' }
+  | { kind: 'skill-not-found'; skillId: string }
+  | { kind: 'download-failed'; message: string };

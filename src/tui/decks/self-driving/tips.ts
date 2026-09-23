@@ -10,7 +10,7 @@ import { NO_DEFAULT_LIMIT, PRICING_LONG } from './pricing.js';
  * `TipsCard`. Wired onto the program's `getTips`.
  */
 
-import type { Tip } from '@tui/components/TipsCard';
+import type { Tip } from '../../components/TipsCard';
 
 export const SELF_DRIVING_TIPS: Tip[] = [
   {

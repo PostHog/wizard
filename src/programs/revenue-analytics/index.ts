@@ -1,5 +1,5 @@
 import { REVENUE_ANALYTICS_RUN } from './run.js';
-import type { ProgramConfig } from '@programs/program-step';
+import type { ProgramConfig } from '../program-step';
 import { WIZARD_TOOL_NAMES } from '@agent';
 import { detectRevenuePrerequisites } from './detect.js';
 

@@ -9,7 +9,7 @@
 import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
 import { getUI } from './ui';
-import { LoggingUI } from '@headless/renderers/logging-ui';
+import { LoggingUI } from '@headless';
 import type { ErrorCode } from '@shared/errors';
 import {
   WizardError,

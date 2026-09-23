@@ -33,7 +33,7 @@ import type {
 import { prepareRun } from './shared/bootstrap';
 import { createProgressCollector } from './shared/progress-collector';
 import { getSequence } from './switchboard';
-import { flushScanReport } from '@agent/yara-hooks';
+import { flushScanReport } from '../yara-hooks';
 import { captureRunSkillCleanup } from '@shared/skill-run-cleanup';
 import { hostAborted } from './shared/errors';
 
@@ -59,7 +59,7 @@ export type {
   AgentInteraction,
   AgentProgress,
   ProgressEmitter,
-} from '@agent/progress';
+} from '../progress';
 export { shouldDisableAsk } from './shared/bootstrap';
 export { resolveBinding } from './switchboard';
 export type { ProgramBinding, SwitchboardCtx } from './switchboard';

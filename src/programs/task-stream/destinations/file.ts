@@ -16,7 +16,7 @@ import type {
   StreamEvent,
   TaskStreamDestination,
   TaskStreamUpdate,
-} from '@programs/task-stream/types';
+} from '../types';
 
 export interface FileDestinationOptions {
   path: string;

@@ -28,10 +28,10 @@ import {
   allowsPostHogMcp,
   queueTools,
   renderToolInventory,
-} from '@agent/agent-prompt-loader';
-import { AgentErrorType } from '@agent/agent-interface';
-import { REMARK_INSTRUCTION } from '@agent/signals';
-import { AgentOutputSignals } from '@agent/output-signals';
+} from '../../../agent-prompt-loader';
+import { AgentErrorType } from '../../../agent-interface';
+import { REMARK_INSTRUCTION } from '../../../signals';
+import { AgentOutputSignals } from '../../../output-signals';
 import { TaskStatus } from '../../sequence/orchestrator/queue';
 import type { OrchestratorToolsContext } from '../../sequence/orchestrator/queue-tools';
 import type { AgentResult, TaskRunInputs } from '../types';
@@ -52,7 +52,7 @@ import {
   lastStatusLine,
   withMode,
 } from './index';
-import { createAioCapture } from '@agent/aio-capture';
+import { createAioCapture } from '../../../aio-capture';
 
 /** wizard tool vocabulary → the pi tool definitions it unlocks. */
 const CODING_TOOL_MAP: Record<string, readonly string[]> = {
@@ -290,7 +290,7 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
       triageProvider: boot.triageProvider,
       getWizardAskPending: () => askState.pending,
     });
-    const { prewarmYaraScanner } = await import('@agent/yara-hooks');
+    const { prewarmYaraScanner } = await import('../../../yara-hooks');
     void prewarmYaraScanner();
 
     // PostHog MCP, for the tasks whose prompt requests it. Tasks that never

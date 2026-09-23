@@ -18,7 +18,7 @@ import {
   type DetectEvent,
   type AgenticDetectionContext,
   type AgenticDetectOptions,
-} from '@programs/detection/agentic';
+} from '../detection/agentic';
 import {
   VARIANT_DISPLAY_NAME,
   AUTOMATABLE_VARIANTS,

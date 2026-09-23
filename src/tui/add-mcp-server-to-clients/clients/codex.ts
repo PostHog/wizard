@@ -4,20 +4,11 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 
-import { LoginCapable } from '@tui/add-mcp-server-to-clients/login-client';
-import { DefaultMCPClient } from '@tui/add-mcp-server-to-clients/MCPClient';
-import {
-  DefaultMCPClientConfig,
-  buildMCPUrl,
-} from '@tui/add-mcp-server-to-clients/defaults';
-import {
-  PluginCapable,
-  PluginInstallResult,
-} from '@tui/add-mcp-server-to-clients/plugin-client';
-import {
-  redactSecrets,
-  type InstallResult,
-} from '@tui/add-mcp-server-to-clients/results';
+import { LoginCapable } from '../login-client';
+import { DefaultMCPClient } from '../MCPClient';
+import { DefaultMCPClientConfig, buildMCPUrl } from '../defaults';
+import { PluginCapable, PluginInstallResult } from '../plugin-client';
+import { redactSecrets, type InstallResult } from '../results';
 
 import { analytics } from '@utils/analytics';
 

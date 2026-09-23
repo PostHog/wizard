@@ -137,8 +137,8 @@ credentials.
 
 ## UI state and agent output
 
-Business logic uses [WizardUI](../../../../src/ui/wizard-ui.ts) through
-`getUI()`. [InkUI](../../../../src/tui/ink-ui.ts) updates the TUI store;
+CLI runners use [WizardUI](../../../../src/cli/wizard-ui.ts) through
+`getUI()`; programs and the TUI take hosts as arguments. [InkUI](../../../../src/tui/ink-ui.ts) updates the TUI store;
 [LoggingUI](../../../../src/headless/renderers/logging-ui.ts) is available for noninteractive
 callers that select it. A missing TTY does not automatically mean an arbitrary
 caller uses LoggingUI; snapshot CI drives Ink in a PTY. `requestQuestion` and

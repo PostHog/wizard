@@ -14,29 +14,29 @@
 import { Box, Text, useInput } from 'ink';
 import { useState, useEffect, useRef } from 'react';
 import { useSyncExternalStore } from 'react';
-import { type WizardStore, McpOutcome } from '@tui/store';
+import { type WizardStore, McpOutcome } from '../store';
 import {
   ConfirmationInput,
   GroupedPickerMenu,
   PickerMenu,
-} from '@tui/primitives/index';
-import { Colors, Icons } from '@tui/styles';
+} from '../primitives/index';
+import { Colors, Icons } from '../styles';
 import type {
   McpInstaller,
   McpClientInfo,
   McpClientResult,
-} from '@tui/services/mcp-installer';
+} from '../services/mcp-installer';
 import {
   McpClientStatus,
   namesWithStatus,
   isOk,
   summarizeFailure,
-} from '@tui/add-mcp-server-to-clients/results';
+} from '../add-mcp-server-to-clients/results';
 import {
   AVAILABLE_FEATURES,
   ALL_FEATURE_VALUES,
   isAllFeaturesSelected,
-} from '@tui/add-mcp-server-to-clients/defaults';
+} from '../add-mcp-server-to-clients/defaults';
 
 export type McpMode = 'install' | 'remove';
 

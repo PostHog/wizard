@@ -21,15 +21,15 @@ import {
   ProgressList,
   SplitView,
   TextRevealMode,
-} from '@tui/primitives/index';
-import type { ContentBlock, ProgressItem } from '@tui/primitives/index';
-import { Colors } from '@tui/styles';
-import type { WizardStore } from '@tui/store';
+} from '../../primitives/index';
+import type { ContentBlock, ProgressItem } from '../../primitives/index';
+import { Colors } from '../../styles';
+import type { WizardStore } from '../../store';
 import { PROGRAM_REGISTRY } from '@programs';
-import { AUDIT_AREA_SLIDES } from '@tui/screens/audit/slides/index';
-import { getProgramContentBlocks } from '@tui/decks/registry';
-import { rawProgramFlow } from '@tui/flows/index';
-import type { AreaSlide } from '@tui/screens/audit/slides/shared';
+import { AUDIT_AREA_SLIDES } from '../../screens/audit/slides/index';
+import { getProgramContentBlocks } from '../../decks/registry';
+import { rawProgramFlow } from '../../flows/index';
+import type { AreaSlide } from '../../screens/audit/slides/shared';
 
 interface Deck {
   id: string;
