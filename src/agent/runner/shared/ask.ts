@@ -3,7 +3,7 @@
  *
  * `createWizardAskBridge` already owns request ids, the timeout race, the
  * `__cancelled__` sentinel and the analytics; it only ever needed a
- * `showQuestion` and a `cancelQuestion`. Here those come from
+ * `showQuestion` that honours each question's own signal. Here that comes from
  * `AgentInteraction` instead of `getUI()`. With no answerer there is no bridge,
  * so `wizard_ask` reports its existing "not available" error rather than
  * hanging on a question nobody can see.
@@ -30,11 +30,10 @@ export function createAskBridge(
 
   return createWizardAskBridge({
     getSource: options.getSource,
-    showQuestion: (question) => {
+    showQuestion: (question, context) => {
       options.beforeShow?.();
-      return ask(question);
+      return ask(question, context);
     },
-    cancelQuestion: interaction?.cancelAsk,
     richLinks: options.richLinks,
     timeoutMs: options.timeoutMs,
   });

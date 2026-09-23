@@ -309,7 +309,7 @@ describe('runAgent standalone', () => {
       const result = await running;
       expect(result.outcome).toBe(RunOutcome.Success);
       expect(result.snapshot.statusMessages).toContain('answered:{"q1":"yes"}');
-      expect(analytics.shutdown).toHaveBeenCalledExactlyOnceWith('success');
+      expect(analytics.shutdown).not.toHaveBeenCalled();
       expect(flushScanReport).toHaveBeenCalledTimes(1);
     },
   );
@@ -375,8 +375,8 @@ describe('runAgent standalone', () => {
           ]);
         }
       }
-      expect(analytics.shutdown).toHaveBeenCalledTimes(2);
-      expect(analytics.shutdown).toHaveBeenCalledWith('success');
+      // Terminal analytics belong to the process, so to the host.
+      expect(analytics.shutdown).not.toHaveBeenCalled();
     },
   );
 
@@ -432,7 +432,7 @@ describe('runAgent standalone', () => {
   });
 
   it.each([Sequence.linear, Sequence.orchestrator])(
-    'preserves %s completion, shutdown and scan-flush ordering',
+    'preserves %s completion and scan-flush ordering and leaves the shutdown to the host',
     async (sequence) => {
       const order: string[] = [];
       vi.mocked(analytics.shutdown).mockImplementationOnce(() => {
@@ -472,7 +472,6 @@ describe('runAgent standalone', () => {
         'queue-clean',
         'completion',
         'outro',
-        'shutdown',
         'scan-flush',
       ]);
     },
@@ -501,11 +500,16 @@ describe('runAgent standalone', () => {
     });
     expect(result.failure).toBeUndefined();
 
-    // The answerer saw the question the bridge built, and its answer came back.
+    // The answerer saw the question the bridge built, with that question's own
+    // signal, and its answer came back.
     expect(ask).toHaveBeenCalledTimes(1);
-    const [question] = ask.mock.calls[0] as unknown as [PendingQuestion];
+    const [question, context] = ask.mock.calls[0] as unknown as [
+      PendingQuestion,
+      { signal: AbortSignal },
+    ];
     expect(question.questions[0].id).toBe('q1');
     expect(question.source).toBe('test-integration');
+    expect(context.signal.aborted).toBe(false);
     expect(events).toContainEqual({
       kind: 'status',
       message: 'answered:{"q1":"yes"}',
@@ -533,7 +537,7 @@ describe('runAgent standalone', () => {
       cacheReadTokens: 0,
       cacheCreationTokens: 0,
     });
-    expect(analytics.shutdown).toHaveBeenCalledExactlyOnceWith('success');
+    expect(analytics.shutdown).not.toHaveBeenCalled();
   });
 
   it('runs to a complete result with no options at all', async () => {
@@ -617,7 +621,7 @@ describe('runAgent standalone', () => {
     expect(result.failure).toBe(failure);
   });
 
-  it('skips the terminal outro and the shutdown for a composed sub-run', async () => {
+  it('skips the terminal outro for a composed sub-run', async () => {
     const events: AgentProgress[] = [];
 
     const result = await runAgent(config({ composed: true }), input(), {

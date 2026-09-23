@@ -11,13 +11,14 @@ import type { TaskNotice } from '@lib/wizard-session';
 
 // Hoisted: `vi.mock` factories are lifted above the imports, so the analytics
 // factory would otherwise read these before they exist.
-const { showTaskNotice, cancelTaskNotice, wizardCapture, captureException } =
-  vi.hoisted(() => ({
-    showTaskNotice: vi.fn<(notice: TaskNotice) => Promise<boolean>>(),
-    cancelTaskNotice: vi.fn(),
-    wizardCapture: vi.fn(),
-    captureException: vi.fn(),
-  }));
+const { showTaskNotice, wizardCapture, captureException } = vi.hoisted(() => ({
+  showTaskNotice:
+    vi.fn<
+      (notice: TaskNotice, context: { signal: AbortSignal }) => Promise<boolean>
+    >(),
+  wizardCapture: vi.fn(),
+  captureException: vi.fn(),
+}));
 
 vi.mock('@utils/analytics', () => ({
   analytics: {
@@ -36,9 +37,13 @@ import {
 } from '@agent/runner/sequence/orchestrator/orchestrator-runner';
 
 /** The answerer under test, standing where `getUI()` used to. */
-const interaction = {
-  taskNotice: (notice: TaskNotice) => showTaskNotice(notice),
-  cancelTaskNotice: () => cancelTaskNotice(),
+const interaction = { taskNotice: showTaskNotice };
+
+/** The signal the offer handed the host with its one notice. */
+const noticeSignal = (): AbortSignal => {
+  const call = showTaskNotice.mock.calls[0];
+  if (!call) throw new Error('No notice was shown');
+  return call[1].signal;
 };
 
 const NOTICE: TaskNotice = {
@@ -52,7 +57,6 @@ const NOTICE: TaskNotice = {
 
 const resetMocks = () => {
   showTaskNotice.mockReset();
-  cancelTaskNotice.mockReset();
   wizardCapture.mockReset();
   captureException.mockReset();
 };
@@ -75,7 +79,7 @@ describe('task notice timeout', () => {
 
       await expect(promise).resolves.toEqual({ keep: false, timedOut: true });
       // Without this the modal stays on screen over the rest of the run.
-      expect(cancelTaskNotice).toHaveBeenCalledTimes(1);
+      expect(noticeSignal().aborted).toBe(true);
     } finally {
       vi.useRealTimers();
     }
@@ -95,7 +99,7 @@ describe('task notice timeout', () => {
       vi.advanceTimersByTime(5000);
       // The timer must not fire after an answer — it would close a modal that
       // is no longer there and stamp a second outcome on the step.
-      expect(cancelTaskNotice).not.toHaveBeenCalled();
+      expect(noticeSignal().aborted).toBe(false);
     } finally {
       vi.useRealTimers();
     }
@@ -114,7 +118,7 @@ describe('task notice timeout', () => {
         keep: false,
         timedOut: false,
       });
-      expect(cancelTaskNotice).not.toHaveBeenCalled();
+      expect(noticeSignal().aborted).toBe(false);
     } finally {
       vi.useRealTimers();
     }

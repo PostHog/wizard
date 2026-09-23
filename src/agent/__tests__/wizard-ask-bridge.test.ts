@@ -212,15 +212,17 @@ describe('createWizardAskBridge', () => {
   });
 
   describe('timeout', () => {
-    it('resolves every field with the cancelled sentinel and dismisses the host overlay when the user does not answer in time', async () => {
+    it('resolves every field with the cancelled sentinel and aborts the question when the user does not answer in time', async () => {
       vi.useFakeTimers();
       try {
         // showQuestion intentionally never resolves — the timeout has to win.
-        const cancelQuestion = vi.fn();
+        const signals: AbortSignal[] = [];
         const bridge = createWizardAskBridge({
           getSource: () => 'product-tours',
-          showQuestion: () => new Promise<AskAnswers>(() => undefined),
-          cancelQuestion,
+          showQuestion: (_question, { signal }) => {
+            signals.push(signal);
+            return new Promise<AskAnswers>(() => undefined);
+          },
           timeoutMs: 1000,
         });
 
@@ -230,6 +232,7 @@ describe('createWizardAskBridge', () => {
             { id: 'audience', prompt: 'Who?', kind: 'text' },
           ],
         });
+        expect(signals[0].aborted).toBe(false);
 
         vi.advanceTimersByTime(1000);
 
@@ -244,7 +247,7 @@ describe('createWizardAskBridge', () => {
         // Without this, the host's pending-question state survives the
         // timeout and every later wizard_ask in the run is rejected as a
         // duplicate request.
-        expect(cancelQuestion).toHaveBeenCalledTimes(1);
+        expect(signals[0].aborted).toBe(true);
 
         const cancelledCall = wizardCaptureMock.mock.calls.find(
           ([name]) => name === 'wizard_ask cancelled',
@@ -255,14 +258,16 @@ describe('createWizardAskBridge', () => {
       }
     });
 
-    it('does not dismiss the overlay when the user answers before the timeout', async () => {
+    it('does not abort the question when the user answers before the timeout', async () => {
       vi.useFakeTimers();
       try {
-        const cancelQuestion = vi.fn();
+        const signals: AbortSignal[] = [];
         const bridge = createWizardAskBridge({
           getSource: () => 'product-tours',
-          showQuestion: () => Promise.resolve({ goal: 'ship it' }),
-          cancelQuestion,
+          showQuestion: (_question, { signal }) => {
+            signals.push(signal);
+            return Promise.resolve({ goal: 'ship it' });
+          },
           timeoutMs: 1000,
         });
 
@@ -271,7 +276,37 @@ describe('createWizardAskBridge', () => {
         });
 
         vi.advanceTimersByTime(1000);
-        expect(cancelQuestion).not.toHaveBeenCalled();
+        expect(signals[0].aborted).toBe(false);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('aborts only the question whose timeout fired', async () => {
+      vi.useFakeTimers();
+      try {
+        const signals: AbortSignal[] = [];
+        const bridge = createWizardAskBridge({
+          getSource: () => 'product-tours',
+          showQuestion: (_question, { signal }) => {
+            signals.push(signal);
+            return new Promise<AskAnswers>(() => undefined);
+          },
+          timeoutMs: 1000,
+        });
+        const questions = [
+          { id: 'goal', prompt: 'Goal?', kind: 'text' as const },
+        ];
+
+        const first = bridge.request({ questions });
+        vi.advanceTimersByTime(500);
+        void bridge.request({ questions });
+        vi.advanceTimersByTime(500);
+
+        await expect(first).resolves.toMatchObject({ timedOut: true });
+        // The second question is still open: the first one's timeout must not
+        // dismiss it.
+        expect(signals.map((signal) => signal.aborted)).toEqual([true, false]);
       } finally {
         vi.useRealTimers();
       }

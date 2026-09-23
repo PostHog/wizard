@@ -12,7 +12,7 @@
  *
  * Current additions: `McpTutorial` layers read-only on every product
  * surface (feature flags, experiments, surveys, replays, errors, web
- * analytics, LLM analytics, cohorts, persons) plus read/write on
+ * analytics, AI Observability, cohorts, persons) plus read/write on
  * annotations; `AgentSkill` adds feature-flag read/write; the default
  * `PostHogIntegration` run and the standalone `slack` flow add
  * `integration:read` for the Connect-Slack step. Persistence writes (dashboard:write,

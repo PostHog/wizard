@@ -241,17 +241,22 @@ export type ProgressEmitter = (event: AgentProgress) => void;
  * capability is optional. With none supplied the agent installs no ask bridge,
  * so `wizard_ask` returns its existing "not available" error, and an optional
  * task notice is declined — the same path a `--ci` run takes today.
+ * On a request's `signal` abort, the host dismisses that request alone, and
+ * that dismissal must not throw: abort listeners run where the agent cannot
+ * catch them, so Node would rethrow the error as an uncaught exception.
  */
 export interface AgentInteraction {
   /**
    * Open a question and resolve with the answers. The bridge that calls this
    * owns the timeout, the `__cancelled__` sentinel and the analytics.
    */
-  ask?: (question: PendingQuestion) => Promise<AskAnswers>;
-  /** Dismiss the in-flight question as cancelled (timeouts call this). */
-  cancelAsk?: () => void;
+  ask?: (
+    question: PendingQuestion,
+    context: { signal: AbortSignal },
+  ) => Promise<AskAnswers>;
   /** Offer an optional step and resolve with whether to keep it. */
-  taskNotice?: (notice: TaskNotice) => Promise<boolean>;
-  /** Dismiss an in-flight task notice as declined (timeouts call this). */
-  cancelTaskNotice?: () => void;
+  taskNotice?: (
+    notice: TaskNotice,
+    context: { signal: AbortSignal },
+  ) => Promise<boolean>;
 }

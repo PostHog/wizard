@@ -1,15 +1,13 @@
 import {
   detectProjectsWithAgent,
+  AgenticDetectionTimeoutError,
   type AgenticProject,
 } from '@lib/detection/agentic';
 import {
   chooseIntegrationProject,
   scopeInstallDirToProject,
 } from '@lib/detection/project-scope';
-import {
-  AGENTIC_DETECTION_TIMEOUT_MS,
-  WIZARD_BASIC_INTEGRATION_AGENTIC_DETECTION_FLAG_KEY,
-} from '@shared/constants';
+import { WIZARD_BASIC_INTEGRATION_AGENTIC_DETECTION_FLAG_KEY } from '@shared/constants';
 import { authenticate } from '@lib/programs/authenticate';
 import { buildSession } from '@lib/wizard-session';
 import { analytics } from '@utils/analytics';
@@ -194,21 +192,40 @@ describe('scopeInstallDirToProject', () => {
     });
   });
 
-  it('leaves the session untouched and fires timeout when the scan outruns the budget', async () => {
-    // The scan is abandoned, not cancelled — the run must not wait on it forever.
+  it('leaves the session untouched and fires timeout after the retry deadline', async () => {
+    flagsSpy.mockResolvedValue(FLAG_ON);
+    scan.mockRejectedValue(new AgenticDetectionTimeoutError(2, 90_000));
+    const session = buildSession({ installDir: '/repo' });
+
+    await scopeInstallDirToProject(session);
+
+    expect(session.installDir).toBe('/repo');
+    expect(outcomeEvent()).toMatchObject({ outcome: 'timeout' });
+  });
+
+  it('uses a valid retry result after the old 60-second caller deadline', async () => {
     vi.useFakeTimers();
     try {
       flagsSpy.mockResolvedValue(FLAG_ON);
-      scan.mockReturnValue(new Promise(() => undefined));
+      scan.mockImplementation(
+        () =>
+          new Promise((resolve) =>
+            setTimeout(
+              () => resolve({ repoType: 'monorepo', projects: [web] }),
+              65_000,
+            ),
+          ),
+      );
       const session = buildSession({ installDir: '/repo' });
       const done = scopeInstallDirToProject(session);
-      await vi.advanceTimersByTimeAsync(AGENTIC_DETECTION_TIMEOUT_MS);
+
+      await vi.advanceTimersByTimeAsync(65_000);
       await done;
 
-      expect(session.installDir).toBe('/repo');
+      expect(session.installDir).toBe('/repo/apps/web');
       expect(outcomeEvent()).toMatchObject({
-        outcome: 'timeout',
-        duration_ms: AGENTIC_DETECTION_TIMEOUT_MS,
+        outcome: 'recommended',
+        duration_ms: 65_000,
       });
     } finally {
       vi.useRealTimers();
