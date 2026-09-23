@@ -26,7 +26,10 @@ import {
 } from '@shared/errors';
 import { detectErrorCode } from '@programs/detect-map';
 import type { OutroData, RunPhase as RunPhaseT } from '@lib/wizard-session';
-import { registerRunSkillCleanup } from '@shared/skill-run-cleanup';
+import {
+  commitRegisteredRunSkillCleanups,
+  registerRunSkillCleanup,
+} from '@shared/skill-run-cleanup';
 
 /**
  * The two non-interactive run modes. Both drive the same pipeline today; the
@@ -379,8 +382,10 @@ export function runNonInteractive(
       const { runProgramAgent } = await import('./run-program-agent');
       await runProgramAgent(config, session, {
         inferenceAuth: ciInferenceAuth,
+        deferSkillCleanupCommit: true,
       });
       await settleStream(RunPhase.Completed);
+      commitRegisteredRunSkillCleanups();
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : String(error);
