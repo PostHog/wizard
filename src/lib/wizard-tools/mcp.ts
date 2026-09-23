@@ -34,6 +34,7 @@ import {
 } from '../agent/runner/sequence/orchestrator/queue-tools';
 import type { LLMProvider } from '@posthog/warlock';
 import {
+  ASK_MAX_QUESTIONS_PER_CALL,
   DEFAULT_ASK_MAX_QUESTIONS,
   CHECK_ENV_KEYS_DESCRIPTION,
   CHECK_ENV_KEYS_FILE_PATH_DESCRIPTION,
@@ -587,7 +588,10 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
     'wizard_ask',
     WIZARD_ASK_TOOL_DESCRIPTION,
     {
-      questions: z.array(askQuestionSchema).min(1).max(8),
+      questions: z
+        .array(askQuestionSchema)
+        .min(1)
+        .max(ASK_MAX_QUESTIONS_PER_CALL),
       subject: z.string().optional().describe(WIZARD_ASK_SUBJECT_DESCRIPTION),
     },
     async (args: {
