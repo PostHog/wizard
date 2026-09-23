@@ -67,7 +67,7 @@ runAgent(config: RunConfig, input: RunInput, options?: {
 Other runtime exports: `DEFAULT_AGENT_BINDING` for standalone callers, the
 generic `resolveBinding` and `resolveHarness` helpers, `shouldDisableAsk`,
 `initializeAgent`, `executeAgent`, `buildRunTags`, `AgentSignals`,
-`downloadSkill`, `WIZARD_TOOL_NAMES`, `LONGER_ASK_TIMEOUT_MS`,
+`downloadSkill`, `WIZARD_TOOL_NAMES`, `LONGER_ASK_TIMEOUT_MS`, `OutroKind`,
 `flushScanReport`, and `runMcpPromptViaSdk`, which loads the streaming module on
 first call.
 

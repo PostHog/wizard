@@ -54,6 +54,13 @@ agent returns a caught coded error as `failed` and an uncoded throw as
 non-`Error` throw), which the host can rethrow when it needs exception
 semantics.
 
+A runnable reference host is `scripts/e2e-agent.no-jest.ts`, run by
+`pnpm test:e2e:agent`. It runs a `quack` skill from a loopback skills server in
+an empty directory. Its environment is described in
+`e2e-harness/surface-e2e.ts`: `PROJECT_ID`, a PostHog key from
+`POSTHOG_PERSONAL_API_KEY` or `POSTHOG_KEY_FILE`, and a gateway token from
+`WIZARD_CI_GATEWAY_TOKEN_FILE`.
+
 ### Inference authentication
 
 For first-party inference authentication, import
@@ -74,8 +81,10 @@ optional `signal` requests cancellation. It returns a `ProgramRunOutcome`:
 outcome and failure, final progress, actual settled agent runs, program-specific
 data, artifacts, and invocation data (including a captured event plan). The
 latter contains credentials and should not be logged. Agent failures retain an
-attached `Error` when one exists. External host callbacks may still reject the
-promise, so callers handle those exceptions as well as returned outcomes.
+attached `Error` when one exists. Rejections from the credential, approval and
+composition callbacks resolve as `failed`. The promise rejects only on an
+unexpected invocation error, such as a duplicate composed `runId` or a run
+definition that throws, so callers read the outcome and still catch a rejection.
 
 ```ts
 import { runProgram } from '@programs';
@@ -113,6 +122,11 @@ require additional prepared inputs or host effects; the
 the available fields and capabilities. Host callbacks such as credential
 resolution, approval, and MCP work do not receive the signal. There is no live
 store or step-control handle.
+
+A runnable reference host is `scripts/e2e-programs.no-jest.ts`, run by
+`pnpm test:e2e:programs`. It runs posthog-integration against the app in
+`APP_DIR`, with the same environment as the agent route
+(`e2e-harness/surface-e2e.ts`).
 
 ## Development CI and experimental headless runner
 

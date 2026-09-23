@@ -110,9 +110,10 @@ separately catch rejected promises.
 starts returns `aborted` with an agent-abort failure code. Agent programs check
 again before startup and pass the signal to the active harness. Programs without
 an agent recheck after credential resolution and host work; an abort returns
-`aborted` even if a callback has completed. Workflow requests receive the
-signal, but in-flight host effects must cooperate with cancellation and
-completed external effects are not rolled back.
+`aborted` even if a callback has completed. The no-agent `workflow` receives the
+signal. `compositionWorkflow.confirmStep` does not, and a rejection from it
+during an abort returns `failed`. In-flight host effects must cooperate with
+cancellation, and completed external effects are not rolled back.
 
 The result includes:
 
