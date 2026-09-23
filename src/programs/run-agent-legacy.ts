@@ -20,7 +20,7 @@ import { getUI } from '@ui';
 import { createUiReducer, uiInteraction } from '@ui/agent-progress';
 import { buildRunTags, flushScanReport, RunOutcome } from '@agent';
 import type { InferenceAuthProvider, RunConfig, RunInput } from '@agent/types';
-import { runProgram as runCallableProgram } from './run-program';
+import { runProgram } from './run-program';
 import { createPosthogInferenceAuthProvider } from './credentials';
 import { resolveProgramBinding, type ProgramSwitchboardCtx } from './binding';
 import { getProgramCommandments } from './commandments';
@@ -92,7 +92,7 @@ export async function runProgramAgent(
         ? await programConfig.run(session)
         : programConfig.run;
 
-    const succeeded = await runProgram(
+    const succeeded = await runLegacyStep(
       session,
       runDef,
       programConfig,
@@ -118,7 +118,7 @@ export async function runProgramAgent(
  * Gates → authenticate → flags → binding → the functional run → apply result.
  * Every step happens in the order it did inside the agent's bootstrap.
  */
-async function runProgram(
+async function runLegacyStep(
   session: WizardSession,
   run: ProgramRun,
   programConfig: ProgramConfig,
@@ -306,7 +306,7 @@ async function runProgram(
   };
 
   const reduceUi = createUiReducer(ui);
-  const programResult = await runCallableProgram(
+  const programResult = await runProgram(
     programConfig.id,
     {
       installDir: input.installDir,
