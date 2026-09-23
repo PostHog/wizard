@@ -18,9 +18,10 @@ policy), `RunInput` (project, credentials, required inference-auth provider,
 flags and host), and optional `onProgress`, `interaction`, and `signal` options.
 Import the function from `@agent` and types from `@agent/types`. It returns a
 `RunResult` with a `success`, `aborted`, `failed`, or `crashed` outcome and a
-final task/status/usage snapshot. Progress is delivered in emission order;
-observer errors do not fail the run. Without `interaction`, questions have no
-answer bridge and optional task notices are declined.
+final task/status/usage snapshot. Progress is delivered in emission order.
+Synchronous observer throws are logged without failing the run; asynchronous
+observers must handle their own rejected promises. Without `interaction`,
+questions have no answer bridge and optional task notices are declined.
 
 ```ts
 import { runAgent } from '@agent';
@@ -46,13 +47,23 @@ PostHog user or detect the project. The caller must supply
 refresh it during a long run. There is no session control protocol on this API.
 An aborted signal returns an `aborted` result; it does not pause the run.
 
+### Inference authentication
+
+For first-party inference authentication, import
+`createPosthogInferenceAuthProvider` from `@programs` and pass authenticated
+PostHog credentials and the run's program ID (for example, `config.programId`,
+`'audit'`, or `'metrics'`). Its provider mints a gateway token and refreshes it
+near expiry; the host still handles user login and project selection.
+Development [CI](#development-ci-and-experimental-headless-runner) instead uses
+an already-issued fixed token.
+
 ## Callable program
 
 `runProgram` takes a registered ID, `ProgramInput` with at least `installDir`,
 and optional `ProgramOptions`. The host supplies resolved credentials or a
 credential provider, prepared detection and framework context where needed, and
 callbacks for questions, approvals, progress, or program-specific effects. An
-optional `signal` cancels an active agent run. It returns a `ProgramRunOutcome`:
+optional `signal` requests cancellation. It returns a `ProgramRunOutcome`:
 outcome and failure, final progress, actual settled agent runs, program-specific
 data, artifacts, and invocation data (including a captured event plan). The
 latter contains credentials and should not be logged.
@@ -88,9 +99,10 @@ export async function runAudit(
 
 The caller implements the credential and approval callbacks. Some programs
 require additional prepared inputs or host effects; the
-[program reference](../src/programs/README.md#inputs-and-capabilities) lists
-them. Host callbacks such as credential resolution, approval, and MCP work do
-not receive the signal. There is no live store or step-control handle.
+[program reference](../src/programs/README.md#inputs-and-capabilities) describes
+the available fields and capabilities. Host callbacks such as credential
+resolution, approval, and MCP work do not receive the signal. There is no live
+store or step-control handle.
 
 ## Development CI and experimental headless runner
 
@@ -112,7 +124,9 @@ gateway token file is read into a fixed provider for CI. Pre-run detection and
 composed child runs use that same provider; this path does not mint or refresh
 the token. Published builds reject `--ci`. The internal
 `runWizardCI(config, options): void` entry point still uses the legacy session
-adapter, which now calls `runProgram` for agent execution.
+adapter, which calls `runProgram` for each program's main agent run. Agentic
+detection can call the agent separately before that run; MCP suggested prompts
+also use a separate agent path with their own progress and cancellation.
 
 An experimental published-build headless path exists internally as
 `runWizardHeadless(config, options): void`. It shares the process-owned runner,

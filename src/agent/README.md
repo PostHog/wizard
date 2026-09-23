@@ -33,7 +33,9 @@ runAgent(config: RunConfig, input: RunInput, options?: {
   `benchmark`, `yaraReport`) and the host the CLI was told. The caller supplies
   an `InferenceAuthProvider` whose `resolve()` returns gateway authentication.
   The agent resolves it before execution and again when the harness needs
-  refreshed auth.
+  refreshed auth. See the
+  [first-party provider](../../docs/developer-interfaces.md#inference-authentication)
+  for gateway token minting and refresh.
 - `RunResult`: `outcome` is `RunOutcome.Success | Aborted | Failed | Crashed`.
   Success may carry an `outro`; the other three carry a `failure`
   (`AgentFailure`: message, outro data, error, exit code, error code, detail).
@@ -87,13 +89,15 @@ store and no registry.
 Programs call the agent to do the work a skill describes. A standalone host can
 observe the run through `onProgress` and answer it through `interaction`; the
 legacy TUI and non-interactive runner still use
-`src/lib/runners/run-program-agent.ts` for session gates and UI translation, then
-call the same `runProgram` host.
+`src/lib/runners/run-program-agent.ts` for session gates and UI translation,
+then call the same `runProgram` host.
 
 Without `onProgress` the run completes and its snapshot still comes back in the
 result. Without `interaction` the agent installs no ask bridge: `wizard_ask`
 returns its "not available" error and optional task notices are declined, which
 is what a `--ci` run does. A throwing observer is logged and the run continues.
+Progress callbacks are not awaited, so an asynchronous observer must handle its
+own rejected promises.
 
 ## Architecture
 
