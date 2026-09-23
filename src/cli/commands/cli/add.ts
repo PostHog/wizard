@@ -1,7 +1,6 @@
 import * as path from 'node:path';
 import * as readline from 'node:readline/promises';
 import type { Arguments } from 'yargs';
-import { getUI, setUI } from '@ui';
 import { LoggingUI } from '@headless/renderers/logging-ui';
 import { analytics } from '@utils/analytics';
 import {
@@ -13,6 +12,7 @@ import {
   installSteeringSnippet,
 } from '@cli/install-cli-steering';
 import type { Command } from '../command';
+import { getUI, setUI } from '@cli/ui';
 
 export const cliAddCommand: Command = {
   name: 'add',

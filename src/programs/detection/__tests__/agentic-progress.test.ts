@@ -4,12 +4,12 @@ import {
   runAgent as executeAgent,
 } from '@agent/agent-interface';
 import { HostResolution } from '@shared/host-resolution';
-import { getUI } from '@ui';
-import { createUiReducer } from '@ui/agent-progress';
+import { createUiReducer } from '@programs';
 import { buildSession } from '@tui/session';
+import { getUI } from '@cli/ui';
 
 vi.mock('@utils/debug');
-vi.mock('@ui', () => ({ getUI: () => ui }));
+vi.mock('@cli/ui', () => ({ getUI: () => ui }));
 const ui = vi.hoisted(() => ({
   addTokenUsage: vi.fn(),
   setStage: vi.fn(),

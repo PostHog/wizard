@@ -7,7 +7,7 @@ import { fetchProjectData, fetchUserData } from '@shared/api';
 import { performOAuthFlow } from '@utils/oauth';
 
 // Resolution reports through its host. Reaching for the UI singleton fails.
-vi.mock('@ui', () => ({
+vi.mock('@cli/ui', () => ({
   getUI: () => {
     throw new Error('project-data resolution reached for getUI()');
   },

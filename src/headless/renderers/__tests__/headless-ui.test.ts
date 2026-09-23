@@ -2,10 +2,10 @@
 // resolves in the order the app uses (@ui before logging-ui). Importing
 // HeadlessUI as the entry otherwise hits `new LoggingUI()` in @ui before
 // logging-ui has finished initializing.
-import '@ui';
+import '@cli/ui';
 import { HeadlessUI } from '../headless-ui';
-import { TaskStatus } from '@ui/wizard-ui';
 import type { WizardStore } from '@tui/store';
+import { TaskStatus } from '@shared/run-state';
 
 describe('HeadlessUI', () => {
   it('forwards task updates to the store and still logs to the console', () => {

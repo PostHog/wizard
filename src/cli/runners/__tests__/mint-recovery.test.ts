@@ -4,15 +4,15 @@ import { runProgramAgent } from '../run-program-agent';
 import { startTUI } from '@tui/start-tui';
 import { WizardStore } from '@tui/store';
 import { InkUI } from '@tui/ink-ui';
-import { setUI } from '@ui';
 import { posthogIntegrationConfig } from '@programs/posthog-integration';
 import { ScreenId } from '@tui/router';
 import { HostResolution } from '@shared/host-resolution';
 import { analytics } from '@utils/analytics';
-import { clearCleanup } from '@utils/wizard-abort';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import { setUI } from '@cli/ui';
+import { clearCleanup } from '@utils/cleanup-registry';
 
 vi.mock('../run-program-agent', () => ({ runProgramAgent: vi.fn() }));
 vi.mock('@tui/start-tui', () => ({ startTUI: vi.fn() }));

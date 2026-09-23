@@ -1,4 +1,4 @@
-import { createUiReducer } from '@ui/agent-progress';
+import { createUiReducer } from '@programs';
 import { InkUI } from '@tui/ink-ui';
 import { WizardStore } from '@tui/store';
 import { tuiSnapshotSignature } from '../tui-snapshot-signature';

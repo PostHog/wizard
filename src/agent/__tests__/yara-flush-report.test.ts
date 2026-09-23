@@ -3,7 +3,7 @@ import { WIZARD_YARA_REPORT_FILE } from '@utils/paths';
 
 // The flush runs inside the agent, which has no UI: the report line is
 // returned to the caller, who decides where it goes.
-vi.mock('@ui', () => ({
+vi.mock('@cli/ui', () => ({
   getUI: () => {
     throw new Error('agent code reached the UI');
   },

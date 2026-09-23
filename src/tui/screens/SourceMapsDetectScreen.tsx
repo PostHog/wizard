@@ -12,13 +12,13 @@ import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import type { WizardStore } from '@tui/store';
 import { LoadingBox, PickerMenu } from '@tui/primitives/index';
 import { Colors, Icons } from '@tui/styles';
-import { createUiReducer } from '@ui';
 import { InkUI } from '@tui/ink-ui';
 import {
   SOURCE_MAPS_CONTEXT_KEYS,
   VARIANT_DISPLAY_NAME,
   MANUAL_SDK_VARIANTS,
   detectSourceMapsProjects,
+  createUiReducer,
 } from '@programs';
 import type { DetectedProject, DetectionReport } from '@programs/types';
 

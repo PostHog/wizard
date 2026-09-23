@@ -18,7 +18,6 @@ import {
   type ProgramId,
 } from '../store';
 import { InkUI } from '../ink-ui';
-import { setUI } from '@ui/index';
 import { Integration } from '@shared/constants';
 import { FRAMEWORK_REGISTRY } from '@programs/registry';
 import { HostResolution } from '@shared/host-resolution';
@@ -35,6 +34,7 @@ import { ACTION_REGISTRY } from '@e2e-harness/action-registry';
 import { buildSession } from '@tui/session';
 import { OutroKind } from '@shared/outro';
 import type { WizardSession } from '@tui/session';
+import { setUI } from '@cli/ui';
 
 vi.mock('ink', () =>
   vi.importActual('../../../node_modules/ink/build/index.js'),
@@ -75,10 +75,6 @@ vi.mock('@shared/skill-menu', async (importOriginal) => ({
 vi.mock('@programs/project-data', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@programs/project-data')>()),
   getOrAskForProjectData: vi.fn(() => new Promise(() => undefined)),
-}));
-vi.mock('@utils/wizard-abort', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@utils/wizard-abort')>()),
-  wizardAbort: vi.fn().mockResolvedValue(undefined),
 }));
 
 // A temp dir so KeepSkillsScreen's readdir of `<installDir>/.claude/skills`

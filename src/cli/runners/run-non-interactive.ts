@@ -9,7 +9,6 @@ import {
   POSTHOG_LOCAL_URL,
 } from '@shared/local-dev';
 import type { CloudRegion } from '@utils/types';
-import { createUiReducer, getUI, setUI } from '@ui';
 import { LoggingUI } from '@headless/renderers/logging-ui';
 import type {
   HostFailure,
@@ -30,7 +29,8 @@ import { captureRunSkillCleanup } from '@shared/skill-run-cleanup';
 import { cliAuthHost } from './auth-host';
 import type { OutroData } from '@shared/outro';
 import type { RunPhase as RunPhaseT } from '@shared/run-state';
-import { getAuditChecks, detectErrorCode } from '@programs';
+import { getAuditChecks, detectErrorCode, createUiReducer } from '@programs';
+import { getUI, setUI } from '@cli/ui';
 
 /**
  * The two non-interactive run modes. Both drive the same pipeline today; the
@@ -124,7 +124,7 @@ export function runNonInteractive(
       '@utils/debug'
     );
     const { registerCleanup, runCleanups, wizardAbort, WizardError } =
-      await import('@utils/wizard-abort');
+      await import('@cli/wizard-abort');
     runRegisteredCleanups = runCleanups;
 
     configureLogFileFromEnvironment();

@@ -5,7 +5,7 @@ import type { AgentProgress } from '@agent/progress';
 
 // The benchmark pipeline runs inside the agent, which has no UI. Reaching one
 // is the defect this file guards against.
-vi.mock('@ui', () => ({
+vi.mock('@cli/ui', () => ({
   getUI: () => {
     throw new Error('agent code reached the UI');
   },

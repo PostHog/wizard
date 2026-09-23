@@ -1,25 +1,27 @@
 /**
- * InkUI — Ink-backed implementation of WizardUI.
+ * InkUI — Ink-backed implementation of the CLI's WizardUI.
  *
  * Translates business logic calls into store setter calls.
  * No direct session mutation. No imperative screen transitions.
  * The router derives the active screen from session state.
  */
 
-import type {
-  WizardUI,
-  SpinnerHandle,
-  AuthErrorDetail,
-  TokenUsageDelta,
-} from '@ui/wizard-ui';
 import type { WizardStore } from './store.js';
 import type { SettingsConflict } from '@shared/claude-settings';
 import type { WizardReadinessResult } from '@shared/health-checks/readiness';
 import type { ApiUser, Credentials } from '@shared/api';
-import type { AskAnswers, PendingQuestion, TaskNotice } from '@agent/types';
+import type {
+  AskAnswers,
+  PendingQuestion,
+  TaskNotice,
+  SpinnerHandle,
+  AuthErrorDetail,
+  TokenUsageDelta,
+} from '@agent/types';
 import type { OutroData } from '@shared/outro';
 import { RunPhase } from '@shared/run-state';
 import { OutroKind } from '@shared/outro';
+import type { InteractionUi, ProgressUi } from '@programs/types';
 
 // Strip ANSI escape codes (chalk formatting) from strings
 // eslint-disable-next-line no-control-regex
@@ -28,7 +30,8 @@ function stripAnsi(s: string): string {
   return s.replace(ANSI_RE, '');
 }
 
-export class InkUI implements WizardUI {
+/** Implements the CLI's WizardUI; the CLI checks that where it installs one. */
+export class InkUI implements ProgressUi, InteractionUi {
   constructor(private store: WizardStore) {}
 
   intro(message: string): void {

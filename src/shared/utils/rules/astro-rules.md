@@ -2,7 +2,8 @@
 
 ## PostHog Integration
 
-PostHog is already integrated into this Astro project. The configuration includes:
+PostHog is already integrated into this Astro project. The configuration
+includes:
 
 - PostHog initialization in `src/components/posthog.astro`
 - Layout setup in `src/layouts/PostHogLayout.astro`
@@ -11,22 +12,27 @@ PostHog is already integrated into this Astro project. The configuration include
 ## Key Guidelines
 
 ### Component Structure
-- PostHog component uses `is:inline` directive to prevent Astro from processing the script
+
+- PostHog component uses `is:inline` directive to prevent Astro from processing
+  the script
 - Layout wraps PostHog component in the `<head>` section
 - Pages use PostHogLayout to ensure PostHog loads on all pages
 
 ### Environment Variables
+
 - Use `PUBLIC_` prefix for client-side environment variables in Astro
 - `PUBLIC_POSTHOG_PROJECT_TOKEN` - Your PostHog project token
 - `PUBLIC_POSTHOG_HOST` - Your PostHog instance URL
 
 ### Best Practices
+
 - Always use `posthog.identify()` when users sign in
 - Use `posthog.capture()` for custom events
 - Feature flags can be accessed with `posthog.isFeatureEnabled()`
 - Keep the PostHog script in the head section for accurate tracking
 
 ### File Structure
+
 ```
 src/
 ├── components/
@@ -38,6 +44,7 @@ src/
 ```
 
 ### Common Patterns
+
 - Wrap pages with PostHogLayout for analytics
 - Use PostHog's autocapture for basic interaction tracking
 - Implement custom events for business-specific actions

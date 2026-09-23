@@ -1,14 +1,13 @@
 /* eslint-disable @typescript-eslint/require-await */
+import { analytics } from '@utils/analytics';
+import { ErrorCodes, WizardError } from '@shared/errors';
+import { getUI } from '../ui';
+import { wizardAbort } from '@cli/wizard-abort';
 import {
-  wizardAbort,
-  WizardError,
   registerCleanup,
   clearCleanup,
   runCleanups,
-} from '@utils/wizard-abort';
-import { analytics } from '@utils/analytics';
-import { ErrorCodes } from '@shared/errors';
-import { getUI } from '../ui';
+} from '@utils/cleanup-registry';
 
 vi.mock('@utils/analytics');
 vi.mock('../ui', () => ({

@@ -9,12 +9,12 @@ import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import type { WizardStore } from '@tui/store';
 import { LoadingBox, PickerMenu } from '@tui/primitives/index';
 import { Colors, Icons } from '@tui/styles';
-import { createUiReducer } from '@ui';
 import { InkUI } from '@tui/ink-ui';
 import {
   FRAMEWORK_REGISTRY,
   detectErrorTrackingProjects,
   ERROR_TRACKING_PROJECT_PATH_KEY,
+  createUiReducer,
 } from '@programs';
 import type {
   ErrorTrackingDetectionReport,

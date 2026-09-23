@@ -1,6 +1,7 @@
 /**
- * UI singleton — provides getUI() and setUI() for the wizard.
- * Default: LoggingUI. Swap to InkUI at startup for TUI mode.
+ * The CLI's current UI: LoggingUI until an entry point swaps in the TUI's
+ * InkUI (or HeadlessUI). Only CLI code looks it up; every other layer takes
+ * the host it needs as an argument.
  */
 
 import type { WizardUI } from './wizard-ui';
@@ -21,5 +22,4 @@ export function setUI(ui: WizardUI): void {
   currentUI = ui;
 }
 
-export type { WizardUI, SpinnerHandle } from './wizard-ui';
-export { createUiReducer, uiInteraction } from './agent-progress';
+export type { WizardUI } from './wizard-ui';

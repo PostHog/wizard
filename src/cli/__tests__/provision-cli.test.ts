@@ -60,8 +60,8 @@ vi.mock('@programs/detection', () => ({
 vi.mock('@utils/analytics', () => ({
   analytics: { setTag: vi.fn() },
 }));
-vi.mock('@utils/wizard-abort', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@utils/wizard-abort')>()),
+vi.mock('@cli/wizard-abort', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@cli/wizard-abort')>()),
   wizardAbort: vi.fn(),
 }));
 vi.mock('../runners/run-program-agent', () => ({

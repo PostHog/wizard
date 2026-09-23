@@ -17,7 +17,7 @@ vi.mock('@utils/analytics', () => ({
 
 const setAccessToken = vi.fn();
 const projection = { setAccessToken };
-vi.mock('@ui', () => ({
+vi.mock('@cli/ui', () => ({
   getUI: () => {
     throw new Error('refresh must use the supplied projection');
   },

@@ -87,8 +87,8 @@ store and no registry.
 Programs call the agent to do the work a skill describes. A standalone host can
 observe the run through `onProgress` and answer it through `interaction`; the
 legacy TUI and non-interactive runner still use
-`src/cli/runners/run-program-agent.ts` for session gates and UI translation, then
-call the same `runProgram` host.
+`src/cli/runners/run-program-agent.ts` for session gates and UI translation,
+then call the same `runProgram` host.
 
 Without `onProgress` the run completes and its snapshot still comes back in the
 result. Without `interaction` the agent installs no ask bridge: `wizard_ask`

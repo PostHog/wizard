@@ -1,8 +1,8 @@
 import type { Arguments } from 'yargs';
-import { getUI, setUI } from '@ui';
 import { LoggingUI } from '@headless/renderers/logging-ui';
 import type { ProvisioningResult } from '@utils/provisioning';
 import type { Command } from './command';
+import { getUI, setUI } from '@cli/ui';
 
 export const provisionCommand: Command = {
   name: 'provision',

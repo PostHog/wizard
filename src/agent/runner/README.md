@@ -77,7 +77,8 @@ gateway.
 
 ## How they connect
 
-- Programs supply inference auth; prepare resolves it and builds triage for the resolved harness.
+- Programs supply inference auth; prepare resolves it and builds triage for the
+  resolved harness.
 - The switchboard knows which sequences and harnesses exist (via its two
   registries), but not what they do.
 - A sequence knows how to shape a conversation, but delegates the actual model
@@ -90,7 +91,8 @@ Each layer is replaceable.
 
 1. The caller runs its gates, authenticates, fetches PostHog flags and resolves
    a `ProgramBinding { sequence, harness, model }`; analytics tags the run.
-2. `runAgent(config, input, options)` resolves the supplied inference auth and prepares triage.
+2. `runAgent(config, input, options)` resolves the supplied inference auth and
+   prepares triage.
 3. Sequence takes over — shapes the LLM's work into one conversation (linear) or
    many (orchestrator), reporting through `onProgress`.
 4. Harness drives each conversation through its SDK, using the bound model, on

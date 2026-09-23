@@ -1,4 +1,3 @@
-import { getUI, setUI } from '@ui';
 import { LoggingUI } from '@headless/renderers/logging-ui';
 import { readApiKeyFromEnv } from '@utils/env-api-key';
 import { ErrorCodes } from '@shared/errors';
@@ -7,6 +6,7 @@ import { runWizard } from '@cli/runners';
 import { skillProgramOptions } from './skill-program-options';
 import type { Command } from './command';
 import { posthogDoctorConfig, fetchHealthIssues, getKindMeta } from '@programs';
+import { getUI, setUI } from '@cli/ui';
 
 export const doctorCommand: Command = {
   name: 'doctor',

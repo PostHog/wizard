@@ -11,7 +11,6 @@
 
 import { WizardStore } from '@tui/store';
 import { InkUI } from '@tui/ink-ui';
-import { setUI } from '@ui/index';
 import { HostResolution } from '@shared/host-resolution';
 import { Integration } from '@shared/constants';
 import { FRAMEWORK_REGISTRY } from '@programs/registry';
@@ -24,6 +23,7 @@ import { SOURCE_MAPS_CONTEXT_KEYS } from '@programs/error-tracking-upload-source
 import { buildSession } from '@tui/session';
 import { RunPhase, McpOutcome } from '@shared/run-state';
 import { OutroKind } from '@shared/outro';
+import { setUI } from '@cli/ui';
 
 function freshStore(): WizardStore {
   const store = new WizardStore(Program.PostHogIntegration);

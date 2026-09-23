@@ -13,8 +13,8 @@ vi.mock('@utils/analytics', () => ({
   analytics: { wizardCapture: vi.fn(), setTag: vi.fn() },
 }));
 // Programs end a run through their host; the process-level abort is the CLI's.
-vi.mock('@utils/wizard-abort', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@utils/wizard-abort')>()),
+vi.mock('@cli/wizard-abort', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@cli/wizard-abort')>()),
   wizardAbort: () => {
     throw new Error('a program reached for wizardAbort');
   },

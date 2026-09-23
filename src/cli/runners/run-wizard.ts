@@ -18,17 +18,17 @@ import type { startTUI as StartTUIFn } from '@tui/start-tui';
 import type { WizardStore } from '@tui/store';
 import { resolveNoTelemetry } from './resolve-no-telemetry';
 import { checkLocalServices, getLocalDev } from '@shared/local-dev';
-import { registerCleanup, runCleanups } from '@utils/wizard-abort';
 import { captureRunSkillCleanup } from '@shared/skill-run-cleanup';
 import { classifyRunFailure, emitWizardError } from '@shared/errors';
 import { isRunFailure } from '@tui/mint-failure';
-import { getUI } from '@ui';
 import { analytics } from '@utils/analytics';
 import { join } from 'node:path';
 import { cliAuthHost } from './auth-host';
 import { OutroKind } from '@shared/outro';
 import type { WizardSession } from '@tui/session';
 import { cliTuiHost } from '@cli/tui-host';
+import { registerCleanup, runCleanups } from '@utils/cleanup-registry';
+import { getUI } from '@cli/ui';
 
 const WIZARD_VERSION = VERSION;
 
@@ -126,7 +126,7 @@ export function runWizard(
         localPosthog: local.localPosthog && !options.baseUrl,
       });
       if (localServicesError) {
-        const { wizardAbort } = await import('@utils/wizard-abort');
+        const { wizardAbort } = await import('@cli/wizard-abort');
         await wizardAbort({ message: localServicesError });
         return;
       }

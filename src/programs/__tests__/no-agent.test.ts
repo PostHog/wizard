@@ -9,7 +9,7 @@ import { HostResolution } from '@shared/host-resolution';
 import { fetchHealthIssues } from '@programs/posthog-doctor/fetch';
 import { analytics } from '@utils/analytics';
 
-vi.mock('@ui', () => ({
+vi.mock('@cli/ui', () => ({
   getUI: () => {
     throw new Error('no-agent execution reached for UI');
   },

@@ -14,7 +14,7 @@ vi.mock('@utils/analytics', () => ({
   analytics: { identifyUser: vi.fn(), setGroups: vi.fn() },
   groupsFromUser: vi.fn().mockReturnValue({}),
 }));
-vi.mock('@ui', () => ({
+vi.mock('@cli/ui', () => ({
   getUI: () => {
     throw new Error('authentication must use the supplied projection');
   },

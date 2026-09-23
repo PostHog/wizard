@@ -16,7 +16,7 @@ import { MAX_HANDOFF_TEXT_CHARS, publishHandoff } from '../handoff';
 
 // The tool runs inside the agent, which has no UI; the handoff is a progress
 // event the host projects however it likes.
-vi.mock('@ui', () => ({
+vi.mock('@cli/ui', () => ({
   getUI: () => {
     throw new Error('agent code reached the UI');
   },

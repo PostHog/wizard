@@ -15,7 +15,7 @@ vi.mock('@utils/analytics', () => ({
   analytics: { wizardCapture: vi.fn(), captureException: vi.fn() },
 }));
 // The flow reports through its host. Reaching for the UI singleton fails.
-vi.mock('@ui', () => ({
+vi.mock('@cli/ui', () => ({
   getUI: () => {
     throw new Error('OAuth flow reached for getUI()');
   },

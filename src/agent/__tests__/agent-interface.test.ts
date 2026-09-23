@@ -19,7 +19,7 @@ import {
   ADDITIONAL_FEATURE_PROMPTS,
 } from '@shared/constants';
 import type { WizardRunOptions } from '@utils/types';
-import type { SpinnerHandle } from '@ui';
+import type { SpinnerHandle } from '@agent/types';
 
 // Mock dependencies
 vi.mock('@utils/analytics');

@@ -14,13 +14,13 @@ import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import type { WizardStore } from '@tui/store';
 import { LoadingBox, PickerMenu } from '@tui/primitives/index';
 import { Colors, Icons } from '@tui/styles';
-import { createUiReducer } from '@ui';
 import { InkUI } from '@tui/ink-ui';
 import { Integration } from '@shared/constants';
 import {
   FRAMEWORK_REGISTRY,
   SELF_DRIVING_INTEGRATE_PATH_KEY,
   detectSelfDrivingIntegrationProjects,
+  createUiReducer,
 } from '@programs';
 import type {
   IntegrationProject,

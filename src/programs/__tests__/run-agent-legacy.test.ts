@@ -6,14 +6,8 @@ import { Harness, Sequence } from '@shared/constants';
 import { checkLocalServices } from '@shared/local-dev';
 import { HostResolution } from '@shared/host-resolution';
 import { LoggingUI } from '@headless/renderers/logging-ui';
-import { setUI } from '@ui';
 import { analytics } from '@utils/analytics';
 import { initLogFile } from '@utils/debug';
-import {
-  clearCleanup,
-  registerCleanup,
-  wizardAbort,
-} from '@utils/wizard-abort';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -21,6 +15,9 @@ import type { ProgramConfig } from '../program-step';
 import type { ProgramRun } from '../program-run';
 import { buildSession } from '@tui/session';
 import { OutroKind } from '@shared/outro';
+import { setUI } from '@cli/ui';
+import { clearCleanup, registerCleanup } from '@utils/cleanup-registry';
+import { wizardAbort } from '@cli/wizard-abort';
 
 const streamShutdown = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 vi.mock('@env', async (original) => ({
@@ -69,14 +66,14 @@ vi.mock('@shared/claude-settings', () => ({
   checkAllSettingsConflicts: vi.fn().mockReturnValue([]),
   restoreClaudeSettings: vi.fn(),
 }));
-vi.mock('@utils/wizard-abort', async (original) => {
-  const actual = await original<typeof import('@utils/wizard-abort')>();
-  return {
-    ...actual,
-    registerCleanup: vi.fn(actual.registerCleanup),
-    wizardAbort: vi.fn().mockResolvedValue(undefined),
-  };
+vi.mock('@utils/cleanup-registry', async (original) => {
+  const actual = await original<typeof import('@utils/cleanup-registry')>();
+  return { ...actual, registerCleanup: vi.fn(actual.registerCleanup) };
 });
+vi.mock('@cli/wizard-abort', async (original) => ({
+  ...(await original<typeof import('@cli/wizard-abort')>()),
+  wizardAbort: vi.fn().mockResolvedValue(undefined),
+}));
 vi.mock('../posthog-integration/detect', () => ({
   maybeStampAiSdkDetected: vi.fn(),
 }));

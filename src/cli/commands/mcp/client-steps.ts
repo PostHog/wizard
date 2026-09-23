@@ -2,7 +2,6 @@ import type { Integration } from '@shared/constants';
 import type { CloudRegion } from '@utils/types';
 import { withProgress } from '@utils/telemetry';
 import { analytics } from '@utils/analytics';
-import { getUI } from '@ui';
 import {
   addMCPServer,
   getInstalledClients,
@@ -14,6 +13,7 @@ import {
   McpClientStatus,
   namesWithStatus,
 } from '@tui/add-mcp-server-to-clients/results';
+import { getUI } from '@cli/ui';
 
 /** Per-client outcome, so a scripted caller can turn a failure into an exit code. */
 export interface McpStepOutcome {

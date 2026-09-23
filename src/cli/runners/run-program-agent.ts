@@ -14,7 +14,6 @@
  */
 
 import { analytics } from '@utils/analytics';
-import { createUiReducer, getUI, uiInteraction } from '@ui';
 import { buildRunTags, flushScanReport, RunOutcome } from '@agent';
 import type { InferenceAuthProvider, RunConfig, RunInput } from '@agent/types';
 import {
@@ -32,6 +31,8 @@ import {
   maybeStampAiSdkDetected,
   startAuditLedgerWatcher,
   AUDIT_CHECKS_KEY,
+  createUiReducer,
+  uiInteraction,
 } from '@programs';
 import type {
   ProgramCompletionContext,
@@ -52,7 +53,6 @@ import {
   SERVICE_LABELS,
 } from '@shared/health-checks/readiness';
 import { enableDebugLogs, logToFile, initLogFile } from '@utils/debug';
-import { registerCleanup, wizardAbort } from '@utils/wizard-abort';
 import { ErrorCodes } from '@shared/errors';
 import { isNonInteractiveEnvironment } from '@utils/environment';
 import {
@@ -64,6 +64,9 @@ import type { ProgramConfig } from '@programs/types';
 import { captureRunSkillCleanup } from '@shared/skill-run-cleanup';
 import { cliAuthHost } from './auth-host';
 import type { WizardSession } from '@tui/session';
+import { getUI } from '@cli/ui';
+import { registerCleanup } from '@utils/cleanup-registry';
+import { wizardAbort } from '@cli/wizard-abort';
 
 /**
  * Resolve a ProgramConfig's agent run definition and execute the pipeline.

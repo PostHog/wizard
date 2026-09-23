@@ -12,10 +12,10 @@ prompt assembly, error routing, post-run work, and outro construction. Retain it
 for very simple tasks and legacy support. Its context is subject to the
 harness's compaction behavior.
 
-`AgentRunDefinition.customPrompt`, `abortCases`, and the program's `postRun`
-and `buildOutroData` hooks are linear hooks. The orchestrator does not invoke them. Composed program sub-runs
-are also clamped to linear because an orchestrator owns its full lifecycle and
-cannot nest through the composition seam.
+`AgentRunDefinition.customPrompt`, `abortCases`, and the program's `postRun` and
+`buildOutroData` hooks are linear hooks. The orchestrator does not invoke them.
+Composed program sub-runs are also clamped to linear because an orchestrator
+owns its full lifecycle and cannot nest through the composition seam.
 
 ## Orchestrator
 
@@ -51,5 +51,5 @@ frontmatter contract rather than copying an old manifest example:
 
 Per-role routes in the resolved binding can adjust a task's harness, model or
 effort. Programs resolve `PROGRAM_BINDINGS[id].contextMillOverride` before the
-agent starts. New task types usually belong in context-mill; new native
-behavior still requires the appropriate Wizard configuration or implementation.
+agent starts. New task types usually belong in context-mill; new native behavior
+still requires the appropriate Wizard configuration or implementation.

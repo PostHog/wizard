@@ -42,6 +42,7 @@ export async function detectSourceMapsProjects(
 }
 /** Agent capabilities hosts reach through programs; the prompt stream loads on first call. */
 export { downloadSkill, runMcpPromptViaSdk } from '@agent';
+export { createUiReducer, uiInteraction } from './host-ui';
 /** Task streaming loads when a run starts, not at CLI startup. */
 export const loadTaskStream = () => import('./task-stream/index');
 export {
