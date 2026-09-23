@@ -832,7 +832,13 @@ describe('gateway re-mint on 401', () => {
     const refresh = vi
       .fn()
       .mockResolvedValue(auth('phe_fresh', Date.now() + HOUR));
-    const cfg = config(auth('phe_stale', Date.now() - 1), refresh);
+    const cfg = {
+      ...config(auth('phe_stale', Date.now() - 1), refresh),
+      mcpServers: {
+        'posthog-wizard': { type: 'http' as const, url: 'https://mcp.test' },
+        svelte: { command: 'svelte-mcp', args: [] },
+      },
+    };
 
     const result = await run(cfg);
 
@@ -843,6 +849,14 @@ describe('gateway re-mint on 401', () => {
     const [first, second] = mockQuery.mock.calls.map((c) => c[0]);
     expect(first.options.resume).toBeUndefined();
     expect(second.options.resume).toBe('sess-1');
+    for (const { options } of [first, second]) {
+      expect(options.strictMcpConfig).toBe(true);
+      expect(options.mcpServers).toEqual(cfg.mcpServers);
+      expect(options.agents['general-purpose'].mcpServers).toEqual([
+        'posthog-wizard',
+        'svelte',
+      ]);
+    }
     // The new subprocess carries the new bearer and finds the transcript in
     // the same config dir; the env is frozen at spawn, so a new one is the
     // only way to hand it over.
