@@ -8,6 +8,7 @@ import { analytics } from '@utils/analytics';
 import {
   ASK_BATCH_THRESHOLD,
   ASK_CANCELLED_NOTE,
+  ASK_MAX_QUESTIONS_PER_CALL,
   ASK_SUBJECT_UNSPECIFIED,
   ASK_TIMED_OUT_NOTE,
   DEFAULT_ASK_MAX_QUESTIONS,
@@ -652,6 +653,28 @@ describe('normaliseAskSubject', () => {
   });
 });
 
+describe('ASK_MAX_QUESTIONS_PER_CALL', () => {
+  it('carries the widest connector form in one call', () => {
+    // Nine is what the widest data-warehouse connector advertises; a cap below
+    // it makes those sources uncollectable in the single call the guidance
+    // asks for, and the agent falls back to a browser link.
+    expect(ASK_MAX_QUESTIONS_PER_CALL).toBeGreaterThanOrEqual(9);
+  });
+
+  it('is the number the tool description quotes', () => {
+    expect(WIZARD_ASK_TOOL_DESCRIPTION).toContain(
+      `up to ${ASK_MAX_QUESTIONS_PER_CALL}`,
+    );
+  });
+
+  it('tells the agent to split a wider subject rather than give up on it', () => {
+    expect(WIZARD_ASK_TOOL_DESCRIPTION).toMatch(
+      /consecutive calls reusing the same `subject`/,
+    );
+    expect(WIZARD_ASK_TOOL_DESCRIPTION).toMatch(/never a reason to abandon/i);
+  });
+});
+
 describe('evaluateAskCap', () => {
   const MAX = DEFAULT_ASK_MAX_QUESTIONS;
   const at = (over: Partial<Parameters<typeof evaluateAskCap>[0]>) =>
@@ -709,6 +732,9 @@ describe('evaluateAskCap', () => {
     // impossible, so the agent fell back to browser links instead.
     const decision = at({ subjectRunLength: ASK_BATCH_THRESHOLD });
     if (decision.kind !== 'capped') throw new Error('expected capped');
+    expect(decision.message).toContain(
+      `up to ${ASK_MAX_QUESTIONS_PER_CALL} questions`,
+    );
     expect(decision.message).toMatch(/different `subject`/);
     expect(decision.message).toMatch(/per subject/i);
     expect(decision.message).toMatch(/one call per source is never blocked/i);

@@ -224,13 +224,27 @@ export async function installSkillById(
 }
 
 export const DEFAULT_ASK_MAX_QUESTIONS = 10;
+
+/**
+ * Most questions one `wizard_ask` call may carry, enforced by both harness
+ * facades' schemas and quoted by the guidance below, so the limit and what the
+ * agent is told about it cannot drift apart.
+ *
+ * Sized against the forms this tool exists to collect: the widest
+ * data-warehouse connector advertises nine configuration fields, and a
+ * database whose form includes an SSH tunnel expands past that again. At eight
+ * the databases the step is mostly offered for did not fit, and an agent that
+ * reads "one subject, one call" as the contract treats a form it cannot fit in
+ * one call as one it cannot collect at all — and hands over a browser link.
+ */
+export const ASK_MAX_QUESTIONS_PER_CALL = 12;
 /**
  * Consecutive calls about the *same subject* before the one-time
  * batch-your-questions nudge fires. Adjacency is per subject, not per run:
  * the guard exists to stop an agent firing many small prompts about one
  * thing, not to stop a flow that legitimately walks a list — the warehouse
  * task asks one call per detected source, and 5–8 sources need 15–25 fields,
- * far more than the 8-question schema limit allows in a single call.
+ * far more than {@link ASK_MAX_QUESTIONS_PER_CALL} allows in a single call.
  */
 export const ASK_BATCH_THRESHOLD = 3;
 
@@ -337,8 +351,12 @@ export const WIZARD_ASK_SUBJECT_DESCRIPTION =
 export const WIZARD_ASK_TOOL_DESCRIPTION =
   'Ask the user one or more structured questions and wait for their answers. ' +
   'Use this whenever you would otherwise inline a question in your text output. ' +
-  'Batch every question about one subject into a single call (up to 8) rather ' +
-  'than asking one at a time, and tag the call with `subject`. Walking a list — ' +
+  `Batch every question about one subject into a single call (up to ${ASK_MAX_QUESTIONS_PER_CALL}) rather ` +
+  'than asking one at a time, and tag the call with `subject`. A subject needing ' +
+  'more fields than one call carries — a connection form wider than the limit — ' +
+  'is collected over consecutive calls reusing the same `subject`: that is ' +
+  'expected, and is never a reason to abandon it for a link the user has to ' +
+  'follow themselves. Walking a list — ' +
   'one call per data-warehouse source, one call per integration step — is ' +
   'expected and is never blocked, because the batching guard counts consecutive ' +
   'calls per subject. A fully cancelled or timed-out response does NOT count ' +
@@ -497,10 +515,10 @@ export function evaluateAskCap({
       message:
         `Not an error — this ask was not sent (a one-time nudge). ` +
         `You have sent ${subjectRunLength} wizard_ask calls in a row about the same subject (${subjectNote}). ` +
-        `Batch every question you still need for that subject into one call (up to 8 questions) and send wizard_ask again now. ` +
+        `Batch every question you still need for that subject into one call (up to ${ASK_MAX_QUESTIONS_PER_CALL} questions) and send wizard_ask again now. ` +
         `If your next questions are about something else — another data-warehouse source, another integration step — ` +
         `set a different \`subject\` on the call. Adjacency is counted per subject, so one call per source is never blocked, ` +
-        `and you must not try to squeeze several sources into one 8-question call. ` +
+        `and you must not try to squeeze several sources into one ${ASK_MAX_QUESTIONS_PER_CALL}-question call. ` +
         `Either way the next call is sent. Do not abandon the task, and do not fall back to browser setup because of this message.`,
     };
   }
