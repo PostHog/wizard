@@ -6,10 +6,11 @@ import { Harness, Sequence } from '@shared/constants';
 import { buildSession, OutroKind } from '@lib/wizard-session';
 import { HostResolution } from '@shared/host-resolution';
 import { LoggingUI } from '@ui/logging-ui';
-import { setUI } from '@ui';
+import { getUI, setUI } from '@ui';
 import { analytics } from '@utils/analytics';
 import { initLogFile } from '@utils/debug';
 import { wizardAbort } from '@utils/wizard-abort';
+import { ErrorCodes } from '@shared/errors';
 import type { ProgramConfig } from '../program-step';
 
 const streamShutdown = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
@@ -171,7 +172,11 @@ it('clamps a composed program to linear and keeps host analytics alive', async (
 it.each([RunOutcome.Aborted, RunOutcome.Failed] as const)(
   'passes a %s result to the existing abort handler',
   async (outcome) => {
-    const failure = { message: 'Failed', exitCode: 2 };
+    const failure = {
+      code: ErrorCodes.AgentApiError,
+      message: 'Failed',
+      exitCode: 2,
+    };
     vi.mocked(runAgent).mockResolvedValue({ outcome, failure, snapshot });
     await runProgramAgent(program(), session());
     expect(wizardAbort).toHaveBeenCalledExactlyOnceWith(failure);
@@ -179,11 +184,34 @@ it.each([RunOutcome.Aborted, RunOutcome.Failed] as const)(
   },
 );
 
+it('shows the auth guidance from a decided 401 before the error outro', async () => {
+  const detail = { hasSettingsConflict: false, logFilePath: '/tmp/wizard.log' };
+  const show = vi.spyOn(getUI(), 'showAuthError');
+  vi.mocked(runAgent).mockResolvedValue({
+    outcome: RunOutcome.Failed,
+    failure: {
+      code: ErrorCodes.AuthInvalidOrExpired,
+      message: 'Authentication failed (401)',
+      authErrorDetail: detail,
+    },
+    snapshot,
+  });
+  await runProgramAgent(program(), session());
+  expect(show).toHaveBeenCalledExactlyOnceWith(detail);
+  expect(wizardAbort).toHaveBeenCalledWith(
+    expect.objectContaining({ authErrorDetail: detail }),
+  );
+});
+
 it('rethrows the original crash for the outer runner', async () => {
   const error = new Error('mint refused');
   const result: RunResult = {
     outcome: RunOutcome.Crashed,
-    failure: { error },
+    failure: {
+      code: ErrorCodes.InternalUnhandled,
+      message: error.message,
+      error,
+    },
     snapshot,
   };
   vi.mocked(runAgent).mockResolvedValue(result);

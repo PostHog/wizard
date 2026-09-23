@@ -44,6 +44,8 @@ import type { ProgressEmitter } from '@agent/progress';
 import { createEmitLog } from '@agent/runner/shared/progress-collector';
 import type { TaskStore } from './tasks';
 import { completionFailure, runErrorType } from './completion';
+import { bindPiCancellation } from './cancellation';
+import { classifyRunFailure, ErrorCodes } from '@shared/errors';
 
 /** Injects the MCP server `instructions` pi-mcp-adapter drops (project env, skill steer, tool domains) into the system prompt, falling back to a bootstrap-derived project block when the warm-connect captured none. */
 function piMcpContext(
@@ -205,6 +207,13 @@ export const piBackend: AgentHarness = {
   name: Harness.pi,
 
   async run(inputs: BackendRunInputs): Promise<AgentResult> {
+    if (inputs.signal?.aborted) {
+      return {
+        kind: 'abort',
+        classification: AgentErrorType.ABORT,
+        message: 'Agent run cancelled',
+      };
+    }
     const { config: runConfig, input, boot, emit, prompt, spinner } = inputs;
     const config = runConfig.run;
     const modelId = inputs.model;
@@ -255,6 +264,9 @@ export const piBackend: AgentHarness = {
         model: modelId,
       });
 
+    let mcpCleanup: (() => void) | undefined;
+    let aioFailed = true;
+    let cancellation: ReturnType<typeof bindPiCancellation> | undefined;
     try {
       const {
         createAgentSession,
@@ -298,7 +310,8 @@ export const piBackend: AgentHarness = {
       const model = registry.find(GATEWAY_PROVIDER, modelId);
       if (!model) {
         return {
-          error: AgentErrorType.API_ERROR,
+          kind: 'failure',
+          classification: AgentErrorType.API_ERROR,
           message: 'pi: gateway model could not be resolved',
         };
       }
@@ -338,7 +351,6 @@ export const piBackend: AgentHarness = {
       const extensionFactories = [security.factory] as Array<
         (pi: unknown) => void
       >;
-      let mcpCleanup: (() => void) | undefined;
       let mcpInstructions: string | undefined;
       // Whether the agent really got the tool. The commandments below claim
       // `posthog_exec` exists when this is true, so it must track the setup and
@@ -363,6 +375,12 @@ export const piBackend: AgentHarness = {
         mcpInstructions = await instructionsPromise;
         posthogMcp = true;
       } catch (err) {
+        try {
+          mcpCleanup?.();
+        } catch {
+          /* Setup cleanup is best effort. */
+        }
+        mcpCleanup = undefined;
         logToFile(`[pi] PostHog MCP setup skipped: ${String(err)}`);
         analytics.wizardCapture('mcp setup failed', {
           harness: 'pi',
@@ -485,12 +503,20 @@ export const piBackend: AgentHarness = {
       // rebindCurrentSession. createAgentSession builds the session but does not
       // emit session_start on its own, and the MCP adapter connects on that
       // event; without this its tools report "MCP not initialized".
+      cancellation = bindPiCancellation(
+        inputs.signal,
+        agentSession,
+        (error) => {
+          logToFile(`[pi] abort failed: ${String(error)}`);
+        },
+      );
       await agentSession.bindExtensions({});
 
       // A turn that ends on a 401 from an aged bearer re-mints once and
       // continues; pi resolves the provider's apiKey per request, so
       // re-registering is enough.
       const turns = withGatewayRemint({
+        signal: inputs.signal,
         session: agentSession,
         registry,
         auth,
@@ -573,10 +599,18 @@ export const piBackend: AgentHarness = {
       // turns that follow.
       capture.setInitialPrompt(prompt);
 
+      let terminal = turns.terminalFailure();
       try {
+        if (inputs.signal?.aborted)
+          return {
+            kind: 'abort',
+            classification: AgentErrorType.ABORT,
+            message: 'Agent run cancelled',
+          };
         // Non-streaming: resolves when the agent run completes. Throws if no
         // model/api key, or on a transport error.
         await turns.prompt(prompt);
+        terminal = turns.terminalFailure();
 
         // Completion guard: pi's prompt() resolves the moment the model returns
         // a turn with no tool call (e.g. a lone [STATUS] line), even mid-plan.
@@ -585,6 +619,8 @@ export const piBackend: AgentHarness = {
         while (
           continueNudges < MAX_CONTINUE_NUDGES &&
           !security.state.criticalViolation &&
+          !inputs.signal?.aborted &&
+          !terminal &&
           hasOpenTasks(wizardTaskTools.store)
         ) {
           continueNudges += 1;
@@ -592,10 +628,15 @@ export const piBackend: AgentHarness = {
             `[pi] completion guard: tasks still open, nudge ${continueNudges}/${MAX_CONTINUE_NUDGES}`,
           );
           await turns.prompt(CONTINUE_INSTRUCTION);
+          terminal = turns.terminalFailure();
         }
 
         // Best-effort remark ask — a failed turn never fails a successful run.
-        if (!security.state.criticalViolation) {
+        if (
+          !security.state.criticalViolation &&
+          !terminal &&
+          !inputs.signal?.aborted
+        ) {
           try {
             await agentSession.prompt(REMARK_INSTRUCTION);
           } catch (err) {
@@ -603,8 +644,47 @@ export const piBackend: AgentHarness = {
           }
         }
       } finally {
-        unsubscribe();
-        mcpCleanup?.();
+        try {
+          unsubscribe();
+        } catch {
+          /* Keep the terminal result. */
+        }
+      }
+
+      if (inputs.signal?.aborted) {
+        return {
+          kind: 'abort',
+          classification: AgentErrorType.ABORT,
+          message: 'Agent run cancelled',
+        };
+      }
+
+      if (terminal && !security.state.criticalViolation) {
+        spinner.stop(
+          config.errorMessage ?? `${config.integrationLabel} failed`,
+        );
+        captureAborted(terminal.classification);
+        if (terminal.status === 401) {
+          return {
+            kind: 'decided_failure',
+            failure: {
+              code: ErrorCodes.AuthInvalidOrExpired,
+              message: 'Authentication failed (401)',
+              detail: { providerMessage: terminal.message },
+            },
+          };
+        }
+        return terminal.classification === AgentErrorType.ABORT
+          ? {
+              kind: 'abort',
+              classification: AgentErrorType.ABORT,
+              message: terminal.message,
+            }
+          : {
+              kind: 'failure',
+              classification: terminal.classification,
+              message: terminal.message,
+            };
       }
 
       // A latched post-scan violation terminates the run as a YARA violation,
@@ -615,7 +695,10 @@ export const piBackend: AgentHarness = {
           `[pi] terminated: YARA violation (blocked ${security.state.blockedCount} call(s))`,
         );
         captureAborted(AgentErrorType.YARA_VIOLATION);
-        return { error: AgentErrorType.YARA_VIOLATION };
+        return {
+          kind: 'failure',
+          classification: AgentErrorType.YARA_VIOLATION,
+        };
       }
 
       // pi ends a run on any tool-call-less turn, so guard against a hollow
@@ -631,14 +714,14 @@ export const piBackend: AgentHarness = {
           assistant_turns: assistantTurns,
         });
         captureAborted(failure);
-        return { error: failure };
+        return { kind: 'failure', classification: failure };
       }
       if (failure === AgentErrorType.INCOMPLETE_TASKS) {
         spinner.stop('Agent stopped before finishing');
         logToFile('[pi] incomplete: tasks left open');
         analytics.wizardCapture('agent incomplete tasks', { open_tasks: true });
         captureAborted(failure);
-        return { error: failure };
+        return { kind: 'failure', classification: failure };
       }
 
       const remark = signals.remark();
@@ -678,15 +761,48 @@ export const piBackend: AgentHarness = {
         cache_read_input_tokens: stats.tokens.cacheRead,
       });
       spinner.stop(config.successMessage ?? 'PostHog integration complete');
-      return {};
+      aioFailed = false;
+      return { kind: 'success' };
     } catch (err) {
+      if (inputs.signal?.aborted) {
+        return {
+          kind: 'abort',
+          classification: AgentErrorType.ABORT,
+          message: 'Agent run cancelled',
+        };
+      }
       const message = err instanceof Error ? err.message : String(err);
       logToFile(`[pi] run error: ${message}`);
       spinner.stop(config.errorMessage ?? `${config.integrationLabel} failed`);
       log.error(`pi backend error: ${message}`);
-      const error = runErrorType(message);
-      captureAborted(error);
-      return { error, message };
+      const coded = classifyRunFailure(err);
+      if (coded.coded && err instanceof Error) {
+        captureAborted(AgentErrorType.API_ERROR);
+        return {
+          kind: 'decided_failure',
+          failure: { code: coded.code, message: coded.message, error: err },
+        };
+      }
+      const classification = runErrorType(message);
+      captureAborted(classification);
+      return {
+        kind: 'failure',
+        classification,
+        message,
+        error: err instanceof Error ? err : undefined,
+      };
+    } finally {
+      await cancellation?.settle();
+      try {
+        mcpCleanup?.();
+      } catch {
+        /* Keep the terminal result. */
+      }
+      try {
+        capture.finishPiRun(aioFailed);
+      } catch {
+        /* Telemetry is best effort. */
+      }
     }
   },
 
