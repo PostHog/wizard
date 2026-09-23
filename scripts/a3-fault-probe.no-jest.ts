@@ -28,9 +28,6 @@ globalThis.fetch = (input, init) => {
 };
 
 const { runAgent } = await import('@agent/runner');
-const { configureGatewayCredentialsForCI } = await import(
-  '@agent/gateway-session'
-);
 const { DEFAULT_AGENT_MODEL, Harness, Sequence } = await import(
   '@shared/constants'
 );
@@ -43,11 +40,7 @@ analytics.captureException = () => {};
 analytics.wizardCapture = () => {};
 analytics.shutdown = async () => {};
 
-configureGatewayCredentialsForCI(
-  'phe_synthetic_fault_probe',
-  228144,
-  gatewayUrl,
-);
+const chosenHarness = harness === 'pi' ? Harness.pi : Harness.anthropic;
 
 const config: RunConfig = {
   programId: 'fault-probe',
@@ -63,13 +56,8 @@ const config: RunConfig = {
   composed: false,
   binding: {
     sequence: Sequence.linear,
-    harness: harness as Harness,
+    harness: chosenHarness,
     model: DEFAULT_AGENT_MODEL,
-  },
-  switchboard: {
-    program: 'fault-probe',
-    flags: {},
-    cliHarness: harness as Harness,
   },
   skillsBaseUrl: 'http://127.0.0.1:1',
   wizardFlags: {},
@@ -84,6 +72,15 @@ const input: RunInput = {
     projectApiKey: 'phc_synthetic_fault_probe',
     host: HostResolution.fromApiHost('http://127.0.0.1:1', { localMcp: true }),
     projectId: 228144,
+  },
+  inferenceAuth: {
+    resolve: () =>
+      Promise.resolve({
+        gatewayUrl,
+        token: 'phe_synthetic_fault_probe',
+        teamId: 228144,
+        refreshAtMs: Date.now() + 3_600_000,
+      }),
   },
   project: null,
   apiUser: null,
@@ -112,7 +109,7 @@ process.stdout.write(
   })}\n`,
 );
 if (result.outcome === 'failed' || result.outcome === 'aborted') {
-  const { wizardAbort } = await import('@utils/wizard-abort');
+  const { wizardAbort } = await import('@cli/wizard-abort');
   await wizardAbort(result.failure);
 } else {
   process.exitCode = 2;
