@@ -138,18 +138,147 @@ describe('runAgent', () => {
       );
 
       const running = runAgent(
-        defaultAgentConfig,
+        { ...defaultAgentConfig, signal: host.signal },
         'test prompt',
         defaultOptions,
         mockSpinner as unknown as SpinnerHandle,
-        { signal: host.signal },
       );
       await vi.waitFor(() => expect(mockQuery).toHaveBeenCalledTimes(1));
       host.abort();
 
-      expect(await running).toEqual({});
+      expect(await running).toMatchObject({
+        kind: 'abort',
+        classification: 'WIZARD_ABORT',
+      });
       expect(sdkAbort?.aborted).toBe(true);
       expect(mockSpinner.stop).toHaveBeenCalledWith('Run cancelled');
+    });
+
+    it('returns a failure for an SDK error result without an API marker', async () => {
+      function* failed() {
+        yield {
+          type: 'result',
+          subtype: 'error_max_turns',
+          is_error: true,
+          errors: ['maximum turns reached'],
+        };
+      }
+      mockQuery.mockReturnValue(failed());
+      const result = await runAgent(
+        defaultAgentConfig,
+        'test prompt',
+        defaultOptions,
+        mockSpinner as unknown as SpinnerHandle,
+      );
+      expect(result).toMatchObject({
+        kind: 'failure',
+        classification: 'WIZARD_API_ERROR',
+        message: 'maximum turns reached',
+      });
+      expect(mockSpinner.stop).not.toHaveBeenCalledWith('Test success');
+    });
+
+    it('classifies an assistant structured 429 before a generic error result', async () => {
+      function* rateLimited() {
+        yield {
+          type: 'assistant',
+          error: { status: 429 },
+          message: { role: 'assistant', content: [] },
+        };
+        yield {
+          type: 'result',
+          subtype: 'error_during_execution',
+          is_error: true,
+          errors: ['request failed'],
+        };
+      }
+      mockQuery.mockReturnValue(rateLimited());
+      const result = await runAgent(
+        defaultAgentConfig,
+        'test prompt',
+        defaultOptions,
+        mockSpinner as unknown as SpinnerHandle,
+      );
+      expect(result).toMatchObject({
+        kind: 'failure',
+        classification: 'WIZARD_RATE_LIMIT',
+      });
+    });
+
+    it('returns an abort when the host cancels and the SDK throws AbortError', async () => {
+      const controller = new AbortController();
+      mockQuery.mockReturnValue({
+        [Symbol.asyncIterator]() {
+          return {
+            next() {
+              controller.abort();
+              return Promise.reject(
+                Object.assign(new Error('SDK aborted'), {
+                  name: 'AbortError',
+                }),
+              );
+            },
+          };
+        },
+      });
+      const result = await runAgent(
+        { ...defaultAgentConfig, signal: controller.signal },
+        'test prompt',
+        defaultOptions,
+        mockSpinner as unknown as SpinnerHandle,
+      );
+      expect(result).toMatchObject({
+        kind: 'abort',
+        classification: 'WIZARD_ABORT',
+      });
+    });
+
+    it('returns a failure when the stream ends without a terminal result', async () => {
+      function* exhausted() {
+        yield { type: 'system', subtype: 'init', tools: [], mcp_servers: [] };
+      }
+      mockQuery.mockReturnValue(exhausted());
+      const result = await runAgent(
+        defaultAgentConfig,
+        'test prompt',
+        defaultOptions,
+        mockSpinner as unknown as SpinnerHandle,
+      );
+      expect(result).toMatchObject({
+        kind: 'failure',
+        classification: 'WIZARD_API_ERROR',
+      });
+    });
+
+    it('does not treat quoted API error prose as an auth failure', async () => {
+      function* quoted() {
+        yield {
+          type: 'assistant',
+          message: {
+            role: 'assistant',
+            content: [
+              {
+                type: 'text',
+                text: 'API Error: 401 appears in the user log, but I fixed the issue.',
+              },
+            ],
+          },
+        };
+        yield {
+          type: 'result',
+          subtype: 'success',
+          is_error: false,
+          result: 'done',
+        };
+      }
+      mockQuery.mockReturnValue(quoted());
+      const result = await runAgent(
+        defaultAgentConfig,
+        'test prompt',
+        defaultOptions,
+        mockSpinner as unknown as SpinnerHandle,
+      );
+      expect(result).toEqual({ kind: 'success' });
     });
 
     it('should return success when agent completes successfully then SDK cleanup fails', async () => {
@@ -194,7 +323,7 @@ describe('runAgent', () => {
       );
 
       // Should return success (empty object), not throw
-      expect(result).toEqual({});
+      expect(result).toEqual({ kind: 'success' });
       expect(mockSpinner.stop).toHaveBeenCalledWith('Test success');
     });
 
@@ -269,8 +398,13 @@ describe('runAgent', () => {
       );
 
       // Should return API error, not success
-      expect(result.error).toBe('WIZARD_API_ERROR');
-      expect(result.message).toContain('API Error');
+      expect(result.kind).toBe('failure');
+      expect(result.kind === 'failure' && result.classification).toBe(
+        'WIZARD_API_ERROR',
+      );
+      expect(result.kind === 'failure' && result.message).toContain(
+        'API Error',
+      );
     });
 
     it('should suppress user-facing errors when SDK yields error result after success', async () => {
@@ -334,7 +468,7 @@ describe('runAgent', () => {
       );
 
       // Should return success (empty object), not error
-      expect(result).toEqual({});
+      expect(result).toEqual({ kind: 'success' });
       expect(mockSpinner.stop).toHaveBeenCalledWith('Test success');
 
       // ui.log.error should NOT have been called (errors suppressed for user)
@@ -391,7 +525,7 @@ describe('runAgent', () => {
         },
       );
 
-      expect(result).toEqual({});
+      expect(result).toEqual({ kind: 'success' });
       expect(mockSpinner.stop).toHaveBeenCalledWith('Test success');
       expect(mockUIInstance.log.error).not.toHaveBeenCalled();
     });
@@ -431,7 +565,7 @@ describe('runAgent', () => {
         },
       );
 
-      expect(result).toEqual({});
+      expect(result).toEqual({ kind: 'success' });
       expect(mockSpinner.stop).toHaveBeenCalledWith('Test success');
     });
   });
@@ -766,7 +900,8 @@ describe('subprocess gateway credentials', () => {
     );
 
     expect(result).toEqual({
-      error: 'WIZARD_YARA_VIOLATION',
+      kind: 'failure',
+      classification: 'WIZARD_YARA_VIOLATION',
       message: expect.stringContaining('poisoned'),
     });
     expect(mockQuery).not.toHaveBeenCalled();
@@ -788,7 +923,8 @@ describe('subprocess gateway credentials', () => {
     );
 
     expect(result).toEqual({
-      error: 'WIZARD_YARA_VIOLATION',
+      kind: 'failure',
+      classification: 'WIZARD_YARA_VIOLATION',
       message: expect.stringContaining('scanner failed'),
     });
     expect(mockQuery).not.toHaveBeenCalled();
@@ -848,6 +984,7 @@ describe('gateway re-mint on 401', () => {
     yield {
       type: 'assistant',
       session_id: id,
+      error: { status: 401 },
       message: {
         role: 'assistant',
         content: [
@@ -899,7 +1036,7 @@ describe('gateway re-mint on 401', () => {
 
     const result = await run(cfg);
 
-    expect(result).toEqual({});
+    expect(result).toEqual({ kind: 'success' });
     expect(refresh).toHaveBeenCalledTimes(1);
     expect(authErrors()).toHaveLength(0);
     expect(mockQuery).toHaveBeenCalledTimes(2);
@@ -940,12 +1077,16 @@ describe('gateway re-mint on 401', () => {
 
     expect(refresh).toHaveBeenCalledTimes(1);
     expect(mockQuery).toHaveBeenCalledTimes(2);
-    expect(authErrors()).toHaveLength(1);
+    expect(authErrors()).toHaveLength(0);
     // The auth screen is reported, and the decided failure goes back to the
     // caller, which owns the exit.
-    expect(result.error).toBeUndefined();
-    expect(result.failure?.message).toBe('Authentication failed (401)');
-    expect(result.failure?.code).toBeDefined();
+    expect(result.kind).toBe('decided_failure');
+    expect(result.kind === 'decided_failure' && result.failure.message).toBe(
+      'Authentication failed (401)',
+    );
+    expect(
+      result.kind === 'decided_failure' && result.failure.code,
+    ).toBeDefined();
   });
 
   it('judges a failed resumed session on its own error, not the old 401', async () => {
@@ -979,9 +1120,12 @@ describe('gateway re-mint on 401', () => {
 
     // The 401 that triggered the re-mint is history; reporting it here would
     // send the user to the auth screen for a 500.
-    expect(result.error).toBe('WIZARD_API_ERROR');
-    expect(result.message).toContain('500');
-    expect(result.message).not.toContain('401');
+    expect(result.kind).toBe('failure');
+    expect(result.kind === 'failure' && result.classification).toBe(
+      'WIZARD_API_ERROR',
+    );
+    expect(result.kind === 'failure' && result.message).toContain('500');
+    expect(result.kind === 'failure' && result.message).not.toContain('401');
     expect(authErrors()).toHaveLength(0);
   });
 
@@ -996,8 +1140,10 @@ describe('gateway re-mint on 401', () => {
     // A fresh token the gateway rejects is a bad credential, not age.
     expect(refresh).not.toHaveBeenCalled();
     expect(mockQuery).toHaveBeenCalledTimes(1);
-    expect(authErrors()).toHaveLength(1);
-    expect(result.failure?.message).toBe('Authentication failed (401)');
+    expect(authErrors()).toHaveLength(0);
+    expect(result.kind === 'decided_failure' && result.failure.message).toBe(
+      'Authentication failed (401)',
+    );
   });
 });
 

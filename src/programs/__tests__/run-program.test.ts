@@ -635,7 +635,10 @@ describe('runProgram', () => {
     }));
     vi.mocked(runAgent).mockResolvedValue({
       outcome: RunOutcome.Failed,
-      failure: { message: 'integration failed' },
+      failure: {
+        code: ErrorCodes.AgentApiError,
+        message: 'integration failed',
+      },
       snapshot,
     });
 
