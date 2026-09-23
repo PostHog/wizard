@@ -19,6 +19,9 @@ module.exports = {
     'assets/**',
     'scripts/**',
     'coverage/**',
+    // Standalone jest-based package, linted/typechecked in its own context and
+    // outside the root tsconfig the parser uses (parserOptions.project).
+    'e2e-tests/**',
   ],
   extends: [
     'eslint:recommended',
@@ -79,7 +82,7 @@ module.exports = {
                   'The agent reports through progress events and asks through AgentInteraction; it takes everything else through RunConfig and RunInput.',
               },
               {
-                group: ['@programs/**', '**/programs/**'],
+                group: ['@programs', '@programs/**', '**/programs/**'],
                 allowTypeImports: true,
                 message:
                   'The agent takes program data through RunConfig. ProgramId types remain until B2 moves PROGRAM_BINDINGS to programs.',

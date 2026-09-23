@@ -11,19 +11,19 @@ import { LoggingUI } from '@ui/logging-ui';
 import { getUI, setUI } from '@ui';
 import { analytics } from '@utils/analytics';
 import { initLogFile } from '@utils/debug';
-import {
-  clearCleanup,
-  registerCleanup,
-  wizardAbort,
-} from '@utils/wizard-abort';
-import { ErrorCodes } from '@shared/errors';
+import { clearCleanup, runCleanups, wizardAbort } from '@utils/wizard-abort';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import { ErrorCodes } from '@shared/errors';
 import type { ProgramConfig } from '../program-step';
 import type { ProgramRun } from '../program-run';
+import { AUDIT_CHECKS_FILE } from '@shared/audit-ledger';
+import { AUDIT_CHECKS_KEY } from '../audit/types';
+import type { WizardStore } from '@ui/tui/store';
 
 const streamShutdown = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+let headlessStore: WizardStore | undefined;
 vi.mock('@env', async (original) => ({
   ...(await original<typeof import('@env')>()),
   IS_PRODUCTION_BUILD: false,
@@ -38,6 +38,9 @@ vi.mock('@utils/environment', async (original) => ({
 }));
 vi.mock('@programs/task-stream/index', () => ({
   TaskStreamPush: class {
+    constructor(options: { store: WizardStore }) {
+      headlessStore = options.store;
+    }
     attach = vi.fn();
     shutdown = streamShutdown;
   },
@@ -77,7 +80,6 @@ vi.mock('@utils/wizard-abort', async (original) => {
   const actual = await original<typeof import('@utils/wizard-abort')>();
   return {
     ...actual,
-    registerCleanup: vi.fn(actual.registerCleanup),
     wizardAbort: vi.fn().mockResolvedValue(undefined),
   };
 });
@@ -121,6 +123,7 @@ const session = () => ({
 let logSpy: ReturnType<typeof vi.spyOn>;
 
 beforeEach(() => {
+  headlessStore = undefined;
   clearCleanup();
   vi.clearAllMocks();
   vi.mocked(authenticate).mockImplementation((sess) => {
@@ -264,16 +267,56 @@ it('reads completion data when each hook runs, after late URL updates', async ()
 
 it('passes actual self-driving GitHub gate state to the callable host', async () => {
   const notConnected = session();
-  notConnected.githubConnected = false;
+  expect(notConnected.githubConnected).toBeNull();
   await runProgramAgent(program('self-driving'), notConnected);
+  expect(wizardAbort).toHaveBeenCalledExactlyOnceWith({
+    code: ErrorCodes.AgentAbort,
+    message: 'GitHub connection was not confirmed.',
+  });
   expect(runAgent).not.toHaveBeenCalled();
 
+  vi.mocked(wizardAbort).mockClear();
   const connected = session();
   connected.githubConnected = true;
-  connected.selfDrivingHandoffConfirmed = true;
   await runProgramAgent(program('self-driving'), connected);
   expect(runAgent).toHaveBeenCalledOnce();
+  expect(wizardAbort).not.toHaveBeenCalled();
 });
+
+it('projects an audit ledger update through the legacy runner UI bridge', async () => {
+  const installDir = fs.mkdtempSync(
+    path.join(os.tmpdir(), 'wizard-audit-bridge-'),
+  );
+  const currentSession = session();
+  currentSession.installDir = installDir;
+  const config = program('audit');
+  config.auditLedgerFile = AUDIT_CHECKS_FILE;
+  const ui = new LoggingUI();
+  const setFrameworkContext = vi.spyOn(ui, 'setFrameworkContext');
+  setUI(ui);
+  const checks = [{ id: 'new', area: 'Events', label: 'new', status: 'pass' }];
+  vi.mocked(runAgent).mockImplementationOnce(async () => {
+    fs.writeFileSync(
+      path.join(installDir, AUDIT_CHECKS_FILE),
+      JSON.stringify(checks),
+    );
+    await vi.waitFor(
+      () =>
+        expect(setFrameworkContext).toHaveBeenCalledWith(
+          AUDIT_CHECKS_KEY,
+          checks,
+        ),
+      { timeout: 7000 },
+    );
+    return { outcome: RunOutcome.Success, snapshot };
+  });
+  try {
+    await runProgramAgent(config, currentSession);
+    expect(setFrameworkContext).toHaveBeenCalledWith(AUDIT_CHECKS_KEY, checks);
+  } finally {
+    fs.rmSync(installDir, { recursive: true, force: true });
+  }
+}, 8000);
 
 it('passes a session-scoped CI bearer to a composed child run', async () => {
   const inferenceAuth = {
@@ -311,6 +354,13 @@ it('passes the fixed CI bearer through the callable host without agent-global ga
     );
     await vi.waitFor(() => expect(streamShutdown).toHaveBeenCalledOnce());
     expect(ciPreRun).toHaveBeenCalledOnce();
+
+    expect(headlessStore?.session.inferenceAuth).toBeDefined();
+    expect(await headlessStore?.session.inferenceAuth?.resolve()).toMatchObject(
+      {
+        token: 'fixed-ci-bearer',
+      },
+    );
 
     const input = vi.mocked(runAgent).mock.calls[0]?.[1];
     expect(input).toBeDefined();
@@ -426,7 +476,7 @@ it('registers cleanup before the agent starts so a signal removes only new marke
       makeSkill('installed-this-run', true);
       makeSkill('user-owned-this-run', false);
       // runWizard's SIGINT/SIGTERM handler calls the registered cleanups.
-      for (const [cleanup] of vi.mocked(registerCleanup).mock.calls) cleanup();
+      runCleanups();
       return Promise.resolve({ outcome: RunOutcome.Success, snapshot });
     });
 
@@ -436,6 +486,91 @@ it('registers cleanup before the agent starts so a signal removes only new marke
       'preexisting',
       'user-owned-this-run',
     ]);
+  } finally {
+    fs.rmSync(installDir, { recursive: true, force: true });
+  }
+});
+
+it('disarms registered skill cleanup after a successful standalone program run', async () => {
+  const installDir = fs.mkdtempSync(
+    path.join(os.tmpdir(), 'wizard-run-complete-'),
+  );
+  const skillDir = path.join(installDir, '.claude', 'skills', 'installed');
+  vi.mocked(runAgent).mockImplementationOnce(() => {
+    fs.mkdirSync(skillDir, { recursive: true });
+    fs.writeFileSync(path.join(skillDir, '.posthog-wizard'), '');
+    return Promise.resolve({ outcome: RunOutcome.Success, snapshot });
+  });
+  try {
+    await runProgramAgent(program(), { ...session(), installDir });
+    runCleanups();
+    expect(fs.existsSync(skillDir)).toBe(true);
+  } finally {
+    fs.rmSync(installDir, { recursive: true, force: true });
+  }
+});
+
+it.each(['ci', 'headless'] as const)(
+  'removes new Wizard skills when %s stream settlement fails after agent success',
+  async (mode) => {
+    const installDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), `wizard-${mode}-late-failure-`),
+    );
+    const skillDir = path.join(installDir, '.claude', 'skills', 'unfinished');
+    const tokenFile = path.join(installDir, 'gateway-token');
+    fs.writeFileSync(tokenFile, 'fixed-ci-bearer');
+    vi.stubEnv('WIZARD_CI_GATEWAY_TOKEN_FILE', tokenFile);
+    const settlementError = new Error('task stream failed to flush');
+    streamShutdown.mockRejectedValueOnce(settlementError);
+    vi.mocked(wizardAbort).mockImplementationOnce(() => {
+      runCleanups();
+      return Promise.resolve(undefined as never);
+    });
+    vi.mocked(runAgent).mockImplementationOnce(() => {
+      fs.mkdirSync(skillDir, { recursive: true });
+      fs.writeFileSync(path.join(skillDir, '.posthog-wizard'), '');
+      return Promise.resolve({ outcome: RunOutcome.Success, snapshot });
+    });
+
+    try {
+      runNonInteractive(
+        program(),
+        { apiKey: 'phx_test', projectId: '1', installDir, telemetry: false },
+        mode,
+      );
+      await vi.waitFor(() => expect(wizardAbort).toHaveBeenCalledOnce());
+      expect(wizardAbort).toHaveBeenCalledWith(
+        expect.objectContaining({ error: settlementError }),
+      );
+      expect(streamShutdown).toHaveBeenCalledTimes(2);
+      expect(fs.existsSync(skillDir)).toBe(false);
+    } finally {
+      vi.unstubAllEnvs();
+      fs.rmSync(installDir, { recursive: true, force: true });
+    }
+  },
+);
+
+it('keeps new Wizard skills after headless stream settlement succeeds', async () => {
+  const installDir = fs.mkdtempSync(
+    path.join(os.tmpdir(), 'wizard-headless-success-'),
+  );
+  const skillDir = path.join(installDir, '.claude', 'skills', 'completed');
+  vi.mocked(runAgent).mockImplementationOnce(() => {
+    fs.mkdirSync(skillDir, { recursive: true });
+    fs.writeFileSync(path.join(skillDir, '.posthog-wizard'), '');
+    return Promise.resolve({ outcome: RunOutcome.Success, snapshot });
+  });
+  try {
+    runNonInteractive(
+      program(),
+      { apiKey: 'phx_test', projectId: '1', installDir, telemetry: false },
+      'headless',
+    );
+    await vi.waitFor(() => expect(streamShutdown).toHaveBeenCalledOnce());
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    runCleanups();
+    expect(fs.existsSync(skillDir)).toBe(true);
   } finally {
     fs.rmSync(installDir, { recursive: true, force: true });
   }

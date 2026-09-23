@@ -149,20 +149,25 @@ npx @posthog/wizard@latest skill <skill-name>      # run one by name
 
 Reviews are auto-requested via [`.github/CODEOWNERS`](.github/CODEOWNERS) — the
 file is the source of truth; this table just mirrors it for readability.
-`team-wizard-docs` is the default reviewer; the team-owned programs below
+`team-wizard-docs` is the default reviewer; the team-owned paths below
 route review to their owning team instead.
 
 | Path | Owning team |
 |---|---|
 | `*` (everything else, including all other programs) | `@PostHog/team-wizard-docs` |
 | `src/agent/` | `@PostHog/team-wizard-docs` |
+| `src/programs/ai-observability/` | `@PostHog/team-ai-observability` |
 | `src/programs/posthog-integration/` | `@PostHog/team-wizard-docs` |
 | `src/programs/error-tracking-upload-source-maps/` | `@PostHog/team-error-tracking` |
 | `src/programs/mcp-analytics/` | `@PostHog/team-mcp-analytics` |
+| `src/programs/metrics/` | `@PostHog/apm` |
+| `src/programs/replay-vision/` | `@PostHog/team-replay` |
 | `src/programs/revenue-analytics/` | `@PostHog/team-web-analytics` |
 | `src/programs/self-driving/` | `@PostHog/team-self-driving` |
 | `src/programs/warehouse-source/` | `@PostHog/team-warehouse-sources` |
 | `src/programs/web-analytics-doctor/` | `@PostHog/team-web-analytics` |
+| `src/ui/tui/decks/error-tracking-upload-source-maps/` | `@PostHog/team-error-tracking` |
+| `src/ui/tui/decks/self-driving/` | `@PostHog/team-self-driving` |
 
 Ownership is by directory. Programs not listed above
 (`agent-skill`, `audit`, `events-audit`, `mcp`, `migration`, `posthog-doctor`,
@@ -560,21 +565,14 @@ To run unit tests, run:
 bin/test
 ```
 
-End-to-end runs are live and credentialed, and each one exercises one surface.
-Point `APP_DIR` at an app copy from
-[wizard-workbench](https://github.com/PostHog/wizard-workbench), which owns the
-fixture apps and the assertions:
+To run E2E tests run:
 
 ```bash
-pnpm test:e2e:tui        # the full TUI in a PTY, frames to SNAP_OUT
-pnpm test:e2e:programs   # runProgram with no TUI or store (PROGRAM, default posthog-integration)
-pnpm test:e2e:agent      # runAgent on a local quack skill, no programs
+bin/test-e2e
 ```
 
-Each route reads `PROJECT_ID`, `POSTHOG_PERSONAL_API_KEY` or `POSTHOG_KEY_FILE`,
-and `WIZARD_CI_GATEWAY_TOKEN_FILE`, and writes its result to `E2E_RESULT_JSON`
-when set. The TUI and programs routes also need `APP_DIR`. The agent route makes
-its own empty directory and passes when the agent writes `quack/quack.txt`.
+E2E tests are a bit more complicated to create and adjust due to to their mocked
+LLM calls. See the `e2e-tests/README.md` for more information.
 
 #### Explore with an agent
 

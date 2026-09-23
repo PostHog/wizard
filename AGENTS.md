@@ -163,13 +163,13 @@ pnpm try --install-dir=<path>      # Run the wizard locally against a test proje
 pnpm build                         # Compile TypeScript
 pnpm test                          # Unit tests (builds first)
 pnpm test:watch                    # Unit tests in watch mode
-pnpm test:e2e:tui                  # Live, credentialed: full TUI on a workbench app copy
-pnpm test:e2e:programs             # Live, credentialed: runProgram, no TUI
-pnpm test:e2e:agent                # Live, credentialed: runAgent on a local quack skill
+pnpm test:e2e                      # Live, credentialed tests; may write the selected project
 pnpm lint                          # Prettier + ESLint checks
 pnpm fix                           # Auto-fix lint issues
 pnpm dev                           # Build, link globally, watch for changes
 ```
+
+See [the live E2E guide](e2e-tests/README.md) before running `pnpm test:e2e`.
 
 Choose verification for the change: check links and formatting for docs; run
 `pnpm typecheck` and focused existing tests for code. Build when bundling or

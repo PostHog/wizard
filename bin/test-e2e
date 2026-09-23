@@ -1,0 +1,6 @@
+#!/bin/bash
+set -e
+
+# Run tests (includes linting and formatting)
+echo "Running E2E tests..."
+pnpm test:e2e
