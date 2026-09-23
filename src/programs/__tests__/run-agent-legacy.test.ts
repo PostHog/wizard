@@ -481,6 +481,72 @@ it('disarms registered skill cleanup after a successful standalone program run',
   }
 });
 
+it.each(['ci', 'headless'] as const)(
+  'removes new Wizard skills when %s stream settlement fails after agent success',
+  async (mode) => {
+    const installDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), `wizard-${mode}-late-failure-`),
+    );
+    const skillDir = path.join(installDir, '.claude', 'skills', 'unfinished');
+    const tokenFile = path.join(installDir, 'gateway-token');
+    fs.writeFileSync(tokenFile, 'fixed-ci-bearer');
+    vi.stubEnv('WIZARD_CI_GATEWAY_TOKEN_FILE', tokenFile);
+    const settlementError = new Error('task stream failed to flush');
+    streamShutdown.mockRejectedValueOnce(settlementError);
+    vi.mocked(wizardAbort).mockImplementationOnce(() => {
+      runCleanups();
+      return Promise.resolve(undefined as never);
+    });
+    vi.mocked(runAgent).mockImplementationOnce(() => {
+      fs.mkdirSync(skillDir, { recursive: true });
+      fs.writeFileSync(path.join(skillDir, '.posthog-wizard'), '');
+      return Promise.resolve({ outcome: RunOutcome.Success, snapshot });
+    });
+
+    try {
+      runNonInteractive(
+        program(),
+        { apiKey: 'phx_test', projectId: '1', installDir, telemetry: false },
+        mode,
+      );
+      await vi.waitFor(() => expect(wizardAbort).toHaveBeenCalledOnce());
+      expect(wizardAbort).toHaveBeenCalledWith(
+        expect.objectContaining({ error: settlementError }),
+      );
+      expect(streamShutdown).toHaveBeenCalledTimes(2);
+      expect(fs.existsSync(skillDir)).toBe(false);
+    } finally {
+      vi.unstubAllEnvs();
+      fs.rmSync(installDir, { recursive: true, force: true });
+    }
+  },
+);
+
+it('keeps new Wizard skills after headless stream settlement succeeds', async () => {
+  const installDir = fs.mkdtempSync(
+    path.join(os.tmpdir(), 'wizard-headless-success-'),
+  );
+  const skillDir = path.join(installDir, '.claude', 'skills', 'completed');
+  vi.mocked(runAgent).mockImplementationOnce(() => {
+    fs.mkdirSync(skillDir, { recursive: true });
+    fs.writeFileSync(path.join(skillDir, '.posthog-wizard'), '');
+    return Promise.resolve({ outcome: RunOutcome.Success, snapshot });
+  });
+  try {
+    runNonInteractive(
+      program(),
+      { apiKey: 'phx_test', projectId: '1', installDir, telemetry: false },
+      'headless',
+    );
+    await vi.waitFor(() => expect(streamShutdown).toHaveBeenCalledOnce());
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    runCleanups();
+    expect(fs.existsSync(skillDir)).toBe(true);
+  } finally {
+    fs.rmSync(installDir, { recursive: true, force: true });
+  }
+});
+
 it('cleans a marked install when program setup throws before the functional runner', async () => {
   const installDir = fs.mkdtempSync(
     path.join(os.tmpdir(), 'wizard-setup-cleanup-'),
