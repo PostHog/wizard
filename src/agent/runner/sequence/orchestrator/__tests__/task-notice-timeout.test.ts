@@ -94,6 +94,18 @@ describe('task notice timeout', () => {
     }
   });
 
+  it('closes an active notice on run cancellation without marking a timeout', async () => {
+    const controller = new AbortController();
+    showTaskNotice.mockReturnValue(new Promise<boolean>(() => undefined));
+    const result = offerSeededTask(NOTICE, {
+      interaction,
+      signal: controller.signal,
+    });
+    controller.abort();
+    await expect(result).resolves.toEqual({ keep: false, timedOut: false });
+    expect(cancelTaskNotice).toHaveBeenCalledTimes(1);
+  });
+
   it('keeps the step when the user accepts in time', async () => {
     vi.useFakeTimers();
     try {

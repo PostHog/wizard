@@ -62,6 +62,7 @@ export type AioCapture = {
   captureFromAnthropicSDKMessage(msg: unknown): void;
   /** Called for every subscribe event on the pi harness. */
   captureFromPiMessageEndEvent(event: unknown): void;
+  finishPiRun(isError: boolean): void;
 };
 
 const noop = (_: unknown): void => undefined;
@@ -69,6 +70,7 @@ const NOOP: AioCapture = {
   setInitialPrompt: noop,
   captureFromAnthropicSDKMessage: noop,
   captureFromPiMessageEndEvent: noop,
+  finishPiRun: noop,
 };
 
 export function createAioCapture(args: {
@@ -216,6 +218,7 @@ export function createAioCapture(args: {
         role?: string;
         model?: string;
         content?: unknown;
+        stopReason?: string;
         usage?: {
           input_tokens?: number;
           output_tokens?: number;
@@ -243,7 +246,8 @@ export function createAioCapture(args: {
       cacheCreationTokens: e.message.usage?.cache_creation_input_tokens,
       latencyMs,
       generationId: e.message.id,
-      isError: false,
+      isError:
+        e.message.stopReason === 'error' || e.message.stopReason === 'aborted',
     };
   };
 
@@ -328,10 +332,7 @@ export function createAioCapture(args: {
           });
           lastAssistantContent = turn.outputChoices;
         }
-        // Terminal: pi emits `agent_end` when the session's prompt() resolves.
-        if (e?.type === 'agent_end' && !e.willRetry) {
-          sendTraceEnd({ isError: false });
-        }
+        // The harness decides whether a final turn recovered before ending the trace.
       } catch (err) {
         logToFile(
           `[aio-capture] pi compose failed: ${
@@ -339,6 +340,9 @@ export function createAioCapture(args: {
           }`,
         );
       }
+    },
+    finishPiRun(isError) {
+      sendTraceEnd({ isError });
     },
   };
 }

@@ -25,7 +25,7 @@
 import { Sequence } from '@shared/constants';
 import { RunOutcome } from './shared/types';
 export { RunOutcome } from './shared/types';
-import { classifyRunFailure } from '@shared/errors';
+import { classifyRunFailure, ErrorCodes } from '@shared/errors';
 import { logToFile } from '@utils/debug';
 import type {
   RunAgentOptions,
@@ -79,52 +79,79 @@ export async function runAgent(
   input: RunInput,
   options: RunAgentOptions = {},
 ): Promise<RunResult> {
-  const collector = createProgressCollector(options.onProgress);
-  const { emit } = collector;
-  const log = (message: string) =>
-    emit({ kind: 'log', level: 'info', message });
+  let collector: ReturnType<typeof createProgressCollector> | undefined;
+  const snapshot = (): RunResult['snapshot'] => {
+    try {
+      if (collector) return collector.snapshot();
+    } catch {
+      // A partial snapshot must not replace the run's primary failure.
+    }
+    return {
+      tasks: [],
+      statusMessages: [],
+      usage: {
+        inputTokens: 0,
+        outputTokens: 0,
+        cacheReadTokens: 0,
+        cacheCreationTokens: 0,
+      },
+    };
+  };
   let cleanupInstalledSkills: (() => void) | undefined;
   const cleanFailedRun = () => {
     try {
       cleanupInstalledSkills?.();
     } catch (error) {
-      logToFile('[agent-runner] failed-run skill cleanup error:', error);
+      try {
+        logToFile('[agent-runner] failed-run skill cleanup error:', error);
+      } catch {
+        // Logging is best effort.
+      }
     }
   };
+  const cancelled = (): RunResult => ({
+    ...hostAborted(),
+    skillId: input.skillId,
+    snapshot: snapshot(),
+  });
+  // Every ending passes through here once the outcome is decided: clean the
+  // skills a failed run installed, then flush the warlock scan report at this
+  // single seam for every harness. flushScanReport is idempotent (it zeroes
+  // scan state), so a caller that also flushes sees a harmless no-op.
+  const finish = (result: RunResult): RunResult => {
+    if (result.outcome !== RunOutcome.Success) cleanFailedRun();
+    try {
+      const report = flushScanReport({ yaraReport: input.flags.yaraReport });
+      if (report)
+        collector?.emit({ kind: 'log', level: 'info', message: report });
+    } catch {
+      // Scan reporting is best effort after the run outcome is decided.
+    }
+    return result;
+  };
 
-  // Flush the warlock scan report once, at this single seam, on every
-  // termination path and for every harness (linear, orchestrator, or future).
-  // flushScanReport is idempotent (it zeroes scan state), so a caller that also
-  // flushes from its own cleanup path sees a harmless no-op. No harness has to
-  // know reporting exists.
   try {
+    collector = createProgressCollector(options.onProgress);
+    const { emit } = collector;
+    const log = (message: string) =>
+      emit({ kind: 'log', level: 'info', message });
     // Capture before preparation so pre-harness failures also clean new skills.
     cleanupInstalledSkills = captureRunSkillCleanup(input.installDir);
-    if (options.signal?.aborted) {
-      cleanFailedRun();
-      return {
-        ...hostAborted(),
-        skillId: input.skillId,
-        snapshot: collector.snapshot(),
-      };
-    }
+    if (options.signal?.aborted) return finish(cancelled());
     const boot = await prepareRun(config, input);
-    if (options.signal?.aborted) {
-      cleanFailedRun();
-      return {
-        ...hostAborted(),
-        skillId: input.skillId,
-        snapshot: collector.snapshot(),
-      };
-    }
+    if (options.signal?.aborted) return finish(cancelled());
     if (config.binding.sequence === Sequence.orchestrator) {
       log('Task-queue orchestrator enabled.');
     }
-    logToFile(
-      `[agent-runner] run program=${config.programId} sequence=${config.binding.sequence}` +
-        ` harness=${config.binding.harness} composed=${config.composed}`,
-    );
-    const result = await getSequence(config.binding.sequence).run({
+    try {
+      logToFile(
+        `[agent-runner] run program=${config.programId} sequence=${config.binding.sequence}` +
+          ` harness=${config.binding.harness} composed=${config.composed}`,
+      );
+    } catch {
+      // Logging is best effort.
+    }
+    const sequenceResult = await getSequence(config.binding.sequence).run({
       config,
       input,
       boot,
@@ -132,39 +159,75 @@ export async function runAgent(
       interaction: options.interaction,
       signal: options.signal,
     });
-    if (result.outcome !== RunOutcome.Success || options.signal?.aborted)
-      cleanFailedRun();
-    return {
-      ...(options.signal?.aborted ? hostAborted() : result),
-      skillId: input.skillId,
-      snapshot: collector.snapshot(),
-    };
-  } catch (error) {
-    if (options.signal?.aborted) {
-      cleanFailedRun();
-      return {
-        ...hostAborted(),
-        skillId: input.skillId,
-        snapshot: collector.snapshot(),
-      };
+    // A host cancellation replaces a success only. A terminal failure the run
+    // already decided is the more specific outcome and stays.
+    if (
+      options.signal?.aborted &&
+      sequenceResult.outcome === RunOutcome.Success
+    ) {
+      return finish(cancelled());
     }
+    return finish({
+      ...sequenceResult,
+      skillId: input.skillId,
+      snapshot: snapshot(),
+    });
+  } catch (error) {
     // Not a decision the agent made. Hand it back whole rather than throw, so
     // every ending of a run is a result the caller reads the same way.
-    const failure = classifyRunFailure(error);
-    logToFile('[agent-runner] run crashed:', error);
-    cleanFailedRun();
-    return {
+    const original =
+      error instanceof Error ? error : new Error(safeErrorMessage(error));
+    let failure: ReturnType<typeof classifyRunFailure>;
+    try {
+      failure = classifyRunFailure(original);
+    } catch {
+      failure = {
+        code: ErrorCodes.InternalUnhandled,
+        message: 'Unexpected agent error',
+        coded: false,
+      };
+    }
+    try {
+      logToFile('[agent-runner] run failed:', original);
+    } catch {
+      // Logging is best effort.
+    }
+    let abortError = false;
+    try {
+      abortError = original.name === 'AbortError';
+    } catch {
+      /* Hostile Error getter. */
+    }
+    if (failure.coded) {
+      return finish({
+        outcome: RunOutcome.Failed,
+        skillId: input?.skillId,
+        failure: {
+          code: failure.code,
+          message: failure.message,
+          error: original,
+        },
+        snapshot: snapshot(),
+      });
+    }
+    if (options.signal?.aborted && abortError) return finish(cancelled());
+    return finish({
       outcome: RunOutcome.Crashed,
-      skillId: input.skillId,
+      skillId: input?.skillId,
       failure: {
         code: failure.code,
         message: failure.message,
-        error: error instanceof Error ? error : new Error(String(error)),
+        error: original,
       },
-      snapshot: collector.snapshot(),
-    };
-  } finally {
-    const report = flushScanReport({ yaraReport: input.flags.yaraReport });
-    if (report) log(report);
+      snapshot: snapshot(),
+    });
+  }
+}
+
+function safeErrorMessage(error: unknown): string {
+  try {
+    return String(error);
+  } catch {
+    return 'Unknown thrown value';
   }
 }
