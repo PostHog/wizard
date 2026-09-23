@@ -14,7 +14,8 @@
  * run.
  *
  * This is the only file that knows about `getUI()`, the session and
- * `wizardAbort` on the agent's behalf. Programs replace it in Release B.
+ * `wizardAbort` on the agent's behalf. The TUI and headless hosts replace it
+ * in Release C.
  */
 
 import { isDeepStrictEqual } from 'node:util';

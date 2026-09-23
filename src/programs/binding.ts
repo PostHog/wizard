@@ -1,3 +1,4 @@
+import { IS_PRODUCTION_BUILD } from '@env';
 import {
   DEFAULT_AGENT_MODEL,
   GPT5_6_SOL_MODEL,
@@ -5,8 +6,13 @@ import {
   Harness,
   Sequence,
 } from '@shared/constants';
-import { DEFAULT_AGENT_BINDING, resolveBinding, resolveHarness } from '@agent';
-import type { ResolvedBinding } from '@agent/types';
+import { logToFile } from '@utils/debug';
+import {
+  DEFAULT_AGENT_BINDING,
+  harnessRunsTasks,
+  resolveHarness,
+} from '@agent';
+import type { ResolvedBinding, SwitchboardCtx } from '@agent/types';
 import type { ProgramId } from './program-registry';
 import {
   isOrchestratorEnabled,
@@ -109,7 +115,7 @@ export function resolveProgramBinding(
     cliModel: ctx.cliModel,
     trace: ctx.trace,
   };
-  const binding = resolveBinding(resolution);
+  const binding = resolveBindingPrecedence(resolution);
   const roles = Object.keys(baseBinding.contextMillOverride ?? {});
   if (roles.length === 0) return binding;
   return {
@@ -121,4 +127,48 @@ export function resolveProgramBinding(
       ]),
     ),
   };
+}
+
+/** Compose both axes: the sequence here, the harness and model through the agent. */
+function resolveBindingPrecedence(ctx: SwitchboardCtx): ResolvedBinding {
+  const sequence = resolveSequence(ctx);
+  const { harness, model, thinkingLevel } = resolveHarness(ctx);
+  return { sequence, harness, model, thinkingLevel };
+}
+
+function resolveSequence(ctx: SwitchboardCtx): Sequence {
+  const [source, sequence] = pickSequence(ctx);
+  if (ctx.trace) ctx.trace.sequence = source;
+  logToFile(
+    `[switchboard] resolved: program=${
+      ctx.program ?? '?'
+    } sequence=${sequence} (${source})`,
+  );
+  return sequence;
+}
+
+/**
+ * The first rung that decides wins: the composed clamp, the dev-build CLI
+ * override, the runTask capability clamp, the flag route, the experiment, then
+ * the base binding. CLI sits above the capability clamp, so `--sequence
+ * orchestrator` still reaches the orchestrator's hard error in dev builds.
+ */
+function pickSequence(
+  ctx: SwitchboardCtx,
+): [NonNullable<ProgramSwitchboardTrace['sequence']>, Sequence] {
+  // The orchestrator owns the whole run lifecycle and cannot nest.
+  if (ctx.composed) return ['composed', Sequence.linear];
+  if (!IS_PRODUCTION_BUILD && ctx.cliSequence) return ['cli', ctx.cliSequence];
+  const { harness } = resolveHarness(ctx);
+  if (!harnessRunsTasks(harness)) {
+    if (ctx.orchestratorFlagOn) {
+      logToFile(
+        `[switchboard] wizard-orchestrator ignored: ${harness} has no runTask, clamping to linear`,
+      );
+    }
+    return ['runtask-clamp', Sequence.linear];
+  }
+  if (ctx.flagRoute?.sequence) return ['payload', ctx.flagRoute.sequence];
+  if (ctx.flagSequence) return ['flag', ctx.flagSequence];
+  return ['binding', (ctx.baseBinding ?? DEFAULT_AGENT_BINDING).sequence];
 }

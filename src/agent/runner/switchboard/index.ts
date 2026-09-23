@@ -2,9 +2,7 @@
 
 import { Harness, Sequence } from '@shared/constants';
 import { DEFAULT_AGENT_BINDING } from '@agent/default-binding';
-import { resolveHarness } from './harness';
 import type { EffortLevel } from './models';
-import { resolveSequence } from './sequence';
 
 // ── Shared machinery ────────────────────────────────────────────────────
 
@@ -106,28 +104,15 @@ export interface ProgramBinding {
   contextMillOverride?: Record<string, Partial<HarnessPick>>;
 }
 
-/** Legacy alias until the public runner export is removed in B2 integration. */
+/** The harness axis's fallback when the caller supplies no base binding. */
 export const DEFAULT_BINDING: ProgramBinding = DEFAULT_AGENT_BINDING;
 
-// ── Unified resolver ────────────────────────────────────────────────────
-
-/** Compose both axes. Callers needing only one axis use the per-axis resolver. */
-export function resolveBinding(
-  ctx: SwitchboardCtx,
-  role = 'default',
-): ProgramBinding {
-  ctx.trace ??= {};
-  const sequence = resolveSequence(ctx);
-  const { harness, model, thinkingLevel } = resolveHarness(ctx, role);
-  return { sequence, harness, model, thinkingLevel };
-}
-
 // ── Unified re-export surface ───────────────────────────────────────────
-export { HARNESS_OPTIONS, getHarness, resolveHarness } from './harness';
 export {
-  SEQUENCE_OPTIONS,
-  getSequence,
-  resolveSequence,
-  type SequenceRunner,
-} from './sequence';
+  HARNESS_OPTIONS,
+  getHarness,
+  harnessRunsTasks,
+  resolveHarness,
+} from './harness';
+export { SEQUENCE_OPTIONS, getSequence, type SequenceRunner } from './sequence';
 export { resolveRoleHarness } from './harness';

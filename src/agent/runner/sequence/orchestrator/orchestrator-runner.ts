@@ -64,8 +64,7 @@ import {
 import { RunMetrics } from './run-metrics';
 import { dependencyClosure, uncoveredBySink } from './queue-tools';
 import { deferSeededTasks } from './seeded-deps';
-import { LONGER_ASK_TIMEOUT_MS } from '@agent/wizard-ask-bridge';
-import { shouldDisableAsk } from '../../shared/bootstrap';
+import { isAskDisabled, LONGER_ASK_TIMEOUT_MS } from '@shared/ask-policy';
 import {
   agentRunTools,
   assembleSeedPrompt,
@@ -929,7 +928,7 @@ async function executeOrchestrator(
 
   // One bridge for the run, handed only to a task whose prompt allows asking.
   // Absent in CI and signup, where nobody can answer.
-  const askBridge = shouldDisableAsk(input.flags)
+  const askBridge = isAskDisabled(input.flags)
     ? undefined
     : createAskBridge(interaction, {
         signal,

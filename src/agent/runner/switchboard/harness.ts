@@ -29,6 +29,11 @@ export function getHarness(name: Harness): AgentHarness {
   return harness;
 }
 
+/** Whether the orchestrator can drive this harness: it implements `runTask`. */
+export function harnessRunsTasks(name: Harness): boolean {
+  return typeof getHarness(name).runTask === 'function';
+}
+
 /**
  * A validated caller-supplied route overlays the base binding.
  */

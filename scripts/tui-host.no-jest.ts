@@ -227,7 +227,7 @@ async function main() {
     // Keep the `wizard_ask` bridge wired despite `ci: true`. The driver loop
     // below is the answerer — without this the agent-in-the-loop layer of a
     // flow (credential questions, the orchestrator's seeded warehouse task) is
-    // never exercised. Only this host sets it; see `shouldDisableAsk`.
+    // never exercised. Only this host sets it; see `isAskDisabled`.
     e2eAsk: process.env.E2E_ASK === 'true',
     apiKey,
     projectId,
