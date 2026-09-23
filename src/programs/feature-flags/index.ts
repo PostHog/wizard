@@ -5,6 +5,8 @@ import { posthogIntegrationConfig } from '@programs/posthog-integration/index';
 import type { ProgramConfig, ProgramStep } from '@programs/program-step';
 import type { CiRunnerContext } from '@programs/runner-context';
 import type { WizardSession } from '@lib/wizard-session';
+import { getContentBlocks } from '@ui/tui/decks/feature-flags/index';
+import { getTips } from '@ui/tui/decks/feature-flags/tips';
 import { FEATURE_FLAGS_PROMPTS, FEATURE_FLAGS_REPORT_FILE } from './prompts.js';
 
 const FEATURE_FLAGS_DOCS_URL = 'https://posthog.com/docs/feature-flags';
@@ -21,8 +23,15 @@ export const featureFlagsConfig: ProgramConfig = {
   id: 'feature-flags',
   agentFlow: 'feature-flags',
   agentPrompts: FEATURE_FLAGS_PROMPTS,
-  steps: [DETECT_FRAMEWORK_STEP, ...AGENT_SKILL_STEPS],
+  steps: [
+    DETECT_FRAMEWORK_STEP,
+    ...AGENT_SKILL_STEPS.map((step) =>
+      step.id === 'intro' ? { ...step, screenId: 'feature-flags-intro' } : step,
+    ),
+  ],
   reportFile: FEATURE_FLAGS_REPORT_FILE,
+  getContentBlocks,
+  getTips,
   cliOptions: { ...headlessOption, ...regionOption },
   run: {
     integrationLabel: 'feature-flags',

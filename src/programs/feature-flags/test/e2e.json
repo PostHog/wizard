@@ -21,7 +21,7 @@
       "screen": "detect",
       "auto": "(headless) framework detection puts the framework id on session.skillId"
     },
-    { "screen": "agent-skill-intro", "auto": "confirm & continue" },
+    { "screen": "feature-flags-intro", "auto": "confirm & continue" },
     {
       "screen": "health-check",
       "auto": "dismiss outage and proceed even if the readiness probe flags an issue"

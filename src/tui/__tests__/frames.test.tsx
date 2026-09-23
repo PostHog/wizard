@@ -380,6 +380,7 @@ const FIXTURES: Record<ScreenName, Fixture> = {
   [ScreenId.AiObservabilityIntro]: { program: Program.AiObservability },
   [ScreenId.MetricsIntro]: { program: Program.Metrics },
   [ScreenId.ErrorTrackingIntro]: { program: Program.ErrorTracking },
+  [ScreenId.FeatureFlagsIntro]: { program: Program.FeatureFlags },
   [ScreenId.ErrorTrackingDetect]: {
     program: Program.ErrorTracking,
     arrange: authed,

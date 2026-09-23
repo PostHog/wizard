@@ -1,0 +1,39 @@
+ PostHog Wizard v0.0.0-test                                                                Feedback: wizard@posthog.com
+
+ Cost (running): $0.00 · no agent turns yet                                                              Ctrl+T to hide
+
+
+
+
+
+
+
+
+
+
+
+                                                 ███ PostHog Wizard 🦔
+
+                                 We'll use AI to analyze your project and complete work.
+                                    .env* file contents will not leave your machine.
+
+           Let's add your first PostHog feature flags, so you can ship code and turn it on when you're ready.
+
+                                                    Directory ✔ /app
+
+                                                ▸ Continue
+                                                  More info
+                                                  Privacy & data
+                                                  Cancel
+
+
+
+
+
+
+
+
+
+
+
+  ↑↓ navigate  enter select
