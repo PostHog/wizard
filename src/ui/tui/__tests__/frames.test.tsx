@@ -651,6 +651,30 @@ describe('feature-flags-intro with no detected framework', () => {
   });
 });
 
+describe('feature-flags-intro with an unsupported framework version', () => {
+  it.each(SIZES)(`at $columns x $rows`, async (size) => {
+    const store = makeStore(Program.FeatureFlags);
+    store.setFrameworkConfig(Integration.nextjs, staticFrameworkConfig());
+    store.setDetectedFramework('Next.js');
+    store.setUnsupportedVersion({
+      current: '12.3.0',
+      minimum: '13.0.0',
+      docsUrl: 'https://posthog.com/docs/libraries/next-js',
+    });
+    store.setDetectionComplete();
+    expect(store.currentScreen).toBe(ScreenId.FeatureFlagsIntro);
+    const { frame } = await renderScreen(
+      store,
+      screenShell(store, makeServices(store)),
+      size,
+    );
+    expect(frame).not.toContain('Continue');
+    await expect(frame).toMatchFileSnapshot(
+      `__snapshots__/frames/feature-flags-intro-unsupported-version-${size.columns}x${size.rows}.txt`,
+    );
+  });
+});
+
 function snapshotPath(screen: ScreenName, size: TerminalSize): string {
   return `__snapshots__/frames/${screen}-${size.columns}x${size.rows}.txt`;
 }

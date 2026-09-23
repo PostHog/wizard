@@ -91,18 +91,13 @@ export const FeatureFlagsIntroScreen = ({
   };
 
   const selectMenuAction = (value: string) => menuActions[value]?.();
-  const isDetectingFramework = !session.detectionComplete;
-  const isFrameworkUndetected = session.integration === null;
+  const blockedBody = bodyThatBlocksContinue(session);
 
-  if (isDetectingFramework || isFrameworkUndetected) {
+  if (blockedBody) {
     return (
       <IntroScreenLayout
         installDir={session.installDir}
-        body={
-          isDetectingFramework
-            ? DETECTING_FRAMEWORK_BODY
-            : UNDETECTED_FRAMEWORK_BODY
-        }
+        body={blockedBody}
         showDetection={false}
         programLabel={session.programLabel}
         skillId={session.skillId}
@@ -124,6 +119,26 @@ export const FeatureFlagsIntroScreen = ({
     />
   );
 };
+
+function bodyThatBlocksContinue(
+  session: WizardStore['session'],
+): ReactNode | null {
+  if (!session.detectionComplete) return DETECTING_FRAMEWORK_BODY;
+  if (session.integration === null) return UNDETECTED_FRAMEWORK_BODY;
+  if (!session.unsupportedVersion) return null;
+  const { current, minimum, docsUrl } = session.unsupportedVersion;
+  return (
+    <Box flexDirection="column" alignItems="center" width={64}>
+      <Text color="#DC9300">
+        Version {current} is not supported by the wizard. Please upgrade to{' '}
+        {minimum} or later.
+      </Text>
+      <Box marginTop={1}>
+        <Text dimColor>Manual setup guide: {docsUrl}</Text>
+      </Box>
+    </Box>
+  );
+}
 
 const DETECTING_FRAMEWORK_BODY: ReactNode = (
   <Box marginY={1}>
