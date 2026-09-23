@@ -1117,7 +1117,7 @@ export async function scanInstalledSkill(
     absoluteSkillDir,
     '.',
     llmProvider,
-    phase === 'skill-load',
+    true,
   );
   const verdict = scanVerdict(matches);
   if (!verdict) return null;
@@ -1162,6 +1162,7 @@ async function scanSkillFiles(
   const files = await fg(SKILL_TEXT_GLOB, {
     cwd: absoluteDir,
     absolute: true,
+    caseSensitiveMatch: false,
   });
 
   if (files.length === 0) {

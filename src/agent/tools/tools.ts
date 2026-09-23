@@ -20,6 +20,10 @@ import {
   type EnvKeyLocations,
 } from '@utils/env-scan';
 import { scanInstalledSkill } from '@agent/yara-hooks';
+import {
+  forgetCleanProjectSkill,
+  scanAndCacheInstalledProjectSkill,
+} from '@agent/skill-preflight';
 import type { LLMProvider } from '@posthog/warlock';
 import { writeJsonAtomic, makeMutex } from '@utils/atomic-ledger';
 import {
@@ -68,8 +72,14 @@ export async function downloadSkill(
     // Same scan the Bash-install hook runs — TS-path installs (linear
     // pre-install, MCP/pi install_skill, orchestrator cache + reference)
     // must not skip it.
-    const poisonReason = await scanInstalledSkill(receipt.skillDir, triage);
+    const isProjectSkill =
+      path.resolve(path.dirname(receipt.skillDir)) ===
+      path.resolve(installDir, '.claude', 'skills');
+    const poisonReason = isProjectSkill
+      ? await scanAndCacheInstalledProjectSkill(receipt.skillDir, triage)
+      : await scanInstalledSkill(receipt.skillDir, triage);
     if (poisonReason) {
+      forgetCleanProjectSkill(receipt.skillDir);
       receipt.rollback();
       logToFile(`downloadSkill: ${poisonReason}`);
       analytics.wizardCapture('skill install failed', {
@@ -91,6 +101,7 @@ export async function downloadSkill(
     });
     return { success: true };
   } catch (err: any) {
+    if (receipt) forgetCleanProjectSkill(receipt.skillDir);
     receipt?.rollback();
     logToFile(`downloadSkill: error: ${err.message}`);
     // A skill-less run still reports success — keep the failure visible.
