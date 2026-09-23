@@ -75,7 +75,7 @@ export const anthropicBackend: AgentHarness = {
     logToFile('[agent-runner] agent initialized');
 
     return executeAgent(
-      agent,
+      { ...agent, signal: inputs.signal },
       prompt,
       runOptions(input),
       spinner,
@@ -151,7 +151,7 @@ export const anthropicBackend: AgentHarness = {
     );
 
     return executeAgent(
-      { ...agent, model, allowedTools, disallowedTools },
+      { ...agent, model, allowedTools, disallowedTools, signal: inputs.signal },
       prompt,
       options,
       spinner,

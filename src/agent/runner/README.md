@@ -40,7 +40,7 @@ for the coordinated change checklist.
 Five layers, each with its own job. Nothing crosses layers unless it has to.
 
 **The entry point** (`index.ts`) is the front door:
-`runAgent(config, input, {onProgress?, interaction?}) → RunResult`. It takes
+`runAgent(config, input, {onProgress?, interaction?, signal?}) → RunResult`. It takes
 resolved execution data and an invocation snapshot (`shared/types.ts`), reports
 through `onProgress` and asks through `interaction` (`../progress.ts`), and
 returns every ending as a result. It never renders, reads a session or exits.
@@ -85,6 +85,53 @@ gateway.
 - A harness adapts its SDK, gateway transport, security hooks, and tool surface.
 
 Each layer is replaceable.
+
+## Ownership map
+
+```mermaid
+%%{init: {"block": {"padding": 20}}}%%
+block-beta
+  columns 11
+  hostBand["Host: programs and UI"]:11
+  runProgramAgent["runProgramAgent"]:3 space:1 wizardAbort["wizardAbort"]:3 space:4
+  space:11
+  runnerBand["Agent runner"]:11
+  runAgent["runAgent"]:3 space:1 runResult["RunResult"]:3 space:4
+  space:11
+  sequenceBand["Orchestrator sequence"]:11
+  runOrchestrator["runOrchestrator"]:3 space:1 sequenceResult["SequenceResult"]:3 space:4
+  space:11
+  drainQueue["drainQueue"]:3 space:5 runAbort["AbortController"]:3
+  space:11
+  harnessBand["Selected harness"]:11
+  agentHarness["AgentHarness"]:3 space:1 agentResult["AgentResult"]:3 space:1 signal["TaskRunInputs.signal"]:3
+  space:11
+  sdkBand["External model SDK"]:11
+  sdk["Selected SDK"]:3 space:8
+
+  runProgramAgent --> runAgent
+  runAgent --> runOrchestrator
+  runOrchestrator --> drainQueue
+  drainQueue --> agentHarness
+  agentHarness --> sdk
+  agentHarness --> agentResult
+  agentResult --> sequenceResult
+  sequenceResult --> runResult
+  runResult --> wizardAbort
+  drainQueue --> runAbort
+  runAbort --> signal
+
+  classDef owner fill:#9ca3af1f,stroke:#9ca3af,stroke-width:1.5px
+  classDef changed fill:#3b82f626,stroke:#3b82f6,stroke-width:2px
+  class hostBand,runnerBand,sequenceBand,harnessBand,sdkBand owner
+  class runResult,agentResult,runAbort changed
+```
+
+Calls descend on the left, results return through the middle, and cancellation
+moves down the right. Blue marks the result contracts and run-scoped abort.
+On the first fatal task result, `drainQueue` stops scheduling, cancels
+active work and pending asks, joins siblings, then preserves that failure for
+the host to present.
 
 ## Flow
 

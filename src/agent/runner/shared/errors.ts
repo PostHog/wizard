@@ -3,8 +3,7 @@
  */
 
 import type { InstallSkillResult } from '@agent/tools';
-import { skillErrorCode } from '@shared/errors';
-import { WizardError } from '@shared/errors';
+import { ErrorCodes, skillErrorCode } from '@shared/errors';
 import { RunOutcome, type AgentFailure, type SequenceResult } from './types';
 
 export const failed = (failure: AgentFailure): SequenceResult => ({
@@ -17,7 +16,7 @@ export function installFailure(
   integrationLabel: string,
   result: Exclude<InstallSkillResult, { kind: 'ok' }>,
 ): AgentFailure {
-  const code = skillErrorCode(result) ?? undefined;
+  const code = skillErrorCode(result) ?? ErrorCodes.InternalUnhandled;
 
   const message = (() => {
     switch (result.kind) {
@@ -33,17 +32,13 @@ export function installFailure(
   return {
     message,
     code,
-    error: new WizardError(
-      `Skill install failed: ${result.kind}`,
-      {
-        integration: integrationLabel,
-        error_type: result.kind,
-        platform: process.platform,
-        ...(result.kind === 'download-failed'
-          ? { error_detail: result.message.slice(0, 500) }
-          : {}),
-      },
-      code,
-    ),
+    detail: {
+      integration: integrationLabel,
+      error_type: result.kind,
+      platform: process.platform,
+      ...(result.kind === 'download-failed'
+        ? { error_detail: result.message.slice(0, 500) }
+        : {}),
+    },
   };
 }

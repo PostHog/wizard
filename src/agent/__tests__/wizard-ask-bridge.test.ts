@@ -19,6 +19,49 @@ beforeEach(() => {
 });
 
 describe('createWizardAskBridge', () => {
+  it('dismisses and settles an active question on run cancellation', async () => {
+    const controller = new AbortController();
+    const cancelQuestion = vi.fn();
+    const bridge = createWizardAskBridge({
+      signal: controller.signal,
+      getSource: () => 'skill',
+      showQuestion: () => new Promise<AskAnswers>(() => undefined),
+      cancelQuestion,
+    });
+    const result = bridge.request({
+      questions: [{ id: 'goal', prompt: 'Goal?', kind: 'text' }],
+    });
+    expect(bridge.getPendingQuestion()).not.toBeNull();
+    controller.abort();
+    await expect(result).resolves.toEqual({
+      answers: { goal: CANCELLED_SENTINEL },
+      timedOut: false,
+    });
+    expect(cancelQuestion).toHaveBeenCalledTimes(1);
+    expect(bridge.getPendingQuestion()).toBeNull();
+  });
+
+  it('does not open a question when the run was already cancelled', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const showQuestion = vi.fn();
+    const bridge = createWizardAskBridge({
+      signal: controller.signal,
+      getSource: () => 'skill',
+      showQuestion,
+    });
+    await expect(
+      bridge.request({
+        questions: [{ id: 'goal', prompt: 'Goal?', kind: 'text' }],
+      }),
+    ).resolves.toEqual({
+      answers: { goal: CANCELLED_SENTINEL },
+      timedOut: false,
+    });
+    expect(showQuestion).not.toHaveBeenCalled();
+    expect(bridge.getPendingQuestion()).toBeNull();
+  });
+
   it('forwards questions to showQuestion and resolves with the captured answers', async () => {
     const captured: PendingQuestion[] = [];
     let resolveAnswers!: (answers: AskAnswers) => void;
@@ -250,6 +293,31 @@ describe('createWizardAskBridge', () => {
           ([name]) => name === 'wizard_ask cancelled',
         );
         expect(cancelledCall?.[1]).toMatchObject({ timed_out: true });
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('settles a timed-out question when host dismissal throws', async () => {
+      vi.useFakeTimers();
+      try {
+        const bridge = createWizardAskBridge({
+          getSource: () => 'product-tours',
+          showQuestion: () => new Promise<AskAnswers>(() => undefined),
+          cancelQuestion: () => {
+            throw new Error('overlay broken');
+          },
+          timeoutMs: 1000,
+        });
+        const result = bridge.request({
+          questions: [{ id: 'goal', prompt: 'Goal?', kind: 'text' }],
+        });
+        vi.advanceTimersByTime(1000);
+        await expect(result).resolves.toEqual({
+          answers: { goal: CANCELLED_SENTINEL },
+          timedOut: true,
+        });
+        expect(bridge.getPendingQuestion()).toBeNull();
       } finally {
         vi.useRealTimers();
       }

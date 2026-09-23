@@ -27,7 +27,6 @@ import type { WizardSession } from '@lib/wizard-session';
 import type { WizardRunOptions } from '@utils/types';
 import { getUI, type SpinnerHandle } from '@ui';
 import { createUiReducer } from '@ui/agent-progress';
-import { WizardError } from '@shared/errors';
 
 /** A category the agent classifies each project into (id the agent returns). */
 export type DetectTarget = { id: string; name: string };
@@ -431,18 +430,14 @@ export async function detectProjectsWithAgent(
     middleware,
   );
 
-  if (result.failure) {
+  if (result.kind !== 'success') {
+    if (result.kind === 'decided_failure') {
+      throw result.failure.error ?? new Error(result.failure.message);
+    }
     throw (
-      result.failure.error ??
-      new WizardError(
-        result.failure.message ?? 'Agent detection failed',
-        undefined,
-        result.failure.code,
-      )
+      result.error ??
+      new Error(result.message || `Agent error: ${result.classification}`)
     );
-  }
-  if (result.error) {
-    throw new Error(result.message || `Agent error: ${result.error}`);
   }
 
   // Transcript first, final message last — its verdicts win path conflicts.
