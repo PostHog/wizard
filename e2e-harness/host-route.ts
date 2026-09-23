@@ -1,8 +1,7 @@
 /**
  * Which route the real TUI host takes, and where that route's control channel
- * is. Both come from the environment, and the host reads them before it starts
- * the TUI: a missing one is reported on stderr, not as a crash from inside a
- * run that has already taken the screen.
+ * is. The host resolves both before it starts the TUI, so a missing one is
+ * readable on stderr instead of a crash from under a rendered screen.
  */
 
 export const HOST_MODES = ['fixed', 'serve'] as const;
@@ -14,15 +13,16 @@ export type HostRouteResult =
   | { ok: true; route: HostRoute }
   | { ok: false; error: string };
 
-/** The env var that carries each route's control channel. */
-const CONTROL_VAR: Record<HostMode, string> = {
-  fixed: 'SNAP_CTRL',
-  serve: 'CONTROL_SOCK',
-};
-
-const CONTROL_USE: Record<HostMode, string> = {
-  fixed: 'the host appends the name of each screen it snapshots to that file',
-  serve: 'the host listens for commands on that socket path',
+/** The env var carrying each route's control channel, and what it is for. */
+const CONTROL: Record<HostMode, { variable: string; use: string }> = {
+  fixed: {
+    variable: 'SNAP_CTRL',
+    use: 'the host appends the name of each screen it snapshots to that file',
+  },
+  serve: {
+    variable: 'CONTROL_SOCK',
+    use: 'the host listens for commands on that socket path',
+  },
 };
 
 const MODE_HELP =
@@ -38,12 +38,12 @@ export function resolveHostRoute(env: NodeJS.ProcessEnv): HostRouteResult {
   if (!isHostMode(mode))
     return { ok: false, error: `MODE=${mode} is not a route. ${MODE_HELP}` };
 
-  const variable = CONTROL_VAR[mode];
+  const { variable, use } = CONTROL[mode];
   const controlPath = env[variable];
   if (!controlPath)
     return {
       ok: false,
-      error: `${variable} is not set, and MODE=${mode} needs it: ${CONTROL_USE[mode]}.`,
+      error: `${variable} is not set, and MODE=${mode} needs it: ${use}.`,
     };
 
   return { ok: true, route: { mode, controlPath } };

@@ -1,7 +1,7 @@
 /**
- * The host reads its route from the environment. An unset control path used to
- * reach `fs.appendFileSync` as `undefined` and abort the run with a Node type
- * error, so these pin that each gap is named instead.
+ * The host reads its route from the environment. Each gap must name the
+ * variable that closes it, rather than reaching `fs.appendFileSync` as
+ * `undefined` and aborting the run with a Node type error.
  */
 
 import { resolveHostRoute } from '@e2e-harness/host-route';
