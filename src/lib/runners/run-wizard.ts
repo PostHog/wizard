@@ -14,6 +14,10 @@ import type { TaskStreamPush as TaskStreamPushClass } from '@lib/task-stream/tas
 import { resolveNoTelemetry } from './resolve-no-telemetry';
 import { checkLocalServices, getLocalDev } from '@shared/local-dev';
 import { runCleanups } from '@utils/wizard-abort';
+import {
+  commitRegisteredRunSkillCleanups,
+  registerRunSkillCleanup,
+} from '@shared/skill-run-cleanup';
 import { classifyRunFailure, emitWizardError } from '@shared/errors';
 import { isRunFailure } from '@ui/mint-failure';
 import { getUI } from '@ui';
@@ -83,6 +87,8 @@ export function runWizard(
   void (async () => {
     try {
       const installDir = (options.installDir as string) || process.cwd();
+      // Armed until a successful exit, so every failed or interrupted exit removes new skills.
+      registerRunSkillCleanup(installDir);
 
       const { startTUI } = await import('@ui/tui/start-tui');
       const { buildSession, RunPhase } = await import('@lib/wizard-session');
@@ -287,13 +293,18 @@ export function runWizard(
         if (skipAgent && !runFailed) return s.outroDismissed;
         return s.skillsComplete;
       });
+      if (signalled) return;
 
-      exitInProgress = true;
       await activeStream.shutdown(2000);
-      process.off('SIGINT', onSignal);
-      process.off('SIGTERM', onSignal);
-      if (runFailed) await analytics.shutdown('error');
+      if (signalled) return;
+      // Handlers stay attached, so a late signal cannot end the process before drain or commit.
+      exitInProgress = true;
+      if (runFailed) {
+        runCleanups();
+        await analytics.shutdown('error');
+      }
       activeTui.unmount();
+      if (!runFailed) commitRegisteredRunSkillCleanups();
       process.exit(runFailed ? 1 : 0);
     } catch (err) {
       // File-log first — the cleanup below can throw or exit.

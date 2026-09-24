@@ -13,9 +13,12 @@ import { WizardStore } from '@ui/tui/store';
 import { getUI, setUI } from '@ui';
 import { analytics } from '@utils/analytics';
 import { initLogFile, logToFile } from '@utils/debug';
-import { wizardAbort } from '@utils/wizard-abort';
+import { runCleanups, wizardAbort } from '@utils/wizard-abort';
 import { ErrorCodes } from '@shared/errors';
 import type { ProgramConfig } from '../program-step';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
 
 const streamShutdown = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 vi.mock('@env', async (original) => ({
@@ -374,6 +377,46 @@ it('keeps a headless run a success when its terminal analytics flush fails', asy
     flushError,
   );
 });
+
+it.each([
+  ['SIGINT', [[130]], false],
+  ['SIGTERM', [[143]], false],
+  ['completion', [], true],
+] as const)(
+  'a headless run ended by %s exits %j and keeps its new skill: %s',
+  async (ending, exits, kept) => {
+    const installDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wizard-ci-'));
+    const skillDir = path.join(installDir, '.claude', 'skills', 'installed');
+    const exit = vi
+      .spyOn(process, 'exit')
+      .mockImplementation(() => undefined as never);
+    const config: ProgramConfig = {
+      ...program(),
+      ciPreRun: () => {
+        fs.mkdirSync(skillDir, { recursive: true });
+        fs.writeFileSync(path.join(skillDir, '.posthog-wizard'), '');
+        if (ending !== 'completion') process.emit(ending);
+        return Promise.resolve();
+      },
+    };
+    try {
+      runNonInteractive(
+        config,
+        { apiKey: 'phx_test', projectId: '1', installDir, telemetry: false },
+        'headless',
+      );
+      await vi.waitFor(() => expect(streamShutdown).toHaveBeenCalledOnce());
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      runCleanups();
+
+      expect(exit.mock.calls).toEqual(exits);
+      expect(fs.existsSync(skillDir)).toBe(kept);
+    } finally {
+      exit.mockRestore();
+      fs.rmSync(installDir, { recursive: true, force: true });
+    }
+  },
+);
 
 it('keeps a TUI run a success when its terminal analytics flush fails', async () => {
   const flushError = new Error('flush timed out');

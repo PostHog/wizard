@@ -50,6 +50,9 @@ runAgent(config: RunConfig, input: RunInput, options?: {
   whether to show auth UI. `Aborted` means the host's signal cancelled the run;
   an agent that stops itself with `[ABORT]` returns `Failed` with its abort
   code.
+- Skills: a run that does not end in `Success` removes the skill directories it
+  added under `<installDir>/.claude/skills` that carry the `.posthog-wizard`
+  marker. Directories that were there before the run stay.
 - Analytics shutdown is host-owned: the agent never sends the terminal
   `setup wizard finished` event. The host sends it from the outcome: `Success`
   is `success`, `Aborted` is `cancelled`, `Failed` and `Crashed` are `error`.

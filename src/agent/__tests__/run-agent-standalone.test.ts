@@ -871,6 +871,35 @@ describe('runAgent standalone', () => {
     expect(result.failure).toBe(failure);
   });
 
+  it.each([
+    [RunOutcome.Failed, ['preexisting', 'user-owned']],
+    [RunOutcome.Success, ['installed', 'preexisting', 'user-owned']],
+  ] as const)('a %s run leaves %j in .claude/skills', async (outcome, left) => {
+    const skillsDir = path.join(tmp, '.claude', 'skills');
+    const makeSkill = (id: string, marked: boolean) => {
+      fs.mkdirSync(path.join(skillsDir, id), { recursive: true });
+      if (marked)
+        fs.writeFileSync(path.join(skillsDir, id, '.posthog-wizard'), '');
+    };
+    makeSkill('preexisting', true);
+    if (outcome === RunOutcome.Failed)
+      harnessState.result = {
+        kind: 'failure',
+        classification: AgentErrorType.NO_PROGRESS,
+      };
+
+    const result = await runAgent(config(), input(), {
+      onProgress: (event) => {
+        if (event.kind !== 'status') return;
+        makeSkill('installed', true);
+        makeSkill('user-owned', false);
+      },
+    });
+
+    expect(result.outcome).toBe(outcome);
+    expect(fs.readdirSync(skillsDir).sort()).toEqual(left);
+  });
+
   it('skips the terminal outro for a composed sub-run', async () => {
     const events: AgentProgress[] = [];
 
