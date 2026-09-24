@@ -23,6 +23,9 @@ let onRefreshed: ((credentials: Credentials) => void) | undefined;
 /** Shared so concurrent callers rotate once: a second rotation would spend the refresh token the first replaced. */
 let inFlight: Promise<Credentials> | null = null;
 const listeners = new Set<(accessToken: string) => void>();
+/** Every access token this login has held, and the first one, which names the login. */
+let lineage = new Set<string>();
+let lineageRoot: string | undefined;
 
 /** Adopt the run's credentials; a stale copy of the held login gets the newer one back through `onRefreshed`. */
 export function configureOAuthSession(
@@ -44,7 +47,17 @@ export function configureOAuthSession(
     return;
   }
   devLog(`configure adopted ${describe(credentials)}`);
+  if (!current || !sameLogin(current, credentials)) {
+    lineage = new Set();
+    lineageRoot = credentials.accessToken;
+  }
+  lineage.add(credentials.accessToken);
   current = credentials;
+}
+
+/** A key that stays the same across this login's rotations, so caches keyed on it survive one. */
+export function oauthLoginKey(accessToken: string): string {
+  return lineageRoot && lineage.has(accessToken) ? lineageRoot : accessToken;
 }
 
 /** The current credentials, refreshed first when near expiry or when `force` is set. */
@@ -104,6 +117,8 @@ export function onAccessTokenRotated(
 export function resetOAuthSession(): void {
   current = null;
   rotate = undefined;
+  lineage = new Set();
+  lineageRoot = undefined;
   onRefreshed = undefined;
   inFlight = null;
   listeners.clear();
@@ -137,6 +152,7 @@ async function refresh(
       refreshed.refreshToken === credentials.refreshToken ? 'kept' : 'rotated'
     }`,
   );
+  lineage.add(refreshed.accessToken);
   current = refreshed;
   onRefreshed?.(refreshed);
   for (const listener of listeners) listener(refreshed.accessToken);
