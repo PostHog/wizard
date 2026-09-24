@@ -1,4 +1,8 @@
-import { POSTHOG_DOCS_URL, type Harness, type Sequence } from '@shared/constants';
+import {
+  POSTHOG_DOCS_URL,
+  type Harness,
+  type Sequence,
+} from '@shared/constants';
 import {
   createWizardRunSync,
   type RunOutcome,

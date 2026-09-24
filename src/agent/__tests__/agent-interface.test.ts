@@ -113,6 +113,7 @@ describe('runAgent', () => {
   });
 
   it('retains task identity through SDK rekeying and ignores read-only task tools', async () => {
+    const progress = vi.fn();
     const tool = (id: string, name: string, input: object) => ({
       type: 'assistant',
       message: { content: [{ type: 'tool_use', id, name, input }] },
@@ -150,14 +151,15 @@ describe('runAgent', () => {
       })(),
     );
     await runAgent(
-      defaultAgentConfig,
+      { ...defaultAgentConfig, emit: progress },
       'test',
       defaultOptions,
       mockSpinner as unknown as SpinnerHandle,
     );
-    const snapshots = mockUIInstance.syncTodos.mock.calls.map(
-      ([tasks]) => tasks,
-    );
+    const snapshots = progress.mock.calls
+      .map(([event]) => event)
+      .filter((event) => event.kind === 'tasks')
+      .map((event) => event.tasks);
     expect(snapshots).toHaveLength(4);
     expect(snapshots.map((items) => items[0].status)).toEqual([
       'pending',
