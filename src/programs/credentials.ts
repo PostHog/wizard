@@ -1,4 +1,4 @@
-/** Resolved credentials passed from a program host to one agent run. */
+/** Resolved credentials runProgram passes to one agent run. */
 
 import type { ApiProject, ApiUser, Credentials } from '@shared/api';
 
