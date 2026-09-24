@@ -15,6 +15,7 @@ import { App } from './App.js';
 import { enterDarkTerminal, releaseTerminal } from './terminal.js';
 import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
+import { installCancelSignals } from '@utils/wizard-abort';
 import { getExitLine } from './exit-line.js';
 
 export { releaseTerminal };
@@ -35,9 +36,12 @@ export function startTUI(
   const inkUI = new InkUI(store);
   setUI(inkUI);
 
+  // ScreenContainer turns the ctrl+c key into `wizardCancel`, like a SIGINT.
   const { unmount: inkUnmount, waitUntilExit } = render(
     createElement(App, { store }),
+    { exitOnCtrlC: false },
   );
+  installCancelSignals();
 
   analytics.setTag('program_id', program);
   // The launch marker — the first event of every TUI run, captured under
@@ -74,24 +78,11 @@ export function startTUI(
   };
   process.on('exit', cleanup);
 
-  // Ink unmounts itself on ctrl+c (exitOnCtrlC) but that alone doesn't
-  // end the process — background handles (e.g. the OAuth callback
-  // server) keep the event loop alive, leaving a zombie wizard with no
-  // UI. Follow the app teardown with a real exit.
-  void waitUntilExit().then(async () => {
-    // `cleaned` still false here means Ink tore itself down (ctrl+c) rather
-    // than a runner-driven exit — flush the terminal analytics event before
-    // the process dies, or interrupted runs vanish from the funnel entirely.
-    // shutdown() is a no-op when a runner already reported a real status.
-    const interrupted = !cleaned;
+  // Unmounting alone doesn't end the process — background handles (e.g. the
+  // OAuth callback server) keep the event loop alive, leaving a zombie wizard
+  // with no UI. Follow the app teardown with a real exit.
+  void waitUntilExit().then(() => {
     cleanup();
-    if (interrupted) {
-      try {
-        await analytics.shutdown('cancelled');
-      } catch {
-        /* never block exit on a flush failure */
-      }
-    }
     process.exit(process.exitCode ?? 0);
   });
 

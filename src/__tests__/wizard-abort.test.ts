@@ -5,6 +5,10 @@ import {
   registerCleanup,
   clearCleanup,
   runCleanups,
+  wizardCancel,
+  registerCancelHook,
+  clearCancel,
+  installCancelSignals,
 } from '@utils/wizard-abort';
 import { analytics } from '@utils/analytics';
 import { ErrorCodes } from '@shared/errors';
@@ -254,6 +258,97 @@ describe('runCleanups', () => {
     registerCleanup(() => calls.push('after'));
     runCleanups();
     expect(calls).toEqual(['after']);
+  });
+});
+
+describe('wizardCancel', () => {
+  let exit: MockInstance<typeof process.exit>;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    clearCleanup();
+    clearCancel();
+    mockAnalytics.shutdown = vi.fn().mockResolvedValue(undefined);
+    exit = vi
+      .spyOn(process, 'exit')
+      .mockImplementation(() => undefined as never);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it('runs the cleanups, then the cancel hooks, then analytics, then exits 130', async () => {
+    const order: string[] = [];
+    registerCleanup(() => order.push('cleanup'));
+    registerCancelHook(async () => {
+      order.push('hook');
+    });
+    mockAnalytics.shutdown.mockImplementation(async (status) => {
+      order.push(`analytics:${status}`);
+    });
+    exit.mockImplementation((() => order.push('exit')) as never);
+
+    await wizardCancel('ctrl+c');
+
+    expect(order).toEqual(['cleanup', 'hook', 'analytics:cancelled', 'exit']);
+    expect(exit).toHaveBeenCalledExactlyOnceWith(130);
+  });
+
+  it.each([
+    ['SIGINT', 130],
+    ['SIGTERM', 143],
+    ['SIGHUP', 129],
+  ] as const)(
+    'exits %s as 128 plus the signal number',
+    async (signal, code) => {
+      await wizardCancel(signal);
+      expect(exit).toHaveBeenCalledExactlyOnceWith(code);
+    },
+  );
+
+  it('exits at once on a second cancel while the first is settling', async () => {
+    registerCancelHook(() => new Promise<void>(() => undefined));
+    void wizardCancel('ctrl+c');
+    await wizardCancel('ctrl+c');
+    expect(exit).toHaveBeenCalledExactlyOnceWith(130);
+  });
+
+  it('exits when a cancel hook hangs or throws', async () => {
+    vi.useFakeTimers();
+    registerCancelHook(() => new Promise<void>(() => undefined));
+    registerCancelHook(() => {
+      throw new Error('stream gone');
+    });
+    const cancelled = wizardCancel('SIGTERM');
+    await vi.advanceTimersByTimeAsync(2000);
+    await cancelled;
+    expect(exit).toHaveBeenCalledExactlyOnceWith(143);
+  });
+
+  it('skips a hook whose remover ran', async () => {
+    const hook = vi.fn();
+    registerCancelHook(hook)();
+    await wizardCancel('ctrl+c');
+    expect(hook).not.toHaveBeenCalled();
+  });
+});
+
+describe('installCancelSignals', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('routes SIGINT, SIGTERM and SIGHUP to one cancel, and removes them', () => {
+    const on = vi.spyOn(process, 'on').mockReturnValue(process);
+    const off = vi.spyOn(process, 'off').mockReturnValue(process);
+    const remove = installCancelSignals();
+    expect(on.mock.calls.map(([signal]) => signal)).toEqual([
+      'SIGINT',
+      'SIGTERM',
+      'SIGHUP',
+    ]);
+    remove();
+    expect(off.mock.calls).toEqual(on.mock.calls);
   });
 });
 

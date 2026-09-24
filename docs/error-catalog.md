@@ -153,8 +153,8 @@ signal is available.
   stderr code for the same session id.
 - **Decide:** use the catalog `retry` column for re-run policy; `no` codes need
   human/config intervention, `yes` codes are safe to retry after backoff.
-- **Zero exit without a code** means success or a Ctrl-C style cancel (exit 130
-  / user dismissal).
+- **No code** means success (exit 0) or a cancel: exit 130 for Ctrl-C or
+  SIGINT, 143 for SIGTERM, 129 for SIGHUP.
 
 ## Extending the catalog
 
