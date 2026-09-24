@@ -20,10 +20,6 @@ import {
   type EnvKeyLocations,
 } from '@utils/env-scan';
 import { scanInstalledSkill } from '@agent/yara-hooks';
-import {
-  forgetCleanProjectSkill,
-  scanAndCacheInstalledProjectSkill,
-} from '@agent/skill-preflight';
 import type { LLMProvider } from '@posthog/warlock';
 import { writeJsonAtomic, makeMutex } from '@utils/atomic-ledger';
 import {
@@ -77,14 +73,8 @@ export async function downloadSkill(
     // that fails to load throws from here. Left as `extract` that lands on the
     // event as an unzip failure, which the pure-JS unzip cannot produce.
     step = 'scan';
-    const isProjectSkill =
-      path.resolve(path.dirname(receipt.skillDir)) ===
-      path.resolve(installDir, '.claude', 'skills');
-    const poisonReason = isProjectSkill
-      ? await scanAndCacheInstalledProjectSkill(receipt.skillDir, triage)
-      : await scanInstalledSkill(receipt.skillDir, triage);
+    const poisonReason = await scanInstalledSkill(receipt.skillDir, triage);
     if (poisonReason) {
-      forgetCleanProjectSkill(receipt.skillDir);
       receipt.rollback();
       logToFile(`downloadSkill: ${poisonReason}`);
       analytics.wizardCapture('skill install failed', {
@@ -106,7 +96,6 @@ export async function downloadSkill(
     });
     return { success: true };
   } catch (err: any) {
-    if (receipt) forgetCleanProjectSkill(receipt.skillDir);
     receipt?.rollback();
     logToFile(`downloadSkill: error: ${err.message}`);
     // A skill-less run still reports success — keep the failure visible.

@@ -234,7 +234,7 @@ async function executeLinear(
   if (classification === AgentErrorType.YARA_VIOLATION) {
     return failed({
       code: AGENT_ERROR_CODE[AgentErrorType.YARA_VIOLATION],
-      message: failureMessage ?? formatYaraAbortMessage(),
+      message: formatYaraAbortMessage(),
       error: agentResult.kind === 'failure' ? agentResult.error : undefined,
     });
   }

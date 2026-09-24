@@ -47,7 +47,6 @@ import {
   createPostToolUseYaraHooks,
   prewarmYaraScanner,
 } from '@agent/yara-hooks';
-import { scanProjectSkills } from './skill-preflight';
 import { createTriageLLMProvider } from './triage-provider';
 import type { LLMProvider } from '@posthog/warlock';
 import { assembleCommandments } from './runner/switchboard/commandments';
@@ -991,41 +990,6 @@ export async function runAgent(
     if (warlockDisabled) {
       logToFile('[warlock] scanning disabled for run (local env override)');
       analytics.wizardCapture('warlock disabled', { reason: 'env-override' });
-    } else {
-      // The SDK auto-loads every project skill before any tool hook runs. Scan
-      // that exact directory before starting the first SDK query, including
-      // skills that were present before this Wizard run.
-      try {
-        const findings = await scanProjectSkills(
-          agentConfig.workingDirectory,
-          triageProvider,
-        );
-        if (findings.length > 0) {
-          const names = findings.map(({ skillDir }) => path.basename(skillDir));
-          logToFile('[YARA] project skill preflight stopped run:', findings);
-          spinner.stop('Security check stopped the setup');
-          return {
-            kind: 'failure',
-            classification: AgentErrorType.YARA_VIOLATION,
-            message:
-              `Security check found a critical issue in project skill ${names.join(
-                ', ',
-              )}. ` +
-              'Setup stopped before loading it. Review or remove the skill before retrying.',
-          };
-        }
-      } catch (error) {
-        const detail = error instanceof Error ? error.message : String(error);
-        logToFile('[YARA] project skill preflight failed:', error);
-        spinner.stop('Security check stopped the setup');
-        return {
-          kind: 'failure',
-          classification: AgentErrorType.YARA_VIOLATION,
-          message:
-            `Security check could not scan project skills (${detail}). ` +
-            'Setup stopped before loading them.',
-        };
-      }
     }
 
     // Seed the AIO capture with the initial prompt so the first assistant
