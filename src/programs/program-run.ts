@@ -1,7 +1,7 @@
 /**
  * A program's run definition: the agent's `AgentRunDefinition` plus the
  * completion hooks that read the session. The agent never calls these —
- * `src/lib/runners/run-program-agent.ts` binds them to the run's credentials and hands the
+ * `run-agent-legacy.ts` binds them to the run's credentials and hands the
  * agent `RunConfig.hooks`.
  */
 

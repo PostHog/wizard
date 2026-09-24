@@ -211,8 +211,6 @@ export type AgentConfig = {
    * another program's budget, so neither should depend on an optional string bag.
    */
   programId: string;
-  /** Program-owned guidance supplied as data, never looked up here. */
-  programCommandments?: readonly string[];
   /** Program identifier — selects the model for that program. */
   integrationLabel?: string;
   /**
@@ -357,8 +355,8 @@ type AgentRunConfig = {
    * bearer.
    */
   refreshGatewayAuth?: () => Promise<GatewayAuth>;
-  /** Program-owned guidance supplied as data. */
-  programCommandments?: readonly string[];
+  /** Program id, for the program-axis commandments. */
+  program?: string;
   /** Resolved sequence, for the sequence-axis commandments. */
   sequence: Sequence;
   /** Where the run reports. A no-op when the caller passed none. */
@@ -367,7 +365,30 @@ type AgentRunConfig = {
 
 const NO_PROGRESS: ProgressEmitter = () => undefined;
 
-export { buildRunTags } from '@shared/run-tags';
+/**
+ * Global identifiers attached to every LLM gateway trace for a run. They ride on
+ * each `$ai_generation` the gateway emits (in the `X-PostHog-Properties` blob
+ * `buildAgentEnv` builds), so traces are filterable by program, framework, run,
+ * and build type for cost attribution and dashboards. `skill_id` is omitted when
+ * the run has none.
+ */
+export function buildRunTags(args: {
+  programId: string;
+  integration: string;
+  runId: string;
+  build: string;
+  skillId?: string;
+}): Record<string, string> {
+  return {
+    program_id: args.programId,
+    integration: args.integration,
+    run_id: args.runId,
+    build: args.build,
+    // Triage and detection spread these tags and override this one.
+    call_type: CallType.agent,
+    ...(args.skillId ? { skill_id: args.skillId } : {}),
+  };
+}
 
 /**
  * Whether Warlock/YARA scanning is disabled for this run. Off by default:
@@ -648,7 +669,7 @@ export async function initializeAgent(
       triageProvider,
       gatewayAuth: auth,
       refreshGatewayAuth: currentGatewayAuth,
-      programCommandments: config.programCommandments,
+      program: config.integrationLabel,
       // A queue context is present only on a task run; that is the sequence.
       sequence: config.orchestrator ? Sequence.orchestrator : Sequence.linear,
       emit,
@@ -1148,7 +1169,7 @@ export async function runAgent(
             // we keep default Claude Code behaviors. An orchestrator context is
             // present only on a task run — that is what picks the sequence.
             append: assembleCommandments({
-              programCommandments: agentConfig.programCommandments,
+              program: agentConfig.program,
               sequence: agentConfig.sequence,
               harness: Harness.anthropic,
             }),

@@ -10,7 +10,7 @@ import {
   startFileWatcher,
   type FileWatcherHandle,
   type FileWatcherOptions,
-} from '@shared/file-watcher';
+} from '@lib/file-watcher';
 import { logToFile } from '@utils/debug';
 import { AUDIT_CHECKS_KEY, coerceAuditChecks } from './types.js';
 

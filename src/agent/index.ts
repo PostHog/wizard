@@ -10,31 +10,29 @@
 
 /**
  * Stays. The agent's contract: the one way to run it, the marker strings
- * program prompts embed, the tool ids programs put in allowedTools and
- * disallowedTools, and what programs resolve a binding with: the default
- * binding, the harness axis and each harness's task capability.
+ * program prompts embed, and the tool ids programs put in allowedTools and
+ * disallowedTools.
  */
 export type * from './types';
 export { runAgent, RunOutcome } from './runner';
 export { AgentSignals } from './agent-interface';
 export { WIZARD_TOOL_NAMES } from './tools';
-export { DEFAULT_AGENT_BINDING } from './default-binding';
-export {
-  harnessRunsTasks,
-  resolveHarness,
-} from './runner/switchboard/resolve-harness';
 
 /**
- * Leaves in B2. shouldDisableAsk is a flags policy programs decide and pass
- * in; LONGER_ASK_TIMEOUT_MS is a tuning number programs own as askTimeoutMs.
+ * Leaves in B2 (B1 deferred the bindings). Bindings and program data move to
+ * programs: resolveBinding
+ * is keyed by PROGRAM_BINDINGS and the agent keeps only "run from an
+ * already-resolved binding"; shouldDisableAsk is a flags policy programs
+ * decide and pass in; LONGER_ASK_TIMEOUT_MS is a tuning number programs own
+ * as askTimeoutMs.
  */
-export { shouldDisableAsk } from './runner';
+export { resolveBinding, shouldDisableAsk } from './runner';
 export { LONGER_ASK_TIMEOUT_MS } from './wizard-ask-bridge';
 
 /**
  * Leaves in B2. Programs own credentials and the legacy adapter dies.
  * initializeAgent, executeAgent and buildRunTags are the pre-runAgent surface
- * that detection/agentic.ts and run-program-agent.ts still call; they go
+ * that detection/agentic.ts and run-agent-legacy.ts still call; they go
  * through runAgent or leave with detection, and AgentErrorType, which
  * classifies executeAgent's failures, goes with them.
  * configureGatewayFromCIEnvironment is CI inference auth the headless provider

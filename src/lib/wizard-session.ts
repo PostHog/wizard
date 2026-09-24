@@ -11,7 +11,6 @@
  */
 
 import { POSTHOG_LOCAL_URL, resolveLocalDev } from '@shared/local-dev';
-import { DiscoveredFeature } from '@shared/scan-consent';
 import {
   AdditionalFeature,
   ADDITIONAL_FEATURE_LABELS,
@@ -68,7 +67,11 @@ export enum RunPhase {
   Error = 'error',
 }
 
-export { DiscoveredFeature };
+/** Features discovered by the feature-discovery subagent */
+export enum DiscoveredFeature {
+  Stripe = 'stripe',
+  LLM = 'llm',
+}
 
 /** Consent to report what local detection found (see `scanConsent` below). */
 export enum ScanConsent {
@@ -455,8 +458,21 @@ export function buildSession(args: {
   };
 }
 
-export {
-  mayReportScanResults,
-  reportableDiscoveredFeatures,
-  reportablePosthogSdkDetected,
-} from '@shared/scan-consent';
+/** One place to ask, so a new consent state does not need three edits. */
+export function mayReportScanResults(session: WizardSession): boolean {
+  return session.scanConsent === ScanConsent.Granted;
+}
+
+/** Lives here so analytics infrastructure never learns what consent means. */
+export function reportableDiscoveredFeatures(
+  session: WizardSession,
+): DiscoveredFeature[] | undefined {
+  return mayReportScanResults(session) ? session.discoveredFeatures : undefined;
+}
+
+/** Also a scan result, so it travels under the same consent as the rest. */
+export function reportablePosthogSdkDetected(
+  session: WizardSession,
+): boolean | undefined {
+  return mayReportScanResults(session) ? session.posthogSdkDetected : undefined;
+}

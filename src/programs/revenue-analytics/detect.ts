@@ -7,6 +7,7 @@
 
 import { existsSync, statSync } from 'fs';
 import type { WizardSession } from '@lib/wizard-session';
+import type { AbortCase } from '@agent/types';
 import { findPackageJsons } from '@programs/shared/package-scanning';
 
 export {
@@ -31,7 +32,29 @@ export type RevenueDetectError =
   | { kind: 'missing-posthog'; foundStripe: string[] }
   | { kind: 'missing-stripe'; foundPosthog: string[] };
 
-export { REVENUE_ABORT_CASES } from './abort-cases.js';
+/** `[ABORT] <reason>` cases the revenue analytics skill can emit. */
+export const REVENUE_ABORT_CASES: AbortCase[] = [
+  {
+    // Skill emits: [ABORT] Could not find a PostHog distinct_id
+    match: /^could not find a posthog distinct_id$/i,
+    message: 'Could not find a PostHog distinct_id',
+    body:
+      'The agent could not find PostHog distinct_id usage in your codebase. ' +
+      'Your users must be identified in PostHog before they can be tagged in Stripe. ' +
+      'Please identify your users and try again.',
+    docsUrl: 'https://posthog.com/docs/product-analytics/identify',
+  },
+  {
+    // Skill emits: [ABORT] Could not find a Stripe integration
+    match: /^could not find a stripe integration$/i,
+    message: 'Could not find a Stripe integration',
+    body:
+      'The Wizard could not find an existing Stripe customer, charge, ' +
+      'subscription, or other Stripe operations. Please run the Revenue ' +
+      'Analytics Wizard on a project with an existing Stripe integration.',
+    docsUrl: 'https://posthog.com/docs/revenue-analytics',
+  },
+];
 
 /**
  * Scan `session.installDir` for PostHog + Stripe SDKs. Writes detection

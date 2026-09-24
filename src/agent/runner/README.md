@@ -23,7 +23,7 @@ retained for very simple tasks and legacy support. The Anthropic Agent SDK is a
 supported legacy fallback, deprecated as the default, retained for major Pi
 vulnerabilities or gaps in support for new Anthropic models.
 
-`DEFAULT_AGENT_BINDING`, the standalone default, is Pi + linear; explicit program bindings
+Existing `DEFAULT_BINDING` remains Anthropic + linear; explicit program bindings
 and flags determine actual behavior. Both harnesses implement `run` and
 `runTask`. Composed sub-runs are clamped to linear, and linear-only
 post-run/outro hooks do not automatically transfer to an orchestrated flow.
@@ -45,22 +45,21 @@ resolved execution data and an invocation snapshot (`shared/types.ts`), reports
 through `onProgress` and asks through `interaction` (`../progress.ts`), and
 returns every ending as a result. It never renders, reads a session or exits.
 The gates, OAuth, flags and binding lookup that used to run here live in
-`src/lib/runners/run-program-agent.ts`, which also maps progress back onto
+`src/programs/run-agent-legacy.ts`, which also maps progress back onto
 `getUI()` for today's runners.
 
 **Prepare** (`shared/bootstrap.ts`) is the on-ramp inside the agent: logging
 targets, the gateway mint and the scan-triage classifier. Whether the run turns
 out to be linear or orchestrator, anthropic or pi, the setup is the same.
 
-**The switchboard** (`switchboard/`) holds the sequence and harness registries
-and the harness axis. Programs resolve the binding (`resolveProgramBinding`):
-the sequence precedence lives there, and the harness and model come from this
-layer's `resolveHarness` (CLI > flag > program config >
-default). `harnessRunsTasks` tells programs which harnesses the orchestrator can
-drive.
+**The switchboard** (`switchboard/`) is the router. Given a program id + the
+fetched flags + any CLI overrides, it returns a `ProgramBinding` — which query
+shape (sequence), which agent SDK (harness), which model. Two independent
+middleware chains, one per axis, apply precedence rules (CLI > flag > program
+config > default). This is the only layer that makes routing decisions.
 
-**Sequences** (`sequence/`) are LLM query shapes. Once the binding has picked
-one, that sequence takes over the run and owns _how the LLM's work is
+**Sequences** (`sequence/`) are LLM query shapes. Once the switchboard has
+picked one, that sequence takes over the run and owns _how the LLM's work is
 shaped_. See `sequence/README.md`.
 
 - **linear** — one long conversation with the model, start to finish.

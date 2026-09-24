@@ -5,7 +5,7 @@
  * invocation snapshot, reports through `options.onProgress`, asks through
  * `options.interaction`, and returns a `RunResult`. Nothing here names a UI,
  * a store, a session or a program registry: the caller resolves those and
- * hands over plain data. `src/lib/runners/run-program-agent.ts` is the caller
+ * hands over plain data. `src/programs/run-agent-legacy.ts` is the caller
  * that rebuilds today's session-driven behavior on top of this contract.
  */
 
@@ -21,6 +21,7 @@ import type { ErrorCode } from '@shared/errors';
 import type { LLMProvider } from '@posthog/warlock';
 import type { AgentInteraction, ProgressEmitter } from '@agent/progress';
 import type { EffortLevel } from '../switchboard/models';
+import type { SwitchboardCtx } from '../switchboard';
 
 export type { PromptContext, Credentials };
 
@@ -138,11 +139,6 @@ export interface ResolvedBinding {
   model: string;
   /** Reasoning-effort override. Absent → the model's table default. */
   thinkingLevel?: EffortLevel;
-  /** Role-specific routes resolved by the caller before the agent starts. */
-  roleBindings?: Record<
-    string,
-    { harness: Harness; model: string; thinkingLevel?: EffortLevel }
-  >;
 }
 
 /**
@@ -151,7 +147,7 @@ export interface ResolvedBinding {
  * treats every label as opaque.
  */
 export interface RunConfig {
-  /** Opaque program label for gateway spend pin and analytics. */
+  /** Program id: gateway spend pin, analytics label, commandments axis. */
   programId: string;
   /** The run definition. A program's session-taking hooks are the caller's, see `hooks`. */
   run: AgentRunDefinition;
@@ -159,12 +155,11 @@ export interface RunConfig {
   composed: boolean;
   /** Run-level sequence, harness and model. */
   binding: ResolvedBinding;
-  /** Program text selected by the caller; the agent only assembles it. */
-  programCommandments?: readonly string[];
-  /** Validated stage policy selected by the caller; absent keeps flow frontmatter. */
-  stageOverrides?: Record<string, { model?: string; effort?: EffortLevel }>;
-  /** The caller's resolved seeded-task experiment. */
-  seededTasksEnabled?: boolean;
+  /**
+   * The inputs the run-level binding was resolved from. The orchestrator
+   * re-resolves the harness per task role from these; nothing else reads them.
+   */
+  switchboard: SwitchboardCtx;
   /** Primary skills origin (context-mill dev or GitHub Releases). */
   skillsBaseUrl: string;
   /** Feature flag key → variant, evaluated before the run. */
