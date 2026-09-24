@@ -86,7 +86,7 @@ export function runWizard(
   void (async () => {
     try {
       const installDir = (options.installDir as string) || process.cwd();
-      // Covers installs before runProgram registers its own, such as the outage skill.
+      // Armed until a successful exit, so every failed or interrupted exit removes new skills.
       registerRunSkillCleanup(installDir);
 
       const { startTUI } = await import('@ui/tui/start-tui');
@@ -292,9 +292,8 @@ export function runWizard(
 
       await activeStream.shutdown(2000);
       if (signalled) return;
+      // Handlers stay attached, so a late signal cannot end the process before drain or commit.
       exitInProgress = true;
-      // Keep the handlers until process.exit so a signal cannot take the
-      // default termination path before cleanup is disarmed.
       if (runFailed) {
         runCleanups();
         await analytics.shutdown('error');

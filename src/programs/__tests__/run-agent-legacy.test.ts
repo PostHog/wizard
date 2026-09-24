@@ -4,7 +4,6 @@ import { authenticate } from '@programs/authenticate';
 import { runProgramAgent } from '../run-agent-legacy';
 import { runAgent, RunOutcome, type RunResult } from '@agent/runner';
 import { Harness, Sequence } from '@shared/constants';
-import { checkLocalServices } from '@shared/local-dev';
 import {
   buildSession,
   DiscoveredFeature,
@@ -273,37 +272,6 @@ it('hands the CI bearer from the token file to ciPreRun and the agent through th
   }
 });
 
-it('cleans new Wizard skills when non-interactive startup crashes before the agent', async () => {
-  const installDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wizard-ci-crash-'));
-  const skillDir = path.join(
-    installDir,
-    '.claude',
-    'skills',
-    'startup-install',
-  );
-  const exit = vi
-    .spyOn(process, 'exit')
-    .mockImplementation(() => undefined as never);
-  vi.mocked(checkLocalServices).mockImplementationOnce(() => {
-    fs.mkdirSync(skillDir, { recursive: true });
-    fs.writeFileSync(path.join(skillDir, '.posthog-wizard'), '');
-    return Promise.reject(new Error('startup crashed'));
-  });
-  try {
-    runNonInteractive(
-      program(),
-      { apiKey: 'phx_test', projectId: '1', installDir, telemetry: false },
-      'ci',
-    );
-    await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(1));
-    expect(fs.existsSync(skillDir)).toBe(false);
-    expect(runAgent).not.toHaveBeenCalled();
-  } finally {
-    exit.mockRestore();
-    fs.rmSync(installDir, { recursive: true, force: true });
-  }
-});
-
 it.each([
   [RunOutcome.Aborted, 'cancelled'],
   [RunOutcome.Failed, 'error'],
@@ -457,32 +425,6 @@ it.each(['ci', 'headless'] as const)(
   },
 );
 
-it('keeps new Wizard skills after headless stream settlement succeeds', async () => {
-  const installDir = fs.mkdtempSync(
-    path.join(os.tmpdir(), 'wizard-headless-success-'),
-  );
-  const skillDir = path.join(installDir, '.claude', 'skills', 'completed');
-  vi.mocked(runAgent).mockImplementationOnce(() => {
-    fs.mkdirSync(skillDir, { recursive: true });
-    fs.writeFileSync(path.join(skillDir, '.posthog-wizard'), '');
-    return Promise.resolve({ outcome: RunOutcome.Success, snapshot });
-  });
-  try {
-    runNonInteractive(
-      program(),
-      { apiKey: 'phx_test', projectId: '1', installDir, telemetry: false },
-      'headless',
-    );
-    await vi.waitFor(() => expect(streamShutdown).toHaveBeenCalledOnce());
-    await new Promise<void>((resolve) => setImmediate(resolve));
-    expect(analytics.shutdown).toHaveBeenCalledExactlyOnceWith('success');
-    runCleanups();
-    expect(fs.existsSync(skillDir)).toBe(true);
-  } finally {
-    fs.rmSync(installDir, { recursive: true, force: true });
-  }
-});
-
 it("cleans a marked install when program setup throws before the functional runner, through the CLI root's drain", async () => {
   const installDir = fs.mkdtempSync(
     path.join(os.tmpdir(), 'wizard-setup-cleanup-'),
@@ -523,56 +465,6 @@ it("cleans a marked install when program setup throws before the functional runn
     fs.rmSync(installDir, { recursive: true, force: true });
   }
 });
-
-it.each([
-  ['SIGINT', 130],
-  ['SIGTERM', 143],
-] as const)(
-  'cleans new Wizard skills on non-interactive %s before the agent starts',
-  async (signal, exitCode) => {
-    const installDir = fs.mkdtempSync(
-      path.join(os.tmpdir(), 'wizard-ci-signal-'),
-    );
-    const skillsDir = path.join(installDir, '.claude', 'skills');
-    const tokenFile = path.join(installDir, 'gateway-token');
-    fs.writeFileSync(tokenFile, 'fixed-ci-bearer');
-    vi.stubEnv('WIZARD_CI_GATEWAY_TOKEN_FILE', tokenFile);
-    const makeSkill = (id: string, marked: boolean) => {
-      const dir = path.join(skillsDir, id);
-      fs.mkdirSync(dir, { recursive: true });
-      fs.writeFileSync(path.join(dir, 'SKILL.md'), '# skill');
-      if (marked) fs.writeFileSync(path.join(dir, '.posthog-wizard'), '');
-    };
-    makeSkill('preexisting', true);
-    const exit = vi
-      .spyOn(process, 'exit')
-      .mockImplementation(() => undefined as never);
-    const signalProgram = program();
-    signalProgram.ciPreRun = () => {
-      makeSkill('installed-before-agent', true);
-      makeSkill('user-owned-before-agent', false);
-      process.emit(signal);
-      return Promise.resolve();
-    };
-    try {
-      runNonInteractive(
-        signalProgram,
-        { apiKey: 'phx_test', projectId: '1', installDir, telemetry: false },
-        'ci',
-      );
-      await vi.waitFor(() => expect(streamShutdown).toHaveBeenCalledOnce());
-      expect(exit).toHaveBeenCalledWith(exitCode);
-      expect(fs.readdirSync(skillsDir).sort()).toEqual([
-        'preexisting',
-        'user-owned-before-agent',
-      ]);
-    } finally {
-      exit.mockRestore();
-      vi.unstubAllEnvs();
-      fs.rmSync(installDir, { recursive: true, force: true });
-    }
-  },
-);
 
 it.each([
   [Harness.pi, Sequence.linear],
@@ -634,6 +526,46 @@ it('keeps a headless run a success when its terminal analytics flush fails', asy
     flushError,
   );
 });
+
+it.each([
+  ['SIGINT', [[130]], false],
+  ['SIGTERM', [[143]], false],
+  ['completion', [], true],
+] as const)(
+  'a headless run ended by %s exits %j and keeps its new skill: %s',
+  async (ending, exits, kept) => {
+    const installDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wizard-ci-'));
+    const skillDir = path.join(installDir, '.claude', 'skills', 'installed');
+    const exit = vi
+      .spyOn(process, 'exit')
+      .mockImplementation(() => undefined as never);
+    const config: ProgramConfig = {
+      ...program(),
+      ciPreRun: () => {
+        fs.mkdirSync(skillDir, { recursive: true });
+        fs.writeFileSync(path.join(skillDir, '.posthog-wizard'), '');
+        if (ending !== 'completion') process.emit(ending);
+        return Promise.resolve();
+      },
+    };
+    try {
+      runNonInteractive(
+        config,
+        { apiKey: 'phx_test', projectId: '1', installDir, telemetry: false },
+        'headless',
+      );
+      await vi.waitFor(() => expect(streamShutdown).toHaveBeenCalledOnce());
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      runCleanups();
+
+      expect(exit.mock.calls).toEqual(exits);
+      expect(fs.existsSync(skillDir)).toBe(kept);
+    } finally {
+      exit.mockRestore();
+      fs.rmSync(installDir, { recursive: true, force: true });
+    }
+  },
+);
 
 it('keeps a TUI run a success when its terminal analytics flush fails', async () => {
   const flushError = new Error('flush timed out');

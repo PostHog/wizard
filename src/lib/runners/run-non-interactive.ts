@@ -134,7 +134,7 @@ export function runNonInteractive(
       ? (options.installDir as string)
       : path.join(process.cwd(), options.installDir as string);
 
-    // Covers installs before runProgram registers its own, such as the outage skill.
+    // Armed until the run completes, so every failed or interrupted exit removes new skills.
     registerRunSkillCleanup(installDir);
     const onSigint = () => {
       runCleanups();

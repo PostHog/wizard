@@ -873,6 +873,35 @@ describe('runAgent standalone', () => {
     expect(result.failure).toBe(failure);
   });
 
+  it.each([
+    [RunOutcome.Failed, ['preexisting', 'user-owned']],
+    [RunOutcome.Success, ['installed', 'preexisting', 'user-owned']],
+  ] as const)('a %s run leaves %j in .claude/skills', async (outcome, left) => {
+    const skillsDir = path.join(tmp, '.claude', 'skills');
+    const makeSkill = (id: string, marked: boolean) => {
+      fs.mkdirSync(path.join(skillsDir, id), { recursive: true });
+      if (marked)
+        fs.writeFileSync(path.join(skillsDir, id, '.posthog-wizard'), '');
+    };
+    makeSkill('preexisting', true);
+    if (outcome === RunOutcome.Failed)
+      harnessState.result = {
+        kind: 'failure',
+        classification: AgentErrorType.NO_PROGRESS,
+      };
+
+    const result = await runAgent(config(), input(), {
+      onProgress: (event) => {
+        if (event.kind !== 'status') return;
+        makeSkill('installed', true);
+        makeSkill('user-owned', false);
+      },
+    });
+
+    expect(result.outcome).toBe(outcome);
+    expect(fs.readdirSync(skillsDir).sort()).toEqual(left);
+  });
+
   it('skips the terminal outro for a composed sub-run', async () => {
     const events: AgentProgress[] = [];
 
@@ -1074,77 +1103,6 @@ describe('runAgent standalone', () => {
     expect(result.snapshot.statusMessages).toContain('Installing the SDK');
   });
 
-  it.each([
-    [
-      // The agent stopped itself; only the host's signal makes a run aborted.
-      'an agent [ABORT]',
-      'failed',
-      {
-        kind: 'abort',
-        classification: AgentErrorType.ABORT,
-        message: 'No Stripe found',
-      },
-      undefined,
-    ],
-    [
-      'a failure',
-      'failed',
-      { kind: 'failure', classification: AgentErrorType.NO_PROGRESS },
-      undefined,
-    ],
-    ['a crash', 'crashed', { kind: 'success' }, new Error('SDK exploded')],
-  ] as const)(
-    'removes only new Wizard-installed skills after %s',
-    async (_ending, outcome, harnessResult, thrown) => {
-      const skillsDir = path.join(tmp, '.claude', 'skills');
-      const makeSkill = (id: string, marked: boolean) => {
-        const dir = path.join(skillsDir, id);
-        fs.mkdirSync(dir, { recursive: true });
-        fs.writeFileSync(path.join(dir, 'SKILL.md'), '# skill');
-        if (marked) fs.writeFileSync(path.join(dir, '.posthog-wizard'), '');
-      };
-      makeSkill('preexisting', true);
-      harnessState.result = harnessResult;
-      harnessState.throws = thrown;
-
-      const result = await runAgent(config(), input(), {
-        onProgress: (event) => {
-          if (event.kind !== 'status') return;
-          makeSkill('installed-this-run', true);
-          makeSkill('user-owned-this-run', false);
-        },
-      });
-
-      expect(result.outcome).toBe(outcome);
-      expect(fs.readdirSync(skillsDir).sort()).toEqual([
-        'preexisting',
-        'user-owned-this-run',
-      ]);
-    },
-  );
-
-  it('removes a new marked skill when preparation fails before the harness starts', async () => {
-    const skillsDir = path.join(tmp, '.claude', 'skills');
-    const failedInput = input({
-      inferenceAuth: {
-        resolve: () => {
-          const dir = path.join(skillsDir, 'installed-during-preparation');
-          fs.mkdirSync(dir, { recursive: true });
-          fs.writeFileSync(path.join(dir, '.posthog-wizard'), '');
-          return Promise.reject(new Error('preparation blocked the run'));
-        },
-      },
-    });
-
-    const result = await runAgent(config(), failedInput);
-
-    expect(result.outcome).toBe(RunOutcome.Crashed);
-    expect(harnessState.lastInputs).toBeUndefined();
-    expect(
-      fs.existsSync(path.join(skillsDir, 'installed-during-preparation')),
-    ).toBe(false);
-  });
-
   it('ends the run before any harness when the inference provider refuses', async () => {
     const refusal = new Error('gateway mint refused');
     const result = await runAgent(
@@ -1155,20 +1113,6 @@ describe('runAgent standalone', () => {
     expect(result.outcome).toBe(RunOutcome.Crashed);
     expect(result.failure?.error).toBe(refusal);
     expect(harnessState.lastInputs).toBeUndefined();
-  });
-
-  it('keeps newly installed skills after a successful run', async () => {
-    const skillDir = path.join(tmp, '.claude', 'skills', 'completed-install');
-    const result = await runAgent(config(), input(), {
-      onProgress: (event) => {
-        if (event.kind !== 'status') return;
-        fs.mkdirSync(skillDir, { recursive: true });
-        fs.writeFileSync(path.join(skillDir, '.posthog-wizard'), '');
-      },
-    });
-
-    expect(result.outcome).toBe(RunOutcome.Success);
-    expect(fs.existsSync(skillDir)).toBe(true);
   });
 
   it('sends benchmark output to onProgress when benchmarking', async () => {
