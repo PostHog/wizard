@@ -12,8 +12,8 @@
  * registry actions (publish/push/deploy), arbitrary-package execution
  * (`npx <anything>` downloads and runs it), and shell injection. Matching is
  * token-exact per manager — keyword prefixes admitted `npm publish` via `pub`.
- * `rm` is allowed only as a plain delete of files inside the project root, the
- * same tree the anthropic sandbox lets bash write to.
+ * `rm` is allowed only as a plain delete of named files inside the project
+ * root.
  */
 import fs from 'fs';
 import path from 'path';
@@ -469,7 +469,7 @@ function commandDecision(
   );
 }
 
-/** True when a target resolves to a file strictly inside the project root. */
+/** True when a target names a non-env file strictly inside the project root, with no flag, glob, or `..`. */
 function isDeletableProjectFile(
   target: string,
   root: string,
@@ -482,8 +482,11 @@ function isDeletableProjectFile(
 
   // Compare real paths, so a symlinked directory on the way can't lead out.
   const resolved = p.resolve(root, target);
-  const real = p.join(realPathOf(p.dirname(resolved), p), p.basename(resolved));
-  return real.startsWith(realPathOf(root, p) + p.sep);
+  const realTarget = p.join(
+    realPathOf(p.dirname(resolved), p),
+    p.basename(resolved),
+  );
+  return realTarget.startsWith(realPathOf(root, p) + p.sep);
 }
 
 /** `target` with its deepest existing ancestor's symlinks resolved; a missing tail stays as written. */

@@ -125,7 +125,8 @@ const str = (v: unknown): string => (typeof v === 'string' ? v : '');
 
 /** A pi tool path as pi opens it: its `resolveToCwd` strips a leading `@` and decodes `file://`. */
 function piToolPath(v: unknown): string {
-  const p = str(v).startsWith('@') ? str(v).slice(1) : str(v);
+  const raw = str(v);
+  const p = raw.startsWith('@') ? raw.slice(1) : raw;
   if (!p.startsWith('file://')) return p;
   try {
     return fileURLToPath(p);
