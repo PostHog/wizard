@@ -11,6 +11,7 @@ import type {
   RunResult,
 } from '@agent/types';
 import { getSkillsBaseUrl } from '@shared/constants';
+import type { Credentials } from '@shared/api';
 import type { Harness, Integration, Sequence } from '@shared/constants';
 import { ErrorCodes } from '@shared/errors';
 import { buildRunTags } from '@shared/run-tags';
@@ -36,11 +37,6 @@ import { resolveProgramBinding } from './binding';
 import { getProgramCommandments } from './commandments';
 import { areSeededTasksEnabled, resolveStageOverrides } from './experiments';
 import { captureSwitchboardDecision } from './binding-telemetry';
-import {
-  runNoAgentProgram,
-  type NoAgentMcpPort,
-  type NoAgentProgramOptions,
-} from './no-agent';
 import type { ProgramRunDefinitionInput } from './resolve-run-definition';
 import {
   resolvePosthogIntegrationRun,
@@ -87,7 +83,6 @@ export interface ProgramInput extends ProgramRunDefinitionInput {
   integration?: Integration | null;
   frameworkDocsUrl?: string;
   flags?: Partial<RunInput['flags']>;
-  mcp?: { features?: string[]; apiKey?: string };
   host?: RunInput['host'];
   /** Evaluated flags; when absent, runProgram asks options.featureFlags. */
   wizardFlags?: Record<string, string>;
@@ -155,9 +150,17 @@ export interface ProgramOptions {
   credentials?: CredentialsProvider;
   interaction?: AgentInteraction;
   onProgress?: (progress: ProgramProgress) => void;
-  mcp?: NoAgentMcpPort;
   workflow?: ProgramWorkflowConnector;
-  noAgentWorkflow?: NoAgentProgramOptions['workflow'];
+  /** Runs a no-agent program, such as mcp-tutorial or slack, in the host. */
+  noAgentWorkflow?: (request: {
+    programId: string;
+    installDir: string;
+    credentials?: Credentials;
+    signal: AbortSignal;
+  }) => Promise<{
+    outcome: 'success' | 'aborted';
+    data?: Record<string, unknown>;
+  }>;
   /** Without getNotebookUrl, the outro reads the notebook URL the run emitted. */
   integrationEffects?: PosthogIntegrationRunEffects;
   /** Wait for the host's AI-processing approval gate when org approval is absent. */
@@ -182,7 +185,7 @@ export interface ProgramRunOutcome {
   progress: ProgramStoreProjection;
   /** Actual completed agent invocations, in settlement order. */
   settledRuns: SettledProgramRun[];
-  /** Program-specific outcome data, such as doctor issues or MCP client results. */
+  /** The data a no-agent workflow returned. */
   programData?: Record<string, unknown>;
   artifacts: { reportFile?: string };
   failure?: RunResult['failure'];
@@ -341,31 +344,28 @@ async function runProgramWithStore(
     }
   }
   if (program.strategy === 'no-agent') {
-    const result = await runNoAgentProgram(
-      programId,
-      {
+    if (!options.noAgentWorkflow) {
+      return settle(RunOutcome.Failed, {
+        code: ErrorCodes.CliInteractiveRequired,
+        message: `${programId} requires an interactive workflow.`,
+      });
+    }
+    let result;
+    try {
+      result = await options.noAgentWorkflow({
+        programId,
         installDir: input.installDir,
         credentials: credentials?.posthog,
-        mcp: { ...input.mcp, local: input.flags?.localMcp },
-      },
-      {
-        mcp: options.mcp,
-        workflow: options.noAgentWorkflow,
-        signal: options.signal,
-      },
-    );
+        signal,
+      });
+    } catch (error) {
+      if (signal.aborted) return cancelled();
+      return fail(error instanceof Error ? error.message : String(error));
+    }
     if (signal.aborted) return cancelled();
     return {
       ...settle(
-        result.outcome === 'interactive-required'
-          ? RunOutcome.Failed
-          : (result.outcome as RunOutcome),
-        'failure' in result
-          ? {
-              ...result.failure,
-              code: result.failure.code ?? ErrorCodes.InternalUnhandled,
-            }
-          : undefined,
+        result.outcome === 'aborted' ? RunOutcome.Aborted : RunOutcome.Success,
       ),
       programData: result.data,
     };

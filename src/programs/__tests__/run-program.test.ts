@@ -533,31 +533,32 @@ describe('runProgram', () => {
     }
   });
 
-  it('runs a no-agent program through a host capability without credentials', async () => {
-    vi.mocked(getRuntimeProgramConfig).mockReturnValueOnce({
-      id: 'mcp-add',
+  it('hands a no-agent program to the host workflow, and fails without one', async () => {
+    vi.mocked(getRuntimeProgramConfig).mockReturnValue({
+      id: 'slack',
       strategy: 'no-agent',
-      requiresAi: false,
     });
-    const mcp = {
-      detectSupportedClients: vi.fn().mockResolvedValue(['Claude']),
-      add: vi.fn().mockResolvedValue([{ name: 'Claude', status: 'changed' }]),
-      detectInstalledClients: vi.fn(),
-      remove: vi.fn(),
-    };
+    const noAgentWorkflow = vi
+      .fn()
+      .mockResolvedValue({ outcome: 'success', data: { connected: true } });
 
-    const result = await runProgram(
-      'mcp-add',
-      { installDir: '/project' },
-      { mcp },
+    expect(await runProgram('slack', { installDir: '/project' })).toMatchObject(
+      {
+        outcome: RunOutcome.Failed,
+        failure: { code: ErrorCodes.CliInteractiveRequired },
+      },
     );
-
-    expect(result).toMatchObject({
-      programId: 'mcp-add',
-      outcome: 'success',
-      programData: { kind: 'mcp-add', installed: ['Claude'] },
-      runResults: [],
-    });
+    expect(
+      await runProgram(
+        'slack',
+        { installDir: '/project' },
+        { noAgentWorkflow },
+      ),
+    ).toMatchObject({ outcome: 'success', programData: { connected: true } });
+    expect(noAgentWorkflow).toHaveBeenCalledWith(
+      expect.objectContaining({ programId: 'slack', installDir: '/project' }),
+    );
+    expect(analytics.wizardCapture).not.toHaveBeenCalled();
     expect(runAgent).not.toHaveBeenCalled();
   });
 
@@ -738,7 +739,7 @@ describe('runProgram', () => {
     });
   });
 
-  it('captures agent started before credentials resolve, for agent programs only', async () => {
+  it('captures agent started before credentials resolve', async () => {
     vi.mocked(runAgent).mockResolvedValue({
       outcome: RunOutcome.Success,
       snapshot,
@@ -765,24 +766,6 @@ describe('runProgram', () => {
       { installDir: '/project' },
       { credentials: { resolve } },
     );
-    vi.mocked(getRuntimeProgramConfig).mockReturnValueOnce({
-      id: 'mcp-add',
-      strategy: 'no-agent',
-      requiresAi: false,
-    });
-    await runProgram(
-      'mcp-add',
-      { installDir: '/project' },
-      {
-        mcp: {
-          detectSupportedClients: vi.fn().mockResolvedValue([]),
-          add: vi.fn().mockResolvedValue([]),
-          detectInstalledClients: vi.fn(),
-          remove: vi.fn(),
-        },
-      },
-    );
-
     expect(started().map(({ properties }) => properties)).toEqual([
       {
         integration: 'custom-label',
