@@ -247,6 +247,19 @@ export interface E2eResultBase {
   skillsComplete: boolean;
 }
 
+/** Write the first outcome once, then allow the final skills decision to replace it. */
+export function createE2eResultWriter(
+  file: string | undefined,
+  getResult: () => Record<string, unknown>,
+): (final?: boolean) => void {
+  let written = false;
+  return (final = false) => {
+    if (!file || (written && !final)) return;
+    fs.writeFileSync(file, JSON.stringify(getResult(), null, 2));
+    written = true;
+  };
+}
+
 /**
  * Build the `E2E_RESULT_JSON` payload. Additive over {@link E2eResultBase} —
  * the pre-existing keys are copied through byte-identical.
