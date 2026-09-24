@@ -1,6 +1,9 @@
 import { runNonInteractive } from '@lib/runners/run-non-interactive';
 import { runWizard } from '@lib/runners/run-wizard';
-import { authenticate } from '@programs/authenticate';
+import {
+  authenticate,
+  refreshCredentialsIfNeeded,
+} from '@programs/authenticate';
 import { runProgramAgent } from '../run-agent-legacy';
 import { runAgent, RunOutcome, type RunResult } from '@agent/runner';
 import { Harness, Sequence } from '@shared/constants';
@@ -51,10 +54,14 @@ vi.mock('@utils/analytics', () => ({
     wizardCapture: vi.fn(),
     captureException: vi.fn(),
     setTag: vi.fn(),
+    identifyUser: vi.fn(),
+    setGroups: vi.fn(),
+    groupIdentify: vi.fn(),
     getAllFlagsForWizard: vi.fn().mockResolvedValue({}),
     getWizardFlagPayloads: vi.fn().mockReturnValue({}),
     shutdown: vi.fn().mockResolvedValue(undefined),
   },
+  groupsFromUser: () => ({}),
   sessionProperties: () => ({}),
 }));
 vi.mock('@agent/runner', async (original) => ({
@@ -63,7 +70,9 @@ vi.mock('@agent/runner', async (original) => ({
 }));
 vi.mock('@programs/authenticate', () => ({
   authenticate: vi.fn().mockResolvedValue(undefined),
-  refreshAccessTokenIfNeeded: vi.fn().mockResolvedValue(undefined),
+  refreshCredentialsIfNeeded: vi.fn((credentials: unknown) =>
+    Promise.resolve(credentials),
+  ),
 }));
 vi.mock('@shared/claude-settings', () => ({
   checkAllSettingsConflicts: vi.fn().mockReturnValue([]),
@@ -76,6 +85,7 @@ vi.mock('@utils/wizard-abort', async (original) => ({
 }));
 vi.mock('../posthog-integration/detect', () => ({
   maybeStampAiSdkDetected: vi.fn(),
+  stampAiSdkDetected: vi.fn(),
 }));
 
 const program = (id: ProgramConfig['id'] = 'metrics'): ProgramConfig => ({
@@ -312,6 +322,31 @@ it('rethrows the original crash for the outer runner', async () => {
   await expect(runProgramAgent(program(), session())).rejects.toBe(error);
   expect(wizardAbort).not.toHaveBeenCalled();
   expect(analytics.shutdown).not.toHaveBeenCalled();
+});
+
+it('rethrows a login failure for the CLI roots, before the agent starts', async () => {
+  const error = new Error('OAuth cancelled');
+  vi.mocked(authenticate).mockRejectedValueOnce(error);
+  await expect(runProgramAgent(program(), session())).rejects.toBe(error);
+  expect(runAgent).not.toHaveBeenCalled();
+  expect(wizardAbort).not.toHaveBeenCalled();
+});
+
+it('projects a refreshed token and the AI SDK stamp back onto the session', async () => {
+  const current = session();
+  const setAccessToken = vi.spyOn(getUI(), 'setAccessToken');
+  vi.mocked(refreshCredentialsIfNeeded).mockImplementationOnce((credentials) =>
+    Promise.resolve({ ...credentials, accessToken: 'pha_refreshed' }),
+  );
+  await runProgramAgent(program(), current);
+  expect(vi.mocked(runAgent).mock.calls[0][1].credentials.accessToken).toBe(
+    'pha_refreshed',
+  );
+  expect(current.credentials?.accessToken).toBe('pha_refreshed');
+  // Only the token fields change; the login keeps its host.
+  expect(current.credentials?.host).toBeInstanceOf(HostResolution);
+  expect(setAccessToken).toHaveBeenCalledExactlyOnceWith(current.credentials);
+  expect(current.aiSdkStampReported).toBe(true);
 });
 
 it.each([
