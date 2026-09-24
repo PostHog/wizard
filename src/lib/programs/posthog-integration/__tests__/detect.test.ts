@@ -46,9 +46,7 @@ import {
 import type { DetectedSource } from '@lib/warehouse-sources/types';
 
 function makeTmpDir(): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'warehouse-reporting-'));
-  fs.writeFileSync(path.join(dir, 'package.json'), '{}');
-  return dir;
+  return fs.mkdtempSync(path.join(os.tmpdir(), 'warehouse-reporting-'));
 }
 
 function cleanup(dir: string): void {
