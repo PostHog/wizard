@@ -8,7 +8,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { createJiti } from 'jiti';
 import { VERSION } from '@shared/version';
-import { IS_DEV } from '@shared/constants';
+import { IS_PRODUCTION_BUILD } from '@env';
 import { logToFile } from '@utils/debug';
 import { onAccessTokenRotated } from '@agent/oauth-session';
 
@@ -20,7 +20,11 @@ let previousMcpToken: string | undefined;
 let stopFollowingRotations: (() => void) | undefined;
 
 function setMcpToken(token: string): void {
-  if (IS_DEV && activeMcpToken !== undefined && activeMcpToken !== token)
+  if (
+    !IS_PRODUCTION_BUILD &&
+    activeMcpToken !== undefined &&
+    activeMcpToken !== token
+  )
     logToFile('[pi-mcp] MCP token env follows the rotated OAuth token');
   activeMcpToken = token;
   process.env[MCP_TOKEN_ENV] = token;

@@ -6,7 +6,7 @@
 
 import { createHash } from 'node:crypto';
 import type { Credentials } from '@shared/api';
-import { IS_DEV } from '@shared/constants';
+import { IS_PRODUCTION_BUILD } from '@env';
 import { logToFile } from '@utils/debug';
 
 // Below this remaining lifetime a run risks outliving its token; just-minted and 7-day tokens skip.
@@ -161,7 +161,7 @@ async function refresh(
 
 // Dev builds only; a short hash tells tokens apart without logging one.
 function devLog(message: string): void {
-  if (IS_DEV) logToFile(`[oauth-session] ${message}`);
+  if (!IS_PRODUCTION_BUILD) logToFile(`[oauth-session] ${message}`);
 }
 
 function fingerprint(token: string): string {
