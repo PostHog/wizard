@@ -22,7 +22,8 @@ import { Program, getProgramConfig, type ProgramId } from '@programs';
 import type { Harness, Sequence } from '@shared/constants';
 import { buildSession } from '@lib/wizard-session';
 import { initLocalDev } from '@shared/local-dev';
-import { createLazyCiInferenceAuthProvider } from '@lib/runners/ci-inference-auth';
+import { loadCiInferenceAuthProvider } from '@lib/runners/ci-inference-auth';
+import type { InferenceAuthProvider } from '@agent/types';
 import { runProgramAgent } from '@programs/run-agent-legacy';
 import { commitRegisteredRunSkillCleanups } from '@shared/skill-run-cleanup';
 import {
@@ -245,14 +246,17 @@ async function main() {
     sequence: (process.env.SNAP_SEQUENCE || undefined) as Sequence | undefined,
     model: process.env.SNAP_MODEL || undefined,
   });
-  // The control socket can serve detection and screen actions without model
-  // access. Read the one-use token file only when a route requests inference.
-  store.setInferenceAuth(
-    createLazyCiInferenceAuthProvider(
-      Number(projectId),
-      store.session.region ?? 'us',
-    ),
-  );
+  // Read the one-use token file only when a route first requests inference.
+  let ciAuth: InferenceAuthProvider | undefined;
+  store.setInferenceAuth({
+    resolve: async () => {
+      ciAuth ??= loadCiInferenceAuthProvider(
+        Number(projectId),
+        store.session.region ?? 'us',
+      );
+      return ciAuth.resolve();
+    },
+  });
   // Dumped, never pushed: an e2e run is synthetic, like `--ci`.
   const streamLog = createFileDestination(process.env.TASK_STREAM_LOG ?? '');
   if (streamLog) {
