@@ -1,8 +1,8 @@
 import type { ProgramConfig } from '@programs/program-step';
 import { WIZARD_TOOL_NAMES } from '@agent';
 import { REVENUE_ANALYTICS_PROGRAM } from './steps.js';
-import { REVENUE_ABORT_CASES } from './detect.js';
 import { getContentBlocks } from '../../ui/tui/decks/revenue-analytics/index.js';
+import { REVENUE_ANALYTICS_RUN } from './run.js';
 
 export const revenueAnalyticsConfig: ProgramConfig = {
   command: 'revenue-analytics',
@@ -13,17 +13,7 @@ export const revenueAnalyticsConfig: ProgramConfig = {
   getContentBlocks,
   allowedTools: ['Agent'],
   disallowedTools: [WIZARD_TOOL_NAMES.wizardAsk],
-  run: {
-    skillId: 'revenue-analytics-setup',
-    integrationLabel: 'revenue-analytics-setup',
-    customPrompt: () => 'Set up revenue analytics for this project.',
-    successMessage: 'Revenue analytics configured!',
-    reportFile: 'posthog-revenue-report.md',
-    docsUrl: 'https://posthog.com/docs/revenue-analytics',
-    spinnerMessage: 'Setting up revenue analytics...',
-    estimatedDurationMinutes: 5,
-    abortCases: REVENUE_ABORT_CASES,
-  },
+  run: REVENUE_ANALYTICS_RUN,
   requires: ['posthog-integration'],
 };
 
