@@ -150,12 +150,8 @@ const integrationFrameworkConfig = (): FrameworkConfig =>
 /** Integration host effects without a live notebook getter. */
 const integrationEffects = () => ({
   readPackageJson: vi.fn().mockResolvedValue(null),
-  hasDeclaredDependency: vi.fn().mockReturnValue(true),
   warn: vi.fn(),
-  setTag: vi.fn(),
-  capture: vi.fn(),
   uploadEnvironmentVariables: vi.fn().mockResolvedValue([]),
-  requestDeepLink: vi.fn().mockResolvedValue(null),
   openDashboardDeepLink: vi.fn(),
 });
 

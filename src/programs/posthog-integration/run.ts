@@ -7,7 +7,6 @@ import type {
 } from '@agent/types';
 import { AgentSignals } from '@agent';
 import { isAskDisabled } from '@shared/ask-policy';
-import type { Credentials } from '@shared/api';
 import type { HostResolution } from '@shared/host-resolution';
 import type { FrameworkConfig } from '@programs/framework-config';
 import {
@@ -22,6 +21,9 @@ import {
   type Integration,
 } from '@shared/constants';
 import { withUtm } from '@utils/links';
+import { analytics } from '@utils/analytics';
+import { hasDeclaredDependency } from '@utils/package-json';
+import { requestDeepLink } from '@utils/provisioning';
 import { buildCodingAgentPrompt } from './handoff.js';
 
 export const SETUP_REPORT_FILE = 'posthog-setup-report.md';
@@ -40,8 +42,6 @@ const WAREHOUSE_LINK_LIMIT = 3;
 /** Sources the seeded step collects credentials for; the rest become outro links. */
 const WAREHOUSE_SEED_LIMIT = 3;
 
-type TagValue = string | boolean | number | null | undefined;
-
 export interface PosthogIntegrationRunInput {
   installDir: string;
   frameworkConfig: FrameworkConfig;
@@ -53,37 +53,21 @@ export interface PosthogIntegrationRunInput {
   /** The run's wizard flags; an explicit 'false' on the AIO/Logs key drops both products. */
   wizardFlags: Record<string, string>;
   mayReportScanResults: boolean;
-  /** Legacy TUI calls its separate seedTasks callback after resolving the run. */
-  includeSeedTasks?: boolean;
   /** An earlier step may have produced a dashboard link already. */
   dashboardDeepLink?: unknown;
-  /** Fallback for hosts that do not expose a live notebook URL getter. */
-  notebookUrl?: string | null;
 }
 
 /** Effects a host supplies at the program boundary. No WizardSession is passed in. */
 export interface PosthogIntegrationRunEffects {
   readPackageJson: (installDir: string) => Promise<unknown | null>;
-  hasDeclaredDependency: (name: string, packageJson: unknown) => boolean;
   warn: (message: string) => void;
-  setTag: (key: string, value: TagValue) => void;
-  capture: (event: string, properties: Record<string, unknown>) => void;
   uploadEnvironmentVariables: (
     envVars: Record<string, string>,
     integration: Integration,
   ) => Promise<string[]>;
-  requestDeepLink: (
-    credentials: Credentials,
-  ) => Promise<string | null | undefined>;
   openDashboardDeepLink: (taggedUrl: string) => void;
   getNotebookUrl?: () => string | null | undefined;
   setDashboardDeepLink?: (taggedUrl: string) => void;
-}
-
-export interface ResolvedPosthogIntegrationRun {
-  run: AgentRunDefinition;
-  hooks: RunHooks;
-  seedTasks: SeedTaskEntry[];
 }
 
 function resolveContinueUrl(
@@ -148,7 +132,6 @@ export function resolvePosthogIntegrationSeedTasks(
     PosthogIntegrationRunInput,
     'warehouseSources' | 'flags' | 'mayReportScanResults'
   >,
-  capture: PosthogIntegrationRunEffects['capture'],
 ): SeedTaskEntry[] {
   if (isAskDisabled(input.flags)) return [];
   const sources = input.warehouseSources;
@@ -156,7 +139,7 @@ export function resolvePosthogIntegrationSeedTasks(
   const offered = sources.slice(0, WAREHOUSE_SEED_LIMIT);
   const deferred = sources.length - offered.length;
   if (input.mayReportScanResults) {
-    capture('orchestrator warehouse task queued', {
+    analytics.wizardCapture('orchestrator warehouse task queued', {
       warehouse_source_count: sources.length,
       warehouse_source_kinds: sources.map((s) => s.kind),
       // The detection totals stay above; this is what the step was given.
@@ -196,26 +179,21 @@ export function resolvePosthogIntegrationSeedTasks(
   ];
 }
 
-/** Resolve prompt, completion hooks and seeded tasks from explicit program data. */
+/** Resolve the prompt and completion hooks from explicit program data. */
 export async function resolvePosthogIntegrationRun(
   input: PosthogIntegrationRunInput,
   effects: PosthogIntegrationRunEffects,
-): Promise<ResolvedPosthogIntegrationRun> {
+): Promise<{ run: AgentRunDefinition; hooks: RunHooks }> {
   const config = input.frameworkConfig;
   const typeScriptDetected = input.typescript;
-  effects.setTag('typescript', typeScriptDetected);
+  analytics.setTag('typescript', typeScriptDetected);
 
   const usesPackageJson = config.detection.usesPackageJson !== false;
   let frameworkVersion: string | undefined;
   if (usesPackageJson) {
     const packageJson = await effects.readPackageJson(input.installDir);
     if (packageJson) {
-      if (
-        !effects.hasDeclaredDependency(
-          config.detection.packageName,
-          packageJson,
-        )
-      ) {
+      if (!hasDeclaredDependency(config.detection.packageName, packageJson)) {
         effects.warn(
           `${config.detection.packageDisplayName} does not seem to be installed. Continuing anyway — the agent will handle it.`,
         );
@@ -232,12 +210,12 @@ export async function resolvePosthogIntegrationRun(
 
   if (frameworkVersion && config.detection.getVersionBucket) {
     const versionBucket = config.detection.getVersionBucket(frameworkVersion);
-    effects.setTag(`${config.metadata.integration}-version`, versionBucket);
+    analytics.setTag(`${config.metadata.integration}-version`, versionBucket);
   }
   const frameworkContext = input.frameworkContext;
   const contextTags = config.analytics.getTags(frameworkContext);
   Object.entries(contextTags).forEach(([key, value]) =>
-    effects.setTag(key, value),
+    analytics.setTag(key, value),
   );
 
   // The kill switch the orchestrator applies via excludedTaskTypes, gated here
@@ -335,7 +313,7 @@ ${warehouseReportInstruction(input.warehouseSources)}
           config.metadata.integration,
         );
         if (uploadedEnvVars.length > 0) {
-          effects.capture(WIZARD_INTERACTION_EVENT_NAME, {
+          analytics.capture(WIZARD_INTERACTION_EVENT_NAME, {
             action: 'wizard_env_vars_uploaded',
             integration: config.metadata.integration,
             variable_count: uploadedEnvVars.length,
@@ -344,7 +322,10 @@ ${warehouseReportInstruction(input.warehouseSources)}
         }
       }
       if (input.flags.signup) {
-        const deepLink = await effects.requestDeepLink(credentials);
+        const deepLink = await requestDeepLink(
+          credentials.accessToken,
+          credentials.host,
+        );
         if (deepLink) {
           const taggedDeepLink = withUtm(deepLink, 'dashboard-deeplink');
           dashboardDeepLink = taggedDeepLink;
@@ -376,8 +357,7 @@ ${warehouseReportInstruction(input.warehouseSources)}
           ? 'Added environment variables to .env file'
           : '',
       ].filter(Boolean);
-      const notebookUrl =
-        effects.getNotebookUrl?.() ?? input.notebookUrl ?? undefined;
+      const notebookUrl = effects.getNotebookUrl?.() ?? undefined;
       return {
         kind: OutroKind.Success,
         message: 'Successfully installed PostHog!',
@@ -398,12 +378,5 @@ ${warehouseReportInstruction(input.warehouseSources)}
     },
   };
 
-  return {
-    run,
-    hooks,
-    seedTasks:
-      input.includeSeedTasks === false
-        ? []
-        : resolvePosthogIntegrationSeedTasks(input, effects.capture),
-  };
+  return { run, hooks };
 }

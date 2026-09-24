@@ -44,6 +44,7 @@ import {
 import type { ProgramRunDefinitionInput } from './resolve-run-definition';
 import {
   resolvePosthogIntegrationRun,
+  resolvePosthogIntegrationSeedTasks,
   type PosthogIntegrationRunEffects,
 } from './posthog-integration/run';
 import { resolveSelfDrivingRun } from './self-driving/run';
@@ -579,7 +580,12 @@ async function runProgramWithStore(
         );
         run = resolved.run;
         hooks ??= resolved.hooks;
-        seedTasks ??= () => resolved.seedTasks;
+        seedTasks ??= () =>
+          resolvePosthogIntegrationSeedTasks({
+            warehouseSources: input.warehouseSources ?? [],
+            flags,
+            mayReportScanResults: input.mayReportScanResults ?? false,
+          });
       } catch (error) {
         return fail(error instanceof Error ? error.message : String(error));
       }

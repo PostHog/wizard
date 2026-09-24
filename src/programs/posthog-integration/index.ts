@@ -2,10 +2,10 @@ import type { ProgramConfig, ProgramStep } from '@programs/program-step';
 import { runProgramAgent } from '@programs/run-agent-legacy';
 import type { ProgramRun } from '@programs/program-run';
 import type { WizardSession } from '@lib/wizard-session';
-import { mayReportScanResults, RunPhase } from '@lib/wizard-session';
+import { RunPhase } from '@lib/wizard-session';
+import { mayReportScanResults } from '@shared/scan-consent';
 import { WIZARD_TOOL_NAMES } from '@agent';
 import { tryGetPackageJson, isUsingTypeScript } from '@utils/setup-utils';
-import { hasDeclaredDependency } from '@utils/package-json';
 import { analytics } from '@utils/analytics';
 import {
   detectFramework,
@@ -16,7 +16,6 @@ import { FRAMEWORK_REGISTRY } from '@programs/registry';
 import { wizardAbort } from '@utils/wizard-abort';
 import { ErrorCodes } from '@shared/errors';
 import { getUI } from '@ui/index';
-import { requestDeepLink } from '@utils/provisioning';
 import { openTrackedLink } from '@utils/links';
 import { getDetectedWarehouseSources } from '@programs/warehouse-source/detect';
 import { POSTHOG_INTEGRATION_PROGRAM } from './steps.js';
@@ -31,18 +30,15 @@ import { EVENT_PLAN_FILE } from './constants.js';
 const DASHBOARD_DEEP_LINK_KEY = 'dashboardDeepLink';
 
 const warehouseSeedTasks: NonNullable<ProgramConfig['seedTasks']> = (session) =>
-  resolvePosthogIntegrationSeedTasks(
-    {
-      warehouseSources: getDetectedWarehouseSources(session),
-      flags: {
-        ci: session.ci,
-        signup: session.signup,
-        e2eAsk: session.e2eAsk,
-      },
-      mayReportScanResults: mayReportScanResults(session),
+  resolvePosthogIntegrationSeedTasks({
+    warehouseSources: getDetectedWarehouseSources(session),
+    flags: {
+      ci: session.ci,
+      signup: session.signup,
+      e2eAsk: session.e2eAsk,
     },
-    (event, properties) => analytics.wizardCapture(event, properties),
-  );
+    mayReportScanResults: mayReportScanResults(session),
+  });
 
 export { SETUP_REPORT_FILE } from './run.js';
 export { EVENT_PLAN_FILE } from './constants.js';
@@ -118,16 +114,11 @@ export const posthogIntegrationConfig: ProgramConfig = {
         },
         wizardFlags: await analytics.getAllFlagsForWizard(),
         mayReportScanResults: mayReportScanResults(session),
-        includeSeedTasks: false,
         dashboardDeepLink: session.frameworkContext[DASHBOARD_DEEP_LINK_KEY],
-        notebookUrl: session.notebookUrl,
       },
       {
         readPackageJson: (installDir) => tryGetPackageJson({ installDir }),
-        hasDeclaredDependency,
         warn: (message) => getUI().log.warn(message),
-        setTag: (key, value) => analytics.setTag(key, value),
-        capture: (event, properties) => analytics.capture(event, properties),
         uploadEnvironmentVariables: async (envVars, integration) => {
           const { uploadEnvironmentVariablesStep } = await import(
             '@steps/index'
@@ -137,8 +128,6 @@ export const posthogIntegrationConfig: ProgramConfig = {
             session,
           });
         },
-        requestDeepLink: (credentials) =>
-          requestDeepLink(credentials.accessToken, credentials.host),
         openDashboardDeepLink: (url) =>
           openTrackedLink(url, 'dashboard-deeplink', { auto: true }),
         getNotebookUrl: () => session.notebookUrl,
