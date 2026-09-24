@@ -171,10 +171,14 @@ describe('error-tracking ciPreRun', () => {
 
     await errorTrackingConfig.ciPreRun?.(session);
 
-    expect(wizardAbort).toHaveBeenCalledWith({
-      code: ErrorCodes.DetectNoFramework,
-      message: expect.stringContaining("app's root directory"),
-    });
+    expect(wizardAbort).toHaveBeenCalledWith(
+      expect.objectContaining({
+        code: ErrorCodes.DetectNoFramework,
+        outroData: expect.objectContaining({
+          instruction: expect.stringContaining("app's root directory"),
+        }),
+      }),
+    );
     expect(session.integration).toBeUndefined();
     expect(session.frameworkConfig).toBeUndefined();
     expect(session.skillId).toBeUndefined();
