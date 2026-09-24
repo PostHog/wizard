@@ -5,19 +5,18 @@ import {
   AgenticDetectionTimeoutError,
   resolveProjectDir,
   type AgenticDetectionReport,
-  type AgenticDetectionContext,
-  type AgenticDetectOptions,
   type AgenticProject,
   type DetectEvent,
   type DetectTarget,
 } from './agentic.js';
-import { authenticate, type AuthSession } from '@programs/authenticate';
+import { authenticate } from '@programs/authenticate';
 import type { ProgramCiHost } from '@programs/host-capabilities';
 import { FRAMEWORK_REGISTRY } from '@programs/registry';
 import {
   Integration,
   WIZARD_BASIC_INTEGRATION_AGENTIC_DETECTION_FLAG_KEY,
 } from '@shared/constants';
+import type { WizardSession } from '@lib/wizard-session';
 import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
 
@@ -60,13 +59,12 @@ export function toIntegrationCandidates(
 
 /** Run the agentic detector for the wizard's integration frameworks — the single home of targets + purpose. */
 export async function detectIntegrationProjects(
-  session: AgenticDetectionContext,
+  session: WizardSession,
   options: {
     /** Program the scan bills to. Required so no caller can go unattributed. */
     programId: string;
     recommend?: boolean;
     onEvent?: DetectEvent;
-    onProgress?: AgenticDetectOptions['onProgress'];
   },
 ): Promise<AgenticDetectionReport> {
   // Spread first so the targets and purpose this function owns always win.
@@ -103,15 +101,13 @@ function captureOutcome(
   analytics.wizardCapture('agentic detection', { outcome, ...properties });
 }
 
-export type ProjectScopeSession = AuthSession & AgenticDetectionContext;
-
 /** Flag-gated non-interactive monorepo phase: scan, auto-choose the recommended project, re-point session.installDir; every failure leaves the session untouched. */
 export async function scopeInstallDirToProject(
-  session: ProjectScopeSession,
+  session: WizardSession,
   host: ProgramCiHost,
 ): Promise<void> {
   // Idempotent early auth: the detector needs credentials and the flag must evaluate as the logged-in user.
-  await authenticate(session, 'posthog-integration', host.auth);
+  await authenticate(session, 'posthog-integration');
   const flags = await analytics.getAllFlagsForWizard();
   if (flags[WIZARD_BASIC_INTEGRATION_AGENTIC_DETECTION_FLAG_KEY] !== 'true') {
     // A failed flag fetch surfaces as an empty map, so flag-off also covers "flags unavailable".
@@ -129,7 +125,6 @@ export async function scopeInstallDirToProject(
       programId: 'posthog-integration',
       recommend: true,
       onEvent: (line) => logToFile('[agentic detect]', line),
-      onProgress: (event) => host.onProgress(event),
     });
   } catch (err) {
     const error = err instanceof Error ? err : new Error(String(err));

@@ -2,7 +2,7 @@ import { join } from 'path';
 import { access, rm } from 'node:fs/promises';
 import type { ProgramConfig } from '@programs/program-step';
 import type { ProgramRun } from '@programs/program-run';
-import { OutroKind } from '@agent';
+import { OutroKind, type WizardSession } from '@lib/wizard-session';
 import { createSkillProgram } from '../agent-skill/index.js';
 import { SELF_DRIVING_PROGRAM } from './steps.js';
 import {
@@ -15,7 +15,9 @@ import {
   NO_DEFAULT_LIMIT,
   PRICE_PER_PR_USD,
   PRICING_LONG,
-} from '@shared/self-driving-pricing';
+} from '../../ui/tui/decks/self-driving/pricing.js';
+import { getTips } from '../../ui/tui/decks/self-driving/tips.js';
+import { getContentBlocks } from '../../ui/tui/decks/self-driving/index.js';
 
 export const SELF_DRIVING_SKILL_ID = 'self-driving-setup';
 const REPORT_FILE = 'posthog-self-driving-report.md';
@@ -45,10 +47,7 @@ async function removeInstalledSkill(installDir: string): Promise<void> {
 // A session closure (not a static object) so `customPrompt` can read the
 // tools detected in the codebase — written to frameworkContext by the detect
 // step — and hand them to the prompt for STEP 4/STEP 5 prioritisation.
-const buildRun = (session: {
-  installDir: string;
-  frameworkContext: Record<string, unknown>;
-}): Promise<ProgramRun> =>
+const buildRun = (session: WizardSession): Promise<ProgramRun> =>
   Promise.resolve({
     skillId: SELF_DRIVING_SKILL_ID,
     integrationLabel: SELF_DRIVING_SKILL_ID,
@@ -85,7 +84,7 @@ const buildRun = (session: {
     // conversion, scout enable rate) keeps counting when a run words its tasks differently.
     resolveStepKey: resolveSelfDrivingStepKey,
 
-    postRun: async () => {
+    postRun: async (session) => {
       await removeInstalledSkill(session.installDir);
     },
 
@@ -129,6 +128,8 @@ export const selfDrivingConfig: ProgramConfig = {
   }),
   steps: SELF_DRIVING_PROGRAM,
   run: buildRun,
+  getTips,
+  getContentBlocks,
 };
 
 export { SELF_DRIVING_PROGRAM } from './steps.js';

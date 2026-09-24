@@ -173,9 +173,9 @@ describe('flow shape', () => {
   });
 
   it('keeps the program single-run, so the outro stays terminal', () => {
-    // A step declaring a child program would flip run-wizard into the composed
+    // A step carrying its own `run` would flip run-wizard into the composed
     // walk, where a second agent run could abort before the outro is pushed.
-    expect(POSTHOG_INTEGRATION_PROGRAM.some((s) => s.runProgramId)).toBe(false);
+    expect(POSTHOG_INTEGRATION_PROGRAM.some((s) => s.run)).toBe(false);
   });
 });
 

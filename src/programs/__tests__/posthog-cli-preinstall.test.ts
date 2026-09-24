@@ -4,10 +4,10 @@ import {
   preinstallPostHogCliOnce,
   resetPostHogCliPreinstallForTests,
 } from '@programs/shared/posthog-cli-preinstall';
-import { installOrUpdatePostHogCli } from '@shared/posthog-cli-install';
+import { installOrUpdatePostHogCli } from '@steps/install-cli-steering';
 import { analytics } from '@utils/analytics';
 
-vi.mock('@shared/posthog-cli-install', () => ({
+vi.mock('@steps/install-cli-steering', () => ({
   installOrUpdatePostHogCli: vi.fn(),
 }));
 vi.mock('@utils/analytics', () => ({
@@ -26,16 +26,12 @@ describe('preinstallPostHogCliOnce', () => {
 
     preinstallPostHogCliOnce(
       'source maps posthog-cli preinstall failed',
-      {
-        variant: 'ios',
-      },
+      { variant: 'ios' },
       warn,
     );
     preinstallPostHogCliOnce(
       'error tracking posthog-cli preinstall failed',
-      {
-        integration: 'swift',
-      },
+      { integration: 'swift' },
       warn,
     );
 
@@ -50,9 +46,7 @@ describe('preinstallPostHogCliOnce', () => {
 
     preinstallPostHogCliOnce(
       'error tracking posthog-cli preinstall failed',
-      {
-        integration: 'swift',
-      },
+      { integration: 'swift' },
       warn,
     );
 
@@ -69,9 +63,7 @@ describe('preinstallPostHogCliOnce', () => {
 
     preinstallPostHogCliOnce(
       'error tracking posthog-cli preinstall failed',
-      {
-        integration: 'swift',
-      },
+      { integration: 'swift' },
       warn,
     );
 

@@ -17,8 +17,6 @@
     "vitest.config.ts",
     "spec/**/*",
     "src/**/*",
-    "scripts/**/*.ts",
-    "scripts/**/*.tsx",
     "test/**/*",
     "e2e-harness/**/*",
     "types/**/*"

@@ -4,7 +4,6 @@ import type {
   RunResult,
 } from '../agent/types.js';
 import type { ApiProject, ApiUser, Credentials } from '../shared/api.js';
-import type { PlannedEvent } from './posthog-integration/watch-event-plan.js';
 
 /** One agent run's progress event, attributed to its run. */
 export type ProgramRunProgress = {
@@ -35,7 +34,6 @@ export type ProgramInvocationData = {
   apiProject: ApiProject | null;
   apiUser: ApiUser | null;
   detection: { frameworkContext: Record<string, unknown> };
-  eventPlan: PlannedEvent[];
   /** The route of the agent run; null until it resolves. */
   binding: ResolvedBinding | null;
   /** Latched once the organization's AI SDK stamp was considered for this login. */
@@ -78,7 +76,6 @@ export class ProgramStore {
       apiProject: null,
       apiUser: null,
       detection: { frameworkContext: {} },
-      eventPlan: [],
       binding: null,
       aiSdkStampReported: options.aiSdkStampReported ?? false,
     };
@@ -97,11 +94,6 @@ export class ProgramStore {
 
   setFrameworkContext(key: string, value: unknown): void {
     this.data.detection.frameworkContext[key] = structuredClone(value);
-    this.emitData();
-  }
-
-  setEventPlan(events: PlannedEvent[]): void {
-    this.data.eventPlan = structuredClone(events);
     this.emitData();
   }
 

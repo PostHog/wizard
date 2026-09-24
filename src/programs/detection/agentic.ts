@@ -13,11 +13,10 @@
  * program uses, which needs credentials.
  */
 
-import { AgentSignals, runAgent, RunOutcome } from '@agent';
+import { AgentSignals, buildRunTags, runAgent, RunOutcome } from '@agent';
 import type {
   AgentProgress,
   AgentRunDefinition,
-  InferenceAuthProvider,
   ResolvedBinding,
   RunConfig,
   RunInput,
@@ -34,12 +33,10 @@ import {
   POSTHOG_DOCS_URL,
   Sequence,
 } from '@shared/constants';
-import type { Credentials } from '@shared/api';
-import { buildRunTags } from '@shared/run-tags';
 import { analytics } from '@utils/analytics';
-import type { WizardRunOptions } from '@utils/types';
-import { createPosthogInferenceAuthProvider } from '@programs/credentials';
-import { WizardError } from '@shared/errors';
+import type { WizardSession } from '@lib/wizard-session';
+import { getUI } from '@ui';
+import { createUiReducer } from '@ui/agent-progress';
 
 /** A category the agent classifies each project into (id the agent returns). */
 export type DetectTarget = { id: string; name: string };
@@ -153,14 +150,6 @@ export type AgenticDetectOptions = {
   rerankIds?: readonly string[];
   /** Streaming activity callback for the UI. */
   onEvent?: DetectEvent;
-  /** Host-owned sink for the scan's run progress. */
-  onProgress?: (event: AgentProgress) => void;
-};
-
-/** Data the detection agent needs from its host; no UI or session ownership. */
-export type AgenticDetectionContext = WizardRunOptions & {
-  credentials: Credentials | null;
-  inferenceAuth?: InferenceAuthProvider;
 };
 
 function buildPrompt(
@@ -346,7 +335,7 @@ function detectionRunDefinition(prompt: string): AgentRunDefinition {
   };
 }
 
-/** What a detect host saw before `runAgent`: no run lifecycle, spinner, outro, or setup logs below warn. */
+/** What the UI saw before `runAgent`: no run lifecycle, spinner, outro, or setup logs below warn. */
 function reachesHost(event: AgentProgress): boolean {
   switch (event.kind) {
     case 'lifecycle':
@@ -362,7 +351,7 @@ function reachesHost(event: AgentProgress): boolean {
 
 /** Scan the repo with Haiku through `runAgent`; each attempt is a fresh run with its own deadline. */
 export async function detectProjectsWithAgent(
-  session: AgenticDetectionContext,
+  session: WizardSession,
   options: AgenticDetectOptions,
 ): Promise<AgenticDetectionReport> {
   if (!session.credentials) {
@@ -375,9 +364,7 @@ export async function detectProjectsWithAgent(
     recommend = false,
     rerankIds,
     onEvent,
-    onProgress,
   } = options;
-  const { credentials } = session;
 
   // Built here: the scan runs before the program's own run tags exist.
   const wizardMetadata = {
@@ -396,6 +383,13 @@ export async function detectProjectsWithAgent(
     ),
     composed: true,
     binding: AGENTIC_DETECTION_BINDING,
+    // Only the orchestrator reads it; the scan is linear.
+    switchboard: {
+      program: programId,
+      composed: true,
+      flags: {},
+      flagPayloads: {},
+    },
     skillsBaseUrl: getSkillsBaseUrl(),
     wizardFlags: {},
     wizardFlagPayloads: {},
@@ -406,11 +400,7 @@ export async function detectProjectsWithAgent(
   };
   const input: RunInput = {
     installDir: session.installDir,
-    credentials,
-    // One provider for both attempts: each resolves its own gateway bearer.
-    inferenceAuth:
-      session.inferenceAuth ??
-      createPosthogInferenceAuthProvider(credentials, programId),
+    credentials: session.credentials,
     project: null,
     apiUser: null,
     // No benchmark pipeline and no AIO capture: the scan never had either.
@@ -426,9 +416,10 @@ export async function detectProjectsWithAgent(
     },
     host: { projectId: session.projectId, apiKey: session.apiKey },
   };
+  const reduceUi = createUiReducer(getUI());
   const forward = (event: AgentProgress): void => {
     if (event.kind === 'activity') onEvent?.(event.line);
-    if (reachesHost(event)) onProgress?.(event);
+    if (reachesHost(event)) reduceUi(event);
   };
 
   for (let attempt = 0; attempt < 2; attempt++) {
@@ -450,10 +441,7 @@ export async function detectProjectsWithAgent(
       throw new AgenticDetectionTimeoutError(attempt + 1, timeoutMs);
     }
     if (result.outcome !== RunOutcome.Success) {
-      throw (
-        result.failure.error ??
-        new WizardError(result.failure.message, undefined, result.failure.code)
-      );
+      throw result.failure.error ?? new Error(result.failure.message);
     }
 
     // Transcript first, final message last — its verdicts win path conflicts.

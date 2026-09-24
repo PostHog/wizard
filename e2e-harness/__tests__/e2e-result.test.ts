@@ -20,7 +20,6 @@ import {
   E2eRunRecorder,
   abortReasonFrom,
   buildE2eResult,
-  createE2eResultWriter,
   detectedSourcesFrom,
   readReportFile,
   taskOutcomesFrom,
@@ -462,34 +461,6 @@ describe('buildE2eResult', () => {
 
   it('passes the pre-existing keys through unchanged', () => {
     expect(build()).toMatchObject(base);
-  });
-
-  it('replaces an outro result only when the final skills decision is written', () => {
-    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'wizard-result-'));
-    const file = path.join(directory, 'result.json');
-    let skillsComplete = false;
-    const write = createE2eResultWriter(file, () => ({
-      ...build(),
-      skillsComplete,
-    }));
-
-    try {
-      write();
-      expect(JSON.parse(fs.readFileSync(file, 'utf8'))).toMatchObject({
-        skillsComplete: false,
-      });
-      skillsComplete = true;
-      write();
-      expect(JSON.parse(fs.readFileSync(file, 'utf8'))).toMatchObject({
-        skillsComplete: false,
-      });
-      write(true);
-      expect(JSON.parse(fs.readFileSync(file, 'utf8'))).toMatchObject({
-        skillsComplete: true,
-      });
-    } finally {
-      fs.rmSync(directory, { recursive: true, force: true });
-    }
   });
 
   it('projects tasks down to label and status', () => {

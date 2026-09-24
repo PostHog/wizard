@@ -1,16 +1,21 @@
 import {
   AGENT_SKILL_STEPS,
   createSkillProgram,
-  type SkillProgramOptions,
 } from '@programs/agent-skill/index';
 import type { ProgramStep, ProgramConfig } from '@programs/program-step';
 import type { ProgramRun } from '@programs/program-run';
-import { OutroKind } from '@agent';
+import type { ProgramRunHost } from '@programs/host-capabilities';
+import type { WizardSession } from '@lib/wizard-session';
+import { OutroKind } from '@lib/wizard-session';
 import { WIZARD_TOOL_NAMES } from '@agent';
-import { skillRunDefinition } from '@programs/agent-skill/run-definition';
+import { headlessOption, regionOption } from '@lib/headless-mode';
 import { AUDIT_ABORT_CASES } from './detect.js';
-import { AUDIT_CHECKS_FILE, AUDIT_REPORT_FILE } from './types.js';
-import { AUDIT_SEED_CHECKS } from './seed.js';
+import {
+  AUDIT_CHECKS_FILE,
+  AUDIT_CHECKS_KEY,
+  AUDIT_REPORT_FILE,
+} from './types.js';
+import { AUDIT_SEED_CHECKS, seedAuditLedger } from './seed.js';
 
 /** Audit-specific screens for the shared agent-skill pipeline. */
 const AUDIT_SCREEN_BY_STEP: Record<string, string> = {
@@ -19,9 +24,9 @@ const AUDIT_SCREEN_BY_STEP: Record<string, string> = {
   outro: 'audit-outro',
 };
 
-type AuditRunState = {
-  dashboardUrl: string | null;
-  notebookUrl: string | null;
+const seedBeforeAuditRun = (session: WizardSession): void => {
+  seedAuditLedger(session.installDir);
+  session.frameworkContext[AUDIT_CHECKS_KEY] = AUDIT_SEED_CHECKS;
 };
 
 const withAuditScreens = (steps: ProgramStep[]): ProgramStep[] =>
@@ -32,7 +37,7 @@ const withAuditScreens = (steps: ProgramStep[]): ProgramStep[] =>
 
 const auditSteps: ProgramStep[] = withAuditScreens(AGENT_SKILL_STEPS);
 
-const AUDIT_OPTIONS: SkillProgramOptions = {
+const baseConfig = createSkillProgram({
   skillId: 'audit',
   command: 'audit',
   id: 'audit',
@@ -48,13 +53,24 @@ const AUDIT_OPTIONS: SkillProgramOptions = {
   estimatedDurationMinutes: 5,
   requires: ['posthog-integration'],
   abortCases: AUDIT_ABORT_CASES,
-};
+});
 
-const baseConfig = createSkillProgram(AUDIT_OPTIONS);
-const baseRun = skillRunDefinition(AUDIT_OPTIONS);
+const auditRun = async (
+  session: WizardSession,
+  host: ProgramRunHost,
+): Promise<ProgramRun> => {
+  seedBeforeAuditRun(session);
 
-const auditRun = (session: AuditRunState): Promise<ProgramRun> =>
-  Promise.resolve({
+  if (!baseConfig.run) {
+    throw new Error('Audit program has no run configuration.');
+  }
+
+  const baseRun =
+    typeof baseConfig.run === 'function'
+      ? await baseConfig.run(session, host)
+      : baseConfig.run;
+
+  return {
     ...baseRun,
     // Override the default outro so the dashboard + notebook URLs the
     // agent emits via `[DASHBOARD_URL]` / `[NOTEBOOK_URL]` are surfaced
@@ -81,14 +97,14 @@ const auditRun = (session: AuditRunState): Promise<ProgramRun> =>
         notebookUrl: session.notebookUrl ?? undefined,
       };
     },
-  });
+  };
+};
 
 export const auditConfig: ProgramConfig = {
   ...baseConfig,
   steps: auditSteps,
   run: auditRun,
   auditLedgerFile: AUDIT_CHECKS_FILE,
-  auditSeedChecks: AUDIT_SEED_CHECKS,
   // Ledger tools are opt-in per program; pi matches on the short name.
   allowedTools: [
     'Agent',
@@ -97,4 +113,8 @@ export const auditConfig: ProgramConfig = {
     WIZARD_TOOL_NAMES.auditResolveChecks,
   ],
   disallowedTools: [WIZARD_TOOL_NAMES.wizardAsk],
+  // The experimental headless flag — declared on `audit` (and basic
+  // integration) rather than globally. mergeCommandOptions lands it on the
+  // `wizard audit` command; dispatchProgram routes it to runWizardHeadless.
+  cliOptions: { ...headlessOption, ...regionOption },
 };

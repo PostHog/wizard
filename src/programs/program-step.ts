@@ -6,8 +6,10 @@ import type {
 import type { WizardReadinessResult } from '@shared/health-checks/readiness';
 import type { ProgramRun } from '@programs/program-run';
 import type { Integration } from '@shared/constants';
-import type { AuditCheck } from '@shared/audit-ledger';
 import type { FrameworkConfig } from '@programs/framework-config';
+import type { ContentBlock } from '@ui/tui/primitives/index';
+import type { WizardStore } from '@ui/tui/store';
+import type { Tip } from '@ui/tui/components/TipsCard';
 // Type-only — erased at compile time, so no runtime cycle with the
 // registry that imports `ProgramConfig` back from this module.
 import type { ProgramId } from './program-registry.js';
@@ -75,10 +77,13 @@ export interface ProgramStep {
   screenId?: string;
 
   /**
-   * For a composed run step (`screenId: 'run'`): identifies the child program
-   * whose agent the host runs. Omit to run this program's own agent.
+   * For a run step (`screenId: 'run'`): runs this step's own agent. A program
+   * exports a self-contained run step and another imports it into its step list
+   * — e.g. posthog-integration exports a run step that runs its agent, and
+   * self-driving imports it before its own run step. Omit to run the host
+   * program's own agent (`config.run`).
    */
-  runProgramId?: ProgramId;
+  run?: (session: WizardSession) => Promise<void>;
 
   /**
    * For a run step: prepare a derived session before its agent runs — e.g.
@@ -290,14 +295,28 @@ export interface ProgramConfig {
   eventPlanFile?: string;
   /** Audit ledger to mirror into the session, relative to `installDir`. */
   auditLedgerFile?: string;
-  /** Ledger rows written before the agent starts, so the run screen renders before its first update. */
-  auditSeedChecks?: readonly AuditCheck[];
   /**
    * Channel the task stream publishes this run under, when it differs from the
    * program id. A family leaf runs on the generic skill program, so without
    * this every `wizard audit <leaf>` would report as `agent-skill`.
    */
   streamWorkflowId?: string;
+  /**
+   * LearnCard deck rendered in the shared `RunScreen` while the agent
+   * runs. Lives at `<program>/content/index.tsx` by convention.
+   * Programs that ship a custom RunScreen variant (audit) or skip the
+   * run step (posthog-doctor) leave this unset.
+   */
+  getContentBlocks?: (store?: WizardStore) => ContentBlock[];
+  /**
+   * Tips shown in the run screen's right pane (the `Tips` sidebar) once
+   * the LearnCard finishes. Lets a program supply its own explainer copy
+   * (e.g. self-driving explaining what signal sources and scouts are)
+   * instead of the generic onboarding deck. Unset → `RunScreen` falls back
+   * to `DEFAULT_TIPS`, so every other program is unaffected. Lives at
+   * `<program>/content/tips.ts` by convention.
+   */
+  getTips?: (store?: WizardStore) => Tip[];
   /**
    * Subcommand-specific CLI options. Spread into yargs `.options(...)` when the
    * program's subcommand is registered. Program-specific knowledge stays in

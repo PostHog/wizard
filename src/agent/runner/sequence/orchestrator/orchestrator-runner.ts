@@ -10,7 +10,7 @@
  * task resolve to a prompt fetched at startup into the registry. The wizard side
  * stays product-ignorant: it is the queue, the executor, and the loader.
  */
-import { failed, hostAborted } from '../../shared/errors';
+import { failed } from '../../shared/errors';
 import { RunOutcome } from '../../shared/types';
 import { randomUUID } from 'crypto';
 import {
@@ -43,8 +43,10 @@ import type {
 import { createEmitSpinner } from '../../shared/progress-collector';
 import { createAskBridge } from '../../shared/ask';
 import {
+  areSeededTasksEnabled,
   getHarness,
-  resolveRoleHarness,
+  resolveHarness,
+  resolveStageOverrides,
   type HarnessPick,
 } from '../../switchboard';
 import { isValidModel, requireKnownModel } from '../../switchboard/models';
@@ -66,7 +68,8 @@ import {
 import { RunMetrics } from './run-metrics';
 import { dependencyClosure, uncoveredBySink } from './queue-tools';
 import { deferSeededTasks } from './seeded-deps';
-import { isAskDisabled, LONGER_ASK_TIMEOUT_MS } from '@shared/ask-policy';
+import { LONGER_ASK_TIMEOUT_MS } from '@agent/wizard-ask-bridge';
+import { shouldDisableAsk } from '../../shared/bootstrap';
 import {
   agentRunTools,
   assembleSeedPrompt,
@@ -184,6 +187,13 @@ function terminalResult(
         },
       };
   }
+}
+
+function cancelledRun(): SequenceResult {
+  return {
+    outcome: RunOutcome.Aborted,
+    failure: { code: ErrorCodes.AgentAbort, message: 'Agent run cancelled' },
+  };
 }
 
 /** Every skill entry the menu knows, across categories. */
@@ -593,10 +603,15 @@ async function executeOrchestrator(
   cleanupQueue: () => void,
   controller: AbortController,
 ): Promise<SequenceResult> {
-  if (signal?.aborted) return hostAborted();
+  if (signal?.aborted) return cancelledRun();
   const runId = randomUUID();
   const { run } = config;
   const programId = config.programId;
+
+  // Switchboard context — reused for every per-role harness resolution below.
+  // The caller resolved the run-level binding from it; per-task roles overlay
+  // `binding.contextMillOverride[role]` on the same inputs.
+  const switchboardCtx = { ...config.switchboard, trace: undefined };
 
   // The WHAT (agent prompts) is served from context-mill. Fetch the registry
   // once up front: its types drive enqueue validation, and resolving a task to
@@ -605,9 +620,13 @@ async function executeOrchestrator(
   const registry = await loadAgentRegistry(boot.skillsBaseUrl, flow, {
     exclude: effectiveExcludedTaskTypes(config, boot.wizardFlags),
     // Baked into the prompts at load, so enqueue, dispatch, and telemetry all read one effective spec.
-    overrides: config.stageOverrides,
+    overrides: resolveStageOverrides(
+      programId,
+      boot.wizardFlags,
+      boot.wizardFlagPayloads,
+    ),
   });
-  if (signal?.aborted) return hostAborted();
+  if (signal?.aborted) return cancelledRun();
   const seedPrompt = registry.seed;
   if (!seedPrompt) {
     throw new Error(
@@ -619,7 +638,7 @@ async function executeOrchestrator(
   const taskModels = Object.fromEntries(
     ['seed', ...registry.types].map((type) => {
       const prompt = type === 'seed' ? seedPrompt : registry.get(type);
-      const pick = resolveRoleHarness(config.binding, type);
+      const pick = resolveHarness(switchboardCtx, type);
       const specModel = prompt && promptModelFor(prompt, pick.harness).model;
       return [type, isValidModel(specModel) ? specModel : pick.model];
     }),
@@ -644,7 +663,7 @@ async function executeOrchestrator(
 
   const store = new QueueStore(input.installDir, runId, {
     onTransition: (event, task) => {
-      const pick = resolveRoleHarness(config.binding, task.type);
+      const pick = resolveHarness(switchboardCtx, task.type);
       // Mirror dispatch's allow-list fallback so attribution names the model that runs.
       const specModel = taskModelSpec(registry, task, pick.harness).model;
       const base = {
@@ -715,7 +734,7 @@ async function executeOrchestrator(
   let commandmentsPath: string | undefined;
   let referenceInstallPath: string | undefined;
   const menuSkillEntries = await fetchSkillMenuEntries(boot.skillsBaseUrl);
-  if (signal?.aborted) return hostAborted();
+  if (signal?.aborted) return cancelledRun();
   // The framework key for reference + variant resolution. `input.integration`
   // is the detected framework and always wins; `input.skillId` is the
   // fallback for the basic-integration path, where the caller sets it to the
@@ -736,7 +755,7 @@ async function executeOrchestrator(
         triage: boot.triageProvider,
       },
     );
-    if (signal?.aborted) return hostAborted();
+    if (signal?.aborted) return cancelledRun();
     if (ref.kind === 'ok') {
       referenceInstallPath = ref.path;
       const example = path.join(ref.path, 'references', 'EXAMPLE.md');
@@ -861,7 +880,7 @@ async function executeOrchestrator(
   // depend on them, and no prompt has to remember they are there.
   // Kill switch: off (or unset), the wizard queues nothing itself and the run
   // is byte-identical to a project with no detected sources.
-  const seedEntries = config.seededTasksEnabled
+  const seedEntries = areSeededTasksEnabled(boot.wizardFlags)
     ? config.seedTasks?.() ?? []
     : [];
   const seededTypes: string[] = [];
@@ -916,7 +935,7 @@ async function executeOrchestrator(
           signal,
         }),
       );
-      if (signal?.aborted) return hostAborted();
+      if (signal?.aborted) return cancelledRun();
     }
     logToFile(`[orchestrator] runner-seeded task ${seeded.type}`);
   }
@@ -947,7 +966,7 @@ async function executeOrchestrator(
 
   // One bridge for the run, handed only to a task whose prompt allows asking.
   // Absent in CI and signup, where nobody can answer.
-  const askBridge = isAskDisabled(input.flags)
+  const askBridge = shouldDisableAsk(input.flags)
     ? undefined
     : createAskBridge(interaction, {
         signal,
@@ -978,7 +997,7 @@ async function executeOrchestrator(
   // Prompt-frontmatter model wins over the switchboard pick (§3.6 of the
   // switchboard plan) — the switchboard's model is the fallback when the
   // prompt is silent.
-  const seedPick = resolveRoleHarness(config.binding, 'seed');
+  const seedPick = resolveHarness(switchboardCtx, 'seed');
   const seedHarness = requireTaskHarness(seedPick);
   const seedModel = promptModelFor(seedPrompt, seedPick.harness);
   const seedResult = await seedHarness.runTask({
@@ -1007,7 +1026,7 @@ async function executeOrchestrator(
     requestRemark: false,
     analyticsProperties: { task_type: 'seed', harness: seedPick.harness },
   });
-  if (signal?.aborted) return hostAborted();
+  if (signal?.aborted) return cancelledRun();
   const seedTerminal = terminalResult(seedResult);
   if (seedTerminal) return seedTerminal;
   analytics.wizardCapture('orchestrator seeded', {
@@ -1188,9 +1207,10 @@ async function executeOrchestrator(
       // panel shows progress); errors still surface — the harness stops the
       // spinner with its own error text.
       //
-      // Per-task role = task.type. Programs resolved any role override before
-      // invocation; prompt-frontmatter model still wins (§3.6).
-      const taskPick = resolveRoleHarness(config.binding, task.type);
+      // Per-task role = task.type — the switchboard consults
+      // PROGRAM_BINDINGS[id].contextMillOverride?.[task.type] for wizard-side
+      // per-agent overrides. Prompt-frontmatter model still wins (§3.6).
+      const taskPick = resolveHarness(switchboardCtx, task.type);
       const taskHarness = requireTaskHarness(taskPick);
       const taskModel = taskModelSpec(registry, task, taskPick.harness);
       let taskResult: AgentResult;
@@ -1341,7 +1361,7 @@ async function executeOrchestrator(
     reportBlockedTasks(store.list(), stoppedBy);
     return { outcome: fatal.outcome, failure: fatal.failure };
   }
-  if (signal?.aborted) return hostAborted();
+  if (signal?.aborted) return cancelledRun();
 
   renderQueue();
 

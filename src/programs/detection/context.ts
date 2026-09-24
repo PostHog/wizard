@@ -11,16 +11,6 @@ import { DETECTION_TIMEOUT_MS } from '@shared/constants';
 import type { FrameworkConfig } from '@programs/framework-config';
 import type { WizardRunOptions } from '@utils/types';
 
-/** Host data used when gathering context for a chosen project. */
-export type FrameworkDetectionState = Pick<
-  WizardRunOptions,
-  'installDir' | 'debug' | 'signup' | 'ci' | 'benchmark' | 'yaraReport'
-> & {
-  frameworkConfig: FrameworkConfig | null;
-  frameworkContext: Record<string, unknown>;
-  detectedFrameworkLabel: string | null;
-};
-
 /**
  * Run a framework's `gatherContext()` to collect variant-specific
  * metadata (e.g., router type for Next.js, Expo vs bare for React Native).

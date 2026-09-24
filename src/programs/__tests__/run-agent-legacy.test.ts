@@ -1,41 +1,23 @@
 import { runNonInteractive } from '@lib/runners/run-non-interactive';
 import { runWizard } from '@lib/runners/run-wizard';
-import { authenticate } from '@programs/authenticate';
-import { runProgramAgent } from '@lib/runners/run-program-agent';
-import { runAgent, RunOutcome, type RunResult } from '@agent/runner';
-import { Harness, Integration, Sequence } from '@shared/constants';
-import { uploadEnvironmentVariablesStep } from '@steps/upload-environment-variables';
 import {
-  buildSession,
-  DiscoveredFeature,
-  OutroKind,
-  ScanConsent,
-} from '@lib/wizard-session';
-import type { ApiUser } from '@shared/api';
+  authenticate,
+  refreshCredentialsIfNeeded,
+} from '@programs/authenticate';
+import { runProgramAgent } from '../run-agent-legacy';
+import { runAgent, RunOutcome, type RunResult } from '@agent/runner';
+import { Harness, Sequence } from '@shared/constants';
+import { buildSession, OutroKind } from '@lib/wizard-session';
 import { HostResolution } from '@shared/host-resolution';
 import { LoggingUI } from '@ui/logging-ui';
 import { InkUI } from '@ui/tui/ink-ui';
-import * as ledgerWatch from '../audit/watch-ledger';
-import { auditConfig } from '../audit/index';
-import { AUDIT_SEED_CHECKS } from '../audit/seed';
-import { AUDIT_CHECKS_FILE, AUDIT_CHECKS_KEY } from '../audit/types';
-import { EVENT_PLAN_FILE } from '../posthog-integration/constants';
 import { startTUI } from '@ui/tui/start-tui';
 import { WizardStore } from '@ui/tui/store';
 import { getUI, setUI } from '@ui';
 import { analytics } from '@utils/analytics';
 import { initLogFile, logToFile } from '@utils/debug';
-import { clearCleanup, runCleanups, wizardAbort } from '@utils/wizard-abort';
-import * as fs from 'node:fs';
-import * as os from 'node:os';
-import * as path from 'node:path';
+import { wizardAbort } from '@utils/wizard-abort';
 import { ErrorCodes } from '@shared/errors';
-import {
-  checkAllSettingsConflicts,
-  restoreClaudeSettings,
-} from '@shared/claude-settings';
-import { refreshAccessToken } from '@utils/oauth-token';
-import { errorTrackingUploadSourceMapsConfig } from '../error-tracking-upload-source-maps/index';
 import type { ProgramConfig } from '../program-step';
 import type { ProgramRun } from '../program-run';
 
@@ -51,6 +33,10 @@ vi.mock('@shared/local-dev', async (original) => ({
 vi.mock('@utils/environment', async (original) => ({
   ...(await original<typeof import('@utils/environment')>()),
   readEnvironment: () => ({}),
+}));
+vi.mock('@agent/gateway-session', async (original) => ({
+  ...(await original<typeof import('@agent/gateway-session')>()),
+  configureGatewayFromCIEnvironment: vi.fn(),
 }));
 vi.mock('@programs/task-stream/index', () => ({
   TaskStreamPush: class {
@@ -85,26 +71,23 @@ vi.mock('@agent/runner', async (original) => ({
 }));
 vi.mock('@programs/authenticate', () => ({
   authenticate: vi.fn().mockResolvedValue(undefined),
-}));
-vi.mock('@steps/upload-environment-variables', async (original) => ({
-  ...(await original<typeof import('@steps/upload-environment-variables')>()),
-  uploadEnvironmentVariablesStep: vi.fn().mockResolvedValue(['POSTHOG_KEY']),
+  refreshCredentialsIfNeeded: vi.fn((credentials: unknown) =>
+    Promise.resolve(credentials),
+  ),
 }));
 vi.mock('@shared/claude-settings', () => ({
   checkAllSettingsConflicts: vi.fn().mockReturnValue([]),
   restoreClaudeSettings: vi.fn(),
 }));
-vi.mock('@utils/wizard-abort', async (original) => {
-  const actual = await original<typeof import('@utils/wizard-abort')>();
-  return {
-    ...actual,
-    wizardAbort: vi.fn().mockResolvedValue(undefined),
-  };
-});
+vi.mock('@utils/wizard-abort', async (original) => ({
+  ...(await original<typeof import('@utils/wizard-abort')>()),
+  registerCleanup: vi.fn(),
+  wizardAbort: vi.fn().mockResolvedValue(undefined),
+}));
 vi.mock('../posthog-integration/detect', () => ({
   maybeStampAiSdkDetected: vi.fn(),
+  stampAiSdkDetected: vi.fn(),
 }));
-vi.mock('@utils/oauth-token', () => ({ refreshAccessToken: vi.fn() }));
 
 const program = (id: ProgramConfig['id'] = 'metrics'): ProgramConfig => ({
   id,
@@ -157,7 +140,6 @@ const finishRun: typeof runAgent = (_config, _input, options) => {
 };
 
 beforeEach(() => {
-  clearCleanup();
   vi.clearAllMocks();
   vi.mocked(authenticate).mockImplementation((sess) => {
     sess.credentials = session().credentials;
@@ -167,10 +149,7 @@ beforeEach(() => {
   logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
   vi.mocked(runAgent).mockImplementation(finishRun);
 });
-afterEach(() => {
-  clearCleanup();
-  logSpy.mockRestore();
-});
+afterEach(() => logSpy.mockRestore());
 
 it.each([
   ['metrics', Harness.pi, Sequence.orchestrator],
@@ -239,150 +218,25 @@ it('clamps a composed program to linear and keeps host analytics alive', async (
   expect(analytics.shutdown).toHaveBeenCalledExactlyOnceWith('success');
 });
 
-it('supplies environment upload through the run host for the requested project', async () => {
+it('supplies the live UI as the run host, not the session it was handed', async () => {
+  const ui = getUI();
+  vi.spyOn(ui, 'getFrameworkContext').mockReturnValue('ios');
+  const write = vi.spyOn(ui, 'setFrameworkContext');
+  const warn = vi.spyOn(ui.log, 'warn');
   const config = program();
-  config.run = async (_session, host) => {
-    const uploaded = await host.uploadEnvironmentVariables(
-      { POSTHOG_KEY: 'phc_test' },
-      Integration.nextjs,
-      '/repo/apps/web',
-    );
-    expect(uploaded).toEqual(['POSTHOG_KEY']);
-    return program().run as ProgramRun;
+  let read: unknown;
+  config.run = (_session, host) => {
+    read = host.getFrameworkContext('selectedVariant');
+    host.setFrameworkContext('sourceMapsCompletedVariant', 'ios');
+    host.warn('careful');
+    return Promise.resolve(program().run as ProgramRun);
   };
 
   await runProgramAgent(config, session());
 
-  expect(uploadEnvironmentVariablesStep).toHaveBeenCalledWith(
-    { POSTHOG_KEY: 'phc_test' },
-    {
-      integration: Integration.nextjs,
-      session: { installDir: '/repo/apps/web' },
-    },
-  );
-});
-
-it('reads completion data when each hook runs, after late URL updates', async () => {
-  const currentSession = session();
-  const postRun = vi.fn().mockResolvedValue(undefined);
-  const buildOutroData = vi.fn().mockReturnValue({
-    kind: OutroKind.Success,
-    message: 'Done',
-  });
-  const buildOutroNextSteps = vi.fn().mockReturnValue(undefined);
-  const config = program();
-  config.run = {
-    ...(config.run as ProgramRun),
-    postRun,
-    buildOutroData,
-    buildOutroNextSteps,
-  };
-  vi.mocked(runAgent).mockImplementationOnce(async (runConfig, input) => {
-    currentSession.dashboardUrl = 'https://us.posthog.com/dashboard/42';
-    await runConfig.hooks?.postRun?.(input.credentials);
-    currentSession.notebookUrl = 'https://us.posthog.com/notebook/7';
-    runConfig.hooks?.buildOutroData?.(input.credentials);
-    runConfig.hooks?.buildOutroNextSteps?.(input.credentials, ['seeded']);
-    return { outcome: RunOutcome.Success, snapshot };
-  });
-
-  await runProgramAgent(config, currentSession);
-
-  expect(postRun).toHaveBeenCalledWith(
-    {
-      signup: false,
-      dashboardUrl: 'https://us.posthog.com/dashboard/42',
-      notebookUrl: null,
-    },
-    currentSession.credentials,
-  );
-  expect(buildOutroData).toHaveBeenCalledWith(
-    {
-      signup: false,
-      dashboardUrl: 'https://us.posthog.com/dashboard/42',
-      notebookUrl: 'https://us.posthog.com/notebook/7',
-    },
-    currentSession.credentials,
-  );
-  expect(buildOutroNextSteps).toHaveBeenCalledWith(
-    {
-      signup: false,
-      dashboardUrl: 'https://us.posthog.com/dashboard/42',
-      notebookUrl: 'https://us.posthog.com/notebook/7',
-    },
-    currentSession.credentials,
-    ['seeded'],
-  );
-});
-
-it('projects an audit ledger update from program data through the legacy runner UI bridge', async () => {
-  const installDir = fs.mkdtempSync(
-    path.join(os.tmpdir(), 'wizard-audit-bridge-'),
-  );
-  const currentSession = session();
-  currentSession.installDir = installDir;
-  const config = program('audit');
-  config.auditLedgerFile = AUDIT_CHECKS_FILE;
-  config.auditSeedChecks = AUDIT_SEED_CHECKS;
-  const ui = new LoggingUI();
-  const setFrameworkContext = vi.spyOn(ui, 'setFrameworkContext');
-  setUI(ui);
-  const watchLedger = vi.spyOn(ledgerWatch, 'watchAuditLedger');
-  const checksSent = () =>
-    setFrameworkContext.mock.calls.filter(([key]) => key === AUDIT_CHECKS_KEY);
-  const checks = [{ id: 'new', area: 'Events', label: 'new', status: 'pass' }];
-  vi.mocked(runAgent).mockImplementationOnce(async () => {
-    fs.writeFileSync(
-      path.join(installDir, AUDIT_CHECKS_FILE),
-      JSON.stringify(checks),
-    );
-    // The update reaches the UI while the agent still runs.
-    await vi.waitFor(
-      () =>
-        expect(setFrameworkContext).toHaveBeenCalledWith(
-          AUDIT_CHECKS_KEY,
-          checks,
-        ),
-      { timeout: 7000 },
-    );
-    return { outcome: RunOutcome.Success, snapshot };
-  });
-  try {
-    await runProgramAgent(config, currentSession);
-    // runProgram's watcher is the only one; the projection forwards each value once.
-    expect(watchLedger).toHaveBeenCalledOnce();
-    expect(checksSent()).toEqual([
-      [AUDIT_CHECKS_KEY, AUDIT_SEED_CHECKS],
-      [AUDIT_CHECKS_KEY, checks],
-    ]);
-  } finally {
-    watchLedger.mockRestore();
-    fs.rmSync(installDir, { recursive: true, force: true });
-  }
-}, 8000);
-
-it('hands the CI bearer from the token file to ciPreRun and the agent through the session', async () => {
-  const installDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wizard-ci-auth-'));
-  const tokenFile = path.join(installDir, 'gateway-token');
-  fs.writeFileSync(tokenFile, 'fixed-ci-bearer');
-  vi.stubEnv('WIZARD_CI_GATEWAY_TOKEN_FILE', tokenFile);
-  try {
-    const ciPreRun = vi.fn((_session: ReturnType<typeof buildSession>) =>
-      Promise.resolve(),
-    );
-    runNonInteractive(
-      { ...program(), ciPreRun },
-      { apiKey: 'phx_test', projectId: '42', installDir, telemetry: false },
-      'ci',
-    );
-    await vi.waitFor(() => expect(streamShutdown).toHaveBeenCalledOnce());
-    const provider = ciPreRun.mock.calls[0]?.[0].inferenceAuth;
-    expect(provider).toBeDefined();
-    expect(vi.mocked(runAgent).mock.calls[0]?.[1].inferenceAuth).toBe(provider);
-  } finally {
-    vi.unstubAllEnvs();
-    fs.rmSync(installDir, { recursive: true, force: true });
-  }
+  expect(read).toBe('ios');
+  expect(write).toHaveBeenCalledWith('sourceMapsCompletedVariant', 'ios');
+  expect(warn).toHaveBeenCalledWith('careful');
 });
 
 it.each([
@@ -492,91 +346,29 @@ it('rethrows the original crash for the outer runner', async () => {
   expect(analytics.shutdown).not.toHaveBeenCalled();
 });
 
-it.each(['ci', 'headless'] as const)(
-  'removes new Wizard skills when %s stream settlement fails after agent success',
-  async (mode) => {
-    const installDir = fs.mkdtempSync(
-      path.join(os.tmpdir(), `wizard-${mode}-late-failure-`),
-    );
-    const skillDir = path.join(installDir, '.claude', 'skills', 'unfinished');
-    const tokenFile = path.join(installDir, 'gateway-token');
-    fs.writeFileSync(tokenFile, 'fixed-ci-bearer');
-    vi.stubEnv('WIZARD_CI_GATEWAY_TOKEN_FILE', tokenFile);
-    const settlementError = new Error('task stream failed to flush');
-    streamShutdown.mockRejectedValueOnce(settlementError);
-    vi.mocked(wizardAbort).mockImplementationOnce(() => {
-      runCleanups();
-      return Promise.resolve(undefined as never);
-    });
-    vi.mocked(runAgent).mockImplementationOnce(() => {
-      fs.mkdirSync(skillDir, { recursive: true });
-      fs.writeFileSync(path.join(skillDir, '.posthog-wizard'), '');
-      return Promise.resolve({ outcome: RunOutcome.Success, snapshot });
-    });
+it('rethrows a login failure for the CLI roots, before the agent starts', async () => {
+  const error = new Error('OAuth cancelled');
+  vi.mocked(authenticate).mockRejectedValueOnce(error);
+  await expect(runProgramAgent(program(), session())).rejects.toBe(error);
+  expect(runAgent).not.toHaveBeenCalled();
+  expect(wizardAbort).not.toHaveBeenCalled();
+});
 
-    try {
-      runNonInteractive(
-        program(),
-        { apiKey: 'phx_test', projectId: '1', installDir, telemetry: false },
-        mode,
-      );
-      await vi.waitFor(() => expect(wizardAbort).toHaveBeenCalledOnce());
-      expect(wizardAbort).toHaveBeenCalledWith(
-        expect.objectContaining({ error: settlementError }),
-      );
-      // The agent run succeeded first, so 'success' goes out before wizardAbort's 'error'.
-      expect(analytics.shutdown).toHaveBeenCalledExactlyOnceWith('success');
-      expect(
-        vi.mocked(analytics.shutdown).mock.invocationCallOrder[0],
-      ).toBeLessThan(vi.mocked(wizardAbort).mock.invocationCallOrder[0]);
-      expect(streamShutdown).toHaveBeenCalledTimes(2);
-      expect(fs.existsSync(skillDir)).toBe(false);
-    } finally {
-      vi.unstubAllEnvs();
-      fs.rmSync(installDir, { recursive: true, force: true });
-    }
-  },
-);
-
-it("cleans a marked install when program setup throws before the functional runner, through the CLI root's drain", async () => {
-  const installDir = fs.mkdtempSync(
-    path.join(os.tmpdir(), 'wizard-setup-cleanup-'),
+it('projects a refreshed token and the AI SDK stamp back onto the session', async () => {
+  const current = session();
+  const setAccessToken = vi.spyOn(getUI(), 'setAccessToken');
+  vi.mocked(refreshCredentialsIfNeeded).mockImplementationOnce((credentials) =>
+    Promise.resolve({ ...credentials, accessToken: 'pha_refreshed' }),
   );
-  const skillDir = path.join(installDir, '.claude', 'skills', 'setup-install');
-  const setupFailure = new Error('program setup failed');
-  const failingProgram = program();
-  failingProgram.run = () => {
-    fs.mkdirSync(skillDir, { recursive: true });
-    fs.writeFileSync(path.join(skillDir, '.posthog-wizard'), '');
-    throw setupFailure;
-  };
-  const actual = await vi.importActual<typeof import('@utils/wizard-abort')>(
-    '@utils/wizard-abort',
+  await runProgramAgent(program(), current);
+  expect(vi.mocked(runAgent).mock.calls[0][1].credentials.accessToken).toBe(
+    'pha_refreshed',
   );
-  vi.mocked(wizardAbort).mockImplementationOnce(actual.wizardAbort);
-  const exit = vi
-    .spyOn(process, 'exit')
-    .mockImplementation(() => undefined as never);
-  const stderr = vi
-    .spyOn(process.stderr, 'write')
-    .mockImplementation(() => true);
-  try {
-    runNonInteractive(
-      failingProgram,
-      { apiKey: 'phx_test', projectId: '1', installDir, telemetry: false },
-      'headless',
-    );
-    await vi.waitFor(() => expect(exit).toHaveBeenCalled());
-    expect(wizardAbort).toHaveBeenCalledWith(
-      expect.objectContaining({ error: setupFailure }),
-    );
-    expect(fs.existsSync(skillDir)).toBe(false);
-    expect(runAgent).not.toHaveBeenCalled();
-  } finally {
-    exit.mockRestore();
-    stderr.mockRestore();
-    fs.rmSync(installDir, { recursive: true, force: true });
-  }
+  expect(current.credentials?.accessToken).toBe('pha_refreshed');
+  // Only the token fields change; the login keeps its host.
+  expect(current.credentials?.host).toBeInstanceOf(HostResolution);
+  expect(setAccessToken).toHaveBeenCalledExactlyOnceWith(current.credentials);
+  expect(current.aiSdkStampReported).toBe(true);
 });
 
 it.each([
@@ -640,45 +432,29 @@ it('keeps a headless run a success when its terminal analytics flush fails', asy
   );
 });
 
-it.each([
-  ['SIGINT', [[130]], false],
-  ['SIGTERM', [[143]], false],
-  ['completion', [], true],
-] as const)(
-  'a headless run ended by %s exits %j and keeps its new skill: %s',
-  async (ending, exits, kept) => {
-    const installDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wizard-ci-'));
-    const skillDir = path.join(installDir, '.claude', 'skills', 'installed');
-    const exit = vi
-      .spyOn(process, 'exit')
-      .mockImplementation(() => undefined as never);
-    const config: ProgramConfig = {
-      ...program(),
-      ciPreRun: () => {
-        fs.mkdirSync(skillDir, { recursive: true });
-        fs.writeFileSync(path.join(skillDir, '.posthog-wizard'), '');
-        if (ending !== 'completion') process.emit(ending);
-        return Promise.resolve();
-      },
-    };
-    try {
-      runNonInteractive(
-        config,
-        { apiKey: 'phx_test', projectId: '1', installDir, telemetry: false },
-        'headless',
-      );
-      await vi.waitFor(() => expect(streamShutdown).toHaveBeenCalledOnce());
-      await new Promise<void>((resolve) => setImmediate(resolve));
-      runCleanups();
+it('supplies the logging UI as the CI host for ciPreRun', async () => {
+  const config = program();
+  config.ciPreRun = (_session, host) => {
+    host.log.info('Scanning the repo');
+    host.log.warn('Scan failed');
+    return Promise.resolve();
+  };
 
-      expect(exit.mock.calls).toEqual(exits);
-      expect(fs.existsSync(skillDir)).toBe(kept);
-    } finally {
-      exit.mockRestore();
-      fs.rmSync(installDir, { recursive: true, force: true });
-    }
-  },
-);
+  runNonInteractive(
+    config,
+    {
+      apiKey: 'phx_test',
+      projectId: '1',
+      installDir: '/tmp/adapter-test',
+      telemetry: false,
+    },
+    'headless',
+  );
+  await vi.waitFor(() => expect(streamShutdown).toHaveBeenCalledOnce());
+
+  expect(logSpy).toHaveBeenCalledWith('│  Scanning the repo');
+  expect(logSpy).toHaveBeenCalledWith('▲  Scan failed');
+});
 
 it('keeps a TUI run a success when its terminal analytics flush fails', async () => {
   const flushError = new Error('flush timed out');
@@ -712,214 +488,4 @@ it('keeps a TUI run a success when its terminal analytics flush fails', async ()
     flushError,
   );
   exit.mockRestore();
-});
-
-describe('host wiring over runProgram', () => {
-  const approved = {
-    organization: { id: 'org-1', is_ai_data_processing_approved: true },
-  } as ApiUser;
-
-  it('authenticates through the provider after the settings gate, then awaits AI opt-in and the post-auth gate', async () => {
-    const order: string[] = [];
-    const ui = getUI();
-    const record =
-      <T>(name: string, value?: T) =>
-      () => {
-        order.push(name);
-        return value as T;
-      };
-    vi.mocked(checkAllSettingsConflicts).mockImplementationOnce(
-      record('settings check', []),
-    );
-    vi.mocked(authenticate).mockImplementationOnce(
-      record('authenticate', Promise.resolve()),
-    );
-    vi.spyOn(ui, 'waitForAiOptIn').mockImplementation(
-      record('waitForAiOptIn', Promise.resolve()),
-    );
-    vi.spyOn(ui, 'waitForGate').mockImplementation((id) =>
-      record(`waitForGate:${id}`, Promise.resolve())(),
-    );
-    vi.mocked(analytics.getAllFlagsForWizard).mockImplementationOnce(
-      record('getAllFlagsForWizard', Promise.resolve({})),
-    );
-    vi.mocked(runAgent).mockImplementationOnce((...args) => {
-      order.push('runAgent');
-      return finishRun(...args);
-    });
-
-    await runProgramAgent(errorTrackingUploadSourceMapsConfig, {
-      ...buildSession({ ci: false, installDir: '/tmp/adapter-test' }),
-      credentials: session().credentials,
-      apiUser: { organization: { is_ai_data_processing_approved: false } },
-    } as ReturnType<typeof session>);
-
-    expect(order).toEqual([
-      'settings check',
-      'authenticate',
-      'waitForAiOptIn',
-      'waitForGate:detect',
-      'getAllFlagsForWizard',
-      'runAgent',
-    ]);
-  });
-
-  it('a refreshed token reaches session and UI', async () => {
-    vi.mocked(refreshAccessToken).mockResolvedValueOnce({
-      access_token: 'pha_new',
-      refresh_token: 'phr_rotated',
-      expires_in: 3600,
-      token_type: 'Bearer',
-      scope: 'project:read',
-    });
-    // authenticate is a no-op for a session that already has its login.
-    vi.mocked(authenticate).mockImplementationOnce(() => Promise.resolve());
-    const aging = {
-      ...session().credentials,
-      refreshToken: 'phr_old',
-      expiresAt: Date.now() + 20 * 60 * 1000,
-      projectId: 7,
-    };
-    const refreshing = { ...session(), credentials: aging };
-    const setAccessToken = vi.spyOn(getUI(), 'setAccessToken');
-
-    await runProgramAgent(program(), refreshing);
-
-    expect(refreshing.credentials).toMatchObject({
-      accessToken: 'pha_new',
-      refreshToken: 'phr_rotated',
-      projectId: 7,
-    });
-    // The login's host keeps its class, not a structured copy.
-    expect(refreshing.credentials.host).toBe(aging.host);
-    expect(aging.accessToken).toBe('test');
-    expect(setAccessToken).toHaveBeenCalledExactlyOnceWith(
-      refreshing.credentials,
-    );
-  });
-
-  it.each([
-    [false, 1],
-    [true, 0],
-  ])(
-    'passes the session stamp latch (%s) to runProgram and latches the session',
-    async (latched, stamps) => {
-      const stamping = Object.assign(session(), {
-        apiUser: approved,
-        scanConsent: ScanConsent.Granted,
-        discoveredFeatures: [DiscoveredFeature.LLM],
-        aiSdkStampReported: latched,
-      });
-
-      await runProgramAgent(program(), stamping);
-
-      expect(analytics.groupIdentify).toHaveBeenCalledTimes(stamps);
-      expect(stamping.aiSdkStampReported).toBe(true);
-    },
-  );
-
-  it('registers the linear settings restore once, before the run can reach the outro', async () => {
-    const onEnterScreen = vi.spyOn(getUI(), 'onEnterScreen');
-    let registeredBeforeRun = false;
-    vi.mocked(runAgent).mockImplementationOnce((...args) => {
-      registeredBeforeRun = onEnterScreen.mock.calls.length === 1;
-      return finishRun(...args);
-    });
-
-    // A composed program is clamped to linear.
-    await runProgramAgent(program(), session(), { composed: true });
-
-    expect(registeredBeforeRun).toBe(true);
-    expect(onEnterScreen).toHaveBeenCalledExactlyOnceWith(
-      'outro',
-      expect.any(Function),
-    );
-    onEnterScreen.mock.calls[0][1]();
-    expect(restoreClaudeSettings).toHaveBeenCalledExactlyOnceWith(
-      '/tmp/adapter-test',
-    );
-
-    onEnterScreen.mockClear();
-    await runProgramAgent(program(), session());
-    expect(onEnterScreen).not.toHaveBeenCalled();
-  });
-
-  describe('program files', () => {
-    let installDir: string;
-    beforeEach(() => {
-      installDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wizard-files-'));
-    });
-    afterEach(() => {
-      fs.rmSync(installDir, { recursive: true, force: true });
-    });
-
-    it('sends the host the seeded audit checks before the run, then each update once', async () => {
-      const setFrameworkContext = vi.spyOn(getUI(), 'setFrameworkContext');
-      const sent = () =>
-        setFrameworkContext.mock.calls.filter(
-          ([key]) => key === AUDIT_CHECKS_KEY,
-        );
-      const resolved = [{ ...AUDIT_SEED_CHECKS[0], status: 'pass' }];
-      let sentBeforeRun: unknown[][] = [];
-      vi.mocked(runAgent).mockImplementationOnce((...args) => {
-        sentBeforeRun = sent();
-        fs.writeFileSync(
-          path.join(installDir, AUDIT_CHECKS_FILE),
-          JSON.stringify(resolved),
-        );
-        return finishRun(...args);
-      });
-
-      await runProgramAgent(auditConfig, { ...session(), installDir });
-
-      expect(sentBeforeRun).toEqual([[AUDIT_CHECKS_KEY, AUDIT_SEED_CHECKS]]);
-      expect(sent()).toEqual([
-        [AUDIT_CHECKS_KEY, AUDIT_SEED_CHECKS],
-        [AUDIT_CHECKS_KEY, resolved],
-      ]);
-    });
-
-    it('sends the host the event plan an integration run wrote', async () => {
-      const setEventPlan = vi.spyOn(getUI(), 'setEventPlan');
-      vi.mocked(runAgent).mockImplementationOnce((...args) => {
-        fs.writeFileSync(
-          path.join(installDir, EVENT_PLAN_FILE),
-          JSON.stringify([{ event_name: 'checkout_started' }]),
-        );
-        return finishRun(...args);
-      });
-
-      await runProgramAgent(
-        { ...program('posthog-integration'), eventPlanFile: EVENT_PLAN_FILE },
-        { ...session(), installDir },
-      );
-
-      expect(setEventPlan).toHaveBeenCalledExactlyOnceWith([
-        { name: 'checkout_started', description: '' },
-      ]);
-    });
-  });
-
-  const hostFailure = new Error('host capability failed');
-  it.each([
-    [
-      'a failed login',
-      () => vi.mocked(authenticate).mockRejectedValueOnce(hostFailure),
-    ],
-    [
-      'a malformed flag override',
-      () =>
-        vi
-          .mocked(analytics.getAllFlagsForWizard)
-          .mockRejectedValueOnce(hostFailure),
-    ],
-  ])('rethrows %s for the CLI root, as before', async (_name, arrange) => {
-    arrange();
-
-    await expect(runProgramAgent(program(), session())).rejects.toBe(
-      hostFailure,
-    );
-    expect(runAgent).not.toHaveBeenCalled();
-    expect(wizardAbort).not.toHaveBeenCalled();
-  });
 });

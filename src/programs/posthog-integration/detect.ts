@@ -11,10 +11,11 @@
 
 import type { ProgramReadyContext } from '@programs/program-step';
 import {
-  type DiscoveredFeature,
+  DiscoveredFeature,
   mayReportScanResults,
   ScanConsent,
-} from '@shared/scan-consent';
+  type WizardSession,
+} from '@lib/wizard-session';
 import type { ApiUser } from '@shared/api';
 import { FRAMEWORK_REGISTRY } from '@programs/registry';
 import {
@@ -25,12 +26,13 @@ import {
 } from '@programs/detection/index';
 import { analytics } from '@utils/analytics';
 import { detectWarehouseSources } from '@programs/warehouse-sources/detect';
+import { AI_SOURCE_KINDS } from '@programs/warehouse-sources/registry';
+import type { DetectedSource } from '@programs/warehouse-sources/types';
 import {
   DETECTED_WAREHOUSE_SOURCES_KEY,
   getDetectedWarehouseSources,
 } from '@programs/warehouse-source/detect';
 import { findPackageJsons } from '@programs/shared/package-scanning';
-import { stampAiSdkDetected } from '@programs/posthog-integration/ai-sdk-stamp';
 
 export async function detectPostHogIntegration(
   ctx: ProgramReadyContext,
@@ -67,10 +69,7 @@ export async function detectPostHogIntegration(
     // pre-copy object and the live session would never see it.
     ctx.setSkillId(detectedIntegration);
 
-    const detectedLabel = config.metadata.getDetectedFrameworkLabel?.(context);
-    if (detectedLabel) {
-      ctx.setDetectedFramework(detectedLabel);
-    } else if (!session.detectedFrameworkLabel) {
+    if (!session.detectedFrameworkLabel) {
       ctx.setDetectedFramework(config.metadata.name);
     }
 
@@ -106,20 +105,6 @@ export async function detectPostHogIntegration(
  */
 const WAREHOUSE_SCAN_STATE_KEY = 'warehouseScanState';
 type WarehouseScanState = 'ok' | 'failed';
-
-type AiSdkDetectionState = {
-  apiUser: Pick<ApiUser, 'organization'> | null;
-  discoveredFeatures: DiscoveredFeature[];
-  frameworkContext: Record<string, unknown>;
-  scanConsent: ScanConsent;
-  aiSdkStampReported: boolean;
-};
-
-type WarehouseReportState = {
-  frameworkContext: Record<string, unknown>;
-  scanConsent: ScanConsent;
-  warehouseSourcesReported: boolean;
-};
 
 /**
  * Scan for data warehouse source signals (Postgres, Stripe, Hubspot, …) and,
@@ -160,6 +145,37 @@ function detectWarehouseSourcesForSuggestion(
   }
 }
 
+/** What the org stamp reads, with no session. */
+export type AiSdkStampEvidence = {
+  apiUser: Pick<ApiUser, 'organization'> | null;
+  discoveredFeatures: readonly DiscoveredFeature[];
+  warehouseSources: readonly DetectedSource[];
+  /** Scan consent was granted, so local detection results may be reported. */
+  mayReportScanResults: boolean;
+};
+
+function hasAiSdkEvidence(evidence: AiSdkStampEvidence): boolean {
+  return (
+    evidence.warehouseSources.some((s) => AI_SOURCE_KINDS.has(s.kind)) ||
+    evidence.discoveredFeatures.includes(DiscoveredFeature.LLM)
+  );
+}
+
+/**
+ * Boolean only, on the org, never the list of kinds or any non-AI tool: a
+ * decline must not leak even the shape of what local detection saw.
+ */
+export function stampAiSdkDetected(evidence: AiSdkStampEvidence): void {
+  if (!evidence.mayReportScanResults) return;
+  const organizationId = evidence.apiUser?.organization?.id;
+  if (!organizationId) return;
+  if (!hasAiSdkEvidence(evidence)) return;
+
+  analytics.groupIdentify('organization', organizationId, {
+    wizard_ai_sdk_detected: true,
+  });
+}
+
 /**
  * Fires the org stamp once per session, right after `authenticate()` succeeds
  * — never from the consent path, since consent on the intro screen resolves
@@ -171,7 +187,7 @@ function detectWarehouseSourcesForSuggestion(
  * anyway) and this only ever runs from the later, idempotent bootstrap.ts
  * call — still correctly finding no evidence, since CI skips the detect step.
  */
-export function maybeStampAiSdkDetected(session: AiSdkDetectionState): void {
+export function maybeStampAiSdkDetected(session: WizardSession): void {
   // Direct mutation, not a store setter: unlike `warehouseSourcesReported`
   // (latched only from TUI-only consent screens), this runs from
   // `authenticate()`, which also fires in `--ci` mode, where the session is a
@@ -204,7 +220,7 @@ export function maybeStampAiSdkDetected(session: AiSdkDetectionState): void {
  * without sending.
  */
 export function reportWarehouseSourcesDetected(
-  session: WarehouseReportState,
+  session: WizardSession,
 ): boolean {
   if (session.warehouseSourcesReported) return false;
   // 'undecided' means come back later, not no.

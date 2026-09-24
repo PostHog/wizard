@@ -43,12 +43,6 @@ export const LARAVEL_AGENT_CONFIG: FrameworkConfig<LaravelContext> = {
         laravelStructure,
       };
     },
-    getDetectedFrameworkLabel: (context) =>
-      context.projectType === LaravelProjectType.STANDARD
-        ? 'Laravel'
-        : context.projectType
-        ? getLaravelProjectTypeName(context.projectType)
-        : undefined,
   },
 
   detection: {

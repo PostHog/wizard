@@ -1,7 +1,8 @@
 import type { ProgramConfig } from '@programs/program-step';
 import type { ProgramRun } from '@programs/program-run';
+import type { WizardSession } from '@lib/wizard-session';
+import { OutroKind } from '@lib/wizard-session';
 import type { ProgramRunHost } from '@programs/host-capabilities';
-import { OutroKind } from '@agent';
 import { ERROR_TRACKING_UPLOAD_SOURCE_MAPS_PROGRAM } from './steps.js';
 import {
   buildSourceMapsUploadPrompt,
@@ -13,6 +14,7 @@ import {
   VARIANTS_REQUIRING_POSTHOG_CLI,
   type SkillVariant,
 } from './detect.js';
+import { getContentBlocks } from '../../ui/tui/decks/error-tracking-upload-source-maps/index.js';
 import { preinstallPostHogCliOnce } from '@programs/shared/posthog-cli-preinstall';
 
 const REPORT_FILE = 'posthog-source-maps-report.md';
@@ -41,9 +43,10 @@ export const errorTrackingUploadSourceMapsConfig: ProgramConfig = {
   requiresAi: true,
   steps: ERROR_TRACKING_UPLOAD_SOURCE_MAPS_PROGRAM,
   reportFile: REPORT_FILE,
+  getContentBlocks,
   requires: ['posthog-integration'],
 
-  run: (_session, host: ProgramRunHost): Promise<ProgramRun> => {
+  run: (_session: WizardSession, host: ProgramRunHost): Promise<ProgramRun> => {
     // Read the picked project LIVE at prompt-build time, not here: the picker
     // screen runs AFTER this run config is resolved (post-auth), and the store
     // forks the session reference, so the `session` passed in never sees the

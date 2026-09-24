@@ -7,18 +7,20 @@
  * snapshot (directory, credentials, project); `options` carries an optional
  * progress observer, an optional answerer.
  *
- * The pipeline prepares the run (logging, supplied inference auth, scan triage),
+ * The pipeline prepares the run (logging targets, gateway mint, scan triage),
  * then forks. The `orchestrator` variant routes to the task-queue runner.
  * Every other variant runs the fixed linear pipeline:
  *   [skill install] → agent init → prompt → run → errors → [postRun] → outro
  *
- * The agent reports and asks; it never renders, reads a session, exits, or
- * sends the process's terminal analytics.
- * Coded errors return Failed, uncoded throws return Crashed, and both retain
- * the caught error. Scan-report flushing is best effort after the result is
- * decided. A program run reaches this call through programs' `runProgram`,
- * which builds the config and input. Agentic detection and a standalone caller
- * build them and call it directly.
+ * The agent reports and asks, it never renders, never reads a session, never
+ * exits the process, never sends the process's terminal analytics and never
+ * rejects. A decided failure comes back in
+ * `RunResult.failure` with the same fields `wizardAbort` takes; an error the
+ * agent did not decide (a refused mint, an SDK crash) comes back as
+ * `outcome: RunOutcome.Crashed` with the original error attached, so a caller can keep
+ * handling it the way it always did. The legacy adapter in
+ * `src/programs/run-agent-legacy.ts` rebuilds today's session-driven
+ * behavior on top of this call for every existing caller.
  */
 
 import { Sequence } from '@shared/constants';
@@ -40,17 +42,12 @@ import {
 } from './shared/transcript-tail';
 import { getSequence } from './switchboard';
 import { flushScanReport } from '@agent/yara-hooks';
-import type { ProgressEmitter } from '@agent/progress';
-import { captureRunSkillCleanup } from '@shared/skill-run-cleanup';
-import { registerCleanup } from '@utils/cleanup-registry';
-import { hostAborted } from './shared/errors';
 
 export type {
   AbortCase,
   AgentFailure,
   BootstrapResult,
   Credentials,
-  InferenceAuthProvider,
   AgentRunDefinition,
   PromptContext,
   ResolvedBinding,
@@ -68,6 +65,8 @@ export type {
   AgentProgress,
   ProgressEmitter,
 } from '@agent/progress';
+export { shouldDisableAsk } from './shared/bootstrap';
+export { resolveBinding } from './switchboard';
 export type { ProgramBinding, SwitchboardCtx } from './switchboard';
 export { TASK_OUTCOMES_KEY } from './sequence/orchestrator/queue';
 export type { TaskOutcome } from './sequence/orchestrator/queue';
@@ -85,20 +84,7 @@ export async function runAgent(
   options: RunAgentOptions = {},
 ): Promise<RunResult> {
   let collector: ReturnType<typeof createProgressCollector> | undefined;
-  let scanReport: { flush(): void } | undefined;
   let transcript: TranscriptTail | undefined;
-  let cleanupInstalledSkills: (() => void) | undefined;
-  const cleanFailedRun = () => {
-    try {
-      cleanupInstalledSkills?.();
-    } catch (error) {
-      try {
-        logToFile('[agent-runner] failed-run skill cleanup error:', error);
-      } catch {
-        // Cleanup diagnostics must not replace the run result.
-      }
-    }
-  };
   const snapshot = (): RunResult['snapshot'] => {
     try {
       if (collector) {
@@ -121,37 +107,35 @@ export async function runAgent(
       },
     };
   };
-  const settle = (result: RunResult): RunResult => {
-    if (result.outcome !== RunOutcome.Success) cleanFailedRun();
+  const flushReport = (): void => {
+    // A deferred report keeps counting this run's scans toward the host run's.
+    if (config.scanReport === 'defer') return;
     try {
-      // A deferred report keeps counting this run's scans toward the host run's.
-      scanReport?.flush();
+      const report = flushScanReport({ yaraReport: input.flags.yaraReport });
+      if (report)
+        collector?.emit({ kind: 'log', level: 'info', message: report });
     } catch {
       // Scan reporting is best effort after the run outcome is decided.
     }
-    return result;
   };
   let result: RunResult;
   try {
-    // The report line reaches the collector once it exists; a drain cannot run before that.
-    if (config.scanReport !== 'defer') {
-      scanReport = armScanReportFlush(input.flags.yaraReport, (event) =>
-        collector?.emit(event),
-      );
-    }
-    // Capture before preparation so pre-harness failures clean new skills too.
-    cleanupInstalledSkills = captureRunSkillCleanup(input.installDir);
     collector = createProgressCollector(options.onProgress);
     const { emit } = collector;
     if (config.run.collectTranscript) transcript = createTranscriptTail(emit);
     const log = (message: string) =>
       emit({ kind: 'log', level: 'info', message });
     if (options.signal?.aborted) {
-      return settle({
-        ...hostAborted(),
+      flushReport();
+      return {
+        outcome: RunOutcome.Aborted,
         skillId: input.skillId,
+        failure: {
+          code: ErrorCodes.AgentAbort,
+          message: 'Agent run cancelled',
+        },
         snapshot: snapshot(),
-      });
+      };
     }
     const boot = await prepareRun(config, input);
     if (config.binding.sequence === Sequence.orchestrator) {
@@ -175,7 +159,16 @@ export async function runAgent(
       transcript,
     });
     result = {
-      ...(options.signal?.aborted ? hostAborted() : sequenceResult),
+      ...(options.signal?.aborted &&
+      sequenceResult.outcome === RunOutcome.Success
+        ? {
+            outcome: RunOutcome.Aborted as const,
+            failure: {
+              code: ErrorCodes.AgentAbort,
+              message: 'Agent run cancelled',
+            },
+          }
+        : sequenceResult),
       skillId: input.skillId,
       snapshot: snapshot(),
     };
@@ -197,13 +190,13 @@ export async function runAgent(
     } catch {
       // Logging is best effort.
     }
-    if (options.signal?.aborted) {
-      result = {
-        ...hostAborted(),
-        skillId: input.skillId,
-        snapshot: snapshot(),
-      };
-    } else if (failure.coded) {
+    let abortError = false;
+    try {
+      abortError = original.name === 'AbortError';
+    } catch {
+      /* Hostile Error getter. */
+    }
+    if (failure.coded) {
       result = {
         outcome: RunOutcome.Failed,
         skillId: input?.skillId,
@@ -211,6 +204,16 @@ export async function runAgent(
           code: failure.code,
           message: failure.message,
           error: original,
+        },
+        snapshot: snapshot(),
+      };
+    } else if (options.signal?.aborted && abortError) {
+      result = {
+        outcome: RunOutcome.Aborted,
+        skillId: input?.skillId,
+        failure: {
+          code: ErrorCodes.AgentAbort,
+          message: 'Agent run cancelled',
         },
         snapshot: snapshot(),
       };
@@ -227,26 +230,8 @@ export async function runAgent(
       };
     }
   }
-  return settle(result);
-}
-
-/**
- * Write the scan report and emit its line once: from the run's own tail, or
- * earlier when a process drain (wizardAbort, a signal handler) runs cleanups.
- */
-function armScanReportFlush(
-  yaraReport: boolean,
-  emit: ProgressEmitter,
-): { flush(): void } {
-  let flushed = false;
-  const flush = () => {
-    if (flushed) return;
-    flushed = true;
-    const report = flushScanReport({ yaraReport });
-    if (report) emit({ kind: 'log', level: 'info', message: report });
-  };
-  registerCleanup(flush);
-  return { flush };
+  flushReport();
+  return result;
 }
 
 function safeErrorMessage(error: unknown): string {

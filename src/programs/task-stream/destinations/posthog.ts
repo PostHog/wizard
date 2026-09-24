@@ -22,7 +22,7 @@ import type {
   TaskStreamUpdate,
   StreamEvent,
 } from '@programs/task-stream/types';
-import type { Credentials } from '@shared/api';
+import type { Credentials } from '@lib/wizard-session';
 import { logToFile } from '@utils/debug';
 
 export interface PostHogDestinationOptions {

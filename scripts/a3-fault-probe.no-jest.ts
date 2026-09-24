@@ -28,7 +28,9 @@ globalThis.fetch = (input, init) => {
 };
 
 const { runAgent } = await import('@agent/runner');
-const { createCiGatewayAuth } = await import('@shared/ci-gateway-auth');
+const { configureGatewayCredentialsForCI } = await import(
+  '@agent/gateway-session'
+);
 const { DEFAULT_AGENT_MODEL, Harness, Sequence } = await import(
   '@shared/constants'
 );
@@ -41,8 +43,7 @@ analytics.captureException = () => {};
 analytics.wizardCapture = () => {};
 analytics.shutdown = async () => {};
 
-const chosenHarness = harness === 'pi' ? Harness.pi : Harness.anthropic;
-const ciAuth = createCiGatewayAuth(
+configureGatewayCredentialsForCI(
   'phe_synthetic_fault_probe',
   228144,
   gatewayUrl,
@@ -62,8 +63,13 @@ const config: RunConfig = {
   composed: false,
   binding: {
     sequence: Sequence.linear,
-    harness: chosenHarness,
+    harness: harness as Harness,
     model: DEFAULT_AGENT_MODEL,
+  },
+  switchboard: {
+    program: 'fault-probe',
+    flags: {},
+    cliHarness: harness as Harness,
   },
   skillsBaseUrl: 'http://127.0.0.1:1',
   wizardFlags: {},
@@ -79,7 +85,6 @@ const input: RunInput = {
     host: HostResolution.fromApiHost('http://127.0.0.1:1', { localMcp: true }),
     projectId: 228144,
   },
-  inferenceAuth: { resolve: () => Promise.resolve(ciAuth) },
   project: null,
   apiUser: null,
   flags: {

@@ -1,14 +1,9 @@
 import type { ProgramConfig, ProgramStep } from '@programs/program-step';
+import { runProgramAgent } from '@programs/run-agent-legacy';
 import type { ProgramRun } from '@programs/program-run';
-import type {
-  ProgramCiHost,
-  ProgramRunHost,
-} from '@programs/host-capabilities';
-import type { FrameworkDetectionState } from '@programs/detection/context';
-import { AgentSignals, OutroKind, WIZARD_TOOL_NAMES } from '@agent';
-import { isAskDisabled } from '@shared/ask-policy';
-import { RunPhase } from '@shared/run-state';
-import { mayReportScanResults } from '@shared/scan-consent';
+import { AgentSignals, shouldDisableAsk, WIZARD_TOOL_NAMES } from '@agent';
+import type { WizardSession } from '@lib/wizard-session';
+import { mayReportScanResults, OutroKind, RunPhase } from '@lib/wizard-session';
 import {
   DEFAULT_PACKAGE_INSTALLATION,
   SPINNER_MESSAGE,
@@ -19,41 +14,28 @@ import {
   detectFramework,
   gatherFrameworkContext,
 } from '@programs/detection/index';
-import {
-  scopeInstallDirToProject,
-  type ProjectScopeSession,
-} from '@programs/detection/project-scope';
+import { scopeInstallDirToProject } from '@programs/detection/project-scope';
+import type {
+  ProgramCiHost,
+  ProgramRunHost,
+} from '@programs/host-capabilities';
 import { FRAMEWORK_REGISTRY } from '@programs/registry';
 import { wizardAbort } from '@utils/wizard-abort';
 import { ErrorCodes } from '@shared/errors';
 import {
   WIZARD_DEFAULT_AIO_LOGS_FLAG_KEY,
   WIZARD_INTERACTION_EVENT_NAME,
-  type AdditionalFeature,
-  type Integration,
 } from '@shared/constants';
 import { requestDeepLink } from '@utils/provisioning';
 import { openTrackedLink, withUtm } from '@utils/links';
 import type { HostResolution } from '@shared/host-resolution';
 import { getDetectedWarehouseSources } from '@programs/warehouse-source/detect';
 import { POSTHOG_INTEGRATION_PROGRAM } from './steps.js';
+import { getContentBlocks } from '../../ui/tui/decks/posthog-integration/index.js';
 import { buildCodingAgentPrompt } from './handoff.js';
 import { EVENT_PLAN_FILE } from './constants.js';
 
 const DASHBOARD_DEEP_LINK_KEY = 'dashboardDeepLink';
-
-type IntegrationCiSession = ProjectScopeSession &
-  FrameworkDetectionState & {
-    integration: Integration | null;
-  };
-
-type IntegrationRunSession = Pick<
-  FrameworkDetectionState,
-  'installDir' | 'frameworkConfig' | 'frameworkContext'
-> & {
-  typescript: boolean;
-  additionalFeatureQueue: AdditionalFeature[];
-};
 
 const WAREHOUSE_SOURCES_DOCS_URL =
   'https://posthog.com/docs/data-warehouse/sources';
@@ -62,11 +44,11 @@ const WAREHOUSE_SOURCES_DOCS_URL =
 const WAREHOUSE_SEED_TASK_TYPE = 'warehouse';
 
 function resolveContinueUrl(
-  signup: boolean,
+  sess: WizardSession,
   host: HostResolution,
   deepLink: unknown,
 ): string | undefined {
-  if (!signup) return undefined;
+  if (!sess.signup) return undefined;
   if (typeof deepLink === 'string' && deepLink) return deepLink;
   return withUtm(`${host.appHost}/products?source=wizard`, 'outro-continue');
 }
@@ -138,7 +120,7 @@ function warehouseSourceUrl(
  * past that is still unconnected and still belongs here.
  */
 function buildWarehouseNextSteps(
-  sess: Pick<IntegrationRunSession, 'frameworkContext'>,
+  sess: WizardSession,
   host: HostResolution,
   projectId: number | string,
   completedSeededTypes: readonly string[],
@@ -173,9 +155,7 @@ function buildWarehouseNextSteps(
  * because it is a note in a report: the outro `nextSteps` bullet carries the
  * same information deterministically, so nothing is lost if the agent drops it.
  */
-function warehouseReportInstruction(
-  sess: Pick<IntegrationRunSession, 'frameworkContext'>,
-): string {
+function warehouseReportInstruction(sess: WizardSession): string {
   const sources = getDetectedWarehouseSources(sess);
   if (sources.length === 0) return '';
 
@@ -202,7 +182,7 @@ function warehouseReportInstruction(
  * links by {@link buildWarehouseNextSteps}.
  */
 const warehouseSeedTasks: NonNullable<ProgramConfig['seedTasks']> = (sess) => {
-  if (isAskDisabled(sess)) return [];
+  if (shouldDisableAsk(sess)) return [];
   const sources = getDetectedWarehouseSources(sess);
   if (sources.length === 0) return [];
 
@@ -267,6 +247,7 @@ export const posthogIntegrationConfig: ProgramConfig = {
   agentFlow: 'integration-v2',
   eventPlanFile: EVENT_PLAN_FILE,
   steps: POSTHOG_INTEGRATION_PROGRAM,
+  getContentBlocks,
   // Basic integration runs without structured user input; drop wizard_ask
   // so the model can't pop modal prompts mid-run. The runner forwards this
   // list to the general-purpose subagent as well, so dispatched subagents
@@ -285,7 +266,7 @@ export const posthogIntegrationConfig: ProgramConfig = {
   // CI-mode prerequisite work: the headless equivalent of the detect step's
   // onReady hook. Auto-detect the framework, then gather context.
   ciPreRun: async (
-    session: IntegrationCiSession,
+    session: WizardSession,
     host: ProgramCiHost,
   ): Promise<void> => {
     await scopeInstallDirToProject(session, host);
@@ -312,9 +293,6 @@ export const posthogIntegrationConfig: ProgramConfig = {
       benchmark: session.benchmark,
       yaraReport: session.yaraReport,
     });
-    const detectedLabel =
-      frameworkConfig.metadata.getDetectedFrameworkLabel?.(context);
-    if (detectedLabel) session.detectedFrameworkLabel = detectedLabel;
     for (const [key, value] of Object.entries(context)) {
       if (!(key in session.frameworkContext)) {
         session.frameworkContext[key] = value;
@@ -323,7 +301,7 @@ export const posthogIntegrationConfig: ProgramConfig = {
   },
 
   run: async (
-    session: IntegrationRunSession,
+    session: WizardSession,
     host: ProgramRunHost,
   ): Promise<ProgramRun> => {
     const config = session.frameworkConfig!;
@@ -464,10 +442,15 @@ ${warehouseReportInstruction(session)}
           credentials.host.apiHost,
         );
         if (config.environment.uploadToHosting) {
-          const uploadedEnvVars = await host.uploadEnvironmentVariables(
+          const { uploadEnvironmentVariablesStep } = await import(
+            '@steps/index'
+          );
+          const uploadedEnvVars = await uploadEnvironmentVariablesStep(
             envVars,
-            config.metadata.integration,
-            session.installDir,
+            {
+              integration: config.metadata.integration,
+              session: sess,
+            },
           );
           if (uploadedEnvVars.length > 0) {
             analytics.capture(WIZARD_INTERACTION_EVENT_NAME, {
@@ -486,7 +469,7 @@ ${warehouseReportInstruction(session)}
           );
           if (deepLink) {
             const taggedDeepLink = withUtm(deepLink, 'dashboard-deeplink');
-            session.frameworkContext[DASHBOARD_DEEP_LINK_KEY] = taggedDeepLink;
+            sess.frameworkContext[DASHBOARD_DEEP_LINK_KEY] = taggedDeepLink;
             openTrackedLink(taggedDeepLink, 'dashboard-deeplink', {
               auto: true,
             });
@@ -494,9 +477,9 @@ ${warehouseReportInstruction(session)}
         }
       },
 
-      buildOutroNextSteps: (_context, credentials, completedSeededTypes) =>
+      buildOutroNextSteps: (sess, credentials, completedSeededTypes) =>
         buildWarehouseNextSteps(
-          session,
+          sess,
           credentials.host,
           credentials.projectId,
           completedSeededTypes,
@@ -507,9 +490,9 @@ ${warehouseReportInstruction(session)}
           credentials.projectApiKey,
           credentials.host.apiHost,
         );
-        const deepLink = session.frameworkContext[DASHBOARD_DEEP_LINK_KEY];
+        const deepLink = sess.frameworkContext[DASHBOARD_DEEP_LINK_KEY];
         const continueUrl = resolveContinueUrl(
-          sess.signup,
+          sess,
           credentials.host,
           deepLink,
         );
@@ -530,7 +513,7 @@ ${warehouseReportInstruction(session)}
           // The linear sequence seeds no tasks, so nothing here was connected
           // during the run. `buildOutroNextSteps` carries the orchestrated case.
           nextSteps: buildWarehouseNextSteps(
-            session,
+            sess,
             credentials.host,
             credentials.projectId,
             [],
@@ -560,8 +543,10 @@ export const integrationRunStep: ProgramStep = {
   id: 'run',
   label: 'Integration',
   screenId: 'run',
-  // The host runs this child without its terminal outro or analytics shutdown.
-  runProgramId: 'posthog-integration',
+  // composed: runs inside the host program (self-driving), so skip the
+  // integration's terminal outro + analytics shutdown of the shared client.
+  run: (session) =>
+    runProgramAgent(posthogIntegrationConfig, session, { composed: true }),
   isComplete: (session) =>
     session.runPhase === RunPhase.Completed ||
     session.runPhase === RunPhase.Error,

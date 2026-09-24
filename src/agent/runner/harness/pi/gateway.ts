@@ -10,7 +10,7 @@ import {
   buildWizardPropertiesBlob,
   isPastRefresh,
   type GatewayAuth,
-} from '@shared/gateway-auth';
+} from '@agent/gateway-session';
 import {
   modelCapabilities,
   type ThinkingLevel,

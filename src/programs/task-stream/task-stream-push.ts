@@ -16,9 +16,14 @@
  * latest state once the current one settles.
  */
 
-import { RunPhase, TaskStatus } from '@shared/run-state';
-import { OutroKind } from '@agent';
-import type { OutroData, PendingQuestion } from '@agent/types';
+import type { WizardStore, TaskItem } from '@ui/tui/store';
+import { TaskStatus } from '@ui/wizard-ui';
+import {
+  RunPhase,
+  OutroKind,
+  type OutroData,
+  type PendingQuestion,
+} from '@lib/wizard-session';
 import {
   type TaskStreamDestination,
   type TaskStreamUpdate,
@@ -28,7 +33,7 @@ import {
   StreamTaskStatus,
   StreamEvent,
 } from './types';
-import type { PlannedEvent } from '../posthog-integration/watch-event-plan.js';
+import { EventPlanWatcher } from './event-plan-watcher';
 import { rollUpAuditAreas } from './audit-areas';
 import { logToFile } from '@utils/debug';
 import { sanitizeErrorDetail } from '@shared/errors';
@@ -46,9 +51,7 @@ const STATUS_MAP: Record<TaskStatus, StreamTaskStatus> = {
   [TaskStatus.Skipped]: StreamTaskStatus.Completed,
 };
 
-function buildTasks(
-  items: ReadonlyArray<{ label: string; status: TaskStatus }>,
-): StreamTask[] {
+function buildTasks(items: TaskItem[]): StreamTask[] {
   return items.map((item, i) => ({
     id: String(i),
     title: item.label,
@@ -107,23 +110,12 @@ function buildPendingInput(
   };
 }
 
-export interface TaskStreamSource {
-  readonly session: {
-    skillId: string | null;
-    runPhase: RunPhase;
-    outroData: OutroData | null;
-    pendingQuestion: PendingQuestion | null;
-  };
-  readonly tasks: ReadonlyArray<{ label: string; status: TaskStatus }>;
-  readonly eventPlan: PlannedEvent[];
-  readonly handoffText: string | null;
-  subscribe(callback: () => void): () => void;
-}
-
 export interface TaskStreamPushOptions {
-  store: TaskStreamSource;
+  store: WizardStore;
   programId: string;
   destinations: TaskStreamDestination[];
+  /** Optional absolute event-plan path to load into the store once. */
+  eventPlanPath?: string;
   /** The run's audit ledger, when it has one. The runner owns the watcher. */
   auditChecks?: () => unknown;
   /** When false, destination subscription/delivery remains disabled. */
@@ -131,11 +123,12 @@ export interface TaskStreamPushOptions {
 }
 
 export class TaskStreamPush {
-  private readonly store: TaskStreamSource;
+  private readonly store: WizardStore;
   private readonly destinations: TaskStreamDestination[];
   private readonly startedAt: string;
   private readonly programId: string;
   private readonly sessionId: string;
+  private readonly eventPlanWatcher: EventPlanWatcher | null;
   private readonly auditChecks: (() => unknown) | null;
 
   private enabled: boolean;
@@ -155,6 +148,9 @@ export class TaskStreamPush {
     this.destinations = opts.destinations;
     this.enabled = opts.enabled ?? true;
     const startedAt = new Date();
+    this.eventPlanWatcher = opts.eventPlanPath
+      ? new EventPlanWatcher(this.store, opts.eventPlanPath)
+      : null;
     this.auditChecks = opts.auditChecks ?? null;
     this.startedAt = secondPrecisionIso(startedAt);
     // skillId may not be set yet — fall back to programId so the
@@ -166,8 +162,13 @@ export class TaskStreamPush {
     this.sessionId = `${this.programId}-${skillId}-${this.startedAt}`;
   }
 
-  /** Subscribe to store changes, unless destination delivery is disabled. */
-  attach(store?: TaskStreamSource): void {
+  /**
+   * Load the event plan and subscribe to store changes. Destination delivery
+   * remains disabled when `enabled === false`, but the plan still populates the
+   * store for local and headless consumers.
+   */
+  attach(store?: WizardStore): void {
+    this.eventPlanWatcher?.start();
     if (!this.enabled) return;
     if (this.unsubscribe) return;
     const target = store ?? this.store;
@@ -176,6 +177,7 @@ export class TaskStreamPush {
 
   /** Stop subscribing. Does not flush. */
   detach(): void {
+    this.eventPlanWatcher?.stop();
     if (this.unsubscribe) {
       this.unsubscribe();
       this.unsubscribe = null;
@@ -195,6 +197,7 @@ export class TaskStreamPush {
     timeoutMs: number = DEFAULT_SHUTDOWN_TIMEOUT_MS,
   ): Promise<void> {
     this.shuttingDown = true;
+    this.eventPlanWatcher?.refresh();
     if (this.debounceTimer) {
       clearTimeout(this.debounceTimer);
       this.debounceTimer = null;

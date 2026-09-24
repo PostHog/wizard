@@ -10,6 +10,7 @@ import {
 } from '@agent/agent-interface';
 import { buildSession } from '@lib/wizard-session';
 import { HostResolution } from '@shared/host-resolution';
+import { flushScanReport } from '@agent/yara-hooks';
 import { Harness, HAIKU_MODEL, Sequence } from '@shared/constants';
 
 vi.mock('@utils/analytics');
@@ -23,15 +24,20 @@ vi.mock('@agent', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@agent')>();
   return { ...actual, runAgent: vi.fn(actual.runAgent) };
 });
-vi.mock('@programs/credentials', () => ({
-  createPosthogInferenceAuthProvider: vi.fn(() => ({
-    resolve: () =>
-      Promise.resolve({
-        gatewayUrl: 'https://gateway.test',
-        token: 'phe_test',
-        refreshAtMs: Infinity,
-      }),
-  })),
+vi.mock('@agent/yara-hooks', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@agent/yara-hooks')>()),
+  flushScanReport: vi.fn(),
+}));
+// The runner mints before each attempt; no mint may leave the process.
+vi.mock('@agent/gateway-session', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@agent/gateway-session')>()),
+  gatewayAuth: vi.fn(() =>
+    Promise.resolve({
+      gatewayUrl: 'https://gateway.test',
+      token: 'phe_test',
+      refreshAtMs: Infinity,
+    }),
+  ),
 }));
 
 const init = vi.mocked(initializeAgent);
@@ -98,7 +104,7 @@ describe('agentic detection retry', () => {
 
   afterEach(() => vi.restoreAllMocks());
 
-  it('runs both attempts through runAgent with the detection binding, read-only tools, a deferred scan report and one inference provider', async () => {
+  it('runs both attempts through runAgent on linear Haiku with read-only tools, its own prompt, no remark and a deferred scan report', async () => {
     timeOut();
     emitResult(verdict);
 
@@ -114,10 +120,18 @@ describe('agentic detection retry', () => {
       });
       expect(config.allowedTools).toEqual(['Read', 'Grep', 'Glob']);
       expect(config.scanReport).toBe('defer');
+      expect(config.run).toMatchObject({
+        collectTranscript: true,
+        requestRemark: false,
+      });
     }
-    const [[, first], [, second]] = calls;
-    expect(first.inferenceAuth).toBeDefined();
-    expect(second.inferenceAuth).toBe(first.inferenceAuth);
+    // The run definition's prompt replaces the assembled program prompt.
+    expect(execute.mock.calls[0][1]).toContain(
+      'You are scanning a code repository',
+    );
+    expect(execute.mock.calls[0][4]).toMatchObject({ requestRemark: false });
+    // The program run's report counts the scan's scans.
+    expect(flushScanReport).not.toHaveBeenCalled();
   });
 
   it('restarts the scan once when the first result has no JSON', async () => {

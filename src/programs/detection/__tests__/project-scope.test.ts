@@ -73,15 +73,7 @@ describe('chooseIntegrationProject', () => {
 });
 
 describe('scopeInstallDirToProject', () => {
-  const host: ProgramCiHost = {
-    auth: {
-      setCredentials: vi.fn(),
-      setRoleAtOrganization: vi.fn(),
-      setApiUser: vi.fn(),
-    },
-    log: { info: vi.fn(), warn: vi.fn() },
-    onProgress: vi.fn(),
-  };
+  const host: ProgramCiHost = { log: { info: vi.fn(), warn: vi.fn() } };
   const scan = vi.mocked(detectProjectsWithAgent);
   const FLAG_ON = {
     [WIZARD_BASIC_INTEGRATION_AGENTIC_DETECTION_FLAG_KEY]: 'true',
@@ -127,11 +119,7 @@ describe('scopeInstallDirToProject', () => {
     const session = buildSession({ installDir: '/repo' });
     await scopeInstallDirToProject(session, host);
 
-    expect(vi.mocked(authenticate)).toHaveBeenCalledWith(
-      session,
-      'posthog-integration',
-      host.auth,
-    );
+    expect(vi.mocked(authenticate)).toHaveBeenCalledTimes(1);
     expect(session.installDir).toBe('/repo');
     expect(outcomeEvent()).toMatchObject({ outcome: 'flag-off' });
     expect(scan).not.toHaveBeenCalled();
@@ -146,14 +134,8 @@ describe('scopeInstallDirToProject', () => {
 
     expect(scan).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({
-        programId: 'posthog-integration',
-        onProgress: expect.any(Function),
-      }),
+      expect.objectContaining({ programId: 'posthog-integration' }),
     );
-    const progress = { kind: 'status' as const, message: 'Scanning' };
-    scan.mock.calls[0]?.[1].onProgress?.(progress);
-    expect(host.onProgress).toHaveBeenCalledWith(progress);
   });
 
   it('re-points installDir at the recommended project and fires recommended with scan facts', async () => {
@@ -227,7 +209,6 @@ describe('scopeInstallDirToProject', () => {
     expect(host.log.warn).toHaveBeenCalledWith(
       'Project scan attempt 2 timed out after 90s; continuing with the install dir as-is.',
     );
-    expect(exceptionSpy).not.toHaveBeenCalled();
   });
 
   it('uses a valid retry result after the old 60-second caller deadline', async () => {

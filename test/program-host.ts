@@ -10,21 +10,14 @@ export function testProgramRunHost(session?: {
       context[key] = value;
     },
     warn: () => undefined,
-    uploadEnvironmentVariables: () => Promise.resolve([]),
   };
 }
 
 export function testProgramCiHost(): ProgramCiHost {
   return {
-    auth: {
-      setCredentials: () => undefined,
-      setRoleAtOrganization: () => undefined,
-      setApiUser: () => undefined,
-    },
     log: {
       info: () => undefined,
       warn: () => undefined,
     },
-    onProgress: () => undefined,
   };
 }

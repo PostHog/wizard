@@ -143,7 +143,6 @@
     "test:coverage": "pnpm build && vitest run --coverage",
     "test:e2e": "pnpm build && ./e2e-tests/run.sh",
     "test:e2e-record": "export RECORD_FIXTURES=true && pnpm build && ./e2e-tests/run.sh",
-    "test:e2e:tui": "tsx scripts/tui-snapshots.no-jest.ts",
     "try": "tsx bin.ts",
     "dev": "pnpm build && pnpm link --global && pnpm build:watch",
     "test:watch": "vitest",

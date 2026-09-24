@@ -1,41 +1,36 @@
 /** A caller-owned program invocation. No TUI store or session is required. */
 import path from 'path';
 import { randomUUID } from 'crypto';
-import { runAgent, RunOutcome } from '@agent';
+import { buildRunTags, resolveBinding, runAgent, RunOutcome } from '@agent';
 import type {
   AgentInteraction,
   AgentRunDefinition,
+  ProgramBinding,
   RunConfig,
   RunHooks,
   RunInput,
   RunResult,
+  SwitchboardCtx,
 } from '@agent/types';
-import { getSkillsBaseUrl } from '@shared/constants';
-import type { AuditCheck } from '@shared/audit-ledger';
-import type { Harness, Integration, Sequence } from '@shared/constants';
-import { ErrorCodes } from '@shared/errors';
-import { buildRunTags } from '@shared/run-tags';
 import {
-  registerRunSkillCleanup,
-  type RunSkillCleanup,
-} from '@shared/skill-run-cleanup';
-import type { DiscoveredFeature } from '@shared/scan-consent';
+  getSkillsBaseUrl,
+  Sequence,
+  WIZARD_ORCHESTRATOR_FLAG_KEY,
+  WIZARD_SELF_DRIVING_USE_PI_HARNESS_FLAG_KEY,
+  type Harness,
+  type Integration,
+} from '@shared/constants';
+import { ErrorCodes } from '@shared/errors';
+import type { DiscoveredFeature } from '@lib/wizard-session';
 import { analytics, groupsFromUser } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
 import type { DetectedSource } from './warehouse-sources/types';
-import {
-  createPosthogInferenceAuthProvider,
-  type CredentialsProvider,
-  type ResolvedProgramCredentials,
+import type {
+  CredentialsProvider,
+  ResolvedProgramCredentials,
 } from './credentials';
-import { refreshCredentialsIfNeeded } from './token-refresh';
-import { stampAiSdkDetected } from './posthog-integration/ai-sdk-stamp';
-import { startProgramFileWatchers } from './program-file-watchers';
-import { resolveProgramBinding } from './binding';
-import { getProgramCommandments } from './commandments';
-import { areSeededTasksEnabled, resolveStageOverrides } from './experiments';
-import { captureSwitchboardDecision } from './binding-telemetry';
-import { snapshotProgramInput } from './snapshot-program-input';
+import { refreshCredentialsIfNeeded } from './authenticate';
+import { stampAiSdkDetected } from './posthog-integration/detect';
 import {
   ProgramStore,
   type ProgramDiagnostic,
@@ -65,10 +60,6 @@ export type ProgramSettings = {
   allowedTools?: RunConfig['allowedTools'];
   disallowedTools?: RunConfig['disallowedTools'];
   excludedTaskTypes?: RunConfig['excludedTaskTypes'];
-  auditLedgerFile?: string;
-  /** Written to the audit ledger before the agent starts. */
-  auditSeedChecks?: readonly AuditCheck[];
-  eventPlanFile?: string;
   /** Steps the host settles after auth and before the agent starts. */
   postAuthGates?: readonly string[];
 };
@@ -119,8 +110,6 @@ export interface ProgramOptions {
   }) => Promise<void>;
   /** Evaluate feature flags for a run whose input carries none. */
   featureFlags?: () => Promise<WizardFlagSnapshot>;
-  /** Leave new skills armed after success; the host commits them at exit. */
-  deferSkillCommit?: boolean;
   signal?: AbortSignal;
 }
 
@@ -151,6 +140,22 @@ const DEFAULT_FLAGS: RunInput['flags'] = {
   yaraReport: false,
 };
 
+/** Fields that carry functions or class instances; everything else is data. */
+const KEPT_BY_REFERENCE = [
+  'credentials',
+  'run',
+  'program',
+  'hooks',
+  'seedTasks',
+] as const satisfies readonly (keyof ProgramInput)[];
+
+/** Copy the host's input, so a later host write cannot reach the run or its hooks. */
+function snapshotProgramInput(input: ProgramInput): ProgramInput {
+  const data: Partial<ProgramInput> = { ...input };
+  for (const key of KEPT_BY_REFERENCE) delete data[key];
+  return { ...input, ...structuredClone(data) };
+}
+
 /** Run an existing program from explicit inputs, with invocation-owned state. */
 export async function runProgram(
   programId: string,
@@ -162,33 +167,6 @@ export async function runProgram(
     aiSdkStampReported: input.aiSdkStampReported,
     onData: options.onProgress,
   });
-  // Registered, so a process drain mid-run (wizardAbort, a signal) removes new skills too.
-  const skills = registerRunSkillCleanup(input.installDir);
-  try {
-    const result = await runWithStore(programId, input, options, store);
-    if (result.outcome !== RunOutcome.Success) cleanFailedRun(skills);
-    else if (!options.deferSkillCommit) skills.commit();
-    return result;
-  } catch (error) {
-    cleanFailedRun(skills);
-    throw error;
-  }
-}
-
-function cleanFailedRun(skills: RunSkillCleanup): void {
-  try {
-    skills();
-  } catch (error) {
-    logToFile('[programs] failed-run skill cleanup error:', error);
-  }
-}
-
-async function runWithStore(
-  programId: string,
-  input: ProgramInput,
-  options: ProgramOptions,
-  store: ProgramStore,
-): Promise<ProgramRunOutcome> {
   const { installDir, run } = input;
   const program = input.program ?? {};
   const artifacts: ProgramRunOutcome['artifacts'] = {};
@@ -311,91 +289,120 @@ async function runWithStore(
   const wizardFlags = { ...flagSnapshot.flags };
   const wizardFlagPayloads = { ...flagSnapshot.payloads };
 
-  const fileWatchers = startProgramFileWatchers(program, installDir, store);
-  try {
-    fileWatchers.seedAuditLedger();
+  // Resolve which sequence and harness run the program (CLI → PostHog flag →
+  // per-program binding → default) and tag both axes onto analytics.
+  const switchboard: SwitchboardCtx = {
+    program: programId,
+    composed: input.composed ?? false,
+    flags: wizardFlags,
+    flagPayloads: wizardFlagPayloads,
+    cliHarness: input.overrides?.harness,
+    cliSequence: input.overrides?.sequence,
+    cliModel: input.overrides?.model,
+  };
+  const binding = resolveBinding(switchboard);
+  analytics.setTag('sequence', binding.sequence);
+  analytics.setTag('harness', binding.harness);
+  captureSwitchboardDecision(switchboard, binding);
+  store.setBinding(binding);
 
-    const switchboard = {
-      program: programId,
+  const wizardMetadata = {
+    ...buildRunTags({
+      programId,
+      integration: run.integrationLabel,
+      runId: analytics.runId,
+      build: analytics.build,
+      skillId: run.skillId,
+    }),
+    SEQUENCE: binding.sequence,
+    HARNESS: binding.harness,
+  };
+  artifacts.reportFile = path.resolve(installDir, run.reportFile);
+  const adapter = store.beginRun(runId, options.onProgress);
+
+  const result = await runAgent(
+    {
+      programId,
+      run,
       composed: input.composed ?? false,
-      flags: wizardFlags,
-      flagPayloads: wizardFlagPayloads,
-      cliHarness: input.overrides?.harness,
-      cliSequence: input.overrides?.sequence,
-      cliModel: input.overrides?.model,
-    };
-    const binding = resolveProgramBinding(switchboard);
-    analytics.setTag('sequence', binding.sequence);
-    analytics.setTag('harness', binding.harness);
-    captureSwitchboardDecision(switchboard, binding);
-    store.setBinding(binding);
+      binding,
+      switchboard,
+      skillsBaseUrl: getSkillsBaseUrl(),
+      wizardFlags,
+      wizardFlagPayloads,
+      wizardMetadata,
+      allowedTools: program.allowedTools,
+      disallowedTools: program.disallowedTools,
+      agentFlow: program.agentFlow,
+      excludedTaskTypes: program.excludedTaskTypes,
+      seedTasks: input.seedTasks,
+      hooks: input.hooks,
+    },
+    {
+      installDir,
+      credentials: credentials.posthog,
+      project: credentials.project,
+      apiUser: credentials.apiUser,
+      skillId: input.skillId ?? run.skillId ?? run.integrationLabel,
+      integration: input.integration,
+      frameworkDocsUrl: input.frameworkDocsUrl,
+      flags,
+      host: { ...input.host },
+    },
+    {
+      interaction: options.interaction,
+      onProgress: (event) => adapter.onProgress(event),
+      signal: options.signal,
+    },
+  );
+  adapter.finish(result);
+  return settle(
+    result.outcome,
+    result.outcome === RunOutcome.Success ? undefined : result.failure,
+  );
+}
 
-    const inferenceAuth =
-      credentials.inferenceAuth ??
-      createPosthogInferenceAuthProvider(credentials.posthog, programId);
-    const wizardMetadata = {
-      ...buildRunTags({
-        programId,
-        integration: run.integrationLabel,
-        runId: analytics.runId,
-        build: analytics.build,
-        skillId: run.skillId,
-      }),
-      SEQUENCE: binding.sequence,
-      HARNESS: binding.harness,
-    };
-    artifacts.reportFile = path.resolve(installDir, run.reportFile);
-    const adapter = store.beginRun(runId, options.onProgress);
-
-    const result = await runAgent(
-      {
-        programId,
-        run,
-        composed: input.composed ?? false,
-        binding,
-        programCommandments: getProgramCommandments(programId),
-        stageOverrides: resolveStageOverrides(
-          programId,
-          wizardFlags,
-          wizardFlagPayloads,
-        ),
-        seededTasksEnabled: areSeededTasksEnabled(wizardFlags),
-        skillsBaseUrl: getSkillsBaseUrl(),
-        wizardFlags,
-        wizardFlagPayloads,
-        wizardMetadata,
-        allowedTools: program.allowedTools,
-        disallowedTools: program.disallowedTools,
-        agentFlow: program.agentFlow,
-        excludedTaskTypes: program.excludedTaskTypes,
-        seedTasks: input.seedTasks,
-        hooks: input.hooks,
-      },
-      {
-        installDir,
-        credentials: credentials.posthog,
-        inferenceAuth,
-        project: credentials.project,
-        apiUser: credentials.apiUser,
-        skillId: input.skillId ?? run.skillId ?? run.integrationLabel,
-        integration: input.integration,
-        frameworkDocsUrl: input.frameworkDocsUrl,
-        flags,
-        host: { ...input.host },
-      } as RunInput,
-      {
-        interaction: options.interaction,
-        onProgress: (event) => adapter.onProgress(event),
-        signal: options.signal,
-      },
-    );
-    adapter.finish(result);
-    fileWatchers.refresh();
-    return settle(
-      result.outcome,
-      result.outcome === RunOutcome.Success ? undefined : result.failure,
-    );
-  } finally {
-    fileWatchers.stop();
-  }
+/**
+ * One event + one log line per run: what entered the switchboard, which
+ * precedence rung decided each axis, and the final pick.
+ */
+function captureSwitchboardDecision(
+  ctx: SwitchboardCtx,
+  binding: ProgramBinding,
+): void {
+  const trace = ctx.trace ?? {};
+  // Unpinned orchestrator runs choose a model per task from the context-mill agent prompts; the orchestrator logs that map once the prompts load.
+  const perTaskModel =
+    binding.sequence === Sequence.orchestrator && trace.model === 'binding';
+  const model = perTaskModel ? 'chosen-per-task' : binding.model;
+  const modelSource = perTaskModel ? 'agent-prompts' : trace.model;
+  analytics.wizardCapture('switchboard resolved', {
+    program: ctx.program,
+    flag_self_driving_use_pi_harness:
+      ctx.flags[WIZARD_SELF_DRIVING_USE_PI_HARNESS_FLAG_KEY],
+    flag_self_driving_pi_payload: JSON.stringify(
+      ctx.flagPayloads?.[WIZARD_SELF_DRIVING_USE_PI_HARNESS_FLAG_KEY] ?? null,
+    ),
+    flag_orchestrator: ctx.flags[WIZARD_ORCHESTRATOR_FLAG_KEY],
+    cli_harness: ctx.cliHarness,
+    cli_sequence: ctx.cliSequence,
+    cli_model: ctx.cliModel,
+    harness_source: trace.harness,
+    model_source: modelSource,
+    sequence_source: trace.sequence,
+    harness: binding.harness,
+    model,
+    thinking_level: binding.thinkingLevel,
+    sequence: binding.sequence,
+  });
+  logToFile(
+    `[switchboard] decision: program=${ctx.program}` +
+      ` in(orchestrator=${ctx.flags[WIZARD_ORCHESTRATOR_FLAG_KEY] ?? '-'},` +
+      ` cli=${ctx.cliHarness ?? '-'}/${ctx.cliSequence ?? '-'}/${
+        ctx.cliModel ?? '-'
+      })` +
+      ` → harness=${binding.harness} (${trace.harness ?? '?'})` +
+      ` model=${model} (${modelSource ?? '?'})` +
+      ` sequence=${binding.sequence} (${trace.sequence ?? '?'})`,
+  );
 }

@@ -26,7 +26,7 @@ import { AgentErrorType } from '@agent/agent-interface';
 import { AgentSignals, REMARK_INSTRUCTION } from '@agent/signals';
 import { AgentOutputSignals } from '@agent/output-signals';
 import { assembleCommandments } from '../../switchboard/commandments';
-import type { GatewayAuth } from '@shared/gateway-auth';
+import { gatewayAuth, type GatewayAuth } from '@agent/gateway-session';
 import {
   buildGatewayProvider,
   GATEWAY_PROVIDER,
@@ -285,9 +285,14 @@ export const piBackend: AgentHarness = {
       } = await import('@earendil-works/pi-coding-agent');
 
       // the claude-agent-sdk path. The provider spec is shared with the
-      // orchestrator's per-task sessions (gateway.ts). Programs supply the
-      // run's inference auth provider.
-      const refreshAuth = () => input.inferenceAuth.resolve();
+      // orchestrator's per-task sessions (gateway.ts). gatewayAuth mints the
+      // run's scoped token.
+      const refreshAuth = () =>
+        gatewayAuth(
+          boot.credentials.host,
+          boot.credentials.accessToken,
+          boot.programId,
+        );
       const auth = await refreshAuth();
       const providerInputs = (current: GatewayAuth) => ({
         gatewayUrl: current.gatewayUrl,
@@ -389,7 +394,7 @@ export const piBackend: AgentHarness = {
         agentDir: getAgentDir(),
         systemPrompt:
           assembleCommandments({
-            programCommandments: runConfig.programCommandments,
+            program: runConfig.programId,
             sequence: Sequence.linear,
             harness: Harness.pi,
             caps: { bash: true, posthogMcp },

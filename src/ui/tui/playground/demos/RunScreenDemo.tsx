@@ -35,7 +35,8 @@ import type { ProgressItem, TabDefinition } from '@ui/tui/primitives/index';
 import { LearnCard } from '@ui/tui/components/LearnCard';
 import { TipsCard } from '@ui/tui/components/TipsCard';
 import { VisualizerTab } from '@ui/tui/components/PhaseVisuals';
-import { getProgramContentBlocks } from '@ui/tui/decks/registry';
+import { getProgramConfig } from '@programs';
+import { getContentBlocks as getSkillContentBlocks } from '@ui/tui/decks/agent-skill/index';
 import { Colors } from '@ui/tui/styles';
 import { WIZARD_LOG_FILE } from '@utils/paths';
 
@@ -221,7 +222,10 @@ export const RunScreenDemo = ({ store }: RunScreenDemoProps) => {
   }));
 
   const learnBlocks = useMemo(() => {
-    return getProgramContentBlocks(store.router.activeProgram, store);
+    const getBlocks =
+      getProgramConfig(store.router.activeProgram).getContentBlocks ??
+      getSkillContentBlocks;
+    return getBlocks(store);
   }, [store]);
 
   const leftPane = store.learnCardComplete ? (

@@ -28,18 +28,16 @@ import {
   type AdditionalFeature,
   ADDITIONAL_FEATURE_PROMPTS,
 } from '@shared/constants';
-import type {
-  AgentFailure,
-  InferenceAuthProvider,
-} from './runner/shared/types';
+import type { AgentFailure } from './runner/shared/types';
 import type { AgentResult } from './runner/harness/types';
 import { createCustomHeaders } from '@utils/custom-headers';
 import type { HostResolution } from '@shared/host-resolution';
 import {
   buildWizardPropertiesBlob,
+  gatewayAuth,
   isPastRefresh,
   type GatewayAuth,
-} from '@shared/gateway-auth';
+} from '@agent/gateway-session';
 import { evaluateBashCommand } from './bash-fence';
 import { createWizardToolsServer, WIZARD_TOOL_NAMES } from '@agent/tools';
 import {
@@ -213,10 +211,6 @@ export type AgentConfig = {
    * another program's budget, so neither should depend on an optional string bag.
    */
   programId: string;
-  /** Program-owned inference auth, refreshed at each model call. */
-  inferenceAuth: InferenceAuthProvider;
-  /** Program-owned guidance supplied as data, never looked up here. */
-  programCommandments?: readonly string[];
   /** Program identifier — selects the model for that program. */
   integrationLabel?: string;
   /**
@@ -361,8 +355,8 @@ type AgentRunConfig = {
    * bearer.
    */
   refreshGatewayAuth?: () => Promise<GatewayAuth>;
-  /** Program-owned guidance supplied as data. */
-  programCommandments?: readonly string[];
+  /** Program id, for the program-axis commandments. */
+  program?: string;
   /** Resolved sequence, for the sequence-axis commandments. */
   sequence: Sequence;
   /** Where the run reports. A no-op when the caller passed none. */
@@ -370,6 +364,31 @@ type AgentRunConfig = {
 };
 
 const NO_PROGRESS: ProgressEmitter = () => undefined;
+
+/**
+ * Global identifiers attached to every LLM gateway trace for a run. They ride on
+ * each `$ai_generation` the gateway emits (in the `X-PostHog-Properties` blob
+ * `buildAgentEnv` builds), so traces are filterable by program, framework, run,
+ * and build type for cost attribution and dashboards. `skill_id` is omitted when
+ * the run has none.
+ */
+export function buildRunTags(args: {
+  programId: string;
+  integration: string;
+  runId: string;
+  build: string;
+  skillId?: string;
+}): Record<string, string> {
+  return {
+    program_id: args.programId,
+    integration: args.integration,
+    run_id: args.runId,
+    build: args.build,
+    // Triage and detection spread these tags and override this one.
+    call_type: CallType.agent,
+    ...(args.skillId ? { skill_id: args.skillId } : {}),
+  };
+}
 
 /**
  * Whether Warlock/YARA scanning is disabled for this run. Off by default:
@@ -524,10 +543,13 @@ export async function initializeAgent(
   const emit = config.emit ?? NO_PROGRESS;
 
   try {
-    // Configure model routing with the program-supplied gateway bearer.
+    // Configure model routing (inherited by the SDK subprocess). All model
+    // calls route through the PostHog AI gateway with the scoped token
+    // gatewayAuth mints for this run.
     // Disable experimental betas (like input_examples) the gateway doesn't support.
     process.env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS = 'true';
-    const currentGatewayAuth = () => config.inferenceAuth.resolve();
+    const currentGatewayAuth = () =>
+      gatewayAuth(config.host, config.posthogApiKey, config.programId);
     const auth = await currentGatewayAuth();
     const gatewayUrl = auth.gatewayUrl;
     process.env.ANTHROPIC_BASE_URL = gatewayUrl;
@@ -647,7 +669,7 @@ export async function initializeAgent(
       triageProvider,
       gatewayAuth: auth,
       refreshGatewayAuth: currentGatewayAuth,
-      programCommandments: config.programCommandments,
+      program: config.integrationLabel,
       // A queue context is present only on a task run; that is the sequence.
       sequence: config.orchestrator ? Sequence.orchestrator : Sequence.linear,
       emit,
@@ -1147,7 +1169,7 @@ export async function runAgent(
             // we keep default Claude Code behaviors. An orchestrator context is
             // present only on a task run — that is what picks the sequence.
             append: assembleCommandments({
-              programCommandments: agentConfig.programCommandments,
+              program: agentConfig.program,
               sequence: agentConfig.sequence,
               harness: Harness.anthropic,
             }),

@@ -1,20 +1,20 @@
 import type { ProgramConfig } from '@programs/program-step';
 import type { ProgramRun } from '@programs/program-run';
-import { LONGER_ASK_TIMEOUT_MS } from '@shared/ask-policy';
+import type { WizardSession } from '@lib/wizard-session';
+import { LONGER_ASK_TIMEOUT_MS } from '@agent';
 import { WAREHOUSE_SOURCE_PROGRAM } from './steps.js';
 import {
   WAREHOUSE_ABORT_CASES,
   getDetectedWarehouseSources,
 } from './detect.js';
-
-type WarehouseRunState = Parameters<typeof getDetectedWarehouseSources>[0];
+import { getContentBlocks } from '../../ui/tui/decks/warehouse-source/index.js';
 
 /**
  * Inject the detected sources (and their creation mode) into the prompt so the
  * skill knows what to set up. The *how* — in-CLI creation vs deep-link, field
  * collection, validation — lives in the skill, not here.
  */
-function buildPrompt(session: WarehouseRunState): string {
+function buildPrompt(session: WizardSession): string {
   const sources = getDetectedWarehouseSources(session);
   if (sources.length === 0) {
     return 'Set up a data warehouse source for this project.';
@@ -47,9 +47,10 @@ export const warehouseSourceConfig: ProgramConfig = {
   id: 'warehouse-source',
   skillId: 'data-warehouse-source-setup',
   steps: WAREHOUSE_SOURCE_PROGRAM,
+  getContentBlocks,
   reportFile: 'posthog-warehouse-report.md',
   allowedTools: ['Agent'],
-  run: (session: WarehouseRunState): Promise<ProgramRun> =>
+  run: (session: WizardSession): Promise<ProgramRun> =>
     Promise.resolve({
       skillId: 'data-warehouse-source-setup',
       integrationLabel: 'data-warehouse-source-setup',
