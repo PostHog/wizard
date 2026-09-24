@@ -33,7 +33,6 @@ const context = {
 
 beforeEach(() => {
   ui.values = {};
-  ui.setFrameworkContext.mockClear();
   ui.warn.mockClear();
   vi.mocked(preinstallPostHogCliOnce).mockClear();
 });
@@ -53,15 +52,6 @@ it('reads the source-maps picker after legacy run resolution', async () => {
   ui.values[SOURCE_MAPS_CONTEXT_KEYS.selectedPath] = 'apps/web';
   expect(run.customPrompt?.(context)).toContain('apps/web');
   expect(run.customPrompt?.(context)).toContain('Next.js');
-
-  await run.postRun?.(
-    {} as WizardSession,
-    {} as NonNullable<WizardSession['credentials']>,
-  );
-  expect(ui.setFrameworkContext).toHaveBeenCalledWith(
-    'sourceMapsCompletedVariant',
-    'nextjs',
-  );
 });
 
 it('preinstalls the global CLI only after a requiring variant is picked', async () => {

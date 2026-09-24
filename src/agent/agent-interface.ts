@@ -47,7 +47,6 @@ import {
   createPostToolUseYaraHooks,
   prewarmYaraScanner,
 } from '@agent/yara-hooks';
-import { scanProjectSkills } from './skill-preflight';
 import { createTriageLLMProvider } from './triage-provider';
 import type { LLMProvider } from '@posthog/warlock';
 import { assembleCommandments } from './runner/switchboard/commandments';
@@ -774,8 +773,6 @@ export async function runAgent(
      * aborted` events (e.g. the orchestrator's task type and id).
      */
     analyticsProperties?: Record<string, unknown>;
-    /** Host cancellation; aborts the active SDK query and unblocks its prompt stream. */
-    signal?: AbortSignal;
     /** Abort the SDK query when this run exceeds its own deadline. */
     timeoutMs?: number;
   },
@@ -784,8 +781,7 @@ export async function runAgent(
     finalize(resultMessage: any, totalDurationMs: number): any;
   },
 ): Promise<AgentResult> {
-  const hostSignal = agentConfig.signal ?? config?.signal;
-  if (hostSignal?.aborted) {
+  if (agentConfig.signal?.aborted) {
     return {
       kind: 'abort',
       classification: AgentErrorType.ABORT,
@@ -939,10 +935,11 @@ export async function runAgent(
   // A 401 on a fresh bearer: the auth screen was reported, and this is the
   // failure the caller ends the run with. The query is aborted to unwind.
   let authFailure: AgentFailure | undefined;
-  hostSignal?.addEventListener('abort', onExternalAbort, {
+  const agentConfigDir = createIsolatedAgentConfigDir();
+  agentConfig.signal?.addEventListener('abort', onExternalAbort, {
     once: true,
   });
-  if (hostSignal?.aborted) onExternalAbort();
+  if (agentConfig.signal?.aborted) onExternalAbort();
   const timeoutMs = config?.timeoutMs;
   const timeoutId = timeoutMs
     ? setTimeout(() => {
@@ -954,7 +951,6 @@ export async function runAgent(
     : undefined;
 
   try {
-    const agentConfigDir = createIsolatedAgentConfigDir();
     // Per-program allow/disallow lists tweak BASE_ALLOWED_TOOLS. Skills are
     // enabled via the `skills` query option; PostHog MCP tools come through
     // `mcpServers`. Neither belongs in this list.
@@ -991,41 +987,6 @@ export async function runAgent(
     if (warlockDisabled) {
       logToFile('[warlock] scanning disabled for run (local env override)');
       analytics.wizardCapture('warlock disabled', { reason: 'env-override' });
-    } else {
-      // The SDK auto-loads every project skill before any tool hook runs. Scan
-      // that exact directory before starting the first SDK query, including
-      // skills that were present before this Wizard run.
-      try {
-        const findings = await scanProjectSkills(
-          agentConfig.workingDirectory,
-          triageProvider,
-        );
-        if (findings.length > 0) {
-          const names = findings.map(({ skillDir }) => path.basename(skillDir));
-          logToFile('[YARA] project skill preflight stopped run:', findings);
-          spinner.stop('Security check stopped the setup');
-          return {
-            kind: 'failure',
-            classification: AgentErrorType.YARA_VIOLATION,
-            message:
-              `Security check found a critical issue in project skill ${names.join(
-                ', ',
-              )}. ` +
-              'Setup stopped before loading it. Review or remove the skill before retrying.',
-          };
-        }
-      } catch (error) {
-        const detail = error instanceof Error ? error.message : String(error);
-        logToFile('[YARA] project skill preflight failed:', error);
-        spinner.stop('Security check stopped the setup');
-        return {
-          kind: 'failure',
-          classification: AgentErrorType.YARA_VIOLATION,
-          message:
-            `Security check could not scan project skills (${detail}). ` +
-            'Setup stopped before loading them.',
-        };
-      }
     }
 
     // Seed the AIO capture with the initial prompt so the first assistant
@@ -1329,7 +1290,7 @@ export async function runAgent(
               agentConfig.refreshGatewayAuth &&
               !reminted &&
               isPastRefresh(agentConfig.gatewayAuth) &&
-              !hostSignal?.aborted
+              !agentConfig.signal?.aborted
             ) {
               logToFile(
                 'Agent error: 401 on an aged gateway bearer; re-minting',
@@ -1434,32 +1395,23 @@ export async function runAgent(
     };
 
     const refreshGatewayAuth = agentConfig.refreshGatewayAuth;
-    if (hostSignal?.aborted) {
-      spinner.stop('Run cancelled');
-      return {
-        kind: 'abort',
-        classification: AgentErrorType.ABORT,
-        message: 'Agent run cancelled',
-      };
-    }
-    const queryResult = await runQuery();
     if (
-      queryResult === 'remint' &&
+      (await runQuery()) === 'remint' &&
       refreshGatewayAuth &&
-      !hostSignal?.aborted
+      !agentConfig.signal?.aborted
     ) {
       // The subprocess froze the dead bearer in its env at spawn, so it cannot
       // be handed a new one: mint, then resume the session in a new one.
       reminted = true;
       remintRequested = false;
       abortController = new AbortController();
-      if (hostSignal?.aborted) abortController.abort();
+      if (agentConfig.signal?.aborted) abortController.abort();
       signals.forgetApiErrors();
       spinner.message('Renewing the gateway token...');
       const stale = agentConfig.gatewayAuth;
       // A refusal or failure here ends the run with its own message.
       agentConfig.gatewayAuth = await refreshGatewayAuth();
-      if (hostSignal?.aborted)
+      if (agentConfig.signal?.aborted)
         return {
           kind: 'abort',
           classification: AgentErrorType.ABORT,
@@ -1484,7 +1436,7 @@ export async function runAgent(
     if (authFailure) {
       return { kind: 'decided_failure', failure: authFailure };
     }
-    if (hostSignal?.aborted) {
+    if (agentConfig.signal?.aborted) {
       return {
         kind: 'abort',
         classification: AgentErrorType.ABORT,
@@ -1509,7 +1461,7 @@ export async function runAgent(
         message: abortReason,
       };
     }
-    if (hostSignal?.aborted) {
+    if (agentConfig.signal?.aborted) {
       spinner.stop('Wizard aborted');
       return {
         kind: 'abort',
@@ -1591,6 +1543,7 @@ export async function runAgent(
   } catch (error) {
     // Signal done to unblock the async generator
     signalDone();
+
     // A YARA hook aborted the run (the SDK throws AbortError once the hook
     // calls abortController.abort()). Surface it before anything else so it is
     // never mistaken for a success-cleanup race or a generic abort.
@@ -1611,7 +1564,7 @@ export async function runAgent(
       };
     }
 
-    if (hostSignal?.aborted) {
+    if (agentConfig.signal?.aborted) {
       spinner.stop('Wizard aborted');
       return {
         kind: 'abort',
@@ -1674,7 +1627,7 @@ export async function runAgent(
     debug('Full error:', error);
     throw error;
   } finally {
-    hostSignal?.removeEventListener('abort', onExternalAbort);
+    agentConfig.signal?.removeEventListener('abort', onExternalAbort);
     if (timeoutId) clearTimeout(timeoutId);
     // Always capture run duration, even on abort/error, so we can alert on
     // long runs where the user gave up before completion. A 401 never reached

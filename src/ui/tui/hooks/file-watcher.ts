@@ -1,8 +1,14 @@
 import { useEffect } from 'react';
-import { startFileWatcher, type FileWatcherOptions } from '@lib/file-watcher';
+import {
+  startFileWatcher,
+  type FileWatcherOptions,
+} from '@shared/file-watcher';
 
-export { startFileWatcher } from '@lib/file-watcher';
-export type { FileWatcherHandle, FileWatcherOptions } from '@lib/file-watcher';
+export { startFileWatcher } from '@shared/file-watcher';
+export type {
+  FileWatcherHandle,
+  FileWatcherOptions,
+} from '@shared/file-watcher';
 
 /** React hook wrapping `startFileWatcher`. Starts on mount, stops on unmount
  *  or when `path` changes. `onUpdate` and `options` are captured at mount

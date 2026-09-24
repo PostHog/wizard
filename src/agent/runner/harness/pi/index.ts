@@ -287,7 +287,7 @@ export const piBackend: AgentHarness = {
       // the claude-agent-sdk path. The provider spec is shared with the
       // orchestrator's per-task sessions (gateway.ts). Programs supply the
       // run's inference auth provider.
-      const refreshAuth = () => boot.inferenceAuth.resolve();
+      const refreshAuth = () => input.inferenceAuth.resolve();
       const auth = await refreshAuth();
       const providerInputs = (current: GatewayAuth) => ({
         gatewayUrl: current.gatewayUrl,
@@ -596,14 +596,12 @@ export const piBackend: AgentHarness = {
 
       let terminal = turns.terminalFailure();
       try {
-        if (inputs.signal?.aborted) {
-          spinner.stop('Run cancelled');
+        if (inputs.signal?.aborted)
           return {
             kind: 'abort',
             classification: AgentErrorType.ABORT,
             message: 'Agent run cancelled',
           };
-        }
         // Non-streaming: resolves when the agent run completes. Throws if no
         // model/api key, or on a transport error.
         await turns.prompt(prompt);
@@ -615,8 +613,8 @@ export const piBackend: AgentHarness = {
         let continueNudges = 0;
         while (
           continueNudges < MAX_CONTINUE_NUDGES &&
-          !inputs.signal?.aborted &&
           !security.state.criticalViolation &&
+          !inputs.signal?.aborted &&
           !terminal &&
           hasOpenTasks(wizardTaskTools.store)
         ) {
@@ -630,7 +628,6 @@ export const piBackend: AgentHarness = {
 
         // Best-effort remark ask — a failed turn never fails a successful run.
         if (
-          config.requestRemark !== false &&
           !security.state.criticalViolation &&
           !terminal &&
           !inputs.signal?.aborted
@@ -650,7 +647,6 @@ export const piBackend: AgentHarness = {
       }
 
       if (inputs.signal?.aborted) {
-        spinner.stop('Run cancelled');
         return {
           kind: 'abort',
           classification: AgentErrorType.ABORT,
@@ -764,7 +760,6 @@ export const piBackend: AgentHarness = {
       return { kind: 'success' };
     } catch (err) {
       if (inputs.signal?.aborted) {
-        spinner.stop('Run cancelled');
         return {
           kind: 'abort',
           classification: AgentErrorType.ABORT,
@@ -811,13 +806,6 @@ export const piBackend: AgentHarness = {
   // task.ts pulls in typebox (ESM), which must stay out of the static module
   // graph so CommonJS unit tests can load the backend seam without parsing it.
   async runTask(inputs: TaskRunInputs): Promise<AgentResult> {
-    if (inputs.signal?.aborted) {
-      return {
-        kind: 'abort',
-        classification: AgentErrorType.ABORT,
-        message: 'Agent run cancelled',
-      };
-    }
     const { runPiTask } = await import('./task');
     return runPiTask(inputs);
   },

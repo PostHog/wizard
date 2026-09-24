@@ -12,19 +12,6 @@ export interface TranscriptTail extends RunMiddleware {
   text(): string;
 }
 
-type TranscriptBlock = {
-  type?: unknown;
-  text?: unknown;
-  name?: unknown;
-  input?: unknown;
-};
-
-type TranscriptMessage = {
-  type?: unknown;
-  result?: unknown;
-  message?: { content?: unknown };
-};
-
 export function createTranscriptTail(emit: ProgressEmitter): TranscriptTail {
   const collected: string[] = [];
   let collectedChars = 0;
@@ -40,12 +27,11 @@ export function createTranscriptTail(emit: ProgressEmitter): TranscriptTail {
   const activity = (line: string): void => emit({ kind: 'activity', line });
 
   return {
-    onMessage(value: unknown): void {
-      const message = (value ?? {}) as TranscriptMessage;
-      if (message.type === 'assistant') {
+    onMessage(message: any): void {
+      if (message?.type === 'assistant') {
         const content = message.message?.content;
         if (!Array.isArray(content)) return;
-        for (const block of content as (TranscriptBlock | null)[]) {
+        for (const block of content) {
           if (block?.type === 'text' && typeof block.text === 'string') {
             collect(block.text);
             const line = block.text.trim();
@@ -61,7 +47,7 @@ export function createTranscriptTail(emit: ProgressEmitter): TranscriptTail {
           }
         }
       } else if (
-        message.type === 'result' &&
+        message?.type === 'result' &&
         typeof message.result === 'string'
       ) {
         resultText = message.result;
@@ -91,9 +77,9 @@ export function withTranscript(
   };
 }
 
-function formatToolUse(block: TranscriptBlock): string {
-  const name = typeof block.name === 'string' ? block.name : 'tool';
-  const input = (block.input ?? {}) as Record<string, unknown>;
+function formatToolUse(block: any): string {
+  const name = typeof block?.name === 'string' ? block.name : 'tool';
+  const input = (block?.input ?? {}) as Record<string, unknown>;
   const detail =
     (input.file_path as string) ||
     (input.pattern as string) ||

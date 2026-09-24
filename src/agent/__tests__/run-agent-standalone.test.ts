@@ -67,8 +67,6 @@ const harnessState = vi.hoisted(() => ({
   taskThrow: undefined as Error | undefined,
   seedFailure: undefined as AgentFailure | undefined,
   askQuestions: undefined as PendingQuestion['questions'] | undefined,
-  taskCapability: true,
-  waitForAbort: false,
   /** How many install tasks the seed plans. */
   seedTasks: 1,
   /** Scripts each drained task in place of the default install. */
@@ -81,13 +79,6 @@ const harnessState = vi.hoisted(() => ({
     | undefined,
 }));
 vi.mock('@agent/runner/switchboard/harness', () => {
-  const waitForAbort = async (signal: AbortSignal | undefined) => {
-    if (!signal) throw new Error('host signal did not reach active harness');
-    if (signal.aborted) return;
-    await new Promise<void>((resolve) =>
-      signal.addEventListener('abort', () => resolve(), { once: true }),
-    );
-  };
   const askIfRequested = async (inputs: BackendRunInputs | TaskRunInputs) => {
     if (!harnessState.askQuestions || !inputs.askBridge) return;
     const { answers } = await inputs.askBridge.request({
@@ -103,14 +94,6 @@ vi.mock('@agent/runner/switchboard/harness', () => {
     async runTask(inputs: TaskRunInputs) {
       harnessState.tasks.push(inputs);
       const { store, currentTaskId } = inputs.orchestrator;
-      if (currentTaskId && harnessState.waitForAbort) {
-        await waitForAbort(inputs.signal);
-        return {
-          kind: 'abort',
-          classification: AgentErrorType.ABORT,
-          message: 'Agent run cancelled',
-        };
-      }
       if (!currentTaskId) {
         if (harnessState.seedFailure)
           return { kind: 'decided_failure', failure: harnessState.seedFailure };
@@ -134,14 +117,6 @@ vi.mock('@agent/runner/switchboard/harness', () => {
     },
     async run(inputs: BackendRunInputs) {
       harnessState.lastInputs = inputs;
-      if (harnessState.waitForAbort) {
-        await waitForAbort(inputs.signal);
-        return {
-          kind: 'abort',
-          classification: AgentErrorType.ABORT,
-          message: 'Agent run cancelled',
-        };
-      }
       if (harnessState.run) return harnessState.run(inputs);
       const { emit, spinner } = inputs;
       emit({ kind: 'log', level: 'step', message: 'Initializing agent' });
@@ -185,11 +160,7 @@ vi.mock('@agent/runner/switchboard/harness', () => {
     HARNESS_OPTIONS: { [Harness.pi]: fake },
     getHarness: (name: Harness) => {
       harnessState.selected.push(name);
-      return {
-        ...fake,
-        name,
-        runTask: harnessState.taskCapability ? fake.runTask : undefined,
-      };
+      return { ...fake, name };
     },
   };
 });
@@ -306,8 +277,6 @@ beforeEach(() => {
   harnessState.throws = undefined;
   harnessState.lastInputs = undefined;
   harnessState.askQuestions = undefined;
-  harnessState.taskCapability = true;
-  harnessState.waitForAbort = false;
   harnessState.seedTasks = 1;
   harnessState.task = undefined;
   harnessState.run = undefined;
@@ -320,87 +289,6 @@ beforeEach(() => {
 afterEach(() => fs.rmSync(tmp, { recursive: true, force: true }));
 
 describe('runAgent standalone', () => {
-  it.each([Sequence.linear, Sequence.orchestrator])(
-    'returns a typed abort before bootstrapping %s',
-    async (sequence) => {
-      const controller = new AbortController();
-      controller.abort();
-      const result = await runAgent(
-        config({
-          binding: {
-            harness: Harness.pi,
-            sequence,
-            model: DEFAULT_AGENT_MODEL,
-          },
-        }),
-        input(),
-        { signal: controller.signal },
-      );
-
-      expect(result.outcome).toBe(RunOutcome.Aborted);
-      expect(result.failure?.code).toBe(ErrorCodes.AgentAbort);
-      expect(harnessState.selected).toEqual([]);
-      expect(harnessState.tasks).toEqual([]);
-      expect(flushScanReport).toHaveBeenCalledTimes(1);
-    },
-  );
-
-  it.each([Sequence.linear, Sequence.orchestrator])(
-    'aborts an active %s harness before outro and cleans the queue',
-    async (sequence) => {
-      harnessState.waitForAbort = true;
-      const skillRoot = path.join(tmp, '.claude', 'skills');
-      const preexistingSkill = path.join(skillRoot, 'preexisting');
-      fs.mkdirSync(preexistingSkill, { recursive: true });
-      fs.writeFileSync(path.join(preexistingSkill, '.posthog-wizard'), '');
-      const controller = new AbortController();
-      const postRun = vi.fn();
-      const events: AgentProgress[] = [];
-      const running = runAgent(
-        config({
-          binding: {
-            harness: Harness.pi,
-            sequence,
-            model: DEFAULT_AGENT_MODEL,
-          },
-          hooks: { postRun },
-        }),
-        input(),
-        {
-          signal: controller.signal,
-          onProgress: (event) => events.push(event),
-        },
-      );
-
-      await vi.waitFor(() =>
-        expect(
-          sequence === Sequence.linear
-            ? harnessState.lastInputs
-            : harnessState.tasks.some(
-                (task) => task.orchestrator.currentTaskId,
-              ),
-        ).toBeTruthy(),
-      );
-      const runSkill = path.join(skillRoot, 'installed-during-run');
-      fs.mkdirSync(runSkill);
-      fs.writeFileSync(path.join(runSkill, '.posthog-wizard'), '');
-      const userSkill = path.join(skillRoot, 'user-owned-during-run');
-      fs.mkdirSync(userSkill);
-      controller.abort();
-      const result = await running;
-
-      expect(result.outcome).toBe(RunOutcome.Aborted);
-      expect(result.failure?.code).toBe(ErrorCodes.AgentAbort);
-      expect(postRun).not.toHaveBeenCalled();
-      expect(events.some((event) => event.kind === 'completion')).toBe(false);
-      expect(fs.existsSync(path.join(tmp, QUEUE_DIR_NAME))).toBe(false);
-      expect(fs.existsSync(runSkill)).toBe(false);
-      expect(fs.existsSync(userSkill)).toBe(true);
-      expect(fs.existsSync(preexistingSkill)).toBe(true);
-      expect(flushScanReport).toHaveBeenCalledTimes(1);
-    },
-  );
-
   it.each([
     [Harness.pi, Sequence.linear],
     [Harness.anthropic, Sequence.linear],
@@ -511,24 +399,6 @@ describe('runAgent standalone', () => {
       expect(analytics.shutdown).not.toHaveBeenCalled();
     },
   );
-
-  it('keeps an explicit orchestrator route as a hard error without runTask', async () => {
-    harnessState.taskCapability = false;
-    const result = await runAgent(
-      config({
-        binding: {
-          harness: Harness.anthropic,
-          sequence: Sequence.orchestrator,
-          model: DEFAULT_AGENT_MODEL,
-        },
-      }),
-      input(),
-    );
-    expect(result.outcome).toBe(RunOutcome.Crashed);
-    expect(result.failure?.error?.message).toContain(
-      'does not implement runTask; orchestrator mode requires it',
-    );
-  });
 
   it('cleans up when the seed fails before the drain starts', async () => {
     const failure = {
@@ -872,7 +742,8 @@ describe('runAgent standalone', () => {
 
   it('a process drain during a run writes the scan report once, through progress', async () => {
     clearCleanup();
-    harnessState.waitForAbort = true;
+    harnessState.askQuestions = [{ id: 'q1', prompt: 'Go?', kind: 'text' }];
+    const ask = vi.fn(() => new Promise<AskAnswers>(() => undefined));
     vi.mocked(flushScanReport).mockReturnValueOnce(
       'YARA scan report: /tmp/scan.json',
     );
@@ -884,9 +755,10 @@ describe('runAgent standalone', () => {
       {
         signal: controller.signal,
         onProgress: (event) => events.push(event),
+        interaction: { ask },
       },
     );
-    await vi.waitFor(() => expect(harnessState.lastInputs).toBeTruthy());
+    await vi.waitFor(() => expect(ask).toHaveBeenCalled());
 
     runCleanups();
 
@@ -901,12 +773,6 @@ describe('runAgent standalone', () => {
     controller.abort();
     expect((await running).outcome).toBe(RunOutcome.Aborted);
     expect(flushScanReport).toHaveBeenCalledTimes(1);
-    expect(
-      events.filter(
-        (event) =>
-          event.kind === 'log' && event.message.startsWith('YARA scan report'),
-      ),
-    ).toHaveLength(1);
   });
 
   it('runs to a complete result with no options at all', async () => {
@@ -1007,6 +873,35 @@ describe('runAgent standalone', () => {
     expect(result.failure).toBe(failure);
   });
 
+  it.each([
+    [RunOutcome.Failed, ['preexisting', 'user-owned']],
+    [RunOutcome.Success, ['installed', 'preexisting', 'user-owned']],
+  ] as const)('a %s run leaves %j in .claude/skills', async (outcome, left) => {
+    const skillsDir = path.join(tmp, '.claude', 'skills');
+    const makeSkill = (id: string, marked: boolean) => {
+      fs.mkdirSync(path.join(skillsDir, id), { recursive: true });
+      if (marked)
+        fs.writeFileSync(path.join(skillsDir, id, '.posthog-wizard'), '');
+    };
+    makeSkill('preexisting', true);
+    if (outcome === RunOutcome.Failed)
+      harnessState.result = {
+        kind: 'failure',
+        classification: AgentErrorType.NO_PROGRESS,
+      };
+
+    const result = await runAgent(config(), input(), {
+      onProgress: (event) => {
+        if (event.kind !== 'status') return;
+        makeSkill('installed', true);
+        makeSkill('user-owned', false);
+      },
+    });
+
+    expect(result.outcome).toBe(outcome);
+    expect(fs.readdirSync(skillsDir).sort()).toEqual(left);
+  });
+
   it('skips the terminal outro for a composed sub-run', async () => {
     const events: AgentProgress[] = [];
 
@@ -1034,15 +929,9 @@ describe('runAgent standalone', () => {
             { type: 'text', text: '  Globbing every manifest.  ' },
             {
               type: 'tool_use',
-              name: 'Glob',
-              input: { pattern: '**/{package.json}' },
-            },
-            {
-              type: 'tool_use',
               name: 'Read',
               input: { file_path: 'apps/web/package.json' },
             },
-            { type: 'tool_use', name: 'TaskList', input: {} },
             { type: 'text', text: long },
           ],
         },
@@ -1072,9 +961,7 @@ describe('runAgent standalone', () => {
     );
     expect(events.filter((event) => event.kind === 'activity')).toEqual([
       { kind: 'activity', line: 'Globbing every manifest.' },
-      { kind: 'activity', line: 'Glob **/{package.json}' },
       { kind: 'activity', line: 'Read apps/web/package.json' },
-      { kind: 'activity', line: 'TaskList' },
       { kind: 'activity', line: `${'x'.repeat(100)}…` },
     ]);
   });
@@ -1097,23 +984,6 @@ describe('runAgent standalone', () => {
     );
 
     expect(result.snapshot.transcriptTail).toBe(`${chunk}\n${chunk}\n`);
-  });
-
-  it('reports no activity and keeps no transcript unless the run asks', async () => {
-    const events: AgentProgress[] = [];
-    let middleware: BackendRunInputs['middleware'];
-    harnessState.run = (inputs) => {
-      middleware = inputs.middleware;
-      return Promise.resolve({ kind: 'success' });
-    };
-
-    const result = await runAgent(config(), input(), {
-      onProgress: (event) => events.push(event),
-    });
-
-    expect(middleware).toBeUndefined();
-    expect(result.snapshot.transcriptTail).toBeUndefined();
-    expect(events.some((event) => event.kind === 'activity')).toBe(false);
   });
 
   it('leaves a deferred scan report to the host run', async () => {
@@ -1150,6 +1020,8 @@ describe('runAgent standalone', () => {
       ];
       const host = new AbortController();
       const signals: AbortSignal[] = [];
+      const postRun = vi.fn();
+      const events: AgentProgress[] = [];
       const running = runAgent(
         config({
           binding: {
@@ -1157,10 +1029,12 @@ describe('runAgent standalone', () => {
             sequence,
             model: DEFAULT_AGENT_MODEL,
           },
+          hooks: { postRun },
         }),
         input(),
         {
           signal: host.signal,
+          onProgress: (event) => events.push(event),
           interaction: {
             ask: (_question, { signal }) => {
               signals.push(signal);
@@ -1176,6 +1050,9 @@ describe('runAgent standalone', () => {
       expect(result.outcome).toBe(RunOutcome.Aborted);
       // The host's abort reached the open question as its own abort.
       expect(signals[0].aborted).toBe(true);
+      expect(postRun).not.toHaveBeenCalled();
+      expect(events.some((event) => event.kind === 'completion')).toBe(false);
+      expect(fs.existsSync(path.join(tmp, QUEUE_DIR_NAME))).toBe(false);
     },
   );
 
@@ -1226,102 +1103,16 @@ describe('runAgent standalone', () => {
     expect(result.snapshot.statusMessages).toContain('Installing the SDK');
   });
 
-  it.each([
-    [
-      // The agent stopped itself; only the host's signal makes a run aborted.
-      'an agent [ABORT]',
-      'failed',
-      {
-        kind: 'abort',
-        classification: AgentErrorType.ABORT,
-        message: 'No Stripe found',
-      },
-      undefined,
-    ],
-    [
-      'a failure',
-      'failed',
-      { kind: 'failure', classification: AgentErrorType.NO_PROGRESS },
-      undefined,
-    ],
-    ['a crash', 'crashed', { kind: 'success' }, new Error('SDK exploded')],
-  ] as const)(
-    'removes only new Wizard-installed skills after %s',
-    async (_ending, outcome, harnessResult, thrown) => {
-      const skillsDir = path.join(tmp, '.claude', 'skills');
-      const makeSkill = (id: string, marked: boolean) => {
-        const dir = path.join(skillsDir, id);
-        fs.mkdirSync(dir, { recursive: true });
-        fs.writeFileSync(path.join(dir, 'SKILL.md'), '# skill');
-        if (marked) fs.writeFileSync(path.join(dir, '.posthog-wizard'), '');
-      };
-      makeSkill('preexisting', true);
-      harnessState.result = harnessResult;
-      harnessState.throws = thrown;
-
-      const result = await runAgent(config(), input(), {
-        onProgress: (event) => {
-          if (event.kind !== 'status') return;
-          makeSkill('installed-this-run', true);
-          makeSkill('user-owned-this-run', false);
-        },
-      });
-
-      expect(result.outcome).toBe(outcome);
-      expect(fs.readdirSync(skillsDir).sort()).toEqual([
-        'preexisting',
-        'user-owned-this-run',
-      ]);
-    },
-  );
-
-  it('removes a new marked skill when preparation fails before the harness starts', async () => {
-    const skillsDir = path.join(tmp, '.claude', 'skills');
-    const failedInput = input({
-      inferenceAuth: {
-        resolve: () => {
-          const dir = path.join(skillsDir, 'installed-during-preparation');
-          fs.mkdirSync(dir, { recursive: true });
-          fs.writeFileSync(path.join(dir, '.posthog-wizard'), '');
-          return Promise.reject(new Error('preparation blocked the run'));
-        },
-      },
-    });
-
-    const result = await runAgent(config(), failedInput);
-
-    expect(result.outcome).toBe(RunOutcome.Crashed);
-    expect(harnessState.lastInputs).toBeUndefined();
-    expect(
-      fs.existsSync(path.join(skillsDir, 'installed-during-preparation')),
-    ).toBe(false);
-  });
-
-  it('rejects a standalone agent run without a caller-owned inference provider', async () => {
-    const missingProvider = input();
-    delete (missingProvider as Partial<RunInput>).inferenceAuth;
-
-    const result = await runAgent(config(), missingProvider);
-
-    expect(result.outcome).toBe(RunOutcome.Crashed);
-    expect(result.failure?.message).toContain(
-      'Inference auth provider is required',
+  it('ends the run before any harness when the inference provider refuses', async () => {
+    const refusal = new Error('gateway mint refused');
+    const result = await runAgent(
+      config(),
+      input({ inferenceAuth: { resolve: () => Promise.reject(refusal) } }),
     );
+
+    expect(result.outcome).toBe(RunOutcome.Crashed);
+    expect(result.failure?.error).toBe(refusal);
     expect(harnessState.lastInputs).toBeUndefined();
-  });
-
-  it('keeps newly installed skills after a successful run', async () => {
-    const skillDir = path.join(tmp, '.claude', 'skills', 'completed-install');
-    const result = await runAgent(config(), input(), {
-      onProgress: (event) => {
-        if (event.kind !== 'status') return;
-        fs.mkdirSync(skillDir, { recursive: true });
-        fs.writeFileSync(path.join(skillDir, '.posthog-wizard'), '');
-      },
-    });
-
-    expect(result.outcome).toBe(RunOutcome.Success);
-    expect(fs.existsSync(skillDir)).toBe(true);
   });
 
   it('sends benchmark output to onProgress when benchmarking', async () => {

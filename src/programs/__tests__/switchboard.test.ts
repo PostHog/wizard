@@ -25,7 +25,7 @@ import {
 import {
   PROGRAM_BINDINGS,
   resolveProgramBinding as resolveBinding,
-} from '@programs';
+} from '../binding';
 import type { ProgramSwitchboardCtx as SwitchboardCtx } from '@programs/types';
 import { DEFAULT_AGENT_BINDING as DEFAULT_BINDING } from '@agent';
 import {

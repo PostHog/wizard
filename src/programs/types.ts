@@ -12,30 +12,22 @@ export type { ProgramCiHost, ProgramRunHost } from './host-capabilities';
 export type {
   ProgramInput,
   ProgramOptions,
+  ProgramOverrides,
   ProgramRunOutcome,
   ProgramWorkflowConnector,
+  ProgramWorkflowDecision,
+  ProgramWorkflowRequest,
+  WizardFlagSnapshot,
 } from './run-program';
 export type {
+  ProgramDataProgress,
+  ProgramDiagnostic,
   ProgramInvocationData,
   ProgramProgress,
-  ProgramStoreProjection,
+  ProgramRunProgress,
   SettledProgramRun,
 } from './program-store';
-export type {
-  ProgramBinding,
-  ProgramSwitchboardCtx,
-  ProgramSwitchboardTrace,
-} from './binding';
-export type {
-  ProgramRunProgress,
-  ProgramDataProgress,
-  ProgramDataWriter,
-} from './program-store';
-export type { ProgramOverrides, WizardFlagSnapshot } from './run-program';
-export type {
-  ProgramWorkflowRequest,
-  ProgramWorkflowDecision,
-} from './run-program';
+export type { ProgramSwitchboardCtx } from './binding';
 export type {
   ProgramPreflightDecision,
   ProgramPreflightHost,

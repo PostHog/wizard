@@ -74,8 +74,11 @@ export function transpiled(file: string): string {
   }).outputText;
 }
 
-/** Repo files that load with `entry`: static imports and re-exports, never `import()`. */
-export function staticImportClosure(entry: string): string[] {
+/** Repo files that load with `entry`: static imports and re-exports, plus `import()` when `includeDynamic`. */
+export function staticImportClosure(
+  entry: string,
+  includeDynamic = false,
+): string[] {
   const aliases = loadAliases();
   const pending = [entry];
   const visited = new Set<string>();
@@ -84,22 +87,30 @@ export function staticImportClosure(entry: string): string[] {
     const file = pending.pop();
     if (!file || visited.has(file)) continue;
     visited.add(file);
-    const output = ts.createSourceFile(
+    const specs: string[] = [];
+    const visit = (node: ts.Node): void => {
+      if (
+        (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
+        node.moduleSpecifier &&
+        ts.isStringLiteral(node.moduleSpecifier)
+      ) {
+        specs.push(node.moduleSpecifier.text);
+      } else if (
+        ts.isCallExpression(node) &&
+        node.expression.kind === ts.SyntaxKind.ImportKeyword &&
+        node.arguments[0] &&
+        ts.isStringLiteral(node.arguments[0])
+      ) {
+        specs.push(node.arguments[0].text);
+      }
+      if (includeDynamic) ts.forEachChild(node, visit);
+    };
+    ts.createSourceFile(
       `${file}.js`,
       transpiled(file),
       ts.ScriptTarget.ES2022,
-    );
-    for (const statement of output.statements) {
-      if (
-        !(
-          ts.isImportDeclaration(statement) || ts.isExportDeclaration(statement)
-        ) ||
-        !statement.moduleSpecifier ||
-        !ts.isStringLiteral(statement.moduleSpecifier)
-      ) {
-        continue;
-      }
-      const spec = statement.moduleSpecifier.text;
+    ).statements.forEach(visit);
+    for (const spec of specs) {
       const base = spec.startsWith('.')
         ? path.resolve(REPO_ROOT, path.dirname(file), spec)
         : aliasTarget(spec, aliases);

@@ -1,5 +1,23 @@
 # Changelog
 
+## [2.77.0](https://github.com/PostHog/wizard/compare/v2.76.1...v2.77.0) (2026-09-23)
+
+
+### Features
+
+* allow AIO and Logs in default integrations ([#1235](https://github.com/PostHog/wizard/issues/1235)) ([32c6097](https://github.com/PostHog/wizard/commit/32c6097e6168a2b5f7cd40bcf5206fcbe9b25b51))
+
+
+### Bug Fixes
+
+* **mcp:** install the Codex plugin, and report the real cause when Codex fails ([#1295](https://github.com/PostHog/wizard/issues/1295)) ([8c65238](https://github.com/PostHog/wizard/commit/8c65238f8efbd46d73ae201bde0b5569e2fe7e54))
+* **mcp:** register the marketplace before the Claude Code plugin install ([#1294](https://github.com/PostHog/wizard/issues/1294)) ([8c54c11](https://github.com/PostHog/wizard/commit/8c54c1110941a680db813da3d370cd517f6db53f))
+* **orchestrator:** report the steps a failed dependency stopped ([#1275](https://github.com/PostHog/wizard/issues/1275)) ([0f62680](https://github.com/PostHog/wizard/commit/0f6268097c7754d043deb3c071abf8211fe80b28))
+* retry project detection when agent output has no JSON ([#1305](https://github.com/PostHog/wizard/issues/1305)) ([001edb6](https://github.com/PostHog/wizard/commit/001edb6e4f32d8ff6c3699950fd2b07583ee2a8b))
+* **skills:** attribute a scanner failure to the scan step, not extract ([#1280](https://github.com/PostHog/wizard/issues/1280)) ([0c72cd2](https://github.com/PostHog/wizard/commit/0c72cd2d699a9ff98481a8f7c1ea802555103ee7))
+* **warehouse-sources:** deep-link BigQuery, whose credential is a file upload ([#1262](https://github.com/PostHog/wizard/issues/1262)) ([8677a59](https://github.com/PostHog/wizard/commit/8677a59bf1423b534b589583005056b025dbbf05))
+* **warehouse:** bound the seeded data-source step to a few sources ([#1284](https://github.com/PostHog/wizard/issues/1284)) ([1d57216](https://github.com/PostHog/wizard/commit/1d57216e6cc71c515278b66c5e7fcf7020ad0484))
+
 ## [2.76.1](https://github.com/PostHog/wizard/compare/v2.76.0...v2.76.1) (2026-09-21)
 
 

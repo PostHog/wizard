@@ -58,8 +58,6 @@ const MODEL_COMMANDMENTS: Record<string, readonly string[]> = {};
 // ── Assembly ────────────────────────────────────────────────────────────
 
 export interface CommandmentAxes {
-  /** Deprecated call-site label; never used to select guidance. */
-  program?: string;
   /** Selected by programs; the agent only assembles supplied text. */
   programCommandments?: readonly string[];
   sequence: Sequence;

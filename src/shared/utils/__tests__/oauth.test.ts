@@ -3,9 +3,9 @@ import {
   extractOAuthCode,
   isAuthorizationTimeout,
   missingOAuthScopes,
-  OAuthTokenResponseSchema,
   parseOAuthScopes,
 } from '@utils/oauth';
+import { OAuthTokenResponseSchema } from '@utils/oauth-token';
 import {
   WIZARD_OAUTH_SCOPES,
   WIZARD_PROVISIONING_SCOPES,

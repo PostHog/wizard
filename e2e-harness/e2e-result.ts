@@ -23,6 +23,8 @@ import fs from 'fs';
 import path from 'path';
 import { OutroKind, type WizardSession } from '@lib/wizard-session';
 import { RunPhase } from '@shared/run-state';
+import { TASK_OUTCOMES_KEY } from '@agent';
+import type { TaskOutcome } from '@agent/types';
 import { DETECTED_WAREHOUSE_SOURCES_KEY } from '@programs/warehouse-source/detect';
 import type { DetectedSource } from '@programs/warehouse-sources/types';
 import type { E2eDecisionReport } from './e2e-profile.js';
@@ -220,6 +222,22 @@ export function detectedSourcesFrom(
   return Array.isArray(raw) ? (raw as DetectedSource[]) : [];
 }
 
+/**
+ * The drained queue's final outcomes the orchestrator wrote into
+ * frameworkContext. Unlike the UI `tasks` rows (label + display status, where
+ * done and failed both render `completed`), these carry the task `type` and
+ * the queue's real terminal status — the stable vocabulary e2e expectations
+ * assert on. Null when nothing was recorded (a linear run, or a run that died
+ * before the drain settled) — distinct from an orchestrator run whose queue
+ * held no tasks, which records `[]`.
+ */
+export function taskOutcomesFrom(
+  session: Pick<WizardSession, 'frameworkContext'>,
+): TaskOutcome[] | null {
+  const raw = session.frameworkContext[TASK_OUTCOMES_KEY];
+  return Array.isArray(raw) ? (raw as TaskOutcome[]) : null;
+}
+
 /** The keys the result payload carried before the warehouse work. */
 export interface E2eResultBase {
   runPhase: RunPhase;
@@ -236,6 +254,7 @@ export type E2eResultPayload = E2eResultBase & {
   refusedAsks: number;
   notices: E2eNoticeRecord[];
   tasks: Array<{ label: string; status: string }>;
+  taskOutcomes?: Array<Pick<TaskOutcome, 'type' | 'status' | 'optional'>>;
   detectedSources: DetectedSource[];
   reportFile: E2eReportFile | null;
   abort: string | null;
@@ -273,6 +292,13 @@ export function buildE2eResult(args: {
     refusedAsks: recorder.refusedAsks,
     notices: recorder.notices,
     tasks: tasks.map((t) => ({ label: t.label, status: t.status })),
+    // Key absent = never recorded (linear run); present-but-empty = an
+    // orchestrator run that drained no tasks. Graders must not conflate them.
+    taskOutcomes: taskOutcomesFrom(session)?.map((t) => ({
+      type: t.type,
+      status: t.status,
+      optional: t.optional,
+    })),
     detectedSources: detectedSourcesFrom(session).map((s) => ({
       kind: s.kind,
       label: s.label,

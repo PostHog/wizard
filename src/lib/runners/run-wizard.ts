@@ -71,13 +71,11 @@ export async function advanceStep(
     await runProgramAgent(
       getProgramConfig(step.runProgramId),
       await prepareRunSession(step, store),
-      { composed: true, deferSkillCleanupCommit: true },
+      { composed: true },
     );
     store.completeRunStep(step.id);
   } else if (step.screenId === 'run') {
-    await runProgramAgent(config, await prepareRunSession(step, store), {
-      deferSkillCleanupCommit: true,
-    });
+    await runProgramAgent(config, await prepareRunSession(step, store));
   } else if (step.isComplete) {
     await store.waitUntil(step.isComplete);
   }
@@ -100,7 +98,7 @@ export function runWizard(
   void (async () => {
     try {
       const installDir = (options.installDir as string) || process.cwd();
-      // Covers installs before runProgram registers its own, such as the outage skill.
+      // Armed until a successful exit, so every failed or interrupted exit removes new skills.
       registerRunSkillCleanup(installDir);
 
       const { startTUI } = await import('@ui/tui/start-tui');
@@ -277,9 +275,7 @@ export function runWizard(
         });
       } else {
         try {
-          await runProgramAgent(config, activeTui.store.session, {
-            deferSkillCleanupCommit: true,
-          });
+          await runProgramAgent(config, activeTui.store.session);
         } catch (error) {
           // The run threw before its own error handling rendered an outro.
           // Show the handoff screen and let the user's agent take over.
@@ -308,9 +304,8 @@ export function runWizard(
 
       await activeStream.shutdown(2000);
       if (signalled) return;
+      // Handlers stay attached, so a late signal cannot end the process before drain or commit.
       exitInProgress = true;
-      // Keep the handlers until process.exit so a signal cannot take the
-      // default termination path before cleanup is disarmed.
       if (runFailed) {
         runCleanups();
         await analytics.shutdown('error');

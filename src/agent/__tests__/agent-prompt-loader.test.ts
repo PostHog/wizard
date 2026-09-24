@@ -143,15 +143,17 @@ Connect the sources.
 
   it('marks the sink and the runner-seeded task from frontmatter', () => {
     const p = parseAgentPrompt(
-      '---\nsink: true\nrunnerSeeded: true\n---\nx',
+      '---\nsink: true\nrunnerSeeded: true\noptional: true\n---\nx',
       't',
     );
     expect(p.sink).toBe(true);
     expect(p.runnerSeeded).toBe(true);
+    expect(p.optional).toBe(true);
 
     const plain = parseAgentPrompt('---\nmodel: x\n---\nx', 't');
     expect(plain.sink).toBe(false);
     expect(plain.runnerSeeded).toBe(false);
+    expect(plain.optional).toBe(false);
   });
 
   it('defaults missing array fields to empty and models to undefined', () => {
@@ -212,6 +214,7 @@ describe('buildRegistry', () => {
     seed: false,
     sink: false,
     runnerSeeded: false,
+    optional: false,
     skills: [],
     allowedTools: [],
     disallowedTools: [],
@@ -243,15 +246,17 @@ describe('buildRegistry', () => {
         prompt({ type: 'plan', flow: 'f', seed: true }),
         prompt({ type: 'install', flow: 'f' }),
         prompt({ type: 'warehouse', flow: 'f', runnerSeeded: true }),
+        prompt({ type: 'logs', flow: 'f', optional: true }),
         prompt({ type: 'report', flow: 'f', sink: true }),
       ],
       'f',
     );
 
     // The type still runs — it is only the planner that cannot reach it.
-    expect(registry.types).toEqual(['install', 'warehouse', 'report']);
-    expect(registry.enqueueableTypes).toEqual(['install', 'report']);
+    expect(registry.types).toEqual(['install', 'warehouse', 'logs', 'report']);
+    expect(registry.enqueueableTypes).toEqual(['install', 'logs', 'report']);
     expect(registry.runnerSeededTypes).toEqual(['warehouse']);
+    expect(registry.optionalTypes).toEqual(['logs']);
     expect(registry.sinkTypes).toEqual(['report']);
   });
 
@@ -265,6 +270,21 @@ describe('buildRegistry', () => {
       buildRegistry(prompts, 'f', { exclude: ['dashboard'] }).types,
     ).toEqual(['build']);
     expect(buildRegistry(prompts, 'f').types).toEqual(['build', 'dashboard']);
+  });
+
+  it('reports only excluded types the flow actually had, deduped', () => {
+    const prompts = [
+      prompt({ type: 'plan', flow: 'f', seed: true }),
+      prompt({ type: 'build', flow: 'f' }),
+      prompt({ type: 'logs', flow: 'f' }),
+    ];
+    const registry = buildRegistry(prompts, 'f', {
+      // 'logs' twice (two exclusion sources overlap) and a type this flow
+      // never carried — the note must name 'logs' once and nothing else.
+      exclude: ['logs', 'logs', 'ghost-type'],
+    });
+    expect(registry.excludedTypes).toEqual(['logs']);
+    expect(buildRegistry(prompts, 'f').excludedTypes).toEqual([]);
   });
 
   it('bakes stage overrides into the pi frontmatter at load; unnamed stages and sdk fields untouched', () => {
@@ -322,6 +342,7 @@ describe('resolveTask', () => {
     seed: false,
     sink: false,
     runnerSeeded: false,
+    optional: false,
     modelPi: 'openai/gpt-5.6-luna',
     effortPi: 'low',
     modelSdk: 'claude-haiku-4-5',
@@ -560,6 +581,36 @@ describe('renderToolInventory', () => {
 });
 
 describe('assembleSeedPrompt', () => {
+  it('is byte-identical to a no-exclusions prompt when nothing is excluded', () => {
+    const ctx = {
+      projectId: 1,
+      projectApiKey: 'k',
+      host: { apiHost: 'https://h' },
+    } as Parameters<typeof assembleSeedPrompt>[0];
+
+    expect(assembleSeedPrompt(ctx, 'plan it', [], [])).toBe(
+      assembleSeedPrompt(ctx, 'plan it', []),
+    );
+    expect(assembleSeedPrompt(ctx, 'plan it')).not.toContain('excludes them');
+  });
+
+  it('names excluded types so the plan mentioning them reads as a skip', () => {
+    const ctx = {
+      projectId: 1,
+      projectApiKey: 'k',
+      host: { apiHost: 'https://h' },
+    } as Parameters<typeof assembleSeedPrompt>[0];
+
+    const prompt = assembleSeedPrompt(
+      ctx,
+      'plan it',
+      [],
+      ['ai-observability', 'logs'],
+    );
+    expect(prompt).toContain('this run excludes them: ai-observability, logs');
+    expect(prompt).toContain('do not queue them, do not retry them');
+  });
+
   it('names the tasks the wizard queued before the planner ran', () => {
     const ctx = {
       projectId: 1,

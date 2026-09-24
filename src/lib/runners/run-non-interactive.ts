@@ -12,7 +12,6 @@ import type { CloudRegion } from '@utils/types';
 import { createUiReducer, getUI, setUI } from '@ui';
 import { LoggingUI } from '@ui/logging-ui';
 import type { ProgramConfig } from '@programs/types';
-import type { InferenceAuthProvider } from '@agent/types';
 import { getAuditChecks } from '@programs/audit/types';
 import { analytics } from '@utils/analytics';
 import { resolveNoTelemetry } from './resolve-no-telemetry';
@@ -135,7 +134,7 @@ export function runNonInteractive(
       ? (options.installDir as string)
       : path.join(process.cwd(), options.installDir as string);
 
-    // Covers installs before runProgram registers its own, such as the outage skill.
+    // Armed until the run completes, so every failed or interrupted exit removes new skills.
     registerRunSkillCleanup(installDir);
     const onSigint = () => {
       runCleanups();
@@ -264,17 +263,14 @@ export function runNonInteractive(
     };
 
     try {
-      let ciInferenceAuth: InferenceAuthProvider | undefined;
       if (mode === 'ci') {
         const { loadCiInferenceAuthProvider } = await import(
           './ci-inference-auth'
         );
-        ciInferenceAuth = loadCiInferenceAuthProvider(
+        session.inferenceAuth = loadCiInferenceAuthProvider(
           Number(session.projectId),
           session.region ?? 'us',
         );
-        session.inferenceAuth = ciInferenceAuth;
-        store?.setInferenceAuth(ciInferenceAuth);
       }
       if (config.ciPreRun) {
         const ui = getUI();
@@ -377,10 +373,7 @@ export function runNonInteractive(
       }
 
       const { runProgramAgent } = await import('./run-program-agent');
-      await runProgramAgent(config, session, {
-        inferenceAuth: ciInferenceAuth,
-        deferSkillCleanupCommit: true,
-      });
+      await runProgramAgent(config, session);
       await settleStream(RunPhase.Completed);
       commitRegisteredRunSkillCleanups();
     } catch (error) {

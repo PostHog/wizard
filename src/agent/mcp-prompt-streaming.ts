@@ -244,8 +244,6 @@ export async function* runMcpPromptViaSdk(args: {
 
   // The url and the bearer are one unit: a run must take both from the same
   // mint.
-  if (!args.inferenceAuth)
-    throw new Error('Inference auth provider is required.');
   const auth = await args.inferenceAuth.resolve();
   const gatewayUrl = auth.gatewayUrl;
   process.env.ANTHROPIC_BASE_URL = gatewayUrl;
