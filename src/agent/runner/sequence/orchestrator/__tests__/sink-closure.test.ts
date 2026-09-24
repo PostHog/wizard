@@ -374,6 +374,7 @@ describe('one-way rule for runner-seeded tasks', () => {
     });
 
     expect(r).toMatchObject({ ok: false, guard: 'seeded-dep' });
+    expect(r.ok === false && r.message).toContain('only the final reporting');
   });
 
   it('rejects one that reaches it through an intermediate hop', () => {
@@ -442,6 +443,7 @@ describe('one-way rule for runner-seeded tasks', () => {
     expect(r.ok === false && r.message).not.toContain(
       'a task already in dependsOn',
     );
+    expect(r.ok === false && r.message).toContain('only legal spot');
   });
 
   it('keeps the generic sink advice when no seeded task is uncovered', () => {

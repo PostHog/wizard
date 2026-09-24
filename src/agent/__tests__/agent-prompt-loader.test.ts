@@ -607,7 +607,8 @@ describe('assembleSeedPrompt', () => {
       [],
       ['ai-observability', 'logs'],
     );
-    expect(prompt).toContain('ai-observability, logs');
+    expect(prompt).toContain('this run excludes them: ai-observability, logs');
+    expect(prompt).toContain('do not queue them, do not retry them');
   });
 
   it('names the tasks the wizard queued before the planner ran', () => {
@@ -620,7 +621,26 @@ describe('assembleSeedPrompt', () => {
     const prompt = assembleSeedPrompt(ctx, 'plan it', [
       { id: 'abc-123', type: 'warehouse' },
     ]);
-    expect(prompt).toContain('abc-123');
+    expect(prompt).toContain('warehouse (id: abc-123)');
+    expect(prompt).toContain('Do not queue them again');
+  });
+
+  it('tells the planner the edge is one-way — sink in, nothing else', () => {
+    const ctx = {
+      projectId: 1,
+      projectApiKey: 'k',
+      host: { apiHost: 'https://h' },
+    } as Parameters<typeof assembleSeedPrompt>[0];
+
+    const prompt = assembleSeedPrompt(ctx, 'plan it', [
+      { id: 'abc-123', type: 'warehouse' },
+    ]);
+
+    // A pre-queued task is deferred to the end of the drain and may block on a
+    // person, so a task hung off it would wait on the user — the interruption
+    // deferring it removed.
+    expect(prompt).toContain('hang nothing else off them');
+    expect(prompt).toContain('reporting task depend on each one');
   });
 
   it('says nothing about pre-queued tasks when there are none', () => {
