@@ -86,6 +86,8 @@ export async function runProgramAgent(
     ? startAuditLedgerWatcher(session.installDir, ledgerFile)
     : null;
   const releaseLedger = () => {
+    // Read a last write the watch debounce hasn't picked up before stopping.
+    ledger?.refresh();
     ledger?.stop();
     if (ledgerFile) removeAuditLedger(session.installDir, ledgerFile);
   };

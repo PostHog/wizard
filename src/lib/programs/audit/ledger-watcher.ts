@@ -1,7 +1,8 @@
 /**
  * Mirrors the agent's `.posthog-audit-checks.json` into the session, so the TUI
- * screens and the task stream read one value. `runAgent` owns the lifecycle, so
- * every path gets it — including the e2e host, which builds no task stream.
+ * screens and the task stream read one value. `runProgramAgent` owns the
+ * lifecycle and removes the file at run end, so every path gets it — including
+ * the e2e host, which builds no task stream.
  */
 
 import fs from 'fs';
@@ -38,7 +39,7 @@ export function startAuditLedgerWatcher(
   );
 }
 
-/** The wizard seeded the ledger, so it removes it, agent `rm` step or not. */
+/** The program declared the ledger, so it removes it, agent `rm` step or not. */
 export function removeAuditLedger(installDir: string, file: string): void {
   const target = path.join(installDir, file);
   try {

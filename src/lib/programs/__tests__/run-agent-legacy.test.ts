@@ -19,6 +19,7 @@ import { initLogFile, logToFile } from '@utils/debug';
 import { registerCleanup, wizardAbort } from '@utils/wizard-abort';
 import { ErrorCodes } from '@shared/errors';
 import type { ProgramConfig } from '../program-step';
+import { AUDIT_CHECKS_KEY } from '../audit/types';
 
 const streamShutdown = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 vi.mock('@env', async (original) => ({
@@ -463,5 +464,31 @@ describe('the audit ledger', () => {
     );
     await runProgramAgent(audit(), auditSession());
     expect(leftAfterAbort).toBe(false);
+  });
+
+  it('keeps a finished run a success when the ledger cannot be removed', async () => {
+    vi.mocked(runAgent).mockImplementation((...args) => {
+      fs.mkdirSync(ledgerPath());
+      return finishRun(...args);
+    });
+    await expect(
+      runProgramAgent(audit(), auditSession()),
+    ).resolves.toBeUndefined();
+    expect(logToFile).toHaveBeenCalledWith(
+      expect.stringContaining('[audit-ledger] could not remove'),
+    );
+  });
+
+  it('mirrors a last write the watcher has not read yet', async () => {
+    const checks = [
+      { id: 'sdk', area: 'SDK', label: 'Install the SDK', status: 'pass' },
+    ];
+    const mirror = vi.spyOn(getUI(), 'setFrameworkContext');
+    vi.mocked(runAgent).mockImplementation((...args) => {
+      fs.writeFileSync(ledgerPath(), JSON.stringify(checks));
+      return finishRun(...args);
+    });
+    await runProgramAgent(audit(), auditSession());
+    expect(mirror).toHaveBeenCalledWith(AUDIT_CHECKS_KEY, checks);
   });
 });
