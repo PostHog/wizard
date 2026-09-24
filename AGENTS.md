@@ -163,6 +163,7 @@ pnpm try --install-dir=<path>      # Run the wizard locally against a test proje
 pnpm build                         # Compile TypeScript
 pnpm test                          # Unit tests (builds first)
 pnpm test:watch                    # Unit tests in watch mode
+pnpm test:e2e                      # Jest E2E suite on recorded fixtures (builds first)
 pnpm test:e2e:tui                  # Live, credentialed: full TUI on a workbench app copy
 pnpm lint                          # Prettier + ESLint checks
 pnpm fix                           # Auto-fix lint issues

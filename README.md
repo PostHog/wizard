@@ -565,7 +565,15 @@ To run unit tests, run:
 bin/test
 ```
 
-End-to-end runs are live and credentialed. Point `APP_DIR` at an app copy from
+To run the jest E2E suite, which replays recorded LLM calls, run:
+
+```bash
+bin/test-e2e
+```
+
+See [`e2e-tests/README.md`](e2e-tests/README.md) to add or re-record tests.
+
+Live end-to-end runs are credentialed. Point `APP_DIR` at an app copy from
 [wizard-workbench](https://github.com/PostHog/wizard-workbench), which owns the
 fixture apps and the assertions:
 
