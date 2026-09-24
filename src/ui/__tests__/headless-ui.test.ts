@@ -32,53 +32,56 @@ describe('HeadlessUI', () => {
   });
 });
 
-it.each(['headless', 'interactive'])(
-  'publishes every committed %s task state independently of legacy coalescing',
-  async (mode) => {
-    const { WizardStore } = await import('../tui/store');
-    const { InkUI } = await import('../tui/ink-ui');
-    const { TaskStreamPush } = await import(
-      '@lib/task-stream/task-stream-push'
-    );
-    const { WizardRunSync } = await import('@lib/task-stream/wizard-run-sync');
-    const { HostResolution } = await import('@shared/host-resolution');
-    const { RunPhase } = await import('@lib/wizard-session');
-    const store = new WizardStore();
-    store.setCredentials({
-      accessToken: 'pha_test',
-      projectId: 42,
-      projectApiKey: 'phc_unused',
-      host: HostResolution.fromApiHost('https://eu.posthog.com'),
-    });
-    const ui = mode === 'headless' ? new HeadlessUI(store) : new InkUI(store);
-    const fetchImpl = vi
-      .fn<typeof fetch>()
-      .mockResolvedValue(new Response(null, { status: 204 }));
-    const legacy = {
-      name: 'legacy',
-      send: vi.fn().mockRejectedValue(new Error('legacy unavailable')),
-    };
-    const runSync = new WizardRunSync({
-      mode: 'cloud',
-      assignedId: '019edb1a-cce4-4000-8f6d-682061862da9',
-      programId: 'posthog-integration',
-      getSession: () => store.session,
-      fetchImpl,
-    });
-    const stream = new TaskStreamPush({
-      store,
-      programId: 'onboarding',
-      destinations: [legacy],
-      runSync,
-    });
-    stream.attach();
-    ui.startRun();
-    for (const status of ['pending', 'in_progress', 'completed']) {
-      ui.syncTodos([{ id: 'task-1', content: 'Inspect', status }]);
-    }
-    ui.setAccessToken(store.session.credentials!);
-    store.setRunPhase(RunPhase.Completed);
-    await stream.shutdown(2000, 'completed');
+it.each([
+  ['headless', 'wizard-run'],
+  ['interactive', 'wizard-run'],
+  ['headless', 'wizard-session'],
+  ['interactive', 'wizard-session'],
+])('publishes %s tasks through the %s variant', async (mode, variant) => {
+  const { WizardStore } = await import('../tui/store');
+  const { InkUI } = await import('../tui/ink-ui');
+  const { TaskStreamPush } = await import('@lib/task-stream/task-stream-push');
+  const { WizardRunSync } = await import('@lib/task-stream/wizard-run-sync');
+  const { HostResolution } = await import('@shared/host-resolution');
+  const { RunPhase } = await import('@lib/wizard-session');
+  const store = new WizardStore();
+  store.setCredentials({
+    accessToken: 'pha_test',
+    projectId: 42,
+    projectApiKey: 'phc_unused',
+    host: HostResolution.fromApiHost('https://eu.posthog.com'),
+  });
+  const ui = mode === 'headless' ? new HeadlessUI(store) : new InkUI(store);
+  const fetchImpl = vi
+    .fn<typeof fetch>()
+    .mockResolvedValue(new Response(null, { status: 204 }));
+  const legacy = {
+    name: 'posthog',
+    send: vi.fn().mockRejectedValue(new Error('legacy unavailable')),
+  };
+  const runSync = new WizardRunSync({
+    mode: 'cloud',
+    assignedId: '019edb1a-cce4-4000-8f6d-682061862da9',
+    programId: 'posthog-integration',
+    getSession: () => store.session,
+    fetchImpl,
+  });
+  const stream = new TaskStreamPush({
+    store,
+    programId: 'onboarding',
+    destinations: [legacy],
+    runSync,
+    getFlags: () => ({ 'wizard-run-sync': variant }),
+  });
+  stream.attach();
+  ui.startRun();
+  for (const status of ['pending', 'in_progress', 'completed']) {
+    ui.syncTodos([{ id: 'task-1', content: 'Inspect', status }]);
+  }
+  ui.setAccessToken(store.session.credentials!);
+  store.setRunPhase(RunPhase.Completed);
+  await stream.shutdown(2000, 'completed');
+  if (variant === 'wizard-run') {
     expect(
       fetchImpl.mock.calls.map(([, init]) => JSON.parse(init!.body as string)),
     ).toEqual([
@@ -87,6 +90,9 @@ it.each(['headless', 'interactive'])(
         tasks: [{ name: 'Inspect', status }],
       })),
     ]);
+    expect(legacy.send).not.toHaveBeenCalled();
+  } else {
+    expect(fetchImpl).not.toHaveBeenCalled();
     expect(legacy.send).toHaveBeenCalled();
-  },
-);
+  }
+});

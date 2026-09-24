@@ -217,6 +217,7 @@ export function runWizard(
       const taskStreamEnabled = destinations.length > 0;
       const activeStream = new TaskStreamPush({
         store: activeTui.store,
+        getFlags: () => analytics.getCachedWizardFlags(),
         programId: config.streamWorkflowId ?? config.id,
         runSync: createWizardRunSync({
           mode: 'local',

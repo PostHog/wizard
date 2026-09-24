@@ -297,6 +297,7 @@ export const WIZARD_DEFAULT_AIO_LOGS_FLAG_KEY = 'wizard-default-aio-logs';
 // Reading a flag enters this run into that flag's experiment, so a closed set — not a
 // `wizard-` prefix anyone can name into — decides what a run evaluates. Test-pinned exhaustive.
 export const WIZARD_FLAG_KEYS = [
+  'wizard-run-sync',
   WIZARD_ORCHESTRATOR_FLAG_KEY,
   WIZARD_ORCHESTRATOR_OVERRIDE_FLAG_KEY,
   WIZARD_ORCHESTRATOR_SEEDED_TASKS_FLAG_KEY,

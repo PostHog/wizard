@@ -115,6 +115,7 @@ function buildPendingInput(
 export interface TaskStreamPushOptions {
   store: WizardStore;
   runSync?: WizardRunSync;
+  getFlags?: () => Readonly<Record<string, string>> | null;
   programId: string;
   destinations: TaskStreamDestination[];
   /** Optional absolute event-plan path to load into the store once. */
@@ -135,6 +136,8 @@ export class TaskStreamPush {
   private readonly auditChecks: (() => unknown) | null;
 
   private readonly runSync?: WizardRunSync;
+  private readonly getFlags?: TaskStreamPushOptions['getFlags'];
+  private remoteSync?: 'wizard-session' | 'wizard-run';
   private shutdownPromise?: Promise<void>;
   private enabled: boolean;
   private created = false;
@@ -150,6 +153,12 @@ export class TaskStreamPush {
   constructor(opts: TaskStreamPushOptions) {
     this.store = opts.store;
     this.runSync = opts.runSync;
+    this.getFlags = opts.getFlags;
+    this.remoteSync = !opts.runSync
+      ? 'wizard-session'
+      : opts.getFlags
+      ? undefined
+      : 'wizard-run';
     this.programId = sanitizeChannelId(opts.programId);
     this.destinations = opts.destinations;
     this.enabled = opts.enabled ?? true;
@@ -256,9 +265,12 @@ export class TaskStreamPush {
 
   private onStoreChange(): void {
     if (!this.enabled || this.shuttingDown) return;
-    this.runSync?.capture(this.store.tasks);
     const phase = this.store.session.runPhase;
     if (phase === RunPhase.Idle) return;
+    this.selectRemoteSync();
+    if (this.remoteSync === 'wizard-run') {
+      this.runSync?.capture(this.store.tasks);
+    }
 
     // A push is already in flight — coalesce. The in-flight push's
     // settle handler will trigger one follow-up with the latest state.
@@ -326,6 +338,7 @@ export class TaskStreamPush {
   }
 
   private async sendOnce(): Promise<void> {
+    this.selectRemoteSync();
     const { session, tasks, eventPlan, handoffText } = this.store;
     const skillId = sanitizeChannelId(session.skillId ?? this.programId);
     const phase = session.runPhase;
@@ -373,10 +386,25 @@ export class TaskStreamPush {
     this.lastPushedQuestionId = payload.pending_input?.id ?? null;
 
     await Promise.all(
-      this.destinations.map((d) =>
-        // eslint-disable-next-line @typescript-eslint/no-empty-function
-        d.send(event, payload).catch(() => {}),
-      ),
+      this.destinations
+        .filter(
+          (d) => d.name !== 'posthog' || this.remoteSync === 'wizard-session',
+        )
+        .map((d) =>
+          // eslint-disable-next-line @typescript-eslint/no-empty-function
+          d.send(event, payload).catch(() => {}),
+        ),
     );
+  }
+
+  private selectRemoteSync(): void {
+    if (this.remoteSync || !this.store.session.credentials) return;
+    if (this.store.session.runPhase === RunPhase.Idle) return;
+    const flags = this.getFlags?.();
+    if (!flags) return;
+    this.remoteSync =
+      flags['wizard-run-sync'] === 'wizard-run'
+        ? 'wizard-run'
+        : 'wizard-session';
   }
 }

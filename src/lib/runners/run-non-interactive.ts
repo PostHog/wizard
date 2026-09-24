@@ -214,6 +214,7 @@ export function runNonInteractive(
       setUI(new HeadlessUI(headlessStore));
       taskStream = new TaskStreamPush({
         store: headlessStore,
+        getFlags: () => analytics.getCachedWizardFlags(),
         programId: config.streamWorkflowId ?? config.id,
         runSync: createWizardRunSync({
           mode,

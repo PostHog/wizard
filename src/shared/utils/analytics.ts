@@ -365,6 +365,10 @@ export class Analytics {
     return this.activeFlags;
   }
 
+  getCachedWizardFlags(): Readonly<Record<string, string>> | null {
+    return this.activeFlags;
+  }
+
   /** Flag payloads from the same snapshot; empty until the flags are fetched. */
   getWizardFlagPayloads(): Record<string, unknown> {
     return this.activeFlagPayloads;

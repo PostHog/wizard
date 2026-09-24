@@ -178,10 +178,18 @@ and inherits the umbrella setting; an explicit `false` overrides it.
 
 ## WizardRun synchronization
 
-An authenticated interactive execution creates one local WizardRun when the
-agent starts. Creation uses the selected top-level `ProgramConfig.id`, the
-resolved API host and project, the target folder's basename as its display name,
-and the package version. Program IDs must exist in the backend registry and
+The multivariate `wizard-run-sync` flag selects the remote transport:
+`wizard-session` publishes WizardSession state; `wizard-run` publishes WizardRun
+tasks and local lifecycle updates. Missing, disabled, or unknown variants use
+`wizard-session`. The publisher uses the existing authenticated flag snapshot
+and fixes the selection for the execution; there is no extra flag request or
+polling. A synchronization failure does not switch transports. File output is
+independent of the flag.
+
+With `wizard-run`, an authenticated interactive execution creates one local
+WizardRun when the agent starts. Creation uses the selected top-level
+`ProgramConfig.id`, the resolved API host and project, the target folder's
+basename as its display name, and the package version. Program IDs must exist in the backend registry and
 support local folders; a rejected configuration disables run synchronization
 without selecting a different program. The analytics `run_id`, session
 `session_id`, and cloud analytics `task_run_id` remain separate identities.
@@ -235,8 +243,9 @@ written to project files or passed to nested agent environments.
 Headless invocations without an assignment remain on the legacy WizardSession
 transport. `POSTHOG_TASK_RUN_ID` is an analytics compatibility alias and is
 **never** interpreted as a WizardRun assignment. Headless mode alone cannot
-create a local run. Both modes continue independent session synchronization and
-file output. `--no-telemetry` disables both remote transports; synthetic `--ci`
+create a local run. The flag selects one remote transport for local and assigned
+cloud executions. Legacy headless launches retain session publishing regardless
+of the variant. `--no-telemetry` disables both remote transports; synthetic `--ci`
 uses local output only.
 
 The coordinated PostHog worker change is still required in

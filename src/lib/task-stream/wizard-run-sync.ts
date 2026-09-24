@@ -105,15 +105,18 @@ export class WizardRunSync {
   private authDisabled = false;
   private closing?: Promise<void>;
 
-  constructor(private readonly options: Options) {
-    if (options.mode === 'cloud' && !isUUID(options.assignedId ?? '')) {
-      this.tasksDisabled = true;
-      this.report('invalid cloud run assignment');
-    }
-  }
+  constructor(private readonly options: Options) {}
 
   capture(items: readonly TaskItem[] | undefined): void {
     if (this.stopped || this.tasksDisabled || !items) return;
+    if (
+      this.options.mode === 'cloud' &&
+      !isUUID(this.options.assignedId ?? '')
+    ) {
+      this.tasksDisabled = true;
+      this.report('invalid cloud run assignment');
+      return;
+    }
     const session = this.options.getSession();
     if (session.runPhase === RunPhase.Idle) return;
     if (!this.context) {

@@ -277,9 +277,11 @@ Some programs request more on top (`PROGRAM_SCOPE_ADDITIONS` in
 `integration:read` and `external_data_source:read` /
 `external_data_source:write`.
 
-Local executions also synchronize tasks and terminal status to WizardRun.
-Cloud executions require an explicit `POSTHOG_WIZARD_RUN_ID` assignment and
-leave terminal status to their worker. See [WizardRun synchronization](docs/local-dev.md#wizardrun-synchronization)
+The `wizard-run-sync` flag selects remote synchronization: `wizard-session`
+(the default) uses WizardSession; `wizard-run` uses WizardRun. In the latter
+mode, local executions synchronize tasks and terminal status. Cloud executions
+require an explicit `POSTHOG_WIZARD_RUN_ID` assignment and leave terminal status
+to their worker. See [WizardRun synchronization](docs/local-dev.md#wizardrun-synchronization)
 for limits, shutdown behavior, migration compatibility, and deployment checks.
 
 ### OAuth app scope ceiling
@@ -414,12 +416,12 @@ wizard alongside all of our other PostHog product data, and this is very
 powerful. For example: we could show in-product surveys to people who have used
 the wizard to improve the experience.
 
-When the user authenticates, the wizard also streams live run state — current
+With `wizard-run-sync=wizard-session`, the wizard streams live run state — current
 phase, task list, planned events — to `POST /api/projects/{id}/wizard/sessions/`
 so the PostHog web app can render real-time progress. Updates are debounced
 (250ms) with phase changes flushed immediately; failures fall back silently to
 the wizard's debug log without disturbing the TUI. Pass `--no-telemetry` (or
-set `POSTHOG_WIZARD_NO_TELEMETRY=1`) to disable.
+set `POSTHOG_WIZARD_NO_TELEMETRY=1`) to disable either remote transport.
 
 ## Leave rules behind
 

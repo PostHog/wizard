@@ -406,3 +406,97 @@ it('uses a fresh creation key for each independent execution', async () => {
     second.writes()[0].body.idempotency_key,
   );
 });
+
+it.each(['local', 'cloud'] as const)(
+  'selects exactly one remote transport for %s executions and keeps file output',
+  async (mode) => {
+    const { WizardStore } = await import('@ui/tui/store');
+    const { TaskStreamPush } = await import('../task-stream-push');
+    for (const variant of [
+      'wizard-run',
+      'wizard-session',
+      'false',
+      'unknown',
+      undefined,
+    ]) {
+      const { session, fetchImpl, options, writes } = setup(mode);
+      const store = new WizardStore();
+      store.session = session;
+      let flags: Record<string, string> = variant
+        ? { 'wizard-run-sync': variant }
+        : {};
+      const legacy = {
+        name: 'posthog',
+        send: vi.fn().mockResolvedValue(undefined),
+      };
+      const file = { name: 'file', send: vi.fn().mockResolvedValue(undefined) };
+      const stream = new TaskStreamPush({
+        store,
+        programId: options.programId,
+        runSync: new WizardRunSync({
+          ...options,
+          getSession: () => store.session,
+        }),
+        getFlags: () => flags,
+        destinations: [legacy, file],
+      });
+      stream.attach();
+      store.syncTodos([
+        { id: 'one', content: 'Inspect', status: 'in_progress' },
+      ]);
+      flags = {
+        'wizard-run-sync':
+          variant === 'wizard-run' ? 'wizard-session' : 'wizard-run',
+      };
+      store.syncTodos([{ id: 'one', content: 'Inspect', status: 'completed' }]);
+      await stream.shutdown(2000, 'completed');
+      expect(file.send).toHaveBeenCalled();
+      if (variant === 'wizard-run') {
+        expect(legacy.send).not.toHaveBeenCalled();
+        expect(
+          writes()
+            .filter((r) => r.method === 'PUT')
+            .map((r) => r.body.tasks),
+        ).toContainEqual([{ name: 'Inspect', status: 'running' }]);
+        expect(writes().at(-1)?.method).toBe(
+          mode === 'local' ? 'PATCH' : 'PUT',
+        );
+      } else {
+        expect(legacy.send).toHaveBeenCalled();
+        expect(fetchImpl).not.toHaveBeenCalled();
+      }
+    }
+  },
+);
+
+it('waits for authenticated flags, then keeps run failures on the selected transport', async () => {
+  const { WizardStore } = await import('@ui/tui/store');
+  const { TaskStreamPush } = await import('../task-stream-push');
+  const { session, options, fetchImpl } = setup('cloud');
+  const store = new WizardStore();
+  store.session = session;
+  let flags: Record<string, string> | null = null;
+  const legacy = {
+    name: 'posthog',
+    send: vi.fn().mockResolvedValue(undefined),
+  };
+  const stream = new TaskStreamPush({
+    store,
+    programId: options.programId,
+    runSync: new WizardRunSync({ ...options, getSession: () => store.session }),
+    getFlags: () => flags,
+    destinations: [legacy],
+  });
+  stream.attach();
+  await vi.advanceTimersByTimeAsync(0);
+  expect(legacy.send).not.toHaveBeenCalled();
+  expect(fetchImpl).not.toHaveBeenCalled();
+  flags = { 'wizard-run-sync': 'wizard-run' };
+  fetchImpl.mockResolvedValue(new Response(null, { status: 403 }));
+  store.syncTodos([{ id: 'one', content: 'Inspect', status: 'in_progress' }]);
+  await vi.advanceTimersByTimeAsync(0);
+  store.syncTodos([{ id: 'one', content: 'Inspect', status: 'completed' }]);
+  await stream.shutdown(2000, 'completed');
+  expect(fetchImpl).toHaveBeenCalledOnce();
+  expect(legacy.send).not.toHaveBeenCalled();
+});
