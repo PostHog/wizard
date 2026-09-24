@@ -337,7 +337,7 @@ export function runNonInteractive(
         }
       }
 
-      const { runProgramAgent } = await import('@programs/run-agent-legacy');
+      const { runProgramAgent } = await import('./run-program-agent');
       await runProgramAgent(config, session);
       await settleStream(RunPhase.Completed);
     } catch (error) {

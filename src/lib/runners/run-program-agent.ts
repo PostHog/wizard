@@ -26,11 +26,17 @@ import {
   TASK_OUTCOMES_KEY,
 } from '@agent';
 import type { RunConfig, RunInput } from '@agent/types';
-import { resolveProgramBinding, type ProgramSwitchboardCtx } from './binding';
-import { getProgramCommandments } from './commandments';
-import { captureSwitchboardDecision } from './binding-telemetry';
-import { areSeededTasksEnabled, resolveStageOverrides } from './experiments';
-import type { ProgramRun } from './program-run';
+import {
+  resolveProgramBinding,
+  type ProgramSwitchboardCtx,
+} from '@programs/binding';
+import { getProgramCommandments } from '@programs/commandments';
+import { captureSwitchboardDecision } from '@programs/binding-telemetry';
+import {
+  areSeededTasksEnabled,
+  resolveStageOverrides,
+} from '@programs/experiments';
+import type { ProgramRun } from '@programs/program-run';
 import {
   backupAndFixClaudeSettings,
   checkAllSettingsConflicts,
@@ -54,10 +60,13 @@ import {
   type Integration,
 } from '@shared/constants';
 import { FRAMEWORK_REGISTRY } from '@programs/registry';
-import { postAuthGateSteps, type ProgramConfig } from './program-step';
-import { authenticate, refreshAccessTokenIfNeeded } from './authenticate';
-import { maybeStampAiSdkDetected } from './posthog-integration/detect';
-import { startAuditLedgerWatcher } from './audit/ledger-watcher';
+import { postAuthGateSteps, type ProgramConfig } from '@programs/program-step';
+import {
+  authenticate,
+  refreshAccessTokenIfNeeded,
+} from '@programs/authenticate';
+import { maybeStampAiSdkDetected } from '@programs/posthog-integration/detect';
+import { startAuditLedgerWatcher } from '@programs/audit/ledger-watcher';
 
 /**
  * Resolve a ProgramConfig's agent run definition and execute the pipeline.

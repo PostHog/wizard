@@ -1,7 +1,7 @@
 import { runNonInteractive } from '@lib/runners/run-non-interactive';
 import { runWizard } from '@lib/runners/run-wizard';
 import { authenticate } from '@programs/authenticate';
-import { runProgramAgent } from '../run-agent-legacy';
+import { runProgramAgent } from '@lib/runners/run-program-agent';
 import { runAgent, RunOutcome, type RunResult } from '@agent/runner';
 import { Harness, Sequence } from '@shared/constants';
 import { buildSession, OutroKind } from '@lib/wizard-session';
