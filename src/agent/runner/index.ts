@@ -38,6 +38,7 @@ import { prepareRun } from './shared/bootstrap';
 import { createProgressCollector } from './shared/progress-collector';
 import { getSequence } from './switchboard';
 import { flushScanReport } from '@agent/yara-hooks';
+import { captureRunSkillCleanup } from '@shared/skill-run-cleanup';
 
 export type {
   AbortCase,
@@ -80,6 +81,18 @@ export async function runAgent(
   options: RunAgentOptions = {},
 ): Promise<RunResult> {
   let collector: ReturnType<typeof createProgressCollector> | undefined;
+  let cleanupInstalledSkills: (() => void) | undefined;
+  const cleanFailedRun = () => {
+    try {
+      cleanupInstalledSkills?.();
+    } catch (error) {
+      try {
+        logToFile('[agent-runner] failed-run skill cleanup error:', error);
+      } catch {
+        // Cleanup diagnostics must not replace the run result.
+      }
+    }
+  };
   const snapshot = (): RunResult['snapshot'] => {
     try {
       if (collector) return collector.snapshot();
@@ -108,6 +121,8 @@ export async function runAgent(
   };
   let result: RunResult;
   try {
+    // Capture before preparation so pre-harness failures clean new skills too.
+    cleanupInstalledSkills = captureRunSkillCleanup(input.installDir);
     collector = createProgressCollector(options.onProgress);
     const { emit } = collector;
     const log = (message: string) =>
@@ -216,6 +231,7 @@ export async function runAgent(
       };
     }
   }
+  if (result.outcome !== RunOutcome.Success) cleanFailedRun();
   flushReport();
   return result;
 }
