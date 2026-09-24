@@ -19,7 +19,7 @@
  * agent did not decide (a refused mint, an SDK crash) comes back as
  * `outcome: RunOutcome.Crashed` with the original error attached, so a caller can keep
  * handling it the way it always did. The legacy adapter in
- * `src/lib/runners/run-program-agent.ts` rebuilds today's session-driven
+ * `src/programs/run-agent-legacy.ts` rebuilds today's session-driven
  * behavior on top of this call for every existing caller.
  */
 
@@ -44,7 +44,6 @@ export type {
   AgentFailure,
   BootstrapResult,
   Credentials,
-  InferenceAuthProvider,
   AgentRunDefinition,
   PromptContext,
   ResolvedBinding,
@@ -63,6 +62,7 @@ export type {
   ProgressEmitter,
 } from '@agent/progress';
 export { shouldDisableAsk } from './shared/bootstrap';
+export { resolveBinding } from './switchboard';
 export type { ProgramBinding, SwitchboardCtx } from './switchboard';
 export { TASK_OUTCOMES_KEY } from './sequence/orchestrator/queue';
 export type { TaskOutcome } from './sequence/orchestrator/queue';

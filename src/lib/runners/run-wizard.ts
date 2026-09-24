@@ -1,6 +1,6 @@
 import { VERSION } from '@shared/version';
 import { logToFile, getLogFilePath } from '@utils/debug';
-import { runProgramAgent } from './run-program-agent';
+import { runProgramAgent } from '@programs/run-agent-legacy';
 import { authenticate } from '@programs/authenticate';
 import { getProgramConfig } from '@programs';
 import { getAuditChecks } from '@programs/audit/types';

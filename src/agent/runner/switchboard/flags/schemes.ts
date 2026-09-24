@@ -15,7 +15,7 @@ import {
 } from '@shared/constants';
 import type { ProgramId } from '@programs/types';
 import { logToFile } from '@utils/debug';
-import type { EffortLevel } from '@agent/types';
+import type { EffortLevel } from '../models';
 
 // ── Shared vocabulary ─────────────────────────────────────────────────────
 

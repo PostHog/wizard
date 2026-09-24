@@ -4,7 +4,7 @@
  * `runAgent` reports through one optional callback and asks through one
  * optional set of capabilities. Neither reaches into a UI singleton, a store,
  * or a session: every payload is copied data, every question is awaited on an
- * injected answerer. The legacy adapter in `src/lib/runners/run-program-agent.ts`
+ * injected answerer. The legacy adapter in `src/programs/run-agent-legacy.ts`
  * maps these back onto `WizardUI` one call per event, so the terminal output of
  * every existing runner is unchanged.
  */
@@ -232,9 +232,7 @@ export type AgentProgress =
   /** The handoff document the agent published (`WizardUI.setHandoffText`). */
   | { kind: 'handoff'; text: string }
   /** The run's final outro payload (`WizardUI.setOutroData`). */
-  | { kind: 'completion'; outro: OutroData }
-  /** One short line per agent step, only from a run that collects its transcript. */
-  | { kind: 'activity'; line: string };
+  | { kind: 'completion'; outro: OutroData };
 
 export type ProgressEmitter = (event: AgentProgress) => void;
 

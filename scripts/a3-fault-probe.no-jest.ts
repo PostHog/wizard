@@ -66,6 +66,11 @@ const config: RunConfig = {
     harness: harness as Harness,
     model: DEFAULT_AGENT_MODEL,
   },
+  switchboard: {
+    program: 'fault-probe',
+    flags: {},
+    cliHarness: harness as Harness,
+  },
   skillsBaseUrl: 'http://127.0.0.1:1',
   wizardFlags: {},
   wizardFlagPayloads: {},

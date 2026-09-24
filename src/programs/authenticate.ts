@@ -10,7 +10,6 @@
  * back rather than fetching again.
  */
 
-import type { ApiUser } from '@shared/api';
 import type { Credentials, WizardSession } from '@lib/wizard-session';
 import type { ProgramId } from '@programs/program-registry';
 import { getOrAskForProjectData } from '@utils/setup-utils';
@@ -20,12 +19,6 @@ import { markGrantRevoked } from '@shared/auth-session-state';
 import { analytics, groupsFromUser } from '@utils/analytics';
 import { getUI } from '@ui';
 import { logToFile } from '@utils/debug';
-
-export type AuthProjection = {
-  setCredentials(credentials: Credentials): void;
-  setRoleAtOrganization(role: string | null): void;
-  setApiUser(user: ApiUser | null): void;
-};
 
 export async function authenticate(
   session: WizardSession,

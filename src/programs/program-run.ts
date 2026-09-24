@@ -1,18 +1,12 @@
 /**
  * A program's run definition: the agent's `AgentRunDefinition` plus the
  * completion hooks that read the session. The agent never calls these —
- * `src/lib/runners/run-program-agent.ts` binds them to the run's credentials and hands the
+ * `run-agent-legacy.ts` binds them to the run's credentials and hands the
  * agent `RunConfig.hooks`.
  */
 
 import type { AgentRunDefinition } from '@agent/types';
 import type { Credentials, WizardSession } from '@lib/wizard-session';
-
-export type ProgramCompletionContext = Readonly<{
-  signup: boolean;
-  dashboardUrl: string | null;
-  notebookUrl: string | null;
-}>;
 
 export interface ProgramRun extends AgentRunDefinition {
   /** Runs after agent completes, before outro (e.g. env var upload). */

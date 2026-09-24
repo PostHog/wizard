@@ -394,7 +394,7 @@ export const piBackend: AgentHarness = {
         agentDir: getAgentDir(),
         systemPrompt:
           assembleCommandments({
-            programCommandments: runConfig.programCommandments,
+            program: runConfig.programId,
             sequence: Sequence.linear,
             harness: Harness.pi,
             caps: { bash: true, posthogMcp },

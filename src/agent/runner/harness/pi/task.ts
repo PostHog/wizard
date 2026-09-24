@@ -340,7 +340,7 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
       cwd: input.installDir,
       agentDir: getAgentDir(),
       systemPrompt: assembleCommandments({
-        programCommandments: config.programCommandments,
+        program: config.programId,
         sequence: Sequence.orchestrator,
         harness: Harness.pi,
         caps: { bash: codingTools.has('bash'), posthogMcp },

@@ -43,8 +43,10 @@ import type {
 import { createEmitSpinner } from '../../shared/progress-collector';
 import { createAskBridge } from '../../shared/ask';
 import {
+  areSeededTasksEnabled,
   getHarness,
-  resolveRoleHarness,
+  resolveHarness,
+  resolveStageOverrides,
   type HarnessPick,
 } from '../../switchboard';
 import { isValidModel, requireKnownModel } from '../../switchboard/models';
@@ -606,6 +608,11 @@ async function executeOrchestrator(
   const { run } = config;
   const programId = config.programId;
 
+  // Switchboard context — reused for every per-role harness resolution below.
+  // The caller resolved the run-level binding from it; per-task roles overlay
+  // `binding.contextMillOverride[role]` on the same inputs.
+  const switchboardCtx = { ...config.switchboard, trace: undefined };
+
   // The WHAT (agent prompts) is served from context-mill. Fetch the registry
   // once up front: its types drive enqueue validation, and resolving a task to
   // its run config is then synchronous, with no mid-drain network latency.
@@ -613,7 +620,11 @@ async function executeOrchestrator(
   const registry = await loadAgentRegistry(boot.skillsBaseUrl, flow, {
     exclude: effectiveExcludedTaskTypes(config, boot.wizardFlags),
     // Baked into the prompts at load, so enqueue, dispatch, and telemetry all read one effective spec.
-    overrides: config.stageOverrides,
+    overrides: resolveStageOverrides(
+      programId,
+      boot.wizardFlags,
+      boot.wizardFlagPayloads,
+    ),
   });
   if (signal?.aborted) return cancelledRun();
   const seedPrompt = registry.seed;
@@ -627,7 +638,7 @@ async function executeOrchestrator(
   const taskModels = Object.fromEntries(
     ['seed', ...registry.types].map((type) => {
       const prompt = type === 'seed' ? seedPrompt : registry.get(type);
-      const pick = resolveRoleHarness(config.binding, type);
+      const pick = resolveHarness(switchboardCtx, type);
       const specModel = prompt && promptModelFor(prompt, pick.harness).model;
       return [type, isValidModel(specModel) ? specModel : pick.model];
     }),
@@ -652,7 +663,7 @@ async function executeOrchestrator(
 
   const store = new QueueStore(input.installDir, runId, {
     onTransition: (event, task) => {
-      const pick = resolveRoleHarness(config.binding, task.type);
+      const pick = resolveHarness(switchboardCtx, task.type);
       // Mirror dispatch's allow-list fallback so attribution names the model that runs.
       const specModel = taskModelSpec(registry, task, pick.harness).model;
       const base = {
@@ -869,7 +880,7 @@ async function executeOrchestrator(
   // depend on them, and no prompt has to remember they are there.
   // Kill switch: off (or unset), the wizard queues nothing itself and the run
   // is byte-identical to a project with no detected sources.
-  const seedEntries = config.seededTasksEnabled
+  const seedEntries = areSeededTasksEnabled(boot.wizardFlags)
     ? config.seedTasks?.() ?? []
     : [];
   const seededTypes: string[] = [];
@@ -986,7 +997,7 @@ async function executeOrchestrator(
   // Prompt-frontmatter model wins over the switchboard pick (§3.6 of the
   // switchboard plan) — the switchboard's model is the fallback when the
   // prompt is silent.
-  const seedPick = resolveRoleHarness(config.binding, 'seed');
+  const seedPick = resolveHarness(switchboardCtx, 'seed');
   const seedHarness = requireTaskHarness(seedPick);
   const seedModel = promptModelFor(seedPrompt, seedPick.harness);
   const seedResult = await seedHarness.runTask({
@@ -1196,9 +1207,10 @@ async function executeOrchestrator(
       // panel shows progress); errors still surface — the harness stops the
       // spinner with its own error text.
       //
-      // Per-task role = task.type. Programs resolved any role override before
-      // invocation; prompt-frontmatter model still wins (§3.6).
-      const taskPick = resolveRoleHarness(config.binding, task.type);
+      // Per-task role = task.type — the switchboard consults
+      // PROGRAM_BINDINGS[id].contextMillOverride?.[task.type] for wizard-side
+      // per-agent overrides. Prompt-frontmatter model still wins (§3.6).
+      const taskPick = resolveHarness(switchboardCtx, task.type);
       const taskHarness = requireTaskHarness(taskPick);
       const taskModel = taskModelSpec(registry, task, taskPick.harness);
       let taskResult: AgentResult;

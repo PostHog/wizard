@@ -1,4 +1,4 @@
-import { buildRunTags } from '@shared/run-tags';
+import { buildRunTags } from '@agent/agent-interface';
 import { CallType } from '@shared/constants';
 
 describe('buildRunTags', () => {

@@ -1,5 +1,5 @@
 import type { ProgramConfig, ProgramStep } from '@programs/program-step';
-import { runProgramAgent } from '@lib/runners/run-program-agent';
+import { runProgramAgent } from '@programs/run-agent-legacy';
 import type { ProgramRun } from '@programs/program-run';
 import { AgentSignals, shouldDisableAsk, WIZARD_TOOL_NAMES } from '@agent';
 import type { WizardSession } from '@lib/wizard-session';
