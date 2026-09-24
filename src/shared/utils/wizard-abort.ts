@@ -3,9 +3,12 @@
  *
  * Sequence: cleanup -> error capture (optional) -> analytics shutdown -> outro -> process.exit
  *
+ * A user cancel (ctrl+c, SIGINT, SIGTERM, SIGHUP) exits through `wizardCancel`, with no outro.
+ *
  * WizardError (from `@lib/errors`) is a data carrier passed to wizardAbort() for analytics context, never thrown.
  * The legacy abort() in setup-utils.ts delegates here.
  */
+import { constants } from 'os';
 import { analytics } from './analytics';
 import { logToFile } from './debug';
 import { getUI } from '@ui';
@@ -53,6 +56,76 @@ export function runCleanups(): void {
       /* cleanup should not prevent exit */
     }
   }
+}
+
+const CANCEL_SIGNALS = ['SIGINT', 'SIGTERM', 'SIGHUP'] as const;
+type CancelSignal = (typeof CANCEL_SIGNALS)[number];
+/** Upper bound on the cancel hooks and the analytics flush, each. */
+const CANCEL_STEP_TIMEOUT_MS = 2000;
+
+const cancelHooks: Array<() => Promise<void> | void> = [];
+let cancelling = false;
+
+/** Async teardown that only a cancel runs, such as settling a task stream. Returns the remover. */
+export function registerCancelHook(fn: () => Promise<void> | void): () => void {
+  cancelHooks.push(fn);
+  return () => {
+    const index = cancelHooks.indexOf(fn);
+    if (index >= 0) cancelHooks.splice(index, 1);
+  };
+}
+
+export function clearCancel(): void {
+  cancelHooks.length = 0;
+  cancelling = false;
+}
+
+const settleWithin = (work: Promise<unknown>, ms: number): Promise<void> =>
+  new Promise((resolve) => {
+    const timer = setTimeout(resolve, ms);
+    void work
+      .catch(() => undefined)
+      .finally(() => {
+        clearTimeout(timer);
+        resolve();
+      });
+  });
+
+/** The one exit for ctrl+c, SIGINT, SIGTERM and SIGHUP. A second cancel exits at once. */
+export async function wizardCancel(
+  source: CancelSignal | 'ctrl+c',
+): Promise<never> {
+  // The key is a SIGINT the terminal never sent, so it exits like one: 130.
+  const signal = source === 'ctrl+c' ? 'SIGINT' : source;
+  const exitCode = 128 + constants.signals[signal];
+  if (cancelling) {
+    logToFile(`[wizard-cancel] ${source} again, exiting now`);
+    return process.exit(exitCode);
+  }
+  cancelling = true;
+  logToFile(`[wizard-cancel] ${source}, cancelling`);
+
+  // Sync first: a settings restore must not wait on the network.
+  runCleanups();
+  const hooks = cancelHooks.splice(0);
+  await settleWithin(
+    Promise.allSettled(hooks.map((hook) => Promise.resolve().then(hook))),
+    CANCEL_STEP_TIMEOUT_MS,
+  );
+  await settleWithin(analytics.shutdown('cancelled'), CANCEL_STEP_TIMEOUT_MS);
+  return process.exit(exitCode);
+}
+
+/** Routes SIGINT, SIGTERM and SIGHUP to `wizardCancel`. Returns the remover. */
+export function installCancelSignals(): () => void {
+  const handlers = CANCEL_SIGNALS.map((signal) => {
+    const handler = () => void wizardCancel(signal);
+    process.on(signal, handler);
+    return { signal, handler };
+  });
+  return () => {
+    for (const { signal, handler } of handlers) process.off(signal, handler);
+  };
 }
 
 function resolveErrorCode(

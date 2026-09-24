@@ -13,7 +13,7 @@ import { OutroKind, type WizardSession } from '@lib/wizard-session';
 import type { TaskStreamPush as TaskStreamPushClass } from '@lib/task-stream/task-stream-push';
 import { resolveNoTelemetry } from './resolve-no-telemetry';
 import { checkLocalServices, getLocalDev } from '@shared/local-dev';
-import { runCleanups } from '@utils/wizard-abort';
+import { registerCancelHook, runCleanups } from '@utils/wizard-abort';
 import { classifyRunFailure, emitWizardError } from '@shared/errors';
 import { isRunFailure } from '@ui/mint-failure';
 import { getUI } from '@ui';
@@ -77,8 +77,6 @@ export function runWizard(
 ): void {
   let tui: ReturnType<typeof StartTUIFn> | null = null;
   let taskStream: TaskStreamPushClass | null = null;
-  let onSignal: (() => void) | null = null;
-  let exitInProgress = false;
 
   void (async () => {
     try {
@@ -144,45 +142,6 @@ export function runWizard(
 
       activeTui.store.session = session;
 
-      // Flush a terminal-phase push on Ctrl-C so the web app sees the
-      // run ended in error rather than hanging on the last "running"
-      // snapshot. Registered before the stream exists: Ctrl-C on the intro
-      // must still restore the terminal and run the cleanups, and there is
-      // no run to report yet.
-      let signalled = false;
-      onSignal = (): void => {
-        if (signalled || exitInProgress) return;
-        signalled = true;
-        logToFile('[run-wizard] signal received, flushing task stream');
-        // Run cleanups synchronously first — settings restore is sync fs work
-        // and must complete even if the stream shutdown below times out.
-        runCleanups();
-        if (activeTui.store.session.runPhase === RunPhase.Running) {
-          activeTui.store.setRunPhase(RunPhase.Error);
-        }
-        const teardown = (): void => {
-          try {
-            activeTui.unmount();
-          } catch {
-            // terminal may already be torn down
-          }
-          process.exit(130);
-        };
-        const stream = taskStream;
-        if (!stream) {
-          teardown();
-          return;
-        }
-        void stream
-          .shutdown(2000)
-          .catch((e) =>
-            logToFile('[run-wizard] task stream shutdown error on signal:', e),
-          )
-          .finally(teardown);
-      };
-      process.on('SIGINT', onSignal);
-      process.on('SIGTERM', onSignal);
-
       for (;;) {
         await activeTui.store.runReadyHooks();
         // Settle the pre-run screens; `integration-check` is a no-op gate here.
@@ -226,6 +185,13 @@ export function runWizard(
       });
       taskStream = activeStream;
       activeStream.attach();
+      // On a cancel, end the run as an error so the web app stops showing it running.
+      registerCancelHook(async () => {
+        if (activeTui.store.session.runPhase === RunPhase.Running) {
+          activeTui.store.setRunPhase(RunPhase.Error);
+        }
+        await activeStream.shutdown(2000);
+      });
 
       await activeTui.store.getGate('integration-check');
       await activeTui.store.getGate('health-check');
@@ -288,10 +254,7 @@ export function runWizard(
         return s.skillsComplete;
       });
 
-      exitInProgress = true;
       await activeStream.shutdown(2000);
-      process.off('SIGINT', onSignal);
-      process.off('SIGTERM', onSignal);
       if (runFailed) await analytics.shutdown('error');
       activeTui.unmount();
       process.exit(runFailed ? 1 : 0);
@@ -303,11 +266,6 @@ export function runWizard(
       runCleanups();
       // The task-stream debounce timer keeps the event loop alive, so
       // we have to drain it before exiting on the error path.
-      exitInProgress = true;
-      if (onSignal) {
-        process.off('SIGINT', onSignal);
-        process.off('SIGTERM', onSignal);
-      }
       if (taskStream) {
         try {
           await taskStream.shutdown(2000);

@@ -4,7 +4,7 @@ import { authenticate } from '@lib/programs/authenticate';
 import { runProgramAgent } from '../run-agent-legacy';
 import { runAgent, RunOutcome, type RunResult } from '@agent/runner';
 import { Harness, Sequence } from '@shared/constants';
-import { buildSession, OutroKind } from '@lib/wizard-session';
+import { buildSession, OutroKind, RunPhase } from '@lib/wizard-session';
 import { HostResolution } from '@shared/host-resolution';
 import { LoggingUI } from '@ui/logging-ui';
 import { InkUI } from '@ui/tui/ink-ui';
@@ -13,7 +13,7 @@ import { WizardStore } from '@ui/tui/store';
 import { getUI, setUI } from '@ui';
 import { analytics } from '@utils/analytics';
 import { initLogFile, logToFile } from '@utils/debug';
-import { wizardAbort } from '@utils/wizard-abort';
+import { clearCancel, wizardAbort, wizardCancel } from '@utils/wizard-abort';
 import { ErrorCodes } from '@shared/errors';
 import type { ProgramConfig } from '../program-step';
 
@@ -407,4 +407,72 @@ it('keeps a TUI run a success when its terminal analytics flush fails', async ()
     flushError,
   );
   exit.mockRestore();
+});
+
+describe('a cancel mid-run', () => {
+  let exit: MockInstance<typeof process.exit>;
+
+  beforeEach(() => {
+    clearCancel();
+    exit = vi
+      .spyOn(process, 'exit')
+      .mockImplementation(() => undefined as never);
+  });
+  afterEach(() => exit.mockRestore());
+
+  it('ends a TUI run as an error and settles its stream before exiting', async () => {
+    const store = new WizardStore('metrics');
+    setUI(new InkUI(store));
+    vi.spyOn(store, 'runReadyHooks').mockResolvedValue(undefined);
+    vi.spyOn(store, 'getGate').mockResolvedValue(undefined);
+    vi.mocked(startTUI).mockReturnValue({
+      store,
+      unmount: vi.fn(),
+      waitForSetup: () => Promise.resolve(),
+    });
+    let phaseAtExit: RunPhase | undefined;
+    exit.mockImplementation((() => {
+      phaseAtExit = store.session.runPhase;
+    }) as never);
+    vi.mocked(runAgent).mockImplementation(async (...args) => {
+      store.setRunPhase(RunPhase.Running);
+      await wizardCancel('ctrl+c');
+      return finishRun(...args);
+    });
+
+    runWizard(program(), { installDir: '/tmp/adapter-test', telemetry: false });
+
+    await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(130));
+    expect(phaseAtExit).toBe(RunPhase.Error);
+    expect(streamShutdown.mock.invocationCallOrder[0]).toBeLessThan(
+      exit.mock.invocationCallOrder[0],
+    );
+    expect(analytics.shutdown).toHaveBeenCalledWith('cancelled');
+  });
+
+  it('settles a headless stream and exits 143 on SIGTERM', async () => {
+    const on = vi.spyOn(process, 'on');
+    vi.mocked(runAgent).mockImplementation(async (...args) => {
+      const sigterm = on.mock.calls.find(([event]) => event === 'SIGTERM');
+      await (sigterm?.[1] as () => Promise<void>)();
+      return finishRun(...args);
+    });
+
+    runNonInteractive(
+      program(),
+      {
+        apiKey: 'phx_test',
+        projectId: '1',
+        installDir: '/tmp/adapter-test',
+        telemetry: false,
+      },
+      'headless',
+    );
+
+    await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(143));
+    expect(streamShutdown.mock.invocationCallOrder[0]).toBeLessThan(
+      exit.mock.invocationCallOrder[0],
+    );
+    on.mockRestore();
+  });
 });

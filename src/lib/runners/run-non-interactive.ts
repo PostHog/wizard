@@ -115,7 +115,12 @@ export function runNonInteractive(
     const { configureLogFileFromEnvironment, logToFile } = await import(
       '@utils/debug'
     );
-    const { wizardAbort, WizardError } = await import('@utils/wizard-abort');
+    const {
+      installCancelSignals,
+      registerCancelHook,
+      wizardAbort,
+      WizardError,
+    } = await import('@utils/wizard-abort');
 
     configureLogFileFromEnvironment();
 
@@ -239,6 +244,11 @@ export function runNonInteractive(
       store.setRunPhase(phase);
       await taskStream.shutdown(2000);
     };
+
+    const removeCancelSignals = installCancelSignals();
+    const removeCancelHook = registerCancelHook(() =>
+      settleStream(RunPhase.Error),
+    );
 
     try {
       if (mode === 'ci') {
@@ -371,6 +381,9 @@ export function runNonInteractive(
           : `Something went wrong: ${errorMessage}\n\nYou can read the documentation at ${docsUrl} to set up manually.${debugInfo}`,
         error: error as Error,
       });
+    } finally {
+      removeCancelSignals();
+      removeCancelHook();
     }
   })().catch((error: unknown) => {
     emitWizardError({

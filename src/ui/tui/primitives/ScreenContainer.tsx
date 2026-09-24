@@ -22,11 +22,9 @@ import { KeyboardHintsProvider } from '@ui/tui/hooks/useKeyboardHints';
 import { DissolveTransition } from './DissolveTransition.js';
 import { KeyboardHintsBar } from './KeyboardHintsBar.js';
 import { ScreenErrorBoundary } from './ScreenErrorBoundary.js';
-import {
-  ViewportTooSmall,
-  isViewportTooSmall,
-} from './ViewportTooSmall.js';
+import { ViewportTooSmall, isViewportTooSmall } from './ViewportTooSmall.js';
 import type { WizardStore } from '@ui/tui/store';
+import { wizardCancel } from '@utils/wizard-abort';
 
 const MIN_WIDTH = 80;
 export const MAX_WIDTH = 120;
@@ -56,6 +54,8 @@ export const ScreenContainer = ({ store, screens }: ScreenContainerProps) => {
   // ScreenContainer is the one component alive for the whole process.
   useInput((input, key) => {
     if (key.ctrl && input === 't') store.toggleTokenHud();
+    // Raw mode delivers ctrl+c as a key, not a SIGINT: cancel the same way.
+    if (key.ctrl && input === 'c') void wizardCancel('ctrl+c');
   });
 
   const terminalWidth = columns;
@@ -88,8 +88,7 @@ export const ScreenContainer = ({ store, screens }: ScreenContainerProps) => {
   // Only enforced on a real terminal: with stdout piped there are no
   // dimensions to read (useStdoutDimensions substitutes 80×24) and no window
   // for anyone to resize, so nagging would be both wrong and unactionable.
-  const tooSmall =
-    Boolean(stdout.isTTY) && isViewportTooSmall(columns, rows);
+  const tooSmall = Boolean(stdout.isTTY) && isViewportTooSmall(columns, rows);
 
   const inner = (
     <Box
