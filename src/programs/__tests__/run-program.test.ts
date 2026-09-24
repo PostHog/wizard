@@ -564,10 +564,10 @@ describe('runProgram', () => {
       requiresAi: false,
     });
     const controller = new AbortController();
-    let complete!: (value: { outcome: 'success' }) => void;
+    let complete!: (value: { outcome: RunOutcome.Success }) => void;
     const workflow = vi.fn(
       () =>
-        new Promise<{ outcome: 'success' }>((resolve) => {
+        new Promise<{ outcome: RunOutcome.Success }>((resolve) => {
           complete = resolve;
         }),
     );
@@ -582,7 +582,7 @@ describe('runProgram', () => {
       expect.objectContaining({ signal: controller.signal }),
     );
     controller.abort();
-    complete({ outcome: 'success' });
+    complete({ outcome: RunOutcome.Success });
 
     expect(await pending).toMatchObject({
       outcome: RunOutcome.Aborted,

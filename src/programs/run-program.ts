@@ -158,7 +158,7 @@ export interface ProgramOptions {
     credentials?: Credentials;
     signal: AbortSignal;
   }) => Promise<{
-    outcome: 'success' | 'aborted';
+    outcome: RunOutcome.Success | RunOutcome.Aborted;
     data?: Record<string, unknown>;
   }>;
   /** Without getNotebookUrl, the outro reads the notebook URL the run emitted. */
@@ -267,6 +267,7 @@ async function runProgramWithStore(
   const program = getRuntimeProgramConfig(programId);
   const artifacts: ProgramRunOutcome['artifacts'] = {};
   const runId = input.runId ?? randomUUID();
+  const { installDir } = input;
   const signal = options.signal ?? NEVER_ABORTED;
 
   const settle = (
@@ -303,95 +304,92 @@ async function runProgramWithStore(
     });
   }
 
-  let credentials = input.credentials;
-  if (!credentials && options.credentials) {
-    try {
-      credentials = await options.credentials.resolve(programId, { signal });
-    } catch (error) {
-      if (signal.aborted) return cancelled();
-      return fail(error instanceof Error ? error.message : String(error));
-    }
-  }
-  if (signal.aborted) return cancelled();
-  if (credentials) {
-    store.setAuthenticated({
-      credentials: credentials.posthog,
-      apiProject: credentials.project,
-      apiUser: credentials.apiUser,
-    });
-    // Identify before flags are evaluated, so flags can target the user.
-    if (credentials.apiUser) analytics.identifyUser(credentials.apiUser);
-    analytics.setGroups(
-      groupsFromUser(credentials.apiUser, credentials.posthog.host.apiHost),
-    );
-    if (!store.readData().aiSdkStampReported) {
-      store.setAiSdkStampReported();
-      stampAiSdkDetected({
-        apiUser: credentials.apiUser,
-        discoveredFeatures: input.discoveredFeatures ?? [],
-        warehouseSources: input.warehouseSources ?? [],
-        mayReportScanResults: input.mayReportScanResults ?? false,
-      });
-    }
-  }
-  if (program.strategy === 'no-agent') {
-    if (!options.noAgentWorkflow) {
-      return settle(RunOutcome.Failed, {
-        code: ErrorCodes.CliInteractiveRequired,
-        message: `${programId} requires an interactive workflow.`,
-      });
-    }
-    let result;
-    try {
-      result = await options.noAgentWorkflow({
-        programId,
-        installDir: input.installDir,
-        credentials: credentials?.posthog,
-        signal,
-      });
-    } catch (error) {
-      if (signal.aborted) return cancelled();
-      return fail(error instanceof Error ? error.message : String(error));
-    }
-    if (signal.aborted) return cancelled();
-    return {
-      ...settle(
-        result.outcome === 'aborted' ? RunOutcome.Aborted : RunOutcome.Success,
-      ),
-      programData: result.data,
-    };
-  }
-  if (!credentials)
-    return fail(`Credentials are required to run ${programId}.`);
-  if (signal.aborted) return cancelled();
+  /** Await a host capability; a host abort during the wait wins over its answer. */
+  const park = async <T>(work: Promise<T>): Promise<T> => {
+    const value = await work;
+    signal.throwIfAborted();
+    return value;
+  };
 
-  if (
-    program.requiresAi !== false &&
-    !input.flags?.ci &&
-    !input.flags?.signup &&
-    credentials.apiUser?.organization?.is_ai_data_processing_approved !==
-      true &&
-    !approval.granted
-  ) {
-    if (!options.awaitAiApproval) {
-      return fail(
-        'AI processing approval is required before this program can run.',
+  let credentials = input.credentials;
+  let frameworkContext = input.frameworkContext ?? {};
+  let run: AgentRunDefinition | undefined | null = input.run;
+  let hooks: RunHooks | undefined = input.hooks;
+  let seedTasks = input.seedTasks;
+  const flags = { ...DEFAULT_FLAGS, ...input.flags };
+  let flagSnapshot: WizardFlagSnapshot = {
+    flags: { ...input.wizardFlags },
+    payloads: { ...input.wizardFlagPayloads },
+  };
+  // Everything before the agent starts: a rejection fails the run, unless the host aborted.
+  try {
+    if (!credentials && options.credentials) {
+      credentials = await park(
+        options.credentials.resolve(programId, { signal }),
       );
     }
-    try {
-      approval.granted = await options.awaitAiApproval({ programId, signal });
-    } catch (error) {
-      if (signal.aborted) return cancelled();
-      return fail(error instanceof Error ? error.message : String(error));
+    if (credentials) {
+      store.setAuthenticated({
+        credentials: credentials.posthog,
+        apiProject: credentials.project,
+        apiUser: credentials.apiUser,
+      });
+      // Identify before flags are evaluated, so flags can target the user.
+      if (credentials.apiUser) analytics.identifyUser(credentials.apiUser);
+      analytics.setGroups(
+        groupsFromUser(credentials.apiUser, credentials.posthog.host.apiHost),
+      );
+      if (!store.readData().aiSdkStampReported) {
+        store.setAiSdkStampReported();
+        stampAiSdkDetected({
+          apiUser: credentials.apiUser,
+          discoveredFeatures: input.discoveredFeatures ?? [],
+          warehouseSources: input.warehouseSources ?? [],
+          mayReportScanResults: input.mayReportScanResults ?? false,
+        });
+      }
     }
-    if (signal.aborted) return cancelled();
-    if (!approval.granted) return abort('AI processing approval declined.');
-  }
+    if (program.strategy === 'no-agent') {
+      if (!options.noAgentWorkflow) {
+        return settle(RunOutcome.Failed, {
+          code: ErrorCodes.CliInteractiveRequired,
+          message: `${programId} requires an interactive workflow.`,
+        });
+      }
+      const result = await park(
+        options.noAgentWorkflow({
+          programId,
+          installDir,
+          credentials: credentials?.posthog,
+          signal,
+        }),
+      );
+      return { ...settle(result.outcome), programData: result.data };
+    }
+    if (!credentials)
+      return fail(`Credentials are required to run ${programId}.`);
 
-  let frameworkContext = input.frameworkContext ?? {};
-  const postAuthGates = program.postAuthGates ?? [];
-  if (postAuthGates.length > 0 && options.workflow) {
-    try {
+    if (
+      program.requiresAi !== false &&
+      !input.flags?.ci &&
+      !input.flags?.signup &&
+      credentials.apiUser?.organization?.is_ai_data_processing_approved !==
+        true &&
+      !approval.granted
+    ) {
+      if (!options.awaitAiApproval) {
+        return fail(
+          'AI processing approval is required before this program can run.',
+        );
+      }
+      approval.granted = await park(
+        options.awaitAiApproval({ programId, signal }),
+      );
+      if (!approval.granted) return abort('AI processing approval declined.');
+    }
+
+    const postAuthGates = program.postAuthGates ?? [];
+    if (postAuthGates.length > 0 && options.workflow) {
       const decision = await askWorkflow(
         options.workflow,
         {
@@ -406,28 +404,20 @@ async function runProgramWithStore(
         store.setFrameworkContext(key, value);
       }
       frameworkContext = { ...frameworkContext, ...patch };
-    } catch (error) {
-      if (signal.aborted) return cancelled();
-      return fail(error instanceof Error ? error.message : String(error));
     }
-    if (signal.aborted) return cancelled();
-  }
 
-  if (program.strategy === 'self-driving') {
-    const composition = input.composition ?? {};
-    const workflow = options.workflow;
-    const confirm = async (
-      connector: ProgramWorkflowConnector,
-      id: 'self-driving-handoff' | 'self-driving-github',
-    ): Promise<boolean> => {
-      const decision = await askWorkflow(
-        connector,
-        { kind: 'confirm', programId, id, installDir: input.installDir },
-        signal,
-      );
-      return decision.confirmed;
-    };
-    try {
+    if (program.strategy === 'self-driving') {
+      const composition = input.composition ?? {};
+      const workflow = options.workflow;
+      // Without a connector, the prepared composition answers each confirmation.
+      const confirmed = async (
+        id: 'self-driving-handoff' | 'self-driving-github',
+        prepared: 'handoffConfirmed' | 'githubConnected',
+      ): Promise<boolean> => {
+        if (!workflow) return composition[prepared] === true;
+        const request = { kind: 'confirm', programId, id, installDir } as const;
+        return (await askWorkflow(workflow, request, signal)).confirmed;
+      };
       for (const composed of program.composedRuns ?? []) {
         // A prepared child was copied with this input. A connector's answer is
         // copied as it arrives; null means the host ran the child itself.
@@ -440,7 +430,7 @@ async function runProgramWithStore(
               programId,
               stepId: composed.stepId,
               runProgramId: composed.runProgramId,
-              installDir: input.installDir,
+              installDir,
             },
             signal,
           );
@@ -480,58 +470,19 @@ async function runProgramWithStore(
           };
         }
         store.markProgramCompleted(composed.stepId);
-        if (workflow) {
-          if (!(await confirm(workflow, 'self-driving-handoff'))) {
-            return abort('Self-driving handoff declined.');
-          }
-        } else if (composition.handoffConfirmed !== true) {
+        if (!(await confirmed('self-driving-handoff', 'handoffConfirmed'))) {
           return abort('Self-driving handoff was not confirmed.');
         }
       }
-      if (workflow) {
-        if (!(await confirm(workflow, 'self-driving-github'))) {
-          return abort('GitHub connection declined.');
-        }
-      } else if (composition.githubConnected !== true) {
+      if (!(await confirmed('self-driving-github', 'githubConnected'))) {
         return abort('GitHub connection was not confirmed.');
       }
-    } catch (error) {
-      if (signal.aborted) return cancelled();
-      return fail(error instanceof Error ? error.message : String(error));
     }
-  }
 
-  const fileWatchers = startProgramFileWatchers(
-    {
-      ...program,
-      auditLedgerFile: input.auditLedgerFile ?? program.auditLedgerFile,
-    },
-    input.installDir,
-    store,
-  );
-  try {
-    fileWatchers.seedAuditLedger();
-
-    const flags = { ...DEFAULT_FLAGS, ...input.flags };
-    let flagSnapshot: WizardFlagSnapshot = {
-      flags: { ...input.wizardFlags },
-      payloads: { ...input.wizardFlagPayloads },
-    };
     if (!input.wizardFlags && options.featureFlags) {
-      try {
-        flagSnapshot = await options.featureFlags();
-      } catch (error) {
-        if (signal.aborted) return cancelled();
-        return fail(error instanceof Error ? error.message : String(error));
-      }
-      if (signal.aborted) return cancelled();
+      flagSnapshot = await park(options.featureFlags());
     }
-    const wizardFlags = { ...flagSnapshot.flags };
-    const wizardFlagPayloads = { ...flagSnapshot.payloads };
 
-    let run: AgentRunDefinition | undefined | null = input.run;
-    let hooks: RunHooks | undefined = input.hooks;
-    let seedTasks = input.seedTasks;
     if (!run && program.strategy === 'integration') {
       const effects = options.integrationEffects;
       if (!input.frameworkConfig || !effects) {
@@ -539,41 +490,37 @@ async function runProgramWithStore(
           'PostHog integration requires prepared framework configuration and host effects.',
         );
       }
-      try {
-        const resolved = await resolvePosthogIntegrationRun(
-          {
-            installDir: input.installDir,
-            frameworkConfig: input.frameworkConfig,
-            frameworkContext,
-            typescript: input.typescript ?? false,
-            additionalFeatureQueue: input.additionalFeatureQueue,
-            warehouseSources: input.warehouseSources ?? [],
-            flags,
-            wizardFlags,
-            mayReportScanResults: input.mayReportScanResults ?? false,
-          },
-          {
-            ...effects,
-            // The outro is built before runAgent returns, so it reads the URL
-            // this run emitted, unless the host has its own live getter.
-            getNotebookUrl:
-              effects.getNotebookUrl ?? (() => store.activeNotebookUrl()),
-          },
-        );
-        run = resolved.run;
-        hooks ??= resolved.hooks;
-        seedTasks ??= () =>
-          resolvePosthogIntegrationSeedTasks({
-            warehouseSources: input.warehouseSources ?? [],
-            flags,
-            mayReportScanResults: input.mayReportScanResults ?? false,
-          });
-      } catch (error) {
-        return fail(error instanceof Error ? error.message : String(error));
-      }
+      const resolved = await resolvePosthogIntegrationRun(
+        {
+          installDir,
+          frameworkConfig: input.frameworkConfig,
+          frameworkContext,
+          typescript: input.typescript ?? false,
+          additionalFeatureQueue: input.additionalFeatureQueue,
+          warehouseSources: input.warehouseSources ?? [],
+          flags,
+          wizardFlags: { ...flagSnapshot.flags },
+          mayReportScanResults: input.mayReportScanResults ?? false,
+        },
+        {
+          ...effects,
+          // The outro is built before runAgent returns, so it reads the URL
+          // this run emitted, unless the host has its own live getter.
+          getNotebookUrl:
+            effects.getNotebookUrl ?? (() => store.activeNotebookUrl()),
+        },
+      );
+      run = resolved.run;
+      hooks ??= resolved.hooks;
+      seedTasks ??= () =>
+        resolvePosthogIntegrationSeedTasks({
+          warehouseSources: input.warehouseSources ?? [],
+          flags,
+          mayReportScanResults: input.mayReportScanResults ?? false,
+        });
     } else if (!run && program.strategy === 'self-driving') {
       const resolved = resolveSelfDrivingRun({
-        installDir: input.installDir,
+        installDir,
         detectedTools: input.detectedTools ?? [],
       });
       run = resolved.run;
@@ -591,22 +538,39 @@ async function runProgramWithStore(
         `Program ${programId} needs a data-only run definition before it can run without a TUI session.`,
       );
     }
-    if (signal.aborted) return cancelled();
 
     // The agent can't swap tokens mid-run, so freshness is measured after every
     // park above, right before the agent mints.
-    const posthog = await refreshCredentialsIfNeeded(credentials.posthog, {
-      baseUrl: input.host?.baseUrl,
-    });
-    if (posthog !== credentials.posthog) {
-      credentials = { ...credentials, posthog };
+    const refreshed = await park(
+      refreshCredentialsIfNeeded(credentials.posthog, {
+        baseUrl: input.host?.baseUrl,
+      }),
+    );
+    if (refreshed !== credentials.posthog) {
+      credentials = { ...credentials, posthog: refreshed };
       store.setAuthenticated({
-        credentials: posthog,
+        credentials: refreshed,
         apiProject: credentials.project,
         apiUser: credentials.apiUser,
       });
     }
+  } catch (error) {
     if (signal.aborted) return cancelled();
+    return fail(error instanceof Error ? error.message : String(error));
+  }
+  const wizardFlags = { ...flagSnapshot.flags };
+  const wizardFlagPayloads = { ...flagSnapshot.payloads };
+
+  const fileWatchers = startProgramFileWatchers(
+    {
+      ...program,
+      auditLedgerFile: input.auditLedgerFile ?? program.auditLedgerFile,
+    },
+    installDir,
+    store,
+  );
+  try {
+    fileWatchers.seedAuditLedger();
 
     const switchboard = {
       program: programId,
@@ -627,7 +591,7 @@ async function runProgramWithStore(
 
     const inferenceAuth =
       credentials.inferenceAuth ??
-      createPosthogInferenceAuthProvider(posthog, programId);
+      createPosthogInferenceAuthProvider(credentials.posthog, programId);
     const wizardMetadata = {
       ...buildRunTags({
         programId,
@@ -640,7 +604,7 @@ async function runProgramWithStore(
       SEQUENCE: binding.sequence,
       HARNESS: binding.harness,
     };
-    artifacts.reportFile = path.resolve(input.installDir, run.reportFile);
+    artifacts.reportFile = path.resolve(installDir, run.reportFile);
     const adapter = store.beginRun({ runId, stepId }, options.onProgress);
 
     const result = await runAgent(
@@ -668,8 +632,8 @@ async function runProgramWithStore(
         hooks,
       },
       {
-        installDir: input.installDir,
-        credentials: posthog,
+        installDir,
+        credentials: credentials.posthog,
         inferenceAuth,
         project: credentials.project,
         apiUser: credentials.apiUser,
@@ -704,13 +668,14 @@ function mergeGiven<T extends object>(parent?: T, child?: T): T | undefined {
   return parent || child ? ({ ...parent, ...child } as T) : undefined;
 }
 
-/** Ask the connector, and reject an answer to a different kind of request. */
+/** Ask the connector; a host abort wins, and an answer of another kind is rejected. */
 async function askWorkflow<R extends ProgramWorkflowRequest>(
   workflow: ProgramWorkflowConnector,
   request: R,
   signal: AbortSignal,
 ): Promise<Extract<ProgramWorkflowDecision, { kind: R['kind'] }>> {
   const decision = await workflow.step(request, { signal });
+  signal.throwIfAborted();
   if (decision.kind !== request.kind) {
     throw new Error(
       `Workflow connector answered ${decision.kind} to a ${request.kind} request`,
