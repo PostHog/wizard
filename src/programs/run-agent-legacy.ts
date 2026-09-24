@@ -1,22 +1,4 @@
-/**
- * The session-driven agent runner every existing caller uses.
- *
- * `runProgramAgent(programConfig, session)` runs the program through the
- * callable `runProgram(programId, input, options)` and keeps only the host's
- * part: it runs preflight through `getUI()`, builds `ProgramInput` from the
- * session, and supplies the session's login as the credentials provider, the
- * TUI's AI opt-in and post-auth gates as awaited capabilities, the feature-flag
- * loader, and `getUI()` as the answerer. It maps every progress event back
- * onto `getUI()` one call per event and mirrors program data, including the
- * event plan and audit checks runProgram watches, onto the session and the UI,
- * then applies the result — `wizardAbort` with the outcome's terminal status
- * for a decided failure, the terminal analytics event for a finished top-level
- * run.
- *
- * This is the only file that knows about `getUI()`, the session and
- * `wizardAbort` on the agent's behalf. The TUI and headless hosts replace it
- * in Release C.
- */
+/** Runs a ProgramConfig through runProgram with the session, `getUI()` and `wizardAbort` as its host, until Release C replaces it. */
 
 import { isDeepStrictEqual } from 'node:util';
 import type { WizardSession } from '@lib/wizard-session';
@@ -24,15 +6,12 @@ import { analytics } from '@utils/analytics';
 import { getUI, type WizardUI } from '@ui';
 import { createUiReducer, uiInteraction } from '@ui/agent-progress';
 import { RunOutcome, TASK_OUTCOMES_KEY } from '@agent';
-import type { InferenceAuthProvider } from '@agent/types';
 import {
   runProgram,
   type ProgramWorkflowConnector,
   type WizardFlagSnapshot,
 } from './run-program';
-import type { CredentialsProvider } from './credentials';
 import type { ProgramInvocationData } from './program-store';
-import type { ProgramRun } from './program-run';
 import { restoreClaudeSettings } from '@shared/claude-settings';
 import { preflight, type ProgramPreflightHost } from './preflight';
 import { enableDebugLogs, logToFile, initLogFile } from '@utils/debug';
@@ -46,51 +25,21 @@ import { getDetectedWarehouseSources } from './warehouse-source/detect';
 import { mayReportScanResults } from '@shared/scan-consent';
 import { AUDIT_CHECKS_KEY } from './audit/types';
 
-/**
- * Resolve a ProgramConfig's agent run definition and execute the pipeline.
- * Entry point for the runners and for composed run steps.
- */
+/** Resolve the program's run from the session, preflight, run it through runProgram and apply the result. */
 export async function runProgramAgent(
   programConfig: ProgramConfig,
   session: WizardSession,
-  options: {
-    composed?: boolean;
-    inferenceAuth?: InferenceAuthProvider;
-    deferSkillCleanupCommit?: boolean;
-  } = {},
+  options: { composed?: boolean } = {},
 ): Promise<void> {
   if (!programConfig.run) {
     throw new Error(`Program "${programConfig.id}" has no run configuration.`);
   }
-
-  const runDef =
+  const run =
     typeof programConfig.run === 'function'
       ? await programConfig.run(session)
       : programConfig.run;
+  const composed = options.composed ?? false;
 
-  await runLegacyStep(
-    session,
-    runDef,
-    programConfig,
-    options.composed ?? false,
-    options.inferenceAuth,
-    options.deferSkillCleanupCommit,
-  );
-}
-
-/**
- * Preflight → runProgram with the session's capabilities → apply the result.
- * runProgram authenticates, stamps, parks, routes, refreshes and runs, in the
- * order the agent's bootstrap did.
- */
-async function runLegacyStep(
-  session: WizardSession,
-  run: ProgramRun,
-  programConfig: ProgramConfig,
-  composed: boolean,
-  inferenceAuth?: InferenceAuthProvider,
-  deferSkillCommit?: boolean,
-): Promise<void> {
   // 1. Init logging + debug
   initLogFile();
   session.skillId = run.skillId ?? run.integrationLabel;
@@ -112,18 +61,16 @@ async function runLegacyStep(
     restoreClaudeSettings(session.installDir),
   );
 
-  // runProgram turns a host capability that throws into a failed run; the CLI
-  // roots expect the throw, so keep the error and rethrow it below.
+  // runProgram turns a throwing host capability into a failed run; the CLI roots expect the throw.
   let hostFailure: { error: unknown } | undefined;
   const keepFailure = <T>(work: Promise<T>): Promise<T> =>
     work.catch((error: unknown) => {
       hostFailure ??= { error };
       throw error;
     });
-  const provider = sessionCredentialsProvider(session, inferenceAuth);
 
   const framework = session.integration ?? session.skillId ?? undefined;
-  const programResult = await runProgram(
+  const result = await runProgram(
     programConfig.id,
     {
       installDir: session.installDir,
@@ -185,8 +132,16 @@ async function runLegacyStep(
     },
     {
       credentials: {
-        resolve: (programId, context) =>
-          keepFailure(provider.resolve(programId, context)),
+        // authenticate() is idempotent, so a later run in the same invocation reuses the login.
+        resolve: (programId) =>
+          keepFailure(
+            authenticate(session, programId).then(() => ({
+              posthog: session.credentials!,
+              inferenceAuth: session.inferenceAuth,
+              project: session.apiProject,
+              apiUser: session.apiUser,
+            })),
+          ),
       },
       featureFlags: () => keepFailure(loadWizardFlags()),
       workflow: legacyWorkflowConnector(ui),
@@ -195,11 +150,9 @@ async function runLegacyStep(
         else projectData(progress.data);
       },
       interaction: uiInteraction(ui),
-      deferSkillCommit,
-      // AI opt-in enforcement. Parks while AiOptInRequiredScreen is up if the
-      // org hasn't approved third-party AI — before the skill install and agent
-      // start, so no source leaves the machine. The screen alone is cosmetic;
-      // this await is the actual gate.
+      // The CLI roots commit new skills at exit, so a later drain still removes them.
+      deferSkillCommit: true,
+      // The actual AI opt-in gate: it parks before the skill install and agent start.
       awaitAiApproval: async () => {
         logToFile('[agent-runner] checking AI opt-in gate');
         await ui.waitForAiOptIn();
@@ -211,21 +164,17 @@ async function runLegacyStep(
   if (hostFailure) throw hostFailure.error;
 
   // The host owns process exits, terminal analytics and rethrowing crashes.
-  if (programResult.outcome === RunOutcome.Crashed) {
-    throw (
-      programResult.failure?.error ??
-      new Error(programResult.failure?.message ?? 'Program run crashed')
-    );
+  if (result.outcome === RunOutcome.Crashed) {
+    throw result.failure?.error;
   }
-  if (programResult.outcome !== RunOutcome.Success) {
-    if (programResult.failure?.authErrorDetail) {
-      ui.showAuthError(programResult.failure.authErrorDetail);
+  if (result.outcome !== RunOutcome.Success) {
+    if (result.failure?.authErrorDetail) {
+      ui.showAuthError(result.failure.authErrorDetail);
     }
     // The terminal status follows how the run ended, not whether an Error came back.
     await wizardAbort({
-      ...programResult.failure,
-      status:
-        programResult.outcome === RunOutcome.Aborted ? 'cancelled' : 'error',
+      ...result.failure,
+      status: result.outcome === RunOutcome.Aborted ? 'cancelled' : 'error',
     });
   } else if (!composed) {
     // A composed sub-run leaves the terminal event to its host program's run.
@@ -240,35 +189,7 @@ async function runLegacyStep(
 
 // ── Host capabilities ─────────────────────────────────────────────────
 
-/**
- * The session's login as a credentials provider. authenticate() is idempotent
- * within a run: a second agent run in the same invocation (self-driving's
- * integration phase) reuses the first login instead of another OAuth.
- */
-function sessionCredentialsProvider(
-  session: WizardSession,
-  inferenceAuth?: InferenceAuthProvider,
-): CredentialsProvider {
-  return {
-    resolve: async (programId) => {
-      await authenticate(session, programId);
-      return {
-        posthog: session.credentials!,
-        inferenceAuth: inferenceAuth ?? session.inferenceAuth,
-        project: session.apiProject,
-        apiUser: session.apiUser,
-      };
-    },
-  };
-}
-
-/**
- * Answers runProgram's pauses from the TUI. Post-auth parks on each gated step
- * the user completes after login, such as the source-maps project picker; the
- * legacy run reads that pick live when it builds its prompt. The TUI walks
- * composed steps itself (advanceStep) and gated the handoff and GitHub steps
- * before this run screen.
- */
+/** Answers runProgram's pauses from the TUI, which walks composed steps and gates handoff and GitHub itself. */
 function legacyWorkflowConnector(ui: WizardUI): ProgramWorkflowConnector {
   return {
     async step(request) {
@@ -316,9 +237,7 @@ function projectProgramData(
       ui.setAccessToken(session.credentials);
     }
     if (data.aiSdkStampReported) session.aiSdkStampReported = true;
-    // Linear settings restoration fires on entry to the outro screen, so it is
-    // registered before the run can reach that screen; the abort path still
-    // restores through the cleanup backupAndFixClaudeSettings registered.
+    // Registered before the run can reach the outro; the abort path restores through its own cleanup.
     if (data.binding?.sequence === Sequence.linear && !outroRestoreRegistered) {
       outroRestoreRegistered = true;
       ui.onEnterScreen('outro', restoreSettings);

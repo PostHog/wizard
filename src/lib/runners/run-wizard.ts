@@ -63,13 +63,7 @@ async function advanceStep(
     await step.run(await prepareRunSession(step, store.session));
     store.completeRunStep(step.id);
   } else if (step.screenId === 'run') {
-    await runProgramAgent(
-      config,
-      await prepareRunSession(step, store.session),
-      {
-        deferSkillCleanupCommit: true,
-      },
-    );
+    await runProgramAgent(config, await prepareRunSession(step, store.session));
   } else if (step.isComplete) {
     await store.waitUntil(step.isComplete);
   }
@@ -269,9 +263,7 @@ export function runWizard(
         });
       } else {
         try {
-          await runProgramAgent(config, activeTui.store.session, {
-            deferSkillCleanupCommit: true,
-          });
+          await runProgramAgent(config, activeTui.store.session);
         } catch (error) {
           // The run threw before its own error handling rendered an outro.
           // Show the handoff screen and let the user's agent take over.

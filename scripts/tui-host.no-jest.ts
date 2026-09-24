@@ -24,6 +24,7 @@ import { buildSession } from '@lib/wizard-session';
 import { initLocalDev } from '@shared/local-dev';
 import { createLazyCiInferenceAuthProvider } from '@lib/runners/ci-inference-auth';
 import { runProgramAgent } from '@programs/run-agent-legacy';
+import { commitRegisteredRunSkillCleanups } from '@shared/skill-run-cleanup';
 import {
   TaskStreamPush,
   createFileDestination,
@@ -338,6 +339,8 @@ async function main() {
     } else {
       await runProgramAgent(programConfig, store.session);
     }
+    // runProgramAgent leaves new skills armed; a finished run keeps them.
+    commitRegisteredRunSkillCleanups();
   };
 
   if (process.env.MODE === 'serve') return serve();
