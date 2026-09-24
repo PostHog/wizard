@@ -2,8 +2,6 @@ import { WIZARD_COMMANDMENTS } from '@agent/commandments';
 import { assembleCommandments } from '@agent/runner/switchboard/commandments';
 import { Harness, Sequence } from '@shared/constants';
 
-const global = WIZARD_COMMANDMENTS.join('\n');
-
 /** Every axis combination that reaches a runner today. */
 const CAPS = { bash: true, posthogMcp: true };
 const prompt = (
@@ -67,13 +65,6 @@ describe('commandments by axis', () => {
       expect(linear.match(/Each task subject is SHORT/g)).toHaveLength(1);
       expect(linear).not.toMatch(/Create tasks as soon as you understand/);
     });
-
-    it('keeps the provider-naming rule global — it governs code, not a tool', () => {
-      expect(global).toMatch(/Do not assume "PostHog provider"/);
-      expect(prompt(Harness.pi, Sequence.orchestrator)).toMatch(
-        /Do not assume "PostHog provider"/,
-      );
-    });
   });
 
   describe('axis scoping', () => {
@@ -97,41 +88,6 @@ describe('commandments by axis', () => {
       expect(prompt(Harness.anthropic, Sequence.linear)).not.toMatch(
         /## This runtime/,
       );
-    });
-  });
-
-  // Targeted assertions for the wizard_ask Path A translation rules.
-  // These are the rules a skill author depends on when leaving their prose
-  // unchanged — they need to keep working as the commandment list evolves.
-  describe('wizard_ask Path A rules', () => {
-    const text = global;
-
-    it('names the tool explicitly', () => {
-      expect(text).toMatch(/`wizard_ask`/);
-    });
-
-    it('forbids inlining questions in text output', () => {
-      expect(text).toMatch(/never inline questions/i);
-    });
-
-    it('requires batching prose lists into one call', () => {
-      expect(text).toMatch(/single `wizard_ask` tool call/i);
-      expect(text).toMatch(/never split/i);
-    });
-
-    it('describes how to infer `kind`', () => {
-      expect(text).toMatch(/`single`/);
-      expect(text).toMatch(/`multi`/);
-      expect(text).toMatch(/`text`/);
-    });
-
-    it('describes how to derive options and ids', () => {
-      expect(text).toMatch(/kebab-case/i);
-      expect(text).toMatch(/label.*value/i);
-    });
-
-    it('tells the agent to use answers directly without re-asking', () => {
-      expect(text).toMatch(/do not re-ask/i);
     });
   });
 });

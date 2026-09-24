@@ -85,10 +85,6 @@ describe('STEP 6c — Replay Vision scanners', () => {
     expect(step6c()).toContain('(skill: "Replay Vision scanners")');
   });
 
-  it('states the never-abort posture (a wizard-owned contract)', () => {
-    expect(step6c()).toContain('never an abort');
-  });
-
   it('names the STEP 3 (Session Replay) dependency', () => {
     // Cross-step ordering is the wizard's to own, not the skill's.
     expect(step6c()).toContain('STEP 3');

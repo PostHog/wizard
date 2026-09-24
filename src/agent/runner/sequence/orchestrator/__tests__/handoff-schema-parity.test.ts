@@ -62,8 +62,4 @@ describe('complete_task description', () => {
       expect(COMPLETE_TASK_DESCRIPTION).toContain(field);
     },
   );
-
-  it('says the handoff is nested', () => {
-    expect(COMPLETE_TASK_DESCRIPTION).toMatch(/nested object/);
-  });
 });

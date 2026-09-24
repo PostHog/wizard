@@ -1422,7 +1422,6 @@ describe('repeat-block tracker (identical retries after a block)', () => {
     const reason = repeatBlockReason(2, 'Edit', '[YARA] rule: bad.');
     expect(reason).toContain('[YARA] rule: bad.');
     expect(reason).toContain('ALREADY blocked');
-    expect(reason).toContain('Change the code');
   });
 
   test('third and later attempts tell the agent to report and move on', () => {

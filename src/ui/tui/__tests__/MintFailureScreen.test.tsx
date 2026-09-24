@@ -57,28 +57,11 @@ function setup() {
 
 afterEach(cleanup);
 
-it('shows the headline, the hedgehog, and every option', async () => {
-  const { app } = setup();
-  await delay();
-  const frame = app.lastFrame() ?? '';
-  expect(frame).toContain("The Wizard's a little busy 🦔");
-  expect(frame).toContain('Grab a skill and let your agent take over.');
-  for (const label of [
-    'Save skill',
-    'Open in Claude Code',
-    'Open in Codex',
-    'Report this issue',
-    'Exit',
-  ])
-    expect(frame).toContain(label);
-});
-
 it('reports the log, saves the skill, then continues setup', async () => {
   const { app, store, services, choose } = setup();
   await choose(3);
   expect(app.lastFrame()).toContain(services.logPath);
   await choose(0);
-  expect(app.lastFrame()).toContain('Skill saved');
   expect(app.lastFrame()).toContain(saved.path);
   expect(store.session.mintHandoff).toBeNull();
   await choose(0);

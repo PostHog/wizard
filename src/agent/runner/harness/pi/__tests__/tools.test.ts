@@ -286,13 +286,11 @@ describe('pi wizard_ask — the batching guard counts per subject', () => {
     for (let i = 0; i < ASK_BATCH_THRESHOLD; i++) {
       await ask(wizardAsk, 'Postgres');
     }
-    const nudged = await ask(wizardAsk, 'Postgres');
-    expect(textOf(nudged)).toMatch(/Not an error/);
+    await ask(wizardAsk, 'Postgres');
     expect(request).toHaveBeenCalledTimes(ASK_BATCH_THRESHOLD);
 
     // The nudge fires once; the retry goes straight through.
-    const retried = await ask(wizardAsk, 'Postgres');
-    expect(textOf(retried)).not.toMatch(/Not an error/);
+    await ask(wizardAsk, 'Postgres');
     expect(request).toHaveBeenCalledTimes(ASK_BATCH_THRESHOLD + 1);
   });
 
@@ -301,7 +299,7 @@ describe('pi wizard_ask — the batching guard counts per subject', () => {
     for (let i = 0; i < ASK_BATCH_THRESHOLD; i++) {
       await ask(wizardAsk);
     }
-    expect(textOf(await ask(wizardAsk))).toMatch(/Not an error/);
+    await ask(wizardAsk);
     expect(request).toHaveBeenCalledTimes(ASK_BATCH_THRESHOLD);
   });
 

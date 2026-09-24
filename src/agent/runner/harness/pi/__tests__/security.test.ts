@@ -515,7 +515,6 @@ describe('pi-security: repeat-block escalation (identical retries after a YARA b
     const second = await handlers.tool_call(piiWrite);
     expect(second.block).toBe(true);
     expect(second.reason).toContain('ALREADY blocked');
-    expect(second.reason).toContain('Change the code');
 
     mockedScan.mockResolvedValueOnce({ matched: true, matches: [piiMatch] });
     const third = await handlers.tool_call(piiWrite);

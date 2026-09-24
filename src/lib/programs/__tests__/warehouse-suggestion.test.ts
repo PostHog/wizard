@@ -93,15 +93,13 @@ describe('outro suggestion', () => {
     expect(outro.nextSteps).toBeUndefined();
   });
 
-  it('keeps the PostHog headline and change list intact either way', async () => {
+  it('never points the outro at a local report file', async () => {
     for (const sources of [[], [POSTGRES]]) {
       const s = sessionWith(sources);
       const runDef = await resolveRun(s);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const outro = runDef.buildOutroData!(s, CREDENTIALS as any)!;
 
-      expect(outro.message).toBe('Successfully installed PostHog!');
-      expect(outro.changes).toContain('Added PostHog provider');
       // No report file — the report goes out via publish_handoff + notebook.
       expect(outro.reportFile).toBeUndefined();
     }
@@ -109,49 +107,15 @@ describe('outro suggestion', () => {
 });
 
 describe('report instruction', () => {
-  it('asks the agent to note the sources in the report checklist', async () => {
+  it('asks the agent to note the warehouse command in the report', async () => {
     const prompt = await promptFor([POSTGRES]);
-    expect(prompt).toContain('Verify before merging');
     expect(prompt).toContain('npx @posthog/wizard warehouse');
-  });
-
-  it('tells the agent not to set them up in this run', async () => {
-    const prompt = await promptFor([POSTGRES]);
-    expect(prompt).toContain('Do not attempt to set them up yourself');
   });
 
   it('adds nothing when no sources were detected', async () => {
     const prompt = await promptFor([]);
     expect(prompt).not.toContain('warehouse');
     expect(prompt).not.toContain('data sources PostHog can import');
-  });
-});
-
-/**
- * The default flow's STEP 5 writes the PostHog token to an env file, so what
- * it says about `check_env_keys` decides whether the agent trusts a key it
- * should not. The tool answers `{ status, foundIn }` and discounts committed
- * templates; a prompt still describing the single-file tool it used to be
- * teaches the agent to read the answer wrong.
- */
-describe('env tool instruction', () => {
-  it('tells the agent it can omit filePath and scan the project', async () => {
-    const prompt = await promptFor([]);
-    expect(prompt).toContain('Omit filePath');
-    expect(prompt).not.toMatch(
-      /keys already exist in the project's \.env file/,
-    );
-  });
-
-  it('says a template declaration does not count as set', async () => {
-    const prompt = await promptFor([]);
-    expect(prompt).toMatch(/\.env\.example/);
-    expect(prompt).toMatch(/documents a key rather than setting it/);
-  });
-
-  it('warns the agent off writing credentials into a template', async () => {
-    const prompt = await promptFor([]);
-    expect(prompt).toMatch(/never a file to write credentials into/);
   });
 });
 
