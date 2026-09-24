@@ -47,10 +47,12 @@ and returns decided outcomes and caught run-body crashes as results. It never
 renders, reads a session or exits. Its caller does the host work. For a program
 run, `runProgram` in `src/programs/run-program.ts` calls the host's credentials
 provider once, identifies the user, stamps the AI SDK evidence, awaits the
-host's approval and workflow connector, loads flags, refreshes an OAuth token
-near expiry, and resolves the binding. The legacy
-`src/cli/runners/run-program-agent.ts` supplies those capabilities from the
-session and maps progress back onto `getUI()`.
+host's approval and post-auth gates, loads flags, refreshes an OAuth token near
+expiry, and resolves the binding. Its caller builds the run definition and the
+program settings from the `ProgramConfig`. The legacy
+`src/cli/runners/run-program-agent.ts` does that from the session, supplies the
+capabilities, and maps progress back onto `getUI()`. Agentic detection builds
+its own config and input, and calls `runAgent` directly.
 
 **Prepare** (`shared/bootstrap.ts`) is the on-ramp inside the agent: logging
 targets, caller-supplied inference auth and the scan-triage classifier. Whether
@@ -148,10 +150,12 @@ can also cancel active harness work.
 
 ## Flow
 
-1. The host runs `preflight`. `runProgram` then resolves credentials, awaits the
-   host's gates, loads PostHog flags, refreshes a token near expiry and resolves
-   a `ProgramBinding { sequence, harness, model }` from `input.overrides` and
-   the flags. It tags the run and captures the switchboard decision.
+1. The host builds the run and settings from the `ProgramConfig`, and runs any
+   readiness or settings gates it needs. `runProgram` then resolves credentials,
+   awaits the host's gates, loads PostHog flags, refreshes a token near expiry,
+   starts the file watchers and resolves a `ResolvedBinding` (sequence, harness
+   and model) from `input.overrides` and the flags. It tags the run and captures
+   the switchboard decision.
 2. `runAgent(config, input, options)` resolves the supplied inference auth and
    prepares triage.
 3. The sequence takes over. It shapes the LLM's work into one conversation

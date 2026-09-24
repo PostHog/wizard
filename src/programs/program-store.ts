@@ -6,11 +6,10 @@ import type {
 import type { ApiProject, ApiUser, Credentials } from '../shared/api.js';
 import type { PlannedEvent } from './posthog-integration/watch-event-plan.js';
 
-/** One agent run's progress event, attributed to its run and step. */
+/** One agent run's progress event, attributed to its run. */
 export type ProgramRunProgress = {
   kind: 'run';
   runId: string;
-  stepId?: string;
   event: AgentProgress;
 };
 
@@ -37,20 +36,15 @@ export type ProgramInvocationData = {
   apiUser: ApiUser | null;
   detection: { frameworkContext: Record<string, unknown> };
   eventPlan: PlannedEvent[];
-  composition: {
-    parentProgramId: string | null;
-    completedRuns: string[];
-  };
-  /** The route of the latest agent run; null until one resolves. */
+  /** The route of the agent run; null until it resolves. */
   binding: ResolvedBinding | null;
   /** Latched once the organization's AI SDK stamp was considered for this login. */
   aiSdkStampReported: boolean;
 };
 
-/** An agent run's final result, in completion order. */
+/** An agent run's final result. */
 export type SettledProgramRun = {
   runId: string;
-  stepId?: string;
   result: RunResult;
 };
 
@@ -61,8 +55,6 @@ export type AgentProgressAdapter = {
 
 type RunEntry = {
   runId: string;
-  stepId?: string;
-  notebookUrl?: string;
   result?: RunResult;
 };
 
@@ -87,7 +79,6 @@ export class ProgramStore {
       apiUser: null,
       detection: { frameworkContext: {} },
       eventPlan: [],
-      composition: { parentProgramId: null, completedRuns: [] },
       binding: null,
       aiSdkStampReported: options.aiSdkStampReported ?? false,
     };
@@ -114,11 +105,6 @@ export class ProgramStore {
     this.emitData();
   }
 
-  setComposition(patch: { parentProgramId: string }): void {
-    this.data.composition.parentProgramId = patch.parentProgramId;
-    this.emitData();
-  }
-
   setBinding(binding: ResolvedBinding): void {
     this.data.binding = structuredClone(binding);
     this.emitData();
@@ -130,17 +116,11 @@ export class ProgramStore {
     this.emitData();
   }
 
-  markProgramCompleted(programId: string): void {
-    if (this.data.composition.completedRuns.includes(programId)) return;
-    this.data.composition.completedRuns.push(programId);
-    this.emitData();
-  }
-
   beginRun(
-    identity: { runId: string; stepId?: string },
+    runId: string,
     observer?: (progress: ProgramRunProgress) => void,
   ): AgentProgressAdapter {
-    const run: RunEntry = { ...identity };
+    const run: RunEntry = { runId };
     this.runs.push(run);
 
     return {
@@ -150,16 +130,9 @@ export class ProgramStore {
           this.recordDiagnostic(source, 'progress after finish');
           return;
         }
-        if (event.kind === 'url' && event.which === 'notebook') {
-          run.notebookUrl = event.url;
-        }
         if (!observer) return;
         this.deliver(source, () =>
-          observer({
-            kind: 'run',
-            ...identity,
-            event: structuredClone(event),
-          }),
+          observer({ kind: 'run', runId, event: structuredClone(event) }),
         );
       },
       finish: (result) => {
@@ -168,18 +141,9 @@ export class ProgramStore {
     };
   }
 
-  /** The unfinished run's notebook URL, for outro hooks built before the agent returns. */
-  activeNotebookUrl(): string | undefined {
-    for (let index = this.runs.length - 1; index >= 0; index--) {
-      const run = this.runs[index];
-      if (!run.result) return run.notebookUrl;
-    }
-    return undefined;
-  }
-
   settledRuns(): SettledProgramRun[] {
-    return this.runs.flatMap(({ runId, stepId, result }) =>
-      result ? [{ runId, stepId, result }] : [],
+    return this.runs.flatMap(({ runId, result }) =>
+      result ? [{ runId, result }] : [],
     );
   }
 

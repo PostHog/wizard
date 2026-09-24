@@ -1,6 +1,6 @@
-import { AI_OBSERVABILITY_REPORT_FILE, AI_OBSERVABILITY_RUN } from './run.js';
 import type { ProgramConfig, ProgramStep } from '@programs/program-step';
 import { AGENT_SKILL_STEPS } from '@programs/agent-skill/index';
+import { AI_OBSERVABILITY_REPORT_FILE, AI_OBSERVABILITY_RUN } from './run.js';
 
 const AI_OBSERVABILITY_STEPS: ProgramStep[] = AGENT_SKILL_STEPS.map((step) =>
   step.id === 'intro' ? { ...step, screenId: 'ai-observability-intro' } : step,

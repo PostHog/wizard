@@ -14,9 +14,7 @@ export type {
   ProgramOptions,
   ProgramOverrides,
   ProgramRunOutcome,
-  ProgramWorkflowConnector,
-  ProgramWorkflowDecision,
-  ProgramWorkflowRequest,
+  ProgramSettings,
   WizardFlagSnapshot,
 } from './run-program';
 export type {
@@ -28,7 +26,3 @@ export type {
   SettledProgramRun,
 } from './program-store';
 export type { ProgramSwitchboardCtx } from './binding';
-export type {
-  ProgramPreflightDecision,
-  ProgramPreflightHost,
-} from './preflight';
