@@ -8,22 +8,32 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { createJiti } from 'jiti';
 import { VERSION } from '@shared/version';
+import { IS_DEV } from '@shared/constants';
 import { logToFile } from '@utils/debug';
+import { onAccessTokenRotated } from '@agent/oauth-session';
 
 const MCP_TOKEN_ENV = 'POSTHOG_MCP_TOKEN';
 let mcpTokenOwners = 0;
 let activeMcpToken: string | undefined;
 let previousMcpToken: string | undefined;
 
+let stopFollowingRotations: (() => void) | undefined;
+
+function setMcpToken(token: string): void {
+  if (IS_DEV && activeMcpToken !== undefined && activeMcpToken !== token)
+    logToFile('[pi-mcp] MCP token env follows the rotated OAuth token');
+  activeMcpToken = token;
+  process.env[MCP_TOKEN_ENV] = token;
+}
+
 function acquireMcpToken(token: string): () => void {
-  if (mcpTokenOwners > 0 && activeMcpToken !== token) {
-    throw new Error('PostHog MCP token is already owned by another active run');
-  }
   if (mcpTokenOwners === 0) {
     previousMcpToken = process.env[MCP_TOKEN_ENV];
-    activeMcpToken = token;
-    process.env[MCP_TOKEN_ENV] = token;
+    // The adapter reads the env on each connect, so reconnects take the rotated token.
+    stopFollowingRotations = onAccessTokenRotated(setMcpToken);
   }
+  // A later session after a rotation carries the newer token of the same login.
+  if (activeMcpToken !== token) setMcpToken(token);
   mcpTokenOwners += 1;
   let released = false;
   return () => {
@@ -31,6 +41,8 @@ function acquireMcpToken(token: string): () => void {
     released = true;
     mcpTokenOwners -= 1;
     if (mcpTokenOwners > 0) return;
+    stopFollowingRotations?.();
+    stopFollowingRotations = undefined;
     if (previousMcpToken === undefined) delete process.env[MCP_TOKEN_ENV];
     else process.env[MCP_TOKEN_ENV] = previousMcpToken;
     activeMcpToken = undefined;
