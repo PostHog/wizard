@@ -6,8 +6,8 @@ import {
   loadAliases,
   probe,
   REPO_ROOT,
+  staticImportClosure,
   toRepoRelative,
-  transpiled,
 } from '../../../test/module-graph';
 
 export type Surface =
@@ -300,30 +300,6 @@ function analyze(): Analysis {
 
 const analysis = analyze();
 
-function runtimeClosure(entry: string): string[] {
-  const aliases = loadAliases();
-  const pending = [entry];
-  const visited = new Set<string>();
-
-  while (pending.length > 0) {
-    const file = pending.pop();
-    if (!file) continue;
-    if (visited.has(file)) continue;
-    visited.add(file);
-    const output = transpiled(file);
-
-    for (const spec of specifiersIn(stripComments(output))) {
-      const base = spec.startsWith('.')
-        ? path.resolve(REPO_ROOT, path.dirname(file), spec)
-        : aliasTarget(spec, aliases);
-      const target = base && probe(base);
-      if (target) pending.push(toRepoRelative(target));
-    }
-  }
-
-  return [...visited].sort();
-}
-
 const known = (
   JSON.parse(
     fs.readFileSync(path.join(HERE, 'known-violations.json'), 'utf8'),
@@ -386,39 +362,19 @@ describe('import boundaries', () => {
   });
 });
 
-it('keeps the callable program registry free of UI and session runtime imports', () => {
-  const forbidden = runtimeClosure('src/programs/runtime-registry.ts').filter(
+// The runtime registry and the program watchers load inside this closure.
+it('keeps the callable runProgram closure free of UI, session and legacy imports', () => {
+  const forbidden = staticImportClosure(
+    'src/programs/run-program.ts',
+    true,
+  ).filter(
     (file) =>
       file === 'src/programs/program-registry.ts' ||
       file.startsWith('src/ui/') ||
       file.startsWith('src/steps/') ||
       file.startsWith('src/lib/wizard-session') ||
       file.startsWith('src/lib/runners/') ||
-      file.startsWith('src/commands/'),
-  );
-  expect(forbidden).toEqual([]);
-});
-
-it('keeps the callable runProgram closure free of UI, session, and legacy registry imports', () => {
-  const forbidden = runtimeClosure('src/programs/run-program.ts').filter(
-    (file) =>
-      file === 'src/programs/program-registry.ts' ||
-      file.startsWith('src/ui/') ||
-      file.startsWith('src/steps/') ||
-      file.startsWith('src/lib/wizard-session'),
-  );
-  expect(forbidden).toEqual([]);
-});
-
-it.each([
-  'src/programs/audit/watch-ledger.ts',
-  'src/programs/posthog-integration/watch-event-plan.ts',
-])('keeps %s free of UI, session, and task-stream runtime imports', (entry) => {
-  const forbidden = runtimeClosure(entry).filter(
-    (file) =>
-      file.startsWith('src/ui/') ||
-      file.startsWith('src/steps/') ||
-      file.startsWith('src/lib/wizard-session') ||
+      file.startsWith('src/commands/') ||
       file.startsWith('src/programs/task-stream/'),
   );
   expect(forbidden).toEqual([]);
