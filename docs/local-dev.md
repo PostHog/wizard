@@ -79,7 +79,9 @@ These flags are available in dev/test builds. Published builds reject them.
 | `--task-stream-log[=path]` | `POSTHOG_WIZARD_TASK_STREAM_LOG` | dump every attempted task-stream sync as JSONL (default `/tmp/posthog-wizard-task-stream.jsonl`) |
 
 `--local-posthog` is sugar over `--base-url`. It pins the API host, app host,
-OAuth server, and the LLM gateway derived from them.
+and OAuth server. The backend supplies the LLM gateway URL when it mints a
+token. If a local PostHog API advertises `host.docker.internal`, the Wizard
+uses `localhost` on the same gateway port for its host-side model calls.
 
 `--task-stream-log` records what the run published, one JSON line per push,
 truncated per run. It rides beside the PostHog destination rather than

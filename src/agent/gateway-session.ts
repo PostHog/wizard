@@ -431,10 +431,17 @@ async function mintGatewayToken(
       );
       throw new GatewayMintFailed('mint returned an untrusted gateway url');
     }
+    const gatewayUrl = new URL(body.gateway_url);
+    if (
+      ['localhost', '127.0.0.1'].includes(new URL(host.apiHost).hostname) &&
+      gatewayUrl.hostname === 'host.docker.internal'
+    ) {
+      gatewayUrl.hostname = 'localhost';
+    }
     return {
       token: body.token,
       expiresAt: body.expires_at,
-      gatewayUrl: body.gateway_url.replace(/\/+$/, ''),
+      gatewayUrl: gatewayUrl.origin,
       teamId: body.team_id,
     };
   } catch (e) {
