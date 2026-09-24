@@ -85,35 +85,35 @@ const REFRESH_WHEN_REMAINING_MS = 50 * 60 * 1000;
  */
 const DEAD_GRANT_CODES = new Set(['invalid_grant', 'invalid_client']);
 
-// Best-effort pre-run refresh: no refresh token or a failed grant keeps the existing token.
-export async function refreshAccessTokenIfNeeded(
-  session: WizardSession,
-): Promise<void> {
-  const credentials = session.credentials;
-  if (!credentials?.refreshToken) return;
+/** Best-effort pre-run refresh; the same object comes back unless the token was refreshed. */
+export async function refreshCredentialsIfNeeded(
+  credentials: Credentials,
+  options: { baseUrl?: string },
+): Promise<Credentials> {
+  if (!credentials.refreshToken) return credentials;
 
   // No expiry means we cannot tell how much life is left, so leave it alone —
   // refreshing every run would spend a rotation for nothing.
-  if (credentials.expiresAt === undefined) return;
-  if (credentials.expiresAt - Date.now() >= REFRESH_WHEN_REMAINING_MS) return;
+  if (credentials.expiresAt === undefined) return credentials;
+  if (credentials.expiresAt - Date.now() >= REFRESH_WHEN_REMAINING_MS) {
+    return credentials;
+  }
 
   try {
     const token = await refreshAccessToken(
       credentials.refreshToken,
-      session.baseUrl,
+      options.baseUrl,
       credentials.oauthClientId,
     );
     // Replaced, not mutated: readers hold this object, and a new one keeps the
     // store and the (possibly shallow-copied) session explicitly in step.
-    const refreshed: Credentials = {
+    return {
       ...credentials,
       accessToken: token.access_token,
       // Rotation: keep the returned refresh token or the old one stops working.
       refreshToken: token.refresh_token ?? credentials.refreshToken,
       expiresAt: Date.now() + token.expires_in * 1000,
     };
-    session.credentials = refreshed;
-    getUI().setAccessToken(refreshed);
   } catch (error) {
     // A dead grant is recorded but not thrown: the current token may still have
     // minutes of life, and failing here would break runs that would have worked.
@@ -126,5 +126,6 @@ export async function refreshAccessTokenIfNeeded(
       '[oauth] pre-run token refresh failed, continuing with the existing token:',
       error instanceof Error ? error.message : error,
     );
+    return credentials;
   }
 }

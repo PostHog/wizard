@@ -16,6 +16,7 @@ import {
   ScanConsent,
   type WizardSession,
 } from '@lib/wizard-session';
+import type { ApiUser } from '@shared/api';
 import { FRAMEWORK_REGISTRY } from '@programs/registry';
 import {
   detectFramework,
@@ -144,13 +145,19 @@ function detectWarehouseSourcesForSuggestion(
   }
 }
 
-function hasAiSdkEvidence(
-  session: WizardSession,
-  sources: DetectedSource[],
-): boolean {
+/** What the org stamp reads, with no session. */
+export type AiSdkStampEvidence = {
+  apiUser: Pick<ApiUser, 'organization'> | null;
+  discoveredFeatures: readonly DiscoveredFeature[];
+  warehouseSources: readonly DetectedSource[];
+  /** Scan consent was granted, so local detection results may be reported. */
+  mayReportScanResults: boolean;
+};
+
+function hasAiSdkEvidence(evidence: AiSdkStampEvidence): boolean {
   return (
-    sources.some((s) => AI_SOURCE_KINDS.has(s.kind)) ||
-    session.discoveredFeatures.includes(DiscoveredFeature.LLM)
+    evidence.warehouseSources.some((s) => AI_SOURCE_KINDS.has(s.kind)) ||
+    evidence.discoveredFeatures.includes(DiscoveredFeature.LLM)
   );
 }
 
@@ -158,13 +165,11 @@ function hasAiSdkEvidence(
  * Boolean only, on the org, never the list of kinds or any non-AI tool: a
  * decline must not leak even the shape of what local detection saw.
  */
-function stampAiSdkDetected(
-  session: WizardSession,
-  sources: DetectedSource[],
-): void {
-  const organizationId = session.apiUser?.organization?.id;
+export function stampAiSdkDetected(evidence: AiSdkStampEvidence): void {
+  if (!evidence.mayReportScanResults) return;
+  const organizationId = evidence.apiUser?.organization?.id;
   if (!organizationId) return;
-  if (!hasAiSdkEvidence(session, sources)) return;
+  if (!hasAiSdkEvidence(evidence)) return;
 
   analytics.groupIdentify('organization', organizationId, {
     wizard_ai_sdk_detected: true,
@@ -194,9 +199,12 @@ export function maybeStampAiSdkDetected(session: WizardSession): void {
   // would latch this before consent exists and never stamp even once granted.
   if (session.aiSdkStampReported) return;
   session.aiSdkStampReported = true;
-  if (!mayReportScanResults(session)) return;
-
-  stampAiSdkDetected(session, getDetectedWarehouseSources(session));
+  stampAiSdkDetected({
+    apiUser: session.apiUser,
+    discoveredFeatures: session.discoveredFeatures,
+    warehouseSources: getDetectedWarehouseSources(session),
+    mayReportScanResults: mayReportScanResults(session),
+  });
 }
 
 /**
