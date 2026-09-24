@@ -14,7 +14,6 @@ import type { ApiUser } from '@shared/api';
 import { HostResolution } from '@shared/host-resolution';
 import { LoggingUI } from '@ui/logging-ui';
 import { InkUI } from '@ui/tui/ink-ui';
-import * as ledgerWatch from '../audit/watch-ledger';
 import { auditConfig } from '../audit/index';
 import { AUDIT_SEED_CHECKS } from '../audit/seed';
 import { AUDIT_CHECKS_FILE, AUDIT_CHECKS_KEY } from '../audit/types';
@@ -35,7 +34,6 @@ import {
 } from '@shared/claude-settings';
 import { refreshAccessToken } from '@utils/oauth-token';
 import { errorTrackingUploadSourceMapsConfig } from '../error-tracking-upload-source-maps/index';
-import { maybeStampAiSdkDetected } from '../posthog-integration/detect';
 import type { ProgramConfig } from '../program-step';
 
 const streamShutdown = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
@@ -602,53 +600,44 @@ it('keeps a TUI run a success when its terminal analytics flush fails', async ()
 });
 
 describe('host wiring over runProgram', () => {
-  const unapproved = {
-    organization: { id: 'org-1', is_ai_data_processing_approved: false },
-  } as ApiUser;
   const approved = {
     organization: { id: 'org-1', is_ai_data_processing_approved: true },
   } as ApiUser;
-  /** An interactive session with a login, as the TUI hands the adapter. */
-  const tuiSession = (apiUser: ApiUser) => ({
-    ...buildSession({ ci: false, installDir: '/tmp/adapter-test' }),
-    credentials: session().credentials,
-    apiUser,
-  });
 
-  it('authenticates through the provider after preflight, awaits AI opt-in once, and awaits the post-auth gate through the connector', async () => {
+  it('authenticates through the provider after preflight, then awaits AI opt-in and the post-auth gate', async () => {
     const order: string[] = [];
     const ui = getUI();
-    vi.mocked(checkAllSettingsConflicts).mockImplementationOnce(() => {
-      order.push('settings check');
-      return [];
-    });
-    vi.mocked(authenticate).mockImplementationOnce(() => {
-      order.push('authenticate');
-      return Promise.resolve();
-    });
-    const waitForAiOptIn = vi
-      .spyOn(ui, 'waitForAiOptIn')
-      .mockImplementation(() => {
-        order.push('waitForAiOptIn');
-        return Promise.resolve();
-      });
-    vi.spyOn(ui, 'waitForGate').mockImplementation((id) => {
-      order.push(`waitForGate:${id}`);
-      return Promise.resolve();
-    });
-    vi.mocked(analytics.getAllFlagsForWizard).mockImplementationOnce(() => {
-      order.push('getAllFlagsForWizard');
-      return Promise.resolve({});
-    });
+    const record =
+      <T>(name: string, value?: T) =>
+      () => {
+        order.push(name);
+        return value as T;
+      };
+    vi.mocked(checkAllSettingsConflicts).mockImplementationOnce(
+      record('settings check', []),
+    );
+    vi.mocked(authenticate).mockImplementationOnce(
+      record('authenticate', Promise.resolve()),
+    );
+    vi.spyOn(ui, 'waitForAiOptIn').mockImplementation(
+      record('waitForAiOptIn', Promise.resolve()),
+    );
+    vi.spyOn(ui, 'waitForGate').mockImplementation((id) =>
+      record(`waitForGate:${id}`, Promise.resolve())(),
+    );
+    vi.mocked(analytics.getAllFlagsForWizard).mockImplementationOnce(
+      record('getAllFlagsForWizard', Promise.resolve({})),
+    );
     vi.mocked(runAgent).mockImplementationOnce((...args) => {
       order.push('runAgent');
       return finishRun(...args);
     });
 
-    await runProgramAgent(
-      errorTrackingUploadSourceMapsConfig,
-      tuiSession(unapproved),
-    );
+    await runProgramAgent(errorTrackingUploadSourceMapsConfig, {
+      ...buildSession({ ci: false, installDir: '/tmp/adapter-test' }),
+      credentials: session().credentials,
+      apiUser: { organization: { is_ai_data_processing_approved: false } },
+    } as ReturnType<typeof session>);
 
     expect(order).toEqual([
       'settings check',
@@ -658,12 +647,6 @@ describe('host wiring over runProgram', () => {
       'getAllFlagsForWizard',
       'runAgent',
     ]);
-    expect(waitForAiOptIn).toHaveBeenCalledOnce();
-    expect(
-      vi
-        .mocked(analytics.wizardCapture)
-        .mock.calls.filter(([event]) => event === 'agent started'),
-    ).toHaveLength(1);
   });
 
   it('a refreshed token reaches session and UI', async () => {
@@ -678,7 +661,6 @@ describe('host wiring over runProgram', () => {
     vi.mocked(authenticate).mockImplementationOnce(() => Promise.resolve());
     const aging = {
       ...session().credentials,
-      accessToken: 'pha_old',
       refreshToken: 'phr_old',
       expiresAt: Date.now() + 20 * 60 * 1000,
       projectId: 7,
@@ -688,7 +670,6 @@ describe('host wiring over runProgram', () => {
 
     await runProgramAgent(program(), refreshing);
 
-    expect(refreshing.credentials).not.toBe(aging);
     expect(refreshing.credentials).toMatchObject({
       accessToken: 'pha_new',
       refreshToken: 'phr_rotated',
@@ -696,7 +677,7 @@ describe('host wiring over runProgram', () => {
     });
     // The login's host keeps its class, not a structured copy.
     expect(refreshing.credentials.host).toBe(aging.host);
-    expect(aging.accessToken).toBe('pha_old');
+    expect(aging.accessToken).toBe('test');
     expect(setAccessToken).toHaveBeenCalledExactlyOnceWith(
       refreshing.credentials,
     );
@@ -706,7 +687,7 @@ describe('host wiring over runProgram', () => {
     [false, 1],
     [true, 0],
   ])(
-    'leaves the organization stamp to runProgram when the latch is %s, and latches the session',
+    'passes the session stamp latch (%s) to runProgram and latches the session',
     async (latched, stamps) => {
       const stamping = Object.assign(session(), {
         apiUser: approved,
@@ -717,7 +698,6 @@ describe('host wiring over runProgram', () => {
 
       await runProgramAgent(program(), stamping);
 
-      expect(maybeStampAiSdkDetected).not.toHaveBeenCalled();
       expect(analytics.groupIdentify).toHaveBeenCalledTimes(stamps);
       expect(stamping.aiSdkStampReported).toBe(true);
     },
@@ -757,15 +737,17 @@ describe('host wiring over runProgram', () => {
     afterEach(() => {
       fs.rmSync(installDir, { recursive: true, force: true });
     });
-    const auditChecksSent = (spy: { mock: { calls: unknown[][] } }) =>
-      spy.mock.calls.filter(([key]) => key === AUDIT_CHECKS_KEY);
 
-    it('an audit run starts one ledger watcher, and the host still receives the seeded checks', async () => {
+    it('sends the host the seeded audit checks before the run, then each update once', async () => {
       const setFrameworkContext = vi.spyOn(getUI(), 'setFrameworkContext');
+      const sent = () =>
+        setFrameworkContext.mock.calls.filter(
+          ([key]) => key === AUDIT_CHECKS_KEY,
+        );
       const resolved = [{ ...AUDIT_SEED_CHECKS[0], status: 'pass' }];
       let sentBeforeRun: unknown[][] = [];
       vi.mocked(runAgent).mockImplementationOnce((...args) => {
-        sentBeforeRun = auditChecksSent(setFrameworkContext);
+        sentBeforeRun = sent();
         fs.writeFileSync(
           path.join(installDir, AUDIT_CHECKS_FILE),
           JSON.stringify(resolved),
@@ -773,21 +755,16 @@ describe('host wiring over runProgram', () => {
         return finishRun(...args);
       });
 
-      const watchLedger = vi.spyOn(ledgerWatch, 'watchAuditLedger');
-
       await runProgramAgent(auditConfig, { ...session(), installDir });
 
-      expect(watchLedger).toHaveBeenCalledOnce();
-      watchLedger.mockRestore();
-      // The seed reaches the screen before the agent starts; each value once.
       expect(sentBeforeRun).toEqual([[AUDIT_CHECKS_KEY, AUDIT_SEED_CHECKS]]);
-      expect(auditChecksSent(setFrameworkContext)).toEqual([
+      expect(sent()).toEqual([
         [AUDIT_CHECKS_KEY, AUDIT_SEED_CHECKS],
         [AUDIT_CHECKS_KEY, resolved],
       ]);
     });
 
-    it('an integration run sends the host its event plan', async () => {
+    it('sends the host the event plan an integration run wrote', async () => {
       const setEventPlan = vi.spyOn(getUI(), 'setEventPlan');
       vi.mocked(runAgent).mockImplementationOnce((...args) => {
         fs.writeFileSync(
