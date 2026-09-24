@@ -24,7 +24,7 @@ import { buildSession } from '@lib/wizard-session';
 import { initLocalDev } from '@shared/local-dev';
 import { loadCiInferenceAuthProvider } from '@lib/runners/ci-inference-auth';
 import type { InferenceAuthProvider } from '@agent/types';
-import { runProgramAgent } from '@programs/run-agent-legacy';
+import { runProgramAgent } from '@lib/runners/run-program-agent';
 import { commitRegisteredRunSkillCleanups } from '@shared/skill-run-cleanup';
 import {
   TaskStreamPush,

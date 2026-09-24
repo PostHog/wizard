@@ -47,7 +47,7 @@ returns every ending as a result. It never renders, reads a session or exits.
 The gates, OAuth, flags and binding lookup that used to run here live in
 programs: `runProgram` resolves credentials through a host provider, awaits the
 host's gates, loads flags and resolves the binding.
-`src/programs/run-agent-legacy.ts` supplies those capabilities from the session
+`src/lib/runners/run-program-agent.ts` supplies those capabilities from the session
 and maps progress back onto `getUI()` for today's runners.
 
 **Prepare** (`shared/bootstrap.ts`) is the on-ramp inside the agent: logging

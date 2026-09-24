@@ -6,8 +6,8 @@ import { analytics } from '@utils/analytics';
 import { getUI, type WizardUI } from '@ui';
 import { createUiReducer, uiInteraction } from '@ui/agent-progress';
 import { RunOutcome, TASK_OUTCOMES_KEY } from '@agent';
-import { runProgram, type WizardFlagSnapshot } from './run-program';
-import type { ProgramInvocationData } from './program-store';
+import { runProgram, type WizardFlagSnapshot } from '@programs/run-program';
+import type { ProgramInvocationData } from '@programs/program-store';
 import {
   backupAndFixClaudeSettings,
   checkAllSettingsConflicts,
@@ -27,11 +27,11 @@ import { ErrorCodes } from '@shared/errors';
 import { isNonInteractiveEnvironment } from '@utils/environment';
 import { Sequence, type Integration } from '@shared/constants';
 import { FRAMEWORK_REGISTRY } from '@programs/registry';
-import { postAuthGateSteps, type ProgramConfig } from './program-step';
-import { authenticate } from './authenticate';
-import { getDetectedWarehouseSources } from './warehouse-source/detect';
+import { postAuthGateSteps, type ProgramConfig } from '@programs/program-step';
+import { authenticate } from '@programs/authenticate';
+import { getDetectedWarehouseSources } from '@programs/warehouse-source/detect';
 import { mayReportScanResults } from '@shared/scan-consent';
-import { AUDIT_CHECKS_KEY } from './audit/types';
+import { AUDIT_CHECKS_KEY } from '@programs/audit/types';
 
 /** Resolve the program's run from the session, run the gates, run it through runProgram and apply the result. */
 export async function runProgramAgent(
