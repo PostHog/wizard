@@ -129,6 +129,14 @@ describe('apply functions', () => {
     expect(r.task.enqueuedBy).toBe('orchestrator');
   });
 
+  it('stamps optional from the registry list, not the caller', () => {
+    ctx.optionalTypes = ['capture'];
+    const opt = applyEnqueue(ctx, { type: 'capture', reason: 'x' });
+    const req = applyEnqueue(ctx, { type: 'install', reason: 'x' });
+    expect(opt.ok && opt.task.optional).toBe(true);
+    expect(req.ok && !req.task.optional).toBe(true);
+  });
+
   it('attributes a follow-up enqueue to the running task', () => {
     const parent = store.enqueue({ type: 'init' });
     ctx.currentTaskId = parent.id;

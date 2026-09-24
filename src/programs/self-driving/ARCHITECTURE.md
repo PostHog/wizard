@@ -182,12 +182,12 @@ against `config.abortCases`. `PromptContext` (project/host + AI-consent
 **`wizard-tools` MCP + `wizard_ask`** (`src/agent/tools/tools.ts`).
 `check_env_keys` / `set_env_values` are the only sanctioned `.env` access
 (value-safe, `.gitignore`-guarded, secret-vault aware). `wizard_ask` is the
-**only** way to ask the user anything — 1–8 questions, capped at `maxQuestions`
-(13), batched. Each call carries an optional `subject` tag; the one-time
-batch-your-questions nudge counts consecutive calls **per subject**, so a step
-that walks a list (one call per detected source) is never interrupted, while
-repeated prompting about one thing still gets nudged. Each `single`/`multi`
-option is `{ label, value, description? }`.
+**only** way to ask the user anything — questions batched per call, with
+`maxQuestions` (13) calls per run. Each call carries an optional `subject` tag;
+the one-time batch-your-questions nudge counts consecutive calls **per
+subject**, so a step that walks a list (one call per detected source) is never
+interrupted, while repeated prompting about one thing still gets nudged. Each
+`single`/`multi` option is `{ label, value, description? }`.
 `description` is **optional and additive** (added for STEP 7): rendered dimmed
 and wrapped beneath the label, and **only in the multi-select render path**
 (`PickerMenu` `MultiPickerMenu` + `WizardAskScreen`); when a question omits it,

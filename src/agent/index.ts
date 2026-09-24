@@ -49,6 +49,8 @@ export {
 export { configureGatewayFromCIEnvironment } from './gateway-session';
 export { flushScanReport } from './yara-hooks';
 export { downloadSkill } from './tools';
+/** The frameworkContext slot the legacy adapter fills for the e2e harness. */
+export { TASK_OUTCOMES_KEY } from './runner';
 
 /**
  * Leaves in C2. The TUI receives agent data through program state. Until

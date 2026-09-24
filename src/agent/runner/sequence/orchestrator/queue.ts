@@ -114,7 +114,7 @@ export interface QueuedTask {
   handoff?: TaskHandoff;
   /** 'orchestrator' for seeded tasks, or the id of the task that enqueued this one. */
   enqueuedBy: string;
-  /** Wizard-seeded only: terminal failure unblocks dependents and never fails the run. */
+  /** Terminal failure unblocks dependents and never fails the run. */
   optional?: boolean;
   createdAt: string;
   startedAt?: string;
@@ -130,6 +130,16 @@ export interface QueueFile {
   version: 1;
   runId: string;
   tasks: QueuedTask[];
+}
+
+/** Session frameworkContext key holding the drained queue's final outcomes —
+ *  written by the runner before the cache wipe, read by the e2e harness. */
+export const TASK_OUTCOMES_KEY = 'orchestrator-task-outcomes';
+
+export interface TaskOutcome {
+  type: string;
+  status: TaskStatus;
+  optional: boolean;
 }
 
 /** The structured handoff a task leaves for the next agent. */
