@@ -30,6 +30,23 @@ function failedRunSession() {
 
 describe('WizardRouter', () => {
   it.each(PROGRAM_REGISTRY.map((program) => program.id))(
+    'shows and dismisses an early error before setup completes in %s',
+    (program) => {
+      const router = new WizardRouter(program);
+      const session = baseWizardSession();
+      session.runPhase = RunPhase.Error;
+      session.outroData = {
+        kind: OutroKind.Error,
+        message: 'detection failed',
+      };
+
+      expect(router.resolve(session)).toBe(ScreenId.Outro);
+      session.outroDismissed = true;
+      expect(router.resolve(session)).toBe(ScreenId.Exit);
+    },
+  );
+
+  it.each(PROGRAM_REGISTRY.map((program) => program.id))(
     'shows a failed run over every step and overlay in %s',
     (program) => {
       const router = new WizardRouter(program);

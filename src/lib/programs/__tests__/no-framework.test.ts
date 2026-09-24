@@ -1,7 +1,7 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { WizardStore } from '@ui/tui/store';
+import { WizardStore, ScreenId } from '@ui/tui/store';
 import { InkUI } from '@ui/tui/ink-ui';
 import { setUI } from '@ui/index';
 import { buildSession, OutroKind } from '@lib/wizard-session';
@@ -44,7 +44,6 @@ describe.each([
       store = new WizardStore(program);
       store.session = buildSession({ installDir });
       const ui = new InkUI(store);
-      vi.spyOn(ui, 'waitForOutroDismissed').mockResolvedValue(undefined);
       setUI(ui);
       vi.spyOn(process, 'exit').mockImplementation(() => {
         throw exit;
@@ -57,19 +56,27 @@ describe.each([
     });
 
     it('shows the no-framework error before completing detection in an empty project', async () => {
-      await expect(store.runReadyHooks()).rejects.toBe(exit);
+      const finished = expect(store.runReadyHooks()).rejects.toBe(exit);
+      try {
+        await vi.waitFor(() => expect(store.session.outroData).not.toBeNull());
 
-      expect(store.session.outroData).toEqual(
-        expect.objectContaining({
-          kind: OutroKind.Error,
-          errorCode: ErrorCodes.DetectNoFramework,
-          message: expect.stringContaining(message),
-        }),
-      );
-      expect(store.session.detectionComplete).toBe(false);
-      expect(store.session.outroData?.message).toContain(
-        "app's root directory",
-      );
+        expect(store.session.outroData).toEqual(
+          expect.objectContaining({
+            kind: OutroKind.Error,
+            errorCode: ErrorCodes.DetectNoFramework,
+            message: expect.stringContaining(message),
+          }),
+        );
+        expect(store.session.detectionComplete).toBe(false);
+        expect(store.router.resolve(store.session)).toBe(ScreenId.Outro);
+        expect(store.session.outroData?.message).toContain(
+          "app's root directory",
+        );
+        expect(process.exit).not.toHaveBeenCalled();
+      } finally {
+        store.setOutroDismissed();
+        await finished;
+      }
       expect(process.exit).toHaveBeenCalledWith(1);
     });
 
