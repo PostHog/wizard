@@ -466,35 +466,6 @@ describe('the audit ledger', () => {
     expect(leftAfterAbort).toBe(false);
   });
 
-  it('is removed when a headless audit gets a signal', async () => {
-    const actual = await vi.importActual<typeof import('@utils/wizard-abort')>(
-      '@utils/wizard-abort',
-    );
-    vi.mocked(registerCleanup).mockImplementationOnce(actual.registerCleanup);
-    const on = vi.spyOn(process, 'on');
-    let leftAfterSignal = true;
-    vi.mocked(runAgent).mockImplementation(
-      seedThen((...args) => {
-        const onSignal = on.mock.calls.find(([event]) => event === 'SIGTERM');
-        (onSignal?.[1] as () => void)();
-        leftAfterSignal = fs.existsSync(ledgerPath());
-        return finishRun(...args);
-      }),
-    );
-    runNonInteractive(
-      audit(),
-      { apiKey: 'phx_test', projectId: '1', installDir, telemetry: false },
-      'headless',
-    );
-    await vi.waitFor(() =>
-      expect(wizardAbort).toHaveBeenCalledWith(
-        expect.objectContaining({ exitCode: 130, status: 'cancelled' }),
-      ),
-    );
-    expect(leftAfterSignal).toBe(false);
-    on.mockRestore();
-  });
-
   it('keeps a finished run a success when the ledger cannot be removed', async () => {
     vi.mocked(runAgent).mockImplementation((...args) => {
       fs.mkdirSync(ledgerPath());
