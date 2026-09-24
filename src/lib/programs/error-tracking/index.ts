@@ -17,6 +17,7 @@ import { preinstallPostHogCliOnce } from '@lib/programs/shared/posthog-cli-prein
 import { analytics } from '@utils/analytics';
 import { wizardAbort } from '@utils/wizard-abort';
 import { ErrorCodes } from '@shared/errors';
+import { abortNoFrameworkDetected } from '@lib/programs/shared/abort-no-framework';
 
 const ERROR_TRACKING_REPORT_FILE = 'posthog-error-tracking-report.md';
 const ERROR_TRACKING_DOCS_URL = 'https://posthog.com/docs/error-tracking';
@@ -184,10 +185,7 @@ export const errorTrackingConfig: ProgramConfig = {
 
     const integration = await detectFramework(session.installDir);
     if (!integration) {
-      await wizardAbort({
-        code: ErrorCodes.DetectNoFramework,
-        message: 'Could not auto-detect your framework for this project.',
-      });
+      await abortNoFrameworkDetected();
       return;
     }
     if (ERROR_TRACKING_UNSUPPORTED.has(integration)) {
