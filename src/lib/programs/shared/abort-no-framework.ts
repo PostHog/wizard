@@ -1,14 +1,22 @@
 import { ErrorCodes } from '@shared/errors';
 import { wizardAbort } from '@utils/wizard-abort';
-
-const NO_FRAMEWORK_MESSAGE =
-  'Could not auto-detect your framework for this project.\n\n' +
-  "Run the wizard from your app's root directory (where its package.json or " +
-  'equivalent project file lives). See supported frameworks and manual setup instructions at:\n' +
-  '  https://posthog.com/docs/libraries';
+import { OutroKind, type OutroData } from '@lib/wizard-session';
 
 export function abortNoFrameworkDetected(
-  message = NO_FRAMEWORK_MESSAGE,
+  overrides: Pick<OutroData, 'message' | 'docsLabel' | 'docsUrl'> = {},
 ): Promise<never> {
-  return wizardAbort({ code: ErrorCodes.DetectNoFramework, message });
+  const message = overrides.message ?? 'Could not detect a framework';
+  return wizardAbort({
+    code: ErrorCodes.DetectNoFramework,
+    message,
+    outroData: {
+      kind: OutroKind.Error,
+      message,
+      instruction: "Run the wizard from your app's root directory.",
+      body: "That's the folder containing package.json or an equivalent project file.",
+      docsLabel: 'Supported frameworks and manual setup:',
+      docsUrl: 'https://posthog.com/docs/libraries',
+      ...overrides,
+    },
+  });
 }

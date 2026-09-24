@@ -38,8 +38,10 @@ export class LoggingUI implements WizardUI {
 
   outroError(data: OutroData): void {
     console.log(`✖  ${data.message ?? 'Wizard aborted'}`);
+    if (data.instruction) console.log(`│  ${data.instruction}`);
     if (data.body) console.log(`│  ${data.body}`);
-    if (data.docsUrl) console.log(`│  Docs: ${data.docsUrl}`);
+    if (data.docsUrl)
+      console.log(`│  ${data.docsLabel ?? 'Docs:'} ${data.docsUrl}`);
   }
 
   waitForOutroDismissed(): Promise<void> {
