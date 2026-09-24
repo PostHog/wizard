@@ -290,7 +290,7 @@ export interface ProgramConfig {
    * stale or unrelated `.posthog-events.json` file.
    */
   eventPlanFile?: string;
-  /** Audit ledger to mirror into the session, relative to `installDir`. */
+  /** Audit ledger to mirror into the session and delete at run end, relative to `installDir`. */
   auditLedgerFile?: string;
   /**
    * Channel the task stream publishes this run under, when it differs from the
