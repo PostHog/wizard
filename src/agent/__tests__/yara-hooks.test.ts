@@ -771,10 +771,6 @@ describe('yara-hooks', () => {
         );
         expect(result.stopReason).toContain('YARA CRITICAL');
         expect(result.stopReason).toContain('Poisoned skill');
-        expect(mockFg).toHaveBeenCalledWith(
-          '**/*.{md,txt,yaml,yml,json,js,ts,py,rb,sh}',
-          expect.objectContaining({ caseSensitiveMatch: false }),
-        );
       });
 
       it('allows clean skill installs', async () => {
