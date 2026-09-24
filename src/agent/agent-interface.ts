@@ -25,8 +25,6 @@ import {
   wizardUserAgentForProgram,
   DEFAULT_AGENT_MODEL,
   AWS_SKILLS_BASE_URL,
-  type AdditionalFeature,
-  ADDITIONAL_FEATURE_PROMPTS,
 } from '@shared/constants';
 import type { AgentFailure } from './runner/shared/types';
 import type { AgentResult } from './runner/harness/types';
@@ -259,28 +257,22 @@ export type StopHookResult =
   | { decision: 'block'; reason: string };
 
 /**
- * Create a stop hook callback that drains the additional feature queue,
- * then collects a remark, then allows stop.
+ * Create a stop hook callback that collects a remark, then allows stop.
  *
- * Three-phase logic using closure state:
- *   Phase 1 — drain queue: block with each feature prompt in order
- *   Phase 2 — collect remark (once): block with remark prompt
- *   Phase 3 — allow stop: return {}
+ * Two-phase logic using closure state:
+ *   Phase 1 — collect remark (once): block with remark prompt
+ *   Phase 2 — allow stop: return {}
  */
 export function createStopHook(
-  featureQueue: readonly AdditionalFeature[],
   signals?: AgentOutputSignals,
   requestRemark = true,
 ): (input: { stop_hook_active: boolean }) => StopHookResult {
-  let featureIndex = 0;
   let remarkRequested = false;
 
   return (input: { stop_hook_active: boolean }): StopHookResult => {
     logToFile('Stop hook triggered', {
       stop_hook_active: input.stop_hook_active,
-      featureIndex,
       remarkRequested,
-      queueLength: featureQueue.length,
     });
 
     // On API errors, allow stop immediately — blocking with remark/feature
@@ -290,15 +282,7 @@ export function createStopHook(
       return {};
     }
 
-    // Phase 1: drain feature queue
-    if (featureIndex < featureQueue.length) {
-      const feature = featureQueue[featureIndex++];
-      const prompt = ADDITIONAL_FEATURE_PROMPTS[feature];
-      logToFile(`Stop hook: injecting feature prompt for ${feature}`);
-      return { decision: 'block', reason: prompt };
-    }
-
-    // Phase 2: collect remark (once). Skipped when the caller opts out — the
+    // Phase 1: collect remark (once). Skipped when the caller opts out — the
     // orchestrator suppresses it per task so it does not fire on every agent.
     if (requestRemark && !remarkRequested) {
       remarkRequested = true;
@@ -309,7 +293,7 @@ export function createStopHook(
       };
     }
 
-    // Phase 3: allow stop
+    // Phase 2: allow stop
     logToFile('Stop hook: allowing stop');
     return {};
   };
@@ -774,7 +758,6 @@ export async function runAgent(
     spinnerMessage?: string;
     successMessage?: string;
     errorMessage?: string;
-    additionalFeatureQueue?: readonly AdditionalFeature[];
     abortCases?: readonly AbortCaseMatcher[];
     /**
      * Emit a `wizard: step` event on each agent task transition. Threaded from
@@ -1182,7 +1165,7 @@ export async function runAgent(
               debug('CLI stderr:', data);
             }
           },
-          // Stop hook: drain additional feature queue, then collect remark, then allow stop
+          // Stop hook: collect remark, then allow stop
           hooks: {
             PreToolUse: warlockDisabled
               ? []
@@ -1192,13 +1175,7 @@ export async function runAgent(
               : createPostToolUseYaraHooks(triageProvider, onYaraTerminate),
             Stop: [
               {
-                hooks: [
-                  createStopHook(
-                    config?.additionalFeatureQueue ?? [],
-                    signals,
-                    config?.requestRemark ?? true,
-                  ),
-                ],
+                hooks: [createStopHook(signals, config?.requestRemark ?? true)],
                 timeout: 30,
               },
             ],

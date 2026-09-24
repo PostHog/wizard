@@ -16,10 +16,6 @@ import { analytics } from '@utils/analytics';
 import { Sequence } from '@shared/constants';
 import type { WizardRunOptions } from '@utils/types';
 import type { SpinnerHandle } from '@ui';
-import {
-  AdditionalFeature,
-  ADDITIONAL_FEATURE_PROMPTS,
-} from '@lib/wizard-session';
 
 // Mock dependencies
 vi.mock('@utils/analytics');
@@ -581,7 +577,7 @@ describe('createStopHook', () => {
   const hookInput = { stop_hook_active: false };
 
   it('empty queue: first call blocks for remark, second allows stop', () => {
-    const hook = createStopHook([]);
+    const hook = createStopHook();
 
     // First call → remark prompt
     const first = hook(hookInput);
@@ -593,56 +589,8 @@ describe('createStopHook', () => {
     expect(second).toEqual({});
   });
 
-  it('single feature: feature prompt, then remark, then allow stop', () => {
-    const hook = createStopHook([AdditionalFeature.LLM]);
-
-    // First call → LLM feature prompt
-    const first = hook(hookInput);
-    expect(first).toHaveProperty('decision', 'block');
-    expect((first as { reason: string }).reason).toBe(
-      ADDITIONAL_FEATURE_PROMPTS[AdditionalFeature.LLM],
-    );
-
-    // Second call → remark prompt
-    const second = hook(hookInput);
-    expect(second).toHaveProperty('decision', 'block');
-    expect((second as { reason: string }).reason).toContain('WIZARD-REMARK');
-
-    // Third call → allow stop
-    const third = hook(hookInput);
-    expect(third).toEqual({});
-  });
-
-  it('multiple queue entries: drains all, then remark, then allow stop', () => {
-    // Queue the same feature twice to exercise multi-item draining
-    const hook = createStopHook([AdditionalFeature.LLM, AdditionalFeature.LLM]);
-
-    // First call → LLM prompt
-    const first = hook(hookInput);
-    expect(first).toHaveProperty('decision', 'block');
-    expect((first as { reason: string }).reason).toBe(
-      ADDITIONAL_FEATURE_PROMPTS[AdditionalFeature.LLM],
-    );
-
-    // Second call → LLM prompt again
-    const second = hook(hookInput);
-    expect(second).toHaveProperty('decision', 'block');
-    expect((second as { reason: string }).reason).toBe(
-      ADDITIONAL_FEATURE_PROMPTS[AdditionalFeature.LLM],
-    );
-
-    // Third call → remark prompt
-    const third = hook(hookInput);
-    expect(third).toHaveProperty('decision', 'block');
-    expect((third as { reason: string }).reason).toContain('WIZARD-REMARK');
-
-    // Fourth call → allow stop
-    const fourth = hook(hookInput);
-    expect(fourth).toEqual({});
-  });
-
   it('allow stop is idempotent after all phases complete', () => {
-    const hook = createStopHook([]);
+    const hook = createStopHook();
 
     hook(hookInput); // remark
     hook(hookInput); // allow
@@ -655,7 +603,7 @@ describe('createStopHook', () => {
     signals.push(
       'Failed to authenticate. API Error: 401 {"detail":"Authentication required"}',
     );
-    const hook = createStopHook([AdditionalFeature.LLM], signals);
+    const hook = createStopHook(signals);
 
     const result = hook(hookInput);
     expect(result).toEqual({});
@@ -664,7 +612,7 @@ describe('createStopHook', () => {
   it('allows stop immediately on generic API error', () => {
     const signals = new AgentOutputSignals();
     signals.push('API Error: 500 Internal Server Error');
-    const hook = createStopHook([AdditionalFeature.LLM], signals);
+    const hook = createStopHook(signals);
 
     const result = hook(hookInput);
     expect(result).toEqual({});
@@ -673,7 +621,7 @@ describe('createStopHook', () => {
   it('proceeds normally when output has no API error', () => {
     const signals = new AgentOutputSignals();
     signals.push('Some normal agent output'); // dropped: carries no signal
-    const hook = createStopHook([], signals);
+    const hook = createStopHook(signals);
 
     // First call → remark prompt (normal behavior)
     const first = hook(hookInput);

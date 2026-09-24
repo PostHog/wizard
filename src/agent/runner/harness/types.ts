@@ -18,7 +18,6 @@
  * tagged success, abort, or failure data for the sequence to decide.
  */
 
-import type { AdditionalFeature } from '@shared/constants';
 import type { Harness } from '@shared/constants';
 import type { WizardAskBridge } from '@agent/wizard-ask-bridge';
 import type { AgentErrorType } from '@agent/agent-interface';
@@ -124,7 +123,6 @@ export interface TaskRunInputs {
   spinnerMessage: string;
   successMessage: string;
   errorMessage?: string;
-  additionalFeatureQueue: readonly AdditionalFeature[];
   /** Whether to request the end-of-run reflection remark (fired once, on the last task). */
   requestRemark: boolean;
   /** Per-call analytics properties merged into `agent completed` / `agent aborted` events. */

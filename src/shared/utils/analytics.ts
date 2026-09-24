@@ -61,7 +61,6 @@ export function sessionProperties(
       ? { discovered_features: discoveredFeatures }
       : {}),
     scan_consent: session.scanConsent,
-    additional_features: session.additionalFeatureQueue,
     run_phase: session.runPhase,
     ...(posthogSdkDetected !== undefined
       ? { posthog_sdk_detected: posthogSdkDetected }

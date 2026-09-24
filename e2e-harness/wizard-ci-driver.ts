@@ -70,7 +70,6 @@ export interface CiState {
     slackStepDismissed: boolean;
     skillsComplete: boolean;
     outroDismissed: boolean;
-    llmOptIn: boolean;
     discoveredFeatures: string[];
   };
   tasks: Array<{ label: string; status: string; activeForm?: string }>;
@@ -120,7 +119,6 @@ export class WizardCiDriver {
         slackStepDismissed: s.slackStepDismissed,
         skillsComplete: s.skillsComplete,
         outroDismissed: s.outroDismissed,
-        llmOptIn: s.llmOptIn,
         discoveredFeatures: [...s.discoveredFeatures],
       },
       tasks: this.store.tasks.map((t) => ({
