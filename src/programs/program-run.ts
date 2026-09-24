@@ -1,30 +1,21 @@
 /**
  * A program's run definition: the agent's `AgentRunDefinition` plus the
- * completion hooks that read the program's completion data. The agent never calls these —
- * `src/lib/runners/run-program-agent.ts` binds them to the run's credentials and hands the
+ * completion hooks that read the session. The agent never calls these —
+ * `run-agent-legacy.ts` binds them to the run's credentials and hands the
  * agent `RunConfig.hooks`.
  */
 
-import type { AgentRunDefinition, OutroData } from '@agent/types';
-import type { Credentials } from '@shared/api';
-
-export type ProgramCompletionContext = Readonly<{
-  signup: boolean;
-  dashboardUrl: string | null;
-  notebookUrl: string | null;
-}>;
+import type { AgentRunDefinition } from '@agent/types';
+import type { Credentials, WizardSession } from '@lib/wizard-session';
 
 export interface ProgramRun extends AgentRunDefinition {
   /** Runs after agent completes, before outro (e.g. env var upload). */
-  postRun?: (
-    context: ProgramCompletionContext,
-    credentials: Credentials,
-  ) => Promise<void>;
+  postRun?: (session: WizardSession, credentials: Credentials) => Promise<void>;
   /** Custom outro data. Omit for default built from successMessage/reportFile/docsUrl. */
   buildOutroData?: (
-    context: ProgramCompletionContext,
+    session: WizardSession,
     credentials: Credentials,
-  ) => OutroData | null;
+  ) => WizardSession['outroData'];
   /**
    * Outro bullets for a sequence that composes its own outro data.
    *
@@ -41,7 +32,7 @@ export interface ProgramRun extends AgentRunDefinition {
    * already did — the sequence stays ignorant of what any type means.
    */
   buildOutroNextSteps?: (
-    context: ProgramCompletionContext,
+    session: WizardSession,
     credentials: Credentials,
     completedSeededTypes: readonly string[],
   ) => { heading: string; items: string[] } | undefined;

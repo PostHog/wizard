@@ -22,7 +22,6 @@
 import fs from 'fs';
 import path from 'path';
 import { OutroKind, type WizardSession } from '@lib/wizard-session';
-import { RunPhase } from '@shared/run-state';
 import { TASK_OUTCOMES_KEY } from '@agent';
 import type { TaskOutcome } from '@agent/types';
 import { DETECTED_WAREHOUSE_SOURCES_KEY } from '@programs/warehouse-source/detect';
@@ -240,37 +239,12 @@ export function taskOutcomesFrom(
 
 /** The keys the result payload carried before the warehouse work. */
 export interface E2eResultBase {
-  runPhase: RunPhase;
+  runPhase: string;
   hasPosthogDep: boolean;
   newDeps: string[];
   envFile: string | null;
   screenPath: string[];
   skillsComplete: boolean;
-}
-
-export type E2eResultPayload = E2eResultBase & {
-  asks: E2eAskRecord[];
-  unansweredAsks: number;
-  refusedAsks: number;
-  notices: E2eNoticeRecord[];
-  tasks: Array<{ label: string; status: string }>;
-  taskOutcomes?: Array<Pick<TaskOutcome, 'type' | 'status' | 'optional'>>;
-  detectedSources: DetectedSource[];
-  reportFile: E2eReportFile | null;
-  abort: string | null;
-};
-
-/** Write the first outcome once, then allow the final skills decision to replace it. */
-export function createE2eResultWriter(
-  file: string | undefined,
-  getResult: () => E2eResultPayload,
-): (final?: boolean) => void {
-  let written = false;
-  return (final = false) => {
-    if (!file || (written && !final)) return;
-    fs.writeFileSync(file, JSON.stringify(getResult(), null, 2));
-    written = true;
-  };
 }
 
 /**
@@ -283,7 +257,7 @@ export function buildE2eResult(args: {
   session: Pick<WizardSession, 'frameworkContext' | 'outroData'>;
   tasks: Array<{ label: string; status: string }>;
   reportFile: E2eReportFile | null;
-}): E2eResultPayload {
+}): Record<string, unknown> {
   const { base, recorder, session, tasks, reportFile } = args;
   return {
     ...base,

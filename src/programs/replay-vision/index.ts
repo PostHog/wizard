@@ -1,14 +1,10 @@
+import type { AbortCase } from '@agent/types';
 import { Integration } from '@shared/constants';
 import {
   detectFramework,
   gatherFrameworkContext,
 } from '@programs/detection/index';
-import {
-  scopeInstallDirToProject,
-  type ProjectScopeSession,
-} from '@programs/detection/project-scope';
-import type { FrameworkDetectionState } from '@programs/detection/context';
-import type { ProgramCiHost } from '@programs/host-capabilities';
+import { scopeInstallDirToProject } from '@programs/detection/project-scope';
 import { FRAMEWORK_REGISTRY } from '@programs/registry';
 import { createSkillProgram } from '@programs/agent-skill/index';
 import { AGENT_SKILL_STEPS } from '@programs/agent-skill/steps';
@@ -18,12 +14,12 @@ import type {
   ProgramReadyContext,
   ProgramStep,
 } from '@programs/program-step';
+import type { WizardSession } from '@lib/wizard-session';
 import { analytics } from '@utils/analytics';
 import { wizardAbort } from '@utils/wizard-abort';
 import { ErrorCodes } from '@shared/errors';
-import { REPLAY_VISION_OPTIONS } from './run.js';
 
-export { REPLAY_VISION_ABORT_CASES } from './run.js';
+const REPLAY_VISION_REPORT_FILE = 'posthog-replay-vision-report.md';
 
 /**
  * The platforms session replay can actually record on. Replay vision watches
@@ -58,12 +54,6 @@ export const REPLAY_VISION_SUPPORTED: ReadonlySet<Integration> = new Set([
   Integration.flutter,
 ]);
 
-type ReplayVisionCiSession = ProjectScopeSession &
-  FrameworkDetectionState & {
-    integration: Integration | null;
-    skillId: string | null;
-  };
-
 async function abortUnsupportedPlatform(
   integration: Integration,
 ): Promise<void> {
@@ -86,6 +76,22 @@ async function abortUnsupportedPlatform(
       '  https://posthog.com/docs/session-replay',
   });
 }
+
+/**
+ * `[ABORT]` reasons the replay-vision skill emits when the run can't proceed.
+ * Kept in sync with the stop conditions in the skill's `description.md`
+ * (context-mill `context/skills/replay-vision`).
+ */
+export const REPLAY_VISION_ABORT_CASES: AbortCase[] = [
+  {
+    match: /^replay vision not available for this project$/i,
+    message: 'Replay vision is not available for this project',
+    body:
+      'Every Replay vision scanner endpoint reported that the feature is not ' +
+      'available here yet. Session replay setup done so far is kept. See ' +
+      'https://posthog.com/docs/replay-vision for availability.',
+  },
+];
 
 /**
  * Framework detection ahead of the run, exactly like the default integration
@@ -113,7 +119,32 @@ const DETECT_STEP: ProgramStep = {
   },
 };
 
-const base = createSkillProgram(REPLAY_VISION_OPTIONS);
+const base = createSkillProgram({
+  // The menu ids this skill `<dir>-<variant>`, and context-mill's
+  // `replay-vision/config.yaml` declares a single variant, `setup`. The bare
+  // `replay-vision` id does not exist — the orchestrator never installs this
+  // (it resolves per-task mini-skills instead), but the linear path does, and
+  // aborts `skill-not-found` on a miss.
+  skillId: 'replay-vision-setup',
+  command: 'replay-vision',
+  id: 'replay-vision',
+  description: 'Set up PostHog Replay Vision scanners for your product',
+  integrationLabel: 'replay-vision',
+  customPrompt:
+    'Set up PostHog Replay vision. Run the `replay-vision` skill end-to-end: ' +
+    'make sure session replay is recording (server-side enable plus a ' +
+    'posthog-js init check), then create the vision scanners the skill ' +
+    "defines, scoped to this product's key flows read out of the repo. If " +
+    'PostHog is not integrated yet, install and initialize the SDK first as ' +
+    'the skill instructs — do not abort. The final report is written to ' +
+    `./${REPLAY_VISION_REPORT_FILE}.`,
+  successMessage: `Replay vision configured! View the report at ./${REPLAY_VISION_REPORT_FILE}`,
+  reportFile: REPLAY_VISION_REPORT_FILE,
+  docsUrl: 'https://posthog.com/docs/replay-vision',
+  spinnerMessage: 'Setting up Replay vision...',
+  estimatedDurationMinutes: 6,
+  abortCases: REPLAY_VISION_ABORT_CASES,
+});
 
 /**
  * `wizard replay-vision` — flat skill command on the orchestrator sequence.
@@ -140,11 +171,8 @@ export const replayVisionConfig: ProgramConfig = {
   agentFlow: 'replay-vision',
   steps: [DETECT_STEP, ...AGENT_SKILL_STEPS],
 
-  ciPreRun: async (
-    session: ReplayVisionCiSession,
-    host: ProgramCiHost,
-  ): Promise<void> => {
-    await scopeInstallDirToProject(session, host);
+  ciPreRun: async (session: WizardSession): Promise<void> => {
+    await scopeInstallDirToProject(session);
 
     const integration = await detectFramework(session.installDir);
     if (!integration) {
@@ -173,9 +201,6 @@ export const replayVisionConfig: ProgramConfig = {
       benchmark: session.benchmark,
       yaraReport: session.yaraReport,
     });
-    const detectedLabel =
-      frameworkConfig.metadata.getDetectedFrameworkLabel?.(context);
-    if (detectedLabel) session.detectedFrameworkLabel = detectedLabel;
     for (const [key, value] of Object.entries(context)) {
       if (!(key in session.frameworkContext)) {
         session.frameworkContext[key] = value;

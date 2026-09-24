@@ -169,11 +169,6 @@ const MUTATIONS: MutationCase[] = [
     emits: 1,
   },
   {
-    name: 'setInferenceAuth',
-    invoke: (s) => s.setInferenceAuth({ resolve: vi.fn() }),
-    emits: 1,
-  },
-  {
     name: 'setAccessToken',
     invoke: (s) => s.setAccessToken(CREDENTIALS),
     emits: 1,

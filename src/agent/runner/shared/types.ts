@@ -5,8 +5,8 @@
  * invocation snapshot, reports through `options.onProgress`, asks through
  * `options.interaction`, and returns a `RunResult`. Nothing here names a UI,
  * a store, a session or a program registry: the caller resolves those and
- * hands over plain data. Programs' `runProgram` is the caller that builds it
- * for every host.
+ * hands over plain data. `src/programs/run-agent-legacy.ts` is the caller
+ * that rebuilds today's session-driven behavior on top of this contract.
  */
 
 import type { AdditionalFeature } from '@shared/constants';
@@ -21,15 +21,9 @@ import type { ErrorCode } from '@shared/errors';
 import type { LLMProvider } from '@posthog/warlock';
 import type { AgentInteraction, ProgressEmitter } from '@agent/progress';
 import type { EffortLevel } from '../switchboard/models';
-import type { GatewayAuth } from '@shared/gateway-auth';
-import type { TranscriptTail } from './transcript-tail';
+import type { SwitchboardCtx } from '../switchboard';
 
 export type { PromptContext, Credentials };
-
-/** Agent-facing capability; programs decide where inference auth comes from. */
-export type InferenceAuthProvider = {
-  resolve(): Promise<GatewayAuth>;
-};
 
 /**
  * A known `[ABORT] <reason>` case. First matching entry is rendered on
@@ -151,11 +145,6 @@ export interface ResolvedBinding {
   model: string;
   /** Reasoning-effort override. Absent → the model's table default. */
   thinkingLevel?: EffortLevel;
-  /** Role-specific routes resolved by the caller before the agent starts. */
-  roleBindings?: Record<
-    string,
-    { harness: Harness; model: string; thinkingLevel?: EffortLevel }
-  >;
 }
 
 /**
@@ -164,7 +153,7 @@ export interface ResolvedBinding {
  * treats every label as opaque.
  */
 export interface RunConfig {
-  /** Opaque program label for gateway spend pin and analytics. */
+  /** Program id: gateway spend pin, analytics label, commandments axis. */
   programId: string;
   /** The run definition. A program's session-taking hooks are the caller's, see `hooks`. */
   run: AgentRunDefinition;
@@ -172,12 +161,11 @@ export interface RunConfig {
   composed: boolean;
   /** Run-level sequence, harness and model. */
   binding: ResolvedBinding;
-  /** Program text selected by the caller; the agent only assembles it. */
-  programCommandments?: readonly string[];
-  /** Validated stage policy selected by the caller; absent keeps flow frontmatter. */
-  stageOverrides?: Record<string, { model?: string; effort?: EffortLevel }>;
-  /** The caller's resolved seeded-task experiment. */
-  seededTasksEnabled?: boolean;
+  /**
+   * The inputs the run-level binding was resolved from. The orchestrator
+   * re-resolves the harness per task role from these; nothing else reads them.
+   */
+  switchboard: SwitchboardCtx;
   /** Primary skills origin (context-mill dev or GitHub Releases). */
   skillsBaseUrl: string;
   /** Feature flag key → variant, evaluated before the run. */
@@ -223,8 +211,6 @@ export interface RunInput {
   installDir: string;
   /** Resolved credentials, including the host family and its MCP url. */
   credentials: Credentials;
-  /** Caller-owned gateway auth, including refresh policy. */
-  inferenceAuth: InferenceAuthProvider;
   /** Project payload resolved at authentication, for prompt context. */
   project: ApiProject | null;
   /** User payload resolved at authentication, for the AI opt-in prompt line. */
@@ -283,9 +269,6 @@ export interface AgentFailure {
   detail?: Record<string, unknown>;
   authErrorDetail?: AuthErrorDetail;
 }
-
-/** frameworkContext key for the drained queue's final outcomes, read by the e2e harness. */
-export const TASK_OUTCOMES_KEY = 'orchestrator-task-outcomes';
 
 export enum RunOutcome {
   Success = 'success',
@@ -356,6 +339,4 @@ export interface SequenceContext {
   emit: ProgressEmitter;
   interaction: AgentInteraction | undefined;
   signal?: AbortSignal;
-  /** Present when the run definition sets `collectTranscript`. */
-  transcript?: TranscriptTail;
 }

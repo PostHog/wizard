@@ -21,7 +21,11 @@ import { Integration } from '@shared/constants';
 import { HostResolution } from '@shared/host-resolution';
 import { FRAMEWORK_REGISTRY } from '@programs/registry';
 import { WizardReadiness } from '@shared/health-checks/readiness';
-import { Program, getProgramConfig, type ProgramId } from '@programs';
+import {
+  Program,
+  getProgramConfig,
+  type ProgramId,
+} from '@programs';
 import { ScreenId } from '@ui/tui/router';
 import { SELF_DRIVING_INTEGRATE_PATH_KEY } from '@programs/self-driving/detect';
 import { WizardCiDriver } from '../wizard-ci-driver';
@@ -109,8 +113,8 @@ function traceFlow(
         path: '.',
       });
     } else if (screen === ScreenId.Run) {
-      // The run screen is shared by composed run steps (a step declaring a
-      // child program, e.g. self-driving's integrate-run) and the program's own
+      // The run screen is shared by composed run steps (a step carrying its own
+      // `run` thunk, e.g. self-driving's integrate-run) and the program's own
       // run. Complete the active run step the way the runner would: a composed
       // step via completeRunStep, the main run via runPhase.
       const steps = getProgramConfig(store.router.activeProgram).steps;
@@ -120,7 +124,7 @@ function traceFlow(
           (!s.show || s.show(store.session)) &&
           (!s.isComplete || !s.isComplete(store.session)),
       );
-      if (runStep?.runProgramId) {
+      if (runStep?.run) {
         store.completeRunStep(runStep.id);
       } else {
         store.setRunPhase(RunPhase.Completed);

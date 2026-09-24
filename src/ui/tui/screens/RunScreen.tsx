@@ -24,10 +24,8 @@ import { VisualizerTab } from '@ui/tui/components/PhaseVisuals';
 import { TipsCard } from '@ui/tui/components/TipsCard';
 import { useStdoutDimensions } from '@ui/tui/hooks/useStdoutDimensions';
 
-import {
-  getProgramContentBlocks,
-  getProgramTips,
-} from '@ui/tui/decks/registry';
+import { getProgramConfig } from '@programs';
+import { getContentBlocks as getSkillContentBlocks } from '@ui/tui/decks/agent-skill/index';
 
 import { WIZARD_LOG_FILE } from '@utils/paths';
 
@@ -66,15 +64,20 @@ export const RunScreen = ({ store }: RunScreenProps) => {
   const statuses =
     store.statusMessages.length > 0 ? store.statusMessages : undefined;
 
+  // Each program owns its content deck (program/content/index.tsx)
+  // and wires it onto its ProgramConfig.getContentBlocks. Fall back to the
+  // agent-skill deck for runtime-created configs (e.g. `wizard skill <id>`)
+  // that aren't in the static registry.
   const activeProgram = store.router.activeProgram;
-  const learnBlocks = useMemo(
-    () => getProgramContentBlocks(activeProgram, store),
-    [store, activeProgram],
-  );
+  const learnBlocks = useMemo(() => {
+    const getBlocks =
+      getProgramConfig(activeProgram).getContentBlocks ?? getSkillContentBlocks;
+    return getBlocks(store);
+  }, [store, activeProgram]);
 
   // Program-supplied tips for the right pane; undefined falls back to
   // DEFAULT_TIPS inside TipsCard, so non-self-driving programs are unaffected.
-  const programTips = getProgramTips(activeProgram, store);
+  const programTips = getProgramConfig(activeProgram).getTips?.(store);
 
   const leftPane = store.learnCardComplete ? (
     <TipsCard store={store} tips={programTips} />

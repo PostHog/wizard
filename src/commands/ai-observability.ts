@@ -1,5 +1,4 @@
 import { aiObservabilityConfig } from '@programs/ai-observability/index';
-import { headlessOption, regionOption } from '@lib/headless-mode';
 
 import type { Command } from './command';
 import { nativeCommandFactory } from './factories/native-command-factory';
@@ -17,5 +16,4 @@ import { nativeCommandFactory } from './factories/native-command-factory';
  */
 export const aiObservabilityCommand: Command = nativeCommandFactory(
   aiObservabilityConfig,
-  { cliOptions: { ...headlessOption, ...regionOption } },
 );

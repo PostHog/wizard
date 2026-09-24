@@ -26,7 +26,6 @@ import { Integration } from '@shared/constants';
 import { WIZARD_TOOL_NAMES } from '@agent/tools';
 import { buildSession } from '@lib/wizard-session';
 import type { Mock } from 'vitest';
-import { testProgramRunHost } from '../../../test/program-host';
 
 function makeTmpDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'self-driving-detect-'));
@@ -189,13 +188,20 @@ describe('selfDrivingConfig', () => {
     );
   });
 
+  it('ships its own Learn deck ending on the self-driving closer', () => {
+    const blocks = selfDrivingConfig.getContentBlocks?.() ?? [];
+    expect(blocks.length).toBeGreaterThan(0);
+    const last = blocks[blocks.length - 1];
+    expect(
+      typeof last === 'object' && 'content' in last ? last.content : '',
+    ).toBe('Your product drives itself.');
+  });
+
   it('gives wizard_ask a 30-min timeout for the browser-handoff steps', async () => {
     // `run` is resolved per-session so the prompt can carry the integrate flag.
     const { run } = selfDrivingConfig;
     const resolved =
-      typeof run === 'function'
-        ? await run(buildSession({}), testProgramRunHost())
-        : run;
+      typeof run === 'function' ? await run(buildSession({})) : run;
     expect(resolved?.askTimeoutMs).toBe(30 * 60 * 1000);
   });
 

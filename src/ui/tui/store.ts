@@ -453,11 +453,6 @@ export class WizardStore {
     this.emitChange();
   }
 
-  setInferenceAuth(provider: WizardSession['inferenceAuth']): void {
-    this.$session.setKey('inferenceAuth', provider);
-    this.emitChange();
-  }
-
   /** Post-refresh credential swap. No `auth complete` — see WizardUI. */
   setAccessToken(credentials: WizardSession['credentials']): void {
     this.$session.setKey('credentials', credentials);

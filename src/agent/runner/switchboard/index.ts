@@ -1,11 +1,20 @@
 // Resolves routing; model additions also require mint allowlists and gateway prompt/transport support.
 
-import { Harness, Sequence } from '@shared/constants';
+import {
+  DEFAULT_AGENT_MODEL,
+  GPT5_6_SOL_MODEL,
+  GPT5_6_TERRA_MODEL,
+  Harness,
+  Sequence,
+} from '@shared/constants';
+import type { ProgramId } from '@programs/types';
+import { resolveHarness } from './harness';
 import type { EffortLevel } from './models';
+import { resolveSequence } from './sequence';
 
 // ── Shared machinery ────────────────────────────────────────────────────
 
-/** Which precedence rung decided each axis. Stamped by the resolvers as they decide. */
+/** Which precedence rung decided each axis. Stamped by middlewares as they assert. */
 export interface SwitchboardTrace {
   harness?: 'cli' | 'flag' | 'binding';
   model?: 'cli' | 'flag' | 'binding';
@@ -18,21 +27,14 @@ export interface SwitchboardTrace {
     | 'binding';
 }
 
-/** Everything a resolver may branch on. Built once per run. */
+/** Everything a resolver middleware may branch on. Built once per run. */
 export interface SwitchboardCtx {
-  /** Opaque log label. Program lookup stays with the caller. */
-  program?: string;
-  /** The caller's selected base binding, before route/CLI overlays. */
-  baseBinding?: ProgramBinding;
+  program: ProgramId;
   /** Composed sub-run (a dependency inside a parent program). Structurally linear — no override can orchestrate it. */
   composed?: boolean;
-  /** Already validated experiment route; no flag parsing happens in the agent. */
-  flagRoute?: {
-    harness?: Harness;
-    model?: string;
-    thinkingLevel?: EffortLevel;
-    sequence?: Sequence;
-  };
+  flags: Record<string, string>;
+  /** Flag payloads from the same snapshot (payload-carrying flags, e.g. self-driving pi). */
+  flagPayloads?: Record<string, unknown>;
   /** CLI override (`--harness`). Wins over `flags`. */
   cliHarness?: Harness;
   /** CLI override (`--sequence`). Wins over `flags`. */
@@ -41,6 +43,37 @@ export interface SwitchboardCtx {
   cliModel?: string;
   /** Filled during resolution; read by the caller for telemetry. */
   trace?: SwitchboardTrace;
+}
+
+/** A resolver middleware: defer via `next()`, or assert by returning a value. */
+export type Middleware<D> = (ctx: SwitchboardCtx, next: () => D) => D;
+
+/**
+ * Run a middleware chain over `ctx`. Each middleware receives `next` (which
+ * runs the rest of the chain) and can either:
+ *   - defer: call `next()` and optionally modify its result (overlay pattern)
+ *   - short-circuit: return a value without calling `next()` (skip the rest)
+ *
+ * **Earlier in the array = higher precedence.** Index 0 runs first and can
+ * short-circuit the rest; index 1 only runs if index 0 deferred. So
+ * `[cliSequenceMw, orchestratorFeatureFlagMw]` means CLI takes precedence over the
+ * flag, not the other way around.
+ *
+ * `fallback` runs at the end — reached only when every middleware deferred.
+ * Typically the map read for the base value.
+ */
+export function runChain<D>(
+  chain: Middleware<D>[],
+  ctx: SwitchboardCtx,
+  fallback: () => D,
+): D {
+  function step(index: number): D {
+    if (index >= chain.length) return fallback();
+    const middleware = chain[index];
+    const next = () => step(index + 1);
+    return middleware(ctx, next);
+  }
+  return step(0);
 }
 
 // ── Data model ──────────────────────────────────────────────────────────
@@ -69,11 +102,92 @@ export interface ProgramBinding {
   contextMillOverride?: Record<string, Partial<HarnessPick>>;
 }
 
+// Legacy fallback; new programs should explicitly choose Pi and prefer orchestration.
+export const DEFAULT_BINDING: ProgramBinding = {
+  sequence: Sequence.linear,
+  harness: Harness.pi,
+  model: GPT5_6_SOL_MODEL,
+  thinkingLevel: 'medium',
+};
+
+/**
+ * Per-program routing. Kept in lockstep with `PROGRAM_REGISTRY` by the
+ * switchboard test. Anything absent falls back to `DEFAULT_BINDING`.
+ */
+export const PROGRAM_BINDINGS: Partial<Record<ProgramId, ProgramBinding>> = {
+  'posthog-integration': DEFAULT_BINDING,
+  'revenue-analytics-setup': DEFAULT_BINDING,
+  'warehouse-source': DEFAULT_BINDING,
+  'error-tracking-upload-source-maps': {
+    sequence: Sequence.linear,
+    harness: Harness.pi,
+    model: GPT5_6_SOL_MODEL,
+    thinkingLevel: 'medium',
+  },
+  audit: DEFAULT_BINDING,
+  'events-audit': DEFAULT_BINDING,
+  'posthog-doctor': DEFAULT_BINDING,
+  'web-analytics-doctor': DEFAULT_BINDING,
+  migration: DEFAULT_BINDING,
+  'self-driving': DEFAULT_BINDING,
+  'agent-skill': DEFAULT_BINDING,
+  'mcp-add': DEFAULT_BINDING,
+  'mcp-remove': DEFAULT_BINDING,
+  'mcp-tutorial': DEFAULT_BINDING,
+  'mcp-analytics': DEFAULT_BINDING,
+  // Orchestrator on pi. The binding routes only; every stage's model and
+  // effort are pinned context-mill side in the flow's frontmatter
+  // (`model_pi`/`effort_pi`: terra seed, sol tasks, luna report).
+  metrics: {
+    sequence: Sequence.orchestrator,
+    harness: Harness.pi,
+    model: DEFAULT_AGENT_MODEL,
+  },
+  'replay-vision': {
+    sequence: Sequence.orchestrator,
+    harness: Harness.anthropic,
+    model: DEFAULT_AGENT_MODEL,
+  },
+  // Orchestrator on pi, like metrics. The binding routes only; every stage's
+  // model and effort are pinned context-mill side in the flow's frontmatter
+  // (`model_pi`/`effort_pi`: terra seed, install and init, sol tasks, luna report).
+  'error-tracking': {
+    sequence: Sequence.orchestrator,
+    harness: Harness.pi,
+    model: DEFAULT_AGENT_MODEL,
+  },
+  'ai-observability': {
+    sequence: Sequence.linear,
+    harness: Harness.pi,
+    model: GPT5_6_TERRA_MODEL,
+    thinkingLevel: 'high',
+  },
+  slack: DEFAULT_BINDING,
+};
+
+// ── Unified resolver ────────────────────────────────────────────────────
+
+/** Compose both axes. Callers needing only one axis use the per-axis resolver. */
+export function resolveBinding(
+  ctx: SwitchboardCtx,
+  role = 'default',
+): ProgramBinding {
+  ctx.trace ??= {};
+  const sequence = resolveSequence(ctx);
+  const { harness, model, thinkingLevel } = resolveHarness(ctx, role);
+  return { sequence, harness, model, thinkingLevel };
+}
+
 // ── Unified re-export surface ───────────────────────────────────────────
-export { HARNESS_OPTIONS, getHarness } from './harness';
+export { HARNESS_OPTIONS, getHarness, resolveHarness } from './harness';
 export {
-  harnessRunsTasks,
-  resolveHarness,
-  resolveRoleHarness,
-} from './resolve-harness';
-export { SEQUENCE_OPTIONS, getSequence, type SequenceRunner } from './sequence';
+  SEQUENCE_OPTIONS,
+  getSequence,
+  resolveSequence,
+  type SequenceRunner,
+} from './sequence';
+export {
+  isOrchestratorEnabled,
+  areSeededTasksEnabled,
+  resolveStageOverrides,
+} from './flags';

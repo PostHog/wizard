@@ -54,6 +54,15 @@ vi.mock('@utils/analytics', () => ({
     shutdown: vi.fn().mockResolvedValue(undefined),
   },
 }));
+vi.mock('@agent/gateway-session', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@agent/gateway-session')>()),
+  gatewayAuth: vi.fn().mockResolvedValue({
+    gatewayUrl: 'https://gateway.test',
+    token: 'phe_run',
+    teamId: 1,
+    refreshAtMs: Date.now() + 3_600_000,
+  }),
+}));
 
 // The fake harness: reports a little of everything, then returns what the
 // current test told it to.
@@ -162,6 +171,10 @@ vi.mock('@agent/runner/switchboard/harness', () => {
       harnessState.selected.push(name);
       return { ...fake, name };
     },
+    resolveHarness: (ctx: { cliHarness?: Harness }) => ({
+      harness: ctx.cliHarness ?? Harness.pi,
+      model: DEFAULT_AGENT_MODEL,
+    }),
   };
 });
 
@@ -200,7 +213,6 @@ import type { RunAgentOptions, RunConfig, RunInput } from '@agent/runner';
 import { analytics } from '@utils/analytics';
 import { initLogFile } from '@utils/debug';
 import { flushScanReport } from '@agent/yara-hooks';
-import { clearCleanup, runCleanups } from '@utils/cleanup-registry';
 import { QUEUE_DIR_NAME } from '../runner/sequence/orchestrator/queue';
 
 let tmp: string;
@@ -225,6 +237,7 @@ const config = (over: Partial<RunConfig> = {}): RunConfig => ({
   },
   composed: false,
   binding: { sequence: Sequence.linear, harness: Harness.pi, model: 'm' },
+  switchboard: { program: 'test-program', flags: {} },
   skillsBaseUrl: 'https://skills.test',
   wizardFlags: {},
   wizardFlagPayloads: {},
@@ -239,15 +252,6 @@ const input = (over: Partial<RunInput> = {}): RunInput => ({
     projectApiKey: 'phc_test',
     host: HostResolution.fromApiHost('https://us.posthog.com'),
     projectId: 1,
-  },
-  inferenceAuth: {
-    resolve: () =>
-      Promise.resolve({
-        gatewayUrl: 'https://gateway.test',
-        token: 'phe_run',
-        teamId: 1,
-        refreshAtMs: Date.now() + 3_600_000,
-      }),
   },
   project: null,
   apiUser: null,
@@ -312,6 +316,11 @@ describe('runAgent standalone', () => {
       const running = runAgent(
         config({
           binding: { harness, sequence, model: DEFAULT_AGENT_MODEL },
+          switchboard: {
+            program: 'test-program',
+            flags: {},
+            cliHarness: harness,
+          },
         }),
         input(),
         { interaction: { ask }, onProgress: (event) => events.push(event) },
@@ -378,6 +387,11 @@ describe('runAgent standalone', () => {
         const result = await runAgent(
           config({
             binding: { harness, sequence, model: DEFAULT_AGENT_MODEL },
+            switchboard: {
+              program: 'test-program',
+              flags: {},
+              cliHarness: harness,
+            },
           }),
           input(),
         );
@@ -413,6 +427,11 @@ describe('runAgent standalone', () => {
           sequence: Sequence.orchestrator,
           model: DEFAULT_AGENT_MODEL,
         },
+        switchboard: {
+          program: 'test-program',
+          flags: {},
+          cliHarness: Harness.anthropic,
+        },
       }),
       input(),
     );
@@ -434,6 +453,11 @@ describe('runAgent standalone', () => {
           harness: Harness.anthropic,
           sequence: Sequence.orchestrator,
           model: DEFAULT_AGENT_MODEL,
+        },
+        switchboard: {
+          program: 'test-program',
+          flags: {},
+          cliHarness: Harness.anthropic,
         },
       }),
       input(),
@@ -457,6 +481,11 @@ describe('runAgent standalone', () => {
           harness: Harness.pi,
           sequence: Sequence.orchestrator,
           model: DEFAULT_AGENT_MODEL,
+        },
+        switchboard: {
+          program: 'test-program',
+          flags: {},
+          cliHarness: Harness.pi,
         },
       }),
       input(),
@@ -502,6 +531,11 @@ describe('runAgent standalone', () => {
           harness: Harness.pi,
           sequence: Sequence.orchestrator,
           model: DEFAULT_AGENT_MODEL,
+        },
+        switchboard: {
+          program: 'test-program',
+          flags: {},
+          cliHarness: Harness.pi,
         },
       }),
       input(),
@@ -740,41 +774,6 @@ describe('runAgent standalone', () => {
     expect(analytics.shutdown).not.toHaveBeenCalled();
   });
 
-  it('a process drain during a run writes the scan report once, through progress', async () => {
-    clearCleanup();
-    harnessState.askQuestions = [{ id: 'q1', prompt: 'Go?', kind: 'text' }];
-    const ask = vi.fn(() => new Promise<AskAnswers>(() => undefined));
-    vi.mocked(flushScanReport).mockReturnValueOnce(
-      'YARA scan report: /tmp/scan.json',
-    );
-    const controller = new AbortController();
-    const events: AgentProgress[] = [];
-    const running = runAgent(
-      config(),
-      input({ flags: { ...input().flags, yaraReport: true } }),
-      {
-        signal: controller.signal,
-        onProgress: (event) => events.push(event),
-        interaction: { ask },
-      },
-    );
-    await vi.waitFor(() => expect(ask).toHaveBeenCalled());
-
-    runCleanups();
-
-    expect(flushScanReport).toHaveBeenCalledExactlyOnceWith({
-      yaraReport: true,
-    });
-    expect(events).toContainEqual({
-      kind: 'log',
-      level: 'info',
-      message: 'YARA scan report: /tmp/scan.json',
-    });
-    controller.abort();
-    expect((await running).outcome).toBe(RunOutcome.Aborted);
-    expect(flushScanReport).toHaveBeenCalledTimes(1);
-  });
-
   it('runs to a complete result with no options at all', async () => {
     const result = await runAgent(config(), input());
 
@@ -873,35 +872,6 @@ describe('runAgent standalone', () => {
     expect(result.failure).toBe(failure);
   });
 
-  it.each([
-    [RunOutcome.Failed, ['preexisting', 'user-owned']],
-    [RunOutcome.Success, ['installed', 'preexisting', 'user-owned']],
-  ] as const)('a %s run leaves %j in .claude/skills', async (outcome, left) => {
-    const skillsDir = path.join(tmp, '.claude', 'skills');
-    const makeSkill = (id: string, marked: boolean) => {
-      fs.mkdirSync(path.join(skillsDir, id), { recursive: true });
-      if (marked)
-        fs.writeFileSync(path.join(skillsDir, id, '.posthog-wizard'), '');
-    };
-    makeSkill('preexisting', true);
-    if (outcome === RunOutcome.Failed)
-      harnessState.result = {
-        kind: 'failure',
-        classification: AgentErrorType.NO_PROGRESS,
-      };
-
-    const result = await runAgent(config(), input(), {
-      onProgress: (event) => {
-        if (event.kind !== 'status') return;
-        makeSkill('installed', true);
-        makeSkill('user-owned', false);
-      },
-    });
-
-    expect(result.outcome).toBe(outcome);
-    expect(fs.readdirSync(skillsDir).sort()).toEqual(left);
-  });
-
   it('skips the terminal outro for a composed sub-run', async () => {
     const events: AgentProgress[] = [];
 
@@ -916,81 +886,6 @@ describe('runAgent standalone', () => {
       events.some((e) => e.kind === 'lifecycle' && e.phase === 'completed'),
     ).toBe(false);
     expect(analytics.shutdown).not.toHaveBeenCalled();
-  });
-
-  it('collectTranscript fills snapshot.transcriptTail; run.prompt replaces the assembled prompt', async () => {
-    const events: AgentProgress[] = [];
-    const long = 'x'.repeat(150);
-    harnessState.run = ({ middleware }) => {
-      middleware?.onMessage({
-        type: 'assistant',
-        message: {
-          content: [
-            { type: 'text', text: '  Globbing every manifest.  ' },
-            {
-              type: 'tool_use',
-              name: 'Read',
-              input: { file_path: 'apps/web/package.json' },
-            },
-            { type: 'text', text: long },
-          ],
-        },
-      });
-      middleware?.onMessage({ type: 'result', result: '{"path":"."}' });
-      return Promise.resolve({ kind: 'success' });
-    };
-
-    const result = await runAgent(
-      config({
-        run: {
-          ...config().run,
-          prompt: () => 'Scan the repo only.',
-          collectTranscript: true,
-        },
-      }),
-      input(),
-      { onProgress: (event) => events.push(event) },
-    );
-
-    expect(result.outcome).toBe(RunOutcome.Success);
-    expect((harnessState.lastInputs as BackendRunInputs).prompt).toBe(
-      'Scan the repo only.',
-    );
-    expect(result.snapshot.transcriptTail).toBe(
-      `  Globbing every manifest.  \n${long}\n{"path":"."}`,
-    );
-    expect(events.filter((event) => event.kind === 'activity')).toEqual([
-      { kind: 'activity', line: 'Globbing every manifest.' },
-      { kind: 'activity', line: 'Read apps/web/package.json' },
-      { kind: 'activity', line: `${'x'.repeat(100)}…` },
-    ]);
-  });
-
-  it('keeps only the newest 256 KiB of a collected transcript', async () => {
-    const chunk = 'y'.repeat(100 * 1024);
-    harnessState.run = ({ middleware }) => {
-      for (const text of ['oldest', chunk, chunk, chunk]) {
-        middleware?.onMessage({
-          type: 'assistant',
-          message: { content: [{ type: 'text', text }] },
-        });
-      }
-      return Promise.resolve({ kind: 'success' });
-    };
-
-    const result = await runAgent(
-      config({ run: { ...config().run, collectTranscript: true } }),
-      input(),
-    );
-
-    expect(result.snapshot.transcriptTail).toBe(`${chunk}\n${chunk}\n`);
-  });
-
-  it('leaves a deferred scan report to the host run', async () => {
-    const result = await runAgent(config({ scanReport: 'defer' }), input());
-
-    expect(result.outcome).toBe(RunOutcome.Success);
-    expect(flushScanReport).not.toHaveBeenCalled();
   });
 
   it('finishes when the observer throws on every event', async () => {
@@ -1020,8 +915,6 @@ describe('runAgent standalone', () => {
       ];
       const host = new AbortController();
       const signals: AbortSignal[] = [];
-      const postRun = vi.fn();
-      const events: AgentProgress[] = [];
       const running = runAgent(
         config({
           binding: {
@@ -1029,12 +922,15 @@ describe('runAgent standalone', () => {
             sequence,
             model: DEFAULT_AGENT_MODEL,
           },
-          hooks: { postRun },
+          switchboard: {
+            program: 'test-program',
+            flags: {},
+            cliHarness: Harness.pi,
+          },
         }),
         input(),
         {
           signal: host.signal,
-          onProgress: (event) => events.push(event),
           interaction: {
             ask: (_question, { signal }) => {
               signals.push(signal);
@@ -1050,9 +946,6 @@ describe('runAgent standalone', () => {
       expect(result.outcome).toBe(RunOutcome.Aborted);
       // The host's abort reached the open question as its own abort.
       expect(signals[0].aborted).toBe(true);
-      expect(postRun).not.toHaveBeenCalled();
-      expect(events.some((event) => event.kind === 'completion')).toBe(false);
-      expect(fs.existsSync(path.join(tmp, QUEUE_DIR_NAME))).toBe(false);
     },
   );
 
@@ -1101,18 +994,6 @@ describe('runAgent standalone', () => {
     expect(result.failure?.code).toBe(ErrorCodes.InternalUnhandled);
     // What was reported before the crash survives in the snapshot.
     expect(result.snapshot.statusMessages).toContain('Installing the SDK');
-  });
-
-  it('ends the run before any harness when the inference provider refuses', async () => {
-    const refusal = new Error('gateway mint refused');
-    const result = await runAgent(
-      config(),
-      input({ inferenceAuth: { resolve: () => Promise.reject(refusal) } }),
-    );
-
-    expect(result.outcome).toBe(RunOutcome.Crashed);
-    expect(result.failure?.error).toBe(refusal);
-    expect(harnessState.lastInputs).toBeUndefined();
   });
 
   it('sends benchmark output to onProgress when benchmarking', async () => {

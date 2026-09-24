@@ -44,7 +44,7 @@ async function initializeHarness(
         sequence: Sequence.linear,
         model: 'test',
       },
-      programCommandments: ['Follow the program rule'],
+      switchboard: { program: 'test', flags: {} },
       skillsBaseUrl: 'https://skills.test',
       wizardFlags: {},
       wizardFlagPayloads: {},
@@ -64,14 +64,6 @@ async function initializeHarness(
       },
       host: {},
       credentials,
-      inferenceAuth: {
-        resolve: () =>
-          Promise.resolve({
-            gatewayUrl: 'https://ai-gateway.us.posthog.com',
-            token: 'phe_test',
-            refreshAtMs: Infinity,
-          }),
-      },
       project: null,
       apiUser: null,
     },
@@ -120,14 +112,6 @@ async function initializeHarness(
     }
   };
 }
-
-it('forwards the supplied program commandments on both entry points', async () => {
-  for (const mode of ['linear', 'task'] as const) {
-    await initializeHarness(mode, undefined);
-    const [config] = vi.mocked(initializeAgent).mock.calls.at(-1)!;
-    expect(config.programCommandments).toEqual(['Follow the program rule']);
-  }
-});
 
 afterEach(() => {
   vi.useRealTimers();

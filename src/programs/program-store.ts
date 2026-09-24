@@ -1,10 +1,10 @@
+/* eslint-disable @typescript-eslint/no-unused-vars -- A shell: B3 fills in the bodies. */
 import type {
   AgentProgress,
   ResolvedBinding,
   RunResult,
 } from '../agent/types.js';
 import type { ApiProject, ApiUser, Credentials } from '../shared/api.js';
-import type { PlannedEvent } from './posthog-integration/watch-event-plan.js';
 
 /** One agent run's progress event, attributed to its run. */
 export type ProgramRunProgress = {
@@ -35,7 +35,6 @@ export type ProgramInvocationData = {
   apiProject: ApiProject | null;
   apiUser: ApiUser | null;
   detection: { frameworkContext: Record<string, unknown> };
-  eventPlan: PlannedEvent[];
   /** The route of the agent run; null until it resolves. */
   binding: ResolvedBinding | null;
   /** Latched once the organization's AI SDK stamp was considered for this login. */
@@ -53,134 +52,50 @@ export type AgentProgressAdapter = {
   finish(result: RunResult): void;
 };
 
-type RunEntry = {
-  runId: string;
-  result?: RunResult;
-};
-
-const MAX_DIAGNOSTICS = 10;
-
 export class ProgramStore {
-  private readonly runs: RunEntry[] = [];
-  private readonly diagnostics: ProgramDiagnostic[] = [];
-  private readonly data: ProgramInvocationData;
-  private readonly onData?: (progress: ProgramDataProgress) => void;
-
   constructor(
     options: {
       aiSdkStampReported?: boolean;
       onData?: (progress: ProgramDataProgress) => void;
     } = {},
   ) {
-    this.onData = options.onData;
-    this.data = {
-      credentials: null,
-      apiProject: null,
-      apiUser: null,
-      detection: { frameworkContext: {} },
-      eventPlan: [],
-      binding: null,
-      aiSdkStampReported: options.aiSdkStampReported ?? false,
-    };
+    throw new Error('ProgramStore: not implemented');
   }
 
   readData(): ProgramInvocationData {
-    return structuredClone(this.data);
+    throw new Error('ProgramStore: not implemented');
   }
 
   setAuthenticated(
     auth: Pick<ProgramInvocationData, 'credentials' | 'apiProject' | 'apiUser'>,
   ): void {
-    Object.assign(this.data, structuredClone(auth));
-    this.emitData();
+    throw new Error('ProgramStore: not implemented');
   }
 
   setFrameworkContext(key: string, value: unknown): void {
-    this.data.detection.frameworkContext[key] = structuredClone(value);
-    this.emitData();
-  }
-
-  setEventPlan(events: PlannedEvent[]): void {
-    this.data.eventPlan = structuredClone(events);
-    this.emitData();
+    throw new Error('ProgramStore: not implemented');
   }
 
   setBinding(binding: ResolvedBinding): void {
-    this.data.binding = structuredClone(binding);
-    this.emitData();
+    throw new Error('ProgramStore: not implemented');
   }
 
   setAiSdkStampReported(): void {
-    if (this.data.aiSdkStampReported) return;
-    this.data.aiSdkStampReported = true;
-    this.emitData();
+    throw new Error('ProgramStore: not implemented');
   }
 
   beginRun(
     runId: string,
     observer?: (progress: ProgramRunProgress) => void,
   ): AgentProgressAdapter {
-    const run: RunEntry = { runId };
-    this.runs.push(run);
-
-    return {
-      onProgress: (event) => {
-        const source = { runId: run.runId, eventKind: event.kind };
-        if (run.result) {
-          this.recordDiagnostic(source, 'progress after finish');
-          return;
-        }
-        if (!observer) return;
-        this.deliver(source, () =>
-          observer({ kind: 'run', runId, event: structuredClone(event) }),
-        );
-      },
-      finish: (result) => {
-        run.result = result;
-      },
-    };
+    throw new Error('ProgramStore: not implemented');
   }
 
   settledRuns(): SettledProgramRun[] {
-    return this.runs.flatMap(({ runId, result }) =>
-      result ? [{ runId, result }] : [],
-    );
+    throw new Error('ProgramStore: not implemented');
   }
 
   readDiagnostics(): ProgramDiagnostic[] {
-    return this.diagnostics.map((diagnostic) => ({ ...diagnostic }));
-  }
-
-  private emitData(): void {
-    const onData = this.onData;
-    if (!onData) return;
-    this.deliver({ eventKind: 'data' }, () =>
-      onData({ kind: 'program', data: this.readData() }),
-    );
-  }
-
-  /** Never waits for an observer; a throw or a rejection becomes a diagnostic. */
-  private deliver(source: DiagnosticSource, send: () => unknown): void {
-    try {
-      const delivery = send();
-      if (
-        delivery &&
-        typeof (delivery as PromiseLike<unknown>).then === 'function'
-      ) {
-        void Promise.resolve(delivery).catch((error: unknown) => {
-          this.recordDiagnostic(source, error);
-        });
-      }
-    } catch (error) {
-      this.recordDiagnostic(source, error);
-    }
-  }
-
-  private recordDiagnostic(source: DiagnosticSource, error: unknown): void {
-    this.diagnostics.push({
-      ...source,
-      message: error instanceof Error ? error.message : String(error),
-    });
-    if (this.diagnostics.length > MAX_DIAGNOSTICS) this.diagnostics.shift();
+    throw new Error('ProgramStore: not implemented');
   }
 }

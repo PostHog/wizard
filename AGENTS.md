@@ -76,7 +76,7 @@ Agent SDK is a supported legacy fallback, deprecated as the default; retain it
 for major Pi vulnerabilities or gaps in support for new Anthropic models.
 
 This is the contribution policy, not a claim that every existing binding has
-migrated. The default, `DEFAULT_AGENT_BINDING`, is Pi + linear. Set new bindings
+migrated: `DEFAULT_BINDING` is still Anthropic + linear. Set new bindings
 explicitly and check sequence-specific hooks before migrating existing flows.
 See
 [execution policy and model admission](.claude/skills/wizard-development/SKILL.md#execution-policy-and-model-admission)

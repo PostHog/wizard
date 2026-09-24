@@ -8,7 +8,6 @@ import { posthogIntegrationConfig } from '@programs/posthog-integration/index';
 import { DETECTED_WAREHOUSE_SOURCES_KEY } from '@programs/warehouse-source/detect';
 import { buildSession, type WizardSession } from '@lib/wizard-session';
 import type { DetectedSource } from '@programs/warehouse-sources/types';
-import { testProgramRunHost } from '../../../../test/program-host';
 
 export const CREDENTIALS = {
   accessToken: 'tok',
@@ -47,7 +46,7 @@ export function sessionWith(sources: DetectedSource[]): WizardSession {
 export async function resolveRun(session: WizardSession) {
   const { run } = posthogIntegrationConfig;
   if (typeof run !== 'function') throw new Error('expected a run function');
-  return run(session, testProgramRunHost(session));
+  return run(session);
 }
 
 export const promptFor = async (sources: DetectedSource[]) => {

@@ -8,7 +8,6 @@
  * user a quarter of the time the in-run prompt does for identical questions.
  */
 import type { WizardSession } from '@lib/wizard-session';
-import { testProgramRunHost } from '../../../test/program-host';
 
 vi.mock('@utils/analytics', () => ({
   analytics: {
@@ -20,8 +19,10 @@ vi.mock('@utils/analytics', () => ({
 }));
 
 import { warehouseSourceConfig } from '@programs/warehouse-source/index';
-import { DEFAULT_ASK_TIMEOUT_MS } from '@agent/wizard-ask-bridge';
-import { LONGER_ASK_TIMEOUT_MS } from '@shared/ask-policy';
+import {
+  LONGER_ASK_TIMEOUT_MS,
+  DEFAULT_ASK_TIMEOUT_MS,
+} from '@agent/wizard-ask-bridge';
 
 function session(): WizardSession {
   return { installDir: '/tmp/app', frameworkContext: {} } as WizardSession;
@@ -30,10 +31,7 @@ function session(): WizardSession {
 describe('warehouse command ask timeout', () => {
   it('gives credential questions the shared allowance, not the default', async () => {
     const { run } = warehouseSourceConfig;
-    const resolved =
-      typeof run === 'function'
-        ? await run(session(), testProgramRunHost())
-        : run;
+    const resolved = typeof run === 'function' ? await run(session()) : run;
 
     expect(resolved?.askTimeoutMs).toBe(LONGER_ASK_TIMEOUT_MS);
     expect(resolved?.askTimeoutMs).toBeGreaterThan(DEFAULT_ASK_TIMEOUT_MS);

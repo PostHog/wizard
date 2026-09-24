@@ -9,19 +9,17 @@
  * Product-knowledge-free by design — the caller passes the targets to classify
  * into (e.g. source-map skill variants) and maps the result back. Sits next to
  * the other detection tools (framework, features, package-manager) so it's
- * discoverable. Runs AFTER auth: it goes through the same `runAgent` every
- * program uses, which needs credentials.
+ * discoverable. Runs AFTER auth: it uses the same agent loop every program
+ * uses, which needs credentials.
  */
 
-import { AgentSignals, runAgent, RunOutcome } from '@agent';
-import type {
-  AgentProgress,
-  AgentRunDefinition,
-  InferenceAuthProvider,
-  ResolvedBinding,
-  RunConfig,
-  RunInput,
-} from '@agent/types';
+import {
+  initializeAgent,
+  executeAgent,
+  buildRunTags,
+  AgentSignals,
+  AgentErrorType,
+} from '@agent';
 import { isAbsolute, resolve, sep } from 'path';
 import { detectNodePackageManagers } from './package-manager.js';
 import {
@@ -29,17 +27,13 @@ import {
   AGENTIC_DETECTION_RETRY_TIMEOUT_MS,
   CallType,
   getSkillsBaseUrl,
-  Harness,
   HAIKU_MODEL,
-  POSTHOG_DOCS_URL,
-  Sequence,
 } from '@shared/constants';
-import type { Credentials } from '@shared/api';
-import { buildRunTags } from '@shared/run-tags';
 import { analytics } from '@utils/analytics';
+import type { WizardSession } from '@lib/wizard-session';
 import type { WizardRunOptions } from '@utils/types';
-import { createPosthogInferenceAuthProvider } from '@programs/credentials';
-import { WizardError } from '@shared/errors';
+import { getUI, type SpinnerHandle } from '@ui';
+import { createUiReducer } from '@ui/agent-progress';
 
 /** A category the agent classifies each project into (id the agent returns). */
 export type DetectTarget = { id: string; name: string };
@@ -153,14 +147,6 @@ export type AgenticDetectOptions = {
   rerankIds?: readonly string[];
   /** Streaming activity callback for the UI. */
   onEvent?: DetectEvent;
-  /** Host-owned sink for the scan's run progress. */
-  onProgress?: (event: AgentProgress) => void;
-};
-
-/** Data the detection agent needs from its host; no UI or session ownership. */
-export type AgenticDetectionContext = WizardRunOptions & {
-  credentials: Credentials | null;
-  inferenceAuth?: InferenceAuthProvider;
 };
 
 function buildPrompt(
@@ -322,47 +308,44 @@ export function coerceAgenticReport(
   return { repoType, projects };
 }
 
-/** A fast mechanical scan: linear Haiku on the Anthropic harness. */
-const AGENTIC_DETECTION_BINDING: ResolvedBinding = {
-  sequence: Sequence.linear,
-  harness: Harness.anthropic,
-  model: HAIKU_MODEL,
-};
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function formatToolUse(block: any): string {
+  const name = typeof block?.name === 'string' ? block.name : 'tool';
+  const input = (block?.input ?? {}) as Record<string, unknown>;
+  const detail =
+    (input.file_path as string) ||
+    (input.pattern as string) ||
+    (input.path as string) ||
+    '';
+  return detail ? `${name} ${detail}` : name;
+}
 
-/** No skill and no remark; the report is read back from the transcript tail. */
-function detectionRunDefinition(prompt: string): AgentRunDefinition {
+function sessionToWizardOptions(session: WizardSession): WizardRunOptions {
   return {
-    integrationLabel: 'agentic-detect',
-    prompt: () => prompt,
-    collectTranscript: true,
-    requestRemark: false,
-    detectPackageManager: detectNodePackageManagers,
-    spinnerMessage: 'Scanning the repo...',
-    successMessage: 'Detection complete',
-    errorMessage: 'Detection failed',
-    estimatedDurationMinutes: 1,
-    reportFile: '',
-    docsUrl: POSTHOG_DOCS_URL,
+    installDir: session.installDir,
+    ci: session.ci,
+    debug: session.debug,
+    benchmark: session.benchmark,
+    yaraReport: session.yaraReport,
+    signup: session.signup,
+    apiKey: session.apiKey,
+    projectId: session.projectId,
   };
 }
 
-/** What a detect host saw before `runAgent`: no run lifecycle, spinner, outro, or setup logs below warn. */
-function reachesHost(event: AgentProgress): boolean {
-  switch (event.kind) {
-    case 'lifecycle':
-    case 'completion':
-    case 'spinner':
-      return false;
-    case 'log':
-      return event.level === 'warn' || event.level === 'error';
-    default:
-      return true;
-  }
-}
+const NOOP_SPINNER: SpinnerHandle = {
+  start: () => undefined,
+  stop: () => undefined,
+  message: () => undefined,
+};
 
-/** Scan the repo with Haiku through `runAgent`; each attempt is a fresh run with its own deadline. */
+/**
+ * Drive the wizard's agent loop on HAIKU_MODEL to scan the repo and return a
+ * structured detection report. Reuses the same setup every program uses, so
+ * MCP, tools, and credentials are wired identically.
+ */
 export async function detectProjectsWithAgent(
-  session: AgenticDetectionContext,
+  session: WizardSession,
   options: AgenticDetectOptions,
 ): Promise<AgenticDetectionReport> {
   if (!session.credentials) {
@@ -375,11 +358,13 @@ export async function detectProjectsWithAgent(
     recommend = false,
     rerankIds,
     onEvent,
-    onProgress,
   } = options;
-  const { credentials } = session;
+  const { accessToken, host } = session.credentials;
+  const cwd = session.installDir;
+  const runOptions = sessionToWizardOptions(session);
 
-  // Built here: the scan runs before the program's own run tags exist.
+  // Built here rather than inherited: this scan runs before
+  // `bootstrapProgram`, so there's no `boot.wizardMetadata` yet.
   const wizardMetadata = {
     ...buildRunTags({
       programId,
@@ -389,75 +374,108 @@ export async function detectProjectsWithAgent(
     }),
     call_type: CallType.detection,
   };
-  const config: RunConfig = {
-    programId,
-    run: detectionRunDefinition(
-      buildPrompt(session.installDir, targets, purpose, recommend),
-    ),
-    composed: true,
-    binding: AGENTIC_DETECTION_BINDING,
-    skillsBaseUrl: getSkillsBaseUrl(),
-    wizardFlags: {},
-    wizardFlagPayloads: {},
-    wizardMetadata,
-    allowedTools: ['Read', 'Grep', 'Glob'],
-    // The scan's scans count toward the program run's report.
-    scanReport: 'defer',
-  };
-  const input: RunInput = {
-    installDir: session.installDir,
-    credentials,
-    // One provider for both attempts: each resolves its own gateway bearer.
-    inferenceAuth:
-      session.inferenceAuth ??
-      createPosthogInferenceAuthProvider(credentials, programId),
-    project: null,
-    apiUser: null,
-    // No benchmark pipeline and no AIO capture: the scan never had either.
-    flags: {
-      ci: session.ci,
-      signup: session.signup,
-      debug: session.debug,
-      e2eAsk: false,
-      localMcp: false,
-      captureAio: false,
-      benchmark: false,
-      yaraReport: session.yaraReport,
-    },
-    host: { projectId: session.projectId, apiKey: session.apiKey },
-  };
-  const forward = (event: AgentProgress): void => {
-    if (event.kind === 'activity') onEvent?.(event.line);
-    if (reachesHost(event)) onProgress?.(event);
-  };
 
+  const prompt = buildPrompt(cwd, targets, purpose, recommend);
   for (let attempt = 0; attempt < 2; attempt++) {
     const timeoutMs =
       attempt === 0
         ? AGENTIC_DETECTION_FIRST_ATTEMPT_TIMEOUT_MS
         : AGENTIC_DETECTION_RETRY_TIMEOUT_MS;
-    const deadline = AbortSignal.timeout(timeoutMs);
-    const result = await runAgent(config, input, {
-      signal: deadline,
-      onProgress: forward,
-    });
+    const agent = await initializeAgent(
+      {
+        emit: createUiReducer(getUI()),
+        workingDirectory: cwd,
+        posthogMcpUrl: host.mcpUrl,
+        posthogApiKey: accessToken,
+        host,
+        detectPackageManager: detectNodePackageManagers,
+        skillsBaseUrl: getSkillsBaseUrl(),
+        programId,
+        integrationLabel: 'agentic-detect',
+        wizardMetadata,
+        allowedTools: ['Read', 'Grep', 'Glob'],
+        modelOverride: HAIKU_MODEL,
+      },
+      runOptions,
+    );
 
-    if (result.outcome === RunOutcome.Aborted && deadline.aborted) {
+    // Keeps only the transcript tail — the report JSON is the last output.
+    const MAX_TRANSCRIPT_CHARS = 256 * 1024;
+    const collected: string[] = [];
+    let collectedChars = 0;
+    const collect = (text: string): void => {
+      collected.push(text);
+      collectedChars += text.length;
+      while (collectedChars > MAX_TRANSCRIPT_CHARS && collected.length > 1) {
+        collectedChars -= collected.shift()!.length;
+      }
+    };
+    let resultText = '';
+
+    const middleware = {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      onMessage: (message: any): void => {
+        if (message?.type === 'assistant') {
+          for (const block of message.message?.content ?? []) {
+            if (block?.type === 'text' && typeof block.text === 'string') {
+              collect(block.text);
+              const line = block.text.trim();
+              if (line && onEvent) {
+                onEvent(line.length > 100 ? `${line.slice(0, 100)}…` : line);
+              }
+            } else if (block?.type === 'tool_use') {
+              onEvent?.(formatToolUse(block));
+            }
+          }
+        } else if (
+          message?.type === 'result' &&
+          typeof message.result === 'string'
+        ) {
+          resultText = message.result;
+        }
+      },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      finalize: (_resultMessage: any, _durationMs: number): unknown =>
+        undefined,
+    };
+
+    const result = await executeAgent(
+      agent,
+      prompt,
+      runOptions,
+      NOOP_SPINNER,
+      {
+        spinnerMessage: 'Scanning the repo...',
+        successMessage: 'Detection complete',
+        errorMessage: 'Detection failed',
+        requestRemark: false,
+        timeoutMs,
+      },
+      middleware,
+    );
+
+    if (
+      result.kind === 'failure' &&
+      result.classification === AgentErrorType.AGENTIC_DETECTION_TIMEOUT
+    ) {
       if (attempt === 0) {
         onEvent?.('Project scan timed out; retrying...');
         continue;
       }
       throw new AgenticDetectionTimeoutError(attempt + 1, timeoutMs);
     }
-    if (result.outcome !== RunOutcome.Success) {
+    if (result.kind !== 'success') {
+      if (result.kind === 'decided_failure') {
+        throw result.failure.error ?? new Error(result.failure.message);
+      }
       throw (
-        result.failure.error ??
-        new WizardError(result.failure.message, undefined, result.failure.code)
+        result.error ??
+        new Error(result.message || `Agent error: ${result.classification}`)
       );
     }
 
     // Transcript first, final message last — its verdicts win path conflicts.
-    const output = result.snapshot.transcriptTail ?? '';
+    const output = `${collected.join('\n')}\n${resultText}`;
     const derived = deriveReportJson(output);
     if (derived !== null) {
       return coerceAgenticReport(

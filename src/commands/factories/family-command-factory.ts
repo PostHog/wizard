@@ -1,11 +1,11 @@
-import type { Arguments, Options } from 'yargs';
+import type { Arguments } from 'yargs';
 
 import type { ProgramConfig } from '@programs/types';
 import {
   buildFamilyPickerChildren,
   dispatchFamily,
   pickerChildrenToShow,
-} from '../dispatch-family';
+} from '@programs/dispatch-family';
 import { getSkillsBaseUrl } from '@shared/constants';
 import { fetchSkillMenu } from '@shared/skill-menu';
 
@@ -24,8 +24,6 @@ export interface FamilyCommandFactoryOpts {
    * generic agent-skill config.
    */
   optionsFrom: ProgramConfig;
-  /** Options supplied by the CLI rather than the program. */
-  cliOptions?: Record<string, Options>;
 }
 
 /**
@@ -48,7 +46,6 @@ export function familyCommandFactory({
   family,
   description,
   optionsFrom,
-  cliOptions,
 }: FamilyCommandFactoryOpts): Command {
   // Bare `wizard <family>` in an interactive terminal. With a single option
   // today (e.g. `audit events`), skip the picker and run it directly so the
@@ -71,7 +68,7 @@ export function familyCommandFactory({
   return {
     name: `${family} [skill]`,
     description,
-    options: mergeCommandOptions(optionsFrom, cliOptions),
+    options: mergeCommandOptions(optionsFrom),
     positionals: {
       skill: {
         type: 'string',

@@ -132,7 +132,9 @@ export interface QueueFile {
   tasks: QueuedTask[];
 }
 
-export { TASK_OUTCOMES_KEY } from '../../shared/types';
+/** Session frameworkContext key holding the drained queue's final outcomes —
+ *  written by the runner before the cache wipe, read by the e2e harness. */
+export const TASK_OUTCOMES_KEY = 'orchestrator-task-outcomes';
 
 export interface TaskOutcome {
   type: string;

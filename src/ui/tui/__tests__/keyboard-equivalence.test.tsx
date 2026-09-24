@@ -64,10 +64,6 @@ vi.mock('opn', () => ({ default: vi.fn() }));
 vi.mock('@shared/api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@shared/api')>()),
   fetchSlackConnected: vi.fn().mockResolvedValue(false),
-  // This test compares the handoff commit, not the following GitHub screen's
-  // polling effect. A real request can settle between the keyboard and action
-  // snapshots and add githubConnected only to the mounted keyboard path.
-  fetchGithubConnected: vi.fn(() => new Promise(() => undefined)),
   fetchUserData: vi.fn(() => new Promise(() => undefined)),
 }));
 vi.mock('@shared/skill-menu', async (importOriginal) => ({

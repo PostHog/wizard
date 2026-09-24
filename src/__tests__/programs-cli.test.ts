@@ -29,7 +29,7 @@ import { selfDrivingCommand } from '../commands/self-driving';
 import {
   dispatchFamily,
   pickerChildrenToShow,
-} from '../commands/dispatch-family';
+} from '@programs/dispatch-family';
 import type { Command } from '../commands/command';
 import { fetchSkillMenu, type CliEntry } from '@shared/skill-menu';
 import { auditConfig } from '@programs/audit/index';

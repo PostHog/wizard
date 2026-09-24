@@ -5,11 +5,11 @@ import {
   ANALYTICS_TEAM_TAG,
   WIZARD_FLAG_KEYS,
 } from '@shared/constants';
-import type { WizardSession } from '@lib/wizard-session';
 import {
   reportableDiscoveredFeatures,
   reportablePosthogSdkDetected,
-} from '@shared/scan-consent';
+  type WizardSession,
+} from '@lib/wizard-session';
 import type { ApiUser } from '@shared/api';
 import { v4 as uuidv4 } from 'uuid';
 import { IS_PRODUCTION_BUILD, RUN_SURFACE, TASK_ID, TASK_RUN_ID } from '@env';

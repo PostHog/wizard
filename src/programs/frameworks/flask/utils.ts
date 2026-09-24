@@ -1,4 +1,5 @@
 import { boundedGlob, readProjectFile } from '@utils/bounded-fs';
+import { getUI } from '@ui';
 import type { WizardRunOptions } from '@utils/types';
 import { createVersionBucket } from '@utils/semver';
 import * as path from 'node:path';
@@ -236,25 +237,30 @@ export async function getFlaskProjectType(
 
   // Check for Flask-RESTX first (most specific - includes Swagger)
   if (await hasFlaskRESTX({ installDir })) {
+    getUI().setDetectedFramework('Flask-RESTX');
     return FlaskProjectType.RESTX;
   }
 
   // Check for flask-smorest (OpenAPI-first)
   if (await hasFlaskSmorest({ installDir })) {
+    getUI().setDetectedFramework('flask-smorest');
     return FlaskProjectType.SMOREST;
   }
 
   // Check for Flask-RESTful
   if (await hasFlaskRESTful({ installDir })) {
+    getUI().setDetectedFramework('Flask-RESTful');
     return FlaskProjectType.RESTFUL;
   }
 
   // Check for Blueprints (large app structure)
   if (await hasBlueprints({ installDir })) {
+    getUI().setDetectedFramework('Flask with Blueprints');
     return FlaskProjectType.BLUEPRINT;
   }
 
   // Default to standard Flask
+  getUI().setDetectedFramework('Flask');
   return FlaskProjectType.STANDARD;
 }
 

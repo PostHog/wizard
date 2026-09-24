@@ -1,14 +1,5 @@
 import { LoggingUI } from './logging-ui';
-
-interface HeadlessRunStore {
-  syncTodos(
-    todos: Array<{ content: string; status: string; activeForm?: string }>,
-  ): void;
-  setHandoffText(text: string): void;
-  setFrameworkContext(key: string, value: unknown): void;
-  setEventPlan(events: Array<{ name: string; description: string }>): void;
-  session: { frameworkContext: Record<string, unknown> };
-}
+import type { WizardStore } from './tui/store';
 
 /**
  * `LoggingUI` plus it feeds run state into a `WizardStore` so the background
@@ -19,7 +10,7 @@ interface HeadlessRunStore {
  * ledger arrives through `setFrameworkContext`, the seam every UI implements.
  */
 export class HeadlessUI extends LoggingUI {
-  constructor(private readonly store: HeadlessRunStore) {
+  constructor(private readonly store: WizardStore) {
     super();
   }
 
@@ -36,10 +27,6 @@ export class HeadlessUI extends LoggingUI {
 
   setFrameworkContext(key: string, value: unknown): void {
     this.store.setFrameworkContext(key, value);
-  }
-
-  setEventPlan(events: Array<{ name: string; description: string }>): void {
-    this.store.setEventPlan(events);
   }
 
   getFrameworkContext(key: string): unknown {
