@@ -87,20 +87,6 @@ vi.mock('@shared/claude-settings', () => ({
   checkAllSettingsConflicts: vi.fn().mockReturnValue([]),
   restoreClaudeSettings: vi.fn(),
 }));
-// Fixture ids such as `metrics` are health-check programs, so preflight probes readiness.
-vi.mock('@shared/health-checks/readiness', async (original) => {
-  const actual = await original<
-    typeof import('@shared/health-checks/readiness')
-  >();
-  return {
-    ...actual,
-    evaluateWizardReadiness: vi.fn().mockResolvedValue({
-      decision: actual.WizardReadiness.Yes,
-      health: {},
-      reasons: [],
-    }),
-  };
-});
 vi.mock('@utils/wizard-abort', async (original) => {
   const actual = await original<typeof import('@utils/wizard-abort')>();
   return {
@@ -604,7 +590,7 @@ describe('host wiring over runProgram', () => {
     organization: { id: 'org-1', is_ai_data_processing_approved: true },
   } as ApiUser;
 
-  it('authenticates through the provider after preflight, then awaits AI opt-in and the post-auth gate', async () => {
+  it('authenticates through the provider after the settings gate, then awaits AI opt-in and the post-auth gate', async () => {
     const order: string[] = [];
     const ui = getUI();
     const record =

@@ -26,7 +26,3 @@ export type {
   SettledProgramRun,
 } from './program-store';
 export type { ProgramSwitchboardCtx } from './binding';
-export type {
-  ProgramPreflightDecision,
-  ProgramPreflightHost,
-} from './preflight';

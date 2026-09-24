@@ -26,14 +26,6 @@ export async function runProgram(
   const entry = await import('./run-program');
   return entry.runProgram(programId, snapshot, options);
 }
-/** Keep the readiness and settings checks out of CLI startup until a host runs them. */
-export async function preflight(
-  programId: string,
-  host: import('./preflight').ProgramPreflightHost,
-): Promise<import('./preflight').ProgramPreflightDecision> {
-  const entry = await import('./preflight');
-  return entry.preflight(programId, host);
-}
 export {
   Program,
   PROGRAM_REGISTRY,
