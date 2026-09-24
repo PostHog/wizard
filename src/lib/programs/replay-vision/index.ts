@@ -15,6 +15,7 @@ import type { WizardSession } from '@lib/wizard-session';
 import { analytics } from '@utils/analytics';
 import { wizardAbort } from '@utils/wizard-abort';
 import { ErrorCodes } from '@shared/errors';
+import { abortNoFrameworkDetected } from '@lib/programs/shared/abort-no-framework';
 
 const REPLAY_VISION_REPORT_FILE = 'posthog-replay-vision-report.md';
 
@@ -74,18 +75,13 @@ async function abortUnsupportedPlatform(
   });
 }
 
-async function abortNoFrameworkDetected(): Promise<void> {
-  await wizardAbort({
-    code: ErrorCodes.DetectNoFramework,
-    message:
-      "Replay vision couldn't detect a framework here, so it has nothing " +
-      'to scope its scanners to.\n\n' +
-      "Make sure you're running this from your app's root directory " +
-      '(where its package.json or framework-equivalent lives), not an ' +
-      'empty or unrelated folder. See what replay supports at:\n' +
-      '  https://posthog.com/docs/session-replay',
-  });
-}
+const NO_FRAMEWORK_MESSAGE =
+  "Replay vision couldn't detect a framework here, so it has nothing " +
+  'to scope its scanners to.\n\n' +
+  "Make sure you're running this from your app's root directory " +
+  '(where its package.json or framework-equivalent lives), not an ' +
+  'empty or unrelated folder. See what replay supports at:\n' +
+  '  https://posthog.com/docs/session-replay';
 
 /**
  * `[ABORT]` reasons the replay-vision skill emits when the run can't proceed.
@@ -123,7 +119,7 @@ const DETECT_STEP: ProgramStep = {
     const integration = await detectFramework(ctx.session.installDir);
     if (!integration) {
       // Stop before skill preflight, matching the CI path below.
-      await abortNoFrameworkDetected();
+      await abortNoFrameworkDetected(NO_FRAMEWORK_MESSAGE);
       return;
     }
     if (!REPLAY_VISION_SUPPORTED.has(integration)) {
@@ -191,10 +187,7 @@ export const replayVisionConfig: ProgramConfig = {
 
     const integration = await detectFramework(session.installDir);
     if (!integration) {
-      await wizardAbort({
-        code: ErrorCodes.DetectNoFramework,
-        message: 'Could not auto-detect your framework for this project.',
-      });
+      await abortNoFrameworkDetected(NO_FRAMEWORK_MESSAGE);
       return;
     }
     if (!REPLAY_VISION_SUPPORTED.has(integration)) {

@@ -7,6 +7,11 @@ import { setUI } from '@ui/index';
 import { buildSession, OutroKind } from '@lib/wizard-session';
 import { ErrorCodes } from '@shared/errors';
 import { Integration } from '@shared/constants';
+import { getProgramConfig } from '@lib/programs/program-registry';
+
+vi.mock('@lib/detection/project-scope', () => ({
+  scopeInstallDirToProject: vi.fn().mockResolvedValue(undefined),
+}));
 
 vi.mock('@utils/analytics', () => ({
   analytics: {
@@ -55,30 +60,41 @@ describe.each([
       fs.rmSync(installDir, { recursive: true, force: true });
     });
 
-    it('shows the no-framework error before completing detection in an empty project', async () => {
-      const finished = expect(store.runReadyHooks()).rejects.toBe(exit);
-      try {
-        await vi.waitFor(() => expect(store.session.outroData).not.toBeNull());
+    it.each(['interactive', 'ci'] as const)(
+      'shows the no-framework error for an empty project in %s mode',
+      async (mode) => {
+        store.session = buildSession({ installDir, ci: mode === 'ci' });
+        const detection =
+          mode === 'ci'
+            ? getProgramConfig(program).ciPreRun?.(store.session)
+            : store.runReadyHooks();
+        if (!detection) throw new Error('expected a detection hook');
+        const finished = expect(detection).rejects.toBe(exit);
+        try {
+          await vi.waitFor(() =>
+            expect(store.session.outroData).not.toBeNull(),
+          );
 
-        expect(store.session.outroData).toEqual(
-          expect.objectContaining({
-            kind: OutroKind.Error,
-            errorCode: ErrorCodes.DetectNoFramework,
-            message: expect.stringContaining(message),
-          }),
-        );
-        expect(store.session.detectionComplete).toBe(false);
-        expect(store.router.resolve(store.session)).toBe(ScreenId.Outro);
-        expect(store.session.outroData?.message).toContain(
-          "app's root directory",
-        );
-        expect(process.exit).not.toHaveBeenCalled();
-      } finally {
-        store.setOutroDismissed();
-        await finished;
-      }
-      expect(process.exit).toHaveBeenCalledWith(1);
-    });
+          expect(store.session.outroData).toEqual(
+            expect.objectContaining({
+              kind: OutroKind.Error,
+              errorCode: ErrorCodes.DetectNoFramework,
+              message: expect.stringContaining(message),
+            }),
+          );
+          expect(store.session.detectionComplete).toBe(false);
+          expect(store.router.resolve(store.session)).toBe(ScreenId.Outro);
+          expect(store.session.outroData?.message).toContain(
+            "app's root directory",
+          );
+          expect(process.exit).not.toHaveBeenCalled();
+        } finally {
+          store.setOutroDismissed();
+          await finished;
+        }
+        expect(process.exit).toHaveBeenCalledWith(1);
+      },
+    );
 
     it('completes detection and selects the skill for a recognized project', async () => {
       fs.writeFileSync(
