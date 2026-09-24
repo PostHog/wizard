@@ -22,11 +22,9 @@ import { preinstallPostHogCliOnce } from '@programs/shared/posthog-cli-preinstal
 import { analytics } from '@utils/analytics';
 import { wizardAbort } from '@utils/wizard-abort';
 import { ErrorCodes } from '@shared/errors';
-import {
-  ERROR_TRACKING_DOCS_URL,
-  ERROR_TRACKING_REPORT_FILE,
-  resolveErrorTrackingRunDefinition,
-} from '@programs/resolve-run-definition';
+
+const ERROR_TRACKING_REPORT_FILE = 'posthog-error-tracking-report.md';
+const ERROR_TRACKING_DOCS_URL = 'https://posthog.com/docs/error-tracking';
 
 /**
  * Frameworks whose symbol upload shells out to a machine-global `posthog-cli`
@@ -119,6 +117,46 @@ const ERROR_TRACKING_STEPS: ProgramStep[] = AGENT_SKILL_STEPS.flatMap(
 );
 
 /**
+ * Run instructions for a linear override (`--sequence=linear`), the only
+ * sequence that reads `customPrompt`. The orchestrator runs the flow's own
+ * prompts, so these spell out the skill-menu lookups its tasks perform.
+ */
+const ERROR_TRACKING_PROMPT = `Set up PostHog error tracking end-to-end:
+
+1. If PostHog is not integrated yet, install and initialize the SDK first —
+   do not abort. Pick the matching variant from the skill menu's
+   "integration-v2/install" and "integration-v2/init" categories.
+
+2. Wire up exception capture: install the "error-tracking" skill variant that
+   matches this project's platform (\`load_skill_menu\` with
+   \`category: "error-tracking"\`) and follow it. Set capture up in one place —
+   the SDK's own mechanism, never manual capture calls sprinkled across files.
+
+3. When the platform ships minified bundles or stripped binaries (browser JS,
+   React Native, iOS, Android, Flutter, Go, Rust), wire up source-map /
+   debug-symbol upload too: install the matching
+   "error-tracking-upload-source-maps" skill variant and follow it, including
+   credentials and CI. Skip this step on platforms with readable stack traces
+   (plain Python, Ruby, PHP, Elixir, JVM servers).
+
+The final report is written to ./${ERROR_TRACKING_REPORT_FILE}.`;
+
+const ERROR_TRACKING_RUN: ProgramRun = {
+  integrationLabel: 'error-tracking',
+  customPrompt: () => ERROR_TRACKING_PROMPT,
+  successMessage: `Error tracking configured! View the report at ./${ERROR_TRACKING_REPORT_FILE}`,
+  reportFile: ERROR_TRACKING_REPORT_FILE,
+  docsUrl: ERROR_TRACKING_DOCS_URL,
+  spinnerMessage: 'Setting up error tracking...',
+  estimatedDurationMinutes: 8,
+  // The flow can park on wizard_ask while the user does slow work (mint a
+  // personal API key in the browser, run a build and trigger the test
+  // error). The orchestrator caps per-task asks itself; this covers the
+  // linear fallback.
+  askTimeoutMs: 30 * 60 * 1000,
+};
+
+/**
  * `wizard error-tracking` — flat command on the orchestrator sequence.
  *
  * Makes uncaught errors reach PostHog with readable stack traces. The
@@ -159,7 +197,7 @@ export const errorTrackingConfig: ProgramConfig = {
     maybePreinstallPostHogCli(session.integration, (message) =>
       host.warn(message),
     );
-    return Promise.resolve(resolveErrorTrackingRunDefinition());
+    return Promise.resolve(ERROR_TRACKING_RUN);
   },
 
   ciPreRun: async (

@@ -1,4 +1,4 @@
-/** Features discovered by scanning project dependencies. */
+/** Features discovered by the feature-discovery subagent */
 export enum DiscoveredFeature {
   Stripe = 'stripe',
   LLM = 'llm',
@@ -13,17 +13,19 @@ export enum ScanConsent {
 
 type ScanConsentState = { scanConsent: string };
 
-/** An undecided or declined scan never reports local detection results. */
+/** One place to ask, so a new consent state does not need three edits. */
 export function mayReportScanResults(session: ScanConsentState): boolean {
   return session.scanConsent === 'granted';
 }
 
-export function reportableDiscoveredFeatures<TFeature>(
-  session: ScanConsentState & { discoveredFeatures: TFeature[] },
-): TFeature[] | undefined {
+/** Lives here so analytics infrastructure never learns what consent means. */
+export function reportableDiscoveredFeatures(
+  session: ScanConsentState & { discoveredFeatures: DiscoveredFeature[] },
+): DiscoveredFeature[] | undefined {
   return mayReportScanResults(session) ? session.discoveredFeatures : undefined;
 }
 
+/** Also a scan result, so it travels under the same consent as the rest. */
 export function reportablePosthogSdkDetected(
   session: ScanConsentState & { posthogSdkDetected: boolean },
 ): boolean | undefined {

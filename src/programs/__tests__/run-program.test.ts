@@ -3,26 +3,14 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { EVENT_PLAN_FILE, Harness, Sequence } from '@shared/constants';
-import { AUDIT_CHECKS_FILE } from '@shared/audit-ledger';
+import { AUDIT_CHECKS_FILE, type AuditCheck } from '@shared/audit-ledger';
 import { HostResolution } from '@shared/host-resolution';
 import type { ApiUser } from '@shared/api';
-import type { OutroData, SeedTaskEntry } from '@agent/types';
-import type { FrameworkConfig } from '../framework-config';
+import type { RunResult } from '@agent/types';
 import type { DetectedSource } from '../warehouse-sources/types';
 import type { ResolvedProgramCredentials } from '../credentials';
-import type { ProgramProgress } from '../program-store';
-import type {
-  ProgramInput,
-  ProgramOptions,
-  ProgramWorkflowDecision,
-  ProgramWorkflowRequest,
-} from '../run-program';
+import type { ProgramInput, ProgramOptions } from '../run-program';
 import { ErrorCodes } from '@shared/errors';
-import {
-  getRuntimeProgramConfig,
-  type RuntimeProgramConfig,
-} from '../runtime-registry';
-import * as auditWatcher from '../audit/watch-ledger';
 import { ProgramEventPlanWatcher } from '../posthog-integration/watch-event-plan';
 import { runProgram } from '@programs';
 import { runProgram as runProgramDirect } from '../run-program';
@@ -50,9 +38,6 @@ vi.mock('../binding-telemetry', async (importOriginal) => {
     captureSwitchboardDecision: vi.fn(actual.captureSwitchboardDecision),
   };
 });
-vi.mock('../runtime-registry', () => ({
-  getRuntimeProgramConfig: vi.fn(),
-}));
 vi.mock('@utils/analytics', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@utils/analytics')>()),
   analytics: {
@@ -103,27 +88,6 @@ const credentials: ResolvedProgramCredentials = {
   } as ApiUser,
 };
 
-const binding = {
-  sequence: Sequence.linear,
-  harness: Harness.anthropic,
-  model: 'claude-test',
-};
-
-/** The programs these tests call; self-driving composes one integration child. */
-const PROGRAMS: Record<string, RuntimeProgramConfig> = {
-  metrics: { id: 'metrics', strategy: 'static', run },
-  gated: { id: 'gated', strategy: 'static', run, postAuthGates: ['detect'] },
-  slack: { id: 'slack', strategy: 'no-agent' },
-  'posthog-integration': { id: 'posthog-integration', strategy: 'integration' },
-  'self-driving': {
-    id: 'self-driving',
-    strategy: 'self-driving',
-    composedRuns: [
-      { stepId: 'integrate-run', runProgramId: 'posthog-integration' },
-    ],
-  },
-};
-
 /** A token close enough to expiry that runProgram refreshes it. */
 const aging = () => ({
   ...credentials.posthog,
@@ -144,45 +108,12 @@ const login = (apiUser: ApiUser | null = credentials.apiUser) => ({
   resolve: () => Promise.resolve({ ...credentials, apiUser }),
 });
 
-const child = (): ProgramInput => ({
-  installDir: '/project/app',
-  run: { ...run, integrationLabel: 'nextjs' },
-});
-
-/** A connector that hands over `input` for the child run and confirms every gate. */
-const connector = (input: ProgramInput | null) => ({
-  step: vi.fn(
-    (request: ProgramWorkflowRequest): Promise<ProgramWorkflowDecision> =>
-      Promise.resolve(
-        request.kind === 'child-run'
-          ? { kind: 'child-run', input }
-          : { kind: 'confirm', confirmed: true },
-      ),
-  ),
-});
-
-/** A framework whose prompt reads the framework context. */
-const integrationFrameworkConfig = (): FrameworkConfig =>
-  ({
-    metadata: { name: 'Next.js', integration: 'nextjs', docsUrl: 'docs' },
-    detection: { usesPackageJson: false, getVersion: () => '15' },
-    analytics: { getTags: () => ({}) },
-    prompts: {
-      projectTypeDetection: 'app',
-      getAdditionalContextLines: (context: Record<string, unknown>) =>
-        context.router ? [`Router: ${String(context.router)}`] : [],
-    },
-    environment: { uploadToHosting: false, getEnvVars: () => ({}) },
-    ui: { successMessage: 'Done', getOutroChanges: () => [] },
-  } as unknown as FrameworkConfig);
-
-/** Integration host effects without a live notebook getter. */
-const integrationEffects = () => ({
-  readPackageJson: vi.fn().mockResolvedValue(null),
-  warn: vi.fn(),
-  uploadEnvironmentVariables: vi.fn().mockResolvedValue([]),
-  openDashboardDeepLink: vi.fn(),
-});
+/** A program with one post-auth gate, like the source-maps project picker. */
+const gated: ProgramInput = {
+  installDir: '/project',
+  run,
+  program: { postAuthGates: ['detect'] },
+};
 
 const warehouseSource = (kind: string): DetectedSource => ({
   kind,
@@ -206,7 +137,6 @@ const markSkill = (dir: string) => {
 describe('runProgram', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(getRuntimeProgramConfig).mockImplementation((id) => PROGRAMS[id]);
     vi.mocked(runAgent).mockResolvedValue({
       outcome: RunOutcome.Success,
       snapshot,
@@ -219,18 +149,39 @@ describe('runProgram', () => {
     }
   });
 
-  it('calls a static program with explicit inputs and returns its final results', async () => {
-    const outcome = await runProgram('metrics', {
-      installDir: '/project',
-      runId: 'run-1',
-      credentials,
-    });
+  it("runs the caller's run definition and program settings, and returns its final results", async () => {
+    const excludedTaskTypes = () => ['logs'];
+    const { signal } = new AbortController();
+    const outcome = await runProgram(
+      'metrics',
+      {
+        installDir: '/project',
+        runId: 'run-1',
+        run,
+        program: {
+          agentFlow: 'metrics-flow',
+          allowedTools: ['Agent'],
+          disallowedTools: ['wizard_ask'],
+          excludedTaskTypes,
+        },
+        credentials,
+      },
+      { signal },
+    );
 
-    const [config, input] = vi.mocked(runAgent).mock.calls[0];
-    expect(config.run).toBe(run);
+    const [config, input, agentOptions] = vi.mocked(runAgent).mock.calls[0];
+    expect(config).toMatchObject({
+      programId: 'metrics',
+      run,
+      agentFlow: 'metrics-flow',
+      allowedTools: ['Agent'],
+      disallowedTools: ['wizard_ask'],
+    });
+    expect(config.excludedTaskTypes).toBe(excludedTaskTypes);
     expect(input.installDir).toBe('/project');
     expect(input.credentials).toBe(credentials.posthog);
     expect(input.inferenceAuth).toBe(credentials.inferenceAuth);
+    expect(agentOptions?.signal).toBe(signal);
     expect(outcome).toMatchObject({
       programId: 'metrics',
       outcome: RunOutcome.Success,
@@ -243,12 +194,12 @@ describe('runProgram', () => {
     });
   });
 
-  it('every run carries the standard trace tags, which input metadata overrides but cannot reroute', async () => {
+  it('every run carries the standard trace tags and its route', async () => {
     await runProgram('metrics', {
       installDir: '/project',
+      run,
       credentials,
-      binding,
-      wizardMetadata: { call_type: 'detection', SEQUENCE: 'not-the-route' },
+      overrides: { harness: Harness.anthropic, sequence: Sequence.linear },
     });
 
     expect(vi.mocked(runAgent).mock.calls[0][0].wizardMetadata).toEqual({
@@ -256,92 +207,68 @@ describe('runProgram', () => {
       integration: 'metrics',
       run_id: 'analytics-run-id',
       build: 'test',
-      call_type: 'detection',
+      call_type: 'agent',
       SEQUENCE: Sequence.linear,
       HARNESS: Harness.anthropic,
     });
   });
 
   const closed = () => Promise.reject(new Error('host closed'));
-  it.each<[string, string, () => ProgramOptions, RunOutcome, string, number]>([
+  it.each<[string, () => ProgramOptions, RunOutcome, string]>([
     [
-      'an unknown program',
-      'missing-program',
-      () => ({ credentials: login() }),
+      'no credentials',
+      () => ({}),
       RunOutcome.Failed,
-      'Unknown program: missing-program',
-      0,
+      'Credentials are required to run metrics.',
     ],
     [
       'no org AI approval and no host approval capability',
-      'metrics',
       () => ({ credentials: login(null) }),
       RunOutcome.Failed,
       'AI processing approval is required before this program can run.',
-      0,
     ],
     [
       'a declined host AI approval',
-      'metrics',
       () => ({
         credentials: login(null),
         awaitAiApproval: () => Promise.resolve(false),
       }),
       RunOutcome.Aborted,
       'AI processing approval declined.',
-      0,
-    ],
-    [
-      'a connector answer of the wrong kind',
-      'gated',
-      () => ({
-        credentials: login(),
-        workflow: {
-          step: () => Promise.resolve({ kind: 'confirm', confirmed: true }),
-        },
-      }),
-      RunOutcome.Failed,
-      'Workflow connector answered confirm to a post-auth request',
-      0,
     ],
     [
       'a rejecting credential provider',
-      'metrics',
       () => ({ credentials: { resolve: closed } }),
       RunOutcome.Failed,
       'host closed',
-      0,
-    ],
-    [
-      'a rejecting composition gate',
-      'self-driving',
-      () => ({
-        credentials: login(),
-        workflow: {
-          step: vi
-            .fn()
-            .mockResolvedValueOnce({ kind: 'child-run', input: child() })
-            .mockImplementation(closed),
-        },
-      }),
-      RunOutcome.Failed,
-      'host closed',
-      1,
     ],
   ])(
     '%s is a decided result before the agent it guards',
-    async (_case, programId, options, outcome, message, agentRuns) => {
+    async (_case, options, outcome, message) => {
       const result = await runProgram(
-        programId,
-        { installDir: '/project' },
+        'metrics',
+        { installDir: '/project', run },
         options(),
       );
 
       expect(result).toMatchObject({ outcome, failure: { message } });
-      expect(result.settledRuns).toHaveLength(agentRuns);
-      expect(runAgent).toHaveBeenCalledTimes(agentRuns);
+      expect(result.settledRuns).toHaveLength(0);
+      expect(runAgent).not.toHaveBeenCalled();
     },
   );
+
+  it('a program that needs no AI runs without an approval', async () => {
+    const awaitAiApproval = vi.fn();
+
+    const result = await runProgram(
+      'metrics',
+      { installDir: '/project', run, program: { requiresAi: false } },
+      { credentials: login(null), awaitAiApproval },
+    );
+
+    expect(result.outcome).toBe(RunOutcome.Success);
+    expect(awaitAiApproval).not.toHaveBeenCalled();
+  });
 
   it.each([
     'credential resolution',
@@ -364,14 +291,13 @@ describe('runProgram', () => {
       const options: ProgramOptions = {
         'credential resolution': { credentials: { resolve: park } },
         'AI approval': { credentials: login(null), awaitAiApproval: park },
-        'a post-auth gate': { credentials: login(), workflow: { step: park } },
+        'a post-auth gate': { credentials: login(), awaitPostAuthGates: park },
       }[gate];
 
-      const pending = runProgram(
-        'gated',
-        { installDir: '/project' },
-        { ...options, signal: controller.signal },
-      );
+      const pending = runProgram('gated', gated, {
+        ...options,
+        signal: controller.signal,
+      });
       await vi.waitFor(() => expect(park).toHaveBeenCalledOnce());
       controller.abort();
 
@@ -393,7 +319,7 @@ describe('runProgram', () => {
 
     const result = await runProgram(
       'metrics',
-      { installDir: '/project' },
+      { installDir: '/project', run },
       { credentials: { resolve }, signal: controller.signal },
     );
 
@@ -405,81 +331,10 @@ describe('runProgram', () => {
     expect(runAgent).not.toHaveBeenCalled();
   });
 
-  it('forwards the host signal to the agent', async () => {
-    const { signal } = new AbortController();
-
-    await runProgram(
-      'metrics',
-      { installDir: '/project', credentials },
-      { signal },
-    );
-
-    expect(vi.mocked(runAgent).mock.calls[0][2]?.signal).toBe(signal);
-  });
-
-  it('hands a no-agent program to the host workflow, and fails without one', async () => {
-    const noAgentWorkflow = vi.fn().mockResolvedValue({
-      outcome: RunOutcome.Success,
-      data: { connected: true },
-    });
-
-    expect(await runProgram('slack', { installDir: '/project' })).toMatchObject(
-      {
-        outcome: RunOutcome.Failed,
-        failure: { code: ErrorCodes.CliInteractiveRequired },
-      },
-    );
-    expect(
-      await runProgram(
-        'slack',
-        { installDir: '/project' },
-        { noAgentWorkflow },
-      ),
-    ).toMatchObject({
-      outcome: RunOutcome.Success,
-      programData: { connected: true },
-    });
-    expect(noAgentWorkflow).toHaveBeenCalledWith(
-      expect.objectContaining({ programId: 'slack', installDir: '/project' }),
-    );
-    expect(analytics.wizardCapture).not.toHaveBeenCalled();
-    expect(runAgent).not.toHaveBeenCalled();
-  });
-
-  it('aborts a no-agent workflow when the host cancels during the callback', async () => {
-    const controller = new AbortController();
-    // The workflow still answers after the abort; the abort wins.
-    const noAgentWorkflow = vi.fn(
-      () =>
-        new Promise<{ outcome: RunOutcome.Success }>((resolve) => {
-          controller.signal.addEventListener('abort', () =>
-            resolve({ outcome: RunOutcome.Success }),
-          );
-        }),
-    );
-
-    const pending = runProgram(
-      'slack',
-      { installDir: '/project' },
-      { noAgentWorkflow, signal: controller.signal },
-    );
-    await vi.waitFor(() =>
-      expect(noAgentWorkflow).toHaveBeenCalledWith(
-        expect.objectContaining({ signal: controller.signal }),
-      ),
-    );
-    controller.abort();
-
-    expect(await pending).toMatchObject({
-      outcome: RunOutcome.Aborted,
-      failure: { code: ErrorCodes.AgentAbort },
-    });
-    expect(runAgent).not.toHaveBeenCalled();
-  });
-
   it('overrides reach the binding and the decision is captured once', async () => {
     const result = await runProgram('metrics', {
       installDir: '/project',
+      run,
       credentials,
       overrides: { harness: Harness.anthropic, sequence: Sequence.linear },
     });
@@ -499,20 +354,6 @@ describe('runProgram', () => {
     );
     expect(analytics.setTag).toHaveBeenCalledWith('harness', Harness.anthropic);
     expect(result.data.binding).toEqual(resolved);
-  });
-
-  it('uses a host-resolved binding without capturing the decision again', async () => {
-    const result = await runProgram('metrics', {
-      installDir: '/project',
-      credentials,
-      binding,
-      overrides: { harness: Harness.pi },
-    });
-
-    expect(vi.mocked(runAgent).mock.calls[0][0].binding).toEqual(binding);
-    expect(captureSwitchboardDecision).not.toHaveBeenCalled();
-    expect(analytics.setTag).not.toHaveBeenCalled();
-    expect(result.data.binding).toEqual(binding);
   });
 
   it('runs in order: agent started, credentials, approval, post-auth, flags, refresh, route, agent', async () => {
@@ -538,11 +379,12 @@ describe('runProgram', () => {
       flags: { 'wizard-test-flag': 'on' },
       payloads: { 'wizard-test-flag': { variant: 'b' } },
     };
+    const awaitPostAuthGates = answer('post-auth', undefined);
 
     const result = await runProgram(
       'gated',
       {
-        installDir: '/project',
+        ...gated,
         run: { ...run, integrationLabel: 'custom-label', skillId: 'skill-x' },
       },
       {
@@ -554,7 +396,7 @@ describe('runProgram', () => {
           }),
         },
         awaitAiApproval: answer('approval', true),
-        workflow: { step: answer('post-auth', { kind: 'post-auth' as const }) },
+        awaitPostAuthGates,
         featureFlags: answer('flags', flags),
       },
     );
@@ -575,6 +417,11 @@ describe('runProgram', () => {
       program_id: 'gated',
       skill_id: 'skill-x',
     });
+    expect(awaitPostAuthGates).toHaveBeenCalledWith({
+      programId: 'gated',
+      gates: ['detect'],
+      signal: expect.objectContaining({ aborted: false }),
+    });
     expect(vi.mocked(runAgent).mock.calls[0][0]).toMatchObject({
       wizardFlags: flags.flags,
       wizardFlagPayloads: flags.payloads,
@@ -588,6 +435,7 @@ describe('runProgram', () => {
       'metrics',
       {
         installDir: '/project',
+        run,
         credentials,
         wizardFlags: { 'wizard-test-flag': 'input' },
       },
@@ -601,263 +449,28 @@ describe('runProgram', () => {
   });
 
   it.each([
-    [
-      'handoff',
-      { githubConnected: true },
-      'Self-driving handoff was not confirmed.',
-    ],
-    [
-      'GitHub connection',
-      { handoffConfirmed: true },
-      'GitHub connection was not confirmed.',
-    ],
-  ])(
-    'aborts before self-driving starts when the prepared %s is not confirmed',
-    async (_gate, gates, message) => {
-      const result = await runProgram('self-driving', {
-        installDir: '/project',
-        credentials,
-        composition: { integration: child(), ...gates },
-      });
-
-      expect(result).toMatchObject({
-        outcome: RunOutcome.Aborted,
-        failure: { message },
-      });
-      expect(
-        vi.mocked(runAgent).mock.calls.map(([config]) => config.programId),
-      ).toEqual(['posthog-integration']);
-    },
-  );
-
-  it('the outro reads the notebook URL emitted during the run', async () => {
-    let outro: OutroData | undefined;
-    vi.mocked(runAgent).mockImplementation((config, input, options) => {
-      options?.onProgress?.({
-        kind: 'url',
-        which: 'notebook',
-        url: 'https://us.posthog.com/notebook/7',
-      });
-      outro = config.hooks?.buildOutroData?.(input.credentials);
-      return Promise.resolve({ outcome: RunOutcome.Success, snapshot });
-    });
-
-    await runProgram(
-      'posthog-integration',
-      {
-        installDir: '/project',
-        credentials,
-        frameworkConfig: integrationFrameworkConfig(),
-        flags: { ci: true },
-      },
-      { integrationEffects: integrationEffects() },
-    );
-
-    expect(outro?.notebookUrl).toBe('https://us.posthog.com/notebook/7');
-  });
-
-  it.each([
     ['the lazy entry', runProgram],
     ['run-program', runProgramDirect],
   ])(
-    'a host mutation after the call does not reach run resolution, through %s',
+    'a host mutation after the call does not reach the run, through %s',
     async (_entry, callProgram) => {
-      let prompt: string | undefined;
-      let seeded: SeedTaskEntry[] | undefined;
-      vi.mocked(runAgent).mockImplementation((config) => {
-        prompt = config.run.customPrompt?.(credentials.posthog);
-        seeded = config.seedTasks?.();
-        return Promise.resolve({ outcome: RunOutcome.Success, snapshot });
-      });
-      const frameworkContext = { router: 'app' };
-      const warehouseSources = [warehouseSource('Stripe')];
       const flags = { ci: false };
       const host: NonNullable<ProgramInput['host']> = { region: 'us' };
 
       const pending = callProgram(
-        'posthog-integration',
-        {
-          installDir: '/project',
-          frameworkConfig: integrationFrameworkConfig(),
-          frameworkContext,
-          warehouseSources,
-          flags,
-          host,
-        },
-        { credentials: login(), integrationEffects: integrationEffects() },
+        'metrics',
+        { installDir: '/project', run, flags, host },
+        { credentials: login() },
       );
-      frameworkContext.router = 'pages';
-      warehouseSources.push(warehouseSource('Postgres'));
       flags.ci = true;
       host.region = 'eu';
       await pending;
 
-      expect(prompt).toContain('Router: app');
-      expect(seeded).toMatchObject([
-        { type: 'warehouse', inputs: { sources: [{ kind: 'Stripe' }] } },
-      ]);
       const [, runInput] = vi.mocked(runAgent).mock.calls[0];
       expect(runInput.flags.ci).toBe(false);
       expect(runInput.host.region).toBe('us');
     },
   );
-
-  it('copies a composed child’s input when the connector hands it over', async () => {
-    const childContext = { router: 'app' };
-    const prompts: string[] = [];
-    vi.mocked(runAgent).mockImplementation((config) => {
-      // The host keeps writing the object it handed over.
-      childContext.router = 'pages';
-      if (config.programId === 'posthog-integration') {
-        prompts.push(config.run.customPrompt?.(credentials.posthog) ?? '');
-      }
-      return Promise.resolve({ outcome: RunOutcome.Success, snapshot });
-    });
-    const workflow = connector({
-      installDir: '/project/app',
-      frameworkConfig: integrationFrameworkConfig(),
-      frameworkContext: childContext,
-    });
-
-    await runProgram(
-      'self-driving',
-      { installDir: '/project', credentials },
-      { workflow, integrationEffects: integrationEffects() },
-    );
-
-    expect(prompts).toEqual([expect.stringContaining('Router: app')]);
-  });
-
-  it('composes an integration run before self-driving with one attributed ledger', async () => {
-    vi.mocked(runAgent).mockImplementation((config, _input, options) => {
-      options?.onProgress?.({ kind: 'status', message: config.programId });
-      return Promise.resolve({
-        outcome: RunOutcome.Success,
-        skillId: config.programId,
-        snapshot,
-      });
-    });
-    const featureFlags = vi
-      .fn()
-      .mockResolvedValue({ flags: { 'wizard-test-flag': 'on' }, payloads: {} });
-    const observed: ProgramProgress[] = [];
-
-    const result = await runProgram(
-      'self-driving',
-      {
-        installDir: '/project',
-        runId: 'parent',
-        credentials,
-        overrides: { harness: Harness.anthropic },
-        composition: {
-          integration: child(),
-          handoffConfirmed: true,
-          githubConnected: true,
-        },
-      },
-      { featureFlags, onProgress: (event) => observed.push(event) },
-    );
-
-    const shared = {
-      binding: { harness: Harness.anthropic },
-      wizardFlags: { 'wizard-test-flag': 'on' },
-    };
-    expect(vi.mocked(runAgent).mock.calls).toMatchObject([
-      [
-        { ...shared, programId: 'posthog-integration', composed: true },
-        { installDir: '/project/app' },
-        expect.anything(),
-      ],
-      [
-        { ...shared, programId: 'self-driving', composed: false },
-        { installDir: '/project' },
-        expect.anything(),
-      ],
-    ]);
-    expect(
-      observed.filter((progress) => progress.kind === 'run'),
-    ).toMatchObject([
-      { kind: 'run', runId: 'parent:integrate-run', stepId: 'integrate-run' },
-      { kind: 'run', runId: 'parent' },
-    ]);
-    expect(
-      result.settledRuns.map(({ runId, result }) => [runId, result.skillId]),
-    ).toEqual([
-      ['parent:integrate-run', 'posthog-integration'],
-      ['parent', 'self-driving'],
-    ]);
-    expect(result.data.composition.completedRuns).toContain('integrate-run');
-  });
-
-  it('asks a connector for the child and each confirmation in turn', async () => {
-    const workflow = connector(child());
-
-    const result = await runProgram(
-      'self-driving',
-      { installDir: '/project', credentials },
-      { workflow },
-    );
-
-    expect(result.outcome).toBe(RunOutcome.Success);
-    const base = { programId: 'self-driving', installDir: '/project' };
-    expect(workflow.step.mock.calls.map(([request]) => request)).toEqual([
-      {
-        ...base,
-        kind: 'child-run',
-        stepId: 'integrate-run',
-        runProgramId: 'posthog-integration',
-      },
-      { ...base, kind: 'confirm', id: 'self-driving-handoff' },
-      { ...base, kind: 'confirm', id: 'self-driving-github' },
-    ]);
-    expect(runAgent).toHaveBeenCalledTimes(2);
-  });
-
-  it('skips the child and its handoff when the host ran the child itself', async () => {
-    const { step } = connector(null);
-
-    const result = await runProgram(
-      'self-driving',
-      { installDir: '/project', credentials },
-      { workflow: { step } },
-    );
-
-    expect(result.outcome).toBe(RunOutcome.Success);
-    expect(step.mock.calls.map(([request]) => request.kind)).toEqual([
-      'child-run',
-      'confirm',
-    ]);
-    expect(step.mock.calls[1][0]).toMatchObject({ id: 'self-driving-github' });
-    expect(
-      vi.mocked(runAgent).mock.calls.map(([config]) => config.programId),
-    ).toEqual(['self-driving']);
-  });
-
-  it('stops the composed run when the child fails', async () => {
-    vi.mocked(runAgent).mockResolvedValue({
-      outcome: RunOutcome.Failed,
-      failure: {
-        code: ErrorCodes.AgentApiError,
-        message: 'integration failed',
-      },
-      snapshot,
-    });
-
-    const result = await runProgram('self-driving', {
-      installDir: '/project',
-      credentials,
-      composition: { integration: child() },
-    });
-
-    expect(result).toMatchObject({
-      programId: 'self-driving',
-      outcome: RunOutcome.Failed,
-      failure: { message: 'integration failed' },
-      settledRuns: [{ stepId: 'integrate-run' }],
-      data: { composition: { completedRuns: [] } },
-    });
-    expect(runAgent).toHaveBeenCalledTimes(1);
-  });
 
   it('a provider is resolved once, then stamped, and refreshed before the agent starts', async () => {
     vi.mocked(refreshAccessToken).mockResolvedValueOnce(refreshedToken);
@@ -870,22 +483,20 @@ describe('runProgram', () => {
       .mockResolvedValue({ posthog: aging(), project: null, apiUser });
 
     const result = await runProgram(
-      'self-driving',
+      'metrics',
       {
         installDir: '/project',
+        run,
         host: { baseUrl: 'https://posthog.example' },
         mayReportScanResults: true,
         discoveredFeatures: [DiscoveredFeature.LLM],
-        composition: {
-          integration: child(),
-          handoffConfirmed: true,
-          githubConnected: true,
-        },
+        warehouseSources: [warehouseSource('Stripe')],
       },
       { credentials: { resolve } },
     );
 
     expect(resolve).toHaveBeenCalledOnce();
+    expect(analytics.identifyUser).toHaveBeenCalledExactlyOnceWith(apiUser);
     expect(analytics.groupIdentify).toHaveBeenCalledExactlyOnceWith(
       'organization',
       'org-1',
@@ -896,102 +507,50 @@ describe('runProgram', () => {
       'https://posthog.example',
       undefined,
     );
-    // The child refreshed the login, so the parent starts on the same token.
-    expect(
-      vi
-        .mocked(runAgent)
-        .mock.calls.map(([, input]) => input.credentials.accessToken),
-    ).toEqual(['pha_refreshed', 'pha_refreshed']);
-    expect(result.data.credentials?.refreshToken).toBe('phr_rotated');
+    expect(vi.mocked(runAgent).mock.calls[0][1].credentials.accessToken).toBe(
+      'pha_refreshed',
+    );
+    expect(result.data).toMatchObject({
+      credentials: { refreshToken: 'phr_rotated' },
+      aiSdkStampReported: true,
+    });
 
-    await vi.mocked(runAgent).mock.calls[1][1].inferenceAuth.resolve();
+    await vi.mocked(runAgent).mock.calls[0][1].inferenceAuth.resolve();
     expect(gatewayAuth).toHaveBeenCalledExactlyOnceWith(
       credentials.posthog.host,
       'pha_refreshed',
-      'self-driving',
+      'metrics',
     );
   });
 
-  it('post-auth sends the program gates and applies the patch', async () => {
-    const resolve = vi.fn(() => run);
-    vi.mocked(getRuntimeProgramConfig).mockReturnValue({
-      id: 'error-tracking-upload-source-maps',
-      strategy: 'resolved',
-      resolve,
-      postAuthGates: ['detect'],
-    });
-    const step = vi.fn(
-      (): Promise<ProgramWorkflowDecision> =>
-        Promise.resolve({
-          kind: 'post-auth',
-          frameworkContext: { selectedProject: 'apps/web' },
-        }),
-    );
-
-    const result = await runProgram(
-      'error-tracking-upload-source-maps',
-      {
-        installDir: '/project',
-        credentials,
-        frameworkContext: { detected: true },
-      },
-      { workflow: { step } },
-    );
-
-    expect(result.outcome).toBe(RunOutcome.Success);
-    expect(step).toHaveBeenCalledExactlyOnceWith(
-      {
-        kind: 'post-auth',
-        programId: 'error-tracking-upload-source-maps',
-        gates: [{ id: 'detect' }],
-      },
-      { signal: expect.objectContaining({ aborted: false }) },
-    );
-    expect(resolve).toHaveBeenCalledWith(
-      expect.objectContaining({
-        frameworkContext: { detected: true, selectedProject: 'apps/web' },
-      }),
-    );
-    expect(result.data.detection.frameworkContext).toEqual({
-      detected: true,
-      selectedProject: 'apps/web',
-    });
-  });
-
-  it('observes a ledger the host lays over a program for this run', async () => {
+  it('seeds the audit ledger before the agent and returns the checks this run wrote', async () => {
     const installDir = tempDir();
     const ledgerFile = path.join(installDir, AUDIT_CHECKS_FILE);
-    const updated = [
-      { id: 'seed', area: 'Events', label: 'seed', status: 'pass' },
+    const seed: AuditCheck[] = [
+      { id: 'seed', area: 'Events', label: 'seed', status: 'pending' },
     ];
-    const watch = vi.spyOn(auditWatcher, 'watchAuditLedger');
+    const updated = [{ ...seed[0], status: 'pass' }];
+    let seededBeforeRun: unknown;
     vi.mocked(runAgent).mockImplementation(() => {
+      seededBeforeRun = JSON.parse(fs.readFileSync(ledgerFile, 'utf8'));
       fs.writeFileSync(ledgerFile, JSON.stringify(updated));
       return Promise.resolve({ outcome: RunOutcome.Success, snapshot });
     });
 
-    const result = await runProgram('metrics', {
+    const result = await runProgram('audit', {
       installDir,
+      run,
       credentials,
-      auditLedgerFile: AUDIT_CHECKS_FILE,
+      program: { auditLedgerFile: AUDIT_CHECKS_FILE, auditSeedChecks: seed },
     });
 
+    expect(seededBeforeRun).toEqual(seed);
     expect(result.data.detection.frameworkContext.auditChecks).toEqual(updated);
-    expect(watch).toHaveBeenCalledExactlyOnceWith(
-      installDir,
-      AUDIT_CHECKS_FILE,
-      expect.any(Function),
-    );
   });
 
   it('returns the event plan this run wrote, and releases its watcher when the agent throws', async () => {
     const installDir = tempDir();
     const planFile = path.join(installDir, EVENT_PLAN_FILE);
-    vi.mocked(getRuntimeProgramConfig).mockReturnValue({
-      id: 'posthog-integration',
-      strategy: 'integration',
-      eventPlanFile: EVENT_PLAN_FILE,
-    });
     const stop = vi.spyOn(ProgramEventPlanWatcher.prototype, 'stop');
     vi.mocked(runAgent)
       .mockImplementationOnce(() => {
@@ -1004,7 +563,12 @@ describe('runProgram', () => {
         return Promise.resolve({ outcome: RunOutcome.Success, snapshot });
       })
       .mockRejectedValueOnce(new Error('agent crashed'));
-    const input = { installDir, credentials, run };
+    const input: ProgramInput = {
+      installDir,
+      credentials,
+      run,
+      program: { eventPlanFile: EVENT_PLAN_FILE },
+    };
 
     const result = await runProgram('posthog-integration', input);
     stop.mockClear();
@@ -1037,53 +601,44 @@ describe('runProgram', () => {
     });
     afterEach(() => clearCleanup());
 
-    it('cleans a child skill if a later composition gate aborts', async () => {
-      const childDir = path.join(installDir, 'app');
-      const childOld = path.join(childDir, '.claude', 'skills', 'before-run');
-      const childNew = path.join(childDir, '.claude', 'skills', 'during-run');
-      markSkill(childOld);
-      vi.mocked(runAgent).mockImplementation(() => {
-        markSkill(childNew);
-        return Promise.resolve({ outcome: RunOutcome.Success, snapshot });
-      });
-      const step = vi
-        .fn()
-        .mockResolvedValueOnce({
-          kind: 'child-run',
-          input: { ...child(), installDir: childDir },
-        })
-        .mockResolvedValue({ kind: 'confirm', confirmed: false });
-
-      const result = await runProgram(
-        'self-driving',
-        { installDir, credentials },
-        { workflow: { step } },
-      );
-
-      expect(result.outcome).toBe(RunOutcome.Aborted);
-      expect(fs.existsSync(childNew)).toBe(false);
-      expect(fs.existsSync(childOld)).toBe(true);
-      expect(runAgent).toHaveBeenCalledTimes(1);
-    });
-
-    it("a process drain mid-run removes this invocation's new skills", async () => {
+    it.each<[string, () => RunResult]>([
+      [
+        'a failed run',
+        () => ({
+          outcome: RunOutcome.Failed,
+          failure: { code: ErrorCodes.AgentApiError, message: 'failed' },
+          snapshot,
+        }),
+      ],
+      [
+        // What wizardAbort and the CLI roots' signal handlers call.
+        'a process drain mid-run',
+        () => {
+          runCleanups();
+          return { outcome: RunOutcome.Success, snapshot };
+        },
+      ],
+    ])("%s removes this invocation's new skills", async (_case, settle) => {
       vi.mocked(runAgent).mockImplementation(() => {
         markSkill(newSkill);
-        // What wizardAbort and the CLI roots' signal handlers call.
-        runCleanups();
-        return Promise.resolve({ outcome: RunOutcome.Success, snapshot });
+        return Promise.resolve(settle());
       });
 
-      await runProgram('metrics', { installDir, credentials });
+      await runProgram('metrics', { installDir, run, credentials });
 
       expect(fs.existsSync(newSkill)).toBe(false);
       expect(fs.existsSync(oldSkill)).toBe(true);
     });
 
-    it('deferSkillCommit keeps the handle until the host commits', async () => {
+    it('commits its handle after success, or leaves it to the host with deferSkillCommit', async () => {
+      await runProgram('metrics', { installDir, run, credentials });
+      runCleanups();
+      expect(fs.existsSync(newSkill)).toBe(true);
+
+      fs.rmSync(newSkill, { recursive: true });
       await runProgram(
         'metrics',
-        { installDir, credentials },
+        { installDir, run, credentials },
         { deferSkillCommit: true },
       );
       // A host that fails after the run still drains this invocation's skills.
@@ -1092,20 +647,13 @@ describe('runProgram', () => {
 
       await runProgram(
         'metrics',
-        { installDir, credentials },
+        { installDir, run, credentials },
         { deferSkillCommit: true },
       );
       commitRegisteredRunSkillCleanups();
       runCleanups();
       expect(fs.existsSync(newSkill)).toBe(true);
       expect(fs.existsSync(oldSkill)).toBe(true);
-    });
-
-    it('commits its own handles after a successful run', async () => {
-      await runProgram('metrics', { installDir, credentials });
-      runCleanups();
-
-      expect(fs.existsSync(newSkill)).toBe(true);
     });
   });
 });

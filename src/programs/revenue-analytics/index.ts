@@ -1,7 +1,7 @@
-import { REVENUE_ANALYTICS_RUN } from './run.js';
 import type { ProgramConfig } from '@programs/program-step';
 import { WIZARD_TOOL_NAMES } from '@agent';
 import { REVENUE_ANALYTICS_PROGRAM } from './steps.js';
+import { REVENUE_ANALYTICS_RUN } from './run.js';
 
 export const revenueAnalyticsConfig: ProgramConfig = {
   command: 'revenue-analytics',

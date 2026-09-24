@@ -2,6 +2,7 @@ import type { ProgramRun } from '@programs/program-run';
 
 export const AI_OBSERVABILITY_REPORT_FILE =
   'posthog-ai-observability-report.md';
+
 export const AI_OBSERVABILITY_RUN: ProgramRun = {
   integrationLabel: 'ai-observability',
   // No `skillId`: linear.ts skips its pre-install step (see the gate on

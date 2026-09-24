@@ -3,10 +3,7 @@
  */
 
 export { TaskStreamPush } from './task-stream-push';
-export type {
-  TaskStreamPushOptions,
-  TaskStreamSource,
-} from './task-stream-push';
+export type { TaskStreamPushOptions } from './task-stream-push';
 
 export { PostHogDestination } from './destinations/posthog';
 export { FileDestination, createFileDestination } from './destinations/file';

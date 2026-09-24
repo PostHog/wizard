@@ -26,14 +26,6 @@ export async function runProgram(
   const entry = await import('./run-program');
   return entry.runProgram(programId, snapshot, options);
 }
-/** Keep the readiness and settings checks out of CLI startup until a host runs them. */
-export async function preflight(
-  programId: string,
-  host: import('./preflight').ProgramPreflightHost,
-): Promise<import('./preflight').ProgramPreflightDecision> {
-  const entry = await import('./preflight');
-  return entry.preflight(programId, host);
-}
 export {
   Program,
   PROGRAM_REGISTRY,
@@ -42,3 +34,9 @@ export {
   getCommandPath,
   getLaunchablePrograms,
 } from './program-registry';
+/** Step-based host helpers for the session adapter. */
+export { postAuthGateSteps } from './program-step';
+export { authenticate } from './authenticate';
+export { FRAMEWORK_REGISTRY } from './registry';
+export { getDetectedWarehouseSources } from './warehouse-source/detect';
+export { AUDIT_CHECKS_KEY } from './audit/types';
