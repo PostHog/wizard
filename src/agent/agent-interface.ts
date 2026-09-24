@@ -935,6 +935,7 @@ export async function runAgent(
   // A 401 on a fresh bearer: the auth screen was reported, and this is the
   // failure the caller ends the run with. The query is aborted to unwind.
   let authFailure: AgentFailure | undefined;
+  const agentConfigDir = createIsolatedAgentConfigDir();
   agentConfig.signal?.addEventListener('abort', onExternalAbort, {
     once: true,
   });
@@ -950,7 +951,6 @@ export async function runAgent(
     : undefined;
 
   try {
-    const agentConfigDir = createIsolatedAgentConfigDir();
     // Per-program allow/disallow lists tweak BASE_ALLOWED_TOOLS. Skills are
     // enabled via the `skills` query option; PostHog MCP tools come through
     // `mcpServers`. Neither belongs in this list.
@@ -1543,6 +1543,7 @@ export async function runAgent(
   } catch (error) {
     // Signal done to unblock the async generator
     signalDone();
+
     // A YARA hook aborted the run (the SDK throws AbortError once the hook
     // calls abortController.abort()). Surface it before anything else so it is
     // never mistaken for a success-cleanup race or a generic abort.

@@ -208,7 +208,7 @@ export async function runAgent(
     } else if (failure.coded) {
       result = {
         outcome: RunOutcome.Failed,
-        skillId: input.skillId,
+        skillId: input?.skillId,
         failure: {
           code: failure.code,
           message: failure.message,
@@ -219,7 +219,7 @@ export async function runAgent(
     } else {
       result = {
         outcome: RunOutcome.Crashed,
-        skillId: input.skillId,
+        skillId: input?.skillId,
         failure: {
           code: failure.code,
           message: failure.message,
@@ -229,7 +229,6 @@ export async function runAgent(
       };
     }
   }
-
   return settle(result);
 }
 

@@ -185,9 +185,8 @@ export function createWizardAskBridge(
         return { answers, timedOut };
       } finally {
         if (timer) clearTimeout(timer);
-        if (cancelForAbort) {
+        if (cancelForAbort)
           opts.signal?.removeEventListener('abort', cancelForAbort);
-        }
         pendingQuestions.delete(pending.id);
       }
     },

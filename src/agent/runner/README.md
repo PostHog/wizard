@@ -23,9 +23,9 @@ retained for very simple tasks and legacy support. The Anthropic Agent SDK is a
 supported legacy fallback, deprecated as the default, retained for major Pi
 vulnerabilities or gaps in support for new Anthropic models.
 
-`DEFAULT_AGENT_BINDING`, the standalone default, is Pi + linear; explicit
-program bindings and flags determine actual behavior. Both harnesses implement
-`run` and `runTask`. Composed sub-runs are clamped to linear, and linear-only
+`DEFAULT_AGENT_BINDING`, the standalone default, is Pi + linear; explicit program bindings
+and flags determine actual behavior. Both harnesses implement `run` and
+`runTask`. Composed sub-runs are clamped to linear, and linear-only
 post-run/outro hooks do not automatically transfer to an orchestrated flow.
 
 New models require Wizard capabilities **and** mint model/effort allowlists,
@@ -40,18 +40,18 @@ for the coordinated change checklist.
 Five layers, each with its own job. Nothing crosses layers unless it has to.
 
 **The entry point** (`index.ts`) is the front door:
-`runAgent(config, input, {onProgress?, interaction?, signal?}) → RunResult`. It
-takes resolved execution data and an invocation snapshot (`shared/types.ts`),
-reports through `onProgress` and asks through `interaction` (`../progress.ts`),
-and returns every ending as a result. It never renders, reads a session or
-exits. The gates, OAuth, flags and binding lookup that used to run here live in
+`runAgent(config, input, {onProgress?, interaction?, signal?}) → RunResult`. It takes
+resolved execution data and an invocation snapshot (`shared/types.ts`), reports
+through `onProgress` and asks through `interaction` (`../progress.ts`), and
+returns every ending as a result. It never renders, reads a session or exits.
+The gates, OAuth, flags and binding lookup that used to run here live in
 programs: `runProgram` resolves credentials through a host provider, awaits the
 host's gates, loads flags and resolves the binding.
 `src/programs/run-agent-legacy.ts` supplies those capabilities from the session
 and maps progress back onto `getUI()` for today's runners.
 
 **Prepare** (`shared/bootstrap.ts`) is the on-ramp inside the agent: logging
-targets, the gateway mint and the scan-triage classifier. Whether the run turns
+targets, the supplied gateway auth and the scan-triage classifier. Whether the run turns
 out to be linear or orchestrator, anthropic or pi, the setup is the same.
 
 **The switchboard** (`switchboard/`) holds the sequence and harness registries
@@ -132,10 +132,10 @@ block-beta
 ```
 
 Calls descend on the left, results return through the middle, and cancellation
-moves down the right. Blue marks the result contracts and run-scoped abort. On
-the first fatal task result, `drainQueue` stops scheduling, cancels active work
-and pending asks, joins siblings, then preserves that failure for the host to
-present.
+moves down the right. Blue marks the result contracts and run-scoped abort.
+On the first fatal task result, `drainQueue` stops scheduling, cancels
+active work and pending asks, joins siblings, then preserves that failure for
+the host to present.
 
 ## Flow
 

@@ -59,10 +59,10 @@ async function executeLinear(
   }: SequenceContext,
   runSignal: AbortSignal,
 ): Promise<SequenceResult> {
-  if (signal?.aborted) return hostAborted();
   const { run, composed } = config;
   const { skillsBaseUrl, credentials, project } = boot;
   const { projectApiKey, host, projectId } = credentials;
+  if (signal?.aborted) return hostAborted();
 
   // 5. Skill install (if skillId provided)
   let skillPath: string | undefined;

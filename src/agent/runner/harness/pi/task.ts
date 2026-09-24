@@ -506,8 +506,8 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
       let nudges = 0;
       while (
         nudges < MAX_TASK_NUDGES &&
-        !inputs.signal?.aborted &&
         !security.state.criticalViolation &&
+        !inputs.signal?.aborted &&
         !terminal &&
         !isSettled(orchestrator)
       ) {

@@ -613,8 +613,8 @@ export const piBackend: AgentHarness = {
         let continueNudges = 0;
         while (
           continueNudges < MAX_CONTINUE_NUDGES &&
-          !inputs.signal?.aborted &&
           !security.state.criticalViolation &&
+          !inputs.signal?.aborted &&
           !terminal &&
           hasOpenTasks(wizardTaskTools.store)
         ) {
