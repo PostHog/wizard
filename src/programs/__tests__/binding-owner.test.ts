@@ -7,7 +7,7 @@ import {
   WIZARD_SELF_DRIVING_USE_PI_HARNESS_FLAG_KEY,
 } from '@shared/constants';
 import { HARNESS_RUNS_TASKS } from '@agent/runner/switchboard/resolve-harness';
-import { PROGRAM_BINDINGS, resolveProgramBinding } from '@programs';
+import { PROGRAM_BINDINGS, resolveProgramBinding } from '../binding';
 
 describe('program binding owner', () => {
   it('resolves and traces a CLI sequence override ahead of an experiment', () => {

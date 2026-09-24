@@ -10,22 +10,22 @@ export type { FrameworkConfig, SetupQuestion } from './framework-config';
 export type {
   ProgramInput,
   ProgramOptions,
+  ProgramOverrides,
   ProgramRunOutcome,
   ProgramWorkflowConnector,
+  ProgramWorkflowDecision,
+  ProgramWorkflowRequest,
+  WizardFlagSnapshot,
 } from './run-program';
 export type {
+  ProgramDataProgress,
   ProgramDiagnostic,
   ProgramInvocationData,
   ProgramProgress,
+  ProgramRunProgress,
   SettledProgramRun,
 } from './program-store';
 export type { ProgramSwitchboardCtx } from './binding';
-export type { ProgramRunProgress, ProgramDataProgress } from './program-store';
-export type { ProgramOverrides, WizardFlagSnapshot } from './run-program';
-export type {
-  ProgramWorkflowRequest,
-  ProgramWorkflowDecision,
-} from './run-program';
 export type {
   ProgramPreflightDecision,
   ProgramPreflightHost,

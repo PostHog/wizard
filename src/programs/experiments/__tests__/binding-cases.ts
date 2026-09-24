@@ -5,7 +5,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { GPT5_6_SOL_MODEL, Harness, Sequence } from '@shared/constants';
-import { resolveProgramBinding as resolveBinding } from '@programs';
+import { resolveProgramBinding as resolveBinding } from '../../binding';
 import type { ProgramSwitchboardCtx as SwitchboardCtx } from '@programs/types';
 import type { EffortLevel } from '@agent/runner/switchboard/models';
 
