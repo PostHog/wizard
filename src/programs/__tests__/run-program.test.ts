@@ -6,6 +6,7 @@ import { EVENT_PLAN_FILE, Harness, Sequence } from '@shared/constants';
 import { AUDIT_CHECKS_FILE, type AuditCheck } from '@shared/audit-ledger';
 import { HostResolution } from '@shared/host-resolution';
 import type { ApiUser } from '@shared/api';
+import type { RunResult } from '@agent/types';
 import type { DetectedSource } from '../warehouse-sources/types';
 import type { ResolvedProgramCredentials } from '../credentials';
 import type { ProgramInput, ProgramOptions } from '../run-program';
@@ -150,20 +151,25 @@ describe('runProgram', () => {
 
   it("runs the caller's run definition and program settings, and returns its final results", async () => {
     const excludedTaskTypes = () => ['logs'];
-    const outcome = await runProgram('metrics', {
-      installDir: '/project',
-      runId: 'run-1',
-      run,
-      program: {
-        agentFlow: 'metrics-flow',
-        allowedTools: ['Agent'],
-        disallowedTools: ['wizard_ask'],
-        excludedTaskTypes,
+    const { signal } = new AbortController();
+    const outcome = await runProgram(
+      'metrics',
+      {
+        installDir: '/project',
+        runId: 'run-1',
+        run,
+        program: {
+          agentFlow: 'metrics-flow',
+          allowedTools: ['Agent'],
+          disallowedTools: ['wizard_ask'],
+          excludedTaskTypes,
+        },
+        credentials,
       },
-      credentials,
-    });
+      { signal },
+    );
 
-    const [config, input] = vi.mocked(runAgent).mock.calls[0];
+    const [config, input, agentOptions] = vi.mocked(runAgent).mock.calls[0];
     expect(config).toMatchObject({
       programId: 'metrics',
       run,
@@ -175,6 +181,7 @@ describe('runProgram', () => {
     expect(input.installDir).toBe('/project');
     expect(input.credentials).toBe(credentials.posthog);
     expect(input.inferenceAuth).toBe(credentials.inferenceAuth);
+    expect(agentOptions?.signal).toBe(signal);
     expect(outcome).toMatchObject({
       programId: 'metrics',
       outcome: RunOutcome.Success,
@@ -322,18 +329,6 @@ describe('runProgram', () => {
     });
     expect(resolve).not.toHaveBeenCalled();
     expect(runAgent).not.toHaveBeenCalled();
-  });
-
-  it('forwards the host signal to the agent', async () => {
-    const { signal } = new AbortController();
-
-    await runProgram(
-      'metrics',
-      { installDir: '/project', run, credentials },
-      { signal },
-    );
-
-    expect(vi.mocked(runAgent).mock.calls[0][2]?.signal).toBe(signal);
   });
 
   it('overrides reach the binding and the decision is captured once', async () => {
@@ -606,28 +601,27 @@ describe('runProgram', () => {
     });
     afterEach(() => clearCleanup());
 
-    it("a failed run removes this invocation's new skills", async () => {
-      vi.mocked(runAgent).mockImplementation(() => {
-        markSkill(newSkill);
-        return Promise.resolve({
+    it.each<[string, () => RunResult]>([
+      [
+        'a failed run',
+        () => ({
           outcome: RunOutcome.Failed,
           failure: { code: ErrorCodes.AgentApiError, message: 'failed' },
           snapshot,
-        });
-      });
-
-      await runProgram('metrics', { installDir, run, credentials });
-
-      expect(fs.existsSync(newSkill)).toBe(false);
-      expect(fs.existsSync(oldSkill)).toBe(true);
-    });
-
-    it("a process drain mid-run removes this invocation's new skills", async () => {
+        }),
+      ],
+      [
+        // What wizardAbort and the CLI roots' signal handlers call.
+        'a process drain mid-run',
+        () => {
+          runCleanups();
+          return { outcome: RunOutcome.Success, snapshot };
+        },
+      ],
+    ])("%s removes this invocation's new skills", async (_case, settle) => {
       vi.mocked(runAgent).mockImplementation(() => {
         markSkill(newSkill);
-        // What wizardAbort and the CLI roots' signal handlers call.
-        runCleanups();
-        return Promise.resolve({ outcome: RunOutcome.Success, snapshot });
+        return Promise.resolve(settle());
       });
 
       await runProgram('metrics', { installDir, run, credentials });
@@ -636,7 +630,12 @@ describe('runProgram', () => {
       expect(fs.existsSync(oldSkill)).toBe(true);
     });
 
-    it('deferSkillCommit keeps the handle until the host commits', async () => {
+    it('commits its handle after success, or leaves it to the host with deferSkillCommit', async () => {
+      await runProgram('metrics', { installDir, run, credentials });
+      runCleanups();
+      expect(fs.existsSync(newSkill)).toBe(true);
+
+      fs.rmSync(newSkill, { recursive: true });
       await runProgram(
         'metrics',
         { installDir, run, credentials },
@@ -655,13 +654,6 @@ describe('runProgram', () => {
       runCleanups();
       expect(fs.existsSync(newSkill)).toBe(true);
       expect(fs.existsSync(oldSkill)).toBe(true);
-    });
-
-    it('commits its own handle after a successful run', async () => {
-      await runProgram('metrics', { installDir, run, credentials });
-      runCleanups();
-
-      expect(fs.existsSync(newSkill)).toBe(true);
     });
   });
 });
