@@ -9,10 +9,6 @@ import { posthogIntegrationConfig } from '@programs/posthog-integration';
 import { ScreenId } from '@ui/tui/router';
 import { HostResolution } from '@shared/host-resolution';
 import { analytics } from '@utils/analytics';
-import { clearCleanup, runCleanups } from '@utils/wizard-abort';
-import * as fs from 'node:fs';
-import * as os from 'node:os';
-import * as path from 'node:path';
 
 vi.mock('../run-program-agent', () => ({ runProgramAgent: vi.fn() }));
 vi.mock('@ui/tui/start-tui', () => ({ startTUI: vi.fn() }));
@@ -44,69 +40,9 @@ vi.mock('@programs/task-stream/destinations/posthog', () => ({
 }));
 
 afterEach(() => {
-  clearCleanup();
   vi.restoreAllMocks();
   vi.clearAllMocks();
 });
-
-it.each([
-  ['TUI setup fails before the agent starts', false, 1, 'setup'],
-  ['SIGTERM arrives before the completion screen exits', false, 130, 'signal'],
-  ['the completion wait fails after the agent succeeds', false, 1, 'wait'],
-  ['the completion screen exits after a successful run', true, 0, 'success'],
-] as const)(
-  'when %s, the run-installed skill is kept: %s',
-  async (_case, kept, exitCode, ending) => {
-    const installDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wizard-skills-'));
-    const skillDir = path.join(installDir, '.claude', 'skills', 'installed');
-    const install = () => {
-      fs.mkdirSync(skillDir, { recursive: true });
-      fs.writeFileSync(path.join(skillDir, '.posthog-wizard'), '');
-    };
-    const store = new WizardStore();
-    setUI(new InkUI(store));
-    vi.spyOn(store, 'runReadyHooks').mockImplementation(() => {
-      if (ending !== 'setup') return Promise.resolve();
-      install();
-      return Promise.reject(new Error('TUI setup failed'));
-    });
-    vi.spyOn(store, 'getGate').mockResolvedValue(undefined);
-    let dismiss!: () => void;
-    const completion = vi.spyOn(store, 'waitUntil').mockImplementation(() => {
-      if (ending === 'wait') return Promise.reject(new Error('wait failed'));
-      if (ending !== 'signal') return Promise.resolve();
-      return new Promise<void>((resolve) => (dismiss = resolve));
-    });
-    vi.mocked(startTUI).mockReturnValue({
-      store,
-      unmount: vi.fn(),
-      waitForSetup: () => Promise.resolve(),
-    });
-    vi.mocked(runProgramAgent).mockImplementation(() => {
-      install();
-      return Promise.resolve();
-    });
-    const exit = vi
-      .spyOn(process, 'exit')
-      .mockImplementation(() => undefined as never);
-    try {
-      runWizard(posthogIntegrationConfig, { installDir, telemetry: false });
-      if (ending === 'signal') {
-        await vi.waitFor(() => expect(completion).toHaveBeenCalled());
-        process.emit('SIGTERM');
-      }
-      await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(exitCode));
-      if (ending === 'signal') dismiss();
-      await new Promise<void>((resolve) => setImmediate(resolve));
-      runCleanups();
-
-      expect(exit).toHaveBeenCalledOnce();
-      expect(fs.existsSync(skillDir)).toBe(kept);
-    } finally {
-      fs.rmSync(installDir, { recursive: true, force: true });
-    }
-  },
-);
 
 it.each(['continue', 'exit'] as const)(
   'catches a failed run, shows the handoff screen, and exits 1 after %s',

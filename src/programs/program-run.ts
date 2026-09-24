@@ -8,6 +8,12 @@
 import type { AgentRunDefinition } from '@agent/types';
 import type { Credentials, WizardSession } from '@lib/wizard-session';
 
+export type ProgramCompletionContext = Readonly<{
+  signup: boolean;
+  dashboardUrl: string | null;
+  notebookUrl: string | null;
+}>;
+
 export interface ProgramRun extends AgentRunDefinition {
   /** Runs after agent completes, before outro (e.g. env var upload). */
   postRun?: (session: WizardSession, credentials: Credentials) => Promise<void>;

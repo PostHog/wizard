@@ -15,7 +15,7 @@ import {
   NO_DEFAULT_LIMIT,
   PRICE_PER_PR_USD,
   PRICING_LONG,
-} from '@shared/self-driving-pricing';
+} from '../../ui/tui/decks/self-driving/pricing.js';
 import { getTips } from '../../ui/tui/decks/self-driving/tips.js';
 import { getContentBlocks } from '../../ui/tui/decks/self-driving/index.js';
 

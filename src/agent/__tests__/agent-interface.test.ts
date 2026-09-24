@@ -237,8 +237,6 @@ describe('runAgent', () => {
         kind: 'abort',
         classification: 'WIZARD_ABORT',
       });
-      const [{ options }] = mockQuery.mock.calls[0];
-      expect(options.abortController.signal.aborted).toBe(true);
     });
 
     it('returns a failure when the stream ends without a terminal result', async () => {

@@ -28,18 +28,16 @@ import {
   type AdditionalFeature,
   ADDITIONAL_FEATURE_PROMPTS,
 } from '@shared/constants';
-import type {
-  AgentFailure,
-  InferenceAuthProvider,
-} from './runner/shared/types';
+import type { AgentFailure } from './runner/shared/types';
 import type { AgentResult } from './runner/harness/types';
 import { createCustomHeaders } from '@utils/custom-headers';
 import type { HostResolution } from '@shared/host-resolution';
 import {
   buildWizardPropertiesBlob,
+  gatewayAuth,
   isPastRefresh,
   type GatewayAuth,
-} from '@shared/gateway-auth';
+} from '@agent/gateway-session';
 import { evaluateBashCommand } from './bash-fence';
 import { createWizardToolsServer, WIZARD_TOOL_NAMES } from '@agent/tools';
 import {
@@ -213,8 +211,6 @@ export type AgentConfig = {
    * another program's budget, so neither should depend on an optional string bag.
    */
   programId: string;
-  /** Program-owned inference auth, refreshed at each model call. */
-  inferenceAuth: InferenceAuthProvider;
   /** Program-owned guidance supplied as data, never looked up here. */
   programCommandments?: readonly string[];
   /** Program identifier — selects the model for that program. */
@@ -371,6 +367,8 @@ type AgentRunConfig = {
 
 const NO_PROGRESS: ProgressEmitter = () => undefined;
 
+export { buildRunTags } from '@shared/run-tags';
+
 /**
  * Whether Warlock/YARA scanning is disabled for this run. Off by default:
  * scanning is disabled only by the local POSTHOG_WIZARD_WARLOCK_DISABLED env
@@ -524,10 +522,13 @@ export async function initializeAgent(
   const emit = config.emit ?? NO_PROGRESS;
 
   try {
-    // Configure model routing with the program-supplied gateway bearer.
+    // Configure model routing (inherited by the SDK subprocess). All model
+    // calls route through the PostHog AI gateway with the scoped token
+    // gatewayAuth mints for this run.
     // Disable experimental betas (like input_examples) the gateway doesn't support.
     process.env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS = 'true';
-    const currentGatewayAuth = () => config.inferenceAuth.resolve();
+    const currentGatewayAuth = () =>
+      gatewayAuth(config.host, config.posthogApiKey, config.programId);
     const auth = await currentGatewayAuth();
     const gatewayUrl = auth.gatewayUrl;
     process.env.ANTHROPIC_BASE_URL = gatewayUrl;

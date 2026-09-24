@@ -19,8 +19,10 @@ vi.mock('@utils/analytics', () => ({
 }));
 
 import { warehouseSourceConfig } from '@programs/warehouse-source/index';
-import { DEFAULT_ASK_TIMEOUT_MS } from '@agent/wizard-ask-bridge';
-import { LONGER_ASK_TIMEOUT_MS } from '@shared/ask-policy';
+import {
+  LONGER_ASK_TIMEOUT_MS,
+  DEFAULT_ASK_TIMEOUT_MS,
+} from '@agent/wizard-ask-bridge';
 
 function session(): WizardSession {
   return { installDir: '/tmp/app', frameworkContext: {} } as WizardSession;

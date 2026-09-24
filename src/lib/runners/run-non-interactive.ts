@@ -17,6 +17,7 @@ import { analytics } from '@utils/analytics';
 import { resolveNoTelemetry } from './resolve-no-telemetry';
 import type { WizardStore } from '@ui/tui/store';
 import type { TaskStreamPush } from '@programs/task-stream/task-stream-push';
+import { join } from 'node:path';
 import {
   ErrorCodes,
   classifyRunFailure,
@@ -24,10 +25,6 @@ import {
 } from '@shared/errors';
 import { detectErrorCode } from '@programs/detect-map';
 import type { OutroData, RunPhase as RunPhaseT } from '@lib/wizard-session';
-import {
-  commitRegisteredRunSkillCleanups,
-  registerRunSkillCleanup,
-} from '@shared/skill-run-cleanup';
 
 /**
  * The two non-interactive run modes. Both drive the same pipeline today; the
@@ -107,8 +104,6 @@ export function runNonInteractive(
   // (cloud / CI/CD) tags 'headless'; a dev/test `--ci` run upgrades 'dev' to
   // 'ci'. The mode string is the tag value.
   analytics.setTag('build', mode);
-  let detachSignalHandlers: () => void = () => undefined;
-  let runRegisteredCleanups: () => void = () => undefined;
 
   void (async () => {
     const path = await import('path');
@@ -120,10 +115,7 @@ export function runNonInteractive(
     const { configureLogFileFromEnvironment, logToFile } = await import(
       '@utils/debug'
     );
-    const { runCleanups, wizardAbort, WizardError } = await import(
-      '@utils/wizard-abort'
-    );
-    runRegisteredCleanups = runCleanups;
+    const { wizardAbort, WizardError } = await import('@utils/wizard-abort');
 
     configureLogFileFromEnvironment();
 
@@ -133,23 +125,6 @@ export function runNonInteractive(
     const installDir = path.isAbsolute(options.installDir as string)
       ? (options.installDir as string)
       : path.join(process.cwd(), options.installDir as string);
-
-    // Armed until the run completes, so every failed or interrupted exit removes new skills.
-    registerRunSkillCleanup(installDir);
-    const onSigint = () => {
-      runCleanups();
-      process.exit(130);
-    };
-    const onSigterm = () => {
-      runCleanups();
-      process.exit(143);
-    };
-    process.once('SIGINT', onSigint);
-    process.once('SIGTERM', onSigterm);
-    detachSignalHandlers = () => {
-      process.off('SIGINT', onSigint);
-      process.off('SIGTERM', onSigterm);
-    };
 
     const session = buildSession({
       debug: options.debug as boolean | undefined,
@@ -238,6 +213,9 @@ export function runNonInteractive(
         store: headlessStore,
         programId: config.streamWorkflowId ?? config.id,
         destinations,
+        eventPlanPath: config.eventPlanFile
+          ? join(session.installDir, config.eventPlanFile)
+          : undefined,
         auditChecks: config.auditLedgerFile
           ? () => getAuditChecks(headlessStore.session)
           : undefined,
@@ -264,10 +242,8 @@ export function runNonInteractive(
 
     try {
       if (mode === 'ci') {
-        const { loadCiInferenceAuthProvider } = await import(
-          './ci-inference-auth'
-        );
-        session.inferenceAuth = loadCiInferenceAuthProvider(
+        const { configureGatewayFromCIEnvironment } = await import('@agent');
+        configureGatewayFromCIEnvironment(
           Number(session.projectId),
           session.region ?? 'us',
         );
@@ -364,7 +340,6 @@ export function runNonInteractive(
       const { runProgramAgent } = await import('./run-program-agent');
       await runProgramAgent(config, session);
       await settleStream(RunPhase.Completed);
-      commitRegisteredRunSkillCleanups();
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : String(error);
@@ -395,14 +370,11 @@ export function runNonInteractive(
         error: error as Error,
       });
     }
-  })()
-    .catch((error: unknown) => {
-      runRegisteredCleanups();
-      emitWizardError({
-        code: ErrorCodes.InternalUnhandled,
-        message: error instanceof Error ? error.message : String(error),
-      });
-      process.exit(1);
-    })
-    .finally(() => detachSignalHandlers());
+  })().catch((error: unknown) => {
+    emitWizardError({
+      code: ErrorCodes.InternalUnhandled,
+      message: error instanceof Error ? error.message : String(error),
+    });
+    process.exit(1);
+  });
 }

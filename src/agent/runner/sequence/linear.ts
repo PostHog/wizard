@@ -19,15 +19,13 @@ import { AGENT_ERROR_CODE } from '@agent/error-map';
 import { analytics } from '@utils/analytics';
 import { formatYaraAbortMessage } from '@agent/yara-hooks';
 import { installSkillById } from '@agent/tools';
-import { assemblePrompt, type PromptContext } from '../../agent-prompt';
+import { assemblePrompt } from '../../agent-prompt';
 import type { SequenceResult, SequenceContext } from '../shared/types';
-import { failed, hostAborted, installFailure } from '../shared/errors';
+import { failed, installFailure } from '../shared/errors';
 import { RunOutcome } from '../shared/types';
-import { runOptions } from '../shared/bootstrap';
-import { isAskDisabled } from '@shared/ask-policy';
+import { shouldDisableAsk, runOptions } from '../shared/bootstrap';
 import { createEmitSpinner } from '../shared/progress-collector';
 import { createAskBridge } from '../shared/ask';
-import { withTranscript } from '../shared/transcript-tail';
 import { getHarness } from '../switchboard';
 
 export async function runLinearProgram(
@@ -48,21 +46,17 @@ export async function runLinearProgram(
 
 /** The host's `signal` decides the outcome; `runSignal` also ends with the run. */
 async function executeLinear(
-  {
-    config,
-    input,
-    boot,
-    emit,
-    interaction,
-    signal,
-    transcript,
-  }: SequenceContext,
+  { config, input, boot, emit, interaction, signal }: SequenceContext,
   runSignal: AbortSignal,
 ): Promise<SequenceResult> {
   const { run, composed } = config;
   const { skillsBaseUrl, credentials, project } = boot;
   const { projectApiKey, host, projectId } = credentials;
-  if (signal?.aborted) return hostAborted();
+  const aborted = (): SequenceResult => ({
+    outcome: RunOutcome.Aborted,
+    failure: { code: ErrorCodes.AgentAbort, message: 'Agent run cancelled' },
+  });
+  if (signal?.aborted) return aborted();
 
   // 5. Skill install (if skillId provided)
   let skillPath: string | undefined;
@@ -74,7 +68,7 @@ async function executeLinear(
       skillsBaseUrl,
       { triage: boot.triageProvider },
     );
-    if (signal?.aborted) return hostAborted();
+    if (signal?.aborted) return aborted();
     if (installResult.kind !== 'ok') {
       return failed(installFailure(run.integrationLabel, installResult));
     }
@@ -92,7 +86,7 @@ async function executeLinear(
   // CI/signup with neither has no answerer, so we omit the bridge and the tool
   // returns an actionable error rather than hanging on a never-resolving prompt.
   const askDisabled =
-    isAskDisabled(input.flags) && process.env.WIZARD_ASK_AUTODRIVE !== '1';
+    shouldDisableAsk(input.flags) && process.env.WIZARD_ASK_AUTODRIVE !== '1';
   const ask = askDisabled
     ? undefined
     : createAskBridge(interaction, {
@@ -102,15 +96,12 @@ async function executeLinear(
         signal: runSignal,
       });
 
-  const middleware = withTranscript(
-    input.flags.benchmark
-      ? createBenchmarkPipeline(emit, spinner, runOptions(input))
-      : undefined,
-    transcript,
-  );
+  const middleware = input.flags.benchmark
+    ? createBenchmarkPipeline(emit, spinner, runOptions(input))
+    : undefined;
 
   // 7. Build prompt
-  const promptContext: PromptContext = {
+  const prompt = assemblePrompt(run, {
     projectId,
     projectApiKey,
     host,
@@ -124,12 +115,9 @@ async function executeLinear(
           surveys: project.surveys_opt_in ?? null,
         }
       : null,
-  };
-  const prompt = run.prompt
-    ? run.prompt(promptContext)
-    : assemblePrompt(run, promptContext);
+  });
   logToFile(`[agent-runner] prompt assembled (${prompt.length} chars)`);
-  if (signal?.aborted) return hostAborted();
+  if (signal?.aborted) return aborted();
 
   // 8. Run the agent through the run-level harness. The harness owns the agent
   // loop + model transport; everything around it (skill install, prompt, ask
@@ -149,7 +137,7 @@ async function executeLinear(
     thinkingLevel,
     signal: runSignal,
   });
-  if (signal?.aborted) return hostAborted();
+  if (signal?.aborted && agentResult.kind === 'success') return aborted();
 
   // 9. Error handling (full set from both harnesses)
   if (agentResult.kind === 'decided_failure') {
@@ -295,7 +283,7 @@ async function executeLinear(
   // 10. Post-run hooks
   if (config.hooks?.postRun) {
     await config.hooks.postRun(credentials);
-    if (signal?.aborted) return hostAborted();
+    if (signal?.aborted) return aborted();
   }
 
   // A composed sub-run leaves the terminal outro to its host.

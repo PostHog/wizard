@@ -45,13 +45,11 @@ resolved execution data and an invocation snapshot (`shared/types.ts`), reports
 through `onProgress` and asks through `interaction` (`../progress.ts`), and
 returns every ending as a result. It never renders, reads a session or exits.
 The gates, OAuth, flags and binding lookup that used to run here live in
-programs: `runProgram` resolves credentials through a host provider, awaits the
-host's gates, loads flags and resolves the binding.
-`src/lib/runners/run-program-agent.ts` supplies those capabilities from the session
-and maps progress back onto `getUI()` for today's runners.
+`src/lib/runners/run-program-agent.ts`, which also maps progress back onto
+`getUI()` for today's runners.
 
 **Prepare** (`shared/bootstrap.ts`) is the on-ramp inside the agent: logging
-targets, the supplied gateway auth and the scan-triage classifier. Whether the run turns
+targets, the gateway mint and the scan-triage classifier. Whether the run turns
 out to be linear or orchestrator, anthropic or pi, the setup is the same.
 
 **The switchboard** (`switchboard/`) holds the sequence and harness registries
@@ -80,8 +78,7 @@ gateway.
 
 ## How they connect
 
-- Programs supply inference auth; prepare resolves it and builds triage for the
-  resolved harness.
+- Prepare mints the gateway token and builds triage for the resolved harness.
 - The switchboard knows which sequences and harnesses exist (via its two
   registries), but not what they do.
 - A sequence knows how to shape a conversation, but delegates the actual model
@@ -141,15 +138,12 @@ the host to present.
 
 1. The caller runs its gates, authenticates, fetches PostHog flags and resolves
    a `ProgramBinding { sequence, harness, model }`; analytics tags the run.
-2. `runAgent(config, input, options)` resolves the supplied inference auth and
-   prepares triage.
+2. `runAgent(config, input, options)` prepares (mint, triage).
 3. Sequence takes over — shapes the LLM's work into one conversation (linear) or
    many (orchestrator), reporting through `onProgress`.
 4. Harness drives each conversation through its SDK, using the bound model, on
    the PostHog LLM gateway.
-5. The scan report flushes once, at the end or earlier when a process drain runs
-   the cleanups, unless `RunConfig.scanReport` defers it to the host run; its
-   line arrives as `log` progress; `runAgent` returns a `RunResult`.
+5. The scan report flushes; `runAgent` returns a `RunResult`.
 6. The caller applies it: a decided failure goes to `wizardAbort` with the
    terminal status its outcome names, a crash is rethrown for the runner's own
    handling, and a non-composed success sends the terminal success analytics.

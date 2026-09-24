@@ -6,7 +6,8 @@ import { SPINNER_MESSAGE } from '@programs/framework-config';
 import { isUsingTypeScript } from '@utils/setup-utils';
 import { WIZARD_TOOL_NAMES } from '@agent';
 import { EVENTS_AUDIT_PROGRAM } from './steps.js';
-import { AUDIT_CHECKS_FILE } from '@programs/audit/types';
+import { AUDIT_CHECKS_FILE, AUDIT_CHECKS_KEY } from '@programs/audit/types';
+import { seedAuditLedger } from '@programs/audit/seed';
 import { EVENTS_AUDIT_SEED_CHECKS } from './seed.js';
 
 // SETUP_REPORT_FILE is also re-exported for backward compat with existing
@@ -33,9 +34,6 @@ export const eventsAuditConfig: ProgramConfig = {
   // synchronously without unwrapping the deferred `run` function.
   reportFile: SETUP_REPORT_FILE,
   auditLedgerFile: AUDIT_CHECKS_FILE,
-  // The events-audit ledger is the 6-phase pipeline, not the doctor's 10
-  // integrity checks.
-  auditSeedChecks: EVENTS_AUDIT_SEED_CHECKS,
   allowedTools: [
     'Agent',
     WIZARD_TOOL_NAMES.auditSeedChecks,
@@ -49,6 +47,12 @@ export const eventsAuditConfig: ProgramConfig = {
       installDir: session.installDir,
     });
     session.typescript = typeScriptDetected;
+
+    // Seed the audit ledger so AuditRunScreen has something to render
+    // before the agent emits its first check update. The events-audit
+    // ledger is the 6-phase pipeline, not the doctor's 10 integrity checks.
+    seedAuditLedger(session.installDir, EVENTS_AUDIT_SEED_CHECKS);
+    session.frameworkContext[AUDIT_CHECKS_KEY] = EVENTS_AUDIT_SEED_CHECKS;
 
     return Promise.resolve({
       skillId: 'events-audit',

@@ -24,7 +24,6 @@ import type { FrameworkConfig } from '@programs/types';
 import type { WizardReadinessResult } from '@shared/health-checks/readiness';
 import type { SettingsConflict } from '@shared/claude-settings';
 import type { ApiUser, ApiProject, Credentials } from '@shared/api';
-import type { InferenceAuthProvider } from '@agent/types';
 import type { CloudRegion } from '@utils/types';
 import type {
   AskAnswers,
@@ -69,7 +68,6 @@ export enum RunPhase {
   Error = 'error',
 }
 
-/** Compatibility export for session readers; detection owns the shared value. */
 export { DiscoveredFeature };
 
 /** Consent to report what local detection found (see `scanConsent` below). */
@@ -107,7 +105,7 @@ export interface WizardSession {
    *
    * Only the e2e TUI host sets it, from the `E2E_ASK` env var. There is no CLI
    * flag, `bin.ts` never populates it, and nothing in a published build reads
-   * the env var — so a normal `--ci` run is unchanged. See `isAskDisabled`.
+   * the env var — so a normal `--ci` run is unchanged. See `shouldDisableAsk`.
    *
    * Guarding `E2E_ASK` is not enough on its own: the CI runner spreads the
    * whole `POSTHOG_WIZARD_*` bag into `buildSession`, which would let
@@ -164,9 +162,9 @@ export interface WizardSession {
   /** Guards against reporting twice; consent resolves from two paths. */
   warehouseSourcesReported: boolean;
   /**
-   * Latched once the organization's AI SDK stamp was considered for this login:
-   * by run-wizard.ts's auth step (`maybeStampAiSdkDetected`), or by runProgram,
-   * whose latch the legacy adapter mirrors back, whichever logs in first.
+   * Guards `maybeStampAiSdkDetected` against running twice: it is called from
+   * both run-wizard.ts's auth step and bootstrap.ts, since either can be the
+   * first real `authenticate()` to complete depending on the program.
    */
   aiSdkStampReported: boolean;
   integration: Integration | null;
@@ -191,8 +189,6 @@ export interface WizardSession {
 
   // From OAuth
   credentials: Credentials | null;
-  /** Host-supplied inference auth for legacy steps that run before the callable host. */
-  inferenceAuth?: InferenceAuthProvider;
 
   /**
    * `role_at_organization` from `/api/users/@me/`. Null when the upstream
@@ -458,3 +454,9 @@ export function buildSession(args: {
     pendingQuestion: null,
   };
 }
+
+export {
+  mayReportScanResults,
+  reportableDiscoveredFeatures,
+  reportablePosthogSdkDetected,
+} from '@shared/scan-consent';

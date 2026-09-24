@@ -18,18 +18,17 @@ import net from 'net';
 import { spawnSync } from 'child_process';
 import { startTUI } from '@ui/tui/start-tui';
 import { VERSION } from '@shared/version';
-import { Program, getProgramConfig, type ProgramId } from '@programs';
+import {
+  Program,
+  getProgramConfig,
+  type ProgramId,
+} from '@programs';
 import type { Harness, Sequence } from '@shared/constants';
 import { buildSession } from '@lib/wizard-session';
 import { initLocalDev } from '@shared/local-dev';
-import { loadCiInferenceAuthProvider } from '@lib/runners/ci-inference-auth';
-import type { InferenceAuthProvider } from '@agent/types';
+import { configureGatewayFromCIEnvironment } from '@agent/gateway-session';
 import { runProgramAgent } from '@lib/runners/run-program-agent';
-import { commitRegisteredRunSkillCleanups } from '@shared/skill-run-cleanup';
-import {
-  TaskStreamPush,
-  createFileDestination,
-} from '@programs/task-stream/index';
+import { TaskStreamPush, createFileDestination } from '@programs/task-stream/index';
 import { getAuditChecks } from '@programs/audit/types';
 import { authenticate } from '@programs/authenticate';
 import { getOrAskForProjectData } from '@utils/setup-utils';
@@ -229,7 +228,7 @@ async function main() {
     // Keep the `wizard_ask` bridge wired despite `ci: true`. The driver loop
     // below is the answerer — without this the agent-in-the-loop layer of a
     // flow (credential questions, the orchestrator's seeded warehouse task) is
-    // never exercised. Only this host sets it; see `isAskDisabled`.
+    // never exercised. Only this host sets it; see `shouldDisableAsk`.
     e2eAsk: process.env.E2E_ASK === 'true',
     apiKey,
     projectId,
@@ -246,17 +245,6 @@ async function main() {
     sequence: (process.env.SNAP_SEQUENCE || undefined) as Sequence | undefined,
     model: process.env.SNAP_MODEL || undefined,
   });
-  // Read the one-use token file only when a route first requests inference.
-  let ciAuth: InferenceAuthProvider | undefined;
-  store.setInferenceAuth({
-    resolve: async () => {
-      ciAuth ??= loadCiInferenceAuthProvider(
-        Number(projectId),
-        store.session.region ?? 'us',
-      );
-      return ciAuth.resolve();
-    },
-  });
   // Dumped, never pushed: an e2e run is synthetic, like `--ci`.
   const streamLog = createFileDestination(process.env.TASK_STREAM_LOG ?? '');
   if (streamLog) {
@@ -264,6 +252,9 @@ async function main() {
       store,
       programId,
       destinations: [streamLog],
+      eventPlanPath: programConfig.eventPlanFile
+        ? join(store.session.installDir, programConfig.eventPlanFile)
+        : undefined,
       auditChecks: programConfig.auditLedgerFile
         ? () => getAuditChecks(store.session)
         : undefined,
@@ -301,7 +292,15 @@ async function main() {
   // Pass the pre-run gates and run the program's real agent. The auth and run
   // screens never advance on their own; this is what moves them. Mirrors
   // run-wizard's flow, including in-program run phases.
+  let gatewayConfigured = false;
   const runProgram = async () => {
+    if (!gatewayConfigured) {
+      configureGatewayFromCIEnvironment(
+        Number(projectId),
+        store.session.region ?? 'us',
+      );
+      gatewayConfigured = true;
+    }
     await store.getGate('intro');
     await store.getGate('integration-check');
     await store.getGate('health-check');
@@ -343,8 +342,6 @@ async function main() {
     } else {
       await runProgramAgent(programConfig, store.session);
     }
-    // runProgramAgent leaves new skills armed; a finished run keeps them.
-    commitRegisteredRunSkillCleanups();
   };
 
   if (process.env.MODE === 'serve') return serve();

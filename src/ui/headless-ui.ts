@@ -29,10 +29,6 @@ export class HeadlessUI extends LoggingUI {
     this.store.setFrameworkContext(key, value);
   }
 
-  setEventPlan(events: Array<{ name: string; description: string }>): void {
-    this.store.setEventPlan(events);
-  }
-
   getFrameworkContext(key: string): unknown {
     return this.store.session.frameworkContext[key];
   }

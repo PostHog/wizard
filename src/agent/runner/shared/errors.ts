@@ -11,12 +11,6 @@ export const failed = (failure: AgentFailure): SequenceResult => ({
   failure,
 });
 
-/** A host cancellation is a decided abort, regardless of SDK error wording. */
-export const hostAborted = (): SequenceResult => ({
-  outcome: RunOutcome.Aborted,
-  failure: { code: ErrorCodes.AgentAbort, message: 'Run cancelled by host.' },
-});
-
 /** The failure a skill install error decides. The caller reports and exits. */
 export function installFailure(
   integrationLabel: string,

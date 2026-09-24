@@ -77,17 +77,11 @@ it('keeps initialization and execution progress visible during detection', async
       return Promise.resolve({ kind: 'success' });
     },
   );
-  const session = detectionSession();
-  const inferenceAuth = { resolve: vi.fn() };
-  session.inferenceAuth = inferenceAuth;
-  const report = await detectProjectsWithAgent(session, {
+  const report = await detectProjectsWithAgent(detectionSession(), {
     programId: 'posthog-integration',
     targets: [{ id: 'node', name: 'Node.js' }],
   });
   expect(report.projects[0].targetId).toBe('node');
-  expect(vi.mocked(initializeAgent).mock.calls[0][0].inferenceAuth).toBe(
-    inferenceAuth,
-  );
   expect(getUI().addTokenUsage).toHaveBeenCalledWith(delta);
   expect(ui.setStage).toHaveBeenCalledWith('Scanning');
   expect(ui.pushStatus).toHaveBeenCalledWith('Found a project');
@@ -95,74 +89,6 @@ it('keeps initialization and execution progress visible during detection', async
     ['Initialization diagnostic'],
     ['Execution diagnostic'],
   ]);
-});
-
-import type { AgentProgress } from '@agent/types';
-
-// The test below runs the real runAgent pipeline, so no analytics or gateway mint may leave the process.
-vi.mock('@utils/analytics');
-vi.mock('@programs/credentials', () => ({
-  createPosthogInferenceAuthProvider: vi.fn(() => ({
-    resolve: () =>
-      Promise.resolve({
-        gatewayUrl: 'https://gateway.test',
-        token: 'phe_test',
-        refreshAtMs: Infinity,
-      }),
-  })),
-}));
-
-afterEach(() => vi.restoreAllMocks());
-
-it('sends each agent step to onEvent and the host only the progress it saw before', async () => {
-  vi.mocked(initializeAgent).mockImplementation((config) =>
-    Promise.resolve({ emit: config.emit } as Awaited<
-      ReturnType<typeof initializeAgent>
-    >),
-  );
-  vi.mocked(executeAgent).mockImplementation(
-    (config, _prompt, _options, _spinner, _messages, middleware) => {
-      config.emit?.({ kind: 'status', message: 'Scanning' });
-      config.emit?.({ kind: 'log', level: 'info', message: 'Info line' });
-      config.emit?.({ kind: 'log', level: 'warn', message: 'Warn line' });
-      middleware?.onMessage({
-        type: 'assistant',
-        message: {
-          content: [
-            { type: 'text', text: 'Reading the root manifest.' },
-            {
-              type: 'tool_use',
-              name: 'Read',
-              input: { file_path: 'package.json' },
-            },
-          ],
-        },
-      });
-      middleware?.onMessage({
-        type: 'result',
-        result: '{"path":".","targetId":"node","framework":"Node.js"}',
-      });
-      return Promise.resolve({ kind: 'success' });
-    },
-  );
-  const events: AgentProgress[] = [];
-  const lines: string[] = [];
-
-  const report = await detectProjectsWithAgent(detectionSession(), {
-    programId: 'posthog-integration',
-    targets: [{ id: 'node', name: 'Node.js' }],
-    onEvent: (line) => lines.push(line),
-    onProgress: (event) => events.push(event),
-  });
-
-  expect(report.projects[0].targetId).toBe('node');
-  expect(lines).toEqual(['Reading the root manifest.', 'Read package.json']);
-  expect(
-    events.map((event) =>
-      event.kind === 'log' ? `log:${event.level}` : event.kind,
-    ),
-  ).toEqual(['status', 'log:warn', 'activity', 'activity']);
-  expect(ui.pushStatus).not.toHaveBeenCalledWith('Scanning');
 });
 
 it('stops optional detection on a data-only 401 before parsing partial JSON', async () => {
@@ -215,7 +141,7 @@ it('preserves the original error from a decided failure', async () => {
   ).rejects.toBe(original);
 });
 
-it('rejects classified agent failures without retrying', async () => {
+it('rejects classified agent failures', async () => {
   vi.mocked(initializeAgent).mockResolvedValue(
     {} as Awaited<ReturnType<typeof initializeAgent>>,
   );
@@ -231,5 +157,4 @@ it('rejects classified agent failures without retrying', async () => {
       targets: [{ id: 'node', name: 'Node.js' }],
     }),
   ).rejects.toThrow('Agent API unavailable');
-  expect(vi.mocked(executeAgent)).toHaveBeenCalledOnce();
 });

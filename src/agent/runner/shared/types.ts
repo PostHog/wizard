@@ -5,8 +5,8 @@
  * invocation snapshot, reports through `options.onProgress`, asks through
  * `options.interaction`, and returns a `RunResult`. Nothing here names a UI,
  * a store, a session or a program registry: the caller resolves those and
- * hands over plain data. Programs' `runProgram` is the caller that builds it
- * for every host.
+ * hands over plain data. `src/lib/runners/run-program-agent.ts` is the caller
+ * that rebuilds today's session-driven behavior on top of this contract.
  */
 
 import type { AdditionalFeature } from '@shared/constants';
@@ -22,7 +22,6 @@ import type { LLMProvider } from '@posthog/warlock';
 import type { AgentInteraction, ProgressEmitter } from '@agent/progress';
 import type { EffortLevel } from '../switchboard/models';
 import type { GatewayAuth } from '@shared/gateway-auth';
-import type { TranscriptTail } from './transcript-tail';
 
 export type { PromptContext, Credentials };
 
@@ -224,7 +223,7 @@ export interface RunInput {
   /** Resolved credentials, including the host family and its MCP url. */
   credentials: Credentials;
   /** Caller-owned gateway auth, including refresh policy. */
-  inferenceAuth: InferenceAuthProvider;
+  inferenceAuth?: InferenceAuthProvider;
   /** Project payload resolved at authentication, for prompt context. */
   project: ApiProject | null;
   /** User payload resolved at authentication, for the AI opt-in prompt line. */
@@ -283,9 +282,6 @@ export interface AgentFailure {
   detail?: Record<string, unknown>;
   authErrorDetail?: AuthErrorDetail;
 }
-
-/** frameworkContext key for the drained queue's final outcomes, read by the e2e harness. */
-export const TASK_OUTCOMES_KEY = 'orchestrator-task-outcomes';
 
 export enum RunOutcome {
   Success = 'success',
@@ -356,6 +352,4 @@ export interface SequenceContext {
   emit: ProgressEmitter;
   interaction: AgentInteraction | undefined;
   signal?: AbortSignal;
-  /** Present when the run definition sets `collectTranscript`. */
-  transcript?: TranscriptTail;
 }

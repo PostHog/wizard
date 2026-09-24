@@ -18,7 +18,7 @@ import {
   NO_DEFAULT_LIMIT,
   PRICING_LONG,
   PRICING_SHORT,
-} from '@shared/self-driving-pricing';
+} from '@ui/tui/decks/self-driving/pricing.js';
 import type { SelfDrivingDetectError } from '@programs/self-driving/index';
 
 interface SelfDrivingIntroScreenProps {

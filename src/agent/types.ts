@@ -38,7 +38,7 @@ export type {
 export type { ProgramBinding, SwitchboardCtx } from './runner';
 export type { EffortLevel } from './runner/switchboard/models';
 
-/** Leaves in C3 with downloadSkill. */
+/** Leaves in B2 with downloadSkill. */
 export type { InstallSkillResult } from './tools';
 
 /** Leaves in B2 with the legacy adapter that records it. */

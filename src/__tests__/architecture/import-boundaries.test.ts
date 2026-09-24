@@ -1,14 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
-import {
-  aliasTarget,
-  loadAliases,
-  probe,
-  REPO_ROOT,
-  staticImportClosure,
-  toRepoRelative,
-} from '../../../test/module-graph';
 
 export type Surface =
   | 'env'
@@ -20,6 +12,7 @@ export type Surface =
   | 'cli';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
+const REPO_ROOT = path.resolve(HERE, '../../..');
 
 const SURFACE_RULES: ReadonlyArray<readonly [Surface, (p: string) => boolean]> =
   [
@@ -208,6 +201,14 @@ function stripComments(source: string): string {
   return out;
 }
 
+function toRepoRelative(abs: string): string {
+  return path.relative(REPO_ROOT, abs).split(path.sep).join('/');
+}
+
+function isFile(abs: string): boolean {
+  return fs.statSync(abs, { throwIfNoEntry: false })?.isFile() ?? false;
+}
+
 function collectFiles(absDir: string, into: string[]): void {
   for (const entry of fs.readdirSync(absDir, { withFileTypes: true })) {
     const abs = path.join(absDir, entry.name);
@@ -221,6 +222,51 @@ function collectFiles(absDir: string, into: string[]): void {
       continue;
     into.push(toRepoRelative(abs));
   }
+}
+
+function loadAliases(): ReadonlyArray<readonly [string, string]> {
+  const tsconfig = JSON.parse(
+    fs.readFileSync(path.join(REPO_ROOT, 'tsconfig.build.json'), 'utf8'),
+  ) as { compilerOptions?: { paths?: Record<string, string[]> } };
+  return Object.entries(tsconfig.compilerOptions?.paths ?? {}).map(
+    ([pattern, targets]) => [pattern, targets[0]] as const,
+  );
+}
+
+function aliasTarget(
+  spec: string,
+  aliases: ReadonlyArray<readonly [string, string]>,
+): string | null {
+  for (const [pattern, target] of aliases) {
+    if (pattern.endsWith('*')) {
+      const prefix = pattern.slice(0, -1);
+      if (spec.startsWith(prefix)) {
+        return path.resolve(
+          REPO_ROOT,
+          target.slice(0, -1) + spec.slice(prefix.length),
+        );
+      }
+    } else if (spec === pattern) {
+      return path.resolve(REPO_ROOT, target);
+    }
+  }
+  return null;
+}
+
+function probe(base: string): string | null {
+  const candidates: string[] = [];
+  if (base.endsWith('.js')) {
+    const stem = base.slice(0, -3);
+    candidates.push(`${stem}.ts`, `${stem}.tsx`);
+  }
+  candidates.push(
+    `${base}.ts`,
+    `${base}.tsx`,
+    path.join(base, 'index.ts'),
+    path.join(base, 'index.tsx'),
+    base,
+  );
+  return candidates.find(isFile) ?? null;
 }
 
 function specifiersIn(text: string): string[] {
@@ -360,24 +406,6 @@ describe('import boundaries', () => {
       'stale entries, delete them from known-violations.json',
     ).toEqual([]);
   });
-});
-
-// The program watchers load inside this closure.
-it('keeps the callable runProgram closure free of UI, session and legacy imports', () => {
-  const forbidden = staticImportClosure(
-    'src/programs/run-program.ts',
-    true,
-  ).filter(
-    (file) =>
-      file === 'src/programs/program-registry.ts' ||
-      file.startsWith('src/ui/') ||
-      file.startsWith('src/steps/') ||
-      file.startsWith('src/lib/wizard-session') ||
-      file.startsWith('src/lib/runners/') ||
-      file.startsWith('src/commands/') ||
-      file.startsWith('src/programs/task-stream/'),
-  );
-  expect(forbidden).toEqual([]);
 });
 
 describe('surface classification', () => {

@@ -1,19 +1,24 @@
-import path from 'node:path';
+/**
+ * Mirrors the agent's `.posthog-audit-checks.json` into the session, so the TUI
+ * screens and the task stream read one value. `runAgent` owns the lifecycle, so
+ * every path gets it — including the e2e host, which builds no task stream.
+ */
+
+import path from 'path';
+import { getUI } from '@ui';
 import {
   startFileWatcher,
   type FileWatcherHandle,
   type FileWatcherOptions,
 } from '@shared/file-watcher';
-import { coerceAuditChecks, type AuditCheck } from '@shared/audit-ledger';
 import { logToFile } from '@utils/debug';
+import { AUDIT_CHECKS_KEY, coerceAuditChecks } from './types.js';
 
 const MAX_LEDGER_FILE_BYTES = 256 * 1024;
 
-/** Watch this run's audit ledger and project valid ledger arrays to a caller. */
-export function watchAuditLedger(
+export function startAuditLedgerWatcher(
   installDir: string,
   file: string,
-  onChecks: (checks: AuditCheck[]) => void,
   options: FileWatcherOptions = {},
 ): FileWatcherHandle {
   const target = path.join(installDir, file);
@@ -21,7 +26,8 @@ export function watchAuditLedger(
 
   return startFileWatcher(
     target,
-    (parsed) => onChecks(coerceAuditChecks(parsed)),
+    (parsed) =>
+      getUI().setFrameworkContext(AUDIT_CHECKS_KEY, coerceAuditChecks(parsed)),
     {
       // A ledger an earlier run left behind stays ignored until this run writes.
       ignoreInitialFile: true,

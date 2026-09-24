@@ -92,6 +92,8 @@ export const CANCELLED_SENTINEL = '__cancelled__';
 /** Default per-question timeout (5 minutes). */
 export const DEFAULT_ASK_TIMEOUT_MS = 5 * 60 * 1000;
 
+export { LONGER_ASK_TIMEOUT_MS } from '@shared/ask-policy';
+
 function buildCancelledAnswers(questions: AskQuestion[]): AskAnswers {
   const out: AskAnswers = {};
   for (const q of questions) {

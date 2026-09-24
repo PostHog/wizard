@@ -6,13 +6,23 @@
  * unattributed money to hide an outage.
  */
 
+import { readFileSync } from 'node:fs';
 import { logToFile } from '@utils/debug';
 import { analytics } from '@utils/analytics';
 import { ErrorCodes, WizardError } from '@shared/errors';
 import type { HostResolution } from '@shared/host-resolution';
 import { checkLlmGatewayHealth } from '@shared/health-checks/endpoints';
 import { ServiceHealthStatus } from '@shared/health-checks/types';
+import { IS_PRODUCTION_BUILD, runtimeEnv } from '@env';
+import type { CloudRegion } from '@utils/types';
 import { isTrustedGatewayUrl, type GatewayAuth } from '@shared/gateway-auth';
+
+export {
+  buildWizardPropertiesBlob,
+  isPastRefresh,
+  isTrustedGatewayUrl,
+  type GatewayAuth,
+} from '@shared/gateway-auth';
 
 interface CachedAuth {
   key: string;
@@ -27,6 +37,54 @@ let cached: CachedAuth | null = null;
  * task at once, and each would otherwise take its own token and its own cap.
  */
 let inFlight: { key: string; promise: Promise<GatewayAuth> } | null = null;
+let ciAuth: GatewayAuth | null = null;
+
+// Snapshot CI supplies a gateway bearer without minting or re-minting.
+export function configureGatewayCredentialsForCI(
+  token: string,
+  projectId: number,
+  gatewayUrl: string,
+): void {
+  if (IS_PRODUCTION_BUILD)
+    throw new Error('CI gateway auth requires a non-production build');
+  if (!token.trim() || !Number.isSafeInteger(projectId) || projectId <= 0) {
+    throw new Error('CI gateway auth requires a token and valid project ID');
+  }
+  if (
+    !/^https?:\/\//.test(gatewayUrl) ||
+    !isTrustedGatewayUrl(gatewayUrl, '')
+  ) {
+    throw new Error('CI gateway auth requires a trusted gateway origin');
+  }
+  resetGatewaySession();
+  ciAuth = {
+    token: token.trim(),
+    teamId: projectId,
+    gatewayUrl: gatewayUrl.replace(/\/+$/, ''),
+    refreshAtMs: Infinity,
+  };
+}
+
+// TODO(B2): CI credential loading belongs to the headless provider, not the
+// agent. Leaves with the rest of this module once RunInput carries resolved
+// inference auth.
+export function configureGatewayFromCIEnvironment(
+  projectId: number,
+  region: CloudRegion,
+): void {
+  if (IS_PRODUCTION_BUILD)
+    throw new Error('CI gateway auth requires a non-production build');
+  const path = runtimeEnv('WIZARD_CI_GATEWAY_TOKEN_FILE');
+  if (!path) throw new Error('WIZARD_CI_GATEWAY_TOKEN_FILE is required for CI');
+  const token = readFileSync(path, 'utf8');
+  delete process.env.WIZARD_CI_GATEWAY_TOKEN_FILE;
+  configureGatewayCredentialsForCI(
+    token,
+    projectId,
+    runtimeEnv('WIZARD_CI_GATEWAY_URL') ||
+      `https://ai-gateway.${region}.posthog.com`,
+  );
+}
 
 /**
  * Adoption floor. The anthropic subprocess holds its credential until a 401
@@ -49,6 +107,7 @@ export async function gatewayAuth(
   accessToken: string,
   program: string | undefined,
 ): Promise<GatewayAuth> {
+  if (ciAuth) return ciAuth;
   // Keyed by program: a token pins `wizard:<program>`, so reusing one across
   // programs bills the wrong budget.
   const key = `${host.apiHost}\n${accessToken}\n${program ?? ''}`;
@@ -122,6 +181,7 @@ async function resolveGatewayAuth(
 export function resetGatewaySession(): void {
   cached = null;
   inFlight = null;
+  ciAuth = null;
 }
 
 interface MintedToken {

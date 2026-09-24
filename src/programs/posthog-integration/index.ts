@@ -1,11 +1,9 @@
 import type { ProgramConfig, ProgramStep } from '@programs/program-step';
 import { runProgramAgent } from '@lib/runners/run-program-agent';
 import type { ProgramRun } from '@programs/program-run';
-import { AgentSignals, WIZARD_TOOL_NAMES } from '@agent';
-import { isAskDisabled } from '@shared/ask-policy';
+import { AgentSignals, shouldDisableAsk, WIZARD_TOOL_NAMES } from '@agent';
 import type { WizardSession } from '@lib/wizard-session';
-import { OutroKind, RunPhase } from '@lib/wizard-session';
-import { mayReportScanResults } from '@shared/scan-consent';
+import { mayReportScanResults, OutroKind, RunPhase } from '@lib/wizard-session';
 import {
   DEFAULT_PACKAGE_INSTALLATION,
   SPINNER_MESSAGE,
@@ -181,7 +179,7 @@ function warehouseReportInstruction(sess: WizardSession): string {
  * links by {@link buildWarehouseNextSteps}.
  */
 const warehouseSeedTasks: NonNullable<ProgramConfig['seedTasks']> = (sess) => {
-  if (isAskDisabled(sess)) return [];
+  if (shouldDisableAsk(sess)) return [];
   const sources = getDetectedWarehouseSources(sess);
   if (sources.length === 0) return [];
 

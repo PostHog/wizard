@@ -1,8 +1,7 @@
 /** Resolved credentials passed from a program host to one agent run. */
+/* eslint-disable @typescript-eslint/no-unused-vars -- A shell: B3 fills in the body. */
 
-import { gatewayAuth } from './gateway-session';
 import type { InferenceAuthProvider } from '@agent/types';
-import type { GatewayAuth } from '@shared/gateway-auth';
 import type { ApiProject, ApiUser, Credentials } from '@shared/api';
 
 export type ResolvedProgramCredentials = {
@@ -26,8 +25,5 @@ export function createPosthogInferenceAuthProvider(
   posthog: Credentials,
   programId: string,
 ): InferenceAuthProvider {
-  return {
-    resolve: (): Promise<GatewayAuth> =>
-      gatewayAuth(posthog.host, posthog.accessToken, programId),
-  };
+  throw new Error('createPosthogInferenceAuthProvider: not implemented');
 }

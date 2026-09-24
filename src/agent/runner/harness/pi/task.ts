@@ -35,7 +35,7 @@ import { AgentOutputSignals } from '@agent/output-signals';
 import { TaskStatus } from '../../sequence/orchestrator/queue';
 import type { OrchestratorToolsContext } from '../../sequence/orchestrator/queue-tools';
 import type { AgentResult, TaskRunInputs } from '../types';
-import type { GatewayAuth } from '@shared/gateway-auth';
+import { gatewayAuth, type GatewayAuth } from '@agent/gateway-session';
 import {
   buildGatewayProvider,
   GATEWAY_PROVIDER,
@@ -250,7 +250,12 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
       createWriteToolDefinition,
     } = sdk;
 
-    const refreshAuth = () => input.inferenceAuth.resolve();
+    const refreshAuth = () =>
+      gatewayAuth(
+        boot.credentials.host,
+        boot.credentials.accessToken,
+        boot.programId,
+      );
     const auth = await refreshAuth();
     const providerInputs = (current: GatewayAuth) => ({
       gatewayUrl: current.gatewayUrl,

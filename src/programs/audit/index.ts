@@ -9,14 +9,23 @@ import { OutroKind } from '@lib/wizard-session';
 import { WIZARD_TOOL_NAMES } from '@agent';
 import { headlessOption, regionOption } from '@lib/headless-mode';
 import { AUDIT_ABORT_CASES } from './detect.js';
-import { AUDIT_CHECKS_FILE, AUDIT_REPORT_FILE } from './types.js';
-import { AUDIT_SEED_CHECKS } from './seed.js';
+import {
+  AUDIT_CHECKS_FILE,
+  AUDIT_CHECKS_KEY,
+  AUDIT_REPORT_FILE,
+} from './types.js';
+import { AUDIT_SEED_CHECKS, seedAuditLedger } from './seed.js';
 
 /** Audit-specific screens for the shared agent-skill pipeline. */
 const AUDIT_SCREEN_BY_STEP: Record<string, string> = {
   intro: 'audit-intro',
   run: 'audit-run',
   outro: 'audit-outro',
+};
+
+const seedBeforeAuditRun = (session: WizardSession): void => {
+  seedAuditLedger(session.installDir);
+  session.frameworkContext[AUDIT_CHECKS_KEY] = AUDIT_SEED_CHECKS;
 };
 
 const withAuditScreens = (steps: ProgramStep[]): ProgramStep[] =>
@@ -46,6 +55,8 @@ const baseConfig = createSkillProgram({
 });
 
 const auditRun = async (session: WizardSession): Promise<ProgramRun> => {
+  seedBeforeAuditRun(session);
+
   if (!baseConfig.run) {
     throw new Error('Audit program has no run configuration.');
   }
@@ -90,7 +101,6 @@ export const auditConfig: ProgramConfig = {
   steps: auditSteps,
   run: auditRun,
   auditLedgerFile: AUDIT_CHECKS_FILE,
-  auditSeedChecks: AUDIT_SEED_CHECKS,
   // Ledger tools are opt-in per program; pi matches on the short name.
   allowedTools: [
     'Agent',

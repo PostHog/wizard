@@ -1,7 +1,7 @@
 import type { ProgramConfig } from '@programs/program-step';
 import type { ProgramRun } from '@programs/program-run';
 import type { WizardSession } from '@lib/wizard-session';
-import { LONGER_ASK_TIMEOUT_MS } from '@shared/ask-policy';
+import { LONGER_ASK_TIMEOUT_MS } from '@agent';
 import { WAREHOUSE_SOURCE_PROGRAM } from './steps.js';
 import {
   WAREHOUSE_ABORT_CASES,

@@ -2,6 +2,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { readFileHead } from './bounded-fs';
 import { withProgress } from './telemetry';
+import { getPackageDotJson, updatePackageDotJson } from './setup-utils';
+import type { PackageJson } from './package-json';
 import { analytics } from './analytics';
 import type { WizardRunOptions } from './types';
 
@@ -16,6 +18,11 @@ export interface PackageManager {
   runScriptCommand: string;
   flags: string;
   detect: (opts: InstallDirOpt) => boolean;
+  addOverride: (
+    pkgName: string,
+    pkgVersion: string,
+    opts: InstallDirOpt,
+  ) => Promise<void>;
 }
 
 function hasLockfile(installDir: string, file: string): boolean {
@@ -33,6 +40,38 @@ function lockfileHeaderContains(
   );
 }
 
+type OverrideSlot = 'npm' | 'yarn' | 'pnpm';
+
+async function writeOverride(
+  slot: OverrideSlot,
+  pkgName: string,
+  pkgVersion: string,
+  { installDir }: InstallDirOpt,
+): Promise<void> {
+  const pkg = await getPackageDotJson({ installDir });
+  let next: PackageJson;
+  if (slot === 'yarn') {
+    next = {
+      ...pkg,
+      resolutions: { ...(pkg.resolutions ?? {}), [pkgName]: pkgVersion },
+    };
+  } else if (slot === 'pnpm') {
+    next = {
+      ...pkg,
+      pnpm: {
+        ...(pkg.pnpm ?? {}),
+        overrides: { ...(pkg.pnpm?.overrides ?? {}), [pkgName]: pkgVersion },
+      },
+    };
+  } else {
+    next = {
+      ...pkg,
+      overrides: { ...(pkg.overrides ?? {}), [pkgName]: pkgVersion },
+    };
+  }
+  await updatePackageDotJson(next, { installDir });
+}
+
 export const BUN: PackageManager = {
   name: 'bun',
   label: 'Bun',
@@ -42,6 +81,8 @@ export const BUN: PackageManager = {
   flags: '',
   detect: ({ installDir }) =>
     hasLockfile(installDir, 'bun.lockb') || hasLockfile(installDir, 'bun.lock'),
+  addOverride: (pkgName, pkgVersion, opts) =>
+    writeOverride('npm', pkgName, pkgVersion, opts),
 };
 
 export const YARN_V1: PackageManager = {
@@ -53,6 +94,8 @@ export const YARN_V1: PackageManager = {
   flags: '--ignore-workspace-root-check',
   detect: ({ installDir }) =>
     lockfileHeaderContains(installDir, 'yarn.lock', 'yarn lockfile v1'),
+  addOverride: (pkgName, pkgVersion, opts) =>
+    writeOverride('yarn', pkgName, pkgVersion, opts),
 };
 
 /** YARN V2/3/4 */
@@ -65,6 +108,8 @@ export const YARN_V2: PackageManager = {
   flags: '',
   detect: ({ installDir }) =>
     lockfileHeaderContains(installDir, 'yarn.lock', '__metadata'),
+  addOverride: (pkgName, pkgVersion, opts) =>
+    writeOverride('yarn', pkgName, pkgVersion, opts),
 };
 
 export const PNPM: PackageManager = {
@@ -75,6 +120,8 @@ export const PNPM: PackageManager = {
   runScriptCommand: 'pnpm',
   flags: '--ignore-workspace-root-check',
   detect: ({ installDir }) => hasLockfile(installDir, 'pnpm-lock.yaml'),
+  addOverride: (pkgName, pkgVersion, opts) =>
+    writeOverride('pnpm', pkgName, pkgVersion, opts),
 };
 
 export const NPM: PackageManager = {
@@ -85,6 +132,8 @@ export const NPM: PackageManager = {
   runScriptCommand: 'npm run',
   flags: '',
   detect: ({ installDir }) => hasLockfile(installDir, 'package-lock.json'),
+  addOverride: (pkgName, pkgVersion, opts) =>
+    writeOverride('npm', pkgName, pkgVersion, opts),
 };
 
 // Expo is selected by upstream config (app.json / app.config.*) rather than
@@ -97,6 +146,8 @@ export const EXPO: PackageManager = {
   runScriptCommand: 'npx expo run',
   flags: '',
   detect: () => false,
+  addOverride: (pkgName, pkgVersion, opts) =>
+    writeOverride('npm', pkgName, pkgVersion, opts),
 };
 
 export const packageManagers: PackageManager[] = [

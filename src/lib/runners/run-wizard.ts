@@ -14,14 +14,11 @@ import type { TaskStreamPush as TaskStreamPushClass } from '@programs/task-strea
 import { resolveNoTelemetry } from './resolve-no-telemetry';
 import { checkLocalServices, getLocalDev } from '@shared/local-dev';
 import { runCleanups } from '@utils/wizard-abort';
-import {
-  commitRegisteredRunSkillCleanups,
-  registerRunSkillCleanup,
-} from '@shared/skill-run-cleanup';
 import { classifyRunFailure, emitWizardError } from '@shared/errors';
 import { isRunFailure } from '@ui/mint-failure';
 import { getUI } from '@ui';
 import { analytics } from '@utils/analytics';
+import { join } from 'node:path';
 
 const WIZARD_VERSION = VERSION;
 
@@ -86,8 +83,6 @@ export function runWizard(
   void (async () => {
     try {
       const installDir = (options.installDir as string) || process.cwd();
-      // Armed until a successful exit, so every failed or interrupted exit removes new skills.
-      registerRunSkillCleanup(installDir);
 
       const { startTUI } = await import('@ui/tui/start-tui');
       const { buildSession, RunPhase } = await import('@lib/wizard-session');
@@ -198,10 +193,11 @@ export function runWizard(
         config = getProgramConfig(active);
       }
 
-      // After the switch loop, not before: the stream bakes its program id and
-      // session id in at construction, so a stream built for the launch program
-      // would report the whole run under a program the user left on the intro
-      // screen. Nothing before this point produces a task to push.
+      // After the switch loop, not before: the stream bakes its program id,
+      // session id, and event-plan path in at construction, so a stream built
+      // for the launch program would report the whole run under a program the
+      // user left on the intro screen. Nothing before this point produces a
+      // task to push.
       // Consent gates the push, not the dump: `--no-telemetry` still logs.
       const fileDestination = createFileDestination(options.taskStreamLog);
       const destinations = [
@@ -220,6 +216,9 @@ export function runWizard(
         store: activeTui.store,
         programId: config.streamWorkflowId ?? config.id,
         destinations,
+        eventPlanPath: config.eventPlanFile
+          ? join(session.installDir, config.eventPlanFile)
+          : undefined,
         auditChecks: config.auditLedgerFile
           ? () => getAuditChecks(activeTui.store.session)
           : undefined,
@@ -288,18 +287,13 @@ export function runWizard(
         if (skipAgent && !runFailed) return s.outroDismissed;
         return s.skillsComplete;
       });
-      if (signalled) return;
 
-      await activeStream.shutdown(2000);
-      if (signalled) return;
-      // Handlers stay attached, so a late signal cannot end the process before drain or commit.
       exitInProgress = true;
-      if (runFailed) {
-        runCleanups();
-        await analytics.shutdown('error');
-      }
+      await activeStream.shutdown(2000);
+      process.off('SIGINT', onSignal);
+      process.off('SIGTERM', onSignal);
+      if (runFailed) await analytics.shutdown('error');
       activeTui.unmount();
-      if (!runFailed) commitRegisteredRunSkillCleanups();
       process.exit(runFailed ? 1 : 0);
     } catch (err) {
       // File-log first — the cleanup below can throw or exit.

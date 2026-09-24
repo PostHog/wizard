@@ -1,10 +1,9 @@
+import type { PlannedEvent, WizardStore } from '@ui/tui/store';
 import {
   startFileWatcher,
   type FileWatcherHandle,
   type FileWatcherOptions,
 } from '@shared/file-watcher';
-
-export type PlannedEvent = { name: string; description: string };
 
 const MAX_EVENT_PLAN_FILE_BYTES = 256 * 1024;
 const MAX_EVENT_COUNT = 50;
@@ -41,14 +40,13 @@ export function normalizeEventPlan(parsed: unknown): PlannedEvent[] | null {
   return events;
 }
 
-/** Capture the first non-empty event plan emitted by this run. */
-export class ProgramEventPlanWatcher {
+export class EventPlanWatcher {
   private handle: FileWatcherHandle | null = null;
   private captured = false;
 
   constructor(
+    private readonly store: WizardStore,
     private readonly path: string,
-    private readonly onEvents: (events: PlannedEvent[]) => void,
     private readonly options: FileWatcherOptions = {},
   ) {}
 
@@ -62,11 +60,8 @@ export class ProgramEventPlanWatcher {
         if (!events || events.length === 0) return;
 
         this.captured = true;
-        try {
-          this.onEvents(events);
-        } finally {
-          this.stop();
-        }
+        this.store.setEventPlan(events);
+        this.stop();
       },
       {
         ignoreInitialFile: true,

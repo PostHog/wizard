@@ -1,4 +1,4 @@
-/** Tool ids programs name in allowedTools and disallowedTools. Data only: the agent entry loads it at startup. */
+/** Tool ids programs name in allowedTools and disallowedTools. Data only. */
 
 export const SERVER_NAME = 'wizard-tools';
 

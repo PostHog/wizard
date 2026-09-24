@@ -2,15 +2,14 @@ import { inspect } from 'node:util';
 import {
   GatewayMintFailed,
   GatewayMintRefused,
-  gatewayAuth,
-  resetGatewaySession,
-} from '../gateway-session';
-import {
   buildWizardPropertiesBlob,
+  configureGatewayCredentialsForCI,
+  configureGatewayFromCIEnvironment,
+  gatewayAuth,
   isPastRefresh,
   isTrustedGatewayUrl,
-} from '@shared/gateway-auth';
-import { createCiGatewayAuth } from '@shared/ci-gateway-auth';
+  resetGatewaySession,
+} from '@agent/gateway-session';
 import type { HostResolution } from '@shared/host-resolution';
 import { ErrorCodes } from '@shared/errors';
 import { WizardError } from '@utils/wizard-abort';
@@ -66,6 +65,38 @@ describe('gatewayAuth', () => {
     vi.unstubAllGlobals();
   });
 
+  it('uses the supplied CI bearer across programs and time without minting', async () => {
+    configureGatewayCredentialsForCI(
+      ' opaque-ci-token ',
+      42,
+      'https://ai-gateway.us.posthog.com/',
+    );
+    const auth = {
+      token: 'opaque-ci-token',
+      teamId: 42,
+      gatewayUrl: 'https://ai-gateway.us.posthog.com',
+      refreshAtMs: Infinity,
+    };
+    const results = await Promise.all(
+      ['integration', 'audit', undefined].map((program) =>
+        gatewayAuth(host, 'phx_project', program),
+      ),
+    );
+    expect(results).toEqual([auth, auth, auth]);
+    const clock = vi
+      .spyOn(Date, 'now')
+      .mockReturnValue(Number.MAX_SAFE_INTEGER);
+    try {
+      expect(await gatewayAuth(host, 'phx_project', 'integration')).toEqual(
+        auth,
+      );
+      expect(isPastRefresh(auth)).toBe(false);
+    } finally {
+      clock.mockRestore();
+    }
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it.each([
     ['', 42, 'https://ai-gateway.us.posthog.com'],
     ['token', 0, 'https://ai-gateway.us.posthog.com'],
@@ -79,7 +110,9 @@ describe('gatewayAuth', () => {
   ] as const)(
     'rejects invalid CI gateway configuration',
     (token, projectId, url) => {
-      expect(() => createCiGatewayAuth(token, projectId, url)).toThrow();
+      expect(() =>
+        configureGatewayCredentialsForCI(token, projectId, url),
+      ).toThrow();
     },
   );
 
@@ -87,9 +120,9 @@ describe('gatewayAuth', () => {
     vi.stubEnv('NODE_ENV', 'production');
     vi.resetModules();
     try {
-      const prod = await import('@shared/ci-gateway-auth');
+      const prod = await import('@agent/gateway-session');
       expect(() =>
-        prod.createCiGatewayAuth(
+        prod.configureGatewayCredentialsForCI(
           'token',
           42,
           'https://ai-gateway.us.posthog.com',
@@ -98,6 +131,17 @@ describe('gatewayAuth', () => {
     } finally {
       vi.unstubAllEnvs();
       vi.resetModules();
+    }
+  });
+
+  it('requires an explicit gateway token file for CI', () => {
+    vi.stubEnv('WIZARD_CI_GATEWAY_TOKEN_FILE', '');
+    try {
+      expect(() => configureGatewayFromCIEnvironment(42, 'us')).toThrow(
+        'WIZARD_CI_GATEWAY_TOKEN_FILE is required',
+      );
+    } finally {
+      vi.unstubAllEnvs();
     }
   });
 

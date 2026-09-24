@@ -10,7 +10,7 @@
  * task resolve to a prompt fetched at startup into the registry. The wizard side
  * stays product-ignorant: it is the queue, the executor, and the loader.
  */
-import { failed, hostAborted } from '../../shared/errors';
+import { failed } from '../../shared/errors';
 import { RunOutcome } from '../../shared/types';
 import { randomUUID } from 'crypto';
 import {
@@ -66,7 +66,8 @@ import {
 import { RunMetrics } from './run-metrics';
 import { dependencyClosure, uncoveredBySink } from './queue-tools';
 import { deferSeededTasks } from './seeded-deps';
-import { isAskDisabled, LONGER_ASK_TIMEOUT_MS } from '@shared/ask-policy';
+import { LONGER_ASK_TIMEOUT_MS } from '@agent/wizard-ask-bridge';
+import { shouldDisableAsk } from '../../shared/bootstrap';
 import {
   agentRunTools,
   assembleSeedPrompt,
@@ -184,6 +185,13 @@ function terminalResult(
         },
       };
   }
+}
+
+function cancelledRun(): SequenceResult {
+  return {
+    outcome: RunOutcome.Aborted,
+    failure: { code: ErrorCodes.AgentAbort, message: 'Agent run cancelled' },
+  };
 }
 
 /** Every skill entry the menu knows, across categories. */
@@ -593,7 +601,7 @@ async function executeOrchestrator(
   cleanupQueue: () => void,
   controller: AbortController,
 ): Promise<SequenceResult> {
-  if (signal?.aborted) return hostAborted();
+  if (signal?.aborted) return cancelledRun();
   const runId = randomUUID();
   const { run } = config;
   const programId = config.programId;
@@ -607,7 +615,7 @@ async function executeOrchestrator(
     // Baked into the prompts at load, so enqueue, dispatch, and telemetry all read one effective spec.
     overrides: config.stageOverrides,
   });
-  if (signal?.aborted) return hostAborted();
+  if (signal?.aborted) return cancelledRun();
   const seedPrompt = registry.seed;
   if (!seedPrompt) {
     throw new Error(
@@ -715,7 +723,7 @@ async function executeOrchestrator(
   let commandmentsPath: string | undefined;
   let referenceInstallPath: string | undefined;
   const menuSkillEntries = await fetchSkillMenuEntries(boot.skillsBaseUrl);
-  if (signal?.aborted) return hostAborted();
+  if (signal?.aborted) return cancelledRun();
   // The framework key for reference + variant resolution. `input.integration`
   // is the detected framework and always wins; `input.skillId` is the
   // fallback for the basic-integration path, where the caller sets it to the
@@ -736,7 +744,7 @@ async function executeOrchestrator(
         triage: boot.triageProvider,
       },
     );
-    if (signal?.aborted) return hostAborted();
+    if (signal?.aborted) return cancelledRun();
     if (ref.kind === 'ok') {
       referenceInstallPath = ref.path;
       const example = path.join(ref.path, 'references', 'EXAMPLE.md');
@@ -916,7 +924,7 @@ async function executeOrchestrator(
           signal,
         }),
       );
-      if (signal?.aborted) return hostAborted();
+      if (signal?.aborted) return cancelledRun();
     }
     logToFile(`[orchestrator] runner-seeded task ${seeded.type}`);
   }
@@ -947,7 +955,7 @@ async function executeOrchestrator(
 
   // One bridge for the run, handed only to a task whose prompt allows asking.
   // Absent in CI and signup, where nobody can answer.
-  const askBridge = isAskDisabled(input.flags)
+  const askBridge = shouldDisableAsk(input.flags)
     ? undefined
     : createAskBridge(interaction, {
         signal,
@@ -1007,7 +1015,7 @@ async function executeOrchestrator(
     requestRemark: false,
     analyticsProperties: { task_type: 'seed', harness: seedPick.harness },
   });
-  if (signal?.aborted) return hostAborted();
+  if (signal?.aborted) return cancelledRun();
   const seedTerminal = terminalResult(seedResult);
   if (seedTerminal) return seedTerminal;
   analytics.wizardCapture('orchestrator seeded', {
@@ -1341,7 +1349,7 @@ async function executeOrchestrator(
     reportBlockedTasks(store.list(), stoppedBy);
     return { outcome: fatal.outcome, failure: fatal.failure };
   }
-  if (signal?.aborted) return hostAborted();
+  if (signal?.aborted) return cancelledRun();
 
   renderQueue();
 
