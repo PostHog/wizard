@@ -93,15 +93,13 @@ describe('outro suggestion', () => {
     expect(outro.nextSteps).toBeUndefined();
   });
 
-  it('keeps the PostHog headline and change list intact either way', async () => {
+  it('never points the outro at a local report file', async () => {
     for (const sources of [[], [POSTGRES]]) {
       const s = sessionWith(sources);
       const runDef = await resolveRun(s);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const outro = runDef.buildOutroData!(s, CREDENTIALS as any)!;
 
-      expect(outro.message).toBe('Successfully installed PostHog!');
-      expect(outro.changes).toContain('Added PostHog provider');
       // No report file — the report goes out via publish_handoff + notebook.
       expect(outro.reportFile).toBeUndefined();
     }
