@@ -15,12 +15,6 @@
 
 import { atom, map } from 'nanostores';
 import { logToFile } from '@utils/debug';
-import {
-  TaskStatus,
-  isTaskStatus,
-  type AuthErrorDetail,
-  type TokenUsageDelta,
-} from '@ui/wizard-ui';
 import type { SettingsConflict } from '@shared/claude-settings';
 import {
   WizardReadiness,
@@ -36,7 +30,7 @@ import {
   type ProgramId,
 } from './router.js';
 import { analytics, sessionProperties } from '@utils/analytics';
-import type { ProgramReadyContext } from '@programs/types';
+import type { HostFailure, ProgramReadyContext } from '@programs/types';
 import type { StoreInitContext } from './flow.js';
 import { getProgramConfig, reportWarehouseSourcesDetected } from '@programs';
 import { getProgramFlow, rawProgramFlow } from './flows/index.js';
@@ -46,9 +40,20 @@ import { computeTokenCostUsd } from '@shared/token-pricing';
 import type { WizardSession } from '@tui/session';
 import type { OutroData } from '@shared/outro';
 import type { DiscoveredFeature } from '@shared/scan-consent';
-import type { PendingQuestion, AskAnswers, TaskNotice } from '@agent/types';
+import type {
+  PendingQuestion,
+  AskAnswers,
+  TaskNotice,
+  AuthErrorDetail,
+  TokenUsageDelta,
+} from '@agent/types';
 import type { CloudRegion } from '@utils/types';
-import { McpOutcome, RunPhase } from '@shared/run-state';
+import {
+  McpOutcome,
+  RunPhase,
+  TaskStatus,
+  isTaskStatus,
+} from '@shared/run-state';
 import { ScanConsent } from '@shared/scan-consent';
 import { buildSession } from '@tui/session';
 
@@ -166,6 +171,13 @@ export class WizardStore {
 
   version = '';
 
+  /** Ends the run; the CLI installs its abort path when it starts the TUI. */
+  abort: (failure?: HostFailure) => Promise<never> = (failure) => {
+    // A store no CLI started (tests, the playground) has no process to end.
+    logToFile(`[store] abort without a host: ${failure?.message ?? ''}`);
+    return new Promise<never>(() => undefined);
+  };
+
   /** Navigation router — resolves active screen from session state. */
   readonly router: WizardRouter;
 
@@ -258,6 +270,7 @@ export class WizardStore {
       setUnsupportedVersion: (info) => this.setUnsupportedVersion(info),
       addDiscoveredFeature: (f) => this.addDiscoveredFeature(f),
       setDetectionComplete: () => this.setDetectionComplete(),
+      abort: (failure) => this.abort(failure),
     };
     await config.onReady?.(ctx);
   }

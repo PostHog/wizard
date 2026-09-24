@@ -102,7 +102,6 @@ vi.mock('@programs/posthog-doctor/fetch', () => ({
 
 import { WizardStore, TaskStatus, type ScreenName } from '@tui/store';
 import { InkUI } from '@tui/ink-ui';
-import { setUI } from '@ui/index';
 import { ScreenId, Overlay } from '@tui/router';
 import { createServices, type ScreenServices } from '@tui/screen-registry';
 import { HostResolution } from '@shared/host-resolution';
@@ -128,6 +127,7 @@ import {
 import { buildSession } from '@tui/session';
 import { OutroKind } from '@shared/outro';
 import { RunPhase, McpOutcome } from '@shared/run-state';
+import { setUI } from '@cli/ui';
 
 // 80x28 is the ScreenContainer minimum. Anything smaller renders the
 // viewport guard instead of the screen, which the last describe pins once.

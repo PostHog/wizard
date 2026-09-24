@@ -1,8 +1,8 @@
-vi.mock('@ui', () => ({ getUI: vi.fn() }));
+vi.mock('@cli/ui', () => ({ getUI: vi.fn() }));
 vi.mock('@utils/debug');
 vi.mock('@utils/analytics', () => ({ analytics: { wizardCapture: vi.fn() } }));
 
-import { createUiReducer, uiInteraction } from '../agent-progress';
+import { createUiReducer, uiInteraction } from '../host-ui';
 import { LoggingUI } from '@headless/renderers/logging-ui';
 import type { AgentProgress } from '@agent/progress';
 import {

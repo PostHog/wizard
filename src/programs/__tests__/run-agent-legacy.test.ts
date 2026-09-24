@@ -18,10 +18,11 @@ import { AUDIT_CHECKS_FILE, AUDIT_CHECKS_KEY } from '../audit/types';
 import { EVENT_PLAN_FILE } from '../posthog-integration/constants';
 import { startTUI } from '@tui/start-tui';
 import { WizardStore } from '@tui/store';
-import { getUI, setUI } from '@ui';
+import { getUI, setUI } from '@cli/ui';
 import { analytics } from '@utils/analytics';
 import { initLogFile, logToFile } from '@utils/debug';
-import { clearCleanup, runCleanups, wizardAbort } from '@utils/wizard-abort';
+import { clearCleanup, runCleanups } from '@utils/cleanup-registry';
+import { wizardAbort } from '@cli/wizard-abort';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -103,13 +104,10 @@ vi.mock('@shared/health-checks/readiness', async (original) => {
     }),
   };
 });
-vi.mock('@utils/wizard-abort', async (original) => {
-  const actual = await original<typeof import('@utils/wizard-abort')>();
-  return {
-    ...actual,
-    wizardAbort: vi.fn().mockResolvedValue(undefined),
-  };
-});
+vi.mock('@cli/wizard-abort', async (original) => ({
+  ...(await original<typeof import('@cli/wizard-abort')>()),
+  wizardAbort: vi.fn().mockResolvedValue(undefined),
+}));
 vi.mock('../posthog-integration/detect', () => ({
   maybeStampAiSdkDetected: vi.fn(),
 }));
@@ -434,8 +432,8 @@ it.each([
 ] as const)(
   'labels a %s run %s from its outcome when no Error came back',
   async (outcome, status, failure) => {
-    const actual = await vi.importActual<typeof import('@utils/wizard-abort')>(
-      '@utils/wizard-abort',
+    const actual = await vi.importActual<typeof import('@cli/wizard-abort')>(
+      '@cli/wizard-abort',
     );
     vi.mocked(wizardAbort).mockImplementationOnce(actual.wizardAbort);
     const exit = vi
@@ -567,8 +565,8 @@ it("cleans a marked install when program setup throws before the functional runn
     fs.writeFileSync(path.join(skillDir, '.posthog-wizard'), '');
     throw setupFailure;
   };
-  const actual = await vi.importActual<typeof import('@utils/wizard-abort')>(
-    '@utils/wizard-abort',
+  const actual = await vi.importActual<typeof import('@cli/wizard-abort')>(
+    '@cli/wizard-abort',
   );
   vi.mocked(wizardAbort).mockImplementationOnce(actual.wizardAbort);
   const exit = vi

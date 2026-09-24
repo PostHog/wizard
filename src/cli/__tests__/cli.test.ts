@@ -109,8 +109,8 @@ vi.mock('@programs/detection', () => ({
 vi.mock('@utils/analytics', () => ({
   analytics: { setTag: vi.fn() },
 }));
-vi.mock('@utils/wizard-abort', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@utils/wizard-abort')>()),
+vi.mock('@cli/wizard-abort', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@cli/wizard-abort')>()),
   wizardAbort: vi.fn(),
 }));
 vi.mock('../runners/run-program-agent', () => ({
@@ -501,7 +501,7 @@ describe('CLI argument parsing', () => {
   // analytics. Its CLI name is intentionally ugly/undocumented — sourced from
   // @cli/headless-mode so this test never has to spell it out.
   describe('headless flag', () => {
-    // Source of truth: HEADLESS_FLAG in src/cli/headless-mode.ts. Hardcoded
+    // Source of truth: HEADLESS_FLAG in src/env.ts. Hardcoded
     // here (not imported) to keep this file free of top-level imports — see the
     // note at the top of the file.
     const headlessFlag = '--headless-DONOTUSE-EXPERIMENTAL';

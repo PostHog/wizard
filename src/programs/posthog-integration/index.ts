@@ -23,7 +23,6 @@ import {
   type ProjectScopeSession,
 } from '@programs/detection/project-scope';
 import { FRAMEWORK_REGISTRY } from '@programs/registry';
-import { wizardAbort } from '@utils/wizard-abort';
 import { ErrorCodes } from '@shared/errors';
 import {
   WIZARD_DEFAULT_AIO_LOGS_FLAG_KEY,
@@ -290,7 +289,7 @@ export const posthogIntegrationConfig: ProgramConfig = {
 
     const integration = await detectFramework(session.installDir);
     if (!integration) {
-      await wizardAbort({
+      await host.abort({
         code: ErrorCodes.DetectNoFramework,
         message: 'Could not auto-detect your framework for this project.',
       });

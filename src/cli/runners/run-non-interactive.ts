@@ -9,20 +9,20 @@ import {
   POSTHOG_LOCAL_URL,
 } from '@shared/local-dev';
 import type { CloudRegion } from '@utils/types';
-import { createUiReducer, getUI, setUI } from '@ui';
 import { LoggingUI } from '@headless/renderers/logging-ui';
-import type { ProgramConfig } from '@programs/types';
-import { getAuditChecks } from '@programs/audit/types';
+import type {
+  HostFailure,
+  ProgramConfig,
+  TaskStreamPush,
+} from '@programs/types';
 import { analytics } from '@utils/analytics';
 import { resolveNoTelemetry } from './resolve-no-telemetry';
 import type { WizardStore } from '@tui/store';
-import type { TaskStreamPush } from '@programs/task-stream/task-stream-push';
 import {
   ErrorCodes,
   classifyRunFailure,
   emitWizardError,
 } from '@shared/errors';
-import { detectErrorCode } from '@programs/detect-map';
 import {
   commitRegisteredRunSkillCleanups,
   registerRunSkillCleanup,
@@ -30,6 +30,8 @@ import {
 import { cliAuthHost } from './auth-host';
 import type { OutroData } from '@shared/outro';
 import type { RunPhase as RunPhaseT } from '@shared/run-state';
+import { getAuditChecks, detectErrorCode, createUiReducer } from '@programs';
+import { getUI, setUI } from '@cli/ui';
 
 /**
  * The two non-interactive run modes. Both drive the same pipeline today; the
@@ -123,7 +125,7 @@ export function runNonInteractive(
       '@utils/debug'
     );
     const { runCleanups, wizardAbort, WizardError } = await import(
-      '@utils/wizard-abort'
+      '@cli/wizard-abort'
     );
     runRegisteredCleanups = runCleanups;
 
@@ -213,8 +215,9 @@ export function runNonInteractive(
     {
       const { WizardStore } = await import('@tui/store');
       const { HeadlessUI } = await import('@headless/renderers/headless-ui');
+      const { loadTaskStream } = await import('@programs');
       const { TaskStreamPush, PostHogDestination, createFileDestination } =
-        await import('@programs/task-stream/index');
+        await loadTaskStream();
 
       // `''` resolves to the default path, so `--ci` always dumps.
       const logTarget =
@@ -280,6 +283,7 @@ export function runNonInteractive(
           auth: cliAuthHost(),
           log: ui.log,
           onProgress: createUiReducer(ui),
+          abort: (failure) => wizardAbort(failure),
         });
       } else {
         const readyCtx = {
@@ -308,6 +312,7 @@ export function runNonInteractive(
           setPosthogSdkDetected: (detected: boolean) => {
             session.posthogSdkDetected = detected;
           },
+          abort: (failure?: HostFailure) => wizardAbort(failure),
         };
         await config.onReady?.(readyCtx);
 

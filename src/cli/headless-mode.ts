@@ -11,17 +11,18 @@
  * The flag is deliberately named `--headless-DONOTUSE-EXPERIMENTAL` and hidden
  * from `--help`: the contract is still unstable and subject to breaking
  * changes, so it must not be advertised or relied on by external callers. This
- * module is the single source of truth for the flag's name and detection — keep
- * the scary name out of every other file so a future rename is one edit here.
+ * module owns the flag's declaration and detection; its name lives in `@env`,
+ * which reads argv at launch. Keep the scary name out of every other file.
  */
 
 import type { Options } from 'yargs';
+import { HEADLESS_FLAG } from '@env';
 
 /**
  * The on-CLI flag name. Intentionally ugly + undocumented; do not surface it in
  * `--help`, the README, or user-facing error messages.
  */
-export const HEADLESS_FLAG = 'headless-DONOTUSE-EXPERIMENTAL';
+export { HEADLESS_FLAG };
 
 /**
  * The yargs option declaration for the headless flag. Commands opt in so that

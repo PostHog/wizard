@@ -4,13 +4,6 @@
  * No prompts, no TUI, no interactivity. Just console output.
  */
 
-import {
-  TaskStatus,
-  type WizardUI,
-  type SpinnerHandle,
-  type AuthErrorDetail,
-  type TokenUsageDelta,
-} from '@ui/wizard-ui';
 import type { SettingsConflict } from '@shared/claude-settings';
 import type { ApiUser, Credentials } from '@shared/api';
 import { OAUTH_TIMEOUT_MS } from '@shared/constants';
@@ -19,10 +12,20 @@ import {
   getBlockingServiceKeys,
   SERVICE_LABELS,
 } from '@shared/health-checks/readiness';
-import type { AskAnswers, PendingQuestion, TaskNotice } from '@agent/types';
+import type {
+  AskAnswers,
+  PendingQuestion,
+  TaskNotice,
+  SpinnerHandle,
+  AuthErrorDetail,
+  TokenUsageDelta,
+} from '@agent/types';
 import type { OutroData } from '@shared/outro';
+import { TaskStatus } from '@shared/run-state';
+import type { InteractionUi, ProgressUi } from '@programs/types';
 
-export class LoggingUI implements WizardUI {
+/** Implements the CLI's WizardUI; the CLI checks that where it installs one. */
+export class LoggingUI implements ProgressUi, InteractionUi {
   intro(message: string): void {
     console.log(`┌  ${message}`);
   }

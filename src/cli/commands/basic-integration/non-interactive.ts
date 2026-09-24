@@ -1,6 +1,6 @@
-import { getUI } from '@ui';
 import { ErrorCodes } from '@shared/errors';
 import { emitWizardError } from '@shared/errors';
+import { getUI } from '@cli/ui';
 
 /** Print the "needs a TTY" error and exit. Used when no `--ci` flag and no TTY. */
 export function failNonInteractive(): void {

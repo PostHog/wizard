@@ -15,7 +15,6 @@
 
 import { WizardStore } from '@tui/store';
 import { InkUI } from '@tui/ink-ui';
-import { setUI } from '@ui/index';
 import { Integration } from '@shared/constants';
 import { HostResolution } from '@shared/host-resolution';
 import { FRAMEWORK_REGISTRY } from '@programs/registry';
@@ -29,6 +28,7 @@ import { profileFor } from '../profiles';
 import { rawProgramFlow } from '@tui/flows/index';
 import { buildSession } from '@tui/session';
 import { RunPhase } from '@shared/run-state';
+import { setUI } from '@cli/ui';
 
 /**
  * Walk a program flow offline using an e2e profile, injecting the external

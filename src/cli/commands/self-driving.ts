@@ -1,7 +1,7 @@
 import { runWizard, runWizardCI } from '@cli/runners';
-import { selfDrivingConfig } from '@programs/self-driving/index';
 import { skillProgramOptions } from './skill-program-options';
 import type { Command } from './command';
+import { selfDrivingConfig } from '@programs';
 
 export const selfDrivingCommand: Command = {
   name: 'self-driving',

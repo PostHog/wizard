@@ -1,8 +1,8 @@
-import { auditConfig } from '@programs/audit/index';
 import { headlessOption, regionOption } from '@cli/headless-mode';
 
 import type { Command } from './command';
 import { familyCommandFactory } from './factories/family-command-factory';
+import { auditConfig } from '@programs';
 
 /**
  * The `wizard audit` family.

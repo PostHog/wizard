@@ -2,14 +2,15 @@
 
 import { isDeepStrictEqual } from 'node:util';
 import { analytics } from '@utils/analytics';
-import { createUiReducer, getUI, uiInteraction, type WizardUI } from '@ui';
 import { RunOutcome, TASK_OUTCOMES_KEY } from '@agent';
 import {
   AUDIT_CHECKS_KEY,
   authenticate,
+  createUiReducer,
   FRAMEWORK_REGISTRY,
   getDetectedWarehouseSources,
   runProgram,
+  uiInteraction,
 } from '@programs';
 import type {
   ProgramCompletionContext,
@@ -32,14 +33,14 @@ import {
   SERVICE_LABELS,
 } from '@shared/health-checks/readiness';
 import { enableDebugLogs, logToFile, initLogFile } from '@utils/debug';
-import { wizardAbort } from '@utils/wizard-abort';
 import { ErrorCodes } from '@shared/errors';
 import { isNonInteractiveEnvironment } from '@utils/environment';
 import { Sequence, type Integration } from '@shared/constants';
 import { mayReportScanResults } from '@shared/scan-consent';
-import { postAuthGateSteps, type FlowStep } from '@tui/flow';
-import { rawProgramFlow } from '@tui/flows/index';
+import type { FlowStep } from '@tui/flow';
 import type { WizardSession } from '@tui/session';
+import { getUI, type WizardUI } from '@cli/ui';
+import { wizardAbort } from '@cli/wizard-abort';
 import { cliAuthHost } from './auth-host';
 
 /** Resolve the program's run from the session, run the gates, run it through runProgram and apply the result. */
@@ -79,7 +80,10 @@ export async function runProgramAgent(
 
   // 2. Health check (guarded — skip if TUI already ran it). Only
   // programs whose TUI flow has a health-check screen get pre-flight checks;
-  // for everything else the checks never fire and never block.
+  // for everything else the checks never fire and never block. The TUI flow
+  // also names the post-auth gates; it loads here, not at startup.
+  const { postAuthGateSteps } = await import('@tui/flow');
+  const { rawProgramFlow } = await import('@tui/flows/index');
   const flow = rawProgramFlow(programConfig.id);
   await runHealthGate(session, flow);
 

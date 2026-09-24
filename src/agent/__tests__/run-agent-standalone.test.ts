@@ -24,7 +24,7 @@ import type {
   TaskRunInputs,
 } from '@agent/runner/harness/types';
 
-vi.mock('@ui', () => ({
+vi.mock('@cli/ui', () => ({
   getUI: () => {
     throw new Error('the agent reached for getUI()');
   },

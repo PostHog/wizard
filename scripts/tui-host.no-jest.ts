@@ -20,7 +20,6 @@ import { startTUI } from '@tui/start-tui';
 import { rawProgramFlow } from '@tui/flows/index';
 import { advanceStep } from '@cli/runners/run-wizard';
 import { cliAuthHost } from '@cli/runners/auth-host';
-import { getUI } from '@ui';
 import { VERSION } from '@shared/version';
 import { Program, getProgramConfig, type ProgramId } from '@programs';
 import type { Harness, Sequence } from '@shared/constants';

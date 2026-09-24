@@ -9,7 +9,7 @@ vi.mock('@utils/analytics', () => ({
   analytics: { setTag: vi.fn(), wizardCapture: vi.fn() },
 }));
 // The program reports through its host. Reaching for the UI singleton fails.
-vi.mock('@ui', () => ({
+vi.mock('@cli/ui', () => ({
   getUI: () => {
     throw new Error('env upload reached for getUI()');
   },

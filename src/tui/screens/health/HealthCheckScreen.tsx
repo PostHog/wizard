@@ -22,7 +22,6 @@ import {
   SIGNUP_WIZARD_READINESS_CONFIG,
 } from '@shared/health-checks/readiness';
 import { ServiceHealthStatus } from '@shared/health-checks/types';
-import { wizardAbort } from '@utils/wizard-abort';
 import { ErrorCodes } from '@shared/errors';
 import { downloadSkill } from '@programs';
 import { fetchSkillMenu } from '@shared/skill-menu';
@@ -168,7 +167,7 @@ export const HealthCheckScreen = ({ store }: HealthCheckScreenProps) => {
     canDownloadSkills && !isSkillsOriginDown
       ? () => void handleDownloadAndExit()
       : () =>
-          void wizardAbort({
+          void store.abort({
             code: ErrorCodes.EnvServiceOutage,
             message: 'Exited due to service outage.',
           });
@@ -194,13 +193,13 @@ export const HealthCheckScreen = ({ store }: HealthCheckScreenProps) => {
             confirmLabel=""
             cancelLabel="Exit [Esc]"
             onConfirm={() =>
-              void wizardAbort({
+              void store.abort({
                 code: ErrorCodes.EnvServiceOutage,
                 message: 'Exited due to service outage.',
               })
             }
             onCancel={() =>
-              void wizardAbort({
+              void store.abort({
                 code: ErrorCodes.EnvServiceOutage,
                 message: 'Exited due to service outage.',
               })

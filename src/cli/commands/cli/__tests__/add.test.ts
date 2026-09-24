@@ -40,7 +40,7 @@ vi.mock('@cli/install-cli-steering', () => ({
   installOrUpdatePostHogCli: mockCliAddInstallOrUpdatePostHogCli,
   installSteeringSnippet: mockCliAddInstallSteeringSnippet,
 }));
-vi.mock('@ui', () => ({
+vi.mock('@cli/ui', () => ({
   getUI: () => mockCliAddUi,
   setUI: mockCliAddSetUI,
 }));

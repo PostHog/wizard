@@ -1,7 +1,6 @@
-import { migrationConfig } from '@programs/migration/index';
-
 import type { Command } from './command';
 import { nativeCommandFactory } from './factories/native-command-factory';
+import { migrationConfig } from '@programs';
 
 /**
  * `wizard migrate` — flat skill command, Statsig today.

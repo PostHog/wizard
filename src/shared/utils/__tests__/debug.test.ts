@@ -83,7 +83,7 @@ describe('debug console sink', () => {
 
   it('is wired to the current UI by the UI module', async () => {
     const { debug, enableDebugLogs } = await import('../debug');
-    const { getUI, setUI } = await import('@ui');
+    const { getUI, setUI } = await import('@cli/ui');
     const seen: string[] = [];
     const original = getUI();
     setUI({

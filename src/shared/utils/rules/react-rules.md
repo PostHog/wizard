@@ -1,6 +1,6 @@
 ---
 description: apply when interacting with PostHog/analytics tasks
-globs: 
+globs:
 alwaysApply: true
 ---
 

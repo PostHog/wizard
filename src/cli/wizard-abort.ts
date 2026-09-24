@@ -6,9 +6,9 @@
  * WizardError (from `@lib/errors`) is a data carrier passed to wizardAbort() for analytics context, never thrown.
  * The legacy abort() in setup-utils.ts delegates here.
  */
-import { analytics } from './analytics';
-import { logToFile } from './debug';
-import { getUI } from '@ui';
+import { analytics } from '@utils/analytics';
+import { logToFile } from '@utils/debug';
+import { getUI } from './ui';
 import { LoggingUI } from '@headless/renderers/logging-ui';
 import type { ErrorCode } from '@shared/errors';
 import {
@@ -16,11 +16,15 @@ import {
   emitWizardError,
   sanitizeErrorDetail,
 } from '@shared/errors';
-import { runCleanups } from './cleanup-registry';
+import { runCleanups } from '@utils/cleanup-registry';
 import { OutroKind } from '@shared/outro';
 import type { OutroData } from '@shared/outro';
 
-export { registerCleanup, clearCleanup, runCleanups } from './cleanup-registry';
+export {
+  registerCleanup,
+  clearCleanup,
+  runCleanups,
+} from '@utils/cleanup-registry';
 
 // Still importable from here; the class lives with the error codes.
 export { WizardError };

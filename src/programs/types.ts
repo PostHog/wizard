@@ -13,6 +13,7 @@ export type {
   ProgramRunHost,
 } from './host-capabilities';
 export type { AuthHost } from './authenticate';
+export type { InteractionUi, ProgressUi } from './host-ui';
 export type { ProjectDataHost } from './project-data';
 export type {
   ProgramInput,

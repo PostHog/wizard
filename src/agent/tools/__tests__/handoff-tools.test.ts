@@ -8,7 +8,7 @@ import { createWizardPiTools } from '@agent/runner/harness/pi/tools';
 import { createWizardToolsServer } from '../mcp';
 import { PUBLISH_HANDOFF_TOOL_NAME } from '../handoff';
 
-vi.mock('@ui', () => ({
+vi.mock('@cli/ui', () => ({
   getUI: () => {
     throw new Error('agent code reached the UI');
   },

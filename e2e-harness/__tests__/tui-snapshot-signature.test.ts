@@ -3,7 +3,7 @@
  * status-only progress event, and an audit ledger update that keeps the same
  * context key.
  */
-import { createUiReducer } from '@ui/agent-progress';
+import { createUiReducer } from '@programs';
 import { InkUI } from '@tui/ink-ui';
 import { WizardStore } from '@tui/store';
 import { AUDIT_CHECKS_KEY } from '@programs/audit/types';

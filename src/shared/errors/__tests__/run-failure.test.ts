@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { classifyRunFailure } from '../run-failure';
 import { ErrorCodes } from '../codes';
-import { WizardError } from '@utils/wizard-abort';
+import { WizardError } from '@shared/errors';
 
 vi.mock('@utils/analytics', () => ({
   analytics: { wizardCapture: vi.fn(), captureException: vi.fn() },

@@ -19,7 +19,6 @@ import {
 import { VARIANTS_REQUIRING_POSTHOG_CLI } from '@programs/error-tracking-upload-source-maps/detect';
 import { preinstallPostHogCliOnce } from '@programs/shared/posthog-cli-preinstall';
 import { analytics } from '@utils/analytics';
-import { wizardAbort } from '@utils/wizard-abort';
 import { testProgramCiHost } from '../../../test/program-host';
 import { ERROR_TRACKING_FLOW } from '@tui/flows/error-tracking';
 import { buildSession } from '@tui/session';
@@ -39,9 +38,12 @@ vi.mock('@programs/detection/project-scope', async (importOriginal) => ({
 vi.mock('@programs/shared/posthog-cli-preinstall', () => ({
   preinstallPostHogCliOnce: vi.fn(),
 }));
-vi.mock('@utils/wizard-abort', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@utils/wizard-abort')>()),
-  wizardAbort: vi.fn(),
+// Programs end a run through their host; the process-level abort is the CLI's.
+vi.mock('@cli/wizard-abort', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@cli/wizard-abort')>()),
+  wizardAbort: () => {
+    throw new Error('a program reached for wizardAbort');
+  },
 }));
 
 const resolveRun = errorTrackingConfig.run as (
@@ -181,12 +183,12 @@ describe('error-tracking ciPreRun', () => {
   test('stops KMP before it sets the framework', async () => {
     vi.mocked(detectFramework).mockResolvedValue(Integration.kmp);
     const session = buildSession({ installDir: '/tmp/error-tracking-ci' });
-    const host = testProgramCiHost();
+    const host = { ...testProgramCiHost(), abort: vi.fn() };
 
     await errorTrackingConfig.ciPreRun?.(session, host);
 
     expect(scopeInstallDirToProject).toHaveBeenCalledWith(session, host);
-    expect(wizardAbort).toHaveBeenCalledWith(
+    expect(host.abort).toHaveBeenCalledWith(
       expect.objectContaining({ code: ErrorCodes.DetectUnsupportedPlatform }),
     );
     expect(session.integration).toBeNull();

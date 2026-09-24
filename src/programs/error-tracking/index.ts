@@ -19,7 +19,6 @@ import type {
 } from '@programs/host-capabilities';
 import { preinstallPostHogCliOnce } from '@programs/shared/posthog-cli-preinstall';
 import { analytics } from '@utils/analytics';
-import { wizardAbort } from '@utils/wizard-abort';
 import { ErrorCodes } from '@shared/errors';
 
 const ERROR_TRACKING_REPORT_FILE = 'posthog-error-tracking-report.md';
@@ -44,13 +43,14 @@ export const SYMBOL_UPLOAD_CLI_FRAMEWORKS: ReadonlySet<Integration> = new Set([
 
 async function abortUnsupportedPlatform(
   integration: Integration,
+  abort: ProgramCiHost['abort'],
 ): Promise<void> {
   const name = FRAMEWORK_REGISTRY[integration]?.metadata.name ?? integration;
   // A clean exit, not a crash: an event, never an `error` for captureException.
   analytics.wizardCapture('error tracking unsupported platform', {
     integration,
   });
-  await wizardAbort({
+  await abort({
     code: ErrorCodes.DetectUnsupportedPlatform,
     message:
       `The wizard cannot set up error tracking for ${name} projects yet.\n\n` +
@@ -181,14 +181,16 @@ export const errorTrackingConfig: ProgramConfig = {
 
     const integration = await detectFramework(session.installDir);
     if (!integration) {
-      await wizardAbort({
+      await host.abort({
         code: ErrorCodes.DetectNoFramework,
         message: 'Could not auto-detect your framework for this project.',
       });
       return;
     }
     if (ERROR_TRACKING_UNSUPPORTED.has(integration)) {
-      await abortUnsupportedPlatform(integration);
+      await abortUnsupportedPlatform(integration, (failure) =>
+        host.abort(failure),
+      );
       return;
     }
     session.integration = integration;

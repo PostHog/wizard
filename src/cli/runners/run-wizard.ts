@@ -1,31 +1,36 @@
 import { VERSION } from '@shared/version';
 import { logToFile, getLogFilePath } from '@utils/debug';
 import { runProgramAgent } from './run-program-agent';
-import { authenticate } from '@programs/authenticate';
-import { getProgramConfig } from '@programs';
-import { getAuditChecks } from '@programs/audit/types';
-import { maybeStampAiSdkDetected } from '@programs/posthog-integration/detect';
-import type { ProgramConfig, ProgramRunStep } from '@programs/types';
+import {
+  getProgramConfig,
+  authenticate,
+  getAuditChecks,
+  maybeStampAiSdkDetected,
+} from '@programs';
+import type {
+  ProgramConfig,
+  ProgramRunStep,
+  TaskStreamPush as TaskStreamPushClass,
+} from '@programs/types';
 import type { FlowStep } from '@tui/flow';
-import { rawProgramFlow } from '@tui/flows/index';
 import type { Harness, Sequence } from '@shared/constants';
 import type { startTUI as StartTUIFn } from '@tui/start-tui';
 import type { WizardStore } from '@tui/store';
-import type { TaskStreamPush as TaskStreamPushClass } from '@programs/task-stream/task-stream-push';
 import { resolveNoTelemetry } from './resolve-no-telemetry';
 import { checkLocalServices, getLocalDev } from '@shared/local-dev';
-import { runCleanups } from '@utils/wizard-abort';
 import {
   commitRegisteredRunSkillCleanups,
   registerRunSkillCleanup,
 } from '@shared/skill-run-cleanup';
 import { classifyRunFailure, emitWizardError } from '@shared/errors';
 import { isRunFailure } from '@tui/mint-failure';
-import { getUI } from '@ui';
 import { analytics } from '@utils/analytics';
 import { cliAuthHost } from './auth-host';
 import { OutroKind } from '@shared/outro';
 import type { WizardSession } from '@tui/session';
+import { cliTuiHost } from '@cli/tui-host';
+import { runCleanups } from '@utils/cleanup-registry';
+import { getUI } from '@cli/ui';
 
 const WIZARD_VERSION = VERSION;
 
@@ -109,13 +114,9 @@ export function runWizard(
       const { startTUI } = await import('@tui/start-tui');
       const { buildSession } = await import('@tui/session');
       const { RunPhase } = await import('@shared/run-state');
-      const { TaskStreamPush } = await import('@programs/task-stream/index');
-      const { PostHogDestination } = await import(
-        '@programs/task-stream/destinations/posthog'
-      );
-      const { createFileDestination } = await import(
-        '@programs/task-stream/destinations/file'
-      );
+      const { loadTaskStream } = await import('@programs');
+      const { TaskStreamPush, PostHogDestination, createFileDestination } =
+        await loadTaskStream();
 
       // Before the TUI mounts: once Ink owns the alt screen, anything written
       // to it is wiped on unmount (see the catch block below), so an abort here
@@ -128,13 +129,13 @@ export function runWizard(
         localPosthog: local.localPosthog && !options.baseUrl,
       });
       if (localServicesError) {
-        const { wizardAbort } = await import('@utils/wizard-abort');
+        const { wizardAbort } = await import('@cli/wizard-abort');
         await wizardAbort({ message: localServicesError });
         return;
       }
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      tui = startTUI(WIZARD_VERSION, config.id as any);
+      tui = startTUI(WIZARD_VERSION, config.id as any, cliTuiHost());
       const activeTui = tui;
 
       const session = buildSession({
@@ -257,6 +258,7 @@ export function runWizard(
         // (self-driving runs the integration before its own
         // run), or scopes its own run to a picked project (error-tracking).
         // Walk the list once, advancing each step to completion.
+        const { rawProgramFlow } = await import('@tui/flows/index');
         for (const step of rawProgramFlow(config.id)) {
           if (step.screenId === 'outro') break; // run-completion wait owns it
           if (shown(step)) await advanceStep(step, activeTui.store, config);

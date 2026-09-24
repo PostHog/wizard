@@ -107,7 +107,7 @@ process.stdout.write(
   })}\n`,
 );
 if (result.outcome === 'failed' || result.outcome === 'aborted') {
-  const { wizardAbort } = await import('@utils/wizard-abort');
+  const { wizardAbort } = await import('@cli/wizard-abort');
   await wizardAbort(result.failure);
 } else {
   process.exitCode = 2;

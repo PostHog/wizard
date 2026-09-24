@@ -4,15 +4,15 @@ import { runProgramAgent } from '../run-program-agent';
 import { startTUI } from '@tui/start-tui';
 import { WizardStore } from '@tui/store';
 import { InkUI } from '@tui/ink-ui';
-import { setUI } from '@ui';
 import { posthogIntegrationConfig } from '@programs/posthog-integration';
 import { ScreenId } from '@tui/router';
 import { HostResolution } from '@shared/host-resolution';
 import { analytics } from '@utils/analytics';
-import { clearCleanup, runCleanups } from '@utils/wizard-abort';
+import { clearCleanup, runCleanups } from '@utils/cleanup-registry';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import { setUI } from '@cli/ui';
 
 vi.mock('../run-program-agent', () => ({ runProgramAgent: vi.fn() }));
 vi.mock('@tui/start-tui', () => ({ startTUI: vi.fn() }));
@@ -31,15 +31,14 @@ vi.mock('@utils/analytics', () => ({
   },
   sessionProperties: () => ({}),
 }));
-vi.mock('@programs/task-stream/index', () => ({
+vi.mock('@programs/task-stream/index', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@programs/task-stream/index')>()),
   TaskStreamPush: class {
     attach = vi.fn();
     shutdown() {
       return Promise.resolve();
     }
   },
-}));
-vi.mock('@programs/task-stream/destinations/posthog', () => ({
   PostHogDestination: class {},
 }));
 

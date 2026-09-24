@@ -30,9 +30,7 @@
       "@headless/*": ["./src/headless/*"],
       "@cli/*": ["./src/cli/*"],
       "@e2e-harness/*": ["./e2e-harness/*"],
-      "@utils/*": ["./src/shared/utils/*"],
-      "@ui": ["./src/ui/index.ts"],
-      "@ui/*": ["./src/ui/*"]
+      "@utils/*": ["./src/shared/utils/*"]
     }
   }
 }

@@ -1,25 +1,26 @@
 import { LoggingUI } from './logging-ui';
 
-interface HeadlessRunStore {
+/** The run state a headless run tees into, for the task stream to observe. */
+export interface HeadlessRunStateSink {
   syncTodos(
     todos: Array<{ content: string; status: string; activeForm?: string }>,
   ): void;
   setHandoffText(text: string): void;
   setFrameworkContext(key: string, value: unknown): void;
   setEventPlan(events: Array<{ name: string; description: string }>): void;
-  session: { frameworkContext: Record<string, unknown> };
+  readonly session: { frameworkContext: Record<string, unknown> };
 }
 
 /**
- * `LoggingUI` plus it feeds run state into a `WizardStore` so the background
- * wizard-session sync (`TaskStreamPush`) can observe a headless run. We extend
+ * `LoggingUI` plus it feeds run state into a sink (the runner's store) so the
+ * background wizard-session sync (`TaskStreamPush`) can observe a headless run. We extend
  * `LoggingUI` (not `InkUI`) because its blocking/gate methods would wait on a
  * TUI that never renders; the runner drives phase transitions on the store
  * directly, so only UI-originated per-run updates tee through here. The audit
  * ledger arrives through `setFrameworkContext`, the seam every UI implements.
  */
 export class HeadlessUI extends LoggingUI {
-  constructor(private readonly store: HeadlessRunStore) {
+  constructor(private readonly store: HeadlessRunStateSink) {
     super();
   }
 

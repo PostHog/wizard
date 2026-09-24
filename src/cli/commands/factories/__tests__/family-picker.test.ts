@@ -54,7 +54,7 @@ describe('orderFamilyChildren', () => {
 });
 
 describe('chooseFamilyChild', () => {
-  it('renders the default leaf first so it is pre-highlighted (Enter runs it)', () => {
+  it('renders the default leaf first so it is pre-highlighted (Enter runs it)', async () => {
     (render as Mock).mockClear();
     const all: Command = {
       name: 'all',
@@ -71,7 +71,7 @@ describe('chooseFamilyChild', () => {
     // Input order puts the default LAST — the picker must reorder it to index 0.
     void chooseFamilyChild('wizard audit', [events, all]);
 
-    expect(render as Mock).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => expect(render as Mock).toHaveBeenCalledTimes(1));
     const element = (render as Mock).mock.calls[0][0];
     const options = element.props.options as {
       label: string;

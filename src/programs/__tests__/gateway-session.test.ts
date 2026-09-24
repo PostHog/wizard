@@ -12,8 +12,7 @@ import {
 } from '@shared/gateway-auth';
 import { createCiGatewayAuth } from '@shared/ci-gateway-auth';
 import type { HostResolution } from '@shared/host-resolution';
-import { ErrorCodes } from '@shared/errors';
-import { WizardError } from '@utils/wizard-abort';
+import { ErrorCodes, WizardError } from '@shared/errors';
 import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
 import { checkLlmGatewayHealth } from '@shared/health-checks/endpoints';
