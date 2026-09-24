@@ -6,10 +6,7 @@
 import { describe, it, expect } from 'vitest';
 import { GPT5_6_SOL_MODEL, Harness, Sequence } from '@shared/constants';
 import { resolveProgramBinding as resolveBinding } from '@programs';
-import type {
-  ProgramSwitchboardCtx as SwitchboardCtx,
-  ProgramSwitchboardTrace as SwitchboardTrace,
-} from '@programs/types';
+import type { ProgramSwitchboardCtx as SwitchboardCtx } from '@programs/types';
 import type { EffortLevel } from '@agent/runner/switchboard/models';
 
 /** The complete resolved binding — every axis stated, nothing implicit. */
@@ -27,7 +24,7 @@ export interface BindingCase {
   ctx: Omit<SwitchboardCtx, 'trace'>;
   binding: ExpectedBinding;
   /** Also pin which precedence rung decided each axis. */
-  trace?: SwitchboardTrace;
+  trace?: SwitchboardCtx['trace'];
 }
 
 export function runBindingCases(

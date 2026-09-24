@@ -19,11 +19,7 @@ export type {
   ProgramStoreProjection,
   SettledProgramRun,
 } from './program-store';
-export type {
-  ProgramBinding,
-  ProgramSwitchboardCtx,
-  ProgramSwitchboardTrace,
-} from './binding';
+export type { ProgramSwitchboardCtx } from './binding';
 export type {
   ProgramRunProgress,
   ProgramDataProgress,
