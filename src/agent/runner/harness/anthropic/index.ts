@@ -65,6 +65,7 @@ export const anthropicBackend: AgentHarness = {
         allowedTools: runConfig.allowedTools,
         disallowedTools: runConfig.disallowedTools,
         modelOverride: model,
+        outputFormat: config.outputFormat,
         capture,
         emit,
       },
@@ -80,6 +81,7 @@ export const anthropicBackend: AgentHarness = {
       runOptions(input),
       spinner,
       {
+        requestRemark: !config.outputFormat,
         estimatedDurationMinutes: config.estimatedDurationMinutes,
         spinnerMessage: config.spinnerMessage,
         successMessage: config.successMessage,

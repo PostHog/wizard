@@ -218,6 +218,8 @@ export type AgentConfig = {
    * Use for cheap mechanical runs (e.g. source-map detection on HAIKU_MODEL).
    */
   modelOverride?: string;
+  /** Schema for callers that consume a structured SDK result. */
+  outputFormat?: import('@anthropic-ai/claude-agent-sdk').Options['outputFormat'];
   /** Bridge that drives the `wizard_ask` overlay. Omit in non-interactive hosts. */
   askBridge?: import('@agent/wizard-ask-bridge').WizardAskBridge;
   /** Per-run cap on `wizard_ask` invocations. Defaults to 10. */
@@ -323,6 +325,7 @@ type AgentRunConfig = {
   workingDirectory: string;
   mcpServers: McpServersConfig;
   model: string;
+  outputFormat?: AgentConfig['outputFormat'];
   /** The run's OAuth access token — the MCP config resolves it in the child. */
   posthogApiKey: string;
   wizardFlags?: Record<string, string>;
@@ -658,6 +661,7 @@ export async function initializeAgent(
       workingDirectory: config.workingDirectory,
       mcpServers,
       model,
+      outputFormat: config.outputFormat,
       posthogApiKey: config.posthogApiKey,
       wizardFlags: config.wizardFlags,
       wizardMetadata: config.wizardMetadata,
@@ -1025,6 +1029,7 @@ export async function runAgent(
           abortController,
           resume,
           model: agentConfig.model,
+          outputFormat: agentConfig.outputFormat,
           cwd: agentConfig.workingDirectory,
           permissionMode: 'acceptEdits',
           betas: ['context-1m-2025-08-07'],
@@ -1610,6 +1615,12 @@ export async function runAgent(
         classification: AgentErrorType.AGENTIC_DETECTION_TIMEOUT,
         message: `Agent run timed out after ${timeoutMs! / 1000}s`,
       };
+    }
+
+    // The SDK can throw after yielding a typed error result.
+    if (terminalFailure) {
+      spinner.stop(errorMessage);
+      return terminalFailure;
     }
 
     // Check if we collected an error signal before the exception was thrown.

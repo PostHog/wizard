@@ -45,6 +45,7 @@ import { createEmitLog } from '@agent/runner/shared/progress-collector';
 import type { TaskStore } from './tasks';
 import { completionFailure, runErrorType } from './completion';
 import { bindPiCancellation } from './cancellation';
+import { structuredOutputExtension } from './structured-output';
 import { classifyRunFailure, ErrorCodes } from '@shared/errors';
 
 /** Injects the MCP server `instructions` pi-mcp-adapter drops (project env, skill steer, tool domains) into the system prompt, falling back to a bootstrap-derived project block when the warm-connect captured none. */
@@ -237,6 +238,7 @@ export const piBackend: AgentHarness = {
     const startTime = Date.now();
     const signals = new AgentOutputSignals();
     let assistantTurns = 0;
+    let lastAssistantText = '';
     // Tool calls across the whole run. Zero means the agent only ever produced
     // text and never acted — a no-op that leaves the project untouched.
     let toolCalls = 0;
@@ -303,7 +305,9 @@ export const piBackend: AgentHarness = {
         modelId,
         effort: inputs.thinkingLevel,
       });
-      const { provider, caps } = buildGatewayProvider(providerInputs(auth));
+      const { provider, caps, api } = buildGatewayProvider(
+        providerInputs(auth),
+      );
       const registry = ModelRegistry.inMemory(AuthStorage.create());
       registry.registerProvider(GATEWAY_PROVIDER, provider as never);
 
@@ -387,6 +391,12 @@ export const piBackend: AgentHarness = {
           scope: 'run',
           error: String(err).slice(0, 300),
         });
+      }
+
+      if (config.outputFormat) {
+        extensionFactories.push(
+          structuredOutputExtension(config.outputFormat, api),
+        );
       }
 
       const resourceLoader = new DefaultResourceLoader({
@@ -547,6 +557,11 @@ export const piBackend: AgentHarness = {
             assistantTurns += 1;
             turns.noteAssistantTurn(event.message);
             const assistant = extractText(event.message).trim();
+            lastAssistantText = assistant;
+            inputs.middleware?.onMessage({
+              type: 'assistant',
+              message: { content: [{ type: 'text', text: assistant }] },
+            });
             if (assistant) {
               logToFile(`[pi] assistant: ${assistant.slice(0, 1000)}`);
               applyOutroMarkers(assistant, emit);
@@ -633,6 +648,7 @@ export const piBackend: AgentHarness = {
 
         // Best-effort remark ask — a failed turn never fails a successful run.
         if (
+          !config.outputFormat &&
           !security.state.criticalViolation &&
           !terminal &&
           !inputs.signal?.aborted
@@ -743,7 +759,8 @@ export const piBackend: AgentHarness = {
       // up host-side rather than leave a stale (often empty) artifact (#15).
       try {
         const planFile = path.join(input.installDir, '.posthog-events.json');
-        if (fs.existsSync(planFile)) await fs.promises.rm(planFile);
+        if (!config.outputFormat && fs.existsSync(planFile))
+          await fs.promises.rm(planFile);
       } catch (err) {
         logToFile(`[pi] .posthog-events.json cleanup skipped: ${String(err)}`);
       }
@@ -762,6 +779,20 @@ export const piBackend: AgentHarness = {
       });
       spinner.stop(config.successMessage ?? 'PostHog integration complete');
       aioFailed = false;
+      if (config.outputFormat) {
+        let structuredOutput: unknown;
+        try {
+          structuredOutput = JSON.parse(lastAssistantText);
+        } catch {
+          // The caller validates the result and owns its bounded retry.
+        }
+        inputs.middleware?.onMessage({
+          type: 'result',
+          subtype: 'success',
+          result: lastAssistantText,
+          structured_output: structuredOutput,
+        });
+      }
       return { kind: 'success' };
     } catch (err) {
       if (inputs.signal?.aborted) {

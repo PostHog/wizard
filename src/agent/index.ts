@@ -64,3 +64,5 @@ export async function* runMcpPromptViaSdk(
   const streaming = await import('./mcp-prompt-streaming');
   yield* streaming.runMcpPromptViaSdk(args);
 }
+
+export { executeStructuredAgent } from './structured-run';
