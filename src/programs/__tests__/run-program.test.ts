@@ -669,43 +669,24 @@ describe('runProgram', () => {
     });
   });
 
-  it.each<[string, number, () => [string, ProgramOptions]]>([
-    [
-      'the flag loader',
-      0,
-      () => [
-        'metrics',
-        { featureFlags: () => Promise.reject(new Error('host closed')) },
-      ],
-    ],
-    [
-      'credential resolution',
-      0,
-      () => [
-        'metrics',
-        {
-          credentials: {
-            resolve: () => Promise.reject(new Error('host closed')),
-          },
-        },
-      ],
-    ],
-    [
-      'a composition gate',
-      1,
-      () => {
-        composeSelfDriving();
-        const step = vi
-          .fn()
-          .mockResolvedValueOnce({ kind: 'child-run', input: child() })
-          .mockRejectedValue(new Error('host closed'));
-        return ['self-driving', { workflow: { step } }];
-      },
-    ],
-  ])(
+  it.each([
+    ['the flag loader', 'metrics', 0],
+    ['credential resolution', 'metrics', 0],
+    ['a composition gate', 'self-driving', 1],
+  ] as const)(
     'a rejection from %s is a decided failure before the agent it guards',
-    async (_capability, agentRuns, setup) => {
-      const [programId, options] = setup();
+    async (capability, programId, agentRuns) => {
+      if (programId === 'self-driving') composeSelfDriving();
+      const closed = () => Promise.reject(new Error('host closed'));
+      const step = vi
+        .fn()
+        .mockResolvedValueOnce({ kind: 'child-run', input: child() })
+        .mockImplementation(closed);
+      const options: ProgramOptions = {
+        'the flag loader': { featureFlags: closed },
+        'credential resolution': { credentials: { resolve: closed } },
+        'a composition gate': { workflow: { step } },
+      }[capability];
 
       const result = await runProgram(
         programId,
@@ -782,40 +763,18 @@ describe('runProgram', () => {
     });
   });
 
-  it.each<
-    [
-      string,
-      readonly string[],
-      Partial<ProgramInput>,
-      (park: () => Promise<never>) => ProgramOptions,
-    ]
-  >([
-    [
-      'credential resolution',
-      [],
-      {},
-      (park) => ({ credentials: { resolve: park } }),
-    ],
-    [
-      'AI approval',
-      [],
-      { credentials: { ...credentials, apiUser: null } },
-      (park) => ({ awaitAiApproval: park }),
-    ],
-    [
-      'a post-auth gate',
-      ['detect'],
-      { credentials },
-      (park) => ({ workflow: { step: park } }),
-    ],
-  ])(
+  it.each([
+    'credential resolution',
+    'AI approval',
+    'a post-auth gate',
+  ] as const)(
     'a host abort during %s returns Aborted and starts nothing else',
-    async (_park, postAuthGates, input, options) => {
+    async (gate) => {
       vi.mocked(getRuntimeProgramConfig).mockReturnValue({
         id: 'metrics',
         strategy: 'static',
         run,
-        postAuthGates,
+        postAuthGates: ['detect'],
       });
       const controller = new AbortController();
       // The host closes its screen on abort, so the pending capability rejects.
@@ -827,11 +786,19 @@ describe('runProgram', () => {
             );
           }),
       );
+      const login = (apiUser: ApiUser | null = credentials.apiUser) => ({
+        resolve: () => Promise.resolve({ ...credentials, apiUser }),
+      });
+      const options: ProgramOptions = {
+        'credential resolution': { credentials: { resolve: park } },
+        'AI approval': { credentials: login(null), awaitAiApproval: park },
+        'a post-auth gate': { credentials: login(), workflow: { step: park } },
+      }[gate];
 
       const pending = runProgram(
         'metrics',
-        { installDir: '/project', ...input },
-        { ...options(park), signal: controller.signal },
+        { installDir: '/project' },
+        { ...options, signal: controller.signal },
       );
       await vi.waitFor(() => expect(park).toHaveBeenCalledOnce());
       controller.abort();
@@ -1094,30 +1061,20 @@ describe('runProgram', () => {
     );
 
     expect(featureFlags).toHaveBeenCalledTimes(2);
-    expect(
-      vi
-        .mocked(runAgent)
-        .mock.calls.map(([config, input]) => [
-          config.programId,
-          config.composed,
-          input.installDir,
-          config.binding.harness,
-          config.wizardFlags,
-        ]),
-    ).toEqual([
+    const shared = {
+      binding: { harness: Harness.anthropic },
+      wizardFlags: { 'wizard-test-flag': 'on' },
+    };
+    expect(vi.mocked(runAgent).mock.calls).toMatchObject([
       [
-        'posthog-integration',
-        true,
-        '/project/app',
-        Harness.anthropic,
-        { 'wizard-test-flag': 'on' },
+        { ...shared, programId: 'posthog-integration', composed: true },
+        { installDir: '/project/app' },
+        expect.anything(),
       ],
       [
-        'self-driving',
-        false,
-        '/project',
-        Harness.anthropic,
-        { 'wizard-test-flag': 'on' },
+        { ...shared, programId: 'self-driving', composed: false },
+        { installDir: '/project' },
+        expect.anything(),
       ],
     ]);
     expect(
@@ -1265,30 +1222,26 @@ describe('runProgram', () => {
     );
 
     expect(result.outcome).toBe(RunOutcome.Success);
-    expect(workflow.step.mock.calls.map(([request]) => request)).toEqual([
-      {
-        kind: 'child-run',
-        programId: 'self-driving',
-        stepId: 'integrate-run',
-        runProgramId: 'posthog-integration',
-        installDir: '/project',
-      },
-      {
-        kind: 'confirm',
-        programId: 'self-driving',
-        id: 'self-driving-handoff',
-        installDir: '/project',
-      },
-      {
-        kind: 'confirm',
-        programId: 'self-driving',
-        id: 'self-driving-github',
-        installDir: '/project',
-      },
+    const base = { programId: 'self-driving', installDir: '/project' };
+    expect(workflow.step.mock.calls).toEqual([
+      [
+        {
+          ...base,
+          kind: 'child-run',
+          stepId: 'integrate-run',
+          runProgramId: 'posthog-integration',
+        },
+        { signal: expect.objectContaining({ aborted: false }) },
+      ],
+      [
+        { ...base, kind: 'confirm', id: 'self-driving-handoff' },
+        expect.anything(),
+      ],
+      [
+        { ...base, kind: 'confirm', id: 'self-driving-github' },
+        expect.anything(),
+      ],
     ]);
-    expect(workflow.step).toHaveBeenCalledWith(expect.anything(), {
-      signal: expect.objectContaining({ aborted: false }),
-    });
     expect(
       vi
         .mocked(runAgent)
