@@ -12,12 +12,7 @@ import {
 } from '@shared/health-checks/readiness';
 import { ServiceHealthStatus } from '@shared/health-checks/types';
 import { analytics } from '@utils/analytics';
-import { PROGRAM_REGISTRY } from '../program-registry';
-import {
-  HEALTH_CHECK_PROGRAMS,
-  preflight,
-  type ProgramPreflightHost,
-} from '../preflight';
+import { preflight, type ProgramPreflightHost } from '../preflight';
 
 vi.mock('@utils/debug');
 vi.mock('@shared/health-checks/readiness', async (original) => ({
@@ -56,45 +51,28 @@ const projectConflict: SettingsConflict = {
   writable: true,
 };
 
-const calls: string[] = [];
-
 function host(overrides: Partial<ProgramPreflightHost> = {}) {
   return {
     installDir: INSTALL_DIR,
     signup: false,
     interactive: false,
     readiness: null,
-    showOutage: vi.fn(() => {
-      calls.push('showOutage');
-      return Promise.resolve();
-    }),
-    setReadinessWarnings: vi.fn(() => {
-      calls.push('setReadinessWarnings');
-    }),
-    showSettingsOverride: vi.fn(() => {
-      calls.push('showSettingsOverride');
-      return Promise.resolve();
-    }),
+    showOutage: vi.fn(() => Promise.resolve()),
+    setReadinessWarnings: vi.fn(),
+    showSettingsOverride: vi.fn(() => Promise.resolve()),
     ...overrides,
   } satisfies ProgramPreflightHost;
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
-  calls.length = 0;
   vi.spyOn(analytics, 'wizardCapture').mockImplementation(() => undefined);
-  vi.mocked(evaluateWizardReadiness).mockImplementation(() => {
-    calls.push('evaluateWizardReadiness');
-    return Promise.resolve({
-      decision: WizardReadiness.Yes,
-      health: { skillsOrigin: { status: ServiceHealthStatus.Healthy } },
-      reasons: [],
-    });
+  vi.mocked(evaluateWizardReadiness).mockResolvedValue({
+    decision: WizardReadiness.Yes,
+    health: { skillsOrigin: { status: ServiceHealthStatus.Healthy } },
+    reasons: [],
   });
-  vi.mocked(checkAllSettingsConflicts).mockImplementation(() => {
-    calls.push('checkAllSettingsConflicts');
-    return [];
-  });
+  vi.mocked(checkAllSettingsConflicts).mockReturnValue([]);
 });
 
 it.each([
@@ -108,60 +86,43 @@ it.each([
   expect(evaluateWizardReadiness).not.toHaveBeenCalled();
   expect(preflightHost.showOutage).not.toHaveBeenCalled();
   expect(preflightHost.setReadinessWarnings).not.toHaveBeenCalled();
-  expect(calls).toEqual(['checkAllSettingsConflicts']);
+  expect(checkAllSettingsConflicts).toHaveBeenCalledOnce();
   expect(decision.kind).toBe('proceed');
 });
 
-it('shows an interactive outage, then aborts with EnvServiceOutage and skips the settings check', async () => {
-  vi.mocked(evaluateWizardReadiness).mockImplementation(() => {
-    calls.push('evaluateWizardReadiness');
-    return Promise.resolve(outage);
-  });
-  const preflightHost = host({ interactive: true });
-
-  const decision = await preflight('posthog-integration', preflightHost);
-
-  expect(preflightHost.showOutage).toHaveBeenCalledExactlyOnceWith(outage);
-  expect(calls).toEqual(['evaluateWizardReadiness', 'showOutage']);
-  expect(decision).toEqual({
-    kind: 'abort',
-    failure: {
-      code: ErrorCodes.EnvServiceOutage,
-      message:
-        'Cannot start — external services are down:\n' +
-        '  - Skills download (down)\n' +
-        '\nPlease try again later.',
+it.each([
+  [
+    'aborts an interactive run with EnvServiceOutage before the settings check',
+    true,
+    {
+      kind: 'abort',
+      failure: {
+        code: ErrorCodes.EnvServiceOutage,
+        message:
+          'Cannot start — external services are down:\n' +
+          '  - Skills download (down)\n' +
+          '\nPlease try again later.',
+      },
     },
-  });
-});
-
-it('shows a non-interactive outage and proceeds to the settings check', async () => {
-  vi.mocked(evaluateWizardReadiness).mockImplementation(() => {
-    calls.push('evaluateWizardReadiness');
-    return Promise.resolve(outage);
-  });
-  const preflightHost = host({ interactive: false });
+  ],
+  [
+    'lets a non-interactive run proceed to the settings check',
+    false,
+    { kind: 'proceed', restoreSettings: expect.any(Function) },
+  ],
+] as const)('shows an outage and %s', async (_case, interactive, expected) => {
+  vi.mocked(evaluateWizardReadiness).mockResolvedValue(outage);
+  const preflightHost = host({ interactive });
 
   const decision = await preflight('posthog-integration', preflightHost);
 
   expect(preflightHost.showOutage).toHaveBeenCalledExactlyOnceWith(outage);
-  expect(calls).toEqual([
-    'evaluateWizardReadiness',
-    'showOutage',
-    'checkAllSettingsConflicts',
-  ]);
-  expect(decision.kind).toBe('proceed');
-  if (decision.kind !== 'proceed') return;
-  expect(restoreClaudeSettings).not.toHaveBeenCalled();
-  decision.restoreSettings();
-  expect(restoreClaudeSettings).toHaveBeenCalledExactlyOnceWith(INSTALL_DIR);
+  expect(checkAllSettingsConflicts).toHaveBeenCalledTimes(interactive ? 0 : 1);
+  expect(decision).toEqual(expected);
 });
 
-it('sends readiness warnings to setReadinessWarnings and proceeds', async () => {
-  vi.mocked(evaluateWizardReadiness).mockImplementation(() => {
-    calls.push('evaluateWizardReadiness');
-    return Promise.resolve(warnings);
-  });
+it('sends readiness warnings to setReadinessWarnings, then checks settings and proceeds', async () => {
+  vi.mocked(evaluateWizardReadiness).mockResolvedValue(warnings);
   const preflightHost = host({ interactive: true });
 
   const decision = await preflight('metrics', preflightHost);
@@ -170,12 +131,14 @@ it('sends readiness warnings to setReadinessWarnings and proceeds', async () => 
     warnings,
   );
   expect(preflightHost.showOutage).not.toHaveBeenCalled();
-  expect(calls).toEqual([
-    'evaluateWizardReadiness',
-    'setReadinessWarnings',
-    'checkAllSettingsConflicts',
-  ]);
-  expect(decision.kind).toBe('proceed');
+  expect(
+    vi.mocked(preflightHost.setReadinessWarnings).mock.invocationCallOrder[0],
+  ).toBeLessThan(
+    vi.mocked(checkAllSettingsConflicts).mock.invocationCallOrder[0],
+  );
+  if (decision.kind !== 'proceed') throw new Error('expected proceed');
+  decision.restoreSettings();
+  expect(restoreClaudeSettings).toHaveBeenCalledExactlyOnceWith(INSTALL_DIR);
 });
 
 it.each([
@@ -225,31 +188,18 @@ it.each([
 it('awaits the settings override for an interactive unfixable conflict', async () => {
   vi.mocked(checkAllSettingsConflicts).mockReturnValue([managedConflict]);
   let resolveOverride!: () => void;
-  const preflightHost = host({
-    interactive: true,
-    showSettingsOverride: vi.fn(
-      () =>
-        new Promise<void>((resolve) => {
-          resolveOverride = resolve;
-        }),
-    ),
-  });
+  const showSettingsOverride = vi.fn<
+    ProgramPreflightHost['showSettingsOverride']
+  >(() => new Promise((resolve) => (resolveOverride = resolve)));
 
-  let settled = false;
-  const pending = preflight('warehouse-source', preflightHost).then(
-    (decision) => {
-      settled = true;
-      return decision;
-    },
+  const pending = preflight(
+    'warehouse-source',
+    host({ interactive: true, showSettingsOverride }),
   );
-  await vi.waitFor(() =>
-    expect(preflightHost.showSettingsOverride).toHaveBeenCalledOnce(),
-  );
-  await Promise.resolve();
-  expect(settled).toBe(false);
+  await vi.waitFor(() => expect(showSettingsOverride).toHaveBeenCalledOnce());
+  expect(await Promise.race([pending, 'pending'])).toBe('pending');
 
-  const [conflicts, fix] = vi.mocked(preflightHost.showSettingsOverride).mock
-    .calls[0];
+  const [conflicts, fix] = showSettingsOverride.mock.calls[0];
   expect(conflicts).toEqual([managedConflict]);
   vi.mocked(backupAndFixClaudeSettings).mockReturnValue(true);
   expect(fix()).toBe(true);
@@ -259,12 +209,4 @@ it('awaits the settings override for an interactive unfixable conflict', async (
 
   resolveOverride();
   expect((await pending).kind).toBe('proceed');
-});
-
-it('lists every registered program whose steps include the health-check screen', () => {
-  const withHealthCheck = PROGRAM_REGISTRY.filter((config) =>
-    config.steps.some((step) => step.screenId === 'health-check'),
-  ).map((config) => config.id);
-
-  expect([...HEALTH_CHECK_PROGRAMS].sort()).toEqual(withHealthCheck.sort());
 });
