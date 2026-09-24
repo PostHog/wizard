@@ -12,13 +12,22 @@ import {
   harnessRunsTasks,
   resolveHarness,
 } from '@agent';
-import type { ResolvedBinding, SwitchboardCtx } from '@agent/types';
+import type {
+  ResolvedBinding,
+  SwitchboardCtx as HarnessCtx,
+} from '@agent/types';
 import type { ProgramId } from './program-registry';
 import {
   isOrchestratorEnabled,
   resolveFlagRoute,
   resolveFlagSequence,
 } from './experiments';
+
+/** The agent's harness inputs plus the sequence inputs only programs read. */
+type SwitchboardCtx = HarnessCtx & {
+  flagSequence?: Sequence;
+  orchestratorFlagOn?: boolean;
+};
 
 export interface ProgramBinding extends ResolvedBinding {
   contextMillOverride?: Record<

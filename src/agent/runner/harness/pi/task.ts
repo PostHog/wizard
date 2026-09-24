@@ -250,7 +250,7 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
       createWriteToolDefinition,
     } = sdk;
 
-    const refreshAuth = () => boot.inferenceAuth.resolve();
+    const refreshAuth = () => input.inferenceAuth.resolve();
     const auth = await refreshAuth();
     const providerInputs = (current: GatewayAuth) => ({
       gatewayUrl: current.gatewayUrl,

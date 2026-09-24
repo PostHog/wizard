@@ -98,8 +98,11 @@ describe('public agent prompt stream', () => {
   });
 
   it('propagates setup failures instead of silently ending the stream', async () => {
-    await expect(consume({ inferenceAuth: undefined })).rejects.toThrow(
-      'Inference auth provider is required',
+    const inferenceAuth = {
+      resolve: () => Promise.reject(new Error('gateway mint refused')),
+    };
+    await expect(consume({ inferenceAuth })).rejects.toThrow(
+      'gateway mint refused',
     );
   });
 });

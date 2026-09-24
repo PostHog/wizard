@@ -155,7 +155,6 @@ describe('commandments by axis', () => {
 describe('runtime caps gate the pi runtime notes', () => {
   const withCaps = (caps: { bash: boolean; posthogMcp: boolean }) =>
     assembleCommandments({
-      program: 'warehouse-source',
       sequence: Sequence.linear,
       harness: Harness.pi,
       caps,

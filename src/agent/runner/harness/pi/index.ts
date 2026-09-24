@@ -287,7 +287,7 @@ export const piBackend: AgentHarness = {
       // the claude-agent-sdk path. The provider spec is shared with the
       // orchestrator's per-task sessions (gateway.ts). Programs supply the
       // run's inference auth provider.
-      const refreshAuth = () => boot.inferenceAuth.resolve();
+      const refreshAuth = () => input.inferenceAuth.resolve();
       const auth = await refreshAuth();
       const providerInputs = (current: GatewayAuth) => ({
         gatewayUrl: current.gatewayUrl,
@@ -628,7 +628,6 @@ export const piBackend: AgentHarness = {
 
         // Best-effort remark ask — a failed turn never fails a successful run.
         if (
-          config.requestRemark !== false &&
           !security.state.criticalViolation &&
           !terminal &&
           !inputs.signal?.aborted

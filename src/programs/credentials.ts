@@ -1,7 +1,8 @@
 /** Resolved credentials passed from a program host to one agent run. */
 
 import { gatewayAuth } from './gateway-session';
-import type { GatewayAuth, InferenceAuthProvider } from '@agent/types';
+import type { InferenceAuthProvider } from '@agent/types';
+import type { GatewayAuth } from '@shared/gateway-auth';
 import type { ApiProject, ApiUser, Credentials } from '@shared/api';
 
 export type ResolvedProgramCredentials = {

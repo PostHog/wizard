@@ -58,14 +58,12 @@ export async function prepareRun(
   const { wizardFlags, wizardFlagPayloads, wizardMetadata, programId } = config;
 
   // Resolve before starting either sequence, so a refusal stops the run.
-  const inferenceAuth = input.inferenceAuth;
-  if (!inferenceAuth) throw new Error('Inference auth provider is required.');
+  const { inferenceAuth } = input;
   await inferenceAuth.resolve();
 
   return {
     skillsBaseUrl,
     credentials,
-    inferenceAuth,
     // Carried so per-task sessions re-resolve against the same program the boot
     // minted for, rather than digging it back out of the metadata bag.
     programId,

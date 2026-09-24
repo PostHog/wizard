@@ -57,7 +57,7 @@ out to be linear or orchestrator, anthropic or pi, the setup is the same.
 **The switchboard** (`switchboard/`) holds the sequence and harness registries
 and the harness axis. Programs resolve the binding (`resolveProgramBinding`):
 the sequence precedence lives there, and the harness and model come from this
-layer's `resolveHarness` middleware chain (CLI > flag > program config >
+layer's `resolveHarness` (CLI > flag > program config >
 default). `harnessRunsTasks` tells programs which harnesses the orchestrator can
 drive.
 

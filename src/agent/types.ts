@@ -21,7 +21,6 @@ export type {
   RunResult,
   SeedTaskEntry,
 } from './runner';
-export type { GatewayAuth } from '@shared/gateway-auth';
 export type {
   AgentInteraction,
   AgentProgress,

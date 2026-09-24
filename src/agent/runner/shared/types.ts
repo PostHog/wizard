@@ -62,7 +62,7 @@ export interface AgentRunDefinition {
   prompt?: (ctx: PromptContext) => string;
   /** Keep a 256 KiB `snapshot.transcriptTail` and report each step as `activity` (linear, Anthropic). */
   collectTranscript?: boolean;
-  /** Ask for the end-of-run reflection remark. Defaults to true. */
+  /** Ask for the end-of-run reflection remark (linear, Anthropic). Defaults to true. */
   requestRemark?: boolean;
   /** Additional MCP servers (e.g. Svelte MCP) */
   additionalMcpServers?: Record<string, { url: string }>;
@@ -256,8 +256,6 @@ export interface BootstrapResult {
   skillsBaseUrl: string;
   /** Resolved credentials (incl. the host family and its MCP url). */
   credentials: Credentials;
-  /** Resolve again near expiry; the provider owns mint and refresh policy. */
-  inferenceAuth: InferenceAuthProvider;
   /** Program this run is, and the node its gateway spend pins to. */
   programId: string;
   wizardFlags: Record<string, string>;

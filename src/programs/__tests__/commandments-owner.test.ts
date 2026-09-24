@@ -19,7 +19,6 @@ describe('program commandment selection', () => {
   it('does not infer program text from an opaque program label', () => {
     expect(
       assembleCommandments({
-        program: 'self-driving',
         sequence: Sequence.linear,
         harness: Harness.pi,
       }),
