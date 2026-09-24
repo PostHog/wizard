@@ -75,13 +75,11 @@ async function abortUnsupportedPlatform(
   });
 }
 
-const NO_FRAMEWORK_MESSAGE =
-  "Replay vision couldn't detect a framework here, so it has nothing " +
-  'to scope its scanners to.\n\n' +
-  "Make sure you're running this from your app's root directory " +
-  '(where its package.json or framework-equivalent lives), not an ' +
-  'empty or unrelated folder. See what replay supports at:\n' +
-  '  https://posthog.com/docs/session-replay';
+const NO_FRAMEWORK_GUIDANCE = {
+  message: "Replay vision couldn't detect a framework",
+  docsLabel: 'Supported replay platforms:',
+  docsUrl: 'https://posthog.com/docs/session-replay',
+};
 
 /**
  * `[ABORT]` reasons the replay-vision skill emits when the run can't proceed.
@@ -119,7 +117,7 @@ const DETECT_STEP: ProgramStep = {
     const integration = await detectFramework(ctx.session.installDir);
     if (!integration) {
       // Stop before skill preflight, matching the CI path below.
-      await abortNoFrameworkDetected(NO_FRAMEWORK_MESSAGE);
+      await abortNoFrameworkDetected(NO_FRAMEWORK_GUIDANCE);
       return;
     }
     if (!REPLAY_VISION_SUPPORTED.has(integration)) {
@@ -187,7 +185,7 @@ export const replayVisionConfig: ProgramConfig = {
 
     const integration = await detectFramework(session.installDir);
     if (!integration) {
-      await abortNoFrameworkDetected(NO_FRAMEWORK_MESSAGE);
+      await abortNoFrameworkDetected(NO_FRAMEWORK_GUIDANCE);
       return;
     }
     if (!REPLAY_VISION_SUPPORTED.has(integration)) {

@@ -29,7 +29,7 @@ describe.each([
     program: 'posthog-integration' as const,
     integration: Integration.javascriptNode,
     dependencies: {},
-    message: 'Could not auto-detect your framework',
+    message: 'Could not detect a framework',
   },
   {
     program: 'replay-vision' as const,
@@ -84,7 +84,7 @@ describe.each([
           );
           expect(store.session.detectionComplete).toBe(false);
           expect(store.router.resolve(store.session)).toBe(ScreenId.Outro);
-          expect(store.session.outroData?.message).toContain(
+          expect(store.session.outroData?.instruction).toContain(
             "app's root directory",
           );
           expect(process.exit).not.toHaveBeenCalled();
