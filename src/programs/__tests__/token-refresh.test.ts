@@ -49,64 +49,47 @@ describe('refreshCredentialsIfNeeded', () => {
     resetAuthSessionState();
   });
 
-  it('returns the same credentials without a refresh token (CI api-key runs, refresh-less grants)', async () => {
-    const apiKey = credentialsWith({ accessToken: 'pha_ci_key', expiresAt: 0 });
-
-    await expect(refreshCredentialsIfNeeded(apiKey, {})).resolves.toBe(apiKey);
-    expect(mockedRefresh).not.toHaveBeenCalled();
-  });
-
-  it('returns the same credentials while most of the lifetime is left', async () => {
-    const fresh = aging({ expiresAt: Date.now() + 59 * 60 * 1000 });
-
-    await expect(refreshCredentialsIfNeeded(fresh, {})).resolves.toBe(fresh);
-    expect(mockedRefresh).not.toHaveBeenCalled();
-  });
-
-  // `?? 0` would read as "expired" and spend a rotation on every run.
-  it('returns the same credentials when they carry a refresh token but no expiry', async () => {
-    const noExpiry = credentialsWith({ refreshToken: 'phr_old' });
-
-    await expect(refreshCredentialsIfNeeded(noExpiry, {})).resolves.toBe(
-      noExpiry,
+  it.each([
+    [
+      'without a refresh token (CI api-key runs, refresh-less grants)',
+      credentialsWith({ accessToken: 'pha_ci_key', expiresAt: 0 }),
+    ],
+    [
+      'while most of the lifetime is left',
+      aging({ expiresAt: Date.now() + 59 * 60 * 1000 }),
+    ],
+    // `?? 0` would read as "expired" and spend a rotation on every run.
+    [
+      'with a refresh token but no expiry',
+      credentialsWith({ refreshToken: 'phr_old' }),
+    ],
+  ])('returns the same credentials %s', async (_case, credentials) => {
+    await expect(refreshCredentialsIfNeeded(credentials, {})).resolves.toBe(
+      credentials,
     );
     expect(mockedRefresh).not.toHaveBeenCalled();
   });
 
-  it('refreshes an aging token against the base URL and keeps the rotated refresh token', async () => {
+  it('refreshes an aging token under the base URL and minting client id, and keeps the rotated refresh token', async () => {
     mockedRefresh.mockResolvedValueOnce(
       token({ refresh_token: 'phr_rotated' }),
     );
 
-    const refreshed = await refreshCredentialsIfNeeded(aging(), {
-      baseUrl: 'https://posthog.example',
-    });
+    const refreshed = await refreshCredentialsIfNeeded(
+      aging({ oauthClientId: 'client_us_provisioning' }),
+      { baseUrl: 'https://posthog.example' },
+    );
 
     expect(mockedRefresh).toHaveBeenCalledWith(
       'phr_old',
       'https://posthog.example',
-      undefined,
+      'client_us_provisioning',
     );
     expect(refreshed.accessToken).toBe('pha_new');
     expect(refreshed.refreshToken).toBe('phr_rotated');
     // Unrelated fields survive the swap.
     expect(refreshed.projectId).toBe(7);
     expect(refreshed.expiresAt).toBeGreaterThan(Date.now() + 59 * 60 * 1000);
-  });
-
-  it('refreshes under the minting client id when the credentials carry one (provisioning signups)', async () => {
-    mockedRefresh.mockResolvedValueOnce(token());
-
-    await refreshCredentialsIfNeeded(
-      aging({ oauthClientId: 'client_us_provisioning' }),
-      {},
-    );
-
-    expect(mockedRefresh).toHaveBeenCalledWith(
-      'phr_old',
-      undefined,
-      'client_us_provisioning',
-    );
   });
 
   it('returns new credentials rather than mutating the old ones', async () => {
@@ -121,14 +104,6 @@ describe('refreshCredentialsIfNeeded', () => {
     expect(refreshed.refreshToken).toBe('phr_old');
   });
 
-  it('returns the same credentials and does not throw when the refresh fails', async () => {
-    mockedRefresh.mockRejectedValueOnce(new Error('network down'));
-    const before = aging();
-
-    await expect(refreshCredentialsIfNeeded(before, {})).resolves.toBe(before);
-    expect(before.accessToken).toBe('pha_old');
-  });
-
   it('marks the grant revoked on invalid_grant, so a later 401 can name the cause', async () => {
     mockedRefresh.mockRejectedValueOnce(new OAuthError('invalid_grant'));
 
@@ -141,11 +116,12 @@ describe('refreshCredentialsIfNeeded', () => {
     );
   });
 
-  it('leaves the grant unmarked for a transport failure, which says nothing about the login', async () => {
+  it('keeps the same credentials and leaves the grant unmarked for a transport failure, which says nothing about the login', async () => {
     mockedRefresh.mockRejectedValueOnce(new Error('ETIMEDOUT'));
+    const before = aging();
 
-    await refreshCredentialsIfNeeded(aging(), {});
-
+    await expect(refreshCredentialsIfNeeded(before, {})).resolves.toBe(before);
+    expect(before.accessToken).toBe('pha_old');
     expect(isGrantRevoked()).toBe(false);
     expect(analytics.wizardCapture).not.toHaveBeenCalled();
   });
