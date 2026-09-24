@@ -12,7 +12,11 @@ import {
   harnessRunsTasks,
   resolveHarness,
 } from '@agent';
-import type { ResolvedBinding, SwitchboardCtx } from '@agent/types';
+import type {
+  ProgramBinding,
+  ResolvedBinding,
+  SwitchboardCtx as HarnessCtx,
+} from '@agent/types';
 import type { ProgramId } from './program-registry';
 import {
   isOrchestratorEnabled,
@@ -20,24 +24,11 @@ import {
   resolveFlagSequence,
 } from './experiments';
 
-export interface ProgramBinding extends ResolvedBinding {
-  contextMillOverride?: Record<
-    string,
-    Partial<Pick<ResolvedBinding, 'harness' | 'model' | 'thinkingLevel'>>
-  >;
-}
-
-export interface ProgramSwitchboardTrace {
-  harness?: 'cli' | 'flag' | 'binding';
-  model?: 'cli' | 'flag' | 'binding';
-  sequence?:
-    | 'cli'
-    | 'composed'
-    | 'runtask-clamp'
-    | 'payload'
-    | 'flag'
-    | 'binding';
-}
+/** The agent's harness inputs plus the sequence inputs only programs read. */
+type SwitchboardCtx = HarnessCtx & {
+  flagSequence?: Sequence;
+  orchestratorFlagOn?: boolean;
+};
 
 export interface ProgramSwitchboardCtx {
   program: ProgramId;
@@ -47,7 +38,7 @@ export interface ProgramSwitchboardCtx {
   cliHarness?: Harness;
   cliSequence?: Sequence;
   cliModel?: string;
-  trace?: ProgramSwitchboardTrace;
+  trace?: SwitchboardCtx['trace'];
 }
 
 /** Program routes. The registry lockstep contract is tested at this boundary. */
@@ -115,7 +106,9 @@ export function resolveProgramBinding(
     cliModel: ctx.cliModel,
     trace: ctx.trace,
   };
-  const binding = resolveBindingPrecedence(resolution);
+  const sequence = resolveSequence(resolution);
+  const { harness, model, thinkingLevel } = resolveHarness(resolution);
+  const binding = { sequence, harness, model, thinkingLevel };
   const roles = Object.keys(baseBinding.contextMillOverride ?? {});
   if (roles.length === 0) return binding;
   return {
@@ -127,13 +120,6 @@ export function resolveProgramBinding(
       ]),
     ),
   };
-}
-
-/** Compose both axes: the sequence here, the harness and model through the agent. */
-function resolveBindingPrecedence(ctx: SwitchboardCtx): ResolvedBinding {
-  const sequence = resolveSequence(ctx);
-  const { harness, model, thinkingLevel } = resolveHarness(ctx);
-  return { sequence, harness, model, thinkingLevel };
 }
 
 function resolveSequence(ctx: SwitchboardCtx): Sequence {
@@ -155,7 +141,7 @@ function resolveSequence(ctx: SwitchboardCtx): Sequence {
  */
 function pickSequence(
   ctx: SwitchboardCtx,
-): [NonNullable<ProgramSwitchboardTrace['sequence']>, Sequence] {
+): [Required<NonNullable<SwitchboardCtx['trace']>>['sequence'], Sequence] {
   // The orchestrator owns the whole run lifecycle and cannot nest.
   if (ctx.composed) return ['composed', Sequence.linear];
   if (!IS_PRODUCTION_BUILD && ctx.cliSequence) return ['cli', ctx.cliSequence];

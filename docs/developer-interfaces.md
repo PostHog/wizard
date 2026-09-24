@@ -55,12 +55,10 @@ non-`Error` throw), which the host can rethrow when it needs exception
 semantics. `runAgent` never sends the terminal `setup wizard finished` event.
 The host sends it when its process is done.
 
-A runnable reference host is `scripts/e2e-agent.no-jest.ts`, run by
-`pnpm test:e2e:agent`. It runs a `quack` skill from a loopback skills server in
-an empty directory. Its environment is described in
-`e2e-harness/surface-e2e.ts`: `PROJECT_ID`, a PostHog key from
-`POSTHOG_PERSONAL_API_KEY` or `POSTHOG_KEY_FILE`, and a gateway token from
-`WIZARD_CI_GATEWAY_TOKEN_FILE`.
+A runnable reference host is the
+[wizard-workbench](https://github.com/PostHog/wizard-workbench) harness,
+`pnpm wizard-agent` with `WIZARD_REPO` set to a wizard checkout. It runs one
+agent through `runAgent`, with no TUI and no programs.
 
 ### Inference authentication
 
@@ -78,11 +76,11 @@ an already-issued fixed token.
 
 `runProgram` takes a registered ID, a `ProgramInput` with at least `installDir`,
 and optional `ProgramOptions`. Import it from `@programs` and types from
-`@programs/types`. It returns a `ProgramRunOutcome`: outcome and failure, final
-progress, actual settled agent runs, program-specific data, artifacts, and
-invocation data (including a captured event plan). The invocation data contains
-credentials, so don't log it. Agent failures retain an attached `Error` when one
-exists.
+`@programs/types`. It returns a `ProgramRunOutcome`: outcome and failure, the
+settled agent runs, observer diagnostics, the data a program with no agent
+returned, artifacts, and invocation data (including a captured event plan). The
+invocation data contains credentials, so don't log it. Agent failures retain an
+attached `Error` when one exists.
 
 The host supplies credentials in one of two ways:
 
@@ -101,14 +99,16 @@ run. It copies the input when it receives it, so a later host write can't reach
 the run.
 
 Awaited host capabilities receive the invocation's signal:
-`credentials.resolve`, `awaitAiApproval({ programId, signal })`, and
-`workflow.step(request, { signal })`. The workflow connector answers the
-post-auth, child-run and confirm requests that gated and composed programs make.
-A rejection from any of them resolves as `failed`, or as `aborted` once the
-signal has aborted. `featureFlags`, the MCP port and the integration effects
-don't receive the signal. The promise rejects only on an invocation error, such
-as a duplicate composed `runId`, a run definition that throws, or input that
-can't be copied. Read the outcome, and still catch a rejection.
+`credentials.resolve`, `awaitAiApproval({ programId, signal })`,
+`workflow.step(request, { signal })` and `noAgentWorkflow(request)`. The
+workflow connector answers the post-auth, child-run and confirm requests that
+gated and composed programs make. `noAgentWorkflow` runs the programs with no
+agent, such as `posthog-doctor`, `mcp-add` and `slack`. A rejection from any of
+them, or from `featureFlags` or a run definition that throws, resolves as
+`failed`, or as `aborted` once the signal has aborted. `featureFlags` and the
+integration effects don't receive the signal. The promise rejects only on an
+invocation error, such as input that can't be copied. Read the outcome, and
+still catch a rejection.
 
 `onProgress` receives two kinds of `ProgramProgress`. A run event is
 `{ kind: 'run', runId, stepId?, event }`, where `event` is the agent's progress.
@@ -155,10 +155,9 @@ fields and capabilities. There is no live store or step-control handle.
 `runProgram` never sends the terminal `setup wizard finished` event. A
 long-lived host decides when to send it, from the outcome.
 
-A runnable reference host is `scripts/e2e-programs.no-jest.ts`, run by
-`pnpm test:e2e:programs`. It runs posthog-integration against the app in
-`APP_DIR`, with the same environment as the agent route
-(`e2e-harness/surface-e2e.ts`).
+A runnable reference host is the workbench harness's `pnpm wizard-program`. It
+runs one program against the app in `APP_DIR`, with resolved credentials and no
+TUI.
 
 ### Preflight
 

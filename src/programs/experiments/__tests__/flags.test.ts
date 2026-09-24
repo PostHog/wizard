@@ -15,7 +15,7 @@ import {
   WIZARD_ORCHESTRATOR_OVERRIDE_FLAG_KEY,
   WIZARD_SELF_DRIVING_USE_PI_HARNESS_FLAG_KEY,
 } from '@shared/constants';
-import { resolveProgramBinding as resolveBinding } from '@programs';
+import { resolveProgramBinding as resolveBinding } from '../../binding';
 import type { ProgramSwitchboardCtx as SwitchboardCtx } from '@programs/types';
 import { areSeededTasksEnabled, resolveStageOverrides } from '..';
 import {

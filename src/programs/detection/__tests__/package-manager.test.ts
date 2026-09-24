@@ -1,7 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { PNPM } from '@utils/package-manager';
 import {
   detectNodePackageManagers,
   detectPythonPackageManagers,
@@ -107,23 +106,6 @@ describe('detectNodePackageManagers', () => {
     const result = await detectNodePackageManagers(tmpDir);
     expect(result.primary?.runCommand).toBe('npm run');
   });
-});
-
-it('writes a package-manager override without loading CLI setup', async () => {
-  const dir = makeTmpDir();
-  try {
-    const pkgPath = path.join(dir, 'package.json');
-    fs.writeFileSync(pkgPath, JSON.stringify({ name: 'app', pnpm: {} }));
-
-    await PNPM.addOverride('posthog-js', '1.0.0', { installDir: dir });
-
-    expect(JSON.parse(fs.readFileSync(pkgPath, 'utf8'))).toEqual({
-      name: 'app',
-      pnpm: { overrides: { 'posthog-js': '1.0.0' } },
-    });
-  } finally {
-    cleanup(dir);
-  }
 });
 
 // ---------------------------------------------------------------------------

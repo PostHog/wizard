@@ -1,4 +1,4 @@
-import { NO_DEFAULT_LIMIT, PRICING_LONG } from './pricing.js';
+import { NO_DEFAULT_LIMIT, PRICING_LONG } from '@shared/self-driving-pricing';
 
 /**
  * Sidebar tips for the self-driving run — short footnotes on the

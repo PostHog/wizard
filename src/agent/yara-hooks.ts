@@ -343,7 +343,6 @@ const SCAN_CHUNK_SIZE = 100_000;
 
 // A skill file is read at most this far; the rest is head-scanned and logged.
 const SKILL_FILE_SCAN_BYTES = 10 * 1024 * 1024;
-export const SKILL_TEXT_GLOB = '**/*.{md,txt,yaml,yml,json,js,ts,py,rb,sh}';
 /**
  * Overlap between adjacent chunks so a pattern straddling a chunk boundary
  * still lands whole inside at least one chunk. YARA rule strings are at most
@@ -1094,8 +1093,8 @@ export function createPostToolUseYaraHooks(
 // ─── Skill File Scanner ──────────────────────────────────────────
 
 /**
- * Scan a skill directory (any root — .claude/skills or the orchestrator's run
- * cache) and return a terminate reason when it is poisoned,
+ * Scan a freshly installed skill directory (any root — .claude/skills or the
+ * orchestrator's run cache) and return a terminate reason when it is poisoned,
  * else null. The choke point for TS-path installs (downloadSkill); agent Bash
  * installs are covered by the PostToolUse matcher above. Runs the same LLM
  * triage as the tool-use scans; fail-closed to treating every match as real when
@@ -1110,20 +1109,14 @@ export function createPostToolUseYaraHooks(
 export async function scanInstalledSkill(
   absoluteSkillDir: string,
   llmProvider: LLMProvider | undefined,
-  phase: 'skill-install' | 'skill-load' = 'skill-install',
 ): Promise<string | null> {
   recordScan();
-  const matches = await scanSkillFiles(
-    absoluteSkillDir,
-    '.',
-    llmProvider,
-    true,
-  );
+  const matches = await scanSkillFiles(absoluteSkillDir, '.', llmProvider);
   const verdict = scanVerdict(matches);
   if (!verdict) return null;
   recordMatch(
-    phase,
-    phase === 'skill-load' ? 'projectSkillLoad' : 'installSkillById',
+    'skill-install',
+    'installSkillById',
     verdict.match,
     verdict.action,
   );
@@ -1150,7 +1143,6 @@ async function scanSkillFiles(
   cwd: string,
   skillDir: string,
   llmProvider: LLMProvider | undefined,
-  failOnUnreadableFile = false,
 ): Promise<ScanMatch[]> {
   const absoluteDir = path.resolve(cwd, skillDir);
 
@@ -1159,10 +1151,9 @@ async function scanSkillFiles(
     return [];
   }
 
-  const files = await fg(SKILL_TEXT_GLOB, {
+  const files = await fg('**/*.{md,txt,yaml,yml,json,js,ts,py,rb,sh}', {
     cwd: absoluteDir,
     absolute: true,
-    caseSensitiveMatch: false,
   });
 
   if (files.length === 0) {
@@ -1192,7 +1183,6 @@ async function scanSkillFiles(
       }
     } catch (err) {
       logToFile(`[YARA] Could not read skill file ${filePath}:`, err);
-      if (failOnUnreadableFile) throw err;
       continue;
     }
     if (content) {

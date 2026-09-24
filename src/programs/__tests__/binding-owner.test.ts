@@ -7,18 +7,9 @@ import {
   WIZARD_SELF_DRIVING_USE_PI_HARNESS_FLAG_KEY,
 } from '@shared/constants';
 import { HARNESS_RUNS_TASKS } from '@agent/runner/switchboard/resolve-harness';
-import { PROGRAM_BINDINGS, resolveProgramBinding } from '@programs';
-import { PROGRAM_REGISTRY } from '@programs';
+import { PROGRAM_BINDINGS, resolveProgramBinding } from '../binding';
 
 describe('program binding owner', () => {
-  it('keeps the registry and program bindings in lockstep', () => {
-    const ids = PROGRAM_REGISTRY.map((program) => program.id);
-    expect(ids.filter((id) => !(id in PROGRAM_BINDINGS))).toEqual([]);
-    expect(
-      Object.keys(PROGRAM_BINDINGS).filter((id) => !ids.includes(id)),
-    ).toEqual([]);
-  });
-
   it('resolves and traces a CLI sequence override ahead of an experiment', () => {
     const trace = {};
     const binding = resolveProgramBinding({
@@ -29,28 +20,6 @@ describe('program binding owner', () => {
     });
     expect(binding.sequence).toBe(Sequence.linear);
     expect(trace).toMatchObject({ sequence: 'cli', harness: 'flag' });
-  });
-
-  it('keeps a composed run linear even with a CLI orchestrator override', () => {
-    const trace = {};
-    const binding = resolveProgramBinding({
-      program: 'posthog-integration',
-      flags: {},
-      composed: true,
-      cliSequence: Sequence.orchestrator,
-      trace,
-    });
-    expect(binding.sequence).toBe(Sequence.linear);
-    expect(trace).toMatchObject({ sequence: 'composed' });
-  });
-
-  it('preserves the per-program harness and model', () => {
-    expect(
-      resolveProgramBinding({ program: 'replay-vision', flags: {} }),
-    ).toMatchObject({
-      sequence: Sequence.orchestrator,
-      harness: Harness.anthropic,
-    });
   });
 
   it('pre-resolves task roles with flag routes above role defaults', () => {

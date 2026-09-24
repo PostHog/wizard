@@ -77,12 +77,15 @@ runAgent(config: RunConfig, input: RunInput, options?: {
   the host to present. The host decides how to present a returned failure, set
   an exit code, or rethrow an attached error. Final scan-report flushing is best
   effort and does not replace the run result.
+- Skills: a run that does not end in `Success` removes the skill directories it
+  added under `<installDir>/.claude/skills` that carry the `.posthog-wizard`
+  marker. Directories that were there before the run stay.
 - Analytics shutdown is host-owned: the agent never sends the terminal
   `setup wizard finished` event, and `runProgram` doesn't either. The host sends
   it from the outcome: `Success` is `success`, `Aborted` is `cancelled`,
   `Failed` and `Crashed` are `error`.
 
-`@agent` exports ten runtime names, and
+`@agent` exports eleven runtime names, and
 `src/agent/__tests__/public-entry.test.ts` holds that list:
 
 - **`runAgent` and `RunOutcome`.** The run and its outcome enum.
@@ -95,6 +98,8 @@ runAgent(config: RunConfig, input: RunInput, options?: {
   prompts embed, and the tool ids that go in tool allow and deny lists.
 - **`downloadSkill` and `runMcpPromptViaSdk`.** The skill installer and the
   suggested-prompts stream. Each loads its module on first call.
+- **`TASK_OUTCOMES_KEY`.** The `frameworkContext` key under which the session
+  adapter stores an orchestrator run's task outcomes.
 
 Minimal invocation:
 
@@ -138,8 +143,9 @@ Agentic detection calls `runAgent` itself, before the program runs. It uses a
 linear Haiku run on the Anthropic harness, with `collectTranscript`,
 `requestRemark: false` and `scanReport: 'defer'`. It reads its report from the
 transcript tail and makes up to two attempts, with deadlines of 60 and 90
-seconds. A standalone host builds the config and input itself, as
-`scripts/e2e-agent.no-jest.ts` does.
+seconds. A standalone host builds the config and input itself, as the
+[wizard-workbench](https://github.com/PostHog/wizard-workbench) harness does
+with `pnpm wizard-agent`.
 
 Without `onProgress` the run completes and its snapshot still comes back in the
 result. Without `interaction` the agent installs no ask bridge: `wizard_ask`

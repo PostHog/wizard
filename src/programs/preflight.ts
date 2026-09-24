@@ -18,6 +18,7 @@ import {
   WizardReadiness,
   type WizardReadinessResult,
 } from '@shared/health-checks/readiness';
+import { getRuntimeProgramConfig } from './runtime-registry';
 
 /** What a host supplies: its presentation and its interactive policy. */
 export type ProgramPreflightHost = {
@@ -40,24 +41,6 @@ export type ProgramPreflightDecision =
 
 type PreflightAbort = Extract<ProgramPreflightDecision, { kind: 'abort' }>;
 
-/** Every program whose steps include HEALTH_CHECK_STEP (agent-skill steps are shared by many). */
-export const HEALTH_CHECK_PROGRAMS: ReadonlySet<string> = new Set([
-  'posthog-integration',
-  'revenue-analytics-setup',
-  'error-tracking',
-  'audit',
-  'events-audit',
-  'posthog-doctor',
-  'web-analytics-doctor',
-  'migration',
-  'self-driving',
-  'agent-skill',
-  'mcp-analytics',
-  'replay-vision',
-  'ai-observability',
-  'metrics',
-]);
-
 /** Readiness first, then settings; the first abort wins. */
 export async function preflight(
   programId: string,
@@ -77,7 +60,8 @@ async function checkReadiness(
   programId: string,
   host: ProgramPreflightHost,
 ): Promise<PreflightAbort | null> {
-  if (!HEALTH_CHECK_PROGRAMS.has(programId) || host.readiness) return null;
+  const config = getRuntimeProgramConfig(programId);
+  if (!config || config.healthCheck === false || host.readiness) return null;
 
   logToFile('[agent-runner] evaluating wizard readiness');
   const readinessConfig = host.signup

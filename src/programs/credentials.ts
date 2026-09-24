@@ -1,7 +1,8 @@
 /** Resolved credentials passed from a program host to one agent run. */
 
 import { gatewayAuth } from './gateway-session';
-import type { GatewayAuth, InferenceAuthProvider } from '@agent/types';
+import type { InferenceAuthProvider } from '@agent/types';
+import type { GatewayAuth } from '@shared/gateway-auth';
 import type { ApiProject, ApiUser, Credentials } from '@shared/api';
 
 export type ResolvedProgramCredentials = {
@@ -20,15 +21,11 @@ export type CredentialsProvider = {
   ): Promise<ResolvedProgramCredentials>;
 };
 
-/**
- * Program-owned first-party inference auth. Resolving each time preserves the
- * gateway session's cache and near-expiry refresh for long agent runs.
- */
+/** First-party inference auth; each resolve reuses the gateway session's cache and near-expiry refresh. */
 export function createPosthogInferenceAuthProvider(
   posthog: Credentials,
   programId: string,
 ): InferenceAuthProvider {
-  if (!programId) throw new Error('Inference auth requires a program id');
   return {
     resolve: (): Promise<GatewayAuth> =>
       gatewayAuth(posthog.host, posthog.accessToken, programId),

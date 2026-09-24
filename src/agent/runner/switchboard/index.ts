@@ -5,7 +5,7 @@ import type { EffortLevel } from './models';
 
 // ── Shared machinery ────────────────────────────────────────────────────
 
-/** Which precedence rung decided each axis. Stamped by middlewares as they assert. */
+/** Which precedence rung decided each axis. Stamped by the resolvers as they decide. */
 export interface SwitchboardTrace {
   harness?: 'cli' | 'flag' | 'binding';
   model?: 'cli' | 'flag' | 'binding';
@@ -18,7 +18,7 @@ export interface SwitchboardTrace {
     | 'binding';
 }
 
-/** Everything a resolver middleware may branch on. Built once per run. */
+/** Everything a resolver may branch on. Built once per run. */
 export interface SwitchboardCtx {
   /** Opaque log label. Program lookup stays with the caller. */
   program?: string;
@@ -33,9 +33,6 @@ export interface SwitchboardCtx {
     thinkingLevel?: EffortLevel;
     sequence?: Sequence;
   };
-  flagSequence?: Sequence;
-  /** Raw boolean only for the existing capability-clamp log line. */
-  orchestratorFlagOn?: boolean;
   /** CLI override (`--harness`). Wins over `flags`. */
   cliHarness?: Harness;
   /** CLI override (`--sequence`). Wins over `flags`. */
@@ -45,9 +42,6 @@ export interface SwitchboardCtx {
   /** Filled during resolution; read by the caller for telemetry. */
   trace?: SwitchboardTrace;
 }
-
-/** A resolver middleware: defer via `next()`, or assert by returning a value. */
-export type Middleware<D> = (ctx: SwitchboardCtx, next: () => D) => D;
 
 // ── Data model ──────────────────────────────────────────────────────────
 

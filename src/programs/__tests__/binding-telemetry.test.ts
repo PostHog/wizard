@@ -1,6 +1,6 @@
 import { expect, it, vi } from 'vitest';
 import { Harness, Sequence } from '@shared/constants';
-import { captureSwitchboardDecision } from '@programs';
+import { captureSwitchboardDecision } from '../binding-telemetry';
 import { analytics } from '@utils/analytics';
 
 vi.mock('@utils/analytics', () => ({

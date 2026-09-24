@@ -59,10 +59,10 @@ async function executeLinear(
   }: SequenceContext,
   runSignal: AbortSignal,
 ): Promise<SequenceResult> {
-  if (signal?.aborted) return hostAborted();
   const { run, composed } = config;
   const { skillsBaseUrl, credentials, project } = boot;
   const { projectApiKey, host, projectId } = credentials;
+  if (signal?.aborted) return hostAborted();
 
   // 5. Skill install (if skillId provided)
   let skillPath: string | undefined;
@@ -76,13 +76,11 @@ async function executeLinear(
     );
     if (signal?.aborted) return hostAborted();
     if (installResult.kind !== 'ok') {
-      if (signal?.aborted) return hostAborted();
       return failed(installFailure(run.integrationLabel, installResult));
     }
     skillPath = installResult.path;
     logToFile(`[agent-runner] skill installed at ${skillPath}`);
   }
-  if (signal?.aborted) return hostAborted();
 
   // 6. Initialize agent
   const spinner = createEmitSpinner(emit);
@@ -234,7 +232,7 @@ async function executeLinear(
   if (classification === AgentErrorType.YARA_VIOLATION) {
     return failed({
       code: AGENT_ERROR_CODE[AgentErrorType.YARA_VIOLATION],
-      message: failureMessage ?? formatYaraAbortMessage(),
+      message: formatYaraAbortMessage(),
       error: agentResult.kind === 'failure' ? agentResult.error : undefined,
     });
   }
@@ -299,7 +297,6 @@ async function executeLinear(
     await config.hooks.postRun(credentials);
     if (signal?.aborted) return hostAborted();
   }
-  if (signal?.aborted) return hostAborted();
 
   // A composed sub-run leaves the terminal outro to its host.
   if (composed) {
@@ -319,7 +316,6 @@ async function executeLinear(
           : undefined,
       };
   if (outroData) {
-    if (signal?.aborted) return hostAborted();
     emit({ kind: 'completion', outro: outroData });
   }
 

@@ -1,3 +1,4 @@
+import { WIZARD_TOOL_NAMES } from '@agent';
 import type { AgentRunDefinition } from '@agent/types';
 import { EVENT_PLAN_FILE } from '@shared/constants';
 import { AUDIT_CHECKS_FILE, type AuditCheck } from '@shared/audit-ledger';
@@ -11,6 +12,7 @@ import { MIGRATION_RUN } from './migration/run.js';
 import { REPLAY_VISION_OPTIONS } from './replay-vision/run.js';
 import { REVENUE_ANALYTICS_RUN } from './revenue-analytics/run.js';
 import { WEB_ANALYTICS_DOCTOR_OPTIONS } from './web-analytics-doctor/run.js';
+import { excludedIntegrationTaskTypes } from './posthog-integration/run.js';
 import {
   resolveAgentSkillRunDefinition,
   resolveAuditRunDefinition,
@@ -27,9 +29,13 @@ type RuntimeProgramConfigBase = {
   requiresAi?: boolean;
   allowedTools?: readonly string[];
   disallowedTools?: readonly string[];
+  /** Task types the orchestrator drops for this run's wizard flags. */
+  excludedTaskTypes?: (flags: Record<string, string>) => readonly string[];
   auditLedgerFile?: string;
   auditSeedChecks?: readonly AuditCheck[];
   eventPlanFile?: string;
+  /** False for programs without the health-check step, so preflight skips readiness. */
+  healthCheck?: boolean;
   /** Steps a host settles after auth and before the run, asked as one post-auth request. */
   postAuthGates?: readonly string[];
   /** Child program runs a composed program starts before its own agent. */
@@ -53,13 +59,18 @@ export type RuntimeProgramConfig = RuntimeProgramConfigBase &
       }
   );
 
-const WIZARD_ASK = 'mcp__wizard-tools__wizard_ask';
+const WIZARD_ASK = WIZARD_TOOL_NAMES.wizardAsk;
 const AUDIT_TOOLS = [
   'Agent',
-  'mcp__wizard-tools__audit_seed_checks',
-  'mcp__wizard-tools__audit_add_checks',
-  'mcp__wizard-tools__audit_resolve_checks',
+  WIZARD_TOOL_NAMES.auditSeedChecks,
+  WIZARD_TOOL_NAMES.auditAddChecks,
+  WIZARD_TOOL_NAMES.auditResolveChecks,
 ];
+const MCP_CLIENT_PROGRAM = {
+  strategy: 'no-agent',
+  requiresAi: false,
+  healthCheck: false,
+} as const;
 
 export const RUNTIME_PROGRAM_REGISTRY = [
   {
@@ -67,6 +78,7 @@ export const RUNTIME_PROGRAM_REGISTRY = [
     strategy: 'integration',
     agentFlow: 'integration-v2',
     disallowedTools: [WIZARD_ASK],
+    excludedTaskTypes: excludedIntegrationTaskTypes,
     eventPlanFile: EVENT_PLAN_FILE,
   },
   {
@@ -82,6 +94,7 @@ export const RUNTIME_PROGRAM_REGISTRY = [
     resolve: (input) =>
       resolveWarehouseSourceRunDefinition(input.warehouseSources ?? []),
     allowedTools: ['Agent'],
+    healthCheck: false,
   },
   {
     id: 'error-tracking-upload-source-maps',
@@ -90,6 +103,7 @@ export const RUNTIME_PROGRAM_REGISTRY = [
       resolveSourceMapsRunDefinition(input.sourceMapsSelection),
     requiresAi: true,
     postAuthGates: ['detect'],
+    healthCheck: false,
   },
   {
     id: 'error-tracking',
@@ -144,12 +158,13 @@ export const RUNTIME_PROGRAM_REGISTRY = [
   {
     id: 'agent-skill',
     strategy: 'resolved',
-    resolve: (input) => resolveAgentSkillRunDefinition(input.skillId),
+    resolve: ({ skillId }) =>
+      skillId ? resolveAgentSkillRunDefinition(skillId) : undefined,
     allowedTools: ['Agent'],
   },
-  { id: 'mcp-add', strategy: 'no-agent', requiresAi: false },
-  { id: 'mcp-remove', strategy: 'no-agent', requiresAi: false },
-  { id: 'mcp-tutorial', strategy: 'no-agent', requiresAi: false },
+  { id: 'mcp-add', ...MCP_CLIENT_PROGRAM },
+  { id: 'mcp-remove', ...MCP_CLIENT_PROGRAM },
+  { id: 'mcp-tutorial', ...MCP_CLIENT_PROGRAM },
   {
     id: 'mcp-analytics',
     strategy: 'static',
@@ -163,10 +178,8 @@ export const RUNTIME_PROGRAM_REGISTRY = [
   },
   { id: 'ai-observability', strategy: 'static', run: AI_OBSERVABILITY_RUN },
   { id: 'metrics', strategy: 'static', agentFlow: 'metrics', run: METRICS_RUN },
-  { id: 'slack', strategy: 'no-agent' },
+  { id: 'slack', strategy: 'no-agent', healthCheck: false },
 ] as const satisfies readonly RuntimeProgramConfig[];
-
-export type RuntimeProgramId = (typeof RUNTIME_PROGRAM_REGISTRY)[number]['id'];
 
 export function getRuntimeProgramConfig(
   id: string,

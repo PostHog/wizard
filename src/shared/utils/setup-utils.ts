@@ -307,39 +307,6 @@ export async function installPackage({
 }
 
 /**
- * Get package.json or abort the wizard if not found.
- * Only use where package.json is required (e.g., package install, overrides).
- * For detection/version-checks, use tryGetPackageJson() instead.
- */
-export async function getPackageDotJson({
-  installDir,
-}: Pick<WizardRunOptions, 'installDir'>): Promise<PackageJson> {
-  const pkgPath = join(installDir, 'package.json');
-
-  let raw: string;
-  try {
-    raw = await fs.promises.readFile(pkgPath, 'utf8');
-  } catch {
-    getUI().log.error(
-      'Could not find package.json. Make sure to run the wizard in the root of your app!',
-    );
-    await abort();
-    return {};
-  }
-
-  try {
-    const parsed = JSON.parse(raw) as PackageJson | null;
-    return parsed ?? {};
-  } catch {
-    getUI().log.error(
-      `Unable to parse your package.json. Make sure it has a valid format!`,
-    );
-    await abort();
-    return {};
-  }
-}
-
-/**
  * Try to get package.json, returning null if it doesn't exist.
  * Use this for detection purposes where missing package.json is expected (e.g., Python projects).
  */
@@ -354,25 +321,6 @@ export async function tryGetPackageJson({
     return JSON.parse(packageJsonFileContents) as PackageJson;
   } catch {
     return null;
-  }
-}
-
-export async function updatePackageDotJson(
-  packageDotJson: PackageJson,
-  { installDir }: Pick<WizardRunOptions, 'installDir'>,
-): Promise<void> {
-  const pkgPath = join(installDir, 'package.json');
-  const serialized = JSON.stringify(packageDotJson, null, 2);
-
-  try {
-    await fs.promises.writeFile(pkgPath, serialized, {
-      encoding: 'utf8',
-      flag: 'w',
-    });
-    return;
-  } catch {
-    getUI().log.error(`Unable to update your package.json.`);
-    await abort();
   }
 }
 

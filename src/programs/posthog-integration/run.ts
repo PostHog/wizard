@@ -7,7 +7,6 @@ import type {
 } from '@agent/types';
 import { AgentSignals } from '@agent';
 import { isAskDisabled } from '@shared/ask-policy';
-import type { Credentials } from '@shared/api';
 import type { HostResolution } from '@shared/host-resolution';
 import type { FrameworkConfig } from '@programs/framework-config';
 import {
@@ -17,21 +16,31 @@ import {
 import type { DetectedSource } from '@programs/warehouse-sources/types';
 import { OutroKind } from '@agent';
 import {
+  WIZARD_DEFAULT_AIO_LOGS_FLAG_KEY,
   WIZARD_INTERACTION_EVENT_NAME,
   type Integration,
 } from '@shared/constants';
 import { withUtm } from '@utils/links';
+import { analytics } from '@utils/analytics';
+import { hasDeclaredDependency } from '@utils/package-json';
+import { requestDeepLink } from '@utils/provisioning';
 import { buildCodingAgentPrompt } from './handoff.js';
 
 export const SETUP_REPORT_FILE = 'posthog-setup-report.md';
+
+/** Kill switch over the shipped default: only an explicit 'false' drops AI Observability and Logs. */
+export const excludedIntegrationTaskTypes = (
+  flags: Record<string, string>,
+): readonly string[] =>
+  flags[WIZARD_DEFAULT_AIO_LOGS_FLAG_KEY] === 'false'
+    ? ['ai-observability', 'logs']
+    : [];
 const WAREHOUSE_SOURCES_DOCS_URL =
   'https://posthog.com/docs/data-warehouse/sources';
 const WAREHOUSE_SEED_TASK_TYPE = 'warehouse';
 const WAREHOUSE_LINK_LIMIT = 3;
 /** Sources the seeded step collects credentials for; the rest become outro links. */
 const WAREHOUSE_SEED_LIMIT = 3;
-
-type TagValue = string | boolean | number | null | undefined;
 
 export interface PosthogIntegrationRunInput {
   installDir: string;
@@ -41,38 +50,24 @@ export interface PosthogIntegrationRunInput {
   additionalFeatureQueue?: AgentRunDefinition['additionalFeatureQueue'];
   warehouseSources: readonly DetectedSource[];
   flags: Pick<RunFlags, 'ci' | 'signup' | 'e2eAsk'>;
+  /** The run's wizard flags; an explicit 'false' on the AIO/Logs key drops both products. */
+  wizardFlags: Record<string, string>;
   mayReportScanResults: boolean;
-  /** Legacy TUI calls its separate seedTasks callback after resolving the run. */
-  includeSeedTasks?: boolean;
   /** An earlier step may have produced a dashboard link already. */
   dashboardDeepLink?: unknown;
-  /** Fallback for hosts that do not expose a live notebook URL getter. */
-  notebookUrl?: string | null;
 }
 
 /** Effects a host supplies at the program boundary. No WizardSession is passed in. */
 export interface PosthogIntegrationRunEffects {
   readPackageJson: (installDir: string) => Promise<unknown | null>;
-  hasDeclaredDependency: (name: string, packageJson: unknown) => boolean;
   warn: (message: string) => void;
-  setTag: (key: string, value: TagValue) => void;
-  capture: (event: string, properties: Record<string, unknown>) => void;
   uploadEnvironmentVariables: (
     envVars: Record<string, string>,
     integration: Integration,
   ) => Promise<string[]>;
-  requestDeepLink: (
-    credentials: Credentials,
-  ) => Promise<string | null | undefined>;
   openDashboardDeepLink: (taggedUrl: string) => void;
   getNotebookUrl?: () => string | null | undefined;
   setDashboardDeepLink?: (taggedUrl: string) => void;
-}
-
-export interface ResolvedPosthogIntegrationRun {
-  run: AgentRunDefinition;
-  hooks: RunHooks;
-  seedTasks: SeedTaskEntry[];
 }
 
 function resolveContinueUrl(
@@ -137,7 +132,6 @@ export function resolvePosthogIntegrationSeedTasks(
     PosthogIntegrationRunInput,
     'warehouseSources' | 'flags' | 'mayReportScanResults'
   >,
-  capture: PosthogIntegrationRunEffects['capture'],
 ): SeedTaskEntry[] {
   if (isAskDisabled(input.flags)) return [];
   const sources = input.warehouseSources;
@@ -145,7 +139,7 @@ export function resolvePosthogIntegrationSeedTasks(
   const offered = sources.slice(0, WAREHOUSE_SEED_LIMIT);
   const deferred = sources.length - offered.length;
   if (input.mayReportScanResults) {
-    capture('orchestrator warehouse task queued', {
+    analytics.wizardCapture('orchestrator warehouse task queued', {
       warehouse_source_count: sources.length,
       warehouse_source_kinds: sources.map((s) => s.kind),
       // The detection totals stay above; this is what the step was given.
@@ -185,26 +179,21 @@ export function resolvePosthogIntegrationSeedTasks(
   ];
 }
 
-/** Resolve prompt, completion hooks and seeded tasks from explicit program data. */
+/** Resolve the prompt and completion hooks from explicit program data. */
 export async function resolvePosthogIntegrationRun(
   input: PosthogIntegrationRunInput,
   effects: PosthogIntegrationRunEffects,
-): Promise<ResolvedPosthogIntegrationRun> {
+): Promise<{ run: AgentRunDefinition; hooks: RunHooks }> {
   const config = input.frameworkConfig;
   const typeScriptDetected = input.typescript;
-  effects.setTag('typescript', typeScriptDetected);
+  analytics.setTag('typescript', typeScriptDetected);
 
   const usesPackageJson = config.detection.usesPackageJson !== false;
   let frameworkVersion: string | undefined;
   if (usesPackageJson) {
     const packageJson = await effects.readPackageJson(input.installDir);
     if (packageJson) {
-      if (
-        !effects.hasDeclaredDependency(
-          config.detection.packageName,
-          packageJson,
-        )
-      ) {
+      if (!hasDeclaredDependency(config.detection.packageName, packageJson)) {
         effects.warn(
           `${config.detection.packageDisplayName} does not seem to be installed. Continuing anyway — the agent will handle it.`,
         );
@@ -221,13 +210,21 @@ export async function resolvePosthogIntegrationRun(
 
   if (frameworkVersion && config.detection.getVersionBucket) {
     const versionBucket = config.detection.getVersionBucket(frameworkVersion);
-    effects.setTag(`${config.metadata.integration}-version`, versionBucket);
+    analytics.setTag(`${config.metadata.integration}-version`, versionBucket);
   }
   const frameworkContext = input.frameworkContext;
   const contextTags = config.analytics.getTags(frameworkContext);
   Object.entries(contextTags).forEach(([key, value]) =>
-    effects.setTag(key, value),
+    analytics.setTag(key, value),
   );
+
+  // The kill switch the orchestrator applies via excludedTaskTypes, gated here
+  // for linear and composed runs, which assemble their own prompt. Only an
+  // explicit 'false' excludes, so a failed flag fetch keeps the default.
+  const skillCategoryInstruction =
+    input.wizardFlags[WIZARD_DEFAULT_AIO_LOGS_FLAG_KEY] !== 'false'
+      ? `Choose a skill from the \`integration\` category that matches this project's framework. Start with this framework skill; load the AI Observability and Logs skills when its workflow calls for them, and follow each installed skill's own steps to completion — framework first, then AI Observability, then Logs — before verification and the setup report. Both are included by default where applicable; the skills define applicability and how to report skipped work. These three categories — \`integration\`, \`ai-observability\`, \`logs\` — are the only ones this run uses. Do NOT load or install skills from any other category (llm-analytics, error-tracking, feature-flags, audit, etc.) — those are handled separately. In particular, \`ai-observability\` is the category for AI Observability; do not substitute \`llm-analytics\`.`
+      : `Choose a skill from the \`integration\` category that matches this project's framework. The \`integration\` category is the ONLY one this run uses. Do NOT load or install skills from any other category (ai-observability, logs, llm-analytics, error-tracking, feature-flags, audit, etc.) — those are handled separately. If the installed skill's workflow contains an "AI Observability and Logs" section, skip that entire section: this run excludes both products.`;
 
   let dashboardDeepLink = input.dashboardDeepLink;
   const run: AgentRunDefinition = {
@@ -268,12 +265,12 @@ Project context:
 
 Instructions (follow these steps IN ORDER - do not skip or reorder):
 
-STEP 1: Call load_skill_menu (from the wizard-tools MCP server) to see available skills.
+STEP 1: Call load_skill_menu (from the wizard-tools MCP server) with category: "integration" to see available framework skills.
    If the tool fails, emit: ${
      AgentSignals.ERROR_MCP_MISSING
    } Could not load skill menu and halt.
 
-   Choose a skill from the \`integration\` category that matches this project's framework. Do NOT pick skills from other categories (llm-analytics, error-tracking, feature-flags, omnibus, etc.) — those are handled separately.
+   ${skillCategoryInstruction}
    If no suitable integration skill is found, emit: ${
      AgentSignals.ERROR_RESOURCE_MISSING
    } Could not find a suitable skill for this project.
@@ -316,7 +313,7 @@ ${warehouseReportInstruction(input.warehouseSources)}
           config.metadata.integration,
         );
         if (uploadedEnvVars.length > 0) {
-          effects.capture(WIZARD_INTERACTION_EVENT_NAME, {
+          analytics.capture(WIZARD_INTERACTION_EVENT_NAME, {
             action: 'wizard_env_vars_uploaded',
             integration: config.metadata.integration,
             variable_count: uploadedEnvVars.length,
@@ -325,7 +322,10 @@ ${warehouseReportInstruction(input.warehouseSources)}
         }
       }
       if (input.flags.signup) {
-        const deepLink = await effects.requestDeepLink(credentials);
+        const deepLink = await requestDeepLink(
+          credentials.accessToken,
+          credentials.host,
+        );
         if (deepLink) {
           const taggedDeepLink = withUtm(deepLink, 'dashboard-deeplink');
           dashboardDeepLink = taggedDeepLink;
@@ -357,8 +357,7 @@ ${warehouseReportInstruction(input.warehouseSources)}
           ? 'Added environment variables to .env file'
           : '',
       ].filter(Boolean);
-      const notebookUrl =
-        effects.getNotebookUrl?.() ?? input.notebookUrl ?? undefined;
+      const notebookUrl = effects.getNotebookUrl?.() ?? undefined;
       return {
         kind: OutroKind.Success,
         message: 'Successfully installed PostHog!',
@@ -379,12 +378,5 @@ ${warehouseReportInstruction(input.warehouseSources)}
     },
   };
 
-  return {
-    run,
-    hooks,
-    seedTasks:
-      input.includeSeedTasks === false
-        ? []
-        : resolvePosthogIntegrationSeedTasks(input, effects.capture),
-  };
+  return { run, hooks };
 }

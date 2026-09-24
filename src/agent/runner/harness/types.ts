@@ -51,7 +51,6 @@ export interface BackendRunInputs {
   input: RunInput;
   boot: BootstrapResult;
   emit: ProgressEmitter;
-  /** Host cancellation for the whole agent run. */
   signal?: AbortSignal;
   /** The fully assembled prompt. */
   prompt: string;
@@ -101,7 +100,6 @@ export interface TaskRunInputs {
   input: RunInput;
   boot: BootstrapResult;
   emit: ProgressEmitter;
-  /** Host cancellation shared by every task in this run. */
   signal?: AbortSignal;
   /** The fully assembled per-task or seed prompt. */
   prompt: string;

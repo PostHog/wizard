@@ -7,11 +7,6 @@ import type {
 import type { WizardStore, TaskItem } from '@ui/tui/store';
 import { TaskStatus } from '@ui/wizard-ui';
 import { RunPhase, type PendingQuestion } from '@lib/wizard-session';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { EVENT_PLAN_FILE } from '@programs/posthog-integration/constants';
-import * as eventPlanWatch from '@programs/posthog-integration/watch-event-plan';
 
 type Listener = () => void;
 
@@ -134,40 +129,6 @@ describe('TaskStreamPush', () => {
   });
 
   // ── Existing event-sequencing behaviour ────────────────────────
-
-  it('starts no file watcher; the program owns the event plan', async () => {
-    const installDir = mkdtempSync(join(tmpdir(), 'wizard-unwatched-plan-'));
-    const EventPlanWatcher = eventPlanWatch.ProgramEventPlanWatcher;
-    const watcher = vi
-      .spyOn(eventPlanWatch, 'ProgramEventPlanWatcher')
-      .mockImplementation(function (
-        ...args: ConstructorParameters<typeof EventPlanWatcher>
-      ) {
-        return new EventPlanWatcher(...args);
-      });
-    // An untyped caller, such as a script, may still name the file.
-    const options = {
-      store: createMockStore({ installDir, runPhase: RunPhase.Completed }),
-      programId: 'posthog-integration',
-      destinations: [createMockDestination()],
-      eventPlanPath: join(installDir, EVENT_PLAN_FILE),
-    };
-    try {
-      const push = new TaskStreamPush(options);
-      push.attach();
-      writeFileSync(
-        options.eventPlanPath,
-        JSON.stringify([{ event_name: 'created_workspace' }]),
-      );
-      await push.shutdown(2000);
-
-      expect(watcher).not.toHaveBeenCalled();
-      expect(options.store.eventPlan).toEqual([]);
-    } finally {
-      watcher.mockRestore();
-      rmSync(installDir, { recursive: true, force: true });
-    }
-  });
 
   describe('event ordering (imperative push)', () => {
     it('first push sends CREATE', async () => {

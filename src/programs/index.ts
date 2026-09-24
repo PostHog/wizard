@@ -1,10 +1,6 @@
 /** Public runtime entry for the programs surface. */
 import { snapshotProgramInput } from './snapshot-program-input';
 export type * from './types';
-export { PROGRAM_BINDINGS, resolveProgramBinding } from './binding';
-export { getProgramCommandments } from './commandments';
-export { captureSwitchboardDecision } from './binding-telemetry';
-export { areSeededTasksEnabled, resolveStageOverrides } from './experiments';
 /** Load gateway minting only when the caller requests model auth. */
 export function createPosthogInferenceAuthProvider(
   posthog: import('@shared/api').Credentials,

@@ -114,7 +114,7 @@ export interface QueuedTask {
   handoff?: TaskHandoff;
   /** 'orchestrator' for seeded tasks, or the id of the task that enqueued this one. */
   enqueuedBy: string;
-  /** Wizard-seeded only: terminal failure unblocks dependents and never fails the run. */
+  /** Terminal failure unblocks dependents and never fails the run. */
   optional?: boolean;
   createdAt: string;
   startedAt?: string;
@@ -130,6 +130,14 @@ export interface QueueFile {
   version: 1;
   runId: string;
   tasks: QueuedTask[];
+}
+
+export { TASK_OUTCOMES_KEY } from '../../shared/types';
+
+export interface TaskOutcome {
+  type: string;
+  status: TaskStatus;
+  optional: boolean;
 }
 
 /** The structured handoff a task leaves for the next agent. */

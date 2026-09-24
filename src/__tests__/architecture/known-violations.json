@@ -23,7 +23,6 @@
     "src/lib/runners/run-non-interactive.ts -> src/programs/task-stream/task-stream-push.ts",
     "src/lib/runners/run-program-agent.ts -> src/programs/audit/types.ts",
     "src/lib/runners/run-program-agent.ts -> src/programs/authenticate.ts",
-    "src/lib/runners/run-program-agent.ts -> src/programs/program-run.ts",
     "src/lib/runners/run-program-agent.ts -> src/programs/registry.ts",
     "src/lib/runners/run-program-agent.ts -> src/programs/warehouse-source/detect.ts",
     "src/lib/runners/run-wizard.ts -> src/programs/audit/types.ts",
