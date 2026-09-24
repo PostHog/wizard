@@ -11,7 +11,6 @@ import type { FrameworkDetectionState } from '@programs/detection/context';
 import type { ProgramCiHost } from '@programs/host-capabilities';
 import { FRAMEWORK_REGISTRY } from '@programs/registry';
 import { createSkillProgram } from '@programs/agent-skill/index';
-import { REPLAY_VISION_OPTIONS } from './run.js';
 import { AGENT_SKILL_STEPS } from '@programs/agent-skill/steps';
 import { detectPostHogIntegration } from '@programs/posthog-integration/detect';
 import type {
@@ -22,6 +21,9 @@ import type {
 import { analytics } from '@utils/analytics';
 import { wizardAbort } from '@utils/wizard-abort';
 import { ErrorCodes } from '@shared/errors';
+import { REPLAY_VISION_OPTIONS } from './run.js';
+
+export { REPLAY_VISION_ABORT_CASES } from './run.js';
 
 /**
  * The platforms session replay can actually record on. Replay vision watches

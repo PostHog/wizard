@@ -30,6 +30,8 @@ export type RevenueDetectError =
   | { kind: 'missing-posthog'; foundStripe: string[] }
   | { kind: 'missing-stripe'; foundPosthog: string[] };
 
+export { REVENUE_ABORT_CASES } from './abort-cases.js';
+
 /**
  * Scan `session.installDir` for PostHog + Stripe SDKs. Writes detection
  * results into frameworkContext via the callback — either the detected

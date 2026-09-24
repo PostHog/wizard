@@ -1,6 +1,6 @@
-import { METRICS_REPORT_FILE, METRICS_RUN } from './run.js';
 import type { ProgramConfig, ProgramStep } from '@programs/program-step';
 import { AGENT_SKILL_STEPS } from '@programs/agent-skill/index';
+import { METRICS_REPORT_FILE, METRICS_RUN } from './run.js';
 
 const METRICS_STEPS: ProgramStep[] = AGENT_SKILL_STEPS.map((step) =>
   step.id === 'intro' ? { ...step, screenId: 'metrics-intro' } : step,
