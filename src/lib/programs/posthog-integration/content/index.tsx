@@ -164,6 +164,10 @@ export const getContentBlocks = (store?: WizardStore): ContentBlock[] => [
         <Text color="cyan">{'◆ '}</Text>
         {'Logs'}
       </Text>,
+      <Text>
+        <Text color="cyan">{'  ◆ '}</Text>
+        {'Data Warehouse sources'}
+      </Text>,
     ],
   },
 ];
