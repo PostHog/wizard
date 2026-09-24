@@ -31,10 +31,6 @@ import {
   resolveEnvPath,
   templateEnvWriteRefusal,
 } from '@agent/tools';
-import {
-  __test as skillDownloadTest,
-  downloadSkillPayload,
-} from '@shared/skill-download';
 import type { AuditCheck } from '@programs/audit/types';
 
 function makeTmpDir(): string {
@@ -1091,7 +1087,7 @@ describe('extractZipArchive', () => {
       'references/deep/notes.md': new TextEncoder().encode('notes'),
     });
 
-    const written = skillDownloadTest.extractZipArchive(zip, dest);
+    const written = __test.extractZipArchive(zip, dest);
 
     expect(written).toBe(2);
     expect(fs.readFileSync(path.join(dest, 'SKILL.md'), 'utf8')).toBe(
@@ -1107,7 +1103,7 @@ describe('extractZipArchive', () => {
       '../evil.txt': new TextEncoder().encode('pwned'),
     });
 
-    expect(() => skillDownloadTest.extractZipArchive(zip, dest)).toThrow(
+    expect(() => __test.extractZipArchive(zip, dest)).toThrow(
       /escapes destination/,
     );
     expect(fs.existsSync(path.join(dest, '..', 'evil.txt'))).toBe(false);
@@ -1118,7 +1114,7 @@ describe('extractZipArchive', () => {
       '/etc/evil.txt': new TextEncoder().encode('pwned'),
     });
 
-    expect(() => skillDownloadTest.extractZipArchive(zip, dest)).toThrow(
+    expect(() => __test.extractZipArchive(zip, dest)).toThrow(
       /escapes destination/,
     );
   });
@@ -1141,7 +1137,7 @@ describe('extractBundle', () => {
   });
 
   it('writes only the named variant, including nested paths', () => {
-    const written = skillDownloadTest.extractBundle(
+    const written = __test.extractBundle(
       bundle({ 'SKILL.md': '# skill', 'references/deep/notes.md': 'notes' }),
       dest,
       'integration-v2-capture-django',
@@ -1158,7 +1154,7 @@ describe('extractBundle', () => {
 
   it('rejects entries that escape the destination', () => {
     expect(() =>
-      skillDownloadTest.extractBundle(
+      __test.extractBundle(
         bundle({ '../evil.txt': 'pwned' }),
         dest,
         'integration-v2-capture-django',
@@ -1169,7 +1165,7 @@ describe('extractBundle', () => {
 
   it('rejects absolute entry paths', () => {
     expect(() =>
-      skillDownloadTest.extractBundle(
+      __test.extractBundle(
         bundle({ '/etc/evil.txt': 'pwned' }),
         dest,
         'integration-v2-capture-django',
@@ -1179,7 +1175,7 @@ describe('extractBundle', () => {
 
   it('throws when the bundle lacks the named variant', () => {
     expect(() =>
-      skillDownloadTest.extractBundle(
+      __test.extractBundle(
         bundle({ 'SKILL.md': '# skill' }),
         dest,
         'integration-v2-capture-nextjs',
@@ -1197,7 +1193,7 @@ describe('extractBundle', () => {
       { id: 'x', variants: null },
     ]) {
       expect(() =>
-        skillDownloadTest.extractBundle(
+        __test.extractBundle(
           malformed as never,
           dest,
           'integration-v2-capture-django',
@@ -1221,7 +1217,7 @@ describe('downloadWithRetry', () => {
   it('returns the body on first success without sleeping', async () => {
     let fetches = 0;
 
-    const bytes = await downloadSkillPayload(url, {
+    const bytes = await __test.downloadWithRetry(url, {
       fetchImpl: (() => {
         fetches += 1;
         return okResponse();
@@ -1239,7 +1235,7 @@ describe('downloadWithRetry', () => {
     let attempts = 0;
     const sleeps: number[] = [];
 
-    const bytes = await downloadSkillPayload(url, {
+    const bytes = await __test.downloadWithRetry(url, {
       fetchImpl: (() => {
         attempts += 1;
         if (attempts < 3) return Promise.reject(new Error('fetch failed'));
@@ -1261,7 +1257,7 @@ describe('downloadWithRetry', () => {
     let attempts = 0;
 
     await expect(
-      downloadSkillPayload(url, {
+      __test.downloadWithRetry(url, {
         fetchImpl: (() => {
           attempts += 1;
           return Promise.resolve({
@@ -1283,7 +1279,7 @@ describe('downloadWithRetry', () => {
     const errors = ['ENOTFOUND', 'ECONNRESET', 'ETIMEDOUT'];
     let i = 0;
     await expect(
-      downloadSkillPayload(url, {
+      __test.downloadWithRetry(url, {
         fetchImpl: (() => Promise.reject(new Error(errors[i++]))) as any,
         sleepImpl: noSleep,
         maxAttempts: 3,
@@ -1296,7 +1292,7 @@ describe('downloadWithRetry', () => {
     let slept = false;
 
     await expect(
-      downloadSkillPayload(url, {
+      __test.downloadWithRetry(url, {
         fetchImpl: (() => {
           attempts += 1;
           return Promise.resolve({
@@ -1322,7 +1318,7 @@ describe('downloadWithRetry', () => {
     let attempts = 0;
 
     await expect(
-      downloadSkillPayload(url, {
+      __test.downloadWithRetry(url, {
         fetchImpl: (() => {
           attempts += 1;
           return Promise.resolve({

@@ -8,6 +8,7 @@
 
 import path from 'path';
 import fs from 'fs';
+import { unzipSync } from 'fflate';
 import { logToFile } from '@utils/debug';
 import { analytics } from '@utils/analytics';
 import { readProjectFile, walkProjectFiles } from '@utils/bounded-fs';
@@ -30,15 +31,74 @@ import {
 } from '@shared/audit-ledger';
 import { CANCELLED_SENTINEL } from '../wizard-ask-bridge';
 import type { SecretVault } from '@shared/secret-vault';
-import { fetchWithRetry } from '@shared/fetch-retry';
+import { fetchWithRetry, type RetryOpts } from '@shared/fetch-retry';
 import { fetchSkillMenu, type SkillEntry } from '@shared/skill-menu';
-import {
-  downloadSkillPayload,
-  extractSkillPayload,
-  type SkillInstallReceipt,
-} from '@shared/skill-download';
 
-export type { SkillBundle } from '@shared/skill-download';
+/** A bundle's files, keyed by variant short id then path. */
+export type SkillBundle = {
+  id: string;
+  variants: Record<string, Record<string, string>>;
+};
+
+/** Extract a zip buffer, refusing entries that escape destDir (zip-slip). */
+function extractZipArchive(zip: Uint8Array, destDir: string): number {
+  const root = path.resolve(destDir);
+  let written = 0;
+  for (const [entryPath, data] of Object.entries(unzipSync(zip))) {
+    const target = path.resolve(root, entryPath);
+    if (target !== root && !target.startsWith(root + path.sep)) {
+      throw new Error(`zip entry escapes destination: ${entryPath}`);
+    }
+    if (entryPath.endsWith('/')) {
+      fs.mkdirSync(target, { recursive: true });
+      continue;
+    }
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, data);
+    written++;
+  }
+  return written;
+}
+
+/** Unpack the one variant this entry names out of a bundle; the rest is noise and never hits disk. */
+function extractBundle(
+  bundle: SkillBundle,
+  destDir: string,
+  entryId: string,
+): number {
+  if (
+    typeof bundle?.id !== 'string' ||
+    typeof bundle?.variants !== 'object' ||
+    bundle.variants === null
+  ) {
+    throw new Error('malformed bundle: expected { id, variants }');
+  }
+  const files = bundle.variants[entryId.slice(bundle.id.length + 1)];
+  if (!files) {
+    throw new Error(`bundle ${bundle.id} has no variant "${entryId}"`);
+  }
+  const root = path.resolve(destDir);
+  let written = 0;
+  for (const [entryPath, contents] of Object.entries(files)) {
+    const target = path.resolve(root, entryPath);
+    if (target !== root && !target.startsWith(root + path.sep)) {
+      throw new Error(`bundle entry escapes destination: ${entryPath}`);
+    }
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, contents);
+    written++;
+  }
+  return written;
+}
+
+/** Download a URL to a buffer, retrying transient failures with backoff. */
+async function downloadWithRetry(
+  url: string,
+  opts: RetryOpts = {},
+): Promise<Uint8Array> {
+  const resp = await fetchWithRetry(url, opts);
+  return new Uint8Array(await resp.arrayBuffer());
+}
 
 /** How to place a skill and what triages it — `triage` is stated by every caller so none inherits a silent default. */
 export interface SkillInstallOptions {
@@ -57,13 +117,23 @@ export async function downloadSkill(
   installDir: string,
   { skillsRoot, triage }: SkillInstallOptions,
 ): Promise<{ success: boolean; error?: string }> {
+  const skillDir = skillsRoot
+    ? path.join(installDir, skillsRoot, skillEntry.id)
+    : path.join(installDir, '.claude', 'skills', skillEntry.id);
   let step: 'download' | 'extract' | 'scan' = 'download';
-  let receipt: SkillInstallReceipt | undefined;
 
   try {
-    const data = await downloadSkillPayload(skillEntry.downloadUrl);
+    fs.mkdirSync(skillDir, { recursive: true });
+    const data = await downloadWithRetry(skillEntry.downloadUrl);
     step = 'extract';
-    receipt = extractSkillPayload(skillEntry, installDir, data, skillsRoot);
+    const fileCount = skillEntry.bundle
+      ? extractBundle(
+          JSON.parse(Buffer.from(data).toString('utf8')) as SkillBundle,
+          skillDir,
+          skillEntry.id,
+        )
+      : extractZipArchive(data, skillDir);
+    fs.writeFileSync(path.join(skillDir, '.posthog-wizard'), '');
 
     // Same scan the Bash-install hook runs — TS-path installs (linear
     // pre-install, MCP/pi install_skill, orchestrator cache + reference)
@@ -73,9 +143,9 @@ export async function downloadSkill(
     // that fails to load throws from here. Left as `extract` that lands on the
     // event as an unzip failure, which the pure-JS unzip cannot produce.
     step = 'scan';
-    const poisonReason = await scanInstalledSkill(receipt.skillDir, triage);
+    const poisonReason = await scanInstalledSkill(skillDir, triage);
     if (poisonReason) {
-      receipt.rollback();
+      fs.rmSync(skillDir, { recursive: true, force: true });
       logToFile(`downloadSkill: ${poisonReason}`);
       analytics.wizardCapture('skill install failed', {
         skill_id: skillEntry.id,
@@ -87,7 +157,7 @@ export async function downloadSkill(
     }
 
     logToFile(
-      `downloadSkill: installed ${skillEntry.id} from ${skillEntry.downloadUrl} (${receipt.fileCount} files)`,
+      `downloadSkill: installed ${skillEntry.id} from ${skillEntry.downloadUrl} (${fileCount} files)`,
     );
     // The installed variant is a skill program's identity dimension in analytics.
     analytics.wizardCapture('skill installed', {
@@ -96,7 +166,6 @@ export async function downloadSkill(
     });
     return { success: true };
   } catch (err: any) {
-    receipt?.rollback();
     logToFile(`downloadSkill: error: ${err.message}`);
     // A skill-less run still reports success — keep the failure visible.
     analytics.wizardCapture('skill install failed', {
@@ -1094,7 +1163,10 @@ export { SERVER_NAME, WIZARD_TOOL_NAMES } from './tool-names';
 // ---------------------------------------------------------------------------
 
 export const __test = {
+  extractZipArchive,
+  extractBundle,
   fetchWithRetry,
+  downloadWithRetry,
   writeLedgerAtomic,
   readLedger,
   applyAuditAdditions,
