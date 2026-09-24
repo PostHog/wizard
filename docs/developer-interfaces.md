@@ -5,11 +5,11 @@ mode for running without a terminal UI. The TypeScript aliases below are
 internal to this repository. `@posthog/wizard` publishes a CLI, not these
 functions as a stable package API.
 
-| Surface                                 | Use it for                                      | Detailed contract                                                                          |
-| --------------------------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| `runAgent(config, input, options)`      | One already-configured AI run                   | [Agent reference](../src/agent/README.md)                                                  |
-| `runProgram(programId, input, options)` | A registered program with invocation-owned data | [Programs reference](../src/programs/README.md)                                            |
-| Development `--ci`                      | A process-owned, non-interactive CLI run        | [Local CI credentials and recipe](local-dev.md#credentials-for-local-ci-and-headless-runs) |
+| Surface                                 | Use it for                                               | Detailed contract                                                                          |
+| --------------------------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `runAgent(config, input, options)`      | One already-configured AI run                            | [Agent reference](../src/agent/README.md)                                                  |
+| `runProgram(programId, input, options)` | One program run the caller builds from a `ProgramConfig` | [Programs reference](../src/programs/README.md)                                            |
+| Development `--ci`                      | A process-owned, non-interactive CLI run                 | [Local CI credentials and recipe](local-dev.md#credentials-for-local-ci-and-headless-runs) |
 
 ## Standalone agent
 
@@ -74,60 +74,83 @@ an already-issued fixed token.
 
 ## Callable program
 
-`runProgram` takes a registered ID, a `ProgramInput` with at least `installDir`,
-and optional `ProgramOptions`. Import it from `@programs` and types from
-`@programs/types`. It returns a `ProgramRunOutcome`: outcome and failure, the
-settled agent runs, observer diagnostics, the data a program with no agent
-returned, artifacts, and invocation data (including a captured event plan). The
-invocation data contains credentials, so don't log it. Agent failures retain an
-attached `Error` when one exists.
+`runProgram` takes a program ID, a `ProgramInput` and optional `ProgramOptions`.
+Import it from `@programs` and types from `@programs/types`. It doesn't look the
+ID up in a registry. The ID picks the binding policy, the commandments, the
+stage overrides and the analytics attribution. The caller builds the rest from
+the program's `ProgramConfig`:
+
+- **`input.run`.** The required `AgentRunDefinition`. A static
+  `ProgramConfig.run` passes as is. A dynamic one reads a session and a
+  `ProgramRunHost`, so the caller resolves it first.
+- **`input.program`.** The `ProgramSettings`: `requiresAi`, `agentFlow`, the
+  tool allow and deny lists, `excludedTaskTypes`, the audit ledger and its seed
+  checks, the event plan file and the post-auth gates.
 
 The host supplies credentials in one of two ways:
 
 - **Resolved.** `input.credentials` carries
   `{ posthog, inferenceAuth?, project, apiUser }`.
 - **A provider.** `options.credentials.resolve(programId, { signal })`.
-  `runProgram` calls it once per invocation, and composed child runs reuse the
-  result.
+  `runProgram` calls it once, only when `input.credentials` is absent.
 
 Either way, `runProgram` identifies the user for analytics, stamps the
 organization's AI SDK evidence, and refreshes an OAuth token that is close to
-expiry before each agent run. Launch choices go in `input.overrides` as
+expiry before the agent starts. Launch choices go in `input.overrides` as
 `{ harness?, sequence?, model? }`. `runProgram` resolves the binding from them
-and the flag snapshot, and captures the switchboard decision once for each agent
-run. It copies the input when it receives it, so a later host write can't reach
-the run.
+and the flag snapshot, and captures the switchboard decision. It copies the
+input when it receives it, so a later host write can't reach the run.
 
-Awaited host capabilities receive the invocation's signal:
-`credentials.resolve`, `awaitAiApproval({ programId, signal })`,
-`workflow.step(request, { signal })` and `noAgentWorkflow(request)`. The
-workflow connector answers the post-auth, child-run and confirm requests that
-gated and composed programs make. `noAgentWorkflow` runs the programs with no
-agent, such as `posthog-doctor`, `mcp-add` and `slack`. A rejection from any of
-them, or from `featureFlags` or a run definition that throws, resolves as
-`failed`, or as `aborted` once the signal has aborted. `featureFlags` and the
-integration effects don't receive the signal. The promise rejects only on an
-invocation error, such as input that can't be copied. Read the outcome, and
-still catch a rejection.
+The other options are host capabilities:
+
+- **`awaitAiApproval({ programId, signal })`.** Answers the AI-processing
+  approval. Without it, a run that needs approval fails.
+- **`awaitPostAuthGates({ programId, gates, signal })`.** Settles the post-auth
+  gates, such as a project picker.
+- **`featureFlags()`.** Evaluates flags when the input has none. It gets no
+  signal.
+- **`interaction`, `onProgress`, `deferSkillCommit` and `signal`.** Answer the
+  agent's questions, observe the run, leave new skills for the host to commit,
+  and cancel the invocation.
+
+A rejection from `credentials`, `awaitAiApproval`, `awaitPostAuthGates`,
+`featureFlags` or the token refresh resolves as `failed`, or as `aborted` once
+the signal has aborted. The promise rejects only when the invocation itself
+breaks, such as input that can't be copied. Read the outcome, and still catch a
+rejection.
+
+`runProgram` returns a `ProgramRunOutcome`: the outcome and failure,
+`settledRuns` with the agent run's result, `diagnostics` for observer failures
+and late events, `artifacts.reportFile`, and the invocation `data`, including a
+captured event plan. The data contains credentials, so don't log it. Agent
+failures retain an attached `Error` when one exists.
 
 `onProgress` receives two kinds of `ProgramProgress`. A run event is
-`{ kind: 'run', runId, stepId?, event }`, where `event` is the agent's progress.
-A program-data event is `{ kind: 'program', data }`, a copy of the invocation
-data after each write. Narrow on `kind` first:
+`{ kind: 'run', runId, event }`, where `event` is the agent's progress. A
+program-data event is `{ kind: 'program', data }`, a copy of the invocation data
+after each write. Narrow on `kind` first:
 
 ```ts
-import { runProgram } from '@programs';
+import { getProgramConfig, runProgram } from '@programs';
 import type { ProgramOptions } from '@programs/types';
 
-export async function runAudit(
+export async function runMetrics(
   installDir: string,
   credentials: NonNullable<ProgramOptions['credentials']>,
   awaitAiApproval: NonNullable<ProgramOptions['awaitAiApproval']>,
   signal?: AbortSignal,
 ) {
+  const config = getProgramConfig('metrics');
+  if (!config.run || typeof config.run === 'function') {
+    throw new Error('metrics has a static run definition');
+  }
   const result = await runProgram(
-    'audit',
-    { installDir },
+    config.id,
+    {
+      installDir,
+      run: config.run,
+      program: { agentFlow: config.agentFlow, requiresAi: config.requiresAi },
+    },
     {
       credentials,
       awaitAiApproval,
@@ -142,34 +165,31 @@ export async function runAudit(
   );
   if (result.outcome !== 'success') {
     if (result.failure?.error) throw result.failure.error;
-    throw new Error(result.failure?.message ?? `Audit ${result.outcome}`);
+    throw new Error(result.failure?.message ?? `Metrics ${result.outcome}`);
   }
   return result.artifacts.reportFile;
 }
 ```
 
-The caller implements the credential and approval callbacks. Some programs
-require additional prepared inputs or host effects. The
-[program reference](../src/programs/README.md#inputs) describes the available
-fields and capabilities. There is no live store or step-control handle.
-`runProgram` never sends the terminal `setup wizard finished` event. A
-long-lived host decides when to send it, from the outcome.
+The [program reference](../src/programs/README.md#inputs) lists every input,
+setting and option. There is no live store or step-control handle. `runProgram`
+never sends the terminal `setup wizard finished` event. A long-lived host
+decides when to send it, from the outcome.
 
 A runnable reference host is the workbench harness's `pnpm wizard-program`. It
-runs one program against the app in `APP_DIR`, with resolved credentials and no
-TUI.
+builds the run and settings from the `ProgramConfig`, the way the session
+adapter does, and runs one program against the app in `APP_DIR`, with resolved
+credentials and no TUI.
 
-### Preflight
+### What stays with the host
 
-Hosts call `preflight(programId, host)` from `@programs` before `runProgram`.
-`runProgram` doesn't call it. It runs the readiness check, then the Claude
-settings check, and returns `{ kind: 'proceed', restoreSettings }` or
-`{ kind: 'abort', failure }`. The host supplies the presentation (`showOutage`,
-`setReadinessWarnings` and `showSettingsOverride`) and its policy
-(`interactive`, `signup`, and any readiness it already computed). An outage
-aborts only an interactive host. An unfixable settings conflict aborts only a
-non-interactive host. Call `restoreSettings()` when the run ends. See the
-[program reference](../src/programs/README.md#preflight) for the details.
+`runProgram` runs one agent. It doesn't check service readiness or Claude
+settings, walk composed steps, or run a program with no agent. The session
+adapter, `src/lib/runners/run-program-agent.ts`, runs the readiness and settings
+gates before it calls `runProgram`. The TUI walks each composed step as its own
+call with `composed: true`, and runs the steps of programs with no agent, such
+as `posthog-doctor`, `mcp-add` and `slack`. See the
+[program reference](../src/programs/README.md#current-limits).
 
 ## Development CI and experimental headless runner
 
@@ -188,13 +208,14 @@ pnpm try --ci --api-key "$POSTHOG_PERSONAL_API_KEY" \
 The runner logs progress and writes a local task-stream JSONL dump. Callers
 observe the process exit and its logs, rather than a returned result. The
 gateway token file is read into a fixed provider for CI. Pre-run detection and
-composed child runs use that same provider. This path doesn't mint or refresh
-the token. Published builds reject `--ci`. The internal
+the program's agent run use that same provider. This path doesn't mint or
+refresh the token. Published builds reject `--ci`. The internal
 `runWizardCI(config, options): void` entry point uses the session adapter,
-`src/lib/runners/run-program-agent.ts`. The adapter runs `preflight`, then calls
-`runProgram` for each program's main agent run. Agentic detection runs before
-that call, through its own `runAgent` call. MCP suggested prompts use a separate
-SDK path with their own progress and cancellation.
+`src/lib/runners/run-program-agent.ts`. The adapter builds the run from the
+`ProgramConfig`, runs the readiness and settings gates, then calls `runProgram`
+once. Agentic detection runs before that call, through its own `runAgent` call.
+MCP suggested prompts use a separate SDK path with their own progress and
+cancellation.
 
 An experimental published-build headless path exists internally as
 `runWizardHeadless(config, options): void`. It shares the process-owned runner,

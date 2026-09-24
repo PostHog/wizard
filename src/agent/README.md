@@ -12,14 +12,24 @@ Import runtime values from `@agent` and types from `@agent/types`. Nothing
 outside `src/agent` imports deeper. Lint and the architecture test reject it.
 
 ```ts
-import { runAgent, RunOutcome } from '@agent';
-import type { RunConfig, RunInput, RunResult, AgentProgress, AgentInteraction } from '@agent/types';
+import type {
+  AgentInteraction,
+  AgentProgress,
+  RunConfig,
+  RunInput,
+  RunResult,
+} from '@agent/types';
 
-runAgent(config: RunConfig, input: RunInput, options?: {
-  onProgress?: (event: AgentProgress) => unknown;
-  interaction?: AgentInteraction;
-  signal?: AbortSignal;
-}): Promise<RunResult>
+// The shape of `runAgent`, exported from `@agent`.
+declare function runAgent(
+  config: RunConfig,
+  input: RunInput,
+  options?: {
+    onProgress?: (event: AgentProgress) => unknown;
+    interaction?: AgentInteraction;
+    signal?: AbortSignal;
+  },
+): Promise<RunResult>;
 ```
 
 - `RunConfig`: the opaque program id, its `AgentRunDefinition` (prompt, skill,
@@ -104,19 +114,25 @@ runAgent(config: RunConfig, input: RunInput, options?: {
 Minimal invocation:
 
 ```ts
-const result = await runAgent(config, input, {
-  onProgress: (event) => {
-    if (event.kind === 'log') console.log(event.message);
-  },
-  interaction: {
-    ask: async (question, { signal }) => answersFor(question, signal),
-  },
-});
-if (result.outcome !== RunOutcome.Success) {
-  console.error(
-    result.failure.error ?? result.failure.message ?? `Agent ${result.outcome}`,
-  );
-  process.exitCode = result.failure.exitCode ?? 1;
+import { runAgent, RunOutcome } from '@agent';
+import type { AgentInteraction, RunConfig, RunInput } from '@agent/types';
+
+export async function runOnce(
+  config: RunConfig,
+  input: RunInput,
+  ask: NonNullable<AgentInteraction['ask']>,
+) {
+  const result = await runAgent(config, input, {
+    onProgress: (event) => {
+      if (event.kind === 'log') console.log(event.message);
+    },
+    interaction: { ask },
+  });
+  if (result.outcome !== RunOutcome.Success) {
+    console.error(result.failure.error ?? result.failure.message);
+    process.exitCode = result.failure.exitCode ?? 1;
+  }
+  return result;
 }
 ```
 

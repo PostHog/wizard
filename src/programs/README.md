@@ -12,18 +12,18 @@ The npm package doesn't export it as a public library API.
 Import runtime values from `@programs` and types from `@programs/types`:
 
 ```ts
-import { runProgram } from '@programs';
 import type {
   ProgramInput,
   ProgramOptions,
   ProgramRunOutcome,
 } from '@programs/types';
 
-runProgram(
+// The shape of `runProgram`, exported from `@programs`.
+declare function runProgram(
   programId: string,
   input: ProgramInput,
   options?: ProgramOptions,
-): Promise<ProgramRunOutcome>
+): Promise<ProgramRunOutcome>;
 ```
 
 `programId` picks the binding policy, the commandments, the stage overrides and
