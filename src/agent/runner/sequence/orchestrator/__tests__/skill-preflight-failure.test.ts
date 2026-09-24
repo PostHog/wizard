@@ -14,7 +14,7 @@ describe('skillPreflightFailure', () => {
     });
 
     expect(failure.code).toBe(ErrorCodes.DetectNoFramework);
-    expect(failure.message).toContain('Could not detect a framework');
+    expect(failure.message).toContain('Could not auto-detect your framework');
     expect(failure.message).not.toContain('failed to download');
   });
 

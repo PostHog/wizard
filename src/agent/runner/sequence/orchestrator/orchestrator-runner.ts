@@ -35,6 +35,7 @@ import {
   classifyRunFailure,
   ErrorCodes,
   WizardError,
+  type ErrorCode,
 } from '@shared/errors';
 import type { AgentResult } from '../../harness/types';
 import type { AgentInteraction } from '@agent/progress';
@@ -209,12 +210,7 @@ async function fetchSkillMenuEntries(
   return Object.values(menu.categories).flat();
 }
 
-/**
- * The failure a preflight miss decides. Three causes reach the same miss, and
- * they need different words: a run with no framework never had instructions to
- * resolve, an empty menu is a download the user can retry, and a framework the
- * menu does not carry is neither — retrying that one loops forever.
- */
+/** The failure a preflight miss decides: three causes reach the same miss, and only one of them is a download the user can retry. */
 export function skillPreflightFailure(args: {
   missing: readonly string[];
   framework: string | undefined;
@@ -222,56 +218,57 @@ export function skillPreflightFailure(args: {
   frameworkDocsUrl: string | undefined;
 }): AgentFailure {
   const { missing, framework, menuAvailable, frameworkDocsUrl } = args;
-  const context = { missing: missing.join(', '), framework };
+  const docsUrl = frameworkDocsUrl ?? POSTHOG_DOCS_URL;
 
-  if (!framework) {
+  const { code, title, message } = ((): {
+    code: ErrorCode;
+    title: string;
+    message: string;
+  } => {
+    if (!framework) {
+      return {
+        code: ErrorCodes.DetectNoFramework,
+        title: 'Orchestrator preflight: no detected framework',
+        message:
+          'Could not auto-detect your framework for this project, so there are no setup instructions to run.\n' +
+          "Please run the wizard from your app's root directory, or integrate manually here:\n" +
+          `  ${docsUrl}`,
+      };
+    }
+    if (!menuAvailable) {
+      return {
+        code: ErrorCodes.SkillMenuFetchFailed,
+        title: 'Orchestrator preflight: skill menu unavailable',
+        message:
+          'Setup instructions for this project failed to download.\n' +
+          `Please try again, or contact ${WIZARD_CONTACT_EMAIL}.\n\n` +
+          'You can also set up with your agent by downloading the skills here:\n' +
+          '  https://github.com/PostHog/context-mill/releases\n' +
+          'or integrate manually here:\n' +
+          `  ${docsUrl}`,
+      };
+    }
+    // A docs page resolves only for a key the framework registry knows, so its
+    // absence marks an internal id that would mean nothing to the user.
+    const subject = frameworkDocsUrl ? framework : 'this project';
     return {
-      code: ErrorCodes.DetectNoFramework,
+      code: ErrorCodes.AgentOrchestratorSkillVariantMissing,
+      title: 'Orchestrator preflight: skill variant missing',
       message:
-        'Could not detect a framework in this project, so there are no setup instructions to run.\n' +
-        "Please run the wizard from your app's root directory, or integrate manually here:\n" +
-        `  ${POSTHOG_DOCS_URL}`,
-      error: new WizardError(
-        'Orchestrator preflight: no detected framework',
-        context,
-        ErrorCodes.DetectNoFramework,
-      ),
+        `The wizard has no setup instructions for ${subject} yet.\n` +
+        'You can integrate manually here:\n' +
+        `  ${docsUrl}\n\n` +
+        `Please tell us what you are building: ${WIZARD_CONTACT_EMAIL}`,
     };
-  }
+  })();
 
-  if (!menuAvailable) {
-    return {
-      code: ErrorCodes.SkillMenuFetchFailed,
-      message:
-        'Setup instructions for this project failed to download.\n' +
-        `Please try again, or contact ${WIZARD_CONTACT_EMAIL}.\n\n` +
-        'You can also set up with your agent by downloading the skills here:\n' +
-        '  https://github.com/PostHog/context-mill/releases\n' +
-        'or integrate manually here:\n' +
-        `  ${frameworkDocsUrl ?? POSTHOG_DOCS_URL}`,
-      error: new WizardError(
-        'Orchestrator preflight: skill menu unavailable',
-        context,
-        ErrorCodes.SkillMenuFetchFailed,
-      ),
-    };
-  }
-
-  // The caller resolves `frameworkDocsUrl` from the framework registry, so it
-  // is also the test for "this key is a framework at all": without one the key
-  // is an internal id, and naming it tells the user nothing.
-  const subject = frameworkDocsUrl ? framework : 'this project';
   return {
-    code: ErrorCodes.AgentOrchestratorSkillVariantMissing,
-    message:
-      `The wizard has no setup instructions for ${subject} yet.\n` +
-      'You can integrate manually here:\n' +
-      `  ${frameworkDocsUrl ?? POSTHOG_DOCS_URL}\n\n` +
-      `Please tell us what you are building: ${WIZARD_CONTACT_EMAIL}`,
+    code,
+    message,
     error: new WizardError(
-      'Orchestrator preflight: skill variant missing',
-      context,
-      ErrorCodes.AgentOrchestratorSkillVariantMissing,
+      title,
+      { missing: missing.join(', '), framework },
+      code,
     ),
   };
 }
