@@ -3,6 +3,7 @@ import type { TaskNotice } from '@agent/types';
 import type { ProgramSession } from './program-session';
 import type { ProgramRun } from '@programs/program-run';
 import type { Integration } from '@shared/constants';
+import type { AuditCheck } from '@shared/audit-ledger';
 import type { FrameworkConfig } from '@programs/framework-config';
 // Type-only — erased at compile time, so no runtime cycle with the
 // registry that imports `ProgramConfig` back from this module.
@@ -210,6 +211,8 @@ export interface ProgramConfig {
   eventPlanFile?: string;
   /** Audit ledger to mirror into the session, relative to `installDir`. */
   auditLedgerFile?: string;
+  /** Ledger rows written before the agent starts, so the run screen renders before its first update. */
+  auditSeedChecks?: readonly AuditCheck[];
   /**
    * Channel the task stream publishes this run under, when it differs from the
    * program id. A family leaf runs on the generic skill program, so without

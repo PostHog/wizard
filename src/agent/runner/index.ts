@@ -16,8 +16,9 @@
  * sends the process's terminal analytics.
  * Coded errors return Failed, uncoded throws return Crashed, and both retain
  * the caught error. Scan-report flushing is best effort after the result is
- * decided. Every host reaches this call through programs' `runProgram`, which
- * builds the config and input; a standalone caller builds them itself.
+ * decided. A program run reaches this call through programs' `runProgram`,
+ * which builds the config and input. Agentic detection and a standalone caller
+ * build them and call it directly.
  */
 
 import { Sequence } from '@shared/constants';

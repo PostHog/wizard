@@ -3,6 +3,11 @@ import type { SkillProgramOptions } from '@programs/agent-skill/run-definition';
 
 const REPLAY_VISION_REPORT_FILE = 'posthog-replay-vision-report.md';
 
+/**
+ * `[ABORT]` reasons the replay-vision skill emits when the run can't proceed.
+ * Kept in sync with the stop conditions in the skill's `description.md`
+ * (context-mill `context/skills/replay-vision`).
+ */
 export const REPLAY_VISION_ABORT_CASES: AbortCase[] = [
   {
     match: /^replay vision not available for this project$/i,

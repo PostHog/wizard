@@ -1,5 +1,5 @@
-import { METRICS_REPORT_FILE, METRICS_RUN } from './run.js';
 import type { ProgramConfig } from '@programs/program-step';
+import { METRICS_REPORT_FILE, METRICS_RUN } from './run.js';
 
 /**
  * `wizard metrics` — instrument the project with PostHog application metrics

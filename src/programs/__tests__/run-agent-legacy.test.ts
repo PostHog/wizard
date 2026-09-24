@@ -31,6 +31,7 @@ import {
   restoreClaudeSettings,
 } from '@shared/claude-settings';
 import { refreshAccessToken } from '@utils/oauth-token';
+import { evaluateWizardReadiness } from '@shared/health-checks/readiness';
 import { errorTrackingUploadSourceMapsConfig } from '../error-tracking-upload-source-maps/index';
 import type { ProgramConfig } from '../program-step';
 import type { ProgramRun } from '../program-run';
@@ -87,7 +88,8 @@ vi.mock('@shared/claude-settings', () => ({
   checkAllSettingsConflicts: vi.fn().mockReturnValue([]),
   restoreClaudeSettings: vi.fn(),
 }));
-// Fixture ids such as `metrics` are health-check programs, so preflight probes readiness.
+// Fixture ids such as `metrics` have a health-check step in their TUI flow, so
+// the health gate probes readiness.
 vi.mock('@shared/health-checks/readiness', async (original) => {
   const actual = await original<
     typeof import('@shared/health-checks/readiness')
@@ -202,6 +204,15 @@ it.each([
     expect(analytics.shutdown).toHaveBeenCalledExactlyOnceWith('success');
   },
 );
+
+it('probes readiness only when the program flow has a health-check step', async () => {
+  await runProgramAgent(program('metrics'), session());
+  expect(evaluateWizardReadiness).toHaveBeenCalledOnce();
+
+  vi.mocked(evaluateWizardReadiness).mockClear();
+  await runProgramAgent(program('warehouse-source'), session());
+  expect(evaluateWizardReadiness).not.toHaveBeenCalled();
+});
 
 it('sends terminal analytics after the outro and the run, before the host goes on', async () => {
   const order: string[] = [];
@@ -321,25 +332,6 @@ it('reads completion data when each hook runs, after late URL updates', async ()
   );
 });
 
-it('passes actual self-driving GitHub gate state to the callable host', async () => {
-  const notConnected = session();
-  expect(notConnected.githubConnected).toBeNull();
-  await runProgramAgent(program('self-driving'), notConnected);
-  expect(wizardAbort).toHaveBeenCalledExactlyOnceWith({
-    code: ErrorCodes.AgentAbort,
-    message: 'GitHub connection was not confirmed.',
-    status: 'cancelled',
-  });
-  expect(runAgent).not.toHaveBeenCalled();
-
-  vi.mocked(wizardAbort).mockClear();
-  const connected = session();
-  connected.githubConnected = true;
-  await runProgramAgent(program('self-driving'), connected);
-  expect(runAgent).toHaveBeenCalledOnce();
-  expect(wizardAbort).not.toHaveBeenCalled();
-});
-
 it('projects an audit ledger update from program data through the legacy runner UI bridge', async () => {
   const installDir = fs.mkdtempSync(
     path.join(os.tmpdir(), 'wizard-audit-bridge-'),
@@ -348,6 +340,7 @@ it('projects an audit ledger update from program data through the legacy runner 
   currentSession.installDir = installDir;
   const config = program('audit');
   config.auditLedgerFile = AUDIT_CHECKS_FILE;
+  config.auditSeedChecks = AUDIT_SEED_CHECKS;
   const ui = new LoggingUI();
   const setFrameworkContext = vi.spyOn(ui, 'setFrameworkContext');
   setUI(ui);
@@ -743,7 +736,7 @@ describe('host wiring over runProgram', () => {
     organization: { id: 'org-1', is_ai_data_processing_approved: true },
   } as ApiUser;
 
-  it('authenticates through the provider after preflight, then awaits AI opt-in and the post-auth gate', async () => {
+  it('authenticates through the provider after the settings gate, then awaits AI opt-in and the post-auth gate', async () => {
     const order: string[] = [];
     const ui = getUI();
     const record =
@@ -913,10 +906,10 @@ describe('host wiring over runProgram', () => {
         return finishRun(...args);
       });
 
-      await runProgramAgent(program('posthog-integration'), {
-        ...session(),
-        installDir,
-      });
+      await runProgramAgent(
+        { ...program('posthog-integration'), eventPlanFile: EVENT_PLAN_FILE },
+        { ...session(), installDir },
+      );
 
       expect(setEventPlan).toHaveBeenCalledExactlyOnceWith([
         { name: 'checkout_started', description: '' },

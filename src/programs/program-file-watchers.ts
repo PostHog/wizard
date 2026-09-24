@@ -5,7 +5,7 @@ import { seedAuditLedger } from './audit/seed.js';
 import { watchAuditLedger } from './audit/watch-ledger.js';
 import { ProgramEventPlanWatcher } from './posthog-integration/watch-event-plan.js';
 import type { ProgramStore } from './program-store.js';
-import type { RuntimeProgramConfig } from './runtime-registry.js';
+import type { ProgramSettings } from './run-program.js';
 
 export type ProgramFileWatchers = {
   seedAuditLedger(): void;
@@ -15,7 +15,10 @@ export type ProgramFileWatchers = {
 
 /** Own the files emitted by this invocation until its agent run settles. */
 export function startProgramFileWatchers(
-  program: RuntimeProgramConfig,
+  program: Pick<
+    ProgramSettings,
+    'auditLedgerFile' | 'auditSeedChecks' | 'eventPlanFile'
+  >,
   installDir: string,
   store: ProgramStore,
 ): ProgramFileWatchers {
