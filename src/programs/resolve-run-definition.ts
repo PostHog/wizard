@@ -146,7 +146,7 @@ export function resolveErrorTrackingRunDefinition(): AgentRunDefinition {
   };
 }
 
-function warehousePrompt(sources: readonly DetectedSource[]): string {
+export function warehousePrompt(sources: readonly DetectedSource[]): string {
   if (sources.length === 0)
     return 'Set up a data warehouse source for this project.';
 

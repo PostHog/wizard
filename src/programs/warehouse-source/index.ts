@@ -1,7 +1,10 @@
 import type { ProgramConfig } from '@programs/program-step';
 import type { ProgramRun } from '@programs/program-run';
 import type { WizardSession } from '@lib/wizard-session';
-import { resolveWarehouseSourceRunDefinition } from '@programs/resolve-run-definition';
+import {
+  resolveWarehouseSourceRunDefinition,
+  warehousePrompt,
+} from '@programs/resolve-run-definition';
 import { WAREHOUSE_SOURCE_PROGRAM } from './steps.js';
 import { getDetectedWarehouseSources } from './detect.js';
 import { getContentBlocks } from '../../ui/tui/decks/warehouse-source/index.js';
@@ -15,21 +18,13 @@ export const warehouseSourceConfig: ProgramConfig = {
   getContentBlocks,
   reportFile: 'posthog-warehouse-report.md',
   allowedTools: ['Agent'],
-  run: (session: WizardSession): Promise<ProgramRun> => {
-    const run = resolveWarehouseSourceRunDefinition(
-      getDetectedWarehouseSources(session),
-    );
-    return Promise.resolve({
-      ...run,
-      customPrompt: (ctx) => {
-        const latest = resolveWarehouseSourceRunDefinition(
-          getDetectedWarehouseSources(session),
-        ).customPrompt;
-        if (!latest) throw new Error('Warehouse run has no prompt');
-        return latest(ctx);
-      },
-    });
-  },
+  run: (session: WizardSession): Promise<ProgramRun> =>
+    Promise.resolve({
+      ...resolveWarehouseSourceRunDefinition(
+        getDetectedWarehouseSources(session),
+      ),
+      customPrompt: () => warehousePrompt(getDetectedWarehouseSources(session)),
+    }),
   requires: ['posthog-integration'],
 };
 

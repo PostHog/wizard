@@ -7,7 +7,6 @@ import { scopeInstallDirToProject } from '@programs/detection/project-scope';
 import { FRAMEWORK_REGISTRY } from '@programs/registry';
 import { createSkillProgram } from '@programs/agent-skill/index';
 import { REPLAY_VISION_OPTIONS } from './run.js';
-export { REPLAY_VISION_ABORT_CASES } from './run.js';
 import { AGENT_SKILL_STEPS } from '@programs/agent-skill/steps';
 import { detectPostHogIntegration } from '@programs/posthog-integration/detect';
 import type {
@@ -75,12 +74,6 @@ async function abortUnsupportedPlatform(
       '  https://posthog.com/docs/session-replay',
   });
 }
-
-/**
- * `[ABORT]` reasons the replay-vision skill emits when the run can't proceed.
- * Kept in sync with the stop conditions in the skill's `description.md`
- * (context-mill `context/skills/replay-vision`).
- */
 
 /**
  * Framework detection ahead of the run, exactly like the default integration

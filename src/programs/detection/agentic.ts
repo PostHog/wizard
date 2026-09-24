@@ -16,20 +16,23 @@
 import { AgentSignals, runAgent, RunOutcome } from '@agent';
 import type {
   AgentProgress,
+  AgentRunDefinition,
   InferenceAuthProvider,
+  ResolvedBinding,
   RunConfig,
   RunInput,
 } from '@agent/types';
 import { isAbsolute, resolve, sep } from 'path';
-import {
-  AGENTIC_DETECTION_BINDING,
-  detectionRunDefinition,
-} from './run-definition.js';
+import { detectNodePackageManagers } from './package-manager.js';
 import {
   AGENTIC_DETECTION_FIRST_ATTEMPT_TIMEOUT_MS,
   AGENTIC_DETECTION_RETRY_TIMEOUT_MS,
   CallType,
   getSkillsBaseUrl,
+  Harness,
+  HAIKU_MODEL,
+  POSTHOG_DOCS_URL,
+  Sequence,
 } from '@shared/constants';
 import type { Credentials } from '@shared/api';
 import { buildRunTags } from '@shared/run-tags';
@@ -318,6 +321,30 @@ export function coerceAgenticReport(
     };
   });
   return { repoType, projects };
+}
+
+/** A fast mechanical scan: linear Haiku on the Anthropic harness. */
+const AGENTIC_DETECTION_BINDING: ResolvedBinding = {
+  sequence: Sequence.linear,
+  harness: Harness.anthropic,
+  model: HAIKU_MODEL,
+};
+
+/** No skill and no remark; the report is read back from the transcript tail. */
+function detectionRunDefinition(prompt: string): AgentRunDefinition {
+  return {
+    integrationLabel: 'agentic-detect',
+    prompt: () => prompt,
+    collectTranscript: true,
+    requestRemark: false,
+    detectPackageManager: detectNodePackageManagers,
+    spinnerMessage: 'Scanning the repo...',
+    successMessage: 'Detection complete',
+    errorMessage: 'Detection failed',
+    estimatedDurationMinutes: 1,
+    reportFile: '',
+    docsUrl: POSTHOG_DOCS_URL,
+  };
 }
 
 /** What a detect host saw before `runAgent`: no run lifecycle, spinner, outro, or setup logs below warn. */

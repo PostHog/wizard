@@ -11,7 +11,7 @@ export type WebAnalyticsDetectError =
   | { kind: 'no-package-json' }
   | { kind: 'no-posthog'; scannedCount: number };
 
-export { WEB_ANALYTICS_ABORT_CASES } from './abort-cases.js';
+export { WEB_ANALYTICS_ABORT_CASES } from './run.js';
 
 export function detectWebAnalyticsPrerequisites(
   session: WizardSession,

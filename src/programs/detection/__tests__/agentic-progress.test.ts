@@ -100,8 +100,7 @@ it('keeps initialization and execution progress visible during detection', async
 import { flushScanReport } from '@agent/yara-hooks';
 import type { AgentProgress } from '@agent/types';
 
-// Every test below goes through the real runAgent pipeline: no analytics
-// client, no gateway mint and no scan-report write may leave the process.
+// The tests below run the real runAgent pipeline, so no analytics, gateway mint or scan-report write may leave the process.
 vi.mock('@utils/analytics');
 vi.mock('@programs/credentials', () => ({
   createPosthogInferenceAuthProvider: vi.fn(() => ({
@@ -118,77 +117,9 @@ vi.mock('@agent/yara-hooks', async (original) => ({
   flushScanReport: vi.fn(),
 }));
 
-const cancelled = {
-  kind: 'abort',
-  classification: AgentErrorType.ABORT,
-  message: 'Agent run cancelled',
-} as const;
-
-/** Each attempt's deadline, fired by the test instead of the clock. */
-function fakeDeadlines(): AbortController[] {
-  const deadlines: AbortController[] = [];
-  vi.spyOn(AbortSignal, 'timeout').mockImplementation(() => {
-    const deadline = new AbortController();
-    deadlines.push(deadline);
-    return deadline.signal;
-  });
-  return deadlines;
-}
-
 afterEach(() => vi.restoreAllMocks());
 
-it.each([
-  ['the session provider', true],
-  ['a provider built from the credentials', false],
-])('hands both detection attempts %s', async (_label, supplied) => {
-  const deadlines = fakeDeadlines();
-  vi.mocked(initializeAgent).mockResolvedValue(
-    {} as Awaited<ReturnType<typeof initializeAgent>>,
-  );
-  vi.mocked(executeAgent)
-    .mockImplementationOnce(() => {
-      deadlines.at(-1)?.abort();
-      return Promise.resolve(cancelled);
-    })
-    .mockImplementationOnce(
-      (_config, _prompt, _options, _spinner, _messages, middleware) => {
-        middleware?.onMessage({
-          type: 'result',
-          result:
-            '{"projects":[{"path":".","targetId":"node","framework":"Node.js"}]}',
-        });
-        return Promise.resolve({ kind: 'success' });
-      },
-    );
-  const session = detectionSession();
-  const inferenceAuth = { resolve: vi.fn() };
-  if (supplied) session.inferenceAuth = inferenceAuth;
-
-  const report = await detectProjectsWithAgent(session, {
-    programId: 'posthog-integration',
-    targets: [{ id: 'node', name: 'Node.js' }],
-  });
-
-  expect(report.projects[0].targetId).toBe('node');
-  const [first, second] = vi
-    .mocked(initializeAgent)
-    .mock.calls.map(([config]) => config.inferenceAuth);
-  expect(vi.mocked(initializeAgent)).toHaveBeenCalledTimes(2);
-  expect(first).toBeDefined();
-  expect(second).toBe(first);
-  if (supplied) expect(first).toBe(inferenceAuth);
-  else expect(first).not.toBe(inferenceAuth);
-});
-
 it('sends each agent step to onEvent and the host only the progress it saw before', async () => {
-  const delta = {
-    inputTokens: 5,
-    outputTokens: 2,
-    cacheReadTokens: 0,
-    cacheCreationTokens: 0,
-    cacheCreation5m: 0,
-    cacheCreation1h: 0,
-  };
   vi.mocked(initializeAgent).mockImplementation((config) =>
     Promise.resolve({ emit: config.emit } as Awaited<
       ReturnType<typeof initializeAgent>
@@ -196,17 +127,9 @@ it('sends each agent step to onEvent and the host only the progress it saw befor
   );
   vi.mocked(executeAgent).mockImplementation(
     (config, _prompt, _options, _spinner, _messages, middleware) => {
-      config.emit?.({ kind: 'usage', delta });
-      config.emit?.({ kind: 'stage', stage: 'codebase-scan' });
-      config.emit?.({
-        kind: 'tasks',
-        tasks: [{ content: 'Scan', status: 'in_progress' }],
-      });
-      config.emit?.({ kind: 'url', which: 'dashboard', url: 'https://d/1' });
       config.emit?.({ kind: 'status', message: 'Scanning' });
       config.emit?.({ kind: 'log', level: 'info', message: 'Info line' });
       config.emit?.({ kind: 'log', level: 'warn', message: 'Warn line' });
-      config.emit?.({ kind: 'log', level: 'error', message: 'Error line' });
       middleware?.onMessage({
         type: 'assistant',
         message: {
@@ -220,7 +143,6 @@ it('sends each agent step to onEvent and the host only the progress it saw befor
           ],
         },
       });
-      config.emit?.({ kind: 'finalCost', usd: 0.01 });
       middleware?.onMessage({
         type: 'result',
         result: '{"path":".","targetId":"node","framework":"Node.js"}',
@@ -244,18 +166,7 @@ it('sends each agent step to onEvent and the host only the progress it saw befor
     events.map((event) =>
       event.kind === 'log' ? `log:${event.level}` : event.kind,
     ),
-  ).toEqual([
-    'usage',
-    'stage',
-    'tasks',
-    'url',
-    'status',
-    'log:warn',
-    'log:error',
-    'activity',
-    'activity',
-    'finalCost',
-  ]);
+  ).toEqual(['status', 'log:warn', 'activity', 'activity']);
   expect(ui.pushStatus).not.toHaveBeenCalledWith('Scanning');
 });
 

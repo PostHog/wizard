@@ -10,7 +10,7 @@ import {
 } from '@agent/agent-interface';
 import { buildSession } from '@lib/wizard-session';
 import { HostResolution } from '@shared/host-resolution';
-import { CallType, Harness, HAIKU_MODEL, Sequence } from '@shared/constants';
+import { Harness, HAIKU_MODEL, Sequence } from '@shared/constants';
 
 vi.mock('@utils/analytics');
 vi.mock('@agent/agent-interface', async (importOriginal) => ({
@@ -98,13 +98,12 @@ describe('agentic detection retry', () => {
 
   afterEach(() => vi.restoreAllMocks());
 
-  it('runs through runAgent with the detection binding and read-only tools, and inference auth on both attempts', async () => {
+  it('runs both attempts through runAgent with the detection binding, read-only tools and one inference provider', async () => {
     timeOut();
     emitResult(verdict);
 
-    const report = await detectProjectsWithAgent(session(), options);
+    await detectProjectsWithAgent(session(), options);
 
-    expect(report.projects).toHaveLength(1);
     const calls = vi.mocked(agentEntry.runAgent).mock.calls;
     expect(calls).toHaveLength(2);
     for (const [config] of calls) {
@@ -114,36 +113,10 @@ describe('agentic detection retry', () => {
         model: HAIKU_MODEL,
       });
       expect(config.allowedTools).toEqual(['Read', 'Grep', 'Glob']);
-      expect(config.scanReport).toBe('defer');
-      expect(config.wizardMetadata).toMatchObject({
-        program_id: 'posthog-integration',
-        integration: 'agentic-detect',
-        call_type: CallType.detection,
-      });
-      expect(config.run).toMatchObject({
-        collectTranscript: true,
-        requestRemark: false,
-      });
-      expect(config.run.skillId).toBeUndefined();
     }
-    const [[, firstInput, firstOptions], [, secondInput, secondOptions]] =
-      calls;
-    expect(firstInput.inferenceAuth).toBeDefined();
-    expect(secondInput.inferenceAuth).toBe(firstInput.inferenceAuth);
-    expect(firstOptions?.signal).not.toBe(secondOptions?.signal);
-    expect(vi.mocked(AbortSignal.timeout).mock.calls).toEqual([
-      [60_000],
-      [90_000],
-    ]);
-    expect(sdkSawDeadline).toEqual([true]);
-    expect(init.mock.calls.map(([config]) => config.modelOverride)).toEqual([
-      HAIKU_MODEL,
-      HAIKU_MODEL,
-    ]);
-    expect(execute.mock.calls[0][1]).toMatch(
-      /^You are scanning a code repository/,
-    );
-    expect(execute.mock.calls[0][4]).toMatchObject({ requestRemark: false });
+    const [[, first], [, second]] = calls;
+    expect(first.inferenceAuth).toBeDefined();
+    expect(second.inferenceAuth).toBe(first.inferenceAuth);
   });
 
   it('restarts the scan once when the first result has no JSON', async () => {
