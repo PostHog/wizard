@@ -37,8 +37,24 @@ function seed(sess: WizardSession) {
   return posthogIntegrationConfig.seedTasks?.(sess) ?? [];
 }
 
+function sources(n: number): DetectedSource[] {
+  return Array.from({ length: n }, (_, i) => ({
+    ...POSTGRES,
+    kind: `Source${i}`,
+    label: `Source ${i}`,
+  }));
+}
+
+function seedSources(n: number) {
+  return seed(
+    session({
+      frameworkContext: { [DETECTED_WAREHOUSE_SOURCES_KEY]: sources(n) },
+    }),
+  );
+}
+
 describe('warehouse seed task', () => {
-  it('queues one task carrying every detected source', () => {
+  it('queues one task carrying the detected source', () => {
     const tasks = seed(
       session({
         frameworkContext: { [DETECTED_WAREHOUSE_SOURCES_KEY]: [POSTGRES] },
@@ -138,5 +154,36 @@ describe('warehouse task notice', () => {
 
   it('names what was detected', () => {
     expect(notice()?.items).toEqual(['Postgres']);
+  });
+});
+
+describe('warehouse seed task size', () => {
+  it('hands the step only the first few sources', () => {
+    // One credential prompt per source, so an unbounded list is an unbounded
+    // ask. The tail reaches the user as outro links instead.
+    const inputs = seedSources(9)[0].inputs?.sources as DetectedSource[];
+
+    expect(inputs).toHaveLength(3);
+    expect(inputs.map((s) => s.kind)).toEqual([
+      'Source0',
+      'Source1',
+      'Source2',
+    ]);
+  });
+
+  it('names only the sources the step will ask about', () => {
+    const notice = seedSources(9)[0].notice;
+
+    expect(notice?.items).toEqual(['Source 0', 'Source 1', 'Source 2']);
+  });
+
+  it('says where the sources it did not take are going', () => {
+    expect(seedSources(9)[0].notice?.body.join(' ')).toContain('6 more');
+  });
+
+  it('says nothing about a remainder when there is none', () => {
+    expect(seedSources(3)[0].notice?.body.join(' ')).not.toContain(
+      'more we can connect',
+    );
   });
 });

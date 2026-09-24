@@ -9,7 +9,6 @@ import { mayReportScanResults } from '@shared/scan-consent';
 import type { Integration } from '@shared/constants';
 import { WIZARD_TOOL_NAMES } from '@agent';
 import { tryGetPackageJson, isUsingTypeScript } from '@utils/package-json';
-import { hasDeclaredDependency } from '@utils/package-json';
 import { analytics } from '@utils/analytics';
 import {
   detectFramework,
@@ -22,10 +21,10 @@ import {
 import { FRAMEWORK_REGISTRY } from '@programs/registry';
 import { wizardAbort } from '@utils/wizard-abort';
 import { ErrorCodes } from '@shared/errors';
-import { requestDeepLink } from '@utils/provisioning';
 import { openTrackedLink } from '@utils/links';
 import { getDetectedWarehouseSources } from '@programs/warehouse-source/detect';
 import {
+  excludedIntegrationTaskTypes,
   resolvePosthogIntegrationRun,
   resolvePosthogIntegrationSeedTasks,
   type PosthogIntegrationRunInput,
@@ -54,18 +53,15 @@ type IntegrationRunSession = Pick<
 };
 
 const warehouseSeedTasks: NonNullable<ProgramConfig['seedTasks']> = (session) =>
-  resolvePosthogIntegrationSeedTasks(
-    {
-      warehouseSources: getDetectedWarehouseSources(session),
-      flags: {
-        ci: session.ci,
-        signup: session.signup,
-        e2eAsk: session.e2eAsk,
-      },
-      mayReportScanResults: mayReportScanResults(session),
+  resolvePosthogIntegrationSeedTasks({
+    warehouseSources: getDetectedWarehouseSources(session),
+    flags: {
+      ci: session.ci,
+      signup: session.signup,
+      e2eAsk: session.e2eAsk,
     },
-    (event, properties) => analytics.wizardCapture(event, properties),
-  );
+    mayReportScanResults: mayReportScanResults(session),
+  });
 
 export { SETUP_REPORT_FILE } from './run.js';
 export { EVENT_PLAN_FILE } from './constants.js';
@@ -83,6 +79,8 @@ export const posthogIntegrationConfig: ProgramConfig = {
   disallowedTools: [WIZARD_TOOL_NAMES.wizardAsk],
 
   seedTasks: warehouseSeedTasks,
+
+  excludedTaskTypes: excludedIntegrationTaskTypes,
 
   // CI-mode prerequisite work: the headless equivalent of onReady. Auto-detect the framework, then gather context.
   ciPreRun: async (
@@ -144,17 +142,13 @@ export const posthogIntegrationConfig: ProgramConfig = {
           signup: session.signup,
           e2eAsk: session.e2eAsk,
         },
+        wizardFlags: await analytics.getAllFlagsForWizard(),
         mayReportScanResults: mayReportScanResults(session),
-        includeSeedTasks: false,
         dashboardDeepLink: session.frameworkContext[DASHBOARD_DEEP_LINK_KEY],
-        notebookUrl: session.notebookUrl,
       },
       {
         readPackageJson: (installDir) => tryGetPackageJson({ installDir }),
-        hasDeclaredDependency,
         warn: (message) => host.warn(message),
-        setTag: (key, value) => analytics.setTag(key, value),
-        capture: (event, properties) => analytics.capture(event, properties),
         uploadEnvironmentVariables: async (envVars, integration) => {
           const { uploadEnvironmentVariablesStep } = await import(
             './upload-environment-variables'
@@ -168,8 +162,6 @@ export const posthogIntegrationConfig: ProgramConfig = {
             },
           });
         },
-        requestDeepLink: (credentials) =>
-          requestDeepLink(credentials.accessToken, credentials.host),
         openDashboardDeepLink: (url) =>
           openTrackedLink(url, 'dashboard-deeplink', { auto: true }),
         getNotebookUrl: () => session.notebookUrl,

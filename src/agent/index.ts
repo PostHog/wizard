@@ -8,43 +8,45 @@
  * Grouped by fate, per the stack plan (sections 4.1 to 4.5 and 7).
  */
 
+import type { RunAgentOptions, RunConfig, RunInput, RunResult } from './types';
+
 /**
  * Stays. The agent's contract: the one way to run it, the marker strings
- * program prompts embed, and the tool ids programs put in allowedTools and
- * disallowedTools.
+ * program prompts embed, the tool ids programs put in allowedTools and
+ * disallowedTools, and what programs resolve a binding with: the default
+ * binding, the harness axis and each harness's task capability.
  */
 export type * from './types';
-export { runAgent, RunOutcome } from './runner';
-export { AgentSignals } from './agent-interface';
+export { RunOutcome } from './runner/shared/types';
+export { AgentSignals } from './signals';
 export { OutroKind } from './progress';
-export { WIZARD_TOOL_NAMES } from './tools';
+export { WIZARD_TOOL_NAMES } from './tools/tool-names';
 export { DEFAULT_AGENT_BINDING } from './default-binding';
-export { resolveHarness } from './runner/switchboard';
-
-/**
- * Temporary compatibility helpers while B2 callers move. `resolveBinding`
- * applies generic precedence and clamps to caller-selected data; it has no
- * program registry. The final agent entry keeps only resolved-run behavior.
- */
-export { resolveBinding, shouldDisableAsk } from './runner';
-export { LONGER_ASK_TIMEOUT_MS } from './wizard-ask-bridge';
-
-/**
- * Leaves in B2. Programs own credentials and the legacy adapter dies.
- * initializeAgent, executeAgent and buildRunTags are the pre-runAgent surface
- * that detection/agentic.ts and lib/runners/run-program-agent.ts still call; they go
- * through runAgent or leave with detection. CI inference auth belongs to the
- * headless provider. flushScanReport becomes a
- * progress event rather than a call. downloadSkill leaves once the skill scan
- * runs at load and skill install becomes shared.
- */
 export {
-  buildRunTags,
-  initializeAgent,
-  runAgent as executeAgent,
-} from './agent-interface';
-export { flushScanReport } from './yara-hooks';
-export { downloadSkill } from './tools';
+  harnessRunsTasks,
+  resolveHarness,
+} from './runner/switchboard/resolve-harness';
+
+/** Runs one agent pipeline; the runner loads on the first call. */
+export async function runAgent(
+  config: RunConfig,
+  input: RunInput,
+  options?: RunAgentOptions,
+): Promise<RunResult> {
+  const runner = await import('./runner');
+  return runner.runAgent(config, input, options);
+}
+
+/** Leaves in C3 (M16, then D12), once skill install becomes shared. The installer loads on the first call. */
+export async function downloadSkill(
+  ...args: Parameters<typeof import('./tools/tools').downloadSkill>
+): ReturnType<typeof import('./tools/tools').downloadSkill> {
+  const tools = await import('./tools/tools');
+  return tools.downloadSkill(...args);
+}
+
+/** The frameworkContext slot the legacy adapter fills for the e2e harness. */
+export { TASK_OUTCOMES_KEY } from './runner/shared/types';
 
 /** Streams one suggested MCP prompt; hosts reach it through `@programs`, loaded on first call. */
 export async function* runMcpPromptViaSdk(

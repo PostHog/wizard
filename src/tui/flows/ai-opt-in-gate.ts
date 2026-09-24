@@ -27,7 +27,7 @@
  *     (`WIZARD_PROVISIONING_SCOPES` in constants.ts), so the org's
  *     approval can never be read back — `apiUser` stays null and the gate
  *     could never clear. Creating an account through the wizard to run the
- *     AI agent is itself the consent, mirroring how `shouldDisableAsk`
+ *     AI agent is itself the consent, mirroring how `isAskDisabled`
  *     already treats `ci || signup` as one non-interactive mode.
  */
 

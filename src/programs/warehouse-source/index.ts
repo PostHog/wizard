@@ -1,6 +1,9 @@
 import type { ProgramConfig } from '@programs/program-step';
 import type { ProgramRun } from '@programs/program-run';
-import { resolveWarehouseSourceRunDefinition } from '@programs/resolve-run-definition';
+import {
+  resolveWarehouseSourceRunDefinition,
+  warehousePrompt,
+} from '@programs/resolve-run-definition';
 import { detectWarehousePrerequisites } from './detect.js';
 import { getDetectedWarehouseSources } from './detect.js';
 
@@ -15,21 +18,13 @@ export const warehouseSourceConfig: ProgramConfig = {
   allowedTools: ['Agent'],
   run: (
     session: Parameters<typeof getDetectedWarehouseSources>[0],
-  ): Promise<ProgramRun> => {
-    const run = resolveWarehouseSourceRunDefinition(
-      getDetectedWarehouseSources(session),
-    );
-    return Promise.resolve({
-      ...run,
-      customPrompt: (ctx) => {
-        const latest = resolveWarehouseSourceRunDefinition(
-          getDetectedWarehouseSources(session),
-        ).customPrompt;
-        if (!latest) throw new Error('Warehouse run has no prompt');
-        return latest(ctx);
-      },
-    });
-  },
+  ): Promise<ProgramRun> =>
+    Promise.resolve({
+      ...resolveWarehouseSourceRunDefinition(
+        getDetectedWarehouseSources(session),
+      ),
+      customPrompt: () => warehousePrompt(getDetectedWarehouseSources(session)),
+    }),
   requires: ['posthog-integration'],
 };
 

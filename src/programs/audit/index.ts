@@ -7,26 +7,16 @@ import {
   AUDIT_PROGRAM_OPTIONS,
   resolveAuditRunDefinition,
 } from '@programs/resolve-run-definition';
-import { AUDIT_CHECKS_FILE, AUDIT_CHECKS_KEY } from './types.js';
-import { AUDIT_SEED_CHECKS, seedAuditLedger } from './seed.js';
+import { AUDIT_CHECKS_FILE } from './types.js';
 
 type AuditRunState = {
-  installDir: string;
-  frameworkContext: Record<string, unknown>;
   dashboardUrl: string | null;
   notebookUrl: string | null;
-};
-
-const seedBeforeAuditRun = (session: AuditRunState): void => {
-  seedAuditLedger(session.installDir);
-  session.frameworkContext[AUDIT_CHECKS_KEY] = AUDIT_SEED_CHECKS;
 };
 
 const baseConfig = createSkillProgram(AUDIT_PROGRAM_OPTIONS);
 
 const auditRun = (session: AuditRunState): Promise<ProgramRun> => {
-  seedBeforeAuditRun(session);
-
   const baseRun = resolveAuditRunDefinition();
 
   return Promise.resolve({

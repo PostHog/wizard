@@ -21,6 +21,8 @@ vi.mock('@utils/analytics', () => ({
     wizardCapture: vi.fn(),
     setTag: vi.fn(),
     capture: vi.fn(),
+    // Empty map = flags unreadable = the shipped default (AIO + Logs on).
+    getAllFlagsForWizard: vi.fn().mockResolvedValue({}),
   },
 }));
 

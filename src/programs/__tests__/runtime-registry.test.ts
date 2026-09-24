@@ -1,4 +1,6 @@
 import { PROGRAM_REGISTRY } from '../program-registry';
+import { postAuthGateSteps } from '@tui/flow';
+import { rawProgramFlow } from '@tui/flows/index';
 import {
   RUNTIME_PROGRAM_REGISTRY,
   getRuntimeProgramConfig,
@@ -38,24 +40,24 @@ it('exposes every registered program and its callable agent policy', () => {
   }
 });
 
-it('returns no config for an unknown program', () => {
-  expect(getRuntimeProgramConfig('no-such-program')).toBeUndefined();
-});
-
-it('declares one callable execution strategy for every runtime program', () => {
-  for (const program of RUNTIME_PROGRAM_REGISTRY) {
-    expect([
-      'no-agent',
-      'static',
-      'resolved',
-      'integration',
-      'self-driving',
-    ]).toContain(program.strategy);
-    if (program.strategy === 'static') expect(program.run).toBeDefined();
-    else expect('run' in program).toBe(false);
-    if (program.strategy === 'resolved')
-      expect(program.resolve).toBeTypeOf('function');
-    else expect('resolve' in program).toBe(false);
+it('declares the health check, post-auth gates and composed runs the TUI flows carry', () => {
+  for (const legacy of PROGRAM_REGISTRY) {
+    const runtime = getRuntimeProgramConfig(legacy.id);
+    const flow = rawProgramFlow(legacy.id);
+    expect(runtime?.healthCheck ?? true).toBe(
+      flow.some((step) => step.screenId === 'health-check'),
+    );
+    expect(runtime?.postAuthGates ?? []).toEqual(
+      postAuthGateSteps(flow).map((step) => step.id),
+    );
+    expect(runtime?.composedRuns ?? []).toEqual(
+      flow.flatMap((step) => {
+        const runProgramId = legacy.runSteps?.[step.id]?.runProgramId;
+        return runProgramId ? [{ stepId: step.id, runProgramId }] : [];
+      }),
+    );
+    for (const composed of runtime?.composedRuns ?? []) {
+      expect(getRuntimeProgramConfig(composed.runProgramId)).toBeDefined();
+    }
   }
-  expect(getRuntimeProgramConfig('agent-skill')?.strategy).toBe('resolved');
 });

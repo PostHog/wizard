@@ -12,13 +12,11 @@ import type { CloudRegion } from '@utils/types';
 import { createUiReducer, getUI, setUI } from '@ui';
 import { LoggingUI } from '@headless/renderers/logging-ui';
 import type { ProgramConfig } from '@programs/types';
-import type { InferenceAuthProvider } from '@agent/types';
 import { getAuditChecks } from '@programs/audit/types';
 import { analytics } from '@utils/analytics';
 import { resolveNoTelemetry } from './resolve-no-telemetry';
 import type { WizardStore } from '@tui/store';
 import type { TaskStreamPush } from '@programs/task-stream/task-stream-push';
-import { join } from 'node:path';
 import {
   ErrorCodes,
   classifyRunFailure,
@@ -138,6 +136,7 @@ export function runNonInteractive(
       ? (options.installDir as string)
       : path.join(process.cwd(), options.installDir as string);
 
+    // Armed until the run completes, so every failed or interrupted exit removes new skills.
     registerRunSkillCleanup(installDir);
     const onSigint = () => {
       runCleanups();
@@ -241,9 +240,6 @@ export function runNonInteractive(
         store: headlessStore,
         programId: config.streamWorkflowId ?? config.id,
         destinations,
-        eventPlanPath: config.eventPlanFile
-          ? join(session.installDir, config.eventPlanFile)
-          : undefined,
         auditChecks: config.auditLedgerFile
           ? () => getAuditChecks(headlessStore.session)
           : undefined,
@@ -269,17 +265,14 @@ export function runNonInteractive(
     };
 
     try {
-      let ciInferenceAuth: InferenceAuthProvider | undefined;
       if (mode === 'ci') {
         const { loadCiInferenceAuthProvider } = await import(
           './ci-inference-auth'
         );
-        ciInferenceAuth = loadCiInferenceAuthProvider(
+        session.inferenceAuth = loadCiInferenceAuthProvider(
           Number(session.projectId),
           session.region ?? 'us',
         );
-        session.inferenceAuth = ciInferenceAuth;
-        store?.setInferenceAuth(ciInferenceAuth);
       }
       if (config.ciPreRun) {
         const ui = getUI();
@@ -378,10 +371,7 @@ export function runNonInteractive(
       }
 
       const { runProgramAgent } = await import('./run-program-agent');
-      await runProgramAgent(config, session, {
-        inferenceAuth: ciInferenceAuth,
-        deferSkillCleanupCommit: true,
-      });
+      await runProgramAgent(config, session);
       await settleStream(RunPhase.Completed);
       commitRegisteredRunSkillCleanups();
     } catch (error) {

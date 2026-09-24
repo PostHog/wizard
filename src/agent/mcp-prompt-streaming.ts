@@ -16,7 +16,8 @@ import type { Credentials } from '@shared/api';
 import type { InferenceAuthProvider } from '@agent/types';
 import { DEFAULT_AGENT_MODEL, WIZARD_USER_AGENT } from '@shared/constants';
 import { logToFile } from '@utils/debug';
-import { buildAgentEnv, buildRunTags } from '@agent/agent-interface';
+import { buildAgentEnv } from '@agent/agent-interface';
+import { buildRunTags } from '@shared/run-tags';
 import { sanitizeAgentSubprocessEnv } from '@shared/agent-env-isolation';
 import { createIsolatedAgentConfigDir } from '@agent/stored-login';
 import { analytics } from '@utils/analytics';
@@ -243,8 +244,6 @@ export async function* runMcpPromptViaSdk(args: {
 
   // The url and the bearer are one unit: a run must take both from the same
   // mint.
-  if (!args.inferenceAuth)
-    throw new Error('Inference auth provider is required.');
   const auth = await args.inferenceAuth.resolve();
   const gatewayUrl = auth.gatewayUrl;
   process.env.ANTHROPIC_BASE_URL = gatewayUrl;

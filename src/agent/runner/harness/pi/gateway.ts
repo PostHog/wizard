@@ -217,9 +217,8 @@ export function isGatewayAuthRejection(
 }
 
 export interface GatewayRemintOptions {
-  session: { prompt(text: string): Promise<void> };
-  /** Prevent a fresh turn if the host cancels while the bearer is re-minted. */
   signal?: AbortSignal;
+  session: { prompt(text: string): Promise<void> };
   registry: { registerProvider(providerName: string, config: never): void };
   auth: GatewayAuth;
   /** The cache: the same token while fresh, a new mint past the refresh point. */

@@ -36,6 +36,7 @@ import type { AgentResult } from '../../harness/types';
 import type { AgentInteraction } from '@agent/progress';
 import type {
   AgentFailure,
+  RunConfig,
   SequenceResult,
   SequenceContext,
 } from '../../shared/types';
@@ -54,6 +55,7 @@ import {
   SkipReason,
   TaskStatus,
   type QueuedTask,
+  type TaskOutcome,
 } from './queue';
 import {
   DEFAULT_DRAIN_OPTIONS,
@@ -64,8 +66,7 @@ import {
 import { RunMetrics } from './run-metrics';
 import { dependencyClosure, uncoveredBySink } from './queue-tools';
 import { deferSeededTasks } from './seeded-deps';
-import { LONGER_ASK_TIMEOUT_MS } from '@agent/wizard-ask-bridge';
-import { shouldDisableAsk } from '../../shared/bootstrap';
+import { isAskDisabled, LONGER_ASK_TIMEOUT_MS } from '@shared/ask-policy';
 import {
   agentRunTools,
   assembleSeedPrompt,
@@ -155,20 +156,18 @@ function requireTaskHarness(pick: HarnessPick): AgentHarness & {
   };
 }
 
-function terminalResult(result: AgentResult):
-  | {
-      outcome: RunOutcome.Aborted | RunOutcome.Failed;
-      failure: AgentFailure;
-    }
-  | undefined {
+function terminalResult(
+  result: AgentResult,
+): { outcome: RunOutcome.Failed; failure: AgentFailure } | undefined {
   switch (result.kind) {
     case 'success':
       return undefined;
     case 'decided_failure':
       return { outcome: RunOutcome.Failed, failure: result.failure };
     case 'abort':
+      // Callers return first on the run's signal, so this abort is the agent's own.
       return {
-        outcome: RunOutcome.Aborted,
+        outcome: RunOutcome.Failed,
         failure: {
           code: AGENT_ERROR_CODE[result.classification],
           message: result.message ?? 'Agent aborted',
@@ -265,38 +264,36 @@ export async function offerSeededTask(
   // No one to show the notice to: a step nobody can answer for must not run.
   // The same answer a non-interactive host gives today.
   if (!interaction?.taskNotice) return { keep: false, timedOut: false };
-  const { taskNotice, cancelTaskNotice } = interaction;
+  const { taskNotice } = interaction;
 
+  // This notice's own signal: its timeout or the run's cancellation aborts it.
+  const controller = new AbortController();
   let timer: ReturnType<typeof setTimeout> | undefined;
   let timedOut = false;
   let cancelForAbort: (() => void) | undefined;
   const timeout = new Promise<boolean>((resolve) => {
     timer = setTimeout(() => {
       timedOut = true;
-      // Dismisses the overlay and settles the showTaskNotice promise too, so
-      // the losing side of the race cannot leave a modal on screen.
-      try {
-        cancelTaskNotice?.();
-      } catch {
-        // An overlay failure must not leave a pending notice promise.
-      }
+      // Settle first: a host that rejects once dismissed must not win.
       resolve(false);
+      // The host dismisses this notice's overlay and settles its promise too,
+      // so the losing side of the race cannot leave a modal on screen.
+      controller.abort();
     }, timeoutMs);
   });
   const aborted = new Promise<boolean>((resolve) => {
     cancelForAbort = () => {
-      try {
-        cancelTaskNotice?.();
-      } catch {
-        // A host overlay failure must not prevent the run from settling.
-      }
       resolve(false);
+      controller.abort();
     };
     signal?.addEventListener('abort', cancelForAbort, { once: true });
-    if (signal?.aborted) cancelForAbort();
   });
   try {
-    const keep = await Promise.race([taskNotice(notice), timeout, aborted]);
+    const keep = await Promise.race([
+      taskNotice(notice, { signal: controller.signal }),
+      timeout,
+      aborted,
+    ]);
     return { keep, timedOut };
   } finally {
     if (timer) clearTimeout(timer);
@@ -432,8 +429,10 @@ export function drainVerdict(tasks: readonly QueuedTask[]): {
   requiredFailedTypes: string[];
   optionalFailedTypes: string[];
   blocked: number;
+  blockedTypes: string[];
 } {
   const failed = tasks.filter((t) => t.status === TaskStatus.Failed);
+  const pending = tasks.filter((t) => t.status === TaskStatus.Pending);
   return {
     requiredFailedTypes: failed
       .filter((t) => t.optional !== true)
@@ -441,8 +440,54 @@ export function drainVerdict(tasks: readonly QueuedTask[]): {
     optionalFailedTypes: failed
       .filter((t) => t.optional === true)
       .map((t) => t.type),
-    blocked: tasks.filter((t) => t.status === TaskStatus.Pending).length,
+    blocked: pending.length,
+    blockedTypes: pending.map((t) => t.type),
   };
+}
+
+/**
+ * The one-line "what went wrong" the abort message leads with.
+ *
+ * Both halves are named. A drain that ends with work still pending used to
+ * report only how many steps never ran, which is the least useful fact about
+ * them: a user who agreed to connect their data sources and then read that
+ * "2 steps never ran" had no way to tell whether that step was one of them.
+ */
+export function describeDrainFailure(verdict: {
+  requiredFailedTypes: string[];
+  blockedTypes: string[];
+}): string {
+  const parts: string[] = [];
+  if (verdict.requiredFailedTypes.length > 0) {
+    parts.push(`the ${verdict.requiredFailedTypes.join(', ')} step failed`);
+  }
+  if (verdict.blockedTypes.length > 0) {
+    parts.push(
+      `the ${verdict.blockedTypes.join(', ')} step${
+        verdict.blockedTypes.length === 1 ? '' : 's'
+      } never ran`,
+    );
+  }
+  return parts.join(', so ');
+}
+
+/** One `orchestrator task blocked` event per pending task, best effort once the outcome is decided. */
+function reportBlockedTasks(
+  tasks: readonly QueuedTask[],
+  failedTypes: readonly string[],
+): void {
+  for (const task of tasks) {
+    if (task.status !== TaskStatus.Pending) continue;
+    try {
+      analytics.wizardCapture('orchestrator task blocked', {
+        type: task.type,
+        optional: task.optional === true,
+        failed_types: failedTypes.join(',') || 'none',
+      });
+    } catch {
+      // Reporting must not replace the run result.
+    }
+  }
 }
 
 /** How many tasks deep in the graph a task sits — 0 when it depends on nothing. */
@@ -487,6 +532,21 @@ export function displayOrder(
         a.depth - b.depth || a.optional - b.optional || a.index - b.index,
     )
     .map((entry) => entry.task);
+}
+
+/**
+ * The run's excluded task types: CI gates plus the program's flag mapping.
+ * Exported so a test can pin the flag→exclusion hookup against the real
+ * program config — the registry and seed note both read this one list.
+ */
+export function effectiveExcludedTaskTypes(
+  source: Pick<RunConfig, 'excludedTaskTypes'>,
+  flags: Record<string, string>,
+): string[] {
+  return [
+    ...ciExcludedTaskTypes(),
+    ...(source.excludedTaskTypes?.(flags) ?? []),
+  ];
 }
 
 export async function runOrchestrator(
@@ -543,7 +603,7 @@ async function executeOrchestrator(
   // its run config is then synchronous, with no mid-drain network latency.
   const flow = config.agentFlow ?? programId;
   const registry = await loadAgentRegistry(boot.skillsBaseUrl, flow, {
-    exclude: ciExcludedTaskTypes(),
+    exclude: effectiveExcludedTaskTypes(config, boot.wizardFlags),
     // Baked into the prompts at load, so enqueue, dispatch, and telemetry all read one effective spec.
     overrides: config.stageOverrides,
   });
@@ -791,6 +851,8 @@ async function executeOrchestrator(
     // — a single planner edge is enough to pull the task back to the front of
     // the drain and put its prompt in front of the code work again.
     runnerSeededTypes: registry.runnerSeededTypes,
+    // Optionality comes from the task's frontmatter, never from the enqueue call.
+    optionalTypes: registry.optionalTypes,
     currentTaskId,
   });
 
@@ -885,7 +947,7 @@ async function executeOrchestrator(
 
   // One bridge for the run, handed only to a task whose prompt allows asking.
   // Absent in CI and signup, where nobody can answer.
-  const askBridge = shouldDisableAsk(input.flags)
+  const askBridge = isAskDisabled(input.flags)
     ? undefined
     : createAskBridge(interaction, {
         signal,
@@ -925,7 +987,15 @@ async function executeOrchestrator(
     input,
     boot,
     emit,
-    prompt: assembleSeedPrompt(promptContext, seedPrompt.body, store.list()),
+    // The exclusion note names `registry.excludedTypes` — the excluded types
+    // this flow actually had — so the planner never hears about work that was
+    // never available, and overlapping exclusion sources cannot double-list.
+    prompt: assembleSeedPrompt(
+      promptContext,
+      seedPrompt.body,
+      store.list(),
+      registry.excludedTypes,
+    ),
     spinner,
     model: requireKnownModel(seedModel.model, seedPick.model),
     effort: seedModel.effort,
@@ -1157,15 +1227,20 @@ async function executeOrchestrator(
         if (signal?.aborted) return;
         if (error instanceof RunTaskFatal) throw error;
         const failure = classifyRunFailure(error);
-        throw new RunTaskFatal({
-          code: failure.code,
-          message: failure.message,
-          error: error instanceof Error ? error : undefined,
-        });
+        throw new RunTaskFatal(
+          {
+            code: failure.code,
+            message: failure.message,
+            error: error instanceof Error ? error : undefined,
+          },
+          RunOutcome.Failed,
+          task.type,
+        );
       }
       if (signal?.aborted) return;
       const terminal = terminalResult(taskResult);
-      if (terminal) throw new RunTaskFatal(terminal.failure, terminal.outcome);
+      if (terminal)
+        throw new RunTaskFatal(terminal.failure, terminal.outcome, task.type);
     } finally {
       // Durable skills a task installed are irrelevant to later tasks — and
       // the sdk harness auto-loads .claude/skills into every agent — so sweep
@@ -1212,6 +1287,14 @@ async function executeOrchestrator(
     if (!(error instanceof RunTaskFatal)) throw error;
     fatal = error;
   } finally {
+    // The queue file is wiped below; the e2e harness reads outcomes from here.
+    config.hooks?.recordTaskOutcomes?.(
+      store.list().map((t) => ({
+        type: t.type,
+        status: t.status,
+        optional: t.optional === true,
+      })) satisfies TaskOutcome[],
+    );
     try {
       if (!signal?.aborted && referenceSkillId && referenceInstallPath) {
         promoteReferenceSkill(
@@ -1249,7 +1332,15 @@ async function executeOrchestrator(
     }
   }
 
-  if (fatal) return { outcome: fatal.outcome, failure: fatal.failure };
+  if (fatal) {
+    // The steps the fatal task stopped still get their terminal event.
+    const stoppedBy = drainVerdict(store.list()).requiredFailedTypes;
+    if (fatal.taskType && !stoppedBy.includes(fatal.taskType)) {
+      stoppedBy.push(fatal.taskType);
+    }
+    reportBlockedTasks(store.list(), stoppedBy);
+    return { outcome: fatal.outcome, failure: fatal.failure };
+  }
   if (signal?.aborted) return hostAborted();
 
   renderQueue();
@@ -1288,11 +1379,16 @@ async function executeOrchestrator(
   // A failed optional task is exempt: reported per-task, never run-failing.
   const verdict = drainVerdict(store.list());
   const blocked = verdict.blocked;
+  // A pending task at this point never ran and never will — its dependency
+  // failed. No transition fires for it, so without this the step leaves no
+  // terminal event at all: a step the user was offered and accepted simply
+  // drops out of the funnel. The queue itself is left alone, because the run
+  // cache is already wiped by here and writing to it would recreate the folder
+  // the cleanup just removed.
+  reportBlockedTasks(store.list(), verdict.requiredFailedTypes);
   if (verdict.requiredFailedTypes.length > 0 || blocked > 0) {
     const failedTypes = verdict.requiredFailedTypes.join(', ');
-    const whatFailed = failedTypes
-      ? `the ${failedTypes} step failed`
-      : `${blocked} steps never ran`;
+    const whatFailed = describeDrainFailure(verdict);
     // A grant narrowed at login is the one failure cause the user can fix
     // alone — lead with the fix, and only fall back to the report-a-bug line
     // when trying again doesn't work.
@@ -1366,6 +1462,5 @@ async function executeOrchestrator(
   };
   emit({ kind: 'completion', outro });
   emit({ kind: 'lifecycle', phase: 'completed', message });
-  await analytics.shutdown('success');
   return { outcome: RunOutcome.Success, outro };
 }

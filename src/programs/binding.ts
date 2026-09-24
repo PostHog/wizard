@@ -1,3 +1,4 @@
+import { IS_PRODUCTION_BUILD } from '@env';
 import {
   DEFAULT_AGENT_MODEL,
   GPT5_6_SOL_MODEL,
@@ -5,8 +6,17 @@ import {
   Harness,
   Sequence,
 } from '@shared/constants';
-import { DEFAULT_AGENT_BINDING, resolveBinding, resolveHarness } from '@agent';
-import type { ResolvedBinding } from '@agent/types';
+import { logToFile } from '@utils/debug';
+import {
+  DEFAULT_AGENT_BINDING,
+  harnessRunsTasks,
+  resolveHarness,
+} from '@agent';
+import type {
+  ProgramBinding,
+  ResolvedBinding,
+  SwitchboardCtx as HarnessCtx,
+} from '@agent/types';
 import type { ProgramId } from './program-registry';
 import {
   isOrchestratorEnabled,
@@ -14,24 +24,11 @@ import {
   resolveFlagSequence,
 } from './experiments';
 
-export interface ProgramBinding extends ResolvedBinding {
-  contextMillOverride?: Record<
-    string,
-    Partial<Pick<ResolvedBinding, 'harness' | 'model' | 'thinkingLevel'>>
-  >;
-}
-
-export interface ProgramSwitchboardTrace {
-  harness?: 'cli' | 'flag' | 'binding';
-  model?: 'cli' | 'flag' | 'binding';
-  sequence?:
-    | 'cli'
-    | 'composed'
-    | 'runtask-clamp'
-    | 'payload'
-    | 'flag'
-    | 'binding';
-}
+/** The agent's harness inputs plus the sequence inputs only programs read. */
+type SwitchboardCtx = HarnessCtx & {
+  flagSequence?: Sequence;
+  orchestratorFlagOn?: boolean;
+};
 
 export interface ProgramSwitchboardCtx {
   program: ProgramId;
@@ -41,7 +38,7 @@ export interface ProgramSwitchboardCtx {
   cliHarness?: Harness;
   cliSequence?: Sequence;
   cliModel?: string;
-  trace?: ProgramSwitchboardTrace;
+  trace?: SwitchboardCtx['trace'];
 }
 
 /** Program routes. The registry lockstep contract is tested at this boundary. */
@@ -109,7 +106,9 @@ export function resolveProgramBinding(
     cliModel: ctx.cliModel,
     trace: ctx.trace,
   };
-  const binding = resolveBinding(resolution);
+  const sequence = resolveSequence(resolution);
+  const { harness, model, thinkingLevel } = resolveHarness(resolution);
+  const binding = { sequence, harness, model, thinkingLevel };
   const roles = Object.keys(baseBinding.contextMillOverride ?? {});
   if (roles.length === 0) return binding;
   return {
@@ -121,4 +120,41 @@ export function resolveProgramBinding(
       ]),
     ),
   };
+}
+
+function resolveSequence(ctx: SwitchboardCtx): Sequence {
+  const [source, sequence] = pickSequence(ctx);
+  if (ctx.trace) ctx.trace.sequence = source;
+  logToFile(
+    `[switchboard] resolved: program=${
+      ctx.program ?? '?'
+    } sequence=${sequence} (${source})`,
+  );
+  return sequence;
+}
+
+/**
+ * The first rung that decides wins: the composed clamp, the dev-build CLI
+ * override, the runTask capability clamp, the flag route, the experiment, then
+ * the base binding. CLI sits above the capability clamp, so `--sequence
+ * orchestrator` still reaches the orchestrator's hard error in dev builds.
+ */
+function pickSequence(
+  ctx: SwitchboardCtx,
+): [Required<NonNullable<SwitchboardCtx['trace']>>['sequence'], Sequence] {
+  // The orchestrator owns the whole run lifecycle and cannot nest.
+  if (ctx.composed) return ['composed', Sequence.linear];
+  if (!IS_PRODUCTION_BUILD && ctx.cliSequence) return ['cli', ctx.cliSequence];
+  const { harness } = resolveHarness(ctx);
+  if (!harnessRunsTasks(harness)) {
+    if (ctx.orchestratorFlagOn) {
+      logToFile(
+        `[switchboard] wizard-orchestrator ignored: ${harness} has no runTask, clamping to linear`,
+      );
+    }
+    return ['runtask-clamp', Sequence.linear];
+  }
+  if (ctx.flagRoute?.sequence) return ['payload', ctx.flagRoute.sequence];
+  if (ctx.flagSequence) return ['flag', ctx.flagSequence];
+  return ['binding', (ctx.baseBinding ?? DEFAULT_AGENT_BINDING).sequence];
 }

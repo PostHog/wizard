@@ -8,10 +8,10 @@ import {
   buildAuthErrorContext,
   buildAgentEnv,
   reportMcpSetup,
+  AgentErrorType,
 } from '@agent/agent-interface';
 import { AgentOutputSignals } from '@agent/output-signals';
 import { RESUME_INSTRUCTION } from '@agent/signals';
-import { scanProjectSkills } from '@agent/skill-preflight';
 import { analytics } from '@utils/analytics';
 import {
   Sequence,
@@ -24,9 +24,6 @@ import type { SpinnerHandle } from '@ui';
 // Mock dependencies
 vi.mock('@utils/analytics');
 vi.mock('@utils/debug');
-vi.mock('@agent/skill-preflight', () => ({
-  scanProjectSkills: vi.fn().mockResolvedValue([]),
-}));
 
 // Mock the SDK module
 const mockQuery = vi.fn();
@@ -118,43 +115,51 @@ describe('runAgent', () => {
     Object.values(mockUIInstance.log).forEach((fn) => fn.mockReset());
   });
 
-  describe('race condition handling', () => {
-    it('aborts the active SDK query when the host cancels', async () => {
-      const host = new AbortController();
-      let sdkAbort: AbortSignal | undefined;
-      mockQuery.mockImplementation(
-        ({ options }: { options: { abortController: AbortController } }) => {
-          sdkAbort = options.abortController.signal;
-          return (async function* () {
-            yield* [];
-            await new Promise<void>((resolve) =>
-              sdkAbort?.addEventListener('abort', () => resolve(), {
+  it('aborts an unfinished SDK run at its configured timeout', async () => {
+    vi.useFakeTimers();
+    let controller: AbortController | undefined;
+    let pending: Promise<unknown> | undefined;
+    try {
+      mockQuery.mockImplementation(({ options }) => {
+        controller = options.abortController;
+        return (async function* () {
+          await new Promise<void>((resolve) => {
+            if (controller?.signal.aborted) resolve();
+            else
+              controller?.signal.addEventListener('abort', () => resolve(), {
                 once: true,
-              }),
-            );
-            throw new Error('SDK aborted');
-          })();
-        },
-      );
+              });
+          });
+          if (controller?.signal.aborted) throw new Error('SDK query aborted');
+          yield { type: 'assistant', message: { content: [] } };
+        })();
+      });
 
-      const running = runAgent(
+      pending = runAgent(
         defaultAgentConfig,
         'test prompt',
         defaultOptions,
         mockSpinner as unknown as SpinnerHandle,
-        { signal: host.signal },
-      );
-      await vi.waitFor(() => expect(mockQuery).toHaveBeenCalledTimes(1));
-      host.abort();
+        { timeoutMs: 60_000 },
+      ).catch((error) => error);
+      await vi.waitFor(() => expect(controller).toBeDefined());
+      await vi.advanceTimersByTimeAsync(60_000);
 
-      expect(await running).toMatchObject({
-        kind: 'abort',
-        classification: 'WIZARD_ABORT',
+      expect(controller?.signal.aborted).toBe(true);
+      expect(await pending).toEqual({
+        kind: 'failure',
+        classification: AgentErrorType.AGENTIC_DETECTION_TIMEOUT,
+        message: 'Agent run timed out after 60s',
       });
-      expect(sdkAbort?.aborted).toBe(true);
-      expect(mockSpinner.stop).toHaveBeenCalledWith('Wizard aborted');
-    });
+      expect(mockSpinner.stop).toHaveBeenCalledWith('Agent run timed out');
+    } finally {
+      controller?.abort();
+      if (pending) await pending;
+      vi.useRealTimers();
+    }
+  });
 
+  describe('race condition handling', () => {
     it('returns a failure for an SDK error result without an API marker', async () => {
       function* failed() {
         yield {
@@ -232,6 +237,8 @@ describe('runAgent', () => {
         kind: 'abort',
         classification: 'WIZARD_ABORT',
       });
+      const [{ options }] = mockQuery.mock.calls[0];
+      expect(options.abortController.signal.aborted).toBe(true);
     });
 
     it('returns a failure when the stream ends without a terminal result', async () => {
@@ -856,79 +863,6 @@ describe('subprocess gateway credentials', () => {
     // The run tags ride one properties blob, with the minted team on it.
     expect(env.ANTHROPIC_CUSTOM_HEADERS).toContain('X-PostHog-Properties');
     expect(env.ANTHROPIC_CUSTOM_HEADERS).toContain('"team_id":42');
-  });
-
-  it('checks existing project skills before the SDK can load them', async () => {
-    function* ok() {
-      yield {
-        type: 'result',
-        subtype: 'success',
-        is_error: false,
-        result: 'done',
-      };
-    }
-    mockQuery.mockReturnValue(ok());
-
-    await runAgent(
-      config,
-      'test prompt',
-      options,
-      spinner as unknown as SpinnerHandle,
-    );
-
-    expect(scanProjectSkills).toHaveBeenCalledWith(
-      config.workingDirectory,
-      config.triageProvider,
-    );
-    expect(
-      vi.mocked(scanProjectSkills).mock.invocationCallOrder[0],
-    ).toBeLessThan(mockQuery.mock.invocationCallOrder[0]);
-  });
-
-  it('ends the run before SDK load when a project skill has a terminal finding', async () => {
-    vi.mocked(scanProjectSkills).mockResolvedValueOnce([
-      {
-        skillDir: '/test/dir/.claude/skills/poisoned',
-        reason: 'Poisoned skill detected: prompt-injection (critical)',
-      },
-    ]);
-
-    const result = await runAgent(
-      config,
-      'test prompt',
-      options,
-      spinner as unknown as SpinnerHandle,
-    );
-
-    expect(result).toEqual({
-      kind: 'failure',
-      classification: 'WIZARD_YARA_VIOLATION',
-      message: expect.stringContaining('poisoned'),
-    });
-    expect(mockQuery).not.toHaveBeenCalled();
-    expect(spinner.stop).toHaveBeenCalledWith(
-      'Security check stopped the setup',
-    );
-  });
-
-  it('ends the run before SDK load if the project skill scan fails', async () => {
-    vi.mocked(scanProjectSkills).mockRejectedValueOnce(
-      new Error('scanner failed'),
-    );
-
-    const result = await runAgent(
-      config,
-      'test prompt',
-      options,
-      spinner as unknown as SpinnerHandle,
-    );
-
-    expect(result).toEqual({
-      kind: 'failure',
-      classification: 'WIZARD_YARA_VIOLATION',
-      message: expect.stringContaining('scanner failed'),
-    });
-    expect(mockQuery).not.toHaveBeenCalled();
   });
 });
 

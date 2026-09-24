@@ -1,9 +1,6 @@
 /** Public runtime entry for the programs surface. */
+import { snapshotProgramInput } from './snapshot-program-input';
 export type * from './types';
-export { PROGRAM_BINDINGS, resolveProgramBinding } from './binding';
-export { getProgramCommandments } from './commandments';
-export { captureSwitchboardDecision } from './binding-telemetry';
-export { areSeededTasksEnabled, resolveStageOverrides } from './experiments';
 /** Load gateway minting only when the caller requests model auth. */
 export function createPosthogInferenceAuthProvider(
   posthog: import('@shared/api').Credentials,
@@ -24,8 +21,18 @@ export async function runProgram(
   input: import('./run-program').ProgramInput,
   options?: import('./run-program').ProgramOptions,
 ): Promise<import('./run-program').ProgramRunOutcome> {
+  // Copy before the load, so host writes while it loads cannot reach the run.
+  const snapshot = snapshotProgramInput(input);
   const entry = await import('./run-program');
-  return entry.runProgram(programId, input, options);
+  return entry.runProgram(programId, snapshot, options);
+}
+/** Keep the readiness and settings checks out of CLI startup until a host runs them. */
+export async function preflight(
+  programId: string,
+  host: import('./preflight').ProgramPreflightHost,
+): Promise<import('./preflight').ProgramPreflightDecision> {
+  const entry = await import('./preflight');
+  return entry.preflight(programId, host);
 }
 /** Source-map project detection runs an agent; load it when a screen asks. */
 export async function detectSourceMapsProjects(
@@ -54,11 +61,7 @@ export {
 } from './program-registry';
 export { agentSkillConfig } from './program-registry';
 export { FRAMEWORK_REGISTRY } from './registry';
-export {
-  authenticate,
-  bindAuthHost,
-  refreshAccessTokenIfNeeded,
-} from './authenticate';
+export { authenticate, bindAuthHost } from './authenticate';
 export { detectErrorCode } from './detect-map';
 export { needsFrameworkSetup } from './framework-config';
 export { getOrAskForProjectData } from './project-data';
@@ -69,7 +72,6 @@ export {
   AUDIT_SEVERITY_STYLE,
   getAuditChecks,
 } from './audit/types';
-export { watchAuditLedger } from './audit/watch-ledger';
 export { auditConfig } from './audit/index';
 export { createSkillProgram } from './agent-skill/index';
 export { aiObservabilityConfig } from './ai-observability/index';

@@ -19,27 +19,50 @@ import { AGENT_ERROR_CODE } from '@agent/error-map';
 import { analytics } from '@utils/analytics';
 import { formatYaraAbortMessage } from '@agent/yara-hooks';
 import { installSkillById } from '@agent/tools';
-import { assemblePrompt } from '../../agent-prompt';
+import { assemblePrompt, type PromptContext } from '../../agent-prompt';
 import type { SequenceResult, SequenceContext } from '../shared/types';
 import { failed, hostAborted, installFailure } from '../shared/errors';
 import { RunOutcome } from '../shared/types';
-import { shouldDisableAsk, runOptions } from '../shared/bootstrap';
+import { runOptions } from '../shared/bootstrap';
+import { isAskDisabled } from '@shared/ask-policy';
 import { createEmitSpinner } from '../shared/progress-collector';
 import { createAskBridge } from '../shared/ask';
+import { withTranscript } from '../shared/transcript-tail';
 import { getHarness } from '../switchboard';
 
-export async function runLinearProgram({
-  config,
-  input,
-  boot,
-  emit,
-  interaction,
-  signal,
-}: SequenceContext): Promise<SequenceResult> {
-  if (signal?.aborted) return hostAborted();
+export async function runLinearProgram(
+  context: SequenceContext,
+): Promise<SequenceResult> {
+  // Aborts on the host's signal or when the run ends, so no ask outlives it.
+  const controller = new AbortController();
+  const abortFromHost = () => controller.abort();
+  context.signal?.addEventListener('abort', abortFromHost, { once: true });
+  if (context.signal?.aborted) abortFromHost();
+  try {
+    return await executeLinear(context, controller.signal);
+  } finally {
+    context.signal?.removeEventListener('abort', abortFromHost);
+    controller.abort();
+  }
+}
+
+/** The host's `signal` decides the outcome; `runSignal` also ends with the run. */
+async function executeLinear(
+  {
+    config,
+    input,
+    boot,
+    emit,
+    interaction,
+    signal,
+    transcript,
+  }: SequenceContext,
+  runSignal: AbortSignal,
+): Promise<SequenceResult> {
   const { run, composed } = config;
   const { skillsBaseUrl, credentials, project } = boot;
   const { projectApiKey, host, projectId } = credentials;
+  if (signal?.aborted) return hostAborted();
 
   // 5. Skill install (if skillId provided)
   let skillPath: string | undefined;
@@ -53,13 +76,11 @@ export async function runLinearProgram({
     );
     if (signal?.aborted) return hostAborted();
     if (installResult.kind !== 'ok') {
-      if (signal?.aborted) return hostAborted();
       return failed(installFailure(run.integrationLabel, installResult));
     }
     skillPath = installResult.path;
     logToFile(`[agent-runner] skill installed at ${skillPath}`);
   }
-  if (signal?.aborted) return hostAborted();
 
   // 6. Initialize agent
   const spinner = createEmitSpinner(emit);
@@ -71,22 +92,25 @@ export async function runLinearProgram({
   // CI/signup with neither has no answerer, so we omit the bridge and the tool
   // returns an actionable error rather than hanging on a never-resolving prompt.
   const askDisabled =
-    shouldDisableAsk(input.flags) && process.env.WIZARD_ASK_AUTODRIVE !== '1';
+    isAskDisabled(input.flags) && process.env.WIZARD_ASK_AUTODRIVE !== '1';
   const ask = askDisabled
     ? undefined
     : createAskBridge(interaction, {
         getSource: () => input.skillId ?? run.integrationLabel,
         richLinks: run.richLinks ?? false,
         timeoutMs: run.askTimeoutMs,
-        signal,
+        signal: runSignal,
       });
 
-  const middleware = input.flags.benchmark
-    ? createBenchmarkPipeline(emit, spinner, runOptions(input))
-    : undefined;
+  const middleware = withTranscript(
+    input.flags.benchmark
+      ? createBenchmarkPipeline(emit, spinner, runOptions(input))
+      : undefined,
+    transcript,
+  );
 
   // 7. Build prompt
-  const prompt = assemblePrompt(run, {
+  const promptContext: PromptContext = {
     projectId,
     projectApiKey,
     host,
@@ -100,7 +124,10 @@ export async function runLinearProgram({
           surveys: project.surveys_opt_in ?? null,
         }
       : null,
-  });
+  };
+  const prompt = run.prompt
+    ? run.prompt(promptContext)
+    : assemblePrompt(run, promptContext);
   logToFile(`[agent-runner] prompt assembled (${prompt.length} chars)`);
   if (signal?.aborted) return hostAborted();
 
@@ -109,7 +136,6 @@ export async function runLinearProgram({
   // bridge, error routing, outro) stays here so every harness shares it.
   const { harness, model, thinkingLevel } = config.binding;
   const agentResult = await getHarness(harness).run({
-    signal,
     config,
     input,
     boot,
@@ -121,6 +147,7 @@ export async function runLinearProgram({
     middleware,
     model,
     thinkingLevel,
+    signal: runSignal,
   });
   if (signal?.aborted) return hostAborted();
 
@@ -163,7 +190,8 @@ export async function runLinearProgram({
       matched: matched?.message ?? null,
     });
     return {
-      outcome: RunOutcome.Aborted,
+      // An agent that stops itself failed the run; only the host's signal cancels it.
+      outcome: signal?.aborted ? RunOutcome.Aborted : RunOutcome.Failed,
       failure: {
         message: matched?.message ?? `${run.integrationLabel} aborted`,
         outroData,
@@ -204,7 +232,7 @@ export async function runLinearProgram({
   if (classification === AgentErrorType.YARA_VIOLATION) {
     return failed({
       code: AGENT_ERROR_CODE[AgentErrorType.YARA_VIOLATION],
-      message: failureMessage ?? formatYaraAbortMessage(),
+      message: formatYaraAbortMessage(),
       error: agentResult.kind === 'failure' ? agentResult.error : undefined,
     });
   }
@@ -269,7 +297,6 @@ export async function runLinearProgram({
     await config.hooks.postRun(credentials);
     if (signal?.aborted) return hostAborted();
   }
-  if (signal?.aborted) return hostAborted();
 
   // A composed sub-run leaves the terminal outro to its host.
   if (composed) {
@@ -289,12 +316,10 @@ export async function runLinearProgram({
           : undefined,
       };
   if (outroData) {
-    if (signal?.aborted) return hostAborted();
     emit({ kind: 'completion', outro: outroData });
   }
 
   emit({ kind: 'lifecycle', phase: 'completed', message: run.successMessage });
 
-  await analytics.shutdown('success');
   return { outcome: RunOutcome.Success, outro: outroData };
 }

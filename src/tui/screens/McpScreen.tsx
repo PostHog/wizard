@@ -12,6 +12,7 @@
  */
 
 import { Box, Text, useInput } from 'ink';
+import { Spinner } from '@inkjs/ui';
 import { useState, useEffect, useRef } from 'react';
 import { useSyncExternalStore } from 'react';
 import { type WizardStore, McpOutcome } from '@tui/store';
@@ -505,9 +506,12 @@ export const McpScreen = ({
         )}
 
         {phase === Phase.Working && (
-          <Text dimColor>
-            {isRemove ? 'Removing' : 'Installing'} MCP server...
-          </Text>
+          <Box flexDirection="row" gap={1}>
+            <Text dimColor>
+              {isRemove ? 'Removing' : 'Installing'} MCP server...
+            </Text>
+            <Spinner />
+          </Box>
         )}
 
         {phase === Phase.Done && (

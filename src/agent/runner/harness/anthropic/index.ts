@@ -1,7 +1,6 @@
 // Supported legacy SDK fallback; both this adapter and Pi implement run and runTask.
 
 import { Harness } from '@shared/constants';
-import { AgentErrorType } from '@agent/signals';
 import {
   initializeAgent,
   runAgent as executeAgent,
@@ -59,7 +58,7 @@ export const anthropicBackend: AgentHarness = {
         wizardFlags,
         wizardMetadata,
         programId: boot.programId,
-        inferenceAuth: boot.inferenceAuth,
+        inferenceAuth: input.inferenceAuth,
         programCommandments: runConfig.programCommandments,
         integrationLabel: config.integrationLabel,
         askBridge,
@@ -73,12 +72,6 @@ export const anthropicBackend: AgentHarness = {
       },
       runOptions(input),
     );
-    if (inputs.signal?.aborted)
-      return {
-        kind: 'abort',
-        classification: AgentErrorType.ABORT,
-        message: 'Agent run cancelled',
-      };
     log.step(`Verbose logs: ${getLogFilePath()}`);
     log.success("Agent initialized. Let's get cooking!");
     logToFile('[agent-runner] agent initialized');
@@ -98,8 +91,8 @@ export const anthropicBackend: AgentHarness = {
         abortCases: config.abortCases,
         emitStepEvents: config.trackStepProgress ?? false,
         resolveStepKey: config.resolveStepKey,
+        requestRemark: config.requestRemark,
         triageProvider: boot.triageProvider,
-        signal: inputs.signal,
       },
       middleware,
     );
@@ -146,7 +139,7 @@ export const anthropicBackend: AgentHarness = {
         detectPackageManager: detectNodePackageManagers,
         skillsBaseUrl: boot.skillsBaseUrl,
         programId: boot.programId,
-        inferenceAuth: boot.inferenceAuth,
+        inferenceAuth: input.inferenceAuth,
         programCommandments: config.programCommandments,
         wizardFlags: boot.wizardFlags,
         wizardMetadata: boot.wizardMetadata,
@@ -161,12 +154,6 @@ export const anthropicBackend: AgentHarness = {
       },
       options,
     );
-    if (inputs.signal?.aborted)
-      return {
-        kind: 'abort',
-        classification: AgentErrorType.ABORT,
-        message: 'Agent run cancelled',
-      };
 
     return executeAgent(
       { ...agent, model, allowedTools, disallowedTools, signal: inputs.signal },
@@ -180,7 +167,6 @@ export const anthropicBackend: AgentHarness = {
         additionalFeatureQueue,
         requestRemark,
         analyticsProperties,
-        signal: inputs.signal,
       },
     );
   },

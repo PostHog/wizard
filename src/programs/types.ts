@@ -5,7 +5,7 @@ export type {
   ProgramRunStep,
   ProgramReadyContext,
 } from './program-step';
-export type { ProgramCompletionContext } from './program-run';
+export type { ProgramCompletionContext, ProgramRun } from './program-run';
 export type { FrameworkConfig, SetupQuestion } from './framework-config';
 export type {
   HostFailure,
@@ -17,21 +17,26 @@ export type { ProjectDataHost } from './project-data';
 export type {
   ProgramInput,
   ProgramOptions,
+  ProgramOverrides,
   ProgramRunOutcome,
   ProgramWorkflowConnector,
+  ProgramWorkflowDecision,
+  ProgramWorkflowRequest,
+  WizardFlagSnapshot,
 } from './run-program';
 export type {
+  ProgramDataProgress,
+  ProgramDiagnostic,
   ProgramInvocationData,
   ProgramProgress,
-  ProgramStoreProjection,
+  ProgramRunProgress,
   SettledProgramRun,
 } from './program-store';
+export type { ProgramSwitchboardCtx } from './binding';
 export type {
-  ProgramBinding,
-  ProgramSwitchboardCtx,
-  ProgramSwitchboardTrace,
-} from './binding';
-export type { ProgramRun } from './program-run';
+  ProgramPreflightDecision,
+  ProgramPreflightHost,
+} from './preflight';
 export type { ProgramLaunchArgs, ProgramSession } from './program-session';
 export type { AuditCheck, AuditStatus } from './audit/types';
 export type {

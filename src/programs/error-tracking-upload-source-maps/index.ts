@@ -60,15 +60,11 @@ export const errorTrackingUploadSourceMapsConfig: ProgramConfig = {
       ...resolveSourceMapsRunDefinition(),
 
       customPrompt: (ctx) => {
-        // The legacy picker writes after `run()` resolves, so read its live
-        // selection at prompt time; callable programs pass it as plain data.
         const selection = readSelection();
         const { variant } = selection;
         if (variant && VARIANTS_REQUIRING_POSTHOG_CLI.has(variant))
           ensurePostHogCli(variant, (message) => host.warn(message));
-        const prompt = resolveSourceMapsRunDefinition(selection).customPrompt;
-        if (!prompt) throw new Error('Source maps run has no prompt');
-        return prompt(ctx);
+        return resolveSourceMapsRunDefinition(selection).customPrompt!(ctx);
       },
 
       postRun: () => {

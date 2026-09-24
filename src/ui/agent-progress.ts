@@ -1,5 +1,6 @@
 import type { WizardUI, SpinnerHandle } from './wizard-ui';
 import type { AgentInteraction, AgentProgress } from '@agent/types';
+import { logToFile } from '@utils/debug';
 
 // ── Progress → WizardUI, one call per event ───────────────────────────
 
@@ -53,6 +54,9 @@ export function createUiReducer(ui: WizardUI): (event: AgentProgress) => void {
       case 'completion':
         ui.setOutroData(event.outro);
         break;
+      case 'activity':
+        // Step lines belong to the caller that asked for them, not the run UI.
+        break;
       default: {
         const unhandled: never = event;
         throw new Error(
@@ -66,9 +70,36 @@ export function createUiReducer(ui: WizardUI): (event: AgentProgress) => void {
 /** The agent's questions, answered wherever `getUI()` answers them today. */
 export function uiInteraction(ui: WizardUI): AgentInteraction {
   return {
-    ask: (question) => ui.requestQuestion(question),
-    cancelAsk: () => ui.cancelPendingQuestion(),
-    taskNotice: (notice) => ui.showTaskNotice(notice),
-    cancelTaskNotice: () => ui.cancelTaskNotice(),
+    ask: (question, { signal }) =>
+      dismissOnAbort(ui.requestQuestion(question), signal, () =>
+        ui.cancelPendingQuestion(),
+      ),
+    taskNotice: (notice, { signal }) =>
+      dismissOnAbort(ui.showTaskNotice(notice), signal, () =>
+        ui.cancelTaskNotice(),
+      ),
   };
+}
+
+/**
+ * Dismiss one open request on abort; a settled one leaves the UI alone. A
+ * throw inside an abort listener reaches no caller: Node rethrows it as an
+ * uncaught exception, so a broken overlay is logged here instead.
+ */
+function dismissOnAbort<T>(
+  open: Promise<T>,
+  signal: AbortSignal,
+  dismiss: () => void,
+): Promise<T> {
+  const onAbort = () => {
+    try {
+      dismiss();
+    } catch (error) {
+      logToFile('[agent-progress] dismissing an aborted request failed', error);
+    }
+  };
+  // An abort listener added to an already aborted signal never fires.
+  if (signal.aborted) onAbort();
+  else signal.addEventListener('abort', onAbort, { once: true });
+  return open.finally(() => signal.removeEventListener('abort', onAbort));
 }

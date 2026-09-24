@@ -21,7 +21,6 @@ export type {
   RunResult,
   SeedTaskEntry,
 } from './runner';
-export type { GatewayAuth } from '@shared/gateway-auth';
 export type {
   AgentInteraction,
   AgentProgress,
@@ -35,12 +34,15 @@ export type {
   TokenUsageDelta,
 } from './progress';
 
-/** Generic switchboard input types retained for the B2 compatibility export. */
+/** Input types of the exported resolveHarness. */
 export type { ProgramBinding, SwitchboardCtx } from './runner';
 export type { EffortLevel } from './runner/switchboard/models';
 
-/** Leaves in B2 with downloadSkill. */
+/** Leaves in C3 with downloadSkill. */
 export type { InstallSkillResult } from './tools';
+
+/** Leaves in B2 with the legacy adapter that records it. */
+export type { TaskOutcome } from './runner';
 
 /** Leaves in C2 with runMcpPromptViaSdk. */
 export type { AgentChunk } from './mcp-prompt-streaming';

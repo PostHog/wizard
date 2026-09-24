@@ -250,7 +250,7 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
       createWriteToolDefinition,
     } = sdk;
 
-    const refreshAuth = () => boot.inferenceAuth.resolve();
+    const refreshAuth = () => input.inferenceAuth.resolve();
     const auth = await refreshAuth();
     const providerInputs = (current: GatewayAuth) => ({
       gatewayUrl: current.gatewayUrl,
@@ -491,14 +491,12 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
 
     let terminal = turns.terminalFailure();
     try {
-      if (inputs.signal?.aborted) {
-        if (spinnerMessage) spinner.stop('Run cancelled');
+      if (inputs.signal?.aborted)
         return {
           kind: 'abort',
           classification: AgentErrorType.ABORT,
           message: 'Agent run cancelled',
         };
-      }
       await turns.prompt(taskPrompt);
       terminal = turns.terminalFailure();
 
@@ -508,8 +506,8 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
       let nudges = 0;
       while (
         nudges < MAX_TASK_NUDGES &&
-        !inputs.signal?.aborted &&
         !security.state.criticalViolation &&
+        !inputs.signal?.aborted &&
         !terminal &&
         !isSettled(orchestrator)
       ) {
@@ -544,7 +542,6 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
     }
 
     if (inputs.signal?.aborted) {
-      if (spinnerMessage) spinner.stop('Run cancelled');
       return {
         kind: 'abort',
         classification: AgentErrorType.ABORT,
@@ -620,7 +617,6 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
     return { kind: 'success' };
   } catch (err) {
     if (inputs.signal?.aborted) {
-      if (spinnerMessage) spinner.stop('Run cancelled');
       return {
         kind: 'abort',
         classification: AgentErrorType.ABORT,

@@ -5,9 +5,7 @@ import { OutroKind } from '@agent';
 import { isUsingTypeScript } from '@utils/package-json';
 import { WIZARD_TOOL_NAMES } from '@agent';
 import { resolveEventsAuditRunDefinition } from '@programs/resolve-run-definition';
-import { AUDIT_CHECKS_FILE, AUDIT_CHECKS_KEY } from '@programs/audit/types';
-import { seedAuditLedger } from '@programs/audit/seed';
-import { EVENTS_AUDIT_SEED_CHECKS } from './seed.js';
+import { AUDIT_CHECKS_FILE } from '@programs/audit/types';
 
 // SETUP_REPORT_FILE is also re-exported for backward compat with existing
 // imports from `@programs/events-audit`. EVENT_INVENTORY_FILE and
@@ -19,7 +17,6 @@ export { SETUP_REPORT_FILE };
 type EventsAuditRunState = {
   installDir: string;
   typescript: boolean;
-  frameworkContext: Record<string, unknown>;
   additionalFeatureQueue: AdditionalFeature[];
 };
 
@@ -50,12 +47,6 @@ export const eventsAuditConfig: ProgramConfig = {
       installDir: session.installDir,
     });
     session.typescript = typeScriptDetected;
-
-    // Seed the audit ledger so AuditRunScreen has something to render
-    // before the agent emits its first check update. The events-audit
-    // ledger is the 6-phase pipeline, not the doctor's 10 integrity checks.
-    seedAuditLedger(session.installDir, EVENTS_AUDIT_SEED_CHECKS);
-    session.frameworkContext[AUDIT_CHECKS_KEY] = EVENTS_AUDIT_SEED_CHECKS;
 
     const run = resolveEventsAuditRunDefinition({
       typescript: typeScriptDetected,
