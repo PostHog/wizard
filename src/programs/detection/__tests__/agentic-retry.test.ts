@@ -98,7 +98,7 @@ describe('agentic detection retry', () => {
 
   afterEach(() => vi.restoreAllMocks());
 
-  it('runs both attempts through runAgent with the detection binding, read-only tools and one inference provider', async () => {
+  it('runs both attempts through runAgent with the detection binding, read-only tools, a deferred scan report and one inference provider', async () => {
     timeOut();
     emitResult(verdict);
 
@@ -113,6 +113,7 @@ describe('agentic detection retry', () => {
         model: HAIKU_MODEL,
       });
       expect(config.allowedTools).toEqual(['Read', 'Grep', 'Glob']);
+      expect(config.scanReport).toBe('defer');
     }
     const [[, first], [, second]] = calls;
     expect(first.inferenceAuth).toBeDefined();

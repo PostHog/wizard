@@ -97,10 +97,9 @@ it('keeps initialization and execution progress visible during detection', async
   ]);
 });
 
-import { flushScanReport } from '@agent/yara-hooks';
 import type { AgentProgress } from '@agent/types';
 
-// The tests below run the real runAgent pipeline, so no analytics, gateway mint or scan-report write may leave the process.
+// The test below runs the real runAgent pipeline, so no analytics or gateway mint may leave the process.
 vi.mock('@utils/analytics');
 vi.mock('@programs/credentials', () => ({
   createPosthogInferenceAuthProvider: vi.fn(() => ({
@@ -111,10 +110,6 @@ vi.mock('@programs/credentials', () => ({
         refreshAtMs: Infinity,
       }),
   })),
-}));
-vi.mock('@agent/yara-hooks', async (original) => ({
-  ...(await original<typeof import('@agent/yara-hooks')>()),
-  flushScanReport: vi.fn(),
 }));
 
 afterEach(() => vi.restoreAllMocks());
@@ -168,31 +163,6 @@ it('sends each agent step to onEvent and the host only the progress it saw befor
     ),
   ).toEqual(['status', 'log:warn', 'activity', 'activity']);
   expect(ui.pushStatus).not.toHaveBeenCalledWith('Scanning');
-});
-
-it('leaves the scan report to the program run', async () => {
-  vi.mocked(initializeAgent).mockResolvedValue(
-    {} as Awaited<ReturnType<typeof initializeAgent>>,
-  );
-  vi.mocked(executeAgent).mockImplementation(
-    (_config, _prompt, _options, _spinner, _messages, middleware) => {
-      middleware?.onMessage({
-        type: 'result',
-        result: '{"path":".","targetId":"node","framework":"Node.js"}',
-      });
-      return Promise.resolve({ kind: 'success' });
-    },
-  );
-
-  await detectProjectsWithAgent(
-    { ...detectionSession(), yaraReport: true },
-    {
-      programId: 'posthog-integration',
-      targets: [{ id: 'node', name: 'Node.js' }],
-    },
-  );
-
-  expect(flushScanReport).not.toHaveBeenCalled();
 });
 
 it('stops optional detection on a data-only 401 before parsing partial JSON', async () => {
