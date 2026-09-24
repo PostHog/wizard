@@ -288,7 +288,10 @@ export const posthogIntegrationConfig: ProgramConfig = {
   },
 
   run: async (session: WizardSession): Promise<ProgramRun> => {
-    const config = session.frameworkConfig!;
+    const config = session.frameworkConfig;
+    if (!config) {
+      return abortNoFrameworkDetected();
+    }
 
     const typeScriptDetected = isUsingTypeScript({
       installDir: session.installDir,

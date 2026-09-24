@@ -24,7 +24,6 @@ import {
   checkFrameworkVersion,
 } from '@lib/detection/index';
 import { analytics } from '@utils/analytics';
-import { abortNoFrameworkDetected } from '@lib/programs/shared/abort-no-framework';
 import { detectWarehouseSources } from '@lib/warehouse-sources/detect';
 import { AI_SOURCE_KINDS } from '@lib/warehouse-sources/registry';
 import type { DetectedSource } from '@lib/warehouse-sources/types';
@@ -78,9 +77,6 @@ export async function detectPostHogIntegration(
     if (versionResult.supported !== true) {
       ctx.setUnsupportedVersion(versionResult.supported);
     }
-  } else {
-    await abortNoFrameworkDetected();
-    return;
   }
 
   // Feature discovery
