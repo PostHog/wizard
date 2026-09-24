@@ -477,7 +477,7 @@ export const piBackend: AgentHarness = {
           modelRegistry: registry,
           cwd: input.installDir,
           agentDir: getAgentDir(),
-          securityFactory: security.factory as (pi: unknown) => void,
+          securityFactory: security.subagentFactory,
           bashTool: scrubbedBash,
           sdk: { createAgentSession, DefaultResourceLoader, SessionManager },
         }),
@@ -738,9 +738,9 @@ export const piBackend: AgentHarness = {
         });
       }
 
-      // The skill plans events into .posthog-events.json then asks to remove it
-      // on completion; pi's `rm` is fence-blocked, so the agent can't — clean it
-      // up host-side rather than leave a stale (often empty) artifact (#15).
+      // The skill plans events into .posthog-events.json then asks the agent to
+      // remove it on completion; clean it up host-side too, so a skipped step
+      // never leaves a stale (often empty) artifact (#15).
       try {
         const planFile = path.join(input.installDir, '.posthog-events.json');
         if (fs.existsSync(planFile)) await fs.promises.rm(planFile);

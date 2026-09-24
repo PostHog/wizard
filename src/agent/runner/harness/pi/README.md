@@ -33,7 +33,8 @@ The linear path supplies file/exploration tools, shell, Wizard capabilities,
 todos and bounded subagents. The orchestrator task path supplies its task and
 handoff capabilities; it is not an identical tool roster. Inspect the entrypoint
 and [tools](tools.ts) when extending either. [subagent.ts](subagent.ts) applies
-the parent's security factory to bounded read-only exploration agents.
+the parent's subagent security gate, which shares its state and never allows
+`rm`, to bounded exploration agents.
 
 [commandments.ts](../../switchboard/commandments.ts) assembles runtime/tool
 guidance alongside flow/task context. The linear path also supplies MCP server

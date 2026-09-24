@@ -51,6 +51,7 @@
     "jsonc-parser": "^3.3.1",
     "lodash": "^4.17.21",
     "magicast": "^0.2.10",
+    "minimatch": "^10.2.5",
     "nanostores": "^1.1.1",
     "opn": "^5.4.0",
     "pi-mcp-adapter": "~2.15.0",

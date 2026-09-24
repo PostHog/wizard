@@ -5,12 +5,12 @@ import { scan, triageMatches, type ScanMatch } from '@posthog/warlock';
 import {
   evaluateToolCall,
   createSecurityExtension,
-  isScopedFileRemoval,
   observeTransportLeak,
   overwriteShrinkReason,
   MAX_TOOL_CALLS,
   type PiExtensionApiLike,
 } from '../security';
+import { isScopedFileRemoval } from '@agent/bash-fence';
 import { analytics } from '@utils/analytics';
 
 vi.mock('@utils/analytics', () => ({
@@ -46,6 +46,8 @@ const injectionMatch: ScanMatch = {
   },
   matchedStrings: ['ignore previous instructions'],
 };
+
+const PROJECT = path.resolve('/project');
 
 const block = async (toolName: string, input: Record<string, unknown>) =>
   (await evaluateToolCall(toolName, input)).block;
@@ -85,6 +87,21 @@ describe('pi-security: blocked-action corpus (parity with the anthropic fence)',
     expect(await block('write', { path: '.env', content: 'X=1' })).toBe(true);
     expect(await block('edit', { path: '.env', edits: [] })).toBe(true);
     expect(await block('grep', { path: '.env' })).toBe(true);
+  });
+
+  test('checks the path pi opens, after it strips `@` and decodes file://', async () => {
+    expect(await block('read', { path: '@.env' })).toBe(true);
+    expect(await block('write', { path: '@.env', content: 'X=1' })).toBe(true);
+    expect(await block('edit', { path: '@config/.env.local', edits: [] })).toBe(
+      true,
+    );
+    expect(await block('read', { path: 'file:///project/%2Eenv' })).toBe(true);
+    expect(await block('grep', { path: '@.env' })).toBe(true);
+  });
+
+  test('blocks a grep glob that can pull .env files into the search', async () => {
+    expect(await block('grep', { path: '.', glob: '.env*' })).toBe(true);
+    expect(await block('grep', { path: '.', glob: '**/*.ts' })).toBe(false);
   });
 
   test('allows .env example/template files — they document keys, hold no secrets', async () => {
@@ -275,7 +292,9 @@ describe('pi-security: extension state machine (fail-closed + runaway + latch)',
   }
 
   test('blocks a denied call and counts it', async () => {
-    const { factory, state } = createSecurityExtension();
+    const { factory, state } = createSecurityExtension({
+      workingDirectory: PROJECT,
+    });
     const { pi, handlers } = fakePi();
     factory(pi);
     expect(
@@ -296,9 +315,29 @@ describe('pi-security: extension state machine (fail-closed + runaway + latch)',
     ).toEqual({});
   });
 
+  test('the subagent gate refuses rm and shares the parent state', async () => {
+    const { factory, subagentFactory, state } = createSecurityExtension({
+      workingDirectory: PROJECT,
+    });
+    const parent = fakePi();
+    const child = fakePi();
+    factory(parent.pi);
+    subagentFactory(child.pi);
+    const rm = { toolName: 'bash', input: { command: 'rm plan.json' } };
+    expect(await parent.handlers.tool_call(rm)).toEqual({});
+    expect(await child.handlers.tool_call(rm)).toEqual({
+      block: true,
+      reason: expect.any(String),
+    });
+    expect(state.toolCalls).toBe(2);
+    expect(state.blockedCount).toBe(1);
+  });
+
   test('a scanner error on publish_handoff latches and ends the run', async () => {
     // Blocking alone would leave the agent rewording a report forever.
-    const { factory, state } = createSecurityExtension();
+    const { factory, state } = createSecurityExtension({
+      workingDirectory: PROJECT,
+    });
     const { pi, handlers } = fakePi();
     factory(pi);
     mockedScan.mockRejectedValueOnce(new Error('wasm boom'));
@@ -312,7 +351,9 @@ describe('pi-security: extension state machine (fail-closed + runaway + latch)',
   });
 
   test('a scanner error on a write blocks without ending the run', async () => {
-    const { factory, state } = createSecurityExtension();
+    const { factory, state } = createSecurityExtension({
+      workingDirectory: PROJECT,
+    });
     const { pi, handlers } = fakePi();
     factory(pi);
     mockedScan.mockRejectedValueOnce(new Error('wasm boom'));
@@ -326,7 +367,9 @@ describe('pi-security: extension state machine (fail-closed + runaway + latch)',
   });
 
   test('a post-scan violation latches and terminates all further calls', async () => {
-    const { factory, state } = createSecurityExtension();
+    const { factory, state } = createSecurityExtension({
+      workingDirectory: PROJECT,
+    });
     const { pi, handlers } = fakePi();
     factory(pi);
     // A read whose OUTPUT contains a prompt-injection override → post-scan latch.
@@ -357,7 +400,9 @@ describe('pi-security: extension state machine (fail-closed + runaway + latch)',
   });
 
   test('a non-critical, non-block post-scan match warns without terminating', async () => {
-    const { factory, state } = createSecurityExtension();
+    const { factory, state } = createSecurityExtension({
+      workingDirectory: PROJECT,
+    });
     const { pi, handlers } = fakePi();
     factory(pi);
     // piiMatch is severity: 'high', action: 'remediate' — below the terminate
@@ -378,6 +423,7 @@ describe('pi-security: extension state machine (fail-closed + runaway + latch)',
 
   test('with a triage provider, a false_positive verdict unblocks the write', async () => {
     const { factory, state } = createSecurityExtension({
+      workingDirectory: PROJECT,
       triageProvider: () => Promise.resolve('false_positive'),
     });
     const { pi, handlers } = fakePi();
@@ -399,7 +445,9 @@ describe('pi-security: extension state machine (fail-closed + runaway + latch)',
   });
 
   test('a scanner error on tool output latches (fail closed)', async () => {
-    const { factory, state } = createSecurityExtension();
+    const { factory, state } = createSecurityExtension({
+      workingDirectory: PROJECT,
+    });
     const { pi, handlers } = fakePi();
     factory(pi);
     mockedScan.mockRejectedValueOnce(new Error('wasm exploded'));
@@ -411,7 +459,9 @@ describe('pi-security: extension state machine (fail-closed + runaway + latch)',
   });
 
   test('runaway guard blocks past the cap', async () => {
-    const { factory, state } = createSecurityExtension();
+    const { factory, state } = createSecurityExtension({
+      workingDirectory: PROJECT,
+    });
     const { pi, handlers } = fakePi();
     factory(pi);
     for (let i = 0; i < MAX_TOOL_CALLS; i++) {
@@ -500,7 +550,7 @@ describe('pi-security: repeat-block escalation (identical retries after a YARA b
   };
 
   test('an identical YARA-blocked write escalates, then says report-and-move-on', async () => {
-    const { factory } = createSecurityExtension();
+    const { factory } = createSecurityExtension({ workingDirectory: PROJECT });
     const { pi, handlers } = fakePi();
     factory(pi);
 
@@ -525,7 +575,7 @@ describe('pi-security: repeat-block escalation (identical retries after a YARA b
   });
 
   test('different blocked content is a fresh first attempt, not a repeat', async () => {
-    const { factory } = createSecurityExtension();
+    const { factory } = createSecurityExtension({ workingDirectory: PROJECT });
     const { pi, handlers } = fakePi();
     factory(pi);
 
@@ -545,7 +595,7 @@ describe('pi-security: repeat-block escalation (identical retries after a YARA b
   });
 
   test('policy denies (non-YARA) never gain repeat-escalation text', async () => {
-    const { factory } = createSecurityExtension();
+    const { factory } = createSecurityExtension({ workingDirectory: PROJECT });
     const { pi, handlers } = fakePi();
     factory(pi);
 
@@ -558,11 +608,10 @@ describe('pi-security: repeat-block escalation (identical retries after a YARA b
   });
 });
 
-// pi lets a plain `rm` of files INSIDE the project root through the allowlist
-// (matching the anthropic arm, where bash is unrestricted and YARA is the real
-// guard). Two invariants: it can delete project files, and it can never touch
-// anything outside the root or smuggle a second command via a shell operator.
-describe('pi-security: plain rm matches the anthropic arm', () => {
+// The shared fence lets a plain `rm` of files INSIDE the project root through.
+// Two invariants at the pi gate: it can delete project files, and it can never
+// touch anything outside the root or smuggle a second command.
+describe('pi-security: plain rm of project files', () => {
   const ROOT = path.resolve('/project');
   const rmBlocked = async (command: string) =>
     (await evaluateToolCall('bash', { command }, { workingDirectory: ROOT }))
@@ -765,6 +814,14 @@ describe('pi-security: overwrite shrink guard (destructive whole-file rewrite)',
     );
     expect(gut.block).toBe(true);
     expect(gut.reason).toContain('targeted edits');
+
+    // pi strips a leading `@`, so this overwrites existing.ts too.
+    const atGut = await evaluateToolCall(
+      'write',
+      { path: '@existing.ts', content: 'const value = compute();' },
+      { workingDirectory: dir },
+    );
+    expect(atGut.block).toBe(true);
 
     const fresh = await evaluateToolCall(
       'write',
