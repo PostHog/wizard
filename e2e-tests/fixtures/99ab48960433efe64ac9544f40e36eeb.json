@@ -1,0 +1,8 @@
+{
+  "files": [
+    "src/components/PostHogProvider.tsx",
+    "src/lib/posthog.ts",
+    "next.config.mjs",
+    "src/app/layout.tsx"
+  ]
+}
