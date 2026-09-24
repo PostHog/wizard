@@ -175,6 +175,12 @@ vi.mock('@agent/runner/switchboard/harness', () => {
       harness: ctx.cliHarness ?? Harness.pi,
       model: DEFAULT_AGENT_MODEL,
     }),
+    resolveRoleHarness: (binding: RunConfig['binding'], role: string) =>
+      binding.roleBindings?.[role] ?? {
+        harness: binding.harness,
+        model: binding.model,
+        thinkingLevel: binding.thinkingLevel,
+      },
   };
 });
 
@@ -237,7 +243,6 @@ const config = (over: Partial<RunConfig> = {}): RunConfig => ({
   },
   composed: false,
   binding: { sequence: Sequence.linear, harness: Harness.pi, model: 'm' },
-  switchboard: { program: 'test-program', flags: {} },
   skillsBaseUrl: 'https://skills.test',
   wizardFlags: {},
   wizardFlagPayloads: {},
@@ -316,11 +321,6 @@ describe('runAgent standalone', () => {
       const running = runAgent(
         config({
           binding: { harness, sequence, model: DEFAULT_AGENT_MODEL },
-          switchboard: {
-            program: 'test-program',
-            flags: {},
-            cliHarness: harness,
-          },
         }),
         input(),
         { interaction: { ask }, onProgress: (event) => events.push(event) },
@@ -387,11 +387,6 @@ describe('runAgent standalone', () => {
         const result = await runAgent(
           config({
             binding: { harness, sequence, model: DEFAULT_AGENT_MODEL },
-            switchboard: {
-              program: 'test-program',
-              flags: {},
-              cliHarness: harness,
-            },
           }),
           input(),
         );
@@ -427,11 +422,6 @@ describe('runAgent standalone', () => {
           sequence: Sequence.orchestrator,
           model: DEFAULT_AGENT_MODEL,
         },
-        switchboard: {
-          program: 'test-program',
-          flags: {},
-          cliHarness: Harness.anthropic,
-        },
       }),
       input(),
     );
@@ -453,11 +443,6 @@ describe('runAgent standalone', () => {
           harness: Harness.anthropic,
           sequence: Sequence.orchestrator,
           model: DEFAULT_AGENT_MODEL,
-        },
-        switchboard: {
-          program: 'test-program',
-          flags: {},
-          cliHarness: Harness.anthropic,
         },
       }),
       input(),
@@ -481,11 +466,6 @@ describe('runAgent standalone', () => {
           harness: Harness.pi,
           sequence: Sequence.orchestrator,
           model: DEFAULT_AGENT_MODEL,
-        },
-        switchboard: {
-          program: 'test-program',
-          flags: {},
-          cliHarness: Harness.pi,
         },
       }),
       input(),
@@ -531,11 +511,6 @@ describe('runAgent standalone', () => {
           harness: Harness.pi,
           sequence: Sequence.orchestrator,
           model: DEFAULT_AGENT_MODEL,
-        },
-        switchboard: {
-          program: 'test-program',
-          flags: {},
-          cliHarness: Harness.pi,
         },
       }),
       input(),
@@ -921,11 +896,6 @@ describe('runAgent standalone', () => {
             harness: Harness.pi,
             sequence,
             model: DEFAULT_AGENT_MODEL,
-          },
-          switchboard: {
-            program: 'test-program',
-            flags: {},
-            cliHarness: Harness.pi,
           },
         }),
         input(),

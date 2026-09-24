@@ -1,8 +1,5 @@
 {
   "violations": [
-    "src/agent/runner/switchboard/flags/index.ts -> src/programs/types.ts",
-    "src/agent/runner/switchboard/flags/schemes.ts -> src/programs/types.ts",
-    "src/agent/runner/switchboard/index.ts -> src/programs/types.ts",
     "src/commands/ai-observability.ts -> src/programs/ai-observability/index.ts",
     "src/commands/audit.ts -> src/programs/audit/index.ts",
     "src/commands/basic-integration/ci-install.ts -> src/programs/posthog-integration/index.ts",

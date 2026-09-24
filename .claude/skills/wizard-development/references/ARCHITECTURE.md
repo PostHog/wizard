@@ -60,10 +60,11 @@ example. Native command modules still need registration in
 
 ## Switchboard contract
 
-`resolveBinding(ctx, role?)` is the routing seam. Read its exported types rather
-than copying their fields into another document. It receives the program, flag
-snapshot/payloads, composition state, and development overrides, returning the
-binding and stamping a trace of the selected precedence rungs.
+`resolveProgramBinding(ctx)` in [programs](../../../../src/programs/binding.ts)
+is the routing seam. It receives the program, flag snapshot/payloads,
+composition state and development overrides, returning a resolved binding and
+stamping a trace of the selected precedence rungs. The agent receives this
+binding and any pre-resolved task-role routes as data.
 
 - Harness/model: development CLI override, declared flag route, per-program
   binding, default.
@@ -72,7 +73,8 @@ binding and stamping a trace of the selected precedence rungs.
 
 [Harness](../../../../src/agent/runner/switchboard/harness.ts) and
 [sequence](../../../../src/agent/runner/switchboard/sequence.ts) contain the
-exact chains. Published builds omit CLI overrides. `RUN_SURFACE` can disable
+generic precedence and clamp chains over caller-supplied policy. Published
+builds omit CLI overrides. `RUN_SURFACE` can disable
 harness experiments; static bindings and harness capabilities also affect
 resolution. Composed sub-runs remain linear even when a CLI override requests
 orchestration.
@@ -84,11 +86,11 @@ admitted by the minted token and gateway. Local routing cannot bypass that
 external policy; see the
 [model admission checklist](../SKILL.md#execution-policy-and-model-admission).
 
-Flags belong in
-[switchboard/flags](../../../../src/agent/runner/switchboard/flags/).
+Program flags belong in
+[experiments](../../../../src/programs/experiments/).
 Experiments declare their program scope; malformed payloads yield no experiment
 route. Reuse the
-[switchboard tests](../../../../src/agent/runner/__tests__/switchboard.test.ts)
+[switchboard tests](../../../../src/programs/__tests__/switchboard.test.ts)
 and experiment tests to check full bindings and isolation of unrelated programs.
 Do not add a second flag-reading path inside a harness or sequence.
 

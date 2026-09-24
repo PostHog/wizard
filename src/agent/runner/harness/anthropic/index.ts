@@ -136,6 +136,7 @@ export const anthropicBackend: AgentHarness = {
         detectPackageManager: detectNodePackageManagers,
         skillsBaseUrl: boot.skillsBaseUrl,
         programId: boot.programId,
+        programCommandments: config.programCommandments,
         wizardFlags: boot.wizardFlags,
         wizardMetadata: boot.wizardMetadata,
         integrationLabel: config.programId,

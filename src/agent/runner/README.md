@@ -23,7 +23,7 @@ retained for very simple tasks and legacy support. The Anthropic Agent SDK is a
 supported legacy fallback, deprecated as the default, retained for major Pi
 vulnerabilities or gaps in support for new Anthropic models.
 
-Existing `DEFAULT_BINDING` remains Anthropic + linear; explicit program bindings
+`DEFAULT_AGENT_BINDING`, the standalone default, is Pi + linear; explicit program bindings
 and flags determine actual behavior. Both harnesses implement `run` and
 `runTask`. Composed sub-runs are clamped to linear, and linear-only
 post-run/outro hooks do not automatically transfer to an orchestrated flow.

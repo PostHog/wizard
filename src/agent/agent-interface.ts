@@ -211,6 +211,8 @@ export type AgentConfig = {
    * another program's budget, so neither should depend on an optional string bag.
    */
   programId: string;
+  /** Program-owned guidance supplied as data, never looked up here. */
+  programCommandments?: readonly string[];
   /** Program identifier — selects the model for that program. */
   integrationLabel?: string;
   /**
@@ -355,8 +357,8 @@ type AgentRunConfig = {
    * bearer.
    */
   refreshGatewayAuth?: () => Promise<GatewayAuth>;
-  /** Program id, for the program-axis commandments. */
-  program?: string;
+  /** Program-owned guidance supplied as data. */
+  programCommandments?: readonly string[];
   /** Resolved sequence, for the sequence-axis commandments. */
   sequence: Sequence;
   /** Where the run reports. A no-op when the caller passed none. */
@@ -646,7 +648,7 @@ export async function initializeAgent(
       triageProvider,
       gatewayAuth: auth,
       refreshGatewayAuth: currentGatewayAuth,
-      program: config.integrationLabel,
+      programCommandments: config.programCommandments,
       // A queue context is present only on a task run; that is the sequence.
       sequence: config.orchestrator ? Sequence.orchestrator : Sequence.linear,
       emit,
@@ -1146,7 +1148,7 @@ export async function runAgent(
             // we keep default Claude Code behaviors. An orchestrator context is
             // present only on a task run — that is what picks the sequence.
             append: assembleCommandments({
-              program: agentConfig.program,
+              programCommandments: agentConfig.programCommandments,
               sequence: agentConfig.sequence,
               harness: Harness.anthropic,
             }),

@@ -8,10 +8,8 @@ import { logToFile } from '@utils/debug';
 import { anthropicBackend } from '../harness/anthropic';
 import { piBackend } from '../harness/pi';
 import type { AgentHarness } from '../harness/types';
-import { resolveFlagRoute } from './flags';
 import {
   DEFAULT_BINDING,
-  PROGRAM_BINDINGS,
   runChain,
   type HarnessPick,
   type Middleware,
@@ -32,12 +30,11 @@ export function getHarness(name: Harness): AgentHarness {
 }
 
 /**
- * PostHog-flag routing to pi (see `./flags`). No valid route — flag off, no
- * config, or an invalid payload — keeps the non-flagged binding default.
+ * A validated caller-supplied route overlays the base binding.
  */
 const flagRunnerOverride: Middleware<HarnessPick> = (ctx, next) => {
   const pick = next();
-  const route = resolveFlagRoute(ctx.program, ctx.flags, ctx.flagPayloads);
+  const route = ctx.flagRoute;
   if (!route) return pick;
   if (ctx.trace) {
     ctx.trace.harness = 'flag';
@@ -86,7 +83,7 @@ export function resolveHarness(
   const pick = runChain(HARNESS_MIDDLEWARE, ctx, () => {
     if (ctx.trace)
       Object.assign(ctx.trace, { harness: 'binding', model: 'binding' });
-    const binding = PROGRAM_BINDINGS[ctx.program] ?? DEFAULT_BINDING;
+    const binding = ctx.baseBinding ?? DEFAULT_BINDING;
     return {
       harness: binding.harness,
       model: binding.model,
@@ -95,11 +92,32 @@ export function resolveHarness(
     };
   });
   logToFile(
-    `[switchboard] resolved: program=${ctx.program} harness=${pick.harness}` +
+    `[switchboard] resolved: program=${ctx.program ?? '?'} harness=${
+      pick.harness
+    }` +
       `${ctx.trace?.harness ? ` (${ctx.trace.harness})` : ''} model=${
         pick.model
       }` +
       `${ctx.trace?.model ? ` (${ctx.trace.model})` : ''}`,
   );
   return pick;
+}
+
+/** The agent resolves a task role only from data the caller already supplied. */
+export function resolveRoleHarness(
+  binding: {
+    harness: Harness;
+    model: string;
+    thinkingLevel?: HarnessPick['thinkingLevel'];
+    roleBindings?: Record<string, HarnessPick>;
+  },
+  role: string,
+): HarnessPick {
+  return (
+    binding.roleBindings?.[role] ?? {
+      harness: binding.harness,
+      model: binding.model,
+      thinkingLevel: binding.thinkingLevel,
+    }
+  );
 }

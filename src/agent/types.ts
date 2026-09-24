@@ -12,8 +12,11 @@ export type {
   AgentRunDefinition,
   PromptContext,
   RunConfig,
+  ResolvedBinding,
+  RunFlags,
   RunInput,
   RunResult,
+  SeedTaskEntry,
 } from './runner';
 export type {
   AgentInteraction,
@@ -28,8 +31,9 @@ export type {
   TokenUsageDelta,
 } from './progress';
 
-/** Leaves in B2 with the bindings table; B1 deferred PROGRAM_BINDINGS. */
+/** Input types of the exported resolveBinding and resolveHarness. */
 export type { ProgramBinding, SwitchboardCtx } from './runner';
+export type { EffortLevel } from './runner/switchboard/models';
 
 /** Leaves in B2 with downloadSkill. */
 export type { InstallSkillResult } from './tools';

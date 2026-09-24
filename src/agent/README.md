@@ -20,10 +20,11 @@ runAgent(config: RunConfig, input: RunInput, options?: {
 }): Promise<RunResult>
 ```
 
-- `RunConfig`: the program id, its `AgentRunDefinition` (prompt, skill, tools,
-  copy), the resolved `binding` (sequence, harness, model), the switchboard
-  inputs, the skills origin, flag snapshot, trace tags, tool allow and deny
-  lists, seed tasks and bound completion `hooks`.
+- `RunConfig`: the opaque program id, its `AgentRunDefinition` (prompt, skill,
+  tools, copy), the resolved `binding` (sequence, harness, model and task-role
+  routes), supplied program commandments and stage policy, the skills origin,
+  flag snapshot, trace tags, tool allow and deny lists, seed tasks and bound
+  completion `hooks`.
 - `RunInput`: install directory, resolved credentials, project and user
   payloads, skill id, detected integration, `flags` (`ci`, `signup`, `debug`,
   `e2eAsk`, `localMcp`, `captureAio`, `benchmark`, `yaraReport`) and the host
@@ -54,11 +55,12 @@ runAgent(config: RunConfig, input: RunInput, options?: {
   `setup wizard finished` event. The host sends it from the outcome: `Success`
   is `success`, `Aborted` is `cancelled`, `Failed` and `Crashed` are `error`.
 
-Other runtime exports: `resolveBinding`, `shouldDisableAsk`, `initializeAgent`,
-`executeAgent`, `buildRunTags`, `AgentSignals`,
-`configureGatewayFromCIEnvironment`, `downloadSkill`, `WIZARD_TOOL_NAMES`,
-`LONGER_ASK_TIMEOUT_MS`, `flushScanReport`, and `runMcpPromptViaSdk`, which
-loads the streaming module on first call.
+Other runtime exports: `DEFAULT_AGENT_BINDING` for standalone callers,
+`resolveHarness` and `resolveBinding`, which programs resolve a binding with,
+`shouldDisableAsk`, `initializeAgent`, `executeAgent`, `buildRunTags`,
+`AgentSignals`, `configureGatewayFromCIEnvironment`, `downloadSkill`,
+`WIZARD_TOOL_NAMES`, `LONGER_ASK_TIMEOUT_MS`, `flushScanReport`, and
+`runMcpPromptViaSdk`, which loads the streaming module on first call.
 
 Minimal invocation:
 
