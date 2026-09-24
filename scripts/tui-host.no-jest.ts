@@ -58,10 +58,17 @@ import {
   readReportFile,
 } from '@e2e-harness/e2e-result';
 import { tuiSnapshotSignature } from '@e2e-harness/tui-snapshot-signature';
-import { readPersonalApiKey } from '@e2e-harness/surface-e2e';
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const mark = (m: string) => logToFile(`[tui-host] ${m}`);
+
+/** A blank variable counts as unset, so the key file is the fallback. */
+function readPersonalApiKey(env: NodeJS.ProcessEnv): string {
+  const inline = env.POSTHOG_PERSONAL_API_KEY?.trim();
+  if (inline) return inline;
+  const file = env.POSTHOG_KEY_FILE?.trim();
+  return file ? fs.readFileSync(file, 'utf8').trim() : '';
+}
 
 /** Tri-state: absent ⇒ `undefined`, so `resolveLocalDev` can apply the umbrella. */
 function envFlag(name: string): boolean | undefined {

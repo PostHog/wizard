@@ -244,14 +244,11 @@ export async function runMetrics(
 }
 ```
 
-A runnable reference host is
-[`scripts/e2e-programs.no-jest.ts`](../../scripts/e2e-programs.no-jest.ts), run
-by `pnpm test:e2e:programs`. It detects the framework, supplies resolved
-credentials and integration effects, and runs `posthog-integration` against the
-app in `APP_DIR`. Its environment is described in
-[`e2e-harness/surface-e2e.ts`](../../e2e-harness/surface-e2e.ts): `APP_DIR`,
-`PROJECT_ID`, a PostHog key from `POSTHOG_PERSONAL_API_KEY` or
-`POSTHOG_KEY_FILE`, and a gateway token from `WIZARD_CI_GATEWAY_TOKEN_FILE`.
+A runnable reference host is the
+[wizard-workbench](https://github.com/PostHog/wizard-workbench) harness,
+`pnpm wizard-program` with `WIZARD_REPO` set to a wizard checkout. It detects
+the framework, supplies resolved credentials and integration effects, and runs
+one program against the app in `APP_DIR`.
 
 ## Intent
 
@@ -265,8 +262,8 @@ Today's callers:
   and the `--ci` runner. It runs `preflight`, supplies the session's login as
   the credentials provider, answers the connector from TUI gates, and maps
   progress back onto `getUI()`.
-- **The reference script.** `scripts/e2e-programs.no-jest.ts` passes resolved
-  credentials and `flags.ci`, with no connector and no answerer.
+- **The workbench harness.** `pnpm wizard-program` in wizard-workbench passes
+  resolved credentials and `flags.ci`, with no connector and no answerer.
 
 A missing capability never hangs the run and never invents consent. A program
 that needs approval fails without `awaitAiApproval`. A run with no `interaction`
