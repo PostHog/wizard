@@ -22,6 +22,7 @@ import { getDetectedWarehouseSources } from '@programs/warehouse-source/detect';
 import { POSTHOG_INTEGRATION_PROGRAM } from './steps.js';
 import { getContentBlocks } from '../../ui/tui/decks/posthog-integration/index.js';
 import {
+  excludedIntegrationTaskTypes,
   resolvePosthogIntegrationRun,
   resolvePosthogIntegrationSeedTasks,
 } from './run.js';
@@ -60,6 +61,8 @@ export const posthogIntegrationConfig: ProgramConfig = {
   disallowedTools: [WIZARD_TOOL_NAMES.wizardAsk],
 
   seedTasks: warehouseSeedTasks,
+
+  excludedTaskTypes: excludedIntegrationTaskTypes,
 
   // CI-mode prerequisite work: the headless equivalent of the detect step's
   // onReady hook. Auto-detect the framework, then gather context.
@@ -113,6 +116,7 @@ export const posthogIntegrationConfig: ProgramConfig = {
           signup: session.signup,
           e2eAsk: session.e2eAsk,
         },
+        wizardFlags: await analytics.getAllFlagsForWizard(),
         mayReportScanResults: mayReportScanResults(session),
         includeSeedTasks: false,
         dashboardDeepLink: session.frameworkContext[DASHBOARD_DEEP_LINK_KEY],

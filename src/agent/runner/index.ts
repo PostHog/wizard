@@ -71,6 +71,8 @@ export type {
   ProgressEmitter,
 } from '@agent/progress';
 export type { ProgramBinding, SwitchboardCtx } from './switchboard';
+export { TASK_OUTCOMES_KEY } from './sequence/orchestrator/queue';
+export type { TaskOutcome } from './sequence/orchestrator/queue';
 
 /**
  * Run a program's agent pipeline.

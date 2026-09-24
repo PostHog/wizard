@@ -23,7 +23,7 @@ import type { WizardSession } from '@lib/wizard-session';
 import { analytics } from '@utils/analytics';
 import { getUI, type WizardUI } from '@ui';
 import { createUiReducer, uiInteraction } from '@ui/agent-progress';
-import { RunOutcome } from '@agent';
+import { RunOutcome, TASK_OUTCOMES_KEY } from '@agent';
 import type { InferenceAuthProvider } from '@agent/types';
 import {
   runProgram,
@@ -170,6 +170,9 @@ async function runLegacyStep(
           ? (creds, completed) =>
               run.buildOutroNextSteps!(session, creds, completed)
           : undefined,
+        recordTaskOutcomes: (outcomes) => {
+          session.frameworkContext[TASK_OUTCOMES_KEY] = outcomes;
+        },
       },
       allowedTools: programConfig.allowedTools,
       disallowedTools: programConfig.disallowedTools,

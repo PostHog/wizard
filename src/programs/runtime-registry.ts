@@ -11,6 +11,7 @@ import { MIGRATION_RUN } from './migration/run.js';
 import { REPLAY_VISION_OPTIONS } from './replay-vision/run.js';
 import { REVENUE_ANALYTICS_RUN } from './revenue-analytics/run.js';
 import { WEB_ANALYTICS_DOCTOR_OPTIONS } from './web-analytics-doctor/run.js';
+import { excludedIntegrationTaskTypes } from './posthog-integration/run.js';
 import {
   resolveAgentSkillRunDefinition,
   resolveAuditRunDefinition,
@@ -27,6 +28,8 @@ type RuntimeProgramConfigBase = {
   requiresAi?: boolean;
   allowedTools?: readonly string[];
   disallowedTools?: readonly string[];
+  /** Task types the orchestrator drops for this run's wizard flags. */
+  excludedTaskTypes?: (flags: Record<string, string>) => readonly string[];
   auditLedgerFile?: string;
   auditSeedChecks?: readonly AuditCheck[];
   eventPlanFile?: string;
@@ -67,6 +70,7 @@ export const RUNTIME_PROGRAM_REGISTRY = [
     strategy: 'integration',
     agentFlow: 'integration-v2',
     disallowedTools: [WIZARD_ASK],
+    excludedTaskTypes: excludedIntegrationTaskTypes,
     eventPlanFile: EVENT_PLAN_FILE,
   },
   {

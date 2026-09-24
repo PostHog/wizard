@@ -17,6 +17,7 @@ import {
 import type { DetectedSource } from '@programs/warehouse-sources/types';
 import { OutroKind } from '@agent';
 import {
+  WIZARD_DEFAULT_AIO_LOGS_FLAG_KEY,
   WIZARD_INTERACTION_EVENT_NAME,
   type Integration,
 } from '@shared/constants';
@@ -24,6 +25,14 @@ import { withUtm } from '@utils/links';
 import { buildCodingAgentPrompt } from './handoff.js';
 
 export const SETUP_REPORT_FILE = 'posthog-setup-report.md';
+
+/** Kill switch over the shipped default: only an explicit 'false' drops AI Observability and Logs. */
+export const excludedIntegrationTaskTypes = (
+  flags: Record<string, string>,
+): readonly string[] =>
+  flags[WIZARD_DEFAULT_AIO_LOGS_FLAG_KEY] === 'false'
+    ? ['ai-observability', 'logs']
+    : [];
 const WAREHOUSE_SOURCES_DOCS_URL =
   'https://posthog.com/docs/data-warehouse/sources';
 const WAREHOUSE_SEED_TASK_TYPE = 'warehouse';
@@ -41,6 +50,8 @@ export interface PosthogIntegrationRunInput {
   additionalFeatureQueue?: AgentRunDefinition['additionalFeatureQueue'];
   warehouseSources: readonly DetectedSource[];
   flags: Pick<RunFlags, 'ci' | 'signup' | 'e2eAsk'>;
+  /** The run's wizard flags; an explicit 'false' on the AIO/Logs key drops both products. */
+  wizardFlags: Record<string, string>;
   mayReportScanResults: boolean;
   /** Legacy TUI calls its separate seedTasks callback after resolving the run. */
   includeSeedTasks?: boolean;
@@ -229,6 +240,14 @@ export async function resolvePosthogIntegrationRun(
     effects.setTag(key, value),
   );
 
+  // The kill switch the orchestrator applies via excludedTaskTypes, gated here
+  // for linear and composed runs, which assemble their own prompt. Only an
+  // explicit 'false' excludes, so a failed flag fetch keeps the default.
+  const skillCategoryInstruction =
+    input.wizardFlags[WIZARD_DEFAULT_AIO_LOGS_FLAG_KEY] !== 'false'
+      ? `Choose a skill from the \`integration\` category that matches this project's framework. Start with this framework skill; load the AI Observability and Logs skills when its workflow calls for them, and follow each installed skill's own steps to completion — framework first, then AI Observability, then Logs — before verification and the setup report. Both are included by default where applicable; the skills define applicability and how to report skipped work. These three categories — \`integration\`, \`ai-observability\`, \`logs\` — are the only ones this run uses. Do NOT load or install skills from any other category (llm-analytics, error-tracking, feature-flags, audit, etc.) — those are handled separately. In particular, \`ai-observability\` is the category for AI Observability; do not substitute \`llm-analytics\`.`
+      : `Choose a skill from the \`integration\` category that matches this project's framework. The \`integration\` category is the ONLY one this run uses. Do NOT load or install skills from any other category (ai-observability, logs, llm-analytics, error-tracking, feature-flags, audit, etc.) — those are handled separately. If the installed skill's workflow contains an "AI Observability and Logs" section, skip that entire section: this run excludes both products.`;
+
   let dashboardDeepLink = input.dashboardDeepLink;
   const run: AgentRunDefinition = {
     integrationLabel: config.metadata.integration,
@@ -268,12 +287,12 @@ Project context:
 
 Instructions (follow these steps IN ORDER - do not skip or reorder):
 
-STEP 1: Call load_skill_menu (from the wizard-tools MCP server) to see available skills.
+STEP 1: Call load_skill_menu (from the wizard-tools MCP server) with category: "integration" to see available framework skills.
    If the tool fails, emit: ${
      AgentSignals.ERROR_MCP_MISSING
    } Could not load skill menu and halt.
 
-   Choose a skill from the \`integration\` category that matches this project's framework. Do NOT pick skills from other categories (llm-analytics, error-tracking, feature-flags, omnibus, etc.) — those are handled separately.
+   ${skillCategoryInstruction}
    If no suitable integration skill is found, emit: ${
      AgentSignals.ERROR_RESOURCE_MISSING
    } Could not find a suitable skill for this project.

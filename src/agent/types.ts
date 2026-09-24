@@ -42,5 +42,8 @@ export type { EffortLevel } from './runner/switchboard/models';
 /** Leaves in C3 with downloadSkill. */
 export type { InstallSkillResult } from './tools';
 
+/** Leaves in B2 with the legacy adapter that records it. */
+export type { TaskOutcome } from './runner';
+
 /** Leaves in C2 with runMcpPromptViaSdk. */
 export type { AgentChunk } from './mcp-prompt-streaming';

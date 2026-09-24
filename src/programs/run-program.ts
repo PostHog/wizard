@@ -528,6 +528,23 @@ async function runProgramWithStore(
   try {
     fileWatchers.seedAuditLedger();
 
+    const flags = { ...DEFAULT_FLAGS, ...input.flags };
+    let flagSnapshot: WizardFlagSnapshot = {
+      flags: { ...input.wizardFlags },
+      payloads: { ...input.wizardFlagPayloads },
+    };
+    if (!input.wizardFlags && options.featureFlags) {
+      try {
+        flagSnapshot = await options.featureFlags();
+      } catch (error) {
+        if (signal.aborted) return cancelled();
+        return fail(error instanceof Error ? error.message : String(error));
+      }
+      if (signal.aborted) return cancelled();
+    }
+    const wizardFlags = { ...flagSnapshot.flags };
+    const wizardFlagPayloads = { ...flagSnapshot.payloads };
+
     let run: AgentRunDefinition | undefined | null = input.run;
     let hooks: RunHooks | undefined = input.hooks;
     let seedTasks = input.seedTasks;
@@ -547,7 +564,8 @@ async function runProgramWithStore(
             typescript: input.typescript ?? false,
             additionalFeatureQueue: input.additionalFeatureQueue,
             warehouseSources: input.warehouseSources ?? [],
-            flags: { ...DEFAULT_FLAGS, ...input.flags },
+            flags,
+            wizardFlags,
             mayReportScanResults: input.mayReportScanResults ?? false,
           },
           {
@@ -586,24 +604,6 @@ async function runProgramWithStore(
       );
     }
     if (signal.aborted) return cancelled();
-    artifacts.reportFile = path.resolve(input.installDir, run.reportFile);
-
-    const flags = { ...DEFAULT_FLAGS, ...input.flags };
-    let flagSnapshot: WizardFlagSnapshot = {
-      flags: { ...input.wizardFlags },
-      payloads: { ...input.wizardFlagPayloads },
-    };
-    if (!input.wizardFlags && options.featureFlags) {
-      try {
-        flagSnapshot = await options.featureFlags();
-      } catch (error) {
-        if (signal.aborted) return cancelled();
-        return fail(error instanceof Error ? error.message : String(error));
-      }
-      if (signal.aborted) return cancelled();
-    }
-    const wizardFlags = { ...flagSnapshot.flags };
-    const wizardFlagPayloads = { ...flagSnapshot.payloads };
 
     // The agent can't swap tokens mid-run, so freshness is measured after every
     // park above, right before the agent mints.
@@ -652,6 +652,7 @@ async function runProgramWithStore(
       SEQUENCE: binding.sequence,
       HARNESS: binding.harness,
     };
+    artifacts.reportFile = path.resolve(input.installDir, run.reportFile);
     const adapter = store.beginRun({ runId, stepId }, options.onProgress);
 
     const result = await runAgent(
@@ -674,6 +675,7 @@ async function runProgramWithStore(
         allowedTools: input.allowedTools ?? program.allowedTools,
         disallowedTools: input.disallowedTools ?? program.disallowedTools,
         agentFlow: input.agentFlow ?? program.agentFlow,
+        excludedTaskTypes: program.excludedTaskTypes,
         seedTasks,
         hooks,
       },

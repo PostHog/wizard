@@ -892,6 +892,7 @@ describe('runProgram', () => {
       outcome: RunOutcome.Failed,
       failure: { message: 'malformed CI flag override' },
     });
+    expect(result.artifacts.reportFile).toBeUndefined();
     expect(runAgent).not.toHaveBeenCalled();
   });
 

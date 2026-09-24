@@ -99,7 +99,7 @@ export function createPiOrchestratorTools(
     description:
       'Add a task to the orchestrator queue. Use it to seed work and to enqueue follow-up work you discover. Keep tasks small and discrete.',
     promptSnippet:
-      'enqueue_task(type, label, dependsOn, reason) — add a task to the queue; returns its id',
+      'enqueue_task({type, label, dependsOn, reason}) — add a task to the queue; the task type goes in the "type" field, and it returns the task id',
     parameters: Type.Object({
       type: Type.String({
         description: `The task type. One of: ${ctx.validTypes.join(', ')}.`,

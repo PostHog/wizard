@@ -6,6 +6,7 @@ describe('@agent public entry', () => {
       'DEFAULT_AGENT_BINDING',
       'OutroKind',
       'RunOutcome',
+      'TASK_OUTCOMES_KEY',
       'WIZARD_TOOL_NAMES',
       'downloadSkill',
       'harnessRunsTasks',
