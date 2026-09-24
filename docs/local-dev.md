@@ -20,6 +20,17 @@ file outside the repo, restrict its permissions (`chmod 600`), and supply a
 valid token for the gateway being used. Missing, expired, or rejected tokens
 fail the run.
 
+To get a token on your machine, mint one for the program you will run. This
+opens the browser once for the OAuth login, then writes the token (`chmod 600`)
+and a `<file>.json` sidecar holding the program, project, gateway URL and
+refresh time:
+
+```bash
+PROGRAM=posthog-integration PROJECT_ID=12345 \
+  TOKEN_FILE="$HOME/.config/posthog/wizard-gateway-token" \
+  pnpm mint-gateway-token
+```
+
 With your personal API key already exported and gateway token saved locally:
 
 ```bash

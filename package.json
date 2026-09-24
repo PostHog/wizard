@@ -148,7 +148,8 @@
     "prepare": "husky",
     "screens:check": "tsx scripts/check-screens.tsx",
     "wizard-ci-explore": "tsx scripts/wizard-ci-explore.no-jest.ts",
-    "wizard-ci-replay": "tsx scripts/tui-replay.no-jest.ts"
+    "wizard-ci-replay": "tsx scripts/tui-replay.no-jest.ts",
+    "mint-gateway-token": "tsx scripts/mint-gateway-token.no-jest.ts"
   },
   "lint-staged": {
     ".claude/settings.json": "sh -c 'printf \"\\n\\033[31mDo not commit .claude/settings.json — use .claude/settings.local.json (gitignored).\\nUnstage with: git restore --staged .claude/settings.json\\033[0m\\n\\n\" >&2 && exit 1'",
