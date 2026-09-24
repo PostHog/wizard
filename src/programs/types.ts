@@ -12,17 +12,23 @@ export type { ProgramCiHost, ProgramRunHost } from './host-capabilities';
 export type {
   ProgramInput,
   ProgramOptions,
+  ProgramOverrides,
   ProgramRunOutcome,
   ProgramWorkflowConnector,
+  ProgramWorkflowDecision,
+  ProgramWorkflowRequest,
+  WizardFlagSnapshot,
 } from './run-program';
 export type {
+  ProgramDataProgress,
+  ProgramDiagnostic,
   ProgramInvocationData,
   ProgramProgress,
-  ProgramStoreProjection,
+  ProgramRunProgress,
   SettledProgramRun,
 } from './program-store';
+export type { ProgramSwitchboardCtx } from './binding';
 export type {
-  ProgramBinding,
-  ProgramSwitchboardCtx,
-  ProgramSwitchboardTrace,
-} from './binding';
+  ProgramPreflightDecision,
+  ProgramPreflightHost,
+} from './preflight';

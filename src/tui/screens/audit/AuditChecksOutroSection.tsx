@@ -1,6 +1,7 @@
 import { Box, Text } from 'ink';
 import { AUDIT_SEVERITY_STYLE, type AuditCheck } from '@programs/audit/types';
 import { relativeToInstallDir } from '@utils/paths';
+import { countNoun } from '@utils/count-noun';
 
 interface AuditChecksOutroSectionProps {
   checks: AuditCheck[];
@@ -29,8 +30,12 @@ export const AuditChecksOutroSection = ({
         Items audited:
       </Text>
       <Text dimColor>
-        {checks.length} checks · {errors.length} errors · {warnings.length}{' '}
-        warnings · {suggestions.length} suggestions
+        {[
+          countNoun(checks.length, 'check'),
+          countNoun(errors.length, 'error'),
+          countNoun(warnings.length, 'warning'),
+          countNoun(suggestions.length, 'suggestion'),
+        ].join(' · ')}
       </Text>
       {problematic.length === 0 ? (
         <Text color="green">{'•'} No issues found.</Text>

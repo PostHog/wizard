@@ -13,12 +13,26 @@
  * say the run already connected the sources.
  */
 
-import { posthogIntegrationConfig } from '@programs/posthog-integration/index';
 import { POSTHOG_INTEGRATION_PROGRAM } from '@programs/posthog-integration/steps';
-import { DETECTED_WAREHOUSE_SOURCES_KEY } from '@programs/warehouse-source/detect';
-import { buildSession, type WizardSession } from '@lib/wizard-session';
+import type { WizardSession } from '@lib/wizard-session';
 import type { DetectedSource } from '@programs/warehouse-sources/types';
-import { testProgramRunHost } from '../../../test/program-host';
+import { analytics } from '@utils/analytics';
+
+import {
+  CREDENTIALS,
+  promptFor,
+  resolveRun,
+  sessionWith,
+} from './helpers/integration-prompt.no-jest';
+
+// The run builder reads the run's wizard flags; pin them empty so these
+// tests stay hermetic (empty map = flags unreadable = shipped default).
+beforeEach(() => {
+  vi.spyOn(analytics, 'getAllFlagsForWizard').mockResolvedValue({});
+});
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 const POSTGRES: DetectedSource = {
   kind: 'postgres',
@@ -33,46 +47,6 @@ const STRIPE: DetectedSource = {
   mode: 'in-cli',
   matchedSignal: 'stripe in package.json',
 };
-
-const CREDENTIALS = {
-  accessToken: 'tok',
-  projectApiKey: 'phc_test',
-  projectId: '1',
-  host: {
-    apiHost: 'https://us.i.posthog.com',
-    appHost: 'https://us.posthog.com',
-  },
-};
-
-const FRAMEWORK_CONFIG = {
-  metadata: { name: 'Next.js', docsUrl: 'https://posthog.com/docs' },
-  environment: { getEnvVars: () => ({ POSTHOG_KEY: 'phc_test' }) },
-  ui: { getOutroChanges: () => ['Added PostHog provider'] },
-  detection: {
-    usesPackageJson: false,
-    getVersion: () => '15.0.0',
-    packageName: 'next',
-    packageDisplayName: 'Next.js',
-  },
-  analytics: { getTags: () => ({}) },
-  prompts: { projectTypeDetection: 'app router' },
-};
-
-function sessionWith(sources: DetectedSource[]): WizardSession {
-  const s = buildSession({ installDir: '/tmp/app' });
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  s.frameworkConfig = FRAMEWORK_CONFIG as any;
-  if (sources.length > 0) {
-    s.frameworkContext[DETECTED_WAREHOUSE_SOURCES_KEY] = sources;
-  }
-  return s;
-}
-
-async function resolveRun(session: WizardSession) {
-  const { run } = posthogIntegrationConfig;
-  if (typeof run !== 'function') throw new Error('expected a run function');
-  return run(session, testProgramRunHost(session));
-}
 
 describe('outro suggestion', () => {
   it('gives every detected source its own pre-filled link', async () => {
@@ -133,17 +107,6 @@ describe('outro suggestion', () => {
     }
   });
 });
-
-const promptFor = async (sources: DetectedSource[]) => {
-  const s = sessionWith(sources);
-  const runDef = await resolveRun(s);
-  return runDef.customPrompt!({
-    projectId: 1,
-    projectApiKey: 'phc_test',
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    host: CREDENTIALS.host as any,
-  });
-};
 
 describe('report instruction', () => {
   it('asks the agent to note the sources in the report checklist', async () => {
@@ -256,6 +219,23 @@ describe('orchestrated outro suggestion', () => {
     const s = sessionWith([POSTGRES]);
 
     expect(await nextSteps(s, ['warehouse'])).toBeUndefined();
+  });
+
+  it('still carries the sources the seeded step was never given', async () => {
+    // The step is capped, so "it completed" means it connected the ones it was
+    // handed — the tail is as unconnected as if the step had never run.
+    const tail: DetectedSource = {
+      kind: 'resend',
+      label: 'Resend',
+      mode: 'in-cli',
+      matchedSignal: 'resend in package.json',
+    };
+    const s = sessionWith([POSTGRES, STRIPE, POSTGRES, tail]);
+
+    const text = (await nextSteps(s, ['warehouse']))!.items.join('\n');
+
+    expect(text).toContain('kind=resend');
+    expect(text).not.toContain('kind=stripe');
   });
 
   it('offers nothing when nothing was detected', async () => {

@@ -170,15 +170,7 @@ const MUTATIONS: MutationCase[] = [
   },
   {
     name: 'setInferenceAuth',
-    invoke: (s) =>
-      s.setInferenceAuth({
-        resolve: () =>
-          Promise.resolve({
-            gatewayUrl: 'https://ai-gateway.us.posthog.com',
-            token: 'phe_test',
-            refreshAtMs: Infinity,
-          }),
-      }),
+    invoke: (s) => s.setInferenceAuth({ resolve: vi.fn() }),
     emits: 1,
   },
   {

@@ -8,6 +8,7 @@
 
 import path from 'path';
 import fs from 'fs';
+import { unzipSync } from 'fflate';
 import { logToFile } from '@utils/debug';
 import { analytics } from '@utils/analytics';
 import { readProjectFile, walkProjectFiles } from '@utils/bounded-fs';
@@ -20,10 +21,6 @@ import {
   type EnvKeyLocations,
 } from '@utils/env-scan';
 import { scanInstalledSkill } from '@agent/yara-hooks';
-import {
-  forgetCleanProjectSkill,
-  scanAndCacheInstalledProjectSkill,
-} from '@agent/skill-preflight';
 import type { LLMProvider } from '@posthog/warlock';
 import { writeJsonAtomic, makeMutex } from '@utils/atomic-ledger';
 import {
@@ -34,15 +31,74 @@ import {
 } from '@shared/audit-ledger';
 import { CANCELLED_SENTINEL } from '../wizard-ask-bridge';
 import type { SecretVault } from '@shared/secret-vault';
-import { fetchWithRetry } from '@shared/fetch-retry';
+import { fetchWithRetry, type RetryOpts } from '@shared/fetch-retry';
 import { fetchSkillMenu, type SkillEntry } from '@shared/skill-menu';
-import {
-  downloadSkillPayload,
-  extractSkillPayload,
-  type SkillInstallReceipt,
-} from '@shared/skill-download';
 
-export type { SkillBundle } from '@shared/skill-download';
+/** A bundle's files, keyed by variant short id then path. */
+export type SkillBundle = {
+  id: string;
+  variants: Record<string, Record<string, string>>;
+};
+
+/** Extract a zip buffer, refusing entries that escape destDir (zip-slip). */
+function extractZipArchive(zip: Uint8Array, destDir: string): number {
+  const root = path.resolve(destDir);
+  let written = 0;
+  for (const [entryPath, data] of Object.entries(unzipSync(zip))) {
+    const target = path.resolve(root, entryPath);
+    if (target !== root && !target.startsWith(root + path.sep)) {
+      throw new Error(`zip entry escapes destination: ${entryPath}`);
+    }
+    if (entryPath.endsWith('/')) {
+      fs.mkdirSync(target, { recursive: true });
+      continue;
+    }
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, data);
+    written++;
+  }
+  return written;
+}
+
+/** Unpack the one variant this entry names out of a bundle; the rest is noise and never hits disk. */
+function extractBundle(
+  bundle: SkillBundle,
+  destDir: string,
+  entryId: string,
+): number {
+  if (
+    typeof bundle?.id !== 'string' ||
+    typeof bundle?.variants !== 'object' ||
+    bundle.variants === null
+  ) {
+    throw new Error('malformed bundle: expected { id, variants }');
+  }
+  const files = bundle.variants[entryId.slice(bundle.id.length + 1)];
+  if (!files) {
+    throw new Error(`bundle ${bundle.id} has no variant "${entryId}"`);
+  }
+  const root = path.resolve(destDir);
+  let written = 0;
+  for (const [entryPath, contents] of Object.entries(files)) {
+    const target = path.resolve(root, entryPath);
+    if (target !== root && !target.startsWith(root + path.sep)) {
+      throw new Error(`bundle entry escapes destination: ${entryPath}`);
+    }
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, contents);
+    written++;
+  }
+  return written;
+}
+
+/** Download a URL to a buffer, retrying transient failures with backoff. */
+async function downloadWithRetry(
+  url: string,
+  opts: RetryOpts = {},
+): Promise<Uint8Array> {
+  const resp = await fetchWithRetry(url, opts);
+  return new Uint8Array(await resp.arrayBuffer());
+}
 
 /** How to place a skill and what triages it — `triage` is stated by every caller so none inherits a silent default. */
 export interface SkillInstallOptions {
@@ -61,26 +117,35 @@ export async function downloadSkill(
   installDir: string,
   { skillsRoot, triage }: SkillInstallOptions,
 ): Promise<{ success: boolean; error?: string }> {
-  let step: 'download' | 'extract' = 'download';
-  let receipt: SkillInstallReceipt | undefined;
+  const skillDir = skillsRoot
+    ? path.join(installDir, skillsRoot, skillEntry.id)
+    : path.join(installDir, '.claude', 'skills', skillEntry.id);
+  let step: 'download' | 'extract' | 'scan' = 'download';
 
   try {
-    const data = await downloadSkillPayload(skillEntry.downloadUrl);
+    fs.mkdirSync(skillDir, { recursive: true });
+    const data = await downloadWithRetry(skillEntry.downloadUrl);
     step = 'extract';
-    receipt = extractSkillPayload(skillEntry, installDir, data, skillsRoot);
+    const fileCount = skillEntry.bundle
+      ? extractBundle(
+          JSON.parse(Buffer.from(data).toString('utf8')) as SkillBundle,
+          skillDir,
+          skillEntry.id,
+        )
+      : extractZipArchive(data, skillDir);
+    fs.writeFileSync(path.join(skillDir, '.posthog-wizard'), '');
 
     // Same scan the Bash-install hook runs — TS-path installs (linear
     // pre-install, MCP/pi install_skill, orchestrator cache + reference)
     // must not skip it.
-    const isProjectSkill =
-      path.resolve(path.dirname(receipt.skillDir)) ===
-      path.resolve(installDir, '.claude', 'skills');
-    const poisonReason = isProjectSkill
-      ? await scanAndCacheInstalledProjectSkill(receipt.skillDir, triage)
-      : await scanInstalledSkill(receipt.skillDir, triage);
+    //
+    // The scan is its own step: it runs the YARA-X WASM engine, and an engine
+    // that fails to load throws from here. Left as `extract` that lands on the
+    // event as an unzip failure, which the pure-JS unzip cannot produce.
+    step = 'scan';
+    const poisonReason = await scanInstalledSkill(skillDir, triage);
     if (poisonReason) {
-      forgetCleanProjectSkill(receipt.skillDir);
-      receipt.rollback();
+      fs.rmSync(skillDir, { recursive: true, force: true });
       logToFile(`downloadSkill: ${poisonReason}`);
       analytics.wizardCapture('skill install failed', {
         skill_id: skillEntry.id,
@@ -92,7 +157,7 @@ export async function downloadSkill(
     }
 
     logToFile(
-      `downloadSkill: installed ${skillEntry.id} from ${skillEntry.downloadUrl} (${receipt.fileCount} files)`,
+      `downloadSkill: installed ${skillEntry.id} from ${skillEntry.downloadUrl} (${fileCount} files)`,
     );
     // The installed variant is a skill program's identity dimension in analytics.
     analytics.wizardCapture('skill installed', {
@@ -101,8 +166,6 @@ export async function downloadSkill(
     });
     return { success: true };
   } catch (err: any) {
-    if (receipt) forgetCleanProjectSkill(receipt.skillDir);
-    receipt?.rollback();
     logToFile(`downloadSkill: error: ${err.message}`);
     // A skill-less run still reports success — keep the failure visible.
     analytics.wizardCapture('skill install failed', {
@@ -161,13 +224,27 @@ export async function installSkillById(
 }
 
 export const DEFAULT_ASK_MAX_QUESTIONS = 10;
+
+/**
+ * Most questions one `wizard_ask` call may carry, enforced by both harness
+ * facades' schemas and quoted by the guidance below, so the limit and what the
+ * agent is told about it cannot drift apart.
+ *
+ * Sized against the forms this tool exists to collect: the widest
+ * data-warehouse connector advertises nine configuration fields, and a
+ * database whose form includes an SSH tunnel expands past that again. At eight
+ * the databases the step is mostly offered for did not fit, and an agent that
+ * reads "one subject, one call" as the contract treats a form it cannot fit in
+ * one call as one it cannot collect at all — and hands over a browser link.
+ */
+export const ASK_MAX_QUESTIONS_PER_CALL = 12;
 /**
  * Consecutive calls about the *same subject* before the one-time
  * batch-your-questions nudge fires. Adjacency is per subject, not per run:
  * the guard exists to stop an agent firing many small prompts about one
  * thing, not to stop a flow that legitimately walks a list — the warehouse
  * task asks one call per detected source, and 5–8 sources need 15–25 fields,
- * far more than the 8-question schema limit allows in a single call.
+ * far more than {@link ASK_MAX_QUESTIONS_PER_CALL} allows in a single call.
  */
 export const ASK_BATCH_THRESHOLD = 3;
 
@@ -274,8 +351,12 @@ export const WIZARD_ASK_SUBJECT_DESCRIPTION =
 export const WIZARD_ASK_TOOL_DESCRIPTION =
   'Ask the user one or more structured questions and wait for their answers. ' +
   'Use this whenever you would otherwise inline a question in your text output. ' +
-  'Batch every question about one subject into a single call (up to 8) rather ' +
-  'than asking one at a time, and tag the call with `subject`. Walking a list — ' +
+  `Batch every question about one subject into a single call (up to ${ASK_MAX_QUESTIONS_PER_CALL}) rather ` +
+  'than asking one at a time, and tag the call with `subject`. A subject needing ' +
+  'more fields than one call carries — a connection form wider than the limit — ' +
+  'is collected over consecutive calls reusing the same `subject`: that is ' +
+  'expected, and is never a reason to abandon it for a link the user has to ' +
+  'follow themselves. Walking a list — ' +
   'one call per data-warehouse source, one call per integration step — is ' +
   'expected and is never blocked, because the batching guard counts consecutive ' +
   'calls per subject. A fully cancelled or timed-out response does NOT count ' +
@@ -434,10 +515,10 @@ export function evaluateAskCap({
       message:
         `Not an error — this ask was not sent (a one-time nudge). ` +
         `You have sent ${subjectRunLength} wizard_ask calls in a row about the same subject (${subjectNote}). ` +
-        `Batch every question you still need for that subject into one call (up to 8 questions) and send wizard_ask again now. ` +
+        `Batch every question you still need for that subject into one call (up to ${ASK_MAX_QUESTIONS_PER_CALL} questions) and send wizard_ask again now. ` +
         `If your next questions are about something else — another data-warehouse source, another integration step — ` +
         `set a different \`subject\` on the call. Adjacency is counted per subject, so one call per source is never blocked, ` +
-        `and you must not try to squeeze several sources into one 8-question call. ` +
+        `and you must not try to squeeze several sources into one ${ASK_MAX_QUESTIONS_PER_CALL}-question call. ` +
         `Either way the next call is sent. Do not abandon the task, and do not fall back to browser setup because of this message.`,
     };
   }
@@ -1075,35 +1156,17 @@ export function appendAuditChecksToLedger(
   return { ok: true, added: additions.length };
 }
 
-export const SERVER_NAME = 'wizard-tools';
-
-/** Tool names exposed by the wizard-tools server, keyed for selective use. */
-// SDK expects MCP tool names in allowedTools/disallowedTools to be the
-// fully-qualified `mcp__<server>__<tool>` form (sdk.d.ts: "Fully-qualified
-// MCP tool name, e.g. mcp__server__tool_name."). The colon form silently
-// fails to match, which made every program's `disallowedTools` entry a no-op.
-export const WIZARD_TOOL_NAMES = {
-  checkEnvKeys: `mcp__${SERVER_NAME}__check_env_keys`,
-  setEnvValues: `mcp__${SERVER_NAME}__set_env_values`,
-  detectPackageManager: `mcp__${SERVER_NAME}__detect_package_manager`,
-  loadSkillMenu: `mcp__${SERVER_NAME}__load_skill_menu`,
-  installSkill: `mcp__${SERVER_NAME}__install_skill`,
-  auditSeedChecks: `mcp__${SERVER_NAME}__audit_seed_checks`,
-  auditAddChecks: `mcp__${SERVER_NAME}__audit_add_checks`,
-  auditResolveChecks: `mcp__${SERVER_NAME}__audit_resolve_checks`,
-  wizardAsk: `mcp__${SERVER_NAME}__wizard_ask`,
-  publishHandoff: `mcp__${SERVER_NAME}__publish_handoff`,
-  enqueueTask: `mcp__${SERVER_NAME}__enqueue_task`,
-  completeTask: `mcp__${SERVER_NAME}__complete_task`,
-  readHandoffs: `mcp__${SERVER_NAME}__read_handoffs`,
-} as const;
+export { SERVER_NAME, WIZARD_TOOL_NAMES } from './tool-names';
 
 // ---------------------------------------------------------------------------
 // Test-only exports
 // ---------------------------------------------------------------------------
 
 export const __test = {
+  extractZipArchive,
+  extractBundle,
   fetchWithRetry,
+  downloadWithRetry,
   writeLedgerAtomic,
   readLedger,
   applyAuditAdditions,

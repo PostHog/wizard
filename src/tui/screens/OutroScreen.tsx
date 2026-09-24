@@ -56,20 +56,14 @@ export const OutroScreen = ({ store }: OutroScreenProps) => {
             </Box>
           )}
 
-          {outroData.nextSteps && outroData.nextSteps.items.length > 0 && (
-            <Box flexDirection="column" marginTop={1}>
-              <Text color="cyan" bold>
-                {outroData.nextSteps.heading}
+          {outroData.notebookUrl && (
+            <Box marginTop={1}>
+              <Text>
+                Notebook:{' '}
+                <Text color="cyan">
+                  {withUtm(outroData.notebookUrl, 'outro-notebook')}
+                </Text>
               </Text>
-              {/* Items can carry a URL, so render through LinkText: it keeps the
-                  full address as the click target and shortens the visible label
-                  instead of wrapping it across lines. */}
-              {outroData.nextSteps.items.map((item, i) => (
-                <Box key={i} flexDirection="row">
-                  <Text>• </Text>
-                  <LinkText text={item} />
-                </Box>
-              ))}
             </Box>
           )}
 
@@ -79,17 +73,6 @@ export const OutroScreen = ({ store }: OutroScreenProps) => {
                 Dashboard:{' '}
                 <Text color="cyan">
                   {withUtm(outroData.dashboardUrl, 'outro-dashboard')}
-                </Text>
-              </Text>
-            </Box>
-          )}
-
-          {outroData.notebookUrl && (
-            <Box marginTop={1}>
-              <Text>
-                Notebook:{' '}
-                <Text color="cyan">
-                  {withUtm(outroData.notebookUrl, 'outro-notebook')}
                 </Text>
               </Text>
             </Box>
@@ -153,6 +136,25 @@ export const OutroScreen = ({ store }: OutroScreenProps) => {
                   {withUtm(outroData.continueUrl, 'outro-continue')}
                 </Text>
               </Text>
+            </Box>
+          )}
+
+          {/* Suggestions (e.g. unconnected warehouse sources) go after
+              everything the run actually produced. */}
+          {outroData.nextSteps && outroData.nextSteps.items.length > 0 && (
+            <Box flexDirection="column" marginTop={1}>
+              <Text color="cyan" bold>
+                {outroData.nextSteps.heading}
+              </Text>
+              {/* Items can carry a URL, so render through LinkText: it keeps the
+                  full address as the click target and shortens the visible label
+                  instead of wrapping it across lines. */}
+              {outroData.nextSteps.items.map((item, i) => (
+                <Box key={i} flexDirection="row">
+                  <Text>• </Text>
+                  <LinkText text={item} />
+                </Box>
+              ))}
             </Box>
           )}
 

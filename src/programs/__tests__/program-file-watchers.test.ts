@@ -1,9 +1,17 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  mkdtempSync,
+  rmSync,
+  symlinkSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { ProgramStore } from '../program-store';
 import { watchAuditLedger } from '../audit/watch-ledger';
-import { ProgramEventPlanWatcher } from '../posthog-integration/watch-event-plan';
+import {
+  ProgramEventPlanWatcher,
+  normalizeEventPlan,
+} from '../posthog-integration/watch-event-plan';
 import { AUDIT_CHECKS_FILE } from '@shared/audit-ledger';
 import { EVENT_PLAN_FILE } from '@shared/constants';
 
@@ -18,70 +26,45 @@ describe('program-owned file watchers', () => {
     rmSync(installDir, { recursive: true, force: true });
   });
 
-  it('ignores an old audit ledger, then projects this run’s update into ProgramStore until stopped', () => {
+  it('ignores an old audit ledger, then reports this run’s update until stopped', () => {
     const path = join(installDir, AUDIT_CHECKS_FILE);
-    const stale = [
-      { id: 'old', area: 'Events', label: 'old', status: 'pending' },
-    ];
     const fresh = [{ id: 'new', area: 'Events', label: 'new', status: 'pass' }];
-    writeFileSync(path, JSON.stringify(stale));
-    const store = new ProgramStore();
-    const handle = watchAuditLedger(installDir, AUDIT_CHECKS_FILE, (checks) =>
-      store.setFrameworkContext('auditChecks', checks),
-    );
+    writeFileSync(path, JSON.stringify([{ ...fresh[0], status: 'pending' }]));
+    const onChecks = vi.fn();
+    const handle = watchAuditLedger(installDir, AUDIT_CHECKS_FILE, onChecks);
     try {
       handle.refresh();
-      expect(
-        store.readData().detection.frameworkContext.auditChecks,
-      ).toBeUndefined();
-
       writeFileSync(path, JSON.stringify(fresh));
       handle.refresh();
-      expect(store.readData().detection.frameworkContext.auditChecks).toEqual(
-        fresh,
-      );
-
       handle.stop();
       writeFileSync(path, JSON.stringify([{ ...fresh[0], id: 'later' }]));
       handle.refresh();
-      expect(store.readData().detection.frameworkContext.auditChecks).toEqual(
-        fresh,
-      );
+
+      expect(onChecks.mock.calls).toEqual([[fresh]]);
     } finally {
       handle.stop();
     }
   });
 
-  it('keeps the first non-empty event plan in ProgramStore across refresh and stop', () => {
+  it('reports only the first non-empty event plan this run writes', () => {
     const path = join(installDir, EVENT_PLAN_FILE);
     writeFileSync(path, JSON.stringify([{ event_name: 'stale_event' }]));
-    const store = new ProgramStore();
-    const watcher = new ProgramEventPlanWatcher(path, (events) =>
-      store.setFrameworkContext('eventPlan', events),
-    );
+    const onEvents = vi.fn();
+    const watcher = new ProgramEventPlanWatcher(path, onEvents);
     try {
       watcher.start();
       watcher.refresh();
-      expect(
-        store.readData().detection.frameworkContext.eventPlan,
-      ).toBeUndefined();
+      for (const plan of [
+        [],
+        [{ event_name: 'first' }],
+        [{ event_name: 'later_event' }],
+      ]) {
+        writeFileSync(path, JSON.stringify(plan));
+        watcher.refresh();
+      }
 
-      writeFileSync(path, JSON.stringify([]));
-      watcher.refresh();
-      expect(
-        store.readData().detection.frameworkContext.eventPlan,
-      ).toBeUndefined();
-
-      writeFileSync(path, JSON.stringify([{ event_name: 'first_event' }]));
-      watcher.refresh();
-      expect(store.readData().detection.frameworkContext.eventPlan).toEqual([
-        { name: 'first_event', description: '' },
-      ]);
-
-      writeFileSync(path, JSON.stringify([{ event_name: 'later_event' }]));
-      watcher.refresh();
-      expect(store.readData().detection.frameworkContext.eventPlan).toEqual([
-        { name: 'first_event', description: '' },
+      expect(onEvents.mock.calls).toEqual([
+        [[{ name: 'first', description: '' }]],
       ]);
     } finally {
       watcher.stop();
@@ -90,20 +73,71 @@ describe('program-owned file watchers', () => {
 
   it('releases an event-plan watcher even when its consumer throws', () => {
     const path = join(installDir, EVENT_PLAN_FILE);
-    const onEvents = vi.fn(() => {
+    const watcher = new ProgramEventPlanWatcher(path, () => {
       throw new Error('store unavailable');
     });
-    const watcher = new ProgramEventPlanWatcher(path, onEvents);
     const stop = vi.spyOn(watcher, 'stop');
+    watcher.start();
+    writeFileSync(path, JSON.stringify([{ event_name: 'first_event' }]));
+    watcher.refresh();
+
+    expect(stop).toHaveBeenCalledOnce();
+  });
+
+  it('rejects oversized and symbolic-link event plan files', () => {
+    const path = join(installDir, EVENT_PLAN_FILE);
+    const onEvents = vi.fn();
+    const watcher = new ProgramEventPlanWatcher(path, onEvents);
     try {
       watcher.start();
-      writeFileSync(path, JSON.stringify([{ event_name: 'first_event' }]));
+      writeFileSync(
+        path,
+        JSON.stringify([{ event_name: 'x'.repeat(300_000) }]),
+      );
       watcher.refresh();
 
-      expect(onEvents).toHaveBeenCalledTimes(1);
-      expect(stop).toHaveBeenCalledTimes(1);
+      unlinkSync(path);
+      const target = join(installDir, 'external-plan.json');
+      writeFileSync(target, JSON.stringify([{ event_name: 'linked_event' }]));
+      symlinkSync(target, path);
+      watcher.refresh();
+
+      expect(onEvents).not.toHaveBeenCalled();
     } finally {
       watcher.stop();
     }
+  });
+});
+
+describe('normalizeEventPlan', () => {
+  it('normalizes canonical fields and legacy fallbacks', () => {
+    expect(
+      normalizeEventPlan([
+        { event_name: 'signed_up', event_description: 'User signs up' },
+        { name: 'invited_user', description: 'User sends an invite' },
+        { event: 'created_team' },
+        { event_name: 42, name: 'valid_fallback' },
+        { event_name: 'x'.repeat(401) },
+        { event_name: '   ' },
+        { description: 'missing name' },
+      ]),
+    ).toEqual([
+      { name: 'signed_up', description: 'User signs up' },
+      { name: 'invited_user', description: 'User sends an invite' },
+      { name: 'created_team', description: '' },
+      { name: 'valid_fallback', description: '' },
+    ]);
+  });
+
+  it('caps event count and description length', () => {
+    const events = Array.from({ length: 60 }, (_, index) => ({
+      event_name: `event_${index}`,
+      event_description: 'x'.repeat(5000),
+    }));
+
+    const normalized = normalizeEventPlan(events);
+
+    expect(normalized).toHaveLength(50);
+    expect(normalized?.[0].description).toHaveLength(4000);
   });
 });

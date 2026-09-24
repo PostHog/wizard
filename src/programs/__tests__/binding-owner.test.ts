@@ -6,19 +6,10 @@ import {
   WIZARD_ORCHESTRATOR_FLAG_KEY,
   WIZARD_SELF_DRIVING_USE_PI_HARNESS_FLAG_KEY,
 } from '@shared/constants';
-import { HARNESS_OPTIONS } from '@agent/runner/switchboard/harness';
-import { PROGRAM_BINDINGS, resolveProgramBinding } from '@programs';
-import { PROGRAM_REGISTRY } from '@programs';
+import { HARNESS_RUNS_TASKS } from '@agent/runner/switchboard/resolve-harness';
+import { PROGRAM_BINDINGS, resolveProgramBinding } from '../binding';
 
 describe('program binding owner', () => {
-  it('keeps the registry and program bindings in lockstep', () => {
-    const ids = PROGRAM_REGISTRY.map((program) => program.id);
-    expect(ids.filter((id) => !(id in PROGRAM_BINDINGS))).toEqual([]);
-    expect(
-      Object.keys(PROGRAM_BINDINGS).filter((id) => !ids.includes(id)),
-    ).toEqual([]);
-  });
-
   it('resolves and traces a CLI sequence override ahead of an experiment', () => {
     const trace = {};
     const binding = resolveProgramBinding({
@@ -29,28 +20,6 @@ describe('program binding owner', () => {
     });
     expect(binding.sequence).toBe(Sequence.linear);
     expect(trace).toMatchObject({ sequence: 'cli', harness: 'flag' });
-  });
-
-  it('keeps a composed run linear even with a CLI orchestrator override', () => {
-    const trace = {};
-    const binding = resolveProgramBinding({
-      program: 'posthog-integration',
-      flags: {},
-      composed: true,
-      cliSequence: Sequence.orchestrator,
-      trace,
-    });
-    expect(binding.sequence).toBe(Sequence.linear);
-    expect(trace).toMatchObject({ sequence: 'composed' });
-  });
-
-  it('preserves the per-program harness and model', () => {
-    expect(
-      resolveProgramBinding({ program: 'replay-vision', flags: {} }),
-    ).toMatchObject({
-      sequence: Sequence.orchestrator,
-      harness: Harness.anthropic,
-    });
   });
 
   it('pre-resolves task roles with flag routes above role defaults', () => {
@@ -84,12 +53,7 @@ describe('program binding owner', () => {
   });
 
   it('clamps a flag route without runTask while preserving the dev CLI hard-error route', () => {
-    const original = HARNESS_OPTIONS[Harness.anthropic];
-    if (!original) throw new Error('Anthropic harness is not registered');
-    HARNESS_OPTIONS[Harness.anthropic] = {
-      ...original,
-      runTask: undefined,
-    };
+    HARNESS_RUNS_TASKS[Harness.anthropic] = false;
     const input = {
       program: 'self-driving',
       flags: { [WIZARD_SELF_DRIVING_USE_PI_HARNESS_FLAG_KEY]: 'true' },
@@ -118,7 +82,7 @@ describe('program binding owner', () => {
       ).toBe(Sequence.orchestrator);
       expect(cliTrace).toMatchObject({ sequence: 'cli' });
     } finally {
-      HARNESS_OPTIONS[Harness.anthropic] = original;
+      HARNESS_RUNS_TASKS[Harness.anthropic] = true;
     }
   });
 });

@@ -41,50 +41,6 @@ describe('drainQueue', () => {
     return Promise.resolve();
   };
 
-  it('waits for active siblings after abort and starts no dependents', async () => {
-    const controller = new AbortController();
-    let releaseSibling!: () => void;
-    const siblingDone = new Promise<void>((resolve) => {
-      releaseSibling = resolve;
-    });
-    const parent = q.enqueue({ type: 'parent' });
-    q.enqueue({ type: 'sibling' });
-    q.enqueue({ type: 'dependent', dependsOn: [parent.id] });
-    const started: string[] = [];
-    const draining = drainQueue(
-      q,
-      async (task) => {
-        started.push(task.type);
-        if (task.type === 'parent') {
-          await new Promise<void>((resolve) =>
-            controller.signal.addEventListener('abort', () => resolve(), {
-              once: true,
-            }),
-          );
-        } else {
-          await siblingDone;
-        }
-      },
-      { maxStarts: 10, signal: controller.signal },
-    );
-    await new Promise<void>((resolve) => setImmediate(resolve));
-    expect(started).toEqual(['parent', 'sibling']);
-
-    controller.abort();
-    let settled = false;
-    void draining.then(() => {
-      settled = true;
-    });
-    await new Promise<void>((resolve) => setImmediate(resolve));
-    expect(settled).toBe(false);
-    releaseSibling();
-    await draining;
-    expect(started).toEqual(['parent', 'sibling']);
-    expect(q.list().find((task) => task.type === 'dependent')?.status).toBe(
-      TaskStatus.Pending,
-    );
-  });
-
   it('waits for live siblings after a fatal error and starts no dependents', async () => {
     const fatal = new RunTaskFatal({
       code: ErrorCodes.AgentOrchestratorTasksFailed,

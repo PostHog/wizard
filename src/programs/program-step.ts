@@ -265,6 +265,13 @@ export interface ProgramConfig {
      */
     notice?: TaskNotice;
   }>;
+  /**
+   * Task types this run excludes, decided from the run's wizard flags. An
+   * excluded type does not exist for the run: the planner cannot enqueue it
+   * and no agent boots for it. The program owns the flag→type mapping; the
+   * runner only applies it.
+   */
+  excludedTaskTypes?: (flags: Record<string, string>) => readonly string[];
   /** Prerequisites: other program ids that must have run first */
   requires?: string[];
   /**

@@ -17,7 +17,9 @@ it.
 - We take the recommended supported project, else the first supported
   PostHog-free one, and re-point the install dir there.
 - On a single-repo project it recommends `.`, so nothing moves.
-- If the scan errors, times out (60s, `AGENTIC_DETECTION_TIMEOUT_MS`), or finds
+- The scan gets two attempts, 60s then 90s
+  (`AGENTIC_DETECTION_FIRST_ATTEMPT_TIMEOUT_MS`,
+  `AGENTIC_DETECTION_RETRY_TIMEOUT_MS`). If both error or time out, or it finds
   nothing, `session.installDir` is left untouched and the run falls back to the
   old root detection, exactly like flag-off.
 

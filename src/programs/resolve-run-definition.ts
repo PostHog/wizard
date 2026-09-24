@@ -1,9 +1,12 @@
 /** Resolve program run copy and prompts from data the host already prepared. */
 
 import type { AgentRunDefinition } from '@agent/types';
-import { LONGER_ASK_TIMEOUT_MS } from '@agent';
+import { LONGER_ASK_TIMEOUT_MS } from '@shared/ask-policy';
 import { POSTHOG_DOCS_URL, type AdditionalFeature } from '@shared/constants';
-import type { SkillProgramOptions } from './agent-skill/index.js';
+import {
+  skillRunDefinition,
+  type SkillProgramOptions,
+} from './agent-skill/run-definition.js';
 import { SPINNER_MESSAGE } from '@programs/framework-config';
 import { AUDIT_ABORT_CASES } from './audit/detect.js';
 import { AUDIT_REPORT_FILE } from './audit/types.js';
@@ -62,32 +65,9 @@ export const AUDIT_PROGRAM_OPTIONS: SkillProgramOptions = {
   abortCases: AUDIT_ABORT_CASES,
 };
 
-export function resolveProgramRunDefinition(
-  programId: string,
-  input: ProgramRunDefinitionInput,
-): AgentRunDefinition | undefined {
-  switch (programId) {
-    case 'agent-skill':
-      return resolveAgentSkillRunDefinition(input.skillId);
-    case 'audit':
-      return resolveAuditRunDefinition();
-    case 'events-audit':
-      return resolveEventsAuditRunDefinition(input);
-    case 'error-tracking':
-      return resolveErrorTrackingRunDefinition();
-    case 'warehouse-source':
-      return resolveWarehouseSourceRunDefinition(input.warehouseSources ?? []);
-    case 'error-tracking-upload-source-maps':
-      return resolveSourceMapsRunDefinition(input.sourceMapsSelection);
-    default:
-      return undefined;
-  }
-}
-
 export function resolveAgentSkillRunDefinition(
-  skillId?: string,
-): AgentRunDefinition | undefined {
-  if (!skillId) return undefined;
+  skillId: string,
+): AgentRunDefinition {
   return {
     skillId,
     integrationLabel: skillId,
@@ -99,21 +79,8 @@ export function resolveAgentSkillRunDefinition(
   };
 }
 
-export function resolveAuditRunDefinition(): AgentRunDefinition {
-  const options = AUDIT_PROGRAM_OPTIONS;
-  const prompt = options.customPrompt;
-  return {
-    skillId: options.skillId,
-    integrationLabel: options.integrationLabel,
-    customPrompt: prompt ? () => prompt : undefined,
-    successMessage: options.successMessage,
-    reportFile: options.reportFile,
-    docsUrl: options.docsUrl,
-    spinnerMessage: options.spinnerMessage,
-    estimatedDurationMinutes: options.estimatedDurationMinutes,
-    abortCases: options.abortCases,
-  };
-}
+export const resolveAuditRunDefinition = (): AgentRunDefinition =>
+  skillRunDefinition(AUDIT_PROGRAM_OPTIONS);
 
 export function resolveEventsAuditRunDefinition(
   input: Pick<
@@ -179,7 +146,7 @@ export function resolveErrorTrackingRunDefinition(): AgentRunDefinition {
   };
 }
 
-function warehousePrompt(sources: readonly DetectedSource[]): string {
+export function warehousePrompt(sources: readonly DetectedSource[]): string {
   if (sources.length === 0)
     return 'Set up a data warehouse source for this project.';
 

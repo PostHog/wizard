@@ -30,4 +30,14 @@ describe('HeadlessUI', () => {
 
     logSpy.mockRestore();
   });
+
+  it('keeps the event plan in its store for the task stream', () => {
+    const setEventPlan = vi.fn();
+    const ui = new HeadlessUI({ setEventPlan } as unknown as WizardStore);
+    const plan = [{ name: 'signed_up', description: 'User signs up' }];
+
+    ui.setEventPlan(plan);
+
+    expect(setEventPlan).toHaveBeenCalledExactlyOnceWith(plan);
+  });
 });
