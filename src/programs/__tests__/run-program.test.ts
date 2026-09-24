@@ -24,7 +24,8 @@ import {
 } from '../runtime-registry';
 import {
   resolveAgentSkillRunDefinition,
-  resolveProgramRunDefinition,
+  resolveAuditRunDefinition,
+  resolveEventsAuditRunDefinition,
 } from '../resolve-run-definition';
 import * as auditWatcher from '../audit/watch-ledger';
 import { ProgramEventPlanWatcher } from '../posthog-integration/watch-event-plan';
@@ -314,7 +315,7 @@ describe('runProgram', () => {
     vi.mocked(getRuntimeProgramConfig).mockReturnValueOnce({
       id: 'events-audit',
       strategy: 'resolved',
-      resolve: (input) => resolveProgramRunDefinition('events-audit', input),
+      resolve: resolveEventsAuditRunDefinition,
     });
     vi.mocked(runAgent).mockResolvedValue({
       outcome: RunOutcome.Success,
@@ -344,7 +345,8 @@ describe('runProgram', () => {
     vi.mocked(getRuntimeProgramConfig).mockReturnValueOnce({
       id: 'agent-skill',
       strategy: 'resolved',
-      resolve: (input) => resolveAgentSkillRunDefinition(input.skillId),
+      resolve: ({ skillId }) =>
+        skillId ? resolveAgentSkillRunDefinition(skillId) : undefined,
       allowedTools: ['Agent'],
     });
     vi.mocked(runAgent).mockResolvedValue({
@@ -386,7 +388,7 @@ describe('runProgram', () => {
     vi.mocked(getRuntimeProgramConfig).mockReturnValueOnce({
       id: 'audit',
       strategy: 'resolved',
-      resolve: (input) => resolveProgramRunDefinition('audit', input),
+      resolve: resolveAuditRunDefinition,
       auditLedgerFile: AUDIT_CHECKS_FILE,
       auditSeedChecks: seed,
     });
@@ -443,7 +445,8 @@ describe('runProgram', () => {
     vi.mocked(getRuntimeProgramConfig).mockReturnValueOnce({
       id: 'agent-skill',
       strategy: 'resolved',
-      resolve: (input) => resolveAgentSkillRunDefinition(input.skillId),
+      resolve: ({ skillId }) =>
+        skillId ? resolveAgentSkillRunDefinition(skillId) : undefined,
     });
     vi.mocked(runAgent).mockImplementation(() => {
       fs.writeFileSync(

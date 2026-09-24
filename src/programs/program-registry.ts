@@ -11,7 +11,7 @@
  */
 
 import type { ProgramConfig } from './program-step.js';
-import { POSTHOG_DOCS_URL } from '@shared/constants.js';
+import { resolveAgentSkillRunDefinition } from './resolve-run-definition.js';
 import { posthogIntegrationConfig } from './posthog-integration/index.js';
 import { revenueAnalyticsConfig } from './revenue-analytics/index.js';
 import { warehouseSourceConfig } from './warehouse-source/index.js';
@@ -52,18 +52,10 @@ export const agentSkillConfig: ProgramConfig = {
   steps: AGENT_SKILL_STEPS,
   getContentBlocks: agentSkillContentBlocks,
   allowedTools: ['Agent'],
-  run: (session) => {
-    const skillId = session.skillId ?? 'agent-skill';
-    return Promise.resolve({
-      skillId,
-      integrationLabel: skillId,
-      spinnerMessage: `Running ${skillId}...`,
-      successMessage: `${skillId} complete!`,
-      estimatedDurationMinutes: 5,
-      reportFile: `posthog-${skillId}-report.md`,
-      docsUrl: POSTHOG_DOCS_URL,
-    });
-  },
+  run: (session) =>
+    Promise.resolve(
+      resolveAgentSkillRunDefinition(session.skillId ?? 'agent-skill'),
+    ),
 };
 
 export const PROGRAM_REGISTRY = [

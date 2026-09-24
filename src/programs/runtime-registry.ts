@@ -148,7 +148,8 @@ export const RUNTIME_PROGRAM_REGISTRY = [
   {
     id: 'agent-skill',
     strategy: 'resolved',
-    resolve: (input) => resolveAgentSkillRunDefinition(input.skillId),
+    resolve: ({ skillId }) =>
+      skillId ? resolveAgentSkillRunDefinition(skillId) : undefined,
     allowedTools: ['Agent'],
   },
   { id: 'mcp-add', strategy: 'no-agent', requiresAi: false },
