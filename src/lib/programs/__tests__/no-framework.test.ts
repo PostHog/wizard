@@ -102,7 +102,7 @@ describe.each([
           expect(store.session.detectionComplete).toBe(false);
           expect(store.router.resolve(store.session)).toBe(ScreenId.Outro);
           expect(store.session.outroData?.instruction).toContain(
-            "app's root directory",
+            'an app root directory',
           );
           expect(process.exit).not.toHaveBeenCalled();
         } finally {
