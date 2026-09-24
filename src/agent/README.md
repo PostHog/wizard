@@ -56,7 +56,7 @@ runAgent(config: RunConfig, input: RunInput, options?: {
   is `success`, `Aborted` is `cancelled`, `Failed` and `Crashed` are `error`.
 
 Other runtime exports: `DEFAULT_AGENT_BINDING` for standalone callers,
-`resolveHarness` and `resolveBinding`, which programs resolve a binding with,
+`resolveHarness` and `harnessRunsTasks`, which programs resolve a binding with,
 `shouldDisableAsk`, `initializeAgent`, `executeAgent`, `buildRunTags`,
 `AgentSignals`, `configureGatewayFromCIEnvironment`, `downloadSkill`,
 `WIZARD_TOOL_NAMES`, `LONGER_ASK_TIMEOUT_MS`, `flushScanReport`, and

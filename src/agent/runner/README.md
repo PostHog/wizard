@@ -52,14 +52,15 @@ The gates, OAuth, flags and binding lookup that used to run here live in
 targets, the gateway mint and the scan-triage classifier. Whether the run turns
 out to be linear or orchestrator, anthropic or pi, the setup is the same.
 
-**The switchboard** (`switchboard/`) is the router. Given a program id + the
-fetched flags + any CLI overrides, it returns a `ProgramBinding` — which query
-shape (sequence), which agent SDK (harness), which model. Two independent
-middleware chains, one per axis, apply precedence rules (CLI > flag > program
-config > default). This is the only layer that makes routing decisions.
+**The switchboard** (`switchboard/`) holds the sequence and harness registries
+and the harness axis. Programs resolve the binding (`resolveProgramBinding`):
+the sequence precedence lives there, and the harness and model come from this
+layer's `resolveHarness` (CLI > flag > program config >
+default). `harnessRunsTasks` tells programs which harnesses the orchestrator can
+drive.
 
-**Sequences** (`sequence/`) are LLM query shapes. Once the switchboard has
-picked one, that sequence takes over the run and owns _how the LLM's work is
+**Sequences** (`sequence/`) are LLM query shapes. Once the binding has picked
+one, that sequence takes over the run and owns _how the LLM's work is
 shaped_. See `sequence/README.md`.
 
 - **linear** — one long conversation with the model, start to finish.

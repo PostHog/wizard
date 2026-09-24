@@ -31,7 +31,7 @@ export type {
   TokenUsageDelta,
 } from './progress';
 
-/** Input types of the exported resolveBinding and resolveHarness. */
+/** Input types of the exported resolveHarness. */
 export type { ProgramBinding, SwitchboardCtx } from './runner';
 export type { EffortLevel } from './runner/switchboard/models';
 

@@ -12,22 +12,23 @@
  * Stays. The agent's contract: the one way to run it, the marker strings
  * program prompts embed, the tool ids programs put in allowedTools and
  * disallowedTools, and what programs resolve a binding with: the default
- * binding and the harness axis.
+ * binding, the harness axis and each harness's task capability.
  */
 export type * from './types';
 export { runAgent, RunOutcome } from './runner';
 export { AgentSignals } from './agent-interface';
 export { WIZARD_TOOL_NAMES } from './tools';
 export { DEFAULT_AGENT_BINDING } from './default-binding';
-export { resolveHarness } from './runner/switchboard/resolve-harness';
+export {
+  harnessRunsTasks,
+  resolveHarness,
+} from './runner/switchboard/resolve-harness';
 
 /**
- * Leaves in B2. resolveBinding applies the generic precedence to the base
- * binding and routes programs select, and programs/binding.ts is its one
- * caller; shouldDisableAsk is a flags policy programs decide and pass in;
- * LONGER_ASK_TIMEOUT_MS is a tuning number programs own as askTimeoutMs.
+ * Leaves in B2. shouldDisableAsk is a flags policy programs decide and pass
+ * in; LONGER_ASK_TIMEOUT_MS is a tuning number programs own as askTimeoutMs.
  */
-export { resolveBinding, shouldDisableAsk } from './runner';
+export { shouldDisableAsk } from './runner';
 export { LONGER_ASK_TIMEOUT_MS } from './wizard-ask-bridge';
 
 /**
