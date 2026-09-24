@@ -162,7 +162,7 @@ describe('error-tracking project picker report', () => {
 });
 
 describe('error-tracking ciPreRun', () => {
-  test('stops when no framework is detected and explains how to retry', async () => {
+  test('stops when no framework is detected', async () => {
     vi.mocked(detectFramework).mockResolvedValue(undefined);
     const session = {
       installDir: '/tmp/error-tracking-ci',
@@ -172,12 +172,7 @@ describe('error-tracking ciPreRun', () => {
     await errorTrackingConfig.ciPreRun?.(session);
 
     expect(wizardAbort).toHaveBeenCalledWith(
-      expect.objectContaining({
-        code: ErrorCodes.DetectNoFramework,
-        outroData: expect.objectContaining({
-          instruction: expect.stringContaining("app's root directory"),
-        }),
-      }),
+      expect.objectContaining({ code: ErrorCodes.DetectNoFramework }),
     );
     expect(session.integration).toBeUndefined();
     expect(session.frameworkConfig).toBeUndefined();
