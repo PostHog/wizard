@@ -18,10 +18,12 @@ import {
 } from '@programs/error-tracking/index';
 import { VARIANTS_REQUIRING_POSTHOG_CLI } from '@programs/error-tracking-upload-source-maps/detect';
 import { preinstallPostHogCliOnce } from '@programs/shared/posthog-cli-preinstall';
-import { buildSession, type WizardSession } from '@lib/wizard-session';
 import { analytics } from '@utils/analytics';
 import { wizardAbort } from '@utils/wizard-abort';
 import { testProgramCiHost } from '../../../test/program-host';
+import { ERROR_TRACKING_FLOW } from '@tui/flows/error-tracking';
+import { buildSession } from '@tui/session';
+import type { WizardSession } from '@tui/session';
 
 vi.mock('@programs/detection/index', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@programs/detection/index')>()),
@@ -55,7 +57,7 @@ const runHost = (): ProgramRunHost => ({
   spinner: () => ({ start: vi.fn(), stop: vi.fn(), message: vi.fn() }),
 });
 
-const step = (id: string) => errorTrackingConfig.steps.find((s) => s.id === id);
+const step = (id: string) => ERROR_TRACKING_FLOW.find((s) => s.id === id);
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -84,14 +86,14 @@ describe('error-tracking program', () => {
   });
 
   test('picks the project after login and before the run', () => {
-    const ids = errorTrackingConfig.steps.map((s) => s.id);
+    const ids = ERROR_TRACKING_FLOW.map((s) => s.id);
     expect(ids.indexOf('auth')).toBeLessThan(ids.indexOf('detect'));
     expect(ids.indexOf('detect')).toBeLessThan(ids.indexOf('run'));
     expect(step('detect')?.screenId).toBe('error-tracking-detect');
   });
 
   test('runs the agent in the picked project, else the repo root', () => {
-    const targetDir = step('run')?.targetDir;
+    const targetDir = errorTrackingConfig.runSteps?.run?.targetDir;
     const picked = {
       installDir: '/repo',
       frameworkContext: { [ERROR_TRACKING_PROJECT_PATH_KEY]: 'apps/web' },

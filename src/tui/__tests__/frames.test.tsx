@@ -40,7 +40,7 @@ vi.mock('@utils/debug', async (actual) => ({
   logToFile: vi.fn(),
   debug: vi.fn(),
 }));
-vi.mock('@utils/setup-utils', async (actual) => ({
+vi.mock('@programs/project-data', async (actual) => ({
   ...(await actual<Record<string, unknown>>()),
   getOrAskForProjectData: vi.fn(pending),
 }));
@@ -105,12 +105,6 @@ import { InkUI } from '@tui/ink-ui';
 import { setUI } from '@ui/index';
 import { ScreenId, Overlay } from '@tui/router';
 import { createServices, type ScreenServices } from '@tui/screen-registry';
-import {
-  buildSession,
-  OutroKind,
-  RunPhase,
-  McpOutcome,
-} from '@lib/wizard-session';
 import { HostResolution } from '@shared/host-resolution';
 import { Integration } from '@shared/constants';
 import { FRAMEWORK_REGISTRY } from '@programs/registry';
@@ -131,6 +125,9 @@ import {
   screenShell,
   type TerminalSize,
 } from './helpers/render-screen.no-jest';
+import { buildSession } from '@tui/session';
+import { OutroKind } from '@shared/outro';
+import { RunPhase, McpOutcome } from '@shared/run-state';
 
 // 80x28 is the ScreenContainer minimum. Anything smaller renders the
 // viewport guard instead of the screen, which the last describe pins once.

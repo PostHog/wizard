@@ -1,7 +1,7 @@
 import { runMcpPromptViaSdk } from '@agent';
 import { createPosthogInferenceAuthProvider } from '@programs';
 import { HostResolution } from '@shared/host-resolution';
-import type { Credentials } from '@lib/wizard-session';
+import type { Credentials } from '@shared/api';
 import { WizardStore } from '@tui/store';
 import { createMcpSuggestedPromptsServices } from '../mcp-suggested-prompts-services';
 

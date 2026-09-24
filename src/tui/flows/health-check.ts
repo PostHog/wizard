@@ -11,7 +11,7 @@
  * render the OutroScreen.
  */
 
-import type { ProgramStep } from '@programs/program-step';
+import type { FlowStep } from '../flow';
 import {
   evaluateWizardReadiness,
   WizardReadiness,
@@ -48,7 +48,7 @@ export function healthCheckReady(session: HealthCheckState): boolean {
   return true;
 }
 
-export const HEALTH_CHECK_STEP: ProgramStep = {
+export const HEALTH_CHECK_STEP: FlowStep = {
   id: 'health-check',
   label: 'Health check',
   screenId: 'health-check',

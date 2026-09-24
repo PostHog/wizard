@@ -13,7 +13,7 @@
 import type { ApiProject, ApiUser, Credentials } from '@shared/api';
 import type { ProgramId } from '@programs/program-registry';
 import type { CloudRegion } from '@utils/types';
-import { getOrAskForProjectData } from '@utils/setup-utils';
+import { getOrAskForProjectData, type ProjectDataHost } from './project-data';
 import { analytics, groupsFromUser } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
 
@@ -22,6 +22,34 @@ export type AuthProjection = {
   setRoleAtOrganization(role: string | null): void;
   setApiUser(user: ApiUser | null): void;
 };
+
+/** Everything authentication needs from its host: the projection plus login display and abort. */
+export type AuthHost = AuthProjection & ProjectDataHost;
+
+/** Binds a UI object's auth methods into an AuthHost so each keeps its receiver. */
+export function bindAuthHost(
+  ui: Omit<AuthHost, 'abort'>,
+  abort: AuthHost['abort'],
+): AuthHost {
+  return {
+    log: {
+      info: (message) => ui.log.info(message),
+      warn: (message) => ui.log.warn(message),
+      error: (message) => ui.log.error(message),
+      success: (message) => ui.log.success(message),
+    },
+    spinner: () => ui.spinner(),
+    setLoginUrl: (url) => ui.setLoginUrl(url),
+    setAuthorizeUrl: (url) => ui.setAuthorizeUrl(url),
+    waitForManualAuthCode: () => ui.waitForManualAuthCode(),
+    showSessionTimeout: () => ui.showSessionTimeout(),
+    showPortConflict: (processInfo) => ui.showPortConflict(processInfo),
+    setCredentials: (credentials) => ui.setCredentials(credentials),
+    setRoleAtOrganization: (role) => ui.setRoleAtOrganization(role),
+    setApiUser: (user) => ui.setApiUser(user),
+    abort,
+  };
+}
 
 /** Authentication state shared with the CLI host, without TUI session fields. */
 export interface AuthSession {
@@ -42,7 +70,7 @@ export interface AuthSession {
 export async function authenticate(
   session: AuthSession,
   programId: ProgramId,
-  projection: AuthProjection,
+  authHost: AuthHost,
 ): Promise<void> {
   if (session.credentials) return;
 
@@ -59,17 +87,20 @@ export async function authenticate(
     user,
     project,
     missingScopes,
-  } = await getOrAskForProjectData({
-    signup: session.signup,
-    ci: session.ci,
-    apiKey: session.apiKey,
-    projectId: session.projectId,
-    email: session.email,
-    region: session.region,
-    baseUrl: session.baseUrl,
-    localMcp: session.localMcp,
-    programId,
-  });
+  } = await getOrAskForProjectData(
+    {
+      signup: session.signup,
+      ci: session.ci,
+      apiKey: session.apiKey,
+      projectId: session.projectId,
+      email: session.email,
+      region: session.region,
+      baseUrl: session.baseUrl,
+      localMcp: session.localMcp,
+      programId,
+    },
+    authHost,
+  );
 
   session.credentials = {
     accessToken,
@@ -85,9 +116,9 @@ export async function authenticate(
   session.roleAtOrganization = roleAtOrganization;
   session.apiUser = user;
 
-  projection.setCredentials(session.credentials);
-  projection.setRoleAtOrganization(roleAtOrganization);
-  projection.setApiUser(user);
+  authHost.setCredentials(session.credentials);
+  authHost.setRoleAtOrganization(roleAtOrganization);
+  authHost.setApiUser(user);
 
   // Identify the user (email, name) before flags are evaluated, so flags can
   // target the individual user and not just $app_name.

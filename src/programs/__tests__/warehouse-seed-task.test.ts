@@ -3,7 +3,6 @@
  * so it belongs only in a run that has both something to connect and someone
  * to answer — and the wizard, not the planner, is what decides that.
  */
-import type { WizardSession } from '@lib/wizard-session';
 import type { DetectedSource } from '@programs/warehouse-sources/types';
 
 vi.mock('@utils/analytics', () => ({
@@ -17,6 +16,7 @@ vi.mock('@utils/analytics', () => ({
 
 import { posthogIntegrationConfig } from '@programs/posthog-integration/index';
 import { DETECTED_WAREHOUSE_SOURCES_KEY } from '@programs/warehouse-source/detect';
+import type { WizardSession } from '@tui/session';
 
 const POSTGRES: DetectedSource = {
   kind: 'Postgres',

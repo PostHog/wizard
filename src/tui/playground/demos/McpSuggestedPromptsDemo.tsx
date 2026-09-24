@@ -37,7 +37,6 @@ import type { WizardStore } from '@tui/store';
 import { McpSuggestedPromptsScreen } from '@tui/screens/McpSuggestedPromptsScreen';
 import { Colors } from '@tui/styles';
 import { Integration } from '@shared/constants';
-import { McpOutcome } from '@lib/wizard-session';
 import { HostResolution } from '@shared/host-resolution';
 import { TAILORED_ROLES } from '@tui/services/mcp-role-prompts';
 import {
@@ -49,6 +48,7 @@ import type {
   AgentChunk,
   McpSuggestedPromptsServices,
 } from '@tui/services/mcp-suggested-prompts-services';
+import { McpOutcome } from '@shared/run-state';
 
 // One Integration per framework family so cycling exercises every
 // override bucket in mcp-role-prompts.ts.

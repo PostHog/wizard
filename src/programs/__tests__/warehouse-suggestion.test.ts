@@ -13,9 +13,10 @@
  * say the run already connected the sources.
  */
 
-import { POSTHOG_INTEGRATION_PROGRAM } from '@programs/posthog-integration/steps';
-import type { WizardSession } from '@lib/wizard-session';
+import { posthogIntegrationConfig } from '@programs/posthog-integration/index';
+import { POSTHOG_INTEGRATION_FLOW } from '@tui/flows/posthog-integration';
 import type { DetectedSource } from '@programs/warehouse-sources/types';
+import type { WizardSession } from '@tui/session';
 import { analytics } from '@utils/analytics';
 
 import {
@@ -157,9 +158,8 @@ describe('env tool instruction', () => {
 
 describe('flow shape', () => {
   it('adds no steps — the suggestion never becomes an inline run', () => {
-    const ids = POSTHOG_INTEGRATION_PROGRAM.map((s) => s.id);
+    const ids = POSTHOG_INTEGRATION_FLOW.map((s) => s.id);
     expect(ids).toEqual([
-      'detect',
       'intro',
       'health-check',
       'setup',
@@ -175,7 +175,7 @@ describe('flow shape', () => {
   it('keeps the program single-run, so the outro stays terminal', () => {
     // A step declaring a child program would flip run-wizard into the composed
     // walk, where a second agent run could abort before the outro is pushed.
-    expect(POSTHOG_INTEGRATION_PROGRAM.some((s) => s.runProgramId)).toBe(false);
+    expect(posthogIntegrationConfig.runSteps).toBeUndefined();
   });
 });
 

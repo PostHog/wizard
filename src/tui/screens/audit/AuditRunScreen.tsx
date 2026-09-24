@@ -13,8 +13,7 @@ import { AuditAreaPane } from './AuditAreaPane.js';
 import { AUDIT_AREA_SLIDES } from './slides/index.js';
 import { EVENTS_AUDIT_AREA_SLIDES } from './slides/events-audit/index.js';
 import { PendingChecksList } from './PendingChecksList.js';
-import { AUDIT_REPORT_FILE, getAuditChecks } from '@programs/audit/types';
-import { getProgramConfig } from '@programs';
+import { getProgramConfig, AUDIT_REPORT_FILE, getAuditChecks } from '@programs';
 import { WIZARD_LOG_FILE } from '@utils/paths';
 
 interface AuditRunScreenProps {

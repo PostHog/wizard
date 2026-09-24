@@ -28,6 +28,7 @@ import type { WizardStore } from '@tui/store';
 import { PROGRAM_REGISTRY } from '@programs';
 import { AUDIT_AREA_SLIDES } from '@tui/screens/audit/slides/index';
 import { getProgramContentBlocks } from '@tui/decks/registry';
+import { rawProgramFlow } from '@tui/flows/index';
 import type { AreaSlide } from '@tui/screens/audit/slides/shared';
 
 interface Deck {
@@ -85,7 +86,7 @@ interface LearnDeckDemoProps {
 
 export const getLearnDeckPrograms = () =>
   PROGRAM_REGISTRY.filter((program) =>
-    program.steps.some((step) => step.screenId === 'run'),
+    rawProgramFlow(program.id).some((step) => step.screenId === 'run'),
   );
 
 export const LearnDeckDemo = ({ store }: LearnDeckDemoProps) => {

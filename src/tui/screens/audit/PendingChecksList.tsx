@@ -1,9 +1,10 @@
 import { Box, Text } from 'ink';
 import { Spinner } from '@inkjs/ui';
-import { AUDIT_SEVERITY_STYLE, type AuditCheck } from '@programs/audit/types';
 import { Colors, Icons } from '@tui/styles';
 import { LoadingBox } from '@tui/primitives/index';
 import { useStdoutDimensions } from '@tui/hooks/useStdoutDimensions';
+import { AUDIT_SEVERITY_STYLE } from '@programs';
+import type { AuditCheck } from '@programs/types';
 
 interface PendingChecksListProps {
   checks: AuditCheck[];

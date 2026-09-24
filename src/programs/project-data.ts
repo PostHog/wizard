@@ -1,47 +1,36 @@
 import * as childProcess from 'node:child_process';
-import * as fs from 'node:fs';
-import * as os from 'node:os';
-import { basename, isAbsolute, join, relative } from 'node:path';
-import { promisify } from 'node:util';
+import { basename } from 'node:path';
 
-import { withProgress } from './telemetry';
-import { debug, logToFile } from './debug';
-import type { PackageJson } from './package-json';
-import {
-  type PackageManager,
-  detectAllPackageManagers,
-  NPM as npm,
-} from './package-manager';
-import type { CloudRegion, WizardRunOptions } from './types';
-import { getDeclaredVersion } from './package-json';
+import { withProgress } from '@utils/telemetry';
+import { logToFile } from '@utils/debug';
+import type { CloudRegion, WizardRunOptions } from '@utils/types';
 import { DUMMY_PROJECT_API_KEY, ISSUES_URL } from '@shared/constants';
 import {
   getOAuthScopesForProgram,
   getProvisioningScopesForProgram,
-} from '@programs/oauth/program-scopes';
-import type { ProgramId } from '@programs/types';
-import { analytics } from './analytics';
-import { getUI } from '@ui';
+} from './oauth/program-scopes';
+import type { ProgramId } from './program-registry';
+import { analytics } from '@utils/analytics';
 import { HostResolution } from '@shared/host-resolution';
 import {
   assertWizardCompletionScope,
   missingOAuthScopes,
   performOAuthFlow,
-} from './oauth';
-import { resolveGrantedProject } from './project-resolution';
+  type OAuthFlowHost,
+} from '@utils/oauth';
+import { resolveGrantedProject } from '@utils/project-resolution';
 import {
   ProvisionedAccountUnreadableError,
   provisionNewAccount,
-} from './provisioning';
+} from '@utils/provisioning';
 import {
   fetchUserData,
   fetchProjectData,
   type ApiUser,
   type ApiProject,
 } from '@shared/api';
-import { versionSatisfiesRange } from './semver';
-import { wizardAbort } from './wizard-abort';
-import { OutroKind } from '@lib/wizard-session';
+import type { HostFailure } from './host-capabilities';
+import { OutroKind } from '@agent';
 
 interface ProjectData {
   projectApiKey: string;
@@ -84,43 +73,11 @@ interface ProjectData {
   missingScopes?: readonly string[];
 }
 
-export interface CliSetupConfig {
-  filename: string;
-  name: string;
-  gitignore: boolean;
-
-  likelyAlreadyHasAuthToken(contents: string): boolean;
-  tokenContent(authToken: string): string;
-
-  likelyAlreadyHasOrgAndProject(contents: string): boolean;
-  orgAndProjContent(org: string, project: string): string;
-
-  likelyAlreadyHasUrl?(contents: string): boolean;
-  urlContent?(url: string): string;
-}
-
-export interface CliSetupConfigContent {
-  authToken: string;
-  org?: string;
-  project?: string;
-  url?: string;
-}
-
-/** @deprecated Use wizardAbort() directly for new code. */
-export async function abort(message?: string, status?: number): Promise<never> {
-  return wizardAbort({ message, exitCode: status });
-}
-
-export function isInGitRepo(): boolean {
-  try {
-    childProcess.execSync('git rev-parse --show-toplevel', {
-      stdio: 'ignore',
-    });
-  } catch {
-    return false;
-  }
-  return true;
-}
+/** What resolving project data needs from its host: the OAuth flow's needs, success lines and abort. */
+export type ProjectDataHost = Omit<OAuthFlowHost, 'log' | 'abort'> & {
+  log: OAuthFlowHost['log'] & { success(message: string): void };
+  abort(failure?: HostFailure): Promise<never>;
+};
 
 const FREEMAIL_DOMAINS = new Set([
   'gmail.com',
@@ -181,182 +138,10 @@ export function detectOrgAndProject(email: string): {
   return { orgName, projectName };
 }
 
-export function getUncommittedOrUntrackedFiles(): string[] {
-  let gitStatus: string;
-  try {
-    gitStatus = childProcess
-      .execSync('git status --porcelain=v1', {
-        // we only care about stdout
-        stdio: ['ignore', 'pipe', 'ignore'],
-      })
-      .toString();
-  } catch {
-    return [];
-  }
-
-  const result: string[] = [];
-  for (const rawLine of gitStatus.split(os.EOL)) {
-    const line = rawLine.trim();
-    if (!line) continue;
-    const match = /^\S+\s+(\S+)/.exec(line);
-    result.push(`- ${match?.[1]}`);
-  }
-  return result;
-}
-
-export async function isReact19Installed({
-  installDir,
-}: Pick<WizardRunOptions, 'installDir'>): Promise<boolean> {
-  try {
-    const packageJson = await tryGetPackageJson({ installDir });
-    if (!packageJson) return false;
-    const reactVersion = getDeclaredVersion('react', packageJson);
-
-    if (!reactVersion) {
-      return false;
-    }
-
-    return versionSatisfiesRange({
-      version: reactVersion,
-      acceptableVersions: '>=19.0.0',
-      canBeLatest: true,
-    });
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Installs or updates a package with the user's package manager.
- *
- * IMPORTANT: This function modifies the `package.json`! Be sure to re-read
- * it if you make additional modifications to it after calling this function!
- */
-export async function installPackage({
-  packageName,
-  alreadyInstalled,
-  packageNameDisplayLabel,
-  packageManager,
-  integration,
-  installDir,
-}: {
-  packageName: string;
-  alreadyInstalled: boolean;
-  packageNameDisplayLabel?: string;
-  packageManager?: PackageManager;
-  integration?: string;
-  installDir: string;
-}): Promise<{ packageManager?: PackageManager }> {
-  return withProgress('install-package', async () => {
-    const sdkInstallSpinner = getUI().spinner();
-
-    const pkgManager =
-      packageManager || (await getPackageManager({ installDir }));
-
-    const isReact19 = await isReact19Installed({ installDir });
-    const legacyPeerDepsFlag =
-      isReact19 && pkgManager.name === 'npm' ? '--legacy-peer-deps' : '';
-
-    sdkInstallSpinner.start(
-      `${alreadyInstalled ? 'Updating' : 'Installing'} ${
-        packageNameDisplayLabel ?? packageName
-      } with ${pkgManager.label}.`,
-    );
-
-    const execAsync = promisify(childProcess.exec);
-    const installCommand =
-      `${pkgManager.installCommand} ${packageName} ${pkgManager.flags} ${legacyPeerDepsFlag}`.trim();
-
-    try {
-      await execAsync(installCommand, { cwd: installDir });
-    } catch (e) {
-      const { stdout = '', stderr = '' } = (e ?? {}) as {
-        stdout?: string;
-        stderr?: string;
-      };
-      fs.writeFileSync(
-        join(
-          process.cwd(),
-          `posthog-wizard-installation-error-${Date.now()}.log`,
-        ),
-        JSON.stringify({ stdout, stderr }),
-        { encoding: 'utf8' },
-      );
-      sdkInstallSpinner.stop('Installation failed.');
-      getUI().log.error(
-        // eslint-disable-next-line @typescript-eslint/restrict-template-expressions
-        `Encountered the following error during installation:\n\n${e}\n\nThe wizard has created a \`posthog-wizard-installation-error-*.log\` file. If you think this issue is caused by the PostHog wizard, create an issue on GitHub and include the log file's content:\n${ISSUES_URL}`,
-      );
-      await abort();
-    }
-
-    sdkInstallSpinner.stop(
-      `${alreadyInstalled ? 'Updated' : 'Installed'} ${
-        packageNameDisplayLabel ?? packageName
-      } with ${pkgManager.label}.`,
-    );
-
-    analytics.wizardCapture('package installed', {
-      package_name: packageName,
-      package_manager: pkgManager.name,
-      integration,
-    });
-
-    return { packageManager: pkgManager };
-  });
-}
-
-/**
- * Try to get package.json, returning null if it doesn't exist.
- * Use this for detection purposes where missing package.json is expected (e.g., Python projects).
- */
-export async function tryGetPackageJson({
-  installDir,
-}: Pick<WizardRunOptions, 'installDir'>): Promise<PackageJson | null> {
-  try {
-    const packageJsonFileContents = await fs.promises.readFile(
-      join(installDir, 'package.json'),
-      'utf8',
-    );
-    return JSON.parse(packageJsonFileContents) as PackageJson;
-  } catch {
-    return null;
-  }
-}
-
 /**
  * Detect and return the package manager. Pure — no prompts.
  * Falls back to first detected or npm if ambiguous.
  */
-// eslint-disable-next-line @typescript-eslint/require-await
-export async function getPackageManager(
-  options: Pick<WizardRunOptions, 'installDir'> & { ci?: boolean },
-): Promise<PackageManager> {
-  const detectedPackageManagers = detectAllPackageManagers({
-    installDir: options.installDir,
-  });
-
-  if (detectedPackageManagers.length >= 1) {
-    const selected = detectedPackageManagers[0];
-    analytics.setTag('package-manager', selected.name);
-    return selected;
-  }
-
-  // No package manager detected — default to npm
-  analytics.setTag('package-manager', npm.name);
-  return npm;
-}
-
-export function isUsingTypeScript({
-  installDir,
-}: Pick<WizardRunOptions, 'installDir'>): boolean {
-  try {
-    fs.accessSync(join(installDir, 'tsconfig.json'));
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 /**
  * Get project data for the wizard via OAuth or CI API key.
@@ -375,6 +160,7 @@ export async function getOrAskForProjectData(
      *  `WIZARD_OAUTH_SCOPES`. Threaded into `askForWizardLogin`. */
     programId?: ProgramId | null;
   },
+  ui: ProjectDataHost,
 ): Promise<{
   host: HostResolution;
   projectApiKey: string;
@@ -394,7 +180,7 @@ export async function getOrAskForProjectData(
 }> {
   // CI mode: bypass OAuth, use personal API key for LLM gateway
   if (_options.ci && _options.apiKey) {
-    getUI().log.info('Using provided API key (CI mode - OAuth bypassed)');
+    ui.log.info('Using provided API key (CI mode - OAuth bypassed)');
 
     const host = await HostResolution.fromAccessToken(_options.apiKey, {
       region: _options.region,
@@ -432,7 +218,7 @@ export async function getOrAskForProjectData(
         '[ci-auth] identified via API key; flags evaluate as the key owner',
       );
     } else {
-      getUI().log.warn(
+      ui.log.warn(
         'Could not resolve the API key user (key needs user:read scope) — feature flags evaluate anonymously; user-targeted flags will not match.',
       );
     }
@@ -464,25 +250,28 @@ export async function getOrAskForProjectData(
     project,
     missingScopes,
   } = await withProgress('login', () =>
-    askForWizardLogin({
-      signup: _options.signup,
-      email: _options.email,
-      region: _options.region,
-      baseUrl: _options.baseUrl,
-      programId: _options.programId,
-      projectId: _options.projectId,
-      localMcp: _options.localMcp,
-    }),
+    askForWizardLogin(
+      {
+        signup: _options.signup,
+        email: _options.email,
+        region: _options.region,
+        baseUrl: _options.baseUrl,
+        programId: _options.programId,
+        projectId: _options.projectId,
+        localMcp: _options.localMcp,
+      },
+      ui,
+    ),
   );
 
   if (!projectApiKey) {
     const cloudUrl = host.appHost;
-    getUI().log.error(`Didn't receive a project token. This shouldn't happen :(
+    ui.log.error(`Didn't receive a project token. This shouldn't happen :(
 
 Please let us know if you think this is a bug in the wizard:
 ${ISSUES_URL}`);
 
-    getUI().log
+    ui.log
       .info(`In the meantime, we'll add a dummy project token ("${DUMMY_PROJECT_API_KEY}") for you to replace later.
 You can find your project token here:
 ${cloudUrl}/settings/project#variables`);
@@ -537,23 +326,27 @@ async function fetchProjectDataById(
   };
 }
 
-async function askForWizardLogin(options: {
-  signup: boolean;
-  email?: string;
-  region?: CloudRegion;
-  /** Explicit base URL override (`--base-url`); pins every PostHog origin. */
-  baseUrl?: string;
-  /** Used to pick the right scope set via `getOAuthScopesForProgram`.
-   *  Omitted → default `WIZARD_OAUTH_SCOPES`. */
-  programId?: ProgramId | null;
-  /** `--project-id`, if passed. When the user granted access to it on the consent
-   *  screen we use it directly; otherwise we fall back to the first granted team. */
-  projectId?: number;
-  /** `--local-mcp`: forwarded into the resolved host so `host.mcpUrl` is local. */
-  localMcp?: boolean;
-}): Promise<ProjectData> {
+async function askForWizardLogin(
+  options: {
+    signup: boolean;
+    email?: string;
+    region?: CloudRegion;
+    /** Explicit base URL override (`--base-url`); pins every PostHog origin. */
+    baseUrl?: string;
+    /** Used to pick the right scope set via `getOAuthScopesForProgram`.
+     *  Omitted → default `WIZARD_OAUTH_SCOPES`. */
+    programId?: ProgramId | null;
+    /** `--project-id`, if passed. When the user granted access to it on the consent
+     *  screen we use it directly; otherwise we fall back to the first granted team. */
+    projectId?: number;
+    /** `--local-mcp`: forwarded into the resolved host so `host.mcpUrl` is local. */
+    localMcp?: boolean;
+  },
+  ui: ProjectDataHost,
+): Promise<ProjectData> {
   if (options.signup) {
     return askForProvisioningSignup(
+      ui,
       options.email,
       options.region,
       options.baseUrl,
@@ -563,12 +356,15 @@ async function askForWizardLogin(options: {
   }
 
   const requestedScopes = [...getOAuthScopesForProgram(options.programId)];
-  const tokenResponse = await performOAuthFlow({
-    scopes: requestedScopes,
-    signup: false,
-    projectId: options.projectId,
-    baseUrl: options.baseUrl,
-  });
+  const tokenResponse = await performOAuthFlow(
+    {
+      scopes: requestedScopes,
+      signup: false,
+      projectId: options.projectId,
+      baseUrl: options.baseUrl,
+    },
+    ui,
+  );
 
   try {
     assertWizardCompletionScope(tokenResponse.scope);
@@ -580,7 +376,7 @@ async function askForWizardLogin(options: {
       step: 'wizard_login',
       missing_scope: 'event_definition:write',
     });
-    await wizardAbort({
+    await ui.abort({
       message: scopeError.message,
       outroData: {
         kind: OutroKind.Error,
@@ -615,8 +411,8 @@ async function askForWizardLogin(options: {
       requested_project_id: resolution.requested,
       granted_project_id: resolution.granted,
     });
-    getUI().log.error(error.message);
-    await abort(error.message);
+    ui.log.error(error.message);
+    await ui.abort({ message: error.message });
   }
 
   const projectId = resolution.ok ? resolution.projectId : undefined;
@@ -629,8 +425,8 @@ async function askForWizardLogin(options: {
       step: 'wizard_login',
       has_scoped_teams: !!tokenResponse.scoped_teams,
     });
-    getUI().log.error(error.message);
-    await abort(error.message);
+    ui.log.error(error.message);
+    await ui.abort({ message: error.message });
   }
 
   // The issuing region comes with the token; the us/eu @me probe only runs when omitted.
@@ -667,7 +463,7 @@ async function askForWizardLogin(options: {
     missingScopes: missingOAuthScopes(requestedScopes, tokenResponse.scope),
   };
 
-  getUI().log.success('Login complete.');
+  ui.log.success('Login complete.');
   analytics.setTag('opened-wizard-link', true);
   analytics.identifyUser(userData);
 
@@ -675,6 +471,7 @@ async function askForWizardLogin(options: {
 }
 
 async function askForProvisioningSignup(
+  ui: ProjectDataHost,
   email?: string,
   region?: CloudRegion,
   baseUrl?: string,
@@ -682,14 +479,14 @@ async function askForProvisioningSignup(
   programId?: ProgramId | null,
 ): Promise<ProjectData> {
   if (!email || !email.includes('@')) {
-    getUI().log.error(
+    ui.log.error(
       'Email is required for signup. Use --email your@email.com with --signup.',
     );
-    await abort();
+    await ui.abort();
     throw new Error('unreachable');
   }
 
-  const spinner = getUI().spinner();
+  const spinner = ui.spinner();
   spinner.start('Creating your PostHog account...');
 
   try {
@@ -703,7 +500,7 @@ async function askForProvisioningSignup(
     });
 
     spinner.stop('Account created!');
-    getUI().log.success('Welcome to PostHog!');
+    ui.log.success('Welcome to PostHog!');
 
     const host = HostResolution.fromApiHost(result.host, { localMcp });
 
@@ -726,64 +523,28 @@ async function askForProvisioningSignup(
     // second one on top of the org they already own.
     if (error instanceof ProvisionedAccountUnreadableError) {
       spinner.stop('Account created, but the project could not be read back.');
-      getUI().log.warn(message);
-      getUI().log.info('Signing you in to your new account instead...');
+      ui.log.warn(message);
+      ui.log.info('Signing you in to your new account instead...');
 
-      return askForWizardLogin({ signup: false, baseUrl, localMcp });
+      return askForWizardLogin({ signup: false, baseUrl, localMcp }, ui);
     }
 
     spinner.stop('Account creation failed.');
 
     if (message.includes('already associated')) {
-      getUI().log.info(
+      ui.log.info(
         'This email already has a PostHog account. Switching to login flow...',
       );
 
-      return askForWizardLogin({ signup: false, baseUrl, localMcp });
+      return askForWizardLogin({ signup: false, baseUrl, localMcp }, ui);
     }
 
-    getUI().log.error(`Failed to create account: ${message}`);
+    ui.log.error(`Failed to create account: ${message}`);
     analytics.captureException(
       error instanceof Error ? error : new Error(message),
       { step: 'provisioning_signup' },
     );
-    await abort();
+    await ui.abort();
     throw error;
   }
-}
-
-/**
- * Creates a new config file with the given filepath and codeSnippet.
- */
-export async function createNewConfigFile(
-  filepath: string,
-  codeSnippet: string,
-  { installDir }: Pick<WizardRunOptions, 'installDir'>,
-  moreInformation?: string,
-): Promise<boolean> {
-  if (!isAbsolute(filepath)) {
-    debug(`createNewConfigFile: filepath is not absolute: ${filepath}`);
-    return false;
-  }
-
-  const prettyFilename = relative(installDir, filepath);
-
-  try {
-    await fs.promises.writeFile(filepath, codeSnippet);
-
-    getUI().log.success(`Added new ${prettyFilename} file.`);
-
-    if (moreInformation) {
-      getUI().log.info(moreInformation);
-    }
-
-    return true;
-  } catch (e) {
-    debug(e);
-    getUI().log.warn(
-      `Could not create a new ${prettyFilename} file. Please create one manually and follow the instructions below.`,
-    );
-  }
-
-  return false;
 }

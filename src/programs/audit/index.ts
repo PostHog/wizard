@@ -1,9 +1,8 @@
 import {
-  AGENT_SKILL_STEPS,
   createSkillProgram,
   type SkillProgramOptions,
 } from '@programs/agent-skill/index';
-import type { ProgramStep, ProgramConfig } from '@programs/program-step';
+import type { ProgramConfig } from '@programs/program-step';
 import type { ProgramRun } from '@programs/program-run';
 import { OutroKind } from '@agent';
 import { WIZARD_TOOL_NAMES } from '@agent';
@@ -12,25 +11,10 @@ import { AUDIT_ABORT_CASES } from './detect.js';
 import { AUDIT_CHECKS_FILE, AUDIT_REPORT_FILE } from './types.js';
 import { AUDIT_SEED_CHECKS } from './seed.js';
 
-/** Audit-specific screens for the shared agent-skill pipeline. */
-const AUDIT_SCREEN_BY_STEP: Record<string, string> = {
-  intro: 'audit-intro',
-  run: 'audit-run',
-  outro: 'audit-outro',
-};
-
 type AuditRunState = {
   dashboardUrl: string | null;
   notebookUrl: string | null;
 };
-
-const withAuditScreens = (steps: ProgramStep[]): ProgramStep[] =>
-  steps.map((step) => {
-    const override = AUDIT_SCREEN_BY_STEP[step.id];
-    return override ? { ...step, screenId: override } : step;
-  });
-
-const auditSteps: ProgramStep[] = withAuditScreens(AGENT_SKILL_STEPS);
 
 const AUDIT_OPTIONS: SkillProgramOptions = {
   skillId: 'audit',
@@ -85,7 +69,6 @@ const auditRun = (session: AuditRunState): Promise<ProgramRun> =>
 
 export const auditConfig: ProgramConfig = {
   ...baseConfig,
-  steps: auditSteps,
   run: auditRun,
   auditLedgerFile: AUDIT_CHECKS_FILE,
   auditSeedChecks: AUDIT_SEED_CHECKS,

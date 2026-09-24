@@ -12,8 +12,7 @@
  * No switch statements, no hardcoded transitions in business logic.
  */
 
-import { RunPhase, type WizardSession } from '@lib/wizard-session';
-import { isRunFailure } from '@ui/mint-failure';
+import { isRunFailure } from '@tui/mint-failure';
 import { Program, type ProgramId } from '@programs';
 import {
   PROGRAM_SEQUENCES,
@@ -22,6 +21,8 @@ import {
   type Screen,
   type Sequence,
 } from './screen-sequences.js';
+import { RunPhase } from '@shared/run-state';
+import type { WizardSession } from '@tui/session';
 
 // Re-export so existing imports from './router.js' keep working
 export { ScreenId, Program };

@@ -8,8 +8,8 @@
  */
 
 import { ScreenId, Overlay, type ScreenName } from '@tui/router';
-import type { AskAnswers, AskQuestion } from '@lib/wizard-session';
 import type { CiState } from './wizard-ci-driver.js';
+import type { AskAnswers, AskQuestion } from '@agent/types';
 
 /** Which option to pick for a setup disambiguation question. */
 export type SetupChoice = 'first' | 'last';

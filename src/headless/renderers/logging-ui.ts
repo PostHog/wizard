@@ -12,20 +12,15 @@ import {
   type TokenUsageDelta,
 } from '@ui/wizard-ui';
 import type { SettingsConflict } from '@shared/claude-settings';
-import type { ApiUser } from '@shared/api';
+import type { ApiUser, Credentials } from '@shared/api';
 import { OAUTH_TIMEOUT_MS } from '@shared/constants';
 import {
   type WizardReadinessResult,
   getBlockingServiceKeys,
   SERVICE_LABELS,
 } from '@shared/health-checks/readiness';
-import type {
-  AskAnswers,
-  Credentials,
-  OutroData,
-  PendingQuestion,
-  TaskNotice,
-} from '@lib/wizard-session';
+import type { AskAnswers, PendingQuestion, TaskNotice } from '@agent/types';
+import type { OutroData } from '@shared/outro';
 
 export class LoggingUI implements WizardUI {
   intro(message: string): void {
@@ -294,7 +289,7 @@ export class LoggingUI implements WizardUI {
     // No-op — the hidden Ctrl+T HUD is TUI-only
   }
 
-  setOutroData(_data: import('@lib/wizard-session').OutroData): void {
+  setOutroData(_data: import('@shared/outro').OutroData): void {
     // No-op in CI mode
   }
 

@@ -5,11 +5,12 @@ import { authenticate } from '@programs/authenticate';
 import { getProgramConfig } from '@programs';
 import { getAuditChecks } from '@programs/audit/types';
 import { maybeStampAiSdkDetected } from '@programs/posthog-integration/detect';
-import type { ProgramConfig } from '@programs/types';
+import type { ProgramConfig, ProgramRunStep } from '@programs/types';
+import type { FlowStep } from '@tui/flow';
+import { rawProgramFlow } from '@tui/flows/index';
 import type { Harness, Sequence } from '@shared/constants';
 import type { startTUI as StartTUIFn } from '@tui/start-tui';
 import type { WizardStore } from '@tui/store';
-import { OutroKind, type WizardSession } from '@lib/wizard-session';
 import type { TaskStreamPush as TaskStreamPushClass } from '@programs/task-stream/task-stream-push';
 import { resolveNoTelemetry } from './resolve-no-telemetry';
 import { checkLocalServices, getLocalDev } from '@shared/local-dev';
@@ -19,32 +20,35 @@ import {
   registerRunSkillCleanup,
 } from '@shared/skill-run-cleanup';
 import { classifyRunFailure, emitWizardError } from '@shared/errors';
-import { isRunFailure } from '@ui/mint-failure';
+import { isRunFailure } from '@tui/mint-failure';
 import { getUI } from '@ui';
 import { analytics } from '@utils/analytics';
+import { cliAuthHost } from './auth-host';
+import { OutroKind } from '@shared/outro';
+import type { WizardSession } from '@tui/session';
 
 const WIZARD_VERSION = VERSION;
 
-type Step = ProgramConfig['steps'][number];
+type Step = FlowStep;
 
-/** The session a run step's agent runs in: scoped to the step's target dir
+/** The session a run step's agent runs in: scoped to the run step's target dir
  * (e.g. a monorepo sub-app) with its own framework context, after any prep.
- * A step without `targetDir` runs in the live session, unchanged.
+ * A run step without `targetDir` runs in the live session, unchanged.
  * The frameworkContext copy is shallow and unfiltered — name keys per owning program. */
 async function prepareRunSession(
-  step: Step,
+  runStep: ProgramRunStep | undefined,
   store: WizardStore,
 ): Promise<WizardSession> {
   const live = store.session;
   const previousLabel = live.detectedFrameworkLabel;
-  const session = step.targetDir
+  const session = runStep?.targetDir
     ? {
         ...live,
-        installDir: step.targetDir(live),
+        installDir: runStep.targetDir(live),
         frameworkContext: { ...live.frameworkContext },
       }
     : live;
-  if (step.onRunPrep) await step.onRunPrep(session);
+  if (runStep?.onRunPrep) await runStep.onRunPrep(session);
   if (
     session.detectedFrameworkLabel &&
     session.detectedFrameworkLabel !== previousLabel
@@ -64,18 +68,19 @@ export async function advanceStep(
   store: WizardStore,
   config: ProgramConfig,
 ): Promise<void> {
+  const runStep = config.runSteps?.[step.id];
   if (step.screenId === 'auth') {
-    await authenticate(store.session, config.id, getUI());
+    await authenticate(store.session, config.id, cliAuthHost());
     maybeStampAiSdkDetected(store.session);
-  } else if (step.runProgramId) {
+  } else if (runStep?.runProgramId) {
     await runProgramAgent(
-      getProgramConfig(step.runProgramId),
-      await prepareRunSession(step, store),
+      getProgramConfig(runStep.runProgramId),
+      await prepareRunSession(runStep, store),
       { composed: true },
     );
     store.completeRunStep(step.id);
   } else if (step.screenId === 'run') {
-    await runProgramAgent(config, await prepareRunSession(step, store));
+    await runProgramAgent(config, await prepareRunSession(runStep, store));
   } else if (step.isComplete) {
     await store.waitUntil(step.isComplete);
   }
@@ -102,7 +107,8 @@ export function runWizard(
       registerRunSkillCleanup(installDir);
 
       const { startTUI } = await import('@tui/start-tui');
-      const { buildSession, RunPhase } = await import('@lib/wizard-session');
+      const { buildSession } = await import('@tui/session');
+      const { RunPhase } = await import('@shared/run-state');
       const { TaskStreamPush } = await import('@programs/task-stream/index');
       const { PostHogDestination } = await import(
         '@programs/task-stream/destinations/posthog'
@@ -244,29 +250,31 @@ export function runWizard(
       await activeTui.store.getGate('health-check');
 
       const skipAgent = config.run == null;
-      const shown = (s: ProgramConfig['steps'][number]) =>
-        !s.show || s.show(activeTui.store.session);
+      const shown = (s: FlowStep) => !s.show || s.show(activeTui.store.session);
 
-      if (config.steps.some((s) => s.runProgramId || s.targetDir)) {
+      if (config.runSteps && Object.keys(config.runSteps).length > 0) {
         // A composed program: its step list includes a child program run
         // (self-driving runs the integration before its own
         // run), or scopes its own run to a picked project (error-tracking).
         // Walk the list once, advancing each step to completion.
-        for (const step of config.steps) {
+        for (const step of rawProgramFlow(config.id)) {
           if (step.screenId === 'outro') break; // run-completion wait owns it
           if (shown(step)) await advanceStep(step, activeTui.store, config);
         }
       } else if (skipAgent) {
-        const { getOrAskForProjectData } = await import('@utils/setup-utils');
+        const { getOrAskForProjectData } = await import('@programs');
         const { projectApiKey, host, accessToken, projectId } =
-          await getOrAskForProjectData({
-            signup: session.signup,
-            ci: session.ci,
-            apiKey: session.apiKey,
-            projectId: session.projectId,
-            baseUrl: session.baseUrl,
-            programId: config.id,
-          });
+          await getOrAskForProjectData(
+            {
+              signup: session.signup,
+              ci: session.ci,
+              apiKey: session.apiKey,
+              projectId: session.projectId,
+              baseUrl: session.baseUrl,
+              programId: config.id,
+            },
+            cliAuthHost(),
+          );
         activeTui.store.setCredentials({
           accessToken,
           projectApiKey,

@@ -6,7 +6,7 @@
 
 import { posthogIntegrationConfig } from '@programs/posthog-integration/index';
 import { DETECTED_WAREHOUSE_SOURCES_KEY } from '@programs/warehouse-source/detect';
-import { buildSession, type WizardSession } from '@lib/wizard-session';
+import { buildSession, type WizardSession } from '@tui/session';
 import type { DetectedSource } from '@programs/warehouse-sources/types';
 import { testProgramRunHost } from '../../../../test/program-host';
 

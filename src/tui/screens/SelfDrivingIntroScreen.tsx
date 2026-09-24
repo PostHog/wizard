@@ -19,7 +19,7 @@ import {
   PRICING_LONG,
   PRICING_SHORT,
 } from '@shared/self-driving-pricing';
-import type { SelfDrivingDetectError } from '@programs/self-driving/index';
+import type { SelfDrivingDetectError } from '@programs/types';
 
 interface SelfDrivingIntroScreenProps {
   store: WizardStore;

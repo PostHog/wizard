@@ -29,7 +29,6 @@
       "@tui/*": ["./src/tui/*"],
       "@headless/*": ["./src/headless/*"],
       "@cli/*": ["./src/cli/*"],
-      "@lib/*": ["./src/lib/*"],
       "@e2e-harness/*": ["./e2e-harness/*"],
       "@utils/*": ["./src/shared/utils/*"],
       "@ui": ["./src/ui/index.ts"],

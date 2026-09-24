@@ -19,7 +19,6 @@ import { TextInput } from '@inkjs/ui';
 import { useState, useSyncExternalStore } from 'react';
 
 import type { WizardStore } from '@tui/store';
-import type { CloudRegion } from '@lib/wizard-session';
 import { PickerMenu } from '@tui/primitives/index';
 import {
   PrivacyPanel,
@@ -28,6 +27,7 @@ import {
 import { IntroScreenLayout } from '@tui/screens/IntroScreenLayout';
 import { POSTHOG_PRIVACY_URL, POSTHOG_TERMS_URL } from '@shared/constants';
 import { Colors } from '@tui/styles';
+import type { CloudRegion } from '@utils/types';
 
 interface SelfDrivingIntegrationCheckScreenProps {
   store: WizardStore;

@@ -10,7 +10,7 @@ import { getSkillsBaseUrl } from '@shared/constants';
 import { fetchSkillMenu } from '@shared/skill-menu';
 
 import type { Command } from '../command';
-import { createFamilyPickerDefault } from '@tui/family-picker';
+import { createFamilyPickerDefault } from './family-picker';
 import { mergeCommandOptions, runCommandHandler } from './shared';
 
 export interface FamilyCommandFactoryOpts {

@@ -10,11 +10,11 @@
  * tree.
  */
 
-import type { Credentials } from '@lib/wizard-session';
-import { getOrAskForProjectData } from '@utils/setup-utils';
+import { getOrAskForProjectData } from '@programs';
+import { tuiAuthHost } from '@tui/auth-host';
 import { Program, createPosthogInferenceAuthProvider } from '@programs';
 import type { WizardStore } from '@tui/store';
-import type { ApiUser } from '@shared/api';
+import type { ApiUser, Credentials } from '@shared/api';
 import {
   probeProjectData as runProbe,
   type ProjectDataProfile,
@@ -95,22 +95,25 @@ export function createMcpSuggestedPromptsServices(
 ): McpSuggestedPromptsServices {
   return {
     performLogin: async () => {
-      const result = await getOrAskForProjectData({
-        signup: false,
-        ci: false,
-        apiKey: undefined,
-        projectId: undefined,
-        email: undefined,
-        region: undefined,
-        baseUrl: store.session.baseUrl,
-        // Widens the OAuth scope grant: base `WIZARD_OAUTH_SCOPES` plus
-        // read on every product surface (flags, experiments, surveys,
-        // replays, errors, web analytics, AI Observability, cohorts, persons) plus
-        // annotation read/write. Persistence writes (dashboard, insight,
-        // notebook) come for free from the base set. See
-        // `src/programs/oauth/program-scopes.ts`.
-        programId: Program.McpTutorial,
-      });
+      const result = await getOrAskForProjectData(
+        {
+          signup: false,
+          ci: false,
+          apiKey: undefined,
+          projectId: undefined,
+          email: undefined,
+          region: undefined,
+          baseUrl: store.session.baseUrl,
+          // Widens the OAuth scope grant: base `WIZARD_OAUTH_SCOPES` plus
+          // read on every product surface (flags, experiments, surveys,
+          // replays, errors, web analytics, AI Observability, cohorts, persons) plus
+          // annotation read/write. Persistence writes (dashboard, insight,
+          // notebook) come for free from the base set. See
+          // `src/programs/oauth/program-scopes.ts`.
+          programId: Program.McpTutorial,
+        },
+        tuiAuthHost(store),
+      );
       return {
         credentials: {
           accessToken: result.accessToken,
@@ -168,6 +171,6 @@ async function* runProductionPromptStreaming(args: {
   // Defer the SDK import to call time — the playground never hits
   // this path (it overrides the whole service object), so demo
   // sessions don't pay the SDK load cost.
-  const { runMcpPromptViaSdk } = await import('@agent');
+  const { runMcpPromptViaSdk } = await import('@programs');
   yield* runMcpPromptViaSdk(args);
 }

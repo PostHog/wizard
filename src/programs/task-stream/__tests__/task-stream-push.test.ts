@@ -6,7 +6,8 @@ import type {
 } from '@programs/task-stream/types';
 import type { WizardStore, TaskItem } from '@tui/store';
 import { TaskStatus } from '@ui/wizard-ui';
-import { RunPhase, type PendingQuestion } from '@lib/wizard-session';
+import { RunPhase } from '@shared/run-state';
+import type { PendingQuestion } from '@agent/types';
 
 type Listener = () => void;
 

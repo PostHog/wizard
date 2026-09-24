@@ -2,13 +2,13 @@ import fs from 'fs/promises';
 import path from 'path';
 import { getSkillsBaseUrl, POSTHOG_DOCS_URL } from '@shared/constants';
 import type { ProgramConfig } from '@programs/types';
-import type { WizardSession } from '@lib/wizard-session';
-import { downloadSkill } from '@agent';
+import { downloadSkill } from '@programs';
 import {
   fetchSkillMenu,
   type SkillEntry,
   type SkillMenu,
 } from '@shared/skill-menu';
+import type { WizardSession } from '@tui/session';
 
 export type WizardSpellbook = { path: string; skillsIncluded: boolean };
 type SpellbookSession = Pick<

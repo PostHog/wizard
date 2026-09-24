@@ -148,11 +148,11 @@ repos.
 
 **Program definition** (`src/programs/self-driving/`, four core files):
 `index.ts` (config + lifecycle), `prompt.ts` (the 10 steps + mechanics + project
-URLs), `detect.ts` (prerequisite check + abort vocabulary), `steps.ts` (TUI
+URLs), `detect.ts` (prerequisite check + abort vocabulary), `src/tui/flows/self-driving.ts` (TUI
 screen sequence
 `detect → intro → health-check → auth → self-driving-github → run → outro`). The
-TUI deck at `src/tui/decks/self-driving/tips.ts` (the `Tips`-sidebar copy
-that defines signal sources + scouts + scanners in plain language, wired via
+TUI deck at `src/tui/decks/self-driving/tips.ts` (the `Tips`-sidebar copy that
+defines signal sources + scouts + scanners in plain language, wired via
 `getTips`; `RunScreen` falls back to `DEFAULT_TIPS` for every other program, so
 nothing else is affected). `selfDrivingConfig` is built from the
 `createSkillProgram` factory (`src/programs/agent-skill/`) with overrides.
@@ -375,7 +375,7 @@ source is enabled.
    (`posthog/models/organization.py`, default `True`, nullable; admin toggle at
    `/settings/organization#organization-ai-consent`). Fail-closed; without it
    findings are silently dropped. Enforced for this program by the **base
-   wizard's AI opt-in gate** (`src/programs/ai-opt-in-gate.ts`,
+   wizard's AI opt-in gate** (`src/tui/flows/ai-opt-in-gate.ts`,
    `withAiOptInGate`): it injects an `ai-opt-in` step after `auth` for every
    program that doesn't set `requiresAi: false` (self-driving doesn't), and
    `store.getGate('ai-opt-in')` parks the agent until approval lands — so the

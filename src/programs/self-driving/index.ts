@@ -4,11 +4,14 @@ import type { ProgramConfig } from '@programs/program-step';
 import type { ProgramRun } from '@programs/program-run';
 import { OutroKind } from '@agent';
 import { createSkillProgram } from '../agent-skill/index.js';
-import { SELF_DRIVING_PROGRAM } from './steps.js';
 import {
   SELF_DRIVING_ABORT_CASES,
+  SELF_DRIVING_INTEGRATE_PATH_KEY,
+  detectSelfDrivingPrerequisites,
   getSelfDrivingDetectedTools,
 } from './detect.js';
+import { prepSelfDrivingIntegration } from './detect-agentic.js';
+import { resolveProjectDir } from '@programs/detection/agentic';
 import { buildSelfDrivingPrompt } from './prompt.js';
 import { resolveSelfDrivingStepKey } from './step-keys.js';
 import {
@@ -41,6 +44,16 @@ async function removeInstalledSkill(installDir: string): Promise<void> {
   }
   await rm(skillDir, { recursive: true, force: true }).catch(() => undefined);
 }
+
+/** Absolute dir to integrate into: the picked sub-app (LLM output — the shared resolver clamps escapes), else the repo root. */
+const integrationDir = (session: {
+  installDir: string;
+  frameworkContext: Record<string, unknown>;
+}): string =>
+  resolveProjectDir(
+    session.installDir,
+    session.frameworkContext[SELF_DRIVING_INTEGRATE_PATH_KEY],
+  );
 
 // A session closure (not a static object) so `customPrompt` can read the
 // tools detected in the codebase — written to frameworkContext by the detect
@@ -127,11 +140,19 @@ export const selfDrivingConfig: ProgramConfig = {
     requires: ['posthog-integration'],
     abortCases: SELF_DRIVING_ABORT_CASES,
   }),
-  steps: SELF_DRIVING_PROGRAM,
+  onReady: (ctx) =>
+    detectSelfDrivingPrerequisites(ctx.session, ctx.setFrameworkContext),
+  runSteps: {
+    // The integration's own agent, in the picked project's dir.
+    'integrate-run': {
+      runProgramId: 'posthog-integration',
+      targetDir: integrationDir,
+      onRunPrep: prepSelfDrivingIntegration,
+    },
+  },
   run: buildRun,
 };
 
-export { SELF_DRIVING_PROGRAM } from './steps.js';
 export {
   detectSelfDrivingPrerequisites,
   SELF_DRIVING_ABORT_CASES,

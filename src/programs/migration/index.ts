@@ -1,6 +1,5 @@
 import type { ProgramConfig } from '@programs/program-step';
 import { WIZARD_TOOL_NAMES } from '@agent';
-import { MIGRATION_PROGRAM } from './steps.js';
 import {
   DEFAULT_MIGRATE_SKILL_ID,
   MIGRATION_REPORT_FILE,
@@ -12,12 +11,9 @@ export const migrationConfig: ProgramConfig = {
   description: 'Migrate to PostHog from another analytics provider',
   id: 'migration',
   skillId: DEFAULT_MIGRATE_SKILL_ID,
-  steps: MIGRATION_PROGRAM,
   reportFile: MIGRATION_REPORT_FILE,
   allowedTools: ['Agent'],
   disallowedTools: [WIZARD_TOOL_NAMES.wizardAsk],
   run: MIGRATION_RUN,
   requires: ['posthog-integration'],
 };
-
-export { MIGRATION_PROGRAM } from './steps.js';

@@ -11,9 +11,8 @@ describe('replay-vision program', () => {
     expect(replayVisionConfig.agentFlow).toBe('replay-vision');
   });
 
-  test('detects the framework before the agent-skill steps', () => {
-    expect(replayVisionConfig.steps[0]?.id).toBe('detect');
-    expect(replayVisionConfig.steps[0]?.onReady).toBeDefined();
+  test('detects the framework before the flow', () => {
+    expect(replayVisionConfig.onReady).toBeDefined();
   });
 
   test('declares ci prerequisite work for headless runs', () => {

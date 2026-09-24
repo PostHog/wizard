@@ -17,11 +17,13 @@ import fs from 'fs';
 import net from 'net';
 import { spawnSync } from 'child_process';
 import { startTUI } from '@tui/start-tui';
+import { rawProgramFlow } from '@tui/flows/index';
+import { advanceStep } from '@cli/runners/run-wizard';
+import { cliAuthHost } from '@cli/runners/auth-host';
 import { getUI } from '@ui';
 import { VERSION } from '@shared/version';
 import { Program, getProgramConfig, type ProgramId } from '@programs';
 import type { Harness, Sequence } from '@shared/constants';
-import { buildSession } from '@lib/wizard-session';
 import { initLocalDev } from '@shared/local-dev';
 import { loadCiInferenceAuthProvider } from '@cli/runners/ci-inference-auth';
 import type { InferenceAuthProvider } from '@agent/types';
@@ -33,7 +35,7 @@ import {
 } from '@programs/task-stream/index';
 import { getAuditChecks } from '@programs/audit/types';
 import { authenticate } from '@programs/authenticate';
-import { getOrAskForProjectData } from '@utils/setup-utils';
+import { getOrAskForProjectData } from '@programs/project-data';
 import { logToFile } from '@utils/debug';
 import { join } from 'path';
 import { detectFramework } from '@programs/detection/index';
@@ -60,6 +62,7 @@ import {
   readReportFile,
 } from '@e2e-harness/e2e-result';
 import { tuiSnapshotSignature } from '@e2e-harness/tui-snapshot-signature';
+import { buildSession } from '@tui/session';
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const mark = (m: string) => logToFile(`[tui-host] ${m}`);
@@ -278,13 +281,16 @@ async function main() {
   // Resolve credentials from the phx key (same bearer as an OAuth token) and set
   // them on the store — advances the auth screen with no browser, no keystrokes.
   const authByState = async () => {
-    const d = await getOrAskForProjectData({
-      signup: false,
-      ci: true,
-      apiKey,
-      projectId: Number(projectId),
-      programId,
-    });
+    const d = await getOrAskForProjectData(
+      {
+        signup: false,
+        ci: true,
+        apiKey,
+        projectId: Number(projectId),
+        programId,
+      },
+      cliAuthHost(),
+    );
     store.setCredentials({
       accessToken: d.accessToken,
       projectApiKey: d.projectApiKey,
@@ -306,45 +312,14 @@ async function main() {
     // or scope their own run to a picked project (error-tracking).
     // `authenticate` here resolves the phx key, not OAuth, since the session is
     // built with ci + apiKey.
-    if (programConfig.steps.some((s) => s.runProgramId || s.targetDir)) {
-      const runSessionFor = async (
-        step: (typeof programConfig.steps)[number],
-      ) => {
-        const live = store.session;
-        const previousLabel = live.detectedFrameworkLabel;
-        const runSession = step.targetDir
-          ? {
-              ...live,
-              installDir: step.targetDir(live),
-              frameworkContext: { ...live.frameworkContext },
-            }
-          : live;
-        if (step.onRunPrep) await step.onRunPrep(runSession);
-        if (
-          runSession.detectedFrameworkLabel &&
-          runSession.detectedFrameworkLabel !== previousLabel
-        ) {
-          store.setDetectedFramework(runSession.detectedFrameworkLabel);
-        }
-        return runSession;
-      };
-      for (const step of programConfig.steps) {
+    if (
+      programConfig.runSteps &&
+      Object.keys(programConfig.runSteps).length > 0
+    ) {
+      for (const step of rawProgramFlow(programConfig.id)) {
         if (step.screenId === 'outro') break;
         if (step.show && !step.show(store.session)) continue;
-        if (step.screenId === 'auth') {
-          await authenticate(store.session, programConfig.id, getUI());
-        } else if (step.runProgramId) {
-          await runProgramAgent(
-            getProgramConfig(step.runProgramId),
-            await runSessionFor(step),
-            { composed: true },
-          );
-          store.completeRunStep(step.id);
-        } else if (step.screenId === 'run') {
-          await runProgramAgent(programConfig, await runSessionFor(step));
-        } else if (step.isComplete) {
-          await store.waitUntil(step.isComplete);
-        }
+        await advanceStep(step, store, programConfig);
       }
     } else {
       await runProgramAgent(programConfig, store.session);

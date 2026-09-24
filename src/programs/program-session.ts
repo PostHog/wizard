@@ -1,57 +1,23 @@
 /**
- * WizardSession — single source of truth for every decision the wizard needs.
+ * ProgramSession: what one program invocation knows and decides.
  *
- * Populated in layers:
- *   CLI args / env vars  →  populate fields directly
- *   Auto-detection       →  framework, typescript, package manager
- *   TUI screens          →  region, framework disambiguation, etc.
- *   OAuth                →  credentials
- *
- * Business logic reads from the session. Never calls a prompt.
+ * Launch values come from argv and env; detection, login, composition and
+ * run outputs are written as the program runs. Hosts extend it with their own
+ * state (the TUI adds its screen state to make `WizardSession`).
  */
 
 import { POSTHOG_LOCAL_URL, resolveLocalDev } from '@shared/local-dev';
-import { DiscoveredFeature, ScanConsent } from '@shared/scan-consent';
-import {
-  AdditionalFeature,
-  ADDITIONAL_FEATURE_LABELS,
-  ADDITIONAL_FEATURE_PROMPTS,
-  type Harness,
-  type Integration,
-  type Sequence,
-} from '@shared/constants';
-import type { FrameworkConfig } from '@programs/types';
-import type { WizardReadinessResult } from '@shared/health-checks/readiness';
-import type { SettingsConflict } from '@shared/claude-settings';
-import type { ApiUser, ApiProject, Credentials } from '@shared/api';
-import type { InferenceAuthProvider } from '@agent/types';
-import type { CloudRegion } from '@utils/types';
+import { ScanConsent, type DiscoveredFeature } from '@shared/scan-consent';
 import type {
-  AskAnswers,
-  AskQuestion,
-  OutroData,
-  PendingQuestion,
-  TaskNotice,
-} from '@agent/types';
-// Leaf module on purpose: shared analytics imports this file, so the agent
-// entry would form a module cycle here.
-// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- B2: the session becomes a TUI projection
-import { OutroKind } from '@agent/progress';
-import { McpOutcome, RunPhase } from '@shared/run-state';
-
-// These shapes moved to their owners; re-exported so every session reader
-// keeps its import path. `Credentials` sits with the API types, the
-// additional-feature enum with the other program enums in `./constants`, and
-// the outro, question and task-notice shapes are the agent's contract.
-export type { Credentials, CloudRegion };
-export {
   AdditionalFeature,
-  ADDITIONAL_FEATURE_LABELS,
-  ADDITIONAL_FEATURE_PROMPTS,
-};
-export { OutroKind };
-export { McpOutcome, RunPhase, ScanConsent };
-export type { AskAnswers, AskQuestion, OutroData, PendingQuestion, TaskNotice };
+  Harness,
+  Integration,
+  Sequence,
+} from '@shared/constants';
+import type { ApiUser, ApiProject, Credentials } from '@shared/api';
+import type { CloudRegion } from '@utils/types';
+import type { InferenceAuthProvider, OutroData } from '@agent/types';
+import type { FrameworkConfig } from './framework-config';
 
 function parseProjectIdArg(value: string | undefined): number | undefined {
   if (value === undefined || value === '') return undefined;
@@ -59,19 +25,7 @@ function parseProjectIdArg(value: string | undefined): number | undefined {
   return Number.isInteger(n) && n > 0 ? n : undefined;
 }
 
-/** Compatibility export for session readers; detection owns the shared value. */
-export { DiscoveredFeature };
-
-/**
- * PostHog dashboard URL emitted by the agent during a program run.
- * Populated via the `[DASHBOARD_URL]` text marker in agent assistant messages
- * — see `handleSDKMessage` in `agent/agent-interface.ts`. Read by programs
- * (e.g. events-audit) inside `buildOutroData` to surface a dashboard link
- * the agent actually created.
- */
-
-export interface WizardSession {
-  // From CLI args
+export interface ProgramSession {
   debug: boolean;
   installDir: string;
   ci: boolean;
@@ -112,7 +66,6 @@ export interface WizardSession {
   yaraReport: boolean;
   projectId?: number;
   noTelemetry: boolean;
-
   /**
    * `--capture-aio`: mirror every wizard LLM call as an `$ai_generation` event
    * into the authenticated project's AI Observability tab. Dev/test builds
@@ -120,16 +73,12 @@ export interface WizardSession {
    * there. See `src/agent/aio-capture.ts`.
    */
   captureAio: boolean;
-
   /** `--harness` override, read by `resolveHarness`. Wins over the runner flag. */
   harness?: Harness;
   /** `--sequence` override, read in `runProgram`. Wins over the orchestrator flag. */
   sequence?: Sequence;
   /** `--model` override (gateway id), read by `resolveHarness`. Wins over the binding's model. */
   model?: string;
-
-  // From detection + screens
-  setupConfirmed: boolean;
   /**
    * Gates reporting only; local detection runs either way. Reporting treats
    * 'undecided' as 'declined', so a path that reports before the user was
@@ -147,28 +96,21 @@ export interface WizardSession {
   integration: Integration | null;
   frameworkContext: Record<string, unknown>;
   typescript: boolean;
-
   /** Human-readable label for the detected framework variant (e.g., "Django with Wagtail CMS") */
   detectedFrameworkLabel: string | null;
-
   /** PostHog found in the project's dependencies. A signal, not a verified install. */
   posthogSdkDetected: boolean;
-
   /** True once framework detection has run (whether it found something or not) */
   detectionComplete: boolean;
-
   /** Set when the detected framework version is too old for the wizard */
   unsupportedVersion: {
     current: string;
     minimum: string;
     docsUrl: string;
   } | null;
-
-  // From OAuth
   credentials: Credentials | null;
   /** Host-supplied inference auth for legacy steps that run before the callable host. */
   inferenceAuth?: InferenceAuthProvider;
-
   /**
    * `role_at_organization` from `/api/users/@me/`. Null when the upstream
    * value is missing (older accounts, fresh signups before onboarding).
@@ -179,7 +121,6 @@ export interface WizardSession {
    * the broader `apiUser` plumbing.
    */
   roleAtOrganization: string | null;
-
   /**
    * Full user payload from `/api/users/@me/` — identifiers, profile,
    * current team + organization, preferences, etc. Null until OAuth /
@@ -189,7 +130,6 @@ export interface WizardSession {
    * re-fetching.
    */
   apiUser: ApiUser | null;
-
   /**
    * Project payload resolved at authentication, kept so a second agent run in
    * the same invocation (e.g. self-driving's integration phase) reuses the
@@ -197,37 +137,7 @@ export interface WizardSession {
    * lives on `credentials.host.region`.
    */
   apiProject: ApiProject | null;
-
-  // Lifecycle
-  runPhase: RunPhase;
-  loginUrl: string | null;
-  // Direct PostHog authorize URL, shown in the manual-paste modal for
-  // headless/remote shells (the localhost loginUrl is unreachable there).
-  authorizeUrl: string | null;
-
-  // Feature discovery
   discoveredFeatures: DiscoveredFeature[];
-  llmOptIn: boolean;
-
-  // ScreenId completion
-  mcpComplete: boolean;
-  mcpOutcome: McpOutcome | null;
-  mcpInstalledClients: string[];
-  /** Editor-owned login commands still to run (e.g. `claude mcp login posthog`), echoed at exit. */
-  mcpLoginCommands: string[];
-  mcpSuggestedPromptsDismissed: boolean;
-  /** True once the user has acted on (opened or skipped) the Connect-Slack step. */
-  slackStepDismissed: boolean;
-  /**
-   * Whether the project already has a Slack integration connected.
-   * `null` until detected. Prefetched by the tutorial screen as soon as
-   * credentials exist so the Connect-Slack step renders the right
-   * variant immediately instead of flashing the nudge first.
-   */
-  slackConnected: boolean | null;
-  skillsComplete: boolean;
-  outroDismissed: boolean;
-
   /**
    * Self-driving only: whether to integrate PostHog as part of this run.
    * `null` until decided. When detection finds no PostHog SDK, the
@@ -241,88 +151,22 @@ export interface WizardSession {
    * the Self-driving steps. Unused by other programs.
    */
   integrate: boolean | null;
-
   /**
    * Ids of composed run steps that have completed — e.g. self-driving's
    * `integrate-run`. Lets a run step's `isComplete` hold after it ran,
    * independent of the shared `runPhase`.
    */
   completedRuns: string[];
-
-  /**
-   * Self-driving only: whether the user confirmed the handoff screen shown
-   * after the integration run ("PostHog is installed — now set up Self-driving").
-   * Gates the Self-driving run so it doesn't start until acknowledged. Only
-   * reached in the integrate path; the already-has-PostHog path skips it.
-   */
-  selfDrivingHandoffConfirmed: boolean;
-
-  /**
-   * Self-driving only: whether the project has the PostHog GitHub App
-   * connected. `null` until the GitHub gate's first check resolves. Self-driving
-   * cannot research issues or open fixes without it, so the gate holds the run
-   * until this is `true`.
-   */
-  githubConnected: boolean | null;
-
-  /**
-   * Self-driving only: the user answered "I can't connect right now" on the
-   * GitHub gate. Completes the gate step and hides the run step, so the flow
-   * lands on the outro without starting the agent.
-   */
-  githubDeclined: boolean;
-
-  // Runtime
-  readinessResult: WizardReadinessResult | null;
-  outageDismissed: boolean;
-  settingsOverrideKeys: string[] | null;
-  settingsConflicts: SettingsConflict[] | null;
-  /** Mirrors `AuthErrorDetail` in `@ui/wizard-ui` — keep the two in step. */
-  authErrorDetail: {
-    hasSettingsConflict: boolean;
-    conflicts?: SettingsConflict[];
-    usingManagedLogin?: boolean;
-    credentialPlaces?: string[];
-    sessionExpired?: boolean;
-    logFilePath: string;
-  } | null;
-  portConflictProcess: {
-    command: string;
-    pid: string;
-    port: number;
-    user: string;
-  } | null;
-  /** Copy for the task-notice modal, set while it is open. */
-  taskNotice: TaskNotice | null;
   outroData: OutroData | null;
-  /** Skill saved for the user's own agent during the handoff. */
-  spellbook: { path: string; skillsIncluded: boolean } | null;
-  /**
-   * How the user left the mint-failure screen: `continue` walks the
-   * post-run steps (MCP, Slack, keep-skills), `exit` leaves. Null until then.
-   */
-  mintHandoff: 'continue' | 'exit' | null;
   dashboardUrl: string | null;
   notebookUrl: string | null;
-
-  // Additional features queue (drained via stop hook after main integration)
   additionalFeatureQueue: AdditionalFeature[];
-
-  // Program metadata (set by runWizard in bin.ts)
-  programLabel: string | null;
   skillId: string | null;
-
-  // Resolved framework config (set after integration is known)
   frameworkConfig: FrameworkConfig | null;
-
-  /** Active wizard_ask request, set by the bridge when the agent calls the tool. */
-  pendingQuestion: PendingQuestion | null;
 }
 
-/**
- * Build a WizardSession from CLI args, pre-populating whatever is known.
- */
-export function buildSession(args: {
+/** Launch values a host parses from argv and env. */
+export type ProgramLaunchArgs = {
   debug?: boolean;
   installDir?: string;
   ci?: boolean;
@@ -347,7 +191,10 @@ export function buildSession(args: {
   model?: string;
   integrate?: boolean;
   captureAio?: boolean;
-}): WizardSession {
+};
+
+/** A program session from launch values, with nothing detected or decided yet. */
+export function buildProgramSession(args: ProgramLaunchArgs): ProgramSession {
   const local = resolveLocalDev(args);
   return {
     debug: args.debug ?? false,
@@ -372,8 +219,6 @@ export function buildSession(args: {
     harness: args.harness,
     sequence: args.sequence,
     model: args.model,
-
-    setupConfirmed: false,
     // No screen can ask in a scripted CI run, so granting keeps CI's
     // telemetry as it was. --signup alone still provisions a brand-new
     // account headlessly, and that user has never seen the disclosure — a
@@ -388,48 +233,20 @@ export function buildSession(args: {
     posthogSdkDetected: false,
     detectionComplete: false,
     unsupportedVersion: null,
-
-    runPhase: RunPhase.Idle,
     discoveredFeatures: [],
-    llmOptIn: false,
-    mcpComplete: false,
-    mcpOutcome: null,
-    mcpInstalledClients: [],
-    mcpLoginCommands: [],
-    mcpSuggestedPromptsDismissed: false,
-    slackStepDismissed: false,
-    slackConnected: null,
-    skillsComplete: false,
-    outroDismissed: false,
     // `--integrate` forces integration (skip the question); otherwise the
     // integration-check screen resolves it from null.
     integrate: args.integrate === true ? true : null,
     completedRuns: [],
-    selfDrivingHandoffConfirmed: false,
-    githubConnected: null,
-    githubDeclined: false,
-    loginUrl: null,
-    authorizeUrl: null,
     credentials: null,
     roleAtOrganization: null,
     apiUser: null,
     apiProject: null,
-    readinessResult: null,
-    outageDismissed: false,
-    settingsOverrideKeys: null,
-    settingsConflicts: null,
-    authErrorDetail: null,
-    portConflictProcess: null,
-    taskNotice: null,
     outroData: null,
-    spellbook: null,
-    mintHandoff: null,
     dashboardUrl: null,
     notebookUrl: null,
     additionalFeatureQueue: [],
-    programLabel: null,
     skillId: null,
     frameworkConfig: null,
-    pendingQuestion: null,
   };
 }

@@ -85,7 +85,6 @@ export default defineConfig({
       { find: /^@tui\/(.*)$/, replacement: `${r('src/tui')}/$1` },
       { find: /^@headless\/(.*)$/, replacement: `${r('src/headless')}/$1` },
       { find: /^@cli\/(.*)$/, replacement: `${r('src/cli')}/$1` },
-      { find: /^@lib\/(.*)$/, replacement: `${r('src/lib')}/$1` },
       { find: /^@e2e-harness\/(.*)$/, replacement: `${r('e2e-harness')}/$1` },
       { find: /^@utils\/(.*)$/, replacement: `${r('src/shared/utils')}/$1` },
       { find: /^@ui$/, replacement: r('src/ui/index.ts') },

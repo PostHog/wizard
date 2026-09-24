@@ -48,11 +48,7 @@ export async function downloadSkill(
 /** The frameworkContext slot the legacy adapter fills for the e2e harness. */
 export { TASK_OUTCOMES_KEY } from './runner/shared/types';
 
-/**
- * Leaves in C2. The TUI receives agent data through program state. Until
- * then the suggested-prompts screen streams through this wrapper, which loads
- * the streaming module on first call so the startup chunk does not grow.
- */
+/** Streams one suggested MCP prompt; hosts reach it through `@programs`, loaded on first call. */
 export async function* runMcpPromptViaSdk(
   args: Parameters<
     typeof import('./mcp-prompt-streaming').runMcpPromptViaSdk

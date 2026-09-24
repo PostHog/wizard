@@ -36,7 +36,7 @@ function runMcpRemove(argv: Arguments): void {
 
     try {
       const { startTUI } = await import('@tui/start-tui');
-      const { buildSession } = await import('@lib/wizard-session');
+      const { buildSession } = await import('@tui/session');
       const tui = startTUI(VERSION, Program.McpRemove);
       tui.store.session = buildSession({
         debug,
@@ -55,8 +55,6 @@ function runMcpRemove(argv: Arguments): void {
 /** No exit code on an empty result: nothing to remove is the requested end state. */
 async function runHeadlessRemove(local?: boolean): Promise<void> {
   setUI(new LoggingUI());
-  const { removeMCPServerFromClientsStep } = await import(
-    '@tui/add-mcp-server-to-clients/index'
-  );
+  const { removeMCPServerFromClientsStep } = await import('./client-steps');
   await removeMCPServerFromClientsStep({ local });
 }

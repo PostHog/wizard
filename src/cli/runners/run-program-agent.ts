@@ -1,7 +1,6 @@
 /** Runs a ProgramConfig through runProgram with the session, `getUI()` and `wizardAbort` as its host, until Release C replaces it. */
 
 import { isDeepStrictEqual } from 'node:util';
-import type { WizardSession } from '@lib/wizard-session';
 import { analytics } from '@utils/analytics';
 import { createUiReducer, getUI, uiInteraction, type WizardUI } from '@ui';
 import { RunOutcome, TASK_OUTCOMES_KEY } from '@agent';
@@ -10,7 +9,6 @@ import {
   authenticate,
   FRAMEWORK_REGISTRY,
   getDetectedWarehouseSources,
-  postAuthGateSteps,
   runProgram,
 } from '@programs';
 import type {
@@ -39,6 +37,10 @@ import { ErrorCodes } from '@shared/errors';
 import { isNonInteractiveEnvironment } from '@utils/environment';
 import { Sequence, type Integration } from '@shared/constants';
 import { mayReportScanResults } from '@shared/scan-consent';
+import { postAuthGateSteps, type FlowStep } from '@tui/flow';
+import { rawProgramFlow } from '@tui/flows/index';
+import type { WizardSession } from '@tui/session';
+import { cliAuthHost } from './auth-host';
 
 /** Resolve the program's run from the session, run the gates, run it through runProgram and apply the result. */
 export async function runProgramAgent(
@@ -76,9 +78,10 @@ export async function runProgramAgent(
   }
 
   // 2. Health check (guarded — skip if TUI already ran it). Only
-  // programs that declare a health-check screen get pre-flight checks;
+  // programs whose TUI flow has a health-check screen get pre-flight checks;
   // for everything else the checks never fire and never block.
-  await runHealthGate(session, programConfig);
+  const flow = rawProgramFlow(programConfig.id);
+  await runHealthGate(session, flow);
 
   // 3. Settings conflicts
   await runSettingsGate(session);
@@ -164,9 +167,7 @@ export async function runProgramAgent(
         auditLedgerFile: programConfig.auditLedgerFile,
         auditSeedChecks: programConfig.auditSeedChecks,
         eventPlanFile: programConfig.eventPlanFile,
-        postAuthGates: postAuthGateSteps(programConfig.steps).map(
-          (step) => step.id,
-        ),
+        postAuthGates: postAuthGateSteps(flow).map((step) => step.id),
       },
       aiSdkStampReported: session.aiSdkStampReported,
       discoveredFeatures: session.discoveredFeatures,
@@ -178,7 +179,7 @@ export async function runProgramAgent(
         // authenticate() is idempotent, so a later run in the same invocation reuses the login.
         resolve: (programId) =>
           keepFailure(
-            authenticate(session, programId, ui).then(() => ({
+            authenticate(session, programId, cliAuthHost()).then(() => ({
               posthog: session.credentials!,
               inferenceAuth: session.inferenceAuth,
               project: session.apiProject,
@@ -292,11 +293,9 @@ const loadWizardFlags = async (): Promise<WizardFlagSnapshot> => ({
 
 async function runHealthGate(
   session: WizardSession,
-  programConfig: ProgramConfig,
+  flow: FlowStep[],
 ): Promise<void> {
-  const hasHealthCheckScreen = programConfig.steps.some(
-    (s) => s.screenId === 'health-check',
-  );
+  const hasHealthCheckScreen = flow.some((s) => s.screenId === 'health-check');
   if (session.readinessResult) {
     logToFile(
       `[agent-runner] readiness pre-computed by TUI: decision=${session.readinessResult.decision}` +

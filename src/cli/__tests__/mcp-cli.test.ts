@@ -11,7 +11,7 @@ const { mockBuildSessionMcp, mockStartTUIMcp, mockReadApiKeyFromEnvMcp } =
     mockReadApiKeyFromEnvMcp: vi.fn(() => undefined as string | undefined),
   }));
 
-vi.mock('@lib/wizard-session', () => ({
+vi.mock('@tui/session', () => ({
   buildSession: mockBuildSessionMcp,
   // analytics.ts imports this for sessionProperties(); unused by this
   // suite's assertions, stubbed only so the mocked module still satisfies

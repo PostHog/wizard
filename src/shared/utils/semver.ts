@@ -1,11 +1,4 @@
-import {
-  major,
-  minVersion,
-  satisfies,
-  subset,
-  valid,
-  validRange,
-} from 'semver';
+import { major, minVersion } from 'semver';
 
 /**
  * Version strings from package.json that are not semver ranges.
@@ -26,28 +19,6 @@ function isNonSemverVersion(version: string): boolean {
     v.startsWith('/') ||
     v.includes('/') // user/repo shorthand
   );
-}
-
-export function versionSatisfiesRange({
-  version,
-  acceptableVersions,
-  canBeLatest,
-}: {
-  version: string;
-  acceptableVersions: string;
-  canBeLatest: boolean;
-}): boolean {
-  if (version === 'latest') return canBeLatest;
-  if (isNonSemverVersion(version)) return false;
-
-  const concrete = valid(version);
-  if (concrete !== null) {
-    return satisfies(concrete, acceptableVersions);
-  }
-
-  const userRange = validRange(version);
-  if (userRange === null) return false;
-  return subset(userRange, acceptableVersions);
 }
 
 /**

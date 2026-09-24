@@ -11,11 +11,6 @@ import * as os from 'os';
 import * as path from 'path';
 import { Harness, Sequence, DEFAULT_AGENT_MODEL } from '@shared/constants';
 import { HostResolution } from '@shared/host-resolution';
-import {
-  OutroKind,
-  type AskAnswers,
-  type PendingQuestion,
-} from '@lib/wizard-session';
 import { ErrorCodes, WizardError } from '@shared/errors';
 import { AGENT_ERROR_CODE } from '@agent/error-map';
 import { AgentErrorType } from '@agent/signals';
@@ -202,6 +197,8 @@ import { initLogFile } from '@utils/debug';
 import { flushScanReport } from '@agent/yara-hooks';
 import { clearCleanup, runCleanups } from '@utils/cleanup-registry';
 import { QUEUE_DIR_NAME } from '../runner/sequence/orchestrator/queue';
+import { OutroKind } from '@shared/outro';
+import type { AskAnswers, PendingQuestion } from '@agent/types';
 
 let tmp: string;
 

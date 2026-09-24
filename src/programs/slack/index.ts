@@ -11,12 +11,4 @@ import type { ProgramConfig } from '@programs/program-step';
 export const slackConnectConfig: ProgramConfig = {
   id: 'slack',
   description: 'Connect PostHog to your Slack',
-  steps: [
-    {
-      id: 'slack-connect',
-      label: 'Connect Slack',
-      screenId: 'slack-connect',
-      isComplete: (s) => s.slackStepDismissed,
-    },
-  ],
 };

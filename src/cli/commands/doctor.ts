@@ -53,16 +53,20 @@ async function runDoctorCI(options: Record<string, unknown>): Promise<void> {
   getUI().log.info('Running posthog-doctor in CI mode');
 
   try {
-    const { getOrAskForProjectData } = await import('@utils/setup-utils');
-    const { host, accessToken, projectId } = await getOrAskForProjectData({
-      signup: false,
-      ci: true,
-      apiKey,
-      projectId: options.projectId
-        ? Number(options.projectId as string)
-        : undefined,
-      baseUrl: options.baseUrl as string | undefined,
-    });
+    const { getOrAskForProjectData } = await import('@programs');
+    const { cliAuthHost } = await import('@cli/runners/auth-host');
+    const { host, accessToken, projectId } = await getOrAskForProjectData(
+      {
+        signup: false,
+        ci: true,
+        apiKey,
+        projectId: options.projectId
+          ? Number(options.projectId as string)
+          : undefined,
+        baseUrl: options.baseUrl as string | undefined,
+      },
+      cliAuthHost(),
+    );
 
     const issues = await fetchHealthIssues(
       accessToken,

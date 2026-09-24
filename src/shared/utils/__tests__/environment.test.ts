@@ -9,7 +9,7 @@
  */
 
 import { readEnvironment } from '@utils/environment';
-import { buildSession } from '@lib/wizard-session';
+import { buildSession } from '@tui/session';
 import { isAskDisabled } from '@shared/ask-policy';
 
 /** Every var this file sets, cleared between cases. */

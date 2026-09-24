@@ -1,5 +1,7 @@
 import { readFileSync } from 'fs';
+import * as fs from 'node:fs';
 import path from 'path';
+import type { WizardRunOptions } from './types';
 
 export type PackageJson = {
   dependencies?: Record<string, string>;
@@ -77,5 +79,34 @@ export function getInstalledPackageVersion(
     return manifest.version;
   } catch {
     return undefined;
+  }
+}
+
+/**
+ * Try to get package.json, returning null if it doesn't exist.
+ * Use this for detection purposes where missing package.json is expected (e.g., Python projects).
+ */
+export async function tryGetPackageJson({
+  installDir,
+}: Pick<WizardRunOptions, 'installDir'>): Promise<PackageJson | null> {
+  try {
+    const packageJsonFileContents = await fs.promises.readFile(
+      path.join(installDir, 'package.json'),
+      'utf8',
+    );
+    return JSON.parse(packageJsonFileContents) as PackageJson;
+  } catch {
+    return null;
+  }
+}
+
+export function isUsingTypeScript({
+  installDir,
+}: Pick<WizardRunOptions, 'installDir'>): boolean {
+  try {
+    fs.accessSync(path.join(installDir, 'tsconfig.json'));
+    return true;
+  } catch {
+    return false;
   }
 }

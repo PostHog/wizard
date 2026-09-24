@@ -21,20 +21,6 @@ import {
   type AuthErrorDetail,
   type TokenUsageDelta,
 } from '@ui/wizard-ui';
-import {
-  type WizardSession,
-  type OutroData,
-  type DiscoveredFeature,
-  type PendingQuestion,
-  type AskAnswers,
-  type CloudRegion,
-  AdditionalFeature,
-  McpOutcome,
-  RunPhase,
-  ScanConsent,
-  buildSession,
-  type TaskNotice,
-} from '@lib/wizard-session';
 import type { SettingsConflict } from '@shared/claude-settings';
 import {
   WizardReadiness,
@@ -50,13 +36,21 @@ import {
   type ProgramId,
 } from './router.js';
 import { analytics, sessionProperties } from '@utils/analytics';
-import type { StoreInitContext, ProgramReadyContext } from '@programs/types';
-import { getProgramConfig } from '@programs';
-import { withAiOptInGate } from '@programs/ai-opt-in-gate';
-import { reportWarehouseSourcesDetected } from '@programs/posthog-integration/detect';
+import type { ProgramReadyContext } from '@programs/types';
+import type { StoreInitContext } from './flow.js';
+import { getProgramConfig, reportWarehouseSourcesDetected } from '@programs';
+import { getProgramFlow, rawProgramFlow } from './flows/index.js';
 import { appendStatus } from '@shared/status-history';
-import { IS_DEV } from '@shared/constants';
+import { IS_DEV, AdditionalFeature } from '@shared/constants';
 import { computeTokenCostUsd } from '@shared/token-pricing';
+import type { WizardSession } from '@tui/session';
+import type { OutroData } from '@shared/outro';
+import type { DiscoveredFeature } from '@shared/scan-consent';
+import type { PendingQuestion, AskAnswers, TaskNotice } from '@agent/types';
+import type { CloudRegion } from '@utils/types';
+import { McpOutcome, RunPhase } from '@shared/run-state';
+import { ScanConsent } from '@shared/scan-consent';
+import { buildSession } from '@tui/session';
 
 export { TaskStatus, ScreenId, Overlay, Program, RunPhase, McpOutcome };
 export type { ScreenName, OutroData, WizardSession, ProgramId };
@@ -197,16 +191,15 @@ export class WizardStore {
   }
 
   /**
-   * Scan program steps for gate predicates and create gate promises.
+   * Scan the program's flow for gate predicates and create gate promises.
    *
-   * Steps are wrapped with withAiOptInGate so the injected ai-opt-in
-   * step's gate registers here — the agent runner awaits it (via
+   * The flow includes the injected ai-opt-in step, so its gate registers here — the agent runner awaits it (via
    * WizardUI.waitForAiOptIn) before any source leaves the machine.
-   * Same wrapper screen-sequences.ts uses, so the gate and its screen
-   * can't drift apart.
+   * Same flow screen-sequences.ts uses, so the gate and its screen can't
+   * drift apart.
    */
   private _initFromProgram(program: ProgramId): void {
-    const steps = withAiOptInGate(getProgramConfig(program));
+    const steps = getProgramFlow(program);
 
     // Create gate promises from steps that define them
     for (const step of steps) {
@@ -226,13 +219,13 @@ export class WizardStore {
   }
 
   /**
-   * Run the program steps' onInit callbacks. startTUI calls this once
+   * Run the flow steps' onInit callbacks. startTUI calls this once
    * the screens are actually rendering — constructing a store alone
    * (tests, playground) must not fire init work like the health-check
    * pre-flight, whose probes belong only to flows that show its screen.
    */
   runInitHooks(): void {
-    const steps = getProgramConfig(this.router.activeProgram).steps;
+    const steps = rawProgramFlow(this.router.activeProgram);
     const getSession = (): WizardSession => this.session;
     const ctx: StoreInitContext = {
       get session() {
@@ -248,13 +241,13 @@ export class WizardStore {
   }
 
   /**
-   * Run all `onReady` hooks declared by the current flow's steps, in
-   * order. Must be called after `store.session = session` so hooks see
-   * the real installDir. bin.ts calls this generically — it doesn't
-   * need to know which program has which pre-flow work.
+   * Run the current program's `onReady` detection. Must be called after
+   * `store.session = session` so it sees the real installDir. bin.ts calls
+   * this generically — it doesn't need to know which program has which
+   * pre-flow work.
    */
   async runReadyHooks(): Promise<void> {
-    const steps = getProgramConfig(this.router.activeProgram).steps;
+    const config = getProgramConfig(this.router.activeProgram);
     const ctx: ProgramReadyContext = {
       session: this.session,
       setFrameworkContext: (k, v) => this.setFrameworkContext(k, v),
@@ -266,11 +259,7 @@ export class WizardStore {
       addDiscoveredFeature: (f) => this.addDiscoveredFeature(f),
       setDetectionComplete: () => this.setDetectionComplete(),
     };
-    for (const step of steps) {
-      if (step.onReady) {
-        await step.onReady(ctx);
-      }
-    }
+    await config.onReady?.(ctx);
   }
 
   // ── Gate API ────────────────────────────────────────────────────
@@ -1005,9 +994,7 @@ export class WizardStore {
    */
   private _programIdForScreen(screen: ScreenName): ProgramId {
     const program = this.router.activeProgram;
-    const step = getProgramConfig(program).steps.find(
-      (s) => s.screenId === screen,
-    );
+    const step = rawProgramFlow(program).find((s) => s.screenId === screen);
     return step?.reportsAsProgramId ?? program;
   }
 

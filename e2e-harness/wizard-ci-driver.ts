@@ -20,8 +20,9 @@
 
 import type { WizardStore } from '@tui/store';
 import type { ScreenName } from '@tui/router';
-import type { PendingQuestion, RunPhase } from '@lib/wizard-session';
 import { actionsForScreen, MissingParamError } from './action-registry.js';
+import type { PendingQuestion } from '@agent/types';
+import type { RunPhase } from '@shared/run-state';
 
 /** A setup question projected for the harness (no `detect` fn, no closures). */
 export interface SetupQuestionView {

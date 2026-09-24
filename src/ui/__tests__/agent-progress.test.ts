@@ -9,7 +9,7 @@ import {
   CANCELLED_SENTINEL,
   createWizardAskBridge,
 } from '@agent/wizard-ask-bridge';
-import { OutroKind } from '@lib/wizard-session';
+import { OutroKind } from '@shared/outro';
 import { logToFile } from '@utils/debug';
 
 beforeEach(() => {

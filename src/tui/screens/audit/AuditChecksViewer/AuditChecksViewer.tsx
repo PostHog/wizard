@@ -23,7 +23,6 @@ import {
   useKeyBindings,
   type KeyBinding,
 } from '@tui/hooks/useKeyBindings';
-import type { AuditCheck } from '@programs/audit/types';
 import { AreaHeaderRow } from './AreaHeaderRow.js';
 import { CheckRow } from './CheckRow.js';
 import { DetailRow } from './DetailRow.js';
@@ -31,6 +30,7 @@ import { Footer } from './Footer.js';
 import { Header, Summary, statusCounts } from './Header.js';
 import { computeLayout } from './layout.js';
 import { groupChecksByArea } from './sort.js';
+import type { AuditCheck } from '@programs/types';
 
 interface AuditChecksViewerProps {
   checks: AuditCheck[];

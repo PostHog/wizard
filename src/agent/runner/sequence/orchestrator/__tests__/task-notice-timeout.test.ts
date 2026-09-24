@@ -7,7 +7,6 @@
  * the run — so the offer is made at seed time, and only the work it gates is
  * deferred to the end of the queue.
  */
-import type { TaskNotice } from '@lib/wizard-session';
 
 // Hoisted: `vi.mock` factories are lifted above the imports, so the analytics
 // factory would otherwise read these before they exist.
@@ -35,6 +34,7 @@ import {
   offerSeededTask,
   TASK_NOTICE_TIMEOUT_MS,
 } from '@agent/runner/sequence/orchestrator/orchestrator-runner';
+import type { TaskNotice } from '@agent/types';
 
 /** The answerer under test, standing where `getUI()` used to. */
 const interaction = { taskNotice: showTaskNotice };

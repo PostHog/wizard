@@ -9,14 +9,17 @@ import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import type { WizardStore } from '@tui/store';
 import { LoadingBox, PickerMenu } from '@tui/primitives/index';
 import { Colors, Icons } from '@tui/styles';
-import { createUiReducer, getUI } from '@ui';
-import { FRAMEWORK_REGISTRY } from '@programs/registry';
+import { createUiReducer } from '@ui';
+import { InkUI } from '@tui/ink-ui';
 import {
+  FRAMEWORK_REGISTRY,
   detectErrorTrackingProjects,
   ERROR_TRACKING_PROJECT_PATH_KEY,
-  type ErrorTrackingDetectionReport,
-  type ErrorTrackingProject,
-} from '@programs/error-tracking/detect-agentic';
+} from '@programs';
+import type {
+  ErrorTrackingDetectionReport,
+  ErrorTrackingProject,
+} from '@programs/types';
 
 interface ErrorTrackingDetectScreenProps {
   store: WizardStore;
@@ -63,7 +66,7 @@ export const ErrorTrackingDetectScreen = ({
               setActivity((prev) => [...prev, line].slice(-MAX_ACTIVITY_LINES));
             }
           },
-          createUiReducer(getUI()),
+          createUiReducer(new InkUI(store)),
         );
         if (!cancelled) setState({ kind: 'ready', report });
       } catch (err) {

@@ -28,7 +28,7 @@ function runMcpTutorial(argv: Arguments): void {
 
     try {
       const { startTUI } = await import('@tui/start-tui');
-      const { buildSession } = await import('@lib/wizard-session');
+      const { buildSession } = await import('@tui/session');
       const tui = startTUI(VERSION, Program.McpTutorial);
       tui.store.session = buildSession({
         debug,

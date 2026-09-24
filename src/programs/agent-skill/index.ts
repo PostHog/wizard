@@ -20,7 +20,6 @@
  */
 
 import type { ProgramConfig } from '@programs/program-step';
-import { AGENT_SKILL_STEPS } from './steps.js';
 import {
   skillRunDefinition,
   type SkillProgramOptions,
@@ -34,11 +33,8 @@ export function createSkillProgram(opts: SkillProgramOptions): ProgramConfig {
     description: opts.description,
     id: opts.id,
     skillId: opts.skillId,
-    steps: AGENT_SKILL_STEPS,
     reportFile: opts.reportFile,
     run: skillRunDefinition(opts),
     requires: opts.requires,
   };
 }
-
-export { AGENT_SKILL_STEPS } from './steps.js';

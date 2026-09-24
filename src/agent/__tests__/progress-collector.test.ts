@@ -1,6 +1,6 @@
-import { OutroKind } from '@lib/wizard-session';
 import { createProgressCollector } from '../runner/shared/progress-collector';
 import { MAX_STATUS_MESSAGES } from '@shared/status-history';
+import { OutroKind } from '@shared/outro';
 
 it('retains a bounded FIFO of statuses and drops consecutive duplicates', () => {
   const observer = vi.fn();

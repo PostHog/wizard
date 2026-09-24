@@ -4,12 +4,9 @@ import { authenticate } from '@programs/authenticate';
 import { runProgramAgent } from '@cli/runners/run-program-agent';
 import { runAgent, RunOutcome, type RunResult } from '@agent/runner';
 import { Harness, Sequence } from '@shared/constants';
-import {
-  buildSession,
-  DiscoveredFeature,
-  OutroKind,
-  ScanConsent,
-} from '@lib/wizard-session';
+import { buildSession } from '@tui/session';
+import { OutroKind } from '@shared/outro';
+import { DiscoveredFeature, ScanConsent } from '@shared/scan-consent';
 import type { ApiUser } from '@shared/api';
 import { HostResolution } from '@shared/host-resolution';
 import { LoggingUI } from '@headless/renderers/logging-ui';
@@ -34,6 +31,7 @@ import {
   restoreClaudeSettings,
 } from '@shared/claude-settings';
 import { refreshAccessToken } from '@utils/oauth-token';
+import { evaluateWizardReadiness } from '@shared/health-checks/readiness';
 import { errorTrackingUploadSourceMapsConfig } from '../error-tracking-upload-source-maps/index';
 import type { ProgramConfig } from '../program-step';
 import type { ProgramRun } from '../program-run';
@@ -82,13 +80,29 @@ vi.mock('@agent/runner', async (original) => ({
   ...(await original<typeof import('@agent/runner')>()),
   runAgent: vi.fn(),
 }));
-vi.mock('@programs/authenticate', () => ({
+vi.mock('@programs/authenticate', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@programs/authenticate')>()),
   authenticate: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock('@shared/claude-settings', () => ({
   checkAllSettingsConflicts: vi.fn().mockReturnValue([]),
   restoreClaudeSettings: vi.fn(),
 }));
+// Fixture ids such as `metrics` have a health-check step in their TUI flow, so
+// the health gate probes readiness.
+vi.mock('@shared/health-checks/readiness', async (original) => {
+  const actual = await original<
+    typeof import('@shared/health-checks/readiness')
+  >();
+  return {
+    ...actual,
+    evaluateWizardReadiness: vi.fn().mockResolvedValue({
+      decision: actual.WizardReadiness.Yes,
+      health: {},
+      reasons: [],
+    }),
+  };
+});
 vi.mock('@utils/wizard-abort', async (original) => {
   const actual = await original<typeof import('@utils/wizard-abort')>();
   return {
@@ -103,7 +117,6 @@ vi.mock('@utils/oauth-token', () => ({ refreshAccessToken: vi.fn() }));
 
 const program = (id: ProgramConfig['id'] = 'metrics'): ProgramConfig => ({
   id,
-  steps: [],
   description: 'Test',
   run: {
     integrationLabel: 'test',
@@ -191,6 +204,15 @@ it.each([
     expect(analytics.shutdown).toHaveBeenCalledExactlyOnceWith('success');
   },
 );
+
+it('probes readiness only when the program flow has a health-check step', async () => {
+  await runProgramAgent(program('metrics'), session());
+  expect(evaluateWizardReadiness).toHaveBeenCalledOnce();
+
+  vi.mocked(evaluateWizardReadiness).mockClear();
+  await runProgramAgent(program('warehouse-source'), session());
+  expect(evaluateWizardReadiness).not.toHaveBeenCalled();
+});
 
 it('sends terminal analytics after the outro and the run, before the host goes on', async () => {
   const order: string[] = [];

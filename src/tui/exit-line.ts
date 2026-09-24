@@ -14,10 +14,10 @@
  */
 
 import { totalTokenCount, type WizardStore } from './store.js';
-import { OutroKind } from '@lib/wizard-session';
-import { isRunFailure, MINT_FAILURE_CONTACT } from '@ui/mint-failure';
+import { isRunFailure, MINT_FAILURE_CONTACT } from '@tui/mint-failure';
 import { formatTokenCount, formatCostUsd } from '@shared/token-pricing';
 import { getLogFilePath } from '@utils/debug';
+import { OutroKind } from '@shared/outro';
 
 const RESET_ATTRS = '\x1b[0m';
 const GREEN = '\x1b[32m';

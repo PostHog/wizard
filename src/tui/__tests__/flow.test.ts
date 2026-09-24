@@ -1,11 +1,8 @@
-import {
-  createProgramSequence,
-  type ProgramStep,
-} from '@programs/program-step';
+import { createProgramSequence, type FlowStep } from '../flow';
 
 describe('createProgramSequence', () => {
   it('filters out headless steps and keeps only screen-bearing ones', () => {
-    const steps: ProgramStep[] = [
+    const steps: FlowStep[] = [
       { id: 'detect', label: 'Detecting' }, // headless
       { id: 'intro', label: 'Welcome', screenId: 'intro' },
       { id: 'check', label: 'Checking' }, // headless
@@ -21,7 +18,7 @@ describe('createProgramSequence', () => {
     const gateFn = vi.fn();
     const isCompleteFn = vi.fn();
 
-    const steps: ProgramStep[] = [
+    const steps: FlowStep[] = [
       { id: 'a', label: 'A', screenId: 'a', gate: gateFn },
       {
         id: 'b',
@@ -41,14 +38,13 @@ describe('createProgramSequence', () => {
   });
 
   it('strips internal step fields — router only sees id/show/isComplete', () => {
-    const steps: ProgramStep[] = [
+    const steps: FlowStep[] = [
       {
         id: 'intro',
         label: 'Welcome',
         screenId: 'intro',
         gate: () => true,
         onInit: vi.fn(),
-        onReady: vi.fn(),
       },
     ];
 
@@ -57,6 +53,5 @@ describe('createProgramSequence', () => {
     expect(entry).not.toHaveProperty('label');
     expect(entry).not.toHaveProperty('gate');
     expect(entry).not.toHaveProperty('onInit');
-    expect(entry).not.toHaveProperty('onReady');
   });
 });

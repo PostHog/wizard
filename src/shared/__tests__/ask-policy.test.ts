@@ -1,5 +1,5 @@
 import { isAskDisabled } from '@shared/ask-policy';
-import { buildSession } from '@lib/wizard-session';
+import { buildSession } from '@tui/session';
 
 describe('isAskDisabled', () => {
   it('enables wizard_ask in interactive runs by default', () => {

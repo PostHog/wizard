@@ -7,7 +7,6 @@
  * The command was on the 5-minute default, so the fallback route gave the
  * user a quarter of the time the in-run prompt does for identical questions.
  */
-import type { WizardSession } from '@lib/wizard-session';
 import { testProgramRunHost } from '../../../test/program-host';
 
 vi.mock('@utils/analytics', () => ({
@@ -22,6 +21,7 @@ vi.mock('@utils/analytics', () => ({
 import { warehouseSourceConfig } from '@programs/warehouse-source/index';
 import { DEFAULT_ASK_TIMEOUT_MS } from '@agent/wizard-ask-bridge';
 import { LONGER_ASK_TIMEOUT_MS } from '@shared/ask-policy';
+import type { WizardSession } from '@tui/session';
 
 function session(): WizardSession {
   return { installDir: '/tmp/app', frameworkContext: {} } as WizardSession;

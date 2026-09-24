@@ -1,9 +1,6 @@
-import type {
-  WizardSession,
-  DiscoveredFeature,
-  TaskNotice,
-} from '@lib/wizard-session';
-import type { WizardReadinessResult } from '@shared/health-checks/readiness';
+import type { DiscoveredFeature } from '@shared/scan-consent';
+import type { TaskNotice } from '@agent/types';
+import type { ProgramSession } from './program-session';
 import type { ProgramRun } from '@programs/program-run';
 import type { Integration } from '@shared/constants';
 import type { AuditCheck } from '@shared/audit-ledger';
@@ -14,34 +11,12 @@ import type { ProgramId } from './program-registry.js';
 import type { ProgramCiHost, ProgramRunHost } from './host-capabilities.js';
 
 /**
- * A program step is the primary unit of the wizard's execution model.
- *
- * It can own:
- * - a screen in the TUI (optional — some steps are headless)
- * - agent work via a program reference (optional — some steps are UI-only)
- * - completion and visibility predicates
- *
- * The PostHog integration program is one ordered list of steps.
- * Other programs (e.g. revenue analytics) register a different step list.
- */
-/**
- * Context passed to onInit callbacks — fires when the TUI starts
- * rendering, before bin.ts has assigned the real session.
- */
-export interface StoreInitContext {
-  readonly session: WizardSession;
-  readonly setReadinessResult: (result: WizardReadinessResult | null) => void;
-  readonly setFrameworkContext: (key: string, value: unknown) => void;
-  readonly emitChange: () => void;
-}
-
-/**
  * Context passed to onReady callbacks — fires after bin.ts has assigned
  * the real session, so reading `session.installDir` returns the target
  * project. Use for async pre-program work like prerequisite detection.
  */
 export interface ProgramReadyContext {
-  readonly session: WizardSession;
+  readonly session: ProgramSession;
   readonly setFrameworkContext: (key: string, value: unknown) => void;
 
   // Detection-specific methods — used by core-integration's detect step
@@ -61,84 +36,25 @@ export interface ProgramReadyContext {
   readonly setPosthogSdkDetected: (detected: boolean) => void;
 }
 
-export interface ProgramStep {
-  /** Unique identifier for this step */
-  id: string;
-
-  /** Human-readable label for progress display */
-  label: string;
-
-  /**
-   * TUI screen this step owns, if any.
-   * Matches the ScreenId enum values (e.g. 'intro', 'run', 'outro').
-   */
-  screenId?: string;
-
-  /**
-   * For a composed run step (`screenId: 'run'`): identifies the child program
-   * whose agent the host runs. Omit to run this program's own agent.
-   */
+/**
+ * How one of a flow's run steps runs: which program's agent, in which
+ * directory, after what preparation. Keyed by the flow step id.
+ */
+export interface ProgramRunStep {
+  /** The child program whose agent runs. Omit to run this program's own agent. */
   runProgramId?: ProgramId;
-
   /**
-   * For a run step: prepare a derived session before its agent runs — e.g.
-   * gather framework context for the chosen project. The session it receives is
-   * the run's own, so writes don't leak into later runs.
+   * Prepare a derived session before the agent runs, e.g. gather framework
+   * context for the chosen project. The session is the run's own, so writes
+   * don't leak into later runs.
    */
-  onRunPrep?: (session: WizardSession) => Promise<void>;
-
+  onRunPrep?: (session: ProgramSession) => Promise<void>;
   /**
-   * For a run step: the working directory its agent runs in, resolved from the
-   * session (e.g. self-driving's integration runs in the picked monorepo
-   * sub-app, not the repo root). The runner scopes a derived session to this
-   * dir for that run only. Defaults to `session.installDir`.
+   * The directory the agent runs in (e.g. a picked monorepo sub-app). The
+   * runner scopes a derived session to it for that run only. Defaults to
+   * `session.installDir`.
    */
-  targetDir?: (session: WizardSession) => string;
-
-  /**
-   * Whether this step should be visible in the current program.
-   * If omitted, the step is always visible.
-   */
-  show?: (session: WizardSession) => boolean;
-
-  /**
-   * Exit condition for the screen. Router advances when true.
-   * Defaults to `gate` if unset.
-   */
-  isComplete?: (session: WizardSession) => boolean;
-
-  /**
-   * Define a gate if your screen needs to await user interactions.
-   * bin.ts can `await store.getGate(stepId)` to pause until the
-   * predicate becomes true.
-   */
-  gate?: (session: WizardSession) => boolean;
-
-  /**
-   * Called once when the TUI starts rendering, with the default
-   * session. Use for session-independent fire-and-forget work that
-   * should start as early as possible (e.g. health check kicked off
-   * while the user is still reading the intro screen). Never fires for
-   * a store that isn't rendering screens (tests, playground).
-   */
-  onInit?: (ctx: StoreInitContext) => void;
-
-  /**
-   * Called once after bin.ts has assigned the real session to the store,
-   * before any gate is awaited. Awaited in sequence with other steps'
-   * onReady callbacks. Use for session-dependent pre-program work like
-   * scanning the installDir for prerequisites. May be sync or async.
-   */
-  onReady?: (ctx: ProgramReadyContext) => void | Promise<void>;
-
-  /**
-   * Report this step's analytics under a different program than its host, for
-   * steps shared across programs (the MCP tutorial is all of `mcp-tutorial`
-   * and the last step of `mcp-add`). Attribution only — scopes, bindings, and
-   * sequences still follow the host. Matched by `screenId`, so headless steps
-   * are unaffected.
-   */
-  reportsAsProgramId?: ProgramId;
+  targetDir?: (session: ProgramSession) => string;
 }
 
 /**
@@ -235,19 +151,24 @@ export interface ProgramConfig {
    * agent run.
    */
   skillId?: string;
-  /** The ordered step list */
-  steps: ProgramStep[];
+  /**
+   * Detection before the flow: runs once after the host assigns the real
+   * session, before any gate is awaited. May be sync or async.
+   */
+  onReady?: (ctx: ProgramReadyContext) => void | Promise<void>;
+  /** Run steps that compose a child program or scope a run, keyed by step id. */
+  runSteps?: Record<string, ProgramRunStep>;
   /** Agent run config. Static object or async function for dynamic config. */
   run?:
     | ProgramRun
-    | ((session: WizardSession, host: ProgramRunHost) => Promise<ProgramRun>);
+    | ((session: ProgramSession, host: ProgramRunHost) => Promise<ProgramRun>);
   /**
    * CI-mode pre-run strategy. When set, runWizardCI awaits this after building
    * the ci:true session and before the agent runs, instead of walking step
    * onReady hooks. Use for headless prerequisite work (e.g. framework
    * detection) that the TUI performs via step onReady callbacks.
    */
-  ciPreRun?: (session: WizardSession, host: ProgramCiHost) => Promise<void>;
+  ciPreRun?: (session: ProgramSession, host: ProgramCiHost) => Promise<void>;
   /**
    * Tasks the orchestrator queues itself, before the planner runs, from what
    * the wizard detected. Their types are marked `runnerSeeded: true` in the
@@ -255,7 +176,7 @@ export interface ProgramConfig {
    * decided here, in code, not by a model that could invent it or forget it.
    * Return an empty list to queue none.
    */
-  seedTasks?: (session: WizardSession) => Array<{
+  seedTasks?: (session: ProgramSession) => Array<{
     type: string;
     label?: string;
     inputs?: Record<string, unknown>;
@@ -328,49 +249,4 @@ export interface ProgramConfig {
    * `ProgramCliSurface` for semantics.
    */
   cli?: ProgramCliSurface;
-}
-
-/**
- * Project program steps into the narrower Screen shape the router consumes.
- *
- * Two things happen here:
- *   1. Headless steps (no `screenId`) are filtered out. The router walks
- *      visible screens; gate-only steps like `detect` are store concerns.
- *   2. The step is narrowed to just { id, show, isComplete } — the
- *      router has no business touching gate, onInit, or label.
- *
- * This intentional separation keeps the router focused on one question:
- * "Which screen should be rendered right now?"
- */
-/**
- * The gated steps the agent runner awaits after `auth` and before `run`, in
- * step order. Empty when a program has no auth step or runs before it.
- */
-export function postAuthGateSteps(steps: ProgramStep[]): ProgramStep[] {
-  const authIndex = steps.findIndex((s) => s.screenId === 'auth');
-  const runIndex = steps.findIndex((s) => s.screenId === 'run');
-  if (authIndex === -1 || runIndex <= authIndex) return [];
-  return steps.slice(authIndex + 1, runIndex).filter((s) => s.gate);
-}
-
-export function createProgramSequence(steps: ProgramStep[]): Array<{
-  id: string;
-  show?: (session: WizardSession) => boolean;
-  isComplete?: (session: WizardSession) => boolean;
-}> {
-  const entries = steps
-    .filter((step) => step.screenId != null)
-    .map((step) => ({
-      id: step.screenId!,
-      show: step.show,
-      // `isComplete` defaults to `gate` — for most steps they're the same
-      // predicate (e.g. intro: setupConfirmed unblocks bin.ts AND finishes
-      // the screen). Only override when the two conditions diverge.
-      isComplete: step.isComplete ?? step.gate,
-    }));
-
-  // Every program ends with the exit screen.
-  entries.push({ id: 'exit', show: undefined, isComplete: undefined });
-
-  return entries;
 }

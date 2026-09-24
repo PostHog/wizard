@@ -4,11 +4,8 @@ import { v4 as uuidv4 } from 'uuid';
 import { ANALYTICS_TEAM_TAG, WIZARD_FLAG_KEYS } from '@shared/constants';
 import { VERSION } from '@shared/version';
 import type { ApiUser } from '@shared/api';
-import {
-  buildSession,
-  DiscoveredFeature,
-  ScanConsent,
-} from '@lib/wizard-session';
+import { buildSession } from '@tui/session';
+import { DiscoveredFeature, ScanConsent } from '@shared/scan-consent';
 
 vi.mock('posthog-node');
 vi.mock('uuid');

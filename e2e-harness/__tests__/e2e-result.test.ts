@@ -11,8 +11,6 @@
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { OutroKind, RunPhase } from '@lib/wizard-session';
-import type { AskQuestion, WizardSession } from '@lib/wizard-session';
 import { DETECTED_WAREHOUSE_SOURCES_KEY } from '@programs/warehouse-source/detect';
 import { Overlay } from '@tui/router';
 import { TASK_OUTCOMES_KEY } from '@agent';
@@ -27,6 +25,10 @@ import {
 } from '../e2e-result';
 import { DEFAULT_E2E_PROFILE, decideE2eAction } from '../e2e-profile';
 import type { CiState } from '../wizard-ci-driver';
+import { OutroKind } from '@shared/outro';
+import { RunPhase } from '@shared/run-state';
+import type { AskQuestion } from '@agent/types';
+import type { WizardSession } from '@tui/session';
 
 const SECRET = 'sk_live_do_not_leak_9f2b';
 

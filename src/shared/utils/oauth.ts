@@ -3,14 +3,13 @@ import * as http from 'node:http';
 import { execSync } from 'node:child_process';
 import axios from 'axios';
 import { logToFile } from './debug';
-import { getUI } from '@ui';
+import type { SpinnerHandle } from '@shared/spinner';
 import {
   OAUTH_PORTS,
   OAUTH_TIMEOUT_MS,
   WIZARD_USER_AGENT,
 } from '@shared/constants';
 import { getOAuthUrl, resolveBaseUrl } from './urls';
-import { abort } from './setup-utils';
 import { openTrackedLink, withUtm } from './links';
 import { analytics } from './analytics';
 import {
@@ -88,6 +87,29 @@ const AUTHORIZATION_TIMEOUT_MESSAGE = 'Authorization timed out';
 
 export function isAuthorizationTimeout(error: Error): boolean {
   return error.message === AUTHORIZATION_TIMEOUT_MESSAGE;
+}
+
+/** What the OAuth flow needs from its host: login display, manual code, overlays and abort. */
+export interface OAuthFlowHost {
+  log: {
+    info(message: string): void;
+    warn(message: string): void;
+    error(message: string): void;
+  };
+  spinner(): SpinnerHandle;
+  setLoginUrl(url: string | null): void;
+  setAuthorizeUrl(url: string | null): void;
+  /** Resolves with a pasted code; hosts that cannot prompt never resolve. */
+  waitForManualAuthCode(): Promise<string>;
+  showSessionTimeout(): void;
+  showPortConflict(processInfo: {
+    command: string;
+    pid: string;
+    port: number;
+    user: string;
+  }): Promise<void>;
+  /** Ends the run after a failed flow; the host's abort path never returns. */
+  abort(): Promise<never>;
 }
 
 interface OAuthConfig {
@@ -446,6 +468,7 @@ async function exchangeCodeForToken(
 function reportNarrowedGrant(
   requestedScopes: readonly string[],
   grantedScope: string,
+  host: Pick<OAuthFlowHost, 'log'>,
 ): void {
   const missing = missingOAuthScopes(requestedScopes, grantedScope);
   if (missing.length === 0) return;
@@ -460,7 +483,7 @@ function reportNarrowedGrant(
     missing_scope_count: missing.length,
   });
   const plural = missing.length > 1;
-  getUI().log.warn(
+  host.log.warn(
     `Your PostHog authorization is missing ${
       plural ? `${missing.length} permissions` : 'a permission'
     } the wizard asked for: ${missing.join(', ')}. ` +
@@ -477,6 +500,7 @@ function reportNarrowedGrant(
 
 export async function performOAuthFlow(
   config: OAuthConfig,
+  host: OAuthFlowHost,
 ): Promise<OAuthTokenResponse> {
   const clientId = getOAuthClientId(config.baseUrl);
   const oauthUrl = getOAuthUrl(config.baseUrl);
@@ -544,12 +568,12 @@ export async function performOAuthFlow(
 
       logToFile('[oauth] callback server ready, showing login URL');
 
-      getUI().setLoginUrl(urlToOpen);
+      host.setLoginUrl(urlToOpen);
       // The localhost proxy above only works on this machine. Surface the
       // direct PostHog authorize URL too, for the manual-paste modal — on a
       // remote/headless box the user opens it from another machine, where
       // localhost:<port> is unreachable.
-      getUI().setAuthorizeUrl(
+      host.setAuthorizeUrl(
         config.signup ? signupUrl.toString() : taggedAuthUrl,
       );
 
@@ -557,7 +581,7 @@ export async function performOAuthFlow(
       // it redirects to carries the UTMs.
       openTrackedLink(urlToOpen, 'oauth', { auto: true, skipUtm: true });
 
-      const loginSpinner = getUI().spinner();
+      const loginSpinner = host.spinner();
       loginSpinner.start('Waiting for authorization...');
 
       try {
@@ -567,7 +591,7 @@ export async function performOAuthFlow(
         // paste modal and submits the callback URL or code by hand.
         const code = await Promise.race([
           waitForCallback(),
-          getUI().waitForManualAuthCode(),
+          host.waitForManualAuthCode(),
           new Promise<never>((_, reject) =>
             setTimeout(
               () => reject(new Error(AUTHORIZATION_TIMEOUT_MESSAGE)),
@@ -584,11 +608,11 @@ export async function performOAuthFlow(
         );
 
         server.close();
-        getUI().setLoginUrl(null);
-        getUI().setAuthorizeUrl(null);
+        host.setLoginUrl(null);
+        host.setAuthorizeUrl(null);
         loginSpinner.stop('Authorization complete!');
 
-        reportNarrowedGrant(config.scopes, token.scope);
+        reportNarrowedGrant(config.scopes, token.scope, host);
 
         return token;
       } catch (e) {
@@ -616,13 +640,13 @@ export async function performOAuthFlow(
           // Overlay bypasses the auth-step gating (which never completes
           // without credentials), so the user sees the failure instead of a
           // spinner that never stops; any key exits.
-          getUI().showSessionTimeout();
+          host.showSessionTimeout();
         } else if (accessDenied) {
-          getUI().log.info(
+          host.log.info(
             `Authorization was cancelled.\n\nYou denied access to PostHog. To use the wizard, you need to authorize access to your PostHog account.\n\nYou can try again by re-running the wizard.`,
           );
         } else {
-          getUI().log.error(
+          host.log.error(
             buildOAuthFailureMessage({
               error,
               requestedScopes: config.scopes,
@@ -655,7 +679,7 @@ export async function performOAuthFlow(
           $exception_fingerprint: `wizard_oauth_${oauthErrorCode}`,
         });
 
-        await abort();
+        await host.abort();
         throw error;
       }
     }
@@ -664,7 +688,7 @@ export async function performOAuthFlow(
       throw new Error('No OAuth callback ports configured');
     }
 
-    await getUI().showPortConflict(lastProcessInfo);
+    await host.showPortConflict(lastProcessInfo);
     shouldRetry = true;
   } while (shouldRetry);
 

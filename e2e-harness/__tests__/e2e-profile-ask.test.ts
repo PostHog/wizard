@@ -8,7 +8,6 @@
  */
 
 import { Overlay, ScreenId } from '@tui/router';
-import type { AskQuestion } from '@lib/wizard-session';
 import {
   DEFAULT_E2E_PROFILE,
   E2E_ANSWER_SENTINEL,
@@ -20,6 +19,7 @@ import {
 import { profileFor, resolveE2eProfile } from '../profiles';
 import { Program } from '@programs';
 import type { CiState } from '../wizard-ci-driver';
+import type { AskQuestion } from '@agent/types';
 
 const text = (id: string, prompt = id): AskQuestion => ({
   id,

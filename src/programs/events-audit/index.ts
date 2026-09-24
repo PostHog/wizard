@@ -3,9 +3,8 @@ import type { ProgramRun } from '@programs/program-run';
 import type { AdditionalFeature } from '@shared/constants';
 import { OutroKind } from '@agent';
 import { SPINNER_MESSAGE } from '@programs/framework-config';
-import { isUsingTypeScript } from '@utils/setup-utils';
+import { isUsingTypeScript } from '@utils/package-json';
 import { WIZARD_TOOL_NAMES } from '@agent';
-import { EVENTS_AUDIT_PROGRAM } from './steps.js';
 import { AUDIT_CHECKS_FILE } from '@programs/audit/types';
 import { EVENTS_AUDIT_SEED_CHECKS } from './seed.js';
 
@@ -34,7 +33,6 @@ export const eventsAuditConfig: ProgramConfig = {
   description: 'Audit PostHog event tracking in this project',
   id: 'events-audit',
   skillId: 'events-audit',
-  steps: EVENTS_AUDIT_PROGRAM,
   // Top-level reportFile so AuditRunScreen can resolve the report path
   // synchronously without unwrapping the deferred `run` function.
   reportFile: SETUP_REPORT_FILE,
@@ -108,5 +106,3 @@ Project context:
     });
   },
 };
-
-export { EVENTS_AUDIT_PROGRAM } from './steps.js';

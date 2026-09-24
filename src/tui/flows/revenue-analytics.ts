@@ -5,22 +5,11 @@
  * and agent run live in the program runner (see agent-runner.ts).
  */
 
-import type { ProgramStep } from '@programs/program-step';
+import type { FlowStep } from '../flow';
 import { RunPhase } from '@shared/run-state';
-import { HEALTH_CHECK_STEP } from '@programs/shared/health-check-step';
-import { detectRevenuePrerequisites } from './detect.js';
+import { HEALTH_CHECK_STEP } from './health-check';
 
-export const REVENUE_ANALYTICS_PROGRAM: ProgramStep[] = [
-  {
-    id: 'detect',
-    label: 'Detecting prerequisites',
-    // Headless step: no screen, no gate. onReady fires after bin.ts
-    // assigns the session — the hook scans for PostHog + Stripe SDKs
-    // and writes the results (or a detectError) to frameworkContext
-    // for the intro screen to render.
-    onReady: (ctx) =>
-      detectRevenuePrerequisites(ctx.session, ctx.setFrameworkContext),
-  },
+export const REVENUE_ANALYTICS_FLOW: FlowStep[] = [
   {
     id: 'intro',
     label: 'Welcome',

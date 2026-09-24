@@ -6,20 +6,10 @@
  * both in-CLI source creation and deep-link emission per detected source.
  */
 
-import type { ProgramStep } from '@programs/program-step';
+import type { FlowStep } from '../flow';
 import { RunPhase } from '@shared/run-state';
-import { detectWarehousePrerequisites } from './detect.js';
 
-export const WAREHOUSE_SOURCE_PROGRAM: ProgramStep[] = [
-  {
-    id: 'detect',
-    label: 'Detecting data sources',
-    // Headless step: no screen. onReady scans installDir and writes the
-    // detected sources (or a detectError) to frameworkContext for the
-    // intro screen to render.
-    onReady: (ctx) =>
-      detectWarehousePrerequisites(ctx.session, ctx.setFrameworkContext),
-  },
+export const WAREHOUSE_SOURCE_FLOW: FlowStep[] = [
   {
     id: 'intro',
     label: 'Welcome',

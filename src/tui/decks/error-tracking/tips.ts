@@ -1,7 +1,7 @@
 /** Sidebar tips for the error-tracking run: product features the learn deck does not cover. */
 
 import type { Tip } from '@tui/components/TipsCard';
-import { REPLAY_VISION_SUPPORTED } from '@programs/replay-vision/index';
+import { REPLAY_VISION_SUPPORTED } from '@programs';
 
 export const ERROR_TRACKING_TIPS: Tip[] = [
   {

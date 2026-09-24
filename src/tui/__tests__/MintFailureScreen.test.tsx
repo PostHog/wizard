@@ -6,9 +6,9 @@ import {
   type MintFailureServices,
 } from '../screens/MintFailureScreen';
 import { KeyboardHintsProvider } from '../hooks/useKeyboardHints';
-import { OutroKind } from '@lib/wizard-session';
 import { HostResolution } from '@shared/host-resolution';
 import { ScreenId } from '../router';
+import { OutroKind } from '@shared/outro';
 
 vi.mock('ink', () =>
   vi.importActual('../../../node_modules/ink/build/index.js'),

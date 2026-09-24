@@ -18,7 +18,6 @@ import {
   HNViewer,
 } from '@tui/primitives/index';
 import type { ProgressItem } from '@tui/primitives/index';
-import { ADDITIONAL_FEATURE_LABELS } from '@lib/wizard-session';
 import { LearnCard } from '@tui/components/LearnCard';
 import { VisualizerTab } from '@tui/components/PhaseVisuals';
 import { TipsCard } from '@tui/components/TipsCard';
@@ -27,6 +26,7 @@ import { useStdoutDimensions } from '@tui/hooks/useStdoutDimensions';
 import { getProgramContentBlocks, getProgramTips } from '@tui/decks/registry';
 
 import { WIZARD_LOG_FILE } from '@utils/paths';
+import { ADDITIONAL_FEATURE_LABELS } from '@shared/constants';
 
 interface RunScreenProps {
   store: WizardStore;

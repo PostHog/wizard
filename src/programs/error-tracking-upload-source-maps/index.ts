@@ -2,7 +2,6 @@ import type { ProgramConfig } from '@programs/program-step';
 import type { ProgramRun } from '@programs/program-run';
 import type { ProgramRunHost } from '@programs/host-capabilities';
 import { OutroKind } from '@agent';
-import { ERROR_TRACKING_UPLOAD_SOURCE_MAPS_PROGRAM } from './steps.js';
 import {
   buildSourceMapsUploadPrompt,
   SOURCE_MAPS_DETECTION_FAILED_PROMPT,
@@ -39,7 +38,6 @@ export const errorTrackingUploadSourceMapsConfig: ProgramConfig = {
   description: 'Upload source maps to PostHog Error Tracking',
   id: 'error-tracking-upload-source-maps',
   requiresAi: true,
-  steps: ERROR_TRACKING_UPLOAD_SOURCE_MAPS_PROGRAM,
   reportFile: REPORT_FILE,
   requires: ['posthog-integration'],
 
@@ -130,7 +128,6 @@ export const errorTrackingUploadSourceMapsConfig: ProgramConfig = {
   },
 };
 
-export { ERROR_TRACKING_UPLOAD_SOURCE_MAPS_PROGRAM } from './steps.js';
 export {
   detectSourceMapsPrerequisites,
   SOURCE_MAPS_ABORT_CASES,

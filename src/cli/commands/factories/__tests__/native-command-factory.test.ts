@@ -25,7 +25,6 @@ function buildTestConfig(
     command: 'demo',
     description: 'demo program',
     id: 'demo',
-    steps: [],
     ...overrides,
   };
 }

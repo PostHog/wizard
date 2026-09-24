@@ -4,7 +4,7 @@ const readEnv =
   typeof readEnvModule === 'function'
     ? readEnvModule
     : (readEnvModule as any).default;
-import { tryGetPackageJson } from './setup-utils';
+import { tryGetPackageJson } from './package-json';
 import type { WizardRunOptions } from './types';
 import { boundedGlob } from './bounded-fs';
 import { IS_DEV } from '@shared/constants';

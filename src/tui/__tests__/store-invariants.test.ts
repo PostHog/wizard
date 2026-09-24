@@ -14,25 +14,20 @@ import {
   McpOutcome,
   type ScreenName,
 } from '@tui/store';
-import {
-  buildSession,
-  AdditionalFeature,
-  DiscoveredFeature,
-  OutroKind,
-  type AskAnswers,
-  type PendingQuestion,
-  type TaskNotice,
-  type WizardSession,
-} from '@lib/wizard-session';
 import { EXPANDED_COUNT } from '@tui/constants';
 import { PROGRAM_SEQUENCES } from '@tui/screen-sequences';
 import { WizardReadiness } from '@shared/health-checks/readiness';
 import { HostResolution } from '@shared/host-resolution';
-import { Integration } from '@shared/constants';
+import { Integration, AdditionalFeature } from '@shared/constants';
 import { FRAMEWORK_REGISTRY } from '@programs/registry';
 import { analytics } from '@utils/analytics';
 import { PROGRAM_REGISTRY } from '@programs';
 import type { SettingsConflict } from '@shared/claude-settings';
+import { buildSession } from '@tui/session';
+import { DiscoveredFeature } from '@shared/scan-consent';
+import { OutroKind } from '@shared/outro';
+import type { AskAnswers, PendingQuestion, TaskNotice } from '@agent/types';
+import type { WizardSession } from '@tui/session';
 
 vi.mock('@utils/analytics.js', () => ({
   analytics: {

@@ -10,10 +10,10 @@
 import { useEffect } from 'react';
 
 import type { WizardStore } from '@tui/store';
-import type { WizardSession } from '@lib/wizard-session';
 import { fetchGithubConnected } from '@shared/api';
 import { requestDeepLink } from '@utils/provisioning';
 import { analytics } from '@utils/analytics';
+import type { WizardSession } from '@tui/session';
 
 const POLL_INTERVAL_MS = 3000;
 

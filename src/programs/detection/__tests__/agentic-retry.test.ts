@@ -8,7 +8,7 @@ import {
   initializeAgent,
   runAgent,
 } from '@agent/agent-interface';
-import { buildSession } from '@lib/wizard-session';
+import { buildSession } from '@tui/session';
 import { HostResolution } from '@shared/host-resolution';
 import { Harness, HAIKU_MODEL, Sequence } from '@shared/constants';
 

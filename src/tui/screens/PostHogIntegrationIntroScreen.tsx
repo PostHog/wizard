@@ -21,7 +21,6 @@ import {
 } from '@tui/primitives/index';
 import { IntroScreenLayout, type DetectionRow } from './IntroScreenLayout.js';
 import { SkillSourceInfo, useSkillEntry } from './SkillSourceInfo.js';
-import { ScanConsent } from '@lib/wizard-session';
 import { KeyMatch, useKeyBindings } from '@tui/hooks/useKeyBindings';
 import { Icons } from '@tui/styles';
 import { analytics } from '@utils/analytics';
@@ -31,6 +30,7 @@ import {
   introHeadline,
   introMenuOptions,
 } from '@tui/posthog-integration-intro';
+import { ScanConsent } from '@shared/scan-consent';
 
 /**
  * Replaces IntroScreenLayout's DEFAULT_SUBTITLE for this screen only. The
@@ -99,7 +99,7 @@ const FrameworkPicker = ({
       options={options}
       onSelect={(value) => {
         const integration = Array.isArray(value) ? value[0] : value;
-        void import('@programs/registry').then(({ FRAMEWORK_REGISTRY }) => {
+        void import('@programs').then(({ FRAMEWORK_REGISTRY }) => {
           const config = FRAMEWORK_REGISTRY[integration];
           store.setFrameworkConfig(integration, config);
           store.setDetectedFramework(config.metadata.name);

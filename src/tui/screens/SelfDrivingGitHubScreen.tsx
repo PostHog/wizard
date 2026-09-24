@@ -27,14 +27,11 @@ import {
   useGithubConnection,
   fetchLoginUrl,
 } from '@tui/hooks/useGithubConnection';
-import { OutroKind } from '@lib/wizard-session';
-import {
-  GITHUB_REQUIRED_BODY,
-  GITHUB_REQUIRED_MESSAGE,
-} from '@programs/self-driving/detect';
 import { analytics } from '@utils/analytics';
 import { openTrackedLink } from '@utils/links';
 import { getIntegrationAuthorizeUrl } from '@utils/urls';
+import { GITHUB_REQUIRED_BODY, GITHUB_REQUIRED_MESSAGE } from '@programs';
+import { OutroKind } from '@shared/outro';
 
 interface SelfDrivingGitHubScreenProps {
   store: WizardStore;

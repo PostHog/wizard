@@ -32,7 +32,8 @@
  */
 
 import type { ApiUser } from '@shared/api';
-import type { ProgramConfig, ProgramStep } from './program-step.js';
+import type { ProgramConfig } from '@programs/types';
+import type { FlowStep } from '../flow';
 
 /** Step id — also the ScreenId.AiOptIn enum value in screen-sequences. */
 export const AI_OPT_IN_STEP_ID = 'ai-opt-in';
@@ -42,18 +43,21 @@ function aiApproved(user: ApiUser | null): boolean {
 }
 
 /**
- * Returns the program's steps with the AI opt-in gate injected after
+ * Returns the program's flow with the AI opt-in gate injected after
  * `auth`. Programs with `requiresAi: false` or no auth step pass
  * through unchanged — without auth, `apiUser` would never be populated
  * for evaluation anyway.
  */
-export function withAiOptInGate(config: ProgramConfig): ProgramStep[] {
-  if (config.requiresAi === false) return config.steps;
+export function withAiOptInGate(
+  config: Pick<ProgramConfig, 'requiresAi'>,
+  flow: FlowStep[],
+): FlowStep[] {
+  if (config.requiresAi === false) return flow;
 
-  const authIdx = config.steps.findIndex((s) => s.id === 'auth');
-  if (authIdx === -1) return config.steps;
+  const authIdx = flow.findIndex((s) => s.id === 'auth');
+  if (authIdx === -1) return flow;
 
-  const gateStep: ProgramStep = {
+  const gateStep: FlowStep = {
     id: AI_OPT_IN_STEP_ID,
     label: 'AI opt-in check',
     screenId: AI_OPT_IN_STEP_ID,
@@ -71,9 +75,5 @@ export function withAiOptInGate(config: ProgramConfig): ProgramStep[] {
       session.ci || session.signup || aiApproved(session.apiUser),
   };
 
-  return [
-    ...config.steps.slice(0, authIdx + 1),
-    gateStep,
-    ...config.steps.slice(authIdx + 1),
-  ];
+  return [...flow.slice(0, authIdx + 1), gateStep, ...flow.slice(authIdx + 1)];
 }

@@ -2,6 +2,7 @@ import { PROGRAM_REGISTRY } from '@programs';
 import type { ProgramId } from '@programs/types';
 import { getProgramContentBlocks, getProgramTips } from '@tui/decks/registry';
 import { getLearnDeckPrograms } from '@tui/playground/demos/LearnDeckDemo';
+import { rawProgramFlow } from '@tui/flows/index';
 
 const runDecks = [
   ['posthog-integration', 'It handles the entire PostHog setup process'],
@@ -21,7 +22,7 @@ const runDecks = [
 
 it('keeps an outcome for every program with the standard run screen', () => {
   const actualRunPrograms = PROGRAM_REGISTRY.filter((program) =>
-    program.steps.some((step) => step.screenId === 'run'),
+    rawProgramFlow(program.id).some((step) => step.screenId === 'run'),
   ).map((program) => program.id);
   expect(actualRunPrograms.sort()).toEqual(runDecks.map(([id]) => id).sort());
 });

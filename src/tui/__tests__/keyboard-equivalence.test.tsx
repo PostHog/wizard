@@ -19,11 +19,6 @@ import {
 } from '../store';
 import { InkUI } from '../ink-ui';
 import { setUI } from '@ui/index';
-import {
-  buildSession,
-  OutroKind,
-  type WizardSession,
-} from '@lib/wizard-session';
 import { Integration } from '@shared/constants';
 import { FRAMEWORK_REGISTRY } from '@programs/registry';
 import { HostResolution } from '@shared/host-resolution';
@@ -37,6 +32,9 @@ import {
   type ScreenServices,
 } from '../screen-registry';
 import { ACTION_REGISTRY } from '@e2e-harness/action-registry';
+import { buildSession } from '@tui/session';
+import { OutroKind } from '@shared/outro';
+import type { WizardSession } from '@tui/session';
 
 vi.mock('ink', () =>
   vi.importActual('../../../node_modules/ink/build/index.js'),
@@ -74,8 +72,8 @@ vi.mock('@shared/skill-menu', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@shared/skill-menu')>()),
   fetchSkillMenu: vi.fn(() => new Promise(() => undefined)),
 }));
-vi.mock('@utils/setup-utils', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@utils/setup-utils')>()),
+vi.mock('@programs/project-data', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@programs/project-data')>()),
   getOrAskForProjectData: vi.fn(() => new Promise(() => undefined)),
 }));
 vi.mock('@utils/wizard-abort', async (importOriginal) => ({

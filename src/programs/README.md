@@ -33,15 +33,15 @@ with no binding runs on the default agent binding. The exact shapes are in
 
 ### Exports
 
-| Export                                                                                                                | What it's for                                                                                   |
-| --------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| `runProgram`                                                                                                          | Run one program invocation.                                                                     |
-| [`createPosthogInferenceAuthProvider`](../../docs/developer-interfaces.md#inference-authentication)                   | Mint first-party gateway auth from a PostHog login, for a host that calls `runAgent` itself.    |
-| `postAuthGateSteps`, `authenticate`, `FRAMEWORK_REGISTRY`, `getDetectedWarehouseSources`, `AUDIT_CHECKS_KEY`          | Step-based host helpers. The session adapter uses them to build the input and project the data. |
-| `PROGRAM_REGISTRY`, `Program`, `getProgramConfig`, `getSubcommandPrograms`, `getCommandPath`, `getLaunchablePrograms` | The step-based `ProgramConfig` registry that the TUI and the CLI commands use.                  |
+| Export                                                                                                                | What it's for                                                                                |
+| --------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `runProgram`                                                                                                          | Run one program invocation.                                                                  |
+| [`createPosthogInferenceAuthProvider`](../../docs/developer-interfaces.md#inference-authentication)                   | Mint first-party gateway auth from a PostHog login, for a host that calls `runAgent` itself. |
+| `authenticate`, `FRAMEWORK_REGISTRY`, `getDetectedWarehouseSources`, `AUDIT_CHECKS_KEY`                               | Host helpers. The session adapter uses them to build the input and project the data.         |
+| `PROGRAM_REGISTRY`, `Program`, `getProgramConfig`, `getSubcommandPrograms`, `getCommandPath`, `getLaunchablePrograms` | The `ProgramConfig` registry that the TUI and the CLI commands use.                          |
 
 The type entry adds the input, option, settings, outcome and progress types
-named below. It also carries the `ProgramConfig` step types, the
+named below. It also carries the `ProgramConfig` and `ProgramRunStep` types, the
 `ProgramCompletionContext` the completion hooks read, the switchboard context
 type, and the `ProgramCiHost` and `ProgramRunHost` capability types.
 
@@ -220,9 +220,10 @@ Today's callers:
 - **The session adapter.** `src/cli/runners/run-program-agent.ts` serves the TUI
   and the `--ci` runner. It resolves `ProgramConfig.run` against the session and
   a `ProgramRunHost`, runs the health and settings gates, and reads the program
-  settings from the config. It supplies the session's login as the credentials
-  provider, answers approval and post-auth gates from the TUI, and maps progress
-  back onto `getUI()`.
+  settings from the config. The health check and the post-auth gates come from
+  the program's TUI flow in `src/tui/flows`. It supplies the session's login as
+  the credentials provider, answers approval and post-auth gates from the TUI,
+  and maps progress back onto `getUI()`.
 - **The workbench harness.** `pnpm wizard-program` in
   [wizard-workbench](https://github.com/PostHog/wizard-workbench) is a reference
   host with no TUI.
@@ -294,17 +295,15 @@ the invocation added. Skills that existed before stay.
 doesn't send the terminal `setup wizard finished` event. The host sends it from
 the outcome.
 
-`ProgramCiHost` and `ProgramRunHost` belong to the step-based `ProgramConfig`
-path, not to `runProgram`. `ProgramCiHost` supplies logging, auth and progress
-while a CI pre-run scopes the project. `ProgramRunHost` supplies the live UI
-effects a legacy recipe reads while its run definition resolves. The completion
-hooks read a `ProgramCompletionContext` built when each hook runs, so URLs the
-run emitted reach them.
+`ProgramCiHost` and `ProgramRunHost` belong to the `ProgramConfig` path, not to
+`runProgram`. `ProgramCiHost` supplies logging, auth and progress while a CI
+pre-run scopes the project. `ProgramRunHost` supplies the live UI effects a
+legacy recipe reads while its run definition resolves. The completion hooks read
+a `ProgramCompletionContext` built when each hook runs, so URLs the run emitted
+reach them.
 
 The programs layer imports the agent only through `@agent` and `@agent/types`.
-Its other imports come from `src/shared` and `src/env.ts`. The one exception is
-a type import in `program-step.ts`, where the step types still name the legacy
-`WizardSession`.
+Its other imports come from `src/shared` and `src/env.ts`.
 
 ## Current limits
 
@@ -312,9 +311,10 @@ a type import in `program-step.ts`, where the step types still name the legacy
 The host supplies those through data and capabilities.
 
 One call runs one agent. Composition belongs to the host: the TUI walks a
-composed step, marked with `runProgramId`, as its own call with
-`composed: true`. Programs with no agent, such as `posthog-doctor`, `mcp-add`
-and `slack`, don't go through `runProgram`. The TUI runs their steps.
+composed step, one whose `ProgramConfig.runSteps` entry names a `runProgramId`,
+as its own call with `composed: true`. Programs with no agent, such as
+`posthog-doctor`, `mcp-add` and `slack`, don't go through `runProgram`. The TUI
+runs their steps.
 
 Agentic detection runs before `runProgram`, as its own `runAgent` call with a
 deadline per attempt. The MCP suggested-prompts screen streams through

@@ -23,7 +23,6 @@ import { migrationConfig } from './migration/index.js';
 import { errorTrackingUploadSourceMapsConfig } from './error-tracking-upload-source-maps/index.js';
 import { errorTrackingConfig } from './error-tracking/index.js';
 import { selfDrivingConfig } from './self-driving/index.js';
-import { AGENT_SKILL_STEPS } from './agent-skill/index.js';
 import {
   mcpAddConfig,
   mcpRemoveConfig,
@@ -48,7 +47,6 @@ import { slackConnectConfig } from './slack/index.js';
 export const agentSkillConfig: ProgramConfig = {
   id: 'agent-skill',
   description: 'Run an arbitrary context-mill skill',
-  steps: AGENT_SKILL_STEPS,
   allowedTools: ['Agent'],
   run: (session) => {
     const skillId = session.skillId ?? 'agent-skill';

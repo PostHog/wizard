@@ -57,7 +57,7 @@ resolution. Local state is appropriate for presentation details such as tab
 selection, not wizard progression.
 
 For new state, first decide whether it belongs in
-[WizardSession](../../../src/lib/wizard-session.ts) or display-only store state.
+[WizardSession](../../../src/tui/session.ts) or display-only store state.
 Use an explicit setter that notifies subscribers. When business logic needs the
 operation, extend `WizardUI`, [InkUI](../../../src/tui/ink-ui.ts), and
 [LoggingUI](../../../src/headless/renderers/logging-ui.ts) together. Reuse existing enums and

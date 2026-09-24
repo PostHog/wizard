@@ -6,17 +6,16 @@ import {
   getProgramConfig,
   getSubcommandPrograms,
 } from '../program-registry';
-import type { WizardSession } from '@lib/wizard-session';
 import { testProgramRunHost } from '../../../test/program-host';
+import type { WizardSession } from '@tui/session';
 
 describe('PROGRAM_REGISTRY', () => {
-  it('every entry has unique id, description, and non-empty steps', () => {
+  it('every entry has a unique id and a description', () => {
     const ids = PROGRAM_REGISTRY.map((c) => c.id);
     expect(new Set(ids).size).toBe(ids.length);
 
     for (const config of PROGRAM_REGISTRY) {
       expect(config.description).toBeTruthy();
-      expect(config.steps.length).toBeGreaterThan(0);
     }
   });
 });

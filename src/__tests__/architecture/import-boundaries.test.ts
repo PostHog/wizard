@@ -376,7 +376,6 @@ it('keeps the callable runProgram closure free of UI, session and legacy imports
       file.startsWith('src/ui/') ||
       file.startsWith('src/tui/') ||
       file.startsWith('src/headless/') ||
-      file.startsWith('src/lib/wizard-session') ||
       file.startsWith('src/cli/runners/') ||
       file.startsWith('src/cli/commands/') ||
       file.startsWith('src/programs/task-stream/'),

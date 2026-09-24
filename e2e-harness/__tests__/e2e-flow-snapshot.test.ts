@@ -16,7 +16,6 @@
 import { WizardStore } from '@tui/store';
 import { InkUI } from '@tui/ink-ui';
 import { setUI } from '@ui/index';
-import { buildSession, RunPhase } from '@lib/wizard-session';
 import { Integration } from '@shared/constants';
 import { HostResolution } from '@shared/host-resolution';
 import { FRAMEWORK_REGISTRY } from '@programs/registry';
@@ -27,6 +26,9 @@ import { SELF_DRIVING_INTEGRATE_PATH_KEY } from '@programs/self-driving/detect';
 import { WizardCiDriver } from '../wizard-ci-driver';
 import { decideE2eAction, type WizardE2eProfile } from '../e2e-profile';
 import { profileFor } from '../profiles';
+import { rawProgramFlow } from '@tui/flows/index';
+import { buildSession } from '@tui/session';
+import { RunPhase } from '@shared/run-state';
 
 /**
  * Walk a program flow offline using an e2e profile, injecting the external
@@ -113,14 +115,14 @@ function traceFlow(
       // child program, e.g. self-driving's integrate-run) and the program's own
       // run. Complete the active run step the way the runner would: a composed
       // step via completeRunStep, the main run via runPhase.
-      const steps = getProgramConfig(store.router.activeProgram).steps;
-      const runStep = steps.find(
+      const config = getProgramConfig(store.router.activeProgram);
+      const runStep = rawProgramFlow(config.id).find(
         (s) =>
           s.screenId === 'run' &&
           (!s.show || s.show(store.session)) &&
           (!s.isComplete || !s.isComplete(store.session)),
       );
-      if (runStep?.runProgramId) {
+      if (runStep && config.runSteps?.[runStep.id]?.runProgramId) {
         store.completeRunStep(runStep.id);
       } else {
         store.setRunPhase(RunPhase.Completed);

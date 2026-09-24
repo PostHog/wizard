@@ -54,7 +54,7 @@ itself.
 
 | Starting point                              | Pattern to reuse                                                                                                            |
 | ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| [Next.js](../../../src/programs/frameworks/nextjs/)  | `hasDeclaredDependency` from `utils/package-json`, `tryGetPackageJson` from `utils/setup-utils`, and router setup questions |
+| [Next.js](../../../src/programs/frameworks/nextjs/)  | `hasDeclaredDependency` from `utils/package-json`, `tryGetPackageJson` from `utils/package-json`, and router setup questions |
 | [Django](../../../src/programs/frameworks/django/)   | Python project files, context gathering, and Python package-manager detection                                               |
 | [Laravel](../../../src/programs/frameworks/laravel/) | Composer and framework-specific filesystem signals                                                                          |
 | [Rails](../../../src/programs/frameworks/rails/)     | Gemfile detection and Ruby conventions                                                                                      |

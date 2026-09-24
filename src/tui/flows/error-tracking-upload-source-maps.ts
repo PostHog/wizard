@@ -7,19 +7,11 @@
  * needs credentials.
  */
 
-import type { ProgramStep } from '@programs/program-step';
+import type { FlowStep } from '../flow';
 import { RunPhase } from '@shared/run-state';
-import { SOURCE_MAPS_CONTEXT_KEYS } from './detect.js';
+import { isSourceMapsProjectSelected } from '@programs';
 
-function projectSelected(session: {
-  frameworkContext: Record<string, unknown>;
-}): boolean {
-  return (
-    session.frameworkContext[SOURCE_MAPS_CONTEXT_KEYS.selectedVariant] != null
-  );
-}
-
-export const ERROR_TRACKING_UPLOAD_SOURCE_MAPS_PROGRAM: ProgramStep[] = [
+export const ERROR_TRACKING_UPLOAD_SOURCE_MAPS_FLOW: FlowStep[] = [
   {
     id: 'intro',
     label: 'Welcome',
@@ -41,8 +33,8 @@ export const ERROR_TRACKING_UPLOAD_SOURCE_MAPS_PROGRAM: ProgramStep[] = [
     // agent runner park after auth until the pick lands, so the run prompt sees
     // the chosen variant.
     screenId: 'source-maps-detect',
-    isComplete: projectSelected,
-    gate: projectSelected,
+    isComplete: isSourceMapsProjectSelected,
+    gate: isSourceMapsProjectSelected,
   },
   {
     id: 'run',

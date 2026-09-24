@@ -12,17 +12,15 @@ import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import type { WizardStore } from '@tui/store';
 import { LoadingBox, PickerMenu } from '@tui/primitives/index';
 import { Colors, Icons } from '@tui/styles';
-import { createUiReducer, getUI } from '@ui';
+import { createUiReducer } from '@ui';
+import { InkUI } from '@tui/ink-ui';
 import {
   SOURCE_MAPS_CONTEXT_KEYS,
   VARIANT_DISPLAY_NAME,
   MANUAL_SDK_VARIANTS,
-} from '@programs/error-tracking-upload-source-maps/index';
-import {
   detectSourceMapsProjects,
-  type DetectedProject,
-  type DetectionReport,
-} from '@programs/error-tracking-upload-source-maps/detect-agentic';
+} from '@programs';
+import type { DetectedProject, DetectionReport } from '@programs/types';
 
 interface SourceMapsDetectScreenProps {
   store: WizardStore;
@@ -70,7 +68,7 @@ export const SourceMapsDetectScreen = ({
               setActivity((prev) => [...prev, line].slice(-MAX_ACTIVITY_LINES));
             }
           },
-          createUiReducer(getUI()),
+          createUiReducer(new InkUI(store)),
         );
         if (!cancelled) setState({ kind: 'ready', report });
       } catch (err) {
