@@ -32,11 +32,12 @@ Each domain has a dedicated boundary:
   `docs/runbooks/warlock-kill-switch.md`. ONLY USE THIS IF ABSOLUTELY NECESSARY.
 - **Agent** → `src/agent/`, imported only through `@agent` (values) and
   `@agent/types` (types); see [src/agent/README.md](src/agent/README.md)
-- **Shared** → `src/shared/`, stateless library code with no upward imports;
-  see [src/shared/README.md](src/shared/README.md)
-- **Programs** → configs, detection, framework registry and task stream in
-  `src/programs/`; runtime and type entries are `@programs` and
-  `@programs/types`
+- **Shared** → `src/shared/`, stateless library code with no upward imports; see
+  [src/shared/README.md](src/shared/README.md)
+- **Programs** → configs, detection, framework registry, task stream and
+  `runProgram` in `src/programs/`. The runtime and type entries are `@programs`
+  and `@programs/types`. See [src/programs/README.md](src/programs/README.md)
+  and the [developer interfaces](docs/developer-interfaces.md)
 - **TUI** → screens, primitives and content decks in `src/ui/tui/`
 
 Adding a new concern means finding the narrowest existing surface, not adding
@@ -76,9 +77,8 @@ Agent SDK is a supported legacy fallback, deprecated as the default; retain it
 for major Pi vulnerabilities or gaps in support for new Anthropic models.
 
 This is the contribution policy, not a claim that every existing binding has
-migrated. The default, `DEFAULT_AGENT_BINDING`, is Pi + linear. Set new bindings
-explicitly and check sequence-specific hooks before migrating existing flows.
-See
+migrated: `DEFAULT_BINDING` is Pi + linear. Set new bindings explicitly and
+check sequence-specific hooks before migrating existing flows. See
 [execution policy and model admission](.claude/skills/wizard-development/SKILL.md#execution-policy-and-model-admission)
 for the gateway allowlists, required system prompt, and composition constraints.
 
@@ -103,8 +103,8 @@ aliases.
 
 | Subcommand                    | What it audits                                       |
 | ----------------------------- | ---------------------------------------------------- |
-| `wizard audit events`         | event capture quality + cost                        |
-| `wizard audit all`            | comprehensive audit across every area (**default**) |
+| `wizard audit events`         | event capture quality + cost                         |
+| `wizard audit all`            | comprehensive audit across every area (**default**)  |
 | `wizard audit autocapture`    | autocapture setup + cost                             |
 | `wizard audit feature-flags`  | feature flag usage + cost                            |
 | `wizard audit identify`       | `$identify` implementation                           |
@@ -133,9 +133,8 @@ confuse it with the top-level `wizard skill` command.
   ([`src/commands/factories/native-command-factory.ts`](src/commands/factories/native-command-factory.ts)).
 - **Family commands** (e.g. `audit`) resolve subcommands at runtime against the
   `cliEntries` in `skill-menu.json`. Logic lives in
-  [`src/commands/dispatch-family.ts`](src/commands/dispatch-family.ts).
-  Adding a skill-backed subcommand is a **context-mill** release, not a wizard
-  change.
+  [`src/programs/dispatch-family.ts`](src/programs/dispatch-family.ts). Adding a
+  skill-backed subcommand is a **context-mill** release, not a wizard change.
 
 ### Commands vs. programs (don't confuse these)
 
@@ -163,14 +162,11 @@ pnpm try --install-dir=<path>      # Run the wizard locally against a test proje
 pnpm build                         # Compile TypeScript
 pnpm test                          # Unit tests (builds first)
 pnpm test:watch                    # Unit tests in watch mode
-pnpm test:e2e                      # Jest E2E suite on recorded fixtures (builds first)
-pnpm test:e2e:tui                  # Live, credentialed: full TUI on a workbench app copy
+pnpm test:e2e                      # End-to-end tests
 pnpm lint                          # Prettier + ESLint checks
 pnpm fix                           # Auto-fix lint issues
 pnpm dev                           # Build, link globally, watch for changes
 ```
-
-`test:e2e:tui` needs `APP_DIR`, `PROJECT_ID`, a personal key (`POSTHOG_PERSONAL_API_KEY` or `POSTHOG_KEY_FILE`) and `WIZARD_CI_GATEWAY_TOKEN_FILE`; see the Testing section of the [README](README.md). Headless `runProgram` and `runAgent` runs live in the [wizard-workbench](https://github.com/PostHog/wizard-workbench) harness, pointed at this checkout by `WIZARD_REPO`.
 
 Choose verification for the change: check links and formatting for docs; run
 `pnpm typecheck` and focused existing tests for code. Build when bundling or
@@ -179,8 +175,8 @@ nonmutating lint checks, and scope formatting fixes to edited files. Do not add
 tests for prose, compiler-enforced shapes, or duplicated implementation. Keep
 new code comments to one line; put longer explanations in linked docs.
 
-Local `--ci`, smoke-test, and full headless runs require two separate secrets:
-a PostHog personal API key and an already-issued gateway token supplied through
+Local `--ci`, smoke-test, and full headless runs require two separate secrets: a
+PostHog personal API key and an already-issued gateway token supplied through
 `WIZARD_CI_GATEWAY_TOKEN_FILE`, plus the target project ID. Follow the
 [credential setup](docs/local-dev.md#credentials-for-local-ci-and-headless-runs).
 
@@ -205,12 +201,14 @@ wizard run points. Full catalog: [`docs/local-dev.md`](docs/local-dev.md).
 - TypeScript everywhere. Use `type` (not `interface`) for framework context
   types so they satisfy `Record<string, unknown>`.
 - All UI calls go through `getUI()` (returns `WizardUI` interface). Never import
-  the store directly from business logic.
-- Shared helpers never call `getUI()`; they take a sink or return data. `debug()`
-  reaches the UI through the sink `src/ui/index.ts` installs.
+  the store directly from business logic. A program's `run` and `ciPreRun`
+  callbacks use the host they receive (`ProgramRunHost`, `ProgramCiHost`), not
+  `getUI()`.
+- Shared helpers never call `getUI()`; they take a sink or return data.
+  `debug()` reaches the UI through the sink `src/ui/index.ts` installs.
 - Outside `src/agent`, import the agent through `@agent` or `@agent/types`. Add
-  to those entry modules rather than deep-importing; lint and
-  `pnpm test:arch` reject `@agent/*` paths elsewhere.
+  to those entry modules rather than deep-importing; lint and `pnpm test:arch`
+  reject `@agent/*` paths elsewhere.
 - Session mutations go through explicit store setters that call `emitChange()`.
   Never mutate `session` directly — nanostore holds a shallow copy.
 - The router resolves the active screen from session state. No imperative

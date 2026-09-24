@@ -167,7 +167,9 @@ route review to their owning team instead.
 | `src/programs/warehouse-source/` | `@PostHog/team-warehouse-sources` |
 | `src/programs/web-analytics-doctor/` | `@PostHog/team-web-analytics` |
 | `src/ui/tui/decks/error-tracking-upload-source-maps/` | `@PostHog/team-error-tracking` |
+| `src/ui/tui/decks/revenue-analytics/` | `@PostHog/team-web-analytics` |
 | `src/ui/tui/decks/self-driving/` | `@PostHog/team-self-driving` |
+| `src/ui/tui/decks/warehouse-source/` | `@PostHog/team-warehouse-sources` |
 
 Ownership is by directory. Programs not listed above
 (`agent-skill`, `audit`, `events-audit`, `mcp`, `migration`, `posthog-doctor`,
@@ -393,11 +395,6 @@ that conventional code implies.
 If you want to use this code as a starting place for your own project, here's a
 quick explainer on its structure.
 
-For code that runs without the terminal UI, see the
-[non-interactive developer interfaces](docs/developer-interfaces.md), including
-the [standalone agent](src/agent/README.md) and
-[callable programs](src/programs/README.md).
-
 ## Entrypoint: `run.ts`
 
 The entrypoint for this tool is `run.ts`. Use this file to interpret arguments
@@ -565,29 +562,14 @@ To run unit tests, run:
 bin/test
 ```
 
-To run the jest E2E suite, which replays recorded LLM calls, run:
+To run E2E tests run:
 
 ```bash
 bin/test-e2e
 ```
 
-See [`e2e-tests/README.md`](e2e-tests/README.md) to add or re-record tests.
-
-Live end-to-end runs are credentialed. Point `APP_DIR` at an app copy from
-[wizard-workbench](https://github.com/PostHog/wizard-workbench), which owns the
-fixture apps and the assertions:
-
-```bash
-pnpm test:e2e:tui        # the full TUI in a PTY, frames to SNAP_OUT
-```
-
-It reads `PROJECT_ID`, `POSTHOG_PERSONAL_API_KEY` or `POSTHOG_KEY_FILE`, and
-`WIZARD_CI_GATEWAY_TOKEN_FILE`, and writes its result to `E2E_RESULT_JSON` when
-set.
-
-The workbench also runs one program through `runProgram`, or one agent through
-`runAgent`, with no TUI: `pnpm wizard-program` and `pnpm wizard-agent` there,
-with `WIZARD_REPO` set to this checkout.
+E2E tests are a bit more complicated to create and adjust due to to their mocked
+LLM calls. See the `e2e-tests/README.md` for more information.
 
 #### Explore with an agent
 

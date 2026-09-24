@@ -102,7 +102,7 @@ Everything below ships in this repo (`wizard/`) and its workbench
   orchestrator on pi, per-task models from context-mill frontmatter; off → the
   linear anthropic default). Per-stage variations ride
   `wizard-orchestrator-override` payloads (`{stage: {model?, effort?}}`,
-  variant keys in `wizard/src/programs/experiments/schemes.ts`).
+  variant keys in `wizard/src/agent/runner/switchboard/flags/schemes.ts`).
   The baseline is `{"wizard-orchestrator":"false"}` — never an empty override,
   or live remote flags leak into the baseline.
 

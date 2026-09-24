@@ -1,10 +1,8 @@
 # Agent
 
-The agent runs one program's AI pipeline against a project directory. It takes
-resolved data in, reports through progress events, asks through an injected
-answerer, and returns a result. It never reads a session, a store or a UI. For
-the callable program host and development CI runner, see the
-[non-interactive developer interfaces](../../docs/developer-interfaces.md).
+The agent runs one AI pipeline against a project directory. It takes resolved
+data in, reports through progress events, asks through an injected answerer, and
+returns a result. It never reads a session, a store or a UI.
 
 ## Signatures
 
@@ -12,6 +10,7 @@ Import runtime values from `@agent` and types from `@agent/types`. Nothing
 outside `src/agent` imports deeper. Lint and the architecture test reject it.
 
 ```ts
+import { runAgent } from '@agent';
 import type {
   AgentInteraction,
   AgentProgress,
@@ -20,8 +19,8 @@ import type {
   RunResult,
 } from '@agent/types';
 
-// The shape of `runAgent`, exported from `@agent`.
-declare function runAgent(
+// The shape `@agent` exports.
+export const signature: (
   config: RunConfig,
   input: RunInput,
   options?: {
@@ -29,158 +28,178 @@ declare function runAgent(
     interaction?: AgentInteraction;
     signal?: AbortSignal;
   },
-): Promise<RunResult>;
+) => Promise<RunResult> = runAgent;
 ```
 
-- `RunConfig`: the opaque program id, its `AgentRunDefinition` (prompt, skill,
-  tools, copy), the resolved `binding` (sequence, harness, model and task-role
-  routes), supplied program commandments and stage policy, the skills origin,
-  flag snapshot, trace tags, tool allow and deny lists, seed tasks, bound
-  completion `hooks` and `scanReport`. `scanReport: 'defer'` leaves this run's
-  scans to the host run's report. The default, `'flush'`, writes the report when
-  this run ends.
-- Two `AgentRunDefinition` options shape the run's output.
-  `collectTranscript: true` keeps the last 256 KiB of assistant text as
-  `snapshot.transcriptTail` and reports each step as `activity` progress. It
-  works on the linear sequence with the Anthropic harness.
-  `requestRemark: false` skips the end-of-run reflection remark, which is on by
-  default.
-- `RunInput`: install directory, resolved PostHog credentials, required
-  `inferenceAuth`, project and user payloads, skill id, detected integration,
-  `flags` (`ci`, `signup`, `debug`, `e2eAsk`, `localMcp`, `captureAio`,
-  `benchmark`, `yaraReport`) and the host the CLI was told. The caller supplies
-  an `InferenceAuthProvider` whose `resolve()` returns gateway authentication.
-  The agent resolves it before execution and again when the harness needs
-  refreshed auth. See the
-  [first-party provider](../../docs/developer-interfaces.md#inference-authentication)
-  for gateway token minting and refresh.
+- `RunConfig`: the program ID, its `AgentRunDefinition` as `run`, `composed`,
+  the resolved `binding` (sequence, harness, model, effort), the switchboard
+  inputs, the skills origin, the flag snapshot and its payloads, the trace tags,
+  the tool allow and deny lists, `agentFlow`, `excludedTaskTypes`, `seedTasks`,
+  the bound completion `hooks`, and `scanReport`.
+- `RunInput`: the install directory, resolved credentials, the project and user
+  payloads, the skill ID, the detected integration and its docs URL, `flags`
+  (`ci`, `signup`, `debug`, `e2eAsk`, `localMcp`, `captureAio`, `benchmark`,
+  `yaraReport`), and the host the CLI was told.
 - `RunResult`: `outcome` is `RunOutcome.Success | Aborted | Failed | Crashed`.
-  Success may carry an `outro`. The other three carry a `failure`
-  (`AgentFailure`: required code and message, optional outro data, `Error`, exit
-  code, detail, and authentication detail). `failure.error` may be attached, and
-  `Crashed` requires one. A failed result need not have an attached `Error`.
-  Every result carries a `snapshot` of what the run reported: tasks, status
-  lines, stage, token usage totals, final cost, dashboard and notebook URLs,
-  handoff text, and the transcript tail when the run definition sets
-  `collectTranscript`. It may also carry `skillId`.
+  `Success` can carry an `outro`. The other three carry a `failure`
+  (`AgentFailure`: message, outro data, error, exit code, error code, detail,
+  auth error detail). Every result carries `skillId` and a `snapshot` of what
+  the run reported: tasks, status lines, stage, token usage totals, final cost,
+  dashboard and notebook URLs, handoff text, and the transcript tail when the
+  run collected one.
 - `AgentProgress`: one event per thing the run reports, in emission order.
   Kinds: `lifecycle`, `spinner`, `log`, `status`, `tasks`, `stage`, `url`,
-  `usage`, `finalCost`, `authError`, `handoff`, `completion`, and `activity`
-  (one line per step, only from a run that collects its transcript). Payloads
-  are copies, never live objects.
-- `AgentInteraction`: every member optional. `ask(question, { signal })`
-  resolves with answers, and `taskNotice(notice, { signal })` resolves with
-  whether to keep an optional task. Each request has its own signal, which
-  aborts when that request times out, the host aborts the run, or another task
-  fails the run. On abort the host dismisses that request alone, without
-  throwing.
-- `signal`: an optional `AbortSignal` from the host. A pre-aborted signal
-  returns `Aborted` before execution. An abort during execution reaches the
-  active harness and returns `Aborted` with the current snapshot. It does not
-  pause or resume a run. `Aborted` means only that the host's signal cancelled
-  the run.
-- Errors: the agent does not exit the process or throw for a decided failure. A
-  caught coded error returns `Failed`, and an uncoded throw returns `Crashed`.
-  Both retain the caught `Error` (or an `Error` wrapper for a non-`Error`
-  throw). An agent that stops itself with `[ABORT]` returns `Failed` with its
-  abort code. A gateway 401 returns an authentication failure with detail for
-  the host to present. The host decides how to present a returned failure, set
-  an exit code, or rethrow an attached error. Final scan-report flushing is best
-  effort and does not replace the run result.
-- Skills: a run that does not end in `Success` removes the skill directories it
-  added under `<installDir>/.claude/skills` that carry the `.posthog-wizard`
-  marker. Directories that were there before the run stay.
-- Analytics shutdown is host-owned: the agent never sends the terminal
-  `setup wizard finished` event, and `runProgram` doesn't either. The host sends
-  it from the outcome: `Success` is `success`, `Aborted` is `cancelled`,
-  `Failed` and `Crashed` are `error`.
+  `usage`, `finalCost`, `authError`, `handoff`, `completion` and `activity`.
+  Payloads are copies, never live objects.
+- `AgentInteraction`: every member is optional. `ask(question, { signal })`
+  resolves with answers. `taskNotice(notice, { signal })` resolves with whether
+  to keep an optional task. Each request has its own signal. It aborts when that
+  request times out, the host aborts the run, or another task fails the run. On
+  abort the host dismisses that request alone, without throwing.
+- Errors: the agent doesn't exit the process and doesn't reject. A caught coded
+  error, such as a refused gateway mint, becomes `Failed`. An uncoded throw
+  becomes `Crashed` with the error attached. A gateway 401 returns an auth
+  failure, and the host decides whether to show auth UI. `Aborted` means the
+  host's signal cancelled the run. An agent that stops itself with `[ABORT]`
+  returns `Failed` with its abort code.
+- Analytics shutdown is host-owned. The agent never sends the terminal
+  `setup wizard finished` event. The host sends it from the outcome: `Success`
+  is `success`, `Aborted` is `cancelled`, `Failed` and `Crashed` are `error`.
 
-`@agent` exports eleven runtime names, and
-`src/agent/__tests__/public-entry.test.ts` holds that list:
+Other runtime exports: `RunOutcome`, `AgentSignals`, `WIZARD_TOOL_NAMES`,
+`resolveBinding`, `shouldDisableAsk`, `LONGER_ASK_TIMEOUT_MS`, `buildRunTags`,
+`configureGatewayFromCIEnvironment`, `flushScanReport`, `downloadSkill`,
+`TASK_OUTCOMES_KEY`, and `runMcpPromptViaSdk`, which loads the streaming module
+on first call.
 
-- **`runAgent` and `RunOutcome`.** The run and its outcome enum.
-- **`OutroKind`.** The kind of an outro in `completion` progress and in failure
-  outro data.
-- **`DEFAULT_AGENT_BINDING`.** The Pi and linear binding for standalone callers.
-- **`resolveHarness` and `harnessRunsTasks`.** What programs resolve a binding
-  with. `harnessRunsTasks` says which harnesses the orchestrator can drive.
-- **`AgentSignals` and `WIZARD_TOOL_NAMES`.** The marker strings that program
-  prompts embed, and the tool ids that go in tool allow and deny lists.
-- **`downloadSkill` and `runMcpPromptViaSdk`.** The skill installer and the
-  suggested-prompts stream. Each loads its module on first call.
-- **`TASK_OUTCOMES_KEY`.** The `frameworkContext` key under which the session
-  adapter stores an orchestrator run's task outcomes.
+## Run definition
+
+`RunConfig.run` is an `AgentRunDefinition`. These fields shape the prompt and
+what the run collects:
+
+| Field               | What it does                                                                                                                                              |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `skillId`           | The skill the linear sequence installs before the agent starts. Omit it to let the agent discover skills.                                                 |
+| `customPrompt`      | Instructions appended after the default project prompt.                                                                                                   |
+| `prompt`            | Replaces the assembled project prompt. It receives the same `PromptContext`: project ID and key, host, skill path, and the organization and team opt-ins. |
+| `collectTranscript` | Keeps a transcript tail on `snapshot.transcriptTail` and reports each agent step as an `activity` event.                                                  |
+| `requestRemark`     | Asks for the end-of-run reflection remark. Defaults to `true`. `false` skips it.                                                                          |
+| `abortCases`        | Known `[ABORT] <reason>` cases and the outro each one renders.                                                                                            |
+
+`prompt`, `customPrompt` and `abortCases` apply on the linear sequence. The
+orchestrator builds each task's prompt from its context-mill flow.
+`collectTranscript` and `requestRemark` take effect on the linear sequence with
+the Anthropic harness. The Pi harness always asks for the remark on a linear
+run. The orchestrator never asks for it.
+
+The other fields carry the run's copy, report file, docs URL, extra MCP servers,
+question limits and step analytics. See
+[`shared/types.ts`](runner/shared/types.ts).
+
+### Transcript tail
+
+With `collectTranscript`, the run observes every SDK message:
+
+- Each assistant text block joins the tail. The tail keeps the newest blocks, up
+  to 256 × 1024 characters, and drops the oldest first. A single block over the
+  cap stays whole.
+- The run's final result text follows the kept blocks.
+- `snapshot.transcriptTail` is the kept blocks, one per line, then the final
+  result.
+- Each non-empty text block also emits `{ kind: 'activity', line }`, trimmed and
+  cut at 100 characters.
+- Each tool call emits `{ kind: 'activity', line }` with the tool name and its
+  file path, pattern or path.
+
+Only the caller that set `collectTranscript` wants `activity` lines. The TUI's
+progress reducer ignores them.
+
+### Scan report
+
+The agent counts its security scans in process-wide state. At the end of a run,
+`runAgent` flushes them. It sends the scan telemetry and resets the counts. With
+`flags.yaraReport`, it also writes the local report file and emits its path as
+an `info` log event. `RunConfig.scanReport: 'defer'` skips the flush, so the
+run's scans count toward the next flush. Agentic detection defers, so its scans
+land in the program run's report.
+
+## Who calls `runAgent`
+
+- **`runProgram`**, for every program's agent run. It resolves credentials,
+  consent, flags and the route first. See the
+  [developer interfaces](../../docs/developer-interfaces.md).
+- **Agentic detection**, `detectProjectsWithAgent` in
+  [`src/programs/detection/agentic.ts`](../programs/detection/agentic.ts). It
+  sets `prompt`, `collectTranscript: true`, `requestRemark: false` and
+  `scanReport: 'defer'`, and reads its report from the transcript tail.
+- **The fault probe**,
+  [`scripts/a3-fault-probe.no-jest.ts`](../../scripts/a3-fault-probe.no-jest.ts),
+  against a local gateway with synthetic credentials.
+
+A standalone caller supplies everything `runProgram` would resolve. `runAgent`
+doesn't authenticate the user, check consent, load flags or pick a route. It
+does mint gateway auth: before any agent starts, it mints a scoped gateway token
+from `input.credentials` for `config.programId`, and re-mints near expiry. In
+development and test builds, `configureGatewayFromCIEnvironment` loads a fixed
+token from `WIZARD_CI_GATEWAY_TOKEN_FILE` instead, and `runAgent` uses it
+without minting. The gateway auth cache is process-wide.
 
 Minimal invocation:
 
 ```ts
 import { runAgent, RunOutcome } from '@agent';
-import type { AgentInteraction, RunConfig, RunInput } from '@agent/types';
+import type {
+  AskAnswers,
+  PendingQuestion,
+  RunConfig,
+  RunInput,
+} from '@agent/types';
 
-export async function runOnce(
+export async function runWithAnswers(
   config: RunConfig,
   input: RunInput,
-  ask: NonNullable<AgentInteraction['ask']>,
-) {
+  answersFor: (question: PendingQuestion) => Promise<AskAnswers>,
+): Promise<void> {
   const result = await runAgent(config, input, {
     onProgress: (event) => {
       if (event.kind === 'log') console.log(event.message);
     },
-    interaction: { ask },
+    interaction: {
+      ask: (question) => answersFor(question),
+    },
   });
   if (result.outcome !== RunOutcome.Success) {
-    console.error(result.failure.error ?? result.failure.message);
     process.exitCode = result.failure.exitCode ?? 1;
   }
-  return result;
 }
 ```
 
-The result is the agent's termination report. Check `outcome` first and then
-read `failure`. A failed result can have no attached `Error`. If a higher layer
-uses exceptions, it can rethrow `failure.error` when present and construct an
-error from `failure.message` otherwise. Preserve the original `Error` object
-when rethrowing so its stack and cause remain available.
-
-`src/agent/__tests__/run-agent-standalone.test.ts` runs this with no UI, no
-store and no registry.
-
-Pass an `AbortController` signal in the options and call `controller.abort()` to
-cancel an active run. The result then has `RunOutcome.Aborted`.
+`src/agent/__tests__/run-agent-standalone.test.ts` runs the agent this way with
+no UI, no store and no registry.
 
 ## Intent
 
-Programs call the agent to do the work a skill describes. `runProgram` builds
-the `RunConfig` and `RunInput` for every program run. The TUI and the `--ci`
-runner reach it through `src/lib/runners/run-program-agent.ts`, which supplies
-session capabilities and maps progress back onto `getUI()`.
+Programs call the agent to do the work a skill describes. The TUI and the
+non-interactive runner observe the run through `onProgress` and answer it
+through `interaction`. `src/programs/run-agent-legacy.ts` does both on top of
+the session, through `runProgram`.
 
-Agentic detection calls `runAgent` itself, before the program runs. It uses a
-linear Haiku run on the Anthropic harness, with `collectTranscript`,
-`requestRemark: false` and `scanReport: 'defer'`. It reads its report from the
-transcript tail and makes up to two attempts, with deadlines of 60 and 90
-seconds. A standalone host builds the config and input itself, as the
-[wizard-workbench](https://github.com/PostHog/wizard-workbench) harness does
-with `pnpm wizard-agent`.
-
-Without `onProgress` the run completes and its snapshot still comes back in the
+Without `onProgress` the run completes, and its snapshot still comes back in the
 result. Without `interaction` the agent installs no ask bridge: `wizard_ask`
-returns its "not available" error and optional task notices are declined. Plain
-`--ci` runs also disable the ask bridge and decline notices. A throwing observer
-is logged and the run continues. Progress callbacks are not awaited. Throws and
-rejections from returned thenables are logged. Observers must handle errors from
-detached work they start.
+returns its "not available" error and optional task notices are declined, which
+is what a `--ci` run does. A throwing or rejecting observer is logged and the
+run continues.
 
 ## Architecture
 
 The agent owns run state for one invocation: the task queue, phase, status,
 resolved skill, handoff text, usage and the final result. It depends on
-`src/shared` and `src/env.ts`. Callers supply program routing and policy through
-`RunConfig`.
+`src/shared` and on `src/env.ts`. It depends on program types only until the
+bindings table moves to programs.
 
 ```text
 caller ── RunConfig + RunInput ──▶ runAgent
-                                      │ prepareRun: supplied gateway auth, triage provider
+                                      │ prepareRun: gateway mint, triage provider
                                       ▼
                           sequence (linear | orchestrator)
                                       │
@@ -188,10 +207,13 @@ caller ── RunConfig + RunInput ──▶ runAgent
                                       │
              onProgress ◀── events ───┤──── questions ──▶ interaction
                                       ▼
+                          scan report flush (unless deferred)
+                                      ▼
                                   RunResult
 ```
 
-`runner/` holds the dispatcher, sequences, harnesses and the switchboard.
-`tools/` holds the wizard tools shared by both harnesses. `middleware/` holds
-the benchmark pipeline. `progress.ts` defines the event and interaction
-contracts. `yara-hooks.ts` scans what the run installs.
+`runner/` holds the dispatcher, sequences, harnesses and the switchboard. See
+the [runner reference](runner/README.md). `tools/` holds the wizard tools shared
+by both harnesses. `middleware/` holds the benchmark pipeline. `progress.ts`
+defines the event and interaction contracts. `yara-hooks.ts` scans what the run
+installs.
