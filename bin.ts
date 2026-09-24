@@ -49,6 +49,22 @@ if (!satisfies(process.version, NODE_VERSION_RANGE)) {
   process.exit(1);
 }
 
+// Test mock server — only loaded when NODE_ENV is 'test'.
+// In production builds, tsdown replaces process.env.NODE_ENV with 'production',
+// making this block dead code.
+if (process.env.NODE_ENV === 'test') {
+  void (async () => {
+    try {
+      const { server } = await import('./e2e-tests/mocks/server.js');
+      server.listen({
+        onUnhandledRequest: 'bypass',
+      });
+    } catch (error) {
+      // Mock server import failed - this can happen during non-E2E tests
+    }
+  })();
+}
+
 import { Wizard } from './src/wizard';
 import { basicIntegrationCommand } from './src/commands/basic-integration';
 import { mcpCommand } from './src/commands/mcp';
