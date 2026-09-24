@@ -186,7 +186,7 @@ export interface RunConfig {
   seedTasks?: () => SeedTaskEntry[];
   /** Completion hooks, bound by the caller. */
   hooks?: RunHooks;
-  /** `defer` leaves this run's scans to the host run's report; the default flushes it. */
+  /** `defer` leaves this run's scans to the program run's report; the default flushes it. */
   scanReport?: 'flush' | 'defer';
 }
 
