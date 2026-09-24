@@ -218,8 +218,9 @@ export const ERROR_CATALOG: Record<ErrorCode, ErrorCatalogEntry> = {
   },
   [ErrorCodes.AgentOrchestratorSkillVariantMissing]: {
     group: 'agent',
-    retry: 'yes',
-    description: 'The orchestrator could not download a needed skill variant.',
+    retry: 'no',
+    description:
+      "The skill menu carries no variant for the project's framework.",
   },
   [ErrorCodes.AgentOrchestratorTasksFailed]: {
     group: 'agent',
