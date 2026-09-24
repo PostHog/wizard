@@ -760,10 +760,10 @@ describe('host wiring over runProgram', () => {
         return finishRun(...args);
       });
 
-      await runProgramAgent(program('posthog-integration'), {
-        ...session(),
-        installDir,
-      });
+      await runProgramAgent(
+        { ...program('posthog-integration'), eventPlanFile: EVENT_PLAN_FILE },
+        { ...session(), installDir },
+      );
 
       expect(setEventPlan).toHaveBeenCalledExactlyOnceWith([
         { name: 'checkout_started', description: '' },

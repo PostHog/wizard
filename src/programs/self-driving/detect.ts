@@ -50,7 +50,7 @@ export const SELF_DRIVING_DETECTED_TOOLS_KEY = 'selfDrivingDetectedTools';
 
 /** Read the detected tools out of frameworkContext. */
 export function getSelfDrivingDetectedTools(
-  session: Pick<WizardSession, 'frameworkContext'>,
+  session: WizardSession,
 ): DetectedSource[] {
   return (
     (session.frameworkContext[SELF_DRIVING_DETECTED_TOOLS_KEY] as

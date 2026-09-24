@@ -362,7 +362,7 @@ describe('import boundaries', () => {
   });
 });
 
-// The runtime registry and the program watchers load inside this closure.
+// The program watchers load inside this closure.
 it('keeps the callable runProgram closure free of UI, session and legacy imports', () => {
   const forbidden = staticImportClosure(
     'src/programs/run-program.ts',

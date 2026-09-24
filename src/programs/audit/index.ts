@@ -8,11 +8,9 @@ import type { WizardSession } from '@lib/wizard-session';
 import { OutroKind } from '@lib/wizard-session';
 import { WIZARD_TOOL_NAMES } from '@agent';
 import { headlessOption, regionOption } from '@lib/headless-mode';
-import {
-  AUDIT_PROGRAM_OPTIONS,
-  resolveAuditRunDefinition,
-} from '@programs/resolve-run-definition';
-import { AUDIT_CHECKS_FILE } from './types.js';
+import { AUDIT_ABORT_CASES } from './detect.js';
+import { AUDIT_CHECKS_FILE, AUDIT_REPORT_FILE } from './types.js';
+import { AUDIT_SEED_CHECKS } from './seed.js';
 
 /** Audit-specific screens for the shared agent-skill pipeline. */
 const AUDIT_SCREEN_BY_STEP: Record<string, string> = {
@@ -29,12 +27,35 @@ const withAuditScreens = (steps: ProgramStep[]): ProgramStep[] =>
 
 const auditSteps: ProgramStep[] = withAuditScreens(AGENT_SKILL_STEPS);
 
-const baseConfig = createSkillProgram(AUDIT_PROGRAM_OPTIONS);
+const baseConfig = createSkillProgram({
+  skillId: 'audit',
+  command: 'audit',
+  id: 'audit',
+  description: 'Audit and improve your PostHog setup',
+  integrationLabel: 'audit',
+  customPrompt:
+    'Run a comprehensive audit of the existing PostHog integration. Follow the skill program steps in order. Do not modify any project files — only create the final audit report.',
+  successMessage:
+    'Audit complete! You can view the audit report at ./posthog-audit-report.md',
+  reportFile: AUDIT_REPORT_FILE,
+  docsUrl: 'https://posthog.com/docs/product-analytics/best-practices',
+  spinnerMessage: 'Auditing PostHog integration...',
+  estimatedDurationMinutes: 5,
+  requires: ['posthog-integration'],
+  abortCases: AUDIT_ABORT_CASES,
+});
 
-const auditRun = (session: WizardSession): Promise<ProgramRun> => {
-  const baseRun = resolveAuditRunDefinition();
+const auditRun = async (session: WizardSession): Promise<ProgramRun> => {
+  if (!baseConfig.run) {
+    throw new Error('Audit program has no run configuration.');
+  }
 
-  return Promise.resolve({
+  const baseRun =
+    typeof baseConfig.run === 'function'
+      ? await baseConfig.run(session)
+      : baseConfig.run;
+
+  return {
     ...baseRun,
     // Override the default outro so the dashboard + notebook URLs the
     // agent emits via `[DASHBOARD_URL]` / `[NOTEBOOK_URL]` are surfaced
@@ -61,7 +82,7 @@ const auditRun = (session: WizardSession): Promise<ProgramRun> => {
         notebookUrl: session.notebookUrl ?? undefined,
       };
     },
-  });
+  };
 };
 
 export const auditConfig: ProgramConfig = {
@@ -69,6 +90,7 @@ export const auditConfig: ProgramConfig = {
   steps: auditSteps,
   run: auditRun,
   auditLedgerFile: AUDIT_CHECKS_FILE,
+  auditSeedChecks: AUDIT_SEED_CHECKS,
   // Ledger tools are opt-in per program; pi matches on the short name.
   allowedTools: [
     'Agent',

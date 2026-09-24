@@ -12,9 +12,7 @@ export type {
   ProgramOptions,
   ProgramOverrides,
   ProgramRunOutcome,
-  ProgramWorkflowConnector,
-  ProgramWorkflowDecision,
-  ProgramWorkflowRequest,
+  ProgramSettings,
   WizardFlagSnapshot,
 } from './run-program';
 export type {

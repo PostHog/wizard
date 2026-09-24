@@ -6,6 +6,7 @@ import type {
 import type { WizardReadinessResult } from '@shared/health-checks/readiness';
 import type { ProgramRun } from '@programs/program-run';
 import type { Integration } from '@shared/constants';
+import type { AuditCheck } from '@shared/audit-ledger';
 import type { FrameworkConfig } from '@programs/framework-config';
 import type { ContentBlock } from '@ui/tui/primitives/index';
 import type { WizardStore } from '@ui/tui/store';
@@ -292,6 +293,8 @@ export interface ProgramConfig {
   eventPlanFile?: string;
   /** Audit ledger to mirror into the session, relative to `installDir`. */
   auditLedgerFile?: string;
+  /** Ledger rows written before the agent starts, so the run screen renders before its first update. */
+  auditSeedChecks?: readonly AuditCheck[];
   /**
    * Channel the task stream publishes this run under, when it differs from the
    * program id. A family leaf runs on the generic skill program, so without

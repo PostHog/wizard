@@ -6,11 +6,7 @@ import { analytics } from '@utils/analytics';
 import { getUI, type WizardUI } from '@ui';
 import { createUiReducer, uiInteraction } from '@ui/agent-progress';
 import { RunOutcome, TASK_OUTCOMES_KEY } from '@agent';
-import {
-  runProgram,
-  type ProgramWorkflowConnector,
-  type WizardFlagSnapshot,
-} from './run-program';
+import { runProgram, type WizardFlagSnapshot } from './run-program';
 import type { ProgramInvocationData } from './program-store';
 import {
   backupAndFixClaudeSettings,
@@ -31,7 +27,7 @@ import { ErrorCodes } from '@shared/errors';
 import { isNonInteractiveEnvironment } from '@utils/environment';
 import { Sequence, type Integration } from '@shared/constants';
 import { FRAMEWORK_REGISTRY } from '@programs/registry';
-import type { ProgramConfig } from './program-step';
+import { postAuthGateSteps, type ProgramConfig } from './program-step';
 import { authenticate } from './authenticate';
 import { getDetectedWarehouseSources } from './warehouse-source/detect';
 import { mayReportScanResults } from '@shared/scan-consent';
@@ -137,10 +133,19 @@ export async function runProgramAgent(
           session.frameworkContext[TASK_OUTCOMES_KEY] = outcomes;
         },
       },
-      allowedTools: programConfig.allowedTools,
-      disallowedTools: programConfig.disallowedTools,
-      agentFlow: programConfig.agentFlow,
-      auditLedgerFile: programConfig.auditLedgerFile,
+      program: {
+        requiresAi: programConfig.requiresAi,
+        agentFlow: programConfig.agentFlow,
+        allowedTools: programConfig.allowedTools,
+        disallowedTools: programConfig.disallowedTools,
+        excludedTaskTypes: programConfig.excludedTaskTypes,
+        auditLedgerFile: programConfig.auditLedgerFile,
+        auditSeedChecks: programConfig.auditSeedChecks,
+        eventPlanFile: programConfig.eventPlanFile,
+        postAuthGates: postAuthGateSteps(programConfig.steps).map(
+          (step) => step.id,
+        ),
+      },
       aiSdkStampReported: session.aiSdkStampReported,
       discoveredFeatures: session.discoveredFeatures,
       warehouseSources: getDetectedWarehouseSources(session),
@@ -160,7 +165,14 @@ export async function runProgramAgent(
           ),
       },
       featureFlags: () => keepFailure(loadWizardFlags()),
-      workflow: legacyWorkflowConnector(ui),
+      // Each step the user settles between auth and run, such as the source-maps project picker.
+      awaitPostAuthGates: async ({ gates }) => {
+        for (const gate of gates) {
+          logToFile(`[agent-runner] awaiting post-auth gate: ${gate}`);
+          await ui.waitForGate(gate);
+          logToFile(`[agent-runner] post-auth gate cleared: ${gate}`);
+        }
+      },
       onProgress: (progress) => {
         if (progress.kind === 'run') reduceUi(progress.event);
         else projectData(progress.data);
@@ -204,27 +216,6 @@ export async function runProgramAgent(
 }
 
 // ── Host capabilities ─────────────────────────────────────────────────
-
-/** Answers runProgram's pauses from the TUI, which walks composed steps and gates handoff and GitHub itself. */
-function legacyWorkflowConnector(ui: WizardUI): ProgramWorkflowConnector {
-  return {
-    async step(request) {
-      switch (request.kind) {
-        case 'post-auth':
-          for (const gate of request.gates) {
-            logToFile(`[agent-runner] awaiting post-auth gate: ${gate.id}`);
-            await ui.waitForGate(gate.id);
-            logToFile(`[agent-runner] post-auth gate cleared: ${gate.id}`);
-          }
-          return { kind: 'post-auth' };
-        case 'child-run':
-          return { kind: 'child-run', input: null };
-        case 'confirm':
-          return { kind: 'confirm', confirmed: true };
-      }
-    },
-  };
-}
 
 /** Mirror the invocation's data onto the session and the UI the TUI reads. */
 function projectProgramData(
