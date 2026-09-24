@@ -23,25 +23,22 @@ runAgent(config: RunConfig, input: RunInput, options?: {
 - `RunConfig`: the opaque program id, its `AgentRunDefinition` (prompt, skill,
   tools, copy), the resolved `binding` (sequence, harness, model and task-role
   routes), supplied program commandments and stage policy, the skills origin,
-  flag snapshot, trace tags, tool allow and deny lists, seed tasks, bound
-  completion `hooks` and `scanReport` (`defer` leaves the scan report to the
-  host run).
-- `RunInput`: install directory, resolved PostHog credentials and inference-auth
-  provider, project and user payloads, skill id, detected integration, `flags`
-  (`ci`, `signup`, `debug`, `e2eAsk`, `localMcp`, `captureAio`, `benchmark`,
-  `yaraReport`) and the host the CLI was told.
+  flag snapshot, trace tags, tool allow and deny lists, seed tasks and bound
+  completion `hooks`.
+- `RunInput`: install directory, resolved credentials, project and user
+  payloads, skill id, detected integration, `flags` (`ci`, `signup`, `debug`,
+  `e2eAsk`, `localMcp`, `captureAio`, `benchmark`, `yaraReport`) and the host
+  the CLI was told.
 - `RunResult`: `outcome` is `RunOutcome.Success | Aborted | Failed | Crashed`.
   Success may carry an `outro`; the other three carry a `failure`
   (`AgentFailure`: message, outro data, error, exit code, error code, detail).
   Every result carries `skillId` and a `snapshot` of what the run reported:
   tasks, status lines, stage, token usage totals, final cost, dashboard and
-  notebook URLs, handoff text, and the transcript tail when the run definition
-  sets `collectTranscript`.
+  notebook URLs, handoff text.
 - `AgentProgress`: one event per thing the run reports, in emission order.
   Kinds: `lifecycle`, `spinner`, `log`, `status`, `tasks`, `stage`, `url`,
-  `usage`, `finalCost`, `authError`, `handoff`, `completion`, and `activity`
-  (one line per step, only from a run that collects its transcript). Payloads
-  are copies, never live objects.
+  `usage`, `finalCost`, `authError`, `handoff`, `completion`. Payloads are
+  copies, never live objects.
 - `AgentInteraction`: every member optional. `ask(question, { signal })`
   resolves with answers, and `taskNotice(notice, { signal })` resolves with
   whether to keep an optional task. Each request has its own signal, which
@@ -54,17 +51,16 @@ runAgent(config: RunConfig, input: RunInput, options?: {
   whether to show auth UI. `Aborted` means the host's signal cancelled the run;
   an agent that stops itself with `[ABORT]` returns `Failed` with its abort
   code.
-- Skills: a run that does not end in `Success` removes the skill directories it
-  added under `<installDir>/.claude/skills` that carry the `.posthog-wizard`
-  marker. Directories that were there before the run stay.
 - Analytics shutdown is host-owned: the agent never sends the terminal
   `setup wizard finished` event. The host sends it from the outcome: `Success`
   is `success`, `Aborted` is `cancelled`, `Failed` and `Crashed` are `error`.
 
 Other runtime exports: `DEFAULT_AGENT_BINDING` for standalone callers,
 `resolveHarness` and `harnessRunsTasks`, which programs resolve a binding with,
-`AgentSignals`, `WIZARD_TOOL_NAMES`, `downloadSkill`, and `runMcpPromptViaSdk`,
-which loads the streaming module on first call.
+`shouldDisableAsk`, `initializeAgent`, `executeAgent`, `buildRunTags`,
+`AgentSignals`, `configureGatewayFromCIEnvironment`, `downloadSkill`,
+`WIZARD_TOOL_NAMES`, `LONGER_ASK_TIMEOUT_MS`, `flushScanReport`, and
+`runMcpPromptViaSdk`, which loads the streaming module on first call.
 
 Minimal invocation:
 
@@ -84,9 +80,6 @@ if (result.outcome !== RunOutcome.Success) {
 
 `src/agent/__tests__/run-agent-standalone.test.ts` runs this with no UI, no
 store and no registry.
-
-Pass an `AbortController` signal in the options and call `controller.abort()` to
-cancel an active run. The result then has `RunOutcome.Aborted`.
 
 ## Intent
 
@@ -109,7 +102,7 @@ table moves to programs.
 
 ```text
 caller ── RunConfig + RunInput ──▶ runAgent
-                                      │ prepareRun: supplied gateway auth, triage provider
+                                      │ prepareRun: gateway mint, triage provider
                                       ▼
                           sequence (linear | orchestrator)
                                       │

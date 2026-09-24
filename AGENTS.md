@@ -133,7 +133,7 @@ confuse it with the top-level `wizard skill` command.
   ([`src/commands/factories/native-command-factory.ts`](src/commands/factories/native-command-factory.ts)).
 - **Family commands** (e.g. `audit`) resolve subcommands at runtime against the
   `cliEntries` in `skill-menu.json`. Logic lives in
-  [`src/commands/dispatch-family.ts`](src/commands/dispatch-family.ts).
+  [`src/programs/dispatch-family.ts`](src/programs/dispatch-family.ts).
   Adding a skill-backed subcommand is a **context-mill** release, not a wizard
   change.
 
@@ -163,13 +163,11 @@ pnpm try --install-dir=<path>      # Run the wizard locally against a test proje
 pnpm build                         # Compile TypeScript
 pnpm test                          # Unit tests (builds first)
 pnpm test:watch                    # Unit tests in watch mode
-pnpm test:e2e:tui                  # Live, credentialed: full TUI on a workbench app copy
+pnpm test:e2e                      # End-to-end tests
 pnpm lint                          # Prettier + ESLint checks
 pnpm fix                           # Auto-fix lint issues
 pnpm dev                           # Build, link globally, watch for changes
 ```
-
-`test:e2e:tui` needs `APP_DIR`, `PROJECT_ID`, a personal key (`POSTHOG_PERSONAL_API_KEY` or `POSTHOG_KEY_FILE`) and `WIZARD_CI_GATEWAY_TOKEN_FILE`; see the Testing section of the [README](README.md). Headless `runProgram` and `runAgent` runs live in the [wizard-workbench](https://github.com/PostHog/wizard-workbench) harness, pointed at this checkout by `WIZARD_REPO`.
 
 Choose verification for the change: check links and formatting for docs; run
 `pnpm typecheck` and focused existing tests for code. Build when bundling or
