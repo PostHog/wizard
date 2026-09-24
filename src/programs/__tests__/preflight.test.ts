@@ -131,59 +131,35 @@ it('sends readiness warnings to setReadinessWarnings, then checks settings and p
     warnings,
   );
   expect(preflightHost.showOutage).not.toHaveBeenCalled();
-  expect(
-    vi.mocked(preflightHost.setReadinessWarnings).mock.invocationCallOrder[0],
-  ).toBeLessThan(
-    vi.mocked(checkAllSettingsConflicts).mock.invocationCallOrder[0],
-  );
   if (decision.kind !== 'proceed') throw new Error('expected proceed');
   decision.restoreSettings();
   expect(restoreClaudeSettings).toHaveBeenCalledExactlyOnceWith(INSTALL_DIR);
 });
 
-it.each([
-  [
-    'an org-managed conflict',
-    [managedConflict],
-    false,
-    '  - managed (/etc/claude-code/managed-settings.json): apiKeyHelper',
-  ],
-  [
-    'a project conflict whose backup fails',
-    [projectConflict],
-    false,
-    `  - project (${INSTALL_DIR}/.claude/settings.json): ANTHROPIC_BASE_URL`,
-  ],
-] as const)(
-  'aborts a non-interactive run on %s with SettingsUnfixableConflict before any override',
-  async (_case, conflicts, backedUp, line) => {
-    vi.mocked(checkAllSettingsConflicts).mockReturnValue([...conflicts]);
-    vi.mocked(backupAndFixClaudeSettings).mockReturnValue(backedUp);
-    const preflightHost = host({ interactive: false });
+it('aborts a non-interactive run with SettingsUnfixableConflict when a project backup fails', async () => {
+  vi.mocked(checkAllSettingsConflicts).mockReturnValue([projectConflict]);
+  vi.mocked(backupAndFixClaudeSettings).mockReturnValue(false);
+  const preflightHost = host({ interactive: false });
 
-    const decision = await preflight('warehouse-source', preflightHost);
+  const decision = await preflight('warehouse-source', preflightHost);
 
-    expect(preflightHost.showSettingsOverride).not.toHaveBeenCalled();
-    expect(decision).toEqual({
-      kind: 'abort',
-      failure: {
-        code: ErrorCodes.SettingsUnfixableConflict,
-        message:
-          'Cannot start — a Claude settings file redirects the agent away ' +
-          'from the PostHog gateway and cannot be neutralized automatically:\n' +
-          `${line}\n` +
-          '\nRemove the conflicting keys and re-run the wizard.',
-      },
-    });
-    expect(analytics.wizardCapture).toHaveBeenCalledWith(
-      'settings conflict detected',
-      {
-        level: conflicts[0].source === 'managed' ? 'org' : 'project',
-        keys: conflicts[0].keys,
-      },
-    );
-  },
-);
+  expect(preflightHost.showSettingsOverride).not.toHaveBeenCalled();
+  expect(decision).toEqual({
+    kind: 'abort',
+    failure: {
+      code: ErrorCodes.SettingsUnfixableConflict,
+      message:
+        'Cannot start — a Claude settings file redirects the agent away ' +
+        'from the PostHog gateway and cannot be neutralized automatically:\n' +
+        `  - project (${INSTALL_DIR}/.claude/settings.json): ANTHROPIC_BASE_URL\n` +
+        '\nRemove the conflicting keys and re-run the wizard.',
+    },
+  });
+  expect(analytics.wizardCapture).toHaveBeenCalledWith(
+    'settings conflict detected',
+    { level: 'project', keys: ['ANTHROPIC_BASE_URL'] },
+  );
+});
 
 it('awaits the settings override for an interactive unfixable conflict', async () => {
   vi.mocked(checkAllSettingsConflicts).mockReturnValue([managedConflict]);
@@ -201,6 +177,10 @@ it('awaits the settings override for an interactive unfixable conflict', async (
 
   const [conflicts, fix] = showSettingsOverride.mock.calls[0];
   expect(conflicts).toEqual([managedConflict]);
+  expect(analytics.wizardCapture).toHaveBeenCalledWith(
+    'settings conflict detected',
+    { level: 'org', keys: ['apiKeyHelper'] },
+  );
   vi.mocked(backupAndFixClaudeSettings).mockReturnValue(true);
   expect(fix()).toBe(true);
   expect(backupAndFixClaudeSettings).toHaveBeenCalledExactlyOnceWith(

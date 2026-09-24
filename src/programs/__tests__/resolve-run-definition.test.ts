@@ -17,6 +17,13 @@ const promptContext = {
   },
 } as unknown as PromptContext;
 
+const postgres = {
+  kind: 'Postgres',
+  label: 'PostgreSQL',
+  mode: 'in-cli',
+  matchedSignal: '.env: DATABASE_URL',
+} as const;
+
 describe('data-only program run definitions', () => {
   it('resolves events-audit from explicit TypeScript and feature inputs', () => {
     const run = resolveEventsAuditRunDefinition({
@@ -30,14 +37,7 @@ describe('data-only program run definitions', () => {
   });
 
   it('builds the warehouse prompt from detected source data', () => {
-    const run = resolveWarehouseSourceRunDefinition([
-      {
-        kind: 'Postgres',
-        label: 'PostgreSQL',
-        mode: 'in-cli',
-        matchedSignal: '.env: DATABASE_URL',
-      },
-    ]);
+    const run = resolveWarehouseSourceRunDefinition([postgres]);
 
     expect(run.customPrompt?.(promptContext)).toContain(
       'PostgreSQL (kind: Postgres, mode: in-cli) — .env: DATABASE_URL',
@@ -50,14 +50,7 @@ describe('data-only program run definitions', () => {
       session: WizardSession,
     ) => Promise<{ customPrompt?: (ctx: PromptContext) => string }>;
     const run = await resolve(session);
-    session.frameworkContext[DETECTED_WAREHOUSE_SOURCES_KEY] = [
-      {
-        kind: 'Postgres',
-        label: 'PostgreSQL',
-        mode: 'in-cli',
-        matchedSignal: '.env: DATABASE_URL',
-      },
-    ];
+    session.frameworkContext[DETECTED_WAREHOUSE_SOURCES_KEY] = [postgres];
     expect(run.customPrompt?.(promptContext)).toContain('.env: DATABASE_URL');
   });
 });

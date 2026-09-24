@@ -39,25 +39,13 @@ it('forwards attributed copies of run events and settles the original result', (
   ]);
   expect(store.activeNotebookUrl()).toBe('https://us.posthog.com/notebook/7');
 
-  const error = new Error('Connection failed');
-  const result: RunResult = {
+  const result = {
     outcome: RunOutcome.Crashed,
     failure: {
       code: ErrorCodes.InternalUnhandled,
-      message: error.message,
-      error,
+      message: 'Connection failed',
     },
-    snapshot: {
-      tasks: [],
-      statusMessages: [],
-      usage: {
-        inputTokens: 0,
-        outputTokens: 0,
-        cacheReadTokens: 0,
-        cacheCreationTokens: 0,
-      },
-    },
-  };
+  } as RunResult;
   run.finish(result);
   run.onProgress({ kind: 'status', message: 'late' });
 
