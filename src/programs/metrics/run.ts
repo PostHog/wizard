@@ -1,6 +1,7 @@
 import type { ProgramRun } from '@programs/program-run';
 
 export const METRICS_REPORT_FILE = 'posthog-metrics-report.md';
+
 export const METRICS_RUN: ProgramRun = {
   integrationLabel: 'metrics',
   // No `skillId`: the agent must load the menu and install the right

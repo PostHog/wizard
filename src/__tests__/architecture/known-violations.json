@@ -104,6 +104,7 @@
     "src/programs/shared/posthog-cli-preinstall.ts -> src/ui/index.ts",
     "src/programs/task-stream/destinations/posthog.ts -> src/lib/wizard-session.ts",
     "src/programs/task-stream/task-stream-push.ts -> src/lib/wizard-session.ts",
+    "src/programs/task-stream/task-stream-push.ts -> src/ui/tui/store.ts",
     "src/programs/task-stream/task-stream-push.ts -> src/ui/wizard-ui.ts",
     "src/programs/task-stream/types.ts -> src/lib/wizard-session.ts",
     "src/programs/warehouse-source/detect.ts -> src/lib/wizard-session.ts",

@@ -1,12 +1,12 @@
 import type { ProgramConfig } from '@programs/program-step';
-import {
-  MIGRATION_REPORT_FILE,
-  DEFAULT_MIGRATE_SKILL_ID,
-  MIGRATION_RUN,
-} from './run.js';
 import { WIZARD_TOOL_NAMES } from '@agent';
 import { MIGRATION_PROGRAM } from './steps.js';
 import { getContentBlocks } from '../../ui/tui/decks/migration/index.js';
+import {
+  DEFAULT_MIGRATE_SKILL_ID,
+  MIGRATION_REPORT_FILE,
+  MIGRATION_RUN,
+} from './run.js';
 
 export const migrationConfig: ProgramConfig = {
   command: 'migrate',
