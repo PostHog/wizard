@@ -3,7 +3,7 @@ import {
   startFileWatcher,
   type FileWatcherHandle,
   type FileWatcherOptions,
-} from '@lib/file-watcher';
+} from '@shared/file-watcher';
 
 const MAX_EVENT_PLAN_FILE_BYTES = 256 * 1024;
 const MAX_EVENT_COUNT = 50;
