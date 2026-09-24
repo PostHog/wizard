@@ -219,21 +219,16 @@ describe('runProgram', () => {
     expect(outcome).toMatchObject({
       programId: 'metrics',
       outcome: 'success',
-      runResults: [{ outcome: 'success', skillId: 'metrics' }],
-      progress: {
-        runs: [
-          {
-            runId: 'run-1',
-            phase: 'finished',
-            outcome: 'success',
-            snapshot: { statusMessages: ['Metrics configured'] },
-          },
-        ],
-      },
       data: {
         credentials: { projectId: 42 },
       },
-      settledRuns: [{ runId: 'run-1', result: { outcome: 'success' } }],
+      settledRuns: [
+        {
+          runId: 'run-1',
+          result: { outcome: 'success', skillId: 'metrics', snapshot },
+        },
+      ],
+      diagnostics: [],
       artifacts: { reportFile: '/project/posthog-metrics-report.md' },
     });
   });
@@ -302,7 +297,7 @@ describe('runProgram', () => {
     expect(outcome).toMatchObject({
       outcome: 'failed',
       failure: { message: 'Unknown program: missing-program' },
-      runResults: [],
+      settledRuns: [],
     });
     expect(runAgent).not.toHaveBeenCalled();
   });
@@ -919,7 +914,7 @@ describe('runProgram', () => {
     expect(result).toMatchObject({
       outcome: 'failed',
       failure: { message: 'login unavailable' },
-      runResults: [],
+      settledRuns: [],
     });
     expect(runAgent).not.toHaveBeenCalled();
   });
@@ -1446,7 +1441,7 @@ describe('runProgram', () => {
     expect(
       observed.filter((progress) => progress.kind === 'program').at(-1),
     ).toEqual({ kind: 'program', data: result.data });
-    expect(result.runResults.map((item) => item.skillId)).toEqual([
+    expect(result.settledRuns.map((item) => item.result.skillId)).toEqual([
       'posthog-integration',
       'self-driving',
     ]);

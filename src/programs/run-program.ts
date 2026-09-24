@@ -47,9 +47,9 @@ import { resolveSelfDrivingRun } from './self-driving/run';
 import { snapshotProgramInput } from './snapshot-program-input';
 import {
   ProgramStore,
+  type ProgramDiagnostic,
   type ProgramInvocationData,
   type ProgramProgress,
-  type ProgramStoreProjection,
   type SettledProgramRun,
 } from './program-store';
 
@@ -178,13 +178,12 @@ export interface ProgramOptions {
 export interface ProgramRunOutcome {
   programId: string;
   outcome: RunOutcome;
-  runResults: RunResult[];
   /** Final invocation-owned authentication, detection, and composition data. */
   data: ProgramInvocationData;
-  /** Snapshot of each agent run's attributed progress. */
-  progress: ProgramStoreProjection;
-  /** Actual completed agent invocations, in settlement order. */
+  /** Each agent run's result, attributed to its run and step, in settlement order. */
   settledRuns: SettledProgramRun[];
+  /** Observer failures and late events, newest last. */
+  diagnostics: ProgramDiagnostic[];
   /** The data a no-agent workflow returned. */
   programData?: Record<string, unknown>;
   artifacts: { reportFile?: string };
@@ -212,10 +211,10 @@ export async function runProgram(
   options: ProgramOptions = {},
 ): Promise<ProgramRunOutcome> {
   const input = snapshotProgramInput(hostInput);
-  const store = new ProgramStore(
-    { aiSdkStampReported: input.aiSdkStampReported },
-    { onData: options.onProgress },
-  );
+  const store = new ProgramStore({
+    aiSdkStampReported: input.aiSdkStampReported,
+    onData: options.onProgress,
+  });
   // Registered, so a process drain mid-run (wizardAbort, a signal) removes new skills too.
   const cleanups = new Map<string, RunSkillCleanup>();
   const captureSkills = (installDir: string) => {
@@ -276,10 +275,9 @@ async function runProgramWithStore(
   ): ProgramRunOutcome => ({
     programId,
     outcome,
-    runResults: store.results(),
     data: store.readData(),
-    progress: store.read(),
     settledRuns: store.settledRuns(),
+    diagnostics: store.readDiagnostics(),
     artifacts,
     ...(failure && { failure }),
   });
@@ -293,13 +291,6 @@ async function runProgramWithStore(
 
   if (!program) return fail(`Unknown program: ${programId}`);
 
-  if (input.integration !== undefined || input.typescript !== undefined) {
-    store.setDetection({
-      integration: input.integration,
-      typescript: input.typescript,
-      complete: input.frameworkConfig !== undefined,
-    });
-  }
   for (const [key, value] of Object.entries(input.frameworkContext ?? {})) {
     store.setFrameworkContext(key, value);
   }
@@ -566,8 +557,7 @@ async function runProgramWithStore(
             // The outro is built before runAgent returns, so it reads the URL
             // this run emitted, unless the host has its own live getter.
             getNotebookUrl:
-              effects.getNotebookUrl ??
-              (() => store.activeRunSnapshot()?.notebookUrl),
+              effects.getNotebookUrl ?? (() => store.activeNotebookUrl()),
           },
         );
         run = resolved.run;

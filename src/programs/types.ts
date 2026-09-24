@@ -14,17 +14,13 @@ export type {
   ProgramWorkflowConnector,
 } from './run-program';
 export type {
+  ProgramDiagnostic,
   ProgramInvocationData,
   ProgramProgress,
-  ProgramStoreProjection,
   SettledProgramRun,
 } from './program-store';
 export type { ProgramSwitchboardCtx } from './binding';
-export type {
-  ProgramRunProgress,
-  ProgramDataProgress,
-  ProgramDataWriter,
-} from './program-store';
+export type { ProgramRunProgress, ProgramDataProgress } from './program-store';
 export type { ProgramOverrides, WizardFlagSnapshot } from './run-program';
 export type {
   ProgramWorkflowRequest,
