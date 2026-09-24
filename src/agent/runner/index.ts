@@ -123,7 +123,16 @@ export async function runAgent(
       },
     };
   };
-
+  const settle = (result: RunResult): RunResult => {
+    if (result.outcome !== RunOutcome.Success) cleanFailedRun();
+    try {
+      // A deferred report keeps counting this run's scans toward the host run's.
+      scanReport?.flush();
+    } catch {
+      // Scan reporting is best effort after the run outcome is decided.
+    }
+    return result;
+  };
   let result: RunResult;
   try {
     // The report line reaches the collector once it exists; a drain cannot run before that.
@@ -140,47 +149,38 @@ export async function runAgent(
     const log = (message: string) =>
       emit({ kind: 'log', level: 'info', message });
     if (options.signal?.aborted) {
-      result = {
+      return settle({
         ...hostAborted(),
         skillId: input.skillId,
         snapshot: snapshot(),
-      };
-    } else {
-      const boot = await prepareRun(config, input);
-      if (options.signal?.aborted) {
-        result = {
-          ...hostAborted(),
-          skillId: input.skillId,
-          snapshot: snapshot(),
-        };
-      } else {
-        if (config.binding.sequence === Sequence.orchestrator) {
-          log('Task-queue orchestrator enabled.');
-        }
-        try {
-          logToFile(
-            `[agent-runner] run program=${config.programId} sequence=${config.binding.sequence}` +
-              ` harness=${config.binding.harness} composed=${config.composed}`,
-          );
-        } catch {
-          // Logging is best effort.
-        }
-        const sequenceResult = await getSequence(config.binding.sequence).run({
-          config,
-          input,
-          boot,
-          emit,
-          interaction: options.interaction,
-          signal: options.signal,
-          transcript,
-        });
-        result = {
-          ...(options.signal?.aborted ? hostAborted() : sequenceResult),
-          skillId: input.skillId,
-          snapshot: snapshot(),
-        };
-      }
+      });
     }
+    const boot = await prepareRun(config, input);
+    if (config.binding.sequence === Sequence.orchestrator) {
+      log('Task-queue orchestrator enabled.');
+    }
+    try {
+      logToFile(
+        `[agent-runner] run program=${config.programId} sequence=${config.binding.sequence}` +
+          ` harness=${config.binding.harness} composed=${config.composed}`,
+      );
+    } catch {
+      // Logging is best effort.
+    }
+    const sequenceResult = await getSequence(config.binding.sequence).run({
+      config,
+      input,
+      boot,
+      emit,
+      interaction: options.interaction,
+      signal: options.signal,
+      transcript,
+    });
+    result = {
+      ...(options.signal?.aborted ? hostAborted() : sequenceResult),
+      skillId: input.skillId,
+      snapshot: snapshot(),
+    };
   } catch (error) {
     const original =
       error instanceof Error ? error : new Error(safeErrorMessage(error));
@@ -230,17 +230,7 @@ export async function runAgent(
     }
   }
 
-  if (options.signal?.aborted && result.outcome === RunOutcome.Success) {
-    result = { ...hostAborted(), skillId: input.skillId, snapshot: snapshot() };
-  }
-  if (result.outcome !== RunOutcome.Success) cleanFailedRun();
-  try {
-    // A deferred report keeps counting this run's scans toward the host run's.
-    scanReport?.flush();
-  } catch {
-    // Scan reporting is best effort after the run outcome is decided.
-  }
-  return result;
+  return settle(result);
 }
 
 /**

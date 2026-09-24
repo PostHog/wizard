@@ -160,42 +160,6 @@ describe('runAgent', () => {
   });
 
   describe('race condition handling', () => {
-    it('aborts the active SDK query when the host cancels', async () => {
-      const host = new AbortController();
-      let sdkAbort: AbortSignal | undefined;
-      mockQuery.mockImplementation(
-        ({ options }: { options: { abortController: AbortController } }) => {
-          sdkAbort = options.abortController.signal;
-          return (async function* () {
-            yield* [];
-            await new Promise<void>((resolve) =>
-              sdkAbort?.addEventListener('abort', () => resolve(), {
-                once: true,
-              }),
-            );
-            throw new Error('SDK aborted');
-          })();
-        },
-      );
-
-      const running = runAgent(
-        defaultAgentConfig,
-        'test prompt',
-        defaultOptions,
-        mockSpinner as unknown as SpinnerHandle,
-        { signal: host.signal },
-      );
-      await vi.waitFor(() => expect(mockQuery).toHaveBeenCalledTimes(1));
-      host.abort();
-
-      expect(await running).toMatchObject({
-        kind: 'abort',
-        classification: 'WIZARD_ABORT',
-      });
-      expect(sdkAbort?.aborted).toBe(true);
-      expect(mockSpinner.stop).toHaveBeenCalledWith('Wizard aborted');
-    });
-
     it('returns a failure for an SDK error result without an API marker', async () => {
       function* failed() {
         yield {
@@ -273,6 +237,8 @@ describe('runAgent', () => {
         kind: 'abort',
         classification: 'WIZARD_ABORT',
       });
+      const [{ options }] = mockQuery.mock.calls[0];
+      expect(options.abortController.signal.aborted).toBe(true);
     });
 
     it('returns a failure when the stream ends without a terminal result', async () => {

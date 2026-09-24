@@ -491,14 +491,12 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
 
     let terminal = turns.terminalFailure();
     try {
-      if (inputs.signal?.aborted) {
-        if (spinnerMessage) spinner.stop('Run cancelled');
+      if (inputs.signal?.aborted)
         return {
           kind: 'abort',
           classification: AgentErrorType.ABORT,
           message: 'Agent run cancelled',
         };
-      }
       await turns.prompt(taskPrompt);
       terminal = turns.terminalFailure();
 
@@ -544,7 +542,6 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
     }
 
     if (inputs.signal?.aborted) {
-      if (spinnerMessage) spinner.stop('Run cancelled');
       return {
         kind: 'abort',
         classification: AgentErrorType.ABORT,
@@ -620,7 +617,6 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
     return { kind: 'success' };
   } catch (err) {
     if (inputs.signal?.aborted) {
-      if (spinnerMessage) spinner.stop('Run cancelled');
       return {
         kind: 'abort',
         classification: AgentErrorType.ABORT,
