@@ -267,25 +267,24 @@ async function runProgramWithStore(
   const runId = input.runId ?? randomUUID();
   const signal = options.signal ?? NEVER_ABORTED;
 
-  const fail = (message: string): ProgramRunOutcome => ({
+  const settle = (
+    outcome: RunOutcome,
+    failure?: RunResult['failure'],
+  ): ProgramRunOutcome => ({
     programId,
-    outcome: RunOutcome.Failed,
+    outcome,
     runResults: store.results(),
     data: store.readData(),
     progress: store.read(),
     settledRuns: store.settledRuns(),
     artifacts,
-    failure: { code: ErrorCodes.InternalUnhandled, message },
+    ...(failure && { failure }),
   });
-  const abort = (message: string): ProgramRunOutcome => ({
-    ...fail(message),
-    outcome: RunOutcome.Aborted,
-    failure: { code: ErrorCodes.AgentAbort, message },
-  });
-  const cancelled = (): ProgramRunOutcome => ({
-    ...abort('Run cancelled by host.'),
-    failure: { code: ErrorCodes.AgentAbort, message: 'Run cancelled by host.' },
-  });
+  const fail = (message: string) =>
+    settle(RunOutcome.Failed, { code: ErrorCodes.InternalUnhandled, message });
+  const abort = (message: string) =>
+    settle(RunOutcome.Aborted, { code: ErrorCodes.AgentAbort, message });
+  const cancelled = () => abort('Run cancelled by host.');
 
   if (signal.aborted) return cancelled();
 
@@ -357,25 +356,18 @@ async function runProgramWithStore(
     );
     if (signal.aborted) return cancelled();
     return {
-      programId,
-      outcome:
+      ...settle(
         result.outcome === 'interactive-required'
           ? RunOutcome.Failed
           : (result.outcome as RunOutcome),
-      runResults: [],
-      data: store.readData(),
-      progress: store.read(),
-      settledRuns: store.settledRuns(),
-      programData: result.data,
-      artifacts,
-      ...('failure' in result
-        ? {
-            failure: {
+        'failure' in result
+          ? {
               ...result.failure,
               code: result.failure.code ?? ErrorCodes.InternalUnhandled,
-            },
-          }
-        : {}),
+            }
+          : undefined,
+      ),
+      programData: result.data,
     };
   }
   if (!credentials)
@@ -708,18 +700,10 @@ async function runProgramWithStore(
     if (result.outcome === RunOutcome.Success) {
       store.markProgramCompleted(programId);
     }
-    return {
-      programId,
-      outcome: result.outcome,
-      runResults: store.results(),
-      data: store.readData(),
-      progress: store.read(),
-      settledRuns: store.settledRuns(),
-      artifacts,
-      ...(result.outcome === RunOutcome.Success
-        ? {}
-        : { failure: result.failure }),
-    };
+    return settle(
+      result.outcome,
+      result.outcome === RunOutcome.Success ? undefined : result.failure,
+    );
   } finally {
     fileWatchers.stop();
   }
