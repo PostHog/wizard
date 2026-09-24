@@ -372,8 +372,7 @@ export async function evaluateToolCall(
     // The allowlist is a pi-only restriction; the anthropic arm runs bash
     // unrestricted and leans on the shared YARA scan. Let a plain `rm` of
     // project files through to that same scan so pi matches that behavior.
-    // Decided before `wizardCanUseTool`, which logs and captures every
-    // allowlist deny, so an rm that runs is never recorded as denied.
+    // Decided first: `wizardCanUseTool` logs and captures every allowlist deny.
     const allowedLikeAnthropic =
       toolName === 'bash' &&
       isScopedFileRemoval(str(input.command), ctx.workingDirectory);
