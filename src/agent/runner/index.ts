@@ -12,11 +12,13 @@
  * Every other variant runs the fixed linear pipeline:
  *   [skill install] → agent init → prompt → run → errors → [postRun] → outro
  *
- * The agent reports and asks; it never renders, reads a session, or exits.
+ * The agent reports and asks; it never renders, reads a session, exits, or
+ * sends the process's terminal analytics.
  * Coded errors return Failed, uncoded throws return Crashed, and both retain
  * the caught error. Scan-report flushing is best effort after the result is
- * decided. The legacy adapter in `src/cli/runners/run-program-agent.ts`
- * rebuilds session-driven behavior for existing program callers.
+ * decided. A program run reaches this call through programs' `runProgram`,
+ * which builds the config and input. Agentic detection and a standalone caller
+ * build them and call it directly.
  */
 
 import { Sequence } from '@shared/constants';
@@ -32,9 +34,15 @@ import type {
 } from './shared/types';
 import { prepareRun } from './shared/bootstrap';
 import { createProgressCollector } from './shared/progress-collector';
+import {
+  createTranscriptTail,
+  type TranscriptTail,
+} from './shared/transcript-tail';
 import { getSequence } from './switchboard';
 import { flushScanReport } from '@agent/yara-hooks';
+import type { ProgressEmitter } from '@agent/progress';
 import { captureRunSkillCleanup } from '@shared/skill-run-cleanup';
+import { registerCleanup } from '@utils/cleanup-registry';
 import { hostAborted } from './shared/errors';
 
 export type {
@@ -60,9 +68,9 @@ export type {
   AgentProgress,
   ProgressEmitter,
 } from '@agent/progress';
-export { shouldDisableAsk } from './shared/bootstrap';
-export { resolveBinding } from './switchboard';
 export type { ProgramBinding, SwitchboardCtx } from './switchboard';
+export { TASK_OUTCOMES_KEY } from './sequence/orchestrator/queue';
+export type { TaskOutcome } from './sequence/orchestrator/queue';
 
 /**
  * Run a program's agent pipeline.
@@ -77,6 +85,8 @@ export async function runAgent(
   options: RunAgentOptions = {},
 ): Promise<RunResult> {
   let collector: ReturnType<typeof createProgressCollector> | undefined;
+  let scanReport: { flush(): void } | undefined;
+  let transcript: TranscriptTail | undefined;
   let cleanupInstalledSkills: (() => void) | undefined;
   const cleanFailedRun = () => {
     try {
@@ -91,7 +101,12 @@ export async function runAgent(
   };
   const snapshot = (): RunResult['snapshot'] => {
     try {
-      if (collector) return collector.snapshot();
+      if (collector) {
+        const collected = collector.snapshot();
+        return transcript
+          ? { ...collected, transcriptTail: transcript.text() }
+          : collected;
+      }
     } catch {
       // A partial snapshot must not replace the run's primary failure.
     }
@@ -106,56 +121,64 @@ export async function runAgent(
       },
     };
   };
-
+  const settle = (result: RunResult): RunResult => {
+    if (result.outcome !== RunOutcome.Success) cleanFailedRun();
+    try {
+      // A deferred report keeps counting this run's scans toward the host run's.
+      scanReport?.flush();
+    } catch {
+      // Scan reporting is best effort after the run outcome is decided.
+    }
+    return result;
+  };
   let result: RunResult;
   try {
-    // Capture before preparation so pre-harness failures also clean new skills.
+    // The report line reaches the collector once it exists; a drain cannot run before that.
+    if (config.scanReport !== 'defer') {
+      scanReport = armScanReportFlush(input.flags.yaraReport, (event) =>
+        collector?.emit(event),
+      );
+    }
+    // Capture before preparation so pre-harness failures clean new skills too.
     cleanupInstalledSkills = captureRunSkillCleanup(input.installDir);
     collector = createProgressCollector(options.onProgress);
     const { emit } = collector;
+    if (config.run.collectTranscript) transcript = createTranscriptTail(emit);
     const log = (message: string) =>
       emit({ kind: 'log', level: 'info', message });
     if (options.signal?.aborted) {
-      result = {
+      return settle({
         ...hostAborted(),
         skillId: input.skillId,
         snapshot: snapshot(),
-      };
-    } else {
-      const boot = await prepareRun(config, input);
-      if (options.signal?.aborted) {
-        result = {
-          ...hostAborted(),
-          skillId: input.skillId,
-          snapshot: snapshot(),
-        };
-      } else {
-        if (config.binding.sequence === Sequence.orchestrator) {
-          log('Task-queue orchestrator enabled.');
-        }
-        try {
-          logToFile(
-            `[agent-runner] run program=${config.programId} sequence=${config.binding.sequence}` +
-              ` harness=${config.binding.harness} composed=${config.composed}`,
-          );
-        } catch {
-          // Logging is best effort.
-        }
-        const sequenceResult = await getSequence(config.binding.sequence).run({
-          config,
-          input,
-          boot,
-          emit,
-          interaction: options.interaction,
-          signal: options.signal,
-        });
-        result = {
-          ...(options.signal?.aborted ? hostAborted() : sequenceResult),
-          skillId: input.skillId,
-          snapshot: snapshot(),
-        };
-      }
+      });
     }
+    const boot = await prepareRun(config, input);
+    if (config.binding.sequence === Sequence.orchestrator) {
+      log('Task-queue orchestrator enabled.');
+    }
+    try {
+      logToFile(
+        `[agent-runner] run program=${config.programId} sequence=${config.binding.sequence}` +
+          ` harness=${config.binding.harness} composed=${config.composed}`,
+      );
+    } catch {
+      // Logging is best effort.
+    }
+    const sequenceResult = await getSequence(config.binding.sequence).run({
+      config,
+      input,
+      boot,
+      emit,
+      interaction: options.interaction,
+      signal: options.signal,
+      transcript,
+    });
+    result = {
+      ...(options.signal?.aborted ? hostAborted() : sequenceResult),
+      skillId: input.skillId,
+      snapshot: snapshot(),
+    };
   } catch (error) {
     const original =
       error instanceof Error ? error : new Error(safeErrorMessage(error));
@@ -183,7 +206,7 @@ export async function runAgent(
     } else if (failure.coded) {
       result = {
         outcome: RunOutcome.Failed,
-        skillId: input.skillId,
+        skillId: input?.skillId,
         failure: {
           code: failure.code,
           message: failure.message,
@@ -194,7 +217,7 @@ export async function runAgent(
     } else {
       result = {
         outcome: RunOutcome.Crashed,
-        skillId: input.skillId,
+        skillId: input?.skillId,
         failure: {
           code: failure.code,
           message: failure.message,
@@ -204,19 +227,26 @@ export async function runAgent(
       };
     }
   }
+  return settle(result);
+}
 
-  if (options.signal?.aborted && result.outcome === RunOutcome.Success) {
-    result = { ...hostAborted(), skillId: input.skillId, snapshot: snapshot() };
-  }
-  if (result.outcome !== RunOutcome.Success) cleanFailedRun();
-  try {
-    const report = flushScanReport({ yaraReport: input.flags.yaraReport });
-    if (report)
-      collector?.emit({ kind: 'log', level: 'info', message: report });
-  } catch {
-    // Scan reporting is best effort after the run outcome is decided.
-  }
-  return result;
+/**
+ * Write the scan report and emit its line once: from the run's own tail, or
+ * earlier when a process drain (wizardAbort, a signal handler) runs cleanups.
+ */
+function armScanReportFlush(
+  yaraReport: boolean,
+  emit: ProgressEmitter,
+): { flush(): void } {
+  let flushed = false;
+  const flush = () => {
+    if (flushed) return;
+    flushed = true;
+    const report = flushScanReport({ yaraReport });
+    if (report) emit({ kind: 'log', level: 'info', message: report });
+  };
+  registerCleanup(flush);
+  return { flush };
 }
 
 function safeErrorMessage(error: unknown): string {

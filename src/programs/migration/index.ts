@@ -1,10 +1,10 @@
 import type { ProgramConfig } from '@programs/program-step';
+import { WIZARD_TOOL_NAMES } from '@agent';
 import {
-  MIGRATION_REPORT_FILE,
   DEFAULT_MIGRATE_SKILL_ID,
+  MIGRATION_REPORT_FILE,
   MIGRATION_RUN,
 } from './run.js';
-import { WIZARD_TOOL_NAMES } from '@agent';
 
 export const migrationConfig: ProgramConfig = {
   command: 'migrate',

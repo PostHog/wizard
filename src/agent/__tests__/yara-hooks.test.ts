@@ -8,7 +8,6 @@ import {
   captureScanReport,
   recordExternalScan,
   resetScanReport,
-  scanInstalledSkill,
 } from '@agent/yara-hooks';
 import { scan, triageMatches } from '@posthog/warlock';
 import fs from 'fs';
@@ -772,10 +771,6 @@ describe('yara-hooks', () => {
         );
         expect(result.stopReason).toContain('YARA CRITICAL');
         expect(result.stopReason).toContain('Poisoned skill');
-        expect(mockFg).toHaveBeenCalledWith(
-          '**/*.{md,txt,yaml,yml,json,js,ts,py,rb,sh}',
-          expect.objectContaining({ caseSensitiveMatch: false }),
-        );
       });
 
       it('allows clean skill installs', async () => {
@@ -796,19 +791,6 @@ describe('yara-hooks', () => {
           { signal: dummySignal },
         );
         expect(result).toEqual({});
-      });
-
-      it('fails an installed-skill scan when a matched text file is unreadable', async () => {
-        mockFs.existsSync.mockReturnValue(true);
-        mockFs.statSync.mockReturnValue({ size: 100 } as fs.Stats);
-        mockFg.mockResolvedValue(['/tmp/.claude/skills/x/PAYLOAD.TXT']);
-        mockFs.readFileSync.mockImplementation(() => {
-          throw new Error('unreadable');
-        });
-
-        await expect(
-          scanInstalledSkill('/tmp/.claude/skills/x', undefined),
-        ).rejects.toThrow('unreadable');
       });
 
       it('skips non-skill-install Bash commands', async () => {

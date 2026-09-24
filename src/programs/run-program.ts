@@ -11,114 +11,134 @@ import type {
   RunResult,
 } from '@agent/types';
 import { getSkillsBaseUrl } from '@shared/constants';
-import type { Integration } from '@shared/constants';
+import type { AuditCheck } from '@shared/audit-ledger';
+import type { Harness, Integration, Sequence } from '@shared/constants';
 import { ErrorCodes } from '@shared/errors';
-import { captureRunSkillCleanup } from '@shared/skill-run-cleanup';
+import { buildRunTags } from '@shared/run-tags';
+import {
+  registerRunSkillCleanup,
+  type RunSkillCleanup,
+} from '@shared/skill-run-cleanup';
+import type { DiscoveredFeature } from '@shared/scan-consent';
+import { analytics, groupsFromUser } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
-import type { FrameworkConfig } from './framework-config';
 import type { DetectedSource } from './warehouse-sources/types';
-import type {
-  CredentialsProvider,
-  ResolvedProgramCredentials,
+import {
+  createPosthogInferenceAuthProvider,
+  type CredentialsProvider,
+  type ResolvedProgramCredentials,
 } from './credentials';
-import { getRuntimeProgramConfig } from './runtime-registry';
+import { refreshCredentialsIfNeeded } from './token-refresh';
+import { stampAiSdkDetected } from './posthog-integration/ai-sdk-stamp';
 import { startProgramFileWatchers } from './program-file-watchers';
 import { resolveProgramBinding } from './binding';
 import { getProgramCommandments } from './commandments';
 import { areSeededTasksEnabled, resolveStageOverrides } from './experiments';
 import { captureSwitchboardDecision } from './binding-telemetry';
-import {
-  runNoAgentProgram,
-  type NoAgentMcpPort,
-  type NoAgentProgramOptions,
-} from './no-agent';
-import type { ProgramRunDefinitionInput } from './resolve-run-definition';
-import {
-  resolvePosthogIntegrationRun,
-  type PosthogIntegrationRunEffects,
-} from './posthog-integration/run';
-import { resolveSelfDrivingRun } from './self-driving/run';
+import { snapshotProgramInput } from './snapshot-program-input';
 import {
   ProgramStore,
+  type ProgramDiagnostic,
   type ProgramInvocationData,
   type ProgramProgress,
-  type ProgramStoreProjection,
   type SettledProgramRun,
 } from './program-store';
 
-export interface ProgramInput extends ProgramRunDefinitionInput {
+/** Launch-time routing choices, such as the CLI's --harness, --sequence and --model. */
+export type ProgramOverrides = {
+  harness?: Harness;
+  sequence?: Sequence;
+  model?: string;
+};
+
+/** Feature flags and their payloads from one evaluation. */
+export type WizardFlagSnapshot = {
+  flags: Record<string, string>;
+  payloads: Record<string, unknown>;
+};
+
+/** Program-level settings the caller reads from the program's `ProgramConfig`. */
+export type ProgramSettings = {
+  /** False for a program whose run needs no AI-processing approval. */
+  requiresAi?: boolean;
+  agentFlow?: string;
+  allowedTools?: RunConfig['allowedTools'];
+  disallowedTools?: RunConfig['disallowedTools'];
+  excludedTaskTypes?: RunConfig['excludedTaskTypes'];
+  auditLedgerFile?: string;
+  /** Written to the audit ledger before the agent starts. */
+  auditSeedChecks?: readonly AuditCheck[];
+  eventPlanFile?: string;
+  /** Steps the host settles after auth and before the agent starts. */
+  postAuthGates?: readonly string[];
+};
+
+/** Copied when runProgram receives it; functions stay by reference. */
+export interface ProgramInput {
   installDir: string;
+  /** The program's run definition, built by the caller from its `ProgramConfig`. */
+  run: AgentRunDefinition;
+  program?: ProgramSettings;
   /** Run-scoped credentials, or provide options.credentials instead. */
   credentials?: ResolvedProgramCredentials;
   /** Stable attribution supplied by a host. Generated when absent. */
   runId?: string;
-  /** Data-only override for a program whose legacy recipe still takes a session. */
-  run?: AgentRunDefinition;
-  binding?: RunConfig['binding'];
+  overrides?: ProgramOverrides;
   composed?: boolean;
   skillId?: string;
   integration?: Integration | null;
   frameworkDocsUrl?: string;
   flags?: Partial<RunInput['flags']>;
-  mcp?: { features?: string[]; apiKey?: string };
   host?: RunInput['host'];
+  /** Evaluated flags; when absent, runProgram asks options.featureFlags. */
   wizardFlags?: Record<string, string>;
   wizardFlagPayloads?: Record<string, unknown>;
-  wizardMetadata?: Record<string, string>;
   seedTasks?: RunConfig['seedTasks'];
   hooks?: RunHooks;
-  allowedTools?: RunConfig['allowedTools'];
-  disallowedTools?: RunConfig['disallowedTools'];
-  agentFlow?: string;
-  frameworkConfig?: FrameworkConfig;
-  frameworkContext?: Record<string, unknown>;
   warehouseSources?: readonly DetectedSource[];
-  detectedTools?: readonly DetectedSource[];
   mayReportScanResults?: boolean;
-  /** Prepared child integration and gate decisions for a composed run. */
-  composition?: {
-    integration?: ProgramInput;
-    handoffConfirmed?: boolean;
-    githubConnected?: boolean;
-  };
-}
-
-export interface ProgramWorkflowConnector {
-  confirmStep(request: {
-    programId: 'self-driving';
-    stepId: 'self-driving-handoff' | 'self-driving-github';
-    installDir: string;
-  }): Promise<boolean>;
+  discoveredFeatures?: readonly DiscoveredFeature[];
+  /** The host already considered the AI SDK stamp for this login. */
+  aiSdkStampReported?: boolean;
 }
 
 export interface ProgramOptions {
   credentials?: CredentialsProvider;
   interaction?: AgentInteraction;
   onProgress?: (progress: ProgramProgress) => void;
-  mcp?: NoAgentMcpPort;
-  workflow?: NoAgentProgramOptions['workflow'];
-  integrationEffects?: PosthogIntegrationRunEffects;
-  compositionWorkflow?: ProgramWorkflowConnector;
   /** Wait for the host's AI-processing approval gate when org approval is absent. */
-  awaitAiApproval?: (context: { programId: string }) => Promise<boolean>;
+  awaitAiApproval?: (context: {
+    programId: string;
+    signal: AbortSignal;
+  }) => Promise<boolean>;
+  /** Wait while the host settles the program's post-auth gates, such as a project picker. */
+  awaitPostAuthGates?: (context: {
+    programId: string;
+    gates: readonly string[];
+    signal: AbortSignal;
+  }) => Promise<void>;
+  /** Evaluate feature flags for a run whose input carries none. */
+  featureFlags?: () => Promise<WizardFlagSnapshot>;
+  /** Leave new skills armed after success; the host commits them at exit. */
+  deferSkillCommit?: boolean;
   signal?: AbortSignal;
 }
 
 export interface ProgramRunOutcome {
   programId: string;
   outcome: RunOutcome;
-  runResults: RunResult[];
-  /** Final invocation-owned authentication, detection, and composition data. */
+  /** Final invocation-owned authentication and program-file data. */
   data: ProgramInvocationData;
-  /** Snapshot of each agent run's attributed progress. */
-  progress: ProgramStoreProjection;
-  /** Actual completed agent invocations, in settlement order. */
+  /** The agent run's result, attributed to its run, once it settled. */
   settledRuns: SettledProgramRun[];
-  /** Program-specific outcome data, such as doctor issues or MCP client results. */
-  programData?: Record<string, unknown>;
+  /** Observer failures and late events, newest last. */
+  diagnostics: ProgramDiagnostic[];
   artifacts: { reportFile?: string };
   failure?: RunResult['failure'];
 }
+
+/** Handed to host capabilities when the caller supplied no signal. */
+const NEVER_ABORTED = new AbortController().signal;
 
 const DEFAULT_FLAGS: RunInput['flags'] = {
   ci: false,
@@ -131,301 +151,201 @@ const DEFAULT_FLAGS: RunInput['flags'] = {
   yaraReport: false,
 };
 
-/** Run a registered program from explicit inputs, with invocation-owned state. */
+/** Run an existing program from explicit inputs, with invocation-owned state. */
 export async function runProgram(
   programId: string,
-  input: ProgramInput,
+  hostInput: ProgramInput,
   options: ProgramOptions = {},
 ): Promise<ProgramRunOutcome> {
-  const store = new ProgramStore();
-  const installDirs = new Set([
-    input.installDir,
-    ...(input.composition?.integration
-      ? [input.composition.integration.installDir]
-      : []),
-  ]);
-  const cleanups = [...installDirs].map(captureRunSkillCleanup);
-  const cleanFailedInvocation = () => {
-    for (const cleanup of cleanups) {
-      try {
-        cleanup();
-      } catch (error) {
-        logToFile('[programs] failed-run skill cleanup error:', error);
-      }
-    }
-  };
+  const input = snapshotProgramInput(hostInput);
+  const store = new ProgramStore({
+    aiSdkStampReported: input.aiSdkStampReported,
+    onData: options.onProgress,
+  });
+  // Registered, so a process drain mid-run (wizardAbort, a signal) removes new skills too.
+  const skills = registerRunSkillCleanup(input.installDir);
   try {
-    const result = await runProgramWithStore(
-      programId,
-      input,
-      options,
-      store,
-      undefined,
-      { granted: false },
-    );
-    if (result.outcome !== RunOutcome.Success) cleanFailedInvocation();
+    const result = await runWithStore(programId, input, options, store);
+    if (result.outcome !== RunOutcome.Success) cleanFailedRun(skills);
+    else if (!options.deferSkillCommit) skills.commit();
     return result;
   } catch (error) {
-    cleanFailedInvocation();
+    cleanFailedRun(skills);
     throw error;
   }
 }
 
-async function runProgramWithStore(
+function cleanFailedRun(skills: RunSkillCleanup): void {
+  try {
+    skills();
+  } catch (error) {
+    logToFile('[programs] failed-run skill cleanup error:', error);
+  }
+}
+
+async function runWithStore(
   programId: string,
   input: ProgramInput,
   options: ProgramOptions,
   store: ProgramStore,
-  stepId?: string,
-  approval: { granted: boolean } = { granted: false },
 ): Promise<ProgramRunOutcome> {
-  const program = getRuntimeProgramConfig(programId);
+  const { installDir, run } = input;
+  const program = input.program ?? {};
   const artifacts: ProgramRunOutcome['artifacts'] = {};
   const runId = input.runId ?? randomUUID();
+  const signal = options.signal ?? NEVER_ABORTED;
 
-  const fail = (message: string): ProgramRunOutcome => ({
+  const settle = (
+    outcome: RunOutcome,
+    failure?: RunResult['failure'],
+  ): ProgramRunOutcome => ({
     programId,
-    outcome: RunOutcome.Failed,
-    runResults: store.results(),
+    outcome,
     data: store.readData(),
-    progress: store.read(),
     settledRuns: store.settledRuns(),
+    diagnostics: store.readDiagnostics(),
     artifacts,
-    failure: { code: ErrorCodes.InternalUnhandled, message },
+    ...(failure && { failure }),
   });
-  const abort = (message: string): ProgramRunOutcome => ({
-    ...fail(message),
-    outcome: RunOutcome.Aborted,
-    failure: { code: ErrorCodes.AgentAbort, message },
-  });
-  const cancelled = (): ProgramRunOutcome => ({
-    ...abort('Run cancelled by host.'),
-    failure: { code: ErrorCodes.AgentAbort, message: 'Run cancelled by host.' },
+  const fail = (message: string) =>
+    settle(RunOutcome.Failed, { code: ErrorCodes.InternalUnhandled, message });
+  const abort = (message: string) =>
+    settle(RunOutcome.Aborted, { code: ErrorCodes.AgentAbort, message });
+  const cancelled = () => abort('Run cancelled by host.');
+
+  if (signal.aborted) return cancelled();
+
+  analytics.wizardCapture('agent started', {
+    integration: run.integrationLabel,
+    program_id: programId,
+    skill_id: run.skillId ?? null,
   });
 
-  if (options.signal?.aborted) return cancelled();
-
-  if (!program) return fail(`Unknown program: ${programId}`);
-
-  if (input.integration !== undefined || input.typescript !== undefined) {
-    store.setDetection({
-      integration: input.integration,
-      typescript: input.typescript,
-      complete: input.frameworkConfig !== undefined,
-    });
-  }
-  for (const [key, value] of Object.entries(input.frameworkContext ?? {})) {
-    store.setFrameworkContext(key, value);
-  }
+  /** Await a host capability; a host abort during the wait wins over its answer. */
+  const park = async <T>(work: Promise<T>): Promise<T> => {
+    const value = await work;
+    signal.throwIfAborted();
+    return value;
+  };
 
   let credentials = input.credentials;
-  if (!credentials && options.credentials) {
-    try {
-      credentials = await options.credentials.resolve(programId);
-    } catch (error) {
-      if (options.signal?.aborted) return cancelled();
-      return fail(error instanceof Error ? error.message : String(error));
+  const flags = { ...DEFAULT_FLAGS, ...input.flags };
+  let flagSnapshot: WizardFlagSnapshot = {
+    flags: { ...input.wizardFlags },
+    payloads: { ...input.wizardFlagPayloads },
+  };
+  // Everything before the agent starts: a rejection fails the run, unless the host aborted.
+  try {
+    if (!credentials && options.credentials) {
+      credentials = await park(
+        options.credentials.resolve(programId, { signal }),
+      );
     }
-  }
-  if (options.signal?.aborted) return cancelled();
-  if (credentials) {
+    if (!credentials)
+      return fail(`Credentials are required to run ${programId}.`);
     store.setAuthenticated({
       credentials: credentials.posthog,
       apiProject: credentials.project,
       apiUser: credentials.apiUser,
     });
-  }
-  if (program.strategy === 'no-agent') {
-    const result = await runNoAgentProgram(
-      programId,
-      {
-        installDir: input.installDir,
-        credentials: credentials?.posthog,
-        mcp: { ...input.mcp, local: input.flags?.localMcp },
-      },
-      { mcp: options.mcp, workflow: options.workflow, signal: options.signal },
+    // Identify before flags are evaluated, so flags can target the user.
+    if (credentials.apiUser) analytics.identifyUser(credentials.apiUser);
+    analytics.setGroups(
+      groupsFromUser(credentials.apiUser, credentials.posthog.host.apiHost),
     );
-    if (options.signal?.aborted) return cancelled();
-    return {
-      programId,
-      outcome:
-        result.outcome === 'interactive-required'
-          ? RunOutcome.Failed
-          : (result.outcome as RunOutcome),
-      runResults: [],
-      data: store.readData(),
-      progress: store.read(),
-      settledRuns: store.settledRuns(),
-      programData: result.data,
-      artifacts,
-      ...('failure' in result
-        ? {
-            failure: {
-              ...result.failure,
-              code: result.failure.code ?? ErrorCodes.InternalUnhandled,
-            },
-          }
-        : {}),
-    };
-  }
-  if (!credentials)
-    return fail(`Credentials are required to run ${programId}.`);
-  if (options.signal?.aborted) return cancelled();
-
-  if (
-    program.requiresAi !== false &&
-    !input.flags?.ci &&
-    !input.flags?.signup &&
-    credentials.apiUser?.organization?.is_ai_data_processing_approved !==
-      true &&
-    !approval.granted
-  ) {
-    if (!options.awaitAiApproval) {
-      return fail(
-        'AI processing approval is required before this program can run.',
-      );
+    if (!store.readData().aiSdkStampReported) {
+      store.setAiSdkStampReported();
+      stampAiSdkDetected({
+        apiUser: credentials.apiUser,
+        discoveredFeatures: input.discoveredFeatures ?? [],
+        warehouseSources: input.warehouseSources ?? [],
+        mayReportScanResults: input.mayReportScanResults ?? false,
+      });
     }
-    try {
-      approval.granted = await options.awaitAiApproval({ programId });
-    } catch (error) {
-      return fail(error instanceof Error ? error.message : String(error));
-    }
-    if (!approval.granted) return abort('AI processing approval declined.');
-  }
 
-  if (programId === 'self-driving') {
-    try {
-      const composition = input.composition ?? {};
-      if (composition.integration) {
-        store.setComposition({ parentProgramId: programId });
-        const childInput = composition.integration;
-        const childResult = await runProgramWithStore(
-          'posthog-integration',
-          {
-            ...childInput,
-            credentials: childInput.credentials ?? credentials,
-            composed: true,
-            runId: childInput.runId ?? `${runId}:integrate-run`,
-            flags: { ...input.flags, ...childInput.flags },
-            wizardFlags: { ...input.wizardFlags, ...childInput.wizardFlags },
-            wizardFlagPayloads: {
-              ...input.wizardFlagPayloads,
-              ...childInput.wizardFlagPayloads,
-            },
-          },
-          options,
-          store,
-          'integrate-run',
-          approval,
+    if (
+      program.requiresAi !== false &&
+      !flags.ci &&
+      !flags.signup &&
+      credentials.apiUser?.organization?.is_ai_data_processing_approved !== true
+    ) {
+      if (!options.awaitAiApproval) {
+        return fail(
+          'AI processing approval is required before this program can run.',
         );
-        if (childResult.outcome !== RunOutcome.Success) {
-          return { ...childResult, programId };
-        }
-        store.markProgramCompleted('integrate-run');
-        if (options.compositionWorkflow) {
-          const continueAfterHandoff =
-            await options.compositionWorkflow.confirmStep({
-              programId: 'self-driving',
-              stepId: 'self-driving-handoff',
-              installDir: input.installDir,
-            });
-          if (!continueAfterHandoff)
-            return abort('Self-driving handoff declined.');
-        } else if (composition.handoffConfirmed !== true) {
-          return abort('Self-driving handoff was not confirmed.');
-        }
       }
-      if (options.compositionWorkflow) {
-        const githubConnected = await options.compositionWorkflow.confirmStep({
-          programId: 'self-driving',
-          stepId: 'self-driving-github',
-          installDir: input.installDir,
-        });
-        if (!githubConnected) return abort('GitHub connection declined.');
-      } else if (composition.githubConnected !== true) {
-        return abort('GitHub connection was not confirmed.');
-      }
-    } catch (error) {
-      return fail(error instanceof Error ? error.message : String(error));
+      const approved = await park(
+        options.awaitAiApproval({ programId, signal }),
+      );
+      if (!approved) return abort('AI processing approval declined.');
     }
-  }
 
-  const fileWatchers = startProgramFileWatchers(
-    program,
-    input.installDir,
-    store,
-  );
+    const gates = program.postAuthGates ?? [];
+    if (gates.length > 0 && options.awaitPostAuthGates) {
+      await park(options.awaitPostAuthGates({ programId, gates, signal }));
+    }
+
+    if (!input.wizardFlags && options.featureFlags) {
+      flagSnapshot = await park(options.featureFlags());
+    }
+
+    // The agent can't swap tokens mid-run, so freshness is measured after every
+    // park above, right before the agent mints.
+    const refreshed = await park(
+      refreshCredentialsIfNeeded(credentials.posthog, {
+        baseUrl: input.host?.baseUrl,
+      }),
+    );
+    if (refreshed !== credentials.posthog) {
+      credentials = { ...credentials, posthog: refreshed };
+      store.setAuthenticated({
+        credentials: refreshed,
+        apiProject: credentials.project,
+        apiUser: credentials.apiUser,
+      });
+    }
+  } catch (error) {
+    if (signal.aborted) return cancelled();
+    return fail(error instanceof Error ? error.message : String(error));
+  }
+  const wizardFlags = { ...flagSnapshot.flags };
+  const wizardFlagPayloads = { ...flagSnapshot.payloads };
+
+  const fileWatchers = startProgramFileWatchers(program, installDir, store);
   try {
     fileWatchers.seedAuditLedger();
 
-    let run: AgentRunDefinition | undefined | null = input.run;
-    let hooks: RunHooks | undefined = input.hooks;
-    let seedTasks = input.seedTasks;
-    if (!run && program.strategy === 'integration') {
-      if (!input.frameworkConfig || !options.integrationEffects) {
-        return fail(
-          'PostHog integration requires prepared framework configuration and host effects.',
-        );
-      }
-      try {
-        const resolved = await resolvePosthogIntegrationRun(
-          {
-            installDir: input.installDir,
-            frameworkConfig: input.frameworkConfig,
-            frameworkContext: input.frameworkContext ?? {},
-            typescript: input.typescript ?? false,
-            additionalFeatureQueue: input.additionalFeatureQueue,
-            warehouseSources: input.warehouseSources ?? [],
-            flags: { ...DEFAULT_FLAGS, ...input.flags },
-            mayReportScanResults: input.mayReportScanResults ?? false,
-          },
-          options.integrationEffects,
-        );
-        run = resolved.run;
-        hooks ??= resolved.hooks;
-        seedTasks ??= () => resolved.seedTasks;
-      } catch (error) {
-        return fail(error instanceof Error ? error.message : String(error));
-      }
-    } else if (!run && program.strategy === 'self-driving') {
-      const resolved = resolveSelfDrivingRun({
-        installDir: input.installDir,
-        detectedTools: input.detectedTools ?? [],
-      });
-      run = resolved.run;
-      hooks ??= resolved.hooks;
-    }
-    if (!run) {
-      if (program.strategy === 'static') run = program.run;
-      if (program.strategy === 'resolved') {
-        run = program.resolve(input);
-      }
-    }
-    if (!run) {
-      return fail(
-        `Program ${programId} needs a data-only run definition before it can run without a TUI session.`,
-      );
-    }
-    if (options.signal?.aborted) return cancelled();
-    artifacts.reportFile = path.resolve(input.installDir, run.reportFile);
-
-    const flags = { ...DEFAULT_FLAGS, ...input.flags };
-    const wizardFlags = { ...input.wizardFlags };
-    const wizardFlagPayloads = { ...input.wizardFlagPayloads };
     const switchboard = {
       program: programId,
       composed: input.composed ?? false,
       flags: wizardFlags,
       flagPayloads: wizardFlagPayloads,
+      cliHarness: input.overrides?.harness,
+      cliSequence: input.overrides?.sequence,
+      cliModel: input.overrides?.model,
     };
-    const binding = input.binding ?? resolveProgramBinding(switchboard);
-    if (!input.binding) captureSwitchboardDecision(switchboard, binding);
+    const binding = resolveProgramBinding(switchboard);
+    analytics.setTag('sequence', binding.sequence);
+    analytics.setTag('harness', binding.harness);
+    captureSwitchboardDecision(switchboard, binding);
+    store.setBinding(binding);
+
+    const inferenceAuth =
+      credentials.inferenceAuth ??
+      createPosthogInferenceAuthProvider(credentials.posthog, programId);
     const wizardMetadata = {
-      ...input.wizardMetadata,
+      ...buildRunTags({
+        programId,
+        integration: run.integrationLabel,
+        runId: analytics.runId,
+        build: analytics.build,
+        skillId: run.skillId,
+      }),
       SEQUENCE: binding.sequence,
       HARNESS: binding.harness,
     };
-    const adapter = store.beginRun({ runId, stepId }, options.onProgress);
+    artifacts.reportFile = path.resolve(installDir, run.reportFile);
+    const adapter = store.beginRun(runId, options.onProgress);
 
     const result = await runAgent(
       {
@@ -444,16 +364,17 @@ async function runProgramWithStore(
         wizardFlags,
         wizardFlagPayloads,
         wizardMetadata,
-        allowedTools: input.allowedTools ?? program.allowedTools,
-        disallowedTools: input.disallowedTools ?? program.disallowedTools,
-        agentFlow: input.agentFlow ?? program.agentFlow,
-        seedTasks,
-        hooks,
+        allowedTools: program.allowedTools,
+        disallowedTools: program.disallowedTools,
+        agentFlow: program.agentFlow,
+        excludedTaskTypes: program.excludedTaskTypes,
+        seedTasks: input.seedTasks,
+        hooks: input.hooks,
       },
       {
-        installDir: input.installDir,
+        installDir,
         credentials: credentials.posthog,
-        inferenceAuth: credentials.inferenceAuth,
+        inferenceAuth,
         project: credentials.project,
         apiUser: credentials.apiUser,
         skillId: input.skillId ?? run.skillId ?? run.integrationLabel,
@@ -470,21 +391,10 @@ async function runProgramWithStore(
     );
     adapter.finish(result);
     fileWatchers.refresh();
-    if (result.outcome === RunOutcome.Success) {
-      store.markProgramCompleted(programId);
-    }
-    return {
-      programId,
-      outcome: result.outcome,
-      runResults: store.results(),
-      data: store.readData(),
-      progress: store.read(),
-      settledRuns: store.settledRuns(),
-      artifacts,
-      ...(result.outcome === RunOutcome.Success
-        ? {}
-        : { failure: result.failure }),
-    };
+    return settle(
+      result.outcome,
+      result.outcome === RunOutcome.Success ? undefined : result.failure,
+    );
   } finally {
     fileWatchers.stop();
   }

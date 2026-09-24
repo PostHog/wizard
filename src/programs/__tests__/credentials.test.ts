@@ -12,42 +12,22 @@ const posthog: Credentials = {
   host: HostResolution.fromRegion('us'),
 };
 
-describe('program inference credentials', () => {
-  beforeEach(() => vi.clearAllMocks());
+it('resolves a scoped bearer on each request so the mint cache can refresh it', async () => {
+  const auth = {
+    gatewayUrl: 'https://ai-gateway.us.posthog.com',
+    token: 'phe_fixture',
+    teamId: 42,
+    refreshAtMs: 100,
+  };
+  vi.mocked(gatewayAuth).mockResolvedValue(auth);
 
-  it('resolves a scoped bearer on each request so the mint cache can refresh it', async () => {
-    const first = {
-      gatewayUrl: 'https://ai-gateway.us.posthog.com',
-      token: 'phe_first',
-      teamId: 42,
-      refreshAtMs: 100,
-    };
-    const renewed = { ...first, token: 'phe_renewed', refreshAtMs: 200 };
-    vi.mocked(gatewayAuth)
-      .mockResolvedValueOnce(first)
-      .mockResolvedValueOnce(renewed);
-
-    const provider = createPosthogInferenceAuthProvider(posthog, 'metrics');
-    expect(await provider.resolve()).toEqual(first);
-    expect(await provider.resolve()).toEqual(renewed);
-    expect(gatewayAuth).toHaveBeenNthCalledWith(
-      1,
-      posthog.host,
-      'pha_fixture',
-      'metrics',
-    );
-    expect(gatewayAuth).toHaveBeenNthCalledWith(
-      2,
-      posthog.host,
-      'pha_fixture',
-      'metrics',
-    );
-  });
-
-  it('does not make an unattributed provider', () => {
-    expect(() => createPosthogInferenceAuthProvider(posthog, '')).toThrow(
-      'program id',
-    );
-    expect(gatewayAuth).not.toHaveBeenCalled();
-  });
+  const provider = createPosthogInferenceAuthProvider(posthog, 'metrics');
+  await provider.resolve();
+  expect(await provider.resolve()).toBe(auth);
+  expect(gatewayAuth).toHaveBeenCalledTimes(2);
+  expect(gatewayAuth).toHaveBeenLastCalledWith(
+    posthog.host,
+    'pha_fixture',
+    'metrics',
+  );
 });

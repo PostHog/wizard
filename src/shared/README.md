@@ -25,9 +25,6 @@ Modules callers reach most:
   failover policy for every critical-path fetch.
 - `@shared/skill-menu`: `fetchSkillMenu(skillsBaseUrl, retryOpts?)` returns the
   parsed `SkillMenu` or `null`; `expandBundleEntry`, `SkillEntry`, `CliEntry`.
-- `@shared/skill-download`: fetches and extracts zip or bundle skills, returning
-  a receipt that can restore overwritten files and remove only newly written
-  files.
 - `@shared/claude-settings`: settings conflict detection, backup and restore.
 - `@shared/secret-vault`: the session-scoped vault the tools resolve secret
   references through.
@@ -52,7 +49,7 @@ debug('resolving host', host); // rendered and handed to the sink
 setDebugSink(restore);
 ```
 
-`src/ui/index.ts` installs the current UI's info log as the debug sink at load,
+`src/cli/ui.ts` installs the current UI's info log as the debug sink at load,
 so `debug()` follows `setUI()` without shared code knowing a UI exists. Until
 the UI module loads, lines go to stdout.
 
@@ -68,8 +65,11 @@ dependency, and would otherwise be copied.
 Shared imports `src/env.ts` and itself. The architecture test classifies
 `src/shared` as its own surface and lists the remaining upward edges in
 `src/__tests__/architecture/known-violations.json`; each has an owner in the
-stack plan. `utils/setup-utils.ts`, `utils/oauth.ts` and `utils/wizard-abort.ts`
-are TUI and CLI flow code that leave in Release C. `utils/analytics.ts` accepts
-the legacy session shape as a type only; scan consent and cleanup registration
-live in shared modules so callable programs load no session or UI code.
-`errors/agent-map.ts` still imports an agent leaf module until Release B.
+stack plan. `utils/oauth.ts` is TUI and CLI flow code that leaves in Release C;
+`wizardAbort` already lives in `src/cli/wizard-abort.ts`. `utils/analytics.ts`
+accepts the legacy session shape as a type only; scan consent and cleanup
+registration live in shared modules so callable programs load no session or UI
+code. The only agent import left is type-only: `errors/skill-map.ts` takes
+`InstallSkillResult` from `@agent/types`. `claude-settings.ts` now uses
+`agent-env-isolation.ts` in shared, and the agent error map lives in
+`src/agent/error-map.ts`.

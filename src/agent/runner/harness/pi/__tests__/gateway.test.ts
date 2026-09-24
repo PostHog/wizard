@@ -316,41 +316,4 @@ describe('withGatewayRemint', () => {
     expect(refreshAuth).not.toHaveBeenCalled();
     expect(prompts).toEqual(['do it']);
   });
-
-  it('does not continue after the host cancels during bearer refresh', async () => {
-    const controller = new AbortController();
-    let finishRefresh!: (auth: GatewayAuth) => void;
-    const session = { prompt: vi.fn().mockResolvedValue(undefined) };
-    const refreshAuth = vi.fn(
-      () => new Promise<GatewayAuth>((resolve) => (finishRefresh = resolve)),
-    );
-    const wrapped = withGatewayRemint({
-      session,
-      registry: { registerProvider: vi.fn() },
-      auth: gatewayAuth('phe_old', Date.now() - 1),
-      refreshAuth,
-      providerInputs: (auth) => ({
-        gatewayUrl: auth.gatewayUrl,
-        accessToken: auth.token,
-        teamId: auth.teamId,
-        wizardMetadata: {},
-        wizardFlags: {},
-        modelId: 'openai/gpt-5.6-terra',
-      }),
-      continueText: 'continue',
-      signal: controller.signal,
-    });
-    session.prompt.mockImplementation(() => {
-      wrapped.noteAssistantTurn(rejected);
-      return Promise.resolve();
-    });
-
-    const running = wrapped.prompt('do it');
-    await vi.waitFor(() => expect(refreshAuth).toHaveBeenCalledTimes(1));
-    controller.abort();
-    finishRefresh(gatewayAuth('phe_new', Date.now() + HOUR));
-    await running;
-
-    expect(session.prompt).toHaveBeenCalledTimes(1);
-  });
 });

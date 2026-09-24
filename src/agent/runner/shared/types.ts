@@ -5,8 +5,8 @@
  * invocation snapshot, reports through `options.onProgress`, asks through
  * `options.interaction`, and returns a `RunResult`. Nothing here names a UI,
  * a store, a session or a program registry: the caller resolves those and
- * hands over plain data. `src/cli/runners/run-program-agent.ts` is the caller
- * that rebuilds today's session-driven behavior on top of this contract.
+ * hands over plain data. Programs' `runProgram` is the caller that builds it
+ * for every host.
  */
 
 import type { AdditionalFeature } from '@shared/constants';
@@ -22,6 +22,7 @@ import type { LLMProvider } from '@posthog/warlock';
 import type { AgentInteraction, ProgressEmitter } from '@agent/progress';
 import type { EffortLevel } from '../switchboard/models';
 import type { GatewayAuth } from '@shared/gateway-auth';
+import type { TranscriptTail } from './transcript-tail';
 
 export type { PromptContext, Credentials };
 
@@ -57,6 +58,12 @@ export interface AgentRunDefinition {
   skillId?: string;
   /** Additional program-specific prompt instructions. Appended after the default project prompt. */
   customPrompt?: (ctx: PromptContext) => string;
+  /** Replaces the assembled project prompt. */
+  prompt?: (ctx: PromptContext) => string;
+  /** Keep a 256 KiB `snapshot.transcriptTail` and report each step as `activity` (linear, Anthropic). */
+  collectTranscript?: boolean;
+  /** Ask for the end-of-run reflection remark (linear, Anthropic). Defaults to true. */
+  requestRemark?: boolean;
   /** Additional MCP servers (e.g. Svelte MCP) */
   additionalMcpServers?: Record<string, { url: string }>;
   /** Package manager detector. Defaults to detectNodePackageManagers. */
@@ -130,6 +137,10 @@ export interface RunHooks {
     credentials: Credentials,
     completedSeededTypes: readonly string[],
   ) => { heading: string; items: string[] } | undefined;
+  /** Receives the drained queue's final outcomes before the cache wipe (orchestrated only). */
+  recordTaskOutcomes?: (
+    outcomes: import('../sequence/orchestrator/queue').TaskOutcome[],
+  ) => void;
 }
 
 /** The run-level routing decision the caller made. */
@@ -181,10 +192,14 @@ export interface RunConfig {
   disallowedTools?: readonly string[];
   /** Context-mill flow the orchestrator loads. Defaults to `programId`. */
   agentFlow?: string;
+  /** Task types the program excludes for these flags. The orchestrator adds the CI gates. */
+  excludedTaskTypes?: (flags: Record<string, string>) => readonly string[];
   /** Tasks to queue before the orchestrator's planner runs. */
   seedTasks?: () => SeedTaskEntry[];
   /** Completion hooks, bound by the caller. */
   hooks?: RunHooks;
+  /** `defer` leaves this run's scans to the host run's report; the default flushes it. */
+  scanReport?: 'flush' | 'defer';
 }
 
 /** Invocation flags the agent reads. */
@@ -241,8 +256,6 @@ export interface BootstrapResult {
   skillsBaseUrl: string;
   /** Resolved credentials (incl. the host family and its MCP url). */
   credentials: Credentials;
-  /** Resolve again near expiry; the provider owns mint and refresh policy. */
-  inferenceAuth: InferenceAuthProvider;
   /** Program this run is, and the node its gateway spend pins to. */
   programId: string;
   wizardFlags: Record<string, string>;
@@ -271,6 +284,9 @@ export interface AgentFailure {
   authErrorDetail?: AuthErrorDetail;
 }
 
+/** frameworkContext key for the drained queue's final outcomes, read by the e2e harness. */
+export const TASK_OUTCOMES_KEY = 'orchestrator-task-outcomes';
+
 export enum RunOutcome {
   Success = 'success',
   Aborted = 'aborted',
@@ -297,6 +313,8 @@ export interface RunSnapshot {
   notebookUrl?: string;
   /** The handoff document the agent published, when it did. */
   handoffText?: string;
+  /** Collected when the run definition sets `collectTranscript`. */
+  transcriptTail?: string;
 }
 
 /** A sequence decides an outcome; the dispatcher owns its snapshot. */
@@ -323,20 +341,21 @@ export type RunResult = (
 };
 
 export interface RunAgentOptions {
-  /** Cancels this run, including its active harness operation. */
-  signal?: AbortSignal;
   /** Receives every progress event in emission order. Never awaited. */
   onProgress?: (event: import('@agent/progress').AgentProgress) => unknown;
   /** Answers the agent's questions. Absent → no ask bridge, notices declined. */
   interaction?: AgentInteraction;
+  signal?: AbortSignal;
 }
 
 /** What a sequence receives: the contracts plus the prepared run. */
 export interface SequenceContext {
-  signal?: AbortSignal;
   config: RunConfig;
   input: RunInput;
   boot: BootstrapResult;
   emit: ProgressEmitter;
   interaction: AgentInteraction | undefined;
+  signal?: AbortSignal;
+  /** Present when the run definition sets `collectTranscript`. */
+  transcript?: TranscriptTail;
 }

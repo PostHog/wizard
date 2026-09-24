@@ -1,35 +1,44 @@
-import { createSkillProgram } from '@programs/agent-skill/index';
+import {
+  createSkillProgram,
+  type SkillProgramOptions,
+} from '@programs/agent-skill/index';
 import type { ProgramConfig } from '@programs/program-step';
 import type { ProgramRun } from '@programs/program-run';
 import { OutroKind } from '@agent';
 import { WIZARD_TOOL_NAMES } from '@agent';
-import {
-  AUDIT_PROGRAM_OPTIONS,
-  resolveAuditRunDefinition,
-} from '@programs/resolve-run-definition';
-import { AUDIT_CHECKS_FILE, AUDIT_CHECKS_KEY } from './types.js';
-import { AUDIT_SEED_CHECKS, seedAuditLedger } from './seed.js';
+import { skillRunDefinition } from '@programs/agent-skill/run-definition';
+import { AUDIT_ABORT_CASES } from './detect.js';
+import { AUDIT_CHECKS_FILE, AUDIT_REPORT_FILE } from './types.js';
+import { AUDIT_SEED_CHECKS } from './seed.js';
 
 type AuditRunState = {
-  installDir: string;
-  frameworkContext: Record<string, unknown>;
   dashboardUrl: string | null;
   notebookUrl: string | null;
 };
 
-const seedBeforeAuditRun = (session: AuditRunState): void => {
-  seedAuditLedger(session.installDir);
-  session.frameworkContext[AUDIT_CHECKS_KEY] = AUDIT_SEED_CHECKS;
+const AUDIT_OPTIONS: SkillProgramOptions = {
+  skillId: 'audit',
+  command: 'audit',
+  id: 'audit',
+  description: 'Audit and improve your PostHog setup',
+  integrationLabel: 'audit',
+  customPrompt:
+    'Run a comprehensive audit of the existing PostHog integration. Follow the skill program steps in order. Do not modify any project files — only create the final audit report.',
+  successMessage:
+    'Audit complete! You can view the audit report at ./posthog-audit-report.md',
+  reportFile: AUDIT_REPORT_FILE,
+  docsUrl: 'https://posthog.com/docs/product-analytics/best-practices',
+  spinnerMessage: 'Auditing PostHog integration...',
+  estimatedDurationMinutes: 5,
+  requires: ['posthog-integration'],
+  abortCases: AUDIT_ABORT_CASES,
 };
 
-const baseConfig = createSkillProgram(AUDIT_PROGRAM_OPTIONS);
+const baseConfig = createSkillProgram(AUDIT_OPTIONS);
+const baseRun = skillRunDefinition(AUDIT_OPTIONS);
 
-const auditRun = (session: AuditRunState): Promise<ProgramRun> => {
-  seedBeforeAuditRun(session);
-
-  const baseRun = resolveAuditRunDefinition();
-
-  return Promise.resolve({
+const auditRun = (session: AuditRunState): Promise<ProgramRun> =>
+  Promise.resolve({
     ...baseRun,
     // Override the default outro so the dashboard + notebook URLs the
     // agent emits via `[DASHBOARD_URL]` / `[NOTEBOOK_URL]` are surfaced
@@ -57,12 +66,12 @@ const auditRun = (session: AuditRunState): Promise<ProgramRun> => {
       };
     },
   });
-};
 
 export const auditConfig: ProgramConfig = {
   ...baseConfig,
   run: auditRun,
   auditLedgerFile: AUDIT_CHECKS_FILE,
+  auditSeedChecks: AUDIT_SEED_CHECKS,
   // Ledger tools are opt-in per program; pi matches on the short name.
   allowedTools: [
     'Agent',

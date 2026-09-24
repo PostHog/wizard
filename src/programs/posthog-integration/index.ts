@@ -5,11 +5,14 @@ import type {
   ProgramRunHost,
 } from '@programs/host-capabilities';
 import type { FrameworkDetectionState } from '@programs/detection/context';
+import { AgentSignals, OutroKind, WIZARD_TOOL_NAMES } from '@agent';
+import { isAskDisabled } from '@shared/ask-policy';
 import { mayReportScanResults } from '@shared/scan-consent';
-import type { Integration } from '@shared/constants';
-import { WIZARD_TOOL_NAMES } from '@agent';
+import {
+  DEFAULT_PACKAGE_INSTALLATION,
+  SPINNER_MESSAGE,
+} from '@programs/framework-config';
 import { tryGetPackageJson, isUsingTypeScript } from '@utils/package-json';
-import { hasDeclaredDependency } from '@utils/package-json';
 import { analytics } from '@utils/analytics';
 import {
   detectFramework,
@@ -21,14 +24,17 @@ import {
 } from '@programs/detection/project-scope';
 import { FRAMEWORK_REGISTRY } from '@programs/registry';
 import { ErrorCodes } from '@shared/errors';
-import { requestDeepLink } from '@utils/provisioning';
-import { openTrackedLink } from '@utils/links';
-import { getDetectedWarehouseSources } from '@programs/warehouse-source/detect';
 import {
-  resolvePosthogIntegrationRun,
-  resolvePosthogIntegrationSeedTasks,
-  type PosthogIntegrationRunInput,
-} from './run.js';
+  WIZARD_DEFAULT_AIO_LOGS_FLAG_KEY,
+  WIZARD_INTERACTION_EVENT_NAME,
+  type AdditionalFeature,
+  type Integration,
+} from '@shared/constants';
+import { requestDeepLink } from '@utils/provisioning';
+import { openTrackedLink, withUtm } from '@utils/links';
+import type { HostResolution } from '@shared/host-resolution';
+import { getDetectedWarehouseSources } from '@programs/warehouse-source/detect';
+import { buildCodingAgentPrompt } from './handoff.js';
 import { EVENT_PLAN_FILE } from './constants.js';
 import { detectPostHogIntegration } from './detect.js';
 
@@ -40,33 +46,217 @@ type IntegrationCiSession = ProjectScopeSession &
   };
 
 type IntegrationRunSession = Pick<
-  PosthogIntegrationRunInput,
-  'installDir' | 'frameworkContext' | 'additionalFeatureQueue'
+  FrameworkDetectionState,
+  'installDir' | 'frameworkConfig' | 'frameworkContext'
 > & {
-  frameworkConfig: PosthogIntegrationRunInput['frameworkConfig'] | null;
   typescript: boolean;
-  ci: boolean;
-  signup: boolean;
-  e2eAsk: boolean;
-  scanConsent: string;
-  notebookUrl: string | null;
+  additionalFeatureQueue: AdditionalFeature[];
 };
 
-const warehouseSeedTasks: NonNullable<ProgramConfig['seedTasks']> = (session) =>
-  resolvePosthogIntegrationSeedTasks(
-    {
-      warehouseSources: getDetectedWarehouseSources(session),
-      flags: {
-        ci: session.ci,
-        signup: session.signup,
-        e2eAsk: session.e2eAsk,
-      },
-      mayReportScanResults: mayReportScanResults(session),
-    },
-    (event, properties) => analytics.wizardCapture(event, properties),
+const WAREHOUSE_SOURCES_DOCS_URL =
+  'https://posthog.com/docs/data-warehouse/sources';
+
+/** Task type of the seeded step below, matched against the drain's result. */
+const WAREHOUSE_SEED_TASK_TYPE = 'warehouse';
+
+function resolveContinueUrl(
+  signup: boolean,
+  host: HostResolution,
+  deepLink: unknown,
+): string | undefined {
+  if (!signup) return undefined;
+  if (typeof deepLink === 'string' && deepLink) return deepLink;
+  return withUtm(`${host.appHost}/products?source=wizard`, 'outro-continue');
+}
+
+/** Sources listed with their own link before the outro falls back to a summary line. */
+const WAREHOUSE_LINK_LIMIT = 3;
+
+/**
+ * How many detected sources the seeded step is allowed to collect credentials
+ * for.
+ *
+ * The step's cost to the user is one credential prompt per source, and the
+ * wizard knows the count at seed time: detection keys off dependency and
+ * `.env` key names, so an ordinary app can match a dozen sources it has no
+ * intention of importing. Offering all of them asks a person to agree, up
+ * front, to an interrogation whose length they cannot see — and the runs
+ * offered more than a handful answer none of the prompts at all, while the
+ * short ones are where every connected source comes from.
+ *
+ * So the step takes the first few and the outro carries the rest as links,
+ * which is the same trade {@link WAREHOUSE_LINK_LIMIT} already makes for a
+ * list too long to read. Ordering is the registry's, which groups databases
+ * ahead of the API-key SaaS that inflates the tail.
+ */
+const WAREHOUSE_SEED_LIMIT = 3;
+
+/**
+ * The app's new-source page, pre-selected to one source kind.
+ *
+ * `kind` is matched case-insensitively against the connector list, and a kind
+ * the app cannot resolve lands on the source catalog rather than erroring. So a
+ * source we detect but the app has not shipped a connector for still takes the
+ * user somewhere useful.
+ */
+function warehouseSourceUrl(
+  host: HostResolution,
+  projectId: number | string,
+  kind: string,
+): string {
+  const path = `${
+    host.appHost
+  }/project/${projectId}/data-warehouse/new-source?kind=${encodeURIComponent(
+    kind,
+  )}`;
+  return withUtm(path, 'outro-warehouse');
+}
+
+/**
+ * Outro suggestion for data sources found in the project but not connected.
+ *
+ * A pointer at the app, not an inline flow. Connecting a source needs
+ * interactive credential collection, and chaining that as a second agent run
+ * before the outro would let any of its terminal failure paths `process.exit()`
+ * — costing the user the success outro and the post-outro MCP / Slack steps on
+ * a run where PostHog installed fine.
+ *
+ * Each source gets its own pre-filled link, because the alternative we shipped
+ * first — naming the `wizard warehouse` command — asks the user to start a
+ * second CLI run before they can connect anything. A link opens the form for
+ * that one source. The command line stays for anyone who wants every source in
+ * one pass, and it is the only route offered once the list is too long to read.
+ *
+ * Returns undefined when nothing was detected, so the outro is unchanged for
+ * projects with no connectable source — and when the run's own warehouse step
+ * connected everything it was given, where every bullet here would ask the
+ * user to redo work the wizard just did and send them at a new-source form
+ * that would collide with the source already created. A completed step is
+ * only ever given the first {@link WAREHOUSE_SEED_LIMIT} sources, so anything
+ * past that is still unconnected and still belongs here.
+ */
+function buildWarehouseNextSteps(
+  sess: Pick<IntegrationRunSession, 'frameworkContext'>,
+  host: HostResolution,
+  projectId: number | string,
+  completedSeededTypes: readonly string[],
+): { heading: string; items: string[] } | undefined {
+  const detected = getDetectedWarehouseSources(sess);
+  const sources = completedSeededTypes.includes(WAREHOUSE_SEED_TASK_TYPE)
+    ? detected.slice(WAREHOUSE_SEED_LIMIT)
+    : detected;
+  if (sources.length === 0) return undefined;
+
+  const listed = sources.slice(0, WAREHOUSE_LINK_LIMIT);
+  const items = listed.map(
+    (s) => `Connect ${s.label}: ${warehouseSourceUrl(host, projectId, s.kind)}`,
   );
 
-export { SETUP_REPORT_FILE } from './run.js';
+  const remaining = sources.length - listed.length;
+  if (remaining > 0) {
+    items.push(`And ${remaining} more we found in this project.`);
+  }
+  items.push('Connect them all at once with: npx @posthog/wizard warehouse');
+
+  return { heading: 'Query your other data in PostHog:', items };
+}
+
+/**
+ * Prompt fragment asking the agent to note the detected data sources in the
+ * setup report's checklist.
+ *
+ * Empty string when nothing was detected, so the prompt is byte-identical to
+ * today for projects with no connectable source. Best-effort by nature — the
+ * agent may word it differently or skip it. That is acceptable here precisely
+ * because it is a note in a report: the outro `nextSteps` bullet carries the
+ * same information deterministically, so nothing is lost if the agent drops it.
+ */
+function warehouseReportInstruction(
+  sess: Pick<IntegrationRunSession, 'frameworkContext'>,
+): string {
+  const sources = getDetectedWarehouseSources(sess);
+  if (sources.length === 0) return '';
+
+  const labels = sources.map((s) => s.label).join(', ');
+  return `Finally: this project also contains data sources PostHog can import (${labels}). In the setup report's "Verify before merging" checklist, add one item noting these were found and that \`npx @posthog/wizard warehouse\` will connect them to PostHog's data warehouse. Do not attempt to set them up yourself in this run.`;
+}
+
+/**
+ * The orchestrator task that connects the data sources detection found in the
+ * project — the one step of the flow that stops to ask the user for
+ * credentials. Queued here rather than by the planner: whether it belongs in
+ * the run is a fact about the project the wizard already scanned, so a model
+ * can neither invent it nor forget it.
+ *
+ * It runs at the end of the queue, not the start. Where exactly is the agent
+ * prompt's business (`dependsOn` in the warehouse agent's frontmatter, resolved
+ * by `seeded-deps.ts` once the planner has run) — this file only decides whether
+ * the task belongs in the run at all.
+ *
+ * Empty when nothing was detected, and in CI, signup, and any other run where
+ * `wizard_ask` is disabled — a credential prompt nobody can answer would burn
+ * the task's whole timeout and then fail the run. Capped at
+ * {@link WAREHOUSE_SEED_LIMIT} sources, with the rest handed over as outro
+ * links by {@link buildWarehouseNextSteps}.
+ */
+const warehouseSeedTasks: NonNullable<ProgramConfig['seedTasks']> = (sess) => {
+  if (isAskDisabled(sess)) return [];
+  const sources = getDetectedWarehouseSources(sess);
+  if (sources.length === 0) return [];
+
+  const offered = sources.slice(0, WAREHOUSE_SEED_LIMIT);
+  const deferred = sources.length - offered.length;
+
+  // The task is queued either way. A decline withholds reporting, not the
+  // feature. See the matching gate in reportWarehouseSourcesDetected.
+  if (mayReportScanResults(sess)) {
+    analytics.wizardCapture('orchestrator warehouse task queued', {
+      warehouse_source_count: sources.length,
+      warehouse_source_kinds: sources.map((s) => s.kind),
+      // What the step was actually given, which is what its outcome is a rate
+      // of. The two counts above stay the detection totals they have always
+      // been, so the detection trend reads across this change.
+      warehouse_offered_count: offered.length,
+    });
+  }
+  return [
+    {
+      type: WAREHOUSE_SEED_TASK_TYPE,
+      inputs: {
+        sources: offered.map((s) => ({
+          kind: s.kind,
+          label: s.label,
+          mode: s.mode,
+          matchedSignal: s.matchedSignal,
+        })),
+      },
+      notice: {
+        title: 'Connect your data sources',
+        // Two moments, and the copy has to name both. The answer is given here,
+        // at the start of the run. The credential questions arrive at the end of
+        // it, minutes later. So this must not read as "expect a prompt any
+        // moment now", and equally must not read as "walk away for the run".
+        body: [
+          'We detected some warehouse sources we can connect to enrich your PostHog data. Answer now, and we connect them at the end of the run, after your code changes. We will ask you for the credentials at that point, and beep when we do.',
+          ...(deferred > 0
+            ? [
+                `We found ${deferred} more we can connect. Those are listed with a link each at the end, so this step stays short.`,
+              ]
+            : []),
+          "You can select [Skip] if you'd like to do this later in PostHog.",
+        ],
+        items: offered.map((s) => s.label),
+        docsLabel: 'Learn more about warehouse sources',
+        docsUrl: WAREHOUSE_SOURCES_DOCS_URL,
+        prompt: 'Connect these during setup?',
+        confirmLabel: 'Continue [Enter]',
+        cancelLabel: 'Skip [Esc]',
+      },
+    },
+  ];
+};
+
+export const SETUP_REPORT_FILE = 'posthog-setup-report.md';
 export { EVENT_PLAN_FILE } from './constants.js';
 
 export const posthogIntegrationConfig: ProgramConfig = {
@@ -82,6 +272,13 @@ export const posthogIntegrationConfig: ProgramConfig = {
   disallowedTools: [WIZARD_TOOL_NAMES.wizardAsk],
 
   seedTasks: warehouseSeedTasks,
+
+  // Kill switch over the shipped default: only an explicit 'false' excludes,
+  // so a failed flag fetch keeps AI Observability and Logs in the run.
+  excludedTaskTypes: (flags) =>
+    flags[WIZARD_DEFAULT_AIO_LOGS_FLAG_KEY] === 'false'
+      ? ['ai-observability', 'logs']
+      : [],
 
   // CI-mode prerequisite work: the headless equivalent of onReady. Auto-detect the framework, then gather context.
   ciPreRun: async (
@@ -126,66 +323,232 @@ export const posthogIntegrationConfig: ProgramConfig = {
     session: IntegrationRunSession,
     host: ProgramRunHost,
   ): Promise<ProgramRun> => {
+    const config = session.frameworkConfig!;
+
     const typeScriptDetected = isUsingTypeScript({
       installDir: session.installDir,
     });
     session.typescript = typeScriptDetected;
-    const { run, hooks } = await resolvePosthogIntegrationRun(
-      {
+    analytics.setTag('typescript', typeScriptDetected);
+
+    // Read package.json and resolve framework version
+    const usesPackageJson = config.detection.usesPackageJson !== false;
+    let frameworkVersion: string | undefined;
+
+    if (usesPackageJson) {
+      const packageJson = await tryGetPackageJson({
         installDir: session.installDir,
-        frameworkConfig: session.frameworkConfig!,
-        frameworkContext: session.frameworkContext,
-        typescript: typeScriptDetected,
-        additionalFeatureQueue: session.additionalFeatureQueue,
-        warehouseSources: getDetectedWarehouseSources(session),
-        flags: {
-          ci: session.ci,
-          signup: session.signup,
-          e2eAsk: session.e2eAsk,
-        },
-        mayReportScanResults: mayReportScanResults(session),
-        includeSeedTasks: false,
-        dashboardDeepLink: session.frameworkContext[DASHBOARD_DEEP_LINK_KEY],
-        notebookUrl: session.notebookUrl,
+      });
+      if (packageJson) {
+        const { hasDeclaredDependency } = await import('@utils/package-json');
+        if (!hasDeclaredDependency(config.detection.packageName, packageJson)) {
+          host.warn(
+            `${config.detection.packageDisplayName} does not seem to be installed. Continuing anyway — the agent will handle it.`,
+          );
+        }
+        frameworkVersion = config.detection.getVersion(packageJson);
+      } else {
+        host.warn(
+          'Could not find package.json. Continuing anyway — the agent will handle it.',
+        );
+      }
+    } else {
+      frameworkVersion = config.detection.getVersion(null);
+    }
+
+    // Analytics tags
+    if (frameworkVersion && config.detection.getVersionBucket) {
+      const versionBucket = config.detection.getVersionBucket(frameworkVersion);
+      analytics.setTag(`${config.metadata.integration}-version`, versionBucket);
+    }
+    // The same kill switch the orchestrator applies via excludedTaskTypes,
+    // gated here for linear/composed runs, which assemble their own prompt —
+    // without this, disabling the flag would not reach this path and the
+    // prompt would still instruct installing the AIO and Logs skills. Only an
+    // explicit 'false' excludes, so a failed flag fetch keeps the default.
+    const wizardFlags = await analytics.getAllFlagsForWizard();
+    const skillCategoryInstruction =
+      wizardFlags[WIZARD_DEFAULT_AIO_LOGS_FLAG_KEY] !== 'false'
+        ? `Choose a skill from the \`integration\` category that matches this project's framework. Start with this framework skill; load the AI Observability and Logs skills when its workflow calls for them, and follow each installed skill's own steps to completion — framework first, then AI Observability, then Logs — before verification and the setup report. Both are included by default where applicable; the skills define applicability and how to report skipped work. These three categories — \`integration\`, \`ai-observability\`, \`logs\` — are the only ones this run uses. Do NOT load or install skills from any other category (llm-analytics, error-tracking, feature-flags, audit, etc.) — those are handled separately. In particular, \`ai-observability\` is the category for AI Observability; do not substitute \`llm-analytics\`.`
+        : `Choose a skill from the \`integration\` category that matches this project's framework. The \`integration\` category is the ONLY one this run uses. Do NOT load or install skills from any other category (ai-observability, logs, llm-analytics, error-tracking, feature-flags, audit, etc.) — those are handled separately. If the installed skill's workflow contains an "AI Observability and Logs" section, skip that entire section: this run excludes both products.`;
+
+    const frameworkContext = session.frameworkContext;
+    const contextTags = config.analytics.getTags(frameworkContext);
+    Object.entries(contextTags).forEach(([key, value]) => {
+      analytics.setTag(key, value);
+    });
+
+    return {
+      integrationLabel: config.metadata.integration,
+      additionalMcpServers: config.metadata.additionalMcpServers,
+      detectPackageManager: config.detection.detectPackageManager,
+      spinnerMessage: SPINNER_MESSAGE,
+      successMessage: config.ui.successMessage,
+      estimatedDurationMinutes: config.ui.estimatedDurationMinutes,
+      reportFile: SETUP_REPORT_FILE,
+      docsUrl: config.metadata.docsUrl,
+      errorMessage: 'Integration failed',
+      additionalFeatureQueue: session.additionalFeatureQueue,
+      // The seeded warehouse task's fallback, when a user cannot hand over a
+      // credential, is to give them the pre-filled new-source URL. That only
+      // works if the overlay renders it as a link they can open or copy.
+      richLinks: true,
+
+      customPrompt: (ctx) => {
+        const additionalLines = config.prompts.getAdditionalContextLines
+          ? config.prompts.getAdditionalContextLines(frameworkContext)
+          : [];
+        const additionalContext =
+          additionalLines.length > 0
+            ? '\n' + additionalLines.map((line) => `- ${line}`).join('\n')
+            : '';
+
+        return `You have access to the PostHog MCP server which provides skills to integrate PostHog into this ${
+          config.metadata.name
+        } project.
+
+Project context:
+- PostHog Project ID: ${ctx.projectId}
+- Framework: ${config.metadata.name} ${frameworkVersion || 'latest'}
+- TypeScript: ${typeScriptDetected ? 'Yes' : 'No'}
+- PostHog public token: ${ctx.projectApiKey}
+- PostHog Host: ${ctx.host.apiHost}
+- Project type: ${config.prompts.projectTypeDetection}
+- Package installation: ${
+          config.prompts.packageInstallation ?? DEFAULT_PACKAGE_INSTALLATION
+        }${additionalContext}
+
+Instructions (follow these steps IN ORDER - do not skip or reorder):
+
+STEP 1: Call load_skill_menu (from the wizard-tools MCP server) with category: "integration" to see available framework skills.
+   If the tool fails, emit: ${
+     AgentSignals.ERROR_MCP_MISSING
+   } Could not load skill menu and halt.
+
+   ${skillCategoryInstruction}
+   If no suitable integration skill is found, emit: ${
+     AgentSignals.ERROR_RESOURCE_MISSING
+   } Could not find a suitable skill for this project.
+
+STEP 2: Call install_skill (from the wizard-tools MCP server) with the chosen skill ID (e.g., "integration-nextjs-app-router").
+   Do NOT run any shell commands to install skills.
+   If install_skill fails, emit on its own line: ${
+     AgentSignals.SKILL_INSTALL_FAILED
+   } <skill id — one-line reason>. Then CONTINUE and SKIP to STEP 5 the integration without the skill, following these steps and your knowledge of ${
+          config.metadata.name
+        } and PostHog's official docs, and note in the setup report that the skill could not be installed.
+
+STEP 3: Load the installed skill's SKILL.md file to understand what references are available.
+
+STEP 4: Follow the skill's program files in sequence. Look for numbered program files in the references (e.g., files with patterns like "1-", "2-", "3-"). Start with the first one and proceed through each step until completion. Each program file will tell you what to do and which file comes next. Never directly write PostHog tokens directly to code files; always use environment variables.
+
+STEP 5: Set up environment variables for PostHog using the wizard-tools MCP server (this runs locally — secret values never leave the machine):
+   - Use check_env_keys to see which keys the project already sets, and where. Omit filePath and it scans every .env file in the project, so you don't have to guess between .env, .env.local and a nested one. It answers { status, foundIn } per key: "present" means a real env file sets the key, while a key found only in a committed template (.env.example and friends) reads as "missing" — a template documents a key rather than setting it, and is never a file to write credentials into.
+   - Use set_env_values to create or update the PostHog public token and host, using the appropriate environment variable naming convention for ${
+     config.metadata.name
+   }, which you'll find in example code. The tool will also ensure .gitignore coverage. Don't assume the presence of keys means the value is up to date. Write the correct value each time.
+   - Reference these environment variables in the code files you create instead of hardcoding the public token and host.
+
+Important: Use the detect_package_manager tool (from the wizard-tools MCP server) to determine which package manager the project uses, then run its install command to add the SDK. Do not manually search for lockfiles or config files. If a file already EXISTS, read it immediately before you edit or overwrite it — writing from a stale read causes a tool failure. Creating a brand-new file needs no prior read: never read a path that does not exist yet; just write it.
+
+${warehouseReportInstruction(session)}
+`;
       },
-      {
-        readPackageJson: (installDir) => tryGetPackageJson({ installDir }),
-        hasDeclaredDependency,
-        warn: (message) => host.warn(message),
-        setTag: (key, value) => analytics.setTag(key, value),
-        capture: (event, properties) => analytics.capture(event, properties),
-        uploadEnvironmentVariables: async (envVars, integration) => {
+
+      postRun: async (sess, credentials) => {
+        const envVars = config.environment.getEnvVars(
+          credentials.projectApiKey,
+          credentials.host.apiHost,
+        );
+        if (config.environment.uploadToHosting) {
           const { uploadEnvironmentVariablesStep } = await import(
             './upload-environment-variables'
           );
-          return uploadEnvironmentVariablesStep(envVars, {
-            integration,
-            installDir: session.installDir,
-            report: {
-              info: (message) => host.info(message),
-              spinner: () => host.spinner(),
+          const uploadedEnvVars = await uploadEnvironmentVariablesStep(
+            envVars,
+            {
+              integration: config.metadata.integration,
+              installDir: session.installDir,
+              report: {
+                info: (message) => host.info(message),
+                spinner: () => host.spinner(),
+              },
             },
-          });
-        },
-        requestDeepLink: (credentials) =>
-          requestDeepLink(credentials.accessToken, credentials.host),
-        openDashboardDeepLink: (url) =>
-          openTrackedLink(url, 'dashboard-deeplink', { auto: true }),
-        getNotebookUrl: () => session.notebookUrl,
-        setDashboardDeepLink: (url) => {
-          session.frameworkContext[DASHBOARD_DEEP_LINK_KEY] = url;
-        },
+          );
+          if (uploadedEnvVars.length > 0) {
+            analytics.capture(WIZARD_INTERACTION_EVENT_NAME, {
+              action: 'wizard_env_vars_uploaded',
+              integration: config.metadata.integration,
+              variable_count: uploadedEnvVars.length,
+              variable_keys: uploadedEnvVars,
+            });
+          }
+        }
+
+        if (sess.signup) {
+          const deepLink = await requestDeepLink(
+            credentials.accessToken,
+            credentials.host,
+          );
+          if (deepLink) {
+            const taggedDeepLink = withUtm(deepLink, 'dashboard-deeplink');
+            session.frameworkContext[DASHBOARD_DEEP_LINK_KEY] = taggedDeepLink;
+            openTrackedLink(taggedDeepLink, 'dashboard-deeplink', {
+              auto: true,
+            });
+          }
+        }
       },
-    );
-    return {
-      ...run,
-      postRun: async (_session, credentials) => {
-        await hooks.postRun?.(credentials);
+
+      buildOutroNextSteps: (_context, credentials, completedSeededTypes) =>
+        buildWarehouseNextSteps(
+          session,
+          credentials.host,
+          credentials.projectId,
+          completedSeededTypes,
+        ),
+
+      buildOutroData: (sess, credentials) => {
+        const envVars = config.environment.getEnvVars(
+          credentials.projectApiKey,
+          credentials.host.apiHost,
+        );
+        const deepLink = session.frameworkContext[DASHBOARD_DEEP_LINK_KEY];
+        const continueUrl = resolveContinueUrl(
+          sess.signup,
+          credentials.host,
+          deepLink,
+        );
+
+        const changes = [
+          ...config.ui.getOutroChanges(frameworkContext),
+          Object.keys(envVars).length > 0
+            ? 'Added environment variables to .env file'
+            : '',
+        ].filter(Boolean);
+
+        return {
+          kind: OutroKind.Success as const,
+          message: 'Successfully installed PostHog!',
+          changes,
+          docsUrl: config.metadata.docsUrl,
+          continueUrl,
+          // The linear sequence seeds no tasks, so nothing here was connected
+          // during the run. `buildOutroNextSteps` carries the orchestrated case.
+          nextSteps: buildWarehouseNextSteps(
+            session,
+            credentials.host,
+            credentials.projectId,
+            [],
+          ),
+          // Set once the agent mirrors the report into a notebook and emits [NOTEBOOK_URL].
+          notebookUrl: sess.notebookUrl ?? undefined,
+          // No report file — the prompt points at the notebook, when the run captured one.
+          handoffPrompt: sess.notebookUrl
+            ? buildCodingAgentPrompt(sess.notebookUrl)
+            : undefined,
+        };
       },
-      buildOutroNextSteps: (_session, credentials, completedSeededTypes) =>
-        hooks.buildOutroNextSteps?.(credentials, completedSeededTypes),
-      buildOutroData: (_session, credentials) =>
-        hooks.buildOutroData?.(credentials) ?? null,
     };
   },
 };

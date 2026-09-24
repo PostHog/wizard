@@ -12,10 +12,11 @@ prompt assembly, error routing, post-run work, and outro construction. Retain it
 for very simple tasks and legacy support. Its context is subject to the
 harness's compaction behavior.
 
-`AgentRunDefinition.customPrompt`, `abortCases`, and the program's `postRun` and
-`buildOutroData` hooks are linear hooks. The orchestrator does not invoke them.
-Composed program sub-runs are also clamped to linear because an orchestrator
-owns its full lifecycle and cannot nest through the composition seam.
+`AgentRunDefinition.customPrompt`, `prompt`, `collectTranscript`, `abortCases`,
+and the program's `postRun` and `buildOutroData` hooks are linear hooks. The
+orchestrator does not invoke them. Composed program sub-runs are also clamped to
+linear because an orchestrator owns its full lifecycle and cannot nest through
+the composition seam.
 
 ## Orchestrator
 

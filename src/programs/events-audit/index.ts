@@ -2,11 +2,10 @@ import type { ProgramConfig } from '@programs/program-step';
 import type { ProgramRun } from '@programs/program-run';
 import type { AdditionalFeature } from '@shared/constants';
 import { OutroKind } from '@agent';
+import { SPINNER_MESSAGE } from '@programs/framework-config';
 import { isUsingTypeScript } from '@utils/package-json';
 import { WIZARD_TOOL_NAMES } from '@agent';
-import { resolveEventsAuditRunDefinition } from '@programs/resolve-run-definition';
-import { AUDIT_CHECKS_FILE, AUDIT_CHECKS_KEY } from '@programs/audit/types';
-import { seedAuditLedger } from '@programs/audit/seed';
+import { AUDIT_CHECKS_FILE } from '@programs/audit/types';
 import { EVENTS_AUDIT_SEED_CHECKS } from './seed.js';
 
 // SETUP_REPORT_FILE is also re-exported for backward compat with existing
@@ -19,9 +18,10 @@ export { SETUP_REPORT_FILE };
 type EventsAuditRunState = {
   installDir: string;
   typescript: boolean;
-  frameworkContext: Record<string, unknown>;
   additionalFeatureQueue: AdditionalFeature[];
 };
+
+const DOCS_URL = 'https://posthog.com/docs/product-analytics/best-practices';
 
 /**
  * No CLI word of its own since the audit family took over: `wizard audit
@@ -37,6 +37,9 @@ export const eventsAuditConfig: ProgramConfig = {
   // synchronously without unwrapping the deferred `run` function.
   reportFile: SETUP_REPORT_FILE,
   auditLedgerFile: AUDIT_CHECKS_FILE,
+  // The events-audit ledger is the 6-phase pipeline, not the doctor's 10
+  // integrity checks.
+  auditSeedChecks: EVENTS_AUDIT_SEED_CHECKS,
   allowedTools: [
     'Agent',
     WIZARD_TOOL_NAMES.auditSeedChecks,
@@ -51,18 +54,28 @@ export const eventsAuditConfig: ProgramConfig = {
     });
     session.typescript = typeScriptDetected;
 
-    // Seed the audit ledger so AuditRunScreen has something to render
-    // before the agent emits its first check update. The events-audit
-    // ledger is the 6-phase pipeline, not the doctor's 10 integrity checks.
-    seedAuditLedger(session.installDir, EVENTS_AUDIT_SEED_CHECKS);
-    session.frameworkContext[AUDIT_CHECKS_KEY] = EVENTS_AUDIT_SEED_CHECKS;
-
-    const run = resolveEventsAuditRunDefinition({
-      typescript: typeScriptDetected,
-      additionalFeatureQueue: session.additionalFeatureQueue,
-    });
     return Promise.resolve({
-      ...run,
+      skillId: 'events-audit',
+      integrationLabel: 'events-audit',
+      spinnerMessage: SPINNER_MESSAGE,
+      successMessage:
+        'Events audit complete! You can view the report at ./posthog-events-audit-report.md',
+      estimatedDurationMinutes: 5,
+      reportFile: SETUP_REPORT_FILE,
+      docsUrl: DOCS_URL,
+      errorMessage: 'Events audit failed',
+      additionalFeatureQueue: session.additionalFeatureQueue,
+
+      customPrompt: (ctx) =>
+        `Audit PostHog event capture in this project. Do not modify any project files — produce a read-only report only.
+
+Project context:
+- PostHog Project ID: ${ctx.projectId}
+- TypeScript: ${typeScriptDetected ? 'Yes' : 'No'}
+- PostHog public token: ${ctx.projectApiKey}
+- PostHog Host: ${ctx.host.apiHost}
+`,
+
       buildOutroData: (sess, credentials) => {
         const cloudUrl = credentials.host.appHost;
         const continueUrl = sess.signup
@@ -84,7 +97,7 @@ export const eventsAuditConfig: ProgramConfig = {
           message: 'Your events audit was successful',
           reportFile: SETUP_REPORT_FILE,
           changes: [],
-          docsUrl: run.docsUrl,
+          docsUrl: DOCS_URL,
           continueUrl,
           dashboardUrl,
           notebookUrl,

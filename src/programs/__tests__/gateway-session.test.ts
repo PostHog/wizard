@@ -65,22 +65,6 @@ describe('gatewayAuth', () => {
     vi.unstubAllGlobals();
   });
 
-  it('creates a fixed CI bearer without changing the mint session', () => {
-    const auth = createCiGatewayAuth(
-      ' opaque-ci-token ',
-      42,
-      'https://ai-gateway.us.posthog.com/',
-    );
-    expect(auth).toEqual({
-      token: 'opaque-ci-token',
-      teamId: 42,
-      gatewayUrl: 'https://ai-gateway.us.posthog.com',
-      refreshAtMs: Infinity,
-    });
-    expect(isPastRefresh(auth, Number.MAX_SAFE_INTEGER)).toBe(false);
-    expect(fetchMock).not.toHaveBeenCalled();
-  });
-
   it.each([
     ['', 42, 'https://ai-gateway.us.posthog.com'],
     ['token', 0, 'https://ai-gateway.us.posthog.com'],

@@ -76,7 +76,7 @@ Agent SDK is a supported legacy fallback, deprecated as the default; retain it
 for major Pi vulnerabilities or gaps in support for new Anthropic models.
 
 This is the contribution policy, not a claim that every existing binding has
-migrated: `DEFAULT_BINDING` is still Anthropic + linear. Set new bindings
+migrated. The default, `DEFAULT_AGENT_BINDING`, is Pi + linear. Set new bindings
 explicitly and check sequence-specific hooks before migrating existing flows.
 See
 [execution policy and model admission](.claude/skills/wizard-development/SKILL.md#execution-policy-and-model-admission)
@@ -164,14 +164,12 @@ pnpm build                         # Compile TypeScript
 pnpm test                          # Unit tests (builds first)
 pnpm test:watch                    # Unit tests in watch mode
 pnpm test:e2e:tui                  # Live, credentialed: full TUI on a workbench app copy
-pnpm test:e2e:programs             # Live, credentialed: runProgram, no TUI
-pnpm test:e2e:agent                # Live, credentialed: runAgent on a local quack skill
 pnpm lint                          # Prettier + ESLint checks
 pnpm fix                           # Auto-fix lint issues
 pnpm dev                           # Build, link globally, watch for changes
 ```
 
-The `test:e2e:*` routes need `APP_DIR` (TUI and programs), `PROJECT_ID`, a personal key (`POSTHOG_PERSONAL_API_KEY` or `POSTHOG_KEY_FILE`) and `WIZARD_CI_GATEWAY_TOKEN_FILE`; see the End-to-end section of the [README](README.md).
+`test:e2e:tui` needs `APP_DIR`, `PROJECT_ID`, a personal key (`POSTHOG_PERSONAL_API_KEY` or `POSTHOG_KEY_FILE`) and `WIZARD_CI_GATEWAY_TOKEN_FILE`; see the Testing section of the [README](README.md). Headless `runProgram` and `runAgent` runs live in the [wizard-workbench](https://github.com/PostHog/wizard-workbench) harness, pointed at this checkout by `WIZARD_REPO`.
 
 Choose verification for the change: check links and formatting for docs; run
 `pnpm typecheck` and focused existing tests for code. Build when bundling or

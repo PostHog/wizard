@@ -124,23 +124,13 @@ export function startFileWatcher(
   };
 
   const attachWatch = () => {
-    const watcher = fs.watch(targetDir, (_eventType, filename) => {
-      if (filename == null || filename.toString() === targetName) {
-        scheduleRead();
-      }
-    });
-    // macOS can report an exhausted FSEvents limit after fs.watch returns.
-    // Polling stays active, so losing the low-latency watcher must not crash.
-    watcher.on('error', (error) => {
-      logReadError(
-        `watch:${String(error)}`,
-        `directory watch failed (${error})`,
-      );
-      watcher.close();
-      const index = watchers.indexOf(watcher);
-      if (index >= 0) watchers.splice(index, 1);
-    });
-    watchers.push(watcher);
+    watchers.push(
+      fs.watch(targetDir, (_eventType, filename) => {
+        if (filename == null || filename.toString() === targetName) {
+          scheduleRead();
+        }
+      }),
+    );
   };
 
   intervals.push(setInterval(() => read(), pollIntervalMs));

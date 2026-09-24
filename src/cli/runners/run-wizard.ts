@@ -25,7 +25,6 @@ import {
 import { classifyRunFailure, emitWizardError } from '@shared/errors';
 import { isRunFailure } from '@tui/mint-failure';
 import { analytics } from '@utils/analytics';
-import { join } from 'node:path';
 import { cliAuthHost } from './auth-host';
 import { OutroKind } from '@shared/outro';
 import type { WizardSession } from '@tui/session';
@@ -82,13 +81,11 @@ export async function advanceStep(
     await runProgramAgent(
       getProgramConfig(runStep.runProgramId),
       await prepareRunSession(runStep, store),
-      { composed: true, deferSkillCleanupCommit: true },
+      { composed: true },
     );
     store.completeRunStep(step.id);
   } else if (step.screenId === 'run') {
-    await runProgramAgent(config, await prepareRunSession(runStep, store), {
-      deferSkillCleanupCommit: true,
-    });
+    await runProgramAgent(config, await prepareRunSession(runStep, store));
   } else if (step.isComplete) {
     await store.waitUntil(step.isComplete);
   }
@@ -111,6 +108,7 @@ export function runWizard(
   void (async () => {
     try {
       const installDir = (options.installDir as string) || process.cwd();
+      // Armed until a successful exit, so every failed or interrupted exit removes new skills.
       registerRunSkillCleanup(installDir);
 
       const { startTUI } = await import('@tui/start-tui');
@@ -219,11 +217,10 @@ export function runWizard(
         config = getProgramConfig(active);
       }
 
-      // After the switch loop, not before: the stream bakes its program id,
-      // session id, and event-plan path in at construction, so a stream built
-      // for the launch program would report the whole run under a program the
-      // user left on the intro screen. Nothing before this point produces a
-      // task to push.
+      // After the switch loop, not before: the stream bakes its program id and
+      // session id in at construction, so a stream built for the launch program
+      // would report the whole run under a program the user left on the intro
+      // screen. Nothing before this point produces a task to push.
       // Consent gates the push, not the dump: `--no-telemetry` still logs.
       const fileDestination = createFileDestination(options.taskStreamLog);
       const destinations = [
@@ -242,9 +239,6 @@ export function runWizard(
         store: activeTui.store,
         programId: config.streamWorkflowId ?? config.id,
         destinations,
-        eventPlanPath: config.eventPlanFile
-          ? join(session.installDir, config.eventPlanFile)
-          : undefined,
         auditChecks: config.auditLedgerFile
           ? () => getAuditChecks(activeTui.store.session)
           : undefined,
@@ -291,9 +285,7 @@ export function runWizard(
         });
       } else {
         try {
-          await runProgramAgent(config, activeTui.store.session, {
-            deferSkillCleanupCommit: true,
-          });
+          await runProgramAgent(config, activeTui.store.session);
         } catch (error) {
           // The run threw before its own error handling rendered an outro.
           // Show the handoff screen and let the user's agent take over.
@@ -322,9 +314,8 @@ export function runWizard(
 
       await activeStream.shutdown(2000);
       if (signalled) return;
+      // Handlers stay attached, so a late signal cannot end the process before drain or commit.
       exitInProgress = true;
-      // Keep the handlers until process.exit so a signal cannot take the
-      // default termination path before cleanup is disarmed.
       if (runFailed) {
         runCleanups();
         await analytics.shutdown('error');

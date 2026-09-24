@@ -19,6 +19,7 @@ import { allowedPiCodingTools, allowedOrchestratorTools } from '../task';
 import {
   ASK_BATCH_THRESHOLD,
   ASK_CANCELLED_NOTE,
+  ASK_MAX_QUESTIONS_PER_CALL,
   ASK_TIMED_OUT_NOTE,
   WIZARD_ASK_KIND_DESCRIPTION,
   WIZARD_ASK_SENSITIVE_DESCRIPTION,
@@ -368,6 +369,22 @@ describe('pi wizard_ask — the batching guard counts per subject', () => {
     expect(question.properties.kind.description).toBe(
       WIZARD_ASK_KIND_DESCRIPTION,
     );
+  });
+
+  it('caps one call at the shared question limit, not a harness-local number', () => {
+    // The orchestrator runs on pi, so this schema is the one in effect: a
+    // limit below the widest connector form is what sends a database source
+    // to the browser fallback.
+    const { wizardAsk } = makeTools({});
+    const questions = (
+      wizardAsk as unknown as {
+        parameters: {
+          properties: { questions: { minItems?: number; maxItems?: number } };
+        };
+      }
+    ).parameters.properties.questions;
+    expect(questions.maxItems).toBe(ASK_MAX_QUESTIONS_PER_CALL);
+    expect(questions.minItems).toBe(1);
   });
 
   it('shares one tool description with the MCP server', () => {

@@ -1,3 +1,8 @@
+/**
+ * The snapshot signature changes for the state the real TUI shows: a
+ * status-only progress event, and an audit ledger update that keeps the same
+ * context key.
+ */
 import { createUiReducer } from '@programs';
 import { InkUI } from '@tui/ink-ui';
 import { WizardStore } from '@tui/store';

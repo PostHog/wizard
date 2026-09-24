@@ -1,13 +1,8 @@
-import {
-  initializeAgent,
-  runAgent as executeAgent,
-  wizardCanUseTool,
-} from '@agent/agent-interface';
+import { initializeAgent, wizardCanUseTool } from '@agent/agent-interface';
 import { createAskBridge } from '../../../shared/ask';
 import { anthropicBackend } from '..';
 import type { BackendRunInputs, TaskRunInputs } from '../../types';
 import { Harness, Sequence } from '@shared/constants';
-import { AgentErrorType } from '@agent/signals';
 import { HostResolution } from '@shared/host-resolution';
 import type { AskAnswers } from '@agent/types';
 
@@ -17,7 +12,7 @@ vi.mock('@agent/aio-capture', () => ({ createAioCapture: vi.fn() }));
 vi.mock('@agent/agent-interface', async (original) => ({
   ...(await original<typeof import('@agent/agent-interface')>()),
   initializeAgent: vi.fn().mockResolvedValue({}),
-  runAgent: vi.fn().mockResolvedValue({ kind: 'success' }),
+  runAgent: vi.fn().mockResolvedValue({}),
 }));
 
 const questions = [{ id: 'q', prompt: 'Continue?', kind: 'text' as const }];
@@ -25,7 +20,6 @@ const questions = [{ id: 'q', prompt: 'Continue?', kind: 'text' as const }];
 async function initializeHarness(
   mode: 'linear' | 'task',
   askBridge: BackendRunInputs['askBridge'],
-  signal?: AbortSignal,
 ) {
   const credentials = {
     accessToken: 'test',
@@ -85,14 +79,6 @@ async function initializeHarness(
       programId: 'test',
       skillsBaseUrl: 'https://skills.test',
       credentials,
-      inferenceAuth: {
-        resolve: () =>
-          Promise.resolve({
-            gatewayUrl: 'https://ai-gateway.us.posthog.com',
-            token: 'phe_fixture',
-            refreshAtMs: Infinity,
-          }),
-      },
       wizardFlags: {},
       wizardFlagPayloads: {},
       wizardMetadata: {},
@@ -104,7 +90,6 @@ async function initializeHarness(
     spinner: { start: vi.fn(), stop: vi.fn(), message: vi.fn() },
     model: 'test',
     askBridge,
-    signal,
   };
   if (mode === 'linear') {
     await anthropicBackend.run(inputs);
@@ -136,49 +121,17 @@ async function initializeHarness(
   };
 }
 
-describe.each(['linear', 'task'] as const)(
-  'Anthropic %s resolved program inputs',
-  (mode) => {
-    it('forwards a live host cancellation signal into execution', async () => {
-      const controller = new AbortController();
-      vi.mocked(executeAgent).mockImplementation(
-        (_agent, _prompt, _options, _spinner, runOptions) =>
-          new Promise((resolve) => {
-            expect(runOptions?.signal).toBe(controller.signal);
-            controller.signal.addEventListener('abort', () =>
-              resolve({
-                kind: 'abort',
-                classification: AgentErrorType.ABORT,
-                message: 'Agent run cancelled',
-              }),
-            );
-          }),
-      );
-
-      const pending = initializeHarness(mode, undefined, controller.signal);
-      await vi.waitFor(() => expect(executeAgent).toHaveBeenCalledOnce());
-      controller.abort();
-      await pending;
-    });
-
-    it('forwards inference auth and program commandments into initialization', async () => {
-      await initializeHarness(mode, undefined);
-      const [config] = vi.mocked(initializeAgent).mock.calls.at(-1)!;
-      expect(config).toMatchObject({
-        programCommandments: ['Follow the program rule'],
-        inferenceAuth: { resolve: expect.any(Function) },
-      });
-      await expect(config.inferenceAuth?.resolve()).resolves.toMatchObject({
-        token: 'phe_fixture',
-      });
-    });
-  },
-);
+it('forwards the supplied program commandments on both entry points', async () => {
+  for (const mode of ['linear', 'task'] as const) {
+    await initializeHarness(mode, undefined);
+    const [config] = vi.mocked(initializeAgent).mock.calls.at(-1)!;
+    expect(config.programCommandments).toEqual(['Follow the program rule']);
+  }
+});
 
 afterEach(() => {
   vi.useRealTimers();
   vi.clearAllMocks();
-  vi.mocked(executeAgent).mockReset().mockResolvedValue({ kind: 'success' });
 });
 
 describe.each(['linear', 'task'] as const)(
@@ -190,17 +143,17 @@ describe.each(['linear', 'task'] as const)(
         vi.useFakeTimers();
         let resolve!: (answers: AskAnswers) => void;
         let reject!: (error: Error) => void;
-        const cancelAsk = vi.fn();
+        let signal: AbortSignal | undefined;
         const bridge = createAskBridge(
           {
-            ask: () => {
+            ask: (_question, context) => {
               expectPermission('deny');
+              signal = context.signal;
               return new Promise((res, rej) => {
                 resolve = res;
                 reject = rej;
               });
             },
-            cancelAsk,
           },
           { getSource: () => 'test', richLinks: false, timeoutMs: 1000 },
         );
@@ -227,7 +180,7 @@ describe.each(['linear', 'task'] as const)(
         }
 
         expectPermission('allow');
-        expect(cancelAsk).toHaveBeenCalledTimes(ending === 'timeout' ? 1 : 0);
+        expect(signal?.aborted).toBe(ending === 'timeout');
         expect(vi.getTimerCount()).toBe(0);
       },
     );

@@ -46,6 +46,8 @@ export class RunTaskFatal extends Error {
     public readonly outcome:
       | RunOutcome.Aborted
       | RunOutcome.Failed = RunOutcome.Failed,
+    /** The type of the task that ended the run, for the steps it stopped. */
+    public readonly taskType?: string,
   ) {
     super(failure.message ?? 'agent run failed');
     this.name = 'RunTaskFatal';
@@ -56,7 +58,6 @@ export interface DrainOptions {
   /** Backstop against a pathological always-one-more-pending loop. */
   maxStarts: number;
   signal?: AbortSignal;
-  /** Stop sibling sessions on the first fatal result before joining them. */
   onFatal?: () => void;
 }
 

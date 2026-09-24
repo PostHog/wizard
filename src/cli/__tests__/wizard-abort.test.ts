@@ -186,6 +186,35 @@ describe('wizardAbort', () => {
     expect(process.exit).toHaveBeenCalledWith(1);
   });
 
+  it('captures an "error" ending that has no Error from its code and message', async () => {
+    await expect(
+      wizardAbort({
+        message: 'Could not access MCP',
+        code: ErrorCodes.AgentMcpMissing,
+        status: 'error',
+      }),
+    ).rejects.toThrow('process.exit called');
+
+    const [captured, properties] = mockAnalytics.captureException.mock
+      .calls[0] as [WizardError, Record<string, unknown>];
+    expect(captured).toBeInstanceOf(WizardError);
+    expect(captured.message).toBe('Could not access MCP');
+    expect(captured.code).toBe(ErrorCodes.AgentMcpMissing);
+    expect(properties).toEqual({ error_code: ErrorCodes.AgentMcpMissing });
+    expect(mockAnalytics.shutdown).toHaveBeenCalledWith('error');
+  });
+
+  it('shuts down as the explicit status even when an Error is provided', async () => {
+    const error = new Error('stopped');
+
+    await expect(wizardAbort({ error, status: 'cancelled' })).rejects.toThrow(
+      'process.exit called',
+    );
+
+    expect(mockAnalytics.captureException).toHaveBeenCalledWith(error, {});
+    expect(mockAnalytics.shutdown).toHaveBeenCalledWith('cancelled');
+  });
+
   it('shuts down analytics as "cancelled" when no error is provided', async () => {
     await expect(wizardAbort({ message: 'Bad input' })).rejects.toThrow(
       'process.exit called',

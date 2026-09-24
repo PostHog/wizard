@@ -1,9 +1,9 @@
-import { AI_OBSERVABILITY_REPORT_FILE, AI_OBSERVABILITY_RUN } from './run.js';
 import type { ProgramConfig } from '@programs/program-step';
+import { AI_OBSERVABILITY_REPORT_FILE, AI_OBSERVABILITY_RUN } from './run.js';
 
 /**
  * `wizard ai-observability` — wrap the project's LLM client calls so they emit
- * `$ai_generation` events into LLM Analytics.
+ * `$ai_generation` events into AI Observability.
  *
  * No `run.skillId`: the context-mill `ai-observability` group ships one variant
  * per (LLM provider × language) and the wizard does no provider detection —
