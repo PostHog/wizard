@@ -1,9 +1,8 @@
 // Resolves routing; model additions also require mint allowlists and gateway prompt/transport support.
 
 import { Harness, Sequence } from '@shared/constants';
-import { DEFAULT_AGENT_BINDING } from '@agent/default-binding';
-import { resolveHarness } from './harness';
 import type { EffortLevel } from './models';
+import { resolveHarness } from './resolve-harness';
 import { resolveSequence } from './sequence';
 
 // ── Shared machinery ────────────────────────────────────────────────────
@@ -106,9 +105,6 @@ export interface ProgramBinding {
   contextMillOverride?: Record<string, Partial<HarnessPick>>;
 }
 
-/** Legacy alias until the public runner export is removed in B2 integration. */
-export const DEFAULT_BINDING: ProgramBinding = DEFAULT_AGENT_BINDING;
-
 // ── Unified resolver ────────────────────────────────────────────────────
 
 /** Compose both axes. Callers needing only one axis use the per-axis resolver. */
@@ -123,11 +119,15 @@ export function resolveBinding(
 }
 
 // ── Unified re-export surface ───────────────────────────────────────────
-export { HARNESS_OPTIONS, getHarness, resolveHarness } from './harness';
+export { HARNESS_OPTIONS, getHarness } from './harness';
+export {
+  harnessRunsTasks,
+  resolveHarness,
+  resolveRoleHarness,
+} from './resolve-harness';
 export {
   SEQUENCE_OPTIONS,
   getSequence,
   resolveSequence,
   type SequenceRunner,
 } from './sequence';
-export { resolveRoleHarness } from './harness';

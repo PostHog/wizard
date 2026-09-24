@@ -19,7 +19,7 @@ export { runAgent, RunOutcome } from './runner';
 export { AgentSignals } from './agent-interface';
 export { WIZARD_TOOL_NAMES } from './tools';
 export { DEFAULT_AGENT_BINDING } from './default-binding';
-export { resolveHarness } from './runner/switchboard';
+export { resolveHarness } from './runner/switchboard/resolve-harness';
 
 /**
  * Leaves in B2. resolveBinding applies the generic precedence to the base

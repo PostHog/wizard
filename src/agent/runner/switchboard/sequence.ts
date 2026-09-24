@@ -5,16 +5,12 @@
 import { IS_PRODUCTION_BUILD } from '@env';
 import { Sequence } from '@shared/constants';
 import { logToFile } from '@utils/debug';
-import { getHarness, resolveHarness } from './harness';
+import { DEFAULT_AGENT_BINDING } from '@agent/default-binding';
+import { harnessRunsTasks, resolveHarness } from './resolve-harness';
 import type { SequenceResult, SequenceContext } from '../shared/types';
 import { runLinearProgram } from '../sequence/linear';
 import { runOrchestrator } from '../sequence/orchestrator/orchestrator-runner';
-import {
-  DEFAULT_BINDING,
-  runChain,
-  type Middleware,
-  type SwitchboardCtx,
-} from '.';
+import { runChain, type Middleware, type SwitchboardCtx } from '.';
 
 // ── Registry ────────────────────────────────────────────────────────────
 
@@ -82,13 +78,13 @@ const sequenceExperimentMw: Middleware<Sequence> = (ctx, next) => {
 /**
  * The orchestrator drives harnesses through `runTask`; a harness that has not
  * implemented it clamps the run to linear. A capability check, not a harness
- * identity check — a harness gains orchestrator support by implementing the
- * method, with no switchboard change. Sits below the CLI override so
+ * identity check — `HARNESS_RUNS_TASKS` records which backends implement the
+ * method, and a registry test keeps it in step. Sits below the CLI override so
  * `--sequence orchestrator` still reproduces the hard error in dev builds.
  */
 const runTaskCapabilityClampMw: Middleware<Sequence> = (ctx, next) => {
   const pick = resolveHarness(ctx);
-  if (getHarness(pick.harness).runTask) return next();
+  if (harnessRunsTasks(pick.harness)) return next();
   if (ctx.orchestratorFlagOn) {
     logToFile(
       `[switchboard] wizard-orchestrator ignored: ${pick.harness} has no runTask, clamping to linear`,
@@ -112,7 +108,7 @@ const SEQUENCE_MIDDLEWARE: Middleware<Sequence>[] = [
 export function resolveSequence(ctx: SwitchboardCtx): Sequence {
   const sequence = runChain(SEQUENCE_MIDDLEWARE, ctx, () => {
     if (ctx.trace) ctx.trace.sequence = 'binding';
-    const binding = ctx.baseBinding ?? DEFAULT_BINDING;
+    const binding = ctx.baseBinding ?? DEFAULT_AGENT_BINDING;
     return binding.sequence;
   });
   logToFile(

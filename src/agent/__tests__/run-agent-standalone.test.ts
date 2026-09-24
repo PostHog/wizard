@@ -171,16 +171,6 @@ vi.mock('@agent/runner/switchboard/harness', () => {
       harnessState.selected.push(name);
       return { ...fake, name };
     },
-    resolveHarness: (ctx: { cliHarness?: Harness }) => ({
-      harness: ctx.cliHarness ?? Harness.pi,
-      model: DEFAULT_AGENT_MODEL,
-    }),
-    resolveRoleHarness: (binding: RunConfig['binding'], role: string) =>
-      binding.roleBindings?.[role] ?? {
-        harness: binding.harness,
-        model: binding.model,
-        thinkingLevel: binding.thinkingLevel,
-      },
   };
 });
 
