@@ -10,11 +10,8 @@
  */
 
 import type { ProgramReadyContext } from '@programs/program-step';
-import {
-  mayReportScanResults,
-  ScanConsent,
-  type WizardSession,
-} from '@lib/wizard-session';
+import { ScanConsent, type WizardSession } from '@lib/wizard-session';
+import { mayReportScanResults } from '@shared/scan-consent';
 import { FRAMEWORK_REGISTRY } from '@programs/registry';
 import {
   detectFramework,

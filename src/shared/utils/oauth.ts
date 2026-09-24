@@ -26,12 +26,6 @@ import {
   type OAuthTokenResponse,
 } from './oauth-token';
 
-export {
-  OAuthTokenResponseSchema,
-  refreshAccessToken,
-  type OAuthTokenResponse,
-} from './oauth-token';
-
 const OAUTH_CALLBACK_STYLES = `
   <style>
     * {

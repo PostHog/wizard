@@ -458,10 +458,3 @@ export function buildSession(args: {
     pendingQuestion: null,
   };
 }
-
-/** Compatibility exports; consent rules live in shared code. */
-export {
-  mayReportScanResults,
-  reportableDiscoveredFeatures,
-  reportablePosthogSdkDetected,
-} from '@shared/scan-consent';
