@@ -14,7 +14,7 @@ import {
   getSelfDrivingDetectedTools,
 } from '@programs/self-driving/detect';
 import { getDetectedWarehouseSources } from '@programs/warehouse-source/detect';
-import { WizardStore } from '@ui/tui/store';
+import { WizardStore } from '@tui/store';
 import { SOURCE_DETECTORS } from '@programs/warehouse-sources/registry';
 import type { DetectedSource } from '@programs/warehouse-sources/types';
 import { toIntegrationReport } from '@programs/self-driving/detect-agentic';

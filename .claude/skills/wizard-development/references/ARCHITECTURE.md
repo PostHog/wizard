@@ -8,13 +8,13 @@ description:
 
 ## Runner and lifecycle
 
-[run-wizard.ts](../../../../src/lib/runners/run-wizard.ts) owns the program's
+[run-wizard.ts](../../../../src/cli/runners/run-wizard.ts) owns the program's
 interactive lifecycle: create the session and TUI, assign the session, run
 readiness hooks, and traverse steps and gates.
-[store.ts](../../../../src/ui/tui/store.ts) runs `onInit` when the TUI starts;
+[store.ts](../../../../src/tui/store.ts) runs `onInit` when the TUI starts;
 `onReady` runs after the real session is assigned. Keep session-dependent
 detection in `onReady`. Noninteractive execution has its own lifecycle in
-[run-non-interactive.ts](../../../../src/lib/runners/run-non-interactive.ts).
+[run-non-interactive.ts](../../../../src/cli/runners/run-non-interactive.ts).
 
 [runner/index.ts](../../../../src/agent/runner/index.ts) resolves a
 program's `run` definition, calls shared bootstrap, selects a binding,
@@ -138,8 +138,8 @@ credentials.
 ## UI state and agent output
 
 Business logic uses [WizardUI](../../../../src/ui/wizard-ui.ts) through
-`getUI()`. [InkUI](../../../../src/ui/tui/ink-ui.ts) updates the TUI store;
-[LoggingUI](../../../../src/ui/logging-ui.ts) is available for noninteractive
+`getUI()`. [InkUI](../../../../src/tui/ink-ui.ts) updates the TUI store;
+[LoggingUI](../../../../src/headless/renderers/logging-ui.ts) is available for noninteractive
 callers that select it. A missing TTY does not automatically mean an arbitrary
 caller uses LoggingUI; snapshot CI drives Ink in a PTY. `requestQuestion` and
 task notices are supported interactions, not console prompts to invent in
@@ -153,9 +153,9 @@ state. Do not assume all harness output passes through `handleSDKMessage`.
 
 Session changes go through explicit store setters. They emit updates,
 re-evaluate gates, detect transitions, and refresh rendering. The
-[router](../../../../src/ui/tui/router.ts) resolves overlays first, then the
+[router](../../../../src/tui/router.ts) resolves overlays first, then the
 first visible incomplete screen from
-[screen-sequences.ts](../../../../src/ui/tui/screen-sequences.ts). Those
+[screen-sequences.ts](../../../../src/tui/screen-sequences.ts). Those
 sequences are projected from registered program steps. Change the
 state/predicate that represents progress rather than adding imperative
 navigation.

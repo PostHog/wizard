@@ -185,7 +185,7 @@ credentials and no TUI.
 
 `runProgram` runs one agent. It doesn't check service readiness or Claude
 settings, walk composed steps, or run a program with no agent. The session
-adapter, `src/lib/runners/run-program-agent.ts`, runs the readiness and settings
+adapter, `src/cli/runners/run-program-agent.ts`, runs the readiness and settings
 gates before it calls `runProgram`. The TUI walks each composed step as its own
 call with `composed: true`, and runs the steps of programs with no agent, such
 as `posthog-doctor`, `mcp-add` and `slack`. See the
@@ -211,7 +211,7 @@ gateway token file is read into a fixed provider for CI. Pre-run detection and
 the program's agent run use that same provider. This path doesn't mint or
 refresh the token. Published builds reject `--ci`. The internal
 `runWizardCI(config, options): void` entry point uses the session adapter,
-`src/lib/runners/run-program-agent.ts`. The adapter builds the run from the
+`src/cli/runners/run-program-agent.ts`. The adapter builds the run from the
 `ProgramConfig`, runs the readiness and settings gates, then calls `runProgram`
 once. Agentic detection runs before that call, through its own `runAgent` call.
 MCP suggested prompts use a separate SDK path with their own progress and

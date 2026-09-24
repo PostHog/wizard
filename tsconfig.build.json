@@ -26,13 +26,14 @@
       "@programs": ["./src/programs/index.ts"],
       "@programs/types": ["./src/programs/types.ts"],
       "@programs/*": ["./src/programs/*"],
+      "@tui/*": ["./src/tui/*"],
+      "@headless/*": ["./src/headless/*"],
+      "@cli/*": ["./src/cli/*"],
       "@lib/*": ["./src/lib/*"],
       "@e2e-harness/*": ["./e2e-harness/*"],
       "@utils/*": ["./src/shared/utils/*"],
       "@ui": ["./src/ui/index.ts"],
-      "@ui/*": ["./src/ui/*"],
-      "@steps": ["./src/steps/index.ts"],
-      "@steps/*": ["./src/steps/*"]
+      "@ui/*": ["./src/ui/*"]
     }
   }
 }

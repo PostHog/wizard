@@ -4,7 +4,7 @@ import type {
   TaskStreamDestination,
   TaskStreamUpdate,
 } from '@programs/task-stream/types';
-import type { WizardStore, TaskItem } from '@ui/tui/store';
+import type { WizardStore, TaskItem } from '@tui/store';
 import { TaskStatus } from '@ui/wizard-ui';
 import { RunPhase, type PendingQuestion } from '@lib/wizard-session';
 

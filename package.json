@@ -136,6 +136,7 @@
     "test:agent": "vitest run --project agent",
     "test:programs": "vitest run --project programs",
     "test:tui": "vitest run --project tui",
+    "test:headless": "vitest run --project headless",
     "test:cli": "vitest run --project cli",
     "test:harness": "vitest run --project harness",
     "test:arch": "vitest run --project architecture",

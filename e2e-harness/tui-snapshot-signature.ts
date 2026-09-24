@@ -5,7 +5,7 @@
  * context values, not only its keys, because audit ledger updates keep the
  * same key and still need a frame.
  */
-import type { WizardStore } from '@ui/tui/store';
+import type { WizardStore } from '@tui/store';
 
 function digest(s: string): string {
   let h = 0x811c9dc5;

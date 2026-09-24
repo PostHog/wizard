@@ -4,7 +4,7 @@
  * `runAgent` reports through one optional callback and asks through one
  * optional set of capabilities. Neither reaches into a UI singleton, a store,
  * or a session: every payload is copied data, every question is awaited on an
- * injected answerer. The legacy adapter in `src/lib/runners/run-program-agent.ts`
+ * injected answerer. The legacy adapter in `src/cli/runners/run-program-agent.ts`
  * maps these back onto `WizardUI` one call per event, so the terminal output of
  * every existing runner is unchanged.
  */

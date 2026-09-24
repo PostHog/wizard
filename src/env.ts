@@ -15,7 +15,7 @@
  * this module instead.
  */
 
-import { HEADLESS_FLAG } from '@lib/headless-mode';
+import { HEADLESS_FLAG } from '@cli/headless-mode';
 
 // ── Build-time constants ─────────────────────────────────────────────
 // tsdown replaces `process.env.NODE_ENV` with a string literal.

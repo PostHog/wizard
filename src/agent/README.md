@@ -152,7 +152,7 @@ cancel an active run. The result then has `RunOutcome.Aborted`.
 
 Programs call the agent to do the work a skill describes. `runProgram` builds
 the `RunConfig` and `RunInput` for every program run. The TUI and the `--ci`
-runner reach it through `src/lib/runners/run-program-agent.ts`, which supplies
+runner reach it through `src/cli/runners/run-program-agent.ts`, which supplies
 session capabilities and maps progress back onto `getUI()`.
 
 Agentic detection calls `runAgent` itself, before the program runs. It uses a

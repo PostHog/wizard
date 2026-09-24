@@ -217,7 +217,7 @@ progress.
 
 Today's callers:
 
-- **The session adapter.** `src/lib/runners/run-program-agent.ts` serves the TUI
+- **The session adapter.** `src/cli/runners/run-program-agent.ts` serves the TUI
   and the `--ci` runner. It resolves `ProgramConfig.run` against the session and
   a `ProgramRunHost`, runs the health and settings gates, and reads the program
   settings from the config. It supplies the session's login as the credentials

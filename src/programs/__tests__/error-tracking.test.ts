@@ -7,7 +7,7 @@ import type { AgenticDetectionReport } from '@programs/detection/agentic';
 import { detectFramework } from '@programs/detection/index';
 import { scopeInstallDirToProject } from '@programs/detection/project-scope';
 import { ErrorCodes } from '@shared/errors';
-import { ERROR_TRACKING_TIPS } from '@ui/tui/decks/error-tracking/tips';
+import { ERROR_TRACKING_TIPS } from '@tui/decks/error-tracking/tips';
 import {
   ERROR_TRACKING_PROJECT_PATH_KEY,
   toErrorTrackingReport,
@@ -50,8 +50,9 @@ const resolveRun = errorTrackingConfig.run as (
 const runHost = (): ProgramRunHost => ({
   getFrameworkContext: vi.fn(),
   setFrameworkContext: vi.fn(),
+  info: vi.fn(),
   warn: vi.fn(),
-  uploadEnvironmentVariables: vi.fn().mockResolvedValue([]),
+  spinner: () => ({ start: vi.fn(), stop: vi.fn(), message: vi.fn() }),
 });
 
 const step = (id: string) => errorTrackingConfig.steps.find((s) => s.id === id);

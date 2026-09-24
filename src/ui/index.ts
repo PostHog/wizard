@@ -4,7 +4,7 @@
  */
 
 import type { WizardUI } from './wizard-ui';
-import { LoggingUI } from './logging-ui';
+import { LoggingUI } from '@headless/renderers/logging-ui';
 import { setDebugSink } from '@utils/debug';
 
 let currentUI: WizardUI = new LoggingUI();

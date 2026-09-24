@@ -3,7 +3,7 @@ vi.mock('@utils/debug');
 vi.mock('@utils/analytics', () => ({ analytics: { wizardCapture: vi.fn() } }));
 
 import { createUiReducer, uiInteraction } from '../agent-progress';
-import { LoggingUI } from '../logging-ui';
+import { LoggingUI } from '@headless/renderers/logging-ui';
 import type { AgentProgress } from '@agent/progress';
 import {
   CANCELLED_SENTINEL,

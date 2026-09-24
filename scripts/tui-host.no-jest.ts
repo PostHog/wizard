@@ -16,16 +16,16 @@
 import fs from 'fs';
 import net from 'net';
 import { spawnSync } from 'child_process';
-import { startTUI } from '@ui/tui/start-tui';
+import { startTUI } from '@tui/start-tui';
 import { getUI } from '@ui';
 import { VERSION } from '@shared/version';
 import { Program, getProgramConfig, type ProgramId } from '@programs';
 import type { Harness, Sequence } from '@shared/constants';
 import { buildSession } from '@lib/wizard-session';
 import { initLocalDev } from '@shared/local-dev';
-import { loadCiInferenceAuthProvider } from '@lib/runners/ci-inference-auth';
+import { loadCiInferenceAuthProvider } from '@cli/runners/ci-inference-auth';
 import type { InferenceAuthProvider } from '@agent/types';
-import { runProgramAgent } from '@lib/runners/run-program-agent';
+import { runProgramAgent } from '@cli/runners/run-program-agent';
 import { commitRegisteredRunSkillCleanups } from '@shared/skill-run-cleanup';
 import {
   TaskStreamPush,
@@ -45,7 +45,7 @@ import {
   detectSourceMapsPrerequisites,
   SOURCE_MAPS_CONTEXT_KEYS,
 } from '@programs/error-tracking-upload-source-maps/index';
-import { ScreenId, Overlay } from '@ui/tui/router';
+import { ScreenId, Overlay } from '@tui/router';
 import { WizardCiDriver } from '@e2e-harness/wizard-ci-driver';
 import {
   decideE2eAction,

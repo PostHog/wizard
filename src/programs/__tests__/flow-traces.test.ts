@@ -10,8 +10,8 @@
  * change and belongs in its own PR; when it lands, re-record and add an
  * assertion that no trace visits `run` twice.
  */
-import { WizardStore, ScreenId, RunPhase, McpOutcome } from '@ui/tui/store';
-import { InkUI } from '@ui/tui/ink-ui';
+import { WizardStore, ScreenId, RunPhase, McpOutcome } from '@tui/store';
+import { InkUI } from '@tui/ink-ui';
 import { setUI } from '@ui/index';
 import {
   buildSession,

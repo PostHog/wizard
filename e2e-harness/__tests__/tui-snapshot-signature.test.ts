@@ -4,8 +4,8 @@
  * context key.
  */
 import { createUiReducer } from '@ui/agent-progress';
-import { InkUI } from '@ui/tui/ink-ui';
-import { WizardStore } from '@ui/tui/store';
+import { InkUI } from '@tui/ink-ui';
+import { WizardStore } from '@tui/store';
 import { AUDIT_CHECKS_KEY } from '@programs/audit/types';
 import { tuiSnapshotSignature } from '../tui-snapshot-signature';
 

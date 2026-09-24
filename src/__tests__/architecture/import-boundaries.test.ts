@@ -17,6 +17,7 @@ export type Surface =
   | 'agent'
   | 'programs'
   | 'tui'
+  | 'headless'
   | 'cli';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -27,20 +28,9 @@ const SURFACE_RULES: ReadonlyArray<readonly [Surface, (p: string) => boolean]> =
     ['shared', (p) => p.startsWith('src/shared/')],
     ['agent', (p) => p.startsWith('src/agent/')],
     ['programs', (p) => p.startsWith('src/programs/')],
-    [
-      'tui',
-      (p) =>
-        p.startsWith('src/ui/tui/') ||
-        p === 'src/commands/factories/family-picker.tsx',
-    ],
-    [
-      'cli',
-      (p) =>
-        p === 'bin.ts' ||
-        p === 'src/wizard.ts' ||
-        p.startsWith('src/commands/') ||
-        p.startsWith('src/lib/runners/'),
-    ],
+    ['tui', (p) => p.startsWith('src/tui/')],
+    ['headless', (p) => p.startsWith('src/headless/')],
+    ['cli', (p) => p === 'bin.ts' || p.startsWith('src/cli/')],
   ];
 
 export function classifySurface(relPath: string): Surface {
@@ -59,7 +49,17 @@ export const ALLOWED_IMPORTS: Record<Surface, readonly Surface[]> = {
   agent: ['env', 'shared', 'agent'],
   programs: ['env', 'shared', 'agent', 'programs'],
   tui: ['env', 'shared', 'legacy', 'programs', 'tui'],
-  cli: ['env', 'shared', 'legacy', 'agent', 'programs', 'tui', 'cli'],
+  headless: ['env', 'shared', 'legacy', 'programs', 'headless'],
+  cli: [
+    'env',
+    'shared',
+    'legacy',
+    'agent',
+    'programs',
+    'tui',
+    'headless',
+    'cli',
+  ],
 };
 
 // The agent's public entries. Outside `src/agent`, an import into the agent
@@ -78,7 +78,10 @@ export function ruleFor(fromFile: string, toFile: string): string | null {
     if (target !== AGENT_VALUES_ENTRY && target !== AGENT_TYPES_ENTRY) {
       return 'agent-deep-import';
     }
-    if (from === 'tui' && target !== AGENT_TYPES_ENTRY) {
+    if (
+      (from === 'tui' || from === 'headless') &&
+      target !== AGENT_TYPES_ENTRY
+    ) {
       return `matrix:${from}->${to}`;
     }
     return null;
@@ -371,10 +374,11 @@ it('keeps the callable runProgram closure free of UI, session and legacy imports
     (file) =>
       file === 'src/programs/program-registry.ts' ||
       file.startsWith('src/ui/') ||
-      file.startsWith('src/steps/') ||
+      file.startsWith('src/tui/') ||
+      file.startsWith('src/headless/') ||
       file.startsWith('src/lib/wizard-session') ||
-      file.startsWith('src/lib/runners/') ||
-      file.startsWith('src/commands/') ||
+      file.startsWith('src/cli/runners/') ||
+      file.startsWith('src/cli/commands/') ||
       file.startsWith('src/programs/task-stream/'),
   );
   expect(forbidden).toEqual([]);
@@ -384,9 +388,9 @@ it('keeps program decks and task-stream state behind the TUI boundary', () => {
   const forbidden = analysis.edges.filter(
     (edge) =>
       (edge.startsWith('src/programs/') &&
-        edge.includes(' -> src/ui/tui/decks/')) ||
+        edge.includes(' -> src/tui/decks/')) ||
       (edge.startsWith('src/programs/task-stream/') &&
-        edge.includes(' -> src/ui/')),
+        (edge.includes(' -> src/ui/') || edge.includes(' -> src/tui/'))),
   );
   expect(forbidden).toEqual([]);
 });
@@ -400,18 +404,18 @@ describe('surface classification', () => {
     expect(classifySurface('src/programs/program-registry.ts')).toBe(
       'programs',
     );
-    expect(classifySurface('src/ui/tui/App.tsx')).toBe('tui');
+    expect(classifySurface('src/tui/App.tsx')).toBe('tui');
     expect(classifySurface('src/ui/index.ts')).toBe('legacy');
-    expect(classifySurface('src/steps/index.ts')).toBe('legacy');
+    expect(classifySurface('src/headless/renderers/logging-ui.ts')).toBe(
+      'headless',
+    );
     expect(classifySurface('bin.ts')).toBe('cli');
     expect(classifySurface('src/agent/tools/mcp.ts')).toBe('agent');
     expect(classifySurface('src/agent/tools/tools.ts')).toBe('agent');
-    expect(classifySurface('src/commands/factories/family-picker.tsx')).toBe(
+    expect(classifySurface('src/tui/family-picker.tsx')).toBe('tui');
+    expect(classifySurface('src/tui/decks/posthog-integration/index.tsx')).toBe(
       'tui',
     );
-    expect(
-      classifySurface('src/ui/tui/decks/posthog-integration/index.tsx'),
-    ).toBe('tui');
     expect(classifySurface('src/programs/posthog-integration/index.ts')).toBe(
       'programs',
     );
@@ -428,11 +432,11 @@ describe('agent entry modules', () => {
     expect(rule('src/programs/audit/index.ts', 'src/agent/types.ts')).toBe(
       null,
     );
-    expect(rule('src/commands/skill.ts', 'src/agent/index.ts')).toBe(null);
+    expect(rule('src/cli/commands/skill.ts', 'src/agent/index.ts')).toBe(null);
     expect(
       rule('src/programs/audit/index.ts', 'src/agent/agent-runner.ts'),
     ).toBe('agent-deep-import');
-    expect(rule('src/commands/skill.ts', 'src/agent/runner/index.ts')).toBe(
+    expect(rule('src/cli/commands/skill.ts', 'src/agent/runner/index.ts')).toBe(
       'agent-deep-import',
     );
     expect(rule('src/shared/claude-settings.ts', 'src/agent/signals.ts')).toBe(
@@ -441,11 +445,11 @@ describe('agent entry modules', () => {
   });
 
   it('lets the TUI take agent types but not agent values', () => {
-    expect(rule('src/ui/tui/App.tsx', 'src/agent/types.ts')).toBe(null);
-    expect(rule('src/ui/tui/App.tsx', 'src/agent/index.ts')).toBe(
+    expect(rule('src/tui/App.tsx', 'src/agent/types.ts')).toBe(null);
+    expect(rule('src/tui/App.tsx', 'src/agent/index.ts')).toBe(
       'matrix:tui->agent',
     );
-    expect(rule('src/ui/tui/App.tsx', 'src/agent/progress.ts')).toBe(
+    expect(rule('src/tui/App.tsx', 'src/agent/progress.ts')).toBe(
       'agent-deep-import',
     );
   });
@@ -454,10 +458,10 @@ describe('agent entry modules', () => {
     expect(rule('src/agent/runner/index.ts', 'src/agent/progress.ts')).toBe(
       null,
     );
-    expect(rule('src/programs/audit/index.ts', 'src/ui/tui/store.ts')).toBe(
+    expect(rule('src/programs/audit/index.ts', 'src/tui/store.ts')).toBe(
       'matrix:programs->tui',
     );
-    expect(rule('src/agent/runner/index.ts', 'src/ui/tui/store.ts')).toBe(
+    expect(rule('src/agent/runner/index.ts', 'src/tui/store.ts')).toBe(
       'matrix:agent->tui',
     );
   });
@@ -467,19 +471,24 @@ describe('programs entry modules', () => {
   const rule = (from: string, to: string) => ruleFor(from, to);
 
   it('lets hosts reach programs through its entries', () => {
-    expect(rule('src/commands/audit.ts', 'src/programs/index.ts')).toBe(null);
-    expect(rule('src/ui/tui/store.ts', 'src/programs/types.ts')).toBe(null);
-    expect(rule('src/commands/audit.ts', 'src/programs/audit/index.ts')).toBe(
-      'programs-deep-import',
+    expect(rule('src/cli/commands/audit.ts', 'src/programs/index.ts')).toBe(
+      null,
     );
+    expect(rule('src/tui/store.ts', 'src/programs/types.ts')).toBe(null);
+    expect(
+      rule('src/cli/commands/audit.ts', 'src/programs/audit/index.ts'),
+    ).toBe('programs-deep-import');
   });
 
   it('keeps programs from reaching the TUI and CLI', () => {
-    expect(rule('src/programs/audit/index.ts', 'src/ui/tui/store.ts')).toBe(
+    expect(rule('src/programs/audit/index.ts', 'src/tui/store.ts')).toBe(
       'matrix:programs->tui',
     );
     expect(
-      rule('src/commands/dispatch-family.ts', 'src/commands/command.ts'),
+      rule(
+        'src/cli/commands/dispatch-family.ts',
+        'src/cli/commands/command.ts',
+      ),
     ).toBe(null);
   });
 });

@@ -3,7 +3,7 @@ import {
   truncateUrlLabel,
   extractUrls,
   splitPromptIntoSegments,
-} from '@ui/tui/primitives/link-helpers';
+} from '@tui/primitives/link-helpers';
 
 const ESC = String.fromCharCode(0x1b);
 const BEL = String.fromCharCode(0x07);

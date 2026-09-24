@@ -34,14 +34,9 @@ function resolveTsForJs(): Plugin {
 const TESTS = '__tests__/**/*.{js,jsx,ts,tsx}';
 const AGENT_TESTS = [`src/agent/**/${TESTS}`];
 const PROGRAM_TESTS = [`src/programs/**/${TESTS}`];
-const TUI_TESTS = [`src/ui/tui/**/${TESTS}`];
-const CLI_TESTS = [
-  `src/commands/**/${TESTS}`,
-  `src/lib/runners/${TESTS}`,
-  'src/__tests__/*cli*.test.ts',
-  'src/__tests__/wizard.test.ts',
-  'src/__tests__/headless-scope.test.ts',
-];
+const TUI_TESTS = [`src/tui/**/${TESTS}`];
+const HEADLESS_TESTS = [`src/headless/**/${TESTS}`];
+const CLI_TESTS = [`src/cli/**/${TESTS}`];
 const HARNESS_TESTS = [
   `e2e-harness/${TESTS}`,
   'e2e-harness/**/*.{test,spec}.{js,jsx,ts,tsx}',
@@ -87,13 +82,14 @@ export default defineConfig({
       { find: /^@programs\/(.*)$/, replacement: `${r('src/programs')}/$1` },
       // Path aliases — mirror tsconfig `paths`.
       { find: /^@env$/, replacement: r('src/env.ts') },
+      { find: /^@tui\/(.*)$/, replacement: `${r('src/tui')}/$1` },
+      { find: /^@headless\/(.*)$/, replacement: `${r('src/headless')}/$1` },
+      { find: /^@cli\/(.*)$/, replacement: `${r('src/cli')}/$1` },
       { find: /^@lib\/(.*)$/, replacement: `${r('src/lib')}/$1` },
       { find: /^@e2e-harness\/(.*)$/, replacement: `${r('e2e-harness')}/$1` },
       { find: /^@utils\/(.*)$/, replacement: `${r('src/shared/utils')}/$1` },
       { find: /^@ui$/, replacement: r('src/ui/index.ts') },
       { find: /^@ui\/(.*)$/, replacement: `${r('src/ui')}/$1` },
-      { find: /^@steps$/, replacement: r('src/steps/index.ts') },
-      { find: /^@steps\/(.*)$/, replacement: `${r('src/steps')}/$1` },
     ],
   },
   test: {
@@ -103,6 +99,7 @@ export default defineConfig({
       project('agent', AGENT_TESTS),
       project('programs', PROGRAM_TESTS),
       project('tui', TUI_TESTS),
+      project('headless', HEADLESS_TESTS),
       project('cli', CLI_TESTS),
       project('harness', HARNESS_TESTS),
       project('architecture', ARCH_TESTS),
@@ -115,6 +112,7 @@ export default defineConfig({
           ...AGENT_TESTS,
           ...PROGRAM_TESTS,
           ...TUI_TESTS,
+          ...HEADLESS_TESTS,
           ...CLI_TESTS,
           ...ARCH_TESTS,
         ],

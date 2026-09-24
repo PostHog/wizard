@@ -50,7 +50,7 @@ provider once, identifies the user, stamps the AI SDK evidence, awaits the
 host's approval and post-auth gates, loads flags, refreshes an OAuth token near
 expiry, and resolves the binding. Its caller builds the run definition and the
 program settings from the `ProgramConfig`. The legacy
-`src/lib/runners/run-program-agent.ts` does that from the session, supplies the
+`src/cli/runners/run-program-agent.ts` does that from the session, supplies the
 capabilities, and maps progress back onto `getUI()`. Agentic detection builds
 its own config and input, and calls `runAgent` directly.
 

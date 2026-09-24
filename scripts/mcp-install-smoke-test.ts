@@ -15,7 +15,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { HEADLESS_FLAG } from '../src/lib/headless-mode';
+import { HEADLESS_FLAG } from '../src/cli/headless-mode';
 
 const PROVIDERS = ['claude-code', 'codex'] as const;
 type Provider = (typeof PROVIDERS)[number];
@@ -100,7 +100,7 @@ function wizard(...args: string[]): Run {
 
 /**
  * The non-interactive install. Reuses the run pipeline's headless flag, so the
- * name is imported rather than spelled out — see @lib/headless-mode.
+ * name is imported rather than spelled out — see @cli/headless-mode.
  */
 function mcpAdd(...extra: string[]): Run {
   return wizard('mcp', 'add', `--${HEADLESS_FLAG}`, ...extra);

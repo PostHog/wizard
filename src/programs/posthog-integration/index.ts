@@ -464,10 +464,19 @@ ${warehouseReportInstruction(session)}
           credentials.host.apiHost,
         );
         if (config.environment.uploadToHosting) {
-          const uploadedEnvVars = await host.uploadEnvironmentVariables(
+          const { uploadEnvironmentVariablesStep } = await import(
+            './upload-environment-variables'
+          );
+          const uploadedEnvVars = await uploadEnvironmentVariablesStep(
             envVars,
-            config.metadata.integration,
-            session.installDir,
+            {
+              integration: config.metadata.integration,
+              installDir: session.installDir,
+              report: {
+                info: (message) => host.info(message),
+                spinner: () => host.spinner(),
+              },
+            },
           );
           if (uploadedEnvVars.length > 0) {
             analytics.capture(WIZARD_INTERACTION_EVENT_NAME, {

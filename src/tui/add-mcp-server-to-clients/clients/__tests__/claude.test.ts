@@ -1,0 +1,435 @@
+// We use the ClaudeMCPClient as a reference to test the DefaultMCPClient
+import * as fs from 'fs';
+import * as path from 'path';
+import * as os from 'os';
+import { ClaudeMCPClient } from '@tui/add-mcp-server-to-clients/clients/claude';
+import {
+  getDefaultServerConfig,
+  DefaultMCPClientConfig,
+} from '@tui/add-mcp-server-to-clients/defaults';
+
+vi.mock('fs', () => ({
+  promises: {
+    mkdir: vi.fn(),
+    readFile: vi.fn(),
+    writeFile: vi.fn(),
+  },
+  existsSync: vi.fn(),
+}));
+
+vi.mock('os', () => ({
+  homedir: vi.fn(),
+}));
+
+vi.mock('../../defaults', () => ({
+  DefaultMCPClientConfig: {
+    parse: vi.fn(),
+  },
+  getDefaultServerConfig: vi.fn(),
+}));
+
+describe('ClaudeMCPClient', () => {
+  let client: ClaudeMCPClient;
+  const mockHomeDir = '/mock/home';
+  const mockApiKey = 'test-api-key';
+  const mockServerConfig = {
+    command: 'npx',
+    args: ['-y', 'mcp-remote@latest'],
+    env: { POSTHOG_AUTH_HEADER: `Bearer ${mockApiKey}` },
+  };
+
+  const mkdirMock = fs.promises.mkdir as Mock;
+  const readFileMock = fs.promises.readFile as Mock;
+  const writeFileMock = fs.promises.writeFile as Mock;
+  const existsSyncMock = fs.existsSync as Mock;
+  const homedirMock = os.homedir as Mock;
+  const getDefaultServerConfigMock = getDefaultServerConfig as Mock;
+
+  const originalPlatform = process.platform;
+
+  beforeEach(() => {
+    client = new ClaudeMCPClient();
+    vi.clearAllMocks();
+    homedirMock.mockReturnValue(mockHomeDir);
+    getDefaultServerConfigMock.mockReturnValue(mockServerConfig);
+
+    // Mock the Zod schema parse method
+    (DefaultMCPClientConfig.parse as Mock).mockImplementation(
+      (data: any) => data,
+    );
+  });
+
+  afterEach(() => {
+    Object.defineProperty(process, 'platform', {
+      value: originalPlatform,
+      writable: true,
+    });
+  });
+
+  describe('constructor', () => {
+    it('should set the correct name', () => {
+      expect(client.name).toBe('Claude Desktop');
+    });
+  });
+
+  describe('isClientSupported', () => {
+    it('should return true for macOS', async () => {
+      Object.defineProperty(process, 'platform', {
+        value: 'darwin',
+        writable: true,
+      });
+      await expect(client.isClientSupported()).resolves.toBe(true);
+    });
+
+    it('should return true for Windows', async () => {
+      Object.defineProperty(process, 'platform', {
+        value: 'win32',
+        writable: true,
+      });
+      await expect(client.isClientSupported()).resolves.toBe(true);
+    });
+
+    it('should return false for Linux', async () => {
+      Object.defineProperty(process, 'platform', {
+        value: 'linux',
+        writable: true,
+      });
+      await expect(client.isClientSupported()).resolves.toBe(false);
+    });
+
+    it('should return false for other platforms', async () => {
+      Object.defineProperty(process, 'platform', {
+        value: 'freebsd',
+        writable: true,
+      });
+      await expect(client.isClientSupported()).resolves.toBe(false);
+    });
+  });
+
+  describe('getConfigPath', () => {
+    it('should return correct path for macOS', async () => {
+      Object.defineProperty(process, 'platform', {
+        value: 'darwin',
+        writable: true,
+      });
+
+      const configPath = await client.getConfigPath();
+      expect(configPath).toBe(
+        path.join(
+          mockHomeDir,
+          'Library',
+          'Application Support',
+          'Claude',
+          'claude_desktop_config.json',
+        ),
+      );
+    });
+
+    it('should return correct path for Windows', async () => {
+      Object.defineProperty(process, 'platform', {
+        value: 'win32',
+        writable: true,
+      });
+
+      const mockAppData = 'C:\\Users\\Test\\AppData\\Roaming';
+      process.env.APPDATA = mockAppData;
+
+      const configPath = await client.getConfigPath();
+      expect(configPath).toBe(
+        path.join(mockAppData, 'Claude', 'claude_desktop_config.json'),
+      );
+    });
+
+    it('should throw error for unsupported platform', async () => {
+      Object.defineProperty(process, 'platform', {
+        value: 'linux',
+        writable: true,
+      });
+
+      await expect(client.getConfigPath()).rejects.toThrow(
+        'Unsupported platform: linux',
+      );
+    });
+  });
+
+  describe('isServerInstalled', () => {
+    beforeEach(() => {
+      Object.defineProperty(process, 'platform', {
+        value: 'darwin',
+        writable: true,
+      });
+    });
+
+    it('should return false when config file does not exist', async () => {
+      existsSyncMock.mockReturnValue(false);
+
+      const result = await client.isServerInstalled();
+      expect(result).toBe(false);
+    });
+
+    it('should return false when config file exists but posthog server is not configured', async () => {
+      existsSyncMock.mockReturnValue(true);
+      const configData = {
+        mcpServers: {
+          otherServer: mockServerConfig,
+        },
+      };
+      readFileMock.mockResolvedValue(JSON.stringify(configData));
+
+      const result = await client.isServerInstalled();
+      expect(result).toBe(false);
+    });
+
+    it('should return true when posthog server is configured', async () => {
+      existsSyncMock.mockReturnValue(true);
+      const configData = {
+        mcpServers: {
+          posthog: mockServerConfig,
+          otherServer: mockServerConfig,
+        },
+      };
+      readFileMock.mockResolvedValue(JSON.stringify(configData));
+
+      const result = await client.isServerInstalled();
+      expect(result).toBe(true);
+    });
+
+    it('should return false when config file is invalid JSON', async () => {
+      existsSyncMock.mockReturnValue(true);
+      readFileMock.mockResolvedValue('invalid json');
+
+      const result = await client.isServerInstalled();
+      expect(result).toBe(false);
+    });
+
+    it('should return false when readFile throws an error', async () => {
+      existsSyncMock.mockReturnValue(true);
+      readFileMock.mockRejectedValue(new Error('File read error'));
+
+      const result = await client.isServerInstalled();
+      expect(result).toBe(false);
+    });
+  });
+
+  describe('addServer', () => {
+    beforeEach(() => {
+      Object.defineProperty(process, 'platform', {
+        value: 'darwin',
+        writable: true,
+      });
+    });
+
+    it('should create config directory and add server when config file does not exist', async () => {
+      existsSyncMock.mockReturnValue(false);
+
+      await client.addServer(mockApiKey);
+
+      const expectedConfigPath = path.join(
+        mockHomeDir,
+        'Library',
+        'Application Support',
+        'Claude',
+        'claude_desktop_config.json',
+      );
+      const expectedConfigDir = path.dirname(expectedConfigPath);
+
+      expect(mkdirMock).toHaveBeenCalledWith(expectedConfigDir, {
+        recursive: true,
+      });
+
+      expect(writeFileMock).toHaveBeenCalledWith(
+        expectedConfigPath,
+        JSON.stringify(
+          {
+            mcpServers: {
+              posthog: mockServerConfig,
+            },
+          },
+          null,
+          2,
+        ),
+        'utf8',
+      );
+    });
+
+    it('should merge with existing config when config file exists', async () => {
+      existsSyncMock.mockReturnValue(true);
+      const existingConfig = {
+        mcpServers: {
+          existingServer: {
+            command: 'existing',
+            args: [],
+            env: {},
+          },
+        },
+      };
+      readFileMock.mockResolvedValue(JSON.stringify(existingConfig));
+
+      await client.addServer(mockApiKey);
+
+      expect(writeFileMock).toHaveBeenCalledWith(
+        expect.any(String),
+        JSON.stringify(
+          {
+            mcpServers: {
+              existingServer: existingConfig.mcpServers.existingServer,
+              posthog: mockServerConfig,
+            },
+          },
+          null,
+          2,
+        ),
+        'utf8',
+      );
+    });
+
+    it('should not overwrite existing config when it is invalid', async () => {
+      existsSyncMock.mockReturnValue(true);
+      readFileMock.mockResolvedValue(
+        JSON.stringify({
+          invalidKey: {
+            existingServer: {
+              command: 'existing',
+              args: [],
+              env: {},
+            },
+          },
+          x: 'y',
+        }),
+      );
+
+      await client.addServer(mockApiKey);
+
+      expect(writeFileMock).toHaveBeenCalledWith(
+        expect.any(String),
+        JSON.stringify(
+          {
+            invalidKey: {
+              existingServer: {
+                command: 'existing',
+                args: [],
+                env: {},
+              },
+            },
+            x: 'y',
+            mcpServers: {
+              posthog: mockServerConfig,
+            },
+          },
+          null,
+          2,
+        ),
+        'utf8',
+      );
+    });
+
+    it('should call getDefaultServerConfig with the provided API key', async () => {
+      existsSyncMock.mockReturnValue(false);
+
+      await client.addServer(mockApiKey);
+
+      expect(getDefaultServerConfigMock).toHaveBeenCalledWith(
+        mockApiKey,
+        undefined,
+        undefined,
+      );
+    });
+
+    it('should call getDefaultServerConfig with undefined API key for OAuth mode', async () => {
+      existsSyncMock.mockReturnValue(false);
+
+      await client.addServer(undefined);
+
+      expect(getDefaultServerConfigMock).toHaveBeenCalledWith(
+        undefined,
+        undefined,
+        undefined,
+      );
+    });
+  });
+
+  describe('removeServer', () => {
+    beforeEach(() => {
+      Object.defineProperty(process, 'platform', {
+        value: 'darwin',
+        writable: true,
+      });
+    });
+
+    it('should do nothing when config file does not exist', async () => {
+      existsSyncMock.mockReturnValue(false);
+
+      await client.removeServer();
+
+      expect(readFileMock).not.toHaveBeenCalled();
+      expect(writeFileMock).not.toHaveBeenCalled();
+    });
+
+    it('should remove posthog server from config', async () => {
+      existsSyncMock.mockReturnValue(true);
+      const configWithPosthog = {
+        mcpServers: {
+          posthog: mockServerConfig,
+          otherServer: {
+            command: 'other',
+            args: [],
+            env: {},
+          },
+        },
+      };
+      readFileMock.mockResolvedValue(JSON.stringify(configWithPosthog));
+
+      await client.removeServer();
+
+      expect(writeFileMock).toHaveBeenCalledWith(
+        expect.any(String),
+        JSON.stringify(
+          {
+            mcpServers: {
+              otherServer: configWithPosthog.mcpServers.otherServer,
+            },
+          },
+          null,
+          2,
+        ),
+        'utf8',
+      );
+    });
+
+    it('should do nothing when posthog server is not in config', async () => {
+      existsSyncMock.mockReturnValue(true);
+      const configWithoutPosthog = {
+        mcpServers: {
+          otherServer: {
+            command: 'other',
+            args: [],
+            env: {},
+          },
+        },
+      };
+      readFileMock.mockResolvedValue(JSON.stringify(configWithoutPosthog));
+
+      await client.removeServer();
+
+      expect(writeFileMock).not.toHaveBeenCalled();
+    });
+
+    it('should handle invalid JSON gracefully', async () => {
+      existsSyncMock.mockReturnValue(true);
+      readFileMock.mockResolvedValue('invalid json');
+
+      await client.removeServer();
+
+      expect(writeFileMock).not.toHaveBeenCalled();
+    });
+
+    it('should handle file read errors gracefully', async () => {
+      existsSyncMock.mockReturnValue(true);
+      readFileMock.mockRejectedValue(new Error('File read error'));
+
+      await client.removeServer();
+
+      expect(writeFileMock).not.toHaveBeenCalled();
+    });
+  });
+});

@@ -4,7 +4,7 @@ import * as path from 'path';
 
 import { AUDIT_SEED_CHECKS, seedAuditLedger } from '@programs/audit/seed';
 import { AUDIT_CHECKS_FILE, type AuditCheck } from '@programs/audit/types';
-import { COL_AREA_WIDTH } from '@ui/tui/screens/audit/AuditChecksViewer/layout';
+import { COL_AREA_WIDTH } from '@tui/screens/audit/AuditChecksViewer/layout';
 
 const ids = (checks: AuditCheck[]) => checks.map((c) => c.id);
 

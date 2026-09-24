@@ -49,24 +49,24 @@ if (!satisfies(process.version, NODE_VERSION_RANGE)) {
   process.exit(1);
 }
 
-import { Wizard } from './src/wizard';
-import { basicIntegrationCommand } from './src/commands/basic-integration';
-import { mcpCommand } from './src/commands/mcp';
-import { mcpAnalyticsCommand } from './src/commands/mcp-analytics';
-import { replayVisionCommand } from './src/commands/replay-vision';
-import { aiObservabilityCommand } from './src/commands/ai-observability';
-import { metricsCommand } from './src/commands/metrics';
-import { auditCommand } from './src/commands/audit';
-import { doctorCommand } from './src/commands/doctor';
-import { migrateCommand } from './src/commands/migrate';
-import { revenueCommand } from './src/commands/revenue';
-import { warehouseCommand } from './src/commands/warehouse';
-import { selfDrivingCommand } from './src/commands/self-driving';
-import { slackCommand } from './src/commands/slack';
-import { uploadSourcemapsCommand } from './src/commands/upload-sourcemaps';
-import { errorTrackingCommand } from './src/commands/error-tracking';
-import { skillCommand } from './src/commands/skill';
-import { cliCommand } from './src/commands/cli';
+import { Wizard } from '@cli/wizard';
+import { basicIntegrationCommand } from '@cli/commands/basic-integration';
+import { mcpCommand } from '@cli/commands/mcp';
+import { mcpAnalyticsCommand } from '@cli/commands/mcp-analytics';
+import { replayVisionCommand } from '@cli/commands/replay-vision';
+import { aiObservabilityCommand } from '@cli/commands/ai-observability';
+import { metricsCommand } from '@cli/commands/metrics';
+import { auditCommand } from '@cli/commands/audit';
+import { doctorCommand } from '@cli/commands/doctor';
+import { migrateCommand } from '@cli/commands/migrate';
+import { revenueCommand } from '@cli/commands/revenue';
+import { warehouseCommand } from '@cli/commands/warehouse';
+import { selfDrivingCommand } from '@cli/commands/self-driving';
+import { slackCommand } from '@cli/commands/slack';
+import { uploadSourcemapsCommand } from '@cli/commands/upload-sourcemaps';
+import { errorTrackingCommand } from '@cli/commands/error-tracking';
+import { skillCommand } from '@cli/commands/skill';
+import { cliCommand } from '@cli/commands/cli';
 import { recoverOrphanedSettingsBackups } from '@shared/claude-settings';
 
 // Heal any .claude/settings backup a previous interrupted run left orphaned,
