@@ -17,6 +17,12 @@ import {
 import { VARIANTS_REQUIRING_POSTHOG_CLI } from '@programs/error-tracking-upload-source-maps/detect';
 import { preinstallPostHogCliOnce } from '@programs/shared/posthog-cli-preinstall';
 import type { WizardSession } from '@lib/wizard-session';
+import type { ProgramRunHost } from '@programs/host-capabilities';
+import { scopeInstallDirToProject } from '@programs/detection/project-scope';
+import {
+  testProgramCiHost,
+  testProgramRunHost,
+} from '../../../test/program-host';
 import { analytics } from '@utils/analytics';
 import { wizardAbort } from '@utils/wizard-abort';
 
@@ -41,6 +47,7 @@ vi.mock('@utils/wizard-abort', async (importOriginal) => ({
 
 const resolveRun = errorTrackingConfig.run as (
   session: WizardSession,
+  host: ProgramRunHost,
 ) => Promise<ProgramRun>;
 
 const step = (id: string) => errorTrackingConfig.steps.find((s) => s.id === id);
@@ -67,7 +74,10 @@ describe('error-tracking program', () => {
     // There is no bare `error-tracking` menu entry; a seeded skillId would
     // send the linear path to a skill-not-found abort and mislead the intro.
     expect(errorTrackingConfig.skillId).toBeUndefined();
-    const run = await resolveRun({ integration: null } as WizardSession);
+    const run = await resolveRun(
+      { integration: null } as WizardSession,
+      testProgramRunHost(),
+    );
     expect(run.skillId).toBeUndefined();
   });
 
@@ -171,7 +181,10 @@ describe('error-tracking ciPreRun', () => {
       frameworkContext: {},
     } as unknown as WizardSession;
 
-    await errorTrackingConfig.ciPreRun?.(session);
+    const host = testProgramCiHost();
+    await errorTrackingConfig.ciPreRun?.(session, host);
+
+    expect(scopeInstallDirToProject).toHaveBeenCalledWith(session, host);
 
     expect(wizardAbort).toHaveBeenCalledWith(
       expect.objectContaining({ code: ErrorCodes.DetectUnsupportedPlatform }),
@@ -182,16 +195,24 @@ describe('error-tracking ciPreRun', () => {
 
 describe('error-tracking run config', () => {
   test('pre-installs posthog-cli when run resolves, after the project pick', async () => {
-    await resolveRun({ integration: Integration.swift } as WizardSession);
+    const host = { ...testProgramRunHost(), warn: vi.fn() };
+    await resolveRun({ integration: Integration.swift } as WizardSession, host);
 
     expect(preinstallPostHogCliOnce).toHaveBeenCalledWith(
       'error tracking posthog-cli preinstall failed',
       { integration: Integration.swift },
+      expect.any(Function),
     );
+    const warn = vi.mocked(preinstallPostHogCliOnce).mock.calls[0]?.[2];
+    warn?.('install warning');
+    expect(host.warn).toHaveBeenCalledWith('install warning');
   });
 
   test('skips the pre-install for platforms without symbol upload', async () => {
-    await resolveRun({ integration: Integration.nextjs } as WizardSession);
+    await resolveRun(
+      { integration: Integration.nextjs } as WizardSession,
+      testProgramRunHost(),
+    );
 
     expect(preinstallPostHogCliOnce).not.toHaveBeenCalled();
   });

@@ -19,6 +19,7 @@ import { initLogFile, logToFile } from '@utils/debug';
 import { wizardAbort } from '@utils/wizard-abort';
 import { ErrorCodes } from '@shared/errors';
 import type { ProgramConfig } from '../program-step';
+import type { ProgramRun } from '../program-run';
 
 const streamShutdown = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 vi.mock('@env', async (original) => ({
@@ -217,6 +218,27 @@ it('clamps a composed program to linear and keeps host analytics alive', async (
   expect(analytics.shutdown).toHaveBeenCalledExactlyOnceWith('success');
 });
 
+it('supplies the live UI as the run host, not the session it was handed', async () => {
+  const ui = getUI();
+  vi.spyOn(ui, 'getFrameworkContext').mockReturnValue('ios');
+  const write = vi.spyOn(ui, 'setFrameworkContext');
+  const warn = vi.spyOn(ui.log, 'warn');
+  const config = program();
+  let read: unknown;
+  config.run = (_session, host) => {
+    read = host.getFrameworkContext('selectedVariant');
+    host.setFrameworkContext('sourceMapsCompletedVariant', 'ios');
+    host.warn('careful');
+    return Promise.resolve(program().run as ProgramRun);
+  };
+
+  await runProgramAgent(config, session());
+
+  expect(read).toBe('ios');
+  expect(write).toHaveBeenCalledWith('sourceMapsCompletedVariant', 'ios');
+  expect(warn).toHaveBeenCalledWith('careful');
+});
+
 it.each([
   [RunOutcome.Aborted, 'cancelled'],
   [RunOutcome.Failed, 'error'],
@@ -408,6 +430,30 @@ it('keeps a headless run a success when its terminal analytics flush fails', asy
     expect.stringContaining('analytics shutdown failed'),
     flushError,
   );
+});
+
+it('supplies the logging UI as the CI host for ciPreRun', async () => {
+  const config = program();
+  config.ciPreRun = (_session, host) => {
+    host.log.info('Scanning the repo');
+    host.log.warn('Scan failed');
+    return Promise.resolve();
+  };
+
+  runNonInteractive(
+    config,
+    {
+      apiKey: 'phx_test',
+      projectId: '1',
+      installDir: '/tmp/adapter-test',
+      telemetry: false,
+    },
+    'headless',
+  );
+  await vi.waitFor(() => expect(streamShutdown).toHaveBeenCalledOnce());
+
+  expect(logSpy).toHaveBeenCalledWith('│  Scanning the repo');
+  expect(logSpy).toHaveBeenCalledWith('▲  Scan failed');
 });
 
 it('keeps a TUI run a success when its terminal analytics flush fails', async () => {
