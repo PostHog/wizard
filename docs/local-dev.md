@@ -191,11 +191,16 @@ independent of the flag.
 The CLI evaluates this flag in PostHog's internal flags project. A local
 PostHog web app evaluates its own copy, so changing the flag in the local app
 does not change the CLI's selection. To exercise WizardRun from a development
-build without changing the internal flag, start an interactive run with
-`WIZARD_CI_FLAG_OVERRIDES='{"wizard-run-sync":"wizard-run"}'` in its environment.
-For wizard-workbench, prefix `pnpm wizard-run` with that assignment. This
-override is stripped from published builds. An already completed WizardSession
-run is not converted; start a new execution after setting the override.
+build without changing the internal flag, start an interactive workbench run
+with:
+
+```bash
+WIZARD_CI_FLAG_OVERRIDES='{"wizard-run-sync":"wizard-run"}' pnpm exec tsx services/wizard-run/index.ts
+```
+
+This override is stripped from published builds. An already completed
+WizardSession run is not converted; start a new execution after setting the
+override.
 
 With `wizard-run`, an authenticated interactive execution creates one local
 WizardRun when the agent starts. Creation uses the selected top-level
