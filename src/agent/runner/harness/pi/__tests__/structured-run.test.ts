@@ -1,5 +1,6 @@
 import { piBackend } from '..';
 import { Harness, Sequence, GPT5_6_LUNA_MODEL } from '@shared/constants';
+import { AgentErrorType } from '@agent/agent-interface';
 import { HostResolution } from '@shared/host-resolution';
 import type { BackendRunInputs } from '../../types';
 import type {
@@ -13,6 +14,10 @@ const state = vi.hoisted(() => ({
   text: '',
   prompts: [] as string[],
   request: undefined as unknown,
+  tasks: new Map<string, { status: string }>(),
+  // A hung turn ends only when the harness aborts the session.
+  hang: false,
+  release: undefined as (() => void) | undefined,
 }));
 vi.mock('@utils/analytics', () => ({
   analytics: { wizardCapture: vi.fn(), capture: vi.fn() },
@@ -57,7 +62,7 @@ vi.mock('../mcp', () => ({
 }));
 vi.mock('../tools', () => ({ createWizardPiTools: () => [] }));
 vi.mock('../tasks', () => ({
-  createWizardPiTaskTools: () => ({ tools: [], store: new Map() }),
+  createWizardPiTaskTools: () => ({ tools: [], store: state.tasks }),
 }));
 vi.mock('../subagent', () => ({ createDispatchAgentTool: () => ({}) }));
 vi.mock('@earendil-works/pi-coding-agent', () => ({
@@ -120,15 +125,103 @@ vi.mock('@earendil-works/pi-coding-agent', () => ({
               content: [{ type: 'text', text: state.text }],
             },
           });
-          return Promise.resolve();
+          return state.hang
+            ? new Promise<void>((resolve) => (state.release = resolve))
+            : Promise.resolve();
         },
         getSessionStats: () => ({
           tokens: { input: 1, output: 1, cacheWrite: 0, cacheRead: 0 },
         }),
-        abort: () => Promise.resolve(),
+        abort: () => {
+          state.release?.();
+          return Promise.resolve();
+        },
       },
     }),
 }));
+
+const schema = {
+  type: 'object',
+  properties: { projects: { type: 'array' } },
+};
+
+function runInputs(
+  onMessage: (message: unknown) => void,
+  structured: BackendRunInputs['structured'] | null = {
+    schema,
+    timeoutMs: 60_000,
+  },
+): BackendRunInputs {
+  const credentials = {
+    accessToken: 'test',
+    projectApiKey: 'test',
+    projectId: 1,
+    host: HostResolution.fromApiHost('https://us.posthog.com'),
+  };
+  return {
+    config: {
+      programId: 'posthog-integration',
+      composed: true,
+      binding: {
+        harness: Harness.pi,
+        sequence: Sequence.linear,
+        model: GPT5_6_LUNA_MODEL,
+      },
+      switchboard: { program: 'posthog-integration', flags: {} },
+      skillsBaseUrl: '',
+      wizardFlags: {},
+      wizardFlagPayloads: {},
+      wizardMetadata: {},
+      run: {
+        integrationLabel: 'agentic-detect',
+        spinnerMessage: '',
+        successMessage: '',
+        reportFile: '',
+        docsUrl: '',
+        estimatedDurationMinutes: 1,
+      },
+    },
+    input: {
+      installDir: '/tmp/test-detect',
+      credentials,
+      project: null,
+      apiUser: null,
+      flags: {
+        ci: true,
+        signup: false,
+        debug: false,
+        captureAio: false,
+        benchmark: false,
+        yaraReport: false,
+        localMcp: false,
+        e2eAsk: false,
+      },
+      host: {},
+    },
+    boot: {
+      credentials,
+      programId: 'posthog-integration',
+      skillsBaseUrl: '',
+      wizardFlags: {},
+      wizardFlagPayloads: {},
+      wizardMetadata: {},
+      project: null,
+      triageProvider: undefined,
+    },
+    emit: vi.fn(),
+    prompt: 'Scan the repo',
+    model: GPT5_6_LUNA_MODEL,
+    spinner: { start: vi.fn(), stop: vi.fn(), message: vi.fn() },
+    middleware: { onMessage, finalize: vi.fn() },
+    structured: structured ?? undefined,
+  };
+}
+
+beforeEach(() => {
+  state.prompts = [];
+  state.tasks.clear();
+  state.hang = false;
+});
 
 it.each([
   [
@@ -138,94 +231,43 @@ it.each([
   ],
   ['malformed report', 'I found a project.', undefined],
 ])(
-  'delivers the %s from Pi without overwriting it with a remark',
+  'returns the %s with no remark or task nudges',
   async (_label, text, expected) => {
     state.text = text;
-    state.prompts = [];
+    state.tasks.set('1', { status: 'in_progress' });
     const onMessage = vi.fn();
-    const credentials = {
-      accessToken: 'test',
-      projectApiKey: 'test',
-      projectId: 1,
-      host: HostResolution.fromApiHost('https://us.posthog.com'),
-    };
-    const outputFormat = {
-      type: 'json_schema' as const,
-      schema: { type: 'object', properties: { projects: { type: 'array' } } },
-    };
-    const inputs: BackendRunInputs = {
-      config: {
-        programId: 'posthog-integration',
-        composed: true,
-        binding: {
-          harness: Harness.pi,
-          sequence: Sequence.linear,
-          model: GPT5_6_LUNA_MODEL,
-        },
-        switchboard: { program: 'posthog-integration', flags: {} },
-        skillsBaseUrl: '',
-        wizardFlags: {},
-        wizardFlagPayloads: {},
-        wizardMetadata: {},
-        run: {
-          integrationLabel: 'agentic-detect',
-          outputFormat,
-          spinnerMessage: '',
-          successMessage: '',
-          reportFile: '',
-          docsUrl: '',
-          estimatedDurationMinutes: 1,
-        },
-      },
-      input: {
-        installDir: '/tmp/test-detect',
-        credentials,
-        project: null,
-        apiUser: null,
-        flags: {
-          ci: true,
-          signup: false,
-          debug: false,
-          captureAio: false,
-          benchmark: false,
-          yaraReport: false,
-          localMcp: false,
-          e2eAsk: false,
-        },
-        host: {},
-      },
-      boot: {
-        credentials,
-        programId: 'posthog-integration',
-        skillsBaseUrl: '',
-        wizardFlags: {},
-        wizardFlagPayloads: {},
-        wizardMetadata: {},
-        project: null,
-        triageProvider: undefined,
-      },
-      emit: vi.fn(),
-      prompt: 'Scan the repo',
-      model: GPT5_6_LUNA_MODEL,
-      spinner: { start: vi.fn(), stop: vi.fn(), message: vi.fn() },
-      middleware: { onMessage, finalize: vi.fn() },
-    };
-    await expect(piBackend.run(inputs)).resolves.toEqual({ kind: 'success' });
+
+    await expect(piBackend.run(runInputs(onMessage))).resolves.toEqual({
+      kind: 'success',
+      structuredOutput: expected,
+    });
     expect(state.request).toMatchObject({
-      text: {
-        format: {
-          type: 'json_schema',
-          strict: true,
-          schema: outputFormat.schema,
-        },
-      },
+      text: { format: { type: 'json_schema', strict: true, schema } },
     });
     expect(state.prompts).toEqual(['Scan the repo']);
-    expect(onMessage).toHaveBeenLastCalledWith({
-      type: 'result',
-      subtype: 'success',
-      result: text,
-      structured_output: expected,
+    expect(onMessage).toHaveBeenCalledWith({
+      type: 'assistant',
+      message: { content: [{ type: 'tool_use', name: 'find', input: {} }] },
     });
   },
 );
+
+it('ends a scan that outlives its budget as a timeout', async () => {
+  state.hang = true;
+
+  await expect(
+    piBackend.run(runInputs(vi.fn(), { schema, timeoutMs: 1 })),
+  ).resolves.toMatchObject({
+    kind: 'failure',
+    classification: AgentErrorType.AGENTIC_DETECTION_TIMEOUT,
+  });
+});
+
+it('keeps the remark and leaves the middleware alone on an integration run', async () => {
+  state.text = 'Installed the SDK.';
+  const onMessage = vi.fn();
+
+  await piBackend.run(runInputs(onMessage, null));
+  expect(state.prompts).toHaveLength(2);
+  expect(onMessage).not.toHaveBeenCalled();
+});

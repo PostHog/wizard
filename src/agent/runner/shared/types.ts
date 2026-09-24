@@ -46,8 +46,6 @@ export interface AbortCase {
  * the caller binds those and hands the agent `RunConfig.hooks` instead.
  */
 export interface AgentRunDefinition {
-  /** Final result schema, enforced by either harness. */
-  outputFormat?: import('@anthropic-ai/claude-agent-sdk').Options['outputFormat'];
   /** Analytics label (e.g. 'revenue-analytics-setup', 'nextjs') */
   integrationLabel: string;
   /** Skill ID to pre-install. Omit for agent-driven skill discovery. */

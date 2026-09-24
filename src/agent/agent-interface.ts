@@ -740,6 +740,11 @@ function sdkErrorStatus(value: unknown): number | undefined {
   return undefined;
 }
 
+/** The SDK ran out of retries matching `outputFormat`. A caller may retry the run. */
+export class StructuredOutputError extends Error {
+  name = 'StructuredOutputError';
+}
+
 function sdkResultFailure(
   message: Record<string, unknown>,
 ): Extract<AgentResult, { kind: 'failure' }> | undefined {
@@ -765,6 +770,9 @@ function sdkResultFailure(
     classification:
       status === 429 ? AgentErrorType.RATE_LIMIT : AgentErrorType.API_ERROR,
     message: detail,
+    ...(message.subtype === 'error_max_structured_output_retries'
+      ? { error: new StructuredOutputError(detail) }
+      : {}),
   };
 }
 
@@ -936,7 +944,10 @@ export async function runAgent(
       logToFile(`${AgentSignals.BENCHMARK} Middleware finalize error:`, e);
     }
     spinner.stop(successMessage);
-    return { kind: 'success' };
+    return {
+      kind: 'success',
+      structuredOutput: lastResultMessage?.structured_output,
+    };
   };
 
   // Abort controller — lets us force-kill the SDK query when we detect an

@@ -3,7 +3,6 @@ import { executeStructuredAgent } from '@agent';
 import { buildSession } from '@lib/wizard-session';
 import { HostResolution } from '@shared/host-resolution';
 import { getUI } from '@ui';
-import { ErrorCodes } from '@shared/errors';
 
 vi.mock('@utils/debug');
 vi.mock('@ui', () => ({ getUI: () => ui }));
@@ -49,7 +48,7 @@ it('keeps initialization and execution progress visible during detection', async
         result:
           '{"projects":[{"path":".","targetId":"node","framework":"Node.js"}]}',
       });
-      return Promise.resolve({ kind: 'success' });
+      return Promise.resolve({ kind: 'output', value: undefined });
     },
   );
   const session = buildSession({ installDir: '/tmp/detection-test' });
@@ -78,11 +77,8 @@ it('stops optional detection on a data-only 401 before parsing partial JSON', as
         result: '{"projects":[{"path":".","targetId":"node"}]}',
       });
       return Promise.resolve({
-        kind: 'decided_failure',
-        failure: {
-          code: ErrorCodes.AuthInvalidOrExpired,
-          message: 'Authentication failed (401)',
-        },
+        kind: 'failed',
+        error: new Error('Authentication failed (401)'),
       });
     },
   );

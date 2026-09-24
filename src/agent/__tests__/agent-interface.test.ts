@@ -9,6 +9,7 @@ import {
   buildAgentEnv,
   reportMcpSetup,
   AgentErrorType,
+  StructuredOutputError,
 } from '@agent/agent-interface';
 import { AgentOutputSignals } from '@agent/output-signals';
 import { RESUME_INSTRUCTION } from '@agent/signals';
@@ -128,21 +129,22 @@ describe('runAgent', () => {
     mockQuery.mockImplementation(function* () {
       yield result;
     });
-    const middleware = { onMessage: vi.fn(), finalize: vi.fn() };
 
-    await runAgent(
+    const run = await runAgent(
       { ...defaultAgentConfig, outputFormat },
       'Scan projects',
       defaultOptions,
       mockSpinner,
       { requestRemark: false },
-      middleware,
     );
 
     expect(mockQuery.mock.calls[0][0].options.outputFormat).toEqual(
       outputFormat,
     );
-    expect(middleware.onMessage).toHaveBeenCalledWith(result);
+    expect(run).toEqual({
+      kind: 'success',
+      structuredOutput: { projects: [] },
+    });
   });
 
   it('preserves structured-output exhaustion when the SDK throws after its result', async () => {
@@ -155,7 +157,6 @@ describe('runAgent', () => {
       yield result;
       throw new Error('SDK query failed');
     });
-    const middleware = { onMessage: vi.fn(), finalize: vi.fn() };
 
     await expect(
       runAgent(
@@ -164,14 +165,13 @@ describe('runAgent', () => {
         defaultOptions,
         mockSpinner,
         { requestRemark: false },
-        middleware,
       ),
     ).resolves.toMatchObject({
       kind: 'failure',
       classification: AgentErrorType.API_ERROR,
       message: 'Invalid structured output',
+      error: expect.any(StructuredOutputError),
     });
-    expect(middleware.onMessage).toHaveBeenCalledWith(result);
   });
 
   it('aborts an unfinished SDK run at its configured timeout', async () => {

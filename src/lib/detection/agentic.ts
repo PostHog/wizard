@@ -15,10 +15,8 @@
 
 import {
   executeStructuredAgent,
-  resolveBinding,
+  resolveScanBindings,
   buildRunTags,
-  AgentSignals,
-  AgentErrorType,
 } from '@agent';
 import { isAbsolute, resolve, sep } from 'path';
 import { z } from 'zod';
@@ -29,10 +27,6 @@ import {
   AGENTIC_DETECTION_RETRY_TIMEOUT_MS,
   CallType,
   getSkillsBaseUrl,
-  HAIKU_MODEL,
-  GPT5_6_LUNA_MODEL,
-  Harness,
-  Sequence,
 } from '@shared/constants';
 import { analytics } from '@utils/analytics';
 import type { WizardSession } from '@lib/wizard-session';
@@ -239,6 +233,7 @@ function buildPrompt(
  */
 export function deriveReportJson(text: string): unknown | null {
   const byPath = new Map<string, Record<string, unknown>>();
+  let sawReport = false;
   for (const line of text.split('\n')) {
     const start = line.indexOf('{');
     const end = line.lastIndexOf('}');
@@ -250,13 +245,16 @@ export function deriveReportJson(text: string): unknown | null {
       continue; // not JSON — prose, shape echoes, pretty-printed fragments
     }
     const obj = (parsed ?? {}) as Record<string, unknown>;
+    sawReport ||= Array.isArray(obj.projects);
     const candidates = Array.isArray(obj.projects) ? obj.projects : [obj];
     for (const candidate of candidates) {
       const p = (candidate ?? {}) as Record<string, unknown>;
       if (typeof p.path === 'string') byPath.set(p.path, p);
     }
   }
-  if (byPath.size === 0) return null;
+  // A report with no projects is a valid scan of a repo without manifests.
+  if (byPath.size === 0)
+    return sawReport ? { repoType: 'single', projects: [] } : null;
   const projects = [...byPath.values()];
   return { repoType: projects.length > 1 ? 'monorepo' : 'single', projects };
 }
@@ -382,7 +380,7 @@ export async function detectProjectsWithAgent(
     flagPayloads: wizardFlagPayloads,
     cliHarness: session.harness,
   };
-  const initialHarness = resolveBinding(switchboard).harness;
+  const bindings = resolveScanBindings(switchboard);
 
   // Built here rather than inherited: this scan runs before
   // `bootstrapProgram`, so there's no `boot.wizardMetadata` yet.
@@ -398,21 +396,16 @@ export async function detectProjectsWithAgent(
 
   const prompt = buildPrompt(cwd, targets, purpose, recommend);
   const reportSchema = detectionReportSchema(recommend);
-  const outputFormat = {
-    type: 'json_schema' as const,
-    schema: zodToJsonSchema(reportSchema),
-  };
-  for (let attempt = 0; attempt < 2; attempt++) {
+  const schema = zodToJsonSchema(reportSchema);
+  for (const [attempt, binding] of bindings.entries()) {
     const timeoutMs =
       attempt === 0
         ? AGENTIC_DETECTION_FIRST_ATTEMPT_TIMEOUT_MS
         : AGENTIC_DETECTION_RETRY_TIMEOUT_MS;
-    const harness = attempt === 0 ? initialHarness : Harness.anthropic;
     const config: RunConfig = {
       programId,
       run: {
         integrationLabel: 'agentic-detect',
-        outputFormat,
         detectPackageManager: detectNodePackageManagers,
         spinnerMessage: 'Scanning the repo...',
         successMessage: 'Detection complete',
@@ -423,11 +416,7 @@ export async function detectProjectsWithAgent(
       },
       composed: true,
       switchboard,
-      binding: {
-        sequence: Sequence.linear,
-        harness,
-        model: harness === Harness.pi ? GPT5_6_LUNA_MODEL : HAIKU_MODEL,
-      },
+      binding,
       skillsBaseUrl: getSkillsBaseUrl(),
       wizardFlags,
       wizardFlagPayloads,
@@ -464,8 +453,6 @@ export async function detectProjectsWithAgent(
       }
     };
     let resultText = '';
-    let structuredOutput: unknown;
-    let structuredOutputFailed = false;
 
     const middleware = {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -482,13 +469,11 @@ export async function detectProjectsWithAgent(
               onEvent?.(formatToolUse(block));
             }
           }
-        } else if (message?.type === 'result') {
-          if (typeof message.result === 'string') resultText = message.result;
-          if (message.structured_output !== undefined) {
-            structuredOutput = message.structured_output;
-          }
-          structuredOutputFailed =
-            message.subtype === 'error_max_structured_output_retries';
+        } else if (
+          message?.type === 'result' &&
+          typeof message.result === 'string'
+        ) {
+          resultText = message.result;
         }
       },
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -496,47 +481,31 @@ export async function detectProjectsWithAgent(
         undefined,
     };
 
-    const deadline = AbortSignal.timeout(timeoutMs);
-    const result = await executeStructuredAgent(config, input, {
+    const outcome = await executeStructuredAgent(config, input, {
       prompt,
       spinner: NOOP_SPINNER,
       emit: createUiReducer(getUI()),
       middleware,
-      signal: deadline,
+      schema,
+      timeoutMs,
     });
 
-    if (
-      (result.kind === 'abort' && deadline.aborted) ||
-      (result.kind === 'failure' &&
-        result.classification === AgentErrorType.AGENTIC_DETECTION_TIMEOUT)
-    ) {
+    if (outcome.kind === 'failed') throw outcome.error;
+    if (outcome.kind === 'timeout' || outcome.kind === 'invalid') {
       if (attempt === 0) {
-        onEvent?.('Project scan timed out; retrying...');
+        onEvent?.(
+          outcome.kind === 'timeout'
+            ? 'Project scan timed out; retrying...'
+            : 'Project scan returned invalid output; retrying...',
+        );
         continue;
       }
-      throw new AgenticDetectionTimeoutError(attempt + 1, timeoutMs);
-    }
-    if (
-      result.kind === 'failure' &&
-      ((result.classification === AgentErrorType.API_ERROR &&
-        structuredOutputFailed) ||
-        result.classification === AgentErrorType.NO_PROGRESS) &&
-      attempt === 0
-    ) {
-      onEvent?.('Project scan returned invalid output; retrying...');
-      continue;
-    }
-    if (result.kind !== 'success') {
-      if (result.kind === 'decided_failure') {
-        throw result.failure.error ?? new Error(result.failure.message);
-      }
-      throw (
-        result.error ??
-        new Error(result.message || `Agent error: ${result.classification}`)
-      );
+      throw outcome.kind === 'timeout'
+        ? new AgenticDetectionTimeoutError(attempt + 1, timeoutMs)
+        : outcome.error;
     }
 
-    const structured = reportSchema.safeParse(structuredOutput);
+    const structured = reportSchema.safeParse(outcome.value);
     if (structured.success) {
       return coerceAgenticReport(
         structured.data,
@@ -554,10 +523,6 @@ export async function detectProjectsWithAgent(
         targets.map((t) => t.id),
         { recommend, rerankIds },
       );
-    }
-    // No manifests are a valid empty scan, not a reason to retry.
-    if (output.includes(AgentSignals.ABORT)) {
-      return { repoType: 'single', projects: [] };
     }
     if (attempt === 0) onEvent?.('Retrying project scan...');
   }
