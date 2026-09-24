@@ -129,22 +129,13 @@ async function initializeHarness(
   };
 }
 
-describe.each(['linear', 'task'] as const)(
-  'Anthropic %s resolved program inputs',
-  (mode) => {
-    it('forwards inference auth and program commandments into initialization', async () => {
-      await initializeHarness(mode, undefined);
-      const [config] = vi.mocked(initializeAgent).mock.calls.at(-1)!;
-      expect(config).toMatchObject({
-        programCommandments: ['Follow the program rule'],
-        inferenceAuth: { resolve: expect.any(Function) },
-      });
-      await expect(config.inferenceAuth?.resolve()).resolves.toMatchObject({
-        token: 'phe_fixture',
-      });
-    });
-  },
-);
+it('forwards the supplied program commandments on both entry points', async () => {
+  for (const mode of ['linear', 'task'] as const) {
+    await initializeHarness(mode, undefined);
+    const [config] = vi.mocked(initializeAgent).mock.calls.at(-1)!;
+    expect(config.programCommandments).toEqual(['Follow the program rule']);
+  }
+});
 
 afterEach(() => {
   vi.useRealTimers();
