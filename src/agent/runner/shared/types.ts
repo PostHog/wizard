@@ -22,6 +22,7 @@ import type { LLMProvider } from '@posthog/warlock';
 import type { AgentInteraction, ProgressEmitter } from '@agent/progress';
 import type { EffortLevel } from '../switchboard/models';
 import type { SwitchboardCtx } from '../switchboard';
+import type { TranscriptTail } from './transcript-tail';
 
 export type { PromptContext, Credentials };
 
@@ -339,4 +340,6 @@ export interface SequenceContext {
   emit: ProgressEmitter;
   interaction: AgentInteraction | undefined;
   signal?: AbortSignal;
+  /** Present when the run definition sets `collectTranscript`. */
+  transcript?: TranscriptTail;
 }
