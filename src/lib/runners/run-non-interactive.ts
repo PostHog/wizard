@@ -115,7 +115,9 @@ export function runNonInteractive(
     const { configureLogFileFromEnvironment, logToFile } = await import(
       '@utils/debug'
     );
-    const { wizardAbort, WizardError } = await import('@utils/wizard-abort');
+    const { runCleanups, wizardAbort, WizardError } = await import(
+      '@utils/wizard-abort'
+    );
 
     configureLogFileFromEnvironment();
 
@@ -239,6 +241,28 @@ export function runNonInteractive(
       store.setRunPhase(phase);
       await taskStream.shutdown(2000);
     };
+
+    // A signal skips every finally, so run the cleanups and exit via wizardAbort.
+    let signalled = false;
+    const onSignal = (): void => {
+      if (signalled) return;
+      signalled = true;
+      logToFile(`[${mode}] signal received, cancelling`);
+      runCleanups();
+      void settleStream(RunPhase.Error)
+        .catch((e) =>
+          logToFile(`[${mode}] stream shutdown error on signal:`, e),
+        )
+        .then(() =>
+          wizardAbort({
+            message: 'Wizard cancelled.',
+            exitCode: 130,
+            status: 'cancelled',
+          }),
+        );
+    };
+    process.on('SIGINT', onSignal);
+    process.on('SIGTERM', onSignal);
 
     try {
       if (mode === 'ci') {
@@ -371,6 +395,9 @@ export function runNonInteractive(
           : `Something went wrong: ${errorMessage}\n\nYou can read the documentation at ${docsUrl} to set up manually.${debugInfo}`,
         error: error as Error,
       });
+    } finally {
+      process.off('SIGINT', onSignal);
+      process.off('SIGTERM', onSignal);
     }
   })().catch((error: unknown) => {
     emitWizardError({
