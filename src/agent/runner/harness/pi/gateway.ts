@@ -216,6 +216,30 @@ export function isGatewayAuthRejection(
   return /\b401\b|authentication_error|unauthorized/i.test(errorMessage ?? '');
 }
 
+/** Whether a turn failed because the model stream dropped mid-response. */
+function isDroppedModelStream(turn: GatewayTurnError | undefined): boolean {
+  return /upstream closed the stream|ECONNRESET|socket hang up|\bterminated\b/i.test(
+    turn?.errorMessage ?? '',
+  );
+}
+
+/** The wait before each resume after a dropped stream; its length is the limit. */
+const STREAM_RETRY_DELAYS_MS = [1_000, 2_000];
+
+/** Resolves after `ms`, or as soon as the signal aborts. */
+function backoff(ms: number, signal: AbortSignal | undefined): Promise<void> {
+  return new Promise((resolve) => {
+    if (signal?.aborted) return resolve();
+    const done = () => {
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', done);
+      resolve();
+    };
+    const timer = setTimeout(done, ms);
+    signal?.addEventListener('abort', done, { once: true });
+  });
+}
+
 export interface GatewayRemintOptions {
   signal?: AbortSignal;
   session: { prompt(text: string): Promise<void> };
@@ -224,16 +248,25 @@ export interface GatewayRemintOptions {
   /** The cache: the same token while fresh, a new mint past the refresh point. */
   refreshAuth: () => Promise<GatewayAuth>;
   providerInputs: (auth: GatewayAuth) => GatewayProviderInputs;
-  /** The prompt that resumes the work after a re-mint. */
+  /** The prompt that resumes the work after a re-mint or a dropped stream. */
   continueText: string | (() => string);
   onRemint?: () => void;
+  /** Called before each wait for a resume after a dropped stream. */
+  onStreamRetry?: (retry: {
+    attempt: number;
+    limit: number;
+    delayMs: number;
+    message: string;
+  }) => void;
 }
 
 /**
- * Wraps a pi session's prompt(): when a turn ends on a 401 from a bearer past
- * its refresh instant, mint once, re-register the provider with the new
- * bearer (pi resolves the apiKey per request), and continue. A 401 on a fresh
- * bearer, or a second one, is left to the harness's normal failure path.
+ * Wraps a pi session's prompt() and resumes with `continueText` after a
+ * failure the next request can fix. A 401 from a bearer past its refresh
+ * instant mints once and re-registers the provider (pi resolves the apiKey
+ * per request); a 401 on a fresh bearer, or a second one, is left to the
+ * harness's normal failure path. A dropped model stream resumes after 1s,
+ * then 2s, twice at most per prompt() call.
  */
 export function withGatewayRemint(opts: GatewayRemintOptions): {
   prompt(text: string): Promise<void>;
@@ -244,6 +277,8 @@ export function withGatewayRemint(opts: GatewayRemintOptions): {
   let auth = opts.auth;
   let rejected = false;
   let reminted = false;
+  // The error of a last turn whose model stream dropped, else undefined.
+  let dropped: string | undefined;
   let lastTurn: ({ stopReason?: string } & GatewayTurnError) | undefined;
   return {
     noteAssistantTurn(message) {
@@ -252,28 +287,52 @@ export function withGatewayRemint(opts: GatewayRemintOptions): {
         | undefined;
       rejected =
         lastTurn?.stopReason === 'error' && isGatewayAuthRejection(lastTurn);
+      dropped =
+        lastTurn?.stopReason === 'error' && isDroppedModelStream(lastTurn)
+          ? lastTurn.errorMessage
+          : undefined;
     },
     terminalFailure: () => gatewayTerminalFailure(lastTurn),
     async prompt(text) {
-      if (opts.signal?.aborted) return;
-      rejected = false;
-      lastTurn = undefined;
-      await opts.session.prompt(text);
-      if (opts.signal?.aborted || !rejected || reminted || !isPastRefresh(auth))
-        return;
-      reminted = true;
-      auth = await opts.refreshAuth();
-      if (opts.signal?.aborted) return;
-      opts.registry.registerProvider(
-        GATEWAY_PROVIDER,
-        buildGatewayProvider(opts.providerInputs(auth)).provider as never,
-      );
-      opts.onRemint?.();
-      rejected = false;
-      lastTurn = undefined;
-      const next = opts.continueText;
-      if (opts.signal?.aborted) return;
-      await opts.session.prompt(typeof next === 'function' ? next() : next);
+      let next = text;
+      let streamRetries = 0;
+      for (;;) {
+        if (opts.signal?.aborted) return;
+        rejected = false;
+        dropped = undefined;
+        lastTurn = undefined;
+        await opts.session.prompt(next);
+        if (opts.signal?.aborted) return;
+        if (rejected && !reminted && isPastRefresh(auth)) {
+          reminted = true;
+          auth = await opts.refreshAuth();
+          if (opts.signal?.aborted) return;
+          opts.registry.registerProvider(
+            GATEWAY_PROVIDER,
+            buildGatewayProvider(opts.providerInputs(auth)).provider as never,
+          );
+          opts.onRemint?.();
+        } else if (
+          dropped !== undefined &&
+          streamRetries < STREAM_RETRY_DELAYS_MS.length
+        ) {
+          const delayMs = STREAM_RETRY_DELAYS_MS[streamRetries];
+          streamRetries += 1;
+          opts.onStreamRetry?.({
+            attempt: streamRetries,
+            limit: STREAM_RETRY_DELAYS_MS.length,
+            delayMs,
+            message: dropped,
+          });
+          await backoff(delayMs, opts.signal);
+        } else {
+          return;
+        }
+        next =
+          typeof opts.continueText === 'function'
+            ? opts.continueText()
+            : opts.continueText;
+      }
     },
   };
 }

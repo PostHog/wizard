@@ -20,6 +20,14 @@ OAuth token directly. The gateway must admit the model and effort and support
 its required Wizard or security-triage prompt shape. A model registry entry
 alone cannot grant access.
 
+A turn that ends on a 401 from an aged gateway token re-mints once, then
+continues. A turn that ends on a dropped model stream
+(`upstream closed the stream`, `ECONNRESET`, `socket hang up`, `terminated`)
+continues after 1s, then 2s, at most twice per prompt. Both resume the
+conversation with a continue prompt and never re-send the task. Each stream
+retry is logged and captured as `model stream retried`. Pi's own auto-retry
+stays on, but its fixed error pattern misses the gateway's stream close.
+
 ## Tools and security
 
 Pi sessions explicitly install tools and disable project-controlled extensions,

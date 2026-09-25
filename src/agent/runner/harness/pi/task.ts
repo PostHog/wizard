@@ -419,6 +419,7 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
 
     // A turn that ends on a 401 from an aged bearer re-mints once and
     // continues with the nudge the task would get anyway.
+    // A turn that ends on a dropped model stream continues the same way.
     const turns = withGatewayRemint({
       signal: inputs.signal,
       session: agentSession,
@@ -431,6 +432,16 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
       onRemint: () => {
         logToFile('[pi-task] gateway token renewed after a 401; continuing');
         analytics.wizardCapture('gateway token reminted', { harness: 'pi' });
+      },
+      onStreamRetry: ({ attempt, limit, delayMs, message }) => {
+        logToFile(
+          `[pi-task] model stream dropped (${message}); resuming in ${delayMs}ms, retry ${attempt}/${limit}`,
+        );
+        analytics.wizardCapture('model stream retried', {
+          harness: 'pi',
+          attempt,
+          error: message.slice(0, 300),
+        });
       },
     });
 
