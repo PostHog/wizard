@@ -19,6 +19,13 @@ export { AgentSignals } from './agent-interface';
 export { WIZARD_TOOL_NAMES } from './tools';
 
 /**
+ * Stays. Schema-bound scans such as project detection run outside the
+ * sequence, on bindings the switchboard picks.
+ */
+export { executeStructuredAgent } from './structured-run';
+export { resolveScanBindings } from './runner';
+
+/**
  * Leaves in B1. Bindings and program data move to programs: resolveBinding
  * is keyed by PROGRAM_BINDINGS and the agent keeps only "run from an
  * already-resolved binding"; shouldDisableAsk is a flags policy programs
@@ -30,10 +37,10 @@ export { LONGER_ASK_TIMEOUT_MS } from './wizard-ask-bridge';
 
 /**
  * Leaves in B2. Programs own credentials and the legacy adapter dies.
- * initializeAgent, executeAgent and buildRunTags are the pre-runAgent surface
- * that detection/agentic.ts and run-agent-legacy.ts still call; they go
- * through runAgent or leave with detection, and AgentErrorType, which
- * classifies executeAgent's failures, goes with them.
+ * initializeAgent, executeAgent and buildRunTags are the pre-runAgent surface.
+ * Detection and run-agent-legacy.ts still call buildRunTags. They go through
+ * runAgent or leave with detection, and AgentErrorType, which classifies
+ * executeAgent's failures, goes with them.
  * configureGatewayFromCIEnvironment is CI inference auth the headless provider
  * owns. flushScanReport becomes a progress event rather than a call.
  * downloadSkill leaves once the skill scan runs at load and skill install

@@ -1,12 +1,8 @@
 import { detectProjectsWithAgent } from '../agentic';
-import {
-  initializeAgent,
-  runAgent as executeAgent,
-} from '@agent/agent-interface';
+import { executeStructuredAgent } from '@agent';
 import { buildSession } from '@lib/wizard-session';
 import { HostResolution } from '@shared/host-resolution';
 import { getUI } from '@ui';
-import { ErrorCodes } from '@shared/errors';
 
 vi.mock('@utils/debug');
 vi.mock('@ui', () => ({ getUI: () => ui }));
@@ -17,10 +13,15 @@ const ui = vi.hoisted(() => ({
   showAuthError: vi.fn(),
   log: { error: vi.fn() },
 }));
-vi.mock('@agent/agent-interface', async (original) => ({
-  ...(await original<typeof import('@agent/agent-interface')>()),
-  initializeAgent: vi.fn(),
-  runAgent: vi.fn(),
+vi.mock('@agent', async (original) => ({
+  ...(await original<typeof import('@agent')>()),
+  executeStructuredAgent: vi.fn(),
+}));
+vi.mock('@utils/analytics', () => ({
+  analytics: {
+    getAllFlagsForWizard: vi.fn().mockResolvedValue({}),
+    getWizardFlagPayloads: vi.fn().mockReturnValue({}),
+  },
 }));
 
 it('keeps initialization and execution progress visible during detection', async () => {
@@ -32,22 +33,12 @@ it('keeps initialization and execution progress visible during detection', async
     cacheCreation5m: 0,
     cacheCreation1h: 0,
   };
-  vi.mocked(initializeAgent).mockImplementation((config) => {
-    config.emit?.({
-      kind: 'log',
-      level: 'error',
-      message: 'Initialization diagnostic',
-    });
-    return Promise.resolve({ emit: config.emit } as Awaited<
-      ReturnType<typeof initializeAgent>
-    >);
-  });
-  vi.mocked(executeAgent).mockImplementation(
-    (config, _prompt, _options, _spinner, _messages, middleware) => {
-      config.emit?.({ kind: 'usage', delta });
-      config.emit?.({ kind: 'stage', stage: 'Scanning' });
-      config.emit?.({ kind: 'status', message: 'Found a project' });
-      config.emit?.({
+  vi.mocked(executeStructuredAgent).mockImplementation(
+    (_config, _input, { emit, middleware }) => {
+      emit({ kind: 'usage', delta });
+      emit({ kind: 'stage', stage: 'Scanning' });
+      emit({ kind: 'status', message: 'Found a project' });
+      emit({
         kind: 'log',
         level: 'error',
         message: 'Execution diagnostic',
@@ -57,7 +48,7 @@ it('keeps initialization and execution progress visible during detection', async
         result:
           '{"projects":[{"path":".","targetId":"node","framework":"Node.js"}]}',
       });
-      return Promise.resolve({ kind: 'success' });
+      return Promise.resolve({ kind: 'output', value: undefined });
     },
   );
   const session = buildSession({ installDir: '/tmp/detection-test' });
@@ -75,28 +66,19 @@ it('keeps initialization and execution progress visible during detection', async
   expect(getUI().addTokenUsage).toHaveBeenCalledWith(delta);
   expect(ui.setStage).toHaveBeenCalledWith('Scanning');
   expect(ui.pushStatus).toHaveBeenCalledWith('Found a project');
-  expect(ui.log.error.mock.calls).toEqual([
-    ['Initialization diagnostic'],
-    ['Execution diagnostic'],
-  ]);
+  expect(ui.log.error.mock.calls).toEqual([['Execution diagnostic']]);
 });
 
 it('stops optional detection on a data-only 401 before parsing partial JSON', async () => {
-  vi.mocked(initializeAgent).mockResolvedValue(
-    {} as Awaited<ReturnType<typeof initializeAgent>>,
-  );
-  vi.mocked(executeAgent).mockImplementation(
-    (_config, _prompt, _options, _spinner, _messages, middleware) => {
+  vi.mocked(executeStructuredAgent).mockImplementation(
+    (_config, _input, { middleware }) => {
       middleware?.onMessage({
         type: 'result',
         result: '{"projects":[{"path":".","targetId":"node"}]}',
       });
       return Promise.resolve({
-        kind: 'decided_failure',
-        failure: {
-          code: ErrorCodes.AuthInvalidOrExpired,
-          message: 'Authentication failed (401)',
-        },
+        kind: 'failed',
+        error: new Error('Authentication failed (401)'),
       });
     },
   );

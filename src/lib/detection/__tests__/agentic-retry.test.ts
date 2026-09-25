@@ -2,26 +2,46 @@ import {
   AgenticDetectionTimeoutError,
   detectProjectsWithAgent,
 } from '@lib/detection/agentic';
+import { executeStructuredAgent, resolveScanBindings } from '@agent';
 import {
-  AgentErrorType,
-  initializeAgent,
-  runAgent,
-} from '@agent/agent-interface';
+  Harness,
+  Sequence,
+  HAIKU_MODEL,
+  GPT5_6_LUNA_MODEL,
+} from '@shared/constants';
 import { buildSession } from '@lib/wizard-session';
 import { HostResolution } from '@shared/host-resolution';
 
-vi.mock('@agent/agent-interface', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agent/agent-interface')>()),
-  initializeAgent: vi.fn(),
-  runAgent: vi.fn(),
+vi.mock('@agent', async (original) => ({
+  ...(await original<typeof import('@agent')>()),
+  executeStructuredAgent: vi.fn(),
+  resolveScanBindings: vi.fn(),
+}));
+vi.mock('@utils/analytics', () => ({
+  analytics: {
+    getAllFlagsForWizard: vi.fn().mockResolvedValue({}),
+    getWizardFlagPayloads: vi.fn().mockReturnValue({}),
+  },
 }));
 
-const init = vi.mocked(initializeAgent);
-const execute = vi.mocked(runAgent);
+type Outcome = Awaited<ReturnType<typeof executeStructuredAgent>>;
+
+const execute = vi.mocked(executeStructuredAgent);
+const bindings = [
+  { harness: Harness.pi, sequence: Sequence.linear, model: GPT5_6_LUNA_MODEL },
+  { harness: Harness.anthropic, sequence: Sequence.linear, model: HAIKU_MODEL },
+] as const;
 const options = {
   programId: 'posthog-integration',
   targets: [{ id: 'nextjs', name: 'Next.js' }],
 };
+const project = {
+  path: '.',
+  framework: 'Next.js',
+  targetId: 'nextjs',
+  hasPostHog: false,
+};
+const projectLine = JSON.stringify(project);
 
 function session() {
   const value = buildSession({ installDir: '/repo' });
@@ -34,92 +54,103 @@ function session() {
   return value;
 }
 
-function emitResult(text: string) {
-  return execute.mockImplementationOnce((...args) => {
-    args[5]?.onMessage({ type: 'result', result: text });
-    return Promise.resolve({ kind: 'success' });
+/** One scan attempt: streams `text` as its final message, then ends with `outcome`. */
+function scan(outcome: Outcome, text?: string) {
+  execute.mockImplementationOnce((_config, _input, { middleware }) => {
+    if (text) middleware?.onMessage({ type: 'result', result: text });
+    return Promise.resolve(outcome);
   });
 }
 
-describe('agentic detection retry', () => {
+const noOutput: Outcome = { kind: 'output', value: undefined };
+
+describe('agentic detection', () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    init.mockImplementation(() =>
-      Promise.resolve({ id: init.mock.calls.length } as unknown as Awaited<
-        ReturnType<typeof initializeAgent>
-      >),
-    );
+    vi.mocked(resolveScanBindings).mockReturnValue(bindings);
   });
 
-  it('restarts the scan once when the first result has no JSON', async () => {
-    emitResult('I found a Next.js project.');
-    emitResult(
-      '{"path":".","framework":"Next.js","targetId":"nextjs","hasPostHog":false}',
-    );
+  it('returns the typed report over streamed verdicts', async () => {
+    execute.mockImplementationOnce((_config, _input, { middleware }) => {
+      middleware?.onMessage({
+        type: 'assistant',
+        message: {
+          content: [{ type: 'text', text: '{"path":"stale","targetId":"x"}' }],
+        },
+      });
+      return Promise.resolve({
+        kind: 'output',
+        value: {
+          repoType: 'monorepo',
+          projects: [
+            {
+              ...project,
+              matchingTargets: ['nextjs'],
+              evidence: 'next in package.json',
+              recommended: true,
+            },
+          ],
+        },
+      });
+    });
 
-    const report = await detectProjectsWithAgent(session(), options);
+    await expect(
+      detectProjectsWithAgent(session(), { ...options, recommend: true }),
+    ).resolves.toEqual({
+      repoType: 'monorepo',
+      projects: [{ ...project, recommended: true }],
+    });
+    expect(execute).toHaveBeenCalledTimes(1);
+    expect(execute.mock.calls[0][2].schema).toMatchObject({
+      required: ['repoType', 'projects'],
+    });
+  });
 
-    expect(report.projects).toEqual([
-      {
-        path: '.',
-        framework: 'Next.js',
-        targetId: 'nextjs',
-        hasPostHog: false,
-      },
-    ]);
-    expect(init).toHaveBeenCalledTimes(2);
+  it('accepts an empty report, typed or recovered from the transcript', async () => {
+    scan({ kind: 'output', value: { repoType: 'single', projects: [] } });
+    scan(noOutput, '{"repoType":"single","projects":[]}');
+
+    for (let run = 0; run < 2; run++) {
+      await expect(
+        detectProjectsWithAgent(session(), options),
+      ).resolves.toEqual({ repoType: 'single', projects: [] });
+    }
     expect(execute).toHaveBeenCalledTimes(2);
-    expect(execute.mock.calls[0][4]).toEqual(
-      expect.objectContaining({ timeoutMs: 60_000 }),
-    );
-    expect(execute.mock.calls[1][4]).toEqual(
-      expect.objectContaining({ timeoutMs: 90_000 }),
-    );
   });
 
-  it('returns the first valid report without starting a retry', async () => {
-    emitResult(
-      '{"path":".","framework":"Next.js","targetId":"nextjs","hasPostHog":false}',
+  it('recovers the report from the transcript when the typed result is malformed', async () => {
+    scan(
+      { kind: 'output', value: { repoType: 'single', projects: 'Next.js' } },
+      projectLine,
     );
 
-    const report = await detectProjectsWithAgent(session(), options);
-
-    expect(report.projects).toHaveLength(1);
-    expect(init).toHaveBeenCalledTimes(1);
+    expect(
+      (await detectProjectsWithAgent(session(), options)).projects,
+    ).toEqual([project]);
     expect(execute).toHaveBeenCalledTimes(1);
   });
 
-  it('retries a timed-out first run with a fresh Haiku session', async () => {
+  it('retries a timed-out scan once on the fallback binding with its own budget', async () => {
     const events: string[] = [];
-    execute.mockResolvedValueOnce({
-      kind: 'failure',
-      classification: AgentErrorType.AGENTIC_DETECTION_TIMEOUT,
-    });
-    emitResult(
-      '{"path":".","framework":"Next.js","targetId":"nextjs","hasPostHog":false}',
-    );
+    scan({ kind: 'timeout' });
+    scan(noOutput, projectLine);
 
-    const report = await detectProjectsWithAgent(session(), {
+    await detectProjectsWithAgent(session(), {
       ...options,
       onEvent: (line) => events.push(line),
     });
 
-    expect(report.projects).toHaveLength(1);
     expect(events).toContain('Project scan timed out; retrying...');
-    expect(execute.mock.calls[0][0]).not.toBe(execute.mock.calls[1][0]);
-    expect(execute.mock.calls[0][4]).toEqual(
-      expect.objectContaining({ timeoutMs: 60_000 }),
+    expect(execute.mock.calls.map(([config]) => config.binding)).toEqual(
+      bindings,
     );
-    expect(execute.mock.calls[1][4]).toEqual(
-      expect.objectContaining({ timeoutMs: 90_000 }),
-    );
+    expect(execute.mock.calls.map(([, , run]) => run.timeoutMs)).toEqual([
+      60_000, 90_000,
+    ]);
   });
 
   it('reports a typed timeout when the retry also times out', async () => {
-    execute.mockResolvedValue({
-      kind: 'failure',
-      classification: AgentErrorType.AGENTIC_DETECTION_TIMEOUT,
-    });
+    execute.mockResolvedValue({ kind: 'timeout' });
 
     await expect(detectProjectsWithAgent(session(), options)).rejects.toThrow(
       AgenticDetectionTimeoutError,
@@ -127,61 +158,34 @@ describe('agentic detection retry', () => {
     expect(execute).toHaveBeenCalledTimes(2);
   });
 
-  it('accepts a streamed verdict after a no-JSON result', async () => {
-    const events: string[] = [];
-    emitResult('Found a project, but no JSON report.');
-    execute.mockImplementationOnce((...args) => {
-      args[5]?.onMessage({
-        type: 'assistant',
-        message: {
-          content: [
-            {
-              type: 'text',
-              text: '{"path":".","framework":"Next.js","targetId":"nextjs","hasPostHog":false}',
-            },
-          ],
-        },
-      });
-      args[5]?.onMessage({ type: 'result', result: 'Done.' });
-      return Promise.resolve({ kind: 'success' });
-    });
-
-    const report = await detectProjectsWithAgent(session(), {
-      ...options,
-      onEvent: (line) => events.push(line),
-    });
-
-    expect(report.projects).toEqual([
-      {
-        path: '.',
-        framework: 'Next.js',
-        targetId: 'nextjs',
-        hasPostHog: false,
-      },
-    ]);
-    expect(events).toContain('Retrying project scan...');
-    expect(init).toHaveBeenCalledTimes(2);
-    expect(execute.mock.calls[0][0]).not.toBe(execute.mock.calls[1][0]);
-    expect(execute.mock.calls[0][1]).toBe(execute.mock.calls[1][1]);
-  });
-
-  it('stops after one retry if neither result has JSON', async () => {
-    emitResult('No JSON here.');
-    emitResult('Still no JSON.');
+  it('retries invalid output once, then surfaces the retry error', async () => {
+    scan({ kind: 'invalid', error: new Error('No tool use') });
+    scan({ kind: 'invalid', error: new Error('Invalid structured output') });
 
     await expect(detectProjectsWithAgent(session(), options)).rejects.toThrow(
-      'Agent did not return a JSON object after retry',
+      'Invalid structured output',
     );
     expect(execute).toHaveBeenCalledTimes(2);
   });
 
-  it('does not retry an intentional abort', async () => {
-    emitResult('[ABORT] detection failed');
+  it('does not retry a failed scan', async () => {
+    scan({ kind: 'failed', error: new Error('Authentication failed (401)') });
 
-    await expect(detectProjectsWithAgent(session(), options)).resolves.toEqual({
-      repoType: 'single',
-      projects: [],
-    });
+    await expect(detectProjectsWithAgent(session(), options)).rejects.toThrow(
+      'Authentication failed (401)',
+    );
     expect(execute).toHaveBeenCalledTimes(1);
+  });
+
+  it('restarts the scan once when neither attempt returns JSON', async () => {
+    scan(noOutput, 'No JSON here.');
+    scan(noOutput, 'Still no JSON.');
+
+    await expect(detectProjectsWithAgent(session(), options)).rejects.toThrow(
+      'Agent did not return a JSON object after retry',
+    );
+    expect(execute.mock.calls[0][2].prompt).toBe(
+      execute.mock.calls[1][2].prompt,
+    );
   });
 });

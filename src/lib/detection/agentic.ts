@@ -1,7 +1,7 @@
 /**
  * Agentic project detection.
  *
- * A reusable detection tool that drives a Haiku agent over the repo: it finds
+ * A reusable detection tool that drives an agent over the repo: it finds
  * project roots, resolves monorepo/workspace markers, reads package manifests,
  * classifies each project against a caller-supplied set of targets, and reports
  * which projects already have a PostHog SDK installed.
@@ -14,24 +14,23 @@
  */
 
 import {
-  initializeAgent,
-  executeAgent,
+  executeStructuredAgent,
+  resolveScanBindings,
   buildRunTags,
-  AgentSignals,
-  AgentErrorType,
 } from '@agent';
 import { isAbsolute, resolve, sep } from 'path';
+import { z } from 'zod';
+import { zodToJsonSchema } from 'zod-to-json-schema';
 import { detectNodePackageManagers } from './package-manager.js';
 import {
   AGENTIC_DETECTION_FIRST_ATTEMPT_TIMEOUT_MS,
   AGENTIC_DETECTION_RETRY_TIMEOUT_MS,
   CallType,
   getSkillsBaseUrl,
-  HAIKU_MODEL,
 } from '@shared/constants';
 import { analytics } from '@utils/analytics';
 import type { WizardSession } from '@lib/wizard-session';
-import type { WizardRunOptions } from '@utils/types';
+import type { RunConfig, RunInput, SwitchboardCtx } from '@agent/types';
 import { getUI, type SpinnerHandle } from '@ui';
 import { createUiReducer } from '@ui/agent-progress';
 
@@ -149,6 +148,27 @@ export type AgenticDetectOptions = {
   onEvent?: DetectEvent;
 };
 
+function detectionReportSchema(recommend: boolean) {
+  return z
+    .object({
+      repoType: z.enum(['monorepo', 'single']),
+      projects: z.array(
+        z
+          .object({
+            path: z.string(),
+            framework: z.string(),
+            matchingTargets: z.array(z.string()),
+            targetId: z.string().nullable(),
+            hasPostHog: z.boolean(),
+            evidence: z.string(),
+            ...(recommend ? { recommended: z.boolean() } : {}),
+          })
+          .strict(),
+      ),
+    })
+    .strict();
+}
+
 function buildPrompt(
   cwd: string,
   targets: readonly DetectTarget[],
@@ -197,7 +217,7 @@ function buildPrompt(
           '- Exactly one project has "recommended": true; every other project has "recommended": false.',
         ]
       : []),
-    `- If there are no manifests at all, respond with exactly: ${AgentSignals.ABORT} detection failed`,
+    '- If there are no manifests at all, return {"repoType":"single","projects":[]}.',
   ].join('\n');
 }
 
@@ -213,6 +233,7 @@ function buildPrompt(
  */
 export function deriveReportJson(text: string): unknown | null {
   const byPath = new Map<string, Record<string, unknown>>();
+  let sawReport = false;
   for (const line of text.split('\n')) {
     const start = line.indexOf('{');
     const end = line.lastIndexOf('}');
@@ -224,13 +245,16 @@ export function deriveReportJson(text: string): unknown | null {
       continue; // not JSON — prose, shape echoes, pretty-printed fragments
     }
     const obj = (parsed ?? {}) as Record<string, unknown>;
+    sawReport ||= Array.isArray(obj.projects);
     const candidates = Array.isArray(obj.projects) ? obj.projects : [obj];
     for (const candidate of candidates) {
       const p = (candidate ?? {}) as Record<string, unknown>;
       if (typeof p.path === 'string') byPath.set(p.path, p);
     }
   }
-  if (byPath.size === 0) return null;
+  // A report with no projects is a valid scan of a repo without manifests.
+  if (byPath.size === 0)
+    return sawReport ? { repoType: 'single', projects: [] } : null;
   const projects = [...byPath.values()];
   return { repoType: projects.length > 1 ? 'monorepo' : 'single', projects };
 }
@@ -320,19 +344,6 @@ function formatToolUse(block: any): string {
   return detail ? `${name} ${detail}` : name;
 }
 
-function sessionToWizardOptions(session: WizardSession): WizardRunOptions {
-  return {
-    installDir: session.installDir,
-    ci: session.ci,
-    debug: session.debug,
-    benchmark: session.benchmark,
-    yaraReport: session.yaraReport,
-    signup: session.signup,
-    apiKey: session.apiKey,
-    projectId: session.projectId,
-  };
-}
-
 const NOOP_SPINNER: SpinnerHandle = {
   start: () => undefined,
   stop: () => undefined,
@@ -340,7 +351,7 @@ const NOOP_SPINNER: SpinnerHandle = {
 };
 
 /**
- * Drive the wizard's agent loop on HAIKU_MODEL to scan the repo and return a
+ * Drive the selected harness on Luna or Haiku to scan the repo and return a
  * structured detection report. Reuses the same setup every program uses, so
  * MCP, tools, and credentials are wired identically.
  */
@@ -359,9 +370,17 @@ export async function detectProjectsWithAgent(
     rerankIds,
     onEvent,
   } = options;
-  const { accessToken, host } = session.credentials;
   const cwd = session.installDir;
-  const runOptions = sessionToWizardOptions(session);
+  const wizardFlags = await analytics.getAllFlagsForWizard();
+  const wizardFlagPayloads = analytics.getWizardFlagPayloads();
+  const switchboard: SwitchboardCtx = {
+    program: programId,
+    composed: true,
+    flags: wizardFlags,
+    flagPayloads: wizardFlagPayloads,
+    cliHarness: session.harness,
+  };
+  const bindings = resolveScanBindings(switchboard);
 
   // Built here rather than inherited: this scan runs before
   // `bootstrapProgram`, so there's no `boot.wizardMetadata` yet.
@@ -376,28 +395,51 @@ export async function detectProjectsWithAgent(
   };
 
   const prompt = buildPrompt(cwd, targets, purpose, recommend);
-  for (let attempt = 0; attempt < 2; attempt++) {
+  const reportSchema = detectionReportSchema(recommend);
+  const schema = zodToJsonSchema(reportSchema);
+  for (const [attempt, binding] of bindings.entries()) {
     const timeoutMs =
       attempt === 0
         ? AGENTIC_DETECTION_FIRST_ATTEMPT_TIMEOUT_MS
         : AGENTIC_DETECTION_RETRY_TIMEOUT_MS;
-    const agent = await initializeAgent(
-      {
-        emit: createUiReducer(getUI()),
-        workingDirectory: cwd,
-        posthogMcpUrl: host.mcpUrl,
-        posthogApiKey: accessToken,
-        host,
-        detectPackageManager: detectNodePackageManagers,
-        skillsBaseUrl: getSkillsBaseUrl(),
-        programId,
+    const config: RunConfig = {
+      programId,
+      run: {
         integrationLabel: 'agentic-detect',
-        wizardMetadata,
-        allowedTools: ['Read', 'Grep', 'Glob'],
-        modelOverride: HAIKU_MODEL,
+        detectPackageManager: detectNodePackageManagers,
+        spinnerMessage: 'Scanning the repo...',
+        successMessage: 'Detection complete',
+        errorMessage: 'Detection failed',
+        estimatedDurationMinutes: 1,
+        reportFile: '',
+        docsUrl: '',
       },
-      runOptions,
-    );
+      composed: true,
+      switchboard,
+      binding,
+      skillsBaseUrl: getSkillsBaseUrl(),
+      wizardFlags,
+      wizardFlagPayloads,
+      wizardMetadata,
+      allowedTools: ['Read', 'Grep', 'Glob'],
+    };
+    const input: RunInput = {
+      installDir: cwd,
+      credentials: session.credentials,
+      project: null,
+      apiUser: null,
+      flags: {
+        ci: session.ci,
+        debug: session.debug,
+        signup: session.signup,
+        benchmark: false,
+        yaraReport: session.yaraReport,
+        captureAio: false,
+        e2eAsk: false,
+        localMcp: false,
+      },
+      host: { projectId: session.projectId, apiKey: session.apiKey },
+    };
 
     // Keeps only the transcript tail — the report JSON is the last output.
     const MAX_TRANSCRIPT_CHARS = 256 * 1024;
@@ -439,38 +481,36 @@ export async function detectProjectsWithAgent(
         undefined,
     };
 
-    const result = await executeAgent(
-      agent,
+    const outcome = await executeStructuredAgent(config, input, {
       prompt,
-      runOptions,
-      NOOP_SPINNER,
-      {
-        spinnerMessage: 'Scanning the repo...',
-        successMessage: 'Detection complete',
-        errorMessage: 'Detection failed',
-        requestRemark: false,
-        timeoutMs,
-      },
+      spinner: NOOP_SPINNER,
+      emit: createUiReducer(getUI()),
       middleware,
-    );
+      schema,
+      timeoutMs,
+    });
 
-    if (
-      result.kind === 'failure' &&
-      result.classification === AgentErrorType.AGENTIC_DETECTION_TIMEOUT
-    ) {
+    if (outcome.kind === 'failed') throw outcome.error;
+    if (outcome.kind === 'timeout' || outcome.kind === 'invalid') {
       if (attempt === 0) {
-        onEvent?.('Project scan timed out; retrying...');
+        onEvent?.(
+          outcome.kind === 'timeout'
+            ? 'Project scan timed out; retrying...'
+            : 'Project scan returned invalid output; retrying...',
+        );
         continue;
       }
-      throw new AgenticDetectionTimeoutError(attempt + 1, timeoutMs);
+      throw outcome.kind === 'timeout'
+        ? new AgenticDetectionTimeoutError(attempt + 1, timeoutMs)
+        : outcome.error;
     }
-    if (result.kind !== 'success') {
-      if (result.kind === 'decided_failure') {
-        throw result.failure.error ?? new Error(result.failure.message);
-      }
-      throw (
-        result.error ??
-        new Error(result.message || `Agent error: ${result.classification}`)
+
+    const structured = reportSchema.safeParse(outcome.value);
+    if (structured.success) {
+      return coerceAgenticReport(
+        structured.data,
+        targets.map((t) => t.id),
+        { recommend, rerankIds },
       );
     }
 
@@ -483,10 +523,6 @@ export async function detectProjectsWithAgent(
         targets.map((t) => t.id),
         { recommend, rerankIds },
       );
-    }
-    // No manifests are a valid empty scan, not a reason to retry.
-    if (output.includes(AgentSignals.ABORT)) {
-      return { repoType: 'single', projects: [] };
     }
     if (attempt === 0) onEvent?.('Retrying project scan...');
   }

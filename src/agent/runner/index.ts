@@ -62,7 +62,7 @@ export type {
   ProgressEmitter,
 } from '@agent/progress';
 export { shouldDisableAsk } from './shared/bootstrap';
-export { resolveBinding } from './switchboard';
+export { resolveBinding, resolveScanBindings } from './switchboard';
 export type { ProgramBinding, SwitchboardCtx } from './switchboard';
 export { TASK_OUTCOMES_KEY } from './sequence/orchestrator/queue';
 export type { TaskOutcome } from './sequence/orchestrator/queue';

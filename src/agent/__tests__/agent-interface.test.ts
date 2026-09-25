@@ -9,6 +9,7 @@ import {
   buildAgentEnv,
   reportMcpSetup,
   AgentErrorType,
+  StructuredOutputError,
 } from '@agent/agent-interface';
 import { AgentOutputSignals } from '@agent/output-signals';
 import { RESUME_INSTRUCTION } from '@agent/signals';
@@ -109,6 +110,64 @@ describe('runAgent', () => {
     mockUIInstance.spinner.mockReturnValue(mockSpinner);
     // Reset log mocks
     Object.values(mockUIInstance.log).forEach((fn) => fn.mockReset());
+  });
+
+  it('forwards the output schema to the SDK and delivers the typed result', async () => {
+    const outputFormat = {
+      type: 'json_schema' as const,
+      schema: { type: 'object', properties: { projects: { type: 'array' } } },
+    };
+    const result = {
+      type: 'result',
+      subtype: 'success',
+      structured_output: { projects: [] },
+    };
+    mockQuery.mockImplementation(function* () {
+      yield result;
+    });
+
+    const run = await runAgent(
+      { ...defaultAgentConfig, outputFormat },
+      'Scan projects',
+      defaultOptions,
+      mockSpinner,
+      { requestRemark: false },
+    );
+
+    expect(mockQuery.mock.calls[0][0].options.outputFormat).toEqual(
+      outputFormat,
+    );
+    expect(run).toEqual({
+      kind: 'success',
+      structuredOutput: { projects: [] },
+    });
+  });
+
+  it('preserves structured-output exhaustion when the SDK throws after its result', async () => {
+    const result = {
+      type: 'result',
+      subtype: 'error_max_structured_output_retries',
+      errors: ['Invalid structured output'],
+    };
+    mockQuery.mockImplementation(function* () {
+      yield result;
+      throw new Error('SDK query failed');
+    });
+
+    await expect(
+      runAgent(
+        defaultAgentConfig,
+        'Scan projects',
+        defaultOptions,
+        mockSpinner,
+        { requestRemark: false },
+      ),
+    ).resolves.toMatchObject({
+      kind: 'failure',
+      classification: AgentErrorType.API_ERROR,
+      message: 'Invalid structured output',
+      error: expect.any(StructuredOutputError),
+    });
   });
 
   it('aborts an unfinished SDK run at its configured timeout', async () => {

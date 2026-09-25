@@ -45,6 +45,7 @@ import { createEmitLog } from '@agent/runner/shared/progress-collector';
 import type { TaskStore } from './tasks';
 import { completionFailure, runErrorType } from './completion';
 import { bindPiCancellation } from './cancellation';
+import { structuredOutputExtension } from './structured-output';
 import { classifyRunFailure, ErrorCodes } from '@shared/errors';
 
 /** Injects the MCP server `instructions` pi-mcp-adapter drops (project env, skill steer, tool domains) into the system prompt, falling back to a bootstrap-derived project block when the warm-connect captured none. */
@@ -214,7 +215,15 @@ export const piBackend: AgentHarness = {
         message: 'Agent run cancelled',
       };
     }
-    const { config: runConfig, input, boot, emit, prompt, spinner } = inputs;
+    const {
+      config: runConfig,
+      input,
+      boot,
+      emit,
+      prompt,
+      spinner,
+      structured,
+    } = inputs;
     const config = runConfig.run;
     const modelId = inputs.model;
     const log = createEmitLog(emit);
@@ -227,9 +236,11 @@ export const piBackend: AgentHarness = {
     });
 
     // Init banner (parity #5).
-    log.step('Initializing Wizard agent...');
-    log.step(`Verbose logs: ${getLogFilePath()}`);
-    log.success("Agent initialized. Let's get cooking!");
+    if (!structured) {
+      log.step('Initializing Wizard agent...');
+      log.step(`Verbose logs: ${getLogFilePath()}`);
+      log.success("Agent initialized. Let's get cooking!");
+    }
 
     spinner.start(config.spinnerMessage ?? 'Customizing your PostHog setup...');
 
@@ -237,6 +248,7 @@ export const piBackend: AgentHarness = {
     const startTime = Date.now();
     const signals = new AgentOutputSignals();
     let assistantTurns = 0;
+    let lastAssistantText = '';
     // Tool calls across the whole run. Zero means the agent only ever produced
     // text and never acted — a no-op that leaves the project untouched.
     let toolCalls = 0;
@@ -263,10 +275,21 @@ export const piBackend: AgentHarness = {
         ...runDurations(),
         model: modelId,
       });
+    const timedOutResult = (timeoutMs: number): AgentResult => {
+      spinner.stop('Agent run timed out');
+      captureAborted(AgentErrorType.AGENTIC_DETECTION_TIMEOUT);
+      return {
+        kind: 'failure',
+        classification: AgentErrorType.AGENTIC_DETECTION_TIMEOUT,
+        message: `Agent run timed out after ${timeoutMs / 1000}s`,
+      };
+    };
 
     let mcpCleanup: (() => void) | undefined;
     let aioFailed = true;
     let cancellation: ReturnType<typeof bindPiCancellation> | undefined;
+    let timedOut = false;
+    let timeoutAbort: Promise<void> | undefined;
     try {
       const {
         createAgentSession,
@@ -303,7 +326,9 @@ export const piBackend: AgentHarness = {
         modelId,
         effort: inputs.thinkingLevel,
       });
-      const { provider, caps } = buildGatewayProvider(providerInputs(auth));
+      const { provider, caps, api } = buildGatewayProvider(
+        providerInputs(auth),
+      );
       const registry = ModelRegistry.inMemory(AuthStorage.create());
       registry.registerProvider(GATEWAY_PROVIDER, provider as never);
 
@@ -387,6 +412,12 @@ export const piBackend: AgentHarness = {
           scope: 'run',
           error: String(err).slice(0, 300),
         });
+      }
+
+      if (structured) {
+        extensionFactories.push(
+          structuredOutputExtension(structured.schema, api),
+        );
       }
 
       const resourceLoader = new DefaultResourceLoader({
@@ -547,6 +578,13 @@ export const piBackend: AgentHarness = {
             assistantTurns += 1;
             turns.noteAssistantTurn(event.message);
             const assistant = extractText(event.message).trim();
+            lastAssistantText = assistant;
+            if (structured) {
+              inputs.middleware?.onMessage({
+                type: 'assistant',
+                message: { content: [{ type: 'text', text: assistant }] },
+              });
+            }
             if (assistant) {
               logToFile(`[pi] assistant: ${assistant.slice(0, 1000)}`);
               applyOutroMarkers(assistant, emit);
@@ -565,6 +603,20 @@ export const piBackend: AgentHarness = {
             toolCalls += 1;
             const args = JSON.stringify(event.args ?? {}).slice(0, 200);
             logToFile(`[pi] → ${event.toolName} ${args}`);
+            if (structured) {
+              inputs.middleware?.onMessage({
+                type: 'assistant',
+                message: {
+                  content: [
+                    {
+                      type: 'tool_use',
+                      name: event.toolName,
+                      input: event.args,
+                    },
+                  ],
+                },
+              });
+            }
             // Don't surface raw tool names in the spinner — the anthropic path
             // doesn't, and it reads as noise. The Task panel (syncTodos) is the
             // visible progress, matching the anthropic presentation.
@@ -600,6 +652,15 @@ export const piBackend: AgentHarness = {
       capture.setInitialPrompt(prompt);
 
       let terminal = turns.terminalFailure();
+      // A structured run's budget starts once setup is done.
+      const timeout =
+        structured &&
+        setTimeout(() => {
+          timedOut = true;
+          timeoutAbort = agentSession.abort().catch((error: unknown) => {
+            logToFile(`[pi] timeout abort failed: ${String(error)}`);
+          });
+        }, structured.timeoutMs);
       try {
         if (inputs.signal?.aborted)
           return {
@@ -615,8 +676,10 @@ export const piBackend: AgentHarness = {
         // Completion guard: pi's prompt() resolves the moment the model returns
         // a turn with no tool call (e.g. a lone [STATUS] line), even mid-plan.
         // While tasks remain open and we're under the cap, nudge it to continue.
+        // A schema-bound scan has no plan to finish, so it never gets nudged.
         let continueNudges = 0;
         while (
+          !structured &&
           continueNudges < MAX_CONTINUE_NUDGES &&
           !security.state.criticalViolation &&
           !inputs.signal?.aborted &&
@@ -633,6 +696,7 @@ export const piBackend: AgentHarness = {
 
         // Best-effort remark ask — a failed turn never fails a successful run.
         if (
+          !structured &&
           !security.state.criticalViolation &&
           !terminal &&
           !inputs.signal?.aborted
@@ -644,6 +708,7 @@ export const piBackend: AgentHarness = {
           }
         }
       } finally {
+        if (timeout) clearTimeout(timeout);
         try {
           unsubscribe();
         } catch {
@@ -658,6 +723,7 @@ export const piBackend: AgentHarness = {
           message: 'Agent run cancelled',
         };
       }
+      if (timedOut && structured) return timedOutResult(structured.timeoutMs);
 
       if (terminal && !security.state.criticalViolation) {
         spinner.stop(
@@ -703,7 +769,7 @@ export const piBackend: AgentHarness = {
 
       // pi ends a run on any tool-call-less turn, so guard against a hollow
       // success reaching the outro (nothing done, or stopped mid-plan).
-      const openTasks = hasOpenTasks(wizardTaskTools.store);
+      const openTasks = !structured && hasOpenTasks(wizardTaskTools.store);
       const failure = completionFailure({ toolCalls, openTasks });
       if (failure === AgentErrorType.NO_PROGRESS) {
         spinner.stop('Agent made no changes');
@@ -743,7 +809,8 @@ export const piBackend: AgentHarness = {
       // up host-side rather than leave a stale (often empty) artifact (#15).
       try {
         const planFile = path.join(input.installDir, '.posthog-events.json');
-        if (fs.existsSync(planFile)) await fs.promises.rm(planFile);
+        if (!structured && fs.existsSync(planFile))
+          await fs.promises.rm(planFile);
       } catch (err) {
         logToFile(`[pi] .posthog-events.json cleanup skipped: ${String(err)}`);
       }
@@ -762,7 +829,16 @@ export const piBackend: AgentHarness = {
       });
       spinner.stop(config.successMessage ?? 'PostHog integration complete');
       aioFailed = false;
-      return { kind: 'success' };
+      if (!structured) return { kind: 'success' };
+      try {
+        return {
+          kind: 'success',
+          structuredOutput: JSON.parse(lastAssistantText),
+        };
+      } catch {
+        // The caller validates the result and owns its bounded retry.
+        return { kind: 'success' };
+      }
     } catch (err) {
       if (inputs.signal?.aborted) {
         return {
@@ -771,6 +847,7 @@ export const piBackend: AgentHarness = {
           message: 'Agent run cancelled',
         };
       }
+      if (timedOut && structured) return timedOutResult(structured.timeoutMs);
       const message = err instanceof Error ? err.message : String(err);
       logToFile(`[pi] run error: ${message}`);
       spinner.stop(config.errorMessage ?? `${config.integrationLabel} failed`);
@@ -793,6 +870,7 @@ export const piBackend: AgentHarness = {
       };
     } finally {
       await cancellation?.settle();
+      await timeoutAbort;
       try {
         mcpCleanup?.();
       } catch {

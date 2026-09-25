@@ -9,7 +9,7 @@ import {
 } from '@shared/constants';
 import type { ProgramId } from '@lib/programs/program-registry';
 import { resolveHarness } from './harness';
-import type { EffortLevel } from './models';
+import { triageModelFor, type EffortLevel } from './models';
 import { resolveSequence } from './sequence';
 
 // ── Shared machinery ────────────────────────────────────────────────────
@@ -176,6 +176,18 @@ export function resolveBinding(
   const sequence = resolveSequence(ctx);
   const { harness, model, thinkingLevel } = resolveHarness(ctx, role);
   return { sequence, harness, model, thinkingLevel };
+}
+
+/** A scan's two attempts on triage models: the resolved harness, then the SDK as a second provider. */
+export function resolveScanBindings(
+  ctx: SwitchboardCtx,
+): readonly [ProgramBinding, ProgramBinding] {
+  const scan = (harness: Harness): ProgramBinding => ({
+    sequence: Sequence.linear,
+    harness,
+    model: triageModelFor(harness),
+  });
+  return [scan(resolveBinding(ctx).harness), scan(Harness.anthropic)];
 }
 
 // ── Unified re-export surface ───────────────────────────────────────────
