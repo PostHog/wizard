@@ -8,7 +8,7 @@
  * user a quarter of the time the in-run prompt does for identical questions.
  */
 import type { WizardSession } from '@lib/wizard-session';
-import { testProgramRunHost } from '../../../test/program-host';
+import { testRunnerContext } from '../../../test/runner-context';
 
 vi.mock('@utils/analytics', () => ({
   analytics: {
@@ -34,7 +34,7 @@ describe('warehouse command ask timeout', () => {
     const { run } = warehouseSourceConfig;
     const resolved =
       typeof run === 'function'
-        ? await run(session(), testProgramRunHost())
+        ? await run(session(), testRunnerContext())
         : run;
 
     expect(resolved?.askTimeoutMs).toBe(LONGER_ASK_TIMEOUT_MS);

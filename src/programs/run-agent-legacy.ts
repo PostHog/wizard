@@ -19,7 +19,7 @@ import { getUI, type WizardUI } from '@ui';
 import { createUiReducer, uiInteraction } from '@ui/agent-progress';
 import { flushScanReport, RunOutcome, TASK_OUTCOMES_KEY } from '@agent';
 import type { ProgramRun } from './program-run';
-import type { ProgramRunHost } from './host-capabilities';
+import type { RunnerContext } from './runner-context';
 import {
   backupAndFixClaudeSettings,
   checkAllSettingsConflicts,
@@ -69,7 +69,7 @@ export async function runProgramAgent(
   try {
     const runDef =
       typeof programConfig.run === 'function'
-        ? await programConfig.run(session, uiRunHost())
+        ? await programConfig.run(session, uiRunnerContext())
         : programConfig.run;
 
     await runSessionProgram(
@@ -83,8 +83,8 @@ export async function runProgramAgent(
   }
 }
 
-/** The run host each program effect reaches `getUI()` through, read at call time. */
-function uiRunHost(): ProgramRunHost {
+/** The runner context each program effect reaches `getUI()` through, read at call time. */
+function uiRunnerContext(): RunnerContext {
   return {
     getFrameworkContext: (key) => getUI().getFrameworkContext(key),
     setFrameworkContext: (key, value) =>

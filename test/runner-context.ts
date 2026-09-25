@@ -1,8 +1,8 @@
-import type { ProgramCiHost, ProgramRunHost } from '@programs/types';
+import type { CiRunnerContext, RunnerContext } from '@programs/types';
 
-export function testProgramRunHost(session?: {
+export function testRunnerContext(session?: {
   frameworkContext: Record<string, unknown>;
-}): ProgramRunHost {
+}): RunnerContext {
   const context = session?.frameworkContext ?? {};
   return {
     getFrameworkContext: (key) => context[key],
@@ -13,7 +13,7 @@ export function testProgramRunHost(session?: {
   };
 }
 
-export function testProgramCiHost(): ProgramCiHost {
+export function testCiRunnerContext(): CiRunnerContext {
   return {
     log: {
       info: () => undefined,

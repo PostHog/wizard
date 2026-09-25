@@ -218,17 +218,17 @@ it('clamps a composed program to linear and keeps host analytics alive', async (
   expect(analytics.shutdown).toHaveBeenCalledExactlyOnceWith('success');
 });
 
-it('supplies the live UI as the run host, not the session it was handed', async () => {
+it('supplies the live UI as the runner context, not the session it was handed', async () => {
   const ui = getUI();
   vi.spyOn(ui, 'getFrameworkContext').mockReturnValue('ios');
   const write = vi.spyOn(ui, 'setFrameworkContext');
   const warn = vi.spyOn(ui.log, 'warn');
   const config = program();
   let read: unknown;
-  config.run = (_session, host) => {
-    read = host.getFrameworkContext('selectedVariant');
-    host.setFrameworkContext('sourceMapsCompletedVariant', 'ios');
-    host.warn('careful');
+  config.run = (_session, runner) => {
+    read = runner.getFrameworkContext('selectedVariant');
+    runner.setFrameworkContext('sourceMapsCompletedVariant', 'ios');
+    runner.warn('careful');
     return Promise.resolve(program().run as ProgramRun);
   };
 
@@ -432,11 +432,11 @@ it('keeps a headless run a success when its terminal analytics flush fails', asy
   );
 });
 
-it('supplies the logging UI as the CI host for ciPreRun', async () => {
+it('supplies the logging UI as the CI runner context for ciPreRun', async () => {
   const config = program();
-  config.ciPreRun = (_session, host) => {
-    host.log.info('Scanning the repo');
-    host.log.warn('Scan failed');
+  config.ciPreRun = (_session, runner) => {
+    runner.log.info('Scanning the repo');
+    runner.log.warn('Scan failed');
     return Promise.resolve();
   };
 

@@ -17,12 +17,12 @@ import {
 import { VARIANTS_REQUIRING_POSTHOG_CLI } from '@programs/error-tracking-upload-source-maps/detect';
 import { preinstallPostHogCliOnce } from '@programs/shared/posthog-cli-preinstall';
 import type { WizardSession } from '@lib/wizard-session';
-import type { ProgramRunHost } from '@programs/host-capabilities';
+import type { RunnerContext } from '@programs/runner-context';
 import { scopeInstallDirToProject } from '@programs/detection/project-scope';
 import {
-  testProgramCiHost,
-  testProgramRunHost,
-} from '../../../test/program-host';
+  testCiRunnerContext,
+  testRunnerContext,
+} from '../../../test/runner-context';
 import { analytics } from '@utils/analytics';
 import { wizardAbort } from '@utils/wizard-abort';
 
@@ -47,7 +47,7 @@ vi.mock('@utils/wizard-abort', async (importOriginal) => ({
 
 const resolveRun = errorTrackingConfig.run as (
   session: WizardSession,
-  host: ProgramRunHost,
+  runner: RunnerContext,
 ) => Promise<ProgramRun>;
 
 const step = (id: string) => errorTrackingConfig.steps.find((s) => s.id === id);
@@ -76,7 +76,7 @@ describe('error-tracking program', () => {
     expect(errorTrackingConfig.skillId).toBeUndefined();
     const run = await resolveRun(
       { integration: null } as WizardSession,
-      testProgramRunHost(),
+      testRunnerContext(),
     );
     expect(run.skillId).toBeUndefined();
   });
@@ -181,10 +181,10 @@ describe('error-tracking ciPreRun', () => {
       frameworkContext: {},
     } as unknown as WizardSession;
 
-    const host = testProgramCiHost();
-    await errorTrackingConfig.ciPreRun?.(session, host);
+    const runner = testCiRunnerContext();
+    await errorTrackingConfig.ciPreRun?.(session, runner);
 
-    expect(scopeInstallDirToProject).toHaveBeenCalledWith(session, host);
+    expect(scopeInstallDirToProject).toHaveBeenCalledWith(session, runner);
 
     expect(wizardAbort).toHaveBeenCalledWith(
       expect.objectContaining({ code: ErrorCodes.DetectUnsupportedPlatform }),
@@ -195,8 +195,11 @@ describe('error-tracking ciPreRun', () => {
 
 describe('error-tracking run config', () => {
   test('pre-installs posthog-cli when run resolves, after the project pick', async () => {
-    const host = { ...testProgramRunHost(), warn: vi.fn() };
-    await resolveRun({ integration: Integration.swift } as WizardSession, host);
+    const runner = { ...testRunnerContext(), warn: vi.fn() };
+    await resolveRun(
+      { integration: Integration.swift } as WizardSession,
+      runner,
+    );
 
     expect(preinstallPostHogCliOnce).toHaveBeenCalledWith(
       'error tracking posthog-cli preinstall failed',
@@ -205,13 +208,13 @@ describe('error-tracking run config', () => {
     );
     const warn = vi.mocked(preinstallPostHogCliOnce).mock.calls[0]?.[2];
     warn?.('install warning');
-    expect(host.warn).toHaveBeenCalledWith('install warning');
+    expect(runner.warn).toHaveBeenCalledWith('install warning');
   });
 
   test('skips the pre-install for platforms without symbol upload', async () => {
     await resolveRun(
       { integration: Integration.nextjs } as WizardSession,
-      testProgramRunHost(),
+      testRunnerContext(),
     );
 
     expect(preinstallPostHogCliOnce).not.toHaveBeenCalled();

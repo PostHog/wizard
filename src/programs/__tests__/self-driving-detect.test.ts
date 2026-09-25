@@ -25,7 +25,7 @@ import {
 import { Integration } from '@shared/constants';
 import { WIZARD_TOOL_NAMES } from '@agent/tools';
 import { buildSession } from '@lib/wizard-session';
-import { testProgramRunHost } from '../../../test/program-host';
+import { testRunnerContext } from '../../../test/runner-context';
 import type { Mock } from 'vitest';
 
 function makeTmpDir(): string {
@@ -203,7 +203,7 @@ describe('selfDrivingConfig', () => {
     const { run } = selfDrivingConfig;
     const resolved =
       typeof run === 'function'
-        ? await run(buildSession({}), testProgramRunHost())
+        ? await run(buildSession({}), testRunnerContext())
         : run;
     expect(resolved?.askTimeoutMs).toBe(30 * 60 * 1000);
   });
