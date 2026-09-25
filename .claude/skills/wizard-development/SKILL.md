@@ -43,8 +43,8 @@ infrastructure should consume those boundaries.
   new Anthropic models.
 
 Existing routing has not all migrated:
-[DEFAULT_BINDING](../../../src/agent/runner/switchboard/index.ts) still
-selects Anthropic + linear, with per-program and flag overrides. Set new
+[DEFAULT_BINDING](../../../src/agent/runner/switchboard/index.ts) selects
+Pi + linear, with per-program and flag overrides. Set new
 bindings explicitly. Migrating an existing program requires checking its flow,
 tasks, and lifecycle hooks; changing the default constant alone is insufficient.
 Both harnesses implement `run` and `runTask`.

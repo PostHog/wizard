@@ -70,14 +70,14 @@ export const signature: (
 
 ### Field definitions
 
-| Field                                                       | Type                | What it's for                                                                    |
-| ----------------------------------------------------------- | ------------------- | -------------------------------------------------------------------------------- |
-| `programId`                                                 | `string`            | Which program runs. It names analytics, the route and the gateway spend.         |
-| [`input`](../src/programs/run-program.ts#L66)               | `ProgramInput`      | What to run and where. `installDir` and `run` are required.                      |
-| [`input.program`](../src/programs/run-program.ts#L56)       | `ProgramSettings`   | The program's settings from its `ProgramConfig`.                                 |
-| [`options`](../src/programs/run-program.ts#L89)             | `ProgramOptions`    | The login, questions, approval and gate waits, flags, progress and cancellation. |
-| [`options.onProgress`](../src/programs/program-store.ts#L9) | `ProgramProgress`   | Agent events and program data snapshots. Never awaited.                          |
-| [Outcome](../src/programs/run-program.ts#L106)              | `ProgramRunOutcome` | How the run ended, the agent's result, the final data and the report path.       |
+| Field                                                        | Type                | What it's for                                                                    |
+| ------------------------------------------------------------ | ------------------- | -------------------------------------------------------------------------------- |
+| `programId`                                                  | `string`            | Which program runs. It names analytics, the route and the gateway spend.         |
+| [`input`](../src/programs/run-program.ts#L66)                | `ProgramInput`      | What to run and where. `installDir` and `run` are required.                      |
+| [`input.program`](../src/programs/run-program.ts#L56)        | `ProgramSettings`   | The program's settings from its `ProgramConfig`.                                 |
+| [`options`](../src/programs/run-program.ts#L89)              | `ProgramOptions`    | The login, questions, approval and gate waits, flags, progress and cancellation. |
+| [`options.onProgress`](../src/programs/program-store.ts#L21) | `ProgramProgress`   | Agent events and program data snapshots. Never awaited.                          |
+| [Outcome](../src/programs/run-program.ts#L106)               | `ProgramRunOutcome` | How the run ended, the agent's result, the final data and the report path.       |
 
 ### Example
 
@@ -164,15 +164,16 @@ export async function runMetrics(
 
 ### Cancellation
 
-Pass a `signal` to cancel the run. Every wait receives it, and a wait must
-settle when it aborts. A cancelled run resolves to `aborted`, not a rejection.
+Pass a `signal` to cancel the run. The credentials, approval and gate waits
+receive it, and each must settle when it aborts. A cancelled run resolves to
+`aborted`, not a rejection.
 
 ### Failures
 
 Most endings resolve to an outcome instead of throwing. Check `outcome` and read
 `failure`. The promise rejects only when the call itself can't run, such as an
 input field that can't be copied. The cases are in
-[`run-program.ts`](../src/programs/run-program.ts#L160).
+[`run-program.ts`](../src/programs/run-program.ts#L163).
 
 ### Program callbacks
 
@@ -226,11 +227,11 @@ export const signature: (
 
 | Field                                                   | Type                 | What it's for                                                                   |
 | ------------------------------------------------------- | -------------------- | ------------------------------------------------------------------------------- |
-| [`config`](../src/agent/runner/shared/types.ts#L153)    | `RunConfig`          | What the agent runs, with its route and tools.                                  |
-| [`config.run`](../src/agent/runner/shared/types.ts#L49) | `AgentRunDefinition` | The prompt and run options, such as `collectTranscript`.                        |
-| [`input`](../src/agent/runner/shared/types.ts#L207)     | `RunInput`           | Where and as whom: the project, the login and the flags.                        |
+| [`config`](../src/agent/runner/shared/types.ts#L151)    | `RunConfig`          | What the agent runs, with its route and tools.                                  |
+| [`config.run`](../src/agent/runner/shared/types.ts#L48) | `AgentRunDefinition` | The prompt and run options, such as `collectTranscript`.                        |
+| [`input`](../src/agent/runner/shared/types.ts#L205)     | `RunInput`           | Where and as whom: the project, the login and the flags.                        |
 | `options`                                               |                      | `onProgress` for agent events, `interaction` for questions, `signal` to cancel. |
-| [Result](../src/agent/runner/shared/types.ts#L309)      | `RunResult`          | How the run ended, with a snapshot of its tasks and transcript.                 |
+| [Result](../src/agent/runner/shared/types.ts#L307)      | `RunResult`          | How the run ended, with a snapshot of its tasks and transcript.                 |
 
 ### Callers
 

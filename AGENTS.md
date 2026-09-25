@@ -37,7 +37,7 @@ Each domain has a dedicated boundary:
 - **Programs** → program configs and `runProgram` in `src/programs/`; see
   [src/programs/README.md](src/programs/README.md) and the
   [developer interfaces](docs/developer-interfaces.md)
-- **TUI** → screen components and primitives in `src/ui/tui/`
+- **TUI** → screens, primitives and content decks in `src/ui/tui/`
 
 Adding a new concern means finding the narrowest existing surface, not adding
 logic to the runner. Keep changes local to the boundary that owns them.
