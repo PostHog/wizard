@@ -45,7 +45,11 @@ const renderArg = (a: unknown): string => {
 const loggedLines = () =>
   vi.mocked(logToFile).mock.calls.map((call) => call.map(renderArg).join(' '));
 
-const host = { apiHost: 'https://us.posthog.com' } as unknown as HostResolution;
+const host = {
+  apiHost: 'https://us.posthog.com',
+  region: 'us',
+} as unknown as HostResolution;
+const GATEWAY = 'https://ai-gateway.us.posthog.com';
 
 describe('gatewayAuth', () => {
   const fetchMock = vi.fn();
@@ -210,7 +214,7 @@ describe('gatewayAuth', () => {
   );
 
   it.each([ServiceHealthStatus.Down, ServiceHealthStatus.NoConnection])(
-    'reports gateway %s without exposing diagnostics or caching auth',
+    'reports gateway %s without minting, exposing diagnostics or caching auth',
     async (status) => {
       fetchMock.mockResolvedValue({
         ok: true,
@@ -218,7 +222,7 @@ describe('gatewayAuth', () => {
           Promise.resolve({
             token: 'phe_minted',
             expires_at: new Date(Date.now() + 3600_000).toISOString(),
-            gateway_url: 'https://ai-gateway.us.posthog.com',
+            gateway_url: GATEWAY,
           }),
       });
       vi.mocked(checkLlmGatewayHealth).mockResolvedValueOnce({
@@ -233,11 +237,70 @@ describe('gatewayAuth', () => {
         message:
           'The PostHog AI gateway is unavailable. Please try again later.',
       });
+      // The whole point of the reorder: an unhealthy gateway costs no mint, so
+      // the run that follows still has its weekly reservation.
+      expect(checkLlmGatewayHealth).toHaveBeenCalledExactlyOnceWith(GATEWAY);
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(vi.mocked(analytics.wizardCapture).mock.calls).toEqual([
+        [
+          'gateway readiness blocked',
+          { status, spent_mint: false, program: 'integration' },
+        ],
+      ]);
       await gatewayAuth(host, 'pha_oauth', 'integration');
-      expect(fetchMock).toHaveBeenCalledTimes(2);
-      expect(checkLlmGatewayHealth).toHaveBeenCalledTimes(2);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
     },
   );
+
+  it('probes a gateway the mint points elsewhere, and pays a mint for it', async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          token: 'phe_minted',
+          expires_at: new Date(Date.now() + 3600_000).toISOString(),
+          gateway_url: 'https://ai-gateway.eu.posthog.com',
+        }),
+    });
+    vi.mocked(checkLlmGatewayHealth)
+      .mockResolvedValueOnce({ status: ServiceHealthStatus.Healthy })
+      .mockResolvedValueOnce({ status: ServiceHealthStatus.Down });
+
+    await expect(
+      gatewayAuth(host, 'pha_oauth', 'integration'),
+    ).rejects.toMatchObject({ code: ErrorCodes.EnvServiceOutage });
+
+    expect(vi.mocked(checkLlmGatewayHealth).mock.calls).toEqual([
+      [GATEWAY],
+      ['https://ai-gateway.eu.posthog.com'],
+    ]);
+    expect(analytics.wizardCapture).toHaveBeenCalledWith(
+      'gateway readiness blocked',
+      expect.objectContaining({ spent_mint: true }),
+    );
+  });
+
+  it('probes only the minted gateway when the run is pinned off cloud', async () => {
+    const pinned = {
+      apiHost: 'http://localhost:8010',
+      region: 'us',
+    } as unknown as HostResolution;
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          token: 'phe_minted',
+          expires_at: new Date(Date.now() + 3600_000).toISOString(),
+          gateway_url: 'http://localhost:8080',
+        }),
+    });
+
+    await gatewayAuth(pinned, 'pha_oauth', 'integration');
+
+    expect(checkLlmGatewayHealth).toHaveBeenCalledExactlyOnceWith(
+      'http://localhost:8080',
+    );
+  });
 
   it('records a successful mint without ever logging the token', async () => {
     fetchMock.mockResolvedValue({

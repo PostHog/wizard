@@ -89,8 +89,7 @@ export function configureGatewayFromCIEnvironment(
   configureGatewayCredentialsForCI(
     token,
     projectId,
-    runtimeEnv('WIZARD_CI_GATEWAY_URL') ||
-      `https://ai-gateway.${region}.posthog.com`,
+    runtimeEnv('WIZARD_CI_GATEWAY_URL') || cloudGatewayUrl(region),
   );
 }
 
@@ -108,6 +107,52 @@ const MINT_TIMEOUT_MS = 20_000;
 const MAX_REFUSAL_DETAIL_LENGTH = 500;
 /** Outcomes are short snake_case labels; anything longer is not one. */
 const MAX_REFUSAL_OUTCOME_LENGTH = 64;
+
+const cloudGatewayUrl = (region: CloudRegion): string =>
+  `https://ai-gateway.${region}.posthog.com`;
+
+/**
+ * The gateway a cloud run is expected to be sent to, so readiness can be probed
+ * before a mint spends one of the account's weekly reservations. A run pinned to
+ * a host outside PostHog cloud has no predictable gateway, and is probed once the
+ * mint has answered with one.
+ */
+function expectedGatewayUrl(host: HostResolution): string | undefined {
+  let apiHost: URL;
+  try {
+    apiHost = new URL(host.apiHost);
+  } catch {
+    return undefined;
+  }
+  return apiHost.hostname.endsWith('.posthog.com')
+    ? cloudGatewayUrl(host.region)
+    : undefined;
+}
+
+/** Stop the run unless the gateway answers its readiness probe. */
+async function requireHealthyGateway(
+  gatewayUrl: string,
+  program: string,
+  spentMint: boolean,
+): Promise<void> {
+  const health = await checkLlmGatewayHealth(gatewayUrl);
+  if (health.status === ServiceHealthStatus.Healthy) return;
+  logToFile(
+    `[gateway] readiness probe answered ${health.status}; failing the run`,
+  );
+  // `spent_mint` counts the tokens this gate still throws away: a block before
+  // the mint costs the user nothing, a block after it costs a weekly slot.
+  analytics.wizardCapture('gateway readiness blocked', {
+    status: health.status,
+    spent_mint: spentMint,
+    program,
+  });
+  throw new WizardError(
+    'The PostHog AI gateway is unavailable. Please try again later.',
+    undefined,
+    ErrorCodes.EnvServiceOutage,
+  );
+}
 
 /** Resolve this run's gateway auth, minting and re-minting near expiry. */
 export async function gatewayAuth(
@@ -149,14 +194,15 @@ async function resolveGatewayAuth(
       'this run has no program to attribute its spend to',
     );
   }
+  // Probed before the mint: the backend spends a weekly mint reservation as it
+  // issues the token, so minting into a gateway that is down costs the user a
+  // slot and hands back nothing.
+  const expected = expectedGatewayUrl(host);
+  if (expected) await requireHealthyGateway(expected, program, false);
   const minted = await mintGatewayToken(host, accessToken, program);
-  const health = await checkLlmGatewayHealth(minted.gatewayUrl);
-  if (health.status !== ServiceHealthStatus.Healthy) {
-    throw new WizardError(
-      'The PostHog AI gateway is unavailable. Please try again later.',
-      undefined,
-      ErrorCodes.EnvServiceOutage,
-    );
+  // A mint may point the run at a gateway other than the cloud default.
+  if (minted.gatewayUrl !== expected) {
+    await requireHealthyGateway(minted.gatewayUrl, program, true);
   }
   const expiresAtMs = Date.parse(minted.expiresAt);
   const ttlMs = expiresAtMs - Date.now();
