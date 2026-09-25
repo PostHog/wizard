@@ -19,7 +19,7 @@
  * agent did not decide (a refused mint, an SDK crash) comes back as
  * `outcome: RunOutcome.Crashed` with the original error attached, so a caller can keep
  * handling it the way it always did. The legacy adapter in
- * `src/lib/programs/run-agent-legacy.ts` rebuilds today's session-driven
+ * `src/programs/run-agent-legacy.ts` rebuilds today's session-driven
  * behavior on top of this call for every existing caller.
  */
 

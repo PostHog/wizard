@@ -10,7 +10,7 @@
  * asserted directly.
  */
 import { describe, it, expect } from 'vitest';
-import { PROGRAM_REGISTRY } from '@lib/programs/program-registry';
+import { PROGRAM_REGISTRY } from '@programs';
 import {
   DEFAULT_AGENT_MODEL,
   GPT5_6_LUNA_MODEL,

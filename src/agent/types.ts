@@ -28,7 +28,7 @@ export type {
   TokenUsageDelta,
 } from './progress';
 
-/** Leaves in B1 with the bindings table. */
+/** Leaves when the bindings table moves to programs. */
 export type { ProgramBinding, SwitchboardCtx } from './runner';
 
 /** Leaves in B2 with downloadSkill. */

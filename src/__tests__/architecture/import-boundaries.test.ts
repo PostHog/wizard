@@ -2,7 +2,14 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
 
-export type Surface = 'env' | 'shared' | 'legacy' | 'agent' | 'tui' | 'cli';
+export type Surface =
+  | 'env'
+  | 'shared'
+  | 'legacy'
+  | 'agent'
+  | 'programs'
+  | 'tui'
+  | 'cli';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(HERE, '../../..');
@@ -12,15 +19,12 @@ const SURFACE_RULES: ReadonlyArray<readonly [Surface, (p: string) => boolean]> =
     ['env', (p) => p === 'src/env.ts'],
     ['shared', (p) => p.startsWith('src/shared/')],
     ['agent', (p) => p.startsWith('src/agent/')],
+    ['programs', (p) => p.startsWith('src/programs/')],
     [
       'tui',
       (p) =>
         p.startsWith('src/ui/tui/') ||
-        p === 'src/ui/logging-ui.ts' ||
-        p === 'src/ui/headless-ui.ts' ||
-        p === 'src/commands/factories/family-picker.tsx' ||
-        /^src\/lib\/programs\/[^/]+\/content\//.test(p) ||
-        /^src\/lib\/programs\/[^/]+\/tips\.ts$/.test(p),
+        p === 'src/commands/factories/family-picker.tsx',
     ],
     [
       'cli',
@@ -43,17 +47,20 @@ export function classifySurface(relPath: string): Surface {
 export const ALLOWED_IMPORTS: Record<Surface, readonly Surface[]> = {
   env: [],
   shared: ['env', 'shared'],
-  legacy: ['env', 'shared', 'legacy'],
-  // Program types stay importable from the agent until B1 moves the bindings.
-  agent: ['env', 'shared', 'legacy', 'agent'],
-  tui: ['env', 'shared', 'legacy', 'tui'],
-  cli: ['env', 'shared', 'legacy', 'agent', 'tui', 'cli'],
+  legacy: ['env', 'shared', 'legacy', 'programs'],
+  // Moving the bindings to programs removes the agent's ProgramId type imports.
+  agent: ['env', 'shared', 'agent'],
+  programs: ['env', 'shared', 'agent', 'programs'],
+  tui: ['env', 'shared', 'legacy', 'programs', 'tui'],
+  cli: ['env', 'shared', 'legacy', 'agent', 'programs', 'tui', 'cli'],
 };
 
 // The agent's public entries. Outside `src/agent`, an import into the agent
 // must land on one of these; `types.ts` is type-only, so the TUI may take it.
 const AGENT_VALUES_ENTRY = 'src/agent/index.ts';
 const AGENT_TYPES_ENTRY = 'src/agent/types.ts';
+const PROGRAMS_VALUES_ENTRY = 'src/programs/index.ts';
+const PROGRAMS_TYPES_ENTRY = 'src/programs/types.ts';
 
 /** The rule an edge breaks, or null when it is allowed. */
 export function ruleFor(fromFile: string, toFile: string): string | null {
@@ -68,6 +75,12 @@ export function ruleFor(fromFile: string, toFile: string): string | null {
       return `matrix:${from}->${to}`;
     }
     return null;
+  }
+  if (to === 'programs' && from !== 'programs') {
+    const target = toFile.split(path.sep).join('/');
+    if (target !== PROGRAMS_VALUES_ENTRY && target !== PROGRAMS_TYPES_ENTRY) {
+      return 'programs-deep-import';
+    }
   }
   return ALLOWED_IMPORTS[from].includes(to) ? null : `matrix:${from}->${to}`;
 }
@@ -401,7 +414,12 @@ describe('surface classification', () => {
     expect(classifySurface('src/shared/utils/analytics.ts')).toBe('shared');
     expect(classifySurface('src/shared/errors/codes.ts')).toBe('shared');
     expect(classifySurface('src/agent/agent-runner.ts')).toBe('agent');
+    expect(classifySurface('src/programs/program-registry.ts')).toBe(
+      'programs',
+    );
     expect(classifySurface('src/ui/tui/App.tsx')).toBe('tui');
+    expect(classifySurface('src/ui/index.ts')).toBe('legacy');
+    expect(classifySurface('src/steps/index.ts')).toBe('legacy');
     expect(classifySurface('bin.ts')).toBe('cli');
     expect(classifySurface('src/agent/tools/mcp.ts')).toBe('agent');
     expect(classifySurface('src/agent/tools/tools.ts')).toBe('agent');
@@ -409,32 +427,32 @@ describe('surface classification', () => {
       'tui',
     );
     expect(
-      classifySurface('src/lib/programs/posthog-integration/content/index.tsx'),
+      classifySurface('src/ui/tui/decks/posthog-integration/index.tsx'),
     ).toBe('tui');
-    expect(
-      classifySurface('src/lib/programs/posthog-integration/index.ts'),
-    ).toBe('legacy');
+    expect(classifySurface('src/programs/posthog-integration/index.ts')).toBe(
+      'programs',
+    );
   });
 });
 
 describe('agent entry modules', () => {
   const rule = (from: string, to: string) => ruleFor(from, to);
 
-  it('lets legacy and cli code reach the agent through its entries only', () => {
-    expect(rule('src/lib/programs/audit/index.ts', 'src/agent/index.ts')).toBe(
+  it('lets programs and cli code reach the agent through its entries only', () => {
+    expect(rule('src/programs/audit/index.ts', 'src/agent/index.ts')).toBe(
       null,
     );
-    expect(rule('src/lib/programs/audit/index.ts', 'src/agent/types.ts')).toBe(
+    expect(rule('src/programs/audit/index.ts', 'src/agent/types.ts')).toBe(
       null,
     );
     expect(rule('src/commands/skill.ts', 'src/agent/index.ts')).toBe(null);
     expect(
-      rule('src/lib/programs/audit/index.ts', 'src/agent/agent-runner.ts'),
+      rule('src/programs/audit/index.ts', 'src/agent/agent-runner.ts'),
     ).toBe('agent-deep-import');
     expect(rule('src/commands/skill.ts', 'src/agent/runner/index.ts')).toBe(
       'agent-deep-import',
     );
-    expect(rule('src/shared/errors/agent-map.ts', 'src/agent/signals.ts')).toBe(
+    expect(rule('src/shared/claude-settings.ts', 'src/agent/signals.ts')).toBe(
       'agent-deep-import',
     );
   });
@@ -453,11 +471,46 @@ describe('agent entry modules', () => {
     expect(rule('src/agent/runner/index.ts', 'src/agent/progress.ts')).toBe(
       null,
     );
-    expect(rule('src/lib/programs/audit/index.ts', 'src/ui/tui/store.ts')).toBe(
-      'matrix:legacy->tui',
+    expect(rule('src/programs/audit/index.ts', 'src/ui/tui/store.ts')).toBe(
+      'matrix:programs->tui',
     );
     expect(rule('src/agent/runner/index.ts', 'src/ui/tui/store.ts')).toBe(
       'matrix:agent->tui',
     );
+  });
+});
+
+describe('programs entry modules', () => {
+  const rule = (from: string, to: string) => ruleFor(from, to);
+
+  it('lets the CLI and TUI reach programs through its entries', () => {
+    expect(rule('src/commands/audit.ts', 'src/programs/index.ts')).toBe(null);
+    expect(rule('src/ui/tui/store.ts', 'src/programs/types.ts')).toBe(null);
+    expect(rule('src/commands/audit.ts', 'src/programs/audit/index.ts')).toBe(
+      'programs-deep-import',
+    );
+  });
+
+  it('keeps programs from reaching the TUI and CLI', () => {
+    expect(rule('src/programs/audit/index.ts', 'src/ui/tui/store.ts')).toBe(
+      'matrix:programs->tui',
+    );
+    expect(
+      rule('src/programs/dispatch-family.ts', 'src/commands/command.ts'),
+    ).toBe('matrix:programs->cli');
+  });
+});
+
+describe('migration matrix', () => {
+  it('lets legacy code use the programs entry', () => {
+    expect(ruleFor('src/lib/wizard-session.ts', 'src/programs/index.ts')).toBe(
+      null,
+    );
+  });
+
+  it('keeps agent code out of legacy session state', () => {
+    expect(
+      ruleFor('src/agent/runner/index.ts', 'src/lib/wizard-session.ts'),
+    ).toBe('matrix:agent->legacy');
   });
 });

@@ -11,7 +11,7 @@ classify failures without parsing human-readable messages.
   [`src/shared/errors/catalog.ts`](../src/shared/errors/catalog.ts)
 - **Consumers:** `wizardAbort()`
   ([`src/shared/utils/wizard-abort.ts`](../src/shared/utils/wizard-abort.ts)), the task stream
-  ([`src/lib/task-stream/`](../src/lib/task-stream/)), and non-interactive hosts
+  ([`src/programs/task-stream/`](../src/programs/task-stream/)), and non-interactive hosts
   reading stderr.
 
 ## Stability contract
@@ -117,7 +117,7 @@ guarantee.
 
 Program detect steps write `{ kind, ...detail }` into
 `session.frameworkContext.detectError`. `detectErrorCode()`
-([`src/lib/programs/detect-map.ts`](../src/lib/programs/detect-map.ts)) maps `kind`
+([`src/programs/detect-map.ts`](../src/programs/detect-map.ts)) maps `kind`
 → code, and the whole object — `kind` included — rides along as
 `OutroData.errorDetail`.
 

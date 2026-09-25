@@ -29,11 +29,11 @@ import { selfDrivingCommand } from '../commands/self-driving';
 import {
   dispatchFamily,
   pickerChildrenToShow,
-} from '@lib/programs/dispatch-family';
+} from '@programs/dispatch-family';
 import type { Command } from '../commands/command';
 import { fetchSkillMenu, type CliEntry } from '@shared/skill-menu';
-import { auditConfig } from '@lib/programs/audit/index';
-import { webAnalyticsDoctorConfig } from '@lib/programs/web-analytics-doctor/index';
+import { auditConfig } from '@programs/audit/index';
+import { webAnalyticsDoctorConfig } from '@programs/web-analytics-doctor/index';
 import { parseCommand } from './helpers/parse-command.no-jest';
 
 const mockFetchSkillMenu = fetchSkillMenu as MockedFunction<

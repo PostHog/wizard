@@ -40,7 +40,7 @@ conventions rather than copying upstream component manuals.
 3. Register the component in
    [screen-registry.tsx](../../../src/ui/tui/screen-registry.tsx).
 4. Reference it through `screenId` in the owning
-   [program's steps](../../../src/lib/programs/), with the appropriate
+   [program's steps](../../../src/programs/), with the appropriate
    visibility, completion, and gate predicates.
 
 Screen sequences derive from program steps. Do not hand-maintain a second

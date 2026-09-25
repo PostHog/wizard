@@ -35,12 +35,8 @@ import { analytics } from '@utils/analytics';
 import { ciExcludedTaskTypes } from '@utils/ci-flag-overrides';
 import { logToFile } from '@utils/debug';
 import { ringTerminalBell } from '@utils/terminal-bell';
-import {
-  AGENT_ERROR_CODE,
-  classifyRunFailure,
-  ErrorCodes,
-  WizardError,
-} from '@shared/errors';
+import { AGENT_ERROR_CODE } from '@agent/error-map';
+import { classifyRunFailure, ErrorCodes, WizardError } from '@shared/errors';
 import type { AgentResult } from '../../harness/types';
 import type { AgentInteraction } from '@agent/progress';
 import type {

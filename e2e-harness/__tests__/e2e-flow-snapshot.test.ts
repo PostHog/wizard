@@ -19,15 +19,15 @@ import { setUI } from '@ui/index';
 import { buildSession, RunPhase } from '@lib/wizard-session';
 import { Integration } from '@shared/constants';
 import { HostResolution } from '@shared/host-resolution';
-import { FRAMEWORK_REGISTRY } from '@lib/registry';
+import { FRAMEWORK_REGISTRY } from '@programs/frameworks/registry';
 import { WizardReadiness } from '@shared/health-checks/readiness';
 import {
   Program,
   getProgramConfig,
   type ProgramId,
-} from '@lib/programs/program-registry';
+} from '@programs';
 import { ScreenId } from '@ui/tui/router';
-import { SELF_DRIVING_INTEGRATE_PATH_KEY } from '@lib/programs/self-driving/detect';
+import { SELF_DRIVING_INTEGRATE_PATH_KEY } from '@programs/self-driving/detect';
 import { WizardCiDriver } from '../wizard-ci-driver';
 import { decideE2eAction, type WizardE2eProfile } from '../e2e-profile';
 import { profileFor } from '../profiles';

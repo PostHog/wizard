@@ -62,22 +62,22 @@ vi.mock('@ui/tui/hooks/useGithubConnection', () => ({
   useGithubConnection: () => undefined,
   fetchLoginUrl: vi.fn().mockResolvedValue(null),
 }));
-vi.mock('@lib/programs/self-driving/detect-agentic', async (actual) => ({
+vi.mock('@programs/self-driving/detect-agentic', async (actual) => ({
   ...(await actual<Record<string, unknown>>()),
   detectSelfDrivingIntegrationProjects: vi.fn(pending),
 }));
-vi.mock('@lib/programs/error-tracking/detect-agentic', async (actual) => ({
+vi.mock('@programs/error-tracking/detect-agentic', async (actual) => ({
   ...(await actual<Record<string, unknown>>()),
   detectErrorTrackingProjects: vi.fn(pending),
 }));
 vi.mock(
-  '@lib/programs/error-tracking-upload-source-maps/detect-agentic',
+  '@programs/error-tracking-upload-source-maps/detect-agentic',
   async (actual) => ({
     ...(await actual<Record<string, unknown>>()),
     detectSourceMapsProjects: vi.fn(pending),
   }),
 );
-vi.mock('@lib/programs/posthog-doctor/fetch', () => ({
+vi.mock('@programs/posthog-doctor/fetch', () => ({
   fetchHealthIssues: vi.fn().mockResolvedValue([
     {
       id: 'issue-1',
@@ -113,17 +113,17 @@ import {
 } from '@lib/wizard-session';
 import { HostResolution } from '@shared/host-resolution';
 import { Integration } from '@shared/constants';
-import { FRAMEWORK_REGISTRY } from '@lib/registry';
-import type { FrameworkConfig } from '@lib/framework-config';
-import { Program, type ProgramId } from '@lib/programs/program-registry';
+import { FRAMEWORK_REGISTRY } from '@programs/frameworks/registry';
+import type { FrameworkConfig } from '@programs/types';
+import { Program, type ProgramId } from '@programs';
 import {
   WizardReadiness,
   type WizardReadinessResult,
 } from '@shared/health-checks/readiness';
 import { ServiceHealthStatus } from '@shared/health-checks/types';
-import { SOURCE_MAPS_CONTEXT_KEYS } from '@lib/programs/error-tracking-upload-source-maps/detect';
-import { AUDIT_CHECKS_KEY } from '@lib/programs/audit/types';
-import { AUDIT_SEED_CHECKS } from '@lib/programs/audit/seed';
+import { SOURCE_MAPS_CONTEXT_KEYS } from '@programs/error-tracking-upload-source-maps/detect';
+import { AUDIT_CHECKS_KEY } from '@programs/audit/types';
+import { AUDIT_SEED_CHECKS } from '@programs/audit/seed';
 import type { McpInstaller } from '@ui/tui/services/mcp-installer';
 import type { McpSuggestedPromptsServices } from '@ui/tui/services/mcp-suggested-prompts-services';
 import {

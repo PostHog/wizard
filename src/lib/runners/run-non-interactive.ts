@@ -6,7 +6,7 @@ import {
 import {
   createWizardRunSync,
   type RunOutcome,
-} from '@lib/task-stream/wizard-run-sync';
+} from '@programs/task-stream/wizard-run-sync';
 import { runtimeEnv } from '@env';
 import { registerShutdown, runCleanups } from '@utils/wizard-abort';
 import {
@@ -17,19 +17,19 @@ import {
 import type { CloudRegion } from '@utils/types';
 import { getUI, setUI } from '@ui';
 import { LoggingUI } from '@ui/logging-ui';
-import type { ProgramConfig } from '@lib/programs/program-step';
-import { getAuditChecks } from '@lib/programs/audit/types';
+import type { ProgramConfig } from '@programs/types';
+import { getAuditChecks } from '@programs/audit/types';
 import { analytics } from '@utils/analytics';
 import { resolveNoTelemetry } from './resolve-no-telemetry';
 import type { WizardStore } from '@ui/tui/store';
-import type { TaskStreamPush } from '@lib/task-stream/task-stream-push';
+import type { TaskStreamPush } from '@programs/task-stream/task-stream-push';
 import { join } from 'node:path';
 import {
   ErrorCodes,
   classifyRunFailure,
   emitWizardError,
 } from '@shared/errors';
-import { detectErrorCode } from '@lib/programs/detect-map';
+import { detectErrorCode } from '@programs/detect-map';
 import type { OutroData, RunPhase as RunPhaseT } from '@lib/wizard-session';
 
 /**
@@ -193,7 +193,7 @@ export function runNonInteractive(
       const { WizardStore } = await import('@ui/tui/store');
       const { HeadlessUI } = await import('@ui/headless-ui');
       const { TaskStreamPush, PostHogDestination, createFileDestination } =
-        await import('@lib/task-stream/index');
+        await import('@programs/task-stream/index');
 
       // `''` resolves to the default path, so `--ci` always dumps.
       const logTarget =
@@ -375,9 +375,7 @@ export function runNonInteractive(
         }
       }
 
-      const { runProgramAgent } = await import(
-        '@lib/programs/run-agent-legacy'
-      );
+      const { runProgramAgent } = await import('@programs/run-agent-legacy');
       await runProgramAgent(config, session);
       if (signalled) return;
       await settleStream(RunPhase.Completed);

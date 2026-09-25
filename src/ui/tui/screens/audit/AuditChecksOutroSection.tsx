@@ -2,7 +2,7 @@ import { Box, Text } from 'ink';
 import {
   AUDIT_SEVERITY_STYLE,
   type AuditCheck,
-} from '@lib/programs/audit/types';
+} from '@programs/audit/types';
 import { relativeToInstallDir } from '@utils/paths';
 import { countNoun } from '@utils/count-noun';
 

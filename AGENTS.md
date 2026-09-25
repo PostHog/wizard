@@ -19,7 +19,7 @@ configuration surfaces.
 
 Each domain has a dedicated boundary:
 
-- **Frameworks** → `FrameworkConfig` in `src/frameworks/<name>/`
+- **Frameworks** → `FrameworkConfig` in `src/programs/frameworks/<name>/`
 - **Integration knowledge** → markdown skills in the
   [context-mill](https://github.com/PostHog/context-mill) repo
 - **Security policy** → YARA-X rules in the
@@ -34,8 +34,10 @@ Each domain has a dedicated boundary:
   `@agent/types` (types); see [src/agent/README.md](src/agent/README.md)
 - **Shared** → `src/shared/`, stateless library code with no upward imports;
   see [src/shared/README.md](src/shared/README.md)
-- **Programs** → step arrays in `src/lib/programs/`
-- **TUI** → screen components and primitives in `src/ui/tui/`
+- **Programs** → configs, detection, framework registry and task stream in
+  `src/programs/`; runtime and type entries are `@programs` and
+  `@programs/types`
+- **TUI** → screens, primitives and content decks in `src/ui/tui/`
 
 Adding a new concern means finding the narrowest existing surface, not adding
 logic to the runner. Keep changes local to the boundary that owns them.
@@ -131,7 +133,7 @@ confuse it with the top-level `wizard skill` command.
   ([`src/commands/factories/native-command-factory.ts`](src/commands/factories/native-command-factory.ts)).
 - **Family commands** (e.g. `audit`) resolve subcommands at runtime against the
   `cliEntries` in `skill-menu.json`. Logic lives in
-  [`src/lib/programs/dispatch-family.ts`](src/lib/programs/dispatch-family.ts).
+  [`src/programs/dispatch-family.ts`](src/programs/dispatch-family.ts).
   Adding a skill-backed subcommand is a **context-mill** release, not a wizard
   change.
 

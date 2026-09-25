@@ -13,7 +13,7 @@ import os from 'os';
 import path from 'path';
 import { OutroKind, RunPhase } from '@lib/wizard-session';
 import type { AskQuestion, WizardSession } from '@lib/wizard-session';
-import { DETECTED_WAREHOUSE_SOURCES_KEY } from '@lib/programs/warehouse-source/detect';
+import { DETECTED_WAREHOUSE_SOURCES_KEY } from '@programs/warehouse-source/detect';
 import { Overlay } from '@ui/tui/router';
 import { TASK_OUTCOMES_KEY } from '@agent';
 import {

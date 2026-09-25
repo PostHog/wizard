@@ -27,7 +27,7 @@ vi.mock('../ui/tui/start-tui', () => ({
     },
   }),
 }));
-vi.mock('../lib/programs/posthog-integration/index', () => ({
+vi.mock('../programs/posthog-integration', () => ({
   posthogIntegrationConfig: {
     id: 'posthog-integration',
     steps: [],
@@ -52,8 +52,8 @@ vi.mock('@utils/debug', () => ({
   logToFile: vi.fn(),
   setDebugSink: vi.fn(),
 }));
-vi.mock('../lib/registry', () => ({ FRAMEWORK_REGISTRY: {} }));
-vi.mock('../lib/detection/index', () => ({
+vi.mock('../programs/frameworks/registry', () => ({ FRAMEWORK_REGISTRY: {} }));
+vi.mock('../programs/detection', () => ({
   detectFramework: vi.fn().mockResolvedValue(null),
   gatherFrameworkContext: vi.fn().mockResolvedValue({}),
 }));
@@ -64,7 +64,7 @@ vi.mock('@utils/wizard-abort', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@utils/wizard-abort')>()),
   wizardAbort: vi.fn(),
 }));
-vi.mock('../lib/programs/run-agent-legacy', () => ({
+vi.mock('../programs/run-agent-legacy', () => ({
   runProgramAgent: vi.fn().mockResolvedValue(undefined),
 }));
 

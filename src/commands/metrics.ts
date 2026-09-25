@@ -1,4 +1,4 @@
-import { metricsConfig } from '@lib/programs/metrics/index';
+import { metricsConfig } from '@programs/metrics/index';
 
 import type { Command } from './command';
 import { nativeCommandFactory } from './factories/native-command-factory';

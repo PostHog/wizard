@@ -3,7 +3,7 @@
  * "which env keys does this project define, and in which file".
  *
  * Two surfaces read env keys and they must agree:
- *  - the warehouse-source detector (`@lib/warehouse-sources/detect`), which
+ *  - the warehouse-source detector (`@programs/warehouse-sources/detect`), which
  *    turns key names into detected sources, and
  *  - the `check_env_keys` wizard tool, which answers the agent's
  *    "is this key already set?" question.

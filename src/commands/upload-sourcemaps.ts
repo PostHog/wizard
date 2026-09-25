@@ -1,5 +1,5 @@
 import { runWizard, runWizardCI } from '@lib/runners';
-import { errorTrackingUploadSourceMapsConfig } from '@lib/programs/error-tracking-upload-source-maps/index';
+import { errorTrackingUploadSourceMapsConfig } from '@programs/error-tracking-upload-source-maps/index';
 import { skillProgramOptions } from './skill-program-options';
 import type { Command } from './command';
 

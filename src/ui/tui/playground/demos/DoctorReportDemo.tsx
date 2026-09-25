@@ -1,7 +1,7 @@
 import { Box, Text } from 'ink';
 import { Colors, Icons } from '@ui/tui/styles';
 import { IssueTable } from '@ui/tui/screens/doctor/IssueTable';
-import type { HealthIssue } from '@lib/programs/posthog-doctor/index';
+import type { HealthIssue } from '@programs/posthog-doctor/index';
 
 const NOW = '2026-04-27T15:00:00Z';
 

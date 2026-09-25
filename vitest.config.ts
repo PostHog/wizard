@@ -33,6 +33,7 @@ function resolveTsForJs(): Plugin {
 // alone with `vitest run --project <name>`; `vitest run` runs them all.
 const TESTS = '__tests__/**/*.{js,jsx,ts,tsx}';
 const AGENT_TESTS = [`src/agent/**/${TESTS}`];
+const PROGRAM_TESTS = [`src/programs/**/${TESTS}`];
 const TUI_TESTS = [`src/ui/tui/**/${TESTS}`];
 const CLI_TESTS = [
   `src/commands/**/${TESTS}`,
@@ -82,6 +83,9 @@ export default defineConfig({
       { find: /^@agent$/, replacement: r('src/agent/index.ts') },
       { find: /^@agent\/types$/, replacement: r('src/agent/types.ts') },
       { find: /^@agent\/(.*)$/, replacement: `${r('src/agent')}/$1` },
+      { find: /^@programs$/, replacement: r('src/programs/index.ts') },
+      { find: /^@programs\/types$/, replacement: r('src/programs/types.ts') },
+      { find: /^@programs\/(.*)$/, replacement: `${r('src/programs')}/$1` },
       // Path aliases — mirror tsconfig `paths`.
       { find: /^@env$/, replacement: r('src/env.ts') },
       { find: /^@lib\/(.*)$/, replacement: `${r('src/lib')}/$1` },
@@ -91,7 +95,6 @@ export default defineConfig({
       { find: /^@ui\/(.*)$/, replacement: `${r('src/ui')}/$1` },
       { find: /^@steps$/, replacement: r('src/steps/index.ts') },
       { find: /^@steps\/(.*)$/, replacement: `${r('src/steps')}/$1` },
-      { find: /^@frameworks\/(.*)$/, replacement: `${r('src/frameworks')}/$1` },
     ],
   },
   test: {
@@ -99,6 +102,7 @@ export default defineConfig({
     environment: 'node',
     projects: [
       project('agent', AGENT_TESTS),
+      project('programs', PROGRAM_TESTS),
       project('tui', TUI_TESTS),
       project('cli', CLI_TESTS),
       project('harness', HARNESS_TESTS),
@@ -108,7 +112,13 @@ export default defineConfig({
         // The second glob keeps the pre-split behavior: a test file outside
         // a __tests__ directory still runs, here, rather than nowhere.
         [`src/**/${TESTS}`, 'src/**/*.{test,spec}.{js,jsx,ts,tsx}'],
-        [...AGENT_TESTS, ...TUI_TESTS, ...CLI_TESTS, ...ARCH_TESTS],
+        [
+          ...AGENT_TESTS,
+          ...PROGRAM_TESTS,
+          ...TUI_TESTS,
+          ...CLI_TESTS,
+          ...ARCH_TESTS,
+        ],
       ),
     ],
     coverage: {

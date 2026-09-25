@@ -23,8 +23,8 @@ import { VisualizerTab } from '@ui/tui/components/PhaseVisuals';
 import { TipsCard } from '@ui/tui/components/TipsCard';
 import { useStdoutDimensions } from '@ui/tui/hooks/useStdoutDimensions';
 
-import { getProgramConfig } from '@lib/programs/program-registry';
-import { getContentBlocks as getSkillContentBlocks } from '@lib/programs/agent-skill/content/index';
+import { getProgramConfig } from '@programs';
+import { getContentBlocks as getSkillContentBlocks } from '@ui/tui/decks/agent-skill/index';
 
 import { WIZARD_LOG_FILE } from '@utils/paths';
 

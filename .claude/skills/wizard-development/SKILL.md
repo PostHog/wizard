@@ -19,9 +19,9 @@ infrastructure should consume those boundaries.
 
 | Concern                                               | Owner                                                                                                                                                                           |
 | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Framework detection, context, env conventions         | [FrameworkConfig](../../../src/lib/framework-config.ts) and [framework configs](../../../src/frameworks/)                                                                       |
+| Framework detection, context, env conventions         | [FrameworkConfig](../../../src/programs/framework-config.ts) and [framework configs](../../../src/programs/frameworks/)                                                                       |
 | Integration instructions and orchestrator flows/tasks | [context-mill](https://github.com/PostHog/context-mill)                                                                                                                         |
-| Programs, steps, prerequisites and outcomes           | [programs](../../../src/lib/programs/)                                                                                                                                          |
+| Programs, steps, prerequisites and outcomes           | [programs](../../../src/programs/)                                                                                                                                          |
 | Sequence, harness, model and effort selection         | [switchboard](../../../src/agent/runner/switchboard/)                                                                                                                       |
 | Local tool permissions and scanner adapters           | [agent-interface](../../../src/agent/agent-interface.ts), [YARA hooks](../../../src/agent/yara-hooks.ts), [Pi security](../../../src/agent/runner/harness/pi/security.ts) |
 | Scanner rules                                         | [warlock](https://github.com/PostHog/warlock)                                                                                                                                   |
@@ -34,7 +34,7 @@ infrastructure should consume those boundaries.
   are separate: Pi supports gateway-backed Anthropic and OpenAI transports.
 - **Prefer orchestration.** A seed agent plans work, then task agents execute
   focused conversations. Start from
-  [metrics](../../../src/lib/programs/metrics/) and its context-mill flow.
+  [metrics](../../../src/programs/metrics/) and its context-mill flow.
 - **Linear is for very simple tasks and legacy support.** Composed program
   sub-runs are also structurally clamped to linear; orchestration cannot nest
   through that seam.

@@ -8,8 +8,8 @@ import { HostResolution } from '@shared/host-resolution';
 import { WizardReadiness } from '@shared/health-checks/readiness';
 import { WizardRouter, ScreenId, Overlay, Program } from '@ui/tui/router';
 import { Integration } from '@shared/constants';
-import { FRAMEWORK_REGISTRY } from '@lib/registry';
-import { PROGRAM_REGISTRY } from '@lib/programs/program-registry';
+import { FRAMEWORK_REGISTRY } from '@programs/frameworks/registry';
+import { PROGRAM_REGISTRY } from '@programs';
 
 function baseWizardSession() {
   return buildSession({});

@@ -22,27 +22,27 @@ import {
   Program,
   getProgramConfig,
   type ProgramId,
-} from '@lib/programs/program-registry';
+} from '@programs';
 import type { Harness, Sequence } from '@shared/constants';
 import { buildSession } from '@lib/wizard-session';
 import { initLocalDev } from '@shared/local-dev';
 import { configureGatewayFromCIEnvironment } from '@agent/gateway-session';
-import { runProgramAgent } from '@lib/programs/run-agent-legacy';
-import { TaskStreamPush, createFileDestination } from '@lib/task-stream/index';
-import { getAuditChecks } from '@lib/programs/audit/types';
-import { authenticate } from '@lib/programs/authenticate';
+import { runProgramAgent } from '@programs/run-agent-legacy';
+import { TaskStreamPush, createFileDestination } from '@programs/task-stream/index';
+import { getAuditChecks } from '@programs/audit/types';
+import { authenticate } from '@programs/authenticate';
 import { getOrAskForProjectData } from '@utils/setup-utils';
 import { logToFile } from '@utils/debug';
 import { join } from 'path';
-import { detectFramework } from '@lib/detection/index';
-import { FRAMEWORK_REGISTRY } from '@lib/registry';
+import { detectFramework } from '@programs/detection/index';
+import { FRAMEWORK_REGISTRY } from '@programs/frameworks/registry';
 import type { Integration } from '@shared/constants';
-import { SELF_DRIVING_INTEGRATE_PATH_KEY } from '@lib/programs/self-driving/detect';
-import { ERROR_TRACKING_PROJECT_PATH_KEY } from '@lib/programs/error-tracking/detect-agentic';
+import { SELF_DRIVING_INTEGRATE_PATH_KEY } from '@programs/self-driving/detect';
+import { ERROR_TRACKING_PROJECT_PATH_KEY } from '@programs/error-tracking/detect-agentic';
 import {
   detectSourceMapsPrerequisites,
   SOURCE_MAPS_CONTEXT_KEYS,
-} from '@lib/programs/error-tracking-upload-source-maps/index';
+} from '@programs/error-tracking-upload-source-maps/index';
 import { ScreenId, Overlay } from '@ui/tui/router';
 import { WizardCiDriver } from '@e2e-harness/wizard-ci-driver';
 import {

@@ -19,7 +19,8 @@ export { AgentSignals } from './agent-interface';
 export { WIZARD_TOOL_NAMES } from './tools';
 
 /**
- * Leaves in B1. Bindings and program data move to programs: resolveBinding
+ * Leaves when the bindings move to programs. Bindings and program data move to
+ * programs: resolveBinding
  * is keyed by PROGRAM_BINDINGS and the agent keeps only "run from an
  * already-resolved binding"; shouldDisableAsk is a flags policy programs
  * decide and pass in; LONGER_ASK_TIMEOUT_MS is a tuning number programs own

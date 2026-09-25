@@ -45,7 +45,7 @@ resolved execution data and an invocation snapshot (`shared/types.ts`), reports
 through `onProgress` and asks through `interaction` (`../progress.ts`), and
 returns every ending as a result. It never renders, reads a session or exits.
 The gates, OAuth, flags and binding lookup that used to run here live in
-`src/lib/programs/run-agent-legacy.ts`, which also maps progress back onto
+`src/programs/run-agent-legacy.ts`, which also maps progress back onto
 `getUI()` for today's runners.
 
 **Prepare** (`shared/bootstrap.ts`) is the on-ramp inside the agent: logging

@@ -17,7 +17,9 @@ it.
 - We take the recommended supported project, else the first supported
   PostHog-free one, and re-point the install dir there.
 - On a single-repo project it recommends `.`, so nothing moves.
-- If the scan errors, times out (60s, `AGENTIC_DETECTION_TIMEOUT_MS`), or finds
+- The scan gets two attempts, 60s then 90s
+  (`AGENTIC_DETECTION_FIRST_ATTEMPT_TIMEOUT_MS`,
+  `AGENTIC_DETECTION_RETRY_TIMEOUT_MS`). If both error or time out, or it finds
   nothing, `session.installDir` is left untouched and the run falls back to the
   old root detection, exactly like flag-off.
 
@@ -35,10 +37,10 @@ it.
 
 - Only non-interactive basic-integration runs — headless and `--ci`. Interactive
   runs have their own detect step and never enter it.
-- Phase: `scopeInstallDirToProject` in `src/lib/detection/project-scope.ts`,
+- Phase: `scopeInstallDirToProject` in `src/programs/detection/project-scope.ts`,
   called from the top of `ciPreRun` in
-  `src/lib/programs/posthog-integration/index.ts`.
-- Detector: `detectProjectsWithAgent` in `src/lib/detection/agentic.ts`;
+  `src/programs/posthog-integration/index.ts`.
+- Detector: `detectProjectsWithAgent` in `src/programs/detection/agentic.ts`;
   self-driving uses the same detector with its own chooser.
 - Each run fires one `wizard: agentic detection` event tagged with the outcome
   (`flag-off | error | timeout | no-project | recommended | first-instrumentable`).

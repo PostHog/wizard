@@ -83,7 +83,7 @@ store and no registry.
 
 Programs call the agent to do the work a skill describes. The TUI and the
 headless runner observe the run through `onProgress` and answer it through
-`interaction`; today `src/lib/programs/run-agent-legacy.ts` does both on top of
+`interaction`; today `src/programs/run-agent-legacy.ts` does both on top of
 the session.
 
 Without `onProgress` the run completes and its snapshot still comes back in the

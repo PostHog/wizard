@@ -12,7 +12,7 @@
 
 import { POSTHOG_LOCAL_URL, resolveLocalDev } from '@shared/local-dev';
 import type { Harness, Integration, Sequence } from '@shared/constants';
-import type { FrameworkConfig } from './framework-config';
+import type { FrameworkConfig } from '@programs/types';
 import type { WizardReadinessResult } from '@shared/health-checks/readiness';
 import type { SettingsConflict } from '@shared/claude-settings';
 import type { ApiUser, ApiProject, Credentials } from '@shared/api';

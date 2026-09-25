@@ -1,11 +1,11 @@
 import type { Arguments } from 'yargs';
 
-import type { ProgramConfig } from '@lib/programs/program-step';
+import type { ProgramConfig } from '@programs/types';
 import {
   buildFamilyPickerChildren,
   dispatchFamily,
   pickerChildrenToShow,
-} from '@lib/programs/dispatch-family';
+} from '@programs/dispatch-family';
 import { getSkillsBaseUrl } from '@shared/constants';
 import { fetchSkillMenu } from '@shared/skill-menu';
 

@@ -60,8 +60,12 @@ it.each([
 ])('publishes %s tasks through the %s variant', async (mode, variant) => {
   const { WizardStore } = await import('../tui/store');
   const { InkUI } = await import('../tui/ink-ui');
-  const { TaskStreamPush } = await import('@lib/task-stream/task-stream-push');
-  const { WizardRunSync } = await import('@lib/task-stream/wizard-run-sync');
+  const { TaskStreamPush } = await import(
+    '@programs/task-stream/task-stream-push'
+  );
+  const { WizardRunSync } = await import(
+    '@programs/task-stream/wizard-run-sync'
+  );
   const { HostResolution } = await import('@shared/host-resolution');
   const { RunPhase } = await import('@lib/wizard-session');
   const store = new WizardStore();

@@ -6,7 +6,7 @@ import { Colors, Icons } from '@ui/tui/styles';
 import {
   fetchHealthIssues,
   type HealthIssue,
-} from '@lib/programs/posthog-doctor/index';
+} from '@programs/posthog-doctor/index';
 import { OutroKind } from '@lib/wizard-session';
 import { ApiError } from '@shared/api';
 import { POSTHOG_DOCS_URL } from '@shared/constants';
