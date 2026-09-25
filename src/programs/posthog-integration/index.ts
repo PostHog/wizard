@@ -15,6 +15,7 @@ import {
   gatherFrameworkContext,
 } from '@programs/detection/index';
 import { scopeInstallDirToProject } from '@programs/detection/project-scope';
+import type { CiRunnerContext, RunnerContext } from '@programs/runner-context';
 import { FRAMEWORK_REGISTRY } from '@programs/frameworks/registry';
 import { wizardAbort } from '@utils/wizard-abort';
 import { ErrorCodes } from '@shared/errors';
@@ -22,7 +23,6 @@ import {
   WIZARD_DEFAULT_AIO_LOGS_FLAG_KEY,
   WIZARD_INTERACTION_EVENT_NAME,
 } from '@shared/constants';
-import { getUI } from '@ui/index';
 import { requestDeepLink } from '@utils/provisioning';
 import { openTrackedLink, withUtm } from '@utils/links';
 import type { HostResolution } from '@shared/host-resolution';
@@ -262,8 +262,11 @@ export const posthogIntegrationConfig: ProgramConfig = {
 
   // CI-mode prerequisite work: the headless equivalent of the detect step's
   // onReady hook. Auto-detect the framework, then gather context.
-  ciPreRun: async (session: WizardSession): Promise<void> => {
-    await scopeInstallDirToProject(session);
+  ciPreRun: async (
+    session: WizardSession,
+    runner: CiRunnerContext,
+  ): Promise<void> => {
+    await scopeInstallDirToProject(session, runner);
 
     const integration = await detectFramework(session.installDir);
     if (!integration) {
@@ -294,7 +297,10 @@ export const posthogIntegrationConfig: ProgramConfig = {
     }
   },
 
-  run: async (session: WizardSession): Promise<ProgramRun> => {
+  run: async (
+    session: WizardSession,
+    runner: RunnerContext,
+  ): Promise<ProgramRun> => {
     const config = session.frameworkConfig!;
 
     const typeScriptDetected = isUsingTypeScript({
@@ -314,13 +320,13 @@ export const posthogIntegrationConfig: ProgramConfig = {
       if (packageJson) {
         const { hasDeclaredDependency } = await import('@utils/package-json');
         if (!hasDeclaredDependency(config.detection.packageName, packageJson)) {
-          getUI().log.warn(
+          runner.log.warn(
             `${config.detection.packageDisplayName} does not seem to be installed. Continuing anyway — the agent will handle it.`,
           );
         }
         frameworkVersion = config.detection.getVersion(packageJson);
       } else {
-        getUI().log.warn(
+        runner.log.warn(
           'Could not find package.json. Continuing anyway — the agent will handle it.',
         );
       }

@@ -25,6 +25,7 @@ import {
 import { Integration } from '@shared/constants';
 import { WIZARD_TOOL_NAMES } from '@agent/tools';
 import { buildSession } from '@lib/wizard-session';
+import { testRunnerContext } from '../../../test/runner-context';
 import type { Mock } from 'vitest';
 
 function makeTmpDir(): string {
@@ -183,7 +184,9 @@ describe('selfDrivingConfig', () => {
     // `run` is resolved per-session so the prompt can carry the integrate flag.
     const { run } = selfDrivingConfig;
     const resolved =
-      typeof run === 'function' ? await run(buildSession({})) : run;
+      typeof run === 'function'
+        ? await run(buildSession({}), testRunnerContext())
+        : run;
     expect(resolved?.askTimeoutMs).toBe(30 * 60 * 1000);
   });
 

@@ -18,17 +18,16 @@ import net from 'net';
 import { spawnSync } from 'child_process';
 import { startTUI } from '@ui/tui/start-tui';
 import { VERSION } from '@shared/version';
-import {
-  Program,
-  getProgramConfig,
-  type ProgramId,
-} from '@programs';
+import { Program, getProgramConfig, type ProgramId } from '@programs';
 import type { Harness, Sequence } from '@shared/constants';
 import { buildSession } from '@lib/wizard-session';
 import { initLocalDev } from '@shared/local-dev';
 import { configureGatewayFromCIEnvironment } from '@agent/gateway-session';
 import { runProgramAgent } from '@programs/run-agent-legacy';
-import { TaskStreamPush, createFileDestination } from '@programs/task-stream/index';
+import {
+  TaskStreamPush,
+  createFileDestination,
+} from '@programs/task-stream/index';
 import { getAuditChecks } from '@programs/audit/types';
 import { authenticate } from '@programs/authenticate';
 import { getOrAskForProjectData } from '@utils/setup-utils';

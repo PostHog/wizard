@@ -287,7 +287,12 @@ export function runNonInteractive(
         );
       }
       if (config.ciPreRun) {
-        await config.ciPreRun(session);
+        await config.ciPreRun(session, {
+          log: {
+            info: (message) => getUI().log.info(message),
+            warn: (message) => getUI().log.warn(message),
+          },
+        });
       } else {
         const readyCtx = {
           session,

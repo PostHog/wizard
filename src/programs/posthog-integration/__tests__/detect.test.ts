@@ -44,6 +44,7 @@ import {
   type WizardSession,
 } from '@lib/wizard-session';
 import type { DetectedSource } from '@programs/warehouse-sources/types';
+import { testRunnerContext } from '../../../../test/runner-context';
 
 function makeTmpDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'warehouse-reporting-'));
@@ -376,7 +377,7 @@ describe('the full decline contract, end to end', () => {
 
     const { run } = posthogIntegrationConfig;
     if (typeof run !== 'function') throw new Error('expected a run function');
-    const runDef = await run(session);
+    const runDef = await run(session, testRunnerContext(session));
     const outro = runDef.buildOutroData!(
       session,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any

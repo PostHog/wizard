@@ -13,10 +13,7 @@ import type { ReactNode } from 'react';
 import { useState, useSyncExternalStore } from 'react';
 import type { WizardStore } from '@ui/tui/store';
 import { Integration } from '@shared/constants';
-import {
-  getCommandPath,
-  getLaunchablePrograms,
-} from '@programs';
+import { getCommandPath, getLaunchablePrograms } from '@programs';
 import {
   PickerMenu,
   LoadingBox,

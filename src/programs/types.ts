@@ -7,6 +7,7 @@ export type {
   StoreInitContext,
 } from './program-step';
 export type { FrameworkConfig, SetupQuestion } from './framework-config';
+export type { CiRunnerContext, RunnerContext } from './runner-context';
 export type {
   ProgramInput,
   ProgramOptions,

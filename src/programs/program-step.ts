@@ -13,6 +13,7 @@ import type { Tip } from '@ui/tui/components/TipsCard';
 // Type-only — erased at compile time, so no runtime cycle with the
 // registry that imports `ProgramConfig` back from this module.
 import type { ProgramId } from './program-registry.js';
+import type { CiRunnerContext, RunnerContext } from './runner-context.js';
 
 /**
  * A program step is the primary unit of the wizard's execution model.
@@ -242,14 +243,16 @@ export interface ProgramConfig {
   /** The ordered step list */
   steps: ProgramStep[];
   /** Agent run config. Static object or async function for dynamic config. */
-  run?: ProgramRun | ((session: WizardSession) => Promise<ProgramRun>);
+  run?:
+    | ProgramRun
+    | ((session: WizardSession, runner: RunnerContext) => Promise<ProgramRun>);
   /**
    * CI-mode pre-run strategy. When set, runWizardCI awaits this after building
    * the ci:true session and before the agent runs, instead of walking step
    * onReady hooks. Use for headless prerequisite work (e.g. framework
    * detection) that the TUI performs via step onReady callbacks.
    */
-  ciPreRun?: (session: WizardSession) => Promise<void>;
+  ciPreRun?: (session: WizardSession, runner: CiRunnerContext) => Promise<void>;
   /**
    * Tasks the orchestrator queues itself, before the planner runs, from what
    * the wizard detected. Their types are marked `runnerSeeded: true` in the

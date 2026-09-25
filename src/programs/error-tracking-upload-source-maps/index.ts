@@ -2,6 +2,7 @@ import type { ProgramConfig } from '@programs/program-step';
 import type { ProgramRun } from '@programs/program-run';
 import type { WizardSession } from '@lib/wizard-session';
 import { OutroKind } from '@lib/wizard-session';
+import type { RunnerContext } from '@programs/runner-context';
 import { ERROR_TRACKING_UPLOAD_SOURCE_MAPS_PROGRAM } from './steps.js';
 import {
   buildSourceMapsUploadPrompt,
@@ -14,7 +15,6 @@ import {
   type SkillVariant,
 } from './detect.js';
 import { getContentBlocks } from '../../ui/tui/decks/error-tracking-upload-source-maps/index.js';
-import { getUI } from '@ui';
 import { preinstallPostHogCliOnce } from '@programs/shared/posthog-cli-preinstall';
 
 const REPORT_FILE = 'posthog-source-maps-report.md';
@@ -25,10 +25,15 @@ const DOCS_URL = 'https://posthog.com/docs/error-tracking/upload-source-maps';
  * (`VARIANTS_REQUIRING_POSTHOG_CLI`). See `preinstallPostHogCliOnce` for the
  * once-per-process guard and the warn-don't-fail handling.
  */
-function ensurePostHogCli(variant: SkillVariant): void {
-  preinstallPostHogCliOnce('source maps posthog-cli preinstall failed', {
-    variant,
-  });
+function ensurePostHogCli(
+  variant: SkillVariant,
+  log: RunnerContext['log'],
+): void {
+  preinstallPostHogCliOnce(
+    'source maps posthog-cli preinstall failed',
+    { variant },
+    log,
+  );
 }
 
 export const errorTrackingUploadSourceMapsConfig: ProgramConfig = {
@@ -41,19 +46,22 @@ export const errorTrackingUploadSourceMapsConfig: ProgramConfig = {
   getContentBlocks,
   requires: ['posthog-integration'],
 
-  run: (_session: WizardSession): Promise<ProgramRun> => {
+  run: (
+    _session: WizardSession,
+    runner: RunnerContext,
+  ): Promise<ProgramRun> => {
     // Read the picked project LIVE at prompt-build time, not here: the picker
     // screen runs AFTER this run config is resolved (post-auth), and the store
     // forks the session reference, so the `session` passed in never sees the
-    // choice. getUI().getFrameworkContext reads the live store session.
+    // choice. The runner reads the live store session.
     const readSelection = () => {
-      const variant = getUI().getFrameworkContext(
+      const variant = runner.getFrameworkContext(
         SOURCE_MAPS_CONTEXT_KEYS.selectedVariant,
       ) as SkillVariant | undefined;
-      const displayName = getUI().getFrameworkContext(
+      const displayName = runner.getFrameworkContext(
         SOURCE_MAPS_CONTEXT_KEYS.selectedDisplayName,
       ) as string | undefined;
-      const projectPath = getUI().getFrameworkContext(
+      const projectPath = runner.getFrameworkContext(
         SOURCE_MAPS_CONTEXT_KEYS.selectedPath,
       ) as string | undefined;
       const skillId = variant
@@ -88,7 +96,7 @@ export const errorTrackingUploadSourceMapsConfig: ProgramConfig = {
         }
 
         if (VARIANTS_REQUIRING_POSTHOG_CLI.has(variant))
-          ensurePostHogCli(variant);
+          ensurePostHogCli(variant, runner.log);
 
         const uiHost = ctx.host.appHost.replace(/\/$/, '');
 
@@ -109,7 +117,7 @@ export const errorTrackingUploadSourceMapsConfig: ProgramConfig = {
         // Stash a hint for the outro about what variant we shipped.
         const { variant } = readSelection();
         if (variant) {
-          getUI().setFrameworkContext('sourceMapsCompletedVariant', variant);
+          runner.setFrameworkContext('sourceMapsCompletedVariant', variant);
         }
         return Promise.resolve();
       },

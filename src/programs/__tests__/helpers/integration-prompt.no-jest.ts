@@ -8,6 +8,7 @@ import { posthogIntegrationConfig } from '@programs/posthog-integration/index';
 import { DETECTED_WAREHOUSE_SOURCES_KEY } from '@programs/warehouse-source/detect';
 import { buildSession, type WizardSession } from '@lib/wizard-session';
 import type { DetectedSource } from '@programs/warehouse-sources/types';
+import { testRunnerContext } from '../../../../test/runner-context';
 
 export const CREDENTIALS = {
   accessToken: 'tok',
@@ -46,7 +47,7 @@ export function sessionWith(sources: DetectedSource[]): WizardSession {
 export async function resolveRun(session: WizardSession) {
   const { run } = posthogIntegrationConfig;
   if (typeof run !== 'function') throw new Error('expected a run function');
-  return run(session);
+  return run(session, testRunnerContext(session));
 }
 
 export const promptFor = async (sources: DetectedSource[]) => {

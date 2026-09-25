@@ -10,6 +10,7 @@ import { posthogIntegrationConfig } from '@programs/posthog-integration/index';
 import { buildSession, type WizardSession } from '@lib/wizard-session';
 import { analytics } from '@utils/analytics';
 import { isUsingTypeScript } from '@utils/setup-utils';
+import { testRunnerContext } from '../../../../test/runner-context';
 
 vi.mock('@utils/analytics', () => ({
   analytics: {
@@ -50,7 +51,7 @@ function sessionWithFramework(): WizardSession {
 async function resolveRun(session: WizardSession) {
   const { run } = posthogIntegrationConfig;
   if (typeof run !== 'function') throw new Error('expected a run function');
-  return run(session);
+  return run(session, testRunnerContext(session));
 }
 
 describe('posthog-integration run() — typescript tag', () => {

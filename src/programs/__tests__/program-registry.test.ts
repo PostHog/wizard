@@ -7,6 +7,7 @@ import {
   getSubcommandPrograms,
 } from '../program-registry';
 import type { WizardSession } from '@lib/wizard-session';
+import { testRunnerContext } from '../../../test/runner-context';
 
 describe('PROGRAM_REGISTRY', () => {
   it('every entry has unique id, description, and non-empty steps', () => {
@@ -134,7 +135,7 @@ describe('agentSkillConfig run recipe', () => {
     const session = { skillId: 'audit-events' } as unknown as WizardSession;
     const run =
       typeof agentSkillConfig.run === 'function'
-        ? await agentSkillConfig.run(session)
+        ? await agentSkillConfig.run(session, testRunnerContext())
         : agentSkillConfig.run!;
 
     expect(run.skillId).toBe('audit-events');
