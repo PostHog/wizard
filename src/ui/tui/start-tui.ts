@@ -22,6 +22,7 @@ export { releaseTerminal };
 export function startTUI(
   version: string,
   program: ProgramId = Program.PostHogIntegration,
+  onInterrupt?: () => void,
 ): {
   unmount: () => void;
   store: WizardStore;
@@ -84,6 +85,10 @@ export function startTUI(
     // the process dies, or interrupted runs vanish from the funnel entirely.
     // shutdown() is a no-op when a runner already reported a real status.
     const interrupted = !cleaned;
+    if (interrupted && onInterrupt) {
+      onInterrupt();
+      return;
+    }
     cleanup();
     if (interrupted) {
       try {

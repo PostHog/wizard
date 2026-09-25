@@ -25,7 +25,7 @@ import {
   type WizardSession,
 } from '@lib/wizard-session';
 import { Integration } from '@shared/constants';
-import { FRAMEWORK_REGISTRY } from '@programs/registry';
+import { FRAMEWORK_REGISTRY } from '@programs/frameworks/registry';
 import { HostResolution } from '@shared/host-resolution';
 import { WizardReadiness } from '@shared/health-checks/readiness';
 import { SOURCE_MAPS_CONTEXT_KEYS } from '@programs/error-tracking-upload-source-maps/detect';
@@ -288,6 +288,7 @@ const PAIRS: Pair[] = [
       s.setIntegrate(true);
       s.setReadinessResult(clean);
       authed(s);
+      s.setGithubConnected(false);
       s.setFrameworkContext(SELF_DRIVING_INTEGRATE_PATH_KEY, '.');
       s.setFrameworkConfig(
         Integration.javascriptNode,

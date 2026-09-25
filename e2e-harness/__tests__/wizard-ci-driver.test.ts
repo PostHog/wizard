@@ -15,7 +15,7 @@ import { setUI } from '@ui/index';
 import { buildSession, RunPhase, McpOutcome } from '@lib/wizard-session';
 import { HostResolution } from '@shared/host-resolution';
 import { Integration } from '@shared/constants';
-import { FRAMEWORK_REGISTRY } from '@programs/registry';
+import { FRAMEWORK_REGISTRY } from '@programs/frameworks/registry';
 import { WizardReadiness } from '@shared/health-checks/readiness';
 import { ScreenId, Overlay } from '@ui/tui/router';
 import { Program } from '@programs';

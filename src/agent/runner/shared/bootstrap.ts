@@ -10,6 +10,7 @@
 
 import { createTriageLLMProvider } from '@agent/triage-provider';
 import { gatewayAuth } from '@agent/gateway-session';
+import { currentAccessToken } from '@shared/oauth-session';
 import { logToFile } from '@utils/debug';
 import { CallType, IS_DEV } from '@shared/constants';
 import { VERSION } from '@shared/version';
@@ -89,7 +90,9 @@ export async function prepareRun(
     // expiry. Programs own credentials (stack plan 4.5): pass a resolved
     // inference-auth provider on RunInput.credentials and move
     // gateway-session.ts out of src/agent with it.
-    gatewayAuth(credentials.host, credentials.accessToken, programId);
+    currentAccessToken(credentials).then((token) =>
+      gatewayAuth(credentials.host, token, programId),
+    );
   await currentGatewayAuth();
 
   return {
