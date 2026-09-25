@@ -35,7 +35,9 @@ import {
 } from './types';
 import { EventPlanWatcher } from './event-plan-watcher';
 import { rollUpAuditAreas } from './audit-areas';
+import type { WizardRunSync, RunOutcome } from './wizard-run-sync';
 import { logToFile } from '@utils/debug';
+import { WIZARD_RUN_SYNC_FLAG_KEY } from '@shared/constants';
 import { sanitizeErrorDetail } from '@shared/errors';
 
 /** Trailing-edge debounce window for non-phase-change emits. */
@@ -47,6 +49,7 @@ const STATUS_MAP: Record<TaskStatus, StreamTaskStatus> = {
   [TaskStatus.Pending]: StreamTaskStatus.Pending,
   [TaskStatus.InProgress]: StreamTaskStatus.InProgress,
   [TaskStatus.Completed]: StreamTaskStatus.Completed,
+  [TaskStatus.Failed]: StreamTaskStatus.Failed,
   // The stream has no skipped state; skipped is terminal, so report it resolved.
   [TaskStatus.Skipped]: StreamTaskStatus.Completed,
 };
@@ -112,6 +115,8 @@ function buildPendingInput(
 
 export interface TaskStreamPushOptions {
   store: WizardStore;
+  runSync?: WizardRunSync;
+  getFlags?: () => Readonly<Record<string, string>> | null;
   programId: string;
   destinations: TaskStreamDestination[];
   /** Optional absolute event-plan path to load into the store once. */
@@ -131,6 +136,10 @@ export class TaskStreamPush {
   private readonly eventPlanWatcher: EventPlanWatcher | null;
   private readonly auditChecks: (() => unknown) | null;
 
+  private readonly runSync?: WizardRunSync;
+  private readonly getFlags?: TaskStreamPushOptions['getFlags'];
+  private remoteSync?: 'wizard-session' | 'wizard-run';
+  private shutdownPromise?: Promise<void>;
   private enabled: boolean;
   private created = false;
   private lastPushedPhase: RunPhase | null = null;
@@ -144,6 +153,13 @@ export class TaskStreamPush {
 
   constructor(opts: TaskStreamPushOptions) {
     this.store = opts.store;
+    this.runSync = opts.runSync;
+    this.getFlags = opts.getFlags;
+    this.remoteSync = !opts.runSync
+      ? 'wizard-session'
+      : opts.getFlags
+      ? undefined
+      : 'wizard-run';
     this.programId = sanitizeChannelId(opts.programId);
     this.destinations = opts.destinations;
     this.enabled = opts.enabled ?? true;
@@ -188,14 +204,28 @@ export class TaskStreamPush {
     }
   }
 
-  /**
-   * Cancel pending debounce, flush one final push if the current
-   * phase is terminal, and resolve. Never throws. Bounded by
-   * `timeoutMs` — if a destination hangs, this returns anyway.
-   */
-  async shutdown(
-    timeoutMs: number = DEFAULT_SHUTDOWN_TIMEOUT_MS,
+  // Finalize execution while the legacy session continues through the outro.
+  async finishRun(
+    outcome: RunOutcome,
+    timeoutMs = DEFAULT_SHUTDOWN_TIMEOUT_MS,
   ): Promise<void> {
+    await this.runSync?.shutdown(outcome, timeoutMs);
+  }
+
+  shutdown(
+    timeoutMs: number = DEFAULT_SHUTDOWN_TIMEOUT_MS,
+    outcome: RunOutcome = this.store.session.runPhase === RunPhase.Completed
+      ? 'completed'
+      : 'failed',
+  ): Promise<void> {
+    this.shutdownPromise ??= Promise.all([
+      this.runSync?.shutdown(outcome, timeoutMs),
+      this.shutdownLegacy(timeoutMs),
+    ]).then(() => undefined);
+    return this.shutdownPromise;
+  }
+
+  private async shutdownLegacy(timeoutMs: number): Promise<void> {
     this.shuttingDown = true;
     this.eventPlanWatcher?.refresh();
     if (this.debounceTimer) {
@@ -211,10 +241,17 @@ export class TaskStreamPush {
 
     const flush = this.flush();
     if (timeoutMs <= 0) return;
-    await Promise.race([
-      flush,
-      new Promise<void>((resolve) => setTimeout(resolve, timeoutMs)),
-    ]);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      await Promise.race([
+        flush,
+        new Promise<void>((resolve) => {
+          timer = setTimeout(resolve, timeoutMs);
+        }),
+      ]);
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
   /**
@@ -231,6 +268,10 @@ export class TaskStreamPush {
     if (!this.enabled || this.shuttingDown) return;
     const phase = this.store.session.runPhase;
     if (phase === RunPhase.Idle) return;
+    this.selectRemoteSync();
+    if (this.remoteSync === 'wizard-run') {
+      this.runSync?.capture(this.store.tasks);
+    }
 
     // A push is already in flight — coalesce. The in-flight push's
     // settle handler will trigger one follow-up with the latest state.
@@ -298,6 +339,8 @@ export class TaskStreamPush {
   }
 
   private async sendOnce(): Promise<void> {
+    this.selectRemoteSync();
+    if (!this.remoteSync) return;
     const { session, tasks, eventPlan, handoffText } = this.store;
     const skillId = sanitizeChannelId(session.skillId ?? this.programId);
     const phase = session.runPhase;
@@ -345,10 +388,25 @@ export class TaskStreamPush {
     this.lastPushedQuestionId = payload.pending_input?.id ?? null;
 
     await Promise.all(
-      this.destinations.map((d) =>
-        // eslint-disable-next-line @typescript-eslint/no-empty-function
-        d.send(event, payload).catch(() => {}),
-      ),
+      this.destinations
+        .filter(
+          (d) => d.name !== 'posthog' || this.remoteSync === 'wizard-session',
+        )
+        .map((d) =>
+          // eslint-disable-next-line @typescript-eslint/no-empty-function
+          d.send(event, payload).catch(() => {}),
+        ),
     );
+  }
+
+  private selectRemoteSync(): void {
+    if (this.remoteSync || !this.store.session.credentials) return;
+    if (this.store.session.runPhase === RunPhase.Idle) return;
+    const flags = this.getFlags?.();
+    if (!flags) return;
+    this.remoteSync =
+      flags[WIZARD_RUN_SYNC_FLAG_KEY] === 'wizard-run'
+        ? 'wizard-run'
+        : 'wizard-session';
   }
 }

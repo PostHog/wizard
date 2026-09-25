@@ -27,12 +27,12 @@ const DOCS_URL = 'https://posthog.com/docs/error-tracking/upload-source-maps';
  */
 function ensurePostHogCli(
   variant: SkillVariant,
-  warn: RunnerContext['warn'],
+  log: RunnerContext['log'],
 ): void {
   preinstallPostHogCliOnce(
     'source maps posthog-cli preinstall failed',
     { variant },
-    warn,
+    log,
   );
 }
 
@@ -96,7 +96,7 @@ export const errorTrackingUploadSourceMapsConfig: ProgramConfig = {
         }
 
         if (VARIANTS_REQUIRING_POSTHOG_CLI.has(variant))
-          ensurePostHogCli(variant, (message) => runner.warn(message));
+          ensurePostHogCli(variant, runner.log);
 
         const uiHost = ctx.host.appHost.replace(/\/$/, '');
 

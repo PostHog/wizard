@@ -1,25 +1,41 @@
-import { refreshCredentialsIfNeeded } from '../authenticate';
+import { rotateCredentials } from '../credentials';
 import { refreshAccessToken } from '@utils/oauth';
 import { OAuthError } from '@utils/oauth-errors';
 import {
   isGrantRevoked,
   resetAuthSessionState,
 } from '@shared/auth-session-state';
-import type { Credentials } from '@lib/wizard-session';
+import {
+  configureOAuthSession,
+  oauthCredentials,
+  resetOAuthSession,
+} from '@shared/oauth-session';
+import type { Credentials } from '@shared/api';
 
-vi.mock('@utils/oauth', () => ({ refreshAccessToken: vi.fn() }));
+vi.mock('@utils/oauth', async (original) => ({
+  ...(await original<typeof import('@utils/oauth')>()),
+  refreshAccessToken: vi.fn(),
+}));
 vi.mock('@utils/debug', () => ({ logToFile: vi.fn() }));
 vi.mock('@utils/analytics', () => ({
   analytics: { wizardCapture: vi.fn() },
   groupsFromUser: vi.fn(),
 }));
-
+// The real @utils/oauth loads the UI module.
 vi.mock('@ui', () => ({ getUI: vi.fn() }));
 
 const mockedRefresh = refreshAccessToken as Mock;
 
-const refresh = (credentials: Partial<Credentials>) =>
-  refreshCredentialsIfNeeded(credentials as Credentials, {});
+/** The pre-run refresh runProgram does: the OAuth session decides, this grant rotates. */
+async function refresh(
+  credentials: Partial<Credentials>,
+  baseUrl?: string,
+): Promise<Credentials> {
+  configureOAuthSession(credentials as Credentials, {
+    rotate: (held) => rotateCredentials(held, baseUrl),
+  });
+  return (await oauthCredentials())!;
+}
 
 /** Aging enough to be under the 50-minute threshold. */
 const aging = (over: Partial<Credentials> = {}): Partial<Credentials> => ({
@@ -29,10 +45,11 @@ const aging = (over: Partial<Credentials> = {}): Partial<Credentials> => ({
   ...over,
 });
 
-describe('refreshCredentialsIfNeeded', () => {
+describe('rotateCredentials through the OAuth session', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     resetAuthSessionState();
+    resetOAuthSession();
   });
 
   it('is a no-op without a refresh token (CI api-key runs, refresh-less grants)', async () => {
@@ -59,9 +76,9 @@ describe('refreshCredentialsIfNeeded', () => {
       token_type: 'Bearer',
       scope: 'project:read',
     });
-    const refreshed = await refreshCredentialsIfNeeded(
-      aging({ projectId: 7 }) as Credentials,
-      { baseUrl: 'https://posthog.example' },
+    const refreshed = await refresh(
+      aging({ projectId: 7 }),
+      'https://posthog.example',
     );
 
     expect(mockedRefresh).toHaveBeenCalledWith(

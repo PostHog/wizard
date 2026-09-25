@@ -16,7 +16,7 @@ import {
 } from '@programs/detection/index';
 import { scopeInstallDirToProject } from '@programs/detection/project-scope';
 import type { CiRunnerContext, RunnerContext } from '@programs/runner-context';
-import { FRAMEWORK_REGISTRY } from '@programs/registry';
+import { FRAMEWORK_REGISTRY } from '@programs/frameworks/registry';
 import { wizardAbort } from '@utils/wizard-abort';
 import { ErrorCodes } from '@shared/errors';
 import {
@@ -320,13 +320,13 @@ export const posthogIntegrationConfig: ProgramConfig = {
       if (packageJson) {
         const { hasDeclaredDependency } = await import('@utils/package-json');
         if (!hasDeclaredDependency(config.detection.packageName, packageJson)) {
-          runner.warn(
+          runner.log.warn(
             `${config.detection.packageDisplayName} does not seem to be installed. Continuing anyway — the agent will handle it.`,
           );
         }
         frameworkVersion = config.detection.getVersion(packageJson);
       } else {
-        runner.warn(
+        runner.log.warn(
           'Could not find package.json. Continuing anyway — the agent will handle it.',
         );
       }

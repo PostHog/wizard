@@ -9,7 +9,7 @@ export function testRunnerContext(session?: {
     setFrameworkContext: (key, value) => {
       context[key] = value;
     },
-    warn: () => undefined,
+    log: { warn: () => undefined },
   };
 }
 

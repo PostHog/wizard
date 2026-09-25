@@ -11,13 +11,11 @@
 
 import type { ProgramReadyContext } from '@programs/program-step';
 import {
-  DiscoveredFeature,
   mayReportScanResults,
   ScanConsent,
   type WizardSession,
 } from '@lib/wizard-session';
-import type { ApiUser } from '@shared/api';
-import { FRAMEWORK_REGISTRY } from '@programs/registry';
+import { FRAMEWORK_REGISTRY } from '@programs/frameworks/registry';
 import {
   detectFramework,
   discoverFeatures,
@@ -26,13 +24,18 @@ import {
 } from '@programs/detection/index';
 import { analytics } from '@utils/analytics';
 import { detectWarehouseSources } from '@programs/warehouse-sources/detect';
-import { AI_SOURCE_KINDS } from '@programs/warehouse-sources/registry';
-import type { DetectedSource } from '@programs/warehouse-sources/types';
 import {
   DETECTED_WAREHOUSE_SOURCES_KEY,
   getDetectedWarehouseSources,
 } from '@programs/warehouse-source/detect';
 import { findPackageJsons } from '@programs/shared/package-scanning';
+import { stampAiSdkDetected } from '@programs/posthog-integration/ai-sdk-stamp';
+
+// Session-free, so runProgram can stamp without loading the session.
+export {
+  stampAiSdkDetected,
+  type AiSdkStampEvidence,
+} from '@programs/posthog-integration/ai-sdk-stamp';
 
 export async function detectPostHogIntegration(
   ctx: ProgramReadyContext,
@@ -143,37 +146,6 @@ function detectWarehouseSourcesForSuggestion(
       { step: 'detectWarehouseSourcesForSuggestion' },
     );
   }
-}
-
-/** What the org stamp reads, with no session. */
-export type AiSdkStampEvidence = {
-  apiUser: Pick<ApiUser, 'organization'> | null;
-  discoveredFeatures: readonly DiscoveredFeature[];
-  warehouseSources: readonly DetectedSource[];
-  /** Scan consent was granted, so local detection results may be reported. */
-  mayReportScanResults: boolean;
-};
-
-function hasAiSdkEvidence(evidence: AiSdkStampEvidence): boolean {
-  return (
-    evidence.warehouseSources.some((s) => AI_SOURCE_KINDS.has(s.kind)) ||
-    evidence.discoveredFeatures.includes(DiscoveredFeature.LLM)
-  );
-}
-
-/**
- * Boolean only, on the org, never the list of kinds or any non-AI tool: a
- * decline must not leak even the shape of what local detection saw.
- */
-export function stampAiSdkDetected(evidence: AiSdkStampEvidence): void {
-  if (!evidence.mayReportScanResults) return;
-  const organizationId = evidence.apiUser?.organization?.id;
-  if (!organizationId) return;
-  if (!hasAiSdkEvidence(evidence)) return;
-
-  analytics.groupIdentify('organization', organizationId, {
-    wizard_ai_sdk_detected: true,
-  });
 }
 
 /**

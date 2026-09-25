@@ -6,7 +6,7 @@ import {
 } from '@programs/detection/index';
 import { scopeInstallDirToProject } from '@programs/detection/project-scope';
 import type { CiRunnerContext } from '@programs/runner-context';
-import { FRAMEWORK_REGISTRY } from '@programs/registry';
+import { FRAMEWORK_REGISTRY } from '@programs/frameworks/registry';
 import { createSkillProgram } from '@programs/agent-skill/index';
 import { AGENT_SKILL_STEPS } from '@programs/agent-skill/steps';
 import { detectPostHogIntegration } from '@programs/posthog-integration/detect';

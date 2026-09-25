@@ -40,7 +40,7 @@ import { registerCleanup, wizardAbort } from '@utils/wizard-abort';
 import { ErrorCodes } from '@shared/errors';
 import { isNonInteractiveEnvironment } from '@utils/environment';
 import { Sequence, type Integration } from '@shared/constants';
-import { FRAMEWORK_REGISTRY } from '@programs/registry';
+import { FRAMEWORK_REGISTRY } from '@programs/frameworks/registry';
 import { postAuthGateSteps, type ProgramConfig } from './program-step';
 import { authenticate } from './authenticate';
 import {
@@ -101,7 +101,7 @@ function uiRunnerContext(): RunnerContext {
     getFrameworkContext: (key) => getUI().getFrameworkContext(key),
     setFrameworkContext: (key, value) =>
       getUI().setFrameworkContext(key, value),
-    warn: (message) => getUI().log.warn(message),
+    log: { warn: (message) => getUI().log.warn(message) },
   };
 }
 
@@ -248,6 +248,13 @@ async function runSessionProgram(
       interaction: uiInteraction(ui),
     },
   );
+  // runProgram keeps a throwing progress handler or a late event as a diagnostic, so log it.
+  for (const diagnostic of result.diagnostics) {
+    const runLabel = 'runId' in diagnostic ? ` run=${diagnostic.runId}` : '';
+    logToFile(
+      `[agent-runner] progress diagnostic (${diagnostic.eventKind}${runLabel}): ${diagnostic.message}`,
+    );
+  }
   if (capabilityFailure) throw capabilityFailure.error;
 
   // The adapter owns process exits, terminal analytics and rethrowing crashes.
