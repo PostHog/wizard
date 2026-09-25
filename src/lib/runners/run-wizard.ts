@@ -13,7 +13,9 @@ import { OutroKind, type WizardSession } from '@lib/wizard-session';
 import type { TaskStreamPush as TaskStreamPushClass } from '@lib/task-stream/task-stream-push';
 import { resolveNoTelemetry } from './resolve-no-telemetry';
 import { checkLocalServices, getLocalDev } from '@shared/local-dev';
-import { runCleanups } from '@utils/wizard-abort';
+import { createWizardRunSync } from '@lib/task-stream/wizard-run-sync';
+import { runtimeEnv } from '@env';
+import { runCleanups, registerShutdown } from '@utils/wizard-abort';
 import { classifyRunFailure, emitWizardError } from '@shared/errors';
 import { isRunFailure } from '@ui/mint-failure';
 import { getUI } from '@ui';
@@ -79,6 +81,8 @@ export function runWizard(
   let taskStream: TaskStreamPushClass | null = null;
   let onSignal: (() => void) | null = null;
   let exitInProgress = false;
+  let signalled = false;
+  let unregisterShutdown: (() => void) | undefined;
 
   void (async () => {
     try {
@@ -111,7 +115,7 @@ export function runWizard(
       }
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      tui = startTUI(WIZARD_VERSION, config.id as any);
+      tui = startTUI(WIZARD_VERSION, config.id as any, () => onSignal?.());
       const activeTui = tui;
 
       const session = buildSession({
@@ -149,7 +153,6 @@ export function runWizard(
       // snapshot. Registered before the stream exists: Ctrl-C on the intro
       // must still restore the terminal and run the cleanups, and there is
       // no run to report yet.
-      let signalled = false;
       onSignal = (): void => {
         if (signalled || exitInProgress) return;
         signalled = true;
@@ -161,6 +164,11 @@ export function runWizard(
           activeTui.store.setRunPhase(RunPhase.Error);
         }
         const teardown = (): void => {
+          unregisterShutdown?.();
+          if (onSignal) {
+            process.off('SIGINT', onSignal);
+            process.off('SIGTERM', onSignal);
+          }
           try {
             activeTui.unmount();
           } catch {
@@ -168,16 +176,11 @@ export function runWizard(
           }
           process.exit(130);
         };
-        const stream = taskStream;
-        if (!stream) {
-          teardown();
-          return;
-        }
-        void stream
-          .shutdown(2000)
-          .catch((e) =>
-            logToFile('[run-wizard] task stream shutdown error on signal:', e),
-          )
+        void Promise.all([
+          taskStream?.shutdown(2000, 'cancelled'),
+          analytics.shutdown('cancelled'),
+        ])
+          .catch(() => logToFile('[run-wizard] cancellation shutdown failed'))
           .finally(teardown);
       };
       process.on('SIGINT', onSignal);
@@ -214,7 +217,17 @@ export function runWizard(
       const taskStreamEnabled = destinations.length > 0;
       const activeStream = new TaskStreamPush({
         store: activeTui.store,
+        getFlags: () => analytics.getCachedWizardFlags(),
         programId: config.streamWorkflowId ?? config.id,
+        runSync: createWizardRunSync({
+          mode: 'local',
+          programId: config.id,
+          assignedId:
+            (options.runId as string | undefined) ??
+            runtimeEnv('POSTHOG_WIZARD_RUN_ID'),
+          noTelemetry: session.noTelemetry,
+          getSession: () => activeTui.store.session,
+        }),
         destinations,
         eventPlanPath: config.eventPlanFile
           ? join(session.installDir, config.eventPlanFile)
@@ -226,6 +239,12 @@ export function runWizard(
       });
       taskStream = activeStream;
       activeStream.attach();
+      unregisterShutdown = registerShutdown((outcome) => {
+        if (activeTui.store.session.runPhase === RunPhase.Running) {
+          activeTui.store.setRunPhase(RunPhase.Error);
+        }
+        return activeStream.shutdown(2000, outcome);
+      });
 
       await activeTui.store.getGate('integration-check');
       await activeTui.store.getGate('health-check');
@@ -281,7 +300,9 @@ export function runWizard(
         }
       }
 
+      if (signalled) return;
       const runFailed = isRunFailure(activeTui.store.session);
+      await activeStream.finishRun(runFailed ? 'failed' : 'completed');
       await activeTui.store.waitUntil((s) => {
         if (s.mintHandoff === 'exit') return true;
         if (skipAgent && !runFailed) return s.outroDismissed;
@@ -290,12 +311,14 @@ export function runWizard(
 
       exitInProgress = true;
       await activeStream.shutdown(2000);
+      unregisterShutdown?.();
       process.off('SIGINT', onSignal);
       process.off('SIGTERM', onSignal);
       if (runFailed) await analytics.shutdown('error');
       activeTui.unmount();
       process.exit(runFailed ? 1 : 0);
     } catch (err) {
+      if (signalled) return;
       // File-log first — the cleanup below can throw or exit.
       logToFile('[run-wizard] FATAL:', err);
       // Run cleanups before anything async so settings are restored even if
@@ -310,11 +333,12 @@ export function runWizard(
       }
       if (taskStream) {
         try {
-          await taskStream.shutdown(2000);
+          await taskStream.shutdown(2000, 'failed');
         } catch {
           // ignore
         }
       }
+      unregisterShutdown?.();
       if (tui) {
         try {
           tui.unmount();

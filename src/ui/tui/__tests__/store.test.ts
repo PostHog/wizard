@@ -1048,6 +1048,23 @@ describe('WizardStore', () => {
   });
 
   describe('syncTodos', () => {
+    it('removes omitted native tasks and retains completed work from earlier agents', () => {
+      const store = createStore();
+      store.syncTodos([
+        { id: 'a', source: 'first', content: 'Same', status: 'completed' },
+      ]);
+      store.syncTodos([
+        { id: 'a', source: 'second', content: 'Same', status: 'pending' },
+      ]);
+      expect(store.tasks).toHaveLength(2);
+      store.syncTodos([
+        { id: 'b', source: 'second', content: 'Next', status: 'pending' },
+      ]);
+      expect(store.tasks.map((t) => t.label)).toEqual(['Same', 'Next']);
+      store.syncTodos([]);
+      expect(store.tasks.map((t) => t.label)).toEqual(['Same']);
+    });
+
     it('maps incoming todos to TaskItems', () => {
       const store = createStore();
       store.syncTodos([
@@ -1316,7 +1333,7 @@ describe('WizardStore', () => {
       expect(store.statusMessages).toEqual(['']);
     });
 
-    it('syncTodos with empty array clears non-completed tasks', () => {
+    it('syncTodos with empty array retains terminal tasks; setTasks clears all', () => {
       const store = createStore();
       store.setTasks([
         { label: 'Pending', status: TaskStatus.Pending, done: false },
@@ -1324,11 +1341,9 @@ describe('WizardStore', () => {
       ]);
 
       store.syncTodos([]);
-
-      // Only the completed task is retained
-      expect(store.tasks).toEqual([
-        { label: 'Done', status: TaskStatus.Completed, done: true },
-      ]);
+      expect(store.tasks.map((t) => t.label)).toEqual(['Done']);
+      store.setTasks([]);
+      expect(store.tasks).toEqual([]);
     });
 
     it('syncTodos with unknown status defaults to Pending', () => {

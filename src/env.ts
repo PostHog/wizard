@@ -66,6 +66,7 @@ type RuntimeEnvKey =
   // yargs .env('POSTHOG_WIZARD') would claim them as CLI options and
   // .strictOptions() would reject the run unless the wizard also declared them,
   // which would tie every sandbox deploy to an npm release of this package.
+  | 'POSTHOG_WIZARD_RUN_ID'
   | 'POSTHOG_TASK_RUN_ID'
   | 'POSTHOG_TASK_ID'
   | 'POSTHOG_HANDOFF_OUTPUT_PATH'

@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 /**
  * Shared agent interface for PostHog wizards
  * Uses Claude Agent SDK directly with PostHog LLM gateway
@@ -195,6 +196,7 @@ export type AgentConfig = {
   workingDirectory: string;
   posthogMcpUrl: string;
   posthogApiKey: string;
+  currentPosthogApiKey?: () => Promise<string>;
   host: HostResolution;
   additionalMcpServers?: Record<string, { url: string }>;
   detectPackageManager: PackageManagerDetector;
@@ -309,6 +311,7 @@ type AgentRunConfig = {
   model: string;
   /** The run's OAuth access token — the MCP config resolves it in the child. */
   posthogApiKey: string;
+  currentPosthogApiKey?: () => Promise<string>;
   wizardFlags?: Record<string, string>;
   wizardMetadata?: Record<string, string>;
   /** Extra tools added on top of BASE_ALLOWED_TOOLS for this run. */
@@ -532,8 +535,12 @@ export async function initializeAgent(
     // gatewayAuth mints for this run.
     // Disable experimental betas (like input_examples) the gateway doesn't support.
     process.env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS = 'true';
-    const currentGatewayAuth = () =>
-      gatewayAuth(config.host, config.posthogApiKey, config.programId);
+    const currentGatewayAuth = async () =>
+      gatewayAuth(
+        config.host,
+        (await config.currentPosthogApiKey?.()) ?? config.posthogApiKey,
+        config.programId,
+      );
     const auth = await currentGatewayAuth();
     const gatewayUrl = auth.gatewayUrl;
     process.env.ANTHROPIC_BASE_URL = gatewayUrl;
@@ -643,6 +650,7 @@ export async function initializeAgent(
       mcpServers,
       model,
       posthogApiKey: config.posthogApiKey,
+      currentPosthogApiKey: config.currentPosthogApiKey,
       wizardFlags: config.wizardFlags,
       wizardMetadata: config.wizardMetadata,
       allowedTools: config.allowedTools,
@@ -1117,7 +1125,9 @@ export async function runAgent(
             CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS: 'true',
             // The MCP config resolves this in the child; sending the value would
             // put it on the CLI's argv.
-            POSTHOG_MCP_TOKEN: agentConfig.posthogApiKey,
+            POSTHOG_MCP_TOKEN:
+              (await agentConfig.currentPosthogApiKey?.()) ??
+              agentConfig.posthogApiKey,
             // SDK 0.3.142 made MCP servers connect in the background by default;
             // the agent may start its first turn before posthog-wizard is ready
             // (audit programs call audit_seed_checks on turn 1, integration
@@ -1692,7 +1702,15 @@ export const BASE_ALLOWED_TOOLS: readonly string[] = [
   ...Object.values(WIZARD_TOOL_NAMES),
 ];
 
-type TaskEntry = { content: string; status: string; activeForm?: string };
+type TaskEntry = {
+  id?: string;
+  source?: string;
+  content: string;
+  status: string;
+  activeForm?: string;
+};
+
+const taskSources = new WeakMap<Map<string, TaskEntry>, string>();
 
 interface TaskStore {
   tasks: Map<string, TaskEntry>;
@@ -1717,7 +1735,14 @@ function handleTaskCreate(block: ToolUseBlock, store: TaskStore): void {
   if (!input?.subject) return;
   // Key by tool_use_id for now — the rekey to the SDK-assigned taskId happens
   // when the matching tool_result arrives.
+  let source = taskSources.get(store.tasks);
+  if (!source) {
+    source = randomUUID();
+    taskSources.set(store.tasks, source);
+  }
   store.tasks.set(block.id, {
+    id: randomUUID(),
+    source,
     content: input.subject,
     status: 'pending',
     activeForm: input.activeForm,
@@ -1776,6 +1801,8 @@ function handleTaskUpdate(block: ToolUseBlock, store: TaskStore): void {
       });
     }
     store.tasks.set(input.taskId, {
+      id: existing.id,
+      source: existing.source,
       content: input.subject ?? existing.content,
       status: input.status ?? existing.status,
       activeForm: input.activeForm ?? existing.activeForm,
