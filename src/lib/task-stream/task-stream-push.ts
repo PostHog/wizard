@@ -37,6 +37,7 @@ import { EventPlanWatcher } from './event-plan-watcher';
 import { rollUpAuditAreas } from './audit-areas';
 import type { WizardRunSync, RunOutcome } from './wizard-run-sync';
 import { logToFile } from '@utils/debug';
+import { WIZARD_RUN_SYNC_FLAG_KEY } from '@shared/constants';
 import { sanitizeErrorDetail } from '@shared/errors';
 
 /** Trailing-edge debounce window for non-phase-change emits. */
@@ -403,7 +404,7 @@ export class TaskStreamPush {
     const flags = this.getFlags?.();
     if (!flags) return;
     this.remoteSync =
-      flags['wizard-run-sync'] === 'wizard-run'
+      flags[WIZARD_RUN_SYNC_FLAG_KEY] === 'wizard-run'
         ? 'wizard-run'
         : 'wizard-session';
   }

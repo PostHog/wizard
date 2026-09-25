@@ -8,7 +8,6 @@ import {
   type Credentials,
   type WizardSession,
 } from '@lib/wizard-session';
-import type { TaskItem } from '@ui/tui/store';
 import { currentCredentials } from '@agent';
 import { isGrantRevoked } from '@shared/auth-session-state';
 import { logToFile } from '@utils/debug';
@@ -18,6 +17,14 @@ export type RunOutcome = 'completed' | 'failed' | 'cancelled';
 type RunTask = {
   name: string;
   status: 'created' | 'running' | 'completed' | 'failed';
+};
+// The task fields a snapshot reads, local so task-stream stays off the TUI store.
+type TaskItem = {
+  id?: string;
+  source?: string;
+  sourceStatus?: string;
+  label: string;
+  status: string;
 };
 type Options = {
   mode: 'local' | 'cloud';
