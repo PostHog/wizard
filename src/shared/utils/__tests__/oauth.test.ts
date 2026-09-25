@@ -2,6 +2,7 @@ import {
   assertWizardCompletionScope,
   extractOAuthCode,
   isAuthorizationTimeout,
+  isPortUnavailableError,
   missingOAuthScopes,
   OAuthTokenResponseSchema,
   parseOAuthScopes,
@@ -56,6 +57,23 @@ describe('extractOAuthCode', () => {
 
   it('returns null for free-form text with whitespace and no code', () => {
     expect(extractOAuthCode('please paste here')).toBeNull();
+  });
+});
+
+describe('isPortUnavailableError', () => {
+  const errnoError = (code: string) =>
+    Object.assign(new Error(`listen ${code}`), { code });
+
+  it.each(['EADDRINUSE', 'EACCES', 'EPERM'])(
+    'treats %s as unavailable',
+    (code) => {
+      expect(isPortUnavailableError(errnoError(code))).toBe(true);
+    },
+  );
+
+  it('rethrows other listen errors', () => {
+    expect(isPortUnavailableError(errnoError('EINVAL'))).toBe(false);
+    expect(isPortUnavailableError(new Error('boom'))).toBe(false);
   });
 });
 
