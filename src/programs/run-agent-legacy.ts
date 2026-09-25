@@ -101,7 +101,7 @@ function uiRunnerContext(): RunnerContext {
     getFrameworkContext: (key) => getUI().getFrameworkContext(key),
     setFrameworkContext: (key, value) =>
       getUI().setFrameworkContext(key, value),
-    warn: (message) => getUI().log.warn(message),
+    log: { warn: (message) => getUI().log.warn(message) },
   };
 }
 

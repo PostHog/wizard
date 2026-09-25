@@ -237,7 +237,7 @@ it('supplies the live UI as the runner context, not the session it was handed', 
   config.run = (_session, runner) => {
     read = runner.getFrameworkContext('selectedVariant');
     runner.setFrameworkContext('sourceMapsCompletedVariant', 'ios');
-    runner.warn('careful');
+    runner.log.warn('careful');
     return Promise.resolve(program().run as ProgramRun);
   };
 

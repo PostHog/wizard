@@ -195,7 +195,7 @@ describe('error-tracking ciPreRun', () => {
 
 describe('error-tracking run config', () => {
   test('pre-installs posthog-cli when run resolves, after the project pick', async () => {
-    const runner = { ...testRunnerContext(), warn: vi.fn() };
+    const runner = { ...testRunnerContext(), log: { warn: vi.fn() } };
     await resolveRun(
       { integration: Integration.swift } as WizardSession,
       runner,
@@ -204,11 +204,11 @@ describe('error-tracking run config', () => {
     expect(preinstallPostHogCliOnce).toHaveBeenCalledWith(
       'error tracking posthog-cli preinstall failed',
       { integration: Integration.swift },
-      expect.any(Function),
+      runner.log,
     );
-    const warn = vi.mocked(preinstallPostHogCliOnce).mock.calls[0]?.[2];
-    warn?.('install warning');
-    expect(runner.warn).toHaveBeenCalledWith('install warning');
+    const log = vi.mocked(preinstallPostHogCliOnce).mock.calls[0]?.[2];
+    log?.warn('install warning');
+    expect(runner.log.warn).toHaveBeenCalledWith('install warning');
   });
 
   test('skips the pre-install for platforms without symbol upload', async () => {

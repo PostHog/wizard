@@ -62,13 +62,13 @@ async function abortUnsupportedPlatform(
  */
 function maybePreinstallPostHogCli(
   integration: Integration | null,
-  warn: RunnerContext['warn'],
+  log: RunnerContext['log'],
 ): void {
   if (!integration || !SYMBOL_UPLOAD_CLI_FRAMEWORKS.has(integration)) return;
   preinstallPostHogCliOnce(
     'error tracking posthog-cli preinstall failed',
     { integration },
-    warn,
+    log,
   );
 }
 
@@ -181,9 +181,7 @@ export const errorTrackingConfig: ProgramConfig = {
   getTips,
 
   run: (session: WizardSession, runner: RunnerContext): Promise<ProgramRun> => {
-    maybePreinstallPostHogCli(session.integration, (message) =>
-      runner.warn(message),
-    );
+    maybePreinstallPostHogCli(session.integration, runner.log);
     return Promise.resolve(ERROR_TRACKING_RUN);
   },
 

@@ -320,13 +320,13 @@ export const posthogIntegrationConfig: ProgramConfig = {
       if (packageJson) {
         const { hasDeclaredDependency } = await import('@utils/package-json');
         if (!hasDeclaredDependency(config.detection.packageName, packageJson)) {
-          runner.warn(
+          runner.log.warn(
             `${config.detection.packageDisplayName} does not seem to be installed. Continuing anyway — the agent will handle it.`,
           );
         }
         frameworkVersion = config.detection.getVersion(packageJson);
       } else {
-        runner.warn(
+        runner.log.warn(
           'Could not find package.json. Continuing anyway — the agent will handle it.',
         );
       }
