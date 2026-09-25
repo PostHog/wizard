@@ -28,7 +28,6 @@ import {
   type PendingQuestion,
   type AskAnswers,
   type CloudRegion,
-  AdditionalFeature,
   McpOutcome,
   RunPhase,
   ScanConsent,
@@ -732,28 +731,6 @@ export class WizardStore {
       this.session.discoveredFeatures.push(feature);
       this.emitChange();
     }
-  }
-
-  /**
-   * Enable an additional feature: enqueue it for the stop hook
-   * and set any feature-specific session flags.
-   */
-  enableFeature(feature: AdditionalFeature): void {
-    if (!this.session.additionalFeatureQueue.includes(feature)) {
-      this.session.additionalFeatureQueue.push(feature);
-      // Distinct key from `sessionProperties()`'s array-valued
-      // `additional_features` — see the note in posthog-integration/detect.ts.
-      analytics.setTag(
-        'additional_feature_kinds',
-        this.session.additionalFeatureQueue.join(','),
-      );
-    }
-    // Feature-specific flags
-    if (feature === AdditionalFeature.LLM) {
-      this.session.llmOptIn = true;
-    }
-    analytics.wizardCapture('feature enabled', { feature });
-    this.emitChange();
   }
 
   setMcpComplete(

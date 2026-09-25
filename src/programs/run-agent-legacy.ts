@@ -41,7 +41,10 @@ import { Sequence, type Integration } from '@shared/constants';
 import { FRAMEWORK_REGISTRY } from '@programs/registry';
 import { postAuthGateSteps, type ProgramConfig } from './program-step';
 import { authenticate } from './authenticate';
-import { startAuditLedgerWatcher } from './audit/ledger-watcher';
+import {
+  removeAuditLedger,
+  startAuditLedgerWatcher,
+} from './audit/ledger-watcher';
 import { getDetectedWarehouseSources } from './warehouse-source/detect';
 import { runProgram, type WizardFlagSnapshot } from './run-program';
 import type { ProgramInvocationData } from './program-store';
@@ -61,10 +64,17 @@ export async function runProgramAgent(
 
   // Before `run()` resolves: an audit seeds the ledger from inside its recipe,
   // and a watcher started later would ignore that write as pre-existing.
-  const ledger = programConfig.auditLedgerFile
-    ? startAuditLedgerWatcher(session.installDir, programConfig.auditLedgerFile)
+  const ledgerFile = programConfig.auditLedgerFile;
+  const ledger = ledgerFile
+    ? startAuditLedgerWatcher(session.installDir, ledgerFile)
     : null;
-  if (ledger) registerCleanup(() => ledger.stop());
+  const releaseLedger = () => {
+    // Read a last write the watch debounce hasn't picked up before stopping.
+    ledger?.refresh();
+    ledger?.stop();
+    if (ledgerFile) removeAuditLedger(session.installDir, ledgerFile);
+  };
+  if (ledger) registerCleanup(releaseLedger);
 
   try {
     const runDef =
@@ -79,7 +89,7 @@ export async function runProgramAgent(
       options.composed ?? false,
     );
   } finally {
-    ledger?.stop();
+    releaseLedger();
   }
 }
 
