@@ -156,7 +156,14 @@ export type GatewayTerminalFailure = {
   status?: number;
 };
 
-/** What a user reads when the model stream kept dropping after every retry. */
+/** Whether a turn failed because the model stream dropped mid-response. */
+function isDroppedModelStream(turn: GatewayTurnError): boolean {
+  return /upstream closed the stream|upstream connection lost|ECONNRESET|socket hang up|\bterminated\b/i.test(
+    turn.errorMessage ?? '',
+  );
+}
+
+/** What a user reads when the model stream dropped and pi's retries didn't recover it. */
 function droppedStreamMessage(errorMessage: string): string {
   return (
     `The connection to the PostHog AI gateway dropped mid-response, and retrying didn't fix it (${errorMessage}). ` +
@@ -230,85 +237,24 @@ export function isGatewayAuthRejection(
   return /\b401\b|authentication_error|unauthorized/i.test(errorMessage ?? '');
 }
 
-/** Whether a turn failed because the model stream dropped mid-response. */
-function isDroppedModelStream(turn: GatewayTurnError | undefined): boolean {
-  return /upstream closed the stream|ECONNRESET|socket hang up|\bterminated\b/i.test(
-    turn?.errorMessage ?? '',
-  );
-}
-
-/** The drops pi's auto-retry misses; it already retries `socket hang up` and `terminated`. */
-function isDropPiMisses(turn: GatewayTurnError | undefined): boolean {
-  return /upstream closed the stream|ECONNRESET/i.test(
-    turn?.errorMessage ?? '',
-  );
-}
-
-/** The wait before each resume after a dropped stream; its length is the limit. */
-const STREAM_RETRY_DELAYS_MS = [1_000, 2_000];
-
-/** Spreads each wait by ±20%, so runs that dropped together don't resume together. */
-function withJitter(ms: number): number {
-  return Math.round(ms * (0.8 + Math.random() * 0.4));
-}
-
-/** Drops a failed last turn so the resume re-sends the context without it, as pi's retry does. */
-function dropFailedTurn(agent: AgentTranscript): void {
-  const messages = agent.state.messages;
-  const last = messages[messages.length - 1] as
-    | { role?: string; stopReason?: string }
-    | undefined;
-  if (last?.role === 'assistant' && last.stopReason === 'error')
-    agent.state.messages = messages.slice(0, -1);
-}
-
-/** The part of pi's `Agent` whose transcript a resume trims. */
-interface AgentTranscript {
-  state: { messages: unknown[] };
-}
-
-/** Resolves after `ms`, or as soon as the signal aborts. */
-function backoff(ms: number, signal: AbortSignal | undefined): Promise<void> {
-  return new Promise((resolve) => {
-    if (signal?.aborted) return resolve();
-    const done = () => {
-      clearTimeout(timer);
-      signal?.removeEventListener('abort', done);
-      resolve();
-    };
-    const timer = setTimeout(done, ms);
-    signal?.addEventListener('abort', done, { once: true });
-  });
-}
-
 export interface GatewayRemintOptions {
   signal?: AbortSignal;
-  session: { prompt(text: string): Promise<void>; agent: AgentTranscript };
+  session: { prompt(text: string): Promise<void> };
   registry: { registerProvider(providerName: string, config: never): void };
   auth: GatewayAuth;
   /** The cache: the same token while fresh, a new mint past the refresh point. */
   refreshAuth: () => Promise<GatewayAuth>;
   providerInputs: (auth: GatewayAuth) => GatewayProviderInputs;
-  /** The prompt that resumes the work after a re-mint or a dropped stream. */
+  /** The prompt that resumes the work after a re-mint. */
   continueText: string | (() => string);
   onRemint?: () => void;
-  /** Called before each wait for a resume after a dropped stream. */
-  onStreamRetry?: (retry: {
-    attempt: number;
-    limit: number;
-    delayMs: number;
-    message: string;
-  }) => void;
 }
 
 /**
- * Wraps a pi session's prompt() and resumes with `continueText` after a
- * failure the next request can fix. A 401 from a bearer past its refresh
- * instant mints once and re-registers the provider (pi resolves the apiKey
- * per request); a 401 on a fresh bearer, or a second one, is left to the
- * harness's normal failure path. A dropped model stream that pi's own retry
- * misses drops the failed turn and resumes after about 1s, then 2s, twice at
- * most per prompt() call.
+ * Wraps a pi session's prompt(): when a turn ends on a 401 from a bearer past
+ * its refresh instant, mint once, re-register the provider with the new
+ * bearer (pi resolves the apiKey per request), and continue. A 401 on a fresh
+ * bearer, or a second one, is left to the harness's normal failure path.
  */
 export function withGatewayRemint(opts: GatewayRemintOptions): {
   prompt(text: string): Promise<void>;
@@ -319,8 +265,6 @@ export function withGatewayRemint(opts: GatewayRemintOptions): {
   let auth = opts.auth;
   let rejected = false;
   let reminted = false;
-  // The error of a last turn whose model stream dropped, else undefined.
-  let dropped: string | undefined;
   let lastTurn: ({ stopReason?: string } & GatewayTurnError) | undefined;
   return {
     noteAssistantTurn(message) {
@@ -329,53 +273,28 @@ export function withGatewayRemint(opts: GatewayRemintOptions): {
         | undefined;
       rejected =
         lastTurn?.stopReason === 'error' && isGatewayAuthRejection(lastTurn);
-      dropped =
-        lastTurn?.stopReason === 'error' && isDropPiMisses(lastTurn)
-          ? lastTurn.errorMessage
-          : undefined;
     },
     terminalFailure: () => gatewayTerminalFailure(lastTurn),
     async prompt(text) {
-      let next = text;
-      let streamRetries = 0;
-      for (;;) {
-        if (opts.signal?.aborted) return;
-        rejected = false;
-        dropped = undefined;
-        lastTurn = undefined;
-        await opts.session.prompt(next);
-        if (opts.signal?.aborted) return;
-        if (rejected && !reminted && isPastRefresh(auth)) {
-          reminted = true;
-          auth = await opts.refreshAuth();
-          if (opts.signal?.aborted) return;
-          opts.registry.registerProvider(
-            GATEWAY_PROVIDER,
-            buildGatewayProvider(opts.providerInputs(auth)).provider as never,
-          );
-          opts.onRemint?.();
-        } else if (
-          dropped !== undefined &&
-          streamRetries < STREAM_RETRY_DELAYS_MS.length
-        ) {
-          const delayMs = withJitter(STREAM_RETRY_DELAYS_MS[streamRetries]);
-          streamRetries += 1;
-          opts.onStreamRetry?.({
-            attempt: streamRetries,
-            limit: STREAM_RETRY_DELAYS_MS.length,
-            delayMs,
-            message: dropped,
-          });
-          await backoff(delayMs, opts.signal);
-          dropFailedTurn(opts.session.agent);
-        } else {
-          return;
-        }
-        next =
-          typeof opts.continueText === 'function'
-            ? opts.continueText()
-            : opts.continueText;
-      }
+      if (opts.signal?.aborted) return;
+      rejected = false;
+      lastTurn = undefined;
+      await opts.session.prompt(text);
+      if (opts.signal?.aborted || !rejected || reminted || !isPastRefresh(auth))
+        return;
+      reminted = true;
+      auth = await opts.refreshAuth();
+      if (opts.signal?.aborted) return;
+      opts.registry.registerProvider(
+        GATEWAY_PROVIDER,
+        buildGatewayProvider(opts.providerInputs(auth)).provider as never,
+      );
+      opts.onRemint?.();
+      rejected = false;
+      lastTurn = undefined;
+      const next = opts.continueText;
+      if (opts.signal?.aborted) return;
+      await opts.session.prompt(typeof next === 'function' ? next() : next);
     },
   };
 }

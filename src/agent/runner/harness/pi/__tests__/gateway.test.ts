@@ -161,7 +161,6 @@ describe('withGatewayRemint', () => {
   ) {
     const prompts: string[] = [];
     const session = {
-      agent: { state: { messages: [] as unknown[] } },
       prompt: vi.fn((text: string) => {
         prompts.push(text);
         wrapped.noteAssistantTurn(turns.shift() ?? fine);
@@ -226,6 +225,27 @@ describe('withGatewayRemint', () => {
       message: turn.errorMessage,
     });
   });
+
+  it.each([
+    'upstream closed the stream',
+    'upstream connection lost',
+    'read ECONNRESET',
+    'socket hang up',
+  ])(
+    'explains a dropped stream %s as a network or gateway problem',
+    async (errorMessage) => {
+      const { wrapped } = harness(gatewayAuth('phe_fresh', Date.now() + HOUR), [
+        { stopReason: 'error', errorMessage },
+      ]);
+      await wrapped.prompt('do it');
+      expect(wrapped.terminalFailure()).toMatchObject({
+        classification: 'WIZARD_API_ERROR',
+        message: expect.stringContaining(
+          `dropped mid-response, and retrying didn't fix it (${errorMessage}). This is usually a network problem or a brief gateway issue. Try again in a few minutes.`,
+        ),
+      });
+    },
+  );
 
   it('uses the final turn after remint and recovery', async () => {
     const { wrapped } = harness(gatewayAuth('phe_old', Date.now() - 1), [

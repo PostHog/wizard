@@ -46,6 +46,7 @@ import { createEmitLog } from '@agent/runner/shared/progress-collector';
 import type { TaskStore } from './tasks';
 import { completionFailure, runErrorType } from './completion';
 import { bindPiCancellation } from './cancellation';
+import { trackAutoRetry } from './auto-retry';
 import { classifyRunFailure, ErrorCodes } from '@shared/errors';
 
 /** Injects the MCP server `instructions` pi-mcp-adapter drops (project env, skill steer, tool domains) into the system prompt, falling back to a bootstrap-derived project block when the warm-connect captured none. */
@@ -518,7 +519,6 @@ export const piBackend: AgentHarness = {
       // A turn that ends on a 401 from an aged bearer re-mints once and
       // continues; pi resolves the provider's apiKey per request, so
       // re-registering is enough.
-      // A turn that ends on a dropped model stream continues the same way.
       const turns = withGatewayRemint({
         signal: inputs.signal,
         session: agentSession,
@@ -530,16 +530,6 @@ export const piBackend: AgentHarness = {
         onRemint: () => {
           logToFile('[pi] gateway token renewed after a 401; continuing');
           analytics.wizardCapture('gateway token reminted', { harness: 'pi' });
-        },
-        onStreamRetry: ({ attempt, limit, delayMs, message }) => {
-          logToFile(
-            `[pi] model stream dropped (${message}); resuming in ${delayMs}ms, retry ${attempt}/${limit}`,
-          );
-          analytics.wizardCapture('model stream retried', {
-            harness: 'pi',
-            attempt,
-            error: message.slice(0, 300),
-          });
         },
       });
 
@@ -598,6 +588,10 @@ export const piBackend: AgentHarness = {
             );
             break;
           }
+          case 'auto_retry_start':
+          case 'auto_retry_end':
+            trackAutoRetry(event, 'pi');
+            break;
           case 'agent_end': {
             logToFile(`[pi] agent_end (willRetry=${String(event.willRetry)})`);
             break;
