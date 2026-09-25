@@ -22,14 +22,22 @@ interface ConfirmButtonProps {
   focused: boolean;
   /** Optional selected-item count, rendered as "Label (n)" when > 0. */
   count?: number;
+  /**
+   * Noun for the count, rendered as "Label (n noun)". A bare "Confirm (31)"
+   * reads as a queue of 31 actions about to run rather than the size of the
+   * selection, which makes people hesitate to submit.
+   */
+  countNoun?: string;
 }
 
 export const ConfirmButton = ({
   label = 'Confirm',
   focused,
   count,
+  countNoun,
 }: ConfirmButtonProps) => {
-  const text = count && count > 0 ? `${label} (${count})` : label;
+  const suffix = countNoun ? ` ${countNoun}` : '';
+  const text = count && count > 0 ? `${label} (${count}${suffix})` : label;
   return (
     <Text
       color={focused ? Colors.accent : undefined}
