@@ -8,7 +8,7 @@ import {
   type Credentials,
   type WizardSession,
 } from '@lib/wizard-session';
-import { currentCredentials } from '@agent';
+import { currentCredentials } from '@shared/oauth-session';
 import { isGrantRevoked } from '@shared/auth-session-state';
 import { logToFile } from '@utils/debug';
 import { parseRetryAfter } from './destinations/posthog';

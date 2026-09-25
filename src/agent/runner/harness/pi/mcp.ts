@@ -9,7 +9,7 @@ import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
 import { createJiti } from 'jiti';
 import { VERSION } from '@shared/version';
 import { logToFile } from '@utils/debug';
-import { onAccessTokenRotated } from '@agent/oauth-session';
+import { onAccessTokenRotated } from '@shared/oauth-session';
 
 const MCP_TOKEN_ENV = 'POSTHOG_MCP_TOKEN';
 let mcpTokenOwners = 0;

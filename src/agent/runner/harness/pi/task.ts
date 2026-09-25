@@ -36,7 +36,7 @@ import { TaskStatus } from '../../sequence/orchestrator/queue';
 import type { OrchestratorToolsContext } from '../../sequence/orchestrator/queue-tools';
 import type { AgentResult, TaskRunInputs } from '../types';
 import { gatewayAuth, type GatewayAuth } from '@agent/gateway-session';
-import { currentAccessToken } from '@agent/oauth-session';
+import { currentAccessToken } from '@shared/oauth-session';
 import {
   buildGatewayProvider,
   GATEWAY_PROVIDER,

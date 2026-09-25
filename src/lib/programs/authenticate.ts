@@ -17,7 +17,7 @@ import { refreshAccessToken, missingOAuthScopes } from '@utils/oauth';
 import { WIZARD_OAUTH_SCOPES } from '@shared/constants';
 import { OAuthError } from '@utils/oauth-errors';
 import { markGrantRevoked } from '@shared/auth-session-state';
-import { configureOAuthSession, oauthCredentials } from '@agent';
+import { configureOAuthSession, oauthCredentials } from '@shared/oauth-session';
 import { analytics, groupsFromUser } from '@utils/analytics';
 import { getUI } from '@ui';
 import { logToFile } from '@utils/debug';

@@ -10,7 +10,7 @@
 
 import { createTriageLLMProvider } from '@agent/triage-provider';
 import { gatewayAuth } from '@agent/gateway-session';
-import { currentAccessToken } from '@agent/oauth-session';
+import { currentAccessToken } from '@shared/oauth-session';
 import { logToFile } from '@utils/debug';
 import { CallType, IS_DEV } from '@shared/constants';
 import { VERSION } from '@shared/version';

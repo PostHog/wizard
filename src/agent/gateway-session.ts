@@ -11,7 +11,7 @@ import { logToFile } from '@utils/debug';
 import { analytics } from '@utils/analytics';
 import { ErrorCodes, WizardError } from '@shared/errors';
 import type { HostResolution } from '@shared/host-resolution';
-import { oauthLoginKey } from './oauth-session';
+import { oauthLoginKey } from '@shared/oauth-session';
 import { checkLlmGatewayHealth } from '@shared/health-checks/endpoints';
 import { ServiceHealthStatus } from '@shared/health-checks/types';
 import { IS_PRODUCTION_BUILD, runtimeEnv } from '@env';

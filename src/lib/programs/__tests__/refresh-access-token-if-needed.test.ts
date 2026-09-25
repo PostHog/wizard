@@ -5,7 +5,7 @@ import {
   isGrantRevoked,
   resetAuthSessionState,
 } from '@shared/auth-session-state';
-import { resetOAuthSession } from '@agent/oauth-session';
+import { resetOAuthSession } from '@shared/oauth-session';
 import type { WizardSession, Credentials } from '@lib/wizard-session';
 
 vi.mock('@utils/oauth', async (original) => ({

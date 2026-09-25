@@ -27,7 +27,7 @@ import { AgentSignals, REMARK_INSTRUCTION } from '@agent/signals';
 import { AgentOutputSignals } from '@agent/output-signals';
 import { assembleCommandments } from '../../switchboard/commandments';
 import { gatewayAuth, type GatewayAuth } from '@agent/gateway-session';
-import { currentAccessToken } from '@agent/oauth-session';
+import { currentAccessToken } from '@shared/oauth-session';
 import {
   buildGatewayProvider,
   GATEWAY_PROVIDER,

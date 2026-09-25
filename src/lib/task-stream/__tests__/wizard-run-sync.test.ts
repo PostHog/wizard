@@ -8,10 +8,10 @@ import { HostResolution } from '@shared/host-resolution';
 import { TaskStatus } from '@ui/wizard-ui';
 import type { TaskItem } from '@ui/tui/store';
 import { VERSION } from '@shared/version';
-import { currentCredentials } from '@agent';
+import { currentCredentials } from '@shared/oauth-session';
 
-vi.mock('@agent', async (original) => ({
-  ...(await original<typeof import('@agent')>()),
+vi.mock('@shared/oauth-session', async (original) => ({
+  ...(await original<typeof import('@shared/oauth-session')>()),
   currentCredentials: vi.fn(),
 }));
 

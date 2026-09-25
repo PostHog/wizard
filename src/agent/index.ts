@@ -46,11 +46,6 @@ export {
   runAgent as executeAgent,
 } from './agent-interface';
 export { configureGatewayFromCIEnvironment } from './gateway-session';
-export {
-  configureOAuthSession,
-  currentCredentials,
-  oauthCredentials,
-} from './oauth-session';
 export { flushScanReport } from './yara-hooks';
 export { downloadSkill } from './tools';
 /** The frameworkContext slot the legacy adapter fills for the e2e harness. */
