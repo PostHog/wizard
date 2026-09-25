@@ -16,7 +16,7 @@ import {
   ScanConsent,
   type WizardSession,
 } from '@lib/wizard-session';
-import { FRAMEWORK_REGISTRY } from '@programs/registry';
+import { FRAMEWORK_REGISTRY } from '@programs/frameworks/registry';
 import {
   detectFramework,
   discoverFeatures,

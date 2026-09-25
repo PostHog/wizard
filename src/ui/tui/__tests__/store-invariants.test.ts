@@ -28,7 +28,7 @@ import { PROGRAM_SEQUENCES } from '@ui/tui/screen-sequences';
 import { WizardReadiness } from '@shared/health-checks/readiness';
 import { HostResolution } from '@shared/host-resolution';
 import { Integration } from '@shared/constants';
-import { FRAMEWORK_REGISTRY } from '@programs/registry';
+import { FRAMEWORK_REGISTRY } from '@programs/frameworks/registry';
 import { analytics } from '@utils/analytics';
 import { PROGRAM_REGISTRY } from '@programs';
 import type { SettingsConflict } from '@shared/claude-settings';

@@ -102,12 +102,14 @@ const FrameworkPicker = ({
       options={options}
       onSelect={(value) => {
         const integration = Array.isArray(value) ? value[0] : value;
-        void import('@programs/registry').then(({ FRAMEWORK_REGISTRY }) => {
-          const config = FRAMEWORK_REGISTRY[integration];
-          store.setFrameworkConfig(integration, config);
-          store.setDetectedFramework(config.metadata.name);
-          onComplete?.();
-        });
+        void import('@programs/frameworks/registry').then(
+          ({ FRAMEWORK_REGISTRY }) => {
+            const config = FRAMEWORK_REGISTRY[integration];
+            store.setFrameworkConfig(integration, config);
+            store.setDetectedFramework(config.metadata.name);
+            onComplete?.();
+          },
+        );
       }}
     />
   );
