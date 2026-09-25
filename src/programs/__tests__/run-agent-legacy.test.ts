@@ -179,7 +179,7 @@ it.each([
   },
 );
 
-it('sends terminal analytics after the outro and the run, before the host goes on', async () => {
+it('sends terminal analytics after the outro and the run, before the caller goes on', async () => {
   const order: string[] = [];
   logSpy.mockImplementation((line) => {
     if (line === '└  Done') order.push('outro');
@@ -204,7 +204,7 @@ it('sends terminal analytics after the outro and the run, before the host goes o
   expect(analytics.shutdown).toHaveBeenCalledExactlyOnceWith('success');
 });
 
-it('clamps a composed program to linear and keeps host analytics alive', async () => {
+it('clamps a composed program to linear and keeps the caller analytics alive', async () => {
   await runProgramAgent(program(), session(), { composed: true });
   expect(runAgent).toHaveBeenCalledWith(
     expect.objectContaining({

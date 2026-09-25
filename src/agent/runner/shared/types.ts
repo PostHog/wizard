@@ -153,7 +153,7 @@ export interface RunConfig {
   programId: string;
   /** The run definition. A program's session-taking hooks are the caller's, see `hooks`. */
   run: AgentRunDefinition;
-  /** A composed sub-run leaves the terminal outro to its host. */
+  /** A composed sub-run leaves the terminal outro to its caller. */
   composed: boolean;
   /** Run-level sequence, harness and model. */
   binding: ResolvedBinding;

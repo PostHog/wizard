@@ -30,12 +30,10 @@ export { resolveBinding, shouldDisableAsk } from './runner';
 export { LONGER_ASK_TIMEOUT_MS } from './wizard-ask-bridge';
 
 /**
- * Leaves in B2. Programs own credentials and the legacy adapter dies.
- * buildRunTags builds the trace tags runProgram and agentic detection send.
- * configureGatewayFromCIEnvironment is CI inference auth the headless provider
- * owns. flushScanReport becomes a progress event rather than a call.
- * downloadSkill leaves once the skill scan runs at load and skill install
- * becomes shared.
+ * Leaves later in the refactor. buildRunTags builds the trace tags runProgram
+ * and agentic detection send. configureGatewayFromCIEnvironment loads the CI
+ * gateway token. flushScanReport becomes a progress event rather than a call.
+ * downloadSkill leaves once skill install becomes shared.
  */
 export { buildRunTags } from './agent-interface';
 export { configureGatewayFromCIEnvironment } from './gateway-session';
