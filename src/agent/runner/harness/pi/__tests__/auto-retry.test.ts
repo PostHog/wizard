@@ -28,6 +28,19 @@ describe('trackAutoRetry', () => {
     });
   });
 
+  it('does not error-track a retry the user cancelled', () => {
+    trackAutoRetry(
+      {
+        type: 'auto_retry_end',
+        success: false,
+        attempt: 1,
+        finalError: 'Retry cancelled',
+      },
+      'pi',
+    );
+    expect(analytics.captureException).not.toHaveBeenCalled();
+  });
+
   it('error-tracks a retry that gave up, and not one that recovered', () => {
     trackAutoRetry({ type: 'auto_retry_end', success: true, attempt: 1 }, 'pi');
     expect(analytics.captureException).not.toHaveBeenCalled();

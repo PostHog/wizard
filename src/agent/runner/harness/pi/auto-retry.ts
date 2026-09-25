@@ -17,6 +17,9 @@ export type AutoRetryEvent =
       finalError?: string;
     };
 
+/** The `finalError` pi reports when an abort ends its retry wait. */
+const PI_RETRY_CANCELLED = 'Retry cancelled';
+
 /** Logs and captures each Pi auto-retry, and error-tracks the ones that give up. */
 export function trackAutoRetry(event: AutoRetryEvent, tag: string): void {
   if (event.type === 'auto_retry_start') {
@@ -36,7 +39,8 @@ export function trackAutoRetry(event: AutoRetryEvent, tag: string): void {
       event.attempt
     } attempt(s)`,
   );
-  if (!event.success) {
+  // A cancel during pi's wait ends the retry too, but nothing gave up.
+  if (!event.success && event.finalError !== PI_RETRY_CANCELLED) {
     analytics.captureException(
       new Error(event.finalError ?? 'Pi auto-retry gave up'),
       { step: 'pi_auto_retry', harness: 'pi', attempts: event.attempt },
