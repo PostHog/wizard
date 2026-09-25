@@ -10,7 +10,7 @@ import type {
   RunResult,
 } from '@agent/types';
 import type { Harness, Integration, Sequence } from '@shared/constants';
-import type { DiscoveredFeature } from '@lib/wizard-session';
+import type { DiscoveredFeature } from '@shared/discovered-feature';
 import type { DetectedSource } from './warehouse-sources/types';
 import type {
   CredentialsProvider,

@@ -100,7 +100,6 @@
     "src/programs/run-agent-legacy.ts -> src/lib/wizard-session.ts",
     "src/programs/run-agent-legacy.ts -> src/ui/agent-progress.ts",
     "src/programs/run-agent-legacy.ts -> src/ui/index.ts",
-    "src/programs/run-program.ts -> src/lib/wizard-session.ts",
     "src/programs/self-driving/detect-agentic.ts -> src/lib/wizard-session.ts",
     "src/programs/self-driving/detect.ts -> src/lib/wizard-session.ts",
     "src/programs/self-driving/index.ts -> src/lib/wizard-session.ts",
