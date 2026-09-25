@@ -1,5 +1,20 @@
 # Changelog
 
+## [2.78.0](https://github.com/PostHog/wizard/compare/v2.77.0...v2.78.0) (2026-09-25)
+
+
+### Features
+
+* synchronize Wizard CLI executions with WizardRun ([#1323](https://github.com/PostHog/wizard/issues/1323)) ([c6b90b0](https://github.com/PostHog/wizard/commit/c6b90b05ba7d3c0a4b9abd3aee41722415cb75ef))
+
+
+### Bug Fixes
+
+* **audit:** remove the audit ledger when the run settles ([#1336](https://github.com/PostHog/wizard/issues/1336)) ([e63b0ad](https://github.com/PostHog/wizard/commit/e63b0ad9d59776bd1b436f9ca953ba9bf03e579e))
+* **audit:** singular counts and a stray period in the audit screens ([#1334](https://github.com/PostHog/wizard/issues/1334)) ([140af5d](https://github.com/PostHog/wizard/commit/140af5d161f66d9b21027a74e12f065b8d248331))
+* **warehouse:** stop offering one database as two sources ([#1300](https://github.com/PostHog/wizard/issues/1300)) ([6f562a1](https://github.com/PostHog/wizard/commit/6f562a1c5944844ccee60b8319125e695dbbf5e0))
+* **wizard-ask:** let one call carry a whole connector form ([#1319](https://github.com/PostHog/wizard/issues/1319)) ([fde4fac](https://github.com/PostHog/wizard/commit/fde4fac7858839c4244f453a8b4940fbab41d089))
+
 ## [2.77.0](https://github.com/PostHog/wizard/compare/v2.76.1...v2.77.0) (2026-09-23)
 
 
