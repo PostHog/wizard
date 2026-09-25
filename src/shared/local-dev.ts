@@ -8,7 +8,9 @@
  * `--local` here.
  */
 
-export const CONTEXT_MILL_LOCAL_URL = 'http://localhost:8765';
+// `CONTEXT_MILL_URL` points `--local-context-mill` at another port.
+export const CONTEXT_MILL_LOCAL_URL =
+  process.env.CONTEXT_MILL_URL || 'http://localhost:8765';
 export const MCP_LOCAL_URL = 'http://localhost:8787/mcp';
 /** Pins the API, app, OAuth, and the LLM gateway derived from them. */
 export const POSTHOG_LOCAL_URL = 'http://localhost:8010';

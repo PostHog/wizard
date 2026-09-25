@@ -1,4 +1,8 @@
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
 import { getExitLine } from '@ui/tui/exit-line';
+import { buildSession } from '@lib/wizard-session';
 import { WizardStore, Program } from '@ui/tui/store';
 import { OutroKind } from '@lib/wizard-session';
 import { HostResolution } from '@shared/host-resolution';
@@ -198,5 +202,53 @@ describe('getExitLine', () => {
 
       expect(line).not.toContain('Cost');
     });
+  });
+});
+
+describe('getExitLine needs-attention block', () => {
+  const block =
+    '# Report\n\n> ⚠️ **Needs your attention**\n> - Load `.env` in the app.\n';
+
+  it('leads a successful exit with the handoff warning items', () => {
+    const store = storeWithOutro({
+      kind: OutroKind.Success,
+      message: 'Error tracking configured!',
+    });
+    store.setHandoffText(block);
+    const lines = stripAnsi(getExitLine(store)).split('\n');
+    expect(lines.slice(0, 2)).toEqual([
+      '⚠ Needs your attention:',
+      '  • Load `.env` in the app.',
+    ]);
+    expect(lines).toContain('✔ Error tracking configured!');
+  });
+
+  it('keeps the items when the user exits before the outro', () => {
+    const store = new WizardStore(Program.PostHogIntegration);
+    store.setHandoffText(block);
+    const line = stripAnsi(getExitLine(store));
+    expect(line).toContain('⚠ Needs your attention:');
+    expect(line).toContain('exited.');
+  });
+
+  it('reads the items from the report file when nothing was published', () => {
+    const installDir = fs.mkdtempSync(path.join(os.tmpdir(), 'exit-line-'));
+    try {
+      fs.writeFileSync(path.join(installDir, 'report.md'), block);
+      const store = new WizardStore(Program.PostHogIntegration);
+      store.session = buildSession({ installDir });
+      store.setOutroData({ kind: OutroKind.Success, reportFile: 'report.md' });
+      expect(stripAnsi(getExitLine(store))).toContain(
+        '  • Load `.env` in the app.',
+      );
+    } finally {
+      fs.rmSync(installDir, { recursive: true, force: true });
+    }
+  });
+
+  it('adds nothing when the report has no warning block', () => {
+    const store = storeWithOutro({ kind: OutroKind.Success, message: 'Done' });
+    store.setHandoffText('# Report\n\nAll done.');
+    expect(stripAnsi(getExitLine(store))).not.toContain('Needs your attention');
   });
 });

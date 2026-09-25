@@ -18,11 +18,19 @@ import { OutroKind } from '@lib/wizard-session';
 import { isRunFailure, MINT_FAILURE_CONTACT } from '@ui/mint-failure';
 import { formatTokenCount, formatCostUsd } from '@shared/token-pricing';
 import { getLogFilePath } from '@utils/debug';
+import { readFileHead } from '@utils/bounded-fs';
+import {
+  NEEDS_ATTENTION_HEADING,
+  readNeedsAttention,
+} from '@utils/needs-attention';
+import { join } from 'path';
 
 const RESET_ATTRS = '\x1b[0m';
 const GREEN = '\x1b[32m';
 const BOLD = '\x1b[1m';
 const DIM = '\x1b[2m';
+const YELLOW = '\x1b[33m';
+const REPORT_HEAD_BYTES = 16 * 1024;
 
 /**
  * Mirrors the hidden Ctrl+T HUD's tally into post-exit scrollback — but only
@@ -65,7 +73,32 @@ function mcpLoginBlock(store: WizardStore): string | null {
   );
 }
 
+/** The report's warning items, from the published handoff or else the report file. */
+function needsAttentionBlock(store: WizardStore): string | null {
+  const reportFile = store.session.outroData?.reportFile;
+  const markdown =
+    store.handoffText ??
+    (reportFile
+      ? readFileHead(
+          join(store.session.installDir, reportFile),
+          REPORT_HEAD_BYTES,
+        )
+      : null);
+  const items = markdown ? readNeedsAttention(markdown) : [];
+  if (items.length === 0) return null;
+  return (
+    `${YELLOW}${BOLD}⚠ ${NEEDS_ATTENTION_HEADING}:${RESET_ATTRS}\n` +
+    items.map((item) => `  • ${item}`).join('\n')
+  );
+}
+
 export function getExitLine(store: WizardStore): string {
+  const attention = needsAttentionBlock(store);
+  const body = exitSummary(store);
+  return attention ? `${attention}\n\n${body}` : body;
+}
+
+function exitSummary(store: WizardStore): string {
   const outro = store.session.outroData;
   const label = store.session.programLabel ?? 'Wizard';
   const costLine = tokenCostLine(store);

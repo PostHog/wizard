@@ -8,6 +8,7 @@ import type { ProgressEmitter } from '@agent/progress';
 import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
 import { runtimeEnv } from '@env';
+import { NEEDS_ATTENTION_HEADING } from '@utils/needs-attention';
 import { randomBytes } from 'node:crypto';
 import {
   closeSync,
@@ -30,7 +31,8 @@ export const PUBLISH_HANDOFF_TOOL_NAME = 'publish_handoff';
 export const PUBLISH_HANDOFF_DESCRIPTION =
   'Publish the handoff document — the full markdown report of what this run did — to the wizard session. ' +
   'Call it exactly once, at the end of the run, passing the complete report as `content`. ' +
-  'This call is the required way to deliver the report to the user; do not write the report to a file yourself.';
+  'This call is the required way to deliver the report to the user; do not write the report to a file yourself. ' +
+  `When anything is left for the user to do, open the report, right under the H1, with a \`> ⚠️ **${NEEDS_ATTENTION_HEADING}**\` block quote, one \`> - \` bullet per item.`;
 
 export const PUBLISH_HANDOFF_CONTENT_DESCRIPTION =
   'The complete handoff report as markdown, starting with an H1 heading.';
