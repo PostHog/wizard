@@ -86,7 +86,7 @@ export const RUBY_AGENT_CONFIG: FrameworkConfig<RubyContext> = {
         ``,
         `client = PostHog::Client.new(`,
         `  api_key: ENV['POSTHOG_PROJECT_TOKEN'],`,
-        `  host: ENV['POSTHOG_HOST'] || 'https://us.i.posthog.com'`,
+        `  host: ENV['POSTHOG_HOST'] || '<PostHog Host from the project context above>'`,
         `)`,
         ``,
         `### 3. MUST Call shutdown Before Exit`,
