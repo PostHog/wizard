@@ -51,6 +51,9 @@ export interface AgentRunDefinition {
   skillId?: string;
   /** Additional program-specific prompt instructions. Appended after the default project prompt. */
   customPrompt?: (ctx: PromptContext) => string;
+  prompt?: (ctx: PromptContext) => string; // replaces the assembled project prompt; linear
+  collectTranscript?: boolean; // keep a 256K-character transcript tail; linear, Anthropic
+  requestRemark?: boolean; // false skips the closing remark; linear, Anthropic
   /** Additional MCP servers (e.g. Svelte MCP) */
   additionalMcpServers?: Record<string, { url: string }>;
   /** Package manager detector. Defaults to detectNodePackageManagers. */
@@ -178,6 +181,7 @@ export interface RunConfig {
   seedTasks?: () => SeedTaskEntry[];
   /** Completion hooks, bound by the caller. */
   hooks?: RunHooks;
+  scanReport?: 'flush' | 'defer'; // defer leaves the scan report to the outer run
 }
 
 /** Invocation flags the agent reads. */
@@ -286,6 +290,7 @@ export interface RunSnapshot {
   notebookUrl?: string;
   /** The handoff document the agent published, when it did. */
   handoffText?: string;
+  transcriptTail?: string; // set when the run definition asks for collectTranscript
 }
 
 /** A sequence decides an outcome; the dispatcher owns its snapshot. */

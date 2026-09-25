@@ -7,3 +7,19 @@ export type {
   StoreInitContext,
 } from './program-step';
 export type { FrameworkConfig, SetupQuestion } from './framework-config';
+export type {
+  ProgramInput,
+  ProgramOptions,
+  ProgramOverrides,
+  ProgramRunOutcome,
+  ProgramSettings,
+  WizardFlagSnapshot,
+} from './run-program';
+export type {
+  ProgramDataProgress,
+  ProgramDiagnostic,
+  ProgramInvocationData,
+  ProgramProgress,
+  ProgramRunProgress,
+  SettledProgramRun,
+} from './program-store';

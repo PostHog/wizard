@@ -234,7 +234,9 @@ export type AgentProgress =
   /** The handoff document the agent published (`WizardUI.setHandoffText`). */
   | { kind: 'handoff'; text: string }
   /** The run's final outro payload (`WizardUI.setOutroData`). */
-  | { kind: 'completion'; outro: OutroData };
+  | { kind: 'completion'; outro: OutroData }
+  /** One short line per agent step, only from a run that collects its transcript. */
+  | { kind: 'activity'; line: string };
 
 export type ProgressEmitter = (event: AgentProgress) => void;
 

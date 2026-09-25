@@ -12,6 +12,8 @@ export type {
   AgentRunDefinition,
   PromptContext,
   RunConfig,
+  ResolvedBinding,
+  RunHooks,
   RunInput,
   RunResult,
 } from './runner';
