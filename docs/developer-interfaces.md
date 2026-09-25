@@ -31,9 +31,9 @@ the programmatic parts of what a wizard program does. Three things use it:
    wizard program. They reach it through `runProgramAgent` in
    [`run-agent-legacy.ts`](../src/programs/run-agent-legacy.ts). This is a
    temporary adapter, and we will remove it in the full program.
-2. **Testing.** The test workbench calls `runProgram` directly, with no TUI. See
-   `services/wizard-program/` in
-   [PostHog/wizard-workbench#4190](https://github.com/PostHog/wizard-workbench/pull/4190).
+2. **Testing.** The test workbench calls `runProgram` directly, with no TUI,
+   from `services/wizard-program/` in
+   [wizard-workbench](https://github.com/PostHog/wizard-workbench).
 3. **Other integrations.** If you want to integrate with the wizard more
    directly, without everything on top, call `runProgram` yourself.
 
