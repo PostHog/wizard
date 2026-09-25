@@ -20,6 +20,19 @@ OAuth token directly. The gateway must admit the model and effort and support
 its required Wizard or security-triage prompt shape. A model registry entry
 alone cannot grant access.
 
+Failed turns are retried by Pi's own auto-retry only. Each retry is logged and
+captured as `agent turn retried`, and a retry that gives up is sent to error
+tracking. A dropped model stream that still fails reads as a network or gateway
+problem and suggests trying again in a few minutes.
+
+![One turn of a pi session](pi-turn-lifecycle.svg)
+
+One turn of a pi session. Entering `Waiting` emits `auto_retry_start`, which is
+captured as `agent turn retried`. Leaving through `GaveUp` after a retry emits
+`auto_retry_end` and goes to error tracking, and a dropped stream fails with the
+network or gateway message. `Cancelled` is never error-tracked, and `Reminting`
+is the wizard's `withGatewayRemint`, not pi.
+
 ## Tools and security
 
 Pi sessions explicitly install tools and disable project-controlled extensions,

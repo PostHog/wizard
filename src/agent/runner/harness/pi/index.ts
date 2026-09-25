@@ -46,6 +46,7 @@ import { createEmitLog } from '@agent/runner/shared/progress-collector';
 import type { TaskStore } from './tasks';
 import { completionFailure, runErrorType } from './completion';
 import { bindPiCancellation } from './cancellation';
+import { trackAutoRetry } from './auto-retry';
 import { classifyRunFailure, ErrorCodes } from '@shared/errors';
 
 /** Injects the MCP server `instructions` pi-mcp-adapter drops (project env, skill steer, tool domains) into the system prompt, falling back to a bootstrap-derived project block when the warm-connect captured none. */
@@ -587,6 +588,10 @@ export const piBackend: AgentHarness = {
             );
             break;
           }
+          case 'auto_retry_start':
+          case 'auto_retry_end':
+            trackAutoRetry(event, 'pi');
+            break;
           case 'agent_end': {
             logToFile(`[pi] agent_end (willRetry=${String(event.willRetry)})`);
             break;
