@@ -85,88 +85,20 @@ tokens, including the refresh token. Don't log or serialize them.
 `flags.ci` and `flags.signup` skip the AI-processing approval. Set them only
 when consent is already settled.
 
-### Example
+### Do a quack
 
-This runs the `metrics` program with a login you already hold. It asks your own
-consent flow for approval, and logs what the program is doing:
+[`run-program-quack.ts`](examples/run-program-quack.ts) is the smallest
+`runProgram` call. It logs in through the wizard's browser OAuth, runs one
+prompt that replies `quack`, logs status lines and prints the outcome. Each step
+has a comment.
 
-```ts
-import { RunOutcome } from '@agent';
-import { getProgramConfig, runProgram } from '@programs';
-import type {
-  ProgramInput,
-  ProgramOptions,
-  ProgramProgress,
-} from '@programs/types';
+Run it from the repository root against the [local stack](local-dev.md):
 
-type Login = NonNullable<ProgramInput['credentials']>;
-type AskForApproval = NonNullable<ProgramOptions['awaitAiApproval']>;
-
-// Log what the program is doing. runProgram never waits for this.
-function logProgress(progress: ProgramProgress): void {
-  // Program data changed, for example the route resolved.
-  if (progress.kind === 'program') {
-    const route = progress.data.binding;
-    if (route) console.log(`route: ${route.sequence} on ${route.harness}`);
-    return;
-  }
-  // Otherwise it's one agent event.
-  const { event } = progress;
-  switch (event.kind) {
-    case 'status':
-      console.log(event.message);
-      break;
-    case 'tasks': {
-      const done = event.tasks.filter((task) => task.status === 'completed');
-      console.log(`tasks: ${done.length}/${event.tasks.length} done`);
-      break;
-    }
-    case 'url':
-      console.log(`${event.which}: ${event.url}`);
-      break;
-  }
-}
-
-export async function runMetrics(
-  installDir: string,
-  login: Login,
-  askForApproval: AskForApproval,
-  signal?: AbortSignal,
-): Promise<string | undefined> {
-  // Build the run from the program's own config.
-  const config = getProgramConfig('metrics');
-  if (!config.run || typeof config.run === 'function') {
-    throw new Error('metrics has a static run definition');
-  }
-
-  const result = await runProgram(
-    config.id,
-    {
-      installDir, // the project to change
-      run: config.run,
-      credentials: login, // skip the login step
-      program: {
-        requiresAi: config.requiresAi,
-        agentFlow: config.agentFlow,
-        allowedTools: config.allowedTools,
-        disallowedTools: config.disallowedTools,
-        excludedTaskTypes: config.excludedTaskTypes,
-      },
-    },
-    {
-      awaitAiApproval: askForApproval, // your consent flow
-      onProgress: logProgress,
-      signal, // abort to cancel; the run resolves to aborted
-    },
-  );
-
-  // Endings resolve to an outcome. Check it instead of catching.
-  if (result.outcome !== RunOutcome.Success) {
-    throw result.failure?.error ?? new Error(result.failure?.message);
-  }
-  return result.artifacts.reportFile; // where the agent wrote its report
-}
+```bash
+QUACK_INSTALL_DIR=<a git-initialized directory> npx tsx --tsconfig tsconfig.json docs/examples/run-program-quack.ts
 ```
+
+It prints `reply: quack` and `outcome: success`.
 
 ### Cancellation
 
@@ -249,67 +181,15 @@ export const signature: (
 | `detectProjectsWithAgent` in [`agentic.ts`](../src/programs/detection/agentic.ts) | The agentic project scan, one call per attempt. |
 | [`a3-fault-probe.no-jest.ts`](../scripts/a3-fault-probe.no-jest.ts)               | A fault probe against a local gateway.          |
 
-### Example
+### Do a quack
 
-This lists a project's files with an agent that has no Write, Edit or Bash, and
-returns what it said:
+[`run-agent-quack.ts`](examples/run-agent-quack.ts) is the smallest `runAgent`
+call. It logs in the same way, builds a `RunConfig` with one prompt and no
+Write, Edit or Bash, and prints the transcript tail and the outcome. Each step
+has a comment.
 
-```ts
-import { runAgent, RunOutcome } from '@agent';
-import type { RunConfig, RunInput } from '@agent/types';
-import {
-  getSkillsBaseUrl,
-  Harness,
-  HAIKU_MODEL,
-  Sequence,
-} from '@shared/constants';
-
-export async function listProjectFiles(
-  programId: string,
-  input: RunInput, // the project, the login and the flags
-  signal?: AbortSignal,
-): Promise<string> {
-  const config: RunConfig = {
-    programId, // attributes the gateway spend
-    run: {
-      integrationLabel: 'list-files',
-      prompt: () => 'List the files in the working directory. Change nothing.',
-      collectTranscript: true, // keep the agent's output to return below
-      requestRemark: false, // no closing remark
-      spinnerMessage: 'Listing files...',
-      successMessage: 'Listed files',
-      estimatedDurationMinutes: 1,
-      reportFile: '',
-      docsUrl: 'https://posthog.com/docs',
-    },
-    composed: true, // a sub-run: the caller owns the outro
-    // You pick the route yourself. runAgent doesn't resolve one.
-    binding: {
-      sequence: Sequence.linear,
-      harness: Harness.anthropic,
-      model: HAIKU_MODEL,
-    },
-    switchboard: { program: programId, composed: true, flags: {} },
-    skillsBaseUrl: getSkillsBaseUrl(),
-    wizardFlags: {},
-    wizardFlagPayloads: {},
-    wizardMetadata: {},
-    disallowedTools: ['Write', 'Edit', 'Bash'], // no Write, Edit or Bash
-  };
-
-  const result = await runAgent(config, input, {
-    signal,
-    // Each step the agent takes, as one line.
-    onProgress: (event) => {
-      if (event.kind === 'activity') console.log(event.line);
-    },
-  });
-  if (result.outcome !== RunOutcome.Success) {
-    throw result.failure.error ?? new Error(result.failure.message);
-  }
-  return result.snapshot.transcriptTail ?? '';
-}
+```bash
+QUACK_INSTALL_DIR=<a git-initialized directory> npx tsx --tsconfig tsconfig.json docs/examples/run-agent-quack.ts
 ```
 
-`collectTranscript` and `requestRemark` take effect on the linear sequence with
-the Anthropic harness.
+It prints `transcriptTail: quack` and `outcome: success`.
