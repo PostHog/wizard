@@ -1,12 +1,6 @@
-/**
- * The run's PostHog OAuth credentials, shaped like gateway-session: one process-wide holder that
- * rotates near expiry, so the gateway re-mint, MCP and run sync all read the same token.
- * The host supplies the rotation; the agent never talks OAuth itself.
- */
+// The run's one OAuth token, shaped like gateway-session. The host supplies the rotation.
 
-import { createHash } from 'node:crypto';
 import type { Credentials } from '@shared/api';
-import { IS_PRODUCTION_BUILD } from '@env';
 import { logToFile } from '@utils/debug';
 
 // Below this remaining lifetime a run risks outliving its token; just-minted and 7-day tokens skip.
@@ -20,10 +14,10 @@ export type RotateCredentials = (
 let current: Credentials | null = null;
 let rotate: RotateCredentials | undefined;
 let onRefreshed: ((credentials: Credentials) => void) | undefined;
-/** Shared so concurrent callers rotate once: a second rotation would spend the refresh token the first replaced. */
+// Shared so concurrent callers rotate once: a second rotation would spend the refresh token the first replaced.
 let inFlight: Promise<Credentials> | null = null;
 const listeners = new Set<(accessToken: string) => void>();
-/** Every access token this login has held, and the first one, which names the login. */
+// Every access token this login has held; the first one names the login.
 let lineage = new Set<string>();
 let lineageRoot: string | undefined;
 
@@ -42,11 +36,9 @@ export function configureOAuthSession(
     sameLogin(current, credentials) &&
     (current.expiresAt ?? 0) > (credentials.expiresAt ?? 0)
   ) {
-    devLog(`configure kept newer ${describe(current)}`);
     onRefreshed?.(current);
     return;
   }
-  devLog(`configure adopted ${describe(credentials)}`);
   if (!current || !sameLogin(current, credentials)) {
     lineage = new Set();
     lineageRoot = credentials.accessToken;
@@ -67,14 +59,7 @@ export async function oauthCredentials(
   if (!current) return null;
   if (!rotate || !current.refreshToken || (!force && !nearExpiry(current)))
     return current;
-  if (inFlight) {
-    devLog('refresh joined the one in flight');
-    return inFlight;
-  }
-  devLog(
-    `refresh start (${force ? 'forced' : 'near expiry'}) ${describe(current)}`,
-  );
-  inFlight = refresh(rotate, current).finally(() => {
+  inFlight ??= refresh(rotate, current).finally(() => {
     inFlight = null;
   });
   return inFlight;
@@ -84,23 +69,16 @@ export async function oauthCredentials(
 export async function currentCredentials(
   fallback: Credentials,
   force = false,
-  reader = 'run-sync',
 ): Promise<Credentials> {
-  if (!current || !sameLogin(current, fallback)) {
-    devLog(`${reader} reads its own credentials, no session for this login`);
-    return fallback;
-  }
-  const credentials = (await oauthCredentials(force)) ?? fallback;
-  devLog(`${reader} reads token ${fingerprint(credentials.accessToken)}`);
-  return credentials;
+  if (!current || !sameLogin(current, fallback)) return fallback;
+  return (await oauthCredentials(force)) ?? fallback;
 }
 
-/** The access token to use now for this login; `reader` labels the dev log. */
+/** The access token to use now for this login. */
 export async function currentAccessToken(
   fallback: Credentials,
-  reader: string,
 ): Promise<string> {
-  return (await currentCredentials(fallback, false, reader)).accessToken;
+  return (await currentCredentials(fallback)).accessToken;
 }
 
 /** Called with each new access token after a rotation. Returns the unsubscribe. */
@@ -117,11 +95,11 @@ export function onAccessTokenRotated(
 export function resetOAuthSession(): void {
   current = null;
   rotate = undefined;
-  lineage = new Set();
-  lineageRoot = undefined;
   onRefreshed = undefined;
   inFlight = null;
   listeners.clear();
+  lineage = new Set();
+  lineageRoot = undefined;
 }
 
 function sameLogin(a: Credentials, b: Credentials): boolean {
@@ -141,37 +119,11 @@ async function refresh(
   credentials: Credentials,
 ): Promise<Credentials> {
   const refreshed = await rotateWith(credentials);
-  if (refreshed === credentials) {
-    devLog(`refresh failed, keeping ${describe(credentials)}`);
-    return credentials;
-  }
-  devLog(
-    `refreshed ${fingerprint(credentials.accessToken)} -> ${describe(
-      refreshed,
-    )}, refresh token ${
-      refreshed.refreshToken === credentials.refreshToken ? 'kept' : 'rotated'
-    }`,
-  );
+  if (refreshed === credentials) return credentials;
+  logToFile('[oauth-session] token rotated');
   lineage.add(refreshed.accessToken);
   current = refreshed;
   onRefreshed?.(refreshed);
   for (const listener of listeners) listener(refreshed.accessToken);
   return refreshed;
-}
-
-// Dev builds only; a short hash tells tokens apart without logging one.
-function devLog(message: string): void {
-  if (!IS_PRODUCTION_BUILD) logToFile(`[oauth-session] ${message}`);
-}
-
-function fingerprint(token: string): string {
-  return createHash('sha256').update(token).digest('hex').slice(0, 8);
-}
-
-function describe(credentials: Credentials): string {
-  const ttl =
-    credentials.expiresAt === undefined
-      ? 'no expiry'
-      : `${Math.round((credentials.expiresAt - Date.now()) / 1000)}s left`;
-  return `token ${fingerprint(credentials.accessToken)} (${ttl})`;
 }

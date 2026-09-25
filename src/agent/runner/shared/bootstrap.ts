@@ -90,7 +90,7 @@ export async function prepareRun(
     // expiry. Programs own credentials (stack plan 4.5): pass a resolved
     // inference-auth provider on RunInput.credentials and move
     // gateway-session.ts out of src/agent with it.
-    currentAccessToken(credentials, 'gateway').then((token) =>
+    currentAccessToken(credentials).then((token) =>
       gatewayAuth(credentials.host, token, programId),
     );
   await currentGatewayAuth();

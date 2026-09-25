@@ -292,7 +292,7 @@ export const piBackend: AgentHarness = {
       const refreshAuth = async () =>
         gatewayAuth(
           boot.credentials.host,
-          await currentAccessToken(boot.credentials, 'gateway'),
+          await currentAccessToken(boot.credentials),
           boot.programId,
         );
       const auth = await refreshAuth();
@@ -361,7 +361,7 @@ export const piBackend: AgentHarness = {
       let posthogMcp = false;
       try {
         const { setupPostHogMcp, fetchInstructions } = await import('./mcp');
-        const mcpToken = await currentAccessToken(boot.credentials, 'mcp');
+        const mcpToken = await currentAccessToken(boot.credentials);
         // Overlaps the network handshake with the adapter's jiti load.
         const instructionsPromise = fetchInstructions(
           boot.credentials.host.mcpUrl,

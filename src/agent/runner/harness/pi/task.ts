@@ -255,7 +255,7 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
     const refreshAuth = async () =>
       gatewayAuth(
         boot.credentials.host,
-        await currentAccessToken(boot.credentials, 'gateway'),
+        await currentAccessToken(boot.credentials),
         boot.programId,
       );
     const auth = await refreshAuth();
@@ -311,7 +311,7 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
         const { setupPostHogMcp } = await import('./mcp');
         const mcp = await setupPostHogMcp({
           mcpUrl: boot.credentials.host.mcpUrl,
-          accessToken: await currentAccessToken(boot.credentials, 'mcp'),
+          accessToken: await currentAccessToken(boot.credentials),
           userAgent: WIZARD_USER_AGENT,
         });
         extensionFactories.push(mcp.extensionFactory);
