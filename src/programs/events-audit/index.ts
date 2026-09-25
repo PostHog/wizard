@@ -64,7 +64,6 @@ export const eventsAuditConfig: ProgramConfig = {
       reportFile: SETUP_REPORT_FILE,
       docsUrl: DOCS_URL,
       errorMessage: 'Events audit failed',
-      additionalFeatureQueue: session.additionalFeatureQueue,
 
       customPrompt: (ctx) =>
         `Audit PostHog event capture in this project. Do not modify any project files — produce a read-only report only.

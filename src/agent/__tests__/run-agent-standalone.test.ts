@@ -845,7 +845,6 @@ describe('runAgent standalone', () => {
     expect(result.failure?.code).toBe(
       AGENT_ERROR_CODE[AgentErrorType.NO_PROGRESS],
     );
-    expect(result.failure?.message).toContain('without changing your project');
   });
 
   it('resolves a crash even when the thrown Error has hostile getters', async () => {

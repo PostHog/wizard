@@ -861,7 +861,6 @@ describe('sessionProperties', () => {
     const session = buildSession({ installDir: '/tmp/app' });
     session.scanConsent = ScanConsent.Declined;
     session.integration = null;
-    session.additionalFeatureQueue = [];
 
     const properties = sessionProperties(session);
 
@@ -869,7 +868,6 @@ describe('sessionProperties', () => {
       integration: null,
       detected_framework: null,
       typescript: false,
-      additional_features: [],
       run_phase: session.runPhase,
     });
   });
