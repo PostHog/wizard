@@ -8,7 +8,7 @@ import {
   type Credentials,
   type WizardSession,
 } from '@lib/wizard-session';
-import { refreshAccessTokenIfNeeded } from '@lib/programs/authenticate';
+import { currentCredentials } from '@shared/oauth-session';
 import { isGrantRevoked } from '@shared/auth-session-state';
 import { logToFile } from '@utils/debug';
 import { parseRetryAfter } from './destinations/posthog';
@@ -208,10 +208,11 @@ export class WizardRunSync {
     }
   }
 
-  private credentials(): Credentials | undefined {
+  private credentials(
+    creds = this.options.getSession().credentials,
+  ): Credentials | undefined {
     const context = this.context;
     if (!context) return;
-    const creds = this.options.getSession().credentials;
     if (
       !creds ||
       creds.host.appHost.replace(/\/$/, '') !== context.apiHost ||
@@ -249,12 +250,8 @@ export class WizardRunSync {
         if (!creds) return;
         const response = await this.bounded(
           async (requestSignal) => {
-            await refreshAccessTokenIfNeeded(
-              this.options.getSession(),
-              false,
-              requestSignal,
-            );
-            const current = this.credentials();
+            // The run's OAuth session owns refresh, so the agent reads the same rotated token.
+            const current = this.credentials(await currentCredentials(creds));
             if (!current) throw new Error('credentials unavailable');
             const res = await (this.options.fetchImpl ?? fetch)(
               `${context.apiHost}/api/projects/${context.projectId}/wizard/runs/${suffix}`,
@@ -272,12 +269,12 @@ export class WizardRunSync {
               method === 'POST' && (res.status === 200 || res.status === 201)
                 ? await res.json()
                 : undefined;
-            return { res, data };
+            return { res, data, current };
           },
           signal,
           5000,
         );
-        const { res, data } = response;
+        const { res, data, current } = response;
         if (
           (method === 'POST' && [200, 201].includes(res.status)) ||
           (method === 'PUT' && res.status === 204) ||
@@ -286,19 +283,18 @@ export class WizardRunSync {
           return data ?? true;
         if (
           res.status === 401 &&
-          creds.refreshToken &&
+          current.refreshToken &&
           !isGrantRevoked() &&
           !refreshed &&
           method !== 'POST'
         ) {
           refreshed = true;
-          await this.bounded(
-            (s) =>
-              refreshAccessTokenIfNeeded(this.options.getSession(), true, s),
+          const rotated = await this.bounded(
+            () => currentCredentials(current, true),
             signal,
             5000,
           );
-          if (this.credentials()?.accessToken === creds.accessToken) {
+          if (rotated.accessToken === current.accessToken) {
             this.authDisabled = true;
             this.report(
               'OAuth refresh could not recover the grant; authorize again',

@@ -472,7 +472,6 @@ export async function refreshAccessToken(
   refreshToken: string,
   baseUrl?: string,
   clientId?: string,
-  signal?: AbortSignal,
 ): Promise<OAuthTokenResponse> {
   const oauthUrl = getOAuthUrl(baseUrl);
   logToFile(`[oauth] refreshing access token at ${oauthUrl}/oauth/token`);
@@ -491,7 +490,6 @@ export async function refreshAccessToken(
           'User-Agent': WIZARD_USER_AGENT,
         },
         timeout: 30_000,
-        signal,
       },
     );
     const token = OAuthTokenResponseSchema.parse(response.data);

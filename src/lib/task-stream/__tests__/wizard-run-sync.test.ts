@@ -8,10 +8,11 @@ import { HostResolution } from '@shared/host-resolution';
 import { TaskStatus } from '@ui/wizard-ui';
 import type { TaskItem } from '@ui/tui/store';
 import { VERSION } from '@shared/version';
-import { refreshAccessTokenIfNeeded } from '@lib/programs/authenticate';
+import { currentCredentials } from '@shared/oauth-session';
 
-vi.mock('@lib/programs/authenticate', () => ({
-  refreshAccessTokenIfNeeded: vi.fn().mockResolvedValue(undefined),
+vi.mock('@shared/oauth-session', async (original) => ({
+  ...(await original<typeof import('@shared/oauth-session')>()),
+  currentCredentials: vi.fn(),
 }));
 
 const ID = '019edb1a-cce4-4000-8f6d-682061862da9';
@@ -63,6 +64,9 @@ function setup(mode: 'local' | 'cloud' = 'local') {
 beforeEach(() => {
   vi.useFakeTimers();
   vi.clearAllMocks();
+  vi.mocked(currentCredentials).mockImplementation((fallback) =>
+    Promise.resolve(fallback),
+  );
 });
 afterEach(() => {
   vi.useRealTimers();
@@ -314,16 +318,11 @@ it('refreshes a 401 through OAuth but never assumes refresh widens the grant', a
   const { sync, session, fetchImpl } = setup('cloud');
   session.credentials!.refreshToken = 'phr_test';
   fetchImpl.mockResolvedValueOnce(new Response(null, { status: 401 }));
-  vi.mocked(refreshAccessTokenIfNeeded).mockImplementation(
-    (_session, force) => {
-      if (force)
-        session.credentials = {
-          ...session.credentials!,
-          accessToken: 'pha_refreshed',
-        };
-      return Promise.resolve();
-    },
-  );
+  let held = session.credentials!;
+  vi.mocked(currentCredentials).mockImplementation((_fallback, force) => {
+    if (force) held = { ...held, accessToken: 'pha_refreshed' };
+    return Promise.resolve(held);
+  });
   sync.capture([task()]);
   await sync.shutdown('completed', 2000);
   expect(fetchImpl).toHaveBeenCalledTimes(2);

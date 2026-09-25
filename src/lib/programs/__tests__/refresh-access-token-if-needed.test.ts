@@ -5,6 +5,7 @@ import {
   isGrantRevoked,
   resetAuthSessionState,
 } from '@shared/auth-session-state';
+import { resetOAuthSession } from '@shared/oauth-session';
 import type { WizardSession, Credentials } from '@lib/wizard-session';
 
 vi.mock('@utils/oauth', async (original) => ({
@@ -40,6 +41,7 @@ describe('refreshAccessTokenIfNeeded', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     resetAuthSessionState();
+    resetOAuthSession();
   });
 
   it('is a no-op without a refresh token (CI api-key runs, refresh-less grants)', async () => {

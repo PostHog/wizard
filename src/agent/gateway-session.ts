@@ -11,6 +11,7 @@ import { logToFile } from '@utils/debug';
 import { analytics } from '@utils/analytics';
 import { ErrorCodes, WizardError } from '@shared/errors';
 import type { HostResolution } from '@shared/host-resolution';
+import { oauthLoginKey } from '@shared/oauth-session';
 import { checkLlmGatewayHealth } from '@shared/health-checks/endpoints';
 import { ServiceHealthStatus } from '@shared/health-checks/types';
 import { IS_PRODUCTION_BUILD, runtimeEnv } from '@env';
@@ -116,8 +117,11 @@ export async function gatewayAuth(
 ): Promise<GatewayAuth> {
   if (ciAuth) return ciAuth;
   // Keyed by program: a token pins `wizard:<program>`, so reusing one across
-  // programs bills the wrong budget.
-  const key = `${host.apiHost}\n${accessToken}\n${program ?? ''}`;
+  // programs bills the wrong budget. Keyed by login rather than OAuth token:
+  // the token rotates mid-run, and each new one would spend a weekly mint.
+  const key = `${host.apiHost}\n${oauthLoginKey(accessToken)}\n${
+    program ?? ''
+  }`;
   if (cached && cached.key === key && Date.now() < cached.staleAtMs) {
     return cached.auth;
   }
