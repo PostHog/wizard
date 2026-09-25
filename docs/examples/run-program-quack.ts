@@ -4,8 +4,9 @@
 //   npx tsx --tsconfig tsconfig.json docs/examples/run-program-quack.ts
 //
 // Needs local PostHog on :8010 (with its ai-gateway) and context-mill on :8765.
+// POSTHOG_PERSONAL_API_KEY logs in. WIZARD_CI_GATEWAY_TOKEN_FILE holds the gateway token.
 // QUACK_INSTALL_DIR sets the project the agent runs in (default: the current directory).
-import { RunOutcome } from '@agent';
+import { configureGatewayFromCIEnvironment, RunOutcome } from '@agent';
 import { runProgram } from '@programs';
 import type { ProgramProgress } from '@programs/types';
 import { Harness, HAIKU_MODEL, Sequence } from '@shared/constants';
@@ -15,15 +16,20 @@ import { getOrAskForProjectData } from '@utils/setup-utils';
 // Point PostHog, skills and MCP at the local stack, like --local-posthog --local-context-mill --local-mcp.
 initLocalDev({ localPosthog: true, localContextMill: true, localMcp: true });
 
-// Log in with the wizard's own browser OAuth flow. The token stays in memory.
+// Log in with keys instead of the browser, the same way --ci does.
+const apiKey = process.env.POSTHOG_PERSONAL_API_KEY;
+if (!apiKey) throw new Error('Set POSTHOG_PERSONAL_API_KEY');
 const programId = 'posthog-integration'; // a program the local gateway admits
 const login = await getOrAskForProjectData({
   signup: false,
-  ci: false,
+  ci: true, // with apiKey, this skips OAuth
+  apiKey,
   baseUrl: POSTHOG_LOCAL_URL,
   localMcp: true,
   programId,
 });
+// Use the token in WIZARD_CI_GATEWAY_TOKEN_FILE at WIZARD_CI_GATEWAY_URL instead of minting one.
+configureGatewayFromCIEnvironment(login.projectId, 'us');
 
 // Log status lines as the program reports them. runProgram never waits for this.
 function logProgress(progress: ProgramProgress): void {
