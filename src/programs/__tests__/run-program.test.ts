@@ -7,6 +7,7 @@ import { ErrorCodes } from '@shared/errors';
 import { DiscoveredFeature } from '@lib/wizard-session';
 import { analytics } from '@utils/analytics';
 import { refreshAccessToken } from '@utils/oauth';
+import { resetOAuthSession } from '@shared/oauth-session';
 import type { ResolvedProgramCredentials } from '../credentials';
 import type { ProgramInput, ProgramOptions } from '../run-program';
 import { runProgram } from '@programs';
@@ -28,7 +29,10 @@ vi.mock('@utils/analytics', async (importOriginal) => ({
     groupIdentify: vi.fn(),
   },
 }));
-vi.mock('@utils/oauth', () => ({ refreshAccessToken: vi.fn() }));
+vi.mock('@utils/oauth', () => ({
+  refreshAccessToken: vi.fn(),
+  missingOAuthScopes: vi.fn(() => []),
+}));
 vi.mock('@utils/debug');
 
 const run = {
@@ -94,6 +98,7 @@ const gated: ProgramInput = {
 describe('runProgram', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    resetOAuthSession();
     vi.mocked(runAgent).mockResolvedValue({
       outcome: RunOutcome.Success,
       snapshot,

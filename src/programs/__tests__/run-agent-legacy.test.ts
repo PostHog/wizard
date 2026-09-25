@@ -3,10 +3,9 @@ import os from 'os';
 import path from 'path';
 import { runNonInteractive } from '@lib/runners/run-non-interactive';
 import { runWizard } from '@lib/runners/run-wizard';
-import {
-  authenticate,
-  refreshCredentialsIfNeeded,
-} from '@programs/authenticate';
+import { authenticate } from '@programs/authenticate';
+import { rotateCredentials } from '@programs/credentials';
+import { resetOAuthSession } from '@shared/oauth-session';
 import { runProgramAgent } from '../run-agent-legacy';
 import { runAgent, RunOutcome, type RunResult } from '@agent/runner';
 import { Harness, Sequence } from '@shared/constants';
@@ -44,6 +43,7 @@ vi.mock('@agent/gateway-session', async (original) => ({
 vi.mock('@programs/task-stream/index', () => ({
   TaskStreamPush: class {
     attach = vi.fn();
+    finishRun = vi.fn().mockResolvedValue(undefined);
     shutdown = streamShutdown;
   },
   PostHogDestination: class {},
@@ -74,7 +74,9 @@ vi.mock('@agent/runner', async (original) => ({
 }));
 vi.mock('@programs/authenticate', () => ({
   authenticate: vi.fn().mockResolvedValue(undefined),
-  refreshCredentialsIfNeeded: vi.fn((credentials: unknown) =>
+}));
+vi.mock('@programs/credentials', () => ({
+  rotateCredentials: vi.fn((credentials: unknown) =>
     Promise.resolve(credentials),
   ),
 }));
@@ -144,6 +146,7 @@ const finishRun: typeof runAgent = (_config, _input, options) => {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  resetOAuthSession();
   vi.mocked(authenticate).mockImplementation((sess) => {
     sess.credentials = session().credentials;
     return Promise.resolve();
@@ -337,9 +340,20 @@ it('rethrows a login failure for the CLI roots, before the agent starts', async 
 });
 
 it('projects a refreshed token and the AI SDK stamp back onto the session', async () => {
-  const current = session();
+  const base = session();
+  // Near expiry, so the pre-run refresh rotates it.
+  const current = {
+    ...base,
+    credentials: {
+      ...base.credentials,
+      refreshToken: 'phr_test',
+      expiresAt: Date.now() + 60_000,
+    },
+  };
+  // The real login is a no-op when the session already holds credentials.
+  vi.mocked(authenticate).mockImplementationOnce(() => Promise.resolve());
   const setAccessToken = vi.spyOn(getUI(), 'setAccessToken');
-  vi.mocked(refreshCredentialsIfNeeded).mockImplementationOnce((credentials) =>
+  vi.mocked(rotateCredentials).mockImplementationOnce((credentials) =>
     Promise.resolve({ ...credentials, accessToken: 'pha_refreshed' }),
   );
   await runProgramAgent(program(), current);

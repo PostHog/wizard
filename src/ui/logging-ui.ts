@@ -251,7 +251,13 @@ export class LoggingUI implements WizardUI {
   private lastTodoLine = '';
 
   syncTodos(
-    todos: Array<{ content: string; status: string; activeForm?: string }>,
+    todos: Array<{
+      id?: string;
+      source?: string;
+      content: string;
+      status: string;
+      activeForm?: string;
+    }>,
   ): void {
     const completed = todos.filter(
       (t) => t.status === TaskStatus.Completed,

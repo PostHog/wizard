@@ -55,6 +55,7 @@ const mockUIInstance = {
   showAuthError: vi.fn(),
   startRun: vi.fn(),
   syncTodos: vi.fn(),
+  setStage: vi.fn(),
   groupMultiselect: vi.fn(),
   multiselect: vi.fn(),
   addTokenUsage: vi.fn(),
@@ -109,6 +110,66 @@ describe('runAgent', () => {
     mockUIInstance.spinner.mockReturnValue(mockSpinner);
     // Reset log mocks
     Object.values(mockUIInstance.log).forEach((fn) => fn.mockReset());
+  });
+
+  it('retains task identity through SDK rekeying and ignores read-only task tools', async () => {
+    const progress = vi.fn();
+    const tool = (id: string, name: string, input: object) => ({
+      type: 'assistant',
+      message: { content: [{ type: 'tool_use', id, name, input }] },
+    });
+    mockQuery.mockReturnValue(
+      (function* () {
+        yield tool('create-1', 'TaskCreate', {
+          subject: 'Inspect',
+          activeForm: 'Inspecting',
+        });
+        yield {
+          type: 'user',
+          tool_use_result: { task: { id: '1' } },
+          message: {
+            content: [{ type: 'tool_result', tool_use_id: 'create-1' }],
+          },
+        };
+        yield tool('update-1', 'TaskUpdate', {
+          taskId: '1',
+          subject: 'New label',
+          status: 'in_progress',
+        });
+        yield tool('list-1', 'TaskList', {});
+        yield tool('get-1', 'TaskGet', { taskId: '1' });
+        yield tool('update-2', 'TaskUpdate', {
+          taskId: '1',
+          status: 'completed',
+        });
+        yield {
+          type: 'result',
+          subtype: 'success',
+          is_error: false,
+          result: 'Done',
+        };
+      })(),
+    );
+    await runAgent(
+      { ...defaultAgentConfig, emit: progress },
+      'test',
+      defaultOptions,
+      mockSpinner as unknown as SpinnerHandle,
+    );
+    const snapshots = progress.mock.calls
+      .map(([event]) => event)
+      .filter((event) => event.kind === 'tasks')
+      .map((event) => event.tasks);
+    expect(snapshots).toHaveLength(4);
+    expect(snapshots.map((items) => items[0].status)).toEqual([
+      'pending',
+      'pending',
+      'in_progress',
+      'completed',
+    ]);
+    expect(new Set(snapshots.map((items) => items[0].id)).size).toBe(1);
+    expect(snapshots[0][0].id).toEqual(expect.any(String));
+    expect(snapshots.at(-1)[0].content).toBe('New label');
   });
 
   it('aborts an unfinished SDK run at its configured timeout', async () => {
@@ -809,6 +870,31 @@ describe('subprocess gateway credentials', () => {
     // The run tags ride one properties blob, with the minted team on it.
     expect(env.ANTHROPIC_CUSTOM_HEADERS).toContain('X-PostHog-Properties');
     expect(env.ANTHROPIC_CUSTOM_HEADERS).toContain('"team_id":42');
+  });
+
+  it('resolves the latest OAuth token when starting an SDK query', async () => {
+    mockQuery.mockReturnValue(
+      (function* () {
+        yield {
+          type: 'result',
+          subtype: 'success',
+          is_error: false,
+          result: 'done',
+        };
+      })(),
+    );
+    const currentPosthogApiKey = vi.fn().mockResolvedValue('pha_rotated');
+    await runAgent(
+      { ...config, currentPosthogApiKey },
+      'test prompt',
+      options,
+      spinner as unknown as SpinnerHandle,
+      { successMessage: 'ok', errorMessage: 'err' },
+    );
+    expect(currentPosthogApiKey).toHaveBeenCalled();
+    expect(mockQuery.mock.calls[0][0].options.env.POSTHOG_MCP_TOKEN).toBe(
+      'pha_rotated',
+    );
   });
 });
 

@@ -25,11 +25,12 @@ import type { DiscoveredFeature } from '@shared/discovered-feature';
 import { analytics, groupsFromUser } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
 import type { DetectedSource } from './warehouse-sources/types';
-import type {
-  CredentialsProvider,
-  ResolvedProgramCredentials,
+import { configureOAuthSession, oauthCredentials } from '@shared/oauth-session';
+import {
+  rotateCredentials,
+  type CredentialsProvider,
+  type ResolvedProgramCredentials,
 } from './credentials';
-import { refreshCredentialsIfNeeded } from './authenticate';
 import { stampAiSdkDetected } from './posthog-integration/detect';
 import {
   ProgramStore,
@@ -254,21 +255,22 @@ export async function runProgram(
       flagSnapshot = await park(options.featureFlags());
     }
 
-    // The agent can't swap tokens mid-run, so freshness is measured after every
-    // park above, right before the agent mints.
-    const refreshed = await park(
-      refreshCredentialsIfNeeded(credentials.posthog, {
-        baseUrl: input.host?.baseUrl,
-      }),
-    );
-    if (refreshed !== credentials.posthog) {
-      credentials = { ...credentials, posthog: refreshed };
-      store.setAuthenticated({
-        credentials: refreshed,
-        apiProject: credentials.project,
-        apiUser: credentials.apiUser,
-      });
-    }
+    // Freshness is measured after every park above, right before the agent mints.
+    // Every rotation of this login, before or during the run, lands in data.
+    const login = credentials;
+    configureOAuthSession(login.posthog, {
+      rotate: (held) => rotateCredentials(held, input.host?.baseUrl),
+      onRefreshed: (refreshed) =>
+        store.setAuthenticated({
+          credentials: refreshed,
+          apiProject: login.project,
+          apiUser: login.apiUser,
+        }),
+    });
+    // Not parked: a rotation spends the old refresh token, so the new one is kept before a cancel returns.
+    const posthog = (await oauthCredentials()) ?? login.posthog;
+    credentials = { ...login, posthog };
+    signal.throwIfAborted();
   } catch (error) {
     if (signal.aborted) return cancelled();
     return fail(error instanceof Error ? error.message : String(error));
