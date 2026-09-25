@@ -146,10 +146,10 @@ function snapshotProgramInput(input: ProgramInput): ProgramInput {
 /** Run an existing program from explicit inputs, with invocation-owned state. */
 export async function runProgram(
   programId: string,
-  hostInput: ProgramInput,
+  callerInput: ProgramInput,
   options: ProgramOptions = {},
 ): Promise<ProgramRunOutcome> {
-  const input = snapshotProgramInput(hostInput);
+  const input = snapshotProgramInput(callerInput);
   const store = new ProgramStore({
     aiSdkStampReported: input.aiSdkStampReported,
     onData: options.onProgress,

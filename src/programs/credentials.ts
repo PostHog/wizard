@@ -8,7 +8,7 @@ export type ResolvedProgramCredentials = {
   apiUser: ApiUser | null; // the user, when known
 };
 
-/** Hosts authenticate once per scope; the signal aborts with the invocation. */
+/** The caller authenticates once per scope; the signal aborts with the invocation. */
 export type CredentialsProvider = {
   resolve(
     programId: string,
