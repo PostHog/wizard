@@ -2,8 +2,8 @@
  * The session-driven agent runner every existing caller uses.
  *
  * `runProgramAgent(programConfig, session)` runs the gates the TUI owns
- * (health, settings), then hands the program to `runProgram` with the session
- * and `getUI()` as its host: credentials come from `authenticate`, the AI
+ * (health, settings), then calls `runProgram` as its caller, backed by the
+ * session and `getUI()`: credentials come from `authenticate`, the AI
  * opt-in and post-auth gates park on the UI, every progress event maps back
  * onto `getUI()`, and the invocation's data projects back onto the session.
  * It applies the result — `wizardAbort` with the outcome's terminal status for
@@ -82,7 +82,7 @@ export async function runProgramAgent(
   }
 }
 
-/** Gates → runProgram with the session as its host → apply result. */
+/** Gates → runProgram on the session's behalf → apply result. */
 async function runSessionProgram(
   session: WizardSession,
   run: ProgramRun,
@@ -112,11 +112,11 @@ async function runSessionProgram(
   const reduceUi = createUiReducer(ui);
   const projectData = projectProgramData(ui, session);
 
-  // runProgram turns a throwing host capability into a failed run; the CLI roots expect the throw.
-  let hostFailure: { error: unknown } | undefined;
+  // runProgram turns a throwing capability into a failed run; the CLI roots expect the throw.
+  let capabilityFailure: { error: unknown } | undefined;
   const keepFailure = <T>(work: Promise<T>): Promise<T> =>
     work.catch((error: unknown) => {
-      hostFailure ??= { error };
+      capabilityFailure ??= { error };
       throw error;
     });
 
@@ -225,7 +225,7 @@ async function runSessionProgram(
       interaction: uiInteraction(ui),
     },
   );
-  if (hostFailure) throw hostFailure.error;
+  if (capabilityFailure) throw capabilityFailure.error;
 
   // The host owns process exits, terminal analytics and rethrowing crashes.
   if (result.outcome === RunOutcome.Crashed) {

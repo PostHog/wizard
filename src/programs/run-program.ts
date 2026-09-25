@@ -113,7 +113,7 @@ export interface ProgramRunOutcome {
   failure?: RunResult['failure']; // code and message on any non-success
 }
 
-/** Handed to host capabilities when the caller supplied no signal. */
+/** Handed to the caller's capabilities when it supplied no signal. */
 const NEVER_ABORTED = new AbortController().signal;
 
 const DEFAULT_FLAGS: RunInput['flags'] = {
@@ -136,7 +136,7 @@ const KEPT_BY_REFERENCE = [
   'seedTasks',
 ] as const satisfies readonly (keyof ProgramInput)[];
 
-/** Copy the host's input, so a later host write cannot reach the run or its hooks. */
+/** Copy the caller's input, so a later caller write cannot reach the run or its hooks. */
 function snapshotProgramInput(input: ProgramInput): ProgramInput {
   const data: Partial<ProgramInput> = { ...input };
   for (const key of KEPT_BY_REFERENCE) delete data[key];
@@ -176,7 +176,7 @@ export async function runProgram(
     settle(RunOutcome.Failed, { code: ErrorCodes.InternalUnhandled, message });
   const abort = (message: string) =>
     settle(RunOutcome.Aborted, { code: ErrorCodes.AgentAbort, message });
-  const cancelled = () => abort('Run cancelled by host.');
+  const cancelled = () => abort('Run cancelled by the caller.');
 
   if (signal.aborted) return cancelled();
 
@@ -186,7 +186,7 @@ export async function runProgram(
     skill_id: run.skillId ?? null,
   });
 
-  /** Await a host capability; a host abort during the wait wins over its answer. */
+  /** Await a caller capability; a caller abort during the wait wins over its answer. */
   const park = async <T>(work: Promise<T>): Promise<T> => {
     const value = await work;
     signal.throwIfAborted();
@@ -199,7 +199,7 @@ export async function runProgram(
     flags: { ...input.wizardFlags },
     payloads: { ...input.wizardFlagPayloads },
   };
-  // Everything before the agent starts: a rejection fails the run, unless the host aborted.
+  // Everything before the agent starts: a rejection fails the run, unless the caller aborted.
   try {
     if (!credentials && options.credentials) {
       credentials = await park(

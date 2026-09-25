@@ -165,7 +165,7 @@ describe('runProgram', () => {
     expect(outcome.failure).toBeUndefined();
   });
 
-  const closed = () => Promise.reject(new Error('host closed'));
+  const closed = () => Promise.reject(new Error('caller closed'));
   it.each<[string, () => ProgramOptions, RunOutcome, string]>([
     [
       'no credentials',
@@ -177,16 +177,16 @@ describe('runProgram', () => {
       'a rejecting credential provider',
       () => ({ credentials: { resolve: closed } }),
       RunOutcome.Failed,
-      'host closed',
+      'caller closed',
     ],
     [
-      'no org AI approval and no host approval capability',
+      'no org AI approval and no caller approval capability',
       () => ({ credentials: login(null) }),
       RunOutcome.Failed,
       'AI processing approval is required before this program can run.',
     ],
     [
-      'a declined host AI approval',
+      'a declined caller AI approval',
       () => ({
         credentials: login(null),
         awaitAiApproval: () => Promise.resolve(false),
@@ -262,7 +262,7 @@ describe('runProgram', () => {
     'AI approval',
     'a post-auth gate',
   ] as const)(
-    'a host abort during %s reaches the capability, returns Aborted and starts nothing else',
+    'a caller abort during %s reaches the capability, returns Aborted and starts nothing else',
     async (gate) => {
       const controller = new AbortController();
       // Each capability takes the invocation signal last and rejects when it aborts.
@@ -292,7 +292,7 @@ describe('runProgram', () => {
         outcome: RunOutcome.Aborted,
         failure: {
           code: ErrorCodes.AgentAbort,
-          message: 'Run cancelled by host.',
+          message: 'Run cancelled by the caller.',
         },
       });
       expect(runAgent).not.toHaveBeenCalled();
@@ -371,7 +371,7 @@ describe('runProgram', () => {
     });
   });
 
-  it('a host mutation after the call does not reach the run', async () => {
+  it('a caller mutation after the call does not reach the run', async () => {
     const flags = { ci: false };
     const host: NonNullable<ProgramInput['host']> = { region: 'us' };
 
