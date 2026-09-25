@@ -184,4 +184,4 @@ present.
   `scanReport: 'defer'`, and reads its report from `snapshot.transcriptTail`.
 - The fault probe in `scripts/a3-fault-probe.no-jest.ts`, and any standalone
   host. See the
-  [developer interfaces](../../../docs/developer-interfaces.md#runagent-for-detection-and-standalone-callers).
+  [developer interfaces](../../../docs/developer-interfaces.md#runagent).

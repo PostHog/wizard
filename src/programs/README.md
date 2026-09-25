@@ -94,7 +94,7 @@ runs the readiness and Claude settings gates, and builds the input from the
 session and the config. It answers the capabilities from the UI, maps run events
 onto `getUI()`, and projects data snapshots onto the session. Then it applies
 the outcome with `wizardAbort` and the terminal analytics event.
-[How the legacy adapter builds `run`](../../docs/developer-interfaces.md#how-the-legacy-adapter-builds-run)
+[How the legacy adapter builds `run`](../../docs/developer-interfaces.md#what-runprogram-is-for)
 lists every field it maps.
 
 Three places call it:
@@ -129,7 +129,7 @@ instead of calling `getUI()`. Both types live in
 
 Neither capability is a `runProgram` option. They belong to building the run
 from a `ProgramConfig`, which happens before `runProgram`. The
-[developer interfaces](../../docs/developer-interfaces.md#host-capabilities)
+[developer interfaces](../../docs/developer-interfaces.md#program-callbacks)
 list which programs use each capability.
 
 ## Current limits

@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="500" viewBox="0 0 960 500" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" text-anchor="middle">
+  <title>How each way to run the wizard reaches runAgent</title>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#374151"/>
+    </marker>
+  </defs>
+  <rect width="960" height="500" fill="#ffffff"/>
+
+  <!-- Interfaces -->
+  <rect x="20" y="20" width="220" height="70" rx="6" fill="#eaf1ff" stroke="#2f5fd0"/>
+  <text x="130" y="61" fill="#1e3a8a" font-weight="600">TUI</text>
+
+  <rect x="260" y="20" width="220" height="70" rx="6" fill="#f1ecfb" stroke="#6c46c8"/>
+  <text x="370" y="61" fill="#3b2a7a" font-weight="600">Headless runner</text>
+
+  <!-- Their stores, and the callers that skip them -->
+  <rect x="20" y="150" width="220" height="80" rx="6" fill="#eaf1ff" stroke="#2f5fd0" stroke-dasharray="6 4"/>
+  <text x="130" y="185" fill="#1e3a8a" font-weight="600">WizardStore</text>
+  <text x="130" y="208" fill="#1e3a8a">session and Ink screens</text>
+
+  <rect x="260" y="150" width="220" height="80" rx="6" fill="#f1ecfb" stroke="#6c46c8" stroke-dasharray="6 4"/>
+  <text x="370" y="185" fill="#3b2a7a" font-weight="600">WizardSession</text>
+  <text x="370" y="208" fill="#3b2a7a">and LoggingUI</text>
+
+  <rect x="500" y="150" width="220" height="80" rx="6" fill="#f0f0ec" stroke="#7a7a72"/>
+  <text x="610" y="185" fill="#374151" font-weight="600">Workbench and</text>
+  <text x="610" y="208" fill="#374151" font-weight="600">other integrations</text>
+
+  <rect x="740" y="150" width="200" height="80" rx="6" fill="#f0f0ec" stroke="#7a7a72"/>
+  <text x="840" y="185" fill="#374151" font-weight="600">Detection and</text>
+  <text x="840" y="208" fill="#374151" font-weight="600">standalone callers</text>
+
+  <!-- runProgram -->
+  <rect x="20" y="280" width="700" height="80" rx="6" fill="#e8f6ec" stroke="#1f8a45"/>
+  <text x="370" y="315" fill="#14532d" font-weight="600">runProgram</text>
+  <text x="370" y="338" fill="#14532d">ProgramStore</text>
+
+  <!-- runAgent -->
+  <rect x="20" y="410" width="920" height="70" rx="6" fill="#fff1e2" stroke="#c86a12"/>
+  <text x="480" y="451" fill="#78350f" font-weight="600">runAgent</text>
+
+  <!-- Arrows: vertical only -->
+  <g stroke="#374151" stroke-width="1.5" fill="none" marker-end="url(#arrow)">
+    <line x1="130" y1="90" x2="130" y2="148"/>
+    <line x1="370" y1="90" x2="370" y2="148"/>
+    <line x1="130" y1="230" x2="130" y2="278"/>
+    <line x1="370" y1="230" x2="370" y2="278"/>
+    <line x1="610" y1="230" x2="610" y2="278"/>
+    <line x1="840" y1="230" x2="840" y2="408"/>
+    <line x1="370" y1="360" x2="370" y2="408"/>
+  </g>
+</svg>
