@@ -1,3 +1,6 @@
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
 import { runNonInteractive } from '@lib/runners/run-non-interactive';
 import { runWizard } from '@lib/runners/run-wizard';
 import {
@@ -16,9 +19,10 @@ import { WizardStore } from '@ui/tui/store';
 import { getUI, setUI } from '@ui';
 import { analytics } from '@utils/analytics';
 import { initLogFile, logToFile } from '@utils/debug';
-import { wizardAbort } from '@utils/wizard-abort';
+import { registerCleanup, wizardAbort } from '@utils/wizard-abort';
 import { ErrorCodes } from '@shared/errors';
 import type { ProgramConfig } from '../program-step';
+import { AUDIT_CHECKS_KEY } from '../audit/types';
 
 const streamShutdown = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 vi.mock('@env', async (original) => ({
@@ -442,4 +446,84 @@ it('keeps a TUI run a success when its terminal analytics flush fails', async ()
     flushError,
   );
   exit.mockRestore();
+});
+
+describe('the audit ledger', () => {
+  let installDir: string;
+  const ledgerPath = () => path.join(installDir, '.posthog-audit-checks.json');
+  const audit = (): ProgramConfig => ({
+    ...program(),
+    auditLedgerFile: '.posthog-audit-checks.json',
+  });
+  const auditSession = () => ({ ...session(), installDir });
+  /** The agent seeds the ledger and, like a real run, never runs the `rm`. */
+  const seedThen =
+    (finish: typeof runAgent): typeof runAgent =>
+    (...args) => {
+      fs.writeFileSync(ledgerPath(), '[]');
+      return finish(...args);
+    };
+
+  beforeEach(() => {
+    installDir = fs.mkdtempSync(path.join(os.tmpdir(), 'audit-ledger-'));
+  });
+  afterEach(() => fs.rmSync(installDir, { recursive: true, force: true }));
+
+  it('is removed from the project once the run settles', async () => {
+    vi.mocked(runAgent).mockImplementation(seedThen(finishRun));
+    await runProgramAgent(audit(), auditSession());
+    expect(fs.existsSync(ledgerPath())).toBe(false);
+  });
+
+  it('is removed when the run throws', async () => {
+    const error = new Error('agent crashed');
+    vi.mocked(runAgent).mockImplementation(
+      seedThen(() => Promise.reject(error)),
+    );
+    await expect(runProgramAgent(audit(), auditSession())).rejects.toBe(error);
+    expect(fs.existsSync(ledgerPath())).toBe(false);
+  });
+
+  it('is removed by the abort cleanup', async () => {
+    const onAbort: Array<() => void> = [];
+    vi.mocked(registerCleanup).mockImplementation((fn) => {
+      onAbort.push(fn);
+    });
+    let leftAfterAbort = true;
+    vi.mocked(runAgent).mockImplementation(
+      seedThen((...args) => {
+        onAbort.forEach((fn) => fn());
+        leftAfterAbort = fs.existsSync(ledgerPath());
+        return finishRun(...args);
+      }),
+    );
+    await runProgramAgent(audit(), auditSession());
+    expect(leftAfterAbort).toBe(false);
+  });
+
+  it('keeps a finished run a success when the ledger cannot be removed', async () => {
+    vi.mocked(runAgent).mockImplementation((...args) => {
+      fs.mkdirSync(ledgerPath());
+      return finishRun(...args);
+    });
+    await expect(
+      runProgramAgent(audit(), auditSession()),
+    ).resolves.toBeUndefined();
+    expect(logToFile).toHaveBeenCalledWith(
+      expect.stringContaining('[audit-ledger] could not remove'),
+    );
+  });
+
+  it('mirrors a last write the watcher has not read yet', async () => {
+    const checks = [
+      { id: 'sdk', area: 'SDK', label: 'Install the SDK', status: 'pass' },
+    ];
+    const mirror = vi.spyOn(getUI(), 'setFrameworkContext');
+    vi.mocked(runAgent).mockImplementation((...args) => {
+      fs.writeFileSync(ledgerPath(), JSON.stringify(checks));
+      return finishRun(...args);
+    });
+    await runProgramAgent(audit(), auditSession());
+    expect(mirror).toHaveBeenCalledWith(AUDIT_CHECKS_KEY, checks);
+  });
 });

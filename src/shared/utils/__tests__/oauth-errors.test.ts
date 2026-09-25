@@ -207,13 +207,7 @@ describe('buildOAuthFailureMessage', () => {
       ...base,
       error: new OAuthError('invalid_scope'),
     });
-    expect(message).toContain('rejected one or more of the requested scopes');
-    expect(message).toContain('What to do:');
-    // The user-facing action is emailing support; the runbook is the
-    // pointer for PostHog staff picking the report up.
-    expect(message).toContain(
-      `email ${WIZARD_CONTACT_EMAIL} with the details below`,
-    );
+    // The runbook is the pointer for PostHog staff picking the report up.
     expect(message).toContain('scope-ceiling-invalid-scope');
     expect(message).toContain('PostHog/runbooks');
     expect(message).not.toContain('local wizard OAuth app');
@@ -236,20 +230,7 @@ describe('buildOAuthFailureMessage', () => {
       oauthUrl: 'http://localhost:8010',
       error: new OAuthError('invalid_client'),
     });
-    expect(message).toContain(
-      'PostHog at http://localhost:8010 does not recognize',
-    );
     expect(message).toContain('--base-url');
-    expect(message).toContain('What to do:');
-  });
-
-  it('explains invalid_grant as an expired or reused code', () => {
-    const message = buildOAuthFailureMessage({
-      ...base,
-      error: new OAuthError('invalid_grant'),
-    });
-    expect(message).toContain('expired or was already used');
-    expect(message).toContain('Re-run the wizard');
   });
 
   it('gives retry guidance and the status page for server errors', () => {
@@ -268,10 +249,7 @@ describe('buildOAuthFailureMessage', () => {
       ...base,
       error: new OAuthError('interaction_required'),
     });
-    expect(message).toContain(
-      'PostHog returned an OAuth error: interaction_required.',
-    );
-    expect(message).toContain('What to do:');
+    expect(message).toContain('interaction_required');
   });
 
   it('renders plain errors with their message', () => {

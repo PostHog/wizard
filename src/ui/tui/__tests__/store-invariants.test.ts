@@ -16,7 +16,6 @@ import {
 } from '@ui/tui/store';
 import {
   buildSession,
-  AdditionalFeature,
   DiscoveredFeature,
   OutroKind,
   type AskAnswers,
@@ -340,11 +339,6 @@ const MUTATIONS: MutationCase[] = [
   {
     name: 'addDiscoveredFeature',
     invoke: (s) => s.addDiscoveredFeature(DiscoveredFeature.Stripe),
-    emits: 1,
-  },
-  {
-    name: 'enableFeature',
-    invoke: (s) => s.enableFeature(AdditionalFeature.LLM),
     emits: 1,
   },
   {
