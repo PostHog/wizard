@@ -100,7 +100,7 @@ export interface ProgramRunOutcome {
 /** Run an existing program from explicit inputs, with invocation-owned state. */
 export async function runProgram(
   programId: string,
-  hostInput: ProgramInput,
+  callerInput: ProgramInput,
   options: ProgramOptions = {},
 ): Promise<ProgramRunOutcome> {
   throw new Error('runProgram: not implemented');
