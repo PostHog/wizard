@@ -72,9 +72,9 @@ export function configureGatewayCredentialsForCI(
   };
 }
 
-// TODO(B2): CI credential loading belongs to the headless provider, not the
-// agent. Leaves with the rest of this module once RunInput carries resolved
-// inference auth.
+// TODO: CI credential loading belongs outside the agent. It leaves with the rest
+// of this module once RunInput carries resolved inference auth, later in the
+// refactor.
 export function configureGatewayFromCIEnvironment(
   projectId: number,
   region: CloudRegion,

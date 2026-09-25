@@ -48,7 +48,7 @@ export const ALLOWED_IMPORTS: Record<Surface, readonly Surface[]> = {
   env: [],
   shared: ['env', 'shared'],
   legacy: ['env', 'shared', 'legacy', 'programs'],
-  // B2 moves bindings and removes the agent's remaining ProgramId type imports.
+  // Moving the bindings to programs removes the agent's ProgramId type imports.
   agent: ['env', 'shared', 'agent'],
   programs: ['env', 'shared', 'agent', 'programs'],
   tui: ['env', 'shared', 'legacy', 'programs', 'tui'],
