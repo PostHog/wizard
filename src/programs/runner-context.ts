@@ -10,5 +10,7 @@ export type CiRunnerContext = {
 export type RunnerContext = {
   getFrameworkContext(key: string): unknown;
   setFrameworkContext(key: string, value: unknown): void;
-  warn(message: string): void;
+  log: {
+    warn(message: string): void;
+  };
 };

@@ -28,12 +28,15 @@ import type {
 // entry would form a module cycle here.
 // eslint-disable-next-line @typescript-eslint/no-restricted-imports -- the session becomes a TUI projection later in the refactor
 import { OutroKind } from '@agent/progress';
+import { DiscoveredFeature } from '@shared/discovered-feature';
 
 // These shapes moved to their owners; re-exported so every session reader
-// keeps its import path. `Credentials` sits with the API types, and the
-// outro, question and task-notice shapes are the agent's contract.
+// keeps its import path. `Credentials` sits with the API types,
+// `DiscoveredFeature` sits in shared so programs can name it without the
+// session, and the outro, question and task-notice shapes are the agent's
+// contract.
 export type { Credentials, CloudRegion };
-export { OutroKind };
+export { OutroKind, DiscoveredFeature };
 export type { AskAnswers, AskQuestion, OutroData, PendingQuestion, TaskNotice };
 
 function parseProjectIdArg(value: string | undefined): number | undefined {
@@ -52,12 +55,6 @@ export enum RunPhase {
   Completed = 'completed',
   /** Main work finished with an error */
   Error = 'error',
-}
-
-/** Features discovered by the feature-discovery subagent */
-export enum DiscoveredFeature {
-  Stripe = 'stripe',
-  LLM = 'llm',
 }
 
 /** Consent to report what local detection found (see `scanConsent` below). */

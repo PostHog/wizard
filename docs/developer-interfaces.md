@@ -73,11 +73,14 @@ export const signature: (
 | Field                                                        | Type                | What it's for                                                                    |
 | ------------------------------------------------------------ | ------------------- | -------------------------------------------------------------------------------- |
 | `programId`                                                  | `string`            | Which program runs. It names analytics, the route and the gateway spend.         |
-| [`input`](../src/programs/run-program.ts#L66)                | `ProgramInput`      | What to run and where. `installDir` and `run` are required.                      |
-| [`input.program`](../src/programs/run-program.ts#L56)        | `ProgramSettings`   | The program's settings from its `ProgramConfig`.                                 |
-| [`options`](../src/programs/run-program.ts#L89)              | `ProgramOptions`    | The login, questions, approval and gate waits, flags, progress and cancellation. |
-| [`options.onProgress`](../src/programs/program-store.ts#L21) | `ProgramProgress`   | Agent events and program data snapshots. Never awaited.                          |
-| [Outcome](../src/programs/run-program.ts#L106)               | `ProgramRunOutcome` | How the run ended, the agent's result, the final data and the report path.       |
+| [`input`](../src/programs/run-program.ts#L67)                | `ProgramInput`      | What to run and where. `installDir` and `run` are required.                      |
+| [`input.program`](../src/programs/run-program.ts#L57)        | `ProgramSettings`   | The program's settings from its `ProgramConfig`.                                 |
+| [`options`](../src/programs/run-program.ts#L90)              | `ProgramOptions`    | The login, questions, approval and gate waits, flags, progress and cancellation. |
+| [`options.onProgress`](../src/programs/program-store.ts#L17) | `ProgramProgress`   | Agent events and program data snapshots. Never awaited.                          |
+| [Outcome](../src/programs/run-program.ts#L107)               | `ProgramRunOutcome` | How the run ended, the agent's result, the final data and the report path.       |
+
+The outcome's `data` and the `kind: 'program'` progress snapshots hold PostHog
+tokens, including the refresh token. Don't log or serialize them.
 
 `flags.ci` and `flags.signup` skip the AI-processing approval. Set them only
 when consent is already settled.
@@ -176,7 +179,7 @@ receive it, and each must settle when it aborts. A cancelled run resolves to
 Most endings resolve to an outcome instead of throwing. Check `outcome` and read
 `failure`. The promise rejects only when the call itself can't run, such as an
 input field that can't be copied. The cases are in
-[`run-program.ts`](../src/programs/run-program.ts#L163).
+[`run-program.ts`](../src/programs/run-program.ts#L164).
 
 ### Program callbacks
 
@@ -228,13 +231,15 @@ export const signature: (
 
 ### Field definitions
 
-| Field                                                   | Type                 | What it's for                                                                   |
-| ------------------------------------------------------- | -------------------- | ------------------------------------------------------------------------------- |
-| [`config`](../src/agent/runner/shared/types.ts#L151)    | `RunConfig`          | What the agent runs, with its route and tools.                                  |
-| [`config.run`](../src/agent/runner/shared/types.ts#L48) | `AgentRunDefinition` | The prompt and run options, such as `collectTranscript`.                        |
-| [`input`](../src/agent/runner/shared/types.ts#L205)     | `RunInput`           | Where and as whom: the project, the login and the flags.                        |
-| `options`                                               |                      | `onProgress` for agent events, `interaction` for questions, `signal` to cancel. |
-| [Result](../src/agent/runner/shared/types.ts#L307)      | `RunResult`          | How the run ended, with a snapshot of its tasks and transcript.                 |
+| Field                                                                | Type                 | What it's for                                                                   |
+| -------------------------------------------------------------------- | -------------------- | ------------------------------------------------------------------------------- |
+| [`config`](../src/agent/runner/shared/types.ts#L151)                 | `RunConfig`          | What the agent runs, with its route and tools.                                  |
+| [`config.run`](../src/agent/runner/shared/types.ts#L48)              | `AgentRunDefinition` | The prompt and run options, such as `collectTranscript`.                        |
+| [`config.allowedTools`](../src/agent/runner/shared/types.ts#L174)    | `readonly string[]`  | Tools added to the base tools.                                                  |
+| [`config.disallowedTools`](../src/agent/runner/shared/types.ts#L176) | `readonly string[]`  | Tools removed from the base tools.                                              |
+| [`input`](../src/agent/runner/shared/types.ts#L205)                  | `RunInput`           | Where and as whom: the project, the login and the flags.                        |
+| `options`                                                            |                      | `onProgress` for agent events, `interaction` for questions, `signal` to cancel. |
+| [Result](../src/agent/runner/shared/types.ts#L307)                   | `RunResult`          | How the run ended, with a snapshot of its tasks and transcript.                 |
 
 ### Callers
 
@@ -246,7 +251,8 @@ export const signature: (
 
 ### Example
 
-This lists a project's files with a read-only agent and returns what it said:
+This lists a project's files with an agent that has no Write, Edit or Bash, and
+returns what it said:
 
 ```ts
 import { runAgent, RunOutcome } from '@agent';
@@ -288,7 +294,7 @@ export async function listProjectFiles(
     wizardFlags: {},
     wizardFlagPayloads: {},
     wizardMetadata: {},
-    allowedTools: ['Read', 'Glob'], // read-only
+    disallowedTools: ['Write', 'Edit', 'Bash'], // no Write, Edit or Bash
   };
 
   const result = await runAgent(config, input, {

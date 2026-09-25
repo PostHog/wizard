@@ -270,6 +270,7 @@ export const WIZARD_OAUTH_SCOPES = [
   'health_issue:read',
   'wizard_session:read',
   'wizard_session:write',
+  'wizard_run:write',
   'organization:read',
 ] as const;
 
@@ -277,6 +278,8 @@ export const WIZARD_OAUTH_SCOPES = [
 
 export const WIZARD_INTERACTION_EVENT_NAME = 'wizard interaction';
 export const WIZARD_REMARK_EVENT_NAME = 'wizard remark';
+/** Multivariate flag: `wizard-run` publishes to WizardRun, anything else to WizardSession. */
+export const WIZARD_RUN_SYNC_FLAG_KEY = 'wizard-run-sync';
 /** Boolean feature flag that routes a run to the experimental orchestrator runner. */
 export const WIZARD_ORCHESTRATOR_FLAG_KEY = 'wizard-orchestrator';
 /** Multivariate flag: per-stage orchestrator overrides ride each variant's JSON payload (`{stage: {model?, effort?}}`). */
@@ -296,6 +299,7 @@ export const WIZARD_DEFAULT_AIO_LOGS_FLAG_KEY = 'wizard-default-aio-logs';
 // Reading a flag enters this run into that flag's experiment, so a closed set — not a
 // `wizard-` prefix anyone can name into — decides what a run evaluates. Test-pinned exhaustive.
 export const WIZARD_FLAG_KEYS = [
+  WIZARD_RUN_SYNC_FLAG_KEY,
   WIZARD_ORCHESTRATOR_FLAG_KEY,
   WIZARD_ORCHESTRATOR_OVERRIDE_FLAG_KEY,
   WIZARD_ORCHESTRATOR_SEEDED_TASKS_FLAG_KEY,

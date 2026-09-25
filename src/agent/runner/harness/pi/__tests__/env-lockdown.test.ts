@@ -18,6 +18,7 @@ describe('buildScrubbedEnv', () => {
     process.env.ANTHROPIC_AUTH_TOKEN = 'tok';
     process.env.AWS_SECRET_ACCESS_KEY = 'aws';
     process.env.SOME_RANDOM_AMBIENT_VAR = 'x';
+    process.env.POSTHOG_WIZARD_RUN_ID = 'assigned-run';
 
     const env = buildScrubbedEnv();
 
@@ -25,6 +26,7 @@ describe('buildScrubbedEnv', () => {
     expect(env.ANTHROPIC_AUTH_TOKEN).toBeUndefined();
     expect(env.AWS_SECRET_ACCESS_KEY).toBeUndefined();
     expect(env.SOME_RANDOM_AMBIENT_VAR).toBeUndefined();
+    expect(env.POSTHOG_WIZARD_RUN_ID).toBeUndefined();
   });
 
   it('keeps the operational allowlist needed to run a package manager', () => {

@@ -13,10 +13,7 @@ import type { ReactNode } from 'react';
 import { useState, useSyncExternalStore } from 'react';
 import type { WizardStore } from '@ui/tui/store';
 import { Integration } from '@shared/constants';
-import {
-  getCommandPath,
-  getLaunchablePrograms,
-} from '@programs';
+import { getCommandPath, getLaunchablePrograms } from '@programs';
 import {
   PickerMenu,
   LoadingBox,
@@ -102,12 +99,14 @@ const FrameworkPicker = ({
       options={options}
       onSelect={(value) => {
         const integration = Array.isArray(value) ? value[0] : value;
-        void import('@programs/registry').then(({ FRAMEWORK_REGISTRY }) => {
-          const config = FRAMEWORK_REGISTRY[integration];
-          store.setFrameworkConfig(integration, config);
-          store.setDetectedFramework(config.metadata.name);
-          onComplete?.();
-        });
+        void import('@programs/frameworks/registry').then(
+          ({ FRAMEWORK_REGISTRY }) => {
+            const config = FRAMEWORK_REGISTRY[integration];
+            store.setFrameworkConfig(integration, config);
+            store.setDetectedFramework(config.metadata.name);
+            onComplete?.();
+          },
+        );
       }}
     />
   );

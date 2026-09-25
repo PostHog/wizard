@@ -405,7 +405,13 @@ describe('runAgent standalone', () => {
             harnessState.tasks[1].orchestrator.currentTaskId,
           ).toBeDefined();
           expect(result.snapshot.tasks).toEqual([
-            { content: 'install', activeForm: 'install', status: 'completed' },
+            {
+              id: expect.any(String),
+              source: expect.any(String),
+              content: 'install',
+              activeForm: 'install',
+              status: 'completed',
+            },
           ]);
         }
       }
