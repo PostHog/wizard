@@ -34,6 +34,7 @@ import {
   provisionNewAccount,
 } from './provisioning';
 import {
+  ApiError,
   fetchUserData,
   fetchProjectData,
   type ApiUser,
@@ -575,11 +576,15 @@ async function fetchProjectDataWithApiKey(
     };
   } catch (err) {
     const reason = err instanceof Error ? err.message : String(err);
-    throw new Error(
+    const message =
       `Could not resolve a project from the API key on ${host.appHost} (region: ${host.region}): ${reason}. ` +
-        'Check that the personal API key is valid for this region and has the project:read scope, ' +
-        'or pass --project-id to select the project directly.',
-    );
+      'Check that the personal API key is valid for this region and has the project:read scope. ' +
+      'If the key cannot read its current project, pass --project-id to select one.';
+    // Keep the status so callers like `doctor --ci` still classify auth failures.
+    if (err instanceof ApiError) {
+      throw new ApiError(message, err.statusCode, err.endpoint);
+    }
+    throw new Error(message);
   }
 }
 
