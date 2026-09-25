@@ -79,6 +79,9 @@ export const signature: (
 | [`options.onProgress`](../src/programs/program-store.ts#L21) | `ProgramProgress`   | Agent events and program data snapshots. Never awaited.                          |
 | [Outcome](../src/programs/run-program.ts#L106)               | `ProgramRunOutcome` | How the run ended, the agent's result, the final data and the report path.       |
 
+`flags.ci` and `flags.signup` skip the AI-processing approval. Set them only
+when consent is already settled.
+
 ### Example
 
 This runs the `metrics` program with a login you already hold. It asks your own
