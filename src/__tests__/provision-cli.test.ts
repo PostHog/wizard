@@ -52,7 +52,7 @@ vi.mock('@utils/debug', () => ({
   logToFile: vi.fn(),
   setDebugSink: vi.fn(),
 }));
-vi.mock('../programs/registry', () => ({ FRAMEWORK_REGISTRY: {} }));
+vi.mock('../programs/frameworks/registry', () => ({ FRAMEWORK_REGISTRY: {} }));
 vi.mock('../programs/detection', () => ({
   detectFramework: vi.fn().mockResolvedValue(null),
   gatherFrameworkContext: vi.fn().mockResolvedValue({}),

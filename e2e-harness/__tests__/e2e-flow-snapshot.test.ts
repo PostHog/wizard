@@ -19,7 +19,7 @@ import { setUI } from '@ui/index';
 import { buildSession, RunPhase } from '@lib/wizard-session';
 import { Integration } from '@shared/constants';
 import { HostResolution } from '@shared/host-resolution';
-import { FRAMEWORK_REGISTRY } from '@programs/registry';
+import { FRAMEWORK_REGISTRY } from '@programs/frameworks/registry';
 import { WizardReadiness } from '@shared/health-checks/readiness';
 import {
   Program,

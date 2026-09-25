@@ -1,4 +1,4 @@
-import type { FrameworkConfig } from './framework-config';
+import type { FrameworkConfig } from '@programs/framework-config';
 import { Integration } from '@shared/constants';
 import { NEXTJS_AGENT_CONFIG } from '@programs/frameworks/nextjs/nextjs-wizard-agent';
 import { NUXT_AGENT_CONFIG } from '@programs/frameworks/nuxt/nuxt-wizard-agent';

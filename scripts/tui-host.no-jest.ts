@@ -35,7 +35,7 @@ import { getOrAskForProjectData } from '@utils/setup-utils';
 import { logToFile } from '@utils/debug';
 import { join } from 'path';
 import { detectFramework } from '@programs/detection/index';
-import { FRAMEWORK_REGISTRY } from '@programs/registry';
+import { FRAMEWORK_REGISTRY } from '@programs/frameworks/registry';
 import type { Integration } from '@shared/constants';
 import { SELF_DRIVING_INTEGRATE_PATH_KEY } from '@programs/self-driving/detect';
 import { ERROR_TRACKING_PROJECT_PATH_KEY } from '@programs/error-tracking/detect-agentic';
