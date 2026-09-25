@@ -108,7 +108,7 @@ export async function runAgent(
     };
   };
   const flushReport = (): void => {
-    // A deferred report keeps counting this run's scans toward the host run's.
+    // A deferred report keeps counting this run's scans toward the program run's.
     if (config.scanReport === 'defer') return;
     try {
       const report = flushScanReport({ yaraReport: input.flags.yaraReport });
