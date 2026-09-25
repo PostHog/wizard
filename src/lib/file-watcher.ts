@@ -124,13 +124,22 @@ export function startFileWatcher(
   };
 
   const attachWatch = () => {
-    watchers.push(
-      fs.watch(targetDir, (_eventType, filename) => {
-        if (filename == null || filename.toString() === targetName) {
-          scheduleRead();
-        }
-      }),
-    );
+    const watcher = fs.watch(targetDir, (_eventType, filename) => {
+      if (filename == null || filename.toString() === targetName) {
+        scheduleRead();
+      }
+    });
+    // A late watch error (e.g. exhausted macOS FSEvents) drops only the watch; polling continues.
+    watcher.on('error', (error) => {
+      logReadError(
+        `watch:${String(error)}`,
+        `directory watch failed (${error})`,
+      );
+      watcher.close();
+      const index = watchers.indexOf(watcher);
+      if (index >= 0) watchers.splice(index, 1);
+    });
+    watchers.push(watcher);
   };
 
   intervals.push(setInterval(() => read(), pollIntervalMs));
