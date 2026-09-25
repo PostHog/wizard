@@ -166,6 +166,7 @@ export class ApiError extends Error {
 export async function fetchUserData(
   accessToken: string,
   baseUrl: string,
+  opts: { reportAuthErrors?: boolean } = {},
 ): Promise<ApiUser> {
   try {
     const response = await axios.get(`${baseUrl}/api/users/@me/`, {
@@ -178,10 +179,14 @@ export async function fetchUserData(
     return ApiUserSchema.parse(response.data);
   } catch (error) {
     const apiError = handleApiError(error, 'fetch user data');
-    analytics.captureException(apiError, {
-      endpoint: '/api/users/@me/',
-      baseUrl,
-    });
+    const isAuthError =
+      apiError.statusCode === 401 || apiError.statusCode === 403;
+    if (opts.reportAuthErrors !== false || !isAuthError) {
+      analytics.captureException(apiError, {
+        endpoint: '/api/users/@me/',
+        baseUrl,
+      });
+    }
     throw apiError;
   }
 }

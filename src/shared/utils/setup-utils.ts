@@ -470,7 +470,9 @@ export async function getOrAskForProjectData(
     let user: ApiUser | null = null;
     let roleAtOrganization: string | null = null;
     try {
-      user = await fetchUserData(_options.apiKey, cloudUrl);
+      user = await fetchUserData(_options.apiKey, cloudUrl, {
+        reportAuthErrors: false,
+      });
       roleAtOrganization = user.role_at_organization ?? null;
     } catch (err) {
       logToFile(
