@@ -1,5 +1,13 @@
 # Programs
 
+> ⚠️ **This changes by the end of this refactor.**
+>
+> - Each program moves into its own folder with everything it owns, so a team
+>   can own a full program through `CODEOWNERS`.
+> - The temporary adapter `runProgramAgent` in
+>   [`run-agent-legacy.ts`](run-agent-legacy.ts) is removed.
+> - Program configs stop taking a `WizardSession` and stop calling `getUI()`.
+
 A program is one thing the wizard does for a user, such as adding PostHog or
 setting up error tracking. Each program is a `ProgramConfig`: the screens the
 TUI walks, the agent run it performs, and its settings.
@@ -36,16 +44,3 @@ Follow the
 skill. A framework integration uses
 [adding-framework-support](../../.claude/skills/adding-framework-support/SKILL.md)
 instead.
-
-## Future work
-
-- **One folder per program.** Each program will move into its own folder with
-  everything it owns, so a team can own a full program through `CODEOWNERS`.
-- **No legacy adapter.** The TUI and the headless runner reach `runProgram`
-  through `runProgramAgent` in [`run-agent-legacy.ts`](run-agent-legacy.ts).
-  This is a temporary adapter, and we will remove it in the full program.
-- **No session in program configs.** A program's `run` and `ciPreRun` still take
-  a `WizardSession`. This is temporary, and we will remove it in the full
-  program.
-- **No direct `getUI()` calls.** Some program code still calls `getUI()`. This
-  is temporary, and we will remove it in the full program.

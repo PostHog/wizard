@@ -1,5 +1,9 @@
 # Agent
 
+> ⚠️ **The bindings table will be gone.** The program bindings table still lives
+> in the agent. By the end of this refactor it moves to programs, and the agent
+> takes a resolved route only.
+
 The agent runs one AI pipeline against a project. It takes resolved data in,
 reports through progress events, asks through an answerer you pass, and returns
 a result. It never reads a session, a store or a UI.
@@ -27,9 +31,3 @@ To call it from code, use `runAgent`. The
 
 Import runtime values from `@agent` and types from `@agent/types`. Nothing
 outside the agent imports deeper, and lint rejects it.
-
-## Future work
-
-- **Bindings move to programs.** The program bindings table still lives in the
-  agent. It will move to programs, and the agent will take a resolved route
-  only.
