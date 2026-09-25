@@ -1,14 +1,14 @@
 import { auditCommand } from '../commands/audit';
+import { aiObservabilityCommand } from '../commands/ai-observability';
 import { basicIntegrationCommand } from '../commands/basic-integration';
 import { revenueCommand } from '../commands/revenue';
 import { HEADLESS_FLAG } from '../lib/headless-mode';
 import { GLOBAL_OPTIONS } from '../wizard';
 import { parseCommand } from './helpers/parse-command.no-jest';
 
-// The experimental headless flag is scoped to exactly two surfaces — the base
-// integration flow (`wizard`) and `wizard audit` — rather than being a global
-// flag. These tests pin that scope so a future change can't silently re-globalise
-// it or leak it onto another command.
+// Headless support is opt-in because each command must work without prompts.
+// These tests prevent the flag from becoming global or leaking onto a command
+// that has not implemented non-interactive execution.
 describe('headless flag scope', () => {
   test('is not a global option', () => {
     expect(GLOBAL_OPTIONS).not.toHaveProperty(HEADLESS_FLAG);
@@ -22,6 +22,10 @@ describe('headless flag scope', () => {
     expect(auditCommand.options).toHaveProperty(HEADLESS_FLAG);
   });
 
+  test('is declared on the AI Observability command', () => {
+    expect(aiObservabilityCommand.options).toHaveProperty(HEADLESS_FLAG);
+  });
+
   test('is NOT declared on an unrelated native command', () => {
     expect(revenueCommand.options ?? {}).not.toHaveProperty(HEADLESS_FLAG);
   });
@@ -33,5 +37,14 @@ describe('headless flag scope', () => {
     );
     expect(argv.skill).toBe('events');
     expect(argv[HEADLESS_FLAG]).toBe(true);
+  });
+
+  test('AI Observability parses cloud-run flags (end-to-end yargs)', async () => {
+    const argv = await parseCommand(
+      aiObservabilityCommand,
+      `ai-observability --${HEADLESS_FLAG} --region us --api-key pha_x --install-dir /tmp/app`,
+    );
+    expect(argv[HEADLESS_FLAG]).toBe(true);
+    expect(argv.region).toBe('us');
   });
 });

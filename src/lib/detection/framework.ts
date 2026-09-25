@@ -6,7 +6,7 @@
  * (or undefined). No store mutations, no UI calls.
  */
 
-import { Integration, DETECTION_TIMEOUT_MS } from '@lib/constants';
+import { Integration, DETECTION_TIMEOUT_MS } from '@shared/constants';
 import { FRAMEWORK_REGISTRY } from '@lib/registry';
 
 /**

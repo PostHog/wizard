@@ -1,15 +1,60 @@
-import { buildSession, McpOutcome, RunPhase } from '@lib/wizard-session';
-import { HostResolution } from '@lib/host-resolution';
-import { WizardReadiness } from '@lib/health-checks/readiness';
+import {
+  buildSession,
+  McpOutcome,
+  OutroKind,
+  RunPhase,
+} from '@lib/wizard-session';
+import { HostResolution } from '@shared/host-resolution';
+import { WizardReadiness } from '@shared/health-checks/readiness';
 import { WizardRouter, ScreenId, Overlay, Program } from '@ui/tui/router';
-import { Integration } from '@lib/constants';
+import { Integration } from '@shared/constants';
 import { FRAMEWORK_REGISTRY } from '@lib/registry';
+import { PROGRAM_REGISTRY } from '@lib/programs/program-registry';
 
 function baseWizardSession() {
   return buildSession({});
 }
 
+/** An agent run that ended in an error: credentials set, error outro shown. */
+function failedRunSession() {
+  const session = baseWizardSession();
+  session.credentials = {
+    accessToken: 'tok',
+    projectApiKey: 'pk',
+    host: HostResolution.fromApiHost('https://app.posthog.com'),
+    projectId: 1,
+  };
+  session.outroData = { kind: OutroKind.Error, message: 'agent failed' };
+  return session;
+}
+
 describe('WizardRouter', () => {
+  it.each(PROGRAM_REGISTRY.map((program) => program.id))(
+    'shows a failed run over every step and overlay in %s',
+    (program) => {
+      const router = new WizardRouter(program);
+      router.pushOverlay(Overlay.WizardAsk);
+      const session = failedRunSession();
+      session.outroDismissed = true;
+      expect(router.resolve(session)).toBe(ScreenId.MintFailure);
+    },
+  );
+
+  it('continues a failed run through the post-run steps, then exits', () => {
+    const router = new WizardRouter(Program.SelfDriving);
+    const session = failedRunSession();
+    session.mintHandoff = 'continue';
+    expect(router.resolve(session)).toBe(ScreenId.Mcp);
+    session.mcpComplete = true;
+    expect(router.resolve(session)).toBe(ScreenId.SlackConnect);
+    session.slackStepDismissed = true;
+    expect(router.resolve(session)).toBe(ScreenId.KeepSkills);
+    session.skillsComplete = true;
+    expect(router.resolve(session)).toBe(ScreenId.Exit);
+    session.mintHandoff = 'exit';
+    expect(router.resolve(session)).toBe(ScreenId.Exit);
+  });
+
   describe('resolve', () => {
     it('returns the first incomplete visible screen for the wizard flow', () => {
       const router = new WizardRouter(Program.PostHogIntegration);
@@ -53,6 +98,31 @@ describe('WizardRouter', () => {
       session.frameworkContext = { packageManager: 'pnpm' };
 
       expect(router.resolve(session)).toBe(ScreenId.Auth);
+    });
+
+    // Every login failure path (OAuth denied, missing completion scope, no
+    // project access) calls wizardAbort, which renders the error outro and
+    // then waits for its dismissal. Credentials never arrive, so the auth
+    // step never completes — without the reroute the auth spinner stays up
+    // and that wait deadlocks.
+    it('routes a failed login to the error outro instead of parking on auth', () => {
+      const router = new WizardRouter(Program.PostHogIntegration);
+      const session = baseWizardSession();
+
+      session.setupConfirmed = true;
+      session.readinessResult = {
+        decision: WizardReadiness.Yes,
+        health: {} as never,
+        reasons: [],
+      };
+      expect(router.resolve(session)).toBe(ScreenId.Auth);
+
+      // An error phase alone (no outro yet) stays on auth.
+      session.runPhase = RunPhase.Error;
+      expect(router.resolve(session)).toBe(ScreenId.Auth);
+
+      session.outroData = { kind: OutroKind.Error, message: 'login failed' };
+      expect(router.resolve(session)).toBe(ScreenId.Outro);
     });
 
     it('returns the last flow screen when every entry is complete', () => {
@@ -248,6 +318,38 @@ describe('WizardRouter', () => {
       session.integration = Integration.javascriptNode; // picked
       session.frameworkConfig = FRAMEWORK_REGISTRY[Integration.javascriptNode];
       // integrate-run shares the 'run' screen; the phase hasn't completed yet.
+      expect(router.resolve(session)).toBe(ScreenId.Run);
+    });
+  });
+
+  describe('error-tracking project picker', () => {
+    function loggedIn() {
+      const session = baseWizardSession();
+      session.setupConfirmed = true;
+      session.readinessResult = {
+        decision: WizardReadiness.Yes,
+        health: {} as never,
+        reasons: [],
+      };
+      session.credentials = {
+        accessToken: 'tok',
+        projectApiKey: 'pk',
+        host: HostResolution.fromApiHost('https://app.posthog.com'),
+        projectId: 1,
+      };
+      return session;
+    }
+
+    it('shows the project picker after login, before a project is picked', () => {
+      const router = new WizardRouter(Program.ErrorTracking);
+      expect(router.resolve(loggedIn())).toBe(ScreenId.ErrorTrackingDetect);
+    });
+
+    it('advances to the run once a project is picked', () => {
+      const router = new WizardRouter(Program.ErrorTracking);
+      const session = loggedIn();
+      session.integration = Integration.nextjs;
+      session.frameworkConfig = FRAMEWORK_REGISTRY[Integration.nextjs];
       expect(router.resolve(session)).toBe(ScreenId.Run);
     });
   });

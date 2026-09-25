@@ -13,11 +13,9 @@ function options(installDir: string): WizardRunOptions {
     installDir,
     ci: true,
     debug: false,
-    default: false,
     benchmark: false,
     yaraReport: false,
     signup: false,
-    localMcp: false,
   };
 }
 

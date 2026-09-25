@@ -17,7 +17,10 @@ import { FUNNEL_BLOCK } from './funnel.js';
 
 export const getContentBlocks = (store?: WizardStore): ContentBlock[] => [
   {
-    content: 'Welcome.',
+    // Name comes from the login profile; falls back when absent (CI keys).
+    content: store?.session.apiUser?.first_name
+      ? `Welcome, ${store.session.apiUser.first_name}.`
+      : 'Welcome.',
     pause: 3000,
     mode: TextRevealMode.Typewriter,
     animationInterval: 160,
@@ -130,4 +133,41 @@ export const getContentBlocks = (store?: WizardStore): ContentBlock[] => [
   { content: 'PostHog has all the dev tools you need.', pause: 3000 },
 
   PRODUCT_SUITE_BLOCK,
+
+  { type: 'clear', pause: 2000 },
+
+  {
+    content: 'The wizard is wiring up your PostHog stack with...',
+    pause: 2500,
+  },
+
+  {
+    type: 'lines',
+    interval: 1000,
+    pause: 12000,
+    lines: [
+      <Text>
+        <Text color="cyan">{'  ◆ '}</Text>
+        {'Product Analytics     '}
+        <Text color="cyan">{'◆ '}</Text>
+        {'Web Analytics'}
+      </Text>,
+      <Text>
+        <Text color="cyan">{'  ◆ '}</Text>
+        {'Error Tracking        '}
+        <Text color="cyan">{'◆ '}</Text>
+        {'Session Replay'}
+      </Text>,
+      <Text>
+        <Text color="cyan">{'  ◆ '}</Text>
+        {'AI Observability      '}
+        <Text color="cyan">{'◆ '}</Text>
+        {'Logs'}
+      </Text>,
+      <Text>
+        <Text color="cyan">{'  ◆ '}</Text>
+        {'Data Warehouse sources'}
+      </Text>,
+    ],
+  },
 ];

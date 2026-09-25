@@ -1,10 +1,12 @@
 import type { Arguments } from 'yargs';
 import { getUI, setUI } from '@ui';
 import { LoggingUI } from '@ui/logging-ui';
-import { runWizardCI, runWizardHeadless } from '@lib/runners';
+import { API_KEY_HINT, runWizardCI, runWizardHeadless } from '@lib/runners';
 import type { NonInteractiveMode } from '@lib/runners';
 import { provisionNewAccount } from '@utils/provisioning';
 import { posthogIntegrationConfig } from '@lib/programs/posthog-integration/index';
+import { ErrorCodes, type ErrorCode } from '@shared/errors';
+import { emitWizardError } from '@shared/errors';
 
 type Options = Arguments & {
   region?: string;
@@ -38,8 +40,8 @@ export function runHeadlessInstall(argv: Arguments): void {
 /**
  * Non-interactive install shared by CI and headless. Validates signup flags,
  * optionally provisions an account, then installs. `mode` only changes
- * user-facing labels, which api-key prefixes are accepted, and which runner is
- * invoked — the install itself is identical (see runNonInteractive).
+ * user-facing labels and which runner is invoked; the accepted keys and the
+ * install itself are identical (see runNonInteractive).
  */
 function runNonInteractiveInstall(
   argv: Arguments,
@@ -53,20 +55,19 @@ function runNonInteractiveInstall(
   // Base validation (region/install-dir/api-key) is owned by the runner.
   // This layer only adds the signup branch on top.
   if (!options.apiKey && !options.signup) {
-    const keyHint = headless
-      ? 'personal API key phx_xxx or pha_ OAuth access token'
-      : 'personal API key phx_xxx';
     return failCI(
-      `${label} mode requires --api-key (${keyHint}). ` +
+      `${label} mode requires --api-key (${API_KEY_HINT}). ` +
         'To create a new account instead, use --signup --email you@example.com.',
+      ErrorCodes.ArgsMissingApiKey,
     );
   }
   if (!options.apiKey && options.signup && !options.email) {
     return failCI(
       `${label} --signup requires --email to create a new account.`,
+      ErrorCodes.ArgsMissingEmail,
     );
   }
-  warnOnUnexpectedKeyPrefix(options.apiKey, headless);
+  warnOnUnexpectedKeyPrefix(options.apiKey);
 
   void (async () => {
     if (!options.apiKey && options.signup) {
@@ -74,6 +75,7 @@ function runNonInteractiveInstall(
       if (!options.installDir) {
         return failCI(
           `${label} mode requires --install-dir (directory to install in)`,
+          ErrorCodes.ArgsMissingInstallDir,
         );
       }
       const provisioned = await provisionForSignup(options);
@@ -81,51 +83,46 @@ function runNonInteractiveInstall(
       if (options.projectId == null) options.projectId = provisioned.projectId;
     }
     runWizard(posthogIntegrationConfig, options);
-  })().catch(() => {
+  })().catch((error: unknown) => {
+    emitWizardError({
+      code: ErrorCodes.ArgsSignupProvisionFailed,
+      message: error instanceof Error ? error.message : String(error),
+    });
     process.exit(1);
   });
 }
 
-function failCI(message: string): void {
+function failCI(message: string, code?: ErrorCode): void {
   setUI(new LoggingUI());
   getUI().intro('PostHog Wizard');
   getUI().log.error(message);
+  if (code) emitWizardError({ code, message });
   process.exit(1);
 }
 
 /**
  * Decide whether to warn about an unexpected `--api-key` prefix, and with what
- * message. Returns `null` when the key is acceptable for the mode.
+ * message. Returns `null` when the key is acceptable.
  *
- * This is the one behavioral fork between `--ci` and headless mode: the LLM
- * Gateway accepts a personal API key (`phx_`) in either mode, but in headless
- * a `pha_` OAuth access token is *also* first-class — PostHog mints one under
- * the wizard's own OAuth application for cloud runs and passes it as the
- * api-key. Outside headless that token is unexpected and still warns.
+ * CI and headless accept the same two credentials: a personal API key (`phx_`)
+ * and a `pha_` OAuth access token minted under the wizard's own OAuth
+ * application (cloud runs, and the CI bot). Both authenticate the mint the
+ * same way. Anything else is unexpected and warns.
  *
- * Extracted as a pure predicate so the fork can be unit-tested without a UI.
+ * Extracted as a pure predicate so it can be unit-tested without a UI.
  */
-export function keyPrefixWarning(
-  apiKey: string | undefined,
-  headless: boolean,
-): string | null {
-  if (!apiKey || apiKey.startsWith('phx_')) return null;
-  if (headless && apiKey.startsWith('pha_')) return null;
-  const prefix = apiKey.slice(0, 4);
-  const hint =
-    prefix === 'pha_'
-      ? ' (pha_ is an OAuth access token — CI mode expects a personal API key)'
-      : prefix === 'phc_'
-      ? ' (phc_ is a project/client key — expected a personal API key)'
-      : '';
-  return `--api-key does not start with "phx_"${hint}. Continuing anyway, but the LLM Gateway may reject it with a 401.`;
+export function keyPrefixWarning(apiKey: string | undefined): string | null {
+  if (!apiKey || apiKey.startsWith('phx_') || apiKey.startsWith('pha_')) {
+    return null;
+  }
+  const hint = apiKey.startsWith('phc_')
+    ? ' (phc_ is a project/client key; expected a personal API key or a wizard-app token)'
+    : '';
+  return `--api-key does not start with "phx_" or "pha_"${hint}. Continuing anyway, but the LLM Gateway may reject it with a 401.`;
 }
 
-function warnOnUnexpectedKeyPrefix(
-  apiKey: string | undefined,
-  headless: boolean,
-): void {
-  const message = keyPrefixWarning(apiKey, headless);
+function warnOnUnexpectedKeyPrefix(apiKey: string | undefined): void {
+  const message = keyPrefixWarning(apiKey);
   if (!message) return;
   setUI(new LoggingUI());
   getUI().intro('PostHog Wizard');

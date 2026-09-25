@@ -11,7 +11,7 @@
  */
 
 import type { ProgramConfig } from './program-step.js';
-import { POSTHOG_DOCS_URL } from '../constants.js';
+import { POSTHOG_DOCS_URL } from '@shared/constants.js';
 import { posthogIntegrationConfig } from './posthog-integration/index.js';
 import { revenueAnalyticsConfig } from './revenue-analytics/index.js';
 import { warehouseSourceConfig } from './warehouse-source/index.js';
@@ -21,6 +21,7 @@ import { posthogDoctorConfig } from './posthog-doctor/index.js';
 import { webAnalyticsDoctorConfig } from './web-analytics-doctor/index.js';
 import { migrationConfig } from './migration/index.js';
 import { errorTrackingUploadSourceMapsConfig } from './error-tracking-upload-source-maps/index.js';
+import { errorTrackingConfig } from './error-tracking/index.js';
 import { selfDrivingConfig } from './self-driving/index.js';
 import { AGENT_SKILL_STEPS } from './agent-skill/index.js';
 import { getContentBlocks as agentSkillContentBlocks } from './agent-skill/content/index.js';
@@ -30,6 +31,9 @@ import {
   mcpTutorialConfig,
 } from './mcp/index.js';
 import { mcpAnalyticsConfig } from './mcp-analytics/index.js';
+import { replayVisionConfig } from './replay-vision/index.js';
+import { aiObservabilityConfig } from './ai-observability/index.js';
+import { metricsConfig } from './metrics/index.js';
 import { slackConnectConfig } from './slack/index.js';
 
 // Generic skill program — runs an arbitrary context-mill skill chosen at
@@ -67,6 +71,7 @@ export const PROGRAM_REGISTRY = [
   revenueAnalyticsConfig,
   warehouseSourceConfig,
   errorTrackingUploadSourceMapsConfig,
+  errorTrackingConfig,
   auditConfig,
   eventsAuditConfig,
   posthogDoctorConfig,
@@ -78,6 +83,9 @@ export const PROGRAM_REGISTRY = [
   mcpRemoveConfig,
   mcpTutorialConfig,
   mcpAnalyticsConfig,
+  replayVisionConfig,
+  aiObservabilityConfig,
+  metricsConfig,
   slackConnectConfig,
 ] as const satisfies readonly ProgramConfig[];
 
@@ -91,6 +99,7 @@ export const Program = {
   RevenueAnalyticsSetup: revenueAnalyticsConfig.id,
   WarehouseSource: warehouseSourceConfig.id,
   ErrorTrackingUploadSourceMaps: errorTrackingUploadSourceMapsConfig.id,
+  ErrorTracking: errorTrackingConfig.id,
   Migration: migrationConfig.id,
   Audit: auditConfig.id,
   EventsAudit: eventsAuditConfig.id,
@@ -102,6 +111,9 @@ export const Program = {
   McpRemove: mcpRemoveConfig.id,
   McpTutorial: mcpTutorialConfig.id,
   McpAnalytics: mcpAnalyticsConfig.id,
+  ReplayVision: replayVisionConfig.id,
+  AiObservability: aiObservabilityConfig.id,
+  Metrics: metricsConfig.id,
   SlackConnect: slackConnectConfig.id,
 } as const;
 
@@ -124,5 +136,34 @@ export type SubcommandProgram = ProgramConfig & { command: string };
 export function getSubcommandPrograms(): SubcommandProgram[] {
   return PROGRAM_REGISTRY.filter(
     (c): c is SubcommandProgram => c.command != null,
+  );
+}
+
+/** What a user types to reach the program. Nested ones go through its parent. */
+export function getCommandPath(config: SubcommandProgram): string {
+  return config.parentCommand
+    ? `${config.parentCommand} ${config.command}`
+    : config.command;
+}
+
+/** What the intro offers, in order. Curated: no config field ranks these. */
+const INTRO_PROGRAMS = [
+  'self-driving',
+  'error-tracking-upload-source-maps',
+  'warehouse-source',
+  'audit',
+  'posthog-doctor',
+  'mcp-analytics',
+  'replay-vision',
+  'ai-observability',
+  'metrics',
+  'revenue-analytics-setup',
+];
+
+/** The programs the intro can hand off to, in the order it lists them. */
+export function getLaunchablePrograms(): SubcommandProgram[] {
+  const byId = new Map(getSubcommandPrograms().map((c) => [c.id, c]));
+  return INTRO_PROGRAMS.map((id) => byId.get(id)).filter(
+    (config): config is SubcommandProgram => config != null,
   );
 }

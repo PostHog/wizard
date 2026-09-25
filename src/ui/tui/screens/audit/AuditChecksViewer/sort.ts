@@ -21,6 +21,10 @@ const AREA_ORDER: string[] = [
   'Session Replay — Optimize',
   'Use Case: Expansion',
   'Additional Sections',
+  // Findings read back from PostHog rather than from the source tree. Ranked
+  // after every source-tree area so the checks the user can act on in their
+  // editor come first, and ahead of the trailing workflow rows.
+  'Live Data',
 ];
 
 function areaRank(area: string): number {

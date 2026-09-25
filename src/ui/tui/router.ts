@@ -12,10 +12,12 @@
  * No switch statements, no hardcoded transitions in business logic.
  */
 
-import type { WizardSession } from '@lib/wizard-session';
+import { RunPhase, type WizardSession } from '@lib/wizard-session';
+import { isRunFailure } from '@ui/mint-failure';
 import { Program, type ProgramId } from '@lib/programs/program-registry';
 import {
   PROGRAM_SEQUENCES,
+  MINT_HANDOFF_SEQUENCE,
   ScreenId,
   type Screen,
   type Sequence,
@@ -36,6 +38,7 @@ export enum Overlay {
   AuthError = 'auth-error',
   SessionTimeout = 'session-timeout',
   WizardAsk = 'wizard-ask',
+  TaskNotice = 'task-notice',
 }
 
 /** Union of all screen names */
@@ -49,8 +52,14 @@ export class WizardRouter {
   private overlays: Overlay[] = [];
 
   constructor(programId: ProgramId = Program.PostHogIntegration) {
+    this.setProgram(programId);
+  }
+
+  /** Point the router at a different program. */
+  setProgram(programId: ProgramId): void {
     this.programId = programId;
     this.sequence = PROGRAM_SEQUENCES[programId];
+    this.overlays = [];
   }
 
   /**
@@ -59,18 +68,39 @@ export class WizardRouter {
    * returns the first incomplete screen.
    */
   resolve(session: WizardSession): ScreenName {
+    // A failed agent run interrupts every program until the user leaves the
+    // handoff screen: exit, or continue through the post-run steps.
+    const runFailed = isRunFailure(session);
+    if (runFailed && session.mintHandoff === 'exit') return ScreenId.Exit;
+    if (runFailed && !session.mintHandoff) return ScreenId.MintFailure;
+
     if (this.overlays.length > 0) {
       return this.overlays[this.overlays.length - 1];
     }
 
-    for (const entry of this.sequence) {
+    const sequence = runFailed ? MINT_HANDOFF_SEQUENCE : this.sequence;
+    for (const entry of sequence) {
       if (entry.show && !entry.show(session)) continue;
       if (entry.isComplete && entry.isComplete(session)) continue;
+      // A failed login aborts the run: wizardAbort renders the error outro
+      // and then waits for its dismissal. But the auth step only completes
+      // on credentials — which an aborted login never set — so the walk
+      // would park here forever: auth spinner up, outro unreachable, and
+      // that wait deadlocked. Route to the outro so the error can be read
+      // and dismissed. Auth only: the run steps already complete on
+      // RunPhase.Error, so later aborts reach their program's own outro.
+      if (
+        entry.id === ScreenId.Auth &&
+        session.runPhase === RunPhase.Error &&
+        session.outroData
+      ) {
+        return ScreenId.Outro;
+      }
       return entry.id;
     }
 
     // All entries complete — show the last screen (outro)
-    return this.sequence[this.sequence.length - 1].id;
+    return sequence[sequence.length - 1].id;
   }
 
   /** The screen that should be rendered right now. */

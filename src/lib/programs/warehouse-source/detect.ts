@@ -9,7 +9,7 @@
 import { existsSync, statSync } from 'fs';
 import { analytics } from '@utils/analytics';
 import type { WizardSession } from '@lib/wizard-session';
-import type { AbortCase } from '@lib/agent/agent-runner';
+import type { AbortCase } from '@agent/types';
 import { detectWarehouseSources } from '@lib/warehouse-sources/detect';
 import type { DetectedSource } from '@lib/warehouse-sources/types';
 

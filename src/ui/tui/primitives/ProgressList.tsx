@@ -11,7 +11,7 @@ import { LoadingBox } from './LoadingBox.js';
 export interface ProgressItem {
   label: string;
   activeForm?: string;
-  status: 'pending' | 'in_progress' | 'completed' | 'skipped';
+  status: 'pending' | 'in_progress' | 'completed' | 'skipped' | 'failed';
 }
 
 interface ProgressListProps {
@@ -20,10 +20,11 @@ interface ProgressListProps {
 }
 
 export const ProgressList = ({ items, title }: ProgressListProps) => {
-  const resolved = items.filter(
-    (t) => t.status === 'completed' || t.status === 'skipped',
-  ).length;
-  const total = items.length;
+  // A task found not needed leaves the list — it was never work to show.
+  const visible = items.filter((t) => t.status !== 'skipped');
+  const resolved = visible.filter((t) => t.status === 'completed').length;
+  const total = visible.length;
+  const notRequired = items.length - visible.length;
 
   return (
     <Box flexDirection="column">
@@ -33,37 +34,34 @@ export const ProgressList = ({ items, title }: ProgressListProps) => {
           <Text> </Text>
         </>
       )}
-      {items.length === 0 && <LoadingBox message="Analyzing project..." />}
-      {items.map((item, i) => {
-        const skipped = item.status === 'skipped';
+      {visible.length === 0 && <LoadingBox message="Analyzing project..." />}
+      {visible.map((item, i) => {
         const icon =
-          item.status === 'completed'
+          item.status === 'failed'
+            ? Icons.warning
+            : item.status === 'completed'
             ? Icons.squareFilled
             : item.status === 'in_progress'
             ? Icons.triangleRight
             : Icons.squareOpen;
         const color =
-          item.status === 'completed'
+          item.status === 'failed'
+            ? Colors.error
+            : item.status === 'completed'
             ? Colors.success
             : item.status === 'in_progress'
             ? Colors.primary
             : Colors.muted;
-        const label = skipped
-          ? `${item.label} (skipped)`
-          : item.status === 'in_progress' && item.activeForm
-          ? item.activeForm
-          : item.label;
+        const label =
+          item.status === 'in_progress' && item.activeForm
+            ? item.activeForm
+            : item.label;
 
+        // One row per task: the pane is half the terminal, so truncate.
         return (
-          <Text key={i}>
-            <Text color={color}>{icon}</Text>
-            <Text
-              dimColor={item.status === 'pending' || skipped}
-              strikethrough={skipped}
-            >
-              {' '}
-              {label}
-            </Text>
+          <Text key={i} wrap="truncate">
+            <Text color={color}>{icon}</Text>{' '}
+            <Text dimColor={item.status === 'pending'}>{label}</Text>
           </Text>
         );
       })}
@@ -76,6 +74,9 @@ export const ProgressList = ({ items, title }: ProgressListProps) => {
               : 'Cleaning up...'}
           </Text>
         </Box>
+      )}
+      {notRequired > 0 && (
+        <Text dimColor>({notRequired} skipped as not required)</Text>
       )}
     </Box>
   );

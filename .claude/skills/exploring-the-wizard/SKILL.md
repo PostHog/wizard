@@ -1,71 +1,133 @@
 ---
 name: exploring-the-wizard
-description: Run, drive, and explore the PostHog wizard headlessly against an app — boot it on the app and decide each screen yourself over the wizard-ci MCP tools (open_app / read_state / perform_action / run_agent), snapshotting the TUI to see what happened. Use to test or explore the wizard end-to-end.
-compatibility: Designed for Claude Code working on the PostHog wizard codebase.
+description:
+  Drive the PostHog wizard headlessly against a throwaway app through wizard-ci
+  MCP tools, inspect decisions, and capture the real TUI. Use for detection
+  checks and end-to-end exploration.
+compatibility:
+  Designed for coding agents working on the PostHog wizard codebase with the
+  wizard-ci MCP server.
 metadata:
   author: posthog
-  version: "3.0"
+  version: '5.0'
 ---
 
 # Exploring the wizard as an agent
 
-Drive a real wizard run yourself: boot it on an app, read each screen, decide, act,
-snapshot. You do this through the **`wizard-ci` MCP tools**, which are already bound
-in this repo (registered in `.mcp.json`). For _how_ it works underneath, read
-[`e2e-harness/ARCHITECTURE.md`](../../../e2e-harness/ARCHITECTURE.md).
+Drive the real TUI from this checkout using the `wizard-ci` MCP server in
+`.mcp.json`. If its tools are unavailable, check registration and startup
+errors; request approval only if the client reports that approval is missing.
 
-If you don't see the `wizard-ci` tools (`open_app`, `read_state`, …), the server
-isn't approved yet — ask the user to approve `wizard-ci`, then retry.
+Follow the [runner policy](../wizard-development/SKILL.md) for harness,
+sequence, and gateway policy. For new exploration, launch the server with
+`SNAP_HARNESS=pi`; prefer `SNAP_SEQUENCE=orchestrator` for the integration flow.
+These are server environment variables, not MCP arguments. Restart an existing
+server to change its environment. See the
+[host architecture](../../../e2e-harness/ARCHITECTURE.md) for other programs,
+overrides, and current limitations.
 
-## Set up
+## Prepare the run
 
-Ask the user for the absolute path to their PostHog key file — e.g. "What's the
-path to your phx key file?" — plus the project id and region if you don't have
-them. Clone or copy the target app to a **throwaway `/tmp` copy** (never a real
-fixture). Never print or commit the key.
+Copy the target app to a throwaway directory under `/tmp`: a full run edits
+files and can create real PostHog resources. `open_app` replaces the active
+wizard, so finish recording one app before opening another.
 
-## Drive
+- **Detection only:** pass `appDir` and `projectId` (both required strings),
+  with no key. Stop at `auth` without calling `run_agent`.
+- **Full integration:** reuse the authorized phx key file path, separate gateway
+  token file path, and project id;
+  ask only for missing inputs. Prefer `keyFile` so the key stays out of tool
+  arguments. Set `WIZARD_CI_GATEWAY_TOKEN_FILE` in the MCP server environment
+  before launch (restart an existing server); it is not an `open_app` argument.
+  The file must contain an already-issued gateway bearer, not the phx key.
+  CI does not mint or refresh it. Never print or commit either secret. See
+  [local credential setup](../../../docs/local-dev.md#credentials-for-local-ci-and-headless-runs). Read the
+  [credential and region limitations](../../../e2e-harness/ARCHITECTURE.md#current-host-limitations)
+  before starting: an inherited key can shadow `keyFile`, and the host currently
+  hardcodes the US region.
+- **Questions during the run:** launch the server with `E2E_ASK=true` to keep
+  `wizard_ask` available in this CI session. Handle questions yourself through
+  the actions below; fixed-route answer profiles do not drive the MCP route.
 
-1. **`open_app({ appDir, keyFile, projectId, region })`** — boots a live wizard on
-   the app and returns the first screen. `appDir` is the throwaway copy.
-2. **`read_state`** — current screen, run phase, secret-free session, tasks, and
-   the actions legal right now. Call after every move.
-3. **`perform_action({ action, params? })`** — commit a decision: `confirm_setup`,
-   `dismiss_outage`, `choose` (a setup question, e.g. `{ key, value }`),
-   `set_mcp_outcome`, `dismiss_slack`, `keep_skills`.
-4. **`render_screen`** — render the current TUI to ANSI so you can _see_ it.
-5. **`run_agent`** — kicks off the **real integration** in the background and
-   returns immediately; it bootstraps credentials, so it's what advances `auth`
-   and `run`. Then **poll `read_state`** — `runPhase` goes `running → completed`
-   and the screen advances to `outro`.
+## Tool contract
 
-A typical walk:
+The schema lives in
+[`scripts/wizard-ci-mcp.no-jest.ts`](../../../scripts/wizard-ci-mcp.no-jest.ts).
+It exposes exactly these tools:
 
-```
-open_app → intro → perform_action confirm_setup
-read_state → health-check → perform_action dismiss_outage
-read_state → auth → run_agent           (returns at once; integration runs in background)
-read_state (poll) → runPhase running → completed, screen → outro
-outro → perform_action dismiss_outro → … → keep_skills
-```
+| Tool             | Arguments                                                                    | Result                                                            |
+| ---------------- | ---------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| `open_app`       | `appDir`, `projectId`; optional `keyFile`, `apiKey`, `region` (`us` or `eu`) | First state, possibly before detection finishes                   |
+| `read_state`     | None                                                                         | Current state, legal actions, and background run status           |
+| `perform_action` | `action`; optional `params` object                                           | State after committing a legal action                             |
+| `render_screen`  | None                                                                         | Current rendered screen as plain text, with ANSI removed          |
+| `run_agent`      | None                                                                         | Starts the real program in the background and returns immediately |
 
-Snapshot with `render_screen` at each key moment and save each frame to a numbered
-file — `/tmp/wz-explore-snaps/NN-<screen>.txt`, incrementing `NN` in visit order —
-so the run leaves a readable, ordered record you and the user can review afterward
-(the same shape the CI route's `.txt` frames take). Capture the run screen as it
-progresses, not just on screen changes.
+Use `read_state.actions` for action ids and parameters; there is no
+`list_actions` MCP tool. Framework identity is `session.integration`, with
+`session.detectedFrameworkLabel` and `session.detectionComplete`. The separate
+top-level `integration` field is the background status: `idle`, `running`,
+`done`, or `failed`; `integrationError` holds a caught failure. Those two fields
+are added by `read_state` and are absent from `perform_action` replies.
 
-## Key facts
+## Drive and record
 
-- **State → screen.** You never navigate; you commit a decision (an action) and the
-  router re-derives the active screen. Name actions, not keys.
-- **`auth` and `run` advance only via `run_agent`.** They expose no action and
-  don't self-advance. `run_agent` returns immediately and runs the integration in
-  the background — poll `read_state` for `runPhase` (`running → completed`).
-  Everything else is an instant commit.
-- **`run_agent` creates real PostHog resources** (a dashboard + insights) in the
-  project; each run duplicates them.
-- **A green run ≠ a valid integration.** `runPhase=completed` means the flow
-  finished, not that the wizard understood the framework (e.g. it'll treat a Wasp
-  app as react-router). Read what it actually changed.
-- **None of this ships.** The harness lives in `e2e-harness/`, out of `src/`.
+This walk targets the default integration program; other programs expose their
+own decisions through the same state and action contract.
+
+1. Open the app, then poll `read_state` until `session.detectionComplete` before
+   judging detection. Inspect `session.integration` and `setupQuestions`.
+2. Capture `render_screen` before each decision and during task or phase
+   changes. Save numbered frames such as `/tmp/wz-explore-snaps/01-intro.txt`.
+3. Commit only actions currently offered. Common choices are below; the
+   [action registry](../../../e2e-harness/action-registry.ts) defines the full
+   set.
+4. For a full run, confirm setup and call `run_agent` at `auth`. Continue
+   reading state and handling overlays while it runs; polling alone cannot
+   answer them.
+5. Check `runPhase` (`idle`, `running`, `completed`, `error`), background
+   status, and the rendered outro. On error, capture the frame and reason before
+   dismissing it. An error outro can wait for dismissal while `integration`
+   still says `running`; a host exit can instead surface as a socket error.
+6. After successful agent completion, finish the offered outro and follow-up
+   actions. For the integration flow, `session.skillsComplete` marks the tail's
+   completion. Other programs can have a terminal outro or exit screen.
+
+| Decision                                 | Action and `params`                                                                          |
+| ---------------------------------------- | -------------------------------------------------------------------------------------------- |
+| Confirm intro / dismiss blocking outage  | `confirm_setup` / `dismiss_outage`                                                           |
+| Answer setup question                    | `choose`, `{ key, value }` from `setupQuestions`                                             |
+| Answer every question in a pending batch | `answer_question`, `{ answers: { questionId: value } }`; values are strings or string arrays |
+| Cancel a question batch                  | `cancel_question`                                                                            |
+| Accept or decline an optional task       | `resolve_notice`, `{ keep: true }` or `{ keep: false }`                                      |
+| Finish outro                             | `dismiss_outro`                                                                              |
+| Record MCP outcome                       | `set_mcp_outcome`, `{ outcome: "skipped" }` or `{ outcome: "installed", clients: [...] }`    |
+| Dismiss suggested prompts / Slack step   | `dismiss` / `dismiss_slack`                                                                  |
+| Record keep-skills choice                | `keep_skills`, `{ kept: true }` or `{ kept: false }`                                         |
+
+MCP and keep-skills actions commit store state; recording an outcome does not
+perform the corresponding installation or cleanup. Report which outcomes were
+simulated. A completed run also needs a review of the app diff and expected
+integration behavior before calling the integration valid.
+
+MCP snapshots are plain `.txt`; the CI snapshot route writes colored `.ans`
+frames. Keep the screen path and failure evidence with the snapshots. Do not
+stop a progressing run at an invented turn count: the MCP exposes no turn limit;
+Pi's continuation and tool-call guards are described in its
+[harness README](../../../src/agent/runner/harness/pi/README.md).
+
+## Sweep the workbench
+
+Fixtures live in the sibling repo at
+`wizard-workbench/apps/basic-integration/<framework>/<app>`. Copy each app with
+`rsync -a`, excluding `.git`, `node_modules`, and ecosystem build/dependency
+directories such as `vendor`, `venv`, `Pods`, `build`, and `dist`. Verify a
+failed copy before treating null detection as a regression; remove throwaway
+copies after recording their results.
+
+The shared log is `/tmp/posthog-wizard.log`. Record its byte count before a run
+and read from that count plus one afterward. Run sweeps serially so their logs
+remain attributable. `read_state` omits `frameworkContext`; an empty
+`setupQuestions` list alone does not prove a router mode. When necessary,
+inspect the detector under [`src/frameworks/`](../../../src/frameworks/) against
+the same fixture.

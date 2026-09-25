@@ -1,12 +1,12 @@
 import type { ProgramConfig } from '@lib/programs/program-step';
-import type { ProgramRun } from '@lib/agent/agent-runner';
+import type { ProgramRun } from '@lib/programs/program-run';
 import type { WizardSession } from '@lib/wizard-session';
 import { OutroKind } from '@lib/wizard-session';
 import { SPINNER_MESSAGE } from '@lib/framework-config';
 import { isUsingTypeScript } from '@utils/setup-utils';
-import { WIZARD_TOOL_NAMES } from '@lib/wizard-tools';
+import { WIZARD_TOOL_NAMES } from '@agent';
 import { EVENTS_AUDIT_PROGRAM } from './steps.js';
-import { AUDIT_CHECKS_KEY } from '@lib/programs/audit/types';
+import { AUDIT_CHECKS_FILE, AUDIT_CHECKS_KEY } from '@lib/programs/audit/types';
 import { seedAuditLedger } from '@lib/programs/audit/seed';
 import { EVENTS_AUDIT_SEED_CHECKS } from './seed.js';
 
@@ -19,8 +19,13 @@ export { SETUP_REPORT_FILE };
 
 const DOCS_URL = 'https://posthog.com/docs/product-analytics/best-practices';
 
+/**
+ * No CLI word of its own since the audit family took over: `wizard audit
+ * events` is the live path, and it resolves to the context-mill `audit-events`
+ * skill (whose id AuditRunScreen keys its slides on), not to this config.
+ * Registered so its id stays resolvable; nothing dispatches to it today.
+ */
 export const eventsAuditConfig: ProgramConfig = {
-  command: 'events-audit',
   description: 'Audit PostHog event tracking in this project',
   id: 'events-audit',
   skillId: 'events-audit',
@@ -28,7 +33,13 @@ export const eventsAuditConfig: ProgramConfig = {
   // Top-level reportFile so AuditRunScreen can resolve the report path
   // synchronously without unwrapping the deferred `run` function.
   reportFile: SETUP_REPORT_FILE,
-  allowedTools: ['Agent'],
+  auditLedgerFile: AUDIT_CHECKS_FILE,
+  allowedTools: [
+    'Agent',
+    WIZARD_TOOL_NAMES.auditSeedChecks,
+    WIZARD_TOOL_NAMES.auditAddChecks,
+    WIZARD_TOOL_NAMES.auditResolveChecks,
+  ],
   disallowedTools: [WIZARD_TOOL_NAMES.wizardAsk],
 
   run: (session: WizardSession): Promise<ProgramRun> => {
@@ -53,7 +64,6 @@ export const eventsAuditConfig: ProgramConfig = {
       reportFile: SETUP_REPORT_FILE,
       docsUrl: DOCS_URL,
       errorMessage: 'Events audit failed',
-      additionalFeatureQueue: session.additionalFeatureQueue,
 
       customPrompt: (ctx) =>
         `Audit PostHog event capture in this project. Do not modify any project files — produce a read-only report only.

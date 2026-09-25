@@ -1,0 +1,11 @@
+ PostHog Wizard v0.0.0-test                                                                Feedback: wizard@posthog.com
+
+ Cost (running): $0.00 · no agent turns yet                                                              Ctrl+T to hide
+
+ ✘ Login timed out
+
+ The OAuth link timed out after 30 minutes.
+
+ Re-run the wizard to get a fresh link and try again.
+
+ Press any key to exit

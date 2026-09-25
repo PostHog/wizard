@@ -7,7 +7,7 @@
 import { Box, Text } from 'ink';
 import { useSyncExternalStore } from 'react';
 import type { WizardStore } from '@ui/tui/store';
-import { OAUTH_PORTS } from '@lib/constants';
+import { OAUTH_PORTS } from '@shared/constants';
 import { ConfirmationInput, ModalOverlay } from '@ui/tui/primitives/index';
 
 interface PortConflictScreenProps {

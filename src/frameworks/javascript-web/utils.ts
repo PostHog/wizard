@@ -1,5 +1,6 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { boundedGlob } from '@utils/bounded-fs';
 import { detectAllPackageManagers } from '@utils/package-manager';
 import type { WizardRunOptions } from '@utils/types';
 
@@ -10,15 +11,6 @@ export type JavaScriptContext = {
 };
 
 const INDEX_HTML_MAX_DEPTH = 6;
-const INDEX_HTML_IGNORE_DIRS = new Set([
-  'node_modules',
-  '.git',
-  '.next',
-  'dist',
-  'build',
-  '.turbo',
-  '.cache',
-]);
 
 /**
  * Packages that indicate a specific framework integration exists.
@@ -86,44 +78,14 @@ export function detectBundler(
  * Heuristic: check if there is an index.html anywhere in the project,
  * ignoring common build and dependency directories.
  */
-export function hasIndexHtml(
+export async function hasIndexHtml(
   options: Pick<WizardRunOptions, 'installDir'>,
-): boolean {
-  const root = options.installDir;
+): Promise<boolean> {
+  const matches = await boundedGlob('**/index.html', {
+    cwd: options.installDir,
+    deep: INDEX_HTML_MAX_DEPTH,
+    limit: 1,
+  });
 
-  function search(dir: string, depth: number): boolean {
-    if (depth > INDEX_HTML_MAX_DEPTH) {
-      return false;
-    }
-
-    const base = path.basename(dir);
-    if (INDEX_HTML_IGNORE_DIRS.has(base)) {
-      return false;
-    }
-
-    let entries: fs.Dirent[];
-    try {
-      entries = fs.readdirSync(dir, { withFileTypes: true });
-    } catch {
-      return false;
-    }
-
-    for (const entry of entries) {
-      if (entry.isFile() && entry.name.toLowerCase() === 'index.html') {
-        return true;
-      }
-    }
-
-    for (const entry of entries) {
-      if (entry.isDirectory()) {
-        if (search(path.join(dir, entry.name), depth + 1)) {
-          return true;
-        }
-      }
-    }
-
-    return false;
-  }
-
-  return search(root, 0);
+  return matches.length > 0;
 }

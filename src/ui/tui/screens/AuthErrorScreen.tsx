@@ -1,7 +1,10 @@
 /**
  * AuthErrorScreen — Shown when the PostHog LLM Gateway returns a 401.
  *
- * Two distinct causes:
+ * Distinct causes, most specific first:
+ *  0. The OAuth grant is gone — a pre-run refresh already got `invalid_grant`
+ *     from the token endpoint. The only branch backed by a server verdict
+ *     rather than inference, so it wins; re-running is the whole fix.
  *  1. Claude Code settings.json / managed-settings overrides ANTHROPIC_*
  *     env vars — auth conflict. Tell the user to log out of Claude Code.
  *  2. The PostHog API key itself was rejected — bad prefix, missing scope,
@@ -31,6 +34,7 @@ export const AuthErrorScreen = ({ store }: AuthErrorScreenProps) => {
   const conflicts = detail?.conflicts ?? [];
   const usingManagedLogin = detail?.usingManagedLogin ?? false;
   const credentialPlaces = detail?.credentialPlaces ?? [];
+  const sessionExpired = detail?.sessionExpired ?? false;
   const logFilePath = detail?.logFilePath;
 
   return (
@@ -39,7 +43,31 @@ export const AuthErrorScreen = ({ store }: AuthErrorScreenProps) => {
         {'✘'} Authentication error
       </Text>
 
-      {usingManagedLogin ? (
+      {sessionExpired ? (
+        <>
+          <Box flexDirection="column" marginTop={1}>
+            <Text>
+              Your PostHog login expired while the wizard was running, so the
+              LLM Gateway rejected it (401). Nothing on this machine is
+              misconfigured — the session simply ran out.
+            </Text>
+          </Box>
+
+          <Box marginTop={1}>
+            <Text dimColor>Re-run the wizard and log in again:</Text>
+          </Box>
+
+          <Box flexDirection="column" marginTop={1} paddingLeft={2}>
+            <Text color="cyan">npx @posthog/wizard</Text>
+          </Box>
+
+          <Box marginTop={1}>
+            <Text dimColor>
+              Any files the agent already wrote are still in your project.
+            </Text>
+          </Box>
+        </>
+      ) : usingManagedLogin ? (
         <>
           <Box flexDirection="column" marginTop={1}>
             <Text>

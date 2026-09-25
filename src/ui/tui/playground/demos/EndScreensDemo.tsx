@@ -27,7 +27,7 @@ import { SlackConnectScreen } from '@ui/tui/screens/SlackConnectScreen';
 import { OutroScreen } from '@ui/tui/screens/OutroScreen';
 import { Colors } from '@ui/tui/styles';
 import { OutroKind, type OutroData } from '@lib/wizard-session';
-import { HostResolution } from '@lib/host-resolution';
+import { HostResolution } from '@shared/host-resolution';
 
 const VIEWS = ['slack-connect', 'outro'] as const;
 type View = (typeof VIEWS)[number];

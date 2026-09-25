@@ -3,13 +3,17 @@ import {
   createSkillProgram,
 } from '@lib/programs/agent-skill/index';
 import type { ProgramStep, ProgramConfig } from '@lib/programs/program-step';
-import type { ProgramRun } from '@lib/agent/agent-runner';
+import type { ProgramRun } from '@lib/programs/program-run';
 import type { WizardSession } from '@lib/wizard-session';
 import { OutroKind } from '@lib/wizard-session';
-import { WIZARD_TOOL_NAMES } from '@lib/wizard-tools';
+import { WIZARD_TOOL_NAMES } from '@agent';
 import { headlessOption, regionOption } from '@lib/headless-mode';
 import { AUDIT_ABORT_CASES } from './detect.js';
-import { AUDIT_CHECKS_KEY, AUDIT_REPORT_FILE } from './types.js';
+import {
+  AUDIT_CHECKS_FILE,
+  AUDIT_CHECKS_KEY,
+  AUDIT_REPORT_FILE,
+} from './types.js';
 import { AUDIT_SEED_CHECKS, seedAuditLedger } from './seed.js';
 
 /** Audit-specific screens for the shared agent-skill pipeline. */
@@ -36,8 +40,7 @@ const baseConfig = createSkillProgram({
   skillId: 'audit',
   command: 'audit',
   id: 'audit',
-  description:
-    'Audit an existing PostHog integration for correctness and best practices',
+  description: 'Audit and improve your PostHog setup',
   integrationLabel: 'audit',
   customPrompt:
     'Run a comprehensive audit of the existing PostHog integration. Follow the skill program steps in order. Do not modify any project files — only create the final audit report.',
@@ -97,7 +100,14 @@ export const auditConfig: ProgramConfig = {
   ...baseConfig,
   steps: auditSteps,
   run: auditRun,
-  allowedTools: ['Agent'],
+  auditLedgerFile: AUDIT_CHECKS_FILE,
+  // Ledger tools are opt-in per program; pi matches on the short name.
+  allowedTools: [
+    'Agent',
+    WIZARD_TOOL_NAMES.auditSeedChecks,
+    WIZARD_TOOL_NAMES.auditAddChecks,
+    WIZARD_TOOL_NAMES.auditResolveChecks,
+  ],
   disallowedTools: [WIZARD_TOOL_NAMES.wizardAsk],
   // The experimental headless flag — declared on `audit` (and basic
   // integration) rather than globally. mergeCommandOptions lands it on the

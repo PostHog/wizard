@@ -1,7 +1,7 @@
 import { PostHogDestination } from '../destinations/posthog';
 import { StreamEvent, type TaskStreamUpdate } from '../types';
 import { RunPhase, type Credentials } from '../../wizard-session';
-import { HostResolution } from '../../host-resolution';
+import { HostResolution } from '@shared/host-resolution';
 
 const SAMPLE_CREDS: Credentials = {
   host: HostResolution.fromApiHost('https://us.posthog.com'),

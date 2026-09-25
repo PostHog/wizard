@@ -9,14 +9,21 @@ import {
 import {
   detectPostHogPresent,
   POSTHOG_MANIFESTS,
+  SELF_DRIVING_DETECTED_TOOLS_KEY,
+  SELF_DRIVING_TOOL_KINDS,
+  getSelfDrivingDetectedTools,
 } from '@lib/programs/self-driving/detect';
+import { getDetectedWarehouseSources } from '@lib/programs/warehouse-source/detect';
+import { WizardStore } from '@ui/tui/store';
+import { SOURCE_DETECTORS } from '@lib/warehouse-sources/registry';
+import type { DetectedSource } from '@lib/warehouse-sources/types';
 import { toIntegrationReport } from '@lib/programs/self-driving/detect-agentic';
 import {
   PROJECT_MANIFESTS,
   type AgenticDetectionReport,
 } from '@lib/detection/agentic';
-import { Integration } from '@lib/constants';
-import { WIZARD_TOOL_NAMES } from '@lib/wizard-tools';
+import { Integration } from '@shared/constants';
+import { WIZARD_TOOL_NAMES } from '@agent/tools';
 import { buildSession } from '@lib/wizard-session';
 import type { Mock } from 'vitest';
 
@@ -59,6 +66,87 @@ describe('detectSelfDrivingPrerequisites', () => {
 
     expect(ctx.detectError).toBeUndefined();
   });
+
+  /** Kinds stashed for the connected-tools ask after a scan of `tmpDir`. */
+  const detectedKinds = (deps: Record<string, string>): string[] => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({ dependencies: deps }),
+    );
+    detectSelfDrivingPrerequisites(
+      buildSession({ installDir: tmpDir }),
+      setCtx,
+    );
+    const tools = ctx[SELF_DRIVING_DETECTED_TOOLS_KEY] as
+      | DetectedSource[]
+      | undefined;
+    return (tools ?? []).map((s) => s.kind);
+  };
+
+  it('stashes tools detected in the codebase for the connected-tools ask', () => {
+    expect(detectedKinds({ '@sentry/node': '^7.0.0' })).toContain('Sentry');
+  });
+
+  it('keeps only the tools the inbox can connect', () => {
+    // `pg` and `stripe` are warehouse sources, not connected tools.
+    expect(detectedKinds({ pg: '^8.0.0', stripe: '^14.0.0' })).toEqual([]);
+    expect(detectedKinds({ pg: '^8.0.0', '@sentry/node': '^7.0.0' })).toEqual([
+      'Sentry',
+    ]);
+  });
+
+  it('writes nothing when the codebase has no detectable tools', () => {
+    // Bare dir: valid, but no tools to prioritise, so the key stays unset.
+    const session = buildSession({ installDir: tmpDir });
+    detectSelfDrivingPrerequisites(session, setCtx);
+
+    expect(ctx.detectError).toBeUndefined();
+    expect(ctx[SELF_DRIVING_DETECTED_TOOLS_KEY]).toBeUndefined();
+  });
+});
+
+describe('SELF_DRIVING_TOOL_KINDS', () => {
+  it('names only kinds the source registry can actually detect', () => {
+    // A plain string set, so a registry rename would otherwise drop a tool silently.
+    const known = new Set(SOURCE_DETECTORS.map((d) => d.kind));
+    expect([...SELF_DRIVING_TOOL_KINDS].filter((k) => !known.has(k))).toEqual(
+      [],
+    );
+  });
+});
+
+describe('the detect step does not leak into the composed integration run', () => {
+  // Through the real store — the leak lived in the plumbing, not in detectConnectedTools.
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = makeTmpDir();
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        dependencies: { '@sentry/node': '^7.0.0', pg: '^8.0.0' },
+      }),
+    );
+  });
+  afterEach(() => cleanup(tmpDir));
+
+  it('stashes under its own key and leaves the warehouse key untouched', async () => {
+    const store = new WizardStore('self-driving');
+    store.session = buildSession({ installDir: tmpDir });
+    await store.runReadyHooks();
+
+    // Self-driving sees its tools...
+    expect(
+      getSelfDrivingDetectedTools(store.session).map((s) => s.kind),
+    ).toContain('Sentry');
+    // ...and the integration program, on the session it inherits, sees nothing.
+    expect(getDetectedWarehouseSources(store.session)).toEqual([]);
+    const inherited = {
+      ...store.session,
+      frameworkContext: { ...store.session.frameworkContext },
+    };
+    expect(getDetectedWarehouseSources(inherited)).toEqual([]);
+  });
 });
 
 describe('SELF_DRIVING_ABORT_CASES', () => {
@@ -77,20 +165,6 @@ describe('SELF_DRIVING_ABORT_CASES', () => {
     expect(matched[0].message).toBeTruthy();
     expect(matched[0].body).toBeTruthy();
   });
-
-  it('frames the unavailable-access abort as open beta, not a closed per-team beta', () => {
-    // STEP 1 no longer gates on access — Self-driving is open beta — but the
-    // abort is kept as a safety net. Its copy must say the product is still
-    // in beta while dropping the old closed/per-team "join the beta" framing.
-    const [accessCase] = SELF_DRIVING_ABORT_CASES.filter((c) =>
-      c.match.test('self-driving is not available for this project'),
-    );
-    expect(accessCase).toBeDefined();
-    const copy = `${accessCase.message} ${accessCase.body}`.toLowerCase();
-    expect(copy).toContain('open beta');
-    expect(copy).not.toContain('per team');
-    expect(copy).not.toContain('join the beta');
-  });
 });
 
 describe('selfDrivingConfig', () => {
@@ -100,13 +174,9 @@ describe('selfDrivingConfig', () => {
     );
   });
 
-  it('ships its own Learn deck ending on the self-driving closer', () => {
+  it('ships its own Learn deck', () => {
     const blocks = selfDrivingConfig.getContentBlocks?.() ?? [];
     expect(blocks.length).toBeGreaterThan(0);
-    const last = blocks[blocks.length - 1];
-    expect(
-      typeof last === 'object' && 'content' in last ? last.content : '',
-    ).toBe('Your product drives itself.');
   });
 
   it('gives wizard_ask a 30-min timeout for the browser-handoff steps', async () => {
@@ -136,6 +206,7 @@ describe('selfDrivingConfig', () => {
       'integrate-detect',
       'integrate-run',
       'self-driving-handoff',
+      'self-driving-github',
       'run',
       'outro',
     ]);

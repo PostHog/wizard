@@ -45,6 +45,10 @@ export const mcpAddConfig: ProgramConfig = {
       // talk to from the tutorial.
       show: (s) => s.mcpOutcome === McpOutcome.Installed,
       isComplete: (s) => s.mcpSuggestedPromptsDismissed,
+      // This step *is* the tutorial, so it reports there rather than to
+      // `mcp-add`. Literal avoids a runtime cycle with the program registry;
+      // the `ProgramId` type still catches a rename.
+      reportsAsProgramId: 'mcp-tutorial',
     },
   ],
 };

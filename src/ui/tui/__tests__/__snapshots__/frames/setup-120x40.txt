@@ -1,0 +1,10 @@
+ PostHog Wizard v0.0.0-test                                                                Feedback: wizard@posthog.com
+
+ Cost (running): $0.00 · no agent turns yet                                                              Ctrl+T to hide
+
+ Project Setup
+ Configuring Next.js integration
+
+  Which Next.js router are you using?
+ ▸ App Router
+   Pages Router

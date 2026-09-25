@@ -17,7 +17,7 @@ const WIZARD_MARKER = '.posthog-wizard';
 import type { WizardStore } from '@ui/tui/store';
 import { ConfirmationInput } from '@ui/tui/primitives/index';
 import { Colors } from '@ui/tui/styles';
-import { CONTEXT_MILL_URL } from '@lib/constants';
+import { CONTEXT_MILL_URL } from '@shared/constants';
 
 interface KeepSkillsScreenProps {
   store: WizardStore;
@@ -65,20 +65,26 @@ export const KeepSkillsScreen = ({ store }: KeepSkillsScreenProps) => {
         }
         if (result.length === 0) {
           store.setSkillsComplete(true);
-          process.exit(0);
+          exit();
+          return;
         }
         setSkills(result);
         setPhase(Phase.Ask);
       } catch {
         store.setSkillsComplete(true);
-        process.exit(0);
+        exit();
       }
     })();
   }, []); // eslint-disable-line
 
+  // After a mint failure run-wizard owns the exit (status 1, analytics).
+  const exit = () => {
+    if (!store.session.mintHandoff) process.exit(0);
+  };
+
   const handleKeep = () => {
     store.setSkillsComplete(true);
-    process.exit(0);
+    exit();
   };
 
   const handleRemove = async () => {
@@ -105,7 +111,7 @@ export const KeepSkillsScreen = ({ store }: KeepSkillsScreenProps) => {
     // Give React a tick to paint the "Skills removed." message before exit
     setTimeout(() => {
       store.setSkillsComplete(false);
-      process.exit(0);
+      exit();
     }, 600);
   };
 

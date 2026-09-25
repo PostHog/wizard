@@ -14,7 +14,7 @@ import { useEffect, useSyncExternalStore } from 'react';
 import type { WizardStore } from '@ui/tui/store';
 import { ConfirmationInput, ModalOverlay } from '@ui/tui/primitives/index';
 import { Icons } from '@ui/tui/styles';
-import type { SettingsConflict } from '@lib/agent/claude-settings';
+import type { SettingsConflict } from '@shared/claude-settings';
 import { analytics } from '@utils/analytics';
 
 function sourceLabel(source: SettingsConflict['source']): string {

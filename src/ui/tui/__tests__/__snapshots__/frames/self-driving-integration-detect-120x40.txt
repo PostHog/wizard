@@ -1,0 +1,9 @@
+ PostHog Wizard v0.0.0-test                                                                Feedback: wizard@posthog.com
+
+ Cost (running): $0.00 · no agent turns yet                                                              Ctrl+T to hide
+
+ Detecting your project. Stick around, this will take a few seconds...
+
+ ⠋ Scanning the repo for frameworks and PostHog SDKs...
+
+   Starting up the detection agent…

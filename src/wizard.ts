@@ -2,16 +2,21 @@ import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
 import type { Argv } from 'yargs';
 import { IS_PRODUCTION_BUILD } from '@env';
-import { Harness, Sequence } from '@lib/constants';
+import { Harness, Sequence } from '@shared/constants';
+import { regionOption } from '@lib/headless-mode';
+import { initLocalDev, localMcpSkillsNotice } from '@shared/local-dev';
 import { toCommandModule, type Command } from './commands/command';
+import { ErrorCodes } from '@shared/errors';
+import { emitWizardError } from '@shared/errors';
 
 /**
  * Global yargs options applied to every command. These are read from the
  * `POSTHOG_WIZARD` env prefix as well as flags.
  *
  * Options with `hidden: true` are "internal modes" — they don't show up in
- * `--help` but are still accepted on every command. The catalog of internal
- * flags and what each one does lives in CONTRIBUTING.md.
+ * `--help` but are still accepted on every command. The `--local-*` flags live
+ * in the constructor's `!IS_PRODUCTION_BUILD` block instead, so published
+ * builds reject them; see `docs/local-dev.md`.
  */
 export const GLOBAL_OPTIONS = {
   debug: {
@@ -47,20 +52,17 @@ export const GLOBAL_OPTIONS = {
     type: 'string' as const,
   },
   // ── Internal modes ─────────────────────────────────────────────────
-  // Hidden from `--help`. See CONTRIBUTING.md for what each one does.
-  // NB: the experimental headless flag is deliberately NOT global — it's
-  // declared per-command (basic integration + audit) via `headlessOption`
-  // in @lib/headless-mode, so no other command accepts it.
-  'local-mcp': {
-    default: false,
-    describe:
-      'Use local MCP server at http://localhost:8787/mcp\nenv: POSTHOG_WIZARD_LOCAL_MCP',
-    type: 'boolean' as const,
-    hidden: true,
-  },
+  // Hidden from `--help`.
+  // NB: the experimental headless flag is deliberately NOT global. Supported
+  // commands declare it through `headlessOption` in @lib/headless-mode.
   'base-url': {
     describe:
       'Override the PostHog base URL (e.g. http://localhost:8010), bypassing region resolution. Pins the API host, cloud URL, and OAuth server.\nenv: POSTHOG_WIZARD_BASE_URL',
+    type: 'string' as const,
+    hidden: true,
+  },
+  'run-id': {
+    describe: 'Assigned cloud WizardRun UUID',
     type: 'string' as const,
     hidden: true,
   },
@@ -84,7 +86,7 @@ export class Wizard {
   private cli: Argv;
 
   private constructor() {
-    let cli = yargs(hideBin(process.argv))
+    let cli: Argv = yargs(hideBin(process.argv))
       .env('POSTHOG_WIZARD')
       .options(GLOBAL_OPTIONS);
 
@@ -93,13 +95,13 @@ export class Wizard {
     // it there as an unknown argument — exactly like any other unrecognized
     // flag. init() additionally detects it up front to print a clearer message.
     // The published-build, non-interactive path is the experimental headless
-    // flag — declared per-command on basic integration + audit via
-    // `headlessOption` (see @lib/headless-mode), not globally, so no other
-    // command accepts it. --ci and headless are kept as separate flags so they
-    // can diverge — see basic-integration's dispatch. headless is deliberately
-    // not advertised.
+    // flag, declared per-command through `headlessOption` (see
+    // @lib/headless-mode). CI needs `region` globally because the workbench
+    // passes it to every command. --ci and headless stay separate so their
+    // behavior can diverge.
     if (!IS_PRODUCTION_BUILD) {
       cli = cli
+        .options(regionOption)
         .option('ci', {
           default: false,
           describe:
@@ -124,13 +126,72 @@ export class Wizard {
         })
         .option('model', {
           describe:
-            'Override the agent model (gateway id, e.g. claude-sonnet-4-6 | openai/gpt-5). Wins over the binding default.\nenv: POSTHOG_WIZARD_MODEL',
+            'Override the agent model (gateway id, e.g. claude-sonnet-5 | openai/gpt-5.6-terra). Wins over the binding default.\nenv: POSTHOG_WIZARD_MODEL',
           type: 'string',
           hidden: true,
+        })
+        .option('capture-aio', {
+          default: false,
+          describe:
+            "Capture wizard LLM calls as $ai_generation events in the authenticated project's AI Observability tab.\nenv: POSTHOG_WIZARD_CAPTURE_AIO",
+          type: 'boolean',
+          hidden: true,
+        })
+        // Rides beside the PostHog destination rather than replacing it, so a
+        // logged run is the same run the backend sees.
+        .option('task-stream-log', {
+          describe:
+            'Append every task-stream payload to a local JSONL file. Pass a path, or pass the flag alone for /tmp/posthog-wizard-task-stream.jsonl\nenv: POSTHOG_WIZARD_TASK_STREAM_LOG',
+          type: 'string',
+        })
+        // ── Local dev targets (see docs/local-dev.md) ──────────────────
+        // Not `hidden`: the build gate already keeps them from users, so
+        // hiding them would only cost the dev-build help row. Deliberately not
+        // named `--local`, which `wizard mcp add` already uses for something
+        // unrelated.
+        .option('local-dev', {
+          default: false,
+          describe:
+            'Point context-mill, MCP, and PostHog at local dev servers\nenv: POSTHOG_WIZARD_LOCAL_DEV',
+          type: 'boolean',
+        })
+        // No `default` on the three below — they must stay `undefined` when
+        // absent for resolveLocalDev() to honour the umbrella and `--no-*`.
+        .option('local-context-mill', {
+          describe:
+            'Fetch skills from the local context-mill server (http://localhost:8765)\nenv: POSTHOG_WIZARD_LOCAL_CONTEXT_MILL',
+          type: 'boolean',
+        })
+        .option('local-mcp', {
+          describe:
+            'Use the local MCP server (http://localhost:8787/mcp). Affects MCP only — use --local-context-mill for skills.\nenv: POSTHOG_WIZARD_LOCAL_MCP',
+          type: 'boolean',
+        })
+        .option('local-posthog', {
+          describe:
+            'Point every PostHog origin (API, app, OAuth, gateway) at http://localhost:8010\nenv: POSTHOG_WIZARD_LOCAL_POSTHOG',
+          type: 'boolean',
         });
     }
 
     this.cli = cli
+      // Middleware rather than an argv scan so the env path is covered too,
+      // and it runs before any TUI takes the terminal.
+      .middleware((argv) => {
+        // The one place local targets are resolved; everything downstream reads
+        // getLocalDev().
+        initLocalDev(argv);
+
+        // Temporary.
+        const notice = localMcpSkillsNotice({
+          localDev: argv.localDev as boolean | undefined,
+          localMcp: argv.localMcp as boolean | undefined,
+          localContextMill: argv.localContextMill as boolean | undefined,
+        });
+        if (notice) {
+          process.stderr.write(`\n\x1b[33m! ${notice}\x1b[0m\n\n`);
+        }
+      })
       .strictOptions()
       // Reject unrecognized commands (e.g. `wizard bogus`) instead of letting
       // them fall through to the default `$0` integration flow.
@@ -143,6 +204,7 @@ export class Wizard {
           `\n\x1b[1;91m✖ ${text}\x1b[0m\n` +
             `  Run \`wizard --help\` to see available commands and options.\n\n`,
         );
+        emitWizardError({ code: ErrorCodes.CliBadArgs, message: text });
         process.exit(1);
       })
       .help()
@@ -183,11 +245,16 @@ export class Wizard {
         process.stderr.write(
           `\n\x1b[1;91m✖ CI mode is not currently supported in published builds.\x1b[0m\n\n`,
         );
+        emitWizardError({
+          code: ErrorCodes.CliFlagUnavailable,
+          message: 'CI mode is not supported in published builds.',
+        });
         process.exit(1);
       }
 
-      // --harness / --sequence / --model are dev/test-only. In published builds
-      // the env vars would silently no-op, so reject them explicitly instead.
+      // --harness / --sequence / --model / --capture-aio are dev/test-only.
+      // In published builds the env vars would silently no-op, so reject them
+      // explicitly instead.
       const argvHasOverride = args.some(
         (a) =>
           a === '--harness' ||
@@ -195,7 +262,10 @@ export class Wizard {
           a === '--sequence' ||
           a.startsWith('--sequence=') ||
           a === '--model' ||
-          a.startsWith('--model='),
+          a.startsWith('--model=') ||
+          a === '--capture-aio' ||
+          a === '--no-capture-aio' ||
+          a.startsWith('--capture-aio='),
       );
       const envHasOverride =
         (process.env.POSTHOG_WIZARD_HARNESS != null &&
@@ -203,11 +273,41 @@ export class Wizard {
         (process.env.POSTHOG_WIZARD_SEQUENCE != null &&
           process.env.POSTHOG_WIZARD_SEQUENCE !== '') ||
         (process.env.POSTHOG_WIZARD_MODEL != null &&
-          process.env.POSTHOG_WIZARD_MODEL !== '');
+          process.env.POSTHOG_WIZARD_MODEL !== '') ||
+        (process.env.POSTHOG_WIZARD_CAPTURE_AIO != null &&
+          process.env.POSTHOG_WIZARD_CAPTURE_AIO !== '');
       if (argvHasOverride || envHasOverride) {
         process.stderr.write(
-          `\n\x1b[1;91m✖ The --harness, --sequence, and --model overrides are not available in published builds.\x1b[0m\n\n`,
+          `\n\x1b[1;91m✖ The --harness, --sequence, --model, and --capture-aio overrides are not available in published builds.\x1b[0m\n\n`,
         );
+        emitWizardError({
+          code: ErrorCodes.CliFlagUnavailable,
+          message:
+            'The --harness, --sequence, --model, and --capture-aio overrides are not available in published builds.',
+        });
+        process.exit(1);
+      }
+
+      // `--local-mcp` used to be declared unconditionally, so published builds
+      // accepted it and quietly aimed the run at localhost. Reject explicitly.
+      const argvHasLocalTarget = args.some((a) =>
+        LOCAL_TARGET_FLAGS.some(
+          (f) => a === `--${f}` || a === `--no-${f}` || a.startsWith(`--${f}=`),
+        ),
+      );
+      const envHasLocalTarget = LOCAL_TARGET_ENV_VARS.some(
+        (k) => process.env[k] != null && process.env[k] !== '',
+      );
+      if (argvHasLocalTarget || envHasLocalTarget) {
+        process.stderr.write(
+          `\n\x1b[1;91m✖ The --local-dev, --local-context-mill, --local-mcp, and --local-posthog targets are not available in published builds.\x1b[0m\n` +
+            `  They point the wizard at development servers on localhost.\n\n`,
+        );
+        emitWizardError({
+          code: ErrorCodes.CliFlagUnavailable,
+          message:
+            'The --local-dev, --local-context-mill, --local-mcp, and --local-posthog targets are not available in published builds.',
+        });
         process.exit(1);
       }
     }
@@ -215,3 +315,18 @@ export class Wizard {
       .argv;
   }
 }
+
+/** Excludes bare `local`: `wizard mcp add --local` stays available in prod. */
+const LOCAL_TARGET_FLAGS = [
+  'local-dev',
+  'local-context-mill',
+  'local-mcp',
+  'local-posthog',
+] as const;
+
+const LOCAL_TARGET_ENV_VARS = [
+  'POSTHOG_WIZARD_LOCAL_DEV',
+  'POSTHOG_WIZARD_LOCAL_CONTEXT_MILL',
+  'POSTHOG_WIZARD_LOCAL_MCP',
+  'POSTHOG_WIZARD_LOCAL_POSTHOG',
+] as const;

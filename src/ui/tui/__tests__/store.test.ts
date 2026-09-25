@@ -8,18 +8,19 @@ import {
   RunPhase,
   McpOutcome,
 } from '@ui/tui/store';
-import { OutroKind, AdditionalFeature } from '@lib/wizard-session';
+import { OutroKind, ScanConsent } from '@lib/wizard-session';
 import { EXPANDED_COUNT } from '@ui/tui/constants';
 import {
   WizardReadiness,
   evaluateWizardReadiness,
-} from '@lib/health-checks/readiness';
+} from '@shared/health-checks/readiness';
 import { buildSession } from '@lib/wizard-session';
-import { HostResolution } from '@lib/host-resolution';
-import { Integration } from '@lib/constants';
+import { HostResolution } from '@shared/host-resolution';
+import { Integration } from '@shared/constants';
 import { analytics } from '@utils/analytics';
+import { getProgramConfig } from '@lib/programs/program-registry';
 
-vi.mock('../../../utils/analytics.js', () => ({
+vi.mock('@utils/analytics.js', () => ({
   analytics: {
     capture: vi.fn(),
     wizardCapture: vi.fn(),
@@ -29,7 +30,7 @@ vi.mock('../../../utils/analytics.js', () => ({
   sessionProperties: vi.fn(() => ({})),
 }));
 
-vi.mock('../../../lib/health-checks/readiness.js', () => ({
+vi.mock('@shared/health-checks/readiness.js', () => ({
   evaluateWizardReadiness: vi.fn().mockResolvedValue({
     decision: 'yes',
     health: {},
@@ -92,6 +93,94 @@ describe('WizardStore', () => {
       const store = createStore();
       expect(store.getVersion()).toBe(0);
       expect(store.getSnapshot()).toBe(0);
+    });
+
+    // Runs another command in this session; nothing has happened yet to unwind.
+    describe('switchProgram', () => {
+      it('makes the chosen program the active one', () => {
+        const store = createStore();
+        store.switchProgram(Program.Metrics);
+        expect(store.router.activeProgram).toBe(Program.Metrics);
+      });
+
+      it('routes to the new program instead of finishing the old one', () => {
+        const store = createStore();
+        store.switchProgram(Program.Metrics);
+        expect(store.router.resolve(store.session)).toBe(ScreenId.MetricsIntro);
+      });
+
+      // Every program gates its intro on the same flag, so a stale one skips it.
+      it('does not carry the old confirmation into the new intro', () => {
+        const store = createStore();
+        store.completeSetup();
+        expect(store.session.setupConfirmed).toBe(true);
+
+        store.switchProgram(Program.Metrics);
+
+        expect(store.session.setupConfirmed).toBe(false);
+        expect(store.router.resolve(store.session)).toBe(ScreenId.MetricsIntro);
+      });
+
+      // Already resolved for the program we left, so reusing them skips screens.
+      it('reopens the gates for the new program', async () => {
+        const store = createStore();
+        const before = store.getGate('intro');
+        store.completeSetup();
+        await expect(before).resolves.toBeUndefined();
+
+        store.switchProgram(Program.Metrics);
+
+        const after = store.getGate('intro');
+        expect(after).not.toBe(before);
+        await expect(
+          Promise.race([after, Promise.resolve('pending')]),
+        ).resolves.toBe('pending');
+      });
+
+      // Dropping the promise the runner is parked on strands it, silently.
+      it('releases callers parked on the old gates', async () => {
+        const store = createStore();
+        const parked = store.getGate('intro');
+
+        store.switchProgram(Program.Metrics);
+
+        await expect(parked).resolves.toBeUndefined();
+      });
+
+      it('reports screens under the new program', () => {
+        const store = createStore();
+        store.switchProgram(Program.Metrics);
+        expect(store.analyticsProgramId).toBe(Program.Metrics);
+      });
+
+      // The run-level tag is stamped once at launch, so events after the
+      // switch would otherwise still carry the program the run started as.
+      it('retags the run with the new program', () => {
+        const store = createStore();
+        store.switchProgram(Program.Metrics);
+        expect(analytics.setTag).toHaveBeenCalledWith(
+          'program_id',
+          Program.Metrics,
+        );
+      });
+
+      it('follows the new program for label and skill', () => {
+        const store = createStore();
+        store.switchProgram(Program.Metrics);
+        expect(store.session.programLabel).toBe(Program.Metrics);
+        expect(store.session.skillId).toBe(
+          getProgramConfig(Program.Metrics).skillId ?? null,
+        );
+      });
+
+      // Re-selecting the running program must not discard a fresh confirmation.
+      it('leaves the session alone when the program is unchanged', () => {
+        const store = createStore();
+        store.completeSetup();
+        store.switchProgram(Program.PostHogIntegration);
+        expect(store.session.setupConfirmed).toBe(true);
+        expect(store.router.activeProgram).toBe(Program.PostHogIntegration);
+      });
     });
   });
 
@@ -177,6 +266,102 @@ describe('WizardStore', () => {
       expect(cb).toHaveBeenCalled();
     });
 
+    it('grantSharing sets scanConsent to granted and emits a change', () => {
+      const store = createStore();
+      const cb = vi.fn();
+      store.subscribe(cb);
+
+      store.grantSharing();
+
+      expect(store.session.scanConsent).toBe(ScanConsent.Granted);
+      expect(cb).toHaveBeenCalled();
+    });
+
+    it('declineSharing sets scanConsent to declined and emits a change', () => {
+      const store = createStore();
+      const cb = vi.fn();
+      store.subscribe(cb);
+
+      store.declineSharing();
+
+      expect(store.session.scanConsent).toBe(ScanConsent.Declined);
+      expect(cb).toHaveBeenCalled();
+    });
+
+    it('completeSetup marks the warehouse-scan report done after consent resolves', () => {
+      const store = createStore();
+
+      store.grantSharing();
+      expect(store.session.warehouseSourcesReported).toBe(false);
+
+      store.completeSetup();
+      expect(store.session.warehouseSourcesReported).toBe(true);
+    });
+
+    it('sets the warehouse tags before it sends setup confirmed', () => {
+      const store = createStore();
+      // A granted run with a scan behind it, which is when tags get set.
+      store.session = {
+        ...store.session,
+        scanConsent: ScanConsent.Granted,
+        frameworkContext: {
+          warehouseScanState: 'ok',
+          detectedWarehouseSources: [
+            {
+              kind: 'Stripe',
+              label: 'Stripe',
+              mode: 'in-cli',
+              matchedSignal: 'x',
+            },
+          ],
+        },
+      };
+      (analytics.setTag as Mock).mockClear();
+      wizardCaptureMock.mockClear();
+
+      store.completeSetup();
+
+      // Analytics merges tags into an event as it is sent, so a tag set after
+      // the capture lands one event too late.
+      const taggedKinds = (analytics.setTag as Mock).mock.calls.findIndex(
+        ([key]) => key === 'warehouse_source_kinds',
+      );
+      expect(taggedKinds).toBeGreaterThanOrEqual(0);
+      const tagOrder = (analytics.setTag as Mock).mock.invocationCallOrder[
+        taggedKinds
+      ];
+      const captureOrder =
+        wizardCaptureMock.mock.invocationCallOrder[
+          wizardCaptureMock.mock.calls.findIndex(
+            ([event]) => event === 'setup confirmed',
+          )
+        ];
+      expect(tagOrder).toBeLessThan(captureOrder);
+    });
+
+    it('declineSharing leaves the report unclaimed while the choice can change', () => {
+      const store = createStore();
+
+      store.declineSharing();
+
+      // warehouseSourcesReported is a send-once latch: the reporter returns at
+      // its first line once set. The privacy panel's choice is reversible, so
+      // claiming it here would silence the report of a user who turns sharing
+      // off and then back on. completeSetup() owns the single report.
+      expect(store.session.warehouseSourcesReported).toBe(false);
+    });
+
+    it('still reports for a user who turns sharing off and on again', () => {
+      const store = createStore();
+
+      store.declineSharing();
+      store.grantSharing();
+      store.completeSetup();
+
+      expect(store.session.scanConsent).toBe(ScanConsent.Granted);
+      expect(store.session.warehouseSourcesReported).toBe(true);
+    });
+
     it('setRunPhase updates session.runPhase', () => {
       const store = createStore();
       store.setRunPhase(RunPhase.Running);
@@ -213,6 +398,13 @@ describe('WizardStore', () => {
       expect(store.session.detectionComplete).toBe(false);
       store.setDetectionComplete();
       expect(store.session.detectionComplete).toBe(true);
+    });
+
+    it('setPosthogSdkDetected stores the verdict', () => {
+      const store = createStore();
+      expect(store.session.posthogSdkDetected).toBe(false);
+      store.setPosthogSdkDetected(true);
+      expect(store.session.posthogSdkDetected).toBe(true);
     });
 
     it('setDetectedFramework sets the label', () => {
@@ -325,12 +517,23 @@ describe('WizardStore', () => {
       });
     });
 
-    it('enableFeature fires feature enabled event', () => {
+    it('setRunPhase tags run_phase', () => {
       const store = createStore();
-      store.enableFeature(AdditionalFeature.LLM);
-      expect(wizardCaptureMock).toHaveBeenCalledWith('feature enabled', {
-        feature: AdditionalFeature.LLM,
-      });
+      store.setRunPhase(RunPhase.Running);
+      expect(analytics.setTag).toHaveBeenCalledWith(
+        'run_phase',
+        RunPhase.Running,
+      );
+    });
+
+    it('completeRunStep resets the run_phase tag, not just the session', () => {
+      const store = createStore();
+      store.setRunPhase(RunPhase.Completed);
+      store.completeRunStep('integrate-run');
+      expect(analytics.setTag).toHaveBeenLastCalledWith(
+        'run_phase',
+        RunPhase.Idle,
+      );
     });
 
     it('setMcpComplete fires mcp complete event', () => {
@@ -684,7 +887,7 @@ describe('WizardStore', () => {
         cacheCreationTokens: 0,
         cacheCreation5m: 0,
         cacheCreation1h: 0,
-        model: 'claude-haiku-4-5-20251001',
+        model: 'claude-haiku-4-5',
       });
       store.addTokenUsage({
         inputTokens: 1_000_000,
@@ -845,6 +1048,23 @@ describe('WizardStore', () => {
   });
 
   describe('syncTodos', () => {
+    it('removes omitted native tasks and retains completed work from earlier agents', () => {
+      const store = createStore();
+      store.syncTodos([
+        { id: 'a', source: 'first', content: 'Same', status: 'completed' },
+      ]);
+      store.syncTodos([
+        { id: 'a', source: 'second', content: 'Same', status: 'pending' },
+      ]);
+      expect(store.tasks).toHaveLength(2);
+      store.syncTodos([
+        { id: 'b', source: 'second', content: 'Next', status: 'pending' },
+      ]);
+      expect(store.tasks.map((t) => t.label)).toEqual(['Same', 'Next']);
+      store.syncTodos([]);
+      expect(store.tasks.map((t) => t.label)).toEqual(['Same']);
+    });
+
     it('maps incoming todos to TaskItems', () => {
       const store = createStore();
       store.syncTodos([
@@ -1113,7 +1333,7 @@ describe('WizardStore', () => {
       expect(store.statusMessages).toEqual(['']);
     });
 
-    it('syncTodos with empty array clears non-completed tasks', () => {
+    it('syncTodos with empty array retains terminal tasks; setTasks clears all', () => {
       const store = createStore();
       store.setTasks([
         { label: 'Pending', status: TaskStatus.Pending, done: false },
@@ -1121,11 +1341,9 @@ describe('WizardStore', () => {
       ]);
 
       store.syncTodos([]);
-
-      // Only the completed task is retained
-      expect(store.tasks).toEqual([
-        { label: 'Done', status: TaskStatus.Completed, done: true },
-      ]);
+      expect(store.tasks.map((t) => t.label)).toEqual(['Done']);
+      store.setTasks([]);
+      expect(store.tasks).toEqual([]);
     });
 
     it('syncTodos with unknown status defaults to Pending', () => {
@@ -1431,6 +1649,54 @@ describe('WizardStore', () => {
           ([event]) => typeof event === 'string' && event.startsWith('screen '),
         ),
       ).toBe(false);
+    });
+  });
+
+  // ── Program attribution for shared steps ────────────────────────────
+
+  describe('analyticsProgramId', () => {
+    it('reports the running program for a step that claims no override', () => {
+      const store = createStore(Program.McpAdd);
+
+      expect(store.currentScreen).toBe(ScreenId.McpAdd);
+      expect(store.analyticsProgramId).toBe(Program.McpAdd);
+    });
+
+    it('reports mcp-tutorial for the tutorial step hosted inside mcp-add', () => {
+      const store = createStore(Program.McpAdd);
+      const session = store.session;
+      session.mcpOutcome = McpOutcome.Installed;
+      session.mcpComplete = true;
+      session.slackStepDismissed = true;
+      store.session = session;
+
+      expect(store.currentScreen).toBe(ScreenId.McpSuggestedPrompts);
+      expect(store.analyticsProgramId).toBe(Program.McpTutorial);
+    });
+
+    it('reports mcp-tutorial for the same step run standalone', () => {
+      const store = createStore(Program.McpTutorial);
+
+      expect(store.currentScreen).toBe(ScreenId.McpSuggestedPrompts);
+      expect(store.analyticsProgramId).toBe(Program.McpTutorial);
+    });
+
+    it('stamps the tutorial program id on the screen transition event', () => {
+      const store = createStore(Program.McpAdd);
+      // Prime the transition detector: the first emit has no previous
+      // screen, so it records the starting one without firing an event.
+      store.emitChange();
+
+      const session = store.session;
+      session.mcpOutcome = McpOutcome.Installed;
+      session.mcpComplete = true;
+      session.slackStepDismissed = true;
+      store.session = session;
+
+      expect(wizardCaptureMock).toHaveBeenCalledWith(
+        `screen ${ScreenId.McpSuggestedPrompts}`,
+        expect.objectContaining({ program_id: Program.McpTutorial }),
+      );
     });
   });
 

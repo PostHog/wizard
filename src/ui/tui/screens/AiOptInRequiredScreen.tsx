@@ -20,8 +20,8 @@ import type { WizardStore } from '@ui/tui/store';
 import { useKeyBindings } from '@ui/tui/hooks/useKeyBindings';
 import { Colors } from '@ui/tui/styles';
 import { useSkillEntry } from '@ui/tui/screens/SkillSourceInfo';
-import { fetchUserData } from '@lib/api';
-import { CONTEXT_MILL_RELEASES_URL, POSTHOG_APP_URL } from '@lib/constants';
+import { fetchUserData } from '@shared/api';
+import { CONTEXT_MILL_RELEASES_URL, POSTHOG_APP_URL } from '@shared/constants';
 import { analytics } from '@utils/analytics';
 import { LoadingBox } from '@ui/tui/primitives/index';
 
@@ -61,7 +61,7 @@ export const AiOptInRequiredScreen = ({
   const [retrying, setRetrying] = useState(false);
   const [retryError, setRetryError] = useState<string | null>(null);
 
-  const { skillEntry } = useSkillEntry(session.skillId, session.localMcp);
+  const { skillEntry } = useSkillEntry(session.skillId);
 
   // Fire the "shown" event once per variant transition.
   useEffect(() => {

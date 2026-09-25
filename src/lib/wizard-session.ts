@@ -10,28 +10,37 @@
  * Business logic reads from the session. Never calls a prompt.
  */
 
-import type { Harness, Integration, Sequence } from './constants';
+import { POSTHOG_LOCAL_URL, resolveLocalDev } from '@shared/local-dev';
+import type { Harness, Integration, Sequence } from '@shared/constants';
 import type { FrameworkConfig } from './framework-config';
-import type { WizardReadinessResult } from './health-checks/readiness';
-import type { SettingsConflict } from './agent/claude-settings';
-import type { ApiUser, ApiProject } from './api';
-import type { HostResolution } from './host-resolution';
+import type { WizardReadinessResult } from '@shared/health-checks/readiness';
+import type { SettingsConflict } from '@shared/claude-settings';
+import type { ApiUser, ApiProject, Credentials } from '@shared/api';
+import type { CloudRegion } from '@utils/types';
+import type {
+  AskAnswers,
+  AskQuestion,
+  OutroData,
+  PendingQuestion,
+  TaskNotice,
+} from '@agent/types';
+// Leaf module on purpose: shared analytics imports this file, so the agent
+// entry would form a module cycle here.
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- B2: the session becomes a TUI projection
+import { OutroKind } from '@agent/progress';
 
-export interface Credentials {
-  accessToken: string;
-  projectApiKey: string;
-  /** Resolved at auth time and immutable thereafter — see {@link HostResolution}. */
-  host: HostResolution;
-  projectId: number;
-}
+// These shapes moved to their owners; re-exported so every session reader
+// keeps its import path. `Credentials` sits with the API types, and the
+// outro, question and task-notice shapes are the agent's contract.
+export type { Credentials, CloudRegion };
+export { OutroKind };
+export type { AskAnswers, AskQuestion, OutroData, PendingQuestion, TaskNotice };
 
 function parseProjectIdArg(value: string | undefined): number | undefined {
   if (value === undefined || value === '') return undefined;
   const n = Number(value);
   return Number.isInteger(n) && n > 0 ? n : undefined;
 }
-
-export type CloudRegion = 'us' | 'eu';
 
 /** Lifecycle phase of the main work (agent run, MCP install, etc.) */
 export enum RunPhase {
@@ -51,20 +60,12 @@ export enum DiscoveredFeature {
   LLM = 'llm',
 }
 
-/** Additional features the agent can integrate after the main setup */
-export enum AdditionalFeature {
-  LLM = 'llm',
+/** Consent to report what local detection found (see `scanConsent` below). */
+export enum ScanConsent {
+  Undecided = 'undecided',
+  Granted = 'granted',
+  Declined = 'declined',
 }
-
-/** Human-readable labels for additional features (used in TUI progress) */
-export const ADDITIONAL_FEATURE_LABELS: Record<AdditionalFeature, string> = {
-  [AdditionalFeature.LLM]: 'AI observability',
-};
-
-/** Agent prompts for each additional feature, injected via the stop hook */
-export const ADDITIONAL_FEATURE_PROMPTS: Record<AdditionalFeature, string> = {
-  [AdditionalFeature.LLM]: `Now integrate AI observability with PostHog. Use the PostHog MCP server to find the appropriate AI observability skill, install it, and follow its workflow. PostHog basics are already installed. Update the setup report markdown file when complete with additions from this task. `,
-};
 
 /** Outcome of the MCP server installation step */
 export enum McpOutcome {
@@ -72,92 +73,6 @@ export enum McpOutcome {
   Skipped = 'skipped',
   Installed = 'installed',
   Failed = 'failed',
-}
-
-/** Outcome kind for the outro screen */
-export enum OutroKind {
-  Success = 'success',
-  Error = 'error',
-  Cancel = 'cancel',
-}
-
-export interface OutroData {
-  kind: OutroKind;
-  /** Main headline (green check for Success, red X for Error, etc.) */
-  message?: string;
-  /** Free-form body text shown under the headline. Use \n for paragraph breaks. */
-  body?: string;
-  /** Success-only: bulleted list of "what the agent did" */
-  changes?: string[];
-  /**
-   * Success-only: a prominent, labeled link to where the user should go
-   * next (e.g. an inbox the program just configured). Rendered right under
-   * the headline and shown verbatim — no UTM tagging — so the URL stays
-   * clean and copy-pasteable. Set per-program in buildOutroData.
-   */
-  primaryLink?: { label: string; url: string };
-  /**
-   * Success-only: a short "what to do next" checklist with its own heading,
-   * rendered as a bulleted list. Distinct from `changes`, which recaps what
-   * the agent already did.
-   */
-  nextSteps?: { heading: string; items: string[] };
-  docsUrl?: string;
-  continueUrl?: string;
-  /** Report file the agent wrote (e.g. "posthog-setup-report.md") */
-  reportFile?: string;
-  /** PostHog dashboard URL the program created on the user's behalf. */
-  dashboardUrl?: string;
-  /** PostHog notebook URL the program uploaded the report to. */
-  notebookUrl?: string;
-  /**
-   * Copy-paste prompt the operator hands to their coding agent to finish the
-   * job (work the report's checklist). Printed to the terminal's main buffer on
-   * exit (see getExitLine in start-tui.ts) — the TUI's alternate screen is wiped
-   * on exit, so the scrollback line is where it survives and can be
-   * triple-click-selected. Set per-program in buildOutroData.
-   */
-  handoffPrompt?: string;
-}
-
-/** A single question rendered by the WizardAsk overlay. */
-export interface AskQuestion {
-  /** Key for the response map */
-  id: string;
-  prompt: string;
-  /** text = single-line free input; single/multi = picker */
-  kind: 'single' | 'multi' | 'text';
-  /** Required for `single` and `multi`. Ignored for `text`. */
-  options?: { label: string; value: string; description?: string }[];
-  /** Defaults to true */
-  required?: boolean;
-  /**
-   * Only meaningful for kind='text'. When true, the wizard-tools `wizard_ask`
-   * tool stores the user's answer in the session secret vault and returns
-   * `{ secretRef }` to the agent instead of the plain string — so the value
-   * never enters the LLM conversation. The TUI may also mask input
-   * accordingly. See `secret-vault.ts`.
-   */
-  sensitive?: boolean;
-}
-
-/** Map of question id → answer (string for single/text, string[] for multi). */
-export type AskAnswers = Record<string, string | string[]>;
-
-/** A pending wizard_ask request held by the store. */
-export interface PendingQuestion {
-  id: string;
-  questions: AskQuestion[];
-  /** Skill id of the caller. Set by the wizard from session.skillId. */
-  source: string;
-  /**
-   * When true, the ask overlay renders standalone URLs in prompt text as
-   * OSC 8 hyperlinks and copies a lone URL to the clipboard. Opt-in per
-   * program (set from `ProgramRun.richLinks` via the ask bridge); defaults
-   * to false so existing flows render prompts exactly as before. See
-   * `LinkText` / `link-helpers`.
-   */
-  richLinks?: boolean;
 }
 
 /**
@@ -174,6 +89,25 @@ export interface WizardSession {
   installDir: string;
   ci: boolean;
   signup: boolean;
+  /**
+   * Harness-only escape hatch: keep the `wizard_ask` bridge wired in a `ci`
+   * session so an e2e run can answer the agent's questions.
+   *
+   * Only the e2e TUI host sets it, from the `E2E_ASK` env var. There is no CLI
+   * flag, `bin.ts` never populates it, and nothing in a published build reads
+   * the env var — so a normal `--ci` run is unchanged. See `shouldDisableAsk`.
+   *
+   * Guarding `E2E_ASK` is not enough on its own: the CI runner spreads the
+   * whole `POSTHOG_WIZARD_*` bag into `buildSession`, which would let
+   * `POSTHOG_WIZARD_e2e_ask=true` set this field. `readEnvironment` drops it —
+   * see `NEVER_FROM_ENV`, and keep that list in step with this comment.
+   */
+  e2eAsk: boolean;
+  /**
+   * `--local-posthog` folds into `baseUrl`, and `--local-context-mill` is read
+   * from `getLocalDev()` — neither belongs here. This one stays because
+   * `mcp add|remove|tutorial --local` populate it from their own flag.
+   */
   localMcp: boolean;
   mcpFeatures?: string[];
   apiKey?: string;
@@ -192,6 +126,14 @@ export interface WizardSession {
   projectId?: number;
   noTelemetry: boolean;
 
+  /**
+   * `--capture-aio`: mirror every wizard LLM call as an `$ai_generation` event
+   * into the authenticated project's AI Observability tab. Dev/test builds
+   * only — the flag is undeclared in published builds so this stays `false`
+   * there. See `src/agent/aio-capture.ts`.
+   */
+  captureAio: boolean;
+
   /** `--harness` override, read by `resolveHarness`. Wins over the runner flag. */
   harness?: Harness;
   /** `--sequence` override, read in `runProgram`. Wins over the orchestrator flag. */
@@ -201,12 +143,29 @@ export interface WizardSession {
 
   // From detection + screens
   setupConfirmed: boolean;
+  /**
+   * Gates reporting only; local detection runs either way. Reporting treats
+   * 'undecided' as 'declined', so a path that reports before the user was
+   * asked sends nothing rather than everything.
+   */
+  scanConsent: ScanConsent;
+  /** Guards against reporting twice; consent resolves from two paths. */
+  warehouseSourcesReported: boolean;
+  /**
+   * Guards `maybeStampAiSdkDetected` against running twice: it is called from
+   * both run-wizard.ts's auth step and bootstrap.ts, since either can be the
+   * first real `authenticate()` to complete depending on the program.
+   */
+  aiSdkStampReported: boolean;
   integration: Integration | null;
   frameworkContext: Record<string, unknown>;
   typescript: boolean;
 
   /** Human-readable label for the detected framework variant (e.g., "Django with Wagtail CMS") */
   detectedFrameworkLabel: string | null;
+
+  /** PostHog found in the project's dependencies. A signal, not a verified install. */
+  posthogSdkDetected: boolean;
 
   /** True once framework detection has run (whether it found something or not) */
   detectionComplete: boolean;
@@ -235,7 +194,7 @@ export interface WizardSession {
   /**
    * Full user payload from `/api/users/@me/` — identifiers, profile,
    * current team + organization, preferences, etc. Null until OAuth /
-   * CI-key auth populates it. Schema lives in `src/lib/api.ts` and
+   * CI-key auth populates it. Schema lives in `src/shared/api.ts` and
    * passes through unknown upstream fields so downstream features can
    * read account context (plan, org name, email, etc.) without
    * re-fetching.
@@ -259,12 +218,13 @@ export interface WizardSession {
 
   // Feature discovery
   discoveredFeatures: DiscoveredFeature[];
-  llmOptIn: boolean;
 
   // ScreenId completion
   mcpComplete: boolean;
   mcpOutcome: McpOutcome | null;
   mcpInstalledClients: string[];
+  /** Editor-owned login commands still to run (e.g. `claude mcp login posthog`), echoed at exit. */
+  mcpLoginCommands: string[];
   mcpSuggestedPromptsDismissed: boolean;
   /** True once the user has acted on (opened or skipped) the Connect-Slack step. */
   slackStepDismissed: boolean;
@@ -307,14 +267,33 @@ export interface WizardSession {
    */
   selfDrivingHandoffConfirmed: boolean;
 
+  /**
+   * Self-driving only: whether the project has the PostHog GitHub App
+   * connected. `null` until the GitHub gate's first check resolves. Self-driving
+   * cannot research issues or open fixes without it, so the gate holds the run
+   * until this is `true`.
+   */
+  githubConnected: boolean | null;
+
+  /**
+   * Self-driving only: the user answered "I can't connect right now" on the
+   * GitHub gate. Completes the gate step and hides the run step, so the flow
+   * lands on the outro without starting the agent.
+   */
+  githubDeclined: boolean;
+
   // Runtime
   readinessResult: WizardReadinessResult | null;
   outageDismissed: boolean;
   settingsOverrideKeys: string[] | null;
   settingsConflicts: SettingsConflict[] | null;
+  /** Mirrors `AuthErrorDetail` in `@ui/wizard-ui` — keep the two in step. */
   authErrorDetail: {
     hasSettingsConflict: boolean;
     conflicts?: SettingsConflict[];
+    usingManagedLogin?: boolean;
+    credentialPlaces?: string[];
+    sessionExpired?: boolean;
     logFilePath: string;
   } | null;
   portConflictProcess: {
@@ -323,12 +302,18 @@ export interface WizardSession {
     port: number;
     user: string;
   } | null;
+  /** Copy for the task-notice modal, set while it is open. */
+  taskNotice: TaskNotice | null;
   outroData: OutroData | null;
+  /** Skill saved for the user's own agent during the handoff. */
+  spellbook: { path: string; skillsIncluded: boolean } | null;
+  /**
+   * How the user left the mint-failure screen: `continue` walks the
+   * post-run steps (MCP, Slack, keep-skills), `exit` leaves. Null until then.
+   */
+  mintHandoff: 'continue' | 'exit' | null;
   dashboardUrl: string | null;
   notebookUrl: string | null;
-
-  // Additional features queue (drained via stop hook after main integration)
-  additionalFeatureQueue: AdditionalFeature[];
 
   // Program metadata (set by runWizard in bin.ts)
   programLabel: string | null;
@@ -349,7 +334,11 @@ export function buildSession(args: {
   installDir?: string;
   ci?: boolean;
   signup?: boolean;
+  /** Harness-only. Set by the e2e TUI host from `E2E_ASK`, never by a flag. */
+  e2eAsk?: boolean;
+  localDev?: boolean;
   localMcp?: boolean;
+  localPosthog?: boolean;
   mcpFeatures?: string[];
   apiKey?: string;
   email?: string;
@@ -364,40 +353,55 @@ export function buildSession(args: {
   sequence?: Sequence;
   model?: string;
   integrate?: boolean;
+  captureAio?: boolean;
 }): WizardSession {
+  const local = resolveLocalDev(args);
   return {
     debug: args.debug ?? false,
     installDir: args.installDir ?? process.cwd(),
     ci: args.ci ?? false,
     signup: args.signup ?? false,
-    localMcp: args.localMcp ?? false,
+    e2eAsk: args.e2eAsk ?? false,
+    localMcp: local.localMcp,
     mcpFeatures: args.mcpFeatures,
     apiKey: args.apiKey,
     email: args.email,
     region: args.region,
-    baseUrl: args.baseUrl,
+    // `--local-posthog` is sugar over `--base-url`, which every downstream URL
+    // helper already honours. An explicit `--base-url` is more specific, so it wins.
+    baseUrl:
+      args.baseUrl ?? (local.localPosthog ? POSTHOG_LOCAL_URL : undefined),
     benchmark: args.benchmark ?? false,
     yaraReport: args.yaraReport ?? false,
     projectId: parseProjectIdArg(args.projectId),
     noTelemetry: args.noTelemetry ?? false,
+    captureAio: args.captureAio ?? false,
     harness: args.harness,
     sequence: args.sequence,
     model: args.model,
 
     setupConfirmed: false,
+    // No screen can ask in a scripted CI run, so granting keeps CI's
+    // telemetry as it was. --signup alone still provisions a brand-new
+    // account headlessly, and that user has never seen the disclosure — a
+    // headless `--ci --signup` run stays covered by the ci branch above.
+    scanConsent: args.ci ? ScanConsent.Granted : ScanConsent.Undecided,
+    warehouseSourcesReported: false,
+    aiSdkStampReported: false,
     integration: args.integration ?? null,
     frameworkContext: {},
     typescript: false,
     detectedFrameworkLabel: null,
+    posthogSdkDetected: false,
     detectionComplete: false,
     unsupportedVersion: null,
 
     runPhase: RunPhase.Idle,
     discoveredFeatures: [],
-    llmOptIn: false,
     mcpComplete: false,
     mcpOutcome: null,
     mcpInstalledClients: [],
+    mcpLoginCommands: [],
     mcpSuggestedPromptsDismissed: false,
     slackStepDismissed: false,
     slackConnected: null,
@@ -408,6 +412,8 @@ export function buildSession(args: {
     integrate: args.integrate === true ? true : null,
     completedRuns: [],
     selfDrivingHandoffConfirmed: false,
+    githubConnected: null,
+    githubDeclined: false,
     loginUrl: null,
     authorizeUrl: null,
     credentials: null,
@@ -420,13 +426,34 @@ export function buildSession(args: {
     settingsConflicts: null,
     authErrorDetail: null,
     portConflictProcess: null,
+    taskNotice: null,
     outroData: null,
+    spellbook: null,
+    mintHandoff: null,
     dashboardUrl: null,
     notebookUrl: null,
-    additionalFeatureQueue: [],
     programLabel: null,
     skillId: null,
     frameworkConfig: null,
     pendingQuestion: null,
   };
+}
+
+/** One place to ask, so a new consent state does not need three edits. */
+export function mayReportScanResults(session: WizardSession): boolean {
+  return session.scanConsent === ScanConsent.Granted;
+}
+
+/** Lives here so analytics infrastructure never learns what consent means. */
+export function reportableDiscoveredFeatures(
+  session: WizardSession,
+): DiscoveredFeature[] | undefined {
+  return mayReportScanResults(session) ? session.discoveredFeatures : undefined;
+}
+
+/** Also a scan result, so it travels under the same consent as the rest. */
+export function reportablePosthogSdkDetected(
+  session: WizardSession,
+): boolean | undefined {
+  return mayReportScanResults(session) ? session.posthogSdkDetected : undefined;
 }

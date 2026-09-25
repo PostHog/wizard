@@ -1,0 +1,39 @@
+ PostHog Wizard v0.0.0-test                                                                Feedback: wizard@posthog.com
+
+ Cost (running): $0.00 · no agent turns yet                                                              Ctrl+T to hide
+
+ PostHog Setup Wizard
+
+ Privacy & data
+ • Source files are read by Claude for AI context
+ • .env* and secrets stay on your machine
+ • Press [I] for full privacy & usage info
+
+ ⠋ Waiting for authentication...
+
+ If the browser didn't open, copy and paste this URL:
+
+ https://us.posthog.com/login?next=/oauth/authorize
+
+ Press [C] to copy the link · on a remote machine or devbox? Press [P] to paste the callback URL.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  P paste auth code  C copy link  I privacy & data

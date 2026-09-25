@@ -2,7 +2,9 @@ import type { Arguments } from 'yargs';
 import { getUI, setUI } from '@ui';
 import { LoggingUI } from '@ui/logging-ui';
 import { Program } from '@lib/programs/program-registry';
-import { VERSION } from '@lib/version';
+import { VERSION } from '@shared/version';
+import { ErrorCodes } from '@shared/errors';
+import { emitWizardError } from '@shared/errors';
 import type { Command } from '../command';
 
 export const mcpTutorialCommand: Command = {
@@ -41,6 +43,10 @@ function runMcpTutorial(argv: Arguments): void {
           err instanceof Error ? err.message : String(err)
         }`,
       );
+      emitWizardError({
+        code: ErrorCodes.CliInteractiveRequired,
+        message: 'The MCP tutorial requires an interactive terminal.',
+      });
       process.exit(1);
     }
   })();

@@ -10,24 +10,38 @@ const { mockBuildSessionCli, mockProvisionNewAccountCli } = vi.hoisted(() => ({
 // Headless-only machinery, stubbed so the headless path doesn't construct a
 // real WizardStore (which would re-call the mocked buildSession) or open a real
 // network stream. The spies assert the stream is wired in headless and not CI.
-const { mockStreamAttach, mockStreamShutdown } = vi.hoisted(() => ({
-  mockStreamAttach: vi.fn(),
-  mockStreamShutdown: vi.fn(),
-}));
+const { mockStreamAttach, mockStreamShutdown, mockStreamDestinations } =
+  vi.hoisted(() => ({
+    mockStreamAttach: vi.fn(),
+    mockStreamShutdown: vi.fn(),
+    // Which destinations each run wired up, by name. The CI contract is about
+    // destinations, not about whether a stream exists.
+    mockStreamDestinations: vi.fn(),
+  }));
 vi.mock('../lib/task-stream/index', () => ({
   // shutdown() hardcodes a resolved Promise (not a bare vi.fn) so the
   // interactive runWizard's dangling SIGTERM handler — which calls
   // shutdown().catch() and outlives these tests — never hits undefined.catch.
   TaskStreamPush: class {
+    constructor(opts: { destinations: Array<{ name: string }> }) {
+      mockStreamDestinations(opts.destinations.map((d) => d.name));
+    }
     attach() {
       mockStreamAttach();
     }
+    finishRun = vi.fn().mockResolvedValue(undefined);
     shutdown() {
       mockStreamShutdown();
       return Promise.resolve();
     }
   },
-  PostHogDestination: class {},
+  PostHogDestination: class {
+    readonly name = 'posthog';
+  },
+  createFileDestination: (value: unknown) =>
+    value === undefined || value === null || value === false
+      ? null
+      : { name: 'file', path: '/tmp/task-stream.jsonl' },
 }));
 vi.mock('../ui/tui/store', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../ui/tui/store')>()),
@@ -46,7 +60,7 @@ vi.mock('../lib/wizard-session', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../lib/wizard-session')>()),
   buildSession: mockBuildSessionCli,
 }));
-vi.mock('../utils/provisioning', () => ({
+vi.mock('@utils/provisioning', () => ({
   provisionNewAccount: mockProvisionNewAccountCli,
 }));
 vi.mock('../ui/tui/start-tui', () => ({
@@ -75,36 +89,45 @@ vi.mock('../lib/programs/posthog-integration/index', () => ({
     run: () => Promise.resolve(),
   },
 }));
-vi.mock('../utils/environment', () => ({
+vi.mock('@utils/environment', () => ({
   isNonInteractiveEnvironment: () => false,
   readEnvironment: () => ({}),
 }));
 // CI-path dynamic imports need mocks to prevent unhandled rejections
-vi.mock('../utils/env-api-key', () => ({
+vi.mock('@utils/env-api-key', () => ({
   readApiKeyFromEnv: () => undefined,
 }));
-vi.mock('../utils/debug', () => ({
+vi.mock('@utils/debug', () => ({
   configureLogFileFromEnvironment: vi.fn(),
   logToFile: vi.fn(),
+  setDebugSink: vi.fn(),
 }));
 vi.mock('../lib/registry', () => ({ FRAMEWORK_REGISTRY: {} }));
 vi.mock('../lib/detection/index', () => ({
   detectFramework: vi.fn().mockResolvedValue(null),
   gatherFrameworkContext: vi.fn().mockResolvedValue({}),
 }));
-vi.mock('../utils/analytics', () => ({
-  analytics: { setTag: vi.fn() },
+vi.mock('@utils/analytics', () => ({
+  analytics: {
+    setTag: vi.fn(),
+    shutdown: vi.fn().mockResolvedValue(undefined),
+  },
 }));
-vi.mock('../utils/wizard-abort', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../utils/wizard-abort')>()),
+vi.mock('@utils/wizard-abort', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@utils/wizard-abort')>()),
   wizardAbort: vi.fn(),
 }));
-vi.mock('../lib/agent/agent-runner', () => ({
-  runAgent: vi.fn().mockResolvedValue(undefined),
+vi.mock('../lib/programs/run-agent-legacy', () => ({
+  runProgramAgent: vi.fn().mockResolvedValue(undefined),
 }));
 
 describe('CLI argument parsing', () => {
   const originalArgv = process.argv;
+  const originalSignals = new Map(
+    (['SIGINT', 'SIGTERM'] as const).map(
+      (signal) => [signal, process.listeners(signal)] as const,
+    ),
+  );
   // eslint-disable-next-line @typescript-eslint/unbound-method
   const originalExit = process.exit;
 
@@ -115,10 +138,16 @@ describe('CLI argument parsing', () => {
   // being picked up.
   const WIZARD_ENV_KEYS = [
     'POSTHOG_WIZARD_REGION',
-    'POSTHOG_WIZARD_DEFAULT',
     'POSTHOG_WIZARD_CI',
     'POSTHOG_WIZARD_API_KEY',
     'POSTHOG_WIZARD_INSTALL_DIR',
+    'POSTHOG_WIZARD_LOCAL_DEV',
+    'POSTHOG_WIZARD_LOCAL_CONTEXT_MILL',
+    'POSTHOG_WIZARD_LOCAL_MCP',
+    'POSTHOG_WIZARD_LOCAL_POSTHOG',
+    'POSTHOG_TASK_RUN_ID',
+    'POSTHOG_WIZARD_RUN_ID',
+    'POSTHOG_TASK_ID',
   ];
   const clearWizardEnv = () => {
     for (const key of WIZARD_ENV_KEYS) delete process.env[key];
@@ -139,6 +168,12 @@ describe('CLI argument parsing', () => {
   });
 
   afterEach(() => {
+    for (const [signal, original] of originalSignals) {
+      for (const listener of process.listeners(signal)) {
+        if (!original.includes(listener))
+          process.removeListener(signal, listener);
+      }
+    }
     process.argv = originalArgv;
     process.exit = originalExit;
     clearWizardEnv();
@@ -249,7 +284,85 @@ describe('CLI argument parsing', () => {
 
   // MCP commands now launch TUI — tested via integration tests
 
+  describe('local dev flags', () => {
+    // The runners preflight every requested local server and abort if one is
+    // down, which would stop the run before buildSession. Stub the probe so
+    // these assert flag plumbing rather than whether a dev stack happens to be
+    // running on this machine. Reachability itself is covered in local-dev.test.
+    beforeEach(() => {
+      vi.stubGlobal('fetch', () =>
+        Promise.resolve(new Response(null, { status: 200 })),
+      );
+    });
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    // Skills resolve from the process-wide target the middleware sets, not
+    // from a buildSession arg — so assert the URL the run would actually fetch.
+    async function skillsBaseUrl(): Promise<{ actual: string; local: string }> {
+      const { getSkillsBaseUrl, LOCAL_SKILLS_BASE_URL } = await import(
+        '@shared/constants'
+      );
+      return { actual: getSkillsBaseUrl(), local: LOCAL_SKILLS_BASE_URL };
+    }
+
+    test('forwards each --local-* target', async () => {
+      await runCLI(['--local-context-mill']);
+      const { actual, local } = await skillsBaseUrl();
+      expect(actual).toBe(local);
+      // Absent flags must be undefined, not false — see resolveLocalDev.
+      const args = getLastBuildSessionArgs();
+      expect(args.localMcp).toBeUndefined();
+      expect(args.localPosthog).toBeUndefined();
+    });
+
+    test('forwards the --local-dev umbrella', async () => {
+      await runCLI(['--local-dev']);
+      expect(getLastBuildSessionArgs().localDev).toBe(true);
+      const { actual, local } = await skillsBaseUrl();
+      expect(actual).toBe(local);
+    });
+
+    // The reviewer's bug, end to end: the intro screens used to read the MCP
+    // flag to pick a skills registry.
+    test('--local-mcp alone leaves skills on production', async () => {
+      await runCLI(['--local-mcp']);
+      const { actual, local } = await skillsBaseUrl();
+      expect(actual).not.toBe(local);
+    });
+
+    test('resolves POSTHOG_WIZARD_LOCAL_CONTEXT_MILL from the environment', async () => {
+      process.env.POSTHOG_WIZARD_LOCAL_CONTEXT_MILL = 'true';
+      await runCLI([]);
+      const { actual, local } = await skillsBaseUrl();
+      expect(actual).toBe(local);
+    });
+
+    // A global `local` would silently erase `--local` from
+    // `wizard mcp add --help`; a global's `hidden` beats a command-level one.
+    test('no global option is named `local`', async () => {
+      const { GLOBAL_OPTIONS } = await import('../wizard');
+      expect(Object.keys(GLOBAL_OPTIONS)).not.toContain('local');
+    });
+  });
+
   describe('--ci flag', () => {
+    test('accepts --region for a flat program command', async () => {
+      await runCLI([
+        'mcp-analytics',
+        '--ci',
+        '--region',
+        'us',
+        '--api-key',
+        'phx_test',
+        '--install-dir',
+        '/tmp/test',
+      ]);
+
+      expect(process.exit).not.toHaveBeenCalledWith(1);
+    });
+
     test('defaults to false when not specified', async () => {
       await runCLI([]);
 
@@ -348,11 +461,13 @@ describe('CLI argument parsing', () => {
         '/tmp/test',
       ]);
 
-      const { analytics } = await import('../utils/analytics');
+      const { analytics } = await import('@utils/analytics');
       expect(analytics.setTag).toHaveBeenCalledWith('build', 'ci');
     });
 
-    test('does not stream wizard-session state in CI', async () => {
+    // CI dumps the stream to a local file and never pushes: a CI run is
+    // synthetic, so a push would create a session row in a real project.
+    test('dumps the wizard-session stream locally and never pushes in CI', async () => {
       await runCLI([
         '--ci',
         '--api-key',
@@ -361,8 +476,39 @@ describe('CLI argument parsing', () => {
         '/tmp/test',
       ]);
 
-      expect(mockStreamAttach).not.toHaveBeenCalled();
+      expect(mockStreamAttach).toHaveBeenCalled();
+      expect(mockStreamDestinations).toHaveBeenCalledWith(['file']);
     });
+
+    // The CI bot authenticates with a wizard-app pha_ token, the same
+    // credential headless takes. Either key reaches buildSession untouched and
+    // neither draws the unexpected-prefix warning.
+    test.each(['phx_ci_key', 'pha_ci_bot_token'])(
+      'accepts %s without a prefix warning',
+      async (apiKey) => {
+        const log = vi
+          .spyOn(console, 'log')
+          .mockImplementation(() => undefined);
+        try {
+          await runCLI([
+            '--ci',
+            '--api-key',
+            apiKey,
+            '--install-dir',
+            '/tmp/test',
+          ]);
+
+          expect(process.exit).not.toHaveBeenCalledWith(1);
+          expect(getLastBuildSessionArgs().apiKey).toBe(apiKey);
+          const lines = log.mock.calls.map((c) => c.map(String).join(' '));
+          expect(lines.some((l) => l.includes('does not start with'))).toBe(
+            false,
+          );
+        } finally {
+          log.mockRestore();
+        }
+      },
+    );
   });
 
   // The experimental headless flag is the published-build sibling of --ci: it
@@ -398,7 +544,7 @@ describe('CLI argument parsing', () => {
         '/tmp/test',
       ]);
 
-      const { analytics } = await import('../utils/analytics');
+      const { analytics } = await import('@utils/analytics');
       expect(analytics.setTag).toHaveBeenCalledWith('build', 'headless');
       expect(analytics.setTag).not.toHaveBeenCalledWith('build', 'ci');
     });
@@ -415,7 +561,7 @@ describe('CLI argument parsing', () => {
         '/tmp/test',
       ]);
 
-      const { analytics } = await import('../utils/analytics');
+      const { analytics } = await import('@utils/analytics');
       expect(analytics.setTag).toHaveBeenCalledWith('build', 'headless');
       expect(analytics.setTag).not.toHaveBeenCalledWith('build', 'ci');
     });
@@ -431,6 +577,8 @@ describe('CLI argument parsing', () => {
 
       expect(mockStreamAttach).toHaveBeenCalled();
       expect(mockStreamShutdown).toHaveBeenCalled();
+      // Headless is the surface the web app watches, so it pushes.
+      expect(mockStreamDestinations).toHaveBeenCalledWith(['posthog']);
     });
 
     test('does not require --region when headless is set', async () => {
@@ -475,6 +623,37 @@ describe('CLI argument parsing', () => {
 
       const args = getLastBuildSessionArgs();
       expect(args.apiKey).toBe('phx_env_key');
+    });
+
+    test('accepts the task-run identity the sandbox exports', async () => {
+      // These two are read straight from the environment, never as CLI options,
+      // and their names must stay outside the POSTHOG_WIZARD_ prefix for that to
+      // hold: `.env('POSTHOG_WIZARD')` turns every prefixed variable into an
+      // option name and `.strictOptions()` fails the run on one it doesn't know,
+      // so renaming them under the prefix would exit every cloud run before the
+      // wizard does any work.
+      process.env.POSTHOG_WIZARD_CI = 'true';
+      process.env.POSTHOG_WIZARD_REGION = 'us';
+      process.env.POSTHOG_WIZARD_API_KEY = 'phx_env_key';
+      process.env.POSTHOG_WIZARD_INSTALL_DIR = '/tmp/test';
+      process.env.POSTHOG_TASK_RUN_ID = 'task-run-uuid';
+      process.env.POSTHOG_TASK_ID = 'task-uuid';
+
+      await runCLI([]);
+
+      expect(process.exit).not.toHaveBeenCalledWith(1);
+    });
+
+    test('accepts the explicit WizardRun assignment through the strict environment parser', async () => {
+      process.env.POSTHOG_WIZARD_CI = 'true';
+      process.env.POSTHOG_WIZARD_REGION = 'us';
+      process.env.POSTHOG_WIZARD_API_KEY = 'pha_test';
+      process.env.POSTHOG_WIZARD_INSTALL_DIR = '/tmp/test';
+      process.env.POSTHOG_WIZARD_RUN_ID =
+        '019edb1a-cce4-4000-8f6d-682061862da9';
+      await runCLI([]);
+      expect(process.exit).not.toHaveBeenCalledWith(1);
+      expect(getLastBuildSessionArgs().runId).toBeUndefined();
     });
 
     test('CLI args override CI environment variables', async () => {

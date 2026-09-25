@@ -13,14 +13,15 @@ import type {
   TokenUsageDelta,
 } from '@ui/wizard-ui';
 import type { WizardStore } from './store.js';
-import type { SettingsConflict } from '@lib/agent/claude-settings';
-import type { WizardReadinessResult } from '@lib/health-checks/readiness';
-import type { ApiUser } from '@lib/api';
+import type { SettingsConflict } from '@shared/claude-settings';
+import type { WizardReadinessResult } from '@shared/health-checks/readiness';
+import type { ApiUser } from '@shared/api';
 import type {
   AskAnswers,
   Credentials,
   OutroData,
   PendingQuestion,
+  TaskNotice,
 } from '@lib/wizard-session';
 import { RunPhase, OutroKind } from '@lib/wizard-session';
 
@@ -84,6 +85,10 @@ export class InkUI implements WizardUI {
 
   setCredentials(credentials: Credentials): void {
     this.store.setCredentials(credentials);
+  }
+
+  setAccessToken(credentials: Credentials): void {
+    this.store.setAccessToken(credentials);
   }
 
   setRoleAtOrganization(role: string | null): void {
@@ -150,6 +155,16 @@ export class InkUI implements WizardUI {
 
   waitForManualAuthCode(): Promise<string> {
     return this.store.waitForManualAuthCode();
+  }
+
+  showTaskNotice(notice: TaskNotice): Promise<boolean> {
+    return this.store.showTaskNotice(notice);
+  }
+
+  cancelTaskNotice(): void {
+    // Same path as pressing Skip: closes the overlay and resolves the pending
+    // showTaskNotice promise with false.
+    this.store.resolveTaskNotice(false);
   }
 
   showSettingsOverride(
@@ -224,7 +239,13 @@ export class InkUI implements WizardUI {
   }
 
   syncTodos(
-    todos: Array<{ content: string; status: string; activeForm?: string }>,
+    todos: Array<{
+      id?: string;
+      source?: string;
+      content: string;
+      status: string;
+      activeForm?: string;
+    }>,
   ): void {
     this.store.syncTodos(todos);
   }
@@ -243,6 +264,10 @@ export class InkUI implements WizardUI {
 
   setNotebookUrl(url: string): void {
     this.store.setNotebookUrl(url);
+  }
+
+  setHandoffText(text: string): void {
+    this.store.setHandoffText(text);
   }
 
   addTokenUsage(delta: TokenUsageDelta): void {

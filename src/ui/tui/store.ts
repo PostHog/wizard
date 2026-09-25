@@ -28,18 +28,18 @@ import {
   type PendingQuestion,
   type AskAnswers,
   type CloudRegion,
-  AdditionalFeature,
   McpOutcome,
   RunPhase,
+  ScanConsent,
   buildSession,
+  type TaskNotice,
 } from '@lib/wizard-session';
-import type { SettingsConflict } from '@lib/agent/claude-settings';
+import type { SettingsConflict } from '@shared/claude-settings';
 import {
   WizardReadiness,
   getBlockingServiceKeys,
   type WizardReadinessResult,
-} from '@lib/health-checks/readiness';
-import { ServiceHealthStatus } from '@lib/health-checks/types';
+} from '@shared/health-checks/readiness';
 import {
   WizardRouter,
   type ScreenName,
@@ -55,14 +55,18 @@ import type {
 } from '@lib/programs/program-step';
 import { getProgramConfig } from '@lib/programs/program-registry';
 import { withAiOptInGate } from '@lib/programs/ai-opt-in-gate';
-import { EXPANDED_COUNT } from '@ui/tui/constants';
-import { IS_DEV } from '@lib/constants';
-import { computeTokenCostUsd } from '@lib/agent/token-pricing';
+import { reportWarehouseSourcesDetected } from '@lib/programs/posthog-integration/detect';
+import { appendStatus } from '@shared/status-history';
+import { IS_DEV } from '@shared/constants';
+import { computeTokenCostUsd } from '@shared/token-pricing';
 
 export { TaskStatus, ScreenId, Overlay, Program, RunPhase, McpOutcome };
 export type { ScreenName, OutroData, WizardSession, ProgramId };
 
 export interface TaskItem {
+  id?: string;
+  source?: string;
+  sourceStatus?: string;
   label: string;
   activeForm?: string;
   status: TaskStatus;
@@ -118,56 +122,17 @@ interface GateEntry {
   resolved: boolean;
 }
 
-/**
- * FIFO cap on retained status lines. The status bar is the only consumer and
- * renders at most EXPANDED_COUNT lines, so there is no reason to retain more —
- * the cap is tied to the window it feeds.
- */
-const MAX_STATUS_MESSAGES = EXPANDED_COUNT;
-
-/**
- * Fired once per blocked readiness result, so we can quantify how often
- * the wizard refuses to start and — crucially — split that between
- * confirmed PostHog outages and probe-level reachability failures that
- * are most likely the user's network. Helps us decide whether the
- * health-check UX is over-firing.
- */
+// Capture blocked skill downloads once per readiness result.
 function captureHealthCheckBlocked(result: WizardReadinessResult): void {
   try {
     const health = result.health;
     const blockingKeys = getBlockingServiceKeys(health);
-    const blockingStatuses = blockingKeys.map((k) => health[k]?.status);
-
-    const allNoConnection =
-      blockingStatuses.length > 0 &&
-      blockingStatuses.every((s) => s === ServiceHealthStatus.NoConnection);
-    const onlyGithubReleases =
-      blockingKeys.length === 1 && blockingKeys[0] === 'githubReleases';
-
-    const decision = onlyGithubReleases
-      ? 'github-releases-down'
-      : allNoConnection
-      ? 'no-connection'
-      : 'confirmed-outage';
-
-    const posthogStatus = health.posthogOverall?.status;
-    const retriesUsed = Math.max(
-      0,
-      ...(['llmGateway', 'mcp', 'githubReleases'] as const).map((k) => {
-        const ind = health[k]?.rawIndicator ?? '';
-        const m = ind.match(/attempts=(\d+)/);
-        return m ? Number(m[1]) - 1 : 0;
-      }),
-    );
+    const attempts = health.skillsOrigin.rawIndicator?.match(/attempts=(\d+)/);
+    const retriesUsed = Math.max(0, attempts ? Number(attempts[1]) - 1 : 0);
 
     analytics.wizardCapture('health check blocked', {
-      decision,
+      decision: 'skills-origin-down',
       blocking_keys: blockingKeys,
-      posthog_status_reachable:
-        posthogStatus !== ServiceHealthStatus.NoConnection,
-      posthog_status_reports_incident:
-        posthogStatus === ServiceHealthStatus.Down ||
-        posthogStatus === ServiceHealthStatus.Degraded,
       retries_used: retriesUsed,
     });
   } catch (err) {
@@ -186,6 +151,7 @@ export class WizardStore {
   private $statusExpanded = atom(false);
   private $tasks = atom<TaskItem[]>([]);
   private $eventPlan = atom<PlannedEvent[]>([]);
+  private $handoffText = atom<string | null>(null);
   private $learnCardBlockIdx = atom(0);
   private $learnCardComplete = atom(false);
   private $version = atom(0);
@@ -218,6 +184,8 @@ export class WizardStore {
   private _resolveSettingsOverride: (() => void) | null = null;
   private _backupAndFixSettings: (() => boolean) | null = null;
 
+  /** Blocks the run until an optional step's notice is answered. */
+  private _resolveTaskNotice: ((keep: boolean) => void) | null = null;
   /** Blocks OAuth flow until the port-conflict overlay is dismissed. */
   private _resolvePortConflict: (() => void) | null = null;
 
@@ -297,6 +265,7 @@ export class WizardStore {
       setFrameworkContext: (k, v) => this.setFrameworkContext(k, v),
       setFrameworkConfig: (i, c) => this.setFrameworkConfig(i, c),
       setDetectedFramework: (l) => this.setDetectedFramework(l),
+      setPosthogSdkDetected: (d) => this.setPosthogSdkDetected(d),
       setSkillId: (id) => this.setSkillId(id),
       setUnsupportedVersion: (info) => this.setUnsupportedVersion(info),
       addDiscoveredFeature: (f) => this.addDiscoveredFeature(f),
@@ -387,6 +356,10 @@ export class WizardStore {
     return this.$eventPlan.get();
   }
 
+  get handoffText(): string | null {
+    return this.$handoffText.get();
+  }
+
   get currentStage(): { stage: string; startedAt: number } | null {
     return this.$currentStage.get();
   }
@@ -420,15 +393,57 @@ export class WizardStore {
   // Every setter that affects screen resolution calls emitChange().
   // Business logic calls these instead of mutating session directly.
 
-  /** Sets setupConfirmed. Gate resolves via _checkGates(). */
+  /** Sets setupConfirmed, and is the point consent becomes final. */
   completeSetup(): void {
     this.$session.setKey('setupConfirmed', true);
+    // Reports first: analytics merges tags into an event as it is sent, so
+    // `setup confirmed` only carries the warehouse tags if they are already
+    // set. On main they were, because reporting happened back in detect.
+    this._markWarehouseSourcesReportedIfNeeded();
     analytics.wizardCapture('setup confirmed', sessionProperties(this.session));
     this.emitChange();
   }
 
+  /**
+   * Sharing is on: either the user turned it back on in the panel, or they
+   * pressed Continue without ever touching it. Both are reversible until
+   * completeSetup() resolves the intro gate and reports.
+   */
+  grantSharing(): void {
+    this.$session.setKey('scanConsent', ScanConsent.Granted);
+    this.emitChange();
+  }
+
+  /**
+   * Sharing is off. Suppresses reporting only — local detection still ran and
+   * the results stay in the session, so the outro suggestion and the warehouse
+   * task are unaffected; see `scanConsent` on `WizardSession`.
+   *
+   * Deliberately does not report. The panel's toggle can come back here, so
+   * marking the run reported would strand a user who turns sharing off and
+   * then on again. completeSetup() owns the single report.
+   */
+  declineSharing(): void {
+    this.$session.setKey('scanConsent', ScanConsent.Declined);
+    this.emitChange();
+  }
+
+  /**
+   * reportWarehouseSourcesDetected() is the single place scan results turn
+   * into telemetry; this just supplies its idempotency flag via the normal
+   * setter path (never mutate session directly). A no-op once
+   * `warehouseSourcesReported` is set, or for any program that never
+   * populated a warehouse-scan result in the first place.
+   */
+  private _markWarehouseSourcesReportedIfNeeded(): void {
+    if (reportWarehouseSourcesDetected(this.session)) {
+      this.$session.setKey('warehouseSourcesReported', true);
+    }
+  }
+
   setRunPhase(phase: RunPhase): void {
     this.$session.setKey('runPhase', phase);
+    analytics.setTag('run_phase', phase);
     this.emitChange();
   }
 
@@ -440,6 +455,12 @@ export class WizardStore {
     analytics.wizardCapture('auth complete', {
       project_id: credentials?.projectId,
     });
+    this.emitChange();
+  }
+
+  /** Post-refresh credential swap. No `auth complete` — see WizardUI. */
+  setAccessToken(credentials: WizardSession['credentials']): void {
+    this.$session.setKey('credentials', credentials);
     this.emitChange();
   }
 
@@ -472,6 +493,24 @@ export class WizardStore {
   setDetectedFramework(label: string): void {
     this.$session.setKey('detectedFrameworkLabel', label);
     analytics.setTag('detected_framework', label);
+    this.emitChange();
+  }
+
+  setPosthogSdkDetected(detected: boolean): void {
+    this.$session.setKey('posthogSdkDetected', detected);
+    this.emitChange();
+  }
+
+  setSpellbook(spellbook: NonNullable<WizardSession['spellbook']>): void {
+    this.$session.setKey('spellbook', spellbook);
+    this.emitChange();
+  }
+
+  setMintHandoff(action: NonNullable<WizardSession['mintHandoff']>): void {
+    // The parked agent may still hold a question or notice open.
+    this.cancelPendingQuestion();
+    if (this.session.taskNotice) this.resolveTaskNotice(false);
+    this.$session.setKey('mintHandoff', action);
     this.emitChange();
   }
 
@@ -562,6 +601,26 @@ export class WizardStore {
     this.popOverlay();
     this._resolvePortConflict?.();
     this._resolvePortConflict = null;
+  }
+
+  /**
+   * Show an optional step's notice and return whether to keep that step.
+   * Asked before the step runs, so nobody is surprised by a prompt mid-run.
+   */
+  showTaskNotice(notice: TaskNotice): Promise<boolean> {
+    this.$session.setKey('taskNotice', notice);
+    this.pushOverlay(Overlay.TaskNotice);
+    return new Promise((resolve) => {
+      this._resolveTaskNotice = resolve;
+    });
+  }
+
+  /** Dismiss the notice, keeping (`true`) or skipping (`false`) the step. */
+  resolveTaskNotice(keep: boolean): void {
+    this.$session.setKey('taskNotice', null);
+    this.popOverlay();
+    this._resolveTaskNotice?.(keep);
+    this._resolveTaskNotice = null;
   }
 
   /**
@@ -680,30 +739,16 @@ export class WizardStore {
     }
   }
 
-  /**
-   * Enable an additional feature: enqueue it for the stop hook
-   * and set any feature-specific session flags.
-   */
-  enableFeature(feature: AdditionalFeature): void {
-    if (!this.session.additionalFeatureQueue.includes(feature)) {
-      this.session.additionalFeatureQueue.push(feature);
-    }
-    // Feature-specific flags
-    if (feature === AdditionalFeature.LLM) {
-      this.session.llmOptIn = true;
-    }
-    analytics.wizardCapture('feature enabled', { feature });
-    this.emitChange();
-  }
-
   setMcpComplete(
     outcome: McpOutcome = McpOutcome.Skipped,
     installedClients: string[] = [],
     featuresSelected?: 'all' | string[],
+    loginCommands: string[] = [],
   ): void {
     this.$session.setKey('mcpComplete', true);
     this.$session.setKey('mcpOutcome', outcome);
     this.$session.setKey('mcpInstalledClients', installedClients);
+    this.$session.setKey('mcpLoginCommands', loginCommands);
     const featuresPayload =
       outcome === McpOutcome.Installed && featuresSelected !== undefined
         ? { mcp_features_selected: featuresSelected }
@@ -738,6 +783,22 @@ export class WizardStore {
 
   setSlackConnected(connected: boolean): void {
     this.$session.setKey('slackConnected', connected);
+    this.emitChange();
+  }
+
+  setGithubConnected(connected: boolean): void {
+    this.$session.setKey('githubConnected', connected);
+    this.emitChange();
+  }
+
+  /**
+   * Self-driving GitHub gate declined. Carries the outro the user lands on,
+   * since declining ends the flow before the agent runs and there is no abort
+   * case to render one.
+   */
+  declineGithub(outroData: OutroData): void {
+    this.$session.setKey('githubDeclined', true);
+    this.$session.setKey('outroData', outroData);
     this.emitChange();
   }
 
@@ -803,12 +864,11 @@ export class WizardStore {
       this.$session.setKey('completedRuns', [...done, stepId]);
     }
     this.$tasks.set([]);
-    this.$session.setKey('runPhase', RunPhase.Idle);
-    this.emitChange();
+    this.setRunPhase(RunPhase.Idle);
   }
 
-  setOutroDismissed(): void {
-    this.$session.setKey('outroDismissed', true);
+  setOutroDismissed(dismissed = true): void {
+    this.$session.setKey('outroDismissed', dismissed);
     this.emitChange();
   }
 
@@ -832,6 +892,26 @@ export class WizardStore {
   setFrameworkContext(key: string, value: unknown): void {
     const ctx = { ...this.$session.get().frameworkContext, [key]: value };
     this.$session.setKey('frameworkContext', ctx);
+    this.emitChange();
+  }
+
+  switchProgram(program: ProgramId): void {
+    if (program === this.router.activeProgram) return;
+
+    // Flush unresolved promises so the wizard can advance
+    for (const gate of this._gates.values()) gate.resolve();
+    this._gates.clear();
+
+    this.router.setProgram(program);
+    this._initFromProgram(program);
+    // start-tui stamps this once at launch; without it here every event
+    // after the switch still reports under the program the run started as.
+    analytics.setTag('program_id', program);
+
+    const config = getProgramConfig(program);
+    this.$session.setKey('setupConfirmed', false);
+    this.$session.setKey('programLabel', config.id);
+    this.$session.setKey('skillId', config.skillId ?? null);
     this.emitChange();
   }
 
@@ -897,6 +977,25 @@ export class WizardStore {
   }
 
   /**
+   * The program `screen` reports under — its step's `reportsAsProgramId` if it
+   * claims one, else the running program (also the fallback for overlays and
+   * screens with no owning step).
+   */
+  private _programIdForScreen(screen: ScreenName): ProgramId {
+    const program = this.router.activeProgram;
+    const step = getProgramConfig(program).steps.find(
+      (s) => s.screenId === screen,
+    );
+    return step?.reportsAsProgramId ?? program;
+  }
+
+  /** The program the visible screen reports under; screens stamp this on their
+   *  own events rather than relying on the run-level `program_id` tag. */
+  get analyticsProgramId(): ProgramId {
+    return this._programIdForScreen(this.router.resolve(this.session));
+  }
+
+  /**
    * Detect screen transitions, run enter-screen hooks, and fire analytics.
    * Called at the end of emitChange/pushOverlay/popOverlay.
    */
@@ -915,7 +1014,7 @@ export class WizardStore {
       }
       analytics.wizardCapture(`screen ${next}`, {
         from_screen: prev,
-        program_id: this.router.activeProgram,
+        program_id: this._programIdForScreen(next),
         ...sessionProperties(this.session),
       });
     }
@@ -926,15 +1025,8 @@ export class WizardStore {
 
   pushStatus(message: string): void {
     const msgs = this.$statusMessages.get();
-    // Skip consecutive duplicate messages (no allocation on the hot path)
-    if (msgs.length > 0 && msgs[msgs.length - 1] === message) return;
-    // Nanostore detects change by reference equality, so a new array is
-    // required. At the cap, allocate exactly once at the final size (dropping
-    // the oldest entry) rather than push-then-truncate.
-    const next =
-      msgs.length >= MAX_STATUS_MESSAGES
-        ? [...msgs.slice(msgs.length - MAX_STATUS_MESSAGES + 1), message]
-        : [...msgs, message];
+    const next = appendStatus(msgs, message);
+    if (next === msgs) return;
     this.$statusMessages.set(next);
     this.emitChange();
   }
@@ -1009,6 +1101,14 @@ export class WizardStore {
     this.emitChange();
   }
 
+  /** No-op on identical text: an emit here means a network push downstream. */
+  setHandoffText(text: string): void {
+    if (this.$handoffText.get() === text) return;
+    logToFile(`store.setHandoffText: ${text.length} chars`);
+    this.$handoffText.set(text);
+    this.emitChange();
+  }
+
   get learnCardBlockIdx(): number {
     return this.$learnCardBlockIdx.get();
   }
@@ -1027,11 +1127,20 @@ export class WizardStore {
   }
 
   syncTodos(
-    todos: Array<{ content: string; status: string; activeForm?: string }>,
+    todos: Array<{
+      id?: string;
+      source?: string;
+      content: string;
+      status: string;
+      activeForm?: string;
+    }>,
   ): void {
     const incoming = todos.map((t) => {
       const status = isTaskStatus(t.status) ? t.status : TaskStatus.Pending;
       return {
+        id: t.id,
+        source: t.source,
+        sourceStatus: isTaskStatus(t.status) ? undefined : t.status,
         label: t.content,
         activeForm: t.activeForm,
         status,
@@ -1040,10 +1149,17 @@ export class WizardStore {
     });
 
     const incomingLabels = new Set(incoming.map((t) => t.label));
+    const sources = new Set(todos.map((t) => t.source));
 
     const retained = this.$tasks
       .get()
-      .filter((t) => t.done && !incomingLabels.has(t.label));
+      .filter(
+        (t) =>
+          (t.status === TaskStatus.Completed ||
+            t.status === TaskStatus.Failed ||
+            t.status === TaskStatus.Skipped) &&
+          (t.source ? !sources.has(t.source) : !incomingLabels.has(t.label)),
+      );
 
     this.$tasks.set([...retained, ...incoming]);
     this.emitChange();

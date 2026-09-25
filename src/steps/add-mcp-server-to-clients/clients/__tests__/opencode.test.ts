@@ -227,10 +227,13 @@ describe('OpenCodeMCPClient', () => {
       expect(writtenContent).toContain('other-server');
     });
 
-    it('returns false when config file does not exist', async () => {
+    it('reports nothing-to-do (not a failure) when the config file does not exist', async () => {
       existsSyncMock.mockReturnValue(false);
       const client = new OpenCodeMCPClient();
-      await expect(client.removeServer()).resolves.toEqual({ success: false });
+      await expect(client.removeServer()).resolves.toEqual({
+        success: true,
+        alreadyInstalled: true,
+      });
     });
   });
 });

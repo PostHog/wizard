@@ -23,6 +23,7 @@ import type {
   StreamEvent,
 } from '@lib/task-stream/types';
 import type { Credentials } from '@lib/wizard-session';
+import { logToFile } from '@utils/debug';
 
 export interface PostHogDestinationOptions {
   /**
@@ -51,7 +52,7 @@ function defaultSleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function parseRetryAfter(value: string | null): number {
+export function parseRetryAfter(value: string | null): number {
   if (!value) return DEFAULT_RETRY_AFTER_MS;
   const seconds = Number(value);
   if (Number.isFinite(seconds) && seconds >= 0) {
@@ -143,7 +144,10 @@ export class PostHogDestination implements TaskStreamDestination {
         continue;
       }
 
-      if (response.ok) return;
+      if (response.ok) {
+        logToFile(`[task-stream] wizard/sessions push ok: ${response.status}`);
+        return;
+      }
 
       const status = response.status;
 

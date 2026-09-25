@@ -1,0 +1,225 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`keyboard commit vs control action commit > audit-outro: any key vs dismiss_outro 1`] = `
+{
+  "action": {
+    "outroDismissed": true,
+    "screen": "keep-skills",
+  },
+  "keyboard": {
+    "outroDismissed": true,
+    "screen": "keep-skills",
+    "skillsComplete": true,
+  },
+}
+`;
+
+exports[`keyboard commit vs control action commit > intro: enter on Continue vs confirm_setup 1`] = `
+{
+  "action": {
+    "screen": "health-check",
+    "setupConfirmed": true,
+  },
+  "keyboard": {
+    "scanConsent": "granted",
+    "screen": "health-check",
+    "setupConfirmed": true,
+    "warehouseSourcesReported": true,
+  },
+}
+`;
+
+exports[`keyboard commit vs control action commit > keep-skills: mount with no skills dir vs keep_skills 1`] = `
+{
+  "action": {
+    "skillsComplete": true,
+  },
+  "keyboard": {},
+}
+`;
+
+exports[`keyboard commit vs control action commit > manual-auth-code: escape vs dismiss_auth_code 1`] = `
+{
+  "action": {
+    "overlay": false,
+    "screen": "auth",
+  },
+  "keyboard": {
+    "overlay": false,
+    "screen": "auth",
+  },
+}
+`;
+
+exports[`keyboard commit vs control action commit > manual-auth-code: paste code and enter vs submit_auth_code 1`] = `
+{
+  "action": {
+    "overlay": false,
+    "screen": "auth",
+  },
+  "keyboard": {
+    "overlay": false,
+    "screen": "auth",
+  },
+}
+`;
+
+exports[`keyboard commit vs control action commit > mcp: decline install vs set_mcp_outcome skipped 1`] = `
+{
+  "action": {
+    "mcpComplete": true,
+    "mcpOutcome": "skipped",
+    "screen": "slack-connect",
+  },
+  "keyboard": {
+    "mcpComplete": true,
+    "mcpOutcome": "skipped",
+    "screen": "slack-connect",
+    "slackConnected": false,
+  },
+}
+`;
+
+exports[`keyboard commit vs control action commit > outro: any key vs dismiss_outro 1`] = `
+{
+  "action": {
+    "outroDismissed": true,
+    "screen": "mcp",
+  },
+  "keyboard": {
+    "outroDismissed": true,
+    "screen": "mcp",
+  },
+}
+`;
+
+exports[`keyboard commit vs control action commit > port-conflict: enter vs resolve_port_conflict 1`] = `
+{
+  "action": {
+    "overlay": false,
+    "portConflictProcess": null,
+    "screen": "auth",
+  },
+  "keyboard": {
+    "overlay": false,
+    "portConflictProcess": null,
+    "screen": "auth",
+  },
+}
+`;
+
+exports[`keyboard commit vs control action commit > self-driving-handoff: enter vs confirm_self_driving_handoff 1`] = `
+{
+  "action": {
+    "screen": "self-driving-github",
+    "selfDrivingHandoffConfirmed": true,
+  },
+  "keyboard": {
+    "screen": "self-driving-github",
+    "selfDrivingHandoffConfirmed": true,
+  },
+}
+`;
+
+exports[`keyboard commit vs control action commit > self-driving-integration-check: log me in vs set_integrate true 1`] = `
+{
+  "action": {
+    "integrate": true,
+    "screen": "health-check",
+  },
+  "keyboard": {
+    "integrate": true,
+    "screen": "health-check",
+  },
+}
+`;
+
+exports[`keyboard commit vs control action commit > setup: enter on first router option vs choose 1`] = `
+{
+  "action": {
+    "frameworkContext": {
+      "router": "app-router",
+    },
+    "screen": "auth",
+  },
+  "keyboard": {
+    "frameworkContext": {
+      "router": "app-router",
+    },
+    "screen": "auth",
+  },
+}
+`;
+
+exports[`keyboard commit vs control action commit > slack-connect: skip vs dismiss_slack 1`] = `
+{
+  "action": {
+    "screen": "keep-skills",
+    "slackStepDismissed": true,
+  },
+  "keyboard": {
+    "screen": "keep-skills",
+    "skillsComplete": true,
+    "slackStepDismissed": true,
+  },
+}
+`;
+
+exports[`keyboard commit vs control action commit > source-maps-outro: any key vs dismiss_outro 1`] = `
+{
+  "action": {
+    "outroDismissed": true,
+    "screen": "keep-skills",
+  },
+  "keyboard": {
+    "outroDismissed": true,
+    "screen": "keep-skills",
+    "skillsComplete": true,
+  },
+}
+`;
+
+exports[`keyboard commit vs control action commit > task-notice: enter vs resolve_notice keep 1`] = `
+{
+  "action": {
+    "overlay": false,
+    "screen": "intro",
+    "taskNotice": null,
+  },
+  "keyboard": {
+    "overlay": false,
+    "screen": "intro",
+    "taskNotice": null,
+  },
+}
+`;
+
+exports[`keyboard commit vs control action commit > task-notice: escape vs resolve_notice decline 1`] = `
+{
+  "action": {
+    "overlay": false,
+    "screen": "intro",
+    "taskNotice": null,
+  },
+  "keyboard": {
+    "overlay": false,
+    "screen": "intro",
+    "taskNotice": null,
+  },
+}
+`;
+
+exports[`keyboard commit vs control action commit > wizard-ask: type answer and enter vs answer_question 1`] = `
+{
+  "action": {
+    "overlay": false,
+    "pendingQuestion": null,
+    "screen": "intro",
+  },
+  "keyboard": {
+    "overlay": false,
+    "pendingQuestion": null,
+    "screen": "intro",
+  },
+}
+`;

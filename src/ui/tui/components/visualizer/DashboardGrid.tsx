@@ -9,6 +9,7 @@
 import { Box, Text } from 'ink';
 import { useTick } from '@ui/tui/hooks/useTick';
 import { MATRIX_FADE, Panel, type VisualProps } from './panel';
+import { createGrid, plot, writeText, type Grid } from './grid';
 import { VISUALIZER_PALETTE } from './palette';
 
 type TileKind = 'bars' | 'line' | 'gauge' | 'pulse';
@@ -24,9 +25,7 @@ const SPARK_GLYPHS = '▁▂▃▄▅▆▇█';
 
 export const DashboardGrid = ({ width, height }: VisualProps) => {
   const tick = useTick(220);
-  const grid: string[][] = Array.from({ length: height }, () =>
-    new Array(width).fill(' '),
-  );
+  const grid = createGrid(width, height);
 
   // Collapse to fewer cells when there isn't room for a real 2×2.
   const cols = width >= 22 ? 2 : 1;
@@ -35,20 +34,12 @@ export const DashboardGrid = ({ width, height }: VisualProps) => {
   const hSplit = rows === 2 ? Math.floor(height / 2) : -1;
 
   if (vSplit >= 0) {
-    for (let y = 0; y < height; y++) grid[y][vSplit] = '│';
+    for (let y = 0; y < height; y++) plot(grid, vSplit, y, '│');
   }
   if (hSplit >= 0) {
-    for (let x = 0; x < width; x++) grid[hSplit][x] = '─';
-    if (vSplit >= 0) grid[hSplit][vSplit] = '┼';
+    for (let x = 0; x < width; x++) plot(grid, x, hSplit, '─');
+    if (vSplit >= 0) plot(grid, vSplit, hSplit, '┼');
   }
-
-  const writeText = (x0: number, y0: number, maxW: number, text: string) => {
-    if (y0 < 0 || y0 >= height) return;
-    const slice = text.slice(0, Math.max(0, maxW));
-    for (let i = 0; i < slice.length; i++) {
-      if (x0 + i >= 0 && x0 + i < width) grid[y0][x0 + i] = slice[i];
-    }
-  };
 
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
@@ -69,19 +60,9 @@ export const DashboardGrid = ({ width, height }: VisualProps) => {
       const chartH = Math.max(1, chartY1 - chartY0 + 1);
       const seed = (r * cols + c) * 13;
 
-      writeText(innerX, titleY, innerW, tile.title);
-      renderTile(
-        grid,
-        tile.kind,
-        innerX,
-        chartY0,
-        innerW,
-        chartH,
-        tick,
-        seed,
-        width,
-      );
-      writeText(innerX, valueY, innerW, tileValue(tile.kind, tick, seed));
+      writeText(grid, innerX, titleY, tile.title, innerW);
+      renderTile(grid, tile.kind, innerX, chartY0, innerW, chartH, tick, seed);
+      writeText(grid, innerX, valueY, tileValue(tile.kind, tick, seed), innerW);
     }
   }
 
@@ -146,7 +127,7 @@ export const DashboardGrid = ({ width, height }: VisualProps) => {
 };
 
 function renderTile(
-  grid: string[][],
+  grid: Grid,
   kind: TileKind,
   x0: number,
   y0: number,
@@ -154,13 +135,8 @@ function renderTile(
   h: number,
   tick: number,
   seed: number,
-  gridW: number,
 ): void {
-  const set = (x: number, y: number, ch: string) => {
-    if (y < 0 || y >= grid.length) return;
-    if (x < 0 || x >= gridW) return;
-    grid[y][x] = ch;
-  };
+  const set = (x: number, y: number, ch: string) => plot(grid, x, y, ch);
 
   if (kind === 'bars') {
     // Vertical bars driven by a slow per-column sine. Most tile feels

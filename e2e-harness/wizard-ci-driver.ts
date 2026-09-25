@@ -38,6 +38,17 @@ export interface ActionView {
 }
 
 /**
+ * A task notice projected for the harness. Title, items and prompt only — the
+ * decision function needs to know a notice is up and what it covers, not the
+ * full body copy the screen renders.
+ */
+export interface TaskNoticeView {
+  title: string;
+  items: string[];
+  prompt: string;
+}
+
+/**
  * The serialized observable state. A whitelist of WizardSession — credentials
  * are reduced to a boolean so secrets never reach a driver LLM.
  */
@@ -51,13 +62,14 @@ export interface CiState {
     detectedFrameworkLabel: string | null;
     detectionComplete: boolean;
     setupConfirmed: boolean;
+    /** Self-driving integration-check answer; null until decided. */
+    integrate: boolean | null;
     hasCredentials: boolean;
     projectId: number | null;
     mcpComplete: boolean;
     slackStepDismissed: boolean;
     skillsComplete: boolean;
     outroDismissed: boolean;
-    llmOptIn: boolean;
     discoveredFeatures: string[];
   };
   tasks: Array<{ label: string; status: string; activeForm?: string }>;
@@ -65,6 +77,8 @@ export interface CiState {
   eventPlan: Array<{ name: string; description: string }>;
   /** Present iff a wizard_ask overlay is up. */
   pendingQuestion: PendingQuestion | null;
+  /** Present iff a task-notice overlay is up. */
+  taskNotice: TaskNoticeView | null;
   /** Unresolved framework-setup questions when on the setup screen. */
   setupQuestions: SetupQuestionView[];
   /** Commit actions legal on currentScreen. */
@@ -98,13 +112,13 @@ export class WizardCiDriver {
         detectedFrameworkLabel: s.detectedFrameworkLabel,
         detectionComplete: s.detectionComplete,
         setupConfirmed: s.setupConfirmed,
+        integrate: s.integrate,
         hasCredentials: s.credentials !== null,
         projectId: s.credentials?.projectId ?? null,
         mcpComplete: s.mcpComplete,
         slackStepDismissed: s.slackStepDismissed,
         skillsComplete: s.skillsComplete,
         outroDismissed: s.outroDismissed,
-        llmOptIn: s.llmOptIn,
         discoveredFeatures: [...s.discoveredFeatures],
       },
       tasks: this.store.tasks.map((t) => ({
@@ -118,12 +132,19 @@ export class WizardCiDriver {
         description: e.description,
       })),
       pendingQuestion: s.pendingQuestion ?? null,
+      taskNotice: s.taskNotice
+        ? {
+            title: s.taskNotice.title,
+            items: [...(s.taskNotice.items ?? [])],
+            prompt: s.taskNotice.prompt,
+          }
+        : null,
       setupQuestions: this.unresolvedSetupQuestions(),
       actions: this.listActions(),
     };
   }
 
-  /** Commit actions legal on the current screen. */
+  /** Exposed through read_state.actions; there is no list_actions MCP tool. */
   listActions(): ActionView[] {
     return actionsForScreen(this.store.currentScreen).map((a) => ({
       id: a.id,

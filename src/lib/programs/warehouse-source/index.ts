@@ -1,6 +1,7 @@
 import type { ProgramConfig } from '@lib/programs/program-step';
-import type { ProgramRun } from '@lib/agent/agent-runner';
+import type { ProgramRun } from '@lib/programs/program-run';
 import type { WizardSession } from '@lib/wizard-session';
+import { LONGER_ASK_TIMEOUT_MS } from '@agent';
 import { WAREHOUSE_SOURCE_PROGRAM } from './steps.js';
 import {
   WAREHOUSE_ABORT_CASES,
@@ -28,16 +29,21 @@ function buildPrompt(session: WizardSession): string {
     'The wizard detected the following data warehouse sources in this project:',
     ...lines,
     '',
+    'Each signal names the file it came from. Trust that path — the wizard ' +
+      'read it. To confirm a key is set, call `check_env_keys` with the key ' +
+      'names and no `filePath`; it scans every `.env` file in the project.',
+    '',
     'Set these up in PostHog following the skill instructions: create `in-cli` ' +
       'sources directly via the PostHog MCP after collecting credentials; for ' +
       '`deep-link` sources, provide the user the pre-filled new-source URL.',
+    'Use the `kind` string exactly as printed above for `source_type` — ' +
+      'PostHog rejects the display label.',
   ].join('\n');
 }
 
 export const warehouseSourceConfig: ProgramConfig = {
   command: 'warehouse',
-  description:
-    'Detect and connect a data warehouse source (Postgres, Stripe, …)',
+  description: 'Detect and connect Data Warehouse sources',
   id: 'warehouse-source',
   skillId: 'data-warehouse-source-setup',
   steps: WAREHOUSE_SOURCE_PROGRAM,
@@ -54,6 +60,11 @@ export const warehouseSourceConfig: ProgramConfig = {
       docsUrl: 'https://posthog.com/docs/data-warehouse',
       spinnerMessage: 'Connecting your data source...',
       estimatedDurationMinutes: 5,
+      // Same questions the orchestrator's seeded warehouse task asks, so the
+      // same allowance. On the 5-minute default a user who went to fetch a
+      // database password came back to a cancelled prompt and the browser
+      // fallback — in the command the outro sends declines to.
+      askTimeoutMs: LONGER_ASK_TIMEOUT_MS,
       abortCases: WAREHOUSE_ABORT_CASES,
     }),
   requires: ['posthog-integration'],

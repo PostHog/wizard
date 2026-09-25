@@ -45,6 +45,13 @@ export interface SourceDetector {
   label: string;
   mode: SourceCreationMode;
   signals: SourceSignals;
+  /**
+   * Kinds that reach the same data as this one through a more specific
+   * connector. When any of them also matches, this detector is dropped: a
+   * generic database signal and the hosted provider serving that database are
+   * one database, and offering both imports it twice.
+   */
+  supersededBy?: readonly string[];
 }
 
 export interface DetectedSource {

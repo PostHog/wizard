@@ -1,0 +1,39 @@
+ PostHog Wizard v0.0.0-test                                                                Feedback: wizard@posthog.com
+
+ Cost (running): $0.00 · no agent turns yet                                                              Ctrl+T to hide
+
+
+
+
+
+
+
+                        ╭──────────────────────────────────────────────────────────────────────╮
+                        │                                                                      │
+                        │                         ⚠ Settings conflict                          │
+                        │                                                                      │
+                        │   These Claude Code settings override credentials and prevent the    │
+                        │   Wizard from reaching the PostHog LLM Gateway.                      │
+                        │                                                                      │
+                        │   Organization-managed settings                                      │
+                        │   /Library/Application Support/ClaudeCode/managed-settings.json      │
+                        │     • ANTHROPIC_BASE_URL                                             │
+                        │                                                                      │
+                        │   Remove these keys (or run "claude auth logout"). Managed files     │
+                        │   are root-owned — ask your IT administrator.                        │
+                        │                                                                      │
+                        │   ────────────────────────────────────────────────────────────────   │
+                        │                                                                      │
+                        │    Fix the file(s) above, then re-run the Wizard.                    │
+                        │                                                                      │
+                        │     ▸     Exit [Esc]                                                 │
+                        │                                                                      │
+                        ╰──────────────────────────────────────────────────────────────────────╯
+
+
+
+
+
+
+
+  ←→ switch  esc cancel  enter confirm

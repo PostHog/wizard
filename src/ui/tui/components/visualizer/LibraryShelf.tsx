@@ -8,6 +8,7 @@
 import { Box, Text } from 'ink';
 import { useTick } from '@ui/tui/hooks/useTick';
 import { MATRIX_FADE, Panel, type VisualProps } from './panel';
+import { createGrid, plot, writeText } from './grid';
 import { VISUALIZER_PALETTE } from './palette';
 
 const BOOK_LABELS = [
@@ -36,39 +37,31 @@ export const LibraryShelf = ({ width, height }: VisualProps) => {
   const offset = phase === 0 ? 0 : phase === 1 ? 1 : phase === 2 ? 2 : 1;
   const wobble = phase === 2 && tick % 2 === 0 ? 1 : 0;
 
-  const shelfY = Math.floor(height / 2) - 1;
-  const rows: string[][] = Array.from({ length: height }, () =>
-    new Array(width).fill(' '),
-  );
+  // Clamp the shelf so all three book rows stay on-grid on short panels; the
+  // grid writes are bounds-safe anyway, but this keeps the books visible.
+  const shelfY = Math.min(Math.max(1, Math.floor(height / 2) - 1), height - 3);
+  const rows = createGrid(width, height);
 
   for (let i = 0; i < bookCount; i++) {
     const x = 1 + i * 2;
     const isSelected = i === selectedIdx;
     const shift = isSelected ? offset : 0;
     const wob = isSelected && wobble ? -1 : 0;
-    if (x + shift >= width) continue;
-    rows[shelfY - 1][x + shift] = '█';
-    rows[shelfY][x + shift] = BOOK_LABELS[i][0];
-    rows[shelfY + 1][x + shift] = BOOK_LABELS[i][1];
-    rows[shelfY + 2 + wob]?.[x + shift] !== undefined &&
-      (rows[shelfY + 2 + wob][x + shift] = '█');
+    plot(rows, x + shift, shelfY - 1, '█');
+    plot(rows, x + shift, shelfY, BOOK_LABELS[i][0]);
+    plot(rows, x + shift, shelfY + 1, BOOK_LABELS[i][1]);
+    plot(rows, x + shift, shelfY + 2 + wob, '█');
   }
 
   // Shelf board underneath
   const boardY = shelfY + 3;
-  if (boardY < height) {
-    for (let x = 0; x < width; x++) rows[boardY][x] = '─';
-  }
+  for (let x = 0; x < width; x++) plot(rows, x, boardY, '─');
   // Floating label next to the selected book
   if (phase === 2) {
     const labelStartX = 1 + selectedIdx * 2 + 4;
     const labelText = BOOK_LABELS[selectedIdx] + '-app';
-    for (let c = 0; c < labelText.length && labelStartX + c < width; c++) {
-      rows[shelfY][labelStartX + c] = labelText[c];
-    }
-    if (labelStartX - 1 < width && labelStartX - 1 >= 0) {
-      rows[shelfY][labelStartX - 1] = '▶';
-    }
+    writeText(rows, labelStartX, shelfY, labelText);
+    plot(rows, labelStartX - 1, shelfY, '▶');
   }
 
   return (

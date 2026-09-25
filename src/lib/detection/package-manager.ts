@@ -1,87 +1,35 @@
 /**
  * Cross-ecosystem package manager detection.
  *
- * Provides a common interface (PackageManagerDetector) that each FrameworkConfig
- * implements, plus shared helpers for Node.js, Python, PHP, and Swift ecosystems.
- * The MCP tool in wizard-tools.ts delegates to whatever detector the
- * current framework supplies.
+ * Each FrameworkConfig implements the PackageManagerDetector contract; the
+ * helpers here cover the Python, PHP, Swift, Ruby, Rust, Elixir, Go, Flutter,
+ * Android and Java ecosystems (Node is in `@utils/package-manager`). The
+ * `detect_package_manager` tool delegates to whatever detector the current
+ * framework supplies.
  */
 
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import {
-  detectAllPackageManagers,
-  type PackageManager,
+  detectNodePackageManagers,
+  type DetectedPackageManager,
+  type PackageManagerDetector,
+  type PackageManagerInfo,
 } from '@utils/package-manager';
+
+// The detector contract and the Node detector live in `@utils/package-manager`
+// (the agent's tools need them without importing detection); re-exported so
+// every framework keeps its import path.
+export { detectNodePackageManagers };
+export type {
+  DetectedPackageManager,
+  PackageManagerDetector,
+  PackageManagerInfo,
+};
 import {
   detectPackageManager as detectPythonPM,
   PythonPackageManager,
 } from '@frameworks/python/utils';
-
-// ---------------------------------------------------------------------------
-// Common types
-// ---------------------------------------------------------------------------
-
-/** Structured package manager info the agent can act on */
-export interface DetectedPackageManager {
-  name: string;
-  label: string;
-  installCommand: string;
-  runCommand?: string;
-}
-
-/** Result returned by every detector */
-export interface PackageManagerInfo {
-  detected: DetectedPackageManager[];
-  primary: DetectedPackageManager | null;
-  recommendation: string;
-}
-
-/** Signature each framework implements */
-export type PackageManagerDetector = (
-  installDir: string,
-) => Promise<PackageManagerInfo>;
-
-// ---------------------------------------------------------------------------
-// Node.js helper
-// ---------------------------------------------------------------------------
-
-function serializeNodePM(pm: PackageManager): DetectedPackageManager {
-  return {
-    name: pm.name,
-    label: pm.label,
-    installCommand: pm.installCommand,
-    runCommand: pm.runScriptCommand,
-  };
-}
-
-/**
- * Detect Node.js package managers via lockfiles.
- * Wraps the existing detectAllPackageManagers() from utils/package-manager.ts.
- */
-export function detectNodePackageManagers(
-  installDir: string,
-): Promise<PackageManagerInfo> {
-  const detected = detectAllPackageManagers({ installDir }).map(
-    serializeNodePM,
-  );
-
-  if (detected.length === 0) {
-    return Promise.resolve({
-      detected: [],
-      primary: null,
-      recommendation: 'No lockfile found. Default to npm (npm add, npm run).',
-    });
-  }
-
-  const primary = detected[0];
-  return Promise.resolve({
-    detected,
-    primary,
-    recommendation:
-      detected.length === 1
-        ? `Use ${primary.label} (${primary.installCommand}).`
-        : `Multiple package managers detected. Prefer ${primary.label} (${primary.installCommand}).`,
-  });
-}
 
 // ---------------------------------------------------------------------------
 // Python helper
@@ -216,6 +164,82 @@ export function bundlerPackageManager(): Promise<PackageManagerInfo> {
 }
 
 // ---------------------------------------------------------------------------
+// Rust (Cargo) helper
+// ---------------------------------------------------------------------------
+
+const CARGO: DetectedPackageManager = {
+  name: 'cargo',
+  label: 'Cargo',
+  installCommand: 'cargo add',
+};
+
+export function cargoPackageManager(): Promise<PackageManagerInfo> {
+  return Promise.resolve({
+    detected: [CARGO],
+    primary: CARGO,
+    recommendation: 'Use Cargo (cargo add).',
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Elixir (Mix) helper
+// ---------------------------------------------------------------------------
+
+const MIX: DetectedPackageManager = {
+  name: 'mix',
+  label: 'Mix',
+  installCommand: 'mix deps.get',
+};
+
+export function mixPackageManager(): Promise<PackageManagerInfo> {
+  return Promise.resolve({
+    detected: [MIX],
+    primary: MIX,
+    recommendation:
+      'Use Mix. Add the dependency to the deps list in mix.exs, then run mix deps.get.',
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Go (modules) helper
+// ---------------------------------------------------------------------------
+
+const GO_MODULES: DetectedPackageManager = {
+  name: 'go',
+  label: 'Go modules',
+  installCommand: 'go get',
+};
+
+export function goModulesPackageManager(): Promise<PackageManagerInfo> {
+  return Promise.resolve({
+    detected: [GO_MODULES],
+    primary: GO_MODULES,
+    recommendation:
+      'Use Go modules (go get). Run go mod tidy after imports change.',
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Flutter (pub) helper
+// ---------------------------------------------------------------------------
+
+const PUB: DetectedPackageManager = {
+  name: 'pub',
+  label: 'pub',
+  installCommand: 'flutter pub add',
+  runCommand: 'flutter',
+};
+
+export function pubPackageManager(): Promise<PackageManagerInfo> {
+  return Promise.resolve({
+    detected: [PUB],
+    primary: PUB,
+    recommendation:
+      'Use flutter pub add to add dependencies; it updates pubspec.yaml automatically.',
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Android (Gradle) helper
 // ---------------------------------------------------------------------------
 
@@ -232,4 +256,32 @@ export function gradlePackageManager(): Promise<PackageManagerInfo> {
     recommendation:
       'Add dependencies to build.gradle(.kts) using implementation().',
   });
+}
+
+// ---------------------------------------------------------------------------
+// Java (Maven or Gradle) helper
+// ---------------------------------------------------------------------------
+
+const MAVEN: DetectedPackageManager = {
+  name: 'maven',
+  label: 'Maven',
+  installCommand: 'mvn install',
+};
+
+/**
+ * Java backends split between Maven and Gradle; pom.xml decides.
+ * Defaults to Gradle when neither manifest is present.
+ */
+export function detectJavaPackageManagers(
+  installDir: string,
+): Promise<PackageManagerInfo> {
+  if (fs.existsSync(path.join(installDir, 'pom.xml'))) {
+    return Promise.resolve({
+      detected: [MAVEN],
+      primary: MAVEN,
+      recommendation:
+        'Use Maven. Add the dependency to pom.xml, then run mvn install to resolve it.',
+    });
+  }
+  return gradlePackageManager();
 }

@@ -8,10 +8,10 @@
  * Session-mutating methods trigger reactive screen resolution in the TUI.
  */
 
-import type { SettingsConflict } from '@lib/agent/claude-settings';
-import type { WizardReadinessResult } from '@lib/health-checks/readiness';
-import type { ApiUser } from '@lib/api';
-import type { Credentials } from '@lib/wizard-session';
+import type { SettingsConflict } from '@shared/claude-settings';
+import type { WizardReadinessResult } from '@shared/health-checks/readiness';
+import type { ApiUser } from '@shared/api';
+import type { Credentials, TaskNotice } from '@lib/wizard-session';
 import type {
   AskAnswers,
   OutroData,
@@ -23,60 +23,20 @@ export enum TaskStatus {
   InProgress = 'in_progress',
   Completed = 'completed',
   Skipped = 'skipped',
+  Failed = 'failed',
 }
 
 export function isTaskStatus(value: string): value is TaskStatus {
   return (Object.values(TaskStatus) as string[]).includes(value);
 }
 
-/**
- * One assistant turn's token usage, for the hidden Ctrl+T token/cost HUD.
- * `model` is the model that produced *this* turn (e.g. the SDK's
- * `message.message.model`) — a subagent can run on a different model than
- * the main session, and some programs override to Haiku, so pricing must key
- * off the per-turn model rather than a single run-wide assumption. Omit only
- * when the caller genuinely has no model context (falls back to Sonnet
- * pricing — see `pricePerMtokForModel` in `@lib/agent/token-pricing`).
- */
-export interface TokenUsageDelta {
-  inputTokens: number;
-  outputTokens: number;
-  cacheReadTokens: number;
-  cacheCreationTokens: number;
-  cacheCreation5m: number;
-  cacheCreation1h: number;
-  model?: string;
-}
-
-export interface SpinnerHandle {
-  start(message?: string): void;
-  stop(message?: string): void;
-  message(msg?: string): void;
-}
-
-/**
- * Context passed to `showAuthError` so the screen can pick the right copy.
- *
- * `hasSettingsConflict` is true when a Claude Code settings file (project,
- * project-local, the user's global config, or managed) actually overrides the
- * LLM Gateway auth. `conflicts` carries the exact files and keys so the screen
- * can name them. When there is no conflict, the 401 has a different cause (bad
- * PAT prefix, missing scope, expired key, region mismatch) and we should not
- * advise the user to log out of Claude Code.
- */
-export interface AuthErrorDetail {
-  hasSettingsConflict: boolean;
-  conflicts?: SettingsConflict[];
-  /**
-   * True when the agent SDK authenticated from a stored Claude login
-   * (`apiKeySource: "/login managed key"`) instead of the wizard's gateway
-   * token — conflicting Anthropic credentials. Takes priority in the screen.
-   */
-  usingManagedLogin?: boolean;
-  /** Human-readable places a conflicting Anthropic credential may live. */
-  credentialPlaces?: string[];
-  logFilePath: string;
-}
+// Progress payloads are the agent's contract; re-exported so UI code keeps its import path.
+import type {
+  AuthErrorDetail,
+  SpinnerHandle,
+  TokenUsageDelta,
+} from '@agent/types';
+export type { AuthErrorDetail, SpinnerHandle, TokenUsageDelta };
 
 export interface WizardUI {
   // ── Lifecycle messages ────────────────────────────────────────────
@@ -117,6 +77,13 @@ export interface WizardUI {
 
   /** Store OAuth/API credentials. Resolves past AuthScreen in TUI. */
   setCredentials(credentials: Credentials): void;
+
+  /**
+   * Replace the credentials after a token refresh. Same store write as
+   * {@link setCredentials} without the `auth complete` capture — the user
+   * authenticated once, and a refresh is not a second login.
+   */
+  setAccessToken(credentials: Credentials): void;
 
   /**
    * Persist the user's `role_at_organization` once it's been fetched from
@@ -172,6 +139,19 @@ export interface WizardUI {
     backupAndFix: () => boolean,
   ): Promise<void>;
 
+  /**
+   * Show an optional step's notice and return whether to keep that step. Hosts
+   * that cannot prompt resolve false: a step nobody can answer must not run.
+   */
+  showTaskNotice(notice: TaskNotice): Promise<boolean>;
+
+  /**
+   * Dismiss an in-flight task notice as declined. Called when the offer times
+   * out: the notice sits in front of the run's final steps, so left unanswered
+   * it would hold the report behind a modal nobody is looking at.
+   */
+  cancelTaskNotice(): void;
+
   /** Show auth error overlay when Anthropic API returns 401. */
   showAuthError(detail?: AuthErrorDetail): void;
 
@@ -209,7 +189,13 @@ export interface WizardUI {
   // loop) maintains a Map<taskId, …> from incremental Task* events and
   // re-emits the snapshot here, preserving the existing store semantics.
   syncTodos(
-    todos: Array<{ content: string; status: string; activeForm?: string }>,
+    todos: Array<{
+      id?: string;
+      source?: string;
+      content: string;
+      status: string;
+      activeForm?: string;
+    }>,
   ): void;
 
   // ── Event plan from .posthog-events.json ────────────────────
@@ -224,6 +210,9 @@ export interface WizardUI {
 
   // ── Notebook URL emitted by the agent via [NOTEBOOK_URL] marker ──
   setNotebookUrl(url: string): void;
+
+  /** Handoff doc from the `publish_handoff` tool; the task-stream push carries it as `handoff_text`. */
+  setHandoffText(text: string): void;
 
   /** Accumulate one assistant turn's token usage into the hidden Ctrl+T
    *  token/cost HUD's running estimate. No-op outside the TUI. */

@@ -6,8 +6,8 @@
  * pending request and the overlay pops, returning the agent to its run.
  */
 
-import { Box, Text } from 'ink';
-import { TextInput } from '@inkjs/ui';
+import { Box, Text, useInput } from 'ink';
+import { PasswordInput, TextInput } from '@inkjs/ui';
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import type { WizardStore } from '@ui/tui/store';
 import {
@@ -25,6 +25,78 @@ interface WizardAskScreenProps {
   store: WizardStore;
 }
 
+/**
+ * Key policy for the ask overlay: Esc declines the whole request, everything
+ * else is left to the focused input. Extracted so the wiring is unit-testable
+ * without a live Ink render (the test suite stubs `useInput` to a no-op).
+ */
+export function handleAskKey(
+  key: { escape?: boolean },
+  store: Pick<WizardStore, 'cancelPendingQuestion'>,
+): void {
+  if (key.escape) store.cancelPendingQuestion();
+}
+
+/**
+ * What pressing Esc actually does, phrased for the footer hint.
+ *
+ * Esc declines the *whole* request — {@link WizardStore.cancelPendingQuestion}
+ * builds a cancelled answer for every question, so the ones already typed are
+ * discarded too. The footer used to label that "skip", which on a multi-question
+ * request reads as "skip this field": the warehouse task walks a source's
+ * credentials one field at a time, several of them optional, and a user who
+ * pressed Esc to pass on an optional field instead threw away the whole source
+ * and dropped the agent onto its browser-handoff fallback. Naming the scope
+ * costs a few characters and makes the destructive key read as destructive.
+ */
+export function askEscapeHint(total: number, answered: number): string {
+  if (total <= 1) return 'skip';
+  if (answered <= 0) return `skip all ${total} questions`;
+  return `skip all ${total} questions, discarding the ${answered} you answered`;
+}
+
+/**
+ * Whether the overlay must mask what the user types for this question.
+ *
+ * A `sensitive` answer is one the wizard has already promised to treat as a
+ * secret: `wizard_ask` vaults it and hands the agent an opaque `secretRef`, so
+ * the raw string never enters the model's conversation. Every other boundary
+ * guards it the same way — the skip events carry no free text, handoff prose is
+ * kept out of telemetry — but the overlay that collects it echoed it back in
+ * plain text as it was typed, which is the one place a database password or an
+ * API key is read by a person other than its owner: a shared screen, a pairing
+ * session, a recorded terminal.
+ *
+ * `kind` is checked as well as the flag. The tool already rejects `sensitive`
+ * on a picker, and a picker has nothing to mask, so this keeps the predicate
+ * total over a question rather than relying on that rejection.
+ */
+export function shouldMaskAnswer(
+  question: Pick<AskQuestion, 'kind' | 'sensitive'>,
+): boolean {
+  return question.kind === 'text' && question.sensitive === true;
+}
+
+/**
+ * Whether an answer would leave a required question effectively unanswered.
+ *
+ * The `wizard_ask` schema marks fields `required` (defaulting to true), but the
+ * overlay used to submit whatever the input held — so pressing Enter on an empty
+ * required credential field sent an empty string on to the agent. A blank host
+ * or password is indistinguishable there from a real answer, so the warehouse
+ * task ran on it, failed source creation, and dead-ended with no signal that the
+ * user had in effect declined. Blocking the empty submit keeps the contract the
+ * schema already advertises; Esc stays the way to skip. Optional fields
+ * (`required === false`) are never blocked, and pickers always yield a value.
+ */
+export function isRequiredButEmpty(
+  question: Pick<AskQuestion, 'required'>,
+  value: string | string[],
+): boolean {
+  if (question.required === false) return false;
+  return Array.isArray(value) ? value.length === 0 : value.trim().length === 0;
+}
+
 export const WizardAskScreen = ({ store }: WizardAskScreenProps) => {
   useSyncExternalStore(
     (cb) => store.subscribe(cb),
@@ -38,6 +110,9 @@ export const WizardAskScreen = ({ store }: WizardAskScreenProps) => {
   const [index, setIndex] = useState(0);
   const [answers, setAnswers] = useState<AskAnswers>({});
   const [lastPendingId, setLastPendingId] = useState<string | null>(null);
+  // Set when the user tries to submit an empty required field, cleared once a
+  // real answer goes through. Drives the inline "this field is required" nudge.
+  const [requiredHint, setRequiredHint] = useState(false);
   // What the user last did with the link, so the overlay can confirm it. The
   // auto-copy below seeds 'copied'; pressing `o`/`c` overrides it.
   const [linkStatus, setLinkStatus] = useState<'idle' | 'copied' | 'opened'>(
@@ -112,6 +187,13 @@ export const WizardAskScreen = ({ store }: WizardAskScreenProps) => {
       : [],
   );
 
+  // Esc declines the whole request. Cancellation is a first-class outcome the
+  // ask bridge and the wizard_ask tool already expect (a task treats it as "the
+  // user declined" and falls back — e.g. to a browser setup link), so without
+  // this a user who can't answer has no exit but typing placeholders or waiting
+  // out the multi-minute per-question timeout. Every field comes back cancelled.
+  useInput((_input, key) => handleAskKey(key, store));
+
   if (!pending) return null;
 
   // Reset accumulator state when the agent opens a new request mid-session.
@@ -119,6 +201,7 @@ export const WizardAskScreen = ({ store }: WizardAskScreenProps) => {
     setLastPendingId(pending.id);
     setIndex(0);
     setAnswers({});
+    setRequiredHint(false);
     return null;
   }
 
@@ -127,8 +210,20 @@ export const WizardAskScreen = ({ store }: WizardAskScreenProps) => {
 
   const total = pending.questions.length;
   const progress = total > 1 ? `Question ${index + 1} of ${total}` : null;
+  const escapeHint = askEscapeHint(total, index);
+  // An optional text field already accepts an empty Enter (see
+  // `isRequiredButEmpty`) — it just never said so, leaving Esc as the only
+  // visible exit from a question the user did not want to answer.
+  const canSkipOne = question.kind === 'text' && question.required === false;
 
   const submit = (value: string | string[]) => {
+    // Don't let a required field go through empty — it would reach the agent as
+    // a blank answer it can't tell from a real one. Nudge instead; Esc skips.
+    if (isRequiredButEmpty(question, value)) {
+      setRequiredHint(true);
+      return;
+    }
+    setRequiredHint(false);
     const next: AskAnswers = { ...answers, [question.id]: value };
     if (index + 1 < total) {
       setAnswers(next);
@@ -192,6 +287,27 @@ export const WizardAskScreen = ({ store }: WizardAskScreenProps) => {
           onSubmit={submit}
         />
       </Box>
+      {requiredHint && (
+        <Box marginTop={1}>
+          <Text color={Colors.accent}>
+            {Icons.warning} This field is required — type an answer, or press
+            ESC to {escapeHint}.
+          </Text>
+        </Box>
+      )}
+      {canSkipOne && (
+        <Box marginTop={1}>
+          <Text dimColor>
+            Optional — press <Text color={Colors.accent}>ENTER</Text> on an
+            empty answer to skip just this one.
+          </Text>
+        </Box>
+      )}
+      <Box marginTop={1}>
+        <Text dimColor>
+          <Text color={Colors.accent}>ESC</Text> {escapeHint}
+        </Text>
+      </Box>
     </ModalOverlay>
   );
 };
@@ -240,14 +356,15 @@ const QuestionInput = ({ question, onSubmit }: QuestionInputProps) => {
       );
     }
 
-    case 'text':
+    case 'text': {
+      const Input = shouldMaskAnswer(question) ? PasswordInput : TextInput;
       return (
         // `width="100%"` on both the column and the hint row anchors them to
         // the modal's content width — without it, Ink/Yoga shrinks the column
         // to fit its widest child, so the right-aligned hint walks left/right
         // as the typed text changes width.
         <Box flexDirection="column" width="100%">
-          <TextInput
+          <Input
             placeholder="Type your answer"
             onSubmit={(value) => onSubmit(value)}
           />
@@ -259,5 +376,6 @@ const QuestionInput = ({ question, onSubmit }: QuestionInputProps) => {
           </Box>
         </Box>
       );
+    }
   }
 };

@@ -9,6 +9,8 @@
  */
 
 import type { ReactNode } from 'react';
+import path from 'node:path';
+import { getLogFilePath } from '@utils/debug';
 import type { WizardStore } from './store.js';
 import { ScreenId, Overlay, type ScreenName } from './router.js';
 
@@ -18,6 +20,7 @@ import { DoctorReportScreen } from './screens/doctor/DoctorReportScreen.js';
 import { SettingsOverrideScreen } from './screens/SettingsOverrideScreen.js';
 import { ManagedSettingsScreen } from './screens/ManagedSettingsScreen.js';
 import { PortConflictScreen } from './screens/PortConflictScreen.js';
+import { TaskNoticeScreen } from './screens/TaskNoticeScreen.js';
 import { ManualAuthCodeScreen } from './screens/ManualAuthCodeScreen.js';
 import { PostHogIntegrationIntroScreen } from './screens/PostHogIntegrationIntroScreen.js';
 import { RevenueIntroScreen } from './screens/RevenueIntroScreen.js';
@@ -27,10 +30,15 @@ import { SourceMapsIntroScreen } from './screens/SourceMapsIntroScreen.js';
 import { SourceMapsDetectScreen } from './screens/SourceMapsDetectScreen.js';
 import { SourceMapsOutroScreen } from './screens/SourceMapsOutroScreen.js';
 import { AgentSkillIntroScreen } from './screens/AgentSkillIntroScreen.js';
+import { AiObservabilityIntroScreen } from './screens/AiObservabilityIntroScreen.js';
+import { MetricsIntroScreen } from './screens/MetricsIntroScreen.js';
+import { ErrorTrackingIntroScreen } from './screens/ErrorTrackingIntroScreen.js';
+import { ErrorTrackingDetectScreen } from './screens/ErrorTrackingDetectScreen.js';
 import { SelfDrivingIntroScreen } from './screens/SelfDrivingIntroScreen.js';
 import { SelfDrivingIntegrationCheckScreen } from './screens/SelfDrivingIntegrationCheckScreen.js';
 import { SelfDrivingIntegrationDetectScreen } from './screens/SelfDrivingIntegrationDetectScreen.js';
 import { SelfDrivingHandoffScreen } from './screens/SelfDrivingHandoffScreen.js';
+import { SelfDrivingGitHubScreen } from '@ui/tui/screens/SelfDrivingGitHubScreen';
 import { AuditIntroScreen } from './screens/audit/AuditIntroScreen.js';
 import { AuditRunScreen } from './screens/audit/AuditRunScreen.js';
 import { AuditOutroScreen } from './screens/audit/AuditOutroScreen.js';
@@ -43,6 +51,11 @@ import { McpSuggestedPromptsScreen } from './screens/McpSuggestedPromptsScreen.j
 import { SlackConnectScreen } from './screens/SlackConnectScreen.js';
 import { KeepSkillsScreen } from './screens/KeepSkillsScreen.js';
 import { OutroScreen } from './screens/OutroScreen.js';
+import { MintFailureScreen } from './screens/MintFailureScreen.js';
+import type { MintFailureServices } from './screens/MintFailureScreen.js';
+import { openCodingAgent } from './services/coding-agent-launcher.js';
+import { writeWizardSpellbook } from '@lib/wizard-spellbook';
+import { getProgramConfig } from '@lib/programs/program-registry';
 import { ExitScreen } from './screens/ExitScreen.js';
 import { AuthErrorScreen } from './screens/AuthErrorScreen.js';
 import { SessionTimeoutScreen } from './screens/SessionTimeoutScreen.js';
@@ -52,13 +65,23 @@ import type { McpInstaller } from './services/mcp-installer.js';
 import { createMcpSuggestedPromptsServices } from './services/mcp-suggested-prompts-services.js';
 import type { McpSuggestedPromptsServices } from './services/mcp-suggested-prompts-services.js';
 
-export interface ScreenServices {
+export interface ScreenServices extends MintFailureServices {
   mcpInstaller: McpInstaller;
   mcpSuggestedPromptsServices: McpSuggestedPromptsServices;
 }
 
 export function createServices(store: WizardStore): ScreenServices {
   return {
+    get logPath() {
+      return path.resolve(getLogFilePath());
+    },
+    openAgent: (agent, spellbookPath) =>
+      openCodingAgent(agent, store.session.installDir, spellbookPath),
+    leaveSpellbook: () =>
+      writeWizardSpellbook(
+        store.session,
+        getProgramConfig(store.router.activeProgram),
+      ),
     mcpInstaller: createMcpInstaller(),
     mcpSuggestedPromptsServices: createMcpSuggestedPromptsServices(store),
   };
@@ -73,6 +96,7 @@ export function createScreens(
     [Overlay.SettingsOverride]: <SettingsOverrideScreen store={store} />,
     [Overlay.ManagedSettings]: <ManagedSettingsScreen store={store} />,
     [Overlay.PortConflict]: <PortConflictScreen store={store} />,
+    [Overlay.TaskNotice]: <TaskNoticeScreen store={store} />,
     [Overlay.ManualAuthCode]: <ManualAuthCodeScreen store={store} />,
     [Overlay.AuthError]: <AuthErrorScreen store={store} />,
     [Overlay.SessionTimeout]: <SessionTimeoutScreen store={store} />,
@@ -87,6 +111,12 @@ export function createScreens(
     [ScreenId.SourceMapsOutro]: <SourceMapsOutroScreen store={store} />,
     [ScreenId.MigrationIntro]: <MigrationIntroScreen store={store} />,
     [ScreenId.AgentSkillIntro]: <AgentSkillIntroScreen store={store} />,
+    [ScreenId.AiObservabilityIntro]: (
+      <AiObservabilityIntroScreen store={store} />
+    ),
+    [ScreenId.MetricsIntro]: <MetricsIntroScreen store={store} />,
+    [ScreenId.ErrorTrackingIntro]: <ErrorTrackingIntroScreen store={store} />,
+    [ScreenId.ErrorTrackingDetect]: <ErrorTrackingDetectScreen store={store} />,
     [ScreenId.SelfDrivingIntro]: <SelfDrivingIntroScreen store={store} />,
     [ScreenId.SelfDrivingIntegrationCheck]: (
       <SelfDrivingIntegrationCheckScreen store={store} />
@@ -95,6 +125,7 @@ export function createScreens(
       <SelfDrivingIntegrationDetectScreen store={store} />
     ),
     [ScreenId.SelfDrivingHandoff]: <SelfDrivingHandoffScreen store={store} />,
+    [ScreenId.SelfDrivingGithub]: <SelfDrivingGitHubScreen store={store} />,
     [ScreenId.AuditIntro]: <AuditIntroScreen store={store} />,
     [ScreenId.AuditRun]: <AuditRunScreen store={store} />,
     [ScreenId.AuditOutro]: <AuditOutroScreen store={store} />,
@@ -117,7 +148,10 @@ export function createScreens(
     [ScreenId.SlackConnect]: <SlackConnectScreen store={store} />,
     [ScreenId.KeepSkills]: <KeepSkillsScreen store={store} />,
     [ScreenId.Outro]: <OutroScreen store={store} />,
-    [ScreenId.Exit]: <ExitScreen />,
+    [ScreenId.MintFailure]: (
+      <MintFailureScreen store={store} services={services} />
+    ),
+    [ScreenId.Exit]: <ExitScreen store={store} />,
 
     // Standalone MCP flows
     [ScreenId.McpAdd]: (

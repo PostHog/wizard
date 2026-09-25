@@ -8,6 +8,7 @@ import type { AreaSlide } from './shared.js';
 import { InstallationSlide } from './installation.js';
 import { IdentificationSlide } from './identification.js';
 import { EventCaptureSlide } from './eventCapture.js';
+import { LiveDataSlide } from './liveData.js';
 import { WriteReportSlide } from './writeReport.js';
 import { UploadNotebookSlide } from './uploadNotebook.js';
 
@@ -17,6 +18,7 @@ export const AUDIT_AREA_SLIDES: AreaSlide[] = [
   InstallationSlide,
   IdentificationSlide,
   EventCaptureSlide,
+  LiveDataSlide,
   WriteReportSlide,
   UploadNotebookSlide,
 ];

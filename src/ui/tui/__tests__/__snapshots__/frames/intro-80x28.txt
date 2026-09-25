@@ -1,0 +1,27 @@
+ PostHog Wizard v0.0.0-test                        Feedback: wizard@posthog.com
+
+ Cost (running): $0.00 · no agent turns yet                      Ctrl+T to hide
+
+
+
+
+                             ███ PostHog Wizard 🦔
+
+             We'll use AI to analyze your project and complete work.
+                 Review what data is shared in "Privacy & data."
+                       .env* values stay on your machine.
+
+                  Let's do two hours of work in eight minutes.
+
+                         Directory ✔ /app
+                         Framework ✔ Next.js (detected)
+
+                            ▸ Continue
+                              Change framework
+                              More info
+                              Privacy & data
+                              Cancel
+
+
+
+  ↑↓ navigate  enter select

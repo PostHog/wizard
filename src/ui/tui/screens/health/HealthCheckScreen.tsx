@@ -20,11 +20,13 @@ import { ServiceHealthList } from '@ui/tui/components/ServiceHealthList';
 import {
   getBlockingServiceKeys,
   SIGNUP_WIZARD_READINESS_CONFIG,
-} from '@lib/health-checks/readiness';
-import { ServiceHealthStatus } from '@lib/health-checks/types';
+} from '@shared/health-checks/readiness';
+import { ServiceHealthStatus } from '@shared/health-checks/types';
 import { wizardAbort } from '@utils/wizard-abort';
-import { fetchSkillMenu, downloadSkill } from '@lib/wizard-tools';
-import { REMOTE_SKILLS_BASE_URL } from '@lib/constants';
+import { ErrorCodes } from '@shared/errors';
+import { downloadSkill } from '@agent';
+import { fetchSkillMenu } from '@shared/skill-menu';
+import { GITHUB_SKILLS_BASE_URL } from '@shared/constants';
 import { useDismissOnAnyKey } from '@ui/tui/hooks/useDismissOnAnyKey';
 
 interface HealthCheckScreenProps {
@@ -107,10 +109,10 @@ export const HealthCheckScreen = ({ store }: HealthCheckScreenProps) => {
   const displayKeys = hasHardBlock ? blockingKeys : warningKeys;
   if (displayKeys.length === 0) return null;
 
-  const isGithubReleasesDown =
-    hasHardBlock && blockingKeys.includes('githubReleases');
+  const isSkillsOriginDown =
+    hasHardBlock && blockingKeys.includes('skillsOrigin');
   const canDownloadSkills =
-    result.health.githubReleases.status === ServiceHealthStatus.Healthy;
+    result.health.skillsOrigin.status === ServiceHealthStatus.Healthy;
   const integration = store.session.integration;
 
   // If every blocking row is `NoConnection` (probe failed, no status-page
@@ -124,7 +126,7 @@ export const HealthCheckScreen = ({ store }: HealthCheckScreenProps) => {
       (k) => result.health[k].status === ServiceHealthStatus.NoConnection,
     );
 
-  const title = isGithubReleasesDown
+  const title = isSkillsOriginDown
     ? 'Ongoing service disruptions'
     : allBlockingHaveNoConnection
     ? "Couldn't reach PostHog"
@@ -133,8 +135,8 @@ export const HealthCheckScreen = ({ store }: HealthCheckScreenProps) => {
     : 'Service disruption detected';
 
   const docsUrl = store.session.frameworkConfig?.metadata.docsUrl;
-  const description = isGithubReleasesDown
-    ? "The Wizard can't download necessary skills from GitHub Releases right now."
+  const description = isSkillsOriginDown
+    ? "The Wizard can't download the skills it needs — neither GitHub Releases nor PostHog's mirror is reachable right now."
     : allBlockingHaveNoConnection
     ? "We couldn't reach these services from this machine. PostHog's status page shows no incidents, so this is most likely a network issue — VPN, firewall, captive portal, or flaky Wi-Fi."
     : hasHardBlock
@@ -144,30 +146,35 @@ export const HealthCheckScreen = ({ store }: HealthCheckScreenProps) => {
   const handleDownloadAndExit = async () => {
     if (downloading) return;
     setDownloading(true);
-    const menu = await fetchSkillMenu(REMOTE_SKILLS_BASE_URL);
+    // Primary origin — fetchSkillMenu/downloadSkill fail over to AWS themselves.
+    const menu = await fetchSkillMenu(GITHUB_SKILLS_BASE_URL);
     if (menu) {
       const prefix = `integration-${integration}`;
       const skills = (menu.categories['integration'] ?? []).filter((s) =>
         s.id.startsWith(prefix),
       );
       for (const skill of skills) {
-        await downloadSkill(
-          skill,
-          store.session.installDir,
-          '.posthog/skills',
-        );
+        // Pre-auth outage cache: no gateway, so a flagged skill fails closed.
+        await downloadSkill(skill, store.session.installDir, {
+          skillsRoot: '.posthog/skills',
+          triage: undefined,
+        });
       }
     }
     setDownloaded(true);
   };
 
   const handleCancel =
-    canDownloadSkills && !isGithubReleasesDown
+    canDownloadSkills && !isSkillsOriginDown
       ? () => void handleDownloadAndExit()
-      : () => void wizardAbort({ message: 'Exited due to service outage.' });
+      : () =>
+          void wizardAbort({
+            code: ErrorCodes.EnvServiceOutage,
+            message: 'Exited due to service outage.',
+          });
 
   const cancelLabel =
-    canDownloadSkills && !isGithubReleasesDown
+    canDownloadSkills && !isSkillsOriginDown
       ? downloading
         ? 'Downloading...'
         : 'Download skills & Exit [Esc]'
@@ -181,16 +188,22 @@ export const HealthCheckScreen = ({ store }: HealthCheckScreenProps) => {
       title={title}
       width={72}
       footer={
-        isGithubReleasesDown ? (
+        isSkillsOriginDown ? (
           <ConfirmationInput
             message=""
             confirmLabel=""
             cancelLabel="Exit [Esc]"
             onConfirm={() =>
-              void wizardAbort({ message: 'Exited due to service outage.' })
+              void wizardAbort({
+                code: ErrorCodes.EnvServiceOutage,
+                message: 'Exited due to service outage.',
+              })
             }
             onCancel={() =>
-              void wizardAbort({ message: 'Exited due to service outage.' })
+              void wizardAbort({
+                code: ErrorCodes.EnvServiceOutage,
+                message: 'Exited due to service outage.',
+              })
             }
           />
         ) : (
@@ -225,7 +238,7 @@ export const HealthCheckScreen = ({ store }: HealthCheckScreenProps) => {
 
       <Text dimColor>{description}</Text>
 
-      {isGithubReleasesDown && docsUrl && (
+      {isSkillsOriginDown && docsUrl && (
         <Box marginTop={1}>
           <Text>
             Set up manually: <Text color="cyan">{docsUrl}</Text>
@@ -233,7 +246,7 @@ export const HealthCheckScreen = ({ store }: HealthCheckScreenProps) => {
         </Box>
       )}
 
-      {canDownloadSkills && !isGithubReleasesDown && (
+      {canDownloadSkills && !isSkillsOriginDown && (
         <Box marginTop={1}>
           <Text>
             You can still download the PostHog integration skills and continue

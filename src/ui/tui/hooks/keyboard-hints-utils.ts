@@ -18,6 +18,13 @@ export enum KeyMatch {
   Return = 'return',
   Escape = 'escape',
   Space = 'space',
+  Backspace = 'backspace',
+  /**
+   * Any single printable character typed without a modifier. Broad by design,
+   * so a binding using it must sit last — the first match wins, which is what
+   * lets a specific char binding still take precedence over free typing.
+   */
+  Printable = 'printable',
 }
 
 /** A key match: either a KeyMatch enum value or a literal character string (e.g. 'a', 's'). */
@@ -30,6 +37,8 @@ const DEFAULT_PRIORITY: Record<string, number> = {
   [KeyMatch.LeftArrow]: 1,
   [KeyMatch.RightArrow]: 1,
   [KeyMatch.Space]: 10,
+  [KeyMatch.Printable]: 12,
+  [KeyMatch.Backspace]: 13,
   [KeyMatch.Escape]: 20,
   [KeyMatch.Return]: 21,
 };
@@ -63,6 +72,19 @@ export function matchesKey(
       return !!key.escape;
     case KeyMatch.Space:
       return input === ' ';
+    case KeyMatch.Backspace:
+      return !!key.backspace || !!key.delete;
+    case KeyMatch.Printable:
+      // Ink sets a flag for every non-text key while still passing a non-empty
+      // `input`, so any flag but shift rules out typing.
+      // Any single non-control character, not just ASCII — a filter query can
+      // hold an accented or non-Latin letter.
+      return (
+        input.length === 1 &&
+        input >= ' ' &&
+        input !== '\x7f' &&
+        Object.entries(key).every(([flag, on]) => !on || flag === 'shift')
+      );
     default:
       return input === m;
   }

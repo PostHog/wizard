@@ -6,7 +6,7 @@ import {
   webAnalyticsDoctorConfig,
   WEB_ANALYTICS_ABORT_CASES,
 } from '@lib/programs/web-analytics-doctor/index';
-import { WIZARD_TOOL_NAMES } from '@lib/wizard-tools';
+import { WIZARD_TOOL_NAMES } from '@agent/tools';
 import { buildSession } from '@lib/wizard-session';
 
 function makeTmpDir(): string {

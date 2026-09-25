@@ -1,11 +1,12 @@
 import { TaskStreamPush } from '@lib/task-stream/task-stream-push';
-import { StreamEvent } from '@lib/task-stream/types';
+import { StreamEvent, StreamTaskStatus } from '@lib/task-stream/types';
 import type {
   TaskStreamDestination,
   TaskStreamUpdate,
 } from '@lib/task-stream/types';
 import type { WizardStore, TaskItem } from '@ui/tui/store';
-import { RunPhase } from '@lib/wizard-session';
+import { TaskStatus } from '@ui/wizard-ui';
+import { RunPhase, type PendingQuestion } from '@lib/wizard-session';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -18,7 +19,9 @@ interface MockStoreState {
   skillId: string | null;
   tasks: TaskItem[];
   eventPlan: unknown[];
+  handoffText?: string | null;
   installDir?: string;
+  pendingQuestion?: PendingQuestion | null;
 }
 
 function createMockStore(overrides: Partial<MockStoreState> = {}) {
@@ -28,8 +31,11 @@ function createMockStore(overrides: Partial<MockStoreState> = {}) {
     skillId: 'test-skill',
     tasks: [],
     eventPlan: [],
+    handoffText: null,
     ...overrides,
   };
+
+  const frameworkContext: Record<string, unknown> = {};
 
   const store = {
     get session() {
@@ -38,7 +44,13 @@ function createMockStore(overrides: Partial<MockStoreState> = {}) {
         skillId: state.skillId,
         outroData: null,
         installDir: state.installDir,
+        pendingQuestion: state.pendingQuestion ?? null,
+        frameworkContext,
       };
+    },
+    setFrameworkContext(key: string, value: unknown) {
+      frameworkContext[key] = value;
+      for (const cb of listeners) cb();
     },
     get tasks() {
       return state.tasks;
@@ -46,8 +58,15 @@ function createMockStore(overrides: Partial<MockStoreState> = {}) {
     get eventPlan() {
       return state.eventPlan;
     },
+    get handoffText() {
+      return state.handoffText ?? null;
+    },
     setEventPlan(eventPlan: unknown[]) {
       state.eventPlan = eventPlan;
+      for (const cb of listeners) cb();
+    },
+    setHandoffText(text: string) {
+      state.handoffText = text;
       for (const cb of listeners) cb();
     },
     subscribe(cb: Listener) {
@@ -95,6 +114,7 @@ function createPush(
     dest?: ReturnType<typeof createMockDestination>;
     enabled?: boolean;
     eventPlanPath?: string;
+    auditChecks?: () => unknown;
   } = {},
 ) {
   const dest = opts.dest ?? createMockDestination();
@@ -103,6 +123,7 @@ function createPush(
     programId: 'test-program',
     destinations: [dest],
     eventPlanPath: opts.eventPlanPath,
+    auditChecks: opts.auditChecks,
     enabled: opts.enabled,
   });
   return { push, dest };
@@ -246,6 +267,61 @@ describe('TaskStreamPush', () => {
       expect(dest.calls[0][1].event_plan).toEqual({ events: plan });
     });
 
+    it('appends one task row per audit area, after the program rows', async () => {
+      const checks = [
+        {
+          id: 'sdk-installed',
+          area: 'Installation',
+          label: 'SDK installed',
+          status: 'pass',
+          file: 'src/app.tsx:3',
+          details: 'quotes the user code',
+        },
+        {
+          id: 'init-correct',
+          area: 'Installation',
+          label: 'init correct',
+          status: 'pending',
+        },
+        {
+          id: 'write-report',
+          area: 'Write report',
+          label: 'report',
+          status: 'pending',
+        },
+      ];
+      const store = createMockStore({
+        tasks: [
+          { label: 'Welcome', status: TaskStatus.Completed, done: true },
+          { label: 'Running', status: TaskStatus.InProgress, done: false },
+        ],
+      });
+      const { push, dest } = createPush(store, { auditChecks: () => checks });
+
+      await push.push();
+
+      const payload = dest.calls.at(-1)?.[1];
+      expect(payload?.tasks).toEqual([
+        { id: '0', title: 'Welcome', status: StreamTaskStatus.Completed },
+        { id: '1', title: 'Running', status: StreamTaskStatus.InProgress },
+        { id: '2', title: 'Installation', status: StreamTaskStatus.InProgress },
+        { id: '3', title: 'Write report', status: StreamTaskStatus.Pending },
+      ]);
+      // The check labels, files, and details stay on the machine.
+      expect(JSON.stringify(payload)).not.toContain('SDK installed');
+      expect(JSON.stringify(payload)).not.toContain('src/app.tsx');
+      expect(JSON.stringify(payload)).not.toContain('quotes the user code');
+    });
+
+    it('sends no area rows for a program without a ledger', async () => {
+      const store = createMockStore();
+      const { push, dest } = createPush(store);
+
+      await push.push();
+
+      expect(dest.calls[0][1].tasks).toEqual([]);
+    });
+
     it('omits eventPlan when empty', async () => {
       const store = createMockStore({ eventPlan: [] });
       const { push, dest } = createPush(store);
@@ -253,6 +329,21 @@ describe('TaskStreamPush', () => {
       await push.push();
 
       expect(dest.calls[0][1].event_plan).toBeUndefined();
+    });
+
+    it('carries handoff_text once captured, omits it before', async () => {
+      // The backend keeps the field sticky per session, but only if pushes
+      // after capture actually carry it — dropping it here would leave the
+      // app with no doc for the rest of the run.
+      const store = createMockStore();
+      const { push, dest } = createPush(store);
+
+      await push.push();
+      expect(dest.calls[0][1].handoff_text).toBeUndefined();
+
+      store._set({ handoffText: '# Setup report' });
+      await push.push();
+      expect(dest.calls[1][1].handoff_text).toBe('# Setup report');
     });
 
     it('sanitizes workflow_id and skill_id to channel-safe chars', async () => {
@@ -274,6 +365,58 @@ describe('TaskStreamPush', () => {
       expect(payload.skill_id).toBe('has-colons-and-spaces');
       expect(payload.workflow_id).toMatch(/^[A-Za-z0-9_.-]+$/);
       expect(payload.skill_id).toMatch(/^[A-Za-z0-9_.-]+$/);
+    });
+
+    it('publishes pending_input while a wizard_ask is open', async () => {
+      const store = createMockStore({
+        runPhase: RunPhase.Running,
+        pendingQuestion: pendingQuestion(),
+      });
+      const { push, dest } = createPush(store);
+
+      await push.push();
+
+      expect(dest.calls[0][1].pending_input).toEqual({
+        id: 'q-1',
+        asked_at: '2026-07-28T10:00:00.000Z',
+        question_count: 1,
+        sensitive: false,
+        prompts: ['Which region is your project in?'],
+      });
+    });
+
+    it('omits pending_input when no wizard_ask is open', async () => {
+      const store = createMockStore({ runPhase: RunPhase.Running });
+      const { push, dest } = createPush(store);
+
+      await push.push();
+
+      expect(dest.calls[0][1].pending_input).toBeUndefined();
+    });
+
+    it('withholds prompts when any question is sensitive', async () => {
+      const store = createMockStore({
+        runPhase: RunPhase.Running,
+        pendingQuestion: pendingQuestion({
+          questions: [
+            {
+              id: 'key',
+              prompt: 'Paste your API key',
+              kind: 'text',
+              sensitive: true,
+            },
+            { id: 'region', prompt: 'Which region?', kind: 'text' },
+          ],
+        }),
+      });
+      const { push, dest } = createPush(store);
+
+      await push.push();
+
+      const pendingInput = dest.calls[0][1].pending_input;
+      expect(pendingInput?.sensitive).toBe(true);
+      expect(pendingInput?.question_count).toBe(2);
+      expect(pendingInput?.prompts).toBeUndefined();
     });
 
     it('populates error when phase is Error', async () => {
@@ -444,6 +587,31 @@ describe('TaskStreamPush', () => {
     });
   });
 
+  describe('spec: wizard_ask open/close bypasses debounce', () => {
+    it('question appearing and resolving each produce an immediate push', async () => {
+      vi.useFakeTimers();
+      const store = createMockStore({ runPhase: RunPhase.Running });
+      const { push, dest } = createPush(store);
+      push.attach();
+
+      store._setAndEmit({ runPhase: RunPhase.Running });
+      await flushMicrotasks();
+      expect(dest.calls).toHaveLength(1);
+
+      // wizard_ask opens — no debounce wait.
+      store._setAndEmit({ pendingQuestion: pendingQuestion() });
+      await flushMicrotasks();
+      expect(dest.calls).toHaveLength(2);
+      expect(dest.calls[1][1].pending_input?.id).toBe('q-1');
+
+      // User answers — the clearing push is just as immediate.
+      store._setAndEmit({ pendingQuestion: null });
+      await flushMicrotasks();
+      expect(dest.calls).toHaveLength(3);
+      expect(dest.calls[2][1].pending_input).toBeUndefined();
+    });
+  });
+
   describe('spec: coalesces concurrent emits during in-flight push', () => {
     it('emits during a slow flush produce one follow-up push with the latest state', async () => {
       const store = createMockStore({ runPhase: RunPhase.Running });
@@ -592,6 +760,24 @@ function taskItem(label: string): TaskItem {
     activeForm: label,
     status: 'pending' as TaskItem['status'],
     done: false,
+  };
+}
+
+function pendingQuestion(
+  overrides: Partial<PendingQuestion> = {},
+): PendingQuestion {
+  return {
+    id: 'q-1',
+    source: 'test-skill',
+    askedAt: '2026-07-28T10:00:00.000Z',
+    questions: [
+      {
+        id: 'region',
+        prompt: 'Which region is your project in?',
+        kind: 'text',
+      },
+    ],
+    ...overrides,
   };
 }
 

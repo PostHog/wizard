@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as jsonc from 'jsonc-parser';
 import { getDefaultServerConfig } from './defaults';
+import type { InstallResult } from './results';
 
 export type MCPServerConfig = Record<string, unknown>;
 
@@ -14,8 +15,8 @@ export abstract class MCPClient {
     apiKey?: string,
     selectedFeatures?: string[],
     local?: boolean,
-  ): Promise<{ success: boolean }>;
-  abstract removeServer(local?: boolean): Promise<{ success: boolean }>;
+  ): Promise<InstallResult>;
+  abstract removeServer(local?: boolean): Promise<InstallResult>;
   abstract isClientSupported(): Promise<boolean>;
 }
 
@@ -63,7 +64,7 @@ export abstract class DefaultMCPClient extends MCPClient {
     apiKey?: string,
     selectedFeatures?: string[],
     local?: boolean,
-  ): Promise<{ success: boolean }> {
+  ): Promise<InstallResult> {
     try {
       const configPath = await this.getConfigPath();
       const configDir = path.dirname(configPath);
@@ -89,6 +90,19 @@ export abstract class DefaultMCPClient extends MCPClient {
         typedConfig[serverPropertyName] = {};
       }
       const serverName = local ? 'posthog-local' : 'posthog';
+
+      // An identical entry means this config is already set up — leave the file
+      // untouched and report it, so a re-run says "already installed" instead of
+      // claiming a write that changed nothing. A differing entry (new features,
+      // new key) still gets overwritten and reported as installed.
+      const existingServerConfig = typedConfig[serverPropertyName][serverName];
+      if (
+        existingServerConfig !== undefined &&
+        JSON.stringify(existingServerConfig) === JSON.stringify(newServerConfig)
+      ) {
+        return { success: true, alreadyInstalled: true };
+      }
+
       typedConfig[serverPropertyName][serverName] = newServerConfig;
 
       const edits = jsonc.modify(
@@ -108,17 +122,21 @@ export abstract class DefaultMCPClient extends MCPClient {
       await fs.promises.writeFile(configPath, modifiedContent, 'utf8');
 
       return { success: true };
-    } catch {
-      return { success: false };
+    } catch (error) {
+      return {
+        success: false,
+        reason: error instanceof Error ? error.message : String(error),
+      };
     }
   }
 
-  async removeServer(local?: boolean): Promise<{ success: boolean }> {
+  async removeServer(local?: boolean): Promise<InstallResult> {
+    let configPath = '';
     try {
-      const configPath = await this.getConfigPath();
+      configPath = await this.getConfigPath();
 
       if (!fs.existsSync(configPath)) {
-        return { success: false };
+        return { success: true, alreadyInstalled: true };
       }
 
       const configContent = await fs.promises.readFile(configPath, 'utf8');
@@ -149,10 +167,16 @@ export abstract class DefaultMCPClient extends MCPClient {
 
         return { success: true };
       }
-    } catch {
-      //
+      // No PostHog entry to delete — the config changed under us between the
+      // detection pass and now. Nothing failed, so don't report a failure.
+      return { success: true, alreadyInstalled: true };
+    } catch (error) {
+      return {
+        success: false,
+        reason: `${configPath}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      };
     }
-
-    return { success: false };
   }
 }

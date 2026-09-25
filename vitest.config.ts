@@ -29,6 +29,36 @@ function resolveTsForJs(): Plugin {
   };
 }
 
+// Per-surface Vitest projects keyed by today's directories. Each project runs
+// alone with `vitest run --project <name>`; `vitest run` runs them all.
+const TESTS = '__tests__/**/*.{js,jsx,ts,tsx}';
+const AGENT_TESTS = [`src/agent/**/${TESTS}`];
+const TUI_TESTS = [`src/ui/tui/**/${TESTS}`];
+const CLI_TESTS = [
+  `src/commands/**/${TESTS}`,
+  `src/lib/runners/${TESTS}`,
+  'src/__tests__/*cli*.test.ts',
+  'src/__tests__/wizard.test.ts',
+  'src/__tests__/headless-scope.test.ts',
+];
+const HARNESS_TESTS = [
+  `e2e-harness/${TESTS}`,
+  'e2e-harness/**/*.{test,spec}.{js,jsx,ts,tsx}',
+];
+const ARCH_TESTS = ['src/__tests__/architecture/**/*.{ts,tsx}'];
+const EXCLUDE = [
+  '**/node_modules/**',
+  '**/dist/**',
+  '**/e2e-tests/**',
+  '**/*.no-jest.*',
+  '**/*.d.ts',
+];
+
+const project = (name: string, include: string[], exclude: string[] = []) => ({
+  extends: true as const,
+  test: { name, include, exclude: [...EXCLUDE, ...exclude] },
+});
+
 export default defineConfig({
   plugins: [resolveTsForJs()],
   // The source targets the React 19 automatic JSX runtime (tsconfig
@@ -48,10 +78,15 @@ export default defineConfig({
         replacement: r('__mocks__/@posthog/warlock.ts'),
       },
       { find: /^ink$/, replacement: r('__mocks__/ink.ts') },
+      { find: /^@shared\/(.*)$/, replacement: `${r('src/shared')}/$1` },
+      { find: /^@agent$/, replacement: r('src/agent/index.ts') },
+      { find: /^@agent\/types$/, replacement: r('src/agent/types.ts') },
+      { find: /^@agent\/(.*)$/, replacement: `${r('src/agent')}/$1` },
       // Path aliases — mirror tsconfig `paths`.
       { find: /^@env$/, replacement: r('src/env.ts') },
       { find: /^@lib\/(.*)$/, replacement: `${r('src/lib')}/$1` },
-      { find: /^@utils\/(.*)$/, replacement: `${r('src/utils')}/$1` },
+      { find: /^@e2e-harness\/(.*)$/, replacement: `${r('e2e-harness')}/$1` },
+      { find: /^@utils\/(.*)$/, replacement: `${r('src/shared/utils')}/$1` },
       { find: /^@ui$/, replacement: r('src/ui/index.ts') },
       { find: /^@ui\/(.*)$/, replacement: `${r('src/ui')}/$1` },
       { find: /^@steps$/, replacement: r('src/steps/index.ts') },
@@ -62,19 +97,19 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
-    include: [
-      '**/__tests__/**/*.{test,spec}.{js,jsx,ts,tsx}',
-      '**/__tests__/**/*.{js,jsx,ts,tsx}',
-      '**/*.{test,spec}.{js,jsx,ts,tsx}',
-    ],
-    exclude: [
-      '**/node_modules/**',
-      '**/dist/**',
-      '**/e2e-tests/**',
-      // The e2e harness and its tests live in a separate stacked PR.
-      '**/e2e-harness/**',
-      '**/*.no-jest.*',
-      '**/*.d.ts',
+    projects: [
+      project('agent', AGENT_TESTS),
+      project('tui', TUI_TESTS),
+      project('cli', CLI_TESTS),
+      project('harness', HARNESS_TESTS),
+      project('architecture', ARCH_TESTS),
+      project(
+        'legacy',
+        // The second glob keeps the pre-split behavior: a test file outside
+        // a __tests__ directory still runs, here, rather than nowhere.
+        [`src/**/${TESTS}`, 'src/**/*.{test,spec}.{js,jsx,ts,tsx}'],
+        [...AGENT_TESTS, ...TUI_TESTS, ...CLI_TESTS, ...ARCH_TESTS],
+      ),
     ],
     coverage: {
       provider: 'v8',

@@ -1,31 +1,30 @@
 import { keyPrefixWarning } from '../ci-install';
 
 /**
- * `keyPrefixWarning` is the one behavioral fork between `--ci` and headless
- * mode: headless accepts a `pha_` OAuth access token as first-class, CI does
- * not. Everything else about the two modes is shared.
+ * `--ci` and headless accept the same credentials: a personal API key and a
+ * wizard-app OAuth access token (the CI bot's). Only unknown prefixes warn.
  */
 describe('keyPrefixWarning', () => {
-  describe.each([false, true])('headless=%s', (headless) => {
-    test('a personal API key (phx_) is always accepted', () => {
-      expect(keyPrefixWarning('phx_abc', headless)).toBeNull();
-    });
-
-    test('no key returns no warning', () => {
-      expect(keyPrefixWarning(undefined, headless)).toBeNull();
-    });
-
-    test('a project/client key (phc_) always warns', () => {
-      expect(keyPrefixWarning('phc_abc', headless)).toMatch(/phc_/);
-    });
+  test('a personal API key (phx_) is accepted', () => {
+    expect(keyPrefixWarning('phx_abc')).toBeNull();
   });
 
-  test('headless accepts a pha_ OAuth access token without warning', () => {
-    expect(keyPrefixWarning('pha_abc', true)).toBeNull();
+  test('a wizard-app OAuth access token (pha_) is accepted', () => {
+    // The CI bot authenticates the mint with one of these; a warning here
+    // would name the sanctioned credential as a mistake on every CI run.
+    expect(keyPrefixWarning('pha_abc')).toBeNull();
   });
 
-  test('CI mode warns on a pha_ OAuth access token', () => {
-    const warning = keyPrefixWarning('pha_abc', false);
-    expect(warning).toMatch(/OAuth access token/);
+  test('no key returns no warning', () => {
+    expect(keyPrefixWarning(undefined)).toBeNull();
+  });
+
+  test('a project/client key (phc_) warns and names both accepted kinds', () => {
+    expect(keyPrefixWarning('phc_abc')).toMatch(/phc_/);
+    expect(keyPrefixWarning('phc_abc')).toMatch(/"phx_" or "pha_"/);
+  });
+
+  test('an unknown prefix warns', () => {
+    expect(keyPrefixWarning('sk-abc')).toMatch(/does not start with/);
   });
 });

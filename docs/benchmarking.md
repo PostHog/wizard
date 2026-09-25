@@ -62,21 +62,28 @@ git checkout <branch under test>            # the code you are benchmarking
 pnpm install && node scripts/generate-version.cjs   # version.ts is generated, not committed
 cd .. && git clone https://github.com/PostHog/wizard-workbench   # optional: automated judging
 
-# 2. Credentials — a personal API key for a DEDICATED test project
-#    (runs create real events and dashboards in it). Note the project id.
-echo 'phx_...' > ~/wizard-bench-key.txt
+# 2. Credentials — a personal API key AND a separate gateway token.
+#    Save the issued secrets in private files outside the repo. Use a
+#    DEDICATED test project (runs create real events and dashboards).
+export POSTHOG_KEY_FILE="$HOME/wizard-bench-key.txt"
+export WIZARD_CI_GATEWAY_TOKEN_FILE="$HOME/.config/posthog/wizard-gateway-token"
+chmod 600 "$POSTHOG_KEY_FILE" "$WIZARD_CI_GATEWAY_TOKEN_FILE"
+export PROJECT_ID=12345
 
 # 3. Target apps — shallow-clone each once; treat as read-only sources
 mkdir -p ~/bench/src && cd ~/bench/src
 git clone --depth 1 https://github.com/<org>/<app>
 ```
 
+See [local credentials](local-dev.md#credentials-for-local-ci-and-headless-runs)
+for gateway token behavior and MCP server environment setup.
+
 Also install the toolchains your chosen apps need (node, python, php+composer,
 ruby, gradle) — a missing toolchain fails runs for reasons that are yours, not
 the model's.
 
-Define each config as a `WIZARD_CI_FLAG_OVERRIDES` JSON (harness + model +
-effort), plus the baseline as `{"wizard-use-pi-harness":"false"}`.
+Define each config as a `WIZARD_CI_FLAG_OVERRIDES` JSON, plus the baseline as
+`{"wizard-orchestrator":"false"}`.
 
 ## Tooling
 
@@ -91,13 +98,13 @@ Everything below ships in this repo (`wizard/`) and its workbench
   `NN-<screen>.ans` frame. An `NN-outro.ans` frame is the flow-completion
   signal. `tsx` runs source — no build step. Invocation: see the run-cell
   recipe below.
-- **Config selection:** the three flag axes are `wizard-use-pi-harness`,
-  `wizard-pi-model` (variant keys defined in
-  `wizard/src/lib/agent/runner/switchboard/harness.ts`), and
-  `wizard-pi-effort` (levels in
-  `wizard/src/lib/agent/runner/switchboard/models.ts`). The baseline is
-  `{"wizard-use-pi-harness":"false"}` — never an empty override, or live
-  remote flags leak into the baseline.
+- **Config selection:** the flag axis is `wizard-orchestrator` (on → the
+  orchestrator on pi, per-task models from context-mill frontmatter; off → the
+  linear anthropic default). Per-stage variations ride
+  `wizard-orchestrator-override` payloads (`{stage: {model?, effort?}}`,
+  variant keys in `wizard/src/agent/runner/switchboard/flags/schemes.ts`).
+  The baseline is `{"wizard-orchestrator":"false"}` — never an empty override,
+  or live remote flags leak into the baseline.
 
 ## Running one cell
 
@@ -106,8 +113,7 @@ The canonical recipe — save as `run-cell.sh` and run from anywhere:
 ```bash
 #!/bin/bash
 # run-cell.sh <label> <app_src> <flags_json>   e.g.:
-#   run-cell.sh maybe-luna-med ~/bench/src/maybe \
-#     '{"wizard-use-pi-harness":"true","wizard-pi-model":"gpt-5-6-luna","wizard-pi-effort":"medium"}'
+#   run-cell.sh maybe-orch ~/bench/src/maybe '{"wizard-orchestrator":"true"}'
 set -uo pipefail
 LABEL="$1"; SRC="$2"; FLAGS="$3"
 WIZARD=~/wizard            # the checkout under test

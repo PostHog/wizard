@@ -18,7 +18,7 @@ import {
   WizardReadiness,
   SIGNUP_WIZARD_READINESS_CONFIG,
   getBlockingServiceKeys,
-} from '@lib/health-checks/readiness';
+} from '@shared/health-checks/readiness';
 import { logToFile } from '@utils/debug';
 
 export function healthCheckReady(session: WizardSession): boolean {

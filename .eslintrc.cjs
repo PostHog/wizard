@@ -31,6 +31,97 @@ module.exports = {
   ],
   overrides: [
     {
+      // The agent surface. It takes resolved data in, reports through
+      // progress events and asks through an injected answerer, so nothing
+      // here may import a UI, the session, detection, the CLI or a program.
+      // Only direct static imports are checked. Program types stay importable
+      // until B1 moves PROGRAM_BINDINGS to programs.
+      files: ['src/agent/**/*.ts'],
+      excludedFiles: ['**/__tests__/**'],
+      rules: {
+        '@typescript-eslint/no-restricted-imports': [
+          'error',
+          {
+            paths: [
+              {
+                name: '@utils/wizard-abort',
+                importNames: ['wizardAbort'],
+                message:
+                  'The agent never exits the process: return a failure in RunResult.',
+              },
+              {
+                name: '@shared/utils/wizard-abort',
+                importNames: ['wizardAbort'],
+                message:
+                  'The agent never exits the process: return a failure in RunResult.',
+              },
+            ],
+            patterns: [
+              {
+                group: [
+                  '@ui',
+                  '@ui/**',
+                  '**/ui',
+                  '**/ui/**',
+                  '@lib/**',
+                  '!@lib/programs/**',
+                  '**/lib/**',
+                  '!**/lib/programs/**',
+                  '**/wizard-session',
+                  '**/detection',
+                  '**/detection/**',
+                  '**/runners',
+                  '**/runners/**',
+                  '**/commands/**',
+                  '@steps',
+                  '@steps/**',
+                  '**/steps',
+                  '**/steps/**',
+                  '@frameworks/**',
+                  '**/frameworks/**',
+                  '@utils/setup-utils',
+                  '@shared/utils/setup-utils',
+                  '**/setup-utils',
+                  '@utils/oauth',
+                  '@shared/utils/oauth',
+                  '**/utils/oauth',
+                ],
+                message:
+                  'The agent reports through progress events and asks through AgentInteraction; it takes everything else through RunConfig and RunInput.',
+              },
+              {
+                group: ['@lib/programs/**', '**/programs/**'],
+                allowTypeImports: true,
+                message:
+                  'The agent takes program data through RunConfig. Types only, until B1 moves PROGRAM_BINDINGS to programs.',
+              },
+            ],
+          },
+        ],
+      },
+    },
+    {
+      // Outside the agent, import it through its entry modules only:
+      // `@agent` for values, `@agent/types` for types. The architecture test
+      // applies the same rule to resolved paths; this gives editor feedback.
+      files: ['bin.ts', 'src/**/*.ts', 'src/**/*.tsx'],
+      excludedFiles: ['src/agent/**', '**/__tests__/**', '**/__mocks__/**'],
+      rules: {
+        '@typescript-eslint/no-restricted-imports': [
+          'error',
+          {
+            patterns: [
+              {
+                group: ['@agent/**', '!@agent/types'],
+                message:
+                  'Import the agent through @agent (values) or @agent/types (types).',
+              },
+            ],
+          },
+        ],
+      },
+    },
+    {
       files: [
         '*.test.js',
         '*.test.ts',

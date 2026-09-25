@@ -18,8 +18,8 @@ import {
   HNViewer,
 } from '@ui/tui/primitives/index';
 import type { ProgressItem } from '@ui/tui/primitives/index';
-import { ADDITIONAL_FEATURE_LABELS } from '@lib/wizard-session';
 import { LearnCard } from '@ui/tui/components/LearnCard';
+import { VisualizerTab } from '@ui/tui/components/PhaseVisuals';
 import { TipsCard } from '@ui/tui/components/TipsCard';
 import { useStdoutDimensions } from '@ui/tui/hooks/useStdoutDimensions';
 
@@ -45,20 +45,6 @@ export const RunScreen = ({ store }: RunScreenProps) => {
     activeForm: t.activeForm,
     status: t.status,
   }));
-
-  // When all tasks are done but the queue has features, show a transitional item
-  const queue = store.session.additionalFeatureQueue;
-  const allDone =
-    progressItems.length > 0 &&
-    progressItems.every((t) => t.status === 'completed');
-  if (allDone && queue.length > 0) {
-    const nextLabel = ADDITIONAL_FEATURE_LABELS[queue[0]];
-    progressItems.push({
-      label: `Set up ${nextLabel}`,
-      activeForm: `Setting up ${nextLabel}...`,
-      status: 'in_progress',
-    });
-  }
 
   const statuses =
     store.statusMessages.length > 0 ? store.statusMessages : undefined;
@@ -114,8 +100,11 @@ export const RunScreen = ({ store }: RunScreenProps) => {
       label: 'Tail logs',
       component: <LogViewer filePath={WIZARD_LOG_FILE} />,
     },
-    // Visualizer tab temporarily disabled: Tumblers crashes on short panels
-    // (negative pin row -> grid[undefined]). Component + demo left intact.
+    {
+      id: 'visualizer',
+      label: 'Visualizer',
+      component: <VisualizerTab store={store} />,
+    },
     { id: 'hn', label: 'HN', component: <HNViewer /> },
   ];
 

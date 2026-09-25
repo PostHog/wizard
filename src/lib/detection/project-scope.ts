@@ -2,18 +2,19 @@
 
 import {
   detectProjectsWithAgent,
+  AgenticDetectionTimeoutError,
   resolveProjectDir,
   type AgenticDetectionReport,
   type AgenticProject,
   type DetectEvent,
   type DetectTarget,
 } from './agentic.js';
-import { authenticate } from '@lib/agent/runner/shared/authenticate';
+import { authenticate } from '@lib/programs/authenticate';
 import { FRAMEWORK_REGISTRY } from '@lib/registry';
 import {
-  AGENTIC_DETECTION_TIMEOUT_MS,
+  Integration,
   WIZARD_BASIC_INTEGRATION_AGENTIC_DETECTION_FLAG_KEY,
-} from '@lib/constants';
+} from '@shared/constants';
 import type { WizardSession } from '@lib/wizard-session';
 import { getUI } from '@ui/index';
 import { analytics } from '@utils/analytics';
@@ -24,10 +25,47 @@ const INTEGRATION_TARGETS: DetectTarget[] = Object.entries(
   FRAMEWORK_REGISTRY,
 ).map(([id, config]) => ({ id, name: config.metadata.name }));
 
+const INTEGRATION_IDS = new Set<string>(Object.values(Integration));
+
+/** A scanned project matched to a wizard framework. Each program classifies it with its own rule. */
+export type IntegrationCandidate = {
+  /** Path relative to the repo root ("." for the root). */
+  path: string;
+  /** Human-readable framework the agent detected (e.g. "Next.js"). */
+  framework: string;
+  /** The wizard framework the project matches, else null. */
+  integration: Integration | null;
+  /** Whether a PostHog SDK is already installed in this project. */
+  hasPostHog: boolean;
+  /** The scan's pick for the main app. Always false unless the scan set `recommend`. */
+  recommended: boolean;
+};
+
+/** Match each project of an integration scan to a wizard framework. */
+export function toIntegrationCandidates(
+  report: AgenticDetectionReport,
+): IntegrationCandidate[] {
+  return report.projects.map((p) => ({
+    path: p.path,
+    framework: p.framework,
+    integration:
+      p.targetId && INTEGRATION_IDS.has(p.targetId)
+        ? (p.targetId as Integration)
+        : null,
+    hasPostHog: p.hasPostHog,
+    recommended: p.recommended === true,
+  }));
+}
+
 /** Run the agentic detector for the wizard's integration frameworks — the single home of targets + purpose. */
 export async function detectIntegrationProjects(
   session: WizardSession,
-  options: { recommend?: boolean; onEvent?: DetectEvent } = {},
+  options: {
+    /** Program the scan bills to. Required so no caller can go unattributed. */
+    programId: string;
+    recommend?: boolean;
+    onEvent?: DetectEvent;
+  },
 ): Promise<AgenticDetectionReport> {
   // Spread first so the targets and purpose this function owns always win.
   return detectProjectsWithAgent(session, {
@@ -56,9 +94,6 @@ export type AgenticDetectionOutcome =
   | 'recommended'
   | 'first-instrumentable';
 
-/** Sentinel for a scan that outran AGENTIC_DETECTION_TIMEOUT_MS. */
-const TIMED_OUT = Symbol('timed-out');
-
 function captureOutcome(
   outcome: AgenticDetectionOutcome,
   properties: Record<string, unknown> = {},
@@ -81,21 +116,24 @@ export async function scopeInstallDirToProject(
 
   getUI().log.info('Scanning the repo for projects...');
   const startedAt = Date.now();
-  let report: AgenticDetectionReport | typeof TIMED_OUT;
+  let report: AgenticDetectionReport;
   try {
-    report = await Promise.race([
-      detectIntegrationProjects(session, {
-        recommend: true,
-        onEvent: (line) => logToFile('[agentic detect]', line),
-      }),
-      // The agent has no abort plumbing, so a timed-out scan is abandoned in the
-      // background rather than cancelled; the run stops waiting on it either way.
-      new Promise<typeof TIMED_OUT>((resolve) =>
-        setTimeout(() => resolve(TIMED_OUT), AGENTIC_DETECTION_TIMEOUT_MS),
-      ),
-    ]);
+    report = await detectIntegrationProjects(session, {
+      // Literal, like the `authenticate` call above: importing the program
+      // registry here would cycle.
+      programId: 'posthog-integration',
+      recommend: true,
+      onEvent: (line) => logToFile('[agentic detect]', line),
+    });
   } catch (err) {
     const error = err instanceof Error ? err : new Error(String(err));
+    if (error instanceof AgenticDetectionTimeoutError) {
+      captureOutcome('timeout', { duration_ms: Date.now() - startedAt });
+      getUI().log.warn(
+        `${error.message}; continuing with the install dir as-is.`,
+      );
+      return;
+    }
     analytics.captureException(error, { step: 'agentic_detection' });
     captureOutcome('error', {
       duration_ms: Date.now() - startedAt,
@@ -107,18 +145,10 @@ export async function scopeInstallDirToProject(
     return;
   }
 
-  if (report === TIMED_OUT) {
-    captureOutcome('timeout', { duration_ms: Date.now() - startedAt });
-    getUI().log.warn(
-      `Project scan timed out after ${
-        AGENTIC_DETECTION_TIMEOUT_MS / 1000
-      }s; continuing with the install dir as-is.`,
-    );
-    return;
-  }
-
   const { projects } = report;
   const recommended = projects.find((p) => p.recommended === true);
+  // The event carries at most this many projects; project_count is the true total.
+  const MAX_PROJECTS_CAPTURED = 25;
   const scanProperties = {
     duration_ms: Date.now() - startedAt,
     repo_type: report.repoType,
@@ -126,7 +156,7 @@ export async function scopeInstallDirToProject(
     supported_count: projects.filter((p) => p.targetId != null).length,
     has_recommendation: recommended !== undefined,
     recommended_path: recommended?.path ?? null,
-    projects,
+    projects: projects.slice(0, MAX_PROJECTS_CAPTURED),
   };
 
   const project = chooseIntegrationProject(projects);

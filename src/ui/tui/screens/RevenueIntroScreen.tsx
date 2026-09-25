@@ -205,11 +205,11 @@ const DetectErrorBody = ({ error }: { error: RevenueDetectError }) => {
           <Box marginTop={1} flexDirection="column">
             <Text>Revenue analytics requires:</Text>
             <Text dimColor>
-              {'  \u2022'} A PostHog SDK ({POSTHOG_SDKS.slice(0, 3).join(', ')},
-              …)
+              {'  \u2022'} A PostHog SDK (
+              {[...POSTHOG_SDKS].slice(0, 3).join(', ')}, …)
             </Text>
             <Text dimColor>
-              {'  \u2022'} A Stripe SDK ({STRIPE_SDKS.join(', ')})
+              {'  \u2022'} A Stripe SDK ({[...STRIPE_SDKS].join(', ')})
             </Text>
           </Box>
           <Box marginTop={1}>
@@ -247,7 +247,7 @@ const DetectErrorBody = ({ error }: { error: RevenueDetectError }) => {
           </Text>
           <Box marginTop={1} flexDirection="column">
             <Text dimColor>Install one of:</Text>
-            {STRIPE_SDKS.map((sdk) => (
+            {[...STRIPE_SDKS].map((sdk) => (
               <Text key={sdk} dimColor>
                 {'  \u2022'} {sdk}
               </Text>

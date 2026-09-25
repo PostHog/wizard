@@ -1,11 +1,18 @@
-import type { WizardSession, DiscoveredFeature } from '@lib/wizard-session';
-import type { WizardReadinessResult } from '@lib/health-checks/readiness';
-import type { ProgramRun } from '@lib/agent/agent-runner';
-import type { Integration } from '@lib/constants';
+import type {
+  WizardSession,
+  DiscoveredFeature,
+  TaskNotice,
+} from '@lib/wizard-session';
+import type { WizardReadinessResult } from '@shared/health-checks/readiness';
+import type { ProgramRun } from '@lib/programs/program-run';
+import type { Integration } from '@shared/constants';
 import type { FrameworkConfig } from '@lib/framework-config';
 import type { ContentBlock } from '@ui/tui/primitives/index';
 import type { WizardStore } from '@ui/tui/store';
 import type { Tip } from '@ui/tui/components/TipsCard';
+// Type-only — erased at compile time, so no runtime cycle with the
+// registry that imports `ProgramConfig` back from this module.
+import type { ProgramId } from './program-registry.js';
 
 /**
  * A program step is the primary unit of the wizard's execution model.
@@ -52,6 +59,7 @@ export interface ProgramReadyContext {
   }) => void;
   readonly addDiscoveredFeature: (feature: DiscoveredFeature) => void;
   readonly setDetectionComplete: () => void;
+  readonly setPosthogSdkDetected: (detected: boolean) => void;
 }
 
 export interface ProgramStep {
@@ -126,6 +134,15 @@ export interface ProgramStep {
    * scanning the installDir for prerequisites. May be sync or async.
    */
   onReady?: (ctx: ProgramReadyContext) => void | Promise<void>;
+
+  /**
+   * Report this step's analytics under a different program than its host, for
+   * steps shared across programs (the MCP tutorial is all of `mcp-tutorial`
+   * and the last step of `mcp-add`). Attribution only — scopes, bindings, and
+   * sequences still follow the host. Matched by `screenId`, so headless steps
+   * are unaffected.
+   */
+  reportsAsProgramId?: ProgramId;
 }
 
 /**
@@ -233,6 +250,31 @@ export interface ProgramConfig {
    * detection) that the TUI performs via step onReady callbacks.
    */
   ciPreRun?: (session: WizardSession) => Promise<void>;
+  /**
+   * Tasks the orchestrator queues itself, before the planner runs, from what
+   * the wizard detected. Their types are marked `runnerSeeded: true` in the
+   * agent prompt, so the planner never sees them: whether such a task runs is
+   * decided here, in code, not by a model that could invent it or forget it.
+   * Return an empty list to queue none.
+   */
+  seedTasks?: (session: WizardSession) => Array<{
+    type: string;
+    label?: string;
+    inputs?: Record<string, unknown>;
+    /**
+     * Shown before the run starts, letting the user decline the task. The
+     * program owns the words — the runner and the modal only carry them. A
+     * task without one is queued silently.
+     */
+    notice?: TaskNotice;
+  }>;
+  /**
+   * Task types this run excludes, decided from the run's wizard flags. An
+   * excluded type does not exist for the run: the planner cannot enqueue it
+   * and no agent boots for it. The program owns the flag→type mapping; the
+   * runner only applies it.
+   */
+  excludedTaskTypes?: (flags: Record<string, string>) => readonly string[];
   /** Prerequisites: other program ids that must have run first */
   requires?: string[];
   /**
@@ -248,6 +290,14 @@ export interface ProgramConfig {
    * stale or unrelated `.posthog-events.json` file.
    */
   eventPlanFile?: string;
+  /** Audit ledger to mirror into the session and delete at run end, relative to `installDir`. */
+  auditLedgerFile?: string;
+  /**
+   * Channel the task stream publishes this run under, when it differs from the
+   * program id. A family leaf runs on the generic skill program, so without
+   * this every `wizard audit <leaf>` would report as `agent-skill`.
+   */
+  streamWorkflowId?: string;
   /**
    * LearnCard deck rendered in the shared `RunScreen` while the agent
    * runs. Lives at `<program>/content/index.tsx` by convention.
@@ -308,6 +358,17 @@ export interface ProgramConfig {
  * This intentional separation keeps the router focused on one question:
  * "Which screen should be rendered right now?"
  */
+/**
+ * The gated steps the agent runner awaits after `auth` and before `run`, in
+ * step order. Empty when a program has no auth step or runs before it.
+ */
+export function postAuthGateSteps(steps: ProgramStep[]): ProgramStep[] {
+  const authIndex = steps.findIndex((s) => s.screenId === 'auth');
+  const runIndex = steps.findIndex((s) => s.screenId === 'run');
+  if (authIndex === -1 || runIndex <= authIndex) return [];
+  return steps.slice(authIndex + 1, runIndex).filter((s) => s.gate);
+}
+
 export function createProgramSequence(steps: ProgramStep[]): Array<{
   id: string;
   show?: (session: WizardSession) => boolean;

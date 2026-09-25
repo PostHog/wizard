@@ -54,6 +54,12 @@ const CHROME_OVERHEAD = 10;
  * single border top/bottom (2) + button text (1).
  */
 const MENU_CHROME = 6;
+/**
+ * Max visual rows the list renders regardless of terminal height, so a tall
+ * terminal doesn't turn the menu into a full-screen wall. Mirrors
+ * PickerMenu's MAX_LIST_ROWS.
+ */
+const MAX_LIST_ROWS = 12;
 
 /** Count the visual rows occupied by rows[start..end), accounting for header margins. */
 function countVisualRows(rows: Row[], start: number, end: number): number {
@@ -166,7 +172,10 @@ export const GroupedPickerMenu = ({
   const focusedRowIdx = selectableIndices[focusedSelectable] ?? 0;
 
   // Viewport budget: how many visual rows can be shown
-  const viewportBudget = Math.max(5, termRows - CHROME_OVERHEAD - MENU_CHROME);
+  const viewportBudget = Math.max(
+    5,
+    Math.min(termRows - CHROME_OVERHEAD - MENU_CHROME, MAX_LIST_ROWS),
+  );
   const totalVisual = countVisualRows(rows, 0, rows.length);
   const needsScroll = totalVisual > viewportBudget;
   const effectiveBudget = needsScroll ? viewportBudget - 2 : viewportBudget;
@@ -267,7 +276,7 @@ export const GroupedPickerMenu = ({
   return (
     <Box flexDirection="column">
       <PromptLabel message={message} />
-      <Box flexDirection="column" marginTop={1} marginLeft={2}>
+      <Box flexDirection="column" marginTop={message ? 1 : 0} marginLeft={2}>
         {needsScroll && (
           <Text dimColor>
             {hiddenAbove > 0 ? `\u2191 ${hiddenAbove} more` : ' '}
