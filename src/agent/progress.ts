@@ -24,6 +24,8 @@ export interface OutroData {
   kind: OutroKind;
   /** Main headline (green check for Success, red X for Error, etc.) */
   message?: string;
+  /** Error-only: the primary recovery instruction, above the supporting body. */
+  instruction?: string;
   /** Free-form body text shown under the headline. Use \n for paragraph breaks. */
   body?: string;
   /** Success-only: bulleted list of "what the agent did" */
@@ -42,6 +44,8 @@ export interface OutroData {
    */
   nextSteps?: { heading: string; items: string[] };
   docsUrl?: string;
+  /** Optional label above an error's documentation link. */
+  docsLabel?: string;
   continueUrl?: string;
   /** Report file the agent wrote (e.g. "posthog-setup-report.md") */
   reportFile?: string;

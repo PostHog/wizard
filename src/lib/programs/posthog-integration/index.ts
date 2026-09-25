@@ -13,8 +13,7 @@ import { analytics } from '@utils/analytics';
 import { detectFramework, gatherFrameworkContext } from '@lib/detection/index';
 import { scopeInstallDirToProject } from '@lib/detection/project-scope';
 import { FRAMEWORK_REGISTRY } from '@lib/registry';
-import { wizardAbort } from '@utils/wizard-abort';
-import { ErrorCodes } from '@shared/errors';
+import { abortNoFrameworkDetected } from '@lib/programs/shared/abort-no-framework';
 import {
   WIZARD_DEFAULT_AIO_LOGS_FLAG_KEY,
   WIZARD_INTERACTION_EVENT_NAME,
@@ -264,10 +263,7 @@ export const posthogIntegrationConfig: ProgramConfig = {
 
     const integration = await detectFramework(session.installDir);
     if (!integration) {
-      await wizardAbort({
-        code: ErrorCodes.DetectNoFramework,
-        message: 'Could not auto-detect your framework for this project.',
-      });
+      await abortNoFrameworkDetected();
       return;
     }
     session.integration = integration;
@@ -292,7 +288,10 @@ export const posthogIntegrationConfig: ProgramConfig = {
   },
 
   run: async (session: WizardSession): Promise<ProgramRun> => {
-    const config = session.frameworkConfig!;
+    const config = session.frameworkConfig;
+    if (!config) {
+      return abortNoFrameworkDetected();
+    }
 
     const typeScriptDetected = isUsingTypeScript({
       installDir: session.installDir,

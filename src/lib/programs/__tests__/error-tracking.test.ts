@@ -162,6 +162,23 @@ describe('error-tracking project picker report', () => {
 });
 
 describe('error-tracking ciPreRun', () => {
+  test('stops when no framework is detected', async () => {
+    vi.mocked(detectFramework).mockResolvedValue(undefined);
+    const session = {
+      installDir: '/tmp/error-tracking-ci',
+      frameworkContext: {},
+    } as unknown as WizardSession;
+
+    await errorTrackingConfig.ciPreRun?.(session);
+
+    expect(wizardAbort).toHaveBeenCalledWith(
+      expect.objectContaining({ code: ErrorCodes.DetectNoFramework }),
+    );
+    expect(session.integration).toBeUndefined();
+    expect(session.frameworkConfig).toBeUndefined();
+    expect(session.skillId).toBeUndefined();
+  });
+
   test('stops KMP before it sets the framework', async () => {
     vi.mocked(detectFramework).mockResolvedValue(Integration.kmp);
     const session = {
