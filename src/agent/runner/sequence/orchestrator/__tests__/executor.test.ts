@@ -41,38 +41,52 @@ describe('drainQueue', () => {
     return Promise.resolve();
   };
 
-  it('waits for live siblings after a fatal error and starts no dependents', async () => {
-    const fatal = new RunTaskFatal({
-      code: ErrorCodes.AgentOrchestratorTasksFailed,
-      message: 'Authentication failed',
-    });
-    let release!: () => void;
-    const blocked = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    q.enqueue({ type: 'fatal' });
-    const sibling = q.enqueue({ type: 'sibling' });
-    q.enqueue({ type: 'dependent', dependsOn: [sibling.id] });
-    const started: string[] = [];
-    const drain = drainQueue(q, async (task) => {
-      started.push(task.type);
-      if (task.type === 'fatal') throw fatal;
-      await blocked;
-      q.complete(task.id, HANDOFF);
-    });
-    let settled = false;
-    const result = drain.catch((error: unknown) => {
-      settled = true;
-      return error;
-    });
-    await new Promise<void>((resolve) => setImmediate(resolve));
-    expect(settled).toBe(false);
-    expect(started).toEqual(['fatal', 'sibling']);
-    release();
-    expect(await result).toBe(fatal);
-    expect(q.get(sibling.id)?.status).toBe(TaskStatus.Done);
-    expect(started).toEqual(['fatal', 'sibling']);
-  });
+  it.each(['a fatal error', 'host cancellation'])(
+    'waits for live siblings after %s and starts no dependents',
+    async (ending) => {
+      const controller = new AbortController();
+      const fatal = new RunTaskFatal({
+        code: ErrorCodes.AgentOrchestratorTasksFailed,
+        message: 'Authentication failed',
+      });
+      let release!: () => void;
+      const blocked = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      q.enqueue({ type: 'first' });
+      const sibling = q.enqueue({ type: 'sibling' });
+      q.enqueue({ type: 'dependent', dependsOn: [sibling.id] });
+      const started: string[] = [];
+      const drain = drainQueue(
+        q,
+        async (task) => {
+          started.push(task.type);
+          if (task.type === 'first') {
+            await Promise.resolve(); // Let the sibling start first.
+            if (ending === 'a fatal error') throw fatal;
+            controller.abort();
+            return;
+          }
+          await blocked;
+          q.complete(task.id, HANDOFF);
+        },
+        { maxStarts: 50, signal: controller.signal },
+      );
+      let settled = false;
+      const result = drain
+        .catch((error: unknown) => error)
+        .finally(() => {
+          settled = true;
+        });
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      expect(settled).toBe(false);
+      expect(started).toEqual(['first', 'sibling']);
+      release();
+      expect(await result).toBe(ending === 'a fatal error' ? fatal : undefined);
+      expect(q.get(sibling.id)?.status).toBe(TaskStatus.Done);
+      expect(started).toEqual(['first', 'sibling']);
+    },
+  );
 
   it('preserves a fatal failure when a sibling completes in the same turn', async () => {
     q.enqueue({ type: 'success' });
