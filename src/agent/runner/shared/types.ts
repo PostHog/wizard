@@ -9,7 +9,6 @@
  * that rebuilds today's session-driven behavior on top of this contract.
  */
 
-import type { AdditionalFeature } from '@shared/constants';
 import type { CloudRegion } from '@utils/types';
 import type { Credentials } from '@shared/api';
 import type { AuthErrorDetail, OutroData, TaskNotice } from '@agent/progress';
@@ -65,7 +64,6 @@ export interface AgentRunDefinition {
   reportFile: string;
   docsUrl: string;
   errorMessage?: string;
-  additionalFeatureQueue?: readonly AdditionalFeature[];
   /** Known `[ABORT] <reason>` cases this program can render. */
   abortCases?: AbortCase[];
   /**

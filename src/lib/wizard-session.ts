@@ -11,14 +11,7 @@
  */
 
 import { POSTHOG_LOCAL_URL, resolveLocalDev } from '@shared/local-dev';
-import {
-  AdditionalFeature,
-  ADDITIONAL_FEATURE_LABELS,
-  ADDITIONAL_FEATURE_PROMPTS,
-  type Harness,
-  type Integration,
-  type Sequence,
-} from '@shared/constants';
+import type { Harness, Integration, Sequence } from '@shared/constants';
 import type { FrameworkConfig } from '@programs/types';
 import type { WizardReadinessResult } from '@shared/health-checks/readiness';
 import type { SettingsConflict } from '@shared/claude-settings';
@@ -37,15 +30,9 @@ import type {
 import { OutroKind } from '@agent/progress';
 
 // These shapes moved to their owners; re-exported so every session reader
-// keeps its import path. `Credentials` sits with the API types, the
-// additional-feature enum with the other program enums in `./constants`, and
-// the outro, question and task-notice shapes are the agent's contract.
+// keeps its import path. `Credentials` sits with the API types, and the
+// outro, question and task-notice shapes are the agent's contract.
 export type { Credentials, CloudRegion };
-export {
-  AdditionalFeature,
-  ADDITIONAL_FEATURE_LABELS,
-  ADDITIONAL_FEATURE_PROMPTS,
-};
 export { OutroKind };
 export type { AskAnswers, AskQuestion, OutroData, PendingQuestion, TaskNotice };
 
@@ -231,7 +218,6 @@ export interface WizardSession {
 
   // Feature discovery
   discoveredFeatures: DiscoveredFeature[];
-  llmOptIn: boolean;
 
   // ScreenId completion
   mcpComplete: boolean;
@@ -329,9 +315,6 @@ export interface WizardSession {
   dashboardUrl: string | null;
   notebookUrl: string | null;
 
-  // Additional features queue (drained via stop hook after main integration)
-  additionalFeatureQueue: AdditionalFeature[];
-
   // Program metadata (set by runWizard in bin.ts)
   programLabel: string | null;
   skillId: string | null;
@@ -415,7 +398,6 @@ export function buildSession(args: {
 
     runPhase: RunPhase.Idle,
     discoveredFeatures: [],
-    llmOptIn: false,
     mcpComplete: false,
     mcpOutcome: null,
     mcpInstalledClients: [],
@@ -450,7 +432,6 @@ export function buildSession(args: {
     mintHandoff: null,
     dashboardUrl: null,
     notebookUrl: null,
-    additionalFeatureQueue: [],
     programLabel: null,
     skillId: null,
     frameworkConfig: null,
