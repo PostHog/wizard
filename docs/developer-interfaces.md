@@ -65,23 +65,14 @@ export const signature: (
 
 ### Field definitions
 
-Each field has a one-line comment next to it in the code.
-
-- **`programId`**: which program runs. It names analytics, the route and the
-  gateway spend.
-- **[`input`](../src/programs/run-program.ts#L66)** (`ProgramInput`): what to
-  run and where. `installDir` and `run` are required.
-- **[`input.program`](../src/programs/run-program.ts#L56)** (`ProgramSettings`):
-  the program's settings from its `ProgramConfig`.
-- **[`options`](../src/programs/run-program.ts#L89)** (`ProgramOptions`): how
-  you plug in. The login, questions, the approval and gate waits, flags,
-  progress and cancellation.
-- **[`options.onProgress`](../src/programs/program-store.ts#L9)**
-  (`ProgramProgress`): what's happening, as agent events and program data
-  snapshots. It's never awaited.
-- **[Outcome](../src/programs/run-program.ts#L106)** (`ProgramRunOutcome`): how
-  the run ended, with the agent's result, the final data and the report path.
-  `data` holds tokens, so don't log it.
+| Field                                                       | Type                | What it's for                                                                    |
+| ----------------------------------------------------------- | ------------------- | -------------------------------------------------------------------------------- |
+| `programId`                                                 | `string`            | Which program runs. It names analytics, the route and the gateway spend.         |
+| [`input`](../src/programs/run-program.ts#L66)               | `ProgramInput`      | What to run and where. `installDir` and `run` are required.                      |
+| [`input.program`](../src/programs/run-program.ts#L56)       | `ProgramSettings`   | The program's settings from its `ProgramConfig`.                                 |
+| [`options`](../src/programs/run-program.ts#L89)             | `ProgramOptions`    | The login, questions, approval and gate waits, flags, progress and cancellation. |
+| [`options.onProgress`](../src/programs/program-store.ts#L9) | `ProgramProgress`   | Agent events and program data snapshots. Never awaited.                          |
+| [Outcome](../src/programs/run-program.ts#L106)              | `ProgramRunOutcome` | How the run ended, the agent's result, the final data and the report path.       |
 
 ### Example
 
@@ -228,20 +219,13 @@ export const signature: (
 
 ### Field definitions
 
-Each field has a comment in the code. The
-[agent reference](../src/agent/README.md#signatures) covers the rest.
-
-- **[`config`](../src/agent/runner/shared/types.ts#L153)** (`RunConfig`): what
-  the agent runs, with its route and tools.
-- **[`config.run`](../src/agent/runner/shared/types.ts#L49)**
-  (`AgentRunDefinition`): the prompt and run options, such as `prompt`,
-  `collectTranscript` and `requestRemark`.
-- **[`input`](../src/agent/runner/shared/types.ts#L207)** (`RunInput`): where
-  and as whom. The project, the login and the flags.
-- **`options`**: `onProgress` for agent events, `interaction` for questions, and
-  `signal` to cancel.
-- **[Result](../src/agent/runner/shared/types.ts#L309)** (`RunResult`): how the
-  run ended, with a snapshot of its tasks and transcript.
+| Field                                                   | Type                 | What it's for                                                                   |
+| ------------------------------------------------------- | -------------------- | ------------------------------------------------------------------------------- |
+| [`config`](../src/agent/runner/shared/types.ts#L153)    | `RunConfig`          | What the agent runs, with its route and tools.                                  |
+| [`config.run`](../src/agent/runner/shared/types.ts#L49) | `AgentRunDefinition` | The prompt and run options, such as `collectTranscript`.                        |
+| [`input`](../src/agent/runner/shared/types.ts#L207)     | `RunInput`           | Where and as whom: the project, the login and the flags.                        |
+| `options`                                               |                      | `onProgress` for agent events, `interaction` for questions, `signal` to cancel. |
+| [Result](../src/agent/runner/shared/types.ts#L309)      | `RunResult`          | How the run ended, with a snapshot of its tasks and transcript.                 |
 
 ### Callers
 
