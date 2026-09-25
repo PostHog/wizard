@@ -53,6 +53,7 @@ import { profileFor, resolveE2eProfile } from '@e2e-harness/profiles';
 import {
   E2eRunRecorder,
   buildE2eResult,
+  createE2eResultWriter,
   readReportFile,
 } from '@e2e-harness/e2e-result';
 
@@ -442,7 +443,6 @@ async function main() {
     };
     const recorder = new E2eRunRecorder();
     const screenPath: string[] = [];
-    let resultWritten = false;
     // An abort exits from inside the runner, so hook `exit` too — see writeResult.
     process.on('exit', () => writeResult());
     // Snapshot on key moments — a screen change, a task-list update, or a
@@ -626,9 +626,7 @@ async function main() {
     // integration re-writes it after keep-skills (skillsComplete). Registered
     // on `exit` too: `wizardAbort` renders the error outro and exits, and an
     // aborted run would otherwise write nothing at all.
-    const writeResult = (): void => {
-      if (!process.env.E2E_RESULT_JSON || resultWritten) return;
-      resultWritten = true;
+    const buildResult = () => {
       const appDir = process.env.APP_DIR!;
       // One dependency-name pattern per ecosystem manifest. A run only needs
       // the names, so a line-level scan beats per-format parsers.
@@ -677,28 +675,25 @@ async function main() {
       } catch {
         /* none */
       }
-      fs.writeFileSync(
-        process.env.E2E_RESULT_JSON,
-        JSON.stringify(
-          buildE2eResult({
-            base: {
-              runPhase: store.session.runPhase,
-              hasPosthogDep: posthogDeps.length > 0,
-              newDeps: posthogDeps,
-              envFile,
-              screenPath,
-              skillsComplete: store.session.skillsComplete,
-            },
-            recorder,
-            session: store.session,
-            tasks: store.tasks,
-            reportFile: readReportFile(appDir, programConfig.reportFile),
-          }),
-          null,
-          2,
-        ),
-      );
+      return buildE2eResult({
+        base: {
+          runPhase: store.session.runPhase,
+          hasPosthogDep: posthogDeps.length > 0,
+          newDeps: posthogDeps,
+          envFile,
+          screenPath,
+          skillsComplete: store.session.skillsComplete,
+        },
+        recorder,
+        session: store.session,
+        tasks: store.tasks,
+        reportFile: readReportFile(appDir, programConfig.reportFile),
+      });
     };
+    const writeResult = createE2eResultWriter(
+      process.env.E2E_RESULT_JSON,
+      buildResult,
+    );
     const unsubResult = store.subscribe(() => {
       if (store.currentScreen === 'outro') writeResult();
     });
@@ -716,7 +711,7 @@ async function main() {
     unsubResult();
     await snap(); // the final screen
     await chain; // flush any pending snapshots
-    writeResult(); // final write (integration: after keep-skills)
+    writeResult(true); // final write (integration: after keep-skills)
     process.exit(0);
   }
 }
