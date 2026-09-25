@@ -158,7 +158,6 @@ export class WizardRunSync {
         if (!ok) this.tasksDisabled = true;
       });
     } catch {
-      this.tasksDisabled = true;
       this.report(
         'invalid task snapshot (names, statuses, identities or 100-task limit)',
       );

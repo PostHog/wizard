@@ -23,7 +23,12 @@ import {
 } from 'fs';
 import * as path from 'path';
 import { OutroKind, type TaskNotice } from '@agent/progress';
-import { POSTHOG_DOCS_URL, WIZARD_CONTACT_EMAIL } from '@shared/constants';
+import {
+  POSTHOG_DOCS_URL,
+  WIZARD_CONTACT_EMAIL,
+  WIZARD_OAUTH_SCOPES,
+  WIZARD_PROVISIONING_SCOPES,
+} from '@shared/constants';
 import { installSkillById } from '@agent/tools';
 import { fetchSkillMenu, type SkillEntry } from '@shared/skill-menu';
 import { analytics } from '@utils/analytics';
@@ -1417,7 +1422,11 @@ async function executeOrchestrator(
     // A grant narrowed at login is the one failure cause the user can fix
     // alone — lead with the fix, and only fall back to the report-a-bug line
     // when trying again doesn't work.
-    const missingScopes = boot.credentials.missingScopes ?? [];
+    const missingScopes = (boot.credentials.missingScopes ?? []).filter(
+      (scope) =>
+        WIZARD_PROVISIONING_SCOPES.some((required) => required === scope) ||
+        !WIZARD_OAUTH_SCOPES.some((requested) => requested === scope),
+    );
     const message =
       missingScopes.length > 0
         ? `The wizard could not finish setup: ${whatFailed}, and this run was authorized without the following permission${

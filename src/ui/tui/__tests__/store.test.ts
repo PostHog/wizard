@@ -1048,7 +1048,7 @@ describe('WizardStore', () => {
   });
 
   describe('syncTodos', () => {
-    it('removes omitted native tasks, retains completed work from earlier agents, and intentionally clears', () => {
+    it('removes omitted native tasks and retains completed work from earlier agents', () => {
       const store = createStore();
       store.syncTodos([
         { id: 'a', source: 'first', content: 'Same', status: 'completed' },
@@ -1062,7 +1062,7 @@ describe('WizardStore', () => {
       ]);
       expect(store.tasks.map((t) => t.label)).toEqual(['Same', 'Next']);
       store.syncTodos([]);
-      expect(store.tasks).toEqual([]);
+      expect(store.tasks.map((t) => t.label)).toEqual(['Same']);
     });
 
     it('maps incoming todos to TaskItems', () => {
@@ -1333,7 +1333,7 @@ describe('WizardStore', () => {
       expect(store.statusMessages).toEqual(['']);
     });
 
-    it('syncTodos with empty array intentionally clears all tasks', () => {
+    it('syncTodos with empty array retains terminal tasks; setTasks clears all', () => {
       const store = createStore();
       store.setTasks([
         { label: 'Pending', status: TaskStatus.Pending, done: false },
@@ -1341,7 +1341,8 @@ describe('WizardStore', () => {
       ]);
 
       store.syncTodos([]);
-
+      expect(store.tasks.map((t) => t.label)).toEqual(['Done']);
+      store.setTasks([]);
       expect(store.tasks).toEqual([]);
     });
 

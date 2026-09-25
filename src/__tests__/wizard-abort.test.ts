@@ -49,9 +49,13 @@ describe('wizardAbort', () => {
     vi.restoreAllMocks();
   });
 
-  it.each([false, true])(
-    'awaits stream shutdown before exit, distinguishing cancellation from failure (%s)',
-    async (failed) => {
+  it.each([
+    [{}, 'cancelled'],
+    [{ error: new Error('failure') }, 'failed'],
+    [{ code: ErrorCodes.InternalUnhandled, status: 'cancelled' }, 'cancelled'],
+  ] as const)(
+    'awaits stream shutdown before exit with outcome %s',
+    async (options, outcome) => {
       let release!: () => void;
       const shutdown = vi.fn(
         () =>
@@ -60,11 +64,9 @@ describe('wizardAbort', () => {
           }),
       );
       registerShutdown(shutdown);
-      const result = wizardAbort(
-        failed ? { error: new Error('failure') } : undefined,
-      );
+      const result = wizardAbort(options);
       const assertion = expect(result).rejects.toThrow('process.exit called');
-      expect(shutdown).toHaveBeenCalledWith(failed ? 'failed' : 'cancelled');
+      expect(shutdown).toHaveBeenCalledWith(outcome);
       expect(process.exit).not.toHaveBeenCalled();
       release();
       await assertion;

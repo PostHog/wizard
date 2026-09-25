@@ -231,6 +231,17 @@ it.each([
   },
 );
 
+it('recovers when a malformed snapshot is followed by a valid one', async () => {
+  const { sync, writes, onError } = setup('cloud');
+  sync.capture([task(TaskStatus.Pending, 'one', ' ')]);
+  sync.capture([task(TaskStatus.InProgress)]);
+  await sync.shutdown('completed', 2000);
+  expect(writes().map((request) => request.body)).toEqual([
+    { tasks: [{ name: 'Install SDK', status: 'running' }] },
+  ]);
+  expect(onError).toHaveBeenCalledOnce();
+});
+
 it.each([400, 401, 403, 404, 409])(
   'stops permanent PUT failure %s without fallback',
   async (status) => {
@@ -498,4 +509,31 @@ it('waits for authenticated flags, then keeps run failures on the selected trans
   await stream.shutdown(2000, 'completed');
   expect(fetchImpl).toHaveBeenCalledOnce();
   expect(legacy.send).not.toHaveBeenCalled();
+});
+
+it('sends the first WizardSession snapshot as Create after flags load', async () => {
+  const { WizardStore } = await import('@ui/tui/store');
+  const { TaskStreamPush } = await import('../task-stream-push');
+  const { session, options } = setup('cloud');
+  const store = new WizardStore();
+  store.session = session;
+  let flags: Record<string, string> | null = null;
+  const legacy = {
+    name: 'posthog',
+    send: vi.fn().mockResolvedValue(undefined),
+  };
+  const stream = new TaskStreamPush({
+    store,
+    programId: options.programId,
+    runSync: new WizardRunSync({ ...options, getSession: () => store.session }),
+    getFlags: () => flags,
+    destinations: [legacy],
+  });
+  stream.attach();
+  store.syncTodos([{ id: 'one', content: 'Inspect', status: 'pending' }]);
+  await vi.advanceTimersByTimeAsync(300);
+  flags = { 'wizard-run-sync': 'wizard-session' };
+  store.syncTodos([{ id: 'one', content: 'Inspect', status: 'completed' }]);
+  await stream.shutdown(2000, 'completed');
+  expect(legacy.send.mock.calls[0][0]).toBe('CREATE');
 });

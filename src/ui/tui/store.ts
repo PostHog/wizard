@@ -1155,8 +1155,9 @@ export class WizardStore {
       .get()
       .filter(
         (t) =>
-          todos.length > 0 &&
-          t.done &&
+          (t.status === TaskStatus.Completed ||
+            t.status === TaskStatus.Failed ||
+            t.status === TaskStatus.Skipped) &&
           (t.source ? !sources.has(t.source) : !incomingLabels.has(t.label)),
       );
 

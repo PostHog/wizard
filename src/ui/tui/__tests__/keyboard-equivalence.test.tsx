@@ -288,6 +288,7 @@ const PAIRS: Pair[] = [
       s.setIntegrate(true);
       s.setReadinessResult(clean);
       authed(s);
+      s.setGithubConnected(false);
       s.setFrameworkContext(SELF_DRIVING_INTEGRATE_PATH_KEY, '.');
       s.setFrameworkConfig(
         Integration.javascriptNode,

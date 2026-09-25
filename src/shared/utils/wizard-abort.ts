@@ -101,13 +101,15 @@ export async function wizardAbort(
 
   // 1. Run registered cleanup functions
   runCleanups();
+  const status = options?.status ?? (error ? 'error' : 'cancelled');
   await Promise.allSettled(
-    [...shutdownFns].map((fn) => fn(error || code ? 'failed' : 'cancelled')),
+    [...shutdownFns].map((fn) =>
+      fn(status === 'cancelled' ? 'cancelled' : 'failed'),
+    ),
   );
 
   // 2. Capture error in analytics. An 'error' ending with no Error object
   //    is captured as its code and message.
-  const status = options?.status ?? (error ? 'error' : 'cancelled');
   const captured =
     error ??
     (status === 'error'

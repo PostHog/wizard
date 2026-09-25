@@ -21,7 +21,7 @@ export class HeadlessUI extends LoggingUI {
   }
 
   setCredentials(credentials: Credentials): void {
-    this.store.setCredentials(credentials);
+    this.store.setAccessToken(credentials);
   }
 
   setAccessToken(credentials: Credentials): void {

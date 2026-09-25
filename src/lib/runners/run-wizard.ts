@@ -239,9 +239,12 @@ export function runWizard(
       });
       taskStream = activeStream;
       activeStream.attach();
-      unregisterShutdown = registerShutdown((outcome) =>
-        activeStream.shutdown(2000, outcome),
-      );
+      unregisterShutdown = registerShutdown((outcome) => {
+        if (activeTui.store.session.runPhase === RunPhase.Running) {
+          activeTui.store.setRunPhase(RunPhase.Error);
+        }
+        return activeStream.shutdown(2000, outcome);
+      });
 
       await activeTui.store.getGate('integration-check');
       await activeTui.store.getGate('health-check');

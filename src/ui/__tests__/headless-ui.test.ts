@@ -8,6 +8,26 @@ import { TaskStatus } from '../wizard-ui';
 import type { WizardStore } from '../tui/store';
 
 describe('HeadlessUI', () => {
+  it('stores credentials without emitting an interactive auth event', async () => {
+    const { WizardStore } = await import('../tui/store');
+    const { analytics } = await import('@utils/analytics');
+    const { HostResolution } = await import('@shared/host-resolution');
+    const capture = vi.spyOn(analytics, 'wizardCapture');
+    const store = new WizardStore();
+    new HeadlessUI(store).setCredentials({
+      accessToken: 'pha_test',
+      projectApiKey: 'phc_test',
+      projectId: 42,
+      host: HostResolution.fromApiHost('https://eu.posthog.com'),
+    });
+    expect(store.session.credentials?.projectId).toBe(42);
+    expect(capture).not.toHaveBeenCalledWith(
+      'auth complete',
+      expect.anything(),
+    );
+    capture.mockRestore();
+  });
+
   it('forwards task updates to the store and still logs to the console', () => {
     const syncTodos = vi.fn();
     const store = { syncTodos } as unknown as WizardStore;

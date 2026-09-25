@@ -340,6 +340,7 @@ export class TaskStreamPush {
 
   private async sendOnce(): Promise<void> {
     this.selectRemoteSync();
+    if (!this.remoteSync) return;
     const { session, tasks, eventPlan, handoffText } = this.store;
     const skillId = sanitizeChannelId(session.skillId ?? this.programId);
     const phase = session.runPhase;

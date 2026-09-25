@@ -217,13 +217,15 @@ to their agent execution, and names are frozen at first observation. Duplicate
 subjects receive stable numeric suffixes, including when names are shortened to
 255 characters. The snapshot represents the shared task panel (orchestrator
 queue tasks for orchestrated runs), not the session stream's extra audit-area
-rollups. Completed tasks from earlier composed agents remain in that panel;
-omitted tasks from the same agent disappear. An intentional empty task list
-clears the snapshot. Unavailable state does not clear it.
+rollups. Completed and failed tasks from earlier composed agents remain in that
+panel; omitted tasks from the same agent disappear. An empty agent list retains
+earlier terminal tasks; explicitly clearing the authoritative panel sends an
+empty snapshot. Unavailable state does not clear it.
 
 Snapshots support at most 100 tasks. Oversized lists, blank names, duplicate
-identities, and unexpected statuses stop task synchronization with a sanitized
-file-log diagnostic; no partial list is sent. `pending` maps to `created`,
+identities, and unexpected statuses reject that snapshot with a sanitized
+file-log diagnostic; no partial list is sent. Later valid snapshots can still
+sync. `pending` maps to `created`,
 `in_progress` to `running`, and `skipped` to `completed`. Completed and failed
 states retain their meaning. Cancellation preserves unfinished task states.
 Identical snapshots are skipped; distinct transitions are queued before the
@@ -264,15 +266,12 @@ cloud executions. Legacy headless launches retain session publishing regardless
 of the variant. `--no-telemetry` disables both remote transports; synthetic `--ci`
 uses local output only.
 
-The coordinated PostHog worker change is still required in
-`products/wizard/backend/logic/workers/service.py`: add
-`"POSTHOG_WIZARD_RUN_ID": str(request.run_id)` to `_build_sandbox_config`,
-retaining `POSTHOG_API_URL`, `POSTHOG_PROJECT_ID`, `POSTHOG_WIZARD_API_KEY`,
-`POSTHOG_TASK_RUN_ID`, and `POSTHOG_HANDOFF_OUTPUT_PATH`. Update
-`products/wizard/backend/tests/runs/test_cloud_worker.py`, whose environment
-test currently asserts that `POSTHOG_WIZARD_RUN_ID` is absent. This handoff is a
-coordinated prerequisite, not an input the current worker already supplies. A
-WizardRun launcher must always provide it; absence denotes legacy mode.
+The PostHog worker now supplies `POSTHOG_WIZARD_RUN_ID` alongside the existing
+analytics alias and handoff path. Its default Wizard version is still 2.74.1,
+which does not parse this input. The worker must use a released version that
+accepts the assignment, or gate the new environment variable by version, before
+the handoff can work for default cloud runs. A WizardRun launcher using a
+compatible CLI must provide the assignment; absence denotes legacy mode.
 
 The interactive and cloud Wizard OAuth apps must allow `wizard_run:write` in
 each deployed region. The CLI requests this write scope without requesting

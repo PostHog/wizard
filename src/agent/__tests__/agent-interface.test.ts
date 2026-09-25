@@ -871,6 +871,31 @@ describe('subprocess gateway credentials', () => {
     expect(env.ANTHROPIC_CUSTOM_HEADERS).toContain('X-PostHog-Properties');
     expect(env.ANTHROPIC_CUSTOM_HEADERS).toContain('"team_id":42');
   });
+
+  it('resolves the latest OAuth token when starting an SDK query', async () => {
+    mockQuery.mockReturnValue(
+      (function* () {
+        yield {
+          type: 'result',
+          subtype: 'success',
+          is_error: false,
+          result: 'done',
+        };
+      })(),
+    );
+    const currentPosthogApiKey = vi.fn().mockResolvedValue('pha_rotated');
+    await runAgent(
+      { ...config, currentPosthogApiKey },
+      'test prompt',
+      options,
+      spinner as unknown as SpinnerHandle,
+      { successMessage: 'ok', errorMessage: 'err' },
+    );
+    expect(currentPosthogApiKey).toHaveBeenCalled();
+    expect(mockQuery.mock.calls[0][0].options.env.POSTHOG_MCP_TOKEN).toBe(
+      'pha_rotated',
+    );
+  });
 });
 
 describe('gateway re-mint on 401', () => {

@@ -196,6 +196,7 @@ export type AgentConfig = {
   workingDirectory: string;
   posthogMcpUrl: string;
   posthogApiKey: string;
+  currentPosthogApiKey?: () => Promise<string>;
   host: HostResolution;
   additionalMcpServers?: Record<string, { url: string }>;
   detectPackageManager: PackageManagerDetector;
@@ -310,6 +311,7 @@ type AgentRunConfig = {
   model: string;
   /** The run's OAuth access token — the MCP config resolves it in the child. */
   posthogApiKey: string;
+  currentPosthogApiKey?: () => Promise<string>;
   wizardFlags?: Record<string, string>;
   wizardMetadata?: Record<string, string>;
   /** Extra tools added on top of BASE_ALLOWED_TOOLS for this run. */
@@ -533,8 +535,12 @@ export async function initializeAgent(
     // gatewayAuth mints for this run.
     // Disable experimental betas (like input_examples) the gateway doesn't support.
     process.env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS = 'true';
-    const currentGatewayAuth = () =>
-      gatewayAuth(config.host, config.posthogApiKey, config.programId);
+    const currentGatewayAuth = async () =>
+      gatewayAuth(
+        config.host,
+        (await config.currentPosthogApiKey?.()) ?? config.posthogApiKey,
+        config.programId,
+      );
     const auth = await currentGatewayAuth();
     const gatewayUrl = auth.gatewayUrl;
     process.env.ANTHROPIC_BASE_URL = gatewayUrl;
@@ -644,6 +650,7 @@ export async function initializeAgent(
       mcpServers,
       model,
       posthogApiKey: config.posthogApiKey,
+      currentPosthogApiKey: config.currentPosthogApiKey,
       wizardFlags: config.wizardFlags,
       wizardMetadata: config.wizardMetadata,
       allowedTools: config.allowedTools,
@@ -1118,7 +1125,9 @@ export async function runAgent(
             CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS: 'true',
             // The MCP config resolves this in the child; sending the value would
             // put it on the CLI's argv.
-            POSTHOG_MCP_TOKEN: agentConfig.posthogApiKey,
+            POSTHOG_MCP_TOKEN:
+              (await agentConfig.currentPosthogApiKey?.()) ??
+              agentConfig.posthogApiKey,
             // SDK 0.3.142 made MCP servers connect in the background by default;
             // the agent may start its first turn before posthog-wizard is ready
             // (audit programs call audit_seed_checks on turn 1, integration
