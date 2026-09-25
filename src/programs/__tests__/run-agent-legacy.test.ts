@@ -41,6 +41,7 @@ vi.mock('@agent/gateway-session', async (original) => ({
 vi.mock('@programs/task-stream/index', () => ({
   TaskStreamPush: class {
     attach = vi.fn();
+    finishRun = vi.fn().mockResolvedValue(undefined);
     shutdown = streamShutdown;
   },
   PostHogDestination: class {},

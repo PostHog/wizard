@@ -61,6 +61,11 @@ export const GLOBAL_OPTIONS = {
     type: 'string' as const,
     hidden: true,
   },
+  'run-id': {
+    describe: 'Assigned cloud WizardRun UUID',
+    type: 'string' as const,
+    hidden: true,
+  },
   benchmark: {
     default: false,
     describe:
