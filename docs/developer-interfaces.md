@@ -25,12 +25,17 @@ functions.
 ### What `runProgram` is for
 
 `runProgram` is a clean interface between the TUI, which is the interface, and
-the programmatic parts of what a wizard program does. Three things use it:
+the programmatic parts of what a wizard program does.
+
+> ⚠️ **Temporary adapter.** The TUI and the headless runner reach `runProgram`
+> through `runProgramAgent` in
+> [`run-agent-legacy.ts`](../src/programs/run-agent-legacy.ts). This is a
+> temporary adapter, and we will remove it in the full program.
+
+Three things use it:
 
 1. **The TUI and the headless runner.** Both call `runProgram` to run a full
-   wizard program. They reach it through `runProgramAgent` in
-   [`run-agent-legacy.ts`](../src/programs/run-agent-legacy.ts). This is a
-   temporary adapter, and we will remove it in the full program.
+   wizard program.
 2. **Testing.** The test workbench calls `runProgram` directly, with no TUI,
    from the `wizard-program` service in
    [wizard-workbench](https://github.com/PostHog/wizard-workbench).
@@ -171,11 +176,11 @@ input field that can't be copied. The cases are in
 
 ### Program callbacks
 
-A program's `run` and `ciPreRun` receive a host, `ProgramRunHost` or
-`ProgramCiHost`, instead of calling `getUI()`. Both types come from
+A program's `run` and `ciPreRun` receive a runner context, `RunnerContext` or
+`CiRunnerContext`, instead of calling `getUI()`. Both types come from
 `@programs/types` and are defined in
-[`host-capabilities.ts`](../src/programs/host-capabilities.ts). Build the host
-when you build the run from a `ProgramConfig`, before you call `runProgram`.
+[`runner-context.ts`](../src/programs/runner-context.ts). Build it when you
+build the run from a `ProgramConfig`, before you call `runProgram`.
 
 ## `runAgent`
 

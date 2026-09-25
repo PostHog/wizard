@@ -109,7 +109,7 @@ Each layer is replaceable.
 %%{init: {"block": {"padding": 20}}}%%
 block-beta
   columns 11
-  hostBand["Host: legacy adapter and UI"]:11
+  hostBand["Caller: legacy adapter and UI"]:11
   runProgramAgent["runProgramAgent"]:3 space:1 wizardAbort["wizardAbort"]:3 space:4
   space:11
   programsBand["Programs"]:11
@@ -152,7 +152,7 @@ block-beta
 Calls descend on the left, results return through the middle, and cancellation
 moves down the right. Blue marks the result contracts and run-scoped abort. On
 the first fatal task result, `drainQueue` stops scheduling, cancels active work
-and pending asks, joins siblings, then preserves that failure for the host to
+and pending asks, joins siblings, then preserves that failure for the caller to
 present.
 
 ## Flow
@@ -183,5 +183,5 @@ present.
   sets `run.prompt`, `collectTranscript: true`, `requestRemark: false` and
   `scanReport: 'defer'`, and reads its report from `snapshot.transcriptTail`.
 - The fault probe in `scripts/a3-fault-probe.no-jest.ts`, and any standalone
-  host. See the
+  caller. See the
   [developer interfaces](../../../docs/developer-interfaces.md#runagent).

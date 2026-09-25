@@ -202,8 +202,8 @@ wizard run points. Full catalog: [`docs/local-dev.md`](docs/local-dev.md).
   types so they satisfy `Record<string, unknown>`.
 - All UI calls go through `getUI()` (returns `WizardUI` interface). Never import
   the store directly from business logic. A program's `run` and `ciPreRun`
-  callbacks use the host they receive (`ProgramRunHost`, `ProgramCiHost`), not
-  `getUI()`.
+  callbacks use the runner context they receive (`RunnerContext`,
+  `CiRunnerContext`), not `getUI()`.
 - Shared helpers never call `getUI()`; they take a sink or return data.
   `debug()` reaches the UI through the sink `src/ui/index.ts` installs.
 - Outside `src/agent`, import the agent through `@agent` or `@agent/types`. Add
