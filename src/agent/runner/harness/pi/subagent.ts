@@ -5,10 +5,10 @@
  * about (it can't propagate the parent's disallowedTools into subagents).
  *
  * Controls on every child:
- *  - the SAME security extension (canUseTool + YARA, fail-closed) — shared state,
- *    so the child shares the parent's tool-call cap and violation latch;
- *  - a read-only built-in toolset (read/grep/find/ls + allowlisted bash) — no
- *    write/edit, so a subagent can research but never mutate the project;
+ *  - the parent's subagent security gate (canUseTool + YARA, fail-closed, no
+ *    `rm`) — shared state, so the child shares the tool-call cap and latch;
+ *  - a read-only built-in toolset (read/grep/find/ls) plus allowlisted bash —
+ *    no write/edit tools;
  *  - no custom tools — no .env writes, and crucially no `dispatch_agent`, so a
  *    child cannot recurse (depth is hard-capped at 1).
  */
@@ -18,6 +18,7 @@ import { defineTool } from '@earendil-works/pi-coding-agent';
 import type { ToolDefinition } from '@earendil-works/pi-coding-agent';
 import { logToFile } from '@utils/debug';
 import { gatewayTerminalFailure } from './gateway';
+import type { SubagentSecurityFactory } from './security';
 
 /**
  * Read-only built-ins a subagent may use. bash is supplied separately as the
@@ -63,8 +64,8 @@ export interface SubagentContext {
   modelRegistry: import('@earendil-works/pi-coding-agent').ModelRegistry;
   cwd: string;
   agentDir: string;
-  /** The parent's security extension factory — reused so the fence is inherited. */
-  securityFactory: (pi: unknown) => void;
+  /** The parent's subagent gate: the same fence and shared state, with no rm. */
+  securityFactory: SubagentSecurityFactory;
   /** The parent's env-scrubbed bash, so a subagent's subprocesses are locked down too. */
   bashTool: ToolDefinition;
   /** pi SDK entrypoints, already imported by the backend. */
@@ -101,7 +102,7 @@ export function createDispatchAgentTool(ctx: SubagentContext): ToolDefinition {
         noContextFiles: true,
         noPromptTemplates: true,
         noThemes: true,
-        extensionFactories: [ctx.securityFactory],
+        extensionFactories: [ctx.securityFactory as (pi: unknown) => void],
       });
       await loader.reload();
 
