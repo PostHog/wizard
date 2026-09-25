@@ -121,7 +121,7 @@ export function runNonInteractive(
     const { configureLogFileFromEnvironment, logToFile } = await import(
       '@utils/debug'
     );
-    const { wizardAbort, WizardError } = await import('@utils/wizard-abort');
+    const { wizardAbort } = await import('@utils/wizard-abort');
 
     configureLogFileFromEnvironment();
 
@@ -356,6 +356,14 @@ export function runNonInteractive(
             message: `Prerequisites not met: ${detectKind}`,
             errorCode: code,
             errorDetail: detail,
+          });
+          // A failed prerequisite is an expected user-state check (no
+          // package.json, no PostHog SDK), not a wizard defect. Record it as a
+          // structured event so it does not reach error tracking as a crash.
+          analytics.wizardCapture('non-interactive prerequisites not met', {
+            integration: config.id,
+            program_id: config.id,
+            detect_error_kind: detectError.kind,
           });
           await wizardAbort({
             code,
