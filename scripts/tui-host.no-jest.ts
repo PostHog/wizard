@@ -6,8 +6,10 @@
  * `WizardCiDriver` — no keystrokes. Auth is satisfied by `setCredentials` with
  * the phx key (same bearer as an OAuth token).
  *
- *   MODE=fixed  — self-drive the fixed e2e profile, snapshotting each screen
- *                 (the CI snapshot route).
+ * `MODE` is required, and selects the route:
+ *
+ *   MODE=fixed  — self-drive the fixed e2e profile, snapshotting each screen to
+ *                 SNAP_CTRL (the CI snapshot route).
  *   MODE=serve  — listen on CONTROL_SOCK for {read_state, perform_action,
  *                 set_credentials, run_agent} commands (the agent/MCP route).
  *
@@ -51,6 +53,7 @@ import {
   type WizardE2eProfile,
 } from '@e2e-harness/e2e-profile';
 import { profileFor, resolveE2eProfile } from '@e2e-harness/profiles';
+import { resolveHostRoute } from '@e2e-harness/host-route';
 import {
   E2eRunRecorder,
   buildE2eResult,
@@ -191,6 +194,15 @@ function runAppBuild(root: string): boolean {
 }
 
 async function main() {
+  // Before `startTUI` takes the screen, so a missing route or control path is
+  // readable on stderr instead of an unhandled rejection mid-run.
+  const routed = resolveHostRoute(process.env);
+  if (!routed.ok) {
+    process.stderr.write(`tui-host: ${routed.error}\n`);
+    process.exit(2);
+  }
+  const { mode, controlPath } = routed.route;
+
   const apiKey = (
     process.env.POSTHOG_PERSONAL_API_KEY ??
     (process.env.POSTHOG_KEY_FILE
@@ -344,7 +356,7 @@ async function main() {
     }
   };
 
-  if (process.env.MODE === 'serve') return serve();
+  if (mode === 'serve') return serve();
   return fixed();
 
   // ---- agent route: drive commands over a unix socket ----
@@ -413,19 +425,17 @@ async function main() {
         }
       });
     });
-    const sockPath = process.env.CONTROL_SOCK!;
     try {
-      fs.unlinkSync(sockPath);
+      fs.unlinkSync(controlPath);
     } catch {
       /* fresh */
     }
-    server.listen(sockPath, () => mark(`serving on ${sockPath}`));
+    server.listen(controlPath, () => mark(`serving on ${controlPath}`));
     void store.runReadyHooks(); // detection so the intro screen fills in
   }
 
   // ---- CI route: self-drive the fixed profile, snapshot each screen ----
   async function fixed() {
-    const CTRL = process.env.SNAP_CTRL!;
     // Fold the run's env inputs into the profile once, here. `decideE2eAction`
     // stays pure, so the same state + profile always yields the same decision.
     const profile: WizardE2eProfile = resolveE2eProfile(profileFor(programId), {
@@ -472,7 +482,7 @@ async function main() {
       if (screenPath[screenPath.length - 1] !== screen) screenPath.push(screen);
       chain = chain.then(async () => {
         await sleep(500); // settle: let the frame finish drawing
-        fs.appendFileSync(CTRL, store.currentScreen + '\n');
+        fs.appendFileSync(controlPath, store.currentScreen + '\n');
         await sleep(300); // let the capturer capture before the screen moves on
       });
       return chain;
