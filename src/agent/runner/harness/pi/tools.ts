@@ -103,6 +103,8 @@ export interface PiToolsContext {
   triageProvider?: LLMProvider;
   /** Where `publish_handoff` reports. Absent → the handoff is written but reported nowhere. */
   emit?: ProgressEmitter;
+  /** Set for one task of an orchestrated run: `publish_handoff` then reminds it to report with complete_task. */
+  taskAgent?: boolean;
 }
 
 export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
@@ -563,7 +565,9 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
       }),
     }),
     execute(_id, args) {
-      const result = publishHandoff(args.content, ctx.emit);
+      const result = publishHandoff(args.content, ctx.emit, {
+        taskAgent: ctx.taskAgent,
+      });
       logToFile(`[pi] publish_handoff: ${result.message}`);
       return Promise.resolve(text(result.message));
     },

@@ -763,7 +763,9 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
       content: z.string().describe(PUBLISH_HANDOFF_CONTENT_DESCRIPTION),
     },
     (args: { content: string }) => {
-      const result = publishHandoff(args.content, emit);
+      const result = publishHandoff(args.content, emit, {
+        taskAgent: orchestrator?.currentTaskId !== undefined,
+      });
       logToFile(`publish_handoff: ${result.message}`);
       return {
         content: [{ type: 'text' as const, text: result.message }],

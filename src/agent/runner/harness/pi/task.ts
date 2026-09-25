@@ -379,7 +379,8 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
 
     // Wizard env + package-manager tools are always on — their handlers are
     // fenced, and init/build tasks depend on them. publish_handoff rides
-    // along (it only emits) so the report task can publish the handoff.
+    // along (it only emits) so the report task can publish the handoff; every
+    // other task is told, on the call, that it still owes a complete_task.
     const { createWizardPiTools } = await import('./tools');
     const wizardToolNames = allowedPiWizardTools(allowedTools);
     const wizardTools = createWizardPiTools({
@@ -387,6 +388,7 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
       skillsBaseUrl: boot.skillsBaseUrl,
       triageProvider: boot.triageProvider,
       emit,
+      taskAgent: orchestrator.currentTaskId !== undefined,
       // Present only for a task allowed to ask; without it wizard_ask errors
       // instead of hanging on a prompt nobody will ever see.
       askBridge,
