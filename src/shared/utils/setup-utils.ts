@@ -462,7 +462,7 @@ export async function getOrAskForProjectData(
             _options.projectId,
             cloudUrl,
           )
-        : await fetchProjectDataWithApiKey(_options.apiKey, cloudUrl);
+        : await fetchProjectDataWithApiKey(_options.apiKey, host);
 
     // Best-effort user fetch — CI flows may run with project-scoped keys
     // that 403 on /api/users/@me/, so swallow errors and continue with
@@ -557,23 +557,28 @@ ${cloudUrl}/settings/project#variables`);
 
 async function fetchProjectDataWithApiKey(
   apiKey: string,
-  cloudUrl: string,
+  host: HostResolution,
 ): Promise<{ api_token: string; id: number; project: ApiProject }> {
-  const userData = await fetchUserData(apiKey, cloudUrl);
-  const projectId = userData.team?.id;
-
-  if (!projectId) {
+  // `@current` needs only `project:read`, so keys without `user:read` still resolve.
+  try {
+    const projectData = await fetchProjectData(
+      apiKey,
+      '@current',
+      host.appHost,
+    );
+    return {
+      api_token: projectData.api_token,
+      id: projectData.id,
+      project: projectData,
+    };
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err);
     throw new Error(
-      'Could not determine project ID from API key. Please ensure your API key has access to a project in this cloud region.',
+      `Could not resolve a project from the API key on ${host.appHost} (region: ${host.region}): ${reason}. ` +
+        'Check that the personal API key is valid for this region and has the project:read scope, ' +
+        'or pass --project-id to select the project directly.',
     );
   }
-
-  const projectData = await fetchProjectData(apiKey, projectId, cloudUrl);
-  return {
-    api_token: projectData.api_token,
-    id: projectId,
-    project: projectData,
-  };
 }
 
 async function fetchProjectDataById(

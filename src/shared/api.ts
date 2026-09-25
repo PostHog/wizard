@@ -231,7 +231,7 @@ export async function fetchRecentActivity(
 
 export async function fetchProjectData(
   accessToken: string,
-  projectId: number,
+  projectId: number | '@current',
   baseUrl: string,
 ): Promise<ApiProject> {
   try {

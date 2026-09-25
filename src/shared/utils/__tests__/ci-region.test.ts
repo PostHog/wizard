@@ -138,3 +138,43 @@ describe('getOrAskForProjectData OAuth login region', () => {
     );
   });
 });
+
+describe('getOrAskForProjectData CI without --project-id', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('resolves the project through @current when the user lookup fails', async () => {
+    mockedFetchProject.mockResolvedValue(project);
+    mockedFetchUser.mockRejectedValue(new Error('Authentication failed'));
+
+    const result = await getOrAskForProjectData({
+      signup: false,
+      ci: true,
+      apiKey: 'phx_test',
+      region: 'us',
+    });
+
+    expect(mockedFetchProject).toHaveBeenCalledWith(
+      'phx_test',
+      '@current',
+      'https://us.posthog.com',
+    );
+    expect(result.projectId).toBe(123);
+    expect(result.projectApiKey).toBe('phc_test');
+    expect(result.user).toBeNull();
+  });
+
+  it('names the region and --project-id when the project cannot be resolved', async () => {
+    mockedFetchProject.mockRejectedValue(new Error('Access denied'));
+
+    await expect(
+      getOrAskForProjectData({
+        signup: false,
+        ci: true,
+        apiKey: 'phx_test',
+        region: 'eu',
+      }),
+    ).rejects.toThrow(/region: eu.*--project-id/);
+  });
+});
