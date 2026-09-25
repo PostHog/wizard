@@ -10,7 +10,7 @@ import {
   type DetectTarget,
 } from './agentic.js';
 import { authenticate } from '@programs/authenticate';
-import { FRAMEWORK_REGISTRY } from '@programs/registry';
+import { FRAMEWORK_REGISTRY } from '@programs/frameworks/registry';
 import {
   Integration,
   WIZARD_BASIC_INTEGRATION_AGENTIC_DETECTION_FLAG_KEY,

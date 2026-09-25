@@ -15,7 +15,7 @@ import {
   gatherFrameworkContext,
 } from '@programs/detection/index';
 import { scopeInstallDirToProject } from '@programs/detection/project-scope';
-import { FRAMEWORK_REGISTRY } from '@programs/registry';
+import { FRAMEWORK_REGISTRY } from '@programs/frameworks/registry';
 import { wizardAbort } from '@utils/wizard-abort';
 import { ErrorCodes } from '@shared/errors';
 import {

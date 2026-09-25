@@ -21,7 +21,7 @@ import {
   type Integration,
 } from '@shared/constants';
 import { ErrorCodes } from '@shared/errors';
-import type { DiscoveredFeature } from '@lib/wizard-session';
+import type { DiscoveredFeature } from '@shared/discovered-feature';
 import { analytics, groupsFromUser } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
 import type { DetectedSource } from './warehouse-sources/types';

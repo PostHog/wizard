@@ -1,9 +1,5 @@
-import type {
-  AgentProgress,
-  ResolvedBinding,
-  RunResult,
-} from '../agent/types.js';
-import type { ApiProject, ApiUser, Credentials } from '../shared/api.js';
+import type { AgentProgress, ResolvedBinding, RunResult } from '@agent/types';
+import type { ApiProject, ApiUser, Credentials } from '@shared/api';
 
 /** One agent run's progress event, attributed to its run. */
 export type ProgramRunProgress = {
