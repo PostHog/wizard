@@ -1,37 +1,25 @@
 /**
  * The session-driven agent runner every existing caller uses.
  *
- * `runProgramAgent(programConfig, session)` rebuilds today's behavior on top of the
- * functional `runAgent(config, input, options)` in `@lib/agent/runner`: it
- * runs the gates the TUI owns (health, settings, AI opt-in, post-auth steps),
- * authenticates, resolves the program's binding, builds the agent's inputs
- * from the session, maps every progress event back onto `getUI()` one call
- * per event, answers the agent's questions through `getUI()`, and applies the
- * result — `wizardAbort` with the outcome's terminal status for a decided
- * failure, the terminal analytics event for a finished top-level run.
+ * `runProgramAgent(programConfig, session)` runs the gates the TUI owns
+ * (health, settings), then calls `runProgram` as its caller, backed by the
+ * session and `getUI()`: credentials come from `authenticate`, the AI
+ * opt-in and post-auth gates park on the UI, every progress event maps back
+ * onto `getUI()`, and the invocation's data projects back onto the session.
+ * It applies the result — `wizardAbort` with the outcome's terminal status for
+ * a decided failure, the terminal analytics event for a finished top-level run.
  *
  * This is the only file that knows about `getUI()`, the session and
- * `wizardAbort` on the agent's behalf. Programs replace it in Release B.
+ * `wizardAbort` on the agent's behalf.
+ *
+ * ⚠️ Temporary adapter. It is removed later in the refactor.
  */
 
-import type { WizardSession } from '@lib/wizard-session';
+import { mayReportScanResults, type WizardSession } from '@lib/wizard-session';
 import { analytics } from '@utils/analytics';
-import { getUI } from '@ui';
+import { getUI, type WizardUI } from '@ui';
 import { createUiReducer, uiInteraction } from '@ui/agent-progress';
-import {
-  buildRunTags,
-  flushScanReport,
-  resolveBinding,
-  runAgent,
-  RunOutcome,
-  TASK_OUTCOMES_KEY,
-} from '@agent';
-import type {
-  ProgramBinding,
-  RunConfig,
-  RunInput,
-  SwitchboardCtx,
-} from '@agent/types';
+import { flushScanReport, RunOutcome, TASK_OUTCOMES_KEY } from '@agent';
 import type { ProgramRun } from './program-run';
 import {
   backupAndFixClaudeSettings,
@@ -50,21 +38,17 @@ import { enableDebugLogs, logToFile, initLogFile } from '@utils/debug';
 import { registerCleanup, wizardAbort } from '@utils/wizard-abort';
 import { ErrorCodes } from '@shared/errors';
 import { isNonInteractiveEnvironment } from '@utils/environment';
-import {
-  getSkillsBaseUrl,
-  Sequence,
-  WIZARD_ORCHESTRATOR_FLAG_KEY,
-  WIZARD_SELF_DRIVING_USE_PI_HARNESS_FLAG_KEY,
-  type Integration,
-} from '@shared/constants';
+import { Sequence, type Integration } from '@shared/constants';
 import { FRAMEWORK_REGISTRY } from '@programs/frameworks/registry';
 import { postAuthGateSteps, type ProgramConfig } from './program-step';
-import { authenticate, refreshAccessTokenIfNeeded } from './authenticate';
-import { maybeStampAiSdkDetected } from './posthog-integration/detect';
+import { authenticate } from './authenticate';
 import {
   removeAuditLedger,
   startAuditLedgerWatcher,
 } from './audit/ledger-watcher';
+import { getDetectedWarehouseSources } from './warehouse-source/detect';
+import { runProgram, type WizardFlagSnapshot } from './run-program';
+import type { ProgramInvocationData } from './program-store';
 
 /**
  * Resolve a ProgramConfig's agent run definition and execute the pipeline.
@@ -99,17 +83,19 @@ export async function runProgramAgent(
         ? await programConfig.run(session)
         : programConfig.run;
 
-    await runProgram(session, runDef, programConfig, options.composed ?? false);
+    await runSessionProgram(
+      session,
+      runDef,
+      programConfig,
+      options.composed ?? false,
+    );
   } finally {
     releaseLedger();
   }
 }
 
-/**
- * Gates → authenticate → flags → binding → the functional run → apply result.
- * Every step happens in the order it did inside the agent's bootstrap.
- */
-async function runProgram(
+/** Gates → runProgram on the session's behalf → apply result. */
+async function runSessionProgram(
   session: WizardSession,
   run: ProgramRun,
   programConfig: ProgramConfig,
@@ -134,171 +120,138 @@ async function runProgram(
   // 3. Settings conflicts
   await runSettingsGate(session);
 
-  analytics.wizardCapture('agent started', {
-    integration: run.integrationLabel,
-    program_id: programConfig.id,
-    skill_id: run.skillId ?? null,
-  });
-
-  // 4. Authenticate — idempotent within a run (see authenticate()). A second
-  // agent run in the same invocation (self-driving's integration phase) reuses
-  // the first login; it does not launch another OAuth. authenticate() also
-  // identifies the user and sets analytics groups.
-  await authenticate(session, programConfig.id);
-  maybeStampAiSdkDetected(session);
-
-  // 4.5. AI opt-in enforcement. Parks here while AiOptInRequiredScreen is
-  // up if the org hasn't approved third-party AI — BEFORE the skill
-  // install and agent start, so no source leaves the machine. The screen
-  // alone is cosmetic; this await is the actual gate. Resolves
-  // immediately when the program declared requiresAi: false or in CI.
-  logToFile('[agent-runner] checking AI opt-in gate');
-  await getUI().waitForAiOptIn();
-  logToFile('[agent-runner] AI opt-in gate cleared');
-
-  // Park for any interactive step the user must complete AFTER authenticating
-  // but BEFORE the agent runs — e.g. the source-maps project picker, which
-  // needs credentials to scan and writes its choice to frameworkContext that
-  // the run prompt reads. Generic: await every gated step between auth and run.
-  for (const step of postAuthGateSteps(programConfig.steps)) {
-    logToFile(`[agent-runner] awaiting post-auth gate: ${step.id}`);
-    await getUI().waitForGate(step.id);
-    logToFile(`[agent-runner] post-auth gate cleared: ${step.id}`);
-  }
-
-  // Feature flags. Both arms need these, and the routing decision reads them.
-  const wizardFlags = await analytics.getAllFlagsForWizard();
-  const wizardFlagPayloads = analytics.getWizardFlagPayloads();
-
-  // Gateway trace tags for this run; the binding below stamps its axes on.
-  const wizardMetadata = buildRunTags({
-    programId: programConfig.id,
-    integration: run.integrationLabel,
-    runId: analytics.runId,
-    build: analytics.build,
-    skillId: run.skillId,
-  });
-
-  // The agent can't swap tokens mid-run, so freshness is measured after every
-  // park above, right before the agent mints.
-  await refreshAccessTokenIfNeeded(session);
-
-  // Credentials (incl. the resolved host family and its MCP url) live on
-  // `session.credentials`; narrow once at this boundary — `authenticate` above
-  // set them — so downstream readers get a non-null type without asserting.
-  const credentials = session.credentials!;
-
-  // Resolve which sequence and harness will run a program (CLI → PostHog flag →
-  // per-program binding → default), tag both axes onto analytics, and hand the
-  // binding to the agent for dispatch.
-  const switchboard: SwitchboardCtx = {
-    program: programConfig.id,
-    composed,
-    flags: wizardFlags,
-    flagPayloads: wizardFlagPayloads,
-    cliHarness: session.harness,
-    cliSequence: session.sequence,
-    cliModel: session.model,
-  };
-  const binding = resolveBinding(switchboard);
-  analytics.setTag('sequence', binding.sequence);
-  analytics.setTag('harness', binding.harness);
-  wizardMetadata.SEQUENCE = binding.sequence;
-  wizardMetadata.HARNESS = binding.harness;
-  captureSwitchboardDecision(switchboard, binding);
-
   const ui = getUI();
+  const reduceUi = createUiReducer(ui);
+  const projectData = projectProgramData(ui, session);
 
-  // Cleanup coverage for the abort/cancel path: `wizardAbort` runs the
-  // registered cleanups, and the agent's own `finally` covers completion.
-  // flushScanReport is idempotent, so the overlap is a harmless no-op.
-  registerCleanup(() => {
-    const report = flushScanReport({ yaraReport: session.yaraReport });
-    if (report) ui.log.info(report);
-  });
-
-  // Linear settings restoration fires on entry to the outro screen, so it
-  // is registered before the run can reach that screen. Same owner, same
-  // timing as before; the abort path still restores through the cleanup
-  // `backupAndFixClaudeSettings` registered.
-  if (binding.sequence === Sequence.linear) {
-    ui.onEnterScreen('outro', () => restoreClaudeSettings(session.installDir));
-  }
+  // runProgram turns a throwing capability into a failed run; the CLI roots expect the throw.
+  let capabilityFailure: { error: unknown } | undefined;
+  const keepFailure = <T>(work: Promise<T>): Promise<T> =>
+    work.catch((error: unknown) => {
+      capabilityFailure ??= { error };
+      throw error;
+    });
 
   const framework = session.integration ?? session.skillId ?? undefined;
-  const config: RunConfig = {
-    programId: programConfig.id,
-    run,
-    composed,
-    binding,
-    switchboard,
-    skillsBaseUrl: getSkillsBaseUrl(),
-    wizardFlags,
-    wizardFlagPayloads,
-    wizardMetadata,
-    allowedTools: programConfig.allowedTools,
-    disallowedTools: programConfig.disallowedTools,
-    agentFlow: programConfig.agentFlow,
-    excludedTaskTypes: programConfig.excludedTaskTypes,
-    seedTasks: programConfig.seedTasks
-      ? () => programConfig.seedTasks!(session)
-      : undefined,
-    hooks: {
-      postRun: run.postRun
-        ? (creds) => run.postRun!(session, creds)
-        : undefined,
-      buildOutroData: run.buildOutroData
-        ? (creds) => run.buildOutroData!(session, creds) ?? undefined
-        : undefined,
-      buildOutroNextSteps: run.buildOutroNextSteps
-        ? (creds, completed) =>
-            run.buildOutroNextSteps!(session, creds, completed)
-        : undefined,
-      recordTaskOutcomes: (outcomes) => {
-        session.frameworkContext[TASK_OUTCOMES_KEY] = outcomes;
+  const result = await runProgram(
+    programConfig.id,
+    {
+      installDir: session.installDir,
+      run,
+      composed,
+      overrides: {
+        harness: session.harness,
+        sequence: session.sequence,
+        model: session.model,
       },
+      skillId: session.skillId ?? undefined,
+      integration: session.integration,
+      frameworkDocsUrl: framework
+        ? FRAMEWORK_REGISTRY[framework as Integration]?.metadata.docsUrl
+        : undefined,
+      flags: {
+        ci: session.ci,
+        signup: session.signup,
+        debug: session.debug,
+        e2eAsk: session.e2eAsk,
+        localMcp: session.localMcp,
+        captureAio: session.captureAio,
+        benchmark: session.benchmark,
+        yaraReport: session.yaraReport,
+      },
+      host: {
+        baseUrl: session.baseUrl,
+        region: session.region,
+        email: session.email,
+        projectId: session.projectId,
+        apiKey: session.apiKey,
+      },
+      seedTasks: programConfig.seedTasks
+        ? () => programConfig.seedTasks!(session)
+        : undefined,
+      hooks: {
+        postRun: run.postRun
+          ? (creds) => run.postRun!(session, creds)
+          : undefined,
+        buildOutroData: run.buildOutroData
+          ? (creds) => run.buildOutroData!(session, creds) ?? undefined
+          : undefined,
+        buildOutroNextSteps: run.buildOutroNextSteps
+          ? (creds, completed) =>
+              run.buildOutroNextSteps!(session, creds, completed)
+          : undefined,
+        recordTaskOutcomes: (outcomes) => {
+          session.frameworkContext[TASK_OUTCOMES_KEY] = outcomes;
+        },
+      },
+      program: {
+        requiresAi: programConfig.requiresAi,
+        agentFlow: programConfig.agentFlow,
+        allowedTools: programConfig.allowedTools,
+        disallowedTools: programConfig.disallowedTools,
+        excludedTaskTypes: programConfig.excludedTaskTypes,
+        postAuthGates: postAuthGateSteps(programConfig.steps).map(
+          (step) => step.id,
+        ),
+      },
+      aiSdkStampReported: session.aiSdkStampReported,
+      discoveredFeatures: session.discoveredFeatures,
+      warehouseSources: getDetectedWarehouseSources(session),
+      mayReportScanResults: mayReportScanResults(session),
     },
-  };
-  const input: RunInput = {
-    installDir: session.installDir,
-    credentials,
-    project: session.apiProject,
-    apiUser: session.apiUser,
-    skillId: session.skillId ?? undefined,
-    integration: session.integration,
-    frameworkDocsUrl: framework
-      ? FRAMEWORK_REGISTRY[framework as Integration]?.metadata.docsUrl
-      : undefined,
-    flags: {
-      ci: session.ci,
-      signup: session.signup,
-      debug: session.debug,
-      e2eAsk: session.e2eAsk,
-      localMcp: session.localMcp,
-      captureAio: session.captureAio,
-      benchmark: session.benchmark,
-      yaraReport: session.yaraReport,
+    {
+      credentials: {
+        // Idempotent within a run: a second agent run in the same invocation
+        // (self-driving's integration phase) reuses the first login.
+        resolve: () =>
+          keepFailure(
+            authenticate(session, programConfig.id).then(() => ({
+              posthog: session.credentials!,
+              project: session.apiProject,
+              apiUser: session.apiUser,
+            })),
+          ),
+      },
+      // The actual AI opt-in gate: it parks while AiOptInRequiredScreen is up,
+      // before the skill install and agent start, so no source leaves the machine.
+      awaitAiApproval: async () => {
+        logToFile('[agent-runner] checking AI opt-in gate');
+        await ui.waitForAiOptIn();
+        logToFile('[agent-runner] AI opt-in gate cleared');
+        return true;
+      },
+      // Each step the user settles between auth and run, such as the source-maps
+      // project picker, which writes its choice to frameworkContext for the prompt.
+      awaitPostAuthGates: async ({ gates }) => {
+        for (const gate of gates) {
+          logToFile(`[agent-runner] awaiting post-auth gate: ${gate}`);
+          await ui.waitForGate(gate);
+          logToFile(`[agent-runner] post-auth gate cleared: ${gate}`);
+        }
+      },
+      featureFlags: () => keepFailure(loadWizardFlags()),
+      onProgress: (progress) => {
+        if (progress.kind === 'run') reduceUi(progress.event);
+        else projectData(progress.data);
+      },
+      interaction: uiInteraction(ui),
     },
-    host: {
-      baseUrl: session.baseUrl,
-      region: session.region,
-      email: session.email,
-      projectId: session.projectId,
-      apiKey: session.apiKey,
-    },
-  };
+  );
+  // runProgram keeps a throwing progress handler or a late event as a diagnostic, so log it.
+  for (const diagnostic of result.diagnostics) {
+    const runLabel = 'runId' in diagnostic ? ` run=${diagnostic.runId}` : '';
+    logToFile(
+      `[agent-runner] progress diagnostic (${diagnostic.eventKind}${runLabel}): ${diagnostic.message}`,
+    );
+  }
+  if (capabilityFailure) throw capabilityFailure.error;
 
-  const result = await runAgent(config, input, {
-    onProgress: createUiReducer(ui),
-    interaction: uiInteraction(ui),
-  });
-
-  // The host owns process exits, terminal analytics and rethrowing crashes.
+  // The adapter owns process exits, terminal analytics and rethrowing crashes.
   if (result.outcome === RunOutcome.Crashed) {
-    throw result.failure.error;
+    throw result.failure?.error;
   }
   if (result.outcome !== RunOutcome.Success) {
-    if (result.failure.authErrorDetail) {
+    if (result.failure?.authErrorDetail) {
       ui.showAuthError(result.failure.authErrorDetail);
     }
     // The terminal status follows how the run ended, not whether an Error came back.
@@ -307,7 +260,7 @@ async function runProgram(
       status: result.outcome === RunOutcome.Aborted ? 'cancelled' : 'error',
     });
   } else if (!composed) {
-    // A composed sub-run leaves the terminal event to its host program's run.
+    // A composed sub-run leaves the terminal event to its parent program's run.
     // The run already succeeded: a failed flush is logged, never the outcome.
     try {
       await analytics.shutdown('success');
@@ -316,6 +269,57 @@ async function runProgram(
     }
   }
 }
+
+/** Mirror the invocation's data onto the session and the UI the TUI reads. */
+function projectProgramData(
+  ui: WizardUI,
+  session: WizardSession,
+): (data: ProgramInvocationData) => void {
+  let bindingSeen = false;
+  return (data) => {
+    const current = session.credentials;
+    if (
+      current &&
+      data.credentials &&
+      data.credentials.accessToken !== current.accessToken
+    ) {
+      // A refresh replaces only the token fields; the login keeps its host.
+      session.credentials = {
+        ...current,
+        accessToken: data.credentials.accessToken,
+        refreshToken: data.credentials.refreshToken,
+        expiresAt: data.credentials.expiresAt,
+      };
+      ui.setAccessToken(session.credentials);
+    }
+    if (data.aiSdkStampReported) session.aiSdkStampReported = true;
+    if (!data.binding || bindingSeen) return;
+    bindingSeen = true;
+
+    // Cleanup coverage for the abort/cancel path: `wizardAbort` runs the
+    // registered cleanups, and the agent's own `finally` covers completion.
+    // flushScanReport is idempotent, so the overlap is a harmless no-op.
+    registerCleanup(() => {
+      const report = flushScanReport({ yaraReport: session.yaraReport });
+      if (report) ui.log.info(report);
+    });
+
+    // Linear settings restoration fires on entry to the outro screen, so it
+    // is registered before the run can reach that screen. The abort path
+    // still restores through the cleanup `backupAndFixClaudeSettings`
+    // registered.
+    if (data.binding.sequence === Sequence.linear) {
+      ui.onEnterScreen('outro', () =>
+        restoreClaudeSettings(session.installDir),
+      );
+    }
+  };
+}
+
+const loadWizardFlags = async (): Promise<WizardFlagSnapshot> => ({
+  flags: await analytics.getAllFlagsForWizard(),
+  payloads: analytics.getWizardFlagPayloads(),
+});
 
 // ── Gates ─────────────────────────────────────────────────────────────
 
@@ -449,51 +453,4 @@ async function runSettingsGate(session: WizardSession): Promise<void> {
     );
     logToFile('[agent-runner] settings override resolved');
   }
-}
-
-// ── Switchboard telemetry ─────────────────────────────────────────────
-
-/**
- * One event + one log line per run: what entered the switchboard, which
- * precedence rung decided each axis, and the final pick.
- */
-function captureSwitchboardDecision(
-  ctx: SwitchboardCtx,
-  binding: ProgramBinding,
-): void {
-  const trace = ctx.trace ?? {};
-  // Unpinned orchestrator runs choose a model per task from the context-mill agent prompts; the orchestrator logs that map once the prompts load.
-  const perTaskModel =
-    binding.sequence === Sequence.orchestrator && trace.model === 'binding';
-  const model = perTaskModel ? 'chosen-per-task' : binding.model;
-  const modelSource = perTaskModel ? 'agent-prompts' : trace.model;
-  analytics.wizardCapture('switchboard resolved', {
-    program: ctx.program,
-    flag_self_driving_use_pi_harness:
-      ctx.flags[WIZARD_SELF_DRIVING_USE_PI_HARNESS_FLAG_KEY],
-    flag_self_driving_pi_payload: JSON.stringify(
-      ctx.flagPayloads?.[WIZARD_SELF_DRIVING_USE_PI_HARNESS_FLAG_KEY] ?? null,
-    ),
-    flag_orchestrator: ctx.flags[WIZARD_ORCHESTRATOR_FLAG_KEY],
-    cli_harness: ctx.cliHarness,
-    cli_sequence: ctx.cliSequence,
-    cli_model: ctx.cliModel,
-    harness_source: trace.harness,
-    model_source: modelSource,
-    sequence_source: trace.sequence,
-    harness: binding.harness,
-    model,
-    thinking_level: binding.thinkingLevel,
-    sequence: binding.sequence,
-  });
-  logToFile(
-    `[switchboard] decision: program=${ctx.program}` +
-      ` in(orchestrator=${ctx.flags[WIZARD_ORCHESTRATOR_FLAG_KEY] ?? '-'},` +
-      ` cli=${ctx.cliHarness ?? '-'}/${ctx.cliSequence ?? '-'}/${
-        ctx.cliModel ?? '-'
-      })` +
-      ` → harness=${binding.harness} (${trace.harness ?? '?'})` +
-      ` model=${model} (${modelSource ?? '?'})` +
-      ` sequence=${binding.sequence} (${trace.sequence ?? '?'})`,
-  );
 }

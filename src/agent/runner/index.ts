@@ -36,6 +36,10 @@ import type {
 } from './shared/types';
 import { prepareRun } from './shared/bootstrap';
 import { createProgressCollector } from './shared/progress-collector';
+import {
+  createTranscriptTail,
+  type TranscriptTail,
+} from './shared/transcript-tail';
 import { getSequence } from './switchboard';
 import { flushScanReport } from '@agent/yara-hooks';
 
@@ -80,9 +84,15 @@ export async function runAgent(
   options: RunAgentOptions = {},
 ): Promise<RunResult> {
   let collector: ReturnType<typeof createProgressCollector> | undefined;
+  let transcript: TranscriptTail | undefined;
   const snapshot = (): RunResult['snapshot'] => {
     try {
-      if (collector) return collector.snapshot();
+      if (collector) {
+        const collected = collector.snapshot();
+        return transcript
+          ? { ...collected, transcriptTail: transcript.text() }
+          : collected;
+      }
     } catch {
       // A partial snapshot must not replace the run's primary failure.
     }
@@ -98,6 +108,8 @@ export async function runAgent(
     };
   };
   const flushReport = (): void => {
+    // A deferred report keeps counting this run's scans toward the program run's.
+    if (config.scanReport === 'defer') return;
     try {
       const report = flushScanReport({ yaraReport: input.flags.yaraReport });
       if (report)
@@ -110,6 +122,7 @@ export async function runAgent(
   try {
     collector = createProgressCollector(options.onProgress);
     const { emit } = collector;
+    if (config.run.collectTranscript) transcript = createTranscriptTail(emit);
     const log = (message: string) =>
       emit({ kind: 'log', level: 'info', message });
     if (options.signal?.aborted) {
@@ -143,6 +156,7 @@ export async function runAgent(
       emit,
       interaction: options.interaction,
       signal: options.signal,
+      transcript,
     });
     result = {
       ...(options.signal?.aborted &&

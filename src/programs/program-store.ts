@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unused-vars -- A shell: B3 fills in the bodies. */
 import type { AgentProgress, ResolvedBinding, RunResult } from '@agent/types';
 import type { ApiProject, ApiUser, Credentials } from '@shared/api';
 
@@ -46,50 +45,128 @@ export type AgentProgressAdapter = {
   finish(result: RunResult): void;
 };
 
+type RunEntry = {
+  runId: string;
+  result?: RunResult;
+};
+
+const MAX_DIAGNOSTICS = 10;
+
 export class ProgramStore {
+  private readonly runs: RunEntry[] = [];
+  private readonly diagnostics: ProgramDiagnostic[] = [];
+  private readonly data: ProgramInvocationData;
+  private readonly onData?: (progress: ProgramDataProgress) => void;
+
   constructor(
     options: {
       aiSdkStampReported?: boolean;
       onData?: (progress: ProgramDataProgress) => void;
     } = {},
   ) {
-    throw new Error('ProgramStore: not implemented');
+    this.onData = options.onData;
+    this.data = {
+      credentials: null,
+      apiProject: null,
+      apiUser: null,
+      detection: { frameworkContext: {} },
+      binding: null,
+      aiSdkStampReported: options.aiSdkStampReported ?? false,
+    };
   }
 
   readData(): ProgramInvocationData {
-    throw new Error('ProgramStore: not implemented');
+    return structuredClone(this.data);
   }
 
   setAuthenticated(
     auth: Pick<ProgramInvocationData, 'credentials' | 'apiProject' | 'apiUser'>,
   ): void {
-    throw new Error('ProgramStore: not implemented');
+    Object.assign(this.data, structuredClone(auth));
+    this.emitData();
   }
 
   setFrameworkContext(key: string, value: unknown): void {
-    throw new Error('ProgramStore: not implemented');
+    this.data.detection.frameworkContext[key] = structuredClone(value);
+    this.emitData();
   }
 
   setBinding(binding: ResolvedBinding): void {
-    throw new Error('ProgramStore: not implemented');
+    this.data.binding = structuredClone(binding);
+    this.emitData();
   }
 
   setAiSdkStampReported(): void {
-    throw new Error('ProgramStore: not implemented');
+    if (this.data.aiSdkStampReported) return;
+    this.data.aiSdkStampReported = true;
+    this.emitData();
   }
 
   beginRun(
     runId: string,
     observer?: (progress: ProgramRunProgress) => void,
   ): AgentProgressAdapter {
-    throw new Error('ProgramStore: not implemented');
+    const run: RunEntry = { runId };
+    this.runs.push(run);
+
+    return {
+      onProgress: (event) => {
+        const source = { runId: run.runId, eventKind: event.kind };
+        if (run.result) {
+          this.recordDiagnostic(source, 'progress after finish');
+          return;
+        }
+        if (!observer) return;
+        this.deliver(source, () =>
+          observer({ kind: 'run', runId, event: structuredClone(event) }),
+        );
+      },
+      finish: (result) => {
+        run.result = result;
+      },
+    };
   }
 
   settledRuns(): SettledProgramRun[] {
-    throw new Error('ProgramStore: not implemented');
+    return this.runs.flatMap(({ runId, result }) =>
+      result ? [{ runId, result }] : [],
+    );
   }
 
   readDiagnostics(): ProgramDiagnostic[] {
-    throw new Error('ProgramStore: not implemented');
+    return this.diagnostics.map((diagnostic) => ({ ...diagnostic }));
+  }
+
+  private emitData(): void {
+    const onData = this.onData;
+    if (!onData) return;
+    this.deliver({ eventKind: 'data' }, () =>
+      onData({ kind: 'program', data: this.readData() }),
+    );
+  }
+
+  /** Never waits for an observer; a throw or a rejection becomes a diagnostic. */
+  private deliver(source: DiagnosticSource, send: () => unknown): void {
+    try {
+      const delivery = send();
+      if (
+        delivery &&
+        typeof (delivery as PromiseLike<unknown>).then === 'function'
+      ) {
+        void Promise.resolve(delivery).catch((error: unknown) => {
+          this.recordDiagnostic(source, error);
+        });
+      }
+    } catch (error) {
+      this.recordDiagnostic(source, error);
+    }
+  }
+
+  private recordDiagnostic(source: DiagnosticSource, error: unknown): void {
+    this.diagnostics.push({
+      ...source,
+      message: error instanceof Error ? error.message : String(error),
+    });
+    if (this.diagnostics.length > MAX_DIAGNOSTICS) this.diagnostics.shift();
   }
 }

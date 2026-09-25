@@ -4,6 +4,8 @@ import path from 'path';
 import { runNonInteractive } from '@lib/runners/run-non-interactive';
 import { runWizard } from '@lib/runners/run-wizard';
 import { authenticate } from '@programs/authenticate';
+import { rotateCredentials } from '@programs/credentials';
+import { resetOAuthSession } from '@shared/oauth-session';
 import { runProgramAgent } from '../run-agent-legacy';
 import { runAgent, RunOutcome, type RunResult } from '@agent/runner';
 import { Harness, Sequence } from '@shared/constants';
@@ -56,10 +58,14 @@ vi.mock('@utils/analytics', () => ({
     wizardCapture: vi.fn(),
     captureException: vi.fn(),
     setTag: vi.fn(),
+    identifyUser: vi.fn(),
+    setGroups: vi.fn(),
+    groupIdentify: vi.fn(),
     getAllFlagsForWizard: vi.fn().mockResolvedValue({}),
     getWizardFlagPayloads: vi.fn().mockReturnValue({}),
     shutdown: vi.fn().mockResolvedValue(undefined),
   },
+  groupsFromUser: () => ({}),
   sessionProperties: () => ({}),
 }));
 vi.mock('@agent/runner', async (original) => ({
@@ -68,7 +74,11 @@ vi.mock('@agent/runner', async (original) => ({
 }));
 vi.mock('@programs/authenticate', () => ({
   authenticate: vi.fn().mockResolvedValue(undefined),
-  refreshAccessTokenIfNeeded: vi.fn().mockResolvedValue(undefined),
+}));
+vi.mock('@programs/credentials', () => ({
+  rotateCredentials: vi.fn((credentials: unknown) =>
+    Promise.resolve(credentials),
+  ),
 }));
 vi.mock('@shared/claude-settings', () => ({
   checkAllSettingsConflicts: vi.fn().mockReturnValue([]),
@@ -81,6 +91,9 @@ vi.mock('@utils/wizard-abort', async (original) => ({
 }));
 vi.mock('../posthog-integration/detect', () => ({
   maybeStampAiSdkDetected: vi.fn(),
+}));
+vi.mock('../posthog-integration/ai-sdk-stamp', () => ({
+  stampAiSdkDetected: vi.fn(),
 }));
 
 const program = (id: ProgramConfig['id'] = 'metrics'): ProgramConfig => ({
@@ -135,6 +148,7 @@ const finishRun: typeof runAgent = (_config, _input, options) => {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  resetOAuthSession();
   vi.mocked(authenticate).mockImplementation((sess) => {
     sess.credentials = session().credentials;
     return Promise.resolve();
@@ -170,7 +184,7 @@ it.each([
   },
 );
 
-it('sends terminal analytics after the outro and the run, before the host goes on', async () => {
+it('sends terminal analytics after the outro and the run, before the caller goes on', async () => {
   const order: string[] = [];
   logSpy.mockImplementation((line) => {
     if (line === '└  Done') order.push('outro');
@@ -195,7 +209,7 @@ it('sends terminal analytics after the outro and the run, before the host goes o
   expect(analytics.shutdown).toHaveBeenCalledExactlyOnceWith('success');
 });
 
-it('clamps a composed program to linear and keeps host analytics alive', async () => {
+it('clamps a composed program to linear and keeps the caller analytics alive', async () => {
   await runProgramAgent(program(), session(), { composed: true });
   expect(runAgent).toHaveBeenCalledWith(
     expect.objectContaining({
@@ -317,6 +331,54 @@ it('rethrows the original crash for the outer runner', async () => {
   await expect(runProgramAgent(program(), session())).rejects.toBe(error);
   expect(wizardAbort).not.toHaveBeenCalled();
   expect(analytics.shutdown).not.toHaveBeenCalled();
+});
+
+it('rethrows a login failure for the CLI roots, before the agent starts', async () => {
+  const error = new Error('OAuth cancelled');
+  vi.mocked(authenticate).mockRejectedValueOnce(error);
+  await expect(runProgramAgent(program(), session())).rejects.toBe(error);
+  expect(runAgent).not.toHaveBeenCalled();
+  expect(wizardAbort).not.toHaveBeenCalled();
+});
+
+it('projects a refreshed token and the AI SDK stamp back onto the session', async () => {
+  const base = session();
+  // Near expiry, so the pre-run refresh rotates it.
+  const current = {
+    ...base,
+    credentials: {
+      ...base.credentials,
+      refreshToken: 'phr_test',
+      expiresAt: Date.now() + 60_000,
+    },
+  };
+  // The real login is a no-op when the session already holds credentials.
+  vi.mocked(authenticate).mockImplementationOnce(() => Promise.resolve());
+  const setAccessToken = vi.spyOn(getUI(), 'setAccessToken');
+  vi.mocked(rotateCredentials).mockImplementationOnce((credentials) =>
+    Promise.resolve({ ...credentials, accessToken: 'pha_refreshed' }),
+  );
+  await runProgramAgent(program(), current);
+  expect(vi.mocked(runAgent).mock.calls[0][1].credentials.accessToken).toBe(
+    'pha_refreshed',
+  );
+  expect(current.credentials?.accessToken).toBe('pha_refreshed');
+  // Only the token fields change; the login keeps its host.
+  expect(current.credentials?.host).toBeInstanceOf(HostResolution);
+  expect(setAccessToken).toHaveBeenCalledExactlyOnceWith(current.credentials);
+  expect(current.aiSdkStampReported).toBe(true);
+});
+
+it('logs a progress handler that throws instead of dropping it', async () => {
+  vi.spyOn(getUI(), 'pushStatus').mockImplementationOnce(() => {
+    throw new Error('screen gone');
+  });
+  await runProgramAgent(program(), session());
+  expect(logToFile).toHaveBeenCalledWith(
+    expect.stringMatching(
+      /^\[agent-runner\] progress diagnostic \(status run=.+\): screen gone$/,
+    ),
+  );
 });
 
 it.each([

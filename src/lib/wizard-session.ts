@@ -26,7 +26,7 @@ import type {
 } from '@agent/types';
 // Leaf module on purpose: shared analytics imports this file, so the agent
 // entry would form a module cycle here.
-// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- B2: the session becomes a TUI projection
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- the session becomes a TUI projection later in the refactor
 import { OutroKind } from '@agent/progress';
 import { DiscoveredFeature } from '@shared/discovered-feature';
 

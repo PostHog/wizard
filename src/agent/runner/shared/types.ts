@@ -21,6 +21,7 @@ import type { LLMProvider } from '@posthog/warlock';
 import type { AgentInteraction, ProgressEmitter } from '@agent/progress';
 import type { EffortLevel } from '../switchboard/models';
 import type { SwitchboardCtx } from '../switchboard';
+import type { TranscriptTail } from './transcript-tail';
 
 export type { PromptContext, Credentials };
 
@@ -152,7 +153,7 @@ export interface RunConfig {
   programId: string;
   /** The run definition. A program's session-taking hooks are the caller's, see `hooks`. */
   run: AgentRunDefinition;
-  /** A composed sub-run leaves the terminal outro to its host. */
+  /** A composed sub-run leaves the terminal outro to its caller. */
   composed: boolean;
   /** Run-level sequence, harness and model. */
   binding: ResolvedBinding;
@@ -332,4 +333,6 @@ export interface SequenceContext {
   emit: ProgressEmitter;
   interaction: AgentInteraction | undefined;
   signal?: AbortSignal;
+  /** Present when the run definition sets `collectTranscript`. */
+  transcript?: TranscriptTail;
 }

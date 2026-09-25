@@ -156,7 +156,7 @@ export interface SpinnerHandle {
 }
 
 /**
- * Context the agent attaches to a 401 so the host can pick the right copy.
+ * Context the agent attaches to a 401 so the caller can pick the right copy.
  *
  * `hasSettingsConflict` is true when a Claude Code settings file (project,
  * project-local, the user's global config, or managed) actually overrides the
@@ -185,7 +185,7 @@ export interface AuthErrorDetail {
   logFilePath: string;
 }
 
-/** One task as the host renders it. The same shape `WizardUI.syncTodos` takes. */
+/** One task as the caller renders it. The same shape `WizardUI.syncTodos` takes. */
 export interface TaskSnapshot {
   id?: string;
   source?: string;
@@ -207,7 +207,7 @@ export type ProgressLogLevel = 'info' | 'warn' | 'error' | 'success' | 'step';
 export type AgentProgress =
   /** The run's main work has started (`WizardUI.startRun`). */
   | { kind: 'lifecycle'; phase: 'started' }
-  /** The run finished and the host may show its outro (`WizardUI.outro`). */
+  /** The run finished and the caller may show its outro (`WizardUI.outro`). */
   | { kind: 'lifecycle'; phase: 'completed'; message: string }
   /** The run spinner (`WizardUI.spinner()`), one handle per run. */
   | {
@@ -246,7 +246,7 @@ export type ProgressEmitter = (event: AgentProgress) => void;
  * so `wizard_ask` returns its existing "not available" error, and an optional
  * task notice is declined — the same path a `--ci` run takes today.
  * Each request's `signal` aborts when that request times out, the run's
- * signal aborts, or another task fails the run. On that abort the host
+ * signal aborts, or another task fails the run. On that abort the caller
  * dismisses that request alone, and that dismissal must not throw: abort
  * listeners run where the agent cannot catch them, so Node would rethrow the
  * error as an uncaught exception.
