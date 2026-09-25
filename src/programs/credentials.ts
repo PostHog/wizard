@@ -3,9 +3,9 @@
 import type { ApiProject, ApiUser, Credentials } from '@shared/api';
 
 export type ResolvedProgramCredentials = {
-  posthog: Credentials;
-  project: ApiProject | null;
-  apiUser: ApiUser | null;
+  posthog: Credentials; // token, project API key, project ID and host
+  project: ApiProject | null; // the project, when known
+  apiUser: ApiUser | null; // the user, when known
 };
 
 /** Hosts authenticate once per scope; the signal aborts with the invocation. */

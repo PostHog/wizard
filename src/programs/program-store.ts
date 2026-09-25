@@ -8,15 +8,15 @@ import type { ApiProject, ApiUser, Credentials } from '../shared/api.js';
 
 /** One agent run's progress event, attributed to its run. */
 export type ProgramRunProgress = {
-  kind: 'run';
-  runId: string;
-  event: AgentProgress;
+  kind: 'run'; // one agent event
+  runId: string; // the run it came from
+  event: AgentProgress; // status, tasks, links, completion and more
 };
 
 /** A copy of the invocation's data, sent after each write. */
 export type ProgramDataProgress = {
-  kind: 'program';
-  data: ProgramInvocationData;
+  kind: 'program'; // the program's data changed
+  data: ProgramInvocationData; // a copy of it after the change
 };
 
 export type ProgramProgress = ProgramRunProgress | ProgramDataProgress;
@@ -31,20 +31,18 @@ export type ProgramDiagnostic = DiagnosticSource & { message: string };
 
 /** Data owned by one program invocation, independent of its progress feed. */
 export type ProgramInvocationData = {
-  credentials: Credentials | null;
-  apiProject: ApiProject | null;
-  apiUser: ApiUser | null;
-  detection: { frameworkContext: Record<string, unknown> };
-  /** The route of the agent run; null until it resolves. */
-  binding: ResolvedBinding | null;
-  /** Latched once the organization's AI SDK stamp was considered for this login. */
-  aiSdkStampReported: boolean;
+  credentials: Credentials | null; // the login; holds tokens, don't log it
+  apiProject: ApiProject | null; // the login's project
+  apiUser: ApiUser | null; // the login's user
+  detection: { frameworkContext: Record<string, unknown> }; // always {} here
+  binding: ResolvedBinding | null; // the route; null until it resolves
+  aiSdkStampReported: boolean; // true once the AI SDK stamp was considered
 };
 
 /** An agent run's final result. */
 export type SettledProgramRun = {
-  runId: string;
-  result: RunResult;
+  runId: string; // the run's label
+  result: RunResult; // what runAgent returned
 };
 
 export type AgentProgressAdapter = {
