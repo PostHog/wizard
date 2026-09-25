@@ -30,13 +30,13 @@ export type {
   TokenUsageDelta,
 } from './progress';
 
-/** Leaves in B2 with the bindings table; B1 deferred PROGRAM_BINDINGS. */
+/** Leaves when the bindings table moves to programs. */
 export type { ProgramBinding, SwitchboardCtx } from './runner';
 
-/** Leaves in B2 with downloadSkill. */
+/** Leaves with downloadSkill, later in the refactor. */
 export type { InstallSkillResult } from './tools';
 
-/** Leaves in B2 with the legacy adapter that records it. */
+/** Leaves with the legacy adapter that records it. */
 export type { TaskOutcome } from './runner';
 
 /** Leaves in C2 with runMcpPromptViaSdk. */

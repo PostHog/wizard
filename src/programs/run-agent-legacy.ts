@@ -10,7 +10,9 @@
  * a decided failure, the terminal analytics event for a finished top-level run.
  *
  * This is the only file that knows about `getUI()`, the session and
- * `wizardAbort` on the agent's behalf. Programs replace it in Release B.
+ * `wizardAbort` on the agent's behalf.
+ *
+ * ⚠️ Temporary adapter. It is removed later in the refactor.
  */
 
 import { mayReportScanResults, type WizardSession } from '@lib/wizard-session';
@@ -248,7 +250,7 @@ async function runSessionProgram(
   );
   if (capabilityFailure) throw capabilityFailure.error;
 
-  // The host owns process exits, terminal analytics and rethrowing crashes.
+  // The adapter owns process exits, terminal analytics and rethrowing crashes.
   if (result.outcome === RunOutcome.Crashed) {
     throw result.failure?.error;
   }
@@ -262,7 +264,7 @@ async function runSessionProgram(
       status: result.outcome === RunOutcome.Aborted ? 'cancelled' : 'error',
     });
   } else if (!composed) {
-    // A composed sub-run leaves the terminal event to its host program's run.
+    // A composed sub-run leaves the terminal event to its parent program's run.
     // The run already succeeded: a failed flush is logged, never the outcome.
     try {
       await analytics.shutdown('success');

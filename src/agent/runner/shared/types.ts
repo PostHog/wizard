@@ -52,8 +52,8 @@ export interface AgentRunDefinition {
   skillId?: string;
   /** Additional program-specific prompt instructions. Appended after the default project prompt. */
   customPrompt?: (ctx: PromptContext) => string;
-  prompt?: (ctx: PromptContext) => string; // replaces the assembled project prompt
-  collectTranscript?: boolean; // keep a 256 KiB transcript tail; linear, Anthropic
+  prompt?: (ctx: PromptContext) => string; // replaces the assembled project prompt; linear
+  collectTranscript?: boolean; // keep a 256K-character transcript tail; linear, Anthropic
   requestRemark?: boolean; // false skips the closing remark; linear, Anthropic
   /** Additional MCP servers (e.g. Svelte MCP) */
   additionalMcpServers?: Record<string, { url: string }>;
@@ -153,7 +153,7 @@ export interface RunConfig {
   programId: string;
   /** The run definition. A program's session-taking hooks are the caller's, see `hooks`. */
   run: AgentRunDefinition;
-  /** A composed sub-run leaves the terminal outro to its host. */
+  /** A composed sub-run leaves the terminal outro to its caller. */
   composed: boolean;
   /** Run-level sequence, harness and model. */
   binding: ResolvedBinding;

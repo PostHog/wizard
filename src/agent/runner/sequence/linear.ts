@@ -32,7 +32,7 @@ import { getHarness } from '../switchboard';
 export async function runLinearProgram(
   context: SequenceContext,
 ): Promise<SequenceResult> {
-  // Aborts on the host's signal or when the run ends, so no ask outlives it.
+  // Aborts on the caller's signal or when the run ends, so no ask outlives it.
   const controller = new AbortController();
   const abortFromHost = () => controller.abort();
   context.signal?.addEventListener('abort', abortFromHost, { once: true });
@@ -45,7 +45,7 @@ export async function runLinearProgram(
   }
 }
 
-/** The host's `signal` decides the outcome; `runSignal` also ends with the run. */
+/** The caller's `signal` decides the outcome; `runSignal` also ends with the run. */
 async function executeLinear(
   {
     config,
@@ -193,7 +193,7 @@ async function executeLinear(
       matched: matched?.message ?? null,
     });
     return {
-      // An agent that stops itself failed the run; only the host's signal cancels it.
+      // An agent that stops itself failed the run; only the caller's signal cancels it.
       outcome: signal?.aborted ? RunOutcome.Aborted : RunOutcome.Failed,
       failure: {
         message: matched?.message ?? `${run.integrationLabel} aborted`,
