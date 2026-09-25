@@ -483,7 +483,7 @@ describe('agent entry modules', () => {
 describe('programs entry modules', () => {
   const rule = (from: string, to: string) => ruleFor(from, to);
 
-  it('lets hosts reach programs through its entries', () => {
+  it('lets the CLI and TUI reach programs through its entries', () => {
     expect(rule('src/commands/audit.ts', 'src/programs/index.ts')).toBe(null);
     expect(rule('src/ui/tui/store.ts', 'src/programs/types.ts')).toBe(null);
     expect(rule('src/commands/audit.ts', 'src/programs/audit/index.ts')).toBe(
