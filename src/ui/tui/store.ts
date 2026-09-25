@@ -61,6 +61,9 @@ export { TaskStatus, ScreenId, Overlay, Program, RunPhase, McpOutcome };
 export type { ScreenName, OutroData, WizardSession, ProgramId };
 
 export interface TaskItem {
+  id?: string;
+  source?: string;
+  sourceStatus?: string;
   label: string;
   activeForm?: string;
   status: TaskStatus;
@@ -1121,11 +1124,20 @@ export class WizardStore {
   }
 
   syncTodos(
-    todos: Array<{ content: string; status: string; activeForm?: string }>,
+    todos: Array<{
+      id?: string;
+      source?: string;
+      content: string;
+      status: string;
+      activeForm?: string;
+    }>,
   ): void {
     const incoming = todos.map((t) => {
       const status = isTaskStatus(t.status) ? t.status : TaskStatus.Pending;
       return {
+        id: t.id,
+        source: t.source,
+        sourceStatus: isTaskStatus(t.status) ? undefined : t.status,
         label: t.content,
         activeForm: t.activeForm,
         status,
@@ -1134,10 +1146,17 @@ export class WizardStore {
     });
 
     const incomingLabels = new Set(incoming.map((t) => t.label));
+    const sources = new Set(todos.map((t) => t.source));
 
     const retained = this.$tasks
       .get()
-      .filter((t) => t.done && !incomingLabels.has(t.label));
+      .filter(
+        (t) =>
+          (t.status === TaskStatus.Completed ||
+            t.status === TaskStatus.Failed ||
+            t.status === TaskStatus.Skipped) &&
+          (t.source ? !sources.has(t.source) : !incomingLabels.has(t.label)),
+      );
 
     this.$tasks.set([...retained, ...incoming]);
     this.emitChange();

@@ -187,6 +187,8 @@ export interface AuthErrorDetail {
 
 /** One task as the host renders it. The same shape `WizardUI.syncTodos` takes. */
 export interface TaskSnapshot {
+  id?: string;
+  source?: string;
   content: string;
   status: string;
   activeForm?: string;

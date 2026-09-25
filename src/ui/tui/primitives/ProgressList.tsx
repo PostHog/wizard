@@ -11,7 +11,7 @@ import { LoadingBox } from './LoadingBox.js';
 export interface ProgressItem {
   label: string;
   activeForm?: string;
-  status: 'pending' | 'in_progress' | 'completed' | 'skipped';
+  status: 'pending' | 'in_progress' | 'completed' | 'skipped' | 'failed';
 }
 
 interface ProgressListProps {
@@ -37,13 +37,17 @@ export const ProgressList = ({ items, title }: ProgressListProps) => {
       {visible.length === 0 && <LoadingBox message="Analyzing project..." />}
       {visible.map((item, i) => {
         const icon =
-          item.status === 'completed'
+          item.status === 'failed'
+            ? Icons.warning
+            : item.status === 'completed'
             ? Icons.squareFilled
             : item.status === 'in_progress'
             ? Icons.triangleRight
             : Icons.squareOpen;
         const color =
-          item.status === 'completed'
+          item.status === 'failed'
+            ? Colors.error
+            : item.status === 'completed'
             ? Colors.success
             : item.status === 'in_progress'
             ? Colors.primary

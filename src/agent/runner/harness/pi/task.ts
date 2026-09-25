@@ -36,6 +36,7 @@ import { TaskStatus } from '../../sequence/orchestrator/queue';
 import type { OrchestratorToolsContext } from '../../sequence/orchestrator/queue-tools';
 import type { AgentResult, TaskRunInputs } from '../types';
 import { gatewayAuth, type GatewayAuth } from '@agent/gateway-session';
+import { currentAccessToken } from '@shared/oauth-session';
 import {
   buildGatewayProvider,
   GATEWAY_PROVIDER,
@@ -250,10 +251,11 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
       createWriteToolDefinition,
     } = sdk;
 
-    const refreshAuth = () =>
+    // Reads the live OAuth token, so a mid-run rotation re-mints on the new one.
+    const refreshAuth = async () =>
       gatewayAuth(
         boot.credentials.host,
-        boot.credentials.accessToken,
+        await currentAccessToken(boot.credentials),
         boot.programId,
       );
     const auth = await refreshAuth();
@@ -309,7 +311,7 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
         const { setupPostHogMcp } = await import('./mcp');
         const mcp = await setupPostHogMcp({
           mcpUrl: boot.credentials.host.mcpUrl,
-          accessToken: boot.credentials.accessToken,
+          accessToken: await currentAccessToken(boot.credentials),
           userAgent: WIZARD_USER_AGENT,
         });
         extensionFactories.push(mcp.extensionFactory);
