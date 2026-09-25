@@ -9,10 +9,9 @@ To call it from code, use `runAgent`. The
 
 ## What goes in and out
 
-| Direction | What the agent takes or gives                                                                                                                                                                                                               | What never crosses                                                         |
-| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| In        | `RunConfig`: the program ID, the run definition, a resolved route, tools and a flag snapshot. `RunInput`: the project directory, the login, the project and user, the flags and the PostHog host. `onProgress`, `interaction` and `signal`. | A `WizardSession`, a TUI or headless store, `getUI()` or a `ProgramConfig` |
-| Out       | Progress events as copies, questions through `interaction`, and one `RunResult`.                                                                                                                                                            | Live objects, a thrown error or a process exit                             |
+- **In.** A `RunConfig`, a `RunInput`, and callbacks for progress and questions.
+- **Out.** One `RunResult` at the end.
+- **Never in.** A session, a store or the UI.
 
 ## Where things live
 

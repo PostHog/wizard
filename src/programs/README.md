@@ -9,10 +9,10 @@ To run a program from code, call `runProgram`. The
 
 ## What goes in and out of `runProgram`
 
-| Direction | What `runProgram` takes or gives                                                                                                                                                                            | What never crosses                          |
-| --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
-| In        | `ProgramInput`: the run and settings built from a `ProgramConfig`, the project directory, a login and flags. `ProgramOptions`: the login, questions, approval and gate waits, flags, progress and `signal`. | A `WizardSession`, a TUI store or `getUI()` |
-| Out       | Progress as copies, and one `ProgramRunOutcome`.                                                                                                                                                            | The `ProgramStore` itself, or live objects  |
+- **In.** A `ProgramInput`, and callbacks for login, approval, questions and
+  progress.
+- **Out.** One `ProgramRunOutcome` at the end.
+- **Never in.** A session, a store or the UI.
 
 ## Where things live
 
