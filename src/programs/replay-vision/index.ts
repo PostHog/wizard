@@ -5,7 +5,7 @@ import {
   gatherFrameworkContext,
 } from '@programs/detection/index';
 import { scopeInstallDirToProject } from '@programs/detection/project-scope';
-import type { ProgramCiHost } from '@programs/host-capabilities';
+import type { CiRunnerContext } from '@programs/runner-context';
 import { FRAMEWORK_REGISTRY } from '@programs/registry';
 import { createSkillProgram } from '@programs/agent-skill/index';
 import { AGENT_SKILL_STEPS } from '@programs/agent-skill/steps';
@@ -174,9 +174,9 @@ export const replayVisionConfig: ProgramConfig = {
 
   ciPreRun: async (
     session: WizardSession,
-    host: ProgramCiHost,
+    runner: CiRunnerContext,
   ): Promise<void> => {
-    await scopeInstallDirToProject(session, host);
+    await scopeInstallDirToProject(session, runner);
 
     const integration = await detectFramework(session.installDir);
     if (!integration) {

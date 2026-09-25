@@ -13,10 +13,7 @@ import {
 } from '@programs/error-tracking/detect-agentic';
 import type { ProgramConfig, ProgramStep } from '@programs/program-step';
 import type { WizardSession } from '@lib/wizard-session';
-import type {
-  ProgramCiHost,
-  ProgramRunHost,
-} from '@programs/host-capabilities';
+import type { CiRunnerContext, RunnerContext } from '@programs/runner-context';
 import { preinstallPostHogCliOnce } from '@programs/shared/posthog-cli-preinstall';
 import { analytics } from '@utils/analytics';
 import { wizardAbort } from '@utils/wizard-abort';
@@ -65,7 +62,7 @@ async function abortUnsupportedPlatform(
  */
 function maybePreinstallPostHogCli(
   integration: Integration | null,
-  warn: ProgramRunHost['warn'],
+  warn: RunnerContext['warn'],
 ): void {
   if (!integration || !SYMBOL_UPLOAD_CLI_FRAMEWORKS.has(integration)) return;
   preinstallPostHogCliOnce(
@@ -183,18 +180,18 @@ export const errorTrackingConfig: ProgramConfig = {
   getContentBlocks,
   getTips,
 
-  run: (session: WizardSession, host: ProgramRunHost): Promise<ProgramRun> => {
+  run: (session: WizardSession, runner: RunnerContext): Promise<ProgramRun> => {
     maybePreinstallPostHogCli(session.integration, (message) =>
-      host.warn(message),
+      runner.warn(message),
     );
     return Promise.resolve(ERROR_TRACKING_RUN);
   },
 
   ciPreRun: async (
     session: WizardSession,
-    host: ProgramCiHost,
+    runner: CiRunnerContext,
   ): Promise<void> => {
-    await scopeInstallDirToProject(session, host);
+    await scopeInstallDirToProject(session, runner);
 
     const integration = await detectFramework(session.installDir);
     if (!integration) {

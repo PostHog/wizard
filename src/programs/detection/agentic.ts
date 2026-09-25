@@ -336,7 +336,7 @@ function detectionRunDefinition(prompt: string): AgentRunDefinition {
 }
 
 /** What the UI saw before `runAgent`: no run lifecycle, spinner, outro, or setup logs below warn. */
-function reachesHost(event: AgentProgress): boolean {
+function reachesUi(event: AgentProgress): boolean {
   switch (event.kind) {
     case 'lifecycle':
     case 'completion':
@@ -419,7 +419,7 @@ export async function detectProjectsWithAgent(
   const reduceUi = createUiReducer(getUI());
   const forward = (event: AgentProgress): void => {
     if (event.kind === 'activity') onEvent?.(event.line);
-    if (reachesHost(event)) reduceUi(event);
+    if (reachesUi(event)) reduceUi(event);
   };
 
   for (let attempt = 0; attempt < 2; attempt++) {

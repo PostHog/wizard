@@ -4,7 +4,7 @@ import {
 } from '@programs/agent-skill/index';
 import type { ProgramStep, ProgramConfig } from '@programs/program-step';
 import type { ProgramRun } from '@programs/program-run';
-import type { ProgramRunHost } from '@programs/host-capabilities';
+import type { RunnerContext } from '@programs/runner-context';
 import type { WizardSession } from '@lib/wizard-session';
 import { OutroKind } from '@lib/wizard-session';
 import { WIZARD_TOOL_NAMES } from '@agent';
@@ -57,7 +57,7 @@ const baseConfig = createSkillProgram({
 
 const auditRun = async (
   session: WizardSession,
-  host: ProgramRunHost,
+  runner: RunnerContext,
 ): Promise<ProgramRun> => {
   seedBeforeAuditRun(session);
 
@@ -67,7 +67,7 @@ const auditRun = async (
 
   const baseRun =
     typeof baseConfig.run === 'function'
-      ? await baseConfig.run(session, host)
+      ? await baseConfig.run(session, runner)
       : baseConfig.run;
 
   return {

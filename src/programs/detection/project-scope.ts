@@ -10,7 +10,7 @@ import {
   type DetectTarget,
 } from './agentic.js';
 import { authenticate } from '@programs/authenticate';
-import type { ProgramCiHost } from '@programs/host-capabilities';
+import type { CiRunnerContext } from '@programs/runner-context';
 import { FRAMEWORK_REGISTRY } from '@programs/registry';
 import {
   Integration,
@@ -104,7 +104,7 @@ function captureOutcome(
 /** Flag-gated non-interactive monorepo phase: scan, auto-choose the recommended project, re-point session.installDir; every failure leaves the session untouched. */
 export async function scopeInstallDirToProject(
   session: WizardSession,
-  host: ProgramCiHost,
+  runner: CiRunnerContext,
 ): Promise<void> {
   // Idempotent early auth: the detector needs credentials and the flag must evaluate as the logged-in user.
   await authenticate(session, 'posthog-integration');
@@ -115,7 +115,7 @@ export async function scopeInstallDirToProject(
     return;
   }
 
-  host.log.info('Scanning the repo for projects...');
+  runner.log.info('Scanning the repo for projects...');
   const startedAt = Date.now();
   let report: AgenticDetectionReport;
   try {
@@ -130,7 +130,9 @@ export async function scopeInstallDirToProject(
     const error = err instanceof Error ? err : new Error(String(err));
     if (error instanceof AgenticDetectionTimeoutError) {
       captureOutcome('timeout', { duration_ms: Date.now() - startedAt });
-      host.log.warn(`${error.message}; continuing with the install dir as-is.`);
+      runner.log.warn(
+        `${error.message}; continuing with the install dir as-is.`,
+      );
       return;
     }
     analytics.captureException(error, { step: 'agentic_detection' });
@@ -138,7 +140,7 @@ export async function scopeInstallDirToProject(
       duration_ms: Date.now() - startedAt,
       error_message: error.message,
     });
-    host.log.warn(
+    runner.log.warn(
       `Project scan failed (${error.message}); continuing with the install dir as-is.`,
     );
     return;
@@ -161,7 +163,7 @@ export async function scopeInstallDirToProject(
   const project = chooseIntegrationProject(projects);
   if (!project) {
     captureOutcome('no-project', scanProperties);
-    host.log.info(
+    runner.log.info(
       'The scan found no supported project; continuing with the install dir as-is.',
     );
     return;
@@ -173,5 +175,5 @@ export async function scopeInstallDirToProject(
     chosen_framework: project.targetId,
     chosen_path: project.path,
   });
-  host.log.info(`Continuing with ${project.path} (${project.framework}).`);
+  runner.log.info(`Continuing with ${project.path} (${project.framework}).`);
 }

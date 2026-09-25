@@ -15,10 +15,7 @@ import {
   gatherFrameworkContext,
 } from '@programs/detection/index';
 import { scopeInstallDirToProject } from '@programs/detection/project-scope';
-import type {
-  ProgramCiHost,
-  ProgramRunHost,
-} from '@programs/host-capabilities';
+import type { CiRunnerContext, RunnerContext } from '@programs/runner-context';
 import { FRAMEWORK_REGISTRY } from '@programs/registry';
 import { wizardAbort } from '@utils/wizard-abort';
 import { ErrorCodes } from '@shared/errors';
@@ -267,9 +264,9 @@ export const posthogIntegrationConfig: ProgramConfig = {
   // onReady hook. Auto-detect the framework, then gather context.
   ciPreRun: async (
     session: WizardSession,
-    host: ProgramCiHost,
+    runner: CiRunnerContext,
   ): Promise<void> => {
-    await scopeInstallDirToProject(session, host);
+    await scopeInstallDirToProject(session, runner);
 
     const integration = await detectFramework(session.installDir);
     if (!integration) {
@@ -302,7 +299,7 @@ export const posthogIntegrationConfig: ProgramConfig = {
 
   run: async (
     session: WizardSession,
-    host: ProgramRunHost,
+    runner: RunnerContext,
   ): Promise<ProgramRun> => {
     const config = session.frameworkConfig!;
 
@@ -323,13 +320,13 @@ export const posthogIntegrationConfig: ProgramConfig = {
       if (packageJson) {
         const { hasDeclaredDependency } = await import('@utils/package-json');
         if (!hasDeclaredDependency(config.detection.packageName, packageJson)) {
-          host.warn(
+          runner.warn(
             `${config.detection.packageDisplayName} does not seem to be installed. Continuing anyway — the agent will handle it.`,
           );
         }
         frameworkVersion = config.detection.getVersion(packageJson);
       } else {
-        host.warn(
+        runner.warn(
           'Could not find package.json. Continuing anyway — the agent will handle it.',
         );
       }

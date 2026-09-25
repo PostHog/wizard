@@ -1,5 +1,5 @@
-/** Effects the non-interactive host supplies while a program scopes its project. */
-export type ProgramCiHost = {
+/** Effects the non-interactive runner supplies while a program scopes its project. */
+export type CiRunnerContext = {
   log: {
     info(message: string): void;
     warn(message: string): void;
@@ -7,7 +7,7 @@ export type ProgramCiHost = {
 };
 
 /** Live UI effects a program may need after its run definition resolves. */
-export type ProgramRunHost = {
+export type RunnerContext = {
   getFrameworkContext(key: string): unknown;
   setFrameworkContext(key: string, value: unknown): void;
   warn(message: string): void;
