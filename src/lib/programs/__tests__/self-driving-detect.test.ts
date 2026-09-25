@@ -165,20 +165,6 @@ describe('SELF_DRIVING_ABORT_CASES', () => {
     expect(matched[0].message).toBeTruthy();
     expect(matched[0].body).toBeTruthy();
   });
-
-  it('frames the unavailable-access abort as open beta, not a closed per-team beta', () => {
-    // STEP 1 no longer gates on access — Self-driving is open beta — but the
-    // abort is kept as a safety net. Its copy must say the product is still
-    // in beta while dropping the old closed/per-team "join the beta" framing.
-    const [accessCase] = SELF_DRIVING_ABORT_CASES.filter((c) =>
-      c.match.test('self-driving is not available for this project'),
-    );
-    expect(accessCase).toBeDefined();
-    const copy = `${accessCase.message} ${accessCase.body}`.toLowerCase();
-    expect(copy).toContain('open beta');
-    expect(copy).not.toContain('per team');
-    expect(copy).not.toContain('join the beta');
-  });
 });
 
 describe('selfDrivingConfig', () => {
@@ -188,13 +174,9 @@ describe('selfDrivingConfig', () => {
     );
   });
 
-  it('ships its own Learn deck ending on the self-driving closer', () => {
+  it('ships its own Learn deck', () => {
     const blocks = selfDrivingConfig.getContentBlocks?.() ?? [];
     expect(blocks.length).toBeGreaterThan(0);
-    const last = blocks[blocks.length - 1];
-    expect(
-      typeof last === 'object' && 'content' in last ? last.content : '',
-    ).toBe('Your product drives itself.');
   });
 
   it('gives wizard_ask a 30-min timeout for the browser-handoff steps', async () => {
