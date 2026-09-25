@@ -1022,7 +1022,6 @@ async function executeOrchestrator(
     orchestrator: orchestratorCtx(),
     spinnerMessage: 'Planning the integration...',
     successMessage: 'Planned the integration',
-    additionalFeatureQueue: [],
     requestRemark: false,
     analyticsProperties: { task_type: 'seed', harness: seedPick.harness },
   });
@@ -1235,7 +1234,6 @@ async function executeOrchestrator(
           orchestrator: orchestratorCtx(task.id),
           spinnerMessage: '',
           successMessage: '',
-          additionalFeatureQueue: [],
           requestRemark: false,
           analyticsProperties: {
             task_type: task.type,

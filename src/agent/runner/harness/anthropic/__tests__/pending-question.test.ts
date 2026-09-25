@@ -91,7 +91,6 @@ async function initializeHarness(
       ...inputs,
       spinnerMessage: 'Working',
       successMessage: 'Done',
-      additionalFeatureQueue: [],
       requestRemark: false,
       analyticsProperties: {},
       orchestrator: {} as TaskRunInputs['orchestrator'],
