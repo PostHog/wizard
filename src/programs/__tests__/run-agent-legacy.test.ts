@@ -91,6 +91,8 @@ vi.mock('@utils/wizard-abort', async (original) => ({
 }));
 vi.mock('../posthog-integration/detect', () => ({
   maybeStampAiSdkDetected: vi.fn(),
+}));
+vi.mock('../posthog-integration/ai-sdk-stamp', () => ({
   stampAiSdkDetected: vi.fn(),
 }));
 
@@ -365,6 +367,18 @@ it('projects a refreshed token and the AI SDK stamp back onto the session', asyn
   expect(current.credentials?.host).toBeInstanceOf(HostResolution);
   expect(setAccessToken).toHaveBeenCalledExactlyOnceWith(current.credentials);
   expect(current.aiSdkStampReported).toBe(true);
+});
+
+it('logs a progress handler that throws instead of dropping it', async () => {
+  vi.spyOn(getUI(), 'pushStatus').mockImplementationOnce(() => {
+    throw new Error('screen gone');
+  });
+  await runProgramAgent(program(), session());
+  expect(logToFile).toHaveBeenCalledWith(
+    expect.stringMatching(
+      /^\[agent-runner\] progress diagnostic \(status run=.+\): screen gone$/,
+    ),
+  );
 });
 
 it.each([

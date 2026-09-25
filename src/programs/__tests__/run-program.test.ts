@@ -7,7 +7,7 @@ import { ErrorCodes } from '@shared/errors';
 import { DiscoveredFeature } from '@lib/wizard-session';
 import { analytics } from '@utils/analytics';
 import { refreshAccessToken } from '@utils/oauth';
-import { resetOAuthSession } from '@shared/oauth-session';
+import { oauthCredentials, resetOAuthSession } from '@shared/oauth-session';
 import type { ResolvedProgramCredentials } from '../credentials';
 import type { ProgramInput, ProgramOptions } from '../run-program';
 import { runProgram } from '@programs';
@@ -303,6 +303,33 @@ describe('runProgram', () => {
       expect(runAgent).not.toHaveBeenCalled();
     },
   );
+
+  it('a caller abort during the token refresh keeps the rotated refresh token', async () => {
+    const controller = new AbortController();
+    vi.mocked(refreshAccessToken).mockImplementationOnce(() => {
+      controller.abort();
+      return Promise.resolve(refreshedToken);
+    });
+
+    const result = await runProgram(
+      'metrics',
+      {
+        installDir: '/project',
+        run,
+        credentials: { ...credentials, posthog: aging() },
+      },
+      { signal: controller.signal },
+    );
+
+    expect(result.outcome).toBe(RunOutcome.Aborted);
+    const rotated = {
+      accessToken: 'pha_refreshed',
+      refreshToken: 'phr_rotated',
+    };
+    expect(result.data.credentials).toMatchObject(rotated);
+    expect(await oauthCredentials()).toMatchObject(rotated);
+    expect(runAgent).not.toHaveBeenCalled();
+  });
 
   it('runs in order: agent started, credentials, approval, post-auth, flags, refresh, route, agent', async () => {
     const order: string[] = [];

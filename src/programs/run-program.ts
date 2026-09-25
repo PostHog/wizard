@@ -31,7 +31,7 @@ import {
   type CredentialsProvider,
   type ResolvedProgramCredentials,
 } from './credentials';
-import { stampAiSdkDetected } from './posthog-integration/detect';
+import { stampAiSdkDetected } from './posthog-integration/ai-sdk-stamp';
 import {
   ProgramStore,
   type ProgramDiagnostic,

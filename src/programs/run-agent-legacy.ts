@@ -237,6 +237,13 @@ async function runSessionProgram(
       interaction: uiInteraction(ui),
     },
   );
+  // runProgram keeps a throwing progress handler or a late event as a diagnostic, so log it.
+  for (const diagnostic of result.diagnostics) {
+    const runLabel = 'runId' in diagnostic ? ` run=${diagnostic.runId}` : '';
+    logToFile(
+      `[agent-runner] progress diagnostic (${diagnostic.eventKind}${runLabel}): ${diagnostic.message}`,
+    );
+  }
   if (capabilityFailure) throw capabilityFailure.error;
 
   // The adapter owns process exits, terminal analytics and rethrowing crashes.
