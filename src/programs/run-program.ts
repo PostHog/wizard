@@ -46,7 +46,7 @@ export type ProgramSettings = {
   postAuthGates?: readonly string[]; // steps settled after login, before the agent
 };
 
-/** Copied when runProgram receives it; functions stay by reference. */
+/** Copied when runProgram receives it; credentials, run, program, hooks and seedTasks stay by reference. */
 export interface ProgramInput {
   installDir: string; // the project the agent works in
   run: AgentRunDefinition; // built from the program's ProgramConfig
@@ -55,7 +55,7 @@ export interface ProgramInput {
   runId?: string; // labels progress and the outcome; generated when absent
   overrides?: ProgramOverrides; // launch overrides; dev and test builds only
   composed?: boolean; // true for a sub-run inside another program
-  skillId?: string; // the skill the run installs
+  skillId?: string; // labels the run; defaults to run.skillId, then integrationLabel
   integration?: Integration | null; // the detected framework
   frameworkDocsUrl?: string; // the framework's docs page
   flags?: Partial<RunInput['flags']>; // run flags such as ci and signup
