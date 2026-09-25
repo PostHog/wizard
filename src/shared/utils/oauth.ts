@@ -371,6 +371,9 @@ function getPortProcessInfo(port: number): {
   port: number;
   user: string;
 } {
+  if (process.platform === 'win32') {
+    return { command: 'unknown', pid: 'unknown', port, user: 'unknown' };
+  }
   try {
     const output = execSync(`lsof -i :${port} -sTCP:LISTEN 2>/dev/null`, {
       encoding: 'utf-8',
@@ -391,11 +394,14 @@ function getPortProcessInfo(port: number): {
   }
 }
 
-function isPortInUseError(error: unknown): boolean {
+// EACCES/EPERM: the OS reserves or blocks the port (e.g. Windows excluded port ranges).
+const PORT_UNAVAILABLE_CODES = new Set(['EADDRINUSE', 'EACCES', 'EPERM']);
+
+export function isPortUnavailableError(error: unknown): boolean {
   return (
     error instanceof Error &&
     'code' in error &&
-    (error as NodeJS.ErrnoException).code === 'EADDRINUSE'
+    PORT_UNAVAILABLE_CODES.has((error as NodeJS.ErrnoException).code ?? '')
   );
 }
 
@@ -608,7 +614,12 @@ export async function performOAuthFlow(
           port,
         ));
       } catch (e) {
-        if (!isPortInUseError(e)) throw e;
+        if (!isPortUnavailableError(e)) throw e;
+        logToFile(
+          `[oauth] port ${port} unavailable: ${
+            (e as NodeJS.ErrnoException).code ?? 'unknown'
+          }`,
+        );
         lastProcessInfo = getPortProcessInfo(port);
         continue;
       }

@@ -1,5 +1,5 @@
 /**
- * PortConflictScreen — Modal when all OAuth port candidates are occupied.
+ * PortConflictScreen — Modal when all OAuth port candidates are occupied or blocked.
  *
  * Shows every port the wizard tried and asks the user to free them manually.
  */
@@ -40,8 +40,8 @@ export const PortConflictScreen = ({ store }: PortConflictScreenProps) => {
       }
     >
       <Text>
-        The wizard needs a local port for OAuth. We tried these ports which are
-        all in use:
+        The wizard needs a local port for OAuth. We tried these ports, and each
+        one is in use or blocked by the operating system:
       </Text>
       <Box flexDirection="column" marginY={1} paddingLeft={2} gap={0}>
         {OAUTH_PORTS.map((port) => (
@@ -51,7 +51,7 @@ export const PortConflictScreen = ({ store }: PortConflictScreenProps) => {
           </Text>
         ))}
       </Box>
-      <Text dimColor>Please free one of these ports and retry.</Text>
+      <Text dimColor>Please free or unblock one of these ports and retry.</Text>
     </ModalOverlay>
   );
 };
