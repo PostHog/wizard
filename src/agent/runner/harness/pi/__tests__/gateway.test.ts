@@ -161,6 +161,7 @@ describe('withGatewayRemint', () => {
   ) {
     const prompts: string[] = [];
     const session = {
+      agent: { state: { messages: [] as unknown[] } },
       prompt: vi.fn((text: string) => {
         prompts.push(text);
         wrapped.noteAssistantTurn(turns.shift() ?? fine);

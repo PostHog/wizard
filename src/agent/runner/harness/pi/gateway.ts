@@ -156,6 +156,14 @@ export type GatewayTerminalFailure = {
   status?: number;
 };
 
+/** What a user reads when the model stream kept dropping after every retry. */
+function droppedStreamMessage(errorMessage: string): string {
+  return (
+    `The connection to the PostHog AI gateway dropped mid-response, and retrying didn't fix it (${errorMessage}). ` +
+    'This is usually a network problem or a brief gateway issue. Try again in a few minutes.'
+  );
+}
+
 export function gatewayTerminalFailure(
   turn: ({ stopReason?: string } & GatewayTurnError) | undefined,
 ): GatewayTerminalFailure | undefined {
@@ -168,6 +176,12 @@ export function gatewayTerminalFailure(
       : 'Gateway request failed');
   if (turn.stopReason === 'aborted') {
     return { classification: AgentErrorType.ABORT, message };
+  }
+  if (isDroppedModelStream(turn)) {
+    return {
+      classification: AgentErrorType.API_ERROR,
+      message: droppedStreamMessage(message),
+    };
   }
   const codes =
     turn.diagnostics
@@ -223,8 +237,35 @@ function isDroppedModelStream(turn: GatewayTurnError | undefined): boolean {
   );
 }
 
+/** The drops pi's auto-retry misses; it already retries `socket hang up` and `terminated`. */
+function isDropPiMisses(turn: GatewayTurnError | undefined): boolean {
+  return /upstream closed the stream|ECONNRESET/i.test(
+    turn?.errorMessage ?? '',
+  );
+}
+
 /** The wait before each resume after a dropped stream; its length is the limit. */
 const STREAM_RETRY_DELAYS_MS = [1_000, 2_000];
+
+/** Spreads each wait by ±20%, so runs that dropped together don't resume together. */
+function withJitter(ms: number): number {
+  return Math.round(ms * (0.8 + Math.random() * 0.4));
+}
+
+/** Drops a failed last turn so the resume re-sends the context without it, as pi's retry does. */
+function dropFailedTurn(agent: AgentTranscript): void {
+  const messages = agent.state.messages;
+  const last = messages[messages.length - 1] as
+    | { role?: string; stopReason?: string }
+    | undefined;
+  if (last?.role === 'assistant' && last.stopReason === 'error')
+    agent.state.messages = messages.slice(0, -1);
+}
+
+/** The part of pi's `Agent` whose transcript a resume trims. */
+interface AgentTranscript {
+  state: { messages: unknown[] };
+}
 
 /** Resolves after `ms`, or as soon as the signal aborts. */
 function backoff(ms: number, signal: AbortSignal | undefined): Promise<void> {
@@ -242,7 +283,7 @@ function backoff(ms: number, signal: AbortSignal | undefined): Promise<void> {
 
 export interface GatewayRemintOptions {
   signal?: AbortSignal;
-  session: { prompt(text: string): Promise<void> };
+  session: { prompt(text: string): Promise<void>; agent: AgentTranscript };
   registry: { registerProvider(providerName: string, config: never): void };
   auth: GatewayAuth;
   /** The cache: the same token while fresh, a new mint past the refresh point. */
@@ -265,8 +306,9 @@ export interface GatewayRemintOptions {
  * failure the next request can fix. A 401 from a bearer past its refresh
  * instant mints once and re-registers the provider (pi resolves the apiKey
  * per request); a 401 on a fresh bearer, or a second one, is left to the
- * harness's normal failure path. A dropped model stream resumes after 1s,
- * then 2s, twice at most per prompt() call.
+ * harness's normal failure path. A dropped model stream that pi's own retry
+ * misses drops the failed turn and resumes after about 1s, then 2s, twice at
+ * most per prompt() call.
  */
 export function withGatewayRemint(opts: GatewayRemintOptions): {
   prompt(text: string): Promise<void>;
@@ -288,7 +330,7 @@ export function withGatewayRemint(opts: GatewayRemintOptions): {
       rejected =
         lastTurn?.stopReason === 'error' && isGatewayAuthRejection(lastTurn);
       dropped =
-        lastTurn?.stopReason === 'error' && isDroppedModelStream(lastTurn)
+        lastTurn?.stopReason === 'error' && isDropPiMisses(lastTurn)
           ? lastTurn.errorMessage
           : undefined;
     },
@@ -316,7 +358,7 @@ export function withGatewayRemint(opts: GatewayRemintOptions): {
           dropped !== undefined &&
           streamRetries < STREAM_RETRY_DELAYS_MS.length
         ) {
-          const delayMs = STREAM_RETRY_DELAYS_MS[streamRetries];
+          const delayMs = withJitter(STREAM_RETRY_DELAYS_MS[streamRetries]);
           streamRetries += 1;
           opts.onStreamRetry?.({
             attempt: streamRetries,
@@ -325,6 +367,7 @@ export function withGatewayRemint(opts: GatewayRemintOptions): {
             message: dropped,
           });
           await backoff(delayMs, opts.signal);
+          dropFailedTurn(opts.session.agent);
         } else {
           return;
         }
