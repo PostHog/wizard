@@ -40,6 +40,7 @@ import {
   classifyRunFailure,
   ErrorCodes,
   WizardError,
+  type ErrorCode,
 } from '@shared/errors';
 import type { AgentResult } from '../../harness/types';
 import type { AgentInteraction } from '@agent/progress';
@@ -213,6 +214,69 @@ async function fetchSkillMenuEntries(
   const menu = await fetchSkillMenu(skillsBaseUrl);
   if (!menu) return [];
   return Object.values(menu.categories).flat();
+}
+
+/** The failure a preflight miss decides: three causes reach the same miss, and only one of them is a download the user can retry. */
+export function skillPreflightFailure(args: {
+  missing: readonly string[];
+  framework: string | undefined;
+  menuAvailable: boolean;
+  frameworkDocsUrl: string | undefined;
+}): AgentFailure {
+  const { missing, framework, menuAvailable, frameworkDocsUrl } = args;
+  const docsUrl = frameworkDocsUrl ?? POSTHOG_DOCS_URL;
+
+  const { code, title, message } = ((): {
+    code: ErrorCode;
+    title: string;
+    message: string;
+  } => {
+    if (!framework) {
+      return {
+        code: ErrorCodes.DetectNoFramework,
+        title: 'Orchestrator preflight: no detected framework',
+        message:
+          'Could not auto-detect your framework for this project, so there are no setup instructions to run.\n' +
+          "Please run the wizard from your app's root directory, or integrate manually here:\n" +
+          `  ${docsUrl}`,
+      };
+    }
+    if (!menuAvailable) {
+      return {
+        code: ErrorCodes.SkillMenuFetchFailed,
+        title: 'Orchestrator preflight: skill menu unavailable',
+        message:
+          'Setup instructions for this project failed to download.\n' +
+          `Please try again, or contact ${WIZARD_CONTACT_EMAIL}.\n\n` +
+          'You can also set up with your agent by downloading the skills here:\n' +
+          '  https://github.com/PostHog/context-mill/releases\n' +
+          'or integrate manually here:\n' +
+          `  ${docsUrl}`,
+      };
+    }
+    // A docs page resolves only for a key the framework registry knows, so its
+    // absence marks an internal id that would mean nothing to the user.
+    const subject = frameworkDocsUrl ? framework : 'this project';
+    return {
+      code: ErrorCodes.AgentOrchestratorSkillVariantMissing,
+      title: 'Orchestrator preflight: skill variant missing',
+      message:
+        `The wizard has no setup instructions for ${subject} yet.\n` +
+        'You can integrate manually here:\n' +
+        `  ${docsUrl}\n\n` +
+        `Please tell us what you are building: ${WIZARD_CONTACT_EMAIL}`,
+    };
+  })();
+
+  return {
+    code,
+    message,
+    error: new WizardError(
+      title,
+      { missing: missing.join(', '), framework },
+      code,
+    ),
+  };
 }
 
 /** Menu id for a bare skill id + framework via the menu's declared group/framework/default fields; undefined when nothing matches. */
@@ -808,26 +872,15 @@ async function executeOrchestrator(
     }
   }
   if (missingVariants.length > 0) {
-    // The framework's own docs page, resolved by the caller; generic docs when detection found none.
-    const docsUrl = framework ? input.frameworkDocsUrl : undefined;
-    return failed({
-      code: ErrorCodes.AgentOrchestratorSkillVariantMissing,
-      message:
-        'Setup instructions for this project failed to download.\n' +
-        'Please try again, or contact wizard@posthog.com.\n\n' +
-        'You can also set up with your agent by downloading the skills here:\n' +
-        '  https://github.com/PostHog/context-mill/releases\n' +
-        'or integrate manually here:\n' +
-        `  ${docsUrl ?? POSTHOG_DOCS_URL}`,
-      error: new WizardError(
-        'Orchestrator preflight: skill variant missing',
-        {
-          missing: missingVariants.join(', '),
-          framework,
-        },
-        ErrorCodes.AgentOrchestratorSkillVariantMissing,
-      ),
-    });
+    return failed(
+      skillPreflightFailure({
+        missing: missingVariants,
+        framework,
+        menuAvailable: menuSkillEntries.length > 0,
+        // The framework's own docs page, resolved by the caller.
+        frameworkDocsUrl: input.frameworkDocsUrl,
+      }),
+    );
   }
 
   // The client injects the basics (project context + the I/O contract) around
