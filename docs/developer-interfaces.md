@@ -88,21 +88,12 @@ when consent is already settled.
 ### Do a quack
 
 [`run-program-quack.ts`](examples/run-program-quack.ts) is the smallest
-`runProgram` call. It logs in with keys, the same way `--ci` does, runs one
-prompt that replies `quack`, logs status lines and prints the outcome. Each step
-has a comment.
+`runProgram` call. It runs one prompt that replies `quack`, logs status lines
+and prints the outcome. Each step has a comment.
 
-It takes the two keys from
-[local credentials](local-dev.md#credentials-for-local-ci-and-headless-runs). On
-the [local stack](local-dev.md), the personal API key is the one PostHog's
-`setup_local_api_key` command creates, and the gateway token is the `phs_` key
-PostHog's `setup-gateway-e2e` provisions. Run it from the repository root:
+Run it from the repository root against the [local stack](local-dev.md):
 
 ```bash
-export POSTHOG_PERSONAL_API_KEY=<personal API key>
-export WIZARD_CI_GATEWAY_TOKEN_FILE=<file holding the gateway token>
-export WIZARD_CI_GATEWAY_URL=http://localhost:8080
-export QUACK_INSTALL_DIR=<a git-initialized directory>
 npx tsx --tsconfig tsconfig.json docs/examples/run-program-quack.ts
 ```
 
@@ -192,11 +183,8 @@ export const signature: (
 ### Do a quack
 
 [`run-agent-quack.ts`](examples/run-agent-quack.ts) is the smallest `runAgent`
-call. It logs in with the same keys, builds a `RunConfig` with one prompt and no
-Write, Edit or Bash, and prints the transcript tail and the outcome. Each step
-has a comment.
-
-With the same variables set:
+call. It builds a `RunConfig` with one prompt and no Write, Edit or Bash, and
+prints the transcript tail and the outcome. Each step has a comment.
 
 ```bash
 npx tsx --tsconfig tsconfig.json docs/examples/run-agent-quack.ts
