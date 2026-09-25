@@ -14,3 +14,14 @@ export {
   type AgenticDetectOptions,
   type DetectEvent,
 } from './agentic.js';
+export {
+  detectFrameworkRouted,
+  getJevMode,
+  type JevMode,
+  type RoutedDetection,
+} from './jev/route.js';
+export {
+  detectWithJev,
+  summarizeJevReport,
+  type JevDetectionReport,
+} from './jev/index.js';

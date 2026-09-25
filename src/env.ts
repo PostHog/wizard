@@ -72,6 +72,9 @@ type RuntimeEnvKey =
   | 'POSTHOG_HANDOFF_OUTPUT_PATH'
   // Local/CI escape hatch to disable Warlock scanning without the PostHog flag.
   | 'POSTHOG_WIZARD_WARLOCK_DISABLED'
+  // Jev classifier detection prototype, dev builds only (@lib/detection/jev).
+  | 'WIZARD_JEV_DETECTION'
+  | 'TYPESAFE_API_KEY'
   | 'DEBUG'
   // Agent / MCP
   | 'MCP_URL'

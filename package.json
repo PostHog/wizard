@@ -40,6 +40,7 @@
     "@langchain/core": "^0.3.40",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@posthog/warlock": "0.2.4",
+    "@typesafe-ai/sdk": "^0.5.7",
     "axios": "1.7.4",
     "fast-glob": "^3.3.3",
     "fflate": "^0.8.3",
@@ -148,7 +149,8 @@
     "prepare": "husky",
     "screens:check": "tsx scripts/check-screens.tsx",
     "wizard-ci-explore": "tsx scripts/wizard-ci-explore.no-jest.ts",
-    "wizard-ci-replay": "tsx scripts/tui-replay.no-jest.ts"
+    "wizard-ci-replay": "tsx scripts/tui-replay.no-jest.ts",
+    "jev-detect": "tsx scripts/jev-detect.no-jest.ts"
   },
   "lint-staged": {
     ".claude/settings.json": "sh -c 'printf \"\\n\\033[31mDo not commit .claude/settings.json — use .claude/settings.local.json (gitignored).\\nUnstage with: git restore --staged .claude/settings.json\\033[0m\\n\\n\" >&2 && exit 1'",

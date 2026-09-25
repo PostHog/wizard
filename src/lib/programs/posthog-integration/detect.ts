@@ -18,10 +18,11 @@ import {
 } from '@lib/wizard-session';
 import { FRAMEWORK_REGISTRY } from '@lib/registry';
 import {
-  detectFramework,
+  detectFrameworkRouted,
   discoverFeatures,
   gatherFrameworkContext,
   checkFrameworkVersion,
+  summarizeJevReport,
 } from '@lib/detection/index';
 import { analytics } from '@utils/analytics';
 import { detectWarehouseSources } from '@lib/warehouse-sources/detect';
@@ -39,7 +40,12 @@ export async function detectPostHogIntegration(
   const session = ctx.session;
   const installDir = session.installDir;
 
-  const detectedIntegration = await detectFramework(installDir);
+  // Routed detection: static-only unless WIZARD_JEV_DETECTION says otherwise.
+  const { integration: detectedIntegration, jevReport } =
+    await detectFrameworkRouted(installDir);
+  if (jevReport) {
+    ctx.setFrameworkContext('jevDetection', summarizeJevReport(jevReport));
+  }
 
   if (detectedIntegration) {
     const config = FRAMEWORK_REGISTRY[detectedIntegration];
