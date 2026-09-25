@@ -1,6 +1,7 @@
 import { auditCommand } from '../commands/audit';
 import { aiObservabilityCommand } from '../commands/ai-observability';
 import { basicIntegrationCommand } from '../commands/basic-integration';
+import { featureFlagsCommand } from '../commands/feature-flags';
 import { revenueCommand } from '../commands/revenue';
 import { HEADLESS_FLAG } from '../lib/headless-mode';
 import { GLOBAL_OPTIONS } from '../wizard';
@@ -24,6 +25,10 @@ describe('headless flag scope', () => {
 
   test('is declared on the AI Observability command', () => {
     expect(aiObservabilityCommand.options).toHaveProperty(HEADLESS_FLAG);
+  });
+
+  test('is declared on the feature-flags command', () => {
+    expect(featureFlagsCommand.options).toHaveProperty(HEADLESS_FLAG);
   });
 
   test('is NOT declared on an unrelated native command', () => {

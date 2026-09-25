@@ -621,15 +621,20 @@ async function executeOrchestrator(
   // once up front: its types drive enqueue validation, and resolving a task to
   // its run config is then synchronous, with no mid-drain network latency.
   const flow = config.agentFlow ?? programId;
-  const registry = await loadAgentRegistry(boot.skillsBaseUrl, flow, {
-    exclude: effectiveExcludedTaskTypes(config, boot.wizardFlags),
-    // Baked into the prompts at load, so enqueue, dispatch, and telemetry all read one effective spec.
-    overrides: resolveStageOverrides(
-      programId,
-      boot.wizardFlags,
-      boot.wizardFlagPayloads,
-    ),
-  });
+  const registry = await loadAgentRegistry(
+    boot.skillsBaseUrl,
+    flow,
+    {
+      exclude: effectiveExcludedTaskTypes(config, boot.wizardFlags),
+      // Baked into the prompts at load, so enqueue, dispatch, and telemetry all read one effective spec.
+      overrides: resolveStageOverrides(
+        programId,
+        boot.wizardFlags,
+        boot.wizardFlagPayloads,
+      ),
+    },
+    config.agentPrompts,
+  );
   if (signal?.aborted) return cancelledRun();
   const seedPrompt = registry.seed;
   if (!seedPrompt) {

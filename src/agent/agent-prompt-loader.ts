@@ -455,7 +455,15 @@ export async function loadAgentRegistry(
   skillsBaseUrl: string,
   flow: string,
   opts?: Parameters<typeof buildRegistry>[2],
+  bundledPrompts?: readonly string[],
 ): Promise<AgentRegistry> {
+  if (bundledPrompts) {
+    const prompts = bundledPrompts.map((text) =>
+      parseAgentPrompt(text, flow, flow),
+    );
+    return buildRegistry(prompts, flow, opts);
+  }
+
   const menuRaw = await fetchText(`${skillsBaseUrl}/agent-menu.json`);
   const menu = JSON.parse(menuRaw) as AgentMenu;
 

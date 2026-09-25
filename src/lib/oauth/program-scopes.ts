@@ -221,6 +221,11 @@ export const WAREHOUSE_SOURCE_SCOPE_ADDITIONS = [
  */
 export const CONNECT_SLACK_SCOPE_ADDITIONS = ['integration:read'] as const;
 
+export const FEATURE_FLAGS_SCOPE_ADDITIONS = [
+  'feature_flag:read',
+  'feature_flag:write',
+] as const;
+
 /**
  * Extra scopes the replay-vision program needs on top of `WIZARD_OAUTH_SCOPES`.
  * The same set self-driving's step 6c uses, narrowed to just this flow:
@@ -268,6 +273,7 @@ const PROGRAM_SCOPE_ADDITIONS: Partial<Record<ProgramId, readonly string[]>> = {
   // ever changes, this line will fail to type-check.
   'mcp-tutorial': MCP_TUTORIAL_SCOPE_ADDITIONS,
   'agent-skill': AGENT_SKILL_SCOPE_ADDITIONS,
+  'feature-flags': FEATURE_FLAGS_SCOPE_ADDITIONS,
   'self-driving': SELF_DRIVING_SCOPE_ADDITIONS,
   'warehouse-source': WAREHOUSE_SOURCE_SCOPE_ADDITIONS,
   // The integration run carries the Slack outro step, and — when detection
