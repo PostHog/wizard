@@ -26,11 +26,23 @@ export const MAX_HANDOFF_TEXT_CHARS = 64 * 1024;
 
 export const PUBLISH_HANDOFF_TOOL_NAME = 'publish_handoff';
 
-/** Shared between the MCP server and the pi facade so the contract can't drift. */
+/**
+ * Shared between the MCP server and the pi facade so the contract can't drift.
+ *
+ * Naming who publishes is the load-bearing part: every task of an orchestrated
+ * run holds this tool, and "call it at the end of the run to deliver the
+ * report" is an instruction all of them can follow — so a run published one
+ * full report per step, each replaced by the next, and a step that read the
+ * call as its own finish skipped `complete_task` and was restarted.
+ */
 export const PUBLISH_HANDOFF_DESCRIPTION =
-  'Publish the handoff document — the full markdown report of what this run did — to the wizard session. ' +
-  'Call it exactly once, at the end of the run, passing the complete report as `content`. ' +
-  'This call is the required way to deliver the report to the user; do not write the report to a file yourself.';
+  'Publish the handoff document — the full markdown report of what the whole run did — to the wizard session. ' +
+  'A run publishes once: call it only when your own instructions ask you to write that report, passing the complete report as `content`, and never write the report to a file yourself. ' +
+  'It is not how you report your own work — in a run made of several tasks each step finishes with complete_task, and a step that was not asked for the run report leaves this one uncalled, because the section it owns travels in its handoff.';
+
+/** Appended for a task agent: the reminder lands as it decides it has finished. */
+export const TASK_REPORTING_NOTE =
+  ' This does not report your task: call complete_task to finish.';
 
 export const PUBLISH_HANDOFF_CONTENT_DESCRIPTION =
   'The complete handoff report as markdown, starting with an H1 heading.';
@@ -138,6 +150,8 @@ function writeHandoffFileAtomically(
 export function publishHandoff(
   content: string,
   emit: ProgressEmitter | undefined,
+  /** Set by both facades when the caller is one task of an orchestrated run. */
+  opts: { taskAgent?: boolean } = {},
 ): PublishHandoffResult {
   if (content.trim() === '') {
     analytics.wizardCapture('handoff published', {
@@ -188,6 +202,6 @@ export function publishHandoff(
     ok: true,
     message: `Handoff published (${text.length} chars${
       notes.length > 0 ? `, ${notes.join('; ')}` : ''
-    }).`,
+    }).${opts.taskAgent ? TASK_REPORTING_NOTE : ''}`,
   };
 }
