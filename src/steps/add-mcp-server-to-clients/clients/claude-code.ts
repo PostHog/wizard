@@ -8,8 +8,10 @@ import {
   PluginInstallResult,
 } from '@steps/add-mcp-server-to-clients/plugin-client';
 import {
+  expectedFailureHint,
   redactSecrets,
   scrubHomePaths,
+  type ExpectedFailure,
   type InstallResult,
 } from '@steps/add-mcp-server-to-clients/results';
 import { LoginCapable } from '@steps/add-mcp-server-to-clients/login-client';
@@ -37,6 +39,20 @@ const PLUGIN_REF = `${PLUGIN_NAME}@${PLUGIN_MARKETPLACE}`;
 
 /** The plugin is missing from every catalog the CLI can currently see. */
 const NOT_IN_A_MARKETPLACE = /not found in/i;
+
+/**
+ * Failures in the user's own environment during `plugin install`. Reporting
+ * them files issues nobody can action, so hand back a hint instead.
+ */
+const EXPECTED_FAILURES: ExpectedFailure[] = [
+  {
+    // Only the user-level file: a project settings file is not one we can name.
+    match:
+      /invalid JSON syntax in settings file at ~[\\/]\.claude[\\/]settings\.json/i,
+    stages: ['plugin install'],
+    hint: 'Claude Code could not read its settings — fix the invalid JSON in ~/.claude/settings.json, then retry',
+  },
+];
 
 /** One `plugin list --json` row; the CLI returns more fields than we read. */
 interface ListedPlugin {
@@ -472,15 +488,25 @@ export class ClaudeCodeMCPClient
     if (msg.includes('already installed') || msg.includes('already exists')) {
       return { success: true, alreadyInstalled: true };
     }
-    // `not found in any configured marketplace` is also what the pre-PR bug
-    // produced, so without the marketplace-add failure beside it the new root
-    // cause is indistinguishable from the old one in error tracking.
-    const failure = new Error(`Claude Code plugin install failed: ${msg}`);
-    if (marketplaceFailure) {
-      analytics.captureException(failure, { marketplaceFailure });
-    } else {
-      analytics.captureException(failure);
+    const stage = 'plugin install';
+    const hint = expectedFailureHint(msg, EXPECTED_FAILURES, stage);
+    if (hint) {
+      analytics.wizardCapture('mcp expected failure hinted', {
+        client: this.name,
+        stage,
+        hint,
+        details: msg,
+      });
+      return { success: false, reason: hint };
     }
+    // A constant message keeps one failure class in one issue. `not found in
+    // any configured marketplace` is also what the pre-PR bug produced, so the
+    // marketplace-add failure travels beside it to tell the two apart.
+    analytics.captureException(new Error('Claude Code plugin install failed'), {
+      stage,
+      details: msg,
+      ...(marketplaceFailure && { marketplaceFailure }),
+    });
     return { success: false, reason: msg };
   }
 

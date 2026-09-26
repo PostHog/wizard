@@ -12,7 +12,7 @@ vi.mock('fs', () => ({
 }));
 
 vi.mock('@utils/analytics', () => ({
-  analytics: { captureException: vi.fn() },
+  analytics: { captureException: vi.fn(), wizardCapture: vi.fn() },
 }));
 
 vi.mock('@utils/debug', () => ({
@@ -460,9 +460,10 @@ describe('ClaudeCodeMCPClient — plugin methods', () => {
       });
       expect(analytics.captureException).toHaveBeenCalledWith(
         expect.objectContaining({
-          message: expect.stringContaining('not found in any configured'),
+          message: 'Claude Code plugin install failed',
         }),
         expect.objectContaining({
+          details: expect.stringContaining('not found in any configured'),
           marketplaceFailure: expect.stringContaining('network unreachable'),
         }),
       );
@@ -508,9 +509,54 @@ describe('ClaudeCodeMCPClient — plugin methods', () => {
       });
       expect(analytics.captureException).toHaveBeenCalledWith(
         expect.objectContaining({
-          message: expect.stringContaining('network timeout'),
+          message: 'Claude Code plugin install failed',
+        }),
+        expect.objectContaining({
+          stage: 'plugin install',
+          details: expect.stringContaining('network timeout'),
         }),
       );
+    });
+
+    it('hints instead of reporting when the user settings file has invalid JSON', async () => {
+      routeClaude((cmd) => {
+        if (isCmd(cmd, 'plugin', 'list')) return listed();
+        if (isCmd(cmd, 'marketplace', 'list')) return marketplaces('posthog');
+        if (isCmd(cmd, 'install'))
+          return new Error(
+            'Failed to update settings: Invalid JSON syntax in settings file at /Users/example/.claude/settings.json',
+          );
+        return '';
+      });
+      const client = new ClaudeCodeMCPClient();
+      await expect(client.installPlugin()).resolves.toEqual({
+        success: false,
+        reason: expect.stringContaining('~/.claude/settings.json'),
+      });
+      expect(analytics.captureException).not.toHaveBeenCalled();
+      expect(analytics.wizardCapture).toHaveBeenCalledWith(
+        'mcp expected failure hinted',
+        expect.objectContaining({
+          client: 'Claude Code',
+          stage: 'plugin install',
+          details: expect.not.stringContaining('/Users/example'),
+        }),
+      );
+    });
+
+    it('still reports invalid JSON in a project settings file', async () => {
+      routeClaude((cmd) => {
+        if (isCmd(cmd, 'plugin', 'list')) return listed();
+        if (isCmd(cmd, 'marketplace', 'list')) return marketplaces('posthog');
+        if (isCmd(cmd, 'install'))
+          return new Error(
+            'Invalid JSON syntax in settings file at /srv/app/.claude/settings.local.json',
+          );
+        return '';
+      });
+      await new ClaudeCodeMCPClient().installPlugin();
+      expect(analytics.captureException).toHaveBeenCalled();
+      expect(analytics.wizardCapture).not.toHaveBeenCalled();
     });
 
     it('returns failure with a reason when no binary is found', async () => {
