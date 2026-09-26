@@ -9,7 +9,10 @@
  * PickerMenu mode="multi".
  *
  * When content exceeds available terminal height, the list scrolls
- * to keep the focused item visible with up/down indicators.
+ * to keep the focused item visible with up/down indicators. Those indicators
+ * spell out that arrows scroll: a bare "N more" row reads as a "show more"
+ * control, and the obvious move on it — space — is bound to toggle-selection,
+ * so it silently ticks an option instead of revealing anything.
  *
  * Key bindings are declared via useKeyBindings, which auto-registers
  * hints in the KeyboardHintsBar.
@@ -33,6 +36,8 @@ interface GroupedPickerMenuProps {
   message?: string;
   groups: Record<string, GroupOption[]>;
   initialSelected?: string[];
+  /** Noun for the Confirm button's selected count, e.g. "areas". */
+  countNoun?: string;
   onSelect: (values: string[]) => void;
 }
 
@@ -60,6 +65,8 @@ const MENU_CHROME = 6;
  * PickerMenu's MAX_LIST_ROWS.
  */
 const MAX_LIST_ROWS = 12;
+/** Spelled out on the scroll indicators so "N more" doesn't read as a control. */
+const SCROLL_HINT = '↑↓ to scroll';
 
 /** Count the visual rows occupied by rows[start..end), accounting for header margins. */
 function countVisualRows(rows: Row[], start: number, end: number): number {
@@ -125,6 +132,7 @@ export const GroupedPickerMenu = ({
   message,
   groups,
   initialSelected,
+  countNoun,
   onSelect,
 }: GroupedPickerMenuProps) => {
   const [termCols, termRows] = useStdoutDimensions();
@@ -273,13 +281,25 @@ export const GroupedPickerMenu = ({
     ? selectableIndices.filter((s) => s >= visibleEnd).length
     : 0;
 
+  // The keys that reveal the hidden rows, spelled out on one indicator \u2014 the
+  // bottom one while there's anything below, since that's the one users meet
+  // first. Truncated rather than wrapped so a narrow terminal can't turn an
+  // indicator into two rows and overflow the height budget.
+  const scrollHint = ` \u2014 ${SCROLL_HINT}`;
+  const aboveText =
+    hiddenAbove > 0
+      ? `\u2191 ${hiddenAbove} more above${hiddenBelow > 0 ? '' : scrollHint}`
+      : ' ';
+  const belowText =
+    hiddenBelow > 0 ? `\u2193 ${hiddenBelow} more below${scrollHint}` : ' ';
+
   return (
     <Box flexDirection="column">
       <PromptLabel message={message} />
       <Box flexDirection="column" marginTop={message ? 1 : 0} marginLeft={2}>
         {needsScroll && (
-          <Text dimColor>
-            {hiddenAbove > 0 ? `\u2191 ${hiddenAbove} more` : ' '}
+          <Text dimColor wrap="truncate">
+            {aboveText}
           </Text>
         )}
         {visibleRows.map((row, relIdx) => {
@@ -326,13 +346,17 @@ export const GroupedPickerMenu = ({
           );
         })}
         {needsScroll && (
-          <Text dimColor>
-            {hiddenBelow > 0 ? `\u2193 ${hiddenBelow} more` : ' '}
+          <Text dimColor wrap="truncate">
+            {belowText}
           </Text>
         )}
       </Box>
       <Box marginTop={1} marginLeft={2}>
-        <ConfirmButton focused={onButton} count={selected.size} />
+        <ConfirmButton
+          focused={onButton}
+          count={selected.size}
+          countNoun={countNoun}
+        />
       </Box>
     </Box>
   );
