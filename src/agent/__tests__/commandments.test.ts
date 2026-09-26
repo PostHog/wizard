@@ -133,6 +133,20 @@ describe('commandments by axis', () => {
     it('tells the agent to use answers directly without re-asking', () => {
       expect(text).toMatch(/do not re-ask/i);
     });
+
+    // The conflict this carve-out settles: the rule above read as absolute, so
+    // an agent whose collected credential was rejected downstream had no way to
+    // let the user fix a typo and handed the source over to the browser instead
+    // — while `WIZARD_ASK_SUBJECT_DESCRIPTION` told it to reuse the subject and
+    // re-ask on exactly that failure.
+    it('still lets the agent re-ask the fields a downstream call rejected', () => {
+      expect(text).toMatch(/rejected/i);
+      expect(text).toMatch(/reuse the same `subject`/);
+    });
+
+    it('keeps a dismissed or timed-out ask a decline, not a correction', () => {
+      expect(text).toMatch(/dismissed or timed-out ask is not this case/i);
+    });
   });
 });
 
