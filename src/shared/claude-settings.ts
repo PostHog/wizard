@@ -11,7 +11,7 @@ import path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
 import { analytics } from '@utils/analytics';
-import { registerCleanup } from '@utils/cleanup-registry';
+import { registerCleanup } from '@utils/wizard-abort';
 import {
   BLOCKED_AGENT_ENV_KEYS,
   BLOCKED_AGENT_ENV_PATTERNS,

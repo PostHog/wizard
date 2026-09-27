@@ -62,8 +62,8 @@ changing execution behavior.
 3. Register the config in
    [PROGRAM_REGISTRY](../../../src/programs/program-registry.ts) and add its
    Pi/orchestrator entry to
-   [PROGRAM_BINDINGS](../../../src/programs/binding.ts).
-   [Existing binding checks](../../../src/programs/__tests__/switchboard.test.ts)
+   [PROGRAM_BINDINGS](../../../src/agent/runner/switchboard/index.ts).
+   [Existing binding checks](../../../src/agent/runner/__tests__/switchboard.test.ts)
    enforce coverage; `ProgramId` currently widens to `string`.
 4. For a standalone native command, create a command module with
    [nativeCommandFactory](../../../src/cli/commands/factories/native-command-factory.ts)
@@ -82,7 +82,7 @@ or changing gateway-required prompt material.
 ## Simple linear programs and existing flows
 
 For a very simple linear flow, use
-[createSkillProgram](../../../src/programs/agent-skill/index.ts) to
+[createSkillProgram](../../../src/programs/shared/skill-program.ts) to
 configure installation of one skill. Register the native program as above with
 an explicit Pi/linear binding; the factory does not select a sequence. Read
 `SkillProgramOptions` for required fields;
@@ -102,7 +102,7 @@ does not preserve these behaviors automatically.
 
 ## Screens, prerequisites, and composition
 
-Reuse [AGENT_SKILL_STEPS](../../../src/programs/agent-skill/steps.ts):
+Reuse [AGENT_SKILL_STEPS](../../../src/programs/shared/skill-steps.ts):
 intro, health check, auth, run, outro, and keep-skills. Auth also applies the
 shared [AI opt-in gate](../../../src/programs/ai-opt-in-gate.ts) for agent
 programs. Override `screenId`, not `screen`, when adapting a step. New screens

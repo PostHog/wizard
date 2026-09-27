@@ -3,7 +3,7 @@
 Run the existing health and gateway tests with mocked HTTP requests:
 
 ```bash
-pnpm exec vitest run src/shared/health-checks/__tests__/health-checks.test.ts src/programs/__tests__/gateway-session.test.ts
+pnpm exec vitest run src/shared/health-checks/__tests__/health-checks.test.ts src/agent/__tests__/gateway-session.test.ts
 ```
 
 The checks cover gateway readiness, endpoint retries, and skills downloads from

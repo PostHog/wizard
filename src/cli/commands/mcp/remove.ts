@@ -1,7 +1,7 @@
 import type { Arguments } from 'yargs';
 import { setUI } from '@ui';
 import { LoggingUI } from '@headless/renderers/logging-ui';
-import { headlessOption, isHeadless } from '@cli/headless-mode';
+import { headlessOption, isHeadless } from '@shared/headless-mode';
 import { Program } from '@programs';
 import { VERSION } from '@shared/version';
 import type { Command } from '../command';

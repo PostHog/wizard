@@ -113,7 +113,7 @@ import {
 } from '@lib/wizard-session';
 import { HostResolution } from '@shared/host-resolution';
 import { Integration } from '@shared/constants';
-import { FRAMEWORK_REGISTRY } from '@programs/registry';
+import { FRAMEWORK_REGISTRY } from '@programs/frameworks/registry';
 import type { FrameworkConfig } from '@programs/types';
 import { Program, type ProgramId } from '@programs';
 import {

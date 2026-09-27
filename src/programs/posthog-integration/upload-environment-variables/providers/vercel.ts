@@ -1,17 +1,15 @@
 import { execSync, spawn, spawnSync } from 'child_process';
-import {
-  EnvironmentProvider,
-  type EnvironmentProviderOptions,
-} from '../EnvironmentProvider';
+import { EnvironmentProvider } from '@programs/posthog-integration/upload-environment-variables/EnvironmentProvider';
 import * as fs from 'fs';
 import * as path from 'path';
+import { getUI } from '@ui';
 import { analytics } from '@utils/analytics';
 
 export class VercelEnvironmentProvider extends EnvironmentProvider {
   name = 'Vercel';
   environments = ['production', 'preview', 'development'];
 
-  constructor(options: EnvironmentProviderOptions) {
+  constructor(options: { installDir: string }) {
     super(options);
   }
 
@@ -128,7 +126,7 @@ export class VercelEnvironmentProvider extends EnvironmentProvider {
     const results: Record<string, boolean> = {};
 
     for (const [key, value] of Object.entries(vars)) {
-      const spinner = this.options.report.spinner();
+      const spinner = getUI().spinner();
 
       spinner.start(`Uploading ${key} to ${this.name}...`);
       await Promise.all(

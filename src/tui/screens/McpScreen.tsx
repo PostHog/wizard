@@ -32,12 +32,12 @@ import {
   namesWithStatus,
   isOk,
   summarizeFailure,
-} from '@tui/add-mcp-server-to-clients/results';
+} from '@shared/mcp-clients/results';
 import {
   AVAILABLE_FEATURES,
   ALL_FEATURE_VALUES,
   isAllFeaturesSelected,
-} from '@tui/add-mcp-server-to-clients/defaults';
+} from '@shared/mcp-clients/defaults';
 
 export type McpMode = 'install' | 'remove';
 

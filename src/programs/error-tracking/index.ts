@@ -1,23 +1,19 @@
 import { Integration } from '@shared/constants';
 import { detectFramework } from '@programs/detection/index';
-import {
-  scopeInstallDirToProject,
-  type ProjectScopeSession,
-} from '@programs/detection/project-scope';
-import type { FrameworkDetectionState } from '@programs/detection/context';
-import { FRAMEWORK_REGISTRY } from '@programs/registry';
+import { scopeInstallDirToProject } from '@programs/detection/project-scope';
+import { FRAMEWORK_REGISTRY } from '@programs/frameworks/registry';
 import type { ProgramRun } from '@programs/program-run';
-import { AGENT_SKILL_STEPS } from '@programs/agent-skill/steps';
+import { AGENT_SKILL_STEPS } from '@programs/shared/skill-steps';
+import { getContentBlocks } from '@tui/programs/error-tracking/deck/index';
+import { getTips } from '@tui/programs/error-tracking/deck/tips';
 import {
   ERROR_TRACKING_UNSUPPORTED,
   errorTrackingProjectDir,
   gatherErrorTrackingContext,
 } from '@programs/error-tracking/detect-agentic';
 import type { ProgramConfig, ProgramStep } from '@programs/program-step';
-import type {
-  ProgramCiHost,
-  ProgramRunHost,
-} from '@programs/host-capabilities';
+import type { WizardSession } from '@lib/wizard-session';
+import type { CiRunnerContext, RunnerContext } from '@programs/runner-context';
 import { preinstallPostHogCliOnce } from '@programs/shared/posthog-cli-preinstall';
 import { analytics } from '@utils/analytics';
 import { wizardAbort } from '@utils/wizard-abort';
@@ -66,23 +62,15 @@ async function abortUnsupportedPlatform(
  */
 function maybePreinstallPostHogCli(
   integration: Integration | null,
-  warn: ProgramRunHost['warn'],
+  log: RunnerContext['log'],
 ): void {
   if (!integration || !SYMBOL_UPLOAD_CLI_FRAMEWORKS.has(integration)) return;
   preinstallPostHogCliOnce(
     'error tracking posthog-cli preinstall failed',
-    {
-      integration,
-    },
-    warn,
+    { integration },
+    log,
   );
 }
-
-type ErrorTrackingCiSession = ProjectScopeSession &
-  FrameworkDetectionState & {
-    integration: Integration | null;
-    skillId: string | null;
-  };
 
 /**
  * After login, the scan lists the repo's projects and the user picks one, as in
@@ -189,22 +177,19 @@ export const errorTrackingConfig: ProgramConfig = {
   agentFlow: 'error-tracking',
   steps: ERROR_TRACKING_STEPS,
   reportFile: ERROR_TRACKING_REPORT_FILE,
+  getContentBlocks,
+  getTips,
 
-  run: (
-    session: { integration: Integration | null },
-    host: ProgramRunHost,
-  ): Promise<ProgramRun> => {
-    maybePreinstallPostHogCli(session.integration, (message) =>
-      host.warn(message),
-    );
+  run: (session: WizardSession, runner: RunnerContext): Promise<ProgramRun> => {
+    maybePreinstallPostHogCli(session.integration, runner.log);
     return Promise.resolve(ERROR_TRACKING_RUN);
   },
 
   ciPreRun: async (
-    session: ErrorTrackingCiSession,
-    host: ProgramCiHost,
+    session: WizardSession,
+    runner: CiRunnerContext,
   ): Promise<void> => {
-    await scopeInstallDirToProject(session, host);
+    await scopeInstallDirToProject(session, runner);
 
     const integration = await detectFramework(session.installDir);
     if (!integration) {

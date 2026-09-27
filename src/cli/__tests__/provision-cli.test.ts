@@ -10,11 +10,11 @@ vi.mock('@utils/provisioning', () => ({
 }));
 // Same supporting mocks as src/__tests__/cli.test.ts — bin.ts imports these
 // at module load regardless of which subcommand yargs dispatches.
-vi.mock('@lib/wizard-session', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@lib/wizard-session')>()),
+vi.mock('../../lib/wizard-session', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../lib/wizard-session')>()),
   buildSession: vi.fn((args: Record<string, unknown>) => args),
 }));
-vi.mock('@tui/start-tui', () => ({
+vi.mock('../../tui/start-tui', () => ({
   startTUI: () => ({
     unmount: vi.fn(),
     store: {
@@ -27,7 +27,7 @@ vi.mock('@tui/start-tui', () => ({
     },
   }),
 }));
-vi.mock('@programs/posthog-integration', () => ({
+vi.mock('../../programs/posthog-integration', () => ({
   posthogIntegrationConfig: {
     id: 'posthog-integration',
     steps: [],
@@ -52,8 +52,10 @@ vi.mock('@utils/debug', () => ({
   logToFile: vi.fn(),
   setDebugSink: vi.fn(),
 }));
-vi.mock('@programs/registry', () => ({ FRAMEWORK_REGISTRY: {} }));
-vi.mock('@programs/detection', () => ({
+vi.mock('../../programs/frameworks/registry', () => ({
+  FRAMEWORK_REGISTRY: {},
+}));
+vi.mock('../../programs/detection', () => ({
   detectFramework: vi.fn().mockResolvedValue(null),
   gatherFrameworkContext: vi.fn().mockResolvedValue({}),
 }));
@@ -64,7 +66,7 @@ vi.mock('@utils/wizard-abort', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@utils/wizard-abort')>()),
   wizardAbort: vi.fn(),
 }));
-vi.mock('../runners/run-program-agent', () => ({
+vi.mock('../runners/run-agent-legacy', () => ({
   runProgramAgent: vi.fn().mockResolvedValue(undefined),
 }));
 

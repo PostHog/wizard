@@ -1,0 +1,3 @@
+{
+  "newContent": "/** @type {import('next').NextConfig} */\nconst nextConfig = {\n  async rewrites() {\n    return [\n      {\n        source: \"/ingest/static/:path*\",\n        destination: \"http://localhost:8010/static/:path*\",\n      },\n      {\n        source: \"/ingest/:path*\",\n        destination: \"http://localhost:8010/:path*\",\n      },\n      {\n        source: \"/ingest/decide\",\n        destination: \"http://localhost:8010/decide\",\n      },\n    ];\n  },\n  // This is required to support PostHog trailing slash API requests\n  skipTrailingSlashRedirect: true,\n};\n\nexport default nextConfig;\n"
+}

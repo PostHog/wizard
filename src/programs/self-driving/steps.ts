@@ -16,7 +16,7 @@
 
 import type { ProgramStep } from '@programs/program-step';
 import { resolveProjectDir } from '@programs/detection/agentic';
-import { RunPhase } from '@shared/run-state';
+import { RunPhase, type WizardSession } from '@lib/wizard-session';
 import { HEALTH_CHECK_STEP } from '@programs/shared/health-check-step';
 import { integrationRunStep } from '@programs/posthog-integration/index';
 import {
@@ -27,16 +27,11 @@ import {
 import { prepSelfDrivingIntegration } from './detect-agentic.js';
 
 /** True once detection found PostHog already present in the project. */
-type SelfDrivingStepContext = {
-  installDir: string;
-  frameworkContext: Record<string, unknown>;
-};
-
-const postHogPresent = (session: SelfDrivingStepContext): boolean =>
+const postHogPresent = (session: WizardSession): boolean =>
   session.frameworkContext[POSTHOG_PRESENT_KEY] === true;
 
 /** Absolute dir to integrate into: the picked sub-app (LLM output — the shared resolver clamps escapes), else the repo root. */
-const integrationDir = (session: SelfDrivingStepContext): string =>
+const integrationDir = (session: WizardSession): string =>
   resolveProjectDir(
     session.installDir,
     session.frameworkContext[SELF_DRIVING_INTEGRATE_PATH_KEY],

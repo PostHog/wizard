@@ -1,14 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
-import {
-  aliasTarget,
-  loadAliases,
-  probe,
-  REPO_ROOT,
-  staticImportClosure,
-  toRepoRelative,
-} from '../../../test/module-graph';
 
 export type Surface =
   | 'env'
@@ -21,6 +13,7 @@ export type Surface =
   | 'cli';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
+const REPO_ROOT = path.resolve(HERE, '../../..');
 
 const SURFACE_RULES: ReadonlyArray<readonly [Surface, (p: string) => boolean]> =
   [
@@ -45,7 +38,7 @@ export const ALLOWED_IMPORTS: Record<Surface, readonly Surface[]> = {
   env: [],
   shared: ['env', 'shared'],
   legacy: ['env', 'shared', 'legacy', 'programs'],
-  // B2 moves bindings and removes the agent's remaining ProgramId type imports.
+  // Moving the bindings to programs removes the agent's ProgramId type imports.
   agent: ['env', 'shared', 'agent'],
   programs: ['env', 'shared', 'agent', 'programs'],
   tui: ['env', 'shared', 'legacy', 'programs', 'tui'],
@@ -211,6 +204,14 @@ function stripComments(source: string): string {
   return out;
 }
 
+function toRepoRelative(abs: string): string {
+  return path.relative(REPO_ROOT, abs).split(path.sep).join('/');
+}
+
+function isFile(abs: string): boolean {
+  return fs.statSync(abs, { throwIfNoEntry: false })?.isFile() ?? false;
+}
+
 function collectFiles(absDir: string, into: string[]): void {
   for (const entry of fs.readdirSync(absDir, { withFileTypes: true })) {
     const abs = path.join(absDir, entry.name);
@@ -224,6 +225,51 @@ function collectFiles(absDir: string, into: string[]): void {
       continue;
     into.push(toRepoRelative(abs));
   }
+}
+
+function loadAliases(): ReadonlyArray<readonly [string, string]> {
+  const tsconfig = JSON.parse(
+    fs.readFileSync(path.join(REPO_ROOT, 'tsconfig.build.json'), 'utf8'),
+  ) as { compilerOptions?: { paths?: Record<string, string[]> } };
+  return Object.entries(tsconfig.compilerOptions?.paths ?? {}).map(
+    ([pattern, targets]) => [pattern, targets[0]] as const,
+  );
+}
+
+function aliasTarget(
+  spec: string,
+  aliases: ReadonlyArray<readonly [string, string]>,
+): string | null {
+  for (const [pattern, target] of aliases) {
+    if (pattern.endsWith('*')) {
+      const prefix = pattern.slice(0, -1);
+      if (spec.startsWith(prefix)) {
+        return path.resolve(
+          REPO_ROOT,
+          target.slice(0, -1) + spec.slice(prefix.length),
+        );
+      }
+    } else if (spec === pattern) {
+      return path.resolve(REPO_ROOT, target);
+    }
+  }
+  return null;
+}
+
+function probe(base: string): string | null {
+  const candidates: string[] = [];
+  if (base.endsWith('.js')) {
+    const stem = base.slice(0, -3);
+    candidates.push(`${stem}.ts`, `${stem}.tsx`);
+  }
+  candidates.push(
+    `${base}.ts`,
+    `${base}.tsx`,
+    path.join(base, 'index.ts'),
+    path.join(base, 'index.tsx'),
+    base,
+  );
+  return candidates.find(isFile) ?? null;
 }
 
 function specifiersIn(text: string): string[] {
@@ -365,36 +411,6 @@ describe('import boundaries', () => {
   });
 });
 
-// The program watchers load inside this closure.
-it('keeps the callable runProgram closure free of UI, session and legacy imports', () => {
-  const forbidden = staticImportClosure(
-    'src/programs/run-program.ts',
-    true,
-  ).filter(
-    (file) =>
-      file === 'src/programs/program-registry.ts' ||
-      file.startsWith('src/ui/') ||
-      file.startsWith('src/tui/') ||
-      file.startsWith('src/headless/') ||
-      file.startsWith('src/lib/wizard-session') ||
-      file.startsWith('src/cli/runners/') ||
-      file.startsWith('src/cli/commands/') ||
-      file.startsWith('src/programs/task-stream/'),
-  );
-  expect(forbidden).toEqual([]);
-});
-
-it('keeps program decks and task-stream state behind the TUI boundary', () => {
-  const forbidden = analysis.edges.filter(
-    (edge) =>
-      (edge.startsWith('src/programs/') &&
-        edge.includes(' -> src/tui/decks/')) ||
-      (edge.startsWith('src/programs/task-stream/') &&
-        (edge.includes(' -> src/ui/') || edge.includes(' -> src/tui/'))),
-  );
-  expect(forbidden).toEqual([]);
-});
-
 describe('surface classification', () => {
   it('maps representative paths to their surface', () => {
     expect(classifySurface('src/env.ts')).toBe('env');
@@ -413,9 +429,9 @@ describe('surface classification', () => {
     expect(classifySurface('src/agent/tools/mcp.ts')).toBe('agent');
     expect(classifySurface('src/agent/tools/tools.ts')).toBe('agent');
     expect(classifySurface('src/tui/family-picker.tsx')).toBe('tui');
-    expect(classifySurface('src/tui/decks/posthog-integration/index.tsx')).toBe(
-      'tui',
-    );
+    expect(
+      classifySurface('src/tui/programs/posthog-integration/deck/index.tsx'),
+    ).toBe('tui');
     expect(classifySurface('src/programs/posthog-integration/index.ts')).toBe(
       'programs',
     );
@@ -470,7 +486,7 @@ describe('agent entry modules', () => {
 describe('programs entry modules', () => {
   const rule = (from: string, to: string) => ruleFor(from, to);
 
-  it('lets hosts reach programs through its entries', () => {
+  it('lets the CLI and TUI reach programs through its entries', () => {
     expect(rule('src/cli/commands/audit.ts', 'src/programs/index.ts')).toBe(
       null,
     );
@@ -485,11 +501,8 @@ describe('programs entry modules', () => {
       'matrix:programs->tui',
     );
     expect(
-      rule(
-        'src/cli/commands/dispatch-family.ts',
-        'src/cli/commands/command.ts',
-      ),
-    ).toBe(null);
+      rule('src/programs/dispatch-family.ts', 'src/cli/commands/command.ts'),
+    ).toBe('matrix:programs->cli');
   });
 });
 

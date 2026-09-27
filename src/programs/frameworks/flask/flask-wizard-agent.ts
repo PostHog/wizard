@@ -33,12 +33,6 @@ export const FLASK_AGENT_CONFIG: FrameworkConfig<FlaskContext> = {
       const appFile = await findFlaskAppFile(options);
       return { projectType, appFile };
     },
-    getDetectedFrameworkLabel: (context) =>
-      context.projectType === FlaskProjectType.STANDARD
-        ? 'Flask'
-        : context.projectType
-        ? getFlaskProjectTypeName(context.projectType)
-        : undefined,
   },
 
   detection: {

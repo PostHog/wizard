@@ -18,13 +18,13 @@ import {
   HNViewer,
 } from '@tui/primitives/index';
 import type { ProgressItem } from '@tui/primitives/index';
-import { ADDITIONAL_FEATURE_LABELS } from '@lib/wizard-session';
 import { LearnCard } from '@tui/components/LearnCard';
 import { VisualizerTab } from '@tui/components/PhaseVisuals';
 import { TipsCard } from '@tui/components/TipsCard';
 import { useStdoutDimensions } from '@tui/hooks/useStdoutDimensions';
 
-import { getProgramContentBlocks, getProgramTips } from '@tui/decks/registry';
+import { getProgramConfig } from '@programs';
+import { getContentBlocks as getSkillContentBlocks } from '@tui/programs/shared/skill-deck';
 
 import { WIZARD_LOG_FILE } from '@utils/paths';
 
@@ -46,32 +46,23 @@ export const RunScreen = ({ store }: RunScreenProps) => {
     status: t.status,
   }));
 
-  // When all tasks are done but the queue has features, show a transitional item
-  const queue = store.session.additionalFeatureQueue;
-  const allDone =
-    progressItems.length > 0 &&
-    progressItems.every((t) => t.status === 'completed');
-  if (allDone && queue.length > 0) {
-    const nextLabel = ADDITIONAL_FEATURE_LABELS[queue[0]];
-    progressItems.push({
-      label: `Set up ${nextLabel}`,
-      activeForm: `Setting up ${nextLabel}...`,
-      status: 'in_progress',
-    });
-  }
-
   const statuses =
     store.statusMessages.length > 0 ? store.statusMessages : undefined;
 
+  // Each program owns its content deck (program/content/index.tsx)
+  // and wires it onto its ProgramConfig.getContentBlocks. Fall back to the
+  // agent-skill deck for runtime-created configs (e.g. `wizard skill <id>`)
+  // that aren't in the static registry.
   const activeProgram = store.router.activeProgram;
-  const learnBlocks = useMemo(
-    () => getProgramContentBlocks(activeProgram, store),
-    [store, activeProgram],
-  );
+  const learnBlocks = useMemo(() => {
+    const getBlocks =
+      getProgramConfig(activeProgram).getContentBlocks ?? getSkillContentBlocks;
+    return getBlocks(store);
+  }, [store, activeProgram]);
 
   // Program-supplied tips for the right pane; undefined falls back to
   // DEFAULT_TIPS inside TipsCard, so non-self-driving programs are unaffected.
-  const programTips = getProgramTips(activeProgram, store);
+  const programTips = getProgramConfig(activeProgram).getTips?.(store);
 
   const leftPane = store.learnCardComplete ? (
     <TipsCard store={store} tips={programTips} />

@@ -11,20 +11,11 @@
  */
 
 import { POSTHOG_LOCAL_URL, resolveLocalDev } from '@shared/local-dev';
-import { DiscoveredFeature, ScanConsent } from '@shared/scan-consent';
-import {
-  AdditionalFeature,
-  ADDITIONAL_FEATURE_LABELS,
-  ADDITIONAL_FEATURE_PROMPTS,
-  type Harness,
-  type Integration,
-  type Sequence,
-} from '@shared/constants';
+import type { Harness, Integration, Sequence } from '@shared/constants';
 import type { FrameworkConfig } from '@programs/types';
 import type { WizardReadinessResult } from '@shared/health-checks/readiness';
 import type { SettingsConflict } from '@shared/claude-settings';
 import type { ApiUser, ApiProject, Credentials } from '@shared/api';
-import type { InferenceAuthProvider } from '@agent/types';
 import type { CloudRegion } from '@utils/types';
 import type {
   AskAnswers,
@@ -35,22 +26,17 @@ import type {
 } from '@agent/types';
 // Leaf module on purpose: shared analytics imports this file, so the agent
 // entry would form a module cycle here.
-// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- B2: the session becomes a TUI projection
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- the session becomes a TUI projection later in the refactor
 import { OutroKind } from '@agent/progress';
-import { McpOutcome, RunPhase } from '@shared/run-state';
+import { DiscoveredFeature } from '@shared/discovered-feature';
 
 // These shapes moved to their owners; re-exported so every session reader
-// keeps its import path. `Credentials` sits with the API types, the
-// additional-feature enum with the other program enums in `./constants`, and
-// the outro, question and task-notice shapes are the agent's contract.
+// keeps its import path. `Credentials` sits with the API types,
+// `DiscoveredFeature` sits in shared so programs can name it without the
+// session, and the outro, question and task-notice shapes are the agent's
+// contract.
 export type { Credentials, CloudRegion };
-export {
-  AdditionalFeature,
-  ADDITIONAL_FEATURE_LABELS,
-  ADDITIONAL_FEATURE_PROMPTS,
-};
-export { OutroKind };
-export { McpOutcome, RunPhase, ScanConsent };
+export { OutroKind, DiscoveredFeature };
 export type { AskAnswers, AskQuestion, OutroData, PendingQuestion, TaskNotice };
 
 function parseProjectIdArg(value: string | undefined): number | undefined {
@@ -59,8 +45,32 @@ function parseProjectIdArg(value: string | undefined): number | undefined {
   return Number.isInteger(n) && n > 0 ? n : undefined;
 }
 
-/** Compatibility export for session readers; detection owns the shared value. */
-export { DiscoveredFeature };
+/** Lifecycle phase of the main work (agent run, MCP install, etc.) */
+export enum RunPhase {
+  /** Still gathering input (intro, setup screens) */
+  Idle = 'idle',
+  /** Main work is in progress */
+  Running = 'running',
+  /** Main work finished successfully */
+  Completed = 'completed',
+  /** Main work finished with an error */
+  Error = 'error',
+}
+
+/** Consent to report what local detection found (see `scanConsent` below). */
+export enum ScanConsent {
+  Undecided = 'undecided',
+  Granted = 'granted',
+  Declined = 'declined',
+}
+
+/** Outcome of the MCP server installation step */
+export enum McpOutcome {
+  NoClients = 'no_clients',
+  Skipped = 'skipped',
+  Installed = 'installed',
+  Failed = 'failed',
+}
 
 /**
  * PostHog dashboard URL emitted by the agent during a program run.
@@ -82,7 +92,7 @@ export interface WizardSession {
    *
    * Only the e2e TUI host sets it, from the `E2E_ASK` env var. There is no CLI
    * flag, `bin.ts` never populates it, and nothing in a published build reads
-   * the env var — so a normal `--ci` run is unchanged. See `isAskDisabled`.
+   * the env var — so a normal `--ci` run is unchanged. See `shouldDisableAsk`.
    *
    * Guarding `E2E_ASK` is not enough on its own: the CI runner spreads the
    * whole `POSTHOG_WIZARD_*` bag into `buildSession`, which would let
@@ -139,9 +149,9 @@ export interface WizardSession {
   /** Guards against reporting twice; consent resolves from two paths. */
   warehouseSourcesReported: boolean;
   /**
-   * Latched once the organization's AI SDK stamp was considered for this login:
-   * by run-wizard.ts's auth step (`maybeStampAiSdkDetected`), or by runProgram,
-   * whose latch the legacy adapter mirrors back, whichever logs in first.
+   * Guards `maybeStampAiSdkDetected` against running twice: it is called from
+   * both run-wizard.ts's auth step and bootstrap.ts, since either can be the
+   * first real `authenticate()` to complete depending on the program.
    */
   aiSdkStampReported: boolean;
   integration: Integration | null;
@@ -166,8 +176,6 @@ export interface WizardSession {
 
   // From OAuth
   credentials: Credentials | null;
-  /** Host-supplied inference auth for legacy steps that run before the callable host. */
-  inferenceAuth?: InferenceAuthProvider;
 
   /**
    * `role_at_organization` from `/api/users/@me/`. Null when the upstream
@@ -207,7 +215,6 @@ export interface WizardSession {
 
   // Feature discovery
   discoveredFeatures: DiscoveredFeature[];
-  llmOptIn: boolean;
 
   // ScreenId completion
   mcpComplete: boolean;
@@ -305,9 +312,6 @@ export interface WizardSession {
   dashboardUrl: string | null;
   notebookUrl: string | null;
 
-  // Additional features queue (drained via stop hook after main integration)
-  additionalFeatureQueue: AdditionalFeature[];
-
   // Program metadata (set by runWizard in bin.ts)
   programLabel: string | null;
   skillId: string | null;
@@ -391,7 +395,6 @@ export function buildSession(args: {
 
     runPhase: RunPhase.Idle,
     discoveredFeatures: [],
-    llmOptIn: false,
     mcpComplete: false,
     mcpOutcome: null,
     mcpInstalledClients: [],
@@ -426,10 +429,28 @@ export function buildSession(args: {
     mintHandoff: null,
     dashboardUrl: null,
     notebookUrl: null,
-    additionalFeatureQueue: [],
     programLabel: null,
     skillId: null,
     frameworkConfig: null,
     pendingQuestion: null,
   };
+}
+
+/** One place to ask, so a new consent state does not need three edits. */
+export function mayReportScanResults(session: WizardSession): boolean {
+  return session.scanConsent === ScanConsent.Granted;
+}
+
+/** Lives here so analytics infrastructure never learns what consent means. */
+export function reportableDiscoveredFeatures(
+  session: WizardSession,
+): DiscoveredFeature[] | undefined {
+  return mayReportScanResults(session) ? session.discoveredFeatures : undefined;
+}
+
+/** Also a scan result, so it travels under the same consent as the rest. */
+export function reportablePosthogSdkDetected(
+  session: WizardSession,
+): boolean | undefined {
+  return mayReportScanResults(session) ? session.posthogSdkDetected : undefined;
 }

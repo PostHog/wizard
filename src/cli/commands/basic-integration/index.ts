@@ -1,6 +1,10 @@
 import { isNonInteractiveEnvironment } from '@utils/environment';
 import { setEntryCommand } from '@utils/links';
-import { headlessOption, isHeadless, regionOption } from '@cli/headless-mode';
+import {
+  headlessOption,
+  isHeadless,
+  regionOption,
+} from '@shared/headless-mode';
 import { provisionCommand } from '../provision';
 import type { Command } from '../command';
 

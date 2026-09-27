@@ -266,6 +266,16 @@ describe('Analytics', () => {
       ]);
     });
 
+    it('exposes the cached synchronization variant without evaluating again', async () => {
+      mockFlags({ 'wizard-run-sync': 'wizard-run' });
+      expect(analytics.getCachedWizardFlags()).toBeNull();
+      await analytics.getAllFlagsForWizard();
+      expect(analytics.getCachedWizardFlags()).toEqual({
+        'wizard-run-sync': 'wizard-run',
+      });
+      expect((mockPostHogInstance as any).evaluateFlags).toHaveBeenCalledOnce();
+    });
+
     it("skips another team's flag", async () => {
       await analytics.getAllFlagsForWizard();
       expect(snapshot.getFlag).not.toHaveBeenCalledWith('unrelated-flag');
@@ -861,7 +871,6 @@ describe('sessionProperties', () => {
     const session = buildSession({ installDir: '/tmp/app' });
     session.scanConsent = ScanConsent.Declined;
     session.integration = null;
-    session.additionalFeatureQueue = [];
 
     const properties = sessionProperties(session);
 
@@ -869,7 +878,6 @@ describe('sessionProperties', () => {
       integration: null,
       detected_framework: null,
       typescript: false,
-      additional_features: [],
       run_phase: session.runPhase,
     });
   });

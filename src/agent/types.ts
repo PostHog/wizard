@@ -11,15 +11,11 @@ export type {
   AgentFailure,
   AgentRunDefinition,
   PromptContext,
-  InferenceAuthProvider,
-  RunAgentOptions,
   RunConfig,
   ResolvedBinding,
-  RunFlags,
   RunHooks,
   RunInput,
   RunResult,
-  SeedTaskEntry,
 } from './runner';
 export type {
   AgentInteraction,
@@ -34,14 +30,13 @@ export type {
   TokenUsageDelta,
 } from './progress';
 
-/** Input types of the exported resolveHarness. */
+/** Leaves when the bindings table moves to programs. */
 export type { ProgramBinding, SwitchboardCtx } from './runner';
-export type { EffortLevel } from './runner/switchboard/models';
 
-/** Leaves in C3 with downloadSkill. */
+/** Leaves with downloadSkill, later in the refactor. */
 export type { InstallSkillResult } from './tools';
 
-/** Leaves in B2 with the legacy adapter that records it. */
+/** Leaves with the legacy adapter that records it. */
 export type { TaskOutcome } from './runner';
 
 /** Leaves in C2 with runMcpPromptViaSdk. */

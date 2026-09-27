@@ -7,13 +7,10 @@
  */
 
 import { posthogIntegrationConfig } from '@programs/posthog-integration/index';
-import type { ProgramRunHost } from '@programs/host-capabilities';
 import { buildSession, type WizardSession } from '@lib/wizard-session';
 import { analytics } from '@utils/analytics';
 import { isUsingTypeScript } from '@utils/setup-utils';
-import { HostResolution } from '@shared/host-resolution';
-import { Integration } from '@shared/constants';
-import { uploadEnvironmentVariablesStep } from '@programs/posthog-integration/upload-environment-variables';
+import { testRunnerContext } from '../../../../test/runner-context';
 
 vi.mock('@utils/analytics', () => ({
   analytics: {
@@ -23,10 +20,6 @@ vi.mock('@utils/analytics', () => ({
     // Empty map = flags unreadable = the shipped default (AIO + Logs on).
     getAllFlagsForWizard: vi.fn().mockResolvedValue({}),
   },
-}));
-
-vi.mock('@programs/posthog-integration/upload-environment-variables', () => ({
-  uploadEnvironmentVariablesStep: vi.fn().mockResolvedValue(['POSTHOG_KEY']),
 }));
 
 vi.mock('@utils/setup-utils', () => ({
@@ -55,20 +48,10 @@ function sessionWithFramework(): WizardSession {
   return s;
 }
 
-function runHost(): ProgramRunHost {
-  return {
-    getFrameworkContext: vi.fn(),
-    setFrameworkContext: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-    spinner: () => ({ start: vi.fn(), stop: vi.fn(), message: vi.fn() }),
-  };
-}
-
-async function resolveRun(session: WizardSession, host = runHost()) {
+async function resolveRun(session: WizardSession) {
   const { run } = posthogIntegrationConfig;
   if (typeof run !== 'function') throw new Error('expected a run function');
-  return run(session, host);
+  return run(session, testRunnerContext(session));
 }
 
 describe('posthog-integration run() — typescript tag', () => {
@@ -94,68 +77,5 @@ describe('posthog-integration run() — typescript tag', () => {
 
     expect(session.typescript).toBe(false);
     expect(analytics.setTag).toHaveBeenCalledWith('typescript', false);
-  });
-
-  it('routes missing package warnings through the run host', async () => {
-    (isUsingTypeScript as Mock).mockReturnValue(false);
-    const session = sessionWithFramework();
-    if (!session.frameworkConfig) throw new Error('missing framework config');
-    session.frameworkConfig = {
-      ...session.frameworkConfig,
-      detection: {
-        ...session.frameworkConfig.detection,
-        usesPackageJson: true,
-      },
-    };
-    const host = runHost();
-
-    await resolveRun(session, host);
-
-    expect(host.warn).toHaveBeenCalledWith(
-      'Could not find package.json. Continuing anyway — the agent will handle it.',
-    );
-  });
-
-  it('uploads to hosting from the program, reporting through the run host', async () => {
-    (isUsingTypeScript as Mock).mockReturnValue(false);
-    const session = sessionWithFramework();
-    if (!session.frameworkConfig) throw new Error('missing framework config');
-    session.frameworkConfig = {
-      ...session.frameworkConfig,
-      metadata: {
-        ...session.frameworkConfig.metadata,
-        integration: Integration.nextjs,
-      },
-      environment: {
-        ...session.frameworkConfig.environment,
-        uploadToHosting: true,
-      },
-    };
-    const host = runHost();
-    const run = await resolveRun(session, host);
-
-    await run.postRun?.(
-      { signup: false, dashboardUrl: null, notebookUrl: null },
-      {
-        accessToken: 'token',
-        projectApiKey: 'phc_test',
-        projectId: 123,
-        host: HostResolution.fromApiHost('https://us.posthog.com'),
-      },
-    );
-
-    expect(uploadEnvironmentVariablesStep).toHaveBeenCalledWith(
-      { POSTHOG_KEY: 'phc_test' },
-      expect.objectContaining({
-        integration: Integration.nextjs,
-        installDir: '/tmp/app',
-      }),
-    );
-    const { report } = (uploadEnvironmentVariablesStep as Mock).mock
-      .calls[0][1] as { report: { info(message: string): void } };
-    report.info('Uploading environment variables to Vercel...');
-    expect(host.info).toHaveBeenCalledWith(
-      'Uploading environment variables to Vercel...',
-    );
   });
 });

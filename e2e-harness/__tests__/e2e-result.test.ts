@@ -472,21 +472,16 @@ describe('buildE2eResult', () => {
       ...build(),
       skillsComplete,
     }));
+    const written = () => JSON.parse(fs.readFileSync(file, 'utf8'));
 
     try {
       write();
-      expect(JSON.parse(fs.readFileSync(file, 'utf8'))).toMatchObject({
-        skillsComplete: false,
-      });
+      expect(written()).toMatchObject({ skillsComplete: false });
       skillsComplete = true;
       write();
-      expect(JSON.parse(fs.readFileSync(file, 'utf8'))).toMatchObject({
-        skillsComplete: false,
-      });
+      expect(written()).toMatchObject({ skillsComplete: false });
       write(true);
-      expect(JSON.parse(fs.readFileSync(file, 'utf8'))).toMatchObject({
-        skillsComplete: true,
-      });
+      expect(written()).toMatchObject({ skillsComplete: true });
     } finally {
       fs.rmSync(directory, { recursive: true, force: true });
     }

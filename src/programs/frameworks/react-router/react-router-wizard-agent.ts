@@ -10,6 +10,7 @@ import {
   type PackageJson,
 } from '@utils/package-json';
 import { tryGetPackageJson } from '@utils/setup-utils';
+import { getUI } from '@ui';
 import {
   getReactRouterMode,
   getReactRouterModeName,
@@ -30,14 +31,13 @@ export const REACT_ROUTER_AGENT_CONFIG: FrameworkConfig<ReactRouterContext> = {
     gatherContext: async (options: WizardRunOptions) => {
       const routerMode = await getReactRouterMode(options);
       if (routerMode) {
+        getUI().setDetectedFramework(
+          `React Router ${getReactRouterModeName(routerMode)}`,
+        );
         return { routerMode };
       }
       return {};
     },
-    getDetectedFrameworkLabel: (context) =>
-      context.routerMode
-        ? `React Router ${getReactRouterModeName(context.routerMode)}`
-        : undefined,
   },
 
   detection: {

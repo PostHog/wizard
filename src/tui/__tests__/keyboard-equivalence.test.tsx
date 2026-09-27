@@ -25,7 +25,7 @@ import {
   type WizardSession,
 } from '@lib/wizard-session';
 import { Integration } from '@shared/constants';
-import { FRAMEWORK_REGISTRY } from '@programs/registry';
+import { FRAMEWORK_REGISTRY } from '@programs/frameworks/registry';
 import { HostResolution } from '@shared/host-resolution';
 import { WizardReadiness } from '@shared/health-checks/readiness';
 import { SOURCE_MAPS_CONTEXT_KEYS } from '@programs/error-tracking-upload-source-maps/detect';
@@ -64,10 +64,6 @@ vi.mock('opn', () => ({ default: vi.fn() }));
 vi.mock('@shared/api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@shared/api')>()),
   fetchSlackConnected: vi.fn().mockResolvedValue(false),
-  // This test compares the handoff commit, not the following GitHub screen's
-  // polling effect. A real request can settle between the keyboard and action
-  // snapshots and add githubConnected only to the mounted keyboard path.
-  fetchGithubConnected: vi.fn(() => new Promise(() => undefined)),
   fetchUserData: vi.fn(() => new Promise(() => undefined)),
 }));
 vi.mock('@shared/skill-menu', async (importOriginal) => ({
@@ -292,6 +288,7 @@ const PAIRS: Pair[] = [
       s.setIntegrate(true);
       s.setReadinessResult(clean);
       authed(s);
+      s.setGithubConnected(false);
       s.setFrameworkContext(SELF_DRIVING_INTEGRATE_PATH_KEY, '.');
       s.setFrameworkConfig(
         Integration.javascriptNode,

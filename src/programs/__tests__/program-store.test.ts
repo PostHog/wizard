@@ -92,7 +92,6 @@ it('copies invocation data on write, on read and in each emitted snapshot', () =
     projectId: 42,
     host: { region: 'us', apiHost: 'https://example.test' },
   } as Credentials;
-  const frameworkValue = { paths: ['apps/web'] };
   const binding = {
     sequence: Sequence.linear,
     harness: Harness.anthropic,
@@ -100,25 +99,18 @@ it('copies invocation data on write, on read and in each emitted snapshot', () =
   };
 
   store.setAuthenticated({ credentials, apiProject: null, apiUser: null });
-  store.setFrameworkContext('selectedProject', frameworkValue);
-  store.setEventPlan([{ name: 'signup', description: 'Account created' }]);
   store.setBinding(binding);
   const written = store.readData();
   credentials.accessToken = 'changed input';
-  frameworkValue.paths.push('changed input');
   binding.model = 'changed input';
-  observed[3].data.eventPlan[0].name = 'changed by observer';
-  store.readData().eventPlan.push({ name: 'changed', description: 'output' });
+  observed[1].data.binding!.model = 'changed by observer';
+  store.readData().credentials!.accessToken = 'changed output';
 
-  expect(observed).toHaveLength(4);
-  expect(observed[0].data.eventPlan).toEqual([]);
+  expect(observed).toHaveLength(2);
+  expect(observed[0].data.binding).toBeNull();
   expect(store.readData()).toEqual(written);
   expect(written).toMatchObject({
     credentials: { accessToken: 'test-access-token' },
-    detection: {
-      frameworkContext: { selectedProject: { paths: ['apps/web'] } },
-    },
-    eventPlan: [{ name: 'signup', description: 'Account created' }],
     binding: { model: 'claude-test' },
   });
 });

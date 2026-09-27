@@ -12,22 +12,16 @@
  */
 
 import type { ProgramStep } from '@programs/program-step';
+import type { WizardSession } from '@lib/wizard-session';
 import {
   evaluateWizardReadiness,
   WizardReadiness,
   SIGNUP_WIZARD_READINESS_CONFIG,
   getBlockingServiceKeys,
-  type WizardReadinessResult,
 } from '@shared/health-checks/readiness';
 import { logToFile } from '@utils/debug';
 
-type HealthCheckState = {
-  readinessResult: WizardReadinessResult | null;
-  signup: boolean;
-  outageDismissed: boolean;
-};
-
-export function healthCheckReady(session: HealthCheckState): boolean {
+export function healthCheckReady(session: WizardSession): boolean {
   if (!session.readinessResult) return false;
 
   if (session.signup) {

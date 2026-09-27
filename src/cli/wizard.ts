@@ -3,7 +3,7 @@ import { hideBin } from 'yargs/helpers';
 import type { Argv } from 'yargs';
 import { IS_PRODUCTION_BUILD } from '@env';
 import { Harness, Sequence } from '@shared/constants';
-import { regionOption } from '@cli/headless-mode';
+import { regionOption } from '@shared/headless-mode';
 import { initLocalDev, localMcpSkillsNotice } from '@shared/local-dev';
 import { toCommandModule, type Command } from './commands/command';
 import { ErrorCodes } from '@shared/errors';
@@ -58,6 +58,11 @@ export const GLOBAL_OPTIONS = {
   'base-url': {
     describe:
       'Override the PostHog base URL (e.g. http://localhost:8010), bypassing region resolution. Pins the API host, cloud URL, and OAuth server.\nenv: POSTHOG_WIZARD_BASE_URL',
+    type: 'string' as const,
+    hidden: true,
+  },
+  'run-id': {
+    describe: 'Assigned cloud WizardRun UUID',
     type: 'string' as const,
     hidden: true,
   },

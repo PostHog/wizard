@@ -4,16 +4,16 @@ import {
   preinstallPostHogCliOnce,
   resetPostHogCliPreinstallForTests,
 } from '@programs/shared/posthog-cli-preinstall';
-import { installOrUpdatePostHogCli } from '@shared/posthog-cli-install';
+import { installOrUpdatePostHogCli } from '@shared/install-cli-steering';
 import { analytics } from '@utils/analytics';
 
-vi.mock('@shared/posthog-cli-install', () => ({
+vi.mock('@shared/install-cli-steering', () => ({
   installOrUpdatePostHogCli: vi.fn(),
 }));
 vi.mock('@utils/analytics', () => ({
   analytics: { wizardCapture: vi.fn(), captureException: vi.fn() },
 }));
-const warn = vi.fn();
+const log = { warn: vi.fn() };
 
 describe('preinstallPostHogCliOnce', () => {
   beforeEach(() => {
@@ -26,17 +26,13 @@ describe('preinstallPostHogCliOnce', () => {
 
     preinstallPostHogCliOnce(
       'source maps posthog-cli preinstall failed',
-      {
-        variant: 'ios',
-      },
-      warn,
+      { variant: 'ios' },
+      log,
     );
     preinstallPostHogCliOnce(
       'error tracking posthog-cli preinstall failed',
-      {
-        integration: 'swift',
-      },
-      warn,
+      { integration: 'swift' },
+      log,
     );
 
     expect(installOrUpdatePostHogCli).toHaveBeenCalledTimes(1);
@@ -50,10 +46,8 @@ describe('preinstallPostHogCliOnce', () => {
 
     preinstallPostHogCliOnce(
       'error tracking posthog-cli preinstall failed',
-      {
-        integration: 'swift',
-      },
-      warn,
+      { integration: 'swift' },
+      log,
     );
 
     expect(analytics.wizardCapture).toHaveBeenCalledWith(
@@ -61,7 +55,7 @@ describe('preinstallPostHogCliOnce', () => {
       { integration: 'swift', error: 'EACCES' },
     );
     expect(analytics.captureException).not.toHaveBeenCalled();
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining('EACCES'));
+    expect(log.warn).toHaveBeenCalledWith(expect.stringContaining('EACCES'));
   });
 
   test('a successful install stays silent', () => {
@@ -69,13 +63,11 @@ describe('preinstallPostHogCliOnce', () => {
 
     preinstallPostHogCliOnce(
       'error tracking posthog-cli preinstall failed',
-      {
-        integration: 'swift',
-      },
-      warn,
+      { integration: 'swift' },
+      log,
     );
 
     expect(analytics.wizardCapture).not.toHaveBeenCalled();
-    expect(warn).not.toHaveBeenCalled();
+    expect(log.warn).not.toHaveBeenCalled();
   });
 });

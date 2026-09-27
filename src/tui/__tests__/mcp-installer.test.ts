@@ -1,5 +1,5 @@
 import { createMcpInstaller } from '@tui/services/mcp-installer';
-import { McpClientStatus } from '@tui/add-mcp-server-to-clients/results';
+import { McpClientStatus } from '@shared/mcp-clients/results';
 import * as mcpModuleReal from '@tui/add-mcp-server-to-clients/index';
 import { analytics } from '@utils/analytics';
 

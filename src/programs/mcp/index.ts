@@ -9,7 +9,7 @@
  */
 
 import type { ProgramConfig } from '@programs/program-step';
-import { McpOutcome } from '@shared/run-state';
+import { McpOutcome } from '@lib/wizard-session';
 
 export const mcpAddConfig: ProgramConfig = {
   id: 'mcp-add',

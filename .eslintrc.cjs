@@ -19,6 +19,9 @@ module.exports = {
     'assets/**',
     'scripts/**',
     'coverage/**',
+    // Standalone jest-based package, linted/typechecked in its own context and
+    // outside the root tsconfig the parser uses (parserOptions.project).
+    'e2e-tests/**',
   ],
   extends: [
     'eslint:recommended',
@@ -32,7 +35,7 @@ module.exports = {
       // progress events and asks through an injected answerer, so nothing
       // here may import a UI, the session, detection, the CLI or a program.
       // Only direct static imports are checked. ProgramId remains a type-only
-      // exception until B2 moves PROGRAM_BINDINGS to programs.
+      // exception until PROGRAM_BINDINGS moves to programs.
       files: ['src/agent/**/*.ts'],
       excludedFiles: ['**/__tests__/**'],
       rules: {
@@ -85,7 +88,7 @@ module.exports = {
                 group: ['@programs', '@programs/**', '**/programs/**'],
                 allowTypeImports: true,
                 message:
-                  'The agent takes program data through RunConfig. ProgramId types remain until B2 moves PROGRAM_BINDINGS to programs.',
+                  'The agent takes program data through RunConfig. ProgramId types remain until PROGRAM_BINDINGS moves to programs.',
               },
             ],
           },

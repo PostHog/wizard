@@ -10,6 +10,7 @@ import {
   type PackageJson,
 } from '@utils/package-json';
 import { tryGetPackageJson } from '@utils/setup-utils';
+import { getUI } from '@ui';
 import {
   getTanStackRouterMode,
   getTanStackRouterModeName,
@@ -30,14 +31,13 @@ export const TANSTACK_ROUTER_AGENT_CONFIG: FrameworkConfig<TanStackRouterContext
       gatherContext: async (options: WizardRunOptions) => {
         const routerMode = await getTanStackRouterMode(options);
         if (routerMode) {
+          getUI().setDetectedFramework(
+            `TanStack Router ${getTanStackRouterModeName(routerMode)}`,
+          );
           return { routerMode };
         }
         return {};
       },
-      getDetectedFrameworkLabel: (context) =>
-        context.routerMode
-          ? `TanStack Router ${getTanStackRouterModeName(context.routerMode)}`
-          : undefined,
     },
 
     detection: {

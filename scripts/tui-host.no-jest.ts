@@ -17,27 +17,21 @@ import fs from 'fs';
 import net from 'net';
 import { spawnSync } from 'child_process';
 import { startTUI } from '@tui/start-tui';
-import { getUI } from '@ui';
 import { VERSION } from '@shared/version';
 import { Program, getProgramConfig, type ProgramId } from '@programs';
 import type { Harness, Sequence } from '@shared/constants';
 import { buildSession } from '@lib/wizard-session';
 import { initLocalDev } from '@shared/local-dev';
-import { loadCiInferenceAuthProvider } from '@cli/runners/ci-inference-auth';
-import type { InferenceAuthProvider } from '@agent/types';
-import { runProgramAgent } from '@cli/runners/run-program-agent';
-import { commitRegisteredRunSkillCleanups } from '@shared/skill-run-cleanup';
-import {
-  TaskStreamPush,
-  createFileDestination,
-} from '@programs/task-stream/index';
+import { configureGatewayFromCIEnvironment } from '@agent/gateway-session';
+import { runProgramAgent } from '@cli/runners/run-agent-legacy';
+import { TaskStreamPush, createFileDestination } from '@cli/task-stream/index';
 import { getAuditChecks } from '@programs/audit/types';
-import { authenticate } from '@programs/authenticate';
+import { authenticate } from '@lib/authenticate';
 import { getOrAskForProjectData } from '@utils/setup-utils';
 import { logToFile } from '@utils/debug';
 import { join } from 'path';
 import { detectFramework } from '@programs/detection/index';
-import { FRAMEWORK_REGISTRY } from '@programs/registry';
+import { FRAMEWORK_REGISTRY } from '@programs/frameworks/registry';
 import type { Integration } from '@shared/constants';
 import { SELF_DRIVING_INTEGRATE_PATH_KEY } from '@programs/self-driving/detect';
 import { ERROR_TRACKING_PROJECT_PATH_KEY } from '@programs/error-tracking/detect-agentic';
@@ -59,18 +53,19 @@ import {
   createE2eResultWriter,
   readReportFile,
 } from '@e2e-harness/e2e-result';
-import { tuiSnapshotSignature } from '@e2e-harness/tui-snapshot-signature';
+
+/** Cheap 32-bit FNV-1a, to fold framework-context values into a signature. */
+function digest(s: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return (h >>> 0).toString(36);
+}
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const mark = (m: string) => logToFile(`[tui-host] ${m}`);
-
-/** A blank variable counts as unset, so the key file is the fallback. */
-function readPersonalApiKey(env: NodeJS.ProcessEnv): string {
-  const inline = env.POSTHOG_PERSONAL_API_KEY?.trim();
-  if (inline) return inline;
-  const file = env.POSTHOG_KEY_FILE?.trim();
-  return file ? fs.readFileSync(file, 'utf8').trim() : '';
-}
 
 /** Tri-state: absent ⇒ `undefined`, so `resolveLocalDev` can apply the umbrella. */
 function envFlag(name: string): boolean | undefined {
@@ -193,7 +188,12 @@ function runAppBuild(root: string): boolean {
 }
 
 async function main() {
-  const apiKey = readPersonalApiKey(process.env);
+  const apiKey = (
+    process.env.POSTHOG_PERSONAL_API_KEY ??
+    (process.env.POSTHOG_KEY_FILE
+      ? fs.readFileSync(process.env.POSTHOG_KEY_FILE, 'utf8')
+      : '')
+  ).trim();
   const projectId = process.env.PROJECT_ID!;
   // Which program to drive — defaults to the integration flow. Set PROGRAM to
   // an id (e.g. `self-driving`) to host a different one.
@@ -225,7 +225,7 @@ async function main() {
     // Keep the `wizard_ask` bridge wired despite `ci: true`. The driver loop
     // below is the answerer — without this the agent-in-the-loop layer of a
     // flow (credential questions, the orchestrator's seeded warehouse task) is
-    // never exercised. Only this host sets it; see `isAskDisabled`.
+    // never exercised. Only this host sets it; see `shouldDisableAsk`.
     e2eAsk: process.env.E2E_ASK === 'true',
     apiKey,
     projectId,
@@ -234,23 +234,13 @@ async function main() {
     // skills (:8765) against the production MCP.
     localDev: process.env.POSTHOG_WIZARD_LOCAL_DEV === 'true',
     localMcp: envFlag('POSTHOG_WIZARD_LOCAL_MCP'),
+    localContextMill: envFlag('POSTHOG_WIZARD_LOCAL_CONTEXT_MILL'),
     localPosthog: envFlag('POSTHOG_WIZARD_LOCAL_POSTHOG'),
     // Switchboard variation overrides (see e2e.json `variations`), threaded by
     // the snapshot driver as one run per variation. Empty ⇒ resolved default.
     harness: (process.env.SNAP_HARNESS || undefined) as Harness | undefined,
     sequence: (process.env.SNAP_SEQUENCE || undefined) as Sequence | undefined,
     model: process.env.SNAP_MODEL || undefined,
-  });
-  // Read the one-use token file only when a route first requests inference.
-  let ciAuth: InferenceAuthProvider | undefined;
-  store.setInferenceAuth({
-    resolve: async () => {
-      ciAuth ??= loadCiInferenceAuthProvider(
-        Number(projectId),
-        store.session.region ?? 'us',
-      );
-      return ciAuth.resolve();
-    },
   });
   // Dumped, never pushed: an e2e run is synthetic, like `--ci`.
   const streamLog = createFileDestination(process.env.TASK_STREAM_LOG ?? '');
@@ -259,6 +249,9 @@ async function main() {
       store,
       programId,
       destinations: [streamLog],
+      eventPlanPath: programConfig.eventPlanFile
+        ? join(store.session.installDir, programConfig.eventPlanFile)
+        : undefined,
       auditChecks: programConfig.auditLedgerFile
         ? () => getAuditChecks(store.session)
         : undefined,
@@ -296,7 +289,15 @@ async function main() {
   // Pass the pre-run gates and run the program's real agent. The auth and run
   // screens never advance on their own; this is what moves them. Mirrors
   // run-wizard's flow, including in-program run phases.
+  let gatewayConfigured = false;
   const runProgram = async () => {
+    if (!gatewayConfigured) {
+      configureGatewayFromCIEnvironment(
+        Number(projectId),
+        store.session.region ?? 'us',
+      );
+      gatewayConfigured = true;
+    }
     await store.getGate('intro');
     await store.getGate('integration-check');
     await store.getGate('health-check');
@@ -306,12 +307,11 @@ async function main() {
     // or scope their own run to a picked project (error-tracking).
     // `authenticate` here resolves the phx key, not OAuth, since the session is
     // built with ci + apiKey.
-    if (programConfig.steps.some((s) => s.runProgramId || s.targetDir)) {
+    if (programConfig.steps.some((s) => s.run || s.targetDir)) {
       const runSessionFor = async (
         step: (typeof programConfig.steps)[number],
       ) => {
         const live = store.session;
-        const previousLabel = live.detectedFrameworkLabel;
         const runSession = step.targetDir
           ? {
               ...live,
@@ -320,25 +320,15 @@ async function main() {
             }
           : live;
         if (step.onRunPrep) await step.onRunPrep(runSession);
-        if (
-          runSession.detectedFrameworkLabel &&
-          runSession.detectedFrameworkLabel !== previousLabel
-        ) {
-          store.setDetectedFramework(runSession.detectedFrameworkLabel);
-        }
         return runSession;
       };
       for (const step of programConfig.steps) {
         if (step.screenId === 'outro') break;
         if (step.show && !step.show(store.session)) continue;
         if (step.screenId === 'auth') {
-          await authenticate(store.session, programConfig.id, getUI());
-        } else if (step.runProgramId) {
-          await runProgramAgent(
-            getProgramConfig(step.runProgramId),
-            await runSessionFor(step),
-            { composed: true },
-          );
+          await authenticate(store.session, programConfig.id);
+        } else if (step.run) {
+          await step.run(await runSessionFor(step));
           store.completeRunStep(step.id);
         } else if (step.screenId === 'run') {
           await runProgramAgent(programConfig, await runSessionFor(step));
@@ -349,8 +339,6 @@ async function main() {
     } else {
       await runProgramAgent(programConfig, store.session);
     }
-    // runProgramAgent leaves new skills armed; a finished run keeps them.
-    commitRegisteredRunSkillCleanups();
   };
 
   if (process.env.MODE === 'serve') return serve();
@@ -462,8 +450,18 @@ async function main() {
     // signature and serialized.
     let lastSig = '';
     let chain: Promise<void> = Promise.resolve();
+    const signature = () =>
+      JSON.stringify({
+        screen: store.currentScreen,
+        overlay: store.router.hasOverlay,
+        tasks: store.tasks.map((t) => [t.label, t.status, t.done]),
+        phase: store.session.runPhase,
+        // Values, not just keys: a screen rerendering from an artifact updated
+        // in place (the audit ledger) keeps its key and would snap once, empty.
+        ctx: digest(JSON.stringify(store.session.frameworkContext)),
+      });
     const snap = (): Promise<void> => {
-      const sig = tuiSnapshotSignature(store);
+      const sig = signature();
       if (sig === lastSig) return chain;
       lastSig = sig;
       const screen = store.currentScreen;
@@ -625,72 +623,73 @@ async function main() {
     // integration re-writes it after keep-skills (skillsComplete). Registered
     // on `exit` too: `wizardAbort` renders the error outro and exits, and an
     // aborted run would otherwise write nothing at all.
+    const buildResult = () => {
+      const appDir = process.env.APP_DIR!;
+      // One dependency-name pattern per ecosystem manifest. A run only needs
+      // the names, so a line-level scan beats per-format parsers.
+      const MANIFESTS: Array<[string, RegExp]> = [
+        ['pubspec.yaml', /^ {2}([A-Za-z_][A-Za-z0-9_]*)\s*:/gm],
+        ['go.mod', /^\s*([\w.\/-]+)\s+v[\w.-]+/gm],
+        ['Cargo.toml', /^([A-Za-z0-9_-]+)\s*=/gm],
+        ['pom.xml', /<artifactId>([^<]+)<\/artifactId>/g],
+        ['build.gradle', /['"]([\w.-]+:[\w.-]+)[:'"]/g],
+        ['mix.exs', /\{:([a-z_]+)\s*,/g],
+      ];
+      const deps: string[] = [];
+      try {
+        // package.json needs a real parse: a line scan would also match script
+        // names, and only the dependency blocks carry dependencies.
+        const pkg = JSON.parse(
+          fs.readFileSync(`${appDir}/package.json`, 'utf8'),
+        );
+        deps.push(
+          ...Object.keys({ ...pkg.dependencies, ...pkg.devDependencies }),
+        );
+      } catch {
+        /* not a JS project */
+      }
+      for (const [file, pattern] of MANIFESTS) {
+        try {
+          const text = fs.readFileSync(`${appDir}/${file}`, 'utf8');
+          for (const match of text.matchAll(pattern)) deps.push(match[1]);
+        } catch {
+          /* app doesn't use this ecosystem */
+        }
+      }
+      const posthogDeps = [
+        ...new Set(deps.filter((d) => d.toLowerCase().includes('posthog'))),
+      ];
+      let envFile: string | null = null;
+      try {
+        const hit = fs
+          .readdirSync(appDir)
+          .find(
+            (f) =>
+              (f.startsWith('.env') || f.endsWith('.env')) &&
+              /posthog/i.test(fs.readFileSync(`${appDir}/${f}`, 'utf8')),
+          );
+        envFile = hit ? `${appDir}/${hit}` : null;
+      } catch {
+        /* none */
+      }
+      return buildE2eResult({
+        base: {
+          runPhase: store.session.runPhase,
+          hasPosthogDep: posthogDeps.length > 0,
+          newDeps: posthogDeps,
+          envFile,
+          screenPath,
+          skillsComplete: store.session.skillsComplete,
+        },
+        recorder,
+        session: store.session,
+        tasks: store.tasks,
+        reportFile: readReportFile(appDir, programConfig.reportFile),
+      });
+    };
     const writeResult = createE2eResultWriter(
       process.env.E2E_RESULT_JSON,
-      () => {
-        const appDir = process.env.APP_DIR!;
-        // One dependency-name pattern per ecosystem manifest. A run only needs
-        // the names, so a line-level scan beats per-format parsers.
-        const MANIFESTS: Array<[string, RegExp]> = [
-          ['pubspec.yaml', /^ {2}([A-Za-z_][A-Za-z0-9_]*)\s*:/gm],
-          ['go.mod', /^\s*([\w.\/-]+)\s+v[\w.-]+/gm],
-          ['Cargo.toml', /^([A-Za-z0-9_-]+)\s*=/gm],
-          ['pom.xml', /<artifactId>([^<]+)<\/artifactId>/g],
-          ['build.gradle', /['"]([\w.-]+:[\w.-]+)[:'"]/g],
-          ['mix.exs', /\{:([a-z_]+)\s*,/g],
-        ];
-        const deps: string[] = [];
-        try {
-          // package.json needs a real parse: a line scan would also match script
-          // names, and only the dependency blocks carry dependencies.
-          const pkg = JSON.parse(
-            fs.readFileSync(`${appDir}/package.json`, 'utf8'),
-          );
-          deps.push(
-            ...Object.keys({ ...pkg.dependencies, ...pkg.devDependencies }),
-          );
-        } catch {
-          /* not a JS project */
-        }
-        for (const [file, pattern] of MANIFESTS) {
-          try {
-            const text = fs.readFileSync(`${appDir}/${file}`, 'utf8');
-            for (const match of text.matchAll(pattern)) deps.push(match[1]);
-          } catch {
-            /* app doesn't use this ecosystem */
-          }
-        }
-        const posthogDeps = [
-          ...new Set(deps.filter((d) => d.toLowerCase().includes('posthog'))),
-        ];
-        let envFile: string | null = null;
-        try {
-          const hit = fs
-            .readdirSync(appDir)
-            .find(
-              (f) =>
-                (f.startsWith('.env') || f.endsWith('.env')) &&
-                /posthog/i.test(fs.readFileSync(`${appDir}/${f}`, 'utf8')),
-            );
-          envFile = hit ? `${appDir}/${hit}` : null;
-        } catch {
-          /* none */
-        }
-        return buildE2eResult({
-          base: {
-            runPhase: store.session.runPhase,
-            hasPosthogDep: posthogDeps.length > 0,
-            newDeps: posthogDeps,
-            envFile,
-            screenPath,
-            skillsComplete: store.session.skillsComplete,
-          },
-          recorder,
-          session: store.session,
-          tasks: store.tasks,
-          reportFile: readReportFile(appDir, programConfig.reportFile),
-        });
-      },
+      buildResult,
     );
     const unsubResult = store.subscribe(() => {
       if (store.currentScreen === 'outro') writeResult();
@@ -709,7 +708,7 @@ async function main() {
     unsubResult();
     await snap(); // the final screen
     await chain; // flush any pending snapshots
-    writeResult(true); // integration: replace the early outro result after keep-skills
+    writeResult(true); // final write (integration: after keep-skills)
     process.exit(0);
   }
 }

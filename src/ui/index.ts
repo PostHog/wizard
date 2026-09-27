@@ -22,4 +22,3 @@ export function setUI(ui: WizardUI): void {
 }
 
 export type { WizardUI, SpinnerHandle } from './wizard-ui';
-export { createUiReducer, uiInteraction } from './agent-progress';

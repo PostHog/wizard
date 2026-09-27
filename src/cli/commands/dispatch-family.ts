@@ -1,9 +1,11 @@
 import type { Arguments } from 'yargs';
 
-import { AUDIT_CHECKS_FILE } from '@shared/audit-ledger';
+import { auditConfig } from '@programs/audit/index';
+import { AUDIT_CHECKS_FILE } from '@programs/audit/types';
 import { WIZARD_TOOL_NAMES } from '@agent';
-import { getProgramConfig } from '@programs';
-import type { ProgramConfig } from '@programs/types';
+import { agentSkillConfig } from '@programs/program-registry';
+import { webAnalyticsDoctorConfig } from '@programs/web-analytics-doctor/index';
+import type { ProgramConfig } from '@programs/program-step';
 import { getSkillsBaseUrl } from '@shared/constants';
 import { fetchSkillMenu, type CliEntry } from '@shared/skill-menu';
 import { analytics } from '@utils/analytics';
@@ -48,7 +50,7 @@ async function exitDispatchError(
 
 /** Wizard-native subcommands keyed by family. */
 const NATIVE_HANDLERS: Record<string, Record<string, ProgramConfig>> = {
-  audit: { 'web-analytics': getProgramConfig('web-analytics-doctor') },
+  audit: { 'web-analytics': webAnalyticsDoctorConfig },
 };
 
 /**
@@ -62,8 +64,7 @@ const NATIVE_HANDLERS: Record<string, Record<string, ProgramConfig>> = {
  * generic skill program picks up the ledger here rather than for every skill.
  */
 function configForCliEntry(entry: CliEntry, family: string): ProgramConfig {
-  if (entry.skillId === 'audit') return getProgramConfig('audit');
-  const agentSkillConfig = getProgramConfig('agent-skill');
+  if (entry.skillId === 'audit') return auditConfig;
   return {
     ...agentSkillConfig,
     skillId: entry.skillId,

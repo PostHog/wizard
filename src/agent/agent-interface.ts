@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 /**
  * Shared agent interface for PostHog wizards
  * Uses Claude Agent SDK directly with PostHog LLM gateway
@@ -25,21 +26,17 @@ import {
   wizardUserAgentForProgram,
   DEFAULT_AGENT_MODEL,
   AWS_SKILLS_BASE_URL,
-  type AdditionalFeature,
-  ADDITIONAL_FEATURE_PROMPTS,
 } from '@shared/constants';
-import type {
-  AgentFailure,
-  InferenceAuthProvider,
-} from './runner/shared/types';
+import type { AgentFailure } from './runner/shared/types';
 import type { AgentResult } from './runner/harness/types';
 import { createCustomHeaders } from '@utils/custom-headers';
 import type { HostResolution } from '@shared/host-resolution';
 import {
   buildWizardPropertiesBlob,
+  gatewayAuth,
   isPastRefresh,
   type GatewayAuth,
-} from '@shared/gateway-auth';
+} from '@agent/gateway-session';
 import { evaluateBashCommand } from './bash-fence';
 import { createWizardToolsServer, WIZARD_TOOL_NAMES } from '@agent/tools';
 import {
@@ -199,6 +196,7 @@ export type AgentConfig = {
   workingDirectory: string;
   posthogMcpUrl: string;
   posthogApiKey: string;
+  currentPosthogApiKey?: () => Promise<string>;
   host: HostResolution;
   additionalMcpServers?: Record<string, { url: string }>;
   detectPackageManager: PackageManagerDetector;
@@ -213,10 +211,6 @@ export type AgentConfig = {
    * another program's budget, so neither should depend on an optional string bag.
    */
   programId: string;
-  /** Program-owned inference auth, refreshed at each model call. */
-  inferenceAuth: InferenceAuthProvider;
-  /** Program-owned guidance supplied as data, never looked up here. */
-  programCommandments?: readonly string[];
   /** Program identifier — selects the model for that program. */
   integrationLabel?: string;
   /**
@@ -265,28 +259,22 @@ export type StopHookResult =
   | { decision: 'block'; reason: string };
 
 /**
- * Create a stop hook callback that drains the additional feature queue,
- * then collects a remark, then allows stop.
+ * Create a stop hook callback that collects a remark, then allows stop.
  *
- * Three-phase logic using closure state:
- *   Phase 1 — drain queue: block with each feature prompt in order
- *   Phase 2 — collect remark (once): block with remark prompt
- *   Phase 3 — allow stop: return {}
+ * Two-phase logic using closure state:
+ *   Phase 1 — collect remark (once): block with remark prompt
+ *   Phase 2 — allow stop: return {}
  */
 export function createStopHook(
-  featureQueue: readonly AdditionalFeature[],
   signals?: AgentOutputSignals,
   requestRemark = true,
 ): (input: { stop_hook_active: boolean }) => StopHookResult {
-  let featureIndex = 0;
   let remarkRequested = false;
 
   return (input: { stop_hook_active: boolean }): StopHookResult => {
     logToFile('Stop hook triggered', {
       stop_hook_active: input.stop_hook_active,
-      featureIndex,
       remarkRequested,
-      queueLength: featureQueue.length,
     });
 
     // On API errors, allow stop immediately — blocking with remark/feature
@@ -296,15 +284,7 @@ export function createStopHook(
       return {};
     }
 
-    // Phase 1: drain feature queue
-    if (featureIndex < featureQueue.length) {
-      const feature = featureQueue[featureIndex++];
-      const prompt = ADDITIONAL_FEATURE_PROMPTS[feature];
-      logToFile(`Stop hook: injecting feature prompt for ${feature}`);
-      return { decision: 'block', reason: prompt };
-    }
-
-    // Phase 2: collect remark (once). Skipped when the caller opts out — the
+    // Phase 1: collect remark (once). Skipped when the caller opts out — the
     // orchestrator suppresses it per task so it does not fire on every agent.
     if (requestRemark && !remarkRequested) {
       remarkRequested = true;
@@ -315,7 +295,7 @@ export function createStopHook(
       };
     }
 
-    // Phase 3: allow stop
+    // Phase 2: allow stop
     logToFile('Stop hook: allowing stop');
     return {};
   };
@@ -331,6 +311,7 @@ type AgentRunConfig = {
   model: string;
   /** The run's OAuth access token — the MCP config resolves it in the child. */
   posthogApiKey: string;
+  currentPosthogApiKey?: () => Promise<string>;
   wizardFlags?: Record<string, string>;
   wizardMetadata?: Record<string, string>;
   /** Extra tools added on top of BASE_ALLOWED_TOOLS for this run. */
@@ -361,8 +342,8 @@ type AgentRunConfig = {
    * bearer.
    */
   refreshGatewayAuth?: () => Promise<GatewayAuth>;
-  /** Program-owned guidance supplied as data. */
-  programCommandments?: readonly string[];
+  /** Program id, for the program-axis commandments. */
+  program?: string;
   /** Resolved sequence, for the sequence-axis commandments. */
   sequence: Sequence;
   /** Where the run reports. A no-op when the caller passed none. */
@@ -370,6 +351,31 @@ type AgentRunConfig = {
 };
 
 const NO_PROGRESS: ProgressEmitter = () => undefined;
+
+/**
+ * Global identifiers attached to every LLM gateway trace for a run. They ride on
+ * each `$ai_generation` the gateway emits (in the `X-PostHog-Properties` blob
+ * `buildAgentEnv` builds), so traces are filterable by program, framework, run,
+ * and build type for cost attribution and dashboards. `skill_id` is omitted when
+ * the run has none.
+ */
+export function buildRunTags(args: {
+  programId: string;
+  integration: string;
+  runId: string;
+  build: string;
+  skillId?: string;
+}): Record<string, string> {
+  return {
+    program_id: args.programId,
+    integration: args.integration,
+    run_id: args.runId,
+    build: args.build,
+    // Triage and detection spread these tags and override this one.
+    call_type: CallType.agent,
+    ...(args.skillId ? { skill_id: args.skillId } : {}),
+  };
+}
 
 /**
  * Whether Warlock/YARA scanning is disabled for this run. Off by default:
@@ -524,10 +530,17 @@ export async function initializeAgent(
   const emit = config.emit ?? NO_PROGRESS;
 
   try {
-    // Configure model routing with the program-supplied gateway bearer.
+    // Configure model routing (inherited by the SDK subprocess). All model
+    // calls route through the PostHog AI gateway with the scoped token
+    // gatewayAuth mints for this run.
     // Disable experimental betas (like input_examples) the gateway doesn't support.
     process.env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS = 'true';
-    const currentGatewayAuth = () => config.inferenceAuth.resolve();
+    const currentGatewayAuth = async () =>
+      gatewayAuth(
+        config.host,
+        (await config.currentPosthogApiKey?.()) ?? config.posthogApiKey,
+        config.programId,
+      );
     const auth = await currentGatewayAuth();
     const gatewayUrl = auth.gatewayUrl;
     process.env.ANTHROPIC_BASE_URL = gatewayUrl;
@@ -637,6 +650,7 @@ export async function initializeAgent(
       mcpServers,
       model,
       posthogApiKey: config.posthogApiKey,
+      currentPosthogApiKey: config.currentPosthogApiKey,
       wizardFlags: config.wizardFlags,
       wizardMetadata: config.wizardMetadata,
       allowedTools: config.allowedTools,
@@ -647,7 +661,7 @@ export async function initializeAgent(
       triageProvider,
       gatewayAuth: auth,
       refreshGatewayAuth: currentGatewayAuth,
-      programCommandments: config.programCommandments,
+      program: config.integrationLabel,
       // A queue context is present only on a task run; that is the sequence.
       sequence: config.orchestrator ? Sequence.orchestrator : Sequence.linear,
       emit,
@@ -752,7 +766,6 @@ export async function runAgent(
     spinnerMessage?: string;
     successMessage?: string;
     errorMessage?: string;
-    additionalFeatureQueue?: readonly AdditionalFeature[];
     abortCases?: readonly AbortCaseMatcher[];
     /**
      * Emit a `wizard: step` event on each agent task transition. Threaded from
@@ -1112,7 +1125,9 @@ export async function runAgent(
             CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS: 'true',
             // The MCP config resolves this in the child; sending the value would
             // put it on the CLI's argv.
-            POSTHOG_MCP_TOKEN: agentConfig.posthogApiKey,
+            POSTHOG_MCP_TOKEN:
+              (await agentConfig.currentPosthogApiKey?.()) ??
+              agentConfig.posthogApiKey,
             // SDK 0.3.142 made MCP servers connect in the background by default;
             // the agent may start its first turn before posthog-wizard is ready
             // (audit programs call audit_seed_checks on turn 1, integration
@@ -1147,7 +1162,7 @@ export async function runAgent(
             // we keep default Claude Code behaviors. An orchestrator context is
             // present only on a task run — that is what picks the sequence.
             append: assembleCommandments({
-              programCommandments: agentConfig.programCommandments,
+              program: agentConfig.program,
               sequence: agentConfig.sequence,
               harness: Harness.anthropic,
             }),
@@ -1160,7 +1175,7 @@ export async function runAgent(
               debug('CLI stderr:', data);
             }
           },
-          // Stop hook: drain additional feature queue, then collect remark, then allow stop
+          // Stop hook: collect remark, then allow stop
           hooks: {
             PreToolUse: warlockDisabled
               ? []
@@ -1170,13 +1185,7 @@ export async function runAgent(
               : createPostToolUseYaraHooks(triageProvider, onYaraTerminate),
             Stop: [
               {
-                hooks: [
-                  createStopHook(
-                    config?.additionalFeatureQueue ?? [],
-                    signals,
-                    config?.requestRemark ?? true,
-                  ),
-                ],
+                hooks: [createStopHook(signals, config?.requestRemark ?? true)],
                 timeout: 30,
               },
             ],
@@ -1693,7 +1702,15 @@ export const BASE_ALLOWED_TOOLS: readonly string[] = [
   ...Object.values(WIZARD_TOOL_NAMES),
 ];
 
-type TaskEntry = { content: string; status: string; activeForm?: string };
+type TaskEntry = {
+  id?: string;
+  source?: string;
+  content: string;
+  status: string;
+  activeForm?: string;
+};
+
+const taskSources = new WeakMap<Map<string, TaskEntry>, string>();
 
 interface TaskStore {
   tasks: Map<string, TaskEntry>;
@@ -1718,7 +1735,14 @@ function handleTaskCreate(block: ToolUseBlock, store: TaskStore): void {
   if (!input?.subject) return;
   // Key by tool_use_id for now — the rekey to the SDK-assigned taskId happens
   // when the matching tool_result arrives.
+  let source = taskSources.get(store.tasks);
+  if (!source) {
+    source = randomUUID();
+    taskSources.set(store.tasks, source);
+  }
   store.tasks.set(block.id, {
+    id: randomUUID(),
+    source,
     content: input.subject,
     status: 'pending',
     activeForm: input.activeForm,
@@ -1777,6 +1801,8 @@ function handleTaskUpdate(block: ToolUseBlock, store: TaskStore): void {
       });
     }
     store.tasks.set(input.taskId, {
+      id: existing.id,
+      source: existing.source,
       content: input.subject ?? existing.content,
       status: input.status ?? existing.status,
       activeForm: input.activeForm ?? existing.activeForm,

@@ -19,7 +19,7 @@ import {
   type WizardSession,
 } from '@lib/wizard-session';
 import { Integration } from '@shared/constants';
-import { FRAMEWORK_REGISTRY } from '@programs/registry';
+import { FRAMEWORK_REGISTRY } from '@programs/frameworks/registry';
 import { HostResolution } from '@shared/host-resolution';
 import { WizardReadiness } from '@shared/health-checks/readiness';
 import { analytics } from '@utils/analytics';
@@ -125,7 +125,7 @@ function advance(store: WizardStore, screen: string): boolean {
           (!st.show || st.show(s)) &&
           (!st.isComplete || !st.isComplete(s)),
       );
-      if (runStep?.runProgramId) {
+      if (runStep?.run) {
         store.completeRunStep(runStep.id);
       } else {
         store.setRunPhase(RunPhase.Running);

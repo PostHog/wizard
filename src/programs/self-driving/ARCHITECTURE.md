@@ -151,7 +151,7 @@ repos.
 URLs), `detect.ts` (prerequisite check + abort vocabulary), `steps.ts` (TUI
 screen sequence
 `detect → intro → health-check → auth → self-driving-github → run → outro`). The
-TUI deck at `src/tui/decks/self-driving/tips.ts` (the `Tips`-sidebar copy
+TUI deck at `src/tui/programs/self-driving/deck/tips.ts` (the `Tips`-sidebar copy
 that defines signal sources + scouts + scanners in plain language, wired via
 `getTips`; `RunScreen` falls back to `DEFAULT_TIPS` for every other program, so
 nothing else is affected). `selfDrivingConfig` is built from the
@@ -583,12 +583,12 @@ must be running, or no scout ever dispatches.
 >     (plus its own `startDelay` of 2 s); `ContentSequencer.handleComplete`
 >     fires `onSequenceComplete` **only after the last block's `pause`
 >     elapses**; the deck self-driving plays is the **shared factory default** >
->     `src/tui/decks/agent-skill/index.tsx` (`getContentBlocks`, last block
+>     `src/tui/programs/shared/skill-deck.tsx` (`getContentBlocks`, last block
 >     `pause: 60000`) — self-driving does **not** override it today. **Scoping
 >     caveat (the whole reason this is a TODO, not a one-liner):** that deck is
 >     inherited by _every_ skill program (audit, revenue-analytics, migration,
 >     bare `wizard skill <id>`), so editing
->     `src/tui/decks/agent-skill/index.tsx` changes all of them. Fix
+>     `src/tui/programs/shared/skill-deck.tsx` changes all of them. Fix
 >     self-driving alone the way `getTips` already is — add a
 >     **self-driving-owned `getContentBlocks`** override to `selfDrivingConfig`
 >     (`self-driving/index.ts`, right next to the `getTips` override); only
@@ -959,7 +959,7 @@ Code anchors: posthog `products/replay_vision/backend/models/replay_scanner.py`,
 `api/scanners.py`, `temporal/scanners/prompts/signals_step.jinja` (the fixed
 defect-detection turn that `emits_signals` appends — the _why_ the skill cares
 more about a scanner's `query` than its prompt); wizard `program-scopes.ts` +
-`prompt.ts` + `src/tui/decks/self-driving/tips.ts`; skill
+`prompt.ts` + `src/tui/programs/self-driving/deck/tips.ts`; skill
 `6c-replay-vision-scanners.md`.
 
 ---

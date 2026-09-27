@@ -1,4 +1,5 @@
 import fg from 'fast-glob';
+import { getUI } from '@ui';
 import type { WizardRunOptions } from '@utils/types';
 import { createVersionBucket } from '@utils/semver';
 import * as fs from 'node:fs';
@@ -95,6 +96,7 @@ export function getRailsProjectType(
     try {
       const content = fs.readFileSync(appConfigPath, 'utf-8');
       if (content.includes('config.api_only = true')) {
+        getUI().setDetectedFramework('Rails API-only');
         return RailsProjectType.API;
       }
     } catch {
@@ -102,6 +104,7 @@ export function getRailsProjectType(
     }
   }
 
+  getUI().setDetectedFramework('Rails');
   return RailsProjectType.STANDARD;
 }
 

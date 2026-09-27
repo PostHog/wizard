@@ -8,3 +8,6 @@ minimumReleaseAgeExclude:
   - '@posthog/warlock'
 blockExoticSubdeps: true
 trustPolicy: no-downgrade
+
+packages:
+  - '!e2e-tests/**'

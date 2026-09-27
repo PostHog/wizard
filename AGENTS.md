@@ -34,10 +34,10 @@ Each domain has a dedicated boundary:
   `@agent/types` (types); see [src/agent/README.md](src/agent/README.md)
 - **Shared** → `src/shared/`, stateless library code with no upward imports;
   see [src/shared/README.md](src/shared/README.md)
-- **Programs** → configs, detection, framework registry and task stream in
-  `src/programs/`; runtime and type entries are `@programs` and
-  `@programs/types`
-- **TUI** → screens, primitives and content decks in `src/tui/`
+- **Programs** → program configs and `runProgram` in `src/programs/`; see
+  [src/programs/README.md](src/programs/README.md) and the
+  [developer interfaces](docs/developer-interfaces.md)
+- **TUI** → screens, primitives and content decks in `src/ui/tui/`
 
 Adding a new concern means finding the narrowest existing surface, not adding
 logic to the runner. Keep changes local to the boundary that owns them.
@@ -76,7 +76,7 @@ Agent SDK is a supported legacy fallback, deprecated as the default; retain it
 for major Pi vulnerabilities or gaps in support for new Anthropic models.
 
 This is the contribution policy, not a claim that every existing binding has
-migrated. The default, `DEFAULT_AGENT_BINDING`, is Pi + linear. Set new bindings
+migrated: `DEFAULT_BINDING` is Pi + linear. Set new bindings
 explicitly and check sequence-specific hooks before migrating existing flows.
 See
 [execution policy and model admission](.claude/skills/wizard-development/SKILL.md#execution-policy-and-model-admission)
@@ -133,7 +133,7 @@ confuse it with the top-level `wizard skill` command.
   ([`src/cli/commands/factories/native-command-factory.ts`](src/cli/commands/factories/native-command-factory.ts)).
 - **Family commands** (e.g. `audit`) resolve subcommands at runtime against the
   `cliEntries` in `skill-menu.json`. Logic lives in
-  [`src/cli/commands/dispatch-family.ts`](src/cli/commands/dispatch-family.ts).
+  [`src/programs/dispatch-family.ts`](src/programs/dispatch-family.ts).
   Adding a skill-backed subcommand is a **context-mill** release, not a wizard
   change.
 
@@ -163,13 +163,11 @@ pnpm try --install-dir=<path>      # Run the wizard locally against a test proje
 pnpm build                         # Compile TypeScript
 pnpm test                          # Unit tests (builds first)
 pnpm test:watch                    # Unit tests in watch mode
-pnpm test:e2e:tui                  # Live, credentialed: full TUI on a workbench app copy
+pnpm test:e2e                      # End-to-end tests
 pnpm lint                          # Prettier + ESLint checks
 pnpm fix                           # Auto-fix lint issues
 pnpm dev                           # Build, link globally, watch for changes
 ```
-
-`test:e2e:tui` needs `APP_DIR`, `PROJECT_ID`, a personal key (`POSTHOG_PERSONAL_API_KEY` or `POSTHOG_KEY_FILE`) and `WIZARD_CI_GATEWAY_TOKEN_FILE`; see the Testing section of the [README](README.md). Headless `runProgram` and `runAgent` runs live in the [wizard-workbench](https://github.com/PostHog/wizard-workbench) harness, pointed at this checkout by `WIZARD_REPO`.
 
 Choose verification for the change: check links and formatting for docs; run
 `pnpm typecheck` and focused existing tests for code. Build when bundling or
@@ -204,7 +202,8 @@ wizard run points. Full catalog: [`docs/local-dev.md`](docs/local-dev.md).
 - TypeScript everywhere. Use `type` (not `interface`) for framework context
   types so they satisfy `Record<string, unknown>`.
 - All UI calls go through `getUI()` (returns `WizardUI` interface). Never import
-  the store directly from business logic.
+  the store directly from business logic. A program's `run` and `ciPreRun`
+  use the runner context they receive, not `getUI()`.
 - Shared helpers never call `getUI()`; they take a sink or return data. `debug()`
   reaches the UI through the sink `src/ui/index.ts` installs.
 - Outside `src/agent`, import the agent through `@agent` or `@agent/types`. Add

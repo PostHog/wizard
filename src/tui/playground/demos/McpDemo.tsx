@@ -8,7 +8,7 @@
 import { WizardStore } from '@tui/store';
 import { McpScreen } from '@tui/screens/McpScreen';
 import type { McpInstaller, McpClientInfo } from '@tui/services/mcp-installer';
-import { McpClientStatus } from '@tui/add-mcp-server-to-clients/results';
+import { McpClientStatus } from '@shared/mcp-clients/results';
 
 const MOCK_CLIENTS: McpClientInfo[] = [
   { name: 'Claude Code', supportsPlugin: true, pluginBundlesMcp: false },

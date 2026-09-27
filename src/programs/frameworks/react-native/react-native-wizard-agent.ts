@@ -30,10 +30,6 @@ export const REACT_NATIVE_AGENT_CONFIG: FrameworkConfig<ReactNativeContext> = {
       const variant = await detectReactNativeVariant(options);
       return { variant };
     },
-    getDetectedFrameworkLabel: (context) =>
-      context.variant
-        ? `${getReactNativeVariantName(context.variant)} 📱`
-        : undefined,
   },
 
   detection: {

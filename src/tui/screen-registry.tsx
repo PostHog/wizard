@@ -2,7 +2,7 @@
  * ScreenId registry — maps screen names to React components.
  *
  * Adding a new screen:
- *   1. Create the component in screens/ (or screens/<program>/).
+ *   1. Create the component in screens/, or programs/<program>/screens/ for one program.
  *   2. Add a `ScreenId` enum entry in screen-sequences.ts.
  *   3. Add an entry here.
  *   4. Reference the screen by name in the program's `steps` array.
@@ -15,33 +15,33 @@ import type { WizardStore } from './store.js';
 import { ScreenId, Overlay, type ScreenName } from './router.js';
 
 import { HealthCheckScreen } from './screens/health/HealthCheckScreen.js';
-import { DoctorIntroScreen } from './screens/doctor/DoctorIntroScreen.js';
-import { DoctorReportScreen } from './screens/doctor/DoctorReportScreen.js';
+import { DoctorIntroScreen } from './programs/posthog-doctor/screens/DoctorIntroScreen.js';
+import { DoctorReportScreen } from './programs/posthog-doctor/screens/DoctorReportScreen.js';
 import { SettingsOverrideScreen } from './screens/SettingsOverrideScreen.js';
 import { ManagedSettingsScreen } from './screens/ManagedSettingsScreen.js';
 import { PortConflictScreen } from './screens/PortConflictScreen.js';
 import { TaskNoticeScreen } from './screens/TaskNoticeScreen.js';
 import { ManualAuthCodeScreen } from './screens/ManualAuthCodeScreen.js';
-import { PostHogIntegrationIntroScreen } from './screens/PostHogIntegrationIntroScreen.js';
-import { RevenueIntroScreen } from './screens/RevenueIntroScreen.js';
-import { WarehouseIntroScreen } from './screens/WarehouseIntroScreen.js';
-import { MigrationIntroScreen } from './screens/MigrationIntroScreen.js';
-import { SourceMapsIntroScreen } from './screens/SourceMapsIntroScreen.js';
-import { SourceMapsDetectScreen } from './screens/SourceMapsDetectScreen.js';
-import { SourceMapsOutroScreen } from './screens/SourceMapsOutroScreen.js';
+import { PostHogIntegrationIntroScreen } from './programs/posthog-integration/screens/PostHogIntegrationIntroScreen.js';
+import { RevenueIntroScreen } from './programs/revenue-analytics/screens/RevenueIntroScreen.js';
+import { WarehouseIntroScreen } from './programs/warehouse-source/screens/WarehouseIntroScreen.js';
+import { MigrationIntroScreen } from './programs/migration/screens/MigrationIntroScreen.js';
+import { SourceMapsIntroScreen } from './programs/error-tracking-upload-source-maps/screens/SourceMapsIntroScreen.js';
+import { SourceMapsDetectScreen } from './programs/error-tracking-upload-source-maps/screens/SourceMapsDetectScreen.js';
+import { SourceMapsOutroScreen } from './programs/error-tracking-upload-source-maps/screens/SourceMapsOutroScreen.js';
 import { AgentSkillIntroScreen } from './screens/AgentSkillIntroScreen.js';
-import { AiObservabilityIntroScreen } from './screens/AiObservabilityIntroScreen.js';
-import { MetricsIntroScreen } from './screens/MetricsIntroScreen.js';
-import { ErrorTrackingIntroScreen } from './screens/ErrorTrackingIntroScreen.js';
-import { ErrorTrackingDetectScreen } from './screens/ErrorTrackingDetectScreen.js';
-import { SelfDrivingIntroScreen } from './screens/SelfDrivingIntroScreen.js';
-import { SelfDrivingIntegrationCheckScreen } from './screens/SelfDrivingIntegrationCheckScreen.js';
-import { SelfDrivingIntegrationDetectScreen } from './screens/SelfDrivingIntegrationDetectScreen.js';
-import { SelfDrivingHandoffScreen } from './screens/SelfDrivingHandoffScreen.js';
-import { SelfDrivingGitHubScreen } from '@tui/screens/SelfDrivingGitHubScreen';
-import { AuditIntroScreen } from './screens/audit/AuditIntroScreen.js';
-import { AuditRunScreen } from './screens/audit/AuditRunScreen.js';
-import { AuditOutroScreen } from './screens/audit/AuditOutroScreen.js';
+import { AiObservabilityIntroScreen } from './programs/ai-observability/screens/AiObservabilityIntroScreen.js';
+import { MetricsIntroScreen } from './programs/metrics/screens/MetricsIntroScreen.js';
+import { ErrorTrackingIntroScreen } from './programs/error-tracking/screens/ErrorTrackingIntroScreen.js';
+import { ErrorTrackingDetectScreen } from './programs/error-tracking/screens/ErrorTrackingDetectScreen.js';
+import { SelfDrivingIntroScreen } from './programs/self-driving/screens/SelfDrivingIntroScreen.js';
+import { SelfDrivingIntegrationCheckScreen } from './programs/self-driving/screens/SelfDrivingIntegrationCheckScreen.js';
+import { SelfDrivingIntegrationDetectScreen } from './programs/self-driving/screens/SelfDrivingIntegrationDetectScreen.js';
+import { SelfDrivingHandoffScreen } from './programs/self-driving/screens/SelfDrivingHandoffScreen.js';
+import { SelfDrivingGitHubScreen } from '@tui/programs/self-driving/screens/SelfDrivingGitHubScreen';
+import { AuditIntroScreen } from './programs/audit/screens/AuditIntroScreen.js';
+import { AuditRunScreen } from './programs/audit/screens/AuditRunScreen.js';
+import { AuditOutroScreen } from './programs/audit/screens/AuditOutroScreen.js';
 import { SetupScreen } from './screens/SetupScreen.js';
 import { AuthScreen } from './screens/AuthScreen.js';
 import { AiOptInRequiredScreen } from './screens/AiOptInRequiredScreen.js';

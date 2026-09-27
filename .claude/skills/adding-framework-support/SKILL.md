@@ -33,7 +33,7 @@ Integration instructions and examples belong in context-mill.
 2. Add the config under `src/programs/frameworks/<name>/<name>-wizard-agent.ts`. Use a
    `type` for framework context so it satisfies `Record<string, unknown>`.
    Export the config; the integration program already supplies execution.
-3. Import the config into [FRAMEWORK_REGISTRY](../../../src/programs/registry.ts).
+3. Import the config into [FRAMEWORK_REGISTRY](../../../src/programs/frameworks/registry.ts).
    The display label comes from `metadata.name`.
 
 Read the current interface for the complete required fields. In particular,

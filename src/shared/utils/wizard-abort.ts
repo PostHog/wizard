@@ -17,9 +17,6 @@ import {
   emitWizardError,
   sanitizeErrorDetail,
 } from '@shared/errors';
-import { runCleanups } from './cleanup-registry';
-
-export { registerCleanup, clearCleanup, runCleanups } from './cleanup-registry';
 
 // Still importable from here; the class lives with the error codes.
 export { WizardError };
@@ -34,6 +31,41 @@ interface WizardAbortOptions {
   detail?: Record<string, unknown>;
   /** Terminal analytics status. Defaults from whether `error` is set. */
   status?: 'error' | 'cancelled';
+}
+
+const cleanupFns: Array<() => void> = [];
+const shutdownFns = new Set<
+  (outcome: 'failed' | 'cancelled') => Promise<void>
+>();
+
+export function registerShutdown(
+  fn: (outcome: 'failed' | 'cancelled') => Promise<void>,
+): () => void {
+  shutdownFns.add(fn);
+  return () => {
+    shutdownFns.delete(fn);
+  };
+}
+
+export function registerCleanup(fn: () => void): void {
+  cleanupFns.push(fn);
+}
+
+export function clearCleanup(): void {
+  cleanupFns.length = 0;
+  shutdownFns.clear();
+}
+
+/** Runs all registered cleanup functions and drains the array. */
+export function runCleanups(): void {
+  const fns = cleanupFns.splice(0);
+  for (const fn of fns) {
+    try {
+      fn();
+    } catch {
+      /* cleanup should not prevent exit */
+    }
+  }
 }
 
 function resolveErrorCode(
@@ -69,10 +101,15 @@ export async function wizardAbort(
 
   // 1. Run registered cleanup functions
   runCleanups();
+  const status = options?.status ?? (error ? 'error' : 'cancelled');
+  await Promise.allSettled(
+    [...shutdownFns].map((fn) =>
+      fn(status === 'cancelled' ? 'cancelled' : 'failed'),
+    ),
+  );
 
   // 2. Capture error in analytics. An 'error' ending with no Error object
   //    is captured as its code and message.
-  const status = options?.status ?? (error ? 'error' : 'cancelled');
   const captured =
     error ??
     (status === 'error'

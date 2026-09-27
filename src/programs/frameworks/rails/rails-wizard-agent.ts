@@ -29,12 +29,6 @@ export const RAILS_AGENT_CONFIG: FrameworkConfig<RailsContext> = {
       const initializersDir = findInitializersDir(options);
       return Promise.resolve({ projectType, initializersDir });
     },
-    getDetectedFrameworkLabel: (context) =>
-      context.projectType === RailsProjectType.API
-        ? 'Rails API-only'
-        : context.projectType === RailsProjectType.STANDARD
-        ? 'Rails'
-        : undefined,
   },
 
   detection: {

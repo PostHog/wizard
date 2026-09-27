@@ -17,7 +17,18 @@ import type {
   OutroData,
   PendingQuestion,
 } from '@lib/wizard-session';
-export { TaskStatus, isTaskStatus } from '@shared/run-state';
+
+export enum TaskStatus {
+  Pending = 'pending',
+  InProgress = 'in_progress',
+  Completed = 'completed',
+  Skipped = 'skipped',
+  Failed = 'failed',
+}
+
+export function isTaskStatus(value: string): value is TaskStatus {
+  return (Object.values(TaskStatus) as string[]).includes(value);
+}
 
 // Progress payloads are the agent's contract; re-exported so UI code keeps its import path.
 import type {
@@ -178,7 +189,13 @@ export interface WizardUI {
   // loop) maintains a Map<taskId, …> from incremental Task* events and
   // re-emits the snapshot here, preserving the existing store semantics.
   syncTodos(
-    todos: Array<{ content: string; status: string; activeForm?: string }>,
+    todos: Array<{
+      id?: string;
+      source?: string;
+      content: string;
+      status: string;
+      activeForm?: string;
+    }>,
   ): void;
 
   // ── Event plan from .posthog-events.json ────────────────────

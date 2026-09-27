@@ -1,6 +1,5 @@
 import { WIZARD_COMMANDMENTS } from '@agent/commandments';
 import { assembleCommandments } from '@agent/runner/switchboard/commandments';
-import { getProgramCommandments } from '@programs/commandments';
 import { Harness, Sequence } from '@shared/constants';
 
 const global = WIZARD_COMMANDMENTS.join('\n');
@@ -11,13 +10,7 @@ const prompt = (
   harness: Harness,
   sequence: Sequence,
   program = 'posthog-integration',
-) =>
-  assembleCommandments({
-    programCommandments: getProgramCommandments(program),
-    sequence,
-    harness,
-    caps: CAPS,
-  });
+) => assembleCommandments({ program, sequence, harness, caps: CAPS });
 
 const COMBOS = [
   ['anthropic', Harness.anthropic, Sequence.linear],
@@ -155,6 +148,7 @@ describe('commandments by axis', () => {
 describe('runtime caps gate the pi runtime notes', () => {
   const withCaps = (caps: { bash: boolean; posthogMcp: boolean }) =>
     assembleCommandments({
+      program: 'warehouse-source',
       sequence: Sequence.linear,
       harness: Harness.pi,
       caps,

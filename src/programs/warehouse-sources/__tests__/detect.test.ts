@@ -349,12 +349,21 @@ describe('detectWarehouseSources', () => {
     expect(kinds(tmpDir)).toEqual([kind]);
   });
 
-  it('detects both Neon and Postgres for a Neon project', () => {
-    // Intended double detection: the driver names Neon, DATABASE_URL still
-    // reads as Postgres. Both are offered; the user picks.
-    writePackageJson(tmpDir, { '@neondatabase/serverless': '^0.10.0' });
+  it.each([
+    ['Neon', { '@neondatabase/serverless': '^0.10.0' }],
+    ['Supabase', { '@supabase/supabase-js': '^2.0.0' }],
+  ])('offers only %s when it serves the project Postgres', (kind, deps) => {
+    // The hosted driver and DATABASE_URL name one database, so offering both
+    // it and the generic Postgres kind imports the same tables twice.
+    writePackageJson(tmpDir, deps);
     fs.writeFileSync(path.join(tmpDir, '.env'), 'DATABASE_URL=x\n');
-    expect(kinds(tmpDir)).toEqual(['Neon', 'Postgres']);
+    expect(kinds(tmpDir)).toEqual([kind]);
+  });
+
+  it('still offers Postgres when no hosted provider is detected', () => {
+    writePackageJson(tmpDir, { pg: '^8.0.0' });
+    fs.writeFileSync(path.join(tmpDir, '.env'), 'DATABASE_URL=x\n');
+    expect(kinds(tmpDir)).toEqual(['Postgres']);
   });
 
   it.each([
@@ -524,6 +533,17 @@ describe('SOURCE_DETECTORS', () => {
       .filter(([, count]) => count > 1)
       .map(([kind]) => kind);
     expect(duplicates).toEqual([]);
+  });
+
+  it('supersedes only kinds the registry knows', () => {
+    const kindSet = new Set(SOURCE_DETECTORS.map((d) => d.kind));
+    for (const detector of SOURCE_DETECTORS) {
+      for (const kind of detector.supersededBy ?? []) {
+        expect(kindSet.has(kind), `${detector.kind} supersededBy ${kind}`).toBe(
+          true,
+        );
+      }
+    }
   });
 
   it('gives every entry a non-empty label and at least one signal', () => {

@@ -1,5 +1,6 @@
 import { major, minVersion } from 'semver';
 import { boundedGlob, readProjectFile } from '@utils/bounded-fs';
+import { getUI } from '@ui';
 import type { WizardRunOptions } from '@utils/types';
 import * as path from 'node:path';
 
@@ -150,15 +151,18 @@ export async function getFastAPIProjectType(
 
   // Check for fullstack pattern (templates)
   if (await hasTemplates({ installDir })) {
+    getUI().setDetectedFramework('FastAPI fullstack with templates');
     return FastAPIProjectType.FULLSTACK;
   }
 
   // Check for APIRouter (modular structure)
   if (await hasAPIRouter({ installDir })) {
+    getUI().setDetectedFramework('FastAPI with APIRouter');
     return FastAPIProjectType.ROUTER;
   }
 
   // Default to standard FastAPI
+  getUI().setDetectedFramework('FastAPI');
   return FastAPIProjectType.STANDARD;
 }
 

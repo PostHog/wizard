@@ -1,6 +1,10 @@
 import { rmSync } from 'node:fs';
 import { runMcpPromptViaSdk } from '@agent';
 import type { AgentChunk } from '@agent/types';
+import {
+  configureGatewayCredentialsForCI,
+  resetGatewaySession,
+} from '@agent/gateway-session';
 import { HostResolution } from '@shared/host-resolution';
 
 const { query } = vi.hoisted(() => ({
@@ -28,15 +32,6 @@ async function consume(
     },
     signal: new AbortController().signal,
     programId: 'mcp-tutorial',
-    inferenceAuth: {
-      resolve: () =>
-        Promise.resolve({
-          token: 'test-gateway-token',
-          teamId: 1,
-          gatewayUrl: 'https://ai-gateway.us.posthog.com',
-          refreshAtMs: Infinity,
-        }),
-    },
     ...overrides,
   })) {
     chunks.push(chunk);
@@ -54,6 +49,11 @@ describe('public agent prompt stream', () => {
     ]) {
       vi.stubEnv(name, process.env[name]);
     }
+    configureGatewayCredentialsForCI(
+      'test-gateway-token',
+      1,
+      'https://ai-gateway.us.posthog.com',
+    );
   });
 
   afterEach(() => {
@@ -64,6 +64,7 @@ describe('public agent prompt stream', () => {
       });
     }
     query.mockReset();
+    resetGatewaySession();
     vi.unstubAllEnvs();
   });
 
@@ -98,11 +99,10 @@ describe('public agent prompt stream', () => {
   });
 
   it('propagates setup failures instead of silently ending the stream', async () => {
-    const inferenceAuth = {
-      resolve: () => Promise.reject(new Error('gateway mint refused')),
-    };
-    await expect(consume({ inferenceAuth })).rejects.toThrow(
-      'gateway mint refused',
+    resetGatewaySession();
+
+    await expect(consume({ programId: undefined })).rejects.toThrow(
+      'this run has no program to attribute its spend to',
     );
   });
 });

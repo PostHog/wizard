@@ -166,11 +166,16 @@ route review to their owning team instead.
 | `src/programs/self-driving/` | `@PostHog/team-self-driving` |
 | `src/programs/warehouse-source/` | `@PostHog/team-warehouse-sources` |
 | `src/programs/web-analytics-doctor/` | `@PostHog/team-web-analytics` |
-| `src/ui/tui/decks/error-tracking-upload-source-maps/` | `@PostHog/team-error-tracking` |
-| `src/ui/tui/decks/self-driving/` | `@PostHog/team-self-driving` |
+| `src/tui/programs/ai-observability/` | `@PostHog/team-ai-observability` |
+| `src/tui/programs/error-tracking-upload-source-maps/` | `@PostHog/team-error-tracking` |
+| `src/tui/programs/metrics/` | `@PostHog/apm` |
+| `src/tui/programs/posthog-integration/` | `@PostHog/team-wizard-docs` |
+| `src/tui/programs/revenue-analytics/` | `@PostHog/team-web-analytics` |
+| `src/tui/programs/self-driving/` | `@PostHog/team-self-driving` |
+| `src/tui/programs/warehouse-source/` | `@PostHog/team-warehouse-sources` |
 
 Ownership is by directory. Programs not listed above
-(`agent-skill`, `audit`, `events-audit`, `mcp`, `migration`, `posthog-doctor`,
+(`agent-skill`, `audit` (with `audit/events`), `mcp`, `migration`, `posthog-doctor`,
 `shared`, `slack`) fall through the default and are owned by
 `team-wizard-docs`. Today CODEOWNERS only auto-requests review — approval is
 not a merge gate.
@@ -272,7 +277,7 @@ When creating your personal API key, grant it the wizard's base scope set:
 ```
 user:read project:read organization:read llm_gateway:read query:read
 dashboard:write insight:write notebook:write event_definition:write
-health_issue:read wizard_session:read wizard_session:write
+health_issue:read wizard_session:read wizard_session:write wizard_run:write
 ```
 
 The source of truth is `WIZARD_OAUTH_SCOPES` in `src/shared/constants.ts`, which
@@ -282,7 +287,18 @@ Some programs request more on top (`PROGRAM_SCOPE_ADDITIONS` in
 `integration:read` and `external_data_source:read` /
 `external_data_source:write`.
 
+The `wizard-run-sync` flag selects remote synchronization: `wizard-session`
+(the default) uses WizardSession; `wizard-run` uses WizardRun. In the latter
+mode, local executions synchronize tasks and terminal status. Cloud executions
+require an explicit `POSTHOG_WIZARD_RUN_ID` assignment and leave terminal status
+to their worker. See [WizardRun synchronization](docs/local-dev.md#wizardrun-synchronization)
+for limits, shutdown behavior, migration compatibility, and deployment checks.
+
 ### OAuth app scope ceiling
+
+Both the interactive and cloud Wizard OAuth apps must allow `wizard_run:write`
+in every deployed region. Existing tokens need renewed authorization; refresh
+does not add the grant. Run synchronization needs no read scope.
 
 The wizard's OAuth app on the PostHog side caps the scopes its tokens may
 carry (`OAuthApplication.scopes`). Any scope requested in this repo (see
@@ -315,7 +331,7 @@ every scope in `WIZARD_OAUTH_SCOPES`:
 
 ```
 python manage.py seed_oauth_app_scopes --client-id <id> --dry-run \
-  --scopes "@default,llm_gateway:read,wizard_session:read,wizard_session:write,user:read,project:read,organization:read,query:read,dashboard:write,insight:write,notebook:write,event_definition:write,health_issue:read"
+  --scopes "@default,llm_gateway:read,wizard_session:read,wizard_session:write,wizard_run:write,user:read,project:read,organization:read,query:read,dashboard:write,insight:write,notebook:write,event_definition:write,health_issue:read"
 ```
 
 then re-run without `--dry-run`. Keep `@default` in the list — dropping it
@@ -393,11 +409,6 @@ that conventional code implies.
 If you want to use this code as a starting place for your own project, here's a
 quick explainer on its structure.
 
-For code that runs without the terminal UI, see the
-[non-interactive developer interfaces](docs/developer-interfaces.md), including
-the [standalone agent](src/agent/README.md) and
-[callable programs](src/programs/README.md).
-
 ## Entrypoint: `run.ts`
 
 The entrypoint for this tool is `run.ts`. Use this file to interpret arguments
@@ -415,12 +426,12 @@ wizard alongside all of our other PostHog product data, and this is very
 powerful. For example: we could show in-product surveys to people who have used
 the wizard to improve the experience.
 
-When the user authenticates, the wizard also streams live run state — current
+With `wizard-run-sync=wizard-session`, the wizard streams live run state — current
 phase, task list, planned events — to `POST /api/projects/{id}/wizard/sessions/`
 so the PostHog web app can render real-time progress. Updates are debounced
 (250ms) with phase changes flushed immediately; failures fall back silently to
 the wizard's debug log without disturbing the TUI. Pass `--no-telemetry` (or
-set `POSTHOG_WIZARD_NO_TELEMETRY=1`) to disable.
+set `POSTHOG_WIZARD_NO_TELEMETRY=1`) to disable either remote transport.
 
 ## Leave rules behind
 
@@ -567,21 +578,14 @@ To run unit tests, run:
 bin/test
 ```
 
-End-to-end runs are live and credentialed. Point `APP_DIR` at an app copy from
-[wizard-workbench](https://github.com/PostHog/wizard-workbench), which owns the
-fixture apps and the assertions:
+To run E2E tests run:
 
 ```bash
-pnpm test:e2e:tui        # the full TUI in a PTY, frames to SNAP_OUT
+bin/test-e2e
 ```
 
-It reads `PROJECT_ID`, `POSTHOG_PERSONAL_API_KEY` or `POSTHOG_KEY_FILE`, and
-`WIZARD_CI_GATEWAY_TOKEN_FILE`, and writes its result to `E2E_RESULT_JSON` when
-set.
-
-The workbench also runs one program through `runProgram`, or one agent through
-`runAgent`, with no TUI: `pnpm wizard-program` and `pnpm wizard-agent` there,
-with `WIZARD_REPO` set to this checkout.
+E2E tests are a bit more complicated to create and adjust due to to their mocked
+LLM calls. See the `e2e-tests/README.md` for more information.
 
 #### Explore with an agent
 

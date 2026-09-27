@@ -1,11 +1,12 @@
-/** The organization's wizard_ai_sdk_detected stamp, computed from explicit evidence. */
+/** The AI SDK org stamp. Session-free, so runProgram can load it without the session. */
 
 import type { ApiUser } from '@shared/api';
-import { DiscoveredFeature } from '@shared/scan-consent';
+import { DiscoveredFeature } from '@shared/discovered-feature';
 import { analytics } from '@utils/analytics';
 import { AI_SOURCE_KINDS } from '@programs/warehouse-sources/registry';
 import type { DetectedSource } from '@programs/warehouse-sources/types';
 
+/** What the org stamp reads, with no session. */
 export type AiSdkStampEvidence = {
   apiUser: Pick<ApiUser, 'organization'> | null;
   discoveredFeatures: readonly DiscoveredFeature[];

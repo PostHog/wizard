@@ -1,4 +1,5 @@
 import { boundedGlob, readProjectFile } from '@utils/bounded-fs';
+import { getUI } from '@ui';
 import type { WizardRunOptions } from '@utils/types';
 import { createVersionBucket } from '@utils/semver';
 import * as fs from 'node:fs';
@@ -154,20 +155,24 @@ export async function getDjangoProjectType(
 
   // Check for Wagtail first (CMS)
   if (await hasWagtail({ installDir })) {
+    getUI().setDetectedFramework('Django with Wagtail CMS');
     return DjangoProjectType.WAGTAIL;
   }
 
   // Check for Django REST Framework
   if (await hasDRF({ installDir })) {
+    getUI().setDetectedFramework('Django REST Framework');
     return DjangoProjectType.DRF;
   }
 
   // Check for Django Channels
   if (await hasChannels({ installDir })) {
+    getUI().setDetectedFramework('Django Channels');
     return DjangoProjectType.CHANNELS;
   }
 
   // Default to standard Django
+  getUI().setDetectedFramework('Django');
   return DjangoProjectType.STANDARD;
 }
 

@@ -4,19 +4,26 @@ import {
   type Sequence,
 } from '@shared/constants';
 import {
+  createWizardRunSync,
+  type RunOutcome,
+} from '@cli/task-stream/wizard-run-sync';
+import { runtimeEnv } from '@env';
+import { registerShutdown, runCleanups } from '@utils/wizard-abort';
+import {
   checkLocalServices,
   getLocalDev,
   POSTHOG_LOCAL_URL,
 } from '@shared/local-dev';
 import type { CloudRegion } from '@utils/types';
-import { createUiReducer, getUI, setUI } from '@ui';
+import { getUI, setUI } from '@ui';
 import { LoggingUI } from '@headless/renderers/logging-ui';
 import type { ProgramConfig } from '@programs/types';
 import { getAuditChecks } from '@programs/audit/types';
 import { analytics } from '@utils/analytics';
 import { resolveNoTelemetry } from './resolve-no-telemetry';
 import type { WizardStore } from '@tui/store';
-import type { TaskStreamPush } from '@programs/task-stream/task-stream-push';
+import type { TaskStreamPush } from '@cli/task-stream/task-stream-push';
+import { join } from 'node:path';
 import {
   ErrorCodes,
   classifyRunFailure,
@@ -24,10 +31,6 @@ import {
 } from '@shared/errors';
 import { detectErrorCode } from '@programs/detect-map';
 import type { OutroData, RunPhase as RunPhaseT } from '@lib/wizard-session';
-import {
-  commitRegisteredRunSkillCleanups,
-  registerRunSkillCleanup,
-} from '@shared/skill-run-cleanup';
 
 /**
  * The two non-interactive run modes. Both drive the same pipeline today; the
@@ -107,8 +110,6 @@ export function runNonInteractive(
   // (cloud / CI/CD) tags 'headless'; a dev/test `--ci` run upgrades 'dev' to
   // 'ci'. The mode string is the tag value.
   analytics.setTag('build', mode);
-  let detachSignalHandlers: () => void = () => undefined;
-  let runRegisteredCleanups: () => void = () => undefined;
 
   void (async () => {
     const path = await import('path');
@@ -120,10 +121,7 @@ export function runNonInteractive(
     const { configureLogFileFromEnvironment, logToFile } = await import(
       '@utils/debug'
     );
-    const { runCleanups, wizardAbort, WizardError } = await import(
-      '@utils/wizard-abort'
-    );
-    runRegisteredCleanups = runCleanups;
+    const { wizardAbort, WizardError } = await import('@utils/wizard-abort');
 
     configureLogFileFromEnvironment();
 
@@ -133,23 +131,6 @@ export function runNonInteractive(
     const installDir = path.isAbsolute(options.installDir as string)
       ? (options.installDir as string)
       : path.join(process.cwd(), options.installDir as string);
-
-    // Armed until the run completes, so every failed or interrupted exit removes new skills.
-    registerRunSkillCleanup(installDir);
-    const onSigint = () => {
-      runCleanups();
-      process.exit(130);
-    };
-    const onSigterm = () => {
-      runCleanups();
-      process.exit(143);
-    };
-    process.once('SIGINT', onSigint);
-    process.once('SIGTERM', onSigterm);
-    detachSignalHandlers = () => {
-      process.off('SIGINT', onSigint);
-      process.off('SIGTERM', onSigterm);
-    };
 
     const session = buildSession({
       debug: options.debug as boolean | undefined,
@@ -212,7 +193,7 @@ export function runNonInteractive(
       const { WizardStore } = await import('@tui/store');
       const { HeadlessUI } = await import('@headless/renderers/headless-ui');
       const { TaskStreamPush, PostHogDestination, createFileDestination } =
-        await import('@programs/task-stream/index');
+        await import('@cli/task-stream/index');
 
       // `''` resolves to the default path, so `--ci` always dumps.
       const logTarget =
@@ -221,7 +202,8 @@ export function runNonInteractive(
       const posthogDestination =
         mode === 'headless' && !session.noTelemetry
           ? new PostHogDestination({
-              getCredentials: () => session.credentials,
+              getCredentials: () =>
+                store?.session.credentials ?? session.credentials,
               onError: (e) => logToFile('[headless task-stream]', e.message),
             })
           : null;
@@ -236,15 +218,28 @@ export function runNonInteractive(
       setUI(new HeadlessUI(headlessStore));
       taskStream = new TaskStreamPush({
         store: headlessStore,
+        getFlags: () => analytics.getCachedWizardFlags(),
         programId: config.streamWorkflowId ?? config.id,
+        runSync: createWizardRunSync({
+          mode,
+          programId: config.id,
+          assignedId:
+            (options.runId as string | undefined) ??
+            runtimeEnv('POSTHOG_WIZARD_RUN_ID'),
+          noTelemetry: session.noTelemetry,
+          getSession: () => headlessStore.session,
+        }),
         destinations,
+        eventPlanPath: config.eventPlanFile
+          ? join(session.installDir, config.eventPlanFile)
+          : undefined,
         auditChecks: config.auditLedgerFile
           ? () => getAuditChecks(headlessStore.session)
           : undefined,
         enabled: destinations.length > 0,
       });
       taskStream.attach();
-      headlessStore.setRunPhase(RunPhase.Running);
+
       if (fileDestination) {
         logToFile(`[task-stream] ${mode} dump: ${fileDestination.path}`);
       }
@@ -255,29 +250,48 @@ export function runNonInteractive(
     const settleStream = async (
       phase: RunPhaseT,
       outroData?: OutroData,
+      outcome: RunOutcome = phase === RunPhase.Completed
+        ? 'completed'
+        : 'failed',
     ): Promise<void> => {
       if (!store || !taskStream) return;
       if (outroData) store.setOutroData(outroData);
       store.setRunPhase(phase);
-      await taskStream.shutdown(2000);
+      await taskStream.shutdown(2000, outcome);
+      process.off('SIGINT', onSignal);
+      process.off('SIGTERM', onSignal);
+      unregisterShutdown();
     };
+
+    const unregisterShutdown = registerShutdown((outcome) =>
+      settleStream(RunPhase.Error, undefined, outcome),
+    );
+    let signalled = false;
+    const onSignal = (): void => {
+      if (signalled) return;
+      signalled = true;
+      runCleanups();
+      void settleStream(RunPhase.Error, undefined, 'cancelled').then(() =>
+        wizardAbort({ exitCode: 130 }),
+      );
+    };
+    process.on('SIGINT', onSignal);
+    process.on('SIGTERM', onSignal);
 
     try {
       if (mode === 'ci') {
-        const { loadCiInferenceAuthProvider } = await import(
-          './ci-inference-auth'
-        );
-        session.inferenceAuth = loadCiInferenceAuthProvider(
+        const { configureGatewayFromCIEnvironment } = await import('@agent');
+        configureGatewayFromCIEnvironment(
           Number(session.projectId),
           session.region ?? 'us',
         );
       }
       if (config.ciPreRun) {
-        const ui = getUI();
         await config.ciPreRun(session, {
-          auth: ui,
-          log: ui.log,
-          onProgress: createUiReducer(ui),
+          log: {
+            info: (message) => getUI().log.info(message),
+            warn: (message) => getUI().log.warn(message),
+          },
         });
       } else {
         const readyCtx = {
@@ -286,9 +300,7 @@ export function runNonInteractive(
             session.frameworkContext[key] = value;
           },
           setFrameworkConfig: () => undefined,
-          setDetectedFramework: (label: string) => {
-            session.detectedFrameworkLabel = label;
-          },
+          setDetectedFramework: () => undefined,
           // Non-interactive session is a plain object (no nanostore
           // copy-on-write), so direct assignment is safe here.
           setSkillId: (skillId: string | null) => {
@@ -368,15 +380,12 @@ export function runNonInteractive(
         }
       }
 
-      if (session.detectedFrameworkLabel) {
-        getUI().setDetectedFramework(session.detectedFrameworkLabel);
-      }
-
-      const { runProgramAgent } = await import('./run-program-agent');
+      const { runProgramAgent } = await import('@cli/runners/run-agent-legacy');
       await runProgramAgent(config, session);
+      if (signalled) return;
       await settleStream(RunPhase.Completed);
-      commitRegisteredRunSkillCleanups();
     } catch (error) {
+      if (signalled) return;
       const errorMessage =
         error instanceof Error ? error.message : String(error);
       const errorStack =
@@ -406,14 +415,11 @@ export function runNonInteractive(
         error: error as Error,
       });
     }
-  })()
-    .catch((error: unknown) => {
-      runRegisteredCleanups();
-      emitWizardError({
-        code: ErrorCodes.InternalUnhandled,
-        message: error instanceof Error ? error.message : String(error),
-      });
-      process.exit(1);
-    })
-    .finally(() => detachSignalHandlers());
+  })().catch((error: unknown) => {
+    emitWizardError({
+      code: ErrorCodes.InternalUnhandled,
+      message: error instanceof Error ? error.message : String(error),
+    });
+    process.exit(1);
+  });
 }

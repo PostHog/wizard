@@ -10,8 +10,11 @@
  * Arrow keys are reserved for the playground's tab switcher, so this demo
  * uses letter keys.
  *
- * Decks are pulled from `PROGRAM_REGISTRY` so every program with the
- * standard run screen is reviewable here, including generic fallback decks.
+ * Decks are pulled from `PROGRAM_REGISTRY` so every program that ships a
+ * deck is reviewable here. Migration also gets per-variant entries (one
+ * per `--product=<id>` choice) so the variant composer in
+ * `migration/content/index.tsx` can be exercised side-by-side with the
+ * generic deck.
  */
 
 import { Box, Text, useInput } from 'ink';
@@ -26,9 +29,8 @@ import type { ContentBlock, ProgressItem } from '@tui/primitives/index';
 import { Colors } from '@tui/styles';
 import type { WizardStore } from '@tui/store';
 import { PROGRAM_REGISTRY } from '@programs';
-import { AUDIT_AREA_SLIDES } from '@tui/screens/audit/slides/index';
-import { getProgramContentBlocks } from '@tui/decks/registry';
-import type { AreaSlide } from '@tui/screens/audit/slides/shared';
+import { AUDIT_AREA_SLIDES } from '@tui/programs/audit/screens/slides/index';
+import type { AreaSlide } from '@tui/programs/audit/screens/slides/shared';
 
 interface Deck {
   id: string;
@@ -83,20 +85,16 @@ interface LearnDeckDemoProps {
   store: WizardStore;
 }
 
-export const getLearnDeckPrograms = () =>
-  PROGRAM_REGISTRY.filter((program) =>
-    program.steps.some((step) => step.screenId === 'run'),
-  );
-
 export const LearnDeckDemo = ({ store }: LearnDeckDemoProps) => {
   const decks: Deck[] = useMemo(() => {
     const all: Deck[] = [];
 
-    // Every program with the standard run screen. Seed the store's
+    // Every program in the registry that ships a deck. Seed the store's
     // skillId from the program config so decks that template the skill
     // name (e.g. agent-skill's "Running the <skill> skill...") render the
     // real value instead of "unknown".
-    for (const program of getLearnDeckPrograms()) {
+    for (const program of PROGRAM_REGISTRY) {
+      if (!program.getContentBlocks) continue;
       const stub = program.skillId
         ? withSessionOverride(store, { skillId: program.skillId })
         : store;
@@ -105,7 +103,7 @@ export const LearnDeckDemo = ({ store }: LearnDeckDemoProps) => {
         label: `${program.id} (${program.command ?? 'default'})${
           program.skillId ? ` · skill: ${program.skillId}` : ''
         }`,
-        blocks: getProgramContentBlocks(program.id, stub),
+        blocks: program.getContentBlocks(stub),
       });
     }
 

@@ -16,6 +16,7 @@ import {
   MAX_WALK_FILES,
   safeReadFile,
 } from '@utils/bounded-fs';
+import type { WizardSession } from '@lib/wizard-session';
 import type { AbortCase } from '@agent/types';
 import { ErrorCodes } from '@shared/errors';
 
@@ -356,7 +357,7 @@ export const SOURCE_MAPS_CONTEXT_KEYS = {
  * only picks which variant the prompt should ask the agent to load.
  */
 export function detectSourceMapsPrerequisites(
-  session: { installDir: string },
+  session: WizardSession,
   setFrameworkContext: (key: string, value: unknown) => void,
 ): void {
   const fail = (error: SourceMapsDetectError) =>

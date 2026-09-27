@@ -1,4 +1,3 @@
-import type { Options } from 'yargs';
 import type { ProgramConfig } from '@programs/types';
 
 import type { Command } from '../command';
@@ -8,8 +7,6 @@ import { dispatchProgram, mergeCommandOptions } from './shared';
 export interface NativeCommandFactoryOpts {
   /** Subcommands nested under this command. */
   children?: readonly Command[];
-  /** Options supplied by the CLI rather than the program. */
-  cliOptions?: Record<string, Options>;
 }
 
 /**
@@ -31,7 +28,7 @@ export function nativeCommandFactory(
   return {
     name: config.command,
     description: config.description,
-    options: mergeCommandOptions(config, opts.cliOptions),
+    options: mergeCommandOptions(config),
     children: opts.children,
     handler: (argv) => dispatchProgram(config, argv),
   };

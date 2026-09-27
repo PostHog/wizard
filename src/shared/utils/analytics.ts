@@ -5,11 +5,11 @@ import {
   ANALYTICS_TEAM_TAG,
   WIZARD_FLAG_KEYS,
 } from '@shared/constants';
-import type { WizardSession } from '@lib/wizard-session';
 import {
   reportableDiscoveredFeatures,
   reportablePosthogSdkDetected,
-} from '@shared/scan-consent';
+  type WizardSession,
+} from '@lib/wizard-session';
 import type { ApiUser } from '@shared/api';
 import { v4 as uuidv4 } from 'uuid';
 import { IS_PRODUCTION_BUILD, RUN_SURFACE, TASK_ID, TASK_RUN_ID } from '@env';
@@ -61,7 +61,6 @@ export function sessionProperties(
       ? { discovered_features: discoveredFeatures }
       : {}),
     scan_consent: session.scanConsent,
-    additional_features: session.additionalFeatureQueue,
     run_phase: session.runPhase,
     ...(posthogSdkDetected !== undefined
       ? { posthog_sdk_detected: posthogSdkDetected }
@@ -363,6 +362,10 @@ export class Analytics {
     this.activeFlags = merged.flags;
     this.activeFlagPayloads = merged.payloads;
     logToFile('[flags] evaluated', this.activeFlags);
+    return this.activeFlags;
+  }
+
+  getCachedWizardFlags(): Readonly<Record<string, string>> | null {
     return this.activeFlags;
   }
 

@@ -12,8 +12,6 @@
  */
 
 import type {
-  AgenticDetectionContext,
-  AgenticDetectOptions,
   AgenticDetectionReport,
   DetectEvent,
 } from '@programs/detection/agentic';
@@ -22,8 +20,8 @@ import {
   toIntegrationCandidates,
 } from '@programs/detection/project-scope';
 import { gatherFrameworkContext } from '@programs/detection/index';
-import type { FrameworkDetectionState } from '@programs/detection/context';
 import type { Integration } from '@shared/constants';
+import type { WizardSession } from '@lib/wizard-session';
 
 export type { DetectEvent };
 
@@ -85,14 +83,12 @@ export function toIntegrationReport(
 
 /** Run the Haiku detector over the repo and classify projects for integration. */
 export async function detectSelfDrivingIntegrationProjects(
-  session: AgenticDetectionContext,
+  session: WizardSession,
   onEvent?: DetectEvent,
-  onProgress?: AgenticDetectOptions['onProgress'],
 ): Promise<IntegrationDetectionReport> {
   const report = await detectIntegrationProjects(session, {
     programId: 'self-driving',
     onEvent,
-    onProgress,
   });
   return toIntegrationReport(report);
 }
@@ -106,7 +102,7 @@ export async function detectSelfDrivingIntegrationProjects(
  * integrate-run step's `onRunPrep`.
  */
 export async function prepSelfDrivingIntegration(
-  session: FrameworkDetectionState,
+  session: WizardSession,
 ): Promise<void> {
   // `session` is the phase's derived session — its installDir is already the
   // picked project (the integrate-run step's `targetDir`), so just gather that
@@ -122,9 +118,6 @@ export async function prepSelfDrivingIntegration(
     benchmark: session.benchmark,
     yaraReport: session.yaraReport,
   });
-  const detectedLabel =
-    frameworkConfig.metadata.getDetectedFrameworkLabel?.(context);
-  if (detectedLabel) session.detectedFrameworkLabel = detectedLabel;
   for (const [key, value] of Object.entries(context)) {
     if (!(key in session.frameworkContext)) {
       session.frameworkContext[key] = value;

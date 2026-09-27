@@ -21,7 +21,7 @@ const {
   },
 }));
 
-vi.mock('@cli/install-cli-steering', () => ({
+vi.mock('@shared/install-cli-steering', () => ({
   CLI_STEERING_TARGETS: [
     {
       id: 'codex',

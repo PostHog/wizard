@@ -11,8 +11,8 @@ choose this harness.
 supported: `run()` for linear conversations and `runTask()` for orchestrator
 seed/task calls. Pi also implements both entry points.
 
-The SDK subprocess uses the scoped token supplied by programs through
-[gateway-session.ts](../../../../programs/gateway-session.ts). Wizard explicitly sets the
+The SDK subprocess uses the scoped token minted by
+[gateway-session.ts](../../../gateway-session.ts). Wizard explicitly sets the
 gateway URL and authentication environment and isolates stored Claude logins.
 Model selection must satisfy local routing, the SDK's supported transport, mint
 model/effort allowlists, and the gateway's required prompt policy. The SDK is

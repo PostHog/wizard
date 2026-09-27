@@ -1,27 +1,26 @@
 import { VERSION } from '@shared/version';
 import { logToFile, getLogFilePath } from '@utils/debug';
-import { runProgramAgent } from './run-program-agent';
-import { authenticate } from '@programs/authenticate';
+import { runProgramAgent } from '@cli/runners/run-agent-legacy';
+import { authenticate } from '@lib/authenticate';
 import { getProgramConfig } from '@programs';
 import { getAuditChecks } from '@programs/audit/types';
-import { maybeStampAiSdkDetected } from '@programs/posthog-integration/detect';
+import { maybeStampAiSdkDetected } from '@programs/detection/integration';
 import type { ProgramConfig } from '@programs/types';
 import type { Harness, Sequence } from '@shared/constants';
 import type { startTUI as StartTUIFn } from '@tui/start-tui';
 import type { WizardStore } from '@tui/store';
 import { OutroKind, type WizardSession } from '@lib/wizard-session';
-import type { TaskStreamPush as TaskStreamPushClass } from '@programs/task-stream/task-stream-push';
+import type { TaskStreamPush as TaskStreamPushClass } from '@cli/task-stream/task-stream-push';
 import { resolveNoTelemetry } from './resolve-no-telemetry';
 import { checkLocalServices, getLocalDev } from '@shared/local-dev';
-import { runCleanups } from '@utils/wizard-abort';
-import {
-  commitRegisteredRunSkillCleanups,
-  registerRunSkillCleanup,
-} from '@shared/skill-run-cleanup';
+import { createWizardRunSync } from '@cli/task-stream/wizard-run-sync';
+import { runtimeEnv } from '@env';
+import { runCleanups, registerShutdown } from '@utils/wizard-abort';
 import { classifyRunFailure, emitWizardError } from '@shared/errors';
 import { isRunFailure } from '@ui/mint-failure';
 import { getUI } from '@ui';
 import { analytics } from '@utils/analytics';
+import { join } from 'node:path';
 
 const WIZARD_VERSION = VERSION;
 
@@ -33,10 +32,8 @@ type Step = ProgramConfig['steps'][number];
  * The frameworkContext copy is shallow and unfiltered — name keys per owning program. */
 async function prepareRunSession(
   step: Step,
-  store: WizardStore,
+  live: WizardSession,
 ): Promise<WizardSession> {
-  const live = store.session;
-  const previousLabel = live.detectedFrameworkLabel;
   const session = step.targetDir
     ? {
         ...live,
@@ -45,37 +42,27 @@ async function prepareRunSession(
       }
     : live;
   if (step.onRunPrep) await step.onRunPrep(session);
-  if (
-    session.detectedFrameworkLabel &&
-    session.detectedFrameworkLabel !== previousLabel
-  ) {
-    store.setDetectedFramework(session.detectedFrameworkLabel);
-  }
   return session;
 }
 
 /** Advance one step of a composed run to completion: the auth screen
- * authenticates (every later run reuses it); a step naming a child program
- * runs that agent in its dir and is recorded in `completedRuns`; the
+ * authenticates (every later run reuses it); a step carrying its own `run`
+ * thunk runs that agent in its dir and is recorded in `completedRuns`; the
  * host program's own run screen runs `config.run`; any other screen waits for
  * the user to satisfy `isComplete`. */
-export async function advanceStep(
+async function advanceStep(
   step: Step,
   store: WizardStore,
   config: ProgramConfig,
 ): Promise<void> {
   if (step.screenId === 'auth') {
-    await authenticate(store.session, config.id, getUI());
+    await authenticate(store.session, config.id);
     maybeStampAiSdkDetected(store.session);
-  } else if (step.runProgramId) {
-    await runProgramAgent(
-      getProgramConfig(step.runProgramId),
-      await prepareRunSession(step, store),
-      { composed: true },
-    );
+  } else if (step.run) {
+    await step.run(await prepareRunSession(step, store.session));
     store.completeRunStep(step.id);
   } else if (step.screenId === 'run') {
-    await runProgramAgent(config, await prepareRunSession(step, store));
+    await runProgramAgent(config, await prepareRunSession(step, store.session));
   } else if (step.isComplete) {
     await store.waitUntil(step.isComplete);
   }
@@ -94,21 +81,21 @@ export function runWizard(
   let taskStream: TaskStreamPushClass | null = null;
   let onSignal: (() => void) | null = null;
   let exitInProgress = false;
+  let signalled = false;
+  let unregisterShutdown: (() => void) | undefined;
 
   void (async () => {
     try {
       const installDir = (options.installDir as string) || process.cwd();
-      // Armed until a successful exit, so every failed or interrupted exit removes new skills.
-      registerRunSkillCleanup(installDir);
 
       const { startTUI } = await import('@tui/start-tui');
       const { buildSession, RunPhase } = await import('@lib/wizard-session');
-      const { TaskStreamPush } = await import('@programs/task-stream/index');
+      const { TaskStreamPush } = await import('@cli/task-stream/index');
       const { PostHogDestination } = await import(
-        '@programs/task-stream/destinations/posthog'
+        '@cli/task-stream/destinations/posthog'
       );
       const { createFileDestination } = await import(
-        '@programs/task-stream/destinations/file'
+        '@cli/task-stream/destinations/file'
       );
 
       // Before the TUI mounts: once Ink owns the alt screen, anything written
@@ -128,7 +115,7 @@ export function runWizard(
       }
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      tui = startTUI(WIZARD_VERSION, config.id as any);
+      tui = startTUI(WIZARD_VERSION, config.id as any, () => onSignal?.());
       const activeTui = tui;
 
       const session = buildSession({
@@ -166,7 +153,6 @@ export function runWizard(
       // snapshot. Registered before the stream exists: Ctrl-C on the intro
       // must still restore the terminal and run the cleanups, and there is
       // no run to report yet.
-      let signalled = false;
       onSignal = (): void => {
         if (signalled || exitInProgress) return;
         signalled = true;
@@ -178,6 +164,11 @@ export function runWizard(
           activeTui.store.setRunPhase(RunPhase.Error);
         }
         const teardown = (): void => {
+          unregisterShutdown?.();
+          if (onSignal) {
+            process.off('SIGINT', onSignal);
+            process.off('SIGTERM', onSignal);
+          }
           try {
             activeTui.unmount();
           } catch {
@@ -185,16 +176,11 @@ export function runWizard(
           }
           process.exit(130);
         };
-        const stream = taskStream;
-        if (!stream) {
-          teardown();
-          return;
-        }
-        void stream
-          .shutdown(2000)
-          .catch((e) =>
-            logToFile('[run-wizard] task stream shutdown error on signal:', e),
-          )
+        void Promise.all([
+          taskStream?.shutdown(2000, 'cancelled'),
+          analytics.shutdown('cancelled'),
+        ])
+          .catch(() => logToFile('[run-wizard] cancellation shutdown failed'))
           .finally(teardown);
       };
       process.on('SIGINT', onSignal);
@@ -210,10 +196,11 @@ export function runWizard(
         config = getProgramConfig(active);
       }
 
-      // After the switch loop, not before: the stream bakes its program id and
-      // session id in at construction, so a stream built for the launch program
-      // would report the whole run under a program the user left on the intro
-      // screen. Nothing before this point produces a task to push.
+      // After the switch loop, not before: the stream bakes its program id,
+      // session id, and event-plan path in at construction, so a stream built
+      // for the launch program would report the whole run under a program the
+      // user left on the intro screen. Nothing before this point produces a
+      // task to push.
       // Consent gates the push, not the dump: `--no-telemetry` still logs.
       const fileDestination = createFileDestination(options.taskStreamLog);
       const destinations = [
@@ -230,8 +217,21 @@ export function runWizard(
       const taskStreamEnabled = destinations.length > 0;
       const activeStream = new TaskStreamPush({
         store: activeTui.store,
+        getFlags: () => analytics.getCachedWizardFlags(),
         programId: config.streamWorkflowId ?? config.id,
+        runSync: createWizardRunSync({
+          mode: 'local',
+          programId: config.id,
+          assignedId:
+            (options.runId as string | undefined) ??
+            runtimeEnv('POSTHOG_WIZARD_RUN_ID'),
+          noTelemetry: session.noTelemetry,
+          getSession: () => activeTui.store.session,
+        }),
         destinations,
+        eventPlanPath: config.eventPlanFile
+          ? join(session.installDir, config.eventPlanFile)
+          : undefined,
         auditChecks: config.auditLedgerFile
           ? () => getAuditChecks(activeTui.store.session)
           : undefined,
@@ -239,6 +239,12 @@ export function runWizard(
       });
       taskStream = activeStream;
       activeStream.attach();
+      unregisterShutdown = registerShutdown((outcome) => {
+        if (activeTui.store.session.runPhase === RunPhase.Running) {
+          activeTui.store.setRunPhase(RunPhase.Error);
+        }
+        return activeStream.shutdown(2000, outcome);
+      });
 
       await activeTui.store.getGate('integration-check');
       await activeTui.store.getGate('health-check');
@@ -247,9 +253,9 @@ export function runWizard(
       const shown = (s: ProgramConfig['steps'][number]) =>
         !s.show || s.show(activeTui.store.session);
 
-      if (config.steps.some((s) => s.runProgramId || s.targetDir)) {
-        // A composed program: its step list includes a child program run
-        // (self-driving runs the integration before its own
+      if (config.steps.some((s) => s.run || s.targetDir)) {
+        // A composed program: its step list splices in run steps that carry
+        // their own agent (self-driving runs the integration before its own
         // run), or scopes its own run to a picked project (error-tracking).
         // Walk the list once, advancing each step to completion.
         for (const step of config.steps) {
@@ -294,26 +300,25 @@ export function runWizard(
         }
       }
 
+      if (signalled) return;
       const runFailed = isRunFailure(activeTui.store.session);
+      await activeStream.finishRun(runFailed ? 'failed' : 'completed');
       await activeTui.store.waitUntil((s) => {
         if (s.mintHandoff === 'exit') return true;
         if (skipAgent && !runFailed) return s.outroDismissed;
         return s.skillsComplete;
       });
-      if (signalled) return;
 
-      await activeStream.shutdown(2000);
-      if (signalled) return;
-      // Handlers stay attached, so a late signal cannot end the process before drain or commit.
       exitInProgress = true;
-      if (runFailed) {
-        runCleanups();
-        await analytics.shutdown('error');
-      }
+      await activeStream.shutdown(2000);
+      unregisterShutdown?.();
+      process.off('SIGINT', onSignal);
+      process.off('SIGTERM', onSignal);
+      if (runFailed) await analytics.shutdown('error');
       activeTui.unmount();
-      if (!runFailed) commitRegisteredRunSkillCleanups();
       process.exit(runFailed ? 1 : 0);
     } catch (err) {
+      if (signalled) return;
       // File-log first — the cleanup below can throw or exit.
       logToFile('[run-wizard] FATAL:', err);
       // Run cleanups before anything async so settings are restored even if
@@ -328,11 +333,12 @@ export function runWizard(
       }
       if (taskStream) {
         try {
-          await taskStream.shutdown(2000);
+          await taskStream.shutdown(2000, 'failed');
         } catch {
           // ignore
         }
       }
+      unregisterShutdown?.();
       if (tui) {
         try {
           tui.unmount();

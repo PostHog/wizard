@@ -11,7 +11,7 @@ import {
   findTarget,
   installOrUpdatePostHogCli,
   installSteeringSnippet,
-} from '@cli/install-cli-steering';
+} from '@shared/install-cli-steering';
 import type { Command } from '../command';
 
 export const cliAddCommand: Command = {

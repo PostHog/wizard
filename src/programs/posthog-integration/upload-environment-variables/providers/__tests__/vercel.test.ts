@@ -1,17 +1,11 @@
-import { VercelEnvironmentProvider } from '../vercel';
+import { VercelEnvironmentProvider } from '@programs/posthog-integration/upload-environment-variables/providers/vercel';
 import * as fs from 'fs';
 import * as child_process from 'child_process';
 
 vi.mock('fs');
 vi.mock('child_process');
 
-const mockOptions = {
-  installDir: '/tmp/project',
-  report: {
-    info: vi.fn(),
-    spinner: () => ({ start: vi.fn(), stop: vi.fn(), message: vi.fn() }),
-  },
-};
+const mockOptions = { installDir: '/tmp/project' };
 
 describe('VercelEnvironmentProvider', () => {
   let provider: VercelEnvironmentProvider;

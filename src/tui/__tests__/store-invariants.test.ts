@@ -16,7 +16,6 @@ import {
 } from '@tui/store';
 import {
   buildSession,
-  AdditionalFeature,
   DiscoveredFeature,
   OutroKind,
   type AskAnswers,
@@ -29,7 +28,7 @@ import { PROGRAM_SEQUENCES } from '@tui/screen-sequences';
 import { WizardReadiness } from '@shared/health-checks/readiness';
 import { HostResolution } from '@shared/host-resolution';
 import { Integration } from '@shared/constants';
-import { FRAMEWORK_REGISTRY } from '@programs/registry';
+import { FRAMEWORK_REGISTRY } from '@programs/frameworks/registry';
 import { analytics } from '@utils/analytics';
 import { PROGRAM_REGISTRY } from '@programs';
 import type { SettingsConflict } from '@shared/claude-settings';
@@ -166,11 +165,6 @@ const MUTATIONS: MutationCase[] = [
   {
     name: 'setCredentials',
     invoke: (s) => s.setCredentials(CREDENTIALS),
-    emits: 1,
-  },
-  {
-    name: 'setInferenceAuth',
-    invoke: (s) => s.setInferenceAuth({ resolve: vi.fn() }),
     emits: 1,
   },
   {
@@ -345,11 +339,6 @@ const MUTATIONS: MutationCase[] = [
   {
     name: 'addDiscoveredFeature',
     invoke: (s) => s.addDiscoveredFeature(DiscoveredFeature.Stripe),
-    emits: 1,
-  },
-  {
-    name: 'enableFeature',
-    invoke: (s) => s.enableFeature(AdditionalFeature.LLM),
     emits: 1,
   },
   {
