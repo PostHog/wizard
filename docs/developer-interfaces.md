@@ -88,14 +88,13 @@ when consent is already settled.
 ### Do a quack
 
 [`run-program-quack.ts`](examples/run-program-quack.ts) is the smallest
-`runProgram` call. It logs in through the wizard's browser OAuth, runs one
-prompt that replies `quack`, logs status lines and prints the outcome. Each step
-has a comment.
+`runProgram` call. It runs one prompt that replies `quack`, logs status lines
+and prints the outcome. Each step has a comment.
 
 Run it from the repository root against the [local stack](local-dev.md):
 
 ```bash
-QUACK_INSTALL_DIR=<a git-initialized directory> npx tsx --tsconfig tsconfig.json docs/examples/run-program-quack.ts
+npx tsx --tsconfig tsconfig.json docs/examples/run-program-quack.ts
 ```
 
 It prints `reply: quack` and `outcome: success`.
@@ -184,12 +183,11 @@ export const signature: (
 ### Do a quack
 
 [`run-agent-quack.ts`](examples/run-agent-quack.ts) is the smallest `runAgent`
-call. It logs in the same way, builds a `RunConfig` with one prompt and no
-Write, Edit or Bash, and prints the transcript tail and the outcome. Each step
-has a comment.
+call. It builds a `RunConfig` with one prompt and no Write, Edit or Bash, and
+prints the transcript tail and the outcome. Each step has a comment.
 
 ```bash
-QUACK_INSTALL_DIR=<a git-initialized directory> npx tsx --tsconfig tsconfig.json docs/examples/run-agent-quack.ts
+npx tsx --tsconfig tsconfig.json docs/examples/run-agent-quack.ts
 ```
 
 It prints `transcriptTail: quack` and `outcome: success`.
