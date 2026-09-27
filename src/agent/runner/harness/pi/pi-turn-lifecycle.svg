@@ -1,0 +1,82 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="920" height="520" viewBox="0 0 920 520" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <title>One turn of a pi session</title>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#6b7280"/>
+    </marker>
+  </defs>
+  <rect width="920" height="520" fill="#ffffff"/>
+
+  <g fill="none" stroke="#6b7280" stroke-width="1.5" marker-end="url(#arrow)">
+    <path d="M330,36 L330,68"/>
+    <path d="M390,118 L390,178"/>
+    <path d="M480,108 L638,190"/>
+    <path d="M330,228 L205,318"/>
+    <path d="M390,228 L390,318"/>
+    <path d="M450,228 L700,318"/>
+    <path d="M60,346 L30,346 L30,94 L298,94"/>
+    <path d="M160,374 L160,438"/>
+    <path d="M840,346 L890,346 L890,40 L450,40 L450,68"/>
+    <path d="M800,204 L846,204"/>
+    <path d="M390,374 L390,436"/>
+    <path d="M260,464 L306,464"/>
+  </g>
+
+  <g fill="#1f2937">
+    <circle cx="330" cy="28" r="8"/>
+    <circle cx="858" cy="204" r="10" fill="none" stroke="#1f2937" stroke-width="1.5"/>
+    <circle cx="858" cy="204" r="6"/>
+    <circle cx="390" cy="448" r="10" fill="none" stroke="#1f2937" stroke-width="1.5"/>
+    <circle cx="390" cy="448" r="6"/>
+    <circle cx="318" cy="464" r="10" fill="none" stroke="#1f2937" stroke-width="1.5"/>
+    <circle cx="318" cy="464" r="6"/>
+  </g>
+
+  <g font-size="12" fill="#4b5563">
+    <text x="340" y="56">session.prompt</text>
+    <text x="398" y="154">turn ends in error</text>
+    <text x="560" y="138">turn ends clean</text>
+    <text x="232" y="258" text-anchor="end">pi pattern matches,</text>
+    <text x="232" y="273" text-anchor="end">under 3 attempts</text>
+    <text x="398" y="296">no match, or 3 attempts used</text>
+    <text x="604" y="258">401 on an aged token, first time</text>
+    <text x="42" y="160">re-send without</text>
+    <text x="42" y="175">the failed turn</text>
+    <text x="168" y="412">abort</text>
+    <text x="660" y="32">continue prompt</text>
+    <text x="398" y="410">terminalFailure</text>
+  </g>
+
+  <g font-size="14" text-anchor="middle">
+    <rect x="300" y="70" width="180" height="48" rx="10" fill="#f9fafb" stroke="#9ca3af" stroke-width="1.5"/>
+    <text x="390" y="99" fill="#111827">Streaming</text>
+
+    <rect x="300" y="180" width="180" height="48" rx="10" fill="#f9fafb" stroke="#9ca3af" stroke-width="1.5"/>
+    <text x="390" y="209" fill="#111827">Failed</text>
+
+    <rect x="640" y="180" width="160" height="48" rx="10" fill="#f9fafb" stroke="#9ca3af" stroke-width="1.5"/>
+    <text x="720" y="209" fill="#111827">Done</text>
+
+    <rect x="60" y="320" width="200" height="54" rx="10" fill="#eff6ff" stroke="#3b82f6" stroke-width="2"/>
+    <text x="160" y="342" fill="#111827">Waiting</text>
+    <text x="160" y="362" font-size="11" fill="#1d4ed8">captured: agent turn retried</text>
+
+    <rect x="300" y="320" width="180" height="54" rx="10" fill="#eff6ff" stroke="#3b82f6" stroke-width="2"/>
+    <text x="390" y="342" fill="#111827">GaveUp</text>
+    <text x="390" y="362" font-size="11" fill="#1d4ed8">error tracking, clear message</text>
+
+    <rect x="640" y="320" width="200" height="54" rx="10" fill="#f9fafb" stroke="#9ca3af" stroke-width="1.5"/>
+    <text x="740" y="342" fill="#111827">Reminting</text>
+    <text x="740" y="362" font-size="11" fill="#4b5563">wizard withGatewayRemint</text>
+
+    <rect x="60" y="440" width="200" height="48" rx="10" fill="#f9fafb" stroke="#9ca3af" stroke-width="1.5"/>
+    <text x="160" y="469" fill="#111827">Cancelled</text>
+  </g>
+
+  <g font-size="11" fill="#6b7280">
+    <rect x="560" y="440" width="14" height="14" rx="3" fill="#eff6ff" stroke="#3b82f6" stroke-width="2"/>
+    <text x="582" y="451">tracked by this change</text>
+    <rect x="560" y="466" width="14" height="14" rx="3" fill="#f9fafb" stroke="#9ca3af" stroke-width="1.5"/>
+    <text x="582" y="477">pi or wizard behavior, unchanged</text>
+  </g>
+</svg>

@@ -156,6 +156,21 @@ export type GatewayTerminalFailure = {
   status?: number;
 };
 
+/** Whether a turn failed because the model stream dropped mid-response. */
+function isDroppedModelStream(turn: GatewayTurnError): boolean {
+  return /upstream closed the stream|upstream connection lost|ECONNRESET|socket hang up|\bterminated\b/i.test(
+    turn.errorMessage ?? '',
+  );
+}
+
+/** What a user reads when the model stream dropped and pi's retries didn't recover it. */
+function droppedStreamMessage(errorMessage: string): string {
+  return (
+    `The connection to the PostHog AI gateway dropped mid-response, and retrying didn't fix it (${errorMessage}). ` +
+    'This is usually a network problem or a brief gateway issue. Try again in a few minutes.'
+  );
+}
+
 export function gatewayTerminalFailure(
   turn: ({ stopReason?: string } & GatewayTurnError) | undefined,
 ): GatewayTerminalFailure | undefined {
@@ -168,6 +183,12 @@ export function gatewayTerminalFailure(
       : 'Gateway request failed');
   if (turn.stopReason === 'aborted') {
     return { classification: AgentErrorType.ABORT, message };
+  }
+  if (isDroppedModelStream(turn)) {
+    return {
+      classification: AgentErrorType.API_ERROR,
+      message: droppedStreamMessage(message),
+    };
   }
   const codes =
     turn.diagnostics

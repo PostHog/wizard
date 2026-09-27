@@ -44,6 +44,7 @@ import {
 } from './gateway';
 import { runErrorType } from './completion';
 import { bindPiCancellation } from './cancellation';
+import { trackAutoRetry } from './auto-retry';
 import { classifyRunFailure, ErrorCodes } from '@shared/errors';
 import { assembleCommandments } from '../../switchboard/commandments';
 import {
@@ -486,6 +487,10 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
           }
           break;
         }
+        case 'auto_retry_start':
+        case 'auto_retry_end':
+          trackAutoRetry(event, 'pi-task');
+          break;
         default:
           break;
       }
