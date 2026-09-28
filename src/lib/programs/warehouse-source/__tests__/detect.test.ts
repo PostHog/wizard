@@ -20,6 +20,7 @@ import {
   reportDetectedWarehouseSources,
   getDetectedWarehouseSources,
 } from '@lib/programs/warehouse-source/detect';
+import { maybeStampAiSdkDetected } from '@lib/programs/posthog-integration/detect';
 import {
   buildSession,
   ScanConsent,
@@ -205,7 +206,7 @@ describe('wizard_ai_sdk_detected group stamp for the warehouse-source program', 
     session.apiUser = { organization: { id: 'org-1' } } as any;
   }
 
-  it('fires with wizard_ai_sdk_detected: true when consent is granted and an AI kind is detected', () => {
+  it('stamps after auth, not when the scan reports', () => {
     withDeps(tmpDir, { openai: '^4.0.0' });
     const session = buildSession({ installDir: tmpDir, ci: true });
     withOrgUser(session);
@@ -215,68 +216,16 @@ describe('wizard_ai_sdk_detected group stamp for the warehouse-source program', 
       setFrameworkContext(session),
       markScanReported(session),
     );
+    expect(session.warehouseSourcesReported).toBe(true);
+    expect(analytics.groupIdentify).not.toHaveBeenCalled();
 
+    maybeStampAiSdkDetected(session);
+
+    expect(analytics.groupIdentify).toHaveBeenCalledTimes(1);
     expect(analytics.groupIdentify).toHaveBeenCalledWith(
       'organization',
       'org-1',
       { wizard_ai_sdk_detected: true },
     );
-  });
-
-  it('does not fire when consent is declined', () => {
-    withDeps(tmpDir, { openai: '^4.0.0' });
-    const session = buildSession({ installDir: tmpDir });
-    withOrgUser(session);
-    detectWarehousePrerequisites(
-      session,
-      setFrameworkContext(session),
-      markScanReported(session),
-    );
-    session.scanConsent = ScanConsent.Declined;
-
-    reportDetectedWarehouseSources(session);
-
-    expect(analytics.groupIdentify).not.toHaveBeenCalled();
-  });
-
-  it('does not fire while consent is undecided', () => {
-    withDeps(tmpDir, { openai: '^4.0.0' });
-    const session = buildSession({ installDir: tmpDir });
-    withOrgUser(session);
-
-    detectWarehousePrerequisites(
-      session,
-      setFrameworkContext(session),
-      markScanReported(session),
-    );
-
-    expect(analytics.groupIdentify).not.toHaveBeenCalled();
-  });
-
-  it('does not fire when only a non-AI kind is detected', () => {
-    withDeps(tmpDir, { stripe: '^14.0.0' });
-    const session = buildSession({ installDir: tmpDir, ci: true });
-    withOrgUser(session);
-
-    detectWarehousePrerequisites(
-      session,
-      setFrameworkContext(session),
-      markScanReported(session),
-    );
-
-    expect(analytics.groupIdentify).not.toHaveBeenCalled();
-  });
-
-  it('does not fire when the organization id is unknown', () => {
-    withDeps(tmpDir, { openai: '^4.0.0' });
-    const session = buildSession({ installDir: tmpDir, ci: true });
-
-    detectWarehousePrerequisites(
-      session,
-      setFrameworkContext(session),
-      markScanReported(session),
-    );
-
-    expect(analytics.groupIdentify).not.toHaveBeenCalled();
   });
 });

@@ -11,14 +11,14 @@ import {
   type AuthErrorDetail,
   type TokenUsageDelta,
 } from './wizard-ui';
-import type { SettingsConflict } from '@lib/agent/claude-settings';
-import type { ApiUser } from '@lib/api';
-import { OAUTH_TIMEOUT_MS } from '@lib/constants';
+import type { SettingsConflict } from '@shared/claude-settings';
+import type { ApiUser } from '@shared/api';
+import { OAUTH_TIMEOUT_MS } from '@shared/constants';
 import {
   type WizardReadinessResult,
   getBlockingServiceKeys,
   SERVICE_LABELS,
-} from '@lib/health-checks/readiness';
+} from '@shared/health-checks/readiness';
 import type {
   AskAnswers,
   Credentials,
@@ -168,6 +168,10 @@ export class LoggingUI implements WizardUI {
     return Promise.resolve(false);
   }
 
+  cancelTaskNotice(): void {
+    // Nothing to dismiss — showTaskNotice never opened anything.
+  }
+
   showSettingsOverride(
     _conflicts: SettingsConflict[],
     _backupAndFix: () => boolean,
@@ -231,6 +235,10 @@ export class LoggingUI implements WizardUI {
     // No-op in CI mode — credentials are handled directly
   }
 
+  setAccessToken(_credentials: Credentials): void {
+    // No-op in CI mode — CI runs on a non-expiring key and never refreshes
+  }
+
   setRoleAtOrganization(_role: string | null): void {
     // No-op in CI mode — there's no TUI to render role-tailored prompts
   }
@@ -243,7 +251,13 @@ export class LoggingUI implements WizardUI {
   private lastTodoLine = '';
 
   syncTodos(
-    todos: Array<{ content: string; status: string; activeForm?: string }>,
+    todos: Array<{
+      id?: string;
+      source?: string;
+      content: string;
+      status: string;
+      activeForm?: string;
+    }>,
   ): void {
     const completed = todos.filter(
       (t) => t.status === TaskStatus.Completed,

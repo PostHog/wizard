@@ -1,20 +1,16 @@
 import type { WizardSession } from '@lib/wizard-session';
+import {
+  AUDIT_CHECKS_FILE,
+  AUDIT_REPORT_FILE,
+  coerceAuditChecks,
+  type AuditCheck,
+  type AuditStatus,
+} from '@shared/audit-ledger';
 
-export type AuditStatus =
-  | 'pending'
-  | 'pass'
-  | 'error'
-  | 'warning'
-  | 'suggestion';
-
-export interface AuditCheck {
-  id: string;
-  area: string;
-  label: string;
-  status: AuditStatus;
-  file?: string;
-  details?: string;
-}
+// The ledger contract lives in `@lib/audit-ledger`; re-exported so the audit
+// views and the ledger watcher keep their import path.
+export { AUDIT_CHECKS_FILE, AUDIT_REPORT_FILE, coerceAuditChecks };
+export type { AuditCheck, AuditStatus };
 
 export interface AuditSeverityStyle {
   glyph: string;
@@ -30,23 +26,9 @@ export const AUDIT_SEVERITY_STYLE: Record<AuditStatus, AuditSeverityStyle> = {
   suggestion: { glyph: '•', color: 'cyan' },
 };
 
-export const AUDIT_CHECKS_FILE = '.posthog-audit-checks.json';
-export const AUDIT_REPORT_FILE = 'posthog-audit-report.md';
 export const AUDIT_CHECKS_KEY = 'auditChecks';
 
 export function getAuditChecks(session: WizardSession): AuditCheck[] {
   const raw = session.frameworkContext[AUDIT_CHECKS_KEY];
   return Array.isArray(raw) ? (raw as AuditCheck[]) : [];
-}
-
-/**
- * Read the audit checks ledger off disk. Validation lives at write time —
- * every writer (`audit_seed_checks` / `audit_add_checks` / `audit_resolve_checks`
- * MCP tools, `seedAuditLedger`) zod-parses entries before the atomic write,
- * so by the time the file watcher fires we trust the shape and only guard
- * against the file not being a JSON array (corrupted / hand-edited / not yet
- * seeded).
- */
-export function coerceAuditChecks(parsed: unknown): AuditCheck[] {
-  return Array.isArray(parsed) ? (parsed as AuditCheck[]) : [];
 }

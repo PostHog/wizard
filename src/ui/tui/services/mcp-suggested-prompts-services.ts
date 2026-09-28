@@ -14,29 +14,17 @@ import type { Credentials } from '@lib/wizard-session';
 import { getOrAskForProjectData } from '@utils/setup-utils';
 import { Program } from '@lib/programs/program-registry';
 import type { WizardStore } from '@ui/tui/store';
-import type { ApiUser } from '@lib/api';
+import type { ApiUser } from '@shared/api';
 import {
   probeProjectData as runProbe,
   type ProjectDataProfile,
 } from '@lib/mcp-project-profile';
 import { seedDemoEvents as runSeed } from '@lib/mcp-seed-events';
 
-/**
- * Discriminated union covering every kind of streamed event the screen
- * needs to render. Production yields these from Claude SDK messages;
- * the playground yields them from canned scripts.
- */
-export type AgentChunk =
-  | { kind: 'text'; text: string }
-  /** `command` carries CLI mode's exec command string (`call <tool> …`) so the
-   *  screen can recover the inner tool for context-aware follow-ups. */
-  | { kind: 'tool-call'; toolName: string; detail: string; command?: string }
-  | { kind: 'tool-result'; toolName: string; detail: string }
-  | { kind: 'error'; text: string }
-  /** Stream completed. `sessionId` is the SDK session ID of the just-
-   *  completed turn; pass it back as `resumeSessionId` on a follow-up
-   *  call to continue the conversation with full history. */
-  | { kind: 'done'; sessionId?: string };
+// The streamed event shape is the agent's; re-exported so the screen and the
+// playground keep their import path.
+import type { AgentChunk } from '@agent/types';
+export type { AgentChunk };
 
 export interface McpSuggestedPromptsServices {
   /**
@@ -117,7 +105,7 @@ export function createMcpSuggestedPromptsServices(
         baseUrl: store.session.baseUrl,
         // Widens the OAuth scope grant: base `WIZARD_OAUTH_SCOPES` plus
         // read on every product surface (flags, experiments, surveys,
-        // replays, errors, web/LLM analytics, cohorts, persons) plus
+        // replays, errors, web analytics, AI Observability, cohorts, persons) plus
         // annotation read/write. Persistence writes (dashboard, insight,
         // notebook) come for free from the base set. See
         // `src/lib/oauth/program-scopes.ts`.
@@ -135,7 +123,15 @@ export function createMcpSuggestedPromptsServices(
       };
     },
 
-    runPromptStreaming: (args) => runProductionPromptStreaming(args),
+    runPromptStreaming: (args) =>
+      runProductionPromptStreaming({
+        ...args,
+        // Gateway cost attribution. Only the id crosses here; the rest of the
+        // trace tags are built where the headers are, keeping the agent module
+        // out of the TUI's startup graph.
+        programId: store.analyticsProgramId,
+        integration: store.session.integration ?? undefined,
+      }),
 
     probeProjectData: (credentials) =>
       runProbe({
@@ -159,12 +155,12 @@ async function* runProductionPromptStreaming(args: {
   credentials: Credentials;
   signal: AbortSignal;
   resumeSessionId?: string;
+  programId?: string;
+  integration?: string;
 }): AsyncIterable<AgentChunk> {
   // Defer the SDK import to call time — the playground never hits
   // this path (it overrides the whole service object), so demo
   // sessions don't pay the SDK load cost.
-  const { runMcpPromptViaSdk } = await import(
-    '@lib/agent/mcp-prompt-streaming'
-  );
+  const { runMcpPromptViaSdk } = await import('@agent');
   yield* runMcpPromptViaSdk(args);
 }

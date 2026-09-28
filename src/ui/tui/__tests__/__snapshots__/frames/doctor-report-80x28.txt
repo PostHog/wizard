@@ -1,0 +1,18 @@
+ PostHog Wizard v0.0.0-test                        Feedback: wizard@posthog.com
+
+ Cost (running): $0.00 · no agent turns yet                      Ctrl+T to hide
+
+ PostHog Doctor Report
+ Project 42 • https://us.posthog.com
+
+ 2 active issues: 1 critical, 1 warning
+
+ Critical (1)
+ ◼ Ingestion is delayed
+   https://posthog.com/docs/support/troubleshooting
+
+ Warning (1)
+ ◼ SDK version is out of date
+   https://posthog.com/docs/libraries
+
+ ▸ Continue

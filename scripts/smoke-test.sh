@@ -24,7 +24,7 @@ node --input-type=module -e "import '$DIST_BIN'" 2>&1 | head -5 | grep -q 'PostH
 }
 
 # ── 2. CI flag overrides physically absent from production builds ───────────
-# The override path (src/utils/ci-flag-overrides.ts) is dead code in published
+# The override path (src/shared/utils/ci-flag-overrides.ts) is dead code in published
 # builds and tsdown strips it; its env var name appearing in dist/*.js means
 # dead-code elimination regressed and a prod surface leaked. Sourcemaps keep
 # the original source, so only .js output counts.

@@ -13,9 +13,9 @@ import type {
   TokenUsageDelta,
 } from '@ui/wizard-ui';
 import type { WizardStore } from './store.js';
-import type { SettingsConflict } from '@lib/agent/claude-settings';
-import type { WizardReadinessResult } from '@lib/health-checks/readiness';
-import type { ApiUser } from '@lib/api';
+import type { SettingsConflict } from '@shared/claude-settings';
+import type { WizardReadinessResult } from '@shared/health-checks/readiness';
+import type { ApiUser } from '@shared/api';
 import type {
   AskAnswers,
   Credentials,
@@ -87,6 +87,10 @@ export class InkUI implements WizardUI {
     this.store.setCredentials(credentials);
   }
 
+  setAccessToken(credentials: Credentials): void {
+    this.store.setAccessToken(credentials);
+  }
+
   setRoleAtOrganization(role: string | null): void {
     this.store.setRoleAtOrganization(role);
   }
@@ -155,6 +159,12 @@ export class InkUI implements WizardUI {
 
   showTaskNotice(notice: TaskNotice): Promise<boolean> {
     return this.store.showTaskNotice(notice);
+  }
+
+  cancelTaskNotice(): void {
+    // Same path as pressing Skip: closes the overlay and resolves the pending
+    // showTaskNotice promise with false.
+    this.store.resolveTaskNotice(false);
   }
 
   showSettingsOverride(
@@ -229,7 +239,13 @@ export class InkUI implements WizardUI {
   }
 
   syncTodos(
-    todos: Array<{ content: string; status: string; activeForm?: string }>,
+    todos: Array<{
+      id?: string;
+      source?: string;
+      content: string;
+      status: string;
+      activeForm?: string;
+    }>,
   ): void {
     this.store.syncTodos(todos);
   }

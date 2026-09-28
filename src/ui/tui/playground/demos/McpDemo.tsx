@@ -14,12 +14,13 @@ import type {
 import { McpClientStatus } from '@steps/add-mcp-server-to-clients/results';
 
 const MOCK_CLIENTS: McpClientInfo[] = [
-  { name: 'Claude Code', supportsPlugin: true },
-  { name: 'Cursor', supportsPlugin: true },
-  { name: 'VS Code', supportsPlugin: false },
+  { name: 'Claude Code', supportsPlugin: true, pluginBundlesMcp: false },
+  { name: 'Cursor', supportsPlugin: true, pluginBundlesMcp: false },
+  { name: 'VS Code', supportsPlugin: false, pluginBundlesMcp: false },
   {
     name: 'Claude Desktop/Web',
     supportsPlugin: false,
+    pluginBundlesMcp: false,
     finish: {
       url: 'https://claude.ai/directory/connectors/posthog',
       instruction: 'Sign in and click "Connect" to finish.',
@@ -38,8 +39,7 @@ function createMockInstaller(): McpInstaller {
       // Mixed outcomes so the demo shows every Done-phase section.
       return clientNames.map((name, i) => ({
         name,
-        status:
-          i === 1 ? McpClientStatus.Unchanged : McpClientStatus.Changed,
+        status: i === 1 ? McpClientStatus.Unchanged : McpClientStatus.Changed,
       }));
     },
     async installPlugins(clientNames) {

@@ -76,7 +76,7 @@ dev-only concern.
 
 - **`agents-platform` harness** — placeholder today (`README` only). When it
   lands, whoever builds it needs to add a third transform + wire point in
-  `src/lib/agent/aio-capture.ts`. Search for `captureFromPiMessageEndEvent`
+  `src/agent/aio-capture.ts`. Search for `captureFromPiMessageEndEvent`
   for the pattern.
 - **Non-assistant messages** — user turns, tool results, and system messages
   don't get their own `$ai_generation`. Tool calls ride as content blocks

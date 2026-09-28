@@ -31,7 +31,7 @@ import { Colors, Icons } from '@ui/tui/styles';
 import { PickerMenu, LoadingBox } from '@ui/tui/primitives/index';
 import { useKeyBindings, KeyMatch } from '@ui/tui/hooks/useKeyBindings';
 import { getSlackAppCard } from '@lib/mcp-role-prompts';
-import { fetchSlackConnected } from '@lib/api';
+import { fetchSlackConnected } from '@shared/api';
 import { Program } from '@lib/programs/program-registry';
 import { getOrAskForProjectData } from '@utils/setup-utils';
 import { analytics } from '@utils/analytics';

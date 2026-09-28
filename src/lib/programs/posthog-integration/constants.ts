@@ -1,10 +1,7 @@
 /**
- * Leaf-level constants for the posthog-integration program.
- *
- * Kept separate from `index.ts` so files like `yara-hooks.ts` can import
- * the filename constants without dragging in `index.ts`'s heavier imports
- * (agent-interface, framework-config, etc.) — which would create an import
- * cycle through agent-interface → yara-hooks.
+ * Leaf-level constants for the posthog-integration program. The event plan's
+ * name lives in `@lib/constants` so infrastructure (the scanner's allowlist)
+ * can name it without importing this program.
  */
 
-export const EVENT_PLAN_FILE = '.posthog-events.json';
+export { EVENT_PLAN_FILE } from '@shared/constants';

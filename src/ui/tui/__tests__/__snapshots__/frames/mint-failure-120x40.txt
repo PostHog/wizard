@@ -1,0 +1,39 @@
+ PostHog Wizard v0.0.0-test                                                                Feedback: wizard@posthog.com
+
+ Cost (running): $0.00 · no agent turns yet                                                              Ctrl+T to hide
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                            ██ The Wizard's a little busy 🦔
+
+                      The wizard can still share spells. Grab a skill and let your agent take over.
+
+                                                  ▸ Save skill
+                                                    Open in Claude Code
+                                                    Open in Codex
+                                                    Report this issue
+                                                    Exit
+
+
+
+
+
+
+
+
+
+
+
+
+
+  ↑↓ navigate  enter select

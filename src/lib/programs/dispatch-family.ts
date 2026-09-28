@@ -1,15 +1,19 @@
 import type { Arguments } from 'yargs';
 
 import { auditConfig } from '@lib/programs/audit/index';
+import { AUDIT_CHECKS_FILE } from '@lib/programs/audit/types';
+import { WIZARD_TOOL_NAMES } from '@agent';
 import { agentSkillConfig } from '@lib/programs/program-registry';
 import { webAnalyticsDoctorConfig } from '@lib/programs/web-analytics-doctor/index';
 import type { ProgramConfig } from '@lib/programs/program-step';
-import { getSkillsBaseUrl } from '@lib/constants';
-import { fetchSkillMenu, type CliEntry } from '@lib/wizard-tools';
+import { getSkillsBaseUrl } from '@shared/constants';
+import { fetchSkillMenu, type CliEntry } from '@shared/skill-menu';
 import { analytics } from '@utils/analytics';
 
 import { dispatchProgram } from '../../commands/factories/shared';
 import type { Command } from '../../commands/command';
+import { ErrorCodes } from '@shared/errors';
+import { emitWizardError } from '@shared/errors';
 
 /**
  * Capture a CLI dispatch error, flush analytics, and exit. The wizard never
@@ -29,6 +33,7 @@ async function exitDispatchError(
     /* flush is best-effort; never block the exit */
   }
   process.stderr.write(message);
+  emitWizardError({ code: ErrorCodes.CliBadArgs, message: reason });
   return process.exit(code);
 }
 
@@ -54,10 +59,28 @@ const NATIVE_HANDLERS: Record<string, Record<string, ProgramConfig>> = {
  * `skillId` injected. The comprehensive `audit all` is the one exception —
  * skillId 'audit' triggers the specialized auditConfig (custom hooks,
  * content blocks, screens).
+ *
+ * This is the one place that knows a subcommand belongs to `audit`, so the
+ * generic skill program picks up the ledger here rather than for every skill.
  */
-function configForCliEntry(entry: CliEntry): ProgramConfig {
+function configForCliEntry(entry: CliEntry, family: string): ProgramConfig {
   if (entry.skillId === 'audit') return auditConfig;
-  return { ...agentSkillConfig, skillId: entry.skillId };
+  return {
+    ...agentSkillConfig,
+    skillId: entry.skillId,
+    ...(family === 'audit'
+      ? {
+          auditLedgerFile: AUDIT_CHECKS_FILE,
+          streamWorkflowId: family,
+          allowedTools: [
+            ...(agentSkillConfig.allowedTools ?? []),
+            WIZARD_TOOL_NAMES.auditSeedChecks,
+            WIZARD_TOOL_NAMES.auditAddChecks,
+            WIZARD_TOOL_NAMES.auditResolveChecks,
+          ],
+        }
+      : {}),
+  };
 }
 
 function familyEntries(family: string, entries: CliEntry[]): CliEntry[] {
@@ -97,7 +120,7 @@ export async function dispatchFamily(
     return;
   }
 
-  const skillsBaseUrl = getSkillsBaseUrl(Boolean(argv['local-mcp']));
+  const skillsBaseUrl = getSkillsBaseUrl();
   const menu = await fetchSkillMenu(skillsBaseUrl);
   if (!menu) {
     return exitDispatchError(
@@ -111,7 +134,7 @@ export async function dispatchFamily(
   const entries = menu.cliEntries ?? [];
   const entry = familyEntries(family, entries).find((e) => e.command === sub);
   if (entry) {
-    dispatchProgram(configForCliEntry(entry), argv);
+    dispatchProgram(configForCliEntry(entry, family), argv);
     return;
   }
 

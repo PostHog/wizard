@@ -1,0 +1,27 @@
+ PostHog Wizard v0.0.0-test                        Feedback: wizard@posthog.com
+
+ Cost (running): $0.00 · no agent turns yet                      Ctrl+T to hide
+
+
+ PostHog MCP
+
+ With MCP your agent works directly with the PostHog platform. You can prompt
+ it to:
+
+ ◆ Build dashboards
+ ◆ Run SQL queries
+ ◆ Deploy feature flags
+ ◆ Debug exceptions and errors
+ ◆ And lots more...
+
+ Want a live demo using real data from your project?
+ ▸ Start MCP tutorial
+   Exit
+
+
+
+
+
+
+
+  ↑↓ navigate  p pick new prompt  esc exit  enter select

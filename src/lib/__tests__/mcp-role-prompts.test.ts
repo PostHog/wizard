@@ -11,7 +11,7 @@ import {
   FOLLOW_UP_EXIT_SENTINEL,
   TAILORED_ROLES,
 } from '@lib/mcp-role-prompts';
-import { Integration } from '@lib/constants';
+import { Integration } from '@shared/constants';
 import {
   degradedProfile,
   type EventVolume,

@@ -40,7 +40,7 @@ plugins
 e2e-tests/fixtures/.tracking/*
 
 # Generated at build time by scripts/generate-version.js
-src/lib/version.ts
+src/shared/version.ts
 # Re-include src/lib explicitly: a user-global ignore pattern like `lib/`
 # would otherwise silently drop new source files under src/lib from commits.
 !src/lib/

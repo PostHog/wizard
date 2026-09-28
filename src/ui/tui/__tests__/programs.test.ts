@@ -1,5 +1,5 @@
 import { buildSession, McpOutcome, RunPhase } from '@lib/wizard-session';
-import { WizardReadiness } from '@lib/health-checks/readiness';
+import { WizardReadiness } from '@shared/health-checks/readiness';
 import { PROGRAM_SEQUENCES, ScreenId } from '@ui/tui/screen-sequences';
 import { Program, type ProgramId } from '@lib/programs/program-registry';
 

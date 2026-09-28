@@ -9,7 +9,7 @@
 import { existsSync, statSync } from 'fs';
 import { analytics } from '@utils/analytics';
 import type { WizardSession } from '@lib/wizard-session';
-import type { AbortCase } from '@lib/agent/agent-runner';
+import type { AbortCase } from '@agent/types';
 import { detectWarehouseSources } from '@lib/warehouse-sources/detect';
 import { resolveScanReporting } from '@lib/programs/warehouse-scan-reporting';
 import type { DetectedSource } from '@lib/warehouse-sources/types';
@@ -136,9 +136,8 @@ export function detectWarehousePrerequisites(
 /**
  * The single place this program's scan results become telemetry once an
  * interactive session's consent resolves after `detectWarehousePrerequisites`
- * already ran undecided. Called from the two points `WizardStore` resolves
- * consent, so it must stay idempotent — mirrors `reportWarehouseSourcesDetected`
- * in the posthog-integration program, sharing its consent gate via
+ * already ran undecided. Mirrors `reportWarehouseSourcesDetected` in the
+ * posthog-integration program, sharing its consent gate via
  * `resolveScanReporting`.
  */
 export function reportDetectedWarehouseSources(

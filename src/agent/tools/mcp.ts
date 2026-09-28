@@ -1,0 +1,798 @@
+/**
+ * MCP facade over `./tools` — the unified in-process server the anthropic
+ * harness mounts. Declarations (zod schemas, descriptions) and the MCP result
+ * envelope live here; all behavior is imported from the shared core.
+ *
+ * Provides: check_env_keys, set_env_values, detect_package_manager,
+ * load_skill_menu / install_skill, audit_* ledger tools, wizard_ask, and the
+ * orchestrator queue tools. Secret values never leave the machine.
+ */
+
+import path from 'path';
+import fs from 'fs';
+import { z } from 'zod';
+import { logToFile } from '@utils/debug';
+import { analytics } from '@utils/analytics';
+import { makeMutex } from '@utils/atomic-ledger';
+import type { PackageManagerDetector } from '@utils/package-manager';
+import {
+  AUDIT_CHECKS_FILE,
+  type AuditCheck,
+  type AuditStatus,
+} from '@shared/audit-ledger';
+import { type WizardAskBridge, isFullyCancelled } from '../wizard-ask-bridge';
+import {
+  PUBLISH_HANDOFF_CONTENT_DESCRIPTION,
+  PUBLISH_HANDOFF_DESCRIPTION,
+  PUBLISH_HANDOFF_TOOL_NAME,
+  publishHandoff,
+} from './handoff';
+import { createSecretVault, type SecretVault } from '@shared/secret-vault';
+import type { ProgressEmitter } from '@agent/progress';
+import {
+  buildOrchestratorTools,
+  type OrchestratorToolsContext,
+} from '@agent/runner/sequence/orchestrator/queue-tools';
+import type { LLMProvider } from '@posthog/warlock';
+import {
+  ASK_MAX_QUESTIONS_PER_CALL,
+  DEFAULT_ASK_MAX_QUESTIONS,
+  CHECK_ENV_KEYS_DESCRIPTION,
+  CHECK_ENV_KEYS_FILE_PATH_DESCRIPTION,
+  ENV_FILE_PATH_DESCRIPTION,
+  SERVER_NAME,
+  addAuditChecks,
+  downloadSkill,
+  ensureGitignoreCoverage,
+  createAskAccounting,
+  describeAskCancellation,
+  checkEnvKeys as checkEnvKeysCore,
+  mergeEnvValues,
+  normaliseAskSubject,
+  resolveAskQuestionKinds,
+  resolveAuditChecks,
+  resolveEnvPath,
+  resolveEnvSecretRefs,
+  seedAuditChecks,
+  templateEnvWriteRefusal,
+  legacyKeyNameRefusal,
+  vaultSensitiveAnswers,
+  AUDIT_ADD_CHECKS_DESCRIPTION,
+  AUDIT_ADD_CHECKS_PARAM_DESCRIPTION,
+  AUDIT_RESOLVE_CHECKS_DESCRIPTION,
+  AUDIT_RESOLVE_CHECKS_PARAM_DESCRIPTION,
+  AUDIT_SEED_CHECKS_DESCRIPTION,
+  AUDIT_SEED_CHECKS_PARAM_DESCRIPTION,
+  AUDIT_STATUSES,
+  WIZARD_ASK_KIND_DESCRIPTION,
+  WIZARD_ASK_SENSITIVE_DESCRIPTION,
+  WIZARD_ASK_SUBJECT_DESCRIPTION,
+  WIZARD_ASK_TOOL_DESCRIPTION,
+} from './tools';
+import { fetchSkillMenu, type SkillEntry } from '@shared/skill-menu';
+
+const auditCheckSchema = z.object({
+  id: z.string().min(1),
+  area: z.string().min(1),
+  label: z.string().min(1),
+  status: z.enum(AUDIT_STATUSES as [AuditStatus, ...AuditStatus[]]),
+  file: z.string().optional(),
+  details: z.string().optional(),
+});
+
+const auditUpdateSchema = z.object({
+  id: z.string().min(1),
+  status: z.enum(AUDIT_STATUSES as [AuditStatus, ...AuditStatus[]]),
+  file: z.string().optional(),
+  details: z.string().optional(),
+});
+
+// ---------------------------------------------------------------------------
+// SDK dynamic import (ESM module loaded once, cached)
+// ---------------------------------------------------------------------------
+
+let _sdkModule: any = null;
+async function getSDKModule(): Promise<any> {
+  if (!_sdkModule) {
+    _sdkModule = await import('@anthropic-ai/claude-agent-sdk');
+  }
+  return _sdkModule;
+}
+
+// ---------------------------------------------------------------------------
+// Options for creating the wizard tools server
+// ---------------------------------------------------------------------------
+
+export interface WizardToolsOptions {
+  /** Root directory of the project being analyzed */
+  workingDirectory: string;
+
+  /** Framework-specific package manager detector */
+  detectPackageManager: PackageManagerDetector;
+
+  /** Primary skills origin (e.g. http://localhost:8765 or the GitHub Releases URL); downloads fail over to the AWS mirror */
+  skillsBaseUrl: string;
+
+  /**
+   * Bridge that drives the `wizard_ask` overlay. When omitted, the
+   * `wizard_ask` tool is still registered but returns an error explaining
+   * the host is non-interactive — keeps the tool surface stable across
+   * CI/dev environments.
+   */
+  askBridge?: WizardAskBridge;
+
+  /**
+   * Per-run cap on `wizard_ask` invocations. Defaults to {@link DEFAULT_ASK_MAX_QUESTIONS}.
+   * A separate one-time "batch your questions" nudge fires when several calls
+   * in a row share a `subject` — see {@link ASK_BATCH_THRESHOLD}. That nudge is
+   * per subject, so a flow that asks once per detected source never trips it.
+   */
+  askMaxQuestions?: number;
+
+  /**
+   * Optional secret vault. When provided, tools that handle sensitive
+   * values (wizard_ask with `sensitive: true`, set_env_values) route
+   * those values through the vault and return opaque refs to the agent
+   * instead of raw strings — so the LLM never sees them. When omitted
+   * (e.g. in unit tests), a fresh vault is created internally.
+   */
+  secretVault?: SecretVault;
+
+  /**
+   * Orchestrator queue context. Present only when the `wizard-orchestrator`
+   * flag routes the run to the orchestrator; when set, the orchestrator tools
+   * (enqueue_task, complete_task, read_handoffs) are registered. Absent on the
+   * linear path.
+   */
+  orchestrator?: OrchestratorToolsContext;
+
+  /** Scan-triage classifier for install_skill's scan, resolved by the caller. */
+  triageProvider: LLMProvider;
+
+  /** Where `publish_handoff` reports. Absent → the handoff is written but reported nowhere. */
+  emit?: ProgressEmitter;
+}
+
+/** Default per-run cap on wizard_ask calls when no override is provided. */
+// ---------------------------------------------------------------------------
+// Server factory
+// ---------------------------------------------------------------------------
+
+/**
+ * Create the unified in-process MCP server with all wizard tools.
+ * Must be called asynchronously because the SDK is an ESM module loaded via dynamic import.
+ */
+export async function createWizardToolsServer(options: WizardToolsOptions) {
+  const {
+    workingDirectory,
+    detectPackageManager,
+    skillsBaseUrl,
+    askBridge,
+    askMaxQuestions = DEFAULT_ASK_MAX_QUESTIONS,
+    secretVault = createSecretVault(),
+    orchestrator,
+    triageProvider,
+    emit,
+  } = options;
+  const sdk = await getSDKModule();
+  const { tool, createSdkMcpServer } = sdk;
+
+  // Per-server wizard_ask accounting: the total cap plus the per-subject
+  // adjacency run. Shared with the pi facade so neither can drift.
+  const askAccounting = createAskAccounting(askMaxQuestions);
+
+  // Pre-fetch skill menu so category names are available in the tool schema
+  let cachedSkillMenu: Record<string, SkillEntry[]> = {};
+  let categoryNames: [string, ...string[]] = ['integration'];
+
+  const menu = await fetchSkillMenu(skillsBaseUrl);
+  if (menu) {
+    cachedSkillMenu = menu.categories;
+  }
+
+  const keys = Object.keys(cachedSkillMenu);
+  if (keys.length > 0) {
+    categoryNames = keys as [string, ...string[]];
+  }
+
+  // -- check_env_keys -------------------------------------------------------
+
+  const checkEnvKeys = tool(
+    'check_env_keys',
+    CHECK_ENV_KEYS_DESCRIPTION,
+    {
+      filePath: z
+        .string()
+        .optional()
+        .describe(CHECK_ENV_KEYS_FILE_PATH_DESCRIPTION),
+      keys: z
+        .array(z.string())
+        .describe('Environment variable key names to check'),
+    },
+    (args: { filePath?: string; keys: string[] }) => {
+      const results = checkEnvKeysCore(
+        workingDirectory,
+        args.keys,
+        args.filePath,
+      );
+
+      return {
+        content: [
+          { type: 'text' as const, text: JSON.stringify(results, null, 2) },
+        ],
+      };
+    },
+  );
+
+  // -- set_env_values -------------------------------------------------------
+
+  const setEnvValues = tool(
+    'set_env_values',
+    'Create or update environment variable keys in a .env file. Creates the file if it does not exist. Ensures .gitignore coverage. Each value can be either a literal string or a secret reference of the form `{ "secretRef": "secret:..." }` returned by another tool (e.g. wizard_ask). Secret references are resolved locally — the actual value is written to the file but never returned to the agent.',
+    {
+      filePath: z.string().describe(ENV_FILE_PATH_DESCRIPTION),
+      values: z
+        .record(
+          z.string(),
+          z.union([z.string(), z.object({ secretRef: z.string() })]),
+        )
+        .describe(
+          'Key → (literal string OR { secretRef } pointing to a vaulted secret)',
+        ),
+    },
+    (args: {
+      filePath: string;
+      values: Record<string, string | { secretRef: string }>;
+    }) => {
+      const keyRefusal = legacyKeyNameRefusal(
+        workingDirectory,
+        Object.keys(args.values),
+      );
+      if (keyRefusal) {
+        return {
+          content: [{ type: 'text' as const, text: keyRefusal }],
+          isError: true,
+        };
+      }
+
+      // Resolve any secret refs from the vault before writing.
+      const resolution = resolveEnvSecretRefs(args.values, secretVault);
+      if (!resolution.ok) {
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: `Error: secret reference "${resolution.secretRef}" for key "${resolution.key}" is not known to the vault. The ref may have expired, been minted in a different run, or been mistyped.`,
+            },
+          ],
+          isError: true,
+        };
+      }
+      const { values: resolvedValues, refKeys: resolvedRefKeys } = resolution;
+
+      const resolved = resolveEnvPath(workingDirectory, args.filePath);
+      const templateRefusal = templateEnvWriteRefusal(resolved);
+      if (templateRefusal) {
+        logToFile(`set_env_values: refused template target ${resolved}`);
+        analytics.wizardCapture('set_env_values template target refused', {
+          file_name: path.basename(resolved),
+        });
+        return {
+          content: [{ type: 'text' as const, text: templateRefusal }],
+          isError: true,
+        };
+      }
+      logToFile(
+        `set_env_values: ${resolved}, keys: ${Object.keys(resolvedValues).join(
+          ', ',
+        )}${
+          resolvedRefKeys.length > 0
+            ? ` (secret refs: ${resolvedRefKeys.join(', ')})`
+            : ''
+        }`,
+      );
+
+      const existing = fs.existsSync(resolved)
+        ? fs.readFileSync(resolved, 'utf8')
+        : '';
+      const content = mergeEnvValues(existing, resolvedValues);
+
+      // Env files belong in directories that already exist. Refusing to create
+      // parents catches the classic agent mistake of re-prefixing the wizard
+      // working directory with its ancestor-repo-relative location (e.g.
+      // "apps/web/.env" while already running in apps/web), which would
+      // otherwise silently nest a duplicate tree.
+      const dir = path.dirname(resolved);
+      if (!fs.existsSync(dir)) {
+        analytics.wizardCapture('set_env_values parent dir missing', {
+          platform: process.platform,
+        });
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: `Error: parent directory does not exist: "${path.dirname(
+                args.filePath,
+              )}". filePath is resolved against the wizard working directory — pass ".env" for a file there, or "<subproject>/.env" for an existing nested project.`,
+            },
+          ],
+          isError: true,
+        };
+      }
+
+      fs.writeFileSync(resolved, content, 'utf8');
+
+      // Ensure .gitignore coverage for this env file
+      const envFileName = path.basename(resolved);
+      ensureGitignoreCoverage(workingDirectory, envFileName);
+
+      return {
+        content: [
+          {
+            type: 'text' as const,
+            text: `Updated ${Object.keys(args.values).length} key(s) in ${
+              args.filePath
+            }`,
+          },
+        ],
+      };
+    },
+  );
+
+  // -- detect_package_manager -----------------------------------------------
+
+  const detectPM = tool(
+    'detect_package_manager',
+    'Detect which package manager(s) the project uses. Returns the name, install command, and run command for each detected package manager. Call this before running any install commands.',
+    {},
+    async () => {
+      logToFile(`detect_package_manager: scanning ${workingDirectory}`);
+
+      const result = await detectPackageManager(workingDirectory);
+
+      logToFile(
+        `detect_package_manager: detected ${result.detected.length} package manager(s)`,
+      );
+
+      return {
+        content: [
+          {
+            type: 'text' as const,
+            text: JSON.stringify(result, null, 2),
+          },
+        ],
+      };
+    },
+  );
+
+  // -- load_skill_menu ------------------------------------------------------
+
+  const loadSkillMenu = tool(
+    'load_skill_menu',
+    'Load available PostHog skills for a category. Returns skill IDs and names. Call this first, then use install_skill with the chosen ID.',
+    {
+      category: z.enum(categoryNames).describe('Skill category'),
+    },
+    (args: { category: string }) => {
+      const skills = cachedSkillMenu[args.category];
+      if (!skills || skills.length === 0) {
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: `No skills found for category "${args.category}".`,
+            },
+          ],
+          isError: true,
+        };
+      }
+
+      const menuText = skills.map((s) => `- ${s.id}: ${s.name}`).join('\n');
+
+      logToFile(
+        `load_skill_menu: returning ${skills.length} skills for "${args.category}"`,
+      );
+
+      return {
+        content: [{ type: 'text' as const, text: menuText }],
+      };
+    },
+  );
+
+  // -- install_skill --------------------------------------------------------
+
+  const installSkill = tool(
+    'install_skill',
+    'Download and install a PostHog skill by ID. Call load_skill_menu first to see available skills. Extracts the skill to .claude/skills/<skillId>/.',
+    {
+      skillId: z
+        .string()
+        .describe(
+          'Skill ID from the skill menu (e.g., "integration-nextjs-app-router")',
+        ),
+    },
+    async (args: { skillId: string }) => {
+      if (!/^[a-z0-9][a-z0-9_-]*$/.test(args.skillId)) {
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: 'Error: skillId must be lowercase alphanumeric with hyphens.',
+            },
+          ],
+          isError: true,
+        };
+      }
+
+      // Look up download URL from cached menu
+      const allSkills: SkillEntry[] = Object.values(cachedSkillMenu).flat();
+      const skill = allSkills.find((s) => s.id === args.skillId);
+      if (!skill) {
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: `Error: skill "${args.skillId}" not found. Use load_skill_menu to see available skills.`,
+            },
+          ],
+          isError: true,
+        };
+      }
+
+      const result = await downloadSkill(skill, workingDirectory, {
+        triage: triageProvider,
+      });
+      if (result.success) {
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: `Skill installed to .claude/skills/${args.skillId}/`,
+            },
+          ],
+        };
+      } else {
+        // The agent only sees a tool-result string — report the failure too.
+        analytics.captureException(
+          new Error('Skill install failed: download-failed'),
+          {
+            source: 'install_skill_tool',
+            skill_id: args.skillId,
+            error_detail: String(result.error).slice(0, 500),
+            platform: process.platform,
+          },
+        );
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: `Error installing skill: ${result.error}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    },
+  );
+
+  // -- audit_seed_checks ----------------------------------------------------
+
+  const auditLedgerPath = path.join(workingDirectory, AUDIT_CHECKS_FILE);
+  const auditMutex = makeMutex();
+
+  const auditSeedChecks = tool(
+    'audit_seed_checks',
+    AUDIT_SEED_CHECKS_DESCRIPTION,
+    {
+      checks: z
+        .array(auditCheckSchema)
+        .describe(AUDIT_SEED_CHECKS_PARAM_DESCRIPTION),
+    },
+    async (args: { checks: AuditCheck[] }) => {
+      return auditMutex(() => {
+        const result = seedAuditChecks(auditLedgerPath, args.checks);
+        logToFile(`audit_seed_checks: wrote ${args.checks.length} entries`);
+        return {
+          content: [{ type: 'text' as const, text: result.message }],
+        };
+      });
+    },
+  );
+
+  // -- audit_add_checks -----------------------------------------------------
+
+  const auditAddChecks = tool(
+    'audit_add_checks',
+    AUDIT_ADD_CHECKS_DESCRIPTION,
+    {
+      checks: z
+        .array(auditCheckSchema)
+        .min(1)
+        .describe(AUDIT_ADD_CHECKS_PARAM_DESCRIPTION),
+    },
+    async (args: { checks: AuditCheck[] }) => {
+      return auditMutex(() => {
+        const result = addAuditChecks(auditLedgerPath, args.checks);
+        logToFile(`audit_add_checks: ${result.message}`);
+        return {
+          content: [{ type: 'text' as const, text: result.message }],
+          ...(result.ok ? {} : { isError: true }),
+        };
+      });
+    },
+  );
+
+  // -- audit_resolve_checks -------------------------------------------------
+
+  const auditResolveChecks = tool(
+    'audit_resolve_checks',
+    AUDIT_RESOLVE_CHECKS_DESCRIPTION,
+    {
+      updates: z
+        .array(auditUpdateSchema)
+        .min(1)
+        .describe(AUDIT_RESOLVE_CHECKS_PARAM_DESCRIPTION),
+    },
+    async (args: {
+      updates: Array<{
+        id: string;
+        status: AuditStatus;
+        file?: string;
+        details?: string;
+      }>;
+    }) => {
+      return auditMutex(() => {
+        const result = resolveAuditChecks(auditLedgerPath, args.updates);
+        logToFile(`audit_resolve_checks: ${result.message}`);
+        return {
+          content: [{ type: 'text' as const, text: result.message }],
+          ...(result.ok ? {} : { isError: true }),
+        };
+      });
+    },
+  );
+
+  // -- wizard_ask -----------------------------------------------------------
+
+  const askQuestionSchema = z.object({
+    id: z
+      .string()
+      .min(1)
+      .describe('Stable key for the answer in the response map'),
+    prompt: z.string().min(1).describe('Question text shown to the user'),
+    kind: z
+      .enum(['single', 'multi', 'text'])
+      .optional()
+      .describe(WIZARD_ASK_KIND_DESCRIPTION),
+    options: z
+      .array(
+        z.object({
+          label: z.string(),
+          value: z.string(),
+          description: z
+            .string()
+            .optional()
+            .describe(
+              'Optional secondary line shown dimmed and wrapped beneath the ' +
+                'label (multi-select only). Use when a choice needs more than a ' +
+                'title — e.g. what a custom scout watches and what makes it speak up.',
+            ),
+        }),
+      )
+      .optional()
+      .describe('Required for kind=single|multi; ignored for kind=text'),
+    required: z.boolean().optional().describe('Defaults to true'),
+    sensitive: z
+      .boolean()
+      .optional()
+      .describe(WIZARD_ASK_SENSITIVE_DESCRIPTION),
+  });
+
+  const wizardAsk = tool(
+    'wizard_ask',
+    WIZARD_ASK_TOOL_DESCRIPTION,
+    {
+      questions: z
+        .array(askQuestionSchema)
+        .min(1)
+        .max(ASK_MAX_QUESTIONS_PER_CALL),
+      subject: z.string().optional().describe(WIZARD_ASK_SUBJECT_DESCRIPTION),
+    },
+    async (args: {
+      questions: Array<{
+        id: string;
+        prompt: string;
+        kind?: 'single' | 'multi' | 'text';
+        options?: { label: string; value: string }[];
+        required?: boolean;
+        sensitive?: boolean;
+      }>;
+      subject?: string;
+    }) => {
+      if (!askBridge) {
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: 'Error: wizard_ask is not available in this environment (CI / non-interactive). Proceed with sensible defaults or emit [ABORT] requirements-incomplete.',
+            },
+          ],
+          isError: true,
+        };
+      }
+
+      const capDecision = askAccounting.evaluate(args.subject);
+      if (capDecision.kind === 'capped') {
+        analytics.wizardCapture('wizard_ask capped', {
+          reason: capDecision.reason,
+          call_count: askAccounting.snapshot().callCount,
+          max_questions: askMaxQuestions,
+          subject: capDecision.subject,
+          subject_run_length: capDecision.subjectRunLength,
+        });
+        return {
+          content: [{ type: 'text' as const, text: capDecision.message }],
+          // The adjacency nudge is a one-time, retryable hint, not a failure:
+          // flagging it isError makes the model read it as a hard refusal and
+          // abandon the source to browser fallback. The max_questions cap is a
+          // genuine stop, so it stays an error.
+          isError: capDecision.reason !== 'adjacency',
+        };
+      }
+
+      // A question with no kind takes the one its options imply, so the
+      // overlay always has an input to render. See resolveAskQuestionKinds.
+      const questions = resolveAskQuestionKinds(args.questions);
+
+      // Validate that single/multi questions include options. The schema
+      // alone can't enforce a per-kind requirement.
+      for (const q of questions) {
+        if (
+          (q.kind === 'single' || q.kind === 'multi') &&
+          (!q.options || q.options.length === 0)
+        ) {
+          return {
+            content: [
+              {
+                type: 'text' as const,
+                text: `Error: question "${q.id}" has kind="${q.kind}" but no options. Provide at least one { label, value } option, or change kind to "text".`,
+              },
+            ],
+            isError: true,
+          };
+        }
+        if (q.sensitive && q.kind !== 'text') {
+          return {
+            content: [
+              {
+                type: 'text' as const,
+                text: `Error: question "${q.id}" sets sensitive=true but kind="${q.kind}". Only kind="text" answers can be vaulted as secrets.`,
+              },
+            ],
+            isError: true,
+          };
+        }
+      }
+
+      const ids = new Set<string>();
+      for (const q of questions) {
+        if (ids.has(q.id)) {
+          return {
+            content: [
+              {
+                type: 'text' as const,
+                text: `Error: duplicate question id "${q.id}". Each question must have a unique id.`,
+              },
+            ],
+            isError: true,
+          };
+        }
+        ids.add(q.id);
+      }
+
+      askAccounting.record(args.subject);
+
+      try {
+        const { answers, timedOut } = await askBridge.request({
+          questions,
+          subject: normaliseAskSubject(args.subject),
+        });
+
+        // A fully cancelled/timed-out ask (the user dismissed the overlay or let
+        // it time out) shouldn't burn the per-run cap. Otherwise one cancellation
+        // exhausts the budget for every remaining source and forces a deep-link
+        // fallback even when the user was willing to answer. Refund the slot we
+        // optimistically took so cancellation is free.
+        if (isFullyCancelled(answers)) {
+          askAccounting.refund(args.subject);
+        }
+
+        // Sensitive answers go to the vault; the agent sees an opaque ref.
+        const sanitised = vaultSensitiveAnswers(
+          questions,
+          answers,
+          secretVault,
+        );
+
+        // State an uncollected field as an outcome rather than leaving the
+        // agent to recognise a sentinel answer value (same as the pi facade).
+        const cancelled = describeAskCancellation(sanitised, timedOut);
+
+        logToFile(
+          `wizard_ask: resolved ${Object.keys(answers).length} answer(s) for ${
+            args.questions.length
+          } question(s)${cancelled ? `, cancelled: ${cancelled.reason}` : ''}`,
+        );
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: JSON.stringify(
+                { answers: sanitised, ...(cancelled ? { cancelled } : {}) },
+                null,
+                2,
+              ),
+            },
+          ],
+        };
+      } catch (err: any) {
+        // A failed ask never reached the user, so it shouldn't burn the
+        // per-run cap either — otherwise a transient bridge error eats the
+        // budget for every remaining source.
+        askAccounting.refund(args.subject);
+        logToFile(`wizard_ask: error: ${err?.message ?? err}`);
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: `Error: wizard_ask failed: ${err?.message ?? String(err)}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    },
+  );
+
+  // -- publish_handoff ------------------------------------------------------
+
+  const publishHandoffTool = tool(
+    PUBLISH_HANDOFF_TOOL_NAME,
+    PUBLISH_HANDOFF_DESCRIPTION,
+    {
+      content: z.string().describe(PUBLISH_HANDOFF_CONTENT_DESCRIPTION),
+    },
+    (args: { content: string }) => {
+      const result = publishHandoff(args.content, emit);
+      logToFile(`publish_handoff: ${result.message}`);
+      return {
+        content: [{ type: 'text' as const, text: result.message }],
+        ...(result.ok ? {} : { isError: true }),
+      };
+    },
+  );
+
+  // -- Assemble server ------------------------------------------------------
+
+  const orchestratorTools = orchestrator
+    ? buildOrchestratorTools(tool, orchestrator)
+    : [];
+
+  return createSdkMcpServer({
+    name: SERVER_NAME,
+    version: '1.0.0',
+    tools: [
+      checkEnvKeys,
+      setEnvValues,
+      detectPM,
+      loadSkillMenu,
+      installSkill,
+      auditSeedChecks,
+      auditAddChecks,
+      auditResolveChecks,
+      wizardAsk,
+      publishHandoffTool,
+      ...orchestratorTools,
+    ],
+  });
+}

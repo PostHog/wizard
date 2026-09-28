@@ -1,4 +1,4 @@
-import { POSTHOG_DOCS_URL } from '@lib/constants';
+import { POSTHOG_DOCS_URL } from '@shared/constants';
 
 export interface KindMeta {
   title: string;

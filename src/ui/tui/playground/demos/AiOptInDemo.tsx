@@ -16,7 +16,7 @@ import { useEffect, useState } from 'react';
 import { Box, Text } from 'ink';
 import { WizardStore } from '@ui/tui/store';
 import { AiOptInRequiredScreen } from '@ui/tui/screens/AiOptInRequiredScreen';
-import { HostResolution } from '@lib/host-resolution';
+import { HostResolution } from '@shared/host-resolution';
 
 type Variant = 'admin' | 'non-admin';
 

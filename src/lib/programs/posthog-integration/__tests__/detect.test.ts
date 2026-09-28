@@ -11,6 +11,8 @@ vi.mock('@utils/analytics', () => ({
     capture: vi.fn(),
     captureException: vi.fn(),
     groupIdentify: vi.fn(),
+    // Empty map = flags unreadable = the shipped default (AIO + Logs on).
+    getAllFlagsForWizard: vi.fn().mockResolvedValue({}),
   },
 }));
 
@@ -29,6 +31,7 @@ import { analytics } from '@utils/analytics';
 import { detectWarehouseSources } from '@lib/warehouse-sources/detect';
 import {
   detectPostHogIntegration,
+  maybeStampAiSdkDetected,
   reportWarehouseSourcesDetected,
 } from '@lib/programs/posthog-integration/detect';
 import { posthogIntegrationConfig } from '@lib/programs/posthog-integration/index';
@@ -58,6 +61,7 @@ function makeCtx(session: WizardSession): ProgramReadyContext {
     },
     setFrameworkConfig: vi.fn(),
     setDetectedFramework: vi.fn(),
+    setPosthogSdkDetected: vi.fn(),
     setSkillId: vi.fn(),
     setUnsupportedVersion: vi.fn(),
     addDiscoveredFeature: vi.fn(),
@@ -264,6 +268,50 @@ describe('reportWarehouseSourcesDetected', () => {
     expect(sources.map((s) => s.kind)).toContain('Stripe');
   });
 
+  it('a program that never scanned reports nothing, even when granted', () => {
+    // Every intro screen resolves consent through the same store method, so the
+    // reporter is reached on runs of programs that never scan, and --ci grants
+    // consent up front, so the guard cannot be consent alone.
+    const session = buildSession({ installDir: tmpDir, ci: true });
+    expect(session.scanConsent).toBe(ScanConsent.Granted);
+
+    const fired = reportWarehouseSourcesDetected(session);
+
+    // Resolved, so the caller stops asking, but a scan that never ran must not
+    // produce a row indistinguishable from one that found nothing.
+    expect(fired).toBe(true);
+    expect(analytics.wizardCapture).not.toHaveBeenCalled();
+    expect(analytics.setTag).not.toHaveBeenCalled();
+  });
+
+  it('the standalone warehouse command does not report through this path', async () => {
+    // `wizard warehouse` writes the same frameworkContext key from its own
+    // detect, and sets its own tags. Without a scan-state marker it would also
+    // emit this event, which six saved insights read as "the integration flow
+    // scanned".
+    const session = buildSession({ installDir: tmpDir, ci: true });
+    const { detectWarehousePrerequisites } = await import(
+      '@lib/programs/warehouse-source/detect'
+    );
+    detectWarehousePrerequisites(
+      session,
+      (key, value) => {
+        session.frameworkContext[key] = value;
+      },
+      () => undefined,
+    );
+    expect(
+      session.frameworkContext[DETECTED_WAREHOUSE_SOURCES_KEY],
+    ).toBeDefined();
+
+    reportWarehouseSourcesDetected(session);
+
+    expect(analytics.wizardCapture).not.toHaveBeenCalledWith(
+      'warehouse sources detected',
+      expect.anything(),
+    );
+  });
+
   it('is idempotent: a second call, from either consent path, does nothing', async () => {
     const session = await scannedSession(ScanConsent.Granted);
 
@@ -387,7 +435,7 @@ describe('wizard_ai_sdk_detected group stamp', () => {
     withOrgUser(session);
 
     await detectPostHogIntegration(makeCtx(session));
-    reportWarehouseSourcesDetected(session);
+    maybeStampAiSdkDetected(session);
 
     expect(analytics.groupIdentify).toHaveBeenCalledWith(
       'organization',
@@ -406,7 +454,7 @@ describe('wizard_ai_sdk_detected group stamp', () => {
     withOrgUser(session);
 
     await detectPostHogIntegration(makeCtx(session));
-    reportWarehouseSourcesDetected(session);
+    maybeStampAiSdkDetected(session);
 
     expect(analytics.groupIdentify).toHaveBeenCalledWith(
       'organization',
@@ -424,7 +472,7 @@ describe('wizard_ai_sdk_detected group stamp', () => {
     withOrgUser(session);
 
     await detectPostHogIntegration(makeCtx(session));
-    reportWarehouseSourcesDetected(session);
+    maybeStampAiSdkDetected(session);
 
     expect(analytics.groupIdentify).not.toHaveBeenCalled();
   });
@@ -435,7 +483,7 @@ describe('wizard_ai_sdk_detected group stamp', () => {
     withOrgUser(session);
 
     await detectPostHogIntegration(makeCtx(session));
-    reportWarehouseSourcesDetected(session);
+    maybeStampAiSdkDetected(session);
 
     expect(analytics.groupIdentify).not.toHaveBeenCalled();
   });
@@ -447,7 +495,7 @@ describe('wizard_ai_sdk_detected group stamp', () => {
     withOrgUser(session);
 
     await detectPostHogIntegration(makeCtx(session));
-    reportWarehouseSourcesDetected(session);
+    maybeStampAiSdkDetected(session);
 
     expect(analytics.groupIdentify).not.toHaveBeenCalled();
   });
@@ -458,9 +506,37 @@ describe('wizard_ai_sdk_detected group stamp', () => {
     session.scanConsent = ScanConsent.Granted;
 
     await detectPostHogIntegration(makeCtx(session));
-    reportWarehouseSourcesDetected(session);
+    maybeStampAiSdkDetected(session);
 
     expect(analytics.groupIdentify).not.toHaveBeenCalled();
+  });
+
+  // Reproduces the original dead-code bug: the intro screen resolves consent
+  // before the user has authenticated, so a stamp fired from that path would
+  // always see a null apiUser and silently no-op forever (the ordering
+  // `reportWarehouseSourcesDetected` alone cannot fix, since it only knows
+  // about consent, not login state).
+  it('stamps once authenticate() completes, not when consent resolves first', async () => {
+    withDeps({ openai: '^4.0.0' });
+    const session = buildSession({ installDir: tmpDir });
+    await detectPostHogIntegration(makeCtx(session));
+
+    // Consent resolves on the intro screen, before login — same order as
+    // production. reportWarehouseSourcesDetected runs but apiUser is still null.
+    session.scanConsent = ScanConsent.Granted;
+    reportWarehouseSourcesDetected(session);
+    expect(analytics.groupIdentify).not.toHaveBeenCalled();
+
+    // authenticate() sets apiUser; the post-auth hook runs right after it.
+    withOrgUser(session);
+    maybeStampAiSdkDetected(session);
+
+    expect(analytics.groupIdentify).toHaveBeenCalledTimes(1);
+    expect(analytics.groupIdentify).toHaveBeenCalledWith(
+      'organization',
+      'org-1',
+      { wizard_ai_sdk_detected: true },
+    );
   });
 });
 

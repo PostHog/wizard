@@ -1,0 +1,22 @@
+ PostHog Wizard v0.0.0-test                        Feedback: wizard@posthog.com
+
+ Cost (running): $0.00 · no agent turns yet                      Ctrl+T to hide
+
+ ✔ PostHog is set up!
+
+ Events will start flowing once you run the app.
+
+ Check ./posthog-setup-report.md for details
+
+ What the agent did:
+ • Added posthog-js
+ • Wired the provider
+
+ Learn more: https://posthog.com/docs?utm_source=wizard&utm_medium=cli&utm_cont
+ ent=outro-docs
+
+ Note: This wizard uses an LLM agent to analyze and modify your project. Please
+  review the changes made.
+ How did this work for you? Drop us a line: wizard@posthog.com
+
+ Press any key to continue

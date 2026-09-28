@@ -8,8 +8,8 @@ vi.mock('@lib/runners', () => ({
   runWizardCI: mockRunWizardCI,
 }));
 
-vi.mock('@lib/wizard-tools', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@lib/wizard-tools')>();
+vi.mock('@shared/skill-menu', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@shared/skill-menu')>();
   return {
     ...actual,
     fetchSkillMenu: vi.fn(),
@@ -21,6 +21,7 @@ import type { MockedFunction } from 'vitest';
 import { auditCommand } from '../commands/audit';
 import { migrateCommand } from '../commands/migrate';
 import { mcpAnalyticsCommand } from '../commands/mcp-analytics';
+import { replayVisionCommand } from '../commands/replay-vision';
 import { revenueCommand } from '../commands/revenue';
 import { warehouseCommand } from '../commands/warehouse';
 import { uploadSourcemapsCommand } from '../commands/upload-sourcemaps';
@@ -30,7 +31,7 @@ import {
   pickerChildrenToShow,
 } from '@lib/programs/dispatch-family';
 import type { Command } from '../commands/command';
-import { fetchSkillMenu, type CliEntry } from '@lib/wizard-tools';
+import { fetchSkillMenu, type CliEntry } from '@shared/skill-menu';
 import { auditConfig } from '@lib/programs/audit/index';
 import { webAnalyticsDoctorConfig } from '@lib/programs/web-analytics-doctor/index';
 import { parseCommand } from './helpers/parse-command.no-jest';
@@ -85,6 +86,11 @@ describe('top-level command shapes', () => {
     expect(mcpAnalyticsCommand.children).toBeUndefined();
   });
 
+  test('replay-vision is a flat skill command', () => {
+    expect(replayVisionCommand.name).toBe('replay-vision');
+    expect(replayVisionCommand.children).toBeUndefined();
+  });
+
   test('warehouse is a flat skill command', () => {
     expect(warehouseCommand.name).toBe('warehouse');
     expect(warehouseCommand.children).toBeUndefined();
@@ -119,6 +125,25 @@ describe('dispatchFamily', () => {
     ];
     expect(config.skillId).toBe('audit-events');
     expect(opts).toMatchObject({ debug: true });
+  });
+
+  test('an audit leaf publishes under the family, not under agent-skill', async () => {
+    // A leaf runs on the generic skill program, whose id is `agent-skill`, so
+    // without the override every audit would share one indistinguishable
+    // channel with every other `wizard skill` run. skill_id discriminates.
+    mockMenu([
+      entry({
+        skillId: 'audit-events',
+        command: 'events',
+        parentCommand: 'audit',
+      }),
+    ]);
+    await dispatchFamily('audit', makeArgv({ skill: 'events' }));
+    const [config] = mockRunWizard.mock.calls[0] as [
+      { id?: string; streamWorkflowId?: string },
+    ];
+    expect(config.id).toBe('agent-skill');
+    expect(config.streamWorkflowId).toBe('audit');
   });
 
   test('routes through runWizardCI when --ci is set', async () => {
@@ -184,6 +209,12 @@ describe('flat skill commands', () => {
     expect(config.skillId).toBe('mcp-analytics');
   });
 
+  test('replay-vision dispatches with replay-vision-setup skillId', () => {
+    replayVisionCommand.handler!(makeArgv({ debug: true }));
+    const [config] = mockRunWizard.mock.calls[0] as [{ skillId?: string }];
+    expect(config.skillId).toBe('replay-vision-setup');
+  });
+
   test('warehouse dispatches with data-warehouse-source-setup skillId', () => {
     warehouseCommand.handler!(makeArgv({ installDir: '/tmp/some-app' }));
     const [config, opts] = mockRunWizard.mock.calls[0] as [
@@ -195,7 +226,7 @@ describe('flat skill commands', () => {
   });
 });
 
-describe('yargs parsing for the audit family', () => {
+describe('yargs parsing for program commands', () => {
   test('camelCases --install-dir end-to-end', async () => {
     const argv = await parseCommand(
       auditCommand,

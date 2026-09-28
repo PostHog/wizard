@@ -1,7 +1,7 @@
 /* Generic JavaScript Web (client-side) wizard using posthog-agent with PostHog MCP */
 import type { WizardRunOptions } from '@utils/types';
 import type { FrameworkConfig } from '@lib/framework-config';
-import { Integration } from '@lib/constants';
+import { Integration } from '@shared/constants';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { hasDeclaredDependency } from '@utils/package-json';

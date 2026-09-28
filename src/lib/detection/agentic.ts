@@ -15,15 +15,25 @@
 
 import {
   initializeAgent,
-  runAgent as executeAgent,
+  executeAgent,
+  buildRunTags,
   AgentSignals,
-} from '@lib/agent/agent-interface';
+  AgentErrorType,
+} from '@agent';
 import { isAbsolute, resolve, sep } from 'path';
 import { detectNodePackageManagers } from './package-manager.js';
-import { getSkillsBaseUrl, HAIKU_MODEL } from '@lib/constants';
+import {
+  AGENTIC_DETECTION_FIRST_ATTEMPT_TIMEOUT_MS,
+  AGENTIC_DETECTION_RETRY_TIMEOUT_MS,
+  CallType,
+  getSkillsBaseUrl,
+  HAIKU_MODEL,
+} from '@shared/constants';
+import { analytics } from '@utils/analytics';
 import type { WizardSession } from '@lib/wizard-session';
 import type { WizardRunOptions } from '@utils/types';
-import type { SpinnerHandle } from '@ui';
+import { getUI, type SpinnerHandle } from '@ui';
+import { createUiReducer } from '@ui/agent-progress';
 
 /** A category the agent classifies each project into (id the agent returns). */
 export type DetectTarget = { id: string; name: string };
@@ -46,6 +56,15 @@ export type AgenticDetectionReport = {
   repoType: 'monorepo' | 'single';
   projects: AgenticProject[];
 };
+
+export class AgenticDetectionTimeoutError extends Error {
+  constructor(attempt: number, timeoutMs: number) {
+    super(
+      `Project scan attempt ${attempt} timed out after ${timeoutMs / 1000}s`,
+    );
+    this.name = 'AgenticDetectionTimeoutError';
+  }
+}
 
 /** Streaming progress callback — one short activity line per agent step. */
 export type DetectEvent = (line: string) => void;
@@ -74,12 +93,16 @@ export const PROJECT_MANIFESTS: readonly string[] = [
   // Ruby / PHP
   'Gemfile',
   'composer.json',
-  // Rust / Go / Elixir / JVM / .NET: no framework targets yet, but found so
-  // an existing PostHog SDK is reported (feeds self-driving's "continue" path).
-  'Cargo.toml',
-  'go.mod',
-  'mix.exs',
+  // Java
   'pom.xml',
+  // Rust
+  'Cargo.toml',
+  // Elixir
+  'mix.exs',
+  // Go
+  'go.mod',
+  // .NET: no framework targets yet, but found so
+  // an existing PostHog SDK is reported (feeds self-driving's "continue" path).
   '*.csproj',
   // Mobile / native
   'Package.swift',
@@ -108,6 +131,10 @@ export type AgenticDetectOptions = {
    * through ordering (e.g. a bundler target before a generic framework target).
    */
   targets: readonly DetectTarget[];
+  /** The program this scan bills to. Required, not optional: the scan drives a
+   *  real agent through the gateway, and a caller that forgets leaves that
+   *  spend unattributed. */
+  programId: string;
   /** One short clause describing what the scan is for (frames the prompt). */
   purpose?: string;
   /** Ask the agent to label exactly one project `recommended` (the main client app). Off by default. */
@@ -298,13 +325,11 @@ function sessionToWizardOptions(session: WizardSession): WizardRunOptions {
     installDir: session.installDir,
     ci: session.ci,
     debug: session.debug,
-    default: false,
     benchmark: session.benchmark,
     yaraReport: session.yaraReport,
     signup: session.signup,
     apiKey: session.apiKey,
     projectId: session.projectId,
-    localMcp: session.localMcp,
   };
 }
 
@@ -328,6 +353,7 @@ export async function detectProjectsWithAgent(
   }
   const {
     targets,
+    programId,
     purpose = 'set up a PostHog integration',
     recommend = false,
     rerankIds,
@@ -337,95 +363,132 @@ export async function detectProjectsWithAgent(
   const cwd = session.installDir;
   const runOptions = sessionToWizardOptions(session);
 
-  const agent = await initializeAgent(
-    {
-      workingDirectory: cwd,
-      posthogMcpUrl: host.mcpUrl,
-      posthogApiKey: accessToken,
-      host,
-      detectPackageManager: detectNodePackageManagers,
-      skillsBaseUrl: getSkillsBaseUrl(session.localMcp),
-      integrationLabel: 'agentic-detect',
-      allowedTools: ['Read', 'Grep', 'Glob'],
-      modelOverride: HAIKU_MODEL,
-    },
-    runOptions,
-  );
-
-  // Keeps only the transcript tail — the report JSON is the last output.
-  const MAX_TRANSCRIPT_CHARS = 256 * 1024;
-  const collected: string[] = [];
-  let collectedChars = 0;
-  const collect = (text: string): void => {
-    collected.push(text);
-    collectedChars += text.length;
-    while (collectedChars > MAX_TRANSCRIPT_CHARS && collected.length > 1) {
-      collectedChars -= collected.shift()!.length;
-    }
+  // Built here rather than inherited: this scan runs before
+  // `bootstrapProgram`, so there's no `boot.wizardMetadata` yet.
+  const wizardMetadata = {
+    ...buildRunTags({
+      programId,
+      integration: 'agentic-detect',
+      runId: analytics.runId,
+      build: analytics.build,
+    }),
+    call_type: CallType.detection,
   };
-  let resultText = '';
 
-  const middleware = {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    onMessage: (message: any): void => {
-      if (message?.type === 'assistant') {
-        for (const block of message.message?.content ?? []) {
-          if (block?.type === 'text' && typeof block.text === 'string') {
-            collect(block.text);
-            const line = block.text.trim();
-            if (line && onEvent) {
-              onEvent(line.length > 100 ? `${line.slice(0, 100)}…` : line);
-            }
-          } else if (block?.type === 'tool_use') {
-            onEvent?.(formatToolUse(block));
-          }
-        }
-      } else if (
-        message?.type === 'result' &&
-        typeof message.result === 'string'
-      ) {
-        resultText = message.result;
+  const prompt = buildPrompt(cwd, targets, purpose, recommend);
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const timeoutMs =
+      attempt === 0
+        ? AGENTIC_DETECTION_FIRST_ATTEMPT_TIMEOUT_MS
+        : AGENTIC_DETECTION_RETRY_TIMEOUT_MS;
+    const agent = await initializeAgent(
+      {
+        emit: createUiReducer(getUI()),
+        workingDirectory: cwd,
+        posthogMcpUrl: host.mcpUrl,
+        posthogApiKey: accessToken,
+        host,
+        detectPackageManager: detectNodePackageManagers,
+        skillsBaseUrl: getSkillsBaseUrl(),
+        programId,
+        integrationLabel: 'agentic-detect',
+        wizardMetadata,
+        allowedTools: ['Read', 'Grep', 'Glob'],
+        modelOverride: HAIKU_MODEL,
+      },
+      runOptions,
+    );
+
+    // Keeps only the transcript tail — the report JSON is the last output.
+    const MAX_TRANSCRIPT_CHARS = 256 * 1024;
+    const collected: string[] = [];
+    let collectedChars = 0;
+    const collect = (text: string): void => {
+      collected.push(text);
+      collectedChars += text.length;
+      while (collectedChars > MAX_TRANSCRIPT_CHARS && collected.length > 1) {
+        collectedChars -= collected.shift()!.length;
       }
-    },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    finalize: (_resultMessage: any, _durationMs: number): unknown => undefined,
-  };
+    };
+    let resultText = '';
 
-  const result = await executeAgent(
-    agent,
-    buildPrompt(cwd, targets, purpose, recommend),
-    runOptions,
-    NOOP_SPINNER,
-    {
-      spinnerMessage: 'Scanning the repo...',
-      successMessage: 'Detection complete',
-      errorMessage: 'Detection failed',
-      requestRemark: false,
-    },
-    middleware,
-  );
+    const middleware = {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      onMessage: (message: any): void => {
+        if (message?.type === 'assistant') {
+          for (const block of message.message?.content ?? []) {
+            if (block?.type === 'text' && typeof block.text === 'string') {
+              collect(block.text);
+              const line = block.text.trim();
+              if (line && onEvent) {
+                onEvent(line.length > 100 ? `${line.slice(0, 100)}…` : line);
+              }
+            } else if (block?.type === 'tool_use') {
+              onEvent?.(formatToolUse(block));
+            }
+          }
+        } else if (
+          message?.type === 'result' &&
+          typeof message.result === 'string'
+        ) {
+          resultText = message.result;
+        }
+      },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      finalize: (_resultMessage: any, _durationMs: number): unknown =>
+        undefined,
+    };
 
-  if (result.error) {
-    throw new Error(result.message || `Agent error: ${result.error}`);
-  }
+    const result = await executeAgent(
+      agent,
+      prompt,
+      runOptions,
+      NOOP_SPINNER,
+      {
+        spinnerMessage: 'Scanning the repo...',
+        successMessage: 'Detection complete',
+        errorMessage: 'Detection failed',
+        requestRemark: false,
+        timeoutMs,
+      },
+      middleware,
+    );
 
-  // Transcript first, final message last — its verdicts win path conflicts.
-  const output = `${collected.join('\n')}\n${resultText}`;
-  const derived = deriveReportJson(output);
-  if (derived === null) {
-    // The prompt tells the agent to emit `[ABORT] detection failed` when the
-    // repo has no recognizable project manifests. Surface that (and any other
-    // non-JSON terminal output that carries the abort signal) as an empty
-    // report so the screen renders a friendly "nothing to instrument" state
-    // instead of a cryptic "Agent did not return a JSON object" error.
+    if (
+      result.kind === 'failure' &&
+      result.classification === AgentErrorType.AGENTIC_DETECTION_TIMEOUT
+    ) {
+      if (attempt === 0) {
+        onEvent?.('Project scan timed out; retrying...');
+        continue;
+      }
+      throw new AgenticDetectionTimeoutError(attempt + 1, timeoutMs);
+    }
+    if (result.kind !== 'success') {
+      if (result.kind === 'decided_failure') {
+        throw result.failure.error ?? new Error(result.failure.message);
+      }
+      throw (
+        result.error ??
+        new Error(result.message || `Agent error: ${result.classification}`)
+      );
+    }
+
+    // Transcript first, final message last — its verdicts win path conflicts.
+    const output = `${collected.join('\n')}\n${resultText}`;
+    const derived = deriveReportJson(output);
+    if (derived !== null) {
+      return coerceAgenticReport(
+        derived,
+        targets.map((t) => t.id),
+        { recommend, rerankIds },
+      );
+    }
+    // No manifests are a valid empty scan, not a reason to retry.
     if (output.includes(AgentSignals.ABORT)) {
       return { repoType: 'single', projects: [] };
     }
-    throw new Error('Agent did not return a JSON object');
+    if (attempt === 0) onEvent?.('Retrying project scan...');
   }
-  return coerceAgenticReport(
-    derived,
-    targets.map((t) => t.id),
-    { recommend, rerankIds },
-  );
+  throw new Error('Agent did not return a JSON object after retry');
 }

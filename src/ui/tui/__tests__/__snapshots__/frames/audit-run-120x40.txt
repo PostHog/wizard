@@ -1,0 +1,39 @@
+ PostHog Wizard v0.0.0-test                                                                Feedback: wizard@posthog.com
+
+ Cost (running): $0.00 · no agent turns yet                                                              Ctrl+T to hide
+
+  Verifying installation                                     Checks
+
+  ┌──────────────────────────────────────────────────────┐   ⠋ Installation (0/4)
+  │ app boot                                             │   ◌ PostHog SDK installed
+  │   ▼ posthog.init(...)   once                         │   ◌ SDK version up to date
+  │   │                                                  │   ◌ Initialization is correct
+  │   ▼ posthog.capture('pageview')                      │   ◌ One initialization per runtime
+  │     posthog.capture('signup')                        │
+  │     posthog.capture('purchase')                      │   Identification (0/4)
+  └──────────────────────────────────────────────────────┘   ◌ Stable distinct_id (not session UUID)
+                                                             ◌ identify() called before captures / flag evals
+  PostHog releases frequent SDK updates to fix bugs and      ◌ Same distinct_id across client and server
+  add new features. We're checking your project's SDK        ◌ reset() called on logout / account switch
+  version and making sure it's up to date.
+                                                             Event Capture (0/3)
+  We're also checking that your SDK is initialized           ◌ Event names are static and consistent
+  correctly and in the right part of your app's lifecycle.   ◌ Captures route through a reverse proxy
+                                                             ◌ Key activation events captured
+  This ensures you won't miss any autocaptured events.
+                                                             Live Data (0/1)
+  [O] Learn more                                             ◌ Open findings in PostHog
+
+                                                             Write report (0/1)
+                                                             ◌ Create posthog-audit-report.md
+
+                                                             Upload notebook (0/1)
+                                                             ◌ Write the report into a PostHog notebook
+
+
+ ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  ◆ Reviewing autocapture coverage
+
+   Status   Audit plan   Tail logs   HN
+
+  ←→ switch tab  s toggle status

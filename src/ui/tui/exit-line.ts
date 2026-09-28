@@ -15,7 +15,9 @@
 
 import { totalTokenCount, type WizardStore } from './store.js';
 import { OutroKind } from '@lib/wizard-session';
-import { formatTokenCount, formatCostUsd } from '@lib/agent/token-pricing';
+import { isRunFailure, MINT_FAILURE_CONTACT } from '@ui/mint-failure';
+import { formatTokenCount, formatCostUsd } from '@shared/token-pricing';
+import { getLogFilePath } from '@utils/debug';
 
 const RESET_ATTRS = '\x1b[0m';
 const GREEN = '\x1b[32m';
@@ -49,10 +51,39 @@ function tokenCostLine(store: WizardStore): string | null {
   );
 }
 
+/**
+ * The one manual step the wizard can't do itself: the editor's own MCP login.
+ * Echoed into scrollback like the handoff prompt — command on its own plain
+ * line so a terminal can triple-click-select it.
+ */
+function mcpLoginBlock(store: WizardStore): string | null {
+  const commands = store.session.mcpLoginCommands;
+  if (!commands || commands.length === 0) return null;
+  return (
+    `${GREEN}${BOLD}\u2714 Authenticate to finish (opens your browser):${RESET_ATTRS}\n` +
+    commands.join('\n')
+  );
+}
+
 export function getExitLine(store: WizardStore): string {
   const outro = store.session.outroData;
   const label = store.session.programLabel ?? 'Wizard';
   const costLine = tokenCostLine(store);
+  const loginBlock = mcpLoginBlock(store);
+
+  if (isRunFailure(store.session)) {
+    const spellbook = store.session.spellbook;
+    return [
+      'The wizard is unavailable. Setup has not been completed.',
+      spellbook &&
+        `${DIM}Point your agent at this skill (triple-click to select):${RESET_ATTRS}\n${spellbook.path}`,
+      `${DIM}${MINT_FAILURE_CONTACT}${RESET_ATTRS}\n${getLogFilePath()}`,
+      loginBlock,
+      costLine,
+    ]
+      .filter(Boolean)
+      .join('\n\n');
+  }
 
   if (outro?.kind === OutroKind.Success) {
     const message = outro.message ?? `${label} completed successfully.`;
@@ -87,12 +118,15 @@ export function getExitLine(store: WizardStore): string {
       );
     }
 
+    if (loginBlock) parts.push(loginBlock);
     if (costLine) parts.push(costLine);
 
     return parts.join('\n\n');
   }
 
-  return costLine
-    ? `${DIM}${label} exited.${RESET_ATTRS}\n\n${costLine}`
-    : `${DIM}${label} exited.${RESET_ATTRS}`;
+  const parts = loginBlock
+    ? [loginBlock]
+    : [`${DIM}${label} exited.${RESET_ATTRS}`];
+  if (costLine) parts.push(costLine);
+  return parts.join('\n\n');
 }

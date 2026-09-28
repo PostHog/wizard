@@ -6,8 +6,8 @@ import { render } from 'ink';
 import { createElement } from 'react';
 import { WizardStore } from '@ui/tui/store';
 import { PlaygroundApp } from './PlaygroundApp.js';
-import { HostResolution } from '@lib/host-resolution';
-import { WizardReadiness } from '@lib/health-checks/readiness';
+import { HostResolution } from '@shared/host-resolution';
+import { WizardReadiness } from '@shared/health-checks/readiness';
 import { enterDarkTerminal, releaseTerminal } from '../terminal.js';
 
 export function startPlayground(version: string): void {

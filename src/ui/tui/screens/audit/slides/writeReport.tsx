@@ -22,7 +22,7 @@ const ReportVisual = () => (
 export const WriteReportSlide: AreaSlide = {
   area: 'Write report',
   intro: [
-    'Now we write an audit report at ./posthog-audit-report.md. that summarizes our findings.',
+    'Now we write an audit report at ./posthog-audit-report.md that summarizes our findings.',
     'The report leads with a summary, then a prioritized list of fixes with file:line citations, then every check we ran grouped by area so nothing is hidden.',
     'We will upload the report into a PostHog notebook in the next step.',
   ],

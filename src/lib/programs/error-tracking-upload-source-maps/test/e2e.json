@@ -1,0 +1,38 @@
+{
+  "program": "error-tracking-upload-source-maps",
+  "summary": "Upload source maps: intro → auth → the detect agent scans the repo and the host injects the first instrumentable project as the pick → the run agent gets the upload key via wizard_ask (id \"api-key\"; the driver supplies the raw key and the ask tool vaults it, so the agent only sees a secretRef), wires build config + CI, declines the test offer → outro → keep-skills.",
+  "profile": {
+    "setup": "first",
+    "healthCheck": "dismiss",
+    "mcp": "skip",
+    "slack": "skip",
+    "skills": "delete",
+    "ask": "first"
+  },
+  "path": [
+    {
+      "screen": "source-maps-intro",
+      "auto": "confirm & continue"
+    },
+    {
+      "screen": "auth",
+      "auto": "(external) — the runner resolves credentials from the phx key"
+    },
+    {
+      "screen": "source-maps-detect",
+      "auto": "(external) — the host computes the pick with the static prerequisite detector and commits it via pick_source_maps_project (selectedVariant/DisplayName/Path); the runner's post-auth gate then releases the run"
+    },
+    {
+      "screen": "run",
+      "auto": "(external) — the upload agent; the host answers wizard_ask \"api-key\" with SOURCE_MAPS_CLI_KEY and \"test-affordance\" with \"no\""
+    },
+    {
+      "screen": "source-maps-outro",
+      "auto": "dismiss"
+    },
+    {
+      "screen": "keep-skills",
+      "auto": "delete the installed skill"
+    }
+  ]
+}

@@ -24,7 +24,7 @@ import {
   type KeyMatchOrChar,
 } from '@ui/tui/hooks/useKeyBindings';
 
-interface PickerOption<T> {
+export interface PickerOption<T> {
   label: string;
   value: T;
   hint?: string;
@@ -294,7 +294,8 @@ const FilterRow = ({
   shown: number;
   total: number;
 }) => (
-  <Box>
+  // Indented to sit under PromptLabel, which carries a leading space.
+  <Box paddingLeft={1}>
     <Text dimColor>
       {filter
         ? `Filter: ${filter} (${shown} of ${total})`

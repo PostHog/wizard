@@ -1,11 +1,27 @@
 #!/usr/bin/env node
 import { satisfies } from 'semver';
+import { Agent, setGlobalDispatcher } from 'undici';
+import { ErrorCodes } from '@shared/errors/codes.js';
+import { emitWizardError } from '@shared/errors/emit.js';
 
 // Keep in sync with `engines.node` in package.json. npx does not enforce
 // engines, so this preflight is the only thing standing between an old Node
 // runtime and a cryptic dependency crash (e.g. undici's markAsUncloneable
 // TypeError on Node < 22.10).
 const NODE_VERSION_RANGE = '>=22.22.0';
+
+/*
+ * TODO(#1198): remove when fetch over HTTP/2 is safe on Node 26. Remove when all
+ * of these are true:
+ *  - nodejs/node no longer creates an orphan ClientHttp2Stream when a client
+ *    session gets HEADERS for a stream id it already reset. Repro: abort a fetch
+ *    before its response headers, then idle 4s on Node 26. Fixed when the
+ *    process survives.
+ *  - modelcontextprotocol/typescript-sdk#2526 is closed.
+ *  - pi-coding-agent's CLI drops `allowH2: false` from its http-dispatcher.
+ * Same workaround as pi's CLI and typescript-sdk#2526: HTTP/1.1 only.
+ */
+setGlobalDispatcher(new Agent({ allowH2: false }));
 
 // Have to run this above the other imports because they are importing clack that
 // has the problematic imports.
@@ -26,6 +42,10 @@ if (!satisfies(process.version, NODE_VERSION_RANGE)) {
       `Then run the wizard again. Stuck? Email wizard@posthog.com and we'll help.`,
     ].join('\n'),
   );
+  emitWizardError({
+    code: ErrorCodes.CliNodeVersion,
+    message: `Node ${process.version} is below the required range ${NODE_VERSION_RANGE}`,
+  });
   process.exit(1);
 }
 
@@ -49,7 +69,9 @@ import { Wizard } from './src/wizard';
 import { basicIntegrationCommand } from './src/commands/basic-integration';
 import { mcpCommand } from './src/commands/mcp';
 import { mcpAnalyticsCommand } from './src/commands/mcp-analytics';
+import { replayVisionCommand } from './src/commands/replay-vision';
 import { aiObservabilityCommand } from './src/commands/ai-observability';
+import { metricsCommand } from './src/commands/metrics';
 import { auditCommand } from './src/commands/audit';
 import { doctorCommand } from './src/commands/doctor';
 import { migrateCommand } from './src/commands/migrate';
@@ -58,9 +80,10 @@ import { warehouseCommand } from './src/commands/warehouse';
 import { selfDrivingCommand } from './src/commands/self-driving';
 import { slackCommand } from './src/commands/slack';
 import { uploadSourcemapsCommand } from './src/commands/upload-sourcemaps';
+import { errorTrackingCommand } from './src/commands/error-tracking';
 import { skillCommand } from './src/commands/skill';
 import { cliCommand } from './src/commands/cli';
-import { recoverOrphanedSettingsBackups } from './src/lib/agent/claude-settings';
+import { recoverOrphanedSettingsBackups } from '@shared/claude-settings';
 
 // Heal any .claude/settings backup a previous interrupted run left orphaned,
 // before anything else reads Claude settings — conflict detection, OAuth, and
@@ -80,7 +103,9 @@ function resolveInstallDir(): string {
 Wizard.use(basicIntegrationCommand)
   .use(mcpCommand)
   .use(mcpAnalyticsCommand)
+  .use(replayVisionCommand)
   .use(aiObservabilityCommand)
+  .use(metricsCommand)
   .use(cliCommand)
   .use(auditCommand)
   .use(doctorCommand)
@@ -90,5 +115,6 @@ Wizard.use(basicIntegrationCommand)
   .use(selfDrivingCommand)
   .use(slackCommand)
   .use(uploadSourcemapsCommand)
+  .use(errorTrackingCommand)
   .use(skillCommand)
   .init();

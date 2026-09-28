@@ -8,8 +8,8 @@ import {
   type HealthIssue,
 } from '@lib/programs/posthog-doctor/index';
 import { OutroKind } from '@lib/wizard-session';
-import { ApiError } from '@lib/api';
-import { POSTHOG_DOCS_URL } from '@lib/constants';
+import { ApiError } from '@shared/api';
+import { POSTHOG_DOCS_URL } from '@shared/constants';
 import { IssueTable, SEVERITY_LABEL, SEVERITY_ORDER } from './IssueTable.js';
 
 interface DoctorReportScreenProps {

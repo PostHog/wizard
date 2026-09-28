@@ -1,5 +1,5 @@
 import { resolveSkillEntry } from '@ui/tui/screens/SkillSourceInfo';
-import type { SkillEntry } from '@lib/wizard-tools';
+import type { SkillEntry } from '@shared/skill-menu';
 
 const entry = (id: string): SkillEntry =>
   ({ id, downloadUrl: `https://example.com/${id}.tar.gz` } as SkillEntry);
@@ -30,6 +30,22 @@ describe('resolveSkillEntry', () => {
     // nextjs has app-router and pages-router variants — which one is
     // right depends on the project, so don't pick arbitrarily.
     expect(resolveSkillEntry(MENU, 'nextjs')).toBeNull();
+  });
+
+  it('matches an expanded bundle by its group id', () => {
+    // The menu replaces a bundle with per-framework entries, so no entry keeps
+    // the bundle id. Every one of them carries the bundle's download URL.
+    const group = 'integration-v2-error-tracking-step';
+    const bundled = {
+      id: `${group}-django`,
+      group,
+      bundle: true,
+      downloadUrl: `https://example.com/${group}.json`,
+    } as SkillEntry;
+
+    expect(resolveSkillEntry([...MENU, bundled], group)?.downloadUrl).toBe(
+      `https://example.com/${group}.json`,
+    );
   });
 
   it('returns null when nothing matches', () => {

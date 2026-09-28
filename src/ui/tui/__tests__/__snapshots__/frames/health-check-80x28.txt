@@ -1,0 +1,27 @@
+ PostHog Wizard v0.0.0-test                        Feedback: wizard@posthog.com
+
+ Cost (running): $0.00 · no agent turns yet                      Ctrl+T to hide
+
+
+
+    ╭──────────────────────────────────────────────────────────────────────╮
+    │                                                                      │
+    │                     Ongoing service disruptions                      │
+    │                                                                      │
+    │   ◼ Down ◼ Degraded ◼ No connection                                  │
+    │                                                                      │
+    │    ◼ Skills download                                                 │
+    │                                                                      │
+    │   The Wizard can't download the skills it needs — neither GitHub     │
+    │   Releases nor PostHog's mirror is reachable right now.              │
+    │                                                                      │
+    │   ────────────────────────────────────────────────────────────────   │
+    │                                                                      │
+    │                                                                      │
+    │     ▸     Exit [Esc]                                                 │
+    │                                                                      │
+    ╰──────────────────────────────────────────────────────────────────────╯
+
+
+
+  ←→ switch  esc cancel  enter confirm

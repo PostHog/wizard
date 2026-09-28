@@ -1,10 +1,11 @@
 import { TaskStreamPush } from '@lib/task-stream/task-stream-push';
-import { StreamEvent } from '@lib/task-stream/types';
+import { StreamEvent, StreamTaskStatus } from '@lib/task-stream/types';
 import type {
   TaskStreamDestination,
   TaskStreamUpdate,
 } from '@lib/task-stream/types';
 import type { WizardStore, TaskItem } from '@ui/tui/store';
+import { TaskStatus } from '@ui/wizard-ui';
 import { RunPhase, type PendingQuestion } from '@lib/wizard-session';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -34,6 +35,8 @@ function createMockStore(overrides: Partial<MockStoreState> = {}) {
     ...overrides,
   };
 
+  const frameworkContext: Record<string, unknown> = {};
+
   const store = {
     get session() {
       return {
@@ -42,7 +45,12 @@ function createMockStore(overrides: Partial<MockStoreState> = {}) {
         outroData: null,
         installDir: state.installDir,
         pendingQuestion: state.pendingQuestion ?? null,
+        frameworkContext,
       };
+    },
+    setFrameworkContext(key: string, value: unknown) {
+      frameworkContext[key] = value;
+      for (const cb of listeners) cb();
     },
     get tasks() {
       return state.tasks;
@@ -106,6 +114,7 @@ function createPush(
     dest?: ReturnType<typeof createMockDestination>;
     enabled?: boolean;
     eventPlanPath?: string;
+    auditChecks?: () => unknown;
   } = {},
 ) {
   const dest = opts.dest ?? createMockDestination();
@@ -114,6 +123,7 @@ function createPush(
     programId: 'test-program',
     destinations: [dest],
     eventPlanPath: opts.eventPlanPath,
+    auditChecks: opts.auditChecks,
     enabled: opts.enabled,
   });
   return { push, dest };
@@ -255,6 +265,61 @@ describe('TaskStreamPush', () => {
       await push.push();
 
       expect(dest.calls[0][1].event_plan).toEqual({ events: plan });
+    });
+
+    it('appends one task row per audit area, after the program rows', async () => {
+      const checks = [
+        {
+          id: 'sdk-installed',
+          area: 'Installation',
+          label: 'SDK installed',
+          status: 'pass',
+          file: 'src/app.tsx:3',
+          details: 'quotes the user code',
+        },
+        {
+          id: 'init-correct',
+          area: 'Installation',
+          label: 'init correct',
+          status: 'pending',
+        },
+        {
+          id: 'write-report',
+          area: 'Write report',
+          label: 'report',
+          status: 'pending',
+        },
+      ];
+      const store = createMockStore({
+        tasks: [
+          { label: 'Welcome', status: TaskStatus.Completed, done: true },
+          { label: 'Running', status: TaskStatus.InProgress, done: false },
+        ],
+      });
+      const { push, dest } = createPush(store, { auditChecks: () => checks });
+
+      await push.push();
+
+      const payload = dest.calls.at(-1)?.[1];
+      expect(payload?.tasks).toEqual([
+        { id: '0', title: 'Welcome', status: StreamTaskStatus.Completed },
+        { id: '1', title: 'Running', status: StreamTaskStatus.InProgress },
+        { id: '2', title: 'Installation', status: StreamTaskStatus.InProgress },
+        { id: '3', title: 'Write report', status: StreamTaskStatus.Pending },
+      ]);
+      // The check labels, files, and details stay on the machine.
+      expect(JSON.stringify(payload)).not.toContain('SDK installed');
+      expect(JSON.stringify(payload)).not.toContain('src/app.tsx');
+      expect(JSON.stringify(payload)).not.toContain('quotes the user code');
+    });
+
+    it('sends no area rows for a program without a ledger', async () => {
+      const store = createMockStore();
+      const { push, dest } = createPush(store);
+
+      await push.push();
+
+      expect(dest.calls[0][1].tasks).toEqual([]);
     });
 
     it('omits eventPlan when empty', async () => {

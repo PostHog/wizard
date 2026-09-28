@@ -52,7 +52,7 @@ function defaultSleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function parseRetryAfter(value: string | null): number {
+export function parseRetryAfter(value: string | null): number {
   if (!value) return DEFAULT_RETRY_AFTER_MS;
   const seconds = Number(value);
   if (Number.isFinite(seconds) && seconds >= 0) {

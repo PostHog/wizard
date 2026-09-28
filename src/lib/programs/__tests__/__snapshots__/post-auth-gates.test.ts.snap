@@ -1,0 +1,28 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`post-auth gate ids per program > match the golden 1`] = `
+{
+  "agent-skill": [],
+  "ai-observability": [],
+  "audit": [],
+  "error-tracking": [],
+  "error-tracking-upload-source-maps": [
+    "detect",
+  ],
+  "events-audit": [],
+  "mcp-add": [],
+  "mcp-analytics": [],
+  "mcp-remove": [],
+  "mcp-tutorial": [],
+  "metrics": [],
+  "migration": [],
+  "posthog-doctor": [],
+  "posthog-integration": [],
+  "replay-vision": [],
+  "revenue-analytics-setup": [],
+  "self-driving": [],
+  "slack": [],
+  "warehouse-source": [],
+  "web-analytics-doctor": [],
+}
+`;

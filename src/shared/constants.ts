@@ -1,0 +1,343 @@
+/**
+ * Shared constants for the PostHog wizard.
+ */
+
+import { VERSION } from './version';
+
+// ── Models ──────────────────────────────────────────────────────────
+// Coordinate IDs/efforts with the mint allowlists and gateway transport/required prompt policy; see agent/runner/README.md.
+
+/** Next sonnet generation (a `MODEL_FLAG_VARIANTS` key in the switchboard). */
+export const SONNET_5_MODEL = 'claude-sonnet-5';
+
+/**
+ * Default model for agent runs. Bare model IDs (no `anthropic/` prefix) so the
+ * LLM gateway's Bedrock fallback can match map_to_bedrock_model().
+ */
+export const DEFAULT_AGENT_MODEL = SONNET_5_MODEL;
+
+/** Undated haiku, for scan triage. The alias tracks the current 4.5 release rather than pinning one. */
+export const HAIKU_TRIAGE_MODEL = 'claude-haiku-4-5';
+
+/**
+ * Cheaper, faster model for mechanical agent work (e.g. repo classification
+ * during source-map detection). Passed via AgentConfig.modelOverride.
+ */
+export const HAIKU_MODEL = HAIKU_TRIAGE_MODEL;
+
+// Locally supported OpenAI models; constants alone do not authorize gateway use.
+export const GPT5_6_LUNA_MODEL = 'openai/gpt-5.6-luna';
+export const GPT5_6_TERRA_MODEL = 'openai/gpt-5.6-terra';
+export const GPT5_6_SOL_MODEL = 'openai/gpt-5.6-sol';
+
+// ── Agent runner routing axes ────────────────────────────────────────
+
+/**
+ * The two agent runner routing axes: **harness** (which agent SDK drives the LLM)
+ * and **sequence** (which pipeline shape orchestrates the work). Single source
+ * of truth for yargs `choices`, session fields, the runner registry, and tests
+ * — `Object.values(Harness)` gives an iterable of the values when an array is
+ * needed. Adding a member is enough to pick it up everywhere.
+ *
+ * Naming matches the directory layout — see `src/agent/runner/harness/`
+ * and `src/agent/runner/sequence/`.
+ */
+export enum Harness {
+  anthropic = 'anthropic',
+  pi = 'pi',
+}
+
+export enum Sequence {
+  linear = 'linear',
+  orchestrator = 'orchestrator',
+}
+
+/**
+ * What kind of call produced a gateway generation — the `call_type` trace tag.
+ * Splits a program's LLM spend by workload. Every member is sent explicitly so
+ * an absent value means "old build", not "agent".
+ */
+export enum CallType {
+  /** The agent doing the work the user asked for. */
+  agent = 'agent',
+  /** Warlock's classifier deciding whether a YARA match is a true positive. */
+  yaraTriage = 'yara-triage',
+  /** The cheap repo scan that classifies which projects a program acts on. */
+  detection = 'detection',
+}
+
+// ── Integration / CLI ───────────────────────────────────────────────
+
+/**
+ * Detection order matters: put framework-specific integrations BEFORE basic language fallbacks.
+ */
+export enum Integration {
+  // Frameworks
+  nextjs = 'nextjs',
+  nuxt = 'nuxt',
+  vue = 'vue',
+  reactRouter = 'react-router',
+  tanstackStart = 'tanstack-start',
+  tanstackRouter = 'tanstack-router',
+  reactNative = 'react-native',
+  angular = 'angular',
+  astro = 'astro',
+  django = 'django',
+  flask = 'flask',
+  fastapi = 'fastapi',
+  laravel = 'laravel',
+  sveltekit = 'sveltekit',
+  flutter = 'flutter',
+  kmp = 'kmp',
+  swift = 'swift',
+  android = 'android',
+  rails = 'rails',
+  elixir = 'elixir',
+  go = 'go',
+  rust = 'rust',
+  // Must stay after kmp/swift/android: those claim gradle projects first.
+  java = 'java',
+
+  // Language fallbacks. Keep javascriptNode last: it matches any package.json.
+  python = 'python',
+  ruby = 'ruby',
+  javascript_web = 'javascript_web',
+  javascriptNode = 'javascript_node',
+}
+
+// ── Documents the wizard's programs write into the user's project ────
+// Named here so the scanner's documentation allowlist can list them without
+// importing a program; each program re-exports its own.
+/** The events-audit report. */
+export const EVENTS_AUDIT_REPORT_FILE = 'posthog-events-audit-report.md';
+export const EVENT_INVENTORY_FILE = '.posthog-events-inventory.json';
+/** Per-part filename pattern emitted by events-audit subagents (e.g. `.posthog-events-inventory.part-3.json`). */
+export const EVENT_INVENTORY_PART_PATTERN =
+  /^\.posthog-events-inventory\.part-\d+\.json$/;
+/** The integration program's event plan. */
+export const EVENT_PLAN_FILE = '.posthog-events.json';
+
+export interface Args {
+  debug: boolean;
+  integration: Integration;
+}
+
+// ── Environment ──────────────────────────────────────────────────────
+
+import { IS_DEV } from '@env';
+import {
+  CONTEXT_MILL_LOCAL_URL,
+  getLocalDev,
+  POSTHOG_LOCAL_URL,
+} from './local-dev';
+export { IS_DEV };
+export const DEBUG = false;
+
+// ── URLs ─────────────────────────────────────────────────────────────
+
+export const DEFAULT_URL = IS_DEV
+  ? POSTHOG_LOCAL_URL
+  : 'https://us.posthog.com';
+/**
+ * Region-agnostic PostHog app URL. Resolves to us.posthog.com or
+ * eu.posthog.com server-side based on the signed-in user's profile.
+ * Use this for share-with-user links (e.g. settings pages) so they
+ * land on the right region without us needing to know it client-side.
+ */
+export const POSTHOG_APP_URL = IS_DEV
+  ? POSTHOG_LOCAL_URL
+  : 'https://app.posthog.com';
+export const DEFAULT_HOST_URL = IS_DEV
+  ? POSTHOG_LOCAL_URL
+  : 'https://us.i.posthog.com';
+export const ISSUES_URL = 'https://github.com/posthog/wizard/issues';
+/** Public status page, linked from transient-failure guidance (e.g. OAuth server_error). */
+export const POSTHOG_STATUS_PAGE_URL = 'https://www.posthogstatus.com';
+export const CONTEXT_MILL_URL = 'https://github.com/PostHog/context-mill';
+/**
+ * Latest context-mill release page — the BYOAI download link shown in
+ * the privacy panel. Deliberately the release PAGE, not a direct asset
+ * URL: asset URLs are ~89 chars and hard-wrap inside the 64-col panel,
+ * which corrupts terminal copy/paste with a mid-URL line break. This
+ * stays under one line; the panel names the exact asset to grab.
+ */
+export const CONTEXT_MILL_RELEASES_URL =
+  'https://github.com/PostHog/context-mill/releases/latest';
+export const POSTHOG_DOCS_URL = 'https://posthog.com/docs';
+export const POSTHOG_WIZARD_REPO_URL = 'https://github.com/PostHog/wizard';
+export const POSTHOG_TERMS_URL = 'https://posthog.com/terms';
+export const POSTHOG_PRIVACY_URL = 'https://posthog.com/privacy';
+export const POSTHOG_ORG_AI_SETTINGS_URL =
+  'https://app.posthog.com/settings/organization-details#setting=organization-ai-consent';
+export const WIZARD_CONTACT_EMAIL = 'wizard@posthog.com';
+
+/**
+ * Two origins for the same release, same filenames. Interchangeable bases, so
+ * making AWS primary is a `getSkillsBaseUrl` change, not a code change.
+ */
+export const GITHUB_SKILLS_BASE_URL =
+  'https://github.com/PostHog/context-mill/releases/latest/download';
+export const AWS_SKILLS_BASE_URL = 'https://context-mill.posthog.com/latest';
+/** Alias of `@lib/local-dev`'s constant, kept for existing importers. */
+export const LOCAL_SKILLS_BASE_URL = CONTEXT_MILL_LOCAL_URL;
+
+/**
+ * Driven by `--local-context-mill`, NOT `--local-mcp` (which used to select
+ * both). Takes no argument on purpose: callers can't pass the wrong flag.
+ */
+export function getSkillsBaseUrl(): string {
+  return getLocalDev().localContextMill
+    ? LOCAL_SKILLS_BASE_URL
+    : GITHUB_SKILLS_BASE_URL;
+}
+
+// ── Analytics (internal) ──────────────────────────────────────────────
+
+export const ANALYTICS_POSTHOG_PUBLIC_PROJECT_WRITE_KEY = 'sTMFPsFhdP1Ssg';
+export const ANALYTICS_HOST_URL = 'https://internal-j.posthog.com';
+export const ANALYTICS_TEAM_TAG = 'docs-and-wizard';
+
+// ── OAuth / Auth ────────────────────────────────────────────────────
+
+export const OAUTH_PORTS = [8239, 8238, 8240, 8237, 8236, 8235] as const;
+export const POSTHOG_US_CLIENT_ID = 'c4Rdw8DIxgtQfA80IiSnGKlNX8QN00cFWF00QQhM';
+export const POSTHOG_EU_CLIENT_ID = 'bx2C5sZRN03TkdjraCcetvQFPGH6N2Y9vRLkcKEy';
+export const POSTHOG_DEV_CLIENT_ID = 'DC5uRLVbGI02YQ82grxgnK6Qn12SXWpCqdPb60oZ';
+export const POSTHOG_PROXY_CLIENT_ID = POSTHOG_US_CLIENT_ID;
+export const DUMMY_PROJECT_API_KEY = '_YOUR_POSTHOG_PROJECT_TOKEN_';
+
+/**
+ * Scopes the wizard requests during the agentic provisioning signup flow.
+ *
+ * Each entry is justified by what the wizard's agent step does after signup:
+ * - user:read         identify the user for analytics + agent context
+ * - project:read      look up the freshly-provisioned project
+ * - llm_gateway:read  authenticate to gateway.{us,eu}.posthog.com/wizard
+ *                     (the agent's LLM calls — without this scope, every
+ *                     agent message returns 401)
+ * - query:read        run HogQL queries when the agent needs data
+ * - dashboard:write   create the onboarding dashboard during setup
+ * - insight:write     create the onboarding insights during setup
+ * - notebook:write    upload the events-audit report as a PostHog notebook
+ *                     in step 6 of the events-audit skill (notebooks-create
+ *                     MCP tool requires this scope)
+ * - event_definition:write
+ *                     create event definitions from the completed wizard
+ *                     session's event plan
+ *
+ * Must be a subset of `ALLOWED_PROVISIONING_SCOPES` in
+ * `ee/api/agentic_provisioning/views.py` on the backend.
+ */
+export const WIZARD_PROVISIONING_SCOPES = [
+  'user:read',
+  'project:read',
+  'llm_gateway:read',
+  'dashboard:write',
+  'insight:write',
+  'query:read',
+  'notebook:write',
+  'event_definition:write',
+] as const;
+
+/**
+ * Scopes the wizard requests during the OAuth login flow. Superset of
+ * `WIZARD_PROVISIONING_SCOPES` with scopes that only apply to the login
+ * path and are not in the provisioning allowlist:
+ * - health_issue:read     used by `wizard doctor`
+ * - wizard_session:read   list / retrieve / stream sessions
+ * - wizard_session:write  stream run state to /api/projects/{id}/wizard/sessions/
+ * - event_definition:write
+ *                          create event definitions when a session completes
+ * - organization:read     read `organization.is_ai_data_processing_approved`
+ *                         from /api/users/@me/ for the AI opt-in gate
+ *
+ * NOTE: every scope here must be within the wizard OAuth application's
+ * server-side scope ceiling (`OAuthApplication.scopes` in posthog, set
+ * via Django admin on BOTH prod regions). A scope outside the ceiling
+ * does NOT fail the authorize request — the server silently clamps the
+ * request to the ceiling (`clamp_scopes_to_ceiling` in posthog) and the
+ * token comes back without it. Separately, the consent screen lets the
+ * user deselect any scope the app doesn't mark required. Both paths
+ * yield a granted `scope` narrower than requested, with no error, so
+ * never assume the token carries this list — the token response's
+ * `scope` field is the truth, and `missingOAuthScopes` (utils/oauth.ts)
+ * diffs it at login. Ceiling procedure: the "scope-ceiling-invalid-scope"
+ * runbook in PostHog/runbooks. Keep its worked example in sync when this
+ * list changes.
+ */
+export const WIZARD_OAUTH_SCOPES = [
+  ...WIZARD_PROVISIONING_SCOPES,
+  'health_issue:read',
+  'wizard_session:read',
+  'wizard_session:write',
+  'wizard_run:write',
+  'organization:read',
+] as const;
+
+// ── Wizard run / variants ───────────────────────────────────────────
+
+export const WIZARD_INTERACTION_EVENT_NAME = 'wizard interaction';
+export const WIZARD_REMARK_EVENT_NAME = 'wizard remark';
+/** Multivariate flag: `wizard-run` publishes to WizardRun, anything else to WizardSession. */
+export const WIZARD_RUN_SYNC_FLAG_KEY = 'wizard-run-sync';
+/** Boolean feature flag that routes a run to the experimental orchestrator runner. */
+export const WIZARD_ORCHESTRATOR_FLAG_KEY = 'wizard-orchestrator';
+/** Multivariate flag: per-stage orchestrator overrides ride each variant's JSON payload (`{stage: {model?, effort?}}`). */
+export const WIZARD_ORCHESTRATOR_OVERRIDE_FLAG_KEY =
+  'wizard-orchestrator-override';
+/** Boolean flag: on → pi for self-driving. Payload carries `{model, effort?, harness?, sequence?}` (model = a `MODEL_FLAG_VARIANTS` key); missing/invalid payload keeps the non-flagged default. */
+export const WIZARD_SELF_DRIVING_USE_PI_HARNESS_FLAG_KEY =
+  'wizard-self-driving-use-pi-harness';
+/** Boolean flag: agentic project scoping for non-interactive basic-integration runs. */
+export const WIZARD_BASIC_INTEGRATION_AGENTIC_DETECTION_FLAG_KEY =
+  'wizard-basic-integration-agentic-detection';
+/** Boolean flag: the orchestrator queues the program's runner-seeded tasks (the warehouse step). Off, no task is queued and the run is byte-identical to a no-sources project. */
+export const WIZARD_ORCHESTRATOR_SEEDED_TASKS_FLAG_KEY =
+  'wizard-orchestrator-seeded-tasks';
+/** Kill switch over a shipped default: ONLY an explicit 'false' excludes the AI Observability and Logs tasks from default integration runs — absent or fetch-failed means include, so the default never vanishes on a network hiccup. */
+export const WIZARD_DEFAULT_AIO_LOGS_FLAG_KEY = 'wizard-default-aio-logs';
+// Reading a flag enters this run into that flag's experiment, so a closed set — not a
+// `wizard-` prefix anyone can name into — decides what a run evaluates. Test-pinned exhaustive.
+export const WIZARD_FLAG_KEYS = [
+  WIZARD_RUN_SYNC_FLAG_KEY,
+  WIZARD_ORCHESTRATOR_FLAG_KEY,
+  WIZARD_ORCHESTRATOR_OVERRIDE_FLAG_KEY,
+  WIZARD_ORCHESTRATOR_SEEDED_TASKS_FLAG_KEY,
+  WIZARD_SELF_DRIVING_USE_PI_HARNESS_FLAG_KEY,
+  WIZARD_BASIC_INTEGRATION_AGENTIC_DETECTION_FLAG_KEY,
+  WIZARD_DEFAULT_AIO_LOGS_FLAG_KEY,
+] as const;
+/** User-Agent for wizard HTTP requests and MCP server identification. */
+export const WIZARD_USER_AGENT = `posthog/wizard; version: ${VERSION}`;
+
+/**
+ * User-Agent for a specific program's MCP calls, tagged with `program: <id>` so the
+ * backend can attribute work per program (e.g. the `self-driving` program's warehouse
+ * sources are recorded as `created_via=self_driving` rather than plain `wizard`). The
+ * base `posthog/wizard` token is preserved, so anything keying only on that still matches.
+ */
+export function wizardUserAgentForProgram(programId?: string): string {
+  return programId
+    ? `${WIZARD_USER_AGENT}; program: ${programId}`
+    : WIZARD_USER_AGENT;
+}
+
+// ── Timeouts ─────────────────────────────────────────────────────────
+
+/** Timeout for framework / project detection probes (ms). */
+export const DETECTION_TIMEOUT_MS = 10_000;
+
+/** Timeout for the agentic project scan (ms); past it the run falls back to root detection. */
+export const AGENTIC_DETECTION_FIRST_ATTEMPT_TIMEOUT_MS = 60_000;
+export const AGENTIC_DETECTION_RETRY_TIMEOUT_MS = 90_000;
+
+/**
+ * Timeout for the OAuth authorization flow (ms).
+ *
+ * How long the user has to complete the browser login. The authorization
+ * code is minted at approval and exchanged immediately on callback, so the
+ * server-side code expiry (`AUTHORIZATION_CODE_EXPIRE_SECONDS`, 5 minutes)
+ * bounds only the approval→exchange gap — manual-paste users have 5 minutes
+ * from approval to submit the code — not how long this window may stay open.
+ */
+export const OAUTH_TIMEOUT_MS = 1_800_000;

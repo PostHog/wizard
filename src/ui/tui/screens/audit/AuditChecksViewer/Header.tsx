@@ -1,5 +1,6 @@
 import { Box, Text } from 'ink';
 import type { AuditCheck, AuditStatus } from '@lib/programs/audit/types';
+import { countNoun } from '@utils/count-noun';
 import type { ViewerLayout } from './layout.js';
 
 interface HeaderProps {
@@ -47,8 +48,13 @@ export const Header = ({ layout }: HeaderProps) => (
 
 export const Summary = ({ total, counts }: SummaryProps) => (
   <Text dimColor>
-    {total} total · {counts.pending} pending · {counts.error} errors ·{' '}
-    {counts.warning} warnings · {counts.suggestion} suggestions · {counts.pass}{' '}
-    passes
+    {[
+      `${total} total`,
+      `${counts.pending} pending`,
+      countNoun(counts.error, 'error'),
+      countNoun(counts.warning, 'warning'),
+      countNoun(counts.suggestion, 'suggestion'),
+      countNoun(counts.pass, 'pass', 'passes'),
+    ].join(' · ')}
   </Text>
 );

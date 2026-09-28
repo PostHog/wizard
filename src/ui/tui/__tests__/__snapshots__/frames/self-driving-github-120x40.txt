@@ -1,0 +1,39 @@
+ PostHog Wizard v0.0.0-test                                                                Feedback: wizard@posthog.com
+
+ Cost (running): $0.00 · no agent turns yet                                                              Ctrl+T to hide
+
+
+ Connect GitHub
+
+ Self-driving needs GitHub access to research findings in your code and open fixes, so setup cannot finish without it.
+
+ ◆ Grant it the repos you want Self-driving to work with — include this project's repo so it can also watch its issues.
+
+ Install it: https://us.posthog.com/api/environments/42/integrations/authorize?kind=github
+
+ ▸ Open GitHub App install
+   I can't connect right now
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  ↑↓ navigate  esc end setup  enter select

@@ -1,13 +1,12 @@
 /**
  * TipsCard — Shows PostHog tips during the agent run.
  * Reactively shows/hides tips based on discovered features.
- * Supports toggling additional features via key bindings.
  */
 
-import { Box, Text, useInput } from 'ink';
+import { Box, Text } from 'ink';
 import type { WizardStore } from '@ui/tui/store';
 import { Colors, Icons } from '@ui/tui/styles';
-import { DiscoveredFeature, AdditionalFeature } from '@lib/wizard-session';
+import { DiscoveredFeature } from '@lib/wizard-session';
 
 /** A discrete tip shown in the TipsCard during the agent run. */
 export interface Tip {
@@ -21,19 +20,6 @@ export interface Tip {
   url?: string;
   /** When provided, the tip is only shown if this returns true */
   visible?: (store: WizardStore) => boolean;
-  /** Optional key binding that toggles an AdditionalFeature */
-  toggle?: {
-    /** The key the user presses (lowercase) */
-    key: string;
-    /** The additional feature to enqueue */
-    feature: AdditionalFeature;
-    /** Label shown when toggled on */
-    enabledLabel: string;
-    /** Prompt shown when not yet toggled */
-    prompt: string;
-    /** Returns true if already toggled */
-    isEnabled: (store: WizardStore) => boolean;
-  };
 }
 
 /**
@@ -73,20 +59,6 @@ export const DEFAULT_TIPS: Tip[] = [
     visible: (store) =>
       store.session.discoveredFeatures.includes(DiscoveredFeature.Stripe),
   },
-  {
-    id: 'llm',
-    title: 'PostHog can also help you track your LLM costs',
-    description: '',
-    visible: (store) =>
-      store.session.discoveredFeatures.includes(DiscoveredFeature.LLM),
-    toggle: {
-      key: 'l',
-      feature: AdditionalFeature.LLM,
-      enabledLabel: 'AI observability setup queued next',
-      prompt: 'We detected LLM dependencies in your project.',
-      isEnabled: (store) => store.session.llmOptIn,
-    },
-  },
 ];
 
 export const TipsCard = ({
@@ -96,19 +68,6 @@ export const TipsCard = ({
   store: WizardStore;
   tips?: Tip[];
 }) => {
-  useInput((input) => {
-    for (const tip of tips) {
-      if (
-        tip.toggle &&
-        input.toLowerCase() === tip.toggle.key &&
-        (!tip.visible || tip.visible(store)) &&
-        !tip.toggle.isEnabled(store)
-      ) {
-        store.enableFeature(tip.toggle.feature);
-      }
-    }
-  });
-
   return (
     <Box flexDirection="column" paddingX={1}>
       <Text bold color={Colors.accent}>
@@ -125,31 +84,15 @@ export const TipsCard = ({
               <Text bold>{tip.title}</Text>
             </Text>
 
-            {tip.toggle ? (
-              tip.toggle.isEnabled(store) ? (
-                <Text color={Colors.success}>
-                  {Icons.check} {tip.toggle.enabledLabel}
-                </Text>
-              ) : (
-                <Text dimColor>
-                  {tip.toggle.prompt} Press{' '}
-                  <Text bold color={Colors.accent}>
-                    {tip.toggle.key.toUpperCase()}
-                  </Text>{' '}
-                  to enable.
-                </Text>
-              )
-            ) : (
-              <Text dimColor>
-                {tip.description}
-                {tip.url && (
-                  <>
-                    {' '}
-                    <Text color="cyan">{tip.url}</Text>
-                  </>
-                )}
-              </Text>
-            )}
+            <Text dimColor>
+              {tip.description}
+              {tip.url && (
+                <>
+                  {' '}
+                  <Text color="cyan">{tip.url}</Text>
+                </>
+              )}
+            </Text>
           </Box>
         ))}
     </Box>

@@ -1,8 +1,9 @@
 import { getExitLine } from '@ui/tui/exit-line';
 import { WizardStore, Program } from '@ui/tui/store';
 import { OutroKind } from '@lib/wizard-session';
+import { HostResolution } from '@shared/host-resolution';
 
-vi.mock('../../../utils/analytics.js', () => ({
+vi.mock('@utils/analytics.js', () => ({
   analytics: {
     capture: vi.fn(),
     wizardCapture: vi.fn(),
@@ -30,6 +31,25 @@ function setHudVisible(store: WizardStore, visible: boolean): void {
 }
 
 describe('getExitLine', () => {
+  it('keeps the saved skill path and contact in scrollback after a failed run', () => {
+    const path = '/project/.posthog/wizard-spellbook-123/README.md';
+    const store = storeWithOutro({ kind: OutroKind.Error, message: 'boom' });
+    store.setCredentials({
+      accessToken: 'tok',
+      projectApiKey: 'pk',
+      host: HostResolution.fromApiHost('https://app.posthog.com'),
+      projectId: 1,
+    });
+    store.setSpellbook({ path, skillsIncluded: true });
+    const line = stripAnsi(getExitLine(store));
+    const lines = line.split('\n');
+    expect(lines).toContain(path);
+    expect(line).toContain('wizard@posthog.com');
+    // The log path sits on the line after the contact copy.
+    expect(lines[lines.indexOf(path) + 3]).toMatch(/\S/);
+    expect(line).not.toContain('successfully');
+  });
+
   it('echoes the handoff prompt on its own line so it survives in scrollback', () => {
     const prompt =
       'Read `posthog-setup-report.md` and work through the checklist.';
@@ -44,8 +64,6 @@ describe('getExitLine', () => {
     );
 
     expect(line).toContain('Successfully installed PostHog!');
-    expect(line).toContain('triple-click to select');
-    expect(line).toContain(prompt);
     // Prompt sits on its own line (not glued to the label) for clean selection.
     expect(line.split('\n').some((l) => l === prompt)).toBe(true);
   });
@@ -61,11 +79,10 @@ describe('getExitLine', () => {
     );
 
     expect(line).toContain('Successfully installed PostHog!');
-    expect(line).not.toContain('coding agent');
     expect(line).not.toContain('\n');
   });
 
-  it('echoes the primary link and next-steps so they survive in scrollback', () => {
+  it('echoes the primary link URL on its own line so it survives in scrollback', () => {
     const line = stripAnsi(
       getExitLine(
         storeWithOutro({
@@ -75,52 +92,16 @@ describe('getExitLine', () => {
             label: 'Your Self-driving inbox',
             url: 'https://us.posthog.com/project/123/inbox',
           },
-          nextSteps: {
-            heading: 'In your inbox you can:',
-            items: ['Review findings', 'Triage what matters'],
-          },
         }),
       ),
     );
 
-    expect(line).toContain('Self-driving is on.');
-    expect(line).toContain('Your Self-driving inbox:');
     // URL sits on its own line (not glued to the label) for clean selection.
     expect(
       line
         .split('\n')
         .some((l) => l === 'https://us.posthog.com/project/123/inbox'),
     ).toBe(true);
-    expect(line).toContain('In your inbox you can:');
-    expect(line).toContain('• Review findings');
-  });
-
-  it('appends the report suffix when the message does not already mention it', () => {
-    const line = stripAnsi(
-      getExitLine(
-        storeWithOutro({
-          kind: OutroKind.Success,
-          message: 'Done!',
-          reportFile: 'posthog-setup-report.md',
-        }),
-      ),
-    );
-    expect(line).toContain('Check ./posthog-setup-report.md for details.');
-  });
-
-  it('falls back to a default headline when the outro has no message', () => {
-    const line = stripAnsi(
-      getExitLine(storeWithOutro({ kind: OutroKind.Success })),
-    );
-    expect(line).toMatch(/completed successfully\.$/);
-  });
-
-  it('renders a plain "exited" line for non-success outcomes', () => {
-    const line = stripAnsi(
-      getExitLine(storeWithOutro({ kind: OutroKind.Error, message: 'boom' })),
-    );
-    expect(line).toMatch(/exited\.$/);
-    expect(line).not.toContain('coding agent');
   });
 
   describe('token/cost tally (hidden Ctrl+T HUD survives into scrollback)', () => {
@@ -166,7 +147,7 @@ describe('getExitLine', () => {
       expect(line).toContain('Final cost: $1.50');
     });
 
-    it('appends the tally after the "exited" line for non-success outcomes too', () => {
+    it('appends the tally for non-success outcomes too', () => {
       const store = storeWithOutro({ kind: OutroKind.Error, message: 'boom' });
       setHudVisible(store, true);
       store.addTokenUsage({
@@ -180,7 +161,6 @@ describe('getExitLine', () => {
 
       const line = stripAnsi(getExitLine(store));
 
-      expect(line).toMatch(/exited\./);
       expect(line).toContain('Cost (estimate): $3.00');
     });
 

@@ -2,7 +2,7 @@
 import type { WizardRunOptions } from '@utils/types';
 import type { FrameworkConfig } from '@lib/framework-config';
 import { swiftPackageManager } from '@lib/detection/package-manager';
-import { Integration } from '@lib/constants';
+import { Integration } from '@shared/constants';
 import { boundedGlob } from '@utils/bounded-fs';
 import fg from 'fast-glob';
 import * as fs from 'node:fs';

@@ -11,7 +11,7 @@ import { Box, Text } from 'ink';
 import { useSyncExternalStore } from 'react';
 import type { WizardStore } from '@ui/tui/store';
 import { Colors } from '@ui/tui/styles';
-import { OAUTH_TIMEOUT_MS } from '@lib/constants';
+import { OAUTH_TIMEOUT_MS } from '@shared/constants';
 import { useDismissOnAnyKey } from '@ui/tui/hooks/useDismissOnAnyKey';
 
 interface SessionTimeoutScreenProps {

@@ -10,6 +10,9 @@ import { AUDIT_CHECKS_FILE, type AuditCheck } from './types.js';
  * succeed — the skill writes the report to disk, then mirrors it into a
  * PostHog notebook as its final step).
  *
+ * Every id the skill resolves needs a row here: a batch resolve rejects
+ * atomically, so one missing id discards the whole call.
+ *
  * `posthog-side-findings` is a sweep row, not a rule: the skill reads what
  * PostHog itself already computed for this project (error-tracking
  * recommendations, health issues) and appends one row per open finding via
@@ -34,6 +37,12 @@ export const AUDIT_SEED_CHECKS: AuditCheck[] = [
     id: 'init-correct',
     area: 'Installation',
     label: 'Initialization is correct',
+    status: 'pending',
+  },
+  {
+    id: 'init-not-duplicated',
+    area: 'Installation',
+    label: 'One initialization per runtime',
     status: 'pending',
   },
   {
