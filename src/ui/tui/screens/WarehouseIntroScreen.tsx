@@ -15,10 +15,13 @@ import { useState, useSyncExternalStore } from 'react';
 import type { WizardStore } from '@ui/tui/store';
 import { PickerMenu } from '@ui/tui/primitives/index';
 import { IntroScreenLayout } from './IntroScreenLayout.js';
+import { sharingOptions } from './PostHogIntegrationIntroScreen.js';
 import {
   getDetectedWarehouseSources,
   type WarehouseDetectError,
 } from '@programs/warehouse-source/index';
+import { ScanConsent } from '@lib/wizard-session';
+import { analytics } from '@utils/analytics';
 
 interface WarehouseIntroScreenProps {
   store: WizardStore;
@@ -33,6 +36,7 @@ export const WarehouseIntroScreen = ({ store }: WarehouseIntroScreenProps) => {
   const [showingMoreInfo, setShowingMoreInfo] = useState(false);
 
   const { session } = store;
+  const sharing = session.scanConsent !== ScanConsent.Declined;
   const detectError = session.frameworkContext.detectError as
     | WarehouseDetectError
     | undefined;
@@ -119,15 +123,27 @@ export const WarehouseIntroScreen = ({ store }: WarehouseIntroScreenProps) => {
       programLabel={session.programLabel}
       skillId={session.skillId}
       menuOptions={menuOptions}
+      privacyOptions={sharingOptions(sharing)}
       errorView={errorView}
       onSelect={(value) => {
+        analytics.wizardCapture('intro menu selected', {
+          value,
+          view: showingMoreInfo ? 'more-info' : 'default',
+        });
         if (value === 'cancel') {
           process.exit(0);
         } else if (value === 'more-info') {
           setShowingMoreInfo(true);
         } else if (value === 'back') {
           setShowingMoreInfo(false);
+        } else if (value === 'share') {
+          store.grantSharing();
+        } else if (value === 'no-share') {
+          store.declineSharing();
         } else {
+          if (session.scanConsent === ScanConsent.Undecided) {
+            store.grantSharing();
+          }
           store.completeSetup();
         }
       }}

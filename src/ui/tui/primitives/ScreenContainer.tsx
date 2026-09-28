@@ -22,10 +22,7 @@ import { KeyboardHintsProvider } from '@ui/tui/hooks/useKeyboardHints';
 import { DissolveTransition } from './DissolveTransition.js';
 import { KeyboardHintsBar } from './KeyboardHintsBar.js';
 import { ScreenErrorBoundary } from './ScreenErrorBoundary.js';
-import {
-  ViewportTooSmall,
-  isViewportTooSmall,
-} from './ViewportTooSmall.js';
+import { ViewportTooSmall, isViewportTooSmall } from './ViewportTooSmall.js';
 import type { WizardStore } from '@ui/tui/store';
 
 const MIN_WIDTH = 80;
@@ -88,8 +85,7 @@ export const ScreenContainer = ({ store, screens }: ScreenContainerProps) => {
   // Only enforced on a real terminal: with stdout piped there are no
   // dimensions to read (useStdoutDimensions substitutes 80×24) and no window
   // for anyone to resize, so nagging would be both wrong and unactionable.
-  const tooSmall =
-    Boolean(stdout.isTTY) && isViewportTooSmall(columns, rows);
+  const tooSmall = Boolean(stdout.isTTY) && isViewportTooSmall(columns, rows);
 
   const inner = (
     <Box

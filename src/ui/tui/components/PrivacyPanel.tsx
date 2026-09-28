@@ -11,9 +11,7 @@
  * their browser.
  *
  * The scan paragraph is opt-in per caller. It ends by pointing at a control,
- * so it may only render on a screen that puts one below the panel — three of
- * the four callers show `Back` and nothing else, and would be promising a
- * choice that is not there.
+ * so it may only render on a screen that puts one below the panel.
  */
 
 import { useEffect } from 'react';
@@ -35,8 +33,8 @@ export const PRIVACY_PANEL_LABEL = 'Privacy & data';
 interface PrivacyPanelProps {
   /**
    * True only on a screen that renders the sharing choice below the panel.
-   * Gates the scan paragraph, whose last sentence sends the reader to a
-   * control that exists on one screen.
+   * Gates the scan paragraph, whose last sentence sends the reader to that
+   * choice.
    */
   canOptOut?: boolean;
 }

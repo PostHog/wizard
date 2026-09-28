@@ -52,7 +52,6 @@ import { analytics, sessionProperties } from '@utils/analytics';
 import type { StoreInitContext, ProgramReadyContext } from '@programs/types';
 import { getProgramConfig } from '@programs';
 import { withAiOptInGate } from '@programs/ai-opt-in-gate';
-import { reportWarehouseSourcesDetected } from '@programs/posthog-integration/detect';
 import { appendStatus } from '@shared/status-history';
 import { IS_DEV } from '@shared/constants';
 import { computeTokenCostUsd } from '@shared/token-pricing';
@@ -267,6 +266,8 @@ export class WizardStore {
       setUnsupportedVersion: (info) => this.setUnsupportedVersion(info),
       addDiscoveredFeature: (f) => this.addDiscoveredFeature(f),
       setDetectionComplete: () => this.setDetectionComplete(),
+      markScanReported: () =>
+        this.$session.setKey('warehouseSourcesReported', true),
     };
     for (const step of steps) {
       if (step.onReady) {
@@ -426,14 +427,15 @@ export class WizardStore {
   }
 
   /**
-   * reportWarehouseSourcesDetected() is the single place scan results turn
-   * into telemetry; this just supplies its idempotency flag via the normal
-   * setter path (never mutate session directly). A no-op once
-   * `warehouseSourcesReported` is set, or for any program that never
-   * populated a warehouse-scan result in the first place.
+   * Delegates to the active program's own `reportScanResults` (each program
+   * owns its own event/tag shape; this store stays product-agnostic) and
+   * supplies its idempotency flag via the normal setter path (never mutate
+   * session directly). A no-op once `warehouseSourcesReported` is set, or for
+   * a program that never declared `reportScanResults` in the first place.
    */
   private _markWarehouseSourcesReportedIfNeeded(): void {
-    if (reportWarehouseSourcesDetected(this.session)) {
+    const { reportScanResults } = getProgramConfig(this.router.activeProgram);
+    if (reportScanResults?.(this.session)) {
       this.$session.setKey('warehouseSourcesReported', true);
     }
   }

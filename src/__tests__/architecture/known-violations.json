@@ -116,6 +116,7 @@
     "src/programs/task-stream/task-stream-push.ts -> src/ui/wizard-ui.ts",
     "src/programs/task-stream/types.ts -> src/lib/wizard-session.ts",
     "src/programs/task-stream/wizard-run-sync.ts -> src/lib/wizard-session.ts",
+    "src/programs/warehouse-scan-reporting.ts -> src/lib/wizard-session.ts",
     "src/programs/warehouse-source/detect.ts -> src/lib/wizard-session.ts",
     "src/programs/warehouse-source/index.ts -> src/lib/wizard-session.ts",
     "src/programs/warehouse-source/index.ts -> src/ui/tui/decks/warehouse-source/index.tsx",
@@ -165,7 +166,6 @@
     "src/ui/tui/screens/doctor/IssueTable.tsx -> src/programs/posthog-doctor/index.ts",
     "src/ui/tui/screens/health/HealthCheckScreen.tsx -> src/agent/index.ts",
     "src/ui/tui/services/mcp-suggested-prompts-services.ts -> src/agent/index.ts",
-    "src/ui/tui/store.ts -> src/programs/ai-opt-in-gate.ts",
-    "src/ui/tui/store.ts -> src/programs/posthog-integration/detect.ts"
+    "src/ui/tui/store.ts -> src/programs/ai-opt-in-gate.ts"
   ]
 }

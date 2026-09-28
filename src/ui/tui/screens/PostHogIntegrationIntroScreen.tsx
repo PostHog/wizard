@@ -372,7 +372,6 @@ export const PostHogIntegrationIntroScreen = ({
       detectionRows={detectionRows}
       menuOptions={unsupported ? null : menuOptions}
       menuAlign="center"
-      // The one program whose disclosure view can be acted on.
       privacyOptions={sharingOptions(sharing)}
       onSelect={handleSelect}
       programLabel={session.programLabel}

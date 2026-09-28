@@ -6,6 +6,7 @@ import { WAREHOUSE_SOURCE_PROGRAM } from './steps.js';
 import {
   WAREHOUSE_ABORT_CASES,
   getDetectedWarehouseSources,
+  reportDetectedWarehouseSources,
 } from './detect.js';
 import { getContentBlocks } from '../../ui/tui/decks/warehouse-source/index.js';
 
@@ -50,6 +51,7 @@ export const warehouseSourceConfig: ProgramConfig = {
   getContentBlocks,
   reportFile: 'posthog-warehouse-report.md',
   allowedTools: ['Agent'],
+  reportScanResults: reportDetectedWarehouseSources,
   run: (session: WizardSession): Promise<ProgramRun> =>
     Promise.resolve({
       skillId: 'data-warehouse-source-setup',
@@ -74,6 +76,7 @@ export { WAREHOUSE_SOURCE_PROGRAM } from './steps.js';
 export {
   detectWarehousePrerequisites,
   getDetectedWarehouseSources,
+  reportDetectedWarehouseSources,
   DETECTED_WAREHOUSE_SOURCES_KEY,
   WAREHOUSE_ABORT_CASES,
   type WarehouseDetectError,

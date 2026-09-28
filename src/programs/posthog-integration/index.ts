@@ -28,6 +28,7 @@ import { openTrackedLink, withUtm } from '@utils/links';
 import type { HostResolution } from '@shared/host-resolution';
 import { getDetectedWarehouseSources } from '@programs/warehouse-source/detect';
 import { POSTHOG_INTEGRATION_PROGRAM } from './steps.js';
+import { reportWarehouseSourcesDetected } from './detect.js';
 import { getContentBlocks } from '../../ui/tui/decks/posthog-integration/index.js';
 import { buildCodingAgentPrompt } from './handoff.js';
 import { EVENT_PLAN_FILE } from './constants.js';
@@ -252,6 +253,7 @@ export const posthogIntegrationConfig: ProgramConfig = {
   disallowedTools: [WIZARD_TOOL_NAMES.wizardAsk],
 
   seedTasks: warehouseSeedTasks,
+  reportScanResults: reportWarehouseSourcesDetected,
 
   // Kill switch over the shipped default: only an explicit 'false' excludes,
   // so a failed flag fetch keeps AI Observability and Logs in the run.

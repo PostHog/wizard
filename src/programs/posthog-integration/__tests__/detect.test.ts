@@ -67,6 +67,7 @@ function makeCtx(session: WizardSession): ProgramReadyContext {
     setUnsupportedVersion: vi.fn(),
     addDiscoveredFeature: vi.fn(),
     setDetectionComplete: vi.fn(),
+    markScanReported: vi.fn(),
   };
 }
 
@@ -293,9 +294,13 @@ describe('reportWarehouseSourcesDetected', () => {
     const { detectWarehousePrerequisites } = await import(
       '@programs/warehouse-source/detect'
     );
-    detectWarehousePrerequisites(session, (key, value) => {
-      session.frameworkContext[key] = value;
-    });
+    detectWarehousePrerequisites(
+      session,
+      (key, value) => {
+        session.frameworkContext[key] = value;
+      },
+      () => undefined,
+    );
     expect(
       session.frameworkContext[DETECTED_WAREHOUSE_SOURCES_KEY],
     ).toBeDefined();

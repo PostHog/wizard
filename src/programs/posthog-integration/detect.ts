@@ -10,11 +10,7 @@
  */
 
 import type { ProgramReadyContext } from '@programs/program-step';
-import {
-  mayReportScanResults,
-  ScanConsent,
-  type WizardSession,
-} from '@lib/wizard-session';
+import { mayReportScanResults, type WizardSession } from '@lib/wizard-session';
 import { FRAMEWORK_REGISTRY } from '@programs/frameworks/registry';
 import {
   detectFramework,
@@ -24,6 +20,7 @@ import {
 } from '@programs/detection/index';
 import { analytics } from '@utils/analytics';
 import { detectWarehouseSources } from '@programs/warehouse-sources/detect';
+import { resolveScanReporting } from '@programs/warehouse-scan-reporting';
 import {
   DETECTED_WAREHOUSE_SOURCES_KEY,
   getDetectedWarehouseSources,
@@ -95,13 +92,9 @@ export async function detectPostHogIntegration(
 }
 
 /**
- * How the scan went, for the reporter to read later. Three states, and the
- * absent one carries the most weight:
+ * How the scan went, for the reporter to read later. Three states:
  *
- *   absent   this program never scanned. Only `posthog-integration` runs the
- *            scan below, but every program's intro screen resolves consent
- *            through the same store method, so the reporter is reached on runs
- *            where no scan ever happened.
+ *   absent   this program never scanned.
  *   'failed' the scan threw. A zero-count row would read as "scanned, found
  *            nothing", which is a different fact.
  *   'ok'     the scan ran. Zero sources is a real result and gets reported.
@@ -189,49 +182,45 @@ export function maybeStampAiSdkDetected(session: WizardSession): void {
  * Returns true when consent has resolved and the caller should latch
  * `warehouseSourcesReported`, which is not the same as "this sent something":
  * a decline, a failed scan, and a program that never scanned all resolve
- * without sending.
+ * without sending. Nothing fires on 'declined': saved insights read every row
+ * of this event as a scan that ran. Decline rate comes from 'intro menu
+ * selected' instead.
  */
 export function reportWarehouseSourcesDetected(
   session: WizardSession,
 ): boolean {
-  if (session.warehouseSourcesReported) return false;
-  // 'undecided' means come back later, not no.
-  if (session.scanConsent === ScanConsent.Undecided) return false;
+  return resolveScanReporting(
+    session,
+    getDetectedWarehouseSources(session),
+    (sources) => {
+      // Only an 'ok' scan has something to say. Absent means this program never
+      // scanned, and reporting a zero count there would invent a scan that never
+      // ran; 'failed' already fired captureException.
+      const scanState = session.frameworkContext[WAREHOUSE_SCAN_STATE_KEY] as
+        | WarehouseScanState
+        | undefined;
+      if (scanState !== 'ok') return;
 
-  if (mayReportScanResults(session)) {
-    const sources = getDetectedWarehouseSources(session);
+      // Captured on every run, including the empty case. The denominator is
+      // the whole point: without the zero rows, "20% of runs have a Postgres"
+      // is unanswerable.
+      analytics.wizardCapture('warehouse sources detected', {
+        warehouse_source_count: sources.length,
+        warehouse_source_kinds: sources.map((s) => s.kind),
+        warehouse_source_modes: sources.map((s) => s.mode),
+      });
 
-    // Only an 'ok' scan has something to say. Absent means this program never
-    // scanned, and reporting a zero count there would invent a scan that never
-    // ran; 'failed' already fired captureException.
-    const scanState = session.frameworkContext[WAREHOUSE_SCAN_STATE_KEY] as
-      | WarehouseScanState
-      | undefined;
-    if (scanState !== 'ok') return true;
-
-    // Captured on every run, including the empty case. The denominator is
-    // the whole point: without the zero rows, "20% of runs have a Postgres"
-    // is unanswerable.
-    analytics.wizardCapture('warehouse sources detected', {
-      warehouse_source_count: sources.length,
-      warehouse_source_kinds: sources.map((s) => s.kind),
-      warehouse_source_modes: sources.map((s) => s.mode),
-    });
-
-    if (sources.length > 0) {
-      // Tag subsequent events too, so any downstream funnel can slice on what the
-      // project had available without re-joining to the event above.
-      analytics.setTag(
-        'warehouse_source_kinds',
-        sources.map((s) => s.kind).join(','),
-      );
-      analytics.setTag('warehouse_source_count', sources.length);
-    }
-  }
-  // Nothing on 'declined': saved insights read every row of this event as a
-  // scan that ran. Decline rate comes from 'intro menu selected' instead.
-
-  return true;
+      if (sources.length > 0) {
+        // Tag subsequent events too, so any downstream funnel can slice on what the
+        // project had available without re-joining to the event above.
+        analytics.setTag(
+          'warehouse_source_kinds',
+          sources.map((s) => s.kind).join(','),
+        );
+        analytics.setTag('warehouse_source_count', sources.length);
+      }
+    },
+  );
 }
 
 /** Dependency-level signal, not a verified install. A failed scan reports false. */

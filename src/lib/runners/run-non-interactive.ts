@@ -318,6 +318,9 @@ export function runNonInteractive(
           setPosthogSdkDetected: (detected: boolean) => {
             session.posthogSdkDetected = detected;
           },
+          markScanReported: () => {
+            session.warehouseSourcesReported = true;
+          },
         };
         for (const step of config.steps) {
           if (step.onReady) {

@@ -92,6 +92,7 @@ vi.mock('@utils/wizard-abort', async (original) => ({
 }));
 vi.mock('../posthog-integration/detect', () => ({
   maybeStampAiSdkDetected: vi.fn(),
+  reportWarehouseSourcesDetected: vi.fn(),
 }));
 vi.mock('../posthog-integration/ai-sdk-stamp', () => ({
   stampAiSdkDetected: vi.fn(),

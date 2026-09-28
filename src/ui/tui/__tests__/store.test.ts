@@ -19,6 +19,7 @@ import { HostResolution } from '@shared/host-resolution';
 import { Integration } from '@shared/constants';
 import { analytics } from '@utils/analytics';
 import { getProgramConfig } from '@programs';
+import { DETECTED_WAREHOUSE_SOURCES_KEY } from '@programs/warehouse-source/detect';
 
 vi.mock('@utils/analytics.js', () => ({
   analytics: {
@@ -360,6 +361,39 @@ describe('WizardStore', () => {
 
       expect(store.session.scanConsent).toBe(ScanConsent.Granted);
       expect(store.session.warehouseSourcesReported).toBe(true);
+    });
+
+    it("completeSetup reports the warehouse-source program's own shape, not posthog-integration's, when that program is active", () => {
+      const store = createStore(Program.WarehouseSource);
+      store.setFrameworkContext(DETECTED_WAREHOUSE_SOURCES_KEY, [
+        {
+          kind: 'Stripe',
+          label: 'Stripe',
+          mode: 'in-cli',
+          matchedSignal: 'npm:stripe',
+        },
+      ]);
+
+      store.grantSharing();
+      store.completeSetup();
+
+      expect(store.session.warehouseSourcesReported).toBe(true);
+      expect(analytics.setTag).toHaveBeenCalledWith(
+        'warehouse_source_kinds',
+        'Stripe',
+      );
+      expect(analytics.setTag).toHaveBeenCalledWith(
+        'warehouse_source_modes',
+        'Stripe:in-cli',
+      );
+      expect(analytics.setTag).toHaveBeenCalledWith(
+        'warehouse_source_count',
+        1,
+      );
+      expect(wizardCaptureMock).not.toHaveBeenCalledWith(
+        'warehouse sources detected',
+        expect.anything(),
+      );
     });
 
     it('setRunPhase updates session.runPhase', () => {
