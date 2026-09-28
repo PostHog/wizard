@@ -1,4 +1,4 @@
-import { auditConfig } from '@lib/programs/audit/index';
+import { auditConfig } from '@programs/audit/index';
 
 import type { Command } from './command';
 import { familyCommandFactory } from './factories/family-command-factory';

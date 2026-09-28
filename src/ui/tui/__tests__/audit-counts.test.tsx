@@ -1,6 +1,6 @@
 import { it, expect, vi, afterEach } from 'vitest';
 import { render, cleanup } from 'ink-testing-library';
-import type { AuditCheck, AuditStatus } from '@lib/programs/audit/types';
+import type { AuditCheck, AuditStatus } from '@programs/audit/types';
 import { AuditChecksOutroSection } from '../screens/audit/AuditChecksOutroSection';
 import { Summary } from '../screens/audit/AuditChecksViewer/Header';
 import { WriteReportSlide } from '../screens/audit/slides/writeReport';

@@ -13,7 +13,7 @@
  * isolation surface — a diff here means a credential path changed disposition.
  */
 
-import { sanitizeAgentSubprocessEnv } from '@agent/agent-env-isolation';
+import { sanitizeAgentSubprocessEnv } from '@shared/agent-env-isolation';
 import { classifySettingsConflicts } from '@shared/claude-settings';
 import type { SettingsConflict } from '@shared/claude-settings';
 

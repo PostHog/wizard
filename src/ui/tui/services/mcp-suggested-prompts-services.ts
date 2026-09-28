@@ -12,7 +12,7 @@
 
 import type { Credentials } from '@lib/wizard-session';
 import { getOrAskForProjectData } from '@utils/setup-utils';
-import { Program } from '@lib/programs/program-registry';
+import { Program } from '@programs';
 import type { WizardStore } from '@ui/tui/store';
 import type { ApiUser } from '@shared/api';
 import {
@@ -108,7 +108,7 @@ export function createMcpSuggestedPromptsServices(
         // replays, errors, web analytics, AI Observability, cohorts, persons) plus
         // annotation read/write. Persistence writes (dashboard, insight,
         // notebook) come for free from the base set. See
-        // `src/lib/oauth/program-scopes.ts`.
+        // `src/programs/oauth/program-scopes.ts`.
         programId: Program.McpTutorial,
       });
       return {

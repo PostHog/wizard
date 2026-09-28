@@ -1,4 +1,4 @@
-import type { ProgramConfig } from '@lib/programs/program-step';
+import type { ProgramConfig } from '@programs/types';
 
 import type { Command } from '../command';
 

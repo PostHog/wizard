@@ -18,7 +18,7 @@ import {
   type WizardE2eProfile,
 } from '../e2e-profile';
 import { profileFor, resolveE2eProfile } from '../profiles';
-import { Program } from '@lib/programs/program-registry';
+import { Program } from '@programs';
 import type { CiState } from '../wizard-ci-driver';
 
 const text = (id: string, prompt = id): AskQuestion => ({

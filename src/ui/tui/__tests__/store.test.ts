@@ -18,7 +18,7 @@ import { buildSession } from '@lib/wizard-session';
 import { HostResolution } from '@shared/host-resolution';
 import { Integration } from '@shared/constants';
 import { analytics } from '@utils/analytics';
-import { getProgramConfig } from '@lib/programs/program-registry';
+import { getProgramConfig } from '@programs';
 
 vi.mock('@utils/analytics.js', () => ({
   analytics: {

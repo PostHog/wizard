@@ -19,7 +19,7 @@ configuration surfaces.
 
 Each domain has a dedicated boundary:
 
-- **Frameworks** → `FrameworkConfig` in `src/frameworks/<name>/`
+- **Frameworks** → `FrameworkConfig` in `src/programs/frameworks/<name>/`
 - **Integration knowledge** → markdown skills in the
   [context-mill](https://github.com/PostHog/context-mill) repo
 - **Security policy** → YARA-X rules in the
@@ -34,8 +34,10 @@ Each domain has a dedicated boundary:
   `@agent/types` (types); see [src/agent/README.md](src/agent/README.md)
 - **Shared** → `src/shared/`, stateless library code with no upward imports;
   see [src/shared/README.md](src/shared/README.md)
-- **Programs** → step arrays in `src/lib/programs/`
-- **TUI** → screen components and primitives in `src/ui/tui/`
+- **Programs** → program configs and `runProgram` in `src/programs/`; see
+  [src/programs/README.md](src/programs/README.md) and the
+  [developer interfaces](docs/developer-interfaces.md)
+- **TUI** → screens, primitives and content decks in `src/ui/tui/`
 
 Adding a new concern means finding the narrowest existing surface, not adding
 logic to the runner. Keep changes local to the boundary that owns them.
@@ -74,7 +76,7 @@ Agent SDK is a supported legacy fallback, deprecated as the default; retain it
 for major Pi vulnerabilities or gaps in support for new Anthropic models.
 
 This is the contribution policy, not a claim that every existing binding has
-migrated: `DEFAULT_BINDING` is still Anthropic + linear. Set new bindings
+migrated: `DEFAULT_BINDING` is Pi + linear. Set new bindings
 explicitly and check sequence-specific hooks before migrating existing flows.
 See
 [execution policy and model admission](.claude/skills/wizard-development/SKILL.md#execution-policy-and-model-admission)
@@ -131,7 +133,7 @@ confuse it with the top-level `wizard skill` command.
   ([`src/commands/factories/native-command-factory.ts`](src/commands/factories/native-command-factory.ts)).
 - **Family commands** (e.g. `audit`) resolve subcommands at runtime against the
   `cliEntries` in `skill-menu.json`. Logic lives in
-  [`src/lib/programs/dispatch-family.ts`](src/lib/programs/dispatch-family.ts).
+  [`src/programs/dispatch-family.ts`](src/programs/dispatch-family.ts).
   Adding a skill-backed subcommand is a **context-mill** release, not a wizard
   change.
 
@@ -200,7 +202,8 @@ wizard run points. Full catalog: [`docs/local-dev.md`](docs/local-dev.md).
 - TypeScript everywhere. Use `type` (not `interface`) for framework context
   types so they satisfy `Record<string, unknown>`.
 - All UI calls go through `getUI()` (returns `WizardUI` interface). Never import
-  the store directly from business logic.
+  the store directly from business logic. A program's `run` and `ciPreRun`
+  use the runner context they receive, not `getUI()`.
 - Shared helpers never call `getUI()`; they take a sink or return data. `debug()`
   reaches the UI through the sink `src/ui/index.ts` installs.
 - Outside `src/agent`, import the agent through `@agent` or `@agent/types`. Add

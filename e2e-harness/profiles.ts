@@ -3,7 +3,7 @@
  * program's flow.
  *
  * Each program declares its test path as JSON next to it
- * (`src/lib/programs/<program>/test/e2e.json`): a `profile` (the options the run
+ * (`src/programs/<program>/test/e2e.json`): a `profile` (the options the run
  * auto-takes) plus a documented `path`. {@link profileFor} loads the `profile`
  * and maps it by program id.
  *
@@ -11,7 +11,7 @@
  * so `decideE2eAction` stays a pure function of (state, profile).
  */
 
-import { Program, type ProgramId } from '@lib/programs/program-registry';
+import { Program, type ProgramId } from '@programs';
 import {
   DEFAULT_E2E_PROFILE,
   DEFAULT_E2E_VARIATION,
@@ -19,15 +19,15 @@ import {
   type WizardE2eProfile,
   type WizardE2eVariation,
 } from './e2e-profile.js';
-import posthogIntegrationE2e from '@lib/programs/posthog-integration/test/e2e.json';
-import aiObservabilityE2e from '@lib/programs/ai-observability/test/e2e.json';
-import metricsE2e from '@lib/programs/metrics/test/e2e.json';
-import replayVisionE2e from '@lib/programs/replay-vision/test/e2e.json';
-import selfDrivingE2e from '@lib/programs/self-driving/test/e2e.json';
-import sourceMapsE2e from '@lib/programs/error-tracking-upload-source-maps/test/e2e.json';
-import errorTrackingE2e from '@lib/programs/error-tracking/test/e2e.json';
-import warehouseSourceE2e from '@lib/programs/warehouse-source/test/e2e.json';
-import auditE2e from '@lib/programs/audit/test/e2e.json';
+import posthogIntegrationE2e from '@programs/posthog-integration/test/e2e.json';
+import aiObservabilityE2e from '@programs/ai-observability/test/e2e.json';
+import metricsE2e from '@programs/metrics/test/e2e.json';
+import replayVisionE2e from '@programs/replay-vision/test/e2e.json';
+import selfDrivingE2e from '@programs/self-driving/test/e2e.json';
+import sourceMapsE2e from '@programs/error-tracking-upload-source-maps/test/e2e.json';
+import errorTrackingE2e from '@programs/error-tracking/test/e2e.json';
+import warehouseSourceE2e from '@programs/warehouse-source/test/e2e.json';
+import auditE2e from '@programs/audit/test/e2e.json';
 
 const PROFILES: Partial<Record<ProgramId, WizardE2eProfile>> = {
   [Program.PostHogIntegration]:

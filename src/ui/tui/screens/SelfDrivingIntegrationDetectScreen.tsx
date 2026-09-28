@@ -15,13 +15,13 @@ import type { WizardStore } from '@ui/tui/store';
 import { LoadingBox, PickerMenu } from '@ui/tui/primitives/index';
 import { Colors, Icons } from '@ui/tui/styles';
 import { Integration } from '@shared/constants';
-import { FRAMEWORK_REGISTRY } from '@lib/registry';
-import { SELF_DRIVING_INTEGRATE_PATH_KEY } from '@lib/programs/self-driving/detect';
+import { FRAMEWORK_REGISTRY } from '@programs/frameworks/registry';
+import { SELF_DRIVING_INTEGRATE_PATH_KEY } from '@programs/self-driving/detect';
 import {
   detectSelfDrivingIntegrationProjects,
   type IntegrationProject,
   type IntegrationDetectionReport,
-} from '@lib/programs/self-driving/detect-agentic';
+} from '@programs/self-driving/detect-agentic';
 
 interface SelfDrivingIntegrationDetectScreenProps {
   store: WizardStore;
