@@ -19,7 +19,7 @@ import { sharingOptions } from './PostHogIntegrationIntroScreen.js';
 import {
   getDetectedWarehouseSources,
   type WarehouseDetectError,
-} from '@lib/programs/warehouse-source/index';
+} from '@programs/warehouse-source/index';
 import { ScanConsent } from '@lib/wizard-session';
 import { analytics } from '@utils/analytics';
 

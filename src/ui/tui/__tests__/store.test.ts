@@ -18,8 +18,8 @@ import { buildSession } from '@lib/wizard-session';
 import { HostResolution } from '@shared/host-resolution';
 import { Integration } from '@shared/constants';
 import { analytics } from '@utils/analytics';
-import { getProgramConfig } from '@lib/programs/program-registry';
-import { DETECTED_WAREHOUSE_SOURCES_KEY } from '@lib/programs/warehouse-source/detect';
+import { getProgramConfig } from '@programs';
+import { DETECTED_WAREHOUSE_SOURCES_KEY } from '@programs/warehouse-source/detect';
 
 vi.mock('@utils/analytics.js', () => ({
   analytics: {

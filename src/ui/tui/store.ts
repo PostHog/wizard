@@ -49,12 +49,9 @@ import {
   type ProgramId,
 } from './router.js';
 import { analytics, sessionProperties } from '@utils/analytics';
-import type {
-  StoreInitContext,
-  ProgramReadyContext,
-} from '@lib/programs/program-step';
-import { getProgramConfig } from '@lib/programs/program-registry';
-import { withAiOptInGate } from '@lib/programs/ai-opt-in-gate';
+import type { StoreInitContext, ProgramReadyContext } from '@programs/types';
+import { getProgramConfig } from '@programs';
+import { withAiOptInGate } from '@programs/ai-opt-in-gate';
 import { appendStatus } from '@shared/status-history';
 import { IS_DEV } from '@shared/constants';
 import { computeTokenCostUsd } from '@shared/token-pricing';

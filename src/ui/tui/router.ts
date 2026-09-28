@@ -14,7 +14,7 @@
 
 import { RunPhase, type WizardSession } from '@lib/wizard-session';
 import { isRunFailure } from '@ui/mint-failure';
-import { Program, type ProgramId } from '@lib/programs/program-registry';
+import { Program, type ProgramId } from '@programs';
 import {
   PROGRAM_SEQUENCES,
   MINT_HANDOFF_SEQUENCE,

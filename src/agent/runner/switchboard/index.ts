@@ -7,7 +7,7 @@ import {
   Harness,
   Sequence,
 } from '@shared/constants';
-import type { ProgramId } from '@lib/programs/program-registry';
+import type { ProgramId } from '@programs/types';
 import { resolveHarness } from './harness';
 import type { EffortLevel } from './models';
 import { resolveSequence } from './sequence';

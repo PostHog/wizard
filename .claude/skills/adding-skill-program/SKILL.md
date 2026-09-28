@@ -32,10 +32,10 @@ them.
   [Context-mill](https://github.com/PostHog/context-mill) owns skill content and
   `cliEntries`. A new skill-backed child of an existing family ships through
   context-mill; inspect
-  [family dispatch](../../../src/lib/programs/dispatch-family.ts). Unpromoted
+  [family dispatch](../../../src/programs/dispatch-family.ts). Unpromoted
   skills run through [the skill command](../../../src/commands/skill.ts).
 - **Native program:** use a
-  [ProgramConfig](../../../src/lib/programs/program-step.ts) when the wizard
+  [ProgramConfig](../../../src/programs/program-step.ts) when the wizard
   needs its own flow, screens, detection, composition, or other native behavior.
   Keep product instructions in context-mill.
 
@@ -45,12 +45,12 @@ is `id`, not the retired `flowKey`.
 
 ## Build a native orchestrator program
 
-Use [metrics](../../../src/lib/programs/metrics/) as the current Pi/orchestrator
+Use [metrics](../../../src/programs/metrics/) as the current Pi/orchestrator
 example and read the
 [runner architecture](../wizard-development/references/ARCHITECTURE.md) when
 changing execution behavior.
 
-1. Add the program config under `src/lib/programs/<name>/`. Set `agentFlow` when
+1. Add the program config under `src/programs/<name>/`. Set `agentFlow` when
    its content-mill flow differs from `id`; setting it explicitly also documents
    the content dependency. Keep a `run` definition so the outer runner executes
    agent work.
@@ -60,7 +60,7 @@ changing execution behavior.
    loads `agentFlow ?? id`, requires a seed prompt, and checks task-skill
    variants before running. `run.skillId` alone does not define this flow.
 3. Register the config in
-   [PROGRAM_REGISTRY](../../../src/lib/programs/program-registry.ts) and add its
+   [PROGRAM_REGISTRY](../../../src/programs/program-registry.ts) and add its
    Pi/orchestrator entry to
    [PROGRAM_BINDINGS](../../../src/agent/runner/switchboard/index.ts).
    [Existing binding checks](../../../src/agent/runner/__tests__/switchboard.test.ts)
@@ -70,7 +70,7 @@ changing execution behavior.
    and register it in [bin.ts](../../../bin.ts). A native family child uses the
    handlers in family dispatch. Program registration derives screen sequences
    and store lookup, not the top-level CLI `.use()` chain.
-5. Check [program OAuth scopes](../../../src/lib/oauth/program-scopes.ts)
+5. Check [program OAuth scopes](../../../src/programs/oauth/program-scopes.ts)
    against the tools the program needs; add scopes only when the base set is
    insufficient.
 
@@ -82,13 +82,13 @@ or changing gateway-required prompt material.
 ## Simple linear programs and existing flows
 
 For a very simple linear flow, use
-[createSkillProgram](../../../src/lib/programs/agent-skill/index.ts) to
+[createSkillProgram](../../../src/programs/agent-skill/index.ts) to
 configure installation of one skill. Register the native program as above with
 an explicit Pi/linear binding; the factory does not select a sequence. Read
 `SkillProgramOptions` for required fields;
-[audit](../../../src/lib/programs/audit/) demonstrates factory customization and
+[audit](../../../src/programs/audit/) demonstrates factory customization and
 a dynamic `run(session)` that seeds a ledger.
-[Revenue analytics](../../../src/lib/programs/revenue-analytics/) builds its
+[Revenue analytics](../../../src/programs/revenue-analytics/) builds its
 config directly and adds prerequisite detection.
 
 `ProgramRun.customPrompt`, `abortCases`, `postRun`, and `buildOutroData` are
@@ -102,9 +102,9 @@ does not preserve these behaviors automatically.
 
 ## Screens, prerequisites, and composition
 
-Reuse [AGENT_SKILL_STEPS](../../../src/lib/programs/agent-skill/steps.ts):
+Reuse [AGENT_SKILL_STEPS](../../../src/programs/agent-skill/steps.ts):
 intro, health check, auth, run, outro, and keep-skills. Auth also applies the
-shared [AI opt-in gate](../../../src/lib/programs/ai-opt-in-gate.ts) for agent
+shared [AI opt-in gate](../../../src/programs/ai-opt-in-gate.ts) for agent
 programs. Override `screenId`, not `screen`, when adapting a step. New screens
 need an entry in [ScreenId](../../../src/ui/tui/screen-sequences.ts), a
 component, and registration in
@@ -123,12 +123,12 @@ prerequisite strategy.
 `requires` currently records metadata; it does not execute or enforce prior
 programs. Compose real work through `ProgramStep.run`, with `onRunPrep` and
 `targetDir` when needed. The
-[integration run step](../../../src/lib/programs/posthog-integration/index.ts)
-and [self-driving](../../../src/lib/programs/self-driving/) demonstrate this.
+[integration run step](../../../src/programs/posthog-integration/index.ts)
+and [self-driving](../../../src/programs/self-driving/) demonstrate this.
 Composed sub-runs are structurally linear; orchestrators cannot nest. A host run
 step without `run` can also set `targetDir` and `onRunPrep` to scope the
 program's own agent to a picked project and keep its sequence, as
-[error-tracking](../../../src/lib/programs/error-tracking/) does.
+[error-tracking](../../../src/programs/error-tracking/) does.
 
 ## Validate the affected path
 

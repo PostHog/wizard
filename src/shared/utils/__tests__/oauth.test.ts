@@ -10,7 +10,7 @@ import {
   WIZARD_OAUTH_SCOPES,
   WIZARD_PROVISIONING_SCOPES,
 } from '@shared/constants';
-import { getOAuthScopesForProgram } from '@lib/oauth/program-scopes';
+import { getOAuthScopesForProgram } from '@programs/oauth/program-scopes';
 
 describe('extractOAuthCode', () => {
   it('extracts the code from a full callback URL', () => {

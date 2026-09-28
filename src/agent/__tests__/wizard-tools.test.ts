@@ -31,7 +31,7 @@ import {
   resolveEnvPath,
   templateEnvWriteRefusal,
 } from '@agent/tools';
-import type { AuditCheck } from '@lib/programs/audit/types';
+import type { AuditCheck } from '@programs/audit/types';
 
 function makeTmpDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'wizard-tools-'));

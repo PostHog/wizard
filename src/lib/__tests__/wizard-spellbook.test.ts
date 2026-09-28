@@ -2,7 +2,7 @@ import fs from 'fs/promises';
 import os from 'os';
 import path from 'path';
 import { Integration } from '@shared/constants';
-import type { ProgramConfig } from '../programs/program-step';
+import type { ProgramConfig } from '../../programs/program-step';
 import { buildSession } from '../wizard-session';
 import { writeWizardSpellbook } from '../wizard-spellbook';
 import { downloadSkill } from '@agent/tools/tools';
