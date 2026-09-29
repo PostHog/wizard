@@ -7,12 +7,9 @@
  */
 
 import type { WizardSession } from '@lib/wizard-session';
-import {
-  PROGRAM_REGISTRY,
-  type ProgramId,
-} from '@lib/programs/program-registry';
-import { createProgramSequence } from '@lib/programs/program-step';
-import { withAiOptInGate } from '@lib/programs/ai-opt-in-gate';
+import { PROGRAM_REGISTRY, type ProgramId } from '@programs';
+import { createProgramSequence } from '@programs/program-step';
+import { withAiOptInGate } from '@programs/ai-opt-in-gate';
 
 /** Screens that participate in linear programs. */
 export enum ScreenId {

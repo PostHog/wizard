@@ -1,7 +1,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 import { getSkillsBaseUrl, POSTHOG_DOCS_URL } from '@shared/constants';
-import type { ProgramConfig } from './programs/program-step';
+import type { ProgramConfig } from '@programs/types';
 import type { WizardSession } from './wizard-session';
 import { downloadSkill } from '@agent';
 import {

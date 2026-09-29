@@ -4,6 +4,12 @@ import {
   type Sequence,
 } from '@shared/constants';
 import {
+  createWizardRunSync,
+  type RunOutcome,
+} from '@programs/task-stream/wizard-run-sync';
+import { runtimeEnv } from '@env';
+import { registerShutdown, runCleanups } from '@utils/wizard-abort';
+import {
   checkLocalServices,
   getLocalDev,
   POSTHOG_LOCAL_URL,
@@ -11,19 +17,19 @@ import {
 import type { CloudRegion } from '@utils/types';
 import { getUI, setUI } from '@ui';
 import { LoggingUI } from '@ui/logging-ui';
-import type { ProgramConfig } from '@lib/programs/program-step';
-import { getAuditChecks } from '@lib/programs/audit/types';
+import type { ProgramConfig } from '@programs/types';
+import { getAuditChecks } from '@programs/audit/types';
 import { analytics } from '@utils/analytics';
 import { resolveNoTelemetry } from './resolve-no-telemetry';
 import type { WizardStore } from '@ui/tui/store';
-import type { TaskStreamPush } from '@lib/task-stream/task-stream-push';
+import type { TaskStreamPush } from '@programs/task-stream/task-stream-push';
 import { join } from 'node:path';
 import {
   ErrorCodes,
   classifyRunFailure,
   emitWizardError,
 } from '@shared/errors';
-import { detectErrorCode } from '@lib/programs/detect-map';
+import { detectErrorCode } from '@programs/detect-map';
 import type { OutroData, RunPhase as RunPhaseT } from '@lib/wizard-session';
 
 /**
@@ -187,7 +193,7 @@ export function runNonInteractive(
       const { WizardStore } = await import('@ui/tui/store');
       const { HeadlessUI } = await import('@ui/headless-ui');
       const { TaskStreamPush, PostHogDestination, createFileDestination } =
-        await import('@lib/task-stream/index');
+        await import('@programs/task-stream/index');
 
       // `''` resolves to the default path, so `--ci` always dumps.
       const logTarget =
@@ -196,7 +202,8 @@ export function runNonInteractive(
       const posthogDestination =
         mode === 'headless' && !session.noTelemetry
           ? new PostHogDestination({
-              getCredentials: () => session.credentials,
+              getCredentials: () =>
+                store?.session.credentials ?? session.credentials,
               onError: (e) => logToFile('[headless task-stream]', e.message),
             })
           : null;
@@ -211,7 +218,17 @@ export function runNonInteractive(
       setUI(new HeadlessUI(headlessStore));
       taskStream = new TaskStreamPush({
         store: headlessStore,
+        getFlags: () => analytics.getCachedWizardFlags(),
         programId: config.streamWorkflowId ?? config.id,
+        runSync: createWizardRunSync({
+          mode,
+          programId: config.id,
+          assignedId:
+            (options.runId as string | undefined) ??
+            runtimeEnv('POSTHOG_WIZARD_RUN_ID'),
+          noTelemetry: session.noTelemetry,
+          getSession: () => headlessStore.session,
+        }),
         destinations,
         eventPlanPath: config.eventPlanFile
           ? join(session.installDir, config.eventPlanFile)
@@ -222,7 +239,7 @@ export function runNonInteractive(
         enabled: destinations.length > 0,
       });
       taskStream.attach();
-      headlessStore.setRunPhase(RunPhase.Running);
+
       if (fileDestination) {
         logToFile(`[task-stream] ${mode} dump: ${fileDestination.path}`);
       }
@@ -233,12 +250,33 @@ export function runNonInteractive(
     const settleStream = async (
       phase: RunPhaseT,
       outroData?: OutroData,
+      outcome: RunOutcome = phase === RunPhase.Completed
+        ? 'completed'
+        : 'failed',
     ): Promise<void> => {
       if (!store || !taskStream) return;
       if (outroData) store.setOutroData(outroData);
       store.setRunPhase(phase);
-      await taskStream.shutdown(2000);
+      await taskStream.shutdown(2000, outcome);
+      process.off('SIGINT', onSignal);
+      process.off('SIGTERM', onSignal);
+      unregisterShutdown();
     };
+
+    const unregisterShutdown = registerShutdown((outcome) =>
+      settleStream(RunPhase.Error, undefined, outcome),
+    );
+    let signalled = false;
+    const onSignal = (): void => {
+      if (signalled) return;
+      signalled = true;
+      runCleanups();
+      void settleStream(RunPhase.Error, undefined, 'cancelled').then(() =>
+        wizardAbort({ exitCode: 130 }),
+      );
+    };
+    process.on('SIGINT', onSignal);
+    process.on('SIGTERM', onSignal);
 
     try {
       if (mode === 'ci') {
@@ -249,7 +287,12 @@ export function runNonInteractive(
         );
       }
       if (config.ciPreRun) {
-        await config.ciPreRun(session);
+        await config.ciPreRun(session, {
+          log: {
+            info: (message) => getUI().log.info(message),
+            warn: (message) => getUI().log.warn(message),
+          },
+        });
       } else {
         const readyCtx = {
           session,
@@ -337,12 +380,12 @@ export function runNonInteractive(
         }
       }
 
-      const { runProgramAgent } = await import(
-        '@lib/programs/run-agent-legacy'
-      );
+      const { runProgramAgent } = await import('@programs/run-agent-legacy');
       await runProgramAgent(config, session);
+      if (signalled) return;
       await settleStream(RunPhase.Completed);
     } catch (error) {
+      if (signalled) return;
       const errorMessage =
         error instanceof Error ? error.message : String(error);
       const errorStack =

@@ -61,7 +61,6 @@ export function sessionProperties(
       ? { discovered_features: discoveredFeatures }
       : {}),
     scan_consent: session.scanConsent,
-    additional_features: session.additionalFeatureQueue,
     run_phase: session.runPhase,
     ...(posthogSdkDetected !== undefined
       ? { posthog_sdk_detected: posthogSdkDetected }
@@ -363,6 +362,10 @@ export class Analytics {
     this.activeFlags = merged.flags;
     this.activeFlagPayloads = merged.payloads;
     logToFile('[flags] evaluated', this.activeFlags);
+    return this.activeFlags;
+  }
+
+  getCachedWizardFlags(): Readonly<Record<string, string>> | null {
     return this.activeFlags;
   }
 

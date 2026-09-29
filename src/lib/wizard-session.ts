@@ -11,15 +11,8 @@
  */
 
 import { POSTHOG_LOCAL_URL, resolveLocalDev } from '@shared/local-dev';
-import {
-  AdditionalFeature,
-  ADDITIONAL_FEATURE_LABELS,
-  ADDITIONAL_FEATURE_PROMPTS,
-  type Harness,
-  type Integration,
-  type Sequence,
-} from '@shared/constants';
-import type { FrameworkConfig } from './framework-config';
+import type { Harness, Integration, Sequence } from '@shared/constants';
+import type { FrameworkConfig } from '@programs/types';
 import type { WizardReadinessResult } from '@shared/health-checks/readiness';
 import type { SettingsConflict } from '@shared/claude-settings';
 import type { ApiUser, ApiProject, Credentials } from '@shared/api';
@@ -33,20 +26,17 @@ import type {
 } from '@agent/types';
 // Leaf module on purpose: shared analytics imports this file, so the agent
 // entry would form a module cycle here.
-// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- B2: the session becomes a TUI projection
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- the session becomes a TUI projection later in the refactor
 import { OutroKind } from '@agent/progress';
+import { DiscoveredFeature } from '@shared/discovered-feature';
 
 // These shapes moved to their owners; re-exported so every session reader
-// keeps its import path. `Credentials` sits with the API types, the
-// additional-feature enum with the other program enums in `./constants`, and
-// the outro, question and task-notice shapes are the agent's contract.
+// keeps its import path. `Credentials` sits with the API types,
+// `DiscoveredFeature` sits in shared so programs can name it without the
+// session, and the outro, question and task-notice shapes are the agent's
+// contract.
 export type { Credentials, CloudRegion };
-export {
-  AdditionalFeature,
-  ADDITIONAL_FEATURE_LABELS,
-  ADDITIONAL_FEATURE_PROMPTS,
-};
-export { OutroKind };
+export { OutroKind, DiscoveredFeature };
 export type { AskAnswers, AskQuestion, OutroData, PendingQuestion, TaskNotice };
 
 function parseProjectIdArg(value: string | undefined): number | undefined {
@@ -65,12 +55,6 @@ export enum RunPhase {
   Completed = 'completed',
   /** Main work finished with an error */
   Error = 'error',
-}
-
-/** Features discovered by the feature-discovery subagent */
-export enum DiscoveredFeature {
-  Stripe = 'stripe',
-  LLM = 'llm',
 }
 
 /** Consent to report what local detection found (see `scanConsent` below). */
@@ -231,7 +215,6 @@ export interface WizardSession {
 
   // Feature discovery
   discoveredFeatures: DiscoveredFeature[];
-  llmOptIn: boolean;
 
   // ScreenId completion
   mcpComplete: boolean;
@@ -329,9 +312,6 @@ export interface WizardSession {
   dashboardUrl: string | null;
   notebookUrl: string | null;
 
-  // Additional features queue (drained via stop hook after main integration)
-  additionalFeatureQueue: AdditionalFeature[];
-
   // Program metadata (set by runWizard in bin.ts)
   programLabel: string | null;
   skillId: string | null;
@@ -415,7 +395,6 @@ export function buildSession(args: {
 
     runPhase: RunPhase.Idle,
     discoveredFeatures: [],
-    llmOptIn: false,
     mcpComplete: false,
     mcpOutcome: null,
     mcpInstalledClients: [],
@@ -450,7 +429,6 @@ export function buildSession(args: {
     mintHandoff: null,
     dashboardUrl: null,
     notebookUrl: null,
-    additionalFeatureQueue: [],
     programLabel: null,
     skillId: null,
     frameworkConfig: null,

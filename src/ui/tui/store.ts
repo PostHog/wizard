@@ -28,7 +28,6 @@ import {
   type PendingQuestion,
   type AskAnswers,
   type CloudRegion,
-  AdditionalFeature,
   McpOutcome,
   RunPhase,
   ScanConsent,
@@ -50,13 +49,10 @@ import {
   type ProgramId,
 } from './router.js';
 import { analytics, sessionProperties } from '@utils/analytics';
-import type {
-  StoreInitContext,
-  ProgramReadyContext,
-} from '@lib/programs/program-step';
-import { getProgramConfig } from '@lib/programs/program-registry';
-import { withAiOptInGate } from '@lib/programs/ai-opt-in-gate';
-import { reportWarehouseSourcesDetected } from '@lib/programs/posthog-integration/detect';
+import type { StoreInitContext, ProgramReadyContext } from '@programs/types';
+import { getProgramConfig } from '@programs';
+import { withAiOptInGate } from '@programs/ai-opt-in-gate';
+import { reportWarehouseSourcesDetected } from '@programs/posthog-integration/detect';
 import { appendStatus } from '@shared/status-history';
 import { IS_DEV } from '@shared/constants';
 import { computeTokenCostUsd } from '@shared/token-pricing';
@@ -65,6 +61,9 @@ export { TaskStatus, ScreenId, Overlay, Program, RunPhase, McpOutcome };
 export type { ScreenName, OutroData, WizardSession, ProgramId };
 
 export interface TaskItem {
+  id?: string;
+  source?: string;
+  sourceStatus?: string;
   label: string;
   activeForm?: string;
   status: TaskStatus;
@@ -737,28 +736,6 @@ export class WizardStore {
     }
   }
 
-  /**
-   * Enable an additional feature: enqueue it for the stop hook
-   * and set any feature-specific session flags.
-   */
-  enableFeature(feature: AdditionalFeature): void {
-    if (!this.session.additionalFeatureQueue.includes(feature)) {
-      this.session.additionalFeatureQueue.push(feature);
-      // Distinct key from `sessionProperties()`'s array-valued
-      // `additional_features` — see the note in posthog-integration/detect.ts.
-      analytics.setTag(
-        'additional_feature_kinds',
-        this.session.additionalFeatureQueue.join(','),
-      );
-    }
-    // Feature-specific flags
-    if (feature === AdditionalFeature.LLM) {
-      this.session.llmOptIn = true;
-    }
-    analytics.wizardCapture('feature enabled', { feature });
-    this.emitChange();
-  }
-
   setMcpComplete(
     outcome: McpOutcome = McpOutcome.Skipped,
     installedClients: string[] = [],
@@ -1147,11 +1124,20 @@ export class WizardStore {
   }
 
   syncTodos(
-    todos: Array<{ content: string; status: string; activeForm?: string }>,
+    todos: Array<{
+      id?: string;
+      source?: string;
+      content: string;
+      status: string;
+      activeForm?: string;
+    }>,
   ): void {
     const incoming = todos.map((t) => {
       const status = isTaskStatus(t.status) ? t.status : TaskStatus.Pending;
       return {
+        id: t.id,
+        source: t.source,
+        sourceStatus: isTaskStatus(t.status) ? undefined : t.status,
         label: t.content,
         activeForm: t.activeForm,
         status,
@@ -1160,10 +1146,17 @@ export class WizardStore {
     });
 
     const incomingLabels = new Set(incoming.map((t) => t.label));
+    const sources = new Set(todos.map((t) => t.source));
 
     const retained = this.$tasks
       .get()
-      .filter((t) => t.done && !incomingLabels.has(t.label));
+      .filter(
+        (t) =>
+          (t.status === TaskStatus.Completed ||
+            t.status === TaskStatus.Failed ||
+            t.status === TaskStatus.Skipped) &&
+          (t.source ? !sources.has(t.source) : !incomingLabels.has(t.label)),
+      );
 
     this.$tasks.set([...retained, ...incoming]);
     this.emitChange();

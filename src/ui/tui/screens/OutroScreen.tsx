@@ -57,14 +57,23 @@ export const OutroScreen = ({ store }: OutroScreenProps) => {
           )}
 
           {outroData.notebookUrl && (
-            <Box marginTop={1}>
-              <Text>
-                Notebook:{' '}
-                <Text color="cyan">
-                  {withUtm(outroData.notebookUrl, 'outro-notebook')}
+            <>
+              <Box marginTop={1}>
+                <Text>
+                  The wizard has set up PostHog in your codebase and written a
+                  full report of what it instrumented. Read the notebook for
+                  more details!
                 </Text>
-              </Text>
-            </Box>
+              </Box>
+              <Box marginTop={1}>
+                <Text>
+                  Notebook:{' '}
+                  <Text color="cyan">
+                    {withUtm(outroData.notebookUrl, 'outro-notebook')}
+                  </Text>
+                </Text>
+              </Box>
+            </>
           )}
 
           {outroData.dashboardUrl && (

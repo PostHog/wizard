@@ -35,8 +35,8 @@ import type { ProgressItem, TabDefinition } from '@ui/tui/primitives/index';
 import { LearnCard } from '@ui/tui/components/LearnCard';
 import { TipsCard } from '@ui/tui/components/TipsCard';
 import { VisualizerTab } from '@ui/tui/components/PhaseVisuals';
-import { getProgramConfig } from '@lib/programs/program-registry';
-import { getContentBlocks as getSkillContentBlocks } from '@lib/programs/agent-skill/content/index';
+import { getProgramConfig } from '@programs';
+import { getContentBlocks as getSkillContentBlocks } from '@ui/tui/decks/agent-skill/index';
 import { Colors } from '@ui/tui/styles';
 import { WIZARD_LOG_FILE } from '@utils/paths';
 

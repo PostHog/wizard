@@ -14,23 +14,25 @@ import { OutroKind, type OutroData } from '@agent/progress';
 import { AgentErrorType } from '../../agent-interface';
 import { logToFile } from '@utils/debug';
 import { createBenchmarkPipeline } from '@agent/middleware/benchmark';
-import { AGENT_ERROR_CODE, ErrorCodes } from '@shared/errors';
+import { ErrorCodes } from '@shared/errors';
+import { AGENT_ERROR_CODE } from '@agent/error-map';
 import { analytics } from '@utils/analytics';
 import { formatYaraAbortMessage } from '@agent/yara-hooks';
 import { installSkillById } from '@agent/tools';
-import { assemblePrompt } from '../../agent-prompt';
+import { assemblePrompt, type PromptContext } from '../../agent-prompt';
 import type { SequenceResult, SequenceContext } from '../shared/types';
 import { failed, installFailure } from '../shared/errors';
 import { RunOutcome } from '../shared/types';
 import { shouldDisableAsk, runOptions } from '../shared/bootstrap';
 import { createEmitSpinner } from '../shared/progress-collector';
 import { createAskBridge } from '../shared/ask';
+import { withTranscript } from '../shared/transcript-tail';
 import { getHarness } from '../switchboard';
 
 export async function runLinearProgram(
   context: SequenceContext,
 ): Promise<SequenceResult> {
-  // Aborts on the host's signal or when the run ends, so no ask outlives it.
+  // Aborts on the caller's signal or when the run ends, so no ask outlives it.
   const controller = new AbortController();
   const abortFromHost = () => controller.abort();
   context.signal?.addEventListener('abort', abortFromHost, { once: true });
@@ -43,9 +45,17 @@ export async function runLinearProgram(
   }
 }
 
-/** The host's `signal` decides the outcome; `runSignal` also ends with the run. */
+/** The caller's `signal` decides the outcome; `runSignal` also ends with the run. */
 async function executeLinear(
-  { config, input, boot, emit, interaction, signal }: SequenceContext,
+  {
+    config,
+    input,
+    boot,
+    emit,
+    interaction,
+    signal,
+    transcript,
+  }: SequenceContext,
   runSignal: AbortSignal,
 ): Promise<SequenceResult> {
   const { run, composed } = config;
@@ -78,14 +88,15 @@ async function executeLinear(
   // 6. Initialize agent
   const spinner = createEmitSpinner(emit);
 
-  emit({ kind: 'lifecycle', phase: 'started' });
+  if (!run.structured) emit({ kind: 'lifecycle', phase: 'started' });
 
   // wizard_ask needs an answerer. A human answers at the keyboard; the e2e
   // snapshot/MCP host answers via its driver and sets WIZARD_ASK_AUTODRIVE.
   // CI/signup with neither has no answerer, so we omit the bridge and the tool
   // returns an actionable error rather than hanging on a never-resolving prompt.
   const askDisabled =
-    shouldDisableAsk(input.flags) && process.env.WIZARD_ASK_AUTODRIVE !== '1';
+    !!run.structured ||
+    (shouldDisableAsk(input.flags) && process.env.WIZARD_ASK_AUTODRIVE !== '1');
   const ask = askDisabled
     ? undefined
     : createAskBridge(interaction, {
@@ -95,12 +106,15 @@ async function executeLinear(
         signal: runSignal,
       });
 
-  const middleware = input.flags.benchmark
-    ? createBenchmarkPipeline(emit, spinner, runOptions(input))
-    : undefined;
+  const middleware = withTranscript(
+    input.flags.benchmark
+      ? createBenchmarkPipeline(emit, spinner, runOptions(input))
+      : undefined,
+    transcript,
+  );
 
   // 7. Build prompt
-  const prompt = assemblePrompt(run, {
+  const promptContext: PromptContext = {
     projectId,
     projectApiKey,
     host,
@@ -114,7 +128,10 @@ async function executeLinear(
           surveys: project.surveys_opt_in ?? null,
         }
       : null,
-  });
+  };
+  const prompt = run.prompt
+    ? run.prompt(promptContext)
+    : assemblePrompt(run, promptContext);
   logToFile(`[agent-runner] prompt assembled (${prompt.length} chars)`);
   if (signal?.aborted) return aborted();
 
@@ -135,6 +152,7 @@ async function executeLinear(
     model,
     thinkingLevel,
     signal: runSignal,
+    structured: run.structured,
   });
   if (signal?.aborted && agentResult.kind === 'success') return aborted();
 
@@ -177,7 +195,7 @@ async function executeLinear(
       matched: matched?.message ?? null,
     });
     return {
-      // An agent that stops itself failed the run; only the host's signal cancels it.
+      // An agent that stops itself failed the run; only the caller's signal cancels it.
       outcome: signal?.aborted ? RunOutcome.Aborted : RunOutcome.Failed,
       failure: {
         message: matched?.message ?? `${run.integrationLabel} aborted`,
@@ -277,6 +295,13 @@ async function executeLinear(
       message: agentResult.message ?? 'Agent failed',
       error: agentResult.error,
     });
+  }
+
+  if (run.structured) {
+    return {
+      outcome: RunOutcome.Success,
+      structuredOutput: agentResult.structuredOutput,
+    };
   }
 
   // 10. Post-run hooks

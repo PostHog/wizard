@@ -18,8 +18,8 @@ import { DUMMY_PROJECT_API_KEY, ISSUES_URL } from '@shared/constants';
 import {
   getOAuthScopesForProgram,
   getProvisioningScopesForProgram,
-} from '@lib/oauth/program-scopes';
-import type { ProgramId } from '@lib/programs/program-registry';
+} from '@programs/oauth/program-scopes';
+import type { ProgramId } from '@programs/types';
 import { analytics } from './analytics';
 import { getUI } from '@ui';
 import { HostResolution } from '@shared/host-resolution';

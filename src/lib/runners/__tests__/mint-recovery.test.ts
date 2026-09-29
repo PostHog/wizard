@@ -1,16 +1,19 @@
 import { vi, it, expect, afterEach } from 'vitest';
 import { runWizard } from '../run-wizard';
-import { runProgramAgent } from '@lib/programs/run-agent-legacy';
+import { runProgramAgent } from '@programs/run-agent-legacy';
 import { startTUI } from '@ui/tui/start-tui';
 import { WizardStore } from '@ui/tui/store';
 import { InkUI } from '@ui/tui/ink-ui';
 import { setUI } from '@ui';
-import { posthogIntegrationConfig } from '@lib/programs/posthog-integration';
+import { posthogIntegrationConfig } from '@programs/posthog-integration';
 import { ScreenId } from '@ui/tui/router';
 import { HostResolution } from '@shared/host-resolution';
 import { analytics } from '@utils/analytics';
+import { RunPhase } from '@lib/wizard-session';
 
-vi.mock('@lib/programs/run-agent-legacy', () => ({ runProgramAgent: vi.fn() }));
+const streamShutdown = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+
+vi.mock('@programs/run-agent-legacy', () => ({ runProgramAgent: vi.fn() }));
 vi.mock('@ui/tui/start-tui', () => ({ startTUI: vi.fn() }));
 vi.mock('@shared/local-dev', async (original) => ({
   ...(await original<typeof import('@shared/local-dev')>()),
@@ -27,15 +30,14 @@ vi.mock('@utils/analytics', () => ({
   },
   sessionProperties: () => ({}),
 }));
-vi.mock('@lib/task-stream/index', () => ({
+vi.mock('@programs/task-stream/index', () => ({
   TaskStreamPush: class {
     attach = vi.fn();
-    shutdown() {
-      return Promise.resolve();
-    }
+    finishRun = vi.fn().mockResolvedValue(undefined);
+    shutdown = streamShutdown;
   },
 }));
-vi.mock('@lib/task-stream/destinations/posthog', () => ({
+vi.mock('@programs/task-stream/destinations/posthog', () => ({
   PostHogDestination: class {},
 }));
 
@@ -96,3 +98,35 @@ it.each(['continue', 'exit'] as const)(
     expect(analytics.shutdown).toHaveBeenCalledWith('error');
   },
 );
+
+it('routes Ink cancellation through one cancelled shutdown and preserves exit 130', async () => {
+  const store = new WizardStore();
+  setUI(new InkUI(store));
+  vi.spyOn(store, 'runReadyHooks').mockResolvedValue(undefined);
+  vi.spyOn(store, 'getGate').mockResolvedValue(undefined);
+  const unmount = vi.fn();
+  vi.mocked(startTUI).mockReturnValue({
+    store,
+    unmount,
+    waitForSetup: () => Promise.resolve(),
+  });
+  vi.mocked(runProgramAgent).mockImplementation(() => {
+    store.setRunPhase(RunPhase.Running);
+    return new Promise(() => undefined);
+  });
+  const exit = vi
+    .spyOn(process, 'exit')
+    .mockImplementation(() => undefined as never);
+  runWizard(posthogIntegrationConfig, {
+    installDir: '/tmp/cancellation-test',
+    telemetry: false,
+  });
+  await vi.waitFor(() => expect(runProgramAgent).toHaveBeenCalled());
+  const interrupt = vi.mocked(startTUI).mock.calls[0][2];
+  interrupt?.();
+  interrupt?.();
+  await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(130));
+  expect(streamShutdown).toHaveBeenCalledExactlyOnceWith(2000, 'cancelled');
+  expect(analytics.shutdown).toHaveBeenCalledWith('cancelled');
+  expect(unmount).toHaveBeenCalledOnce();
+});

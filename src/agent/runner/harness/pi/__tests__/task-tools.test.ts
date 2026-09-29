@@ -3,7 +3,9 @@
  * pi tools a task's allow list unlocks, which queue tools its disallow list
  * removes, and the names the security fence blocks.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+import { createWizardPiTaskTools } from '../tasks';
+const syncTodos = vi.fn();
 import {
   allowedPiCodingTools,
   allowedOrchestratorTools,
@@ -128,4 +130,34 @@ describe('audit ledger tools on pi', () => {
     ]);
     expect([...granted].filter((t) => t.startsWith('audit_'))).toHaveLength(3);
   });
+});
+
+it('Pi task mutations retain scoped IDs; reads do not publish', async () => {
+  const first = createWizardPiTaskTools(syncTodos);
+  const call = (name: string, args: unknown) =>
+    (
+      first.tools.find((t) => t.name === name)!.execute as (
+        id: string,
+        args: unknown,
+      ) => Promise<unknown>
+    )('call', args);
+  await call('TaskCreate', { content: 'Inspect' });
+  await call('TaskUpdate', {
+    taskId: 'task-1',
+    status: 'in_progress',
+    content: 'Renamed',
+  });
+  await call('TaskGet', { taskId: 'task-1' });
+  await call('TaskList', {});
+  expect(syncTodos).toHaveBeenCalledTimes(2);
+  expect(syncTodos.mock.calls[0][0][0].id).toBe(
+    syncTodos.mock.calls[1][0][0].id,
+  );
+  const second = createWizardPiTaskTools(syncTodos);
+  await (
+    second.tools[0].execute as (id: string, args: unknown) => Promise<unknown>
+  )('call', { content: 'Inspect' });
+  expect(syncTodos.mock.calls[2][0][0].id).not.toBe(
+    syncTodos.mock.calls[0][0][0].id,
+  );
 });

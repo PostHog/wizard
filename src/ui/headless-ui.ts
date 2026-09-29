@@ -1,3 +1,4 @@
+import { RunPhase, type Credentials } from '@lib/wizard-session';
 import { LoggingUI } from './logging-ui';
 import type { WizardStore } from './tui/store';
 
@@ -14,8 +15,27 @@ export class HeadlessUI extends LoggingUI {
     super();
   }
 
+  startRun(): void {
+    super.startRun();
+    this.store.setRunPhase(RunPhase.Running);
+  }
+
+  setCredentials(credentials: Credentials): void {
+    this.store.setAccessToken(credentials);
+  }
+
+  setAccessToken(credentials: Credentials): void {
+    this.store.setAccessToken(credentials);
+  }
+
   syncTodos(
-    todos: Array<{ content: string; status: string; activeForm?: string }>,
+    todos: Array<{
+      id?: string;
+      source?: string;
+      content: string;
+      status: string;
+      activeForm?: string;
+    }>,
   ): void {
     super.syncTodos(todos);
     this.store.syncTodos(todos);

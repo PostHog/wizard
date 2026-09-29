@@ -18,7 +18,7 @@ const { mockStreamAttach, mockStreamShutdown, mockStreamDestinations } =
     // destinations, not about whether a stream exists.
     mockStreamDestinations: vi.fn(),
   }));
-vi.mock('../lib/task-stream/index', () => ({
+vi.mock('../programs/task-stream', () => ({
   // shutdown() hardcodes a resolved Promise (not a bare vi.fn) so the
   // interactive runWizard's dangling SIGTERM handler — which calls
   // shutdown().catch() and outlives these tests — never hits undefined.catch.
@@ -29,6 +29,7 @@ vi.mock('../lib/task-stream/index', () => ({
     attach() {
       mockStreamAttach();
     }
+    finishRun = vi.fn().mockResolvedValue(undefined);
     shutdown() {
       mockStreamShutdown();
       return Promise.resolve();
@@ -75,7 +76,7 @@ vi.mock('../ui/tui/start-tui', () => ({
     },
   }),
 }));
-vi.mock('../lib/programs/posthog-integration/index', () => ({
+vi.mock('../programs/posthog-integration', () => ({
   posthogIntegrationConfig: {
     id: 'posthog-integration',
     steps: [],
@@ -101,24 +102,32 @@ vi.mock('@utils/debug', () => ({
   logToFile: vi.fn(),
   setDebugSink: vi.fn(),
 }));
-vi.mock('../lib/registry', () => ({ FRAMEWORK_REGISTRY: {} }));
-vi.mock('../lib/detection/index', () => ({
+vi.mock('../programs/frameworks/registry', () => ({ FRAMEWORK_REGISTRY: {} }));
+vi.mock('../programs/detection', () => ({
   detectFramework: vi.fn().mockResolvedValue(null),
   gatherFrameworkContext: vi.fn().mockResolvedValue({}),
 }));
 vi.mock('@utils/analytics', () => ({
-  analytics: { setTag: vi.fn() },
+  analytics: {
+    setTag: vi.fn(),
+    shutdown: vi.fn().mockResolvedValue(undefined),
+  },
 }));
 vi.mock('@utils/wizard-abort', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@utils/wizard-abort')>()),
   wizardAbort: vi.fn(),
 }));
-vi.mock('../lib/programs/run-agent-legacy', () => ({
+vi.mock('../programs/run-agent-legacy', () => ({
   runProgramAgent: vi.fn().mockResolvedValue(undefined),
 }));
 
 describe('CLI argument parsing', () => {
   const originalArgv = process.argv;
+  const originalSignals = new Map(
+    (['SIGINT', 'SIGTERM'] as const).map(
+      (signal) => [signal, process.listeners(signal)] as const,
+    ),
+  );
   // eslint-disable-next-line @typescript-eslint/unbound-method
   const originalExit = process.exit;
 
@@ -137,6 +146,7 @@ describe('CLI argument parsing', () => {
     'POSTHOG_WIZARD_LOCAL_MCP',
     'POSTHOG_WIZARD_LOCAL_POSTHOG',
     'POSTHOG_TASK_RUN_ID',
+    'POSTHOG_WIZARD_RUN_ID',
     'POSTHOG_TASK_ID',
   ];
   const clearWizardEnv = () => {
@@ -158,6 +168,12 @@ describe('CLI argument parsing', () => {
   });
 
   afterEach(() => {
+    for (const [signal, original] of originalSignals) {
+      for (const listener of process.listeners(signal)) {
+        if (!original.includes(listener))
+          process.removeListener(signal, listener);
+      }
+    }
     process.argv = originalArgv;
     process.exit = originalExit;
     clearWizardEnv();
@@ -626,6 +642,18 @@ describe('CLI argument parsing', () => {
       await runCLI([]);
 
       expect(process.exit).not.toHaveBeenCalledWith(1);
+    });
+
+    test('accepts the explicit WizardRun assignment through the strict environment parser', async () => {
+      process.env.POSTHOG_WIZARD_CI = 'true';
+      process.env.POSTHOG_WIZARD_REGION = 'us';
+      process.env.POSTHOG_WIZARD_API_KEY = 'pha_test';
+      process.env.POSTHOG_WIZARD_INSTALL_DIR = '/tmp/test';
+      process.env.POSTHOG_WIZARD_RUN_ID =
+        '019edb1a-cce4-4000-8f6d-682061862da9';
+      await runCLI([]);
+      expect(process.exit).not.toHaveBeenCalledWith(1);
+      expect(getLastBuildSessionArgs().runId).toBeUndefined();
     });
 
     test('CLI args override CI environment variables', async () => {

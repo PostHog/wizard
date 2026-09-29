@@ -9,6 +9,7 @@ import { createAioCapture } from '@agent/aio-capture';
 import { getLogFilePath, logToFile } from '@utils/debug';
 import { detectNodePackageManagers } from '@utils/package-manager';
 import { runOptions } from '@agent/runner/shared/bootstrap';
+import { currentAccessToken } from '@shared/oauth-session';
 import { createEmitLog } from '@agent/runner/shared/progress-collector';
 import type {
   AgentResult,
@@ -51,6 +52,7 @@ export const anthropicBackend: AgentHarness = {
         workingDirectory: input.installDir,
         posthogMcpUrl: host.mcpUrl,
         posthogApiKey: accessToken,
+        currentPosthogApiKey: () => currentAccessToken(credentials),
         host,
         additionalMcpServers: config.additionalMcpServers,
         detectPackageManager:
@@ -87,17 +89,16 @@ export const anthropicBackend: AgentHarness = {
       runOptions(input),
       spinner,
       {
-        requestRemark: !structured,
         timeoutMs: structured?.timeoutMs,
         estimatedDurationMinutes: config.estimatedDurationMinutes,
         spinnerMessage: config.spinnerMessage,
         successMessage: config.successMessage,
         errorMessage:
           config.errorMessage ?? `${config.integrationLabel} failed`,
-        additionalFeatureQueue: config.additionalFeatureQueue ?? [],
         abortCases: config.abortCases,
         emitStepEvents: config.trackStepProgress ?? false,
         resolveStepKey: config.resolveStepKey,
+        requestRemark: structured ? false : config.requestRemark,
         triageProvider: boot.triageProvider,
       },
       middleware,
@@ -120,7 +121,6 @@ export const anthropicBackend: AgentHarness = {
       spinnerMessage,
       successMessage,
       errorMessage,
-      additionalFeatureQueue,
       requestRemark,
       analyticsProperties,
     } = inputs;
@@ -141,6 +141,7 @@ export const anthropicBackend: AgentHarness = {
         workingDirectory: input.installDir,
         posthogMcpUrl: boot.credentials.host.mcpUrl,
         posthogApiKey: boot.credentials.accessToken,
+        currentPosthogApiKey: () => currentAccessToken(boot.credentials),
         host: boot.credentials.host,
         detectPackageManager: detectNodePackageManagers,
         skillsBaseUrl: boot.skillsBaseUrl,
@@ -168,7 +169,6 @@ export const anthropicBackend: AgentHarness = {
         spinnerMessage,
         successMessage,
         errorMessage,
-        additionalFeatureQueue,
         requestRemark,
         analyticsProperties,
       },

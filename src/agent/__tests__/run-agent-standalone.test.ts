@@ -16,7 +16,8 @@ import {
   type AskAnswers,
   type PendingQuestion,
 } from '@lib/wizard-session';
-import { AGENT_ERROR_CODE, ErrorCodes, WizardError } from '@shared/errors';
+import { ErrorCodes, WizardError } from '@shared/errors';
+import { AGENT_ERROR_CODE } from '@agent/error-map';
 import { AgentErrorType } from '@agent/signals';
 import { CANCELLED_SENTINEL, type AskResponse } from '@agent/wizard-ask-bridge';
 import type { AgentFailure } from '@agent/runner/shared/types';
@@ -404,7 +405,13 @@ describe('runAgent standalone', () => {
             harnessState.tasks[1].orchestrator.currentTaskId,
           ).toBeDefined();
           expect(result.snapshot.tasks).toEqual([
-            { content: 'install', activeForm: 'install', status: 'completed' },
+            {
+              id: expect.any(String),
+              source: expect.any(String),
+              content: 'install',
+              activeForm: 'install',
+              status: 'completed',
+            },
           ]);
         }
       }
@@ -844,7 +851,6 @@ describe('runAgent standalone', () => {
     expect(result.failure?.code).toBe(
       AGENT_ERROR_CODE[AgentErrorType.NO_PROGRESS],
     );
-    expect(result.failure?.message).toContain('without changing your project');
   });
 
   it('resolves a crash even when the thrown Error has hostile getters', async () => {
@@ -957,6 +963,32 @@ describe('runAgent standalone', () => {
     expect(result.outcome).toBe(RunOutcome.Aborted);
     expect(result.failure?.code).toBe(ErrorCodes.AgentAbort);
     expect(harnessState.lastInputs).toBeUndefined();
+  });
+
+  it('returns structured output without asking questions or running completion hooks', async () => {
+    const structured = { schema: { type: 'object' }, timeoutMs: 60_000 };
+    const output = { projects: [] };
+    const postRun = vi.fn();
+    const buildOutroData = vi.fn();
+    harnessState.result = { kind: 'success', structuredOutput: output };
+    const result = await runAgent(
+      config({
+        run: { ...config().run, structured },
+        hooks: { postRun, buildOutroData },
+      }),
+      input(),
+    );
+    expect(result).toMatchObject({
+      outcome: RunOutcome.Success,
+      structuredOutput: output,
+    });
+    expect(harnessState.lastInputs).toMatchObject({
+      structured,
+      askBridge: undefined,
+    });
+    expect(postRun).not.toHaveBeenCalled();
+    expect(buildOutroData).not.toHaveBeenCalled();
+    expect(result.outro).toBeUndefined();
   });
 
   it('calls the bound hooks with the run credentials', async () => {

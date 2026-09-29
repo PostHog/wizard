@@ -1,8 +1,8 @@
 /**
  * LearnCard — Generic render shell for an animated content deck.
  *
- * Program-owned. Callers pass the script via `blocks`. The script lives
- * under `src/lib/programs/<name>/content/`. The shell handles
+ * Callers pass the script via `blocks`. The script lives under
+ * `src/ui/tui/decks/<name>/`. The shell handles
  * dimension tracking, status-bar height math, and the `display="none"`
  * clamp on narrow terminals.
  */

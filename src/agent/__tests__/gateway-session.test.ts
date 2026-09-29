@@ -182,6 +182,33 @@ describe('gatewayAuth', () => {
     );
   });
 
+  it.each([
+    ['http://localhost:8010', 'http://localhost:8080'],
+    ['http://127.0.0.1:8010', 'http://localhost:8080'],
+    ['http://host.docker.internal:8010', 'http://host.docker.internal:8080'],
+  ])(
+    'uses the reachable gateway address for API host %s',
+    async (apiHost, expected) => {
+      fetchMock.mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            token: 'phe_minted',
+            expires_at: new Date(Date.now() + 3600_000).toISOString(),
+            gateway_url: 'http://host.docker.internal:8080',
+          }),
+      });
+      const localHost = { apiHost } as HostResolution;
+      const auth = await gatewayAuth(
+        localHost,
+        'pha_oauth',
+        'posthog-integration',
+      );
+      expect(auth.gatewayUrl).toBe(expected);
+      expect(checkLlmGatewayHealth).toHaveBeenCalledWith(expected);
+    },
+  );
+
   it.each([ServiceHealthStatus.Down, ServiceHealthStatus.NoConnection])(
     'reports gateway %s without exposing diagnostics or caching auth',
     async (status) => {

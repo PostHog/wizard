@@ -6,7 +6,7 @@
  */
 
 import { WIZARD_DEFAULT_AIO_LOGS_FLAG_KEY } from '@shared/constants';
-import { posthogIntegrationConfig } from '@lib/programs/posthog-integration/index';
+import { posthogIntegrationConfig } from '@programs/posthog-integration/index';
 import { effectiveExcludedTaskTypes } from '../orchestrator-runner';
 
 describe('effectiveExcludedTaskTypes', () => {

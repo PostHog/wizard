@@ -18,8 +18,8 @@ import {
   NO_DEFAULT_LIMIT,
   PRICING_LONG,
   PRICING_SHORT,
-} from '@lib/programs/self-driving/content/pricing.js';
-import type { SelfDrivingDetectError } from '@lib/programs/self-driving/index';
+} from '@ui/tui/decks/self-driving/pricing.js';
+import type { SelfDrivingDetectError } from '@programs/self-driving/index';
 
 interface SelfDrivingIntroScreenProps {
   store: WizardStore;

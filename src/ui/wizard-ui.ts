@@ -23,6 +23,7 @@ export enum TaskStatus {
   InProgress = 'in_progress',
   Completed = 'completed',
   Skipped = 'skipped',
+  Failed = 'failed',
 }
 
 export function isTaskStatus(value: string): value is TaskStatus {
@@ -188,7 +189,13 @@ export interface WizardUI {
   // loop) maintains a Map<taskId, …> from incremental Task* events and
   // re-emits the snapshot here, preserving the existing store semantics.
   syncTodos(
-    todos: Array<{ content: string; status: string; activeForm?: string }>,
+    todos: Array<{
+      id?: string;
+      source?: string;
+      content: string;
+      status: string;
+      activeForm?: string;
+    }>,
   ): void;
 
   // ── Event plan from .posthog-events.json ────────────────────

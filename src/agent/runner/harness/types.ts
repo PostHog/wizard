@@ -18,7 +18,6 @@
  * tagged success, abort, or failure data for the sequence to decide.
  */
 
-import type { AdditionalFeature } from '@shared/constants';
 import type { Harness } from '@shared/constants';
 import type { WizardAskBridge } from '@agent/wizard-ask-bridge';
 import type { AgentErrorType } from '@agent/agent-interface';
@@ -30,16 +29,14 @@ import type {
 } from '@agent/runner/switchboard/models';
 import type {
   AgentFailure,
+  AgentRunDefinition,
   BootstrapResult,
   RunConfig,
   RunInput,
 } from '@agent/runner/shared/types';
 
-/** A schema-bound scan from `executeStructuredAgent`: no banner, remark, task nudges, or plan cleanup. */
-export interface StructuredRun {
-  schema: Record<string, unknown>;
-  timeoutMs: number;
-}
+/** A schema-bound run: no banner, remark, task nudges, or plan cleanup. */
+export type StructuredRun = NonNullable<AgentRunDefinition['structured']>;
 
 /** The benchmark/telemetry hook threaded through a run, if enabled. */
 export interface RunMiddleware {
@@ -132,7 +129,6 @@ export interface TaskRunInputs {
   spinnerMessage: string;
   successMessage: string;
   errorMessage?: string;
-  additionalFeatureQueue: readonly AdditionalFeature[];
   /** Whether to request the end-of-run reflection remark (fired once, on the last task). */
   requestRemark: boolean;
   /** Per-call analytics properties merged into `agent completed` / `agent aborted` events. */

@@ -5,11 +5,10 @@
  * invocation snapshot, reports through `options.onProgress`, asks through
  * `options.interaction`, and returns a `RunResult`. Nothing here names a UI,
  * a store, a session or a program registry: the caller resolves those and
- * hands over plain data. `src/lib/programs/run-agent-legacy.ts` is the caller
+ * hands over plain data. `src/programs/run-agent-legacy.ts` is the caller
  * that rebuilds today's session-driven behavior on top of this contract.
  */
 
-import type { AdditionalFeature } from '@shared/constants';
 import type { CloudRegion } from '@utils/types';
 import type { Credentials } from '@shared/api';
 import type { AuthErrorDetail, OutroData, TaskNotice } from '@agent/progress';
@@ -22,6 +21,7 @@ import type { LLMProvider } from '@posthog/warlock';
 import type { AgentInteraction, ProgressEmitter } from '@agent/progress';
 import type { EffortLevel } from '../switchboard/models';
 import type { SwitchboardCtx } from '../switchboard';
+import type { TranscriptTail } from './transcript-tail';
 
 export type { PromptContext, Credentials };
 
@@ -42,7 +42,7 @@ export interface AbortCase {
  *
  * Every program provides one of these as `RunConfig.run`. The runner assembles
  * the final prompt from `customPrompt` + `skillId`. Programs extend it with
- * their session-taking completion hooks in `src/lib/programs/program-run.ts`;
+ * their session-taking completion hooks in `src/programs/program-run.ts`;
  * the caller binds those and hands the agent `RunConfig.hooks` instead.
  */
 export interface AgentRunDefinition {
@@ -52,6 +52,10 @@ export interface AgentRunDefinition {
   skillId?: string;
   /** Additional program-specific prompt instructions. Appended after the default project prompt. */
   customPrompt?: (ctx: PromptContext) => string;
+  prompt?: (ctx: PromptContext) => string; // replaces the assembled project prompt; linear
+  structured?: { schema: Record<string, unknown>; timeoutMs: number };
+  collectTranscript?: boolean; // keep a 256K-character transcript tail; linear, Anthropic
+  requestRemark?: boolean; // false skips the closing remark; linear, Anthropic
   /** Additional MCP servers (e.g. Svelte MCP) */
   additionalMcpServers?: Record<string, { url: string }>;
   /** Package manager detector. Defaults to detectNodePackageManagers. */
@@ -62,7 +66,6 @@ export interface AgentRunDefinition {
   reportFile: string;
   docsUrl: string;
   errorMessage?: string;
-  additionalFeatureQueue?: readonly AdditionalFeature[];
   /** Known `[ABORT] <reason>` cases this program can render. */
   abortCases?: AbortCase[];
   /**
@@ -151,7 +154,7 @@ export interface RunConfig {
   programId: string;
   /** The run definition. A program's session-taking hooks are the caller's, see `hooks`. */
   run: AgentRunDefinition;
-  /** A composed sub-run leaves the terminal outro to its host. */
+  /** A composed sub-run leaves the terminal outro to its caller. */
   composed: boolean;
   /** Run-level sequence, harness and model. */
   binding: ResolvedBinding;
@@ -180,6 +183,7 @@ export interface RunConfig {
   seedTasks?: () => SeedTaskEntry[];
   /** Completion hooks, bound by the caller. */
   hooks?: RunHooks;
+  scanReport?: 'flush' | 'defer'; // defer leaves the scan report to the outer run
 }
 
 /** Invocation flags the agent reads. */
@@ -288,11 +292,17 @@ export interface RunSnapshot {
   notebookUrl?: string;
   /** The handoff document the agent published, when it did. */
   handoffText?: string;
+  transcriptTail?: string; // set when the run definition asks for collectTranscript
 }
 
 /** A sequence decides an outcome; the dispatcher owns its snapshot. */
 export type SequenceResult =
-  | { outcome: RunOutcome.Success; outro?: OutroData; failure?: never }
+  | {
+      outcome: RunOutcome.Success;
+      structuredOutput?: unknown;
+      outro?: OutroData;
+      failure?: never;
+    }
   | {
       outcome: RunOutcome.Aborted | RunOutcome.Failed;
       failure: AgentFailure;
@@ -329,4 +339,6 @@ export interface SequenceContext {
   emit: ProgressEmitter;
   interaction: AgentInteraction | undefined;
   signal?: AbortSignal;
+  /** Present when the run definition sets `collectTranscript`. */
+  transcript?: TranscriptTail;
 }

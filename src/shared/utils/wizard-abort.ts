@@ -34,6 +34,18 @@ interface WizardAbortOptions {
 }
 
 const cleanupFns: Array<() => void> = [];
+const shutdownFns = new Set<
+  (outcome: 'failed' | 'cancelled') => Promise<void>
+>();
+
+export function registerShutdown(
+  fn: (outcome: 'failed' | 'cancelled') => Promise<void>,
+): () => void {
+  shutdownFns.add(fn);
+  return () => {
+    shutdownFns.delete(fn);
+  };
+}
 
 export function registerCleanup(fn: () => void): void {
   cleanupFns.push(fn);
@@ -41,6 +53,7 @@ export function registerCleanup(fn: () => void): void {
 
 export function clearCleanup(): void {
   cleanupFns.length = 0;
+  shutdownFns.clear();
 }
 
 /** Runs all registered cleanup functions and drains the array. */
@@ -88,10 +101,15 @@ export async function wizardAbort(
 
   // 1. Run registered cleanup functions
   runCleanups();
+  const status = options?.status ?? (error ? 'error' : 'cancelled');
+  await Promise.allSettled(
+    [...shutdownFns].map((fn) =>
+      fn(status === 'cancelled' ? 'cancelled' : 'failed'),
+    ),
+  );
 
   // 2. Capture error in analytics. An 'error' ending with no Error object
   //    is captured as its code and message.
-  const status = options?.status ?? (error ? 'error' : 'cancelled');
   const captured =
     error ??
     (status === 'error'

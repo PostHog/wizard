@@ -149,20 +149,27 @@ npx @posthog/wizard@latest skill <skill-name>      # run one by name
 
 Reviews are auto-requested via [`.github/CODEOWNERS`](.github/CODEOWNERS) — the
 file is the source of truth; this table just mirrors it for readability.
-`team-wizard-docs` is the default reviewer; the team-owned programs below
+`team-wizard-docs` is the default reviewer; the team-owned paths below
 route review to their owning team instead.
 
 | Path | Owning team |
 |---|---|
 | `*` (everything else, including all other programs) | `@PostHog/team-wizard-docs` |
 | `src/agent/` | `@PostHog/team-wizard-docs` |
-| `src/lib/programs/posthog-integration/` | `@PostHog/team-wizard-docs` |
-| `src/lib/programs/error-tracking-upload-source-maps/` | `@PostHog/team-error-tracking` |
-| `src/lib/programs/mcp-analytics/` | `@PostHog/team-mcp-analytics` |
-| `src/lib/programs/revenue-analytics/` | `@PostHog/team-web-analytics` |
-| `src/lib/programs/self-driving/` | `@PostHog/team-self-driving` |
-| `src/lib/programs/warehouse-source/` | `@PostHog/team-warehouse-sources` |
-| `src/lib/programs/web-analytics-doctor/` | `@PostHog/team-web-analytics` |
+| `src/programs/ai-observability/` | `@PostHog/team-ai-observability` |
+| `src/programs/posthog-integration/` | `@PostHog/team-wizard-docs` |
+| `src/programs/error-tracking-upload-source-maps/` | `@PostHog/team-error-tracking` |
+| `src/programs/mcp-analytics/` | `@PostHog/team-mcp-analytics` |
+| `src/programs/metrics/` | `@PostHog/apm` |
+| `src/programs/replay-vision/` | `@PostHog/team-replay` |
+| `src/programs/revenue-analytics/` | `@PostHog/team-web-analytics` |
+| `src/programs/self-driving/` | `@PostHog/team-self-driving` |
+| `src/programs/warehouse-source/` | `@PostHog/team-warehouse-sources` |
+| `src/programs/web-analytics-doctor/` | `@PostHog/team-web-analytics` |
+| `src/ui/tui/decks/error-tracking-upload-source-maps/` | `@PostHog/team-error-tracking` |
+| `src/ui/tui/decks/revenue-analytics/` | `@PostHog/team-web-analytics` |
+| `src/ui/tui/decks/self-driving/` | `@PostHog/team-self-driving` |
+| `src/ui/tui/decks/warehouse-source/` | `@PostHog/team-warehouse-sources` |
 
 Ownership is by directory. Programs not listed above
 (`agent-skill`, `audit`, `events-audit`, `mcp`, `migration`, `posthog-doctor`,
@@ -267,21 +274,32 @@ When creating your personal API key, grant it the wizard's base scope set:
 ```
 user:read project:read organization:read llm_gateway:read query:read
 dashboard:write insight:write notebook:write event_definition:write
-health_issue:read wizard_session:read wizard_session:write
+health_issue:read wizard_session:read wizard_session:write wizard_run:write
 ```
 
 The source of truth is `WIZARD_OAUTH_SCOPES` in `src/shared/constants.ts`, which
 documents why each scope is needed — if this block drifts, trust the code.
 Some programs request more on top (`PROGRAM_SCOPE_ADDITIONS` in
-`src/lib/oauth/program-scopes.ts`); the default integration flow adds
+`src/programs/oauth/program-scopes.ts`); the default integration flow adds
 `integration:read` and `external_data_source:read` /
 `external_data_source:write`.
 
+The `wizard-run-sync` flag selects remote synchronization: `wizard-session`
+(the default) uses WizardSession; `wizard-run` uses WizardRun. In the latter
+mode, local executions synchronize tasks and terminal status. Cloud executions
+require an explicit `POSTHOG_WIZARD_RUN_ID` assignment and leave terminal status
+to their worker. See [WizardRun synchronization](docs/local-dev.md#wizardrun-synchronization)
+for limits, shutdown behavior, migration compatibility, and deployment checks.
+
 ### OAuth app scope ceiling
+
+Both the interactive and cloud Wizard OAuth apps must allow `wizard_run:write`
+in every deployed region. Existing tokens need renewed authorization; refresh
+does not add the grant. Run synchronization needs no read scope.
 
 The wizard's OAuth app on the PostHog side caps the scopes its tokens may
 carry (`OAuthApplication.scopes`). Any scope requested in this repo (see
-`src/lib/oauth/program-scopes.ts`) must be grantable under that ceiling, or
+`src/programs/oauth/program-scopes.ts`) must be grantable under that ceiling, or
 `/authorize` drops it and the call that needs it 403s.
 
 **A granted token can be narrower than the request even with a correct
@@ -310,7 +328,7 @@ every scope in `WIZARD_OAUTH_SCOPES`:
 
 ```
 python manage.py seed_oauth_app_scopes --client-id <id> --dry-run \
-  --scopes "@default,llm_gateway:read,wizard_session:read,wizard_session:write,user:read,project:read,organization:read,query:read,dashboard:write,insight:write,notebook:write,event_definition:write,health_issue:read"
+  --scopes "@default,llm_gateway:read,wizard_session:read,wizard_session:write,wizard_run:write,user:read,project:read,organization:read,query:read,dashboard:write,insight:write,notebook:write,event_definition:write,health_issue:read"
 ```
 
 then re-run without `--dry-run`. Keep `@default` in the list — dropping it
@@ -405,12 +423,12 @@ wizard alongside all of our other PostHog product data, and this is very
 powerful. For example: we could show in-product surveys to people who have used
 the wizard to improve the experience.
 
-When the user authenticates, the wizard also streams live run state — current
+With `wizard-run-sync=wizard-session`, the wizard streams live run state — current
 phase, task list, planned events — to `POST /api/projects/{id}/wizard/sessions/`
 so the PostHog web app can render real-time progress. Updates are debounced
 (250ms) with phase changes flushed immediately; failures fall back silently to
 the wizard's debug log without disturbing the TUI. Pass `--no-telemetry` (or
-set `POSTHOG_WIZARD_NO_TELEMETRY=1`) to disable.
+set `POSTHOG_WIZARD_NO_TELEMETRY=1`) to disable either remote transport.
 
 ## Leave rules behind
 
@@ -507,11 +525,13 @@ Path aliases defined in `tsconfig.build.json`, resolved by tsdown:
 | `@agent` | `src/agent/index.ts`, the agent's runtime entry; the only agent import outside `src/agent` besides types |
 | `@agent/types` | `src/agent/types.ts`, type-only |
 | `@agent/*` | `src/agent/*`, inside `src/agent` and its tests only |
+| `@programs` | `src/programs/index.ts`, the programs runtime entry |
+| `@programs/types` | `src/programs/types.ts`, type-only |
+| `@programs/*` | `src/programs/*`, retained for internal imports and tracked migration edges |
 | `@shared/*` | `src/shared/*` |
 | `@utils/*` | `src/shared/utils/*` |
 | `@ui/*` | `src/ui/*` |
 | `@steps/*` | `src/steps/*` |
-| `@frameworks/*` | `src/frameworks/*` |
 
 ## Running locally
 

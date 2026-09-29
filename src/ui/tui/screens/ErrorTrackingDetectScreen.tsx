@@ -9,13 +9,13 @@ import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import type { WizardStore } from '@ui/tui/store';
 import { LoadingBox, PickerMenu } from '@ui/tui/primitives/index';
 import { Colors, Icons } from '@ui/tui/styles';
-import { FRAMEWORK_REGISTRY } from '@lib/registry';
+import { FRAMEWORK_REGISTRY } from '@programs/frameworks/registry';
 import {
   detectErrorTrackingProjects,
   ERROR_TRACKING_PROJECT_PATH_KEY,
   type ErrorTrackingDetectionReport,
   type ErrorTrackingProject,
-} from '@lib/programs/error-tracking/detect-agentic';
+} from '@programs/error-tracking/detect-agentic';
 
 interface ErrorTrackingDetectScreenProps {
   store: WizardStore;

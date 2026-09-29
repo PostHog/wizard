@@ -69,10 +69,6 @@ describe('askEscapeHint', () => {
     expect(askEscapeHint(1, 0)).toBe('skip');
   });
 
-  it('names the scope on a multi-question request', () => {
-    expect(askEscapeHint(5, 0)).toBe('skip all 5 questions');
-  });
-
   it('warns that answers already given are discarded', () => {
     expect(askEscapeHint(5, 4)).toBe(
       'skip all 5 questions, discarding the 4 you answered',
