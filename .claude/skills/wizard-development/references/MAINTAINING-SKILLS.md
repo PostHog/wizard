@@ -19,8 +19,9 @@ someone following a skill is also a reason to revisit it.
 
 - Open each linked source and check required fields, signatures, and actual
   consumers.
-- Trace registration: native commands, program registry, binding registry, and
-  context-mill families have different responsibilities.
+- Trace registration: the program registry, the CLI's custom commands, each
+  program's `binding`, and context-mill families have different
+  responsibilities.
 - Check sequence-specific behavior. A hook supported by linear execution need
   not run under orchestration.
 - Distinguish contribution policy from existing runtime defaults and deployed

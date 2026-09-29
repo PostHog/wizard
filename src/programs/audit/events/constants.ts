@@ -1,6 +1,6 @@
 /**
  * Leaf-level constants for the events-audit program. The document names live
- * in `@lib/constants` so infrastructure (the scanner's allowlist) can name
+ * in `@shared/constants` so infrastructure (the scanner's allowlist) can name
  * them without importing this program.
  */
 

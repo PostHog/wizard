@@ -10,9 +10,9 @@ classify failures without parsing human-readable messages.
 - **Source of truth for metadata (group, retry advice, description):**
   [`src/shared/errors/catalog.ts`](../src/shared/errors/catalog.ts)
 - **Consumers:** `wizardAbort()`
-  ([`src/shared/utils/wizard-abort.ts`](../src/shared/utils/wizard-abort.ts)), the task stream
-  ([`src/programs/task-stream/`](../src/programs/task-stream/)), and non-interactive hosts
-  reading stderr.
+  ([`src/host/wizard-abort.ts`](../src/host/wizard-abort.ts)), the task stream
+  ([`src/programs/session/task-stream/`](../src/programs/session/task-stream/)),
+  and non-interactive hosts reading stderr.
 
 ## Stability contract
 
@@ -23,15 +23,17 @@ as an API: backends may branch on it.
 New codes follow the pattern `PHW_<GROUP>_<NAME>` (see `ERROR_CODE_PATTERN` in
 `codes.ts`). Groups are lowercase module prefixes (`cli`, `args`, `auth`, `env`,
 `detect`, `skill`, `agent`, `settings`, `gateway`, `internal`).
+`PHW_AGENTIC_DETECTION_TIMEOUT` is in the `agent` group but predates the
+pattern.
 
 ## How codes propagate
 
-1. **`wizardAbort({ code, detail, ... })`** — the single exit funnel resolves a
-   code (explicit `code` first, then `WizardError.code`), stamps it onto
-   `OutroData` (`errorCode`, `errorDetail`), tags the captured exception with
-   `error_code` in analytics, and — when the active UI is a
-   `LoggingUI`/`HeadlessUI` — prints one machine-readable line to stderr just
-   before exit:
+1. **`wizardAbort(present, { code, detail, ... })`** — the single abort funnel
+   resolves a code (explicit `code` first, then `WizardError.code`), stamps it
+   onto `OutroData` (`errorCode`, `errorDetail`), tags the captured exception
+   with `error_code` in analytics, and — in a headless run, whose presenter is
+   `printAbortOutro` — prints one machine-readable line to stderr just before
+   the run ends:
 
    ```
    phw-error: {"code":"PHW_DETECT_NO_FRAMEWORK","message":"Could not auto-detect your framework for this project.","detail":{"reason":"no matches"}}
@@ -41,18 +43,20 @@ New codes follow the pattern `PHW_<GROUP>_<NAME>` (see `ERROR_CODE_PATTERN` in
    machine-readable channel that works even when the task stream itself is down.
 
 2. **Task stream** — `OutroData.errorCode`/`errorDetail` flow into the `error`
-   object of every run-state push (`TaskStreamError.code`,
-   `TaskStreamError.detail`), so the PostHog backend receives the code with the
-   terminal `RunPhase.Error` snapshot.
+   object of the terminal `RunPhase.Error` push (`TaskStreamError.code`,
+   `TaskStreamError.detail`) on the `wizard-session` transport, so the PostHog
+   backend receives the code with that snapshot. The `wizard-run` transport
+   sends only the terminal status, and `--ci` runs push nothing.
 3. **Analytics** — `analytics.captureException` receives `error_code` for every
-   aborted run that carries a code.
+   aborted run that carries a code and passes an `error` or `status: 'error'`.
 4. **TUI** — `OutroData.errorCode` is available to error screens for display;
    the interactive UX remains message-first.
 
 `WizardError(message, context, code)` carries the code alongside its telemetry
-context. Codes are also emitted at raw `process.exit` sites that run before the
-abort funnel exists (CLI arg validation, Node version preflight, yargs failures)
-via `emitWizardError()`.
+context. Codes are also emitted through `emitWizardError()` where the abort
+funnel doesn't run: the `process.exit` sites in `bin.ts` and the CLI (the Node
+version preflight, arg validation and yargs failures), and the CLI's exit when a
+host rejects.
 
 `errorDetail` is allowlisted (`reason`, `detected`, `platform`) at both egress
 boundaries — the `phw-error:` stderr line and the task-stream push — so fields
@@ -75,11 +79,12 @@ screen, debug log) keep the full detail.
 | `PHW_AUTH_MISSING_SCOPE`                       | auth     | key or OAuth grant lacks a required scope                                                                                                                                                                    | no           |
 | `PHW_AUTH_REGION_MISMATCH`                     | auth     | resolved gateway region disagrees with the session region                                                                                                                                                    | no           |
 | `PHW_AUTH_INVALID_OR_EXPIRED`                  | auth     | gateway rejected an otherwise well-formed credential                                                                                                                                                         | no           |
+| `PHW_AUTH_SESSION_EXPIRED`                     | auth     | the OAuth grant expired or was revoked mid-run; a new run logs in again                                                                                                                                      | yes          |
 | `PHW_AUTH_SETTINGS_CONFLICT`                   | auth     | Claude settings file overrides the gateway credential                                                                                                                                                        | no           |
 | `PHW_AUTH_STORED_LOGIN_CONFLICT`               | auth     | SDK authenticated from a stored Claude login instead of the gateway token                                                                                                                                    | no           |
-| `PHW_AUTH_PROJECT_FETCH_FAILED`                | auth     | user/project data fetch from the PostHog API failed                                                                                                                                                          | yes          |
+| `PHW_AUTH_PROJECT_FETCH_FAILED`                | auth     | user/project data fetch from the PostHog API failed (catalogued; no call site emits it)                                                                                                                      | yes          |
 | `PHW_ENV_LOCAL_SERVICES_DOWN`                  | env      | a local dev target (`--local-*`) is not running                                                                                                                                                              | yes          |
-| `PHW_ENV_SERVICE_OUTAGE`                       | env      | blocking external services down (interactive abort; non-interactive continues)                                                                                                                               | yes          |
+| `PHW_ENV_SERVICE_OUTAGE`                       | env      | blocking external services down (interactive abort; non-interactive continues), or the minted gateway fails `/readyz` (every run)                                                                            | yes          |
 | `PHW_DETECT_BAD_DIRECTORY`                     | detect   | install dir missing, not a directory, or unreadable                                                                                                                                                          | no           |
 | `PHW_DETECT_NO_FRAMEWORK`                      | detect   | framework auto-detection found nothing (`ciPreRun` headless abort)                                                                                                                                           | no           |
 | `PHW_DETECT_UNSUPPORTED_VERSION`               | detect   | detected framework version below the supported minimum                                                                                                                                                       | no           |
@@ -94,6 +99,7 @@ screen, debug log) keep the full detail.
 | `PHW_SKILL_MENU_FETCH_FAILED`                  | skill    | context-mill menu fetch failed                                                                                                                                                                               | yes          |
 | `PHW_SKILL_NOT_FOUND`                          | skill    | skill id absent from the context-mill menu                                                                                                                                                                   | no           |
 | `PHW_SKILL_DOWNLOAD_FAILED`                    | skill    | skill download/extraction failed                                                                                                                                                                             | yes          |
+| `PHW_AGENTIC_DETECTION_TIMEOUT`                | agent    | the agentic project scan exceeded its time limit                                                                                                                                                             | yes          |
 | `PHW_AGENT_ABORT`                              | agent    | agent emitted `[ABORT] <reason>`; `detail.reason` carries the raw signal. A matched `abortCases` entry may override with a specific code (e.g. audit's "no posthog sdk found" → `PHW_DETECT_NO_POSTHOG_SDK`) | case-by-case |
 | `PHW_AGENT_MCP_MISSING`                        | agent    | `[ERROR-MCP-MISSING]` — PostHog MCP server unreachable                                                                                                                                                       | yes          |
 | `PHW_AGENT_RESOURCE_MISSING`                   | agent    | `[ERROR-RESOURCE-MISSING]` — setup resource unavailable                                                                                                                                                      | yes          |
@@ -104,11 +110,12 @@ screen, debug log) keep the full detail.
 | `PHW_AGENT_INCOMPLETE_TASKS`                   | agent    | agent stopped with planned tasks open                                                                                                                                                                        | case-by-case |
 | `PHW_AGENT_ORCHESTRATOR_SKILL_VARIANT_MISSING` | agent    | orchestrator preflight could not download a task skill variant                                                                                                                                               | yes          |
 | `PHW_AGENT_ORCHESTRATOR_TASKS_FAILED`          | agent    | orchestrator queue drained with failed/blocked required tasks                                                                                                                                                | case-by-case |
+| `PHW_AGENT_ORCHESTRATOR_HOLLOW_RUN`            | agent    | orchestrator drained with zero tasks: the seed step got no usable model output                                                                                                                               | yes          |
 | `PHW_AGENT_ORCHESTRATOR_SINK_INVARIANT`        | agent    | orchestrator plan violates sink coverage invariant                                                                                                                                                           | no           |
 | `PHW_SETTINGS_UNFIXABLE_CONFLICT`              | settings | Claude settings conflict that cannot be auto-neutralized (managed/unwritable)                                                                                                                                | no           |
 | `PHW_INTERNAL_UNHANDLED`                       | internal | catch-all: an unexpected error escaped the pipeline                                                                                                                                                          | yes          |
-| `PHW_GATEWAY_MINT_REFUSED`                      | gateway  | the gateway-token mint refused this run (blocked, throttled, unlisted program, rollout off); the server's reason is shown | no |
-| `PHW_GATEWAY_MINT_FAILED`                       | gateway  | the gateway-token mint could not be reached or answered unusably | yes |
+| `PHW_GATEWAY_MINT_REFUSED`                     | gateway  | the gateway-token mint refused this run (blocked, throttled, unlisted program, rollout off); the server's reason is shown                                                                                    | case-by-case |
+| `PHW_GATEWAY_MINT_FAILED`                      | gateway  | the gateway-token mint could not be reached or answered unusably                                                                                                                                             | yes          |
 
 Retry advice is guidance for automated hosts (sandbox re-run policies), not a
 guarantee.
@@ -117,21 +124,22 @@ guarantee.
 
 Program detect steps write `{ kind, ...detail }` into
 `session.frameworkContext.detectError`. `detectErrorCode()`
-([`src/programs/detect-map.ts`](../src/programs/detect-map.ts)) maps `kind`
-→ code, and the whole object — `kind` included — rides along as
+([`src/programs/detect-map.ts`](../src/programs/detect-map.ts)) maps `kind` →
+code, and the whole object — `kind` included — rides along as
 `OutroData.errorDetail`.
 
-`DETECT_CODES` is keyed on `DetectErrorKind`, a union assembled from the
-programs' own `DetectError` types via type-only imports. Adding a kind to any
-program's union breaks the build until it gets a code, so the map cannot fall
-behind (same guarantee `AGENT_ERROR_CODE` gets from keying on `AgentErrorType`).
+Each program declares its codes as `detectErrorCodes` on its config, a table
+keyed on its own `DetectError['kind']` union, and `detectErrorCode()` reads
+every registered program's table. Adding a kind to a program's union breaks the
+build until it gets a code, so the map cannot fall behind (same guarantee
+`AGENT_ERROR_CODE` gets from keying on `AgentErrorType`).
 
 Two rules make the detect group safe for automated retry policy:
 
-- **Codes may be shared, `kind` is not lost.** `no-posthog-sdk`, `no-posthog`,
-  and `missing-posthog` all resolve to `PHW_DETECT_NO_POSTHOG_SDK` — one failure
-  class, one code. Hosts that need to tell the programs apart read
-  `detail.kind`.
+- **Codes may be shared, `kind` is not lost locally.** `no-posthog-sdk`,
+  `no-posthog`, and `missing-posthog` all resolve to `PHW_DETECT_NO_POSTHOG_SDK`
+  — one failure class, one code. `detail.kind` tells the programs apart on the
+  local surfaces (TUI error screen, debug log); the egress allowlist drops it.
 - **The fallback stays inside the group.** An unrecognized `kind` resolves to
   `PHW_DETECT_UNCLASSIFIED` (`retry: 'no'`), never to `PHW_INTERNAL_UNHANDLED`
   (`retry: 'yes'`). A detect failure is a property of the user's project;
@@ -139,30 +147,33 @@ Two rules make the detect group safe for automated retry policy:
 
 ## Auth classification
 
-Gateway 401s are classified at the abort site by `classifyAuthFailure()`
-([`src/shared/errors/auth.ts`](../src/shared/errors/auth.ts)) with priority:
-stored-login conflict → settings conflict → key-type → missing scope → region
-mismatch → invalid/expired. Inputs are best-effort from the run context; the
-classifier degrades to `PHW_AUTH_INVALID_OR_EXPIRED` when no distinguishing
-signal is available.
+The Anthropic SDK harness classifies gateway 401s at the abort site with
+`classifyAuthFailure()`
+([`src/shared/errors/auth.ts`](../src/shared/errors/auth.ts)), in priority
+order: session expired → stored-login conflict → settings conflict → key-type →
+missing scope → region mismatch → invalid/expired. Inputs are best-effort from
+the run context; the classifier degrades to `PHW_AUTH_INVALID_OR_EXPIRED` when
+no distinguishing signal is available. The Pi harness reports every 401 as
+`PHW_AUTH_INVALID_OR_EXPIRED`.
 
 ## Sandbox integration recipe
 
 - **Scrape:** read stderr for the final `phw-error:` line; parse the JSON body.
-- **Correlate:** the task-stream `error.code` on the terminal push matches the
-  stderr code for the same session id.
+- **Correlate:** on the `wizard-session` transport, the task-stream `error.code`
+  on the terminal push matches the stderr code for the same session id.
 - **Decide:** use the catalog `retry` column for re-run policy; `no` codes need
   human/config intervention, `yes` codes are safe to retry after backoff.
-- **Zero exit without a code** means success or a Ctrl-C style cancel (exit 130
-  / user dismissal).
+- **Exit codes:** 0 means success. 130 (SIGINT) or 143 (SIGTERM) without a code
+  means a cancel.
 
 ## Extending the catalog
 
 1. Add the code to `ErrorCodes` (`codes.ts`) and an entry to `ERROR_CATALOG`
    (`catalog.ts`) — the unit test enforces catalog completeness.
-2. Pass it to `wizardAbort({ code })` or `new WizardError(msg, ctx, code)` at
-   the failure site. Prefer explicit `code` over inference so call sites stay
-   greppable. For agent-emitted `[ABORT] <reason>` preconditions, declare
-   `errorCode` on the program's `abortCases` entry so the generic
-   `PHW_AGENT_ABORT` is overridden with the specific class.
+2. Pass it to `wizardAbort(present, { code })` or
+   `new WizardError(msg, ctx, code)` at the failure site. Prefer explicit `code`
+   over inference so call sites stay greppable. For agent-emitted
+   `[ABORT] <reason>` preconditions, declare `errorCode` on the program's
+   `abortCases` entry so the generic `PHW_AGENT_ABORT` is overridden with the
+   specific class.
 3. Add the row here.

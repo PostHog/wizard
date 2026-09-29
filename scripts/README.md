@@ -1,24 +1,32 @@
 # scripts/
 
-Helper scripts. The build-related ones (`generate-version.cjs`,
-`smoke-test*.sh`, `check-screens.tsx`) are wired into `package.json`. The rest
-below are **manual, runnable tools** for headless e2e + snapshots — each is a
-standalone `tsx` entry, named `*.no-jest.ts` so Jest ignores it.
+Helper scripts. `generate-version.cjs`, `smoke-test.sh` and
+`mcp-install-smoke-test.ts` run from `package.json` scripts; the smoke-test
+workflow runs `smoke-test-ci.sh`. The Warlock release gate, `pnpm test:warlock`,
+sits beside the policy it tests, in
+[`src/agent/__tests__/warlock-smoke.no-jest.ts`](../src/agent/__tests__/warlock-smoke.no-jest.ts).
+Scripts import the wizard only through public entries, like the e2e harness; see
+[`ARCHITECTURE.md`](../e2e-harness/ARCHITECTURE.md#the-pieces). The rest below
+are **manual, runnable tools** for headless e2e + snapshots — each is a
+standalone `tsx` entry, named `*.no-jest.ts` so Vitest skips it and `postbuild`
+drops it from `dist/`.
 
 Run from the repo root, e.g. `npx tsx scripts/<name>.no-jest.ts`.
 
-Both e2e routes share one primitive: the **real TUI host** runs `startTUI` (the
-real ink render) and is driven purely by store state manipulation; a PTY parent
+Both e2e routes share one primitive: the **real TUI host** runs `runTui` (the
+real ink render) and is driven purely through its control target; a PTY parent
 ([`e2e-harness/tui-capture.ts`](../e2e-harness/tui-capture.ts), node-pty +
 `@xterm/headless`) captures the real rendered screen.
 
-| Script                             | What it does                                                                                                                                                                                                                             | Needs                                                                                                        |
-| ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| **`tui-host.no-jest.ts`**          | Real TUI host: `MODE=fixed` follows a profile; `MODE=serve` accepts socket commands.                                                                                                                                                     | `APP_DIR`, `PROJECT_ID`, key for a full run, `SNAP_CTRL`; run under a PTY, with `CONTROL_SOCK` in serve mode |
-| **`tui-snapshots.no-jest.ts`**     | Runs the fixed host and saves colored `SNAP_OUT/NN-<screen>.ans` frames, including within-screen progress.                                                                                                                               | `SNAP_OUT`, `APP_DIR`, `PROJECT_ID`, `POSTHOG_KEY_FILE` or `POSTHOG_PERSONAL_API_KEY`                        |
-| **`wizard-ci-mcp.no-jest.ts`**     | Stdio MCP server: `open_app`, `read_state`, `perform_action`, `render_screen`, `run_agent`. Screen output is plain text.                                                                                                                 | Spawns the host; `open_app` requires `appDir` and `projectId`, with optional `keyFile`, `apiKey`, `region`   |
-| **`chunk-manifest.no-jest.ts`**    | Prints a structural manifest of `dist/`: per chunk, the source files it contains and the chunks it imports, hash suffixes stripped. `--summary` prints chunk names plus the sorted source set. A reading tool, nothing diffs its output. | A built `dist/`                                                                                              |
-| **`wizard-ci-explore.no-jest.ts`** | `pnpm wizard-ci-explore`: opens an app, confirms setup, reads state, prints one frame, and exits. It does not run the agent.                                                                                                             | `APP_DIR`, `PROJECT_ID`; optional `POSTHOG_KEY_FILE`                                                         |
+| Script                             | What it does                                                                                                                                                                                                                             | Needs                                                                                                                      |
+| ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| **`tui-host.no-jest.ts`**          | Real TUI host: `MODE=fixed` (the default) follows a profile; `MODE=serve` accepts socket commands.                                                                                                                                       | `APP_DIR`, `PROJECT_ID`, key for a full run, `SNAP_CTRL` in fixed mode; run under a PTY, with `CONTROL_SOCK` in serve mode |
+| **`tui-snapshots.no-jest.ts`**     | Runs the fixed host and saves colored `SNAP_OUT/NN-<screen>.ans` frames, including within-screen progress.                                                                                                                               | `SNAP_OUT`, `APP_DIR`, `PROJECT_ID`, `POSTHOG_KEY_FILE` or `POSTHOG_PERSONAL_API_KEY`                                      |
+| **`wizard-ci-mcp.no-jest.ts`**     | Stdio MCP server: `open_app`, `read_state`, `perform_action`, `render_screen`, `run_agent`. Screen output is plain text.                                                                                                                 | Spawns the host; `open_app` requires `appDir` and `projectId`, with optional `keyFile`, `apiKey`, `region`                 |
+| **`chunk-manifest.no-jest.ts`**    | Prints a structural manifest of `dist/`: per chunk, the source files it contains and the chunks it imports, hash suffixes stripped. `--summary` prints chunk names plus the sorted source set. A reading tool, nothing diffs its output. | A built `dist/`                                                                                                            |
+| **`wizard-ci-explore.no-jest.ts`** | `pnpm wizard-ci-explore`: opens an app, confirms setup, reads state, prints one frame, and exits. It does not run the agent.                                                                                                             | `APP_DIR`, `PROJECT_ID`; optional `POSTHOG_KEY_FILE`                                                                       |
+| **`tui-replay.no-jest.ts`**        | `pnpm wizard-ci-replay <dir> [--step \| --delay <ms>]`: steps through or auto-plays the `NN-<screen>.txt` frames in a directory. It skips the `.ans` frames `tui-snapshots` writes.                                                      | A directory of `.txt` frames                                                                                               |
+| **`a3-fault-probe.no-jest.ts`**    | Runs `runAgent` once against a local fault gateway and prints a `WIZARD_FAULT_RESULT` line.                                                                                                                                              | `WIZARD_FAULT_GATEWAY_URL`, `WIZARD_FAULT_INSTALL_DIR`, `WIZARD_FAULT_HARNESS`                                             |
 
 > You usually don't call these directly — `pnpm wizard-ci-snapshots` (in
 > [wizard-workbench](https://github.com/PostHog/wizard-workbench)) orchestrates
@@ -45,7 +53,8 @@ exploration does not need either secret. See
 ## Background
 
 The control plane lives in [`e2e-harness/`](../e2e-harness/) — out of `src/`, so
-none of it ships in prod. `WizardCiDriver` (read/act over the store), the
-screen→action registry, the e2e profiles, and `tui-capture` (real-TUI PTY
-capture). See [`ARCHITECTURE.md`](../e2e-harness/ARCHITECTURE.md) for how the
-two routes drive these (env strip, scoped project id, gotchas).
+none of it ships in prod. `WizardCiDriver` (read/act over the TUI's control
+target), the profile loader (`profiles.ts`, which reads each
+`src/programs/<id>/test/e2e.json`), and `tui-capture` (real-TUI PTY capture).
+See [`ARCHITECTURE.md`](../e2e-harness/ARCHITECTURE.md) for how the two routes
+drive these (env strip, scoped project id, gotchas).

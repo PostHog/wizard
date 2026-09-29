@@ -7,7 +7,7 @@ description: >
 license: MIT
 metadata:
   author: posthog
-  version: '2.0'
+  version: '3.1'
 ---
 
 # Ink TUI
@@ -34,42 +34,58 @@ conventions rather than copying upstream component manuals.
 
 ## Add a screen
 
-1. Create a component in [screens](../../../src/ui/tui/screens/).
-2. Add its `ScreenId` in
-   [screen-sequences.ts](../../../src/ui/tui/screen-sequences.ts).
-3. Register the component in
-   [screen-registry.tsx](../../../src/ui/tui/screen-registry.tsx).
-4. Reference it through `screenId` in the owning
-   [program's steps](../../../src/programs/), with the appropriate
+A screen one program owns:
+
+1. Create the component in `src/tui/programs/<id>/screens/`.
+2. Add its id to that folder's `screen-ids.ts`.
+3. Map the id to the component in the `screens` of the folder's entry
+   (`index.ts(x)`), and add its control commits to `actions` (an empty list if
+   it has none).
+4. Reference it through `screenId` in the program's flow (`flow.ts`, or the
+   `skillFlow(<intro id>)` a skill program uses), with the appropriate
    visibility, completion, and gate predicates.
 
-Screen sequences derive from program steps. Do not hand-maintain a second
-sequence array or add program navigation to the router. Additional state or
-service wiring depends on the screen's needs; `App` remains the shared shell.
+A tool's screens follow the same steps in `src/tui/tools/<id>/`, whose entry
+exports `TUI_TOOLS`; see [src/tools](../../../src/tools/README.md).
+
+A screen several programs or the core use lives in
+[screens](../../../src/tui/screens/), with its id in
+[screen-ids.ts](../../../src/tui/screen-ids.ts) and its mount in
+[screen-registry.tsx](../../../src/tui/screen-registry.tsx). Screen sequences
+derive from each program's flow. Do not hand-maintain a second sequence array or
+add program navigation to the router. Additional state or service wiring depends
+on the screen's needs; `App` remains the shared shell.
 
 ## Preserve the UI boundary
 
-Business logic calls [WizardUI](../../../src/ui/wizard-ui.ts) through
-[getUI](../../../src/ui/index.ts). Screens use
-[WizardStore](../../../src/ui/tui/store.ts) setters for reactive changes. The
-router resolves program screens from session predicates; overlays interrupt that
+Programs never use the UI. They get a runner context from
+[runner-context.ts](../../../src/programs/runner-context.ts). TUI code, the
+login included, takes the [WizardStore](../../../src/tui/store.ts) it reports
+through as an argument: `pushStatus` for a line, `showOutroError` for an error
+outro, and [abortOnScreens](../../../src/tui/abort.ts) for a decided failure.
+There is no UI interface shared with headless or the CLI. Screens use store
+setters for reactive changes. The router resolves program screens from step
+predicates over the session and the TUI state; overlays interrupt that
 resolution. Local state is appropriate for presentation details such as tab
 selection, not wizard progression.
 
-For new state, first decide whether it belongs in
-[WizardSession](../../../src/lib/wizard-session.ts) or display-only store state.
-Use an explicit setter that notifies subscribers. When business logic needs the
-operation, extend `WizardUI`, [InkUI](../../../src/ui/tui/ink-ui.ts), and
-[LoggingUI](../../../src/ui/logging-ui.ts) together. Reuse existing enums and
-union types rather than introducing competing status vocabularies.
+For new state, first decide whether it belongs in the shared
+[WizardSession](../../../src/programs/session/wizard-session.ts), which extends
+the [ProgramSession](../../../src/programs/program-session.ts) programs read, in
+the TUI's own [TuiState](../../../src/tui/tui-state.ts) when only screens read
+it, or in display-only store state. Use an explicit setter that notifies
+subscribers. When TUI code needs a new operation to report through, add it to
+the store; a run's progress reaches the store through
+[agent-progress.ts](../../../src/tui/agent-progress.ts). Reuse existing enums
+and union types rather than introducing competing status vocabularies.
 
 ## Reuse and check
 
-Compose existing primitives and use [styles.ts](../../../src/ui/tui/styles.ts)
-for shared colors, icons, and alignment. Export new public primitives from
-[primitives/index.ts](../../../src/ui/tui/primitives/index.ts), add a realistic
-[playground demo](../../../src/ui/tui/playground/demos/), and register it in
-[PlaygroundApp.tsx](../../../src/ui/tui/playground/PlaygroundApp.tsx).
+Compose existing primitives and use [styles.ts](../../../src/tui/styles.ts) for
+shared colors, icons, and alignment. Export new public primitives from
+[primitives/index.ts](../../../src/tui/primitives/index.ts), add a realistic
+[playground demo](../../../src/tui/playground/demos/), and register it in
+[PlaygroundApp.tsx](../../../src/tui/playground/PlaygroundApp.tsx).
 
 Run `pnpm try --playground` to inspect primitives. Use
 [exploring-the-wizard](../exploring-the-wizard/SKILL.md) when exercising actual

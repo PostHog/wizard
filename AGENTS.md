@@ -27,17 +27,68 @@ Each domain has a dedicated boundary:
   the scanner through SDK hooks and Pi tool events; see
   [security boundaries](.claude/skills/wizard-development/references/ARCHITECTURE.md#security-boundaries).
   Gateway admission and required safety prompts live in
-  [ai-gateway](https://github.com/PostHog/ai-gateway). To disable scanning in
-  the field without a release, see the kill-switch runbook:
-  `docs/runbooks/warlock-kill-switch.md`. ONLY USE THIS IF ABSOLUTELY NECESSARY.
-- **Agent** → `src/agent/`, imported only through `@agent` (values) and
-  `@agent/types` (types); see [src/agent/README.md](src/agent/README.md)
-- **Shared** → `src/shared/`, stateless library code with no upward imports;
-  see [src/shared/README.md](src/shared/README.md)
-- **Programs** → program configs and `runProgram` in `src/programs/`; see
-  [src/programs/README.md](src/programs/README.md) and the
+  [ai-gateway](https://github.com/PostHog/ai-gateway). Scanning has no remote
+  off switch; the [Warlock runbook](docs/runbooks/warlock-kill-switch.md) covers
+  what to do when it misbehaves.
+- **Agent** → `src/agent/`. Layer source outside it imports it only through
+  `@agent` (values) and `@agent/types` (types); see
+  [src/agent/README.md](src/agent/README.md)
+- **Shared** → `src/shared/`, library code with no upward imports. It also holds
+  process-global state: the log file, the analytics client, the exit cleanup
+  list and the process's one OAuth login session (`@shared/oauth-session`); see
+  [src/shared/README.md](src/shared/README.md)
+- **Host** → `src/host/` (`@host/*`), how the hosts end a run: `startHostExit`,
+  `wizardAbort` and `registerShutdown`, and the control API server each host
+  attaches (`@host/control`). Every `wizardAbort` call passes the presenter that
+  shows its outro. A host resolves an exit code and only the CLI calls
+  `process.exit`. It imports env and shared only. Headless, the TUI, the CLI and
+  the e2e harness may import it. The agent and the programs may not; see
+  [src/host/README.md](src/host/README.md)
+- **Programs** → one folder per program in `src/programs/<id>/`, which other
+  layer source enters only through its `index.ts`, plus `runProgram`. A program
+  is an agent run; see [src/programs/README.md](src/programs/README.md) and the
   [developer interfaces](docs/developer-interfaces.md)
-- **TUI** → screens, primitives and content decks in `src/ui/tui/`
+- **Tools** → `src/tools/` (`@tools`, one entry), the commands that run no
+  agent: `mcp add`, `mcp remove`, `mcp tutorial`, `slack`, `doctor`,
+  `provision`, `cli add` and `skill list`. A tool may import env, shared and the
+  `@agent` entry (the MCP tutorial's prompt stream only), never the programs,
+  host, TUI, headless or CLI, and no program imports it. Its screens live in
+  `src/tui/tools/<id>/`, run by `runTuiTool`; every tool runner resolves an exit
+  code. See [src/tools/README.md](src/tools/README.md)
+- **TUI** → the interactive host (`runTui`), screens, primitives and the screen
+  store in `src/tui/`, which other layers enter only through its one entry,
+  `@tui` (`src/tui/index.ts`); see [src/tui/README.md](src/tui/README.md). Each
+  program's flow, deck, screens and control commits live in
+  `src/tui/programs/<id>/`, and each tool's in `src/tui/tools/<id>/`, entered
+  through its `index` module; the TUI core reaches them only through the TUI
+  program and tool registries. A program's flow uses a step a tool also shows,
+  such as Connect Slack, by its core screen id
+- **Headless** → the host with no screens (`runHeadless`), `LoggingUI` and
+  controlled headless's hooks in `src/headless/`, which other layers enter only
+  through its one entry, `@headless` (`src/headless/index.ts`); see
+  [src/headless/README.md](src/headless/README.md). The two hosts share only the
+  kind of session store they build, `SessionStore` in `@programs`, and the host
+  layer; neither loads the other's code, and each calls `runProgram`; see
+  [what calls what](README.md#what-calls-what)
+- **CLI** → commands, runners and the choice of host in `src/cli/`, the only
+  layer that imports both the TUI and headless, each through its entry. `bin.ts`
+  imports the CLI through its entry, `@cli` (`src/cli/index.ts`); see
+  [src/cli/README.md](src/cli/README.md)
+- **Layers** → one tsconfig project per layer folder, on TypeScript project
+  references, and `pnpm typecheck` is `tsc -b`. A project's `references` name
+  the layers it may import, so importing a file of any other fails with TS6307.
+  Outside the TUI, `ink`, `react`, `@inkjs/ui` and `ink-testing-library` resolve
+  to a fence that fails every import form. ESLint rules in `pnpm lint` close the
+  paths the compiler can't see: a relative import that leaves its layer's folder
+  and a deep alias outside its own layer; a `.tsbuild/` or `node_modules/` path
+  in an import, re-export, `import()` or `typeof import()`; any import of
+  `module` or `node:module`; a bare `require`; triple-slash `path` references;
+  and string-form `vi.mock`; see
+  [layer boundaries](.claude/skills/wizard-development/references/ARCHITECTURE.md#layer-boundaries)
+  and [import aliases](README.md#import-aliases). Code outside a layer imports
+  it only through its public entries. Each layer's tests sit in its project, so
+  a test deep-imports only its own layer and mocks another through its entry,
+  `vi.mock(import('<entry>'))`
 
 Adding a new concern means finding the narrowest existing surface, not adding
 logic to the runner. Keep changes local to the boundary that owns them.
@@ -75,27 +126,18 @@ execution remains useful for very simple tasks and legacy support. The Anthropic
 Agent SDK is a supported legacy fallback, deprecated as the default; retain it
 for major Pi vulnerabilities or gaps in support for new Anthropic models.
 
-This is the contribution policy, not a claim that every existing binding has
-migrated: `DEFAULT_BINDING` is Pi + linear. Set new bindings
-explicitly and check sequence-specific hooks before migrating existing flows.
-See
+This is the contribution policy; existing programs' bindings vary, and
+`DEFAULT_BINDING` is Pi + linear. Set new bindings explicitly and check
+sequence-specific hooks before migrating existing flows. See
 [execution policy and model admission](.claude/skills/wizard-development/SKILL.md#execution-policy-and-model-admission)
 for the gateway allowlists, required system prompt, and composition constraints.
 
 ## CLI command surface
 
-The CLI was overhauled to a smaller, extensible command surface. **Use the new
-command names.** Old names mostly no longer exist — only some are kept as
-aliases.
-
-| Old command                | New command                 | Status                                                     |
-| -------------------------- | --------------------------- | ---------------------------------------------------------- |
-| `wizard integrate`         | `wizard` (default flow)     | command removed                                            |
-| `wizard events-audit`      | `wizard audit events`       | moved into `audit` family                                  |
-| `wizard audit` (single)    | `wizard audit <subcommand>` | now a family — see [Audit subcommands](#audit-subcommands) |
-| `wizard audit-3000`        | _removed_                   | retired                                                    |
-| `wizard revenue`           | `wizard revenue-analytics`  | renamed (old `revenue` removed)                            |
-| `wizard upload-sourcemaps` | `wizard upload-source-maps` | renamed; `upload-sourcemaps` kept as alias                 |
+`wizard` with no command runs the default flow, the `posthog-integration`
+program. `wizard --help` lists the other commands. `audit` is a family: see
+[Audit subcommands](#audit-subcommands). `upload-sourcemaps` is an alias of
+`upload-source-maps`.
 
 ### Audit subcommands
 
@@ -103,8 +145,8 @@ aliases.
 
 | Subcommand                    | What it audits                                       |
 | ----------------------------- | ---------------------------------------------------- |
-| `wizard audit events`         | event capture quality + cost                        |
-| `wizard audit all`            | comprehensive audit across every area (**default**) |
+| `wizard audit events`         | event capture quality + cost                         |
+| `wizard audit all`            | comprehensive audit across every area (**default**)  |
 | `wizard audit autocapture`    | autocapture setup + cost                             |
 | `wizard audit feature-flags`  | feature flag usage + cost                            |
 | `wizard audit identify`       | `$identify` implementation                           |
@@ -116,7 +158,7 @@ aliases.
 A skill and a command are the **same machinery** — a context-mill skill becomes
 a command when its `cli:` block sets `role: command`. So `wizard audit events`
 _is_ the `audit-events` skill, just promoted. `wizard skill <skill-name>`
-([`skill.ts`](src/commands/skill.ts)) runs a skill that **wasn't** promoted.
+([`skill.ts`](src/cli/commands/skill.ts)) runs a skill that **wasn't** promoted.
 
 Two surfaces, one mechanism. So `wizard audit <subcommand>` is choosing an audit
 area — it is **not** asking for a skill name, despite `wizard audit --help`
@@ -125,15 +167,23 @@ confuse it with the top-level `wizard skill` command.
 
 ### Where the surface is defined (source of truth)
 
-- **Registration:** [`bin.ts`](bin.ts) — the `.use()` chain wires each command.
-- **Command shape:** [`src/commands/command.ts`](src/commands/command.ts) — the
-  `Command` interface every command implements.
+- **Registration:** [`src/cli/commands/index.ts`](src/cli/commands/index.ts) —
+  `wizardCommands()` lists every top-level command in `PROGRAM_REGISTRY` order,
+  and `runCli` in [`src/cli/index.ts`](src/cli/index.ts), which
+  [`bin.ts`](bin.ts) calls, registers that list. A program with a top-level
+  `command` gets its command built from its config; the custom commands are
+  listed there by hand: the default flow, the families (`audit`, `self-driving`,
+  `skill`) and the tools' commands (`mcp`, `cli`, `doctor`, `slack`).
+- **Command shape:**
+  [`src/cli/commands/command.ts`](src/cli/commands/command.ts) — the `Command`
+  interface every command implements.
 - **Flat native commands** (e.g. `revenue-analytics`, `upload-source-maps`) are
   built with `nativeCommandFactory`
-  ([`src/commands/factories/native-command-factory.ts`](src/commands/factories/native-command-factory.ts)).
+  ([`src/cli/commands/factories/native-command-factory.ts`](src/cli/commands/factories/native-command-factory.ts))
+  from the program's config. They have no command file.
 - **Family commands** (e.g. `audit`) resolve subcommands at runtime against the
   `cliEntries` in `skill-menu.json`. Logic lives in
-  [`src/programs/dispatch-family.ts`](src/programs/dispatch-family.ts).
+  [`src/cli/commands/dispatch-family.ts`](src/cli/commands/dispatch-family.ts).
   Adding a skill-backed subcommand is a **context-mill** release, not a wizard
   change.
 
@@ -149,11 +199,13 @@ confuse it with the top-level `wizard skill` command.
 
 ### Adding a command alias (keep an old name working)
 
-Give the `Command.name` an array of `[newName, ...legacyNames]`. yargs treats
-the extra entries as aliases. See
-[`src/commands/upload-sourcemaps.ts`](src/commands/upload-sourcemaps.ts).
-Reserve aliases for names that external callers (users' scripts) may still use —
-when the only caller is one we control, update the caller instead.
+For a command built from a program config, list the old names in the config's
+`commandAliases`, as
+[`error-tracking-upload-source-maps`](src/programs/error-tracking-upload-source-maps/index.ts)
+does. For a custom command, give `Command.name` an array of
+`[newName, ...legacyNames]`. yargs treats the extra entries as aliases. Reserve
+aliases for names that external callers (users' scripts) may still use — when
+the only caller is one we control, update the caller instead.
 
 ## Commands
 
@@ -165,6 +217,7 @@ pnpm test                          # Unit tests (builds first)
 pnpm test:watch                    # Unit tests in watch mode
 pnpm test:e2e                      # End-to-end tests
 pnpm lint                          # Prettier + ESLint checks
+pnpm typecheck                     # tsc -b, one project per layer
 pnpm fix                           # Auto-fix lint issues
 pnpm dev                           # Build, link globally, watch for changes
 ```
@@ -176,8 +229,8 @@ nonmutating lint checks, and scope formatting fixes to edited files. Do not add
 tests for prose, compiler-enforced shapes, or duplicated implementation. Keep
 new code comments to one line; put longer explanations in linked docs.
 
-Local `--ci`, smoke-test, and full headless runs require two separate secrets:
-a PostHog personal API key and an already-issued gateway token supplied through
+Local `--ci`, smoke-test, and full headless runs require two separate secrets: a
+PostHog personal API key and an already-issued gateway token supplied through
 `WIZARD_CI_GATEWAY_TOKEN_FILE`, plus the target project ID. Follow the
 [credential setup](docs/local-dev.md#credentials-for-local-ci-and-headless-runs).
 
@@ -186,8 +239,9 @@ a PostHog personal API key and an already-issued gateway token supplied through
 Four things can independently point at a local server — the wizard binary,
 context-mill (`:8765`), the MCP server (`:8787`), and PostHog (`:8010`). One
 flag per service (`--local-context-mill`, `--local-mcp`, `--local-posthog`),
-plus `--local-dev` for all three. They're dev-build-only; published builds
-reject them.
+plus `--local-dev` for all three. Only non-production builds accept them, such
+as `pnpm try` and `pnpm build:ci`; production builds, including the published
+package and the `pnpm dev` link, reject them.
 
 Note `wizard mcp add --local` is **not** one of these — it writes a
 `posthog-local` entry into your editor's MCP config, and is unrelated to where a
@@ -201,18 +255,30 @@ wizard run points. Full catalog: [`docs/local-dev.md`](docs/local-dev.md).
 
 - TypeScript everywhere. Use `type` (not `interface`) for framework context
   types so they satisfy `Record<string, unknown>`.
-- All UI calls go through `getUI()` (returns `WizardUI` interface). Never import
-  the store directly from business logic. A program's `run` and `ciPreRun`
-  use the runner context they receive, not `getUI()`.
-- Shared helpers never call `getUI()`; they take a sink or return data. `debug()`
-  reaches the UI through the sink `src/ui/index.ts` installs.
-- Outside `src/agent`, import the agent through `@agent` or `@agent/types`. Add
-  to those entry modules rather than deep-importing; lint and
-  `pnpm test:arch` reject `@agent/*` paths elsewhere.
-- Session mutations go through explicit store setters that call `emitChange()`.
-  Never mutate `session` directly — nanostore holds a shallow copy.
-- The router resolves the active screen from session state. No imperative
-  navigation (`goTo`, `navigate`, `push`) anywhere.
+- Programs never use the UI. A program's `run` and `ciPreRun` get a runner
+  context, and `onReady` gets a ready context. TUI code reports through the
+  store it is handed, headless through its `LoggingUI`, and the CLI through
+  `consoleLog`; there is no UI interface shared between hosts, and nothing looks
+  a UI up. Never import the store directly from business logic.
+- Shared and host helpers take a sink or return data; there are no
+  process-global sinks. An agent run's debug lines are info log progress, shown
+  by the host's progress handler. An abort takes its presenter as its first
+  argument: `abortOnScreens(store)` in the TUI, `printAbortOutro` in headless
+  and before the TUI mounts.
+- Outside `src/agent`, import the agent through `@agent` or `@agent/types`, and
+  every other layer through its entries. Inside the agent and the programs,
+  import your own modules by relative path. An entry re-exports only from layers
+  its consumers also map, so no declaration turns to `any` in a consumer. Add to
+  an entry rather than deep-importing; `pnpm typecheck` and `pnpm lint` reject a
+  deeper path in layer source, tests, the e2e harness, scripts and docs examples. A test of
+  another layer's internals belongs in that layer's tests, and a test helper
+  beside the tests that use it.
+- Session mutations go through explicit store setters, which notify the store's
+  subscribers. Never mutate `session` directly — nanostore holds a shallow copy.
+- State only the TUI reads (a screen's answer, what an overlay shows) lives in
+  the TUI store (`TuiState`, read as `store.X`), never in the shared session.
+- The router resolves the active screen from the session and the TUI state. No
+  imperative navigation (`goTo`, `navigate`, `push`) anywhere.
 - Never write secrets to source code or hardcode API keys. Use the
   `wizard-tools` MCP server (`check_env_keys` / `set_env_values`) for `.env`
   file operations.

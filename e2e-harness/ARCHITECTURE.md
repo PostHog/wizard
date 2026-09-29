@@ -2,8 +2,9 @@
 
 How an agent (or CI) drives a **real** wizard run end-to-end — the **real TUI**,
 no browser, no keystrokes — and captures what it rendered. Both e2e routes share
-one idea: run the real `startTUI` (the real ink render) and drive its store by
-**state manipulation**, then capture the real rendered screen from a PTY.
+one idea: run the real TUI host, `runTui` (the real ink render), and drive it by
+**state manipulation** through its control target, then capture the real
+rendered screen from a PTY.
 
 > If you're an agent that just wants to run and explore the wizard, use the
 > `exploring-the-wizard` skill
@@ -12,49 +13,65 @@ one idea: run the real `startTUI` (the real ink render) and drive its store by
 
 ## The pieces
 
-This whole harness lives in `e2e-harness/` at the repo root — deliberately OUT
-of `src/` so none of it is part of the wizard's production source (nothing in
-`src/` imports it; the tsdown bundle never includes it).
+The harness lives in `e2e-harness/` and `scripts/`, out of `src/`, with each
+program's profile in `src/programs/<id>/test/e2e.json`. No production module
+imports it, so the tsdown bundle never includes it. It imports the wizard only
+through public entries (`@tui`, `@programs`, `@programs/<id>`, `@agent/types`,
+`@shared/*` and the rest). Its own project, [`tsconfig.json`](tsconfig.json),
+references every layer it imports, and `pnpm typecheck` fails a deeper `@tui/*`
+import and any import of Ink or React. ESLint fails a deeper `@programs/*`,
+`@agent/*` or `@cli/*` import and a relative import out of `e2e-harness/`.
 
 ```
 e2e-harness/
-  wizard-ci-driver.ts   WizardCiDriver — read_state / perform_action over the store
-  action-registry.ts    screen → the actions legal on it (+ NO_ACTION_SCREENS)
+  wizard-ci-driver.ts   WizardCiDriver — read_state / perform_action over the TUI's control target
   e2e-profile.ts        WizardE2eProfile + decideE2eAction — the scripted walk policy
-  profiles.ts           per-program profiles + profileFor(programId) + resolveE2eProfile(env)
+  profiles.ts           reads every program's e2e.json: profileFor(programId) + resolveE2eProfile(profile, overrides)
   e2e-result.ts         the E2E_RESULT_JSON payload: E2eRunRecorder + buildE2eResult
   tui-capture.ts        run a command in a PTY (node-pty) + read its real screen (@xterm/headless)
 scripts/
-  tui-host.no-jest.ts   the real-TUI host: startTUI + WizardCiDriver, MODE=fixed | serve
+  tui-host.no-jest.ts   the real-TUI host: runTui + WizardCiDriver, MODE=fixed | serve
   tui-snapshots.no-jest.ts   CI route: host(fixed) in a PTY → per-screen real-TUI snapshots
   wizard-ci-mcp.no-jest.ts   agent route: MCP server proxying host(serve)
 ```
 
-The driver reads and mutates the **real** `WizardStore` that the TUI renders
-from: the router resolves the active screen from session state, every action
-goes through a store setter, and the render is a pure projection of that state.
-So manipulating the store makes the real TUI react — the driver and the renderer
-share one store and never conflict; you never touch the TUI's input.
+`runTui` hands the host its store's control target through `control.attach`, the
+same target the control API serves: the projected state, the commits legal on
+the current screen, and the named setters. The router resolves the active screen
+from that state, every action commits through the store, and the render is a
+pure projection of it. So a commit makes the real TUI react — the driver and the
+renderer share one store and never conflict; you never touch the TUI's input.
+The state is the control projection: no token, key or answer value, and
+secret-named framework-context keys redacted.
+
+The profile loader, the driver and the walk policy name no program.
+`profiles.ts` reads each `src/programs/<id>/test/e2e.json` and keys it by the
+file's `program` field, which must be a registered program id. The driver's
+actions are the TUI control actions: the core screens' and overlays' own, each
+program screen's from its TUI entry, and the shared `confirm_setup` on a
+`*-intro` screen with none.
 
 ## Auth without a browser
 
-The real TUI runs `ci: true`. `run_agent` enters the normal program bootstrap,
-which resolves the phx personal key into project credentials and commits them to
-the store. Gateway authentication then follows the shared runner path; see the
-[runner policy](../.claude/skills/wizard-development/SKILL.md).
+The real TUI runs `ci: true`, with the phx personal key as its login
+(`launch.credentials`): the run resolves it into project credentials and commits
+them to the store, and the pre-issued gateway token rides on that login. Gateway
+authentication then follows the shared runner path; see the
+[runner policy](../.claude/skills/wizard-development/SKILL.md). The run starts
+once the intro and the pre-run gates pass. In `MODE=serve` the host holds the
+login until `run_agent` releases it.
 
 The direct host reads `APP_DIR`, `PROJECT_ID`, and either
 `POSTHOG_PERSONAL_API_KEY` or `POSTHOG_KEY_FILE`. The MCP route accepts
 `appDir`, `projectId`, and optional `keyFile` or `apiKey` through `open_app`.
-Detection-only MCP runs omit the key and stop at `auth`. The internal socket's
-`set_credentials` command is not exposed as an MCP tool.
+Detection-only MCP runs never call `run_agent`, so they stop at `auth`.
 
 Agent runs require `WIZARD_CI_GATEWAY_TOKEN_FILE` containing an already-issued
 gateway bearer. CI uses it directly and never mints or refreshes it; missing or
 rejected credentials fail the run. `WIZARD_CI_GATEWAY_URL` optionally overrides
 `https://ai-gateway.<region>.posthog.com`. `POSTHOG_KEY_FILE` /
-`POSTHOG_PERSONAL_API_KEY` remain separate credentials for PostHog API and MCP.
-The same gateway settings apply to development `--ci` runs.
+`POSTHOG_PERSONAL_API_KEY` are separate credentials for PostHog API and MCP. The
+same gateway settings apply to development `--ci` runs.
 
 ## The two routes
 
@@ -82,18 +99,20 @@ the host does not force Pi or orchestration. For new exploration, follow the
 server's launch environment accordingly. These inputs are not `open_app`
 arguments; there is no MCP effort or system-prompt override.
 
-`read_state` adds background `integration` (`idle`, `running`, `done`, `failed`)
-and `integrationError` to the driver's state. Framework identity is the separate
+`read_state` adds background `integration` and `integrationError` to the
+driver's state: `idle` until `run_agent`, then the run's phase, `running`,
+`done` once a run completes, or `failed` with the error outro's message. A
+program that composes runs, such as self-driving, reads `done` after each one,
+so read `currentScreen` as well. Framework identity is the separate
 `session.integration`. `perform_action` returns only the driver's state, so read
 again to refresh background status. Legal actions come from
 `read_state.actions`; the MCP has no `list_actions` or `wait_for_change` tool.
 
 Keep handling overlays while the agent runs. `runPhase=completed` ends the main
 work, while `session.skillsComplete` ends the integration flow's follow-up
-screens. Recording MCP or keep-skills outcomes only commits store state; it does
-not perform installation or cleanup. For failures, capture the error outro
-before dismissing it: `wizardAbort` can wait there with background status still
-`running`, then exit the host instead of returning `integration=failed`.
+screens and the host with it. Recording MCP or keep-skills outcomes only commits
+store state; it does not perform installation or cleanup. For failures, capture
+the error outro before dismissing it: dismissing it ends the run.
 
 ## Current host limitations
 
@@ -102,9 +121,13 @@ before dismissing it: `wizardAbort` can wait there with background status still
 - The host reads `POSTHOG_PERSONAL_API_KEY` before `POSTHOG_KEY_FILE`. An
   inherited personal key can therefore shadow an explicit MCP `keyFile`; unset
   that variable in the server's launch environment when using a key file.
-- Some interactive pickers are not represented by driver actions. The fixed
-  route supplies its own detection picks for self-driving and source maps; those
-  conveniences do not automatically apply to the MCP route.
+- The fixed route computes its own detection picks for self-driving, error
+  tracking and source maps and commits them as the MCP route's caller does:
+  `pick_integration_target` on a screen that offers it (the self-driving and
+  error-tracking detect screens), `pick_source_maps_project` on the source-maps
+  one, with the path and framework or variant it chose.
+- `tui-host` takes the control target in process and serves its own socket. The
+  wizard's `--control-socket` API is a separate surface the harness doesn't use.
 
 ## Things that bite
 
@@ -116,7 +139,8 @@ before dismissing it: `wizardAbort` can wait there with background status still
    surface.
 3. **Never run on a real fixture.** Always a throwaway copy.
 4. **`run_agent` is minutes long and creates real resources** (a dashboard +
-   insights) each run; the agent log is one shared file — never run two at once.
+   insights) each run, so never run two at once. The agent log is one shared
+   file unless each run sets `POSTHOG_WIZARD_LOG_FILE`.
 5. **node-pty's spawn-helper.** When the package is extracted without running
    its build script (pnpm skips it), the prebuilt `spawn-helper` loses its
    execute bit and `pty.spawn` fails with `posix_spawnp failed`.
@@ -124,22 +148,29 @@ before dismissing it: `wizardAbort` can wait there with background status still
 
 ## Changing what the run does
 
-Per-program UI choices live in the harness (`profiles.ts`, keyed by program id)
-— not on the program config — so this machinery stays out of production source.
-Edit the program's entry (typed by `WizardE2eProfile`); the fixed host asks
-`decideE2eAction(state, profile)` what to commit on each screen. The (screen →
-decision) trace is snapshot-tested offline in `__tests__/` (Vitest `--update`
-refreshes snapshots).
+Per-program UI choices are the `profile` in `src/programs/<id>/test/e2e.json`
+(typed by `WizardE2eProfile`), which `profiles.ts` finds by the file's `program`
+field. Edit that `profile`; the fixed host asks
+`decideE2eAction(state, profile)` what to commit on each screen. A core screen
+has its own case. A program screen commits the first of its actions that
+`PROGRAM_SCREEN_COMMITS` in `e2e-profile.ts` lists (`confirm_setup`,
+`dismiss_outro`, `dismiss`, `confirm_self_driving_handoff` and `set_integrate`,
+which takes `profile.integrate`), and waits when it offers none of them. The
+(screen → decision) trace is snapshot-tested offline in `__tests__/` (Vitest
+`--update` refreshes snapshots).
 
 ## Driving the agent-in-the-loop layer
 
 Two decision points ask a person to act, and the harness stands in for them.
 
 `wizard_ask` overlay. A `ci` session normally has no ask bridge at all. The host
-sets `session.e2eAsk` from `E2E_ASK=true`, which keeps the bridge wired (see
-`shouldDisableAsk`). In the fixed route, the profile answers every question:
-`askAnswers` routes a question to a value, else the first option, else the
-`'e2e'` sentinel. Route credentials with `${ENV_VAR}` values, never literals.
+always sets `WIZARD_ASK_AUTODRIVE=1`, which keeps the linear sequence's bridge.
+`E2E_ASK=true` sets `session.e2eAsk`, which also keeps the orchestrator's bridge
+and the seeded warehouse task (see `shouldDisableAsk`). In the fixed route, the
+profile answers every question except the host's source-maps overrides
+(`api-key`, `test-affordance`, `test-done`): `askAnswers` routes a question to a
+value, else the first option, else the `'e2e'` sentinel. Route credentials with
+`${ENV_VAR}` values, never literals.
 
 Mark a credential rule `"secret": true`. The skill names its own questions, so a
 rule matches text the agent controls — without the flag, a question called
@@ -152,8 +183,9 @@ instead of looking like an ordinary sentinel.
 Task-notice overlay. `profile.notice` decides `keep` or `decline`. `E2E_NOTICE`
 overrides it per run.
 
-Both env inputs are folded into the profile by `resolveE2eProfile`, at load.
-`decideE2eAction` must stay pure — it reads no env and no store.
+`resolveE2eProfile` folds `E2E_NOTICE`, the extra rules in `E2E_ANSWERS_FILE`
+(matched first) and `${VAR}` values into the profile, at load. `decideE2eAction`
+must stay pure — it reads no env and no store.
 
 In the MCP route, use `perform_action` for `answer_question` (a complete answers
 map), `cancel_question`, or `resolve_notice` with `params: { keep }`. Read
@@ -163,20 +195,23 @@ these overlays in `MODE=serve`.
 ## The result payload
 
 A `MODE=fixed` run writes `E2E_RESULT_JSON`: the run phase and screens walked,
-plus every ask batch, every task notice, the task list, the detected warehouse
-sources, the program's report file, and the abort reason. `e2e-result.ts` builds
-it.
+whether the app has a PostHog dependency, its new dependencies, the env file,
+whether the skills step completed, every ask batch (answered, unanswered and
+refused), every task notice, the task list and task outcomes, the detected
+warehouse sources, the program's report file, and the abort reason.
+`e2e-result.ts` builds it.
 
 **Only question prompt text and question ids go in the payload. No answer value
 ever does.** The decision function reports ids and a keep/decline verdict, so
 the recorder never holds an answer. Keep it that way — the workbench scans the
 file for its own injected credentials.
 
-The report file is the one payload field whose _content_ comes from the app
+The report file is the one payload field that copies a file's text from the app
 directory, which is a checkout the run does not control. `readReportFile` reads
 only a regular file inside `appDir` — never a symlink, and never through a
-symlinked parent — so a committed `posthog-warehouse-report.md` pointing at a
-host file cannot copy it into the payload.
+parent that resolves outside `appDir` — so a committed
+`posthog-warehouse-report.md` pointing at a host file cannot copy it into the
+payload.
 
 ## Visual-regression snapshots (the workbench flow)
 

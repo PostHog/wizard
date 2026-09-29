@@ -12,10 +12,10 @@ prompt assembly, error routing, post-run work, and outro construction. Retain it
 for very simple tasks and legacy support. Its context is subject to the
 harness's compaction behavior.
 
-`AgentRunDefinition.customPrompt`, `abortCases`, and the program's `postRun`
-and `buildOutroData` hooks are linear hooks. The orchestrator does not invoke them. Composed program sub-runs
-are also clamped to linear because an orchestrator owns its full lifecycle and
-cannot nest through the composition seam.
+`AgentRunDefinition.customPrompt`, `abortCases`, and the program's `postRun` and
+`buildOutroData` hooks are linear hooks. The orchestrator does not invoke them.
+Composed program sub-runs are also clamped to linear because an orchestrator
+owns its full lifecycle and cannot nest through the composition seam.
 
 ## Orchestrator
 
@@ -25,10 +25,9 @@ Each task gets a focused conversation, tools, selected model/effort, and
 relevant handoffs. Independent tasks can run concurrently.
 
 The program selects `agentFlow ?? id`. Its published flow must supply a seed
-prompt and valid task-skill variants. Metrics already has a Pi/orchestrator
-binding; other routes can be selected through scoped flags or development CLI
-overrides. The retired `experiment/orchestrator` branch is not a prerequisite.
-See
+prompt and valid task-skill variants. Metrics and error tracking bind to Pi and
+the orchestrator; other routes can be selected through scoped flags or
+development CLI overrides. See
 [adding a program](../../../../.claude/skills/adding-skill-program/SKILL.md).
 
 ### Task metadata
@@ -49,6 +48,7 @@ frontmatter contract rather than copying an old manifest example:
   task types after planning. It is not a universal automatic graph built from
   frontmatter.
 
-Per-role `PROGRAM_BINDINGS[id].contextMillOverride` can adjust a task's harness,
-model or effort. New task types usually belong in context-mill; new native
-behavior still requires the appropriate Wizard configuration or implementation.
+Per-role `contextMillOverride` on the program's `binding` can adjust a task's
+harness, model or effort. New task types usually belong in context-mill; new
+native behavior still requires the appropriate Wizard configuration or
+implementation.
