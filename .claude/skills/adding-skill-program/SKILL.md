@@ -67,7 +67,7 @@ changing execution behavior.
    enforce coverage; `ProgramId` currently widens to `string`.
 4. For a standalone native command, create a command module with
    [nativeCommandFactory](../../../src/commands/factories/native-command-factory.ts)
-   and register it in [bin.ts](../../../bin.ts). A native family child uses the
+   and register it in [main.ts](../../../main.ts). A native family child uses the
    handlers in family dispatch. Program registration derives screen sequences
    and store lookup, not the top-level CLI `.use()` chain.
 5. Check [program OAuth scopes](../../../src/programs/oauth/program-scopes.ts)

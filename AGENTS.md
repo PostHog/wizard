@@ -125,7 +125,7 @@ confuse it with the top-level `wizard skill` command.
 
 ### Where the surface is defined (source of truth)
 
-- **Registration:** [`bin.ts`](bin.ts) — the `.use()` chain wires each command.
+- **Registration:** [`main.ts`](main.ts) — the `.use()` chain wires each command.
 - **Command shape:** [`src/commands/command.ts`](src/commands/command.ts) — the
   `Command` interface every command implements.
 - **Flat native commands** (e.g. `revenue-analytics`, `upload-source-maps`) are
