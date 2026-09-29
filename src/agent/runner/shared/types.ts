@@ -5,23 +5,23 @@
  * invocation snapshot, reports through `options.onProgress`, asks through
  * `options.interaction`, and returns a `RunResult`. Nothing here names a UI,
  * a store, a session or a program registry: the caller resolves those and
- * hands over plain data. `src/programs/run-agent-legacy.ts` is the caller
- * that rebuilds today's session-driven behavior on top of this contract.
+ * hands over plain data.
  */
 
 import type { CloudRegion } from '@utils/types';
 import type { Credentials } from '@shared/api';
-import type { AuthErrorDetail, OutroData, TaskNotice } from '@agent/progress';
-import type { PromptContext } from '@agent/agent-prompt';
+import type { AuthErrorDetail, OutroData, TaskNotice } from '../../progress';
+import type { PromptContext } from '../../agent-prompt';
 import type { PackageManagerDetector } from '@utils/package-manager';
 import type { ApiProject, ApiUser } from '@shared/api';
 import type { Harness, Integration, Sequence } from '@shared/constants';
 import type { ErrorCode } from '@shared/errors';
 import type { LLMProvider } from '@posthog/warlock';
-import type { AgentInteraction, ProgressEmitter } from '@agent/progress';
+import type { AgentInteraction, ProgressEmitter } from '../../progress';
 import type { EffortLevel } from '../switchboard/models';
-import type { SwitchboardCtx } from '../switchboard';
+import type { AgentBinding, SwitchboardCtx } from '../switchboard';
 import type { TranscriptTail } from './transcript-tail';
+import { RunOutcome } from '@shared/run-state';
 
 export type { PromptContext, Credentials };
 
@@ -133,7 +133,7 @@ export interface RunHooks {
   ) => void;
 }
 
-/** The run-level routing decision the caller made. */
+/** The run-level routing decision. */
 export interface ResolvedBinding {
   sequence: Sequence;
   harness: Harness;
@@ -144,23 +144,43 @@ export interface ResolvedBinding {
 }
 
 /**
- * Resolved execution data for one agent run. The caller has already decided
- * which program this is, how it is routed and which flags apply; the agent
- * treats every label as opaque.
+ * How the caller routes a run. The agent resolves the launch overrides and the
+ * feature flags on top of the program's binding (CLI, then flag, then binding).
  */
-export interface RunConfig {
+export interface AgentRouting {
+  /** The program's binding; `DEFAULT_BINDING` when it declares none. */
+  binding: AgentBinding;
+  /** `--harness`, `--sequence` and `--model`; dev and test builds only. */
+  overrides?: { harness?: Harness; sequence?: Sequence; model?: string };
+  /** Record the decision in analytics tags and the `switchboard resolved` event. Default true. */
+  record?: boolean;
+}
+
+/**
+ * Execution data for one agent run. The caller decides which program this is,
+ * what its binding is and which flags apply; the agent treats every label as
+ * opaque.
+ */
+export type RunConfig = Omit<
+  ResolvedRunConfig,
+  'binding' | 'switchboard' | 'wizardMetadata'
+> & {
+  routing: AgentRouting;
+  /** Extra gateway trace tags, laid over the ones the agent builds. */
+  tags?: Record<string, string>;
+};
+
+/** A run's config once its routing is resolved: what the sequences read. */
+export interface ResolvedRunConfig {
   /** Program id: gateway spend pin, analytics label, commandments axis. */
   programId: string;
   /** The run definition. A program's session-taking hooks are the caller's, see `hooks`. */
   run: AgentRunDefinition;
   /** A composed sub-run leaves the terminal outro to its caller. */
   composed: boolean;
-  /** Run-level sequence, harness and model. */
+  /** Run-level sequence, harness and model, resolved from `routing`. */
   binding: ResolvedBinding;
-  /**
-   * The inputs the run-level binding was resolved from. The orchestrator
-   * re-resolves the harness per task role from these; nothing else reads them.
-   */
+  /** What the binding was resolved from; the orchestrator re-resolves each task role from it. */
   switchboard: SwitchboardCtx;
   /** Primary skills origin (context-mill dev or GitHub Releases). */
   skillsBaseUrl: string;
@@ -168,7 +188,7 @@ export interface RunConfig {
   wizardFlags: Record<string, string>;
   /** Flag payloads from the same snapshot. */
   wizardFlagPayloads: Record<string, unknown>;
-  /** Gateway trace tags for this run, already stamped with sequence and harness. */
+  /** Gateway trace tags for this run, stamped with sequence and harness. */
   wizardMetadata: Record<string, string>;
   /** Extra tools added on top of BASE_ALLOWED_TOOLS for this run. */
   allowedTools?: readonly string[];
@@ -250,13 +270,12 @@ export interface BootstrapResult {
 }
 
 /**
- * A decided failure. The same fields `wizardAbort` takes, so the legacy
- * adapter passes it through untouched and the exit sequence, codes and
- * messages stay exactly what they were.
+ * A decided failure. The same fields `wizardAbort` takes, so a host passes it
+ * through untouched to end the process with its code and message.
  */
 export interface AgentFailure {
   message: string;
-  /** Structured error data. Renders via `outroError` instead of `outro`. */
+  /** Structured error data for the outro; built from `message` when absent. */
   outroData?: OutroData;
   error?: Error;
   exitCode?: number;
@@ -265,12 +284,7 @@ export interface AgentFailure {
   authErrorDetail?: AuthErrorDetail;
 }
 
-export enum RunOutcome {
-  Success = 'success',
-  Aborted = 'aborted',
-  Failed = 'failed',
-  Crashed = 'crashed',
-}
+export { RunOutcome };
 
 /** Totals of every `usage` event the run emitted. */
 export interface TokenUsageTotals {
@@ -282,7 +296,7 @@ export interface TokenUsageTotals {
 
 /** What the agent reported, accumulated independently of any observer. */
 export interface RunSnapshot {
-  tasks: import('@agent/progress').TaskSnapshot[];
+  tasks: import('../../progress').TaskSnapshot[];
   statusMessages: string[];
   stage?: string;
   usage: TokenUsageTotals;
@@ -319,7 +333,7 @@ export type RunResult = (
 
 export interface RunAgentOptions {
   /** Receives every progress event in emission order. Never awaited. */
-  onProgress?: (event: import('@agent/progress').AgentProgress) => unknown;
+  onProgress?: (event: import('../../progress').AgentProgress) => unknown;
   /** Answers the agent's questions. Absent → no ask bridge, notices declined. */
   interaction?: AgentInteraction;
   signal?: AbortSignal;
@@ -327,7 +341,7 @@ export interface RunAgentOptions {
 
 /** What a sequence receives: the contracts plus the prepared run. */
 export interface SequenceContext {
-  config: RunConfig;
+  config: ResolvedRunConfig;
   input: RunInput;
   boot: BootstrapResult;
   emit: ProgressEmitter;

@@ -18,6 +18,9 @@ import type { HostResolution } from './host-resolution';
  * else added here is nullish so partial responses don't fail parsing.
  */
 /** What a login (or a CI api key) resolves to: the wizard's access to one project. */
+/** A pre-issued gateway token and the gateway it's for. */
+export type GatewayCredential = { token: string; url: string };
+
 export interface Credentials {
   accessToken: string;
   /** OAuth refresh token when the grant carried one; absent on CI api-key runs. */
@@ -30,6 +33,8 @@ export interface Credentials {
   /** Resolved at auth time and immutable thereafter — see {@link HostResolution}. */
   host: HostResolution;
   projectId: number;
+  /** A pre-issued gateway token the run uses instead of minting (dev and test `--ci` runs). */
+  gateway?: GatewayCredential;
   /**
    * Requested OAuth scopes the grant came back without — deselected on the
    * consent screen or clamped by the app's ceiling. Read when a run fails so
