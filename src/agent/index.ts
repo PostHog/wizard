@@ -15,7 +15,7 @@
  */
 export type * from './types';
 export { runAgent, RunOutcome } from './runner';
-export { AgentSignals, StructuredOutputError } from './agent-interface';
+export { AgentSignals } from './agent-interface';
 export { WIZARD_TOOL_NAMES } from './tools';
 
 /**

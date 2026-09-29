@@ -44,6 +44,7 @@ import type { BootstrapResult } from '@agent/runner/shared/types';
 import type { ProgressEmitter } from '@agent/progress';
 import { createEmitLog } from '@agent/runner/shared/progress-collector';
 import type { TaskStore } from './tasks';
+import type { SecurityState } from './security';
 import { completionFailure, runErrorType } from './completion';
 import { bindPiCancellation } from './cancellation';
 import { structuredOutputExtension } from './structured-output';
@@ -131,20 +132,28 @@ export function withMode<T>(tool: T, mode: 'sequential' | 'parallel'): T {
   return tool;
 }
 
-/** Pull plain text out of a pi AgentMessage (content is text/image blocks). */
-export function extractText(message: unknown): string {
+/**
+ * The text blocks of a pi AgentMessage (content is text/image blocks). A
+ * Responses model can send several message items in one turn, commentary
+ * before its answer, and each becomes its own block.
+ */
+function textBlocks(message: unknown): string[] {
   const content = (message as { content?: unknown })?.content;
-  if (typeof content === 'string') return content;
+  if (typeof content === 'string') return [content];
   if (Array.isArray(content)) {
     return content
       .filter((c): c is { type: string; text: string } => {
         const block = c as { type?: string; text?: unknown };
         return block?.type === 'text' && typeof block.text === 'string';
       })
-      .map((c) => c.text)
-      .join('');
+      .map((c) => c.text);
   }
-  return '';
+  return [];
+}
+
+/** Pull plain text out of a pi AgentMessage. */
+export function extractText(message: unknown): string {
+  return textBlocks(message).join('');
 }
 
 /**
@@ -291,6 +300,20 @@ export const piBackend: AgentHarness = {
     let cancellation: ReturnType<typeof bindPiCancellation> | undefined;
     let timedOut = false;
     let timeoutAbort: Promise<void> | undefined;
+    // Read by the catch path; undefined until setup creates the extension.
+    let securityState: SecurityState | undefined;
+    // A latched violation outranks the timer on both the success and catch paths.
+    const yaraViolationResult = (): AgentResult => {
+      spinner.stop('Security violation detected');
+      logToFile(
+        `[pi] terminated: YARA violation (blocked ${securityState?.blockedCount} call(s))`,
+      );
+      captureAborted(AgentErrorType.YARA_VIOLATION);
+      return {
+        kind: 'failure',
+        classification: AgentErrorType.YARA_VIOLATION,
+      };
+    };
     try {
       const {
         createAgentSession,
@@ -367,6 +390,7 @@ export const piBackend: AgentHarness = {
         // Where pi's bash runs; the rm allowance is confined to this tree.
         workingDirectory: input.installDir,
       });
+      securityState = security.state;
 
       // Pay warlock's WASM-init + rule-compile cost now, off the tool-call
       // path, so the first scanned call doesn't eat cold-start latency.
@@ -585,12 +609,17 @@ export const piBackend: AgentHarness = {
             }
             assistantTurns += 1;
             turns.noteAssistantTurn(event.message);
-            const assistant = extractText(event.message).trim();
-            lastAssistantText = assistant;
+            const blocks = textBlocks(event.message);
+            const assistant = blocks.join('').trim();
+            // A schema-bound answer is the turn's last block, not the joined text.
+            lastAssistantText = (blocks.at(-1) ?? '').trim();
             if (structured) {
+              // One block per transcript line, so recovery can parse each.
               inputs.middleware?.onMessage({
                 type: 'assistant',
-                message: { content: [{ type: 'text', text: assistant }] },
+                message: {
+                  content: blocks.map((text) => ({ type: 'text', text })),
+                },
               });
             }
             if (assistant) {
@@ -731,7 +760,8 @@ export const piBackend: AgentHarness = {
           message: 'Agent run cancelled',
         };
       }
-      if (timedOut && structured) return timedOutResult(structured.timeoutMs);
+      if (timedOut && structured && !security.state.criticalViolation)
+        return timedOutResult(structured.timeoutMs);
 
       if (terminal && !security.state.criticalViolation) {
         spinner.stop(
@@ -763,17 +793,7 @@ export const piBackend: AgentHarness = {
 
       // A latched post-scan violation terminates the run as a YARA violation,
       // matching the anthropic path's AgentErrorType.YARA_VIOLATION.
-      if (security.state.criticalViolation) {
-        spinner.stop('Security violation detected');
-        logToFile(
-          `[pi] terminated: YARA violation (blocked ${security.state.blockedCount} call(s))`,
-        );
-        captureAborted(AgentErrorType.YARA_VIOLATION);
-        return {
-          kind: 'failure',
-          classification: AgentErrorType.YARA_VIOLATION,
-        };
-      }
+      if (security.state.criticalViolation) return yaraViolationResult();
 
       // pi ends a run on any tool-call-less turn, so guard against a hollow
       // success reaching the outro (nothing done, or stopped mid-plan).
@@ -787,8 +807,12 @@ export const piBackend: AgentHarness = {
         analytics.wizardCapture('agent no progress', {
           assistant_turns: assistantTurns,
         });
-        captureAborted(failure);
-        return { kind: 'failure', classification: failure };
+        // A schema-bound run with no tool calls produced no typed result.
+        const classification = structured
+          ? AgentErrorType.INVALID_STRUCTURED_OUTPUT
+          : failure;
+        captureAborted(classification);
+        return { kind: 'failure', classification };
       }
       if (failure === AgentErrorType.INCOMPLETE_TASKS) {
         spinner.stop('Agent stopped before finishing');
@@ -855,6 +879,7 @@ export const piBackend: AgentHarness = {
           message: 'Agent run cancelled',
         };
       }
+      if (securityState?.criticalViolation) return yaraViolationResult();
       if (timedOut && structured) return timedOutResult(structured.timeoutMs);
       const message = err instanceof Error ? err.message : String(err);
       logToFile(`[pi] run error: ${message}`);

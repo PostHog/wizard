@@ -743,11 +743,6 @@ function sdkErrorStatus(value: unknown): number | undefined {
   return undefined;
 }
 
-/** The SDK ran out of retries matching `outputFormat`. A caller may retry the run. */
-export class StructuredOutputError extends Error {
-  name = 'StructuredOutputError';
-}
-
 function sdkResultFailure(
   message: Record<string, unknown>,
 ): Extract<AgentResult, { kind: 'failure' }> | undefined {
@@ -768,14 +763,19 @@ function sdkResultFailure(
     sdkErrorStatus(message.status) ??
     errors.map(sdkErrorStatus).find((code) => code !== undefined) ??
     sdkErrorStatus(message.result);
+  // The SDK ran out of retries matching `outputFormat`. A caller may retry the run.
+  if (message.subtype === 'error_max_structured_output_retries') {
+    return {
+      kind: 'failure',
+      classification: AgentErrorType.INVALID_STRUCTURED_OUTPUT,
+      message: detail,
+    };
+  }
   return {
     kind: 'failure',
     classification:
       status === 429 ? AgentErrorType.RATE_LIMIT : AgentErrorType.API_ERROR,
     message: detail,
-    ...(message.subtype === 'error_max_structured_output_retries'
-      ? { error: new StructuredOutputError(detail) }
-      : {}),
   };
 }
 

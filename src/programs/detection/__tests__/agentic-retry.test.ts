@@ -8,7 +8,6 @@ import { triageModelFor } from '@agent/runner/switchboard/models';
 import {
   AgentErrorType,
   initializeAgent,
-  StructuredOutputError,
   runAgent,
 } from '@agent/agent-interface';
 import { analytics } from '@utils/analytics';
@@ -188,11 +187,10 @@ describe('agentic detection retry', () => {
     });
   });
 
-  it('retries schema exhaustion once but propagates ordinary API failures', async () => {
+  it('retries invalid structured output once but propagates ordinary API failures', async () => {
     execute.mockResolvedValueOnce({
       kind: 'failure',
-      classification: AgentErrorType.API_ERROR,
-      error: new StructuredOutputError('Invalid structured output'),
+      classification: AgentErrorType.INVALID_STRUCTURED_OUTPUT,
     });
     emitResult(verdict);
     expect(
@@ -208,6 +206,65 @@ describe('agentic detection retry', () => {
       failure,
     );
     expect(execute).toHaveBeenCalledTimes(3);
+  });
+
+  it('retries a typed report that misses the schema rather than coercing it', async () => {
+    const project = {
+      path: '.',
+      framework: 'Next.js',
+      matchingTargets: ['nextjs'],
+      targetId: 'nextjs',
+      evidence: 'next in dependencies',
+    };
+    execute.mockResolvedValueOnce({
+      kind: 'success',
+      structuredOutput: {
+        repoType: 'single',
+        projects: [{ ...project, hasPostHog: 'yes' }],
+      },
+    });
+    execute.mockResolvedValueOnce({
+      kind: 'success',
+      structuredOutput: {
+        repoType: 'single',
+        projects: [{ ...project, hasPostHog: true }],
+      },
+    });
+
+    const report = await detectProjectsWithAgent(session(), options);
+
+    expect(report.projects[0].hasPostHog).toBe(true);
+    expect(execute).toHaveBeenCalledTimes(2);
+  });
+
+  it('requires and returns the pick when asked to recommend', async () => {
+    const project = {
+      path: '.',
+      framework: 'Next.js',
+      matchingTargets: ['nextjs'],
+      targetId: 'nextjs',
+      hasPostHog: false,
+      evidence: 'next in dependencies',
+      recommended: true,
+    };
+    execute.mockResolvedValueOnce({
+      kind: 'success',
+      structuredOutput: { repoType: 'single', projects: [project] },
+    });
+
+    const report = await detectProjectsWithAgent(session(), {
+      ...options,
+      recommend: true,
+    });
+
+    expect(report.projects[0].recommended).toBe(true);
+    expect(init.mock.calls[0][0].outputFormat?.schema).toMatchObject({
+      properties: {
+        projects: {
+          items: { required: expect.arrayContaining(['recommended']) },
+        },
+      },
+    });
   });
 
   it('accepts an empty report without retrying, typed or recovered', async () => {
@@ -325,15 +382,5 @@ describe('agentic detection retry', () => {
       'Agent did not return a JSON object after retry',
     );
     expect(execute).toHaveBeenCalledTimes(2);
-  });
-
-  it('does not retry an intentional abort', async () => {
-    emitResult('[ABORT] detection failed');
-
-    await expect(detectProjectsWithAgent(session(), options)).resolves.toEqual({
-      repoType: 'single',
-      projects: [],
-    });
-    expect(execute).toHaveBeenCalledTimes(1);
   });
 });

@@ -1,7 +1,7 @@
 /**
  * Agentic project detection.
  *
- * A reusable detection tool that drives a Haiku agent over the repo: it finds
+ * A reusable detection tool that drives an agent over the repo: it finds
  * project roots, resolves monorepo/workspace markers, reads package manifests,
  * classifies each project against a caller-supplied set of targets, and reports
  * which projects already have a PostHog SDK installed.
@@ -14,12 +14,10 @@
  */
 
 import {
-  AgentSignals,
   buildRunTags,
   runAgent,
   RunOutcome,
   resolveScanBindings,
-  StructuredOutputError,
 } from '@agent';
 import type {
   AgentProgress,
@@ -207,13 +205,13 @@ function buildPrompt(
           '- Exactly one project has "recommended": true; every other project has "recommended": false.',
         ]
       : []),
-    `- If there are no manifests at all, respond with exactly: ${AgentSignals.ABORT} detection failed`,
+    '- If there are no manifests at all, return {"repoType":"single","projects":[]}.',
   ].join('\n');
 }
 
 /**
  * Build the detection report from the agent's output, or null when it holds
- * no verdicts. Exported for testing.
+ * neither a project verdict nor a `projects` array. Exported for testing.
  *
  * The verdict lines are far more reliable than the model's final assembly
  * (prose, pretty-printing, per-object fences), so every parseable line
@@ -477,22 +475,29 @@ export async function detectProjectsWithAgent(
       throw new AgenticDetectionTimeoutError(attempt + 1, timeoutMs);
     }
     if (result.outcome !== RunOutcome.Success) {
-      const invalid =
-        result.failure.code === ErrorCodes.AgentNoProgress ||
-        result.failure.error instanceof StructuredOutputError;
-      if (invalid && attempt === 0) {
+      if (
+        result.failure.code === ErrorCodes.AgentInvalidStructuredOutput &&
+        attempt === 0
+      ) {
         onEvent?.('Project scan returned invalid output; retrying...');
         continue;
       }
       throw result.failure.error ?? new Error(result.failure.message);
     }
-    const structured = reportSchema.safeParse(result.structuredOutput);
-    if (structured.success) {
-      return coerceAgenticReport(
-        structured.data,
-        targets.map((t) => t.id),
-        { recommend, rerankIds },
-      );
+    if (result.structuredOutput !== undefined) {
+      const structured = reportSchema.safeParse(result.structuredOutput);
+      if (structured.success) {
+        return coerceAgenticReport(
+          structured.data,
+          targets.map((t) => t.id),
+          { recommend, rerankIds },
+        );
+      }
+      // A typed report that misses the schema is invalid output, not a transcript.
+      if (attempt === 0) {
+        onEvent?.('Project scan returned invalid output; retrying...');
+      }
+      continue;
     }
 
     // Transcript first, final message last — its verdicts win path conflicts.
@@ -504,10 +509,6 @@ export async function detectProjectsWithAgent(
         targets.map((t) => t.id),
         { recommend, rerankIds },
       );
-    }
-    // No manifests are a valid empty scan, not a reason to retry.
-    if (output.includes(AgentSignals.ABORT)) {
-      return { repoType: 'single', projects: [] };
     }
     if (attempt === 0) onEvent?.('Retrying project scan...');
   }

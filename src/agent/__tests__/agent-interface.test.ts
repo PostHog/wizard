@@ -9,7 +9,6 @@ import {
   buildAgentEnv,
   reportMcpSetup,
   AgentErrorType,
-  StructuredOutputError,
 } from '@agent/agent-interface';
 import { AgentOutputSignals } from '@agent/output-signals';
 import { RESUME_INSTRUCTION } from '@agent/signals';
@@ -207,9 +206,8 @@ describe('runAgent', () => {
       ),
     ).resolves.toMatchObject({
       kind: 'failure',
-      classification: AgentErrorType.API_ERROR,
+      classification: AgentErrorType.INVALID_STRUCTURED_OUTPUT,
       message: 'Invalid structured output',
-      error: expect.any(StructuredOutputError),
     });
   });
 

@@ -21,6 +21,10 @@ const state = vi.hoisted(() => ({
   // A hung turn ends only when the harness aborts the session.
   hang: false,
   release: undefined as (() => void) | undefined,
+  // The turn answers without calling a tool.
+  noTools: false,
+  // Commentary blocks sent before the answer in the same turn.
+  preamble: [] as string[],
 }));
 vi.mock('@utils/analytics', () => ({
   analytics: { wizardCapture: vi.fn(), capture: vi.fn() },
@@ -123,16 +127,20 @@ vi.mock('@earendil-works/pi-coding-agent', () => ({
         },
         prompt: (prompt: string) => {
           state.prompts.push(prompt);
-          state.listener?.({
-            type: 'tool_execution_start',
-            toolName: 'find',
-            args: {},
-          });
+          if (!state.noTools)
+            state.listener?.({
+              type: 'tool_execution_start',
+              toolName: 'find',
+              args: {},
+            });
           state.listener?.({
             type: 'message_end',
             message: {
               role: 'assistant',
-              content: [{ type: 'text', text: state.text }],
+              content: [...state.preamble, state.text].map((text) => ({
+                type: 'text',
+                text,
+              })),
             },
           });
           return state.hang
@@ -232,6 +240,8 @@ beforeEach(() => {
   state.prompts = [];
   state.tasks.clear();
   state.hang = false;
+  state.noTools = false;
+  state.preamble = [];
 });
 
 it.each([
@@ -260,8 +270,59 @@ it.each([
       type: 'assistant',
       message: { content: [{ type: 'tool_use', name: 'find', input: {} }] },
     });
+    // Transcript recovery reads the assistant text the harness feeds here.
+    expect(onMessage).toHaveBeenCalledWith({
+      type: 'assistant',
+      message: { content: [{ type: 'text', text }] },
+    });
   },
 );
+
+it('returns the last block when a turn sends commentary before its answer', async () => {
+  const answer = '{"repoType":"single","projects":[]}';
+  state.preamble = ['{"repoType":"monorepo","projects":[]}'];
+  state.text = answer;
+  const onMessage = vi.fn();
+
+  await expect(piBackend.run(runInputs(onMessage))).resolves.toEqual({
+    kind: 'success',
+    structuredOutput: { repoType: 'single', projects: [] },
+  });
+  expect(onMessage).toHaveBeenCalledWith({
+    type: 'assistant',
+    message: {
+      content: [
+        { type: 'text', text: '{"repoType":"monorepo","projects":[]}' },
+        { type: 'text', text: answer },
+      ],
+    },
+  });
+});
+
+it('reports a scan that answers without reading the repo as invalid output', async () => {
+  state.noTools = true;
+  state.text = '{"repoType":"single","projects":[]}';
+
+  await expect(piBackend.run(runInputs(vi.fn()))).resolves.toMatchObject({
+    kind: 'failure',
+    classification: AgentErrorType.INVALID_STRUCTURED_OUTPUT,
+  });
+});
+
+it('ends a scan with a latched security violation as YARA, even past its budget', async () => {
+  state.hang = true;
+  vi.mocked(createSecurityExtension).mockReturnValueOnce({
+    factory: () => undefined,
+    state: { criticalViolation: true, blockedCount: 1 },
+  } as unknown as ReturnType<typeof createSecurityExtension>);
+
+  await expect(
+    piBackend.run(runInputs(vi.fn(), { schema, timeoutMs: 1 })),
+  ).resolves.toMatchObject({
+    kind: 'failure',
+    classification: AgentErrorType.YARA_VIOLATION,
+  });
+});
 
 it('ends a scan that outlives its budget as a timeout', async () => {
   state.hang = true;
