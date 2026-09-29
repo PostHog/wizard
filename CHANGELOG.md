@@ -1,5 +1,19 @@
 # Changelog
 
+## [2.79.0](https://github.com/PostHog/wizard/compare/v2.78.0...v2.79.0) (2026-09-29)
+
+
+### Features
+
+* **programs:** B2 surface shell — runProgram types and stub signatures ([#1307](https://github.com/PostHog/wizard/issues/1307)) ([92e6fe5](https://github.com/PostHog/wizard/commit/92e6fe5a7df866f808a9630706f10789a4b5bc1d))
+* **programs:** B3 plumbing and tests — runProgram, adapter wiring, detection via runAgent ([#1308](https://github.com/PostHog/wizard/issues/1308)) ([527ef21](https://github.com/PostHog/wizard/commit/527ef210c6e711852d1df77c83cd486288632ab0))
+
+
+### Bug Fixes
+
+* **e2e-harness:** let the final result write replace the outro write ([#1340](https://github.com/PostHog/wizard/issues/1340)) ([da1e7ca](https://github.com/PostHog/wizard/commit/da1e7ca0031d0890ac9e3183d4c31da1f5a49104))
+* enforce structured project detection on Luna and Haiku ([#1350](https://github.com/PostHog/wizard/issues/1350)) ([f31fbb5](https://github.com/PostHog/wizard/commit/f31fbb57cffb6a8e2420de81f07e2128a199919f))
+
 ## [2.78.0](https://github.com/PostHog/wizard/compare/v2.77.0...v2.78.0) (2026-09-25)
 
 
