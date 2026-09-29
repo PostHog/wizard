@@ -127,6 +127,12 @@ const ERROR_TRACKING_PROMPT = `Set up PostHog error tracking end-to-end:
    credentials and CI. Skip this step on platforms with readable stack traces
    (plain Python, Ruby, PHP, Elixir, JVM servers).
 
+4. On Python, Ruby, and PHP, link each production deploy to its release:
+   install the matching "error-tracking-link-releases" skill variant
+   (\`python\`, \`ruby\`, or \`php\`) and follow it. Change only the
+   production deploy path; local runs, tests, and pull-request builds stay
+   as they are.
+
 The final report is written to ./${ERROR_TRACKING_REPORT_FILE}.`;
 
 const ERROR_TRACKING_RUN: ProgramRun = {
@@ -153,7 +159,8 @@ const ERROR_TRACKING_RUN: ProgramRun = {
  * (sharing integration-v2's step-skills, like replay-vision) when the project
  * has no PostHog yet, then exception capture, then — when the platform needs
  * it — the source-map subgraph adapted from the standalone
- * `upload-source-maps` flow.
+ * `upload-source-maps` flow, or, on Python, Ruby and PHP, the `link-releases`
+ * task that resolves a release in the production deploy.
  *
  * Departures from a plain `createSkillProgram`:
  * - No `run.skillId`: the flow's tasks resolve per-framework mini-skills
@@ -172,7 +179,8 @@ const ERROR_TRACKING_RUN: ProgramRun = {
  */
 export const errorTrackingConfig: ProgramConfig = {
   command: 'error-tracking',
-  description: 'Set up PostHog error tracking, source-map upload included',
+  description:
+    'Set up PostHog error tracking, source-map upload and release linking included',
   id: 'error-tracking',
   agentFlow: 'error-tracking',
   steps: ERROR_TRACKING_STEPS,
