@@ -9,7 +9,7 @@
 import { Box, Text } from 'ink';
 import { useState, useEffect } from 'react';
 import { useSyncExternalStore } from 'react';
-import type { WizardStore } from '@ui/tui/store';
+import type { WizardStore } from '@tui/store';
 import { PickerMenu } from '@tui/primitives/index';
 import { Colors } from '@tui/styles';
 import type { SetupQuestion } from '@programs/types';

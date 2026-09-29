@@ -1,7 +1,7 @@
 import { Box, Text } from 'ink';
 import { useSyncExternalStore } from 'react';
-import type { WizardStore } from '@ui/tui/store';
-import { IntroScreenLayout } from '../../../screens/IntroScreenLayout.js';
+import type { WizardStore } from '@tui/store';
+import { IntroScreenLayout } from '@tui/screens/IntroScreenLayout';
 
 interface MigrationIntroScreenProps {
   store: WizardStore;
@@ -25,7 +25,7 @@ export const MigrationIntroScreen = ({ store }: MigrationIntroScreenProps) => {
     <IntroScreenLayout
       installDir={session.installDir}
       body={body}
-      programLabel={session.programLabel}
+      programLabel={store.programLabel}
       skillId={session.skillId}
       menuOptions={[
         { label: 'Continue', value: 'continue' },
@@ -33,7 +33,7 @@ export const MigrationIntroScreen = ({ store }: MigrationIntroScreenProps) => {
       ]}
       onSelect={(value) => {
         if (value === 'cancel') {
-          process.exit(0);
+          store.requestExit(0);
         } else {
           store.completeSetup();
         }

@@ -6,78 +6,74 @@
 import { vi, it, expect, describe, beforeAll, afterEach } from 'vitest';
 import { cleanup } from 'ink-testing-library';
 
-vi.mock('ink', () =>
-  vi.importActual('../../../node_modules/ink/build/index.d.js'),
+vi.mock(import('ink'), () =>
+  vi.importActual<typeof import('ink')>('ink-actual'),
 );
 
 const { pending } = vi.hoisted(() => ({
   pending: () => new Promise<never>(() => undefined),
 }));
 
-vi.mock('opn', () => ({ default: vi.fn(pending) }));
-vi.mock('@utils/analytics', () => ({
+vi.mock(import('opn'), () => ({ default: vi.fn(pending) }));
+vi.mock(import('@utils/analytics'), () => ({
   analytics: {
     capture: vi.fn(),
     wizardCapture: vi.fn(),
     captureException: vi.fn(),
     setTag: vi.fn(),
     shutdown: vi.fn().mockResolvedValue(undefined),
-  },
+  } as never,
   sessionProperties: vi.fn(() => ({})),
 }));
-vi.mock('@utils/clipboard', () => ({
+vi.mock(import('@utils/clipboard'), () => ({
   copyToClipboard: vi.fn().mockResolvedValue(true),
   openInBrowser: vi.fn().mockResolvedValue(true),
   browserOpenCommands: vi.fn(() => []),
 }));
-vi.mock('@utils/links', async (actual) => ({
-  ...(await actual<Record<string, unknown>>()),
+vi.mock(import('@utils/links'), async (actual) => ({
+  ...(await actual()),
   openTrackedLink: vi.fn(),
 }));
-vi.mock('@utils/debug', async (actual) => ({
-  ...(await actual<Record<string, unknown>>()),
+vi.mock(import('@utils/debug'), async (actual) => ({
+  ...(await actual()),
   getLogFilePath: () => '/tmp/posthog-wizard.log',
   logToFile: vi.fn(),
-  debug: vi.fn(),
 }));
-vi.mock('@utils/setup-utils', async (actual) => ({
-  ...(await actual<Record<string, unknown>>()),
+vi.mock(import('@tui/auth/project-data'), async (actual) => ({
+  ...(await actual()),
   getOrAskForProjectData: vi.fn(pending),
 }));
-vi.mock('@shared/api', async (actual) => ({
-  ...(await actual<Record<string, unknown>>()),
+vi.mock(import('@shared/api'), async (actual) => ({
+  ...(await actual()),
   fetchUserData: vi.fn(pending),
   fetchSlackConnected: vi.fn(pending),
   fetchGithubConnected: vi.fn(pending),
 }));
-vi.mock('@agent/tools', async (actual) => ({
-  ...(await actual<Record<string, unknown>>()),
+vi.mock(import('@shared/skill-install'), async (actual) => ({
+  ...(await actual()),
   downloadSkill: vi.fn(pending),
 }));
-vi.mock('@shared/skill-menu', async (actual) => ({
-  ...(await actual<Record<string, unknown>>()),
+vi.mock(import('@shared/skill-menu'), async (actual) => ({
+  ...(await actual()),
   fetchSkillMenu: vi.fn(pending),
 }));
-vi.mock('@tui/programs/self-driving/hooks/useGithubConnection', () => ({
-  useGithubConnection: () => undefined,
-  fetchLoginUrl: vi.fn().mockResolvedValue(null),
-}));
-vi.mock('@programs/self-driving/detect-agentic', async (actual) => ({
-  ...(await actual<Record<string, unknown>>()),
+vi.mock(import('@programs/self-driving'), async (actual) => ({
+  ...(await actual()),
   detectSelfDrivingIntegrationProjects: vi.fn(pending),
 }));
-vi.mock('@programs/error-tracking/detect-agentic', async (actual) => ({
-  ...(await actual<Record<string, unknown>>()),
+vi.mock(import('@programs/error-tracking'), async (actual) => ({
+  ...(await actual()),
   detectErrorTrackingProjects: vi.fn(pending),
 }));
 vi.mock(
-  '@programs/error-tracking-upload-source-maps/detect-agentic',
+  import('@programs/error-tracking-upload-source-maps'),
   async (actual) => ({
-    ...(await actual<Record<string, unknown>>()),
+    ...(await actual()),
     detectSourceMapsProjects: vi.fn(pending),
   }),
 );
-vi.mock('@tools/doctor/fetch', () => ({
+vi.mock(import('@tools'), async (actual) => ({
+  ...(await actual()),
   fetchHealthIssues: vi.fn().mockResolvedValue([
     {
       id: 'issue-1',
@@ -100,37 +96,52 @@ vi.mock('@tools/doctor/fetch', () => ({
   ]),
 }));
 
-import { WizardStore, TaskStatus, type ScreenName } from '@ui/tui/store';
-import { InkUI } from '@ui/tui/ink-ui';
-import { setUI } from '@ui/index';
+import { WizardStore, type ScreenName } from '@tui/store';
+import { TaskStatus } from '@shared/task-status';
+import { SkillScreenId } from '@tui/programs/shared/screen-ids';
+import { programScreenIds } from '@tui/programs/index';
+import { toolScreenIds } from '@tui/tools/index';
 import { ScreenId, Overlay } from '@tui/router';
-import { createServices, type ScreenServices } from '@ui/tui/screen-registry';
-import {
-  buildSession,
-  OutroKind,
-  RunPhase,
-  McpOutcome,
-} from '@lib/wizard-session';
+import { createServices, type ScreenServices } from '@tui/screen-registry';
+import { OutroKind } from '@shared/outro';
+import { RunPhase, McpOutcome } from '@shared/run-state';
 import { HostResolution } from '@shared/host-resolution';
 import { Integration } from '@shared/constants';
-import { FRAMEWORK_REGISTRY } from '@programs/frameworks/registry';
+import {
+  FRAMEWORK_REGISTRY,
+  buildSession,
+  Program,
+  type ProgramId,
+} from '@programs';
 import type { FrameworkConfig } from '@programs/types';
-import { Program, type ProgramId } from '@programs';
 import {
   WizardReadiness,
   type WizardReadinessResult,
 } from '@shared/health-checks/readiness';
 import { ServiceHealthStatus } from '@shared/health-checks/types';
-import { SOURCE_MAPS_CONTEXT_KEYS } from '@programs/error-tracking-upload-source-maps/detect';
-import { AUDIT_CHECKS_KEY } from '@programs/audit/types';
-import { AUDIT_SEED_CHECKS } from '@programs/audit/seed';
+import { SOURCE_MAPS_CONTEXT_KEYS } from '@programs/error-tracking-upload-source-maps';
+import { AUDIT_CHECKS_KEY, AUDIT_SEED_CHECKS } from '@programs/audit';
 import type { McpInstaller } from '@tui/services/mcp-installer';
-import type { McpSuggestedPromptsServices } from '@tui/tools/mcp/services/suggested-prompts';
+import type { McpSuggestedPromptsServices } from '@tui/tools/mcp';
 import {
   renderScreen,
   screenShell,
   type TerminalSize,
 } from './helpers/render-screen.no-jest';
+import { AiObservabilityScreenId } from '@tui/programs/ai-observability';
+import { AuditScreenId } from '@tui/programs/audit';
+import { ErrorTrackingScreenId } from '@tui/programs/error-tracking';
+import { McpScreenId } from '@tui/tools/mcp';
+import { MetricsScreenId } from '@tui/programs/metrics';
+import { MigrationScreenId } from '@tui/programs/migration';
+import { PostHogIntegrationScreenId } from '@tui/programs/posthog-integration';
+import { PosthogDoctorScreenId } from '@tui/tools/doctor';
+import { RevenueAnalyticsScreenId } from '@tui/programs/revenue-analytics';
+import { SelfDrivingScreenId } from '@tui/programs/self-driving';
+import { SourceMapsScreenId } from '@tui/programs/error-tracking-upload-source-maps';
+import { WarehouseSourceScreenId } from '@tui/programs/warehouse-source';
+import { Tool } from '@tools';
+import { applySetter } from '@tui/__tests__/helpers/apply-setter.no-jest';
 
 // 80x28 is the ScreenContainer minimum. Anything smaller renders the
 // viewport guard instead of the screen, which the last describe pins once.
@@ -210,7 +221,6 @@ const inertPromptsServices = {
 
 function makeStore(program: ProgramId): WizardStore {
   const store = new WizardStore(program);
-  setUI(new InkUI(store));
   store.version = '0.0.0-test';
   store.session = buildSession({ installDir: '/app' });
   return store;
@@ -220,7 +230,7 @@ function makeServices(store: WizardStore): ScreenServices {
   return {
     ...createServices(store),
     mcpInstaller: fakeInstaller,
-    mcpSuggestedPromptsServices: inertPromptsServices,
+    programServices: { [McpScreenId.SuggestedPrompts]: inertPromptsServices },
   };
 }
 
@@ -240,7 +250,7 @@ interface Fixture {
   arrange?: (store: WizardStore) => void;
 }
 
-const FIXTURES: Record<ScreenName, Fixture> = {
+const FIXTURES: Record<string, Fixture> = {
   // ── Overlays ───────────────────────────────────────────────────
   [Overlay.SettingsOverride]: {
     program: Program.PostHogIntegration,
@@ -344,7 +354,7 @@ const FIXTURES: Record<ScreenName, Fixture> = {
   },
 
   // ── Program screens ────────────────────────────────────────────
-  [ScreenId.Intro]: {
+  [PostHogIntegrationScreenId.Intro]: {
     program: Program.PostHogIntegration,
     arrange: (s) => {
       s.setFrameworkConfig(Integration.nextjs, staticFrameworkConfig());
@@ -353,19 +363,19 @@ const FIXTURES: Record<ScreenName, Fixture> = {
       s.setDetectionComplete();
     },
   },
-  [ScreenId.RevenueIntro]: { program: Program.RevenueAnalyticsSetup },
-  [ScreenId.WarehouseIntro]: { program: Program.WarehouseSource },
-  [ScreenId.SourceMapsIntro]: {
+  [RevenueAnalyticsScreenId.Intro]: { program: Program.RevenueAnalyticsSetup },
+  [WarehouseSourceScreenId.Intro]: { program: Program.WarehouseSource },
+  [SourceMapsScreenId.Intro]: {
     program: Program.ErrorTrackingUploadSourceMaps,
   },
-  [ScreenId.SourceMapsDetect]: {
+  [SourceMapsScreenId.Detect]: {
     program: Program.ErrorTrackingUploadSourceMaps,
     arrange: (s) => {
       s.completeSetup();
       s.setCredentials(CREDENTIALS);
     },
   },
-  [ScreenId.SourceMapsOutro]: {
+  [SourceMapsScreenId.Outro]: {
     program: Program.ErrorTrackingUploadSourceMaps,
     arrange: (s) => {
       s.completeSetup();
@@ -375,49 +385,49 @@ const FIXTURES: Record<ScreenName, Fixture> = {
       ranSuccessfully(s);
     },
   },
-  [ScreenId.MigrationIntro]: { program: Program.Migration },
-  [ScreenId.AgentSkillIntro]: { program: Program.AgentSkill },
-  [ScreenId.AiObservabilityIntro]: { program: Program.AiObservability },
-  [ScreenId.MetricsIntro]: { program: Program.Metrics },
-  [ScreenId.ErrorTrackingIntro]: { program: Program.ErrorTracking },
-  [ScreenId.ErrorTrackingDetect]: {
+  [MigrationScreenId.Intro]: { program: Program.Migration },
+  [SkillScreenId.Intro]: { program: Program.AgentSkill },
+  [AiObservabilityScreenId.Intro]: { program: Program.AiObservability },
+  [MetricsScreenId.Intro]: { program: Program.Metrics },
+  [ErrorTrackingScreenId.Intro]: { program: Program.ErrorTracking },
+  [ErrorTrackingScreenId.Detect]: {
     program: Program.ErrorTracking,
     arrange: authed,
   },
-  [ScreenId.SelfDrivingIntro]: { program: Program.SelfDriving },
-  [ScreenId.SelfDrivingIntegrationCheck]: {
+  [SelfDrivingScreenId.Intro]: { program: Program.SelfDriving },
+  [SelfDrivingScreenId.IntegrationCheck]: {
     program: Program.SelfDriving,
     arrange: (s) => s.completeSetup(),
   },
-  [ScreenId.SelfDrivingIntegrationDetect]: {
+  [SelfDrivingScreenId.IntegrationDetect]: {
     program: Program.SelfDriving,
     arrange: (s) => {
-      s.setIntegrate(true);
+      applySetter(s, 'setIntegrate', { integrate: true });
       authed(s);
     },
   },
-  [ScreenId.SelfDrivingHandoff]: {
+  [SelfDrivingScreenId.Handoff]: {
     program: Program.SelfDriving,
     arrange: (s) => {
-      s.setIntegrate(true);
-      authed(s);
-      s.setFrameworkConfig(Integration.nextjs, staticFrameworkConfig());
-      s.completeRunStep('integrate-run');
-    },
-  },
-  [ScreenId.SelfDrivingGithub]: {
-    program: Program.SelfDriving,
-    arrange: (s) => {
-      s.setIntegrate(true);
+      applySetter(s, 'setIntegrate', { integrate: true });
       authed(s);
       s.setFrameworkConfig(Integration.nextjs, staticFrameworkConfig());
       s.completeRunStep('integrate-run');
-      s.confirmSelfDrivingHandoff();
-      s.setGithubConnected(false);
     },
   },
-  [ScreenId.AuditIntro]: { program: Program.Audit },
-  [ScreenId.AuditRun]: {
+  [SelfDrivingScreenId.Github]: {
+    program: Program.SelfDriving,
+    arrange: (s) => {
+      applySetter(s, 'setIntegrate', { integrate: true });
+      authed(s);
+      s.setFrameworkConfig(Integration.nextjs, staticFrameworkConfig());
+      s.completeRunStep('integrate-run');
+      applySetter(s, 'confirmSelfDrivingHandoff');
+      applySetter(s, 'setGithubConnected', { connected: false });
+    },
+  },
+  [AuditScreenId.Intro]: { program: Program.Audit },
+  [AuditScreenId.Run]: {
     program: Program.Audit,
     arrange: (s) => {
       authed(s);
@@ -425,7 +435,7 @@ const FIXTURES: Record<ScreenName, Fixture> = {
       s.pushStatus('Reviewing autocapture coverage');
     },
   },
-  [ScreenId.AuditOutro]: {
+  [AuditScreenId.Outro]: {
     program: Program.Audit,
     arrange: (s) => {
       authed(s);
@@ -440,9 +450,9 @@ const FIXTURES: Record<ScreenName, Fixture> = {
       s.setReadinessResult(OUTAGE);
     },
   },
-  [ScreenId.DoctorIntro]: { program: Program.PosthogDoctor },
-  [ScreenId.DoctorReport]: {
-    program: Program.PosthogDoctor,
+  [PosthogDoctorScreenId.Intro]: { program: Tool.PosthogDoctor },
+  [PosthogDoctorScreenId.Report]: {
+    program: Tool.PosthogDoctor,
     arrange: authed,
   },
   [ScreenId.Setup]: {
@@ -496,9 +506,9 @@ const FIXTURES: Record<ScreenName, Fixture> = {
       s.setOutroDismissed();
     },
   },
-  [ScreenId.McpSuggestedPrompts]: { program: Program.McpTutorial },
+  [McpScreenId.SuggestedPrompts]: { program: Tool.McpTutorial },
   [ScreenId.SlackConnect]: {
-    program: Program.SlackConnect,
+    program: Tool.SlackConnect,
     arrange: (s) => {
       s.setCredentials(CREDENTIALS);
       s.setSlackConnected(false);
@@ -545,8 +555,8 @@ const FIXTURES: Record<ScreenName, Fixture> = {
       s.setMintHandoff('exit');
     },
   },
-  [ScreenId.McpAdd]: { program: Program.McpAdd },
-  [ScreenId.McpRemove]: { program: Program.McpRemove },
+  [McpScreenId.Add]: { program: Tool.McpAdd },
+  [McpScreenId.Remove]: { program: Tool.McpRemove },
 };
 
 /** Only the org's AI consent and membership level drive the gate screen. */
@@ -566,15 +576,25 @@ function apiUser(approved: boolean): WizardStore['session']['apiUser'] {
 beforeAll(() => {
   vi.useFakeTimers();
   vi.setSystemTime(new Date('2026-01-01T00:00:00Z'));
-  vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
   vi.spyOn(Math, 'random').mockReturnValue(0.42);
 });
 
 afterEach(cleanup);
 
+// A screen a flow can reach but no fixture renders would go unpinned.
+it('has a fixture for every screen and overlay', () => {
+  const all: string[] = [
+    ...Object.values(ScreenId),
+    ...programScreenIds(),
+    ...toolScreenIds(),
+    ...Object.values(Overlay),
+  ];
+  expect(all.filter((screen) => !(screen in FIXTURES))).toEqual([]);
+});
+
 describe.each(Object.entries(FIXTURES))('%s', (name, fixture) => {
   it.each(SIZES)(`at $columns x $rows`, async (size) => {
-    const screen = name as ScreenName;
+    const screen = name;
     const store = makeStore(fixture.program);
     fixture.arrange?.(store);
     expect(store.currentScreen).toBe(screen);
@@ -590,8 +610,8 @@ describe.each(Object.entries(FIXTURES))('%s', (name, fixture) => {
 
 describe('viewport guard', () => {
   it('replaces every screen below 80x28 with the too-small message', async () => {
-    const store = makeStore(FIXTURES[ScreenId.Intro].program);
-    FIXTURES[ScreenId.Intro].arrange?.(store);
+    const store = makeStore(FIXTURES[PostHogIntegrationScreenId.Intro].program);
+    FIXTURES[PostHogIntegrationScreenId.Intro].arrange?.(store);
     const { frame } = await renderScreen(
       store,
       screenShell(store, makeServices(store)),
@@ -599,7 +619,7 @@ describe('viewport guard', () => {
     );
     expect(frame).toContain('needs at least 80×28');
     await expect(frame).toMatchFileSnapshot(
-      snapshotPath(ScreenId.Intro, TOO_SMALL),
+      snapshotPath(PostHogIntegrationScreenId.Intro, TOO_SMALL),
     );
   });
 });
@@ -613,7 +633,7 @@ describe('revenue-intro with a detect error', () => {
       kind: 'no-sdks',
       scannedCount: 2,
     });
-    expect(store.currentScreen).toBe(ScreenId.RevenueIntro);
+    expect(store.currentScreen).toBe(RevenueAnalyticsScreenId.Intro);
     const { frame } = await renderScreen(
       store,
       screenShell(store, makeServices(store)),

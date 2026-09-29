@@ -8,9 +8,9 @@
 import fs from 'fs';
 import path from 'path';
 import { logToFile } from '@utils/debug';
-import { AgentSignals } from '@agent/agent-interface';
+import { AgentSignals } from '../agent-interface';
 import { runtimeEnv } from '@env';
-import { WIZARD_BENCHMARK_FILE, WIZARD_LOG_FILE } from '@utils/paths';
+import { WIZARD_BENCHMARK_FILE } from '@utils/paths';
 
 export interface BenchmarkConfig {
   /** Enable/disable individual metric plugins */
@@ -20,10 +20,6 @@ export interface BenchmarkConfig {
     benchmarkPath: string;
     /** Whether to write the benchmark JSON file */
     benchmarkEnabled: boolean;
-    /** Path for the main wizard debug log file */
-    logPath: string;
-    /** Whether to write the main wizard debug log */
-    logEnabled: boolean;
     /** Suppress benchmark console output (disables the summary plugin) */
     suppressWizardLogs: boolean;
   };
@@ -44,8 +40,6 @@ const DEFAULT_CONFIG: BenchmarkConfig = {
   output: {
     benchmarkPath: WIZARD_BENCHMARK_FILE,
     benchmarkEnabled: true,
-    logPath: WIZARD_LOG_FILE,
-    logEnabled: true,
     suppressWizardLogs: false,
   },
 };
@@ -67,11 +61,6 @@ export function loadBenchmarkConfig(installDir: string): BenchmarkConfig {
     if (benchFile) {
       config.output.benchmarkPath = benchFile;
     }
-    const logDir = runtimeEnv('POSTHOG_WIZARD_LOG_DIR');
-    if (logDir) {
-      config.output.logPath = path.join(logDir, 'posthog-wizard.log');
-    }
-
     // If benchmark output is disabled, disable the jsonWriter plugin
     if (!config.output.benchmarkEnabled) {
       config.plugins.jsonWriter = false;
@@ -88,11 +77,6 @@ export function loadBenchmarkConfig(installDir: string): BenchmarkConfig {
     if (benchFile2) {
       config.output.benchmarkPath = benchFile2;
     }
-    const logDir2 = runtimeEnv('POSTHOG_WIZARD_LOG_DIR');
-    if (logDir2) {
-      config.output.logPath = path.join(logDir2, 'posthog-wizard.log');
-    }
-
     return config;
   }
 }

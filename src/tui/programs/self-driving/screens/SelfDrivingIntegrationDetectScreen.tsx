@@ -9,19 +9,21 @@
  * Runs after auth — the detector needs credentials.
  */
 
+import { scanProgress } from '@tui/agent-progress';
 import { Box, Text } from 'ink';
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import type { WizardStore } from '@ui/tui/store';
+import type { WizardStore } from '@tui/store';
+import { setIntegrate } from '../store-actions.js';
 import { LoadingBox, PickerMenu } from '@tui/primitives/index';
 import { Colors, Icons } from '@tui/styles';
 import { Integration } from '@shared/constants';
-import { FRAMEWORK_REGISTRY } from '@programs/frameworks/registry';
-import { SELF_DRIVING_INTEGRATE_PATH_KEY } from '@programs/self-driving/detect';
+import { FRAMEWORK_REGISTRY } from '@programs';
+import { SELF_DRIVING_INTEGRATE_PATH_KEY } from '@programs/self-driving';
 import {
   detectSelfDrivingIntegrationProjects,
   type IntegrationProject,
   type IntegrationDetectionReport,
-} from '@programs/self-driving/detect-agentic';
+} from '@programs/self-driving';
 
 interface SelfDrivingIntegrationDetectScreenProps {
   store: WizardStore;
@@ -67,7 +69,7 @@ export const SelfDrivingIntegrationDetectScreen = ({
   // and drops the integrate-run / handoff steps from the walk.
   const continueWithExisting = (p: IntegrationProject) => {
     store.setFrameworkContext(SELF_DRIVING_INTEGRATE_PATH_KEY, p.path);
-    store.setIntegrate(false, {
+    setIntegrate(store, false, {
       via: 'existing-integration-detected',
       path: p.path,
     });
@@ -82,11 +84,12 @@ export const SelfDrivingIntegrationDetectScreen = ({
       try {
         const report = await detectSelfDrivingIntegrationProjects(
           store.session,
-          (line) => {
+          (line: string) => {
             if (!cancelled) {
               setActivity((prev) => [...prev, line].slice(-MAX_ACTIVITY_LINES));
             }
           },
+          scanProgress(store),
         );
         if (!cancelled) setState({ kind: 'ready', report });
       } catch (err) {
@@ -183,7 +186,7 @@ export const SelfDrivingIntegrationDetectScreen = ({
   const dispatch = (value: string | string[]) => {
     const v = Array.isArray(value) ? value[0] : value;
     if (v === CANCEL) {
-      process.exit(0);
+      store.requestExit(0);
       return;
     }
     if (v.startsWith(EXISTING)) {
@@ -212,7 +215,7 @@ export const SelfDrivingIntegrationDetectScreen = ({
         <Box marginTop={1}>
           <PickerMenu
             options={[{ label: 'Exit', value: CANCEL }]}
-            onSelect={() => process.exit(0)}
+            onSelect={() => store.requestExit(0)}
           />
         </Box>
       </Box>

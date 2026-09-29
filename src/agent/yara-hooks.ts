@@ -788,9 +788,7 @@ export function createPreToolUseYaraHooks(
             // The wizard's publish_handoff MCP tool, fully qualified by the
             // SDK (e.g. mcp__wizard-tools__publish_handoff). Matched by
             // suffix so a server rename can't silently reopen the gap — the
-            // exact FQN lives in WIZARD_TOOL_NAMES (wizard-tools/tools.ts),
-            // which this module can't import without a cycle (tools.ts
-            // imports scanInstalledSkill from here).
+            // exact FQN lives in WIZARD_TOOL_NAMES (wizard-tools/tools.ts).
             if (
               typeof toolName !== 'string' ||
               !toolName.endsWith('__publish_handoff')
@@ -1091,47 +1089,6 @@ export function createPostToolUseYaraHooks(
 }
 
 // ─── Skill File Scanner ──────────────────────────────────────────
-
-/**
- * Scan a freshly installed skill directory (any root — .claude/skills or the
- * orchestrator's run cache) and return a terminate reason when it is poisoned,
- * else null. The choke point for TS-path installs (downloadSkill); agent Bash
- * installs are covered by the PostToolUse matcher above. Runs the same LLM
- * triage as the tool-use scans; fail-closed to treating every match as real when
- * no provider is configured, so a missing key never weakens the check.
- * `llmProvider` is explicit — pi and the orchestrator never set the env fallback.
- *
- * Terminates on the same verdict as every other surface (critical only). A
- * non-terminal match is recorded and the skill is kept: these rules fire on
- * first-party skill prose, and deleting the skill leaves the agent working blind
- * on the very content it needed.
- */
-export async function scanInstalledSkill(
-  absoluteSkillDir: string,
-  llmProvider: LLMProvider | undefined,
-): Promise<string | null> {
-  recordScan();
-  const matches = await scanSkillFiles(absoluteSkillDir, '.', llmProvider);
-  const verdict = scanVerdict(matches);
-  if (!verdict) return null;
-  recordMatch(
-    'skill-install',
-    'installSkillById',
-    verdict.match,
-    verdict.action,
-  );
-  if (!verdict.terminal) {
-    logToFile(
-      `[YARA] ${verdict.match.rule} (${
-        verdict.match.metadata.severity ?? 'unknown'
-      }) in ${absoluteSkillDir} — non-terminal, keeping the skill`,
-    );
-    return null;
-  }
-  return `Poisoned skill detected: ${verdict.match.rule} (${
-    verdict.match.metadata.severity ?? 'unknown'
-  }) in ${absoluteSkillDir}`;
-}
 
 /**
  * Read and scan all text files in a skill directory for prompt injection.

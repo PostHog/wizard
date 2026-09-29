@@ -6,16 +6,17 @@
  */
 
 import { existsSync, statSync } from 'fs';
-import type { WizardSession } from '@lib/wizard-session';
+import type { ProgramSession } from '../program-session';
 import type { AbortCase } from '@agent/types';
-import { findPackageJsons } from '@programs/shared/package-scanning';
+import { ErrorCodes, type ErrorCode } from '@shared/errors';
+import { findPackageJsons } from '../shared/package-scanning';
 
 export {
   findPackageJsons,
   POSTHOG_SDKS,
   STRIPE_SDKS,
   type PackageMatch,
-} from '@programs/shared/package-scanning';
+} from '../shared/package-scanning';
 
 /**
  * Structured detection errors. The screen renders each kind into JSX
@@ -31,6 +32,19 @@ export type RevenueDetectError =
   | { kind: 'no-sdks'; scannedCount: number }
   | { kind: 'missing-posthog'; foundStripe: string[] }
   | { kind: 'missing-stripe'; foundPosthog: string[] };
+
+/** The error code for each detect error `kind`, read by `detectErrorCode`. */
+export const REVENUE_DETECT_CODES: Record<
+  RevenueDetectError['kind'],
+  ErrorCode
+> = {
+  'bad-directory': ErrorCodes.DetectBadDirectory,
+  'no-package-json': ErrorCodes.DetectNoPackageJson,
+  'no-sdks': ErrorCodes.DetectNoSdks,
+  // One failure class with the other programs' "no PostHog SDK" kinds.
+  'missing-posthog': ErrorCodes.DetectNoPosthogSdk,
+  'missing-stripe': ErrorCodes.DetectMissingStripe,
+};
 
 /** `[ABORT] <reason>` cases the revenue analytics skill can emit. */
 export const REVENUE_ABORT_CASES: AbortCase[] = [
@@ -64,7 +78,7 @@ export const REVENUE_ABORT_CASES: AbortCase[] = [
  * The skill install happens later in the bootstrap runner, not here.
  */
 export function detectRevenuePrerequisites(
-  session: WizardSession,
+  session: ProgramSession,
   setFrameworkContext: (key: string, value: unknown) => void,
 ): void {
   const fail = (error: RevenueDetectError) =>

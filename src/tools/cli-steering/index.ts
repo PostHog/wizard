@@ -1,9 +1,8 @@
+/** `wizard cli add`: install or update PostHog CLI, then add its steering snippet to the coding agent's instructions. */
+
 import * as path from 'node:path';
 import * as readline from 'node:readline/promises';
-import type { Arguments } from 'yargs';
-import { getUI, setUI } from '@ui';
-import { LoggingUI } from '@ui/logging-ui';
-import { analytics } from '@utils/analytics';
+import type { ConsoleLog } from '@shared/console-log';
 import {
   CLI_STEERING_TARGETS,
   type CliSteeringTarget,
@@ -12,62 +11,26 @@ import {
   installOrUpdatePostHogCli,
   installSteeringSnippet,
 } from '@shared/install-cli-steering';
-import type { Command } from '../../cli/commands/command';
+import { analytics } from '@utils/analytics';
+import { flushAnalytics } from '@utils/flush-analytics';
 
-export const cliAddCommand: Command = {
-  name: 'add',
-  description:
-    "Install or update PostHog CLI and add steering instructions to your coding agent's global instructions file",
-  options: {
-    agent: {
-      describe: 'Agent to install the instructions for',
-      choices: CLI_STEERING_TARGETS.map((target) => target.id),
-      type: 'string',
-    },
-    path: {
-      describe:
-        'Write to an explicit instructions file instead of a detected agent',
-      type: 'string',
-    },
-    all: {
-      default: false,
-      describe: 'Install for every detected agent without prompting',
-      type: 'boolean',
-    },
-  },
-  examples: [
-    ['wizard cli add', 'Detect your coding agents and pick one'],
-    [
-      'wizard cli add --agent claude-code',
-      'Install for Claude Code (~/.claude/CLAUDE.md)',
-    ],
-    ['wizard cli add --all', 'Install for every detected agent'],
-    [
-      'wizard cli add --path ./AGENTS.md',
-      'Install into a specific instructions file',
-    ],
-  ],
-  check: (argv) => {
-    if (argv.all && (argv.agent || argv.path)) {
-      throw new Error('--all cannot be combined with --agent or --path');
-    }
-    return true;
-  },
-  handler: (argv) => {
-    void runCliAdd(argv);
-  },
-};
+export type CliAddArgs = { agent?: string; path?: string; all?: boolean };
 
-async function runCliAdd(argv: Arguments): Promise<void> {
-  setUI(new LoggingUI());
-  const ui = getUI();
+/** Resolves 0 when the CLI and every snippet installed, else 1. */
+export async function runCliAdd(
+  args: CliAddArgs,
+  { log }: { log: ConsoleLog },
+): Promise<number> {
+  const code = await cliAdd(args, log);
+  await flushAnalytics();
+  return code;
+}
+
+async function cliAdd(args: CliAddArgs, ui: ConsoleLog): Promise<number> {
   ui.intro('PostHog CLI setup');
 
-  const files = await resolveTargetFiles(argv);
-  if (files.length === 0) {
-    process.exit(1);
-    return;
-  }
+  const files = await resolveTargetFiles(args, ui);
+  if (files.length === 0) return 1;
 
   ui.log.info('Installing or updating PostHog CLI...');
   const cliInstallResult = installOrUpdatePostHogCli();
@@ -81,10 +44,9 @@ async function runCliAdd(argv: Arguments): Promise<void> {
       files: files.length,
       failures: files.length,
       cli_install_failed: true,
-      agent: typeof argv.agent === 'string' ? argv.agent : undefined,
+      agent: args.agent,
     });
-    process.exit(1);
-    return;
+    return 1;
   }
   ui.log.success('Installed or updated PostHog CLI.');
 
@@ -102,32 +64,30 @@ async function runCliAdd(argv: Arguments): Promise<void> {
   analytics.wizardCapture('cli steering installed', {
     files: files.length,
     failures,
-    agent: typeof argv.agent === 'string' ? argv.agent : undefined,
+    agent: args.agent,
   });
 
-  if (failures > 0) {
-    process.exit(1);
-    return;
-  }
+  if (failures > 0) return 1;
   ui.outro(
     'Done. PostHog CLI is installed and your agent will now use `posthog-cli api` for PostHog tasks.',
   );
-  process.exit(0);
+  return 0;
 }
 
 /** Resolve which instruction files to write, from flags, detection, or a prompt. */
-async function resolveTargetFiles(argv: Arguments): Promise<string[]> {
-  const ui = getUI();
-
-  if (typeof argv.path === 'string' && argv.path.trim()) {
-    return [path.resolve(argv.path.trim())];
+async function resolveTargetFiles(
+  args: CliAddArgs,
+  ui: ConsoleLog,
+): Promise<string[]> {
+  if (args.path?.trim()) {
+    return [path.resolve(args.path.trim())];
   }
 
-  if (typeof argv.agent === 'string') {
+  if (args.agent !== undefined) {
     // yargs `choices` already rejected unknown ids.
-    const target = findTarget(argv.agent);
+    const target = findTarget(args.agent);
     if (!target) {
-      ui.log.error(`Unsupported agent: ${argv.agent}`);
+      ui.log.error(`Unsupported agent: ${args.agent}`);
       return [];
     }
     return [target.instructionsPath()];
@@ -144,7 +104,7 @@ async function resolveTargetFiles(argv: Arguments): Promise<string[]> {
     return [];
   }
 
-  if (argv.all === true) {
+  if (args.all === true) {
     ui.log.info(
       `Installing for all detected agents: ${detected
         .map((t) => t.name)
@@ -172,15 +132,15 @@ async function resolveTargetFiles(argv: Arguments): Promise<string[]> {
     return detected.map((target) => target.instructionsPath());
   }
 
-  const selected = await promptForTargets(detected);
+  const selected = await promptForTargets(detected, ui);
   return selected.map((target) => target.instructionsPath());
 }
 
 /** Minimal numbered selection — this command is intentionally not a TUI flow. */
 async function promptForTargets(
   detected: CliSteeringTarget[],
+  ui: ConsoleLog,
 ): Promise<CliSteeringTarget[]> {
-  const ui = getUI();
   ui.log.info('Which coding agent are you using?');
   detected.forEach((target, index) => {
     ui.log.info(

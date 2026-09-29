@@ -6,11 +6,7 @@
 // Needs local PostHog on :8010 (with its ai-gateway) and context-mill on :8765.
 // POSTHOG_PERSONAL_API_KEY logs in. WIZARD_CI_GATEWAY_TOKEN_FILE holds the gateway token.
 // QUACK_INSTALL_DIR sets the project the agent runs in (default: the current directory).
-import {
-  configureGatewayFromCIEnvironment,
-  runAgent,
-  RunOutcome,
-} from '@agent';
+import { runAgent, RunOutcome } from '@agent';
 import type { RunConfig, RunInput } from '@agent/types';
 import {
   Harness,
@@ -18,26 +14,26 @@ import {
   Sequence,
   getSkillsBaseUrl,
 } from '@shared/constants';
+import { fetchProjectData, fetchUserData } from '@shared/api';
+import { readCiGatewayCredential } from '@shared/ci-gateway';
+import { HostResolution } from '@shared/host-resolution';
 import { initLocalDev, POSTHOG_LOCAL_URL } from '@shared/local-dev';
-import { getOrAskForProjectData } from '@utils/setup-utils';
 
 // Point PostHog, skills and MCP at the local stack, like --local-posthog --local-context-mill --local-mcp.
 initLocalDev({ localPosthog: true, localContextMill: true, localMcp: true });
 
-// Log in with keys instead of the browser, the same way --ci does.
+// Log in with a personal API key instead of the browser: the host, the user, then the key's current project.
 const apiKey = process.env.POSTHOG_PERSONAL_API_KEY;
 if (!apiKey) throw new Error('Set POSTHOG_PERSONAL_API_KEY');
 const programId = 'posthog-integration'; // a program the local gateway admits
-const login = await getOrAskForProjectData({
-  signup: false,
-  ci: true, // with apiKey, this skips OAuth
-  apiKey,
+const host = await HostResolution.fromAccessToken(apiKey, {
   baseUrl: POSTHOG_LOCAL_URL,
   localMcp: true,
-  programId,
 });
-// Use the token in WIZARD_CI_GATEWAY_TOKEN_FILE at WIZARD_CI_GATEWAY_URL instead of minting one.
-configureGatewayFromCIEnvironment(login.projectId, 'us');
+const apiUser = await fetchUserData(apiKey, host.appHost);
+const projectId = apiUser.team?.id;
+if (!projectId) throw new Error('The API key has no current project');
+const project = await fetchProjectData(apiKey, projectId, host.appHost);
 
 // What the agent runs: one prompt, a small model, no Write, Edit or Bash.
 const config: RunConfig = {
@@ -53,35 +49,34 @@ const config: RunConfig = {
     reportFile: '',
     docsUrl: 'https://posthog.com/docs',
   },
-  composed: true, // a sub-run: no terminal outro
-  // runAgent doesn't resolve a route. Linear on the Anthropic harness keeps the transcript.
-  binding: {
-    sequence: Sequence.linear,
-    harness: Harness.anthropic,
-    model: HAIKU_MODEL,
+  composed: false, // a top-level run: the agent writes its own outro
+  // Linear on the Anthropic harness keeps the transcript. With no flags, the agent runs this binding as is.
+  routing: {
+    binding: {
+      sequence: Sequence.linear,
+      harness: Harness.anthropic,
+      model: HAIKU_MODEL,
+    },
   },
-  switchboard: { program: programId, composed: true, flags: {} },
   skillsBaseUrl: getSkillsBaseUrl(),
   wizardFlags: {},
   wizardFlagPayloads: {},
-  wizardMetadata: {},
   disallowedTools: ['Write', 'Edit', 'Bash'],
 };
 
 // Where and as whom: the project, the login and the flags.
 const input: RunInput = {
   installDir: process.env.QUACK_INSTALL_DIR ?? process.cwd(),
+  // Use the token in WIZARD_CI_GATEWAY_TOKEN_FILE at WIZARD_CI_GATEWAY_URL instead of minting one.
   credentials: {
-    accessToken: login.accessToken,
-    refreshToken: login.refreshToken,
-    expiresAt: login.expiresAt,
-    projectApiKey: login.projectApiKey,
-    host: login.host,
-    projectId: login.projectId,
-    missingScopes: login.missingScopes,
+    accessToken: apiKey,
+    projectApiKey: project.api_token,
+    host,
+    projectId: project.id,
+    gateway: readCiGatewayCredential('us'),
   },
-  project: login.project,
-  apiUser: login.user,
+  project,
+  apiUser,
   flags: {
     ci: false,
     signup: false,

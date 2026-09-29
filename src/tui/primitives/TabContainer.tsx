@@ -14,7 +14,7 @@ import {
   KeyMatch,
   type KeyBinding,
 } from '@tui/hooks/useKeyBindings';
-import type { WizardStore } from '@ui/tui/store';
+import type { WizardStore } from '@tui/store';
 import { COLLAPSED_COUNT, EXPANDED_COUNT } from '@tui/constants';
 
 // Re-exported so existing importers (e.g. LearnCard) keep their path.

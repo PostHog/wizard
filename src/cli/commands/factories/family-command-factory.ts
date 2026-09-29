@@ -5,7 +5,7 @@ import {
   buildFamilyPickerChildren,
   dispatchFamily,
   pickerChildrenToShow,
-} from '@cli/commands/dispatch-family';
+} from '../dispatch-family';
 import { getSkillsBaseUrl } from '@shared/constants';
 import { fetchSkillMenu } from '@shared/skill-menu';
 
@@ -33,7 +33,7 @@ export interface FamilyCommandFactoryOpts {
  *     native handlers first, then the live `cliEntries` from
  *     `skill-menu.json`. Unknown subs error with the available list.
  *   - `wizard <family>` (no positional) — in an interactive terminal, runs the
- *     family's single shown entry directly (today `audit events`, so the user
+ *     family's single shown entry directly (the skill menu's default leaf, so the user
  *     lands on its intro screen); opens the picker once a family shows more than
  *     one. In non-TTY/CI, falls through to `dispatchFamily`, which prints
  *     "requires a subcommand" rather than running something unprompted.

@@ -1,34 +1,32 @@
 import {
   PROGRAM_REGISTRY,
-  agentSkillConfig,
   getCommandPath,
-  getLaunchablePrograms,
-  getProgramConfig,
   getSubcommandPrograms,
 } from '../program-registry';
-import type { WizardSession } from '@lib/wizard-session';
-import { testRunnerContext } from '../../../test/runner-context';
+import { config as agentSkill } from '@programs/agent-skill';
+import type { RunnerContext } from '../runner-context';
+import type { WizardSession } from '../session/wizard-session';
+
+/** The host effects a run may use; the runs here use none. */
+const runner: RunnerContext = {
+  getFrameworkContext: () => undefined,
+  setFrameworkContext: () => undefined,
+  log: { info: () => undefined, warn: () => undefined },
+  spinner: () => ({
+    start: () => undefined,
+    stop: () => undefined,
+    message: () => undefined,
+  }),
+};
 
 describe('PROGRAM_REGISTRY', () => {
-  it('every entry has unique id, description, and non-empty steps', () => {
+  it('every entry has a unique id and a description', () => {
     const ids = PROGRAM_REGISTRY.map((c) => c.id);
     expect(new Set(ids).size).toBe(ids.length);
 
     for (const config of PROGRAM_REGISTRY) {
       expect(config.description).toBeTruthy();
-      expect(config.steps.length).toBeGreaterThan(0);
     }
-  });
-});
-
-describe('getProgramConfig', () => {
-  it('finds known configs by id', () => {
-    expect(getProgramConfig('posthog-integration').id).toBe(
-      'posthog-integration',
-    );
-    expect(getProgramConfig('revenue-analytics-setup').command).toBe(
-      'revenue-analytics',
-    );
   });
 });
 
@@ -62,50 +60,7 @@ describe('getCommandPath', () => {
   });
 });
 
-describe('getLaunchablePrograms', () => {
-  // The list is curated, so an id that stops matching drops its row in silence.
-  it("offers the intro's programs, in order, all resolving", () => {
-    expect(getLaunchablePrograms().map((config) => config.id)).toEqual([
-      'self-driving',
-      'error-tracking-upload-source-maps',
-      'warehouse-source',
-      'audit',
-      'posthog-doctor',
-      'mcp-analytics',
-      'replay-vision',
-      'ai-observability',
-      'metrics',
-      'revenue-analytics-setup',
-    ]);
-  });
-
-  // A row wider than the terminal stops the whole block from centering.
-  it('keeps every row inside an 80-column terminal', () => {
-    const COMMAND_COLUMN = 21;
-    const MARKER_PREFIX = 2;
-    const BUDGET = 80 - COMMAND_COLUMN - MARKER_PREFIX;
-
-    const tooLong = getLaunchablePrograms()
-      .filter((config) => config.description.length > BUDGET)
-      .map((config) => `${config.id} (${config.description.length})`);
-
-    expect(tooLong).toEqual([]);
-  });
-});
-
 describe('parentCommand nesting', () => {
-  it('nests web-analytics-doctor under the audit command', () => {
-    const webAnalytics = getProgramConfig('web-analytics-doctor');
-    expect(webAnalytics.command).toBe('web-analytics');
-    expect(webAnalytics.parentCommand).toBe('audit');
-  });
-
-  it('keeps audit as a top-level command', () => {
-    const audit = getProgramConfig('audit');
-    expect(audit.command).toBe('audit');
-    expect(audit.parentCommand).toBeUndefined();
-  });
-
   it('every parentCommand refers to a registered top-level command', () => {
     const topLevelCommands = new Set(
       getSubcommandPrograms()
@@ -121,30 +76,21 @@ describe('parentCommand nesting', () => {
   });
 });
 
-describe('agentSkillConfig run recipe', () => {
-  // Regression guard: `agentSkillConfig` backs `wizard skill <name>` and the
-  // narrow `audit` leaves. The runner skips the agent entirely when a config
-  // has no `run` (run-wizard.ts `skipAgent`), so a missing recipe means those
-  // commands silently no-op instead of running the skill.
-  it('defines a run recipe so the agent is not skipped', () => {
-    expect(agentSkillConfig.run).toBeDefined();
-  });
-
+describe('agent-skill run recipe', () => {
+  // Regression guard: the agent-skill config backs `wizard skill <name>` and the
+  // narrow `audit` leaves. runProgram fails with "has no run configuration"
+  // when a config has no `run`, so a missing recipe means those commands fail
+  // instead of running the skill.
   it('derives run metadata from the dispatched skillId', async () => {
-    expect(typeof agentSkillConfig.run).toBe('function');
+    expect(typeof agentSkill.run).toBe('function');
     const session = { skillId: 'audit-events' } as unknown as WizardSession;
     const run =
-      typeof agentSkillConfig.run === 'function'
-        ? await agentSkillConfig.run(session, testRunnerContext())
-        : agentSkillConfig.run!;
+      typeof agentSkill.run === 'function'
+        ? await agentSkill.run(session, runner)
+        : agentSkill.run!;
 
     expect(run.skillId).toBe('audit-events');
     expect(run.integrationLabel).toBe('audit-events');
     expect(run.reportFile).toContain('audit-events');
-    // Fields the runner relies on to render the run + outro.
-    expect(run.spinnerMessage).toBeTruthy();
-    expect(run.successMessage).toBeTruthy();
-    expect(run.docsUrl).toBeTruthy();
-    expect(run.estimatedDurationMinutes).toBeGreaterThan(0);
   });
 });

@@ -1,46 +1,26 @@
+/**
+ * Detection's scan and its one retry, over a stubbed `runAgent`. What the
+ * agent does with the scan's run (its prompt, transcript, fresh agent per run,
+ * deadline and deferred report) is locked in
+ * `agent/__tests__/run-agent-linear-sdk.test.ts`.
+ */
 import {
   AgenticDetectionTimeoutError,
   detectProjectsWithAgent,
 } from '@programs/detection/agentic';
-import * as agentEntry from '@agent';
-import {
-  AgentErrorType,
-  initializeAgent,
-  runAgent,
-} from '@agent/agent-interface';
-import { buildSession } from '@lib/wizard-session';
+import { runAgent, RunOutcome } from '@agent';
+import type { RunResult } from '@agent/types';
+import { buildSession } from '@programs/session/wizard-session';
+import { ErrorCodes } from '@shared/errors';
 import { HostResolution } from '@shared/host-resolution';
-import { flushScanReport } from '@agent/yara-hooks';
 import { Harness, HAIKU_MODEL, Sequence } from '@shared/constants';
 
-vi.mock('@utils/analytics');
-vi.mock('@agent/agent-interface', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agent/agent-interface')>()),
-  initializeAgent: vi.fn(),
+vi.mock(import('@utils/analytics'));
+vi.mock(import('@agent'), async (importOriginal) => ({
+  ...(await importOriginal()),
   runAgent: vi.fn(),
 }));
-// The entry's runAgent is the real one, spied so each attempt is visible.
-vi.mock('@agent', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@agent')>();
-  return { ...actual, runAgent: vi.fn(actual.runAgent) };
-});
-vi.mock('@agent/yara-hooks', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agent/yara-hooks')>()),
-  flushScanReport: vi.fn(),
-}));
-// The runner mints before each attempt; no mint may leave the process.
-vi.mock('@agent/gateway-session', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agent/gateway-session')>()),
-  gatewayAuth: vi.fn(() =>
-    Promise.resolve({
-      gatewayUrl: 'https://gateway.test',
-      token: 'phe_test',
-      refreshAtMs: Infinity,
-    }),
-  ),
-}));
 
-const init = vi.mocked(initializeAgent);
 const execute = vi.mocked(runAgent);
 const options = {
   programId: 'posthog-integration',
@@ -60,27 +40,42 @@ function session() {
   return value;
 }
 
+const snapshot = (transcriptTail: string): RunResult['snapshot'] => ({
+  tasks: [],
+  statusMessages: [],
+  usage: {
+    inputTokens: 0,
+    outputTokens: 0,
+    cacheReadTokens: 0,
+    cacheCreationTokens: 0,
+  },
+  transcriptTail,
+});
+
+/** The run succeeds with `text` as its collected transcript. */
 function emitResult(text: string) {
-  return execute.mockImplementationOnce((...args) => {
-    args[5]?.onMessage({ type: 'result', result: text });
-    return Promise.resolve({ kind: 'success' });
-  });
+  return execute.mockImplementationOnce(() =>
+    Promise.resolve({
+      outcome: RunOutcome.Success,
+      snapshot: snapshot(text),
+    }),
+  );
 }
 
 let deadlines: AbortController[];
-let sdkSawDeadline: boolean[];
+let runSawDeadline: boolean[];
 
-/** The attempt's deadline fires while its SDK run is active. */
+/** The attempt's deadline fires while its run is active. */
 function timeOut() {
-  return execute.mockImplementationOnce((agent) => {
+  return execute.mockImplementationOnce((_config, _input, runOptions) => {
     deadlines
       .at(-1)
       ?.abort(new DOMException('The operation timed out.', 'TimeoutError'));
-    sdkSawDeadline.push(agent.signal?.aborted === true);
+    runSawDeadline.push(runOptions?.signal?.aborted === true);
     return Promise.resolve({
-      kind: 'abort',
-      classification: AgentErrorType.ABORT,
-      message: 'Agent run cancelled',
+      outcome: RunOutcome.Aborted,
+      failure: { code: ErrorCodes.AgentAbort, message: 'Agent run cancelled' },
+      snapshot: snapshot(''),
     });
   });
 }
@@ -88,13 +83,8 @@ function timeOut() {
 describe('agentic detection retry', () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    init.mockImplementation(() =>
-      Promise.resolve({ id: init.mock.calls.length } as unknown as Awaited<
-        ReturnType<typeof initializeAgent>
-      >),
-    );
     deadlines = [];
-    sdkSawDeadline = [];
+    runSawDeadline = [];
     vi.spyOn(AbortSignal, 'timeout').mockImplementation(() => {
       const deadline = new AbortController();
       deadlines.push(deadline);
@@ -110,28 +100,30 @@ describe('agentic detection retry', () => {
 
     await detectProjectsWithAgent(session(), options);
 
-    const calls = vi.mocked(agentEntry.runAgent).mock.calls;
+    const calls = execute.mock.calls;
     expect(calls).toHaveLength(2);
     for (const [config] of calls) {
-      expect(config.binding).toEqual({
-        sequence: Sequence.linear,
-        harness: Harness.anthropic,
-        model: HAIKU_MODEL,
+      // No flag or launch override applies, and the scan keeps out of the run's routing analytics.
+      expect(config.routing).toEqual({
+        binding: {
+          sequence: Sequence.linear,
+          harness: Harness.anthropic,
+          model: HAIKU_MODEL,
+        },
+        record: false,
       });
       expect(config.allowedTools).toEqual(['Read', 'Grep', 'Glob']);
+      // The program run's report counts the scan's scans.
       expect(config.scanReport).toBe('defer');
       expect(config.run).toMatchObject({
         collectTranscript: true,
         requestRemark: false,
       });
+      // The run definition's prompt replaces the assembled program prompt.
+      expect(config.run.prompt?.({} as never)).toContain(
+        'You are scanning a code repository',
+      );
     }
-    // The run definition's prompt replaces the assembled program prompt.
-    expect(execute.mock.calls[0][1]).toContain(
-      'You are scanning a code repository',
-    );
-    expect(execute.mock.calls[0][4]).toMatchObject({ requestRemark: false });
-    // The program run's report counts the scan's scans.
-    expect(flushScanReport).not.toHaveBeenCalled();
   });
 
   it('restarts the scan once when the first result has no JSON', async () => {
@@ -148,7 +140,6 @@ describe('agentic detection retry', () => {
         hasPostHog: false,
       },
     ]);
-    expect(init).toHaveBeenCalledTimes(2);
     expect(execute).toHaveBeenCalledTimes(2);
     expect(vi.mocked(AbortSignal.timeout).mock.calls).toEqual([
       [60_000],
@@ -162,7 +153,6 @@ describe('agentic detection retry', () => {
     const report = await detectProjectsWithAgent(session(), options);
 
     expect(report.projects).toHaveLength(1);
-    expect(init).toHaveBeenCalledTimes(1);
     expect(execute).toHaveBeenCalledTimes(1);
   });
 
@@ -178,7 +168,7 @@ describe('agentic detection retry', () => {
 
     expect(report.projects).toHaveLength(1);
     expect(events).toContain('Project scan timed out; retrying...');
-    expect(execute.mock.calls[0][0]).not.toBe(execute.mock.calls[1][0]);
+    expect(execute).toHaveBeenCalledTimes(2);
     expect(vi.mocked(AbortSignal.timeout).mock.calls).toEqual([
       [60_000],
       [90_000],
@@ -196,20 +186,14 @@ describe('agentic detection retry', () => {
       'Project scan attempt 2 timed out after 90s',
     );
     expect(execute).toHaveBeenCalledTimes(2);
-    expect(sdkSawDeadline).toEqual([true, true]);
+    expect(runSawDeadline).toEqual([true, true]);
   });
 
   it('accepts a streamed verdict after a no-JSON result', async () => {
     const events: string[] = [];
     emitResult('Found a project, but no JSON report.');
-    execute.mockImplementationOnce((...args) => {
-      args[5]?.onMessage({
-        type: 'assistant',
-        message: { content: [{ type: 'text', text: verdict }] },
-      });
-      args[5]?.onMessage({ type: 'result', result: 'Done.' });
-      return Promise.resolve({ kind: 'success' });
-    });
+    // The transcript holds the streamed text before the final message.
+    emitResult(`${verdict}\nDone.`);
 
     const report = await detectProjectsWithAgent(session(), {
       ...options,
@@ -225,9 +209,8 @@ describe('agentic detection retry', () => {
       },
     ]);
     expect(events).toContain('Retrying project scan...');
-    expect(init).toHaveBeenCalledTimes(2);
-    expect(execute.mock.calls[0][0]).not.toBe(execute.mock.calls[1][0]);
-    expect(execute.mock.calls[0][1]).toBe(execute.mock.calls[1][1]);
+    expect(execute).toHaveBeenCalledTimes(2);
+    expect(execute.mock.calls[0][0]).toBe(execute.mock.calls[1][0]);
   });
 
   it('stops after one retry if neither result has JSON', async () => {

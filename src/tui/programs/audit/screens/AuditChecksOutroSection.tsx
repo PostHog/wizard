@@ -1,8 +1,6 @@
 import { Box, Text } from 'ink';
-import {
-  AUDIT_SEVERITY_STYLE,
-  type AuditCheck,
-} from '@programs/audit/types';
+import type { AuditCheck } from '@programs/audit';
+import { AUDIT_SEVERITY_STYLE } from '../severity-style.js';
 import { relativeToInstallDir } from '@utils/paths';
 import { countNoun } from '@utils/count-noun';
 

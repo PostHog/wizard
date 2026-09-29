@@ -1,4 +1,5 @@
-import { OutroKind, type WizardSession } from '@lib/wizard-session';
+import { OutroKind } from '@shared/outro';
+import type { WizardSession } from '@programs/types';
 
 export const MINT_FAILURE_MESSAGE = "The Wizard's a little busy";
 

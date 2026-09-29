@@ -1,7 +1,7 @@
 /* TanStack Router wizard using posthog-agent with PostHog MCP */
 import type { WizardRunOptions } from '@utils/types';
-import type { FrameworkConfig } from '@programs/framework-config';
-import { detectNodePackageManagers } from '@programs/detection/package-manager';
+import type { FrameworkConfig } from '../../framework-config';
+import { detectNodePackageManagers } from '../../detection/package-manager';
 import { Integration } from '@shared/constants';
 import {
   getDeclaredVersion,
@@ -9,8 +9,7 @@ import {
   hasDeclaredDependency,
   type PackageJson,
 } from '@utils/package-json';
-import { tryGetPackageJson } from '@utils/setup-utils';
-import { getUI } from '@ui';
+import { tryGetPackageJson } from '@utils/package-json';
 import {
   getTanStackRouterMode,
   getTanStackRouterModeName,
@@ -31,13 +30,14 @@ export const TANSTACK_ROUTER_AGENT_CONFIG: FrameworkConfig<TanStackRouterContext
       gatherContext: async (options: WizardRunOptions) => {
         const routerMode = await getTanStackRouterMode(options);
         if (routerMode) {
-          getUI().setDetectedFramework(
-            `TanStack Router ${getTanStackRouterModeName(routerMode)}`,
-          );
           return { routerMode };
         }
         return {};
       },
+      getDetectedFrameworkLabel: (context) =>
+        context.routerMode
+          ? `TanStack Router ${getTanStackRouterModeName(context.routerMode)}`
+          : undefined,
     },
 
     detection: {

@@ -2,15 +2,15 @@ import { initializeAgent, wizardCanUseTool } from '@agent/agent-interface';
 import { createAskBridge } from '../../../shared/ask';
 import { anthropicBackend } from '..';
 import type { BackendRunInputs, TaskRunInputs } from '../../types';
-import type { AskAnswers } from '@lib/wizard-session';
+import type { AskAnswers } from '@agent/types';
 import { Harness, Sequence } from '@shared/constants';
 import { HostResolution } from '@shared/host-resolution';
 
-vi.mock('@utils/analytics');
-vi.mock('@utils/debug');
-vi.mock('@agent/aio-capture', () => ({ createAioCapture: vi.fn() }));
-vi.mock('@agent/agent-interface', async (original) => ({
-  ...(await original<typeof import('@agent/agent-interface')>()),
+vi.mock(import('@utils/analytics'));
+vi.mock(import('@utils/debug'));
+vi.mock(import('@agent/aio-capture'), () => ({ createAioCapture: vi.fn() }));
+vi.mock(import('@agent/agent-interface'), async (original) => ({
+  ...(await original()),
   initializeAgent: vi.fn().mockResolvedValue({}),
   runAgent: vi.fn().mockResolvedValue({}),
 }));
@@ -44,7 +44,15 @@ async function initializeHarness(
         sequence: Sequence.linear,
         model: 'test',
       },
-      switchboard: { program: 'test', flags: {} },
+      switchboard: {
+        program: 'test',
+        binding: {
+          harness: Harness.anthropic,
+          sequence: Sequence.linear,
+          model: 'test',
+        },
+        flags: {},
+      },
       skillsBaseUrl: 'https://skills.test',
       wizardFlags: {},
       wizardFlagPayloads: {},

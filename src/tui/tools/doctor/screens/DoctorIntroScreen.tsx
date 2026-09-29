@@ -1,6 +1,6 @@
 import { Box, Text } from 'ink';
 import { useSyncExternalStore } from 'react';
-import type { WizardStore } from '@ui/tui/store';
+import type { WizardStore } from '@tui/store';
 import { PickerMenu } from '@tui/primitives/index';
 import { Colors, Icons } from '@tui/styles';
 
@@ -45,7 +45,7 @@ export const DoctorIntroScreen = ({ store }: DoctorIntroScreenProps) => {
         ]}
         onSelect={(value) => {
           if (value === 'cancel') {
-            process.exit(0);
+            store.requestExit(0);
           } else {
             store.completeSetup();
           }

@@ -22,26 +22,27 @@ import {
   writeFileSync,
 } from 'fs';
 import * as path from 'path';
-import { OutroKind, type TaskNotice } from '@agent/progress';
+import { OutroKind } from '@shared/outro';
+import type { TaskNotice } from '../../../progress';
 import {
   POSTHOG_DOCS_URL,
   WIZARD_CONTACT_EMAIL,
   WIZARD_OAUTH_SCOPES,
   WIZARD_PROVISIONING_SCOPES,
 } from '@shared/constants';
-import { installSkillById } from '@agent/tools';
+import { installSkillById } from '@shared/skill-install';
 import { fetchSkillMenu, type SkillEntry } from '@shared/skill-menu';
 import { analytics } from '@utils/analytics';
 import { ciExcludedTaskTypes } from '@utils/ci-flag-overrides';
 import { logToFile } from '@utils/debug';
 import { ringTerminalBell } from '@utils/terminal-bell';
-import { AGENT_ERROR_CODE } from '@agent/error-map';
+import { AGENT_ERROR_CODE } from '../../../error-map';
 import { classifyRunFailure, ErrorCodes, WizardError } from '@shared/errors';
 import type { AgentResult } from '../../harness/types';
-import type { AgentInteraction } from '@agent/progress';
+import type { AgentInteraction } from '../../../progress';
 import type {
   AgentFailure,
-  RunConfig,
+  ResolvedRunConfig,
   SequenceResult,
   SequenceContext,
 } from '../../shared/types';
@@ -60,7 +61,7 @@ import {
   QueueStore,
   QUEUE_DIR_NAME,
   SkipReason,
-  TaskStatus,
+  QueueTaskStatus,
   type QueuedTask,
   type TaskOutcome,
 } from './queue';
@@ -73,8 +74,7 @@ import {
 import { RunMetrics } from './run-metrics';
 import { dependencyClosure, uncoveredBySink } from './queue-tools';
 import { deferSeededTasks } from './seeded-deps';
-import { LONGER_ASK_TIMEOUT_MS } from '@agent/wizard-ask-bridge';
-import { shouldDisableAsk } from '../../shared/bootstrap';
+import { LONGER_ASK_TIMEOUT_MS, shouldDisableAsk } from '@shared/ask-policy';
 import {
   agentRunTools,
   assembleSeedPrompt,
@@ -86,7 +86,7 @@ import {
   ASK_TOOL,
   type AgentPrompt,
   type OrchestratorPromptContext,
-} from '@agent/agent-prompt-loader';
+} from '../../../agent-prompt-loader';
 
 /** Docs page (`django.md`, `nuxt-js-3-6.md`) — steps start with a digit, agent artifacts (`SKILL.md`, `EXAMPLE*`, `COMMANDMENTS.md`) have uppercase. */
 const isDocPage = (name: string): boolean =>
@@ -131,15 +131,15 @@ export function sweepRunInstalledSkills(
   }
 }
 
-function toTodoStatus(status: TaskStatus): string {
+function toTodoStatus(status: QueueTaskStatus): string {
   switch (status) {
-    case TaskStatus.Running:
+    case QueueTaskStatus.Running:
       return 'in_progress';
-    case TaskStatus.Done:
+    case QueueTaskStatus.Done:
       return 'completed';
-    case TaskStatus.Failed:
+    case QueueTaskStatus.Failed:
       return 'failed';
-    case TaskStatus.Skipped:
+    case QueueTaskStatus.Skipped:
       return 'skipped';
     default:
       return 'pending';
@@ -330,7 +330,7 @@ export function completedSeededTypes(
   seededTasks: readonly QueuedTask[],
 ): string[] {
   return seededTasks
-    .filter((task) => store.get(task.id)?.status === TaskStatus.Done)
+    .filter((task) => store.get(task.id)?.status === QueueTaskStatus.Done)
     .map((task) => task.type);
 }
 
@@ -447,8 +447,8 @@ export function drainVerdict(tasks: readonly QueuedTask[]): {
   blocked: number;
   blockedTypes: string[];
 } {
-  const failed = tasks.filter((t) => t.status === TaskStatus.Failed);
-  const pending = tasks.filter((t) => t.status === TaskStatus.Pending);
+  const failed = tasks.filter((t) => t.status === QueueTaskStatus.Failed);
+  const pending = tasks.filter((t) => t.status === QueueTaskStatus.Pending);
   return {
     requiredFailedTypes: failed
       .filter((t) => t.optional !== true)
@@ -493,7 +493,7 @@ function reportBlockedTasks(
   failedTypes: readonly string[],
 ): void {
   for (const task of tasks) {
-    if (task.status !== TaskStatus.Pending) continue;
+    if (task.status !== QueueTaskStatus.Pending) continue;
     try {
       analytics.wizardCapture('orchestrator task blocked', {
         type: task.type,
@@ -556,7 +556,7 @@ export function displayOrder(
  * program config — the registry and seed note both read this one list.
  */
 export function effectiveExcludedTaskTypes(
-  source: Pick<RunConfig, 'excludedTaskTypes'>,
+  source: Pick<ResolvedRunConfig, 'excludedTaskTypes'>,
   flags: Record<string, string>,
 ): string[] {
   return [
@@ -758,7 +758,6 @@ async function executeOrchestrator(
       boot.skillsBaseUrl,
       {
         skillsRoot: path.join(QUEUE_DIR_NAME, 'reference'),
-        triage: boot.triageProvider,
       },
     );
     if (signal?.aborted) return cancelledRun();
@@ -1190,7 +1189,7 @@ async function executeOrchestrator(
           variantId,
           input.installDir,
           boot.skillsBaseUrl,
-          { skillsRoot: taskSkillsRoot, triage: boot.triageProvider },
+          { skillsRoot: taskSkillsRoot },
         );
         if (signal?.aborted) return;
         if (result.kind === 'ok') {
@@ -1214,9 +1213,9 @@ async function executeOrchestrator(
       // panel shows progress); errors still surface — the harness stops the
       // spinner with its own error text.
       //
-      // Per-task role = task.type — the switchboard consults
-      // PROGRAM_BINDINGS[id].contextMillOverride?.[task.type] for wizard-side
-      // per-agent overrides. Prompt-frontmatter model still wins (§3.6).
+      // Per-task role = task.type — the switchboard consults the program
+      // binding's contextMillOverride?.[task.type] for wizard-side per-agent
+      // overrides. Prompt-frontmatter model still wins (§3.6).
       const taskPick = resolveHarness(switchboardCtx, task.type);
       const taskHarness = requireTaskHarness(taskPick);
       const taskModel = taskModelSpec(registry, task, taskPick.harness);
@@ -1380,7 +1379,7 @@ async function executeOrchestrator(
     tasks_total: summary.total,
     tasks_done: summary.done,
     tasks_failed: summary.failed,
-    tasks_skipped: summary[TaskStatus.Skipped],
+    tasks_skipped: summary[QueueTaskStatus.Skipped],
     total_duration_ms: Date.now() - runStartMs,
     ...metrics.summary(),
     dynamic_enqueue_count: store
@@ -1397,7 +1396,7 @@ async function executeOrchestrator(
     : undefined;
 
   // Not-needed tasks were never work, so they leave the denominator too.
-  const notRequired = summary[TaskStatus.Skipped];
+  const notRequired = summary[QueueTaskStatus.Skipped];
 
   // A drain that ends with failed tasks (retries exhausted) or tasks still
   // pending (blocked behind a failed dependency) did NOT set PostHog up —

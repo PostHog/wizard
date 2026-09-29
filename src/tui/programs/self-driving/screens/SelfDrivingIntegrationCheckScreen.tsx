@@ -18,8 +18,9 @@ import { Box, Text, useInput } from 'ink';
 import { TextInput } from '@inkjs/ui';
 import { useState, useSyncExternalStore } from 'react';
 
-import type { WizardStore } from '@ui/tui/store';
-import type { CloudRegion } from '@lib/wizard-session';
+import type { WizardStore } from '@tui/store';
+import { chooseProvisionAccount, setIntegrate } from '../store-actions.js';
+import type { CloudRegion } from '@utils/types';
 import { PickerMenu } from '@tui/primitives/index';
 import {
   PrivacyPanel,
@@ -113,7 +114,7 @@ export const SelfDrivingIntegrationCheckScreen = ({
               const region = (
                 Array.isArray(value) ? value[0] : value
               ) as CloudRegion;
-              store.chooseProvisionAccount(email.trim(), region);
+              chooseProvisionAccount(store, email.trim(), region);
             }}
           />
         </Box>
@@ -213,7 +214,7 @@ export const SelfDrivingIntegrationCheckScreen = ({
           onSelect={(value) => {
             const choice = Array.isArray(value) ? value[0] : value;
             if (choice === 'login') {
-              store.setIntegrate(true);
+              setIntegrate(store, true);
             } else {
               setStage('email');
             }

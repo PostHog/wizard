@@ -1,5 +1,5 @@
 /**
- * start-tui.ts — Sets up the Ink TUI renderer and InkUI.
+ * start-tui.ts — Sets up the Ink TUI renderer over a new store.
  *
  * Renders in the terminal's alternate screen buffer so the wizard
  * doesn't pollute scrollback history. On exit, the previous terminal
@@ -8,9 +8,7 @@
 
 import { render } from 'ink';
 import { createElement } from 'react';
-import { WizardStore, Program, type ProgramId } from '../ui/tui/store.js';
-import { InkUI } from '../ui/tui/ink-ui.js';
-import { setUI } from '@ui/index';
+import { WizardStore, type ProgramId } from './store.js';
 import { App } from './App.js';
 import { enterDarkTerminal, releaseTerminal } from './terminal.js';
 import { analytics } from '@utils/analytics';
@@ -19,10 +17,11 @@ import { getExitLine } from './exit-line.js';
 
 export { releaseTerminal };
 
+/** Render the app for `program`. `onInterrupt` runs when Ink tears itself down on Ctrl+C; the caller ends the run. */
 export function startTUI(
   version: string,
-  program: ProgramId = Program.PostHogIntegration,
-  onInterrupt?: () => void,
+  program: ProgramId,
+  onInterrupt: () => void,
 ): {
   unmount: () => void;
   store: WizardStore;
@@ -32,9 +31,6 @@ export function startTUI(
 
   const store = new WizardStore(program);
   store.version = version;
-
-  const inkUI = new InkUI(store);
-  setUI(inkUI);
 
   const { unmount: inkUnmount, waitUntilExit } = render(
     createElement(App, { store }),
@@ -76,28 +72,11 @@ export function startTUI(
   process.on('exit', cleanup);
 
   // Ink unmounts itself on ctrl+c (exitOnCtrlC) but that alone doesn't
-  // end the process — background handles (e.g. the OAuth callback
-  // server) keep the event loop alive, leaving a zombie wizard with no
-  // UI. Follow the app teardown with a real exit.
-  void waitUntilExit().then(async () => {
-    // `cleaned` still false here means Ink tore itself down (ctrl+c) rather
-    // than a runner-driven exit — flush the terminal analytics event before
-    // the process dies, or interrupted runs vanish from the funnel entirely.
-    // shutdown() is a no-op when a runner already reported a real status.
-    const interrupted = !cleaned;
-    if (interrupted && onInterrupt) {
-      onInterrupt();
-      return;
-    }
-    cleanup();
-    if (interrupted) {
-      try {
-        await analytics.shutdown('cancelled');
-      } catch {
-        /* never block exit on a flush failure */
-      }
-    }
-    process.exit(process.exitCode ?? 0);
+  // end the process: background handles (e.g. the OAuth callback server)
+  // keep the event loop alive. `cleaned` still false means Ink tore itself
+  // down rather than the host, so the caller ends the run.
+  void waitUntilExit().then(() => {
+    if (!cleaned) onInterrupt();
   });
 
   return {

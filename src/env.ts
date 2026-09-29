@@ -15,7 +15,11 @@
  * this module instead.
  */
 
-import { HEADLESS_FLAG } from '@shared/headless-mode';
+/**
+ * The on-CLI flag name. Intentionally ugly + undocumented; do not surface it in
+ * `--help`, the README, or user-facing error messages.
+ */
+export const HEADLESS_FLAG = 'headless-DONOTUSE-EXPERIMENTAL';
 
 // ── Build-time constants ─────────────────────────────────────────────
 // tsdown replaces `process.env.NODE_ENV` with a string literal.
@@ -58,7 +62,7 @@ type RuntimeEnvKey =
   // Wizard CLI configuration (yargs POSTHOG_WIZARD_ prefix)
   | 'POSTHOG_WIZARD_BENCHMARK_CONFIG'
   | 'POSTHOG_WIZARD_BENCHMARK_FILE'
-  | 'POSTHOG_WIZARD_LOG_DIR'
+  | 'POSTHOG_WIZARD_LOG_FILE'
   | 'POSTHOG_WIZARD_DEBUG'
   // Identity of the PostHog task run whose sandbox launched this wizard. Set by
   // the sandbox for every run it starts, agent or wizard. Deliberately NOT
@@ -70,7 +74,7 @@ type RuntimeEnvKey =
   | 'POSTHOG_TASK_RUN_ID'
   | 'POSTHOG_TASK_ID'
   | 'POSTHOG_HANDOFF_OUTPUT_PATH'
-  // Local/CI escape hatch to disable Warlock scanning without the PostHog flag.
+  // Local escape hatch that disables Warlock scanning in the Anthropic SDK harness.
   | 'POSTHOG_WIZARD_WARLOCK_DISABLED'
   | 'DEBUG'
   // Agent / MCP

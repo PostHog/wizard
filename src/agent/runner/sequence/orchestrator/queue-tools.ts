@@ -8,12 +8,12 @@
  */
 import { z } from 'zod';
 import { analytics } from '@utils/analytics';
-import { isValidModel, VALID_MODELS } from '@agent/runner/switchboard/models';
+import { isValidModel, VALID_MODELS } from '../../switchboard/models';
 import {
   isNotNeededReason,
   NotNeededReason,
   SkipReason,
-  TaskStatus,
+  QueueTaskStatus,
   type QueueStore,
   type QueuedTask,
   type TaskHandoff,
@@ -285,7 +285,8 @@ export function checkEnqueueGuards(
   if (
     tasks.some(
       (t) =>
-        t.status !== TaskStatus.Failed && dedupKey(t.type, t.inputs) === key,
+        t.status !== QueueTaskStatus.Failed &&
+        dedupKey(t.type, t.inputs) === key,
     )
   ) {
     return {
@@ -347,13 +348,13 @@ export function applyComplete(
       remark: args.remark,
     });
   }
-  if (args.status === TaskStatus.Failed) {
+  if (args.status === QueueTaskStatus.Failed) {
     ctx.store.fail(
       id,
       { type: 'self-reported', message: args.handoff.forNextAgent },
       args.handoff,
     );
-  } else if (args.status === TaskStatus.Skipped) {
+  } else if (args.status === QueueTaskStatus.Skipped) {
     // The agent's own words stay in the handoff and out of telemetry. This flow
     // reaches live database and API credentials, and the repo has no redaction
     // pass for handoff prose, so the event carries the task type, the reason,

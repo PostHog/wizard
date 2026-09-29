@@ -5,42 +5,20 @@
  * the gateway mint and the scan-triage classifier built on it. Everything the
  * caller must decide first — health gates, settings conflicts, authentication,
  * the AI opt-in gate, post-auth gates, feature flags, run tags, token refresh —
- * arrives already resolved in `RunConfig` and `RunInput`.
+ * arrives already resolved in `ResolvedRunConfig` and `RunInput`.
  */
 
-import { createTriageLLMProvider } from '@agent/triage-provider';
-import { gatewayAuth } from '@agent/gateway-session';
+import { createTriageLLMProvider } from '../../triage-provider';
+import { gatewayAuth } from '../../gateway-session';
 import { currentAccessToken } from '@shared/oauth-session';
 import { logToFile } from '@utils/debug';
 import { CallType, IS_DEV } from '@shared/constants';
 import { VERSION } from '@shared/version';
 import { mcpUrlFor } from '@shared/host-resolution';
 import type { WizardRunOptions } from '@utils/types';
-import type { BootstrapResult, RunConfig, RunFlags, RunInput } from './types';
+import type { BootstrapResult, ResolvedRunConfig, RunInput } from './types';
 
 // ── Helpers ──────────────────────────────────────────────────────────
-
-/**
- * Decide whether the `wizard_ask` overlay should be wired for this run.
- * Disabled in non-interactive modes (CI, signup) — there's no human to
- * answer. Per-program disabling is done by adding WIZARD_ASK_TOOL_NAME to
- * the program's `disallowedTools` so the SDK rejects calls outright.
- * Extracted so the policy can be unit-tested directly.
- *
- * `e2eAsk` is the one escape hatch. The e2e harness runs a `ci`
- * session, but it does have an answerer — the driver loop answers each
- * `wizard_ask` batch from the program's e2e profile. Without the flag the
- * agent-in-the-loop layer (the ask bridge in both sequence arms, and the
- * orchestrator's seeded warehouse task) stays unreachable from a test.
- *
- * Only the e2e TUI host sets the flag, from the `E2E_ASK` env var. No CLI flag
- * populates it, so plain `--ci` and `--signup` runs behave exactly as before.
- */
-export function shouldDisableAsk(
-  flags: Pick<RunFlags, 'ci' | 'signup' | 'e2eAsk'>,
-): boolean {
-  return (flags.ci || flags.signup) && !flags.e2eAsk;
-}
 
 /** The option bag the agent interface and the middleware read. */
 export function runOptions(input: RunInput): WizardRunOptions {
@@ -64,7 +42,7 @@ export function runOptions(input: RunInput): WizardRunOptions {
  * any agent starts — the caller maps that the way it maps any unexpected error.
  */
 export async function prepareRun(
-  config: RunConfig,
+  config: ResolvedRunConfig,
   input: RunInput,
 ): Promise<BootstrapResult> {
   const { skillsBaseUrl } = config;
@@ -87,9 +65,9 @@ export async function prepareRun(
   const currentGatewayAuth = () =>
     // TODO: the agent must not mint inference auth. It receives the
     // PostHog token here and derives a gateway token from it, re-minting near
-    // expiry. Programs own credentials (stack plan 4.5): pass a resolved
-    // inference-auth provider on RunInput.credentials and move
-    // gateway-session.ts out of src/agent with it.
+    // expiry. Programs own credentials: pass a resolved inference-auth
+    // provider on RunInput.credentials and move gateway-session.ts out of
+    // src/agent with it.
     currentAccessToken(credentials).then((token) =>
       gatewayAuth(credentials.host, token, programId),
     );

@@ -7,12 +7,10 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import {
-  EventPlanWatcher,
-  normalizeEventPlan,
-} from '@programs/session/task-stream/event-plan-watcher';
-import { EVENT_PLAN_FILE } from '@programs/posthog-integration/constants';
-import type { PlannedEvent, WizardStore } from '@ui/tui/store';
+import { EventPlanWatcher, normalizeEventPlan } from '../event-plan-watcher';
+import { EVENT_PLAN_FILE } from '@shared/constants';
+import type { SessionStore } from '../../session-store';
+import type { PlannedEvent } from '@programs/session/session-store';
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -26,7 +24,7 @@ function createStore(installDir: string) {
     setEventPlan(events: PlannedEvent[]) {
       eventPlan = events;
     },
-  } as WizardStore;
+  } as SessionStore;
 }
 
 describe('EventPlanWatcher', () => {

@@ -8,7 +8,7 @@
 
 import { Box, Text } from 'ink';
 import { useSyncExternalStore } from 'react';
-import type { WizardStore } from '@ui/tui/store';
+import type { WizardStore } from '@tui/store';
 import { Colors } from '@tui/styles';
 import { ConfirmationInput, ModalOverlay } from '@tui/primitives/index';
 

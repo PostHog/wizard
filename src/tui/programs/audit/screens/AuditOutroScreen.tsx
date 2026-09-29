@@ -8,10 +8,10 @@
 import { join } from 'node:path';
 import { Box, Text } from 'ink';
 import { useSyncExternalStore } from 'react';
-import type { WizardStore } from '@ui/tui/store';
-import { OutroKind } from '@lib/wizard-session';
+import type { WizardStore } from '@tui/store';
+import { OutroKind } from '@shared/outro';
 import { Colors } from '@tui/styles';
-import { getAuditChecks } from '@programs/audit/types';
+import { getAuditChecks } from '@programs/audit';
 import { AuditChecksOutroSection } from './AuditChecksOutroSection.js';
 import { useDismissOnAnyKey } from '@tui/hooks/useDismissOnAnyKey';
 

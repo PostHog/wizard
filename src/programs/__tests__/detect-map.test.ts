@@ -1,13 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { ErrorCodes, ERROR_CATALOG } from '@shared/errors';
-import { detectErrorCode, type DetectErrorKind } from '../detect-map';
+import { detectErrorCode } from '../detect-map';
+import { PROGRAM_REGISTRY } from '../program-registry';
 
 /**
- * Every kind the programs can emit. `DetectErrorKind` is derived from their
- * unions, so the annotation below is the real guard: adding a kind to a
- * program's `DetectError` without listing it here fails to type-check.
+ * Every kind the programs emit today. Each program's `detectErrorCodes` is
+ * typed against its own `DetectError` union, which is the compile-time guard;
+ * this list catches a table that drops out of the registry.
  */
-const ALL_KINDS: readonly DetectErrorKind[] = [
+const ALL_KINDS: readonly string[] = [
   'bad-directory',
   'unsupported-platform',
   'no-project-files',
@@ -21,9 +22,22 @@ const ALL_KINDS: readonly DetectErrorKind[] = [
 ];
 
 describe('detectErrorCode', () => {
+  it("resolves each program's kinds to that program's own code", () => {
+    // Kinds are looked up by name alone, so two programs that share a kind
+    // must agree on its code.
+    for (const config of PROGRAM_REGISTRY) {
+      for (const [kind, code] of Object.entries(
+        config.detectErrorCodes ?? {},
+      )) {
+        expect(detectErrorCode(kind), `${config.id} ${kind}`).toBe(code);
+      }
+    }
+  });
+
   it('maps every detect kind to a detect-group code', () => {
     for (const kind of ALL_KINDS) {
       const code = detectErrorCode(kind);
+      expect(code, kind).not.toBe(ErrorCodes.DetectUnclassified);
       expect(ERROR_CATALOG[code].group, `${kind} group`).toBe('detect');
     }
   });
@@ -33,14 +47,6 @@ describe('detectErrorCode', () => {
     // user's project. A sandbox that retries one burns its budget for nothing.
     for (const kind of ALL_KINDS) {
       expect(ERROR_CATALOG[detectErrorCode(kind)].retry, kind).toBe('no');
-    }
-  });
-
-  it('resolves no kind to the internal catch-all', () => {
-    for (const kind of ALL_KINDS) {
-      expect(detectErrorCode(kind), kind).not.toBe(
-        ErrorCodes.InternalUnhandled,
-      );
     }
   });
 

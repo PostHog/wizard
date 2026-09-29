@@ -17,43 +17,8 @@
  */
 
 import type { Arguments } from 'yargs';
-import { Box, Text, render } from 'ink';
-import { createElement } from 'react';
-
-import { Colors } from '@tui/styles';
-import { PickerMenu } from '@tui/primitives/PickerMenu';
 
 import { commandKeys, type Command } from '../command';
-
-interface FamilyPickerAppProps {
-  parentLabel: string;
-  options: { label: string; value: Command; hint?: string }[];
-  onSelect: (cmd: Command) => void;
-}
-
-function FamilyPickerApp(props: FamilyPickerAppProps) {
-  return createElement(
-    Box,
-    { flexDirection: 'column', paddingX: 1, paddingY: 1 },
-    createElement(
-      Text,
-      { bold: true, color: Colors.accent },
-      props.parentLabel,
-    ),
-    createElement(Box, { height: 1 }),
-    createElement(PickerMenu<Command>, {
-      message: 'Pick a subcommand',
-      options: props.options,
-      optionMarginBottom: 1,
-      onSelect: (value) => {
-        // PickerMenu in single mode returns one value; only the multi-mode
-        // signature is the array variant. Narrow defensively.
-        const cmd = Array.isArray(value) ? value[0] : value;
-        if (cmd) props.onSelect(cmd);
-      },
-    }),
-  );
-}
 
 function describe(child: Command): string {
   // Strip positional syntax (`search <query>` → `search`) for the picker label.
@@ -77,37 +42,27 @@ export function orderFamilyChildren(children: readonly Command[]): Command[] {
 }
 
 /**
- * Render the picker. Resolves once the user has selected a child;
- * dispatching the child's handler is the caller's responsibility (so this
- * function stays pure-UI and easy to test by stubbing `render`).
+ * Render the picker over a family's children. Resolves once the user has
+ * selected a child; dispatching the child's handler is the caller's
+ * responsibility.
  */
-export function chooseFamilyChild(
+export async function chooseFamilyChild(
   parentLabel: string,
   children: readonly Command[],
 ): Promise<Command | null> {
   const ordered = orderFamilyChildren(children);
-  if (ordered.length === 0) return Promise.resolve(null);
+  if (ordered.length === 0) return null;
 
-  const options = ordered.map((child) => ({
-    label: describe(child),
-    value: child,
-    hint: child.description,
-  }));
-
-  return new Promise((resolve) => {
-    let app: ReturnType<typeof render> | null = null;
-    const handleSelect = (cmd: Command): void => {
-      app?.unmount();
-      resolve(cmd);
-    };
-    app = render(
-      createElement(FamilyPickerApp, {
-        parentLabel,
-        options,
-        onSelect: handleSelect,
-      }),
-    );
-  });
+  // Loaded here: a headless run never loads the TUI.
+  const { renderFamilyPicker } = await import('@tui');
+  return renderFamilyPicker(
+    parentLabel,
+    ordered.map((child) => ({
+      label: describe(child),
+      value: child,
+      hint: child.description,
+    })),
+  );
 }
 
 /**

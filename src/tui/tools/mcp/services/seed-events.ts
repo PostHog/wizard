@@ -28,7 +28,7 @@ import {
   assembleProfile,
   type EventVolume,
   type ProjectDataProfile,
-} from './mcp-project-profile';
+} from './mcp-project-profile.js';
 
 export interface SeedEvent {
   event: string;

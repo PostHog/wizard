@@ -1,5 +1,5 @@
 import type { ProgramConfig } from '@programs/types';
-import { runNonInteractive } from '../../lib/runners/run-non-interactive';
+import { runNonInteractive } from './run-non-interactive';
 
 /**
  * CI-mode entry point (`--ci`, dev/test builds). A thin shell over the shared

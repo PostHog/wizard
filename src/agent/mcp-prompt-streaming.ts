@@ -7,7 +7,7 @@
  * `agent-interface.ts`: same SDK, much narrower surface, suitable for
  * "user asked a question, show the answer" interactions.
  *
- * The function is an async generator that yields `AgentChunk`s extracted
+ * The function is an async generator that yields `McpPromptChunk`s extracted
  * from the SDK's message stream. Callers (the screen) consume them via
  * `for await (...)` and render as they arrive.
  */
@@ -15,10 +15,10 @@
 import type { Credentials } from '@shared/api';
 import { DEFAULT_AGENT_MODEL, WIZARD_USER_AGENT } from '@shared/constants';
 import { logToFile } from '@utils/debug';
-import { gatewayAuth } from '@agent/gateway-session';
-import { buildAgentEnv, buildRunTags } from '@agent/agent-interface';
+import { gatewayAuth } from './gateway-session';
+import { buildAgentEnv, buildRunTags } from './agent-interface';
 import { sanitizeAgentSubprocessEnv } from '@shared/agent-env-isolation';
-import { createIsolatedAgentConfigDir } from '@agent/stored-login';
+import { createIsolatedAgentConfigDir } from './stored-login';
 import { analytics } from '@utils/analytics';
 
 /**
@@ -26,7 +26,7 @@ import { analytics } from '@utils/analytics';
  * needs to render. Production yields these from Claude SDK messages;
  * the playground yields them from canned scripts.
  */
-export type AgentChunk =
+export type McpPromptChunk =
   | { kind: 'text'; text: string }
   /** `command` carries CLI mode's exec command string (`call <tool> …`) so the
    *  screen can recover the inner tool for context-aware follow-ups. */
@@ -87,8 +87,8 @@ function summarize(value: unknown, maxLen = 120): string {
  * handles, but narrowed to just the kinds the screen needs to render.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function messageToChunks(message: any): AgentChunk[] {
-  const chunks: AgentChunk[] = [];
+function messageToChunks(message: any): McpPromptChunk[] {
+  const chunks: McpPromptChunk[] = [];
 
   if (message?.type === 'assistant') {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
@@ -211,7 +211,7 @@ export function buildTutorialRunTags(args: {
   });
 }
 
-export async function* runMcpPromptViaSdk(args: {
+export async function* streamMcpPrompt(args: {
   prompt: string;
   credentials: Credentials;
   signal: AbortSignal;
@@ -224,7 +224,7 @@ export async function* runMcpPromptViaSdk(args: {
   programId?: string;
   /** Integration label for the trace tags; the tutorial usually has none. */
   integration?: string;
-}): AsyncIterable<AgentChunk> {
+}): AsyncIterable<McpPromptChunk> {
   const { prompt, credentials, signal, resumeSessionId } = args;
 
   // Assembled here rather than passed in so the TUI service layer doesn't
@@ -253,7 +253,7 @@ export async function* runMcpPromptViaSdk(args: {
   process.env.CLAUDE_CODE_OAUTH_TOKEN = auth.token;
 
   logToFile(
-    `[runMcpPromptViaSdk] gatewayUrl=${gatewayUrl} tokenPrefix=${
+    `[streamMcpPrompt] gatewayUrl=${gatewayUrl} tokenPrefix=${
       auth.token ? auth.token.slice(0, 4) + '***' : '(missing)'
     }`,
   );
@@ -271,7 +271,7 @@ export async function* runMcpPromptViaSdk(args: {
 
   const mcpUrl = credentials.host.mcpUrl;
   logToFile(
-    `[runMcpPromptViaSdk] mcpUrl=${mcpUrl} model=${MODEL} resume=${
+    `[streamMcpPrompt] mcpUrl=${mcpUrl} model=${MODEL} resume=${
       resumeSessionId ?? '(none)'
     }`,
   );
@@ -339,7 +339,7 @@ export async function* runMcpPromptViaSdk(args: {
               updatedInput: (input ?? {}) as Record<string, unknown>,
             });
           }
-          logToFile(`[runMcpPromptViaSdk] denying non-MCP tool: ${toolName}`);
+          logToFile(`[streamMcpPrompt] denying non-MCP tool: ${toolName}`);
           return Promise.resolve({
             behavior: 'deny' as const,
             message: `${toolName} is not available in the MCP tutorial — only PostHog MCP tools are permitted.`,
@@ -416,7 +416,7 @@ export async function* runMcpPromptViaSdk(args: {
     }
   } catch (err) {
     const text = err instanceof Error ? err.message : String(err);
-    logToFile(`[runMcpPromptViaSdk] error: ${text}`);
+    logToFile(`[streamMcpPrompt] error: ${text}`);
     yield { kind: 'error', text };
   } finally {
     // Closes the prompt stream so `query()` shuts down cleanly even if

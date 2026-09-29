@@ -28,12 +28,12 @@ import {
   publishHandoff,
 } from './handoff';
 import { createSecretVault, type SecretVault } from '@shared/secret-vault';
-import type { ProgressEmitter } from '@agent/progress';
+import { downloadSkill } from '@shared/skill-install';
+import type { ProgressEmitter } from '../progress';
 import {
   buildOrchestratorTools,
   type OrchestratorToolsContext,
-} from '@agent/runner/sequence/orchestrator/queue-tools';
-import type { LLMProvider } from '@posthog/warlock';
+} from '../runner/sequence/orchestrator/queue-tools';
 import {
   ASK_MAX_QUESTIONS_PER_CALL,
   DEFAULT_ASK_MAX_QUESTIONS,
@@ -42,7 +42,6 @@ import {
   ENV_FILE_PATH_DESCRIPTION,
   SERVER_NAME,
   addAuditChecks,
-  downloadSkill,
   ensureGitignoreCoverage,
   createAskAccounting,
   describeAskCancellation,
@@ -146,9 +145,6 @@ export interface WizardToolsOptions {
    */
   orchestrator?: OrchestratorToolsContext;
 
-  /** Scan-triage classifier for install_skill's scan, resolved by the caller. */
-  triageProvider: LLMProvider;
-
   /** Where `publish_handoff` reports. Absent → the handoff is written but reported nowhere. */
   emit?: ProgressEmitter;
 }
@@ -171,7 +167,6 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
     askMaxQuestions = DEFAULT_ASK_MAX_QUESTIONS,
     secretVault = createSecretVault(),
     orchestrator,
-    triageProvider,
     emit,
   } = options;
   const sdk = await getSDKModule();
@@ -439,9 +434,7 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
         };
       }
 
-      const result = await downloadSkill(skill, workingDirectory, {
-        triage: triageProvider,
-      });
+      const result = await downloadSkill(skill, workingDirectory);
       if (result.success) {
         return {
           content: [

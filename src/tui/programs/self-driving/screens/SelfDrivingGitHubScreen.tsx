@@ -19,19 +19,20 @@
 import { Box, Text } from 'ink';
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 
-import type { WizardStore } from '@ui/tui/store';
+import type { WizardStore } from '@tui/store';
+import { declineGithub } from '../store-actions.js';
 import { Colors, Icons } from '@tui/styles';
 import { PickerMenu, LoadingBox } from '@tui/primitives/index';
 import { useKeyBindings, KeyMatch } from '@tui/hooks/useKeyBindings';
 import {
   useGithubConnection,
   fetchLoginUrl,
-} from '@tui/programs/self-driving/hooks/useGithubConnection';
-import { OutroKind } from '@lib/wizard-session';
+} from '../hooks/useGithubConnection.js';
+import { OutroKind } from '@shared/outro';
 import {
   GITHUB_REQUIRED_BODY,
   GITHUB_REQUIRED_MESSAGE,
-} from '@programs/self-driving/detect';
+} from '@programs/self-driving';
 import { analytics } from '@utils/analytics';
 import { openTrackedLink } from '@utils/links';
 import { getIntegrationAuthorizeUrl } from '@utils/urls';
@@ -54,7 +55,7 @@ export const SelfDrivingGitHubScreen = ({
   );
 
   const credentials = store.session.credentials;
-  const connectedState = store.session.githubConnected;
+  const connectedState = store.githubConnected;
   const connected = connectedState === true;
 
   const authorizeUrl = credentials
@@ -105,7 +106,7 @@ export const SelfDrivingGitHubScreen = ({
     analytics.wizardCapture('github connect declined', {
       install_opened: installOpened,
     });
-    store.declineGithub({
+    declineGithub(store, {
       kind: OutroKind.Cancel,
       message: GITHUB_REQUIRED_MESSAGE,
       body: GITHUB_REQUIRED_BODY,

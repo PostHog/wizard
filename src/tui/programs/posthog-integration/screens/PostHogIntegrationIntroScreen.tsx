@@ -11,23 +11,26 @@
 import { Box, Text } from 'ink';
 import type { ReactNode } from 'react';
 import { useState, useSyncExternalStore } from 'react';
-import type { WizardStore } from '@ui/tui/store';
+import type { WizardStore } from '@tui/store';
 import { Integration } from '@shared/constants';
-import { getCommandPath, getLaunchablePrograms } from '@programs';
 import {
   PickerMenu,
   LoadingBox,
   type PickerOption,
 } from '@tui/primitives/index';
-import { IntroScreenLayout, type DetectionRow } from '../../../screens/IntroScreenLayout.js';
-import { SkillSourceInfo, useSkillEntry } from '../../../screens/SkillSourceInfo.js';
-import { ScanConsent } from '@lib/wizard-session';
+import {
+  IntroScreenLayout,
+  type DetectionRow,
+} from '@tui/screens/IntroScreenLayout';
+import { SkillSourceInfo, useSkillEntry } from '@tui/screens/SkillSourceInfo';
+import { ScanConsent } from '@shared/run-state';
 import { KeyMatch, useKeyBindings } from '@tui/hooks/useKeyBindings';
 import { Icons } from '@tui/styles';
 import { analytics } from '@utils/analytics';
 import { PRIVACY_PANEL_LABEL } from '@tui/components/PrivacyPanel';
 import type { IntroMenuView } from '@tui/programs/posthog-integration/intro-menu';
 import {
+  introEntries,
   introHeadline,
   introMenuOptions,
 } from '@tui/programs/posthog-integration/intro-menu';
@@ -99,14 +102,12 @@ const FrameworkPicker = ({
       options={options}
       onSelect={(value) => {
         const integration = Array.isArray(value) ? value[0] : value;
-        void import('@programs/frameworks/registry').then(
-          ({ FRAMEWORK_REGISTRY }) => {
-            const config = FRAMEWORK_REGISTRY[integration];
-            store.setFrameworkConfig(integration, config);
-            store.setDetectedFramework(config.metadata.name);
-            onComplete?.();
-          },
-        );
+        void import('@programs').then(({ FRAMEWORK_REGISTRY }) => {
+          const config = FRAMEWORK_REGISTRY[integration];
+          store.setFrameworkConfig(integration, config);
+          store.setDetectedFramework(config.metadata.name);
+          onComplete?.();
+        });
       }}
     />
   );
@@ -204,7 +205,7 @@ export const PostHogIntegrationIntroScreen = ({
           <Text>
             The{' '}
             <Text italic color="cyan">
-              {session.programLabel}
+              {store.programLabel}
             </Text>{' '}
             program installs the PostHog SDKs, instruments event tracking, and
             integrates the following dev tools for your application:
@@ -232,9 +233,9 @@ export const PostHogIntegrationIntroScreen = ({
     body = (
       <PickerMenu
         message="The Wizard can do more than integrate with your project:"
-        options={getLaunchablePrograms().map((program) => ({
-          label: `${getCommandPath(program).padEnd(21)}${program.description}`,
-          value: program.id,
+        options={introEntries().map((entry) => ({
+          label: `${entry.command.padEnd(21)}${entry.description}`,
+          value: entry.id,
         }))}
         onSelect={(value) => {
           const id = Array.isArray(value) ? value[0] : value;
@@ -318,7 +319,7 @@ export const PostHogIntegrationIntroScreen = ({
               setPickingFramework(true);
               setManuallySelected(true);
             } else {
-              process.exit(0);
+              store.requestExit(0);
             }
           }}
         />
@@ -337,7 +338,7 @@ export const PostHogIntegrationIntroScreen = ({
   const handleSelect = (value: string) => {
     analytics.wizardCapture('intro menu selected', { value, view });
     if (value === 'cancel') {
-      process.exit(0);
+      store.requestExit(0);
     } else if (value === 'framework') {
       setPickingFramework(true);
       setManuallySelected(true);
@@ -375,7 +376,7 @@ export const PostHogIntegrationIntroScreen = ({
       // The one program whose disclosure view can be acted on.
       privacyOptions={sharingOptions(sharing)}
       onSelect={handleSelect}
-      programLabel={session.programLabel}
+      programLabel={store.programLabel}
       skillId={session.skillId}
     >
       {bodyChildren}

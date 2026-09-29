@@ -7,15 +7,15 @@
  *   pipeline.finalize(resultMessage, durationMs);
  */
 
-import type { ProgressEmitter, SpinnerHandle } from '@agent/progress';
-import { logToFile, getLogFilePath, configureLogFile } from '@utils/debug';
+import type { ProgressEmitter, SpinnerHandle } from '../progress';
+import { logToFile, getLogFilePath } from '@utils/debug';
 import { MiddlewarePipeline } from './pipeline';
 import { PhaseDetector } from './phase-detector';
 import { loadBenchmarkConfig } from './config';
 import { createPluginsFromConfig } from './benchmarks';
 import type { BenchmarkConfig } from './config';
 import type { WizardRunOptions } from '@utils/types';
-import { AgentSignals } from '@agent/agent-interface';
+import { AgentSignals } from '../agent-interface';
 
 // ── Types ──────────────────────────────────────────────────────────────
 
@@ -73,11 +73,6 @@ export function createBenchmarkPipeline(
   const config = configOverride ?? loadBenchmarkConfig(options.installDir);
   const info = (message: string) =>
     emit({ kind: 'log', level: 'info', message });
-
-  configureLogFile({
-    path: config.output.logPath,
-    enabled: config.output.logEnabled,
-  });
 
   const plugins = createPluginsFromConfig(config, {
     emit,

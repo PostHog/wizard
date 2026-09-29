@@ -1,17 +1,17 @@
 /**
  * ExitScreen — Final step in every program.
  *
- * Renders nothing. Immediately exits the process.
+ * Renders nothing. Immediately asks the host to end the run with 0.
  * The cleanup handler in start-tui.ts handles the exit summary line.
  */
 
 import { useEffect } from 'react';
-import type { WizardStore } from '../../ui/tui/store';
+import type { WizardStore } from '../store';
 
-export const ExitScreen = ({ store }: { store?: WizardStore }) => {
+export const ExitScreen = ({ store }: { store: WizardStore }) => {
   useEffect(() => {
-    // After a mint failure run-wizard owns the exit (status 1, analytics).
-    if (!store?.session.mintHandoff) process.exit(0);
+    // After a mint failure the host owns the end (status 1, analytics).
+    if (!store.mintHandoff) store.requestExit(0);
   }, []);
 
   return null;

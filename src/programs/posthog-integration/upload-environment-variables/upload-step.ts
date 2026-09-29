@@ -1,23 +1,24 @@
 import type { Integration } from '@shared/constants';
 import { withProgress } from '@utils/telemetry';
 import { analytics } from '@utils/analytics';
-import { getUI } from '@ui';
-import type { WizardSession } from '@lib/wizard-session';
-import { EnvironmentProvider } from '../../../steps/upload-environment-variables/EnvironmentProvider';
+import type { RunnerContext } from '../../runner-context';
+import { EnvironmentProvider } from './EnvironmentProvider';
 import { VercelEnvironmentProvider } from './providers/vercel';
 
 export const uploadEnvironmentVariablesStep = async (
   envVars: Record<string, string>,
   {
     integration,
-    session,
+    installDir,
+    runner,
   }: {
     integration: Integration;
-    session: WizardSession;
+    installDir: string;
+    runner: Pick<RunnerContext, 'log' | 'spinner'>;
   },
 ): Promise<string[]> => {
   const providers: EnvironmentProvider[] = [
-    new VercelEnvironmentProvider({ installDir: session.installDir }),
+    new VercelEnvironmentProvider({ installDir, runner }),
   ];
 
   let provider: EnvironmentProvider | null = null;
@@ -38,7 +39,7 @@ export const uploadEnvironmentVariablesStep = async (
   }
 
   // Auto-accept — the agent already wrote env vars via MCP tools
-  getUI().log.info(`Uploading environment variables to ${provider.name}...`);
+  runner.log.info(`Uploading environment variables to ${provider.name}...`);
 
   const results = await withProgress(
     'uploading environment variables',

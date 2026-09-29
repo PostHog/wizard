@@ -1,9 +1,9 @@
-import type { PlannedEvent, WizardStore } from '@ui/tui/store';
+import type { PlannedEvent, SessionStore } from '../session-store';
 import {
   startFileWatcher,
   type FileWatcherHandle,
   type FileWatcherOptions,
-} from '@shared/utils/file-watcher';
+} from '@utils/file-watcher';
 
 const MAX_EVENT_PLAN_FILE_BYTES = 256 * 1024;
 const MAX_EVENT_COUNT = 50;
@@ -45,7 +45,7 @@ export class EventPlanWatcher {
   private captured = false;
 
   constructor(
-    private readonly store: WizardStore,
+    private readonly store: SessionStore,
     private readonly path: string,
     private readonly options: FileWatcherOptions = {},
   ) {}

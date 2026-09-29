@@ -9,7 +9,7 @@
 
 import { Box, Text } from 'ink';
 import { useSyncExternalStore } from 'react';
-import type { WizardStore } from '@ui/tui/store';
+import type { WizardStore } from '@tui/store';
 import { Colors } from '@tui/styles';
 import { OAUTH_TIMEOUT_MS } from '@shared/constants';
 import { useDismissOnAnyKey } from '@tui/hooks/useDismissOnAnyKey';
@@ -26,7 +26,7 @@ export const SessionTimeoutScreen = ({ store }: SessionTimeoutScreenProps) => {
     () => store.getSnapshot(),
   );
 
-  useDismissOnAnyKey(() => process.exit(1));
+  useDismissOnAnyKey(() => store.requestExit(1));
 
   return (
     <Box flexDirection="column" flexGrow={1}>

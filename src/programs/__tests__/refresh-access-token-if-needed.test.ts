@@ -1,28 +1,23 @@
 import { rotateCredentials } from '../credentials';
-import { refreshAccessToken } from '@utils/oauth';
+import { refreshAccessToken } from '../oauth/tokens';
 import { OAuthError } from '@utils/oauth-errors';
 import {
-  isGrantRevoked,
-  resetAuthSessionState,
-} from '@shared/auth-session-state';
-import {
   configureOAuthSession,
+  isGrantRevoked,
   oauthCredentials,
   resetOAuthSession,
 } from '@shared/oauth-session';
 import type { Credentials } from '@shared/api';
 
-vi.mock('@utils/oauth', async (original) => ({
-  ...(await original<typeof import('@utils/oauth')>()),
+vi.mock(import('../oauth/tokens'), async (original) => ({
+  ...(await original()),
   refreshAccessToken: vi.fn(),
 }));
-vi.mock('@utils/debug', () => ({ logToFile: vi.fn() }));
-vi.mock('@utils/analytics', () => ({
-  analytics: { wizardCapture: vi.fn() },
+vi.mock(import('@utils/debug'), () => ({ logToFile: vi.fn() }));
+vi.mock(import('@utils/analytics'), () => ({
+  analytics: { wizardCapture: vi.fn() } as never,
   groupsFromUser: vi.fn(),
 }));
-// The real @utils/oauth loads the UI module.
-vi.mock('@ui', () => ({ getUI: vi.fn() }));
 
 const mockedRefresh = refreshAccessToken as Mock;
 
@@ -48,7 +43,6 @@ const aging = (over: Partial<Credentials> = {}): Partial<Credentials> => ({
 describe('rotateCredentials through the OAuth session', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    resetAuthSessionState();
     resetOAuthSession();
   });
 
@@ -139,6 +133,22 @@ describe('rotateCredentials through the OAuth session', () => {
     await refresh(aging());
 
     expect(isGrantRevoked()).toBe(true);
+  });
+
+  it('a new login after a dead grant is not blamed on it', async () => {
+    const host = { apiHost: 'https://us.posthog.com' } as Credentials['host'];
+    mockedRefresh.mockRejectedValueOnce(new OAuthError('invalid_grant'));
+    await refresh(aging({ host }));
+
+    await refresh(
+      aging({
+        host,
+        refreshToken: 'phr_new_login',
+        expiresAt: Date.now() + 60 * 60 * 1000,
+      }),
+    );
+
+    expect(isGrantRevoked()).toBe(false);
   });
 
   it('leaves the grant unmarked for a transport failure, which says nothing about the login', async () => {

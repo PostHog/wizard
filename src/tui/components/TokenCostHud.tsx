@@ -16,7 +16,7 @@
  */
 import { Box, Text } from 'ink';
 import { Colors } from '@tui/styles';
-import { totalTokenCount, type TokenUsageSnapshot } from '@ui/tui/store';
+import { totalTokenCount, type TokenUsageSnapshot } from '@tui/token-usage';
 import { formatTokenCount, formatCostUsd } from '@shared/token-pricing';
 
 /** Self-documents the hidden shortcut once the panel is showing. */

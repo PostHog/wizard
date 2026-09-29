@@ -7,12 +7,11 @@
  * froze, so a workbench run can rely on it.
  */
 
-import { Overlay, ScreenId } from '@tui/router';
-import type { AskQuestion } from '@lib/wizard-session';
+import { Overlay, ScreenId } from '@tui';
+import type { AskQuestion } from '@agent/types';
 import {
   DEFAULT_E2E_PROFILE,
   E2E_ANSWER_SENTINEL,
-  E2E_DRIVABLE_SCREENS,
   answerQuestions,
   decideE2eAction,
   type WizardE2eProfile,
@@ -478,48 +477,6 @@ describe('decideE2eAction purity', () => {
       expect(decideE2eAction(...args())).toEqual(before);
     } finally {
       delete process.env.E2E_NOTICE;
-    }
-  });
-});
-
-describe('E2E_DRIVABLE_SCREENS', () => {
-  it('lists the task-notice overlay', () => {
-    expect(E2E_DRIVABLE_SCREENS).toContain(Overlay.TaskNotice);
-  });
-
-  it('has a decideE2eAction case for every screen it lists', () => {
-    // A listed screen with no case would return `{ wait: true }` forever,
-    // stalling the run instead of failing it.
-    const overlayState: Partial<Record<string, Partial<CiState>>> = {
-      [Overlay.WizardAsk]: {
-        pendingQuestion: {
-          id: 'a',
-          source: 's',
-          questions: [text('q')],
-        },
-      },
-      [Overlay.TaskNotice]: {
-        taskNotice: { title: 't', items: [], prompt: 'p' },
-      },
-      [ScreenId.Setup]: {
-        setupQuestions: [
-          {
-            key: 'router',
-            message: 'router?',
-            options: [{ label: 'a', value: 'a' }],
-          },
-        ],
-      },
-    };
-    for (const screen of E2E_DRIVABLE_SCREENS) {
-      const decision = decideE2eAction(
-        state({ currentScreen: screen, ...(overlayState[screen] ?? {}) }),
-        profile(),
-      );
-      expect({ screen, hasAction: Boolean(decision.action) }).toEqual({
-        screen,
-        hasAction: true,
-      });
     }
   });
 });

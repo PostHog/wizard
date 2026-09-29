@@ -10,36 +10,43 @@
  * change and belongs in its own PR; when it lands, re-record and add an
  * assertion that no trace visits `run` twice.
  */
-import { WizardStore, ScreenId, RunPhase, McpOutcome } from '@ui/tui/store';
-import { InkUI } from '@ui/tui/ink-ui';
-import { setUI } from '@ui/index';
+import { WizardStore, ScreenId } from '@tui/store';
+import { McpOutcome, RunPhase } from '@shared/run-state';
+import { getFlow } from '@tui/programs/index';
 import {
   buildSession,
-  OutroKind,
-  type WizardSession,
-} from '@lib/wizard-session';
+  FRAMEWORK_REGISTRY,
+  PROGRAM_REGISTRY,
+  getProgramConfig,
+} from '@programs';
+import type { WizardSession } from '@programs/types';
+import { OutroKind } from '@shared/outro';
 import { Integration } from '@shared/constants';
-import { FRAMEWORK_REGISTRY } from '@programs/frameworks/registry';
 import { HostResolution } from '@shared/host-resolution';
 import { WizardReadiness } from '@shared/health-checks/readiness';
 import { analytics } from '@utils/analytics';
-import {
-  PROGRAM_REGISTRY,
-  getProgramConfig,
-  type ProgramId,
-} from '../../programs/program-registry';
-import { SELF_DRIVING_INTEGRATE_PATH_KEY } from '../../programs/self-driving/detect';
-import { ERROR_TRACKING_PROJECT_PATH_KEY } from '../../programs/error-tracking/detect-agentic';
-import { SOURCE_MAPS_CONTEXT_KEYS } from '../../programs/error-tracking-upload-source-maps/detect';
+import { TOOL_REGISTRY } from '@tools';
+import type { ProgramId } from '@programs/types';
+import { SELF_DRIVING_INTEGRATE_PATH_KEY } from '@programs/self-driving';
+import { ERROR_TRACKING_PROJECT_PATH_KEY } from '@programs/error-tracking';
+import { SOURCE_MAPS_CONTEXT_KEYS } from '@programs/error-tracking-upload-source-maps';
+import { AuditScreenId } from '@tui/programs/audit';
+import { ErrorTrackingScreenId } from '@tui/programs/error-tracking';
+import { McpScreenId } from '@tui/tools/mcp';
+import { PostHogIntegrationScreenId } from '@tui/programs/posthog-integration';
+import { PosthogDoctorScreenId } from '@tui/tools/doctor';
+import { SelfDrivingScreenId } from '@tui/programs/self-driving';
+import { SourceMapsScreenId } from '@tui/programs/error-tracking-upload-source-maps';
+import { applySetter } from '@tui/__tests__/helpers/apply-setter.no-jest';
 
-vi.mock('@utils/analytics', () => ({
+vi.mock(import('@utils/analytics'), () => ({
   analytics: {
     capture: vi.fn(),
     wizardCapture: vi.fn(),
     setTag: vi.fn(),
     captureException: vi.fn(),
     shutdown: vi.fn().mockResolvedValue(undefined),
-  },
+  } as never,
   sessionProperties: vi.fn(() => ({})),
 }));
 
@@ -65,7 +72,6 @@ const NODE = FRAMEWORK_REGISTRY[Integration.javascriptNode];
 
 function createStore(program: ProgramId, integration: Integration | null) {
   const store = new WizardStore(program);
-  setUI(new InkUI(store));
   const session = buildSession({ installDir: '/app', ci: false });
   if (integration) {
     session.integration = integration;
@@ -83,7 +89,10 @@ const approved = (ok: boolean) =>
 /** Commit what a user, the runner, or the agent would commit on this screen. */
 function advance(store: WizardStore, screen: string): boolean {
   const s = store.session;
-  if (screen === ScreenId.Intro || screen.endsWith('-intro')) {
+  if (
+    screen === PostHogIntegrationScreenId.Intro ||
+    screen.endsWith('-intro')
+  ) {
     store.completeSetup();
     return true;
   }
@@ -117,15 +126,19 @@ function advance(store: WizardStore, screen: string): boolean {
       store.setApiUser(approved(true));
       return true;
     case ScreenId.Run:
-    case ScreenId.AuditRun: {
-      const steps = getProgramConfig(store.router.activeProgram).steps;
+    case AuditScreenId.Run: {
+      const steps = getFlow(store.router.activeProgram);
       const runStep = steps.find(
         (st) =>
           st.screenId === screen &&
-          (!st.show || st.show(s)) &&
-          (!st.isComplete || !st.isComplete(s)),
+          (!st.show || st.show(store)) &&
+          (!st.isComplete || !st.isComplete(store)),
       );
-      if (runStep?.run) {
+      if (
+        runStep &&
+        getProgramConfig(store.router.activeProgram).runSteps?.[runStep.id]
+          ?.runProgramId
+      ) {
         store.completeRunStep(runStep.id);
       } else {
         store.setRunPhase(RunPhase.Running);
@@ -134,20 +147,20 @@ function advance(store: WizardStore, screen: string): boolean {
       return true;
     }
     case ScreenId.Outro:
-    case ScreenId.AuditOutro:
-    case ScreenId.SourceMapsOutro:
+    case AuditScreenId.Outro:
+    case SourceMapsScreenId.Outro:
       store.setOutroDismissed();
       return true;
-    case ScreenId.DoctorReport:
+    case PosthogDoctorScreenId.Report:
       store.setOutroData({ kind: OutroKind.Success, message: 'done' });
       return true;
     case ScreenId.Mcp:
-    case ScreenId.McpAdd:
-    case ScreenId.McpRemove:
+    case McpScreenId.Add:
+    case McpScreenId.Remove:
       store.setMcpComplete(McpOutcome.Skipped);
       return true;
-    case ScreenId.McpSuggestedPrompts:
-      store.setMcpSuggestedPromptsDismissed();
+    case McpScreenId.SuggestedPrompts:
+      applySetter(store, 'setMcpSuggestedPromptsDismissed');
       return true;
     case ScreenId.SlackConnect:
       store.setSlackStepDismissed();
@@ -155,24 +168,24 @@ function advance(store: WizardStore, screen: string): boolean {
     case ScreenId.KeepSkills:
       store.setSkillsComplete(true);
       return true;
-    case ScreenId.SelfDrivingIntegrationCheck:
-      store.setIntegrate(true);
+    case SelfDrivingScreenId.IntegrationCheck:
+      applySetter(store, 'setIntegrate', { integrate: true });
       return true;
-    case ScreenId.SelfDrivingIntegrationDetect:
+    case SelfDrivingScreenId.IntegrationDetect:
       store.setFrameworkContext(SELF_DRIVING_INTEGRATE_PATH_KEY, '.');
       store.setFrameworkConfig(Integration.javascriptNode, NODE);
       return true;
-    case ScreenId.SelfDrivingHandoff:
-      store.confirmSelfDrivingHandoff();
+    case SelfDrivingScreenId.Handoff:
+      applySetter(store, 'confirmSelfDrivingHandoff');
       return true;
-    case ScreenId.SelfDrivingGithub:
-      store.setGithubConnected(true);
+    case SelfDrivingScreenId.Github:
+      applySetter(store, 'setGithubConnected', { connected: true });
       return true;
-    case ScreenId.ErrorTrackingDetect:
+    case ErrorTrackingScreenId.Detect:
       store.setFrameworkContext(ERROR_TRACKING_PROJECT_PATH_KEY, '.');
       store.setFrameworkConfig(Integration.javascriptNode, NODE);
       return true;
-    case ScreenId.SourceMapsDetect:
+    case SourceMapsScreenId.Detect:
       store.setFrameworkContext(
         SOURCE_MAPS_CONTEXT_KEYS.selectedVariant,
         'node',
@@ -190,22 +203,22 @@ function trace(program: ProgramId, integration: Integration | null) {
   const screens: string[] = [];
   let stoppedOn: string | null = null;
   for (let guard = 0; guard < 40; guard++) {
-    const screen = store.router.resolve(store.session);
+    const screen = store.router.resolve(store);
     screens.push(screen);
     if (screen === ScreenId.Exit) break;
     if (!advance(store, screen)) {
       stoppedOn = screen;
       break;
     }
-    if (store.session.skillsComplete) break;
+    if (store.skillsComplete) break;
   }
   return { program, screens, stoppedOn, events: screenEvents() };
 }
 
 describe('flow traces per program', () => {
-  for (const config of PROGRAM_REGISTRY) {
-    it(`${config.id} (node)`, () => {
-      expect(trace(config.id, Integration.javascriptNode)).toMatchSnapshot();
+  for (const { id } of [...PROGRAM_REGISTRY, ...TOOL_REGISTRY]) {
+    it(`${id} (node)`, () => {
+      expect(trace(id, Integration.javascriptNode)).toMatchSnapshot();
     });
   }
 
@@ -216,23 +229,4 @@ describe('flow traces per program', () => {
   it('posthog-integration (no framework detected)', () => {
     expect(trace('posthog-integration', null)).toMatchSnapshot();
   });
-});
-
-describe('headless walk analytics', () => {
-  for (const program of ['posthog-integration', 'audit'] as ProgramId[]) {
-    it(`${program}: run phases without a TUI`, () => {
-      wizardCapture.mockClear();
-      const store = new WizardStore(program);
-      setUI(new InkUI(store));
-      store.session = buildSession({ installDir: '/app', ci: true });
-      store.setRunPhase(RunPhase.Running);
-      store.setOutroData({ kind: OutroKind.Success, message: 'done' });
-      store.setRunPhase(RunPhase.Completed);
-      expect({
-        program,
-        screen: store.router.resolve(store.session),
-        events: screenEvents(),
-      }).toMatchSnapshot();
-    });
-  }
 });

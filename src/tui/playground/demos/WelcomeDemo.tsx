@@ -3,7 +3,7 @@
  */
 
 import { Box, Text, useInput } from 'ink';
-import type { WizardStore } from '@ui/tui/store';
+import type { WizardStore } from '@tui/store';
 import { Colors, Icons } from '@tui/styles';
 
 interface WelcomeDemoProps {

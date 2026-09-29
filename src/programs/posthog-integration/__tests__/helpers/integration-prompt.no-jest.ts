@@ -1,14 +1,11 @@
-/**
- * Shared fixtures for tests that build the default integration's run
- * definition and prompt (`warehouse-suggestion.test.ts`,
- * `posthog-integration-prompt.test.ts`).
- */
+/** Fixtures for the tests that build the default integration's run definition and prompt. */
 
-import { posthogIntegrationConfig } from '@programs/posthog-integration/index';
-import { DETECTED_WAREHOUSE_SOURCES_KEY } from '@programs/warehouse-source/detect';
-import { buildSession, type WizardSession } from '@lib/wizard-session';
+import { DETECTED_WAREHOUSE_SOURCES_KEY } from '@programs/warehouse-sources/detect';
+import type { RunnerContext } from '@programs/runner-context';
+import { buildSession } from '@programs/session/wizard-session';
+import type { WizardSession } from '@programs/session/wizard-session';
 import type { DetectedSource } from '@programs/warehouse-sources/types';
-import { testRunnerContext } from '../../../../../test/runner-context';
+import { config as posthogIntegration } from '../../index';
 
 export const CREDENTIALS = {
   accessToken: 'tok',
@@ -34,6 +31,22 @@ const FRAMEWORK_CONFIG = {
   prompts: { projectTypeDetection: 'app router' },
 };
 
+/** A runner whose framework context is the session's own, with no host to log to. */
+export function runnerFor(session: WizardSession): RunnerContext {
+  return {
+    getFrameworkContext: (key) => session.frameworkContext[key],
+    setFrameworkContext: (key, value) => {
+      session.frameworkContext[key] = value;
+    },
+    log: { info: () => undefined, warn: () => undefined },
+    spinner: () => ({
+      start: () => undefined,
+      stop: () => undefined,
+      message: () => undefined,
+    }),
+  };
+}
+
 export function sessionWith(sources: DetectedSource[]): WizardSession {
   const s = buildSession({ installDir: '/tmp/app' });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -45,9 +58,9 @@ export function sessionWith(sources: DetectedSource[]): WizardSession {
 }
 
 export async function resolveRun(session: WizardSession) {
-  const { run } = posthogIntegrationConfig;
+  const { run } = posthogIntegration;
   if (typeof run !== 'function') throw new Error('expected a run function');
-  return run(session, testRunnerContext(session));
+  return run(session, runnerFor(session));
 }
 
 export const promptFor = async (sources: DetectedSource[]) => {

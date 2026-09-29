@@ -17,8 +17,10 @@ exports[`keyboard commit vs control action commit > audit-outro: any key vs dism
 exports[`keyboard commit vs control action commit > intro: enter on Continue vs confirm_setup 1`] = `
 {
   "action": {
+    "scanConsent": "granted",
     "screen": "health-check",
     "setupConfirmed": true,
+    "warehouseSourcesReported": true,
   },
   "keyboard": {
     "scanConsent": "granted",

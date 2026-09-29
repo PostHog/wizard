@@ -1,8 +1,4 @@
-import type {
-  Middleware,
-  MiddlewareContext,
-  MiddlewareStore,
-} from '@agent/middleware/types';
+import type { Middleware, MiddlewareContext, MiddlewareStore } from '../types';
 import { computeTokenCostUsd } from '@shared/token-pricing';
 import type { TokenData } from './token-tracker';
 import type { CacheData } from './cache-tracker';
@@ -12,7 +8,7 @@ export interface CostData {
   phaseCosts: Array<{ phase: string; cost: number }>;
 }
 
-// Pricing table + formula moved to `@lib/agent/token-pricing` so the live
+// Pricing table + formula live in `@shared/token-pricing` so the live
 // token/cost HUD's per-turn estimate can't drift from this benchmark's.
 // No model is passed to computeTokenCostUsd below (falls back to Sonnet
 // pricing) -- MiddlewareContext has no model field to thread through, and

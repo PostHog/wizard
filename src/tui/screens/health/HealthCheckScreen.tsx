@@ -8,58 +8,26 @@
  */
 
 import { Box, Text } from 'ink';
-import { useState, useSyncExternalStore } from 'react';
-import type { WizardStore } from '@ui/tui/store';
+import { useSyncExternalStore } from 'react';
+import type { WizardStore } from '@tui/store';
 import {
   ConfirmationInput,
   LoadingBox,
   ModalOverlay,
 } from '@tui/primitives/index';
-import { Colors, Icons } from '@tui/styles';
+import { Icons } from '@tui/styles';
 import { ServiceHealthList } from '@tui/components/ServiceHealthList';
 import {
   getBlockingServiceKeys,
   SIGNUP_WIZARD_READINESS_CONFIG,
 } from '@shared/health-checks/readiness';
 import { ServiceHealthStatus } from '@shared/health-checks/types';
-import { wizardAbort } from '@utils/wizard-abort';
+import { abortOnScreens } from '@tui/abort';
 import { ErrorCodes } from '@shared/errors';
-import { downloadSkill } from '@agent';
-import { fetchSkillMenu } from '@shared/skill-menu';
-import { GITHUB_SKILLS_BASE_URL } from '@shared/constants';
-import { useDismissOnAnyKey } from '@tui/hooks/useDismissOnAnyKey';
 
 interface HealthCheckScreenProps {
   store: WizardStore;
 }
-
-const EXAMPLE_PROMPT =
-  'Integrate PostHog into this project using the skill files in .posthog/skills/. Read SKILL.md first, then follow the numbered program files in order.';
-
-const SkillsDownloadedScreen = () => {
-  useDismissOnAnyKey(() => process.exit(0));
-
-  return (
-    <Box flexDirection="column" flexGrow={1}>
-      <Text color="green" bold>
-        {Icons.check} Skills downloaded to .posthog/skills/
-      </Text>
-
-      <Box marginTop={1} flexDirection="column">
-        <Text>
-          You can continue setup with another agent using this prompt:
-        </Text>
-        <Box marginTop={1} paddingLeft={2}>
-          <Text color="cyan">{EXAMPLE_PROMPT}</Text>
-        </Box>
-      </Box>
-
-      <Box marginTop={1}>
-        <Text color={Colors.muted}>Press any key to exit</Text>
-      </Box>
-    </Box>
-  );
-};
 
 export const HealthCheckScreen = ({ store }: HealthCheckScreenProps) => {
   useSyncExternalStore(
@@ -67,14 +35,7 @@ export const HealthCheckScreen = ({ store }: HealthCheckScreenProps) => {
     () => store.getSnapshot(),
   );
 
-  const [downloaded, setDownloaded] = useState(false);
-  const [downloading, setDownloading] = useState(false);
-
   const result = store.session.readinessResult;
-
-  if (downloaded) {
-    return <SkillsDownloadedScreen />;
-  }
 
   // Still checking — show spinner
   if (!result) {
@@ -111,9 +72,6 @@ export const HealthCheckScreen = ({ store }: HealthCheckScreenProps) => {
 
   const isSkillsOriginDown =
     hasHardBlock && blockingKeys.includes('skillsOrigin');
-  const canDownloadSkills =
-    result.health.skillsOrigin.status === ServiceHealthStatus.Healthy;
-  const integration = store.session.integration;
 
   // If every blocking row is `NoConnection` (probe failed, no status-page
   // corroboration), reframe the screen to point at the user's network
@@ -143,42 +101,11 @@ export const HealthCheckScreen = ({ store }: HealthCheckScreenProps) => {
     ? 'The Wizard cannot start while these services are down.'
     : 'Some services are degraded. You can continue, but parts of the wizard may not work reliably.';
 
-  const handleDownloadAndExit = async () => {
-    if (downloading) return;
-    setDownloading(true);
-    // Primary origin — fetchSkillMenu/downloadSkill fail over to AWS themselves.
-    const menu = await fetchSkillMenu(GITHUB_SKILLS_BASE_URL);
-    if (menu) {
-      const prefix = `integration-${integration}`;
-      const skills = (menu.categories['integration'] ?? []).filter((s) =>
-        s.id.startsWith(prefix),
-      );
-      for (const skill of skills) {
-        // Pre-auth outage cache: no gateway, so a flagged skill fails closed.
-        await downloadSkill(skill, store.session.installDir, {
-          skillsRoot: '.posthog/skills',
-          triage: undefined,
-        });
-      }
-    }
-    setDownloaded(true);
-  };
-
-  const handleCancel =
-    canDownloadSkills && !isSkillsOriginDown
-      ? () => void handleDownloadAndExit()
-      : () =>
-          void wizardAbort({
-            code: ErrorCodes.EnvServiceOutage,
-            message: 'Exited due to service outage.',
-          });
-
-  const cancelLabel =
-    canDownloadSkills && !isSkillsOriginDown
-      ? downloading
-        ? 'Downloading...'
-        : 'Download skills & Exit [Esc]'
-      : 'Exit [Esc]';
+  const exitForOutage = () =>
+    void abortOnScreens(store, {
+      code: ErrorCodes.EnvServiceOutage,
+      message: 'Exited due to service outage.',
+    });
 
   return (
     <ModalOverlay
@@ -193,26 +120,16 @@ export const HealthCheckScreen = ({ store }: HealthCheckScreenProps) => {
             message=""
             confirmLabel=""
             cancelLabel="Exit [Esc]"
-            onConfirm={() =>
-              void wizardAbort({
-                code: ErrorCodes.EnvServiceOutage,
-                message: 'Exited due to service outage.',
-              })
-            }
-            onCancel={() =>
-              void wizardAbort({
-                code: ErrorCodes.EnvServiceOutage,
-                message: 'Exited due to service outage.',
-              })
-            }
+            onConfirm={exitForOutage}
+            onCancel={exitForOutage}
           />
         ) : (
           <ConfirmationInput
             message="Continue anyway?"
             confirmLabel="Continue [Enter]"
-            cancelLabel={cancelLabel}
+            cancelLabel="Exit [Esc]"
             onConfirm={() => store.dismissOutage()}
-            onCancel={handleCancel}
+            onCancel={exitForOutage}
           />
         )
       }
@@ -242,15 +159,6 @@ export const HealthCheckScreen = ({ store }: HealthCheckScreenProps) => {
         <Box marginTop={1}>
           <Text>
             Set up manually: <Text color="cyan">{docsUrl}</Text>
-          </Text>
-        </Box>
-      )}
-
-      {canDownloadSkills && !isSkillsOriginDown && (
-        <Box marginTop={1}>
-          <Text>
-            You can still download the PostHog integration skills and continue
-            with another agent.
           </Text>
         </Box>
       )}

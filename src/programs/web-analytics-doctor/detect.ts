@@ -1,8 +1,8 @@
 import { existsSync, statSync } from 'fs';
-import type { WizardSession } from '@lib/wizard-session';
+import type { ProgramSession } from '../program-session';
 import type { AbortCase } from '@agent/types';
-import { ErrorCodes } from '@shared/errors';
-import { findPackageJsons } from '@programs/shared/package-scanning';
+import { ErrorCodes, type ErrorCode } from '@shared/errors';
+import { findPackageJsons } from '../shared/package-scanning';
 
 export type WebAnalyticsDetectError =
   | {
@@ -12,6 +12,17 @@ export type WebAnalyticsDetectError =
     }
   | { kind: 'no-package-json' }
   | { kind: 'no-posthog'; scannedCount: number };
+
+/** The error code for each detect error `kind`, read by `detectErrorCode`. */
+export const WEB_ANALYTICS_DETECT_CODES: Record<
+  WebAnalyticsDetectError['kind'],
+  ErrorCode
+> = {
+  'bad-directory': ErrorCodes.DetectBadDirectory,
+  'no-package-json': ErrorCodes.DetectNoPackageJson,
+  // One failure class with the other programs' "no PostHog SDK" kinds.
+  'no-posthog': ErrorCodes.DetectNoPosthogSdk,
+};
 
 export const WEB_ANALYTICS_ABORT_CASES: AbortCase[] = [
   {
@@ -46,7 +57,7 @@ export const WEB_ANALYTICS_ABORT_CASES: AbortCase[] = [
 ];
 
 export function detectWebAnalyticsPrerequisites(
-  session: WizardSession,
+  session: ProgramSession,
   setFrameworkContext: (key: string, value: unknown) => void,
 ): void {
   const fail = (error: WebAnalyticsDetectError) =>

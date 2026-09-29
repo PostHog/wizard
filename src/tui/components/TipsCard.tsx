@@ -4,9 +4,9 @@
  */
 
 import { Box, Text } from 'ink';
-import type { WizardStore } from '@ui/tui/store';
+import type { WizardStore } from '@tui/store';
 import { Colors, Icons } from '@tui/styles';
-import { DiscoveredFeature } from '@lib/wizard-session';
+import { DiscoveredFeature } from '@shared/discovered-feature';
 
 /** A discrete tip shown in the TipsCard during the agent run. */
 export interface Tip {

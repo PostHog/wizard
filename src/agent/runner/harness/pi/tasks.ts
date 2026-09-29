@@ -10,12 +10,12 @@ import { randomUUID } from 'node:crypto';
 import { Type } from 'typebox';
 import { defineTool } from '@earendil-works/pi-coding-agent';
 import type { ToolDefinition } from '@earendil-works/pi-coding-agent';
-import type { TaskSnapshot } from '@agent/progress';
+import type { TaskSnapshot } from '../../../progress';
 
-export type TaskStatus = 'pending' | 'in_progress' | 'completed';
+export type TodoStatus = 'pending' | 'in_progress' | 'completed';
 export interface TaskEntry {
   content: string;
-  status: TaskStatus;
+  status: TodoStatus;
   activeForm?: string;
 }
 export type TaskStore = Map<string, TaskEntry>;
@@ -99,7 +99,7 @@ export function createWizardPiTaskTools(
       if (!existing) return text(`No such task: ${args.taskId}`);
       store.set(args.taskId, {
         content: args.content ?? existing.content,
-        status: (args.status as TaskStatus) ?? existing.status,
+        status: (args.status as TodoStatus) ?? existing.status,
         activeForm: args.activeForm ?? existing.activeForm,
       });
       syncToTui();

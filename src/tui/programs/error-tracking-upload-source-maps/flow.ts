@@ -7,29 +7,29 @@
  * needs credentials.
  */
 
-import type { ProgramStep } from '@programs/program-step';
-import type { WizardSession } from '@lib/wizard-session';
-import { RunPhase } from '@lib/wizard-session';
-import { SOURCE_MAPS_CONTEXT_KEYS } from '../../../programs/error-tracking-upload-source-maps/detect.js';
+import type { FlowStep } from '@tui/flow';
+import type { TuiView } from '@tui/tui-state';
+import { RunPhase } from '@shared/run-state';
+import { SOURCE_MAPS_CONTEXT_KEYS } from '@programs/error-tracking-upload-source-maps';
 
-function projectSelected(session: WizardSession): boolean {
+function projectSelected({ session }: TuiView): boolean {
   return (
     session.frameworkContext[SOURCE_MAPS_CONTEXT_KEYS.selectedVariant] != null
   );
 }
 
-export const ERROR_TRACKING_UPLOAD_SOURCE_MAPS_PROGRAM: ProgramStep[] = [
+export const ERROR_TRACKING_UPLOAD_SOURCE_MAPS_FLOW: FlowStep[] = [
   {
     id: 'intro',
     label: 'Welcome',
     screenId: 'source-maps-intro',
-    gate: (session) => session.setupConfirmed,
+    gate: (tui) => tui.setupConfirmed,
   },
   {
     id: 'auth',
     label: 'Authentication',
     screenId: 'auth',
-    isComplete: (session) => session.credentials !== null,
+    isComplete: ({ session }) => session.credentials !== null,
   },
   {
     id: 'detect',
@@ -47,7 +47,7 @@ export const ERROR_TRACKING_UPLOAD_SOURCE_MAPS_PROGRAM: ProgramStep[] = [
     id: 'run',
     label: 'Upload source maps',
     screenId: 'run',
-    isComplete: (session) =>
+    isComplete: ({ session }) =>
       session.runPhase === RunPhase.Completed ||
       session.runPhase === RunPhase.Error,
   },
@@ -55,7 +55,7 @@ export const ERROR_TRACKING_UPLOAD_SOURCE_MAPS_PROGRAM: ProgramStep[] = [
     id: 'outro',
     label: 'Done',
     screenId: 'source-maps-outro',
-    isComplete: (session) => session.outroDismissed,
+    isComplete: (tui) => tui.outroDismissed,
   },
   {
     id: 'skills',

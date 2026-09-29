@@ -2,21 +2,22 @@ import { ClaudeCodeMCPClient } from '@shared/mcp-clients/clients/claude-code';
 import { execSync, execFile } from 'child_process';
 import { analytics } from '@utils/analytics';
 
-vi.mock('child_process', () => ({
+vi.mock(import('child_process'), () => ({
   execSync: vi.fn(),
-  execFile: vi.fn(),
+  execFile: vi.fn() as never,
 }));
 
-vi.mock('fs', () => ({
+vi.mock(import('fs'), () => ({
   existsSync: vi.fn().mockReturnValue(false),
 }));
 
-vi.mock('@utils/analytics', () => ({
-  analytics: { captureException: vi.fn() },
+vi.mock(import('@utils/analytics'), () => ({
+  analytics: { captureException: vi.fn() } as never,
 }));
 
-vi.mock('@utils/debug', () => ({
-  debug: vi.fn(),
+vi.mock(import('@utils/debug'), () => ({
+  useLogFile: vi.fn(),
+  logToFile: vi.fn(),
 }));
 
 /** `plugin list --json` payload, trimmed to the fields the client reads. */
@@ -68,16 +69,16 @@ describe('ClaudeCodeMCPClient — plugin methods', () => {
 
   /** Every `claude` invocation, in order, as its joined command. */
   const claudeCalls = () =>
-    execFileMock.mock.calls.map(
-      ([file, args]: [string, string[]]) => `${file} ${args.join(' ')}`,
+    (execFileMock.mock.calls as [string, string[]][]).map(
+      ([file, args]) => `${file} ${args.join(' ')}`,
     );
 
   type ExecFileCb = (e: Error | null, stdout: string, stderr: string) => void;
 
   /** The options argument every `claude` invocation is spawned with. */
   const execFileOptions = () =>
-    execFileMock.mock.calls.map(
-      ([, , options]: [string, string[], unknown]) => options,
+    (execFileMock.mock.calls as [string, string[], unknown][]).map(
+      ([, , options]) => options,
     );
 
   /** Answer claude invocations by their joined args; return an Error to fail one. */

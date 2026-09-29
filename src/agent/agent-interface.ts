@@ -6,18 +6,24 @@ import { randomUUID } from 'node:crypto';
 
 import path from 'path';
 import * as os from 'os';
+// eslint-disable-next-line no-restricted-imports -- resolves the SDK's bundled CLI path where ESM has no bare require
 import { createRequire } from 'node:module';
 import type {
   ProgressEmitter,
   SpinnerHandle,
   TokenUsageDelta,
 } from './progress';
-import { debug, logToFile, initLogFile, getLogFilePath } from '@utils/debug';
+import {
+  formatLogLine,
+  logToFile,
+  initLogFile,
+  getLogFilePath,
+} from '@utils/debug';
 import type { WizardRunOptions } from '@utils/types';
 import { analytics } from '@utils/analytics';
 import { isTemplateEnvFileName } from '@utils/env-scan';
 import { runtimeEnv } from '@env';
-import type { AioCapture } from '@agent/aio-capture';
+import type { AioCapture } from './aio-capture';
 import {
   Harness,
   CallType,
@@ -36,14 +42,14 @@ import {
   gatewayAuth,
   isPastRefresh,
   type GatewayAuth,
-} from '@agent/gateway-session';
+} from './gateway-session';
 import { evaluateBashCommand } from './bash-fence';
-import { createWizardToolsServer, WIZARD_TOOL_NAMES } from '@agent/tools';
+import { createWizardToolsServer, WIZARD_TOOL_NAMES } from './tools';
 import {
   createPreToolUseYaraHooks,
   createPostToolUseYaraHooks,
   prewarmYaraScanner,
-} from '@agent/yara-hooks';
+} from './yara-hooks';
 import { createTriageLLMProvider } from './triage-provider';
 import type { LLMProvider } from '@posthog/warlock';
 import { assembleCommandments } from './runner/switchboard/commandments';
@@ -56,7 +62,7 @@ import {
   RESUME_INSTRUCTION,
 } from './signals';
 import { classifyAuthFailure } from '@shared/errors';
-import { isGrantRevoked } from '@shared/auth-session-state';
+import { isGrantRevoked } from '@shared/oauth-session';
 import { AgentOutputSignals } from './output-signals';
 
 // Signal vocabulary and the output parser live in dedicated modules; re-export
@@ -91,11 +97,8 @@ async function getSDKModule(): Promise<any> {
  * This ensures we use the SDK's bundled version rather than the user's installed Claude Code.
  */
 function getClaudeCodeExecutablePath(): string {
-  // Bare `require` is undefined in ESM (tsx dev runs) — fall back to createRequire.
-  const resolver =
-    typeof require !== 'undefined'
-      ? require
-      : createRequire(process.argv[1] ?? `${process.cwd()}/`);
+  // ESM has no bare `require`: resolve from the entry script.
+  const resolver = createRequire(process.argv[1] ?? `${process.cwd()}/`);
   // resolve finds the package's main entry, then we get cli.js from same dir
   const sdkPackagePath = resolver.resolve('@anthropic-ai/claude-agent-sdk');
   return path.join(path.dirname(sdkPackagePath), 'cli.js');
@@ -219,7 +222,7 @@ export type AgentConfig = {
    */
   modelOverride?: string;
   /** Bridge that drives the `wizard_ask` overlay. Omit in non-interactive hosts. */
-  askBridge?: import('@agent/wizard-ask-bridge').WizardAskBridge;
+  askBridge?: import('./wizard-ask-bridge').WizardAskBridge;
   /** Per-run cap on `wizard_ask` invocations. Defaults to 10. */
   askMaxQuestions?: number;
   /** Extra tools added on top of BASE_ALLOWED_TOOLS for this run. */
@@ -236,7 +239,7 @@ export type AgentConfig = {
    * flag routes the run here; threaded into wizard-tools so the orchestrator
    * tools register.
    */
-  orchestrator?: import('@agent/runner/sequence/orchestrator/queue-tools').OrchestratorToolsContext;
+  orchestrator?: import('./runner/sequence/orchestrator/queue-tools').OrchestratorToolsContext;
   /**
    * Optional AIO capture — mirrors each assistant SDK message into the
    * authenticated project as `$ai_generation`. No-op instance when
@@ -412,6 +415,16 @@ export function buildAgentEnv(
 // Re-export for backwards compatibility — canonical source is skill-install.ts
 export { isSkillInstallCommand } from '@shared/skill-install';
 
+/** A debug run's diagnostic line, as info log progress; a run without `debug` emits nothing. */
+function debugLine(
+  emit: ProgressEmitter,
+  options: Pick<WizardRunOptions, 'debug'>,
+  ...args: unknown[]
+): void {
+  if (!options.debug) return;
+  emit({ kind: 'log', level: 'info', message: formatLogLine(...args) });
+}
+
 /**
  * Permission hook that allows only safe commands. Bash commands are gated by
  * the exact per-manager fence in bash-fence.ts (install/build/typecheck/lint
@@ -429,6 +442,8 @@ export function wizardCanUseTool(
   context: {
     wizardAskPending?: boolean;
     disallowedTools?: readonly string[];
+    /** A debug run's line for each Bash decision. */
+    onDebug?: (line: string) => void;
   } = {},
 ):
   | { behavior: 'allow'; updatedInput: Record<string, unknown> }
@@ -503,12 +518,14 @@ export function wizardCanUseTool(
   const decision = evaluateBashCommand(command);
   if (decision.allowed) {
     logToFile(`Allowing bash command: ${command}`);
-    debug(`Allowing bash command: ${command}`);
+    context.onDebug?.(`Allowing bash command: ${command}`);
     return { behavior: 'allow', updatedInput: input };
   }
 
   logToFile(`Denying bash command (${decision.analyticsReason}): ${command}`);
-  debug(`Denying bash command (${decision.analyticsReason}): ${command}`);
+  context.onDebug?.(
+    `Denying bash command (${decision.analyticsReason}): ${command}`,
+  );
   analytics.wizardCapture('bash denied', {
     reason: decision.analyticsReason,
     command,
@@ -636,7 +653,6 @@ export async function initializeAgent(
       askBridge: config.askBridge,
       askMaxQuestions: config.askMaxQuestions,
       orchestrator: config.orchestrator,
-      triageProvider,
       emit: config.emit,
     });
     mcpServers['wizard-tools'] = wizardToolsServer;
@@ -674,14 +690,12 @@ export async function initializeAgent(
       apiKeyPresent: !!config.posthogApiKey,
     });
 
-    if (options.debug) {
-      debug('Agent config:', {
-        workingDirectory: agentRunConfig.workingDirectory,
-        posthogMcpUrl: config.posthogMcpUrl,
-        gatewayUrl,
-        apiKeyPresent: !!config.posthogApiKey,
-      });
-    }
+    debugLine(emit, options, 'Agent config:', {
+      workingDirectory: agentRunConfig.workingDirectory,
+      posthogMcpUrl: config.posthogMcpUrl,
+      gatewayUrl,
+      apiKeyPresent: !!config.posthogApiKey,
+    });
 
     // Pre-warm the warlock scanner (WASM init + rule compile) off the hook path
     // so the first tool-call scan doesn't pay cold-start under a hook timeout.
@@ -699,7 +713,7 @@ export async function initializeAgent(
       message: `Failed to initialize agent: ${(error as Error).message}`,
     });
     logToFile('Agent initialization error:', error);
-    debug('Agent initialization error:', error);
+    debugLine(emit, options, 'Agent initialization error:', error);
     throw error;
   }
 }
@@ -1150,6 +1164,7 @@ export async function runAgent(
               {
                 wizardAskPending: agentConfig.getPendingQuestion?.() != null,
                 disallowedTools: agentConfig.disallowedTools,
+                onDebug: (line) => debugLine(emit, options, line),
               },
             );
             logToFile('canUseTool result:', result);
@@ -1171,9 +1186,7 @@ export async function runAgent(
           // Capture stderr from CLI subprocess for debugging
           stderr: (data: string) => {
             logToFile('CLI stderr:', data);
-            if (options.debug) {
-              debug('CLI stderr:', data);
-            }
+            debugLine(emit, options, 'CLI stderr:', data);
           },
           // Stop hook: collect remark, then allow stop
           hooks: {
@@ -1633,7 +1646,7 @@ export async function runAgent(
       message: `Error: ${(error as Error).message}`,
     });
     logToFile('Agent run failed:', error);
-    debug('Full error:', error);
+    debugLine(emit, options, 'Full error:', error);
     throw error;
   } finally {
     agentConfig.signal?.removeEventListener('abort', onExternalAbort);
@@ -2001,9 +2014,7 @@ function handleSDKMessage(
   };
   logToFile(`SDK Message: ${message.type}`, JSON.stringify(message, null, 2));
 
-  if (options.debug) {
-    debug(`SDK Message type: ${message.type}`);
-  }
+  debugLine(emit, options, `SDK Message type: ${message.type}`);
 
   switch (message.type) {
     case 'assistant': {
@@ -2186,9 +2197,7 @@ function handleSDKMessage(
 
     default:
       // Log other message types for debugging
-      if (options.debug) {
-        debug(`Unhandled message type: ${message.type}`);
-      }
+      debugLine(emit, options, `Unhandled message type: ${message.type}`);
       break;
   }
 }

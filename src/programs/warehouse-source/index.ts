@@ -1,20 +1,21 @@
-import type { ProgramConfig } from '@programs/program-step';
-import type { ProgramRun } from '@programs/program-run';
-import type { WizardSession } from '@lib/wizard-session';
-import { LONGER_ASK_TIMEOUT_MS } from '@agent';
-import { WAREHOUSE_SOURCE_PROGRAM } from './steps.js';
+import { detectWarehousePrerequisites } from './detect.js';
+import type { ProgramConfig } from '../program-step';
+import type { ProgramRun } from '../program-run';
+import type { ProgramSession } from '../program-session';
+import { LONGER_ASK_TIMEOUT_MS } from '@shared/ask-policy';
+import { WAREHOUSE_SOURCE_SCOPE_ADDITIONS } from '../oauth/program-scopes';
 import {
   WAREHOUSE_ABORT_CASES,
+  WAREHOUSE_DETECT_CODES,
   getDetectedWarehouseSources,
 } from './detect.js';
-import { getContentBlocks } from '../../tui/programs/warehouse-source/deck/index.js';
 
 /**
  * Inject the detected sources (and their creation mode) into the prompt so the
  * skill knows what to set up. The *how* — in-CLI creation vs deep-link, field
  * collection, validation — lives in the skill, not here.
  */
-function buildPrompt(session: WizardSession): string {
+function buildPrompt(session: ProgramSession): string {
   const sources = getDetectedWarehouseSources(session);
   if (sources.length === 0) {
     return 'Set up a data warehouse source for this project.';
@@ -41,16 +42,20 @@ function buildPrompt(session: WizardSession): string {
   ].join('\n');
 }
 
-export const warehouseSourceConfig: ProgramConfig = {
+export const config: ProgramConfig = {
   command: 'warehouse',
   description: 'Detect and connect Data Warehouse sources',
   id: 'warehouse-source',
   skillId: 'data-warehouse-source-setup',
-  steps: WAREHOUSE_SOURCE_PROGRAM,
-  getContentBlocks,
+  onReady: (ctx) =>
+    detectWarehousePrerequisites(ctx.session, ctx.setFrameworkContext),
+  detectErrorCodes: WAREHOUSE_DETECT_CODES,
+  oauthScopeAdditions: WAREHOUSE_SOURCE_SCOPE_ADDITIONS,
+  // No health-check screen in the TUI flow; the run skips the readiness check.
+  healthCheck: false,
   reportFile: 'posthog-warehouse-report.md',
   allowedTools: ['Agent'],
-  run: (session: WizardSession): Promise<ProgramRun> =>
+  run: (session: ProgramSession): Promise<ProgramRun> =>
     Promise.resolve({
       skillId: 'data-warehouse-source-setup',
       integrationLabel: 'data-warehouse-source-setup',
@@ -70,7 +75,6 @@ export const warehouseSourceConfig: ProgramConfig = {
   requires: ['posthog-integration'],
 };
 
-export { WAREHOUSE_SOURCE_PROGRAM } from './steps.js';
 export {
   detectWarehousePrerequisites,
   getDetectedWarehouseSources,

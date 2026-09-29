@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react';
 import { Box } from 'ink';
-import type { WizardStore } from '@ui/tui/store';
+import type { WizardStore } from '@tui/store';
 import {
   TabContainer,
   SplitView,
@@ -13,9 +13,9 @@ import { AuditAreaPane } from './AuditAreaPane.js';
 import { AUDIT_AREA_SLIDES } from './slides/index.js';
 import { EVENTS_AUDIT_AREA_SLIDES } from './slides/events-audit/index.js';
 import { PendingChecksList } from './PendingChecksList.js';
-import { AUDIT_REPORT_FILE, getAuditChecks } from '@programs/audit/types';
+import { AUDIT_REPORT_FILE, getAuditChecks } from '@programs/audit';
 import { getProgramConfig } from '@programs';
-import { WIZARD_LOG_FILE } from '@utils/paths';
+import { getLogFilePath } from '@utils/debug';
 
 interface AuditRunScreenProps {
   store: WizardStore;
@@ -73,7 +73,7 @@ export const AuditRunScreen = ({ store }: AuditRunScreenProps) => {
     {
       id: 'logs',
       label: 'Tail logs',
-      component: <LogViewer filePath={WIZARD_LOG_FILE} />,
+      component: <LogViewer filePath={getLogFilePath()} />,
     },
     { id: 'hn', label: 'HN', component: <HNViewer /> },
   ];

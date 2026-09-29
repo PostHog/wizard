@@ -8,46 +8,37 @@
  *     logic) instead of the integration intro.
  */
 
-import type { ProgramStep } from '@programs/program-step';
-import type { WizardSession } from '@lib/wizard-session';
-import { RunPhase } from '@lib/wizard-session';
+import type { FlowStep } from '@tui/flow';
+import { RunPhase } from '@shared/run-state';
 import { HEALTH_CHECK_STEP } from '@tui/programs/shared/health-check-step';
+import { needsFrameworkSetup } from '@programs';
 
-function needsSetup(session: WizardSession): boolean {
-  const config = session.frameworkConfig;
-  if (!config?.metadata.setup?.questions) return false;
-
-  return config.metadata.setup.questions.some(
-    (q: { key: string }) => !(q.key in session.frameworkContext),
-  );
-}
-
-export const EVENTS_AUDIT_PROGRAM: ProgramStep[] = [
+export const EVENTS_AUDIT_FLOW: FlowStep[] = [
   {
     id: 'intro',
     label: 'Welcome',
     screenId: 'audit-intro',
-    gate: (session) => session.setupConfirmed,
+    gate: (tui) => tui.setupConfirmed,
   },
   HEALTH_CHECK_STEP,
   {
     id: 'setup',
     label: 'Setup',
     screenId: 'setup',
-    show: needsSetup,
-    isComplete: (session) => !needsSetup(session),
+    show: ({ session }) => needsFrameworkSetup(session),
+    isComplete: ({ session }) => !needsFrameworkSetup(session),
   },
   {
     id: 'auth',
     label: 'Authentication',
     screenId: 'auth',
-    isComplete: (session) => session.credentials !== null,
+    isComplete: ({ session }) => session.credentials !== null,
   },
   {
     id: 'run',
     label: 'Events audit',
     screenId: 'audit-run',
-    isComplete: (session) =>
+    isComplete: ({ session }) =>
       session.runPhase === RunPhase.Completed ||
       session.runPhase === RunPhase.Error,
   },
@@ -55,13 +46,13 @@ export const EVENTS_AUDIT_PROGRAM: ProgramStep[] = [
     id: 'mcp',
     label: 'MCP servers',
     screenId: 'mcp',
-    isComplete: (session) => session.mcpComplete,
+    isComplete: (tui) => tui.mcpComplete,
   },
   {
     id: 'outro',
     label: 'Done',
     screenId: 'audit-outro',
-    isComplete: (session) => session.outroDismissed,
+    isComplete: (tui) => tui.outroDismissed,
   },
   {
     id: 'keep-skills',

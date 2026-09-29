@@ -10,7 +10,7 @@
 
 import { Box, Text, measureElement, type DOMElement } from 'ink';
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import type { WizardStore } from '@ui/tui/store';
+import type { WizardStore } from '@tui/store';
 import { useTick } from '@tui/hooks/useTick';
 import { AgentPhase } from '@shared/agent-phase';
 import { MATRIX_FADE } from './visualizer/panel';
@@ -34,8 +34,8 @@ const PHASE_LABELS: Record<AgentPhase, string> = {
   [AgentPhase.Dashboards]: 'Building Dashboards',
 };
 
-/** Reads the active phase from the store. The agent loop pushes it in via
- *  `getUI().setStage(...)` whenever a new tool fires. */
+/** Reads the active phase from the store. The agent's `stage` progress
+ *  events push it in through `store.setCurrentStage` whenever a new tool fires. */
 export function useAgentPhase(store: WizardStore): AgentPhase {
   useSyncExternalStore(
     (cb) => store.subscribe(cb),

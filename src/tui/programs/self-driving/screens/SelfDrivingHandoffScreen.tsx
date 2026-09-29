@@ -9,11 +9,12 @@
 import { Box, Text } from 'ink';
 import { useSyncExternalStore } from 'react';
 
-import type { WizardStore } from '@ui/tui/store';
+import type { WizardStore } from '@tui/store';
+import { confirmSelfDrivingHandoff } from '../store-actions.js';
 import { PickerMenu } from '@tui/primitives/index';
 import { Colors } from '@tui/styles';
-import { SETUP_REPORT_FILE } from '@programs/posthog-integration/index';
-import { SELF_DRIVING_INTEGRATE_PATH_KEY } from '@programs/self-driving/detect';
+import { SETUP_REPORT_FILE } from '@shared/constants';
+import { SELF_DRIVING_INTEGRATE_PATH_KEY } from '@programs/self-driving';
 
 interface SelfDrivingHandoffScreenProps {
   store: WizardStore;
@@ -58,7 +59,7 @@ export const SelfDrivingHandoffScreen = ({
       <Box marginTop={1}>
         <PickerMenu
           options={[{ label: 'Set up Self-driving [Enter]', value: 'go' }]}
-          onSelect={() => store.confirmSelfDrivingHandoff()}
+          onSelect={() => confirmSelfDrivingHandoff(store)}
         />
       </Box>
 

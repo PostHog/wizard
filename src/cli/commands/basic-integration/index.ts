@@ -5,7 +5,7 @@ import {
   isHeadless,
   regionOption,
 } from '@shared/headless-mode';
-import { provisionCommand } from '../../../commands/provision';
+import { provisionCommand } from '../provision';
 import type { Command } from '../command';
 
 export const basicIntegrationCommand: Command = {
@@ -54,7 +54,7 @@ export const basicIntegrationCommand: Command = {
     void (async () => {
       // ── The CI / headless division ───────────────────────────────────
       // --ci (dev/test only) and the experimental headless flag (the
-      // published-build, non-interactive path; see @lib/headless-mode) both
+      // published-build, non-interactive path; see @shared/headless-mode) both
       // request a non-interactive install, but route to dedicated entry points
       // — runHeadlessInstall vs runCIInstall (and below them runWizardHeadless
       // vs runWizardCI). Both share one pipeline today but are separate
@@ -73,9 +73,7 @@ export const basicIntegrationCommand: Command = {
         return failNonInteractive();
       }
       if (argv.playground) {
-        const { runPlayground } = await import(
-          '../../../commands/basic-integration/playground'
-        );
+        const { runPlayground } = await import('./playground');
         return runPlayground();
       }
       const { runInteractive } = await import('./interactive');

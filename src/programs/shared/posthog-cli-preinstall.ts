@@ -8,7 +8,7 @@
  * needs the CLI.
  */
 
-import type { RunnerContext } from '@programs/runner-context';
+import type { RunnerContext } from '../runner-context';
 import { installOrUpdatePostHogCli } from '@shared/install-cli-steering';
 import { analytics } from '@utils/analytics';
 
@@ -17,7 +17,7 @@ let attempted = false;
 export function preinstallPostHogCliOnce(
   failureEvent: string,
   properties: Record<string, string>,
-  log: RunnerContext['log'],
+  log: Pick<RunnerContext['log'], 'warn'>,
 ): void {
   if (attempted) return;
   attempted = true;

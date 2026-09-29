@@ -1,6 +1,6 @@
 import { Box, Text } from 'ink';
 import { useEffect, useState, useSyncExternalStore } from 'react';
-import type { WizardStore } from '@ui/tui/store';
+import type { WizardStore } from '@tui/store';
 import { ConfirmationInput, ModalOverlay } from '@tui/primitives/index';
 import { Icons } from '@tui/styles';
 import { analytics } from '@utils/analytics';
@@ -18,7 +18,7 @@ export const SettingsOverrideScreen = ({
   );
 
   const [feedback, setFeedback] = useState<string | null>(null);
-  const conflicts = store.session.settingsConflicts?.filter((c) => c.writable);
+  const conflicts = store.settingsConflicts?.filter((c) => c.writable);
 
   const hasConflicts = Boolean(conflicts && conflicts.length > 0);
   useEffect(() => {
@@ -51,7 +51,7 @@ export const SettingsOverrideScreen = ({
               setFeedback('Could not back up the settings file.');
             }
           }}
-          onCancel={() => process.exit(1)}
+          onCancel={() => store.requestExit(1)}
         />
       }
     >

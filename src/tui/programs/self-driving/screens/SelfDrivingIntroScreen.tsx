@@ -11,15 +11,15 @@
 
 import { Box, Text } from 'ink';
 import { useState, useSyncExternalStore } from 'react';
-import type { WizardStore } from '@ui/tui/store';
+import type { WizardStore } from '@tui/store';
 import { PickerMenu } from '@tui/primitives/index';
-import { IntroScreenLayout } from '../../../screens/IntroScreenLayout.js';
+import { IntroScreenLayout } from '@tui/screens/IntroScreenLayout';
 import {
   NO_DEFAULT_LIMIT,
   PRICING_LONG,
   PRICING_SHORT,
-} from '@programs/self-driving/pricing.js';
-import type { SelfDrivingDetectError } from '@programs/self-driving/index';
+} from '@programs/self-driving';
+import type { SelfDrivingDetectError } from '@programs/self-driving';
 
 interface SelfDrivingIntroScreenProps {
   store: WizardStore;
@@ -59,7 +59,7 @@ export const SelfDrivingIntroScreen = ({
         <Text>
           The{' '}
           <Text italic color="cyan">
-            {session.programLabel}
+            {store.programLabel}
           </Text>{' '}
           program turns on PostHog Self-driving for this project:
         </Text>
@@ -116,7 +116,7 @@ export const SelfDrivingIntroScreen = ({
 
       <PickerMenu
         options={[{ label: 'Exit', value: 'exit' }]}
-        onSelect={() => process.exit(1)}
+        onSelect={() => store.requestExit(1)}
       />
     </>
   ) : undefined;
@@ -137,12 +137,12 @@ export const SelfDrivingIntroScreen = ({
       body={body}
       showDetection={!showingMoreInfo}
       errorView={errorView}
-      programLabel={session.programLabel}
+      programLabel={store.programLabel}
       skillId={session.skillId}
       menuOptions={menuOptions}
       onSelect={(value) => {
         if (value === 'cancel') {
-          process.exit(0);
+          store.requestExit(0);
         } else if (value === 'more-info') {
           setShowingMoreInfo(true);
         } else if (value === 'back') {

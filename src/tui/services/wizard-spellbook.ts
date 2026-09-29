@@ -1,9 +1,8 @@
 import fs from 'fs/promises';
 import path from 'path';
 import { getSkillsBaseUrl, POSTHOG_DOCS_URL } from '@shared/constants';
-import type { ProgramConfig } from '@programs/types';
-import type { WizardSession } from '../../lib/wizard-session';
-import { downloadSkill } from '@agent';
+import type { ProgramConfig, WizardSession } from '@programs/types';
+import { downloadSkill } from '@shared/skill-install';
 import {
   fetchSkillMenu,
   type SkillEntry,
@@ -119,7 +118,6 @@ export async function writeWizardSpellbook(
   for (const skill of menu ? selectSkills(menu, session, program) : []) {
     const result = await downloadSkill(skill, directory, {
       skillsRoot: 'skills',
-      triage: undefined,
     });
     if (result.success) {
       installed.push(skill);

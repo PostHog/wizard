@@ -2,21 +2,18 @@
  * LearnCard — Generic render shell for an animated content deck.
  *
  * Callers pass the script via `blocks`. The script lives under
- * `src/ui/tui/decks/<name>/`. The shell handles
+ * `src/tui/programs/<name>/deck/`. The shell handles
  * dimension tracking, status-bar height math, and the `display="none"`
  * clamp on narrow terminals.
  */
 
 import { Box, Text } from 'ink';
 import { Colors } from '@tui/styles';
-import type { WizardStore } from '@ui/tui/store';
+import type { WizardStore } from '@tui/store';
 import { ContentSequencer, TextRevealMode } from '@tui/primitives/index';
 import type { ContentBlock } from '@tui/primitives/index';
 import { useStdoutDimensions } from '@tui/hooks/useStdoutDimensions';
-import {
-  COLLAPSED_COUNT,
-  EXPANDED_COUNT,
-} from '@tui/primitives/TabContainer';
+import { COLLAPSED_COUNT, EXPANDED_COUNT } from '@tui/primitives/TabContainer';
 
 /** Fixed chrome: ScreenContainer (3) + TabContainer tab bar (2) */
 const FIXED_CHROME = 5;

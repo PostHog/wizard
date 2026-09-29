@@ -1,11 +1,11 @@
 import type { Arguments } from 'yargs';
 
-import { auditConfig } from '@programs/audit/index';
-import { AUDIT_CHECKS_FILE } from '@programs/audit/types';
+import { AUDIT_CHECKS_FILE } from '@programs/audit';
 import { WIZARD_TOOL_NAMES } from '@agent';
-import { agentSkillConfig } from '@programs/program-registry';
-import { webAnalyticsDoctorConfig } from '@programs/web-analytics-doctor/index';
-import type { ProgramConfig } from '@programs/program-step';
+import { getProgramConfig, Program } from '@programs';
+import { config as agentSkill } from '@programs/agent-skill';
+import { config as webAnalyticsDoctor } from '@programs/web-analytics-doctor';
+import type { ProgramConfig } from '@programs/types';
 import { getSkillsBaseUrl } from '@shared/constants';
 import { fetchSkillMenu, type CliEntry } from '@shared/skill-menu';
 import { analytics } from '@utils/analytics';
@@ -50,30 +50,30 @@ async function exitDispatchError(
 
 /** Wizard-native subcommands keyed by family. */
 const NATIVE_HANDLERS: Record<string, Record<string, ProgramConfig>> = {
-  audit: { 'web-analytics': webAnalyticsDoctorConfig },
+  audit: { 'web-analytics': webAnalyticsDoctor },
 };
 
 /**
  * Resolve a fetched CliEntry to the ProgramConfig that actually runs it.
  * Most entries run via the generic agent-skill program with the entry's
  * `skillId` injected. The comprehensive `audit all` is the one exception —
- * skillId 'audit' triggers the specialized auditConfig (custom hooks,
+ * skillId 'audit' triggers the specialized `audit` program (custom hooks,
  * content blocks, screens).
  *
  * This is the one place that knows a subcommand belongs to `audit`, so the
  * generic skill program picks up the ledger here rather than for every skill.
  */
 function configForCliEntry(entry: CliEntry, family: string): ProgramConfig {
-  if (entry.skillId === 'audit') return auditConfig;
+  if (entry.skillId === 'audit') return getProgramConfig(Program.Audit);
   return {
-    ...agentSkillConfig,
+    ...agentSkill,
     skillId: entry.skillId,
     ...(family === 'audit'
       ? {
           auditLedgerFile: AUDIT_CHECKS_FILE,
           streamWorkflowId: family,
           allowedTools: [
-            ...(agentSkillConfig.allowedTools ?? []),
+            ...(agentSkill.allowedTools ?? []),
             WIZARD_TOOL_NAMES.auditSeedChecks,
             WIZARD_TOOL_NAMES.auditAddChecks,
             WIZARD_TOOL_NAMES.auditResolveChecks,
@@ -184,7 +184,7 @@ export function buildFamilyPickerChildren(
 
 /**
  * The children the family picker shows **today**: only the leaf marked
- * `default` (e.g. `audit events`). Every other subcommand stays runnable
+ * `default` (today `audit all`). Every other subcommand stays runnable
  * directly (`wizard audit <name>`) — they just aren't listed in the picker yet.
  * Falls back to all children when nothing is marked `default`.
  *

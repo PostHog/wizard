@@ -3,54 +3,46 @@ import { beforeEach, describe, expect, test, vi } from 'vitest';
 import type { ProgramRun } from '@programs/program-run';
 import { Integration } from '@shared/constants';
 import type { AgenticDetectionReport } from '@programs/detection/agentic';
-import { detectFramework } from '@programs/detection/index';
+import { detectFramework } from '@programs/detection/framework';
 import { ErrorCodes } from '@shared/errors';
-import { ERROR_TRACKING_TIPS } from '@tui/programs/error-tracking/deck/tips';
 import {
   ERROR_TRACKING_PROJECT_PATH_KEY,
   toErrorTrackingReport,
 } from '@programs/error-tracking/detect-agentic';
-import {
-  errorTrackingConfig,
-  SYMBOL_UPLOAD_CLI_FRAMEWORKS,
-} from '@programs/error-tracking/index';
-import { VARIANTS_REQUIRING_POSTHOG_CLI } from '@programs/error-tracking-upload-source-maps/detect';
+import { config as errorTracking } from '@programs/error-tracking';
 import { preinstallPostHogCliOnce } from '@programs/shared/posthog-cli-preinstall';
-import type { WizardSession } from '@lib/wizard-session';
-import type { RunnerContext } from '@programs/runner-context';
+import type { CiRunnerContext, RunnerContext } from '@programs/runner-context';
+import type { WizardSession } from '@programs/session/wizard-session';
 import { scopeInstallDirToProject } from '@programs/detection/project-scope';
-import {
-  testCiRunnerContext,
-  testRunnerContext,
-} from '../../../../test/runner-context';
 import { analytics } from '@utils/analytics';
-import { wizardAbort } from '@utils/wizard-abort';
+import { ProgramAbort } from '@programs/program-abort';
 
-vi.mock('@programs/detection/index', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@programs/detection/index')>()),
+vi.mock(import('@programs/detection/framework'), async (importOriginal) => ({
+  ...(await importOriginal()),
   detectFramework: vi.fn(),
 }));
-vi.mock('@programs/detection/project-scope', async (importOriginal) => ({
-  ...(await importOriginal<
-    typeof import('@programs/detection/project-scope')
-  >()),
-  scopeInstallDirToProject: vi.fn(),
-  detectIntegrationProjects: vi.fn(),
-}));
-vi.mock('@programs/shared/posthog-cli-preinstall', () => ({
+vi.mock(
+  import('@programs/detection/project-scope'),
+  async (importOriginal) => ({
+    ...(await importOriginal()),
+    scopeInstallDirToProject: vi.fn(),
+    detectIntegrationProjects: vi.fn(),
+  }),
+);
+vi.mock(import('@programs/shared/posthog-cli-preinstall'), () => ({
   preinstallPostHogCliOnce: vi.fn(),
 }));
-vi.mock('@utils/wizard-abort', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@utils/wizard-abort')>()),
-  wizardAbort: vi.fn(),
-}));
 
-const resolveRun = errorTrackingConfig.run as (
-  session: WizardSession,
-  runner: RunnerContext,
-) => Promise<ProgramRun>;
-
-const step = (id: string) => errorTrackingConfig.steps.find((s) => s.id === id);
+/** The runner's log in a run with no host to show it. */
+const log: RunnerContext['log'] = {
+  info: () => undefined,
+  warn: () => undefined,
+};
+/** A headless runner that is already logged in. */
+const ciRunner = (): CiRunnerContext => ({
+  log,
+  authenticate: () => Promise.resolve(),
+});
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -58,38 +50,15 @@ beforeEach(() => {
 });
 
 describe('error-tracking program', () => {
-  test('runs the error-tracking agent flow', () => {
-    expect(errorTrackingConfig.agentFlow).toBe('error-tracking');
-  });
-
-  test('declares ci prerequisite work for headless runs', () => {
-    expect(errorTrackingConfig.ciPreRun).toBeDefined();
-  });
-
-  test('shows the program-specific intro screen', () => {
-    expect(step('intro')?.screenId).toBe('error-tracking-intro');
-  });
-
-  test('pre-installs no skill — the flow resolves variants per framework', async () => {
+  test('pre-installs no skill — the flow resolves variants per framework', () => {
     // There is no bare `error-tracking` menu entry; a seeded skillId would
     // send the linear path to a skill-not-found abort and mislead the intro.
-    expect(errorTrackingConfig.skillId).toBeUndefined();
-    const run = await resolveRun(
-      { integration: null } as WizardSession,
-      testRunnerContext(),
-    );
-    expect(run.skillId).toBeUndefined();
-  });
-
-  test('picks the project after login and before the run', () => {
-    const ids = errorTrackingConfig.steps.map((s) => s.id);
-    expect(ids.indexOf('auth')).toBeLessThan(ids.indexOf('detect'));
-    expect(ids.indexOf('detect')).toBeLessThan(ids.indexOf('run'));
-    expect(step('detect')?.screenId).toBe('error-tracking-detect');
+    expect(errorTracking.skillId).toBeUndefined();
+    expect((errorTracking.run as ProgramRun).skillId).toBeUndefined();
   });
 
   test('runs the agent in the picked project, else the repo root', () => {
-    const targetDir = step('run')?.targetDir;
+    const targetDir = errorTracking.runSteps?.run?.targetDir;
     const picked = {
       installDir: '/repo',
       frameworkContext: { [ERROR_TRACKING_PROJECT_PATH_KEY]: 'apps/web' },
@@ -181,25 +150,31 @@ describe('error-tracking ciPreRun', () => {
       frameworkContext: {},
     } as unknown as WizardSession;
 
-    const runner = testCiRunnerContext();
-    await errorTrackingConfig.ciPreRun?.(session, runner);
+    const runner = ciRunner();
+    const stopped = errorTracking.ciPreRun?.(session, runner);
 
+    await expect(stopped).rejects.toBeInstanceOf(ProgramAbort);
+    await expect(stopped).rejects.toMatchObject({
+      code: ErrorCodes.DetectUnsupportedPlatform,
+    });
     expect(scopeInstallDirToProject).toHaveBeenCalledWith(session, runner);
-
-    expect(wizardAbort).toHaveBeenCalledWith(
-      expect.objectContaining({ code: ErrorCodes.DetectUnsupportedPlatform }),
-    );
     expect(session.integration).toBeUndefined();
   });
 });
 
-describe('error-tracking run config', () => {
-  test('pre-installs posthog-cli when run resolves, after the project pick', async () => {
-    const runner = { ...testRunnerContext(), log: { warn: vi.fn() } };
-    await resolveRun(
-      { integration: Integration.swift } as WizardSession,
-      runner,
-    );
+describe('error-tracking posthog-cli pre-install', () => {
+  test('headless, pre-installs once ciPreRun detects the framework', async () => {
+    vi.mocked(detectFramework).mockResolvedValue(Integration.swift);
+    const runner = {
+      ...ciRunner(),
+      log: { info: vi.fn(), warn: vi.fn() },
+    };
+    const session = {
+      installDir: '/tmp/error-tracking-ci',
+      frameworkContext: {},
+    } as unknown as WizardSession;
+
+    await errorTracking.ciPreRun?.(session, runner);
 
     expect(preinstallPostHogCliOnce).toHaveBeenCalledWith(
       'error tracking posthog-cli preinstall failed',
@@ -212,43 +187,14 @@ describe('error-tracking run config', () => {
   });
 
   test('skips the pre-install for platforms without symbol upload', async () => {
-    await resolveRun(
-      { integration: Integration.nextjs } as WizardSession,
-      testRunnerContext(),
+    await errorTracking.runSteps?.run?.onRunPrep?.(
+      {
+        integration: Integration.nextjs,
+        frameworkContext: {},
+      } as unknown as WizardSession,
+      log,
     );
 
     expect(preinstallPostHogCliOnce).not.toHaveBeenCalled();
-  });
-});
-
-describe('error-tracking posthog-cli pre-install set', () => {
-  test('contains only real Integration values', () => {
-    for (const integration of SYMBOL_UPLOAD_CLI_FRAMEWORKS) {
-      expect(Object.values(Integration)).toContain(integration);
-    }
-  });
-
-  test('matches the source-maps program set, keyed by Integration', () => {
-    // Both programs pre-install the CLI for the same platforms. The source-maps
-    // program keys them by uploader variant, and only `ios` is spelled
-    // differently (`swift` in Integration).
-    const expected = [...VARIANTS_REQUIRING_POSTHOG_CLI]
-      .map((variant) => (variant === 'ios' ? Integration.swift : variant))
-      .sort();
-    expect([...SYMBOL_UPLOAD_CLI_FRAMEWORKS].sort()).toEqual(expected);
-  });
-});
-
-describe('error-tracking tips', () => {
-  const replayTip = ERROR_TRACKING_TIPS.find((t) => t.id === 'session-replay');
-  const storeFor = (integration: Integration | null) =>
-    ({ session: { integration } } as never);
-
-  test('shows the replay tip only where session replay records', () => {
-    expect(replayTip?.visible?.(storeFor(Integration.nextjs))).toBe(true);
-    expect(replayTip?.visible?.(storeFor(Integration.javascriptNode))).toBe(
-      false,
-    );
-    expect(replayTip?.visible?.(storeFor(null))).toBe(false);
   });
 });

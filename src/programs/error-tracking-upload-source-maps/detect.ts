@@ -16,9 +16,9 @@ import {
   MAX_WALK_FILES,
   safeReadFile,
 } from '@utils/bounded-fs';
-import type { WizardSession } from '@lib/wizard-session';
+import type { ProgramSession } from '../program-session';
 import type { AbortCase } from '@agent/types';
-import { ErrorCodes } from '@shared/errors';
+import { ErrorCodes, type ErrorCode } from '@shared/errors';
 
 /**
  * Skill variants published under the `error-tracking-upload-source-maps`
@@ -148,6 +148,17 @@ export type SourceMapsDetectError =
   | { kind: 'no-project-files' }
   | { kind: 'unsupported-platform'; detected: string }
   | { kind: 'no-posthog-sdk'; platform: SkillVariant };
+
+/** The error code for each detect error `kind`, read by `detectErrorCode`. */
+export const SOURCE_MAPS_DETECT_CODES: Record<
+  SourceMapsDetectError['kind'],
+  ErrorCode
+> = {
+  'bad-directory': ErrorCodes.DetectBadDirectory,
+  'no-project-files': ErrorCodes.DetectNoProjectFiles,
+  'unsupported-platform': ErrorCodes.DetectUnsupportedPlatform,
+  'no-posthog-sdk': ErrorCodes.DetectNoPosthogSdk,
+};
 
 /** `[ABORT] <reason>` cases the source maps skill can emit. */
 export const SOURCE_MAPS_ABORT_CASES: AbortCase[] = [
@@ -357,7 +368,7 @@ export const SOURCE_MAPS_CONTEXT_KEYS = {
  * only picks which variant the prompt should ask the agent to load.
  */
 export function detectSourceMapsPrerequisites(
-  session: WizardSession,
+  session: Pick<ProgramSession, 'installDir'>,
   setFrameworkContext: (key: string, value: unknown) => void,
 ): void {
   const fail = (error: SourceMapsDetectError) =>

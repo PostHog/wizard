@@ -2,18 +2,18 @@ import fs from 'fs/promises';
 import os from 'os';
 import path from 'path';
 import { Integration } from '@shared/constants';
-import type { ProgramConfig } from '../../../programs/program-step';
-import { buildSession } from '../../../lib/wizard-session';
+import type { ProgramConfig } from '@programs/types';
+import { buildSession } from '@programs';
 import { writeWizardSpellbook } from '../wizard-spellbook';
-import { downloadSkill } from '@agent/tools/tools';
+import { downloadSkill } from '@shared/skill-install';
 import { fetchSkillMenu } from '@shared/skill-menu';
 
-vi.mock('@agent/tools/tools', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agent/tools/tools')>()),
+vi.mock(import('@shared/skill-install'), async (importOriginal) => ({
+  ...(await importOriginal()),
   downloadSkill: vi.fn(),
 }));
-vi.mock('@shared/skill-menu', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@shared/skill-menu')>()),
+vi.mock(import('@shared/skill-menu'), async (importOriginal) => ({
+  ...(await importOriginal()),
   fetchSkillMenu: vi.fn(),
 }));
 
@@ -21,7 +21,6 @@ const program: ProgramConfig = {
   id: 'example-setup',
   description: 'Set up the example integration.',
   agentFlow: 'example-flow',
-  steps: [],
 };
 
 const skill = {

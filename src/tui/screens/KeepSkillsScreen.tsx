@@ -14,7 +14,7 @@ import { readdir, rm, access } from 'node:fs/promises';
 import { join } from 'node:path';
 
 const WIZARD_MARKER = '.posthog-wizard';
-import type { WizardStore } from '@ui/tui/store';
+import type { WizardStore } from '@tui/store';
 import { ConfirmationInput } from '@tui/primitives/index';
 import { Colors } from '@tui/styles';
 import { CONTEXT_MILL_URL } from '@shared/constants';
@@ -77,9 +77,9 @@ export const KeepSkillsScreen = ({ store }: KeepSkillsScreenProps) => {
     })();
   }, []); // eslint-disable-line
 
-  // After a mint failure run-wizard owns the exit (status 1, analytics).
+  // After a mint failure the host owns the end (status 1, analytics).
   const exit = () => {
-    if (!store.session.mintHandoff) process.exit(0);
+    if (!store.mintHandoff) store.requestExit(0);
   };
 
   const handleKeep = () => {

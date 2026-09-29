@@ -4,7 +4,7 @@ import * as path from 'path';
 import { ErrorCodes } from '@shared/errors';
 import {
   QueueStore,
-  TaskStatus,
+  QueueTaskStatus,
   type QueuedTask,
   type TaskHandoff,
 } from '@agent/runner/sequence/orchestrator/queue';
@@ -14,8 +14,8 @@ import {
   type RunTask,
 } from '@agent/runner/sequence/orchestrator/executor';
 
-vi.mock('@utils/analytics', () => ({
-  analytics: { captureException: vi.fn(), wizardCapture: vi.fn() },
+vi.mock(import('@utils/analytics'), () => ({
+  analytics: { captureException: vi.fn(), wizardCapture: vi.fn() } as never,
 }));
 import { analytics } from '@utils/analytics';
 
@@ -70,7 +70,7 @@ describe('drainQueue', () => {
     expect(started).toEqual(['fatal', 'sibling']);
     release();
     expect(await result).toBe(fatal);
-    expect(q.get(sibling.id)?.status).toBe(TaskStatus.Done);
+    expect(q.get(sibling.id)?.status).toBe(QueueTaskStatus.Done);
     expect(started).toEqual(['fatal', 'sibling']);
   });
 
@@ -132,7 +132,7 @@ describe('drainQueue', () => {
     expect(controller.signal.aborted).toBe(true);
     expect(siblingSettled).toBe(true);
     expect(started).toEqual(['fatal', 'asking']);
-    expect(q.get(queued.id)?.status).toBe(TaskStatus.Pending);
+    expect(q.get(queued.id)?.status).toBe(QueueTaskStatus.Pending);
   });
 
   it('runs a single task to done and drains', async () => {
@@ -274,7 +274,7 @@ describe('drainQueue — optional task failure', () => {
         q.fail(task.id, { type: 'boom', message: 'x' });
       } else {
         // The dependent starts only against a settled outcome.
-        expect(q.get(warehouse.id)?.status).toBe(TaskStatus.Failed);
+        expect(q.get(warehouse.id)?.status).toBe(QueueTaskStatus.Failed);
         expect(q.get(warehouse.id)?.attempts).toBe(
           q.get(warehouse.id)?.maxAttempts,
         );
@@ -287,17 +287,17 @@ describe('drainQueue — optional task failure', () => {
 
     // Both warehouse attempts ran before report started — waited, not skipped.
     expect(order).toEqual(['warehouse#1', 'warehouse#2', 'report#1']);
-    expect(q.get(warehouse.id)?.status).toBe(TaskStatus.Failed);
-    expect(q.get(report.id)?.status).toBe(TaskStatus.Done);
+    expect(q.get(warehouse.id)?.status).toBe(QueueTaskStatus.Failed);
+    expect(q.get(report.id)?.status).toBe(QueueTaskStatus.Done);
     // Every task reached a terminal state; none left pending or running.
     expect(
       q
         .list()
         .every(
           (t) =>
-            t.status === TaskStatus.Done ||
-            t.status === TaskStatus.Failed ||
-            t.status === TaskStatus.Skipped,
+            t.status === QueueTaskStatus.Done ||
+            t.status === QueueTaskStatus.Failed ||
+            t.status === QueueTaskStatus.Skipped,
         ),
     ).toBe(true);
   });
@@ -324,15 +324,15 @@ describe('drainQueue — optional task failure', () => {
     const drain = drainQueue(q, runTask);
     // Give install time to finish while warehouse hangs on its first attempt.
     await new Promise((r) => setTimeout(r, 10));
-    expect(q.get(install.id)?.status).toBe(TaskStatus.Done);
+    expect(q.get(install.id)?.status).toBe(QueueTaskStatus.Done);
     // The drain is still open and report has not started: waiting, not skipping.
-    expect(q.get(report.id)?.status).toBe(TaskStatus.Pending);
+    expect(q.get(report.id)?.status).toBe(QueueTaskStatus.Pending);
 
     releaseWarehouse();
     await drain;
 
-    expect(q.get(warehouse.id)?.status).toBe(TaskStatus.Failed);
-    expect(q.get(report.id)?.status).toBe(TaskStatus.Done);
+    expect(q.get(warehouse.id)?.status).toBe(QueueTaskStatus.Failed);
+    expect(q.get(report.id)?.status).toBe(QueueTaskStatus.Done);
   });
 
   it('an optional task that succeeds on retry feeds its dependent normally', async () => {
@@ -352,7 +352,7 @@ describe('drainQueue — optional task failure', () => {
     };
 
     await drainQueue(q, runTask);
-    expect(q.get(warehouse.id)?.status).toBe(TaskStatus.Done);
-    expect(q.get(report.id)?.status).toBe(TaskStatus.Done);
+    expect(q.get(warehouse.id)?.status).toBe(QueueTaskStatus.Done);
+    expect(q.get(report.id)?.status).toBe(QueueTaskStatus.Done);
   });
 });

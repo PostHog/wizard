@@ -18,6 +18,7 @@ import {
   PrivacyPanel,
   PRIVACY_PANEL_LABEL,
 } from '@tui/components/PrivacyPanel';
+import { flowOwner } from '@tui/flow-owner';
 
 export interface DetectionRow {
   label: string;
@@ -91,7 +92,7 @@ interface IntroScreenLayoutProps {
   /** Program label shown at the bottom */
   programLabel?: string | null;
 
-  /** Skill ID shown at the bottom  */
+  /** Skill ID shown at the bottom, when the program's TUI entry sets `introShowsSkill` */
   skillId?: string | null;
 
   /** Replaces the entire body (topContent + rows + children + menu) for fatal error views */
@@ -296,11 +297,13 @@ export const IntroScreenLayout = ({
               </DetectionLine>
             )}
 
-            {programLabel === 'agent-skill' && skillId && (
-              <DetectionLine label="Skill" width={labelWidth}>
-                {skillId}
-              </DetectionLine>
-            )}
+            {programLabel &&
+              skillId &&
+              flowOwner(programLabel).introShowsSkill && (
+                <DetectionLine label="Skill" width={labelWidth}>
+                  {skillId}
+                </DetectionLine>
+              )}
           </Box>
         )}
 

@@ -1,19 +1,20 @@
 /**
  * WizardAskBridge — host-side promise broker for the `wizard_ask` MCP tool.
  *
- * The `wizard_ask` tool needs to (a) read information from the wizard
- * session (the active skill id, used as the analytics `source`) and
- * (b) drive the TUI overlay. Wiring `wizard-tools.ts` directly to either
- * would couple our pure-data MCP server to the runtime UI layer.
+ * The `wizard_ask` tool needs to (a) know the run's skill id, used as the
+ * analytics `source`, and (b) put questions to whoever answers them. Wiring
+ * the tools directly to either would couple our pure-data MCP server to its
+ * host.
  *
- * The bridge is the seam: `wizard-tools.ts` depends on this interface,
- * and `agent-runner.ts` constructs an implementation that knows about
- * both the session and `getUI()`.
+ * The bridge is the seam: the wizard tools depend on this interface, and
+ * the runner builds an implementation over the caller's `AgentInteraction`
+ * (see `runner/shared/ask.ts`).
  */
 import { randomUUID } from 'crypto';
 
 import { analytics } from '@utils/analytics';
-import type { AskAnswers, AskQuestion, PendingQuestion } from '@agent/progress';
+import { DEFAULT_ASK_TIMEOUT_MS } from '@shared/ask-policy';
+import type { AskAnswers, AskQuestion, PendingQuestion } from './progress';
 
 export interface WizardAskRequest {
   questions: AskQuestion[];
@@ -88,17 +89,6 @@ export interface WizardAskBridgeOptions {
 
 /** Sentinel returned for unanswered fields on cancellation or timeout. */
 export const CANCELLED_SENTINEL = '__cancelled__';
-
-/** Default per-question timeout (5 minutes). */
-export const DEFAULT_ASK_TIMEOUT_MS = 5 * 60 * 1000;
-
-/**
- * The longer per-question timeout, for asks that send the user on an errand —
- * open a database console, mint a restricted API key. The default above is
- * sized for a question answerable from memory and expires long before an
- * errand is done.
- */
-export const LONGER_ASK_TIMEOUT_MS = 20 * 60 * 1000;
 
 function buildCancelledAnswers(questions: AskQuestion[]): AskAnswers {
   const out: AskAnswers = {};

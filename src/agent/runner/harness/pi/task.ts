@@ -28,14 +28,14 @@ import {
   allowsPostHogMcp,
   queueTools,
   renderToolInventory,
-} from '@agent/agent-prompt-loader';
-import { AgentErrorType } from '@agent/agent-interface';
-import { REMARK_INSTRUCTION } from '@agent/signals';
-import { AgentOutputSignals } from '@agent/output-signals';
-import { TaskStatus } from '../../sequence/orchestrator/queue';
+} from '../../../agent-prompt-loader';
+import { AgentErrorType } from '../../../agent-interface';
+import { REMARK_INSTRUCTION } from '../../../signals';
+import { AgentOutputSignals } from '../../../output-signals';
+import { QueueTaskStatus } from '../../sequence/orchestrator/queue';
 import type { OrchestratorToolsContext } from '../../sequence/orchestrator/queue-tools';
 import type { AgentResult, TaskRunInputs } from '../types';
-import { gatewayAuth, type GatewayAuth } from '@agent/gateway-session';
+import { gatewayAuth, type GatewayAuth } from '../../../gateway-session';
 import { currentAccessToken } from '@shared/oauth-session';
 import {
   buildGatewayProvider,
@@ -53,7 +53,8 @@ import {
   lastStatusLine,
   withMode,
 } from './index';
-import { createAioCapture } from '@agent/aio-capture';
+import { createAioCapture } from '../../../aio-capture';
+import type { PiTool } from './subagent';
 
 /** wizard tool vocabulary → the pi tool definitions it unlocks. */
 const CODING_TOOL_MAP: Record<string, readonly string[]> = {
@@ -160,9 +161,9 @@ function isSettled(ctx: OrchestratorToolsContext): boolean {
   const task = ctx.store.get(ctx.currentTaskId);
   return (
     !!task &&
-    (task.status === TaskStatus.Done ||
-      task.status === TaskStatus.Failed ||
-      task.status === TaskStatus.Skipped)
+    (task.status === QueueTaskStatus.Done ||
+      task.status === QueueTaskStatus.Failed ||
+      task.status === QueueTaskStatus.Skipped)
   );
 }
 
@@ -297,7 +298,7 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
       triageProvider: boot.triageProvider,
       getWizardAskPending: () => askState.pending,
     });
-    const { prewarmYaraScanner } = await import('@agent/yara-hooks');
+    const { prewarmYaraScanner } = await import('../../../yara-hooks');
     void prewarmYaraScanner();
 
     // PostHog MCP, for the tasks whose prompt requests it. Tasks that never
@@ -387,7 +388,6 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
     const wizardTools = createWizardPiTools({
       workingDirectory: dir,
       skillsBaseUrl: boot.skillsBaseUrl,
-      triageProvider: boot.triageProvider,
       emit,
       // Present only for a task allowed to ask; without it wizard_ask errors
       // instead of hanging on a prompt nobody will ever see.
@@ -403,7 +403,11 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
       orchestratorTools.has(t.name),
     );
 
-    const customTools = [...codingToolDefs, ...wizardTools, ...queueTools];
+    const customTools: PiTool[] = [
+      ...codingToolDefs,
+      ...wizardTools,
+      ...queueTools,
+    ];
     const { session: agentSession } = await createAgentSession({
       model,
       modelRegistry: registry,

@@ -1,12 +1,15 @@
-import type { ProgramConfig } from '@programs/program-step';
-import { createSkillProgram } from '../agent-skill/index.js';
-import { WEB_ANALYTICS_DOCTOR_PROGRAM } from './steps.js';
-import { WEB_ANALYTICS_ABORT_CASES } from './detect.js';
+import { detectWebAnalyticsPrerequisites } from './detect.js';
+import type { ProgramConfig } from '../program-step';
+import { createSkillProgram } from '../shared/skill-program.js';
+import {
+  WEB_ANALYTICS_ABORT_CASES,
+  WEB_ANALYTICS_DETECT_CODES,
+} from './detect.js';
 
 const REPORT_FILE = 'posthog-web-analytics-report.md';
 const DOCS_URL = 'https://posthog.com/docs/web-analytics';
 
-export const webAnalyticsDoctorConfig: ProgramConfig = {
+export const config: ProgramConfig = {
   ...createSkillProgram({
     skillId: 'web-analytics-doctor',
     command: 'web-analytics',
@@ -28,11 +31,12 @@ export const webAnalyticsDoctorConfig: ProgramConfig = {
     requires: ['posthog-integration'],
     abortCases: WEB_ANALYTICS_ABORT_CASES,
   }),
-  steps: WEB_ANALYTICS_DOCTOR_PROGRAM,
+  onReady: (ctx) =>
+    detectWebAnalyticsPrerequisites(ctx.session, ctx.setFrameworkContext),
   parentCommand: 'audit',
+  detectErrorCodes: WEB_ANALYTICS_DETECT_CODES,
 };
 
-export { WEB_ANALYTICS_DOCTOR_PROGRAM } from './steps.js';
 export {
   detectWebAnalyticsPrerequisites,
   WEB_ANALYTICS_ABORT_CASES,

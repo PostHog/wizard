@@ -3,16 +3,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { AgentProgress } from '@agent/progress';
 
-// The benchmark pipeline runs inside the agent, which has no UI. Reaching one
-// is the defect this file guards against.
-vi.mock('@ui', () => ({
-  getUI: () => {
-    throw new Error('agent code reached the UI');
-  },
-}));
-vi.mock('@utils/debug', () => ({
+vi.mock(import('@utils/debug'), () => ({
+  useLogFile: vi.fn(),
   logToFile: vi.fn(),
-  configureLogFile: vi.fn(),
   getLogFilePath: () => '/tmp/wizard.log',
 }));
 
@@ -33,8 +26,6 @@ describe('createBenchmarkPipeline', () => {
     const spinner = { start: vi.fn(), stop: vi.fn(), message: vi.fn() };
     const config = getDefaultConfig();
     config.output.benchmarkPath = join(dir, 'benchmark.json');
-    config.output.logPath = join(dir, 'wizard.log');
-    config.output.logEnabled = false;
 
     const pipeline = createBenchmarkPipeline(
       (event) => events.push(event),
@@ -75,8 +66,6 @@ describe('createBenchmarkPipeline', () => {
     const spinner = { start: vi.fn(), stop: vi.fn(), message: vi.fn() };
     const config = getDefaultConfig();
     config.output.benchmarkPath = join(dir, 'benchmark.json');
-    config.output.logPath = join(dir, 'wizard.log');
-    config.output.logEnabled = false;
     config.output.suppressWizardLogs = true;
 
     const pipeline = createBenchmarkPipeline(

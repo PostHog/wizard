@@ -13,8 +13,9 @@
  * function (start-tui.ts itself pulls in the whole render tree).
  */
 
-import { totalTokenCount, type WizardStore } from '../ui/tui/store.js';
-import { OutroKind } from '@lib/wizard-session';
+import { type WizardStore } from './store.js';
+import { totalTokenCount } from '@tui/token-usage';
+import { OutroKind } from '@shared/outro';
 import { isRunFailure, MINT_FAILURE_CONTACT } from '@tui/mint-failure';
 import { formatTokenCount, formatCostUsd } from '@shared/token-pricing';
 import { getLogFilePath } from '@utils/debug';
@@ -57,7 +58,7 @@ function tokenCostLine(store: WizardStore): string | null {
  * line so a terminal can triple-click-select it.
  */
 function mcpLoginBlock(store: WizardStore): string | null {
-  const commands = store.session.mcpLoginCommands;
+  const commands = store.mcpLoginCommands;
   if (!commands || commands.length === 0) return null;
   return (
     `${GREEN}${BOLD}\u2714 Authenticate to finish (opens your browser):${RESET_ATTRS}\n` +
@@ -67,12 +68,12 @@ function mcpLoginBlock(store: WizardStore): string | null {
 
 export function getExitLine(store: WizardStore): string {
   const outro = store.session.outroData;
-  const label = store.session.programLabel ?? 'Wizard';
+  const label = store.programLabel ?? 'Wizard';
   const costLine = tokenCostLine(store);
   const loginBlock = mcpLoginBlock(store);
 
   if (isRunFailure(store.session)) {
-    const spellbook = store.session.spellbook;
+    const spellbook = store.spellbook;
     return [
       'The wizard is unavailable. Setup has not been completed.',
       spellbook &&

@@ -1,4 +1,4 @@
-import { NO_DEFAULT_LIMIT, PRICING_LONG } from '../../../../programs/self-driving/pricing.js';
+import { NO_DEFAULT_LIMIT, PRICING_LONG } from '@programs/self-driving';
 /**
  * Self-driving learn-deck — the narrative script played while the agent
  * sets up Self-driving. Teaches the vocabulary ladder (signal source →
@@ -13,7 +13,7 @@ import { NO_DEFAULT_LIMIT, PRICING_LONG } from '../../../../programs/self-drivin
 
 import { Text } from 'ink';
 import { Colors } from '@tui/styles';
-import type { WizardStore } from '@ui/tui/store';
+import type { WizardStore } from '@tui/store';
 import { TextRevealMode } from '@tui/primitives/TextBlock';
 import type { ContentBlock } from '@tui/primitives/content-types';
 import { StatusPeekTrigger } from '@tui/components/StatusPeekTrigger';

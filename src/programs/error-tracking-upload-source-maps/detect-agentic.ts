@@ -16,8 +16,9 @@ import {
   type DetectTarget,
   type AgenticDetectionReport,
   type DetectEvent,
-} from '@programs/detection/agentic';
-import type { WizardSession } from '@lib/wizard-session';
+  type DetectProgress,
+} from '../detection/agentic';
+import type { ProgramSession } from '../program-session';
 import {
   VARIANT_DISPLAY_NAME,
   AUTOMATABLE_VARIANTS,
@@ -401,8 +402,9 @@ export function coerceReport(
 
 /** Run the Haiku detector over the repo and classify projects for source maps. */
 export async function detectSourceMapsProjects(
-  session: WizardSession,
+  session: ProgramSession,
   onEvent?: DetectEvent,
+  onProgress?: DetectProgress,
 ): Promise<DetectionReport> {
   const report = await detectProjectsWithAgent(session, {
     targets: SOURCE_MAPS_TARGETS,
@@ -410,6 +412,7 @@ export async function detectSourceMapsProjects(
     purpose: 'set up PostHog Error Tracking source-map upload',
     rerankIds: JS_RERANK_VARIANTS,
     onEvent,
+    onProgress,
   });
   return toSourceMapsReport(report, {
     hasBuildTarget: (path) => projectHasBuildTarget(session.installDir, path),

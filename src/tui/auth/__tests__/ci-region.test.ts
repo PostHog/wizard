@@ -1,33 +1,33 @@
-import { getOrAskForProjectData } from '@utils/setup-utils';
+import { getOrAskForProjectData } from '@tui/auth/project-data';
 import { detectRegion } from '@utils/urls';
 import { fetchProjectData, fetchUserData } from '@shared/api';
-import { performOAuthFlow } from '@utils/oauth';
+import { performOAuthFlow } from '@tui/auth/oauth-flow';
+import type { WizardStore } from '@tui/store';
+import { WIZARD_OAUTH_SCOPES } from '@shared/constants';
+import { CONNECT_SLACK_SCOPE_ADDITIONS } from '@shared/oauth-scopes';
 
-vi.mock('@ui', () => ({
-  getUI: () => ({
-    log: { info: vi.fn(), error: vi.fn(), success: vi.fn(), warn: vi.fn() },
-  }),
-}));
-vi.mock('@utils/urls', () => ({
+vi.mock(import('@utils/urls'), () => ({
   detectRegion: vi.fn(),
   getHost: (r: string) => `https://${r}.posthog.com`,
   getCloudUrl: (r: string) => `https://${r}.posthog.com`,
   getUiHostFromHost: (host: string) => host,
   resolveBaseUrl: (baseUrl?: string) => baseUrl,
 }));
-vi.mock('@shared/api', () => ({
+vi.mock(import('@shared/api'), () => ({
   fetchProjectData: vi.fn(),
   fetchUserData: vi.fn(),
 }));
-vi.mock('@utils/analytics', () => ({
+vi.mock(import('@utils/analytics'), () => ({
   analytics: {
     identifyUser: vi.fn(),
     captureException: vi.fn(),
     setTag: vi.fn(),
-  },
+  } as never,
 }));
-vi.mock('@utils/oauth', () => ({
+vi.mock(import('@tui/auth/oauth-flow'), () => ({
   performOAuthFlow: vi.fn(),
+}));
+vi.mock(import('../oauth'), () => ({
   assertWizardCompletionScope: vi.fn(),
   missingOAuthScopes: vi.fn(() => []),
 }));
@@ -38,6 +38,8 @@ const mockedFetchProject = fetchProjectData as unknown as ReturnType<
 >;
 const mockedFetchUser = fetchUserData as unknown as ReturnType<typeof vi.fn>;
 const mockedOAuthFlow = performOAuthFlow as unknown as ReturnType<typeof vi.fn>;
+
+const store = { pushStatus: vi.fn() } as unknown as WizardStore;
 
 const project = {
   id: 123,
@@ -55,6 +57,7 @@ describe('getOrAskForProjectData CI region', () => {
 
   it('uses the provided region and never probes @me for it', async () => {
     const result = await getOrAskForProjectData({
+      store,
       signup: false,
       ci: true,
       apiKey: 'phx_test',
@@ -77,6 +80,7 @@ describe('getOrAskForProjectData CI region', () => {
     mockedDetect.mockResolvedValue('us');
 
     await getOrAskForProjectData({
+      store,
       signup: false,
       ci: true,
       apiKey: 'phx_test',
@@ -106,6 +110,7 @@ describe('getOrAskForProjectData OAuth login region', () => {
     });
 
     const result = await getOrAskForProjectData({
+      store,
       ci: false,
       signup: false,
       projectId: 123,
@@ -128,7 +133,12 @@ describe('getOrAskForProjectData OAuth login region', () => {
     });
     mockedDetect.mockResolvedValue('eu');
 
-    await getOrAskForProjectData({ ci: false, signup: false, projectId: 123 });
+    await getOrAskForProjectData({
+      store,
+      ci: false,
+      signup: false,
+      projectId: 123,
+    });
 
     expect(mockedDetect).toHaveBeenCalledTimes(1);
     expect(mockedFetchProject).toHaveBeenCalledWith(
@@ -136,5 +146,38 @@ describe('getOrAskForProjectData OAuth login region', () => {
       123,
       'https://eu.posthog.com',
     );
+  });
+});
+
+describe('getOrAskForProjectData OAuth scopes', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockedFetchProject.mockResolvedValue(project);
+    mockedFetchUser.mockResolvedValue({
+      distinct_id: 'user-1',
+      role_at_organization: null,
+    });
+    mockedOAuthFlow.mockResolvedValue({
+      access_token: 'pha_test',
+      scope: 'event_definition:write',
+      scoped_teams: [123],
+      posthog_region: 'us',
+    });
+  });
+
+  // The Connect Slack screen's poll 403s without its `integration:read`.
+  it("asks for the base set widened by the login's scope additions", async () => {
+    await getOrAskForProjectData({
+      store,
+      ci: false,
+      signup: false,
+      projectId: 123,
+      scopeAdditions: CONNECT_SLACK_SCOPE_ADDITIONS,
+    });
+
+    const [{ scopes }] = mockedOAuthFlow.mock.calls[0] as [
+      { scopes: string[] },
+    ];
+    expect(scopes).toEqual([...WIZARD_OAUTH_SCOPES, 'integration:read']);
   });
 });

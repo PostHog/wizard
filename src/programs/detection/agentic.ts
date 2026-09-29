@@ -13,11 +13,11 @@
  * program uses, which needs credentials.
  */
 
-import { AgentSignals, buildRunTags, runAgent, RunOutcome } from '@agent';
+import { AgentSignals, runAgent, RunOutcome } from '@agent';
 import type {
   AgentProgress,
   AgentRunDefinition,
-  ResolvedBinding,
+  AgentBinding,
   RunConfig,
   RunInput,
 } from '@agent/types';
@@ -33,10 +33,7 @@ import {
   POSTHOG_DOCS_URL,
   Sequence,
 } from '@shared/constants';
-import { analytics } from '@utils/analytics';
-import type { WizardSession } from '@lib/wizard-session';
-import { getUI } from '@ui';
-import { createUiReducer } from '@ui/agent-progress';
+import type { ProgramSession } from '../program-session';
 
 /** A category the agent classifies each project into (id the agent returns). */
 export type DetectTarget = { id: string; name: string };
@@ -71,6 +68,8 @@ export class AgenticDetectionTimeoutError extends Error {
 
 /** Streaming progress callback — one short activity line per agent step. */
 export type DetectEvent = (line: string) => void;
+/** Agent progress a scan forwards to the caller's UI. */
+export type DetectProgress = (event: AgentProgress) => void;
 
 /**
  * Every project-manifest / workspace-marker filename the wizard's frameworks
@@ -150,6 +149,8 @@ export type AgenticDetectOptions = {
   rerankIds?: readonly string[];
   /** Streaming activity callback for the UI. */
   onEvent?: DetectEvent;
+  /** The scan's warnings, tasks and usage, for the caller's UI. */
+  onProgress?: DetectProgress;
 };
 
 function buildPrompt(
@@ -312,7 +313,7 @@ export function coerceAgenticReport(
 }
 
 /** A fast mechanical scan: linear Haiku on the Anthropic harness. */
-const AGENTIC_DETECTION_BINDING: ResolvedBinding = {
+const AGENTIC_DETECTION_BINDING: AgentBinding = {
   sequence: Sequence.linear,
   harness: Harness.anthropic,
   model: HAIKU_MODEL,
@@ -351,7 +352,7 @@ function reachesUi(event: AgentProgress): boolean {
 
 /** Scan the repo with Haiku through `runAgent`; each attempt is a fresh run with its own deadline. */
 export async function detectProjectsWithAgent(
-  session: WizardSession,
+  session: ProgramSession,
   options: AgenticDetectOptions,
 ): Promise<AgenticDetectionReport> {
   if (!session.credentials) {
@@ -364,36 +365,21 @@ export async function detectProjectsWithAgent(
     recommend = false,
     rerankIds,
     onEvent,
+    onProgress,
   } = options;
 
-  // Built here: the scan runs before the program's own run tags exist.
-  const wizardMetadata = {
-    ...buildRunTags({
-      programId,
-      integration: 'agentic-detect',
-      runId: analytics.runId,
-      build: analytics.build,
-    }),
-    call_type: CallType.detection,
-  };
   const config: RunConfig = {
     programId,
     run: detectionRunDefinition(
       buildPrompt(session.installDir, targets, purpose, recommend),
     ),
     composed: true,
-    binding: AGENTIC_DETECTION_BINDING,
-    // Only the orchestrator reads it; the scan is linear.
-    switchboard: {
-      program: programId,
-      composed: true,
-      flags: {},
-      flagPayloads: {},
-    },
+    // A fixed route with no flags: the scan never follows the program's own binding.
+    routing: { binding: AGENTIC_DETECTION_BINDING, record: false },
     skillsBaseUrl: getSkillsBaseUrl(),
     wizardFlags: {},
     wizardFlagPayloads: {},
-    wizardMetadata,
+    tags: { call_type: CallType.detection },
     allowedTools: ['Read', 'Grep', 'Glob'],
     // The scan's scans count toward the program run's report.
     scanReport: 'defer',
@@ -416,10 +402,9 @@ export async function detectProjectsWithAgent(
     },
     host: { projectId: session.projectId, apiKey: session.apiKey },
   };
-  const reduceUi = createUiReducer(getUI());
   const forward = (event: AgentProgress): void => {
     if (event.kind === 'activity') onEvent?.(event.line);
-    if (reachesUi(event)) reduceUi(event);
+    if (reachesUi(event)) onProgress?.(event);
   };
 
   for (let attempt = 0; attempt < 2; attempt++) {

@@ -17,7 +17,7 @@ import { randomUUID } from 'crypto';
 import { writeJsonAtomic } from '@utils/atomic-ledger';
 import { analytics } from '@utils/analytics';
 
-export const TaskStatus = {
+export const QueueTaskStatus = {
   Pending: 'pending',
   Running: 'running',
   Done: 'done',
@@ -25,7 +25,8 @@ export const TaskStatus = {
   Failed: 'failed',
 } as const;
 
-export type TaskStatus = (typeof TaskStatus)[keyof typeof TaskStatus];
+export type QueueTaskStatus =
+  (typeof QueueTaskStatus)[keyof typeof QueueTaskStatus];
 
 /**
  * Why a task ended as skipped.
@@ -92,7 +93,7 @@ export interface QueuedTask {
   type: string;
   /** Human-readable label for the TUI, set by the enqueuing agent. */
   label?: string;
-  status: TaskStatus;
+  status: QueueTaskStatus;
   /**
    * Ids of tasks that must finish before this one runs. Ids are generated at
    * enqueue, so a task can only depend on tasks created before it — the graph is
@@ -132,13 +133,9 @@ export interface QueueFile {
   tasks: QueuedTask[];
 }
 
-/** Session frameworkContext key holding the drained queue's final outcomes —
- *  written by the runner before the cache wipe, read by the e2e harness. */
-export const TASK_OUTCOMES_KEY = 'orchestrator-task-outcomes';
-
 export interface TaskOutcome {
   type: string;
-  status: TaskStatus;
+  status: QueueTaskStatus;
   optional: boolean;
 }
 
@@ -242,9 +239,9 @@ export class QueueStore {
       this.tasks
         .filter(
           (t) =>
-            t.status === TaskStatus.Done ||
-            t.status === TaskStatus.Skipped ||
-            (t.status === TaskStatus.Failed &&
+            t.status === QueueTaskStatus.Done ||
+            t.status === QueueTaskStatus.Skipped ||
+            (t.status === QueueTaskStatus.Failed &&
               t.optional === true &&
               t.attempts >= t.maxAttempts),
         )
@@ -252,7 +249,7 @@ export class QueueStore {
     );
     return this.tasks.filter(
       (t) =>
-        t.status === TaskStatus.Pending &&
+        t.status === QueueTaskStatus.Pending &&
         t.dependsOn.every((d) => doneIds.has(d)),
     );
   }
@@ -262,17 +259,18 @@ export class QueueStore {
    * is terminal, or the only pending tasks are blocked by a failed dependency.
    */
   isDrained(): boolean {
-    if (this.tasks.some((t) => t.status === TaskStatus.Running)) return false;
+    if (this.tasks.some((t) => t.status === QueueTaskStatus.Running))
+      return false;
     return this.nextRunnable().length === 0;
   }
 
-  summary(): Record<TaskStatus, number> & { total: number } {
-    const counts: Record<TaskStatus, number> = {
-      [TaskStatus.Pending]: 0,
-      [TaskStatus.Running]: 0,
-      [TaskStatus.Done]: 0,
-      [TaskStatus.Skipped]: 0,
-      [TaskStatus.Failed]: 0,
+  summary(): Record<QueueTaskStatus, number> & { total: number } {
+    const counts: Record<QueueTaskStatus, number> = {
+      [QueueTaskStatus.Pending]: 0,
+      [QueueTaskStatus.Running]: 0,
+      [QueueTaskStatus.Done]: 0,
+      [QueueTaskStatus.Skipped]: 0,
+      [QueueTaskStatus.Failed]: 0,
     };
     for (const t of this.tasks) counts[t.status] += 1;
     return { ...counts, total: this.tasks.length };
@@ -296,7 +294,7 @@ export class QueueStore {
       id: randomUUID(),
       type: input.type,
       label: input.label,
-      status: TaskStatus.Pending,
+      status: QueueTaskStatus.Pending,
       dependsOn: input.dependsOn ?? [],
       inputs: input.inputs ?? {},
       model: input.model,
@@ -332,7 +330,7 @@ export class QueueStore {
     depIds: readonly string[],
   ): { added: string[]; refused: string[] } {
     const task = this.require(id);
-    if (task.status !== TaskStatus.Pending) {
+    if (task.status !== QueueTaskStatus.Pending) {
       return { added: [], refused: [...depIds] };
     }
 
@@ -356,7 +354,7 @@ export class QueueStore {
 
   start(id: string): QueuedTask {
     const t = this.require(id);
-    t.status = TaskStatus.Running;
+    t.status = QueueTaskStatus.Running;
     t.startedAt = nowIso();
     t.attempts += 1;
     this.reflect();
@@ -365,7 +363,7 @@ export class QueueStore {
   }
 
   complete(id: string, handoff?: TaskHandoff): QueuedTask {
-    return this.finish(id, TaskStatus.Done, handoff);
+    return this.finish(id, QueueTaskStatus.Done, handoff);
   }
 
   /**
@@ -387,7 +385,7 @@ export class QueueStore {
     const t = this.require(id);
     t.skipReason = reason;
     if (notNeededReason) t.notNeededReason = notNeededReason;
-    return this.finish(id, TaskStatus.Skipped, handoff);
+    return this.finish(id, QueueTaskStatus.Skipped, handoff);
   }
 
   fail(
@@ -397,13 +395,13 @@ export class QueueStore {
   ): QueuedTask {
     const t = this.require(id);
     t.error = error;
-    return this.finish(id, TaskStatus.Failed, handoff);
+    return this.finish(id, QueueTaskStatus.Failed, handoff);
   }
 
   /** Put a failed/running task back to pending for a retry within the run. */
   requeue(id: string): QueuedTask {
     const t = this.require(id);
-    t.status = TaskStatus.Pending;
+    t.status = QueueTaskStatus.Pending;
     t.startedAt = undefined;
     t.finishedAt = undefined;
     this.reflect();
@@ -424,9 +422,9 @@ export class QueueStore {
     t.finishedAt = nowIso();
     this.reflect();
     this.notify(
-      status === TaskStatus.Done
+      status === QueueTaskStatus.Done
         ? 'complete'
-        : status === TaskStatus.Skipped
+        : status === QueueTaskStatus.Skipped
         ? 'skip'
         : 'fail',
       t,

@@ -1,19 +1,15 @@
-import { TaskStreamPush } from '@programs/session/task-stream/task-stream-push';
-import {
-  StreamEvent,
-  StreamTaskStatus,
-} from '@programs/session/task-stream/types';
-import type {
-  TaskStreamDestination,
-  TaskStreamUpdate,
-} from '@programs/session/task-stream/types';
-import type { WizardStore, TaskItem } from '@ui/tui/store';
-import { TaskStatus } from '@ui/wizard-ui';
-import { RunPhase, type PendingQuestion } from '@lib/wizard-session';
+import { TaskStreamPush } from '../task-stream-push';
+import { StreamEvent, StreamTaskStatus } from '../types';
+import type { TaskStreamDestination, TaskStreamUpdate } from '../types';
+import type { SessionStore } from '../../session-store';
+import type { TaskItem } from '@programs/session/session-store';
+import { TaskStatus } from '@shared/task-status';
+import { RunPhase } from '@shared/run-state';
+import { type PendingQuestion } from '@agent/types';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { EVENT_PLAN_FILE } from '@programs/posthog-integration/constants';
+import { EVENT_PLAN_FILE } from '@shared/constants';
 
 type Listener = () => void;
 
@@ -94,7 +90,7 @@ function createMockStore(overrides: Partial<MockStoreState> = {}) {
     },
   };
 
-  return store as typeof store & WizardStore;
+  return store as typeof store & SessionStore;
 }
 
 function createMockDestination(name = 'test'): TaskStreamDestination & {
@@ -116,7 +112,7 @@ function createPush(
   opts: {
     dest?: ReturnType<typeof createMockDestination>;
     enabled?: boolean;
-    eventPlanPath?: string;
+    eventPlanPath?: string | (() => string | undefined);
     auditChecks?: () => unknown;
   } = {},
 ) {
@@ -125,7 +121,13 @@ function createPush(
     store,
     programId: 'test-program',
     destinations: [dest],
-    eventPlanPath: opts.eventPlanPath,
+    eventPlanPath:
+      typeof opts.eventPlanPath === 'string'
+        ? (
+            (path) => () =>
+              path
+          )(opts.eventPlanPath)
+        : opts.eventPlanPath,
     auditChecks: opts.auditChecks,
     enabled: opts.enabled,
   });
@@ -139,10 +141,10 @@ describe('TaskStreamPush', () => {
 
   // ── Existing event-sequencing behaviour ────────────────────────
 
-  it('populates the event plan when destination delivery is disabled', async () => {
+  it('populates the event plan once the run starts, with destination delivery disabled', async () => {
     const installDir = mkdtempSync(join(tmpdir(), 'wizard-headless-plan-'));
     const eventPlanPath = join(installDir, EVENT_PLAN_FILE);
-    const store = createMockStore({ installDir });
+    const store = createMockStore({ installDir, runPhase: RunPhase.Running });
     const { push, dest } = createPush(store, {
       enabled: false,
       eventPlanPath,
@@ -161,6 +163,32 @@ describe('TaskStreamPush', () => {
     expect(dest.calls).toHaveLength(0);
 
     rmSync(installDir, { recursive: true, force: true });
+  });
+
+  it('reads the event-plan path when the run starts, after detection moved the install dir', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'wizard-plan-root-'));
+    const project = mkdtempSync(join(tmpdir(), 'wizard-plan-project-'));
+    const store = createMockStore({ installDir: root });
+    const { push } = createPush(store, {
+      enabled: false,
+      eventPlanPath: () =>
+        join(store.session.installDir ?? root, EVENT_PLAN_FILE),
+    });
+    try {
+      push.attach();
+      // Detection scopes the run to a sub-project, then the run starts.
+      store._setAndEmit({ installDir: project, runPhase: RunPhase.Running });
+      writeFileSync(
+        join(project, EVENT_PLAN_FILE),
+        JSON.stringify([{ event_name: 'signed_up' }]),
+      );
+      await push.shutdown(2000);
+      expect(store.eventPlan).toEqual([{ name: 'signed_up', description: '' }]);
+    } finally {
+      push.detach();
+      rmSync(root, { recursive: true, force: true });
+      rmSync(project, { recursive: true, force: true });
+    }
   });
 
   it('does not inspect event-plan artifacts unless explicitly configured', () => {

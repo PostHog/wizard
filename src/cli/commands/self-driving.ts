@@ -1,11 +1,11 @@
 import { runWizard, runWizardCI } from '@cli/runners';
-import { selfDrivingConfig } from '@programs/self-driving/index';
+import { config as selfDriving } from '@programs/self-driving';
 import { skillProgramOptions } from './skill-program-options';
 import type { Command } from './command';
 
 export const selfDrivingCommand: Command = {
   name: 'self-driving',
-  description: selfDrivingConfig.description,
+  description: selfDriving.description,
   options: {
     ...skillProgramOptions,
     integrate: {
@@ -14,7 +14,7 @@ export const selfDrivingCommand: Command = {
       type: 'boolean',
       default: false,
     },
-    ...(selfDrivingConfig.cliOptions ?? {}),
+    ...(selfDriving.cliOptions ?? {}),
   },
   check: (argv) => {
     // self-driving builds on an existing integration and is fully interactive,
@@ -39,12 +39,12 @@ export const selfDrivingCommand: Command = {
   },
   handler: (argv) => {
     const extras =
-      selfDrivingConfig.mapCliOptions?.(argv as Record<string, unknown>) ?? {};
+      selfDriving.mapCliOptions?.(argv as Record<string, unknown>) ?? {};
     const options = { ...argv, ...extras };
     if (options.ci) {
-      runWizardCI(selfDrivingConfig, options);
+      runWizardCI(selfDriving, options);
     } else {
-      runWizard(selfDrivingConfig, options);
+      runWizard(selfDriving, options);
     }
   },
 };

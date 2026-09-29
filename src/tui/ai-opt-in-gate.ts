@@ -1,9 +1,10 @@
 /**
- * AI opt-in gate — step injection for programs whose agent run sends
- * source to Anthropic Claude.
+ * AI opt-in gate — step injection for programs, whose agent run sends
+ * source to a third-party model.
  *
- * Injected after the `auth` step for every program that doesn't declare
- * `requiresAi: false`. The injected step carries three predicates:
+ * Injected after the `auth` step of every program's flow; a tool runs no
+ * agent, so its flow never gets it. The injected step carries three
+ * predicates:
  *
  *   show       — renders AiOptInRequiredScreen when the org hasn't
  *                approved third-party AI
@@ -31,8 +32,8 @@
  *     already treats `ci || signup` as one non-interactive mode.
  */
 
-import type { WizardSession } from '@lib/wizard-session';
-import type { ProgramConfig, ProgramStep } from '../programs/program-step.js';
+import type { ProgramConfig, WizardSession } from '@programs/types';
+import type { FlowStep } from './flow.js';
 
 /** Step id — also the ScreenId.AiOptIn enum value in screen-sequences. */
 export const AI_OPT_IN_STEP_ID = 'ai-opt-in';
@@ -42,37 +43,40 @@ function aiApproved(session: WizardSession): boolean {
 }
 
 /**
- * Returns the program's steps with the AI opt-in gate injected after
- * `auth`. Programs with `requiresAi: false` or no auth step pass
- * through unchanged — without auth, `apiUser` would never be populated
- * for evaluation anyway.
+ * Returns the program's flow with the AI opt-in gate injected after
+ * `auth`. A tool's flow (no program config) or one with no auth step
+ * passes through unchanged — without auth, `apiUser` would never be
+ * populated for evaluation anyway.
  */
-export function withAiOptInGate(config: ProgramConfig): ProgramStep[] {
-  if (config.requiresAi === false) return config.steps;
+export function withAiOptInGate(
+  config: ProgramConfig | undefined,
+  steps: FlowStep[],
+): FlowStep[] {
+  if (!config) return steps;
 
-  const authIdx = config.steps.findIndex((s) => s.id === 'auth');
-  if (authIdx === -1) return config.steps;
+  const authIdx = steps.findIndex((s) => s.id === 'auth');
+  if (authIdx === -1) return steps;
 
-  const gateStep: ProgramStep = {
+  const gateStep: FlowStep = {
     id: AI_OPT_IN_STEP_ID,
     label: 'AI opt-in check',
     screenId: AI_OPT_IN_STEP_ID,
     // Only fire once apiUser has actually been populated — between
     // setCredentials and setApiUser there's a brief emitChange window
     // where apiUser is null, and we don't want to flash the gate then.
-    show: (session) =>
+    show: ({ session }) =>
       !session.ci &&
       !session.signup &&
       session.apiUser != null &&
       !aiApproved(session),
-    isComplete: (session) =>
+    isComplete: ({ session }) =>
       session.ci || session.signup || aiApproved(session),
-    gate: (session) => session.ci || session.signup || aiApproved(session),
+    gate: ({ session }) => session.ci || session.signup || aiApproved(session),
   };
 
   return [
-    ...config.steps.slice(0, authIdx + 1),
+    ...steps.slice(0, authIdx + 1),
     gateStep,
-    ...config.steps.slice(authIdx + 1),
+    ...steps.slice(authIdx + 1),
   ];
 }

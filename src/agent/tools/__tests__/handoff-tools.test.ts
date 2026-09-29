@@ -2,29 +2,23 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { LLMProvider } from '@posthog/warlock';
 import type { AgentProgress } from '@agent/progress';
 import { createWizardPiTools } from '@agent/runner/harness/pi/tools';
 import { createWizardToolsServer } from '../mcp';
 import { PUBLISH_HANDOFF_TOOL_NAME } from '../handoff';
 
-vi.mock('@ui', () => ({
-  getUI: () => {
-    throw new Error('agent code reached the UI');
-  },
-}));
 // The MCP server's tool list, without the SDK's transport around it.
-vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
-  tool: (
+vi.mock(import('@anthropic-ai/claude-agent-sdk'), () => ({
+  tool: ((
     name: string,
     description: string,
     inputSchema: unknown,
     handler: (args: unknown) => unknown,
-  ) => ({ name, description, inputSchema, handler }),
-  createSdkMcpServer: (options: unknown) => options,
+  ) => ({ name, description, inputSchema, handler })) as never,
+  createSdkMcpServer: (options: unknown) => options as never,
 }));
-vi.mock('../tools', async (original) => ({
-  ...(await original<typeof import('../tools')>()),
+vi.mock(import('../tools'), async (original) => ({
+  ...(await original()),
   fetchSkillMenu: vi.fn().mockResolvedValue(null),
 }));
 
@@ -76,7 +70,6 @@ describe('registered publish_handoff tools', () => {
       workingDirectory,
       detectPackageManager: vi.fn(),
       skillsBaseUrl: 'http://localhost:0',
-      triageProvider: {} as LLMProvider,
       emit: (event) => events.push(event),
     })) as unknown as {
       tools: { name: string; handler: (args: unknown) => unknown }[];

@@ -7,14 +7,16 @@
  * non-admin (< 8), matching what the screen reads in production.
  *
  * One demo function, used by two PlaygroundApp tabs. ⚠ keybindings on
- * the screen are LIVE — [E] exits the playground, [O] opens a real
- * browser URL, [R] fires a network request (which will fail with the
- * fake token, but won't be destructive).
+ * the screen are LIVE — [E] exits the playground (the demo store's exit
+ * request goes to the playground's), [O] opens a real browser URL, [R]
+ * fires a network request (which will fail with the fake token, but won't
+ * be destructive).
  */
 
 import { useEffect, useState } from 'react';
 import { Box, Text } from 'ink';
-import { WizardStore } from '@ui/tui/store';
+import { Program } from '@programs';
+import { WizardStore } from '@tui/store';
 import { AiOptInRequiredScreen } from '@tui/screens/AiOptInRequiredScreen';
 import { HostResolution } from '@shared/host-resolution';
 
@@ -22,11 +24,16 @@ type Variant = 'admin' | 'non-admin';
 
 interface AiOptInDemoProps {
   variant: Variant;
+  /** The playground's store: it closes on this store's exit request. */
+  store: WizardStore;
 }
 
-export const AiOptInDemo = ({ variant }: AiOptInDemoProps) => {
+export const AiOptInDemo = ({
+  variant,
+  store: playground,
+}: AiOptInDemoProps) => {
   const [store] = useState(() => {
-    const s = new WizardStore();
+    const s = new WizardStore(Program.PostHogIntegration);
     s.setCredentials({
       accessToken: 'demo-fake-token',
       projectApiKey: 'demo-fake-project-key',
@@ -35,6 +42,15 @@ export const AiOptInDemo = ({ variant }: AiOptInDemoProps) => {
     });
     return s;
   });
+
+  useEffect(
+    () =>
+      store.subscribe(() => {
+        if (store.exitRequest !== null)
+          playground.requestExit(store.exitRequest);
+      }),
+    [store, playground],
+  );
 
   useEffect(() => {
     store.session.region = 'us';

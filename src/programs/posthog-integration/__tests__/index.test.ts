@@ -6,24 +6,28 @@
  * state, so the value rides on every later capture either way.
  */
 
-import { posthogIntegrationConfig } from '@programs/posthog-integration/index';
-import { buildSession, type WizardSession } from '@lib/wizard-session';
+import { config as posthogIntegration } from '@programs/posthog-integration';
+import { buildSession } from '@programs/session/wizard-session';
+import type { WizardSession } from '@programs/session/wizard-session';
 import { analytics } from '@utils/analytics';
 import { isUsingTypeScript } from '@utils/setup-utils';
-import { testRunnerContext } from '../../../../test/runner-context';
+import { runnerFor } from './helpers/integration-prompt.no-jest';
 
-vi.mock('@utils/analytics', () => ({
+vi.mock(import('@utils/analytics'), () => ({
   analytics: {
     wizardCapture: vi.fn(),
     setTag: vi.fn(),
     capture: vi.fn(),
     // Empty map = flags unreadable = the shipped default (AIO + Logs on).
     getAllFlagsForWizard: vi.fn().mockResolvedValue({}),
-  },
+  } as never,
 }));
 
-vi.mock('@utils/setup-utils', () => ({
+vi.mock(import('@utils/setup-utils'), () => ({
   isUsingTypeScript: vi.fn(),
+}));
+vi.mock(import('@utils/package-json'), async (importOriginal) => ({
+  ...(await importOriginal()),
   tryGetPackageJson: vi.fn().mockResolvedValue(null),
 }));
 
@@ -49,9 +53,9 @@ function sessionWithFramework(): WizardSession {
 }
 
 async function resolveRun(session: WizardSession) {
-  const { run } = posthogIntegrationConfig;
+  const { run } = posthogIntegration;
   if (typeof run !== 'function') throw new Error('expected a run function');
-  return run(session, testRunnerContext(session));
+  return run(session, runnerFor(session));
 }
 
 describe('posthog-integration run() — typescript tag', () => {

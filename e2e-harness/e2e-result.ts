@@ -21,12 +21,20 @@
 
 import fs from 'fs';
 import path from 'path';
-import { OutroKind, type WizardSession } from '@lib/wizard-session';
-import { TASK_OUTCOMES_KEY } from '@agent';
-import type { TaskOutcome } from '@agent/types';
-import { DETECTED_WAREHOUSE_SOURCES_KEY } from '@programs/warehouse-source/detect';
-import type { DetectedSource } from '@programs/warehouse-sources/types';
+import { OutroKind, type OutroData } from '@shared/outro';
+import type { DetectedSource } from '@programs/types';
+import { TASK_OUTCOMES_KEY } from '@programs';
+import { DETECTED_WAREHOUSE_SOURCES_KEY } from '@programs/warehouse-source';
+import type { PendingQuestion, TaskNotice, TaskOutcome } from '@agent/types';
 import type { E2eDecisionReport } from './e2e-profile.js';
+
+/** The session fields a run's result reads, as the TUI's control state projects them. */
+export interface E2eObservedSession {
+  pendingQuestion?: PendingQuestion | null;
+  taskNotice?: TaskNotice | null;
+  outroData?: OutroData | null;
+  frameworkContext: Record<string, unknown>;
+}
 
 /** One `wizard_ask` batch the run was shown. */
 export interface E2eAskRecord {
@@ -57,7 +65,10 @@ export interface E2eNoticeRecord {
 }
 
 /** The session fields the recorder watches. */
-type ObservedSession = Pick<WizardSession, 'pendingQuestion' | 'taskNotice'>;
+type ObservedSession = Pick<
+  E2eObservedSession,
+  'pendingQuestion' | 'taskNotice'
+>;
 
 /**
  * Log every ask batch and task notice a run passes through.
@@ -202,11 +213,11 @@ function isInside(root: string, child: string): boolean {
 /**
  * The abort reason for a run, or null when it did not abort.
  *
- * `wizardAbort` renders an error outro and then exits, so `outroData` is the
+ * `wizardAbort` renders an error outro and then ends the run, so `outroData` is the
  * only durable trace of *why* by the time the host writes its result.
  */
 export function abortReasonFrom(
-  session: Pick<WizardSession, 'outroData'>,
+  session: Pick<E2eObservedSession, 'outroData'>,
 ): string | null {
   const outro = session.outroData;
   if (!outro || outro.kind !== OutroKind.Error) return null;
@@ -215,7 +226,7 @@ export function abortReasonFrom(
 
 /** The warehouse sources detection wrote into frameworkContext. */
 export function detectedSourcesFrom(
-  session: Pick<WizardSession, 'frameworkContext'>,
+  session: Pick<E2eObservedSession, 'frameworkContext'>,
 ): DetectedSource[] {
   const raw = session.frameworkContext[DETECTED_WAREHOUSE_SOURCES_KEY];
   return Array.isArray(raw) ? (raw as DetectedSource[]) : [];
@@ -231,7 +242,7 @@ export function detectedSourcesFrom(
  * held no tasks, which records `[]`.
  */
 export function taskOutcomesFrom(
-  session: Pick<WizardSession, 'frameworkContext'>,
+  session: Pick<E2eObservedSession, 'frameworkContext'>,
 ): TaskOutcome[] | null {
   const raw = session.frameworkContext[TASK_OUTCOMES_KEY];
   return Array.isArray(raw) ? (raw as TaskOutcome[]) : null;
@@ -267,7 +278,7 @@ export function createE2eResultWriter(
 export function buildE2eResult(args: {
   base: E2eResultBase;
   recorder: E2eRunRecorder;
-  session: Pick<WizardSession, 'frameworkContext' | 'outroData'>;
+  session: Pick<E2eObservedSession, 'frameworkContext' | 'outroData'>;
   tasks: Array<{ label: string; status: string }>;
   reportFile: E2eReportFile | null;
 }): Record<string, unknown> {

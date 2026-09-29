@@ -11,7 +11,7 @@ import {
   getInstalledClients,
   getSupportedPluginClients,
   installPlugins as runPluginInstall,
-} from '@steps/add-mcp-server-to-clients/index';
+} from '@shared/mcp-clients/install';
 import { ALL_FEATURE_VALUES } from '@shared/mcp-clients/defaults';
 import {
   McpClientStatus,

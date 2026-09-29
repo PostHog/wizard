@@ -3,15 +3,16 @@ import {
   RunTaskNames,
   createWizardRunSync,
 } from '../wizard-run-sync';
-import { RunPhase, buildSession } from '@lib/wizard-session';
+import { RunPhase } from '@shared/run-state';
+import { buildSession } from '../../wizard-session';
 import { HostResolution } from '@shared/host-resolution';
-import { TaskStatus } from '@ui/wizard-ui';
-import type { TaskItem } from '@ui/tui/store';
+import { TaskStatus } from '@shared/task-status';
+import type { TaskItem } from '@programs/session/session-store';
 import { VERSION } from '@shared/version';
 import { currentCredentials } from '@shared/oauth-session';
 
-vi.mock('@shared/oauth-session', async (original) => ({
-  ...(await original<typeof import('@shared/oauth-session')>()),
+vi.mock(import('@shared/oauth-session'), async (original) => ({
+  ...(await original()),
   currentCredentials: vi.fn(),
 }));
 
@@ -420,7 +421,7 @@ it('uses a fresh creation key for each independent execution', async () => {
 it.each(['local', 'cloud'] as const)(
   'selects exactly one remote transport for %s executions and keeps file output',
   async (mode) => {
-    const { WizardStore } = await import('@ui/tui/store');
+    const { SessionStore } = await import('../../session-store');
     const { TaskStreamPush } = await import('../task-stream-push');
     for (const variant of [
       'wizard-run',
@@ -430,8 +431,7 @@ it.each(['local', 'cloud'] as const)(
       undefined,
     ]) {
       const { session, fetchImpl, options, writes } = setup(mode);
-      const store = new WizardStore();
-      store.session = session;
+      const store = new SessionStore(session);
       let flags: Record<string, string> = variant
         ? { 'wizard-run-sync': variant }
         : {};
@@ -480,11 +480,10 @@ it.each(['local', 'cloud'] as const)(
 );
 
 it('waits for authenticated flags, then keeps run failures on the selected transport', async () => {
-  const { WizardStore } = await import('@ui/tui/store');
+  const { SessionStore } = await import('../../session-store');
   const { TaskStreamPush } = await import('../task-stream-push');
   const { session, options, fetchImpl } = setup('cloud');
-  const store = new WizardStore();
-  store.session = session;
+  const store = new SessionStore(session);
   let flags: Record<string, string> | null = null;
   const legacy = {
     name: 'posthog',
@@ -512,11 +511,10 @@ it('waits for authenticated flags, then keeps run failures on the selected trans
 });
 
 it('sends the first WizardSession snapshot as Create after flags load', async () => {
-  const { WizardStore } = await import('@ui/tui/store');
+  const { SessionStore } = await import('../../session-store');
   const { TaskStreamPush } = await import('../task-stream-push');
   const { session, options } = setup('cloud');
-  const store = new WizardStore();
-  store.session = session;
+  const store = new SessionStore(session);
   let flags: Record<string, string> | null = null;
   const legacy = {
     name: 'posthog',

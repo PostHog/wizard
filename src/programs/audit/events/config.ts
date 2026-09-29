@@ -1,13 +1,12 @@
-import type { ProgramConfig } from '@programs/program-step';
-import type { ProgramRun } from '@programs/program-run';
-import type { WizardSession } from '@lib/wizard-session';
-import { OutroKind } from '@lib/wizard-session';
-import { SPINNER_MESSAGE } from '@programs/framework-config';
+import type { ProgramConfig } from '../../program-step';
+import type { ProgramRun } from '../../program-run';
+import type { ProgramSession } from '../../program-session';
+import { OutroKind } from '@shared/outro';
+import { SPINNER_MESSAGE } from '../../framework-config';
 import { isUsingTypeScript } from '@utils/setup-utils';
 import { WIZARD_TOOL_NAMES } from '@agent';
-import { EVENTS_AUDIT_PROGRAM } from '../../../tui/programs/audit/events-flow.js';
-import { AUDIT_CHECKS_FILE, AUDIT_CHECKS_KEY } from '@programs/audit/types';
-import { seedAuditLedger } from '@programs/audit/seed';
+import { AUDIT_CHECKS_FILE, AUDIT_CHECKS_KEY } from '../types.js';
+import { seedAuditLedger } from '../seed.js';
 import { EVENTS_AUDIT_SEED_CHECKS } from './seed.js';
 
 // SETUP_REPORT_FILE is also re-exported for backward compat with existing
@@ -25,11 +24,10 @@ const DOCS_URL = 'https://posthog.com/docs/product-analytics/best-practices';
  * skill (whose id AuditRunScreen keys its slides on), not to this config.
  * Registered so its id stays resolvable; nothing dispatches to it today.
  */
-export const eventsAuditConfig: ProgramConfig = {
+export const config: ProgramConfig = {
   description: 'Audit PostHog event tracking in this project',
   id: 'events-audit',
   skillId: 'events-audit',
-  steps: EVENTS_AUDIT_PROGRAM,
   // Top-level reportFile so AuditRunScreen can resolve the report path
   // synchronously without unwrapping the deferred `run` function.
   reportFile: SETUP_REPORT_FILE,
@@ -42,7 +40,7 @@ export const eventsAuditConfig: ProgramConfig = {
   ],
   disallowedTools: [WIZARD_TOOL_NAMES.wizardAsk],
 
-  run: (session: WizardSession): Promise<ProgramRun> => {
+  run: (session: ProgramSession): Promise<ProgramRun> => {
     const typeScriptDetected = isUsingTypeScript({
       installDir: session.installDir,
     });
@@ -105,5 +103,3 @@ Project context:
     });
   },
 };
-
-export { EVENTS_AUDIT_PROGRAM } from '../../../tui/programs/audit/events-flow.js';

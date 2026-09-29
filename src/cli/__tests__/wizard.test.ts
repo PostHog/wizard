@@ -1,13 +1,5 @@
 import { commandKeys, type Command } from '../commands/command';
-import { basicIntegrationCommand } from '../commands/basic-integration';
-import { mcpCommand } from '../commands/mcp';
-import { auditCommand } from '../commands/audit';
-import { doctorCommand } from '../../commands/doctor';
-import { migrateCommand } from '../../commands/migrate';
-import { replayVisionCommand } from '../../commands/replay-vision';
-import { revenueCommand } from '../../commands/revenue';
-import { uploadSourcemapsCommand } from '../../commands/upload-sourcemaps';
-import { skillCommand } from '../commands/skill';
+import { wizardCommands } from '../commands';
 
 const cmd = (name: string | readonly string[]): Command => ({
   name,
@@ -80,19 +72,30 @@ describe('findConflicts', () => {
 
 describe('production command tree', () => {
   test('has no path conflicts', () => {
-    const tree = [
-      basicIntegrationCommand,
-      mcpCommand,
-      auditCommand,
-      doctorCommand,
-      migrateCommand,
-      replayVisionCommand,
-      revenueCommand,
-      uploadSourcemapsCommand,
-      skillCommand,
-    ];
     // On failure, findConflicts returns the offending path(s) — i.e. which
     // command collides, not just that one did.
-    expect(findConflicts(tree)).toEqual([]);
+    expect(findConflicts(wizardCommands())).toEqual([]);
+  });
+
+  test('lists the commands in the order `wizard --help` shows them', () => {
+    expect(wizardCommands().map((c) => commandKeys(c.name).join('|'))).toEqual([
+      '$0',
+      'mcp',
+      'mcp-analytics',
+      'replay-vision',
+      'ai-observability',
+      'metrics',
+      'cli',
+      'audit',
+      'doctor',
+      'migrate',
+      'revenue-analytics',
+      'warehouse',
+      'self-driving',
+      'slack',
+      'upload-source-maps|upload-sourcemaps',
+      'error-tracking',
+      'skill',
+    ]);
   });
 });

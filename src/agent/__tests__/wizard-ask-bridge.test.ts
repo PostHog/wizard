@@ -4,12 +4,12 @@ import {
   isFullyCancelled,
 } from '@agent/wizard-ask-bridge';
 import { analytics } from '@utils/analytics';
-import type { AskAnswers, PendingQuestion } from '@lib/wizard-session';
+import type { AskAnswers, PendingQuestion } from '@agent/types';
 
-vi.mock('@utils/analytics', () => ({
+vi.mock(import('@utils/analytics'), () => ({
   analytics: {
     wizardCapture: vi.fn(),
-  },
+  } as never,
 }));
 
 const wizardCaptureMock = analytics.wizardCapture as Mock;
@@ -364,6 +364,7 @@ describe('createWizardAskBridge', () => {
         // timeout and every later wizard_ask in the run is rejected as a
         // duplicate request.
         expect(signals[0].aborted).toBe(true);
+        expect(bridge.getPendingQuestion()).toBeNull();
 
         const cancelledCall = wizardCaptureMock.mock.calls.find(
           ([name]) => name === 'wizard_ask cancelled',

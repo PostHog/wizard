@@ -7,21 +7,22 @@
  * Runs after auth — the detection agent needs credentials.
  */
 
+import { scanProgress } from '@tui/agent-progress';
 import { Box, Text } from 'ink';
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import type { WizardStore } from '@ui/tui/store';
+import type { WizardStore } from '@tui/store';
 import { LoadingBox, PickerMenu } from '@tui/primitives/index';
 import { Colors, Icons } from '@tui/styles';
 import {
   SOURCE_MAPS_CONTEXT_KEYS,
   VARIANT_DISPLAY_NAME,
   MANUAL_SDK_VARIANTS,
-} from '@programs/error-tracking-upload-source-maps/index';
+} from '@programs/error-tracking-upload-source-maps';
 import {
   detectSourceMapsProjects,
   type DetectedProject,
   type DetectionReport,
-} from '@programs/error-tracking-upload-source-maps/detect-agentic';
+} from '@programs/error-tracking-upload-source-maps';
 
 interface SourceMapsDetectScreenProps {
   store: WizardStore;
@@ -62,11 +63,15 @@ export const SourceMapsDetectScreen = ({
     let cancelled = false;
     void (async () => {
       try {
-        const report = await detectSourceMapsProjects(store.session, (line) => {
-          if (!cancelled) {
-            setActivity((prev) => [...prev, line].slice(-MAX_ACTIVITY_LINES));
-          }
-        });
+        const report = await detectSourceMapsProjects(
+          store.session,
+          (line: string) => {
+            if (!cancelled) {
+              setActivity((prev) => [...prev, line].slice(-MAX_ACTIVITY_LINES));
+            }
+          },
+          scanProgress(store),
+        );
         if (!cancelled) setState({ kind: 'ready', report });
       } catch (err) {
         if (!cancelled) {
@@ -126,7 +131,7 @@ export const SourceMapsDetectScreen = ({
         </Box>
         <PickerMenu
           options={[{ label: 'Exit', value: EXIT }]}
-          onSelect={() => process.exit(1)}
+          onSelect={() => store.requestExit(1)}
         />
       </Box>
     );
@@ -152,7 +157,7 @@ export const SourceMapsDetectScreen = ({
         <Box marginTop={1}>
           <PickerMenu
             options={[{ label: 'Exit', value: EXIT }]}
-            onSelect={() => process.exit(0)}
+            onSelect={() => store.requestExit(0)}
           />
         </Box>
       </Box>
@@ -182,7 +187,7 @@ export const SourceMapsDetectScreen = ({
         onSelect={(value) => {
           const path = Array.isArray(value) ? value[0] : value;
           if (path === EXIT) {
-            process.exit(0);
+            store.requestExit(0);
             return;
           }
           const chosen = instrumentable.find((p) => p.path === path);

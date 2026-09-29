@@ -9,17 +9,18 @@
 
 import { vi } from 'vitest';
 
-vi.mock('@utils/analytics.js', () => ({
+vi.mock(import('@utils/analytics.js'), () => ({
   analytics: {
     capture: vi.fn(),
     wizardCapture: vi.fn(),
     setTag: vi.fn(),
     shutdown: vi.fn().mockResolvedValue(undefined),
-  },
+  } as never,
   sessionProperties: vi.fn(() => ({})),
 }));
 
-import { WizardStore } from '@ui/tui/store';
+import { Program } from '@programs';
+import { WizardStore } from '@tui/store';
 import {
   askEscapeHint,
   handleAskKey,
@@ -51,7 +52,7 @@ describe('handleAskKey', () => {
   });
 
   it('declines the whole request end-to-end so the task can fall back', async () => {
-    const store = new WizardStore();
+    const store = new WizardStore(Program.PostHogIntegration);
     const answers = store.requestQuestion(pending);
 
     handleAskKey({ escape: true }, store);

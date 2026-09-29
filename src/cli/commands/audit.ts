@@ -1,4 +1,4 @@
-import { auditConfig } from '@programs/audit/index';
+import { getProgramConfig, Program } from '@programs';
 
 import type { Command } from './command';
 import { familyCommandFactory } from './factories/family-command-factory';
@@ -15,8 +15,10 @@ import { familyCommandFactory } from './factories/family-command-factory';
  * Adding a new skill-backed audit subcommand is a context-mill release —
  * no wizard release needed.
  */
+const audit = getProgramConfig(Program.Audit);
+
 export const auditCommand: Command = familyCommandFactory({
   family: 'audit',
-  description: auditConfig.description,
-  optionsFrom: auditConfig,
+  description: audit.description,
+  optionsFrom: audit,
 });

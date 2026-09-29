@@ -5,7 +5,7 @@
  */
 
 import { Text } from 'ink';
-import type { WizardStore } from '@ui/tui/store';
+import type { WizardStore } from '@tui/store';
 import { TextRevealMode } from '@tui/primitives/TextBlock';
 import type { ContentBlock } from '@tui/primitives/content-types';
 

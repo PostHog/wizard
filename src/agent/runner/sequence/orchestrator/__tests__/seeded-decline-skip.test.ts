@@ -10,13 +10,13 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 
-vi.mock('@utils/analytics', () => ({
+vi.mock(import('@utils/analytics'), () => ({
   analytics: {
     wizardCapture: vi.fn(),
     setTag: vi.fn(),
     capture: vi.fn(),
     captureException: vi.fn(),
-  },
+  } as never,
 }));
 
 import {
@@ -26,7 +26,7 @@ import {
 import {
   QueueStore,
   SkipReason,
-  TaskStatus,
+  QueueTaskStatus,
   type TransitionEvent,
   type QueuedTask,
 } from '@agent/runner/sequence/orchestrator/queue';
@@ -81,7 +81,7 @@ describe('skipDeclinedSeededTasks', () => {
     expect(skipped).toBe(1);
     expect(events).not.toContain('start');
     expect(events.filter((e) => e === 'skip')).toHaveLength(1);
-    expect(store.get(task.id)?.status).toBe(TaskStatus.Skipped);
+    expect(store.get(task.id)?.status).toBe(QueueTaskStatus.Skipped);
     expect(store.get(task.id)?.skipReason).toBe(SkipReason.UserDeclined);
   });
 
@@ -111,7 +111,7 @@ describe('skipDeclinedSeededTasks', () => {
     expect(
       skipDeclinedSeededTasks(store, new Map([[task.id, KEPT]]), labelFor),
     ).toBe(0);
-    expect(store.get(task.id)?.status).toBe(TaskStatus.Pending);
+    expect(store.get(task.id)?.status).toBe(QueueTaskStatus.Pending);
     expect(events).not.toContain('skip');
   });
 

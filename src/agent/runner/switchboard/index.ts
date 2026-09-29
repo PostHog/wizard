@@ -1,13 +1,6 @@
 // Resolves routing; model additions also require mint allowlists and gateway prompt/transport support.
 
-import {
-  DEFAULT_AGENT_MODEL,
-  GPT5_6_SOL_MODEL,
-  GPT5_6_TERRA_MODEL,
-  Harness,
-  Sequence,
-} from '@shared/constants';
-import type { ProgramId } from '@programs/types';
+import { GPT5_6_SOL_MODEL, Harness, Sequence } from '@shared/constants';
 import { resolveHarness } from './harness';
 import type { EffortLevel } from './models';
 import { resolveSequence } from './sequence';
@@ -29,7 +22,9 @@ export interface SwitchboardTrace {
 
 /** Everything a resolver middleware may branch on. Built once per run. */
 export interface SwitchboardCtx {
-  program: ProgramId;
+  program: string;
+  /** The program's own binding: the base every override and flag lands on. */
+  binding: AgentBinding;
   /** Composed sub-run (a dependency inside a parent program). Structurally linear — no override can orchestrate it. */
   composed?: boolean;
   flags: Record<string, string>;
@@ -87,7 +82,7 @@ export interface HarnessPick {
   thinkingLevel?: EffortLevel;
 }
 
-export interface ProgramBinding {
+export interface AgentBinding {
   sequence: Sequence;
   harness: Harness;
   model: string;
@@ -102,67 +97,12 @@ export interface ProgramBinding {
   contextMillOverride?: Record<string, Partial<HarnessPick>>;
 }
 
-// Legacy fallback; new programs should explicitly choose Pi and prefer orchestration.
-export const DEFAULT_BINDING: ProgramBinding = {
+// The binding a program gets when it declares none. New programs should choose Pi and prefer orchestration.
+export const DEFAULT_BINDING: AgentBinding = {
   sequence: Sequence.linear,
   harness: Harness.pi,
   model: GPT5_6_SOL_MODEL,
   thinkingLevel: 'medium',
-};
-
-/**
- * Per-program routing. Kept in lockstep with `PROGRAM_REGISTRY` by the
- * switchboard test. Anything absent falls back to `DEFAULT_BINDING`.
- */
-export const PROGRAM_BINDINGS: Partial<Record<ProgramId, ProgramBinding>> = {
-  'posthog-integration': DEFAULT_BINDING,
-  'revenue-analytics-setup': DEFAULT_BINDING,
-  'warehouse-source': DEFAULT_BINDING,
-  'error-tracking-upload-source-maps': {
-    sequence: Sequence.linear,
-    harness: Harness.pi,
-    model: GPT5_6_SOL_MODEL,
-    thinkingLevel: 'medium',
-  },
-  audit: DEFAULT_BINDING,
-  'events-audit': DEFAULT_BINDING,
-  'posthog-doctor': DEFAULT_BINDING,
-  'web-analytics-doctor': DEFAULT_BINDING,
-  migration: DEFAULT_BINDING,
-  'self-driving': DEFAULT_BINDING,
-  'agent-skill': DEFAULT_BINDING,
-  'mcp-add': DEFAULT_BINDING,
-  'mcp-remove': DEFAULT_BINDING,
-  'mcp-tutorial': DEFAULT_BINDING,
-  'mcp-analytics': DEFAULT_BINDING,
-  // Orchestrator on pi. The binding routes only; every stage's model and
-  // effort are pinned context-mill side in the flow's frontmatter
-  // (`model_pi`/`effort_pi`: terra seed, sol tasks, luna report).
-  metrics: {
-    sequence: Sequence.orchestrator,
-    harness: Harness.pi,
-    model: DEFAULT_AGENT_MODEL,
-  },
-  'replay-vision': {
-    sequence: Sequence.orchestrator,
-    harness: Harness.anthropic,
-    model: DEFAULT_AGENT_MODEL,
-  },
-  // Orchestrator on pi, like metrics. The binding routes only; every stage's
-  // model and effort are pinned context-mill side in the flow's frontmatter
-  // (`model_pi`/`effort_pi`: terra seed, install and init, sol tasks, luna report).
-  'error-tracking': {
-    sequence: Sequence.orchestrator,
-    harness: Harness.pi,
-    model: DEFAULT_AGENT_MODEL,
-  },
-  'ai-observability': {
-    sequence: Sequence.linear,
-    harness: Harness.pi,
-    model: GPT5_6_TERRA_MODEL,
-    thinkingLevel: 'high',
-  },
-  slack: DEFAULT_BINDING,
 };
 
 // ── Unified resolver ────────────────────────────────────────────────────
@@ -171,7 +111,7 @@ export const PROGRAM_BINDINGS: Partial<Record<ProgramId, ProgramBinding>> = {
 export function resolveBinding(
   ctx: SwitchboardCtx,
   role = 'default',
-): ProgramBinding {
+): AgentBinding {
   ctx.trace ??= {};
   const sequence = resolveSequence(ctx);
   const { harness, model, thinkingLevel } = resolveHarness(ctx, role);

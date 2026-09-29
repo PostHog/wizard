@@ -3,13 +3,13 @@ const { mockRunWizard, mockRunWizardCI } = vi.hoisted(() => ({
   mockRunWizardCI: vi.fn(),
 }));
 
-vi.mock('@cli/runners', () => ({
+vi.mock(import('@cli/runners'), () => ({
   runWizard: mockRunWizard,
   runWizardCI: mockRunWizardCI,
 }));
 
-vi.mock('@shared/skill-menu', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@shared/skill-menu')>();
+vi.mock(import('@shared/skill-menu'), async (importOriginal) => {
+  const actual = await importOriginal();
   return {
     ...actual,
     fetchSkillMenu: vi.fn(),
@@ -19,22 +19,31 @@ vi.mock('@shared/skill-menu', async (importOriginal) => {
 import type { Arguments } from 'yargs';
 import type { MockedFunction } from 'vitest';
 import { auditCommand } from '../commands/audit';
-import { migrateCommand } from '../../commands/migrate';
-import { mcpAnalyticsCommand } from '../../commands/mcp-analytics';
-import { replayVisionCommand } from '../../commands/replay-vision';
-import { revenueCommand } from '../../commands/revenue';
-import { warehouseCommand } from '../../commands/warehouse';
-import { uploadSourcemapsCommand } from '../../commands/upload-sourcemaps';
+import { wizardCommands } from '../commands';
 import { selfDrivingCommand } from '../commands/self-driving';
 import {
   dispatchFamily,
   pickerChildrenToShow,
-} from '@cli/commands/dispatch-family';
-import type { Command } from '../commands/command';
+} from '../commands/dispatch-family';
+import { commandKeys, type Command } from '../commands/command';
 import { fetchSkillMenu, type CliEntry } from '@shared/skill-menu';
-import { auditConfig } from '@programs/audit/index';
-import { webAnalyticsDoctorConfig } from '@programs/web-analytics-doctor/index';
+import { Program } from '@programs';
 import { parseCommand } from './helpers/parse-command.no-jest';
+
+/** The registered top-level command a user reaches by typing `word`. */
+const wizardCommand = (word: string): Command => {
+  const found = wizardCommands().find((c) =>
+    commandKeys(c.name).includes(word),
+  );
+  if (!found) throw new Error(`no wizard command "${word}"`);
+  return found;
+};
+const migrateCommand = wizardCommand('migrate');
+const mcpAnalyticsCommand = wizardCommand('mcp-analytics');
+const replayVisionCommand = wizardCommand('replay-vision');
+const revenueCommand = wizardCommand('revenue-analytics');
+const warehouseCommand = wizardCommand('warehouse');
+const uploadSourcemapsCommand = wizardCommand('upload-source-maps');
 
 const mockFetchSkillMenu = fetchSkillMenu as MockedFunction<
   typeof fetchSkillMenu
@@ -166,19 +175,19 @@ describe('dispatchFamily', () => {
     expect(mockFetchSkillMenu).not.toHaveBeenCalled();
     expect(mockRunWizard).toHaveBeenCalledTimes(1);
     const [config] = mockRunWizard.mock.calls[0] as [{ id?: string }];
-    expect(config.id).toBe(webAnalyticsDoctorConfig.id);
+    expect(config.id).toBe(Program.WebAnalyticsDoctor);
   });
 
-  test('the comprehensive `audit all` runs the specialized auditConfig, not agent-skill', async () => {
+  test('the comprehensive `audit all` runs the specialized audit program, not agent-skill', async () => {
     // skillId 'audit' (what context-mill emits for `audit all`) signals
-    // the wizard to use auditConfig (custom hooks, content blocks).
+    // the wizard to use the `audit` program (custom hooks, content blocks).
     mockMenu([
       entry({ skillId: 'audit', command: 'all', parentCommand: 'audit' }),
     ]);
     await dispatchFamily('audit', makeArgv({ skill: 'all' }));
     expect(mockRunWizard).toHaveBeenCalledTimes(1);
     const [config] = mockRunWizard.mock.calls[0] as [{ id?: string }];
-    expect(config.id).toBe(auditConfig.id);
+    expect(config.id).toBe(Program.Audit);
   });
 });
 

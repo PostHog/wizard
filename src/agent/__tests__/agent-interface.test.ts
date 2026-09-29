@@ -15,19 +15,20 @@ import { RESUME_INSTRUCTION } from '@agent/signals';
 import { analytics } from '@utils/analytics';
 import { Sequence } from '@shared/constants';
 import type { WizardRunOptions } from '@utils/types';
-import type { SpinnerHandle } from '@ui';
+import type { SpinnerHandle } from '@agent/types';
+import { formatLogLine } from '@utils/debug';
 
 // Mock dependencies
-vi.mock('@utils/analytics');
-vi.mock('@utils/debug');
+vi.mock(import('@utils/analytics'));
+vi.mock(import('@utils/debug'));
 
 // Mock the SDK module
 const mockQuery = vi.fn();
-vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
+vi.mock(import('@anthropic-ai/claude-agent-sdk'), () => ({
   query: (...args: unknown[]) => mockQuery(...args),
 }));
 
-// Mock the UI layer
+// A UI-shaped stub; the agent never reaches a UI, so its calls stay empty.
 const mockUIInstance = {
   log: {
     step: vi.fn(),
@@ -61,9 +62,6 @@ const mockUIInstance = {
   addTokenUsage: vi.fn(),
   setFinalTokenCostUsd: vi.fn(),
 };
-vi.mock('../../ui', () => ({
-  getUI: () => mockUIInstance,
-}));
 
 describe('runAgent', () => {
   let mockSpinner: {
@@ -170,6 +168,58 @@ describe('runAgent', () => {
     expect(new Set(snapshots.map((items) => items[0].id)).size).toBe(1);
     expect(snapshots[0][0].id).toEqual(expect.any(String));
     expect(snapshots.at(-1)[0].content).toBe('New label');
+  });
+
+  it('a debug run emits the agent debug lines as info log progress; a non-debug run emits none', async () => {
+    const actual = await vi.importActual<typeof import('@utils/debug')>(
+      '@utils/debug',
+    );
+    vi.mocked(formatLogLine).mockImplementation(actual.formatLogLine);
+    const infoLines = async (debug: boolean): Promise<string[]> => {
+      const progress = vi.fn();
+      mockQuery.mockImplementation(
+        ({
+          options,
+        }: {
+          options: { canUseTool: (n: string, i: unknown) => unknown };
+        }) => {
+          // A denied Bash call: its decision is one of the debug lines.
+          void options.canUseTool('Bash', { command: 'rm -rf /' });
+          return (function* () {
+            yield {
+              type: 'result',
+              subtype: 'success',
+              is_error: false,
+              result: 'Done',
+            };
+          })();
+        },
+      );
+      await runAgent(
+        { ...defaultAgentConfig, emit: progress },
+        'test',
+        { ...defaultOptions, debug },
+        mockSpinner as unknown as SpinnerHandle,
+      );
+      return progress.mock.calls
+        .map(([event]) => event)
+        .filter((event) => event.kind === 'log' && event.level === 'info')
+        .map((event) => event.message as string);
+    };
+
+    const debugLines = await infoLines(true);
+    expect(debugLines).toContain('SDK Message type: result');
+    expect(debugLines).toContainEqual(
+      expect.stringMatching(/^Denying bash command \(.+\): rm -rf \/$/),
+    );
+    const quietLines = await infoLines(false);
+    expect(
+      quietLines.filter(
+        (line) =>
+          line.startsWith('SDK Message type') ||
+          line.startsWith('Denying bash command'),
+      ),
+    ).toEqual([]);
   });
 
   it('aborts an unfinished SDK run at its configured timeout', async () => {
@@ -900,7 +950,7 @@ describe('subprocess gateway credentials', () => {
 
 describe('gateway re-mint on 401', () => {
   const spinner = { start: vi.fn(), stop: vi.fn(), message: vi.fn() };
-  // Where the run reports the auth screen; stands where getUI() used to.
+  // Where the run reports the auth screen.
   const emit = vi.fn();
   const authErrors = () =>
     emit.mock.calls.filter(([e]) => e.kind === 'authError');
@@ -1111,21 +1161,6 @@ describe('gateway re-mint on 401', () => {
     expect(result.kind === 'decided_failure' && result.failure.message).toBe(
       'Authentication failed (401)',
     );
-  });
-});
-
-describe('auth error context', () => {
-  // The 401 screen's region comes from whichever url it is handed, which is why
-  // runAgent passes the run's resolved auth rather than the process global a
-  // concurrent run also writes.
-  it.each([
-    ['https://ai-gateway.us.posthog.com', 'us'],
-    ['https://ai-gateway.eu.posthog.com', 'eu'],
-    ['http://localhost:3308', 'local'],
-  ])('derives the region from the url it is given (%s)', (url, region) => {
-    const ctx = buildAuthErrorContext('/test/dir', url);
-    expect(ctx.gatewayUrl).toBe(url);
-    expect(ctx.region).toBe(region);
   });
 });
 

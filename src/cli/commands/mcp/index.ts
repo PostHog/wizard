@@ -1,5 +1,5 @@
-import { mcpAddCommand } from '../../../commands/mcp/add';
-import { mcpRemoveCommand } from '../../../commands/mcp/remove';
+import { mcpAddCommand } from './add';
+import { mcpRemoveCommand } from './remove';
 import { mcpTutorialCommand } from './tutorial';
 import type { Command } from '../command';
 

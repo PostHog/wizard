@@ -1,29 +1,31 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import {
-  configureLogFile,
-  getLogFilePath,
-  initLogFile,
-  logToFile,
-} from '@utils/debug';
 
 describe('log file writing', () => {
-  const originalPath = getLogFilePath();
   let tmpRoot: string;
+
+  // The log path is fixed when the module loads, so each test loads it fresh under its own directory.
+  const loadWithLogDir = async (dir: string) => {
+    vi.stubEnv('POSTHOG_WIZARD_LOG_FILE', path.join(dir, 'posthog-wizard.log'));
+    vi.resetModules();
+    return import('@utils/debug');
+  };
 
   beforeEach(() => {
     tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'wizard-debug-'));
   });
 
   afterEach(() => {
-    configureLogFile({ path: originalPath, enabled: true });
+    vi.unstubAllEnvs();
     fs.rmSync(tmpRoot, { recursive: true, force: true });
   });
 
-  it('creates a missing log directory instead of dropping the log', () => {
-    const logPath = path.join(tmpRoot, 'does', 'not', 'exist', 'wizard.log');
-    configureLogFile({ path: logPath, enabled: true });
+  it('creates a missing log directory instead of dropping the log', async () => {
+    const dir = path.join(tmpRoot, 'does', 'not', 'exist');
+    const { logToFile, getLogFilePath } = await loadWithLogDir(dir);
+    const logPath = path.join(dir, 'posthog-wizard.log');
+    expect(getLogFilePath()).toBe(logPath);
 
     logToFile('first line after missing dir');
 
@@ -33,69 +35,38 @@ describe('log file writing', () => {
     );
   });
 
-  it('initLogFile also survives a missing directory', () => {
-    const logPath = path.join(tmpRoot, 'nested', 'wizard.log');
-    configureLogFile({ path: logPath, enabled: true });
+  it('initLogFile also survives a missing directory', async () => {
+    const dir = path.join(tmpRoot, 'nested');
+    const { initLogFile } = await loadWithLogDir(dir);
 
     initLogFile();
 
-    expect(fs.readFileSync(logPath, 'utf8')).toContain('PostHog Wizard Run:');
+    expect(
+      fs.readFileSync(path.join(dir, 'posthog-wizard.log'), 'utf8'),
+    ).toContain('PostHog Wizard Run:');
   });
 
-  it('never throws when the log path is unwritable even after the mkdir retry', () => {
+  it('never throws when the log path is unwritable even after the mkdir retry', async () => {
     // A file where the parent dir should be defeats the mkdir retry too.
     const blocker = path.join(tmpRoot, 'blocker');
     fs.writeFileSync(blocker, '');
-    configureLogFile({ path: path.join(blocker, 'wizard.log'), enabled: true });
+    const { logToFile } = await loadWithLogDir(blocker);
 
     expect(() => logToFile('goes nowhere')).not.toThrow();
     expect(() => logToFile('still nowhere')).not.toThrow();
   });
 
-  it('keeps writing to an existing directory as before', () => {
-    const logPath = path.join(tmpRoot, 'wizard.log');
-    configureLogFile({ path: logPath, enabled: true });
+  it('keeps writing to an existing directory as before', async () => {
+    const { logToFile } = await loadWithLogDir(tmpRoot);
 
     logToFile('plain write');
     logToFile('second write');
 
-    const content = fs.readFileSync(logPath, 'utf8');
+    const content = fs.readFileSync(
+      path.join(tmpRoot, 'posthog-wizard.log'),
+      'utf8',
+    );
     expect(content).toContain('plain write');
     expect(content).toContain('second write');
-  });
-});
-
-describe('debug console sink', () => {
-  it('sends enabled debug lines to the injected sink only', async () => {
-    const { debug, enableDebugLogs, setDebugSink } = await import('../debug');
-    const lines: string[] = [];
-    const previous = setDebugSink((line) => lines.push(line));
-    try {
-      debug('before enable');
-      expect(lines).toEqual([]);
-      enableDebugLogs();
-      debug('hello', 'world');
-      expect(lines).toEqual(['hello world']);
-    } finally {
-      setDebugSink(previous);
-    }
-  });
-
-  it('is wired to the current UI by the UI module', async () => {
-    const { debug, enableDebugLogs } = await import('../debug');
-    const { getUI, setUI } = await import('@ui');
-    const seen: string[] = [];
-    const original = getUI();
-    setUI({
-      ...original,
-      log: { ...original.log, info: (line: string) => seen.push(line) },
-    } as typeof original);
-    try {
-      enableDebugLogs();
-      debug('routed');
-      expect(seen).toEqual(['routed']);
-    } finally {
-      setUI(original);
-    }
   });
 });

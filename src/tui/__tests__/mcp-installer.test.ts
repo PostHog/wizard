@@ -1,6 +1,6 @@
 import { createMcpInstaller } from '@tui/services/mcp-installer';
 import { McpClientStatus } from '@shared/mcp-clients/results';
-import * as mcpModuleReal from '@steps/add-mcp-server-to-clients/index';
+import * as mcpModuleReal from '@shared/mcp-clients/install';
 import { analytics } from '@utils/analytics';
 
 // The module is mocked below. Expose its exports as plain Mocks so the tests
@@ -8,7 +8,7 @@ import { analytics } from '@utils/analytics';
 // previous `require()` form gave) while still typing the .mock* helpers.
 const mcpModule = mcpModuleReal as unknown as Record<string, Mock>;
 
-vi.mock('../../steps/add-mcp-server-to-clients/index.js', () => ({
+vi.mock(import('@shared/mcp-clients/install'), () => ({
   getSupportedClients: vi.fn(),
   getInstalledClients: vi.fn(),
   removeMCPServer: vi.fn(),
@@ -16,16 +16,12 @@ vi.mock('../../steps/add-mcp-server-to-clients/index.js', () => ({
   installPlugins: vi.fn(),
 }));
 
-vi.mock('../../shared/mcp-clients/defaults.js', () => ({
-  ALL_FEATURE_VALUES: ['feature-a'],
-}));
-
-vi.mock('@utils/debug.js', () => ({
+vi.mock(import('@utils/debug.js'), () => ({
   logToFile: vi.fn(),
 }));
 
-vi.mock('@utils/analytics.js', () => ({
-  analytics: { wizardCapture: vi.fn() },
+vi.mock(import('@utils/analytics.js'), () => ({
+  analytics: { wizardCapture: vi.fn() } as never,
 }));
 
 const changed = (name: string) => ({

@@ -14,7 +14,7 @@ import type {
   AgentProgress,
   ProgressEmitter,
   SpinnerHandle,
-} from '@agent/progress';
+} from '../../progress';
 import type { RunSnapshot } from './types';
 
 export interface ProgressCollector {
@@ -116,7 +116,7 @@ export function createProgressCollector(
   };
 }
 
-/** The run spinner as a progress emitter. One per run, like `getUI().spinner()`. */
+/** The run spinner as a progress emitter. One per run. */
 export function createEmitSpinner(emit: ProgressEmitter): SpinnerHandle {
   return {
     start: (message) => emit({ kind: 'spinner', action: 'start', message }),
@@ -125,7 +125,7 @@ export function createEmitSpinner(emit: ProgressEmitter): SpinnerHandle {
   };
 }
 
-/** `WizardUI.log` as a progress emitter. */
+/** A leveled logger as a progress emitter: each call is one `log` event. */
 export function createEmitLog(emit: ProgressEmitter): {
   info(message: string): void;
   warn(message: string): void;

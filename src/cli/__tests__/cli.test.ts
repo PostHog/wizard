@@ -2,125 +2,59 @@
 // vi.mock factories that reference them run.
 // NOTE: variable names must be unique across test files because .test.ts
 // files without top-level imports/exports share a single TS project scope.
-const { mockBuildSessionCli, mockProvisionNewAccountCli } = vi.hoisted(() => ({
-  mockBuildSessionCli: vi.fn((args: Record<string, unknown>) => args),
+const {
+  mockRunTuiCli,
+  mockRunHeadlessCli,
+  mockProvisionNewAccountCli,
+  mockUseLogFileCli,
+} = vi.hoisted(() => ({
+  mockUseLogFileCli: vi.fn(),
+  // The TUI host parks on its intro; headless resolves 0.
+  mockRunTuiCli: vi.fn(() => new Promise<number>(() => undefined)),
+  mockRunHeadlessCli: vi.fn(() => Promise.resolve(0)),
   mockProvisionNewAccountCli: vi.fn(),
 }));
 
-// Headless-only machinery, stubbed so the headless path doesn't construct a
-// real WizardStore (which would re-call the mocked buildSession) or open a real
-// network stream. The spies assert the stream is wired in headless and not CI.
-const { mockStreamAttach, mockStreamShutdown, mockStreamDestinations } =
-  vi.hoisted(() => ({
-    mockStreamAttach: vi.fn(),
-    mockStreamShutdown: vi.fn(),
-    // Which destinations each run wired up, by name. The CI contract is about
-    // destinations, not about whether a stream exists.
-    mockStreamDestinations: vi.fn(),
-  }));
-vi.mock('../../programs/task-stream', () => ({
-  // shutdown() hardcodes a resolved Promise (not a bare vi.fn) so the
-  // interactive runWizard's dangling SIGTERM handler — which calls
-  // shutdown().catch() and outlives these tests — never hits undefined.catch.
-  TaskStreamPush: class {
-    constructor(opts: { destinations: Array<{ name: string }> }) {
-      mockStreamDestinations(opts.destinations.map((d) => d.name));
-    }
-    attach() {
-      mockStreamAttach();
-    }
-    finishRun = vi.fn().mockResolvedValue(undefined);
-    shutdown() {
-      mockStreamShutdown();
-      return Promise.resolve();
-    }
-  },
-  PostHogDestination: class {
-    readonly name = 'posthog';
-  },
-  createFileDestination: (value: unknown) =>
-    value === undefined || value === null || value === false
-      ? null
-      : { name: 'file', path: '/tmp/task-stream.jsonl' },
+// The CLI's job ends at the host: it parses arguments, picks the TUI or the
+// headless host, and hands it the launch values. These stand in for the hosts.
+vi.mock(import('@tui'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  runTui: mockRunTuiCli,
 }));
-vi.mock('../../ui/tui/store', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../../ui/tui/store')>()),
-  WizardStore: class {
-    session: unknown;
-    setRunPhase = vi.fn();
-    setOutroData = vi.fn();
-    syncTodos = vi.fn();
-  },
-}));
+vi.mock(import('@headless'), () => ({ runHeadless: mockRunHeadlessCli }));
 
-vi.mock('semver', () => ({ satisfies: () => true }));
-// importOriginal keeps real exports (e.g. RunPhase) while overriding
-// buildSession — vitest throws on access to exports a partial mock omits.
-vi.mock('../../lib/wizard-session', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../../lib/wizard-session')>()),
-  buildSession: mockBuildSessionCli,
-}));
-vi.mock('@utils/provisioning', () => ({
+vi.mock(import('semver'), () => ({ satisfies: () => true }));
+vi.mock(import('@utils/provisioning'), () => ({
   provisionNewAccount: mockProvisionNewAccountCli,
 }));
-vi.mock('../../tui/start-tui', () => ({
-  startTUI: () => ({
-    unmount: vi.fn(),
-    store: {
-      session: {},
-      runReadyHooks: vi.fn().mockResolvedValue(undefined),
-      // eslint-disable-next-line @typescript-eslint/no-empty-function
-      getGate: vi.fn().mockReturnValue(new Promise(() => {})),
-      subscribe: vi.fn(),
-      onEnterScreen: vi.fn(),
-    },
-  }),
-}));
-vi.mock('../../programs/posthog-integration', () => ({
-  posthogIntegrationConfig: {
+vi.mock(import('@programs/posthog-integration'), () => ({
+  config: {
     id: 'posthog-integration',
     steps: [],
     run: null,
-  },
-  integrationRunStep: {
-    id: 'run',
-    label: 'Integration',
-    screenId: 'run',
-    run: () => Promise.resolve(),
-  },
+  } as never,
 }));
-vi.mock('@utils/environment', () => ({
+vi.mock(import('@utils/environment'), () => ({
   isNonInteractiveEnvironment: () => false,
   readEnvironment: () => ({}),
 }));
 // CI-path dynamic imports need mocks to prevent unhandled rejections
-vi.mock('@utils/env-api-key', () => ({
+vi.mock(import('@utils/env-api-key'), () => ({
   readApiKeyFromEnv: () => undefined,
 }));
-vi.mock('@utils/debug', () => ({
-  configureLogFileFromEnvironment: vi.fn(),
+vi.mock(import('@utils/debug'), () => ({
   logToFile: vi.fn(),
-  setDebugSink: vi.fn(),
+  useLogFile: mockUseLogFileCli,
 }));
-vi.mock('../../programs/frameworks/registry', () => ({
-  FRAMEWORK_REGISTRY: {},
-}));
-vi.mock('../../programs/detection', () => ({
-  detectFramework: vi.fn().mockResolvedValue(null),
-  gatherFrameworkContext: vi.fn().mockResolvedValue({}),
-}));
-vi.mock('@utils/analytics', () => ({
+vi.mock(import('@utils/analytics'), () => ({
   analytics: {
     setTag: vi.fn(),
     shutdown: vi.fn().mockResolvedValue(undefined),
-  },
+  } as never,
 }));
-vi.mock('@utils/wizard-abort', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@utils/wizard-abort')>()),
+vi.mock(import('@host/wizard-abort'), async (importOriginal) => ({
+  ...(await importOriginal()),
   wizardAbort: vi.fn(),
-}));
-vi.mock('../../programs/run-agent-legacy', () => ({
-  runProgramAgent: vi.fn().mockResolvedValue(undefined),
 }));
 
 describe('CLI argument parsing', () => {
@@ -189,9 +123,10 @@ describe('CLI argument parsing', () => {
     process.argv = ['node', 'bin.ts', ...args];
 
     try {
-      // vi.resetModules() (afterEach) clears the registry, so this re-evaluates
-      // bin.ts fresh on every call — the vitest equivalent of isolateModules.
-      await import('../../../bin');
+      // vi.resetModules() (afterEach) clears the registry, so this builds the
+      // command line fresh on every call, as bin.ts does.
+      const { runCli } = await import('../index');
+      runCli();
     } catch {
       // process.exit mock throws to halt handler execution
     }
@@ -207,7 +142,7 @@ describe('CLI argument parsing', () => {
     // async turns.
     //
     // First anchor: pump the event loop until this run reaches a sink —
-    // buildSession (success paths) or process.exit (validation-failure paths).
+    // a host (success paths) or process.exit (validation-failure paths).
     // This guarantees the run has acted before we return, so it can't leak a
     // first sink call into the next test.
     // Poll on a real timer (not a fixed event-loop-turn count): afterEach's
@@ -216,31 +151,41 @@ describe('CLI argument parsing', () => {
     // parallel. A wall-clock budget tolerates that load; it returns as soon as
     // the sink fires, so the budget is only spent in the worst case.
     const sank = () =>
-      mockBuildSessionCli.mock.calls.length > 0 ||
+      mockRunTuiCli.mock.calls.length > 0 ||
+      mockRunHeadlessCli.mock.calls.length > 0 ||
       (process.exit as unknown as Mock).mock.calls.length > 0;
     for (let i = 0; i < 300 && !sank(); i++) {
       await new Promise((resolve) => setTimeout(resolve, 10));
     }
     // Then drain: process.exit is a no-op here, so a validation-failure chain
-    // keeps running past it and may still call buildSession. A short wait lets
+    // keeps running past it and may still reach a host. A short wait lets
     // that trailing work finish inside this test rather than leaking into the
     // next one. (Success chains past their sink only park on the never-resolving
     // intro gate or hit mocked no-ops.)
     await new Promise((resolve) => setTimeout(resolve, 150));
   }
 
-  /**
-   * Helper to get the arguments passed to the last buildSession call.
-   * buildSession is the common interception point for both CI and non-CI paths.
-   */
-  function getLastBuildSessionArgs() {
-    expect(mockBuildSessionCli).toHaveBeenCalled();
-    const calls = mockBuildSessionCli.mock.calls;
-    return calls[calls.length - 1][0];
+  /** The launch values the last host was handed; every path builds its session from them. */
+  function getLastBuildSessionArgs(): Record<string, unknown> {
+    const calls = [
+      ...mockRunTuiCli.mock.calls,
+      ...mockRunHeadlessCli.mock.calls,
+    ] as unknown as Array<[unknown, { session: Record<string, unknown> }]>;
+    expect(calls.length).toBeGreaterThan(0);
+    return calls[calls.length - 1][1].session;
   }
 
-  // Note: --region flows through buildSession only on the non-interactive
-  // paths; interactively it's ignored (OAuth reads the region off the token
+  /** The mode the headless host was started in. */
+  function headlessMode(): string {
+    const calls = mockRunHeadlessCli.mock.calls as unknown as Array<
+      [unknown, { mode: string }]
+    >;
+    expect(calls.length).toBeGreaterThan(0);
+    return calls[calls.length - 1][1].mode;
+  }
+
+  // Note: --region reaches the session only on the non-interactive paths;
+  // interactively it's ignored (OAuth reads the region off the token
   // response), so the non-CI cases just assert parsing succeeds.
 
   describe('--region flag', () => {
@@ -248,7 +193,7 @@ describe('CLI argument parsing', () => {
       'accepts "%s" as a valid region',
       async (region) => {
         await runCLI(['--region', region]);
-        expect(mockBuildSessionCli).toHaveBeenCalled();
+        expect(mockRunTuiCli).toHaveBeenCalled();
       },
     );
   });
@@ -259,7 +204,7 @@ describe('CLI argument parsing', () => {
 
       await runCLI([]);
 
-      expect(mockBuildSessionCli).toHaveBeenCalled();
+      expect(mockRunTuiCli).toHaveBeenCalled();
     });
 
     test('CLI args override environment variables', async () => {
@@ -267,7 +212,7 @@ describe('CLI argument parsing', () => {
 
       await runCLI(['--region', 'eu']);
 
-      expect(mockBuildSessionCli).toHaveBeenCalled();
+      expect(mockRunTuiCli).toHaveBeenCalled();
     });
   });
 
@@ -277,7 +222,7 @@ describe('CLI argument parsing', () => {
 
       const args = getLastBuildSessionArgs();
 
-      // Existing flags forwarded through buildSession
+      // Existing flags forwarded to the host
       expect(args.debug).toBe(true);
       expect(args.signup).toBe(true);
       expect(args.installDir).toBe('/custom/path');
@@ -287,8 +232,8 @@ describe('CLI argument parsing', () => {
   // MCP commands now launch TUI — tested via integration tests
 
   describe('local dev flags', () => {
-    // The runners preflight every requested local server and abort if one is
-    // down, which would stop the run before buildSession. Stub the probe so
+    // The hosts preflight every requested local server and abort if one is
+    // down, which would stop the run. Stub the probe so
     // these assert flag plumbing rather than whether a dev stack happens to be
     // running on this machine. Reachability itself is covered in local-dev.test.
     beforeEach(() => {
@@ -301,7 +246,7 @@ describe('CLI argument parsing', () => {
     });
 
     // Skills resolve from the process-wide target the middleware sets, not
-    // from a buildSession arg — so assert the URL the run would actually fetch.
+    // from a launch value — so assert the URL the run would actually fetch.
     async function skillsBaseUrl(): Promise<{ actual: string; local: string }> {
       const { getSkillsBaseUrl, LOCAL_SKILLS_BASE_URL } = await import(
         '@shared/constants'
@@ -411,36 +356,6 @@ describe('CLI argument parsing', () => {
       expect(process.exit).toHaveBeenCalledWith(1);
     });
 
-    test('passes --api-key through to buildSession', async () => {
-      await runCLI([
-        '--ci',
-        '--region',
-        'us',
-        '--api-key',
-        'phx_test_key',
-        '--install-dir',
-        '/tmp/test',
-      ]);
-
-      const args = getLastBuildSessionArgs();
-      expect(args.apiKey).toBe('phx_test_key');
-    });
-
-    test('passes --region through to buildSession', async () => {
-      await runCLI([
-        '--ci',
-        '--region',
-        'eu',
-        '--api-key',
-        'phx_test',
-        '--install-dir',
-        '/tmp/test',
-      ]);
-
-      const args = getLastBuildSessionArgs();
-      expect(args.region).toBe('eu');
-    });
-
     test('leaves region unset when --region is not passed', async () => {
       await runCLI([
         '--ci',
@@ -454,7 +369,7 @@ describe('CLI argument parsing', () => {
       expect(args.region).toBeUndefined();
     });
 
-    test("tags the build as 'ci'", async () => {
+    test('starts the headless host in ci mode', async () => {
       await runCLI([
         '--ci',
         '--api-key',
@@ -463,27 +378,12 @@ describe('CLI argument parsing', () => {
         '/tmp/test',
       ]);
 
-      const { analytics } = await import('@utils/analytics');
-      expect(analytics.setTag).toHaveBeenCalledWith('build', 'ci');
-    });
-
-    // CI dumps the stream to a local file and never pushes: a CI run is
-    // synthetic, so a push would create a session row in a real project.
-    test('dumps the wizard-session stream locally and never pushes in CI', async () => {
-      await runCLI([
-        '--ci',
-        '--api-key',
-        'phx_test',
-        '--install-dir',
-        '/tmp/test',
-      ]);
-
-      expect(mockStreamAttach).toHaveBeenCalled();
-      expect(mockStreamDestinations).toHaveBeenCalledWith(['file']);
+      expect(headlessMode()).toBe('ci');
+      expect(mockRunTuiCli).not.toHaveBeenCalled();
     });
 
     // The CI bot authenticates with a wizard-app pha_ token, the same
-    // credential headless takes. Either key reaches buildSession untouched and
+    // credential headless takes. Either key reaches the host untouched and
     // neither draws the unexpected-prefix warning.
     test.each(['phx_ci_key', 'pha_ci_bot_token'])(
       'accepts %s without a prefix warning',
@@ -517,14 +417,14 @@ describe('CLI argument parsing', () => {
   // routes through the same non-interactive runner (session.ci === true), but
   // is its own flag and tags the build distinctly so the two modes segment in
   // analytics. Its CLI name is intentionally ugly/undocumented — sourced from
-  // @lib/headless-mode so this test never has to spell it out.
+  // HEADLESS_FLAG in src/env.ts so this test never has to spell it out.
   describe('headless flag', () => {
-    // Source of truth: HEADLESS_FLAG in src/lib/headless-mode.ts. Hardcoded
+    // Source of truth: HEADLESS_FLAG in src/env.ts. Hardcoded
     // here (not imported) to keep this file free of top-level imports — see the
     // note at the top of the file.
     const headlessFlag = '--headless-DONOTUSE-EXPERIMENTAL';
 
-    test('routes through the CI runner (builds a ci session)', async () => {
+    test("starts the headless host in headless mode (not 'ci')", async () => {
       await runCLI([
         headlessFlag,
         '--api-key',
@@ -533,22 +433,7 @@ describe('CLI argument parsing', () => {
         '/tmp/test',
       ]);
 
-      const args = getLastBuildSessionArgs();
-      expect(args.ci).toBe(true);
-    });
-
-    test("tags the build as 'headless' (not 'ci')", async () => {
-      await runCLI([
-        headlessFlag,
-        '--api-key',
-        'pha_test',
-        '--install-dir',
-        '/tmp/test',
-      ]);
-
-      const { analytics } = await import('@utils/analytics');
-      expect(analytics.setTag).toHaveBeenCalledWith('build', 'headless');
-      expect(analytics.setTag).not.toHaveBeenCalledWith('build', 'ci');
+      expect(headlessMode()).toBe('headless');
     });
 
     // The dispatch checks the headless flag before --ci, so headless wins when
@@ -563,24 +448,7 @@ describe('CLI argument parsing', () => {
         '/tmp/test',
       ]);
 
-      const { analytics } = await import('@utils/analytics');
-      expect(analytics.setTag).toHaveBeenCalledWith('build', 'headless');
-      expect(analytics.setTag).not.toHaveBeenCalledWith('build', 'ci');
-    });
-
-    test('attaches and flushes the wizard-session stream', async () => {
-      await runCLI([
-        headlessFlag,
-        '--api-key',
-        'pha_test',
-        '--install-dir',
-        '/tmp/test',
-      ]);
-
-      expect(mockStreamAttach).toHaveBeenCalled();
-      expect(mockStreamShutdown).toHaveBeenCalled();
-      // Headless is the surface the web app watches, so it pushes.
-      expect(mockStreamDestinations).toHaveBeenCalledWith(['posthog']);
+      expect(headlessMode()).toBe('headless');
     });
 
     test('does not require --region when headless is set', async () => {
@@ -646,6 +514,19 @@ describe('CLI argument parsing', () => {
       expect(process.exit).not.toHaveBeenCalledWith(1);
     });
 
+    test('POSTHOG_WIZARD_LOG_FILE picks the log file instead of failing the run', async () => {
+      process.env.POSTHOG_WIZARD_CI = 'true';
+      process.env.POSTHOG_WIZARD_REGION = 'us';
+      process.env.POSTHOG_WIZARD_API_KEY = 'phx_env_key';
+      process.env.POSTHOG_WIZARD_INSTALL_DIR = '/tmp/test';
+      process.env.POSTHOG_WIZARD_LOG_FILE = '/tmp/wizard-cli-test.log';
+      await runCLI([]);
+      expect(process.exit).not.toHaveBeenCalledWith(1);
+      expect(mockUseLogFileCli).toHaveBeenCalledWith(
+        '/tmp/wizard-cli-test.log',
+      );
+    });
+
     test('accepts the explicit WizardRun assignment through the strict environment parser', async () => {
       process.env.POSTHOG_WIZARD_CI = 'true';
       process.env.POSTHOG_WIZARD_REGION = 'us';
@@ -708,7 +589,7 @@ describe('CLI argument parsing', () => {
         '/tmp/test',
         ...extra,
       ]);
-      // Let the async provisioning IIFE + runWizardCI's own IIFE settle
+      // Let the async provisioning and the host's start settle
       for (let i = 0; i < 5; i++) {
         await new Promise((resolve) => setImmediate(resolve));
       }
@@ -766,7 +647,7 @@ describe('CLI argument parsing', () => {
       await runCISignup();
       expect(mockProvisionNewAccountCli).toHaveBeenCalled();
       expect(process.exit).toHaveBeenCalledWith(1);
-      expect(mockBuildSessionCli).not.toHaveBeenCalled();
+      expect(mockRunHeadlessCli).not.toHaveBeenCalled();
     });
 
     test('exits non-zero when provisioning returns no personal API key', async () => {
@@ -776,7 +657,7 @@ describe('CLI argument parsing', () => {
       });
       await runCISignup();
       expect(process.exit).toHaveBeenCalledWith(1);
-      expect(mockBuildSessionCli).not.toHaveBeenCalled();
+      expect(mockRunHeadlessCli).not.toHaveBeenCalled();
     });
 
     test('existing --api-key takes precedence over --signup', async () => {

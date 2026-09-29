@@ -3,7 +3,7 @@
  * keyboard on one store and apply the control action on another, then golden
  * both session diffs. Pairs whose diffs differ today are recorded, not hidden.
  */
-import { vi, describe, it, expect, afterEach, beforeAll } from 'vitest';
+import { vi, describe, it, expect, afterEach } from 'vitest';
 import { render, cleanup } from 'ink-testing-library';
 import { mkdtempSync } from 'fs';
 import { tmpdir } from 'os';
@@ -13,69 +13,69 @@ import {
   Program,
   ScreenId,
   Overlay,
-  RunPhase,
-  McpOutcome,
   type ProgramId,
-} from '../../ui/tui/store';
-import { InkUI } from '../../ui/tui/ink-ui';
-import { setUI } from '@ui/index';
-import {
-  buildSession,
-  OutroKind,
-  type WizardSession,
-} from '@lib/wizard-session';
+} from '../store';
+import { McpOutcome, RunPhase } from '@shared/run-state';
+import { buildSession, FRAMEWORK_REGISTRY } from '@programs';
+import type { WizardSession } from '@programs/types';
+import { initialTuiState, type TuiState } from '@tui/tui-state';
+import { OutroKind } from '@shared/outro';
 import { Integration } from '@shared/constants';
-import { FRAMEWORK_REGISTRY } from '@programs/frameworks/registry';
 import { HostResolution } from '@shared/host-resolution';
 import { WizardReadiness } from '@shared/health-checks/readiness';
-import { SOURCE_MAPS_CONTEXT_KEYS } from '@programs/error-tracking-upload-source-maps/detect';
-import { SELF_DRIVING_INTEGRATE_PATH_KEY } from '@programs/self-driving/detect';
+import { SOURCE_MAPS_CONTEXT_KEYS } from '@programs/error-tracking-upload-source-maps';
+import { SELF_DRIVING_INTEGRATE_PATH_KEY } from '@programs/self-driving';
 import { ScreenContainer } from '../primitives/ScreenContainer';
 import {
   createScreens,
   createServices,
   type ScreenServices,
-} from '../../ui/tui/screen-registry';
-import { ACTION_REGISTRY } from '@e2e-harness/action-registry';
+} from '../screen-registry';
+import { actionsFor } from '../control/actions';
+import { AuditScreenId } from '@tui/programs/audit';
+import { PostHogIntegrationScreenId } from '@tui/programs/posthog-integration';
+import { SelfDrivingScreenId } from '@tui/programs/self-driving';
+import { SourceMapsScreenId } from '@tui/programs/error-tracking-upload-source-maps';
+import { applySetter } from '@tui/__tests__/helpers/apply-setter.no-jest';
 
-vi.mock('ink', () =>
-  vi.importActual('../../../node_modules/ink/build/index.d.js'),
+vi.mock(import('ink'), () =>
+  vi.importActual<typeof import('ink')>('ink-actual'),
 );
-vi.mock('@utils/analytics', () => ({
+vi.mock(import('@utils/analytics'), () => ({
   analytics: {
     capture: vi.fn(),
     wizardCapture: vi.fn(),
     setTag: vi.fn(),
     captureException: vi.fn(),
     shutdown: vi.fn().mockResolvedValue(undefined),
-  },
+  } as never,
   sessionProperties: vi.fn(() => ({})),
 }));
-vi.mock('@utils/links', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@utils/links')>()),
+vi.mock(import('@utils/links'), async (importOriginal) => ({
+  ...(await importOriginal()),
   openTrackedLink: vi.fn(),
 }));
-vi.mock('@utils/clipboard', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@utils/clipboard')>()),
+vi.mock(import('@utils/clipboard'), async (importOriginal) => ({
+  ...(await importOriginal()),
   copyToClipboard: vi.fn().mockResolvedValue(false),
   openInBrowser: vi.fn().mockResolvedValue(false),
 }));
-vi.mock('opn', () => ({ default: vi.fn() }));
-vi.mock('@shared/api', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@shared/api')>()),
+vi.mock(import('opn'), () => ({ default: vi.fn() }));
+vi.mock(import('@shared/api'), async (importOriginal) => ({
+  ...(await importOriginal()),
   fetchSlackConnected: vi.fn().mockResolvedValue(false),
-  fetchUserData: vi.fn(() => new Promise(() => undefined)),
+  fetchUserData: vi.fn(() => new Promise(() => undefined)) as never,
 }));
-vi.mock('@shared/skill-menu', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@shared/skill-menu')>()),
-  fetchSkillMenu: vi.fn(() => new Promise(() => undefined)),
+vi.mock(import('@shared/skill-menu'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  fetchSkillMenu: vi.fn(() => new Promise(() => undefined)) as never,
 }));
-vi.mock('@utils/setup-utils', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@utils/setup-utils')>()),
-  getOrAskForProjectData: vi.fn(() => new Promise(() => undefined)),
+vi.mock(import('@tui/auth/project-data'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  getOrAskForProjectData: vi.fn(() => new Promise(() => undefined)) as never,
 }));
-vi.mock('@utils/wizard-abort', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@utils/wizard-abort')>()),
+vi.mock(import('@host/wizard-abort'), async (importOriginal) => ({
+  ...(await importOriginal()),
   wizardAbort: vi.fn().mockResolvedValue(undefined),
 }));
 
@@ -156,10 +156,8 @@ const nextjsRouterFirst = () => {
 const PAIRS: Pair[] = [
   {
     name: 'intro: enter on Continue vs confirm_setup',
-    knownDivergence:
-      'keyboard grants scan sharing before completeSetup, confirm_setup only completes setup',
     program: Program.PostHogIntegration,
-    screen: ScreenId.Intro,
+    screen: PostHogIntegrationScreenId.Intro,
     arrange: () => undefined,
     keys: [ENTER],
     action: 'confirm_setup',
@@ -241,7 +239,7 @@ const PAIRS: Pair[] = [
     knownDivergence:
       'keyboard path commits mintHandoff alongside outroDismissed',
     program: Program.Audit,
-    screen: ScreenId.AuditOutro,
+    screen: AuditScreenId.Outro,
     arrange: (s) => {
       confirmed(s);
       authed(s);
@@ -255,7 +253,7 @@ const PAIRS: Pair[] = [
     knownDivergence:
       'keyboard path commits mintHandoff alongside outroDismissed',
     program: Program.ErrorTrackingUploadSourceMaps,
-    screen: ScreenId.SourceMapsOutro,
+    screen: SourceMapsScreenId.Outro,
     arrange: (s) => {
       s.completeSetup();
       authed(s);
@@ -269,7 +267,7 @@ const PAIRS: Pair[] = [
   {
     name: 'self-driving-integration-check: log me in vs set_integrate true',
     program: Program.SelfDriving,
-    screen: ScreenId.SelfDrivingIntegrationCheck,
+    screen: SelfDrivingScreenId.IntegrationCheck,
     arrange: (s) => {
       s.setFrameworkContext('postHogPresent', false);
       s.completeSetup();
@@ -281,14 +279,14 @@ const PAIRS: Pair[] = [
   {
     name: 'self-driving-handoff: enter vs confirm_self_driving_handoff',
     program: Program.SelfDriving,
-    screen: ScreenId.SelfDrivingHandoff,
+    screen: SelfDrivingScreenId.Handoff,
     arrange: (s) => {
       s.setFrameworkContext('postHogPresent', false);
       s.completeSetup();
-      s.setIntegrate(true);
+      applySetter(s, 'setIntegrate', { integrate: true });
       s.setReadinessResult(clean);
       authed(s);
-      s.setGithubConnected(false);
+      applySetter(s, 'setGithubConnected', { connected: false });
       s.setFrameworkContext(SELF_DRIVING_INTEGRATE_PATH_KEY, '.');
       s.setFrameworkConfig(
         Integration.javascriptNode,
@@ -392,7 +390,6 @@ const PAIRS: Pair[] = [
 function makeStore(pair: Pair): WizardStore {
   const store = new WizardStore(pair.program);
   store.version = '0.0.0-test';
-  setUI(new InkUI(store));
   const session = buildSession({ installDir: INSTALL_DIR, ci: false });
   const integration = pair.integration ?? Integration.javascriptNode;
   session.integration = integration;
@@ -413,6 +410,10 @@ function snap(store: WizardStore): Snap {
   const session: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(store.session)) {
     session[k] = k === 'frameworkConfig' ? (v ? '[config]' : null) : v;
+  }
+  // The TUI state diffs beside the session, under the same names.
+  for (const k of Object.keys(initialTuiState()) as (keyof TuiState)[]) {
+    session[k] = store[k];
   }
   return {
     screen: store.currentScreen,
@@ -459,18 +460,15 @@ function applyAction(pair: Pair): Record<string, unknown> {
   const store = makeStore(pair);
   expect(store.currentScreen).toBe(pair.screen);
   const before = snap(store);
-  const action = ACTION_REGISTRY[pair.screen as ScreenId]?.find(
+  const action = actionsFor(store, pair.screen).find(
     (a) => a.id === pair.action,
   );
   if (!action) throw new Error(`no action ${pair.action} on ${pair.screen}`);
-  action.apply(store, pair.params ?? {});
+  action.apply(pair.params ?? {});
   return diff(before, snap(store));
 }
 
 describe('keyboard commit vs control action commit', () => {
-  beforeAll(() => {
-    vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
-  });
   afterEach(() => cleanup());
 
   for (const pair of PAIRS) {

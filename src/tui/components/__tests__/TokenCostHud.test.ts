@@ -1,5 +1,5 @@
 import { tokenCostHudRowCount } from '@tui/components/TokenCostHud';
-import type { TokenUsageSnapshot } from '@ui/tui/store';
+import type { TokenUsageSnapshot } from '@tui/token-usage';
 
 const ZERO_USAGE: TokenUsageSnapshot = {
   inputTokens: 0,

@@ -2,8 +2,9 @@
  * Shared error helpers for the runner pipeline.
  */
 
-import type { InstallSkillResult } from '@agent/tools';
-import { ErrorCodes, skillErrorCode } from '@shared/errors';
+import type { InstallSkillResult } from '@shared/skill-install';
+import { ErrorCodes } from '@shared/errors';
+import { skillErrorCode } from './skill-error-code';
 import { RunOutcome, type AgentFailure, type SequenceResult } from './types';
 
 export const failed = (failure: AgentFailure): SequenceResult => ({

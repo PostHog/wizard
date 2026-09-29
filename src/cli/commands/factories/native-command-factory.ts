@@ -26,7 +26,9 @@ export function nativeCommandFactory(
     );
   }
   return {
-    name: config.command,
+    name: config.commandAliases?.length
+      ? [config.command, ...config.commandAliases]
+      : config.command,
     description: config.description,
     options: mergeCommandOptions(config),
     children: opts.children,

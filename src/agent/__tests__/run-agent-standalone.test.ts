@@ -3,19 +3,16 @@
  * no program registry: a fake harness stands in for the SDK, and everything
  * the run reports arrives through `onProgress` or comes back in the result.
  *
- * The `@ui` mock below throws on use. It is never reached — that is the
- * assertion the whole file rests on.
+ * The agent layer cannot import a UI at all; its tsconfig layer has no path
+ * to one.
  */
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { Harness, Sequence, DEFAULT_AGENT_MODEL } from '@shared/constants';
 import { HostResolution } from '@shared/host-resolution';
-import {
-  OutroKind,
-  type AskAnswers,
-  type PendingQuestion,
-} from '@lib/wizard-session';
+import { OutroKind } from '@shared/outro';
+import { type AskAnswers, type PendingQuestion } from '@agent/types';
 import { ErrorCodes, WizardError } from '@shared/errors';
 import { AGENT_ERROR_CODE } from '@agent/error-map';
 import { AgentErrorType } from '@agent/signals';
@@ -29,21 +26,13 @@ import type {
   TaskRunInputs,
 } from '@agent/runner/harness/types';
 
-vi.mock('@ui', () => ({
-  getUI: () => {
-    throw new Error('the agent reached for getUI()');
-  },
-  setUI: () => {
-    throw new Error('the agent reached for setUI()');
-  },
-}));
-vi.mock('@utils/debug');
-vi.mock('@utils/terminal-bell');
-vi.mock('@agent/yara-hooks', async (original) => ({
-  ...(await original<typeof import('@agent/yara-hooks')>()),
+vi.mock(import('@utils/debug'));
+vi.mock(import('@utils/terminal-bell'));
+vi.mock(import('@agent/yara-hooks'), async (original) => ({
+  ...(await original()),
   flushScanReport: vi.fn(),
 }));
-vi.mock('@utils/analytics', () => ({
+vi.mock(import('@utils/analytics'), () => ({
   analytics: {
     build: 'test',
     runId: 'run-1',
@@ -52,10 +41,10 @@ vi.mock('@utils/analytics', () => ({
     captureException: vi.fn(),
     setTag: vi.fn(),
     shutdown: vi.fn().mockResolvedValue(undefined),
-  },
+  } as never,
 }));
-vi.mock('@agent/gateway-session', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agent/gateway-session')>()),
+vi.mock(import('@agent/gateway-session'), async (importOriginal) => ({
+  ...(await importOriginal()),
   gatewayAuth: vi.fn().mockResolvedValue({
     gatewayUrl: 'https://gateway.test',
     token: 'phe_run',
@@ -87,7 +76,7 @@ const harnessState = vi.hoisted(() => ({
     | ((inputs: BackendRunInputs) => Promise<AgentResult>)
     | undefined,
 }));
-vi.mock('@agent/runner/switchboard/harness', () => {
+vi.mock(import('@agent/runner/switchboard/harness'), () => {
   const askIfRequested = async (inputs: BackendRunInputs | TaskRunInputs) => {
     if (!harnessState.askQuestions || !inputs.askBridge) return;
     const { answers } = await inputs.askBridge.request({
@@ -178,8 +167,8 @@ vi.mock('@agent/runner/switchboard/harness', () => {
   };
 });
 
-vi.mock('@agent/agent-prompt-loader', async (original) => {
-  const actual = await original<typeof import('@agent/agent-prompt-loader')>();
+vi.mock(import('@agent/agent-prompt-loader'), async (original) => {
+  const actual = await original();
   return {
     ...actual,
     loadAgentRegistry: vi.fn(() =>
@@ -203,8 +192,8 @@ vi.mock('@agent/agent-prompt-loader', async (original) => {
     ),
   };
 });
-vi.mock('@shared/skill-menu', async (original) => ({
-  ...(await original<typeof import('@shared/skill-menu')>()),
+vi.mock(import('@shared/skill-menu'), async (original) => ({
+  ...(await original()),
   fetchSkillMenu: vi.fn().mockResolvedValue({ categories: {} }),
 }));
 
@@ -236,12 +225,12 @@ const config = (over: Partial<RunConfig> = {}): RunConfig => ({
     ],
   },
   composed: false,
-  binding: { sequence: Sequence.linear, harness: Harness.pi, model: 'm' },
-  switchboard: { program: 'test-program', flags: {} },
+  routing: {
+    binding: { sequence: Sequence.linear, harness: Harness.pi, model: 'm' },
+  },
   skillsBaseUrl: 'https://skills.test',
   wizardFlags: {},
   wizardFlagPayloads: {},
-  wizardMetadata: {},
   ...over,
 });
 
@@ -315,11 +304,9 @@ describe('runAgent standalone', () => {
       let settled = false;
       const running = runAgent(
         config({
-          binding: { harness, sequence, model: DEFAULT_AGENT_MODEL },
-          switchboard: {
-            program: 'test-program',
-            flags: {},
-            cliHarness: harness,
+          routing: {
+            binding: { harness, sequence, model: DEFAULT_AGENT_MODEL },
+            overrides: { harness },
           },
         }),
         input(),
@@ -358,7 +345,13 @@ describe('runAgent standalone', () => {
         Promise.reject(new Error('disabled answerer called')),
       );
       const runConfig = config({
-        binding: { harness: Harness.pi, sequence, model: DEFAULT_AGENT_MODEL },
+        routing: {
+          binding: {
+            harness: Harness.pi,
+            sequence,
+            model: DEFAULT_AGENT_MODEL,
+          },
+        },
       });
       const runInput = input();
       runInput.flags.ci = true;
@@ -386,11 +379,9 @@ describe('runAgent standalone', () => {
       for (const sequence of [Sequence.linear, Sequence.orchestrator]) {
         const result = await runAgent(
           config({
-            binding: { harness, sequence, model: DEFAULT_AGENT_MODEL },
-            switchboard: {
-              program: 'test-program',
-              flags: {},
-              cliHarness: harness,
+            routing: {
+              binding: { harness, sequence, model: DEFAULT_AGENT_MODEL },
+              overrides: { harness },
             },
           }),
           input(),
@@ -428,15 +419,13 @@ describe('runAgent standalone', () => {
     harnessState.seedFailure = failure;
     const result = await runAgent(
       config({
-        binding: {
-          harness: Harness.anthropic,
-          sequence: Sequence.orchestrator,
-          model: DEFAULT_AGENT_MODEL,
-        },
-        switchboard: {
-          program: 'test-program',
-          flags: {},
-          cliHarness: Harness.anthropic,
+        routing: {
+          binding: {
+            harness: Harness.anthropic,
+            sequence: Sequence.orchestrator,
+            model: DEFAULT_AGENT_MODEL,
+          },
+          overrides: { harness: Harness.anthropic },
         },
       }),
       input(),
@@ -455,15 +444,13 @@ describe('runAgent standalone', () => {
     harnessState.taskFailure = failure;
     const result = await runAgent(
       config({
-        binding: {
-          harness: Harness.anthropic,
-          sequence: Sequence.orchestrator,
-          model: DEFAULT_AGENT_MODEL,
-        },
-        switchboard: {
-          program: 'test-program',
-          flags: {},
-          cliHarness: Harness.anthropic,
+        routing: {
+          binding: {
+            harness: Harness.anthropic,
+            sequence: Sequence.orchestrator,
+            model: DEFAULT_AGENT_MODEL,
+          },
+          overrides: { harness: Harness.anthropic },
         },
       }),
       input(),
@@ -483,15 +470,13 @@ describe('runAgent standalone', () => {
     harnessState.taskThrow = error;
     const result = await runAgent(
       config({
-        binding: {
-          harness: Harness.pi,
-          sequence: Sequence.orchestrator,
-          model: DEFAULT_AGENT_MODEL,
-        },
-        switchboard: {
-          program: 'test-program',
-          flags: {},
-          cliHarness: Harness.pi,
+        routing: {
+          binding: {
+            harness: Harness.pi,
+            sequence: Sequence.orchestrator,
+            model: DEFAULT_AGENT_MODEL,
+          },
+          overrides: { harness: Harness.pi },
         },
       }),
       input(),
@@ -533,15 +518,13 @@ describe('runAgent standalone', () => {
     };
     const result = await runAgent(
       config({
-        binding: {
-          harness: Harness.pi,
-          sequence: Sequence.orchestrator,
-          model: DEFAULT_AGENT_MODEL,
-        },
-        switchboard: {
-          program: 'test-program',
-          flags: {},
-          cliHarness: Harness.pi,
+        routing: {
+          binding: {
+            harness: Harness.pi,
+            sequence: Sequence.orchestrator,
+            model: DEFAULT_AGENT_MODEL,
+          },
+          overrides: { harness: Harness.pi },
         },
       }),
       input(),
@@ -582,10 +565,12 @@ describe('runAgent standalone', () => {
     };
     const result = await runAgent(
       config({
-        binding: {
-          harness: Harness.pi,
-          sequence: Sequence.orchestrator,
-          model: DEFAULT_AGENT_MODEL,
+        routing: {
+          binding: {
+            harness: Harness.pi,
+            sequence: Sequence.orchestrator,
+            model: DEFAULT_AGENT_MODEL,
+          },
         },
       }),
       input(),
@@ -620,10 +605,12 @@ describe('runAgent standalone', () => {
     try {
       const result = await runAgent(
         config({
-          binding: {
-            harness: Harness.pi,
-            sequence: Sequence.orchestrator,
-            model: DEFAULT_AGENT_MODEL,
+          routing: {
+            binding: {
+              harness: Harness.pi,
+              sequence: Sequence.orchestrator,
+              model: DEFAULT_AGENT_MODEL,
+            },
           },
         }),
         input(),
@@ -685,10 +672,12 @@ describe('runAgent standalone', () => {
       });
       const result = await runAgent(
         config({
-          binding: {
-            harness: Harness.pi,
-            sequence,
-            model: DEFAULT_AGENT_MODEL,
+          routing: {
+            binding: {
+              harness: Harness.pi,
+              sequence,
+              model: DEFAULT_AGENT_MODEL,
+            },
           },
         }),
         input(),
@@ -755,11 +744,14 @@ describe('runAgent standalone', () => {
       message: 'answered:{"q1":"yes"}',
     });
 
-    // Emission order: started first, completion then completed last.
+    // Emission order: the resolved route, then started, completion then completed last.
     const kinds = events.map(
       (e) => `${e.kind}${'phase' in e ? `:${e.phase}` : ''}`,
     );
-    expect(kinds[0]).toBe('lifecycle:started');
+    expect(kinds.slice(0, 2)).toEqual(['binding', 'lifecycle:started']);
+    expect(events[0]).toMatchObject({
+      binding: { harness: Harness.pi, sequence: Sequence.linear },
+    });
     expect(kinds.slice(-2)).toEqual(['completion', 'lifecycle:completed']);
 
     // The agent's own snapshot, independent of the observer.
@@ -922,15 +914,13 @@ describe('runAgent standalone', () => {
       const signals: AbortSignal[] = [];
       const running = runAgent(
         config({
-          binding: {
-            harness: Harness.pi,
-            sequence,
-            model: DEFAULT_AGENT_MODEL,
-          },
-          switchboard: {
-            program: 'test-program',
-            flags: {},
-            cliHarness: Harness.pi,
+          routing: {
+            binding: {
+              harness: Harness.pi,
+              sequence,
+              model: DEFAULT_AGENT_MODEL,
+            },
+            overrides: { harness: Harness.pi },
           },
         }),
         input(),
@@ -1004,13 +994,9 @@ describe('runAgent standalone', () => {
   it('sends benchmark output to onProgress when benchmarking', async () => {
     const benchmarkPath = path.join(tmp, 'benchmark.json');
     const configPath = path.join(tmp, '.benchmark-config.json');
-    fs.writeFileSync(
-      configPath,
-      JSON.stringify({ output: { benchmarkPath, logEnabled: false } }),
-    );
+    fs.writeFileSync(configPath, JSON.stringify({ output: { benchmarkPath } }));
     vi.stubEnv('POSTHOG_WIZARD_BENCHMARK_CONFIG', configPath);
     vi.stubEnv('POSTHOG_WIZARD_BENCHMARK_FILE', benchmarkPath);
-    vi.stubEnv('POSTHOG_WIZARD_LOG_DIR', tmp);
     const runInput = input();
     runInput.flags.benchmark = true;
     const events: AgentProgress[] = [];

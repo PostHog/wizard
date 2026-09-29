@@ -8,7 +8,7 @@
 
 import { useMemo, useSyncExternalStore } from 'react';
 import { Box } from 'ink';
-import type { WizardStore } from '@ui/tui/store';
+import type { WizardStore } from '@tui/store';
 import {
   TabContainer,
   SplitView,
@@ -23,10 +23,10 @@ import { VisualizerTab } from '@tui/components/PhaseVisuals';
 import { TipsCard } from '@tui/components/TipsCard';
 import { useStdoutDimensions } from '@tui/hooks/useStdoutDimensions';
 
-import { getProgramConfig } from '@programs';
+import { flowOwner } from '@tui/flow-owner';
 import { getContentBlocks as getSkillContentBlocks } from '@tui/programs/shared/skill-deck';
 
-import { WIZARD_LOG_FILE } from '@utils/paths';
+import { getLogFilePath } from '@utils/debug';
 
 interface RunScreenProps {
   store: WizardStore;
@@ -49,20 +49,18 @@ export const RunScreen = ({ store }: RunScreenProps) => {
   const statuses =
     store.statusMessages.length > 0 ? store.statusMessages : undefined;
 
-  // Each program owns its content deck (program/content/index.tsx)
-  // and wires it onto its ProgramConfig.getContentBlocks. Fall back to the
-  // agent-skill deck for runtime-created configs (e.g. `wizard skill <id>`)
-  // that aren't in the static registry.
+  // Each program's deck lives in its TUI folder (`programs/<id>/deck`). Fall
+  // back to the agent-skill deck for programs without one and for
+  // runtime-created configs (e.g. `wizard skill <id>`).
   const activeProgram = store.router.activeProgram;
   const learnBlocks = useMemo(() => {
-    const getBlocks =
-      getProgramConfig(activeProgram).getContentBlocks ?? getSkillContentBlocks;
+    const getBlocks = flowOwner(activeProgram).deck ?? getSkillContentBlocks;
     return getBlocks(store);
   }, [store, activeProgram]);
 
   // Program-supplied tips for the right pane; undefined falls back to
   // DEFAULT_TIPS inside TipsCard, so non-self-driving programs are unaffected.
-  const programTips = getProgramConfig(activeProgram).getTips?.(store);
+  const programTips = flowOwner(activeProgram).tips?.(store);
 
   const leftPane = store.learnCardComplete ? (
     <TipsCard store={store} tips={programTips} />
@@ -98,7 +96,7 @@ export const RunScreen = ({ store }: RunScreenProps) => {
     {
       id: 'logs',
       label: 'Tail logs',
-      component: <LogViewer filePath={WIZARD_LOG_FILE} />,
+      component: <LogViewer filePath={getLogFilePath()} />,
     },
     {
       id: 'visualizer',

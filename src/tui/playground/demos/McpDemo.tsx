@@ -5,12 +5,9 @@
  * a short install delay, and a successful result.
  */
 
-import { WizardStore } from '@ui/tui/store';
+import { WizardStore } from '@tui/store';
 import { McpScreen } from '@tui/screens/McpScreen';
-import type {
-  McpInstaller,
-  McpClientInfo,
-} from '@tui/services/mcp-installer';
+import type { McpInstaller, McpClientInfo } from '@tui/services/mcp-installer';
 import { McpClientStatus } from '@shared/mcp-clients/results';
 
 const MOCK_CLIENTS: McpClientInfo[] = [

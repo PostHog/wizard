@@ -14,43 +14,24 @@
  * gates on the GitHub App connection the run cannot proceed without. No keep-skills step: the setup skill is transient, so postRun removes it.
  */
 
-import type { ProgramStep } from '@programs/program-step';
-import { resolveProjectDir } from '@programs/detection/agentic';
-import { RunPhase, type WizardSession } from '@lib/wizard-session';
+import type { FlowStep } from '@tui/flow';
+import { RunPhase } from '@shared/run-state';
+import type { WizardSession } from '@programs/types';
 import { HEALTH_CHECK_STEP } from '@tui/programs/shared/health-check-step';
-import { integrationRunStep } from '@programs/posthog-integration/index';
-import {
-  detectSelfDrivingPrerequisites,
-  POSTHOG_PRESENT_KEY,
-  SELF_DRIVING_INTEGRATE_PATH_KEY,
-} from '../../../programs/self-driving/detect.js';
-import { prepSelfDrivingIntegration } from '../../../programs/self-driving/detect-agentic.js';
+import { POSTHOG_PRESENT_KEY } from '@programs/self-driving';
 
 /** True once detection found PostHog already present in the project. */
 const postHogPresent = (session: WizardSession): boolean =>
   session.frameworkContext[POSTHOG_PRESENT_KEY] === true;
 
 /** Absolute dir to integrate into: the picked sub-app (LLM output — the shared resolver clamps escapes), else the repo root. */
-const integrationDir = (session: WizardSession): string =>
-  resolveProjectDir(
-    session.installDir,
-    session.frameworkContext[SELF_DRIVING_INTEGRATE_PATH_KEY],
-  );
 
-export const SELF_DRIVING_PROGRAM: ProgramStep[] = [
-  {
-    id: 'detect',
-    label: 'Detecting prerequisites',
-    // Headless: validates the install dir and runs the deterministic
-    // PostHog-presence check (writes frameworkContext.postHogPresent).
-    onReady: (ctx) =>
-      detectSelfDrivingPrerequisites(ctx.session, ctx.setFrameworkContext),
-  },
+export const SELF_DRIVING_FLOW: FlowStep[] = [
   {
     id: 'intro',
     label: 'Welcome',
     screenId: 'self-driving-intro',
-    gate: (session) => session.setupConfirmed,
+    gate: (tui) => tui.setupConfirmed,
   },
   {
     // Shown only when PostHog wasn't detected and the decision is still open:
@@ -61,17 +42,16 @@ export const SELF_DRIVING_PROGRAM: ProgramStep[] = [
     id: 'integration-check',
     label: 'Integration',
     screenId: 'self-driving-integration-check',
-    show: (session) => !postHogPresent(session) && session.integrate === null,
-    isComplete: (session) =>
-      postHogPresent(session) || session.integrate !== null,
-    gate: (session) => postHogPresent(session) || session.integrate !== null,
+    show: (tui) => !postHogPresent(tui.session) && tui.integrate === null,
+    isComplete: (tui) => postHogPresent(tui.session) || tui.integrate !== null,
+    gate: (tui) => postHogPresent(tui.session) || tui.integrate !== null,
   },
   HEALTH_CHECK_STEP,
   {
     id: 'auth',
     label: 'Authentication',
     screenId: 'auth',
-    isComplete: (session) => session.credentials !== null,
+    isComplete: ({ session }) => session.credentials !== null,
   },
   {
     // After auth, before the integration runs: the detector scans the repo and
@@ -82,25 +62,22 @@ export const SELF_DRIVING_PROGRAM: ProgramStep[] = [
     id: 'integrate-detect',
     label: 'Detecting',
     screenId: 'self-driving-integration-detect',
-    show: (session) =>
-      session.integrate === true && session.integration == null,
+    show: (tui) => tui.integrate === true && tui.session.integration == null,
     // Complete on a picked project OR "continue with existing"
     // (integrate=false); without the latter the orchestrator's waitUntil hangs.
-    isComplete: (session) =>
-      session.integration != null || session.integrate === false,
+    isComplete: (tui) =>
+      tui.session.integration != null || tui.integrate === false,
   },
   {
-    // The integration's own run step, imported and composed here: it runs the
-    // integration agent (its prompt, tools, task list) in the picked project's
-    // dir. Shown only when integrating; prep gathers that project's framework
-    // context. Completion is tracked via `completedRuns`, separate from the
-    // Self-driving run's `runPhase`.
-    ...integrationRunStep,
+    // The integration agent (its prompt, tools, task list) runs composed in
+    // the picked project's dir; the program's `config.runSteps` owns that run.
+    // Shown only when integrating. Completion is tracked via `completedRuns`,
+    // separate from the Self-driving run's `runPhase`.
     id: 'integrate-run',
-    onRunPrep: prepSelfDrivingIntegration,
-    targetDir: integrationDir,
-    show: (session) => session.integrate === true,
-    isComplete: (session) => session.completedRuns.includes('integrate-run'),
+    label: 'Integration',
+    screenId: 'run',
+    show: (tui) => tui.integrate === true,
+    isComplete: (tui) => tui.completedRuns.includes('integrate-run'),
   },
   {
     // Handoff after the integration run: "PostHog is installed — now set up
@@ -109,8 +86,8 @@ export const SELF_DRIVING_PROGRAM: ProgramStep[] = [
     id: 'self-driving-handoff',
     label: 'Ready',
     screenId: 'self-driving-handoff',
-    show: (session) => session.integrate === true,
-    isComplete: (session) => session.selfDrivingHandoffConfirmed,
+    show: (tui) => tui.integrate === true,
+    isComplete: (tui) => tui.selfDrivingHandoffConfirmed,
   },
   {
     // Hard gate before the agent starts: Self-driving cannot research findings
@@ -121,17 +98,15 @@ export const SELF_DRIVING_PROGRAM: ProgramStep[] = [
     id: 'self-driving-github',
     label: 'GitHub',
     screenId: 'self-driving-github',
-    isComplete: (session) =>
-      session.githubConnected === true || session.githubDeclined,
-    gate: (session) =>
-      session.githubConnected === true || session.githubDeclined,
+    isComplete: (tui) => tui.githubConnected === true || tui.githubDeclined,
+    gate: (tui) => tui.githubConnected === true || tui.githubDeclined,
   },
   {
     id: 'run',
     label: 'Self-driving',
     screenId: 'run',
-    show: (session) => !session.githubDeclined,
-    isComplete: (session) =>
+    show: (tui) => !tui.githubDeclined,
+    isComplete: ({ session }) =>
       session.runPhase === RunPhase.Completed ||
       session.runPhase === RunPhase.Error,
   },
@@ -139,6 +114,6 @@ export const SELF_DRIVING_PROGRAM: ProgramStep[] = [
     id: 'outro',
     label: 'Done',
     screenId: 'outro',
-    isComplete: (session) => session.outroDismissed,
+    isComplete: (tui) => tui.outroDismissed,
   },
 ];

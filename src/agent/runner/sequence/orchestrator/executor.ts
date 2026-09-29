@@ -12,7 +12,7 @@
 import { analytics } from '@utils/analytics';
 import { RunOutcome, type AgentFailure } from '../../shared/types';
 import { logToFile } from '@utils/debug';
-import { TaskStatus, type QueueStore, type QueuedTask } from './queue';
+import { QueueTaskStatus, type QueueStore, type QueuedTask } from './queue';
 
 /** Per-task agent configuration the resolver produces from a task's type.
  * The model is resolved separately (per-harness profile), not here. */
@@ -92,7 +92,7 @@ async function runOne(
   const after = store.get(task.id);
   if (!after) return;
 
-  if (after.status === TaskStatus.Running) {
+  if (after.status === QueueTaskStatus.Running) {
     // The agent ended without calling complete_task. Retry or fail.
     if (after.attempts < after.maxAttempts) {
       store.requeue(task.id);
@@ -106,7 +106,7 @@ async function runOne(
   }
 
   if (
-    after.status === TaskStatus.Failed &&
+    after.status === QueueTaskStatus.Failed &&
     after.attempts < after.maxAttempts
   ) {
     store.requeue(task.id);

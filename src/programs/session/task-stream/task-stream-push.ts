@@ -1,5 +1,5 @@
 /**
- * Task-stream push — subscribes to WizardStore, builds payloads,
+ * Task-stream push — subscribes to SessionStore, builds payloads,
  * and fans out async to all registered destinations.
  *
  * Behaviour:
@@ -16,14 +16,12 @@
  * latest state once the current one settles.
  */
 
-import type { WizardStore, TaskItem } from '@ui/tui/store';
-import { TaskStatus } from '@ui/wizard-ui';
-import {
-  RunPhase,
-  OutroKind,
-  type OutroData,
-  type PendingQuestion,
-} from '@lib/wizard-session';
+import type { SessionStore } from '../session-store';
+import type { TaskItem } from '../session-store';
+import { TaskStatus } from '@shared/task-status';
+import { RunPhase } from '@shared/run-state';
+import { OutroKind } from '@shared/outro';
+import { type OutroData, type PendingQuestion } from '@agent/types';
 import {
   type TaskStreamDestination,
   type TaskStreamUpdate,
@@ -35,7 +33,7 @@ import {
 } from './types';
 import { EventPlanWatcher } from './event-plan-watcher';
 import { rollUpAuditAreas } from './audit-areas';
-import type { WizardRunSync, RunOutcome } from './wizard-run-sync';
+import type { WizardRunSync, TaskStreamOutcome } from './wizard-run-sync';
 import { logToFile } from '@utils/debug';
 import { WIZARD_RUN_SYNC_FLAG_KEY } from '@shared/constants';
 import { sanitizeErrorDetail } from '@shared/errors';
@@ -114,13 +112,13 @@ function buildPendingInput(
 }
 
 export interface TaskStreamPushOptions {
-  store: WizardStore;
+  store: SessionStore;
   runSync?: WizardRunSync;
   getFlags?: () => Readonly<Record<string, string>> | null;
   programId: string;
   destinations: TaskStreamDestination[];
-  /** Optional absolute event-plan path to load into the store once. */
-  eventPlanPath?: string;
+  /** The absolute event-plan path to load into the store once, read when the run starts: detection may move the install dir. */
+  eventPlanPath?: () => string | undefined;
   /** The run's audit ledger, when it has one. The runner owns the watcher. */
   auditChecks?: () => unknown;
   /** When false, destination subscription/delivery remains disabled. */
@@ -128,12 +126,13 @@ export interface TaskStreamPushOptions {
 }
 
 export class TaskStreamPush {
-  private readonly store: WizardStore;
+  private readonly store: SessionStore;
   private readonly destinations: TaskStreamDestination[];
   private readonly startedAt: string;
   private readonly programId: string;
   private readonly sessionId: string;
-  private readonly eventPlanWatcher: EventPlanWatcher | null;
+  private readonly eventPlanPath: (() => string | undefined) | null;
+  private eventPlanWatcher: EventPlanWatcher | null = null;
   private readonly auditChecks: (() => unknown) | null;
 
   private readonly runSync?: WizardRunSync;
@@ -164,9 +163,7 @@ export class TaskStreamPush {
     this.destinations = opts.destinations;
     this.enabled = opts.enabled ?? true;
     const startedAt = new Date();
-    this.eventPlanWatcher = opts.eventPlanPath
-      ? new EventPlanWatcher(this.store, opts.eventPlanPath)
-      : null;
+    this.eventPlanPath = opts.eventPlanPath ?? null;
     this.auditChecks = opts.auditChecks ?? null;
     this.startedAt = secondPrecisionIso(startedAt);
     // skillId may not be set yet — fall back to programId so the
@@ -179,16 +176,29 @@ export class TaskStreamPush {
   }
 
   /**
-   * Load the event plan and subscribe to store changes. Destination delivery
-   * remains disabled when `enabled === false`, but the plan still populates the
-   * store for local and headless consumers.
+   * Subscribe to store changes. The event-plan watcher starts once the run
+   * leaves idle, and fills the store even when destination delivery is
+   * disabled (`enabled === false`), for local and headless consumers.
    */
-  attach(store?: WizardStore): void {
-    this.eventPlanWatcher?.start();
-    if (!this.enabled) return;
+  attach(store?: SessionStore): void {
     if (this.unsubscribe) return;
+    this.startEventPlanWatcher();
+    // With delivery off, a subscription only matters to start the watcher.
+    if (!this.enabled && !this.eventPlanPath) return;
     const target = store ?? this.store;
-    this.unsubscribe = target.subscribe(() => this.onStoreChange());
+    this.unsubscribe = target.subscribe(() => {
+      this.startEventPlanWatcher();
+      if (this.enabled) this.onStoreChange();
+    });
+  }
+
+  private startEventPlanWatcher(): void {
+    if (this.eventPlanWatcher || !this.eventPlanPath) return;
+    if (this.store.session.runPhase === RunPhase.Idle) return;
+    const path = this.eventPlanPath();
+    if (!path) return;
+    this.eventPlanWatcher = new EventPlanWatcher(this.store, path);
+    this.eventPlanWatcher.start();
   }
 
   /** Stop subscribing. Does not flush. */
@@ -206,7 +216,7 @@ export class TaskStreamPush {
 
   // Finalize execution while the legacy session continues through the outro.
   async finishRun(
-    outcome: RunOutcome,
+    outcome: TaskStreamOutcome,
     timeoutMs = DEFAULT_SHUTDOWN_TIMEOUT_MS,
   ): Promise<void> {
     await this.runSync?.shutdown(outcome, timeoutMs);
@@ -214,7 +224,8 @@ export class TaskStreamPush {
 
   shutdown(
     timeoutMs: number = DEFAULT_SHUTDOWN_TIMEOUT_MS,
-    outcome: RunOutcome = this.store.session.runPhase === RunPhase.Completed
+    outcome: TaskStreamOutcome = this.store.session.runPhase ===
+    RunPhase.Completed
       ? 'completed'
       : 'failed',
   ): Promise<void> {

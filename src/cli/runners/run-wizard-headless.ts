@@ -1,9 +1,9 @@
 import type { ProgramConfig } from '@programs/types';
-import { runNonInteractive } from '../../lib/runners/run-non-interactive';
+import { runNonInteractive } from './run-non-interactive';
 
 /**
  * Headless entry point (the experimental published-build, non-interactive run
- * path; see @lib/headless-mode). A thin shell over the shared non-interactive
+ * path; see @shared/headless-mode). A thin shell over the shared non-interactive
  * pipeline — see `runNonInteractive`. Today it behaves exactly like
  * `runWizardCI`; it exists as a separate function so headless can diverge later
  * (its own auth handling, telemetry, prompts, …) without touching CI or its

@@ -2,14 +2,12 @@ const {
   mockCliAddInstallOrUpdatePostHogCli,
   mockCliAddInstallSteeringSnippet,
   mockCliAddWizardCapture,
-  mockCliAddSetUI,
-  mockCliAddUi,
+  mockCliAddLog,
 } = vi.hoisted(() => ({
   mockCliAddInstallOrUpdatePostHogCli: vi.fn(),
   mockCliAddInstallSteeringSnippet: vi.fn(),
   mockCliAddWizardCapture: vi.fn(),
-  mockCliAddSetUI: vi.fn(),
-  mockCliAddUi: {
+  mockCliAddLog: {
     intro: vi.fn(),
     outro: vi.fn(),
     log: {
@@ -17,11 +15,12 @@ const {
       info: vi.fn(),
       success: vi.fn(),
       warn: vi.fn(),
+      step: vi.fn(),
     },
   },
 }));
 
-vi.mock('@shared/install-cli-steering', () => ({
+vi.mock(import('@shared/install-cli-steering'), () => ({
   CLI_STEERING_TARGETS: [
     {
       id: 'codex',
@@ -40,25 +39,18 @@ vi.mock('@shared/install-cli-steering', () => ({
   installOrUpdatePostHogCli: mockCliAddInstallOrUpdatePostHogCli,
   installSteeringSnippet: mockCliAddInstallSteeringSnippet,
 }));
-vi.mock('@ui', () => ({
-  getUI: () => mockCliAddUi,
-  setUI: mockCliAddSetUI,
-}));
-vi.mock('@ui/logging-ui', () => ({
-  LoggingUI: vi.fn(),
-}));
-vi.mock('@utils/analytics', () => ({
-  analytics: { wizardCapture: mockCliAddWizardCapture },
+vi.mock(import('@utils/analytics'), () => ({
+  analytics: {
+    wizardCapture: mockCliAddWizardCapture,
+    flush: vi.fn().mockResolvedValue(undefined),
+  } as never,
 }));
 
-import { cliAddCommand } from '../index';
+import { runCliAdd } from '..';
 
-describe('cli add command', () => {
-  const originalExit = process.exit;
-
+describe('cli add', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    process.exit = vi.fn() as unknown as typeof process.exit;
     mockCliAddInstallOrUpdatePostHogCli.mockReturnValue({ success: true });
     mockCliAddInstallSteeringSnippet.mockReturnValue({
       success: true,
@@ -66,21 +58,10 @@ describe('cli add command', () => {
     });
   });
 
-  afterEach(() => {
-    process.exit = originalExit;
-  });
-
-  async function runHandler() {
-    cliAddCommand.handler?.({
-      _: [],
-      $0: 'wizard',
-      agent: 'codex',
-    });
-    await new Promise((resolve) => setImmediate(resolve));
-  }
+  const run = () => runCliAdd({ agent: 'codex' }, { log: mockCliAddLog });
 
   it('installs or updates the CLI before installing steering', async () => {
-    await runHandler();
+    const code = await run();
 
     expect(mockCliAddInstallOrUpdatePostHogCli).toHaveBeenCalledTimes(1);
     expect(mockCliAddInstallSteeringSnippet).toHaveBeenCalledWith(
@@ -91,7 +72,7 @@ describe('cli add command', () => {
     ).toBeLessThan(
       mockCliAddInstallSteeringSnippet.mock.invocationCallOrder[0],
     );
-    expect(process.exit).toHaveBeenCalledWith(0);
+    expect(code).toBe(0);
   });
 
   it('does not install steering when the CLI install fails', async () => {
@@ -100,12 +81,12 @@ describe('cli add command', () => {
       error: 'npm failed',
     });
 
-    await runHandler();
+    const code = await run();
 
     expect(mockCliAddInstallSteeringSnippet).not.toHaveBeenCalled();
-    expect(mockCliAddUi.log.error).toHaveBeenCalledWith(
+    expect(mockCliAddLog.log.error).toHaveBeenCalledWith(
       'Failed to install or update PostHog CLI: npm failed',
     );
-    expect(process.exit).toHaveBeenCalledWith(1);
+    expect(code).toBe(1);
   });
 });

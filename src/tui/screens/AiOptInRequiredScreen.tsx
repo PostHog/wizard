@@ -16,7 +16,7 @@
 import opn from 'opn';
 import { Box, Text } from 'ink';
 import { useEffect, useState, useSyncExternalStore } from 'react';
-import type { WizardStore } from '@ui/tui/store';
+import type { WizardStore } from '@tui/store';
 import { useKeyBindings } from '@tui/hooks/useKeyBindings';
 import { Colors } from '@tui/styles';
 import { useSkillEntry } from '@tui/screens/SkillSourceInfo';
@@ -110,7 +110,7 @@ export const AiOptInRequiredScreen = ({
 
   const handleExit = () => {
     analytics.wizardCapture('ai opt-in action', { variant, action: 'exit' });
-    process.exit(0);
+    store.requestExit(0);
   };
 
   useKeyBindings('ai-opt-in', [

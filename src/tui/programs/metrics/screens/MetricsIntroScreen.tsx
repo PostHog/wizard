@@ -1,11 +1,8 @@
 import { Box, Text } from 'ink';
 import { useState, useSyncExternalStore } from 'react';
-import type { WizardStore } from '@ui/tui/store';
+import type { WizardStore } from '@tui/store';
 import { IntroScreenLayout } from '@tui/screens/IntroScreenLayout';
-import {
-  SkillSourceInfo,
-  useSkillEntry,
-} from '@tui/screens/SkillSourceInfo';
+import { SkillSourceInfo, useSkillEntry } from '@tui/screens/SkillSourceInfo';
 
 interface MetricsIntroScreenProps {
   store: WizardStore;
@@ -71,7 +68,7 @@ export const MetricsIntroScreen = ({ store }: MetricsIntroScreenProps) => {
       ];
 
   const handleSelect = (value: string) => {
-    if (value === 'cancel') process.exit(0);
+    if (value === 'cancel') store.requestExit(0);
     else if (value === 'more-info') setShowingMoreInfo(true);
     else if (value === 'back') setShowingMoreInfo(false);
     else store.completeSetup();
@@ -82,7 +79,7 @@ export const MetricsIntroScreen = ({ store }: MetricsIntroScreenProps) => {
       installDir={session.installDir}
       body={body}
       showDetection={!showingMoreInfo}
-      programLabel={session.programLabel}
+      programLabel={store.programLabel}
       skillId={session.skillId}
       menuOptions={menuOptions}
       onSelect={handleSelect}

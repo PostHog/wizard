@@ -9,7 +9,7 @@
 import { Box, Text, useInput } from 'ink';
 import { PasswordInput, TextInput } from '@inkjs/ui';
 import { useEffect, useState, useSyncExternalStore } from 'react';
-import type { WizardStore } from '@ui/tui/store';
+import type { WizardStore } from '@tui/store';
 import {
   LinkText,
   ModalOverlay,
@@ -19,7 +19,7 @@ import {
 import { Colors, Icons } from '@tui/styles';
 import { copyToClipboard, openInBrowser } from '@utils/clipboard';
 import { useKeyBindings } from '@tui/hooks/useKeyBindings';
-import type { AskAnswers, AskQuestion } from '@lib/wizard-session';
+import type { AskAnswers, AskQuestion } from '@agent/types';
 
 interface WizardAskScreenProps {
   store: WizardStore;

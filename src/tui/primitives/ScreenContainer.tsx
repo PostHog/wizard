@@ -22,11 +22,8 @@ import { KeyboardHintsProvider } from '@tui/hooks/useKeyboardHints';
 import { DissolveTransition } from './DissolveTransition.js';
 import { KeyboardHintsBar } from './KeyboardHintsBar.js';
 import { ScreenErrorBoundary } from './ScreenErrorBoundary.js';
-import {
-  ViewportTooSmall,
-  isViewportTooSmall,
-} from './ViewportTooSmall.js';
-import type { WizardStore } from '@ui/tui/store';
+import { ViewportTooSmall, isViewportTooSmall } from './ViewportTooSmall.js';
+import type { WizardStore } from '@tui/store';
 
 const MIN_WIDTH = 80;
 export const MAX_WIDTH = 120;

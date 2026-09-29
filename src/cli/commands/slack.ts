@@ -1,10 +1,8 @@
 import type { Arguments } from 'yargs';
-import { getUI, setUI } from '@ui';
-import { LoggingUI } from '@ui/logging-ui';
-import { Program } from '@programs';
-import { VERSION } from '@shared/version';
-import { ErrorCodes } from '@shared/errors';
-import { emitWizardError } from '@shared/errors';
+import { consoleLog } from '@shared/console-log';
+import { ErrorCodes, emitWizardError } from '@shared/errors';
+import { Tool } from '@tools';
+import { exitWith, underSignals } from '@cli/runners';
 import type { Command } from './command';
 
 export const slackCommand: Command = {
@@ -23,21 +21,21 @@ export const slackCommand: Command = {
 };
 
 function runSlackConnect(argv: Arguments): void {
-  void (async () => {
-    const debug = argv.debug as boolean | undefined;
-
+  exitWith(async () => {
     try {
-      const { startTUI } = await import('@tui/start-tui');
-      const { buildSession } = await import('@lib/wizard-session');
-      const tui = startTUI(VERSION, Program.SlackConnect);
-      tui.store.session = buildSession({
-        debug,
-        baseUrl: argv.baseUrl as string | undefined,
-      });
+      const { runTuiTool } = await import('@tui');
+      return await underSignals((signal) =>
+        runTuiTool(Tool.SlackConnect, {
+          session: {
+            debug: argv.debug as boolean | undefined,
+            baseUrl: argv.baseUrl as string | undefined,
+          },
+          signal,
+        }),
+      );
     } catch (err) {
       // TUI unavailable — connecting Slack has no headless fallback.
-      setUI(new LoggingUI());
-      getUI().log.error(
+      consoleLog.log.error(
         `Connecting Slack requires an interactive terminal. ${
           err instanceof Error ? err.message : String(err)
         }`,
@@ -46,7 +44,7 @@ function runSlackConnect(argv: Arguments): void {
         code: ErrorCodes.CliInteractiveRequired,
         message: 'Connecting Slack requires an interactive terminal.',
       });
-      process.exit(1);
+      return 1;
     }
-  })();
+  });
 }

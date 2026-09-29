@@ -17,6 +17,7 @@
  * generic deck.
  */
 
+import { getTuiProgram } from '@tui/programs/index';
 import { Box, Text, useInput } from 'ink';
 import { useMemo, useState } from 'react';
 import {
@@ -27,7 +28,7 @@ import {
 } from '@tui/primitives/index';
 import type { ContentBlock, ProgressItem } from '@tui/primitives/index';
 import { Colors } from '@tui/styles';
-import type { WizardStore } from '@ui/tui/store';
+import type { WizardStore } from '@tui/store';
 import { PROGRAM_REGISTRY } from '@programs';
 import { AUDIT_AREA_SLIDES } from '@tui/programs/audit/screens/slides/index';
 import type { AreaSlide } from '@tui/programs/audit/screens/slides/shared';
@@ -94,7 +95,8 @@ export const LearnDeckDemo = ({ store }: LearnDeckDemoProps) => {
     // name (e.g. agent-skill's "Running the <skill> skill...") render the
     // real value instead of "unknown".
     for (const program of PROGRAM_REGISTRY) {
-      if (!program.getContentBlocks) continue;
+      const deck = getTuiProgram(program.id).deck;
+      if (!deck) continue;
       const stub = program.skillId
         ? withSessionOverride(store, { skillId: program.skillId })
         : store;
@@ -103,7 +105,7 @@ export const LearnDeckDemo = ({ store }: LearnDeckDemoProps) => {
         label: `${program.id} (${program.command ?? 'default'})${
           program.skillId ? ` · skill: ${program.skillId}` : ''
         }`,
-        blocks: program.getContentBlocks(stub),
+        blocks: deck(stub),
       });
     }
 

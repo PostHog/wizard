@@ -5,9 +5,11 @@ import { IS_PRODUCTION_BUILD } from '@env';
 import { Harness, Sequence } from '@shared/constants';
 import { regionOption } from '@shared/headless-mode';
 import { initLocalDev, localMcpSkillsNotice } from '@shared/local-dev';
+import { useLogFile } from '@utils/debug';
 import { toCommandModule, type Command } from './commands/command';
 import { ErrorCodes } from '@shared/errors';
 import { emitWizardError } from '@shared/errors';
+import { CONTROL_OPTIONS, controlFlagRefusal } from './control-flags';
 
 /**
  * Global yargs options applied to every command. These are read from the
@@ -23,6 +25,11 @@ export const GLOBAL_OPTIONS = {
     default: false,
     describe: 'Enable verbose logging\nenv: POSTHOG_WIZARD_DEBUG',
     type: 'boolean' as const,
+  },
+  'log-file': {
+    describe:
+      'Write the debug log to this file (default: posthog-wizard.log in the temp dir)\nenv: POSTHOG_WIZARD_LOG_FILE',
+    type: 'string' as const,
   },
   signup: {
     default: false,
@@ -54,7 +61,7 @@ export const GLOBAL_OPTIONS = {
   // ── Internal modes ─────────────────────────────────────────────────
   // Hidden from `--help`.
   // NB: the experimental headless flag is deliberately NOT global. Supported
-  // commands declare it through `headlessOption` in @lib/headless-mode.
+  // commands declare it through `headlessOption` in @shared/headless-mode.
   'base-url': {
     describe:
       'Override the PostHog base URL (e.g. http://localhost:8010), bypassing region resolution. Pins the API host, cloud URL, and OAuth server.\nenv: POSTHOG_WIZARD_BASE_URL',
@@ -80,6 +87,9 @@ export const GLOBAL_OPTIONS = {
     type: 'boolean' as const,
     hidden: true,
   },
+  // Always declared so the published headless path accepts them; init()
+  // refuses the socket on published TUI runs and a mode without a socket.
+  ...CONTROL_OPTIONS,
 };
 
 export class Wizard {
@@ -96,7 +106,7 @@ export class Wizard {
     // flag. init() additionally detects it up front to print a clearer message.
     // The published-build, non-interactive path is the experimental headless
     // flag, declared per-command through `headlessOption` (see
-    // @lib/headless-mode). CI needs `region` globally because the workbench
+    // @shared/headless-mode). CI needs `region` globally because the workbench
     // passes it to every command. --ci and headless stay separate so their
     // behavior can diverge.
     if (!IS_PRODUCTION_BUILD) {
@@ -178,6 +188,9 @@ export class Wizard {
       // Middleware rather than an argv scan so the env path is covered too,
       // and it runs before any TUI takes the terminal.
       .middleware((argv) => {
+        if (typeof argv.logFile === 'string' && argv.logFile) {
+          useLogFile(argv.logFile);
+        }
         // The one place local targets are resolved; everything downstream reads
         // getLocalDev().
         initLocalDev(argv);
@@ -228,6 +241,19 @@ export class Wizard {
 
   /** Parse argv and dispatch to the matching registered command. */
   init(): void {
+    const controlRefusal = controlFlagRefusal(
+      process.argv.slice(2),
+      process.env,
+      IS_PRODUCTION_BUILD,
+    );
+    if (controlRefusal) {
+      process.stderr.write(`\n\x1b[1;91m✖ ${controlRefusal}\x1b[0m\n\n`);
+      emitWizardError({
+        code: ErrorCodes.CliFlagUnavailable,
+        message: controlRefusal,
+      });
+      process.exit(1);
+    }
     // In published builds, `--ci` is undeclared, so yargs would reject it as
     // an unknown argument — accurate but unhelpful, since --help doesn't list
     // --ci either and the user has no path forward. POSTHOG_WIZARD_CI silently

@@ -1,4 +1,4 @@
-import { cliAddCommand } from '../../../tools/cli-steering/index';
+import { cliAddCommand } from './add';
 import type { Command } from '../command';
 
 export const cliCommand: Command = {

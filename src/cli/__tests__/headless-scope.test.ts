@@ -1,10 +1,20 @@
 import { auditCommand } from '../commands/audit';
-import { aiObservabilityCommand } from '../../commands/ai-observability';
 import { basicIntegrationCommand } from '../commands/basic-integration';
-import { revenueCommand } from '../../commands/revenue';
-import { HEADLESS_FLAG } from '../../shared/headless-mode';
+import { wizardCommands } from '../commands';
+import { commandKeys } from '../commands/command';
+import { HEADLESS_FLAG } from '@shared/headless-mode';
 import { GLOBAL_OPTIONS } from '../wizard';
 import { parseCommand } from './helpers/parse-command.no-jest';
+
+const wizardCommand = (word: string) => {
+  const found = wizardCommands().find((c) =>
+    commandKeys(c.name).includes(word),
+  );
+  if (!found) throw new Error(`no wizard command "${word}"`);
+  return found;
+};
+const aiObservabilityCommand = wizardCommand('ai-observability');
+const revenueCommand = wizardCommand('revenue-analytics');
 
 // Headless support is opt-in because each command must work without prompts.
 // These tests prevent the flag from becoming global or leaking onto a command

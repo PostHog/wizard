@@ -7,7 +7,7 @@ import type { InstallResult } from './results';
 export type MCPServerConfig = Record<string, unknown>;
 
 export abstract class MCPClient {
-  name: string;
+  abstract name: string;
   abstract getConfigPath(): Promise<string>;
   abstract getServerPropertyName(): string;
   abstract isServerInstalled(local?: boolean): Promise<boolean>;

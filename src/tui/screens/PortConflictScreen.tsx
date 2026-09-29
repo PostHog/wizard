@@ -6,7 +6,7 @@
 
 import { Box, Text } from 'ink';
 import { useSyncExternalStore } from 'react';
-import type { WizardStore } from '@ui/tui/store';
+import type { WizardStore } from '@tui/store';
 import { OAUTH_PORTS } from '@shared/constants';
 import { ConfirmationInput, ModalOverlay } from '@tui/primitives/index';
 
@@ -20,7 +20,7 @@ export const PortConflictScreen = ({ store }: PortConflictScreenProps) => {
     () => store.getSnapshot(),
   );
 
-  const processInfo = store.session.portConflictProcess;
+  const processInfo = store.portConflictProcess;
 
   if (!processInfo) return null;
 
@@ -35,7 +35,7 @@ export const PortConflictScreen = ({ store }: PortConflictScreenProps) => {
           confirmLabel="Retry [Enter]"
           cancelLabel="Exit [Esc]"
           onConfirm={() => store.resolvePortConflict()}
-          onCancel={() => process.exit(1)}
+          onCancel={() => store.requestExit(1)}
         />
       }
     >

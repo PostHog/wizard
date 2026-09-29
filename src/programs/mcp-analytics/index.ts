@@ -1,6 +1,7 @@
 import type { AbortCase } from '@agent/types';
 import { ErrorCodes } from '@shared/errors';
-import { createSkillProgram } from '@programs/agent-skill/index';
+import type { ProgramConfig } from '../program-step';
+import { createSkillProgram } from '../shared/skill-program';
 
 const MCP_ANALYTICS_REPORT_FILE = 'posthog-mcp-analytics-report.md';
 
@@ -54,7 +55,7 @@ export const MCP_ANALYTICS_ABORT_CASES: AbortCase[] = [
  * 'mcp-analytics'` from context-mill — a deliberate breaking change, done then,
  * not pre-emptively.
  */
-export const mcpAnalyticsConfig = createSkillProgram({
+export const config: ProgramConfig = createSkillProgram({
   skillId: 'mcp-analytics',
   command: 'mcp-analytics',
   id: 'mcp-analytics',

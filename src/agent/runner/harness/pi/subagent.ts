@@ -19,6 +19,10 @@ import type { ToolDefinition } from '@earendil-works/pi-coding-agent';
 import { logToFile } from '@utils/debug';
 import { gatewayTerminalFailure } from './gateway';
 
+/** A pi tool with any schema, details and state; pi's own `ToolDefinition` defaults are invariant. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type PiTool = ToolDefinition<any, any, any>;
+
 /**
  * Read-only built-ins a subagent may use. bash is supplied separately as the
  * parent's env-scrubbed tool (below), not the built-in, so a subagent's
@@ -66,7 +70,7 @@ export interface SubagentContext {
   /** The parent's security extension factory — reused so the fence is inherited. */
   securityFactory: (pi: unknown) => void;
   /** The parent's env-scrubbed bash, so a subagent's subprocesses are locked down too. */
-  bashTool: ToolDefinition;
+  bashTool: PiTool;
   /** pi SDK entrypoints, already imported by the backend. */
   sdk: {
     createAgentSession: typeof import('@earendil-works/pi-coding-agent')['createAgentSession'];

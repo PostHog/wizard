@@ -1,7 +1,7 @@
 /* TanStack Start wizard using posthog-agent with PostHog MCP */
 import type { WizardRunOptions } from '@utils/types';
-import type { FrameworkConfig } from '@programs/framework-config';
-import { detectNodePackageManagers } from '@programs/detection/package-manager';
+import type { FrameworkConfig } from '../../framework-config';
+import { detectNodePackageManagers } from '../../detection/package-manager';
 import { Integration } from '@shared/constants';
 import {
   getDeclaredVersion,
@@ -9,7 +9,7 @@ import {
   hasDeclaredDependency,
   type PackageJson,
 } from '@utils/package-json';
-import { tryGetPackageJson } from '@utils/setup-utils';
+import { tryGetPackageJson } from '@utils/package-json';
 import { getTanStackStartVersionBucket } from './utils';
 
 type TanStackStartContext = Record<string, unknown>;

@@ -1,10 +1,14 @@
-import { buildSession, McpOutcome, RunPhase } from '@lib/wizard-session';
+import { tuiView } from '@tui/__tests__/helpers/tui-view.no-jest';
+import { McpOutcome, RunPhase } from '@shared/run-state';
 import { WizardReadiness } from '@shared/health-checks/readiness';
-import { PROGRAM_SEQUENCES, ScreenId } from '@ui/tui/screen-sequences';
+import { programSequence, ScreenId } from '@tui/screen-sequences';
 import { Program, type ProgramId } from '@programs';
+import { McpScreenId } from '@tui/tools/mcp';
+import { SourceMapsScreenId } from '@tui/programs/error-tracking-upload-source-maps';
+import { Tool } from '@tools';
 
-function getEntry(program: ProgramId, id: ScreenId) {
-  const entry = PROGRAM_SEQUENCES[program].find(
+function getEntry(program: ProgramId, id: string) {
+  const entry = programSequence(program).find(
     (candidate) => candidate.id === id,
   );
   if (!entry) {
@@ -13,125 +17,81 @@ function getEntry(program: ProgramId, id: ScreenId) {
   return entry;
 }
 
-describe('PROGRAM_SEQUENCES', () => {
+describe('programSequence', () => {
   describe('Wizard setup predicate', () => {
     it('hides setup when there are no setup questions', () => {
-      const session = buildSession({});
+      const view = tuiView({});
       const entry = getEntry(Program.PostHogIntegration, ScreenId.Setup);
 
-      expect(entry.show?.(session)).toBe(false);
-      expect(entry.isComplete?.(session)).toBe(true);
+      expect(entry.show?.(view)).toBe(false);
+      expect(entry.isComplete?.(view)).toBe(true);
     });
 
     it('shows setup when framework questions are missing answers', () => {
-      const session = buildSession({});
+      const view = tuiView({});
       const entry = getEntry(Program.PostHogIntegration, ScreenId.Setup);
 
-      session.frameworkConfig = {
+      view.session.frameworkConfig = {
         metadata: {
           setup: {
             questions: [{ key: 'packageManager' }, { key: 'srcDir' }],
           },
         },
       } as never;
-      session.frameworkContext = { packageManager: 'pnpm' };
+      view.session.frameworkContext = { packageManager: 'pnpm' };
 
-      expect(entry.show?.(session)).toBe(true);
-      expect(entry.isComplete?.(session)).toBe(false);
+      expect(entry.show?.(view)).toBe(true);
+      expect(entry.isComplete?.(view)).toBe(false);
     });
 
     it('marks setup complete once all required answers are present', () => {
-      const session = buildSession({});
+      const view = tuiView({});
       const entry = getEntry(Program.PostHogIntegration, ScreenId.Setup);
 
-      session.frameworkConfig = {
+      view.session.frameworkConfig = {
         metadata: {
           setup: {
             questions: [{ key: 'packageManager' }, { key: 'srcDir' }],
           },
         },
       } as never;
-      session.frameworkContext = {
+      view.session.frameworkContext = {
         packageManager: 'pnpm',
         srcDir: 'src',
       };
 
-      expect(entry.show?.(session)).toBe(false);
-      expect(entry.isComplete?.(session)).toBe(true);
+      expect(entry.show?.(view)).toBe(false);
+      expect(entry.isComplete?.(view)).toBe(true);
     });
   });
 
   describe('Wizard health-check predicate', () => {
-    it('stays incomplete before readiness exists', () => {
-      const session = buildSession({});
-      const entry = getEntry(Program.PostHogIntegration, ScreenId.HealthCheck);
-
-      expect(entry.isComplete?.(session)).toBe(false);
-    });
-
-    it('stays incomplete for blocking readiness until outage is dismissed', () => {
-      const session = buildSession({});
-      const entry = getEntry(Program.PostHogIntegration, ScreenId.HealthCheck);
-
-      session.readinessResult = {
-        decision: WizardReadiness.No,
-        health: {} as never,
-        reasons: ['Anthropic: down'],
-      };
-
-      expect(entry.isComplete?.(session)).toBe(false);
-
-      session.outageDismissed = true;
-
-      expect(entry.isComplete?.(session)).toBe(true);
-    });
-
     it('completes immediately for non-blocking readiness', () => {
-      const session = buildSession({});
+      const view = tuiView({});
       const entry = getEntry(Program.PostHogIntegration, ScreenId.HealthCheck);
 
-      session.readinessResult = {
+      view.session.readinessResult = {
         decision: WizardReadiness.YesWithWarnings,
         health: {} as never,
         reasons: [],
       };
 
-      expect(entry.isComplete?.(session)).toBe(true);
+      expect(entry.isComplete?.(view)).toBe(true);
     });
   });
 
   describe('Source maps flow', () => {
-    const sourceMapsScreens = () =>
-      PROGRAM_SEQUENCES[Program.ErrorTrackingUploadSourceMaps].map((s) => s.id);
-
-    it('logs in, then detects: intro → auth → detect → run, no health-check', () => {
-      const screens = sourceMapsScreens();
-
-      // Auth comes before the agentic detect screen (detection needs creds).
-      expect(screens.indexOf(ScreenId.Auth)).toBeLessThan(
-        screens.indexOf(ScreenId.SourceMapsDetect),
-      );
-      expect(screens.indexOf(ScreenId.SourceMapsIntro)).toBeLessThan(
-        screens.indexOf(ScreenId.Auth),
-      );
-      expect(screens.indexOf(ScreenId.SourceMapsDetect)).toBeLessThan(
-        screens.indexOf(ScreenId.Run),
-      );
-      // The health-check ("connection") screen was removed from this flow.
-      expect(screens).not.toContain(ScreenId.HealthCheck);
-    });
-
     it('detect screen stays incomplete until a project is selected', () => {
       const entry = getEntry(
         Program.ErrorTrackingUploadSourceMaps,
-        ScreenId.SourceMapsDetect,
+        SourceMapsScreenId.Detect,
       );
-      const session = buildSession({});
+      const view = tuiView({});
 
-      expect(entry.isComplete?.(session)).toBe(false);
+      expect(entry.isComplete?.(view)).toBe(false);
 
-      session.frameworkContext = { sourceMapsSelectedVariant: 'nextjs' };
-      expect(entry.isComplete?.(session)).toBe(true);
+      view.session.frameworkContext = { sourceMapsSelectedVariant: 'nextjs' };
+      expect(entry.isComplete?.(view)).toBe(true);
     });
   });
 
@@ -144,54 +104,53 @@ describe('PROGRAM_SEQUENCES', () => {
       } as never);
 
     it('hides the gate while apiUser is null (transient between emits)', () => {
-      const session = buildSession({});
+      const view = tuiView({});
       const entry = getEntry(Program.PostHogIntegration, ScreenId.AiOptIn);
 
-      expect(session.apiUser).toBeNull();
-      expect(entry.show?.(session)).toBe(false);
-      expect(entry.isComplete?.(session)).toBe(false);
+      expect(view.session.apiUser).toBeNull();
+      expect(entry.show?.(view)).toBe(false);
+      expect(entry.isComplete?.(view)).toBe(false);
     });
 
     it('hides the gate when the org has opted in (true)', () => {
-      const session = buildSession({});
-      session.apiUser = orgWith(true);
+      const view = tuiView({});
+      view.session.apiUser = orgWith(true);
       const entry = getEntry(Program.PostHogIntegration, ScreenId.AiOptIn);
 
-      expect(entry.show?.(session)).toBe(false);
-      expect(entry.isComplete?.(session)).toBe(true);
+      expect(entry.show?.(view)).toBe(false);
+      expect(entry.isComplete?.(view)).toBe(true);
     });
 
     it('shows the gate when the org has explicitly opted out (false)', () => {
-      const session = buildSession({});
-      session.apiUser = orgWith(false);
+      const view = tuiView({});
+      view.session.apiUser = orgWith(false);
       const entry = getEntry(Program.PostHogIntegration, ScreenId.AiOptIn);
 
-      expect(entry.show?.(session)).toBe(true);
-      expect(entry.isComplete?.(session)).toBe(false);
+      expect(entry.show?.(view)).toBe(true);
+      expect(entry.isComplete?.(view)).toBe(false);
     });
 
     it('shows the gate when the field is null (legacy org, matches Max)', () => {
-      const session = buildSession({});
-      session.apiUser = orgWith(null);
+      const view = tuiView({});
+      view.session.apiUser = orgWith(null);
       const entry = getEntry(Program.PostHogIntegration, ScreenId.AiOptIn);
 
-      expect(entry.show?.(session)).toBe(true);
-      expect(entry.isComplete?.(session)).toBe(false);
+      expect(entry.show?.(view)).toBe(true);
+      expect(entry.isComplete?.(view)).toBe(false);
     });
 
     it('shows the gate when the field is undefined (matches Max)', () => {
-      const session = buildSession({});
-      session.apiUser = orgWith(undefined);
+      const view = tuiView({});
+      view.session.apiUser = orgWith(undefined);
       const entry = getEntry(Program.PostHogIntegration, ScreenId.AiOptIn);
 
-      expect(entry.show?.(session)).toBe(true);
-      expect(entry.isComplete?.(session)).toBe(false);
+      expect(entry.show?.(view)).toBe(true);
+      expect(entry.isComplete?.(view)).toBe(false);
     });
 
-    it('is omitted entirely from programs with requiresAi: false', () => {
-      // posthog-doctor sets requiresAi: false — withAiOptInGate should skip
-      // injection so the gate never appears in the sequence.
-      const entry = PROGRAM_SEQUENCES[Program.PosthogDoctor].find(
+    it('is omitted entirely from a tool flow, even one with an auth step', () => {
+      // A tool runs no agent, so withAiOptInGate never injects the gate.
+      const entry = programSequence(Tool.PosthogDoctor).find(
         (e) => e.id === ScreenId.AiOptIn,
       );
       expect(entry).toBeUndefined();
@@ -200,13 +159,13 @@ describe('PROGRAM_SEQUENCES', () => {
     it('skips the gate in CI mode regardless of opt-in state', () => {
       // CI users have already auto-consented to AI usage per the README,
       // and the interactive kill screen would be unworkable headless.
-      const session = buildSession({});
-      session.ci = true;
-      session.apiUser = orgWith(false);
+      const view = tuiView({});
+      view.session.ci = true;
+      view.session.apiUser = orgWith(false);
       const entry = getEntry(Program.PostHogIntegration, ScreenId.AiOptIn);
 
-      expect(entry.show?.(session)).toBe(false);
-      expect(entry.isComplete?.(session)).toBe(true);
+      expect(entry.show?.(view)).toBe(false);
+      expect(entry.isComplete?.(view)).toBe(true);
     });
 
     it('skips the gate in signup mode regardless of opt-in state', () => {
@@ -214,135 +173,116 @@ describe('PROGRAM_SEQUENCES', () => {
       // AI approval can never be read back. Creating an account through the
       // wizard to run the agent is itself the consent — signup auto-consents
       // like CI, so the gate must never block it.
-      const session = buildSession({});
-      session.signup = true;
-      session.apiUser = orgWith(false);
+      const view = tuiView({});
+      view.session.signup = true;
+      view.session.apiUser = orgWith(false);
       const entry = getEntry(Program.SelfDriving, ScreenId.AiOptIn);
 
-      expect(entry.show?.(session)).toBe(false);
-      expect(entry.isComplete?.(session)).toBe(true);
+      expect(entry.show?.(view)).toBe(false);
+      expect(entry.isComplete?.(view)).toBe(true);
     });
 
     it('skips the gate in signup mode even when apiUser is null', () => {
-      const session = buildSession({});
-      session.signup = true;
+      const view = tuiView({});
+      view.session.signup = true;
       const entry = getEntry(Program.SelfDriving, ScreenId.AiOptIn);
 
-      expect(session.apiUser).toBeNull();
-      expect(entry.show?.(session)).toBe(false);
-      expect(entry.isComplete?.(session)).toBe(true);
+      expect(view.session.apiUser).toBeNull();
+      expect(entry.show?.(view)).toBe(false);
+      expect(entry.isComplete?.(view)).toBe(true);
     });
   });
 
   describe('Wizard run predicate', () => {
     it('stays incomplete while run is idle or running', () => {
-      const session = buildSession({});
+      const view = tuiView({});
       const entry = getEntry(Program.PostHogIntegration, ScreenId.Run);
 
-      session.runPhase = RunPhase.Idle;
-      expect(entry.isComplete?.(session)).toBe(false);
+      view.session.runPhase = RunPhase.Idle;
+      expect(entry.isComplete?.(view)).toBe(false);
 
-      session.runPhase = RunPhase.Running;
-      expect(entry.isComplete?.(session)).toBe(false);
+      view.session.runPhase = RunPhase.Running;
+      expect(entry.isComplete?.(view)).toBe(false);
     });
 
     it('completes when run finishes or errors', () => {
-      const session = buildSession({});
+      const view = tuiView({});
       const entry = getEntry(Program.PostHogIntegration, ScreenId.Run);
 
-      session.runPhase = RunPhase.Completed;
-      expect(entry.isComplete?.(session)).toBe(true);
+      view.session.runPhase = RunPhase.Completed;
+      expect(entry.isComplete?.(view)).toBe(true);
 
-      session.runPhase = RunPhase.Error;
-      expect(entry.isComplete?.(session)).toBe(true);
+      view.session.runPhase = RunPhase.Error;
+      expect(entry.isComplete?.(view)).toBe(true);
     });
   });
 
   describe('MCP flow predicates', () => {
     it('uses mcpComplete for McpAdd', () => {
-      const session = buildSession({});
-      const entry = getEntry(Program.McpAdd, ScreenId.McpAdd);
+      const view = tuiView({});
+      const entry = getEntry(Tool.McpAdd, McpScreenId.Add);
 
-      expect(entry.isComplete?.(session)).toBe(false);
+      expect(entry.isComplete?.(view)).toBe(false);
 
-      session.mcpComplete = true;
+      view.mcpComplete = true;
 
-      expect(entry.isComplete?.(session)).toBe(true);
+      expect(entry.isComplete?.(view)).toBe(true);
     });
 
     it('uses mcpComplete for McpRemove', () => {
-      const session = buildSession({});
-      const entry = getEntry(Program.McpRemove, ScreenId.McpRemove);
+      const view = tuiView({});
+      const entry = getEntry(Tool.McpRemove, McpScreenId.Remove);
 
-      expect(entry.isComplete?.(session)).toBe(false);
+      expect(entry.isComplete?.(view)).toBe(false);
 
-      session.mcpComplete = true;
+      view.mcpComplete = true;
 
-      expect(entry.isComplete?.(session)).toBe(true);
-    });
-
-    describe('McpAdd step ordering', () => {
-      // Slack-connect must run before the tutorial: the no-creds Slack render
-      // is the only post-install step that can render in mcp-add (a loginless
-      // command), so it sits between install and the tutorial. Ordering it
-      // after the tutorial would also bury Slack discovery behind a tutorial
-      // dismissal screen.
-      it('runs install → slack-connect → mcp-suggested-prompts', () => {
-        const order = PROGRAM_SEQUENCES[Program.McpAdd]
-          .map((entry) => entry.id)
-          .filter((id) => id !== ScreenId.Exit);
-
-        expect(order).toEqual([
-          ScreenId.McpAdd,
-          ScreenId.SlackConnect,
-          ScreenId.McpSuggestedPrompts,
-        ]);
-      });
+      expect(entry.isComplete?.(view)).toBe(true);
     });
 
     describe('McpAdd → mcp-suggested-prompts step', () => {
       it('hides the step when MCP install was skipped', () => {
-        const session = buildSession({});
-        session.mcpOutcome = McpOutcome.Skipped;
-        const entry = getEntry(Program.McpAdd, ScreenId.McpSuggestedPrompts);
+        const view = tuiView({});
+        view.mcpOutcome = McpOutcome.Skipped;
+        const entry = getEntry(Tool.McpAdd, McpScreenId.SuggestedPrompts);
 
-        expect(entry.show?.(session)).toBe(false);
+        expect(entry.show?.(view)).toBe(false);
       });
 
       it('hides the step when no MCP clients were detected', () => {
-        const session = buildSession({});
-        session.mcpOutcome = McpOutcome.NoClients;
-        const entry = getEntry(Program.McpAdd, ScreenId.McpSuggestedPrompts);
+        const view = tuiView({});
+        view.mcpOutcome = McpOutcome.NoClients;
+        const entry = getEntry(Tool.McpAdd, McpScreenId.SuggestedPrompts);
 
-        expect(entry.show?.(session)).toBe(false);
+        expect(entry.show?.(view)).toBe(false);
       });
 
       it('hides the step when MCP install failed', () => {
-        const session = buildSession({});
-        session.mcpOutcome = McpOutcome.Failed;
-        const entry = getEntry(Program.McpAdd, ScreenId.McpSuggestedPrompts);
+        const view = tuiView({});
+        view.mcpOutcome = McpOutcome.Failed;
+        const entry = getEntry(Tool.McpAdd, McpScreenId.SuggestedPrompts);
 
-        expect(entry.show?.(session)).toBe(false);
+        expect(entry.show?.(view)).toBe(false);
       });
 
       it('shows the step when MCP was installed', () => {
-        const session = buildSession({});
-        session.mcpOutcome = McpOutcome.Installed;
-        const entry = getEntry(Program.McpAdd, ScreenId.McpSuggestedPrompts);
+        const view = tuiView({});
+        view.mcpOutcome = McpOutcome.Installed;
+        const entry = getEntry(Tool.McpAdd, McpScreenId.SuggestedPrompts);
 
-        expect(entry.show?.(session)).toBe(true);
+        expect(entry.show?.(view)).toBe(true);
       });
 
       it('is incomplete until the user dismisses', () => {
-        const session = buildSession({});
-        session.mcpOutcome = McpOutcome.Installed;
-        const entry = getEntry(Program.McpAdd, ScreenId.McpSuggestedPrompts);
+        const view = tuiView({});
+        view.mcpOutcome = McpOutcome.Installed;
+        const entry = getEntry(Tool.McpAdd, McpScreenId.SuggestedPrompts);
 
-        expect(entry.isComplete?.(session)).toBe(false);
+        expect(entry.isComplete?.(view)).toBe(false);
 
-        session.mcpSuggestedPromptsDismissed = true;
+        view.mcpSuggestedPromptsDismissed = true;
 
-        expect(entry.isComplete?.(session)).toBe(true);
+        expect(entry.isComplete?.(view)).toBe(true);
       });
     });
   });

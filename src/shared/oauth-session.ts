@@ -1,4 +1,4 @@
-// The run's one OAuth token, shaped like gateway-session. The host supplies the rotation.
+// The process's one OAuth login session, shaped like gateway-session. The host supplies the rotation.
 
 import type { Credentials } from '@shared/api';
 import { logToFile } from '@utils/debug';
@@ -20,6 +20,8 @@ const listeners = new Set<(accessToken: string) => void>();
 // Every access token this login has held; the first one names the login.
 let lineage = new Set<string>();
 let lineageRoot: string | undefined;
+// The refresh token the token endpoint refused for good; a later login holds a new one.
+let revokedRefreshToken: string | undefined;
 
 /** Adopt the run's credentials; a stale copy of the held login gets the newer one back through `onRefreshed`. */
 export function configureOAuthSession(
@@ -91,6 +93,19 @@ export function onAccessTokenRotated(
   };
 }
 
+/** Record that the token endpoint refused this refresh token for good. A later 401 is then blamed on it. */
+export function markGrantRevoked(refreshToken: string): void {
+  revokedRefreshToken = refreshToken;
+}
+
+/** True while the held login's refresh token is one the token endpoint refused. */
+export function isGrantRevoked(): boolean {
+  return (
+    revokedRefreshToken !== undefined &&
+    current?.refreshToken === revokedRefreshToken
+  );
+}
+
 /** Test hook: drop the held credentials so the next run configures afresh. */
 export function resetOAuthSession(): void {
   current = null;
@@ -100,6 +115,7 @@ export function resetOAuthSession(): void {
   listeners.clear();
   lineage = new Set();
   lineageRoot = undefined;
+  revokedRefreshToken = undefined;
 }
 
 function sameLogin(a: Credentials, b: Credentials): boolean {

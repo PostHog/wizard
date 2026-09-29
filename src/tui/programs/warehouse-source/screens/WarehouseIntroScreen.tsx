@@ -12,13 +12,13 @@
 
 import { Box, Text } from 'ink';
 import { useState, useSyncExternalStore } from 'react';
-import type { WizardStore } from '@ui/tui/store';
+import type { WizardStore } from '@tui/store';
 import { PickerMenu } from '@tui/primitives/index';
-import { IntroScreenLayout } from '../../../screens/IntroScreenLayout.js';
+import { IntroScreenLayout } from '@tui/screens/IntroScreenLayout';
 import {
   getDetectedWarehouseSources,
   type WarehouseDetectError,
-} from '@programs/warehouse-source/index';
+} from '@programs/warehouse-source';
 
 interface WarehouseIntroScreenProps {
   store: WizardStore;
@@ -50,7 +50,7 @@ export const WarehouseIntroScreen = ({ store }: WarehouseIntroScreenProps) => {
         <Text>
           The{' '}
           <Text italic color="cyan">
-            {session.programLabel}
+            {store.programLabel}
           </Text>{' '}
           program connects your existing data sources to PostHog's data
           warehouse, so you can query them alongside product data.
@@ -66,7 +66,7 @@ export const WarehouseIntroScreen = ({ store }: WarehouseIntroScreenProps) => {
       {detected.length > 0 && (
         <Box flexDirection="column" marginTop={1}>
           <Text dimColor>Detected warehouse sources:</Text>
-          {detected.map((s) => (
+          {detected.map((s: { kind: string; label: string }) => (
             <Text key={s.kind} dimColor>
               {'  •'} {s.label}
             </Text>
@@ -94,7 +94,7 @@ export const WarehouseIntroScreen = ({ store }: WarehouseIntroScreenProps) => {
 
       <PickerMenu
         options={[{ label: 'Exit', value: 'exit' }]}
-        onSelect={() => process.exit(0)}
+        onSelect={() => store.requestExit(0)}
       />
     </>
   ) : undefined;
@@ -116,13 +116,13 @@ export const WarehouseIntroScreen = ({ store }: WarehouseIntroScreenProps) => {
       showSubtitle={!showingMoreInfo}
       body={body}
       showDetection={!showingMoreInfo}
-      programLabel={session.programLabel}
+      programLabel={store.programLabel}
       skillId={session.skillId}
       menuOptions={menuOptions}
       errorView={errorView}
       onSelect={(value) => {
         if (value === 'cancel') {
-          process.exit(0);
+          store.requestExit(0);
         } else if (value === 'more-info') {
           setShowingMoreInfo(true);
         } else if (value === 'back') {

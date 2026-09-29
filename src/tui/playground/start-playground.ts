@@ -4,16 +4,18 @@
 
 import { render } from 'ink';
 import { createElement } from 'react';
-import { WizardStore } from '@ui/tui/store';
+import { Program } from '@programs';
+import { WizardStore } from '@tui/store';
 import { PlaygroundApp } from './PlaygroundApp.js';
 import { HostResolution } from '@shared/host-resolution';
 import { WizardReadiness } from '@shared/health-checks/readiness';
 import { enterDarkTerminal, releaseTerminal } from '../terminal.js';
 
-export function startPlayground(version: string): void {
+/** Launch the playground. Resolves 0 once it closes (Ink exits or a screen asks to end) and the terminal is restored. */
+export function startPlayground(version: string): Promise<number> {
   enterDarkTerminal();
 
-  const store = new WizardStore();
+  const store = new WizardStore(Program.PostHogIntegration);
   store.version = version;
 
   // Pre-fill session so the router skips health-check, auth, and setup,
@@ -37,9 +39,18 @@ export function startPlayground(version: string): void {
     createElement(PlaygroundApp, { store }),
   );
 
-  void waitUntilExit().then(() => {
-    unmount();
-    releaseTerminal();
-    process.exit(0);
+  return new Promise((resolve) => {
+    let closed = false;
+    const close = (): void => {
+      if (closed) return;
+      closed = true;
+      unmount();
+      releaseTerminal();
+      resolve(0);
+    };
+    store.subscribe(() => {
+      if (store.exitRequest !== null) close();
+    });
+    void waitUntilExit().then(close);
   });
 }

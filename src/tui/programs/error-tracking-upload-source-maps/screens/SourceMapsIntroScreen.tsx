@@ -8,8 +8,8 @@
 
 import { Box, Text } from 'ink';
 import { useState, useSyncExternalStore } from 'react';
-import type { WizardStore } from '@ui/tui/store';
-import { IntroScreenLayout } from '../../../screens/IntroScreenLayout.js';
+import type { WizardStore } from '@tui/store';
+import { IntroScreenLayout } from '@tui/screens/IntroScreenLayout';
 
 type View = 'default' | 'more-info';
 
@@ -40,7 +40,7 @@ export const SourceMapsIntroScreen = ({
           <Text>
             The{' '}
             <Text italic color="cyan">
-              {session.programLabel}
+              {store.programLabel}
             </Text>{' '}
             program sets up your project to upload source maps to PostHog, so
             Error Tracking shows production stack traces in your original source
@@ -91,12 +91,12 @@ export const SourceMapsIntroScreen = ({
       showSubtitle={view === 'default'}
       body={body}
       showDetection={view === 'default'}
-      programLabel={session.programLabel}
+      programLabel={store.programLabel}
       skillId={session.skillId}
       menuOptions={menuOptions}
       onSelect={(value) => {
         if (value === 'cancel') {
-          process.exit(0);
+          store.requestExit(0);
         } else if (value === 'more-info') {
           setView('more-info');
         } else if (value === 'back') {

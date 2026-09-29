@@ -3,10 +3,38 @@
  * source creation 403s without the external-data-source pair, on a consent
  * the user already granted.
  */
+import { WIZARD_OAUTH_SCOPES } from '@shared/constants';
 import {
+  PROGRAM_REGISTRY,
   getOAuthScopesForProgram,
   getProvisioningScopesForProgram,
-} from '@programs/oauth/program-scopes';
+} from '../program-registry';
+
+/**
+ * Additions live on each program's config now. A program that loses them
+ * logs in with the base set and 403s on its first widened call.
+ */
+describe('programs that widen the base set', () => {
+  it('are exactly the programs with scope additions', () => {
+    const widened = PROGRAM_REGISTRY.filter(
+      (config) =>
+        getOAuthScopesForProgram(config.id).length > WIZARD_OAUTH_SCOPES.length,
+    ).map((config) => config.id);
+    expect(widened.sort()).toEqual([
+      'agent-skill',
+      'posthog-integration',
+      'replay-vision',
+      'self-driving',
+      'warehouse-source',
+    ]);
+  });
+
+  it('gives an unknown id the base set', () => {
+    expect(getOAuthScopesForProgram('no-such-program')).toBe(
+      WIZARD_OAUTH_SCOPES,
+    );
+  });
+});
 
 describe('posthog-integration scopes', () => {
   it('includes the warehouse pair for the orchestrator warehouse task', () => {
@@ -73,7 +101,7 @@ describe('provisioning scopes', () => {
     expect(getProvisioningScopesForProgram(null)).not.toContain(
       'replay_scanner:write',
     );
-    expect(getProvisioningScopesForProgram('mcp-tutorial')).not.toContain(
+    expect(getProvisioningScopesForProgram('metrics')).not.toContain(
       'replay_scanner:write',
     );
   });

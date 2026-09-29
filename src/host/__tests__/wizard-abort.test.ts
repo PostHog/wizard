@@ -2,47 +2,56 @@
 import {
   wizardAbort,
   WizardError,
-  registerCleanup,
   registerShutdown,
   clearCleanup,
-  runCleanups,
-} from '@utils/wizard-abort';
+  startHostExit,
+  type AbortPresenter,
+  type WizardAbortOptions,
+} from '@host/wizard-abort';
+import { registerCleanup, runCleanups } from '@utils/cleanup';
 import { analytics } from '@utils/analytics';
 import { ErrorCodes } from '@shared/errors';
-import { getUI } from '../../ui';
 
-vi.mock('@utils/analytics');
-vi.mock('../../ui', () => ({
-  getUI: vi.fn().mockReturnValue({
-    outroError: vi.fn(),
-    waitForOutroDismissed: vi.fn().mockResolvedValue(undefined),
-  }),
-}));
+vi.mock(import('@utils/analytics'));
 
 const mockAnalytics = analytics as Mocked<typeof analytics>;
 
-// vitest's restoreAllMocks() (afterEach) wipes the getUI() factory mock's
-// return value (unlike jest, which only restores spyOn mocks), so re-seed it
-// before each test.
-const seedGetUI = () => {
-  (getUI as Mock).mockReturnValue({
+/** The UI the abort presenter shows its outro on; re-seeded before each test. */
+let ui: {
+  outroError: Mock;
+  waitForOutroDismissed: Mock;
+};
+let present: AbortPresenter;
+
+// vitest's restoreAllMocks() (afterEach) wipes mock return values (unlike
+// jest, which only restores spyOn mocks), so re-seed the UI before each test.
+const seedUI = () => {
+  ui = {
     outroError: vi.fn(),
     waitForOutroDismissed: vi.fn().mockResolvedValue(undefined),
-  });
+  };
+  // A host passes its own presenter; here it forwards to the mock.
+  present = async (outro) => {
+    ui.outroError(outro);
+    await ui.waitForOutroDismissed();
+  };
+};
+
+/** Abort under a host, and resolve with the code the host gets. */
+const ended = (options?: WizardAbortOptions): Promise<number> => {
+  const exit = startHostExit();
+  void wizardAbort(present, options);
+  return exit.exited;
 };
 
 describe('wizardAbort', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     clearCleanup();
-    seedGetUI();
+    seedUI();
 
     mockAnalytics.captureException = vi.fn();
     mockAnalytics.shutdown = vi.fn().mockResolvedValue(undefined);
-
-    vi.spyOn(process, 'exit').mockImplementation(() => {
-      throw new Error('process.exit called');
-    });
   });
 
   afterEach(() => {
@@ -54,7 +63,7 @@ describe('wizardAbort', () => {
     [{ error: new Error('failure') }, 'failed'],
     [{ code: ErrorCodes.InternalUnhandled, status: 'cancelled' }, 'cancelled'],
   ] as const)(
-    'awaits stream shutdown before exit with outcome %s',
+    'awaits stream shutdown before the host ends with outcome %s',
     async (options, outcome) => {
       let release!: () => void;
       const shutdown = vi.fn(
@@ -64,64 +73,78 @@ describe('wizardAbort', () => {
           }),
       );
       registerShutdown(shutdown);
-      const result = wizardAbort(options);
-      const assertion = expect(result).rejects.toThrow('process.exit called');
+      let code: number | undefined;
+      const exited = ended(options).then((c) => (code = c));
       expect(shutdown).toHaveBeenCalledWith(outcome);
-      expect(process.exit).not.toHaveBeenCalled();
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      expect(code).toBeUndefined();
       release();
-      await assertion;
+      await exited;
+      expect(code).toBe(1);
     },
   );
 
-  it('calls analytics.shutdown, getUI().outroError, and process.exit in order', async () => {
+  it('calls analytics.shutdown, ui.outroError, and ends the host in order', async () => {
     const callOrder: string[] = [];
     mockAnalytics.shutdown.mockImplementation(async () => {
       callOrder.push('shutdown');
     });
-    (getUI().outroError as unknown as Mock).mockImplementation(() => {
+    ui.outroError.mockImplementation(() => {
       callOrder.push('outroError');
     });
 
-    await expect(wizardAbort()).rejects.toThrow('process.exit called');
+    const code = await ended();
+    callOrder.push('exit');
 
-    expect(callOrder).toEqual(['shutdown', 'outroError']);
-    expect(process.exit).toHaveBeenCalledWith(1);
+    expect(callOrder).toEqual(['shutdown', 'outroError', 'exit']);
+    expect(code).toBe(1);
   });
 
   it('uses default message and exit code when called with no options', async () => {
-    await expect(wizardAbort()).rejects.toThrow('process.exit called');
+    expect(await ended()).toBe(1);
 
-    expect(getUI().outroError).toHaveBeenCalledWith(
+    expect(ui.outroError).toHaveBeenCalledWith(
       expect.objectContaining({ message: 'Wizard setup cancelled.' }),
     );
     expect(mockAnalytics.shutdown).toHaveBeenCalledWith('cancelled');
-    expect(process.exit).toHaveBeenCalledWith(1);
   });
 
   it('uses custom message and exit code', async () => {
-    await expect(
-      wizardAbort({ message: 'Custom failure', exitCode: 2 }),
-    ).rejects.toThrow('process.exit called');
+    expect(await ended({ message: 'Custom failure', exitCode: 2 })).toBe(2);
 
-    expect(getUI().outroError).toHaveBeenCalledWith(
+    expect(ui.outroError).toHaveBeenCalledWith(
       expect.objectContaining({ message: 'Custom failure' }),
     );
-    expect(process.exit).toHaveBeenCalledWith(2);
+  });
+
+  it('never settles after handing its code to the host', async () => {
+    const exit = startHostExit();
+    let settled = false;
+    void wizardAbort(present).finally(() => (settled = true));
+    expect(await exit.exited).toBe(1);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(settled).toBe(false);
+  });
+
+  it('throws when no host started an exit', async () => {
+    vi.resetModules();
+    const fresh = await import('@host/wizard-abort');
+    await expect(fresh.wizardAbort(present)).rejects.toThrow(
+      'wizardAbort ran outside a host',
+    );
   });
 
   it('passes through structured outroData when provided', async () => {
-    await expect(
-      wizardAbort({
-        outroData: {
-          kind: 'error' as never,
-          message: 'Agent aborted',
-          body: 'reason',
-          docsUrl: 'https://posthog.com/docs',
-        },
-      }),
-    ).rejects.toThrow('process.exit called');
+    await ended({
+      outroData: {
+        kind: 'error' as never,
+        message: 'Agent aborted',
+        body: 'reason',
+        docsUrl: 'https://posthog.com/docs',
+      },
+    });
 
-    expect(getUI().outroError).toHaveBeenCalledWith({
+    expect(ui.outroError).toHaveBeenCalledWith({
       kind: 'error',
       message: 'Agent aborted',
       body: 'reason',
@@ -132,14 +155,14 @@ describe('wizardAbort', () => {
   it('captures error in analytics and shuts down as error when error is provided', async () => {
     const error = new Error('something broke');
 
-    await expect(wizardAbort({ error })).rejects.toThrow('process.exit called');
+    await ended({ error });
 
     expect(mockAnalytics.captureException).toHaveBeenCalledWith(error, {});
     expect(mockAnalytics.shutdown).toHaveBeenCalledWith('error');
   });
 
   it('does not capture error when no error is provided', async () => {
-    await expect(wizardAbort()).rejects.toThrow('process.exit called');
+    await ended();
 
     expect(mockAnalytics.captureException).not.toHaveBeenCalled();
   });
@@ -150,7 +173,7 @@ describe('wizardAbort', () => {
       error_type: 'MCP_MISSING',
     });
 
-    await expect(wizardAbort({ error })).rejects.toThrow('process.exit called');
+    await ended({ error });
 
     expect(mockAnalytics.captureException).toHaveBeenCalledWith(error, {
       integration: 'nextjs',
@@ -167,7 +190,7 @@ describe('wizardAbort', () => {
       ErrorCodes.GatewayMintRefused,
     );
 
-    await expect(wizardAbort({ error })).rejects.toThrow('process.exit called');
+    await ended({ error });
 
     expect(mockAnalytics.captureException).toHaveBeenCalledWith(error, {
       status: 403,
@@ -183,11 +206,11 @@ describe('wizardAbort', () => {
     mockAnalytics.shutdown.mockImplementation(async () => {
       callOrder.push('shutdown');
     });
-    (getUI().outroError as unknown as Mock).mockImplementation(() => {
+    ui.outroError.mockImplementation(() => {
       callOrder.push('outroError');
     });
 
-    await expect(wizardAbort()).rejects.toThrow('process.exit called');
+    await ended();
 
     expect(callOrder).toEqual([
       'cleanup1',
@@ -205,21 +228,18 @@ describe('wizardAbort', () => {
       /* this should still run */
     });
 
-    await expect(wizardAbort()).rejects.toThrow('process.exit called');
+    expect(await ended()).toBe(1);
 
     expect(mockAnalytics.shutdown).toHaveBeenCalled();
-    expect(getUI().outroError).toHaveBeenCalled();
-    expect(process.exit).toHaveBeenCalledWith(1);
+    expect(ui.outroError).toHaveBeenCalled();
   });
 
   it('captures an "error" ending that has no Error from its code and message', async () => {
-    await expect(
-      wizardAbort({
-        message: 'Could not access MCP',
-        code: ErrorCodes.AgentMcpMissing,
-        status: 'error',
-      }),
-    ).rejects.toThrow('process.exit called');
+    await ended({
+      message: 'Could not access MCP',
+      code: ErrorCodes.AgentMcpMissing,
+      status: 'error',
+    });
 
     const [captured, properties] = mockAnalytics.captureException.mock
       .calls[0] as [WizardError, Record<string, unknown>];
@@ -233,18 +253,14 @@ describe('wizardAbort', () => {
   it('shuts down as the explicit status even when an Error is provided', async () => {
     const error = new Error('stopped');
 
-    await expect(wizardAbort({ error, status: 'cancelled' })).rejects.toThrow(
-      'process.exit called',
-    );
+    await ended({ error, status: 'cancelled' });
 
     expect(mockAnalytics.captureException).toHaveBeenCalledWith(error, {});
     expect(mockAnalytics.shutdown).toHaveBeenCalledWith('cancelled');
   });
 
   it('shuts down analytics as "cancelled" when no error is provided', async () => {
-    await expect(wizardAbort({ message: 'Bad input' })).rejects.toThrow(
-      'process.exit called',
-    );
+    await ended({ message: 'Bad input' });
 
     expect(mockAnalytics.shutdown).toHaveBeenCalledWith('cancelled');
   });
@@ -279,46 +295,5 @@ describe('runCleanups', () => {
     registerCleanup(() => calls.push('after'));
     runCleanups();
     expect(calls).toEqual(['after']);
-  });
-});
-
-describe('abort() delegates to wizardAbort()', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    clearCleanup();
-    seedGetUI();
-
-    mockAnalytics.captureException = vi.fn();
-    mockAnalytics.shutdown = vi.fn().mockResolvedValue(undefined);
-
-    vi.spyOn(process, 'exit').mockImplementation(() => {
-      throw new Error('process.exit called');
-    });
-  });
-
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
-  it('abort() calls wizardAbort with message and exitCode', async () => {
-    const { abort } = await import('@utils/setup-utils');
-
-    await expect(abort('Test abort', 3)).rejects.toThrow('process.exit called');
-
-    expect(getUI().outroError).toHaveBeenCalledWith(
-      expect.objectContaining({ message: 'Test abort' }),
-    );
-    expect(process.exit).toHaveBeenCalledWith(3);
-  });
-
-  it('abort() uses defaults when called with no args', async () => {
-    const { abort } = await import('@utils/setup-utils');
-
-    await expect(abort()).rejects.toThrow('process.exit called');
-
-    expect(getUI().outroError).toHaveBeenCalledWith(
-      expect.objectContaining({ message: 'Wizard setup cancelled.' }),
-    );
-    expect(process.exit).toHaveBeenCalledWith(1);
   });
 });
