@@ -4,6 +4,7 @@
 // project-wide, matching `test.globals: true` in vitest.config.ts. Referenced
 // here rather than via tsconfig `types` because the project's `typeRoots` is
 // constrained and can't resolve the `vitest/globals` subpath export.
+// eslint-disable-next-line @typescript-eslint/triple-slash-reference -- test projects need vitest's globals ambient.
 /// <reference types="vitest/globals" />
 
 // Bridges jest's ambient mock helper types to vitest's equivalents so test
@@ -22,8 +23,7 @@ declare global {
     ViMock<T>;
   type Mocked<T> = ViMocked<T>;
   type MockedFunction<T extends (...args: any[]) => any> = ViMockedFunction<T>;
-  type MockedClass<T extends abstract new (...args: any[]) => any> =
-    ViMockedClass<T>;
+  type MockedClass<T extends new (...args: any[]) => any> = ViMockedClass<T>;
   type MockInstance<
     T extends (...args: any[]) => any = (...args: any[]) => any,
   > = ViMockInstance<T>;

@@ -4,6 +4,8 @@
 // Therefore most fields are marked as nullable, except the ones we are certain about.
 
 declare module 'xcode' {
+  import { EventEmitter } from 'events';
+
   interface PBXFileOptions {
     lastKnownFileType?: string;
     group?: string;
@@ -61,9 +63,11 @@ declare module 'xcode' {
     writeSync(): string;
     writeHeadComment(): void;
     writeProject(): void;
-    writeObject(object: Record<string, Array | object | string | number>): void;
+    writeObject(
+      object: Record<string, unknown[] | object | string | number>,
+    ): void;
     writeObjectsSections(
-      objects: Record<string, Array | object | string | number>,
+      objects: Record<string, unknown[] | object | string | number>,
     ): void;
     writeArray(
       arr: Array<
@@ -71,19 +75,19 @@ declare module 'xcode' {
             value?: string;
             comment?: string;
           }
-        | Record<string, Array | object | string | number>
+        | Record<string, unknown[] | object | string | number>
       >,
       name: string,
     ): void;
 
     writeSectionComment(name: string, begin: boolean): void;
     writeSection(
-      section: Record<string, Array | object | string | number>,
+      section: Record<string, unknown[] | object | string | number>,
     ): void;
     writeInlineObject(
       name: string,
       comment: string,
-      object: Record<string, Array | object | string | number>,
+      object: Record<string, unknown[] | object | string | number>,
     ): void;
   }
 
@@ -114,7 +118,6 @@ declare module 'xcode' {
     productName?: string;
     productReference?: string;
     productReference_comment?: string;
-    productType?: string;
   }
 
   export interface XCConfigurationList {
@@ -268,7 +271,7 @@ declare module 'xcode' {
     }[];
   }
 
-  export class Project extends import('events').EventEmitter {
+  export class Project extends EventEmitter {
     hash: {
       project: {
         objects: PBXObjects;
@@ -521,7 +524,6 @@ declare module 'xcode' {
 
   export const project: (filename: string) => Project;
 
-  export default {
-    project: project,
-  };
+  const xcode: { project: typeof project };
+  export default xcode;
 }

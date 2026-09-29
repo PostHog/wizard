@@ -38,5 +38,5 @@ export default defineConfig({
   clean: true,
 
   // One config for every file: the per-layer tsconfigs map only their own aliases.
-  tsconfig: './tsconfig.build.json',
+  tsconfig: './tsconfig.base.json',
 });

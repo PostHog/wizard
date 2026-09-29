@@ -1,0 +1,22 @@
+// bin.ts and the build and test configs. bin.ts may import the CLI's entry and
+// nothing else, which `paths` fences: `references` alone would let it reach
+// everything the CLI reaches.
+{
+  "extends": "./tsconfig.no-tui.json",
+  "compilerOptions": {
+    "paths": {
+      "@env": ["./src/env.ts"],
+      "@shared/*": ["./src/shared/*"],
+      "@utils/*": ["./src/shared/utils/*"],
+      "@cli": ["./src/cli/index.ts"],
+      "ink": ["./types/tui-only.fence"],
+      "ink/*": ["./types/tui-only.fence"],
+      "react": ["./types/tui-only.fence"],
+      "react/*": ["./types/tui-only.fence"],
+      "@inkjs/ui": ["./types/tui-only.fence"],
+      "ink-testing-library": ["./types/tui-only.fence"]
+    }
+  },
+  "files": ["bin.ts", "tsdown.config.ts", "vitest.config.ts"],
+  "references": [{ "path": "./src" }, { "path": "./src/shared" }, { "path": "./src/cli" }]
+}

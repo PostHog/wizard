@@ -1,0 +1,27 @@
+// The TUI's shared code. The entry project, tsconfig.json, holds the registries,
+// the tests and the playground, and every program and tool folder imports this.
+// The core sees each registry as a signature stub, never the registry's code.
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "paths": {
+      "@env": ["../env.ts"],
+      "@shared/*": ["../shared/*"],
+      "@utils/*": ["../shared/utils/*"],
+      "@host/*": ["../host/*"],
+      "@agent/types": ["../agent/types.ts"],
+      "@programs": ["../programs/index.ts"],
+      "@programs/types": ["../programs/types.ts"],
+      "@tools": ["../tools/index.ts"],
+      "@tui/*": ["./*"],
+      "@tui/programs/index": ["../../types/tui-programs.d.ts"],
+      "@tui/tools/index": ["../../types/tui-tools.d.ts"]
+    }
+  },
+  "include": ["*.ts", "*.tsx", "auth", "components", "control", "hooks", "primitives", "screens", "services", "programs/shared", "programs/types.ts", "tools/types.ts"],
+  "exclude": ["index.ts", "**/__tests__"],
+  "references": [
+    { "path": "../tsconfig.json" }, { "path": "../shared" }, { "path": "../host" },
+    { "path": "../agent" }, { "path": "../programs" }, { "path": "../tools" }
+  ]
+}
