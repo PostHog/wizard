@@ -9,8 +9,8 @@ import {
   SkipReason,
 } from '@agent/runner/sequence/orchestrator/queue';
 
-vi.mock('@utils/analytics', () => ({
-  analytics: { wizardCapture: vi.fn() },
+vi.mock(import('@utils/analytics'), () => ({
+  analytics: { wizardCapture: vi.fn() } as never,
 }));
 import {
   applyComplete,

@@ -3,10 +3,10 @@ import { walkProjectFiles, safeReadFile } from '@utils/bounded-fs';
 import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
 
-vi.mock('../analytics', () => ({
-  analytics: { captureException: vi.fn() },
+vi.mock(import('../analytics'), () => ({
+  analytics: { captureException: vi.fn() } as never,
 }));
-vi.mock('../debug', () => ({ logToFile: vi.fn() }));
+vi.mock(import('../debug'), () => ({ logToFile: vi.fn() }));
 
 const captureException = analytics.captureException as ReturnType<typeof vi.fn>;
 const mockLogToFile = logToFile as ReturnType<typeof vi.fn>;

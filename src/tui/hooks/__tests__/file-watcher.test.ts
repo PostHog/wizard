@@ -7,7 +7,8 @@ import {
 } from '@tui/hooks/file-watcher';
 import { logToFile } from '@utils/debug';
 
-vi.mock('@utils/debug', () => ({
+vi.mock(import('@utils/debug'), () => ({
+  useLogFile: vi.fn(),
   logToFile: vi.fn(),
 }));
 

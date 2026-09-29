@@ -8,23 +8,23 @@ import {
   DefaultMCPClientConfig,
 } from '@shared/mcp-clients/defaults';
 
-vi.mock('fs', () => ({
+vi.mock(import('fs'), () => ({
   promises: {
     mkdir: vi.fn(),
     readFile: vi.fn(),
     writeFile: vi.fn(),
-  },
+  } as never,
   existsSync: vi.fn(),
 }));
 
-vi.mock('os', () => ({
+vi.mock(import('os'), () => ({
   homedir: vi.fn(),
 }));
 
-vi.mock('../../defaults', () => ({
+vi.mock(import('../../defaults'), () => ({
   DefaultMCPClientConfig: {
     parse: vi.fn(),
-  },
+  } as never,
   getDefaultServerConfig: vi.fn(),
 }));
 

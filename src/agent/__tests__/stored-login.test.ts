@@ -8,9 +8,9 @@ import {
   hasStoredClaudeLogin,
 } from '../stored-login';
 
-vi.mock('node:child_process', () => ({ spawnSync: vi.fn() }));
-vi.mock('@utils/analytics', () => ({
-  analytics: { wizardCapture: vi.fn(), captureException: vi.fn() },
+vi.mock(import('node:child_process'), () => ({ spawnSync: vi.fn() }));
+vi.mock(import('@utils/analytics'), () => ({
+  analytics: { wizardCapture: vi.fn(), captureException: vi.fn() } as never,
 }));
 
 const spawnSyncMock = spawnSync as unknown as Mock;

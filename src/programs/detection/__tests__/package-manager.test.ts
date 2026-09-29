@@ -14,12 +14,9 @@ import {
   pubPackageManager,
 } from '@programs/detection/package-manager';
 
-vi.mock('@utils/debug');
-vi.mock('../../../telemetry', () => ({
-  withProgress: (_name: string, fn: () => unknown) => fn(),
-}));
-vi.mock('@utils/analytics', () => ({
-  analytics: { setTag: vi.fn() },
+vi.mock(import('@utils/debug'));
+vi.mock(import('@utils/analytics'), () => ({
+  analytics: { setTag: vi.fn() } as never,
 }));
 
 function makeTmpDir(): string {

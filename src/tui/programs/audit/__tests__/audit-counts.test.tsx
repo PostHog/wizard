@@ -1,12 +1,12 @@
 import { it, expect, vi, afterEach } from 'vitest';
 import { render, cleanup } from 'ink-testing-library';
-import type { AuditCheck, AuditStatus } from '@programs/audit/types';
+import type { AuditCheck, AuditStatus } from '@programs/audit';
 import { AuditChecksOutroSection } from '../screens/AuditChecksOutroSection';
 import { Summary } from '../screens/AuditChecksViewer/Header';
 import { WriteReportSlide } from '../screens/slides/writeReport';
 
-vi.mock('ink', () =>
-  vi.importActual('../../../../../node_modules/ink/build/index.d.js'),
+vi.mock(import('ink'), () =>
+  vi.importActual<typeof import('ink')>('ink-actual'),
 );
 
 afterEach(cleanup);

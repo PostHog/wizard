@@ -2,7 +2,7 @@ import { ClaudeWebMCPClient } from '@shared/mcp-clients/clients/claude-web';
 import { isBrowserFinishable } from '@shared/mcp-clients/browser-client';
 import { openTrackedLink } from '@utils/links';
 
-vi.mock('@utils/links', () => ({
+vi.mock(import('@utils/links'), () => ({
   openTrackedLink: vi.fn(),
 }));
 

@@ -15,13 +15,13 @@ import fg from 'fast-glob';
 import * as analyticsModule from '@utils/analytics';
 
 // Mock dependencies
-vi.mock('@utils/debug');
-vi.mock('@utils/analytics');
-vi.mock('fs');
-vi.mock('fast-glob');
+vi.mock(import('@utils/debug'));
+vi.mock(import('@utils/analytics'));
+vi.mock(import('fs'));
+vi.mock(import('fast-glob'));
 
 // Mock isSkillInstallCommand from skill-install (extracted to break circular dep)
-vi.mock('@shared/skill-install', () => ({
+vi.mock(import('@shared/skill-install'), () => ({
   isSkillInstallCommand: (command: string) =>
     command.startsWith('mkdir -p .claude/skills/') &&
     command.includes('curl -sL') &&

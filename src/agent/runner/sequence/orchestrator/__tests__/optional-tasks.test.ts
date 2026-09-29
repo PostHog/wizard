@@ -3,8 +3,8 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 
-vi.mock('@utils/analytics', () => ({
-  analytics: { wizardCapture: vi.fn(), captureException: vi.fn() },
+vi.mock(import('@utils/analytics'), () => ({
+  analytics: { wizardCapture: vi.fn(), captureException: vi.fn() } as never,
 }));
 
 import { QueueStore } from '@agent/runner/sequence/orchestrator/queue';

@@ -1,11 +1,11 @@
 import { wizardCanUseTool } from '@agent/agent-interface';
 
-vi.mock('@utils/analytics', () => ({
+vi.mock(import('@utils/analytics'), () => ({
   analytics: {
     wizardCapture: vi.fn(),
-  },
+  } as never,
 }));
-vi.mock('@utils/debug');
+vi.mock(import('@utils/debug'));
 
 describe('wizardCanUseTool — wizard_ask pending guard', () => {
   for (const tool of ['Write', 'Edit'] as const) {

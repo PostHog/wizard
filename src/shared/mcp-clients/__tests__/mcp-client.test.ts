@@ -1,13 +1,13 @@
 import { DefaultMCPClient } from '@shared/mcp-clients/MCPClient';
 import * as fs from 'fs';
 
-vi.mock('fs', () => ({
+vi.mock(import('fs'), () => ({
   existsSync: vi.fn(),
   promises: {
     mkdir: vi.fn().mockResolvedValue(undefined),
     readFile: vi.fn(),
     writeFile: vi.fn().mockResolvedValue(undefined),
-  },
+  } as never,
 }));
 
 const CONFIG_PATH = '/home/test/.some-editor/mcp.json';

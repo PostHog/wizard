@@ -1,13 +1,15 @@
 const state = vi.hoisted(() => ({ fail: false }));
-vi.mock('jiti', () => ({
-  createJiti: () => ({
-    import: () => {
-      if (state.fail) return Promise.reject(new Error('adapter import failed'));
-      return Promise.resolve({ createMcpAdapter: () => () => undefined });
-    },
-  }),
+vi.mock(import('jiti'), () => ({
+  createJiti: () =>
+    ({
+      import: () => {
+        if (state.fail)
+          return Promise.reject(new Error('adapter import failed'));
+        return Promise.resolve({ createMcpAdapter: () => () => undefined });
+      },
+    } as never),
 }));
-vi.mock('@utils/debug');
+vi.mock(import('@utils/debug'));
 
 import { setupPostHogMcp } from '../mcp';
 

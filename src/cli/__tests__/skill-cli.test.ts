@@ -1,17 +1,22 @@
 import type { Arguments } from 'yargs';
 
-vi.mock('../commands/basic-integration/skill', () => ({
+vi.mock(import('../commands/basic-integration/skill'), () => ({
   runSkillMode: vi.fn(),
 }));
 
-vi.mock('@shared/skill-menu', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@shared/skill-menu')>();
+vi.mock(import('@tools'), () => ({ listSkills: vi.fn() }));
+vi.mock(import('@cli/runners'), () => ({ exitWith: vi.fn() }));
+
+vi.mock(import('@shared/skill-menu'), async (importOriginal) => {
+  const actual = await importOriginal();
   return { ...actual, fetchSkillMenu: vi.fn() };
 });
 
 import { runSkillMode } from '../commands/basic-integration/skill';
 import { fetchSkillMenu } from '@shared/skill-menu';
 import { analytics } from '@utils/analytics';
+import { listSkills } from '@tools';
+import { exitWith } from '@cli/runners';
 import { skillCommand } from '../commands/skill';
 import { parseCommand } from './helpers/parse-command.no-jest';
 
@@ -49,6 +54,14 @@ describe('skill command parsing (end-to-end yargs)', () => {
       'skill audit-events --install-dir /tmp/app',
     );
     expect(argv.installDir).toBe('/tmp/app');
+  });
+
+  test('`skill list` lists the catalog instead of running a skill', async () => {
+    const argv = await parseCommand(skillCommand, 'skill list');
+    expect(argv.skillName).toBe('list');
+    skillCommand.handler!(argv);
+    expect(exitWith).toHaveBeenCalledWith(listSkills);
+    expect(runSkillMode).not.toHaveBeenCalled();
   });
 
   test('rejects a bare `skill` with no skill name', async () => {

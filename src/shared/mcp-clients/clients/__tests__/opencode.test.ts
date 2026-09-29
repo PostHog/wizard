@@ -3,11 +3,11 @@ import { execSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 
-vi.mock('node:child_process', () => ({
+vi.mock(import('node:child_process'), () => ({
   execSync: vi.fn(),
 }));
 
-vi.mock('node:fs', async () => {
+vi.mock(import('node:fs'), async () => {
   const actual = await vi.importActual<typeof fs>('node:fs');
   return {
     ...actual,
@@ -16,20 +16,21 @@ vi.mock('node:fs', async () => {
       readFile: vi.fn(),
       writeFile: vi.fn(),
       mkdir: vi.fn(),
-    },
+    } as never,
   };
 });
 
-vi.mock('node:os', () => ({
+vi.mock(import('node:os'), () => ({
   homedir: vi.fn(() => '/home/testuser'),
 }));
 
-vi.mock('@env', () => ({
+vi.mock(import('@env'), () => ({
   runtimeEnv: vi.fn(),
 }));
 
-vi.mock('@utils/debug', () => ({
-  debug: vi.fn(),
+vi.mock(import('@utils/debug'), () => ({
+  useLogFile: vi.fn(),
+  logToFile: vi.fn(),
 }));
 
 describe('OpenCodeMCPClient', () => {

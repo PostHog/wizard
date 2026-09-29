@@ -2,8 +2,8 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 
-vi.mock('@utils/analytics', () => ({
-  analytics: { captureException: vi.fn(), wizardCapture: vi.fn() },
+vi.mock(import('@utils/analytics'), () => ({
+  analytics: { captureException: vi.fn(), wizardCapture: vi.fn() } as never,
 }));
 
 import {

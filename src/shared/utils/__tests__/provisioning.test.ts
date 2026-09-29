@@ -13,15 +13,15 @@ import {
   TOKEN_RESPONSE,
 } from '../__fixtures__/provisioning';
 
-vi.mock('axios');
+vi.mock(import('axios'));
 // Return the override verbatim so region-based prod routing applies (no IS_DEV
 // localhost); undefined means no override.
-vi.mock('../urls', () => ({
+vi.mock(import('../urls'), () => ({
   resolveBaseUrl: (baseUrl?: string) => baseUrl,
 }));
-vi.mock('../debug', () => ({ logToFile: vi.fn() }));
-vi.mock('../analytics', () => ({
-  analytics: { captureException: vi.fn() },
+vi.mock(import('../debug'), () => ({ logToFile: vi.fn() }));
+vi.mock(import('../analytics'), () => ({
+  analytics: { captureException: vi.fn() } as never,
 }));
 
 const mockedAxios = axios as Mocked<typeof axios>;

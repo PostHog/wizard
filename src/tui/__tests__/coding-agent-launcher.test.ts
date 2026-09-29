@@ -11,8 +11,8 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { openCodingAgent } from '../services/coding-agent-launcher';
 
-vi.mock('node:child_process', async (original) => ({
-  ...(await original<typeof import('node:child_process')>()),
+vi.mock(import('node:child_process'), async (original) => ({
+  ...(await original()),
   spawn: vi.fn(),
 }));
 

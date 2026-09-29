@@ -13,8 +13,8 @@ import {
 } from '../security';
 import { analytics } from '@utils/analytics';
 
-vi.mock('@utils/analytics', () => ({
-  analytics: { wizardCapture: vi.fn() },
+vi.mock(import('@utils/analytics'), () => ({
+  analytics: { wizardCapture: vi.fn() } as never,
 }));
 
 // @posthog/warlock resolves to __mocks__/@posthog/warlock.ts (ESM + WASM can't

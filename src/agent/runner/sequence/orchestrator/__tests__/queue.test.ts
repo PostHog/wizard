@@ -13,8 +13,8 @@ import {
   type TransitionEvent,
 } from '@agent/runner/sequence/orchestrator/queue';
 
-vi.mock('@utils/analytics', () => ({
-  analytics: { captureException: vi.fn(), wizardCapture: vi.fn() },
+vi.mock(import('@utils/analytics'), () => ({
+  analytics: { captureException: vi.fn(), wizardCapture: vi.fn() } as never,
 }));
 
 function tmpDir(): string {

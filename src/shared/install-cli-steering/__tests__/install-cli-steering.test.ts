@@ -12,11 +12,11 @@ import {
   installSteeringSnippet,
 } from '@shared/install-cli-steering';
 
-vi.mock('@utils/debug');
-vi.mock('node:child_process', () => ({
+vi.mock(import('@utils/debug'));
+vi.mock(import('node:child_process'), () => ({
   spawnSync: vi.fn(),
 }));
-vi.mock('node:fs', () => ({
+vi.mock(import('node:fs'), () => ({
   existsSync: vi.fn(),
 }));
 

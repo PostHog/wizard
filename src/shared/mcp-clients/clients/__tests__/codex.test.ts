@@ -3,19 +3,19 @@ import { execSync, execFile } from 'node:child_process';
 import * as fs from 'node:fs';
 import { analytics } from '@utils/analytics';
 
-vi.mock('node:child_process', () => ({
+vi.mock(import('node:child_process'), () => ({
   execSync: vi.fn(),
-  execFile: vi.fn(),
+  execFile: vi.fn() as never,
 }));
 
-vi.mock('node:fs', () => ({
+vi.mock(import('node:fs'), () => ({
   existsSync: vi.fn(),
   readFileSync: vi.fn(),
   rmSync: vi.fn(),
 }));
 
-vi.mock('@utils/analytics', () => ({
-  analytics: { captureException: vi.fn(), wizardCapture: vi.fn() },
+vi.mock(import('@utils/analytics'), () => ({
+  analytics: { captureException: vi.fn(), wizardCapture: vi.fn() } as never,
 }));
 
 describe('CodexMCPClient', () => {

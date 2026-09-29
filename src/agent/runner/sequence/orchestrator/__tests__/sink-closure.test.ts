@@ -7,8 +7,8 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 
-vi.mock('@utils/analytics', () => ({
-  analytics: { wizardCapture: vi.fn() },
+vi.mock(import('@utils/analytics'), () => ({
+  analytics: { wizardCapture: vi.fn() } as never,
 }));
 
 import {

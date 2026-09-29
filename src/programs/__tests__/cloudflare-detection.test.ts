@@ -3,7 +3,7 @@ import * as path from 'path';
 import * as os from 'os';
 import { detectCloudflareTarget } from '@programs/cloudflare-detection';
 
-vi.mock('@utils/debug');
+vi.mock(import('@utils/debug'));
 
 function makeTmpDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'cloudflare-detect-'));

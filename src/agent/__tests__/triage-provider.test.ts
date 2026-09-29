@@ -8,7 +8,7 @@ import {
 } from '@shared/constants';
 import { triageModelFor } from '@agent/runner/switchboard/models';
 
-vi.mock('@earendil-works/pi-ai', () => ({ completeSimple: vi.fn() }));
+vi.mock(import('@earendil-works/pi-ai'), () => ({ completeSimple: vi.fn() }));
 const complete = vi.mocked(completeSimple);
 
 const AUTH = { baseURL: 'https://gw.posthog.test', authToken: 'tok' };

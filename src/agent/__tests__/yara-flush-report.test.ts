@@ -1,19 +1,12 @@
 import fs from 'fs';
 import { WIZARD_YARA_REPORT_FILE } from '@utils/paths';
 
-// The flush runs inside the agent, which has no UI: the report line is
-// returned to the caller, who decides where it goes.
-vi.mock('@ui', () => ({
-  getUI: () => {
-    throw new Error('agent code reached the UI');
-  },
+vi.mock(import('@utils/debug'));
+vi.mock(import('@utils/analytics'), () => ({
+  analytics: { wizardCapture: vi.fn(), captureException: vi.fn() } as never,
 }));
-vi.mock('@utils/debug');
-vi.mock('@utils/analytics', () => ({
-  analytics: { wizardCapture: vi.fn(), captureException: vi.fn() },
-}));
-vi.mock('fs', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('fs')>();
+vi.mock(import('fs'), async (importOriginal) => {
+  const actual = await importOriginal();
   return {
     ...actual,
     default: { ...actual, writeFileSync: vi.fn() },

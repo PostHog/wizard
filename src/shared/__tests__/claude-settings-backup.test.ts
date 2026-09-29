@@ -7,11 +7,11 @@ const { captureException, wizardCapture } = vi.hoisted(() => ({
   wizardCapture: vi.fn(),
 }));
 
-vi.mock('@utils/analytics', () => ({
+vi.mock(import('@utils/analytics'), () => ({
   analytics: {
     captureException: (...args: unknown[]) => captureException(...args),
     wizardCapture: (...args: unknown[]) => wizardCapture(...args),
-  },
+  } as never,
 }));
 
 import {
