@@ -144,6 +144,48 @@ describe('runAgent', () => {
     });
   });
 
+  it('restricts a read-only scan at SDK registration and permission gates', async () => {
+    mockQuery.mockImplementation(function* () {
+      yield { type: 'result', subtype: 'success' };
+    });
+    await runAgent(
+      {
+        ...defaultAgentConfig,
+        readOnly: true,
+        allowedTools: ['Write', 'Agent'],
+        mcpServers: {
+          external: { type: 'http', url: 'https://example.test/mcp' },
+        },
+      },
+      'Scan projects',
+      defaultOptions,
+      mockSpinner,
+      { requestRemark: false },
+    );
+    const options = mockQuery.mock.calls[0][0].options;
+    expect(options.tools).toEqual(['Read', 'Glob', 'Grep']);
+    expect(options.allowedTools).toEqual(['Read', 'Glob', 'Grep']);
+    expect(options.mcpServers).toEqual({});
+    expect(options.agents).toBeUndefined();
+    expect(options.settingSources).toEqual([]);
+    expect(options.skills).toEqual([]);
+    for (const tool of [
+      'Write',
+      'Edit',
+      'Bash',
+      'Agent',
+      'mcp__external__exec',
+      'FutureTool',
+    ]) {
+      expect(await options.canUseTool(tool, {})).toMatchObject({
+        behavior: 'deny',
+      });
+    }
+    expect(
+      await options.canUseTool('Read', { file_path: 'package.json' }),
+    ).toMatchObject({ behavior: 'allow' });
+  });
+
   it('preserves structured-output exhaustion when the SDK throws after its result', async () => {
     const result = {
       type: 'result',

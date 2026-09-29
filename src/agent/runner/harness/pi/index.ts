@@ -356,8 +356,11 @@ export const piBackend: AgentHarness = {
       // flips it; the security gate reads it to block Write/Edit meanwhile.
       const askState = { pending: false };
 
-      const { createSecurityExtension } = await import('./security');
+      const { createSecurityExtension, READ_ONLY_PI_TOOLS } = await import(
+        './security'
+      );
       const security = createSecurityExtension({
+        readOnly: config.readOnly,
         disallowedTools: runConfig.disallowedTools,
         getWizardAskPending: () => askState.pending,
         triageProvider: boot.triageProvider,
@@ -384,37 +387,39 @@ export const piBackend: AgentHarness = {
       // not the intent — a hardcoded `true` told the agent to call a tool the
       // failed handshake never registered. `task.ts` has always done this.
       let posthogMcp = false;
-      try {
-        const { setupPostHogMcp, fetchInstructions } = await import('./mcp');
-        const mcpToken = await currentAccessToken(boot.credentials);
-        // Overlaps the network handshake with the adapter's jiti load.
-        const instructionsPromise = fetchInstructions(
-          boot.credentials.host.mcpUrl,
-          mcpToken,
-          WIZARD_USER_AGENT,
-        );
-        const mcp = await setupPostHogMcp({
-          mcpUrl: boot.credentials.host.mcpUrl,
-          accessToken: mcpToken,
-          userAgent: WIZARD_USER_AGENT,
-        });
-        extensionFactories.push(mcp.extensionFactory);
-        mcpCleanup = mcp.cleanup;
-        mcpInstructions = await instructionsPromise;
-        posthogMcp = true;
-      } catch (err) {
+      if (!config.readOnly) {
         try {
-          mcpCleanup?.();
-        } catch {
-          /* Setup cleanup is best effort. */
+          const { setupPostHogMcp, fetchInstructions } = await import('./mcp');
+          const mcpToken = await currentAccessToken(boot.credentials);
+          // Overlaps the network handshake with the adapter's jiti load.
+          const instructionsPromise = fetchInstructions(
+            boot.credentials.host.mcpUrl,
+            mcpToken,
+            WIZARD_USER_AGENT,
+          );
+          const mcp = await setupPostHogMcp({
+            mcpUrl: boot.credentials.host.mcpUrl,
+            accessToken: mcpToken,
+            userAgent: WIZARD_USER_AGENT,
+          });
+          extensionFactories.push(mcp.extensionFactory);
+          mcpCleanup = mcp.cleanup;
+          mcpInstructions = await instructionsPromise;
+          posthogMcp = true;
+        } catch (err) {
+          try {
+            mcpCleanup?.();
+          } catch {
+            /* Setup cleanup is best effort. */
+          }
+          mcpCleanup = undefined;
+          logToFile(`[pi] PostHog MCP setup skipped: ${String(err)}`);
+          analytics.wizardCapture('mcp setup failed', {
+            harness: 'pi',
+            scope: 'run',
+            error: String(err).slice(0, 300),
+          });
         }
-        mcpCleanup = undefined;
-        logToFile(`[pi] PostHog MCP setup skipped: ${String(err)}`);
-        analytics.wizardCapture('mcp setup failed', {
-          harness: 'pi',
-          scope: 'run',
-          error: String(err).slice(0, 300),
-        });
       }
 
       if (structured) {
@@ -515,7 +520,7 @@ export const piBackend: AgentHarness = {
           bashTool: scrubbedBash,
           sdk: { createAgentSession, DefaultResourceLoader, SessionManager },
         }),
-      ];
+      ].filter((tool) => !config.readOnly || READ_ONLY_PI_TOOLS.has(tool.name));
 
       const { session: agentSession } = await createAgentSession({
         model,

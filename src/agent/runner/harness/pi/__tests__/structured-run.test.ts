@@ -1,4 +1,6 @@
 import { piBackend } from '..';
+import { createSecurityExtension } from '../security';
+import { setupPostHogMcp } from '../mcp';
 import { Harness, Sequence, GPT5_6_LUNA_MODEL } from '@shared/constants';
 import { AgentErrorType } from '@agent/agent-interface';
 import { HostResolution } from '@shared/host-resolution';
@@ -14,6 +16,7 @@ const state = vi.hoisted(() => ({
   text: '',
   prompts: [] as string[],
   request: undefined as unknown,
+  tools: [] as { name: string }[],
   tasks: new Map<string, { status: string }>(),
   // A hung turn ends only when the harness aborts the session.
   hang: false,
@@ -46,25 +49,31 @@ vi.mock('../gateway', () => ({
     terminalFailure: () => undefined,
   }),
 }));
-vi.mock('../security', () => ({
-  createSecurityExtension: () => ({
+vi.mock('../security', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../security')>()),
+  createSecurityExtension: vi.fn(() => ({
     factory: () => undefined,
     state: { criticalViolation: false },
-  }),
+  })),
 }));
 vi.mock('../mcp', () => ({
   fetchInstructions: () => Promise.resolve(undefined),
-  setupPostHogMcp: () =>
+  setupPostHogMcp: vi.fn(() =>
     Promise.resolve({
       extensionFactory: () => undefined,
       cleanup: () => undefined,
     }),
+  ),
 }));
-vi.mock('../tools', () => ({ createWizardPiTools: () => [] }));
+vi.mock('../tools', () => ({
+  createWizardPiTools: () => [{ name: 'set_env_values' }],
+}));
 vi.mock('../tasks', () => ({
   createWizardPiTaskTools: () => ({ tools: [], store: state.tasks }),
 }));
-vi.mock('../subagent', () => ({ createDispatchAgentTool: () => ({}) }));
+vi.mock('../subagent', () => ({
+  createDispatchAgentTool: () => ({ name: 'dispatch_agent' }),
+}));
 vi.mock('@earendil-works/pi-coding-agent', () => ({
   DefaultResourceLoader: class {
     constructor(options: { extensionFactories: ExtensionFactory[] }) {
@@ -86,11 +95,12 @@ vi.mock('@earendil-works/pi-coding-agent', () => ({
   ...Object.fromEntries(
     ['Ls', 'Find', 'Grep', 'Bash', 'Read', 'Edit', 'Write'].map((name) => [
       `create${name}ToolDefinition`,
-      () => ({ name }),
+      () => ({ name: name.toLowerCase() }),
     ]),
   ),
-  createAgentSession: () =>
-    Promise.resolve({
+  createAgentSession: (options: { customTools: { name: string }[] }) => {
+    state.tools = options.customTools;
+    return Promise.resolve({
       session: {
         bindExtensions: async () => {
           for (const factory of state.factories) {
@@ -137,7 +147,8 @@ vi.mock('@earendil-works/pi-coding-agent', () => ({
           return Promise.resolve();
         },
       },
-    }),
+    });
+  },
 }));
 
 const schema = {
@@ -268,6 +279,34 @@ it('keeps the remark and leaves the middleware alone on an integration run', asy
   const onMessage = vi.fn();
 
   await piBackend.run(runInputs(onMessage, null));
+  expect(state.tools.map((tool) => tool.name)).toEqual(
+    expect.arrayContaining([
+      'edit',
+      'write',
+      'bash',
+      'set_env_values',
+      'dispatch_agent',
+    ]),
+  );
   expect(state.prompts).toHaveLength(2);
   expect(onMessage).not.toHaveBeenCalled();
+});
+
+it('registers only filesystem readers for a read-only scan and fences tool calls', async () => {
+  const inputs = runInputs(vi.fn());
+  inputs.config.run.readOnly = true;
+  vi.mocked(setupPostHogMcp).mockClear();
+
+  await piBackend.run(inputs);
+
+  expect(state.tools.map((tool) => tool.name).sort()).toEqual([
+    'find',
+    'grep',
+    'ls',
+    'read',
+  ]);
+  expect(setupPostHogMcp).not.toHaveBeenCalled();
+  expect(createSecurityExtension).toHaveBeenLastCalledWith(
+    expect.objectContaining({ readOnly: true }),
+  );
 });

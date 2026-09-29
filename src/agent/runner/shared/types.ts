@@ -54,6 +54,7 @@ export interface AgentRunDefinition {
   customPrompt?: (ctx: PromptContext) => string;
   prompt?: (ctx: PromptContext) => string; // replaces the assembled project prompt; linear
   structured?: { schema: Record<string, unknown>; timeoutMs: number };
+  readOnly?: boolean; // restrict linear runs to filesystem read/search tools
   collectTranscript?: boolean; // keep a 256K-character transcript tail; linear, Anthropic
   requestRemark?: boolean; // false skips the closing remark; linear, Anthropic
   /** Additional MCP servers (e.g. Svelte MCP) */

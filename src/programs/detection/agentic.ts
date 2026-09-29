@@ -345,6 +345,7 @@ function detectionReportSchema(recommend: boolean) {
 function detectionRunDefinition(prompt: string): AgentRunDefinition {
   return {
     integrationLabel: 'agentic-detect',
+    readOnly: true,
     prompt: () => prompt,
     collectTranscript: true,
     requestRemark: false,
@@ -423,7 +424,6 @@ export async function detectProjectsWithAgent(
     wizardFlags,
     wizardFlagPayloads,
     wizardMetadata,
-    allowedTools: ['Read', 'Grep', 'Glob'],
     // The scan's scans count toward the program run's report.
     scanReport: 'defer',
   };

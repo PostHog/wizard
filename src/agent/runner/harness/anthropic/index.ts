@@ -65,6 +65,7 @@ export const anthropicBackend: AgentHarness = {
         askBridge,
         getPendingQuestion: askBridge?.getPendingQuestion,
         askMaxQuestions: config.maxQuestions,
+        readOnly: config.readOnly,
         allowedTools: runConfig.allowedTools,
         disallowedTools: runConfig.disallowedTools,
         modelOverride: model,

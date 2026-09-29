@@ -113,7 +113,7 @@ describe('agentic detection retry', () => {
         harness: Harness.anthropic,
         model: HAIKU_MODEL,
       });
-      expect(config.allowedTools).toEqual(['Read', 'Grep', 'Glob']);
+      expect(config.run.readOnly).toBe(true);
       expect(config.scanReport).toBe('defer');
       expect(config.run).toMatchObject({
         collectTranscript: true,
