@@ -1,5 +1,5 @@
 import type { ProgramStep } from '@programs/program-step';
-import { AGENT_SKILL_STEPS } from '@programs/agent-skill/steps';
+import { AGENT_SKILL_STEPS } from '@tui/programs/shared/skill-flow';
 import { detectWebAnalyticsPrerequisites } from './detect.js';
 
 export const WEB_ANALYTICS_DOCTOR_PROGRAM: ProgramStep[] = [

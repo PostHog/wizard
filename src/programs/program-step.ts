@@ -7,9 +7,9 @@ import type { WizardReadinessResult } from '@shared/health-checks/readiness';
 import type { ProgramRun } from '@programs/program-run';
 import type { Integration } from '@shared/constants';
 import type { FrameworkConfig } from '@programs/framework-config';
-import type { ContentBlock } from '@ui/tui/primitives/index';
-import type { WizardStore } from '@ui/tui/store';
-import type { Tip } from '@ui/tui/components/TipsCard';
+import type { ContentBlock } from '@tui/primitives/index';
+import type { WizardStore } from '@tui/store';
+import type { Tip } from '@tui/components/TipsCard';
 // Type-only — erased at compile time, so no runtime cycle with the
 // registry that imports `ProgramConfig` back from this module.
 import type { ProgramId } from './program-registry.js';

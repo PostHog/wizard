@@ -3,7 +3,7 @@ import type { ProgramRun } from '@programs/program-run';
 import type { WizardSession } from '@lib/wizard-session';
 import { OutroKind } from '@lib/wizard-session';
 import type { RunnerContext } from '@programs/runner-context';
-import { ERROR_TRACKING_UPLOAD_SOURCE_MAPS_PROGRAM } from './steps.js';
+import { ERROR_TRACKING_UPLOAD_SOURCE_MAPS_PROGRAM } from '../../tui/programs/error-tracking-upload-source-maps/flow.js';
 import {
   buildSourceMapsUploadPrompt,
   SOURCE_MAPS_DETECTION_FAILED_PROMPT,
@@ -14,7 +14,7 @@ import {
   VARIANTS_REQUIRING_POSTHOG_CLI,
   type SkillVariant,
 } from './detect.js';
-import { getContentBlocks } from '../../ui/tui/decks/error-tracking-upload-source-maps/index.js';
+import { getContentBlocks } from '../../tui/programs/shared/deck/source-maps.js';
 import { preinstallPostHogCliOnce } from '@programs/shared/posthog-cli-preinstall';
 
 const REPORT_FILE = 'posthog-source-maps-report.md';
@@ -136,7 +136,7 @@ export const errorTrackingUploadSourceMapsConfig: ProgramConfig = {
   },
 };
 
-export { ERROR_TRACKING_UPLOAD_SOURCE_MAPS_PROGRAM } from './steps.js';
+export { ERROR_TRACKING_UPLOAD_SOURCE_MAPS_PROGRAM } from '../../tui/programs/error-tracking-upload-source-maps/flow.js';
 export {
   detectSourceMapsPrerequisites,
   SOURCE_MAPS_ABORT_CASES,

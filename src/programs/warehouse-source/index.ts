@@ -7,7 +7,7 @@ import {
   WAREHOUSE_ABORT_CASES,
   getDetectedWarehouseSources,
 } from './detect.js';
-import { getContentBlocks } from '../../ui/tui/decks/warehouse-source/index.js';
+import { getContentBlocks } from '../../tui/programs/warehouse-source/deck/index.js';
 
 /**
  * Inject the detected sources (and their creation mode) into the prompt so the

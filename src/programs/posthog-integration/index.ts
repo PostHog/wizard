@@ -27,8 +27,8 @@ import { requestDeepLink } from '@utils/provisioning';
 import { openTrackedLink, withUtm } from '@utils/links';
 import type { HostResolution } from '@shared/host-resolution';
 import { getDetectedWarehouseSources } from '@programs/warehouse-source/detect';
-import { POSTHOG_INTEGRATION_PROGRAM } from './steps.js';
-import { getContentBlocks } from '../../ui/tui/decks/posthog-integration/index.js';
+import { POSTHOG_INTEGRATION_PROGRAM } from '../../tui/programs/posthog-integration/flow.js';
+import { getContentBlocks } from '../../tui/programs/posthog-integration/deck/index.js';
 import { buildCodingAgentPrompt } from './handoff.js';
 import { EVENT_PLAN_FILE } from './constants.js';
 
@@ -526,7 +526,7 @@ ${warehouseReportInstruction(session)}
   },
 };
 
-export { POSTHOG_INTEGRATION_PROGRAM } from './steps.js';
+export { POSTHOG_INTEGRATION_PROGRAM } from '../../tui/programs/posthog-integration/flow.js';
 
 /**
  * Self-contained run step that runs the integration agent. Other programs

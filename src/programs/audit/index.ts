@@ -8,7 +8,7 @@ import type { RunnerContext } from '@programs/runner-context';
 import type { WizardSession } from '@lib/wizard-session';
 import { OutroKind } from '@lib/wizard-session';
 import { WIZARD_TOOL_NAMES } from '@agent';
-import { headlessOption, regionOption } from '@lib/headless-mode';
+import { headlessOption, regionOption } from '@shared/headless-mode';
 import { AUDIT_ABORT_CASES } from './detect.js';
 import {
   AUDIT_CHECKS_FILE,

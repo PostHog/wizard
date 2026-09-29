@@ -26,7 +26,7 @@ import {
   ORCHESTRATOR_HARNESS_ROUTE,
 } from '@agent/runner/switchboard/flags/orchestrator';
 import { SELF_DRIVING_EXPERIMENT } from '@agent/runner/switchboard/flags/self-driving';
-import { runBindingCases } from './binding-cases';
+import { runBindingCases } from './binding-cases.no-jest';
 
 const envState = vi.hoisted(() => ({
   runSurface: 'local' as 'cloud' | 'local',

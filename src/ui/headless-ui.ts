@@ -1,6 +1,6 @@
 import { RunPhase, type Credentials } from '@lib/wizard-session';
 import { LoggingUI } from './logging-ui';
-import type { WizardStore } from './tui/store';
+import type { WizardStore } from '../tui/store';
 
 /**
  * `LoggingUI` plus it feeds run state into a `WizardStore` so the background

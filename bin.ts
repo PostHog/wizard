@@ -65,24 +65,24 @@ if (process.env.NODE_ENV === 'test') {
   })();
 }
 
-import { Wizard } from './src/wizard';
-import { basicIntegrationCommand } from './src/commands/basic-integration';
-import { mcpCommand } from './src/commands/mcp';
-import { mcpAnalyticsCommand } from './src/commands/mcp-analytics';
-import { replayVisionCommand } from './src/commands/replay-vision';
-import { aiObservabilityCommand } from './src/commands/ai-observability';
-import { metricsCommand } from './src/commands/metrics';
-import { auditCommand } from './src/commands/audit';
+import { Wizard } from './src/cli/wizard';
+import { basicIntegrationCommand } from './src/cli/commands/basic-integration';
+import { mcpCommand } from './src/cli/commands/mcp';
+import { mcpAnalyticsCommand } from './src/cli/commands/mcp-analytics';
+import { replayVisionCommand } from './src/cli/commands/replay-vision';
+import { aiObservabilityCommand } from './src/cli/commands/ai-observability';
+import { metricsCommand } from './src/cli/commands/metrics';
+import { auditCommand } from './src/cli/commands/audit';
 import { doctorCommand } from './src/commands/doctor';
-import { migrateCommand } from './src/commands/migrate';
-import { revenueCommand } from './src/commands/revenue';
-import { warehouseCommand } from './src/commands/warehouse';
-import { selfDrivingCommand } from './src/commands/self-driving';
-import { slackCommand } from './src/commands/slack';
-import { uploadSourcemapsCommand } from './src/commands/upload-sourcemaps';
-import { errorTrackingCommand } from './src/commands/error-tracking';
-import { skillCommand } from './src/commands/skill';
-import { cliCommand } from './src/commands/cli';
+import { migrateCommand } from './src/cli/commands/migrate';
+import { revenueCommand } from './src/cli/commands/revenue';
+import { warehouseCommand } from './src/cli/commands/warehouse';
+import { selfDrivingCommand } from './src/cli/commands/self-driving';
+import { slackCommand } from './src/cli/commands/slack';
+import { uploadSourcemapsCommand } from './src/cli/commands/upload-sourcemaps';
+import { errorTrackingCommand } from './src/cli/commands/error-tracking';
+import { skillCommand } from './src/cli/commands/skill';
+import { cliCommand } from './src/cli/commands/cli';
 import { recoverOrphanedSettingsBackups } from '@shared/claude-settings';
 
 // Heal any .claude/settings backup a previous interrupted run left orphaned,

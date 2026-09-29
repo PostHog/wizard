@@ -16,7 +16,7 @@ import { posthogIntegrationConfig } from './posthog-integration/index.js';
 import { revenueAnalyticsConfig } from './revenue-analytics/index.js';
 import { warehouseSourceConfig } from './warehouse-source/index.js';
 import { auditConfig } from './audit/index.js';
-import { eventsAuditConfig } from './events-audit/index.js';
+import { eventsAuditConfig } from './audit/events/config.js';
 import { posthogDoctorConfig } from './posthog-doctor/index.js';
 import { webAnalyticsDoctorConfig } from './web-analytics-doctor/index.js';
 import { migrationConfig } from './migration/index.js';
@@ -24,7 +24,7 @@ import { errorTrackingUploadSourceMapsConfig } from './error-tracking-upload-sou
 import { errorTrackingConfig } from './error-tracking/index.js';
 import { selfDrivingConfig } from './self-driving/index.js';
 import { AGENT_SKILL_STEPS } from './agent-skill/index.js';
-import { getContentBlocks as agentSkillContentBlocks } from '../ui/tui/decks/agent-skill/index.js';
+import { getContentBlocks as agentSkillContentBlocks } from '../tui/programs/shared/skill-deck.js';
 import {
   mcpAddConfig,
   mcpRemoveConfig,
@@ -34,7 +34,7 @@ import { mcpAnalyticsConfig } from './mcp-analytics/index.js';
 import { replayVisionConfig } from './replay-vision/index.js';
 import { aiObservabilityConfig } from './ai-observability/index.js';
 import { metricsConfig } from './metrics/index.js';
-import { slackConnectConfig } from './slack/index.js';
+import { slackConnectConfig } from '../tools/slack/index.js';
 
 // Generic skill program — runs an arbitrary context-mill skill chosen at
 // dispatch time (session.skillId) rather than a registered named program.

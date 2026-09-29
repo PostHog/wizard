@@ -3,14 +3,14 @@ import { LoggingUI } from '@ui/logging-ui';
 import { readApiKeyFromEnv } from '@utils/env-api-key';
 import { ErrorCodes } from '@shared/errors';
 import { emitWizardError } from '@shared/errors';
-import { runWizard } from '@lib/runners';
+import { runWizard } from '@cli/runners';
 import {
   posthogDoctorConfig,
   fetchHealthIssues,
   getKindMeta,
 } from '@programs/posthog-doctor/index';
-import { skillProgramOptions } from './skill-program-options';
-import type { Command } from './command';
+import { skillProgramOptions } from '../cli/commands/skill-program-options';
+import type { Command } from '../cli/commands/command';
 
 export const doctorCommand: Command = {
   name: 'doctor',

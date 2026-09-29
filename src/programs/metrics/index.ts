@@ -1,6 +1,6 @@
 import type { ProgramConfig, ProgramStep } from '@programs/program-step';
 import { AGENT_SKILL_STEPS } from '@programs/agent-skill/index';
-import { getContentBlocks } from '@ui/tui/decks/agent-skill/index';
+import { getContentBlocks } from '@tui/programs/shared/skill-deck';
 
 const METRICS_STEPS: ProgramStep[] = AGENT_SKILL_STEPS.map((step) =>
   step.id === 'intro' ? { ...step, screenId: 'metrics-intro' } : step,

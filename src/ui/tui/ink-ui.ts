@@ -12,7 +12,7 @@ import type {
   AuthErrorDetail,
   TokenUsageDelta,
 } from '@ui/wizard-ui';
-import type { WizardStore } from './store.js';
+import type { WizardStore } from '../../tui/store.js';
 import type { SettingsConflict } from '@shared/claude-settings';
 import type { WizardReadinessResult } from '@shared/health-checks/readiness';
 import type { ApiUser } from '@shared/api';

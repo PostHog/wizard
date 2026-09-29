@@ -86,6 +86,11 @@ export default defineConfig({
       { find: /^@programs\/types$/, replacement: r('src/programs/types.ts') },
       { find: /^@programs\/(.*)$/, replacement: `${r('src/programs')}/$1` },
       // Path aliases — mirror tsconfig `paths`.
+      { find: /^@host\/(.*)$/, replacement: `${r('src/host')}/$1` },
+      { find: /^@tools\/(.*)$/, replacement: `${r('src/tools')}/$1` },
+      { find: /^@tui\/(.*)$/, replacement: `${r('src/tui')}/$1` },
+      { find: /^@headless\/(.*)$/, replacement: `${r('src/headless')}/$1` },
+      { find: /^@cli\/(.*)$/, replacement: `${r('src/cli')}/$1` },
       { find: /^@env$/, replacement: r('src/env.ts') },
       { find: /^@lib\/(.*)$/, replacement: `${r('src/lib')}/$1` },
       { find: /^@e2e-harness\/(.*)$/, replacement: `${r('e2e-harness')}/$1` },
@@ -110,12 +115,7 @@ export default defineConfig({
         // The second glob keeps the pre-split behavior: a test file outside
         // a __tests__ directory still runs, here, rather than nowhere.
         [`src/**/${TESTS}`, 'src/**/*.{test,spec}.{js,jsx,ts,tsx}'],
-        [
-          ...AGENT_TESTS,
-          ...PROGRAM_TESTS,
-          ...TUI_TESTS,
-          ...CLI_TESTS,
-        ],
+        [...AGENT_TESTS, ...PROGRAM_TESTS, ...TUI_TESTS, ...CLI_TESTS],
       ),
     ],
     coverage: {

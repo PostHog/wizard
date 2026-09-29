@@ -2,7 +2,7 @@ import type { Arguments } from 'yargs';
 import { getUI, setUI } from '@ui';
 import { LoggingUI } from '@ui/logging-ui';
 import type { ProvisioningResult } from '@utils/provisioning';
-import type { Command } from './command';
+import type { Command } from '../cli/commands/command';
 
 export const provisionCommand: Command = {
   name: 'provision',

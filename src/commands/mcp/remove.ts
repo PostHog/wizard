@@ -1,11 +1,11 @@
 import type { Arguments } from 'yargs';
 import { setUI } from '@ui';
 import { LoggingUI } from '@ui/logging-ui';
-import { headlessOption, isHeadless } from '@lib/headless-mode';
+import { headlessOption, isHeadless } from '@shared/headless-mode';
 import { Program } from '@programs';
 import { VERSION } from '@shared/version';
-import type { Command } from '../command';
-import { isTUIUnavailable } from './tui-availability';
+import type { Command } from '../../cli/commands/command';
+import { isTUIUnavailable } from '../../cli/commands/mcp/tui-availability';
 
 export const mcpRemoveCommand: Command = {
   name: 'remove',
@@ -35,7 +35,7 @@ function runMcpRemove(argv: Arguments): void {
     }
 
     try {
-      const { startTUI } = await import('@ui/tui/start-tui');
+      const { startTUI } = await import('@tui/start-tui');
       const { buildSession } = await import('@lib/wizard-session');
       const tui = startTUI(VERSION, Program.McpRemove);
       tui.store.session = buildSession({

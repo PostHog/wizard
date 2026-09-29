@@ -6,7 +6,7 @@ import {
 import {
   createWizardRunSync,
   type RunOutcome,
-} from '@programs/task-stream/wizard-run-sync';
+} from '@programs/session/task-stream/wizard-run-sync';
 import { runtimeEnv } from '@env';
 import { registerShutdown, runCleanups } from '@utils/wizard-abort';
 import {
@@ -20,9 +20,9 @@ import { LoggingUI } from '@ui/logging-ui';
 import type { ProgramConfig } from '@programs/types';
 import { getAuditChecks } from '@programs/audit/types';
 import { analytics } from '@utils/analytics';
-import { resolveNoTelemetry } from './resolve-no-telemetry';
-import type { WizardStore } from '@ui/tui/store';
-import type { TaskStreamPush } from '@programs/task-stream/task-stream-push';
+import { resolveNoTelemetry } from '../../cli/runners/resolve-no-telemetry';
+import type { WizardStore } from '@tui/store';
+import type { TaskStreamPush } from '@programs/session/task-stream/task-stream-push';
 import { join } from 'node:path';
 import {
   ErrorCodes,
@@ -190,7 +190,7 @@ export function runNonInteractive(
     let store: WizardStore | null = null;
     let taskStream: TaskStreamPush | null = null;
     {
-      const { WizardStore } = await import('@ui/tui/store');
+      const { WizardStore } = await import('@tui/store');
       const { HeadlessUI } = await import('@ui/headless-ui');
       const { TaskStreamPush, PostHogDestination, createFileDestination } =
         await import('@programs/task-stream/index');

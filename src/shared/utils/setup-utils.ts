@@ -27,7 +27,7 @@ import {
   assertWizardCompletionScope,
   missingOAuthScopes,
   performOAuthFlow,
-} from './oauth';
+} from '../../tui/auth/oauth';
 import { resolveGrantedProject } from './project-resolution';
 import {
   ProvisionedAccountUnreadableError,
