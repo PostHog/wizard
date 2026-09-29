@@ -1,5 +1,5 @@
 import type { ProgramStep } from '@programs/program-step';
-import { HEALTH_CHECK_STEP } from '@programs/shared/health-check-step';
+import { HEALTH_CHECK_STEP } from '@tui/programs/shared/health-check-step';
 
 export const POSTHOG_DOCTOR_PROGRAM: ProgramStep[] = [
   {

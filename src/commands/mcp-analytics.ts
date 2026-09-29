@@ -1,7 +1,7 @@
 import { mcpAnalyticsConfig } from '@programs/mcp-analytics/index';
 
-import type { Command } from './command';
-import { nativeCommandFactory } from './factories/native-command-factory';
+import type { Command } from '../cli/commands/command';
+import { nativeCommandFactory } from '../cli/commands/factories/native-command-factory';
 
 /**
  * `wizard mcp-analytics` — flat skill command, instrument-an-MCP-server today.

@@ -13,7 +13,7 @@ import { buildSession, OutroKind } from '@lib/wizard-session';
 import { HostResolution } from '@shared/host-resolution';
 import { LoggingUI } from '@ui/logging-ui';
 import { InkUI } from '@ui/tui/ink-ui';
-import { startTUI } from '@ui/tui/start-tui';
+import { startTUI } from '@tui/start-tui';
 import { WizardStore } from '@ui/tui/store';
 import { getUI, setUI } from '@ui';
 import { analytics } from '@utils/analytics';
@@ -50,7 +50,7 @@ vi.mock('@programs/task-stream/index', () => ({
   PostHogDestination: class {},
   createFileDestination: () => null,
 }));
-vi.mock('@ui/tui/start-tui', () => ({ startTUI: vi.fn() }));
+vi.mock('@tui/start-tui', () => ({ startTUI: vi.fn() }));
 vi.mock('@utils/debug');
 vi.mock('@utils/analytics', () => ({
   analytics: {
@@ -90,10 +90,10 @@ vi.mock('@utils/wizard-abort', async (original) => ({
   registerCleanup: vi.fn(),
   wizardAbort: vi.fn().mockResolvedValue(undefined),
 }));
-vi.mock('../posthog-integration/detect', () => ({
+vi.mock('../detection/integration', () => ({
   maybeStampAiSdkDetected: vi.fn(),
 }));
-vi.mock('../posthog-integration/ai-sdk-stamp', () => ({
+vi.mock('../detection/ai-sdk-stamp', () => ({
   stampAiSdkDetected: vi.fn(),
 }));
 

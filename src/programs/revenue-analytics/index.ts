@@ -2,7 +2,7 @@ import type { ProgramConfig } from '@programs/program-step';
 import { WIZARD_TOOL_NAMES } from '@agent';
 import { REVENUE_ANALYTICS_PROGRAM } from './steps.js';
 import { REVENUE_ABORT_CASES } from './detect.js';
-import { getContentBlocks } from '../../ui/tui/decks/revenue-analytics/index.js';
+import { getContentBlocks } from '../../tui/programs/revenue-analytics/deck/index.js';
 
 export const revenueAnalyticsConfig: ProgramConfig = {
   command: 'revenue-analytics',

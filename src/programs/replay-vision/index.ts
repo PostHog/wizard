@@ -9,7 +9,7 @@ import type { CiRunnerContext } from '@programs/runner-context';
 import { FRAMEWORK_REGISTRY } from '@programs/frameworks/registry';
 import { createSkillProgram } from '@programs/agent-skill/index';
 import { AGENT_SKILL_STEPS } from '@programs/agent-skill/steps';
-import { detectPostHogIntegration } from '@programs/posthog-integration/detect';
+import { detectPostHogIntegration } from '@programs/detection/integration';
 import type {
   ProgramConfig,
   ProgramReadyContext,

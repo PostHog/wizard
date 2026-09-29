@@ -9,8 +9,8 @@
 import type { ProgramStep } from '@programs/program-step';
 import type { WizardSession } from '@lib/wizard-session';
 import { RunPhase } from '@lib/wizard-session';
-import { HEALTH_CHECK_STEP } from '@programs/shared/health-check-step';
-import { detectPostHogIntegration } from './detect.js';
+import { HEALTH_CHECK_STEP } from '@tui/programs/shared/health-check-step';
+import { detectPostHogIntegration } from '../detection/integration.js';
 
 function needsSetup(session: WizardSession): boolean {
   const config = session.frameworkConfig;

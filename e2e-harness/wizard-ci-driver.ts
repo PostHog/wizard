@@ -19,7 +19,7 @@
  */
 
 import type { WizardStore } from '@ui/tui/store';
-import type { ScreenName } from '@ui/tui/router';
+import type { ScreenName } from '@tui/router';
 import type { PendingQuestion, RunPhase } from '@lib/wizard-session';
 import { actionsForScreen, MissingParamError } from './action-registry.js';
 

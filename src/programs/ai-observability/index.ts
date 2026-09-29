@@ -1,7 +1,7 @@
 import type { ProgramConfig, ProgramStep } from '@programs/program-step';
 import { AGENT_SKILL_STEPS } from '@programs/agent-skill/index';
-import { getContentBlocks } from '@ui/tui/decks/agent-skill/index';
-import { headlessOption, regionOption } from '@lib/headless-mode';
+import { getContentBlocks } from '@tui/programs/shared/skill-deck';
+import { headlessOption, regionOption } from '@shared/headless-mode';
 
 const AI_OBSERVABILITY_STEPS: ProgramStep[] = AGENT_SKILL_STEPS.map((step) =>
   step.id === 'intro' ? { ...step, screenId: 'ai-observability-intro' } : step,

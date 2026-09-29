@@ -1,7 +1,7 @@
 import { aiObservabilityConfig } from '@programs/ai-observability/index';
 
-import type { Command } from './command';
-import { nativeCommandFactory } from './factories/native-command-factory';
+import type { Command } from '../cli/commands/command';
+import { nativeCommandFactory } from '../cli/commands/factories/native-command-factory';
 
 /**
  * `wizard ai-observability` — flat skill command, wire AI Observability into a

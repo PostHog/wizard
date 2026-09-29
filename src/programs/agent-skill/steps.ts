@@ -7,7 +7,7 @@
 
 import type { ProgramStep } from '@programs/program-step';
 import { RunPhase } from '@lib/wizard-session';
-import { HEALTH_CHECK_STEP } from '@programs/shared/health-check-step';
+import { HEALTH_CHECK_STEP } from '@tui/programs/shared/health-check-step';
 
 export const AGENT_SKILL_STEPS: ProgramStep[] = [
   {

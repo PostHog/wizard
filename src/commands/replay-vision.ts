@@ -1,7 +1,7 @@
 import { replayVisionConfig } from '@programs/replay-vision/index';
 
-import type { Command } from './command';
-import { nativeCommandFactory } from './factories/native-command-factory';
+import type { Command } from '../cli/commands/command';
+import { nativeCommandFactory } from '../cli/commands/factories/native-command-factory';
 
 /**
  * `wizard replay-vision` — flat skill command, set up Replay vision today.

@@ -7,7 +7,7 @@
  * make. Add a program's profile to {@link ./profiles} to make it e2e-drivable.
  */
 
-import { ScreenId, Overlay, type ScreenName } from '@ui/tui/router';
+import { ScreenId, Overlay, type ScreenName } from '@tui/router';
 import type { AskAnswers, AskQuestion } from '@lib/wizard-session';
 import type { CiState } from './wizard-ci-driver.js';
 

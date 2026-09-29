@@ -4,8 +4,8 @@ import { scopeInstallDirToProject } from '@programs/detection/project-scope';
 import { FRAMEWORK_REGISTRY } from '@programs/frameworks/registry';
 import type { ProgramRun } from '@programs/program-run';
 import { AGENT_SKILL_STEPS } from '@programs/agent-skill/steps';
-import { getContentBlocks } from '@ui/tui/decks/error-tracking/index';
-import { getTips } from '@ui/tui/decks/error-tracking/tips';
+import { getContentBlocks } from '@tui/programs/error-tracking/deck/index';
+import { getTips } from '@tui/programs/error-tracking/deck/tips';
 import {
   ERROR_TRACKING_UNSUPPORTED,
   errorTrackingProjectDir,

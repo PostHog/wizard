@@ -4,20 +4,20 @@ import { runProgramAgent } from '@programs/run-agent-legacy';
 import { authenticate } from '@programs/authenticate';
 import { getProgramConfig } from '@programs';
 import { getAuditChecks } from '@programs/audit/types';
-import { maybeStampAiSdkDetected } from '@programs/posthog-integration/detect';
+import { maybeStampAiSdkDetected } from '@programs/detection/integration';
 import type { ProgramConfig } from '@programs/types';
 import type { Harness, Sequence } from '@shared/constants';
-import type { startTUI as StartTUIFn } from '@ui/tui/start-tui';
+import type { startTUI as StartTUIFn } from '@tui/start-tui';
 import type { WizardStore } from '@ui/tui/store';
 import { OutroKind, type WizardSession } from '@lib/wizard-session';
-import type { TaskStreamPush as TaskStreamPushClass } from '@programs/task-stream/task-stream-push';
-import { resolveNoTelemetry } from './resolve-no-telemetry';
+import type { TaskStreamPush as TaskStreamPushClass } from '@programs/session/task-stream/task-stream-push';
+import { resolveNoTelemetry } from '../../cli/runners/resolve-no-telemetry';
 import { checkLocalServices, getLocalDev } from '@shared/local-dev';
-import { createWizardRunSync } from '@programs/task-stream/wizard-run-sync';
+import { createWizardRunSync } from '@programs/session/task-stream/wizard-run-sync';
 import { runtimeEnv } from '@env';
 import { runCleanups, registerShutdown } from '@utils/wizard-abort';
 import { classifyRunFailure, emitWizardError } from '@shared/errors';
-import { isRunFailure } from '@ui/mint-failure';
+import { isRunFailure } from '@tui/mint-failure';
 import { getUI } from '@ui';
 import { analytics } from '@utils/analytics';
 import { join } from 'node:path';
@@ -88,14 +88,14 @@ export function runWizard(
     try {
       const installDir = (options.installDir as string) || process.cwd();
 
-      const { startTUI } = await import('@ui/tui/start-tui');
+      const { startTUI } = await import('@tui/start-tui');
       const { buildSession, RunPhase } = await import('@lib/wizard-session');
       const { TaskStreamPush } = await import('@programs/task-stream/index');
       const { PostHogDestination } = await import(
-        '@programs/task-stream/destinations/posthog'
+        '@programs/session/task-stream/destinations/posthog'
       );
       const { createFileDestination } = await import(
-        '@programs/task-stream/destinations/file'
+        '@programs/session/task-stream/destinations/file'
       );
 
       // Before the TUI mounts: once Ink owns the alt screen, anything written

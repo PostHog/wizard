@@ -61,10 +61,10 @@ it.each([
   const { WizardStore } = await import('../tui/store');
   const { InkUI } = await import('../tui/ink-ui');
   const { TaskStreamPush } = await import(
-    '@programs/task-stream/task-stream-push'
+    '@programs/session/task-stream/task-stream-push'
   );
   const { WizardRunSync } = await import(
-    '@programs/task-stream/wizard-run-sync'
+    '@programs/session/task-stream/wizard-run-sync'
   );
   const { HostResolution } = await import('@shared/host-resolution');
   const { RunPhase } = await import('@lib/wizard-session');

@@ -13,11 +13,14 @@ export const posthogDoctorConfig: ProgramConfig = {
 };
 
 export { POSTHOG_DOCTOR_PROGRAM } from './steps.js';
-export { fetchHealthIssues } from './fetch.js';
-export { getKindMeta, KIND_METADATA } from './kind-metadata.js';
-export type { KindMeta } from './kind-metadata.js';
+export { fetchHealthIssues } from '../../tools/doctor/fetch.js';
+export {
+  getKindMeta,
+  KIND_METADATA,
+} from '../../tools/doctor/kind-metadata.js';
+export type { KindMeta } from '../../tools/doctor/kind-metadata.js';
 export type {
   HealthIssue,
   HealthIssueSeverity,
   HealthIssueSummary,
-} from './types.js';
+} from '../../tools/doctor/types.js';

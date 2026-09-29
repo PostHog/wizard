@@ -1,7 +1,7 @@
 import { errorTrackingConfig } from '@programs/error-tracking/index';
 
-import type { Command } from './command';
-import { nativeCommandFactory } from './factories/native-command-factory';
+import type { Command } from '../cli/commands/command';
+import { nativeCommandFactory } from '../cli/commands/factories/native-command-factory';
 
 /**
  * `wizard error-tracking` — flat skill command, set up error tracking today.

@@ -23,7 +23,7 @@ import type { ProgramConfig } from '@programs/program-step';
 import type { AbortCase } from '@agent/types';
 import type { ProgramRun } from '@programs/program-run';
 import { AGENT_SKILL_STEPS } from './steps.js';
-import { getContentBlocks } from '../../ui/tui/decks/agent-skill/index.js';
+import { getContentBlocks } from '../../tui/programs/shared/skill-deck.js';
 
 export interface SkillProgramOptions {
   /** Context-mill skill ID to install */

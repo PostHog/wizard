@@ -47,12 +47,12 @@ import {
   Overlay,
   Program,
   type ProgramId,
-} from './router.js';
+} from '../../tui/router.js';
 import { analytics, sessionProperties } from '@utils/analytics';
 import type { StoreInitContext, ProgramReadyContext } from '@programs/types';
 import { getProgramConfig } from '@programs';
-import { withAiOptInGate } from '@programs/ai-opt-in-gate';
-import { reportWarehouseSourcesDetected } from '@programs/posthog-integration/detect';
+import { withAiOptInGate } from '@tui/ai-opt-in-gate';
+import { reportWarehouseSourcesDetected } from '@programs/detection/integration';
 import { appendStatus } from '@shared/status-history';
 import { IS_DEV } from '@shared/constants';
 import { computeTokenCostUsd } from '@shared/token-pricing';

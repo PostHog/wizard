@@ -19,7 +19,7 @@ vi.mock('@lib/wizard-session', () => ({
   reportableDiscoveredFeatures: () => undefined,
   reportablePosthogSdkDetected: () => undefined,
 }));
-vi.mock('@ui/tui/start-tui', () => ({
+vi.mock('@tui/start-tui', () => ({
   startTUI: mockStartTUIMcp,
 }));
 vi.mock('@utils/env-api-key', () => ({
@@ -39,9 +39,9 @@ vi.mock('@programs', () => ({
 import type { Arguments } from 'yargs';
 import { mcpAddCommand } from '../commands/mcp/add';
 import { mcpRemoveCommand } from '../commands/mcp/remove';
-import { mcpTutorialCommand } from '../commands/mcp/tutorial';
-import { mcpCommand } from '../commands/mcp';
-import { parseCommand } from './helpers/parse-command.no-jest';
+import { mcpTutorialCommand } from '../cli/commands/mcp/tutorial';
+import { mcpCommand } from '../cli/commands/mcp';
+import { parseCommand } from '../cli/__tests__/helpers/parse-command.no-jest';
 
 function makeArgv(extra: Record<string, unknown> = {}): Arguments {
   return { _: [], $0: 'wizard', ...extra } as Arguments;

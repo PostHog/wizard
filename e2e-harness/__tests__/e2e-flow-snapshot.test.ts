@@ -22,7 +22,7 @@ import { HostResolution } from '@shared/host-resolution';
 import { FRAMEWORK_REGISTRY } from '@programs/frameworks/registry';
 import { WizardReadiness } from '@shared/health-checks/readiness';
 import { Program, getProgramConfig, type ProgramId } from '@programs';
-import { ScreenId } from '@ui/tui/router';
+import { ScreenId } from '@tui/router';
 import { SELF_DRIVING_INTEGRATE_PATH_KEY } from '@programs/self-driving/detect';
 import { WizardCiDriver } from '../wizard-ci-driver';
 import { decideE2eAction, type WizardE2eProfile } from '../e2e-profile';

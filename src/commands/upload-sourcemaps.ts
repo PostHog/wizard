@@ -1,7 +1,7 @@
-import { runWizard, runWizardCI } from '@lib/runners';
+import { runWizard, runWizardCI } from '@cli/runners';
 import { errorTrackingUploadSourceMapsConfig } from '@programs/error-tracking-upload-source-maps/index';
-import { skillProgramOptions } from './skill-program-options';
-import type { Command } from './command';
+import { skillProgramOptions } from '../cli/commands/skill-program-options';
+import type { Command } from '../cli/commands/command';
 
 export const uploadSourcemapsCommand: Command = {
   // Must match ProgramConfig.command; legacy alias kept for #489 regression.

@@ -1,7 +1,7 @@
 import { warehouseSourceConfig } from '@programs/warehouse-source/index';
 
-import type { Command } from './command';
-import { nativeCommandFactory } from './factories/native-command-factory';
+import type { Command } from '../cli/commands/command';
+import { nativeCommandFactory } from '../cli/commands/factories/native-command-factory';
 
 /**
  * `wizard warehouse` — detect and connect a data warehouse source.

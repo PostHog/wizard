@@ -28,7 +28,7 @@ import { openTrackedLink, withUtm } from '@utils/links';
 import type { HostResolution } from '@shared/host-resolution';
 import { getDetectedWarehouseSources } from '@programs/warehouse-source/detect';
 import { POSTHOG_INTEGRATION_PROGRAM } from './steps.js';
-import { getContentBlocks } from '../../ui/tui/decks/posthog-integration/index.js';
+import { getContentBlocks } from '../../tui/programs/posthog-integration/deck/index.js';
 import { buildCodingAgentPrompt } from './handoff.js';
 import { EVENT_PLAN_FILE } from './constants.js';
 

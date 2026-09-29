@@ -3,23 +3,26 @@ import type { CloudRegion } from '@utils/types';
 import { withProgress } from '@utils/telemetry';
 import { analytics } from '@utils/analytics';
 import { getUI } from '@ui';
-import { MCPClient } from './MCPClient';
-import { CursorMCPClient } from './clients/cursor';
-import { ClaudeCodeMCPClient } from './clients/claude-code';
-import { ClaudeWebMCPClient } from './clients/claude-web';
-import { VisualStudioCodeClient } from './clients/visual-studio-code';
-import { ZedClient } from './clients/zed';
-import { CodexMCPClient } from './clients/codex';
-import { OpenCodeMCPClient } from './clients/opencode';
-import { ALL_FEATURE_VALUES } from './defaults';
+import { MCPClient } from '../../shared/mcp-clients/MCPClient';
+import { CursorMCPClient } from '../../shared/mcp-clients/clients/cursor';
+import { ClaudeCodeMCPClient } from '../../shared/mcp-clients/clients/claude-code';
+import { ClaudeWebMCPClient } from '../../shared/mcp-clients/clients/claude-web';
+import { VisualStudioCodeClient } from '../../shared/mcp-clients/clients/visual-studio-code';
+import { ZedClient } from '../../shared/mcp-clients/clients/zed';
+import { CodexMCPClient } from '../../shared/mcp-clients/clients/codex';
+import { OpenCodeMCPClient } from '../../shared/mcp-clients/clients/opencode';
+import { ALL_FEATURE_VALUES } from '../../shared/mcp-clients/defaults';
 import { debug } from '@utils/debug';
-import { isPluginCapable, PluginCapable } from './plugin-client';
+import {
+  isPluginCapable,
+  PluginCapable,
+} from '../../shared/mcp-clients/plugin-client';
 import {
   McpClientStatus,
   namesWithStatus,
   toClientResult,
   type McpClientResult,
-} from './results';
+} from '../../shared/mcp-clients/results';
 
 export const getSupportedClients = async (): Promise<MCPClient[]> => {
   const allClients = [

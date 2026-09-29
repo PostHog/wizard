@@ -1,12 +1,12 @@
 import { vi, it, expect, afterEach } from 'vitest';
 import { runWizard } from '../run-wizard';
 import { runProgramAgent } from '@programs/run-agent-legacy';
-import { startTUI } from '@ui/tui/start-tui';
+import { startTUI } from '@tui/start-tui';
 import { WizardStore } from '@ui/tui/store';
 import { InkUI } from '@ui/tui/ink-ui';
 import { setUI } from '@ui';
 import { posthogIntegrationConfig } from '@programs/posthog-integration';
-import { ScreenId } from '@ui/tui/router';
+import { ScreenId } from '@tui/router';
 import { HostResolution } from '@shared/host-resolution';
 import { analytics } from '@utils/analytics';
 import { RunPhase } from '@lib/wizard-session';
@@ -14,7 +14,7 @@ import { RunPhase } from '@lib/wizard-session';
 const streamShutdown = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 
 vi.mock('@programs/run-agent-legacy', () => ({ runProgramAgent: vi.fn() }));
-vi.mock('@ui/tui/start-tui', () => ({ startTUI: vi.fn() }));
+vi.mock('@tui/start-tui', () => ({ startTUI: vi.fn() }));
 vi.mock('@shared/local-dev', async (original) => ({
   ...(await original<typeof import('@shared/local-dev')>()),
   getLocalDev: () => ({}),
@@ -37,7 +37,7 @@ vi.mock('@programs/task-stream/index', () => ({
     shutdown = streamShutdown;
   },
 }));
-vi.mock('@programs/task-stream/destinations/posthog', () => ({
+vi.mock('@programs/session/task-stream/destinations/posthog', () => ({
   PostHogDestination: class {},
 }));
 
