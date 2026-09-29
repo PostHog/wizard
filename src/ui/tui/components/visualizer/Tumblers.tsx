@@ -38,7 +38,10 @@ export const Tumblers = ({ width, height }: VisualProps) => {
   const targetForPin = (i: number) =>
     Math.max(
       cylinderTop,
-      Math.min(cylinderBottom, cylinderBottom - 1 - (i % 3) - Math.floor(i / 2)),
+      Math.min(
+        cylinderBottom,
+        cylinderBottom - 1 - (i % 3) - Math.floor(i / 2),
+      ),
     );
 
   if (state.pulse > 0) {
