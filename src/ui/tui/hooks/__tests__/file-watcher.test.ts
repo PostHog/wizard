@@ -1,3 +1,4 @@
+import * as fs from 'fs';
 import { mkdtempSync, rmSync, writeFileSync, renameSync, unlinkSync } from 'fs';
 import { tmpdir } from 'os';
 import path from 'path';
@@ -10,6 +11,11 @@ import { logToFile } from '@utils/debug';
 vi.mock('@utils/debug', () => ({
   logToFile: vi.fn(),
 }));
+
+vi.mock('fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('fs')>();
+  return { ...actual, watch: vi.fn(actual.watch) };
+});
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -153,6 +159,24 @@ describe('startFileWatcher', () => {
 
     await wait(150);
     expect(onUpdate.mock.calls.at(-1)?.[0]).toEqual({ v: 2 });
+  });
+
+  it('keeps polling after the directory watch emits an error', async () => {
+    const onUpdate = vi.fn();
+    const target = path.join(workdir, 'data.json');
+
+    handle = startFileWatcher(target, onUpdate, { pollIntervalMs: 30 });
+    const watcher = vi.mocked(fs.watch).mock.results.at(-1)
+      ?.value as fs.FSWatcher;
+
+    watcher.emit('error', new Error('EMFILE: too many open files'));
+    writeFileSync(target, JSON.stringify({ a: 1 }));
+    await wait(150);
+
+    expect(onUpdate).toHaveBeenCalledWith({ a: 1 });
+    expect(logToFile).toHaveBeenCalledWith(
+      expect.stringContaining('directory watch failed'),
+    );
   });
 
   it('refreshes synchronously before shutdown', () => {
