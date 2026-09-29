@@ -4,9 +4,14 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { LLMProvider } from '@posthog/warlock';
 import type { AgentProgress } from '@agent/progress';
+import type { OrchestratorToolsContext } from '@agent/runner/sequence/orchestrator/queue-tools';
 import { createWizardPiTools } from '@agent/runner/harness/pi/tools';
 import { createWizardToolsServer } from '../mcp';
-import { PUBLISH_HANDOFF_TOOL_NAME } from '../handoff';
+import {
+  PUBLISH_HANDOFF_DESCRIPTION,
+  PUBLISH_HANDOFF_TOOL_NAME,
+  TASK_REPORTING_NOTE,
+} from '../handoff';
 
 vi.mock('@ui', () => ({
   getUI: () => {
@@ -54,6 +59,22 @@ describe('registered publish_handoff tools', () => {
   const handoffs = () =>
     events.flatMap((event) => (event.kind === 'handoff' ? [event.text] : []));
 
+  const mcpPublishTool = async (orchestrator?: OrchestratorToolsContext) => {
+    const server = (await createWizardToolsServer({
+      workingDirectory,
+      detectPackageManager: vi.fn(),
+      skillsBaseUrl: 'http://localhost:0',
+      triageProvider: {} as LLMProvider,
+      emit: (event) => events.push(event),
+      orchestrator,
+    })) as unknown as {
+      tools: { name: string; handler: (args: unknown) => unknown }[];
+    };
+    const tool = server.tools.find((t) => t.name === PUBLISH_HANDOFF_TOOL_NAME);
+    if (!tool) throw new Error('publish_handoff not registered');
+    return tool;
+  };
+
   it('the Pi tool reports the handoff to the host', async () => {
     const tools = createWizardPiTools({
       workingDirectory,
@@ -72,17 +93,7 @@ describe('registered publish_handoff tools', () => {
   });
 
   it('the MCP tool reports the handoff to the host', async () => {
-    const server = (await createWizardToolsServer({
-      workingDirectory,
-      detectPackageManager: vi.fn(),
-      skillsBaseUrl: 'http://localhost:0',
-      triageProvider: {} as LLMProvider,
-      emit: (event) => events.push(event),
-    })) as unknown as {
-      tools: { name: string; handler: (args: unknown) => unknown }[];
-    };
-    const tool = server.tools.find((t) => t.name === PUBLISH_HANDOFF_TOOL_NAME);
-    if (!tool) throw new Error('publish_handoff not registered');
+    const tool = await mcpPublishTool();
 
     const result = (await tool.handler({ content: REPORT })) as {
       content: [{ text: string }];
@@ -91,6 +102,45 @@ describe('registered publish_handoff tools', () => {
 
     expect(result.isError).toBeUndefined();
     expect(result.content[0].text).toContain('Handoff published');
+    expect(result.content[0].text).not.toContain(TASK_REPORTING_NOTE);
     expect(handoffs()).toEqual([REPORT]);
+  });
+
+  // Both facades hand this tool to every task of an orchestrated run, and only
+  // the reporting step should call it. The description says so; these hold the
+  // reminder the others get when they call it anyway.
+  it('tells a Pi task agent that complete_task still has to run', async () => {
+    const tools = createWizardPiTools({
+      workingDirectory,
+      skillsBaseUrl: 'http://localhost:0',
+      emit: (event) => events.push(event),
+      taskAgent: true,
+    });
+    const tool = tools.find((t) => t.name === PUBLISH_HANDOFF_TOOL_NAME);
+    if (!tool) throw new Error('publish_handoff not registered');
+
+    const result = (await (
+      tool.execute as (id: string, args: unknown) => Promise<unknown>
+    )('call-1', { content: REPORT })) as { content: [{ text: string }] };
+
+    expect(result.content[0].text).toContain(TASK_REPORTING_NOTE);
+  });
+
+  it('tells an MCP task agent that complete_task still has to run', async () => {
+    const tool = await mcpPublishTool({
+      store: {} as never,
+      validTypes: ['report'],
+      currentTaskId: 'task-1',
+    });
+
+    const result = (await tool.handler({ content: REPORT })) as {
+      content: [{ text: string }];
+    };
+
+    expect(result.content[0].text).toContain(TASK_REPORTING_NOTE);
+  });
+
+  it('describes publishing as the run report, not a task outcome', () => {
+    expect(PUBLISH_HANDOFF_DESCRIPTION).toContain('complete_task');
   });
 });
