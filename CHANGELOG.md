@@ -1,5 +1,14 @@
 # Changelog
 
+## [2.79.1](https://github.com/PostHog/wizard/compare/v2.79.0...v2.79.1) (2026-09-29)
+
+
+### Bug Fixes
+
+* **agent:** tell a task agent publish_handoff is not its outcome ([#1360](https://github.com/PostHog/wizard/issues/1360)) ([e86e103](https://github.com/PostHog/wizard/commit/e86e103c3ab10b563d70e92d245bcd04d81c9ef5))
+* **cli:** run the Node version check before loading dependencies ([#1397](https://github.com/PostHog/wizard/issues/1397)) ([91c5ab7](https://github.com/PostHog/wizard/commit/91c5ab73ca6440ecb7423c84e5e3b9181e8517ac))
+* **tui:** fail fast with a coded error when stdin is not a TTY ([#1398](https://github.com/PostHog/wizard/issues/1398)) ([52f981f](https://github.com/PostHog/wizard/commit/52f981f6aa77d9945946ea8d1212e69b6a94ceb2))
+
 ## [2.79.0](https://github.com/PostHog/wizard/compare/v2.78.0...v2.79.0) (2026-09-29)
 
 
