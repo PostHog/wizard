@@ -16,6 +16,7 @@ import { enterDarkTerminal, releaseTerminal } from './terminal.js';
 import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
 import { getExitLine } from './exit-line.js';
+import { ErrorCodes, WizardError } from '@shared/errors';
 
 export { releaseTerminal };
 
@@ -28,6 +29,15 @@ export function startTUI(
   store: WizardStore;
   waitForSetup: () => Promise<void>;
 } {
+  // Ink needs raw mode on stdin and otherwise fails later as an unhandled rejection.
+  if (!process.stdin.isTTY) {
+    throw new WizardError(
+      'This command needs an interactive terminal (stdin is not a TTY). Run the wizard directly in a terminal, not through a pipe or script.',
+      undefined,
+      ErrorCodes.CliInteractiveRequired,
+    );
+  }
+
   enterDarkTerminal();
 
   const store = new WizardStore(program);
