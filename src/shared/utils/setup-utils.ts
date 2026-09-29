@@ -34,6 +34,7 @@ import {
   provisionNewAccount,
 } from './provisioning';
 import {
+  ApiError,
   fetchUserData,
   fetchProjectData,
   type ApiUser,
@@ -462,7 +463,7 @@ export async function getOrAskForProjectData(
             _options.projectId,
             cloudUrl,
           )
-        : await fetchProjectDataWithApiKey(_options.apiKey, cloudUrl);
+        : await fetchProjectDataWithApiKey(_options.apiKey, host);
 
     // Best-effort user fetch — CI flows may run with project-scoped keys
     // that 403 on /api/users/@me/, so swallow errors and continue with
@@ -470,7 +471,9 @@ export async function getOrAskForProjectData(
     let user: ApiUser | null = null;
     let roleAtOrganization: string | null = null;
     try {
-      user = await fetchUserData(_options.apiKey, cloudUrl);
+      user = await fetchUserData(_options.apiKey, cloudUrl, {
+        reportAuthErrors: false,
+      });
       roleAtOrganization = user.role_at_organization ?? null;
     } catch (err) {
       logToFile(
@@ -557,23 +560,32 @@ ${cloudUrl}/settings/project#variables`);
 
 async function fetchProjectDataWithApiKey(
   apiKey: string,
-  cloudUrl: string,
+  host: HostResolution,
 ): Promise<{ api_token: string; id: number; project: ApiProject }> {
-  const userData = await fetchUserData(apiKey, cloudUrl);
-  const projectId = userData.team?.id;
-
-  if (!projectId) {
-    throw new Error(
-      'Could not determine project ID from API key. Please ensure your API key has access to a project in this cloud region.',
+  // `@current` needs only `project:read`, so keys without `user:read` still resolve.
+  try {
+    const projectData = await fetchProjectData(
+      apiKey,
+      '@current',
+      host.appHost,
     );
+    return {
+      api_token: projectData.api_token,
+      id: projectData.id,
+      project: projectData,
+    };
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err);
+    const message =
+      `Could not resolve a project from the API key on ${host.appHost} (region: ${host.region}): ${reason}. ` +
+      'Check that the personal API key is valid for this region and has the project:read scope. ' +
+      'If the key cannot read its current project, pass --project-id to select one.';
+    // Keep the status so callers like `doctor --ci` still classify auth failures.
+    if (err instanceof ApiError) {
+      throw new ApiError(message, err.statusCode, err.endpoint);
+    }
+    throw new Error(message);
   }
-
-  const projectData = await fetchProjectData(apiKey, projectId, cloudUrl);
-  return {
-    api_token: projectData.api_token,
-    id: projectId,
-    project: projectData,
-  };
 }
 
 async function fetchProjectDataById(

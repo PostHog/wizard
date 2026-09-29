@@ -1,6 +1,6 @@
 import { getOrAskForProjectData } from '@utils/setup-utils';
 import { detectRegion } from '@utils/urls';
-import { fetchProjectData, fetchUserData } from '@shared/api';
+import { ApiError, fetchProjectData, fetchUserData } from '@shared/api';
 import { performOAuthFlow } from '@utils/oauth';
 
 vi.mock('@ui', () => ({
@@ -15,7 +15,8 @@ vi.mock('@utils/urls', () => ({
   getUiHostFromHost: (host: string) => host,
   resolveBaseUrl: (baseUrl?: string) => baseUrl,
 }));
-vi.mock('@shared/api', () => ({
+vi.mock('@shared/api', async (actual) => ({
+  ApiError: (await actual<typeof import('@shared/api')>()).ApiError,
   fetchProjectData: vi.fn(),
   fetchUserData: vi.fn(),
 }));
@@ -136,5 +137,68 @@ describe('getOrAskForProjectData OAuth login region', () => {
       123,
       'https://eu.posthog.com',
     );
+  });
+});
+
+describe('getOrAskForProjectData CI without --project-id', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('resolves the project through @current when the user lookup fails', async () => {
+    mockedFetchProject.mockResolvedValue(project);
+    mockedFetchUser.mockRejectedValue(new Error('Authentication failed'));
+
+    const result = await getOrAskForProjectData({
+      signup: false,
+      ci: true,
+      apiKey: 'phx_test',
+      region: 'us',
+    });
+
+    expect(mockedFetchProject).toHaveBeenCalledWith(
+      'phx_test',
+      '@current',
+      'https://us.posthog.com',
+    );
+    expect(result.projectId).toBe(123);
+    expect(result.projectApiKey).toBe('phc_test');
+    expect(result.user).toBeNull();
+  });
+
+  it('names the region and --project-id when the project cannot be resolved', async () => {
+    mockedFetchProject.mockRejectedValue(new Error('Access denied'));
+
+    await expect(
+      getOrAskForProjectData({
+        signup: false,
+        ci: true,
+        apiKey: 'phx_test',
+        region: 'eu',
+      }),
+    ).rejects.toThrow(/region: eu.*--project-id/);
+  });
+
+  it('keeps the API status code when the project lookup is rejected', async () => {
+    mockedFetchProject.mockRejectedValue(
+      new ApiError(
+        'Authentication failed while trying to fetch project data',
+        401,
+        'https://us.posthog.com/api/projects/@current/',
+      ),
+    );
+
+    const error = await getOrAskForProjectData({
+      signup: false,
+      ci: true,
+      apiKey: 'phx_test',
+      region: 'us',
+    }).catch((err: unknown) => err);
+
+    expect(error).toBeInstanceOf(ApiError);
+    expect(error).toMatchObject({
+      statusCode: 401,
+      endpoint: 'https://us.posthog.com/api/projects/@current/',
+    });
   });
 });
