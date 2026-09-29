@@ -21,7 +21,7 @@ if (!satisfies(process.version, NODE_VERSION_RANGE)) {
       `To update Node.js:`,
       ``,
       `  Download the latest version from https://nodejs.org/en/download`,
-      `  Or, if you use nvm, run: nvm install 22 && nvm use 22`,
+      `  Or, if you use nvm, run: nvm install 24 && nvm use 24`,
       ``,
       `Then run the wizard again. Stuck? Email wizard@posthog.com and we'll help.`,
     ].join('\n'),
