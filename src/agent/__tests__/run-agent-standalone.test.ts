@@ -965,6 +965,32 @@ describe('runAgent standalone', () => {
     expect(harnessState.lastInputs).toBeUndefined();
   });
 
+  it('returns structured output without asking questions or running completion hooks', async () => {
+    const structured = { schema: { type: 'object' }, timeoutMs: 60_000 };
+    const output = { projects: [] };
+    const postRun = vi.fn();
+    const buildOutroData = vi.fn();
+    harnessState.result = { kind: 'success', structuredOutput: output };
+    const result = await runAgent(
+      config({
+        run: { ...config().run, structured },
+        hooks: { postRun, buildOutroData },
+      }),
+      input(),
+    );
+    expect(result).toMatchObject({
+      outcome: RunOutcome.Success,
+      structuredOutput: output,
+    });
+    expect(harnessState.lastInputs).toMatchObject({
+      structured,
+      askBridge: undefined,
+    });
+    expect(postRun).not.toHaveBeenCalled();
+    expect(buildOutroData).not.toHaveBeenCalled();
+    expect(result.outro).toBeUndefined();
+  });
+
   it('calls the bound hooks with the run credentials', async () => {
     const postRun = vi.fn().mockResolvedValue(undefined);
     const buildOutroData = vi.fn(() => ({

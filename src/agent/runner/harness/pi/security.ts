@@ -94,7 +94,15 @@ export function observeTransportLeak(tool: string, content: string): void {
   }
 }
 
+export const READ_ONLY_PI_TOOLS: ReadonlySet<string> = new Set([
+  'read',
+  'grep',
+  'find',
+  'ls',
+]);
+
 export interface ToolGateContext {
+  readOnly?: boolean;
   disallowedTools?: readonly string[];
   /** True while a wizard_ask overlay is open (interactive); blocks Write/Edit. */
   getWizardAskPending?: () => boolean;
@@ -368,6 +376,12 @@ export async function evaluateToolCall(
   llmProvider?: LLMProvider,
 ): Promise<GateDecision> {
   try {
+    if (ctx.readOnly && !READ_ONLY_PI_TOOLS.has(toolName)) {
+      return {
+        block: true,
+        reason: `Tool ${toolName} is disabled for read-only runs.`,
+      };
+    }
     const policy = toClaudePolicyCall(toolName, input);
     const decision = wizardCanUseTool(policy.name, policy.input, {
       disallowedTools: ctx.disallowedTools,

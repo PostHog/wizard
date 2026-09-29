@@ -211,6 +211,12 @@ export const ERROR_CATALOG: Record<ErrorCode, ErrorCatalogEntry> = {
     retry: 'case-by-case',
     description: 'The agent ended without a single tool call.',
   },
+  [ErrorCodes.AgentInvalidStructuredOutput]: {
+    group: 'agent',
+    retry: 'yes',
+    description:
+      'The agent ended a schema-bound run without output matching the schema.',
+  },
   [ErrorCodes.AgentIncompleteTasks]: {
     group: 'agent',
     retry: 'case-by-case',

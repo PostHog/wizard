@@ -218,12 +218,15 @@ export type AgentConfig = {
    * Use for cheap mechanical runs (e.g. source-map detection on HAIKU_MODEL).
    */
   modelOverride?: string;
+  /** Schema for callers that consume a structured SDK result. */
+  outputFormat?: import('@anthropic-ai/claude-agent-sdk').Options['outputFormat'];
   /** Bridge that drives the `wizard_ask` overlay. Omit in non-interactive hosts. */
   askBridge?: import('@agent/wizard-ask-bridge').WizardAskBridge;
   /** Per-run cap on `wizard_ask` invocations. Defaults to 10. */
   askMaxQuestions?: number;
   /** Extra tools added on top of BASE_ALLOWED_TOOLS for this run. */
   allowedTools?: readonly string[];
+  readOnly?: boolean;
   /** Tools removed from BASE_ALLOWED_TOOLS for this run. */
   disallowedTools?: readonly string[];
   /**
@@ -309,6 +312,7 @@ type AgentRunConfig = {
   workingDirectory: string;
   mcpServers: McpServersConfig;
   model: string;
+  outputFormat?: AgentConfig['outputFormat'];
   /** The run's OAuth access token — the MCP config resolves it in the child. */
   posthogApiKey: string;
   currentPosthogApiKey?: () => Promise<string>;
@@ -316,6 +320,7 @@ type AgentRunConfig = {
   wizardMetadata?: Record<string, string>;
   /** Extra tools added on top of BASE_ALLOWED_TOOLS for this run. */
   allowedTools?: readonly string[];
+  readOnly?: boolean;
   /** Tools removed from BASE_ALLOWED_TOOLS for this run. */
   disallowedTools?: readonly string[];
   /**
@@ -427,12 +432,20 @@ export function wizardCanUseTool(
   toolName: string,
   input: Record<string, unknown>,
   context: {
+    readOnly?: boolean;
     wizardAskPending?: boolean;
     disallowedTools?: readonly string[];
   } = {},
 ):
   | { behavior: 'allow'; updatedInput: Record<string, unknown> }
   | { behavior: 'deny'; message: string } {
+  if (context.readOnly && !READ_ONLY_TOOLS.includes(toolName)) {
+    return {
+      behavior: 'deny',
+      message: `Tool ${toolName} is disabled for read-only runs.`,
+    };
+  }
+
   // Hard gate on the program's disallow list. The SDK's own disallowedTools
   // option blocks tools at the parent level, but does NOT reliably propagate
   // to dispatched subagents (their AgentDefinition has its own field which the
@@ -649,10 +662,12 @@ export async function initializeAgent(
       workingDirectory: config.workingDirectory,
       mcpServers,
       model,
+      outputFormat: config.outputFormat,
       posthogApiKey: config.posthogApiKey,
       currentPosthogApiKey: config.currentPosthogApiKey,
       wizardFlags: config.wizardFlags,
       wizardMetadata: config.wizardMetadata,
+      readOnly: config.readOnly,
       allowedTools: config.allowedTools,
       disallowedTools: config.disallowedTools,
       getPendingQuestion: config.getPendingQuestion,
@@ -748,6 +763,14 @@ function sdkResultFailure(
     sdkErrorStatus(message.status) ??
     errors.map(sdkErrorStatus).find((code) => code !== undefined) ??
     sdkErrorStatus(message.result);
+  // The SDK ran out of retries matching `outputFormat`. A caller may retry the run.
+  if (message.subtype === 'error_max_structured_output_retries') {
+    return {
+      kind: 'failure',
+      classification: AgentErrorType.INVALID_STRUCTURED_OUTPUT,
+      message: detail,
+    };
+  }
   return {
     kind: 'failure',
     classification:
@@ -923,7 +946,10 @@ export async function runAgent(
       logToFile(`${AgentSignals.BENCHMARK} Middleware finalize error:`, e);
     }
     spinner.stop(successMessage);
-    return { kind: 'success' };
+    return {
+      kind: 'success',
+      structuredOutput: lastResultMessage?.structured_output,
+    };
   };
 
   // Abort controller — lets us force-kill the SDK query when we detect an
@@ -968,10 +994,11 @@ export async function runAgent(
     // enabled via the `skills` query option; PostHog MCP tools come through
     // `mcpServers`. Neither belongs in this list.
     const disallow = new Set(agentConfig.disallowedTools ?? []);
-    const allowedTools = [
-      ...BASE_ALLOWED_TOOLS,
-      ...(agentConfig.allowedTools ?? []),
-    ].filter((t) => !disallow.has(t));
+    const allowedTools = (
+      agentConfig.readOnly
+        ? READ_ONLY_TOOLS
+        : [...BASE_ALLOWED_TOOLS, ...(agentConfig.allowedTools ?? [])]
+    ).filter((t) => !disallow.has(t));
 
     // Subagents dispatched via the Agent tool don't inherit the parent's
     // MCP servers by default — so general-purpose subagents can't see the
@@ -1016,34 +1043,37 @@ export async function runAgent(
           abortController,
           resume,
           model: agentConfig.model,
+          outputFormat: agentConfig.outputFormat,
           cwd: agentConfig.workingDirectory,
-          permissionMode: 'acceptEdits',
+          permissionMode: agentConfig.readOnly ? 'default' : 'acceptEdits',
           betas: ['context-1m-2025-08-07'],
-          mcpServers: agentConfig.mcpServers,
-          agents: {
-            'general-purpose': {
-              description:
-                "General-purpose subagent. Inherits the parent run's tools plus the PostHog and wizard-tools MCP servers, so it can call mcp__posthog-wizard__* directly instead of curling the REST API.",
-              prompt:
-                'You are a general-purpose subagent for the PostHog wizard. Prefer the authenticated mcp__posthog-wizard__* MCP tools over raw HTTP — they are already authenticated for this project. Only fall back to other transports if no MCP tool covers the operation.',
-              mcpServers: inheritedMcpServerNames,
-              // SDK does not propagate the parent's disallowedTools to subagents
-              // (sdk.d.ts: AgentDefinition has its own disallowedTools, and
-              // `tools: undefined` means "inherit all"). Without this, a program
-              // that disallows wizard_ask still leaks it to dispatched subagents.
-              disallowedTools: agentConfig.disallowedTools
-                ? [...agentConfig.disallowedTools]
-                : undefined,
-            },
-          },
+          mcpServers: agentConfig.readOnly ? {} : agentConfig.mcpServers,
+          agents: agentConfig.readOnly
+            ? undefined
+            : {
+                'general-purpose': {
+                  description:
+                    "General-purpose subagent. Inherits the parent run's tools plus the PostHog and wizard-tools MCP servers, so it can call mcp__posthog-wizard__* directly instead of curling the REST API.",
+                  prompt:
+                    'You are a general-purpose subagent for the PostHog wizard. Prefer the authenticated mcp__posthog-wizard__* MCP tools over raw HTTP — they are already authenticated for this project. Only fall back to other transports if no MCP tool covers the operation.',
+                  mcpServers: inheritedMcpServerNames,
+                  // SDK does not propagate the parent's disallowedTools to subagents
+                  // (sdk.d.ts: AgentDefinition has its own disallowedTools, and
+                  // `tools: undefined` means "inherit all"). Without this, a program
+                  // that disallows wizard_ask still leaks it to dispatched subagents.
+                  disallowedTools: agentConfig.disallowedTools
+                    ? [...agentConfig.disallowedTools]
+                    : undefined,
+                },
+              },
           // Load skills from project's .claude/skills/ directory
-          settingSources: ['project'],
+          settingSources: agentConfig.readOnly ? [] : ['project'],
           // Enable all discovered skills. Omitting this is NOT "skills off" —
           // it just means no SDK auto-config — so we set 'all' explicitly to
           // preserve the prior behavior where 'Skill' in allowedTools exposed
           // everything under .claude/skills/. (SDK ≥0.2.133 deprecates passing
           // 'Skill' in allowedTools in favor of this option.)
-          skills: 'all',
+          skills: agentConfig.readOnly ? [] : 'all',
           allowedTools,
           sandbox: {
             enabled: true,
@@ -1148,6 +1178,7 @@ export async function runAgent(
               toolName,
               input as Record<string, unknown>,
               {
+                readOnly: agentConfig.readOnly,
                 wizardAskPending: agentConfig.getPendingQuestion?.() != null,
                 disallowedTools: agentConfig.disallowedTools,
               },
@@ -1167,7 +1198,9 @@ export async function runAgent(
               harness: Harness.anthropic,
             }),
           },
-          tools: { type: 'preset', preset: 'claude_code' },
+          tools: agentConfig.readOnly
+            ? [...READ_ONLY_TOOLS]
+            : { type: 'preset', preset: 'claude_code' },
           // Capture stderr from CLI subprocess for debugging
           stderr: (data: string) => {
             logToFile('CLI stderr:', data);
@@ -1599,6 +1632,12 @@ export async function runAgent(
       };
     }
 
+    // The SDK can throw after yielding a typed error result.
+    if (terminalFailure) {
+      spinner.stop(errorMessage);
+      return terminalFailure;
+    }
+
     // Check if we collected an error signal before the exception was thrown.
     // Surface just the API error line(s), not the entire output.
     const apiErrorMessage = signals.apiErrorMessage() ?? 'Unknown API error';
@@ -1687,6 +1726,8 @@ export enum TaskTool {
  * init handler has to recognise this server in the SDK's status report.
  */
 export const POSTHOG_MCP_SERVER_NAME = 'posthog-wizard';
+
+const READ_ONLY_TOOLS: readonly string[] = ['Read', 'Glob', 'Grep'];
 
 export const BASE_ALLOWED_TOOLS: readonly string[] = [
   'Read',

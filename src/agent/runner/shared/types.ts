@@ -53,6 +53,8 @@ export interface AgentRunDefinition {
   /** Additional program-specific prompt instructions. Appended after the default project prompt. */
   customPrompt?: (ctx: PromptContext) => string;
   prompt?: (ctx: PromptContext) => string; // replaces the assembled project prompt; linear
+  structured?: { schema: Record<string, unknown>; timeoutMs: number }; // typed result; linear only, skips post-run hooks, the outro and asks
+  readOnly?: boolean; // restrict linear runs to filesystem read/search tools
   collectTranscript?: boolean; // keep a 256K-character transcript tail; linear, Anthropic
   requestRemark?: boolean; // false skips the closing remark; linear, Anthropic
   /** Additional MCP servers (e.g. Svelte MCP) */
@@ -296,7 +298,12 @@ export interface RunSnapshot {
 
 /** A sequence decides an outcome; the dispatcher owns its snapshot. */
 export type SequenceResult =
-  | { outcome: RunOutcome.Success; outro?: OutroData; failure?: never }
+  | {
+      outcome: RunOutcome.Success;
+      structuredOutput?: unknown;
+      outro?: OutroData;
+      failure?: never;
+    }
   | {
       outcome: RunOutcome.Aborted | RunOutcome.Failed;
       failure: AgentFailure;

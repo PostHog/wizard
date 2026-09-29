@@ -1,9 +1,11 @@
+import { Harness } from '@shared/constants';
 import { detectProjectsWithAgent } from '../agentic';
 import {
   AgentErrorType,
   initializeAgent,
   runAgent as executeAgent,
 } from '@agent/agent-interface';
+import { analytics } from '@utils/analytics';
 import { buildSession } from '@lib/wizard-session';
 import { HostResolution } from '@shared/host-resolution';
 import { ErrorCodes } from '@shared/errors';
@@ -38,7 +40,10 @@ vi.mock('@agent/agent-interface', async (original) => ({
 }));
 
 function detectionSession() {
-  const session = buildSession({ installDir: '/tmp/detection-test' });
+  const session = buildSession({
+    installDir: '/tmp/detection-test',
+    harness: Harness.anthropic,
+  });
   session.credentials = {
     accessToken: 'test',
     projectApiKey: 'phc_test',
@@ -50,6 +55,8 @@ function detectionSession() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.mocked(analytics.getAllFlagsForWizard).mockResolvedValue({});
+  vi.mocked(analytics.getWizardFlagPayloads).mockReturnValue({});
   vi.mocked(initializeAgent).mockReset();
   vi.mocked(executeAgent).mockReset();
 });

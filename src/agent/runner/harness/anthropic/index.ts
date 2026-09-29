@@ -32,6 +32,7 @@ export const anthropicBackend: AgentHarness = {
       askBridge,
       middleware,
       model,
+      structured,
     } = inputs;
     const config = runConfig.run;
     const { skillsBaseUrl, credentials, wizardFlags, wizardMetadata } = boot;
@@ -45,7 +46,7 @@ export const anthropicBackend: AgentHarness = {
       runTags: wizardMetadata,
     });
 
-    log.step('Initializing Claude agent...');
+    if (!structured) log.step('Initializing Claude agent...');
     const agent = await initializeAgent(
       {
         workingDirectory: input.installDir,
@@ -64,16 +65,23 @@ export const anthropicBackend: AgentHarness = {
         askBridge,
         getPendingQuestion: askBridge?.getPendingQuestion,
         askMaxQuestions: config.maxQuestions,
+        readOnly: config.readOnly,
         allowedTools: runConfig.allowedTools,
         disallowedTools: runConfig.disallowedTools,
         modelOverride: model,
+        outputFormat: structured && {
+          type: 'json_schema',
+          schema: structured.schema,
+        },
         capture,
         emit,
       },
       runOptions(input),
     );
-    log.step(`Verbose logs: ${getLogFilePath()}`);
-    log.success("Agent initialized. Let's get cooking!");
+    if (!structured) {
+      log.step(`Verbose logs: ${getLogFilePath()}`);
+      log.success("Agent initialized. Let's get cooking!");
+    }
     logToFile('[agent-runner] agent initialized');
 
     return executeAgent(
@@ -82,6 +90,7 @@ export const anthropicBackend: AgentHarness = {
       runOptions(input),
       spinner,
       {
+        timeoutMs: structured?.timeoutMs,
         estimatedDurationMinutes: config.estimatedDurationMinutes,
         spinnerMessage: config.spinnerMessage,
         successMessage: config.successMessage,
@@ -90,7 +99,7 @@ export const anthropicBackend: AgentHarness = {
         abortCases: config.abortCases,
         emitStepEvents: config.trackStepProgress ?? false,
         resolveStepKey: config.resolveStepKey,
-        requestRemark: config.requestRemark,
+        requestRemark: structured ? false : config.requestRemark,
         triageProvider: boot.triageProvider,
       },
       middleware,

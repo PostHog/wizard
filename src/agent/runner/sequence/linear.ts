@@ -88,14 +88,15 @@ async function executeLinear(
   // 6. Initialize agent
   const spinner = createEmitSpinner(emit);
 
-  emit({ kind: 'lifecycle', phase: 'started' });
+  if (!run.structured) emit({ kind: 'lifecycle', phase: 'started' });
 
   // wizard_ask needs an answerer. A human answers at the keyboard; the e2e
   // snapshot/MCP host answers via its driver and sets WIZARD_ASK_AUTODRIVE.
   // CI/signup with neither has no answerer, so we omit the bridge and the tool
   // returns an actionable error rather than hanging on a never-resolving prompt.
   const askDisabled =
-    shouldDisableAsk(input.flags) && process.env.WIZARD_ASK_AUTODRIVE !== '1';
+    !!run.structured ||
+    (shouldDisableAsk(input.flags) && process.env.WIZARD_ASK_AUTODRIVE !== '1');
   const ask = askDisabled
     ? undefined
     : createAskBridge(interaction, {
@@ -151,6 +152,7 @@ async function executeLinear(
     model,
     thinkingLevel,
     signal: runSignal,
+    structured: run.structured,
   });
   if (signal?.aborted && agentResult.kind === 'success') return aborted();
 
@@ -293,6 +295,13 @@ async function executeLinear(
       message: agentResult.message ?? 'Agent failed',
       error: agentResult.error,
     });
+  }
+
+  if (run.structured) {
+    return {
+      outcome: RunOutcome.Success,
+      structuredOutput: agentResult.structuredOutput,
+    };
   }
 
   // 10. Post-run hooks

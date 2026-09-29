@@ -112,6 +112,105 @@ describe('runAgent', () => {
     Object.values(mockUIInstance.log).forEach((fn) => fn.mockReset());
   });
 
+  it('forwards the output schema to the SDK and delivers the typed result', async () => {
+    const outputFormat = {
+      type: 'json_schema' as const,
+      schema: { type: 'object', properties: { projects: { type: 'array' } } },
+    };
+    const result = {
+      type: 'result',
+      subtype: 'success',
+      structured_output: { projects: [] },
+    };
+    mockQuery.mockImplementation(function* () {
+      yield result;
+    });
+
+    const run = await runAgent(
+      { ...defaultAgentConfig, outputFormat },
+      'Scan projects',
+      defaultOptions,
+      mockSpinner,
+      { requestRemark: false },
+    );
+
+    expect(mockQuery.mock.calls[0][0].options.outputFormat).toEqual(
+      outputFormat,
+    );
+    expect(run).toEqual({
+      kind: 'success',
+      structuredOutput: { projects: [] },
+    });
+  });
+
+  it('restricts a read-only scan at SDK registration and permission gates', async () => {
+    mockQuery.mockImplementation(function* () {
+      yield { type: 'result', subtype: 'success' };
+    });
+    await runAgent(
+      {
+        ...defaultAgentConfig,
+        readOnly: true,
+        allowedTools: ['Write', 'Agent'],
+        mcpServers: {
+          external: { type: 'http', url: 'https://example.test/mcp' },
+        },
+      },
+      'Scan projects',
+      defaultOptions,
+      mockSpinner,
+      { requestRemark: false },
+    );
+    const options = mockQuery.mock.calls[0][0].options;
+    expect(options.tools).toEqual(['Read', 'Glob', 'Grep']);
+    expect(options.allowedTools).toEqual(['Read', 'Glob', 'Grep']);
+    expect(options.mcpServers).toEqual({});
+    expect(options.agents).toBeUndefined();
+    expect(options.settingSources).toEqual([]);
+    expect(options.skills).toEqual([]);
+    for (const tool of [
+      'Write',
+      'Edit',
+      'Bash',
+      'Agent',
+      'mcp__external__exec',
+      'FutureTool',
+    ]) {
+      expect(await options.canUseTool(tool, {})).toMatchObject({
+        behavior: 'deny',
+      });
+    }
+    expect(
+      await options.canUseTool('Read', { file_path: 'package.json' }),
+    ).toMatchObject({ behavior: 'allow' });
+  });
+
+  it('preserves structured-output exhaustion when the SDK throws after its result', async () => {
+    const result = {
+      type: 'result',
+      subtype: 'error_max_structured_output_retries',
+      errors: ['Invalid structured output'],
+    };
+    mockQuery.mockImplementation(function* () {
+      yield result;
+      throw new Error('SDK query failed');
+    });
+
+    await expect(
+      runAgent(
+        defaultAgentConfig,
+        'Scan projects',
+        defaultOptions,
+        mockSpinner,
+        { requestRemark: false },
+      ),
+    ).resolves.toMatchObject({
+      kind: 'failure',
+      classification: AgentErrorType.INVALID_STRUCTURED_OUTPUT,
+      message: 'Invalid structured output',
+    });
+  });
+
   it('retains task identity through SDK rekeying and ignores read-only task tools', async () => {
     const progress = vi.fn();
     const tool = (id: string, name: string, input: object) => ({

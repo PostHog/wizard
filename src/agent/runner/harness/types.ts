@@ -29,10 +29,14 @@ import type {
 } from '@agent/runner/switchboard/models';
 import type {
   AgentFailure,
+  AgentRunDefinition,
   BootstrapResult,
   RunConfig,
   RunInput,
 } from '@agent/runner/shared/types';
+
+/** A schema-bound run: no banner, remark, task nudges, or plan cleanup. */
+export type StructuredRun = NonNullable<AgentRunDefinition['structured']>;
 
 /** The benchmark/telemetry hook threaded through a run, if enabled. */
 export interface RunMiddleware {
@@ -65,6 +69,7 @@ export interface BackendRunInputs {
   model: string;
   /** Switchboard-resolved reasoning-effort override. Absent → the model's table default. */
   thinkingLevel?: EffortLevel;
+  structured?: StructuredRun;
 }
 
 /**
@@ -72,7 +77,8 @@ export interface BackendRunInputs {
  * caller-visible code and message; the caller alone presents it.
  */
 export type AgentResult =
-  | { kind: 'success' }
+  /** `structuredOutput` is the parsed final message of a structured run, when it parsed. */
+  | { kind: 'success'; structuredOutput?: unknown }
   | {
       kind: 'abort';
       classification: AgentErrorType.ABORT;

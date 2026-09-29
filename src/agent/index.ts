@@ -26,7 +26,11 @@ export { WIZARD_TOOL_NAMES } from './tools';
  * decide and pass in; LONGER_ASK_TIMEOUT_MS is a tuning number programs own
  * as askTimeoutMs.
  */
-export { resolveBinding, shouldDisableAsk } from './runner';
+export {
+  resolveBinding,
+  resolveScanBindings,
+  shouldDisableAsk,
+} from './runner';
 export { LONGER_ASK_TIMEOUT_MS } from './wizard-ask-bridge';
 
 /**
