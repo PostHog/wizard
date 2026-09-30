@@ -41,7 +41,7 @@ Selection criteria, checked in this order:
    exists on the bench machine, or its runs will fail for reasons that are
    yours, not the model's.
 
-Apps used in the 2026-07 benchmark, as worked examples of the spread:
+Example apps that give that spread:
 
 | app | upstream | stack |
 |---|---|---|
@@ -99,8 +99,8 @@ Everything below ships in this repo (`wizard/`) and its workbench
   signal. `tsx` runs source — no build step. Invocation: see the run-cell
   recipe below.
 - **Config selection:** the flag axis is `wizard-orchestrator` (on → the
-  orchestrator on pi, per-task models from context-mill frontmatter; off → the
-  linear anthropic default). Per-stage variations ride
+  orchestrator on pi, per-task models from context-mill frontmatter; off →
+  `DEFAULT_BINDING`, linear on pi). Per-stage variations ride
   `wizard-orchestrator-override` payloads (`{stage: {model?, effort?}}`,
   variant keys in `wizard/src/agent/runner/switchboard/flags/schemes.ts`).
   The baseline is `{"wizard-orchestrator":"false"}` — never an empty override,
@@ -122,12 +122,12 @@ BENCH=~/bench; WORK="$BENCH/$LABEL"; OUT="$BENCH/$LABEL-out"; CAP=600
 rm -rf "$WORK" "$OUT"; mkdir -p "$WORK" "$OUT"
 rsync -a --exclude node_modules --exclude .git --exclude build --exclude dist \
   --exclude .next --exclude .svelte-kit --exclude .turbo "$SRC/" "$WORK/"
-git -C "$WORK" init -q && git -C "$WORK" add -A
+git -C "$WORK" init -q -b main && git -C "$WORK" add -A
 git -C "$WORK" -c user.email=b@b -c user.name=b commit -qm base --no-verify
 git -C "$WORK" checkout -q -b integ
 
 cd "$WIZARD"; SECONDS=0
-SNAP_OUT="$OUT/frames" APP_DIR="$WORK" \
+SNAP_OUT="$OUT/frames" APP_DIR="$WORK" POSTHOG_WIZARD_LOG_FILE="$OUT/wizard.log" \
 POSTHOG_KEY_FILE=~/wizard-bench-key.txt PROJECT_ID=<test project id> \
 WIZARD_CI_FLAG_OVERRIDES="$FLAGS" \
   npx tsx scripts/tui-snapshots.no-jest.ts > "$OUT/stdout.txt" 2>&1 &
@@ -147,20 +147,23 @@ files=$(git -C "$WORK" diff --name-only main integ | wc -l | tr -d ' ')" \
   | tee "$OUT/result.txt"
 ```
 
-Both commits are `--no-verify` (see Traps). The diff, frames, stdout, and
-result line are the cell's complete artifact set — everything else (the shared
-debug log) is unreliable under parallelism.
+Both commits are `--no-verify` (see Traps). The diff, frames, stdout, wizard
+log, and result line are the cell's complete artifact set.
+`POSTHOG_WIZARD_LOG_FILE` gives each cell its own debug log; without it every
+run appends to the shared `/tmp/posthog-wizard.log`, which is unreliable under
+parallelism.
 
 ## Running the matrix
 
 - One app at a time; per app, launch its configs in parallel (≤4 on one
   machine) and `wait`. Contention inflates absolute times roughly uniformly.
-- Cost: anthropic-harness cells report `modelUsage.costUSD` in
-  `/tmp/posthog-wizard.log` — zero the log before each app's wave and slice
-  the block per baseline run. pi-harness cells do not persist token totals;
-  add a temporary hook in the pi harness success path that writes the session
-  token stats to a per-run file, and price them at list rates.
-- Rerun any anomalous cell solo (zeroed log, no parallelism) before drawing a
+- Cost: pi-harness cells, the baseline included, write no cost. Orchestrated pi
+  tasks log `[pi-task] usage … in= out= cacheR= cacheW=` lines in the cell's
+  `wizard.log`. A linear pi run's token totals reach only the `agent completed`
+  analytics event, so add a temporary hook in the pi harness success path that
+  writes them to a per-run file. Price pi tokens at list rates.
+  Anthropic-harness cells report `modelUsage.costUSD` in the log.
+- Rerun any anomalous cell solo (no parallelism) before drawing a
   conclusion from it.
 
 ## Traps — each of these has produced a wrong conclusion
@@ -175,9 +178,10 @@ debug log) is unreliable under parallelism.
   before you blame the model.
 - **"Reached the outro" is not success.** The flow completes even when nothing
   was integrated. Treat completion as outro + a non-trivial diff.
-- **Parallel runs interleave shared state.** The shared debug log cannot be
-  attributed per-run; capture everything per-run or run solo when attribution
-  matters.
+- **Parallel runs interleave shared state.** The default debug log is one file
+  for every run and cannot be attributed per-run; give each cell its own with
+  `POSTHOG_WIZARD_LOG_FILE`, capture everything else per-run, or run solo when
+  attribution matters.
 - **Sandbox/allowlist gaps look like model failures.** If a config produces
   empty or thin work, check whether a blocked command (package-manager
   install, formatter) caused it, and whether other models worked around the
@@ -205,7 +209,7 @@ lives at `wizard-workbench/services/pr-evaluator/`:
   in `wizard-workbench/test-evaluations/<name>/` as `rubric.json` +
   `scores.json`.
 - **Manual run:** an agent applies the same rubric directly to each cell's
-  diff — faster for many cells, and what the 2026-07 benchmark did. Either
+  diff — faster for many cells. Either
   way, report the four dimensions under their full names, 1–5 each
   (5 production-ready, 3 works with real issues, 1 broken or empty):
 

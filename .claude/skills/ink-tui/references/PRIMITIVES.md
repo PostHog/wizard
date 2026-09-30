@@ -13,7 +13,7 @@ exports and each source file for its current props. Shared styling lives in
 | Tabs and status         | [TabContainer](../../../../src/ui/tui/primitives/TabContainer.tsx): local active tab, arrow navigation, optional expandable status                                     |
 | Single/multiple choice  | [PickerMenu](../../../../src/ui/tui/primitives/PickerMenu.tsx): columns, paging, filtering, and confirm-button interaction                                             |
 | Categorized choices     | [GroupedPickerMenu](../../../../src/ui/tui/primitives/GroupedPickerMenu.tsx): category headers, scrolling, and multi-select                                            |
-| Multi-select submission | [ConfirmButton](../../../../src/ui/tui/primitives/ConfirmButton.tsx): bordered submit row with focus and optional count                                                |
+| Multi-select submission | [ConfirmButton](../../../../src/ui/tui/primitives/ConfirmButton.tsx): flat submit row with a focus marker and optional count                                           |
 | Continue/cancel         | [ConfirmationInput](../../../../src/ui/tui/primitives/ConfirmationInput.tsx): text choices, left/right focus, enter activates, escape cancels                          |
 | Prompt heading          | [PromptLabel](../../../../src/ui/tui/primitives/PromptLabel.tsx)                                                                                                       |
 | Task progress           | [ProgressList](../../../../src/ui/tui/primitives/ProgressList.tsx): active labels, completion count, and skipped-task handling                                         |
@@ -40,8 +40,8 @@ an internal helper.
 Both picker primitives place a `ConfirmButton` after the options. Arrow keys
 navigate through options and onto that button. Enter toggles an option or
 submits when the button is focused. Grouped selection also supports `a` for all
-options. Space aliases enter except when `PickerMenu` has an active filter,
-where space is text input.
+options. Space aliases enter except in a filterable `PickerMenu` (10 or more
+options, or `filterable`), where space is filter text.
 
 Use these controls for new multi-select surfaces so submission behavior and
 keyboard hints stay consistent. See

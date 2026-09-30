@@ -27,9 +27,8 @@ Each domain has a dedicated boundary:
   the scanner through SDK hooks and Pi tool events; see
   [security boundaries](.claude/skills/wizard-development/references/ARCHITECTURE.md#security-boundaries).
   Gateway admission and required safety prompts live in
-  [ai-gateway](https://github.com/PostHog/ai-gateway). To disable scanning in
-  the field without a release, see the kill-switch runbook:
-  `docs/runbooks/warlock-kill-switch.md`. ONLY USE THIS IF ABSOLUTELY NECESSARY.
+  [ai-gateway](https://github.com/PostHog/ai-gateway). Scanning has no remote off switch;
+  the [Warlock runbook](docs/runbooks/warlock-kill-switch.md) covers what to do when it misbehaves.
 - **Agent** → `src/agent/`, imported only through `@agent` (values) and
   `@agent/types` (types); see [src/agent/README.md](src/agent/README.md)
 - **Shared** → `src/shared/`, stateless library code with no upward imports;
@@ -84,18 +83,10 @@ for the gateway allowlists, required system prompt, and composition constraints.
 
 ## CLI command surface
 
-The CLI was overhauled to a smaller, extensible command surface. **Use the new
-command names.** Old names mostly no longer exist — only some are kept as
-aliases.
-
-| Old command                | New command                 | Status                                                     |
-| -------------------------- | --------------------------- | ---------------------------------------------------------- |
-| `wizard integrate`         | `wizard` (default flow)     | command removed                                            |
-| `wizard events-audit`      | `wizard audit events`       | moved into `audit` family                                  |
-| `wizard audit` (single)    | `wizard audit <subcommand>` | now a family — see [Audit subcommands](#audit-subcommands) |
-| `wizard audit-3000`        | _removed_                   | retired                                                    |
-| `wizard revenue`           | `wizard revenue-analytics`  | renamed (old `revenue` removed)                            |
-| `wizard upload-sourcemaps` | `wizard upload-source-maps` | renamed; `upload-sourcemaps` kept as alias                 |
+`wizard` with no command runs the default flow, the `posthog-integration`
+program. `wizard --help` lists the other commands. `audit` is a family: see
+[Audit subcommands](#audit-subcommands). `upload-sourcemaps` is an alias of
+`upload-source-maps`.
 
 ### Audit subcommands
 
