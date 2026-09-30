@@ -11,24 +11,14 @@
 import type { SettingsConflict } from '@shared/claude-settings';
 import type { WizardReadinessResult } from '@shared/health-checks/readiness';
 import type { ApiUser } from '@shared/api';
-import type { Credentials, TaskNotice } from '@lib/wizard-session';
+import type { Credentials, TaskNotice } from '@programs/session/wizard-session';
 import type {
   AskAnswers,
   OutroData,
   PendingQuestion,
-} from '@lib/wizard-session';
+} from '@programs/session/wizard-session';
 
-export enum TaskStatus {
-  Pending = 'pending',
-  InProgress = 'in_progress',
-  Completed = 'completed',
-  Skipped = 'skipped',
-  Failed = 'failed',
-}
-
-export function isTaskStatus(value: string): value is TaskStatus {
-  return (Object.values(TaskStatus) as string[]).includes(value);
-}
+export { TaskStatus, isTaskStatus } from '@shared/task-status';
 
 // Progress payloads are the agent's contract; re-exported so UI code keeps its import path.
 import type {

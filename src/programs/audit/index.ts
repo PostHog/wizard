@@ -1,14 +1,13 @@
-import {
-  AGENT_SKILL_STEPS,
-  createSkillProgram,
-} from '@programs/agent-skill/index';
+import { AGENT_SKILL_STEPS } from '@programs/agent-skill/index';
+import { createSkillProgram } from '@programs/shared/skill-program';
+import { withAuditScreens } from '@tui/programs/audit/flow';
 import type { ProgramStep, ProgramConfig } from '@programs/program-step';
 import type { ProgramRun } from '@programs/program-run';
 import type { RunnerContext } from '@programs/runner-context';
-import type { WizardSession } from '@lib/wizard-session';
-import { OutroKind } from '@lib/wizard-session';
+import type { WizardSession } from '@programs/session/wizard-session';
+import { OutroKind } from '@programs/session/wizard-session';
 import { WIZARD_TOOL_NAMES } from '@agent';
-import { headlessOption, regionOption } from '@lib/headless-mode';
+import { headlessOption, regionOption } from '@shared/headless-mode';
 import { AUDIT_ABORT_CASES } from './detect.js';
 import {
   AUDIT_CHECKS_FILE,
@@ -17,23 +16,10 @@ import {
 } from './types.js';
 import { AUDIT_SEED_CHECKS, seedAuditLedger } from './seed.js';
 
-/** Audit-specific screens for the shared agent-skill pipeline. */
-const AUDIT_SCREEN_BY_STEP: Record<string, string> = {
-  intro: 'audit-intro',
-  run: 'audit-run',
-  outro: 'audit-outro',
-};
-
 const seedBeforeAuditRun = (session: WizardSession): void => {
   seedAuditLedger(session.installDir);
   session.frameworkContext[AUDIT_CHECKS_KEY] = AUDIT_SEED_CHECKS;
 };
-
-const withAuditScreens = (steps: ProgramStep[]): ProgramStep[] =>
-  steps.map((step) => {
-    const override = AUDIT_SCREEN_BY_STEP[step.id];
-    return override ? { ...step, screenId: override } : step;
-  });
 
 const auditSteps: ProgramStep[] = withAuditScreens(AGENT_SKILL_STEPS);
 

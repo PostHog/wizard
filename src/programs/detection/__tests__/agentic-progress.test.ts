@@ -6,7 +6,7 @@ import {
   runAgent as executeAgent,
 } from '@agent/agent-interface';
 import { analytics } from '@utils/analytics';
-import { buildSession } from '@lib/wizard-session';
+import { buildSession } from '@programs/session/wizard-session';
 import { HostResolution } from '@shared/host-resolution';
 import { ErrorCodes } from '@shared/errors';
 import { getUI } from '@ui';

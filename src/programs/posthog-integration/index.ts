@@ -2,8 +2,12 @@ import type { ProgramConfig, ProgramStep } from '@programs/program-step';
 import { runProgramAgent } from '@programs/run-agent-legacy';
 import type { ProgramRun } from '@programs/program-run';
 import { AgentSignals, shouldDisableAsk, WIZARD_TOOL_NAMES } from '@agent';
-import type { WizardSession } from '@lib/wizard-session';
-import { mayReportScanResults, OutroKind, RunPhase } from '@lib/wizard-session';
+import type { WizardSession } from '@programs/session/wizard-session';
+import {
+  mayReportScanResults,
+  OutroKind,
+  RunPhase,
+} from '@programs/session/wizard-session';
 import {
   DEFAULT_PACKAGE_INSTALLATION,
   SPINNER_MESSAGE,
@@ -17,7 +21,7 @@ import {
 import { scopeInstallDirToProject } from '@programs/detection/project-scope';
 import type { CiRunnerContext, RunnerContext } from '@programs/runner-context';
 import { FRAMEWORK_REGISTRY } from '@programs/frameworks/registry';
-import { wizardAbort } from '@utils/wizard-abort';
+import { wizardAbort } from '@host/wizard-abort';
 import { ErrorCodes } from '@shared/errors';
 import {
   WIZARD_DEFAULT_AIO_LOGS_FLAG_KEY,
@@ -27,8 +31,8 @@ import { requestDeepLink } from '@utils/provisioning';
 import { openTrackedLink, withUtm } from '@utils/links';
 import type { HostResolution } from '@shared/host-resolution';
 import { getDetectedWarehouseSources } from '@programs/warehouse-source/detect';
-import { POSTHOG_INTEGRATION_PROGRAM } from './steps.js';
-import { getContentBlocks } from '../../ui/tui/decks/posthog-integration/index.js';
+import { POSTHOG_INTEGRATION_PROGRAM } from '../../tui/programs/posthog-integration/flow.js';
+import { getContentBlocks } from '../../tui/programs/posthog-integration/deck/index.js';
 import { buildCodingAgentPrompt } from './handoff.js';
 import { EVENT_PLAN_FILE } from './constants.js';
 
@@ -526,7 +530,7 @@ ${warehouseReportInstruction(session)}
   },
 };
 
-export { POSTHOG_INTEGRATION_PROGRAM } from './steps.js';
+export { POSTHOG_INTEGRATION_PROGRAM } from '../../tui/programs/posthog-integration/flow.js';
 
 /**
  * Self-contained run step that runs the integration agent. Other programs

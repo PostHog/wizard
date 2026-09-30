@@ -7,7 +7,10 @@
  */
 
 import { posthogIntegrationConfig } from '@programs/posthog-integration/index';
-import { buildSession, type WizardSession } from '@lib/wizard-session';
+import {
+  buildSession,
+  type WizardSession,
+} from '@programs/session/wizard-session';
 import { analytics } from '@utils/analytics';
 import { isUsingTypeScript } from '@utils/setup-utils';
 import { testRunnerContext } from '../../../../test/runner-context';

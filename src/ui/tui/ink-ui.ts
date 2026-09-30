@@ -12,7 +12,7 @@ import type {
   AuthErrorDetail,
   TokenUsageDelta,
 } from '@ui/wizard-ui';
-import type { WizardStore } from './store.js';
+import type { WizardStore } from '../../tui/store.js';
 import type { SettingsConflict } from '@shared/claude-settings';
 import type { WizardReadinessResult } from '@shared/health-checks/readiness';
 import type { ApiUser } from '@shared/api';
@@ -22,8 +22,8 @@ import type {
   OutroData,
   PendingQuestion,
   TaskNotice,
-} from '@lib/wizard-session';
-import { RunPhase, OutroKind } from '@lib/wizard-session';
+} from '@programs/session/wizard-session';
+import { RunPhase, OutroKind } from '@programs/session/wizard-session';
 
 // Strip ANSI escape codes (chalk formatting) from strings
 // eslint-disable-next-line no-control-regex

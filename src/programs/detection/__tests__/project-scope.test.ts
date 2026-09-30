@@ -10,7 +10,7 @@ import {
 import { WIZARD_BASIC_INTEGRATION_AGENTIC_DETECTION_FLAG_KEY } from '@shared/constants';
 import { authenticate } from '@programs/authenticate';
 import type { CiRunnerContext } from '@programs/runner-context';
-import { buildSession } from '@lib/wizard-session';
+import { buildSession } from '@programs/session/wizard-session';
 import { analytics } from '@utils/analytics';
 
 // Mock only the two network edges of scopeInstallDirToProject; everything else runs real.

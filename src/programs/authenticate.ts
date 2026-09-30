@@ -10,9 +10,9 @@
  * back rather than fetching again.
  */
 
-import type { WizardSession } from '@lib/wizard-session';
+import type { WizardSession } from '@programs/session/wizard-session';
 import type { ProgramId } from '@programs/program-registry';
-import { getOrAskForProjectData } from '@utils/setup-utils';
+import { getOrAskForProjectData } from '@tui/auth/project-data';
 import { analytics, groupsFromUser } from '@utils/analytics';
 import { getUI } from '@ui';
 import { logToFile } from '@utils/debug';

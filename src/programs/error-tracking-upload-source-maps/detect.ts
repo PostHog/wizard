@@ -16,7 +16,7 @@ import {
   MAX_WALK_FILES,
   safeReadFile,
 } from '@utils/bounded-fs';
-import type { WizardSession } from '@lib/wizard-session';
+import type { WizardSession } from '@programs/session/wizard-session';
 import type { AbortCase } from '@agent/types';
 import { ErrorCodes } from '@shared/errors';
 

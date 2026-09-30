@@ -17,7 +17,7 @@ import {
   type AgenticDetectionReport,
   type DetectEvent,
 } from '@programs/detection/agentic';
-import type { WizardSession } from '@lib/wizard-session';
+import type { WizardSession } from '@programs/session/wizard-session';
 import {
   VARIANT_DISPLAY_NAME,
   AUTOMATABLE_VARIANTS,

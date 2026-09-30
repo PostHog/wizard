@@ -31,6 +31,7 @@ export {
   resolveScanBindings,
   shouldDisableAsk,
 } from './runner';
+export { captureSwitchboardDecision } from './runner/switchboard/resolve-run';
 export { LONGER_ASK_TIMEOUT_MS } from './wizard-ask-bridge';
 
 /**

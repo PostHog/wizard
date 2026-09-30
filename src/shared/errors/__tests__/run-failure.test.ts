@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { classifyRunFailure } from '../run-failure';
 import { ErrorCodes } from '../codes';
-import { WizardError } from '@utils/wizard-abort';
+import { WizardError } from '@host/wizard-abort';
 import { GatewayMintRefused } from '@agent/gateway-session';
 
 vi.mock('@utils/analytics', () => ({

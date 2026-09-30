@@ -13,6 +13,7 @@ export type {
   PromptContext,
   RunConfig,
   ResolvedBinding,
+  RunFlags,
   RunHooks,
   RunInput,
   RunResult,

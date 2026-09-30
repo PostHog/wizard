@@ -12,7 +12,7 @@ import {
 } from '@agent/gateway-session';
 import type { HostResolution } from '@shared/host-resolution';
 import { ErrorCodes } from '@shared/errors';
-import { WizardError } from '@utils/wizard-abort';
+import { WizardError } from '@host/wizard-abort';
 import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
 import { checkLlmGatewayHealth } from '@shared/health-checks/endpoints';

@@ -1,24 +1,24 @@
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { runNonInteractive } from '@lib/runners/run-non-interactive';
-import { runWizard } from '@lib/runners/run-wizard';
+import { runNonInteractive } from '@cli/runners/run-non-interactive';
+import { runWizard } from '@cli/runners/run-wizard';
 import { authenticate } from '@programs/authenticate';
 import { rotateCredentials } from '@programs/credentials';
 import { resetOAuthSession } from '@shared/oauth-session';
 import { runProgramAgent } from '../run-agent-legacy';
 import { runAgent, RunOutcome, type RunResult } from '@agent/runner';
 import { Harness, Sequence } from '@shared/constants';
-import { buildSession, OutroKind } from '@lib/wizard-session';
+import { buildSession, OutroKind } from '@programs/session/wizard-session';
 import { HostResolution } from '@shared/host-resolution';
-import { LoggingUI } from '@ui/logging-ui';
+import { LoggingUI } from '@headless/renderers/logging-ui';
 import { InkUI } from '@ui/tui/ink-ui';
-import { startTUI } from '@ui/tui/start-tui';
-import { WizardStore } from '@ui/tui/store';
+import { startTUI } from '@tui/start-tui';
+import { WizardStore } from '@tui/store';
 import { getUI, setUI } from '@ui';
 import { analytics } from '@utils/analytics';
 import { initLogFile, logToFile } from '@utils/debug';
-import { registerCleanup, wizardAbort } from '@utils/wizard-abort';
+import { registerCleanup, wizardAbort } from '@host/wizard-abort';
 import { ErrorCodes } from '@shared/errors';
 import type { ProgramConfig } from '../program-step';
 import type { ProgramRun } from '../program-run';
@@ -50,7 +50,7 @@ vi.mock('@programs/task-stream/index', () => ({
   PostHogDestination: class {},
   createFileDestination: () => null,
 }));
-vi.mock('@ui/tui/start-tui', () => ({ startTUI: vi.fn() }));
+vi.mock('@tui/start-tui', () => ({ startTUI: vi.fn() }));
 vi.mock('@utils/debug');
 vi.mock('@utils/analytics', () => ({
   analytics: {
@@ -85,15 +85,15 @@ vi.mock('@shared/claude-settings', () => ({
   checkAllSettingsConflicts: vi.fn().mockReturnValue([]),
   restoreClaudeSettings: vi.fn(),
 }));
-vi.mock('@utils/wizard-abort', async (original) => ({
-  ...(await original<typeof import('@utils/wizard-abort')>()),
+vi.mock('@host/wizard-abort', async (original) => ({
+  ...(await original<typeof import('@host/wizard-abort')>()),
   registerCleanup: vi.fn(),
   wizardAbort: vi.fn().mockResolvedValue(undefined),
 }));
-vi.mock('../posthog-integration/detect', () => ({
+vi.mock('../detection/integration', () => ({
   maybeStampAiSdkDetected: vi.fn(),
 }));
-vi.mock('../posthog-integration/ai-sdk-stamp', () => ({
+vi.mock('../detection/ai-sdk-stamp', () => ({
   stampAiSdkDetected: vi.fn(),
 }));
 
@@ -280,8 +280,8 @@ it.each([
 ] as const)(
   'labels a %s run %s from its outcome when no Error came back',
   async (outcome, status, failure) => {
-    const actual = await vi.importActual<typeof import('@utils/wizard-abort')>(
-      '@utils/wizard-abort',
+    const actual = await vi.importActual<typeof import('@host/wizard-abort')>(
+      '@host/wizard-abort',
     );
     vi.mocked(wizardAbort).mockImplementationOnce(actual.wizardAbort);
     const exit = vi

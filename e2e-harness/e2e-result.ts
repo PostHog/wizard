@@ -21,7 +21,7 @@
 
 import fs from 'fs';
 import path from 'path';
-import { OutroKind, type WizardSession } from '@lib/wizard-session';
+import { OutroKind, type WizardSession } from '@programs/session/wizard-session';
 import { TASK_OUTCOMES_KEY } from '@agent';
 import type { TaskOutcome } from '@agent/types';
 import { DETECTED_WAREHOUSE_SOURCES_KEY } from '@programs/warehouse-source/detect';

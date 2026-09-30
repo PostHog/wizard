@@ -15,7 +15,10 @@
  * ⚠️ Temporary adapter. It is removed later in the refactor.
  */
 
-import { mayReportScanResults, type WizardSession } from '@lib/wizard-session';
+import {
+  mayReportScanResults,
+  type WizardSession,
+} from '@programs/session/wizard-session';
 import { analytics } from '@utils/analytics';
 import { getUI, type WizardUI } from '@ui';
 import { createUiReducer, uiInteraction } from '@ui/agent-progress';
@@ -36,7 +39,7 @@ import {
   SERVICE_LABELS,
 } from '@shared/health-checks/readiness';
 import { enableDebugLogs, logToFile, initLogFile } from '@utils/debug';
-import { registerCleanup, wizardAbort } from '@utils/wizard-abort';
+import { registerCleanup, wizardAbort } from '@host/wizard-abort';
 import { ErrorCodes } from '@shared/errors';
 import { isNonInteractiveEnvironment } from '@utils/environment';
 import { Sequence, type Integration } from '@shared/constants';

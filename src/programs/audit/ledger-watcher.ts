@@ -12,7 +12,7 @@ import {
   startFileWatcher,
   type FileWatcherHandle,
   type FileWatcherOptions,
-} from '@lib/file-watcher';
+} from '@shared/utils/file-watcher';
 import { logToFile } from '@utils/debug';
 import { AUDIT_CHECKS_KEY, coerceAuditChecks } from './types.js';
 

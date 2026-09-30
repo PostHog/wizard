@@ -6,7 +6,7 @@ import {
   getProgramConfig,
   getSubcommandPrograms,
 } from '../program-registry';
-import type { WizardSession } from '@lib/wizard-session';
+import type { WizardSession } from '@programs/session/wizard-session';
 import { testRunnerContext } from '../../../test/runner-context';
 
 describe('PROGRAM_REGISTRY', () => {

@@ -1,8 +1,8 @@
 import type { ProgramConfig } from '@programs/program-step';
 import type { AbortCase } from '@agent/types';
 import { WIZARD_TOOL_NAMES } from '@agent';
-import { MIGRATION_PROGRAM } from './steps.js';
-import { getContentBlocks } from '../../ui/tui/decks/migration/index.js';
+import { MIGRATION_PROGRAM } from '../../tui/programs/migration/flow.js';
+import { getContentBlocks } from '../../tui/programs/migration/deck/index.js';
 
 const MIGRATION_REPORT_FILE = 'migration-report.md';
 
@@ -54,4 +54,4 @@ export const migrationConfig: ProgramConfig = {
   requires: ['posthog-integration'],
 };
 
-export { MIGRATION_PROGRAM } from './steps.js';
+export { MIGRATION_PROGRAM } from '../../tui/programs/migration/flow.js';
