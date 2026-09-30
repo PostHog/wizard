@@ -1,13 +1,13 @@
 import type { ProgramConfig } from '@programs/program-step';
 import type { ProgramRun } from '@programs/program-run';
-import type { WizardSession } from '@lib/wizard-session';
+import type { WizardSession } from '@programs/session/wizard-session';
 import { LONGER_ASK_TIMEOUT_MS } from '@agent';
-import { WAREHOUSE_SOURCE_PROGRAM } from './steps.js';
+import { WAREHOUSE_SOURCE_PROGRAM } from '../../tui/programs/warehouse-source/flow.js';
 import {
   WAREHOUSE_ABORT_CASES,
   getDetectedWarehouseSources,
 } from './detect.js';
-import { getContentBlocks } from '../../ui/tui/decks/warehouse-source/index.js';
+import { getContentBlocks } from '../../tui/programs/warehouse-source/deck/index.js';
 
 /**
  * Inject the detected sources (and their creation mode) into the prompt so the
@@ -70,7 +70,7 @@ export const warehouseSourceConfig: ProgramConfig = {
   requires: ['posthog-integration'],
 };
 
-export { WAREHOUSE_SOURCE_PROGRAM } from './steps.js';
+export { WAREHOUSE_SOURCE_PROGRAM } from '../../tui/programs/warehouse-source/flow.js';
 export {
   detectWarehousePrerequisites,
   getDetectedWarehouseSources,

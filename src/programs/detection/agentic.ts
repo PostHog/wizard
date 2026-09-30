@@ -39,7 +39,7 @@ import {
   POSTHOG_DOCS_URL,
 } from '@shared/constants';
 import { analytics } from '@utils/analytics';
-import type { WizardSession } from '@lib/wizard-session';
+import type { WizardSession } from '@programs/session/wizard-session';
 import { getUI } from '@ui';
 import { createUiReducer } from '@ui/agent-progress';
 

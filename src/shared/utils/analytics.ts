@@ -9,7 +9,7 @@ import {
   reportableDiscoveredFeatures,
   reportablePosthogSdkDetected,
   type WizardSession,
-} from '@lib/wizard-session';
+} from '@programs/session/wizard-session';
 import type { ApiUser } from '@shared/api';
 import { v4 as uuidv4 } from 'uuid';
 import { IS_PRODUCTION_BUILD, RUN_SURFACE, TASK_ID, TASK_RUN_ID } from '@env';

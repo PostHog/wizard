@@ -8,7 +8,7 @@ import {
   buildSession,
   DiscoveredFeature,
   ScanConsent,
-} from '@lib/wizard-session';
+} from '@programs/session/wizard-session';
 
 vi.mock('posthog-node');
 vi.mock('uuid');

@@ -16,7 +16,7 @@ import {
   Integration,
   WIZARD_BASIC_INTEGRATION_AGENTIC_DETECTION_FLAG_KEY,
 } from '@shared/constants';
-import type { WizardSession } from '@lib/wizard-session';
+import type { WizardSession } from '@programs/session/wizard-session';
 import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
 

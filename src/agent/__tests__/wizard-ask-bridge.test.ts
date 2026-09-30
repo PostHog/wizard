@@ -4,7 +4,10 @@ import {
   isFullyCancelled,
 } from '@agent/wizard-ask-bridge';
 import { analytics } from '@utils/analytics';
-import type { AskAnswers, PendingQuestion } from '@lib/wizard-session';
+import type {
+  AskAnswers,
+  PendingQuestion,
+} from '@programs/session/wizard-session';
 
 vi.mock('@utils/analytics', () => ({
   analytics: {

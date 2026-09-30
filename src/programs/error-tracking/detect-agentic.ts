@@ -22,7 +22,7 @@ import {
   detectIntegrationProjects,
   toIntegrationCandidates,
 } from '@programs/detection/project-scope';
-import type { WizardSession } from '@lib/wizard-session';
+import type { WizardSession } from '@programs/session/wizard-session';
 
 /** frameworkContext key for the picked project's path, relative to the repo root. */
 export const ERROR_TRACKING_PROJECT_PATH_KEY = 'errorTrackingProjectPath';

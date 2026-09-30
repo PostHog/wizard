@@ -1,5 +1,5 @@
 import type { ProgramConfig } from '@programs/program-step';
-import { createSkillProgram } from '../agent-skill/index.js';
+import { createSkillProgram } from '../shared/skill-program.js';
 import { WEB_ANALYTICS_DOCTOR_PROGRAM } from './steps.js';
 import { WEB_ANALYTICS_ABORT_CASES } from './detect.js';
 

@@ -4,9 +4,9 @@ import { HostResolution } from '@shared/host-resolution';
 import type { ApiUser } from '@shared/api';
 import type { RunResult } from '@agent/types';
 import { ErrorCodes } from '@shared/errors';
-import { DiscoveredFeature } from '@lib/wizard-session';
+import { DiscoveredFeature } from '@programs/session/wizard-session';
 import { analytics } from '@utils/analytics';
-import { refreshAccessToken } from '@utils/oauth';
+import { refreshAccessToken } from '@tui/auth/oauth';
 import { oauthCredentials, resetOAuthSession } from '@shared/oauth-session';
 import type { ResolvedProgramCredentials } from '../credentials';
 import type { ProgramInput, ProgramOptions } from '../run-program';
@@ -29,7 +29,7 @@ vi.mock('@utils/analytics', async (importOriginal) => ({
     groupIdentify: vi.fn(),
   },
 }));
-vi.mock('@utils/oauth', () => ({
+vi.mock('@tui/auth/oauth', () => ({
   refreshAccessToken: vi.fn(),
   missingOAuthScopes: vi.fn(() => []),
 }));

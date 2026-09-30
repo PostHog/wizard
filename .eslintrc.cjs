@@ -55,6 +55,12 @@ module.exports = {
                 message:
                   'The agent never exits the process: return a failure in RunResult.',
               },
+              {
+                name: '@host/wizard-abort',
+                importNames: ['wizardAbort'],
+                message:
+                  'The agent never exits the process: return a failure in RunResult.',
+              },
             ],
             patterns: [
               {

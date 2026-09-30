@@ -36,7 +36,7 @@ import {
   TRIAGE_MODELS,
   VALID_MODELS,
 } from '@agent/runner/switchboard/models';
-import { runBindingCases } from '@agent/runner/switchboard/flags/__tests__/binding-cases';
+import { runBindingCases } from '@agent/runner/switchboard/flags/__tests__/binding-cases.no-jest';
 
 const PROGRAM_IDS = PROGRAM_REGISTRY.map((c) => c.id);
 const DEFAULT_RESOLVED = {

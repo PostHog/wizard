@@ -4,10 +4,10 @@ import {
   preinstallPostHogCliOnce,
   resetPostHogCliPreinstallForTests,
 } from '@programs/shared/posthog-cli-preinstall';
-import { installOrUpdatePostHogCli } from '@steps/install-cli-steering';
+import { installOrUpdatePostHogCli } from '@shared/install-cli-steering';
 import { analytics } from '@utils/analytics';
 
-vi.mock('@steps/install-cli-steering', () => ({
+vi.mock('@shared/install-cli-steering', () => ({
   installOrUpdatePostHogCli: vi.fn(),
 }));
 vi.mock('@utils/analytics', () => ({

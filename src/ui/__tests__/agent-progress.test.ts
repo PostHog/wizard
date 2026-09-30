@@ -3,13 +3,13 @@ vi.mock('@utils/debug');
 vi.mock('@utils/analytics', () => ({ analytics: { wizardCapture: vi.fn() } }));
 
 import { createUiReducer, uiInteraction } from '../agent-progress';
-import { LoggingUI } from '../logging-ui';
+import { LoggingUI } from '../../headless/renderers/logging-ui';
 import type { AgentProgress } from '@agent/progress';
 import {
   CANCELLED_SENTINEL,
   createWizardAskBridge,
 } from '@agent/wizard-ask-bridge';
-import { OutroKind } from '@lib/wizard-session';
+import { OutroKind } from '@programs/session/wizard-session';
 import { logToFile } from '@utils/debug';
 
 beforeEach(() => {

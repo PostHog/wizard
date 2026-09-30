@@ -13,6 +13,10 @@
 import { randomUUID } from 'crypto';
 
 import { analytics } from '@utils/analytics';
+import {
+  DEFAULT_ASK_TIMEOUT_MS,
+  LONGER_ASK_TIMEOUT_MS,
+} from '@shared/ask-policy';
 import type { AskAnswers, AskQuestion, PendingQuestion } from '@agent/progress';
 
 export interface WizardAskRequest {
@@ -89,16 +93,7 @@ export interface WizardAskBridgeOptions {
 /** Sentinel returned for unanswered fields on cancellation or timeout. */
 export const CANCELLED_SENTINEL = '__cancelled__';
 
-/** Default per-question timeout (5 minutes). */
-export const DEFAULT_ASK_TIMEOUT_MS = 5 * 60 * 1000;
-
-/**
- * The longer per-question timeout, for asks that send the user on an errand —
- * open a database console, mint a restricted API key. The default above is
- * sized for a question answerable from memory and expires long before an
- * errand is done.
- */
-export const LONGER_ASK_TIMEOUT_MS = 20 * 60 * 1000;
+export { DEFAULT_ASK_TIMEOUT_MS, LONGER_ASK_TIMEOUT_MS };
 
 function buildCancelledAnswers(questions: AskQuestion[]): AskAnswers {
   const out: AskAnswers = {};

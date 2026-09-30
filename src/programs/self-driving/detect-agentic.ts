@@ -21,7 +21,7 @@ import {
 } from '@programs/detection/project-scope';
 import { gatherFrameworkContext } from '@programs/detection/index';
 import type { Integration } from '@shared/constants';
-import type { WizardSession } from '@lib/wizard-session';
+import type { WizardSession } from '@programs/session/wizard-session';
 
 export type { DetectEvent };
 

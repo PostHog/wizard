@@ -11,7 +11,7 @@ import {
   runAgent,
 } from '@agent/agent-interface';
 import { analytics } from '@utils/analytics';
-import { buildSession } from '@lib/wizard-session';
+import { buildSession } from '@programs/session/wizard-session';
 import { HostResolution } from '@shared/host-resolution';
 import { flushScanReport } from '@agent/yara-hooks';
 import { Harness, HAIKU_MODEL, Sequence } from '@shared/constants';
