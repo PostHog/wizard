@@ -228,6 +228,10 @@ export const WizardAskScreen = ({ store }: WizardAskScreenProps) => {
     if (index + 1 < total) {
       setAnswers(next);
       setIndex(index + 1);
+      // The request's timeout is armed per question, and only this screen
+      // knows a question was answered — the request itself resolves once, at
+      // the end of the walk.
+      store.noteAskProgress();
       return;
     }
     store.resolvePendingQuestion(next);

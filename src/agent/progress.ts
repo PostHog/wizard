@@ -209,10 +209,15 @@ export interface AgentInteraction {
   /**
    * Open a question and resolve with the answers. The bridge that calls this
    * owns the timeout, the `__cancelled__` sentinel and the analytics.
+   *
+   * `onAnswer` reports that the user answered one question of a request that
+   * has more to come, so the bridge can re-arm its timeout against the user's
+   * silence rather than against the age of the whole request. A host that
+   * answers a request in one shot never calls it.
    */
   ask?: (
     question: PendingQuestion,
-    context: { signal: AbortSignal },
+    context: { signal: AbortSignal; onAnswer?: () => void },
   ) => Promise<AskAnswers>;
   /** Offer an optional step and resolve with whether to keep it. */
   taskNotice?: (

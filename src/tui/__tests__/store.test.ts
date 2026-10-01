@@ -784,6 +784,21 @@ describe('WizardStore', () => {
       expect(store.currentScreen).not.toBe(Overlay.WizardAsk);
     });
 
+    it('noteAskProgress reports an answered question to the ask bridge', () => {
+      const store = createStore();
+      const onAnswer = vi.fn();
+      const promise = store.requestQuestion(pending, onAnswer);
+
+      store.noteAskProgress();
+      expect(onAnswer).toHaveBeenCalledTimes(1);
+
+      // The request is over: a later call must not re-arm its timeout.
+      store.resolvePendingQuestion({ goal: 'Find export', audience: 'new' });
+      store.noteAskProgress();
+      expect(onAnswer).toHaveBeenCalledTimes(1);
+      return promise;
+    });
+
     it('throws when requestQuestion is called while another is pending', () => {
       const store = createStore();
       void store.requestQuestion(pending);

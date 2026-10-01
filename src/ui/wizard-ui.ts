@@ -152,8 +152,14 @@ export interface WizardUI {
    * Open the wizard_ask overlay and resolve with the user's answers.
    * Implementations that can't ask (CI/logging) reject so the bridge can
    * surface a clear "not available" error to the agent.
+   *
+   * `onAnswer` is the bridge's timeout heartbeat: an overlay that walks a
+   * multi-question request calls it as each answer goes in.
    */
-  requestQuestion(question: PendingQuestion): Promise<AskAnswers>;
+  requestQuestion(
+    question: PendingQuestion,
+    onAnswer?: () => void,
+  ): Promise<AskAnswers>;
 
   /**
    * Dismiss the in-flight wizard_ask overlay, resolving its request with

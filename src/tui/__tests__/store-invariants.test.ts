@@ -498,6 +498,8 @@ const MUTATIONS: MutationCase[] = [
 /** Read-only or notification-plumbing methods, excluded by the task brief. */
 const NON_MUTATING = [
   'subscribe',
+  // Forwards the ask bridge's timeout heartbeat; holds no session state.
+  'noteAskProgress',
   'getSnapshot',
   'getVersion',
   'runInitHooks',
