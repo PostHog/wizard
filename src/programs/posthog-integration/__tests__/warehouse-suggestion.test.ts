@@ -8,9 +8,8 @@
  * The links reach the user two ways, because the two sequences build the outro
  * differently: the linear one asks the program for the whole thing
  * (`buildOutroData`), while the orchestrated one composes its own message from
- * the drain and takes only the bullets (`buildOutroNextSteps`). The second is
- * the sequence that seeds the warehouse step, so it is also the one that can
- * say the run already connected the sources.
+ * the drain and takes only the bullets (`buildOutroNextSteps`). Both list every
+ * detected source, so the bullets do not depend on which sequence ran.
  */
 
 import { POSTHOG_INTEGRATION_PROGRAM } from '@tui/programs/posthog-integration/flow';
@@ -213,27 +212,27 @@ describe('orchestrated outro suggestion', () => {
     );
   });
 
-  it('offers nothing once the seeded warehouse step connected them', async () => {
+  it('still carries a source the seeded step completed on', async () => {
+    // The step reports success once it has handled each source somehow, and
+    // handing back a link for one whose credentials never arrived is one of
+    // those outcomes — so completing is not evidence the source is connected.
     const s = sessionWith([POSTGRES]);
 
-    expect(await nextSteps(s, ['warehouse'])).toBeUndefined();
+    expect((await nextSteps(s, ['warehouse']))!.items.join('\n')).toContain(
+      'kind=postgres',
+    );
   });
 
-  it('still carries the sources the seeded step was never given', async () => {
-    // The step is capped, so "it completed" means it connected the ones it was
-    // handed — the tail is as unconnected as if the step had never run.
+  it('carries the same sources whether or not the step completed', async () => {
     const tail: DetectedSource = {
       kind: 'resend',
       label: 'Resend',
       mode: 'in-cli',
       matchedSignal: 'resend in package.json',
     };
-    const s = sessionWith([POSTGRES, STRIPE, POSTGRES, tail]);
+    const s = sessionWith([POSTGRES, STRIPE, tail]);
 
-    const text = (await nextSteps(s, ['warehouse']))!.items.join('\n');
-
-    expect(text).toContain('kind=resend');
-    expect(text).not.toContain('kind=stripe');
+    expect(await nextSteps(s, ['warehouse'])).toEqual(await nextSteps(s, []));
   });
 
   it('offers nothing when nothing was detected', async () => {
