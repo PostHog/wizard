@@ -161,6 +161,7 @@ export class WizardStore {
   private _resolveManualAuthCode: ((code: string) => void) | null = null;
 
   /** Resolves the in-flight wizard_ask request. */
+  private _noteAskProgress: (() => void) | null = null;
   private _resolvePendingQuestion: ((answers: AskAnswers) => void) | null =
     null;
 
@@ -629,12 +630,16 @@ export class WizardStore {
    * Only one request is in flight at a time — calling this while a request
    * is already pending throws.
    */
-  requestQuestion(question: PendingQuestion): Promise<AskAnswers> {
+  requestQuestion(
+    question: PendingQuestion,
+    onAnswer?: () => void,
+  ): Promise<AskAnswers> {
     if (this._resolvePendingQuestion) {
       throw new Error(
         'requestQuestion called while another wizard_ask request is pending',
       );
     }
+    this._noteAskProgress = onAnswer ?? null;
     this.$session.setKey('pendingQuestion', question);
     this.pushOverlay(Overlay.WizardAsk);
     analytics.wizardCapture('wizard_ask shown', {
@@ -648,12 +653,21 @@ export class WizardStore {
   }
 
   /**
+   * Report that the user answered one question of the in-flight request and
+   * another is coming — the ask bridge's timeout heartbeat.
+   */
+  noteAskProgress(): void {
+    this._noteAskProgress?.();
+  }
+
+  /**
    * Resolve the in-flight wizard_ask request with the user's answers and
    * dismiss the overlay. Answers flow back to the agent as the tool result.
    */
   resolvePendingQuestion(answers: AskAnswers): void {
     const resolve = this._resolvePendingQuestion;
     this._resolvePendingQuestion = null;
+    this._noteAskProgress = null;
     this.$session.setKey('pendingQuestion', null);
     this.popOverlay();
     resolve?.(answers);

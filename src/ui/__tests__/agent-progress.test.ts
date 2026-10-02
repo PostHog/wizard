@@ -134,8 +134,9 @@ it('forwards answers and notices, leaving the host alone once they settle', asyn
   const interaction = uiInteraction(ui);
   const asked = new AbortController();
   const noticed = new AbortController();
+  const onAnswer = vi.fn();
   await expect(
-    interaction.ask?.(question, { signal: asked.signal }),
+    interaction.ask?.(question, { signal: asked.signal, onAnswer }),
   ).resolves.toEqual({ q: 'yes' });
   await expect(
     interaction.taskNotice?.(notice, { signal: noticed.signal }),
@@ -143,7 +144,8 @@ it('forwards answers and notices, leaving the host alone once they settle', asyn
   // A late abort must not dismiss whatever the host shows next.
   asked.abort();
   noticed.abort();
-  expect(ask).toHaveBeenCalledWith(question);
+  // The host gets the bridge's timeout heartbeat alongside the question.
+  expect(ask).toHaveBeenCalledWith(question, onAnswer);
   expect(show).toHaveBeenCalledWith(notice);
   expect(cancelAsk).not.toHaveBeenCalled();
   expect(cancelNotice).not.toHaveBeenCalled();

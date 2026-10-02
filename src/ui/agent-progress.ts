@@ -70,8 +70,8 @@ export function createUiReducer(ui: WizardUI): (event: AgentProgress) => void {
 /** The agent's questions, answered wherever `getUI()` answers them today. */
 export function uiInteraction(ui: WizardUI): AgentInteraction {
   return {
-    ask: (question, { signal }) =>
-      dismissOnAbort(ui.requestQuestion(question), signal, () =>
+    ask: (question, { signal, onAnswer }) =>
+      dismissOnAbort(ui.requestQuestion(question, onAnswer), signal, () =>
         ui.cancelPendingQuestion(),
       ),
     taskNotice: (notice, { signal }) =>

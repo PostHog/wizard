@@ -182,8 +182,11 @@ export class InkUI implements WizardUI {
     this.store.showSessionTimeout();
   }
 
-  requestQuestion(question: PendingQuestion): Promise<AskAnswers> {
-    return this.store.requestQuestion(question);
+  requestQuestion(
+    question: PendingQuestion,
+    onAnswer?: () => void,
+  ): Promise<AskAnswers> {
+    return this.store.requestQuestion(question, onAnswer);
   }
 
   cancelPendingQuestion(): void {
