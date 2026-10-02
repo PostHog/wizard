@@ -1,0 +1,7 @@
+// What `eslint` type-checks against: every file at once, from source, with no
+// references to build first.
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": { "composite": false, "emitDeclarationOnly": false, "noEmit": true },
+  "include": ["src", "e2e-harness", "scripts", "docs/examples", "__mocks__", "types", "bin.ts", "main.ts", "tsdown.config.ts", "vitest.config.ts"]
+}

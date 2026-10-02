@@ -1,0 +1,7 @@
+{
+  "extends": "../../tsconfig.no-tui.json",
+  "references": [
+    { "path": "../tsconfig.json" }, { "path": "../shared" }, { "path": "../host" },
+    { "path": "../agent" }, { "path": "../programs" }
+  ]
+}
