@@ -3,44 +3,40 @@
  * keyboard on one store and apply the control action on another, then golden
  * both session diffs. Pairs whose diffs differ today are recorded, not hidden.
  */
-import { vi, describe, it, expect, afterEach, beforeAll } from 'vitest';
-import { render, cleanup } from 'ink-testing-library';
+import { vi, describe, it, expect } from 'vitest';
 import { mkdtempSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import {
-  WizardStore,
-  Program,
-  ScreenId,
-  Overlay,
-  RunPhase,
-  McpOutcome,
-  type ProgramId,
-} from '../store';
-import { InkUI } from '../../ui/tui/ink-ui';
-import { setUI } from '@ui/index';
-import {
-  buildSession,
-  OutroKind,
-  type WizardSession,
-} from '@programs/session/wizard-session';
+import { McpOutcome, RunPhase } from '@shared/run-state';
+import { OutroKind } from '@shared/outro';
 import { Integration } from '@shared/constants';
-import { FRAMEWORK_REGISTRY } from '@programs/frameworks/registry';
 import { HostResolution } from '@shared/host-resolution';
 import { WizardReadiness } from '@shared/health-checks/readiness';
-import { SOURCE_MAPS_CONTEXT_KEYS } from '@programs/error-tracking-upload-source-maps/detect';
-import { SELF_DRIVING_INTEGRATE_PATH_KEY } from '@programs/self-driving/detect';
-import { ScreenContainer } from '../primitives/ScreenContainer';
 import {
-  createScreens,
-  createServices,
-  type ScreenServices,
-} from '../../ui/tui/screen-registry';
-import { ACTION_REGISTRY } from '@e2e-harness/action-registry';
+  buildSession,
+  FRAMEWORK_REGISTRY,
+  Program,
+  type ProgramId,
+} from '@programs';
+import type { WizardSession } from '@programs/types';
+import { SOURCE_MAPS_CONTEXT_KEYS } from '@programs/error-tracking-upload-source-maps';
+import { SELF_DRIVING_INTEGRATE_PATH_KEY } from '@programs/self-driving';
+import {
+  AuditScreenId,
+  createTuiStore,
+  mountScreens,
+  Overlay,
+  PostHogIntegrationScreenId,
+  readTuiState,
+  ScreenId,
+  SelfDrivingScreenId,
+  SourceMapsScreenId,
+  type McpInstaller,
+  type WizardStore,
+} from '@tui';
+import { ACTION_REGISTRY } from '../action-registry';
 
-vi.mock('ink', () =>
-  vi.importActual('../../../node_modules/ink/build/index.d.js'),
-);
+vi.mock('ink', () => vi.importActual('ink-actual'));
 vi.mock('@utils/analytics', () => ({
   analytics: {
     capture: vi.fn(),
@@ -70,12 +66,8 @@ vi.mock('@shared/skill-menu', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@shared/skill-menu')>()),
   fetchSkillMenu: vi.fn(() => new Promise(() => undefined)),
 }));
-vi.mock('@tui/auth/project-data', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@tui/auth/project-data')>()),
-  getOrAskForProjectData: vi.fn(() => new Promise(() => undefined)),
-}));
-vi.mock('@host/wizard-abort', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@host/wizard-abort')>()),
+vi.mock(import('@host/wizard-abort'), async (importOriginal) => ({
+  ...(await importOriginal()),
   wizardAbort: vi.fn().mockResolvedValue(undefined),
 }));
 
@@ -128,7 +120,7 @@ const fakeInstaller = {
       { name: 'Claude Code', supportsPlugin: true },
     ]),
   install: () => Promise.resolve([]),
-} as unknown as ScreenServices['mcpInstaller'];
+} as unknown as McpInstaller;
 
 interface Pair {
   name: string;
@@ -159,7 +151,7 @@ const PAIRS: Pair[] = [
     knownDivergence:
       'keyboard grants scan sharing before completeSetup, confirm_setup only completes setup',
     program: Program.PostHogIntegration,
-    screen: ScreenId.Intro,
+    screen: PostHogIntegrationScreenId.Intro,
     arrange: () => undefined,
     keys: [ENTER],
     action: 'confirm_setup',
@@ -241,7 +233,7 @@ const PAIRS: Pair[] = [
     knownDivergence:
       'keyboard path commits mintHandoff alongside outroDismissed',
     program: Program.Audit,
-    screen: ScreenId.AuditOutro,
+    screen: AuditScreenId.Outro,
     arrange: (s) => {
       confirmed(s);
       authed(s);
@@ -255,7 +247,7 @@ const PAIRS: Pair[] = [
     knownDivergence:
       'keyboard path commits mintHandoff alongside outroDismissed',
     program: Program.ErrorTrackingUploadSourceMaps,
-    screen: ScreenId.SourceMapsOutro,
+    screen: SourceMapsScreenId.Outro,
     arrange: (s) => {
       s.completeSetup();
       authed(s);
@@ -269,7 +261,7 @@ const PAIRS: Pair[] = [
   {
     name: 'self-driving-integration-check: log me in vs set_integrate true',
     program: Program.SelfDriving,
-    screen: ScreenId.SelfDrivingIntegrationCheck,
+    screen: SelfDrivingScreenId.IntegrationCheck,
     arrange: (s) => {
       s.setFrameworkContext('postHogPresent', false);
       s.completeSetup();
@@ -281,7 +273,7 @@ const PAIRS: Pair[] = [
   {
     name: 'self-driving-handoff: enter vs confirm_self_driving_handoff',
     program: Program.SelfDriving,
-    screen: ScreenId.SelfDrivingHandoff,
+    screen: SelfDrivingScreenId.Handoff,
     arrange: (s) => {
       s.setFrameworkContext('postHogPresent', false);
       s.completeSetup();
@@ -389,10 +381,9 @@ const PAIRS: Pair[] = [
   },
 ];
 
-function makeStore(pair: Pair): WizardStore {
-  const store = new WizardStore(pair.program);
+async function makeStore(pair: Pair): Promise<WizardStore> {
+  const store = await createTuiStore(pair.program);
   store.version = '0.0.0-test';
-  setUI(new InkUI(store));
   const session = buildSession({ installDir: INSTALL_DIR, ci: false });
   const integration = pair.integration ?? Integration.javascriptNode;
   session.integration = integration;
@@ -409,11 +400,13 @@ interface Snap {
   session: Record<string, unknown>;
 }
 
-function snap(store: WizardStore): Snap {
+async function snap(store: WizardStore): Promise<Snap> {
   const session: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(store.session)) {
     session[k] = k === 'frameworkConfig' ? (v ? '[config]' : null) : v;
   }
+  // The TUI state diffs beside the session, under the same names.
+  Object.assign(session, await readTuiState(store));
   return {
     screen: store.currentScreen,
     overlay: store.router.hasOverlay,
@@ -436,47 +429,40 @@ function diff(before: Snap, after: Snap): Record<string, unknown> {
 }
 
 async function driveKeyboard(pair: Pair): Promise<Record<string, unknown>> {
-  const store = makeStore(pair);
-  const services = { ...createServices(store), mcpInstaller: fakeInstaller };
-  const screens = createScreens(store, services);
-  const { stdin, unmount } = render(
-    <ScreenContainer store={store} screens={screens} />,
-  );
-  await tick(60);
-  expect(store.currentScreen).toBe(pair.screen);
-  const before = snap(store);
-  for (const key of pair.keys) {
-    stdin.write(key);
-    await tick();
+  const store = await makeStore(pair);
+  const screens = await mountScreens(store, { mcpInstaller: fakeInstaller });
+  try {
+    await tick(60);
+    expect(store.currentScreen).toBe(pair.screen);
+    const before = await snap(store);
+    for (const key of pair.keys) {
+      screens.write(key);
+      await tick();
+    }
+    await tick(60);
+    return diff(before, await snap(store));
+  } finally {
+    screens.unmount();
   }
-  await tick(60);
-  const after = snap(store);
-  unmount();
-  return diff(before, after);
 }
 
-function applyAction(pair: Pair): Record<string, unknown> {
-  const store = makeStore(pair);
+async function applyAction(pair: Pair): Promise<Record<string, unknown>> {
+  const store = await makeStore(pair);
   expect(store.currentScreen).toBe(pair.screen);
-  const before = snap(store);
-  const action = ACTION_REGISTRY[pair.screen as ScreenId]?.find(
+  const before = await snap(store);
+  const action = ACTION_REGISTRY[pair.screen]?.find(
     (a) => a.id === pair.action,
   );
   if (!action) throw new Error(`no action ${pair.action} on ${pair.screen}`);
   action.apply(store, pair.params ?? {});
-  return diff(before, snap(store));
+  return diff(before, await snap(store));
 }
 
 describe('keyboard commit vs control action commit', () => {
-  beforeAll(() => {
-    vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
-  });
-  afterEach(() => cleanup());
-
   for (const pair of PAIRS) {
     it(pair.name, async () => {
       const keyboard = await driveKeyboard(pair);
-      const action = applyAction(pair);
+      const action = await applyAction(pair);
       if (pair.knownDivergence) {
         expect(keyboard, pair.knownDivergence).not.toEqual(action);
       } else {
