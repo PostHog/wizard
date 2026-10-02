@@ -6,50 +6,13 @@
  * appending the exit screen). Pure leaf module — no store, no React.
  */
 
-import type { WizardSession } from '@lib/wizard-session';
+import type { WizardSession } from '@programs/session/wizard-session';
 import { PROGRAM_REGISTRY, type ProgramId } from '@programs';
-import { createProgramSequence } from '@programs/program-step';
-import { withAiOptInGate } from '@programs/ai-opt-in-gate';
+import { createProgramSequence } from '@tui/flow';
+import { withAiOptInGate } from '@tui/ai-opt-in-gate';
+import { ScreenId } from '@tui/screen-ids';
 
-/** Screens that participate in linear programs. */
-export enum ScreenId {
-  Intro = 'intro',
-  RevenueIntro = 'revenue-intro',
-  WarehouseIntro = 'warehouse-intro',
-  SourceMapsIntro = 'source-maps-intro',
-  SourceMapsDetect = 'source-maps-detect',
-  SourceMapsOutro = 'source-maps-outro',
-  MigrationIntro = 'migration-intro',
-  AgentSkillIntro = 'agent-skill-intro',
-  AiObservabilityIntro = 'ai-observability-intro',
-  MetricsIntro = 'metrics-intro',
-  ErrorTrackingIntro = 'error-tracking-intro',
-  ErrorTrackingDetect = 'error-tracking-detect',
-  SelfDrivingIntro = 'self-driving-intro',
-  SelfDrivingIntegrationCheck = 'self-driving-integration-check',
-  SelfDrivingIntegrationDetect = 'self-driving-integration-detect',
-  SelfDrivingHandoff = 'self-driving-handoff',
-  SelfDrivingGithub = 'self-driving-github',
-  AuditIntro = 'audit-intro',
-  AuditRun = 'audit-run',
-  AuditOutro = 'audit-outro',
-  HealthCheck = 'health-check',
-  DoctorIntro = 'doctor-intro',
-  DoctorReport = 'doctor-report',
-  Setup = 'setup',
-  Auth = 'auth',
-  Run = 'run',
-  Mcp = 'mcp',
-  McpSuggestedPrompts = 'mcp-suggested-prompts',
-  SlackConnect = 'slack-connect',
-  KeepSkills = 'keep-skills',
-  Outro = 'outro',
-  MintFailure = 'mint-failure',
-  Exit = 'exit',
-  McpAdd = 'mcp-add',
-  McpRemove = 'mcp-remove',
-  AiOptIn = 'ai-opt-in',
-}
+export { ScreenId };
 
 export interface Screen {
   /** ScreenId to show */

@@ -18,9 +18,9 @@
  * the driver issues the final commit directly instead.
  */
 
-import type { WizardStore } from '@ui/tui/store';
-import type { ScreenName } from '@ui/tui/router';
-import type { PendingQuestion, RunPhase } from '@lib/wizard-session';
+import type { WizardStore } from '@tui/store';
+import type { ScreenName } from '@tui/router';
+import type { PendingQuestion, RunPhase } from '@programs/session/wizard-session';
 import { actionsForScreen, MissingParamError } from './action-registry.js';
 
 /** A setup question projected for the harness (no `detect` fn, no closures). */

@@ -4,8 +4,8 @@ export type {
   ProgramConfig,
   ProgramStep,
   ProgramReadyContext,
-  StoreInitContext,
 } from './program-step';
+export type { StoreInitContext } from '@tui/flow';
 export type { FrameworkConfig, SetupQuestion } from './framework-config';
 export type { CiRunnerContext, RunnerContext } from './runner-context';
 export type {

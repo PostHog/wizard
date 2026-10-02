@@ -5,11 +5,11 @@
 import '@ui';
 import { HeadlessUI } from '../headless-ui';
 import { TaskStatus } from '../wizard-ui';
-import type { WizardStore } from '../tui/store';
+import type { WizardStore } from '../../tui/store';
 
 describe('HeadlessUI', () => {
   it('stores credentials without emitting an interactive auth event', async () => {
-    const { WizardStore } = await import('../tui/store');
+    const { WizardStore } = await import('../../tui/store');
     const { analytics } = await import('@utils/analytics');
     const { HostResolution } = await import('@shared/host-resolution');
     const capture = vi.spyOn(analytics, 'wizardCapture');
@@ -58,16 +58,16 @@ it.each([
   ['headless', 'wizard-session'],
   ['interactive', 'wizard-session'],
 ])('publishes %s tasks through the %s variant', async (mode, variant) => {
-  const { WizardStore } = await import('../tui/store');
+  const { WizardStore } = await import('../../tui/store');
   const { InkUI } = await import('../tui/ink-ui');
   const { TaskStreamPush } = await import(
-    '@programs/task-stream/task-stream-push'
+    '@programs/session/task-stream/task-stream-push'
   );
   const { WizardRunSync } = await import(
-    '@programs/task-stream/wizard-run-sync'
+    '@programs/session/task-stream/wizard-run-sync'
   );
   const { HostResolution } = await import('@shared/host-resolution');
-  const { RunPhase } = await import('@lib/wizard-session');
+  const { RunPhase } = await import('@programs/session/wizard-session');
   const store = new WizardStore();
   store.setCredentials({
     accessToken: 'pha_test',

@@ -16,11 +16,11 @@
 import fs from 'fs';
 import net from 'net';
 import { spawnSync } from 'child_process';
-import { startTUI } from '@ui/tui/start-tui';
+import { startTUI } from '@tui/start-tui';
 import { VERSION } from '@shared/version';
 import { Program, getProgramConfig, type ProgramId } from '@programs';
 import type { Harness, Sequence } from '@shared/constants';
-import { buildSession } from '@lib/wizard-session';
+import { buildSession } from '@programs/session/wizard-session';
 import { initLocalDev } from '@shared/local-dev';
 import { configureGatewayFromCIEnvironment } from '@agent/gateway-session';
 import { runProgramAgent } from '@programs/run-agent-legacy';
@@ -30,7 +30,7 @@ import {
 } from '@programs/task-stream/index';
 import { getAuditChecks } from '@programs/audit/types';
 import { authenticate } from '@programs/authenticate';
-import { getOrAskForProjectData } from '@utils/setup-utils';
+import { getOrAskForProjectData } from '@tui/auth/project-data';
 import { logToFile } from '@utils/debug';
 import { join } from 'path';
 import { detectFramework } from '@programs/detection/index';
@@ -42,7 +42,7 @@ import {
   detectSourceMapsPrerequisites,
   SOURCE_MAPS_CONTEXT_KEYS,
 } from '@programs/error-tracking-upload-source-maps/index';
-import { ScreenId, Overlay } from '@ui/tui/router';
+import { ScreenId, Overlay } from '@tui/router';
 import { WizardCiDriver } from '@e2e-harness/wizard-ci-driver';
 import {
   decideE2eAction,

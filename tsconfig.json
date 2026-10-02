@@ -13,6 +13,7 @@
     "__mocks__/**/*",
     "index.ts",
     "bin.ts",
+    "main.ts",
     "tsdown.config.ts",
     "vitest.config.ts",
     "spec/**/*",

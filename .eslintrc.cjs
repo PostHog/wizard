@@ -55,6 +55,12 @@ module.exports = {
                 message:
                   'The agent never exits the process: return a failure in RunResult.',
               },
+              {
+                name: '@host/wizard-abort',
+                importNames: ['wizardAbort'],
+                message:
+                  'The agent never exits the process: return a failure in RunResult.',
+              },
             ],
             patterns: [
               {
@@ -101,7 +107,7 @@ module.exports = {
       // Outside the agent, import it through its entry modules only:
       // `@agent` for values, `@agent/types` for types. The architecture test
       // applies the same rule to resolved paths; this gives editor feedback.
-      files: ['bin.ts', 'src/**/*.ts', 'src/**/*.tsx'],
+      files: ['bin.ts', 'main.ts', 'src/**/*.ts', 'src/**/*.tsx'],
       excludedFiles: ['src/agent/**', '**/__tests__/**', '**/__mocks__/**'],
       rules: {
         '@typescript-eslint/no-restricted-imports': [

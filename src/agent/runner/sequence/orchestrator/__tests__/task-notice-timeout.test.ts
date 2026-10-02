@@ -7,7 +7,7 @@
  * the run — so the offer is made at seed time, and only the work it gates is
  * deferred to the end of the queue.
  */
-import type { TaskNotice } from '@lib/wizard-session';
+import type { TaskNotice } from '@programs/session/wizard-session';
 
 // Hoisted: `vi.mock` factories are lifted above the imports, so the analytics
 // factory would otherwise read these before they exist.

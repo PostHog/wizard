@@ -2,14 +2,14 @@ import type {
   WizardSession,
   DiscoveredFeature,
   TaskNotice,
-} from '@lib/wizard-session';
-import type { WizardReadinessResult } from '@shared/health-checks/readiness';
+} from '@programs/session/wizard-session';
+import type { StoreInitContext } from '@tui/flow';
 import type { ProgramRun } from '@programs/program-run';
 import type { Integration } from '@shared/constants';
 import type { FrameworkConfig } from '@programs/framework-config';
-import type { ContentBlock } from '@ui/tui/primitives/index';
-import type { WizardStore } from '@ui/tui/store';
-import type { Tip } from '@ui/tui/components/TipsCard';
+import type { ContentBlock } from '@tui/primitives/index';
+import type { WizardStore } from '@tui/store';
+import type { Tip } from '@tui/components/TipsCard';
 // Type-only — erased at compile time, so no runtime cycle with the
 // registry that imports `ProgramConfig` back from this module.
 import type { ProgramId } from './program-registry.js';
@@ -26,16 +26,6 @@ import type { CiRunnerContext, RunnerContext } from './runner-context.js';
  * The PostHog integration program is one ordered list of steps.
  * Other programs (e.g. revenue analytics) register a different step list.
  */
-/**
- * Context passed to onInit callbacks — fires when the TUI starts
- * rendering, before bin.ts has assigned the real session.
- */
-export interface StoreInitContext {
-  readonly session: WizardSession;
-  readonly setReadinessResult: (result: WizardReadinessResult | null) => void;
-  readonly setFrameworkContext: (key: string, value: unknown) => void;
-  readonly emitChange: () => void;
-}
 
 /**
  * Context passed to onReady callbacks — fires after bin.ts has assigned
@@ -350,18 +340,6 @@ export interface ProgramConfig {
 }
 
 /**
- * Project program steps into the narrower Screen shape the router consumes.
- *
- * Two things happen here:
- *   1. Headless steps (no `screenId`) are filtered out. The router walks
- *      visible screens; gate-only steps like `detect` are store concerns.
- *   2. The step is narrowed to just { id, show, isComplete } — the
- *      router has no business touching gate, onInit, or label.
- *
- * This intentional separation keeps the router focused on one question:
- * "Which screen should be rendered right now?"
- */
-/**
  * The gated steps the agent runner awaits after `auth` and before `run`, in
  * step order. Empty when a program has no auth step or runs before it.
  */
@@ -370,26 +348,4 @@ export function postAuthGateSteps(steps: ProgramStep[]): ProgramStep[] {
   const runIndex = steps.findIndex((s) => s.screenId === 'run');
   if (authIndex === -1 || runIndex <= authIndex) return [];
   return steps.slice(authIndex + 1, runIndex).filter((s) => s.gate);
-}
-
-export function createProgramSequence(steps: ProgramStep[]): Array<{
-  id: string;
-  show?: (session: WizardSession) => boolean;
-  isComplete?: (session: WizardSession) => boolean;
-}> {
-  const entries = steps
-    .filter((step) => step.screenId != null)
-    .map((step) => ({
-      id: step.screenId!,
-      show: step.show,
-      // `isComplete` defaults to `gate` — for most steps they're the same
-      // predicate (e.g. intro: setupConfirmed unblocks bin.ts AND finishes
-      // the screen). Only override when the two conditions diverge.
-      isComplete: step.isComplete ?? step.gate,
-    }));
-
-  // Every program ends with the exit screen.
-  entries.push({ id: 'exit', show: undefined, isComplete: undefined });
-
-  return entries;
 }

@@ -80,7 +80,7 @@ capabilities table.
 - For a capability, follow
   [adding-skill-program](../adding-skill-program/SKILL.md). Prefer a
   context-mill command within an existing family when that is sufficient. A
-  native command needs a command module and registration in `bin.ts`, as well as
+  native command needs a command module and registration in `main.ts`, as well as
   program and binding registration.
 - For screens or primitives, follow [ink-tui](../ink-tui/SKILL.md). Program
   steps drive screen sequences; business logic calls `getUI()`, and session

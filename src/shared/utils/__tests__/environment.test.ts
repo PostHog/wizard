@@ -9,7 +9,7 @@
  */
 
 import { readEnvironment } from '@utils/environment';
-import { buildSession } from '@lib/wizard-session';
+import { buildSession } from '@programs/session/wizard-session';
 import { shouldDisableAsk } from '@agent/agent-runner';
 
 /** Every var this file sets, cleared between cases. */

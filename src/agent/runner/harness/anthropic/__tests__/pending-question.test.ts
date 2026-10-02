@@ -2,7 +2,7 @@ import { initializeAgent, wizardCanUseTool } from '@agent/agent-interface';
 import { createAskBridge } from '../../../shared/ask';
 import { anthropicBackend } from '..';
 import type { BackendRunInputs, TaskRunInputs } from '../../types';
-import type { AskAnswers } from '@lib/wizard-session';
+import type { AskAnswers } from '@programs/session/wizard-session';
 import { Harness, Sequence } from '@shared/constants';
 import { HostResolution } from '@shared/host-resolution';
 

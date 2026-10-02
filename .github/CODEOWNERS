@@ -20,10 +20,10 @@
 /src/programs/web-analytics-doctor/                     @PostHog/team-web-analytics
 
 # Team-owned program decks
-/src/ui/tui/decks/error-tracking-upload-source-maps/    @PostHog/team-error-tracking
-/src/ui/tui/decks/revenue-analytics/                    @PostHog/team-web-analytics
-/src/ui/tui/decks/self-driving/                         @PostHog/team-self-driving
-/src/ui/tui/decks/warehouse-source/                     @PostHog/team-warehouse-sources
+/src/tui/programs/error-tracking-upload-source-maps/    @PostHog/team-error-tracking
+/src/tui/programs/revenue-analytics/                    @PostHog/team-web-analytics
+/src/tui/programs/self-driving/                         @PostHog/team-self-driving
+/src/tui/programs/warehouse-source/                     @PostHog/team-warehouse-sources
 
 # Agent runner (harness, model, and tools)
 /src/agent/                                             @PostHog/team-wizard-docs

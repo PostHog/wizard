@@ -2,22 +2,21 @@ import { join } from 'path';
 import { access, rm } from 'node:fs/promises';
 import type { ProgramConfig } from '@programs/program-step';
 import type { ProgramRun } from '@programs/program-run';
-import { OutroKind, type WizardSession } from '@lib/wizard-session';
-import { createSkillProgram } from '../agent-skill/index.js';
-import { SELF_DRIVING_PROGRAM } from './steps.js';
+import {
+  OutroKind,
+  type WizardSession,
+} from '@programs/session/wizard-session';
+import { createSkillProgram } from '../shared/skill-program.js';
+import { SELF_DRIVING_PROGRAM } from '../../tui/programs/self-driving/flow.js';
 import {
   SELF_DRIVING_ABORT_CASES,
   getSelfDrivingDetectedTools,
 } from './detect.js';
 import { buildSelfDrivingPrompt } from './prompt.js';
 import { resolveSelfDrivingStepKey } from './step-keys.js';
-import {
-  NO_DEFAULT_LIMIT,
-  PRICE_PER_PR_USD,
-  PRICING_LONG,
-} from '../../ui/tui/decks/self-driving/pricing.js';
-import { getTips } from '../../ui/tui/decks/self-driving/tips.js';
-import { getContentBlocks } from '../../ui/tui/decks/self-driving/index.js';
+import { NO_DEFAULT_LIMIT, PRICE_PER_PR_USD, PRICING_LONG } from './pricing.js';
+import { getTips } from '../../tui/programs/self-driving/deck/tips.js';
+import { getContentBlocks } from '../../tui/programs/self-driving/deck/index.js';
 
 export const SELF_DRIVING_SKILL_ID = 'self-driving-setup';
 const REPORT_FILE = 'posthog-self-driving-report.md';
@@ -132,7 +131,7 @@ export const selfDrivingConfig: ProgramConfig = {
   getContentBlocks,
 };
 
-export { SELF_DRIVING_PROGRAM } from './steps.js';
+export { SELF_DRIVING_PROGRAM } from '../../tui/programs/self-driving/flow.js';
 export {
   detectSelfDrivingPrerequisites,
   SELF_DRIVING_ABORT_CASES,

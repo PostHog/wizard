@@ -7,17 +7,17 @@ import {
 import { scopeInstallDirToProject } from '@programs/detection/project-scope';
 import type { CiRunnerContext } from '@programs/runner-context';
 import { FRAMEWORK_REGISTRY } from '@programs/frameworks/registry';
-import { createSkillProgram } from '@programs/agent-skill/index';
-import { AGENT_SKILL_STEPS } from '@programs/agent-skill/steps';
-import { detectPostHogIntegration } from '@programs/posthog-integration/detect';
+import { createSkillProgram } from '@programs/shared/skill-program';
+import { AGENT_SKILL_STEPS } from '@tui/programs/shared/skill-flow';
+import { detectPostHogIntegration } from '@programs/detection/integration';
 import type {
   ProgramConfig,
   ProgramReadyContext,
   ProgramStep,
 } from '@programs/program-step';
-import type { WizardSession } from '@lib/wizard-session';
+import type { WizardSession } from '@programs/session/wizard-session';
 import { analytics } from '@utils/analytics';
-import { wizardAbort } from '@utils/wizard-abort';
+import { wizardAbort } from '@host/wizard-abort';
 import { ErrorCodes } from '@shared/errors';
 
 const REPLAY_VISION_REPORT_FILE = 'posthog-replay-vision-report.md';

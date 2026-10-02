@@ -15,7 +15,7 @@ import {
   OutroKind,
   type AskAnswers,
   type PendingQuestion,
-} from '@lib/wizard-session';
+} from '@programs/session/wizard-session';
 import { ErrorCodes, WizardError } from '@shared/errors';
 import { AGENT_ERROR_CODE } from '@agent/error-map';
 import { AgentErrorType } from '@agent/signals';

@@ -3,20 +3,21 @@ import { detectFramework } from '@programs/detection/index';
 import { scopeInstallDirToProject } from '@programs/detection/project-scope';
 import { FRAMEWORK_REGISTRY } from '@programs/frameworks/registry';
 import type { ProgramRun } from '@programs/program-run';
-import { AGENT_SKILL_STEPS } from '@programs/agent-skill/steps';
-import { getContentBlocks } from '@ui/tui/decks/error-tracking/index';
-import { getTips } from '@ui/tui/decks/error-tracking/tips';
+import { AGENT_SKILL_STEPS } from '@tui/programs/shared/skill-flow';
+import { PICK_PROJECT_STEP } from '@tui/programs/error-tracking/flow';
+import { getContentBlocks } from '@tui/programs/error-tracking/deck/index';
+import { getTips } from '@tui/programs/error-tracking/deck/tips';
 import {
   ERROR_TRACKING_UNSUPPORTED,
   errorTrackingProjectDir,
   gatherErrorTrackingContext,
 } from '@programs/error-tracking/detect-agentic';
 import type { ProgramConfig, ProgramStep } from '@programs/program-step';
-import type { WizardSession } from '@lib/wizard-session';
+import type { WizardSession } from '@programs/session/wizard-session';
 import type { CiRunnerContext, RunnerContext } from '@programs/runner-context';
 import { preinstallPostHogCliOnce } from '@programs/shared/posthog-cli-preinstall';
 import { analytics } from '@utils/analytics';
-import { wizardAbort } from '@utils/wizard-abort';
+import { wizardAbort } from '@host/wizard-abort';
 import { ErrorCodes } from '@shared/errors';
 
 const ERROR_TRACKING_REPORT_FILE = 'posthog-error-tracking-report.md';
@@ -71,18 +72,6 @@ function maybePreinstallPostHogCli(
     log,
   );
 }
-
-/**
- * After login, the scan lists the repo's projects and the user picks one, as in
- * the legacy upload-source-maps program. The pick sets the framework preflight
- * resolves task skills against, and the project path the run is scoped to.
- */
-const PICK_PROJECT_STEP: ProgramStep = {
-  id: 'detect',
-  label: 'Detecting projects',
-  screenId: 'error-tracking-detect',
-  isComplete: (session) => session.integration != null,
-};
 
 const ERROR_TRACKING_STEPS: ProgramStep[] = AGENT_SKILL_STEPS.flatMap(
   (step): ProgramStep[] => {

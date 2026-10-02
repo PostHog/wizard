@@ -19,7 +19,7 @@ import {
   getSkillsBaseUrl,
 } from '@shared/constants';
 import { initLocalDev, POSTHOG_LOCAL_URL } from '@shared/local-dev';
-import { getOrAskForProjectData } from '@utils/setup-utils';
+import { getOrAskForProjectData } from '@tui/auth/project-data';
 
 // Point PostHog, skills and MCP at the local stack, like --local-posthog --local-context-mill --local-mcp.
 initLocalDev({ localPosthog: true, localContextMill: true, localMcp: true });

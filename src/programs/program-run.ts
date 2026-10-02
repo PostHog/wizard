@@ -6,7 +6,10 @@
  */
 
 import type { AgentRunDefinition } from '@agent/types';
-import type { Credentials, WizardSession } from '@lib/wizard-session';
+import type {
+  Credentials,
+  WizardSession,
+} from '@programs/session/wizard-session';
 
 export interface ProgramRun extends AgentRunDefinition {
   /** Runs after agent completes, before outro (e.g. env var upload). */
