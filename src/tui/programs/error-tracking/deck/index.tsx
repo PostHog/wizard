@@ -8,5 +8,5 @@ export const getContentBlocks = (store?: WizardStore): ContentBlock[] =>
   buildSourceMapsDeck(store, {
     intro: "I'm wiring PostHog Error Tracking into your project.",
     wiring:
-      'If your platform ships minified code or stripped binaries, I also hook source-map or debug-symbol upload into your build, tied to each release you ship.',
+      'If your platform ships minified code or stripped binaries, I also hook source-map or debug-symbol upload into your build, tied to each release you ship. On Python, Ruby and PHP, I link each production deploy to its release instead.',
   });
