@@ -1,7 +1,7 @@
 import {
   MCP_ANALYTICS_ABORT_CASES,
-  mcpAnalyticsConfig,
-} from '@programs/mcp-analytics/index';
+  config as mcpAnalytics,
+} from '@programs/mcp-analytics';
 
 describe('MCP_ANALYTICS_ABORT_CASES', () => {
   // These are the exact `[ABORT] <reason>` strings the mcp-analytics skill
@@ -37,11 +37,11 @@ describe('MCP_ANALYTICS_ABORT_CASES', () => {
   });
 });
 
-describe('mcpAnalyticsConfig', () => {
+describe('mcp-analytics config', () => {
   it('wires the mcp-analytics abort cases into the run config', () => {
     // `run` is statically a defined object for this program (createSkillProgram
     // always sets it, and never uses the session-derived function form).
-    const run = mcpAnalyticsConfig.run;
+    const run = mcpAnalytics.run;
     if (!run || typeof run === 'function') {
       throw new Error('expected a static run object');
     }

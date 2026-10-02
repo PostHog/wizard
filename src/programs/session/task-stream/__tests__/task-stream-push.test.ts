@@ -1,22 +1,15 @@
-import { TaskStreamPush } from '@programs/session/task-stream/task-stream-push';
-import {
-  StreamEvent,
-  StreamTaskStatus,
-} from '@programs/session/task-stream/types';
-import type {
-  TaskStreamDestination,
-  TaskStreamUpdate,
-} from '@programs/session/task-stream/types';
-import type { WizardStore, TaskItem } from '@tui/store';
-import { TaskStatus } from '@ui/wizard-ui';
-import {
-  RunPhase,
-  type PendingQuestion,
-} from '@programs/session/wizard-session';
+import { TaskStreamPush } from '../task-stream-push';
+import { StreamEvent, StreamTaskStatus } from '../types';
+import type { TaskStreamDestination, TaskStreamUpdate } from '../types';
+import type { SessionStore } from '../../session-store';
+import type { TaskItem } from '@programs/session/session-store';
+import { TaskStatus } from '@shared/task-status';
+import { RunPhase } from '@shared/run-state';
+import { type PendingQuestion } from '@agent/types';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { EVENT_PLAN_FILE } from '@programs/posthog-integration/constants';
+import { EVENT_PLAN_FILE } from '@shared/constants';
 
 type Listener = () => void;
 
@@ -97,7 +90,7 @@ function createMockStore(overrides: Partial<MockStoreState> = {}) {
     },
   };
 
-  return store as typeof store & WizardStore;
+  return store as typeof store & SessionStore;
 }
 
 function createMockDestination(name = 'test'): TaskStreamDestination & {

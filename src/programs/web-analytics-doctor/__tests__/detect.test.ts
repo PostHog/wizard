@@ -3,10 +3,10 @@ import * as path from 'path';
 import * as os from 'os';
 import {
   detectWebAnalyticsPrerequisites,
-  webAnalyticsDoctorConfig,
+  config as webAnalyticsDoctor,
   WEB_ANALYTICS_ABORT_CASES,
-} from '@programs/web-analytics-doctor/index';
-import { WIZARD_TOOL_NAMES } from '@agent/tools';
+} from '@programs/web-analytics-doctor';
+import { WIZARD_TOOL_NAMES } from '@agent';
 import { buildSession } from '@programs/session/wizard-session';
 
 function makeTmpDir(): string {
@@ -111,16 +111,16 @@ describe('WEB_ANALYTICS_ABORT_CASES', () => {
   });
 });
 
-describe('webAnalyticsDoctorConfig', () => {
+describe('web-analytics-doctor config', () => {
   it('keeps wizard_ask enabled so the user can pick which fixes to apply', () => {
-    expect(webAnalyticsDoctorConfig.disallowedTools ?? []).not.toContain(
+    expect(webAnalyticsDoctor.disallowedTools ?? []).not.toContain(
       WIZARD_TOOL_NAMES.wizardAsk,
     );
   });
 
   it('wires the web-analytics-doctor skill and CLI command', () => {
-    expect(webAnalyticsDoctorConfig.command).toBe('web-analytics');
-    expect(webAnalyticsDoctorConfig.skillId).toBe('web-analytics-doctor');
-    expect(webAnalyticsDoctorConfig.id).toBe('web-analytics-doctor');
+    expect(webAnalyticsDoctor.command).toBe('web-analytics');
+    expect(webAnalyticsDoctor.skillId).toBe('web-analytics-doctor');
+    expect(webAnalyticsDoctor.id).toBe('web-analytics-doctor');
   });
 });

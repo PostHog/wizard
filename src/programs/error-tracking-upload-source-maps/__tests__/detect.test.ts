@@ -4,7 +4,7 @@ import * as os from 'os';
 import {
   detectSourceMapsPrerequisites,
   SOURCE_MAPS_CONTEXT_KEYS,
-} from '@programs/error-tracking-upload-source-maps/index';
+} from '@programs/error-tracking-upload-source-maps';
 import { buildSession } from '@programs/session/wizard-session';
 
 function makeTmpDir(): string {

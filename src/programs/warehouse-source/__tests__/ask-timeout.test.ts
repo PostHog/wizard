@@ -7,8 +7,8 @@
  * The command was on the 5-minute default, so the fallback route gave the
  * user a quarter of the time the in-run prompt does for identical questions.
  */
+import { testRunnerContext } from '@programs/shared/__tests__/runner-context.no-jest';
 import type { WizardSession } from '@programs/session/wizard-session';
-import { testRunnerContext } from '../../../../test/runner-context';
 
 vi.mock('@utils/analytics', () => ({
   analytics: {
@@ -19,11 +19,11 @@ vi.mock('@utils/analytics', () => ({
   },
 }));
 
-import { warehouseSourceConfig } from '@programs/warehouse-source/index';
+import { config as warehouseSource } from '@programs/warehouse-source';
 import {
-  LONGER_ASK_TIMEOUT_MS,
   DEFAULT_ASK_TIMEOUT_MS,
-} from '@agent/wizard-ask-bridge';
+  LONGER_ASK_TIMEOUT_MS,
+} from '@shared/ask-policy';
 
 function session(): WizardSession {
   return { installDir: '/tmp/app', frameworkContext: {} } as WizardSession;
@@ -31,7 +31,7 @@ function session(): WizardSession {
 
 describe('warehouse command ask timeout', () => {
   it('gives credential questions the shared allowance, not the default', async () => {
-    const { run } = warehouseSourceConfig;
+    const { run } = warehouseSource;
     const resolved =
       typeof run === 'function'
         ? await run(session(), testRunnerContext())

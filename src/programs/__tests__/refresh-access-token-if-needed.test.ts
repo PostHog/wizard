@@ -1,5 +1,5 @@
 import { rotateCredentials } from '../credentials';
-import { refreshAccessToken } from '@tui/auth/oauth';
+import { refreshAccessToken } from '../oauth/tokens';
 import { OAuthError } from '@utils/oauth-errors';
 import {
   isGrantRevoked,
@@ -12,8 +12,8 @@ import {
 } from '@shared/oauth-session';
 import type { Credentials } from '@shared/api';
 
-vi.mock('@tui/auth/oauth', async (original) => ({
-  ...(await original<typeof import('@tui/auth/oauth')>()),
+vi.mock(import('../oauth/tokens'), async (original) => ({
+  ...(await original()),
   refreshAccessToken: vi.fn(),
 }));
 vi.mock('@utils/debug', () => ({ logToFile: vi.fn() }));
@@ -21,8 +21,6 @@ vi.mock('@utils/analytics', () => ({
   analytics: { wizardCapture: vi.fn() },
   groupsFromUser: vi.fn(),
 }));
-// The real @utils/oauth loads the UI module.
-vi.mock('@ui', () => ({ getUI: vi.fn() }));
 
 const mockedRefresh = refreshAccessToken as Mock;
 

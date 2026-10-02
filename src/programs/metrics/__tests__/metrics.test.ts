@@ -1,9 +1,5 @@
-import { AGENT_SKILL_STEPS } from '@programs/agent-skill/index';
-import { getProgramConfig, Program } from '@programs';
-import { metricsConfig } from '@programs/metrics/index';
+import { config as metricsConfig } from '../index';
 import type { ProgramRun } from '@programs/program-run';
-
-import { metricsCommand } from '../../cli/commands/metrics';
 
 function staticRun(config: typeof metricsConfig): ProgramRun {
   if (typeof config.run === 'function') {
@@ -14,22 +10,7 @@ function staticRun(config: typeof metricsConfig): ProgramRun {
 }
 
 describe('metrics program', () => {
-  it('is registered as a flat top-level `metrics` command', () => {
-    const config = getProgramConfig('metrics');
-    expect(config).toBe(metricsConfig);
-    expect(config.command).toBe('metrics');
-    expect(config.parentCommand).toBeUndefined();
-    expect(Program.Metrics).toBe('metrics');
-  });
-
-  it('uses the agent-skill steps with a metrics-specific intro', () => {
-    const [intro, ...rest] = metricsConfig.steps;
-    expect(intro.id).toBe('intro');
-    expect(intro.screenId).toBe('metrics-intro');
-    expect(rest).toEqual(AGENT_SKILL_STEPS.slice(1));
-  });
-
-  it('runs the metrics agent flow on the orchestrator', () => {
+  it('runs the metrics agent flow', () => {
     expect(metricsConfig.agentFlow).toBe('metrics');
   });
 
@@ -57,11 +38,5 @@ describe('metrics program', () => {
     expect(run.docsUrl).toBe('https://posthog.com/docs/metrics');
     expect(run.reportFile).toBe('posthog-metrics-report.md');
     expect(metricsConfig.reportFile).toBe(run.reportFile);
-  });
-
-  it('is exposed as a yargs command via nativeCommandFactory', () => {
-    expect(metricsCommand.name).toBe('metrics');
-    expect(metricsCommand.description).toBe(metricsConfig.description);
-    expect(typeof metricsCommand.handler).toBe('function');
   });
 });

@@ -1,4 +1,4 @@
-import type { CiRunnerContext, RunnerContext } from '@programs/types';
+import type { CiRunnerContext, RunnerContext } from '@programs/runner-context';
 
 export function testRunnerContext(session?: {
   frameworkContext: Record<string, unknown>;
@@ -9,15 +9,22 @@ export function testRunnerContext(session?: {
     setFrameworkContext: (key, value) => {
       context[key] = value;
     },
-    log: { warn: () => undefined },
+    log: { info: () => undefined, warn: () => undefined },
+    spinner: () => ({
+      start: () => undefined,
+      stop: () => undefined,
+      message: () => undefined,
+    }),
   };
 }
 
+/** A headless runner that is already logged in. */
 export function testCiRunnerContext(): CiRunnerContext {
   return {
     log: {
       info: () => undefined,
       warn: () => undefined,
     },
+    authenticate: () => Promise.resolve(),
   };
 }
