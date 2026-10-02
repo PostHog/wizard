@@ -22,7 +22,7 @@ import {
   Harness,
   Sequence,
   WIZARD_REMARK_EVENT_NAME,
-  WIZARD_USER_AGENT,
+  wizardUserAgentForProgram,
 } from '@shared/constants';
 import {
   allowsPostHogMcp,
@@ -312,7 +312,10 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
         const mcp = await setupPostHogMcp({
           mcpUrl: boot.credentials.host.mcpUrl,
           accessToken: await currentAccessToken(boot.credentials),
-          userAgent: WIZARD_USER_AGENT,
+          // Same `program:` marker as the linear run, so a task's MCP writes are
+          // attributed to the program that queued it. `anthropic/index.ts` uses
+          // `programId` as the label on the task path too.
+          userAgent: wizardUserAgentForProgram(config.programId),
         });
         extensionFactories.push(mcp.extensionFactory);
         mcpCleanup = mcp.cleanup;

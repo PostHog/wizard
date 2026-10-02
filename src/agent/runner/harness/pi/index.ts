@@ -19,7 +19,7 @@ import {
   Harness,
   Sequence,
   WIZARD_REMARK_EVENT_NAME,
-  WIZARD_USER_AGENT,
+  wizardUserAgentForProgram,
 } from '@shared/constants';
 import { analytics } from '@utils/analytics';
 import { AgentErrorType } from '@agent/agent-interface';
@@ -415,16 +415,22 @@ export const piBackend: AgentHarness = {
         try {
           const { setupPostHogMcp, fetchInstructions } = await import('./mcp');
           const mcpToken = await currentAccessToken(boot.credentials);
+          // The backend reads the `program:` marker off this UA to attribute what the run
+          // creates (a self-driving run's warehouse sources become created_via=self_driving).
+          // A plain WIZARD_USER_AGENT here records them as generic wizard work.
+          const mcpUserAgent = wizardUserAgentForProgram(
+            config.integrationLabel,
+          );
           // Overlaps the network handshake with the adapter's jiti load.
           const instructionsPromise = fetchInstructions(
             boot.credentials.host.mcpUrl,
             mcpToken,
-            WIZARD_USER_AGENT,
+            mcpUserAgent,
           );
           const mcp = await setupPostHogMcp({
             mcpUrl: boot.credentials.host.mcpUrl,
             accessToken: mcpToken,
-            userAgent: WIZARD_USER_AGENT,
+            userAgent: mcpUserAgent,
           });
           extensionFactories.push(mcp.extensionFactory);
           mcpCleanup = mcp.cleanup;
