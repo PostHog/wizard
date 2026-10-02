@@ -185,6 +185,77 @@ describe('runAgent', () => {
     ).toMatchObject({ behavior: 'allow' });
   });
 
+  it('keeps pre-allowed tools off real .env files', async () => {
+    mockQuery.mockImplementation(function* () {
+      yield { type: 'result', subtype: 'success' };
+    });
+    await runAgent(
+      defaultAgentConfig,
+      'Integrate',
+      defaultOptions,
+      mockSpinner,
+      { requestRemark: false },
+    );
+    const { allowedTools, hooks } = mockQuery.mock.calls[0][0].options;
+    expect(allowedTools).toEqual(
+      expect.arrayContaining(['Read', 'Grep', 'Bash']),
+    );
+    // The SDK skips canUseTool for allowedTools, so only hooks see these calls.
+    const preToolUse = async (tool_name: string, tool_input: object) => {
+      const outputs = [];
+      for (const matcher of hooks.PreToolUse) {
+        for (const hook of matcher.hooks) {
+          outputs.push(
+            await hook({ tool_name, tool_input }, undefined, {
+              signal: new AbortController().signal,
+            }),
+          );
+        }
+      }
+      return outputs;
+    };
+    const blocked = (outputs: Record<string, unknown>[]) =>
+      outputs.some((o) => o.decision === 'block');
+
+    expect(blocked(await preToolUse('Read', { file_path: '/x/.env' }))).toBe(
+      true,
+    );
+    expect(
+      blocked(await preToolUse('Grep', { pattern: 'K', path: '.env' })),
+    ).toBe(true);
+    expect(
+      blocked(await preToolUse('Bash', { command: 'cat .env.local' })),
+    ).toBe(true);
+    expect(
+      blocked(await preToolUse('Bash', { command: 'cat .env.example' })),
+    ).toBe(false);
+    // Grep searches dotfiles, so a directory search must skip .env files.
+    expect(
+      await preToolUse('Grep', { pattern: 'K', path: '.' }),
+    ).toContainEqual({
+      hookSpecificOutput: {
+        hookEventName: 'PreToolUse',
+        updatedInput: { pattern: 'K', path: '.', glob: '!**/.env*' },
+      },
+    });
+  });
+
+  it('loads project skills and CLAUDE.md without running project hooks', async () => {
+    mockQuery.mockImplementation(function* () {
+      yield { type: 'result', subtype: 'success' };
+    });
+    await runAgent(
+      defaultAgentConfig,
+      'Integrate',
+      defaultOptions,
+      mockSpinner,
+      { requestRemark: false },
+    );
+    const options = mockQuery.mock.calls[0][0].options;
+    expect(options.settingSources).toEqual(['project']);
+    expect(options.settings).toMatchObject({ disableAllHooks: true });
+  });
+
   it('preserves structured-output exhaustion when the SDK throws after its result', async () => {
     const result = {
       type: 'result',

@@ -43,6 +43,7 @@ import {
   createPreToolUseYaraHooks,
   createPostToolUseYaraHooks,
   prewarmYaraScanner,
+  type HookCallbackMatcher,
 } from '@agent/yara-hooks';
 import { createTriageLLMProvider } from './triage-provider';
 import type { LLMProvider } from '@posthog/warlock';
@@ -487,9 +488,7 @@ export function wizardCanUseTool(
     return { behavior: 'allow', updatedInput: input };
   }
 
-  // Block Grep when it directly targets a .env file.
-  // Note: ripgrep skips dotfiles (like .env*) by default during directory traversal,
-  // so broad searches like `Grep { path: "." }` are already safe.
+  // Block Grep when it directly targets a .env file; createEnvFileHook covers directory searches.
   if (toolName === 'Grep') {
     const grepPath = typeof input.path === 'string' ? input.path : '';
     if (grepPath && path.basename(grepPath).startsWith('.env')) {
@@ -527,6 +526,59 @@ export function wizardCanUseTool(
     command,
   });
   return { behavior: 'deny', message: decision.message };
+}
+
+/** The first real (non-template) .env file a Bash command names, if any. */
+function envFileInCommand(command: string): string | undefined {
+  return command
+    .split(/[\s;&|<>()'"`=]+/)
+    .map((token) => path.basename(token))
+    .find((name) => name.startsWith('.env') && !isTemplateEnvFileName(name));
+}
+
+/** Holds pre-allowed tools to the .env policy, since the SDK skips canUseTool for allowedTools. */
+export function createEnvFileHook(): HookCallbackMatcher {
+  return {
+    hooks: [
+      (input) => {
+        const toolName = input.tool_name as string;
+        const toolInput = (input.tool_input ?? {}) as Record<string, unknown>;
+        if (toolName === 'Bash') {
+          const command =
+            typeof toolInput.command === 'string' ? toolInput.command : '';
+          const envFile = envFileInCommand(command);
+          if (!envFile) return Promise.resolve({});
+          logToFile(`Denying Bash on env file: ${command}`);
+          return Promise.resolve({
+            decision: 'block',
+            reason: `Bash on ${envFile} is not allowed. Use the wizard-tools MCP server (check_env_keys / set_env_values) to read or modify environment variables.`,
+          });
+        }
+        if (!['Read', 'Write', 'Edit', 'Grep'].includes(toolName)) {
+          return Promise.resolve({});
+        }
+        const decision = wizardCanUseTool(toolName, toolInput);
+        if (decision.behavior === 'deny') {
+          return Promise.resolve({
+            decision: 'block',
+            reason: decision.message,
+          });
+        }
+        if (toolName !== 'Grep') return Promise.resolve({});
+        // Grep searches dotfiles, so a directory search must skip .env files.
+        const glob = typeof toolInput.glob === 'string' ? toolInput.glob : '';
+        return Promise.resolve({
+          hookSpecificOutput: {
+            hookEventName: 'PreToolUse',
+            updatedInput: {
+              ...toolInput,
+              glob: [glob, '!**/.env*'].filter(Boolean).join(' '),
+            },
+          },
+        });
+      },
+    ],
+  };
 }
 
 /**
@@ -1068,6 +1120,8 @@ export async function runAgent(
               },
           // Load skills from project's .claude/skills/ directory
           settingSources: agentConfig.readOnly ? [] : ['project'],
+          // Project hooks would run as the developer outside the fence and YARA; SDK hooks still fire.
+          settings: { disableAllHooks: true },
           // Enable all discovered skills. Omitting this is NOT "skills off" —
           // it just means no SDK auto-config — so we set 'all' explicitly to
           // preserve the prior behavior where 'Skill' in allowedTools exposed
@@ -1210,9 +1264,12 @@ export async function runAgent(
           },
           // Stop hook: collect remark, then allow stop
           hooks: {
-            PreToolUse: warlockDisabled
-              ? []
-              : createPreToolUseYaraHooks(triageProvider, onYaraTerminate),
+            PreToolUse: [
+              createEnvFileHook(),
+              ...(warlockDisabled
+                ? []
+                : createPreToolUseYaraHooks(triageProvider, onYaraTerminate)),
+            ],
             PostToolUse: warlockDisabled
               ? []
               : createPostToolUseYaraHooks(triageProvider, onYaraTerminate),
