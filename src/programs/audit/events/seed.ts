@@ -1,4 +1,4 @@
-import type { AuditCheck } from '@programs/audit/types';
+import type { AuditCheck } from '../types.js';
 
 /**
  * The 7 phases the events-audit skill marches through. One check per area

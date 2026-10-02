@@ -1,6 +1,6 @@
 import { AgentSignals } from '@agent';
 import type { PromptContext } from '@agent/types';
-import type { DetectedSource } from '@programs/warehouse-sources/types';
+import type { DetectedSource } from '../warehouse-sources/types';
 
 /**
  * Render the deterministic codebase-tool scan for the prompt. STEP 4 and
