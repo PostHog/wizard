@@ -26,7 +26,7 @@ export const SessionTimeoutScreen = ({ store }: SessionTimeoutScreenProps) => {
     () => store.getSnapshot(),
   );
 
-  useDismissOnAnyKey(() => process.exit(1));
+  useDismissOnAnyKey(() => store.requestExit(1));
 
   return (
     <Box flexDirection="column" flexGrow={1}>

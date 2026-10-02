@@ -27,9 +27,9 @@ export const AuthErrorScreen = ({ store }: AuthErrorScreenProps) => {
     () => store.getSnapshot(),
   );
 
-  useDismissOnAnyKey(() => process.exit(1));
+  useDismissOnAnyKey(() => store.requestExit(1));
 
-  const detail = store.session.authErrorDetail;
+  const detail = store.authErrorDetail;
   const hasSettingsConflict = detail?.hasSettingsConflict ?? true;
   const conflicts = detail?.conflicts ?? [];
   const usingManagedLogin = detail?.usingManagedLogin ?? false;

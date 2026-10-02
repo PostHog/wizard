@@ -1,7 +1,4 @@
-import {
-  NO_DEFAULT_LIMIT,
-  PRICING_LONG,
-} from '../../../../programs/self-driving/pricing.js';
+import { NO_DEFAULT_LIMIT, PRICING_LONG } from '@programs/self-driving';
 
 /**
  * Sidebar tips for the self-driving run — short footnotes on the

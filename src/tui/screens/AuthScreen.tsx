@@ -45,7 +45,7 @@ export const AuthScreen = ({ store }: AuthScreenProps) => {
   // While the OAuth flow is waiting (loginUrl set), let the user paste the
   // callback URL/code by hand — the fallback for headless/remote shells where
   // the browser can't reach the local callback server.
-  const loginUrl = session.loginUrl;
+  const loginUrl = store.loginUrl;
   const canPasteCode = Boolean(loginUrl);
 
   // The URL renders on its own line; ScreenContainer clamps content to

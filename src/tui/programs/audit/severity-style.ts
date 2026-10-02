@@ -1,4 +1,4 @@
-import type { AuditStatus } from '@shared/audit-ledger';
+import type { AuditStatus } from '@programs/audit';
 
 export interface AuditSeverityStyle {
   glyph: string;

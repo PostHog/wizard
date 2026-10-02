@@ -9,7 +9,7 @@
 import { Box, Text } from 'ink';
 import { useSyncExternalStore } from 'react';
 import type { WizardStore } from '@tui/store';
-import { OutroKind } from '@programs/session/wizard-session';
+import { OutroKind } from '@shared/outro';
 import { Colors } from '@tui/styles';
 import { withUtm } from '@utils/links';
 import { LinkText } from '@tui/primitives/LinkText';
@@ -25,7 +25,7 @@ export const OutroScreen = ({ store }: OutroScreenProps) => {
     () => store.getSnapshot(),
   );
 
-  // Dismissal here chains into ExitScreen's process.exit(), so a modifier
+  // Dismissal here chains into ExitScreen's exit request, so a modifier
   // combo (e.g. Ctrl+T toggling the token/cost HUD) must not trigger it too.
   useDismissOnAnyKey(() => store.setOutroDismissed());
 
