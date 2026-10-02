@@ -296,19 +296,6 @@ describe('pi-security: extension state machine (fail-closed + runaway + latch)',
     ).toEqual({});
   });
 
-  test('applies the policy glob so a folder grep skips .env files', async () => {
-    const { factory } = createSecurityExtension();
-    const { pi, handlers } = fakePi();
-    factory(pi);
-    const event = { toolName: 'grep', input: { pattern: 'KEY', path: '.' } };
-    expect(await handlers.tool_call(event)).toEqual({});
-    expect(event.input).toEqual({
-      pattern: 'KEY',
-      path: '.',
-      glob: '!**/.env*',
-    });
-  });
-
   test('a scanner error on publish_handoff latches and ends the run', async () => {
     // Blocking alone would leave the agent rewording a report forever.
     const { factory, state } = createSecurityExtension();
@@ -853,7 +840,7 @@ describe('read-only runs', () => {
           { path: 'package.json' },
           { readOnly: true },
         ),
-      ).toMatchObject({ block: false });
+      ).toEqual({ block: false });
     }
   });
 });

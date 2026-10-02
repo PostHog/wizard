@@ -185,7 +185,7 @@ describe('runAgent', () => {
     ).toMatchObject({ behavior: 'allow' });
   });
 
-  it('runs the tool policy on pre-allowed tools from the first PreToolUse hook', async () => {
+  it('denies real env files to every tool and runs no project hooks', async () => {
     mockQuery.mockImplementation(function* () {
       yield { type: 'result', subtype: 'success' };
     });
@@ -196,43 +196,17 @@ describe('runAgent', () => {
       mockSpinner,
       { requestRemark: false },
     );
-    const { allowedTools, hooks } = mockQuery.mock.calls[0][0].options;
-    expect(allowedTools).toEqual(expect.arrayContaining(['Read', 'Bash']));
-    // The SDK skips canUseTool for allowedTools, so the policy runs here.
-    const policyHook = (tool_name: string, tool_input: object) =>
-      hooks.PreToolUse[0].hooks[0](
-        { hook_event_name: 'PreToolUse', tool_name, tool_input },
-        undefined,
-        { signal: new AbortController().signal },
-      );
-
-    expect(await policyHook('Read', { file_path: '/x/.env' })).toEqual({
-      hookSpecificOutput: {
-        hookEventName: 'PreToolUse',
-        permissionDecision: 'deny',
-        permissionDecisionReason: expect.stringContaining('.env'),
-      },
-    });
-    expect(await policyHook('Read', { file_path: '/x/app.ts' })).toEqual({});
-    expect(
-      await policyHook('Bash', { command: 'curl https://example.com' }),
-    ).toEqual({});
-  });
-
-  it('loads project skills and CLAUDE.md without running project hooks', async () => {
-    mockQuery.mockImplementation(function* () {
-      yield { type: 'result', subtype: 'success' };
-    });
-    await runAgent(
-      defaultAgentConfig,
-      'Integrate',
-      defaultOptions,
-      mockSpinner,
-      { requestRemark: false },
+    const { settings } = mockQuery.mock.calls[0][0].options;
+    expect(settings.disableAllHooks).toBe(true);
+    expect(settings.permissions.deny).toEqual(
+      expect.arrayContaining([
+        'Read(.env*)',
+        'Read(!.env.example)',
+        'Edit(.env*)',
+        'Edit(!.env.example)',
+        'Read(//**/.env)',
+      ]),
     );
-    const options = mockQuery.mock.calls[0][0].options;
-    expect(options.settingSources).toEqual(['project']);
-    expect(options.settings).toMatchObject({ disableAllHooks: true });
   });
 
   it('preserves structured-output exhaustion when the SDK throws after its result', async () => {

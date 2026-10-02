@@ -319,7 +319,7 @@ export async function* runMcpPromptViaSdk(args: {
         // `~/.claude/settings.json` (apiKeyHelper / env block) can
         // override the OAuth routing we set above.
         settingSources: ['project'],
-        // Project hooks would run as the developer outside the MCP-only gate.
+        // Repo hooks would run as the developer outside the MCP-only gate.
         settings: { disableAllHooks: true },
         // When set, the SDK replays the named session's turns into the
         // new query so the follow-up prompt has full conversation

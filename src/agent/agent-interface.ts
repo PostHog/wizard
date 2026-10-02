@@ -15,7 +15,10 @@ import type {
 import { debug, logToFile, initLogFile, getLogFilePath } from '@utils/debug';
 import type { WizardRunOptions } from '@utils/types';
 import { analytics } from '@utils/analytics';
-import { isTemplateEnvFileName } from '@utils/env-scan';
+import {
+  isTemplateEnvFileName,
+  TEMPLATE_ENV_FILE_NAMES,
+} from '@utils/env-scan';
 import { runtimeEnv } from '@env';
 import type { AioCapture } from '@agent/aio-capture';
 import {
@@ -417,16 +420,10 @@ export function buildAgentEnv(
 // Re-export for backwards compatibility — canonical source is skill-install.ts
 export { isSkillInstallCommand } from '@shared/skill-install';
 
-/** Excludes .env files from a Grep that sets no glob of its own. */
-const ENV_FILES_EXCLUDED_GLOB = '!**/.env*';
-
-/** A .env file name inside a Bash command, captured in group 1. */
-const ENV_FILE_IN_COMMAND = /(?:^|[^\w.-])(\.env[\w.-]*)/g;
-
 /**
  * Permission hook that allows only safe commands. Bash commands are gated by
  * the exact per-manager fence in bash-fence.ts (install/build/typecheck/lint
- * commands, single | tail/head, 2>&1) unless `skipBashFence` is set.
+ * commands, single | tail/head, 2>&1).
  *
  * `wizardAskPending` is true while a wizard_ask overlay is open — when set,
  * Write/Edit calls are denied as a defense-in-depth measure against a
@@ -441,8 +438,6 @@ export function wizardCanUseTool(
     readOnly?: boolean;
     wizardAskPending?: boolean;
     disallowedTools?: readonly string[];
-    /** Anthropic runs Bash without the allowlist and leans on YARA; pi keeps it. */
-    skipBashFence?: boolean;
   } = {},
 ):
   | { behavior: 'allow'; updatedInput: Record<string, unknown> }
@@ -495,24 +490,21 @@ export function wizardCanUseTool(
     return { behavior: 'allow', updatedInput: input };
   }
 
-  // Grep searches dotfiles: deny a path or glob naming .env, and exclude .env when no glob narrows it.
+  // Block Grep when it directly targets a .env file.
+  // Note: ripgrep skips dotfiles (like .env*) by default during directory traversal,
+  // so broad searches like `Grep { path: "." }` are already safe.
   if (toolName === 'Grep') {
-    const glob = typeof input.glob === 'string' ? input.glob : '';
-    const target = [input.path, glob]
-      .map((value) => path.basename(typeof value === 'string' ? value : ''))
-      .find((name) => name.startsWith('.env'));
-    if (target) {
-      logToFile(`Denying Grep on env file: ${target}`);
+    const grepPath = typeof input.path === 'string' ? input.path : '';
+    if (grepPath && path.basename(grepPath).startsWith('.env')) {
+      logToFile(`Denying Grep on env file: ${grepPath}`);
       return {
         behavior: 'deny',
-        message: `Grep on ${target} is not allowed. Use the wizard-tools MCP server (check_env_keys) to check environment variables.`,
+        message: `Grep on ${path.basename(
+          grepPath,
+        )} is not allowed. Use the wizard-tools MCP server (check_env_keys) to check environment variables.`,
       };
     }
-    if (glob) return { behavior: 'allow', updatedInput: input };
-    return {
-      behavior: 'allow',
-      updatedInput: { ...input, glob: ENV_FILES_EXCLUDED_GLOB },
-    };
+    return { behavior: 'allow', updatedInput: input };
   }
 
   // Allow all other non-Bash tools
@@ -523,19 +515,6 @@ export function wizardCanUseTool(
   const command = (
     typeof input.command === 'string' ? input.command : ''
   ).trim();
-
-  // Real .env files stay behind wizard-tools on both harnesses; templates are fine.
-  const envFile = [...command.matchAll(ENV_FILE_IN_COMMAND)]
-    .map((match) => match[1])
-    .find((name) => !isTemplateEnvFileName(name));
-  if (envFile) {
-    logToFile(`Denying Bash on env file: ${command}`);
-    return {
-      behavior: 'deny',
-      message: `Bash on ${envFile} is not allowed. Use the wizard-tools MCP server (check_env_keys / set_env_values) to read or modify environment variables.`,
-    };
-  }
-  if (context.skipBashFence) return { behavior: 'allow', updatedInput: input };
 
   const decision = evaluateBashCommand(command);
   if (decision.allowed) {
@@ -551,41 +530,6 @@ export function wizardCanUseTool(
     command,
   });
   return { behavior: 'deny', message: decision.message };
-}
-
-/** Runs the tool policy on every call, since the SDK skips canUseTool for allowedTools and acceptEdits. */
-function createToolPolicyHook(
-  policyContext: () => Parameters<typeof wizardCanUseTool>[2],
-): import('@anthropic-ai/claude-agent-sdk').HookCallbackMatcher {
-  return {
-    hooks: [
-      (input) => {
-        if (input.hook_event_name !== 'PreToolUse') return Promise.resolve({});
-        const toolInput = (input.tool_input ?? {}) as Record<string, unknown>;
-        const decision = wizardCanUseTool(
-          input.tool_name,
-          toolInput,
-          policyContext(),
-        );
-        if (decision.behavior === 'deny') {
-          return Promise.resolve({
-            hookSpecificOutput: {
-              hookEventName: 'PreToolUse',
-              permissionDecision: 'deny',
-              permissionDecisionReason: decision.message,
-            },
-          });
-        }
-        if (decision.updatedInput === toolInput) return Promise.resolve({});
-        return Promise.resolve({
-          hookSpecificOutput: {
-            hookEventName: 'PreToolUse',
-            updatedInput: decision.updatedInput,
-          },
-        });
-      },
-    ],
-  };
 }
 
 /**
@@ -1069,14 +1013,6 @@ export async function runAgent(
 
     const triageProvider = agentConfig.triageProvider;
 
-    // One context for the policy hook and canUseTool.
-    const policyContext = () => ({
-      readOnly: agentConfig.readOnly,
-      wizardAskPending: agentConfig.getPendingQuestion?.() != null,
-      disallowedTools: agentConfig.disallowedTools,
-      skipBashFence: true,
-    });
-
     // Actually stop the run when a YARA hook hits a terminal violation. The SDK
     // ignores `stopReason` from PostToolUse hooks, so we abort the query (like
     // [ABORT]) and return YARA_VIOLATION from the loop-end / catch below.
@@ -1135,8 +1071,12 @@ export async function runAgent(
               },
           // Load skills from project's .claude/skills/ directory
           settingSources: agentConfig.readOnly ? [] : ['project'],
-          // Project hooks would run outside the policy and YARA; the hooks passed below still fire.
-          settings: { disableAllHooks: true },
+          // The SDK skips canUseTool for allowed tools, so env files are denied as rules, which
+          // the sandbox applies to commands too. Repo hooks would run outside the wizard's checks.
+          settings: {
+            disableAllHooks: true,
+            permissions: { deny: [...ENV_FILE_DENY_RULES] },
+          },
           // Enable all discovered skills. Omitting this is NOT "skills off" —
           // it just means no SDK auto-config — so we set 'all' explicitly to
           // preserve the prior behavior where 'Skill' in allowedTools exposed
@@ -1246,7 +1186,11 @@ export async function runAgent(
             const result = wizardCanUseTool(
               toolName,
               input as Record<string, unknown>,
-              policyContext(),
+              {
+                readOnly: agentConfig.readOnly,
+                wizardAskPending: agentConfig.getPendingQuestion?.() != null,
+                disallowedTools: agentConfig.disallowedTools,
+              },
             );
             logToFile('canUseTool result:', result);
             return Promise.resolve(result);
@@ -1275,12 +1219,9 @@ export async function runAgent(
           },
           // Stop hook: collect remark, then allow stop
           hooks: {
-            PreToolUse: [
-              createToolPolicyHook(policyContext),
-              ...(warlockDisabled
-                ? []
-                : createPreToolUseYaraHooks(triageProvider, onYaraTerminate)),
-            ],
+            PreToolUse: warlockDisabled
+              ? []
+              : createPreToolUseYaraHooks(triageProvider, onYaraTerminate),
             PostToolUse: warlockDisabled
               ? []
               : createPostToolUseYaraHooks(triageProvider, onYaraTerminate),
@@ -1796,6 +1737,17 @@ export enum TaskTool {
 export const POSTHOG_MCP_SERVER_NAME = 'posthog-wizard';
 
 const READ_ONLY_TOOLS: readonly string[] = ['Read', 'Glob', 'Grep'];
+
+/** wizardCanUseTool's env-file rule as SDK deny rules; above the project, where `!` can't carve, the secret names. */
+const ENV_FILE_DENY_RULES: readonly string[] = ['Read', 'Edit'].flatMap(
+  (tool) => [
+    `${tool}(.env*)`,
+    ...TEMPLATE_ENV_FILE_NAMES.map((name) => `${tool}(!${name})`),
+    ...['.env', '.env.local', '.env.*.local'].map(
+      (name) => `${tool}(//**/${name})`,
+    ),
+  ],
+);
 
 export const BASE_ALLOWED_TOOLS: readonly string[] = [
   'Read',

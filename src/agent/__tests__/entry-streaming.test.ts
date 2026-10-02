@@ -83,7 +83,7 @@ describe('public agent prompt stream', () => {
     ]);
   });
 
-  it('loads project settings without running project hooks', async () => {
+  it('runs no project hooks', async () => {
     query.mockImplementation(function* () {
       yield { type: 'result', subtype: 'success', session_id: 'session-123' };
     });
@@ -91,7 +91,6 @@ describe('public agent prompt stream', () => {
     await consume();
 
     expect(query.mock.calls[0][0].options).toMatchObject({
-      settingSources: ['project'],
       settings: { disableAllHooks: true },
     });
   });

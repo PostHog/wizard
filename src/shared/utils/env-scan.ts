@@ -34,6 +34,14 @@ export function isEnvFileName(name: string): boolean {
   return name.startsWith('.env');
 }
 
+/** Committed template names; see {@link isTemplateEnvFileName}. */
+export const TEMPLATE_ENV_FILE_NAMES: readonly string[] = [
+  '.env.example',
+  '.env.sample',
+  '.env.template',
+  '.env.dist',
+];
+
 /**
  * Committed template files: `.env.example` and its conventional siblings. They
  * document the keys a project expects and hold placeholders, not credentials,
@@ -47,7 +55,7 @@ export function isEnvFileName(name: string): boolean {
  * key, not a project that has it.
  */
 export function isTemplateEnvFileName(name: string): boolean {
-  return /^\.env\.(example|sample|template|dist)$/.test(name);
+  return TEMPLATE_ENV_FILE_NAMES.includes(name);
 }
 
 /**
