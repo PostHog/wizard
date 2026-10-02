@@ -101,6 +101,10 @@ mechanism.
 
 - [agent-interface.ts](../../../../src/agent/agent-interface.ts) configures
   the Anthropic SDK's tool permissions, sandbox, and gateway transport.
+- [bash-fence.ts](../../../../src/agent/bash-fence.ts) is the shared bash
+  allowlist behind `wizardCanUseTool`, including the one `rm` rule: named files
+  inside the project root. In effect it gates Pi, since the Anthropic SDK
+  pre-allows Bash under its OS sandbox.
 - [yara-hooks.ts](../../../../src/agent/yara-hooks.ts) adapts warlock scans to SDK
   tool hooks.
 - [Pi security](../../../../src/agent/runner/harness/pi/security.ts) adapts

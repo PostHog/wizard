@@ -296,6 +296,7 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
       disallowedTools: fenceDisallowList(disallowedTools),
       triageProvider: boot.triageProvider,
       getWizardAskPending: () => askState.pending,
+      workingDirectory: input.installDir,
     });
     const { prewarmYaraScanner } = await import('@agent/yara-hooks');
     void prewarmYaraScanner();

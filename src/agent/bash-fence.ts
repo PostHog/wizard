@@ -12,12 +12,22 @@
  * registry actions (publish/push/deploy), arbitrary-package execution
  * (`npx <anything>` downloads and runs it), and shell injection. Matching is
  * token-exact per manager — keyword prefixes admitted `npm publish` via `pub`.
+ * `rm` is allowed only as a plain delete of named files inside the project
+ * root.
  */
+import fs from 'fs';
+import path from 'path';
 import { LINTING_TOOLS } from '@agent/safe-tools';
+import { isEnvFileNameAnyCase } from '@utils/env-scan';
 
 export type BashFenceDecision =
   | { allowed: true }
   | { allowed: false; message: string; analyticsReason: string };
+
+export type BashFenceOptions = {
+  /** Project root. A plain `rm` of files inside it is allowed; absent, every `rm` is denied. */
+  projectRoot?: string;
+};
 
 const NODE_MANAGERS = new Set(['npm', 'pnpm', 'yarn', 'bun']);
 const GRADLE_MANAGERS = new Set(['gradle', 'gradlew', './gradlew']);
@@ -142,6 +152,11 @@ const GRADLE_TASK_VERBS = ['assemble', 'compile', 'bundle', 'lint'];
 const XCODEBUILD_DENIED_ACTIONS = new Set(['test', 'test-without-building']);
 
 const DANGEROUS_OPERATORS = /[;`$()]/;
+
+// Stricter than DANGEROUS_OPERATORS: a plain `rm` also refuses quotes,
+// escapes, braces, redirects, and any whitespace but a space, so the targets
+// checked here are exactly the words bash passes to rm.
+const RM_SHELL_OPERATORS = /[;&|`$(){}<>'"\\]|[^\S ]/;
 
 const ALLOWED_TOOLS_SUMMARY =
   'Allowed: npm/pnpm/yarn/bun (install|i|ci|add|remove|uninstall|update|view, run <build/lint/typecheck script>), ' +
@@ -308,7 +323,10 @@ function xcodebuildDecision(
 }
 
 /** Grammar decision for a single operator-free, pipe-free command. */
-function commandDecision(command: string): BashFenceDecision {
+function commandDecision(
+  command: string,
+  options: BashFenceOptions,
+): BashFenceDecision {
   const parts = command.split(/\s+/).filter(Boolean);
   const raw = parts[0];
   if (!raw) return denyCommand(command, ALLOWED_TOOLS_SUMMARY);
@@ -324,6 +342,14 @@ function commandDecision(command: string): BashFenceDecision {
   if (GRADLE_MANAGERS.has(bin)) return gradleDecision(parts, command);
   if (MAVEN_MANAGERS.has(bin)) return mavenDecision(parts, command);
   if (bin === 'xcodebuild') return xcodebuildDecision(parts, command);
+  if (bin === 'rm') {
+    return denyCommand(
+      command,
+      options.projectRoot
+        ? 'rm may only delete named files inside the project, as a plain rm [-f] <file...> with nothing else on the line: no recursion, globs, quotes, `..`, redirects, pipes, or .env files.'
+        : 'rm is not available in this session.',
+    );
+  }
   if (bin === 'python' || bin === 'python3') {
     // Django's system check.
     if (parts[1] === 'manage.py' && parts[2] === 'check') {
@@ -443,6 +469,64 @@ function commandDecision(command: string): BashFenceDecision {
   );
 }
 
+/** True when a target names a non-env file strictly inside the project root, with no flag, glob, or `..`. */
+function isDeletableProjectFile(
+  target: string,
+  root: string,
+  p: typeof path,
+): boolean {
+  if (target.startsWith('-')) return false; // a flag, not a file
+  if (/[*?[\]~]/.test(target)) return false; // glob / home expansion
+  if (target.split('/').includes('..')) return false; // bash follows a symlink before `..`
+  if (isEnvFileNameAnyCase(p.basename(target))) return false; // secrets
+
+  // Compare real paths, so a symlinked directory on the way can't lead out.
+  const resolved = p.resolve(root, target);
+  const realTarget = p.join(
+    realPathOf(p.dirname(resolved), p),
+    p.basename(resolved),
+  );
+  return realTarget.startsWith(realPathOf(root, p) + p.sep);
+}
+
+/** `target` with its deepest existing ancestor's symlinks resolved; a missing tail stays as written. */
+function realPathOf(target: string, p: typeof path): string {
+  const missing: string[] = [];
+  for (let dir = target; ; dir = p.dirname(dir)) {
+    try {
+      return p.join(fs.realpathSync.native(dir), ...missing);
+    } catch {
+      if (p.dirname(dir) === dir) return target;
+      missing.unshift(p.basename(dir));
+    }
+  }
+}
+
+/**
+ * A plain `rm [-f] <file...>` whose every target is a file inside the project
+ * root. Path checks run through the host's `path` (win32 on Windows, posix
+ * elsewhere); pi always executes commands via a POSIX bash, so targets use
+ * forward slashes.
+ */
+export function isScopedFileRemoval(
+  command: string,
+  rawRoot: string | undefined,
+  p: typeof path = path,
+): boolean {
+  if (!rawRoot) return false; // no root to contain against
+  const root = p.resolve(rawRoot);
+  const trimmed = command.trim();
+  if (RM_SHELL_OPERATORS.test(trimmed)) return false;
+
+  const [executable, ...args] = trimmed.split(/ +/);
+  if (executable !== 'rm') return false;
+
+  if (args[0] === '-f') args.shift();
+  if (args.length === 0) return false;
+
+  return args.every((arg) => isDeletableProjectFile(arg, root, p));
+}
+
 function tailArgsAreSafe(argStr: string): boolean {
   const args = argStr.trim().split(/\s+/).filter(Boolean);
   for (let i = 0; i < args.length; i++) {
@@ -458,11 +542,19 @@ function tailArgsAreSafe(argStr: string): boolean {
 }
 
 /**
- * Full fence decision for a Bash command: shell-shape gates (separators,
- * redirects, pipes) first, then the per-manager grammar.
+ * Full fence decision for a Bash command: a plain project-scoped `rm` first,
+ * then shell-shape gates (separators, redirects, pipes), then the per-manager
+ * grammar.
  */
-export function evaluateBashCommand(rawCommand: string): BashFenceDecision {
+export function evaluateBashCommand(
+  rawCommand: string,
+  options: BashFenceOptions = {},
+): BashFenceDecision {
   const command = rawCommand.trim();
+  // Before the redirect cleanup below, which would strip `>/dev/null` off an rm.
+  if (isScopedFileRemoval(command, options.projectRoot)) {
+    return { allowed: true };
+  }
   // Newlines separate commands in bash; token splitting would flatten
   // `npm install x\ncurl evil` into one "allowed" command.
   if (/[\r\n]/.test(command)) {
@@ -506,7 +598,7 @@ export function evaluateBashCommand(rawCommand: string): BashFenceDecision {
         'Bash command not allowed. tail/head may only take numeric flags (-n 50, -c 200) — no file arguments.',
       );
     }
-    return commandDecision(base);
+    return commandDecision(base, options);
   }
   if (/[|&]/.test(normalized)) {
     return deny(
@@ -514,5 +606,5 @@ export function evaluateBashCommand(rawCommand: string): BashFenceDecision {
       'Bash command not allowed. Pipes are only permitted as a single | tail/head for output limiting.',
     );
   }
-  return commandDecision(normalized);
+  return commandDecision(normalized, options);
 }

@@ -18,6 +18,7 @@
  */
 
 import path from 'path';
+import { minimatch } from 'minimatch';
 import { walkProjectFiles, safeReadFile } from './bounded-fs';
 
 /**
@@ -32,6 +33,19 @@ export const MAX_ENV_KEY_SET = 5_000;
 /** Files whose names start with `.env` carry env keys (`.env.local`, `.env.production`, …). */
 export function isEnvFileName(name: string): boolean {
   return name.startsWith('.env');
+}
+
+/** {@link isEnvFileName} for access guards: APFS and NTFS open `.ENV` as `.env`. */
+export function isEnvFileNameAnyCase(name: string): boolean {
+  return isEnvFileName(name.toLowerCase());
+}
+
+const ENV_FILE_SAMPLES = ['.env', '.env.local', 'app/.env', 'app/.env.local'];
+
+/** True when a ripgrep `--glob` can select a `.env` file. Such a glob overrides `.gitignore`, and ripgrep's `*` matches dotfiles. */
+export function globCanSelectEnvFile(glob: string): boolean {
+  const options = { dot: true, nocase: true, matchBase: true };
+  return ENV_FILE_SAMPLES.some((name) => minimatch(name, glob, options));
 }
 
 /**
