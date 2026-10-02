@@ -248,18 +248,17 @@ export interface WizardSession {
 
   /**
    * Self-driving only: whether the project has the PostHog GitHub App
-   * connected. `null` until the GitHub gate's first check resolves. Self-driving
-   * cannot research issues or open fixes without it, so the gate holds the run
-   * until this is `true`.
+   * connected. `null` until the GitHub gate's first check resolves. The gate
+   * holds the run until this is `true` or the user skips.
    */
   githubConnected: boolean | null;
 
   /**
-   * Self-driving only: the user answered "I can't connect right now" on the
-   * GitHub gate. Completes the gate step and hides the run step, so the flow
-   * lands on the outro without starting the agent.
+   * Self-driving only: the user picked "Skip for now" on the GitHub gate.
+   * Completes the gate step; the run then starts without GitHub and the
+   * prompt tells the agent to leave GitHub out.
    */
-  githubDeclined: boolean;
+  githubSkipped: boolean;
 
   // Runtime
   readinessResult: WizardReadinessResult | null;
@@ -392,7 +391,7 @@ export function buildSession(args: {
     completedRuns: [],
     selfDrivingHandoffConfirmed: false,
     githubConnected: null,
-    githubDeclined: false,
+    githubSkipped: false,
     loginUrl: null,
     authorizeUrl: null,
     credentials: null,

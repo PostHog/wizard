@@ -2,18 +2,16 @@
  * SelfDrivingGitHubScreen — the "Connect GitHub" gate, shown after the handoff
  * and before the Self-driving run.
  *
- * Self-driving cannot research findings or open fixes without code access, so
- * the GitHub App is a hard requirement. The agent used to ask for it mid-run
- * via `wizard_ask` and abort when the answer came back declined — but a
+ * Self-driving needs code access to research findings and open fixes. The
+ * agent used to ask for the GitHub App mid-run via `wizard_ask` — but a
  * `wizard_ask` timeout resolves to the same cancelled value as a real decline,
- * so a user who stepped away had their run killed as if they had refused.
- * Gating here instead makes the requirement cheap (no agent has started),
- * unambiguous (declining is an explicit pick), and un-timeoutable (the screen
+ * so a user who stepped away was read as refusing. Asking here instead is
+ * unambiguous (skipping is an explicit pick) and un-timeoutable (the screen
  * waits as long as the browser install takes).
  *
- * Unlike SlackConnectScreen this is not skippable: declining ends the run on
- * the outro rather than continuing without it. The connection poll lives in
- * {@link useGithubConnection}.
+ * Like SlackConnectScreen this is skippable: skipping starts the run without
+ * GitHub, and the prompt tells the agent to leave it out. The connection poll
+ * lives in {@link useGithubConnection}.
  */
 
 import { Box, Text } from 'ink';
@@ -27,11 +25,6 @@ import {
   useGithubConnection,
   fetchLoginUrl,
 } from '@tui/programs/self-driving/hooks/useGithubConnection';
-import { OutroKind } from '@programs/session/wizard-session';
-import {
-  GITHUB_REQUIRED_BODY,
-  GITHUB_REQUIRED_MESSAGE,
-} from '@programs/self-driving/detect';
 import { analytics } from '@utils/analytics';
 import { openTrackedLink } from '@utils/links';
 import { getIntegrationAuthorizeUrl } from '@utils/urls';
@@ -42,7 +35,7 @@ interface SelfDrivingGitHubScreenProps {
 
 enum ChoiceValue {
   Open = 'open',
-  Decline = 'decline',
+  Skip = 'skip',
 }
 
 export const SelfDrivingGitHubScreen = ({
@@ -99,32 +92,26 @@ export const SelfDrivingGitHubScreen = ({
     setInstallOpened(true);
   };
 
-  // Declining ends the run here, before the agent starts. The outro carries the
-  // same copy the abort case renders, so both paths read identically.
-  const decline = (): void => {
-    analytics.wizardCapture('github connect declined', {
+  const skip = (): void => {
+    analytics.wizardCapture('github connect skipped', {
       install_opened: installOpened,
     });
-    store.declineGithub({
-      kind: OutroKind.Cancel,
-      message: GITHUB_REQUIRED_MESSAGE,
-      body: GITHUB_REQUIRED_BODY,
-    });
+    store.skipGithub();
   };
 
   const handleSelect = (value: ChoiceValue | ChoiceValue[]): void => {
     const choice = Array.isArray(value) ? value[0] : value;
     if (choice === ChoiceValue.Open) openInstall();
-    else decline();
+    else skip();
   };
 
   useKeyBindings('self-driving-github', [
     {
       match: KeyMatch.Escape,
       label: 'esc',
-      action: connected ? 'continue' : 'end setup',
+      action: connected ? 'continue' : 'skip',
       handler: () => {
-        if (!connected) decline();
+        if (!connected) skip();
       },
     },
   ]);
@@ -166,7 +153,7 @@ export const SelfDrivingGitHubScreen = ({
           <Text>
             {installOpened
               ? "We've opened the PostHog GitHub App install in your browser. Approve access there — we'll detect it automatically and continue."
-              : 'Self-driving needs GitHub access to research findings in your code and open fixes, so setup cannot finish without it.'}
+              : 'Self-driving uses GitHub access to research findings in your code and open fixes. You can skip this and connect it later from your integrations settings.'}
           </Text>
         </Box>
 
@@ -208,8 +195,8 @@ export const SelfDrivingGitHubScreen = ({
                 value: ChoiceValue.Open,
               },
               {
-                label: "I can't connect right now",
-                value: ChoiceValue.Decline,
+                label: 'Skip for now',
+                value: ChoiceValue.Skip,
               },
             ]}
             onSelect={handleSelect}

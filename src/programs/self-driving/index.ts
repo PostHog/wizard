@@ -45,13 +45,17 @@ async function removeInstalledSkill(installDir: string): Promise<void> {
 
 // A session closure (not a static object) so `customPrompt` can read the
 // tools detected in the codebase — written to frameworkContext by the detect
-// step — and hand them to the prompt for STEP 4/STEP 5 prioritisation.
+// step — and the GitHub gate's outcome, and hand them to the prompt.
 const buildRun = (session: WizardSession): Promise<ProgramRun> =>
   Promise.resolve({
     skillId: SELF_DRIVING_SKILL_ID,
     integrationLabel: SELF_DRIVING_SKILL_ID,
     customPrompt: (ctx) =>
-      buildSelfDrivingPrompt(ctx, getSelfDrivingDetectedTools(session)),
+      buildSelfDrivingPrompt(
+        ctx,
+        getSelfDrivingDetectedTools(session),
+        session.githubConnected === true,
+      ),
     successMessage: SUCCESS_MESSAGE,
     reportFile: REPORT_FILE,
     docsUrl: DOCS_URL,

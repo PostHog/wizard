@@ -773,14 +773,9 @@ export class WizardStore {
     this.emitChange();
   }
 
-  /**
-   * Self-driving GitHub gate declined. Carries the outro the user lands on,
-   * since declining ends the flow before the agent runs and there is no abort
-   * case to render one.
-   */
-  declineGithub(outroData: OutroData): void {
-    this.$session.setKey('githubDeclined', true);
-    this.$session.setKey('outroData', outroData);
+  /** Self-driving GitHub gate skipped: the run continues without GitHub. */
+  skipGithub(): void {
+    this.$session.setKey('githubSkipped', true);
     this.emitChange();
   }
 

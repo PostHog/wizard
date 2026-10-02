@@ -5,14 +5,15 @@
 
  Connect GitHub
 
- Self-driving needs GitHub access to research findings in your code and open fixes, so setup cannot finish without it.
+ Self-driving uses GitHub access to research findings in your code and open fixes. You can skip this and connect it
+ later from your integrations settings.
 
  ◆ Grant it the repos you want Self-driving to work with — include this project's repo so it can also watch its issues.
 
  Install it: https://us.posthog.com/api/environments/42/integrations/authorize?kind=github
 
  ▸ Open GitHub App install
-   I can't connect right now
+   Skip for now
 
 
 
@@ -35,5 +36,4 @@
 
 
 
-
-  ↑↓ navigate  esc end setup  enter select
+  ↑↓ navigate  esc skip  enter select

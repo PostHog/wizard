@@ -372,9 +372,8 @@ const MUTATIONS: MutationCase[] = [
     emits: 1,
   },
   {
-    name: 'declineGithub',
-    invoke: (s) =>
-      s.declineGithub({ kind: OutroKind.Cancel, message: 'declined' }),
+    name: 'skipGithub',
+    invoke: (s) => s.skipGithub(),
     emits: 1,
   },
   {
@@ -757,7 +756,7 @@ describe('store invariants', () => {
       }
       session.selfDrivingHandoffConfirmed = flip();
       session.githubConnected = pick([null, true, false]);
-      session.githubDeclined = flip();
+      session.githubSkipped = flip();
       session.readinessResult = flip() ? CLEAN_READINESS : null;
       session.outageDismissed = flip();
       if (flip()) session.frameworkContext = { postHogPresent: flip() };

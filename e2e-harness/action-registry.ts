@@ -14,16 +14,12 @@
 
 import type { WizardStore } from '@tui/store';
 import { ScreenId, Overlay, type ScreenName } from '@tui/router';
-import { McpOutcome, OutroKind } from '@programs/session/wizard-session';
+import { McpOutcome } from '@programs/session/wizard-session';
 import type { AskAnswers } from '@programs/session/wizard-session';
 import {
   SOURCE_MAPS_CONTEXT_KEYS,
   VARIANT_DISPLAY_NAME,
 } from '@programs/error-tracking-upload-source-maps/index';
-import {
-  GITHUB_REQUIRED_BODY,
-  GITHUB_REQUIRED_MESSAGE,
-} from '@programs/self-driving/detect';
 
 /** One commit action legal on a given screen. */
 export interface DriverAction {
@@ -295,14 +291,9 @@ export const ACTION_REGISTRY: Partial<Record<ScreenName, DriverAction[]>> = {
         store.setGithubConnected(params.connected !== false),
     },
     {
-      id: 'decline_github',
-      description: 'Answer "I can\'t connect right now" and end the run',
-      apply: (store) =>
-        store.declineGithub({
-          kind: OutroKind.Cancel,
-          message: GITHUB_REQUIRED_MESSAGE,
-          body: GITHUB_REQUIRED_BODY,
-        }),
+      id: 'skip_github',
+      description: 'Answer "Skip for now" and start the run without GitHub',
+      apply: (store) => store.skipGithub(),
     },
   ],
   [ScreenId.SlackConnect]: [

@@ -214,6 +214,20 @@ describe('selfDrivingConfig', () => {
       'outro',
     ]);
   });
+
+  it('skipping the GitHub gate completes it and still shows the run', () => {
+    const steps = selfDrivingConfig.steps;
+    const gate = steps.find((s) => s.id === 'self-driving-github');
+    const run = steps.find((s) => s.id === 'run');
+    const session = buildSession({});
+    session.githubConnected = false;
+    expect(gate?.isComplete?.(session)).toBe(false);
+
+    session.githubSkipped = true;
+    expect(gate?.isComplete?.(session)).toBe(true);
+    expect(gate?.gate?.(session)).toBe(true);
+    expect(run?.show?.(session) ?? true).toBe(true);
+  });
 });
 
 describe('detectPostHogPresent', () => {

@@ -11,7 +11,7 @@
  * `integrate-run` then runs the real integration program's agent (its own task
  * list) in that project. `self-driving-handoff` then bridges to Self-driving
  * ("PostHog is installed — now set up Self-driving"), then `self-driving-github`
- * gates on the GitHub App connection the run cannot proceed without. No keep-skills step: the setup skill is transient, so postRun removes it.
+ * asks for the GitHub App connection, which the user can skip. No keep-skills step: the setup skill is transient, so postRun removes it.
  */
 
 import type { ProgramStep } from '@programs/program-step';
@@ -113,24 +113,22 @@ export const SELF_DRIVING_PROGRAM: ProgramStep[] = [
     isComplete: (session) => session.selfDrivingHandoffConfirmed,
   },
   {
-    // Hard gate before the agent starts: Self-driving cannot research findings
-    // or open fixes without repo access. Asking here rather than mid-run means
-    // a user who steps away isn't read as declining, and a user who won't
-    // connect hasn't paid for an agent start. Complete once GitHub is
-    // connected, or once the user says they can't — which hides `run` below.
+    // Asked before the agent starts: Self-driving needs repo access to research
+    // findings and open fixes. Asking here rather than mid-run means a user who
+    // steps away isn't read as declining. Complete once GitHub is connected, or
+    // once the user skips — the run then starts without it.
     id: 'self-driving-github',
     label: 'GitHub',
     screenId: 'self-driving-github',
     isComplete: (session) =>
-      session.githubConnected === true || session.githubDeclined,
+      session.githubConnected === true || session.githubSkipped,
     gate: (session) =>
-      session.githubConnected === true || session.githubDeclined,
+      session.githubConnected === true || session.githubSkipped,
   },
   {
     id: 'run',
     label: 'Self-driving',
     screenId: 'run',
-    show: (session) => !session.githubDeclined,
     isComplete: (session) =>
       session.runPhase === RunPhase.Completed ||
       session.runPhase === RunPhase.Error,

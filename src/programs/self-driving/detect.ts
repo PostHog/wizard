@@ -236,7 +236,7 @@ export type SelfDrivingDetectError = {
 /** Headline shown when the run ends because GitHub was not connected. */
 export const GITHUB_REQUIRED_MESSAGE = 'GitHub connection required';
 
-/** Body for {@link GITHUB_REQUIRED_MESSAGE}. Shared by the pre-run gate and the abort case. */
+/** Body for {@link GITHUB_REQUIRED_MESSAGE}, rendered by the abort case. */
 export const GITHUB_REQUIRED_BODY =
   'Self-driving needs GitHub access to research issues in your code and ' +
   'open fixes, so setup cannot finish without it. Nothing was changed. ' +

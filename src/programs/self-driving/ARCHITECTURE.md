@@ -381,9 +381,10 @@ source is enabled.
    run can't reach the agent unapproved. That's why neither the prompt nor the
    skill has an AI-approval step anymore — the gate fully owns consent before
    the agent starts.
-4. **GitHub integration** (kind `"github"`, team or user level) — required and
-   verified by the wizard's pre-run gate, or
-   repo selection degrades to `no_repo`. UI:
+4. **GitHub integration** (kind `"github"`, team or user level) — asked for by
+   the wizard's pre-run gate, which the user can skip. Without it repo
+   selection degrades to `no_repo`, the run leaves GitHub Issues out, and the
+   report carries a connect follow-up. UI:
    `/settings/environment-integrations#integration-github`.
 
 Plus the **Temporal coordinator schedule**

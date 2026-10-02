@@ -40,6 +40,9 @@ function renderDetectedTools(sources: DetectedSource[]): string {
  * it drives STEP 4/STEP 5 tool prioritisation. Empty is fine — the block then
  * tells the agent to use the skill's default ordering.
  *
+ * `githubConnected` is the GitHub gate's outcome: `false` means the user
+ * skipped it, so the agent leaves GitHub out and records a follow-up.
+ *
  * Integration (when the project has no PostHog yet) runs as a separate phase
  * before this — the real integration program, with its own screens and task
  * list — so this prompt only covers the Self-driving steps.
@@ -47,6 +50,7 @@ function renderDetectedTools(sources: DetectedSource[]): string {
 export function buildSelfDrivingPrompt(
   ctx: PromptContext,
   detectedSources: DetectedSource[] = [],
+  githubConnected = true,
 ): string {
   const uiHost = ctx.host.appHost.replace(/\/$/, '');
   const projectBase = `${uiHost}/project/${ctx.projectId}`;
@@ -57,6 +61,15 @@ export function buildSelfDrivingPrompt(
   const optIn = (value: boolean | null | undefined): string =>
     value === true ? 'ON' : value === false ? 'OFF' : 'unknown';
   const optIns = ctx.teamProductOptIns;
+  const githubState = githubConnected
+    ? `The PostHog GitHub App is already connected — the wizard verified it
+before this run started, so never ask the user to connect or install it.`
+    : `The PostHog GitHub App is NOT connected — the user skipped it on the
+wizard's GitHub screen. Never ask them to connect or install it. Leave
+GitHub Issues out of the STEP 5 ask, since it needs the App. In STEP 7,
+report GitHub as skipped and add a follow-up to connect the PostHog GitHub
+App at ${integrationsSettingsUrl}, so Self-driving can research findings in
+the code and open fixes.`;
 
   return `You are setting up PostHog Self-driving for this project: you will enable the right signal sources, tune the scout troop, design custom scouts for what this product uniquely needs, put Replay Vision scanners on its key flows, and hand the user a configured inbox.
 
@@ -98,8 +111,7 @@ Drive the list with TaskUpdate — mark a task in_progress when you start
 it and completed when done. If a step turns out to be a no-op (e.g. a
 product is already enabled), still mark its task completed.
 
-The PostHog GitHub App is already connected — the wizard verified it
-before this run started, so never ask the user to connect or install it.
+${githubState}
 
 Wizard mechanics:
 - Ask the user things ONLY with the wizard_ask MCP tool, and batch

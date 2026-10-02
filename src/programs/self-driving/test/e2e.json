@@ -41,7 +41,7 @@
     },
     {
       "screen": "self-driving-github",
-      "auto": "(external) \u2014 the gate polls /integrations/ until the PostHog GitHub App appears; Self-driving cannot run without it"
+      "auto": "(external) \u2014 the gate polls /integrations/ until the PostHog GitHub App appears, or the user picks \"Skip for now\" and the run starts without it"
     },
     {
       "screen": "run",

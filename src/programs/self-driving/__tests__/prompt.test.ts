@@ -145,3 +145,21 @@ describe('detected-tools block', () => {
     );
   });
 });
+
+describe('buildSelfDrivingPrompt — GitHub gate outcome', () => {
+  it('tells the agent GitHub is connected when the gate verified it', () => {
+    const prompt = buildSelfDrivingPrompt(ctx, [], true);
+    expect(prompt).toContain('The PostHog GitHub App is already connected');
+    expect(prompt).not.toContain('NOT connected');
+  });
+
+  it('tells the agent to leave GitHub out and record a follow-up when skipped', () => {
+    const prompt = buildSelfDrivingPrompt(ctx, [], false);
+    expect(prompt).toContain('The PostHog GitHub App is NOT connected');
+    expect(prompt).toContain('Leave\nGitHub Issues out of the STEP 5 ask');
+    expect(prompt).toContain(
+      'https://us.posthog.com/project/123/settings/environment-integrations',
+    );
+    expect(prompt).not.toContain('The PostHog GitHub App is already connected');
+  });
+});
