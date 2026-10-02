@@ -1,21 +1,29 @@
+/**
+ * Login: resolve the PostHog credentials and project for a run, through the
+ * browser OAuth flow or a provisioning signup. UI-bound, so it
+ * lives with the TUI's store; programs receive credentials, never log in.
+ */
+
 import { withProgress } from '@utils/telemetry';
-import { logToFile } from '@utils/debug';
 import type { CloudRegion, WizardRunOptions } from '@utils/types';
-import { DUMMY_PROJECT_API_KEY, ISSUES_URL } from '@shared/constants';
+import {
+  DUMMY_PROJECT_API_KEY,
+  ISSUES_URL,
+  WIZARD_OAUTH_SCOPES,
+  WIZARD_PROVISIONING_SCOPES,
+} from '@shared/constants';
+import { withScopeAdditions } from '@shared/oauth-scopes';
 import {
   getOAuthScopesForProgram,
   getProvisioningScopesForProgram,
-} from '@programs/oauth/program-scopes';
+} from '@programs';
 import type { ProgramId } from '@programs/types';
 import { analytics } from '@utils/analytics';
-import { getUI } from '@ui';
+import type { WizardStore } from '@tui/store';
 import { HostResolution } from '@shared/host-resolution';
-import { abort, detectOrgAndProject } from '@utils/setup-utils';
-import {
-  assertWizardCompletionScope,
-  missingOAuthScopes,
-  performOAuthFlow,
-} from './oauth';
+import { detectOrgAndProject } from '@utils/setup-utils';
+import { missingOAuthScopes } from '@programs';
+import { assertWizardCompletionScope, performOAuthFlow } from './oauth.js';
 import { resolveGrantedProject } from '@utils/project-resolution';
 import {
   ProvisionedAccountUnreadableError,
@@ -27,19 +35,14 @@ import {
   type ApiUser,
   type ApiProject,
 } from '@shared/api';
-import {
-  fetchProjectDataById,
-  fetchProjectDataWithApiKey,
-} from '@shared/api-key-login';
-import { wizardAbort } from '@host/wizard-abort';
-import { OutroKind } from '@programs/session/wizard-session';
+import { abortOnScreens } from '@tui/abort';
+import { OutroKind } from '@shared/outro';
 
 interface ProjectData {
   projectApiKey: string;
   accessToken: string;
-  /** OAuth refresh token when the grant carried one; absent on the CI api-key path. */
   refreshToken?: string;
-  /** Epoch ms when `accessToken` expires; absent on the CI api-key path. */
+  /** Epoch ms when `accessToken` expires. */
   expiresAt?: number;
   /** Minting OAuth client when it differs from the default login app (provisioning signups). */
   oauthClientId?: string;
@@ -55,8 +58,7 @@ interface ProjectData {
   /**
    * Full user payload from `/api/users/@me/`. Carried through so
    * `getOrAskForProjectData` can forward it to the session as
-   * `session.apiUser`. Null when the request failed or the CI key
-   * lacked permissions.
+   * `session.apiUser`. Null when the request failed.
    */
   user?: ApiUser | null;
   /**
@@ -70,16 +72,18 @@ interface ProjectData {
    * Requested OAuth scopes the grant came back without (consent deselection
    * or ceiling clamp). Forwarded to `session.credentials.missingScopes` so
    * runs can degrade scope-gated steps instead of failing on a 403. Empty on
-   * CI api-key and signup-provisioning paths.
+   * the signup-provisioning path.
    */
   missingScopes?: readonly string[];
 }
 
 /**
- * Get project data for the wizard via OAuth or CI API key.
+ * Get project data for the wizard via OAuth or a provisioning signup.
  */
 export async function getOrAskForProjectData(
-  _options: Pick<WizardRunOptions, 'signup' | 'ci' | 'apiKey' | 'projectId'> & {
+  _options: Pick<WizardRunOptions, 'signup' | 'projectId'> & {
+    /** Where login progress and errors are shown. */
+    store: WizardStore;
     email?: string;
     region?: CloudRegion;
     /** Explicit base URL override (`--base-url`, from `session.baseUrl`). When
@@ -91,14 +95,15 @@ export async function getOrAskForProjectData(
      *  `getOAuthScopesForProgram`. Omitted → default
      *  `WIZARD_OAUTH_SCOPES`. Threaded into `askForWizardLogin`. */
     programId?: ProgramId | null;
+    /** A tool's or a screen's own widening of the base scopes; wins over `programId`'s. */
+    scopeAdditions?: readonly string[];
   },
 ): Promise<{
   host: HostResolution;
   projectApiKey: string;
   accessToken: string;
-  /** OAuth refresh token when the grant carried one; absent on the CI api-key path. */
   refreshToken?: string;
-  /** Epoch ms when `accessToken` expires; absent on the CI api-key path. */
+  /** Epoch ms when `accessToken` expires. */
   expiresAt?: number;
   /** Minting OAuth client when it differs from the default login app (provisioning signups). */
   oauthClientId?: string;
@@ -106,68 +111,10 @@ export async function getOrAskForProjectData(
   roleAtOrganization: string | null;
   user: ApiUser | null;
   project: ApiProject | null;
-  /** Requested OAuth scopes the grant came back without. Empty on CI/signup paths. */
+  /** Requested OAuth scopes the grant came back without. Empty on the signup path. */
   missingScopes: readonly string[];
 }> {
-  // CI mode: bypass OAuth, use personal API key for LLM gateway
-  if (_options.ci && _options.apiKey) {
-    getUI().log.info('Using provided API key (CI mode - OAuth bypassed)');
-
-    const host = await HostResolution.fromAccessToken(_options.apiKey, {
-      region: _options.region,
-      localMcp: _options.localMcp,
-      baseUrl: _options.baseUrl,
-    });
-    const cloudUrl = host.appHost;
-
-    const projectData =
-      _options.projectId != null
-        ? await fetchProjectDataById(
-            _options.apiKey,
-            _options.projectId,
-            cloudUrl,
-          )
-        : await fetchProjectDataWithApiKey(_options.apiKey, cloudUrl);
-
-    // Best-effort user fetch — CI flows may run with project-scoped keys
-    // that 403 on /api/users/@me/, so swallow errors and continue with
-    // a null user (and null role).
-    let user: ApiUser | null = null;
-    let roleAtOrganization: string | null = null;
-    try {
-      user = await fetchUserData(_options.apiKey, cloudUrl);
-      roleAtOrganization = user.role_at_organization ?? null;
-    } catch (err) {
-      logToFile(
-        '[ci-auth] user lookup failed:',
-        err instanceof Error ? err.message : String(err),
-      );
-    }
-    if (user) {
-      analytics.identifyUser(user);
-      logToFile(
-        '[ci-auth] identified via API key; flags evaluate as the key owner',
-      );
-    } else {
-      getUI().log.warn(
-        'Could not resolve the API key user (key needs user:read scope) — feature flags evaluate anonymously; user-targeted flags will not match.',
-      );
-    }
-
-    return {
-      host,
-      projectApiKey: projectData.api_token,
-      accessToken: _options.apiKey,
-      projectId: projectData.id,
-      roleAtOrganization,
-      user,
-      project: projectData.project,
-      // A personal API key carries whatever scopes it carries — there is no
-      // per-run scope request to diff against.
-      missingScopes: [],
-    };
-  }
-
+  const { store } = _options;
   const {
     host,
     projectApiKey,
@@ -182,11 +129,13 @@ export async function getOrAskForProjectData(
     missingScopes,
   } = await withProgress('login', () =>
     askForWizardLogin({
+      store,
       signup: _options.signup,
       email: _options.email,
       region: _options.region,
       baseUrl: _options.baseUrl,
       programId: _options.programId,
+      scopeAdditions: _options.scopeAdditions,
       projectId: _options.projectId,
       localMcp: _options.localMcp,
     }),
@@ -194,13 +143,12 @@ export async function getOrAskForProjectData(
 
   if (!projectApiKey) {
     const cloudUrl = host.appHost;
-    getUI().log.error(`Didn't receive a project token. This shouldn't happen :(
+    store.pushStatus(`Didn't receive a project token. This shouldn't happen :(
 
 Please let us know if you think this is a bug in the wizard:
 ${ISSUES_URL}`);
 
-    getUI().log
-      .info(`In the meantime, we'll add a dummy project token ("${DUMMY_PROJECT_API_KEY}") for you to replace later.
+    store.pushStatus(`In the meantime, we'll add a dummy project token ("${DUMMY_PROJECT_API_KEY}") for you to replace later.
 You can find your project token here:
 ${cloudUrl}/settings/project#variables`);
   }
@@ -221,6 +169,7 @@ ${cloudUrl}/settings/project#variables`);
 }
 
 async function askForWizardLogin(options: {
+  store: WizardStore;
   signup: boolean;
   email?: string;
   region?: CloudRegion;
@@ -229,29 +178,41 @@ async function askForWizardLogin(options: {
   /** Used to pick the right scope set via `getOAuthScopesForProgram`.
    *  Omitted → default `WIZARD_OAUTH_SCOPES`. */
   programId?: ProgramId | null;
+  scopeAdditions?: readonly string[];
   /** `--project-id`, if passed. When the user granted access to it on the consent
    *  screen we use it directly; otherwise we fall back to the first granted team. */
   projectId?: number;
   /** `--local-mcp`: forwarded into the resolved host so `host.mcpUrl` is local. */
   localMcp?: boolean;
 }): Promise<ProjectData> {
+  const { store } = options;
   if (options.signup) {
     return askForProvisioningSignup(
+      store,
       options.email,
       options.region,
       options.baseUrl,
       options.localMcp,
       options.programId,
+      options.scopeAdditions,
+      options.projectId,
     );
   }
 
-  const requestedScopes = [...getOAuthScopesForProgram(options.programId)];
-  const tokenResponse = await performOAuthFlow({
-    scopes: requestedScopes,
-    signup: false,
-    projectId: options.projectId,
-    baseUrl: options.baseUrl,
-  });
+  const requestedScopes = [
+    ...(options.scopeAdditions
+      ? withScopeAdditions(WIZARD_OAUTH_SCOPES, options.scopeAdditions)
+      : getOAuthScopesForProgram(options.programId)),
+  ];
+  const tokenResponse = await performOAuthFlow(
+    {
+      scopes: requestedScopes,
+      signup: false,
+      projectId: options.projectId,
+      baseUrl: options.baseUrl,
+    },
+    store,
+  );
 
   try {
     assertWizardCompletionScope(tokenResponse.scope);
@@ -263,7 +224,7 @@ async function askForWizardLogin(options: {
       step: 'wizard_login',
       missing_scope: 'event_definition:write',
     });
-    await wizardAbort({
+    await abortOnScreens(store, {
       message: scopeError.message,
       outroData: {
         kind: OutroKind.Error,
@@ -298,8 +259,8 @@ async function askForWizardLogin(options: {
       requested_project_id: resolution.requested,
       granted_project_id: resolution.granted,
     });
-    getUI().log.error(error.message);
-    await abort(error.message);
+    store.pushStatus(error.message);
+    await abortOnScreens(store, { message: error.message });
   }
 
   const projectId = resolution.ok ? resolution.projectId : undefined;
@@ -312,8 +273,8 @@ async function askForWizardLogin(options: {
       step: 'wizard_login',
       has_scoped_teams: !!tokenResponse.scoped_teams,
     });
-    getUI().log.error(error.message);
-    await abort(error.message);
+    store.pushStatus(error.message);
+    await abortOnScreens(store, { message: error.message });
   }
 
   // The issuing region comes with the token; the us/eu @me probe only runs when omitted.
@@ -350,7 +311,7 @@ async function askForWizardLogin(options: {
     missingScopes: missingOAuthScopes(requestedScopes, tokenResponse.scope),
   };
 
-  getUI().log.success('Login complete.');
+  store.pushStatus('Login complete.');
   analytics.setTag('opened-wizard-link', true);
   analytics.identifyUser(userData);
 
@@ -358,22 +319,24 @@ async function askForWizardLogin(options: {
 }
 
 async function askForProvisioningSignup(
+  store: WizardStore,
   email?: string,
   region?: CloudRegion,
   baseUrl?: string,
   localMcp?: boolean,
   programId?: ProgramId | null,
+  scopeAdditions?: readonly string[],
+  projectId?: number,
 ): Promise<ProjectData> {
   if (!email || !email.includes('@')) {
-    getUI().log.error(
+    store.pushStatus(
       'Email is required for signup. Use --email your@email.com with --signup.',
     );
-    await abort();
+    await abortOnScreens(store);
     throw new Error('unreachable');
   }
 
-  const spinner = getUI().spinner();
-  spinner.start('Creating your PostHog account...');
+  store.pushStatus('Creating your PostHog account...');
 
   try {
     const provisionRegion = (region ?? 'us').toUpperCase() as 'US' | 'EU';
@@ -382,11 +345,13 @@ async function askForProvisioningSignup(
       orgName,
       projectName,
       baseUrl,
-      scopes: getProvisioningScopesForProgram(programId),
+      scopes: scopeAdditions
+        ? withScopeAdditions(WIZARD_PROVISIONING_SCOPES, scopeAdditions)
+        : getProvisioningScopesForProgram(programId),
     });
 
-    spinner.stop('Account created!');
-    getUI().log.success('Welcome to PostHog!');
+    store.pushStatus('Account created!');
+    store.pushStatus('Welcome to PostHog!');
 
     const host = HostResolution.fromApiHost(result.host, { localMcp });
 
@@ -408,29 +373,47 @@ async function askForProvisioningSignup(
     // The account exists — reporting a failed signup would send the user off to create a
     // second one on top of the org they already own.
     if (error instanceof ProvisionedAccountUnreadableError) {
-      spinner.stop('Account created, but the project could not be read back.');
-      getUI().log.warn(message);
-      getUI().log.info('Signing you in to your new account instead...');
+      store.pushStatus(
+        'Account created, but the project could not be read back.',
+      );
+      store.pushStatus(message);
+      store.pushStatus('Signing you in to your new account instead...');
 
-      return askForWizardLogin({ signup: false, baseUrl, localMcp });
+      return askForWizardLogin({
+        store,
+        signup: false,
+        baseUrl,
+        localMcp,
+        programId,
+        scopeAdditions,
+        projectId,
+      });
     }
 
-    spinner.stop('Account creation failed.');
+    store.pushStatus('Account creation failed.');
 
     if (message.includes('already associated')) {
-      getUI().log.info(
+      store.pushStatus(
         'This email already has a PostHog account. Switching to login flow...',
       );
 
-      return askForWizardLogin({ signup: false, baseUrl, localMcp });
+      return askForWizardLogin({
+        store,
+        signup: false,
+        baseUrl,
+        localMcp,
+        programId,
+        scopeAdditions,
+        projectId,
+      });
     }
 
-    getUI().log.error(`Failed to create account: ${message}`);
+    store.pushStatus(`Failed to create account: ${message}`);
     analytics.captureException(
       error instanceof Error ? error : new Error(message),
       { step: 'provisioning_signup' },
     );
-    await abort();
+    await abortOnScreens(store);
     throw error;
   }
 }
