@@ -1,5 +1,19 @@
 # Changelog
 
+## [2.80.0](https://github.com/PostHog/wizard/compare/v2.79.1...v2.80.0) (2026-10-02)
+
+
+### Features
+
+* **error-tracking:** describe release linking for Python, Ruby and PHP ([#1399](https://github.com/PostHog/wizard/issues/1399)) ([fb790ab](https://github.com/PostHog/wizard/commit/fb790ab9777e218ec765ee37cc7fbd18cf3493e6))
+
+
+### Bug Fixes
+
+* **ask:** arm the wizard_ask timeout per question, not per request ([#1368](https://github.com/PostHog/wizard/issues/1368)) ([6cb4093](https://github.com/PostHog/wizard/commit/6cb4093ec7efc150853c7d9269e5109377344331))
+* **harness:** tag pi's MCP user-agent with the running program ([#1404](https://github.com/PostHog/wizard/issues/1404)) ([7cdd92c](https://github.com/PostHog/wizard/commit/7cdd92c98ae83d10c32c78504facc08dcdeaec38))
+* **tui:** bump ink to 7.1.1 to stop full-screen flicker ([#1406](https://github.com/PostHog/wizard/issues/1406)) ([3dd8c6f](https://github.com/PostHog/wizard/commit/3dd8c6f6a73aba4104713546042c2fd54b98a0f5))
+
 ## [2.79.1](https://github.com/PostHog/wizard/compare/v2.79.0...v2.79.1) (2026-09-29)
 
 
