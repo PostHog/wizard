@@ -1,91 +1,64 @@
-import { getUI, setUI } from '@ui';
-import { LoggingUI } from '@headless/renderers/logging-ui';
-import { readApiKeyFromEnv } from '@utils/env-api-key';
-import { ErrorCodes } from '@shared/errors';
-import { emitWizardError } from '@shared/errors';
-import { runWizard } from '@cli/runners';
-import {
-  posthogDoctorConfig,
-  fetchHealthIssues,
-  getKindMeta,
-} from '@programs/posthog-doctor/index';
-import { skillProgramOptions } from '../../cli/commands/skill-program-options';
-import type { Command } from '../../cli/commands/command';
-
-export const doctorCommand: Command = {
-  name: 'doctor',
-  description: posthogDoctorConfig.description,
-  options: {
-    ...skillProgramOptions,
-    ...(posthogDoctorConfig.cliOptions ?? {}),
-  },
-  handler: (argv) => {
-    const extras =
-      posthogDoctorConfig.mapCliOptions?.(argv as Record<string, unknown>) ??
-      {};
-    const options = { ...argv, ...extras };
-    // doctor is otherwise a TUI-only diagnostic (it has no agent run); in CI we
-    // fetch the project's health issues headlessly and report them instead.
-    if (options.ci) {
-      void runDoctorCI(options);
-    } else {
-      runWizard(posthogDoctorConfig, options);
-    }
-  },
-};
+import type { ConsoleLog } from '@shared/console-log';
+import { ErrorCodes, emitWizardError } from '@shared/errors';
+import { fetchHealthIssues } from './fetch';
+import { getKindMeta } from './kind-metadata';
 
 const SEVERITY_ORDER = { critical: 0, warning: 1, info: 2 } as const;
 
-async function runDoctorCI(options: Record<string, unknown>): Promise<void> {
-  setUI(new LoggingUI());
-  const apiKey = (options.apiKey as string) ?? readApiKeyFromEnv() ?? undefined;
+/** Resolves 0 when the project is healthy, and 1 on issues, a missing key or a failed fetch. */
+export async function runDoctorReport(
+  {
+    apiKey,
+    projectId,
+    baseUrl,
+  }: { apiKey?: string; projectId?: number; baseUrl?: string },
+  { log }: { log: ConsoleLog },
+): Promise<number> {
   if (!apiKey) {
-    getUI().intro('PostHog Wizard');
-    getUI().log.error('CI mode requires --api-key (personal API key phx_xxx)');
+    log.intro('PostHog Wizard');
+    log.log.error('CI mode requires --api-key (personal API key phx_xxx)');
     emitWizardError({
       code: ErrorCodes.ArgsMissingApiKey,
       message: 'CI mode requires --api-key (personal API key phx_xxx)',
     });
-    process.exit(1);
+    return 1;
   }
 
-  getUI().intro('Welcome to the PostHog setup wizard');
-  getUI().log.info('Running posthog-doctor in CI mode');
+  log.intro('Welcome to the PostHog setup wizard');
+  log.log.info('Running posthog-doctor in CI mode');
 
   try {
-    const { getOrAskForProjectData } = await import('@tui/auth/project-data');
-    const { host, accessToken, projectId } = await getOrAskForProjectData({
-      signup: false,
-      ci: true,
+    const { resolveApiKeyProject } = await import('@shared/api-key-login');
+    const { host, projectId: resolvedProjectId } = await resolveApiKeyProject(
       apiKey,
-      projectId: options.projectId
-        ? Number(options.projectId as string)
-        : undefined,
-      baseUrl: options.baseUrl as string | undefined,
-    });
+      {
+        projectId,
+        baseUrl,
+        onInfo: (message) => log.log.info(message),
+        onWarning: (message) => log.log.warn(message),
+      },
+    );
 
     const issues = await fetchHealthIssues(
-      accessToken,
+      apiKey,
       host.apiHost,
-      projectId,
+      resolvedProjectId,
     );
     if (issues.length === 0) {
-      getUI().log.success('No active issues — your project looks healthy.');
-      process.exit(0);
+      log.log.success('No active issues — your project looks healthy.');
+      return 0;
     }
 
     const sorted = [...issues].sort(
       (a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity],
     );
-    getUI().log.warn(
+    log.log.warn(
       `${issues.length} active issue${issues.length === 1 ? '' : 's'} found:`,
     );
     for (const issue of sorted) {
-      getUI().log.info(
-        `  • [${issue.severity}] ${getKindMeta(issue.kind).title}`,
-      );
+      log.log.info(`  • [${issue.severity}] ${getKindMeta(issue.kind).title}`);
     }
-    process.exit(1);
+    return 1;
   } catch (error) {
     const { ApiError } = await import('@shared/api');
     const message =
@@ -94,7 +67,7 @@ async function runDoctorCI(options: Record<string, unknown>): Promise<void> {
         : error instanceof Error
         ? error.message
         : String(error);
-    getUI().log.error(`Doctor failed: ${message}`);
+    log.log.error(`Doctor failed: ${message}`);
     emitWizardError({
       code:
         error instanceof ApiError && error.statusCode === 401
@@ -102,6 +75,6 @@ async function runDoctorCI(options: Record<string, unknown>): Promise<void> {
           : ErrorCodes.InternalUnhandled,
       message,
     });
-    process.exit(1);
+    return 1;
   }
 }

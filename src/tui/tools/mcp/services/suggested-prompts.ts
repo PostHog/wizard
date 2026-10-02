@@ -10,21 +10,24 @@
  * tree.
  */
 
-import type { Credentials } from '@programs/session/wizard-session';
+import type { Credentials } from '@shared/api';
 import { getOrAskForProjectData } from '@tui/auth/project-data';
-import { Program } from '@programs';
+import {
+  MCP_TUTORIAL_SCOPE_ADDITIONS,
+  streamMcpPrompt,
+  type McpPromptChunk,
+} from '@tools';
 import type { WizardStore } from '@tui/store';
 import type { ApiUser } from '@shared/api';
 import {
   probeProjectData as runProbe,
   type ProjectDataProfile,
-} from '@tui/tools/mcp/services/mcp-project-profile';
-import { seedDemoEvents as runSeed } from '@tui/tools/mcp/services/seed-events';
+} from './mcp-project-profile.js';
+import { seedDemoEvents as runSeed } from './seed-events.js';
 
 // The streamed event shape is the agent's; re-exported so the screen and the
 // playground keep their import path.
-import type { AgentChunk } from '@agent/types';
-export type { AgentChunk };
+export type { McpPromptChunk };
 
 export interface McpSuggestedPromptsServices {
   /**
@@ -33,7 +36,7 @@ export interface McpSuggestedPromptsServices {
    * after a fake delay.
    *
    * While the promise is pending, the implementation is expected to set
-   * `session.loginUrl` (via `store.setLoginUrl`) so the screen can
+   * `store.loginUrl` (via `store.setLoginUrl`) so the screen can
    * render the URL inline. Mocks may set/clear this URL too if they
    * want to exercise the spinner + URL layout.
    */
@@ -61,7 +64,7 @@ export interface McpSuggestedPromptsServices {
      *  earlier turns as context. Used by follow-up picks; omitted on
      *  the first prompt and after `[p]` restarts the conversation. */
     resumeSessionId?: string;
-  }): AsyncIterable<AgentChunk>;
+  }): AsyncIterable<McpPromptChunk>;
 
   /**
    * Scout the project after auth: a cheap, best-effort probe of event
@@ -86,9 +89,8 @@ export interface McpSuggestedPromptsServices {
 }
 
 /**
- * Production services. The `runPromptStreaming` implementation lives
- * in a separate module so the heavy SDK import is only paid when
- * actually invoked.
+ * Production services. The agent's streaming module loads on the first
+ * prompt, so a session that never runs one never pays for it.
  */
 export function createMcpSuggestedPromptsServices(
   store: WizardStore,
@@ -96,9 +98,8 @@ export function createMcpSuggestedPromptsServices(
   return {
     performLogin: async () => {
       const result = await getOrAskForProjectData({
+        store,
         signup: false,
-        ci: false,
-        apiKey: undefined,
         projectId: undefined,
         email: undefined,
         region: undefined,
@@ -108,8 +109,8 @@ export function createMcpSuggestedPromptsServices(
         // replays, errors, web analytics, AI Observability, cohorts, persons) plus
         // annotation read/write. Persistence writes (dashboard, insight,
         // notebook) come for free from the base set. See
-        // `src/programs/oauth/program-scopes.ts`.
-        programId: Program.McpTutorial,
+        // `src/tools/mcp/scopes.ts`.
+        scopeAdditions: MCP_TUTORIAL_SCOPE_ADDITIONS,
       });
       return {
         credentials: {
@@ -124,7 +125,7 @@ export function createMcpSuggestedPromptsServices(
     },
 
     runPromptStreaming: (args) =>
-      runProductionPromptStreaming({
+      streamMcpPrompt({
         ...args,
         // Gateway cost attribution. Only the id crosses here; the rest of the
         // trace tags are built where the headers are, keeping the agent module
@@ -148,19 +149,4 @@ export function createMcpSuggestedPromptsServices(
         signal,
       }),
   };
-}
-
-async function* runProductionPromptStreaming(args: {
-  prompt: string;
-  credentials: Credentials;
-  signal: AbortSignal;
-  resumeSessionId?: string;
-  programId?: string;
-  integration?: string;
-}): AsyncIterable<AgentChunk> {
-  // Defer the SDK import to call time — the playground never hits
-  // this path (it overrides the whole service object), so demo
-  // sessions don't pay the SDK load cost.
-  const { runMcpPromptViaSdk } = await import('@agent');
-  yield* runMcpPromptViaSdk(args);
 }
