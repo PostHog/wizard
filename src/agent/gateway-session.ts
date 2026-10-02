@@ -6,16 +6,15 @@
  * unattributed money to hide an outage.
  */
 
-import { readFileSync } from 'node:fs';
 import { logToFile } from '@utils/debug';
 import { analytics } from '@utils/analytics';
 import { ErrorCodes, WizardError } from '@shared/errors';
+import type { GatewayCredential } from '@shared/api';
 import type { HostResolution } from '@shared/host-resolution';
 import { oauthLoginKey } from '@shared/oauth-session';
 import { checkLlmGatewayHealth } from '@shared/health-checks/endpoints';
 import { ServiceHealthStatus } from '@shared/health-checks/types';
-import { IS_PRODUCTION_BUILD, runtimeEnv } from '@env';
-import type { CloudRegion } from '@utils/types';
+import { IS_PRODUCTION_BUILD } from '@env';
 
 export interface GatewayAuth {
   /** Base URL for model calls (no `/v1`; transports append their route). */
@@ -73,25 +72,16 @@ export function configureGatewayCredentialsForCI(
   };
 }
 
-// TODO: CI credential loading belongs outside the agent. It leaves with the rest
-// of this module once RunInput carries resolved inference auth, later in the
-// refactor.
-export function configureGatewayFromCIEnvironment(
+/** Use this run's pre-issued gateway token, or mint when it has none; the keyed mint cache stays. */
+export function useRunGatewayCredential(
+  gateway: GatewayCredential | undefined,
   projectId: number,
-  region: CloudRegion,
 ): void {
-  if (IS_PRODUCTION_BUILD)
-    throw new Error('CI gateway auth requires a non-production build');
-  const path = runtimeEnv('WIZARD_CI_GATEWAY_TOKEN_FILE');
-  if (!path) throw new Error('WIZARD_CI_GATEWAY_TOKEN_FILE is required for CI');
-  const token = readFileSync(path, 'utf8');
-  delete process.env.WIZARD_CI_GATEWAY_TOKEN_FILE;
-  configureGatewayCredentialsForCI(
-    token,
-    projectId,
-    runtimeEnv('WIZARD_CI_GATEWAY_URL') ||
-      `https://ai-gateway.${region}.posthog.com`,
-  );
+  if (gateway) {
+    configureGatewayCredentialsForCI(gateway.token, projectId, gateway.url);
+    return;
+  }
+  ciAuth = null;
 }
 
 /**

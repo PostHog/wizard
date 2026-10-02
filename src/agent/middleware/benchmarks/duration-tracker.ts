@@ -2,11 +2,7 @@
  * Duration tracking plugin (per-phase and total).
  */
 
-import type {
-  Middleware,
-  MiddlewareContext,
-  MiddlewareStore,
-} from '@agent/middleware/types';
+import type { Middleware, MiddlewareContext, MiddlewareStore } from '../types';
 
 export interface DurationData {
   phaseSnapshots: Array<{

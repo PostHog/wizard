@@ -4,11 +4,7 @@
  * Respects the dedup flag from TurnCounterPlugin.
  */
 
-import type {
-  Middleware,
-  MiddlewareContext,
-  MiddlewareStore,
-} from '@agent/middleware/types';
+import type { Middleware, MiddlewareContext, MiddlewareStore } from '../types';
 import type { TurnData } from './turn-counter';
 
 /** Matches SDK usage.cache_creation (ephemeral 5m vs 1h for pricing). */
