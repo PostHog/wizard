@@ -1,12 +1,12 @@
-import { headlessOption, regionOption } from '@lib/headless-mode';
-import { AGENT_SKILL_STEPS } from '@programs/agent-skill/steps';
-import { detectPostHogIntegration } from '@programs/posthog-integration/detect';
+import { headlessOption, regionOption } from '@shared/headless-mode';
+import { AGENT_SKILL_STEPS } from '@programs/agent-skill/index';
+import { detectPostHogIntegration } from '@programs/detection/integration';
 import { posthogIntegrationConfig } from '@programs/posthog-integration/index';
 import type { ProgramConfig, ProgramStep } from '@programs/program-step';
 import type { CiRunnerContext } from '@programs/runner-context';
-import type { WizardSession } from '@lib/wizard-session';
-import { getContentBlocks } from '@ui/tui/decks/feature-flags/index';
-import { getTips } from '@ui/tui/decks/feature-flags/tips';
+import type { WizardSession } from '@programs/session/wizard-session';
+import { getContentBlocks } from '@tui/programs/feature-flags/deck/index';
+import { getTips } from '@tui/programs/feature-flags/deck/tips';
 import { FEATURE_FLAGS_PROMPTS, FEATURE_FLAGS_REPORT_FILE } from './prompts.js';
 
 const FEATURE_FLAGS_DOCS_URL = 'https://posthog.com/docs/feature-flags';

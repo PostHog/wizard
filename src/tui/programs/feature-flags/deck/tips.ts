@@ -1,4 +1,4 @@
-import type { Tip } from '@ui/tui/components/TipsCard';
+import type { Tip } from '@tui/components/TipsCard';
 
 export const FEATURE_FLAGS_TIPS: Tip[] = [
   {

@@ -81,5 +81,6 @@ Wizard.use(basicIntegrationCommand)
   .use(slackCommand)
   .use(uploadSourcemapsCommand)
   .use(errorTrackingCommand)
+  .use(featureFlagsCommand)
   .use(skillCommand)
   .init();

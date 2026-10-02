@@ -1,9 +1,9 @@
 import { Text } from 'ink';
-import { Colors } from '@ui/tui/styles';
-import type { WizardStore } from '@ui/tui/store';
-import { TextRevealMode } from '@ui/tui/primitives/TextBlock';
-import type { ContentBlock } from '@ui/tui/primitives/content-types';
-import { StatusPeekTrigger } from '@ui/tui/components/StatusPeekTrigger';
+import { Colors } from '@tui/styles';
+import type { WizardStore } from '@tui/store';
+import { TextRevealMode } from '@tui/primitives/TextBlock';
+import type { ContentBlock } from '@tui/primitives/content-types';
+import { StatusPeekTrigger } from '@tui/components/StatusPeekTrigger';
 
 const GATED_CODE: ContentBlock = {
   type: 'lines',

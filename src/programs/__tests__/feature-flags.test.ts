@@ -7,7 +7,7 @@ import { featureFlagsConfig } from '@programs/feature-flags/index';
 import { FEATURE_FLAGS_PROMPTS } from '@programs/feature-flags/prompts';
 import { posthogIntegrationConfig } from '@programs/posthog-integration/index';
 import type { ProgramConfig } from '@programs/program-step';
-import type { WizardSession } from '@lib/wizard-session';
+import type { WizardSession } from '@programs/session/wizard-session';
 import { testCiRunnerContext } from '../../../test/runner-context';
 
 const bundledRegistry = () =>

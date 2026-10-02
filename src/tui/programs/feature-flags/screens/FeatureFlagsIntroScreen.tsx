@@ -1,14 +1,11 @@
 import { Box, Text } from 'ink';
 import type { ReactNode } from 'react';
 import { useState, useSyncExternalStore } from 'react';
-import type { WizardStore } from '@ui/tui/store';
+import type { WizardStore } from '@tui/store';
 import { FEATURE_FLAGS_STEP_SKILL_ID } from '@programs/feature-flags/prompts';
-import { LoadingBox } from '@ui/tui/primitives/index';
-import { IntroScreenLayout } from '@ui/tui/screens/IntroScreenLayout';
-import {
-  SkillSourceInfo,
-  useSkillEntry,
-} from '@ui/tui/screens/SkillSourceInfo';
+import { LoadingBox } from '@tui/primitives/index';
+import { IntroScreenLayout } from '@tui/screens/IntroScreenLayout';
+import { SkillSourceInfo, useSkillEntry } from '@tui/screens/SkillSourceInfo';
 
 interface FeatureFlagsIntroScreenProps {
   store: WizardStore;
