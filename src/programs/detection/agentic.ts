@@ -13,16 +13,10 @@
  * program uses, which needs credentials.
  */
 
-import {
-  buildRunTags,
-  runAgent,
-  RunOutcome,
-  resolveScanBindings,
-} from '@agent';
+import { DEFAULT_BINDING, runAgent, RunOutcome } from '@agent';
 import type {
   AgentProgress,
   AgentRunDefinition,
-  SwitchboardCtx,
   RunConfig,
   RunInput,
 } from '@agent/types';
@@ -38,10 +32,8 @@ import {
   getSkillsBaseUrl,
   POSTHOG_DOCS_URL,
 } from '@shared/constants';
-import { analytics } from '@utils/analytics';
-import type { WizardSession } from '@programs/session/wizard-session';
-import { getUI } from '@ui';
-import { createUiReducer } from '@ui/agent-progress';
+import type { ProgramSession } from '../program-session';
+import { loadWizardFlags } from '../wizard-flags';
 
 /** A category the agent classifies each project into (id the agent returns). */
 export type DetectTarget = { id: string; name: string };
@@ -76,6 +68,8 @@ export class AgenticDetectionTimeoutError extends Error {
 
 /** Streaming progress callback — one short activity line per agent step. */
 export type DetectEvent = (line: string) => void;
+/** Agent progress a scan forwards to the caller's UI. */
+export type DetectProgress = (event: AgentProgress) => void;
 
 /**
  * Every project-manifest / workspace-marker filename the wizard's frameworks
@@ -155,6 +149,8 @@ export type AgenticDetectOptions = {
   rerankIds?: readonly string[];
   /** Streaming activity callback for the UI. */
   onEvent?: DetectEvent;
+  /** The scan's warnings, tasks and usage, for the caller's UI. */
+  onProgress?: DetectProgress;
 };
 
 function buildPrompt(
@@ -373,7 +369,7 @@ function reachesUi(event: AgentProgress): boolean {
 
 /** Scan through `runAgent` with the bound triage model, then the SDK fallback. */
 export async function detectProjectsWithAgent(
-  session: WizardSession,
+  session: ProgramSession,
   options: AgenticDetectOptions,
 ): Promise<AgenticDetectionReport> {
   if (!session.credentials) {
@@ -386,28 +382,10 @@ export async function detectProjectsWithAgent(
     recommend = false,
     rerankIds,
     onEvent,
+    onProgress,
   } = options;
 
-  // Built here: the scan runs before the program's own run tags exist.
-  const wizardMetadata = {
-    ...buildRunTags({
-      programId,
-      integration: 'agentic-detect',
-      runId: analytics.runId,
-      build: analytics.build,
-    }),
-    call_type: CallType.detection,
-  };
-  const wizardFlags = await analytics.getAllFlagsForWizard();
-  const wizardFlagPayloads = analytics.getWizardFlagPayloads();
-  const switchboard: SwitchboardCtx = {
-    program: programId,
-    composed: true,
-    flags: wizardFlags,
-    flagPayloads: wizardFlagPayloads,
-    cliHarness: session.harness,
-  };
-  const bindings = resolveScanBindings(switchboard);
+  const flags = await loadWizardFlags();
   const reportSchema = detectionReportSchema(recommend);
   const schema = zodToJsonSchema(reportSchema);
   const config: RunConfig = {
@@ -416,12 +394,16 @@ export async function detectProjectsWithAgent(
       buildPrompt(session.installDir, targets, purpose, recommend),
     ),
     composed: true,
-    binding: bindings[0],
-    switchboard,
+    // Only the scan's harness comes from this routing, and every scanning program binds Pi, as DEFAULT_BINDING does.
+    routing: {
+      binding: DEFAULT_BINDING,
+      overrides: { harness: session.harness },
+      record: false,
+    },
     skillsBaseUrl: getSkillsBaseUrl(),
-    wizardFlags,
-    wizardFlagPayloads,
-    wizardMetadata,
+    wizardFlags: flags.flags,
+    wizardFlagPayloads: flags.payloads,
+    tags: { call_type: CallType.detection },
     // The scan's scans count toward the program run's report.
     scanReport: 'defer',
   };
@@ -443,10 +425,9 @@ export async function detectProjectsWithAgent(
     },
     host: { projectId: session.projectId, apiKey: session.apiKey },
   };
-  const reduceUi = createUiReducer(getUI());
   const forward = (event: AgentProgress): void => {
     if (event.kind === 'activity') onEvent?.(event.line);
-    if (reachesUi(event)) reduceUi(event);
+    if (reachesUi(event)) onProgress?.(event);
   };
 
   for (let attempt = 0; attempt < 2; attempt++) {
@@ -457,7 +438,10 @@ export async function detectProjectsWithAgent(
     const result = await runAgent(
       {
         ...config,
-        binding: bindings[attempt],
+        routing: {
+          ...config.routing,
+          scan: attempt === 0 ? 'first' : 'retry',
+        },
         run: { ...config.run, structured: { schema, timeoutMs } },
       },
       input,

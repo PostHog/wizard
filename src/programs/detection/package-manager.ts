@@ -29,7 +29,7 @@ export type {
 import {
   detectPackageManager as detectPythonPM,
   PythonPackageManager,
-} from '@programs/frameworks/python/utils';
+} from '../frameworks/python/utils';
 
 // ---------------------------------------------------------------------------
 // Python helper

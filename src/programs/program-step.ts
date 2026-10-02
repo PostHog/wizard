@@ -1,39 +1,18 @@
-import type {
-  WizardSession,
-  DiscoveredFeature,
-  TaskNotice,
-} from '@programs/session/wizard-session';
-import type { StoreInitContext } from '@tui/flow';
-import type { ProgramRun } from '@programs/program-run';
+import type { ProgramSession } from './program-session';
+import type { DiscoveredFeature } from '@shared/discovered-feature';
+import type { ProgramBinding, TaskNotice } from '@agent/types';
+import type { ProgramRun } from './program-run';
 import type { Integration } from '@shared/constants';
-import type { FrameworkConfig } from '@programs/framework-config';
-import type { ContentBlock } from '@tui/primitives/index';
-import type { WizardStore } from '@tui/store';
-import type { Tip } from '@tui/components/TipsCard';
-// Type-only — erased at compile time, so no runtime cycle with the
-// registry that imports `ProgramConfig` back from this module.
-import type { ProgramId } from './program-registry.js';
+import type { FrameworkConfig } from './framework-config';
 import type { CiRunnerContext, RunnerContext } from './runner-context.js';
 
 /**
- * A program step is the primary unit of the wizard's execution model.
- *
- * It can own:
- * - a screen in the TUI (optional — some steps are headless)
- * - agent work via a program reference (optional — some steps are UI-only)
- * - completion and visibility predicates
- *
- * The PostHog integration program is one ordered list of steps.
- * Other programs (e.g. revenue analytics) register a different step list.
- */
-
-/**
- * Context passed to onReady callbacks — fires after bin.ts has assigned
+ * Context passed to onReady callbacks — fires after the host has assigned
  * the real session, so reading `session.installDir` returns the target
  * project. Use for async pre-program work like prerequisite detection.
  */
 export interface ProgramReadyContext {
-  readonly session: WizardSession;
+  readonly session: ProgramSession;
   readonly setFrameworkContext: (key: string, value: unknown) => void;
 
   // Detection-specific methods — used by core-integration's detect step
@@ -53,87 +32,28 @@ export interface ProgramReadyContext {
   readonly setPosthogSdkDetected: (detected: boolean) => void;
 }
 
-export interface ProgramStep {
-  /** Unique identifier for this step */
-  id: string;
-
-  /** Human-readable label for progress display */
-  label: string;
-
+/**
+ * A run in a program's flow that is not the program's own agent run: a
+ * composed sub-run of another program, or the program's run scoped to a
+ * picked project. Keyed in `ProgramConfig.runSteps` by the flow step id.
+ */
+export interface ProgramRunStep {
   /**
-   * TUI screen this step owns, if any.
-   * Matches the ScreenId enum values (e.g. 'intro', 'run', 'outro').
+   * Run this program's agent instead of the host's, composed: the host keeps
+   * its outro and analytics (self-driving runs posthog-integration first).
    */
-  screenId?: string;
-
+  runProgramId?: ProgramId;
   /**
-   * For a run step (`screenId: 'run'`): runs this step's own agent. A program
-   * exports a self-contained run step and another imports it into its step list
-   * — e.g. posthog-integration exports a run step that runs its agent, and
-   * self-driving imports it before its own run step. Omit to run the host
-   * program's own agent (`config.run`).
+   * Prepare the run's own derived session once the host confirms its step, e.g.
+   * gather framework context for the chosen project. Writes don't leak into
+   * later runs; log lines arrive as the program's progress.
    */
-  run?: (session: WizardSession) => Promise<void>;
-
-  /**
-   * For a run step: prepare a derived session before its agent runs — e.g.
-   * gather framework context for the chosen project. The session it receives is
-   * the run's own, so writes don't leak into later runs.
-   */
-  onRunPrep?: (session: WizardSession) => Promise<void>;
-
-  /**
-   * For a run step: the working directory its agent runs in, resolved from the
-   * session (e.g. self-driving's integration runs in the picked monorepo
-   * sub-app, not the repo root). The runner scopes a derived session to this
-   * dir for that run only. Defaults to `session.installDir`.
-   */
-  targetDir?: (session: WizardSession) => string;
-
-  /**
-   * Whether this step should be visible in the current program.
-   * If omitted, the step is always visible.
-   */
-  show?: (session: WizardSession) => boolean;
-
-  /**
-   * Exit condition for the screen. Router advances when true.
-   * Defaults to `gate` if unset.
-   */
-  isComplete?: (session: WizardSession) => boolean;
-
-  /**
-   * Define a gate if your screen needs to await user interactions.
-   * bin.ts can `await store.getGate(stepId)` to pause until the
-   * predicate becomes true.
-   */
-  gate?: (session: WizardSession) => boolean;
-
-  /**
-   * Called once when the TUI starts rendering, with the default
-   * session. Use for session-independent fire-and-forget work that
-   * should start as early as possible (e.g. health check kicked off
-   * while the user is still reading the intro screen). Never fires for
-   * a store that isn't rendering screens (tests, playground).
-   */
-  onInit?: (ctx: StoreInitContext) => void;
-
-  /**
-   * Called once after bin.ts has assigned the real session to the store,
-   * before any gate is awaited. Awaited in sequence with other steps'
-   * onReady callbacks. Use for session-dependent pre-program work like
-   * scanning the installDir for prerequisites. May be sync or async.
-   */
-  onReady?: (ctx: ProgramReadyContext) => void | Promise<void>;
-
-  /**
-   * Report this step's analytics under a different program than its host, for
-   * steps shared across programs (the MCP tutorial is all of `mcp-tutorial`
-   * and the last step of `mcp-add`). Attribution only — scopes, bindings, and
-   * sequences still follow the host. Matched by `screenId`, so headless steps
-   * are unaffected.
-   */
-  reportsAsProgramId?: ProgramId;
+  onRunPrep?: (
+    session: ProgramSession,
+    log: RunnerContext['log'],
+  ) => Promise<void>;
+  /** The directory the run's agent works in. Defaults to `session.installDir`. */
+  targetDir?: (session: ProgramSession) => string;
 }
 
 /**
@@ -184,6 +104,9 @@ export interface ProgramCliSurface {
   parentCommand?: string;
 }
 
+/** A program's `id`. */
+export type ProgramId = string;
+
 /**
  * Uniform configuration for a wizard program.
  *
@@ -204,6 +127,8 @@ export interface ProgramConfig {
   description: string;
   /** Unique program id — matches the Program enum value */
   id: string;
+  /** Sequence, harness and model the agent runs with. Omit for `DEFAULT_BINDING`. */
+  binding?: ProgramBinding;
   /**
    * Content-mill flow the orchestrator loads its agent prompts + step-skills
    * from (`agents/<flow>/` and `skills/<flow>/`). Defaults to `id`; set it when
@@ -211,38 +136,40 @@ export interface ProgramConfig {
    */
   agentFlow?: string;
   /**
-   * Whether this program's agent run requires third-party AI services.
-   *
-   * When true (the default), the wizard checks
-   * `apiUser.organization.is_ai_data_processing_approved` after auth and
-   * renders `AiOptInRequiredScreen` if the org has not opted in. Matches
-   * Max's strict reading: only literal `true` proceeds.
-   *
-   * Opt out (set to `false`) for programs that don't run the agent —
-   * doctor, mcp install/remove/tutorial, source-map upload. The safe
-   * default is `true` so future programs gate by declaration.
-   */
-  requiresAi?: boolean;
-  /**
    * Context-mill skill ID this program installs and runs. When present,
-   * bin.ts seeds `session.skillId` with this value before the TUI renders
+   * the host seeds `session.skillId` with this value before the TUI renders
    * so intro screens can resolve skill metadata without waiting for the
    * agent run.
    */
   skillId?: string;
-  /** The ordered step list */
-  steps: ProgramStep[];
+  /**
+   * Detection before the program starts: scan the install dir and record what
+   * the intro screen and the run need. The TUI awaits it once, after the real
+   * session is assigned, and runProgram runs it through detectProgram when its
+   * store has no detection yet.
+   */
+  onReady?: (ctx: ProgramReadyContext) => void | Promise<void>;
+  /** Runs in the flow other than the program's own agent run, keyed by flow step id. */
+  runSteps?: Record<string, ProgramRunStep>;
+  /**
+   * Whether the run checks PostHog's readiness first. Defaults to `true`; the
+   * TUI shows the health-check screen for these programs.
+   */
+  healthCheck?: boolean;
   /** Agent run config. Static object or async function for dynamic config. */
   run?:
     | ProgramRun
-    | ((session: WizardSession, runner: RunnerContext) => Promise<ProgramRun>);
+    | ((session: ProgramSession, runner: RunnerContext) => Promise<ProgramRun>);
   /**
-   * CI-mode pre-run strategy. When set, runWizardCI awaits this after building
-   * the ci:true session and before the agent runs, instead of walking step
-   * onReady hooks. Use for headless prerequisite work (e.g. framework
-   * detection) that the TUI performs via step onReady callbacks.
+   * CI-mode pre-run strategy. When set, detectProgram awaits this in place of
+   * `onReady` for a ci:true session, before runProgram starts the agent. Use
+   * for headless prerequisite work (e.g. framework detection) that the TUI
+   * performs via step onReady callbacks.
    */
-  ciPreRun?: (session: WizardSession, runner: CiRunnerContext) => Promise<void>;
+  ciPreRun?: (
+    session: ProgramSession,
+    runner: CiRunnerContext,
+  ) => Promise<void>;
   /**
    * Tasks the orchestrator queues itself, before the planner runs, from what
    * the wizard detected. Their types are marked `runnerSeeded: true` in the
@@ -250,7 +177,7 @@ export interface ProgramConfig {
    * decided here, in code, not by a model that could invent it or forget it.
    * Return an empty list to queue none.
    */
-  seedTasks?: (session: WizardSession) => Array<{
+  seedTasks?: (session: ProgramSession) => Array<{
     type: string;
     label?: string;
     inputs?: Record<string, unknown>;
@@ -292,25 +219,9 @@ export interface ProgramConfig {
    */
   streamWorkflowId?: string;
   /**
-   * LearnCard deck rendered in the shared `RunScreen` while the agent
-   * runs. Lives at `<program>/content/index.tsx` by convention.
-   * Programs that ship a custom RunScreen variant (audit) or skip the
-   * run step (posthog-doctor) leave this unset.
-   */
-  getContentBlocks?: (store?: WizardStore) => ContentBlock[];
-  /**
-   * Tips shown in the run screen's right pane (the `Tips` sidebar) once
-   * the LearnCard finishes. Lets a program supply its own explainer copy
-   * (e.g. self-driving explaining what signal sources and scouts are)
-   * instead of the generic onboarding deck. Unset → `RunScreen` falls back
-   * to `DEFAULT_TIPS`, so every other program is unaffected. Lives at
-   * `<program>/content/tips.ts` by convention.
-   */
-  getTips?: (store?: WizardStore) => Tip[];
-  /**
    * Subcommand-specific CLI options. Spread into yargs `.options(...)` when the
    * program's subcommand is registered. Program-specific knowledge stays in
-   * the program config, not in bin.ts. Typed as `unknown` to avoid pulling a
+   * the program config, not in the CLI. Typed as `unknown` to avoid pulling a
    * yargs dependency into this module.
    */
   cliOptions?: Record<string, unknown>;
@@ -337,15 +248,11 @@ export interface ProgramConfig {
    * `ProgramCliSurface` for semantics.
    */
   cli?: ProgramCliSurface;
-}
-
-/**
- * The gated steps the agent runner awaits after `auth` and before `run`, in
- * step order. Empty when a program has no auth step or runs before it.
- */
-export function postAuthGateSteps(steps: ProgramStep[]): ProgramStep[] {
-  const authIndex = steps.findIndex((s) => s.screenId === 'auth');
-  const runIndex = steps.findIndex((s) => s.screenId === 'run');
-  if (authIndex === -1 || runIndex <= authIndex) return [];
-  return steps.slice(authIndex + 1, runIndex).filter((s) => s.gate);
+  /**
+   * OAuth scopes this program's login asks for on top of the base set. They
+   * only widen it: the resolver in `program-registry.ts` merges them after the
+   * base scopes. Every scope must stay within the wizard OAuth app's ceiling
+   * (README, "OAuth app scope ceiling").
+   */
+  oauthScopeAdditions?: readonly string[];
 }
