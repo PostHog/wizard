@@ -1,4 +1,4 @@
-import { mcpAnalyticsConfig } from '@programs/mcp-analytics/index';
+import { config as mcpAnalyticsConfig } from '@programs/mcp-analytics';
 
 import type { Command } from './command';
 import { nativeCommandFactory } from './factories/native-command-factory';
