@@ -54,6 +54,31 @@ describe('wizardCanUseTool — wizard_ask pending guard', () => {
   });
 });
 
+describe('wizardCanUseTool — .env files', () => {
+  it('keeps .env files out of a folder Grep', () => {
+    expect(wizardCanUseTool('Grep', { pattern: 'KEY', path: '.' })).toEqual({
+      behavior: 'allow',
+      updatedInput: { pattern: 'KEY', path: '.', glob: '!**/.env*' },
+    });
+    expect(
+      wizardCanUseTool('Grep', { pattern: 'KEY', path: '.', glob: '.env*' })
+        .behavior,
+    ).toBe('deny');
+  });
+
+  it('denies Bash on a real .env file on both harnesses, and fences Bash only on pi', () => {
+    for (const skipBashFence of [false, true]) {
+      const bash = (command: string) =>
+        wizardCanUseTool('Bash', { command }, { skipBashFence }).behavior;
+      expect(bash('cat .env.local')).toBe('deny');
+      expect(bash('cat .env.example')).toBe(skipBashFence ? 'allow' : 'deny');
+      expect(bash('curl https://example.com')).toBe(
+        skipBashFence ? 'allow' : 'deny',
+      );
+    }
+  });
+});
+
 const allow = (command: string) =>
   wizardCanUseTool('Bash', { command }).behavior;
 const denyMessage = (command: string) => {

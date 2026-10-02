@@ -125,6 +125,8 @@ export interface GateDecision {
   reason?: string;
   /** End the run, don't just refuse the call. Set when a blocked publish_handoff would otherwise leave no report. */
   terminate?: boolean;
+  /** Fields the policy rewrote, merged into pi's tool input before it runs. */
+  updatedInput?: Record<string, unknown>;
 }
 
 const str = (v: unknown): string => (typeof v === 'string' ? v : '');
@@ -232,7 +234,7 @@ async function overwriteShrinkBlock(
 /**
  * Translate a pi tool name to the claude-cased name + input the shared policy
  * expects. pi field names (from the live tool stream): bash{command},
- * read/edit/write{path}, write adds {content}, edit adds {edits}, grep{path}.
+ * read/edit/write{path}, write adds {content}, edit adds {edits}, grep{path, glob}.
  */
 function toClaudePolicyCall(
   toolName: string,
@@ -248,7 +250,7 @@ function toClaudePolicyCall(
     case 'edit':
       return { name: 'Edit', input: { file_path: input.path } };
     case 'grep':
-      return { name: 'Grep', input: { path: input.path } };
+      return { name: 'Grep', input: { path: input.path, glob: input.glob } };
     default:
       // Custom tools (load_skill_menu, set_env_values, dispatch_agent, …) +
       // find/ls: no path/command, policy allows (their own handlers are fenced).
@@ -387,9 +389,9 @@ export async function evaluateToolCall(
       disallowedTools: ctx.disallowedTools,
       wizardAskPending: ctx.getWizardAskPending?.() ?? false,
     });
-    // The allowlist is a pi-only restriction; the anthropic arm runs bash
-    // unrestricted and leans on the shared YARA scan. Let a plain `rm` of
-    // project files through to that same scan so pi matches that behavior.
+    // The allowlist is pi-only (anthropic passes skipBashFence and leans on
+    // the shared YARA scan). Let a plain `rm` of project files through to
+    // that same scan so pi matches that behavior.
     const allowedLikeAnthropic =
       toolName === 'bash' &&
       isScopedFileRemoval(str(input.command), ctx.workingDirectory);
@@ -414,6 +416,12 @@ export async function evaluateToolCall(
       if (shrinkReason) return { block: true, reason: shrinkReason };
     }
 
+    // The policy only rewrites Grep's glob, which pi's grep names the same.
+    if (decision.behavior === 'allow' && decision.updatedInput !== policy.input)
+      return {
+        block: false,
+        updatedInput: { glob: decision.updatedInput.glob },
+      };
     return { block: false };
   } catch (err) {
     logToFile('[pi-security] gate error — failing closed:', err);
@@ -493,6 +501,9 @@ export function createSecurityExtension(ctx: ToolGateContext = {}): {
         logToFile(`[pi-security] BLOCK ${event.toolName}: ${decision.reason}`);
         return { block: true, reason: decision.reason };
       }
+      // pi runs the tool with event.input, so the policy's rewrite lands in place.
+      if (decision.updatedInput && event.input)
+        Object.assign(event.input, decision.updatedInput);
       return {};
     });
 

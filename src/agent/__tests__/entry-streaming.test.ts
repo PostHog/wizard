@@ -83,6 +83,19 @@ describe('public agent prompt stream', () => {
     ]);
   });
 
+  it('loads project settings without running project hooks', async () => {
+    query.mockImplementation(function* () {
+      yield { type: 'result', subtype: 'success', session_id: 'session-123' };
+    });
+
+    await consume();
+
+    expect(query.mock.calls[0][0].options).toMatchObject({
+      settingSources: ['project'],
+      settings: { disableAllHooks: true },
+    });
+  });
+
   it('forwards an SDK stream failure after partial output', async () => {
     query.mockImplementation(function* () {
       yield {
