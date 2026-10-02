@@ -8,6 +8,7 @@ import {
 import { logToFile } from '@utils/debug';
 
 vi.mock('@utils/debug', () => ({
+  configureLogFile: vi.fn(),
   logToFile: vi.fn(),
 }));
 

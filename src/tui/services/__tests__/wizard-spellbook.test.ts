@@ -2,14 +2,14 @@ import fs from 'fs/promises';
 import os from 'os';
 import path from 'path';
 import { Integration } from '@shared/constants';
-import type { ProgramConfig } from '../../../programs/program-step';
-import { buildSession } from '../../../programs/session/wizard-session';
+import type { ProgramConfig } from '@programs/types';
+import { buildSession } from '@programs';
 import { writeWizardSpellbook } from '../wizard-spellbook';
-import { downloadSkill } from '@agent/tools/tools';
+import { downloadSkill } from '@shared/skill-install';
 import { fetchSkillMenu } from '@shared/skill-menu';
 
-vi.mock('@agent/tools/tools', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agent/tools/tools')>()),
+vi.mock(import('@shared/skill-install'), async (importOriginal) => ({
+  ...(await importOriginal()),
   downloadSkill: vi.fn(),
 }));
 vi.mock('@shared/skill-menu', async (importOriginal) => ({
@@ -21,7 +21,6 @@ const program: ProgramConfig = {
   id: 'example-setup',
   description: 'Set up the example integration.',
   agentFlow: 'example-flow',
-  steps: [],
 };
 
 const skill = {
@@ -74,7 +73,7 @@ describe('writeWizardSpellbook', () => {
     expect(downloadSkill).toHaveBeenCalledExactlyOnceWith(
       skill,
       path.dirname(result.path),
-      { skillsRoot: 'skills', triage: undefined },
+      { skillsRoot: 'skills', scan: expect.any(Function) },
     );
     expect(readme).toContain(program.description);
     expect(readme).toContain(`[${skill.id}](skills/${skill.id}/SKILL.md)`);

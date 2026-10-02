@@ -8,16 +8,12 @@ import { analytics } from '@utils/analytics';
 // previous `require()` form gave) while still typing the .mock* helpers.
 const mcpModule = mcpModuleReal as unknown as Record<string, Mock>;
 
-vi.mock('../../shared/mcp-clients/install.js', () => ({
+vi.mock(import('@shared/mcp-clients/install'), () => ({
   getSupportedClients: vi.fn(),
   getInstalledClients: vi.fn(),
   removeMCPServer: vi.fn(),
   getSupportedPluginClients: vi.fn(),
   installPlugins: vi.fn(),
-}));
-
-vi.mock('../../shared/mcp-clients/defaults.js', () => ({
-  ALL_FEATURE_VALUES: ['feature-a'],
 }));
 
 vi.mock('@utils/debug.js', () => ({
