@@ -1,7 +1,4 @@
-import {
-  NO_DEFAULT_LIMIT,
-  PRICING_LONG,
-} from '../../../../programs/self-driving/pricing.js';
+import { NO_DEFAULT_LIMIT, PRICING_LONG } from '@programs/self-driving';
 /**
  * Self-driving learn-deck — the narrative script played while the agent
  * sets up Self-driving. Teaches the vocabulary ladder (signal source →

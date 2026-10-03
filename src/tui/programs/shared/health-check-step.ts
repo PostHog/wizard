@@ -6,13 +6,13 @@
  * readiness result or an explicit user dismissal of the outage.
  *
  * Programs without this step that hit a blocking outage gridlock the
- * router: agent-runner calls wizardAbort, which awaits outroDismissed,
+ * router: the TUI host calls wizardAbort, whose outro awaits its dismissal,
  * but the router can't advance past the still-incomplete auth step to
  * render the OutroScreen.
  */
 
-import type { ProgramStep } from '@programs/program-step';
-import type { WizardSession } from '@programs/session/wizard-session';
+import type { FlowStep } from '../../flow.js';
+import type { TuiView } from '@tui/tui-state';
 import {
   evaluateWizardReadiness,
   WizardReadiness,
@@ -21,7 +21,10 @@ import {
 } from '@shared/health-checks/readiness';
 import { logToFile } from '@utils/debug';
 
-export function healthCheckReady(session: WizardSession): boolean {
+export function healthCheckReady({
+  session,
+  outageDismissed,
+}: TuiView): boolean {
   if (!session.readinessResult) return false;
 
   if (session.signup) {
@@ -33,16 +36,16 @@ export function healthCheckReady(session: WizardSession): boolean {
       session.readinessResult.health,
     );
     if (hardBlocking.length === 0 && defaultBlocking.length === 0) return true;
-    return session.outageDismissed;
+    return outageDismissed;
   }
 
   if (session.readinessResult.decision === WizardReadiness.No) {
-    return session.outageDismissed;
+    return outageDismissed;
   }
   return true;
 }
 
-export const HEALTH_CHECK_STEP: ProgramStep = {
+export const HEALTH_CHECK_STEP: FlowStep = {
   id: 'health-check',
   label: 'Health check',
   screenId: 'health-check',

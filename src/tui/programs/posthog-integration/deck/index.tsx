@@ -11,9 +11,9 @@ import { TextRevealMode } from '@tui/primitives/TextBlock';
 import type { ContentBlock } from '@tui/primitives/content-types';
 import { StatusPeekTrigger } from '@tui/components/StatusPeekTrigger';
 import { POSTHOG_DATA_FLOW } from './data-flow.js';
-import { PRODUCT_SUITE_BLOCK } from '../../shared/deck/product-suite.js';
-import { LINE_CHART_BLOCK } from '../../shared/deck/line-chart.js';
-import { FUNNEL_BLOCK } from '../../shared/deck/funnel.js';
+import { PRODUCT_SUITE_BLOCK } from '@tui/programs/shared/deck/product-suite';
+import { LINE_CHART_BLOCK } from '@tui/programs/shared/deck/line-chart';
+import { FUNNEL_BLOCK } from '@tui/programs/shared/deck/funnel';
 
 export const getContentBlocks = (store?: WizardStore): ContentBlock[] => [
   {

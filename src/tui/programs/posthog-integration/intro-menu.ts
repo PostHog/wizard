@@ -1,3 +1,5 @@
+import { getCommandPath, getSubcommandPrograms } from '@programs';
+import { getTool } from '@tools';
 import type { PickerOption } from '@tui/primitives/index';
 
 export type IntroMenuView = 'default' | 'more-info' | 'commands';
@@ -15,6 +17,34 @@ export const DETECTED_HEADLINE = [
 
 export function introHeadline(posthogSdkDetected: boolean): string[] {
   return posthogSdkDetected ? DETECTED_HEADLINE : [DEFAULT_HEADLINE];
+}
+
+/** What the spell book offers, in order: programs and tools. Curated: no config field ranks these. */
+const INTRO_ENTRIES = [
+  'self-driving',
+  'error-tracking-upload-source-maps',
+  'warehouse-source',
+  'audit',
+  'posthog-doctor',
+  'mcp-analytics',
+  'replay-vision',
+  'ai-observability',
+  'metrics',
+  'revenue-analytics-setup',
+];
+
+/** One spell book row: the id the intro hands off to, the words that run it, and its help line. */
+export type IntroEntry = { id: string; command: string; description: string };
+
+/** The programs and tools the intro can hand off to, in the order it lists them. */
+export function introEntries(): IntroEntry[] {
+  const programs = new Map(getSubcommandPrograms().map((c) => [c.id, c]));
+  return INTRO_ENTRIES.flatMap((id) => {
+    const entry = programs.get(id) ?? getTool(id);
+    return entry
+      ? [{ id, command: getCommandPath(entry), description: entry.description }]
+      : [];
+  });
 }
 
 export function introMenuOptions({

@@ -10,7 +10,7 @@
 import { useEffect } from 'react';
 
 import type { WizardStore } from '@tui/store';
-import type { WizardSession } from '@programs/session/wizard-session';
+import type { WizardSession } from '@programs/types';
 import { fetchGithubConnected } from '@shared/api';
 import { requestDeepLink } from '@utils/provisioning';
 import { analytics } from '@utils/analytics';
@@ -31,7 +31,7 @@ export async function fetchLoginUrl(
 
 export function useGithubConnection(store: WizardStore): void {
   const credentials = store.session.credentials;
-  const connected = store.session.githubConnected === true;
+  const connected = store.githubConnected === true;
 
   useEffect(() => {
     if (!credentials || connected) return;
@@ -43,7 +43,7 @@ export function useGithubConnection(store: WizardStore): void {
 
     /** A check that came back "not connected" — including a failed one. */
     const settleUnknown = (): void => {
-      if (store.session.githubConnected === null) {
+      if (store.githubConnected === null) {
         store.setGithubConnected(false);
       }
     };
@@ -66,7 +66,7 @@ export function useGithubConnection(store: WizardStore): void {
           if (isConnected) {
             // Only a false→true flip means the user installed during this
             // screen; true on the first check means they arrived connected.
-            if (store.session.githubConnected === false) {
+            if (store.githubConnected === false) {
               analytics.wizardCapture('github connect completed');
             }
             store.setGithubConnected(true);

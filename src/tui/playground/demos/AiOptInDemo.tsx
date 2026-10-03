@@ -22,9 +22,14 @@ type Variant = 'admin' | 'non-admin';
 
 interface AiOptInDemoProps {
   variant: Variant;
+  /** The playground's store: it closes on this store's exit request. */
+  store: WizardStore;
 }
 
-export const AiOptInDemo = ({ variant }: AiOptInDemoProps) => {
+export const AiOptInDemo = ({
+  variant,
+  store: playground,
+}: AiOptInDemoProps) => {
   const [store] = useState(() => {
     const s = new WizardStore();
     s.setCredentials({
@@ -35,6 +40,15 @@ export const AiOptInDemo = ({ variant }: AiOptInDemoProps) => {
     });
     return s;
   });
+
+  useEffect(
+    () =>
+      store.subscribe(() => {
+        if (store.exitRequest !== null)
+          playground.requestExit(store.exitRequest);
+      }),
+    [store, playground],
+  );
 
   useEffect(() => {
     store.session.region = 'us';

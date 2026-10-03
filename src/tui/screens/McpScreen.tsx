@@ -15,7 +15,8 @@ import { Box, Text, useInput } from 'ink';
 import { Spinner } from '@inkjs/ui';
 import { useState, useEffect, useRef } from 'react';
 import { useSyncExternalStore } from 'react';
-import { type WizardStore, McpOutcome } from '@tui/store';
+import type { WizardStore } from '@tui/store';
+import { McpOutcome } from '@shared/run-state';
 import {
   ConfirmationInput,
   GroupedPickerMenu,
@@ -242,8 +243,8 @@ export const McpScreen = ({
       void doInstall(clientNames);
       return;
     }
-    if (store.session.mcpFeatures) {
-      void doInstall(clientNames, store.session.mcpFeatures);
+    if (store.mcpFeatures) {
+      void doInstall(clientNames, store.mcpFeatures);
       return;
     }
     setPhase(Phase.FeatureSelect);
