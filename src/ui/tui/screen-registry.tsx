@@ -33,6 +33,7 @@ import { AgentSkillIntroScreen } from '../../tui/programs/shared/screens/AgentSk
 import { AiObservabilityIntroScreen } from '../../tui/programs/ai-observability/screens/AiObservabilityIntroScreen.js';
 import { MetricsIntroScreen } from '../../tui/programs/metrics/screens/MetricsIntroScreen.js';
 import { ErrorTrackingIntroScreen } from '../../tui/programs/error-tracking/screens/ErrorTrackingIntroScreen.js';
+import { FeatureFlagsIntroScreen } from '../../tui/programs/feature-flags/screens/FeatureFlagsIntroScreen.js';
 import { ErrorTrackingDetectScreen } from '../../tui/programs/error-tracking/screens/ErrorTrackingDetectScreen.js';
 import { SelfDrivingIntroScreen } from '../../tui/programs/self-driving/screens/SelfDrivingIntroScreen.js';
 import { SelfDrivingIntegrationCheckScreen } from '../../tui/programs/self-driving/screens/SelfDrivingIntegrationCheckScreen.js';
@@ -116,6 +117,7 @@ export function createScreens(
     ),
     [ScreenId.MetricsIntro]: <MetricsIntroScreen store={store} />,
     [ScreenId.ErrorTrackingIntro]: <ErrorTrackingIntroScreen store={store} />,
+    [ScreenId.FeatureFlagsIntro]: <FeatureFlagsIntroScreen store={store} />,
     [ScreenId.ErrorTrackingDetect]: <ErrorTrackingDetectScreen store={store} />,
     [ScreenId.SelfDrivingIntro]: <SelfDrivingIntroScreen store={store} />,
     [ScreenId.SelfDrivingIntegrationCheck]: (

@@ -45,6 +45,7 @@ import { selfDrivingCommand } from './src/cli/commands/self-driving';
 import { slackCommand } from './src/cli/commands/slack';
 import { uploadSourcemapsCommand } from './src/cli/commands/upload-sourcemaps';
 import { errorTrackingCommand } from './src/cli/commands/error-tracking';
+import { featureFlagsCommand } from './src/cli/commands/feature-flags';
 import { skillCommand } from './src/cli/commands/skill';
 import { cliCommand } from './src/cli/commands/cli';
 import { recoverOrphanedSettingsBackups } from '@shared/claude-settings';
@@ -80,5 +81,6 @@ Wizard.use(basicIntegrationCommand)
   .use(slackCommand)
   .use(uploadSourcemapsCommand)
   .use(errorTrackingCommand)
+  .use(featureFlagsCommand)
   .use(skillCommand)
   .init();

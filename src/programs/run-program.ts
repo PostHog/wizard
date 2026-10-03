@@ -59,6 +59,7 @@ export type WizardFlagSnapshot = {
 export type ProgramSettings = {
   requiresAi?: boolean; // false skips the AI-processing approval
   agentFlow?: string; // context-mill flow; defaults to the program ID
+  agentPrompts?: RunConfig['agentPrompts'];
   allowedTools?: RunConfig['allowedTools']; // added to the base tools
   disallowedTools?: RunConfig['disallowedTools']; // removed from the base tools
   excludedTaskTypes?: RunConfig['excludedTaskTypes']; // task types to skip for these flags
@@ -325,6 +326,7 @@ export async function runProgram(
       allowedTools: program.allowedTools,
       disallowedTools: program.disallowedTools,
       agentFlow: program.agentFlow,
+      agentPrompts: program.agentPrompts,
       excludedTaskTypes: program.excludedTaskTypes,
       seedTasks: input.seedTasks,
       hooks: input.hooks,

@@ -1,0 +1,59 @@
+import { headlessOption, regionOption } from '@shared/headless-mode';
+import { AGENT_SKILL_STEPS } from '@programs/agent-skill/index';
+import { detectPostHogIntegration } from '@programs/detection/integration';
+import { posthogIntegrationConfig } from '@programs/posthog-integration/index';
+import type { ProgramConfig, ProgramStep } from '@programs/program-step';
+import type { CiRunnerContext } from '@programs/runner-context';
+import type { WizardSession } from '@programs/session/wizard-session';
+import { getContentBlocks } from '@tui/programs/feature-flags/deck/index';
+import { getTips } from '@tui/programs/feature-flags/deck/tips';
+import { FEATURE_FLAGS_PROMPTS, FEATURE_FLAGS_REPORT_FILE } from './prompts.js';
+
+const FEATURE_FLAGS_DOCS_URL = 'https://posthog.com/docs/feature-flags';
+
+const DETECT_FRAMEWORK_STEP: ProgramStep = {
+  id: 'detect',
+  label: 'Detecting framework',
+  onReady: detectPostHogIntegration,
+};
+
+export const featureFlagsConfig: ProgramConfig = {
+  command: 'feature-flags',
+  description: 'Set up example PostHog feature flags',
+  id: 'feature-flags',
+  agentFlow: 'feature-flags',
+  agentPrompts: FEATURE_FLAGS_PROMPTS,
+  steps: [
+    DETECT_FRAMEWORK_STEP,
+    ...AGENT_SKILL_STEPS.map((step) =>
+      step.id === 'intro' ? { ...step, screenId: 'feature-flags-intro' } : step,
+    ),
+  ],
+  reportFile: FEATURE_FLAGS_REPORT_FILE,
+  getContentBlocks,
+  getTips,
+  cliOptions: { ...headlessOption, ...regionOption },
+  run: {
+    integrationLabel: 'feature-flags',
+    successMessage: `Feature flags wired in! View the report at ./${FEATURE_FLAGS_REPORT_FILE}`,
+    reportFile: FEATURE_FLAGS_REPORT_FILE,
+    docsUrl: FEATURE_FLAGS_DOCS_URL,
+    spinnerMessage: 'Setting up your first feature flags...',
+    estimatedDurationMinutes: 5,
+    buildOutroNextSteps: () => ({
+      heading: 'Next steps',
+      items: [
+        `Read ./${FEATURE_FLAGS_REPORT_FILE} for each flag's link and call site`,
+        'Enable the example flags in PostHog when you are ready to roll them out',
+      ],
+    }),
+  },
+
+  ciPreRun: async (
+    session: WizardSession,
+    runner: CiRunnerContext,
+  ): Promise<void> => {
+    await posthogIntegrationConfig.ciPreRun?.(session, runner);
+    if (session.integration) session.skillId = session.integration;
+  },
+};

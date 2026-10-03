@@ -1,0 +1,27 @@
+ PostHog Wizard v0.0.0-test                        Feedback: wizard@posthog.com
+
+ Cost (running): $0.00 · no agent turns yet                      Ctrl+T to hide
+
+
+
+
+
+
+                             ███ PostHog Wizard 🦔
+
+             We'll use AI to analyze your project and complete work.
+                .env* file contents will not leave your machine.
+
+        Version 12.3.0 is not supported by the wizard. Please upgrade to
+         13.0.0 or later.
+
+         Manual setup guide: https://posthog.com/docs/libraries/next-js
+
+                            ▸ Privacy & data
+                              Cancel
+
+
+
+
+
+  ↑↓ navigate  enter select

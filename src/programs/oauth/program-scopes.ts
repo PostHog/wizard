@@ -37,6 +37,7 @@ import {
   WIZARD_PROVISIONING_SCOPES,
 } from '@shared/constants';
 import { AGENT_SKILL_SCOPE_ADDITIONS } from '@programs/agent-skill/scopes';
+import { FEATURE_FLAGS_SCOPE_ADDITIONS } from '@programs/feature-flags/scopes';
 import { REPLAY_VISION_SCOPE_ADDITIONS } from '@programs/replay-vision/scopes';
 import { SELF_DRIVING_SCOPE_ADDITIONS } from '@programs/self-driving/scopes';
 import { CONNECT_SLACK_SCOPE_ADDITIONS } from '@shared/oauth-scopes';
@@ -73,6 +74,7 @@ const PROGRAM_SCOPE_ADDITIONS: Partial<Record<ProgramId, readonly string[]>> = {
   // ever changes, this line will fail to type-check.
   'mcp-tutorial': MCP_TUTORIAL_SCOPE_ADDITIONS,
   'agent-skill': AGENT_SKILL_SCOPE_ADDITIONS,
+  'feature-flags': FEATURE_FLAGS_SCOPE_ADDITIONS,
   'self-driving': SELF_DRIVING_SCOPE_ADDITIONS,
   'warehouse-source': WAREHOUSE_SOURCE_SCOPE_ADDITIONS,
   // The integration run carries the Slack outro step, and — when detection

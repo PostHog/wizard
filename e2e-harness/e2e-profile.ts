@@ -284,6 +284,7 @@ export function decideE2eAction(
     case ScreenId.AiObservabilityIntro:
     case ScreenId.MetricsIntro:
     case ScreenId.ErrorTrackingIntro:
+    case ScreenId.FeatureFlagsIntro:
     case ScreenId.AuditIntro:
     case ScreenId.SourceMapsIntro:
     case ScreenId.DoctorIntro:
