@@ -163,7 +163,7 @@ describe('runAgent', () => {
     );
     const options = mockQuery.mock.calls[0][0].options;
     expect(options.tools).toEqual(['Read', 'Glob', 'Grep']);
-    expect(options.allowedTools).toEqual(['Read', 'Glob', 'Grep']);
+    expect(options.allowedTools).toEqual(['Glob']);
     expect(options.mcpServers).toEqual({});
     expect(options.agents).toBeUndefined();
     expect(options.settingSources).toEqual([]);
@@ -196,7 +196,11 @@ describe('runAgent', () => {
       mockSpinner,
       { requestRemark: false },
     );
-    const { settings } = mockQuery.mock.calls[0][0].options;
+    const { settings, allowedTools } = mockQuery.mock.calls[0][0].options;
+    // Outside the project only canUseTool sees file tools, so none is pre-allowed.
+    for (const tool of ['Read', 'Write', 'Edit', 'Grep']) {
+      expect(allowedTools).not.toContain(tool);
+    }
     expect(settings.disableAllHooks).toBe(true);
     expect(settings.permissions.deny).toEqual(
       expect.arrayContaining([
@@ -204,7 +208,6 @@ describe('runAgent', () => {
         'Read(!.env.example)',
         'Edit(.env*)',
         'Edit(!.env.example)',
-        'Read(//**/.env)',
       ]),
     );
   });
