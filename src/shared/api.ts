@@ -290,7 +290,8 @@ export async function fetchSlackConnected(
  * Check whether the project already has a GitHub App integration connected.
  * Requires the `integration:read` scope. Throws on failure — callers (the
  * SelfDrivingGitHubScreen poll) decide how to degrade and are responsible for
- * capturing the error exactly once.
+ * capturing the error exactly once. Filtered by kind, since the list is paged
+ * and a project with many integrations can push GitHub off the first page.
  */
 export async function fetchGithubConnected(
   accessToken: string,
@@ -301,6 +302,7 @@ export async function fetchGithubConnected(
   const response = await axios.get(
     `${baseUrl}/api/projects/${projectId}/integrations/`,
     {
+      params: { kind: 'github' },
       headers: {
         Authorization: `Bearer ${accessToken}`,
         'User-Agent': WIZARD_USER_AGENT,
