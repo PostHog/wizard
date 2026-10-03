@@ -34,4 +34,5 @@ if (!satisfies(process.version, NODE_VERSION_RANGE)) {
 }
 
 // Loaded dynamically so no dependency is evaluated before the check above.
+// eslint-disable-next-line no-restricted-syntax -- main.ts is bin.ts's own layer.
 await import('./main');

@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { pathToFileURL } from 'url';
 
 import { spawn, execSync } from 'child_process';
 import type { ChildProcess } from 'child_process';
@@ -33,9 +34,14 @@ export class WizardTestEnv {
     opts?: {
       cwd?: string;
       debug?: boolean;
+      env?: NodeJS.ProcessEnv;
     },
   ) {
-    this.taskHandle = spawn(cmd, args, { cwd: opts?.cwd, stdio: 'pipe' });
+    this.taskHandle = spawn(cmd, args, {
+      cwd: opts?.cwd,
+      env: opts?.env,
+      stdio: 'pipe',
+    });
 
     if (opts?.debug) {
       this.taskHandle.stdout?.pipe(process.stdout);
@@ -232,9 +238,23 @@ export function startWizardInstance(
   cleanupGit(projectDir);
   initGit(projectDir);
 
-  return new WizardTestEnv('node', [binPath, '--debug'], {
+  // The mock server has to run inside the wizard's process to intercept its
+  // requests. The mocks are TypeScript, so tsx loads them, with the root
+  // tsconfig for the `@shared/*` aliases they reach.
+  const mockServer = [
+    '--import',
+    pathToFileURL(require.resolve('tsx')).href,
+    '--import',
+    pathToFileURL(path.join(__dirname, '../mocks/preload.ts')).href,
+  ];
+
+  return new WizardTestEnv('node', [...mockServer, binPath, '--debug'], {
     cwd: projectDir,
     debug,
+    env: {
+      ...process.env,
+      TSX_TSCONFIG_PATH: path.join(__dirname, '../../tsconfig.json'),
+    },
   });
 }
 
