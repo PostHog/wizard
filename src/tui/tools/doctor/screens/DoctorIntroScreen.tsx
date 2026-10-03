@@ -45,7 +45,7 @@ export const DoctorIntroScreen = ({ store }: DoctorIntroScreenProps) => {
         ]}
         onSelect={(value) => {
           if (value === 'cancel') {
-            process.exit(0);
+            store.requestExit(0);
           } else {
             store.completeSetup();
           }

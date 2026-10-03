@@ -1,9 +1,8 @@
 import type { Arguments } from 'yargs';
-import { setUI } from '@ui';
-import { LoggingUI } from '@headless/renderers/logging-ui';
+import { consoleLog } from '@shared/console-log';
 import { headlessOption, isHeadless } from '@shared/headless-mode';
-import { Program } from '@programs';
-import { VERSION } from '@shared/version';
+import { removeMCPServerFromClientsStep, Tool } from '@tools';
+import { exitWith, underSignals } from '@cli/runners';
 import type { Command } from '../command';
 import { isTUIUnavailable } from './tui-availability';
 
@@ -23,40 +22,38 @@ export const mcpRemoveCommand: Command = {
 };
 
 function runMcpRemove(argv: Arguments): void {
-  void (async () => {
-    const debug = argv.debug as boolean | undefined;
-    const localMcp = argv.local as boolean | undefined;
+  const localMcp = argv.local as boolean | undefined;
+  const headless = () =>
+    removeMCPServerFromClientsStep(
+      { local: localMcp },
+      { log: consoleLog.log },
+    );
 
-    // See the note in add.ts: a non-TTY run stalls on the confirm prompt
-    // instead of falling back, so scripts need an explicit flag.
-    if (isHeadless(argv)) {
-      await runHeadlessRemove(localMcp);
-      return;
-    }
+  // See the note in add.ts: a non-TTY run stalls on the confirm prompt
+  // instead of falling back, so scripts need an explicit flag.
+  if (isHeadless(argv)) {
+    exitWith(headless);
+    return;
+  }
 
+  exitWith(async () => {
     try {
-      const { startTUI } = await import('@tui/start-tui');
-      const { buildSession } = await import('@programs/session/wizard-session');
-      const tui = startTUI(VERSION, Program.McpRemove);
-      tui.store.session = buildSession({
-        debug,
-        localMcp,
-        baseUrl: argv.baseUrl as string | undefined,
-      });
+      const { runTuiTool } = await import('@tui');
+      return await underSignals((signal) =>
+        runTuiTool(Tool.McpRemove, {
+          session: {
+            debug: argv.debug as boolean | undefined,
+            localMcp,
+            baseUrl: argv.baseUrl as string | undefined,
+          },
+          signal,
+        }),
+      );
     } catch (error) {
-      // Same guard as `mcp add`: only a missing TTY falls back to LoggingUI,
+      // Same guard as `mcp add`: only a missing TTY falls back to the console,
       // so a genuine TUI bug surfaces instead of looking like a plain shell.
       if (!isTUIUnavailable(error)) throw error;
-      await runHeadlessRemove(localMcp);
+      return headless();
     }
-  })();
-}
-
-/** No exit code on an empty result: nothing to remove is the requested end state. */
-async function runHeadlessRemove(local?: boolean): Promise<void> {
-  setUI(new LoggingUI());
-  const { removeMCPServerFromClientsStep } = await import(
-    '@shared/mcp-clients/install'
-  );
-  await removeMCPServerFromClientsStep({ local });
+  });
 }
