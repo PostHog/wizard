@@ -2,11 +2,11 @@ import {
   buildSeedEvents,
   tallySeedEvents,
   seededProfile,
-} from '@tui/tools/mcp/services/seed-events';
+} from '../seed-events';
 import {
   degradedProfile,
   type ProjectDataProfile,
-} from '@tui/tools/mcp/services/mcp-project-profile';
+} from '../mcp-project-profile';
 
 const NOW = new Date('2026-06-08T12:00:00.000Z');
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;

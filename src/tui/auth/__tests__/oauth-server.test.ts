@@ -1,12 +1,9 @@
 import * as http from 'node:http';
 import * as net from 'node:net';
-import { startCallbackServer } from '@tui/auth/oauth';
-import { logToFile } from '../../../shared/utils/debug';
+import { startCallbackServer } from '../oauth';
+import { logToFile } from '@utils/debug';
 
-vi.mock('../../../shared/utils/debug', () => ({
-  logToFile: vi.fn(),
-  setDebugSink: vi.fn(),
-}));
+vi.mock(import('@utils/debug'), () => ({ logToFile: vi.fn() }));
 
 const authUrl = 'https://oauth.example.test/authorize';
 const signupUrl = 'https://oauth.example.test/signup';

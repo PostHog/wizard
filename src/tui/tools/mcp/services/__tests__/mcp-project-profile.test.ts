@@ -3,7 +3,7 @@ import {
   degradedProfile,
   isKnownCloudHost,
   type EventVolume,
-} from '@tui/tools/mcp/services/mcp-project-profile';
+} from '../mcp-project-profile';
 
 // Inconclusive REST result for every product — the "we couldn't tell"
 // default used by most tier/event tests so they isolate the events probe.

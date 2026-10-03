@@ -1086,19 +1086,3 @@ exports[`flow traces per program > web-analytics-doctor (node) 1`] = `
   "stoppedOn": null,
 }
 `;
-
-exports[`headless walk analytics > audit: run phases without a TUI 1`] = `
-{
-  "events": [],
-  "program": "audit",
-  "screen": "audit-intro",
-}
-`;
-
-exports[`headless walk analytics > posthog-integration: run phases without a TUI 1`] = `
-{
-  "events": [],
-  "program": "posthog-integration",
-  "screen": "intro",
-}
-`;
