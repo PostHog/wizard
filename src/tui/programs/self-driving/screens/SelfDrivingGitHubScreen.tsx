@@ -11,8 +11,8 @@
  * unambiguous (declining is an explicit pick), and un-timeoutable (the screen
  * waits as long as the browser install takes).
  *
- * Unlike SlackConnectScreen this is not skippable: declining ends the run on
- * the outro rather than continuing without it. The connection poll lives in
+ * This is not skippable: declining ends the run on the outro rather than
+ * continuing without it. The connection poll lives in
  * {@link useGithubConnection}.
  */
 

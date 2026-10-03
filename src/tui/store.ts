@@ -758,16 +758,6 @@ export class WizardStore {
     this.emitChange();
   }
 
-  setSlackStepDismissed(): void {
-    this.$session.setKey('slackStepDismissed', true);
-    this.emitChange();
-  }
-
-  setSlackConnected(connected: boolean): void {
-    this.$session.setKey('slackConnected', connected);
-    this.emitChange();
-  }
-
   setGithubConnected(connected: boolean): void {
     this.$session.setKey('githubConnected', connected);
     this.emitChange();

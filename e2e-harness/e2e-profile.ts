@@ -51,8 +51,6 @@ export interface WizardE2eProfile {
   healthCheck: 'dismiss' | 'wait';
   /** Post-agent MCP-install step. */
   mcp: 'skip' | 'install';
-  /** Connect-Slack step. */
-  slack: 'skip';
   /** Keep or delete the wizard-installed skills at the end. */
   skills: 'keep' | 'delete';
   /** Answer strategy for an agent `wizard_ask` overlay: the first option (its
@@ -83,7 +81,6 @@ export const DEFAULT_E2E_PROFILE: WizardE2eProfile = {
   setup: 'first',
   healthCheck: 'dismiss',
   mcp: 'skip',
-  slack: 'skip',
   skills: 'delete',
   ask: 'first',
   integrate: false,
@@ -337,9 +334,6 @@ export function decideE2eAction(
     case ScreenId.McpSuggestedPrompts:
       return { action: { id: 'dismiss' } };
 
-    case ScreenId.SlackConnect:
-      return { action: { id: 'dismiss_slack' } };
-
     case ScreenId.KeepSkills:
       return {
         action: {
@@ -401,7 +395,6 @@ export const E2E_DRIVABLE_SCREENS: readonly ScreenName[] = [
   ScreenId.SourceMapsOutro,
   ScreenId.Mcp,
   ScreenId.McpSuggestedPrompts,
-  ScreenId.SlackConnect,
   ScreenId.KeepSkills,
   Overlay.WizardAsk,
   Overlay.TaskNotice,

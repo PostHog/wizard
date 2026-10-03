@@ -103,7 +103,7 @@ function warehouseSourceUrl(
  * A pointer at the app, not an inline flow. Connecting a source needs
  * interactive credential collection, and chaining that as a second agent run
  * before the outro would let any of its terminal failure paths `process.exit()`
- * — costing the user the success outro and the post-outro MCP / Slack steps on
+ * — costing the user the success outro and the post-outro MCP step on
  * a run where PostHog installed fine.
  *
  * Each source gets its own pre-filled link, because the alternative we shipped

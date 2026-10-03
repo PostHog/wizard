@@ -12,7 +12,11 @@
 import { WizardStore } from '@tui/store';
 import { InkUI } from '@ui/tui/ink-ui';
 import { setUI } from '@ui/index';
-import { buildSession, RunPhase, McpOutcome } from '@programs/session/wizard-session';
+import {
+  buildSession,
+  RunPhase,
+  McpOutcome,
+} from '@programs/session/wizard-session';
 import { HostResolution } from '@shared/host-resolution';
 import { Integration } from '@shared/constants';
 import { FRAMEWORK_REGISTRY } from '@programs/frameworks/registry';
@@ -62,13 +66,12 @@ describe('WizardCiDriver — full integration flow', () => {
     driver.performAction('continue_setup');
     expect(driver.readState().currentScreen).toBe(ScreenId.Mcp);
     driver.performAction('set_mcp_outcome', { outcome: 'skipped' });
-    driver.performAction('dismiss_slack');
     expect(driver.readState().currentScreen).toBe(ScreenId.KeepSkills);
     driver.performAction('keep_skills', { kept: true });
     expect(driver.readState().currentScreen).toBe(ScreenId.Exit);
   });
 
-  it('walks intro → setup → run → outro → mcp → slack → keep-skills', () => {
+  it('walks intro → setup → run → outro → mcp → keep-skills', () => {
     const store = freshStore();
     const driver = new WizardCiDriver(store);
 
@@ -116,11 +119,7 @@ describe('WizardCiDriver — full integration flow', () => {
     driver.performAction('set_mcp_outcome', { outcome: 'skipped' });
     expect(store.session.mcpOutcome).toBe(McpOutcome.Skipped);
 
-    // 8. Slack
-    expect(driver.readState().currentScreen).toBe(ScreenId.SlackConnect);
-    driver.performAction('dismiss_slack');
-
-    // 9. Keep skills — terminal commit.
+    // 8. Keep skills — terminal commit.
     expect(driver.readState().currentScreen).toBe(ScreenId.KeepSkills);
     const done = driver.performAction('keep_skills', { kept: true });
 

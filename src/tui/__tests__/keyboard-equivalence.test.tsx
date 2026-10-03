@@ -63,7 +63,6 @@ vi.mock('@utils/clipboard', async (importOriginal) => ({
 vi.mock('opn', () => ({ default: vi.fn() }));
 vi.mock('@shared/api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@shared/api')>()),
-  fetchSlackConnected: vi.fn().mockResolvedValue(false),
   fetchUserData: vi.fn(() => new Promise(() => undefined)),
 }));
 vi.mock('@shared/skill-menu', async (importOriginal) => ({
@@ -85,7 +84,6 @@ const INSTALL_DIR = mkdtempSync(join(tmpdir(), 'wizard-kb-'));
 
 const ENTER = '\r';
 const ESC = '\u001B';
-const DOWN = '\u001B[B';
 // Real timers on purpose: Ink delivers stdin writes through the event loop,
 // and under vi.useFakeTimers the key handlers never run (verified: every
 // keyboard diff came back empty). The frames test can fake time since it
@@ -189,7 +187,7 @@ const PAIRS: Pair[] = [
   {
     name: 'mcp: decline install vs set_mcp_outcome skipped',
     knownDivergence:
-      'keyboard path records extra MCP state the action does not',
+      'keyboard path lands on keep-skills, whose mount scan with no skills dir sets skillsComplete; the action only records the MCP outcome',
     program: Program.PostHogIntegration,
     screen: ScreenId.Mcp,
     arrange: (s) => {
@@ -203,22 +201,6 @@ const PAIRS: Pair[] = [
     params: { outcome: 'skipped' },
   },
   {
-    name: 'slack-connect: skip vs dismiss_slack',
-    knownDivergence:
-      'keyboard path and dismiss_slack commit different slack step state',
-    program: Program.PostHogIntegration,
-    screen: ScreenId.SlackConnect,
-    arrange: (s) => {
-      confirmed(s);
-      authed(s);
-      ran(s);
-      s.setOutroDismissed();
-      s.setMcpComplete(McpOutcome.Skipped);
-    },
-    keys: [DOWN, ENTER],
-    action: 'dismiss_slack',
-  },
-  {
     name: 'keep-skills: mount with no skills dir vs keep_skills',
     knownDivergence:
       'keyboard path runs the skills-dir scan effect, the action only flips the flag',
@@ -230,7 +212,6 @@ const PAIRS: Pair[] = [
       ran(s);
       s.setOutroDismissed();
       s.setMcpComplete(McpOutcome.Skipped);
-      s.setSlackStepDismissed();
     },
     keys: [],
     action: 'keep_skills',

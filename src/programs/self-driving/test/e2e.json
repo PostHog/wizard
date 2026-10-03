@@ -5,7 +5,6 @@
     "setup": "first",
     "healthCheck": "dismiss",
     "mcp": "skip",
-    "slack": "skip",
     "skills": "delete",
     "ask": "first",
     "integrate": true

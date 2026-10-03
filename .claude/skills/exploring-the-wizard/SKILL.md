@@ -102,7 +102,7 @@ own decisions through the same state and action contract.
 | Accept or decline an optional task       | `resolve_notice`, `{ keep: true }` or `{ keep: false }`                                      |
 | Finish outro                             | `dismiss_outro`                                                                              |
 | Record MCP outcome                       | `set_mcp_outcome`, `{ outcome: "skipped" }` or `{ outcome: "installed", clients: [...] }`    |
-| Dismiss suggested prompts / Slack step   | `dismiss` / `dismiss_slack`                                                                  |
+| Dismiss suggested prompts                | `dismiss`                                                                                    |
 | Record keep-skills choice                | `keep_skills`, `{ kept: true }` or `{ kept: false }`                                         |
 
 MCP and keep-skills actions commit store state; recording an outcome does not

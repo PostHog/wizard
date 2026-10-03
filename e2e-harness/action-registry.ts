@@ -220,7 +220,7 @@ export const ACTION_REGISTRY: Partial<Record<ScreenName, DriverAction[]>> = {
   [ScreenId.MintFailure]: [
     {
       id: 'continue_setup',
-      description: 'Continue to MCP and Slack after the skill is saved.',
+      description: 'Continue to MCP after the skill is saved.',
       apply: (store) => store.setMintHandoff('continue'),
     },
     {
@@ -285,7 +285,7 @@ export const ACTION_REGISTRY: Partial<Record<ScreenName, DriverAction[]>> = {
     },
   ],
 
-  // ── Slack ─────────────────────────────────────────────────────────────
+  // ── Self-driving GitHub ───────────────────────────────────────────────
   [ScreenId.SelfDrivingGithub]: [
     {
       id: 'set_github_connected',
@@ -303,20 +303,6 @@ export const ACTION_REGISTRY: Partial<Record<ScreenName, DriverAction[]>> = {
           message: GITHUB_REQUIRED_MESSAGE,
           body: GITHUB_REQUIRED_BODY,
         }),
-    },
-  ],
-  [ScreenId.SlackConnect]: [
-    {
-      id: 'dismiss_slack',
-      description: 'Skip or finish the Connect-Slack step.',
-      apply: (store) => store.setSlackStepDismissed(),
-    },
-    {
-      id: 'set_slack_connected',
-      description: 'Mark Slack as connected (then dismiss to advance).',
-      params: { connected: 'boolean' },
-      apply: (store, params) =>
-        store.setSlackConnected(params.connected !== false),
     },
   ],
 

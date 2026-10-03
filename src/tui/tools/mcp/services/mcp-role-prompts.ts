@@ -139,19 +139,6 @@ const CROSS_SELL_BY_ROLE = copyData.crossSellByRole as Record<
   PromptOption[]
 >;
 const NEUTRAL_CROSS_SELL = copyData.neutralCrossSell as PromptOption[];
-// Presentation copy for the "Take PostHog to Slack" surfaces (Goodbye
-// card + dedicated step). Shown to the user, never sent to the agent —
-// so the read/persistence prompt-scope rule above does not apply. The
-// capabilities describe the Slack agent itself, not role-specific
-// examples. Connecting Slack is a manual OAuth step in the PostHog app,
-// so we link out to `setupUrl` rather than wiring it up.
-export const SLACK_APP = copyData.slackApp as {
-  learnMoreUrl: string;
-  setupUrl: string;
-  headline: string;
-  pitch: string;
-  capabilities: string[];
-};
 
 // Data-aware surfaces — templates + copy for the scout-driven picker.
 const GENERATED_QUESTS = copyData.generatedQuests as {

@@ -205,15 +205,6 @@ export interface WizardSession {
   /** Editor-owned login commands still to run (e.g. `claude mcp login posthog`), echoed at exit. */
   mcpLoginCommands: string[];
   mcpSuggestedPromptsDismissed: boolean;
-  /** True once the user has acted on (opened or skipped) the Connect-Slack step. */
-  slackStepDismissed: boolean;
-  /**
-   * Whether the project already has a Slack integration connected.
-   * `null` until detected. Prefetched by the tutorial screen as soon as
-   * credentials exist so the Connect-Slack step renders the right
-   * variant immediately instead of flashing the nudge first.
-   */
-  slackConnected: boolean | null;
   skillsComplete: boolean;
   outroDismissed: boolean;
 
@@ -288,7 +279,7 @@ export interface WizardSession {
   spellbook: { path: string; skillsIncluded: boolean } | null;
   /**
    * How the user left the mint-failure screen: `continue` walks the
-   * post-run steps (MCP, Slack, keep-skills), `exit` leaves. Null until then.
+   * post-run steps (MCP, keep-skills), `exit` leaves. Null until then.
    */
   mintHandoff: 'continue' | 'exit' | null;
   dashboardUrl: string | null;
@@ -382,8 +373,6 @@ export function buildSession(args: {
     mcpInstalledClients: [],
     mcpLoginCommands: [],
     mcpSuggestedPromptsDismissed: false,
-    slackStepDismissed: false,
-    slackConnected: null,
     skillsComplete: false,
     outroDismissed: false,
     // `--integrate` forces integration (skip the question); otherwise the

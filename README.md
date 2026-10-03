@@ -173,7 +173,7 @@ route review to their owning team instead.
 
 Ownership is by directory. Programs not listed above
 (`agent-skill`, `audit`, `events-audit`, `mcp`, `migration`, `posthog-doctor`,
-`shared`, `slack`) fall through the default and are owned by
+`shared`) fall through the default and are owned by
 `team-wizard-docs`. Today CODEOWNERS only auto-requests review — approval is
 not a merge gate.
 
@@ -613,7 +613,7 @@ Example prompt — explore against
 >    for any setup question, then `run_agent` at auth.
 > 4. Poll `read_state` until `integration` is `done` (or `failed` — then report
 >    `integrationError`), snapshotting as the run screen progresses.
-> 5. Finish the tail: dismiss outro / mcp / slack, then `keep_skills`.
+> 5. Finish the tail: dismiss outro / mcp, then `keep_skills`.
 >
 > Then show me the saved snapshots in order, the screen path, whether `posthog`
 > landed in the app, and anything that broke.

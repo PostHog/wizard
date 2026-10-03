@@ -260,33 +260,6 @@ const IntegrationsResponseSchema = z.object({
 });
 
 /**
- * Check whether the project already has a Slack integration connected.
- * Requires the `integration:read` scope. Throws on failure — callers
- * (including the SlackConnectScreen poll) decide how to degrade and
- * are responsible for capturing the error exactly once.
- */
-export async function fetchSlackConnected(
-  accessToken: string,
-  projectId: number,
-  baseUrl: string,
-  signal?: AbortSignal,
-): Promise<boolean> {
-  const response = await axios.get(
-    `${baseUrl}/api/projects/${projectId}/integrations/`,
-    {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'User-Agent': WIZARD_USER_AGENT,
-      },
-      signal,
-    },
-  );
-  const parsed = IntegrationsResponseSchema.safeParse(response.data);
-  if (!parsed.success) return false;
-  return parsed.data.results.some((i) => i.kind === 'slack');
-}
-
-/**
  * Check whether the project already has a GitHub App integration connected.
  * Requires the `integration:read` scope. Throws on failure — callers (the
  * SelfDrivingGitHubScreen poll) decide how to degrade and are responsible for

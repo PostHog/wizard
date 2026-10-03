@@ -519,7 +519,7 @@ describe('Analytics', () => {
         .before_send;
 
     it('reattaches identity and tags to autocaptured exceptions', () => {
-      analytics.setTag('command', 'slack');
+      analytics.setTag('command', 'mcp-add');
       const beforeSend = getBeforeSend();
 
       const result = beforeSend({
@@ -538,7 +538,7 @@ describe('Analytics', () => {
         run_id: 'run-uuid',
         run_surface: 'local',
         version: VERSION,
-        command: 'slack',
+        command: 'mcp-add',
         $exception_list: [{ type: 'Error' }],
       });
     });

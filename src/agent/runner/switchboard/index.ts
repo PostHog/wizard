@@ -162,7 +162,6 @@ export const PROGRAM_BINDINGS: Partial<Record<ProgramId, ProgramBinding>> = {
     model: GPT5_6_TERRA_MODEL,
     thinkingLevel: 'high',
   },
-  slack: DEFAULT_BINDING,
 };
 
 // ── Unified resolver ────────────────────────────────────────────────────

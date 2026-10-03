@@ -29,7 +29,6 @@ export type Sequence = Screen[];
 /** Post-run steps a mint-failure handoff continues through; ends on exit. */
 export const MINT_HANDOFF_SEQUENCE: Sequence = [
   { id: ScreenId.Mcp, isComplete: (s) => s.mcpComplete },
-  { id: ScreenId.SlackConnect, isComplete: (s) => s.slackStepDismissed },
   { id: ScreenId.KeepSkills, isComplete: (s) => s.skillsComplete },
   { id: ScreenId.Exit },
 ];

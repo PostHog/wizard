@@ -42,7 +42,6 @@ import { migrateCommand } from './src/cli/commands/migrate';
 import { revenueCommand } from './src/cli/commands/revenue';
 import { warehouseCommand } from './src/cli/commands/warehouse';
 import { selfDrivingCommand } from './src/cli/commands/self-driving';
-import { slackCommand } from './src/cli/commands/slack';
 import { uploadSourcemapsCommand } from './src/cli/commands/upload-sourcemaps';
 import { errorTrackingCommand } from './src/cli/commands/error-tracking';
 import { skillCommand } from './src/cli/commands/skill';
@@ -77,7 +76,6 @@ Wizard.use(basicIntegrationCommand)
   .use(revenueCommand)
   .use(warehouseCommand)
   .use(selfDrivingCommand)
-  .use(slackCommand)
   .use(uploadSourcemapsCommand)
   .use(errorTrackingCommand)
   .use(skillCommand)

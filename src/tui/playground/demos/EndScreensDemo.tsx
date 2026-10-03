@@ -2,18 +2,10 @@
  * EndScreensDemo — Playground demo for the screens shown at the end of
  * a wizard run.
  *
- * Mounts the real SlackConnectScreen and OutroScreen against the shared
- * playground store so every variant can be previewed without a run:
+ * Mounts the real OutroScreen against the shared playground store so
+ * every variant can be previewed without a run:
  *
- *   V   switch view          (slack-connect → outro)
- *   K   toggle Slack state   (connected ↔ not connected) — simulates the
- *       poll flipping the screen when the user finishes the browser OAuth
  *   O   cycle outro kind     (success → error → cancel)
- *
- * The playground credentials are re-pointed at a localhost dead-end
- * while this demo is mounted, so SlackConnectScreen's poll fails fast
- * without real network traffic; `K` drives `session.slackConnected`
- * directly, which is the same store key the poll writes.
  *
  * KeepSkillsScreen is intentionally absent — it reads the install dir's
  * .claude/skills/ from disk and calls process.exit() when none are
@@ -23,14 +15,9 @@
 import { Box, Text, useInput } from 'ink';
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import type { WizardStore } from '@tui/store';
-import { SlackConnectScreen } from '@tui/screens/SlackConnectScreen';
 import { OutroScreen } from '@tui/screens/OutroScreen';
 import { Colors } from '@tui/styles';
 import { OutroKind, type OutroData } from '@programs/session/wizard-session';
-import { HostResolution } from '@shared/host-resolution';
-
-const VIEWS = ['slack-connect', 'outro'] as const;
-type View = (typeof VIEWS)[number];
 
 const OUTRO_KINDS = [OutroKind.Success, OutroKind.Error, OutroKind.Cancel];
 
@@ -70,69 +57,31 @@ export const EndScreensDemo = ({ store }: EndScreensDemoProps) => {
     () => store.getSnapshot(),
   );
 
-  const [viewIdx, setViewIdx] = useState(0);
   const [outroKindIdx, setOutroKindIdx] = useState(0);
 
-  const view: View = VIEWS[viewIdx];
   const outroKind = OUTRO_KINDS[outroKindIdx];
 
-  // The playground pre-seeds fake credentials pointed at the real
-  // PostHog host, which SlackConnectScreen's poll would hit. Swap the
-  // host for a localhost dead-end while this demo is mounted (restore
-  // on unmount — tab switches unmount). The credentials must stay
-  // non-null: the router derives the active screen from session state,
-  // and nulling them drops the playground out of the 'run' screen,
-  // unmounting the tab bar and resetting it to the first tab.
-  useEffect(() => {
-    const previous = store.session.credentials;
-    store.setCredentials({
-      accessToken: 'playground',
-      projectApiKey: 'playground',
-      host: HostResolution.fromApiHost('http://127.0.0.1:9'),
-      projectId: 0,
-    });
-    return () => {
-      store.setCredentials(previous);
-    };
-  }, [store]);
-
-  // Seed the outro fixture each screen reads. slackConnected starts
-  // null (unknown) so the first paint shows the nudge variant, exactly
-  // like a wizard run before the poll's first response.
+  // Seed the outro fixture the screen reads.
   useEffect(() => {
     store.setOutroData(OUTRO_FIXTURES[outroKind]);
   }, [store, outroKind]);
 
   useInput((input) => {
-    if (input === 'V' || input === 'v') {
-      setViewIdx((i) => (i + 1) % VIEWS.length);
-    } else if (input === 'K' || input === 'k') {
-      store.setSlackConnected(store.session.slackConnected !== true);
-    } else if (input === 'O' || input === 'o') {
+    if (input === 'O' || input === 'o') {
       setOutroKindIdx((i) => (i + 1) % OUTRO_KINDS.length);
     }
   });
 
-  const slackState =
-    store.session.slackConnected === true ? 'connected' : 'not-connected';
-
   return (
     <Box flexDirection="column" flexGrow={1} paddingX={1}>
-      <Text dimColor>V view · K slack state · O outro kind</Text>
-      <Text dimColor>
-        view={view} · slack={slackState} · outro={outroKind}
-      </Text>
+      <Text dimColor>O outro kind</Text>
+      <Text dimColor>outro={outroKind}</Text>
       <Box marginTop={1} flexDirection="column" flexGrow={1}>
-        {view === 'slack-connect' ? (
-          <SlackConnectScreen store={store} />
-        ) : (
-          <OutroScreen store={store} />
-        )}
+        <OutroScreen store={store} />
       </Box>
       <Box marginTop={1}>
         <Text color={Colors.muted} dimColor>
-          (session-driven previews — the Slack poll points at a localhost
-          dead-end; K flips the same store key the poll writes.)
+          (session-driven preview of the outro screen.)
         </Text>
       </Box>
     </Box>

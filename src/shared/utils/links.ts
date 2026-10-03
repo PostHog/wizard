@@ -12,7 +12,7 @@ import { analytics } from './analytics';
 
 /**
  * Record the CLI command this run was started with (e.g. `integrate`,
- * `slack`, `mcp-add`). Set once at dispatch; tagged onto every wizard
+ * `mcp-add`). Set once at dispatch; tagged onto every wizard
  * event so wizard-side events segment by command.
  */
 export function setEntryCommand(command: string): void {
@@ -21,7 +21,7 @@ export function setEntryCommand(command: string): void {
 
 /**
  * Tag a URL with the wizard's UTM params. `content` names the specific link
- * (e.g. `oauth-signup`, `slack-connect-setup`). URLs that already carry a
+ * (e.g. `oauth-signup`, `outro-docs`). URLs that already carry a
  * utm_source — or don't parse — are returned untouched.
  */
 export function withUtm(url: string, content: string): string {
