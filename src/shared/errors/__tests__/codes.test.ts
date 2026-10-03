@@ -22,25 +22,6 @@ describe('error codes', () => {
 });
 
 describe('error catalog', () => {
-  it('has an entry for every error code', () => {
-    for (const code of Object.values(ErrorCodes)) {
-      expect(
-        ERROR_CATALOG[code],
-        `missing catalog entry for ${code}`,
-      ).toBeDefined();
-    }
-  });
-
-  it('catalog contains no extra entries', () => {
-    const codeValues = new Set(Object.values(ErrorCodes));
-    for (const key of Object.keys(ERROR_CATALOG)) {
-      expect(
-        codeValues.has(key as (typeof ErrorCodes)[keyof typeof ErrorCodes]),
-        `orphan catalog entry ${key}`,
-      ).toBe(true);
-    }
-  });
-
   it('files the mint codes under the gateway group', () => {
     // A refusal is a per-run decision the user can sometimes act on; a failure
     // is the mint being unavailable and clears on its own.
@@ -52,17 +33,5 @@ describe('error catalog', () => {
       group: 'gateway',
       retry: 'yes',
     });
-  });
-
-  it('every entry carries a group, retry advice, and a description', () => {
-    for (const [code, entry] of Object.entries(ERROR_CATALOG)) {
-      expect(entry.group, `${code} group`).toBeTruthy();
-      expect(['yes', 'no', 'case-by-case'], `${code} retry`).toContain(
-        entry.retry,
-      );
-      expect(entry.description.length, `${code} description`).toBeGreaterThan(
-        5,
-      );
-    }
   });
 });

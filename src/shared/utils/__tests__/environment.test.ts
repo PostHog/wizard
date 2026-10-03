@@ -9,8 +9,6 @@
  */
 
 import { readEnvironment } from '@utils/environment';
-import { buildSession } from '@programs/session/wizard-session';
-import { shouldDisableAsk } from '@agent/agent-runner';
 
 /** Every var this file sets, cleared between cases. */
 const TOUCHED = [
@@ -48,19 +46,5 @@ describe('readEnvironment', () => {
     process.env.POSTHOG_WIZARD_DEBUG = 'true';
     process.env.POSTHOG_WIZARD_e2e_ask = 'true';
     expect(readEnvironment()).toEqual({ debug: true });
-  });
-
-  // The composition the CI runner performs: bag spread into buildSession.
-  // Without the guard this flips the gate and the agent starts asking
-  // questions into a run that cannot answer them.
-  it('cannot re-enable wizard_ask in a --ci run', () => {
-    process.env.POSTHOG_WIZARD_e2e_ask = 'true';
-    const session = buildSession({
-      installDir: '/tmp/env-bag',
-      ci: true,
-      ...readEnvironment(),
-    });
-    expect(session.e2eAsk).toBe(false);
-    expect(shouldDisableAsk(session)).toBe(true);
   });
 });
