@@ -5,6 +5,7 @@ import { IS_PRODUCTION_BUILD } from '@env';
 import { Harness, Sequence } from '@shared/constants';
 import { regionOption } from '@shared/headless-mode';
 import { initLocalDev, localMcpSkillsNotice } from '@shared/local-dev';
+import { configureLogFile } from '@utils/debug';
 import { toCommandModule, type Command } from './commands/command';
 import { ErrorCodes } from '@shared/errors';
 import { emitWizardError } from '@shared/errors';
@@ -23,6 +24,11 @@ export const GLOBAL_OPTIONS = {
     default: false,
     describe: 'Enable verbose logging\nenv: POSTHOG_WIZARD_DEBUG',
     type: 'boolean' as const,
+  },
+  'log-file': {
+    describe:
+      'Write the debug log to this file (default: posthog-wizard.log in the temp dir)\nenv: POSTHOG_WIZARD_LOG_FILE',
+    type: 'string' as const,
   },
   signup: {
     default: false,
@@ -54,7 +60,7 @@ export const GLOBAL_OPTIONS = {
   // ── Internal modes ─────────────────────────────────────────────────
   // Hidden from `--help`.
   // NB: the experimental headless flag is deliberately NOT global. Supported
-  // commands declare it through `headlessOption` in @lib/headless-mode.
+  // commands declare it through `headlessOption` in @shared/headless-mode.
   'base-url': {
     describe:
       'Override the PostHog base URL (e.g. http://localhost:8010), bypassing region resolution. Pins the API host, cloud URL, and OAuth server.\nenv: POSTHOG_WIZARD_BASE_URL',
@@ -96,7 +102,7 @@ export class Wizard {
     // flag. init() additionally detects it up front to print a clearer message.
     // The published-build, non-interactive path is the experimental headless
     // flag, declared per-command through `headlessOption` (see
-    // @lib/headless-mode). CI needs `region` globally because the workbench
+    // @shared/headless-mode). CI needs `region` globally because the workbench
     // passes it to every command. --ci and headless stay separate so their
     // behavior can diverge.
     if (!IS_PRODUCTION_BUILD) {
@@ -178,6 +184,9 @@ export class Wizard {
       // Middleware rather than an argv scan so the env path is covered too,
       // and it runs before any TUI takes the terminal.
       .middleware((argv) => {
+        if (typeof argv.logFile === 'string' && argv.logFile) {
+          configureLogFile({ path: argv.logFile, pin: true });
+        }
         // The one place local targets are resolved; everything downstream reads
         // getLocalDev().
         initLocalDev(argv);

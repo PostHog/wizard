@@ -54,7 +54,7 @@ export const basicIntegrationCommand: Command = {
     void (async () => {
       // ── The CI / headless division ───────────────────────────────────
       // --ci (dev/test only) and the experimental headless flag (the
-      // published-build, non-interactive path; see @lib/headless-mode) both
+      // published-build, non-interactive path; see @shared/headless-mode) both
       // request a non-interactive install, but route to dedicated entry points
       // — runHeadlessInstall vs runCIInstall (and below them runWizardHeadless
       // vs runWizardCI). Both share one pipeline today but are separate
