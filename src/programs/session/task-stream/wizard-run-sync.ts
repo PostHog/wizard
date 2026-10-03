@@ -3,17 +3,15 @@ import { basename, resolve } from 'node:path';
 import { validate as isUUID } from 'uuid';
 import { valid as validVersion } from 'semver';
 import { VERSION } from '@shared/version';
-import {
-  RunPhase,
-  type Credentials,
-  type WizardSession,
-} from '@programs/session/wizard-session';
+import { RunPhase } from '@shared/run-state';
+import { type Credentials } from '@shared/api';
+import type { WizardSession } from '../wizard-session';
 import { currentCredentials } from '@shared/oauth-session';
 import { isGrantRevoked } from '@shared/auth-session-state';
 import { logToFile } from '@utils/debug';
 import { parseRetryAfter } from './destinations/posthog';
 
-export type RunOutcome = 'completed' | 'failed' | 'cancelled';
+export type TaskStreamOutcome = 'completed' | 'failed' | 'cancelled';
 type RunTask = {
   name: string;
   status: 'created' | 'running' | 'completed' | 'failed';
@@ -164,7 +162,7 @@ export class WizardRunSync {
     }
   }
 
-  shutdown(outcome: RunOutcome, timeoutMs: number): Promise<void> {
+  shutdown(outcome: TaskStreamOutcome, timeoutMs: number): Promise<void> {
     if (this.closing) return this.closing;
     this.stopped = true;
     this.closing = this.finish(outcome, Math.max(0, timeoutMs));
@@ -326,7 +324,10 @@ export class WizardRunSync {
     this.report(`${method} delivery exhausted`);
   }
 
-  private async finish(outcome: RunOutcome, timeoutMs: number): Promise<void> {
+  private async finish(
+    outcome: TaskStreamOutcome,
+    timeoutMs: number,
+  ): Promise<void> {
     const deadline = Date.now() + timeoutMs;
     try {
       await this.bounded(

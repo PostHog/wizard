@@ -19,11 +19,9 @@
  *   })
  */
 
-import type { ProgramConfig } from '@programs/program-step';
+import type { ProgramConfig } from '../program-step';
 import type { AbortCase } from '@agent/types';
-import type { ProgramRun } from '@programs/program-run';
-import { AGENT_SKILL_STEPS } from '../../tui/programs/shared/skill-flow.js';
-import { getContentBlocks } from '../../tui/programs/shared/skill-deck.js';
+import type { ProgramRun } from '../program-run';
 
 export interface SkillProgramOptions {
   /** Context-mill skill ID to install */
@@ -57,9 +55,7 @@ export function createSkillProgram(opts: SkillProgramOptions): ProgramConfig {
     description: opts.description,
     id: opts.id,
     skillId: opts.skillId,
-    steps: AGENT_SKILL_STEPS,
     reportFile: opts.reportFile,
-    getContentBlocks,
     run: {
       skillId: opts.skillId,
       integrationLabel: opts.integrationLabel,
