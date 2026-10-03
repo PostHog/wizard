@@ -1,6 +1,10 @@
 {
   "compilerOptions": {
-    "declaration": true,
+    "composite": true,
+    "rootDir": ".",
+    "outDir": ".tsbuild",
+    "emitDeclarationOnly": true,
+    "noEmitOnError": true,
     "stripInternal": true,
     "noImplicitAny": true,
     "strictNullChecks": true,
@@ -10,38 +14,35 @@
     "moduleResolution": "bundler",
     "target": "ES2022",
     "skipLibCheck": true,
-    "types": [],
+    "noUncheckedSideEffectImports": true,
+    "moduleDetection": "force",
+    "resolveJsonModule": false,
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
-    "sourceMap": true,
-    "inlineSources": true,
     "esModuleInterop": true,
     "jsx": "react-jsx",
+    "typeRoots": ["./node_modules/@types", "./types"],
+    "types": ["node", "read-env", "xcode", "vitest-global-types"],
+    // Entries only. A layer reads another through its entry, and the layer's
+    // `references` decide which projects it can reach at all.
     "paths": {
       "@env": ["./src/env.ts"],
       "@shared/*": ["./src/shared/*"],
+      "@utils/*": ["./src/shared/utils/*"],
+      "@host/*": ["./src/host/*"],
       "@agent": ["./src/agent/index.ts"],
       "@agent/types": ["./src/agent/types.ts"],
       "@agent/*": ["./src/agent/*"],
       "@programs": ["./src/programs/index.ts"],
       "@programs/types": ["./src/programs/types.ts"],
       "@programs/*": ["./src/programs/*"],
-      "@host/*": ["./src/host/*"],
       "@tools": ["./src/tools/index.ts"],
       "@tui": ["./src/tui/index.ts"],
+      "@tui/*": ["./src/tui/*"],
       "@headless": ["./src/headless/index.ts"],
       "@cli": ["./src/cli/index.ts"],
-      "@tools/*": ["./src/tools/*"],
-      "@tui/*": ["./src/tui/*"],
-      "@headless/*": ["./src/headless/*"],
       "@cli/*": ["./src/cli/*"],
-      "@lib/*": ["./src/lib/*"],
-      "@e2e-harness/*": ["./e2e-harness/*"],
-      "@utils/*": ["./src/shared/utils/*"],
-      "@ui": ["./src/ui/index.ts"],
-      "@ui/*": ["./src/ui/*"],
-      "@steps": ["./src/steps/index.ts"],
-      "@steps/*": ["./src/steps/*"]
+      "@e2e-harness/*": ["./e2e-harness/*"]
     }
   }
 }
