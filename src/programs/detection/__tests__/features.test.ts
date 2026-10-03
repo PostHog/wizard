@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { discoverFeatures } from '@programs/detection/features';
-import { DiscoveredFeature } from '@programs/session/wizard-session';
+import { DiscoveredFeature } from '@shared/discovered-feature';
 
 function makeTmpDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'features-detect-'));

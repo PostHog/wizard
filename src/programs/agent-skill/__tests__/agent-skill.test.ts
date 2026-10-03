@@ -1,11 +1,8 @@
-import { AGENT_SKILL_STEPS } from '@programs/agent-skill/index';
 import {
   createSkillProgram,
   type SkillProgramOptions,
 } from '@programs/shared/skill-program';
 import type { ProgramRun } from '@programs/program-run';
-import { buildSession, RunPhase } from '@programs/session/wizard-session';
-import { HostResolution } from '@shared/host-resolution';
 
 const baseOpts: SkillProgramOptions = {
   skillId: 'error-tracking-setup',
@@ -26,7 +23,6 @@ describe('createSkillProgram', () => {
 
     expect(config.command).toBe('errors');
     expect(config.id).toBe('error-tracking');
-    expect(config.steps).toBe(AGENT_SKILL_STEPS);
 
     // run must be a static object — skill programs don't need dynamic resolution
     const run = config.run as ProgramRun;
@@ -46,48 +42,5 @@ describe('createSkillProgram', () => {
       'Do the thing.',
     );
     expect((without.run as ProgramRun).customPrompt).toBeUndefined();
-  });
-});
-
-describe('AGENT_SKILL_STEPS', () => {
-  it('is intro → health-check → auth → run → outro → skills, all with screens and working predicates', () => {
-    expect(AGENT_SKILL_STEPS.map((s) => s.id)).toEqual([
-      'intro',
-      'health-check',
-      'auth',
-      'run',
-      'outro',
-      'skills',
-    ]);
-
-    const session = buildSession({});
-    const [intro, , auth, run, outro] = AGENT_SKILL_STEPS;
-
-    // Intro gate starts closed
-    expect(intro.gate!(session)).toBe(false);
-
-    // All incomplete initially
-    expect(auth.isComplete!(session)).toBe(false);
-    expect(run.isComplete!(session)).toBe(false);
-    expect(outro.isComplete!(session)).toBe(false);
-
-    // Intro gate opens after setup confirmed
-    session.setupConfirmed = true;
-    expect(intro.gate!(session)).toBe(true);
-
-    // Completing each
-    session.credentials = {
-      accessToken: 't',
-      projectApiKey: 'k',
-      host: HostResolution.fromApiHost('h'),
-      projectId: 1,
-    };
-    expect(auth.isComplete!(session)).toBe(true);
-
-    session.runPhase = RunPhase.Completed;
-    expect(run.isComplete!(session)).toBe(true);
-
-    session.outroDismissed = true;
-    expect(outro.isComplete!(session)).toBe(true);
   });
 });

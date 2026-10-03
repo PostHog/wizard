@@ -15,8 +15,8 @@ vi.mock('@utils/analytics', () => ({
   },
 }));
 
-import { posthogIntegrationConfig } from '@programs/posthog-integration/index';
-import { DETECTED_WAREHOUSE_SOURCES_KEY } from '@programs/warehouse-source/detect';
+import { config as posthogIntegration } from '@programs/posthog-integration';
+import { DETECTED_WAREHOUSE_SOURCES_KEY } from '@programs/warehouse-sources/detect';
 
 const POSTGRES: DetectedSource = {
   kind: 'Postgres',
@@ -34,7 +34,7 @@ function session(over: Partial<WizardSession> = {}): WizardSession {
 }
 
 function seed(sess: WizardSession) {
-  return posthogIntegrationConfig.seedTasks?.(sess) ?? [];
+  return posthogIntegration.seedTasks?.(sess) ?? [];
 }
 
 function sources(n: number): DetectedSource[] {

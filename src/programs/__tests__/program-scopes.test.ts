@@ -6,7 +6,7 @@
 import {
   getOAuthScopesForProgram,
   getProvisioningScopesForProgram,
-} from '@programs/oauth/program-scopes';
+} from '../program-registry';
 
 describe('posthog-integration scopes', () => {
   it('includes the warehouse pair for the orchestrator warehouse task', () => {
@@ -73,7 +73,7 @@ describe('provisioning scopes', () => {
     expect(getProvisioningScopesForProgram(null)).not.toContain(
       'replay_scanner:write',
     );
-    expect(getProvisioningScopesForProgram('mcp-tutorial')).not.toContain(
+    expect(getProvisioningScopesForProgram('metrics')).not.toContain(
       'replay_scanner:write',
     );
   });
