@@ -30,11 +30,11 @@ The wizard uses **AI models from Anthropic or OpenAI**, routed through PostHog's
 
 - **Source files** are sent to the selected model provider as part of the agent's context.
 - **`.env*` files and secrets** stay on your machine. The wizard's security scanner blocks anything it identifies as a secret from being read by the agent.
-- **Telemetry** (run metadata — phase, task list, planned events) is sent to PostHog by default. Pass `--no-telemetry` (or set `POSTHOG_WIZARD_NO_TELEMETRY=1`) to disable.
+- **Telemetry** (run metadata — phase, task list, planned events) is sent to PostHog by default. Pass `--no-telemetry` (or set `POSTHOG_WIZARD_TELEMETRY=false`) to disable.
 - **AI opt-in**: for existing organizations in interactive runs, the wizard checks `is_ai_data_processing_approved` and waits for approval before agent work. CI and signup runs bypass this interactive gate.
 - **Prefer your own AI?** The wizard's integration knowledge ships as a context-mill skill you can download and run inside your own agent.
 
-The wizard's "Privacy & data usage" menu (intro screen) and the `[I]` shortcut on the auth screen surface the same information in-terminal.
+The wizard's "Privacy & data" menu (intro screen) and the `[I]` shortcut on the auth screen surface the same information in-terminal.
 
 ## MCP Commands
 
@@ -135,6 +135,8 @@ Upload JavaScript source maps to PostHog error tracking so stack traces are symb
 npx @posthog/wizard@latest upload-source-maps
 ```
 
+`upload-sourcemaps` also works.
+
 ### Run skill
 
 Run any context-mill skill directly by name, even if it isn't exposed as its own
@@ -233,8 +235,9 @@ The following CLI arguments are available:
 | `--install-dir`   | Directory to install PostHog in                                  | string  |         |                                                      | `POSTHOG_WIZARD_INSTALL_DIR`   |
 | `--ci`            | Enable CI mode for non-interactive execution                     | boolean | `false` |                                                      | `POSTHOG_WIZARD_CI`            |
 | `--api-key`       | PostHog personal API key (phx_xxx) for authentication            | string  |         |                                                      | `POSTHOG_WIZARD_API_KEY`       |
-| `--no-telemetry`  | Disable wizard run-state telemetry                               | boolean | `false` |                                                      | `POSTHOG_WIZARD_NO_TELEMETRY`  |
-
+| `--project-id`    | PostHog project ID to use                                        | string  |         |                                                      | `POSTHOG_WIZARD_PROJECT_ID`    |
+| `--email`         | Email address for signup (with `--signup`)                       | string  |         |                                                      | `POSTHOG_WIZARD_EMAIL`         |
+| `--telemetry`     | Send wizard run state to PostHog; `--no-telemetry` disables it   | boolean | `true`  |                                                      | `POSTHOG_WIZARD_TELEMETRY`     |
 
 # CI Mode
 
@@ -365,34 +368,13 @@ So the rule for a net-new scope this repo starts requesting is:
   admin / the `seed_oauth_app_scopes` command), per region. This is the only
   case that needs a manual prod edit.
 
-Client IDs are per-region DB rows, not committed here — the prod US app is
-`c4Rdw8DIxgtQfA80IiSnGKlNX8QN00cFWF00QQhM`, the dev app (localhost:8010) is
-`DC5uRLVbGI02YQ82grxgnK6Qn12SXWpCqdPb60oZ`; the prod EU app's ID lives in the EU
-deployment (referenced via `WIZARD_CLOUD_RUN_OAUTH_CLIENT_ID`) and should be
-seeded the same `@default,…` way.
+The interactive apps' client IDs are `POSTHOG_US_CLIENT_ID`,
+`POSTHOG_EU_CLIENT_ID` and `POSTHOG_DEV_CLIENT_ID` (the localhost:8010 dev app)
+in `src/shared/constants.ts`. Seed every region's app the same `@default,…` way.
 
 If an existing Wizard authorization predates a newly required scope, reconnect
 the Wizard OAuth app. Refresh tokens retain their original grant and cannot be
 used to silently add permissions.
-
-# Command changes (CLI overhaul)
-
-The CLI was overhauled to consolidate commands into a smaller, extensible
-surface. If you used an older command, here's where it went:
-
-| Old command | New command | What changed |
-|---|---|---|
-| `wizard integrate` | `wizard` (default flow) | Command removed; the default flow runs the integration |
-| `wizard events-audit` | `wizard audit events` | Now an `audit`-family subcommand |
-| `wizard audit` (single audit) | `wizard audit <subcommand>` | Now a family; see [Audit](#audit) for the subcommands |
-| `wizard audit-3000` | *removed* | Retired |
-| `wizard revenue` | `wizard revenue-analytics` | Renamed (old `revenue` removed) |
-| `wizard upload-sourcemaps` | `wizard upload-source-maps` | Renamed; `upload-sourcemaps` still works as an alias |
-
-> **Commands vs. programs:** `integrate` was the *command*; the program behind it
-> is `posthog-integration`, which still exists and now powers the default flow.
-> Other commands depend on it via `requires: ['posthog-integration']`. The
-> program id is internal — it was never a command you typed.
 
 # Steal this code
 
@@ -428,15 +410,7 @@ phase, task list, planned events — to `POST /api/projects/{id}/wizard/sessions
 so the PostHog web app can render real-time progress. Updates are debounced
 (250ms) with phase changes flushed immediately; failures fall back silently to
 the wizard's debug log without disturbing the TUI. Pass `--no-telemetry` (or
-set `POSTHOG_WIZARD_NO_TELEMETRY=1`) to disable either remote transport.
-
-## Leave rules behind
-
-Supporting agent sessions after we leave is important. There are plenty of ways
-to break or misconfigure PostHog, so guarding against this is key.
-
-`src/shared/utils/rules/add-editor-rules.ts` demonstrates how to dynamically construct
-rules files and store them in the project's `.cursor/rules` directory.
+set `POSTHOG_WIZARD_TELEMETRY=false`) to disable either remote transport.
 
 ## Prompts and LLM interactions
 
@@ -505,6 +479,7 @@ To add a new build-time constant, add it to `env` in `tsdown.config.ts` and expo
 | `POSTHOG_WIZARD_BENCHMARK_FILE` | Output path for benchmark results |
 | `POSTHOG_WIZARD_LOG_DIR` | Log directory override |
 | `POSTHOG_WIZARD_DEBUG` / `DEBUG` | Enable debug output |
+| `POSTHOG_WIZARD_WARLOCK_DISABLED` | Local Warlock override; see the [runbook](docs/runbooks/warlock-kill-switch.md) |
 | `MCP_URL` | Override MCP server URL |
 | `POSTHOG_API_KEY` | API key for MCP subprocess auth |
 | `TERM`, `TERM_PROGRAM`, `CI`, etc. | Terminal/platform detection |
@@ -551,19 +526,19 @@ pnpm try --install-dir=[a path]
 pnpm run dev
 ```
 
-This builds, links globally, and watches for changes. Leave it running - any `.ts` file changes will auto-rebuild. Then from any project:
+This builds, links globally, and watches for changes. Leave it running - any `.ts` file changes will auto-rebuild. Then run `wizard` from any project.
+
+The linked build is a production build, so it rejects the dev-only flags. Run
+those from source:
 
 ```bash
-wizard --integration=nextjs
-
 # Point individual services at local dev servers:
-wizard --integration=nextjs --local-context-mill   # skills from localhost:8765
-wizard --integration=nextjs --local-mcp            # MCP from localhost:8787
-wizard --integration=nextjs --local-dev            # context-mill + MCP + PostHog
+pnpm try --install-dir=[a path] --local-context-mill   # skills from localhost:8765
+pnpm try --install-dir=[a path] --local-mcp            # MCP from localhost:8787
+pnpm try --install-dir=[a path] --local-dev            # context-mill + MCP + PostHog
 ```
 
 See [`docs/local-dev.md`](docs/local-dev.md) for the full catalog.
-`--local-mcp` selects the MCP server; `--local-context-mill` selects the skills server.
 
 ### Testing
 
@@ -576,7 +551,7 @@ bin/test
 To run E2E tests run:
 
 ```bash
-bin/test-e2e
+pnpm test:e2e
 ```
 
 E2E tests are a bit more complicated to create and adjust due to to their mocked

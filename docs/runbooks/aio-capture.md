@@ -28,13 +28,13 @@ and never surface to the run.
 Local dev against a test app:
 
 ```bash
-pnpm try --install-dir=<path> -- --capture-aio
+pnpm try --install-dir=<path> --capture-aio
 ```
 
 Any wizard subcommand accepts it (`audit`, `revenue-analytics`, etc.):
 
 ```bash
-pnpm try --install-dir=<path> -- audit events --capture-aio
+pnpm try audit events --install-dir=<path> --capture-aio
 ```
 
 Env var equivalent:
@@ -53,7 +53,7 @@ by:
 - `program_id` — which wizard program (e.g. `posthog-integration`)
 - `integration` — detected framework (e.g. `nextjs`)
 - `run_id` — a single wizard run's trace id (matches `$ai_trace_id`)
-- `build` — `dev` / `ci` / `prod`
+- `build` — `dev` / `ci` / `headless`
 - `skill_id` — installed skill, when the run has one
 
 Each event carries model, output content, token counts (input / output /
@@ -74,13 +74,11 @@ dev-only concern.
 
 ## What's not covered
 
-- **`agents-platform` harness** — placeholder today (`README` only). When it
-  lands, whoever builds it needs to add a third transform + wire point in
-  `src/agent/aio-capture.ts`. Search for `captureFromPiMessageEndEvent`
-  for the pattern.
+- **`agents-platform` harness** — a placeholder (`README` only) with no capture
+  transform. A harness there needs a third transform and wire point in
+  `src/agent/aio-capture.ts`; `captureFromPiMessageEndEvent` shows the pattern.
 - **Non-assistant messages** — user turns, tool results, and system messages
   don't get their own `$ai_generation`. Tool calls ride as content blocks
   inside the assistant turn's `$ai_output_choices`.
 - **Cross-region mirror** — the module always POSTs to the session's own
-  `apiHost`. There's no support today for sending to a different region than
-  the one you OAuth'd into.
+  `apiHost`. It can't send to a different region than the one you OAuth'd into.
