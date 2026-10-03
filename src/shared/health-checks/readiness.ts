@@ -26,7 +26,7 @@ export interface WizardReadinessConfig {
   degradedBlocksRun?: HealthCheckKey[];
 }
 
-// Skills gate startup; gateway readiness is checked against the minted URL.
+// Skills gate startup; gateway readiness is checked around the mint.
 export const DEFAULT_WIZARD_READINESS_CONFIG: WizardReadinessConfig = {
   downBlocksRun: ['skillsOrigin'],
 };
