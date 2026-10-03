@@ -16,6 +16,7 @@
     "main.ts",
     "tsdown.config.ts",
     "vitest.config.ts",
+    "vitest.setup.ts",
     "spec/**/*",
     "src/**/*",
     "test/**/*",

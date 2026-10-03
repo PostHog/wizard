@@ -236,11 +236,14 @@ describe('pi check_env_keys — failures arrive as rejections', () => {
     // instead of arriving as a failed tool call. Dropping `async` here — the
     // scan removed the last `await` — is what made that reachable.
     const { checkEnvKeys } = makeTools({});
-    const run = () =>
-      call(checkEnvKeys, { keys: ['ANY'], filePath: '../../etc/passwd' });
-
-    expect(run).not.toThrow();
-    return expect(run()).rejects.toThrow('Path traversal rejected');
+    let result: Promise<unknown> | undefined;
+    expect(() => {
+      result = call(checkEnvKeys, {
+        keys: ['ANY'],
+        filePath: '../../etc/passwd',
+      });
+    }).not.toThrow();
+    return expect(result).rejects.toThrow('Path traversal rejected');
   });
 
   it('answers normally for a path inside the working directory', async () => {

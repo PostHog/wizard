@@ -99,6 +99,7 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
+    setupFiles: [r('vitest.setup.ts')],
     projects: [
       project('agent', AGENT_TESTS),
       project('programs', PROGRAM_TESTS),
