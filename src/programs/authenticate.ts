@@ -13,9 +13,11 @@
 import type { WizardSession } from '@programs/session/wizard-session';
 import type { ProgramId } from '@programs/program-registry';
 import { getOrAskForProjectData } from '@tui/auth/project-data';
+import { configureOAuthSession } from '@shared/oauth-session';
 import { analytics, groupsFromUser } from '@utils/analytics';
 import { getUI } from '@ui';
 import { logToFile } from '@utils/debug';
+import { rotateCredentials } from './credentials';
 
 export async function authenticate(
   session: WizardSession,
@@ -63,6 +65,13 @@ export async function authenticate(
   session.apiUser = user;
 
   getUI().setCredentials(session.credentials);
+  // Own the login's refresh from here, not from the first agent run, so a
+  // screen that waits before it (the Self-driving GitHub gate) can rotate a
+  // token that expires while the user is in the browser.
+  configureOAuthSession(session.credentials, {
+    rotate: (held) => rotateCredentials(held, session.baseUrl),
+    onRefreshed: (refreshed) => getUI().setAccessToken(refreshed),
+  });
   getUI().setRoleAtOrganization(roleAtOrganization);
   getUI().setApiUser(user);
 

@@ -5,13 +5,21 @@
  * Installing the App is a manual browser step, so polling is what flips the
  * gate once the user comes back. The first tick also resolves the session's
  * unknown (`null`) state.
+ *
+ * The gate can open more than an hour after login, and the user can sit on it
+ * for longer, so each tick reads the token through the login's OAuth session
+ * rather than the one captured at auth. A stale token 401s every tick, and the
+ * gate then shows "Connect GitHub" forever, even after the App lands.
  */
 
 import { useEffect } from 'react';
+import axios from 'axios';
 
 import type { WizardStore } from '@tui/store';
 import type { WizardSession } from '@programs/session/wizard-session';
-import { fetchGithubConnected } from '@shared/api';
+import { fetchGithubConnected, type Credentials } from '@shared/api';
+import { currentCredentials } from '@shared/oauth-session';
+import { isGrantRevoked } from '@shared/auth-session-state';
 import { requestDeepLink } from '@utils/provisioning';
 import { analytics } from '@utils/analytics';
 
@@ -29,12 +37,55 @@ export async function fetchLoginUrl(
   return deepLink ?? `${session.credentials.host.appHost}/login`;
 }
 
+/** The login's current credentials, mirrored onto the session when they rotated. */
+async function freshCredentials(
+  store: WizardStore,
+  force = false,
+): Promise<Credentials | null> {
+  const held = store.session.credentials;
+  if (!held) return null;
+  const fresh = await currentCredentials(held, force);
+  if (fresh.accessToken !== held.accessToken) store.setAccessToken(fresh);
+  return fresh;
+}
+
+const isUnauthorized = (err: unknown): boolean =>
+  axios.isAxiosError(err) && err.response?.status === 401;
+
+/** One check. A 401 rotates the token once and retries before it counts as a failure. */
+export async function checkGithubConnected(
+  store: WizardStore,
+  signal: AbortSignal,
+): Promise<boolean> {
+  const credentials = await freshCredentials(store);
+  if (!credentials) return false;
+  const check = (held: Credentials): Promise<boolean> =>
+    fetchGithubConnected(
+      held.accessToken,
+      held.projectId,
+      held.host.apiHost,
+      signal,
+    );
+  try {
+    return await check(credentials);
+  } catch (err) {
+    if (!isUnauthorized(err) || !credentials.refreshToken || isGrantRevoked()) {
+      throw err;
+    }
+    const rotated = await freshCredentials(store, true);
+    if (!rotated || rotated.accessToken === credentials.accessToken) throw err;
+    return check(rotated);
+  }
+}
+
 export function useGithubConnection(store: WizardStore): void {
-  const credentials = store.session.credentials;
+  // Keyed on being logged in, not on the token: a rotation mid-check must not
+  // restart the loop and abort the retry it is waiting on.
+  const loggedIn = store.session.credentials !== null;
   const connected = store.session.githubConnected === true;
 
   useEffect(() => {
-    if (!credentials || connected) return;
+    if (!loggedIn || connected) return;
 
     const controller = new AbortController();
     let stopped = false;
@@ -56,10 +107,8 @@ export function useGithubConnection(store: WizardStore): void {
     void (async () => {
       while (!stopped) {
         try {
-          const isConnected = await fetchGithubConnected(
-            credentials.accessToken,
-            credentials.projectId,
-            credentials.host.apiHost,
+          const isConnected = await checkGithubConnected(
+            store,
             controller.signal,
           );
           if (stopped) return;
@@ -96,5 +145,5 @@ export function useGithubConnection(store: WizardStore): void {
       if (timer) clearTimeout(timer);
       controller.abort();
     };
-  }, [credentials, connected, store]);
+  }, [loggedIn, connected, store]);
 }
