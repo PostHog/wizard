@@ -1,16 +1,15 @@
 /**
  * Role + framework-tailored MCP prompt suggestions.
  *
- * All copy lives in `mcp-role-prompts.copy.json` so prompts can be
- * edited without touching TypeScript. This file holds the types,
- * the lookup functions, and the framework-family mapping.
+ * All copy lives in `mcp-role-prompts.copy.ts`, a plain data module, so
+ * prompts can be edited without touching the logic. This file holds the
+ * types, the lookup functions, and the framework-family mapping.
  *
- * Editing rule for the JSON (which can't carry comments itself): every
- * prompt is either (a) a read query on any PostHog product, or (b) a
- * write on dashboards, insights, notebooks, or annotations — the four
- * "persistence" surfaces. No prompt should ask the agent to ship a
- * flag, run an experiment, send a survey, or create an alert. See
- * prompt-tree.md §5 for the scope reality.
+ * Editing rule for the copy: every prompt is either (a) a read query on
+ * any PostHog product, or (b) a write on dashboards, insights, notebooks,
+ * or annotations — the four "persistence" surfaces. No prompt should ask
+ * the agent to ship a flag, run an experiment, send a survey, or create an
+ * alert. See prompt-tree.md §5 for the scope reality.
  *
  * The wizard surfaces these on the McpSuggestedPromptsScreen after
  * MCP install. Picking strategy for the kit:
@@ -24,7 +23,7 @@ import type {
   ProductPresence,
   ProjectDataProfile,
 } from './mcp-project-profile';
-import copyData from './mcp-role-prompts.copy.json';
+import copyData from './mcp-role-prompts.copy';
 
 /** Keys of `ProductPresence` — the products an activation cross-sell can target. */
 export type ProductKey = keyof ProductPresence;
@@ -139,20 +138,6 @@ const CROSS_SELL_BY_ROLE = copyData.crossSellByRole as Record<
   PromptOption[]
 >;
 const NEUTRAL_CROSS_SELL = copyData.neutralCrossSell as PromptOption[];
-// Presentation copy for the "Take PostHog to Slack" surfaces (Goodbye
-// card + dedicated step). Shown to the user, never sent to the agent —
-// so the read/persistence prompt-scope rule above does not apply. The
-// capabilities describe the Slack agent itself, not role-specific
-// examples. Connecting Slack is a manual OAuth step in the PostHog app,
-// so we link out to `setupUrl` rather than wiring it up.
-export const SLACK_APP = copyData.slackApp as {
-  learnMoreUrl: string;
-  setupUrl: string;
-  headline: string;
-  pitch: string;
-  capabilities: string[];
-};
-
 // Data-aware surfaces — templates + copy for the scout-driven picker.
 const GENERATED_QUESTS = copyData.generatedQuests as {
   funnel: { label: string; prompt: string };

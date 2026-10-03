@@ -1,57 +1,40 @@
-/**
- * MCP add / remove / tutorial programs.
- *
- * None of these run the agent pipeline — they're TUI-only flows invoked
- * by the `mcp add` / `mcp remove` / `mcp tutorial` subcommands in
- * bin.ts. They live in the program registry so the screen sequence is
- * derived alongside every other program (no special-cases in
- * screen-sequences.ts).
- */
+import type { FlowStep } from '@tui/flow';
+import { McpOutcome } from '@shared/run-state';
 
-import type { ProgramConfig } from '@programs/program-step';
-import { McpOutcome } from '@programs/session/wizard-session';
-
-export const mcpAddConfig: ProgramConfig = {
-  id: 'mcp-add',
-  requiresAi: false,
-  description: 'Add PostHog MCP server to supported clients',
+export const MCP_ADD_FLOW: FlowStep[] = [
   // Order: install → Slack → tutorial. Slack runs before the tutorial
   // because it renders gracefully without credentials (no surprise
   // OAuth on the loginless install path). The tutorial is last so its
   // explicit "Start tutorial" opt-in is the moment OAuth fires — and
   // skipping the tutorial doesn't bury Slack discovery behind a
   // dismissal screen.
-  steps: [
-    {
-      id: 'mcp-add',
-      label: 'Add MCP server',
-      screenId: 'mcp-add',
-      isComplete: (s) => s.mcpComplete,
-    },
-    {
-      id: 'slack-connect',
-      label: 'Connect Slack',
-      screenId: 'slack-connect',
-      // Gate on a successful install so no-clients / skipped / failed
-      // outcomes go straight to program end without a "what's next" prompt.
-      show: (s) => s.mcpOutcome === McpOutcome.Installed,
-      isComplete: (s) => s.slackStepDismissed,
-    },
-    {
-      id: 'mcp-suggested-prompts',
-      label: 'Suggested prompts',
-      screenId: 'mcp-suggested-prompts',
-      // Same install gate — without a working MCP there's nothing to
-      // talk to from the tutorial.
-      show: (s) => s.mcpOutcome === McpOutcome.Installed,
-      isComplete: (s) => s.mcpSuggestedPromptsDismissed,
-      // This step *is* the tutorial, so it reports there rather than to
-      // `mcp-add`. Literal avoids a runtime cycle with the program registry;
-      // the `ProgramId` type still catches a rename.
-      reportsAsProgramId: 'mcp-tutorial',
-    },
-  ],
-};
+  {
+    id: 'mcp-add',
+    label: 'Add MCP server',
+    screenId: 'mcp-add',
+    isComplete: (s) => s.mcpComplete,
+  },
+  {
+    id: 'slack-connect',
+    label: 'Connect Slack',
+    screenId: 'slack-connect',
+    // Gate on a successful install so no-clients / skipped / failed
+    // outcomes go straight to program end without a "what's next" prompt.
+    show: (s) => s.mcpOutcome === McpOutcome.Installed,
+    isComplete: (s) => s.slackStepDismissed,
+  },
+  {
+    id: 'mcp-suggested-prompts',
+    label: 'Suggested prompts',
+    screenId: 'mcp-suggested-prompts',
+    // Same install gate — without a working MCP there's nothing to
+    // talk to from the tutorial.
+    show: (s) => s.mcpOutcome === McpOutcome.Installed,
+    isComplete: (s) => s.mcpSuggestedPromptsDismissed,
+    // This step *is* the tutorial, so it reports there rather than to `mcp-add`.
+    reportsAsProgramId: 'mcp-tutorial',
+  },
+];
 
 /**
  * `wizard mcp remove` — single-step uninstall flow.
@@ -65,21 +48,16 @@ export const mcpAddConfig: ProgramConfig = {
  * post-remove, so the copy would be a lie.
  *
  * If you want a "did you mean to keep it?" confirmation, build that as
- * a screen earlier in this program — don't reuse the tutorial.
+ * a screen earlier in this flow — don't reuse the tutorial.
  */
-export const mcpRemoveConfig: ProgramConfig = {
-  id: 'mcp-remove',
-  requiresAi: false,
-  description: 'Remove PostHog MCP server from supported clients',
-  steps: [
-    {
-      id: 'mcp-remove',
-      label: 'Remove MCP server',
-      screenId: 'mcp-remove',
-      isComplete: (s) => s.mcpComplete,
-    },
-  ],
-};
+export const MCP_REMOVE_FLOW: FlowStep[] = [
+  {
+    id: 'mcp-remove',
+    label: 'Remove MCP server',
+    screenId: 'mcp-remove',
+    isComplete: (s) => s.mcpComplete,
+  },
+];
 
 /**
  * Standalone tutorial flow — boots directly into the Choose phase of
@@ -89,24 +67,19 @@ export const mcpRemoveConfig: ProgramConfig = {
  * without touching their IDE config.
  *
  * The screen handles its own OAuth (via services.performLogin) so this
- * program doesn't pre-populate credentials.
+ * flow doesn't pre-populate credentials.
  */
-export const mcpTutorialConfig: ProgramConfig = {
-  id: 'mcp-tutorial',
-  requiresAi: false,
-  description: 'Try the PostHog MCP with your agent — no install needed',
-  steps: [
-    {
-      id: 'mcp-suggested-prompts',
-      label: 'MCP tutorial',
-      screenId: 'mcp-suggested-prompts',
-      isComplete: (s) => s.mcpSuggestedPromptsDismissed,
-    },
-    {
-      id: 'slack-connect',
-      label: 'Connect Slack',
-      screenId: 'slack-connect',
-      isComplete: (s) => s.slackStepDismissed,
-    },
-  ],
-};
+export const MCP_TUTORIAL_FLOW: FlowStep[] = [
+  {
+    id: 'mcp-suggested-prompts',
+    label: 'MCP tutorial',
+    screenId: 'mcp-suggested-prompts',
+    isComplete: (s) => s.mcpSuggestedPromptsDismissed,
+  },
+  {
+    id: 'slack-connect',
+    label: 'Connect Slack',
+    screenId: 'slack-connect',
+    isComplete: (s) => s.slackStepDismissed,
+  },
+];
