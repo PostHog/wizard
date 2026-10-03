@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.80.1](https://github.com/PostHog/wizard/compare/v2.80.0...v2.80.1) (2026-10-03)
+
+
+### Bug Fixes
+
+* **agent:** deny .env files with SDK rules and skip project hooks ([#1408](https://github.com/PostHog/wizard/issues/1408)) ([1e1e56c](https://github.com/PostHog/wizard/commit/1e1e56c003712aa2087b6c5d2d5964cac06f35c4))
+
 ## [2.80.0](https://github.com/PostHog/wizard/compare/v2.79.1...v2.80.0) (2026-10-02)
 
 
