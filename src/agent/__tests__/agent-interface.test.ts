@@ -163,7 +163,7 @@ describe('runAgent', () => {
     );
     const options = mockQuery.mock.calls[0][0].options;
     expect(options.tools).toEqual(['Read', 'Glob', 'Grep']);
-    expect(options.allowedTools).toEqual(['Read', 'Glob', 'Grep']);
+    expect(options.allowedTools).toEqual(['Glob']);
     expect(options.mcpServers).toEqual({});
     expect(options.agents).toBeUndefined();
     expect(options.settingSources).toEqual([]);
@@ -183,6 +183,33 @@ describe('runAgent', () => {
     expect(
       await options.canUseTool('Read', { file_path: 'package.json' }),
     ).toMatchObject({ behavior: 'allow' });
+  });
+
+  it('denies real env files to every tool and runs no project hooks', async () => {
+    mockQuery.mockImplementation(function* () {
+      yield { type: 'result', subtype: 'success' };
+    });
+    await runAgent(
+      defaultAgentConfig,
+      'Integrate',
+      defaultOptions,
+      mockSpinner,
+      { requestRemark: false },
+    );
+    const { settings, allowedTools } = mockQuery.mock.calls[0][0].options;
+    // Outside the project only canUseTool sees file tools, so none is pre-allowed.
+    for (const tool of ['Read', 'Write', 'Edit', 'Grep']) {
+      expect(allowedTools).not.toContain(tool);
+    }
+    expect(settings.disableAllHooks).toBe(true);
+    expect(settings.permissions.deny).toEqual(
+      expect.arrayContaining([
+        'Read(.env*)',
+        'Read(!.env.example)',
+        'Edit(.env*)',
+        'Edit(!.env.example)',
+      ]),
+    );
   });
 
   it('preserves structured-output exhaustion when the SDK throws after its result', async () => {

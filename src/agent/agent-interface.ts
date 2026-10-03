@@ -15,7 +15,10 @@ import type {
 import { debug, logToFile, initLogFile, getLogFilePath } from '@utils/debug';
 import type { WizardRunOptions } from '@utils/types';
 import { analytics } from '@utils/analytics';
-import { isTemplateEnvFileName } from '@utils/env-scan';
+import {
+  isTemplateEnvFileName,
+  TEMPLATE_ENV_FILE_NAMES,
+} from '@utils/env-scan';
 import { runtimeEnv } from '@env';
 import type { AioCapture } from '@agent/aio-capture';
 import {
@@ -998,7 +1001,7 @@ export async function runAgent(
       agentConfig.readOnly
         ? READ_ONLY_TOOLS
         : [...BASE_ALLOWED_TOOLS, ...(agentConfig.allowedTools ?? [])]
-    ).filter((t) => !disallow.has(t));
+    ).filter((t) => !disallow.has(t) && !CAN_USE_TOOL_FILE_TOOLS.has(t));
 
     // Subagents dispatched via the Agent tool don't inherit the parent's
     // MCP servers by default — so general-purpose subagents can't see the
@@ -1068,6 +1071,12 @@ export async function runAgent(
               },
           // Load skills from project's .claude/skills/ directory
           settingSources: agentConfig.readOnly ? [] : ['project'],
+          // The SDK approves file tools inside the project without canUseTool, so env files are
+          // denied as rules, which the sandbox applies to commands too. Repo hooks would bypass both.
+          settings: {
+            disableAllHooks: true,
+            permissions: { deny: [...ENV_FILE_DENY_RULES] },
+          },
           // Enable all discovered skills. Omitting this is NOT "skills off" —
           // it just means no SDK auto-config — so we set 'all' explicitly to
           // preserve the prior behavior where 'Skill' in allowedTools exposed
@@ -1729,12 +1738,24 @@ export const POSTHOG_MCP_SERVER_NAME = 'posthog-wizard';
 
 const READ_ONLY_TOOLS: readonly string[] = ['Read', 'Glob', 'Grep'];
 
-export const BASE_ALLOWED_TOOLS: readonly string[] = [
+/** wizardCanUseTool's env-file rule as SDK deny rules for the project; outside it, canUseTool sees the file tools. */
+const ENV_FILE_DENY_RULES: readonly string[] = ['Read', 'Edit'].flatMap(
+  (tool) => [
+    `${tool}(.env*)`,
+    ...TEMPLATE_ENV_FILE_NAMES.map((name) => `${tool}(!${name})`),
+  ],
+);
+
+/** The SDK approves these itself inside the project; allowing them would hide calls outside it from canUseTool. */
+const CAN_USE_TOOL_FILE_TOOLS: ReadonlySet<string> = new Set([
   'Read',
   'Write',
   'Edit',
-  'Glob',
   'Grep',
+]);
+
+export const BASE_ALLOWED_TOOLS: readonly string[] = [
+  'Glob',
   'Bash',
   // Task list tools (replaced TodoWrite in 0.3.142). Commandments instruct
   // the agent to call TaskCreate/TaskUpdate to surface progress in the TUI.
