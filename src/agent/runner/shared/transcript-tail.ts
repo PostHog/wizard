@@ -1,6 +1,6 @@
 /** The SDK message observer behind `collectTranscript`: a capped text tail plus one `activity` line per step. */
 
-import type { ProgressEmitter } from '@agent/progress';
+import type { ProgressEmitter } from '../../progress';
 import type { RunMiddleware } from '../harness/types';
 
 /** Only the tail is kept: a caller's report is the run's last output. */

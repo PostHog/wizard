@@ -1,3 +1,5 @@
+// Turns a caller's routing into the resolved config the sequences read.
+
 import {
   Sequence,
   WIZARD_ORCHESTRATOR_FLAG_KEY,
@@ -5,15 +7,57 @@ import {
 } from '@shared/constants';
 import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
-import type { ProgramBinding, SwitchboardCtx } from '.';
+import { buildRunTags } from '../../agent-interface';
+import type {
+  ResolvedBinding,
+  ResolvedRunConfig,
+  RunConfig,
+} from '../shared/types';
+import { resolveBinding, resolveScanBinding, type SwitchboardCtx } from '.';
+
+/** Resolve the run's binding from its routing, and build its trace tags. */
+export function resolveRunConfig(config: RunConfig): ResolvedRunConfig {
+  const { routing, tags, ...rest } = config;
+  const switchboard: SwitchboardCtx = {
+    program: config.programId,
+    binding: routing.binding,
+    composed: config.composed,
+    flags: config.wizardFlags,
+    flagPayloads: config.wizardFlagPayloads,
+    cliHarness: routing.overrides?.harness,
+    cliSequence: routing.overrides?.sequence,
+    cliModel: routing.overrides?.model,
+  };
+  const binding = routing.scan
+    ? resolveScanBinding(switchboard, routing.scan)
+    : resolveBinding(switchboard);
+  const record = routing.record ?? true;
+  if (record) {
+    analytics.setTag('sequence', binding.sequence);
+    analytics.setTag('harness', binding.harness);
+    captureSwitchboardDecision(switchboard, binding);
+  }
+  const wizardMetadata = {
+    ...buildRunTags({
+      programId: config.programId,
+      integration: config.run.integrationLabel,
+      runId: analytics.runId,
+      build: analytics.build,
+      skillId: config.run.skillId,
+    }),
+    ...(record ? { SEQUENCE: binding.sequence, HARNESS: binding.harness } : {}),
+    ...tags,
+  };
+  return { ...rest, binding, switchboard, wizardMetadata };
+}
 
 /**
  * One event + one log line per run: what entered the switchboard, which
  * precedence rung decided each axis, and the final pick.
  */
-export function captureSwitchboardDecision(
+function captureSwitchboardDecision(
   ctx: SwitchboardCtx,
-  binding: ProgramBinding,
+  binding: ResolvedBinding,
 ): void {
   const trace = ctx.trace ?? {};
   // Unpinned orchestrator runs choose a model per task from the context-mill agent prompts; the orchestrator logs that map once the prompts load.

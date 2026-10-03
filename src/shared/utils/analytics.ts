@@ -8,13 +8,16 @@ import {
 import {
   reportableDiscoveredFeatures,
   reportablePosthogSdkDetected,
-  type WizardSession,
-} from '@programs/session/wizard-session';
+  type RunPhase,
+  type ScanConsent,
+} from '@shared/run-state';
+import type { DiscoveredFeature } from '@shared/discovered-feature';
+import type { Integration } from '@shared/constants';
 import type { ApiUser } from '@shared/api';
 import { v4 as uuidv4 } from 'uuid';
 import { IS_PRODUCTION_BUILD, RUN_SURFACE, TASK_ID, TASK_RUN_ID } from '@env';
 import { VERSION } from '@shared/version';
-import { debug, logToFile } from './debug';
+import { logToFile } from './debug';
 import { applyCiFlagOverrides } from './ci-flag-overrides';
 
 /**
@@ -35,12 +38,25 @@ function invocationProperties(): { command: string; cli_flags: string } {
   return { command, cli_flags: flags.join(',') };
 }
 
+/** The session facts analytics reports on every capture. */
+export type SessionFacts = {
+  integration: Integration | null;
+  skillId: string | null;
+  detectedFrameworkLabel: string | null;
+  typescript: boolean;
+  credentials: { projectId: number } | null;
+  discoveredFeatures: DiscoveredFeature[];
+  scanConsent: ScanConsent;
+  runPhase: RunPhase;
+  posthogSdkDetected: boolean;
+};
+
 /**
  * Extract a standard property bag from the current session.
  * Used by store-level analytics and available for ad-hoc captures.
  */
 export function sessionProperties(
-  session: WizardSession,
+  session: SessionFacts,
 ): Record<string, unknown> {
   // reportableDiscoveredFeatures() owns the consent decision; this file
   // never needs to know what `scanConsent` means, only that the result
@@ -349,7 +365,7 @@ export class Analytics {
         if (payload !== undefined) payloads[key] = payload;
       }
     } catch (error) {
-      debug('Failed to get all feature flags:', error);
+      logToFile('Failed to get all feature flags:', error);
       this.captureException(
         error instanceof Error ? error : new Error(String(error)),
         { step: 'get_all_flags' },
