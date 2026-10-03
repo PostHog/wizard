@@ -14,14 +14,17 @@
 import type {
   AgenticDetectionReport,
   DetectEvent,
-} from '@programs/detection/agentic';
+  DetectProgress,
+} from '../detection/agentic';
 import {
   detectIntegrationProjects,
   toIntegrationCandidates,
-} from '@programs/detection/project-scope';
-import { gatherFrameworkContext } from '@programs/detection/index';
+} from '../detection/project-scope';
+import { gatherFrameworkContext } from '../detection/context';
+import { noteDetectedFramework } from '../detection/detected-framework';
 import type { Integration } from '@shared/constants';
-import type { WizardSession } from '@programs/session/wizard-session';
+import type { ProgramSession } from '../program-session';
+import type { RunnerContext } from '../runner-context';
 
 export type { DetectEvent };
 
@@ -83,12 +86,14 @@ export function toIntegrationReport(
 
 /** Run the Haiku detector over the repo and classify projects for integration. */
 export async function detectSelfDrivingIntegrationProjects(
-  session: WizardSession,
+  session: ProgramSession,
   onEvent?: DetectEvent,
+  onProgress?: DetectProgress,
 ): Promise<IntegrationDetectionReport> {
   const report = await detectIntegrationProjects(session, {
     programId: 'self-driving',
     onEvent,
+    onProgress,
   });
   return toIntegrationReport(report);
 }
@@ -102,7 +107,8 @@ export async function detectSelfDrivingIntegrationProjects(
  * integrate-run step's `onRunPrep`.
  */
 export async function prepSelfDrivingIntegration(
-  session: WizardSession,
+  session: ProgramSession,
+  log: RunnerContext['log'],
 ): Promise<void> {
   // `session` is the phase's derived session — its installDir is already the
   // picked project (the integrate-run step's `targetDir`), so just gather that
@@ -123,4 +129,5 @@ export async function prepSelfDrivingIntegration(
       session.frameworkContext[key] = value;
     }
   }
+  noteDetectedFramework(session, frameworkConfig, context, log);
 }

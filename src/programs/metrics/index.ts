@@ -1,10 +1,5 @@
-import type { ProgramConfig, ProgramStep } from '@programs/program-step';
-import { AGENT_SKILL_STEPS } from '@programs/agent-skill/index';
-import { getContentBlocks } from '@tui/programs/shared/skill-deck';
-
-const METRICS_STEPS: ProgramStep[] = AGENT_SKILL_STEPS.map((step) =>
-  step.id === 'intro' ? { ...step, screenId: 'metrics-intro' } : step,
-);
+import { Harness, Sequence, DEFAULT_AGENT_MODEL } from '@shared/constants';
+import type { ProgramConfig } from '../program-step';
 
 const METRICS_REPORT_FILE = 'posthog-metrics-report.md';
 
@@ -18,18 +13,24 @@ const METRICS_REPORT_FILE = 'posthog-metrics-report.md';
  * `customPrompt` both pick from the menu and install it. Stays flat while a
  * single "add metrics to a project" flow is the only action.
  */
-export const metricsConfig: ProgramConfig = {
+export const config: ProgramConfig = {
   command: 'metrics',
   description: 'Add PostHog application metrics to your project',
   id: 'metrics',
+  // Orchestrator on pi. The binding routes only; every stage's model and
+  // effort are pinned context-mill side in the flow's frontmatter
+  // (`model_pi`/`effort_pi`: terra seed, sol tasks, luna report).
+  binding: {
+    sequence: Sequence.orchestrator,
+    harness: Harness.pi,
+    model: DEFAULT_AGENT_MODEL,
+  },
   // Orchestrator flow (context-mill `context/agents/metrics`): the seed queues
   // verify-sdk → instrument-metrics → report; the tasks install the matching
   // platform variant themselves. Explicit so renaming the program can't
   // silently detach the flow.
   agentFlow: 'metrics',
-  steps: METRICS_STEPS,
   reportFile: METRICS_REPORT_FILE,
-  getContentBlocks,
   run: {
     integrationLabel: 'metrics',
     // No `skillId`: the agent must load the menu and install the right

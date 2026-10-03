@@ -1,7 +1,7 @@
 /* Ruby on Rails wizard using posthog-agent with PostHog MCP */
 import type { WizardRunOptions } from '@utils/types';
-import type { FrameworkConfig } from '@programs/framework-config';
-import { bundlerPackageManager } from '@programs/detection/package-manager';
+import type { FrameworkConfig } from '../../framework-config';
+import { bundlerPackageManager } from '../../detection/package-manager';
 import { Integration } from '@shared/constants';
 import {
   getRailsVersion,
@@ -29,6 +29,12 @@ export const RAILS_AGENT_CONFIG: FrameworkConfig<RailsContext> = {
       const initializersDir = findInitializersDir(options);
       return Promise.resolve({ projectType, initializersDir });
     },
+    getDetectedFrameworkLabel: (context) =>
+      context.projectType === RailsProjectType.API
+        ? 'Rails API-only'
+        : context.projectType === RailsProjectType.STANDARD
+        ? 'Rails'
+        : undefined,
   },
 
   detection: {
