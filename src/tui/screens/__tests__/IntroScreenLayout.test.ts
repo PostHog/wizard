@@ -5,11 +5,20 @@
  * nesting under More info.
  */
 
+import { vi } from 'vitest';
+import { createElement } from 'react';
+import { render } from 'ink-testing-library';
+import { Program } from '@programs';
 import {
   buildIntroMenu,
   detectionLabelWidth,
+  IntroScreenLayout,
 } from '@tui/screens/IntroScreenLayout';
 import { PRIVACY_PANEL_LABEL } from '@tui/components/PrivacyPanel';
+
+vi.mock(import('ink'), () =>
+  vi.importActual<typeof import('ink')>('ink-actual'),
+);
 
 const values = (options: ReturnType<typeof buildIntroMenu>) =>
   options?.map((o) => o.value);
@@ -106,5 +115,28 @@ describe('detectionLabelWidth', () => {
     expect(detectionLabelWidth([{ label: 'PostHog SDK', value: 'x' }])).toBe(
       'PostHog SDK'.length,
     );
+  });
+});
+
+// The program's TUI entry decides, so the layout names no program.
+describe('the Skill row', () => {
+  const frame = (programLabel: string): string =>
+    render(
+      createElement(IntroScreenLayout, {
+        installDir: '/app',
+        programLabel,
+        skillId: 'audit-events',
+        menuOptions: null,
+      }),
+    ).lastFrame() ?? '';
+
+  it('names the launched skill for the agent-skill program', () => {
+    expect(frame(Program.AgentSkill)).toMatch(/Skill\s+✔ audit-events/);
+  });
+
+  it('stays off for a program that runs its own skill', () => {
+    const shown = frame(Program.McpAnalytics);
+    expect(shown).toMatch(/Program\s+✔ mcp-analytics/);
+    expect(shown).not.toMatch(/Skill\s+✔/);
   });
 });
