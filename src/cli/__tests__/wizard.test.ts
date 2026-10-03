@@ -2,7 +2,7 @@ import { commandKeys, type Command } from '../commands/command';
 import { basicIntegrationCommand } from '../commands/basic-integration';
 import { mcpCommand } from '../commands/mcp';
 import { auditCommand } from '../commands/audit';
-import { doctorCommand } from '../../tools/doctor/report';
+import { doctorCommand } from '../commands/doctor';
 import { migrateCommand } from '../commands/migrate';
 import { replayVisionCommand } from '../commands/replay-vision';
 import { revenueCommand } from '../commands/revenue';
