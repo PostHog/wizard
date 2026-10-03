@@ -43,8 +43,8 @@ export interface TuiCapture {
   /** Fires after each chunk of terminal output is applied. */
   onData(cb: () => void): void;
   kill(): void;
-  /** Resolves when the child exits. */
-  exited: Promise<void>;
+  /** Resolves with the child's exit code, or 128 + signal, when it exits. */
+  exited: Promise<number>;
 }
 
 // Serialize one buffer row back to ANSI: re-emit SGR (colors + attributes) each
@@ -118,9 +118,11 @@ export function captureTui(opts: {
     term.write(d);
     for (const cb of cbs) cb();
   });
-  let resolveExit!: () => void;
-  const exited = new Promise<void>((r) => (resolveExit = r));
-  child.onExit(() => resolveExit());
+  let resolveExit!: (code: number) => void;
+  const exited = new Promise<number>((r) => (resolveExit = r));
+  child.onExit(({ exitCode, signal }) =>
+    resolveExit(signal ? 128 + signal : exitCode),
+  );
 
   return {
     frame() {
