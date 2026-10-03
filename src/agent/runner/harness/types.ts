@@ -19,21 +19,18 @@
  */
 
 import type { Harness } from '@shared/constants';
-import type { WizardAskBridge } from '@agent/wizard-ask-bridge';
-import type { AgentErrorType } from '@agent/agent-interface';
-import type { ProgressEmitter, SpinnerHandle } from '@agent/progress';
-import type { OrchestratorToolsContext } from '@agent/runner/sequence/orchestrator/queue-tools';
-import type {
-  EffortLevel,
-  ThinkingLevel,
-} from '@agent/runner/switchboard/models';
+import type { WizardAskBridge } from '../../wizard-ask-bridge';
+import type { AgentErrorType } from '../../agent-interface';
+import type { ProgressEmitter, SpinnerHandle } from '../../progress';
+import type { OrchestratorToolsContext } from '../sequence/orchestrator/queue-tools';
+import type { EffortLevel, ThinkingLevel } from '../switchboard/models';
 import type {
   AgentFailure,
   AgentRunDefinition,
   BootstrapResult,
-  RunConfig,
+  ResolvedRunConfig,
   RunInput,
-} from '@agent/runner/shared/types';
+} from '../shared/types';
 
 /** A schema-bound run: no banner, remark, task nudges, or plan cleanup. */
 export type StructuredRun = NonNullable<AgentRunDefinition['structured']>;
@@ -50,7 +47,7 @@ export interface RunMiddleware {
  * re-derives run context.
  */
 export interface BackendRunInputs {
-  config: RunConfig;
+  config: ResolvedRunConfig;
   input: RunInput;
   boot: BootstrapResult;
   emit: ProgressEmitter;
@@ -101,7 +98,7 @@ export type AgentResult =
  * them from the program-level config the linear pipeline assembles once.
  */
 export interface TaskRunInputs {
-  config: RunConfig;
+  config: ResolvedRunConfig;
   input: RunInput;
   boot: BootstrapResult;
   emit: ProgressEmitter;

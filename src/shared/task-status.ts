@@ -1,3 +1,4 @@
+/** The status of one task in the run's task list. */
 export enum TaskStatus {
   Pending = 'pending',
   InProgress = 'in_progress',

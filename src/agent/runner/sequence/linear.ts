@@ -1,7 +1,7 @@
 /**
  * The linear pipeline. Single execution path for all non-orchestrator programs,
  * both skill-based (revenue analytics) and framework-based (core integration).
- * The `AgentRunDefinition` controls what varies between them; `RunConfig`
+ * The `AgentRunDefinition` controls what varies between them; `ResolvedRunConfig`
  * carries the program-level static metadata (tool allow/disallow lists, etc.).
  *
  * Reports through `emit`, asks through `interaction`, and returns a decided
@@ -10,20 +10,21 @@
  * arguments, so the caller's exit sequence is unchanged.
  */
 
-import { OutroKind, type OutroData } from '@agent/progress';
+import { OutroKind, type OutroData } from '@shared/outro';
 import { AgentErrorType } from '../../agent-interface';
 import { logToFile } from '@utils/debug';
-import { createBenchmarkPipeline } from '@agent/middleware/benchmark';
+import { createBenchmarkPipeline } from '../../middleware/benchmark';
 import { ErrorCodes } from '@shared/errors';
-import { AGENT_ERROR_CODE } from '@agent/error-map';
+import { AGENT_ERROR_CODE } from '../../error-map';
 import { analytics } from '@utils/analytics';
-import { formatYaraAbortMessage } from '@agent/yara-hooks';
-import { installSkillById } from '@agent/tools';
+import { formatYaraAbortMessage, scanInstalledSkill } from '../../yara-hooks';
+import { installSkillById } from '@shared/skill-install';
 import { assemblePrompt, type PromptContext } from '../../agent-prompt';
 import type { SequenceResult, SequenceContext } from '../shared/types';
 import { failed, installFailure } from '../shared/errors';
 import { RunOutcome } from '../shared/types';
-import { shouldDisableAsk, runOptions } from '../shared/bootstrap';
+import { runOptions } from '../shared/bootstrap';
+import { shouldDisableAsk } from '@shared/ask-policy';
 import { createEmitSpinner } from '../shared/progress-collector';
 import { createAskBridge } from '../shared/ask';
 import { withTranscript } from '../shared/transcript-tail';
@@ -75,7 +76,7 @@ async function executeLinear(
       run.skillId,
       input.installDir,
       skillsBaseUrl,
-      { triage: boot.triageProvider },
+      { scan: (dir) => scanInstalledSkill(dir, boot.triageProvider) },
     );
     if (signal?.aborted) return aborted();
     if (installResult.kind !== 'ok') {

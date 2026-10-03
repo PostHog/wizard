@@ -5,21 +5,18 @@
  * the gateway mint and the scan-triage classifier built on it. Everything the
  * caller must decide first — health gates, settings conflicts, authentication,
  * the AI opt-in gate, post-auth gates, feature flags, run tags, token refresh —
- * arrives already resolved in `RunConfig` and `RunInput`.
+ * arrives already resolved in `ResolvedRunConfig` and `RunInput`.
  */
 
-import { createTriageLLMProvider } from '@agent/triage-provider';
-import { gatewayAuth } from '@agent/gateway-session';
+import { createTriageLLMProvider } from '../../triage-provider';
+import { gatewayAuth } from '../../gateway-session';
 import { currentAccessToken } from '@shared/oauth-session';
 import { logToFile } from '@utils/debug';
 import { CallType, IS_DEV } from '@shared/constants';
 import { VERSION } from '@shared/version';
 import { mcpUrlFor } from '@shared/host-resolution';
 import type { WizardRunOptions } from '@utils/types';
-import { shouldDisableAsk } from '@shared/ask-policy';
-import type { BootstrapResult, RunConfig, RunInput } from './types';
-
-export { shouldDisableAsk };
+import type { BootstrapResult, ResolvedRunConfig, RunInput } from './types';
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
@@ -45,7 +42,7 @@ export function runOptions(input: RunInput): WizardRunOptions {
  * any agent starts — the caller maps that the way it maps any unexpected error.
  */
 export async function prepareRun(
-  config: RunConfig,
+  config: ResolvedRunConfig,
   input: RunInput,
 ): Promise<BootstrapResult> {
   const { skillsBaseUrl } = config;
