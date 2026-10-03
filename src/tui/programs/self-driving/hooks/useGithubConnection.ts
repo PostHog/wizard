@@ -75,9 +75,9 @@ export function useGithubConnection(store: WizardStore): void {
           settleUnknown();
         } catch (err) {
           if (stopped) return;
-          // Report once, then keep polling. Unlike Slack's nudge, this gate
-          // can't degrade to a skip — the run cannot proceed until it
-          // resolves — so a transient API blip must not strand the user.
+          // Report once, then keep polling. This gate can't degrade to a
+          // skip — the run cannot proceed until it resolves — so a transient
+          // API blip must not strand the user.
           if (!errorReported) {
             errorReported = true;
             analytics.captureException(

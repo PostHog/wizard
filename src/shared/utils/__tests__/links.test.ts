@@ -12,8 +12,8 @@ describe('withUtm', () => {
 
   it('preserves existing query params and fragments', () => {
     const url = withUtm(
-      'https://app.posthog.com/integrations/slack?a=1#connect',
-      'slack-connect-setup',
+      'https://app.posthog.com/products?a=1#connect',
+      'outro-continue',
     );
     const parsed = new URL(url);
     expect(parsed.searchParams.get('a')).toBe('1');

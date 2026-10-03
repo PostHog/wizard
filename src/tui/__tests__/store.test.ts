@@ -659,7 +659,7 @@ describe('WizardStore', () => {
       expect(store.currentScreen).toBe(ScreenId.Mcp);
     });
 
-    it('advances to skills after slack-connect dismissed', () => {
+    it('advances to skills after MCP completes', () => {
       const store = createStore();
       store.completeSetup();
       store.setReadinessResult({
@@ -676,7 +676,6 @@ describe('WizardStore', () => {
       store.setRunPhase(RunPhase.Completed);
       store.setOutroDismissed();
       store.setMcpComplete();
-      store.setSlackStepDismissed();
       expect(store.currentScreen).toBe(ScreenId.KeepSkills);
     });
 
@@ -1468,14 +1467,10 @@ describe('WizardStore', () => {
 
       // Step 6: Complete MCP
       store.setMcpComplete();
-      expect(store.currentScreen).toBe(ScreenId.SlackConnect);
-
-      // Step 7: Dismiss the Connect-Slack step
-      store.setSlackStepDismissed();
       expect(store.currentScreen).toBe(ScreenId.KeepSkills);
 
       // Verify version was bumped for each setter call
-      expect(store.getVersion()).toBe(8);
+      expect(store.getVersion()).toBe(7);
     });
 
     it('walks through the revenue analytics flow correctly', () => {
@@ -1682,7 +1677,6 @@ describe('WizardStore', () => {
       const session = store.session;
       session.mcpOutcome = McpOutcome.Installed;
       session.mcpComplete = true;
-      session.slackStepDismissed = true;
       store.session = session;
 
       expect(store.currentScreen).toBe(ScreenId.McpSuggestedPrompts);
@@ -1705,7 +1699,6 @@ describe('WizardStore', () => {
       const session = store.session;
       session.mcpOutcome = McpOutcome.Installed;
       session.mcpComplete = true;
-      session.slackStepDismissed = true;
       store.session = session;
 
       expect(wizardCaptureMock).toHaveBeenCalledWith(

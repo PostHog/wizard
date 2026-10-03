@@ -21,7 +21,6 @@ exports[`post-auth gate ids per program > match the golden 1`] = `
   "replay-vision": [],
   "revenue-analytics-setup": [],
   "self-driving": [],
-  "slack": [],
   "warehouse-source": [],
   "web-analytics-doctor": [],
 }

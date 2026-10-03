@@ -34,7 +34,6 @@ import { mcpAnalyticsConfig } from './mcp-analytics/index.js';
 import { replayVisionConfig } from './replay-vision/index.js';
 import { aiObservabilityConfig } from './ai-observability/index.js';
 import { metricsConfig } from './metrics/index.js';
-import { slackConnectConfig } from '../tools/slack/index.js';
 
 // Generic skill program — runs an arbitrary context-mill skill chosen at
 // dispatch time (session.skillId) rather than a registered named program.
@@ -86,7 +85,6 @@ export const PROGRAM_REGISTRY = [
   replayVisionConfig,
   aiObservabilityConfig,
   metricsConfig,
-  slackConnectConfig,
 ] as const satisfies readonly ProgramConfig[];
 
 /**
@@ -114,7 +112,6 @@ export const Program = {
   ReplayVision: replayVisionConfig.id,
   AiObservability: aiObservabilityConfig.id,
   Metrics: metricsConfig.id,
-  SlackConnect: slackConnectConfig.id,
 } as const;
 
 /** Compile-time union of every registered program id. */

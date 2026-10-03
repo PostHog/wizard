@@ -357,16 +357,6 @@ const MUTATIONS: MutationCase[] = [
     emits: 1,
   },
   {
-    name: 'setSlackStepDismissed',
-    invoke: (s) => s.setSlackStepDismissed(),
-    emits: 1,
-  },
-  {
-    name: 'setSlackConnected',
-    invoke: (s) => s.setSlackConnected(true),
-    emits: 1,
-  },
-  {
     name: 'setGithubConnected',
     invoke: (s) => s.setGithubConnected(true),
     emits: 1,
@@ -747,7 +737,6 @@ describe('store invariants', () => {
       session.mintHandoff = pick([null, 'exit', 'continue'] as const);
       session.mcpComplete = flip();
       session.mcpOutcome = pick([null, ...Object.values(McpOutcome)]);
-      session.slackStepDismissed = flip();
       session.skillsComplete = flip();
       session.integrate = pick([null, true, false]);
       if (flip()) {

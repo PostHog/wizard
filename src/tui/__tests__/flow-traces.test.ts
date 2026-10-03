@@ -149,9 +149,6 @@ function advance(store: WizardStore, screen: string): boolean {
     case ScreenId.McpSuggestedPrompts:
       store.setMcpSuggestedPromptsDismissed();
       return true;
-    case ScreenId.SlackConnect:
-      store.setSlackStepDismissed();
-      return true;
     case ScreenId.KeepSkills:
       store.setSkillsComplete(true);
       return true;

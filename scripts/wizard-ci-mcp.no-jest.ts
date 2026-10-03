@@ -166,7 +166,7 @@ async function main() {
 
   server.tool(
     'perform_action',
-    'Commit a decision on the current screen (confirm_setup, dismiss_outage, choose, set_mcp_outcome, dismiss_slack, keep_skills). The action must appear in read_state.actions. Returns the next state.',
+    'Commit a decision on the current screen (confirm_setup, dismiss_outage, choose, set_mcp_outcome, keep_skills). The action must appear in read_state.actions. Returns the next state.',
     {
       action: z.string().describe('Action id from read_state.actions'),
       params: z

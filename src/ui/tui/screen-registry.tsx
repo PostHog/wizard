@@ -48,7 +48,6 @@ import { AiOptInRequiredScreen } from '../../tui/screens/AiOptInRequiredScreen.j
 import { RunScreen } from '../../tui/screens/RunScreen.js';
 import { McpScreen } from '../../tui/screens/McpScreen.js';
 import { McpSuggestedPromptsScreen } from '../../tui/tools/mcp/screens/McpSuggestedPromptsScreen.js';
-import { SlackConnectScreen } from '../../tui/screens/SlackConnectScreen.js';
 import { KeepSkillsScreen } from '../../tui/screens/KeepSkillsScreen.js';
 import { OutroScreen } from '../../tui/screens/OutroScreen.js';
 import { MintFailureScreen } from '../../tui/screens/MintFailureScreen.js';
@@ -145,7 +144,6 @@ export function createScreens(
         services={services.mcpSuggestedPromptsServices}
       />
     ),
-    [ScreenId.SlackConnect]: <SlackConnectScreen store={store} />,
     [ScreenId.KeepSkills]: <KeepSkillsScreen store={store} />,
     [ScreenId.Outro]: <OutroScreen store={store} />,
     [ScreenId.MintFailure]: (

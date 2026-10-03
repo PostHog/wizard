@@ -165,7 +165,6 @@ describe('flow shape', () => {
       'run',
       'outro',
       'mcp',
-      'slack-connect',
       'keep-skills',
     ]);
   });

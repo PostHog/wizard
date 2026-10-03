@@ -15,12 +15,9 @@ export const mcpAddConfig: ProgramConfig = {
   id: 'mcp-add',
   requiresAi: false,
   description: 'Add PostHog MCP server to supported clients',
-  // Order: install → Slack → tutorial. Slack runs before the tutorial
-  // because it renders gracefully without credentials (no surprise
-  // OAuth on the loginless install path). The tutorial is last so its
-  // explicit "Start tutorial" opt-in is the moment OAuth fires — and
-  // skipping the tutorial doesn't bury Slack discovery behind a
-  // dismissal screen.
+  // Order: install → tutorial. The tutorial is last so its explicit
+  // "Start tutorial" opt-in is the moment OAuth fires — no surprise
+  // OAuth on the loginless install path.
   steps: [
     {
       id: 'mcp-add',
@@ -29,20 +26,13 @@ export const mcpAddConfig: ProgramConfig = {
       isComplete: (s) => s.mcpComplete,
     },
     {
-      id: 'slack-connect',
-      label: 'Connect Slack',
-      screenId: 'slack-connect',
-      // Gate on a successful install so no-clients / skipped / failed
-      // outcomes go straight to program end without a "what's next" prompt.
-      show: (s) => s.mcpOutcome === McpOutcome.Installed,
-      isComplete: (s) => s.slackStepDismissed,
-    },
-    {
       id: 'mcp-suggested-prompts',
       label: 'Suggested prompts',
       screenId: 'mcp-suggested-prompts',
-      // Same install gate — without a working MCP there's nothing to
-      // talk to from the tutorial.
+      // Gate on a successful install so no-clients / skipped / failed
+      // outcomes go straight to program end without a "what's next" prompt,
+      // and because without a working MCP there's nothing to talk to from
+      // the tutorial.
       show: (s) => s.mcpOutcome === McpOutcome.Installed,
       isComplete: (s) => s.mcpSuggestedPromptsDismissed,
       // This step *is* the tutorial, so it reports there rather than to
@@ -101,12 +91,6 @@ export const mcpTutorialConfig: ProgramConfig = {
       label: 'MCP tutorial',
       screenId: 'mcp-suggested-prompts',
       isComplete: (s) => s.mcpSuggestedPromptsDismissed,
-    },
-    {
-      id: 'slack-connect',
-      label: 'Connect Slack',
-      screenId: 'slack-connect',
-      isComplete: (s) => s.slackStepDismissed,
     },
   ],
 };

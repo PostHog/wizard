@@ -20,7 +20,10 @@
 
 import type { WizardStore } from '@tui/store';
 import type { ScreenName } from '@tui/router';
-import type { PendingQuestion, RunPhase } from '@programs/session/wizard-session';
+import type {
+  PendingQuestion,
+  RunPhase,
+} from '@programs/session/wizard-session';
 import { actionsForScreen, MissingParamError } from './action-registry.js';
 
 /** A setup question projected for the harness (no `detect` fn, no closures). */
@@ -67,7 +70,6 @@ export interface CiState {
     hasCredentials: boolean;
     projectId: number | null;
     mcpComplete: boolean;
-    slackStepDismissed: boolean;
     skillsComplete: boolean;
     outroDismissed: boolean;
     discoveredFeatures: string[];
@@ -116,7 +118,6 @@ export class WizardCiDriver {
         hasCredentials: s.credentials !== null,
         projectId: s.credentials?.projectId ?? null,
         mcpComplete: s.mcpComplete,
-        slackStepDismissed: s.slackStepDismissed,
         skillsComplete: s.skillsComplete,
         outroDismissed: s.outroDismissed,
         discoveredFeatures: [...s.discoveredFeatures],

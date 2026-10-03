@@ -14,12 +14,6 @@ describe('posthog-integration scopes', () => {
     expect(scopes).toContain('external_data_source:read');
     expect(scopes).toContain('external_data_source:write');
   });
-
-  it('keeps the Slack outro scope', () => {
-    expect(getOAuthScopesForProgram('posthog-integration')).toContain(
-      'integration:read',
-    );
-  });
 });
 
 /**

@@ -47,7 +47,6 @@ vi.mock('@tui/auth/project-data', async (actual) => ({
 vi.mock('@shared/api', async (actual) => ({
   ...(await actual<Record<string, unknown>>()),
   fetchUserData: vi.fn(pending),
-  fetchSlackConnected: vi.fn(pending),
   fetchGithubConnected: vi.fn(pending),
 }));
 vi.mock('@agent/tools', async (actual) => ({
@@ -497,13 +496,6 @@ const FIXTURES: Record<ScreenName, Fixture> = {
     },
   },
   [ScreenId.McpSuggestedPrompts]: { program: Program.McpTutorial },
-  [ScreenId.SlackConnect]: {
-    program: Program.SlackConnect,
-    arrange: (s) => {
-      s.setCredentials(CREDENTIALS);
-      s.setSlackConnected(false);
-    },
-  },
   [ScreenId.KeepSkills]: {
     program: Program.PostHogIntegration,
     arrange: (s) => {
@@ -511,7 +503,6 @@ const FIXTURES: Record<ScreenName, Fixture> = {
       ranSuccessfully(s);
       s.setOutroDismissed();
       s.setMcpComplete(McpOutcome.Skipped);
-      s.setSlackStepDismissed();
     },
   },
   [ScreenId.Outro]: {

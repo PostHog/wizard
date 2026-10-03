@@ -8,7 +8,6 @@ exports[`e2e flow snapshot — ai-observability > walks intro → health → aut
     "mcp": "skip",
     "setup": "first",
     "skills": "delete",
-    "slack": "skip",
   },
   "program": "ai-observability",
   "trace": [
@@ -51,7 +50,6 @@ exports[`e2e flow snapshot — metrics > walks intro → health → auth → run
     "mcp": "skip",
     "setup": "first",
     "skills": "delete",
-    "slack": "skip",
   },
   "program": "metrics",
   "trace": [
@@ -95,7 +93,6 @@ exports[`e2e flow snapshot — posthog-integration > Next.js (with a setup quest
     "notice": "keep",
     "setup": "first",
     "skills": "delete",
-    "slack": "skip",
   },
   "program": "posthog-integration",
   "trace": [
@@ -133,10 +130,6 @@ exports[`e2e flow snapshot — posthog-integration > Next.js (with a setup quest
         "outcome": "skipped",
       },
       "screen": "mcp",
-    },
-    {
-      "action": "dismiss_slack",
-      "screen": "slack-connect",
     },
     {
       "action": "keep_skills",
@@ -179,10 +172,6 @@ exports[`e2e flow snapshot — posthog-integration > Node (no setup question) wa
         "outcome": "skipped",
       },
       "screen": "mcp",
-    },
-    {
-      "action": "dismiss_slack",
-      "screen": "slack-connect",
     },
     {
       "action": "keep_skills",
@@ -243,7 +232,6 @@ exports[`e2e flow snapshot — self-driving > integration-first (no existing Pos
     "mcp": "skip",
     "setup": "first",
     "skills": "delete",
-    "slack": "skip",
   },
   "program": "self-driving",
   "trace": [
@@ -302,7 +290,6 @@ exports[`e2e flow snapshot — upload-source-maps > walks a stable path 1`] = `
     "mcp": "skip",
     "setup": "first",
     "skills": "delete",
-    "slack": "skip",
   },
   "program": "error-tracking-upload-source-maps",
   "trace": [
@@ -392,7 +379,6 @@ exports[`e2e flow snapshot — warehouse-source > walks intro → auth → run �
     "notice": "keep",
     "setup": "first",
     "skills": "delete",
-    "slack": "skip",
   },
   "program": "warehouse-source",
   "trace": [

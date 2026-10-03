@@ -14,11 +14,10 @@
  * surface (feature flags, experiments, surveys, replays, errors, web
  * analytics, AI Observability, cohorts, persons) plus read/write on
  * annotations; `AgentSkill` adds feature-flag read/write; the default
- * `PostHogIntegration` run and the standalone `slack` flow add
- * `integration:read` for the Connect-Slack step. Persistence writes (dashboard:write,
- * insight:write, notebook:write, query:read) come for free from the
- * base set, so the tutorial's "save as insight / pin to dashboard /
- * add to notebook" follow-ups keep working.
+ * `PostHogIntegration` run adds the warehouse-source pair. Persistence
+ * writes (dashboard:write, insight:write, notebook:write, query:read) come
+ * for free from the base set, so the tutorial's "save as insight / pin to
+ * dashboard / add to notebook" follow-ups keep working.
  *
  * Add a new program override by extending `PROGRAM_SCOPE_ADDITIONS`
  * below — no other call-site changes required as long as the program's
@@ -39,7 +38,6 @@ import {
 import { AGENT_SKILL_SCOPE_ADDITIONS } from '@programs/agent-skill/scopes';
 import { REPLAY_VISION_SCOPE_ADDITIONS } from '@programs/replay-vision/scopes';
 import { SELF_DRIVING_SCOPE_ADDITIONS } from '@programs/self-driving/scopes';
-import { CONNECT_SLACK_SCOPE_ADDITIONS } from '@shared/oauth-scopes';
 import { MCP_TUTORIAL_SCOPE_ADDITIONS } from '@tools/mcp/scopes';
 
 /**
@@ -75,15 +73,11 @@ const PROGRAM_SCOPE_ADDITIONS: Partial<Record<ProgramId, readonly string[]>> = {
   'agent-skill': AGENT_SKILL_SCOPE_ADDITIONS,
   'self-driving': SELF_DRIVING_SCOPE_ADDITIONS,
   'warehouse-source': WAREHOUSE_SOURCE_SCOPE_ADDITIONS,
-  // The integration run carries the Slack outro step, and — when detection
-  // finds data sources — the orchestrator's warehouse task, which creates
-  // sources through `external-data-sources-create`. Without the warehouse pair
-  // that call 403s on a token the user already granted.
-  'posthog-integration': [
-    ...CONNECT_SLACK_SCOPE_ADDITIONS,
-    ...WAREHOUSE_SOURCE_SCOPE_ADDITIONS,
-  ],
-  slack: CONNECT_SLACK_SCOPE_ADDITIONS,
+  // When detection finds data sources, the integration run's orchestrator
+  // warehouse task creates sources through `external-data-sources-create`.
+  // Without the warehouse pair that call 403s on a token the user already
+  // granted.
+  'posthog-integration': [...WAREHOUSE_SOURCE_SCOPE_ADDITIONS],
   'replay-vision': REPLAY_VISION_SCOPE_ADDITIONS,
 };
 

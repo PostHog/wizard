@@ -70,8 +70,8 @@ export function toCommandModule(
   cmd: Command,
   parentPath: readonly string[],
 ): CommandModule {
-  // `wizard slack` → 'slack', `wizard mcp add` → 'mcp-add'. The default
-  // `$0` resolves to '' and is skipped — its handler reports itself.
+  // `wizard self-driving` → 'self-driving', `wizard mcp add` → 'mcp-add'. The
+  // default `$0` resolves to '' and is skipped — its handler reports itself.
   const entryCommand = [...parentPath, commandKeys(cmd.name)[0]]
     .filter((key) => key !== '$0')
     .join('-');

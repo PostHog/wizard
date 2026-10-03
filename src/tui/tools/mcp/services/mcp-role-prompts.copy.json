@@ -592,16 +592,5 @@
       "Everything is tagged wizard_seed:true and uses wizard-demo-user-* distinct IDs — events are immutable in PostHog, but you can filter these out of any query."
     ],
     "outro": "Want me to seed some demo data to explore?"
-  },
-
-  "slackApp": {
-    "learnMoreUrl": "https://posthog.com/slack",
-    "setupUrl": "https://app.posthog.com/integrations/slack",
-    "headline": "@PostHog in Slack",
-    "pitch": "Ask about your product data, debug issues, and generate PRs without leaving the thread.",
-    "capabilities": [
-      "Tag @PostHog with a bug, edit, or a feature idea. It will spin up a sandboxed environment, plan, edit files, run tests, and open a draft PR.",
-      "Tag @PostHog with any data question. It's the same SQL-writing, statistically-minded assistant as PostHog AI, but it responds where you send work memes."
-    ]
   }
 }
