@@ -45,6 +45,7 @@ export const WIZARD_COMMANDMENTS = [
     '  - For `single` and `multi`, extract the alternatives from the prose into `options` as `{ label, value }` pairs. Use the human phrase as `label` and a lowercase-hyphenated form as `value` (e.g., `label: "Vanilla JS"`, `value: "vanilla-js"`).',
     '  - Use a kebab-case slug of the question label as `id` (e.g., "Tech stack" → `tech-stack`, "Show frequency" → `show-frequency`).',
     '  - Do not invent fields the schema does not define (no `source`, `category`, `priority`, etc.) — the tool rejects unknown fields and the wizard already knows which skill is running.',
-    'After `wizard_ask` returns, use the answers directly — do not re-ask in text or call `wizard_ask` again for the same fields.',
+    'After `wizard_ask` returns, use the answers directly — do not re-ask in text, and do not call `wizard_ask` again to confirm a field the user already answered.',
+    'Correcting a rejected value is the one exception, and it is expected: when whatever you handed an answer to rejects it — a connection that fails, a host or key the API calls invalid, a permission error — ask again for only the fields that were wrong, reuse the same `subject`, and say what was rejected and what a valid value looks like. A value the user could fix in one keystroke is never a reason to abandon the step for a link they have to follow themselves. Stop after a couple of attempts on one subject. A dismissed or timed-out ask is not this case — the result names the fields it did not collect and why, and that is a decline, so fall back instead of re-asking.',
   ].join('\n'),
 ];
