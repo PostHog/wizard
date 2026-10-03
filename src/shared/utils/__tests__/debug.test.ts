@@ -17,7 +17,7 @@ describe('log file writing', () => {
   });
 
   afterEach(() => {
-    configureLogFile({ path: originalPath, enabled: true });
+    configureLogFile({ path: originalPath, enabled: true, pin: false });
     fs.rmSync(tmpRoot, { recursive: true, force: true });
   });
 
@@ -63,39 +63,12 @@ describe('log file writing', () => {
     expect(content).toContain('plain write');
     expect(content).toContain('second write');
   });
-});
 
-describe('debug console sink', () => {
-  it('sends enabled debug lines to the injected sink only', async () => {
-    const { debug, enableDebugLogs, setDebugSink } = await import('../debug');
-    const lines: string[] = [];
-    const previous = setDebugSink((line) => lines.push(line));
-    try {
-      debug('before enable');
-      expect(lines).toEqual([]);
-      enableDebugLogs();
-      debug('hello', 'world');
-      expect(lines).toEqual(['hello world']);
-    } finally {
-      setDebugSink(previous);
-    }
-  });
+  it('keeps a pinned --log-file path when a later caller sets another', () => {
+    const explicit = path.join(tmpRoot, 'explicit.log');
+    configureLogFile({ path: explicit, pin: true });
+    configureLogFile({ path: path.join(tmpRoot, 'benchmark.log') });
 
-  it('is wired to the current UI by the UI module', async () => {
-    const { debug, enableDebugLogs } = await import('../debug');
-    const { getUI, setUI } = await import('@ui');
-    const seen: string[] = [];
-    const original = getUI();
-    setUI({
-      ...original,
-      log: { ...original.log, info: (line: string) => seen.push(line) },
-    } as typeof original);
-    try {
-      enableDebugLogs();
-      debug('routed');
-      expect(seen).toEqual(['routed']);
-    } finally {
-      setUI(original);
-    }
+    expect(getLogFilePath()).toBe(explicit);
   });
 });

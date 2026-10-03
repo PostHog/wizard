@@ -4,12 +4,13 @@
  * of it. It has to be audible to a person who stepped away, and invisible
  * everywhere a bell cannot ring.
  */
+import type { MockInstance } from 'vitest';
 import { ringTerminalBell } from '@utils/terminal-bell';
 
 const BEL = '\u0007';
 
 describe('ringTerminalBell', () => {
-  let write: ReturnType<typeof vi.spyOn>;
+  let write: MockInstance<typeof process.stderr.write>;
   const isTTY = process.stderr.isTTY;
 
   beforeEach(() => {

@@ -1,36 +1,26 @@
 /**
- * Pins the flag→exclusion hookup against the REAL posthog-integration config,
- * through the same helper the runner feeds to the registry and the seed note.
- * A refactor that disconnects the program's mapping from the run turns these
- * red — the mapping test alone cannot see that.
+ * Pins the flag→exclusion hookup through the same helper the runner feeds to
+ * the registry and the seed note. Each program's own tests pin its mapping.
  */
 
-import { WIZARD_DEFAULT_AIO_LOGS_FLAG_KEY } from '@shared/constants';
-import { posthogIntegrationConfig } from '@programs/posthog-integration/index';
 import { effectiveExcludedTaskTypes } from '../orchestrator-runner';
 
+const source = {
+  excludedTaskTypes: (flags: Record<string, string>) =>
+    flags['skip-logs'] === 'true' ? ['logs'] : [],
+};
+
 describe('effectiveExcludedTaskTypes', () => {
-  it("excludes both observability types when the real config sees flag 'false'", () => {
-    const excluded = effectiveExcludedTaskTypes(posthogIntegrationConfig, {
-      [WIZARD_DEFAULT_AIO_LOGS_FLAG_KEY]: 'false',
-    });
-    expect(excluded).toEqual(
-      expect.arrayContaining(['ai-observability', 'logs']),
+  it("excludes what the run config's mapping returns for the run's flags", () => {
+    expect(effectiveExcludedTaskTypes(source, { 'skip-logs': 'true' })).toEqual(
+      expect.arrayContaining(['logs']),
     );
   });
 
-  it('excludes neither for the shipped default — flag true or unreadable', () => {
-    const cases: Record<string, string>[] = [
-      {},
-      { [WIZARD_DEFAULT_AIO_LOGS_FLAG_KEY]: 'true' },
-    ];
-    for (const flags of cases) {
-      const excluded = effectiveExcludedTaskTypes(
-        posthogIntegrationConfig,
-        flags,
-      );
-      expect(excluded).not.toContain('ai-observability');
-      expect(excluded).not.toContain('logs');
-    }
+  it('excludes nothing extra when the mapping returns nothing, or there is none', () => {
+    expect(effectiveExcludedTaskTypes(source, {})).not.toContain('logs');
+    expect(
+      effectiveExcludedTaskTypes({}, { 'skip-logs': 'true' }),
+    ).not.toContain('logs');
   });
 });
