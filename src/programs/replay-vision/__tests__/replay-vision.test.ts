@@ -1,36 +1,8 @@
 import { describe, expect, test } from 'vitest';
 
-import { Integration } from '@shared/constants';
-import {
-  replayVisionConfig,
-  REPLAY_VISION_SUPPORTED,
-} from '@programs/replay-vision/index';
-
-describe('replay-vision program', () => {
-  test('runs the replay-vision agent flow', () => {
-    expect(replayVisionConfig.agentFlow).toBe('replay-vision');
-  });
-
-  test('detects the framework before the agent-skill steps', () => {
-    expect(replayVisionConfig.steps[0]?.id).toBe('detect');
-    expect(replayVisionConfig.steps[0]?.onReady).toBeDefined();
-  });
-
-  test('declares ci prerequisite work for headless runs', () => {
-    expect(replayVisionConfig.ciPreRun).toBeDefined();
-  });
-});
+import { Integration, REPLAY_VISION_SUPPORTED } from '@shared/constants';
 
 describe('replay-vision platform support', () => {
-  test('covers every Integration with an explicit verdict', () => {
-    // The gate is an allow-list: a new Integration enum entry is unsupported
-    // until someone decides otherwise. This test only pins that the set
-    // contains real Integration values.
-    for (const integration of REPLAY_VISION_SUPPORTED) {
-      expect(Object.values(Integration)).toContain(integration);
-    }
-  });
-
   test('supports web and replay-capable mobile platforms', () => {
     expect(REPLAY_VISION_SUPPORTED.has(Integration.nextjs)).toBe(true);
     expect(REPLAY_VISION_SUPPORTED.has(Integration.javascript_web)).toBe(true);

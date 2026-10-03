@@ -1,9 +1,6 @@
-import {
-  rollUpAuditAreas,
-  MAX_AUDIT_AREAS,
-} from '@programs/session/task-stream/audit-areas';
-import { StreamTaskStatus } from '@programs/session/task-stream/types';
-import type { AuditCheck } from '@programs/audit/types';
+import { rollUpAuditAreas, MAX_AUDIT_AREAS } from '../audit-areas';
+import { StreamTaskStatus } from '../types';
+import type { AuditCheck } from '@shared/audit-ledger';
 
 const check = (over: Partial<AuditCheck>): AuditCheck => ({
   id: 'id',
