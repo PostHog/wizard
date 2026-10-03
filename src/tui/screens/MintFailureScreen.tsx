@@ -45,7 +45,7 @@ export function MintFailureScreen({
   const [error, setError] = useState<string | null>(null);
   const [report, setReport] = useState(false);
   const [retry, setRetry] = useState<'save' | CodingAgent>('save');
-  const { spellbook } = store.session;
+  const { spellbook } = store;
 
   const select = async (action: Action) => {
     if (busy.current) return;
@@ -58,8 +58,7 @@ export function MintFailureScreen({
     setError(null);
     setWorking('Saving skill...');
     try {
-      const saved =
-        store.session.spellbook ?? (await services.leaveSpellbook());
+      const saved = store.spellbook ?? (await services.leaveSpellbook());
       store.setSpellbook(saved);
       if (task !== 'save') {
         setWorking(`Opening ${task === 'claude' ? 'Claude Code' : 'Codex'}...`);
@@ -68,7 +67,7 @@ export function MintFailureScreen({
       }
     } catch (err) {
       setError(
-        store.session.spellbook
+        store.spellbook
           ? err instanceof Error
             ? err.message
             : 'Could not open your agent.'

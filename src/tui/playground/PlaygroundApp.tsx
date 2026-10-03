@@ -90,12 +90,12 @@ export const PlaygroundApp = ({ store }: PlaygroundAppProps) => {
     {
       id: 'ai-opt-in-admin',
       label: 'AI opt-in (admin)',
-      component: <AiOptInDemo variant="admin" />,
+      component: <AiOptInDemo variant="admin" store={store} />,
     },
     {
       id: 'ai-opt-in-nonadmin',
       label: 'AI opt-in (non-admin)',
-      component: <AiOptInDemo variant="non-admin" />,
+      component: <AiOptInDemo variant="non-admin" store={store} />,
     },
     {
       id: 'viewport-guard',

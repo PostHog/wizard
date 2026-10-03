@@ -26,12 +26,12 @@ import { useKeyBindings, KeyMatch } from '@tui/hooks/useKeyBindings';
 import {
   useGithubConnection,
   fetchLoginUrl,
-} from '@tui/programs/self-driving/hooks/useGithubConnection';
-import { OutroKind } from '@programs/session/wizard-session';
+} from '../hooks/useGithubConnection.js';
+import { OutroKind } from '@shared/outro';
 import {
   GITHUB_REQUIRED_BODY,
   GITHUB_REQUIRED_MESSAGE,
-} from '@programs/self-driving/detect';
+} from '@programs/self-driving';
 import { analytics } from '@utils/analytics';
 import { openTrackedLink } from '@utils/links';
 import { getIntegrationAuthorizeUrl } from '@utils/urls';
@@ -54,7 +54,7 @@ export const SelfDrivingGitHubScreen = ({
   );
 
   const credentials = store.session.credentials;
-  const connectedState = store.session.githubConnected;
+  const connectedState = store.githubConnected;
   const connected = connectedState === true;
 
   const authorizeUrl = credentials

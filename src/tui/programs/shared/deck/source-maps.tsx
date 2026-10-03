@@ -5,7 +5,8 @@
  * It educates the user on what source maps are and why uploading them
  * matters, built around a before/after stack-trace contrast: a minified
  * production trace nobody can read, then the same trace resolved back to
- * real source. Program-owned; wired onto the program's getContentBlocks.
+ * real source. Shared by the source-maps and error-tracking decks, which
+ * each supply their own copy.
  *
  * Lines stay narrow (~36 cols) because this renders in the left half of a
  * split pane — see LearnCard's paneWidth math.
@@ -270,10 +271,3 @@ export const buildSourceMapsDeck = (
       ),
     },
   ]);
-
-export const getContentBlocks = (store?: WizardStore): ContentBlock[] =>
-  buildSourceMapsDeck(store, {
-    intro: "I'm wiring PostHog Error Tracking into your build.",
-    wiring:
-      "Right now I'm hooking source-map generation and upload into your build, tied to each release you ship.",
-  });

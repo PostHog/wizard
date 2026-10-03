@@ -23,7 +23,7 @@ import {
   useKeyBindings,
   type KeyBinding,
 } from '@tui/hooks/useKeyBindings';
-import type { AuditCheck } from '@programs/audit/types';
+import type { AuditCheck } from '@programs/audit';
 import { AreaHeaderRow } from './AreaHeaderRow.js';
 import { CheckRow } from './CheckRow.js';
 import { DetailRow } from './DetailRow.js';

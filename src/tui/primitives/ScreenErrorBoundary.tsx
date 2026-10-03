@@ -8,7 +8,8 @@
 import { Box, Text } from 'ink';
 import { Component, type ReactNode } from 'react';
 import type { WizardStore } from '@tui/store';
-import { OutroKind, RunPhase } from '@programs/session/wizard-session';
+import { OutroKind } from '@shared/outro';
+import { RunPhase } from '@shared/run-state';
 import { logToFile } from '@utils/debug';
 
 interface Props {

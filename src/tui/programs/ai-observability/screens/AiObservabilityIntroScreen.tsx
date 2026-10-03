@@ -68,7 +68,7 @@ export const AiObservabilityIntroScreen = ({
       ];
 
   const handleSelect = (value: string) => {
-    if (value === 'cancel') process.exit(0);
+    if (value === 'cancel') store.requestExit(0);
     else if (value === 'more-info') setShowingMoreInfo(true);
     else if (value === 'back') setShowingMoreInfo(false);
     else store.completeSetup();
@@ -79,7 +79,7 @@ export const AiObservabilityIntroScreen = ({
       installDir={session.installDir}
       body={body}
       showDetection={!showingMoreInfo}
-      programLabel={session.programLabel}
+      programLabel={store.programLabel}
       skillId={session.skillId}
       menuOptions={menuOptions}
       onSelect={handleSelect}

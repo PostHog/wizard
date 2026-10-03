@@ -32,7 +32,7 @@ import { PickerMenu, LoadingBox } from '@tui/primitives/index';
 import { useKeyBindings, KeyMatch } from '@tui/hooks/useKeyBindings';
 import { getSlackAppCard } from '@tui/services/slack-app-card';
 import { fetchSlackConnected } from '@shared/api';
-import { Program } from '@programs';
+import { CONNECT_SLACK_SCOPE_ADDITIONS } from '@shared/oauth-scopes';
 import { getOrAskForProjectData } from '@tui/auth/project-data';
 import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
@@ -71,7 +71,7 @@ export const SlackConnectScreen = ({ store }: SlackConnectScreenProps) => {
 
   // `slackConnected` is three-state: null until something has actually
   // checked (the tutorial's prefetch, or this screen's first poll tick).
-  const connectedState = store.session.slackConnected;
+  const connectedState = store.slackConnected;
   const connected = connectedState === true;
 
   // Phase.Nudge is the default; Phase.Authenticating fires only when the
@@ -142,12 +142,12 @@ export const SlackConnectScreen = ({ store }: SlackConnectScreenProps) => {
             // Only a false→true flip means the user completed the Slack
             // OAuth during this screen; true on the first-ever check just
             // means they arrived connected.
-            if (store.session.slackConnected === false) {
+            if (store.slackConnected === false) {
               analytics.wizardCapture('slack connect completed', { role });
             }
             store.setSlackConnected(true);
           } else {
-            if (store.session.slackConnected === null) {
+            if (store.slackConnected === null) {
               store.setSlackConnected(false);
             }
             timer = setTimeout(check, POLL_INTERVAL_MS);
@@ -159,7 +159,7 @@ export const SlackConnectScreen = ({ store }: SlackConnectScreenProps) => {
           // every tick would spam error tracking. The nudge copy is
           // the fallback either way; a failed check counts as not
           // connected so the screen doesn't sit on the loading state.
-          if (store.session.slackConnected === null) {
+          if (store.slackConnected === null) {
             store.setSlackConnected(false);
           }
           analytics.captureException(
@@ -226,11 +226,10 @@ export const SlackConnectScreen = ({ store }: SlackConnectScreenProps) => {
     void (async () => {
       try {
         const data = await getOrAskForProjectData({
+          store,
           signup: false,
-          ci: false,
-          apiKey: undefined,
           projectId: undefined,
-          programId: Program.SlackConnect,
+          scopeAdditions: CONNECT_SLACK_SCOPE_ADDITIONS,
         });
         if (cancelled) return;
         store.setCredentials({
@@ -288,14 +287,14 @@ export const SlackConnectScreen = ({ store }: SlackConnectScreenProps) => {
     return (
       <Box flexDirection="column" flexGrow={1} marginTop={1}>
         <LoadingBox message="Waiting for authentication..." />
-        {store.session.loginUrl && (
+        {store.loginUrl && (
           <Box marginTop={1} flexDirection="column">
             <Text>
               <Text dimColor>
                 If the browser didn&apos;t open, copy and paste:
               </Text>
               {'\n\n'}
-              <Text color="cyan">{store.session.loginUrl}</Text>
+              <Text color="cyan">{store.loginUrl}</Text>
             </Text>
           </Box>
         )}

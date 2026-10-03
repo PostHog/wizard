@@ -14,7 +14,7 @@ import type { ReactNode } from 'react';
 import { Box, Text } from 'ink';
 import { useSyncExternalStore } from 'react';
 import type { WizardStore } from '@tui/store';
-import { OutroKind } from '@programs/session/wizard-session';
+import { OutroKind } from '@shared/outro';
 import { Colors } from '@tui/styles';
 import { useDismissOnAnyKey } from '@tui/hooks/useDismissOnAnyKey';
 
