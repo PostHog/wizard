@@ -64,7 +64,7 @@ assistant turns on the same stream.
 
 ## Production builds strip the flag
 
-The flag is declared inside `if (!IS_PRODUCTION_BUILD)` in `src/wizard.ts`,
+The flag is declared inside `if (!IS_PRODUCTION_BUILD)` in `src/cli/wizard.ts`,
 alongside `--ci` / `--harness` / `--sequence` / `--model`. Published builds
 reject `--capture-aio` and `POSTHOG_WIZARD_CAPTURE_AIO` at parse time with a
 clear message. This keeps the surface area of the shipped CLI free of a
