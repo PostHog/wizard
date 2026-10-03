@@ -16,13 +16,16 @@ import {
   resolveProjectDir,
   type AgenticDetectionReport,
   type DetectEvent,
-} from '@programs/detection/agentic';
-import { gatherFrameworkContext } from '@programs/detection/index';
+  type DetectProgress,
+} from '../detection/agentic';
+import { gatherFrameworkContext } from '../detection/context';
+import { noteDetectedFramework } from '../detection/detected-framework';
 import {
   detectIntegrationProjects,
   toIntegrationCandidates,
-} from '@programs/detection/project-scope';
-import type { WizardSession } from '@programs/session/wizard-session';
+} from '../detection/project-scope';
+import type { ProgramSession } from '../program-session';
+import type { RunnerContext } from '../runner-context';
 
 /** frameworkContext key for the picked project's path, relative to the repo root. */
 export const ERROR_TRACKING_PROJECT_PATH_KEY = 'errorTrackingProjectPath';
@@ -70,19 +73,21 @@ export function toErrorTrackingReport(
 
 /** Scan the repo for projects, billed to error tracking. */
 export async function detectErrorTrackingProjects(
-  session: WizardSession,
+  session: ProgramSession,
   onEvent?: DetectEvent,
+  onProgress?: DetectProgress,
 ): Promise<ErrorTrackingDetectionReport> {
   const report = await detectIntegrationProjects(session, {
     programId: 'error-tracking',
     recommend: true,
     onEvent,
+    onProgress,
   });
   return toErrorTrackingReport(report);
 }
 
 /** The run's working directory: the picked project, else the repo root. */
-export function errorTrackingProjectDir(session: WizardSession): string {
+export function errorTrackingProjectDir(session: ProgramSession): string {
   return resolveProjectDir(
     session.installDir,
     session.frameworkContext[ERROR_TRACKING_PROJECT_PATH_KEY],
@@ -91,7 +96,8 @@ export function errorTrackingProjectDir(session: WizardSession): string {
 
 /** Gather framework context for `session.installDir`, keeping keys already set. */
 export async function gatherErrorTrackingContext(
-  session: WizardSession,
+  session: ProgramSession,
+  log: RunnerContext['log'],
 ): Promise<void> {
   const frameworkConfig = session.frameworkConfig;
   if (!frameworkConfig) return;
@@ -108,4 +114,5 @@ export async function gatherErrorTrackingContext(
       session.frameworkContext[key] = value;
     }
   }
+  noteDetectedFramework(session, frameworkConfig, context, log);
 }

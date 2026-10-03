@@ -1,6 +1,6 @@
 /* Vue wizard using posthog-agent with PostHog MCP */
-import type { FrameworkConfig } from '@programs/framework-config';
-import { detectNodePackageManagers } from '@programs/detection/package-manager';
+import type { FrameworkConfig } from '../../framework-config';
+import { detectNodePackageManagers } from '../../detection/package-manager';
 import { Integration } from '@shared/constants';
 import {
   getDeclaredVersion,

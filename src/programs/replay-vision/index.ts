@@ -1,72 +1,36 @@
 import type { AbortCase } from '@agent/types';
-import { Integration } from '@shared/constants';
 import {
-  detectFramework,
-  gatherFrameworkContext,
-} from '@programs/detection/index';
-import { scopeInstallDirToProject } from '@programs/detection/project-scope';
-import type { CiRunnerContext } from '@programs/runner-context';
-import { FRAMEWORK_REGISTRY } from '@programs/frameworks/registry';
-import { createSkillProgram } from '@programs/shared/skill-program';
-import { AGENT_SKILL_STEPS } from '@tui/programs/shared/skill-flow';
-import { detectPostHogIntegration } from '@programs/detection/integration';
-import type {
-  ProgramConfig,
-  ProgramReadyContext,
-  ProgramStep,
-} from '@programs/program-step';
-import type { WizardSession } from '@programs/session/wizard-session';
+  Harness,
+  Integration,
+  Sequence,
+  DEFAULT_AGENT_MODEL,
+  REPLAY_VISION_SUPPORTED,
+} from '@shared/constants';
+import { detectFramework } from '../detection/framework';
+import { gatherFrameworkContext } from '../detection/context';
+import { noteDetectedFramework } from '../detection/detected-framework';
+import { scopeInstallDirToProject } from '../detection/project-scope';
+import type { CiRunnerContext } from '../runner-context';
+import { FRAMEWORK_REGISTRY } from '../frameworks/registry';
+import { createSkillProgram } from '../shared/skill-program';
+import { detectPostHogIntegration } from '../detection/integration';
+import type { ProgramConfig, ProgramReadyContext } from '../program-step';
+import type { ProgramSession } from '../program-session';
 import { analytics } from '@utils/analytics';
-import { wizardAbort } from '@host/wizard-abort';
+import { ProgramAbort } from '../program-abort';
 import { ErrorCodes } from '@shared/errors';
+import { REPLAY_VISION_SCOPE_ADDITIONS } from './scopes.js';
 
 const REPLAY_VISION_REPORT_FILE = 'posthog-replay-vision-report.md';
 
-/**
- * The platforms session replay can actually record on. Replay vision watches
- * recordings, so a platform with no recordings has nothing to set up — the
- * run must stop before any work, not after a pointless agent run.
- *
- * Web frameworks record through posthog-js (server-rendered frameworks
- * included — they serve pages), and the mobile SDKs with replay support are
- * React Native, Android, iOS, and Flutter. Excluded: pure backend targets
- * (`javascript_node`, `python`, `ruby`) and KMP, which has no replay support
- * yet.
- */
-export const REPLAY_VISION_SUPPORTED: ReadonlySet<Integration> = new Set([
-  Integration.nextjs,
-  Integration.nuxt,
-  Integration.vue,
-  Integration.reactRouter,
-  Integration.tanstackStart,
-  Integration.tanstackRouter,
-  Integration.angular,
-  Integration.astro,
-  Integration.sveltekit,
-  Integration.javascript_web,
-  Integration.django,
-  Integration.flask,
-  Integration.fastapi,
-  Integration.laravel,
-  Integration.rails,
-  Integration.reactNative,
-  Integration.android,
-  Integration.swift,
-  Integration.flutter,
-]);
-
-async function abortUnsupportedPlatform(
-  integration: Integration,
-): Promise<void> {
+function abortUnsupportedPlatform(integration: Integration): never {
   const name = FRAMEWORK_REGISTRY[integration]?.metadata.name ?? integration;
   // This is a clean, intentional exit, not a crash. Count it with a normal
-  // event keyed on the platform so aborts roll up into one series. Do not hand
-  // `wizardAbort` an `error` — that forwards to captureException and mints a
-  // new error-tracking issue per install location and per platform.
+  // event keyed on the platform so aborts roll up into one series.
   analytics.wizardCapture('replay-vision unsupported platform', {
     integration,
   });
-  await wizardAbort({
+  throw new ProgramAbort({
     code: ErrorCodes.DetectUnsupportedPlatform,
     message:
       `Session replay isn't available for ${name} projects, and Replay ` +
@@ -103,22 +67,19 @@ export const REPLAY_VISION_ABORT_CASES: AbortCase[] = [
  * preflight. Without this step the session would still carry the program's
  * own skill id and preflight would abort.
  */
-const DETECT_STEP: ProgramStep = {
-  id: 'detect',
-  label: 'Detecting framework',
-  // The platform gate runs on a direct detectFramework call BEFORE the full
-  // detect writes to the store: store setters replace the session with a
-  // shallow copy, so `ctx.session` read after detectPostHogIntegration would
-  // be the stale pre-copy object (see the warning in detect.ts).
-  onReady: async (ctx: ProgramReadyContext) => {
-    const integration = await detectFramework(ctx.session.installDir);
-    if (integration && !REPLAY_VISION_SUPPORTED.has(integration)) {
-      await abortUnsupportedPlatform(integration);
-      return;
-    }
-    await detectPostHogIntegration(ctx);
-  },
-};
+// The platform gate runs on a direct detectFramework call BEFORE the full
+// detect writes to the store: store setters replace the session with a
+// shallow copy, so `ctx.session` read after detectPostHogIntegration would
+// be the stale pre-copy object (see the warning in detect.ts).
+async function detectReplayVisionProject(
+  ctx: ProgramReadyContext,
+): Promise<void> {
+  const integration = await detectFramework(ctx.session.installDir);
+  if (integration && !REPLAY_VISION_SUPPORTED.has(integration)) {
+    abortUnsupportedPlatform(integration);
+  }
+  await detectPostHogIntegration(ctx);
+}
 
 const base = createSkillProgram({
   // The menu ids this skill `<dir>-<variant>`, and context-mill's
@@ -159,36 +120,40 @@ const base = createSkillProgram({
  * aborting.
  *
  * Departures from a plain `createSkillProgram`:
- * - `DETECT_STEP` in front, so `session.skillId` carries the framework id the
+ * - `onReady` detection, so `session.skillId` carries the framework id the
  *   orchestrator's preflight resolves reference + mini-skill variants with.
  * - `agentFlow` pinned (the id would default to the same value — explicit so
  *   renaming the program can't silently detach the flow).
  * - `ciPreRun` mirrors the default integration program: scope the install dir
  *   to the right project (monorepos), then detect the framework — the
- *   headless equivalent of the detect step's onReady hook.
+ *   headless equivalent of `onReady`.
  */
-export const replayVisionConfig: ProgramConfig = {
+export const config: ProgramConfig = {
   ...base,
+  binding: {
+    sequence: Sequence.orchestrator,
+    harness: Harness.anthropic,
+    model: DEFAULT_AGENT_MODEL,
+  },
   agentFlow: 'replay-vision',
-  steps: [DETECT_STEP, ...AGENT_SKILL_STEPS],
+  onReady: detectReplayVisionProject,
+  oauthScopeAdditions: REPLAY_VISION_SCOPE_ADDITIONS,
 
   ciPreRun: async (
-    session: WizardSession,
+    session: ProgramSession,
     runner: CiRunnerContext,
   ): Promise<void> => {
     await scopeInstallDirToProject(session, runner);
 
     const integration = await detectFramework(session.installDir);
     if (!integration) {
-      await wizardAbort({
+      throw new ProgramAbort({
         code: ErrorCodes.DetectNoFramework,
         message: 'Could not auto-detect your framework for this project.',
       });
-      return;
     }
     if (!REPLAY_VISION_SUPPORTED.has(integration)) {
-      await abortUnsupportedPlatform(integration);
-      return;
+      abortUnsupportedPlatform(integration);
     }
     session.integration = integration;
     analytics.setTag('integration', integration);
@@ -210,5 +175,6 @@ export const replayVisionConfig: ProgramConfig = {
         session.frameworkContext[key] = value;
       }
     }
+    noteDetectedFramework(session, frameworkConfig, context, runner.log);
   },
 };

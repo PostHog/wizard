@@ -6,16 +6,16 @@
  */
 
 import { existsSync, statSync } from 'fs';
-import type { WizardSession } from '@programs/session/wizard-session';
+import type { ProgramSession } from '../program-session';
 import type { AbortCase } from '@agent/types';
-import { findPackageJsons } from '@programs/shared/package-scanning';
+import { findPackageJsons } from '../shared/package-scanning';
 
 export {
   findPackageJsons,
   POSTHOG_SDKS,
   STRIPE_SDKS,
   type PackageMatch,
-} from '@programs/shared/package-scanning';
+} from '../shared/package-scanning';
 
 /**
  * Structured detection errors. The screen renders each kind into JSX
@@ -64,7 +64,7 @@ export const REVENUE_ABORT_CASES: AbortCase[] = [
  * The skill install happens later in the bootstrap runner, not here.
  */
 export function detectRevenuePrerequisites(
-  session: WizardSession,
+  session: ProgramSession,
   setFrameworkContext: (key: string, value: unknown) => void,
 ): void {
   const fail = (error: RevenueDetectError) =>
