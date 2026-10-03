@@ -2,7 +2,7 @@ import { auditCommand } from '../commands/audit';
 import { aiObservabilityCommand } from '../commands/ai-observability';
 import { basicIntegrationCommand } from '../commands/basic-integration';
 import { revenueCommand } from '../commands/revenue';
-import { HEADLESS_FLAG } from '../../shared/headless-mode';
+import { HEADLESS_FLAG } from '@env';
 import { GLOBAL_OPTIONS } from '../wizard';
 import { parseCommand } from './helpers/parse-command.no-jest';
 
