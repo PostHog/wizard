@@ -133,6 +133,14 @@ interface Pair {
   program: ProgramId;
   integration?: Integration;
   screen: string;
+  /**
+   * Extra proof the screen has finished mounting, for screens that settle
+   * after their first commit (SetupScreen detects before it shows its
+   * picker, SlackConnectScreen checks the connection, McpScreen detects
+   * editors). A key hint in the frame means useKeyBindings' effects have
+   * run, so its input handler is attached.
+   */
+  ready?: (s: WizardStore, frame: string) => boolean;
   arrange: (s: WizardStore) => void;
   keys: string[];
   action: string;
@@ -161,6 +169,7 @@ const PAIRS: Pair[] = [
     program: Program.PostHogIntegration,
     integration: Integration.nextjs,
     screen: ScreenId.Setup,
+    ready: (_, frame) => frame.includes('enter select'),
     arrange: confirmed,
     keys: [ENTER],
     action: 'choose',
@@ -184,6 +193,7 @@ const PAIRS: Pair[] = [
       'keyboard path records extra MCP state the action does not',
     program: Program.PostHogIntegration,
     screen: ScreenId.Mcp,
+    ready: (_, frame) => frame.includes('esc cancel'),
     arrange: (s) => {
       confirmed(s);
       authed(s);
@@ -200,6 +210,7 @@ const PAIRS: Pair[] = [
       'keyboard path and dismiss_slack commit different slack step state',
     program: Program.PostHogIntegration,
     screen: ScreenId.SlackConnect,
+    ready: (_, frame) => frame.includes('esc skip'),
     arrange: (s) => {
       confirmed(s);
       authed(s);
@@ -428,18 +439,30 @@ function diff(before: Snap, after: Snap): Record<string, unknown> {
   return out;
 }
 
+// These screens commit state from an async effect once they mount: the
+// slack connection check and the skills dir scan.
+const settled = (s: WizardStore) =>
+  (s.currentScreen !== ScreenId.SlackConnect || s.slackConnected !== null) &&
+  (s.currentScreen !== ScreenId.KeepSkills || s.skillsComplete);
+
 async function driveKeyboard(pair: Pair): Promise<Record<string, unknown>> {
   const store = await makeStore(pair);
   const screens = await mountScreens(store, { mcpInstaller: fakeInstaller });
   try {
-    await tick(60);
+    // Ink attaches the stdin listener from useInput's effect, so keys written
+    // before it exists are dropped.
+    await vi.waitFor(() => {
+      expect(screens.listening()).toBe(true);
+      expect(pair.ready?.(store, screens.frame()) ?? true).toBe(true);
+      expect(settled(store)).toBe(true);
+    });
     expect(store.currentScreen).toBe(pair.screen);
     const before = await snap(store);
     for (const key of pair.keys) {
       screens.write(key);
       await tick();
     }
-    await tick(60);
+    await vi.waitFor(() => expect(settled(store)).toBe(true));
     return diff(before, await snap(store));
   } finally {
     screens.unmount();
