@@ -1,42 +1,30 @@
 /**
- * Warehouse-source program step list.
- *
- * The detect step scans for warehouse-source signals. The skill install and
- * agent run live in the program runner (see agent-runner.ts). The skill drives
- * both in-CLI source creation and deep-link emission per detected source.
+ * Warehouse-source program step list. The skill install and agent run happen
+ * in `runProgram`. The skill drives both in-CLI source creation and deep-link
+ * emission per detected source.
  */
 
-import type { ProgramStep } from '@programs/program-step';
-import { RunPhase } from '@programs/session/wizard-session';
-import { detectWarehousePrerequisites } from '../../../programs/warehouse-source/detect.js';
+import type { FlowStep } from '@tui/flow';
+import { RunPhase } from '@shared/run-state';
 
-export const WAREHOUSE_SOURCE_PROGRAM: ProgramStep[] = [
-  {
-    id: 'detect',
-    label: 'Detecting data sources',
-    // Headless step: no screen. onReady scans installDir and writes the
-    // detected sources (or a detectError) to frameworkContext for the
-    // intro screen to render.
-    onReady: (ctx) =>
-      detectWarehousePrerequisites(ctx.session, ctx.setFrameworkContext),
-  },
+export const WAREHOUSE_SOURCE_FLOW: FlowStep[] = [
   {
     id: 'intro',
     label: 'Welcome',
     screenId: 'warehouse-intro',
-    gate: (session) => session.setupConfirmed,
+    gate: (tui) => tui.setupConfirmed,
   },
   {
     id: 'auth',
     label: 'Authentication',
     screenId: 'auth',
-    isComplete: (session) => session.credentials !== null,
+    isComplete: ({ session }) => session.credentials !== null,
   },
   {
     id: 'run',
     label: 'Data warehouse',
     screenId: 'run',
-    isComplete: (session) =>
+    isComplete: ({ session }) =>
       session.runPhase === RunPhase.Completed ||
       session.runPhase === RunPhase.Error,
   },
@@ -44,7 +32,7 @@ export const WAREHOUSE_SOURCE_PROGRAM: ProgramStep[] = [
     id: 'outro',
     label: 'Done',
     screenId: 'outro',
-    isComplete: (session) => session.outroDismissed,
+    isComplete: (tui) => tui.outroDismissed,
   },
   {
     id: 'skills',

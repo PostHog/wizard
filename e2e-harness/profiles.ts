@@ -2,16 +2,20 @@
  * Per-program e2e profiles — the UI choices a headless run makes driving each
  * program's flow.
  *
- * Each program declares its test path as JSON next to it
- * (`src/programs/<program>/test/e2e.json`): a `profile` (the options the run
- * auto-takes) plus a documented `path`. {@link profileFor} loads the `profile`
- * and maps it by program id.
+ * Each program declares its test path as JSON in its own folder
+ * (`src/programs/<id>/test/e2e.json`): the `program` id it drives, a
+ * `profile` (the options the run auto-takes), optional `variations` and a
+ * documented `path`. This module reads every such file once and keys it by
+ * `program`, so a new program's `e2e.json` needs no change here.
  *
  * {@link resolveE2eProfile} folds the run's env-var inputs into a profile once,
  * so `decideE2eAction` stays a pure function of (state, profile).
  */
 
-import { Program, type ProgramId } from '@programs';
+import { existsSync, readdirSync, readFileSync } from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { PROGRAM_REGISTRY, type ProgramId } from '@programs';
 import {
   DEFAULT_E2E_PROFILE,
   DEFAULT_E2E_VARIATION,
@@ -19,51 +23,44 @@ import {
   type WizardE2eProfile,
   type WizardE2eVariation,
 } from './e2e-profile.js';
-import posthogIntegrationE2e from '@programs/posthog-integration/test/e2e.json';
-import aiObservabilityE2e from '@programs/ai-observability/test/e2e.json';
-import metricsE2e from '@programs/metrics/test/e2e.json';
-import replayVisionE2e from '@programs/replay-vision/test/e2e.json';
-import selfDrivingE2e from '@programs/self-driving/test/e2e.json';
-import sourceMapsE2e from '@programs/error-tracking-upload-source-maps/test/e2e.json';
-import errorTrackingE2e from '@programs/error-tracking/test/e2e.json';
-import warehouseSourceE2e from '@programs/warehouse-source/test/e2e.json';
-import auditE2e from '@programs/audit/test/e2e.json';
 
-const PROFILES: Partial<Record<ProgramId, WizardE2eProfile>> = {
-  [Program.PostHogIntegration]:
-    posthogIntegrationE2e.profile as WizardE2eProfile,
-  [Program.AiObservability]: aiObservabilityE2e.profile as WizardE2eProfile,
-  [Program.Metrics]: metricsE2e.profile as WizardE2eProfile,
-  [Program.ReplayVision]: replayVisionE2e.profile as WizardE2eProfile,
-  [Program.SelfDriving]: selfDrivingE2e.profile as WizardE2eProfile,
-  [Program.ErrorTrackingUploadSourceMaps]:
-    sourceMapsE2e.profile as WizardE2eProfile,
-  [Program.ErrorTracking]: errorTrackingE2e.profile as WizardE2eProfile,
-  [Program.WarehouseSource]: warehouseSourceE2e.profile as WizardE2eProfile,
-  [Program.Audit]: auditE2e.profile as WizardE2eProfile,
-};
+/** The machine-read part of a program's `test/e2e.json`. */
+interface E2eDefinition {
+  program: ProgramId;
+  profile: WizardE2eProfile;
+  variations?: WizardE2eVariation[];
+}
 
-const VARIATIONS: Partial<Record<ProgramId, WizardE2eVariation[]>> = {
-  [Program.PostHogIntegration]:
-    posthogIntegrationE2e.variations as WizardE2eVariation[],
-  [Program.AiObservability]:
-    aiObservabilityE2e.variations as WizardE2eVariation[],
-  [Program.Metrics]: metricsE2e.variations as WizardE2eVariation[],
-  [Program.ReplayVision]: replayVisionE2e.variations as WizardE2eVariation[],
-  [Program.ErrorTracking]: errorTrackingE2e.variations as WizardE2eVariation[],
-  [Program.WarehouseSource]:
-    warehouseSourceE2e.variations as WizardE2eVariation[],
-  [Program.Audit]: auditE2e.variations as WizardE2eVariation[],
-};
+const PROGRAMS_DIR = fileURLToPath(
+  new URL('../src/programs/', import.meta.url),
+);
+
+/** Every program folder's `test/e2e.json`, by the registered program it names. */
+function loadDefinitions(): ReadonlyMap<ProgramId, E2eDefinition> {
+  const registered = new Set<string>(PROGRAM_REGISTRY.map((c) => c.id));
+  const definitions = new Map<ProgramId, E2eDefinition>();
+  for (const entry of readdirSync(PROGRAMS_DIR, { withFileTypes: true })) {
+    const file = path.join(PROGRAMS_DIR, entry.name, 'test', 'e2e.json');
+    if (!entry.isDirectory() || !existsSync(file)) continue;
+    const definition = JSON.parse(readFileSync(file, 'utf8')) as E2eDefinition;
+    if (!registered.has(definition.program)) {
+      throw new Error(`${file}: no registered program "${definition.program}"`);
+    }
+    definitions.set(definition.program, definition);
+  }
+  return definitions;
+}
+
+const DEFINITIONS = loadDefinitions();
 
 /** The e2e profile for a program, or the happy-path default if none is set. */
 export function profileFor(program: ProgramId): WizardE2eProfile {
-  return PROFILES[program] ?? DEFAULT_E2E_PROFILE;
+  return DEFINITIONS.get(program)?.profile ?? DEFAULT_E2E_PROFILE;
 }
 
 /** Whether a program has an explicit (non-default) e2e profile. */
 export function hasProfile(program: ProgramId): boolean {
-  return program in PROFILES;
+  return DEFINITIONS.has(program);
 }
 
 /**
@@ -71,7 +68,7 @@ export function hasProfile(program: ProgramId): boolean {
  * back to the single no-override baseline when a program declares none.
  */
 export function variationsFor(program: ProgramId): WizardE2eVariation[] {
-  return VARIATIONS[program] ?? [DEFAULT_E2E_VARIATION];
+  return DEFINITIONS.get(program)?.variations ?? [DEFAULT_E2E_VARIATION];
 }
 
 /** Env-var inputs a run may layer over a program's declared profile. */

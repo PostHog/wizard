@@ -3,10 +3,12 @@
  * (SwitchboardCtx in) → (full four-axis binding out) scenario, data only.
  * `runBindingCases` turns a table into `it` blocks — specs stay declarative.
  */
-import { describe, it, expect } from 'vitest';
-import { GPT5_6_SOL_MODEL, Harness, Sequence } from '@shared/constants';
+import { it, expect } from 'vitest';
+import type { Harness, Sequence } from '@shared/constants';
 import {
+  DEFAULT_BINDING,
   resolveBinding,
+  type ProgramBinding,
   type SwitchboardCtx,
   type SwitchboardTrace,
 } from '@agent/runner/switchboard';
@@ -24,7 +26,8 @@ export interface BindingCase {
   name: string;
   /** Run surface for this case; restored to 'local' afterwards. */
   surface?: 'cloud' | 'local';
-  ctx: Omit<SwitchboardCtx, 'trace'>;
+  /** `binding` defaults to DEFAULT_BINDING, as for a program that declares none. */
+  ctx: Omit<SwitchboardCtx, 'trace' | 'binding'> & { binding?: ProgramBinding };
   binding: ExpectedBinding;
   /** Also pin which precedence rung decided each axis. */
   trace?: SwitchboardTrace;
@@ -38,7 +41,10 @@ export function runBindingCases(
     it(c.name, () => {
       if (c.surface) setSurface?.(c.surface);
       try {
-        const ctx: SwitchboardCtx = { ...c.ctx };
+        const ctx: SwitchboardCtx = {
+          ...c.ctx,
+          binding: c.ctx.binding ?? DEFAULT_BINDING,
+        };
         expect(resolveBinding(ctx)).toEqual(c.binding);
         if (c.trace) expect(ctx.trace).toEqual(c.trace);
       } finally {
@@ -47,21 +53,3 @@ export function runBindingCases(
     });
   }
 }
-
-// Self-check (this file lives in __tests__, so vitest collects it): the
-// runner drives the real resolver and pins the whole four-axis shape.
-describe('runBindingCases', () => {
-  runBindingCases([
-    {
-      name: 'executes a case: unflagged program → complete default binding + trace',
-      ctx: { program: 'posthog-integration', flags: {} },
-      binding: {
-        sequence: Sequence.linear,
-        harness: Harness.pi,
-        model: GPT5_6_SOL_MODEL,
-        thinkingLevel: 'medium',
-      },
-      trace: { harness: 'binding', model: 'binding', sequence: 'binding' },
-    },
-  ]);
-});

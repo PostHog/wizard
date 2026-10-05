@@ -1,7 +1,7 @@
 /* Generic Ruby language wizard using posthog-agent with PostHog MCP */
 import type { WizardRunOptions } from '@utils/types';
-import type { FrameworkConfig } from '@programs/framework-config';
-import { bundlerPackageManager } from '@programs/detection/package-manager';
+import type { FrameworkConfig } from '../../framework-config';
+import { bundlerPackageManager } from '../../detection/package-manager';
 import { Integration } from '@shared/constants';
 import {
   getRubyVersion,

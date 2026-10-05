@@ -3,7 +3,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 
-import { debug } from '@utils/debug';
+import { logToFile } from '@utils/debug';
 
 /**
  * A coding agent whose global instructions file the PostHog CLI steering
@@ -89,7 +89,7 @@ const spawnOptions = {
  */
 export function installOrUpdatePostHogCli(): CliInstallResult {
   const args = ['install', '--global', '@posthog/cli@latest'];
-  debug(`Running npm ${args.join(' ')}`);
+  logToFile(`Running npm ${args.join(' ')}`);
 
   const result = spawnSync('npm', args, spawnOptions);
 
@@ -126,7 +126,7 @@ export function installSteeringSnippet(
   filePath: string,
 ): SteeringInstallResult {
   const args = ['api', 'agents-md', 'install', '--path', filePath];
-  debug(`Running posthog-cli ${args.join(' ')}`);
+  logToFile(`Running posthog-cli ${args.join(' ')}`);
 
   const result = spawnSync('posthog-cli', args, {
     ...spawnOptions,

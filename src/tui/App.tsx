@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { ScreenContainer } from './primitives/index.js';
 import type { WizardStore } from './store.js';
-import { createScreens, createServices } from '../ui/tui/screen-registry.js';
+import { createScreens, createServices } from './screen-registry.js';
 
 interface AppProps {
   store: WizardStore;

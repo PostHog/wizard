@@ -182,16 +182,17 @@ function runInputs(
     projectId: 1,
     host: HostResolution.fromApiHost('https://us.posthog.com'),
   };
+  const binding = {
+    harness: Harness.pi,
+    sequence: Sequence.linear,
+    model: GPT5_6_LUNA_MODEL,
+  };
   return {
     config: {
       programId: 'posthog-integration',
       composed: true,
-      binding: {
-        harness: Harness.pi,
-        sequence: Sequence.linear,
-        model: GPT5_6_LUNA_MODEL,
-      },
-      switchboard: { program: 'posthog-integration', flags: {} },
+      binding,
+      switchboard: { program: 'posthog-integration', binding, flags: {} },
       skillsBaseUrl: '',
       wizardFlags: {},
       wizardFlagPayloads: {},

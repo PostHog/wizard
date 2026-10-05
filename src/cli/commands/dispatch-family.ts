@@ -1,11 +1,11 @@
 import type { Arguments } from 'yargs';
 
-import { auditConfig } from '@programs/audit/index';
-import { AUDIT_CHECKS_FILE } from '@programs/audit/types';
+import { AUDIT_CHECKS_FILE } from '@programs/audit';
 import { WIZARD_TOOL_NAMES } from '@agent';
-import { agentSkillConfig } from '@programs/program-registry';
-import { webAnalyticsDoctorConfig } from '@programs/web-analytics-doctor/index';
-import type { ProgramConfig } from '@programs/program-step';
+import { getProgramConfig, Program } from '@programs';
+import { config as agentSkillConfig } from '@programs/agent-skill';
+import { config as webAnalyticsDoctorConfig } from '@programs/web-analytics-doctor';
+import type { ProgramConfig } from '@programs/types';
 import { getSkillsBaseUrl } from '@shared/constants';
 import { fetchSkillMenu, type CliEntry } from '@shared/skill-menu';
 import { analytics } from '@utils/analytics';
@@ -57,14 +57,14 @@ const NATIVE_HANDLERS: Record<string, Record<string, ProgramConfig>> = {
  * Resolve a fetched CliEntry to the ProgramConfig that actually runs it.
  * Most entries run via the generic agent-skill program with the entry's
  * `skillId` injected. The comprehensive `audit all` is the one exception —
- * skillId 'audit' triggers the specialized auditConfig (custom hooks,
+ * skillId 'audit' triggers the specialized `audit` program (custom hooks,
  * content blocks, screens).
  *
  * This is the one place that knows a subcommand belongs to `audit`, so the
  * generic skill program picks up the ledger here rather than for every skill.
  */
 function configForCliEntry(entry: CliEntry, family: string): ProgramConfig {
-  if (entry.skillId === 'audit') return auditConfig;
+  if (entry.skillId === 'audit') return getProgramConfig(Program.Audit);
   return {
     ...agentSkillConfig,
     skillId: entry.skillId,

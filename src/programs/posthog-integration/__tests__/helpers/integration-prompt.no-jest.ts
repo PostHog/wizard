@@ -1,17 +1,11 @@
-/**
- * Shared fixtures for tests that build the default integration's run
- * definition and prompt (`warehouse-suggestion.test.ts`,
- * `posthog-integration-prompt.test.ts`).
- */
+/** Fixtures for the tests that build the default integration's run definition and prompt. */
 
-import { posthogIntegrationConfig } from '@programs/posthog-integration/index';
-import { DETECTED_WAREHOUSE_SOURCES_KEY } from '@programs/warehouse-source/detect';
-import {
-  buildSession,
-  type WizardSession,
-} from '@programs/session/wizard-session';
+import { DETECTED_WAREHOUSE_SOURCES_KEY } from '@programs/warehouse-sources/detect';
+import { testRunnerContext } from '@programs/shared/__tests__/runner-context.no-jest';
+import { buildSession } from '@programs/session/wizard-session';
+import type { WizardSession } from '@programs/session/wizard-session';
 import type { DetectedSource } from '@programs/warehouse-sources/types';
-import { testRunnerContext } from '../../../../../test/runner-context';
+import { config as posthogIntegration } from '../../index';
 
 export const CREDENTIALS = {
   accessToken: 'tok',
@@ -23,7 +17,7 @@ export const CREDENTIALS = {
   },
 };
 
-const FRAMEWORK_CONFIG = {
+export const FRAMEWORK_CONFIG = {
   metadata: { name: 'Next.js', docsUrl: 'https://posthog.com/docs' },
   environment: { getEnvVars: () => ({ POSTHOG_KEY: 'phc_test' }) },
   ui: { getOutroChanges: () => ['Added PostHog provider'] },
@@ -48,7 +42,7 @@ export function sessionWith(sources: DetectedSource[]): WizardSession {
 }
 
 export async function resolveRun(session: WizardSession) {
-  const { run } = posthogIntegrationConfig;
+  const { run } = posthogIntegration;
   if (typeof run !== 'function') throw new Error('expected a run function');
   return run(session, testRunnerContext(session));
 }

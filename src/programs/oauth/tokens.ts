@@ -1,13 +1,14 @@
+/** The wizard's OAuth token shapes, scope checks and the refresh grant a program's login rotates with. */
 import axios from 'axios';
-import { logToFile } from '../../shared/utils/debug';
 import { z } from 'zod';
 import {
   POSTHOG_DEV_CLIENT_ID,
   POSTHOG_PROXY_CLIENT_ID,
   WIZARD_USER_AGENT,
 } from '@shared/constants';
-import { getOAuthUrl, resolveBaseUrl } from '../../shared/utils/urls';
-import { oauthErrorFromTokenBody } from '../../shared/utils/oauth-errors';
+import { logToFile } from '@utils/debug';
+import { oauthErrorFromTokenBody } from '@utils/oauth-errors';
+import { getOAuthUrl, resolveBaseUrl } from '@utils/urls';
 
 export const OAuthTokenResponseSchema = z.object({
   access_token: z.string(),

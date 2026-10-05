@@ -29,7 +29,7 @@ export const ManualAuthCodeScreen = ({ store }: ManualAuthCodeScreenProps) => {
     () => store.getSnapshot(),
   );
 
-  const { session } = store;
+  const { authorizeUrl } = store;
   const [error, setError] = useState<string | null>(null);
 
   // Esc cancels and returns to the waiting auth screen.
@@ -58,7 +58,7 @@ export const ManualAuthCodeScreen = ({ store }: ManualAuthCodeScreenProps) => {
         </Text>
       </Box>
 
-      {session.authorizeUrl && (
+      {authorizeUrl && (
         <Box flexDirection="column" marginBottom={1}>
           <Text dimColor>
             On a remote/headless machine the local login link won't open. Open
@@ -68,7 +68,7 @@ export const ManualAuthCodeScreen = ({ store }: ManualAuthCodeScreenProps) => {
               stays one continuous string the terminal soft-wraps — copies clean
               instead of being chopped across bordered, indented rows. */}
           <Box flexShrink={0} marginTop={1}>
-            <Text color="cyan">{session.authorizeUrl}</Text>
+            <Text color="cyan">{authorizeUrl}</Text>
           </Box>
         </Box>
       )}

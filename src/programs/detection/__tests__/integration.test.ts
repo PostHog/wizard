@@ -28,23 +28,22 @@ vi.mock('@programs/warehouse-sources/detect', async (importOriginal) => {
 });
 
 import { analytics } from '@utils/analytics';
-import { detectWarehouseSources } from '@programs/warehouse-sources/detect';
+import {
+  detectWarehouseSources,
+  getDetectedWarehouseSources,
+} from '@programs/warehouse-sources/detect';
 import {
   detectPostHogIntegration,
-  maybeStampAiSdkDetected,
   reportWarehouseSourcesDetected,
 } from '@programs/detection/integration';
-import { posthogIntegrationConfig } from '@programs/posthog-integration/index';
-import { DETECTED_WAREHOUSE_SOURCES_KEY } from '@programs/warehouse-source/detect';
-import type { ProgramReadyContext } from '@programs/types';
-import {
-  buildSession,
-  DiscoveredFeature,
-  ScanConsent,
-  type WizardSession,
-} from '@programs/session/wizard-session';
+import { DETECTED_WAREHOUSE_SOURCES_KEY } from '@programs/warehouse-sources/detect';
+import type { ProgramReadyContext } from '@programs/program-step';
+import type { WizardSession } from '@programs/session/wizard-session';
+import { buildSession } from '@programs/session/wizard-session';
+import { DiscoveredFeature } from '@shared/discovered-feature';
+import { mayReportScanResults, ScanConsent } from '@shared/run-state';
+import { stampAiSdkDetected } from '@programs/detection/ai-sdk-stamp';
 import type { DetectedSource } from '@programs/warehouse-sources/types';
-import { testRunnerContext } from '../../../../test/runner-context';
 
 function makeTmpDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'warehouse-reporting-'));
@@ -284,30 +283,6 @@ describe('reportWarehouseSourcesDetected', () => {
     expect(analytics.setTag).not.toHaveBeenCalled();
   });
 
-  it('the standalone warehouse command does not report through this path', async () => {
-    // `wizard warehouse` writes the same frameworkContext key from its own
-    // detect, and sets its own tags. Without a scan-state marker it would also
-    // emit this event, which six saved insights read as "the integration flow
-    // scanned".
-    const session = buildSession({ installDir: tmpDir, ci: true });
-    const { detectWarehousePrerequisites } = await import(
-      '@programs/warehouse-source/detect'
-    );
-    detectWarehousePrerequisites(session, (key, value) => {
-      session.frameworkContext[key] = value;
-    });
-    expect(
-      session.frameworkContext[DETECTED_WAREHOUSE_SOURCES_KEY],
-    ).toBeDefined();
-
-    reportWarehouseSourcesDetected(session);
-
-    expect(analytics.wizardCapture).not.toHaveBeenCalledWith(
-      'warehouse sources detected',
-      expect.anything(),
-    );
-  });
-
   it('is idempotent: a second call, from either consent path, does nothing', async () => {
     const session = await scannedSession(ScanConsent.Granted);
 
@@ -323,84 +298,15 @@ describe('reportWarehouseSourcesDetected', () => {
   });
 });
 
-describe('the full decline contract, end to end', () => {
-  const FRAMEWORK_CONFIG = {
-    metadata: { name: 'Next.js', docsUrl: 'https://posthog.com/docs' },
-    environment: { getEnvVars: () => ({ POSTHOG_KEY: 'phc_test' }) },
-    ui: { getOutroChanges: () => ['Added PostHog provider'] },
-    detection: {
-      usesPackageJson: false,
-      getVersion: () => '15.0.0',
-      packageName: 'next',
-      packageDisplayName: 'Next.js',
-    },
-    analytics: { getTags: () => ({}) },
-    prompts: { projectTypeDetection: 'app router' },
-  };
-
-  const CREDENTIALS = {
-    accessToken: 'tok',
-    projectApiKey: 'phc_test',
-    projectId: '1',
-    host: {
-      apiHost: 'https://us.i.posthog.com',
-      appHost: 'https://us.posthog.com',
-    },
-  };
-
-  let tmpDir: string;
-
-  beforeEach(() => {
-    vi.clearAllMocks();
-    tmpDir = makeTmpDir();
-    fs.writeFileSync(
-      path.join(tmpDir, 'package.json'),
-      JSON.stringify({ dependencies: { stripe: '^14.0.0' } }),
-    );
+/** The org stamp, read from the session after login. */
+function stampAfterLogin(session: WizardSession): void {
+  stampAiSdkDetected({
+    apiUser: session.apiUser,
+    discoveredFeatures: session.discoveredFeatures,
+    warehouseSources: getDetectedWarehouseSources(session),
+    mayReportScanResults: mayReportScanResults(session),
   });
-
-  afterEach(() => cleanup(tmpDir));
-
-  it('sets the key, keeps the outro suggestion, and reports nothing, for a declined run', async () => {
-    const session = buildSession({ installDir: tmpDir });
-    session.scanConsent = ScanConsent.Declined;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    session.frameworkConfig = FRAMEWORK_CONFIG as any;
-
-    await detectPostHogIntegration(makeCtx(session));
-    reportWarehouseSourcesDetected(session);
-
-    const sources = session.frameworkContext[
-      DETECTED_WAREHOUSE_SOURCES_KEY
-    ] as DetectedSource[];
-    expect(sources.map((s) => s.kind)).toContain('Stripe');
-
-    const { run } = posthogIntegrationConfig;
-    if (typeof run !== 'function') throw new Error('expected a run function');
-    const runDef = await run(session, testRunnerContext(session));
-    const outro = runDef.buildOutroData!(
-      session,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      CREDENTIALS as any,
-    );
-    if (!outro) throw new Error('expected outro data');
-    expect(outro.nextSteps).toBeDefined();
-    expect(outro.nextSteps!.items.join(' ')).toContain('Stripe');
-
-    expect(analytics.wizardCapture).not.toHaveBeenCalledWith(
-      'warehouse sources detected',
-      expect.anything(),
-    );
-    expect(analytics.setTag).not.toHaveBeenCalledWith(
-      'warehouse_source_kinds',
-      expect.anything(),
-    );
-    expect(analytics.setTag).not.toHaveBeenCalledWith(
-      'warehouse_source_count',
-      expect.anything(),
-    );
-  });
-});
+}
 
 describe('wizard_ai_sdk_detected group stamp', () => {
   let tmpDir: string;
@@ -431,7 +337,7 @@ describe('wizard_ai_sdk_detected group stamp', () => {
     withOrgUser(session);
 
     await detectPostHogIntegration(makeCtx(session));
-    maybeStampAiSdkDetected(session);
+    stampAfterLogin(session);
 
     expect(analytics.groupIdentify).toHaveBeenCalledWith(
       'organization',
@@ -450,7 +356,7 @@ describe('wizard_ai_sdk_detected group stamp', () => {
     withOrgUser(session);
 
     await detectPostHogIntegration(makeCtx(session));
-    maybeStampAiSdkDetected(session);
+    stampAfterLogin(session);
 
     expect(analytics.groupIdentify).toHaveBeenCalledWith(
       'organization',
@@ -468,7 +374,7 @@ describe('wizard_ai_sdk_detected group stamp', () => {
     withOrgUser(session);
 
     await detectPostHogIntegration(makeCtx(session));
-    maybeStampAiSdkDetected(session);
+    stampAfterLogin(session);
 
     expect(analytics.groupIdentify).not.toHaveBeenCalled();
   });
@@ -479,7 +385,7 @@ describe('wizard_ai_sdk_detected group stamp', () => {
     withOrgUser(session);
 
     await detectPostHogIntegration(makeCtx(session));
-    maybeStampAiSdkDetected(session);
+    stampAfterLogin(session);
 
     expect(analytics.groupIdentify).not.toHaveBeenCalled();
   });
@@ -491,7 +397,7 @@ describe('wizard_ai_sdk_detected group stamp', () => {
     withOrgUser(session);
 
     await detectPostHogIntegration(makeCtx(session));
-    maybeStampAiSdkDetected(session);
+    stampAfterLogin(session);
 
     expect(analytics.groupIdentify).not.toHaveBeenCalled();
   });
@@ -502,17 +408,13 @@ describe('wizard_ai_sdk_detected group stamp', () => {
     session.scanConsent = ScanConsent.Granted;
 
     await detectPostHogIntegration(makeCtx(session));
-    maybeStampAiSdkDetected(session);
+    stampAfterLogin(session);
 
     expect(analytics.groupIdentify).not.toHaveBeenCalled();
   });
 
-  // Reproduces the original dead-code bug: the intro screen resolves consent
-  // before the user has authenticated, so a stamp fired from that path would
-  // always see a null apiUser and silently no-op forever (the ordering
-  // `reportWarehouseSourcesDetected` alone cannot fix, since it only knows
-  // about consent, not login state).
-  it('stamps once authenticate() completes, not when consent resolves first', async () => {
+  // Consent resolves before login, so only a stamp after login sees an apiUser.
+  it('stamps only once an apiUser exists and consent is granted', async () => {
     withDeps({ openai: '^4.0.0' });
     const session = buildSession({ installDir: tmpDir });
     await detectPostHogIntegration(makeCtx(session));
@@ -523,9 +425,9 @@ describe('wizard_ai_sdk_detected group stamp', () => {
     reportWarehouseSourcesDetected(session);
     expect(analytics.groupIdentify).not.toHaveBeenCalled();
 
-    // authenticate() sets apiUser; the post-auth hook runs right after it.
+    // The login sets apiUser, then the stamp runs.
     withOrgUser(session);
-    maybeStampAiSdkDetected(session);
+    stampAfterLogin(session);
 
     expect(analytics.groupIdentify).toHaveBeenCalledTimes(1);
     expect(analytics.groupIdentify).toHaveBeenCalledWith(

@@ -1,5 +1,14 @@
-import type { WizardSession } from '@programs/session/wizard-session';
-import { DiscoveredFeature } from '@shared/discovered-feature';
+/** Run lifecycle and consent states the TUI, the CLI and programs share. */
+
+import type { DiscoveredFeature } from './discovered-feature';
+
+/** How an agent run ended: the agent decides it, and the programs and hosts read it. */
+export enum RunOutcome {
+  Success = 'success',
+  Aborted = 'aborted',
+  Failed = 'failed',
+  Crashed = 'crashed',
+}
 
 /** Lifecycle phase of the main work (agent run, MCP install, etc.) */
 export enum RunPhase {
@@ -29,20 +38,24 @@ export enum McpOutcome {
 }
 
 /** One place to ask, so a new consent state does not need three edits. */
-export function mayReportScanResults(session: WizardSession): boolean {
+export function mayReportScanResults(session: {
+  scanConsent: ScanConsent;
+}): boolean {
   return session.scanConsent === ScanConsent.Granted;
 }
 
 /** Lives here so analytics infrastructure never learns what consent means. */
-export function reportableDiscoveredFeatures(
-  session: WizardSession,
-): DiscoveredFeature[] | undefined {
+export function reportableDiscoveredFeatures(session: {
+  scanConsent: ScanConsent;
+  discoveredFeatures: DiscoveredFeature[];
+}): DiscoveredFeature[] | undefined {
   return mayReportScanResults(session) ? session.discoveredFeatures : undefined;
 }
 
 /** Also a scan result, so it travels under the same consent as the rest. */
-export function reportablePosthogSdkDetected(
-  session: WizardSession,
-): boolean | undefined {
+export function reportablePosthogSdkDetected(session: {
+  scanConsent: ScanConsent;
+  posthogSdkDetected: boolean;
+}): boolean | undefined {
   return mayReportScanResults(session) ? session.posthogSdkDetected : undefined;
 }

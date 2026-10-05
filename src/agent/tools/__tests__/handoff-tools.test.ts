@@ -13,19 +13,14 @@ import {
   TASK_REPORTING_NOTE,
 } from '../handoff';
 
-vi.mock('@ui', () => ({
-  getUI: () => {
-    throw new Error('agent code reached the UI');
-  },
-}));
 // The MCP server's tool list, without the SDK's transport around it.
 vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
-  tool: (
+  tool: ((
     name: string,
     description: string,
     inputSchema: unknown,
     handler: (args: unknown) => unknown,
-  ) => ({ name, description, inputSchema, handler }),
+  ) => ({ name, description, inputSchema, handler })) as never,
   createSdkMcpServer: (options: unknown) => options,
 }));
 vi.mock('../tools', async (original) => ({

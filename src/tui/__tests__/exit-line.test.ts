@@ -1,6 +1,6 @@
 import { getExitLine } from '@tui/exit-line';
 import { WizardStore, Program } from '@tui/store';
-import { OutroKind } from '@programs/session/wizard-session';
+import { OutroKind } from '@shared/outro';
 import { HostResolution } from '@shared/host-resolution';
 
 vi.mock('@utils/analytics.js', () => ({

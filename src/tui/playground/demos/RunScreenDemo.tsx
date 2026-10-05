@@ -21,8 +21,9 @@ import {
   useSyncExternalStore,
 } from 'react';
 import { Box, Text, useInput } from 'ink';
-import { WizardStore, TaskStatus } from '@tui/store';
-import { DiscoveredFeature } from '@programs/session/wizard-session';
+import { WizardStore } from '@tui/store';
+import { TaskStatus } from '@shared/task-status';
+import { DiscoveredFeature } from '@shared/discovered-feature';
 import { AgentPhase } from '@shared/agent-phase';
 import {
   SplitView,
@@ -35,7 +36,7 @@ import type { ProgressItem, TabDefinition } from '@tui/primitives/index';
 import { LearnCard } from '@tui/components/LearnCard';
 import { TipsCard } from '@tui/components/TipsCard';
 import { VisualizerTab } from '@tui/components/PhaseVisuals';
-import { getProgramConfig } from '@programs';
+import { getTuiProgram } from '@tui/programs/index';
 import { getContentBlocks as getSkillContentBlocks } from '@tui/programs/shared/skill-deck';
 import { Colors } from '@tui/styles';
 import { WIZARD_LOG_FILE } from '@utils/paths';
@@ -223,8 +224,7 @@ export const RunScreenDemo = ({ store }: RunScreenDemoProps) => {
 
   const learnBlocks = useMemo(() => {
     const getBlocks =
-      getProgramConfig(store.router.activeProgram).getContentBlocks ??
-      getSkillContentBlocks;
+      getTuiProgram(store.router.activeProgram).deck ?? getSkillContentBlocks;
     return getBlocks(store);
   }, [store]);
 

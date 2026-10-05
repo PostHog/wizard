@@ -1,16 +1,14 @@
-import type { ProgramConfig } from '@programs/program-step';
+import type { ProgramConfig } from '../program-step';
 import { WIZARD_TOOL_NAMES } from '@agent';
-import { REVENUE_ANALYTICS_PROGRAM } from '../../tui/programs/revenue-analytics/flow.js';
-import { REVENUE_ABORT_CASES } from './detect.js';
-import { getContentBlocks } from '../../tui/programs/revenue-analytics/deck/index.js';
+import { detectRevenuePrerequisites, REVENUE_ABORT_CASES } from './detect.js';
 
-export const revenueAnalyticsConfig: ProgramConfig = {
+export const config: ProgramConfig = {
   command: 'revenue-analytics',
   description: 'Set up PostHog for Revenue Analytics',
   id: 'revenue-analytics-setup',
   skillId: 'revenue-analytics-setup',
-  steps: REVENUE_ANALYTICS_PROGRAM,
-  getContentBlocks,
+  onReady: (ctx) =>
+    detectRevenuePrerequisites(ctx.session, ctx.setFrameworkContext),
   allowedTools: ['Agent'],
   disallowedTools: [WIZARD_TOOL_NAMES.wizardAsk],
   run: {
@@ -27,7 +25,6 @@ export const revenueAnalyticsConfig: ProgramConfig = {
   requires: ['posthog-integration'],
 };
 
-export { REVENUE_ANALYTICS_PROGRAM } from '../../tui/programs/revenue-analytics/flow.js';
 export {
   detectRevenuePrerequisites,
   POSTHOG_SDKS,

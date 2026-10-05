@@ -20,7 +20,7 @@ export const PortConflictScreen = ({ store }: PortConflictScreenProps) => {
     () => store.getSnapshot(),
   );
 
-  const processInfo = store.session.portConflictProcess;
+  const processInfo = store.portConflictProcess;
 
   if (!processInfo) return null;
 
@@ -35,7 +35,7 @@ export const PortConflictScreen = ({ store }: PortConflictScreenProps) => {
           confirmLabel="Retry [Enter]"
           cancelLabel="Exit [Esc]"
           onConfirm={() => store.resolvePortConflict()}
-          onCancel={() => process.exit(1)}
+          onCancel={() => store.requestExit(1)}
         />
       }
     >

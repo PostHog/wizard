@@ -1,5 +1,5 @@
 import { Box, Text } from 'ink';
-import type { AuditCheck, AuditStatus } from '@programs/audit/types';
+import type { AuditCheck, AuditStatus } from '@programs/audit';
 import { countNoun } from '@utils/count-noun';
 import type { ViewerLayout } from './layout.js';
 

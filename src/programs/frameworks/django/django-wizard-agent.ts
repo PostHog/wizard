@@ -1,8 +1,8 @@
 /* Django wizard using posthog-agent with PostHog MCP */
 import type { WizardRunOptions } from '@utils/types';
-import type { FrameworkConfig } from '@programs/framework-config';
-import { PYTHON_PACKAGE_INSTALLATION } from '@programs/framework-config';
-import { detectPythonPackageManagers } from '@programs/detection/package-manager';
+import type { FrameworkConfig } from '../../framework-config';
+import { PYTHON_PACKAGE_INSTALLATION } from '../../framework-config';
+import { detectPythonPackageManagers } from '../../detection/package-manager';
 import { Integration } from '@shared/constants';
 import { boundedGlob, readProjectFile } from '@utils/bounded-fs';
 import * as path from 'node:path';
@@ -32,6 +32,18 @@ export const DJANGO_AGENT_CONFIG: FrameworkConfig<DjangoContext> = {
       const projectType = await getDjangoProjectType(options);
       const settingsFile = await findDjangoSettingsFile(options);
       return { projectType, settingsFile };
+    },
+    getDetectedFrameworkLabel: (context) => {
+      switch (context.projectType) {
+        case DjangoProjectType.WAGTAIL:
+          return 'Django with Wagtail CMS';
+        case DjangoProjectType.DRF:
+          return 'Django REST Framework';
+        case DjangoProjectType.CHANNELS:
+          return 'Django Channels';
+        case DjangoProjectType.STANDARD:
+          return 'Django';
+      }
     },
   },
 

@@ -15,13 +15,7 @@ import { getHarness, resolveHarness } from './harness';
 import type { SequenceResult, SequenceContext } from '../shared/types';
 import { runLinearProgram } from '../sequence/linear';
 import { runOrchestrator } from '../sequence/orchestrator/orchestrator-runner';
-import {
-  DEFAULT_BINDING,
-  PROGRAM_BINDINGS,
-  runChain,
-  type Middleware,
-  type SwitchboardCtx,
-} from '.';
+import { runChain, type Middleware, type SwitchboardCtx } from '.';
 
 // ── Registry ────────────────────────────────────────────────────────────
 
@@ -119,7 +113,7 @@ const SEQUENCE_MIDDLEWARE: Middleware<Sequence>[] = [
 export function resolveSequence(ctx: SwitchboardCtx): Sequence {
   const sequence = runChain(SEQUENCE_MIDDLEWARE, ctx, () => {
     if (ctx.trace) ctx.trace.sequence = 'binding';
-    const binding = PROGRAM_BINDINGS[ctx.program] ?? DEFAULT_BINDING;
+    const { binding } = ctx;
     return binding.sequence;
   });
   logToFile(

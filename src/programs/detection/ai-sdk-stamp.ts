@@ -3,8 +3,8 @@
 import type { ApiUser } from '@shared/api';
 import { DiscoveredFeature } from '@shared/discovered-feature';
 import { analytics } from '@utils/analytics';
-import { AI_SOURCE_KINDS } from '@programs/warehouse-sources/registry';
-import type { DetectedSource } from '@programs/warehouse-sources/types';
+import { AI_SOURCE_KINDS } from '../warehouse-sources/registry';
+import type { DetectedSource } from '../warehouse-sources/types';
 
 /** What the org stamp reads, with no session. */
 export type AiSdkStampEvidence = {

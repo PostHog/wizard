@@ -6,15 +6,17 @@ import {
   type MintFailureServices,
 } from '../screens/MintFailureScreen';
 import { KeyboardHintsProvider } from '../hooks/useKeyboardHints';
-import { OutroKind } from '@programs/session/wizard-session';
+import { OutroKind } from '@shared/outro';
 import { HostResolution } from '@shared/host-resolution';
 import { ScreenId } from '../router';
 
-vi.mock('ink', () =>
-  vi.importActual('../../../node_modules/ink/build/index.d.js'),
-);
+vi.mock('ink', () => vi.importActual<typeof import('ink')>('ink-actual'));
 vi.mock('@utils/analytics', () => ({
-  analytics: { wizardCapture: vi.fn(), capture: vi.fn(), setTag: vi.fn() },
+  analytics: {
+    wizardCapture: vi.fn(),
+    capture: vi.fn(),
+    setTag: vi.fn(),
+  } as never,
   sessionProperties: vi.fn(() => ({})),
 }));
 
@@ -63,10 +65,10 @@ it('reports the log, saves the skill, then continues setup', async () => {
   expect(app.lastFrame()).toContain(services.logPath);
   await choose(0);
   expect(app.lastFrame()).toContain(saved.path);
-  expect(store.session.mintHandoff).toBeNull();
+  expect(store.mintHandoff).toBeNull();
   await choose(0);
-  expect(store.session.mintHandoff).toBe('continue');
-  expect(store.router.resolve(store.session)).toBe(ScreenId.Mcp);
+  expect(store.mintHandoff).toBe('continue');
+  expect(store.router.resolve(store)).toBe(ScreenId.Mcp);
 });
 
 it.each(['save', 'open'] as const)(
@@ -80,21 +82,21 @@ it.each(['save', 'open'] as const)(
     expect(app.lastFrame()).toContain(
       failure === 'save' ? 'Could not save' : 'Unavailable',
     );
-    expect(store.session.mintHandoff).toBeNull();
+    expect(store.mintHandoff).toBeNull();
     if (failure === 'save') expect(services.openAgent).not.toHaveBeenCalled();
     await choose(0);
     expect(services.leaveSpellbook).toHaveBeenCalledTimes(
       failure === 'save' ? 2 : 1,
     );
     expect(services.openAgent).toHaveBeenLastCalledWith('codex', saved.path);
-    expect(store.session.mintHandoff).toBe('continue');
+    expect(store.mintHandoff).toBe('continue');
   },
 );
 
 it('exits without saving or launching', async () => {
   const { store, services, choose } = setup();
   await choose(4);
-  expect(store.session.mintHandoff).toBe('exit');
+  expect(store.mintHandoff).toBe('exit');
   expect(services.leaveSpellbook).not.toHaveBeenCalled();
   expect(services.openAgent).not.toHaveBeenCalled();
 });

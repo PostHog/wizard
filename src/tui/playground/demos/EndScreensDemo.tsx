@@ -12,12 +12,12 @@
  *
  * The playground credentials are re-pointed at a localhost dead-end
  * while this demo is mounted, so SlackConnectScreen's poll fails fast
- * without real network traffic; `K` drives `session.slackConnected`
+ * without real network traffic; `K` drives `store.slackConnected`
  * directly, which is the same store key the poll writes.
  *
  * KeepSkillsScreen is intentionally absent — it reads the install dir's
- * .claude/skills/ from disk and calls process.exit() when none are
- * found, which would kill the playground.
+ * .claude/skills/ from disk and asks to end the run when none are
+ * found, which would close the playground.
  */
 
 import { Box, Text, useInput } from 'ink';
@@ -26,7 +26,8 @@ import type { WizardStore } from '@tui/store';
 import { SlackConnectScreen } from '@tui/screens/SlackConnectScreen';
 import { OutroScreen } from '@tui/screens/OutroScreen';
 import { Colors } from '@tui/styles';
-import { OutroKind, type OutroData } from '@programs/session/wizard-session';
+import { OutroKind } from '@shared/outro';
+import { type OutroData } from '@agent/types';
 import { HostResolution } from '@shared/host-resolution';
 
 const VIEWS = ['slack-connect', 'outro'] as const;
@@ -107,14 +108,14 @@ export const EndScreensDemo = ({ store }: EndScreensDemoProps) => {
     if (input === 'V' || input === 'v') {
       setViewIdx((i) => (i + 1) % VIEWS.length);
     } else if (input === 'K' || input === 'k') {
-      store.setSlackConnected(store.session.slackConnected !== true);
+      store.setSlackConnected(store.slackConnected !== true);
     } else if (input === 'O' || input === 'o') {
       setOutroKindIdx((i) => (i + 1) % OUTRO_KINDS.length);
     }
   });
 
   const slackState =
-    store.session.slackConnected === true ? 'connected' : 'not-connected';
+    store.slackConnected === true ? 'connected' : 'not-connected';
 
   return (
     <Box flexDirection="column" flexGrow={1} paddingX={1}>

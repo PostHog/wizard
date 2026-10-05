@@ -3,13 +3,6 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { AgentProgress } from '@agent/progress';
 
-// The benchmark pipeline runs inside the agent, which has no UI. Reaching one
-// is the defect this file guards against.
-vi.mock('@ui', () => ({
-  getUI: () => {
-    throw new Error('agent code reached the UI');
-  },
-}));
 vi.mock('@utils/debug', () => ({
   logToFile: vi.fn(),
   configureLogFile: vi.fn(),

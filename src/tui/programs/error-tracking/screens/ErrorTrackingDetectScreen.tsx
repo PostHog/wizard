@@ -4,18 +4,19 @@
  * tracking up in. Mirrors the legacy SourceMapsDetectScreen.
  */
 
+import { scanProgress } from '@tui/agent-progress';
 import { Box, Text } from 'ink';
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import type { WizardStore } from '@tui/store';
 import { LoadingBox, PickerMenu } from '@tui/primitives/index';
 import { Colors, Icons } from '@tui/styles';
-import { FRAMEWORK_REGISTRY } from '@programs/frameworks/registry';
+import { FRAMEWORK_REGISTRY } from '@programs';
 import {
   detectErrorTrackingProjects,
   ERROR_TRACKING_PROJECT_PATH_KEY,
   type ErrorTrackingDetectionReport,
   type ErrorTrackingProject,
-} from '@programs/error-tracking/detect-agentic';
+} from '@programs/error-tracking';
 
 interface ErrorTrackingDetectScreenProps {
   store: WizardStore;
@@ -62,6 +63,7 @@ export const ErrorTrackingDetectScreen = ({
               setActivity((prev) => [...prev, line].slice(-MAX_ACTIVITY_LINES));
             }
           },
+          scanProgress(store),
         );
         if (!cancelled) setState({ kind: 'ready', report });
       } catch (err) {
@@ -122,7 +124,7 @@ export const ErrorTrackingDetectScreen = ({
         </Box>
         <PickerMenu
           options={[{ label: 'Exit', value: EXIT }]}
-          onSelect={() => process.exit(1)}
+          onSelect={() => store.requestExit(1)}
         />
       </Box>
     );
@@ -146,7 +148,7 @@ export const ErrorTrackingDetectScreen = ({
         </Box>
         <PickerMenu
           options={[{ label: 'Exit', value: EXIT }]}
-          onSelect={() => process.exit(0)}
+          onSelect={() => store.requestExit(0)}
         />
       </Box>
     );
@@ -175,7 +177,7 @@ export const ErrorTrackingDetectScreen = ({
         onSelect={(value) => {
           const path = Array.isArray(value) ? value[0] : value;
           if (path === EXIT) {
-            process.exit(0);
+            store.requestExit(0);
             return;
           }
           const chosen = instrumentable.find((p) => p.path === path);

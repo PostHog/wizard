@@ -1,23 +1,24 @@
-import { Integration } from '@shared/constants';
-import { detectFramework } from '@programs/detection/index';
-import { scopeInstallDirToProject } from '@programs/detection/project-scope';
-import { FRAMEWORK_REGISTRY } from '@programs/frameworks/registry';
-import type { ProgramRun } from '@programs/program-run';
-import { AGENT_SKILL_STEPS } from '@tui/programs/shared/skill-flow';
-import { PICK_PROJECT_STEP } from '@tui/programs/error-tracking/flow';
-import { getContentBlocks } from '@tui/programs/error-tracking/deck/index';
-import { getTips } from '@tui/programs/error-tracking/deck/tips';
+import {
+  Harness,
+  Integration,
+  Sequence,
+  DEFAULT_AGENT_MODEL,
+} from '@shared/constants';
+import { detectFramework } from '../detection/framework';
+import { scopeInstallDirToProject } from '../detection/project-scope';
+import { FRAMEWORK_REGISTRY } from '../frameworks/registry';
+import type { ProgramRun } from '../program-run';
 import {
   ERROR_TRACKING_UNSUPPORTED,
   errorTrackingProjectDir,
   gatherErrorTrackingContext,
-} from '@programs/error-tracking/detect-agentic';
-import type { ProgramConfig, ProgramStep } from '@programs/program-step';
-import type { WizardSession } from '@programs/session/wizard-session';
-import type { CiRunnerContext, RunnerContext } from '@programs/runner-context';
-import { preinstallPostHogCliOnce } from '@programs/shared/posthog-cli-preinstall';
+} from './detect-agentic';
+import type { ProgramConfig } from '../program-step';
+import type { ProgramSession } from '../program-session';
+import type { CiRunnerContext, RunnerContext } from '../runner-context';
+import { preinstallPostHogCliOnce } from '../shared/posthog-cli-preinstall';
 import { analytics } from '@utils/analytics';
-import { wizardAbort } from '@host/wizard-abort';
+import { ProgramAbort } from '../program-abort';
 import { ErrorCodes } from '@shared/errors';
 
 const ERROR_TRACKING_REPORT_FILE = 'posthog-error-tracking-report.md';
@@ -40,15 +41,13 @@ export const SYMBOL_UPLOAD_CLI_FRAMEWORKS: ReadonlySet<Integration> = new Set([
   Integration.rust,
 ]);
 
-async function abortUnsupportedPlatform(
-  integration: Integration,
-): Promise<void> {
+function abortUnsupportedPlatform(integration: Integration): never {
   const name = FRAMEWORK_REGISTRY[integration]?.metadata.name ?? integration;
   // A clean exit, not a crash: an event, never an `error` for captureException.
   analytics.wizardCapture('error tracking unsupported platform', {
     integration,
   });
-  await wizardAbort({
+  throw new ProgramAbort({
     code: ErrorCodes.DetectUnsupportedPlatform,
     message:
       `The wizard cannot set up error tracking for ${name} projects yet.\n\n` +
@@ -57,41 +56,25 @@ async function abortUnsupportedPlatform(
 }
 
 /**
- * Pre-install posthog-cli when the detected framework's symbol upload will
- * shell out to it. See `preinstallPostHogCliOnce` for the once-per-process
- * guard and the warn-don't-fail handling.
+ * Prepare the run once the project is known: pre-install posthog-cli when the
+ * framework's symbol upload shells out to it, then gather the framework
+ * context. See `preinstallPostHogCliOnce` for the once-per-process guard and
+ * the warn-don't-fail handling.
  */
-function maybePreinstallPostHogCli(
-  integration: Integration | null,
+async function prepareErrorTrackingRun(
+  session: ProgramSession,
   log: RunnerContext['log'],
-): void {
-  if (!integration || !SYMBOL_UPLOAD_CLI_FRAMEWORKS.has(integration)) return;
-  preinstallPostHogCliOnce(
-    'error tracking posthog-cli preinstall failed',
-    { integration },
-    log,
-  );
+): Promise<void> {
+  const { integration } = session;
+  if (integration && SYMBOL_UPLOAD_CLI_FRAMEWORKS.has(integration)) {
+    preinstallPostHogCliOnce(
+      'error tracking posthog-cli preinstall failed',
+      { integration },
+      log,
+    );
+  }
+  await gatherErrorTrackingContext(session, log);
 }
-
-const ERROR_TRACKING_STEPS: ProgramStep[] = AGENT_SKILL_STEPS.flatMap(
-  (step): ProgramStep[] => {
-    if (step.id === 'intro') {
-      return [{ ...step, screenId: 'error-tracking-intro' }];
-    }
-    if (step.id === 'auth') return [step, PICK_PROJECT_STEP];
-    if (step.id === 'run') {
-      // targetDir makes run-wizard walk the steps and run in the picked project.
-      return [
-        {
-          ...step,
-          targetDir: errorTrackingProjectDir,
-          onRunPrep: gatherErrorTrackingContext,
-        },
-      ];
-    }
-    return [step];
-  },
-);
 
 /**
  * Run instructions for a linear override (`--sequence=linear`), the only
@@ -155,56 +138,70 @@ const ERROR_TRACKING_RUN: ProgramRun = {
  * - No `run.skillId`: the flow's tasks resolve per-framework mini-skills
  *   themselves (there is no bare `error-tracking` menu entry), so the intro is
  *   a custom screen rather than the generic skill intro.
- * - `PICK_PROJECT_STEP` after auth: the user picks the project, which sets the
- *   framework preflight needs and the directory the run is scoped to.
- * - `run` is a function: `runAgent` resolves it after the pick (and after
- *   `ciPreRun` headless), so the posthog-cli pre-install, which the agent
- *   cannot do (warlock blocks \`npm install -g\`), waits for the user.
+ * - The user picks the project after auth, which sets the framework preflight
+ *   needs and the directory the run is scoped to (`runSteps.run.targetDir`).
+ * - The run step's `onRunPrep` runs after the pick (`ciPreRun` headless), so
+ *   the posthog-cli pre-install, which the agent cannot do (warlock blocks
+ *   \`npm install -g\`), waits for the project.
  * - `agentFlow` pinned (the id would default to the same value — explicit so
  *   renaming the program can't silently detach the flow).
  * - `ciPreRun` mirrors replay-vision: scope the install dir to the right
  *   project (monorepos), then detect the framework — the headless equivalent
  *   of the project picker.
  */
-export const errorTrackingConfig: ProgramConfig = {
+export const config: ProgramConfig = {
+  // Orchestrator on pi, like metrics. The binding routes only; every stage's
+  // model and effort are pinned context-mill side in the flow's frontmatter
+  // (`model_pi`/`effort_pi`: terra seed, install and init, sol tasks, luna report).
+  binding: {
+    sequence: Sequence.orchestrator,
+    harness: Harness.pi,
+    model: DEFAULT_AGENT_MODEL,
+  },
   command: 'error-tracking',
   description:
     'Set up PostHog error tracking, source-map upload and release linking included',
   id: 'error-tracking',
   agentFlow: 'error-tracking',
-  steps: ERROR_TRACKING_STEPS,
   reportFile: ERROR_TRACKING_REPORT_FILE,
-  getContentBlocks,
-  getTips,
-
-  run: (session: WizardSession, runner: RunnerContext): Promise<ProgramRun> => {
-    maybePreinstallPostHogCli(session.integration, runner.log);
-    return Promise.resolve(ERROR_TRACKING_RUN);
+  // The run is scoped to the project the user picks after login.
+  runSteps: {
+    run: {
+      targetDir: errorTrackingProjectDir,
+      onRunPrep: prepareErrorTrackingRun,
+    },
   },
 
+  run: ERROR_TRACKING_RUN,
+
   ciPreRun: async (
-    session: WizardSession,
+    session: ProgramSession,
     runner: CiRunnerContext,
   ): Promise<void> => {
     await scopeInstallDirToProject(session, runner);
 
     const integration = await detectFramework(session.installDir);
     if (!integration) {
-      await wizardAbort({
+      throw new ProgramAbort({
         code: ErrorCodes.DetectNoFramework,
         message: 'Could not auto-detect your framework for this project.',
       });
-      return;
     }
     if (ERROR_TRACKING_UNSUPPORTED.has(integration)) {
-      await abortUnsupportedPlatform(integration);
-      return;
+      abortUnsupportedPlatform(integration);
     }
     session.integration = integration;
     analytics.setTag('integration', integration);
     session.frameworkConfig = FRAMEWORK_REGISTRY[integration];
     session.skillId = integration;
 
-    await gatherErrorTrackingContext(session);
+    await prepareErrorTrackingRun(session, runner.log);
   },
 };
+
+export {
+  ERROR_TRACKING_PROJECT_PATH_KEY,
+  detectErrorTrackingProjects,
+  type ErrorTrackingDetectionReport,
+  type ErrorTrackingProject,
+} from './detect-agentic.js';

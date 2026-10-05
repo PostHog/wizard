@@ -3,6 +3,7 @@ import {
   CONTINUE_LABEL,
   DEFAULT_HEADLINE,
   DETECTED_HEADLINE,
+  introEntries,
   introHeadline,
   introMenuOptions,
 } from '@tui/programs/posthog-integration/intro-menu';
@@ -114,5 +115,36 @@ describe('introMenuOptions', () => {
         posthogSdkDetected: true,
       }),
     ).toBeNull();
+  });
+});
+
+describe('introEntries', () => {
+  // The list is curated, so an id that stops matching drops its row in silence.
+  it("offers the intro's programs and tools, in order, all resolving", () => {
+    expect(introEntries().map((entry) => entry.id)).toEqual([
+      'self-driving',
+      'error-tracking-upload-source-maps',
+      'warehouse-source',
+      'audit',
+      'posthog-doctor',
+      'mcp-analytics',
+      'replay-vision',
+      'ai-observability',
+      'metrics',
+      'revenue-analytics-setup',
+    ]);
+  });
+
+  // A row wider than the terminal stops the whole block from centering.
+  it('keeps every row inside an 80-column terminal', () => {
+    const COMMAND_COLUMN = 21;
+    const MARKER_PREFIX = 2;
+    const BUDGET = 80 - COMMAND_COLUMN - MARKER_PREFIX;
+
+    const tooLong = introEntries()
+      .filter((entry) => entry.description.length > BUDGET)
+      .map((entry) => `${entry.id} (${entry.description.length})`);
+
+    expect(tooLong).toEqual([]);
   });
 });

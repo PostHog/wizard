@@ -1,4 +1,4 @@
-import { replayVisionConfig } from '@programs/replay-vision/index';
+import { config as replayVisionConfig } from '@programs/replay-vision';
 
 import type { Command } from './command';
 import { nativeCommandFactory } from './factories/native-command-factory';

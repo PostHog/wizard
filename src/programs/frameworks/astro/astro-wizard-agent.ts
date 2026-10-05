@@ -1,7 +1,7 @@
 /* Astro wizard using posthog-agent with PostHog MCP */
 import type { WizardRunOptions } from '@utils/types';
-import type { FrameworkConfig } from '@programs/framework-config';
-import { detectNodePackageManagers } from '@programs/detection/package-manager';
+import type { FrameworkConfig } from '../../framework-config';
+import { detectNodePackageManagers } from '../../detection/package-manager';
 import { Integration } from '@shared/constants';
 import {
   getDeclaredVersion,
@@ -10,7 +10,6 @@ import {
   type PackageJson,
 } from '@utils/package-json';
 import { tryGetPackageJson } from '@utils/setup-utils';
-import { getUI } from '@ui';
 import {
   getAstroRenderingMode,
   getAstroVersionBucket,
@@ -29,11 +28,12 @@ export const ASTRO_AGENT_CONFIG: FrameworkConfig<AstroContext> = {
     docsUrl: 'https://posthog.com/docs/libraries/astro',
     gatherContext: async (options: WizardRunOptions) => {
       const renderingMode = await getAstroRenderingMode(options);
-      getUI().setDetectedFramework(
-        `Astro ${getAstroRenderingModeName(renderingMode)}`,
-      );
       return { renderingMode };
     },
+    getDetectedFrameworkLabel: (context) =>
+      context.renderingMode
+        ? `Astro ${getAstroRenderingModeName(context.renderingMode)}`
+        : undefined,
   },
 
   detection: {

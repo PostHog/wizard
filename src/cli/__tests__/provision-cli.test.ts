@@ -8,39 +8,14 @@ vi.mock('semver', () => ({ satisfies: () => true }));
 vi.mock('@utils/provisioning', () => ({
   provisionNewAccount: mockProvisionNewAccountSubcmd,
 }));
-// Same supporting mocks as src/__tests__/cli.test.ts — bin.ts imports these
-// at module load regardless of which subcommand yargs dispatches.
-vi.mock('../../programs/session/wizard-session', async (importOriginal) => ({
-  ...(await importOriginal<
-    typeof import('../../programs/session/wizard-session')
-  >()),
-  buildSession: vi.fn((args: Record<string, unknown>) => args),
-}));
-vi.mock('../../tui/start-tui', () => ({
-  startTUI: () => ({
-    unmount: vi.fn(),
-    store: {
-      session: {},
-      runReadyHooks: vi.fn().mockResolvedValue(undefined),
-      // eslint-disable-next-line @typescript-eslint/no-empty-function
-      getGate: vi.fn().mockReturnValue(new Promise(() => {})),
-      subscribe: vi.fn(),
-      onEnterScreen: vi.fn(),
-    },
-  }),
-}));
-vi.mock('../../programs/posthog-integration', () => ({
-  posthogIntegrationConfig: {
+// Same supporting mocks as cli.test.ts: the CLI loads these at module load
+// regardless of which subcommand yargs dispatches.
+vi.mock(import('@programs/posthog-integration'), () => ({
+  config: {
     id: 'posthog-integration',
     steps: [],
     run: null,
-  },
-  integrationRunStep: {
-    id: 'run',
-    label: 'Integration',
-    screenId: 'run',
-    run: () => Promise.resolve(),
-  },
+  } as never,
 }));
 vi.mock('@utils/environment', () => ({
   isNonInteractiveEnvironment: () => false,
@@ -50,26 +25,20 @@ vi.mock('@utils/env-api-key', () => ({
   readApiKeyFromEnv: () => undefined,
 }));
 vi.mock('@utils/debug', () => ({
+  configureLogFile: vi.fn(),
   configureLogFileFromEnvironment: vi.fn(),
   logToFile: vi.fn(),
-  setDebugSink: vi.fn(),
-}));
-vi.mock('../../programs/frameworks/registry', () => ({
-  FRAMEWORK_REGISTRY: {},
-}));
-vi.mock('../../programs/detection', () => ({
-  detectFramework: vi.fn().mockResolvedValue(null),
-  gatherFrameworkContext: vi.fn().mockResolvedValue({}),
 }));
 vi.mock('@utils/analytics', () => ({
   analytics: { setTag: vi.fn() },
 }));
-vi.mock('@host/wizard-abort', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@host/wizard-abort')>()),
+vi.mock(import('@host/wizard-abort'), async (importOriginal) => ({
+  ...(await importOriginal()),
   wizardAbort: vi.fn(),
 }));
-vi.mock('../../programs/run-agent-legacy', () => ({
-  runProgramAgent: vi.fn().mockResolvedValue(undefined),
+vi.mock(import('@headless'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  runHeadless: vi.fn().mockResolvedValue(0),
 }));
 
 import { provisionCommand } from '../commands/provision';
@@ -114,7 +83,7 @@ describe('wizard provision subcommand', () => {
     personalApiKey: 'phx_test',
   };
 
-  // The success path calls process.exit(0) at the end of bin.ts's detached
+  // The success path calls process.exit(0) at the end of the CLI's detached
   // `void (async () => …)()` dispatch. Our throwing exit mock turns that into an
   // unhandled rejection with no catch site. Swallow exactly that sentinel (the
   // asserted work already ran before exit); re-throw anything else so genuine
@@ -137,24 +106,26 @@ describe('wizard provision subcommand', () => {
     stdoutChunks = [];
     stderrChunks = [];
 
-    process.stdout.write = ((chunk: unknown) => {
+    process.stdout.write = ((chunk: unknown, cb?: unknown) => {
       stdoutChunks.push(String(chunk));
+      if (typeof cb === 'function') cb();
       return true;
     }) as typeof process.stdout.write;
-    process.stderr.write = ((chunk: unknown) => {
+    process.stderr.write = ((chunk: unknown, cb?: unknown) => {
       stderrChunks.push(String(chunk));
+      if (typeof cb === 'function') cb();
       return true;
     }) as typeof process.stderr.write;
 
     consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {
-      // suppress LoggingUI output during tests
+      // suppress consoleLog output during tests
     });
 
     // The CLI quits via process.exit(); the mock throws so a validation failure
     // (yargs `.fail()` during parse) halts BEFORE the command handler runs —
     // otherwise the handler would call provisionNewAccount with invalid input.
     // The call is still recorded before the throw, so `toHaveBeenCalledWith`
-    // assertions hold. On the success path exit(0) runs at the end of bin.ts's
+    // assertions hold. On the success path exit(0) runs at the end of the CLI's
     // detached `void (async () => …)()` dispatch, so its throw escapes as an
     // unhandled rejection — swallowed by the suite-level handler below (the
     // asserted work has already run by then).
@@ -186,12 +157,13 @@ describe('wizard provision subcommand', () => {
   async function runCLI(args: string[]) {
     process.argv = ['node', 'bin.ts', 'provision', ...args];
     try {
-      // vi.resetModules() re-evaluates bin.ts fresh on each call — the vitest
-      // equivalent of jest.isolateModules.
+      // vi.resetModules() builds the command line fresh on each call, as
+      // bin.ts does — the vitest equivalent of jest.isolateModules.
       vi.resetModules();
-      await import('../../../bin');
+      const { runCli } = await import('../index');
+      runCli();
     } catch {
-      // bin.ts dispatch can reject on some parse paths; the run's effect is
+      // The dispatch can reject on some parse paths; the run's effect is
       // asserted via the mocks after settle().
     }
     await settle();
@@ -274,7 +246,7 @@ describe('wizard provision subcommand', () => {
     mockProvisionNewAccountSubcmd.mockResolvedValue(successResult);
     await runCLI(['--email', 'user@example.com']);
     expect(stdoutChunks.join('')).toBe('');
-    // LoggingUI writes via console.log
+    // consoleLog writes via console.log
     const consoleOutput = consoleLogSpy.mock.calls
       .map((call: unknown[]) => String(call[0]))
       .join('\n');
