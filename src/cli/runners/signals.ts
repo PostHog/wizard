@@ -1,4 +1,4 @@
-/** The CLI owns the process: SIGINT and SIGTERM abort the host's signal, and the host's code is the exit. */
+/** The CLI owns the process: SIGINT, SIGTERM and SIGHUP abort the host's signal, and the host's code is the exit. */
 import { ErrorCodes, emitWizardError } from '@shared/errors';
 
 const drain = (stream: NodeJS.WriteStream): Promise<void> =>
@@ -28,8 +28,9 @@ export function exitWith(run: () => Promise<number>): void {
 }
 
 /**
- * Run a host with a signal SIGINT and SIGTERM abort (the reason is the signal
- * name), and settle as it does. The listeners go once it settles, so what runs
+ * Run a host with a signal SIGINT, SIGTERM and SIGHUP abort (the reason is the
+ * signal name), and settle as it does. A closed terminal sends SIGHUP, which
+ * the hosts end like Ctrl-C. The listeners go once it settles, so what runs
  * after it, such as a fallback with no screens, ends on Ctrl-C as Node does.
  */
 export async function underSignals(
@@ -39,11 +40,13 @@ export async function underSignals(
   const onSignal = (name: NodeJS.Signals) => controller.abort(name);
   process.on('SIGINT', onSignal);
   process.on('SIGTERM', onSignal);
+  process.on('SIGHUP', onSignal);
   try {
     return await run(controller.signal);
   } finally {
     process.off('SIGINT', onSignal);
     process.off('SIGTERM', onSignal);
+    process.off('SIGHUP', onSignal);
   }
 }
 

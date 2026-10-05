@@ -37,6 +37,8 @@ it('waits for stdout to flush before it exits', async () => {
 it.each([
   ['SIGINT', 130],
   ['SIGTERM', 143],
+  // A closed terminal: the hosts end it like Ctrl-C.
+  ['SIGHUP', 130],
 ] as const)(
   "aborts the host's signal on %s with the signal name",
   async (name, code) => {
