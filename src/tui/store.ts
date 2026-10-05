@@ -785,6 +785,7 @@ export class WizardStore implements TuiView {
     });
   }
 
+  /** Complete the MCP step; its `mcp complete` capture goes through `reportMcpOutcome`, so once per store. */
   setMcpComplete(
     outcome: McpOutcome = McpOutcome.Skipped,
     installedClients: string[] = [],

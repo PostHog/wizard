@@ -34,7 +34,8 @@ const installer: McpInstaller = {
     Promise.resolve([
       { name: 'Cursor', supportsPlugin: false, pluginBundlesMcp: false },
     ]),
-  install: () => Promise.resolve([]),
+  install: () =>
+    Promise.resolve([{ name: 'Cursor', status: McpClientStatus.Changed }]),
   remove: () =>
     Promise.resolve([{ name: 'Cursor', status: McpClientStatus.Changed }]),
   installPlugins: () => Promise.resolve([]),
@@ -64,4 +65,45 @@ it('reports a removal once, as its results show, before the Enter that completes
   stdin.write('\r');
   await vi.waitFor(() => expect(store.mcpComplete).toBe(true));
   expect(mcpCompleteCalls()).toHaveLength(1);
+});
+
+it('reports an install once, as its results show, before Enter', async () => {
+  const store = new WizardStore(Tool.McpAdd);
+  store.session = buildSession({ installDir: '/app' });
+  const { stdin, lastFrame } = render(
+    <McpScreen store={store} installer={installer} />,
+  );
+  await vi.waitFor(() => expect(lastFrame()).toContain('Detected: Cursor'));
+  stdin.write('\r');
+  await vi.waitFor(() => expect(lastFrame()).toContain('Press enter'));
+
+  expect(mcpCompleteCalls()).toEqual([
+    [
+      'mcp complete',
+      expect.objectContaining({
+        mcp_outcome: McpOutcome.Installed,
+        mcp_installed_clients: ['Cursor'],
+      }),
+    ],
+  ]);
+  expect(store.mcpComplete).toBe(false);
+});
+
+it('reports a failed detection once, as its error shows, before Enter', async () => {
+  const store = new WizardStore(Tool.McpAdd);
+  store.session = buildSession({ installDir: '/app' });
+  const failing: McpInstaller = {
+    ...installer,
+    detectClients: () => Promise.reject(new Error('editor probe crashed')),
+  };
+  const { lastFrame } = render(<McpScreen store={store} installer={failing} />);
+  await vi.waitFor(() => expect(lastFrame()).toContain('Press enter'));
+
+  expect(mcpCompleteCalls()).toEqual([
+    [
+      'mcp complete',
+      { mcp_outcome: McpOutcome.Failed, mcp_installed_clients: [] },
+    ],
+  ]);
+  expect(store.mcpComplete).toBe(false);
 });
