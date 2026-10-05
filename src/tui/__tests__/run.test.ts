@@ -195,7 +195,7 @@ it.each([
   },
 );
 
-it("resolves a screen's exit request with its code and starts no end shutdown", async () => {
+it("resolves a screen's exit request with its code and starts no stream shutdown", async () => {
   const { store, unmount } = mountedStore();
   vi.mocked(runProgram).mockResolvedValue({
     outcome: RunOutcome.Success,
@@ -210,7 +210,7 @@ it("resolves a screen's exit request with its code and starts no end shutdown", 
   await expect(exited).resolves.toBe(0);
   await flush();
   expect(streamShutdown).not.toHaveBeenCalled();
-  expect(unmount).not.toHaveBeenCalled();
+  expect(unmount).toHaveBeenCalledOnce();
 });
 
 it.each([
@@ -219,11 +219,13 @@ it.each([
 ] as const)(
   'ends a screen exit request %i before the run with a %s shutdown, delivered before the exit',
   async (code, status) => {
-    const { store } = mountedStore();
+    const { store, unmount } = mountedStore();
     // The intro never settles: the user leaves from its menu.
     vi.spyOn(store, 'getGate').mockReturnValue(new Promise(() => undefined));
     let delivered = false;
     vi.mocked(analytics.flush).mockImplementation(async () => {
+      // The screen is gone before the wait, so it takes no more input.
+      expect(unmount).toHaveBeenCalledOnce();
       await flush();
       delivered = true;
     });
@@ -236,6 +238,22 @@ it.each([
     expect(runProgram).not.toHaveBeenCalled();
   },
 );
+
+it('exits on a screen exit request within the report budget when analytics hang', async () => {
+  vi.useFakeTimers({ toFake: ['setTimeout'] });
+  try {
+    const { store } = mountedStore();
+    vi.spyOn(store, 'getGate').mockReturnValue(new Promise(() => undefined));
+    vi.mocked(analytics.shutdown).mockReturnValue(new Promise(() => undefined));
+    const exited = runTui(posthogIntegration, launch('/tmp/hung-exit-test'));
+    await vi.waitFor(() => expect(store.getGate).toHaveBeenCalled());
+    store.requestExit(0);
+    await vi.advanceTimersByTimeAsync(2000);
+    await expect(exited).resolves.toBe(0);
+  } finally {
+    vi.useRealTimers();
+  }
+});
 
 it('resolves an abort with its code once its outro is dismissed', async () => {
   const { store } = mountedStore();

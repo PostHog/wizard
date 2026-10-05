@@ -55,9 +55,10 @@ the e2e harness drives a real run, and `tuiProgramFlow(programId)` returns the
 program's flow steps, for walking a flow in tests.
 
 `runTui` and `runTuiTool` resolve an exit code and never exit: the CLI applies
-it. A screen ends the run with `store.requestExit(code)`: `runTui` resolves it
-as is, and `runTuiTool` resolves it once the tool's analytics events flush. A
-decided failure ends it through `abortOnScreens`, or through `wizardAbort` with
+it. A screen ends the run with `store.requestExit(code)`: `runTui` unmounts,
+reports the run's end to analytics within two seconds and resolves it, and
+`runTuiTool` resolves it once the tool's analytics events flush. A decided
+failure ends it through `abortOnScreens`, or through `wizardAbort` with
 `printAbortOutro` before the TUI mounts; Ctrl+C or a signal ends it 130 or 143.
 
 A flow id names a program or a tool. The core finds its flow, screens and deck
