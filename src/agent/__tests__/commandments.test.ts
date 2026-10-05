@@ -78,6 +78,18 @@ describe('commandments by axis', () => {
       );
     });
   });
+  describe('wizard_ask correction rules', () => {
+    const text = WIZARD_COMMANDMENTS.join('\n');
+
+    it('lets the agent re-ask the fields a downstream call rejected', () => {
+      expect(text).toMatch(/rejected/i);
+      expect(text).toMatch(/reuse the same `subject`/);
+    });
+
+    it('keeps a dismissed or timed-out ask a decline, not a correction', () => {
+      expect(text).toMatch(/dismissed or timed-out ask is not this case/i);
+    });
+  });
 });
 
 /**
