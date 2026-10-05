@@ -34,6 +34,20 @@ it('waits for stdout to flush before it exits', async () => {
   await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(0));
 });
 
+// Runs before any hangup test: the hangup flag is process-wide and stays set.
+it('swallows EIO that lands before the SIGHUP, and still throws a broken pipe', async () => {
+  let release: (code: number) => void = () => undefined;
+  const settled = underSignals(
+    () => new Promise<number>((resolve) => (release = resolve)),
+  );
+  const eio = Object.assign(new Error('write EIO'), { code: 'EIO' });
+  expect(() => process.stdout.emit('error', eio)).not.toThrow();
+  const epipe = Object.assign(new Error('write EPIPE'), { code: 'EPIPE' });
+  expect(() => process.stdout.emit('error', epipe)).toThrow('write EPIPE');
+  release(0);
+  await settled;
+});
+
 it.each([
   ['SIGINT', 130],
   ['SIGTERM', 143],
@@ -77,4 +91,20 @@ it('rejects with a host that cannot start, with no signal listeners left', async
   ).rejects.toThrow('Raw mode is not supported');
   expect(process.listenerCount('SIGINT')).toBe(before);
   expect(exit).not.toHaveBeenCalled();
+});
+
+it('swallows write errors on a closed terminal after a hangup, through the exit drain', async () => {
+  let release: (code: number) => void = () => undefined;
+  const settled = underSignals(
+    () => new Promise<number>((resolve) => (release = resolve)),
+  );
+  process.emit('SIGHUP', 'SIGHUP');
+  const epipe = Object.assign(new Error('write EPIPE'), { code: 'EPIPE' });
+  expect(() => process.stdout.emit('error', epipe)).not.toThrow();
+  release(130);
+  await settled;
+  // The CLI's exit drain writes after the host settles.
+  expect(() => process.stderr.emit('error', epipe)).not.toThrow();
+  const other = Object.assign(new Error('boom'), { code: 'EACCES' });
+  expect(() => process.stdout.emit('error', other)).toThrow('boom');
 });

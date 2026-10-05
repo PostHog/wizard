@@ -236,14 +236,14 @@ legacy session publisher's debounce, so a brief running state is retained.
 
 At execution completion, the CLI drains run tasks and sends one local terminal
 status: `completed`, `failed`, or `cancelled`. The existing signal and abort
-paths share this shutdown, including Ink Ctrl-C, SIGINT and handled SIGTERM. The
-two-second shutdown budget reserves its last quarter for finalization; requests
-and retry timers are aborted when their budget expires. Individual requests time
-out after five seconds. Task and terminal writes use at most three attempts for
-network/server failures and at most one rate-limit retry, with `Retry-After`
-capped at 60 seconds outside shutdown. Exhausted task delivery stops later task
-writes but still permits local finalization. SIGKILL cannot flush.
-Synchronization failure does not change the installation result.
+paths share this shutdown, including Ink Ctrl-C, SIGINT, SIGHUP and handled
+SIGTERM. The two-second shutdown budget reserves its last quarter for
+finalization; requests and retry timers are aborted when their budget expires.
+Individual requests time out after five seconds. Task and terminal writes use at
+most three attempts for network/server failures and at most one rate-limit
+retry, with `Retry-After` capped at 60 seconds outside shutdown. Exhausted task
+delivery stops later task writes but still permits local finalization. SIGKILL
+cannot flush. Synchronization failure does not change the installation result.
 
 Local creation includes a fresh UUID idempotency key for each execution. **POST
 retries are disabled** until an integration check against the deployed backend

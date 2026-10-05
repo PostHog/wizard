@@ -37,7 +37,12 @@ export async function underSignals(
   run: (signal: AbortSignal) => Promise<number>,
 ): Promise<number> {
   const controller = new AbortController();
-  const onSignal = (name: NodeJS.Signals) => controller.abort(name);
+  const onSignal = (name: NodeJS.Signals) => {
+    if (name === 'SIGHUP') hungUp = true;
+    controller.abort(name);
+  };
+  // Attached up front: a first touch of a stream after a hangup reopens the dead terminal and blocks.
+  for (const stream of OUTPUT_STREAMS) stream.on('error', onOutputError);
   process.on('SIGINT', onSignal);
   process.on('SIGTERM', onSignal);
   process.on('SIGHUP', onSignal);
@@ -47,8 +52,25 @@ export async function underSignals(
     process.off('SIGINT', onSignal);
     process.off('SIGTERM', onSignal);
     process.off('SIGHUP', onSignal);
+    // After a hangup the exit drain still writes to the dead terminal, so the guard stays.
+    if (!hungUp) {
+      for (const stream of OUTPUT_STREAMS) stream.off('error', onOutputError);
+    }
   }
 }
+
+const OUTPUT_STREAMS = [process.stdout, process.stderr];
+let hungUp = false;
+
+/** A write to a closed terminal fails; that ends nothing, so the run still reports its end. */
+function onOutputError(error: NodeJS.ErrnoException): void {
+  // EIO can land before the SIGHUP does, and only a gone terminal raises it.
+  if (error.code === 'EIO') return;
+  if (hungUp && HANGUP_WRITE_ERRORS.has(error.code ?? '')) return;
+  throw error;
+}
+
+const HANGUP_WRITE_ERRORS = new Set(['EPIPE', 'ERR_STREAM_DESTROYED']);
 
 /** Run a host under the signals, then exit with the code it resolves. */
 export function withSignals(
