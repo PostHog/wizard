@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.80.1](https://github.com/PostHog/wizard/compare/v2.80.0...v2.80.1) (2026-10-05)
+
+
+### Bug Fixes
+
+* **agent:** deny .env files with SDK rules and skip project hooks ([#1408](https://github.com/PostHog/wizard/issues/1408)) ([1e1e56c](https://github.com/PostHog/wizard/commit/1e1e56c003712aa2087b6c5d2d5964cac06f35c4))
+* **agent:** let wizard_ask re-collect a field the downstream call rejected ([#1367](https://github.com/PostHog/wizard/issues/1367)) ([690eae5](https://github.com/PostHog/wizard/commit/690eae5883a145f2eeb30494a30030c900faf72b))
+* **orchestrator:** redact secrets from task remarks before capture ([#1412](https://github.com/PostHog/wizard/issues/1412)) ([2fea60d](https://github.com/PostHog/wizard/commit/2fea60db0b4064116b376da8aedc63596ca86247))
+* **outro:** list every detected data source, not the ones the step skipped ([#1395](https://github.com/PostHog/wizard/issues/1395)) ([88a1761](https://github.com/PostHog/wizard/commit/88a17613bde87a4afa5890df374fda53b3543cda))
+
 ## [2.80.0](https://github.com/PostHog/wizard/compare/v2.79.1...v2.80.0) (2026-10-02)
 
 
