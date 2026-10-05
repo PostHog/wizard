@@ -74,6 +74,23 @@ describe('redactSecrets', () => {
     expect(out).toContain('github.com/PostHog/ai-plugin.git');
   });
 
+  it('masks the password in a database connection string', () => {
+    const out = redactSecrets(
+      'connect failed for postgresql://app:s3cretpass@db.example.com:5432/app',
+    );
+    expect(out).not.toContain('s3cretpass');
+    expect(out).toContain('db.example.com:5432/app');
+  });
+
+  it('masks a Stripe secret or restricted key', () => {
+    expect(redactSecrets('key sk_live_0123456789abcdefghij rejected')).toBe(
+      'key [redacted] rejected',
+    );
+    expect(redactSecrets('key rk_test_0123456789abcdefghij rejected')).toBe(
+      'key [redacted] rejected',
+    );
+  });
+
   it('masks a bare GitHub token', () => {
     expect(redactSecrets('remote: token ghp_0123456789abcdefghij denied')).toBe(
       'remote: token [redacted] denied',
