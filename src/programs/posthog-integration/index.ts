@@ -67,7 +67,7 @@ const WAREHOUSE_LINK_LIMIT = 3;
  * offered more than a handful answer none of the prompts at all, while the
  * short ones are where every connected source comes from.
  *
- * So the step takes the first few and the outro carries the rest as links,
+ * So the step takes the first few and the outro carries them all as links,
  * which is the same trade {@link WAREHOUSE_LINK_LIMIT} already makes for a
  * list too long to read. Ordering is the registry's, which groups databases
  * ahead of the API-key SaaS that inflates the tail.
@@ -111,23 +111,19 @@ function warehouseSourceUrl(
  * one pass, and it is the only route offered once the list is too long to read.
  *
  * Returns undefined when nothing was detected, so the outro is unchanged for
- * projects with no connectable source — and when the run's own warehouse step
- * connected everything it was given, where every bullet here would ask the
- * user to redo work the wizard just did and send them at a new-source form
- * that would collide with the source already created. A completed step is
- * only ever given the first {@link WAREHOUSE_SEED_LIMIT} sources, so anything
- * past that is still unconnected and still belongs here.
+ * projects with no connectable source. Every detected source is listed,
+ * including the ones the run's own warehouse step was given: that step reports
+ * success once it has handled each source somehow, and handing the user a link
+ * for one whose credentials never arrived is one of those outcomes. Nothing in
+ * the run records which sources ended up connected, so the deterministic list
+ * stays complete rather than dropping a source on the step's status.
  */
 function buildWarehouseNextSteps(
   sess: ProgramSession,
   host: HostResolution,
   projectId: number | string,
-  completedSeededTypes: readonly string[],
 ): { heading: string; items: string[] } | undefined {
-  const detected = getDetectedWarehouseSources(sess);
-  const sources = completedSeededTypes.includes(WAREHOUSE_SEED_TASK_TYPE)
-    ? detected.slice(WAREHOUSE_SEED_LIMIT)
-    : detected;
+  const sources = getDetectedWarehouseSources(sess);
   if (sources.length === 0) return undefined;
 
   const listed = sources.slice(0, WAREHOUSE_LINK_LIMIT);
@@ -177,8 +173,8 @@ function warehouseReportInstruction(sess: ProgramSession): string {
  * Empty when nothing was detected, and in CI, signup, and any other run where
  * `wizard_ask` is disabled — a credential prompt nobody can answer would burn
  * the task's whole timeout and then fail the run. Capped at
- * {@link WAREHOUSE_SEED_LIMIT} sources, with the rest handed over as outro
- * links by {@link buildWarehouseNextSteps}.
+ * {@link WAREHOUSE_SEED_LIMIT} sources; {@link buildWarehouseNextSteps} hands
+ * every detected source over as an outro link.
  */
 const warehouseSeedTasks: NonNullable<ProgramConfig['seedTasks']> = (sess) => {
   if (shouldDisableAsk(sess)) return [];
@@ -482,13 +478,8 @@ ${warehouseReportInstruction(session)}
         }
       },
 
-      buildOutroNextSteps: (sess, credentials, completedSeededTypes) =>
-        buildWarehouseNextSteps(
-          sess,
-          credentials.host,
-          credentials.projectId,
-          completedSeededTypes,
-        ),
+      buildOutroNextSteps: (sess, credentials) =>
+        buildWarehouseNextSteps(sess, credentials.host, credentials.projectId),
 
       buildOutroData: (sess, credentials) => {
         const envVars = config.environment.getEnvVars(
@@ -515,13 +506,11 @@ ${warehouseReportInstruction(session)}
           changes,
           docsUrl: config.metadata.docsUrl,
           continueUrl,
-          // The linear sequence seeds no tasks, so nothing here was connected
-          // during the run. `buildOutroNextSteps` carries the orchestrated case.
+          // `buildOutroNextSteps` carries the orchestrated case.
           nextSteps: buildWarehouseNextSteps(
             sess,
             credentials.host,
             credentials.projectId,
-            [],
           ),
           // Set once the agent mirrors the report into a notebook and emits [NOTEBOOK_URL].
           notebookUrl: sess.notebookUrl ?? undefined,
