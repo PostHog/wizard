@@ -10,9 +10,9 @@ classify failures without parsing human-readable messages.
 - **Source of truth for metadata (group, retry advice, description):**
   [`src/shared/errors/catalog.ts`](../src/shared/errors/catalog.ts)
 - **Consumers:** `wizardAbort()`
-  ([`src/shared/utils/wizard-abort.ts`](../src/shared/utils/wizard-abort.ts)), the task stream
-  ([`src/programs/task-stream/`](../src/programs/task-stream/)), and non-interactive hosts
-  reading stderr.
+  ([`src/host/wizard-abort.ts`](../src/host/wizard-abort.ts)), the task stream
+  ([`src/programs/session/task-stream/`](../src/programs/session/task-stream/)),
+  and non-interactive hosts reading stderr.
 
 ## Stability contract
 
@@ -26,12 +26,12 @@ New codes follow the pattern `PHW_<GROUP>_<NAME>` (see `ERROR_CODE_PATTERN` in
 
 ## How codes propagate
 
-1. **`wizardAbort({ code, detail, ... })`** — the single exit funnel resolves a
-   code (explicit `code` first, then `WizardError.code`), stamps it onto
-   `OutroData` (`errorCode`, `errorDetail`), tags the captured exception with
-   `error_code` in analytics, and — when the active UI is a
-   `LoggingUI`/`HeadlessUI` — prints one machine-readable line to stderr just
-   before exit:
+1. **`wizardAbort(host, { code, detail, ... })`** — the single abort funnel
+   resolves a code (explicit `code` first, then `WizardError.code`), stamps it
+   onto `OutroData` (`errorCode`, `errorDetail`), tags the captured exception
+   with `error_code` in analytics, and — in a headless run, whose presenter is
+   `printAbortOutro` — prints one machine-readable line to stderr just before
+   the run ends:
 
    ```
    phw-error: {"code":"PHW_DETECT_NO_FRAMEWORK","message":"Could not auto-detect your framework for this project.","detail":{"reason":"no matches"}}
@@ -41,18 +41,20 @@ New codes follow the pattern `PHW_<GROUP>_<NAME>` (see `ERROR_CODE_PATTERN` in
    machine-readable channel that works even when the task stream itself is down.
 
 2. **Task stream** — `OutroData.errorCode`/`errorDetail` flow into the `error`
-   object of every run-state push (`TaskStreamError.code`,
-   `TaskStreamError.detail`), so the PostHog backend receives the code with the
-   terminal `RunPhase.Error` snapshot.
+   object of the terminal `RunPhase.Error` push (`TaskStreamError.code`,
+   `TaskStreamError.detail`) on the `wizard-session` transport, so the PostHog
+   backend receives the code with that snapshot. The `wizard-run` transport
+   sends only the terminal status, and `--ci` runs push nothing.
 3. **Analytics** — `analytics.captureException` receives `error_code` for every
-   aborted run that carries a code.
+   aborted run that carries a code and passes an `error` or `status: 'error'`.
 4. **TUI** — `OutroData.errorCode` is available to error screens for display;
    the interactive UX remains message-first.
 
 `WizardError(message, context, code)` carries the code alongside its telemetry
-context. Codes are also emitted at raw `process.exit` sites that run before the
-abort funnel exists (CLI arg validation, Node version preflight, yargs failures)
-via `emitWizardError()`.
+context. Codes are also emitted through `emitWizardError()` where the abort
+funnel doesn't run: the `process.exit` sites in `bin.ts` and the CLI (the Node
+version preflight, arg validation and yargs failures), and the CLI's exit when a
+host rejects.
 
 `errorDetail` is allowlisted (`reason`, `detected`, `platform`) at both egress
 boundaries — the `phw-error:` stderr line and the task-stream push — so fields
@@ -129,10 +131,10 @@ behind (same guarantee `AGENT_ERROR_CODE` gets from keying on `AgentErrorType`).
 
 Two rules make the detect group safe for automated retry policy:
 
-- **Codes may be shared, `kind` is not lost.** `no-posthog-sdk`, `no-posthog`,
-  and `missing-posthog` all resolve to `PHW_DETECT_NO_POSTHOG_SDK` — one failure
-  class, one code. Hosts that need to tell the programs apart read
-  `detail.kind`.
+- **Codes may be shared, `kind` is not lost locally.** `no-posthog-sdk`,
+  `no-posthog`, and `missing-posthog` all resolve to `PHW_DETECT_NO_POSTHOG_SDK`
+  — one failure class, one code. `detail.kind` tells the programs apart on the
+  local surfaces (TUI error screen, debug log); the egress allowlist drops it.
 - **The fallback stays inside the group.** An unrecognized `kind` resolves to
   `PHW_DETECT_UNCLASSIFIED` (`retry: 'no'`), never to `PHW_INTERNAL_UNHANDLED`
   (`retry: 'yes'`). A detect failure is a property of the user's project;
@@ -140,30 +142,32 @@ Two rules make the detect group safe for automated retry policy:
 
 ## Auth classification
 
-Gateway 401s are classified at the abort site by `classifyAuthFailure()`
-([`src/shared/errors/auth.ts`](../src/shared/errors/auth.ts)) with priority:
-stored-login conflict → settings conflict → key-type → missing scope → region
-mismatch → invalid/expired. Inputs are best-effort from the run context; the
-classifier degrades to `PHW_AUTH_INVALID_OR_EXPIRED` when no distinguishing
-signal is available.
+The Anthropic SDK harness classifies gateway 401s at the abort site with
+`classifyAuthFailure()`
+([`src/shared/errors/auth.ts`](../src/shared/errors/auth.ts)), in priority
+order: session expired → stored-login conflict → settings conflict → key-type →
+missing scope → region mismatch → invalid/expired. Inputs are best-effort from
+the run context; the classifier degrades to `PHW_AUTH_INVALID_OR_EXPIRED` when
+no distinguishing signal is available. The Pi harness reports every 401 as
+`PHW_AUTH_INVALID_OR_EXPIRED`.
 
 ## Sandbox integration recipe
 
 - **Scrape:** read stderr for the final `phw-error:` line; parse the JSON body.
-- **Correlate:** the task-stream `error.code` on the terminal push matches the
-  stderr code for the same session id.
+- **Correlate:** on the `wizard-session` transport, the task-stream `error.code`
+  on the terminal push matches the stderr code for the same session id.
 - **Decide:** use the catalog `retry` column for re-run policy; `no` codes need
   human/config intervention, `yes` codes are safe to retry after backoff.
-- **Zero exit without a code** means success or a Ctrl-C style cancel (exit 130
-  / user dismissal).
+- **Exit codes:** 0 means success. 130 (SIGINT) or 143 (SIGTERM) without a code
+  means a cancel.
 
 ## Extending the catalog
 
 1. Add the code to `ErrorCodes` (`codes.ts`) and an entry to `ERROR_CATALOG`
    (`catalog.ts`) — the unit test enforces catalog completeness.
-2. Pass it to `wizardAbort({ code })` or `new WizardError(msg, ctx, code)` at
-   the failure site. Prefer explicit `code` over inference so call sites stay
-   greppable. For agent-emitted `[ABORT] <reason>` preconditions, declare
-   `errorCode` on the program's `abortCases` entry so the generic
+2. Pass it to `wizardAbort(host, { code })` or `new WizardError(msg, ctx,
+   code)` at the failure site. Prefer explicit `code` over inference so call
+   sites stay greppable. For agent-emitted `[ABORT] <reason>` preconditions,
+   declare `errorCode` on the program's `abortCases` entry so the generic
    `PHW_AGENT_ABORT` is overridden with the specific class.
 3. Add the row here.

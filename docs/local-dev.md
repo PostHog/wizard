@@ -68,7 +68,8 @@ runs local skills against production MCP and PostHog.
 
 ## Flags
 
-These flags are available in dev/test builds. Published builds reject them.
+These flags are available in non-production builds, such as `pnpm try` and
+`pnpm build:ci`. Production builds, including `pnpm dev`, reject them.
 
 | Flag | Env | Effect |
 |---|---|---|
@@ -99,7 +100,7 @@ Most specific wins:
 MCP_URL / --base-url                                       (explicit URL)
   > --local-mcp / --local-context-mill / --local-posthog   (explicit boolean)
   > --local-dev                                            (umbrella)
-  > IS_DEV implicit localhost:8010                         (dev builds, dim. 4 only)
+  > IS_DEV implicit localhost:8010                         (NODE_ENV development or test, dim. 4 only)
   > production defaults
 ```
 
@@ -110,10 +111,10 @@ MCP, as does `--local-context-mill --local-posthog`.
 ### Recipes
 
 ```bash
-wizard --local-dev                             # everything local
-wizard --local-context-mill                    # local skills, prod MCP + PostHog  ← what CI runs
-wizard --local-context-mill --local-posthog    # local skills + PostHog, prod MCP
-MCP_URL=http://localhost:9000/mcp wizard       # MCP at a non-standard port
+pnpm try --install-dir=<path> --local-dev                           # everything local
+pnpm try --install-dir=<path> --local-context-mill                  # local skills, prod MCP + PostHog  ← what CI runs
+pnpm try --install-dir=<path> --local-context-mill --local-posthog  # local skills + PostHog, prod MCP
+MCP_URL=http://localhost:9000/mcp pnpm try --install-dir=<path>     # MCP at a non-standard port
 ```
 
 ## If a local server isn't running
@@ -123,7 +124,7 @@ asks for isn't listening, the wizard stops with the port, the flag that
 requested it, and how to start it:
 
 ```
-✖ Local services are not running:
+✖ Local service is not running:
 
   context-mill — nothing listening at http://localhost:8765
     requested by --local-context-mill
@@ -147,8 +148,8 @@ PostHog as well.
 ## Editor MCP configuration
 
 `wizard mcp add --local` writes a `posthog-local` server entry into your
-editor's MCP config (Cursor, Claude Code, Codex, Zed, VS Code), pointing at
-`localhost:8787`. It sits alongside the normal `posthog` entry.
+editor's MCP config (Cursor, Claude Code, Codex, Zed, VS Code, OpenCode),
+pointing at `localhost:8787`. It sits alongside the normal `posthog` entry.
 `wizard mcp remove --local` removes the `posthog-local` entry.
 
 Use this command to develop the MCP server in `posthog/services/mcp` through
@@ -161,14 +162,16 @@ Choose the wizard binary through its invocation:
 
 | Mode | Command | Build |
 |---|---|---|
-| From source | `pnpm try --install-dir=<path>` | dev (`IS_DEV`) |
-| Globally linked | `pnpm dev`, then `wizard` | dev, rebuilt on change |
+| From source | `pnpm try --install-dir=<path>` | non-production: accepts the dev-only flags; `IS_DEV` needs `NODE_ENV=development` |
+| Globally linked | `pnpm dev`, then `wizard` | production, rebuilt on change; rejects the dev-only flags |
 | Workbench harness | `WIZARD_PATH=<repo>` → `$WIZARD_PATH/dist/bin.js` | whatever you last built |
 | Published | `npx @posthog/wizard` | production |
 
-To confirm what a run actually used, pass `--debug` and look for the
-`[agent-runner] targets` line in `/tmp/posthog-wizard.log` — it prints the build,
-skills url, MCP url, and PostHog host together.
+To confirm what a run actually used, look for the `[agent-runner] targets` line
+in the debug log — it prints the build, skills url, MCP url, and PostHog host
+together. The log is `posthog-wizard.log` in the temp directory
+(`/tmp/posthog-wizard.log` on macOS and Linux) unless `--log-file` or
+`POSTHOG_WIZARD_LOG_FILE` names another file.
 
 ## Implementation
 
