@@ -22,13 +22,21 @@ export type MountServices = { mcpInstaller?: McpInstaller };
 export type MountedScreens = {
   /** Type into the screens, as the terminal would deliver the keys. */
   write: (input: string) => void;
+  /** The last frame the screens drew. */
+  frame: () => string;
+  /** Whether the screens are reading keys yet; keys typed before that are dropped. */
+  listening: () => boolean;
   unmount: () => void;
 };
 
-/** A terminal that draws nowhere: 100 columns, its frames dropped. */
+/** A terminal that draws nowhere: 100 columns, only its last frame kept. */
 class TestStdout extends EventEmitter {
   readonly columns = 100;
-  write = (): boolean => true;
+  lastFrame = '';
+  write = (frame: string): boolean => {
+    this.lastFrame = frame;
+    return true;
+  };
 }
 
 /** A terminal input the test writes to. */
@@ -67,13 +75,14 @@ export function mountScreens(
   services: MountServices = {},
 ): MountedScreens {
   const stdin = new TestStdin();
+  const stdout = new TestStdout();
   const app = render(
     <ScreenContainer
       store={store}
       screens={createScreens(store, { ...createServices(store), ...services })}
     />,
     {
-      stdout: new TestStdout() as unknown as NodeJS.WriteStream,
+      stdout: stdout as unknown as NodeJS.WriteStream,
       stderr: new TestStdout() as unknown as NodeJS.WriteStream,
       stdin: stdin as unknown as NodeJS.ReadStream,
       debug: true,
@@ -81,7 +90,12 @@ export function mountScreens(
       patchConsole: false,
     },
   );
-  return { write: stdin.write, unmount: app.unmount };
+  return {
+    write: stdin.write,
+    frame: () => stdout.lastFrame,
+    listening: () => stdin.listenerCount('readable') > 0,
+    unmount: app.unmount,
+  };
 }
 
 /** The state only the screens use, as `store` holds it now. */
