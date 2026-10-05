@@ -153,11 +153,13 @@ them once it does. A cancelled run resolves to `aborted`, not a rejection.
 ### Failures
 
 Most endings resolve to an outcome instead of throwing. Check `outcome` and read
-`failure`; the store holds the same failure as its error outro. The promise
-rejects only when the call itself can't run, such as an input field that can't
-be copied, or when the program's detection or `run` throws something other than
-a `ProgramAbort`. A rejection records its error outro and code in the store
-first. The cases are in [`run-program.ts`](../src/programs/run-program.ts).
+`failure`; the store holds the same failure as its error outro. A cancel through
+`signal` is the exception: the store holds a cancel outro with no error code,
+and the phase is still error. The promise rejects only when the call itself
+can't run, such as an input field that can't be copied, or when the program's
+detection or `run` throws something other than a `ProgramAbort`. A rejection
+records its error outro and code in the store first. The cases are in
+[`run-program.ts`](../src/programs/run-program.ts).
 
 ### Runs in one process
 

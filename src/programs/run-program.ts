@@ -134,7 +134,7 @@ async function invokeProgram(
     outcome: RunOutcome,
     failure?: Failure,
   ): ProgramRunOutcome => {
-    // A caller cancel (Ctrl-C, SIGTERM, SIGHUP) is not a run failure, so no host shows a failure screen for it.
+    // A caller cancel through the signal is not a run failure, so no host shows a failure screen for it.
     if (failure && signal.aborted) recordCancel(store, failure);
     else if (failure) recordFailure(store, failure);
     else recordSuccess(store);
