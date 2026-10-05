@@ -1,23 +1,20 @@
 /**
  * WizardAskBridge — host-side promise broker for the `wizard_ask` MCP tool.
  *
- * The `wizard_ask` tool needs to (a) read information from the wizard
- * session (the active skill id, used as the analytics `source`) and
- * (b) drive the TUI overlay. Wiring `wizard-tools.ts` directly to either
- * would couple our pure-data MCP server to the runtime UI layer.
+ * The `wizard_ask` tool needs to (a) know the run's skill id, used as the
+ * analytics `source`, and (b) put questions to whoever answers them. Wiring
+ * the tools directly to either would couple our pure-data MCP server to its
+ * host.
  *
- * The bridge is the seam: `wizard-tools.ts` depends on this interface,
- * and `agent-runner.ts` constructs an implementation that knows about
- * both the session and `getUI()`.
+ * The bridge is the seam: the wizard tools depend on this interface, and
+ * the runner builds an implementation over the caller's `AgentInteraction`
+ * (see `runner/shared/ask.ts`).
  */
 import { randomUUID } from 'crypto';
 
 import { analytics } from '@utils/analytics';
-import {
-  DEFAULT_ASK_TIMEOUT_MS,
-  LONGER_ASK_TIMEOUT_MS,
-} from '@shared/ask-policy';
-import type { AskAnswers, AskQuestion, PendingQuestion } from '@agent/progress';
+import { DEFAULT_ASK_TIMEOUT_MS } from '@shared/ask-policy';
+import type { AskAnswers, AskQuestion, PendingQuestion } from './progress';
 
 export interface WizardAskRequest {
   questions: AskQuestion[];
@@ -93,8 +90,6 @@ export interface WizardAskBridgeOptions {
 
 /** Sentinel returned for unanswered fields on cancellation or timeout. */
 export const CANCELLED_SENTINEL = '__cancelled__';
-
-export { DEFAULT_ASK_TIMEOUT_MS, LONGER_ASK_TIMEOUT_MS };
 
 function buildCancelledAnswers(questions: AskQuestion[]): AskAnswers {
   const out: AskAnswers = {};

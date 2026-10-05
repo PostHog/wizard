@@ -15,9 +15,6 @@ import {
 } from '@programs/detection/package-manager';
 
 vi.mock('@utils/debug');
-vi.mock('../../../telemetry', () => ({
-  withProgress: (_name: string, fn: () => unknown) => fn(),
-}));
 vi.mock('@utils/analytics', () => ({
   analytics: { setTag: vi.fn() },
 }));

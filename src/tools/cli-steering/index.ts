@@ -1,9 +1,6 @@
 import * as path from 'node:path';
 import * as readline from 'node:readline/promises';
-import type { Arguments } from 'yargs';
-import { getUI, setUI } from '@ui';
-import { LoggingUI } from '@headless/renderers/logging-ui';
-import { analytics } from '@utils/analytics';
+import type { ConsoleLog } from '@shared/console-log';
 import {
   CLI_STEERING_TARGETS,
   type CliSteeringTarget,
@@ -12,17 +9,19 @@ import {
   installOrUpdatePostHogCli,
   installSteeringSnippet,
 } from '@shared/install-cli-steering';
+import { analytics } from '@utils/analytics';
 
-export async function runCliAdd(argv: Arguments): Promise<void> {
-  setUI(new LoggingUI());
-  const ui = getUI();
+export type CliAddArgs = { agent?: string; path?: string; all?: boolean };
+
+/** Resolves 0 when the CLI and every snippet installed, else 1. */
+export async function runCliAdd(
+  args: CliAddArgs,
+  { log: ui }: { log: ConsoleLog },
+): Promise<number> {
   ui.intro('PostHog CLI setup');
 
-  const files = await resolveTargetFiles(argv);
-  if (files.length === 0) {
-    process.exit(1);
-    return;
-  }
+  const files = await resolveTargetFiles(args, ui);
+  if (files.length === 0) return 1;
 
   ui.log.info('Installing or updating PostHog CLI...');
   const cliInstallResult = installOrUpdatePostHogCli();
@@ -36,10 +35,9 @@ export async function runCliAdd(argv: Arguments): Promise<void> {
       files: files.length,
       failures: files.length,
       cli_install_failed: true,
-      agent: typeof argv.agent === 'string' ? argv.agent : undefined,
+      agent: args.agent,
     });
-    process.exit(1);
-    return;
+    return 1;
   }
   ui.log.success('Installed or updated PostHog CLI.');
 
@@ -57,32 +55,30 @@ export async function runCliAdd(argv: Arguments): Promise<void> {
   analytics.wizardCapture('cli steering installed', {
     files: files.length,
     failures,
-    agent: typeof argv.agent === 'string' ? argv.agent : undefined,
+    agent: args.agent,
   });
 
-  if (failures > 0) {
-    process.exit(1);
-    return;
-  }
+  if (failures > 0) return 1;
   ui.outro(
     'Done. PostHog CLI is installed and your agent will now use `posthog-cli api` for PostHog tasks.',
   );
-  process.exit(0);
+  return 0;
 }
 
 /** Resolve which instruction files to write, from flags, detection, or a prompt. */
-async function resolveTargetFiles(argv: Arguments): Promise<string[]> {
-  const ui = getUI();
-
-  if (typeof argv.path === 'string' && argv.path.trim()) {
-    return [path.resolve(argv.path.trim())];
+async function resolveTargetFiles(
+  args: CliAddArgs,
+  ui: ConsoleLog,
+): Promise<string[]> {
+  if (args.path?.trim()) {
+    return [path.resolve(args.path.trim())];
   }
 
-  if (typeof argv.agent === 'string') {
+  if (args.agent !== undefined) {
     // yargs `choices` already rejected unknown ids.
-    const target = findTarget(argv.agent);
+    const target = findTarget(args.agent);
     if (!target) {
-      ui.log.error(`Unsupported agent: ${argv.agent}`);
+      ui.log.error(`Unsupported agent: ${args.agent}`);
       return [];
     }
     return [target.instructionsPath()];
@@ -99,7 +95,7 @@ async function resolveTargetFiles(argv: Arguments): Promise<string[]> {
     return [];
   }
 
-  if (argv.all === true) {
+  if (args.all === true) {
     ui.log.info(
       `Installing for all detected agents: ${detected
         .map((t) => t.name)
@@ -127,15 +123,15 @@ async function resolveTargetFiles(argv: Arguments): Promise<string[]> {
     return detected.map((target) => target.instructionsPath());
   }
 
-  const selected = await promptForTargets(detected);
+  const selected = await promptForTargets(detected, ui);
   return selected.map((target) => target.instructionsPath());
 }
 
 /** Minimal numbered selection — this command is intentionally not a TUI flow. */
 async function promptForTargets(
   detected: CliSteeringTarget[],
+  ui: ConsoleLog,
 ): Promise<CliSteeringTarget[]> {
-  const ui = getUI();
   ui.log.info('Which coding agent are you using?');
   detected.forEach((target, index) => {
     ui.log.info(

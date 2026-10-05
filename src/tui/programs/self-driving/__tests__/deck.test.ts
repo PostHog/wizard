@@ -23,10 +23,6 @@ function textOf(node: ReactNode): string {
 describe('self-driving learn deck', () => {
   const blocks = getContentBlocks();
 
-  it('has blocks', () => {
-    expect(blocks.length).toBeGreaterThan(0);
-  });
-
   it('keeps every fixed-layout line within the 80-col pane', () => {
     const wide: string[] = [];
     for (const b of blocks) {

@@ -1,4 +1,4 @@
-import type { AuditCheck, AuditStatus } from '@programs/audit/types';
+import type { AuditCheck, AuditStatus } from '@programs/audit';
 
 const STATUS_ORDER: Record<AuditStatus, number> = {
   error: 0,

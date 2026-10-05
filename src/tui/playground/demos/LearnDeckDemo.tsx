@@ -17,6 +17,7 @@
  * generic deck.
  */
 
+import { getTuiProgram } from '@tui/programs/index';
 import { Box, Text, useInput } from 'ink';
 import { useMemo, useState } from 'react';
 import {
@@ -94,7 +95,8 @@ export const LearnDeckDemo = ({ store }: LearnDeckDemoProps) => {
     // name (e.g. agent-skill's "Running the <skill> skill...") render the
     // real value instead of "unknown".
     for (const program of PROGRAM_REGISTRY) {
-      if (!program.getContentBlocks) continue;
+      const deck = getTuiProgram(program.id).deck;
+      if (!deck) continue;
       const stub = program.skillId
         ? withSessionOverride(store, { skillId: program.skillId })
         : store;
@@ -103,7 +105,7 @@ export const LearnDeckDemo = ({ store }: LearnDeckDemoProps) => {
         label: `${program.id} (${program.command ?? 'default'})${
           program.skillId ? ` · skill: ${program.skillId}` : ''
         }`,
-        blocks: program.getContentBlocks(stub),
+        blocks: deck(stub),
       });
     }
 

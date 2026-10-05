@@ -8,7 +8,7 @@
  */
 
 import { WIZARD_DEFAULT_AIO_LOGS_FLAG_KEY } from '@shared/constants';
-import { posthogIntegrationConfig } from '@programs/posthog-integration/index';
+import { config as posthogIntegration } from '@programs/posthog-integration';
 import { analytics } from '@utils/analytics';
 import { promptFor } from './helpers/integration-prompt.no-jest';
 
@@ -57,7 +57,7 @@ describe('linear-run flag gate', () => {
 
 describe('default observability flag gating', () => {
   const excluded = (flags: Record<string, string>) =>
-    posthogIntegrationConfig.excludedTaskTypes!(flags);
+    posthogIntegration.excludedTaskTypes!(flags);
 
   it("excludes AIO and Logs only on an explicit 'false'", () => {
     expect(excluded({ [WIZARD_DEFAULT_AIO_LOGS_FLAG_KEY]: 'false' })).toEqual([

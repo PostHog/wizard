@@ -5,29 +5,30 @@
  * No detection, no setup, no MCP.
  */
 
-import type { ProgramStep } from '@programs/program-step';
-import { RunPhase } from '@programs/session/wizard-session';
-import { HEALTH_CHECK_STEP } from '@tui/programs/shared/health-check-step';
+import type { FlowStep } from '../../flow.js';
+import { RunPhase } from '@shared/run-state';
+import { HEALTH_CHECK_STEP } from './health-check-step.js';
+import { SkillScreenId } from './screen-ids.js';
 
-export const AGENT_SKILL_STEPS: ProgramStep[] = [
+export const AGENT_SKILL_STEPS: FlowStep[] = [
   {
     id: 'intro',
     label: 'Welcome',
-    screenId: 'agent-skill-intro',
-    gate: (session) => session.setupConfirmed,
+    screenId: SkillScreenId.Intro,
+    gate: (tui) => tui.setupConfirmed,
   },
   HEALTH_CHECK_STEP,
   {
     id: 'auth',
     label: 'Authentication',
     screenId: 'auth',
-    isComplete: (session) => session.credentials !== null,
+    isComplete: ({ session }) => session.credentials !== null,
   },
   {
     id: 'run',
     label: 'Running',
     screenId: 'run',
-    isComplete: (session) =>
+    isComplete: ({ session }) =>
       session.runPhase === RunPhase.Completed ||
       session.runPhase === RunPhase.Error,
   },
@@ -35,7 +36,7 @@ export const AGENT_SKILL_STEPS: ProgramStep[] = [
     id: 'outro',
     label: 'Done',
     screenId: 'outro',
-    isComplete: (session) => session.outroDismissed,
+    isComplete: (tui) => tui.outroDismissed,
   },
   {
     id: 'skills',

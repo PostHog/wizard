@@ -1,9 +1,9 @@
 import type { Arguments } from 'yargs';
-import { setUI } from '@ui';
-import { LoggingUI } from '@headless/renderers/logging-ui';
+import { consoleLog } from '@shared/console-log';
 import { headlessOption, isHeadless } from '@shared/headless-mode';
-import { Program } from '@programs';
-import { VERSION } from '@shared/version';
+import { readApiKeyFromEnv } from '@utils/env-api-key';
+import { addMCPServerToClientsStep, Tool } from '@tools';
+import { exitWith, underSignals } from '@cli/runners';
 import type { Command } from '../command';
 import { isTUIUnavailable } from './tui-availability';
 
@@ -33,56 +33,45 @@ export const mcpAddCommand: Command = {
 
 function runMcpAdd(argv: Arguments): void {
   const features = parseFeatures(argv.features);
-  void (async () => {
-    const { readApiKeyFromEnv } = await import('@utils/env-api-key');
-    const apiKey = (argv.apiKey as string | undefined) || readApiKeyFromEnv();
-    const debug = argv.debug as boolean | undefined;
-    const localMcp = argv.local as boolean | undefined;
-    const args = { local: localMcp, features, apiKey };
-
-    // Ink renders into a pipe happily and only throws on raw-mode input, so a
-    // non-TTY run reaches the confirm prompt and stalls there rather than
-    // hitting the isTUIUnavailable fallback below. The headless flag is the
-    // only reliable way to install from a script.
-    if (isHeadless(argv)) {
-      await runHeadlessAdd(args);
-      return;
-    }
-
-    try {
-      const { startTUI } = await import('@tui/start-tui');
-      const { buildSession } = await import('@programs/session/wizard-session');
-      const tui = startTUI(VERSION, Program.McpAdd);
-      tui.store.session = buildSession({
-        debug,
-        localMcp,
-        mcpFeatures: features,
-        apiKey,
-        baseUrl: argv.baseUrl as string | undefined,
-      });
-    } catch (error) {
-      if (!isTUIUnavailable(error)) throw error;
-      await runHeadlessAdd(args);
-    }
-  })();
-}
-
-async function runHeadlessAdd(args: {
-  local?: boolean;
-  features?: string[];
-  apiKey?: string;
-}): Promise<void> {
-  setUI(new LoggingUI());
-  const { addMCPServerToClientsStep } = await import(
-    '@shared/mcp-clients/install'
-  );
+  const apiKey = (argv.apiKey as string | undefined) || readApiKeyFromEnv();
+  const localMcp = argv.local as boolean | undefined;
   // Never forwards `ci`: headless implies session.ci elsewhere, and the step
   // reads that as "skip MCP entirely" — the opposite of what we're here to do.
-  const { installed, failed } = await addMCPServerToClientsStep(args);
-  // A scripted caller has no screen to read, so this has to be an exit code.
-  // Any failure counts, not just a total wipeout: the step installs to every
-  // detected client, so one succeeding would otherwise mask the rest.
-  if (failed.length > 0 || installed.length === 0) process.exitCode = 1;
+  const headless = () =>
+    addMCPServerToClientsStep(
+      { local: localMcp, features, apiKey },
+      { log: consoleLog.log },
+    );
+
+  // Ink renders into a pipe happily and only throws on raw-mode input, so a
+  // non-TTY run reaches the confirm prompt and stalls there rather than
+  // hitting the isTUIUnavailable fallback below. The headless flag is the
+  // only reliable way to install from a script.
+  if (isHeadless(argv)) {
+    exitWith(headless);
+    return;
+  }
+
+  exitWith(async () => {
+    try {
+      const { runTuiTool } = await import('@tui');
+      return await underSignals((signal) =>
+        runTuiTool(Tool.McpAdd, {
+          session: {
+            debug: argv.debug as boolean | undefined,
+            localMcp,
+            mcpFeatures: features,
+            apiKey,
+            baseUrl: argv.baseUrl as string | undefined,
+          },
+          signal,
+        }),
+      );
+    } catch (error) {
+      if (!isTUIUnavailable(error)) throw error;
+      return headless();
+    }
+  });
 }
 
 function parseFeatures(raw: unknown): string[] | undefined {

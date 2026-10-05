@@ -1,5 +1,5 @@
 import { runWizard, runWizardCI } from '@cli/runners';
-import { selfDrivingConfig } from '@programs/self-driving/index';
+import { config as selfDrivingConfig } from '@programs/self-driving';
 import { skillProgramOptions } from './skill-program-options';
 import type { Command } from './command';
 

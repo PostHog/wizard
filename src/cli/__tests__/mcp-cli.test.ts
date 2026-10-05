@@ -1,39 +1,25 @@
 // Mock variable names must be unique across .test.ts files (shared TS scope).
-// Hoisted, not a plain const: analytics.ts now imports wizard-session.ts
-// statically, so the mock factory runs before a const would initialize.
-const { mockBuildSessionMcp, mockStartTUIMcp, mockReadApiKeyFromEnvMcp } =
-  vi.hoisted(() => ({
-    mockBuildSessionMcp: vi.fn((args: Record<string, unknown>) => args),
-    mockStartTUIMcp: vi.fn(() => ({
-      unmount: vi.fn(),
-      store: { session: {} },
-    })),
-    mockReadApiKeyFromEnvMcp: vi.fn(() => undefined as string | undefined),
-  }));
-
-vi.mock('@programs/session/wizard-session', () => ({
-  buildSession: mockBuildSessionMcp,
-  // analytics.ts imports this for sessionProperties(); unused by this
-  // suite's assertions, stubbed only so the mocked module still satisfies
-  // the real module's exports.
-  reportableDiscoveredFeatures: () => undefined,
-  reportablePosthogSdkDetected: () => undefined,
+// Hoisted, not a plain const: the vi.mock factories below run before a
+// const would initialize.
+const {
+  mockRunTuiToolMcp,
+  mockReadApiKeyFromEnvMcp,
+  mockAddMCPServerToClientsStepMcp,
+} = vi.hoisted(() => ({
+  mockRunTuiToolMcp: vi.fn(() => Promise.resolve(0)),
+  mockReadApiKeyFromEnvMcp: vi.fn(() => undefined as string | undefined),
+  mockAddMCPServerToClientsStepMcp: vi.fn(() => Promise.resolve(1)),
 }));
-vi.mock('@tui/start-tui', () => ({
-  startTUI: mockStartTUIMcp,
+
+vi.mock(import('@tui'), () => ({
+  runTuiTool: mockRunTuiToolMcp,
 }));
 vi.mock('@utils/env-api-key', () => ({
   readApiKeyFromEnv: mockReadApiKeyFromEnvMcp,
 }));
-vi.mock('@programs', () => ({
-  Program: {
-    McpAdd: 'mcp-add',
-    McpRemove: 'mcp-remove',
-    McpTutorial: 'mcp-tutorial',
-  },
-  PROGRAM_REGISTRY: [],
-  getSubcommandPrograms: () => [],
-  getProgramConfig: () => ({}),
+vi.mock(import('@tools'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  addMCPServerToClientsStep: mockAddMCPServerToClientsStepMcp,
 }));
 
 import type { Arguments } from 'yargs';
@@ -46,6 +32,10 @@ import { parseCommand } from './helpers/parse-command.no-jest';
 function makeArgv(extra: Record<string, unknown> = {}): Arguments {
   return { _: [], $0: 'wizard', ...extra } as Arguments;
 }
+
+/** The session a handler ran its screens with. */
+const session = (extra: Record<string, unknown>) =>
+  expect.objectContaining({ session: expect.objectContaining(extra) });
 
 async function flush() {
   for (let i = 0; i < 5; i++) {
@@ -67,27 +57,35 @@ describe('mcpCommand (parent)', () => {
 describe('mcp add handler', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
   });
+  afterEach(() => vi.restoreAllMocks());
 
-  test('starts the TUI with the McpAdd program id', async () => {
+  test('runs the mcp-add screens and exits with their code', async () => {
     mcpAddCommand.handler!(makeArgv());
     await flush();
-    expect(mockStartTUIMcp).toHaveBeenCalledWith(expect.any(String), 'mcp-add');
+    expect(mockRunTuiToolMcp).toHaveBeenCalledWith('mcp-add', {
+      session: expect.any(Object),
+      signal: expect.any(AbortSignal),
+    });
+    expect(process.exit).toHaveBeenCalledWith(0);
   });
 
   test('passes --local through as localMcp', async () => {
     mcpAddCommand.handler!(makeArgv({ local: true }));
     await flush();
-    expect(mockBuildSessionMcp).toHaveBeenCalledWith(
-      expect.objectContaining({ localMcp: true }),
+    expect(mockRunTuiToolMcp).toHaveBeenCalledWith(
+      'mcp-add',
+      session({ localMcp: true }),
     );
   });
 
-  test('passes --api-key through to buildSession', async () => {
+  test('passes --api-key through to the session', async () => {
     mcpAddCommand.handler!(makeArgv({ apiKey: 'phx_from_flag' }));
     await flush();
-    expect(mockBuildSessionMcp).toHaveBeenCalledWith(
-      expect.objectContaining({ apiKey: 'phx_from_flag' }),
+    expect(mockRunTuiToolMcp).toHaveBeenCalledWith(
+      'mcp-add',
+      session({ apiKey: 'phx_from_flag' }),
     );
   });
 
@@ -95,16 +93,34 @@ describe('mcp add handler', () => {
     mockReadApiKeyFromEnvMcp.mockReturnValueOnce('phx_from_env');
     mcpAddCommand.handler!(makeArgv());
     await flush();
-    expect(mockBuildSessionMcp).toHaveBeenCalledWith(
-      expect.objectContaining({ apiKey: 'phx_from_env' }),
+    expect(mockRunTuiToolMcp).toHaveBeenCalledWith(
+      'mcp-add',
+      session({ apiKey: 'phx_from_env' }),
     );
+  });
+
+  test('installs with no screens, and exits with that code, when the terminal has no raw mode', async () => {
+    mockRunTuiToolMcp.mockRejectedValueOnce(
+      new Error('Raw mode is not supported on the current process.stdin'),
+    );
+    const before = process.listenerCount('SIGINT');
+    mcpAddCommand.handler!(makeArgv({ local: true }));
+    await flush();
+    expect(mockAddMCPServerToClientsStepMcp).toHaveBeenCalledWith(
+      expect.objectContaining({ local: true }),
+      expect.anything(),
+    );
+    expect(process.exit).toHaveBeenCalledWith(1);
+    // The console install ends on Ctrl-C as Node does: no signal listener is left.
+    expect(process.listenerCount('SIGINT')).toBe(before);
   });
 
   test('parses --features into a trimmed array', async () => {
     mcpAddCommand.handler!(makeArgv({ features: 'flags, errors , logs' }));
     await flush();
-    expect(mockBuildSessionMcp).toHaveBeenCalledWith(
-      expect.objectContaining({ mcpFeatures: ['flags', 'errors', 'logs'] }),
+    expect(mockRunTuiToolMcp).toHaveBeenCalledWith(
+      'mcp-add',
+      session({ mcpFeatures: ['flags', 'errors', 'logs'] }),
     );
   });
 });
@@ -129,22 +145,16 @@ describe('mcp parsing (end-to-end yargs)', () => {
 describe('mcp remove handler', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
   });
-
-  test('starts the TUI with the McpRemove program id', async () => {
-    mcpRemoveCommand.handler!(makeArgv());
-    await flush();
-    expect(mockStartTUIMcp).toHaveBeenCalledWith(
-      expect.any(String),
-      'mcp-remove',
-    );
-  });
+  afterEach(() => vi.restoreAllMocks());
 
   test('passes --local through as localMcp', async () => {
     mcpRemoveCommand.handler!(makeArgv({ local: true }));
     await flush();
-    expect(mockBuildSessionMcp).toHaveBeenCalledWith(
-      expect.objectContaining({ localMcp: true }),
+    expect(mockRunTuiToolMcp).toHaveBeenCalledWith(
+      'mcp-remove',
+      session({ localMcp: true }),
     );
   });
 });

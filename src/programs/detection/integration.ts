@@ -9,33 +9,23 @@
  * extracted here so the `integrate` subcommand can reuse it.
  */
 
-import type { ProgramReadyContext } from '@programs/program-step';
-import {
-  mayReportScanResults,
-  ScanConsent,
-  type WizardSession,
-} from '@programs/session/wizard-session';
-import { FRAMEWORK_REGISTRY } from '@programs/frameworks/registry';
-import {
-  detectFramework,
-  discoverFeatures,
-  gatherFrameworkContext,
-  checkFrameworkVersion,
-} from '@programs/detection/index';
+import type { ProgramReadyContext } from '../program-step';
+import { mayReportScanResults, ScanConsent } from '@shared/run-state';
+import type { ProgramSession } from '../program-session';
+import { FRAMEWORK_REGISTRY } from '../frameworks/registry';
+import { detectFramework } from './framework';
+import { discoverFeatures } from './features';
+import { checkFrameworkVersion, gatherFrameworkContext } from './context';
 import { analytics } from '@utils/analytics';
-import { detectWarehouseSources } from '@programs/warehouse-sources/detect';
+import { detectWarehouseSources } from '../warehouse-sources/detect';
 import {
   DETECTED_WAREHOUSE_SOURCES_KEY,
   getDetectedWarehouseSources,
-} from '@programs/warehouse-source/detect';
-import { findPackageJsons } from '@programs/shared/package-scanning';
-import { stampAiSdkDetected } from '@programs/detection/ai-sdk-stamp';
+} from '../warehouse-sources/detect';
+import { findPackageJsons } from '../shared/package-scanning';
 
 // Session-free, so runProgram can stamp without loading the session.
-export {
-  stampAiSdkDetected,
-  type AiSdkStampEvidence,
-} from '@programs/detection/ai-sdk-stamp';
+export { stampAiSdkDetected, type AiSdkStampEvidence } from './ai-sdk-stamp';
 
 export async function detectPostHogIntegration(
   ctx: ProgramReadyContext,
@@ -72,7 +62,10 @@ export async function detectPostHogIntegration(
     // pre-copy object and the live session would never see it.
     ctx.setSkillId(detectedIntegration);
 
-    if (!session.detectedFrameworkLabel) {
+    const detectedLabel = config.metadata.getDetectedFrameworkLabel?.(context);
+    if (detectedLabel) {
+      ctx.setDetectedFramework(detectedLabel);
+    } else if (!session.detectedFrameworkLabel) {
       ctx.setDetectedFramework(config.metadata.name);
     }
 
@@ -117,7 +110,7 @@ type WarehouseScanState = 'ok' | 'failed';
  * See `reportWarehouseSourcesDetected` below.
  *
  * Deliberately a suggestion, not an inline agent run: a second credential-
- * collecting agent run before the outro could `process.exit()` on any of its
+ * collecting agent run before the outro could end the run on any of its
  * failure paths and cost the user the success outro on a run where PostHog
  * installed fine.
  *
@@ -149,42 +142,11 @@ function detectWarehouseSourcesForSuggestion(
 }
 
 /**
- * Fires the org stamp once per session, right after `authenticate()` succeeds
- * — never from the consent path, since consent on the intro screen resolves
- * before login and `session.apiUser` is unset there. Called right after
- * `authenticate()` from run-wizard.ts's auth step and from bootstrap.ts,
- * whichever completes it first for a given program; a no-op on every call
- * after that. In the `--ci` path, project-scope.ts authenticates first as a
- * prerequisite (no evidence gathered yet, so nothing would stamp there
- * anyway) and this only ever runs from the later, idempotent bootstrap.ts
- * call — still correctly finding no evidence, since CI skips the detect step.
- */
-export function maybeStampAiSdkDetected(session: WizardSession): void {
-  // Direct mutation, not a store setter: unlike `warehouseSourcesReported`
-  // (latched only from TUI-only consent screens), this runs from
-  // `authenticate()`, which also fires in `--ci` mode, where the session is a
-  // plain object with no nanostore — see run-non-interactive.ts. A setter
-  // routed through WizardStore would silently never latch there.
-  //
-  // Depends on consent resolving before auth, same as every program's step
-  // list orders 'intro' before 'auth' today; a program that reversed that
-  // would latch this before consent exists and never stamp even once granted.
-  if (session.aiSdkStampReported) return;
-  session.aiSdkStampReported = true;
-  stampAiSdkDetected({
-    apiUser: session.apiUser,
-    discoveredFeatures: session.discoveredFeatures,
-    warehouseSources: getDetectedWarehouseSources(session),
-    mayReportScanResults: mayReportScanResults(session),
-  });
-}
-
-/**
  * The single place scan results become telemetry. Called from
  * `WizardStore.completeSetup()`, the point consent becomes final — the privacy
  * panel's choice is reversible until then, so nothing may report earlier.
- * The org stamp is a separate concern: see `maybeStampAiSdkDetected`, which
- * runs post-auth rather than at consent resolution.
+ * The org stamp is a separate concern: `runProgram` makes it once, after the
+ * first login, rather than at consent resolution.
  *
  * Returns true when consent has resolved and the caller should latch
  * `warehouseSourcesReported`, which is not the same as "this sent something":
@@ -192,7 +154,7 @@ export function maybeStampAiSdkDetected(session: WizardSession): void {
  * without sending.
  */
 export function reportWarehouseSourcesDetected(
-  session: WizardSession,
+  session: ProgramSession,
 ): boolean {
   if (session.warehouseSourcesReported) return false;
   // 'undecided' means come back later, not no.

@@ -1,48 +1,53 @@
 /**
  * Shared real-TUI host — the one primitive both e2e routes use.
  *
- * Runs the real `startTUI` (real ink render → this process's stdout, which the
- * PTY parent captures) and drives its store by pure state manipulation via
- * `WizardCiDriver` — no keystrokes. Auth is satisfied by `setCredentials` with
- * the phx key (same bearer as an OAuth token).
+ * Runs the real TUI host, `runTui` (the real ink render → this process's
+ * stdout, which the PTY parent captures), and drives its store by pure state
+ * manipulation, via `WizardCiDriver` — no keystrokes. The run logs in with the
+ * phx key (same bearer as an OAuth token).
  *
  *   MODE=fixed  — self-drive the fixed e2e profile, snapshotting each screen
  *                 (the CI snapshot route).
  *   MODE=serve  — listen on CONTROL_SOCK for {read_state, perform_action,
- *                 set_credentials, run_agent} commands (the agent/MCP route).
+ *                 run_agent} commands (the agent/MCP route).
  *
  * Never writes to stdout (that's the TUI); diagnostics go to the wizard log file.
  */
 import fs from 'fs';
 import net from 'net';
 import { spawnSync } from 'child_process';
-import { startTUI } from '@tui/start-tui';
-import { VERSION } from '@shared/version';
-import { Program, getProgramConfig, type ProgramId } from '@programs';
-import type { Harness, Sequence } from '@shared/constants';
-import { buildSession } from '@programs/session/wizard-session';
-import { initLocalDev } from '@shared/local-dev';
-import { configureGatewayFromCIEnvironment } from '@agent/gateway-session';
-import { runProgramAgent } from '@programs/run-agent-legacy';
-import {
-  TaskStreamPush,
-  createFileDestination,
-} from '@programs/task-stream/index';
-import { getAuditChecks } from '@programs/audit/types';
-import { authenticate } from '@programs/authenticate';
-import { getOrAskForProjectData } from '@tui/auth/project-data';
-import { logToFile } from '@utils/debug';
 import { join } from 'path';
-import { detectFramework } from '@programs/detection/index';
-import { FRAMEWORK_REGISTRY } from '@programs/frameworks/registry';
-import type { Integration } from '@shared/constants';
-import { SELF_DRIVING_INTEGRATE_PATH_KEY } from '@programs/self-driving/detect';
-import { ERROR_TRACKING_PROJECT_PATH_KEY } from '@programs/error-tracking/detect-agentic';
+import {
+  ErrorTrackingScreenId,
+  Overlay,
+  ScreenId,
+  SelfDrivingScreenId,
+  SourceMapsScreenId,
+  runTui,
+  type WizardStore,
+} from '@tui';
+import {
+  apiKeyCredentials,
+  buildSession,
+  detectFramework,
+  FRAMEWORK_REGISTRY,
+  getProgramConfig,
+  Program,
+  type ProgramId,
+} from '@programs';
+import type { CredentialsProvider, SessionArgs } from '@programs/types';
+import { ERROR_TRACKING_PROJECT_PATH_KEY } from '@programs/error-tracking';
 import {
   detectSourceMapsPrerequisites,
   SOURCE_MAPS_CONTEXT_KEYS,
-} from '@programs/error-tracking-upload-source-maps/index';
-import { ScreenId, Overlay } from '@tui/router';
+} from '@programs/error-tracking-upload-source-maps';
+import { SELF_DRIVING_INTEGRATE_PATH_KEY } from '@programs/self-driving';
+import type { GatewayCredential } from '@shared/api';
+import type { Harness, Integration, Sequence } from '@shared/constants';
+import { initLocalDev } from '@shared/local-dev';
+import { readCiGatewayCredential } from '@shared/ci-gateway';
+import { RunPhase } from '@shared/run-state';
+import { logToFile } from '@utils/debug';
 import { WizardCiDriver } from '@e2e-harness/wizard-ci-driver';
 import {
   decideE2eAction,
@@ -203,6 +208,7 @@ async function main() {
   const programId =
     (process.env.PROGRAM as ProgramId) || Program.PostHogIntegration;
   const programConfig = getProgramConfig(programId);
+  const serving = process.env.MODE === 'serve';
 
   // This host answers wizard_ask via its e2e driver, so keep the ask bridge
   // wired even though the session is `ci` (which here is only for headless
@@ -221,8 +227,7 @@ async function main() {
     localPosthog: envFlag('POSTHOG_WIZARD_LOCAL_POSTHOG'),
   });
 
-  const { store } = startTUI(VERSION, programId);
-  store.session = buildSession({
+  const session: SessionArgs = {
     installDir: process.env.APP_DIR!,
     ci: true,
     // Keep the `wizard_ask` bridge wired despite `ci: true`. The driver loop
@@ -237,120 +242,96 @@ async function main() {
     // skills (:8765) against the production MCP.
     localDev: process.env.POSTHOG_WIZARD_LOCAL_DEV === 'true',
     localMcp: envFlag('POSTHOG_WIZARD_LOCAL_MCP'),
-    localContextMill: envFlag('POSTHOG_WIZARD_LOCAL_CONTEXT_MILL'),
     localPosthog: envFlag('POSTHOG_WIZARD_LOCAL_POSTHOG'),
     // Switchboard variation overrides (see e2e.json `variations`), threaded by
     // the snapshot driver as one run per variation. Empty ⇒ resolved default.
     harness: (process.env.SNAP_HARNESS || undefined) as Harness | undefined,
     sequence: (process.env.SNAP_SEQUENCE || undefined) as Sequence | undefined,
     model: process.env.SNAP_MODEL || undefined,
-  });
-  // Dumped, never pushed: an e2e run is synthetic, like `--ci`.
-  const streamLog = createFileDestination(process.env.TASK_STREAM_LOG ?? '');
-  if (streamLog) {
-    const stream = new TaskStreamPush({
-      store,
-      programId,
-      destinations: [streamLog],
-      eventPlanPath: programConfig.eventPlanFile
-        ? join(store.session.installDir, programConfig.eventPlanFile)
-        : undefined,
-      auditChecks: programConfig.auditLedgerFile
-        ? () => getAuditChecks(store.session)
-        : undefined,
-    });
-    stream.attach();
-    process.on('exit', () => void stream.shutdown(0));
-    mark(`task stream dump → ${streamLog.path}`);
-  }
+    // Dumped, never pushed: an e2e run is synthetic, like `--ci`.
+    noTelemetry: true,
+  };
 
-  // Optional skip-ahead: pre-resolve the self-driving integration check so its
-  // screen never shows (INTEGRATE=true integrates first; false = already set up).
-  if (process.env.INTEGRATE === 'true' || process.env.INTEGRATE === 'false') {
-    store.setIntegrate(process.env.INTEGRATE === 'true');
-  }
+  // The phx key logs in as `--ci` does, and the pre-issued gateway token rides on the login.
+  const launched = buildSession(session);
+  const keyLogin = apiKeyCredentials(apiKey, {
+    region: 'us',
+    baseUrl: launched.baseUrl,
+    localMcp: launched.localMcp,
+    projectId: Number(projectId),
+  });
+  let gateway: GatewayCredential | undefined;
+  const login: CredentialsProvider = {
+    resolve: async (id, context) => {
+      const resolved = await keyLogin.resolve(id, context);
+      gateway ??= readCiGatewayCredential('us');
+      return { ...resolved, posthog: { ...resolved.posthog, gateway } };
+    },
+  };
+  // Serve mode holds the login until run_agent, so a run with no key stops at auth.
+  let releaseLogin = (): void => undefined;
+  const loginReleased = new Promise<void>((resolve) => {
+    releaseLogin = resolve;
+  });
+  const credentials: CredentialsProvider = serving
+    ? {
+        resolve: async (id, context) => {
+          await loginReleased;
+          return login.resolve(id, context);
+        },
+      }
+    : login;
+
+  const signals = new AbortController();
+  process.once('SIGINT', () => signals.abort('SIGINT'));
+  process.once('SIGTERM', () => signals.abort('SIGTERM'));
+
+  let resolveStore: (store: WizardStore) => void = () => undefined;
+  const stored = new Promise<WizardStore>((resolve) => {
+    resolveStore = resolve;
+  });
+  const run = runTui(programConfig, {
+    session,
+    taskStreamLog: process.env.TASK_STREAM_LOG ?? '',
+    credentials,
+    onStore: (store) => {
+      // Optional skip-ahead: pre-resolve the self-driving integration check so
+      // its screen never shows (INTEGRATE=true integrates first; false = already set up).
+      if (
+        process.env.INTEGRATE === 'true' ||
+        process.env.INTEGRATE === 'false'
+      ) {
+        store.setIntegrate(process.env.INTEGRATE === 'true');
+      }
+      resolveStore(store);
+    },
+    signal: signals.signal,
+  });
+  // The run can end before the store exists, as when a local service is down.
+  const store = await Promise.race([stored, run.then(() => null)]);
+  if (!store) return process.exit(await run);
   const driver = new WizardCiDriver(store);
 
-  // Resolve credentials from the phx key (same bearer as an OAuth token) and set
-  // them on the store — advances the auth screen with no browser, no keystrokes.
-  const authByState = async () => {
-    const d = await getOrAskForProjectData({
-      signup: false,
-      ci: true,
-      apiKey,
-      projectId: Number(projectId),
-      programId,
-    });
-    store.setCredentials({
-      accessToken: d.accessToken,
-      projectApiKey: d.projectApiKey,
-      host: d.host,
-      projectId: d.projectId,
-    });
-  };
-
-  // Pass the pre-run gates and run the program's real agent. The auth and run
-  // screens never advance on their own; this is what moves them. Mirrors
-  // run-wizard's flow, including in-program run phases.
-  let gatewayConfigured = false;
-  const runProgram = async () => {
-    if (!gatewayConfigured) {
-      configureGatewayFromCIEnvironment(
-        Number(projectId),
-        store.session.region ?? 'us',
-      );
-      gatewayConfigured = true;
-    }
-    await store.getGate('intro');
-    await store.getGate('integration-check');
-    await store.getGate('health-check');
-
-    // Mirror run-wizard's composed walk for programs whose steps splice in
-    // their own run steps (self-driving: detect → integrate → handoff → run),
-    // or scope their own run to a picked project (error-tracking).
-    // `authenticate` here resolves the phx key, not OAuth, since the session is
-    // built with ci + apiKey.
-    if (programConfig.steps.some((s) => s.run || s.targetDir)) {
-      const runSessionFor = async (
-        step: (typeof programConfig.steps)[number],
-      ) => {
-        const live = store.session;
-        const runSession = step.targetDir
-          ? {
-              ...live,
-              installDir: step.targetDir(live),
-              frameworkContext: { ...live.frameworkContext },
-            }
-          : live;
-        if (step.onRunPrep) await step.onRunPrep(runSession);
-        return runSession;
-      };
-      for (const step of programConfig.steps) {
-        if (step.screenId === 'outro') break;
-        if (step.show && !step.show(store.session)) continue;
-        if (step.screenId === 'auth') {
-          await authenticate(store.session, programConfig.id);
-        } else if (step.run) {
-          await step.run(await runSessionFor(step));
-          store.completeRunStep(step.id);
-        } else if (step.screenId === 'run') {
-          await runProgramAgent(programConfig, await runSessionFor(step));
-        } else if (step.isComplete) {
-          await store.waitUntil(step.isComplete);
-        }
-      }
-    } else {
-      await runProgramAgent(programConfig, store.session);
-    }
-  };
-
-  if (process.env.MODE === 'serve') return serve();
-  return fixed();
+  if (serving) return serve(store, driver);
+  return fixed(store, driver);
 
   // ---- agent route: drive commands over a unix socket ----
-  function serve() {
-    let runStatus: 'idle' | 'running' | 'done' | 'failed' = 'idle';
-    let runError: string | null = null;
+  function serve(store: WizardStore, driver: WizardCiDriver) {
+    void run.then((code) => process.exit(code));
+    let released = false;
+    // After run_agent, the run's phase says whether it is still going.
+    const runStatus = (): 'idle' | 'running' | 'done' | 'failed' => {
+      if (!released) return 'idle';
+      const phase = store.session.runPhase;
+      if (phase === RunPhase.Completed) return 'done';
+      if (phase === RunPhase.Error) return 'failed';
+      return 'running';
+    };
+    const runError = (): string | null => {
+      if (runStatus() !== 'failed') return null;
+      const outro = store.session.outroData;
+      return outro?.message ?? outro?.body ?? null;
+    };
     const handle = async (req: {
       type: string;
       action?: string;
@@ -363,8 +344,8 @@ async function main() {
               ok: true,
               state: {
                 ...driver.readState(),
-                integration: runStatus,
-                integrationError: runError,
+                integration: runStatus(),
+                integrationError: runError(),
               },
             };
           case 'perform_action':
@@ -372,23 +353,11 @@ async function main() {
               ok: true,
               state: driver.performAction(req.action!, req.params ?? {}),
             };
-          case 'set_credentials':
-            await authByState();
-            return { ok: true, state: driver.readState() };
           case 'run_agent': {
-            if (runStatus === 'running' || runStatus === 'done')
-              return { ok: true, runStatus };
-            runStatus = 'running';
-            void (async () => {
-              try {
-                await runProgram();
-                runStatus = 'done';
-              } catch (e) {
-                runStatus = 'failed';
-                runError = (e as Error).message;
-                mark('run_agent error ' + runError);
-              }
-            })();
+            if (released) return { ok: true, runStatus: runStatus() };
+            released = true;
+            mark('run_agent: login released');
+            releaseLogin();
             return { ok: true, runStatus: 'running' };
           }
           default:
@@ -420,11 +389,10 @@ async function main() {
       /* fresh */
     }
     server.listen(sockPath, () => mark(`serving on ${sockPath}`));
-    void store.runReadyHooks(); // detection so the intro screen fills in
   }
 
   // ---- CI route: self-drive the fixed profile, snapshot each screen ----
-  async function fixed() {
+  async function fixed(store: WizardStore, driver: WizardCiDriver) {
     const CTRL = process.env.SNAP_CTRL!;
     // Fold the run's env inputs into the profile once, here. `decideE2eAction`
     // stays pure, so the same state + profile always yields the same decision.
@@ -443,7 +411,7 @@ async function main() {
     };
     const recorder = new E2eRunRecorder();
     const screenPath: string[] = [];
-    // An abort exits from inside the runner, so hook `exit` too — see writeResult.
+    // An abort ends the run from inside the runner, so hook `exit` too — see writeResult.
     process.on('exit', () => writeResult());
     // Snapshot on key moments — a screen change, a task-list update, or a
     // runPhase change — so the run screen's progression (the agent working) is
@@ -453,6 +421,8 @@ async function main() {
     // signature and serialized.
     let lastSig = '';
     let chain: Promise<void> = Promise.resolve();
+    // Once the run ends the TUI is gone, so a pending snapshot signals nothing.
+    let ended = false;
     const signature = () =>
       JSON.stringify({
         screen: store.currentScreen,
@@ -471,6 +441,7 @@ async function main() {
       if (screenPath[screenPath.length - 1] !== screen) screenPath.push(screen);
       chain = chain.then(async () => {
         await sleep(500); // settle: let the frame finish drawing
+        if (ended) return;
         fs.appendFileSync(CTRL, store.currentScreen + '\n');
         await sleep(300); // let the capturer capture before the screen moves on
       });
@@ -486,7 +457,7 @@ async function main() {
 
     let stop = false;
     const driverLoop = async () => {
-      while (!stop && !store.session.skillsComplete) {
+      while (!stop && !store.skillsComplete) {
         await snap(); // capture this screen as presented, before acting
         recorder.observe(store.session);
         const state = driver.readState();
@@ -497,7 +468,7 @@ async function main() {
         // for a single app, or a monorepo's first instrumentable sub-app — so
         // the composed integrate-run can proceed.
         if (
-          state.currentScreen === ScreenId.SelfDrivingIntegrationDetect &&
+          state.currentScreen === SelfDrivingScreenId.IntegrationDetect &&
           state.session.integration == null
         ) {
           const pick = await pickIntegrationTarget(store.session.installDir);
@@ -517,7 +488,7 @@ async function main() {
         // Headless error-tracking detect: the same pick injection as above, into
         // the error-tracking path key, so the run is scoped to the picked app.
         if (
-          state.currentScreen === ScreenId.ErrorTrackingDetect &&
+          state.currentScreen === ErrorTrackingScreenId.Detect &&
           state.session.integration == null
         ) {
           const pick = await pickIntegrationTarget(store.session.installDir);
@@ -538,13 +509,13 @@ async function main() {
         // the static prerequisite detector — right for a single-app fixture —
         // and commit it through the driver the way the picker would.
         if (
-          state.currentScreen === ScreenId.SourceMapsDetect &&
+          state.currentScreen === SourceMapsScreenId.Detect &&
           store.session.frameworkContext[
             SOURCE_MAPS_CONTEXT_KEYS.selectedVariant
           ] == null
         ) {
           const ctx: Record<string, unknown> = {};
-          detectSourceMapsPrerequisites(store.session, (k, v) => {
+          detectSourceMapsPrerequisites(state.session, (k, v) => {
             ctx[k] = v;
           });
           const detected = ctx[SOURCE_MAPS_CONTEXT_KEYS.skillVariant];
@@ -552,7 +523,7 @@ async function main() {
             typeof detected === 'string'
               ? detected
               : nativeVariantFor(
-                  store.session.installDir,
+                  state.session.installDir,
                   ctx[SOURCE_MAPS_CONTEXT_KEYS.detectError],
                 );
           if (typeof variant !== 'string') {
@@ -589,7 +560,7 @@ async function main() {
             programId === Program.ErrorTrackingUploadSourceMaps &&
             q?.id === 'test-done'
           ) {
-            const ok = runAppBuild(store.session.installDir);
+            const ok = runAppBuild(state.session.installDir);
             driver.performAction('answer_question', {
               answers: { [q.id]: ok ? 'yes' : 'no' },
             });
@@ -601,6 +572,8 @@ async function main() {
         try {
           const decision = decideE2eAction(state, profile);
           if (decision.action) {
+            // The terminal commit ends the run and releases the terminal: let the capturer take this frame first.
+            if (decision.done) await sleep(500);
             driver.performAction(
               decision.action.id,
               decision.action.params ?? {},
@@ -618,16 +591,17 @@ async function main() {
         if (!stop) await driver.waitForChange(600_000);
       }
     };
-    const drive = driverLoop();
+    void driverLoop();
 
     // Write the structured result the --e2e assertion path reads. Programs whose
     // outro is terminal (self-driving) exit via the outro's ExitScreen before
     // the end-of-run path below, so capture it the moment the outro is reached;
     // integration re-writes it after keep-skills (skillsComplete). Registered
-    // on `exit` too: `wizardAbort` renders the error outro and exits, and an
-    // aborted run would otherwise write nothing at all.
+    // on `exit` too: `wizardAbort` renders the error outro and ends the run, and
+    // an aborted run would otherwise write nothing at all.
     const buildResult = () => {
       const appDir = process.env.APP_DIR!;
+      const state = driver.readState();
       // One dependency-name pattern per ecosystem manifest. A run only needs
       // the names, so a line-level scan beats per-format parsers.
       const MANIFESTS: Array<[string, RegExp]> = [
@@ -677,16 +651,16 @@ async function main() {
       }
       return buildE2eResult({
         base: {
-          runPhase: store.session.runPhase,
+          runPhase: state.runPhase,
           hasPosthogDep: posthogDeps.length > 0,
           newDeps: posthogDeps,
           envFile,
           screenPath,
-          skillsComplete: store.session.skillsComplete,
+          skillsComplete: state.session.skillsComplete,
         },
         recorder,
         session: store.session,
-        tasks: store.tasks,
+        tasks: state.tasks,
         reportFile: readReportFile(appDir, programConfig.reportFile),
       });
     };
@@ -695,26 +669,54 @@ async function main() {
       buildResult,
     );
     const unsubResult = store.subscribe(() => {
-      if (store.currentScreen === 'outro') writeResult();
+      if (store.currentScreen === ScreenId.Outro) writeResult();
     });
 
-    await store.runReadyHooks();
-    await runProgram();
-    const deadline = Date.now() + 120_000;
-    while (!store.session.skillsComplete && Date.now() < deadline)
-      await driver.waitForChange(5_000);
-    // The run reached skillsComplete, so the driver loop is done — but it may be
-    // parked in waitForChange, so don't block on it; the process exit ends it.
-    stop = true;
-    void drive;
-    unsub();
-    unsubResult();
-    await snap(); // the final screen
-    await chain; // flush any pending snapshots
-    writeResult(true); // final write (integration: after keep-skills)
-    process.exit(0);
+    // Once the run settled into its follow-up screens, a stall there gets two minutes.
+    const followUp = (screen: string): boolean =>
+      FOLLOW_UP_SCREENS.has(screen) || screen.endsWith('-outro');
+    let deadline: ReturnType<typeof setTimeout> | undefined;
+    const finish = async (code: number, mounted: boolean): Promise<never> => {
+      stop = true;
+      unsub();
+      unsubResult();
+      unsubDeadline();
+      clearTimeout(deadline);
+      if (mounted) {
+        await snap(); // the final screen
+        await chain; // flush any pending snapshots
+      }
+      ended = true;
+      writeResult(mounted || driver.readState().session.skillsComplete);
+      process.exit(code);
+    };
+    const unsubDeadline = store.subscribe(() => {
+      const state = driver.readState();
+      const settled =
+        (state.runPhase === RunPhase.Completed ||
+          state.runPhase === RunPhase.Error) &&
+        followUp(state.currentScreen);
+      if (!settled) {
+        clearTimeout(deadline);
+        deadline = undefined;
+      } else if (!deadline) {
+        deadline = setTimeout(() => void finish(0, true), 120_000);
+      }
+    });
+
+    await finish(await run, false);
   }
 }
+
+/** The screens after a program's last run: its outro and the integration tail. */
+const FOLLOW_UP_SCREENS: ReadonlySet<string> = new Set<string>([
+  ScreenId.Outro,
+  ScreenId.MintFailure,
+  ScreenId.Mcp,
+  ScreenId.SlackConnect,
+  ScreenId.KeepSkills,
+  ScreenId.Exit,
+]);
 
 /** Extra `askAnswers` rules from `E2E_ANSWERS_FILE`, or none. */
 function readAnswersFile(file: string | undefined): AskAnswerRule[] {

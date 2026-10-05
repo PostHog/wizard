@@ -1,4 +1,12 @@
-import type { RunFlags } from '@agent/types';
+// When `wizard_ask` may reach a human, and how long an errand question waits.
+
+/** The run flags the ask policy reads. */
+export interface AskPolicyFlags {
+  ci: boolean;
+  signup: boolean;
+  /** Harness-only: keep the ask bridge in a `ci` run that has an answerer. */
+  e2eAsk: boolean;
+}
 
 /**
  * Decide whether the `wizard_ask` overlay should be wired for this run.
@@ -16,9 +24,7 @@ import type { RunFlags } from '@agent/types';
  * Only the e2e TUI host sets the flag, from the `E2E_ASK` env var. No CLI flag
  * populates it, so plain `--ci` and `--signup` runs behave exactly as before.
  */
-export function shouldDisableAsk(
-  flags: Pick<RunFlags, 'ci' | 'signup' | 'e2eAsk'>,
-): boolean {
+export function shouldDisableAsk(flags: AskPolicyFlags): boolean {
   return (flags.ci || flags.signup) && !flags.e2eAsk;
 }
 

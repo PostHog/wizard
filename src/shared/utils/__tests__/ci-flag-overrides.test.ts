@@ -4,8 +4,8 @@ import {
 } from '@utils/ci-flag-overrides';
 
 vi.mock('@utils/debug', () => ({
+  configureLogFile: vi.fn(),
   logToFile: vi.fn(),
-  debug: vi.fn(),
 }));
 
 const ENV_KEY = 'WIZARD_CI_FLAG_OVERRIDES';

@@ -42,7 +42,7 @@ export const ManagedSettingsScreen = ({
     () => store.getSnapshot(),
   );
 
-  const conflicts = store.session.settingsConflicts;
+  const conflicts = store.settingsConflicts;
   const readOnlyConflicts = conflicts?.filter((c) => !c.writable);
 
   const hasManaged = Boolean(
@@ -75,8 +75,8 @@ export const ManagedSettingsScreen = ({
           message="Fix the file(s) above, then re-run the Wizard."
           confirmLabel=""
           cancelLabel="Exit [Esc]"
-          onConfirm={() => process.exit(1)}
-          onCancel={() => process.exit(1)}
+          onConfirm={() => store.requestExit(1)}
+          onCancel={() => store.requestExit(1)}
         />
       }
     >

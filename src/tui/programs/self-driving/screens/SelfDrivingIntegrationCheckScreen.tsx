@@ -19,7 +19,7 @@ import { TextInput } from '@inkjs/ui';
 import { useState, useSyncExternalStore } from 'react';
 
 import type { WizardStore } from '@tui/store';
-import type { CloudRegion } from '@programs/session/wizard-session';
+import type { CloudRegion } from '@utils/types';
 import { PickerMenu } from '@tui/primitives/index';
 import {
   PrivacyPanel,

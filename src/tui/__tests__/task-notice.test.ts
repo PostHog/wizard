@@ -3,7 +3,7 @@
  * decline a step that will stop and ask them for credentials, so the copy has
  * to reach the screen and both answers have to come back.
  */
-import type { TaskNotice } from '@programs/session/wizard-session';
+import type { TaskNotice } from '@agent/types';
 
 vi.mock('@utils/analytics.js', () => ({
   analytics: {
@@ -36,11 +36,11 @@ describe('task notice', () => {
     const store = new WizardStore();
 
     const kept = store.showTaskNotice(NOTICE);
-    expect(store.router.resolve(store.session)).toBe(Overlay.TaskNotice);
+    expect(store.router.resolve(store)).toBe(Overlay.TaskNotice);
     store.resolveTaskNotice(true);
     await expect(kept).resolves.toBe(true);
     expect(store.session.taskNotice).toBeNull();
-    expect(store.router.resolve(store.session)).not.toBe(Overlay.TaskNotice);
+    expect(store.router.resolve(store)).not.toBe(Overlay.TaskNotice);
 
     const skipped = store.showTaskNotice(NOTICE);
     store.resolveTaskNotice(false);

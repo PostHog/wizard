@@ -1,12 +1,9 @@
-import {
-  HealthIssueListResponseSchema,
-  HealthIssueSchema,
-} from '@tools/doctor/types';
+import { HealthIssueListResponseSchema, HealthIssueSchema } from '../types';
 import {
   getKindMeta,
   KIND_METADATA,
   UNKNOWN_KIND_META,
-} from '@tools/doctor/kind-metadata';
+} from '../kind-metadata';
 
 describe('posthog-doctor schema', () => {
   const canned = {

@@ -1,4 +1,4 @@
-import { warehouseSourceConfig } from '@programs/warehouse-source/index';
+import { config as warehouseSourceConfig } from '@programs/warehouse-source';
 
 import type { Command } from './command';
 import { nativeCommandFactory } from './factories/native-command-factory';

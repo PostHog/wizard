@@ -5,7 +5,7 @@ import {
   buildFamilyPickerChildren,
   dispatchFamily,
   pickerChildrenToShow,
-} from '@cli/commands/dispatch-family';
+} from '../dispatch-family';
 import { getSkillsBaseUrl } from '@shared/constants';
 import { fetchSkillMenu } from '@shared/skill-menu';
 

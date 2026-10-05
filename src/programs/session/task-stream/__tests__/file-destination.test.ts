@@ -1,16 +1,10 @@
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import {
-  FileDestination,
-  createFileDestination,
-} from '@programs/session/task-stream/destinations/file';
-import {
-  StreamEvent,
-  type TaskStreamUpdate,
-} from '@programs/session/task-stream/types';
+import { FileDestination, createFileDestination } from '../destinations/file';
+import { StreamEvent, type TaskStreamUpdate } from '../types';
 import { WIZARD_TASK_STREAM_FILE } from '@utils/paths';
-import { RunPhase } from '@programs/session/wizard-session';
+import { RunPhase } from '@shared/run-state';
 
 const payload = (over: Partial<TaskStreamUpdate> = {}): TaskStreamUpdate => ({
   session_id: 'audit-audit-2026-01-01T00:00:00Z',

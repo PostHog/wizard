@@ -1,16 +1,15 @@
 import type { Arguments } from 'yargs';
-import type { Mock } from 'vitest';
 
-// Stub only Ink's `render` so `chooseFamilyChild` can build its options
-// without mounting a real TUI; everything else in `ink` stays real.
-vi.mock('ink', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('ink')>();
-  return { ...actual, render: vi.fn() };
-});
+// Stub only the TUI's picker so `chooseFamilyChild` can build its options
+// without mounting a real TUI; the rest of the entry stays real.
+vi.mock(import('@tui'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  renderFamilyPicker: vi.fn(),
+}));
 
-import { render } from 'ink';
+import { renderFamilyPicker } from '@tui';
 
-import type { Command } from '../../command';
+import type { Command } from '@cli/commands/command';
 import { auditCommand } from '../../audit';
 import {
   chooseFamilyChild,
@@ -54,8 +53,8 @@ describe('orderFamilyChildren', () => {
 });
 
 describe('chooseFamilyChild', () => {
-  it('renders the default leaf first so it is pre-highlighted (Enter runs it)', () => {
-    (render as Mock).mockClear();
+  it('renders the default leaf first so it is pre-highlighted (Enter runs it)', async () => {
+    vi.mocked(renderFamilyPicker).mockClear();
     const all: Command = {
       name: 'all',
       description: 'comprehensive',
@@ -71,9 +70,9 @@ describe('chooseFamilyChild', () => {
     // Input order puts the default LAST — the picker must reorder it to index 0.
     void chooseFamilyChild('wizard audit', [events, all]);
 
-    expect(render as Mock).toHaveBeenCalledTimes(1);
-    const element = (render as Mock).mock.calls[0][0];
-    const options = element.props.options as {
+    // The picker loads the TUI on first use.
+    await vi.waitFor(() => expect(renderFamilyPicker).toHaveBeenCalledTimes(1));
+    const options = vi.mocked(renderFamilyPicker).mock.calls[0][1] as {
       label: string;
       value: Command;
     }[];

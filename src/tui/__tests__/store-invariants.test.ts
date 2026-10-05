@@ -5,33 +5,38 @@
 
 import {
   WizardStore,
-  TaskStatus,
   Program,
   type ProgramId,
   ScreenId,
   Overlay,
-  RunPhase,
-  McpOutcome,
   type ScreenName,
 } from '@tui/store';
+import { McpOutcome, RunPhase } from '@shared/run-state';
+import { TaskStatus } from '@shared/task-status';
+import type { WizardSession } from '@programs/types';
 import {
-  buildSession,
-  DiscoveredFeature,
-  OutroKind,
+  tuiView,
+  type TestTuiView,
+} from '@tui/__tests__/helpers/tui-view.no-jest';
+import { DiscoveredFeature } from '@shared/discovered-feature';
+import { OutroKind } from '@shared/outro';
+import {
   type AskAnswers,
   type PendingQuestion,
   type TaskNotice,
-  type WizardSession,
-} from '@programs/session/wizard-session';
+} from '@agent/types';
 import { EXPANDED_COUNT } from '@tui/constants';
-import { PROGRAM_SEQUENCES } from '@ui/tui/screen-sequences';
+import { programSequence } from '@tui/screen-sequences';
+import { listTuiPrograms } from '@tui/programs/index';
+import { listTuiTools } from '@tui/tools/index';
+import { TOOL_REGISTRY } from '@tools';
 import { WizardReadiness } from '@shared/health-checks/readiness';
 import { HostResolution } from '@shared/host-resolution';
 import { Integration } from '@shared/constants';
-import { FRAMEWORK_REGISTRY } from '@programs/frameworks/registry';
+import { FRAMEWORK_REGISTRY, buildSession, PROGRAM_REGISTRY } from '@programs';
 import { analytics } from '@utils/analytics';
-import { PROGRAM_REGISTRY } from '@programs';
 import type { SettingsConflict } from '@shared/claude-settings';
+import { PostHogIntegrationScreenId } from '@tui/programs/posthog-integration';
 
 vi.mock('@utils/analytics.js', () => ({
   analytics: {
@@ -149,6 +154,7 @@ const MUTATIONS: MutationCase[] = [
     invoke: (s) => s.toggleStatusExpanded(),
     emits: 1,
   },
+  { name: 'requestExit', invoke: (s) => s.requestExit(0), emits: 1 },
   {
     name: 'setStatusExpanded',
     invoke: (s) => s.setStatusExpanded(true),
@@ -393,6 +399,11 @@ const MUTATIONS: MutationCase[] = [
     emits: 1,
   },
   {
+    name: 'launch',
+    invoke: (s) => s.launch(buildSession({}), { integrate: true }),
+    emits: 1,
+  },
+  {
     name: 'completeRunStep',
     invoke: (s) => s.completeRunStep('integrate-run'),
     emits: 1,
@@ -401,6 +412,12 @@ const MUTATIONS: MutationCase[] = [
   {
     name: 'setOutroData',
     invoke: (s) => s.setOutroData({ kind: OutroKind.Success, message: 'done' }),
+    emits: 1,
+  },
+  {
+    name: 'showOutroError',
+    invoke: (s) =>
+      s.showOutroError({ kind: OutroKind.Error, message: 'failed' }),
     emits: 1,
   },
   {
@@ -506,6 +523,7 @@ const NON_MUTATING = [
   'runReadyHooks',
   'getGate',
   'waitUntil',
+  'reachStep',
   'onEnterScreen',
   'emitChange',
 ];
@@ -578,6 +596,13 @@ describe('store invariants', () => {
       ).toBe(0);
     });
 
+    it('a second requestExit notifies nothing and keeps the first code', () => {
+      const store = createStore();
+      store.requestExit(1);
+      expect(countEmissions(store, () => store.requestExit(0))).toBe(0);
+      expect(store.exitRequest).toBe(1);
+    });
+
     it('setStatusExpanded to the current value notifies nothing', () => {
       const store = createStore();
       expect(countEmissions(store, () => store.setStatusExpanded(false))).toBe(
@@ -613,9 +638,9 @@ describe('store invariants', () => {
       await flushMicrotasks();
       expect(gate.resolved).toBe(true);
 
-      store.session = buildSession({});
+      store.launch(buildSession({}));
       await flushMicrotasks();
-      expect(store.session.setupConfirmed).toBe(false);
+      expect(store.setupConfirmed).toBe(false);
 
       const relatched = tracked(store.getGate('intro'));
       await flushMicrotasks();
@@ -631,7 +656,9 @@ describe('store invariants', () => {
 
     it('waitUntil resolves on the next commit that matches', async () => {
       const store = createStore();
-      const waiter = tracked(store.waitUntil((s) => s.credentials !== null));
+      const waiter = tracked(
+        store.waitUntil((s) => s.session.credentials !== null),
+      );
       await flushMicrotasks();
       expect(waiter.resolved).toBe(false);
 
@@ -660,16 +687,18 @@ describe('store invariants', () => {
 
       store.pushOverlay(Overlay.AuthError);
       store.pushOverlay(Overlay.SessionTimeout);
-      expect(store.router.resolve(store.session)).toBe(Overlay.SessionTimeout);
+      expect(store.router.resolve(store)).toBe(Overlay.SessionTimeout);
       expect(store.router.hasOverlay).toBe(true);
 
       store.popOverlay();
-      expect(store.router.resolve(store.session)).toBe(Overlay.AuthError);
+      expect(store.router.resolve(store)).toBe(Overlay.AuthError);
       expect(store.router.hasOverlay).toBe(true);
 
       store.popOverlay();
       expect(store.router.hasOverlay).toBe(false);
-      expect(store.router.resolve(store.session)).toBe(ScreenId.Intro);
+      expect(store.router.resolve(store)).toBe(
+        PostHogIntegrationScreenId.Intro,
+      );
     });
 
     it('tracks the nav direction across emits and overlay moves', () => {
@@ -712,9 +741,14 @@ describe('store invariants', () => {
   });
 
   describe('screen resolution is total', () => {
-    const PROGRAM_IDS = PROGRAM_REGISTRY.map((config) => config.id);
+    const PROGRAM_IDS = [...PROGRAM_REGISTRY, ...TOOL_REGISTRY].map(
+      (config) => config.id,
+    );
     const SCREEN_NAMES = new Set<string>([
       ...Object.values(ScreenId),
+      ...[...listTuiPrograms(), ...listTuiTools()].flatMap((owner) =>
+        Object.keys(owner.screens ?? {}),
+      ),
       ...Object.values(Overlay),
     ]);
     const SEED = 0x5eed;
@@ -730,41 +764,41 @@ describe('store invariants', () => {
       };
     }
 
-    function randomSession(rand: () => number): WizardSession {
+    function randomView(rand: () => number): TestTuiView {
       const pick = <T>(values: readonly T[]): T =>
         values[Math.floor(rand() * values.length)];
       const flip = (): boolean => rand() < 0.5;
 
-      const session = buildSession({ installDir: '/app', ci: flip() });
-      session.setupConfirmed = flip();
-      session.credentials = flip() ? CREDENTIALS : null;
-      session.apiUser = pick([null, aiUser(true), aiUser(false)]);
-      session.runPhase = pick(Object.values(RunPhase));
-      session.outroDismissed = flip();
-      session.outroData = flip()
+      const view = tuiView({ installDir: '/app', ci: flip() });
+      view.setupConfirmed = flip();
+      view.session.credentials = flip() ? CREDENTIALS : null;
+      view.session.apiUser = pick([null, aiUser(true), aiUser(false)]);
+      view.session.runPhase = pick(Object.values(RunPhase));
+      view.outroDismissed = flip();
+      view.session.outroData = flip()
         ? { kind: OutroKind.Error, message: 'x' }
         : null;
-      session.mintHandoff = pick([null, 'exit', 'continue'] as const);
-      session.mcpComplete = flip();
-      session.mcpOutcome = pick([null, ...Object.values(McpOutcome)]);
-      session.slackStepDismissed = flip();
-      session.skillsComplete = flip();
-      session.integrate = pick([null, true, false]);
+      view.mintHandoff = pick([null, 'exit', 'continue'] as const);
+      view.mcpComplete = flip();
+      view.mcpOutcome = pick([null, ...Object.values(McpOutcome)]);
+      view.slackStepDismissed = flip();
+      view.skillsComplete = flip();
+      view.integrate = pick([null, true, false]);
       if (flip()) {
-        session.integration = Integration.javascriptNode;
-        session.frameworkConfig =
+        view.session.integration = Integration.javascriptNode;
+        view.session.frameworkConfig =
           FRAMEWORK_REGISTRY[Integration.javascriptNode];
       }
-      session.selfDrivingHandoffConfirmed = flip();
-      session.githubConnected = pick([null, true, false]);
-      session.githubDeclined = flip();
-      session.readinessResult = flip() ? CLEAN_READINESS : null;
-      session.outageDismissed = flip();
-      if (flip()) session.frameworkContext = { postHogPresent: flip() };
-      session.completedRuns = flip() ? ['integrate-run'] : [];
-      session.detectionComplete = flip();
-      session.signup = flip();
-      return session;
+      view.selfDrivingHandoffConfirmed = flip();
+      view.githubConnected = pick([null, true, false]);
+      view.githubDeclined = flip();
+      view.session.readinessResult = flip() ? CLEAN_READINESS : null;
+      view.outageDismissed = flip();
+      if (flip()) view.session.frameworkContext = { postHogPresent: flip() };
+      view.completedRuns = flip() ? ['integrate-run'] : [];
+      view.session.detectionComplete = flip();
+      view.session.signup = flip();
+      return view;
     }
 
     function resolveAll(program: ProgramId): ScreenName[] {
@@ -772,7 +806,7 @@ describe('store invariants', () => {
       const rand = mulberry32(SEED);
       const screens: ScreenName[] = [];
       for (let i = 0; i < SESSION_COUNT; i++) {
-        screens.push(store.router.resolve(randomSession(rand)));
+        screens.push(store.router.resolve(randomView(rand)));
       }
       return screens;
     }
@@ -789,7 +823,7 @@ describe('store invariants', () => {
     );
 
     it.each(PROGRAM_IDS)('%s sequence ends on the exit screen', (program) => {
-      const sequence = PROGRAM_SEQUENCES[program];
+      const sequence = programSequence(program);
       expect(sequence[sequence.length - 1].id).toBe(ScreenId.Exit);
     });
 

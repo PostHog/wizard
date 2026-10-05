@@ -3,7 +3,7 @@
  * applied to a token usage delta.
  *
  * Single source of truth for both the benchmark's `CostTrackerPlugin`
- * (`@lib/middleware/benchmarks/cost-tracker`) and the live token/cost HUD
+ * (`@agent/middleware/benchmarks/cost-tracker`) and the live token/cost HUD
  * (`agent-interface.ts`'s per-turn usage accumulation), so the two estimates
  * never drift apart. Both reconcile against the SDK's own authoritative
  * `total_cost_usd` once the run finishes — this table only prices the
@@ -142,7 +142,7 @@ export function pricePerMtokForModel(
  * a turn without the breakdown still gets a reasonable estimate rather than
  * being priced at $0.
  *
- * Takes the same shape as `TokenUsageDelta` (`@ui/wizard-ui`) so a caller
+ * Takes the same shape as `TokenUsageDelta` (`@agent/types`) so a caller
  * that already has one — `WizardStore.addTokenUsage` — can pass it straight
  * through instead of re-listing its fields in a fixed positional order.
  */

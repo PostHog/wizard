@@ -1,10 +1,9 @@
 import type { Arguments } from 'yargs';
-import { getUI, setUI } from '@ui';
-import { LoggingUI } from '@headless/renderers/logging-ui';
+import { consoleLog } from '@shared/console-log';
 import { API_KEY_HINT, runWizardCI, runWizardHeadless } from '@cli/runners';
-import type { NonInteractiveMode } from '@cli/runners';
+import type { NonInteractiveMode } from '@headless';
 import { provisionNewAccount } from '@utils/provisioning';
-import { posthogIntegrationConfig } from '@programs/posthog-integration/index';
+import { config as posthogIntegrationConfig } from '@programs/posthog-integration';
 import { ErrorCodes, type ErrorCode } from '@shared/errors';
 import { emitWizardError } from '@shared/errors';
 
@@ -29,7 +28,7 @@ export function runCIInstall(argv: Arguments): void {
 
 /**
  * Headless install entry point (the experimental published-build run path; see
- * @lib/headless-mode). Thin shell over the shared non-interactive install.
+ * @shared/headless-mode). Thin shell over the shared non-interactive install.
  * Today it behaves exactly like `runCIInstall`; it is a separate function so
  * headless can diverge later (auth, prompts, …) without touching the CI path.
  */
@@ -93,9 +92,8 @@ function runNonInteractiveInstall(
 }
 
 function failCI(message: string, code?: ErrorCode): void {
-  setUI(new LoggingUI());
-  getUI().intro('PostHog Wizard');
-  getUI().log.error(message);
+  consoleLog.intro('PostHog Wizard');
+  consoleLog.log.error(message);
   if (code) emitWizardError({ code, message });
   process.exit(1);
 }
@@ -124,9 +122,8 @@ export function keyPrefixWarning(apiKey: string | undefined): string | null {
 function warnOnUnexpectedKeyPrefix(apiKey: string | undefined): void {
   const message = keyPrefixWarning(apiKey);
   if (!message) return;
-  setUI(new LoggingUI());
-  getUI().intro('PostHog Wizard');
-  getUI().log.warn(message);
+  consoleLog.intro('PostHog Wizard');
+  consoleLog.log.warn(message);
 }
 
 /**
@@ -137,12 +134,11 @@ function warnOnUnexpectedKeyPrefix(apiKey: string | undefined): void {
 async function provisionForSignup(
   options: Options,
 ): Promise<{ personalApiKey: string; projectId: string }> {
-  setUI(new LoggingUI());
-  getUI().intro('PostHog Wizard');
+  consoleLog.intro('PostHog Wizard');
   const signupRegion = ((options.region as string) || 'us').toUpperCase() as
     | 'US'
     | 'EU';
-  getUI().log.info(
+  consoleLog.log.info(
     `Provisioning new PostHog account for ${String(
       options.email,
     )} in ${signupRegion}...`,
@@ -158,21 +154,21 @@ async function provisionForSignup(
     );
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
-    getUI().log.error(`Provisioning failed: ${msg}`);
+    consoleLog.log.error(`Provisioning failed: ${msg}`);
     throw error;
   }
 
   if (!result.personalApiKey) {
-    getUI().log.error(
+    consoleLog.log.error(
       'Provisioning succeeded but no personal API key was returned — cannot continue install.',
     );
     throw new Error('provisioning returned no personal API key');
   }
 
-  getUI().log.success('Account ready.');
-  getUI().log.info(`  Project API Key:  ${result.projectApiKey}`);
-  getUI().log.info(`  Personal API Key: ${result.personalApiKey}`);
-  getUI().log.info(`  Host:             ${result.host}`);
+  consoleLog.log.success('Account ready.');
+  consoleLog.log.info(`  Project API Key:  ${result.projectApiKey}`);
+  consoleLog.log.info(`  Personal API Key: ${result.personalApiKey}`);
+  consoleLog.log.info(`  Host:             ${result.host}`);
   return {
     personalApiKey: result.personalApiKey,
     projectId: result.projectId,

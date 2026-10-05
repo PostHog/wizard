@@ -16,12 +16,12 @@ import { PickerMenu } from '@tui/primitives/index';
 import {
   IntroScreenLayout,
   type DetectionRow,
-} from '../../../screens/IntroScreenLayout.js';
+} from '@tui/screens/IntroScreenLayout';
 import {
   POSTHOG_SDKS,
   STRIPE_SDKS,
   type RevenueDetectError,
-} from '@programs/revenue-analytics/index';
+} from '@programs/revenue-analytics';
 
 interface RevenueIntroScreenProps {
   store: WizardStore;
@@ -76,7 +76,7 @@ export const RevenueIntroScreen = ({ store }: RevenueIntroScreenProps) => {
         <Text>
           The{' '}
           <Text italic color="cyan">
-            {session.programLabel}
+            {store.programLabel}
           </Text>{' '}
           program links Stripe customers and purchases to PostHog product data
           and persons. It unlocks insights like:
@@ -126,7 +126,7 @@ export const RevenueIntroScreen = ({ store }: RevenueIntroScreenProps) => {
 
       <PickerMenu
         options={[{ label: 'Exit', value: 'exit' }]}
-        onSelect={() => process.exit(1)}
+        onSelect={() => store.requestExit(1)}
       />
     </>
   ) : undefined;
@@ -149,12 +149,12 @@ export const RevenueIntroScreen = ({ store }: RevenueIntroScreenProps) => {
       showDetection={!showingMoreInfo}
       detectionRows={detectionRows}
       errorView={errorView}
-      programLabel={session.programLabel}
+      programLabel={store.programLabel}
       skillId={session.skillId}
       menuOptions={menuOptions}
       onSelect={(value) => {
         if (value === 'cancel') {
-          process.exit(0);
+          store.requestExit(0);
         } else if (value === 'more-info') {
           setShowingMoreInfo(true);
         } else if (value === 'back') {

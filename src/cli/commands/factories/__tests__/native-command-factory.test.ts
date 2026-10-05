@@ -3,7 +3,7 @@ const { mockRunWizard, mockRunWizardCI } = vi.hoisted(() => ({
   mockRunWizardCI: vi.fn(),
 }));
 
-vi.mock('@cli/runners', () => ({
+vi.mock(import('@cli/runners'), () => ({
   runWizard: mockRunWizard,
   runWizardCI: mockRunWizardCI,
 }));
@@ -25,7 +25,6 @@ function buildTestConfig(
     command: 'demo',
     description: 'demo program',
     id: 'demo',
-    steps: [],
     ...overrides,
   };
 }

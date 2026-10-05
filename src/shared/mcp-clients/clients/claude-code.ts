@@ -16,7 +16,7 @@ import { LoginCapable } from '@shared/mcp-clients/login-client';
 import { z } from 'zod';
 import { execSync, execFile } from 'child_process';
 import { analytics } from '@utils/analytics';
-import { debug } from '@utils/debug';
+import { logToFile } from '@utils/debug';
 import * as os from 'os';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -112,7 +112,7 @@ export class ClaudeCodeMCPClient
 
     for (const claudePath of possiblePaths) {
       if (fs.existsSync(claudePath)) {
-        debug(`  Found claude binary at: ${claudePath}`);
+        logToFile(`  Found claude binary at: ${claudePath}`);
         this.claudeBinaryPath = claudePath;
         return claudePath;
       }
@@ -121,7 +121,7 @@ export class ClaudeCodeMCPClient
     // Try PATH as fallback
     try {
       execSync('command -v claude', { stdio: 'pipe' });
-      debug('  Found claude in PATH');
+      logToFile('  Found claude in PATH');
       this.claudeBinaryPath = 'claude';
       return 'claude';
     } catch {
@@ -133,24 +133,26 @@ export class ClaudeCodeMCPClient
 
   isClientSupported(): Promise<boolean> {
     try {
-      debug('  Checking for Claude Code...');
+      logToFile('  Checking for Claude Code...');
       const claudeBinary = this.findClaudeBinary();
 
       if (!claudeBinary) {
-        debug('  Claude Code not found. Installation paths checked:');
-        debug(`    - ${path.join(os.homedir(), '.claude', 'local', 'claude')}`);
-        debug(`    - /usr/local/bin/claude`);
-        debug(`    - /opt/homebrew/bin/claude`);
-        debug(`    - PATH`);
+        logToFile('  Claude Code not found. Installation paths checked:');
+        logToFile(
+          `    - ${path.join(os.homedir(), '.claude', 'local', 'claude')}`,
+        );
+        logToFile(`    - /usr/local/bin/claude`);
+        logToFile(`    - /opt/homebrew/bin/claude`);
+        logToFile(`    - PATH`);
         return Promise.resolve(false);
       }
 
       const output = execSync(`${claudeBinary} --version`, { stdio: 'pipe' });
       const version = output.toString().trim();
-      debug(`  Claude Code detected: ${version}`);
+      logToFile(`  Claude Code detected: ${version}`);
       return Promise.resolve(true);
     } catch (error) {
-      debug(
+      logToFile(
         `  Claude Code check failed: ${
           error instanceof Error ? error.message : String(error)
         }`,
@@ -507,7 +509,7 @@ export class ClaudeCodeMCPClient
       'list',
     ]);
     if (listed?.some(isOurMarketplace)) {
-      debug(`  Marketplace ${PLUGIN_MARKETPLACE} already registered`);
+      logToFile(`  Marketplace ${PLUGIN_MARKETPLACE} already registered`);
       return undefined;
     }
 
@@ -521,7 +523,7 @@ export class ClaudeCodeMCPClient
       PLUGIN_MARKETPLACE_SOURCE,
     ]);
     if (!added.ok) {
-      debug(`  Marketplace add failed: ${added.output}`);
+      logToFile(`  Marketplace add failed: ${added.output}`);
       return added.output;
     }
     return undefined;

@@ -3,8 +3,9 @@ import type { Arguments } from 'yargs';
 import { getSkillsBaseUrl } from '@shared/constants';
 import { fetchSkillMenu } from '@shared/skill-menu';
 import { analytics } from '@utils/analytics';
+import { listSkills } from '@tools';
+import { exitWith } from '@cli/runners';
 
-import { listCommand } from '@tools/skill-list/index';
 import { runSkillMode } from './basic-integration/skill';
 import { skillProgramOptions } from './skill-program-options';
 import { runCommandHandler } from './factories/shared';
@@ -64,7 +65,6 @@ async function assertSkillExists(skillName: string): Promise<void> {
 export const skillCommand: Command = {
   name: 'skill <skill-name>',
   description: 'Run a specific context-mill skill by name (or `list` them)',
-  children: [listCommand],
   options: {
     ...skillProgramOptions,
   },
@@ -81,11 +81,8 @@ export const skillCommand: Command = {
   // yargs already enforces the presence of the `<skill-name>` positional, but
   // an explicitly-empty value (`wizard skill ""`) would otherwise slip
   // through to a broken run. Reject it with the same friendly message
-  // the old --skill flag gave. When `wizard skill list` matched the
-  // child instead, yargs leaves the positional unset — the `null` guard
-  // keeps the check from rejecting that route.
+  // the old --skill flag gave.
   check: (argv) => {
-    if (argv.skillName == null && argv['skill-name'] == null) return true;
     if (!readSkillName(argv)) {
       throw new Error(
         'skill needs a skill name, e.g. `wizard skill audit-events`',
@@ -94,6 +91,8 @@ export const skillCommand: Command = {
     return true;
   },
   handler: (argv) => {
+    // `list` is the positional's one reserved value, not a skill id.
+    if (readSkillName(argv) === 'list') return exitWith(listSkills);
     runCommandHandler(async () => {
       const skillName = readSkillName(argv);
       await assertSkillExists(skillName);
