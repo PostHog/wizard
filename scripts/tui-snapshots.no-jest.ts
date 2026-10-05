@@ -28,7 +28,7 @@ for (const k of Object.keys(env))
 
 const cap = captureTui({
   cmd: path.join(process.cwd(), 'node_modules/.bin/tsx'),
-  args: ['scripts/tui-host.no-jest.ts'],
+  args: ['--tsconfig', 'tsconfig.base.json', 'scripts/tui-host.no-jest.ts'],
   cwd: process.cwd(),
   env,
 });
