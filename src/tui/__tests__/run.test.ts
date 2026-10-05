@@ -213,6 +213,30 @@ it("resolves a screen's exit request with its code and starts no end shutdown", 
   expect(unmount).not.toHaveBeenCalled();
 });
 
+it.each([
+  [0, 'cancelled'],
+  [1, 'error'],
+] as const)(
+  'ends a screen exit request %i before the run with a %s shutdown, delivered before the exit',
+  async (code, status) => {
+    const { store } = mountedStore();
+    // The intro never settles: the user leaves from its menu.
+    vi.spyOn(store, 'getGate').mockReturnValue(new Promise(() => undefined));
+    let delivered = false;
+    vi.mocked(analytics.flush).mockImplementation(async () => {
+      await flush();
+      delivered = true;
+    });
+    const exited = runTui(posthogIntegration, launch('/tmp/intro-exit-test'));
+    await vi.waitFor(() => expect(store.getGate).toHaveBeenCalled());
+    store.requestExit(code);
+    await expect(exited).resolves.toBe(code);
+    expect(delivered).toBe(true);
+    expect(analytics.shutdown).toHaveBeenCalledExactlyOnceWith(status);
+    expect(runProgram).not.toHaveBeenCalled();
+  },
+);
+
 it('resolves an abort with its code once its outro is dismissed', async () => {
   const { store } = mountedStore();
   vi.mocked(store.runReadyHooks).mockRejectedValue(

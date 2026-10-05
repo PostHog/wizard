@@ -118,9 +118,21 @@ export async function runTui(
     tui = startTUI(VERSION, config.id, () => onSignal('SIGINT'));
     const activeTui = tui;
     const { store } = activeTui;
-    // A screen's exit request ends the run with no shutdown; start-tui's exit listener unmounts.
+    // A screen's exit request ends the run with no stream shutdown, once analytics report its end; start-tui's exit listener unmounts.
     store.subscribe(() => {
-      if (store.exitRequest !== null && !handedOff) exit.end(store.exitRequest);
+      const code = store.exitRequest;
+      if (code === null || handedOff || exitInProgress || signalled) return;
+      exitInProgress = true;
+      launch.signal.removeEventListener('abort', onAbort);
+      void (async () => {
+        try {
+          await analytics.shutdown(code === 0 ? 'cancelled' : 'error');
+        } catch {
+          logToFile('[run-wizard] exit request shutdown failed');
+        }
+        await flushAnalytics();
+        exit.end(code);
+      })();
     });
 
     const session = buildSession(launch.session);
@@ -244,7 +256,7 @@ export async function runTui(
     await activeStream.finishRun(runFailed ? 'failed' : 'completed');
     await store.waitUntil((s) => s.mintHandoff === 'exit' || s.skillsComplete);
     // A screen already ended the run (KeepSkills after a success): start no flush it would cut off.
-    if (exit.ended) return;
+    if (exit.ended || exitInProgress) return;
 
     exitInProgress = true;
     await activeStream.shutdown(2000);
