@@ -69,6 +69,19 @@ const markDone = (
   store.setMcpComplete(outcome, clients, featuresSelected, loginCommands);
 };
 
+/** Report the outcome as the results show, and complete the step on Enter. */
+const doneOnEnter = (
+  store: WizardStore,
+  outcome: McpOutcome,
+  clients: string[] = [],
+  featuresSelected?: 'all' | string[],
+  loginCommands: string[] = [],
+): (() => void) => {
+  store.reportMcpOutcome(outcome, clients, featuresSelected);
+  return () =>
+    markDone(store, outcome, clients, featuresSelected, loginCommands);
+};
+
 /**
  * The editor-owned login commands still to run after this install: fresh
  * config entries use the client's own server name, plugin-provided servers
@@ -217,7 +230,7 @@ export const McpScreen = ({
         setDetectError(errorText(err));
         // Long error text — wait for enter instead of a 3s auto-dismiss the
         // user can't finish reading.
-        finishFlow.current = () => markDone(store, McpOutcome.Failed);
+        finishFlow.current = doneOnEnter(store, McpOutcome.Failed);
         setPhase(Phase.None);
       }
     })();
@@ -311,14 +324,13 @@ export const McpScreen = ({
     const logins = oauthFlow
       ? pendingLoginCommands(clients, mcpResult, pluginResult)
       : [];
-    finishFlow.current = () =>
-      markDone(
-        store,
-        outcome,
-        ready.map((r) => r.name),
-        featuresReport,
-        logins,
-      );
+    finishFlow.current = doneOnEnter(
+      store,
+      outcome,
+      ready.map((r) => r.name),
+      featuresReport,
+      logins,
+    );
     setPhase(Phase.Done);
   };
 
@@ -334,12 +346,11 @@ export const McpScreen = ({
     const removed = result.filter(isOk);
     const outcome =
       removed.length > 0 ? McpOutcome.Installed : McpOutcome.Failed;
-    finishFlow.current = () =>
-      markDone(
-        store,
-        outcome,
-        removed.map((r) => r.name),
-      );
+    finishFlow.current = doneOnEnter(
+      store,
+      outcome,
+      removed.map((r) => r.name),
+    );
     setPhase(Phase.Done);
   };
 

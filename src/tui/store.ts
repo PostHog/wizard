@@ -103,6 +103,7 @@ export class WizardStore implements TuiView {
 
   /** Gate promises derived from program step definitions. */
   private _gates = new Map<string, GateEntry>();
+  private _mcpOutcomeReported = false;
 
   version = '';
 
@@ -764,12 +765,14 @@ export class WizardStore implements TuiView {
     this.sessions.addDiscoveredFeature(feature);
   }
 
-  setMcpComplete(
-    outcome: McpOutcome = McpOutcome.Skipped,
+  /** Capture the MCP step's outcome once; the screen reports it as the results show, before Enter. */
+  reportMcpOutcome(
+    outcome: McpOutcome,
     installedClients: string[] = [],
     featuresSelected?: 'all' | string[],
-    loginCommands: string[] = [],
   ): void {
+    if (this._mcpOutcomeReported) return;
+    this._mcpOutcomeReported = true;
     const featuresPayload =
       outcome === McpOutcome.Installed && featuresSelected !== undefined
         ? { mcp_features_selected: featuresSelected }
@@ -780,6 +783,15 @@ export class WizardStore implements TuiView {
       ...featuresPayload,
       ...sessionProperties(this.session),
     });
+  }
+
+  setMcpComplete(
+    outcome: McpOutcome = McpOutcome.Skipped,
+    installedClients: string[] = [],
+    featuresSelected?: 'all' | string[],
+    loginCommands: string[] = [],
+  ): void {
+    this.reportMcpOutcome(outcome, installedClients, featuresSelected);
     this._write({
       mcpComplete: true,
       mcpOutcome: outcome,
