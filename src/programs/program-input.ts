@@ -22,7 +22,7 @@ export interface ProgramInput {
   config?: Partial<ProgramConfig>; // laid over the registered config
   credentials?: ResolvedProgramCredentials; // a login you hold; else the store's, else options.credentials
   runId?: string; // labels the program's own run; generated when absent
-  composed?: boolean; // true for a run inside another's: its caller writes the success outro; a failure still records its error outro and the phase
+  composed?: boolean; // true for a run inside another's: its caller writes the success outro; a failure still records its error outro and the phase, a caller cancel its cancel outro
   wizardFlags?: Record<string, string>; // a flag snapshot; else options.featureFlags
   wizardFlagPayloads?: Record<string, unknown>; // payloads for wizardFlags
 }
