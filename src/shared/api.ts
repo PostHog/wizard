@@ -169,15 +169,15 @@ export class ApiError extends Error {
     this.transient = options?.transient ?? false;
   }
 
-  /** A 5xx or a request that got no response: a retry can heal it. */
+  /** A 5xx, 408, 429, or a request that got no response: a retry can heal it. */
   readonly transient: boolean;
 }
 
 /** A hung connection fails into the retry path instead of blocking login. */
 const AUTH_REQUEST_TIMEOUT_MS = 15_000;
-/** Waits 1s, 2s, 4s: rides out a pod restart or deploy blip, not just one dropped socket. */
+/** Waits ~1-2s, 2-4s, 4-8s: rides out a pod restart or deploy blip, not just one dropped socket. */
 const AUTH_MAX_ATTEMPTS = 4;
-const AUTH_BACKOFF_MS = 1_000; // doubles each retry
+const AUTH_BACKOFF_MS = 2_000; // doubles each retry
 
 export interface AuthRetryOpts {
   sleepImpl?: (ms: number) => Promise<void>;
@@ -188,11 +188,19 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-/** 5xx, or no response at all (network, DNS, reset, timeout). 4xx and parse errors are not. */
+/** 5xx, 408, 429, or no response at all (network, DNS, reset, timeout). Other 4xx and parse errors are not. */
 export function isTransientApiError(error: unknown): boolean {
   if (!axios.isAxiosError(error)) return false;
   const status = error.response?.status;
-  return status === undefined || status >= 500;
+  return (
+    status === undefined || status >= 500 || status === 408 || status === 429
+  );
+}
+
+/** Equal jitter: half the delay is fixed, half is random, so clients that failed together do not retry together. */
+function backoffMs(attempt: number): number {
+  const delay = AUTH_BACKOFF_MS * 2 ** (attempt - 1);
+  return delay / 2 + Math.random() * (delay / 2);
 }
 
 /** GET for the idempotent login lookups; retries only what a retry can heal. */
@@ -214,7 +222,7 @@ async function getWithRetry(
       return response.data;
     } catch (error) {
       if (attempt >= maxAttempts || !isTransientApiError(error)) throw error;
-      await sleepImpl(AUTH_BACKOFF_MS * 2 ** (attempt - 1));
+      await sleepImpl(backoffMs(attempt));
     }
   }
 }

@@ -44,13 +44,15 @@ afterEach(() => {
 });
 
 describe('isTransientApiError', () => {
-  it('treats 5xx and no-response errors as transient', () => {
-    expect(isTransientApiError(axiosError({ status: 503 }))).toBe(true);
+  it('treats 5xx, 408, 429, and no-response errors as transient', () => {
+    for (const status of [408, 429, 503]) {
+      expect(isTransientApiError(axiosError({ status }))).toBe(true);
+    }
     expect(isTransientApiError(axiosError({ code: 'ECONNRESET' }))).toBe(true);
   });
 
-  it('does not treat 4xx or parse errors as transient', () => {
-    for (const status of [400, 401, 403, 404, 429]) {
+  it('does not treat other 4xx or parse errors as transient', () => {
+    for (const status of [400, 401, 403, 404]) {
       expect(isTransientApiError(axiosError({ status }))).toBe(false);
     }
     expect(isTransientApiError(new Error('bad shape'))).toBe(false);
@@ -58,15 +60,21 @@ describe('isTransientApiError', () => {
 });
 
 describe('login lookups retry', () => {
-  it('backs off 1s, 2s, 4s between attempts', async () => {
+  it('backs off exponentially with jitter between attempts', async () => {
     vi.spyOn(axios, 'get').mockRejectedValue(axiosError({ status: 502 }));
+    const random = vi.spyOn(Math, 'random');
     const sleepImpl = vi.fn((_ms: number) => Promise.resolve());
+    const waits = async (r: number) => {
+      random.mockReturnValue(r);
+      sleepImpl.mockClear();
+      await expect(
+        fetchUserData('token', BASE_URL, { sleepImpl }),
+      ).rejects.toThrow(ApiError);
+      return sleepImpl.mock.calls.map(([ms]) => ms);
+    };
 
-    await expect(
-      fetchUserData('token', BASE_URL, { sleepImpl }),
-    ).rejects.toThrow(ApiError);
-
-    expect(sleepImpl.mock.calls.map(([ms]) => ms)).toEqual([1000, 2000, 4000]);
+    expect(await waits(0)).toEqual([1000, 2000, 4000]);
+    expect(await waits(0.5)).toEqual([1500, 3000, 6000]);
   });
 
   it('retries a transient failure and then succeeds', async () => {
@@ -122,8 +130,8 @@ describe('handleApiError', () => {
   });
 
   it('names the status of an unmapped 4xx', () => {
-    const err = handleApiError(axiosError({ status: 429 }), 'fetch user data');
-    expect(err.message).toBe('Failed to fetch user data (HTTP 429)');
+    const err = handleApiError(axiosError({ status: 400 }), 'fetch user data');
+    expect(err.message).toBe('Failed to fetch user data (HTTP 400)');
     expect(err.transient).toBe(false);
   });
 });
