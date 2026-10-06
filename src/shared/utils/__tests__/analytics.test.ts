@@ -4,6 +4,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { ANALYTICS_TEAM_TAG, WIZARD_FLAG_KEYS } from '@shared/constants';
 import { VERSION } from '@shared/version';
 import type { ApiUser } from '@shared/api';
+import { ErrorCodes, WizardError } from '@shared/errors';
 
 vi.mock('posthog-node');
 vi.mock('uuid');
@@ -93,6 +94,53 @@ describe('Analytics', () => {
           version: VERSION,
           ...properties,
         },
+      );
+    });
+
+    it('fingerprints a coded error by its code, whatever its stack', () => {
+      const error = new WizardError(
+        'orchestrator drain ended with failed tasks',
+        undefined,
+        ErrorCodes.AgentOrchestratorTasksFailed,
+      );
+
+      analytics.captureException(error);
+
+      expect(mockPostHogInstance.captureException).toHaveBeenCalledWith(
+        error,
+        'test-uuid',
+        expect.objectContaining({
+          $exception_fingerprint: 'wizard_PHW_AGENT_ORCHESTRATOR_TASKS_FAILED',
+        }),
+      );
+    });
+
+    it('fingerprints a plain error by the error_code it is captured with', () => {
+      analytics.captureException(new Error('x'), {
+        error_code: ErrorCodes.AgentYaraViolation,
+      });
+
+      expect(mockPostHogInstance.captureException).toHaveBeenCalledWith(
+        expect.any(Error),
+        'test-uuid',
+        expect.objectContaining({
+          $exception_fingerprint: 'wizard_PHW_AGENT_YARA_VIOLATION',
+        }),
+      );
+    });
+
+    it("keeps a caller's own fingerprint", () => {
+      analytics.captureException(new Error('x'), {
+        error_code: ErrorCodes.AgentYaraViolation,
+        $exception_fingerprint: 'wizard_oauth_invalid_grant',
+      });
+
+      expect(mockPostHogInstance.captureException).toHaveBeenCalledWith(
+        expect.any(Error),
+        'test-uuid',
+        expect.objectContaining({
+          $exception_fingerprint: 'wizard_oauth_invalid_grant',
+        }),
       );
     });
 

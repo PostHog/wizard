@@ -42,7 +42,12 @@ import { logToFile } from '@utils/debug';
 import { ringTerminalBell } from '@utils/terminal-bell';
 import { AGENT_ERROR_CODE } from '../../../error-map';
 import { AgentErrorType } from '../../../agent-interface';
-import { classifyRunFailure, ErrorCodes, WizardError } from '@shared/errors';
+import {
+  classifyRunFailure,
+  type ErrorCode,
+  ErrorCodes,
+  WizardError,
+} from '@shared/errors';
 import type { AgentResult } from '../../harness/types';
 import type { AgentInteraction } from '../../../progress';
 import type {
@@ -469,6 +474,15 @@ export function drainVerdict(tasks: readonly QueuedTask[]): {
     blocked: pending.length,
     blockedTypes: pending.map((t) => t.type),
   };
+}
+
+/** A drain where a required step failed, or where nothing failed but steps were blocked and never ran. */
+export function drainFailureCode(verdict: {
+  requiredFailedTypes: readonly string[];
+}): ErrorCode {
+  return verdict.requiredFailedTypes.length > 0
+    ? ErrorCodes.AgentOrchestratorTasksFailed
+    : ErrorCodes.AgentOrchestratorTasksBlocked;
 }
 
 /**
@@ -1444,11 +1458,14 @@ async function executeOrchestrator(
             ', ',
           )}.\n\nPlease try again, approving all permissions on the PostHog authorization screen. If it still fails, report it to: ${WIZARD_CONTACT_EMAIL}`
         : `The wizard was unable to set up PostHog: ${whatFailed}.\n\nPlease report this to: ${WIZARD_CONTACT_EMAIL}`;
+    const code = drainFailureCode(verdict);
     return failed({
-      code: ErrorCodes.AgentOrchestratorTasksFailed,
+      code,
       message,
       error: new WizardError(
-        'orchestrator drain ended with failed tasks',
+        code === ErrorCodes.AgentOrchestratorTasksFailed
+          ? 'orchestrator drain ended with failed tasks'
+          : 'orchestrator drain ended with blocked tasks',
         {
           tasks_failed: summary.failed,
           tasks_blocked: blocked,
@@ -1456,7 +1473,7 @@ async function executeOrchestrator(
           missing_oauth_scopes: missingScopes.join(' '),
           queue_state: JSON.stringify(store.list()),
         },
-        ErrorCodes.AgentOrchestratorTasksFailed,
+        code,
       ),
     });
   }

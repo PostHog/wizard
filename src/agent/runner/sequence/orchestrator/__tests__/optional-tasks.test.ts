@@ -10,8 +10,10 @@ vi.mock('@utils/analytics', () => ({
 import { QueueStore } from '@agent/runner/sequence/orchestrator/queue';
 import {
   describeDrainFailure,
+  drainFailureCode,
   drainVerdict,
 } from '@agent/runner/sequence/orchestrator/orchestrator-runner';
+import { ErrorCodes } from '@shared/errors';
 
 describe('drainVerdict', () => {
   let dir: string;
@@ -97,5 +99,19 @@ describe('describeDrainFailure', () => {
         blockedTypes: [],
       }),
     ).toBe('the report step failed');
+  });
+});
+
+describe('drainFailureCode', () => {
+  it('names a drain with a failed required step as failed', () => {
+    expect(drainFailureCode({ requiredFailedTypes: ['install'] })).toBe(
+      ErrorCodes.AgentOrchestratorTasksFailed,
+    );
+  });
+
+  it('names a drain where nothing failed but steps never ran as blocked', () => {
+    expect(drainFailureCode({ requiredFailedTypes: [] })).toBe(
+      ErrorCodes.AgentOrchestratorTasksBlocked,
+    );
   });
 });

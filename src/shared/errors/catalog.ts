@@ -230,7 +230,13 @@ export const ERROR_CATALOG: Record<ErrorCode, ErrorCatalogEntry> = {
   [ErrorCodes.AgentOrchestratorTasksFailed]: {
     group: 'agent',
     retry: 'case-by-case',
-    description: 'The orchestrator queue drained with failed or blocked tasks.',
+    description: 'The orchestrator queue drained with failed required tasks.',
+  },
+  [ErrorCodes.AgentOrchestratorTasksBlocked]: {
+    group: 'agent',
+    retry: 'case-by-case',
+    description:
+      'The orchestrator queue drained with no failed task but blocked ones that never ran.',
   },
   [ErrorCodes.AgentOrchestratorHollowRun]: {
     group: 'agent',

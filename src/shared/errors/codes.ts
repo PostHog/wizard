@@ -45,6 +45,7 @@ export const ErrorCodes = {
   AgentOrchestratorSkillVariantMissing:
     'PHW_AGENT_ORCHESTRATOR_SKILL_VARIANT_MISSING',
   AgentOrchestratorTasksFailed: 'PHW_AGENT_ORCHESTRATOR_TASKS_FAILED',
+  AgentOrchestratorTasksBlocked: 'PHW_AGENT_ORCHESTRATOR_TASKS_BLOCKED',
   AgentOrchestratorHollowRun: 'PHW_AGENT_ORCHESTRATOR_HOLLOW_RUN',
   AgentOrchestratorSinkInvariant: 'PHW_AGENT_ORCHESTRATOR_SINK_INVARIANT',
   /** The backend answered the mint with a deliberate refusal. */
