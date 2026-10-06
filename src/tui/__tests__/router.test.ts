@@ -59,8 +59,6 @@ describe('WizardRouter', () => {
     view.mintHandoff = 'continue';
     expect(router.resolve(view)).toBe(ScreenId.Mcp);
     view.mcpComplete = true;
-    expect(router.resolve(view)).toBe(ScreenId.SlackConnect);
-    view.slackStepDismissed = true;
     expect(router.resolve(view)).toBe(ScreenId.KeepSkills);
     view.skillsComplete = true;
     expect(router.resolve(view)).toBe(ScreenId.Exit);
@@ -230,23 +228,11 @@ describe('WizardRouter', () => {
       expect(router.resolve(view)).toBe(ScreenId.Exit);
     });
 
-    it('advances to SlackConnect after a successful install', () => {
+    it('advances to McpSuggestedPrompts after a successful install', () => {
       const router = new WizardRouter(Tool.McpAdd);
       const view = baseView();
       view.mcpComplete = true;
       view.mcpOutcome = McpOutcome.Installed;
-
-      // Slack is the first post-install step (loginless render); the
-      // tutorial follows it.
-      expect(router.resolve(view)).toBe(ScreenId.SlackConnect);
-    });
-
-    it('advances to McpSuggestedPrompts once the Slack step is dismissed', () => {
-      const router = new WizardRouter(Tool.McpAdd);
-      const view = baseView();
-      view.mcpComplete = true;
-      view.mcpOutcome = McpOutcome.Installed;
-      view.slackStepDismissed = true;
 
       expect(router.resolve(view)).toBe(McpScreenId.SuggestedPrompts);
     });
@@ -256,7 +242,6 @@ describe('WizardRouter', () => {
       const view = baseView();
       view.mcpComplete = true;
       view.mcpOutcome = McpOutcome.Installed;
-      view.slackStepDismissed = true;
       view.mcpSuggestedPromptsDismissed = true;
 
       expect(router.resolve(view)).toBe(ScreenId.Exit);

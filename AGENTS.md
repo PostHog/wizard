@@ -60,7 +60,7 @@ Each domain has a dedicated boundary:
   program's flow, deck and screens live in `src/tui/programs/<id>/`, and each
   tool's in `src/tui/tools/<id>/`, entered through its `index` module; the TUI
   core reaches them only through the TUI program and tool registries. A
-  program's flow uses a step a tool also shows, such as Connect Slack, by its
+  program's flow uses a step a tool also shows, such as the MCP install, by its
   core screen id
 - **Headless** → the host with no screens (`runHeadless`) and `LoggingUI` in
   `src/headless/`, which other layers enter only through its one entry,

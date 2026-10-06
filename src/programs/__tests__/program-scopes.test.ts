@@ -15,8 +15,9 @@ describe('posthog-integration scopes', () => {
     expect(scopes).toContain('external_data_source:write');
   });
 
-  it('keeps the Slack outro scope', () => {
-    expect(getOAuthScopesForProgram('posthog-integration')).toContain(
+  // The Slack step left the integration flow, and nothing else in the run reads integrations.
+  it('no longer asks for integration:read', () => {
+    expect(getOAuthScopesForProgram('posthog-integration')).not.toContain(
       'integration:read',
     );
   });

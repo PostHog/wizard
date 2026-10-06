@@ -69,13 +69,13 @@ exports[`keyboard commit vs control action commit > mcp: decline install vs set_
   "action": {
     "mcpComplete": true,
     "mcpOutcome": "skipped",
-    "screen": "slack-connect",
+    "screen": "keep-skills",
   },
   "keyboard": {
     "mcpComplete": true,
     "mcpOutcome": "skipped",
-    "screen": "slack-connect",
-    "slackConnected": false,
+    "screen": "keep-skills",
+    "skillsComplete": true,
   },
 }
 `;
@@ -154,12 +154,11 @@ exports[`keyboard commit vs control action commit > setup: enter on first router
 exports[`keyboard commit vs control action commit > slack-connect: skip vs dismiss_slack 1`] = `
 {
   "action": {
-    "screen": "keep-skills",
+    "screen": "exit",
     "slackStepDismissed": true,
   },
   "keyboard": {
-    "screen": "keep-skills",
-    "skillsComplete": true,
+    "screen": "exit",
     "slackStepDismissed": true,
   },
 }

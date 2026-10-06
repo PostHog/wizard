@@ -2,12 +2,9 @@ import type { FlowStep } from '@tui/flow';
 import { McpOutcome } from '@shared/run-state';
 
 export const MCP_ADD_FLOW: FlowStep[] = [
-  // Order: install → Slack → tutorial. Slack runs before the tutorial
-  // because it renders gracefully without credentials (no surprise
-  // OAuth on the loginless install path). The tutorial is last so its
-  // explicit "Start tutorial" opt-in is the moment OAuth fires — and
-  // skipping the tutorial doesn't bury Slack discovery behind a
-  // dismissal screen.
+  // Order: install → tutorial. The tutorial's explicit "Start tutorial"
+  // opt-in is the moment OAuth fires, so the loginless install path never
+  // gets a surprise login.
   {
     id: 'mcp-add',
     label: 'Add MCP server',
@@ -15,20 +12,11 @@ export const MCP_ADD_FLOW: FlowStep[] = [
     isComplete: (s) => s.mcpComplete,
   },
   {
-    id: 'slack-connect',
-    label: 'Connect Slack',
-    screenId: 'slack-connect',
-    // Gate on a successful install so no-clients / skipped / failed
-    // outcomes go straight to program end without a "what's next" prompt.
-    show: (s) => s.mcpOutcome === McpOutcome.Installed,
-    isComplete: (s) => s.slackStepDismissed,
-  },
-  {
     id: 'mcp-suggested-prompts',
     label: 'Suggested prompts',
     screenId: 'mcp-suggested-prompts',
-    // Same install gate — without a working MCP there's nothing to
-    // talk to from the tutorial.
+    // Gate on a successful install: without a working MCP there's nothing
+    // to talk to, so no-clients / skipped / failed outcomes end the program.
     show: (s) => s.mcpOutcome === McpOutcome.Installed,
     isComplete: (s) => s.mcpSuggestedPromptsDismissed,
     // This step *is* the tutorial, so it reports there rather than to `mcp-add`.
@@ -75,11 +63,5 @@ export const MCP_TUTORIAL_FLOW: FlowStep[] = [
     label: 'MCP tutorial',
     screenId: 'mcp-suggested-prompts',
     isComplete: (s) => s.mcpSuggestedPromptsDismissed,
-  },
-  {
-    id: 'slack-connect',
-    label: 'Connect Slack',
-    screenId: 'slack-connect',
-    isComplete: (s) => s.slackStepDismissed,
   },
 ];

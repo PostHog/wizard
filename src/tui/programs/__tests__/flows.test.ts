@@ -40,7 +40,6 @@ describe('program flows', () => {
       'run',
       'outro',
       'mcp',
-      'slack-connect',
       'keep-skills',
     ]);
   });
