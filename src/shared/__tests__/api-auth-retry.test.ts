@@ -58,6 +58,17 @@ describe('isTransientApiError', () => {
 });
 
 describe('login lookups retry', () => {
+  it('backs off 1s, 2s, 4s between attempts', async () => {
+    vi.spyOn(axios, 'get').mockRejectedValue(axiosError({ status: 502 }));
+    const sleepImpl = vi.fn((_ms: number) => Promise.resolve());
+
+    await expect(
+      fetchUserData('token', BASE_URL, { sleepImpl }),
+    ).rejects.toThrow(ApiError);
+
+    expect(sleepImpl.mock.calls.map(([ms]) => ms)).toEqual([1000, 2000, 4000]);
+  });
+
   it('retries a transient failure and then succeeds', async () => {
     const get = vi
       .spyOn(axios, 'get')
@@ -80,7 +91,7 @@ describe('login lookups retry', () => {
       (e: unknown) => e,
     );
 
-    expect(get).toHaveBeenCalledTimes(3);
+    expect(get).toHaveBeenCalledTimes(4);
     expect(error).toBeInstanceOf(ApiError);
     expect((error as ApiError).message).toMatch(
       /temporarily unavailable \(HTTP 503\)/,

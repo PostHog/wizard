@@ -175,8 +175,9 @@ export class ApiError extends Error {
 
 /** A hung connection fails into the retry path instead of blocking login. */
 const AUTH_REQUEST_TIMEOUT_MS = 15_000;
-const AUTH_MAX_ATTEMPTS = 3;
-const AUTH_BACKOFF_MS = 500; // doubles each retry
+/** Waits 1s, 2s, 4s: rides out a pod restart or deploy blip, not just one dropped socket. */
+const AUTH_MAX_ATTEMPTS = 4;
+const AUTH_BACKOFF_MS = 1_000; // doubles each retry
 
 export interface AuthRetryOpts {
   sleepImpl?: (ms: number) => Promise<void>;
