@@ -517,6 +517,8 @@ const NON_MUTATING = [
   'subscribe',
   // Forwards the ask bridge's timeout heartbeat; holds no session state.
   'noteAskProgress',
+  // Captures the MCP outcome; holds no session state.
+  'reportMcpOutcome',
   'getSnapshot',
   'getVersion',
   'runInitHooks',

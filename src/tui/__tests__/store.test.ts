@@ -517,7 +517,7 @@ describe('WizardStore', () => {
       );
 
       wizardCaptureMock.mockClear();
-      store.setMcpComplete(
+      createStore().setMcpComplete(
         McpOutcome.Installed,
         ['Cursor'],
         ['dashboards', 'insights'],
