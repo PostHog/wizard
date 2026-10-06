@@ -62,13 +62,6 @@ export const POSTHOG_INTEGRATION_FLOW: FlowStep[] = [
     isComplete: (tui) => tui.mcpComplete,
   },
   {
-    id: 'slack-connect',
-    label: 'Connect Slack',
-    screenId: 'slack-connect',
-    // Always shown — the user declines via Skip/esc, never bypassed.
-    isComplete: (tui) => tui.slackStepDismissed,
-  },
-  {
     id: 'keep-skills',
     label: 'Keep Skills',
     screenId: 'keep-skills',

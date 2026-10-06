@@ -190,7 +190,7 @@ const PAIRS: Pair[] = [
   {
     name: 'mcp: decline install vs set_mcp_outcome skipped',
     knownDivergence:
-      'keyboard path records extra MCP state the action does not',
+      'keyboard path lands on keep-skills, whose mount scan sets skillsComplete; the action only records the MCP outcome',
     program: Program.PostHogIntegration,
     screen: ScreenId.Mcp,
     ready: (_, frame) => frame.includes('esc cancel'),
@@ -206,17 +206,12 @@ const PAIRS: Pair[] = [
   },
   {
     name: 'slack-connect: skip vs dismiss_slack',
-    knownDivergence:
-      'keyboard path and dismiss_slack commit different slack step state',
-    program: Program.PostHogIntegration,
+    // Only `wizard slack` shows this screen now that no program flow does.
+    program: 'slack',
     screen: ScreenId.SlackConnect,
     ready: (_, frame) => frame.includes('esc skip'),
     arrange: (s) => {
-      confirmed(s);
       authed(s);
-      ran(s);
-      s.setOutroDismissed();
-      s.setMcpComplete(McpOutcome.Skipped);
     },
     keys: [DOWN, ENTER],
     action: 'dismiss_slack',
