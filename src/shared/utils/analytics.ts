@@ -17,6 +17,7 @@ import type { ApiUser } from '@shared/api';
 import { v4 as uuidv4 } from 'uuid';
 import { IS_PRODUCTION_BUILD, RUN_SURFACE, TASK_ID, TASK_RUN_ID } from '@env';
 import { VERSION } from '@shared/version';
+import { WizardError } from '@shared/errors';
 import { logToFile } from './debug';
 import { applyCiFlagOverrides } from './ci-flag-overrides';
 
@@ -275,8 +276,13 @@ export class Analytics {
   }
 
   captureException(error: Error, properties: Record<string, unknown> = {}) {
+    const code =
+      (error instanceof WizardError && error.code) ||
+      (typeof properties.error_code === 'string' ? properties.error_code : '');
     this.client.captureException(error, this.distinctId ?? this.anonymousId, {
       team: ANALYTICS_TEAM_TAG,
+      // One issue per error code: the stack's install path and chunk hash otherwise split it per route and release.
+      ...(code ? { $exception_fingerprint: `wizard_${code}` } : {}),
       ...this.tags,
       ...properties,
     });
