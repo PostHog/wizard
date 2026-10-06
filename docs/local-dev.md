@@ -11,7 +11,7 @@ Local `--ci` runs, smoke tests, and full headless/snapshot agent runs need
 | Input | Purpose | How to pass it |
 |---|---|---|
 | PostHog personal API key (`phx_...`) | PostHog API and MCP authentication | CLI: `--api-key` / `POSTHOG_WIZARD_API_KEY`; smoke helper: `POSTHOG_PERSONAL_API_KEY`; TUI e2e host (`scripts/tui-host.no-jest.ts`): `POSTHOG_PERSONAL_API_KEY` or `POSTHOG_KEY_FILE` |
-| Already-issued AI gateway bearer | Model calls | `WIZARD_CI_GATEWAY_TOKEN_FILE`, an absolute path to a file containing only the token |
+| Gateway service key (`phs_...`, in 1Password) | Model calls | `WIZARD_CI_GATEWAY_TOKEN_FILE`, an absolute path to a file containing only the key |
 | Target project ID | Project selection and gateway attribution | CLI: `--project-id` / `POSTHOG_WIZARD_PROJECT_ID`; TUI e2e host: `PROJECT_ID` (MCP: `projectId`) |
 
 The personal API key is not the gateway token. CI reads the gateway token
@@ -20,7 +20,16 @@ file outside the repo, restrict its permissions (`chmod 600`), and supply a
 valid token for the gateway being used. Missing, expired, or rejected tokens
 fail the run.
 
-With your personal API key already exported and gateway token saved locally:
+Pass both keys when you develop: the personal API key for MCP access and the
+gateway service key. The gateway service key is in 1Password. Save it to the
+token file once:
+
+```bash
+op read "op://<vault>/<item>/credential" > "$HOME/.config/posthog/wizard-gateway-token"
+chmod 600 "$HOME/.config/posthog/wizard-gateway-token"
+```
+
+With your personal API key exported and the gateway token saved:
 
 ```bash
 export WIZARD_CI_GATEWAY_TOKEN_FILE="$HOME/.config/posthog/wizard-gateway-token"

@@ -251,8 +251,9 @@ The following CLI arguments are available:
 **CI mode is available only in development/test builds.** Published builds
 reject `--ci`; use an interactive terminal for `npx @posthog/wizard@latest`.
 
-Local CI runs require a PostHog personal API key **and a separate gateway
-token file**, plus the target project ID. See
+Local CI runs require a PostHog personal API key for MCP access **and a
+separate gateway token file** holding the gateway service key from 1Password,
+plus the target project ID. See
 [local credentials](docs/local-dev.md#credentials-for-local-ci-and-headless-runs)
 for setup and the CI secret names. With both secrets configured:
 
@@ -817,7 +818,7 @@ This repo includes a helper script to run a full end‑to‑end smoke test of th
   - Cloning `wizard-workbench` next to this repo (so it lives at `../wizard-workbench`).
 - Set `POSTHOG_PERSONAL_API_KEY` either in your shell or in `../wizard-workbench/.env`.
 - Set `WIZARD_CI_GATEWAY_TOKEN_FILE` to an absolute path containing the separate
-  AI gateway token. See [local credentials](docs/local-dev.md#credentials-for-local-ci-and-headless-runs).
+  gateway service key from 1Password. See [local credentials](docs/local-dev.md#credentials-for-local-ci-and-headless-runs).
 - Set `POSTHOG_WIZARD_PROJECT_ID` to the intended test project and
   `POSTHOG_WIZARD_REGION` to `us` or `eu` (CI uses `us`). The helper also accepts
   `POSTHOG_PROJECT_ID` and `POSTHOG_REGION` as fallback names.
