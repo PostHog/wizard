@@ -46,6 +46,9 @@ import type { WizardStore } from './store.js';
 import type { TuiLaunch } from './launch.js';
 import { tuiWorkflow } from './workflow.js';
 
+/** How long a screen's exit request waits for analytics before it exits anyway. */
+const EXIT_REPORT_BUDGET_MS = 2000;
+
 /**
  * Run `config` in the TUI. Resolves with the exit code: the run's, a screen's
  * exit request, a decided failure's through `wizardAbort`, or 130 or 143 on a signal.
@@ -118,9 +121,25 @@ export async function runTui(
     tui = startTUI(VERSION, config.id, () => onSignal('SIGINT'));
     const activeTui = tui;
     const { store } = activeTui;
-    // A screen's exit request ends the run with no shutdown; start-tui's exit listener unmounts.
+    // A screen's exit request unmounts, reports the run's end within a bounded wait, then exits with no stream shutdown.
     store.subscribe(() => {
-      if (store.exitRequest !== null && !handedOff) exit.end(store.exitRequest);
+      const code = store.exitRequest;
+      if (code === null || handedOff || exitInProgress || signalled) return;
+      exitInProgress = true;
+      launch.signal.removeEventListener('abort', onAbort);
+      activeTui.unmount();
+      const report = async (): Promise<void> => {
+        try {
+          await analytics.shutdown(code === 0 ? 'cancelled' : 'error');
+        } catch {
+          logToFile('[run-wizard] exit request shutdown failed');
+        }
+        await flushAnalytics();
+      };
+      void Promise.race([
+        report(),
+        new Promise((resolve) => setTimeout(resolve, EXIT_REPORT_BUDGET_MS)),
+      ]).then(() => exit.end(code));
     });
 
     const session = buildSession(launch.session);
@@ -244,7 +263,7 @@ export async function runTui(
     await activeStream.finishRun(runFailed ? 'failed' : 'completed');
     await store.waitUntil((s) => s.mintHandoff === 'exit' || s.skillsComplete);
     // A screen already ended the run (KeepSkills after a success): start no flush it would cut off.
-    if (exit.ended) return;
+    if (exit.ended || exitInProgress) return;
 
     exitInProgress = true;
     await activeStream.shutdown(2000);
