@@ -1,13 +1,15 @@
 # Developer interfaces
 
 There are four ways to run the wizard. Most end users run it from the TUI. The
-headless host runs the same programs without a terminal UI. `runProgram` runs
-one program on a session store you own, and `runAgent` runs only the agent.
+headless host runs the same programs without a terminal UI. Published builds
+reject `--ci`, so a headless run needs a checkout or a `build:ci` build.
+`runProgram` runs one program on a session store you own, and `runAgent` runs
+only the agent.
 
 | Way          | Entry                                                                                                     | Use it for                                            | Reference                                                                    |
 | ------------ | --------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- | ---------------------------------------------------------------------------- |
 | TUI          | `npx @posthog/wizard`, through [`runTui`](../src/tui/run.ts)                                              | End users setting up PostHog in a terminal            | [README](../README.md#what-calls-what)                                       |
-| Headless     | `npx @posthog/wizard --ci`, through [`runHeadless`](../src/headless/run.ts)                               | CI and scripts, with no screens                       | [Local credentials](local-dev.md#credentials-for-local-ci-and-headless-runs) |
+| Headless     | `pnpm try --ci` in a checkout, through [`runHeadless`](../src/headless/run.ts)                            | CI and scripts, with no screens                       | [Local credentials](local-dev.md#credentials-for-local-ci-and-headless-runs) |
 | `runProgram` | `runProgram(programId, input, options)` from `@programs`                                                  | One program, from code, with its policy and telemetry | [`runProgram`](#runprogram), [programs reference](../src/programs/README.md) |
 | `runAgent`   | `runAgent(config, input, options)` from `@agent`                                                          | Only the agent, from a resolved config                | [`runAgent`](#runagent), [agent reference](../src/agent/README.md)           |
 
@@ -142,7 +144,8 @@ Run it from the repository root against the [local stack](local-dev.md):
 npx tsx --tsconfig tsconfig.json docs/examples/run-program-quack.ts
 ```
 
-It prints `reply: quack`, `phase: completed` and `outcome: success`.
+It prints `reply: quack` and `outcome: success`. A failed run also prints
+`failure:` with its message.
 
 ### Cancellation
 
@@ -155,9 +158,11 @@ them once it does. A cancelled run resolves to `aborted`, not a rejection.
 Most endings resolve to an outcome instead of throwing. Check `outcome` and read
 `failure`; the store holds the same failure as its error outro. The promise
 rejects only when the call itself can't run, such as an input field that can't
-be copied, or when the program's detection or `run` throws something other than
-a `ProgramAbort`. A rejection records its error outro and code in the store
-first. The cases are in [`run-program.ts`](../src/programs/run-program.ts).
+be copied, or when resolving the program's `run` or an agent run throws
+something other than a `ProgramAbort`. A detection throw resolves to `crashed`
+with the error attached. A rejection records its error outro and code in the
+store first. The cases are in
+[`run-program.ts`](../src/programs/run-program.ts).
 
 ### Runs in one process
 
@@ -263,8 +268,8 @@ pre-issued one in `input.credentials.gateway`, as the quack example does.
 
 [`run-agent-quack.ts`](examples/run-agent-quack.ts) is the smallest `runAgent`
 call. It builds a `RunConfig` with one prompt and no Write, Edit or Bash, and
-prints the transcript tail and the outcome. It logs in with `HostResolution`,
-`fetchUserData` and `fetchProjectData` from `@shared`, and imports nothing from
+prints the transcript tail and the outcome. It logs in with
+`resolveApiKeyProject` from `@shared/api-key-login`, and imports nothing from
 `@programs`. Each step has a comment.
 
 ```bash

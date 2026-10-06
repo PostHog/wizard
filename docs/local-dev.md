@@ -10,9 +10,9 @@ Local `--ci` runs, smoke tests, and full headless/snapshot agent runs need
 
 | Input | Purpose | How to pass it |
 |---|---|---|
-| PostHog personal API key (`phx_...`) | PostHog API and MCP authentication | CLI: `--api-key` / `POSTHOG_WIZARD_API_KEY`; smoke helper: `POSTHOG_PERSONAL_API_KEY`; headless host: `POSTHOG_PERSONAL_API_KEY` or `POSTHOG_KEY_FILE` |
+| PostHog personal API key (`phx_...`) | PostHog API and MCP authentication | CLI: `--api-key` / `POSTHOG_WIZARD_API_KEY`; smoke helper: `POSTHOG_PERSONAL_API_KEY`; TUI e2e host (`scripts/tui-host.no-jest.ts`): `POSTHOG_PERSONAL_API_KEY` or `POSTHOG_KEY_FILE` |
 | Already-issued AI gateway bearer | Model calls | `WIZARD_CI_GATEWAY_TOKEN_FILE`, an absolute path to a file containing only the token |
-| Target project ID | Project selection and gateway attribution | CLI: `--project-id` / `POSTHOG_WIZARD_PROJECT_ID`; headless host: `PROJECT_ID` (MCP: `projectId`) |
+| Target project ID | Project selection and gateway attribution | CLI: `--project-id` / `POSTHOG_WIZARD_PROJECT_ID`; TUI e2e host: `PROJECT_ID` (MCP: `projectId`) |
 
 The personal API key is not the gateway token. CI reads the gateway token
 from the file and uses it directly; it does not mint or refresh one. Keep the
@@ -207,7 +207,8 @@ override.
 
 With `wizard-run`, an authenticated interactive execution creates one local
 WizardRun when the agent starts. Creation uses the selected top-level
-`ProgramConfig.id`, the resolved API host and project, the target folder's
+`ProgramConfig.id`, the credentials' app host (`credentials.host.appHost`) and
+project, the target folder's
 basename as its display name, and the package version. Program IDs must exist in the backend registry and
 support local folders; a rejected configuration disables run synchronization
 without selecting a different program. The analytics `run_id`, session
@@ -255,7 +256,8 @@ serializer help text describes cloud creation. No run ID is persisted for reuse.
 
 `POSTHOG_WIZARD_RUN_ID` is the explicit UUID assignment for a WizardRun-backed
 cloud execution. The strict CLI parser accepts it as the hidden `--run-id`
-option. The authenticated launcher's API host and project are fixed for that
+option. The authenticated launcher's app host (`credentials.host.appHost`) and
+project are fixed for that
 execution. Invalid assignments stop synchronization; they never trigger a local
 POST or session fallback. Assigned cloud executions only publish tasks: the
 worker owns terminal status after artifact publication. The assignment is not
