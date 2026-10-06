@@ -60,21 +60,15 @@ describe('isTransientApiError', () => {
 });
 
 describe('login lookups retry', () => {
-  it('backs off exponentially with jitter between attempts', async () => {
+  it('backs off 1s, 2s, 4s between attempts', async () => {
     vi.spyOn(axios, 'get').mockRejectedValue(axiosError({ status: 502 }));
-    const random = vi.spyOn(Math, 'random');
     const sleepImpl = vi.fn((_ms: number) => Promise.resolve());
-    const waits = async (r: number) => {
-      random.mockReturnValue(r);
-      sleepImpl.mockClear();
-      await expect(
-        fetchUserData('token', BASE_URL, { sleepImpl }),
-      ).rejects.toThrow(ApiError);
-      return sleepImpl.mock.calls.map(([ms]) => ms);
-    };
 
-    expect(await waits(0)).toEqual([1000, 2000, 4000]);
-    expect(await waits(0.5)).toEqual([1500, 3000, 6000]);
+    await expect(
+      fetchUserData('token', BASE_URL, { sleepImpl }),
+    ).rejects.toThrow(ApiError);
+
+    expect(sleepImpl.mock.calls.map(([ms]) => ms)).toEqual([1000, 2000, 4000]);
   });
 
   it('retries a transient failure and then succeeds', async () => {

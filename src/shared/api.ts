@@ -175,9 +175,9 @@ export class ApiError extends Error {
 
 /** A hung connection fails into the retry path instead of blocking login. */
 const AUTH_REQUEST_TIMEOUT_MS = 15_000;
-/** Waits ~1-2s, 2-4s, 4-8s: rides out a pod restart or deploy blip, not just one dropped socket. */
+/** Waits 1s, 2s, 4s: rides out a pod restart or deploy blip, not just one dropped socket. */
 const AUTH_MAX_ATTEMPTS = 4;
-const AUTH_BACKOFF_MS = 2_000; // doubles each retry
+const AUTH_BACKOFF_MS = 1_000; // doubles each retry
 
 export interface AuthRetryOpts {
   sleepImpl?: (ms: number) => Promise<void>;
@@ -195,12 +195,6 @@ export function isTransientApiError(error: unknown): boolean {
   return (
     status === undefined || status >= 500 || status === 408 || status === 429
   );
-}
-
-/** Equal jitter: half the delay is fixed, half is random, so clients that failed together do not retry together. */
-function backoffMs(attempt: number): number {
-  const delay = AUTH_BACKOFF_MS * 2 ** (attempt - 1);
-  return delay / 2 + Math.random() * (delay / 2);
 }
 
 /** GET for the idempotent login lookups; retries only what a retry can heal. */
@@ -222,7 +216,7 @@ async function getWithRetry(
       return response.data;
     } catch (error) {
       if (attempt >= maxAttempts || !isTransientApiError(error)) throw error;
-      await sleepImpl(backoffMs(attempt));
+      await sleepImpl(AUTH_BACKOFF_MS * 2 ** (attempt - 1));
     }
   }
 }
