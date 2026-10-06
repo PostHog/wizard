@@ -10,10 +10,10 @@ export type TuiLaunch = {
   runId?: string; // the cloud WizardRun this run reports under
   credentials?: CredentialsProvider; // the login for the run; the browser OAuth login when absent
   onStore?: (store: WizardStore) => void; // the in-process e2e host: the store once it exists
-  signal: AbortSignal; // the CLI aborts it on SIGINT or SIGTERM, with the signal name as the reason
+  signal: AbortSignal; // the CLI aborts it on SIGINT, SIGTERM or SIGHUP, with the signal name as the reason
 };
 
 export type TuiToolLaunch = {
   session: SessionArgs & Pick<TuiLaunchChoices, 'mcpFeatures'>;
-  signal: AbortSignal; // the CLI aborts it on SIGINT or SIGTERM, with the signal name as the reason
+  signal: AbortSignal; // the CLI aborts it on SIGINT, SIGTERM or SIGHUP, with the signal name as the reason
 };

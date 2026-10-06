@@ -4,15 +4,15 @@ The CLI is the composition root. It parses argv, registers the commands, and
 picks the host a run goes to: the TUI host (`runTui` from `@tui`) for an
 interactive run, or the headless host (`runHeadless` from `@headless`) for a
 `--ci` or headless run. It builds the host's launch values from the arguments
-and the environment, aborts the host's signal on SIGINT or SIGTERM, and exits
-with the code the host resolves. Only the CLI and `bin.ts` call `process.exit`:
-a host's run ends through `withSignals` or `exitWith`. It never runs a program
-itself: each host calls `runProgram`. A tool's command calls the tool's runner
-the same way: `runTuiTool` from `@tui` for its screens, or a console runner from
-`@tools`; see [`src/tools`](../tools/README.md). It is the only layer that
-imports both the TUI and the headless layer, and it loads each host only when a
-command needs it, so a headless run never loads the TUI and a TUI run never
-loads headless.
+and the environment, aborts the host's signal on SIGINT, SIGTERM or SIGHUP, and
+exits with the code the host resolves. Only the CLI and `bin.ts` call
+`process.exit`: a host's run ends through `withSignals` or `exitWith`. It never
+runs a program itself: each host calls `runProgram`. A tool's command calls the
+tool's runner the same way: `runTuiTool` from `@tui` for its screens, or a
+console runner from `@tools`; see [`src/tools`](../tools/README.md). It is the
+only layer that imports both the TUI and the headless layer, and it loads each
+host only when a command needs it, so a headless run never loads the TUI and a
+TUI run never loads headless.
 
 ## Entry and imports
 

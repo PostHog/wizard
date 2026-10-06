@@ -294,6 +294,7 @@ it('keeps a run a success when its terminal analytics flush fails', async () => 
 it.each([
   ['SIGINT', 130],
   ['SIGTERM', 143],
+  ['SIGHUP', 130],
 ] as const)(
   'a %s cancels the run and runs the cleanups, settles the stream as cancelled and resolves %i',
   async (name, code) => {

@@ -293,7 +293,7 @@ is optional.
 | Field           | In                            | What it's for                                                                                                |
 | --------------- | ----------------------------- | ------------------------------------------------------------------------------------------------------------ |
 | `session`       | All three                     | The launch values, as `SessionArgs`. A TUI launch adds the TUI's own choices, `integrate` and `mcpFeatures`. |
-| `signal`        | All three                     | The CLI aborts it on SIGINT or SIGTERM, with the signal name as the reason.                                  |
+| `signal`        | All three                     | The CLI aborts it on SIGINT, SIGTERM or SIGHUP, with the signal name as the reason.                          |
 | `mode`          | `HeadlessLaunch`              | `ci` dumps the task stream to a local file, and `headless` streams it to PostHog.                            |
 | `credentials`   | `TuiLaunch`                   | The login for the run. The browser OAuth login when absent.                                                  |
 | `skillId`       | `TuiLaunch`                   | The skill to run, from `--skill` or `wizard skill <id>`. Else the program's own.                             |
@@ -303,5 +303,5 @@ is optional.
 
 A host resolves 0 when the run succeeds and 1 when a decided failure ends it,
 unless the failure names another code. `runTuiTool` resolves the code a screen
-requests. Every host resolves 130 on SIGINT and 143 on SIGTERM. Only the CLI and
-`bin.ts` call `process.exit`.
+requests. Every host resolves 130 on SIGINT or SIGHUP and 143 on SIGTERM. Only
+the CLI and `bin.ts` call `process.exit`.

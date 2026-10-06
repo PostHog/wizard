@@ -158,8 +158,8 @@ no distinguishing signal is available. The Pi harness reports every 401 as
   on the terminal push matches the stderr code for the same session id.
 - **Decide:** use the catalog `retry` column for re-run policy; `no` codes need
   human/config intervention, `yes` codes are safe to retry after backoff.
-- **Exit codes:** 0 means success. 130 (SIGINT) or 143 (SIGTERM) without a code
-  means a cancel.
+- **Exit codes:** 0 means success. 130 (SIGINT or SIGHUP) or 143 (SIGTERM)
+  without a code means a cancel.
 
 ## Extending the catalog
 

@@ -70,7 +70,7 @@ vi.mock(import('@host/wizard-abort'), async (importOriginal) => ({
 describe('CLI argument parsing', () => {
   const originalArgv = process.argv;
   const originalSignals = new Map(
-    (['SIGINT', 'SIGTERM'] as const).map(
+    (['SIGINT', 'SIGTERM', 'SIGHUP'] as const).map(
       (signal) => [signal, process.listeners(signal)] as const,
     ),
   );

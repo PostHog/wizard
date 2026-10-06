@@ -61,7 +61,7 @@ export type HeadlessLaunch = {
   session: SessionArgs; // launch values, flags already merged over the environment
   taskStreamLog?: string; // --task-stream-log: a path, or '' for the default one
   runId?: string; // the cloud WizardRun this run reports under
-  signal: AbortSignal; // the CLI aborts it on SIGINT or SIGTERM, with the signal name as the reason
+  signal: AbortSignal; // the CLI aborts it on SIGINT, SIGTERM or SIGHUP, with the signal name as the reason
 };
 
 /** Run `config` headlessly. Resolves with the exit code: 0, a failure's through `wizardAbort`, or 130 or 143 on a signal. */
