@@ -31,13 +31,17 @@ import {
   WIZARD_PROVISIONING_SCOPES,
 } from '@shared/constants';
 import { installSkillById } from '@shared/skill-install';
-import { scanInstalledSkill } from '../../../yara-hooks';
+import {
+  formatYaraAbortMessage,
+  scanInstalledSkill,
+} from '../../../yara-hooks';
 import { fetchSkillMenu, type SkillEntry } from '@shared/skill-menu';
 import { analytics } from '@utils/analytics';
 import { ciExcludedTaskTypes } from '@utils/ci-flag-overrides';
 import { logToFile } from '@utils/debug';
 import { ringTerminalBell } from '@utils/terminal-bell';
 import { AGENT_ERROR_CODE } from '../../../error-map';
+import { AgentErrorType } from '../../../agent-interface';
 import { classifyRunFailure, ErrorCodes, WizardError } from '@shared/errors';
 import type { AgentResult } from '../../harness/types';
 import type { AgentInteraction } from '../../../progress';
@@ -166,7 +170,8 @@ function requireTaskHarness(pick: HarnessPick): AgentHarness & {
   };
 }
 
-function terminalResult(
+/** How an agent result ends the run, or undefined when it doesn't. */
+export function terminalResult(
   result: AgentResult,
 ): { outcome: RunOutcome.Failed; failure: AgentFailure } | undefined {
   switch (result.kind) {
@@ -189,7 +194,11 @@ function terminalResult(
         outcome: RunOutcome.Failed,
         failure: {
           code: AGENT_ERROR_CODE[result.classification],
-          message: result.message ?? 'Agent failed',
+          // A security stop says so, as the linear sequence does.
+          message:
+            result.classification === AgentErrorType.YARA_VIOLATION
+              ? formatYaraAbortMessage()
+              : result.message ?? 'Agent failed',
           error: result.error,
         },
       };

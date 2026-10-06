@@ -5,6 +5,7 @@ import { HostResolution } from '@shared/host-resolution';
 import { WizardReadiness } from '@shared/health-checks/readiness';
 import { WizardRouter, ScreenId, Overlay, Program } from '@tui/router';
 import { Integration } from '@shared/constants';
+import { ErrorCodes } from '@shared/errors';
 import { FRAMEWORK_REGISTRY, PROGRAM_REGISTRY } from '@programs';
 import { ErrorTrackingScreenId } from '@tui/programs/error-tracking';
 import { McpScreenId } from '@tui/tools/mcp';
@@ -40,6 +41,17 @@ describe('WizardRouter', () => {
       expect(router.resolve(view)).toBe(ScreenId.MintFailure);
     },
   );
+
+  it('shows a security stop on its own outro, never the busy handoff', () => {
+    const router = new WizardRouter(Program.PostHogIntegration);
+    const view = failedRunView();
+    view.session.outroData = {
+      kind: OutroKind.Error,
+      message: 'Security check stopped the setup.',
+      errorCode: ErrorCodes.AgentYaraViolation,
+    };
+    expect(router.resolve(view)).not.toBe(ScreenId.MintFailure);
+  });
 
   it('continues a failed run through the post-run steps, then exits', () => {
     const router = new WizardRouter(Program.SelfDriving);
