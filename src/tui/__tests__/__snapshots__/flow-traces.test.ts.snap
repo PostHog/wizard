@@ -417,20 +417,14 @@ exports[`flow traces per program > mcp-tutorial (node) 1`] = `
 {
   "events": [
     {
-      "event": "screen slack-connect",
-      "from": "mcp-suggested-prompts",
-      "program": "mcp-tutorial",
-    },
-    {
       "event": "screen exit",
-      "from": "slack-connect",
+      "from": "mcp-suggested-prompts",
       "program": "mcp-tutorial",
     },
   ],
   "program": "mcp-tutorial",
   "screens": [
     "mcp-suggested-prompts",
-    "slack-connect",
     "exit",
   ],
   "stoppedOn": null,
@@ -629,13 +623,8 @@ exports[`flow traces per program > posthog-integration (nextjs, with a setup que
       "program": "posthog-integration",
     },
     {
-      "event": "screen slack-connect",
-      "from": "mcp",
-      "program": "posthog-integration",
-    },
-    {
       "event": "screen keep-skills",
-      "from": "slack-connect",
+      "from": "mcp",
       "program": "posthog-integration",
     },
   ],
@@ -649,7 +638,6 @@ exports[`flow traces per program > posthog-integration (nextjs, with a setup que
     "run",
     "outro",
     "mcp",
-    "slack-connect",
     "keep-skills",
   ],
   "stoppedOn": null,
@@ -695,13 +683,8 @@ exports[`flow traces per program > posthog-integration (no framework detected) 1
       "program": "posthog-integration",
     },
     {
-      "event": "screen slack-connect",
-      "from": "mcp",
-      "program": "posthog-integration",
-    },
-    {
       "event": "screen keep-skills",
-      "from": "slack-connect",
+      "from": "mcp",
       "program": "posthog-integration",
     },
   ],
@@ -714,7 +697,6 @@ exports[`flow traces per program > posthog-integration (no framework detected) 1
     "run",
     "outro",
     "mcp",
-    "slack-connect",
     "keep-skills",
   ],
   "stoppedOn": null,
@@ -760,13 +742,8 @@ exports[`flow traces per program > posthog-integration (node) 1`] = `
       "program": "posthog-integration",
     },
     {
-      "event": "screen slack-connect",
-      "from": "mcp",
-      "program": "posthog-integration",
-    },
-    {
       "event": "screen keep-skills",
-      "from": "slack-connect",
+      "from": "mcp",
       "program": "posthog-integration",
     },
   ],
@@ -779,7 +756,6 @@ exports[`flow traces per program > posthog-integration (node) 1`] = `
     "run",
     "outro",
     "mcp",
-    "slack-connect",
     "keep-skills",
   ],
   "stoppedOn": null,

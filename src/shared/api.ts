@@ -306,6 +306,8 @@ export async function fetchGithubConnected(
   const response = await axios.get(
     `${baseUrl}/api/projects/${projectId}/integrations/`,
     {
+      // The list is paged, so a project with many integrations could push GitHub off page one.
+      params: { kind: 'github' },
       headers: {
         Authorization: `Bearer ${accessToken}`,
         'User-Agent': WIZARD_USER_AGENT,

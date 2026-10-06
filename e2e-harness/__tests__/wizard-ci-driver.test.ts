@@ -68,13 +68,12 @@ describe('WizardCiDriver — full integration flow', () => {
     driver.performAction('continue_setup');
     expect(driver.readState().currentScreen).toBe(ScreenId.Mcp);
     driver.performAction('set_mcp_outcome', { outcome: 'skipped' });
-    driver.performAction('dismiss_slack');
     expect(driver.readState().currentScreen).toBe(ScreenId.KeepSkills);
     driver.performAction('keep_skills', { kept: true });
     expect(driver.readState().currentScreen).toBe(ScreenId.Exit);
   });
 
-  it('walks intro → setup → run → outro → mcp → slack → keep-skills', async () => {
+  it('walks intro → setup → run → outro → mcp → keep-skills', async () => {
     const store = await freshStore();
     const driver = new WizardCiDriver(store);
 
@@ -124,11 +123,7 @@ describe('WizardCiDriver — full integration flow', () => {
     driver.performAction('set_mcp_outcome', { outcome: 'skipped' });
     expect(store.mcpOutcome).toBe(McpOutcome.Skipped);
 
-    // 8. Slack
-    expect(driver.readState().currentScreen).toBe(ScreenId.SlackConnect);
-    driver.performAction('dismiss_slack');
-
-    // 9. Keep skills — terminal commit.
+    // 8. Keep skills — terminal commit.
     expect(driver.readState().currentScreen).toBe(ScreenId.KeepSkills);
     const done = driver.performAction('keep_skills', { kept: true });
 

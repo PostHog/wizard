@@ -317,7 +317,7 @@ export const McpScreen = ({
     setMcpResults(mcpResult);
     setPluginResults(pluginResult);
     // Already-installed counts as installed: the user ends up with a working
-    // MCP either way, so the follow-on steps (Slack, tutorial) still apply.
+    // MCP either way, so the follow-on tutorial still applies.
     const ready = [...mcpResult, ...pluginResult].filter(isOk);
     const outcome = ready.length > 0 ? McpOutcome.Installed : McpOutcome.Failed;
     const featuresReport = reportFeatures(features ?? [...ALL_FEATURE_VALUES]);

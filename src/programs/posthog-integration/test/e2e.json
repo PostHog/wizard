@@ -1,6 +1,6 @@
 {
   "program": "posthog-integration",
-  "summary": "Happy path: confirm intro, push past health issues, take the first setup option, skip MCP + Slack, delete installed skills.",
+  "summary": "Happy path: confirm intro, push past health issues, take the first setup option, skip MCP, delete installed skills.",
   "profile": {
     "setup": "first",
     "healthCheck": "dismiss",
@@ -50,7 +50,6 @@
     },
     { "screen": "outro", "auto": "dismiss" },
     { "screen": "mcp", "auto": "skip — don't install the MCP server" },
-    { "screen": "slack-connect", "auto": "skip" },
     {
       "screen": "keep-skills",
       "auto": "delete — leave nothing behind (terminal: the run's done-signal)"

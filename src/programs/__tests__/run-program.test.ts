@@ -964,7 +964,8 @@ describe('runProgram', () => {
         },
       }[gate];
 
-      const pending = runProgram('metrics', input(), {
+      const s = store();
+      const pending = runProgram('metrics', input({ store: s }), {
         ...options,
         signal: controller.signal,
       });
@@ -978,9 +979,43 @@ describe('runProgram', () => {
           message: 'Run cancelled by the caller.',
         },
       });
+      // A cancel is no run failure: no error outro for a host to show a failure screen on.
+      expect(s.session.outroData).toEqual({
+        kind: OutroKind.Cancel,
+        message: 'Run cancelled by the caller.',
+      });
       expect(runAgent).not.toHaveBeenCalled();
     },
   );
+
+  it('a caller abort during the agent run settles with a cancel outro, not an error one', async () => {
+    const controller = new AbortController();
+    vi.mocked(runAgent).mockImplementationOnce(() => {
+      controller.abort();
+      return Promise.resolve({
+        outcome: RunOutcome.Aborted,
+        failure: {
+          code: ErrorCodes.AgentAbort,
+          message: 'Agent run cancelled',
+        },
+        snapshot,
+      } as RunResult);
+    });
+    const s = store();
+
+    const settled = await runProgram(
+      'metrics',
+      input({ store: s, runId: 'run-1', credentials }),
+      { signal: controller.signal },
+    );
+
+    expect(settled.outcome).toBe(RunOutcome.Aborted);
+    expect(s.session.runPhase).toBe(RunPhase.Error);
+    expect(s.session.outroData).toEqual({
+      kind: OutroKind.Cancel,
+      message: 'Agent run cancelled',
+    });
+  });
 
   it('a caller abort during the token refresh keeps the rotated refresh token', async () => {
     const controller = new AbortController();

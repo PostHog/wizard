@@ -134,7 +134,9 @@ async function invokeProgram(
     outcome: RunOutcome,
     failure?: Failure,
   ): ProgramRunOutcome => {
-    if (failure) recordFailure(store, failure);
+    // A caller cancel through the signal is not a run failure, so no host shows a failure screen for it.
+    if (failure && signal.aborted) recordCancel(store, failure);
+    else if (failure) recordFailure(store, failure);
     else recordSuccess(store);
     // A throwing progress handler is kept as a diagnostic, so log it.
     const diagnostics = progress.diagnostics();
@@ -658,6 +660,14 @@ function recordFailure(store: SessionStore, failure: Failure): void {
         ...(failure.detail && { errorDetail: failure.detail }),
       },
     );
+    store.setRunPhase(RunPhase.Error);
+  });
+}
+
+/** A settled caller cancel, recorded in the store: the cancel outro and the phase. */
+function recordCancel(store: SessionStore, failure: Failure): void {
+  store.batch(() => {
+    store.setOutroData({ kind: OutroKind.Cancel, message: failure.message });
     store.setRunPhase(RunPhase.Error);
   });
 }

@@ -32,7 +32,6 @@ import { getDetectedWarehouseSources } from '../warehouse-sources/detect';
 import { buildCodingAgentPrompt } from './handoff.js';
 import { EVENT_PLAN_FILE } from './constants.js';
 import { WAREHOUSE_SOURCE_SCOPE_ADDITIONS } from '../oauth/program-scopes';
-import { CONNECT_SLACK_SCOPE_ADDITIONS } from '@shared/oauth-scopes';
 
 const DASHBOARD_DEEP_LINK_KEY = 'dashboardDeepLink';
 
@@ -101,7 +100,7 @@ function warehouseSourceUrl(
  * A pointer at the app, not an inline flow. Connecting a source needs
  * interactive credential collection, and chaining that as a second agent run
  * before the outro would let any of its terminal failure paths end the run
- * — costing the user the success outro and the post-outro MCP / Slack steps on
+ * — costing the user the success outro and the post-outro MCP step on
  * a run where PostHog installed fine.
  *
  * Each source gets its own pre-filled link, because the alternative we shipped
@@ -246,14 +245,10 @@ export const config: ProgramConfig = {
   // list to the general-purpose subagent as well, so dispatched subagents
   // can't reach around the parent and ask either.
   disallowedTools: [WIZARD_TOOL_NAMES.wizardAsk],
-  // The integration run carries the Slack outro step, and — when detection
-  // finds data sources — the orchestrator's warehouse task, which creates
-  // sources through `external-data-sources-create`. Without the warehouse pair
-  // that call 403s on a token the user already granted.
-  oauthScopeAdditions: [
-    ...CONNECT_SLACK_SCOPE_ADDITIONS,
-    ...WAREHOUSE_SOURCE_SCOPE_ADDITIONS,
-  ],
+  // When detection finds data sources, the orchestrator's warehouse task
+  // creates them through `external-data-sources-create`. Without the
+  // warehouse pair that call 403s on a token the user already granted.
+  oauthScopeAdditions: [...WAREHOUSE_SOURCE_SCOPE_ADDITIONS],
 
   seedTasks: warehouseSeedTasks,
 
