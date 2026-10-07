@@ -17,7 +17,7 @@ import {
 import {
   redactSecrets,
   scrubHomePaths,
-  expectedFailureHint,
+  reportSpawnFailure as reportFailure,
   type ExpectedFailure,
   type InstallResult,
 } from '@shared/mcp-clients/results';
@@ -237,34 +237,11 @@ const runCodex = (
     child.stdin?.end();
   });
 
-/**
- * Turn a failed spawn into a result: an expected local failure becomes a hint,
- * anything else is reported under a constant message so one root cause stays
- * one issue, with the varying detail in properties.
- */
 const reportSpawnFailure = (
   stage: CodexStage,
   details: string,
-): InstallResult => {
-  const hint = expectedFailureHint(details, EXPECTED_FAILURES, stage);
-  if (hint) {
-    // Hinting takes a failure out of error tracking, so without this the only
-    // evidence a pattern has started over-matching is that our exception count
-    // fell, which reads as the fix working. An event keeps the count.
-    analytics.wizardCapture('mcp expected failure hinted', {
-      client: 'Codex',
-      stage,
-      hint,
-      details: scrubHomePaths(details),
-    });
-    return { success: false, reason: hint };
-  }
-  analytics.captureException(new Error(`Codex ${stage} failed`), {
-    stage,
-    details: scrubHomePaths(details),
-  });
-  return { success: false, reason: details };
-};
+): InstallResult =>
+  reportFailure({ client: 'Codex', stage, details, table: EXPECTED_FAILURES });
 
 /** Wording codex uses when the thing we're adding is already registered. */
 const ALREADY_INSTALLED_PATTERN =

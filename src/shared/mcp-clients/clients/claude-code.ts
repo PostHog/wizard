@@ -8,14 +8,15 @@ import {
   PluginInstallResult,
 } from '@shared/mcp-clients/plugin-client';
 import {
+  reportSpawnFailure,
   redactSecrets,
   scrubHomePaths,
+  type ExpectedFailure,
   type InstallResult,
 } from '@shared/mcp-clients/results';
 import { LoginCapable } from '@shared/mcp-clients/login-client';
 import { z } from 'zod';
 import { execSync, execFile } from 'child_process';
-import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
 import * as os from 'os';
 import * as path from 'path';
@@ -37,6 +38,35 @@ const PLUGIN_REF = `${PLUGIN_NAME}@${PLUGIN_MARKETPLACE}`;
 
 /** The plugin is missing from every catalog the CLI can currently see. */
 const NOT_IN_A_MARKETPLACE = /not found in/i;
+
+/**
+ * What a failing `claude` call was doing, for hint scoping and for the report.
+ * A union rather than loose strings: a hint scoped to a stage nobody passes is
+ * silently dead.
+ */
+type ClaudeCodeStage =
+  | 'MCP add'
+  | 'MCP remove'
+  | 'plugin install'
+  | 'plugin uninstall';
+
+/**
+ * Failures in the user's own environment during `plugin install`. Reporting
+ * them files issues nobody can action, so hand back a hint instead.
+ */
+interface ClaudeCodeExpectedFailure extends ExpectedFailure {
+  stages?: ClaudeCodeStage[];
+}
+
+const EXPECTED_FAILURES: ClaudeCodeExpectedFailure[] = [
+  {
+    // Only the user-level file: a project settings file is not one we can name.
+    match:
+      /invalid JSON syntax in settings file at ~[\\/]\.claude[\\/]settings\.json/i,
+    stages: ['plugin install'],
+    hint: 'Claude Code could not read its settings — fix the invalid JSON in ~/.claude/settings.json, then retry',
+  },
+];
 
 /** One `plugin list --json` row; the CLI returns more fields than we read. */
 interface ListedPlugin {
@@ -222,10 +252,14 @@ export class ClaudeCodeMCPClient
       if (msg.includes('already exists')) {
         return Promise.resolve({ success: true, alreadyInstalled: true });
       }
-      analytics.captureException(
-        new Error(`Claude Code MCP add failed: ${msg}`),
+      return Promise.resolve(
+        reportSpawnFailure<ClaudeCodeStage>({
+          client: this.name,
+          stage: 'MCP add',
+          details: msg,
+          table: EXPECTED_FAILURES,
+        }),
       );
-      return Promise.resolve({ success: false, reason: msg });
     }
   }
 
@@ -284,10 +318,12 @@ export class ClaudeCodeMCPClient
     if (failures.length === 0) return { success: true };
 
     const reason = failures.join('; ');
-    analytics.captureException(
-      new Error(`Claude Code plugin uninstall failed: ${reason}`),
-    );
-    return { success: false, reason };
+    return reportSpawnFailure<ClaudeCodeStage>({
+      client: this.name,
+      stage: 'plugin uninstall',
+      details: reason,
+      table: EXPECTED_FAILURES,
+    });
   }
 
   removeServer(local?: boolean): Promise<InstallResult> {
@@ -313,10 +349,14 @@ export class ClaudeCodeMCPClient
       if (/no( such)? mcp server|not found/i.test(reason)) {
         return Promise.resolve({ success: true, alreadyInstalled: true });
       }
-      analytics.captureException(
-        new Error(`Failed to remove server from Claude Code: ${reason}`),
+      return Promise.resolve(
+        reportSpawnFailure<ClaudeCodeStage>({
+          client: this.name,
+          stage: 'MCP remove',
+          details: reason,
+          table: EXPECTED_FAILURES,
+        }),
       );
-      return Promise.resolve({ success: false, reason });
     }
 
     return Promise.resolve({ success: true });
@@ -475,15 +515,15 @@ export class ClaudeCodeMCPClient
       return { success: true, alreadyInstalled: true };
     }
     // `not found in any configured marketplace` is also what the pre-PR bug
-    // produced, so without the marketplace-add failure beside it the new root
-    // cause is indistinguishable from the old one in error tracking.
-    const failure = new Error(`Claude Code plugin install failed: ${msg}`);
-    if (marketplaceFailure) {
-      analytics.captureException(failure, { marketplaceFailure });
-    } else {
-      analytics.captureException(failure);
-    }
-    return { success: false, reason: msg };
+    // produced, so the marketplace-add failure travels beside it to tell the
+    // two apart.
+    return reportSpawnFailure<ClaudeCodeStage>({
+      client: this.name,
+      stage: 'plugin install',
+      details: msg,
+      table: EXPECTED_FAILURES,
+      extra: marketplaceFailure ? { marketplaceFailure } : undefined,
+    });
   }
 
   // Best-effort: a failure here only matters if the install also fails, since
