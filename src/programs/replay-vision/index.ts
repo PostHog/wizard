@@ -44,7 +44,7 @@ function abortUnsupportedPlatform(integration: Integration): never {
 }
 
 const NO_FRAMEWORK_GUIDANCE = {
-  message: "The Replay Vision setup couldn't find a compatible framework",
+  message: "Could not find a Replay Vision compatible framework",
   docsLabel: 'Supported replay platforms:',
   docsUrl: 'https://posthog.com/docs/session-replay',
 };
