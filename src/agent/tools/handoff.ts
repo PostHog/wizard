@@ -8,6 +8,7 @@ import type { ProgressEmitter } from '../progress';
 import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
 import { runtimeEnv } from '@env';
+import { NEEDS_ATTENTION_HEADING } from '@utils/needs-attention';
 import { randomBytes } from 'node:crypto';
 import {
   closeSync,
@@ -38,6 +39,7 @@ export const PUBLISH_HANDOFF_TOOL_NAME = 'publish_handoff';
 export const PUBLISH_HANDOFF_DESCRIPTION =
   'Publish the handoff document — the full markdown report of what the whole run did — to the wizard session. ' +
   'A run publishes once: call it only when your own instructions ask you to write that report, passing the complete report as `content`, and never write the report to a file yourself. ' +
+  `When anything is left for the user to do, open the report, right under the H1, with a \`> ⚠️ **${NEEDS_ATTENTION_HEADING}**\` block quote, one \`> - \` bullet per item. ` +
   'It is not how you report your own work — in a run made of several tasks each step finishes with complete_task, and a step that was not asked for the run report leaves this one uncalled, because the section it owns travels in its handoff.';
 
 /** Appended for a task agent: the reminder lands as it decides it has finished. */
