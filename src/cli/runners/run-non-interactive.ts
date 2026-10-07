@@ -59,9 +59,7 @@ export function runNonInteractive(
   configureLogFileFromEnvironment();
 
   const env = readEnvironment();
-  const installDir = path.isAbsolute(options.installDir as string)
-    ? (options.installDir as string)
-    : path.join(process.cwd(), options.installDir as string);
+  const installDir = path.resolve(options.installDir as string);
   withSignals(async (signal) => {
     const { runHeadless } = await import('@headless');
     return runHeadless(config, {
