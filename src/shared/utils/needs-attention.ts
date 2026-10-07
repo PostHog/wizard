@@ -12,14 +12,22 @@ export function readNeedsAttention(markdown: string): string[] {
   const start = lines.findIndex((line) => BLOCK_START.test(line));
   if (start === -1) return [];
   const items: string[] = [];
+  // Items are agent-written and printed raw to the terminal: drop escapes.
+  const clean = (text: string) => text.replace(CONTROL_CHARS, '').trim();
+  let open = false;
   for (const line of lines.slice(start + 1)) {
     const quoted = /^\s*>\s?(.*)$/.exec(line);
     if (!quoted) break;
     const bullet = /^\s*(?:[-*]|\d+\.)\s+(.*\S)/.exec(quoted[1]);
+    const text = clean(bullet ? bullet[1] : quoted[1]);
     if (bullet) {
-      // Items are agent-written and printed raw to the terminal: drop escapes.
-      const text = bullet[1].replace(CONTROL_CHARS, '').trim();
-      if (text) items.push(text);
+      open = text !== '';
+      if (open) items.push(text);
+    } else if (!text) {
+      open = false;
+    } else if (open) {
+      // A bullet wrapped onto the next quoted line keeps its tail.
+      items[items.length - 1] += ` ${text}`;
     }
   }
   return items;

@@ -36,4 +36,21 @@ describe('readNeedsAttention', () => {
       'Do [31mthis]52;c;ZXZpbA== now2J',
     ]);
   });
+
+  it('keeps the tail of a bullet wrapped onto the next quoted line', () => {
+    const markdown = report(
+      [
+        '> ⚠️ **Needs your attention**',
+        '> - Set `POSTHOG_API_KEY` in your deploy',
+        '>   environment before the next release.',
+        '> - Add the CI secret.',
+        '>',
+        '> A closing note, not part of any item.',
+      ].join('\n'),
+    );
+    expect(readNeedsAttention(markdown)).toEqual([
+      'Set `POSTHOG_API_KEY` in your deploy environment before the next release.',
+      'Add the CI secret.',
+    ]);
+  });
 });
