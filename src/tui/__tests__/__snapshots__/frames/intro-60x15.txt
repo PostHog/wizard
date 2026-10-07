@@ -1,0 +1,9 @@
+
+
+
+
+
+ The Wizard needs more room to display required text.
+ Please make this terminal bigger.
+
+ Currently 60×15, needs at least 80×28.

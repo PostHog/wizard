@@ -1,35 +1,12 @@
+// A solution: `tsc -b` builds every layer project below in dependency order.
+// It extends the base only so `tsx` and `tsdown` find the `paths` aliases.
 {
-  "extends": "./tsconfig.build.json",
-
-  "compilerOptions": {
-    "types": ["node"],
-    "typeRoots": ["./node_modules/@types", "./types"],
-    "declaration": true,
-    "resolveJsonModule": true,
-    "outDir": "dist"
-  },
-  "include": [
-    "__tests__",
-    "__mocks__/**/*",
-    "index.ts",
-    "bin.ts",
-    "tsdown.config.ts",
-    "vitest.config.ts",
-    "src/lib/**/*",
-    "spec/**/*",
-    "src/**/*",
-    "test/**/*",
-    "e2e-harness/**/*",
-    "types/**/*"
-  ],
-  "exclude": [
-    // e2e-tests is a standalone package (own package.json, own jest + ts-jest,
-    // excluded from the pnpm workspace) and typechecks itself in its own
-    // context. The root unit-test typecheck no longer carries jest types, so it
-    // must not pull e2e's jest-based config/specs into scope.
-    "e2e-tests/**/*"
-  ],
-  "ts-node": {
-    "files": true
-  }
+  "extends": "./tsconfig.base.json",
+  "files": [],
+  "references": [
+    { "path": "./src" }, { "path": "./src/shared" }, { "path": "./src/host" },
+    { "path": "./src/agent" }, { "path": "./src/tools" }, { "path": "./src/programs" },
+    { "path": "./src/headless" }, { "path": "./src/tui" }, { "path": "./src/cli" },
+    { "path": "./tsconfig.bin.json" }, { "path": "./e2e-harness" }, { "path": "./__mocks__" }
+  ]
 }

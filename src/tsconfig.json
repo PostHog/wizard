@@ -1,0 +1,1 @@
+{ "extends": "../tsconfig.no-tui.json", "files": ["env.ts"] }

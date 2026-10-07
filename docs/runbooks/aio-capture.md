@@ -64,7 +64,7 @@ assistant turns on the same stream.
 
 ## Production builds strip the flag
 
-The flag is declared inside `if (!IS_PRODUCTION_BUILD)` in `src/wizard.ts`,
+The flag is declared inside `if (!IS_PRODUCTION_BUILD)` in `src/cli/wizard.ts`,
 alongside `--ci` / `--harness` / `--sequence` / `--model`. Published builds
 reject `--capture-aio` and `POSTHOG_WIZARD_CAPTURE_AIO` at parse time with a
 clear message. This keeps the surface area of the shipped CLI free of a
@@ -76,7 +76,7 @@ dev-only concern.
 
 - **`agents-platform` harness** — placeholder today (`README` only). When it
   lands, whoever builds it needs to add a third transform + wire point in
-  `src/lib/agent/aio-capture.ts`. Search for `captureFromPiMessageEndEvent`
+  `src/agent/aio-capture.ts`. Search for `captureFromPiMessageEndEvent`
   for the pattern.
 - **Non-assistant messages** — user turns, tool results, and system messages
   don't get their own `$ai_generation`. Tool calls ride as content blocks

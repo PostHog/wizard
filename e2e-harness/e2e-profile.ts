@@ -2,13 +2,14 @@
  * WizardE2eProfile — a program's declarative e2e "test definition": the UI
  * choices a headless e2e run makes at each decision point.
  *
- * Per-program choices live in {@link ./profiles}, keyed by program id.
- * {@link decideE2eAction} maps the current screen + a profile to the commit to
- * make. Add a program's profile to {@link ./profiles} to make it e2e-drivable.
+ * Each program's choices live in its own `test/e2e.json`, which
+ * {@link ./profiles} reads by program id. {@link decideE2eAction} maps the
+ * current screen + a profile to the commit to make: a core screen by its own
+ * case, a program screen by the commits the state lists for it.
  */
 
-import { ScreenId, Overlay, type ScreenName } from '@ui/tui/router';
-import type { AskAnswers, AskQuestion } from '@lib/wizard-session';
+import { ScreenId, Overlay } from '@tui';
+import type { AskAnswers, AskQuestion } from '@agent/types';
 import type { CiState } from './wizard-ci-driver.js';
 
 /** Which option to pick for a setup disambiguation question. */
@@ -277,20 +278,6 @@ export function decideE2eAction(
   profile: WizardE2eProfile,
 ): E2eDecision {
   switch (state.currentScreen) {
-    case ScreenId.Intro:
-    case ScreenId.RevenueIntro:
-    case ScreenId.MigrationIntro:
-    case ScreenId.AgentSkillIntro:
-    case ScreenId.AiObservabilityIntro:
-    case ScreenId.MetricsIntro:
-    case ScreenId.ErrorTrackingIntro:
-    case ScreenId.AuditIntro:
-    case ScreenId.SourceMapsIntro:
-    case ScreenId.DoctorIntro:
-    case ScreenId.WarehouseIntro:
-    case ScreenId.SelfDrivingIntro:
-      return { action: { id: 'confirm_setup' } };
-
     case ScreenId.HealthCheck:
       return profile.healthCheck === 'dismiss'
         ? { action: { id: 'dismiss_outage' } }
@@ -308,19 +295,7 @@ export function decideE2eAction(
       };
     }
 
-    case ScreenId.SelfDrivingIntegrationCheck:
-      return {
-        action: {
-          id: 'set_integrate',
-          params: { integrate: profile.integrate === true },
-        },
-      };
-
-    case ScreenId.SelfDrivingHandoff:
-      return { action: { id: 'confirm_self_driving_handoff' } };
-
     case ScreenId.Outro:
-    case ScreenId.SourceMapsOutro:
       return { action: { id: 'dismiss_outro' } };
 
     case ScreenId.Mcp:
@@ -332,9 +307,6 @@ export function decideE2eAction(
           },
         },
       };
-
-    case ScreenId.McpSuggestedPrompts:
-      return { action: { id: 'dismiss' } };
 
     case ScreenId.SlackConnect:
       return { action: { id: 'dismiss_slack' } };
@@ -386,22 +358,59 @@ export function decideE2eAction(
 
     // auth (runner), run (agent), ai-opt-in (ci), exit, terminal overlays.
     default:
-      return { wait: true };
+      return CORE_SCREENS.has(state.currentScreen)
+        ? { wait: true }
+        : decideProgramScreen(state, profile);
   }
 }
 
-/** Screens this profile knows how to act on — for completeness checks/tests. */
-export const E2E_DRIVABLE_SCREENS: readonly ScreenName[] = [
-  ScreenId.Intro,
+/** Core screens and overlays this profile knows how to act on — for completeness checks/tests. */
+export const E2E_DRIVABLE_SCREENS: readonly string[] = [
   ScreenId.HealthCheck,
   ScreenId.Setup,
-  ScreenId.SelfDrivingIntegrationCheck,
   ScreenId.Outro,
-  ScreenId.SourceMapsOutro,
   ScreenId.Mcp,
-  ScreenId.McpSuggestedPrompts,
   ScreenId.SlackConnect,
   ScreenId.KeepSkills,
   Overlay.WizardAsk,
   Overlay.TaskNotice,
 ];
+
+/** The core screens and overlays; every other screen is a program's own. */
+const CORE_SCREENS: ReadonlySet<string> = new Set<string>([
+  ...Object.values(ScreenId),
+  ...Object.values(Overlay),
+]);
+
+/** The params a program-screen commit takes from the profile, if any. */
+type ProgramScreenCommit = (
+  profile: WizardE2eProfile,
+) => Record<string, unknown> | undefined;
+
+/**
+ * The commit a run makes on a program's own screen, by action id. A program
+ * screen commits the first of its actions listed here and waits when it offers
+ * none of them.
+ */
+const PROGRAM_SCREEN_COMMITS: ReadonlyMap<string, ProgramScreenCommit> =
+  new Map<string, ProgramScreenCommit>([
+    ['confirm_setup', () => undefined],
+    ['dismiss_outro', () => undefined],
+    ['dismiss', () => undefined],
+    ['confirm_self_driving_handoff', () => undefined],
+    ['set_integrate', (profile) => ({ integrate: profile.integrate === true })],
+  ]);
+
+/** Decide a program screen from the commits the state lists for it. */
+function decideProgramScreen(
+  state: CiState,
+  profile: WizardE2eProfile,
+): E2eDecision {
+  for (const { id } of state.actions) {
+    const commit = PROGRAM_SCREEN_COMMITS.get(id);
+    if (!commit) continue;
+    const params = commit(profile);
+    return { action: { id, ...(params ? { params } : {}) } };
+  }
+  return { wait: true };
+}

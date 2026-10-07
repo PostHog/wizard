@@ -1,0 +1,33 @@
+// Every layer but the TUI: the base aliases, with `ink`, `react` and their kin
+// mapped to a fence (types/tui-only.d.fence.ts) that fails every import form
+// with TS6263. `paths` replaces the base's rather than merging, so it lists
+// the aliases again, less `@tui/*`.
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "paths": {
+      "@env": ["./src/env.ts"],
+      "@shared/*": ["./src/shared/*"],
+      "@utils/*": ["./src/shared/utils/*"],
+      "@host/*": ["./src/host/*"],
+      "@agent": ["./src/agent/index.ts"],
+      "@agent/types": ["./src/agent/types.ts"],
+      "@agent/*": ["./src/agent/*"],
+      "@programs": ["./src/programs/index.ts"],
+      "@programs/types": ["./src/programs/types.ts"],
+      "@programs/*": ["./src/programs/*"],
+      "@tools": ["./src/tools/index.ts"],
+      "@tui": ["./src/tui/index.ts"],
+      "@headless": ["./src/headless/index.ts"],
+      "@cli": ["./src/cli/index.ts"],
+      "@cli/*": ["./src/cli/*"],
+      "@e2e-harness/*": ["./e2e-harness/*"],
+      "ink": ["./types/tui-only.fence"],
+      "ink/*": ["./types/tui-only.fence"],
+      "react": ["./types/tui-only.fence"],
+      "react/*": ["./types/tui-only.fence"],
+      "@inkjs/ui": ["./types/tui-only.fence"],
+      "ink-testing-library": ["./types/tui-only.fence"]
+    }
+  }
+}

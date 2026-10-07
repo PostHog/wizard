@@ -11,8 +11,7 @@ import { scan, CATEGORIES, type Category } from '@posthog/warlock';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { scanVerdict } from '../src/lib/yara-policy';
-import { scanInstalledSkill } from '../src/lib/yara-hooks';
+import { scanVerdict, scanInstalledSkill } from '@agent';
 
 // Assembled at runtime so no scannable secret literal is committed.
 const fakeStripeKey = 'sk_' + 'live_' + '5'.repeat(24);

@@ -1,0 +1,18 @@
+ PostHog Wizard v0.0.0-test                        Feedback: wizard@posthog.com
+
+ Cost (running): $0.00 · no agent turns yet                      Ctrl+T to hide
+
+ ✔ PostHog is set up!
+
+ Report saved to:
+ /app/posthog-setup-report.md
+ A markdown file in your project folder. Open it in any editor to read the full
+  audit.
+
+ Items audited:
+ 14 checks · 0 errors · 0 warnings · 0 suggestions
+ • No issues found.
+
+ Learn more: https://posthog.com/docs
+
+ Press any key to continue

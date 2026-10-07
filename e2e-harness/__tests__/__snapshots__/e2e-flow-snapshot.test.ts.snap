@@ -135,10 +135,6 @@ exports[`e2e flow snapshot — posthog-integration > Next.js (with a setup quest
       "screen": "mcp",
     },
     {
-      "action": "dismiss_slack",
-      "screen": "slack-connect",
-    },
-    {
       "action": "keep_skills",
       "params": {
         "kept": false,
@@ -179,10 +175,6 @@ exports[`e2e flow snapshot — posthog-integration > Node (no setup question) wa
         "outcome": "skipped",
       },
       "screen": "mcp",
-    },
-    {
-      "action": "dismiss_slack",
-      "screen": "slack-connect",
     },
     {
       "action": "keep_skills",

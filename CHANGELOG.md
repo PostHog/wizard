@@ -1,5 +1,125 @@
 # Changelog
 
+## [2.80.1](https://github.com/PostHog/wizard/compare/v2.80.0...v2.80.1) (2026-10-05)
+
+
+### Bug Fixes
+
+* **agent:** deny .env files with SDK rules and skip project hooks ([#1408](https://github.com/PostHog/wizard/issues/1408)) ([1e1e56c](https://github.com/PostHog/wizard/commit/1e1e56c003712aa2087b6c5d2d5964cac06f35c4))
+* **agent:** let wizard_ask re-collect a field the downstream call rejected ([#1367](https://github.com/PostHog/wizard/issues/1367)) ([690eae5](https://github.com/PostHog/wizard/commit/690eae5883a145f2eeb30494a30030c900faf72b))
+* **orchestrator:** redact secrets from task remarks before capture ([#1412](https://github.com/PostHog/wizard/issues/1412)) ([2fea60d](https://github.com/PostHog/wizard/commit/2fea60db0b4064116b376da8aedc63596ca86247))
+* **outro:** list every detected data source, not the ones the step skipped ([#1395](https://github.com/PostHog/wizard/issues/1395)) ([88a1761](https://github.com/PostHog/wizard/commit/88a17613bde87a4afa5890df374fda53b3543cda))
+
+## [2.80.0](https://github.com/PostHog/wizard/compare/v2.79.1...v2.80.0) (2026-10-02)
+
+
+### Features
+
+* **error-tracking:** describe release linking for Python, Ruby and PHP ([#1399](https://github.com/PostHog/wizard/issues/1399)) ([fb790ab](https://github.com/PostHog/wizard/commit/fb790ab9777e218ec765ee37cc7fbd18cf3493e6))
+
+
+### Bug Fixes
+
+* **ask:** arm the wizard_ask timeout per question, not per request ([#1368](https://github.com/PostHog/wizard/issues/1368)) ([6cb4093](https://github.com/PostHog/wizard/commit/6cb4093ec7efc150853c7d9269e5109377344331))
+* **harness:** tag pi's MCP user-agent with the running program ([#1404](https://github.com/PostHog/wizard/issues/1404)) ([7cdd92c](https://github.com/PostHog/wizard/commit/7cdd92c98ae83d10c32c78504facc08dcdeaec38))
+* **tui:** bump ink to 7.1.1 to stop full-screen flicker ([#1406](https://github.com/PostHog/wizard/issues/1406)) ([3dd8c6f](https://github.com/PostHog/wizard/commit/3dd8c6f6a73aba4104713546042c2fd54b98a0f5))
+
+## [2.79.1](https://github.com/PostHog/wizard/compare/v2.79.0...v2.79.1) (2026-09-29)
+
+
+### Bug Fixes
+
+* **agent:** tell a task agent publish_handoff is not its outcome ([#1360](https://github.com/PostHog/wizard/issues/1360)) ([e86e103](https://github.com/PostHog/wizard/commit/e86e103c3ab10b563d70e92d245bcd04d81c9ef5))
+* **cli:** run the Node version check before loading dependencies ([#1397](https://github.com/PostHog/wizard/issues/1397)) ([91c5ab7](https://github.com/PostHog/wizard/commit/91c5ab73ca6440ecb7423c84e5e3b9181e8517ac))
+* **tui:** fail fast with a coded error when stdin is not a TTY ([#1398](https://github.com/PostHog/wizard/issues/1398)) ([52f981f](https://github.com/PostHog/wizard/commit/52f981f6aa77d9945946ea8d1212e69b6a94ceb2))
+
+## [2.79.0](https://github.com/PostHog/wizard/compare/v2.78.0...v2.79.0) (2026-09-29)
+
+
+### Features
+
+* **programs:** B2 surface shell — runProgram types and stub signatures ([#1307](https://github.com/PostHog/wizard/issues/1307)) ([92e6fe5](https://github.com/PostHog/wizard/commit/92e6fe5a7df866f808a9630706f10789a4b5bc1d))
+* **programs:** B3 plumbing and tests — runProgram, adapter wiring, detection via runAgent ([#1308](https://github.com/PostHog/wizard/issues/1308)) ([527ef21](https://github.com/PostHog/wizard/commit/527ef210c6e711852d1df77c83cd486288632ab0))
+
+
+### Bug Fixes
+
+* **e2e-harness:** let the final result write replace the outro write ([#1340](https://github.com/PostHog/wizard/issues/1340)) ([da1e7ca](https://github.com/PostHog/wizard/commit/da1e7ca0031d0890ac9e3183d4c31da1f5a49104))
+* enforce structured project detection on Luna and Haiku ([#1350](https://github.com/PostHog/wizard/issues/1350)) ([f31fbb5](https://github.com/PostHog/wizard/commit/f31fbb57cffb6a8e2420de81f07e2128a199919f))
+
+## [2.78.0](https://github.com/PostHog/wizard/compare/v2.77.0...v2.78.0) (2026-09-25)
+
+
+### Features
+
+* synchronize Wizard CLI executions with WizardRun ([#1323](https://github.com/PostHog/wizard/issues/1323)) ([c6b90b0](https://github.com/PostHog/wizard/commit/c6b90b05ba7d3c0a4b9abd3aee41722415cb75ef))
+
+
+### Bug Fixes
+
+* **audit:** remove the audit ledger when the run settles ([#1336](https://github.com/PostHog/wizard/issues/1336)) ([e63b0ad](https://github.com/PostHog/wizard/commit/e63b0ad9d59776bd1b436f9ca953ba9bf03e579e))
+* **audit:** singular counts and a stray period in the audit screens ([#1334](https://github.com/PostHog/wizard/issues/1334)) ([140af5d](https://github.com/PostHog/wizard/commit/140af5d161f66d9b21027a74e12f065b8d248331))
+* **warehouse:** stop offering one database as two sources ([#1300](https://github.com/PostHog/wizard/issues/1300)) ([6f562a1](https://github.com/PostHog/wizard/commit/6f562a1c5944844ccee60b8319125e695dbbf5e0))
+* **wizard-ask:** let one call carry a whole connector form ([#1319](https://github.com/PostHog/wizard/issues/1319)) ([fde4fac](https://github.com/PostHog/wizard/commit/fde4fac7858839c4244f453a8b4940fbab41d089))
+
+## [2.77.0](https://github.com/PostHog/wizard/compare/v2.76.1...v2.77.0) (2026-09-23)
+
+
+### Features
+
+* allow AIO and Logs in default integrations ([#1235](https://github.com/PostHog/wizard/issues/1235)) ([32c6097](https://github.com/PostHog/wizard/commit/32c6097e6168a2b5f7cd40bcf5206fcbe9b25b51))
+
+
+### Bug Fixes
+
+* **mcp:** install the Codex plugin, and report the real cause when Codex fails ([#1295](https://github.com/PostHog/wizard/issues/1295)) ([8c65238](https://github.com/PostHog/wizard/commit/8c65238f8efbd46d73ae201bde0b5569e2fe7e54))
+* **mcp:** register the marketplace before the Claude Code plugin install ([#1294](https://github.com/PostHog/wizard/issues/1294)) ([8c54c11](https://github.com/PostHog/wizard/commit/8c54c1110941a680db813da3d370cd517f6db53f))
+* **orchestrator:** report the steps a failed dependency stopped ([#1275](https://github.com/PostHog/wizard/issues/1275)) ([0f62680](https://github.com/PostHog/wizard/commit/0f6268097c7754d043deb3c071abf8211fe80b28))
+* retry project detection when agent output has no JSON ([#1305](https://github.com/PostHog/wizard/issues/1305)) ([001edb6](https://github.com/PostHog/wizard/commit/001edb6e4f32d8ff6c3699950fd2b07583ee2a8b))
+* **skills:** attribute a scanner failure to the scan step, not extract ([#1280](https://github.com/PostHog/wizard/issues/1280)) ([0c72cd2](https://github.com/PostHog/wizard/commit/0c72cd2d699a9ff98481a8f7c1ea802555103ee7))
+* **warehouse-sources:** deep-link BigQuery, whose credential is a file upload ([#1262](https://github.com/PostHog/wizard/issues/1262)) ([8677a59](https://github.com/PostHog/wizard/commit/8677a59bf1423b534b589583005056b025dbbf05))
+* **warehouse:** bound the seeded data-source step to a few sources ([#1284](https://github.com/PostHog/wizard/issues/1284)) ([1d57216](https://github.com/PostHog/wizard/commit/1d57216e6cc71c515278b66c5e7fcf7020ad0484))
+
+## [2.76.1](https://github.com/PostHog/wizard/compare/v2.76.0...v2.76.1) (2026-09-21)
+
+
+### Bug Fixes
+
+* **ai-observability:** allow headless runs ([#1285](https://github.com/PostHog/wizard/issues/1285)) ([e7e630f](https://github.com/PostHog/wizard/commit/e7e630fd14dd3e119bf74f18fd73e54fd16f1fce))
+
+## [2.76.0](https://github.com/PostHog/wizard/compare/v2.75.0...v2.76.0) (2026-09-18)
+
+
+### Features
+
+* **audit:** stream audit progress as areas on the headless path ([#1263](https://github.com/PostHog/wizard/issues/1263)) ([b300b40](https://github.com/PostHog/wizard/commit/b300b40182b20b64f08402db769dcf7c8a45ce76))
+
+## [2.75.0](https://github.com/PostHog/wizard/compare/v2.74.1...v2.75.0) (2026-09-17)
+
+
+### Features
+
+* add friendly mint failure recovery ([#1238](https://github.com/PostHog/wizard/issues/1238)) ([7aaf21c](https://github.com/PostHog/wizard/commit/7aaf21c0080f7bbe1a82362189844d820d5aa250))
+* **error-tracking:** add the error-tracking program on the orchestrator flow ([#1185](https://github.com/PostHog/wizard/issues/1185)) ([632b80a](https://github.com/PostHog/wizard/commit/632b80aa2aa149884b86d4a98a60c7f00e13597d))
+* move AI Observability to Sol medium ([#1255](https://github.com/PostHog/wizard/issues/1255)) ([ad5a8bf](https://github.com/PostHog/wizard/commit/ad5a8bfd1135a0b5398907ae351426c8f72b88e4))
+* **posthog-integration:** detect existing PostHog, surface the other commands ([#1190](https://github.com/PostHog/wizard/issues/1190)) ([1b34483](https://github.com/PostHog/wizard/commit/1b344836e9b186b7da96ddd9f992a3337136e845))
+
+
+### Bug Fixes
+
+* finish legacy gateway cleanup ([#1250](https://github.com/PostHog/wizard/issues/1250)) ([e88050d](https://github.com/PostHog/wizard/commit/e88050da988309f61049d8acb40f55ee7df4e81f))
+* **oauth:** explain oversized browser headers ([#1253](https://github.com/PostHog/wizard/issues/1253)) ([be2bcd2](https://github.com/PostHog/wizard/commit/be2bcd2870a3362bc471f2633099b91b0ac0e7e7))
+* **orchestrator:** carry the data-source next steps onto the outro ([#1234](https://github.com/PostHog/wizard/issues/1234)) ([d254f3a](https://github.com/PostHog/wizard/commit/d254f3aa919d1b8c5830ebc3b1f15b8bcaf376c5))
+* **orchestrator:** don't report a declined task as a started task ([#1216](https://github.com/PostHog/wizard/issues/1216)) ([a7b77e6](https://github.com/PostHog/wizard/commit/a7b77e65b72817ed080a5c3f2ba7544019eb33ae))
+* **orchestrator:** name complete_task's nested handoff in its description ([#1220](https://github.com/PostHog/wizard/issues/1220)) ([fe9751e](https://github.com/PostHog/wizard/commit/fe9751ebf25dca1c5c2134771f6b4d920e5073d1))
+* **pi:** name why an agent run aborted ([#1249](https://github.com/PostHog/wizard/issues/1249)) ([24d39a3](https://github.com/PostHog/wizard/commit/24d39a3ecf0371cac50cf0e72021188b3380c4de))
+* separate CI gateway and PostHog credentials ([#1240](https://github.com/PostHog/wizard/issues/1240)) ([662f54d](https://github.com/PostHog/wizard/commit/662f54da548b3851f26b201f9c06c9ddf8e5b344))
+* **tui:** mask a vaulted answer as the user types it ([#1248](https://github.com/PostHog/wizard/issues/1248)) ([a490788](https://github.com/PostHog/wizard/commit/a4907889199878a2868cf21eff10fd21e3735efe))
+* **tui:** name what Esc discards in the ask overlay ([#1208](https://github.com/PostHog/wizard/issues/1208)) ([a56d03b](https://github.com/PostHog/wizard/commit/a56d03b9f443a2806596679d7eaaeed9bed1e348))
+* **warehouse:** give the standalone command the same credential ask timeout ([#1214](https://github.com/PostHog/wizard/issues/1214)) ([a23f6dc](https://github.com/PostHog/wizard/commit/a23f6dc46141ea1d315279555625b299f58ebeda))
+* **wizard-ask:** infer a question's kind when a call omits it ([#1258](https://github.com/PostHog/wizard/issues/1258)) ([7938a50](https://github.com/PostHog/wizard/commit/7938a50b04c39c33f18fd7b16198fcfc3ce0e165))
+* **wizard-ask:** return an explicit cancellation outcome, not a sentinel ([#1218](https://github.com/PostHog/wizard/issues/1218)) ([f3343b2](https://github.com/PostHog/wizard/commit/f3343b24ededa50fd707fdac99e8a88f6850fabd))
+
 ## [2.74.1](https://github.com/PostHog/wizard/compare/v2.74.0...v2.74.1) (2026-09-10)
 
 

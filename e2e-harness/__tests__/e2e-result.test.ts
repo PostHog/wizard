@@ -11,16 +11,21 @@
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { OutroKind, RunPhase } from '@lib/wizard-session';
-import type { AskQuestion, WizardSession } from '@lib/wizard-session';
-import { DETECTED_WAREHOUSE_SOURCES_KEY } from '@lib/programs/warehouse-source/detect';
-import { Overlay } from '@ui/tui/router';
+import { OutroKind } from '@shared/outro';
+import { RunPhase } from '@shared/run-state';
+import type { AskQuestion } from '@agent/types';
+import type { WizardSession } from '@programs/types';
+import { DETECTED_WAREHOUSE_SOURCES_KEY } from '@programs/warehouse-source';
+import { Overlay } from '@tui';
+import { TASK_OUTCOMES_KEY } from '@programs';
 import {
   E2eRunRecorder,
   abortReasonFrom,
   buildE2eResult,
+  createE2eResultWriter,
   detectedSourcesFrom,
   readReportFile,
+  taskOutcomesFrom,
 } from '../e2e-result';
 import { DEFAULT_E2E_PROFILE, decideE2eAction } from '../e2e-profile';
 import type { CiState } from '../wizard-ci-driver';
@@ -422,6 +427,9 @@ describe('buildE2eResult', () => {
               matchedSignal: 'found DATABASE_URL',
             },
           ],
+          [TASK_OUTCOMES_KEY]: [
+            { type: 'ai-observability', status: 'not needed', optional: true },
+          ],
         },
         outroData: null,
       },
@@ -447,6 +455,7 @@ describe('buildE2eResult', () => {
         'runPhase',
         'screenPath',
         'skillsComplete',
+        'taskOutcomes',
         'tasks',
         'unansweredAsks',
       ].sort(),
@@ -457,10 +466,49 @@ describe('buildE2eResult', () => {
     expect(build()).toMatchObject(base);
   });
 
+  it('replaces an outro result only when the final skills decision is written', () => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'wizard-result-'));
+    const file = path.join(directory, 'result.json');
+    let skillsComplete = false;
+    const write = createE2eResultWriter(file, () => ({
+      ...build(),
+      skillsComplete,
+    }));
+    const written = () => JSON.parse(fs.readFileSync(file, 'utf8'));
+
+    try {
+      write();
+      expect(written()).toMatchObject({ skillsComplete: false });
+      skillsComplete = true;
+      write();
+      expect(written()).toMatchObject({ skillsComplete: false });
+      write(true);
+      expect(written()).toMatchObject({ skillsComplete: true });
+    } finally {
+      fs.rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
   it('projects tasks down to label and status', () => {
     expect(build().tasks).toEqual([
       { label: 'Connect your data sources', status: 'completed' },
     ]);
+  });
+
+  it("reports the queue's terminal outcomes by type", () => {
+    expect(build().taskOutcomes).toEqual([
+      { type: 'ai-observability', status: 'not needed', optional: true },
+    ]);
+  });
+
+  it('distinguishes never-recorded from an orchestrator run with no tasks', () => {
+    // Linear runs (or a run that died pre-drain) never set the key → null,
+    // and the payload drops the field; an orchestrator run that drained an
+    // empty queue records [] — graders must not conflate the two.
+    expect(taskOutcomesFrom({ frameworkContext: {} })).toBeNull();
+    expect(
+      taskOutcomesFrom({ frameworkContext: { [TASK_OUTCOMES_KEY]: [] } }),
+    ).toEqual([]);
   });
 
   it('reports the sources detection found', () => {

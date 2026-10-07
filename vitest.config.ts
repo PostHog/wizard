@@ -1,4 +1,5 @@
 import * as path from 'path';
+import { tmpdir } from 'os';
 import { defineConfig, type Plugin } from 'vitest/config';
 
 const r = (...p: string[]) => path.resolve(__dirname, ...p);
@@ -29,6 +30,32 @@ function resolveTsForJs(): Plugin {
   };
 }
 
+// Per-surface Vitest projects keyed by today's directories. Each project runs
+// alone with `vitest run --project <name>`; `vitest run` runs them all.
+const TESTS = '__tests__/**/*.{js,jsx,ts,tsx}';
+const AGENT_TESTS = [`src/agent/**/${TESTS}`];
+const PROGRAM_TESTS = [`src/programs/**/${TESTS}`];
+const TOOL_TESTS = [`src/tools/**/${TESTS}`];
+const TUI_TESTS = [`src/tui/**/${TESTS}`];
+const HEADLESS_TESTS = [`src/headless/**/${TESTS}`];
+const CLI_TESTS = [`src/cli/**/${TESTS}`];
+const HARNESS_TESTS = [
+  `e2e-harness/${TESTS}`,
+  'e2e-harness/**/*.{test,spec}.{js,jsx,ts,tsx}',
+];
+const EXCLUDE = [
+  '**/node_modules/**',
+  '**/dist/**',
+  '**/e2e-tests/**',
+  '**/*.no-jest.*',
+  '**/*.d.ts',
+];
+
+const project = (name: string, include: string[], exclude: string[] = []) => ({
+  extends: true as const,
+  test: { name, include, exclude: [...EXCLUDE, ...exclude] },
+});
+
 export default defineConfig({
   plugins: [resolveTsForJs()],
   // The source targets the React 19 automatic JSX runtime (tsconfig
@@ -48,32 +75,64 @@ export default defineConfig({
         replacement: r('__mocks__/@posthog/warlock.ts'),
       },
       { find: /^ink$/, replacement: r('__mocks__/ink.ts') },
+      // The real Ink, for the tests that render: `vi.importActual('ink')` gets the stub above.
+      {
+        find: /^ink-actual$/,
+        replacement: r('node_modules/ink/build/index.js'),
+      },
+      { find: /^@shared\/(.*)$/, replacement: `${r('src/shared')}/$1` },
+      { find: /^@agent$/, replacement: r('src/agent/index.ts') },
+      { find: /^@agent\/types$/, replacement: r('src/agent/types.ts') },
+      { find: /^@agent\/(.*)$/, replacement: `${r('src/agent')}/$1` },
+      { find: /^@programs$/, replacement: r('src/programs/index.ts') },
+      { find: /^@programs\/types$/, replacement: r('src/programs/types.ts') },
+      { find: /^@programs\/(.*)$/, replacement: `${r('src/programs')}/$1` },
+      { find: /^@tools$/, replacement: r('src/tools/index.ts') },
       // Path aliases — mirror tsconfig `paths`.
       { find: /^@env$/, replacement: r('src/env.ts') },
-      { find: /^@lib\/(.*)$/, replacement: `${r('src/lib')}/$1` },
+      { find: /^@host\/(.*)$/, replacement: `${r('src/host')}/$1` },
+      { find: /^@tui$/, replacement: r('src/tui/index.ts') },
+      { find: /^@tui\/(.*)$/, replacement: `${r('src/tui')}/$1` },
+      { find: /^@headless$/, replacement: r('src/headless/index.ts') },
+      { find: /^@cli$/, replacement: r('src/cli/index.ts') },
+      { find: /^@cli\/(.*)$/, replacement: `${r('src/cli')}/$1` },
       { find: /^@e2e-harness\/(.*)$/, replacement: `${r('e2e-harness')}/$1` },
-      { find: /^@utils\/(.*)$/, replacement: `${r('src/utils')}/$1` },
-      { find: /^@ui$/, replacement: r('src/ui/index.ts') },
-      { find: /^@ui\/(.*)$/, replacement: `${r('src/ui')}/$1` },
-      { find: /^@steps$/, replacement: r('src/steps/index.ts') },
-      { find: /^@steps\/(.*)$/, replacement: `${r('src/steps')}/$1` },
-      { find: /^@frameworks\/(.*)$/, replacement: `${r('src/frameworks')}/$1` },
+      { find: /^@utils\/(.*)$/, replacement: `${r('src/shared/utils')}/$1` },
     ],
   },
   test: {
     globals: true,
     environment: 'node',
-    include: [
-      '**/__tests__/**/*.{test,spec}.{js,jsx,ts,tsx}',
-      '**/__tests__/**/*.{js,jsx,ts,tsx}',
-      '**/*.{test,spec}.{js,jsx,ts,tsx}',
-    ],
-    exclude: [
-      '**/node_modules/**',
-      '**/dist/**',
-      '**/e2e-tests/**',
-      '**/*.no-jest.*',
-      '**/*.d.ts',
+    // Tests log to their own file, not the one real runs share.
+    env: {
+      POSTHOG_WIZARD_LOG_FILE: path.join(
+        tmpdir(),
+        `posthog-wizard-vitest-${process.pid}.log`,
+      ),
+    },
+    projects: [
+      project('agent', AGENT_TESTS),
+      project('programs', PROGRAM_TESTS),
+      project('tools', TOOL_TESTS),
+      project('tui', TUI_TESTS),
+      project('headless', HEADLESS_TESTS),
+      project('cli', CLI_TESTS),
+      project('harness', HARNESS_TESTS),
+      project(
+        'shared',
+        // Shared, the host layer and anything else no layer project claims.
+        // The second glob runs a test file outside a __tests__ directory here,
+        // rather than nowhere.
+        [`src/**/${TESTS}`, 'src/**/*.{test,spec}.{js,jsx,ts,tsx}'],
+        [
+          ...AGENT_TESTS,
+          ...PROGRAM_TESTS,
+          ...TOOL_TESTS,
+          ...TUI_TESTS,
+          ...HEADLESS_TESTS,
+          ...CLI_TESTS,
+        ],
+      ),
     ],
     coverage: {
       provider: 'v8',

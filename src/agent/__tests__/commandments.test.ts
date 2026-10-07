@@ -1,0 +1,130 @@
+import { WIZARD_COMMANDMENTS } from '@agent/commandments';
+import { assembleCommandments } from '@agent/runner/switchboard/commandments';
+import { Harness, Sequence } from '@shared/constants';
+
+/** Every axis combination that reaches a runner today. */
+const CAPS = { bash: true, posthogMcp: true };
+const prompt = (
+  harness: Harness,
+  sequence: Sequence,
+  program = 'posthog-integration',
+) => assembleCommandments({ program, sequence, harness, caps: CAPS });
+
+const COMBOS = [
+  ['anthropic', Harness.anthropic, Sequence.linear],
+  ['anthropic', Harness.anthropic, Sequence.orchestrator],
+  ['pi', Harness.pi, Sequence.linear],
+  ['pi', Harness.pi, Sequence.orchestrator],
+] as const;
+
+describe('commandments by axis', () => {
+  // The commandment text is load-bearing — the agent reads these rules as part
+  // of its system prompt and they steer every program's behavior. Snapshotting
+  // the assembled output per axis combination makes any edit, or any rule
+  // silently reaching the wrong kind of run, visible in the PR diff.
+  describe.each(COMBOS)('$0 + $2', (_label, harness, sequence) => {
+    it('matches the published prompt', () => {
+      expect(prompt(harness, sequence)).toMatchSnapshot();
+    });
+  });
+
+  it('matches the published prompt for a program with its own guidance', () => {
+    expect(
+      prompt(Harness.pi, Sequence.linear, 'self-driving'),
+    ).toMatchSnapshot();
+  });
+
+  // The bug this split fixes: task-list rules used to live in the global list,
+  // so they reached orchestrator task sessions — which mount no Task tools on
+  // either harness — and cost a "no task-management tool was available" remark.
+  describe('task-list rules follow the sequence, not the harness', () => {
+    it.each([Harness.anthropic, Harness.pi])(
+      'reach a linear run on %s',
+      (harness) => {
+        expect(prompt(harness, Sequence.linear)).toMatch(/`TaskUpdate`/);
+      },
+    );
+
+    it.each([Harness.anthropic, Harness.pi])(
+      'never reach an orchestrator task on %s',
+      (harness) => {
+        expect(prompt(harness, Sequence.orchestrator)).not.toMatch(
+          /TaskUpdate|TaskCreate|Task tools|task list/,
+        );
+      },
+    );
+  });
+
+  describe('axis scoping', () => {
+    it('gives every run the global commandments', () => {
+      for (const [, harness, sequence] of COMBOS) {
+        expect(prompt(harness, sequence)).toContain(WIZARD_COMMANDMENTS[0]);
+      }
+    });
+
+    it('adds program guidance only for the program that declares it', () => {
+      expect(prompt(Harness.pi, Sequence.linear, 'self-driving')).toMatch(
+        /custom-scout proposal/,
+      );
+      expect(prompt(Harness.pi, Sequence.linear)).not.toMatch(
+        /custom-scout proposal/,
+      );
+    });
+
+    it("adds a harness's runtime notes only for that harness", () => {
+      expect(prompt(Harness.pi, Sequence.linear)).toMatch(/## This runtime/);
+      expect(prompt(Harness.anthropic, Sequence.linear)).not.toMatch(
+        /## This runtime/,
+      );
+    });
+  });
+  describe('wizard_ask correction rules', () => {
+    const text = WIZARD_COMMANDMENTS.join('\n');
+
+    it('lets the agent re-ask the fields a downstream call rejected', () => {
+      expect(text).toMatch(/rejected/i);
+      expect(text).toMatch(/reuse the same `subject`/);
+    });
+
+    it('keeps a dismissed or timed-out ask a decline, not a correction', () => {
+      expect(text).toMatch(/dismissed or timed-out ask is not this case/i);
+    });
+  });
+});
+
+/**
+ * The prompt must only promise tools the session really mounted.
+ *
+ * `harness/pi/index.ts` used to pass `posthogMcp: true` hardcoded, right after
+ * a try/catch that logs a failed MCP setup and carries on. So a run whose
+ * handshake failed still told the agent to drive everything through
+ * `posthog_exec` — a tool that was never registered. `task.ts` tracked it
+ * properly all along; `index.ts` now does too.
+ */
+describe('runtime caps gate the pi runtime notes', () => {
+  const withCaps = (caps: { bash: boolean; posthogMcp: boolean }) =>
+    assembleCommandments({
+      program: 'warehouse-source',
+      sequence: Sequence.linear,
+      harness: Harness.pi,
+      caps,
+    });
+
+  it('names posthog_exec when the MCP came up', () => {
+    expect(withCaps({ bash: true, posthogMcp: true })).toContain(
+      'posthog_exec',
+    );
+  });
+
+  it('never names posthog_exec when the MCP did not', () => {
+    expect(withCaps({ bash: true, posthogMcp: false })).not.toContain(
+      'posthog_exec',
+    );
+  });
+
+  it('still produces a usable prompt without the MCP', () => {
+    const notes = withCaps({ bash: true, posthogMcp: false });
+    expect(notes.length).toBeGreaterThan(0);
+    expect(notes).toContain(WIZARD_COMMANDMENTS[0]);
+  });
+});

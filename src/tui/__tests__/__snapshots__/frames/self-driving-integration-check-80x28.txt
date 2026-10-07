@@ -1,0 +1,27 @@
+ PostHog Wizard v0.0.0-test                        Feedback: wizard@posthog.com
+
+ Cost (running): $0.00 · no agent turns yet                      Ctrl+T to hide
+
+ No PostHog integration found
+
+ This will kick off an agent to explore your project and find existing PostHog
+ integrations. Self-driving reads PostHog data, so we'll set that up first: it
+ gives your signal sources something to watch. To do that we need to connect to
+  PostHog — do you already have an account?
+
+ ▸ Yes, log me in (opens PostHog to authorize)
+   No, create one for me (we'll email you a login link)
+
+ [I] Privacy & data
+
+
+
+
+
+
+
+
+
+
+
+  ↑↓ navigate  enter select

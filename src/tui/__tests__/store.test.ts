@@ -1,0 +1,1364 @@
+import {
+  WizardStore,
+  Program,
+  type ProgramId,
+  ScreenId,
+  Overlay,
+} from '@tui/store';
+import { OutroKind } from '@shared/outro';
+import { McpOutcome, RunPhase, ScanConsent } from '@shared/run-state';
+import { TaskStatus } from '@shared/task-status';
+import {
+  WizardReadiness,
+  evaluateWizardReadiness,
+} from '@shared/health-checks/readiness';
+import { buildSession, getProgramConfig } from '@programs';
+import { HostResolution } from '@shared/host-resolution';
+import { Integration } from '@shared/constants';
+import { analytics } from '@utils/analytics';
+import { McpScreenId } from '@tui/tools/mcp';
+import { PosthogDoctorScreenId } from '@tui/tools/doctor';
+import { MetricsScreenId } from '@tui/programs/metrics';
+import { PostHogIntegrationScreenId } from '@tui/programs/posthog-integration';
+import { Tool } from '@tools';
+
+vi.mock('@utils/analytics.js', () => ({
+  analytics: {
+    capture: vi.fn(),
+    wizardCapture: vi.fn(),
+    setTag: vi.fn(),
+    shutdown: vi.fn().mockResolvedValue(undefined),
+  },
+  sessionProperties: vi.fn(() => ({})),
+}));
+
+vi.mock('@shared/health-checks/readiness.js', () => ({
+  evaluateWizardReadiness: vi.fn().mockResolvedValue({
+    decision: 'yes',
+    health: {},
+    reasons: [],
+  }),
+  WizardReadiness: {
+    Yes: 'yes',
+    No: 'no',
+    YesWithWarnings: 'yes-with-warnings',
+  },
+  SERVICE_LABELS: {},
+  getBlockingServiceKeys: vi.fn(() => []),
+}));
+
+function createStore(program?: ProgramId): WizardStore {
+  return new WizardStore(program);
+}
+
+const wizardCaptureMock = analytics.wizardCapture as Mock;
+const evaluateWizardReadinessMock = evaluateWizardReadiness as MockedFunction<
+  typeof evaluateWizardReadiness
+>;
+
+async function flushMicrotasks(): Promise<void> {
+  await Promise.resolve();
+  await Promise.resolve();
+}
+
+describe('WizardStore', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    evaluateWizardReadinessMock.mockResolvedValue({
+      decision: WizardReadiness.Yes,
+      health: {} as never,
+      reasons: [],
+    });
+  });
+  // ── Construction ─────────────────────────────────────────────────
+
+  describe('constructor', () => {
+    it('initialises with default state', () => {
+      const store = createStore();
+      expect(store.version).toBe('');
+      expect(store.statusMessages).toEqual([]);
+      expect(store.tasks).toEqual([]);
+      expect(store.session).toEqual(buildSession({}));
+    });
+
+    it('defaults to Wizard flow', () => {
+      const store = createStore();
+      expect(store.router.activeProgram).toBe(Program.PostHogIntegration);
+    });
+
+    it('accepts a custom flow', () => {
+      const store = createStore(Tool.McpAdd);
+      expect(store.router.activeProgram).toBe(Tool.McpAdd);
+    });
+
+    // Runs another command in this session; nothing has happened yet to unwind.
+    describe('switchProgram', () => {
+      it('makes the chosen program the active one', () => {
+        const store = createStore();
+        store.switchProgram(Program.Metrics);
+        expect(store.router.activeProgram).toBe(Program.Metrics);
+      });
+
+      it('routes to the new program instead of finishing the old one', () => {
+        const store = createStore();
+        store.switchProgram(Program.Metrics);
+        expect(store.router.resolve(store)).toBe(MetricsScreenId.Intro);
+      });
+
+      // The skill program's flow is the fallback for an unknown id; a tool must never land in it.
+      it("routes to a tool's own first screen and its own gates", async () => {
+        const store = createStore();
+        store.switchProgram(Tool.PosthogDoctor);
+        expect(store.router.resolve(store)).toBe(PosthogDoctorScreenId.Intro);
+        const intro = store.getGate('intro');
+        store.completeSetup();
+        await expect(intro).resolves.toBeUndefined();
+        expect(store.programLabel).toBe(Tool.PosthogDoctor);
+      });
+
+      // Every program gates its intro on the same flag, so a stale one skips it.
+      it('does not carry the old confirmation into the new intro', () => {
+        const store = createStore();
+        store.completeSetup();
+        expect(store.setupConfirmed).toBe(true);
+
+        store.switchProgram(Program.Metrics);
+
+        expect(store.setupConfirmed).toBe(false);
+        expect(store.router.resolve(store)).toBe(MetricsScreenId.Intro);
+      });
+
+      // Already resolved for the program we left, so reusing them skips screens.
+      it('reopens the gates for the new program', async () => {
+        const store = createStore();
+        const before = store.getGate('intro');
+        store.completeSetup();
+        await expect(before).resolves.toBeUndefined();
+
+        store.switchProgram(Program.Metrics);
+
+        const after = store.getGate('intro');
+        expect(after).not.toBe(before);
+        await expect(
+          Promise.race([after, Promise.resolve('pending')]),
+        ).resolves.toBe('pending');
+      });
+
+      // Dropping the promise the runner is parked on strands it, silently.
+      it('releases callers parked on the old gates', async () => {
+        const store = createStore();
+        const parked = store.getGate('intro');
+
+        store.switchProgram(Program.Metrics);
+
+        await expect(parked).resolves.toBeUndefined();
+      });
+
+      it('reports screens under the new program', () => {
+        const store = createStore();
+        store.switchProgram(Program.Metrics);
+        expect(store.analyticsProgramId).toBe(Program.Metrics);
+      });
+
+      // The run-level tag is stamped once at launch, so events after the
+      // switch would otherwise still carry the program the run started as.
+      it('retags the run with the new program', () => {
+        const store = createStore();
+        store.switchProgram(Program.Metrics);
+        expect(analytics.setTag).toHaveBeenCalledWith(
+          'program_id',
+          Program.Metrics,
+        );
+      });
+
+      it('follows the new program for label and skill', () => {
+        const store = createStore();
+        store.switchProgram(Program.Metrics);
+        expect(store.programLabel).toBe(Program.Metrics);
+        expect(store.session.skillId).toBe(
+          getProgramConfig(Program.Metrics).skillId ?? null,
+        );
+      });
+
+      // Re-selecting the running program must not discard a fresh confirmation.
+      it('leaves the session alone when the program is unchanged', () => {
+        const store = createStore();
+        store.completeSetup();
+        store.switchProgram(Program.PostHogIntegration);
+        expect(store.setupConfirmed).toBe(true);
+        expect(store.router.activeProgram).toBe(Program.PostHogIntegration);
+      });
+    });
+  });
+
+  // ── Change notification ──────────────────────────────────────────
+
+  describe('change notification', () => {
+    it('emitChange increments version and notifies subscribers', () => {
+      const store = createStore();
+      const listener = vi.fn();
+      store.subscribe(listener);
+
+      store.emitChange();
+
+      expect(store.getVersion()).toBe(1);
+      expect(listener).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  // ── React integration (subscribe / getSnapshot) ──────────────────
+
+  describe('subscribe / getSnapshot', () => {
+    it('subscribe returns an unsubscribe function', () => {
+      const store = createStore();
+      const cb = vi.fn();
+      const unsub = store.subscribe(cb);
+
+      unsub();
+      store.emitChange();
+      expect(cb).not.toHaveBeenCalled();
+    });
+
+    it('getSnapshot returns the current version', () => {
+      const store = createStore();
+      expect(store.getSnapshot()).toBe(0);
+      store.emitChange();
+      expect(store.getSnapshot()).toBe(1);
+    });
+
+    it('is compatible with useSyncExternalStore contract', () => {
+      const store = createStore();
+      const cb = vi.fn();
+      const unsub = store.subscribe(cb);
+
+      const v1 = store.getSnapshot();
+      store.completeSetup();
+      const v2 = store.getSnapshot();
+
+      expect(v2).toBeGreaterThan(v1);
+      expect(cb).toHaveBeenCalled();
+      unsub();
+    });
+  });
+
+  // ── Session setters ──────────────────────────────────────────────
+
+  describe('session setters', () => {
+    it('completeSetup sets setupConfirmed and resolves intro gate', async () => {
+      const store = createStore();
+      const cb = vi.fn();
+      store.subscribe(cb);
+
+      store.completeSetup();
+
+      expect(store.setupConfirmed).toBe(true);
+      await store.getGate('intro');
+      expect(cb).toHaveBeenCalled();
+    });
+
+    it('grantSharing sets scanConsent to granted and emits a change', () => {
+      const store = createStore();
+      const cb = vi.fn();
+      store.subscribe(cb);
+
+      store.grantSharing();
+
+      expect(store.session.scanConsent).toBe(ScanConsent.Granted);
+      expect(cb).toHaveBeenCalled();
+    });
+
+    it('declineSharing sets scanConsent to declined and emits a change', () => {
+      const store = createStore();
+      const cb = vi.fn();
+      store.subscribe(cb);
+
+      store.declineSharing();
+
+      expect(store.session.scanConsent).toBe(ScanConsent.Declined);
+      expect(cb).toHaveBeenCalled();
+    });
+
+    it('completeSetup marks the warehouse-scan report done after consent resolves', () => {
+      const store = createStore();
+
+      store.grantSharing();
+      expect(store.session.warehouseSourcesReported).toBe(false);
+
+      store.completeSetup();
+      expect(store.session.warehouseSourcesReported).toBe(true);
+    });
+
+    it('sets the warehouse tags before it sends setup confirmed', () => {
+      const store = createStore();
+      // A granted run with a scan behind it, which is when tags get set.
+      store.session = {
+        ...store.session,
+        scanConsent: ScanConsent.Granted,
+        frameworkContext: {
+          warehouseScanState: 'ok',
+          detectedWarehouseSources: [
+            {
+              kind: 'Stripe',
+              label: 'Stripe',
+              mode: 'in-cli',
+              matchedSignal: 'x',
+            },
+          ],
+        },
+      };
+      (analytics.setTag as Mock).mockClear();
+      wizardCaptureMock.mockClear();
+
+      store.completeSetup();
+
+      // Analytics merges tags into an event as it is sent, so a tag set after
+      // the capture lands one event too late.
+      const taggedKinds = (analytics.setTag as Mock).mock.calls.findIndex(
+        ([key]) => key === 'warehouse_source_kinds',
+      );
+      expect(taggedKinds).toBeGreaterThanOrEqual(0);
+      const tagOrder = (analytics.setTag as Mock).mock.invocationCallOrder[
+        taggedKinds
+      ];
+      const captureOrder =
+        wizardCaptureMock.mock.invocationCallOrder[
+          wizardCaptureMock.mock.calls.findIndex(
+            ([event]) => event === 'setup confirmed',
+          )
+        ];
+      expect(tagOrder).toBeLessThan(captureOrder);
+    });
+
+    it('declineSharing leaves the report unclaimed while the choice can change', () => {
+      const store = createStore();
+
+      store.declineSharing();
+
+      // warehouseSourcesReported is a send-once latch: the reporter returns at
+      // its first line once set. The privacy panel's choice is reversible, so
+      // claiming it here would silence the report of a user who turns sharing
+      // off and then back on. completeSetup() owns the single report.
+      expect(store.session.warehouseSourcesReported).toBe(false);
+    });
+
+    it('still reports for a user who turns sharing off and on again', () => {
+      const store = createStore();
+
+      store.declineSharing();
+      store.grantSharing();
+      store.completeSetup();
+
+      expect(store.session.scanConsent).toBe(ScanConsent.Granted);
+      expect(store.session.warehouseSourcesReported).toBe(true);
+    });
+
+    it('setRunPhase updates session.runPhase', () => {
+      const store = createStore();
+      store.setRunPhase(RunPhase.Running);
+      expect(store.session.runPhase).toBe(RunPhase.Running);
+    });
+
+    it('setCredentials updates session.credentials', () => {
+      const store = createStore();
+      const creds = {
+        accessToken: 'tok',
+        projectApiKey: 'pk',
+        host: HostResolution.fromApiHost('https://app.posthog.com'),
+        projectId: 42,
+      };
+      store.setCredentials(creds);
+      expect(store.session.credentials).toEqual(creds);
+    });
+
+    it('setFrameworkConfig updates integration and frameworkConfig', () => {
+      const store = createStore();
+      const integration = Integration.nextjs;
+      const config = {
+        metadata: { name: 'Next.js' },
+      } as WizardStore['session']['frameworkConfig'];
+
+      store.setFrameworkConfig(integration, config);
+
+      expect(store.session.integration).toBe(integration);
+      expect(store.session.frameworkConfig).toBe(config);
+    });
+
+    it('setDetectionComplete marks detection done', () => {
+      const store = createStore();
+      expect(store.session.detectionComplete).toBe(false);
+      store.setDetectionComplete();
+      expect(store.session.detectionComplete).toBe(true);
+    });
+
+    it('setPosthogSdkDetected stores the verdict', () => {
+      const store = createStore();
+      expect(store.session.posthogSdkDetected).toBe(false);
+      store.setPosthogSdkDetected(true);
+      expect(store.session.posthogSdkDetected).toBe(true);
+    });
+
+    it('setDetectedFramework sets the label', () => {
+      const store = createStore();
+      store.setDetectedFramework('Django');
+      expect(store.session.detectedFrameworkLabel).toBe('Django');
+    });
+
+    it('setLoginUrl sets and clears the login URL', () => {
+      const store = createStore();
+      store.setLoginUrl('https://example.com/auth');
+      expect(store.loginUrl).toBe('https://example.com/auth');
+
+      store.setLoginUrl(null);
+      expect(store.loginUrl).toBeNull();
+    });
+
+    it('setReadinessResult sets readiness info', () => {
+      const store = createStore();
+      const result = {
+        decision: WizardReadiness.No,
+        health: {} as never,
+        reasons: ['Anthropic: down'],
+      };
+      store.setReadinessResult(result);
+      expect(store.session.readinessResult).toEqual(result);
+
+      store.setReadinessResult(null);
+      expect(store.session.readinessResult).toBeNull();
+    });
+
+    it('setMcpComplete marks MCP step done with outcome', () => {
+      const store = createStore();
+      expect(store.mcpComplete).toBe(false);
+      store.setMcpComplete(McpOutcome.Installed, ['Cursor']);
+      expect(store.mcpComplete).toBe(true);
+      expect(store.mcpOutcome).toBe(McpOutcome.Installed);
+      expect(store.mcpInstalledClients).toEqual(['Cursor']);
+    });
+
+    it('setOutroData sets outro information', () => {
+      const store = createStore();
+      const data = { kind: OutroKind.Success, message: 'Done!' };
+      store.setOutroData(data);
+      expect(store.session.outroData).toEqual(data);
+    });
+
+    it('setFrameworkContext sets key-value pairs', () => {
+      const store = createStore();
+      store.setFrameworkContext('packageManager', 'pnpm');
+      expect(store.session.frameworkContext['packageManager']).toBe('pnpm');
+
+      store.setFrameworkContext('srcDir', 'src');
+      expect(store.session.frameworkContext['srcDir']).toBe('src');
+    });
+  });
+
+  // ── Setter analytics events ────────────────────────────────────
+
+  describe('setter analytics events', () => {
+    it('completeSetup fires setup confirmed event', () => {
+      const store = createStore();
+      store.completeSetup();
+      expect(wizardCaptureMock).toHaveBeenCalledWith(
+        'setup confirmed',
+        expect.any(Object),
+      );
+    });
+
+    it('setCredentials fires auth complete event', () => {
+      const store = createStore();
+      store.setCredentials({
+        accessToken: 'tok',
+        projectApiKey: 'pk',
+        host: HostResolution.fromApiHost('h'),
+        projectId: 42,
+      });
+      expect(wizardCaptureMock).toHaveBeenCalledWith('auth complete', {
+        project_id: 42,
+      });
+    });
+
+    it('setRunPhase tags run_phase', () => {
+      const store = createStore();
+      store.setRunPhase(RunPhase.Running);
+      expect(analytics.setTag).toHaveBeenCalledWith(
+        'run_phase',
+        RunPhase.Running,
+      );
+    });
+
+    it('completeRunStep resets the run_phase tag, not just the session', () => {
+      const store = createStore();
+      store.setRunPhase(RunPhase.Completed);
+      store.completeRunStep('integrate-run');
+      expect(analytics.setTag).toHaveBeenLastCalledWith(
+        'run_phase',
+        RunPhase.Idle,
+      );
+    });
+
+    it('setMcpComplete fires mcp complete event', () => {
+      const store = createStore();
+      store.setMcpComplete(McpOutcome.Installed, ['Cursor', 'VS Code']);
+      expect(wizardCaptureMock).toHaveBeenCalledWith(
+        'mcp complete',
+        expect.objectContaining({
+          mcp_outcome: McpOutcome.Installed,
+          mcp_installed_clients: ['Cursor', 'VS Code'],
+        }),
+      );
+    });
+
+    it('setMcpComplete includes mcp_features_selected when installed', () => {
+      const store = createStore();
+      store.setMcpComplete(McpOutcome.Installed, ['Cursor'], 'all');
+      expect(wizardCaptureMock).toHaveBeenCalledWith(
+        'mcp complete',
+        expect.objectContaining({ mcp_features_selected: 'all' }),
+      );
+
+      wizardCaptureMock.mockClear();
+      createStore().setMcpComplete(
+        McpOutcome.Installed,
+        ['Cursor'],
+        ['dashboards', 'insights'],
+      );
+      expect(wizardCaptureMock).toHaveBeenCalledWith(
+        'mcp complete',
+        expect.objectContaining({
+          mcp_features_selected: ['dashboards', 'insights'],
+        }),
+      );
+    });
+
+    it('setMcpComplete omits mcp_features_selected when not installed', () => {
+      const store = createStore();
+      store.setMcpComplete(McpOutcome.Skipped, [], 'all');
+      const call = wizardCaptureMock.mock.calls.find(
+        ([event]) => event === 'mcp complete',
+      );
+      expect(call?.[1]).not.toHaveProperty('mcp_features_selected');
+    });
+  });
+
+  // ── wizard_ask overlay ───────────────────────────────────────────
+
+  describe('requestQuestion / resolvePendingQuestion', () => {
+    const pending = {
+      id: 'req-1',
+      source: 'creating-product-tours',
+      questions: [
+        { id: 'goal', prompt: 'Goal?', kind: 'text' as const },
+        {
+          id: 'audience',
+          prompt: 'Who?',
+          kind: 'single' as const,
+          options: [
+            { label: 'All users', value: 'all' },
+            { label: 'New users', value: 'new' },
+          ],
+        },
+      ],
+    };
+
+    it('requestQuestion pushes WizardAsk overlay and stores pending payload', () => {
+      const store = createStore();
+      void store.requestQuestion(pending);
+      expect(store.currentScreen).toBe(Overlay.WizardAsk);
+      expect(store.session.pendingQuestion).toEqual(pending);
+    });
+
+    it('resolvePendingQuestion resolves the promise with the answers and pops overlay', async () => {
+      const store = createStore();
+      const promise = store.requestQuestion(pending);
+
+      store.resolvePendingQuestion({ goal: 'Find export', audience: 'new' });
+
+      await expect(promise).resolves.toEqual({
+        goal: 'Find export',
+        audience: 'new',
+      });
+      expect(store.session.pendingQuestion).toBeNull();
+      expect(store.currentScreen).not.toBe(Overlay.WizardAsk);
+    });
+
+    it('noteAskProgress reports an answered question to the ask bridge', () => {
+      const store = createStore();
+      const onAnswer = vi.fn();
+      const promise = store.requestQuestion(pending, onAnswer);
+
+      store.noteAskProgress();
+      expect(onAnswer).toHaveBeenCalledTimes(1);
+
+      // The request is over: a later call must not re-arm its timeout.
+      store.resolvePendingQuestion({ goal: 'Find export', audience: 'new' });
+      store.noteAskProgress();
+      expect(onAnswer).toHaveBeenCalledTimes(1);
+      return promise;
+    });
+
+    it('throws when requestQuestion is called while another is pending', () => {
+      const store = createStore();
+      void store.requestQuestion(pending);
+      expect(() => store.requestQuestion(pending)).toThrow(
+        /another wizard_ask request is pending/,
+      );
+    });
+
+    it('cancelPendingQuestion resolves all fields with the cancelled sentinel', async () => {
+      const store = createStore();
+      const promise = store.requestQuestion(pending);
+
+      store.cancelPendingQuestion();
+
+      await expect(promise).resolves.toEqual({
+        goal: '__cancelled__',
+        audience: '__cancelled__',
+      });
+      expect(store.session.pendingQuestion).toBeNull();
+    });
+
+    it('cancelPendingQuestion is a no-op when nothing is pending', () => {
+      const store = createStore();
+      expect(() => store.cancelPendingQuestion()).not.toThrow();
+      expect(store.session.pendingQuestion).toBeNull();
+    });
+
+    it('fires `wizard_ask shown` analytics with source, question_count, and kinds', () => {
+      const store = createStore();
+      void store.requestQuestion(pending);
+
+      expect(wizardCaptureMock).toHaveBeenCalledWith('wizard_ask shown', {
+        source: 'creating-product-tours',
+        question_count: 2,
+        kinds: ['text', 'single'],
+      });
+    });
+  });
+
+  describe('tokenUsage / toggleTokenHud (hidden Ctrl+T HUD)', () => {
+    it('starts at zero usage, and visible by default in dev/test (IS_DEV)', () => {
+      const store = createStore();
+      expect(store.tokenUsage).toEqual({
+        inputTokens: 0,
+        outputTokens: 0,
+        cacheReadTokens: 0,
+        cacheCreationTokens: 0,
+        costUsd: 0,
+        costIsFinal: false,
+      });
+      // Defaults to IS_DEV, which is true under vitest (NODE_ENV=test) --
+      // see WizardStore's $tokenHudVisible doc comment.
+      expect(store.tokenHudVisible).toBe(true);
+    });
+
+    it('toggleTokenHud flips visibility each call, from whatever it started at', () => {
+      const store = createStore();
+      const initial = store.tokenHudVisible;
+      store.toggleTokenHud();
+      expect(store.tokenHudVisible).toBe(!initial);
+      store.toggleTokenHud();
+      expect(store.tokenHudVisible).toBe(initial);
+    });
+
+    it('addTokenUsage accumulates token counts and cost across calls', () => {
+      const store = createStore();
+      store.addTokenUsage({
+        inputTokens: 1_000_000,
+        outputTokens: 0,
+        cacheReadTokens: 0,
+        cacheCreationTokens: 0,
+        cacheCreation5m: 0,
+        cacheCreation1h: 0,
+      });
+      store.addTokenUsage({
+        inputTokens: 1_000_000,
+        outputTokens: 1_000_000,
+        cacheReadTokens: 0,
+        cacheCreationTokens: 0,
+        cacheCreation5m: 0,
+        cacheCreation1h: 0,
+      });
+
+      expect(store.tokenUsage.inputTokens).toBe(2_000_000);
+      expect(store.tokenUsage.outputTokens).toBe(1_000_000);
+      // $3/Mtok input + $15/Mtok output, from the shared pricing table.
+      expect(store.tokenUsage.costUsd).toBeCloseTo(2 * 3 + 15, 5);
+      expect(store.tokenUsage.costIsFinal).toBe(false);
+    });
+
+    it('prices each delta at its own model, not a single run-wide rate', () => {
+      // A Haiku-overridden turn (e.g. source-map detection) followed by a
+      // default-model turn -- each must be priced at its own rate, since a
+      // subagent can genuinely run on a different model than the main
+      // session's turns.
+      const store = createStore();
+      store.addTokenUsage({
+        inputTokens: 1_000_000,
+        outputTokens: 0,
+        cacheReadTokens: 0,
+        cacheCreationTokens: 0,
+        cacheCreation5m: 0,
+        cacheCreation1h: 0,
+        model: 'claude-haiku-4-5',
+      });
+      store.addTokenUsage({
+        inputTokens: 1_000_000,
+        outputTokens: 0,
+        cacheReadTokens: 0,
+        cacheCreationTokens: 0,
+        cacheCreation5m: 0,
+        cacheCreation1h: 0,
+      });
+
+      // $1 (Haiku) + $3 (Sonnet default) -- not $6 if both were priced as
+      // Sonnet, and not $2 if both were priced as Haiku.
+      expect(store.tokenUsage.costUsd).toBeCloseTo(1 + 3, 5);
+    });
+
+    it('setFinalTokenCostUsd overwrites the running estimate and marks it final', () => {
+      const store = createStore();
+      store.addTokenUsage({
+        inputTokens: 1_000_000,
+        outputTokens: 0,
+        cacheReadTokens: 0,
+        cacheCreationTokens: 0,
+        cacheCreation5m: 0,
+        cacheCreation1h: 0,
+      });
+
+      store.setFinalTokenCostUsd(1.23);
+
+      expect(store.tokenUsage.costUsd).toBe(1.23);
+      expect(store.tokenUsage.costIsFinal).toBe(true);
+      // Token counts (not cost) are untouched by reconciliation.
+      expect(store.tokenUsage.inputTokens).toBe(1_000_000);
+    });
+
+    it('addTokenUsage is a no-op once the cost has been finalized', () => {
+      const store = createStore();
+      store.setFinalTokenCostUsd(1.0);
+
+      store.addTokenUsage({
+        inputTokens: 1_000_000,
+        outputTokens: 0,
+        cacheReadTokens: 0,
+        cacheCreationTokens: 0,
+        cacheCreation5m: 0,
+        cacheCreation1h: 0,
+      });
+
+      // A late-arriving turn (e.g. post-success cleanup) must not perturb
+      // the already-reconciled final number.
+      expect(store.tokenUsage.costUsd).toBe(1.0);
+      expect(store.tokenUsage.inputTokens).toBe(0);
+    });
+
+    it('emits a change so subscribers re-render', () => {
+      const store = createStore();
+      const versions: number[] = [];
+      store.subscribe(() => versions.push(store.getSnapshot()));
+
+      store.toggleTokenHud();
+      store.addTokenUsage({
+        inputTokens: 1,
+        outputTokens: 0,
+        cacheReadTokens: 0,
+        cacheCreationTokens: 0,
+        cacheCreation5m: 0,
+        cacheCreation1h: 0,
+      });
+
+      expect(versions.length).toBe(2);
+    });
+  });
+
+  // ── Agent observation state ──────────────────────────────────────
+
+  describe('tasks', () => {
+    it('setTasks replaces the task list', () => {
+      const store = createStore();
+      const tasks = [
+        { label: 'Install SDK', status: TaskStatus.Pending, done: false },
+        { label: 'Configure', status: TaskStatus.Pending, done: false },
+      ];
+      store.setTasks(tasks);
+      expect(store.tasks).toEqual(tasks);
+    });
+
+    it('updateTask marks a task as done', () => {
+      const store = createStore();
+      store.setTasks([
+        { label: 'Install SDK', status: TaskStatus.Pending, done: false },
+      ]);
+
+      store.updateTask(0, true);
+
+      expect(store.tasks[0].done).toBe(true);
+      expect(store.tasks[0].status).toBe(TaskStatus.Completed);
+    });
+
+    it('updateTask marks a task as not done', () => {
+      const store = createStore();
+      store.setTasks([
+        { label: 'Install SDK', status: TaskStatus.Completed, done: true },
+      ]);
+
+      store.updateTask(0, false);
+
+      expect(store.tasks[0].done).toBe(false);
+      expect(store.tasks[0].status).toBe(TaskStatus.Pending);
+    });
+
+    it('updateTask is a no-op for out-of-bounds index', () => {
+      const store = createStore();
+      store.setTasks([
+        { label: 'Install SDK', status: TaskStatus.Pending, done: false },
+      ]);
+
+      const cb = vi.fn();
+      store.subscribe(cb);
+      store.updateTask(99, true);
+
+      expect(cb).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('syncTodos', () => {
+    it('removes omitted native tasks and retains completed work from earlier agents', () => {
+      const store = createStore();
+      store.syncTodos([
+        { id: 'a', source: 'first', content: 'Same', status: 'completed' },
+      ]);
+      store.syncTodos([
+        { id: 'a', source: 'second', content: 'Same', status: 'pending' },
+      ]);
+      expect(store.tasks).toHaveLength(2);
+      store.syncTodos([
+        { id: 'b', source: 'second', content: 'Next', status: 'pending' },
+      ]);
+      expect(store.tasks.map((t) => t.label)).toEqual(['Same', 'Next']);
+      store.syncTodos([]);
+      expect(store.tasks.map((t) => t.label)).toEqual(['Same']);
+    });
+
+    it('maps incoming todos to TaskItems', () => {
+      const store = createStore();
+      store.syncTodos([
+        { content: 'Install SDK', status: 'pending' },
+        { content: 'Configure', status: 'completed' },
+      ]);
+
+      expect(store.tasks).toHaveLength(2);
+      expect(store.tasks[0]).toEqual({
+        label: 'Install SDK',
+        activeForm: undefined,
+        status: TaskStatus.Pending,
+        done: false,
+      });
+      expect(store.tasks[1]).toEqual({
+        label: 'Configure',
+        activeForm: undefined,
+        status: TaskStatus.Completed,
+        done: true,
+      });
+    });
+
+    it('retains completed tasks not in the incoming list', () => {
+      const store = createStore();
+      store.setTasks([
+        { label: 'Old done task', status: TaskStatus.Completed, done: true },
+        { label: 'Old pending task', status: TaskStatus.Pending, done: false },
+      ]);
+
+      store.syncTodos([{ content: 'New task', status: 'pending' }]);
+
+      // Old done task is retained, old pending task is dropped
+      expect(store.tasks).toHaveLength(2);
+      expect(store.tasks[0].label).toBe('Old done task');
+      expect(store.tasks[1].label).toBe('New task');
+    });
+
+    it('does not duplicate completed tasks that appear in both', () => {
+      const store = createStore();
+      store.setTasks([
+        { label: 'Shared task', status: TaskStatus.Completed, done: true },
+      ]);
+
+      store.syncTodos([{ content: 'Shared task', status: 'completed' }]);
+
+      // Should not have duplicates — incomingLabels includes "Shared task",
+      // so the retained filter excludes it
+      expect(store.tasks).toHaveLength(1);
+      expect(store.tasks[0].label).toBe('Shared task');
+    });
+
+    it('preserves activeForm from incoming todos', () => {
+      const store = createStore();
+      store.syncTodos([
+        {
+          content: 'Installing',
+          status: 'in_progress',
+          activeForm: 'Installing SDK...',
+        },
+      ]);
+
+      expect(store.tasks[0].activeForm).toBe('Installing SDK...');
+    });
+
+    it('emits change', () => {
+      const store = createStore();
+      const cb = vi.fn();
+      store.subscribe(cb);
+      store.syncTodos([{ content: 'task', status: 'pending' }]);
+      expect(cb).toHaveBeenCalled();
+    });
+  });
+
+  // ── Concurrent / rapid-fire mutations ─────────────────────────────
+
+  describe('concurrent mutations', () => {
+    it('subscriber sees consistent state during a setter call', () => {
+      const store = createStore();
+      const snapshots: { confirmed: boolean; version: number }[] = [];
+
+      store.subscribe(() => {
+        snapshots.push({
+          confirmed: store.setupConfirmed,
+          version: store.getSnapshot(),
+        });
+      });
+
+      store.completeSetup();
+
+      expect(snapshots).toEqual([{ confirmed: true, version: 1 }]);
+    });
+
+    it('multiple subscribers all see the same state', () => {
+      const store = createStore();
+      const results: number[] = [];
+
+      store.subscribe(() => results.push(store.getSnapshot()));
+      store.subscribe(() => results.push(store.getSnapshot()));
+      store.subscribe(() => results.push(store.getSnapshot()));
+
+      store.completeSetup();
+
+      // All 3 subscribers should see version 1
+      expect(results).toEqual([1, 1, 1]);
+    });
+
+    it('subscriber that mutates store during notification triggers additional notifications', () => {
+      const store = createStore();
+      const versions: number[] = [];
+
+      // First subscriber triggers another mutation
+      store.subscribe(() => {
+        versions.push(store.getSnapshot());
+        if (store.setupConfirmed && store.session.runPhase === RunPhase.Idle) {
+          store.setRunPhase(RunPhase.Running);
+        }
+      });
+
+      store.completeSetup();
+
+      // Should see version 1 (from completeSetup) and version 2 (from setRunPhase)
+      expect(versions).toEqual([1, 2]);
+      expect(store.session.runPhase).toBe(RunPhase.Running);
+    });
+
+    it('interleaved overlay and session mutations are all visible', () => {
+      const store = createStore();
+      const screens: string[] = [];
+
+      store.subscribe(() => {
+        screens.push(store.currentScreen);
+      });
+
+      store.completeSetup(); // -> health-check
+      store.pushOverlay(Overlay.SettingsOverride); // -> settings-override
+      store.setCredentials({
+        // -> settings-override (overlay still on top)
+        accessToken: 'tok',
+        projectApiKey: 'pk',
+        host: HostResolution.fromApiHost('h'),
+        projectId: 1,
+      });
+      store.popOverlay(); // -> health-check (readinessResult still null)
+
+      expect(screens).toEqual([
+        ScreenId.HealthCheck,
+        Overlay.SettingsOverride,
+        Overlay.SettingsOverride,
+        ScreenId.HealthCheck,
+      ]);
+    });
+
+    it('unsubscribing mid-notification does not affect other subscribers', () => {
+      const store = createStore();
+      const log: string[] = [];
+
+      store.subscribe(() => {
+        log.push('sub1');
+      });
+
+      const unsub2 = store.subscribe(() => {
+        log.push('sub2');
+      });
+
+      store.subscribe(() => {
+        log.push('sub3');
+      });
+
+      store.emitChange();
+      expect(log).toEqual(['sub1', 'sub2', 'sub3']);
+
+      // Unsub the second listener
+      unsub2();
+      log.length = 0;
+      store.emitChange();
+      expect(log).toEqual(['sub1', 'sub3']);
+    });
+  });
+
+  // ── Multiple subscribers ─────────────────────────────────────────
+
+  describe('multiple subscribers', () => {
+    it('supports many concurrent subscribers', () => {
+      const store = createStore();
+      const callbacks = Array.from({ length: 50 }, () => vi.fn());
+      const unsubs = callbacks.map((cb) => store.subscribe(cb));
+
+      store.emitChange();
+
+      callbacks.forEach((cb) => expect(cb).toHaveBeenCalledTimes(1));
+
+      // Unsubscribe all
+      unsubs.forEach((unsub) => unsub());
+      store.emitChange();
+
+      // No more notifications
+      callbacks.forEach((cb) => expect(cb).toHaveBeenCalledTimes(1));
+    });
+
+    it('double-unsubscribe is safe', () => {
+      const store = createStore();
+      const cb = vi.fn();
+      const unsub = store.subscribe(cb);
+
+      unsub();
+      unsub(); // should not throw
+
+      store.emitChange();
+      expect(cb).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── Edge cases ───────────────────────────────────────────────────
+
+  describe('edge cases', () => {
+    it('setFrameworkContext overwrites existing keys', () => {
+      const store = createStore();
+      store.setFrameworkContext('key', 'value1');
+      store.setFrameworkContext('key', 'value2');
+      expect(store.session.frameworkContext['key']).toBe('value2');
+    });
+
+    it('setFrameworkConfig with null integration and config', () => {
+      const store = createStore();
+      store.setFrameworkConfig(null, null);
+      expect(store.session.integration).toBeNull();
+      expect(store.session.frameworkConfig).toBeNull();
+    });
+
+    it('pushStatus with empty string', () => {
+      const store = createStore();
+      store.pushStatus('');
+      expect(store.statusMessages).toEqual(['']);
+    });
+
+    it('syncTodos with empty array retains terminal tasks; setTasks clears all', () => {
+      const store = createStore();
+      store.setTasks([
+        { label: 'Pending', status: TaskStatus.Pending, done: false },
+        { label: 'Done', status: TaskStatus.Completed, done: true },
+      ]);
+
+      store.syncTodos([]);
+      expect(store.tasks.map((t) => t.label)).toEqual(['Done']);
+      store.setTasks([]);
+      expect(store.tasks).toEqual([]);
+    });
+
+    it('syncTodos with unknown status defaults to Pending', () => {
+      const store = createStore();
+      store.syncTodos([{ content: 'Task', status: '' }]);
+      expect(store.tasks[0].status).toBe(TaskStatus.Pending);
+    });
+
+    it('updateTask with negative index is a no-op', () => {
+      const store = createStore();
+      store.setTasks([
+        { label: 'Task', status: TaskStatus.Pending, done: false },
+      ]);
+      const cb = vi.fn();
+      store.subscribe(cb);
+      store.updateTask(-1, true);
+      expect(cb).not.toHaveBeenCalled();
+    });
+
+    it('popOverlay on empty stack does not crash', () => {
+      const store = createStore();
+      expect(() => store.popOverlay()).not.toThrow();
+      expect(store.currentScreen).toBe(PostHogIntegrationScreenId.Intro);
+    });
+
+    it('completeSetup can only resolve the promise once', async () => {
+      const store = createStore();
+      store.completeSetup();
+      store.completeSetup(); // second call — promise already resolved
+
+      await store.getGate('intro');
+      expect(store.setupConfirmed).toBe(true);
+    });
+
+    it('version property (string) is independent from internal _version counter', () => {
+      const store = createStore();
+      store.version = '1.2.3';
+      expect(store.version).toBe('1.2.3');
+      expect(store.getVersion()).toBe(0);
+
+      store.emitChange();
+      expect(store.version).toBe('1.2.3');
+      expect(store.getVersion()).toBe(1);
+    });
+  });
+
+  // ── health-check gate ────────────────────────────────────────────
+
+  describe('health-check gate', () => {
+    it('resolves immediately for non-Wizard flows', async () => {
+      const store = createStore(Tool.McpAdd);
+
+      await expect(store.getGate('health-check')).resolves.toBeUndefined();
+    });
+
+    it('resolves automatically when readiness is non-blocking', async () => {
+      evaluateWizardReadinessMock.mockResolvedValueOnce({
+        decision: WizardReadiness.Yes,
+        health: {} as never,
+        reasons: [],
+      });
+
+      const store = createStore();
+      store.runInitHooks();
+      let resolved = false;
+
+      void store.getGate('health-check').then(() => {
+        resolved = true;
+      });
+
+      await flushMicrotasks();
+
+      expect(resolved).toBe(true);
+      expect(store.session.readinessResult).toEqual({
+        decision: WizardReadiness.Yes,
+        health: {} as never,
+        reasons: [],
+      });
+    });
+
+    it('stays pending for blocking readiness until outage is dismissed', async () => {
+      evaluateWizardReadinessMock.mockResolvedValueOnce({
+        decision: WizardReadiness.No,
+        health: {} as never,
+        reasons: ['Anthropic: down'],
+      });
+
+      const store = createStore();
+      store.runInitHooks();
+      let resolved = false;
+
+      void store.getGate('health-check').then(() => {
+        resolved = true;
+      });
+
+      await flushMicrotasks();
+
+      expect(resolved).toBe(false);
+      expect(store.currentScreen).toBe(PostHogIntegrationScreenId.Intro);
+
+      store.dismissOutage();
+      await store.getGate('health-check');
+
+      expect(resolved).toBe(true);
+      expect(store.outageDismissed).toBe(true);
+    });
+  });
+
+  // ── ScreenId transition analytics ───────────────────────────────────
+
+  describe('screen transition analytics', () => {
+    it('fires when a real screen transition occurs after the initial screen', () => {
+      const store = createStore();
+
+      store.completeSetup();
+      wizardCaptureMock.mockClear();
+
+      store.setReadinessResult({
+        decision: WizardReadiness.Yes,
+        health: {} as never,
+        reasons: [],
+      });
+
+      expect(wizardCaptureMock).toHaveBeenCalledWith(
+        'screen auth',
+        expect.objectContaining({
+          from_screen: ScreenId.HealthCheck,
+        }),
+      );
+    });
+
+    it('does not fire a screen event when the visible screen stays the same', () => {
+      const store = createStore();
+      store.completeSetup();
+      store.setReadinessResult({
+        decision: WizardReadiness.Yes,
+        health: {} as never,
+        reasons: [],
+      });
+      store.setCredentials({
+        accessToken: 'tok',
+        projectApiKey: 'pk',
+        host: HostResolution.fromApiHost('h'),
+        projectId: 1,
+      });
+      wizardCaptureMock.mockClear();
+
+      store.setRunPhase(RunPhase.Running);
+
+      expect(store.currentScreen).toBe(ScreenId.Run);
+      expect(
+        wizardCaptureMock.mock.calls.some(
+          ([event]) => typeof event === 'string' && event.startsWith('screen '),
+        ),
+      ).toBe(false);
+    });
+  });
+
+  // ── Program attribution for shared steps ────────────────────────────
+
+  describe('analyticsProgramId', () => {
+    it('reports the running program for a step that claims no override', () => {
+      const store = createStore(Tool.McpAdd);
+
+      expect(store.currentScreen).toBe(McpScreenId.Add);
+      expect(store.analyticsProgramId).toBe(Tool.McpAdd);
+    });
+
+    it('reports mcp-tutorial for the tutorial step hosted inside mcp-add', () => {
+      const store = createStore(Tool.McpAdd);
+      store.setMcpComplete(McpOutcome.Installed);
+      store.setSlackStepDismissed();
+
+      expect(store.currentScreen).toBe(McpScreenId.SuggestedPrompts);
+      expect(store.analyticsProgramId).toBe(Tool.McpTutorial);
+    });
+
+    it('reports mcp-tutorial for the same step run standalone', () => {
+      const store = createStore(Tool.McpTutorial);
+
+      expect(store.currentScreen).toBe(McpScreenId.SuggestedPrompts);
+      expect(store.analyticsProgramId).toBe(Tool.McpTutorial);
+    });
+
+    it('stamps the tutorial program id on the screen transition event', () => {
+      const store = createStore(Tool.McpAdd);
+      // Prime the transition detector: the first emit has no previous
+      // screen, so it records the starting one without firing an event.
+      store.emitChange();
+
+      store.setMcpComplete(McpOutcome.Installed);
+      store.setSlackStepDismissed();
+
+      expect(wizardCaptureMock).toHaveBeenCalledWith(
+        `screen ${McpScreenId.SuggestedPrompts}`,
+        expect.objectContaining({ program_id: Tool.McpTutorial }),
+      );
+    });
+  });
+
+  // ── intro gate ──────────────────────────────────────────────────
+
+  describe('intro gate', () => {
+    it('resolves when completeSetup is called', async () => {
+      const store = createStore();
+      store.completeSetup();
+      await store.getGate('intro');
+      expect(store.setupConfirmed).toBe(true);
+    });
+
+    it('is a promise that can be awaited before completeSetup is called', async () => {
+      const store = createStore();
+
+      let resolved = false;
+      void store.getGate('intro').then(() => {
+        resolved = true;
+      });
+
+      // Not yet resolved
+      await Promise.resolve(); // flush microtasks
+      expect(resolved).toBe(false);
+
+      store.completeSetup();
+      await store.getGate('intro');
+      expect(resolved).toBe(true);
+    });
+  });
+
+  describe('setIntegrate (self-driving integration check)', () => {
+    it('records "no" as integrate=true', () => {
+      const store = createStore(Program.SelfDriving);
+      store.session = buildSession({});
+      store.setIntegrate(true);
+      expect(store.integrate).toBe(true);
+    });
+
+    it('records "yes, already integrated" as integrate=false', () => {
+      const store = createStore(Program.SelfDriving);
+      store.session = buildSession({});
+      store.setIntegrate(false);
+      expect(store.integrate).toBe(false);
+    });
+
+    it('--integrate pre-resolves the decision to true', () => {
+      const store = createStore(Program.SelfDriving);
+      store.launch(buildSession({}), { integrate: true });
+      expect(store.integrate).toBe(true);
+    });
+  });
+
+  describe('chooseProvisionAccount (self-driving "no account" branch)', () => {
+    it('flips signup and records email + region, and integrates', () => {
+      const store = createStore(Program.SelfDriving);
+      store.session = buildSession({});
+
+      store.chooseProvisionAccount('dev@example.com', 'eu');
+
+      expect(store.session.signup).toBe(true);
+      expect(store.session.email).toBe('dev@example.com');
+      expect(store.session.region).toBe('eu');
+      expect(store.integrate).toBe(true);
+    });
+
+    it('emits exactly one change event', () => {
+      const store = createStore(Program.SelfDriving);
+      store.session = buildSession({});
+      const cb = vi.fn();
+      store.subscribe(cb);
+
+      store.chooseProvisionAccount('dev@example.com', 'us');
+
+      expect(cb).toHaveBeenCalledTimes(1);
+    });
+  });
+});
