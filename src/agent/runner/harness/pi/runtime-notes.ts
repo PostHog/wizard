@@ -57,7 +57,7 @@ const BASH_SCOPE = [
 ];
 
 const POSTHOG_MCP =
-  '- The PostHog MCP is a SINGLE tool named `posthog_exec` that takes a `command` string. The grammar: `tools` (list the catalog), `search <regex>` (find a tool by name), `info <tool>` (show a tool’s schema), `call <tool> <json>` (run it with a JSON argument object). Run `info <tool>` once before your first `call` to that tool so you pass exactly the arguments it expects. Do not guess tool names — reach them through `search`/`info`. It reaches PostHog’s tools only: the wizard’s own tools, such as `wizard_ask`, `check_env_keys` and `set_env_values`, are separate tools you call directly by name, never through `posthog_exec`.';
+  '- The PostHog MCP is a SINGLE tool named `posthog_exec` that takes a `command` string. The grammar: `tools` (list the catalog), `search <regex>` (find a tool by name), `info <tool>` (show a tool’s schema), `call <tool> <json>` (run it with a JSON argument object). Run `info <tool>` once before your first `call` to that tool so you pass exactly the arguments it expects. Do not guess tool names — reach them through `search`/`info`. The PostHog MCP reaches PostHog’s tools only. The wizard’s own tools, such as `wizard_ask`, `check_env_keys` and `set_env_values`, are separate tools you call directly by name, never through `posthog_exec`.';
 
 const DASHBOARD_STEP =
   '- For the dashboard step, drive it entirely through `posthog_exec`: create the dashboard first, then add each insight to it — `call dashboard-create {…}`, then a `call insight-create {…}` per insight. The JSON argument objects are the same ones the named tools took.';
