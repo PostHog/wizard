@@ -51,7 +51,7 @@ describe.each([
     program: replayVision,
     integration: Integration.nextjs,
     dependencies: { next: '^15.0.0' },
-    message: "Replay vision couldn't detect a framework",
+    message: "The Replay Vision setup couldn't find a compatible framework",
   },
 ])(
   '$name framework detection',
