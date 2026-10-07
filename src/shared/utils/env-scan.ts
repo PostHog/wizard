@@ -82,8 +82,40 @@ const ENV_NAME_CANDIDATES = [
 
 const GLOB_SPECIAL_CHARS = /[*?[\\(!+@]/;
 
-/** True when one brace-free glob can select a file whose name starts with `.env`. */
-function globAlternativeCanSelectEnvFile(glob: string): boolean {
+/** Project-relative POSIX paths of the `.env*` files under `rootDir`, same bounded walk as the key scan. */
+export function listProjectEnvFiles(rootDir: string): string[] {
+  const files: string[] = [];
+  walkProjectFiles(
+    rootDir,
+    (name, fullPath) => {
+      if (isEnvFileName(name))
+        files.push(toRelativePosixPath(rootDir, fullPath));
+    },
+    ENV_SCAN_MAX_DEPTH,
+  );
+  return files;
+}
+
+const GLOB_MATCH_OPTIONS = { dot: true, nocase: true };
+
+/** Whether `alternative` selects `relativePath` the way ripgrep reads a glob: by basename, or by path from the search root. */
+function globMatchesFile(alternative: string, relativePath: string): boolean {
+  const basename = path.posix.basename(relativePath);
+  return (
+    minimatch(basename, alternative, GLOB_MATCH_OPTIONS) ||
+    minimatch(relativePath, alternative, GLOB_MATCH_OPTIONS) ||
+    minimatch(relativePath, `**/${alternative}`, GLOB_MATCH_OPTIONS)
+  );
+}
+
+/**
+ * True when one brace-free glob can select a file whose name starts with `.env`.
+ * `existingEnvFiles` is read only for a leading-wildcard name, and only once.
+ */
+function globAlternativeCanSelectEnvFile(
+  glob: string,
+  existingEnvFiles: () => readonly string[],
+): boolean {
   const segments = glob.split('/').filter((segment) => segment !== '');
   const last = segments[segments.length - 1];
   if (last === undefined) return false;
@@ -97,23 +129,44 @@ function globAlternativeCanSelectEnvFile(glob: string): boolean {
     // `.env.prod*` and `.e*` can reach an env file, `app*` and `.git*` cannot.
     return literalPrefix.startsWith('.env') || '.env'.startsWith(literalPrefix);
   }
-  // A leading wildcard (`*`, `?env`, `*.production`) can match any suffix, so
-  // test it against the env names projects use. `*.ts` still passes.
-  const options = { dot: true, nocase: true };
-  return ENV_NAME_CANDIDATES.some((name) => minimatch(name, last, options));
+  // A leading wildcard (`*`, `?env`, `*.production`) can match any suffix.
+  // Decide against the env files that exist, so `*.foo` is denied when
+  // `.env.foo` is there. The usual names stay denied even when absent, so a
+  // file the walk cannot reach (deep, hidden directory, created later) is
+  // still covered. `*.ts` passes both.
+  if (
+    ENV_NAME_CANDIDATES.some((name) =>
+      minimatch(name, last, GLOB_MATCH_OPTIONS),
+    )
+  ) {
+    return true;
+  }
+  return existingEnvFiles().some((file) => globMatchesFile(glob, file));
 }
 
 /**
  * True when a ripgrep `--glob` can select a `.env*` file. Such a glob overrides
  * `.gitignore`, and ripgrep's `*` matches dotfiles. The glob's last segment is
- * what names the file, so that segment decides, not a list of paths. A leading
- * `!` only excludes files from the search, so it never selects one.
+ * what names the file, so that segment decides. A leading `!` only excludes
+ * files from the search, so it never selects one.
+ *
+ * `searchRoot` is the directory the Grep searches (its `path` argument, or the
+ * project root); a leading-wildcard glob is checked against the env files under
+ * it. Without one, only the usual env names are checked.
  */
-export function globCanSelectEnvFile(glob: string): boolean {
+export function globCanSelectEnvFile(
+  glob: string,
+  searchRoot?: string,
+): boolean {
   if (glob.startsWith('!')) return false;
+  let listed: readonly string[] | undefined;
+  const existingEnvFiles = () =>
+    (listed ??= searchRoot ? listProjectEnvFiles(searchRoot) : []);
   return minimatch
     .braceExpand(glob)
-    .some((alternative) => globAlternativeCanSelectEnvFile(alternative));
+    .some((alternative) =>
+      globAlternativeCanSelectEnvFile(alternative, existingEnvFiles),
+    );
 }
 
 /**

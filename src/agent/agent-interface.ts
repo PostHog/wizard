@@ -516,7 +516,10 @@ export function wizardCanUseTool(
   if (toolName === 'Grep') {
     const grepPath = typeof input.path === 'string' ? input.path : '';
     const glob = typeof input.glob === 'string' ? input.glob : '';
-    if (glob && globCanSelectEnvFile(glob)) {
+    const searchRoot = grepPath
+      ? path.resolve(context.workingDirectory ?? '.', grepPath)
+      : context.workingDirectory;
+    if (glob && globCanSelectEnvFile(glob, searchRoot)) {
       logToFile(`Denying Grep glob that selects env files: ${glob}`);
       return {
         behavior: 'deny',

@@ -139,6 +139,55 @@ describe('wizardCanUseTool — .env guard ignores case', () => {
   });
 });
 
+describe('wizardCanUseTool — Grep globs checked against the env files that exist', () => {
+  let root: string;
+
+  beforeAll(() => {
+    root = fs.mkdtempSync(path.join(os.tmpdir(), 'wizard-grep-env-'));
+    fs.mkdirSync(path.join(root, 'apps', 'api'), { recursive: true });
+    fs.writeFileSync(path.join(root, '.env.foo'), 'A=1\n');
+    fs.writeFileSync(path.join(root, 'apps', 'api', '.env.stagingx'), 'B=1\n');
+    fs.writeFileSync(path.join(root, 'app.ts'), 'export {}\n');
+  });
+  afterAll(() => fs.rmSync(root, { recursive: true, force: true }));
+
+  const grep = (glob: string, searchPath?: string) =>
+    wizardCanUseTool(
+      'Grep',
+      { glob, ...(searchPath ? { path: searchPath } : {}) },
+      { workingDirectory: root },
+    ).behavior;
+
+  it('denies a leading-wildcard glob that selects an env file in the project', () => {
+    expect(grep('*.foo')).toBe('deny');
+    expect(grep('{*.foo,x}')).toBe('deny');
+    expect(grep('*.stagingx')).toBe('deny');
+  });
+
+  it('denies a glob by relative path to an env file under the Grep path', () => {
+    expect(grep('api/*.stagingx', 'apps')).toBe('deny');
+    expect(grep('apps/*/.env.stagingx')).toBe('deny');
+  });
+
+  it('allows a leading-wildcard glob that no env file matches', () => {
+    expect(grep('**/*.ts')).toBe('allow');
+    expect(grep('*.bar')).toBe('allow');
+  });
+
+  it('allows a leading-wildcard glob when the env file is outside the Grep path', () => {
+    expect(grep('*.foo', 'apps/api')).toBe('allow');
+  });
+
+  it('keeps denying a conventional env name that is not on disk', () => {
+    expect(grep('*.local')).toBe('deny');
+    expect(grep('apps/api/.env.local')).toBe('deny');
+  });
+
+  it('allows an exclude glob', () => {
+    expect(grep('!*.min.js')).toBe('allow');
+  });
+});
+
 describe('wizardCanUseTool — wizard_ask pending guard', () => {
   for (const tool of ['Write', 'Edit'] as const) {
     it(`denies ${tool} while a wizard_ask overlay is pending`, () => {
