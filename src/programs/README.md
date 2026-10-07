@@ -111,8 +111,9 @@ answers), `resolveApiKeyLogin` (a login from a personal API key) and
 program code the hosts call. Program code may import `@env`, `@shared/*`,
 `@utils/*`, `@agent` and `@agent/types`. A program folder also imports the
 shared program code, by relative path, and only the registry's entry files
-import every program. The programs' projects map no `@programs/*` alias of their
-own, so every declaration a program emits resolves in its consumers; see
+import every program. Every programs project extends `tsconfig.no-tui.json`,
+which maps `@programs/*`. A program's project references only the shared program
+code, so an import of a sibling program or the registry fails with TS6307; see
 [layer boundaries](../../.claude/skills/wizard-development/references/ARCHITECTURE.md#layer-boundaries).
 
 ## Add a program

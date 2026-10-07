@@ -34,7 +34,7 @@ The wizard uses **AI models from Anthropic or OpenAI**, routed through PostHog's
 - **AI opt-in**: for existing organizations in interactive runs, the wizard checks `is_ai_data_processing_approved` and waits for approval before agent work. CI and signup runs bypass this interactive gate.
 - **Prefer your own AI?** The wizard's integration knowledge ships as a context-mill skill you can download and run inside your own agent.
 
-The wizard's "Privacy & data usage" menu (intro screen) and the `[I]` shortcut on the auth screen surface the same information in-terminal.
+The wizard's "Privacy & data" menu (intro screen) and the `[I]` shortcut on the auth screen surface the same information in-terminal.
 
 ## MCP Commands
 
@@ -219,11 +219,12 @@ npx @posthog/wizard@latest provision --email user@example.com --region us
 npx @posthog/wizard@latest provision --email user@example.com --region eu --json
 ```
 
-Success prints the full `ProvisioningResult` (`projectApiKey`, `host`,
-`projectId`, `accountId`, `accessToken`, `refreshToken`, and
-`personalApiKey` if present). Failure exits 1; in `--json` mode the error
-is emitted to stderr as `{"error":"...","code":"..."}`, with `code` set to
-`email_exists` when the address is already registered.
+Success prints `projectApiKey`, `host`, `projectId`, `accountId`, `accessToken`,
+`refreshToken`, and `personalApiKey` if present. `--json` prints the full
+`ProvisioningResult`, which also has `expiresAt` and `oauthClientId`. Failure
+exits 1; in `--json` mode the error is emitted to stderr as
+`{"error":"...","code":"..."}`, with `code` set to `email_exists` when the
+address is already registered.
 
 > ⚠️ **Output contains live credentials.** Pipe it into a secrets store —
 > do not let it be captured by shared CI logs. Mask the step output or
@@ -250,8 +251,9 @@ The following CLI arguments are available:
 **CI mode is available only in development/test builds.** Published builds
 reject `--ci`; use an interactive terminal for `npx @posthog/wizard@latest`.
 
-Local CI runs require a PostHog personal API key **and a separate gateway
-token file**, plus the target project ID. See
+Local CI runs require a PostHog personal API key for MCP access **and a
+separate gateway token file** holding the gateway service key from 1Password,
+plus the target project ID. See
 [local credentials](docs/local-dev.md#credentials-for-local-ci-and-headless-runs)
 for setup and the CI secret names. With both secrets configured:
 
@@ -489,7 +491,7 @@ program at all.
 | Box                               | What it is                                                                                                              | Where                                                                  |
 | --------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
 | `runWizard`                       | Builds the launch values from the arguments and starts the TUI host                                                     | [src/cli/runners](src/cli/runners/run-wizard.ts)                       |
-| `runWizardCI · runWizardHeadless` | Checks the non-interactive arguments and starts the headless host                                                       | [src/cli/runners](src/cli/runners/run-non-interactive.ts)              |
+| `runWizardCI · runWizardHeadless` | Checks the non-interactive arguments and starts the headless host                                                       | [src/cli/runners](src/cli/runners)                                     |
 | `a tool's command`                | Parses the tool's arguments and calls its runner                                                                        | [src/cli/commands](src/cli/commands)                                   |
 | `runTui`                          | The full-screen wizard: OAuth login, the WizardAsk screen as the answerer, the flow's screens as the workflow           | [src/tui/run.ts](src/tui/run.ts)                                       |
 | `runHeadless`                     | A run with no screens: API-key login, no answerer, log lines and the task stream                                        | [src/headless/run.ts](src/headless/run.ts)                             |
@@ -535,8 +537,8 @@ set `POSTHOG_WIZARD_NO_TELEMETRY=1`) to disable either remote transport.
 Supporting agent sessions after we leave is important. There are plenty of ways
 to break or misconfigure PostHog, so guarding against this is key.
 
-`src/shared/utils/rules/add-editor-rules.ts` demonstrates how to dynamically construct
-rules files and store them in the project's `.cursor/rules` directory.
+`src/shared/utils/rules/` holds per-framework rule templates in Markdown. No
+code reads them or writes them into a project today.
 
 ## Prompts and LLM interactions
 
@@ -683,12 +685,12 @@ pnpm run dev
 This builds, links globally, and watches for changes. Leave it running - any `.ts` file changes will auto-rebuild. Then from any project:
 
 ```bash
-wizard --integration=nextjs
+wizard
 
 # Point individual services at local dev servers:
-wizard --integration=nextjs --local-context-mill   # skills from localhost:8765
-wizard --integration=nextjs --local-mcp            # MCP from localhost:8787
-wizard --integration=nextjs --local-dev            # context-mill + MCP + PostHog
+wizard --local-context-mill   # skills from localhost:8765
+wizard --local-mcp            # MCP from localhost:8787
+wizard --local-dev            # context-mill + MCP + PostHog
 ```
 
 See [`docs/local-dev.md`](docs/local-dev.md) for the full catalog.
@@ -816,7 +818,7 @@ This repo includes a helper script to run a full end‑to‑end smoke test of th
   - Cloning `wizard-workbench` next to this repo (so it lives at `../wizard-workbench`).
 - Set `POSTHOG_PERSONAL_API_KEY` either in your shell or in `../wizard-workbench/.env`.
 - Set `WIZARD_CI_GATEWAY_TOKEN_FILE` to an absolute path containing the separate
-  AI gateway token. See [local credentials](docs/local-dev.md#credentials-for-local-ci-and-headless-runs).
+  gateway service key from 1Password. See [local credentials](docs/local-dev.md#credentials-for-local-ci-and-headless-runs).
 - Set `POSTHOG_WIZARD_PROJECT_ID` to the intended test project and
   `POSTHOG_WIZARD_REGION` to `us` or `eu` (CI uses `us`). The helper also accepts
   `POSTHOG_PROJECT_ID` and `POSTHOG_REGION` as fallback names.

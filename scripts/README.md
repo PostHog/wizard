@@ -1,11 +1,13 @@
 # scripts/
 
-Helper scripts. The build-related ones (`generate-version.cjs`,
-`smoke-test*.sh`, `warlock-smoke-test.ts`) are wired into `package.json`.
-Scripts import the wizard only through public entries, like the e2e harness; see
+Helper scripts. The build-related ones (`generate-version.cjs`, `smoke-test.sh`,
+`warlock-smoke-test.ts`) are wired into `package.json`. `smoke-test-ci.sh` runs
+from `.github/workflows/smoke-test.yml`. Scripts import the wizard only through
+public entries, like the e2e harness; see
 [`ARCHITECTURE.md`](../e2e-harness/ARCHITECTURE.md#the-pieces). The rest below
 are **manual, runnable tools** for headless e2e + snapshots — each is a
-standalone `tsx` entry, named `*.no-jest.ts` so Jest ignores it.
+standalone `tsx` entry, named `*.no-jest.ts` so Vitest ignores it
+(`vitest.config.ts` excludes `**/*.no-jest.*`).
 
 Run from the repo root, e.g. `npx tsx scripts/<name>.no-jest.ts`.
 

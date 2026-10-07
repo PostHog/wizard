@@ -9,8 +9,8 @@ bindings can still select the Anthropic SDK. See
 ## Entry points and transport
 
 - [index.ts](index.ts): `run()` drives a linear conversation.
-- [task.ts](task.ts): `runTask()` drives a seed or task conversation for
-  orchestration.
+- [task.ts](task.ts): `runPiTask()` drives a seed or task conversation for
+  orchestration. The backend's `runTask()` in index.ts loads it on first use.
 - [gateway.ts](gateway.ts): shared scoped-token transport and model
   registration.
 

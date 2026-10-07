@@ -28,10 +28,12 @@ To call it from code, use `runAgent`. The
 
 Import runtime values from `@agent` and types from `@agent/types`. `@agent`
 exports `runAgent`, `RunOutcome` (from `@shared/run-state`, so the hosts read it
-without the agent), `AgentSignals`, `WIZARD_TOOL_NAMES`, `DEFAULT_BINDING` and
-`streamMcpPrompt`, the MCP tutorial's prompt stream. `pnpm typecheck` rejects a
-deeper import from any other layer. Files inside `src/agent` import each other
-by relative path: the agent's project maps no `@agent` alias, so every
-declaration it emits resolves in its consumers. The agent itself may import
-`@env`, `@shared/*` and `@utils/*`, and nothing else; see
+without the agent), `AgentSignals`, `WIZARD_TOOL_NAMES`, `DEFAULT_BINDING`,
+`scanVerdict`, `scanInstalledSkill` and `streamMcpPrompt`, the MCP tutorial's
+prompt stream. `pnpm lint` rejects a deeper import from any other layer, through
+ESLint `no-restricted-syntax`. Files inside `src/agent` import each other by
+relative path. Nothing enforces this: the agent's project maps `@agent`,
+`@agent/types` and `@agent/*` through `tsconfig.no-tui.json`, and its tests use
+them. The agent itself may import `@env`, `@shared/*` and `@utils/*`, and
+nothing else; see
 [layer boundaries](../../.claude/skills/wizard-development/references/ARCHITECTURE.md#layer-boundaries).
