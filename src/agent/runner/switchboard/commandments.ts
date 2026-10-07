@@ -4,7 +4,7 @@
  * A run is a resolved (program, sequence, harness, model). Guidance belongs to
  * whichever axis makes it true, declared here beside the tables that resolve
  * them, and assembled once by `assembleCommandments`. A rule that is true for
- * every run stays in `@lib/agent/commandments`; anything narrower lives here so
+ * every run stays in `@agent/commandments`; anything narrower lives here so
  * the call sites never re-derive it.
  *
  * Leaf module by design — it imports the axis enums and the per-axis text, never
@@ -13,7 +13,7 @@
  */
 
 import { Harness, Sequence } from '@shared/constants';
-import { WIZARD_COMMANDMENTS } from '@agent/commandments';
+import { WIZARD_COMMANDMENTS } from '../../commandments';
 import { piRuntimeNotes, type RuntimeCaps } from '../harness/pi/runtime-notes';
 
 // ── Sequence axis ───────────────────────────────────────────────────────
@@ -75,7 +75,7 @@ const MODEL_COMMANDMENTS: Record<string, readonly string[]> = {};
 // ── Assembly ────────────────────────────────────────────────────────────
 
 export interface CommandmentAxes {
-  /** Program id, as resolved into `PROGRAM_BINDINGS`. */
+  /** The run's program id. */
   program?: string;
   sequence: Sequence;
   harness: Harness;

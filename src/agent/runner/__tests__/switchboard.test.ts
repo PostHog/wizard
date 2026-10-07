@@ -10,7 +10,6 @@
  * asserted directly.
  */
 import { describe, it, expect } from 'vitest';
-import { PROGRAM_REGISTRY } from '@lib/programs/program-registry';
 import {
   DEFAULT_AGENT_MODEL,
   GPT5_6_LUNA_MODEL,
@@ -23,9 +22,9 @@ import {
   WIZARD_ORCHESTRATOR_FLAG_KEY,
 } from '@shared/constants';
 import {
-  PROGRAM_BINDINGS,
   DEFAULT_BINDING,
   resolveBinding,
+  type ProgramBinding,
   type SwitchboardCtx,
 } from '@agent/runner/switchboard';
 import {
@@ -36,9 +35,8 @@ import {
   TRIAGE_MODELS,
   VALID_MODELS,
 } from '@agent/runner/switchboard/models';
-import { runBindingCases } from '@agent/runner/switchboard/flags/__tests__/binding-cases';
+import { runBindingCases } from '@agent/runner/switchboard/flags/__tests__/binding-cases.no-jest';
 
-const PROGRAM_IDS = PROGRAM_REGISTRY.map((c) => c.id);
 const DEFAULT_RESOLVED = {
   sequence: Sequence.linear,
   harness: Harness.pi,
@@ -46,37 +44,29 @@ const DEFAULT_RESOLVED = {
   thinkingLevel: 'medium',
 } as const;
 
-describe('switchboard PROGRAM_BINDINGS', () => {
-  // `ProgramId` widens to `string`, so the type can't force coverage. This is
-  // the real guard: add a program without a binding and this fails.
-  it('declares a binding for every registered program', () => {
-    const missing = PROGRAM_IDS.filter((id) => !(id in PROGRAM_BINDINGS));
-    expect(missing).toEqual([]);
-  });
+// Bindings a program config may declare.
+const TERRA_HIGH: ProgramBinding = {
+  sequence: Sequence.linear,
+  harness: Harness.pi,
+  model: GPT5_6_TERRA_MODEL,
+  thinkingLevel: 'high',
+};
+const ORCHESTRATOR_PI: ProgramBinding = {
+  sequence: Sequence.orchestrator,
+  harness: Harness.pi,
+  model: DEFAULT_AGENT_MODEL,
+};
+const ORCHESTRATOR_ANTHROPIC: ProgramBinding = {
+  sequence: Sequence.orchestrator,
+  harness: Harness.anthropic,
+  model: DEFAULT_AGENT_MODEL,
+};
 
-  it('maps no binding to an unregistered program', () => {
-    const stale = Object.keys(PROGRAM_BINDINGS).filter(
-      (id) => !PROGRAM_IDS.includes(id),
-    );
-    expect(stale).toEqual([]);
-  });
-
-  // Pins today's behavior: the seam changes nothing until a binding is moved.
-  it('resolves every program, unflagged, to the same default binding', () => {
-    for (const program of PROGRAM_IDS) {
-      if (program === 'ai-observability') continue; // pinned below
-      if (program === 'error-tracking-upload-source-maps') continue; // pinned below
-      if (program === 'metrics') continue; // pinned below
-      if (program === 'replay-vision') continue; // pinned below
-      if (program === 'error-tracking') continue; // pinned below
-      expect(resolveBinding({ program, flags: {} })).toEqual(DEFAULT_RESOLVED);
-    }
-  });
-
+describe('switchboard program bindings', () => {
   runBindingCases([
     {
-      name: 'binds ai-observability to pi + terra high',
-      ctx: { program: 'ai-observability', flags: {} },
+      name: 'a declared binding sets every axis it names',
+      ctx: { program: 'bound-program', binding: TERRA_HIGH, flags: {} },
       binding: {
         sequence: Sequence.linear,
         harness: Harness.pi,
@@ -86,19 +76,8 @@ describe('switchboard PROGRAM_BINDINGS', () => {
       trace: { harness: 'binding', model: 'binding', sequence: 'binding' },
     },
     {
-      name: 'binds source-map uploads to pi + sol medium',
-      ctx: { program: 'error-tracking-upload-source-maps', flags: {} },
-      binding: {
-        sequence: Sequence.linear,
-        harness: Harness.pi,
-        model: GPT5_6_SOL_MODEL,
-        thinkingLevel: 'medium',
-      },
-      trace: { harness: 'binding', model: 'binding', sequence: 'binding' },
-    },
-    {
-      name: 'binds metrics to the orchestrator on pi; stage models come from the flow frontmatter',
-      ctx: { program: 'metrics', flags: {} },
+      name: 'an orchestrator binding without an effort leaves stage efforts to the flow frontmatter',
+      ctx: { program: 'bound-program', binding: ORCHESTRATOR_PI, flags: {} },
       binding: {
         sequence: Sequence.orchestrator,
         harness: Harness.pi,
@@ -108,22 +87,15 @@ describe('switchboard PROGRAM_BINDINGS', () => {
       trace: { harness: 'binding', model: 'binding', sequence: 'binding' },
     },
     {
-      name: 'binds replay-vision to the orchestrator sequence',
-      ctx: { program: 'replay-vision', flags: {} },
+      name: 'a binding may pick the Anthropic harness',
+      ctx: {
+        program: 'bound-program',
+        binding: ORCHESTRATOR_ANTHROPIC,
+        flags: {},
+      },
       binding: {
         sequence: Sequence.orchestrator,
         harness: Harness.anthropic,
-        model: DEFAULT_AGENT_MODEL,
-        thinkingLevel: undefined,
-      },
-      trace: { harness: 'binding', model: 'binding', sequence: 'binding' },
-    },
-    {
-      name: 'binds error-tracking to the orchestrator on pi; stage models come from the flow frontmatter',
-      ctx: { program: 'error-tracking', flags: {} },
-      binding: {
-        sequence: Sequence.orchestrator,
-        harness: Harness.pi,
         model: DEFAULT_AGENT_MODEL,
         thinkingLevel: undefined,
       },
@@ -225,39 +197,45 @@ describe('switchboard decision trace', () => {
 });
 
 describe('switchboard composed clamp', () => {
-  it('a composed sub-run is linear for every program, whatever the flags say', () => {
-    for (const program of PROGRAM_IDS) {
+  it('a composed sub-run is linear for every binding, whatever the flags say', () => {
+    const cases: Array<[ProgramBinding, typeof DEFAULT_RESOLVED | object]> = [
+      [DEFAULT_BINDING, DEFAULT_RESOLVED],
+      [
+        TERRA_HIGH,
+        {
+          ...DEFAULT_RESOLVED,
+          model: GPT5_6_TERRA_MODEL,
+          thinkingLevel: 'high',
+        },
+      ],
+      [
+        ORCHESTRATOR_PI,
+        {
+          ...DEFAULT_RESOLVED,
+          model: DEFAULT_AGENT_MODEL,
+          thinkingLevel: undefined,
+        },
+      ],
+      [
+        ORCHESTRATOR_ANTHROPIC,
+        {
+          ...DEFAULT_RESOLVED,
+          harness: Harness.anthropic,
+          model: DEFAULT_AGENT_MODEL,
+          thinkingLevel: undefined,
+        },
+      ],
+    ];
+    for (const [binding, expected] of cases) {
       const ctx: SwitchboardCtx = {
-        program,
+        program: 'bound-program',
+        binding,
         composed: true,
         flags: { [WIZARD_ORCHESTRATOR_FLAG_KEY]: 'true' },
         trace: {},
       };
-      // The flag routes posthog-integration's harness to pi; the composed
-      // clamp holds every sequence at linear — the orchestrator bindings
-      // (metrics, replay-vision, error-tracking) included; other axes keep their bindings.
-      expect(resolveBinding(ctx)).toEqual(
-        program === 'ai-observability'
-          ? {
-              ...DEFAULT_RESOLVED,
-              model: GPT5_6_TERRA_MODEL,
-              thinkingLevel: 'high',
-            }
-          : program === 'metrics' || program === 'error-tracking'
-          ? {
-              ...DEFAULT_RESOLVED,
-              model: DEFAULT_AGENT_MODEL,
-              thinkingLevel: undefined,
-            }
-          : program === 'replay-vision'
-          ? {
-              ...DEFAULT_RESOLVED,
-              harness: Harness.anthropic,
-              model: DEFAULT_AGENT_MODEL,
-              thinkingLevel: undefined,
-            }
-          : DEFAULT_RESOLVED,
-      );
+      // The clamp holds every sequence at linear, orchestrator bindings included; other axes keep their bindings.
+      expect(resolveBinding(ctx)).toEqual(expected);
       expect(ctx.trace?.sequence).toBe('composed');
     }
   });

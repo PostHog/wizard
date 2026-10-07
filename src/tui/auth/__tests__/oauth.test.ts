@@ -1,0 +1,128 @@
+import {
+  assertWizardCompletionScope,
+  extractOAuthCode,
+  isAuthorizationTimeout,
+} from '../oauth';
+import { parseOAuthScopes, getOAuthScopesForProgram } from '@programs';
+import {
+  WIZARD_OAUTH_SCOPES,
+  WIZARD_PROVISIONING_SCOPES,
+} from '@shared/constants';
+
+describe('extractOAuthCode', () => {
+  it('extracts the code from a full callback URL', () => {
+    expect(extractOAuthCode('http://localhost:8239/callback?code=abc123')).toBe(
+      'abc123',
+    );
+  });
+
+  it('extracts the code when other query params are present', () => {
+    expect(
+      extractOAuthCode(
+        'http://localhost:8238/callback?state=xyz&code=abc123&scope=read',
+      ),
+    ).toBe('abc123');
+  });
+
+  it('extracts the code from a bare query string', () => {
+    expect(extractOAuthCode('code=abc123&state=xyz')).toBe('abc123');
+  });
+
+  it('returns a bare code as-is', () => {
+    expect(extractOAuthCode('abc123')).toBe('abc123');
+  });
+
+  it('trims surrounding whitespace', () => {
+    expect(extractOAuthCode('  abc123  ')).toBe('abc123');
+  });
+
+  it('url-decodes a code pulled from a query fragment', () => {
+    expect(extractOAuthCode('code=abc%2F123')).toBe('abc/123');
+  });
+
+  it('returns null for empty input', () => {
+    expect(extractOAuthCode('')).toBeNull();
+    expect(extractOAuthCode('   ')).toBeNull();
+  });
+
+  it('returns null for a URL without a code', () => {
+    expect(
+      extractOAuthCode('http://localhost:8239/callback?error=access_denied'),
+    ).toBeNull();
+  });
+
+  it('returns null for free-form text with whitespace and no code', () => {
+    expect(extractOAuthCode('please paste here')).toBeNull();
+  });
+});
+
+describe('isAuthorizationTimeout', () => {
+  it('matches the authorization timeout error', () => {
+    expect(isAuthorizationTimeout(new Error('Authorization timed out'))).toBe(
+      true,
+    );
+  });
+
+  it('does not match unrelated errors', () => {
+    expect(
+      isAuthorizationTimeout(new Error('OAuth error: access_denied')),
+    ).toBe(false);
+    expect(isAuthorizationTimeout(new Error('Unknown error'))).toBe(false);
+  });
+});
+
+describe('wizard OAuth scopes', () => {
+  it('requests both scopes required to complete wizard sessions', () => {
+    const scopes = getOAuthScopesForProgram(null);
+
+    expect(scopes).toContain('wizard_session:write');
+    expect(scopes).toContain('event_definition:write');
+    expect(WIZARD_OAUTH_SCOPES).toEqual(
+      expect.arrayContaining([...WIZARD_PROVISIONING_SCOPES]),
+    );
+  });
+
+  it('grants self-driving the scanner scopes STEP 6c needs', () => {
+    const scopes = getOAuthScopesForProgram('self-driving');
+
+    // The scope OBJECT is `replay_scanner` — `vision-scanners-*` are MCP tool
+    // names, not scopes. Requesting the tool name grants nothing and STEP 6c
+    // 403s on every scanner call.
+    expect(scopes).toContain('replay_scanner:read');
+    expect(scopes).toContain('replay_scanner:write');
+    // Creating/updating a scanner requires session_recording:read alongside
+    // replay_scanner:write (the API pairs them), so losing it breaks 6c too.
+    expect(scopes).toContain('session_recording:read');
+    // Base scopes are never dropped by an addition.
+    expect(scopes).toEqual(expect.arrayContaining([...WIZARD_OAUTH_SCOPES]));
+  });
+
+  it('accepts a newly issued token with the completion scope', () => {
+    expect(() =>
+      assertWizardCompletionScope(
+        'user:read wizard_session:write event_definition:write',
+      ),
+    ).not.toThrow();
+  });
+
+  it('aborts with the fix-first message when the completion scope is missing', () => {
+    expect(() =>
+      assertWizardCompletionScope('user:read wizard_session:write'),
+    ).toThrow(
+      /without the event_definition:write.*approving all permissions.*revoke/is,
+    );
+  });
+
+  it('preserves unrelated granted scopes when parsing the token response', () => {
+    expect(
+      parseOAuthScopes(
+        'user:read project:read wizard_session:write event_definition:write',
+      ),
+    ).toEqual([
+      'user:read',
+      'project:read',
+      'wizard_session:write',
+      'event_definition:write',
+    ]);
+  });
+});

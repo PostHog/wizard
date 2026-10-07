@@ -18,9 +18,7 @@
  * `RunResult.failure` with the same fields `wizardAbort` takes; an error the
  * agent did not decide (a refused mint, an SDK crash) comes back as
  * `outcome: RunOutcome.Crashed` with the original error attached, so a caller can keep
- * handling it the way it always did. The legacy adapter in
- * `src/lib/programs/run-agent-legacy.ts` rebuilds today's session-driven
- * behavior on top of this call for every existing caller.
+ * handling it the way it always did. `runProgram` is the program layer's caller.
  */
 
 import { Sequence } from '@shared/constants';
@@ -36,8 +34,15 @@ import type {
 } from './shared/types';
 import { prepareRun } from './shared/bootstrap';
 import { createProgressCollector } from './shared/progress-collector';
+import {
+  createTranscriptTail,
+  type TranscriptTail,
+} from './shared/transcript-tail';
 import { getSequence } from './switchboard';
-import { flushScanReport } from '@agent/yara-hooks';
+import { resolveRunConfig } from './switchboard/resolve-run';
+import { flushScanReport } from '../yara-hooks';
+import { registerCleanup } from '@utils/cleanup';
+import { useRunGatewayCredential } from '../gateway-session';
 
 export type {
   AbortCase,
@@ -46,6 +51,7 @@ export type {
   Credentials,
   AgentRunDefinition,
   PromptContext,
+  AgentRouting,
   ResolvedBinding,
   RunAgentOptions,
   RunConfig,
@@ -60,11 +66,9 @@ export type {
   AgentInteraction,
   AgentProgress,
   ProgressEmitter,
-} from '@agent/progress';
-export { shouldDisableAsk } from './shared/bootstrap';
-export { resolveBinding } from './switchboard';
-export type { ProgramBinding, SwitchboardCtx } from './switchboard';
-export { TASK_OUTCOMES_KEY } from './sequence/orchestrator/queue';
+} from '../progress';
+export { DEFAULT_BINDING } from './switchboard';
+export type { ProgramBinding } from './switchboard';
 export type { TaskOutcome } from './sequence/orchestrator/queue';
 
 /**
@@ -75,14 +79,20 @@ export type { TaskOutcome } from './sequence/orchestrator/queue';
  * nothing; a throwing observer is logged and the run continues.
  */
 export async function runAgent(
-  config: RunConfig,
+  runConfig: RunConfig,
   input: RunInput,
   options: RunAgentOptions = {},
 ): Promise<RunResult> {
   let collector: ReturnType<typeof createProgressCollector> | undefined;
+  let transcript: TranscriptTail | undefined;
   const snapshot = (): RunResult['snapshot'] => {
     try {
-      if (collector) return collector.snapshot();
+      if (collector) {
+        const collected = collector.snapshot();
+        return transcript
+          ? { ...collected, transcriptTail: transcript.text() }
+          : collected;
+      }
     } catch {
       // A partial snapshot must not replace the run's primary failure.
     }
@@ -97,7 +107,11 @@ export async function runAgent(
       },
     };
   };
+  let unregisterFlush: (() => void) | undefined;
   const flushReport = (): void => {
+    unregisterFlush?.();
+    // A deferred report keeps counting this run's scans toward the program run's.
+    if (runConfig.scanReport === 'defer') return;
     try {
       const report = flushScanReport({ yaraReport: input.flags.yaraReport });
       if (report)
@@ -109,7 +123,11 @@ export async function runAgent(
   let result: RunResult;
   try {
     collector = createProgressCollector(options.onProgress);
+    // An exit mid-run still reports the scans so far; the report is idempotent.
+    unregisterFlush = registerCleanup(flushReport);
     const { emit } = collector;
+    if (runConfig.run.collectTranscript)
+      transcript = createTranscriptTail(emit);
     const log = (message: string) =>
       emit({ kind: 'log', level: 'info', message });
     if (options.signal?.aborted) {
@@ -124,6 +142,13 @@ export async function runAgent(
         snapshot: snapshot(),
       };
     }
+    // A pre-issued gateway token (dev and test CI runs) stands in for the mint, for this run only.
+    useRunGatewayCredential(
+      input.credentials.gateway,
+      input.credentials.projectId,
+    );
+    const config = resolveRunConfig(runConfig);
+    emit({ kind: 'binding', binding: config.binding });
     const boot = await prepareRun(config, input);
     if (config.binding.sequence === Sequence.orchestrator) {
       log('Task-queue orchestrator enabled.');
@@ -143,6 +168,7 @@ export async function runAgent(
       emit,
       interaction: options.interaction,
       signal: options.signal,
+      transcript,
     });
     result = {
       ...(options.signal?.aborted &&

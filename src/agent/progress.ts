@@ -4,64 +4,16 @@
  * `runAgent` reports through one optional callback and asks through one
  * optional set of capabilities. Neither reaches into a UI singleton, a store,
  * or a session: every payload is copied data, every question is awaited on an
- * injected answerer. The legacy adapter in `src/lib/programs/run-agent-legacy.ts`
- * maps these back onto `WizardUI` one call per event, so the terminal output of
- * every existing runner is unchanged.
+ * injected answerer. The caller decides what each event looks like.
  */
 
 import type { SettingsConflict } from '@shared/claude-settings';
 
 // ── What the agent hands back and asks with ─────────────────────────
 
-/** Outcome kind for the outro screen */
-export enum OutroKind {
-  Success = 'success',
-  Error = 'error',
-  Cancel = 'cancel',
-}
-
-export interface OutroData {
-  kind: OutroKind;
-  /** Main headline (green check for Success, red X for Error, etc.) */
-  message?: string;
-  /** Free-form body text shown under the headline. Use \n for paragraph breaks. */
-  body?: string;
-  /** Success-only: bulleted list of "what the agent did" */
-  changes?: string[];
-  /**
-   * Success-only: a prominent, labeled link to where the user should go
-   * next (e.g. an inbox the program just configured). Rendered right under
-   * the headline and shown verbatim — no UTM tagging — so the URL stays
-   * clean and copy-pasteable. Set per-program in buildOutroData.
-   */
-  primaryLink?: { label: string; url: string };
-  /**
-   * Success-only: a short "what to do next" checklist with its own heading,
-   * rendered as a bulleted list. Distinct from `changes`, which recaps what
-   * the agent already did.
-   */
-  nextSteps?: { heading: string; items: string[] };
-  docsUrl?: string;
-  continueUrl?: string;
-  /** Report file the agent wrote (e.g. "posthog-setup-report.md") */
-  reportFile?: string;
-  /** Stable machine-readable error code from the error catalog (@lib/errors). */
-  errorCode?: import('@shared/errors').ErrorCode;
-  /** Structured context for the error code; safe for telemetry payloads. */
-  errorDetail?: Record<string, unknown>;
-  /** PostHog dashboard URL the program created on the user's behalf. */
-  dashboardUrl?: string;
-  /** PostHog notebook URL the program uploaded the report to. */
-  notebookUrl?: string;
-  /**
-   * Copy-paste prompt the operator hands to their coding agent to finish the
-   * job (work the report's checklist). Printed to the terminal's main buffer on
-   * exit (see getExitLine in start-tui.ts) — the TUI's alternate screen is wiped
-   * on exit, so the scrollback line is where it survives and can be
-   * triple-click-selected. Set per-program in buildOutroData.
-   */
-  handoffPrompt?: string;
-}
+import type { OutroData } from '@shared/outro';
+import type { ResolvedBinding } from './runner/shared/types';
+export type { OutroData } from '@shared/outro';
 
 /** A single question rendered by the WizardAsk overlay. */
 export interface AskQuestion {
@@ -136,7 +88,7 @@ export interface PendingQuestion {
  * the main session, and some programs override to Haiku, so pricing must key
  * off the per-turn model rather than a single run-wide assumption. Omit only
  * when the caller genuinely has no model context (falls back to Sonnet
- * pricing — see `pricePerMtokForModel` in `@lib/agent/token-pricing`).
+ * pricing — see `pricePerMtokForModel` in `@shared/token-pricing`).
  */
 export interface TokenUsageDelta {
   inputTokens: number;
@@ -148,7 +100,7 @@ export interface TokenUsageDelta {
   model?: string;
 }
 
-/** The run spinner as the agent drives it: `WizardUI.spinner()` returns one. */
+/** The run spinner as the agent drives it. Each call is one `spinner` event. */
 export interface SpinnerHandle {
   start(message?: string): void;
   stop(message?: string): void;
@@ -156,7 +108,7 @@ export interface SpinnerHandle {
 }
 
 /**
- * Context the agent attaches to a 401 so the host can pick the right copy.
+ * Context the agent attaches to a 401 so the caller can pick the right copy.
  *
  * `hasSettingsConflict` is true when a Claude Code settings file (project,
  * project-local, the user's global config, or managed) actually overrides the
@@ -185,8 +137,10 @@ export interface AuthErrorDetail {
   logFilePath: string;
 }
 
-/** One task as the host renders it. The same shape `WizardUI.syncTodos` takes. */
+/** One task in the run's task list, as the `tasks` event carries it. */
 export interface TaskSnapshot {
+  id?: string;
+  source?: string;
   content: string;
   status: string;
   activeForm?: string;
@@ -195,44 +149,46 @@ export interface TaskSnapshot {
 export type ProgressLogLevel = 'info' | 'warn' | 'error' | 'success' | 'step';
 
 /**
- * Everything the agent reports while it runs. One event per former
- * `getUI()` call, in the same order, with the same payload, so a reducer that
- * maps each case back onto `WizardUI` reproduces today's output exactly.
+ * Everything the agent reports while it runs, in the order it happens.
  *
  * Payloads are copies. Never a store, a setter, a function or a live
  * collection. The callback returns nothing and the agent never branches on it.
  */
 export type AgentProgress =
-  /** The run's main work has started (`WizardUI.startRun`). */
+  /** The run's resolved sequence, harness and model, once, before it starts. */
+  | { kind: 'binding'; binding: ResolvedBinding }
+  /** The run's main work has started. */
   | { kind: 'lifecycle'; phase: 'started' }
-  /** The run finished and the host may show its outro (`WizardUI.outro`). */
+  /** The run finished and the caller may show its outro. */
   | { kind: 'lifecycle'; phase: 'completed'; message: string }
-  /** The run spinner (`WizardUI.spinner()`), one handle per run. */
+  /** The run spinner: start, stop or change its message. One per run. */
   | {
       kind: 'spinner';
       action: 'start' | 'stop' | 'message';
       message?: string;
     }
-  /** A log line (`WizardUI.log[level]`). */
+  /** A log line at a level. */
   | { kind: 'log'; level: ProgressLogLevel; message: string }
-  /** A `[STATUS]` line the agent printed (`WizardUI.pushStatus`). */
+  /** A `[STATUS]` line the agent printed. */
   | { kind: 'status'; message: string }
-  /** The full task list, already sorted for display (`WizardUI.syncTodos`). */
+  /** The full task list, already sorted for display. */
   | { kind: 'tasks'; tasks: TaskSnapshot[] }
-  /** The stage of work derived from the active tool (`WizardUI.setStage`). */
+  /** The stage of work derived from the active tool. */
   | { kind: 'stage'; stage: string }
   /** A PostHog URL the agent created (`setDashboardUrl` / `setNotebookUrl`). */
   | { kind: 'url'; which: 'dashboard' | 'notebook'; url: string }
-  /** One assistant turn's token usage (`WizardUI.addTokenUsage`). */
+  /** One assistant turn's token usage. */
   | { kind: 'usage'; delta: TokenUsageDelta }
-  /** The SDK's authoritative run cost (`WizardUI.setFinalTokenCostUsd`). */
+  /** The SDK's authoritative run cost, in USD. */
   | { kind: 'finalCost'; usd: number }
-  /** The gateway returned 401; a failure follows (`WizardUI.showAuthError`). */
+  /** The gateway returned 401; a failure follows. */
   | { kind: 'authError'; detail: AuthErrorDetail }
-  /** The handoff document the agent published (`WizardUI.setHandoffText`). */
+  /** The handoff document the agent published. */
   | { kind: 'handoff'; text: string }
-  /** The run's final outro payload (`WizardUI.setOutroData`). */
-  | { kind: 'completion'; outro: OutroData };
+  /** The run's final outro payload. */
+  | { kind: 'completion'; outro: OutroData }
+  /** One short line per agent step, only from a run that collects its transcript. */
+  | { kind: 'activity'; line: string };
 
 export type ProgressEmitter = (event: AgentProgress) => void;
 
@@ -242,7 +198,7 @@ export type ProgressEmitter = (event: AgentProgress) => void;
  * so `wizard_ask` returns its existing "not available" error, and an optional
  * task notice is declined — the same path a `--ci` run takes today.
  * Each request's `signal` aborts when that request times out, the run's
- * signal aborts, or another task fails the run. On that abort the host
+ * signal aborts, or another task fails the run. On that abort the caller
  * dismisses that request alone, and that dismissal must not throw: abort
  * listeners run where the agent cannot catch them, so Node would rethrow the
  * error as an uncaught exception.
@@ -251,10 +207,15 @@ export interface AgentInteraction {
   /**
    * Open a question and resolve with the answers. The bridge that calls this
    * owns the timeout, the `__cancelled__` sentinel and the analytics.
+   *
+   * `onAnswer` reports that the user answered one question of a request that
+   * has more to come, so the bridge can re-arm its timeout against the user's
+   * silence rather than against the age of the whole request. A host that
+   * answers a request in one shot never calls it.
    */
   ask?: (
     question: PendingQuestion,
-    context: { signal: AbortSignal },
+    context: { signal: AbortSignal; onAnswer?: () => void },
   ) => Promise<AskAnswers>;
   /** Offer an optional step and resolve with whether to keep it. */
   taskNotice?: (

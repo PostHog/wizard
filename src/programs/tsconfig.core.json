@@ -1,0 +1,10 @@
+// The programs' shared code. The entry project, tsconfig.json, holds the registry and every
+// program folder, which import this and never the other way.
+{
+  "extends": "../../tsconfig.no-tui.json",
+  "include": ["*.ts", "detection", "frameworks", "oauth", "session", "shared", "warehouse-sources"],
+  "exclude": ["index.ts", "types.ts", "program-registry.ts", "run-program.ts", "detect-program.ts", "detect-map.ts"],
+  "references": [
+    { "path": "../tsconfig.json" }, { "path": "../shared" }, { "path": "../agent" }
+  ]
+}

@@ -1,15 +1,8 @@
 // Resolves routing; model additions also require mint allowlists and gateway prompt/transport support.
 
-import {
-  DEFAULT_AGENT_MODEL,
-  GPT5_6_SOL_MODEL,
-  GPT5_6_TERRA_MODEL,
-  Harness,
-  Sequence,
-} from '@shared/constants';
-import type { ProgramId } from '@lib/programs/program-registry';
+import { GPT5_6_SOL_MODEL, Harness, Sequence } from '@shared/constants';
 import { resolveHarness } from './harness';
-import type { EffortLevel } from './models';
+import { triageModelFor, type EffortLevel } from './models';
 import { resolveSequence } from './sequence';
 
 // ── Shared machinery ────────────────────────────────────────────────────
@@ -29,7 +22,9 @@ export interface SwitchboardTrace {
 
 /** Everything a resolver middleware may branch on. Built once per run. */
 export interface SwitchboardCtx {
-  program: ProgramId;
+  program: string;
+  /** The program's own binding: the base every override and flag lands on. */
+  binding: ProgramBinding;
   /** Composed sub-run (a dependency inside a parent program). Structurally linear — no override can orchestrate it. */
   composed?: boolean;
   flags: Record<string, string>;
@@ -110,61 +105,6 @@ export const DEFAULT_BINDING: ProgramBinding = {
   thinkingLevel: 'medium',
 };
 
-/**
- * Per-program routing. Kept in lockstep with `PROGRAM_REGISTRY` by the
- * switchboard test. Anything absent falls back to `DEFAULT_BINDING`.
- */
-export const PROGRAM_BINDINGS: Partial<Record<ProgramId, ProgramBinding>> = {
-  'posthog-integration': DEFAULT_BINDING,
-  'revenue-analytics-setup': DEFAULT_BINDING,
-  'warehouse-source': DEFAULT_BINDING,
-  'error-tracking-upload-source-maps': {
-    sequence: Sequence.linear,
-    harness: Harness.pi,
-    model: GPT5_6_SOL_MODEL,
-    thinkingLevel: 'medium',
-  },
-  audit: DEFAULT_BINDING,
-  'events-audit': DEFAULT_BINDING,
-  'posthog-doctor': DEFAULT_BINDING,
-  'web-analytics-doctor': DEFAULT_BINDING,
-  migration: DEFAULT_BINDING,
-  'self-driving': DEFAULT_BINDING,
-  'agent-skill': DEFAULT_BINDING,
-  'mcp-add': DEFAULT_BINDING,
-  'mcp-remove': DEFAULT_BINDING,
-  'mcp-tutorial': DEFAULT_BINDING,
-  'mcp-analytics': DEFAULT_BINDING,
-  // Orchestrator on pi. The binding routes only; every stage's model and
-  // effort are pinned context-mill side in the flow's frontmatter
-  // (`model_pi`/`effort_pi`: terra seed, sol tasks, luna report).
-  metrics: {
-    sequence: Sequence.orchestrator,
-    harness: Harness.pi,
-    model: DEFAULT_AGENT_MODEL,
-  },
-  'replay-vision': {
-    sequence: Sequence.orchestrator,
-    harness: Harness.anthropic,
-    model: DEFAULT_AGENT_MODEL,
-  },
-  // Orchestrator on pi, like metrics. The binding routes only; every stage's
-  // model and effort are pinned context-mill side in the flow's frontmatter
-  // (`model_pi`/`effort_pi`: terra seed, install and init, sol tasks, luna report).
-  'error-tracking': {
-    sequence: Sequence.orchestrator,
-    harness: Harness.pi,
-    model: DEFAULT_AGENT_MODEL,
-  },
-  'ai-observability': {
-    sequence: Sequence.linear,
-    harness: Harness.pi,
-    model: GPT5_6_TERRA_MODEL,
-    thinkingLevel: 'high',
-  },
-  slack: DEFAULT_BINDING,
-};
-
 // ── Unified resolver ────────────────────────────────────────────────────
 
 /** Compose both axes. Callers needing only one axis use the per-axis resolver. */
@@ -176,6 +116,20 @@ export function resolveBinding(
   const sequence = resolveSequence(ctx);
   const { harness, model, thinkingLevel } = resolveHarness(ctx, role);
   return { sequence, harness, model, thinkingLevel };
+}
+
+/**
+ * A scan's binding: linear on a triage model. The first attempt takes the
+ * harness the run resolves to; the retry runs the SDK, a second provider,
+ * whatever the flags say.
+ */
+export function resolveScanBinding(
+  ctx: SwitchboardCtx,
+  attempt: 'first' | 'retry',
+): ProgramBinding {
+  const harness =
+    attempt === 'retry' ? Harness.anthropic : resolveBinding(ctx).harness;
+  return { sequence: Sequence.linear, harness, model: triageModelFor(harness) };
 }
 
 // ── Unified re-export surface ───────────────────────────────────────────

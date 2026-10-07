@@ -135,7 +135,11 @@ async function main() {
         });
         cap = captureTui({
           cmd: path.join(process.cwd(), 'node_modules/.bin/tsx'),
-          args: ['scripts/tui-host.no-jest.ts'],
+          args: [
+            '--tsconfig',
+            'tsconfig.base.json',
+            'scripts/tui-host.no-jest.ts',
+          ],
           cwd: process.cwd(),
           env,
         });

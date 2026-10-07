@@ -3,7 +3,7 @@
   // jest.config.ts`). The root tsconfig moved the unit suite to vitest and
   // dropped jest from its `types`/scope, so this config restores jest's ambient
   // types and re-includes the e2e sources for ts-jest.
-  "extends": "../tsconfig.json",
+  "extends": "../tsconfig.eslint.json",
   "compilerOptions": {
     "types": ["node", "jest"]
   },

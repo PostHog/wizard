@@ -14,13 +14,15 @@ name: MCP Install
 on:
   pull_request:
     paths:
-      - 'src/steps/add-mcp-server-to-clients/**'
+      - 'src/shared/mcp-clients/**'
+      - 'src/tools/mcp/**'
       - 'scripts/mcp-install-smoke-test.ts'
       - '.github/workflows/mcp-install.yml'
   push:
     branches: [main]
     paths:
-      - 'src/steps/add-mcp-server-to-clients/**'
+      - 'src/shared/mcp-clients/**'
+      - 'src/tools/mcp/**'
       - 'scripts/mcp-install-smoke-test.ts'
       - '.github/workflows/mcp-install.yml'
   # A renamed editor subcommand breaks the wizard with no wizard change to

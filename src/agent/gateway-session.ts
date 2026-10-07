@@ -6,15 +6,15 @@
  * unattributed money to hide an outage.
  */
 
-import { readFileSync } from 'node:fs';
 import { logToFile } from '@utils/debug';
 import { analytics } from '@utils/analytics';
 import { ErrorCodes, WizardError } from '@shared/errors';
+import type { GatewayCredential } from '@shared/api';
 import type { HostResolution } from '@shared/host-resolution';
+import { oauthLoginKey } from '@shared/oauth-session';
 import { checkLlmGatewayHealth } from '@shared/health-checks/endpoints';
 import { ServiceHealthStatus } from '@shared/health-checks/types';
-import { IS_PRODUCTION_BUILD, runtimeEnv } from '@env';
-import type { CloudRegion } from '@utils/types';
+import { IS_PRODUCTION_BUILD } from '@env';
 
 export interface GatewayAuth {
   /** Base URL for model calls (no `/v1`; transports append their route). */
@@ -72,25 +72,16 @@ export function configureGatewayCredentialsForCI(
   };
 }
 
-// TODO(B2): CI credential loading belongs to the headless provider, not the
-// agent. Leaves with the rest of this module once RunInput carries resolved
-// inference auth.
-export function configureGatewayFromCIEnvironment(
+/** Use this run's pre-issued gateway token, or mint when it has none; the keyed mint cache stays. */
+export function useRunGatewayCredential(
+  gateway: GatewayCredential | undefined,
   projectId: number,
-  region: CloudRegion,
 ): void {
-  if (IS_PRODUCTION_BUILD)
-    throw new Error('CI gateway auth requires a non-production build');
-  const path = runtimeEnv('WIZARD_CI_GATEWAY_TOKEN_FILE');
-  if (!path) throw new Error('WIZARD_CI_GATEWAY_TOKEN_FILE is required for CI');
-  const token = readFileSync(path, 'utf8');
-  delete process.env.WIZARD_CI_GATEWAY_TOKEN_FILE;
-  configureGatewayCredentialsForCI(
-    token,
-    projectId,
-    runtimeEnv('WIZARD_CI_GATEWAY_URL') ||
-      `https://ai-gateway.${region}.posthog.com`,
-  );
+  if (gateway) {
+    configureGatewayCredentialsForCI(gateway.token, projectId, gateway.url);
+    return;
+  }
+  ciAuth = null;
 }
 
 /**
@@ -116,8 +107,11 @@ export async function gatewayAuth(
 ): Promise<GatewayAuth> {
   if (ciAuth) return ciAuth;
   // Keyed by program: a token pins `wizard:<program>`, so reusing one across
-  // programs bills the wrong budget.
-  const key = `${host.apiHost}\n${accessToken}\n${program ?? ''}`;
+  // programs bills the wrong budget. Keyed by login rather than OAuth token:
+  // the token rotates mid-run, and each new one would spend a weekly mint.
+  const key = `${host.apiHost}\n${oauthLoginKey(accessToken)}\n${
+    program ?? ''
+  }`;
   if (cached && cached.key === key && Date.now() < cached.staleAtMs) {
     return cached.auth;
   }
@@ -431,10 +425,17 @@ async function mintGatewayToken(
       );
       throw new GatewayMintFailed('mint returned an untrusted gateway url');
     }
+    const gatewayUrl = new URL(body.gateway_url);
+    if (
+      ['localhost', '127.0.0.1'].includes(new URL(host.apiHost).hostname) &&
+      gatewayUrl.hostname === 'host.docker.internal'
+    ) {
+      gatewayUrl.hostname = 'localhost';
+    }
     return {
       token: body.token,
       expiresAt: body.expires_at,
-      gatewayUrl: body.gateway_url.replace(/\/+$/, ''),
+      gatewayUrl: gatewayUrl.origin,
       teamId: body.team_id,
     };
   } catch (e) {

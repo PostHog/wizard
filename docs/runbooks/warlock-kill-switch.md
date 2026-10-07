@@ -63,7 +63,7 @@ Narrower is better — keep the security net on for users who aren't affected.
 ## Timing & reach
 
 - The flag is read **once at run start**
-  ([`agent-runner.ts`](../../src/agent/agent-runner.ts),
+  ([`wizard-flags.ts`](../../src/programs/wizard-flags.ts),
   `getAllFlagsForWizard()`), so a change takes effect on the **next** run — not
   on runs already in flight. Wizard runs are short-lived, so "next run" is
   effectively seconds to minutes.
