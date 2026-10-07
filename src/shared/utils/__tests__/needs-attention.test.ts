@@ -27,4 +27,13 @@ describe('readNeedsAttention', () => {
     expect(readNeedsAttention(report('> - Just a quote'))).toEqual([]);
     expect(readNeedsAttention('# Report\n\nAll done.')).toEqual([]);
   });
+
+  it('strips terminal control characters from items', () => {
+    const markdown = report(
+      '> ⚠️ **Needs your attention**\n> - Do \x1b[31mthis\x1b]52;c;ZXZpbA==\x07 now\x9b2J',
+    );
+    expect(readNeedsAttention(markdown)).toEqual([
+      'Do [31mthis]52;c;ZXZpbA== now2J',
+    ]);
+  });
 });

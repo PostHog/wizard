@@ -94,7 +94,10 @@ function needsAttentionBlock(store: WizardStore): string | null {
 }
 
 export function getExitLine(store: WizardStore): string {
-  const attention = needsAttentionBlock(store);
+  // A failed run prints its own unavailable notice; the report's warnings don't apply.
+  const attention = isRunFailure(store.session)
+    ? null
+    : needsAttentionBlock(store);
   const body = exitSummary(store);
   return attention ? `${attention}\n\n${body}` : body;
 }

@@ -3,6 +3,9 @@ export const NEEDS_ATTENTION_HEADING = 'Needs your attention';
 
 const BLOCK_START = new RegExp(`^\\s*>\\s*⚠.*${NEEDS_ATTENTION_HEADING}`);
 
+// eslint-disable-next-line no-control-regex
+const CONTROL_CHARS = /[\u0000-\u001f\u007f-\u009f]/g;
+
 /** The bullets of a report's `> ⚠️ **Needs your attention**` block, or none. */
 export function readNeedsAttention(markdown: string): string[] {
   const lines = markdown.split('\n');
@@ -13,7 +16,11 @@ export function readNeedsAttention(markdown: string): string[] {
     const quoted = /^\s*>\s?(.*)$/.exec(line);
     if (!quoted) break;
     const bullet = /^\s*(?:[-*]|\d+\.)\s+(.*\S)/.exec(quoted[1]);
-    if (bullet) items.push(bullet[1]);
+    if (bullet) {
+      // Items are agent-written and printed raw to the terminal: drop escapes.
+      const text = bullet[1].replace(CONTROL_CHARS, '').trim();
+      if (text) items.push(text);
+    }
   }
   return items;
 }

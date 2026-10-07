@@ -251,4 +251,13 @@ describe('getExitLine needs-attention block', () => {
     store.setHandoffText('# Report\n\nAll done.');
     expect(stripAnsi(getExitLine(store))).not.toContain('Needs your attention');
   });
+
+  it('skips the warning block on a run failure', () => {
+    const store = storeWithOutro({ kind: OutroKind.Error, message: 'boom' });
+    store.session = { ...store.session, credentials: {} as never };
+    store.setHandoffText(block);
+    const line = stripAnsi(getExitLine(store));
+    expect(line).toContain('The wizard is unavailable');
+    expect(line).not.toContain('Needs your attention');
+  });
 });
