@@ -113,6 +113,30 @@ describe('wizardCanUseTool — .env guard ignores case', () => {
       wizardCanUseTool('Grep', { path: '.', glob: '**/*.ts' }).behavior,
     ).toBe('allow');
   });
+
+  it('denies a Grep glob that names a specific env file at any depth', () => {
+    for (const glob of [
+      'apps/api/.env.local',
+      '.env.production',
+      '.env.prod*',
+      '*.production',
+      '.env.development.local',
+      '.envrc',
+      '{src,apps/api}/.env.local',
+    ]) {
+      expect(wizardCanUseTool('Grep', { path: '.', glob }).behavior).toBe(
+        'deny',
+      );
+    }
+  });
+
+  it('allows a Grep exclude glob and globs that cannot match .env*', () => {
+    for (const glob of ['!*.min.js', '!.env*', 'src/**/*.tsx', '.gitignore']) {
+      expect(wizardCanUseTool('Grep', { path: '.', glob }).behavior).toBe(
+        'allow',
+      );
+    }
+  });
 });
 
 describe('wizardCanUseTool — wizard_ask pending guard', () => {

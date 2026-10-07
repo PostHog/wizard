@@ -48,12 +48,72 @@ export function isEnvFileNameAnyCase(name: string): boolean {
   return isEnvFileName(name.toLowerCase());
 }
 
-const ENV_FILE_SAMPLES = ['.env', '.env.local', 'app/.env', 'app/.env.local'];
+/** Stage words that follow `.env.` in real projects; used only to test globs that start with a wildcard. */
+const ENV_STAGE_WORDS = [
+  'local',
+  'development',
+  'dev',
+  'production',
+  'prod',
+  'staging',
+  'stage',
+  'test',
+  'testing',
+  'ci',
+  'preview',
+  'qa',
+  'uat',
+  'sandbox',
+  'example',
+  'sample',
+  'template',
+  'dist',
+];
 
-/** True when a ripgrep `--glob` can select a `.env` file. Such a glob overrides `.gitignore`, and ripgrep's `*` matches dotfiles. */
+const ENV_NAME_CANDIDATES = [
+  '.env',
+  '.envrc',
+  ...ENV_STAGE_WORDS.flatMap((stage) => [
+    `.env.${stage}`,
+    `.env.${stage}.local`,
+    `.env.local.${stage}`,
+  ]),
+];
+
+const GLOB_SPECIAL_CHARS = /[*?[\\(!+@]/;
+
+/** True when one brace-free glob can select a file whose name starts with `.env`. */
+function globAlternativeCanSelectEnvFile(glob: string): boolean {
+  const segments = glob.split('/').filter((segment) => segment !== '');
+  const last = segments[segments.length - 1];
+  if (last === undefined) return false;
+
+  const special = last.search(GLOB_SPECIAL_CHARS);
+  const literalPrefix = (
+    special === -1 ? last : last.slice(0, special)
+  ).toLowerCase();
+  if (special === -1 || literalPrefix !== '') {
+    // The name is fixed up to its first wildcard, so the prefix decides:
+    // `.env.prod*` and `.e*` can reach an env file, `app*` and `.git*` cannot.
+    return literalPrefix.startsWith('.env') || '.env'.startsWith(literalPrefix);
+  }
+  // A leading wildcard (`*`, `?env`, `*.production`) can match any suffix, so
+  // test it against the env names projects use. `*.ts` still passes.
+  const options = { dot: true, nocase: true };
+  return ENV_NAME_CANDIDATES.some((name) => minimatch(name, last, options));
+}
+
+/**
+ * True when a ripgrep `--glob` can select a `.env*` file. Such a glob overrides
+ * `.gitignore`, and ripgrep's `*` matches dotfiles. The glob's last segment is
+ * what names the file, so that segment decides, not a list of paths. A leading
+ * `!` only excludes files from the search, so it never selects one.
+ */
 export function globCanSelectEnvFile(glob: string): boolean {
-  const options = { dot: true, nocase: true, matchBase: true };
-  return ENV_FILE_SAMPLES.some((name) => minimatch(name, glob, options));
+  if (glob.startsWith('!')) return false;
+  return minimatch
+    .braceExpand(glob)
+    .some((alternative) => globAlternativeCanSelectEnvFile(alternative));
 }
 
 /**
