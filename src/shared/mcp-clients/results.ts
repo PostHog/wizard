@@ -1,3 +1,5 @@
+import { analytics } from '@utils/analytics';
+
 /**
  * Per-client outcome of an MCP server / plugin install or removal.
  *
@@ -130,6 +132,45 @@ export const expectedFailureHint = (
       f.match.test(text) &&
       !f.unless?.test(text),
   )?.hint;
+};
+
+/**
+ * Turn a failed CLI call into a result: an expected local failure becomes a
+ * hint, anything else is reported under a constant message so one root cause
+ * stays one issue, with the varying detail in properties.
+ *
+ * Shared by every client so the hinted-event shape cannot drift between them.
+ * `Stage` is the caller's union: a hint scoped to a stage nobody passes is
+ * silently dead.
+ */
+export const reportSpawnFailure = <Stage extends string>(opts: {
+  client: string;
+  stage: Stage;
+  details: string;
+  table: ExpectedFailure[];
+  /** Extra exception properties, e.g. a failure that travelled beside this one. */
+  extra?: Record<string, unknown>;
+}): InstallResult => {
+  const { client, stage, details, table, extra } = opts;
+  const hint = expectedFailureHint(details, table, stage);
+  if (hint) {
+    // Hinting takes a failure out of error tracking, so without this the only
+    // evidence a pattern has started over-matching is that our exception count
+    // fell, which reads as the fix working. An event keeps the count.
+    analytics.wizardCapture('mcp expected failure hinted', {
+      client,
+      stage,
+      hint,
+      details: scrubHomePaths(details),
+    });
+    return { success: false, reason: hint };
+  }
+  analytics.captureException(new Error(`${client} ${stage} failed`), {
+    stage,
+    details: scrubHomePaths(details),
+    ...extra,
+  });
+  return { success: false, reason: details };
 };
 
 /** First non-empty line of an error, trimmed to something a TUI line can hold. */
