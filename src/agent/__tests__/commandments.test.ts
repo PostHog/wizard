@@ -122,6 +122,11 @@ describe('runtime caps gate the pi runtime notes', () => {
     );
   });
 
+  it('keeps the wizard tools out of posthog_exec', () => {
+    const notes = withCaps({ bash: true, posthogMcp: true });
+    expect(notes).toMatch(/`wizard_ask`[^\n]*never through `posthog_exec`/);
+  });
+
   it('still produces a usable prompt without the MCP', () => {
     const notes = withCaps({ bash: true, posthogMcp: false });
     expect(notes.length).toBeGreaterThan(0);
