@@ -1,6 +1,7 @@
 /** The TUI command runner: parse the launch values, start the TUI host, and exit with its code. */
 import type { ProgramConfig, SessionArgs } from '@programs/types';
 import type { Harness, Sequence } from '@shared/constants';
+import { resolve } from 'node:path';
 import { runtimeEnv } from '@env';
 import { resolveNoTelemetry } from './resolve-no-telemetry';
 import { withSignals } from './signals';
@@ -14,7 +15,7 @@ export function tuiSessionArgs(
     localDev: options.localDev as boolean | undefined,
     localMcp: options.localMcp as boolean | undefined,
     localPosthog: options.localPosthog as boolean | undefined,
-    installDir: (options.installDir as string) || process.cwd(),
+    installDir: resolve((options.installDir as string) || process.cwd()),
     ci: false,
     signup: options.signup as boolean | undefined,
     apiKey: options.apiKey as string | undefined,
