@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 /**
  * Shared agent interface for PostHog wizards
  * Uses Claude Agent SDK directly with PostHog LLM gateway
@@ -5,18 +6,27 @@
 
 import path from 'path';
 import * as os from 'os';
+// eslint-disable-next-line no-restricted-imports -- resolves the SDK's bundled CLI path where ESM has no bare require
 import { createRequire } from 'node:module';
 import type {
   ProgressEmitter,
   SpinnerHandle,
   TokenUsageDelta,
 } from './progress';
-import { debug, logToFile, initLogFile, getLogFilePath } from '@utils/debug';
+import {
+  formatLogLine,
+  logToFile,
+  initLogFile,
+  getLogFilePath,
+} from '@utils/debug';
 import type { WizardRunOptions } from '@utils/types';
 import { analytics } from '@utils/analytics';
-import { isTemplateEnvFileName } from '@utils/env-scan';
+import {
+  isTemplateEnvFileName,
+  TEMPLATE_ENV_FILE_NAMES,
+} from '@utils/env-scan';
 import { runtimeEnv } from '@env';
-import type { AioCapture } from '@agent/aio-capture';
+import type { AioCapture } from './aio-capture';
 import {
   Harness,
   CallType,
@@ -25,8 +35,6 @@ import {
   wizardUserAgentForProgram,
   DEFAULT_AGENT_MODEL,
   AWS_SKILLS_BASE_URL,
-  type AdditionalFeature,
-  ADDITIONAL_FEATURE_PROMPTS,
 } from '@shared/constants';
 import type { AgentFailure } from './runner/shared/types';
 import type { AgentResult } from './runner/harness/types';
@@ -37,14 +45,14 @@ import {
   gatewayAuth,
   isPastRefresh,
   type GatewayAuth,
-} from '@agent/gateway-session';
+} from './gateway-session';
 import { evaluateBashCommand } from './bash-fence';
-import { createWizardToolsServer, WIZARD_TOOL_NAMES } from '@agent/tools';
+import { createWizardToolsServer, WIZARD_TOOL_NAMES } from './tools';
 import {
   createPreToolUseYaraHooks,
   createPostToolUseYaraHooks,
   prewarmYaraScanner,
-} from '@agent/yara-hooks';
+} from './yara-hooks';
 import { createTriageLLMProvider } from './triage-provider';
 import type { LLMProvider } from '@posthog/warlock';
 import { assembleCommandments } from './runner/switchboard/commandments';
@@ -76,7 +84,7 @@ import {
   claudeConfigDir,
   createIsolatedAgentConfigDir,
 } from './stored-login';
-import { sanitizeAgentSubprocessEnv } from './agent-env-isolation';
+import { sanitizeAgentSubprocessEnv } from '@shared/agent-env-isolation';
 
 // Dynamic import cache for ESM module
 let _sdkModule: any = null;
@@ -92,11 +100,7 @@ async function getSDKModule(): Promise<any> {
  * This ensures we use the SDK's bundled version rather than the user's installed Claude Code.
  */
 function getClaudeCodeExecutablePath(): string {
-  // Bare `require` is undefined in ESM (tsx dev runs) — fall back to createRequire.
-  const resolver =
-    typeof require !== 'undefined'
-      ? require
-      : createRequire(process.argv[1] ?? `${process.cwd()}/`);
+  const resolver = createRequire(import.meta.url);
   // resolve finds the package's main entry, then we get cli.js from same dir
   const sdkPackagePath = resolver.resolve('@anthropic-ai/claude-agent-sdk');
   return path.join(path.dirname(sdkPackagePath), 'cli.js');
@@ -197,6 +201,7 @@ export type AgentConfig = {
   workingDirectory: string;
   posthogMcpUrl: string;
   posthogApiKey: string;
+  currentPosthogApiKey?: () => Promise<string>;
   host: HostResolution;
   additionalMcpServers?: Record<string, { url: string }>;
   detectPackageManager: PackageManagerDetector;
@@ -218,12 +223,15 @@ export type AgentConfig = {
    * Use for cheap mechanical runs (e.g. source-map detection on HAIKU_MODEL).
    */
   modelOverride?: string;
+  /** Schema for callers that consume a structured SDK result. */
+  outputFormat?: import('@anthropic-ai/claude-agent-sdk').Options['outputFormat'];
   /** Bridge that drives the `wizard_ask` overlay. Omit in non-interactive hosts. */
-  askBridge?: import('@agent/wizard-ask-bridge').WizardAskBridge;
+  askBridge?: import('./wizard-ask-bridge').WizardAskBridge;
   /** Per-run cap on `wizard_ask` invocations. Defaults to 10. */
   askMaxQuestions?: number;
   /** Extra tools added on top of BASE_ALLOWED_TOOLS for this run. */
   allowedTools?: readonly string[];
+  readOnly?: boolean;
   /** Tools removed from BASE_ALLOWED_TOOLS for this run. */
   disallowedTools?: readonly string[];
   /**
@@ -236,7 +244,7 @@ export type AgentConfig = {
    * flag routes the run here; threaded into wizard-tools so the orchestrator
    * tools register.
    */
-  orchestrator?: import('@agent/runner/sequence/orchestrator/queue-tools').OrchestratorToolsContext;
+  orchestrator?: import('./runner/sequence/orchestrator/queue-tools').OrchestratorToolsContext;
   /**
    * Optional AIO capture — mirrors each assistant SDK message into the
    * authenticated project as `$ai_generation`. No-op instance when
@@ -259,28 +267,22 @@ export type StopHookResult =
   | { decision: 'block'; reason: string };
 
 /**
- * Create a stop hook callback that drains the additional feature queue,
- * then collects a remark, then allows stop.
+ * Create a stop hook callback that collects a remark, then allows stop.
  *
- * Three-phase logic using closure state:
- *   Phase 1 — drain queue: block with each feature prompt in order
- *   Phase 2 — collect remark (once): block with remark prompt
- *   Phase 3 — allow stop: return {}
+ * Two-phase logic using closure state:
+ *   Phase 1 — collect remark (once): block with remark prompt
+ *   Phase 2 — allow stop: return {}
  */
 export function createStopHook(
-  featureQueue: readonly AdditionalFeature[],
   signals?: AgentOutputSignals,
   requestRemark = true,
 ): (input: { stop_hook_active: boolean }) => StopHookResult {
-  let featureIndex = 0;
   let remarkRequested = false;
 
   return (input: { stop_hook_active: boolean }): StopHookResult => {
     logToFile('Stop hook triggered', {
       stop_hook_active: input.stop_hook_active,
-      featureIndex,
       remarkRequested,
-      queueLength: featureQueue.length,
     });
 
     // On API errors, allow stop immediately — blocking with remark/feature
@@ -290,15 +292,7 @@ export function createStopHook(
       return {};
     }
 
-    // Phase 1: drain feature queue
-    if (featureIndex < featureQueue.length) {
-      const feature = featureQueue[featureIndex++];
-      const prompt = ADDITIONAL_FEATURE_PROMPTS[feature];
-      logToFile(`Stop hook: injecting feature prompt for ${feature}`);
-      return { decision: 'block', reason: prompt };
-    }
-
-    // Phase 2: collect remark (once). Skipped when the caller opts out — the
+    // Phase 1: collect remark (once). Skipped when the caller opts out — the
     // orchestrator suppresses it per task so it does not fire on every agent.
     if (requestRemark && !remarkRequested) {
       remarkRequested = true;
@@ -309,7 +303,7 @@ export function createStopHook(
       };
     }
 
-    // Phase 3: allow stop
+    // Phase 2: allow stop
     logToFile('Stop hook: allowing stop');
     return {};
   };
@@ -323,12 +317,15 @@ type AgentRunConfig = {
   workingDirectory: string;
   mcpServers: McpServersConfig;
   model: string;
+  outputFormat?: AgentConfig['outputFormat'];
   /** The run's OAuth access token — the MCP config resolves it in the child. */
   posthogApiKey: string;
+  currentPosthogApiKey?: () => Promise<string>;
   wizardFlags?: Record<string, string>;
   wizardMetadata?: Record<string, string>;
   /** Extra tools added on top of BASE_ALLOWED_TOOLS for this run. */
   allowedTools?: readonly string[];
+  readOnly?: boolean;
   /** Tools removed from BASE_ALLOWED_TOOLS for this run. */
   disallowedTools?: readonly string[];
   /**
@@ -425,6 +422,16 @@ export function buildAgentEnv(
 // Re-export for backwards compatibility — canonical source is skill-install.ts
 export { isSkillInstallCommand } from '@shared/skill-install';
 
+/** A debug run's diagnostic line, as info log progress; a run without `debug` emits nothing. */
+function debugLine(
+  emit: ProgressEmitter,
+  options: Pick<WizardRunOptions, 'debug'>,
+  ...args: unknown[]
+): void {
+  if (!options.debug) return;
+  emit({ kind: 'log', level: 'info', message: formatLogLine(...args) });
+}
+
 /**
  * Permission hook that allows only safe commands. Bash commands are gated by
  * the exact per-manager fence in bash-fence.ts (install/build/typecheck/lint
@@ -440,12 +447,22 @@ export function wizardCanUseTool(
   toolName: string,
   input: Record<string, unknown>,
   context: {
+    readOnly?: boolean;
     wizardAskPending?: boolean;
     disallowedTools?: readonly string[];
+    /** A debug run's line for each Bash decision. */
+    onDebug?: (line: string) => void;
   } = {},
 ):
   | { behavior: 'allow'; updatedInput: Record<string, unknown> }
   | { behavior: 'deny'; message: string } {
+  if (context.readOnly && !READ_ONLY_TOOLS.includes(toolName)) {
+    return {
+      behavior: 'deny',
+      message: `Tool ${toolName} is disabled for read-only runs.`,
+    };
+  }
+
   // Hard gate on the program's disallow list. The SDK's own disallowedTools
   // option blocks tools at the parent level, but does NOT reliably propagate
   // to dispatched subagents (their AgentDefinition has its own field which the
@@ -516,12 +533,14 @@ export function wizardCanUseTool(
   const decision = evaluateBashCommand(command);
   if (decision.allowed) {
     logToFile(`Allowing bash command: ${command}`);
-    debug(`Allowing bash command: ${command}`);
+    context.onDebug?.(`Allowing bash command: ${command}`);
     return { behavior: 'allow', updatedInput: input };
   }
 
   logToFile(`Denying bash command (${decision.analyticsReason}): ${command}`);
-  debug(`Denying bash command (${decision.analyticsReason}): ${command}`);
+  context.onDebug?.(
+    `Denying bash command (${decision.analyticsReason}): ${command}`,
+  );
   analytics.wizardCapture('bash denied', {
     reason: decision.analyticsReason,
     command,
@@ -548,8 +567,12 @@ export async function initializeAgent(
     // gatewayAuth mints for this run.
     // Disable experimental betas (like input_examples) the gateway doesn't support.
     process.env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS = 'true';
-    const currentGatewayAuth = () =>
-      gatewayAuth(config.host, config.posthogApiKey, config.programId);
+    const currentGatewayAuth = async () =>
+      gatewayAuth(
+        config.host,
+        (await config.currentPosthogApiKey?.()) ?? config.posthogApiKey,
+        config.programId,
+      );
     const auth = await currentGatewayAuth();
     const gatewayUrl = auth.gatewayUrl;
     process.env.ANTHROPIC_BASE_URL = gatewayUrl;
@@ -658,9 +681,12 @@ export async function initializeAgent(
       workingDirectory: config.workingDirectory,
       mcpServers,
       model,
+      outputFormat: config.outputFormat,
       posthogApiKey: config.posthogApiKey,
+      currentPosthogApiKey: config.currentPosthogApiKey,
       wizardFlags: config.wizardFlags,
       wizardMetadata: config.wizardMetadata,
+      readOnly: config.readOnly,
       allowedTools: config.allowedTools,
       disallowedTools: config.disallowedTools,
       getPendingQuestion: config.getPendingQuestion,
@@ -682,14 +708,12 @@ export async function initializeAgent(
       apiKeyPresent: !!config.posthogApiKey,
     });
 
-    if (options.debug) {
-      debug('Agent config:', {
-        workingDirectory: agentRunConfig.workingDirectory,
-        posthogMcpUrl: config.posthogMcpUrl,
-        gatewayUrl,
-        apiKeyPresent: !!config.posthogApiKey,
-      });
-    }
+    debugLine(emit, options, 'Agent config:', {
+      workingDirectory: agentRunConfig.workingDirectory,
+      posthogMcpUrl: config.posthogMcpUrl,
+      gatewayUrl,
+      apiKeyPresent: !!config.posthogApiKey,
+    });
 
     // Pre-warm the warlock scanner (WASM init + rule compile) off the hook path
     // so the first tool-call scan doesn't pay cold-start under a hook timeout.
@@ -707,7 +731,7 @@ export async function initializeAgent(
       message: `Failed to initialize agent: ${(error as Error).message}`,
     });
     logToFile('Agent initialization error:', error);
-    debug('Agent initialization error:', error);
+    debugLine(emit, options, 'Agent initialization error:', error);
     throw error;
   }
 }
@@ -756,6 +780,14 @@ function sdkResultFailure(
     sdkErrorStatus(message.status) ??
     errors.map(sdkErrorStatus).find((code) => code !== undefined) ??
     sdkErrorStatus(message.result);
+  // The SDK ran out of retries matching `outputFormat`. A caller may retry the run.
+  if (message.subtype === 'error_max_structured_output_retries') {
+    return {
+      kind: 'failure',
+      classification: AgentErrorType.INVALID_STRUCTURED_OUTPUT,
+      message: detail,
+    };
+  }
   return {
     kind: 'failure',
     classification:
@@ -774,7 +806,6 @@ export async function runAgent(
     spinnerMessage?: string;
     successMessage?: string;
     errorMessage?: string;
-    additionalFeatureQueue?: readonly AdditionalFeature[];
     abortCases?: readonly AbortCaseMatcher[];
     /**
      * Emit a `wizard: step` event on each agent task transition. Threaded from
@@ -932,7 +963,10 @@ export async function runAgent(
       logToFile(`${AgentSignals.BENCHMARK} Middleware finalize error:`, e);
     }
     spinner.stop(successMessage);
-    return { kind: 'success' };
+    return {
+      kind: 'success',
+      structuredOutput: lastResultMessage?.structured_output,
+    };
   };
 
   // Abort controller — lets us force-kill the SDK query when we detect an
@@ -977,10 +1011,11 @@ export async function runAgent(
     // enabled via the `skills` query option; PostHog MCP tools come through
     // `mcpServers`. Neither belongs in this list.
     const disallow = new Set(agentConfig.disallowedTools ?? []);
-    const allowedTools = [
-      ...BASE_ALLOWED_TOOLS,
-      ...(agentConfig.allowedTools ?? []),
-    ].filter((t) => !disallow.has(t));
+    const allowedTools = (
+      agentConfig.readOnly
+        ? READ_ONLY_TOOLS
+        : [...BASE_ALLOWED_TOOLS, ...(agentConfig.allowedTools ?? [])]
+    ).filter((t) => !disallow.has(t) && !CAN_USE_TOOL_FILE_TOOLS.has(t));
 
     // Subagents dispatched via the Agent tool don't inherit the parent's
     // MCP servers by default — so general-purpose subagents can't see the
@@ -1025,34 +1060,43 @@ export async function runAgent(
           abortController,
           resume,
           model: agentConfig.model,
+          outputFormat: agentConfig.outputFormat,
           cwd: agentConfig.workingDirectory,
-          permissionMode: 'acceptEdits',
+          permissionMode: agentConfig.readOnly ? 'default' : 'acceptEdits',
           betas: ['context-1m-2025-08-07'],
-          mcpServers: agentConfig.mcpServers,
-          agents: {
-            'general-purpose': {
-              description:
-                "General-purpose subagent. Inherits the parent run's tools plus the PostHog and wizard-tools MCP servers, so it can call mcp__posthog-wizard__* directly instead of curling the REST API.",
-              prompt:
-                'You are a general-purpose subagent for the PostHog wizard. Prefer the authenticated mcp__posthog-wizard__* MCP tools over raw HTTP — they are already authenticated for this project. Only fall back to other transports if no MCP tool covers the operation.',
-              mcpServers: inheritedMcpServerNames,
-              // SDK does not propagate the parent's disallowedTools to subagents
-              // (sdk.d.ts: AgentDefinition has its own disallowedTools, and
-              // `tools: undefined` means "inherit all"). Without this, a program
-              // that disallows wizard_ask still leaks it to dispatched subagents.
-              disallowedTools: agentConfig.disallowedTools
-                ? [...agentConfig.disallowedTools]
-                : undefined,
-            },
-          },
+          mcpServers: agentConfig.readOnly ? {} : agentConfig.mcpServers,
+          agents: agentConfig.readOnly
+            ? undefined
+            : {
+                'general-purpose': {
+                  description:
+                    "General-purpose subagent. Inherits the parent run's tools plus the PostHog and wizard-tools MCP servers, so it can call mcp__posthog-wizard__* directly instead of curling the REST API.",
+                  prompt:
+                    'You are a general-purpose subagent for the PostHog wizard. Prefer the authenticated mcp__posthog-wizard__* MCP tools over raw HTTP — they are already authenticated for this project. Only fall back to other transports if no MCP tool covers the operation.',
+                  mcpServers: inheritedMcpServerNames,
+                  // SDK does not propagate the parent's disallowedTools to subagents
+                  // (sdk.d.ts: AgentDefinition has its own disallowedTools, and
+                  // `tools: undefined` means "inherit all"). Without this, a program
+                  // that disallows wizard_ask still leaks it to dispatched subagents.
+                  disallowedTools: agentConfig.disallowedTools
+                    ? [...agentConfig.disallowedTools]
+                    : undefined,
+                },
+              },
           // Load skills from project's .claude/skills/ directory
-          settingSources: ['project'],
+          settingSources: agentConfig.readOnly ? [] : ['project'],
+          // The SDK approves file tools inside the project without canUseTool, so env files are
+          // denied as rules, which the sandbox applies to commands too. Repo hooks would bypass both.
+          settings: {
+            disableAllHooks: true,
+            permissions: { deny: [...ENV_FILE_DENY_RULES] },
+          },
           // Enable all discovered skills. Omitting this is NOT "skills off" —
           // it just means no SDK auto-config — so we set 'all' explicitly to
           // preserve the prior behavior where 'Skill' in allowedTools exposed
           // everything under .claude/skills/. (SDK ≥0.2.133 deprecates passing
           // 'Skill' in allowedTools in favor of this option.)
-          skills: 'all',
+          skills: agentConfig.readOnly ? [] : 'all',
           allowedTools,
           sandbox: {
             enabled: true,
@@ -1134,7 +1178,9 @@ export async function runAgent(
             CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS: 'true',
             // The MCP config resolves this in the child; sending the value would
             // put it on the CLI's argv.
-            POSTHOG_MCP_TOKEN: agentConfig.posthogApiKey,
+            POSTHOG_MCP_TOKEN:
+              (await agentConfig.currentPosthogApiKey?.()) ??
+              agentConfig.posthogApiKey,
             // SDK 0.3.142 made MCP servers connect in the background by default;
             // the agent may start its first turn before posthog-wizard is ready
             // (audit programs call audit_seed_checks on turn 1, integration
@@ -1155,8 +1201,10 @@ export async function runAgent(
               toolName,
               input as Record<string, unknown>,
               {
+                readOnly: agentConfig.readOnly,
                 wizardAskPending: agentConfig.getPendingQuestion?.() != null,
                 disallowedTools: agentConfig.disallowedTools,
+                onDebug: (line) => debugLine(emit, options, line),
               },
             );
             logToFile('canUseTool result:', result);
@@ -1174,15 +1222,15 @@ export async function runAgent(
               harness: Harness.anthropic,
             }),
           },
-          tools: { type: 'preset', preset: 'claude_code' },
+          tools: agentConfig.readOnly
+            ? [...READ_ONLY_TOOLS]
+            : { type: 'preset', preset: 'claude_code' },
           // Capture stderr from CLI subprocess for debugging
           stderr: (data: string) => {
             logToFile('CLI stderr:', data);
-            if (options.debug) {
-              debug('CLI stderr:', data);
-            }
+            debugLine(emit, options, 'CLI stderr:', data);
           },
-          // Stop hook: drain additional feature queue, then collect remark, then allow stop
+          // Stop hook: collect remark, then allow stop
           hooks: {
             PreToolUse: warlockDisabled
               ? []
@@ -1192,13 +1240,7 @@ export async function runAgent(
               : createPostToolUseYaraHooks(triageProvider, onYaraTerminate),
             Stop: [
               {
-                hooks: [
-                  createStopHook(
-                    config?.additionalFeatureQueue ?? [],
-                    signals,
-                    config?.requestRemark ?? true,
-                  ),
-                ],
+                hooks: [createStopHook(signals, config?.requestRemark ?? true)],
                 timeout: 30,
               },
             ],
@@ -1612,6 +1654,12 @@ export async function runAgent(
       };
     }
 
+    // The SDK can throw after yielding a typed error result.
+    if (terminalFailure) {
+      spinner.stop(errorMessage);
+      return terminalFailure;
+    }
+
     // Check if we collected an error signal before the exception was thrown.
     // Surface just the API error line(s), not the entire output.
     const apiErrorMessage = signals.apiErrorMessage() ?? 'Unknown API error';
@@ -1646,7 +1694,7 @@ export async function runAgent(
       message: `Error: ${(error as Error).message}`,
     });
     logToFile('Agent run failed:', error);
-    debug('Full error:', error);
+    debugLine(emit, options, 'Full error:', error);
     throw error;
   } finally {
     agentConfig.signal?.removeEventListener('abort', onExternalAbort);
@@ -1701,12 +1749,26 @@ export enum TaskTool {
  */
 export const POSTHOG_MCP_SERVER_NAME = 'posthog-wizard';
 
-export const BASE_ALLOWED_TOOLS: readonly string[] = [
+const READ_ONLY_TOOLS: readonly string[] = ['Read', 'Glob', 'Grep'];
+
+/** wizardCanUseTool's env-file rule as SDK deny rules for the project; outside it, canUseTool sees the file tools. */
+const ENV_FILE_DENY_RULES: readonly string[] = ['Read', 'Edit'].flatMap(
+  (tool) => [
+    `${tool}(.env*)`,
+    ...TEMPLATE_ENV_FILE_NAMES.map((name) => `${tool}(!${name})`),
+  ],
+);
+
+/** The SDK approves these itself inside the project; allowing them would hide calls outside it from canUseTool. */
+const CAN_USE_TOOL_FILE_TOOLS: ReadonlySet<string> = new Set([
   'Read',
   'Write',
   'Edit',
-  'Glob',
   'Grep',
+]);
+
+export const BASE_ALLOWED_TOOLS: readonly string[] = [
+  'Glob',
   'Bash',
   // Task list tools (replaced TodoWrite in 0.3.142). Commandments instruct
   // the agent to call TaskCreate/TaskUpdate to surface progress in the TUI.
@@ -1715,7 +1777,15 @@ export const BASE_ALLOWED_TOOLS: readonly string[] = [
   ...Object.values(WIZARD_TOOL_NAMES),
 ];
 
-type TaskEntry = { content: string; status: string; activeForm?: string };
+type TaskEntry = {
+  id?: string;
+  source?: string;
+  content: string;
+  status: string;
+  activeForm?: string;
+};
+
+const taskSources = new WeakMap<Map<string, TaskEntry>, string>();
 
 interface TaskStore {
   tasks: Map<string, TaskEntry>;
@@ -1740,7 +1810,14 @@ function handleTaskCreate(block: ToolUseBlock, store: TaskStore): void {
   if (!input?.subject) return;
   // Key by tool_use_id for now — the rekey to the SDK-assigned taskId happens
   // when the matching tool_result arrives.
+  let source = taskSources.get(store.tasks);
+  if (!source) {
+    source = randomUUID();
+    taskSources.set(store.tasks, source);
+  }
   store.tasks.set(block.id, {
+    id: randomUUID(),
+    source,
     content: input.subject,
     status: 'pending',
     activeForm: input.activeForm,
@@ -1799,6 +1876,8 @@ function handleTaskUpdate(block: ToolUseBlock, store: TaskStore): void {
       });
     }
     store.tasks.set(input.taskId, {
+      id: existing.id,
+      source: existing.source,
       content: input.subject ?? existing.content,
       status: input.status ?? existing.status,
       activeForm: input.activeForm ?? existing.activeForm,
@@ -1997,9 +2076,7 @@ function handleSDKMessage(
   };
   logToFile(`SDK Message: ${message.type}`, JSON.stringify(message, null, 2));
 
-  if (options.debug) {
-    debug(`SDK Message type: ${message.type}`);
-  }
+  debugLine(emit, options, `SDK Message type: ${message.type}`);
 
   switch (message.type) {
     case 'assistant': {
@@ -2182,9 +2259,7 @@ function handleSDKMessage(
 
     default:
       // Log other message types for debugging
-      if (options.debug) {
-        debug(`Unhandled message type: ${message.type}`);
-      }
+      debugLine(emit, options, `Unhandled message type: ${message.type}`);
       break;
   }
 }

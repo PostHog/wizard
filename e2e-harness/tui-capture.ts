@@ -8,6 +8,7 @@
 import fsmod from 'fs';
 import pathmod from 'path';
 import * as pty from 'node-pty';
+// eslint-disable-next-line no-restricted-imports -- loads @xterm/headless's CJS entry; its module field is the browser build
 import { createRequire } from 'module';
 import type { IBufferLine } from '@xterm/headless';
 

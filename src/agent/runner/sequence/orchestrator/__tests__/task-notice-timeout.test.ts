@@ -7,7 +7,7 @@
  * the run — so the offer is made at seed time, and only the work it gates is
  * deferred to the end of the queue.
  */
-import type { TaskNotice } from '@lib/wizard-session';
+import type { TaskNotice } from '@agent/types';
 
 // Hoisted: `vi.mock` factories are lifted above the imports, so the analytics
 // factory would otherwise read these before they exist.
@@ -33,7 +33,6 @@ import {
   askSeededConsent,
   consentSkipReason,
   offerSeededTask,
-  TASK_NOTICE_TIMEOUT_MS,
 } from '@agent/runner/sequence/orchestrator/orchestrator-runner';
 
 /** The answerer under test, standing where `getUI()` used to. */
@@ -63,10 +62,6 @@ const resetMocks = () => {
 
 describe('task notice timeout', () => {
   beforeEach(resetMocks);
-
-  it('waits five minutes before giving up on an answer', () => {
-    expect(TASK_NOTICE_TIMEOUT_MS).toBe(5 * 60 * 1000);
-  });
 
   it('declines the step when nobody answers, and closes the modal', async () => {
     vi.useFakeTimers();

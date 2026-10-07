@@ -11,15 +11,18 @@
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { OutroKind, RunPhase } from '@lib/wizard-session';
-import type { AskQuestion, WizardSession } from '@lib/wizard-session';
-import { DETECTED_WAREHOUSE_SOURCES_KEY } from '@lib/programs/warehouse-source/detect';
-import { Overlay } from '@ui/tui/router';
-import { TASK_OUTCOMES_KEY } from '@agent';
+import { OutroKind } from '@shared/outro';
+import { RunPhase } from '@shared/run-state';
+import type { AskQuestion } from '@agent/types';
+import type { WizardSession } from '@programs/types';
+import { DETECTED_WAREHOUSE_SOURCES_KEY } from '@programs/warehouse-source';
+import { Overlay } from '@tui';
+import { TASK_OUTCOMES_KEY } from '@programs';
 import {
   E2eRunRecorder,
   abortReasonFrom,
   buildE2eResult,
+  createE2eResultWriter,
   detectedSourcesFrom,
   readReportFile,
   taskOutcomesFrom,
@@ -461,6 +464,29 @@ describe('buildE2eResult', () => {
 
   it('passes the pre-existing keys through unchanged', () => {
     expect(build()).toMatchObject(base);
+  });
+
+  it('replaces an outro result only when the final skills decision is written', () => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'wizard-result-'));
+    const file = path.join(directory, 'result.json');
+    let skillsComplete = false;
+    const write = createE2eResultWriter(file, () => ({
+      ...build(),
+      skillsComplete,
+    }));
+    const written = () => JSON.parse(fs.readFileSync(file, 'utf8'));
+
+    try {
+      write();
+      expect(written()).toMatchObject({ skillsComplete: false });
+      skillsComplete = true;
+      write();
+      expect(written()).toMatchObject({ skillsComplete: false });
+      write(true);
+      expect(written()).toMatchObject({ skillsComplete: true });
+    } finally {
+      fs.rmSync(directory, { recursive: true, force: true });
+    }
   });
 
   it('projects tasks down to label and status', () => {

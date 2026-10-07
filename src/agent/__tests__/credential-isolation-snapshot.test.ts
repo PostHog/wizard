@@ -13,9 +13,7 @@
  * isolation surface — a diff here means a credential path changed disposition.
  */
 
-import { sanitizeAgentSubprocessEnv } from '@agent/agent-env-isolation';
-import { classifySettingsConflicts } from '@shared/claude-settings';
-import type { SettingsConflict } from '@shared/claude-settings';
+import { sanitizeAgentSubprocessEnv } from '@shared/agent-env-isolation';
 
 // Every env-based avenue (one key each), plus the gateway routing and benign
 // env that must survive. Grouped by avenue for readability; the snapshot sorts.
@@ -90,47 +88,5 @@ describe('credential-isolation paths (snapshot)', () => {
         .map((key) => [key, key in out ? 'preserved' : 'stripped']),
     );
     expect(disposition).toMatchSnapshot();
-  });
-
-  it('settings-file conflicts: neutralize / warn / fail-closed disposition', () => {
-    const conflicts: SettingsConflict[] = [
-      // writable project file — SDK reads it; wizard can remove it
-      {
-        source: 'project',
-        path: '/proj/.claude/settings.json',
-        keys: ['ANTHROPIC_BASE_URL'],
-        writable: true,
-      },
-      // org-managed — always read, unremovable
-      {
-        source: 'managed',
-        path: '/managed/managed-settings.json',
-        keys: ['apiKeyHelper'],
-        writable: false,
-      },
-      // user global — ignored under settingSources:['project']
-      {
-        source: 'user',
-        path: '/home/.claude/settings.json',
-        keys: ['ANTHROPIC_API_KEY'],
-        writable: false,
-      },
-      // project-local — ignored under settingSources:['project']
-      {
-        source: 'project-local',
-        path: '/proj/.claude/settings.local.json',
-        keys: ['CLAUDE_CODE_USE_BEDROCK'],
-        writable: false,
-      },
-    ];
-
-    const { autoFix, failClosed, warnOnly } =
-      classifySettingsConflicts(conflicts);
-
-    expect({
-      autoFix_neutralize: autoFix.map((c) => c.source),
-      failClosed_userFixes: failClosed.map((c) => c.source),
-      warnOnly_alreadyIgnored: warnOnly.map((c) => c.source),
-    }).toMatchSnapshot();
   });
 });

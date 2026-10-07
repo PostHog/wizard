@@ -3,8 +3,8 @@ import type { ErrorCode } from './codes';
 /**
  * Structured error data for analytics and the machine-readable error line.
  *
- * A data carrier: the agent returns it inside a failure and the legacy adapter
- * hands it to `wizardAbort()`, which captures it. Never thrown by the wizard.
+ * A data carrier: the agent returns it inside a failure and a host hands it
+ * to `wizardAbort()`, which captures it. Never thrown by the wizard.
  */
 export class WizardError extends Error {
   readonly code?: ErrorCode;

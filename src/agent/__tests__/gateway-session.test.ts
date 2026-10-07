@@ -4,15 +4,14 @@ import {
   GatewayMintRefused,
   buildWizardPropertiesBlob,
   configureGatewayCredentialsForCI,
-  configureGatewayFromCIEnvironment,
   gatewayAuth,
   isPastRefresh,
   isTrustedGatewayUrl,
   resetGatewaySession,
+  useRunGatewayCredential,
 } from '@agent/gateway-session';
 import type { HostResolution } from '@shared/host-resolution';
-import { ErrorCodes } from '@shared/errors';
-import { WizardError } from '@utils/wizard-abort';
+import { classifyRunFailure, ErrorCodes, WizardError } from '@shared/errors';
 import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
 import { checkLlmGatewayHealth } from '@shared/health-checks/endpoints';
@@ -26,7 +25,7 @@ vi.mock('@utils/analytics', () => ({
   analytics: { wizardCapture: vi.fn(), captureException: vi.fn() },
 }));
 
-vi.mock('@utils/debug', () => ({ logToFile: vi.fn(), setDebugSink: vi.fn() }));
+vi.mock('@utils/debug', () => ({ logToFile: vi.fn() }));
 
 // logToFile is variadic, so a leak in any argument is a leak. Rendered every way the
 // sink might: JSON (which invokes getters and toJSON), an Error's stack, and inspect.
@@ -97,6 +96,28 @@ describe('gatewayAuth', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it('a run without a pre-issued token mints its own, even after a run that had one', async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          token: 'phe_minted',
+          expires_at: new Date(Date.now() + 3600_000).toISOString(),
+          gateway_url: 'https://ai-gateway.us.posthog.com',
+        }),
+    });
+    useRunGatewayCredential(
+      { token: 'opaque-ci-token', url: 'https://ai-gateway.us.posthog.com' },
+      42,
+    );
+    useRunGatewayCredential(undefined, 42);
+
+    const auth = await gatewayAuth(host, 'pha_oauth', 'integration');
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(auth.token).toBe('phe_minted');
+  });
+
   it.each([
     ['', 42, 'https://ai-gateway.us.posthog.com'],
     ['token', 0, 'https://ai-gateway.us.posthog.com'],
@@ -131,17 +152,6 @@ describe('gatewayAuth', () => {
     } finally {
       vi.unstubAllEnvs();
       vi.resetModules();
-    }
-  });
-
-  it('requires an explicit gateway token file for CI', () => {
-    vi.stubEnv('WIZARD_CI_GATEWAY_TOKEN_FILE', '');
-    try {
-      expect(() => configureGatewayFromCIEnvironment(42, 'us')).toThrow(
-        'WIZARD_CI_GATEWAY_TOKEN_FILE is required',
-      );
-    } finally {
-      vi.unstubAllEnvs();
     }
   });
 
@@ -181,6 +191,33 @@ describe('gatewayAuth', () => {
       'https://ai-gateway.us.posthog.com',
     );
   });
+
+  it.each([
+    ['http://localhost:8010', 'http://localhost:8080'],
+    ['http://127.0.0.1:8010', 'http://localhost:8080'],
+    ['http://host.docker.internal:8010', 'http://host.docker.internal:8080'],
+  ])(
+    'uses the reachable gateway address for API host %s',
+    async (apiHost, expected) => {
+      fetchMock.mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            token: 'phe_minted',
+            expires_at: new Date(Date.now() + 3600_000).toISOString(),
+            gateway_url: 'http://host.docker.internal:8080',
+          }),
+      });
+      const localHost = { apiHost } as HostResolution;
+      const auth = await gatewayAuth(
+        localHost,
+        'pha_oauth',
+        'posthog-integration',
+      );
+      expect(auth.gatewayUrl).toBe(expected);
+      expect(checkLlmGatewayHealth).toHaveBeenCalledWith(expected);
+    },
+  );
 
   it.each([ServiceHealthStatus.Down, ServiceHealthStatus.NoConnection])(
     'reports gateway %s without exposing diagnostics or caching auth',
@@ -867,5 +904,19 @@ describe('isTrustedGatewayUrl', () => {
         'https://ph.internal.example',
       ),
     ).toBe(true);
+  });
+});
+
+describe('a mint refusal as a run failure', () => {
+  it('keeps a mint refusal as its own code and message', () => {
+    // The runners print this message alone, without the unhandled framing.
+    const failure = classifyRunFailure(
+      new GatewayMintRefused(403, 'This account is blocked.', 'blocked'),
+    );
+    expect(failure).toEqual({
+      code: ErrorCodes.GatewayMintRefused,
+      message: 'This account is blocked.',
+      coded: true,
+    });
   });
 });

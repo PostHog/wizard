@@ -7,11 +7,7 @@
  * is tracked by CacheTrackerPlugin for reporting and pricing.
  */
 
-import type {
-  Middleware,
-  MiddlewareContext,
-  MiddlewareStore,
-} from '@agent/middleware/types';
+import type { Middleware, MiddlewareContext, MiddlewareStore } from '../types';
 import type { TurnData } from './turn-counter';
 
 export interface TokenData {
