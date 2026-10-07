@@ -81,6 +81,8 @@ export enum AgentErrorType {
   ABORT = 'WIZARD_ABORT',
   /** Agent ended without making a single tool call — a no-op run that did no work */
   NO_PROGRESS = 'WIZARD_NO_PROGRESS',
+  /** A schema-bound run ended without output matching its schema */
+  INVALID_STRUCTURED_OUTPUT = 'WIZARD_INVALID_STRUCTURED_OUTPUT',
   /** Agent acted but stopped short — planned tasks left open and/or no skill installed */
   INCOMPLETE_TASKS = 'WIZARD_INCOMPLETE_TASKS',
 }

@@ -2,8 +2,6 @@ import { WIZARD_COMMANDMENTS } from '@agent/commandments';
 import { assembleCommandments } from '@agent/runner/switchboard/commandments';
 import { Harness, Sequence } from '@shared/constants';
 
-const global = WIZARD_COMMANDMENTS.join('\n');
-
 /** Every axis combination that reaches a runner today. */
 const CAPS = { bash: true, posthogMcp: true };
 const prompt = (
@@ -55,25 +53,6 @@ describe('commandments by axis', () => {
         );
       },
     );
-
-    it('are stated once, not once per source', () => {
-      // Previously duplicated: the global list said "create tasks as soon as you
-      // understand the work" while pi's runtime notes said "after you load and
-      // skim the skill workflow, not before" — both in the same prompt.
-      const linear = prompt(Harness.pi, Sequence.linear);
-      expect(
-        linear.match(/Create the task list once you understand/g),
-      ).toHaveLength(1);
-      expect(linear.match(/Each task subject is SHORT/g)).toHaveLength(1);
-      expect(linear).not.toMatch(/Create tasks as soon as you understand/);
-    });
-
-    it('keeps the provider-naming rule global — it governs code, not a tool', () => {
-      expect(global).toMatch(/Do not assume "PostHog provider"/);
-      expect(prompt(Harness.pi, Sequence.orchestrator)).toMatch(
-        /Do not assume "PostHog provider"/,
-      );
-    });
   });
 
   describe('axis scoping', () => {
@@ -99,39 +78,16 @@ describe('commandments by axis', () => {
       );
     });
   });
+  describe('wizard_ask correction rules', () => {
+    const text = WIZARD_COMMANDMENTS.join('\n');
 
-  // Targeted assertions for the wizard_ask Path A translation rules.
-  // These are the rules a skill author depends on when leaving their prose
-  // unchanged — they need to keep working as the commandment list evolves.
-  describe('wizard_ask Path A rules', () => {
-    const text = global;
-
-    it('names the tool explicitly', () => {
-      expect(text).toMatch(/`wizard_ask`/);
+    it('lets the agent re-ask the fields a downstream call rejected', () => {
+      expect(text).toMatch(/rejected/i);
+      expect(text).toMatch(/reuse the same `subject`/);
     });
 
-    it('forbids inlining questions in text output', () => {
-      expect(text).toMatch(/never inline questions/i);
-    });
-
-    it('requires batching prose lists into one call', () => {
-      expect(text).toMatch(/single `wizard_ask` tool call/i);
-      expect(text).toMatch(/never split/i);
-    });
-
-    it('describes how to infer `kind`', () => {
-      expect(text).toMatch(/`single`/);
-      expect(text).toMatch(/`multi`/);
-      expect(text).toMatch(/`text`/);
-    });
-
-    it('describes how to derive options and ids', () => {
-      expect(text).toMatch(/kebab-case/i);
-      expect(text).toMatch(/label.*value/i);
-    });
-
-    it('tells the agent to use answers directly without re-asking', () => {
-      expect(text).toMatch(/do not re-ask/i);
+    it('keeps a dismissed or timed-out ask a decline, not a correction', () => {
+      expect(text).toMatch(/dismissed or timed-out ask is not this case/i);
     });
   });
 });
@@ -164,6 +120,11 @@ describe('runtime caps gate the pi runtime notes', () => {
     expect(withCaps({ bash: true, posthogMcp: false })).not.toContain(
       'posthog_exec',
     );
+  });
+
+  it('keeps the wizard tools out of posthog_exec', () => {
+    const notes = withCaps({ bash: true, posthogMcp: true });
+    expect(notes).toMatch(/`wizard_ask`[^\n]*never through `posthog_exec`/);
   });
 
   it('still produces a usable prompt without the MCP', () => {

@@ -3,7 +3,7 @@
  * "which env keys does this project define, and in which file".
  *
  * Two surfaces read env keys and they must agree:
- *  - the warehouse-source detector (`@lib/warehouse-sources/detect`), which
+ *  - the warehouse-source detector (`@programs/warehouse-sources/detect`), which
  *    turns key names into detected sources, and
  *  - the `check_env_keys` wizard tool, which answers the agent's
  *    "is this key already set?" question.
@@ -35,6 +35,14 @@ export function isEnvFileName(name: string): boolean {
   return name.startsWith('.env');
 }
 
+/** Committed template names; see {@link isTemplateEnvFileName}. */
+export const TEMPLATE_ENV_FILE_NAMES: readonly string[] = [
+  '.env.example',
+  '.env.sample',
+  '.env.template',
+  '.env.dist',
+];
+
 /** {@link isEnvFileName} for access guards: APFS and NTFS open `.ENV` as `.env`. */
 export function isEnvFileNameAnyCase(name: string): boolean {
   return isEnvFileName(name.toLowerCase());
@@ -61,7 +69,7 @@ export function globCanSelectEnvFile(glob: string): boolean {
  * key, not a project that has it.
  */
 export function isTemplateEnvFileName(name: string): boolean {
-  return /^\.env\.(example|sample|template|dist)$/.test(name);
+  return TEMPLATE_ENV_FILE_NAMES.includes(name);
 }
 
 /**

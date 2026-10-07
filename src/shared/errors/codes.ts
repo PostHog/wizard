@@ -40,10 +40,12 @@ export const ErrorCodes = {
   AgentApiError: 'PHW_AGENT_API_ERROR',
   AgentYaraViolation: 'PHW_AGENT_YARA_VIOLATION',
   AgentNoProgress: 'PHW_AGENT_NO_PROGRESS',
+  AgentInvalidStructuredOutput: 'PHW_AGENT_INVALID_STRUCTURED_OUTPUT',
   AgentIncompleteTasks: 'PHW_AGENT_INCOMPLETE_TASKS',
   AgentOrchestratorSkillVariantMissing:
     'PHW_AGENT_ORCHESTRATOR_SKILL_VARIANT_MISSING',
   AgentOrchestratorTasksFailed: 'PHW_AGENT_ORCHESTRATOR_TASKS_FAILED',
+  AgentOrchestratorTasksBlocked: 'PHW_AGENT_ORCHESTRATOR_TASKS_BLOCKED',
   AgentOrchestratorHollowRun: 'PHW_AGENT_ORCHESTRATOR_HOLLOW_RUN',
   AgentOrchestratorSinkInvariant: 'PHW_AGENT_ORCHESTRATOR_SINK_INVARIANT',
   /** The backend answered the mint with a deliberate refusal. */

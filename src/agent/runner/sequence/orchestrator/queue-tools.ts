@@ -8,7 +8,8 @@
  */
 import { z } from 'zod';
 import { analytics } from '@utils/analytics';
-import { isValidModel, VALID_MODELS } from '@agent/runner/switchboard/models';
+import { redactSecrets } from '@shared/mcp-clients/results';
+import { isValidModel, VALID_MODELS } from '../../switchboard/models';
 import {
   isNotNeededReason,
   NotNeededReason,
@@ -344,7 +345,7 @@ export function applyComplete(
   if (args.remark) {
     analytics.wizardCapture('orchestrator remark', {
       task_type: ctx.store.get(id)?.type,
-      remark: args.remark,
+      remark: redactSecrets(args.remark),
     });
   }
   if (args.status === TaskStatus.Failed) {

@@ -8,7 +8,8 @@ import { WIZARD_LOG_FILE } from './paths';
 let logFilePath =
   (IS_DEV && process.env.POSTHOG_WIZARD_LOG_FILE) || WIZARD_LOG_FILE;
 let fileLoggingEnabled = true;
-let consoleLoggingEnabled = false;
+// An explicit --log-file wins over every later path change while pinned.
+let logFilePinned = false;
 
 function stringify(value: unknown): string {
   if (typeof value === 'string') return value;
@@ -22,7 +23,8 @@ function stringify(value: unknown): string {
   }
 }
 
-function renderLine(args: readonly unknown[]): string {
+/** One log line from `logToFile`-style arguments: strings as they are, errors as their stack, the rest as JSON. */
+export function formatLogLine(...args: readonly unknown[]): string {
   return args.map(stringify).join(' ');
 }
 
@@ -33,11 +35,14 @@ export function getLogFilePath(): string {
 export function configureLogFile(opts: {
   path?: string;
   enabled?: boolean;
+  pin?: boolean;
 }): void {
-  if (opts.path !== undefined) {
+  if (opts.pin === false) logFilePinned = false;
+  if (opts.path !== undefined && !logFilePinned) {
     logFilePath = opts.path;
     ensuredLogDir = false;
   }
+  if (opts.pin === true) logFilePinned = true;
   if (opts.enabled !== undefined) fileLoggingEnabled = opts.enabled;
 }
 
@@ -103,26 +108,5 @@ export function initLogFile(): void {
 export function logToFile(...args: unknown[]): void {
   if (!fileLoggingEnabled) return;
   const ts = new Date().toISOString();
-  appendLine(`[${ts}] ${renderLine(args)}\n`);
-}
-
-/** Where `debug()` lines go. The UI module installs the current UI's info log at load; until then they go to stdout. */
-export type DebugSink = (line: string) => void;
-
-let debugSink: DebugSink = (line) => process.stdout.write(`${line}\n`);
-
-/** Replace the console sink; returns the previous one so callers can restore it. */
-export function setDebugSink(sink: DebugSink): DebugSink {
-  const previous = debugSink;
-  debugSink = sink;
-  return previous;
-}
-
-export function debug(...args: unknown[]): void {
-  if (!consoleLoggingEnabled) return;
-  debugSink(renderLine(args));
-}
-
-export function enableDebugLogs(): void {
-  consoleLoggingEnabled = true;
+  appendLine(`[${ts}] ${formatLogLine(...args)}\n`);
 }

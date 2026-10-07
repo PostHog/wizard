@@ -15,11 +15,8 @@ import { RESUME_INSTRUCTION } from '@agent/signals';
 import { analytics } from '@utils/analytics';
 import { Sequence } from '@shared/constants';
 import type { WizardRunOptions } from '@utils/types';
-import type { SpinnerHandle } from '@ui';
-import {
-  AdditionalFeature,
-  ADDITIONAL_FEATURE_PROMPTS,
-} from '@lib/wizard-session';
+import type { SpinnerHandle } from '@agent/types';
+import { formatLogLine } from '@utils/debug';
 
 // Mock dependencies
 vi.mock('@utils/analytics');
@@ -29,43 +26,6 @@ vi.mock('@utils/debug');
 const mockQuery = vi.fn();
 vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
   query: (...args: unknown[]) => mockQuery(...args),
-}));
-
-// Mock the UI layer
-const mockUIInstance = {
-  log: {
-    step: vi.fn(),
-    success: vi.fn(),
-    error: vi.fn(),
-    warn: vi.fn(),
-    info: vi.fn(),
-  },
-  spinner: vi.fn(),
-  select: vi.fn(),
-  confirm: vi.fn(),
-  text: vi.fn(),
-  intro: vi.fn(),
-  outro: vi.fn(),
-  cancel: vi.fn(),
-  note: vi.fn(),
-  isCancel: vi.fn(),
-  setDetectedFramework: vi.fn(),
-  setCredentials: vi.fn(),
-  pushStatus: vi.fn(),
-  setLoginUrl: vi.fn(),
-  showBlockingOutage: vi.fn(),
-  setReadinessWarnings: vi.fn(),
-  showSettingsOverride: vi.fn(),
-  showAuthError: vi.fn(),
-  startRun: vi.fn(),
-  syncTodos: vi.fn(),
-  groupMultiselect: vi.fn(),
-  multiselect: vi.fn(),
-  addTokenUsage: vi.fn(),
-  setFinalTokenCostUsd: vi.fn(),
-};
-vi.mock('../../ui', () => ({
-  getUI: () => mockUIInstance,
 }));
 
 describe('runAgent', () => {
@@ -109,10 +69,244 @@ describe('runAgent', () => {
       stop: vi.fn(),
       message: vi.fn(),
     };
+  });
 
-    mockUIInstance.spinner.mockReturnValue(mockSpinner);
-    // Reset log mocks
-    Object.values(mockUIInstance.log).forEach((fn) => fn.mockReset());
+  it('forwards the output schema to the SDK and delivers the typed result', async () => {
+    const outputFormat = {
+      type: 'json_schema' as const,
+      schema: { type: 'object', properties: { projects: { type: 'array' } } },
+    };
+    const result = {
+      type: 'result',
+      subtype: 'success',
+      structured_output: { projects: [] },
+    };
+    mockQuery.mockImplementation(function* () {
+      yield result;
+    });
+
+    const run = await runAgent(
+      { ...defaultAgentConfig, outputFormat },
+      'Scan projects',
+      defaultOptions,
+      mockSpinner,
+      { requestRemark: false },
+    );
+
+    expect(mockQuery.mock.calls[0][0].options.outputFormat).toEqual(
+      outputFormat,
+    );
+    expect(run).toEqual({
+      kind: 'success',
+      structuredOutput: { projects: [] },
+    });
+  });
+
+  it('restricts a read-only scan at SDK registration and permission gates', async () => {
+    mockQuery.mockImplementation(function* () {
+      yield { type: 'result', subtype: 'success' };
+    });
+    await runAgent(
+      {
+        ...defaultAgentConfig,
+        readOnly: true,
+        allowedTools: ['Write', 'Agent'],
+        mcpServers: {
+          external: { type: 'http', url: 'https://example.test/mcp' },
+        },
+      },
+      'Scan projects',
+      defaultOptions,
+      mockSpinner,
+      { requestRemark: false },
+    );
+    const options = mockQuery.mock.calls[0][0].options;
+    expect(options.tools).toEqual(['Read', 'Glob', 'Grep']);
+    expect(options.allowedTools).toEqual(['Glob']);
+    expect(options.mcpServers).toEqual({});
+    expect(options.agents).toBeUndefined();
+    expect(options.settingSources).toEqual([]);
+    expect(options.skills).toEqual([]);
+    for (const tool of [
+      'Write',
+      'Edit',
+      'Bash',
+      'Agent',
+      'mcp__external__exec',
+      'FutureTool',
+    ]) {
+      expect(await options.canUseTool(tool, {})).toMatchObject({
+        behavior: 'deny',
+      });
+    }
+    expect(
+      await options.canUseTool('Read', { file_path: 'package.json' }),
+    ).toMatchObject({ behavior: 'allow' });
+  });
+
+  it('denies real env files to every tool and runs no project hooks', async () => {
+    mockQuery.mockImplementation(function* () {
+      yield { type: 'result', subtype: 'success' };
+    });
+    await runAgent(
+      defaultAgentConfig,
+      'Integrate',
+      defaultOptions,
+      mockSpinner,
+      { requestRemark: false },
+    );
+    const { settings, allowedTools } = mockQuery.mock.calls[0][0].options;
+    // Outside the project only canUseTool sees file tools, so none is pre-allowed.
+    for (const tool of ['Read', 'Write', 'Edit', 'Grep']) {
+      expect(allowedTools).not.toContain(tool);
+    }
+    expect(settings.disableAllHooks).toBe(true);
+    expect(settings.permissions.deny).toEqual(
+      expect.arrayContaining([
+        'Read(.env*)',
+        'Read(!.env.example)',
+        'Edit(.env*)',
+        'Edit(!.env.example)',
+      ]),
+    );
+  });
+
+  it('preserves structured-output exhaustion when the SDK throws after its result', async () => {
+    const result = {
+      type: 'result',
+      subtype: 'error_max_structured_output_retries',
+      errors: ['Invalid structured output'],
+    };
+    mockQuery.mockImplementation(function* () {
+      yield result;
+      throw new Error('SDK query failed');
+    });
+
+    await expect(
+      runAgent(
+        defaultAgentConfig,
+        'Scan projects',
+        defaultOptions,
+        mockSpinner,
+        { requestRemark: false },
+      ),
+    ).resolves.toMatchObject({
+      kind: 'failure',
+      classification: AgentErrorType.INVALID_STRUCTURED_OUTPUT,
+      message: 'Invalid structured output',
+    });
+  });
+
+  it('retains task identity through SDK rekeying and ignores read-only task tools', async () => {
+    const progress = vi.fn();
+    const tool = (id: string, name: string, input: object) => ({
+      type: 'assistant',
+      message: { content: [{ type: 'tool_use', id, name, input }] },
+    });
+    mockQuery.mockReturnValue(
+      (function* () {
+        yield tool('create-1', 'TaskCreate', {
+          subject: 'Inspect',
+          activeForm: 'Inspecting',
+        });
+        yield {
+          type: 'user',
+          tool_use_result: { task: { id: '1' } },
+          message: {
+            content: [{ type: 'tool_result', tool_use_id: 'create-1' }],
+          },
+        };
+        yield tool('update-1', 'TaskUpdate', {
+          taskId: '1',
+          subject: 'New label',
+          status: 'in_progress',
+        });
+        yield tool('list-1', 'TaskList', {});
+        yield tool('get-1', 'TaskGet', { taskId: '1' });
+        yield tool('update-2', 'TaskUpdate', {
+          taskId: '1',
+          status: 'completed',
+        });
+        yield {
+          type: 'result',
+          subtype: 'success',
+          is_error: false,
+          result: 'Done',
+        };
+      })(),
+    );
+    await runAgent(
+      { ...defaultAgentConfig, emit: progress },
+      'test',
+      defaultOptions,
+      mockSpinner as unknown as SpinnerHandle,
+    );
+    const snapshots = progress.mock.calls
+      .map(([event]) => event)
+      .filter((event) => event.kind === 'tasks')
+      .map((event) => event.tasks);
+    expect(snapshots).toHaveLength(4);
+    expect(snapshots.map((items) => items[0].status)).toEqual([
+      'pending',
+      'pending',
+      'in_progress',
+      'completed',
+    ]);
+    expect(new Set(snapshots.map((items) => items[0].id)).size).toBe(1);
+    expect(snapshots[0][0].id).toEqual(expect.any(String));
+    expect(snapshots.at(-1)[0].content).toBe('New label');
+  });
+
+  it('a debug run emits the agent debug lines as info log progress; a non-debug run emits none', async () => {
+    const actual = await vi.importActual<typeof import('@utils/debug')>(
+      '@utils/debug',
+    );
+    vi.mocked(formatLogLine).mockImplementation(actual.formatLogLine);
+    const infoLines = async (debug: boolean): Promise<string[]> => {
+      const progress = vi.fn();
+      mockQuery.mockImplementation(
+        ({
+          options,
+        }: {
+          options: { canUseTool: (n: string, i: unknown) => unknown };
+        }) => {
+          // A denied Bash call: its decision is one of the debug lines.
+          void options.canUseTool('Bash', { command: 'rm -rf /' });
+          return (function* () {
+            yield {
+              type: 'result',
+              subtype: 'success',
+              is_error: false,
+              result: 'Done',
+            };
+          })();
+        },
+      );
+      await runAgent(
+        { ...defaultAgentConfig, emit: progress },
+        'test',
+        { ...defaultOptions, debug },
+        mockSpinner as unknown as SpinnerHandle,
+      );
+      return progress.mock.calls
+        .map(([event]) => event)
+        .filter((event) => event.kind === 'log' && event.level === 'info')
+        .map((event) => event.message as string);
+    };
+
+    const debugLines = await infoLines(true);
+    expect(debugLines).toContain('SDK Message type: result');
+    expect(debugLines).toContainEqual(
+      expect.stringMatching(/^Denying bash command \(.+\): rm -rf \/$/),
+    );
+    const quietLines = await infoLines(false);
+    expect(
+      quietLines.filter(
+        (line) =>
+          line.startsWith('SDK Message type') ||
+          line.startsWith('Denying bash command'),
+      ),
+    ).toEqual([]);
   });
 
   it('aborts an unfinished SDK run at its configured timeout', async () => {
@@ -476,9 +670,6 @@ describe('runAgent', () => {
       // Should return success (empty object), not error
       expect(result).toEqual({ kind: 'success' });
       expect(mockSpinner.stop).toHaveBeenCalledWith('Test success');
-
-      // ui.log.error should NOT have been called (errors suppressed for user)
-      expect(mockUIInstance.log.error).not.toHaveBeenCalled();
     });
 
     it('should return success when a post-success result carries an API Error', async () => {
@@ -533,7 +724,6 @@ describe('runAgent', () => {
 
       expect(result).toEqual({ kind: 'success' });
       expect(mockSpinner.stop).toHaveBeenCalledWith('Test success');
-      expect(mockUIInstance.log.error).not.toHaveBeenCalled();
     });
 
     it('should ignore abort requests when no abort cases are registered', async () => {
@@ -581,7 +771,7 @@ describe('createStopHook', () => {
   const hookInput = { stop_hook_active: false };
 
   it('empty queue: first call blocks for remark, second allows stop', () => {
-    const hook = createStopHook([]);
+    const hook = createStopHook();
 
     // First call → remark prompt
     const first = hook(hookInput);
@@ -593,56 +783,8 @@ describe('createStopHook', () => {
     expect(second).toEqual({});
   });
 
-  it('single feature: feature prompt, then remark, then allow stop', () => {
-    const hook = createStopHook([AdditionalFeature.LLM]);
-
-    // First call → LLM feature prompt
-    const first = hook(hookInput);
-    expect(first).toHaveProperty('decision', 'block');
-    expect((first as { reason: string }).reason).toBe(
-      ADDITIONAL_FEATURE_PROMPTS[AdditionalFeature.LLM],
-    );
-
-    // Second call → remark prompt
-    const second = hook(hookInput);
-    expect(second).toHaveProperty('decision', 'block');
-    expect((second as { reason: string }).reason).toContain('WIZARD-REMARK');
-
-    // Third call → allow stop
-    const third = hook(hookInput);
-    expect(third).toEqual({});
-  });
-
-  it('multiple queue entries: drains all, then remark, then allow stop', () => {
-    // Queue the same feature twice to exercise multi-item draining
-    const hook = createStopHook([AdditionalFeature.LLM, AdditionalFeature.LLM]);
-
-    // First call → LLM prompt
-    const first = hook(hookInput);
-    expect(first).toHaveProperty('decision', 'block');
-    expect((first as { reason: string }).reason).toBe(
-      ADDITIONAL_FEATURE_PROMPTS[AdditionalFeature.LLM],
-    );
-
-    // Second call → LLM prompt again
-    const second = hook(hookInput);
-    expect(second).toHaveProperty('decision', 'block');
-    expect((second as { reason: string }).reason).toBe(
-      ADDITIONAL_FEATURE_PROMPTS[AdditionalFeature.LLM],
-    );
-
-    // Third call → remark prompt
-    const third = hook(hookInput);
-    expect(third).toHaveProperty('decision', 'block');
-    expect((third as { reason: string }).reason).toContain('WIZARD-REMARK');
-
-    // Fourth call → allow stop
-    const fourth = hook(hookInput);
-    expect(fourth).toEqual({});
-  });
-
   it('allow stop is idempotent after all phases complete', () => {
-    const hook = createStopHook([]);
+    const hook = createStopHook();
 
     hook(hookInput); // remark
     hook(hookInput); // allow
@@ -655,7 +797,7 @@ describe('createStopHook', () => {
     signals.push(
       'Failed to authenticate. API Error: 401 {"detail":"Authentication required"}',
     );
-    const hook = createStopHook([AdditionalFeature.LLM], signals);
+    const hook = createStopHook(signals);
 
     const result = hook(hookInput);
     expect(result).toEqual({});
@@ -664,7 +806,7 @@ describe('createStopHook', () => {
   it('allows stop immediately on generic API error', () => {
     const signals = new AgentOutputSignals();
     signals.push('API Error: 500 Internal Server Error');
-    const hook = createStopHook([AdditionalFeature.LLM], signals);
+    const hook = createStopHook(signals);
 
     const result = hook(hookInput);
     expect(result).toEqual({});
@@ -673,7 +815,7 @@ describe('createStopHook', () => {
   it('proceeds normally when output has no API error', () => {
     const signals = new AgentOutputSignals();
     signals.push('Some normal agent output'); // dropped: carries no signal
-    const hook = createStopHook([], signals);
+    const hook = createStopHook(signals);
 
     // First call → remark prompt (normal behavior)
     const first = hook(hookInput);
@@ -826,7 +968,6 @@ describe('subprocess gateway credentials', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mockUIInstance.spinner.mockReturnValue(spinner);
   });
 
   it('takes the base url and bearer from the run own auth', async () => {
@@ -861,6 +1002,31 @@ describe('subprocess gateway credentials', () => {
     // The run tags ride one properties blob, with the minted team on it.
     expect(env.ANTHROPIC_CUSTOM_HEADERS).toContain('X-PostHog-Properties');
     expect(env.ANTHROPIC_CUSTOM_HEADERS).toContain('"team_id":42');
+  });
+
+  it('resolves the latest OAuth token when starting an SDK query', async () => {
+    mockQuery.mockReturnValue(
+      (function* () {
+        yield {
+          type: 'result',
+          subtype: 'success',
+          is_error: false,
+          result: 'done',
+        };
+      })(),
+    );
+    const currentPosthogApiKey = vi.fn().mockResolvedValue('pha_rotated');
+    await runAgent(
+      { ...config, currentPosthogApiKey },
+      'test prompt',
+      options,
+      spinner as unknown as SpinnerHandle,
+      { successMessage: 'ok', errorMessage: 'err' },
+    );
+    expect(currentPosthogApiKey).toHaveBeenCalled();
+    expect(mockQuery.mock.calls[0][0].options.env.POSTHOG_MCP_TOKEN).toBe(
+      'pha_rotated',
+    );
   });
 });
 
@@ -954,7 +1120,6 @@ describe('gateway re-mint on 401', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mockUIInstance.spinner.mockReturnValue(spinner);
     emit.mockReset();
   });
 

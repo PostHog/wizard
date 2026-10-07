@@ -17,7 +17,7 @@
  */
 import fs from 'fs';
 import path from 'path';
-import { LINTING_TOOLS } from '@agent/safe-tools';
+import { LINTING_TOOLS } from './safe-tools';
 import { isEnvFileNameAnyCase } from '@utils/env-scan';
 
 export type BashFenceDecision =

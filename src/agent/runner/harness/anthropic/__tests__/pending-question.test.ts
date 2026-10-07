@@ -2,7 +2,7 @@ import { initializeAgent, wizardCanUseTool } from '@agent/agent-interface';
 import { createAskBridge } from '../../../shared/ask';
 import { anthropicBackend } from '..';
 import type { BackendRunInputs, TaskRunInputs } from '../../types';
-import type { AskAnswers } from '@lib/wizard-session';
+import type { AskAnswers } from '@agent/types';
 import { Harness, Sequence } from '@shared/constants';
 import { HostResolution } from '@shared/host-resolution';
 
@@ -44,7 +44,15 @@ async function initializeHarness(
         sequence: Sequence.linear,
         model: 'test',
       },
-      switchboard: { program: 'test', flags: {} },
+      switchboard: {
+        program: 'test',
+        binding: {
+          harness: Harness.anthropic,
+          sequence: Sequence.linear,
+          model: 'test',
+        },
+        flags: {},
+      },
       skillsBaseUrl: 'https://skills.test',
       wizardFlags: {},
       wizardFlagPayloads: {},
@@ -91,7 +99,6 @@ async function initializeHarness(
       ...inputs,
       spinnerMessage: 'Working',
       successMessage: 'Done',
-      additionalFeatureQueue: [],
       requestRemark: false,
       analyticsProperties: {},
       orchestrator: {} as TaskRunInputs['orchestrator'],

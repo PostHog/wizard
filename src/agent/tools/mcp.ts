@@ -28,12 +28,14 @@ import {
   publishHandoff,
 } from './handoff';
 import { createSecretVault, type SecretVault } from '@shared/secret-vault';
-import type { ProgressEmitter } from '@agent/progress';
+import { downloadSkill } from '@shared/skill-install';
+import type { ProgressEmitter } from '../progress';
 import {
   buildOrchestratorTools,
   type OrchestratorToolsContext,
-} from '@agent/runner/sequence/orchestrator/queue-tools';
+} from '../runner/sequence/orchestrator/queue-tools';
 import type { LLMProvider } from '@posthog/warlock';
+import { scanInstalledSkill } from '../yara-hooks';
 import {
   ASK_MAX_QUESTIONS_PER_CALL,
   DEFAULT_ASK_MAX_QUESTIONS,
@@ -42,7 +44,6 @@ import {
   ENV_FILE_PATH_DESCRIPTION,
   SERVER_NAME,
   addAuditChecks,
-  downloadSkill,
   ensureGitignoreCoverage,
   createAskAccounting,
   describeAskCancellation,
@@ -440,7 +441,7 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
       }
 
       const result = await downloadSkill(skill, workingDirectory, {
-        triage: triageProvider,
+        scan: (dir) => scanInstalledSkill(dir, triageProvider),
       });
       if (result.success) {
         return {
@@ -763,7 +764,9 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
       content: z.string().describe(PUBLISH_HANDOFF_CONTENT_DESCRIPTION),
     },
     (args: { content: string }) => {
-      const result = publishHandoff(args.content, emit);
+      const result = publishHandoff(args.content, emit, {
+        taskAgent: orchestrator?.currentTaskId !== undefined,
+      });
       logToFile(`publish_handoff: ${result.message}`);
       return {
         content: [{ type: 'text' as const, text: result.message }],

@@ -15,7 +15,11 @@
  * this module instead.
  */
 
-import { HEADLESS_FLAG } from '@lib/headless-mode';
+/**
+ * The on-CLI flag name. Intentionally ugly + undocumented; do not surface it in
+ * `--help`, the README, or user-facing error messages.
+ */
+export const HEADLESS_FLAG = 'headless-DONOTUSE-EXPERIMENTAL';
 
 // ── Build-time constants ─────────────────────────────────────────────
 // tsdown replaces `process.env.NODE_ENV` with a string literal.
@@ -66,6 +70,7 @@ type RuntimeEnvKey =
   // yargs .env('POSTHOG_WIZARD') would claim them as CLI options and
   // .strictOptions() would reject the run unless the wizard also declared them,
   // which would tie every sandbox deploy to an npm release of this package.
+  | 'POSTHOG_WIZARD_RUN_ID'
   | 'POSTHOG_TASK_RUN_ID'
   | 'POSTHOG_TASK_ID'
   | 'POSTHOG_HANDOFF_OUTPUT_PATH'

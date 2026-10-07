@@ -1,7 +1,18 @@
 import { defineConfig } from 'tsdown';
 
+// TODO(publish-library): to publish runProgram (with SessionStore) and runAgent,
+// set this to true and add "./programs" and "./agent" to package.json "exports",
+// each pointing at dist/<name>.js with its dist/<name>.d.ts. The two entries import
+// no TUI, CLI or Ink code, and `pnpm typecheck` keeps it that way.
+const PUBLISH_LIBRARY = false;
+const LIBRARY_ENTRIES = {
+  programs: 'src/programs/index.ts',
+  agent: 'src/agent/index.ts',
+};
+
 export default defineConfig({
-  entry: ['bin.ts'],
+  entry: PUBLISH_LIBRARY ? { bin: 'bin.ts', ...LIBRARY_ENTRIES } : ['bin.ts'],
+  ...(PUBLISH_LIBRARY ? { dts: true } : {}),
   outDir: 'dist',
   format: 'esm',
   platform: 'node',
@@ -26,6 +37,6 @@ export default defineConfig({
   sourcemap: true,
   clean: true,
 
-  // Path aliases — resolved from tsconfig.json paths automatically.
-  // tsdown/rolldown reads the "paths" field in tsconfig.build.json.
+  // One config for every file: the per-layer tsconfigs map only their own aliases.
+  tsconfig: './tsconfig.base.json',
 });

@@ -22,20 +22,21 @@ import {
   Harness,
   Sequence,
   WIZARD_REMARK_EVENT_NAME,
-  WIZARD_USER_AGENT,
+  wizardUserAgentForProgram,
 } from '@shared/constants';
 import {
   allowsPostHogMcp,
   queueTools,
   renderToolInventory,
-} from '@agent/agent-prompt-loader';
-import { AgentErrorType } from '@agent/agent-interface';
-import { REMARK_INSTRUCTION } from '@agent/signals';
-import { AgentOutputSignals } from '@agent/output-signals';
+} from '../../../agent-prompt-loader';
+import { AgentErrorType } from '../../../agent-interface';
+import { REMARK_INSTRUCTION } from '../../../signals';
+import { AgentOutputSignals } from '../../../output-signals';
 import { TaskStatus } from '../../sequence/orchestrator/queue';
 import type { OrchestratorToolsContext } from '../../sequence/orchestrator/queue-tools';
 import type { AgentResult, TaskRunInputs } from '../types';
-import { gatewayAuth, type GatewayAuth } from '@agent/gateway-session';
+import { gatewayAuth, type GatewayAuth } from '../../../gateway-session';
+import { currentAccessToken } from '@shared/oauth-session';
 import {
   buildGatewayProvider,
   GATEWAY_PROVIDER,
@@ -52,7 +53,7 @@ import {
   lastStatusLine,
   withMode,
 } from './index';
-import { createAioCapture } from '@agent/aio-capture';
+import { createAioCapture } from '../../../aio-capture';
 
 /** wizard tool vocabulary → the pi tool definitions it unlocks. */
 const CODING_TOOL_MAP: Record<string, readonly string[]> = {
@@ -250,10 +251,11 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
       createWriteToolDefinition,
     } = sdk;
 
-    const refreshAuth = () =>
+    // Reads the live OAuth token, so a mid-run rotation re-mints on the new one.
+    const refreshAuth = async () =>
       gatewayAuth(
         boot.credentials.host,
-        boot.credentials.accessToken,
+        await currentAccessToken(boot.credentials),
         boot.programId,
       );
     const auth = await refreshAuth();
@@ -296,7 +298,7 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
       getWizardAskPending: () => askState.pending,
       workingDirectory: input.installDir,
     });
-    const { prewarmYaraScanner } = await import('@agent/yara-hooks');
+    const { prewarmYaraScanner } = await import('../../../yara-hooks');
     void prewarmYaraScanner();
 
     // PostHog MCP, for the tasks whose prompt requests it. Tasks that never
@@ -310,8 +312,11 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
         const { setupPostHogMcp } = await import('./mcp');
         const mcp = await setupPostHogMcp({
           mcpUrl: boot.credentials.host.mcpUrl,
-          accessToken: boot.credentials.accessToken,
-          userAgent: WIZARD_USER_AGENT,
+          accessToken: await currentAccessToken(boot.credentials),
+          // Same `program:` marker as the linear run, so a task's MCP writes are
+          // attributed to the program that queued it. `anthropic/index.ts` uses
+          // `programId` as the label on the task path too.
+          userAgent: wizardUserAgentForProgram(config.programId),
         });
         extensionFactories.push(mcp.extensionFactory);
         mcpCleanup = mcp.cleanup;
@@ -380,7 +385,8 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
 
     // Wizard env + package-manager tools are always on — their handlers are
     // fenced, and init/build tasks depend on them. publish_handoff rides
-    // along (it only emits) so the report task can publish the handoff.
+    // along (it only emits) so the report task can publish the handoff; every
+    // other task is told, on the call, that it still owes a complete_task.
     const { createWizardPiTools } = await import('./tools');
     const wizardToolNames = allowedPiWizardTools(allowedTools);
     const wizardTools = createWizardPiTools({
@@ -388,6 +394,7 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
       skillsBaseUrl: boot.skillsBaseUrl,
       triageProvider: boot.triageProvider,
       emit,
+      taskAgent: orchestrator.currentTaskId !== undefined,
       // Present only for a task allowed to ask; without it wizard_ask errors
       // instead of hanging on a prompt nobody will ever see.
       askBridge,
