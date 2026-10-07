@@ -1,4 +1,8 @@
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
 import { wizardCanUseTool } from '@agent/agent-interface';
+import { analytics } from '@utils/analytics';
 
 vi.mock('@utils/analytics', () => ({
   analytics: {
@@ -6,6 +10,183 @@ vi.mock('@utils/analytics', () => ({
   },
 }));
 vi.mock('@utils/debug');
+
+describe('wizardCanUseTool — scoped rm inside the project', () => {
+  const capture = vi.mocked(analytics.wizardCapture);
+  let base: string;
+  let root: string;
+
+  beforeAll(() => {
+    // Under os.tmpdir() on purpose: on macOS it is itself a symlink.
+    base = fs.mkdtempSync(path.join(os.tmpdir(), 'wizard-rm-'));
+    root = path.join(base, 'project');
+    fs.mkdirSync(root);
+    fs.mkdirSync(path.join(base, 'outside'));
+    fs.symlinkSync(path.join(base, 'outside'), path.join(root, 'docs'), 'dir');
+  });
+  afterAll(() => fs.rmSync(base, { recursive: true, force: true }));
+  beforeEach(() => capture.mockClear());
+
+  const decide = (command: string) =>
+    wizardCanUseTool('Bash', { command }, { workingDirectory: root }).behavior;
+
+  it('allows a plain rm of a project file and records no denial', () => {
+    expect(decide('rm -f .posthog-audit-checks.json')).toBe('allow');
+    expect(capture).not.toHaveBeenCalled();
+  });
+
+  it('denies rm, and records it, when no project root is known', () => {
+    const result = wizardCanUseTool('Bash', { command: 'rm plan.json' });
+    expect(result.behavior === 'deny' && result.message).toMatch(
+      /rm is not available/,
+    );
+    expect(capture).toHaveBeenCalledWith('bash denied', {
+      reason: 'not in allowlist',
+      command: 'rm plan.json',
+    });
+  });
+
+  it('denies rm through a symlinked directory that leaves the project', () => {
+    expect(decide('rm docs/secret.txt')).toBe('deny');
+    // bash follows `docs` before `..`, so this lands beside the project.
+    expect(decide('rm docs/../project-sibling.txt')).toBe('deny');
+    // bash splits words on space, tab, and newline only, so this is one target.
+    expect(decide('rm -f docs/\vsecret.txt')).toBe('deny');
+    // ...and this is two, the second one outside the project.
+    expect(decide('rm a.txt\t/etc/passwd')).toBe('deny');
+  });
+
+  it('allows removing a symlink that sits in the project, which deletes only the link', () => {
+    expect(decide('rm docs')).toBe('allow');
+  });
+
+  it('tells the agent the rm rule when an rm is denied', () => {
+    const result = wizardCanUseTool(
+      'Bash',
+      { command: 'rm -rf node_modules' },
+      { workingDirectory: root },
+    );
+    expect(result.behavior === 'deny' && result.message).toMatch(
+      /rm \[-f\] <file\.\.\.>/,
+    );
+  });
+
+  it('denies .env targets in any case or escaped form', () => {
+    for (const c of [
+      'rm .env',
+      'rm .ENV',
+      'rm config/.Env.local',
+      'rm \\.env',
+    ]) {
+      expect(decide(c)).toBe('deny');
+    }
+  });
+});
+
+describe('wizardCanUseTool — .env guard ignores case', () => {
+  it('denies Read, Write, and Edit of .env in any case', () => {
+    for (const tool of ['Read', 'Write', 'Edit']) {
+      for (const file_path of ['.ENV', 'app/.Env.local']) {
+        expect(wizardCanUseTool(tool, { file_path }).behavior).toBe('deny');
+      }
+    }
+  });
+
+  it('still allows an env template in any case', () => {
+    expect(
+      wizardCanUseTool('Write', { file_path: '.ENV.EXAMPLE' }).behavior,
+    ).toBe('allow');
+  });
+
+  it('denies Grep aimed at .env in any case', () => {
+    expect(wizardCanUseTool('Grep', { path: '.ENV' }).behavior).toBe('deny');
+  });
+
+  it('denies a Grep glob that can pull .env files into the search', () => {
+    // ripgrep lets a --glob override .gitignore, so these reach a real .env.
+    for (const glob of ['.env*', '**/.ENV', '*', '**/*', '{.env,x}', '?env']) {
+      expect(wizardCanUseTool('Grep', { path: '.', glob }).behavior).toBe(
+        'deny',
+      );
+    }
+    expect(
+      wizardCanUseTool('Grep', { path: '.', glob: '**/*.ts' }).behavior,
+    ).toBe('allow');
+  });
+
+  it('denies a Grep glob that names a specific env file at any depth', () => {
+    for (const glob of [
+      'apps/api/.env.local',
+      '.env.production',
+      '.env.prod*',
+      '*.production',
+      '.env.development.local',
+      '.envrc',
+      '{src,apps/api}/.env.local',
+    ]) {
+      expect(wizardCanUseTool('Grep', { path: '.', glob }).behavior).toBe(
+        'deny',
+      );
+    }
+  });
+
+  it('allows a Grep exclude glob and globs that cannot match .env*', () => {
+    for (const glob of ['!*.min.js', '!.env*', 'src/**/*.tsx', '.gitignore']) {
+      expect(wizardCanUseTool('Grep', { path: '.', glob }).behavior).toBe(
+        'allow',
+      );
+    }
+  });
+});
+
+describe('wizardCanUseTool — Grep globs checked against the env files that exist', () => {
+  let root: string;
+
+  beforeAll(() => {
+    root = fs.mkdtempSync(path.join(os.tmpdir(), 'wizard-grep-env-'));
+    fs.mkdirSync(path.join(root, 'apps', 'api'), { recursive: true });
+    fs.writeFileSync(path.join(root, '.env.foo'), 'A=1\n');
+    fs.writeFileSync(path.join(root, 'apps', 'api', '.env.stagingx'), 'B=1\n');
+    fs.writeFileSync(path.join(root, 'app.ts'), 'export {}\n');
+  });
+  afterAll(() => fs.rmSync(root, { recursive: true, force: true }));
+
+  const grep = (glob: string, searchPath?: string) =>
+    wizardCanUseTool(
+      'Grep',
+      { glob, ...(searchPath ? { path: searchPath } : {}) },
+      { workingDirectory: root },
+    ).behavior;
+
+  it('denies a leading-wildcard glob that selects an env file in the project', () => {
+    expect(grep('*.foo')).toBe('deny');
+    expect(grep('{*.foo,x}')).toBe('deny');
+    expect(grep('*.stagingx')).toBe('deny');
+  });
+
+  it('denies a glob by relative path to an env file under the Grep path', () => {
+    expect(grep('api/*.stagingx', 'apps')).toBe('deny');
+    expect(grep('apps/*/.env.stagingx')).toBe('deny');
+  });
+
+  it('allows a leading-wildcard glob that no env file matches', () => {
+    expect(grep('**/*.ts')).toBe('allow');
+    expect(grep('*.bar')).toBe('allow');
+  });
+
+  it('allows a leading-wildcard glob when the env file is outside the Grep path', () => {
+    expect(grep('*.foo', 'apps/api')).toBe('allow');
+  });
+
+  it('keeps denying a conventional env name that is not on disk', () => {
+    expect(grep('*.local')).toBe('deny');
+    expect(grep('apps/api/.env.local')).toBe('deny');
+  });
+
+  it('allows an exclude glob', () => {
+    expect(grep('!*.min.js')).toBe('allow');
+  });
+});
 
 describe('wizardCanUseTool — wizard_ask pending guard', () => {
   for (const tool of ['Write', 'Edit'] as const) {

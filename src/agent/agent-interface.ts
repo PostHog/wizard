@@ -22,6 +22,8 @@ import {
 import type { WizardRunOptions } from '@utils/types';
 import { analytics } from '@utils/analytics';
 import {
+  globCanSelectEnvFile,
+  isEnvFileNameAnyCase,
   isTemplateEnvFileName,
   TEMPLATE_ENV_FILE_NAMES,
 } from '@utils/env-scan';
@@ -452,6 +454,8 @@ export function wizardCanUseTool(
     disallowedTools?: readonly string[];
     /** A debug run's line for each Bash decision. */
     onDebug?: (line: string) => void;
+    /** Project root; the bash fence allows a plain `rm` of files inside it. */
+    workingDirectory?: string;
   } = {},
 ):
   | { behavior: 'allow'; updatedInput: Record<string, unknown> }
@@ -494,7 +498,10 @@ export function wizardCanUseTool(
   if (toolName === 'Read' || toolName === 'Write' || toolName === 'Edit') {
     const filePath = typeof input.file_path === 'string' ? input.file_path : '';
     const basename = path.basename(filePath);
-    if (basename.startsWith('.env') && !isTemplateEnvFileName(basename)) {
+    if (
+      isEnvFileNameAnyCase(basename) &&
+      !isTemplateEnvFileName(basename.toLowerCase())
+    ) {
       logToFile(`Denying ${toolName} on env file: ${filePath}`);
       return {
         behavior: 'deny',
@@ -504,12 +511,22 @@ export function wizardCanUseTool(
     return { behavior: 'allow', updatedInput: input };
   }
 
-  // Block Grep when it directly targets a .env file.
-  // Note: ripgrep skips dotfiles (like .env*) by default during directory traversal,
-  // so broad searches like `Grep { path: "." }` are already safe.
+  // Block Grep when it targets a .env file, by path or by a glob that selects
+  // one; ripgrep lets a glob override .gitignore.
   if (toolName === 'Grep') {
     const grepPath = typeof input.path === 'string' ? input.path : '';
-    if (grepPath && path.basename(grepPath).startsWith('.env')) {
+    const glob = typeof input.glob === 'string' ? input.glob : '';
+    const searchRoot = grepPath
+      ? path.resolve(context.workingDirectory ?? '.', grepPath)
+      : context.workingDirectory;
+    if (glob && globCanSelectEnvFile(glob, searchRoot)) {
+      logToFile(`Denying Grep glob that selects env files: ${glob}`);
+      return {
+        behavior: 'deny',
+        message: `Grep with glob ${glob} can search .env files and is not allowed. Narrow the glob, or use the wizard-tools MCP server (check_env_keys) to check environment variables.`,
+      };
+    }
+    if (grepPath && isEnvFileNameAnyCase(path.basename(grepPath))) {
       logToFile(`Denying Grep on env file: ${grepPath}`);
       return {
         behavior: 'deny',
@@ -530,7 +547,9 @@ export function wizardCanUseTool(
     typeof input.command === 'string' ? input.command : ''
   ).trim();
 
-  const decision = evaluateBashCommand(command);
+  const decision = evaluateBashCommand(command, {
+    projectRoot: context.workingDirectory,
+  });
   if (decision.allowed) {
     logToFile(`Allowing bash command: ${command}`);
     context.onDebug?.(`Allowing bash command: ${command}`);
