@@ -551,7 +551,7 @@ describe('ClaudeCodeMCPClient — plugin methods', () => {
         if (isCmd(cmd, 'marketplace', 'list')) return marketplaces('posthog');
         if (isCmd(cmd, 'install'))
           return new Error(
-            'Invalid JSON syntax in settings file at /srv/app/.claude/settings.local.json',
+            'Invalid JSON syntax in settings file at /srv/app/.claude/settings.json',
           );
         return '';
       });
