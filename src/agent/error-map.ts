@@ -11,5 +11,7 @@ export const AGENT_ERROR_CODE: Record<AgentErrorType, ErrorCode> = {
   [AgentErrorType.YARA_VIOLATION]: ErrorCodes.AgentYaraViolation,
   [AgentErrorType.ABORT]: ErrorCodes.AgentAbort,
   [AgentErrorType.NO_PROGRESS]: ErrorCodes.AgentNoProgress,
+  [AgentErrorType.INVALID_STRUCTURED_OUTPUT]:
+    ErrorCodes.AgentInvalidStructuredOutput,
   [AgentErrorType.INCOMPLETE_TASKS]: ErrorCodes.AgentIncompleteTasks,
 };

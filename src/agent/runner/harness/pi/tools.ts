@@ -39,7 +39,6 @@ import {
   createAskAccounting,
   describeAskCancellation,
   ensureGitignoreCoverage,
-  installSkillById,
   mergeEnvValues,
   normaliseAskSubject,
   resolveAskQuestionKinds,
@@ -52,20 +51,22 @@ import {
   WIZARD_ASK_SENSITIVE_DESCRIPTION,
   WIZARD_ASK_SUBJECT_DESCRIPTION,
   WIZARD_ASK_TOOL_DESCRIPTION,
-} from '@agent/tools/tools';
+} from '../../../tools/tools';
 import { fetchSkillMenu } from '@shared/skill-menu';
+import { installSkillById } from '@shared/skill-install';
 import type { LLMProvider } from '@posthog/warlock';
-import type { ProgressEmitter } from '@agent/progress';
+import { scanInstalledSkill } from '../../../yara-hooks';
+import type { ProgressEmitter } from '../../../progress';
 import {
   isFullyCancelled,
   type WizardAskBridge,
-} from '@agent/wizard-ask-bridge';
+} from '../../../wizard-ask-bridge';
 import {
   PUBLISH_HANDOFF_CONTENT_DESCRIPTION,
   PUBLISH_HANDOFF_DESCRIPTION,
   PUBLISH_HANDOFF_TOOL_NAME,
   publishHandoff,
-} from '@agent/tools/handoff';
+} from '../../../tools/handoff';
 import { createSecretVault } from '@shared/secret-vault';
 import {
   AUDIT_CHECKS_FILE,
@@ -103,6 +104,8 @@ export interface PiToolsContext {
   triageProvider?: LLMProvider;
   /** Where `publish_handoff` reports. Absent → the handoff is written but reported nowhere. */
   emit?: ProgressEmitter;
+  /** Set for one task of an orchestrated run: `publish_handoff` then reminds it to report with complete_task. */
+  taskAgent?: boolean;
 }
 
 export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
@@ -168,7 +171,7 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
         args.skillId,
         workingDirectory,
         skillsBaseUrl,
-        { triage: triageProvider },
+        { scan: (dir) => scanInstalledSkill(dir, triageProvider) },
       );
       if (result.kind !== 'ok') {
         logToFile(`[pi] install_skill ${args.skillId}: ${result.kind}`);
@@ -563,7 +566,9 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
       }),
     }),
     execute(_id, args) {
-      const result = publishHandoff(args.content, ctx.emit);
+      const result = publishHandoff(args.content, ctx.emit, {
+        taskAgent: ctx.taskAgent,
+      });
       logToFile(`[pi] publish_handoff: ${result.message}`);
       return Promise.resolve(text(result.message));
     },

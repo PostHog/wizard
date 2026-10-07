@@ -7,7 +7,7 @@
  */
 
 import { Integration, DETECTION_TIMEOUT_MS } from '@shared/constants';
-import { FRAMEWORK_REGISTRY } from '@programs/frameworks/registry';
+import { FRAMEWORK_REGISTRY } from '../frameworks/registry';
 
 /**
  * Loop through all registered frameworks and return the first one

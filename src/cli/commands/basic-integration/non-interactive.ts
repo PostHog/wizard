@@ -1,0 +1,20 @@
+import { consoleLog } from '@shared/console-log';
+import { ErrorCodes } from '@shared/errors';
+import { emitWizardError } from '@shared/errors';
+
+/** Print the "needs a TTY" error and exit. Used when no `--ci` flag and no TTY. */
+export function failNonInteractive(): void {
+  consoleLog.intro('PostHog Wizard');
+  consoleLog.log.error(
+    'This installer requires an interactive terminal (TTY) to run.\n' +
+      'It appears you are running in a non-interactive environment.\n' +
+      'Please run the wizard in an interactive terminal.\n\n' +
+      'For CI/CD environments, use --ci mode:\n' +
+      '  npx @posthog/wizard --ci --region us --api-key phx_xxx',
+  );
+  emitWizardError({
+    code: ErrorCodes.CliInteractiveRequired,
+    message: 'This installer requires an interactive terminal (TTY) to run.',
+  });
+  process.exit(1);
+}

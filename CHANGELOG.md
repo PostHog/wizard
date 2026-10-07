@@ -1,5 +1,52 @@
 # Changelog
 
+## [2.80.1](https://github.com/PostHog/wizard/compare/v2.80.0...v2.80.1) (2026-10-05)
+
+
+### Bug Fixes
+
+* **agent:** deny .env files with SDK rules and skip project hooks ([#1408](https://github.com/PostHog/wizard/issues/1408)) ([1e1e56c](https://github.com/PostHog/wizard/commit/1e1e56c003712aa2087b6c5d2d5964cac06f35c4))
+* **agent:** let wizard_ask re-collect a field the downstream call rejected ([#1367](https://github.com/PostHog/wizard/issues/1367)) ([690eae5](https://github.com/PostHog/wizard/commit/690eae5883a145f2eeb30494a30030c900faf72b))
+* **orchestrator:** redact secrets from task remarks before capture ([#1412](https://github.com/PostHog/wizard/issues/1412)) ([2fea60d](https://github.com/PostHog/wizard/commit/2fea60db0b4064116b376da8aedc63596ca86247))
+* **outro:** list every detected data source, not the ones the step skipped ([#1395](https://github.com/PostHog/wizard/issues/1395)) ([88a1761](https://github.com/PostHog/wizard/commit/88a17613bde87a4afa5890df374fda53b3543cda))
+
+## [2.80.0](https://github.com/PostHog/wizard/compare/v2.79.1...v2.80.0) (2026-10-02)
+
+
+### Features
+
+* **error-tracking:** describe release linking for Python, Ruby and PHP ([#1399](https://github.com/PostHog/wizard/issues/1399)) ([fb790ab](https://github.com/PostHog/wizard/commit/fb790ab9777e218ec765ee37cc7fbd18cf3493e6))
+
+
+### Bug Fixes
+
+* **ask:** arm the wizard_ask timeout per question, not per request ([#1368](https://github.com/PostHog/wizard/issues/1368)) ([6cb4093](https://github.com/PostHog/wizard/commit/6cb4093ec7efc150853c7d9269e5109377344331))
+* **harness:** tag pi's MCP user-agent with the running program ([#1404](https://github.com/PostHog/wizard/issues/1404)) ([7cdd92c](https://github.com/PostHog/wizard/commit/7cdd92c98ae83d10c32c78504facc08dcdeaec38))
+* **tui:** bump ink to 7.1.1 to stop full-screen flicker ([#1406](https://github.com/PostHog/wizard/issues/1406)) ([3dd8c6f](https://github.com/PostHog/wizard/commit/3dd8c6f6a73aba4104713546042c2fd54b98a0f5))
+
+## [2.79.1](https://github.com/PostHog/wizard/compare/v2.79.0...v2.79.1) (2026-09-29)
+
+
+### Bug Fixes
+
+* **agent:** tell a task agent publish_handoff is not its outcome ([#1360](https://github.com/PostHog/wizard/issues/1360)) ([e86e103](https://github.com/PostHog/wizard/commit/e86e103c3ab10b563d70e92d245bcd04d81c9ef5))
+* **cli:** run the Node version check before loading dependencies ([#1397](https://github.com/PostHog/wizard/issues/1397)) ([91c5ab7](https://github.com/PostHog/wizard/commit/91c5ab73ca6440ecb7423c84e5e3b9181e8517ac))
+* **tui:** fail fast with a coded error when stdin is not a TTY ([#1398](https://github.com/PostHog/wizard/issues/1398)) ([52f981f](https://github.com/PostHog/wizard/commit/52f981f6aa77d9945946ea8d1212e69b6a94ceb2))
+
+## [2.79.0](https://github.com/PostHog/wizard/compare/v2.78.0...v2.79.0) (2026-09-29)
+
+
+### Features
+
+* **programs:** B2 surface shell — runProgram types and stub signatures ([#1307](https://github.com/PostHog/wizard/issues/1307)) ([92e6fe5](https://github.com/PostHog/wizard/commit/92e6fe5a7df866f808a9630706f10789a4b5bc1d))
+* **programs:** B3 plumbing and tests — runProgram, adapter wiring, detection via runAgent ([#1308](https://github.com/PostHog/wizard/issues/1308)) ([527ef21](https://github.com/PostHog/wizard/commit/527ef210c6e711852d1df77c83cd486288632ab0))
+
+
+### Bug Fixes
+
+* **e2e-harness:** let the final result write replace the outro write ([#1340](https://github.com/PostHog/wizard/issues/1340)) ([da1e7ca](https://github.com/PostHog/wizard/commit/da1e7ca0031d0890ac9e3183d4c31da1f5a49104))
+* enforce structured project detection on Luna and Haiku ([#1350](https://github.com/PostHog/wizard/issues/1350)) ([f31fbb5](https://github.com/PostHog/wizard/commit/f31fbb57cffb6a8e2420de81f07e2128a199919f))
+
 ## [2.78.0](https://github.com/PostHog/wizard/compare/v2.77.0...v2.78.0) (2026-09-25)
 
 

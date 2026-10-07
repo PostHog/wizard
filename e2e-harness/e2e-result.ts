@@ -21,11 +21,11 @@
 
 import fs from 'fs';
 import path from 'path';
-import { OutroKind, type WizardSession } from '@lib/wizard-session';
-import { TASK_OUTCOMES_KEY } from '@agent';
+import { OutroKind } from '@shared/outro';
+import type { DetectedSource, WizardSession } from '@programs/types';
+import { TASK_OUTCOMES_KEY } from '@programs';
+import { DETECTED_WAREHOUSE_SOURCES_KEY } from '@programs/warehouse-source';
 import type { TaskOutcome } from '@agent/types';
-import { DETECTED_WAREHOUSE_SOURCES_KEY } from '@programs/warehouse-source/detect';
-import type { DetectedSource } from '@programs/warehouse-sources/types';
 import type { E2eDecisionReport } from './e2e-profile.js';
 
 /** One `wizard_ask` batch the run was shown. */
@@ -202,7 +202,7 @@ function isInside(root: string, child: string): boolean {
 /**
  * The abort reason for a run, or null when it did not abort.
  *
- * `wizardAbort` renders an error outro and then exits, so `outroData` is the
+ * `wizardAbort` renders an error outro and then ends the run, so `outroData` is the
  * only durable trace of *why* by the time the host writes its result.
  */
 export function abortReasonFrom(

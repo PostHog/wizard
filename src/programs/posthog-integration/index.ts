@@ -1,36 +1,37 @@
-import type { ProgramConfig, ProgramStep } from '@programs/program-step';
-import { runProgramAgent } from '@programs/run-agent-legacy';
-import type { ProgramRun } from '@programs/program-run';
-import { AgentSignals, shouldDisableAsk, WIZARD_TOOL_NAMES } from '@agent';
-import type { WizardSession } from '@lib/wizard-session';
-import { mayReportScanResults, OutroKind, RunPhase } from '@lib/wizard-session';
+import { detectPostHogIntegration } from '../detection/integration.js';
+import type { ProgramConfig } from '../program-step';
+import type { ProgramRun } from '../program-run';
+import { AgentSignals, WIZARD_TOOL_NAMES } from '@agent';
+import { shouldDisableAsk } from '@shared/ask-policy';
+import type { ProgramSession } from '../program-session';
+import { mayReportScanResults } from '@shared/run-state';
+import { OutroKind } from '@shared/outro';
 import {
   DEFAULT_PACKAGE_INSTALLATION,
   SPINNER_MESSAGE,
-} from '@programs/framework-config';
+} from '../framework-config';
 import { tryGetPackageJson, isUsingTypeScript } from '@utils/setup-utils';
 import { analytics } from '@utils/analytics';
-import {
-  detectFramework,
-  gatherFrameworkContext,
-} from '@programs/detection/index';
-import { scopeInstallDirToProject } from '@programs/detection/project-scope';
-import type { CiRunnerContext, RunnerContext } from '@programs/runner-context';
-import { FRAMEWORK_REGISTRY } from '@programs/frameworks/registry';
-import { wizardAbort } from '@utils/wizard-abort';
+import { detectFramework } from '../detection/framework';
+import { gatherFrameworkContext } from '../detection/context';
+import { noteDetectedFramework } from '../detection/detected-framework';
+import { scopeInstallDirToProject } from '../detection/project-scope';
+import type { CiRunnerContext, RunnerContext } from '../runner-context';
+import { FRAMEWORK_REGISTRY } from '../frameworks/registry';
+import { ProgramAbort } from '../program-abort';
 import { ErrorCodes } from '@shared/errors';
 import {
+  SETUP_REPORT_FILE,
   WIZARD_DEFAULT_AIO_LOGS_FLAG_KEY,
   WIZARD_INTERACTION_EVENT_NAME,
 } from '@shared/constants';
 import { requestDeepLink } from '@utils/provisioning';
 import { openTrackedLink, withUtm } from '@utils/links';
 import type { HostResolution } from '@shared/host-resolution';
-import { getDetectedWarehouseSources } from '@programs/warehouse-source/detect';
-import { POSTHOG_INTEGRATION_PROGRAM } from './steps.js';
-import { getContentBlocks } from '../../ui/tui/decks/posthog-integration/index.js';
+import { getDetectedWarehouseSources } from '../warehouse-sources/detect';
 import { buildCodingAgentPrompt } from './handoff.js';
 import { EVENT_PLAN_FILE } from './constants.js';
+import { WAREHOUSE_SOURCE_SCOPE_ADDITIONS } from '../oauth/program-scopes';
 
 const DASHBOARD_DEEP_LINK_KEY = 'dashboardDeepLink';
 
@@ -41,7 +42,7 @@ const WAREHOUSE_SOURCES_DOCS_URL =
 const WAREHOUSE_SEED_TASK_TYPE = 'warehouse';
 
 function resolveContinueUrl(
-  sess: WizardSession,
+  sess: ProgramSession,
   host: HostResolution,
   deepLink: unknown,
 ): string | undefined {
@@ -65,7 +66,7 @@ const WAREHOUSE_LINK_LIMIT = 3;
  * offered more than a handful answer none of the prompts at all, while the
  * short ones are where every connected source comes from.
  *
- * So the step takes the first few and the outro carries the rest as links,
+ * So the step takes the first few and the outro carries them all as links,
  * which is the same trade {@link WAREHOUSE_LINK_LIMIT} already makes for a
  * list too long to read. Ordering is the registry's, which groups databases
  * ahead of the API-key SaaS that inflates the tail.
@@ -98,8 +99,8 @@ function warehouseSourceUrl(
  *
  * A pointer at the app, not an inline flow. Connecting a source needs
  * interactive credential collection, and chaining that as a second agent run
- * before the outro would let any of its terminal failure paths `process.exit()`
- * — costing the user the success outro and the post-outro MCP / Slack steps on
+ * before the outro would let any of its terminal failure paths end the run
+ * — costing the user the success outro and the post-outro MCP step on
  * a run where PostHog installed fine.
  *
  * Each source gets its own pre-filled link, because the alternative we shipped
@@ -109,23 +110,19 @@ function warehouseSourceUrl(
  * one pass, and it is the only route offered once the list is too long to read.
  *
  * Returns undefined when nothing was detected, so the outro is unchanged for
- * projects with no connectable source — and when the run's own warehouse step
- * connected everything it was given, where every bullet here would ask the
- * user to redo work the wizard just did and send them at a new-source form
- * that would collide with the source already created. A completed step is
- * only ever given the first {@link WAREHOUSE_SEED_LIMIT} sources, so anything
- * past that is still unconnected and still belongs here.
+ * projects with no connectable source. Every detected source is listed,
+ * including the ones the run's own warehouse step was given: that step reports
+ * success once it has handled each source somehow, and handing the user a link
+ * for one whose credentials never arrived is one of those outcomes. Nothing in
+ * the run records which sources ended up connected, so the deterministic list
+ * stays complete rather than dropping a source on the step's status.
  */
 function buildWarehouseNextSteps(
-  sess: WizardSession,
+  sess: ProgramSession,
   host: HostResolution,
   projectId: number | string,
-  completedSeededTypes: readonly string[],
 ): { heading: string; items: string[] } | undefined {
-  const detected = getDetectedWarehouseSources(sess);
-  const sources = completedSeededTypes.includes(WAREHOUSE_SEED_TASK_TYPE)
-    ? detected.slice(WAREHOUSE_SEED_LIMIT)
-    : detected;
+  const sources = getDetectedWarehouseSources(sess);
   if (sources.length === 0) return undefined;
 
   const listed = sources.slice(0, WAREHOUSE_LINK_LIMIT);
@@ -152,7 +149,7 @@ function buildWarehouseNextSteps(
  * because it is a note in a report: the outro `nextSteps` bullet carries the
  * same information deterministically, so nothing is lost if the agent drops it.
  */
-function warehouseReportInstruction(sess: WizardSession): string {
+function warehouseReportInstruction(sess: ProgramSession): string {
   const sources = getDetectedWarehouseSources(sess);
   if (sources.length === 0) return '';
 
@@ -175,8 +172,8 @@ function warehouseReportInstruction(sess: WizardSession): string {
  * Empty when nothing was detected, and in CI, signup, and any other run where
  * `wizard_ask` is disabled — a credential prompt nobody can answer would burn
  * the task's whole timeout and then fail the run. Capped at
- * {@link WAREHOUSE_SEED_LIMIT} sources, with the rest handed over as outro
- * links by {@link buildWarehouseNextSteps}.
+ * {@link WAREHOUSE_SEED_LIMIT} sources; {@link buildWarehouseNextSteps} hands
+ * every detected source over as an outro link.
  */
 const warehouseSeedTasks: NonNullable<ProgramConfig['seedTasks']> = (sess) => {
   if (shouldDisableAsk(sess)) return [];
@@ -235,21 +232,23 @@ const warehouseSeedTasks: NonNullable<ProgramConfig['seedTasks']> = (sess) => {
   ];
 };
 
-export const SETUP_REPORT_FILE = 'posthog-setup-report.md';
 export { EVENT_PLAN_FILE } from './constants.js';
 
-export const posthogIntegrationConfig: ProgramConfig = {
+export const config: ProgramConfig = {
   description: 'Set up PostHog SDK integration',
   id: 'posthog-integration',
   agentFlow: 'integration-v2',
   eventPlanFile: EVENT_PLAN_FILE,
-  steps: POSTHOG_INTEGRATION_PROGRAM,
-  getContentBlocks,
+  onReady: (ctx) => detectPostHogIntegration(ctx),
   // Basic integration runs without structured user input; drop wizard_ask
   // so the model can't pop modal prompts mid-run. The runner forwards this
   // list to the general-purpose subagent as well, so dispatched subagents
   // can't reach around the parent and ask either.
   disallowedTools: [WIZARD_TOOL_NAMES.wizardAsk],
+  // When detection finds data sources, the orchestrator's warehouse task
+  // creates them through `external-data-sources-create`. Without the
+  // warehouse pair that call 403s on a token the user already granted.
+  oauthScopeAdditions: [...WAREHOUSE_SOURCE_SCOPE_ADDITIONS],
 
   seedTasks: warehouseSeedTasks,
 
@@ -263,18 +262,17 @@ export const posthogIntegrationConfig: ProgramConfig = {
   // CI-mode prerequisite work: the headless equivalent of the detect step's
   // onReady hook. Auto-detect the framework, then gather context.
   ciPreRun: async (
-    session: WizardSession,
+    session: ProgramSession,
     runner: CiRunnerContext,
   ): Promise<void> => {
     await scopeInstallDirToProject(session, runner);
 
     const integration = await detectFramework(session.installDir);
     if (!integration) {
-      await wizardAbort({
+      throw new ProgramAbort({
         code: ErrorCodes.DetectNoFramework,
         message: 'Could not auto-detect your framework for this project.',
       });
-      return;
     }
     session.integration = integration;
     analytics.setTag('integration', integration);
@@ -295,10 +293,11 @@ export const posthogIntegrationConfig: ProgramConfig = {
         session.frameworkContext[key] = value;
       }
     }
+    noteDetectedFramework(session, frameworkConfig, context, runner.log);
   },
 
   run: async (
-    session: WizardSession,
+    session: ProgramSession,
     runner: RunnerContext,
   ): Promise<ProgramRun> => {
     const config = session.frameworkConfig!;
@@ -439,13 +438,14 @@ ${warehouseReportInstruction(session)}
         );
         if (config.environment.uploadToHosting) {
           const { uploadEnvironmentVariablesStep } = await import(
-            '@steps/index'
+            './upload-environment-variables/upload-step'
           );
           const uploadedEnvVars = await uploadEnvironmentVariablesStep(
             envVars,
             {
               integration: config.metadata.integration,
-              session: sess,
+              installDir: sess.installDir,
+              runner,
             },
           );
           if (uploadedEnvVars.length > 0) {
@@ -473,13 +473,8 @@ ${warehouseReportInstruction(session)}
         }
       },
 
-      buildOutroNextSteps: (sess, credentials, completedSeededTypes) =>
-        buildWarehouseNextSteps(
-          sess,
-          credentials.host,
-          credentials.projectId,
-          completedSeededTypes,
-        ),
+      buildOutroNextSteps: (sess, credentials) =>
+        buildWarehouseNextSteps(sess, credentials.host, credentials.projectId),
 
       buildOutroData: (sess, credentials) => {
         const envVars = config.environment.getEnvVars(
@@ -506,13 +501,11 @@ ${warehouseReportInstruction(session)}
           changes,
           docsUrl: config.metadata.docsUrl,
           continueUrl,
-          // The linear sequence seeds no tasks, so nothing here was connected
-          // during the run. `buildOutroNextSteps` carries the orchestrated case.
+          // `buildOutroNextSteps` carries the orchestrated case.
           nextSteps: buildWarehouseNextSteps(
             sess,
             credentials.host,
             credentials.projectId,
-            [],
           ),
           // Set once the agent mirrors the report into a notebook and emits [NOTEBOOK_URL].
           notebookUrl: sess.notebookUrl ?? undefined,
@@ -524,26 +517,4 @@ ${warehouseReportInstruction(session)}
       },
     };
   },
-};
-
-export { POSTHOG_INTEGRATION_PROGRAM } from './steps.js';
-
-/**
- * Self-contained run step that runs the integration agent. Other programs
- * import this and splice it into their own step list to compose the
- * integration's work as one of their run steps — self-driving sets up PostHog
- * this way before its own run. The host program supplies `show`/`onRunPrep`/
- * `targetDir`; this carries the run.
- */
-export const integrationRunStep: ProgramStep = {
-  id: 'run',
-  label: 'Integration',
-  screenId: 'run',
-  // composed: runs inside the host program (self-driving), so skip the
-  // integration's terminal outro + analytics shutdown of the shared client.
-  run: (session) =>
-    runProgramAgent(posthogIntegrationConfig, session, { composed: true }),
-  isComplete: (session) =>
-    session.runPhase === RunPhase.Completed ||
-    session.runPhase === RunPhase.Error,
 };

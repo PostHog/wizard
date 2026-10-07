@@ -8,8 +8,8 @@
  * needs the CLI.
  */
 
-import type { RunnerContext } from '@programs/runner-context';
-import { installOrUpdatePostHogCli } from '@steps/install-cli-steering';
+import type { RunnerContext } from '../runner-context';
+import { installOrUpdatePostHogCli } from '@shared/install-cli-steering';
 import { analytics } from '@utils/analytics';
 
 let attempted = false;

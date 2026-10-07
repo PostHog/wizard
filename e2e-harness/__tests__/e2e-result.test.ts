@@ -11,11 +11,13 @@
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { OutroKind, RunPhase } from '@lib/wizard-session';
-import type { AskQuestion, WizardSession } from '@lib/wizard-session';
-import { DETECTED_WAREHOUSE_SOURCES_KEY } from '@programs/warehouse-source/detect';
-import { Overlay } from '@ui/tui/router';
-import { TASK_OUTCOMES_KEY } from '@agent';
+import { OutroKind } from '@shared/outro';
+import { RunPhase } from '@shared/run-state';
+import type { AskQuestion } from '@agent/types';
+import type { WizardSession } from '@programs/types';
+import { DETECTED_WAREHOUSE_SOURCES_KEY } from '@programs/warehouse-source';
+import { Overlay } from '@tui';
+import { TASK_OUTCOMES_KEY } from '@programs';
 import {
   E2eRunRecorder,
   abortReasonFrom,

@@ -1,7 +1,7 @@
 /**
  * Agentic project detection.
  *
- * A reusable detection tool that drives a Haiku agent over the repo: it finds
+ * A reusable detection tool that drives an agent over the repo: it finds
  * project roots, resolves monorepo/workspace markers, reads package manifests,
  * classifies each project against a caller-supplied set of targets, and reports
  * which projects already have a PostHog SDK installed.
@@ -13,30 +13,27 @@
  * program uses, which needs credentials.
  */
 
-import { AgentSignals, buildRunTags, runAgent, RunOutcome } from '@agent';
+import { DEFAULT_BINDING, runAgent, RunOutcome } from '@agent';
 import type {
   AgentProgress,
   AgentRunDefinition,
-  ResolvedBinding,
   RunConfig,
   RunInput,
 } from '@agent/types';
 import { isAbsolute, resolve, sep } from 'path';
+import { z } from 'zod';
+import { zodToJsonSchema } from 'zod-to-json-schema';
+import { ErrorCodes } from '@shared/errors';
 import { detectNodePackageManagers } from './package-manager.js';
 import {
   AGENTIC_DETECTION_FIRST_ATTEMPT_TIMEOUT_MS,
   AGENTIC_DETECTION_RETRY_TIMEOUT_MS,
   CallType,
   getSkillsBaseUrl,
-  Harness,
-  HAIKU_MODEL,
   POSTHOG_DOCS_URL,
-  Sequence,
 } from '@shared/constants';
-import { analytics } from '@utils/analytics';
-import type { WizardSession } from '@lib/wizard-session';
-import { getUI } from '@ui';
-import { createUiReducer } from '@ui/agent-progress';
+import type { ProgramSession } from '../program-session';
+import { loadWizardFlags } from '../wizard-flags';
 
 /** A category the agent classifies each project into (id the agent returns). */
 export type DetectTarget = { id: string; name: string };
@@ -71,6 +68,8 @@ export class AgenticDetectionTimeoutError extends Error {
 
 /** Streaming progress callback — one short activity line per agent step. */
 export type DetectEvent = (line: string) => void;
+/** Agent progress a scan forwards to the caller's UI. */
+export type DetectProgress = (event: AgentProgress) => void;
 
 /**
  * Every project-manifest / workspace-marker filename the wizard's frameworks
@@ -150,6 +149,8 @@ export type AgenticDetectOptions = {
   rerankIds?: readonly string[];
   /** Streaming activity callback for the UI. */
   onEvent?: DetectEvent;
+  /** The scan's warnings, tasks and usage, for the caller's UI. */
+  onProgress?: DetectProgress;
 };
 
 function buildPrompt(
@@ -200,13 +201,13 @@ function buildPrompt(
           '- Exactly one project has "recommended": true; every other project has "recommended": false.',
         ]
       : []),
-    `- If there are no manifests at all, respond with exactly: ${AgentSignals.ABORT} detection failed`,
+    '- If there are no manifests at all, return {"repoType":"single","projects":[]}.',
   ].join('\n');
 }
 
 /**
  * Build the detection report from the agent's output, or null when it holds
- * no verdicts. Exported for testing.
+ * neither a project verdict nor a `projects` array. Exported for testing.
  *
  * The verdict lines are far more reliable than the model's final assembly
  * (prose, pretty-printing, per-object fences), so every parseable line
@@ -216,6 +217,7 @@ function buildPrompt(
  */
 export function deriveReportJson(text: string): unknown | null {
   const byPath = new Map<string, Record<string, unknown>>();
+  let sawReport = false;
   for (const line of text.split('\n')) {
     const start = line.indexOf('{');
     const end = line.lastIndexOf('}');
@@ -227,13 +229,14 @@ export function deriveReportJson(text: string): unknown | null {
       continue; // not JSON — prose, shape echoes, pretty-printed fragments
     }
     const obj = (parsed ?? {}) as Record<string, unknown>;
+    sawReport ||= Array.isArray(obj.projects);
     const candidates = Array.isArray(obj.projects) ? obj.projects : [obj];
     for (const candidate of candidates) {
       const p = (candidate ?? {}) as Record<string, unknown>;
       if (typeof p.path === 'string') byPath.set(p.path, p);
     }
   }
-  if (byPath.size === 0) return null;
+  if (byPath.size === 0 && !sawReport) return null;
   const projects = [...byPath.values()];
   return { repoType: projects.length > 1 ? 'monorepo' : 'single', projects };
 }
@@ -311,17 +314,32 @@ export function coerceAgenticReport(
   return { repoType, projects };
 }
 
-/** A fast mechanical scan: linear Haiku on the Anthropic harness. */
-const AGENTIC_DETECTION_BINDING: ResolvedBinding = {
-  sequence: Sequence.linear,
-  harness: Harness.anthropic,
-  model: HAIKU_MODEL,
-};
+function detectionReportSchema(recommend: boolean) {
+  return z
+    .object({
+      repoType: z.enum(['monorepo', 'single']),
+      projects: z.array(
+        z
+          .object({
+            path: z.string(),
+            framework: z.string(),
+            matchingTargets: z.array(z.string()),
+            targetId: z.string().nullable(),
+            hasPostHog: z.boolean(),
+            evidence: z.string(),
+            ...(recommend ? { recommended: z.boolean() } : {}),
+          })
+          .strict(),
+      ),
+    })
+    .strict();
+}
 
-/** No skill and no remark; the report is read back from the transcript tail. */
+/** Read-only scan with a typed result and transcript recovery. */
 function detectionRunDefinition(prompt: string): AgentRunDefinition {
   return {
     integrationLabel: 'agentic-detect',
+    readOnly: true,
     prompt: () => prompt,
     collectTranscript: true,
     requestRemark: false,
@@ -349,9 +367,9 @@ function reachesUi(event: AgentProgress): boolean {
   }
 }
 
-/** Scan the repo with Haiku through `runAgent`; each attempt is a fresh run with its own deadline. */
+/** Scan through `runAgent` with the bound triage model, then the SDK fallback. */
 export async function detectProjectsWithAgent(
-  session: WizardSession,
+  session: ProgramSession,
   options: AgenticDetectOptions,
 ): Promise<AgenticDetectionReport> {
   if (!session.credentials) {
@@ -364,37 +382,28 @@ export async function detectProjectsWithAgent(
     recommend = false,
     rerankIds,
     onEvent,
+    onProgress,
   } = options;
 
-  // Built here: the scan runs before the program's own run tags exist.
-  const wizardMetadata = {
-    ...buildRunTags({
-      programId,
-      integration: 'agentic-detect',
-      runId: analytics.runId,
-      build: analytics.build,
-    }),
-    call_type: CallType.detection,
-  };
+  const flags = await loadWizardFlags();
+  const reportSchema = detectionReportSchema(recommend);
+  const schema = zodToJsonSchema(reportSchema);
   const config: RunConfig = {
     programId,
     run: detectionRunDefinition(
       buildPrompt(session.installDir, targets, purpose, recommend),
     ),
     composed: true,
-    binding: AGENTIC_DETECTION_BINDING,
-    // Only the orchestrator reads it; the scan is linear.
-    switchboard: {
-      program: programId,
-      composed: true,
-      flags: {},
-      flagPayloads: {},
+    // Only the scan's harness comes from this routing, and every scanning program binds Pi, as DEFAULT_BINDING does.
+    routing: {
+      binding: DEFAULT_BINDING,
+      overrides: { harness: session.harness },
+      record: false,
     },
     skillsBaseUrl: getSkillsBaseUrl(),
-    wizardFlags: {},
-    wizardFlagPayloads: {},
-    wizardMetadata,
-    allowedTools: ['Read', 'Grep', 'Glob'],
+    wizardFlags: flags.flags,
+    wizardFlagPayloads: flags.payloads,
+    tags: { call_type: CallType.detection },
     // The scan's scans count toward the program run's report.
     scanReport: 'defer',
   };
@@ -409,17 +418,16 @@ export async function detectProjectsWithAgent(
       signup: session.signup,
       debug: session.debug,
       e2eAsk: false,
-      localMcp: false,
+      localMcp: session.localMcp,
       captureAio: false,
       benchmark: false,
       yaraReport: session.yaraReport,
     },
     host: { projectId: session.projectId, apiKey: session.apiKey },
   };
-  const reduceUi = createUiReducer(getUI());
   const forward = (event: AgentProgress): void => {
     if (event.kind === 'activity') onEvent?.(event.line);
-    if (reachesUi(event)) reduceUi(event);
+    if (reachesUi(event)) onProgress?.(event);
   };
 
   for (let attempt = 0; attempt < 2; attempt++) {
@@ -427,13 +435,23 @@ export async function detectProjectsWithAgent(
       attempt === 0
         ? AGENTIC_DETECTION_FIRST_ATTEMPT_TIMEOUT_MS
         : AGENTIC_DETECTION_RETRY_TIMEOUT_MS;
-    const deadline = AbortSignal.timeout(timeoutMs);
-    const result = await runAgent(config, input, {
-      signal: deadline,
-      onProgress: forward,
-    });
+    const result = await runAgent(
+      {
+        ...config,
+        routing: {
+          ...config.routing,
+          scan: attempt === 0 ? 'first' : 'retry',
+        },
+        run: { ...config.run, structured: { schema, timeoutMs } },
+      },
+      input,
+      { onProgress: forward },
+    );
 
-    if (result.outcome === RunOutcome.Aborted && deadline.aborted) {
+    if (
+      result.outcome !== RunOutcome.Success &&
+      result.failure.code === ErrorCodes.AgenticDetectionTimeout
+    ) {
       if (attempt === 0) {
         onEvent?.('Project scan timed out; retrying...');
         continue;
@@ -441,7 +459,29 @@ export async function detectProjectsWithAgent(
       throw new AgenticDetectionTimeoutError(attempt + 1, timeoutMs);
     }
     if (result.outcome !== RunOutcome.Success) {
+      if (
+        result.failure.code === ErrorCodes.AgentInvalidStructuredOutput &&
+        attempt === 0
+      ) {
+        onEvent?.('Project scan returned invalid output; retrying...');
+        continue;
+      }
       throw result.failure.error ?? new Error(result.failure.message);
+    }
+    if (result.structuredOutput !== undefined) {
+      const structured = reportSchema.safeParse(result.structuredOutput);
+      if (structured.success) {
+        return coerceAgenticReport(
+          structured.data,
+          targets.map((t) => t.id),
+          { recommend, rerankIds },
+        );
+      }
+      // A typed report that misses the schema is invalid output, not a transcript.
+      if (attempt === 0) {
+        onEvent?.('Project scan returned invalid output; retrying...');
+      }
+      continue;
     }
 
     // Transcript first, final message last — its verdicts win path conflicts.
@@ -453,10 +493,6 @@ export async function detectProjectsWithAgent(
         targets.map((t) => t.id),
         { recommend, rerankIds },
       );
-    }
-    // No manifests are a valid empty scan, not a reason to retry.
-    if (output.includes(AgentSignals.ABORT)) {
-      return { repoType: 'single', projects: [] };
     }
     if (attempt === 0) onEvent?.('Retrying project scan...');
   }

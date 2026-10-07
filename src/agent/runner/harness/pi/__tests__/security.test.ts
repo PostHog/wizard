@@ -806,3 +806,41 @@ describe('observeTransportLeak (passive telemetry)', () => {
     ).toBe(false);
   });
 });
+
+describe('read-only runs', () => {
+  test('blocks mutation, delegation, MCP and unknown tools even when warlock finds nothing', async () => {
+    for (const tool of [
+      'edit',
+      'write',
+      'bash',
+      'set_env_values',
+      'dispatch_agent',
+      'posthog_exec',
+      'future_tool',
+    ]) {
+      expect(
+        await evaluateToolCall(
+          tool,
+          {
+            command: 'rm src/index.ts',
+            path: 'src/index.ts',
+            content: 'changed',
+          },
+          { readOnly: true, workingDirectory: '/tmp/project' },
+        ),
+      ).toMatchObject({ block: true });
+    }
+  });
+
+  test('keeps filesystem discovery available', async () => {
+    for (const tool of ['read', 'grep', 'find', 'ls']) {
+      expect(
+        await evaluateToolCall(
+          tool,
+          { path: 'package.json' },
+          { readOnly: true },
+        ),
+      ).toEqual({ block: false });
+    }
+  });
+});

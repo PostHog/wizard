@@ -6,11 +6,12 @@
  * state, so the value rides on every later capture either way.
  */
 
-import { posthogIntegrationConfig } from '@programs/posthog-integration/index';
-import { buildSession, type WizardSession } from '@lib/wizard-session';
+import { config as posthogIntegration } from '@programs/posthog-integration';
+import { buildSession } from '@programs/session/wizard-session';
+import type { WizardSession } from '@programs/session/wizard-session';
 import { analytics } from '@utils/analytics';
 import { isUsingTypeScript } from '@utils/setup-utils';
-import { testRunnerContext } from '../../../../test/runner-context';
+import { testRunnerContext } from '@programs/shared/__tests__/runner-context.no-jest';
 
 vi.mock('@utils/analytics', () => ({
   analytics: {
@@ -49,7 +50,7 @@ function sessionWithFramework(): WizardSession {
 }
 
 async function resolveRun(session: WizardSession) {
-  const { run } = posthogIntegrationConfig;
+  const { run } = posthogIntegration;
   if (typeof run !== 'function') throw new Error('expected a run function');
   return run(session, testRunnerContext(session));
 }

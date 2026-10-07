@@ -1,8 +1,8 @@
 /* FastAPI wizard using posthog-agent with PostHog MCP */
 import type { WizardRunOptions } from '@utils/types';
-import type { FrameworkConfig } from '@programs/framework-config';
-import { PYTHON_PACKAGE_INSTALLATION } from '@programs/framework-config';
-import { detectPythonPackageManagers } from '@programs/detection/package-manager';
+import type { FrameworkConfig } from '../../framework-config';
+import { PYTHON_PACKAGE_INSTALLATION } from '../../framework-config';
+import { detectPythonPackageManagers } from '../../detection/package-manager';
 import { Integration } from '@shared/constants';
 import {
   getFastAPIVersion,
@@ -17,11 +17,16 @@ import * as path from 'node:path';
 
 const EXTRA_IGNORE = ['**/env/**', '**/.env/**'];
 
+type FastAPIContext = {
+  projectType?: FastAPIProjectType;
+  appFile?: string;
+};
+
 /**
  * FastAPI framework configuration for the universal agent runner
  */
 
-export const FASTAPI_AGENT_CONFIG: FrameworkConfig = {
+export const FASTAPI_AGENT_CONFIG: FrameworkConfig<FastAPIContext> = {
   metadata: {
     name: 'FastAPI',
     integration: Integration.fastapi,
@@ -31,6 +36,16 @@ export const FASTAPI_AGENT_CONFIG: FrameworkConfig = {
       const projectType = await getFastAPIProjectType(options);
       const appFile = await findFastAPIAppFile(options);
       return { projectType, appFile };
+    },
+    getDetectedFrameworkLabel: (context) => {
+      switch (context.projectType) {
+        case FastAPIProjectType.FULLSTACK:
+          return 'FastAPI fullstack with templates';
+        case FastAPIProjectType.ROUTER:
+          return 'FastAPI with APIRouter';
+        case FastAPIProjectType.STANDARD:
+          return 'FastAPI';
+      }
     },
   },
 

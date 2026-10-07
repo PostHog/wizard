@@ -38,9 +38,17 @@ state that a step's `show`, `isComplete`, or `gate` predicate reads. Use the
 existing overlay mechanism for a real overlay.
 
 `requires` documents a prerequisite but does not run it. Detect prerequisites
-explicitly or compose work through `ProgramStep.run`. Use store setters for
-shared session data; do not rely on another program having populated it by
+explicitly or compose work through `ProgramConfig.runSteps`. Use store setters
+for shared session data; do not rely on another program having populated it by
 accident. Shared detection can be a function called by both `onReady` hooks.
+
+## A program reaching past its folder
+
+A program that reaches the UI, renders, or imports another program's folder ties
+its owner to code they don't own. Programs get a runner context and read a
+`ProgramSession`. Their screens live in `src/tui/programs/<id>/`. Move code two
+programs share into `src/programs/shared/` or `detection/`. Don't widen a
+layer's tsconfig `paths` to make an import compile.
 
 ## Bundling fast-changing integration knowledge
 

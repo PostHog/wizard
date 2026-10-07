@@ -3,7 +3,7 @@
 import type { ApiProject, ApiUser, Credentials } from '@shared/api';
 import { WIZARD_OAUTH_SCOPES } from '@shared/constants';
 import { markGrantRevoked } from '@shared/auth-session-state';
-import { missingOAuthScopes, refreshAccessToken } from '@utils/oauth';
+import { missingOAuthScopes, refreshAccessToken } from './oauth/tokens';
 import { OAuthError } from '@utils/oauth-errors';
 import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
@@ -12,6 +12,7 @@ export type ResolvedProgramCredentials = {
   posthog: Credentials; // token, project API key, project ID and host
   project: ApiProject | null; // the project, when known
   apiUser: ApiUser | null; // the user, when known
+  roleAtOrganization?: string | null; // the user's role, for role-tailored copy; else the user's own
 };
 
 /** The caller authenticates once per scope; the signal aborts with the invocation. */

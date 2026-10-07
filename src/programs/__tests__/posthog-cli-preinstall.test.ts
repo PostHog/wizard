@@ -4,16 +4,19 @@ import {
   preinstallPostHogCliOnce,
   resetPostHogCliPreinstallForTests,
 } from '@programs/shared/posthog-cli-preinstall';
-import { installOrUpdatePostHogCli } from '@steps/install-cli-steering';
+import { installOrUpdatePostHogCli } from '@shared/install-cli-steering';
+import { Integration } from '@shared/constants';
 import { analytics } from '@utils/analytics';
+import { SYMBOL_UPLOAD_CLI_FRAMEWORKS } from '@programs/error-tracking';
+import { VARIANTS_REQUIRING_POSTHOG_CLI } from '@programs/error-tracking-upload-source-maps';
 
-vi.mock('@steps/install-cli-steering', () => ({
+vi.mock(import('@shared/install-cli-steering'), () => ({
   installOrUpdatePostHogCli: vi.fn(),
 }));
 vi.mock('@utils/analytics', () => ({
   analytics: { wizardCapture: vi.fn(), captureException: vi.fn() },
 }));
-const log = { warn: vi.fn() };
+const log = { info: vi.fn(), warn: vi.fn() };
 
 describe('preinstallPostHogCliOnce', () => {
   beforeEach(() => {
@@ -69,5 +72,17 @@ describe('preinstallPostHogCliOnce', () => {
 
     expect(analytics.wizardCapture).not.toHaveBeenCalled();
     expect(log.warn).not.toHaveBeenCalled();
+  });
+});
+
+describe('the two programs that pre-install posthog-cli', () => {
+  test('error tracking matches the source-maps program set, keyed by Integration', () => {
+    // Both programs pre-install the CLI for the same platforms. The source-maps
+    // program keys them by uploader variant, and only `ios` is spelled
+    // differently (`swift` in Integration).
+    const expected = [...VARIANTS_REQUIRING_POSTHOG_CLI]
+      .map((variant) => (variant === 'ios' ? Integration.swift : variant))
+      .sort();
+    expect([...SYMBOL_UPLOAD_CLI_FRAMEWORKS].sort()).toEqual(expected);
   });
 });

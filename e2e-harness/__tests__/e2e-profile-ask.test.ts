@@ -7,8 +7,8 @@
  * froze, so a workbench run can rely on it.
  */
 
-import { Overlay, ScreenId } from '@ui/tui/router';
-import type { AskQuestion } from '@lib/wizard-session';
+import { Overlay, ScreenId } from '@tui';
+import type { AskQuestion } from '@agent/types';
 import {
   DEFAULT_E2E_PROFILE,
   E2E_ANSWER_SENTINEL,

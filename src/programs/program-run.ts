@@ -1,21 +1,24 @@
 /**
  * A program's run definition: the agent's `AgentRunDefinition` plus the
  * completion hooks that read the session. The agent never calls these —
- * `run-agent-legacy.ts` binds them to the run's credentials and hands the
- * agent `RunConfig.hooks`.
+ * `runProgram` binds them to the session and hands the agent `RunConfig.hooks`.
  */
 
 import type { AgentRunDefinition } from '@agent/types';
-import type { Credentials, WizardSession } from '@lib/wizard-session';
+import type { Credentials } from '@shared/api';
+import type { ProgramSession } from './program-session';
 
 export interface ProgramRun extends AgentRunDefinition {
   /** Runs after agent completes, before outro (e.g. env var upload). */
-  postRun?: (session: WizardSession, credentials: Credentials) => Promise<void>;
+  postRun?: (
+    session: ProgramSession,
+    credentials: Credentials,
+  ) => Promise<void>;
   /** Custom outro data. Omit for default built from successMessage/reportFile/docsUrl. */
   buildOutroData?: (
-    session: WizardSession,
+    session: ProgramSession,
     credentials: Credentials,
-  ) => WizardSession['outroData'];
+  ) => ProgramSession['outroData'];
   /**
    * Outro bullets for a sequence that composes its own outro data.
    *
@@ -32,7 +35,7 @@ export interface ProgramRun extends AgentRunDefinition {
    * already did — the sequence stays ignorant of what any type means.
    */
   buildOutroNextSteps?: (
-    session: WizardSession,
+    session: ProgramSession,
     credentials: Credentials,
     completedSeededTypes: readonly string[],
   ) => { heading: string; items: string[] } | undefined;

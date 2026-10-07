@@ -1,8 +1,6 @@
-import type { ProgramConfig } from '@programs/program-step';
+import type { ProgramConfig } from '../program-step';
 import type { AbortCase } from '@agent/types';
 import { WIZARD_TOOL_NAMES } from '@agent';
-import { MIGRATION_PROGRAM } from './steps.js';
-import { getContentBlocks } from '../../ui/tui/decks/migration/index.js';
 
 const MIGRATION_REPORT_FILE = 'migration-report.md';
 
@@ -21,17 +19,15 @@ const MIGRATION_ABORT_CASES: AbortCase[] = [
 // Default skill id when nothing else picks one. The `wizard migrate <vendor>`
 // subcommands override this via skillCommandFactory using each manifest
 // entry's skillId, so this default only kicks in for legacy callers (e.g.
-// programmatic uses of migrationConfig directly).
+// programmatic uses of this config directly).
 const DEFAULT_MIGRATE_SKILL_ID = 'migrate-statsig';
 
-export const migrationConfig: ProgramConfig = {
+export const config: ProgramConfig = {
   command: 'migrate',
   description: 'Migrate to PostHog from another analytics provider',
   id: 'migration',
   skillId: DEFAULT_MIGRATE_SKILL_ID,
-  steps: MIGRATION_PROGRAM,
   reportFile: MIGRATION_REPORT_FILE,
-  getContentBlocks,
   allowedTools: ['Agent'],
   disallowedTools: [WIZARD_TOOL_NAMES.wizardAsk],
   run: {
@@ -53,5 +49,3 @@ export const migrationConfig: ProgramConfig = {
   },
   requires: ['posthog-integration'],
 };
-
-export { MIGRATION_PROGRAM } from './steps.js';

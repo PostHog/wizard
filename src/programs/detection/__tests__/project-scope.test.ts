@@ -8,15 +8,11 @@ import {
   scopeInstallDirToProject,
 } from '@programs/detection/project-scope';
 import { WIZARD_BASIC_INTEGRATION_AGENTIC_DETECTION_FLAG_KEY } from '@shared/constants';
-import { authenticate } from '@programs/authenticate';
 import type { CiRunnerContext } from '@programs/runner-context';
-import { buildSession } from '@lib/wizard-session';
+import { buildSession } from '@programs/session/wizard-session';
 import { analytics } from '@utils/analytics';
 
 // Mock only the two network edges of scopeInstallDirToProject; everything else runs real.
-vi.mock('@programs/authenticate', () => ({
-  authenticate: vi.fn().mockResolvedValue(undefined),
-}));
 vi.mock('@programs/detection/agentic', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@programs/detection/agentic')>()),
   detectProjectsWithAgent: vi.fn(),
@@ -73,7 +69,11 @@ describe('chooseIntegrationProject', () => {
 });
 
 describe('scopeInstallDirToProject', () => {
-  const runner: CiRunnerContext = { log: { info: vi.fn(), warn: vi.fn() } };
+  const authenticate = vi.fn().mockResolvedValue(undefined);
+  const runner: CiRunnerContext = {
+    log: { info: vi.fn(), warn: vi.fn() },
+    authenticate,
+  };
   const scan = vi.mocked(detectProjectsWithAgent);
   const FLAG_ON = {
     [WIZARD_BASIC_INTEGRATION_AGENTIC_DETECTION_FLAG_KEY]: 'true',
@@ -119,7 +119,7 @@ describe('scopeInstallDirToProject', () => {
     const session = buildSession({ installDir: '/repo' });
     await scopeInstallDirToProject(session, runner);
 
-    expect(vi.mocked(authenticate)).toHaveBeenCalledTimes(1);
+    expect(authenticate).toHaveBeenCalledTimes(1);
     expect(session.installDir).toBe('/repo');
     expect(outcomeEvent()).toMatchObject({ outcome: 'flag-off' });
     expect(scan).not.toHaveBeenCalled();

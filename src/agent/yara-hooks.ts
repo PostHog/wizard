@@ -788,9 +788,7 @@ export function createPreToolUseYaraHooks(
             // The wizard's publish_handoff MCP tool, fully qualified by the
             // SDK (e.g. mcp__wizard-tools__publish_handoff). Matched by
             // suffix so a server rename can't silently reopen the gap — the
-            // exact FQN lives in WIZARD_TOOL_NAMES (wizard-tools/tools.ts),
-            // which this module can't import without a cycle (tools.ts
-            // imports scanInstalledSkill from here).
+            // exact FQN lives in WIZARD_TOOL_NAMES (wizard-tools/tools.ts).
             if (
               typeof toolName !== 'string' ||
               !toolName.endsWith('__publish_handoff')

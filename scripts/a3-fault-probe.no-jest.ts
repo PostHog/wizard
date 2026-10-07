@@ -1,4 +1,5 @@
-import type { RunConfig, RunInput } from '@agent/runner';
+import type { RunConfig, RunInput } from '@agent/types';
+import type { Harness as HarnessName } from '@shared/constants';
 
 const gatewayUrl = process.env.WIZARD_FAULT_GATEWAY_URL;
 const installDir = process.env.WIZARD_FAULT_INSTALL_DIR;
@@ -27,10 +28,7 @@ globalThis.fetch = (input, init) => {
   return routedFetch(input, init);
 };
 
-const { runAgent } = await import('@agent/runner');
-const { configureGatewayCredentialsForCI } = await import(
-  '@agent/gateway-session'
-);
+const { runAgent } = await import('@agent');
 const { DEFAULT_AGENT_MODEL, Harness, Sequence } = await import(
   '@shared/constants'
 );
@@ -42,12 +40,6 @@ analytics.capture = () => {};
 analytics.captureException = () => {};
 analytics.wizardCapture = () => {};
 analytics.shutdown = async () => {};
-
-configureGatewayCredentialsForCI(
-  'phe_synthetic_fault_probe',
-  228144,
-  gatewayUrl,
-);
 
 const config: RunConfig = {
   programId: 'fault-probe',
@@ -61,20 +53,18 @@ const config: RunConfig = {
     customPrompt: () => 'Answer briefly without using tools.',
   },
   composed: false,
-  binding: {
-    sequence: Sequence.linear,
-    harness: harness as Harness,
-    model: DEFAULT_AGENT_MODEL,
-  },
-  switchboard: {
-    program: 'fault-probe',
-    flags: {},
-    cliHarness: harness as Harness,
+  routing: {
+    binding: {
+      sequence: Sequence.linear,
+      harness: harness as HarnessName,
+      model: DEFAULT_AGENT_MODEL,
+    },
+    record: false,
   },
   skillsBaseUrl: 'http://127.0.0.1:1',
   wizardFlags: {},
   wizardFlagPayloads: {},
-  wizardMetadata: { run_id: 'fault-probe' },
+  tags: { run_id: 'fault-probe' },
 };
 
 const input: RunInput = {
@@ -84,6 +74,7 @@ const input: RunInput = {
     projectApiKey: 'phc_synthetic_fault_probe',
     host: HostResolution.fromApiHost('http://127.0.0.1:1', { localMcp: true }),
     projectId: 228144,
+    gateway: { token: 'phe_synthetic_fault_probe', url: gatewayUrl },
   },
   project: null,
   apiUser: null,
@@ -112,8 +103,12 @@ process.stdout.write(
   })}\n`,
 );
 if (result.outcome === 'failed' || result.outcome === 'aborted') {
-  const { wizardAbort } = await import('@utils/wizard-abort');
-  await wizardAbort(result.failure);
+  // This script is its own host: the abort's code is the exit.
+  const { startHostExit, wizardAbort } = await import('@host/wizard-abort');
+  const { printAbortOutro } = await import('@shared/console-log');
+  const exit = startHostExit();
+  void wizardAbort({ present: printAbortOutro, exit }, result.failure);
+  process.exit(await exit.exited);
 } else {
   process.exitCode = 2;
 }

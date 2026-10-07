@@ -8,10 +8,12 @@
 
 import { existsSync, statSync } from 'fs';
 import { analytics } from '@utils/analytics';
-import type { WizardSession } from '@lib/wizard-session';
+import type { ProgramSession } from '../program-session';
 import type { AbortCase } from '@agent/types';
-import { detectWarehouseSources } from '@programs/warehouse-sources/detect';
-import type { DetectedSource } from '@programs/warehouse-sources/types';
+import {
+  detectWarehouseSources,
+  DETECTED_WAREHOUSE_SOURCES_KEY,
+} from '../warehouse-sources/detect';
 
 /** Structured detection errors rendered by the intro screen. */
 export type WarehouseDetectError =
@@ -21,23 +23,6 @@ export type WarehouseDetectError =
       reason: 'missing' | 'not-dir' | 'unreadable';
     }
   | { kind: 'no-sources' };
-
-/** frameworkContext key holding the detected sources (set on success). */
-export const DETECTED_WAREHOUSE_SOURCES_KEY = 'detectedWarehouseSources';
-
-/**
- * Read the detected sources out of frameworkContext. Single accessor shared by
- * the intro screen and the prompt builder so the key + cast live in one place.
- */
-export function getDetectedWarehouseSources(
-  session: WizardSession,
-): DetectedSource[] {
-  return (
-    (session.frameworkContext[DETECTED_WAREHOUSE_SOURCES_KEY] as
-      | DetectedSource[]
-      | undefined) ?? []
-  );
-}
 
 /** `[ABORT] <reason>` cases the skill can emit. */
 export const WAREHOUSE_ABORT_CASES: AbortCase[] = [
@@ -69,7 +54,7 @@ export const WAREHOUSE_ABORT_CASES: AbortCase[] = [
  * sources (or a `detectError`) into frameworkContext for the intro screen.
  */
 export function detectWarehousePrerequisites(
-  session: WizardSession,
+  session: ProgramSession,
   setFrameworkContext: (key: string, value: unknown) => void,
 ): void {
   const fail = (error: WarehouseDetectError) =>

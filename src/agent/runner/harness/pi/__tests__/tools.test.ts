@@ -40,7 +40,6 @@ const makeTools = (
     workingDirectory,
     skillsBaseUrl: 'http://localhost:0',
     askBridge: { request } as unknown as WizardAskBridge,
-    triageProvider: undefined,
     maxQuestions,
   });
   const byName = (name: string) => {
@@ -626,7 +625,6 @@ describe('pi task wiring — wizard_ask pauses Write/Edit', () => {
       workingDirectory: mkdtempSync(join(tmpdir(), 'pi-ask-pause-')),
       skillsBaseUrl: 'http://localhost:0',
       askBridge: { request } as unknown as WizardAskBridge,
-      triageProvider: undefined,
       onAskPendingChange: (pending) => {
         askState.pending = pending;
       },
@@ -685,7 +683,6 @@ describe('audit ledger tools', () => {
     const tools = createWizardPiTools({
       workingDirectory,
       skillsBaseUrl: 'http://localhost:0',
-      triageProvider: undefined,
     });
     const tool = (name: string) => {
       const found = tools.find((t) => t.name === name);

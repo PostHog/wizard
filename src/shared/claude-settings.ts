@@ -2,7 +2,7 @@
  * Claude Code settings handling: conflict detection, backup/restore, and
  * orphan recovery.
  *
- * Lives apart from agent-interface so bin.ts can run orphan recovery at
+ * Lives apart from agent-interface so main.ts can run orphan recovery at
  * process start without dragging in the agent stack (wizard-tools, yara
  * hooks, the SDK loader).
  */
@@ -11,7 +11,7 @@ import path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
 import { analytics } from '@utils/analytics';
-import { registerCleanup } from '@utils/wizard-abort';
+import { registerCleanup } from '@utils/cleanup';
 import {
   BLOCKED_AGENT_ENV_KEYS,
   BLOCKED_AGENT_ENV_PATTERNS,
@@ -333,7 +333,7 @@ export function restoreClaudeSettings(workingDirectory: string): void {
  * skips restore, so the user's settings stay silently gone. Detect that exact
  * state (backup present, original absent) and put the original back.
  *
- * Runs once per process, from bin.ts, before anything reads Claude settings —
+ * Runs once per process, from main.ts, before anything reads Claude settings —
  * conflict detection must see the user's real settings file, and a recovery
  * any later would resurface the conflicting overrides after the backup step
  * already moved them aside.

@@ -18,9 +18,9 @@
  * the driver issues the final commit directly instead.
  */
 
-import type { WizardStore } from '@ui/tui/store';
-import type { ScreenName } from '@ui/tui/router';
-import type { PendingQuestion, RunPhase } from '@lib/wizard-session';
+import type { WizardStore } from '@tui';
+import type { PendingQuestion } from '@agent/types';
+import type { RunPhase } from '@shared/run-state';
 import { actionsForScreen, MissingParamError } from './action-registry.js';
 
 /** A setup question projected for the harness (no `detect` fn, no closures). */
@@ -53,7 +53,7 @@ export interface TaskNoticeView {
  * are reduced to a boolean so secrets never reach a driver LLM.
  */
 export interface CiState {
-  currentScreen: ScreenName;
+  currentScreen: string;
   hasOverlay: boolean;
   runPhase: RunPhase;
   session: {
@@ -86,7 +86,7 @@ export interface CiState {
 }
 
 export class UnknownActionError extends Error {
-  constructor(action: string, screen: ScreenName) {
+  constructor(action: string, screen: string) {
     super(
       `No action "${action}" on screen "${screen}". ` +
         `Call list_actions / read read_state.actions first.`,
@@ -111,14 +111,14 @@ export class WizardCiDriver {
         integration: s.integration,
         detectedFrameworkLabel: s.detectedFrameworkLabel,
         detectionComplete: s.detectionComplete,
-        setupConfirmed: s.setupConfirmed,
-        integrate: s.integrate,
+        setupConfirmed: this.store.setupConfirmed,
+        integrate: this.store.integrate,
         hasCredentials: s.credentials !== null,
         projectId: s.credentials?.projectId ?? null,
-        mcpComplete: s.mcpComplete,
-        slackStepDismissed: s.slackStepDismissed,
-        skillsComplete: s.skillsComplete,
-        outroDismissed: s.outroDismissed,
+        mcpComplete: this.store.mcpComplete,
+        slackStepDismissed: this.store.slackStepDismissed,
+        skillsComplete: this.store.skillsComplete,
+        outroDismissed: this.store.outroDismissed,
         discoveredFeatures: [...s.discoveredFeatures],
       },
       tasks: this.store.tasks.map((t) => ({

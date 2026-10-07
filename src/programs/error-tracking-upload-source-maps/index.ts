@@ -1,9 +1,8 @@
-import type { ProgramConfig } from '@programs/program-step';
-import type { ProgramRun } from '@programs/program-run';
-import type { WizardSession } from '@lib/wizard-session';
-import { OutroKind } from '@lib/wizard-session';
-import type { RunnerContext } from '@programs/runner-context';
-import { ERROR_TRACKING_UPLOAD_SOURCE_MAPS_PROGRAM } from './steps.js';
+import type { ProgramConfig } from '../program-step';
+import type { ProgramRun } from '../program-run';
+import type { ProgramSession } from '../program-session';
+import { OutroKind } from '@shared/outro';
+import type { RunnerContext } from '../runner-context';
 import {
   buildSourceMapsUploadPrompt,
   SOURCE_MAPS_DETECTION_FAILED_PROMPT,
@@ -14,8 +13,7 @@ import {
   VARIANTS_REQUIRING_POSTHOG_CLI,
   type SkillVariant,
 } from './detect.js';
-import { getContentBlocks } from '../../ui/tui/decks/error-tracking-upload-source-maps/index.js';
-import { preinstallPostHogCliOnce } from '@programs/shared/posthog-cli-preinstall';
+import { preinstallPostHogCliOnce } from '../shared/posthog-cli-preinstall';
 
 const REPORT_FILE = 'posthog-source-maps-report.md';
 const DOCS_URL = 'https://posthog.com/docs/error-tracking/upload-source-maps';
@@ -36,18 +34,17 @@ function ensurePostHogCli(
   );
 }
 
-export const errorTrackingUploadSourceMapsConfig: ProgramConfig = {
+export const config: ProgramConfig = {
   command: 'upload-source-maps',
   description: 'Upload source maps to PostHog Error Tracking',
   id: 'error-tracking-upload-source-maps',
-  requiresAi: true,
-  steps: ERROR_TRACKING_UPLOAD_SOURCE_MAPS_PROGRAM,
+  // No health-check screen in the TUI flow; the run skips the readiness check.
+  healthCheck: false,
   reportFile: REPORT_FILE,
-  getContentBlocks,
   requires: ['posthog-integration'],
 
   run: (
-    _session: WizardSession,
+    _session: ProgramSession,
     runner: RunnerContext,
   ): Promise<ProgramRun> => {
     // Read the picked project LIVE at prompt-build time, not here: the picker
@@ -136,13 +133,19 @@ export const errorTrackingUploadSourceMapsConfig: ProgramConfig = {
   },
 };
 
-export { ERROR_TRACKING_UPLOAD_SOURCE_MAPS_PROGRAM } from './steps.js';
 export {
   detectSourceMapsPrerequisites,
   SOURCE_MAPS_ABORT_CASES,
   SOURCE_MAPS_CONTEXT_KEYS,
   VARIANT_DISPLAY_NAME,
+  VARIANTS_REQUIRING_POSTHOG_CLI,
   MANUAL_SDK_VARIANTS,
   type SkillVariant,
   type SourceMapsDetectError,
 } from './detect.js';
+
+export {
+  detectSourceMapsProjects,
+  type DetectedProject,
+  type DetectionReport,
+} from './detect-agentic.js';

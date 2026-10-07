@@ -8,7 +8,7 @@ description: >
 compatibility: Coding agents working in the PostHog Wizard repository.
 metadata:
   author: posthog
-  version: '2.0'
+  version: '2.2'
 ---
 
 # Wizard development
@@ -21,12 +21,15 @@ infrastructure should consume those boundaries.
 | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Framework detection, context, env conventions         | [FrameworkConfig](../../../src/programs/framework-config.ts) and [framework configs](../../../src/programs/frameworks/)                                                                       |
 | Integration instructions and orchestrator flows/tasks | [context-mill](https://github.com/PostHog/context-mill)                                                                                                                         |
-| Programs, steps, prerequisites and outcomes           | [programs](../../../src/programs/)                                                                                                                                          |
+| Programs: detection, runs, prerequisites and outcomes | One folder per program in [programs](../../../src/programs/), entered through its `index.ts`                                                                                                  |
+| Tools: commands that run no agent                     | [tools](../../../src/tools/), entered through `@tools`, with their screens in [TUI tools](../../../src/tui/tools/)                                                                            |
+| Program screens, flows and decks                      | [TUI programs](../../../src/tui/programs/)                                                                                                                                                    |
 | Sequence, harness, model and effort selection         | [switchboard](../../../src/agent/runner/switchboard/)                                                                                                                       |
 | Local tool permissions and scanner adapters           | [agent-interface](../../../src/agent/agent-interface.ts), [YARA hooks](../../../src/agent/yara-hooks.ts), [Pi security](../../../src/agent/runner/harness/pi/security.ts) |
 | Scanner rules                                         | [warlock](https://github.com/PostHog/warlock)                                                                                                                                   |
 | Token admission and budgets                           | [PostHog mint endpoint](https://github.com/PostHog/posthog/blob/master/posthog/llm/wizard_gateway_token.py) and [ai-gateway](https://github.com/PostHog/ai-gateway)             |
-| Screen resolution and rendering                       | [TUI](../../../src/ui/tui/) through [WizardUI](../../../src/ui/wizard-ui.ts)                                                                                                    |
+| Screen resolution and rendering                       | [TUI](../../../src/tui/) through its [store](../../../src/tui/store.ts)                                                                                                                       |
+| Layer import boundaries                               | One tsconfig project per layer, checked by `pnpm typecheck`, and ESLint rules for the paths the compiler can't see; see [layer boundaries](references/ARCHITECTURE.md#layer-boundaries)       |
 
 ## Execution policy and model admission
 
@@ -42,12 +45,11 @@ infrastructure should consume those boundaries.
   the default.** Retain it for major Pi vulnerabilities or missing support for
   new Anthropic models.
 
-Existing routing has not all migrated:
 [DEFAULT_BINDING](../../../src/agent/runner/switchboard/index.ts) selects
-Pi + linear, with per-program and flag overrides. Set new
-bindings explicitly. Migrating an existing program requires checking its flow,
-tasks, and lifecycle hooks; changing the default constant alone is insufficient.
-Both harnesses implement `run` and `runTask`.
+Pi + linear for a program whose config sets no `binding`; flags and development
+overrides sit on top. Set new bindings explicitly. Migrating an existing program
+requires checking its flow, tasks, and lifecycle hooks; changing the default
+constant alone is insufficient. Both harnesses implement `run` and `runTask`.
 
 Adding a model or effort is a cross-repository change:
 
@@ -80,11 +82,16 @@ capabilities table.
 - For a capability, follow
   [adding-skill-program](../adding-skill-program/SKILL.md). Prefer a
   context-mill command within an existing family when that is sufficient. A
-  native command needs a command module and registration in `bin.ts`, as well as
-  program and binding registration.
-- For screens or primitives, follow [ink-tui](../ink-tui/SKILL.md). Program
-  steps drive screen sequences; business logic calls `getUI()`, and session
-  mutations use store setters that emit changes.
+  native command needs a command module in `src/cli/commands/` and registration
+  in `runCli` (`src/cli/index.ts`), as well as program registration.
+- For a command that runs no agent, such as `mcp add` or `doctor`, follow
+  [Add a tool](../../../src/tools/README.md#add-a-tool). A tool never goes
+  through `runProgram`, and no program imports one.
+- For screens or primitives, follow [ink-tui](../ink-tui/SKILL.md). A program's
+  flow in `src/tui/programs/<id>/` drives its screen sequence. Programs never
+  use the UI; they get a runner context. TUI code takes the store it reports
+  through as an argument, and session mutations use store setters that emit
+  changes.
 - For headless exploration, follow
   [exploring-the-wizard](../exploring-the-wizard/SKILL.md). Drive current legal
   actions and inspect error outros and pending questions throughout execution.
@@ -94,9 +101,9 @@ only when it gives a real owner a smaller, reusable boundary.
 
 ## Lifecycle and security
 
-[runner/index.ts](../../../src/agent/runner/index.ts) bootstraps, resolves a
-binding, and dispatches to a sequence. `agent-runner.ts` is a compatibility
-re-export, not the implementation. Sequences own their lifecycle; harnesses own
+[runner/index.ts](../../../src/agent/runner/index.ts) resolves the route from
+`RunConfig.routing`, bootstraps, and dispatches to a sequence.
+Sequences own their lifecycle; harnesses own
 SDK calls. `ProgramRun.postRun`, `buildOutroData`, `customPrompt`, and
 `abortCases` are consumed by the linear sequence, not by the orchestrator. Put
 orchestrated work in its flow/tasks and inspect its completion path when

@@ -1,11 +1,6 @@
-import type { ProgramConfig, ProgramStep } from '@programs/program-step';
-import { AGENT_SKILL_STEPS } from '@programs/agent-skill/index';
-import { getContentBlocks } from '@ui/tui/decks/agent-skill/index';
-import { headlessOption, regionOption } from '@lib/headless-mode';
-
-const AI_OBSERVABILITY_STEPS: ProgramStep[] = AGENT_SKILL_STEPS.map((step) =>
-  step.id === 'intro' ? { ...step, screenId: 'ai-observability-intro' } : step,
-);
+import { Harness, Sequence, GPT5_6_TERRA_MODEL } from '@shared/constants';
+import type { ProgramConfig } from '../program-step';
+import { headlessOption, regionOption } from '@shared/headless-mode';
 
 const AI_OBSERVABILITY_REPORT_FILE = 'posthog-ai-observability-report.md';
 
@@ -19,14 +14,18 @@ const AI_OBSERVABILITY_REPORT_FILE = 'posthog-ai-observability-report.md';
  * the right variant itself (see `customPrompt`). Stays flat while a single
  * "add AIO to a project" flow is the only action.
  */
-export const aiObservabilityConfig: ProgramConfig = {
+export const config: ProgramConfig = {
+  binding: {
+    sequence: Sequence.linear,
+    harness: Harness.pi,
+    model: GPT5_6_TERRA_MODEL,
+    thinkingLevel: 'high',
+  },
   command: 'ai-observability',
   description: 'Add PostHog AI Observability to your LLM calls',
   id: 'ai-observability',
   cliOptions: { ...headlessOption, ...regionOption },
-  steps: AI_OBSERVABILITY_STEPS,
   reportFile: AI_OBSERVABILITY_REPORT_FILE,
-  getContentBlocks,
   run: {
     integrationLabel: 'ai-observability',
     // No `skillId`: linear.ts skips its pre-install step (see the gate on

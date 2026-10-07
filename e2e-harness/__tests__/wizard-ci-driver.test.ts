@@ -9,26 +9,33 @@
  * through the driver.
  */
 
-import { WizardStore } from '@ui/tui/store';
-import { InkUI } from '@ui/tui/ink-ui';
-import { setUI } from '@ui/index';
-import { buildSession, RunPhase, McpOutcome } from '@lib/wizard-session';
+import { McpOutcome, RunPhase } from '@shared/run-state';
+import { OutroKind } from '@shared/outro';
 import { HostResolution } from '@shared/host-resolution';
 import { Integration } from '@shared/constants';
-import { FRAMEWORK_REGISTRY } from '@programs/frameworks/registry';
 import { WizardReadiness } from '@shared/health-checks/readiness';
-import { ScreenId, Overlay } from '@ui/tui/router';
-import { Program } from '@programs';
+import { buildSession, FRAMEWORK_REGISTRY, Program } from '@programs';
+import { SOURCE_MAPS_CONTEXT_KEYS } from '@programs/error-tracking-upload-source-maps';
+import {
+  createTuiStore,
+  Overlay,
+  PostHogIntegrationScreenId,
+  ScreenId,
+  SelfDrivingScreenId,
+  SourceMapsScreenId,
+  tuiScreenIds,
+  type WizardStore,
+} from '@tui';
 import { WizardCiDriver, UnknownActionError } from '../wizard-ci-driver';
-import { ACTION_REGISTRY, NO_ACTION_SCREENS } from '../action-registry';
-import { SOURCE_MAPS_CONTEXT_KEYS } from '@programs/error-tracking-upload-source-maps/index';
-import { OutroKind } from '@lib/wizard-session';
+import {
+  ACTION_REGISTRY,
+  actionsForScreen,
+  NO_ACTION_SCREENS,
+} from '../action-registry';
 
-function freshStore(): WizardStore {
-  const store = new WizardStore(Program.PostHogIntegration);
-  // Headless: a real store + InkUI (which only forwards to the store), no Ink
-  // render. setUI so any getUI() path the store touches resolves.
-  setUI(new InkUI(store));
+async function freshStore(): Promise<WizardStore> {
+  // Headless: a real store, no Ink render.
+  const store = await createTuiStore(Program.PostHogIntegration);
   const session = buildSession({
     installDir: '/tmp/ci-driver-test',
     ci: true, // OAuth-bypass + ai-opt-in auto-consent semantics
@@ -46,9 +53,8 @@ const cleanReadiness = {
 };
 
 describe('WizardCiDriver — full integration flow', () => {
-  it('lets a failed run exit or continue to MCP', () => {
-    const store = freshStore();
-    const ui = new InkUI(store);
+  it('lets a failed run exit or continue to MCP', async () => {
+    const store = await freshStore();
     const driver = new WizardCiDriver(store);
     store.setCredentials({
       accessToken: 'phx_secret_should_not_leak',
@@ -57,23 +63,24 @@ describe('WizardCiDriver — full integration flow', () => {
       projectId: 42,
     });
     store.setOutroDismissed();
-    ui.outroError({ kind: OutroKind.Error, message: 'agent failed' });
+    store.showOutroError({ kind: OutroKind.Error, message: 'agent failed' });
     expect(driver.readState().currentScreen).toBe(ScreenId.MintFailure);
     driver.performAction('continue_setup');
     expect(driver.readState().currentScreen).toBe(ScreenId.Mcp);
     driver.performAction('set_mcp_outcome', { outcome: 'skipped' });
-    driver.performAction('dismiss_slack');
     expect(driver.readState().currentScreen).toBe(ScreenId.KeepSkills);
     driver.performAction('keep_skills', { kept: true });
     expect(driver.readState().currentScreen).toBe(ScreenId.Exit);
   });
 
-  it('walks intro → setup → run → outro → mcp → slack → keep-skills', () => {
-    const store = freshStore();
+  it('walks intro → setup → run → outro → mcp → keep-skills', async () => {
+    const store = await freshStore();
     const driver = new WizardCiDriver(store);
 
     // 1. Intro
-    expect(driver.readState().currentScreen).toBe(ScreenId.Intro);
+    expect(driver.readState().currentScreen).toBe(
+      PostHogIntegrationScreenId.Intro,
+    );
     expect(driver.listActions().map((a) => a.id)).toContain('confirm_setup');
     driver.performAction('confirm_setup');
 
@@ -114,25 +121,21 @@ describe('WizardCiDriver — full integration flow', () => {
     // 7. MCP
     expect(driver.readState().currentScreen).toBe(ScreenId.Mcp);
     driver.performAction('set_mcp_outcome', { outcome: 'skipped' });
-    expect(store.session.mcpOutcome).toBe(McpOutcome.Skipped);
+    expect(store.mcpOutcome).toBe(McpOutcome.Skipped);
 
-    // 8. Slack
-    expect(driver.readState().currentScreen).toBe(ScreenId.SlackConnect);
-    driver.performAction('dismiss_slack');
-
-    // 9. Keep skills — terminal commit.
+    // 8. Keep skills — terminal commit.
     expect(driver.readState().currentScreen).toBe(ScreenId.KeepSkills);
     const done = driver.performAction('keep_skills', { kept: true });
 
     // keep-skills is the terminal step: it has no isComplete predicate, so the
     // router rests on it. Completion is signalled by skillsComplete — the exact
     // condition run-wizard.ts awaits to end the run.
-    expect(store.session.skillsComplete).toBe(true);
+    expect(store.skillsComplete).toBe(true);
     expect(done.currentScreen).toBe(ScreenId.KeepSkills);
   });
 
-  it('read_state is a truthful projection and never leaks the access token', () => {
-    const store = freshStore();
+  it('read_state is a truthful projection and never leaks the access token', async () => {
+    const store = await freshStore();
     const driver = new WizardCiDriver(store);
     store.setCredentials({
       accessToken: 'phx_secret_should_not_leak',
@@ -149,10 +152,12 @@ describe('WizardCiDriver — full integration flow', () => {
     expect(JSON.stringify(state)).not.toContain('phx_secret_should_not_leak');
   });
 
-  it('rejects actions that are not legal on the current screen', () => {
-    const store = freshStore();
+  it('rejects actions that are not legal on the current screen', async () => {
+    const store = await freshStore();
     const driver = new WizardCiDriver(store);
-    expect(driver.readState().currentScreen).toBe(ScreenId.Intro);
+    expect(driver.readState().currentScreen).toBe(
+      PostHogIntegrationScreenId.Intro,
+    );
     expect(() => driver.performAction('keep_skills')).toThrow(
       UnknownActionError,
     );
@@ -161,7 +166,7 @@ describe('WizardCiDriver — full integration flow', () => {
 
 describe('WizardCiDriver — wizard_ask overlay', () => {
   it('answers a pending question through the driver, resolving the agent promise', async () => {
-    const store = freshStore();
+    const store = await freshStore();
     const driver = new WizardCiDriver(store);
 
     // The agent (via the ask bridge) opens a question and awaits the answers.
@@ -198,49 +203,46 @@ describe('WizardCiDriver — wizard_ask overlay', () => {
 });
 
 describe('WizardCiDriver — self-driving integration check', () => {
-  function selfDrivingStore(): WizardStore {
-    const store = new WizardStore(Program.SelfDriving);
-    setUI(new InkUI(store));
+  async function selfDrivingStore(): Promise<WizardStore> {
+    const store = await createTuiStore(Program.SelfDriving);
     store.session = buildSession({ installDir: '/tmp/ci-driver-sd', ci: true });
     return store;
   }
 
-  it('exposes the integration check and commits set_integrate', () => {
-    const store = selfDrivingStore();
+  it('exposes the integration check and commits set_integrate', async () => {
+    const store = await selfDrivingStore();
     const driver = new WizardCiDriver(store);
 
     // Intro → integration-check.
     store.completeSetup();
     const state = driver.readState();
-    expect(state.currentScreen).toBe(ScreenId.SelfDrivingIntegrationCheck);
+    expect(state.currentScreen).toBe(SelfDrivingScreenId.IntegrationCheck);
     expect(state.session.integrate).toBeNull();
     expect(state.actions.map((a) => a.id)).toContain('set_integrate');
 
     // Answer "no, set it up first" → integrate=true, advances off the screen.
     const next = driver.performAction('set_integrate', { integrate: true });
     expect(next.session.integrate).toBe(true);
-    expect(next.currentScreen).not.toBe(ScreenId.SelfDrivingIntegrationCheck);
+    expect(next.currentScreen).not.toBe(SelfDrivingScreenId.IntegrationCheck);
   });
 
-  it('skips the integration check when --integrate pre-resolved it', () => {
-    const store = selfDrivingStore();
-    store.session = buildSession({
-      installDir: '/tmp/ci-driver-sd',
+  it('skips the integration check when --integrate pre-resolved it', async () => {
+    const store = await selfDrivingStore();
+    store.launch(buildSession({ installDir: '/tmp/ci-driver-sd' }), {
       integrate: true,
     });
     const driver = new WizardCiDriver(store);
 
     store.completeSetup();
     expect(driver.readState().currentScreen).not.toBe(
-      ScreenId.SelfDrivingIntegrationCheck,
+      SelfDrivingScreenId.IntegrationCheck,
     );
   });
 });
 
 describe('WizardCiDriver — source-maps project pick', () => {
-  function sourceMapsStore(): WizardStore {
-    const store = new WizardStore(Program.ErrorTrackingUploadSourceMaps);
-    setUI(new InkUI(store));
+  async function sourceMapsStore(): Promise<WizardStore> {
+    const store = await createTuiStore(Program.ErrorTrackingUploadSourceMaps);
     store.session = buildSession({ installDir: '/tmp/ci-driver-sm', ci: true });
     return store;
   }
@@ -256,13 +258,13 @@ describe('WizardCiDriver — source-maps project pick', () => {
     });
   }
 
-  it('commits the pick the way the detect screen would and advances', () => {
-    const store = sourceMapsStore();
+  it('commits the pick the way the detect screen would and advances', async () => {
+    const store = await sourceMapsStore();
     const driver = new WizardCiDriver(store);
 
     toDetectScreen(store);
     const state = driver.readState();
-    expect(state.currentScreen).toBe(ScreenId.SourceMapsDetect);
+    expect(state.currentScreen).toBe(SourceMapsScreenId.Detect);
     expect(state.actions.map((a) => a.id)).toContain(
       'pick_source_maps_project',
     );
@@ -278,8 +280,8 @@ describe('WizardCiDriver — source-maps project pick', () => {
     expect(next.currentScreen).toBe(ScreenId.Run);
   });
 
-  it('requires the variant and path params', () => {
-    const store = sourceMapsStore();
+  it('requires the variant and path params', async () => {
+    const store = await sourceMapsStore();
     const driver = new WizardCiDriver(store);
 
     toDetectScreen(store);
@@ -300,7 +302,7 @@ describe('WizardCiDriver — task-notice overlay', () => {
   };
 
   it('projects the notice into read_state and keeps the step', async () => {
-    const store = freshStore();
+    const store = await freshStore();
     const driver = new WizardCiDriver(store);
 
     const kept = store.showTaskNotice(notice);
@@ -322,7 +324,7 @@ describe('WizardCiDriver — task-notice overlay', () => {
   });
 
   it('skips the step when keep is false', async () => {
-    const store = freshStore();
+    const store = await freshStore();
     const driver = new WizardCiDriver(store);
     const kept = store.showTaskNotice(notice);
     driver.performAction('resolve_notice', { keep: false });
@@ -330,25 +332,35 @@ describe('WizardCiDriver — task-notice overlay', () => {
   });
 
   it('defaults to keeping the step when keep is omitted', async () => {
-    const store = freshStore();
+    const store = await freshStore();
     const driver = new WizardCiDriver(store);
     const kept = store.showTaskNotice(notice);
     driver.performAction('resolve_notice');
     await expect(kept).resolves.toBe(true);
   });
 
-  it('projects an empty items list when the notice has none', () => {
-    const store = freshStore();
+  it('projects an empty items list when the notice has none', async () => {
+    const store = await freshStore();
     const driver = new WizardCiDriver(store);
     void store.showTaskNotice({ ...notice, items: undefined });
     expect(driver.readState().taskNotice?.items).toEqual([]);
   });
 });
 
+describe('WizardCiDriver — self-driving GitHub gate', () => {
+  it('ends the self-driving run before the agent when GitHub is declined', async () => {
+    const store = await createTuiStore(Program.SelfDriving);
+    actionsForScreen(SelfDrivingScreenId.Github)
+      .find((a) => a.id === 'decline_github')
+      ?.apply(store, {});
+    expect(store.githubDeclined).toBe(true);
+    expect(store.session.outroData?.kind).toBe(OutroKind.Cancel);
+  });
+});
+
 describe('action registry exhaustiveness', () => {
-  it('every screen and overlay is either actionable or explicitly no-action', () => {
-    const allScreens = [...Object.values(ScreenId), ...Object.values(Overlay)];
-    const uncovered = allScreens.filter(
+  it('every screen and overlay is either actionable or explicitly no-action', async () => {
+    const uncovered = (await tuiScreenIds()).filter(
       (s) => !(s in ACTION_REGISTRY) && !NO_ACTION_SCREENS.has(s),
     );
     expect(uncovered).toEqual([]);

@@ -1,0 +1,9 @@
+{
+  "extends": "../tsconfig.no-tui.json",
+  "include": [".", "../scripts", "../docs/examples"],
+  "references": [
+    { "path": "../src/tsconfig.json" }, { "path": "../src/shared" }, { "path": "../src/host" },
+    { "path": "../src/agent" }, { "path": "../src/tools" }, { "path": "../src/programs" },
+    { "path": "../src/tui" }, { "path": "../src/headless" }
+  ]
+}

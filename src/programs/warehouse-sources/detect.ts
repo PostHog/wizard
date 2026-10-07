@@ -10,6 +10,7 @@
  */
 
 import { analytics } from '@utils/analytics';
+import type { ProgramSession } from '../program-session';
 import { walkProjectFiles, safeReadFile } from '@utils/bounded-fs';
 import {
   ENV_SCAN_MAX_DEPTH,
@@ -23,7 +24,7 @@ import {
   parseRequirementsTxt,
   parsePyprojectToml,
   parsePipfile,
-} from '@programs/detection/features';
+} from '../detection/features';
 import { SOURCE_DETECTORS } from './registry.js';
 import type { DetectedSource, SourceDetector } from './types.js';
 
@@ -239,3 +240,20 @@ export function parseGemfile(content: string): string[] {
  * detector and the tool cannot disagree about what counts as a key.
  */
 export { parseEnvKeyNames as parseEnvKeys } from '@utils/env-scan';
+
+/** frameworkContext key holding the detected sources (set on success). */
+export const DETECTED_WAREHOUSE_SOURCES_KEY = 'detectedWarehouseSources';
+
+/**
+ * Read the detected sources out of frameworkContext. Single accessor shared by
+ * the intro screen and the prompt builder so the key + cast live in one place.
+ */
+export function getDetectedWarehouseSources(
+  session: ProgramSession,
+): DetectedSource[] {
+  return (
+    (session.frameworkContext[DETECTED_WAREHOUSE_SOURCES_KEY] as
+      | DetectedSource[]
+      | undefined) ?? []
+  );
+}
