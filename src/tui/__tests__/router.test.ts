@@ -32,6 +32,23 @@ function failedRunView() {
 
 describe('WizardRouter', () => {
   it.each([...PROGRAM_REGISTRY, ...TOOL_REGISTRY].map((program) => program.id))(
+    'shows and dismisses an early error before setup completes in %s',
+    (program) => {
+      const router = new WizardRouter(program);
+      const view = baseView();
+      view.session.runPhase = RunPhase.Error;
+      view.session.outroData = {
+        kind: OutroKind.Error,
+        message: 'detection failed',
+      };
+
+      expect(router.resolve(view)).toBe(ScreenId.Outro);
+      view.outroDismissed = true;
+      expect(router.resolve(view)).toBe(ScreenId.Exit);
+    },
+  );
+
+  it.each([...PROGRAM_REGISTRY, ...TOOL_REGISTRY].map((program) => program.id))(
     'shows a failed run over every step and overlay in %s',
     (program) => {
       const router = new WizardRouter(program);

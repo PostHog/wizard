@@ -20,6 +20,7 @@ import { preinstallPostHogCliOnce } from '../shared/posthog-cli-preinstall';
 import { analytics } from '@utils/analytics';
 import { ProgramAbort } from '../program-abort';
 import { ErrorCodes } from '@shared/errors';
+import { abortNoFrameworkDetected } from '../shared/abort-no-framework';
 
 const ERROR_TRACKING_REPORT_FILE = 'posthog-error-tracking-report.md';
 const ERROR_TRACKING_DOCS_URL = 'https://posthog.com/docs/error-tracking';
@@ -182,10 +183,7 @@ export const config: ProgramConfig = {
 
     const integration = await detectFramework(session.installDir);
     if (!integration) {
-      throw new ProgramAbort({
-        code: ErrorCodes.DetectNoFramework,
-        message: 'Could not auto-detect your framework for this project.',
-      });
+      abortNoFrameworkDetected();
     }
     if (ERROR_TRACKING_UNSUPPORTED.has(integration)) {
       abortUnsupportedPlatform(integration);

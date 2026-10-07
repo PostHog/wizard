@@ -185,17 +185,30 @@ export const OutroScreen = ({ store }: OutroScreenProps) => {
             ✘ {outroData.message || 'An error occurred'}
           </Text>
 
-          {outroData.body && (
+          {outroData.instruction && (
             <Box marginTop={1}>
+              <Text>{outroData.instruction}</Text>
+            </Box>
+          )}
+
+          {outroData.body && (
+            <Box marginTop={outroData.instruction ? 0 : 1}>
               <Text dimColor>{outroData.body}</Text>
             </Box>
           )}
 
           {outroData.docsUrl && (
-            <Box marginTop={1}>
-              <Text>
-                Docs: <Text color="cyan">{outroData.docsUrl}</Text>
-              </Text>
+            <Box marginTop={1} flexDirection="column">
+              {outroData.docsLabel ? (
+                <>
+                  <Text dimColor>{outroData.docsLabel}</Text>
+                  <Text color="cyan">{outroData.docsUrl}</Text>
+                </>
+              ) : (
+                <Text>
+                  Docs: <Text color="cyan">{outroData.docsUrl}</Text>
+                </Text>
+              )}
             </Box>
           )}
         </Box>
@@ -207,8 +220,11 @@ export const OutroScreen = ({ store }: OutroScreenProps) => {
         </Box>
       )}
 
-      <Box marginTop={1}>
-        <Text color={Colors.muted}>Press any key to continue</Text>
+      <Box marginTop={outroData.kind === OutroKind.Error ? 2 : 1}>
+        <Text color={Colors.muted}>
+          Press any key to{' '}
+          {outroData.kind === OutroKind.Error ? 'exit' : 'continue'}
+        </Text>
       </Box>
     </Box>
   );

@@ -162,6 +162,7 @@ export async function runTui(
         await abortOnScreens(store, {
           code: error.code,
           message: error.message,
+          outroData: error.outroData,
         });
       }
       await store.getGate('intro');

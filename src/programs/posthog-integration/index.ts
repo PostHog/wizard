@@ -18,8 +18,7 @@ import { noteDetectedFramework } from '../detection/detected-framework';
 import { scopeInstallDirToProject } from '../detection/project-scope';
 import type { CiRunnerContext, RunnerContext } from '../runner-context';
 import { FRAMEWORK_REGISTRY } from '../frameworks/registry';
-import { ProgramAbort } from '../program-abort';
-import { ErrorCodes } from '@shared/errors';
+import { abortNoFrameworkDetected } from '../shared/abort-no-framework';
 import {
   SETUP_REPORT_FILE,
   WIZARD_DEFAULT_AIO_LOGS_FLAG_KEY,
@@ -269,10 +268,7 @@ export const config: ProgramConfig = {
 
     const integration = await detectFramework(session.installDir);
     if (!integration) {
-      throw new ProgramAbort({
-        code: ErrorCodes.DetectNoFramework,
-        message: 'Could not auto-detect your framework for this project.',
-      });
+      abortNoFrameworkDetected();
     }
     session.integration = integration;
     analytics.setTag('integration', integration);
@@ -300,7 +296,10 @@ export const config: ProgramConfig = {
     session: ProgramSession,
     runner: RunnerContext,
   ): Promise<ProgramRun> => {
-    const config = session.frameworkConfig!;
+    const config = session.frameworkConfig;
+    if (!config) {
+      abortNoFrameworkDetected();
+    }
 
     const typeScriptDetected = isUsingTypeScript({
       installDir: session.installDir,

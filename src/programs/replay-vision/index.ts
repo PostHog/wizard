@@ -20,6 +20,7 @@ import { analytics } from '@utils/analytics';
 import { ProgramAbort } from '../program-abort';
 import { ErrorCodes } from '@shared/errors';
 import { REPLAY_VISION_SCOPE_ADDITIONS } from './scopes.js';
+import { abortNoFrameworkDetected } from '../shared/abort-no-framework';
 
 const REPLAY_VISION_REPORT_FILE = 'posthog-replay-vision-report.md';
 
@@ -41,6 +42,12 @@ function abortUnsupportedPlatform(integration: Integration): never {
       '  https://posthog.com/docs/session-replay',
   });
 }
+
+const NO_FRAMEWORK_GUIDANCE = {
+  message: 'Could not find a Replay Vision compatible framework',
+  docsLabel: 'Supported replay platforms:',
+  docsUrl: 'https://posthog.com/docs/session-replay',
+};
 
 /**
  * `[ABORT]` reasons the replay-vision skill emits when the run can't proceed.
@@ -75,7 +82,11 @@ async function detectReplayVisionProject(
   ctx: ProgramReadyContext,
 ): Promise<void> {
   const integration = await detectFramework(ctx.session.installDir);
-  if (integration && !REPLAY_VISION_SUPPORTED.has(integration)) {
+  if (!integration) {
+    // Stop before skill preflight, matching the CI path below.
+    abortNoFrameworkDetected(NO_FRAMEWORK_GUIDANCE);
+  }
+  if (!REPLAY_VISION_SUPPORTED.has(integration)) {
     abortUnsupportedPlatform(integration);
   }
   await detectPostHogIntegration(ctx);
@@ -147,10 +158,7 @@ export const config: ProgramConfig = {
 
     const integration = await detectFramework(session.installDir);
     if (!integration) {
-      throw new ProgramAbort({
-        code: ErrorCodes.DetectNoFramework,
-        message: 'Could not auto-detect your framework for this project.',
-      });
+      abortNoFrameworkDetected(NO_FRAMEWORK_GUIDANCE);
     }
     if (!REPLAY_VISION_SUPPORTED.has(integration)) {
       abortUnsupportedPlatform(integration);

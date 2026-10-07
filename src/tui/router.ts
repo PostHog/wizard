@@ -13,6 +13,7 @@
  */
 
 import { RunPhase } from '@shared/run-state';
+import { OutroKind } from '@shared/outro';
 import { type TuiView } from '@tui/tui-state';
 import { isRunFailure } from '@tui/mint-failure';
 import { Program, type ProgramId } from '@programs';
@@ -67,24 +68,19 @@ export class WizardRouter {
       return this.overlays[this.overlays.length - 1];
     }
 
+    // Early aborts must be dismissible even when intro, setup, or auth is incomplete.
+    if (
+      !runFailed &&
+      session.runPhase === RunPhase.Error &&
+      session.outroData?.kind === OutroKind.Error
+    ) {
+      return view.outroDismissed ? ScreenId.Exit : ScreenId.Outro;
+    }
+
     const sequence = runFailed ? MINT_HANDOFF_SEQUENCE : this.sequence;
     for (const entry of sequence) {
       if (entry.show && !entry.show(view)) continue;
       if (entry.isComplete && entry.isComplete(view)) continue;
-      // A failed login aborts the run: wizardAbort renders the error outro
-      // and then waits for its dismissal. But the auth step only completes
-      // on credentials — which an aborted login never set — so the walk
-      // would park here forever: auth spinner up, outro unreachable, and
-      // that wait deadlocked. Route to the outro so the error can be read
-      // and dismissed. Auth only: the run steps already complete on
-      // RunPhase.Error, so later aborts reach their program's own outro.
-      if (
-        entry.id === ScreenId.Auth &&
-        session.runPhase === RunPhase.Error &&
-        session.outroData
-      ) {
-        return ScreenId.Outro;
-      }
       return entry.id;
     }
 
