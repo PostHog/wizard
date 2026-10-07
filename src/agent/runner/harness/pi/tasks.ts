@@ -6,10 +6,11 @@
  * like the anthropic path — the thing that was missing before.
  */
 
+import { randomUUID } from 'node:crypto';
 import { Type } from 'typebox';
 import { defineTool } from '@earendil-works/pi-coding-agent';
 import type { ToolDefinition } from '@earendil-works/pi-coding-agent';
-import type { TaskSnapshot } from '@agent/progress';
+import type { TaskSnapshot } from '../../../progress';
 
 export type TaskStatus = 'pending' | 'in_progress' | 'completed';
 export interface TaskEntry {
@@ -26,8 +27,10 @@ function text(s: string): {
   return { content: [{ type: 'text', text: s }], details: {} };
 }
 
-function snapshot(store: TaskStore): TaskSnapshot[] {
-  return Array.from(store.values()).map((t) => ({
+function snapshot(store: TaskStore, source: string): TaskSnapshot[] {
+  return Array.from(store.entries()).map(([id, t]) => ({
+    id: `${source}:${id}`,
+    source,
     content: t.content,
     status: t.status,
     activeForm: t.activeForm,
@@ -42,7 +45,8 @@ export function createWizardPiTaskTools(
   store: TaskStore;
 } {
   const store: TaskStore = new Map();
-  const syncToTui = (): void => onSync(snapshot(store));
+  const source = randomUUID();
+  const syncToTui = (): void => onSync(snapshot(store, source));
 
   const taskCreate = defineTool({
     name: 'TaskCreate',

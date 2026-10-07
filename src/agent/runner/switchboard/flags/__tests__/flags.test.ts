@@ -3,7 +3,6 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { join, dirname } from 'node:path';
 import { describe, it, expect, vi } from 'vitest';
-import { PROGRAM_REGISTRY } from '@lib/programs/program-registry';
 import * as constants from '@shared/constants';
 import {
   DEFAULT_AGENT_MODEL,
@@ -17,6 +16,7 @@ import {
 } from '@shared/constants';
 import {
   areSeededTasksEnabled,
+  DEFAULT_BINDING,
   resolveBinding,
   resolveStageOverrides,
   type SwitchboardCtx,
@@ -26,7 +26,7 @@ import {
   ORCHESTRATOR_HARNESS_ROUTE,
 } from '@agent/runner/switchboard/flags/orchestrator';
 import { SELF_DRIVING_EXPERIMENT } from '@agent/runner/switchboard/flags/self-driving';
-import { runBindingCases } from './binding-cases';
+import { runBindingCases } from './binding-cases.no-jest';
 
 const envState = vi.hoisted(() => ({
   runSurface: 'local' as 'cloud' | 'local',
@@ -39,7 +39,6 @@ vi.mock('@env', async (importOriginal) => ({
 }));
 const setSurface = (s: 'cloud' | 'local') => (envState.runSurface = s);
 
-const PROGRAM_IDS = PROGRAM_REGISTRY.map((c) => c.id);
 const ORCH = WIZARD_ORCHESTRATOR_FLAG_KEY;
 const SD = WIZARD_SELF_DRIVING_USE_PI_HARNESS_FLAG_KEY;
 
@@ -259,72 +258,83 @@ describe('isolation — everything on at once', () => {
     ]),
   );
 
-  it('only the two covered programs move; each lands exactly on its own row', () => {
-    for (const program of PROGRAM_IDS) {
-      const ctx: SwitchboardCtx = { program, flags, flagPayloads };
-      const resolved = resolveBinding(ctx);
-      if (program === 'posthog-integration') {
-        expect(resolved).toEqual(ORCHESTRATOR_PI_DEFAULT);
-      } else if (program === 'self-driving') {
-        expect(resolved).toEqual({
-          sequence: Sequence.orchestrator, // from its own payload only
-          harness: Harness.pi,
-          model: GPT5_6_TERRA_MODEL,
-          thinkingLevel: 'high',
-        });
-      } else if (program === 'ai-observability') {
-        expect(resolved).toEqual({
+  it('only the two covered programs move; every other program keeps its own binding', () => {
+    for (const program of ['posthog-integration', 'self-driving']) {
+      const ctx: SwitchboardCtx = {
+        program,
+        binding: DEFAULT_BINDING,
+        flags,
+        flagPayloads,
+      };
+      expect(resolveBinding(ctx)).toEqual(
+        program === 'posthog-integration'
+          ? ORCHESTRATOR_PI_DEFAULT
+          : {
+              sequence: Sequence.orchestrator, // from its own payload only
+              harness: Harness.pi,
+              model: GPT5_6_TERRA_MODEL,
+              thinkingLevel: 'high',
+            },
+      );
+    }
+    // Uncovered programs land on their declared binding whatever the flags say.
+    const uncovered: Array<[SwitchboardCtx['binding'], object]> = [
+      [DEFAULT_BINDING, LINEAR_DEFAULT],
+      [
+        {
           sequence: Sequence.linear,
           harness: Harness.pi,
           model: GPT5_6_TERRA_MODEL,
           thinkingLevel: 'high',
-        });
-      } else if (program === 'metrics' || program === 'error-tracking') {
-        // Orchestrator + pi from their OWN bindings, not the flag; stage
-        // models are pinned context-mill side in the flow frontmatter.
-        expect(resolved).toEqual({
+        },
+        { ...LINEAR_DEFAULT, model: GPT5_6_TERRA_MODEL, thinkingLevel: 'high' },
+      ],
+      [
+        {
+          sequence: Sequence.orchestrator,
+          harness: Harness.pi,
+          model: DEFAULT_AGENT_MODEL,
+        },
+        {
           ...ORCHESTRATOR_PI_DEFAULT,
           model: DEFAULT_AGENT_MODEL,
           thinkingLevel: undefined,
-        });
-      } else if (program === 'error-tracking-upload-source-maps') {
-        // Pi + sol medium from its OWN binding, not the flag.
-        expect(resolved).toEqual({
-          sequence: Sequence.linear,
-          harness: Harness.pi,
-          model: GPT5_6_SOL_MODEL,
-          thinkingLevel: 'medium',
-        });
-      } else if (program === 'replay-vision') {
-        // Orchestrator from its OWN binding, not the flag — the
-        // wizard-orchestrator experiment does not cover this program, so it
-        // lands here whether the flag is on or off. Anthropic, not pi.
-        expect(resolved).toEqual({
-          ...LINEAR_DEFAULT,
+        },
+      ],
+      [
+        {
+          sequence: Sequence.orchestrator,
+          harness: Harness.anthropic,
+          model: DEFAULT_AGENT_MODEL,
+        },
+        {
           sequence: Sequence.orchestrator,
           harness: Harness.anthropic,
           model: DEFAULT_AGENT_MODEL,
           thinkingLevel: undefined,
-        });
-        expect(ctx.trace).toEqual({
-          harness: 'binding',
-          model: 'binding',
-          sequence: 'binding',
-        });
-      } else {
-        expect(resolved).toEqual(LINEAR_DEFAULT);
-        expect(ctx.trace).toEqual({
-          harness: 'binding',
-          model: 'binding',
-          sequence: 'binding',
-        });
-      }
+        },
+      ],
+    ];
+    for (const [binding, expected] of uncovered) {
+      const ctx: SwitchboardCtx = {
+        program: 'uncovered-program',
+        binding,
+        flags,
+        flagPayloads,
+      };
+      expect(resolveBinding(ctx)).toEqual(expected);
+      expect(ctx.trace).toEqual({
+        harness: 'binding',
+        model: 'binding',
+        sequence: 'binding',
+      });
     }
   });
 
   it('regression (2026-07-17): self-driving never rides the global orchestrator flag into the orchestrator', () => {
     const binding = resolveBinding({
       program: 'self-driving',
+      binding: DEFAULT_BINDING,
       flags: { [ORCH]: 'true', [SD]: 'true' },
       flagPayloads: { [SD]: { model: 'gpt-5-6-terra' } },
     });

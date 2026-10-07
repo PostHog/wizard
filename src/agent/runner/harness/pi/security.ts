@@ -20,7 +20,7 @@
 import fs from 'fs';
 import path from 'path';
 import type { LLMProvider, ScanMatch } from '@posthog/warlock';
-import { wizardCanUseTool } from '@agent/agent-interface';
+import { wizardCanUseTool } from '../../../agent-interface';
 import {
   createRepeatBlockTracker,
   isWizardDocumentationPath,
@@ -28,12 +28,12 @@ import {
   repeatBlockReason,
   scanAndTriage,
   type RepeatBlockTracker,
-} from '@agent/yara-hooks';
+} from '../../../yara-hooks';
 import {
   publishBlockingMatch,
   scanVerdict,
   type ScanContext,
-} from '@agent/yara-policy';
+} from '../../../yara-policy';
 import { logToFile } from '@utils/debug';
 import { analytics } from '@utils/analytics';
 
@@ -94,7 +94,15 @@ export function observeTransportLeak(tool: string, content: string): void {
   }
 }
 
+export const READ_ONLY_PI_TOOLS: ReadonlySet<string> = new Set([
+  'read',
+  'grep',
+  'find',
+  'ls',
+]);
+
 export interface ToolGateContext {
+  readOnly?: boolean;
   disallowedTools?: readonly string[];
   /** True while a wizard_ask overlay is open (interactive); blocks Write/Edit. */
   getWizardAskPending?: () => boolean;
@@ -368,6 +376,12 @@ export async function evaluateToolCall(
   llmProvider?: LLMProvider,
 ): Promise<GateDecision> {
   try {
+    if (ctx.readOnly && !READ_ONLY_PI_TOOLS.has(toolName)) {
+      return {
+        block: true,
+        reason: `Tool ${toolName} is disabled for read-only runs.`,
+      };
+    }
     const policy = toClaudePolicyCall(toolName, input);
     const decision = wizardCanUseTool(policy.name, policy.input, {
       disallowedTools: ctx.disallowedTools,

@@ -1,6 +1,6 @@
 import { rmSync } from 'node:fs';
-import { runMcpPromptViaSdk } from '@agent';
-import type { AgentChunk } from '@agent/types';
+import { streamMcpPrompt } from '@agent';
+import type { McpPromptChunk } from '@agent/types';
 import {
   configureGatewayCredentialsForCI,
   resetGatewaySession,
@@ -16,13 +16,15 @@ const { query } = vi.hoisted(() => ({
     >(),
 }));
 
-vi.mock('@anthropic-ai/claude-agent-sdk', () => ({ query }));
+vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
+  query: query as never,
+}));
 
 async function consume(
-  overrides: Partial<Parameters<typeof runMcpPromptViaSdk>[0]> = {},
-): Promise<AgentChunk[]> {
-  const chunks: AgentChunk[] = [];
-  for await (const chunk of runMcpPromptViaSdk({
+  overrides: Partial<Parameters<typeof streamMcpPrompt>[0]> = {},
+): Promise<McpPromptChunk[]> {
+  const chunks: McpPromptChunk[] = [];
+  for await (const chunk of streamMcpPrompt({
     prompt: 'List events',
     credentials: {
       accessToken: 'test-access-token',
@@ -81,6 +83,18 @@ describe('public agent prompt stream', () => {
       { kind: 'text', text: 'Found three events.' },
       { kind: 'done', sessionId: 'session-123' },
     ]);
+  });
+
+  it('runs no project hooks', async () => {
+    query.mockImplementation(function* () {
+      yield { type: 'result', subtype: 'success', session_id: 'session-123' };
+    });
+
+    await consume();
+
+    expect(query.mock.calls[0][0].options).toMatchObject({
+      settings: { disableAllHooks: true },
+    });
   });
 
   it('forwards an SDK stream failure after partial output', async () => {

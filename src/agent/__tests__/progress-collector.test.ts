@@ -1,4 +1,4 @@
-import { OutroKind } from '@lib/wizard-session';
+import { OutroKind } from '@shared/outro';
 import { createProgressCollector } from '../runner/shared/progress-collector';
 import { MAX_STATUS_MESSAGES } from '@shared/status-history';
 

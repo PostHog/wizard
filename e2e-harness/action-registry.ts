@@ -8,22 +8,39 @@
  * same store method the Ink screen's keyboard handler would.
  *
  * Discipline mirrors screen-registry.tsx: one entry per screen, kept exhaustive
- * by a test over the ScreenId/Overlay enums. No product knowledge leaks in —
+ * by a test over every screen the TUI mounts. No product knowledge leaks in —
  * actions speak only in store setters and generic params.
  */
 
-import type { WizardStore } from '@ui/tui/store';
-import { ScreenId, Overlay, type ScreenName } from '@ui/tui/router';
-import { McpOutcome, OutroKind } from '@lib/wizard-session';
-import type { AskAnswers } from '@lib/wizard-session';
+import {
+  AiObservabilityScreenId,
+  AuditScreenId,
+  ErrorTrackingScreenId,
+  McpScreenId,
+  MetricsScreenId,
+  MigrationScreenId,
+  Overlay,
+  PostHogIntegrationScreenId,
+  PosthogDoctorScreenId,
+  RevenueAnalyticsScreenId,
+  ScreenId,
+  SelfDrivingScreenId,
+  SkillScreenId,
+  SourceMapsScreenId,
+  WarehouseSourceScreenId,
+  type WizardStore,
+} from '@tui';
+import { McpOutcome } from '@shared/run-state';
+import { OutroKind } from '@shared/outro';
+import type { AskAnswers } from '@agent/types';
 import {
   SOURCE_MAPS_CONTEXT_KEYS,
   VARIANT_DISPLAY_NAME,
-} from '@lib/programs/error-tracking-upload-source-maps/index';
+} from '@programs/error-tracking-upload-source-maps';
 import {
   GITHUB_REQUIRED_BODY,
   GITHUB_REQUIRED_MESSAGE,
-} from '@lib/programs/self-driving/detect';
+} from '@programs/self-driving';
 
 /** One commit action legal on a given screen. */
 export interface DriverAction {
@@ -69,21 +86,21 @@ function requireString(
  *     and the no-dismiss terminal overlays.
  *   - screens of programs the integration e2e profile never enters (doctor).
  */
-export const NO_ACTION_SCREENS: ReadonlySet<ScreenName> = new Set<ScreenName>([
+export const NO_ACTION_SCREENS: ReadonlySet<string> = new Set<string>([
   ScreenId.Auth,
   ScreenId.Run,
   ScreenId.AiOptIn,
   ScreenId.Exit,
   // The agent advances the audit run, the same way it advances `run`.
-  ScreenId.AuditRun,
-  ScreenId.DoctorReport,
+  AuditScreenId.Run,
+  PosthogDoctorScreenId.Report,
   // The detector + picker are interactive; no headless e2e drives this screen.
-  ScreenId.SelfDrivingIntegrationDetect,
-  ScreenId.SelfDrivingIntegrationCheck,
-  ScreenId.SelfDrivingIntegrationDetect,
-  ScreenId.SelfDrivingHandoff,
+  SelfDrivingScreenId.IntegrationDetect,
+  SelfDrivingScreenId.IntegrationCheck,
+  SelfDrivingScreenId.IntegrationDetect,
+  SelfDrivingScreenId.Handoff,
   // The e2e host injects the pick, as it does for self-driving's detect screen.
-  ScreenId.ErrorTrackingDetect,
+  ErrorTrackingScreenId.Detect,
   Overlay.ManagedSettings,
   Overlay.AuthError,
   Overlay.SessionTimeout,
@@ -100,23 +117,23 @@ const confirmSetupAction: DriverAction = {
   apply: (store) => store.completeSetup(),
 };
 
-export const ACTION_REGISTRY: Partial<Record<ScreenName, DriverAction[]>> = {
+export const ACTION_REGISTRY: Partial<Record<string, DriverAction[]>> = {
   // ── Program intros — confirm & continue ───────────────────────────────
-  [ScreenId.Intro]: [confirmSetupAction],
-  [ScreenId.RevenueIntro]: [confirmSetupAction],
-  [ScreenId.SourceMapsIntro]: [confirmSetupAction],
-  [ScreenId.MigrationIntro]: [confirmSetupAction],
-  [ScreenId.AgentSkillIntro]: [confirmSetupAction],
-  [ScreenId.AiObservabilityIntro]: [confirmSetupAction],
-  [ScreenId.MetricsIntro]: [confirmSetupAction],
-  [ScreenId.ErrorTrackingIntro]: [confirmSetupAction],
-  [ScreenId.AuditIntro]: [confirmSetupAction],
-  [ScreenId.DoctorIntro]: [confirmSetupAction],
-  [ScreenId.WarehouseIntro]: [confirmSetupAction],
-  [ScreenId.SelfDrivingIntro]: [confirmSetupAction],
+  [PostHogIntegrationScreenId.Intro]: [confirmSetupAction],
+  [RevenueAnalyticsScreenId.Intro]: [confirmSetupAction],
+  [SourceMapsScreenId.Intro]: [confirmSetupAction],
+  [MigrationScreenId.Intro]: [confirmSetupAction],
+  [SkillScreenId.Intro]: [confirmSetupAction],
+  [AiObservabilityScreenId.Intro]: [confirmSetupAction],
+  [MetricsScreenId.Intro]: [confirmSetupAction],
+  [ErrorTrackingScreenId.Intro]: [confirmSetupAction],
+  [AuditScreenId.Intro]: [confirmSetupAction],
+  [PosthogDoctorScreenId.Intro]: [confirmSetupAction],
+  [WarehouseSourceScreenId.Intro]: [confirmSetupAction],
+  [SelfDrivingScreenId.Intro]: [confirmSetupAction],
 
   // ── Self-driving integration check ────────────────────────────────────
-  [ScreenId.SelfDrivingIntegrationCheck]: [
+  [SelfDrivingScreenId.IntegrationCheck]: [
     {
       id: 'set_integrate',
       description:
@@ -128,7 +145,7 @@ export const ACTION_REGISTRY: Partial<Record<ScreenName, DriverAction[]>> = {
   ],
 
   // ── Self-driving handoff (after the integration run) ───────────────────
-  [ScreenId.SelfDrivingHandoff]: [
+  [SelfDrivingScreenId.Handoff]: [
     {
       id: 'confirm_self_driving_handoff',
       description:
@@ -138,7 +155,7 @@ export const ACTION_REGISTRY: Partial<Record<ScreenName, DriverAction[]>> = {
   ],
 
   // ── Source-maps project pick + outro ───────────────────────────────────
-  [ScreenId.SourceMapsDetect]: [
+  [SourceMapsScreenId.Detect]: [
     {
       id: 'pick_source_maps_project',
       description:
@@ -168,7 +185,7 @@ export const ACTION_REGISTRY: Partial<Record<ScreenName, DriverAction[]>> = {
       },
     },
   ],
-  [ScreenId.SourceMapsOutro]: [
+  [SourceMapsScreenId.Outro]: [
     {
       id: 'dismiss_outro',
       description: 'Dismiss the source-maps outro (sets outroDismissed).',
@@ -209,7 +226,7 @@ export const ACTION_REGISTRY: Partial<Record<ScreenName, DriverAction[]>> = {
       apply: (store) => store.setOutroDismissed(),
     },
   ],
-  [ScreenId.AuditOutro]: [
+  [AuditScreenId.Outro]: [
     {
       id: 'dismiss_outro',
       description:
@@ -251,7 +268,7 @@ export const ACTION_REGISTRY: Partial<Record<ScreenName, DriverAction[]>> = {
       },
     },
   ],
-  [ScreenId.McpAdd]: [
+  [McpScreenId.Add]: [
     {
       id: 'set_mcp_outcome',
       description: 'Complete the standalone MCP-add flow.',
@@ -264,7 +281,7 @@ export const ACTION_REGISTRY: Partial<Record<ScreenName, DriverAction[]>> = {
       },
     },
   ],
-  [ScreenId.McpRemove]: [
+  [McpScreenId.Remove]: [
     {
       id: 'set_mcp_outcome',
       description: 'Complete the standalone MCP-remove flow.',
@@ -277,7 +294,7 @@ export const ACTION_REGISTRY: Partial<Record<ScreenName, DriverAction[]>> = {
       },
     },
   ],
-  [ScreenId.McpSuggestedPrompts]: [
+  [McpScreenId.SuggestedPrompts]: [
     {
       id: 'dismiss',
       description: 'Dismiss the suggested-prompts step.',
@@ -286,7 +303,7 @@ export const ACTION_REGISTRY: Partial<Record<ScreenName, DriverAction[]>> = {
   ],
 
   // ── Slack ─────────────────────────────────────────────────────────────
-  [ScreenId.SelfDrivingGithub]: [
+  [SelfDrivingScreenId.Github]: [
     {
       id: 'set_github_connected',
       description: 'Resolve the GitHub App connection check',
@@ -397,6 +414,6 @@ export const ACTION_REGISTRY: Partial<Record<ScreenName, DriverAction[]>> = {
 };
 
 /** Actions legal on the given screen — empty array if none. */
-export function actionsForScreen(screen: ScreenName): DriverAction[] {
+export function actionsForScreen(screen: string): DriverAction[] {
   return ACTION_REGISTRY[screen] ?? [];
 }

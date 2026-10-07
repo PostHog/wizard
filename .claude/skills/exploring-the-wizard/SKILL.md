@@ -9,7 +9,7 @@ compatibility:
   wizard-ci MCP server.
 metadata:
   author: posthog
-  version: '5.0'
+  version: '5.0.1'
 ---
 
 # Exploring the wizard as an agent
@@ -87,8 +87,8 @@ own decisions through the same state and action contract.
    answer them.
 5. Check `runPhase` (`idle`, `running`, `completed`, `error`), background
    status, and the rendered outro. On error, capture the frame and reason before
-   dismissing it. An error outro can wait for dismissal while `integration`
-   still says `running`; a host exit can instead surface as a socket error.
+   dismissing it. `integration` says `failed` once the run's phase is `error`;
+   a host exit can instead surface as a socket error.
 6. After successful agent completion, finish the offered outro and follow-up
    actions. For the integration flow, `session.skillsComplete` marks the tail's
    completion. Other programs can have a terminal outro or exit screen.
@@ -125,9 +125,10 @@ directories such as `vendor`, `venv`, `Pods`, `build`, and `dist`. Verify a
 failed copy before treating null detection as a regression; remove throwaway
 copies after recording their results.
 
-The shared log is `/tmp/posthog-wizard.log`. Record its byte count before a run
+The shared log is `/tmp/posthog-wizard.log` unless the server's environment sets
+`POSTHOG_WIZARD_LOG_FILE`. Record its byte count before a run
 and read from that count plus one afterward. Run sweeps serially so their logs
 remain attributable. `read_state` omits `frameworkContext`; an empty
 `setupQuestions` list alone does not prove a router mode. When necessary,
-inspect the detector under [`src/frameworks/`](../../../src/frameworks/) against
+inspect the detector under [`src/programs/frameworks/`](../../../src/programs/frameworks/) against
 the same fixture.

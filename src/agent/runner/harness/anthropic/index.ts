@@ -4,12 +4,13 @@ import { Harness } from '@shared/constants';
 import {
   initializeAgent,
   runAgent as executeAgent,
-} from '@agent/agent-interface';
-import { createAioCapture } from '@agent/aio-capture';
+} from '../../../agent-interface';
+import { createAioCapture } from '../../../aio-capture';
 import { getLogFilePath, logToFile } from '@utils/debug';
 import { detectNodePackageManagers } from '@utils/package-manager';
-import { runOptions } from '@agent/runner/shared/bootstrap';
-import { createEmitLog } from '@agent/runner/shared/progress-collector';
+import { runOptions } from '../../shared/bootstrap';
+import { currentAccessToken } from '@shared/oauth-session';
+import { createEmitLog } from '../../shared/progress-collector';
 import type {
   AgentResult,
   AgentHarness,
@@ -31,6 +32,7 @@ export const anthropicBackend: AgentHarness = {
       askBridge,
       middleware,
       model,
+      structured,
     } = inputs;
     const config = runConfig.run;
     const { skillsBaseUrl, credentials, wizardFlags, wizardMetadata } = boot;
@@ -44,12 +46,13 @@ export const anthropicBackend: AgentHarness = {
       runTags: wizardMetadata,
     });
 
-    log.step('Initializing Claude agent...');
+    if (!structured) log.step('Initializing Claude agent...');
     const agent = await initializeAgent(
       {
         workingDirectory: input.installDir,
         posthogMcpUrl: host.mcpUrl,
         posthogApiKey: accessToken,
+        currentPosthogApiKey: () => currentAccessToken(credentials),
         host,
         additionalMcpServers: config.additionalMcpServers,
         detectPackageManager:
@@ -62,16 +65,23 @@ export const anthropicBackend: AgentHarness = {
         askBridge,
         getPendingQuestion: askBridge?.getPendingQuestion,
         askMaxQuestions: config.maxQuestions,
+        readOnly: config.readOnly,
         allowedTools: runConfig.allowedTools,
         disallowedTools: runConfig.disallowedTools,
         modelOverride: model,
+        outputFormat: structured && {
+          type: 'json_schema',
+          schema: structured.schema,
+        },
         capture,
         emit,
       },
       runOptions(input),
     );
-    log.step(`Verbose logs: ${getLogFilePath()}`);
-    log.success("Agent initialized. Let's get cooking!");
+    if (!structured) {
+      log.step(`Verbose logs: ${getLogFilePath()}`);
+      log.success("Agent initialized. Let's get cooking!");
+    }
     logToFile('[agent-runner] agent initialized');
 
     return executeAgent(
@@ -80,15 +90,16 @@ export const anthropicBackend: AgentHarness = {
       runOptions(input),
       spinner,
       {
+        timeoutMs: structured?.timeoutMs,
         estimatedDurationMinutes: config.estimatedDurationMinutes,
         spinnerMessage: config.spinnerMessage,
         successMessage: config.successMessage,
         errorMessage:
           config.errorMessage ?? `${config.integrationLabel} failed`,
-        additionalFeatureQueue: config.additionalFeatureQueue ?? [],
         abortCases: config.abortCases,
         emitStepEvents: config.trackStepProgress ?? false,
         resolveStepKey: config.resolveStepKey,
+        requestRemark: structured ? false : config.requestRemark,
         triageProvider: boot.triageProvider,
       },
       middleware,
@@ -111,7 +122,6 @@ export const anthropicBackend: AgentHarness = {
       spinnerMessage,
       successMessage,
       errorMessage,
-      additionalFeatureQueue,
       requestRemark,
       analyticsProperties,
     } = inputs;
@@ -132,6 +142,7 @@ export const anthropicBackend: AgentHarness = {
         workingDirectory: input.installDir,
         posthogMcpUrl: boot.credentials.host.mcpUrl,
         posthogApiKey: boot.credentials.accessToken,
+        currentPosthogApiKey: () => currentAccessToken(boot.credentials),
         host: boot.credentials.host,
         detectPackageManager: detectNodePackageManagers,
         skillsBaseUrl: boot.skillsBaseUrl,
@@ -159,7 +170,6 @@ export const anthropicBackend: AgentHarness = {
         spinnerMessage,
         successMessage,
         errorMessage,
-        additionalFeatureQueue,
         requestRemark,
         analyticsProperties,
       },
