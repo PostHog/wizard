@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
-import { buildRegistry, parseAgentPrompt } from '@agent/agent-prompt-loader';
+import { buildRegistry, parseAgentPrompt } from '@agent';
 import { Integration } from '@shared/constants';
 import { detectFramework } from '@programs/detection/framework';
 import { gatherFrameworkContext } from '@programs/detection/context';

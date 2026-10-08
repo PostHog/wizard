@@ -10,7 +10,9 @@ import { FeatureFlagsIntroScreen } from './screens/FeatureFlagsIntroScreen.js';
 export { FeatureFlagsScreenId } from './screen-ids.js';
 
 const FEATURE_FLAGS_FLOW: FlowStep[] = AGENT_SKILL_STEPS.map((step) =>
-  step.id === 'intro' ? { ...step, screenId: FeatureFlagsScreenId.Intro } : step,
+  step.id === 'intro'
+    ? { ...step, screenId: FeatureFlagsScreenId.Intro }
+    : step,
 );
 
 export const TUI_PROGRAMS: TuiPrograms = {

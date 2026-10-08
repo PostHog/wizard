@@ -22,8 +22,7 @@ export const config: ProgramConfig = {
   command: 'feature-flags',
   description: 'Set up example PostHog feature flags',
   id: 'feature-flags',
-  // Orchestrator on pi. The binding routes only; every stage's model and
-  // effort are pinned in the bundled prompts.
+  // Routes only; each stage's model and effort are pinned in the bundled prompts.
   binding: {
     sequence: Sequence.orchestrator,
     harness: Harness.pi,
@@ -31,8 +30,7 @@ export const config: ProgramConfig = {
   },
   agentFlow: 'feature-flags',
   agentPrompts: FEATURE_FLAGS_PROMPTS,
-  // Detect the framework before the intro, which blocks Continue until a
-  // supported framework is found.
+  // The intro blocks Continue until a supported framework is detected.
   onReady: (ctx) => detectPostHogIntegration(ctx),
   oauthScopeAdditions: FEATURE_FLAGS_SCOPE_ADDITIONS,
   reportFile: FEATURE_FLAGS_REPORT_FILE,
@@ -53,9 +51,7 @@ export const config: ProgramConfig = {
     }),
   },
 
-  // The headless equivalent of `onReady`, as in posthog-integration: scope
-  // the install dir to the project, detect the framework, gather its context,
-  // and run the flow's tasks against the detected framework's skills.
+  // Headless `onReady`, as in posthog-integration, with the framework as the skill id.
   ciPreRun: async (
     session: ProgramSession,
     runner: CiRunnerContext,

@@ -81,6 +81,7 @@ describe('program bindings', () => {
       'self-driving': linearOnSol,
       'error-tracking-upload-source-maps': linearOnSol,
       'error-tracking': orchestratorOnPi,
+      'feature-flags': orchestratorOnPi,
       'agent-skill': linearOnSol,
     });
   });
