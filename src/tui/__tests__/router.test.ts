@@ -240,26 +240,14 @@ describe('WizardRouter', () => {
       view.mcpComplete = true;
       view.mcpOutcome = McpOutcome.Skipped;
 
-      // Skipped → tutorial step is hidden, so the only visible
-      // step (mcp-add) is complete and the program resolves to Exit.
       expect(router.resolve(view)).toBe(ScreenId.Exit);
     });
 
-    it('advances to McpSuggestedPrompts after a successful install', () => {
+    it('exits after a successful install', () => {
       const router = new WizardRouter(Tool.McpAdd);
       const view = baseView();
       view.mcpComplete = true;
       view.mcpOutcome = McpOutcome.Installed;
-
-      expect(router.resolve(view)).toBe(McpScreenId.SuggestedPrompts);
-    });
-
-    it('exits once the tutorial step is dismissed', () => {
-      const router = new WizardRouter(Tool.McpAdd);
-      const view = baseView();
-      view.mcpComplete = true;
-      view.mcpOutcome = McpOutcome.Installed;
-      view.mcpSuggestedPromptsDismissed = true;
 
       expect(router.resolve(view)).toBe(ScreenId.Exit);
     });

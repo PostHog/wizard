@@ -98,12 +98,12 @@ export const RunScreen = ({ store }: RunScreenProps) => {
       label: 'Tail logs',
       component: <LogViewer filePath={getLogFilePath()} />,
     },
+    { id: 'hn', label: 'HN', component: <HNViewer /> },
     {
       id: 'visualizer',
       label: 'Visualizer',
       component: <VisualizerTab store={store} />,
     },
-    { id: 'hn', label: 'HN', component: <HNViewer /> },
   ];
 
   return (

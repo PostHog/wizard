@@ -1255,35 +1255,11 @@ describe('WizardStore', () => {
       expect(store.analyticsProgramId).toBe(Tool.McpAdd);
     });
 
-    it('reports mcp-tutorial for the tutorial step hosted inside mcp-add', () => {
-      const store = createStore(Tool.McpAdd);
-      store.setMcpComplete(McpOutcome.Installed);
-      store.setSlackStepDismissed();
-
-      expect(store.currentScreen).toBe(McpScreenId.SuggestedPrompts);
-      expect(store.analyticsProgramId).toBe(Tool.McpTutorial);
-    });
-
     it('reports mcp-tutorial for the same step run standalone', () => {
       const store = createStore(Tool.McpTutorial);
 
       expect(store.currentScreen).toBe(McpScreenId.SuggestedPrompts);
       expect(store.analyticsProgramId).toBe(Tool.McpTutorial);
-    });
-
-    it('stamps the tutorial program id on the screen transition event', () => {
-      const store = createStore(Tool.McpAdd);
-      // Prime the transition detector: the first emit has no previous
-      // screen, so it records the starting one without firing an event.
-      store.emitChange();
-
-      store.setMcpComplete(McpOutcome.Installed);
-      store.setSlackStepDismissed();
-
-      expect(wizardCaptureMock).toHaveBeenCalledWith(
-        `screen ${McpScreenId.SuggestedPrompts}`,
-        expect.objectContaining({ program_id: Tool.McpTutorial }),
-      );
     });
   });
 

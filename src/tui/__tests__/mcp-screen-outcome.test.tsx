@@ -41,6 +41,11 @@ const installer: McpInstaller = {
   installPlugins: () => Promise.resolve([]),
 };
 
+const ENTER = '\r';
+const DOWN = '\u001B[B';
+const ESC = '\u001B';
+const tick = () => new Promise((r) => setTimeout(r, 20));
+
 const mcpCompleteCalls = () =>
   wizardCapture.mock.calls.filter(([event]) => event === 'mcp complete');
 
@@ -73,8 +78,12 @@ it('reports an install once, as its results show, before Enter', async () => {
   const { stdin, lastFrame } = render(
     <McpScreen store={store} installer={installer} />,
   );
-  await vi.waitFor(() => expect(lastFrame()).toContain('Detected: Cursor'));
-  stdin.write('\r');
+  await vi.waitFor(() => expect(lastFrame()).toContain('Select clients'));
+  // Tick Cursor, then move onto Confirm.
+  for (const key of [ENTER, DOWN, ENTER]) {
+    stdin.write(key);
+    await tick();
+  }
   await vi.waitFor(() => expect(lastFrame()).toContain('Press enter'));
 
   expect(mcpCompleteCalls()).toEqual([
@@ -87,6 +96,21 @@ it('reports an install once, as its results show, before Enter', async () => {
     ],
   ]);
   expect(store.mcpComplete).toBe(false);
+});
+
+it('skips the install on esc from the client picker', async () => {
+  const store = new WizardStore(Tool.McpAdd);
+  store.session = buildSession({ installDir: '/app' });
+  const install = vi.fn<McpInstaller['install']>(() => Promise.resolve([]));
+  const { stdin, lastFrame } = render(
+    <McpScreen store={store} installer={{ ...installer, install }} />,
+  );
+  await vi.waitFor(() => expect(lastFrame()).toContain('Select clients'));
+  await tick();
+  stdin.write(ESC);
+  await vi.waitFor(() => expect(store.mcpComplete).toBe(true));
+  expect(store.mcpOutcome).toBe(McpOutcome.Skipped);
+  expect(install).not.toHaveBeenCalled();
 });
 
 it('reports a failed detection once, as its error shows, before Enter', async () => {

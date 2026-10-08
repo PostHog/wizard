@@ -4,12 +4,12 @@
 
  Install the MCP so you can chat to your data
 
- • Ask your agent: "List my feature flags" — and it does.
- • Run SQL, build dashboards, ship flags, all from your IDE.
- • No copy-pasting tokens or context. Your agent has the keys.
+ Ask your agent: "List my feature flags" — and it does.
+ Run SQL, build dashboards, ship flags, all from your IDE.
 
- Detected: Claude Code, Cursor
+  Select clients to install the PostHog MCP server and plugin
 
-  Install the PostHog MCP server and plugin?
+   ◻ Claude Code (plugin)
+   ◻ Cursor (MCP)
 
-   ▸ Install    No thanks
+     Confirm

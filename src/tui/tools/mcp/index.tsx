@@ -5,13 +5,23 @@ import { MCP_ADD_FLOW, MCP_REMOVE_FLOW, MCP_TUTORIAL_FLOW } from './flow.js';
 import { McpScreenId } from './screen-ids.js';
 import { McpSuggestedPromptsScreen } from './screens/McpSuggestedPromptsScreen.js';
 import { createMcpSuggestedPromptsServices } from './services/suggested-prompts.js';
+import { getRolePrompts } from './services/mcp-role-prompts.js';
 
 export { McpScreenId } from './screen-ids.js';
 export type { McpSuggestedPromptsServices } from './services/suggested-prompts.js';
 
 const screens: TuiTool['screens'] = {
   [McpScreenId.Add]: (store, services) => (
-    <McpScreen store={store} installer={services.mcpInstaller} />
+    <McpScreen
+      store={store}
+      installer={services.mcpInstaller}
+      samplePrompts={getRolePrompts(
+        store.session.roleAtOrganization,
+        store.session.integration,
+      )
+        .slice(0, 3)
+        .map((p) => p.prompt)}
+    />
   ),
   [McpScreenId.Remove]: (store, services) => (
     <McpScreen store={store} installer={services.mcpInstaller} mode="remove" />
