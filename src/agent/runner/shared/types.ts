@@ -22,6 +22,7 @@ import type { EffortLevel } from '../switchboard/models';
 import type { ProgramBinding, SwitchboardCtx } from '../switchboard';
 import type { TranscriptTail } from './transcript-tail';
 import { RunOutcome } from '@shared/run-state';
+import type { TaskOutcome } from '../sequence/orchestrator/queue';
 
 export type { PromptContext, Credentials };
 
@@ -120,6 +121,10 @@ export interface SeedTaskEntry {
  * passed alongside the session before.
  */
 export interface RunHooks {
+  prepareOutro?: (
+    credentials: Credentials,
+    context: ProgramCompletionContext,
+  ) => Promise<void>;
   /** Runs after the agent completes, before the outro (linear only). */
   postRun?: (credentials: Credentials) => Promise<void>;
   /** Custom outro data (linear only). Omit for the default outro. */
@@ -134,6 +139,29 @@ export interface RunHooks {
     outcomes: import('../sequence/orchestrator/queue').TaskOutcome[],
   ) => void;
 }
+
+export type ProgramInvocation = 'interactive' | 'noninteractive' | 'unknown';
+
+export type CompletionTaskOutcomes =
+  | {
+      readonly kind: 'available';
+      readonly outcomes: readonly Readonly<TaskOutcome>[];
+    }
+  | {
+      readonly kind: 'unavailable';
+      readonly reason: 'linear' | 'invalid' | 'limit';
+    };
+
+export type ProgramCompletionContext = {
+  readonly signal: AbortSignal;
+  readonly invocation: ProgramInvocation;
+  readonly sequence: Sequence;
+  readonly programId: string;
+  readonly skillId: string | undefined;
+  readonly composed: boolean;
+  readonly structured: boolean;
+  readonly taskOutcomes: CompletionTaskOutcomes;
+};
 
 /** The run-level routing decision. */
 export interface ResolvedBinding {
@@ -234,6 +262,7 @@ export interface RunFlags {
  * agent never refreshes these from a higher layer.
  */
 export interface RunInput {
+  invocation?: ProgramInvocation;
   installDir: string;
   /** Resolved credentials, including the host family and its MCP url. */
   credentials: Credentials;

@@ -12,6 +12,11 @@
  */
 import { failed } from '../../shared/errors';
 import { RunOutcome } from '../../shared/types';
+import type { CompletionTaskOutcomes } from '../../shared/types';
+import {
+  completionTaskOutcomes,
+  prepareProgramOutro,
+} from '../../shared/program-completion';
 import { randomUUID } from 'crypto';
 import {
   cpSync,
@@ -593,7 +598,7 @@ export async function runOrchestrator(
   context: SequenceContext,
 ): Promise<SequenceResult> {
   const controller = new AbortController();
-  const abortFromHost = () => controller.abort();
+  const abortFromHost = () => controller.abort(context.signal?.reason);
   context.signal?.addEventListener('abort', abortFromHost, { once: true });
   if (context.signal?.aborted) abortFromHost();
   let cleaned = false;
@@ -1330,6 +1335,10 @@ async function executeOrchestrator(
   }
 
   let fatal: RunTaskFatal | undefined;
+  let completionOutcomes: CompletionTaskOutcomes = Object.freeze({
+    kind: 'unavailable',
+    reason: 'invalid',
+  });
   try {
     await drainQueue(store, runTask, {
       ...DEFAULT_DRAIN_OPTIONS,
@@ -1341,13 +1350,13 @@ async function executeOrchestrator(
     fatal = error;
   } finally {
     // The queue file is wiped below; the e2e harness reads outcomes from here.
-    config.hooks?.recordTaskOutcomes?.(
-      store.list().map((t) => ({
-        type: t.type,
-        status: t.status,
-        optional: t.optional === true,
-      })) satisfies TaskOutcome[],
-    );
+    const outcomes = store.list().map((t) => ({
+      type: t.type,
+      status: t.status,
+      optional: t.optional === true,
+    })) satisfies TaskOutcome[];
+    completionOutcomes = completionTaskOutcomes(outcomes);
+    config.hooks?.recordTaskOutcomes?.(outcomes);
     try {
       if (!signal?.aborted && referenceSkillId && referenceInstallPath) {
         promoteReferenceSkill(
@@ -1493,34 +1502,44 @@ async function executeOrchestrator(
     });
   }
 
-  // A failed optional step leaves the denominator and is named instead.
-  const optionalFailedCount = verdict.optionalFailedTypes.length;
-  const stepNotes = [
-    notRequired > 0 ? `${notRequired} skipped as not required` : '',
-    optionalFailedCount > 0
-      ? `${optionalFailedCount} optional step failed`
-      : '',
-  ].filter(Boolean);
-  const message = conflict
-    ? 'PostHog set up, with one conflict to review.'
-    : `PostHog set up: ${summary.done}/${
-        summary.total - notRequired - optionalFailedCount
-      } steps completed${
-        stepNotes.length > 0 ? ` (${stepNotes.join(', ')})` : ''
-      }.`;
-  const outro = {
-    kind: OutroKind.Success,
-    message,
-    body: conflict
-      ? `⚠ Build conflict: ${conflict}\nFull details are in the setup report.`
-      : undefined,
-    docsUrl: 'https://posthog.com/docs/ai-engineering/ai-wizard',
-    nextSteps: config.hooks?.buildOutroNextSteps?.(
-      boot.credentials,
-      completedSeededTypes(store, seededTasks),
-    ),
-  };
-  emit({ kind: 'completion', outro });
-  emit({ kind: 'lifecycle', phase: 'completed', message });
-  return { outcome: RunOutcome.Success, outro };
+  if (signal?.aborted) return cancelledRun();
+  const closeCompletion = await prepareProgramOutro(
+    { config, input, boot, emit, interaction, signal },
+    completionOutcomes,
+  );
+  try {
+    if (signal?.aborted) return cancelledRun();
+    // A failed optional step leaves the denominator and is named instead.
+    const optionalFailedCount = verdict.optionalFailedTypes.length;
+    const stepNotes = [
+      notRequired > 0 ? `${notRequired} skipped as not required` : '',
+      optionalFailedCount > 0
+        ? `${optionalFailedCount} optional step failed`
+        : '',
+    ].filter(Boolean);
+    const message = conflict
+      ? 'PostHog set up, with one conflict to review.'
+      : `PostHog set up: ${summary.done}/${
+          summary.total - notRequired - optionalFailedCount
+        } steps completed${
+          stepNotes.length > 0 ? ` (${stepNotes.join(', ')})` : ''
+        }.`;
+    const outro = {
+      kind: OutroKind.Success,
+      message,
+      body: conflict
+        ? `⚠ Build conflict: ${conflict}\nFull details are in the setup report.`
+        : undefined,
+      docsUrl: 'https://posthog.com/docs/ai-engineering/ai-wizard',
+      nextSteps: config.hooks?.buildOutroNextSteps?.(
+        boot.credentials,
+        completedSeededTypes(store, seededTasks),
+      ),
+    };
+    emit({ kind: 'completion', outro });
+    emit({ kind: 'lifecycle', phase: 'completed', message });
+    return { outcome: RunOutcome.Success, outro };
+  } finally {
+    closeCompletion();
+  }
 }

@@ -193,7 +193,7 @@ async function main(
 
     const result = await runProgram(
       config.id,
-      { store, config },
+      { store, config, invocation: 'noninteractive' },
       {
         credentials,
         onProgress: logProgress(log),

@@ -4,11 +4,19 @@
  * `runProgram` binds them to the session and hands the agent `RunConfig.hooks`.
  */
 
-import type { AgentRunDefinition } from '@agent/types';
+import type {
+  AgentRunDefinition,
+  ProgramCompletionContext,
+} from '@agent/types';
 import type { Credentials } from '@shared/api';
 import type { ProgramSession } from './program-session';
 
 export interface ProgramRun extends AgentRunDefinition {
+  prepareOutro?: (
+    session: ProgramSession,
+    credentials: Credentials,
+    context: ProgramCompletionContext,
+  ) => Promise<void>;
   /** Runs after agent completes, before outro (e.g. env var upload). */
   postRun?: (
     session: ProgramSession,

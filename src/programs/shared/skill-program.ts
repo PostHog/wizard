@@ -43,6 +43,7 @@ export interface SkillProgramOptions {
   estimatedDurationMinutes: number;
   /** Other program ids that must be satisfied first */
   requires?: string[];
+  prepareOutro?: ProgramRun['prepareOutro'];
   /** Override the default outro. Receives the same args as ProgramRun.buildOutroData. */
   buildOutroData?: ProgramRun['buildOutroData'];
   /** Known `[ABORT] <reason>` cases the skill can emit. */
@@ -65,6 +66,7 @@ export function createSkillProgram(opts: SkillProgramOptions): ProgramConfig {
       docsUrl: opts.docsUrl,
       spinnerMessage: opts.spinnerMessage,
       estimatedDurationMinutes: opts.estimatedDurationMinutes,
+      prepareOutro: opts.prepareOutro,
       buildOutroData: opts.buildOutroData,
       abortCases: opts.abortCases,
     },

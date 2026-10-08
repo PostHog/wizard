@@ -149,6 +149,7 @@ it('keeps a run a success when its terminal analytics flush fails', async () => 
   vi.mocked(analytics.shutdown).mockRejectedValueOnce(flushError);
   const { store } = screens();
   await runProgramOnScreens(program(), store, { credentials });
+  expect(vi.mocked(runProgram).mock.calls[0][1].invocation).toBe('interactive');
   expect(wizardAbort).not.toHaveBeenCalled();
   expect(store.session.outroData?.kind).toBe(OutroKind.Success);
   expect(logToFile).toHaveBeenCalledWith(

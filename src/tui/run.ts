@@ -330,7 +330,7 @@ export async function runProgramOnScreens(
     });
   const result = await runProgram(
     config.id,
-    { store: store.sessions, config },
+    { store: store.sessions, config, invocation: 'interactive' },
     {
       credentials: {
         resolve: (programId, context) =>

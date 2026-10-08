@@ -55,6 +55,7 @@ signatures.
 | Surface                                | Current consumer                                               |
 | -------------------------------------- | -------------------------------------------------------------- |
 | `customPrompt`, `abortCases`           | Linear prompt assembly and abort handling                      |
+| `prepareOutro(session, credentials, context)` | Awaited optional preparation before both success outros; interactive, non-composed, non-structured runs only |
 | `postRun(session, credentials)`        | Linear success path, before outro                              |
 | `buildOutroData(session, credentials)` | Linear custom outro; otherwise defaults from run metadata      |
 | `buildOutroNextSteps(session, ...)`    | Orchestrated outro bullets                                     |

@@ -29,13 +29,14 @@ import { createEmitSpinner } from '../shared/progress-collector';
 import { createAskBridge } from '../shared/ask';
 import { withTranscript } from '../shared/transcript-tail';
 import { getHarness } from '../switchboard';
+import { prepareProgramOutro } from '../shared/program-completion';
 
 export async function runLinearProgram(
   context: SequenceContext,
 ): Promise<SequenceResult> {
   // Aborts on the caller's signal or when the run ends, so no ask outlives it.
   const controller = new AbortController();
-  const abortFromHost = () => controller.abort();
+  const abortFromHost = () => controller.abort(context.signal?.reason);
   context.signal?.addEventListener('abort', abortFromHost, { once: true });
   if (context.signal?.aborted) abortFromHost();
   try {
@@ -316,23 +317,37 @@ async function executeLinear(
     return { outcome: RunOutcome.Success };
   }
 
-  // 11. Outro
-  const outroData: OutroData | undefined = config.hooks?.buildOutroData
-    ? config.hooks.buildOutroData(credentials)
-    : {
-        kind: OutroKind.Success,
-        message: run.successMessage,
-        reportFile: run.reportFile,
-        docsUrl: run.docsUrl,
-        continueUrl: input.flags.signup
-          ? `${host.appHost}/products?source=wizard`
-          : undefined,
-      };
-  if (outroData) {
-    emit({ kind: 'completion', outro: outroData });
+  if (signal?.aborted) return aborted();
+  const closeCompletion = await prepareProgramOutro(
+    { config, input, boot, emit, interaction, signal },
+    Object.freeze({ kind: 'unavailable', reason: 'linear' }),
+  );
+  try {
+    if (signal?.aborted) return aborted();
+    // 11. Outro
+    const outroData: OutroData | undefined = config.hooks?.buildOutroData
+      ? config.hooks.buildOutroData(credentials)
+      : {
+          kind: OutroKind.Success,
+          message: run.successMessage,
+          reportFile: run.reportFile,
+          docsUrl: run.docsUrl,
+          continueUrl: input.flags.signup
+            ? `${host.appHost}/products?source=wizard`
+            : undefined,
+        };
+    if (outroData) {
+      emit({ kind: 'completion', outro: outroData });
+    }
+
+    emit({
+      kind: 'lifecycle',
+      phase: 'completed',
+      message: run.successMessage,
+    });
+
+    return { outcome: RunOutcome.Success, outro: outroData };
+  } finally {
+    closeCompletion();
   }
-
-  emit({ kind: 'lifecycle', phase: 'completed', message: run.successMessage });
-
-  return { outcome: RunOutcome.Success, outro: outroData };
 }

@@ -1,6 +1,11 @@
 /** The `runProgram` contract: what a caller passes in, the capabilities it may supply, and what comes back. */
 import type { RunOutcome } from '@shared/run-state';
-import type { AgentInteraction, AgentProgress, RunResult } from '@agent/types';
+import type {
+  AgentInteraction,
+  AgentProgress,
+  RunResult,
+  ProgramInvocation,
+} from '@agent/types';
 import type { SettingsConflict } from '@shared/claude-settings';
 import type { WizardReadinessResult } from '@shared/health-checks/readiness';
 import type {
@@ -18,6 +23,7 @@ export type WizardFlagSnapshot = {
 
 /** What one invocation runs on. The caller owns the store; `runProgram` writes the run into it. */
 export interface ProgramInput {
+  invocation?: ProgramInvocation;
   store: SessionStore; // launch values, detection results and run state
   config?: Partial<ProgramConfig>; // laid over the registered config
   credentials?: ResolvedProgramCredentials; // a login you hold; else the store's, else options.credentials

@@ -87,6 +87,7 @@ export const signature: (
 | `input.wizardFlags`, `input.wizardFlagPayloads` | `Record` | A flag snapshot. Without `wizardFlags` the run calls `options.featureFlags`, if you pass it. |
 | `input.runId` | `string` | Labels the program's own agent run in progress events. Generated when absent. |
 | `input.composed` | `boolean` | A run inside another's: its caller writes the outro. `runProgram` still settles the phase. |
+| `input.invocation` | `'interactive' \| 'noninteractive' \| 'unknown'` | The host's explicit invocation classification. Omitted values default to `unknown`. |
 | [`options`](../src/programs/program-input.ts)                | `ProgramOptions`    | The login, the answerer, the workflow, flags, progress and cancellation.         |
 | `options.credentials` | `CredentialsProvider` | Resolves the login when neither `input` nor the store has one. |
 | `options.interaction` | `AgentInteraction` | Answers the agent's questions and notices. Absent, the agent asks nothing. |
@@ -101,6 +102,35 @@ in. Don't log or serialize its credentials.
 
 A `ci` or `signup` session skips the AI-processing approval. Set them only
 when consent is already settled.
+
+### Preparing the success outro
+
+`ProgramRun.prepareOutro(session, credentials, context)` is an optional async
+hook bound through `runProgram`. Both sequences await it after establishing
+success and before their synchronous outro builders. Linear awaits its existing
+`postRun` first; orchestration never calls `postRun` or `buildOutroData`.
+`createSkillProgram` accepts the same optional `prepareOutro` hook.
+
+Only explicitly interactive, non-composed, non-structured runs invoke this hook.
+CI and headless runs omit it. The TUI forwards `interactive`, the headless host
+forwards `noninteractive`, and other callers default to `unknown`.
+
+The readonly `ProgramCompletionContext` from `@agent/types` carries the resolved
+sequence, invocation, program and skill identities, composition and structured
+state, and an effective signal linked to host cancellation. Its `taskOutcomes`
+snapshot contains only type, status and optionality from the drained in-memory
+queue. At most 64 entries with 128 characters per type are available. Invalid or
+oversized snapshots explicitly report `unavailable`; linear reports
+`unavailable` with reason `linear`.
+
+The hook has four seconds to settle. Rejection or timeout preserves the primary
+success and its outro. Host cancellation returns the existing aborted result and
+suppresses success output. Successful settlement retires the deadline; the
+effective signal stays active through the immediate synchronous outro decision,
+then aborts. Rejection, timeout or cancellation ends it immediately. Check this
+signal before committing prepared state or starting effects, since an
+uncooperative callback can continue after its lifetime ends. Reports and
+notebook mirrors published by the agent remain unchanged.
 
 ### The session store
 
@@ -250,7 +280,7 @@ pre-issued one in `input.credentials.gateway`, as the quack example does.
 | `config.wizardFlags`, `config.wizardFlagPayloads` | `Record` | The flag snapshot the caller evaluated. Empty when there are no flags. |
 | `config.allowedTools`                                                | `readonly string[]`  | Tools added to the base tools.                                                  |
 | `config.disallowedTools`                                             | `readonly string[]`  | Tools removed from the base tools.                                              |
-| `config.hooks` | `RunHooks` | The caller's completion hooks: `postRun`, the outro builders and `recordTaskOutcomes`. |
+| `config.hooks` | `RunHooks` | The caller's completion hooks: `prepareOutro`, `postRun`, the outro builders and `recordTaskOutcomes`. |
 | [`input`](../src/agent/runner/shared/types.ts) | `RunInput` | Where and as whom: `installDir`, `credentials`, `project`, `apiUser`, `flags` and `host`. |
 | `options.onProgress` | `(AgentProgress) => unknown` | Every progress event in order. Never awaited. A throwing observer is logged and the run goes on. |
 | `options.interaction` | `AgentInteraction` | Answers the agent's questions and notices. Absent, the agent has no ask bridge and declines notices. |

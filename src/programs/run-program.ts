@@ -406,6 +406,7 @@ async function invokeProgram(
           },
           {
             installDir: runDir,
+            invocation: input.invocation ?? 'unknown',
             credentials: posthog,
             project: credentials.project,
             apiUser: credentials.apiUser,
@@ -598,6 +599,9 @@ function sessionHooks(
   recordTaskOutcomes: NonNullable<RunHooks['recordTaskOutcomes']>,
 ): RunHooks {
   return {
+    prepareOutro: run.prepareOutro
+      ? (creds, context) => run.prepareOutro!(session(), creds, context)
+      : undefined,
     postRun: run.postRun
       ? (creds) => run.postRun!(session(), creds)
       : undefined,

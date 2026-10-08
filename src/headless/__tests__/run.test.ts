@@ -163,6 +163,9 @@ it.each([
       ),
     ).resolves.toBe(0);
     expect(wizardAbort).not.toHaveBeenCalled();
+    expect(vi.mocked(runProgram).mock.calls[0][1].invocation).toBe(
+      'noninteractive',
+    );
     expect(analytics.shutdown).toHaveBeenCalledExactlyOnceWith('success');
     expect(
       vi.mocked(analytics.shutdown).mock.invocationCallOrder[0],
