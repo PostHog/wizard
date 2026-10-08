@@ -23,6 +23,7 @@ import { config as warehouseSource } from '@programs/warehouse-source';
 import { config as selfDriving } from '@programs/self-driving';
 import { config as sourceMaps } from '@programs/error-tracking-upload-source-maps';
 import { config as errorTracking } from '@programs/error-tracking';
+import { config as featureFlags } from '@programs/feature-flags';
 import { config as agentSkill } from '@programs/agent-skill';
 
 const [audit, eventsAudit] = auditPrograms;
@@ -34,6 +35,7 @@ export const PROGRAM_REGISTRY = [
   warehouseSource,
   sourceMaps,
   errorTracking,
+  featureFlags,
   ...auditPrograms,
   webAnalyticsDoctor,
   migration,
@@ -56,6 +58,7 @@ export const Program = {
   WarehouseSource: warehouseSource.id,
   ErrorTrackingUploadSourceMaps: sourceMaps.id,
   ErrorTracking: errorTracking.id,
+  FeatureFlags: featureFlags.id,
   Migration: migration.id,
   Audit: audit.id,
   EventsAudit: eventsAudit.id,

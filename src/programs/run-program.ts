@@ -395,6 +395,7 @@ async function invokeProgram(
             allowedTools: planned.config.allowedTools,
             disallowedTools: planned.config.disallowedTools,
             agentFlow: planned.config.agentFlow,
+            agentPrompts: planned.config.agentPrompts,
             excludedTaskTypes: planned.config.excludedTaskTypes,
             seedTasks: planned.config.seedTasks
               ? () => planned.config.seedTasks!(session())

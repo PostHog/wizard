@@ -136,6 +136,12 @@ export interface ProgramConfig {
    */
   agentFlow?: string;
   /**
+   * Agent prompts bundled with the wizard for `agentFlow`. When set, the
+   * orchestrator builds the registry from these and does not fetch
+   * `agent-menu.json`.
+   */
+  agentPrompts?: readonly string[];
+  /**
    * Context-mill skill ID this program installs and runs. When present,
    * the host seeds `session.skillId` with this value before the TUI renders
    * so intro screens can resolve skill metadata without waiting for the

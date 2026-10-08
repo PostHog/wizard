@@ -144,6 +144,7 @@ import {
 import { AiObservabilityScreenId } from '@tui/programs/ai-observability';
 import { AuditScreenId } from '@tui/programs/audit';
 import { ErrorTrackingScreenId } from '@tui/programs/error-tracking';
+import { FeatureFlagsScreenId } from '@tui/programs/feature-flags';
 import { McpScreenId } from '@tui/tools/mcp';
 import { MetricsScreenId } from '@tui/programs/metrics';
 import { MigrationScreenId } from '@tui/programs/migration';
@@ -392,6 +393,15 @@ const FIXTURES: Record<string, Fixture> = {
   [AiObservabilityScreenId.Intro]: { program: Program.AiObservability },
   [MetricsScreenId.Intro]: { program: Program.Metrics },
   [ErrorTrackingScreenId.Intro]: { program: Program.ErrorTracking },
+  [FeatureFlagsScreenId.Intro]: {
+    program: Program.FeatureFlags,
+    arrange: (s) => {
+      s.setFrameworkConfig(Integration.nextjs, staticFrameworkConfig());
+      s.setDetectedFramework('Next.js');
+      s.setSkillId('nextjs');
+      s.setDetectionComplete();
+    },
+  },
   [ErrorTrackingScreenId.Detect]: {
     program: Program.ErrorTracking,
     arrange: authed,
@@ -644,6 +654,47 @@ describe('revenue-intro with a detect error', () => {
     );
     await expect(frame).toMatchFileSnapshot(
       `__snapshots__/frames/revenue-intro-detect-error-${size.columns}x${size.rows}.txt`,
+    );
+  });
+});
+
+describe('feature-flags-intro with no detected framework', () => {
+  it.each(SIZES)(`at $columns x $rows`, async (size) => {
+    const store = makeStore(Program.FeatureFlags);
+    store.setDetectionComplete();
+    expect(store.currentScreen).toBe(FeatureFlagsScreenId.Intro);
+    const { frame } = await renderScreen(
+      store,
+      screenShell(store, makeServices(store)),
+      size,
+    );
+    expect(frame).not.toContain('Continue');
+    await expect(frame).toMatchFileSnapshot(
+      `__snapshots__/frames/feature-flags-intro-undetected-${size.columns}x${size.rows}.txt`,
+    );
+  });
+});
+
+describe('feature-flags-intro with an unsupported framework version', () => {
+  it.each(SIZES)(`at $columns x $rows`, async (size) => {
+    const store = makeStore(Program.FeatureFlags);
+    store.setFrameworkConfig(Integration.nextjs, staticFrameworkConfig());
+    store.setDetectedFramework('Next.js');
+    store.setUnsupportedVersion({
+      current: '12.3.0',
+      minimum: '13.0.0',
+      docsUrl: 'https://posthog.com/docs/libraries/next-js',
+    });
+    store.setDetectionComplete();
+    expect(store.currentScreen).toBe(FeatureFlagsScreenId.Intro);
+    const { frame } = await renderScreen(
+      store,
+      screenShell(store, makeServices(store)),
+      size,
+    );
+    expect(frame).not.toContain('Continue');
+    await expect(frame).toMatchFileSnapshot(
+      `__snapshots__/frames/feature-flags-intro-unsupported-version-${size.columns}x${size.rows}.txt`,
     );
   });
 });

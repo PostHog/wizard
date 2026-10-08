@@ -15,6 +15,7 @@ export { AiObservabilityScreenId } from './programs/ai-observability/screen-ids.
 export { AuditScreenId } from './programs/audit/screen-ids.js';
 export { ErrorTrackingScreenId } from './programs/error-tracking/screen-ids.js';
 export { SourceMapsScreenId } from './programs/error-tracking-upload-source-maps/screen-ids.js';
+export { FeatureFlagsScreenId } from './programs/feature-flags/screen-ids.js';
 export { MetricsScreenId } from './programs/metrics/screen-ids.js';
 export { MigrationScreenId } from './programs/migration/screen-ids.js';
 export { PostHogIntegrationScreenId } from './programs/posthog-integration/screen-ids.js';

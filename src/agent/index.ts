@@ -20,6 +20,9 @@ export { WIZARD_TOOL_NAMES } from './tools';
 /** The binding a program gets when it declares none. */
 export { DEFAULT_BINDING } from './runner';
 
+/** The orchestrator's prompt parser and registry, which a program's bundled prompts are checked against. */
+export { buildRegistry, parseAgentPrompt } from './agent-prompt-loader';
+
 /** What a scan's matches decide: end the session or only warn. The Warlock release gate reads it. */
 export { scanVerdict } from './yara-policy';
 

@@ -5,6 +5,7 @@
     { "path": "tsconfig.core.json" }, { "path": "agent-skill" },
     { "path": "ai-observability" }, { "path": "audit" },
     { "path": "error-tracking-upload-source-maps" }, { "path": "error-tracking" },
+    { "path": "feature-flags" },
     { "path": "mcp-analytics" }, { "path": "metrics" }, { "path": "migration" },
     { "path": "posthog-integration" }, { "path": "replay-vision" },
     { "path": "revenue-analytics" }, { "path": "self-driving" },
