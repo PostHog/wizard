@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.81.1](https://github.com/PostHog/wizard/compare/v2.81.0...v2.81.1) (2026-10-08)
+
+
+### Bug Fixes
+
+* Shrink Mcp screens ([#1430](https://github.com/PostHog/wizard/issues/1430)) ([d5d2a55](https://github.com/PostHog/wizard/commit/d5d2a559812edd685e339d0e0a1b74d2a8aeb517))
+
 ## [2.81.0](https://github.com/PostHog/wizard/compare/v2.80.1...v2.81.0) (2026-10-07)
 
 
