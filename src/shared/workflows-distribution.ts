@@ -250,12 +250,13 @@ export class WorkflowsDistributionGate {
     ]);
     const existing = this.decisions.get(key);
     if (existing) {
+      const signal = AbortSignal.any([source.signal, this.generation.signal]);
       const listener = (): void =>
         existing.cancellation.abort(source.signal.reason);
       source.signal.addEventListener('abort', listener, { once: true });
-      return existing.promise.finally(() =>
-        source.signal.removeEventListener('abort', listener),
-      );
+      return existing.promise
+        .finally(() => source.signal.removeEventListener('abort', listener))
+        .then((result) => (signal.aborted ? this.interrupted(signal) : result));
     }
     const cancellation = new AbortController();
     const signal = AbortSignal.any([

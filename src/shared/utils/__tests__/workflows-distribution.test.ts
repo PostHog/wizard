@@ -337,6 +337,32 @@ it('coalesces completion replay without a second authorization, assignment or el
   ).toHaveLength(1);
 });
 
+it.each(['cancelled', 'context-changed'] as const)(
+  'honors %s before returning a settled completion replay',
+  async (reason) => {
+    const source = completedSource();
+    expect(await gate.evaluate(source)).toMatchObject({ status: 'offer' });
+    const cancellation = new AbortController();
+    const replay = gate.evaluate({ ...source, signal: cancellation.signal });
+    if (reason === 'cancelled') cancellation.abort();
+    else gate.invalidate();
+    expect(await replay).toMatchObject({
+      status: 'unenrolled',
+      reason,
+    });
+    await client.flush();
+    expect(requests.map((request) => new URL(request.url).pathname)).toEqual([
+      '/api/projects/42/',
+      '/flags/',
+    ]);
+    expect(
+      captured.filter(
+        (event) => event.event === 'workflow distribution eligible',
+      ),
+    ).toHaveLength(1);
+  },
+);
+
 it('cancels a delayed SDK result before eligibility and never returns a late offer', async () => {
   let release!: () => void;
   let started!: () => void;
