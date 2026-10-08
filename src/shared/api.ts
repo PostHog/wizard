@@ -162,30 +162,87 @@ export class ApiError extends Error {
     message: string,
     public readonly statusCode?: number,
     public readonly endpoint?: string,
+    options?: { cause?: unknown; transient?: boolean },
   ) {
-    super(message);
+    super(message, { cause: options?.cause });
     this.name = 'ApiError';
+    this.transient = options?.transient ?? false;
   }
+
+  /** A 5xx, 408, 429, or a request that got no response: a retry can heal it. */
+  readonly transient: boolean;
+}
+
+/** A hung connection fails into the retry path instead of blocking login. */
+const AUTH_REQUEST_TIMEOUT_MS = 15_000;
+/** Waits 1s, 2s, 4s: rides out a pod restart or deploy blip, not just one dropped socket. */
+const AUTH_MAX_ATTEMPTS = 4;
+const AUTH_BACKOFF_MS = 1_000; // doubles each retry
+
+export interface AuthRetryOpts {
+  sleepImpl?: (ms: number) => Promise<void>;
+  maxAttempts?: number;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** 5xx, 408, 429, or no response at all (network, DNS, reset, timeout). Other 4xx and parse errors are not. */
+export function isTransientApiError(error: unknown): boolean {
+  if (!axios.isAxiosError(error)) return false;
+  const status = error.response?.status;
+  return (
+    status === undefined || status >= 500 || status === 408 || status === 429
+  );
+}
+
+/** GET for the idempotent login lookups; retries only what a retry can heal. */
+async function getWithRetry(
+  url: string,
+  accessToken: string,
+  opts: AuthRetryOpts = {},
+): Promise<unknown> {
+  const { sleepImpl = sleep, maxAttempts = AUTH_MAX_ATTEMPTS } = opts;
+  for (let attempt = 1; ; attempt++) {
+    try {
+      const response = await axios.get(url, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'User-Agent': WIZARD_USER_AGENT,
+        },
+        timeout: AUTH_REQUEST_TIMEOUT_MS,
+      });
+      return response.data;
+    } catch (error) {
+      if (attempt >= maxAttempts || !isTransientApiError(error)) throw error;
+      await sleepImpl(AUTH_BACKOFF_MS * 2 ** (attempt - 1));
+    }
+  }
+}
+
+function apiErrorProperties(apiError: ApiError): Record<string, unknown> {
+  return { statusCode: apiError.statusCode, transient: apiError.transient };
 }
 
 export async function fetchUserData(
   accessToken: string,
   baseUrl: string,
+  retry?: AuthRetryOpts,
 ): Promise<ApiUser> {
   try {
-    const response = await axios.get(`${baseUrl}/api/users/@me/`, {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'User-Agent': WIZARD_USER_AGENT,
-      },
-    });
-
-    return ApiUserSchema.parse(response.data);
+    const data = await getWithRetry(
+      `${baseUrl}/api/users/@me/`,
+      accessToken,
+      retry,
+    );
+    return ApiUserSchema.parse(data);
   } catch (error) {
     const apiError = handleApiError(error, 'fetch user data');
     analytics.captureException(apiError, {
       endpoint: '/api/users/@me/',
       baseUrl,
+      ...apiErrorProperties(apiError),
     });
     throw apiError;
   }
@@ -238,22 +295,22 @@ export async function fetchProjectData(
   accessToken: string,
   projectId: number,
   baseUrl: string,
+  retry?: AuthRetryOpts,
 ): Promise<ApiProject> {
   try {
-    const response = await axios.get(`${baseUrl}/api/projects/${projectId}/`, {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'User-Agent': WIZARD_USER_AGENT,
-      },
-    });
-
-    return ApiProjectSchema.parse(response.data);
+    const data = await getWithRetry(
+      `${baseUrl}/api/projects/${projectId}/`,
+      accessToken,
+      retry,
+    );
+    return ApiProjectSchema.parse(data);
   } catch (error) {
     const apiError = handleApiError(error, 'fetch project data');
     analytics.captureException(apiError, {
       endpoint: `/api/projects/${projectId}/`,
       baseUrl,
       projectId,
+      ...apiErrorProperties(apiError),
     });
     throw apiError;
   }
@@ -326,12 +383,14 @@ export function handleApiError(error: unknown, operation: string): ApiError {
     const status = axiosError.response?.status;
     const detail = axiosError.response?.data?.detail;
     const endpoint = axiosError.config?.url;
+    const options = { cause: error, transient: isTransientApiError(error) };
 
     if (status === 401) {
       return new ApiError(
         `Authentication failed while trying to ${operation}`,
         status,
         endpoint,
+        options,
       );
     }
 
@@ -340,6 +399,7 @@ export function handleApiError(error: unknown, operation: string): ApiError {
         `Access denied while trying to ${operation}`,
         status,
         endpoint,
+        options,
       );
     }
 
@@ -348,20 +408,48 @@ export function handleApiError(error: unknown, operation: string): ApiError {
         `Resource not found while trying to ${operation}`,
         status,
         endpoint,
+        options,
       );
     }
 
-    const message = detail || `Failed to ${operation}`;
-    return new ApiError(message, status, endpoint);
+    if (status === undefined) {
+      const reason = axiosError.code ?? axiosError.message;
+      return new ApiError(
+        `Could not reach PostHog while trying to ${operation} (${reason}). Check your network connection and try again.`,
+        status,
+        endpoint,
+        options,
+      );
+    }
+
+    if (status >= 500) {
+      return new ApiError(
+        `PostHog is temporarily unavailable (HTTP ${status}) while trying to ${operation}. Try again in a few minutes.`,
+        status,
+        endpoint,
+        options,
+      );
+    }
+
+    const message = detail || `Failed to ${operation} (HTTP ${status})`;
+    return new ApiError(message, status, endpoint, options);
   }
 
   if (error instanceof z.ZodError) {
-    return new ApiError(`Invalid response format while trying to ${operation}`);
+    return new ApiError(
+      `Invalid response format while trying to ${operation}`,
+      undefined,
+      undefined,
+      { cause: error },
+    );
   }
 
   return new ApiError(
     `Unexpected error while trying to ${operation}: ${
       error instanceof Error ? error.message : 'Unknown error'
     }`,
+    undefined,
+    undefined,
+    { cause: error },
   );
 }

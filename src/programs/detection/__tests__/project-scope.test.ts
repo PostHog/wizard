@@ -125,6 +125,25 @@ describe('scopeInstallDirToProject', () => {
     expect(scan).not.toHaveBeenCalled();
   });
 
+  it('fires auth-failed and leaves the session untouched when the early login fails', async () => {
+    // The run's own login retries and reports a real failure, so a blip here must not end the run.
+    authenticate.mockRejectedValueOnce(new Error('Failed to fetch user data'));
+    const session = buildSession({ installDir: '/repo' });
+
+    await expect(
+      scopeInstallDirToProject(session, runner),
+    ).resolves.toBeUndefined();
+
+    expect(session.installDir).toBe('/repo');
+    expect(outcomeEvent()).toMatchObject({
+      outcome: 'auth-failed',
+      error_message: 'Failed to fetch user data',
+    });
+    expect(exceptionSpy).toHaveBeenCalledTimes(1);
+    expect(flagsSpy).not.toHaveBeenCalled();
+    expect(scan).not.toHaveBeenCalled();
+  });
+
   it('bills the scan to the program that asked for it', async () => {
     // Runs before bootstrap, so nothing upstream supplies run tags.
     flagsSpy.mockResolvedValue(FLAG_ON);
