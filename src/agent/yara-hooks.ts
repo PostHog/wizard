@@ -1152,6 +1152,7 @@ async function scanSkillFiles(
   const files = await fg('**/*.{md,txt,yaml,yml,json,js,ts,py,rb,sh}', {
     cwd: absoluteDir,
     absolute: true,
+    caseSensitiveMatch: false,
   });
 
   if (files.length === 0) {
