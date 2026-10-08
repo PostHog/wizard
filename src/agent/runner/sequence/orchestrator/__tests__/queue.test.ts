@@ -1,6 +1,8 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { analytics } from '@utils/analytics';
+import { writeJsonAtomic } from '@utils/atomic-ledger';
 import {
   isNotNeededReason,
   NotNeededReason,
@@ -16,6 +18,11 @@ import {
 vi.mock('@utils/analytics', () => ({
   analytics: { captureException: vi.fn(), wizardCapture: vi.fn() },
 }));
+
+vi.mock('@utils/atomic-ledger', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@utils/atomic-ledger')>();
+  return { ...actual, writeJsonAtomic: vi.fn(actual.writeJsonAtomic) };
+});
 
 function tmpDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'queue-test-'));
@@ -551,5 +558,61 @@ describe('not-needed reasons', () => {
       false,
     );
     expect(isNotNeededReason(undefined)).toBe(false);
+  });
+});
+
+describe('QueueStore queue.json writes', () => {
+  let dir: string;
+  let q: QueueStore;
+
+  beforeEach(() => {
+    vi.mocked(analytics.captureException).mockClear();
+    dir = tmpDir();
+    q = new QueueStore(dir, 'run-1');
+  });
+
+  afterEach(() => {
+    vi.mocked(writeJsonAtomic).mockReset();
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('recreates a cache folder removed mid-run', () => {
+    fs.rmSync(path.join(dir, QUEUE_DIR_NAME), { recursive: true });
+    const t = q.enqueue({ type: 'install' });
+
+    const file = JSON.parse(fs.readFileSync(q.queuePath, 'utf8')) as QueueFile;
+    expect(file.tasks.map((x) => x.id)).toEqual([t.id]);
+    expect(analytics.captureException).not.toHaveBeenCalled();
+  });
+
+  it('retries a rename that another process blocks', () => {
+    vi.mocked(writeJsonAtomic).mockImplementationOnce(() => {
+      throw Object.assign(new Error('locked'), { code: 'EPERM' });
+    });
+
+    const t = q.enqueue({ type: 'install' });
+
+    const file = JSON.parse(fs.readFileSync(q.queuePath, 'utf8')) as QueueFile;
+    expect(file.tasks.map((x) => x.id)).toEqual([t.id]);
+    expect(analytics.captureException).not.toHaveBeenCalled();
+  });
+
+  it('reports a write that keeps failing and keeps the run going', () => {
+    vi.mocked(writeJsonAtomic).mockImplementation(() => {
+      throw Object.assign(new Error('no space'), { code: 'ENOSPC' });
+    });
+
+    const t = q.enqueue({ type: 'install' });
+    q.start(t.id);
+    q.complete(t.id);
+
+    expect(q.get(t.id)?.status).toBe('done');
+    expect(analytics.captureException).toHaveBeenCalledWith(
+      expect.any(Error),
+      expect.objectContaining({
+        step: 'orchestrator_queue_reflect',
+        code: 'ENOSPC',
+      }),
+    );
   });
 });

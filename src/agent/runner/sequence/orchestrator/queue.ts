@@ -9,7 +9,8 @@
  * Every transition rewrites `<installDir>/.posthog-wizard-cache/queue.json`, a
  * small file holding the whole queue, handoffs included. It is the run's log
  * and the report's source. The whole cache folder is run-scoped and wiped when
- * the run ends.
+ * the run ends. The write is best-effort: the in-memory queue drives the run,
+ * so a failed write is reported and never ends the run.
  */
 import * as fs from 'fs';
 import * as path from 'path';
@@ -167,6 +168,10 @@ export interface EnqueueInput {
 
 export const QUEUE_DIR_NAME = '.posthog-wizard-cache';
 const DEFAULT_MAX_ATTEMPTS = 2;
+const REFLECT_ATTEMPTS = 3;
+const REFLECT_RETRY_MS = 50;
+/** Rename errors from a file another process holds open, mostly on Windows. */
+const TRANSIENT_WRITE_CODES = new Set(['EPERM', 'EBUSY', 'EACCES']);
 
 function nowIso(): string {
   return new Date().toISOString();
@@ -180,6 +185,31 @@ This folder contains run artifacts from the PostHog Wizard. This should have
 been deleted if the Wizard has finished running. If this wasn't deleted for
 some reason, you can safely delete the entire \`${QUEUE_DIR_NAME}/\` folder.
 `;
+
+/** Write queue.json, recreating a removed cache folder and retrying a locked file. */
+function writeQueueFile(queuePath: string, file: QueueFile): void {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      writeJsonAtomic(queuePath, file);
+      return;
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code ?? '';
+      if (attempt >= REFLECT_ATTEMPTS) throw error;
+      if (code === 'ENOENT') {
+        fs.mkdirSync(path.dirname(queuePath), { recursive: true });
+      } else if (TRANSIENT_WRITE_CODES.has(code)) {
+        Atomics.wait(
+          new Int32Array(new SharedArrayBuffer(4)),
+          0,
+          0,
+          REFLECT_RETRY_MS,
+        );
+      } else {
+        throw error;
+      }
+    }
+  }
+}
 
 /** Every queue transition, in the order it is reflected. */
 export type TransitionEvent =
@@ -436,7 +466,17 @@ export class QueueStore {
       runId: this.runId,
       tasks: this.tasks,
     };
-    writeJsonAtomic(this.queuePath, file);
+    try {
+      writeQueueFile(this.queuePath, file);
+    } catch (error) {
+      analytics.captureException(
+        error instanceof Error ? error : new Error(String(error)),
+        {
+          step: 'orchestrator_queue_reflect',
+          code: (error as NodeJS.ErrnoException).code,
+        },
+      );
+    }
   }
 
   private notify(event: TransitionEvent, task: QueuedTask): void {
