@@ -1,4 +1,4 @@
-import { PostHog } from 'posthog-node';
+import { PostHog, type FeatureFlagEvaluations } from 'posthog-node';
 import {
   ANALYTICS_HOST_URL,
   ANALYTICS_POSTHOG_PUBLIC_PROJECT_WRITE_KEY,
@@ -288,8 +288,13 @@ export class Analytics {
     });
   }
 
-  capture(eventName: string, properties?: Record<string, unknown>) {
+  capture(
+    eventName: string,
+    properties?: Record<string, unknown>,
+    groups?: Record<string, string>,
+  ): void {
     this.client.capture({
+      ...(groups ? { groups } : {}),
       distinctId: this.distinctId ?? this.anonymousId,
       event: eventName,
       properties: {
@@ -329,6 +334,17 @@ export class Analytics {
    */
   wizardCapture(eventName: string, properties?: Record<string, unknown>): void {
     this.capture(`wizard: ${eventName}`, properties);
+  }
+
+  async evaluateProjectFlags(
+    projectUuid: string,
+    flagKeys: string[],
+  ): Promise<FeatureFlagEvaluations> {
+    return this.client.evaluateFlags(this.distinctId ?? this.anonymousId, {
+      groups: { project: projectUuid },
+      personProperties: this.flagPersonProperties(),
+      flagKeys,
+    });
   }
 
   /**

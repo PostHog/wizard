@@ -56,6 +56,17 @@ Modules callers reach most:
   `configureLogFile` and `formatLogLine`, the line format `logToFile` writes.
 - `@utils/analytics`: the `analytics` client (`wizardCapture`, `captureException`, `setTag`, `flush`, `shutdown`).
   `@utils/flush-analytics`: `flushAnalytics()`, a flush that never fails the caller.
+- `@shared/workflows-distribution`: `WorkflowsDistributionGate`, an asynchronous
+  gate for a qualified completion. Keep one instance for the run, supply current
+  credentials, one placement, the supported wave, a source-action ID of at most
+  128 characters and an abort signal. It reads the selected project and evaluates
+  its project-group flags separately from person flags. Offer and control both
+  attempt `workflow distribution eligible` capture with explicit project groups;
+  `eligibilityCapture` describes the capture attempt, not server receipt. Unknown,
+  disabled, overridden and diagnostic assignments stay unenrolled. Calls coalesce
+  within the run, stop after at most four seconds, and invalidate on auth or host
+  changes. Call `invalidate()` when ending or replacing the owning source context.
+  The completion program owns qualification and delivery.
 - `@utils/telemetry`: `withProgress(step, fn)` tags analytics with the current step and runs `fn`.
 - `@utils/package-manager`, `@utils/env-scan`, `@utils/bounded-fs`, `@utils/atomic-ledger`, `@utils/semver`, `@utils/urls`, `@utils/links`.
 

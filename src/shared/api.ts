@@ -238,9 +238,11 @@ export async function fetchProjectData(
   accessToken: string,
   projectId: number,
   baseUrl: string,
+  options: { signal?: AbortSignal; timeout?: number } = {},
 ): Promise<ApiProject> {
   try {
     const response = await axios.get(`${baseUrl}/api/projects/${projectId}/`, {
+      ...options,
       headers: {
         Authorization: `Bearer ${accessToken}`,
         'User-Agent': WIZARD_USER_AGENT,
