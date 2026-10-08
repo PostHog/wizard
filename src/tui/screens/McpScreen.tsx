@@ -5,7 +5,7 @@
  * importing business logic directly. Testable, no dynamic imports.
  *
  * Supports two modes via the `mode` prop:
- *   - 'install': detect clients → confirm → [pick clients] → pick features → install
+ *   - 'install': detect clients → pick clients (esc skips) → pick features → install
  *   - 'remove': detect installed clients → confirm → remove
  *
  * When done, calls store.setMcpComplete(). The router resolves to outro.
@@ -23,6 +23,7 @@ import {
   PickerMenu,
 } from '@tui/primitives/index';
 import { Colors, Icons } from '@tui/styles';
+import { useKeyBindings, KeyMatch } from '@tui/hooks/useKeyBindings';
 import type {
   McpInstaller,
   McpClientInfo,
@@ -224,7 +225,7 @@ export const McpScreen = ({
           setTimeout(() => markDone(store, McpOutcome.NoClients), 1500);
         } else {
           setClients(detected);
-          setPhase(Phase.Ask);
+          setPhase(isRemove ? Phase.Ask : Phase.Pick);
         }
       } catch (err) {
         setDetectError(errorText(err));
@@ -263,19 +264,24 @@ export const McpScreen = ({
     setPhase(Phase.FeatureSelect);
   };
 
-  const handleConfirm = () => {
-    if (isRemove) {
-      void doRemove();
-    } else if (clients.length === 1) {
-      proceedAfterClientPick([clients[0]!.name]);
-    } else {
-      setPhase(Phase.Pick);
-    }
-  };
-
   const handleSkip = () => {
     markDone(store, McpOutcome.Skipped);
   };
+
+  // The picker has no escape binding of its own; esc declines the install.
+  useKeyBindings(
+    'mcp-skip',
+    phase === Phase.Pick
+      ? [
+          {
+            match: KeyMatch.Escape,
+            label: 'esc',
+            action: 'skip',
+            handler: handleSkip,
+          },
+        ]
+      : [],
+  );
 
   const doInstall = async (names: string[], features?: string[]) => {
     setPhase(Phase.Working);
@@ -354,12 +360,11 @@ export const McpScreen = ({
     setPhase(Phase.Done);
   };
 
-  // The "what you get" preview shown above the install confirmation —
+  // The "what you get" preview shown above the editor picker —
   // installed users have no idea what "MCP" means; lead with the value.
-  const installValueBullets = [
+  const installValueLines = [
     'Ask your agent: "List my feature flags" — and it does.',
     'Run SQL, build dashboards, ship flags, all from your IDE.',
-    'No copy-pasting tokens or context. Your agent has the keys.',
   ];
 
   // Clients connected via a browser page (e.g. Claude Desktop/Web) aren't truly
@@ -441,28 +446,17 @@ export const McpScreen = ({
 
         {phase === Phase.Ask && (
           <>
-            {!isRemove && (
-              <Box flexDirection="column" marginBottom={1}>
-                {installValueBullets.map((bullet) => (
-                  <Text key={bullet} dimColor>
-                    {'•'} {bullet}
-                  </Text>
-                ))}
-              </Box>
-            )}
             <Text dimColor>
               Detected: {clients.map((c) => c.name).join(', ')}
             </Text>
             <Box marginTop={1}>
               <ConfirmationInput
-                message={`${
-                  isRemove ? 'Remove' : 'Install'
-                } the PostHog MCP server${
+                message={`Remove the PostHog MCP server${
                   clients.some((c) => c.supportsPlugin) ? ' and plugin' : ''
                 }?`}
-                confirmLabel={isRemove ? 'Remove' : 'Install'}
+                confirmLabel="Remove"
                 cancelLabel="No thanks"
-                onConfirm={handleConfirm}
+                onConfirm={() => void doRemove()}
                 onCancel={handleSkip}
               />
             </Box>
@@ -470,26 +464,42 @@ export const McpScreen = ({
         )}
 
         {phase === Phase.Pick && (
-          <PickerMenu
-            message="Select editor to install"
-            options={clients.map((c) => ({
-              label: c.name,
-              value: c.name,
-              // Browser connectors can't be installed alongside local editors
-              // and are configured on their own screen.
-              exclusive: Boolean(c.finish),
-              hint: c.finish
-                ? 'connector'
-                : c.supportsPlugin
-                ? 'plugin'
-                : 'MCP',
-            }))}
-            mode="multi"
-            onSelect={(selected) => {
-              const names = Array.isArray(selected) ? selected : [selected];
-              proceedAfterClientPick(names);
-            }}
-          />
+          <>
+            <Box flexDirection="column" marginBottom={1}>
+              {installValueLines.map((line) => (
+                <Text key={line} dimColor>
+                  {line}
+                </Text>
+              ))}
+            </Box>
+            <PickerMenu
+              message={`Select clients to install the PostHog MCP server${
+                clients.some((c) => c.supportsPlugin) ? ' and plugin' : ''
+              }`}
+              options={clients.map((c) => ({
+                label: c.name,
+                value: c.name,
+                // Browser connectors can't be installed alongside local editors
+                // and are configured on their own screen.
+                exclusive: Boolean(c.finish),
+                hint: c.finish
+                  ? 'connector'
+                  : c.supportsPlugin
+                  ? 'plugin'
+                  : 'MCP',
+              }))}
+              mode="multi"
+              onSelect={(selected) => {
+                const names = Array.isArray(selected) ? selected : [selected];
+                // Confirming with nothing ticked declines too.
+                if (names.length === 0) {
+                  handleSkip();
+                  return;
+                }
+                proceedAfterClientPick(names);
+              }}
+            />
+          </>
         )}
 
         {phase === Phase.FeatureSelect && (
