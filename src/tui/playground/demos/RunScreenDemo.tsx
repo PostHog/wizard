@@ -7,7 +7,7 @@
  * keys (Ink delivers every key to every handler), leaving the inner tabs
  * unreachable. So the outer playground keeps the arrows and this demo uses:
  *
- *   n / p   switch run-screen tab (Status, Event plan, Tail logs, Visualizer, HN)
+ *   n / p   switch run-screen tab (Status, Event plan, Tail logs, HN, Visualizer)
  *
  * Tasks auto-advance every 1.5s and the visualizer stage cycles on its own.
  * Discovered features (Stripe, LLM) are pre-populated so conditional tips appear.
@@ -263,12 +263,12 @@ export const RunScreenDemo = ({ store }: RunScreenDemoProps) => {
       label: 'Tail logs',
       component: <LogViewer filePath={WIZARD_LOG_FILE} />,
     },
+    { id: 'hn', label: 'HN', component: <HNViewer /> },
     {
       id: 'visualizer',
       label: 'Visualizer',
       component: <VisualizerTab store={store} />,
     },
-    { id: 'hn', label: 'HN', component: <HNViewer /> },
   ];
 
   // The outer playground TabContainer owns the arrow keys, so navigate with n/p.

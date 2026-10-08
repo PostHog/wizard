@@ -1,5 +1,5 @@
 import { tuiView } from '@tui/__tests__/helpers/tui-view.no-jest';
-import { McpOutcome, RunPhase } from '@shared/run-state';
+import { RunPhase } from '@shared/run-state';
 import { WizardReadiness } from '@shared/health-checks/readiness';
 import { programSequence, ScreenId } from '@tui/screen-sequences';
 import { Program, type ProgramId } from '@programs';
@@ -238,52 +238,6 @@ describe('programSequence', () => {
       view.mcpComplete = true;
 
       expect(entry.isComplete?.(view)).toBe(true);
-    });
-
-    describe('McpAdd → mcp-suggested-prompts step', () => {
-      it('hides the step when MCP install was skipped', () => {
-        const view = tuiView({});
-        view.mcpOutcome = McpOutcome.Skipped;
-        const entry = getEntry(Tool.McpAdd, McpScreenId.SuggestedPrompts);
-
-        expect(entry.show?.(view)).toBe(false);
-      });
-
-      it('hides the step when no MCP clients were detected', () => {
-        const view = tuiView({});
-        view.mcpOutcome = McpOutcome.NoClients;
-        const entry = getEntry(Tool.McpAdd, McpScreenId.SuggestedPrompts);
-
-        expect(entry.show?.(view)).toBe(false);
-      });
-
-      it('hides the step when MCP install failed', () => {
-        const view = tuiView({});
-        view.mcpOutcome = McpOutcome.Failed;
-        const entry = getEntry(Tool.McpAdd, McpScreenId.SuggestedPrompts);
-
-        expect(entry.show?.(view)).toBe(false);
-      });
-
-      it('shows the step when MCP was installed', () => {
-        const view = tuiView({});
-        view.mcpOutcome = McpOutcome.Installed;
-        const entry = getEntry(Tool.McpAdd, McpScreenId.SuggestedPrompts);
-
-        expect(entry.show?.(view)).toBe(true);
-      });
-
-      it('is incomplete until the user dismisses', () => {
-        const view = tuiView({});
-        view.mcpOutcome = McpOutcome.Installed;
-        const entry = getEntry(Tool.McpAdd, McpScreenId.SuggestedPrompts);
-
-        expect(entry.isComplete?.(view)).toBe(false);
-
-        view.mcpSuggestedPromptsDismissed = true;
-
-        expect(entry.isComplete?.(view)).toBe(true);
-      });
     });
   });
 });

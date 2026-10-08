@@ -1,26 +1,13 @@
 import type { FlowStep } from '@tui/flow';
-import { McpOutcome } from '@shared/run-state';
 
 export const MCP_ADD_FLOW: FlowStep[] = [
-  // Order: install → tutorial. The tutorial's explicit "Start tutorial"
-  // opt-in is the moment OAuth fires, so the loginless install path never
-  // gets a surprise login.
+  // One step: the install screen's results double as the success screen. The
+  // tutorial stays opt-in via `wizard mcp tutorial`, so no surprise login.
   {
     id: 'mcp-add',
     label: 'Add MCP server',
     screenId: 'mcp-add',
     isComplete: (s) => s.mcpComplete,
-  },
-  {
-    id: 'mcp-suggested-prompts',
-    label: 'Suggested prompts',
-    screenId: 'mcp-suggested-prompts',
-    // Gate on a successful install: without a working MCP there's nothing
-    // to talk to, so no-clients / skipped / failed outcomes end the program.
-    show: (s) => s.mcpOutcome === McpOutcome.Installed,
-    isComplete: (s) => s.mcpSuggestedPromptsDismissed,
-    // This step *is* the tutorial, so it reports there rather than to `mcp-add`.
-    reportsAsProgramId: 'mcp-tutorial',
   },
 ];
 

@@ -1,7 +1,5 @@
 /**
- * McpSuggestedPromptsScreen — shown after MCP install succeeds in the
- * standalone `wizard mcp add` tool, and as the entry point for
- * `wizard mcp tutorial`.
+ * McpSuggestedPromptsScreen — the `wizard mcp tutorial` screen.
  *
  * Phases:
  *   1. Choose          — opens with a Log in / Exit picker, framed by a
@@ -43,7 +41,6 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSyncExternalStore } from 'react';
 
 import type { WizardStore } from '@tui/store';
-import { Tool } from '@tools';
 import { Colors, Icons } from '@tui/styles';
 import { useKeyBindings, KeyMatch } from '@tui/hooks/useKeyBindings';
 import {
@@ -152,14 +149,7 @@ export const McpSuggestedPromptsScreen = ({
 
   // Phase.Choose is the tutorial's no-commitment entry: login fires only when
   // the user picks 'Start tutorial' — explicit consent for the OAuth dance.
-  // After an install (`mcp add`), skip the pitch entirely: land on the
-  // all-set screen with the login commands, no surprise OAuth. The tutorial
-  // stays reachable via `wizard mcp tutorial`.
-  const [phase, setPhase] = useState<Phase>(
-    store.router.activeProgram === Tool.McpTutorial
-      ? Phase.Choose
-      : Phase.Goodbye,
-  );
+  const [phase, setPhase] = useState<Phase>(Phase.Choose);
   // The scout's read of the project, set in the Scouting phase. Drives the
   // data-aware picker, greeting flavor, and Goodbye samples. Null until the
   // probe completes (the picker treats null as legacy / data-unaware).

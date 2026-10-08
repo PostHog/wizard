@@ -8,7 +8,8 @@
  *   - 'install': detect clients → pick clients (esc skips) → pick features → install
  *   - 'remove': detect installed clients → confirm → remove
  *
- * When done, calls store.setMcpComplete(). The router resolves to outro.
+ * A successful install ends on one screen: results, any login commands, sample
+ * prompts and the tutorial command. When done, calls store.setMcpComplete().
  */
 
 import { Box, Text, useInput } from 'ink';
@@ -47,6 +48,8 @@ interface McpScreenProps {
   store: WizardStore;
   installer: McpInstaller;
   mode?: McpMode;
+  /** Prompts to suggest once installed; the MCP tool passes its role-tuned kit. */
+  samplePrompts?: string[];
 }
 
 enum Phase {
@@ -189,6 +192,7 @@ export const McpScreen = ({
   store,
   installer,
   mode = 'install',
+  samplePrompts = [],
 }: McpScreenProps) => {
   useSyncExternalStore(
     (cb) => store.subscribe(cb),
@@ -211,6 +215,7 @@ export const McpScreen = ({
   // "you selected nothing".
   const [detectError, setDetectError] = useState<string | null>(null);
   const [flowError, setFlowError] = useState<string | null>(null);
+  const [loginCommands, setLoginCommands] = useState<string[]>([]);
   // The action that finishes the screen once the user has read the results.
   // Held in a ref so the useInput handler inside DoneContinue can invoke the
   // freshest closure without re-registering listeners on every render.
@@ -323,13 +328,14 @@ export const McpScreen = ({
     setMcpResults(mcpResult);
     setPluginResults(pluginResult);
     // Already-installed counts as installed: the user ends up with a working
-    // MCP either way, so the follow-on tutorial still applies.
+    // MCP either way.
     const ready = [...mcpResult, ...pluginResult].filter(isOk);
     const outcome = ready.length > 0 ? McpOutcome.Installed : McpOutcome.Failed;
     const featuresReport = reportFeatures(features ?? [...ALL_FEATURE_VALUES]);
     const logins = oauthFlow
       ? pendingLoginCommands(clients, mcpResult, pluginResult)
       : [];
+    setLoginCommands(logins);
     finishFlow.current = doneOnEnter(
       store,
       outcome,
@@ -409,12 +415,16 @@ export const McpScreen = ({
       failures.length +
       finishNotes.length >
     0;
+  const installSucceeded =
+    !isRemove && [...mcpResults, ...pluginResults].some(isOk);
 
   return (
     <Box flexDirection="column" flexGrow={1}>
       <Text bold color={Colors.accent}>
         {isRemove
           ? 'Remove the PostHog MCP'
+          : phase === Phase.Done && installSucceeded
+          ? "You're all set — chat to your data from your client"
           : 'Install the MCP so you can chat to your data'}
       </Text>
 
@@ -585,6 +595,22 @@ export const McpScreen = ({
                   icon={'\u2716'}
                   note="Run with --debug for the full output, or report it at github.com/PostHog/wizard/issues."
                 />
+                {loginCommands.length > 0 && (
+                  <Box flexDirection="column" marginBottom={1}>
+                    {/* A step still to do, so not the green of the results. */}
+                    <Box marginBottom={1}>
+                      <Text>Authenticate to finish (opens your browser):</Text>
+                    </Box>
+                    {loginCommands.map((command) => (
+                      <Text key={command}>
+                        <Text dimColor>$ </Text>
+                        <Text bold color={Colors.primary}>
+                          {command}
+                        </Text>
+                      </Text>
+                    ))}
+                  </Box>
+                )}
                 {finishNotes.map((note) => (
                   <Box key={note.name} flexDirection="column" marginTop={1}>
                     <Text color="green" bold>
@@ -603,6 +629,31 @@ export const McpScreen = ({
                     </Text>
                   </Box>
                 ))}
+                {installSucceeded && (
+                  // Result groups already end in a blank line; connector notes don't.
+                  <Box
+                    flexDirection="column"
+                    marginTop={finishNotes.length > 0 ? 1 : 0}
+                  >
+                    {samplePrompts.length > 0 && (
+                      <Box flexDirection="column" marginBottom={1}>
+                        <Text>Open your client and try a prompt like:</Text>
+                        {samplePrompts.map((prompt) => (
+                          <Text key={prompt}>
+                            <Text color={Colors.primary}>
+                              {Icons.triangleSmallRight}
+                            </Text>{' '}
+                            <Text dimColor>{prompt}</Text>
+                          </Text>
+                        ))}
+                      </Box>
+                    )}
+                    <Text dimColor>
+                      Take the guided tour anytime with{' '}
+                      <Text bold>npx @posthog/wizard mcp tutorial</Text>.
+                    </Text>
+                  </Box>
+                )}
               </>
             ) : flowError ? (
               <Box flexDirection="column">

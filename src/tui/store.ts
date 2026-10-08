@@ -1010,21 +1010,10 @@ export class WizardStore implements TuiView {
     this._enterScreenHooks.set(screen, list);
   }
 
-  /**
-   * The program `screen` reports under — its step's `reportsAsProgramId` if it
-   * claims one, else the running program (also the fallback for overlays and
-   * screens with no owning step).
-   */
-  private _programIdForScreen(screen: ScreenName): ProgramId {
-    const program = this.router.activeProgram;
-    const step = flowOwner(program).flow.find((s) => s.screenId === screen);
-    return step?.reportsAsProgramId ?? program;
-  }
-
   /** The program the visible screen reports under; screens stamp this on their
    *  own events rather than relying on the run-level `program_id` tag. */
   get analyticsProgramId(): ProgramId {
-    return this._programIdForScreen(this.router.resolve(this));
+    return this.router.activeProgram;
   }
 
   /**
@@ -1046,7 +1035,7 @@ export class WizardStore implements TuiView {
       }
       analytics.wizardCapture(`screen ${next}`, {
         from_screen: prev,
-        program_id: this._programIdForScreen(next),
+        program_id: this.router.activeProgram,
         ...sessionProperties(this.session),
       });
     }

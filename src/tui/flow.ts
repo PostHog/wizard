@@ -6,7 +6,7 @@
 
 import type { TuiView } from './tui-state.js';
 import type { WizardReadinessResult } from '@shared/health-checks/readiness';
-import type { ProgramId, WizardSession } from '@programs/types';
+import type { WizardSession } from '@programs/types';
 
 /**
  * Context passed to onInit callbacks — fires when the TUI starts
@@ -59,14 +59,6 @@ export interface FlowStep {
    * a store that isn't rendering screens (tests, playground).
    */
   onInit?: (ctx: StoreInitContext) => void;
-
-  /**
-   * Report this step's analytics under a different program than its host, for
-   * steps shared across programs (the MCP tutorial is all of `mcp-tutorial`
-   * and the last step of `mcp-add`). Attribution only — scopes, bindings, and
-   * sequences still follow the host. Matched by `screenId`.
-   */
-  reportsAsProgramId?: ProgramId;
 }
 
 /**
