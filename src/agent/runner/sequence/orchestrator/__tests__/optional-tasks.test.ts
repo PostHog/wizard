@@ -60,6 +60,18 @@ describe('drainVerdict', () => {
     expect(v.blockedTypes).toEqual(['report']);
   });
 
+  it('a task that failed after it delivered the run report does not fail the run', () => {
+    const install = store.enqueue({ type: 'install' });
+    const report = store.enqueue({ type: 'report', dependsOn: [install.id] });
+    finish(install.id, true);
+    finish(report.id, false);
+
+    expect(drainVerdict(store.list()).requiredFailedTypes).toEqual(['report']);
+    const v = drainVerdict(store.list(), new Set([report.id]));
+    expect(v.requiredFailedTypes).toEqual([]);
+    expect(v.optionalFailedTypes).toEqual(['report']);
+  });
+
   it('names a step the user accepted that never became runnable', () => {
     const install = store.enqueue({ type: 'install' });
     store.enqueue({

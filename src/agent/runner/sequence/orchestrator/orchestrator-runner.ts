@@ -455,8 +455,14 @@ function canAsk(prompt: AgentPrompt | undefined): boolean {
   return (prompt?.allowedTools ?? []).includes(ASK_TOOL);
 }
 
-/** Splits terminal failures into run-failing (required) and reported-only (optional). */
-export function drainVerdict(tasks: readonly QueuedTask[]): {
+/**
+ * Splits terminal failures into run-failing (required) and reported-only
+ * (optional, or failed after it delivered the run report to the user).
+ */
+export function drainVerdict(
+  tasks: readonly QueuedTask[],
+  reportDeliveredIds: ReadonlySet<string> = new Set(),
+): {
   requiredFailedTypes: string[];
   optionalFailedTypes: string[];
   blocked: number;
@@ -464,13 +470,13 @@ export function drainVerdict(tasks: readonly QueuedTask[]): {
 } {
   const failed = tasks.filter((t) => t.status === TaskStatus.Failed);
   const pending = tasks.filter((t) => t.status === TaskStatus.Pending);
+  const reportedOnly = (t: QueuedTask) =>
+    t.optional === true || reportDeliveredIds.has(t.id);
   return {
     requiredFailedTypes: failed
-      .filter((t) => t.optional !== true)
+      .filter((t) => !reportedOnly(t))
       .map((t) => t.type),
-    optionalFailedTypes: failed
-      .filter((t) => t.optional === true)
-      .map((t) => t.type),
+    optionalFailedTypes: failed.filter(reportedOnly).map((t) => t.type),
     blocked: pending.length,
     blockedTypes: pending.map((t) => t.type),
   };
@@ -691,6 +697,9 @@ async function executeOrchestrator(
       ? Date.parse(t.finishedAt) - Date.parse(t.startedAt)
       : undefined;
 
+  // Tasks that published the run report: a later failure, such as a notebook copy, leaves the user's report intact.
+  const reportDeliveredIds = new Set<string>();
+
   const store = new QueueStore(input.installDir, runId, {
     onTransition: (event, task) => {
       const pick = resolveHarness(switchboardCtx, task.type);
@@ -748,6 +757,7 @@ async function executeOrchestrator(
             ...base,
             duration_ms: durationMs(task),
             error: task.error?.type,
+            report_delivered: reportDeliveredIds.has(task.id),
           });
           break;
         case 'requeue':
@@ -1254,7 +1264,10 @@ async function executeOrchestrator(
           config,
           input,
           boot,
-          emit,
+          emit: (event) => {
+            if (event.kind === 'handoff') reportDeliveredIds.add(task.id);
+            emit(event);
+          },
           prompt: assembleTaskPrompt(
             promptContext,
             resolved.prompt,
@@ -1387,7 +1400,10 @@ async function executeOrchestrator(
 
   if (fatal) {
     // The steps the fatal task stopped still get their terminal event.
-    const stoppedBy = drainVerdict(store.list()).requiredFailedTypes;
+    const stoppedBy = drainVerdict(
+      store.list(),
+      reportDeliveredIds,
+    ).requiredFailedTypes;
     if (fatal.taskType && !stoppedBy.includes(fatal.taskType)) {
       stoppedBy.push(fatal.taskType);
     }
@@ -1430,7 +1446,7 @@ async function executeOrchestrator(
   // pending (blocked behind a failed dependency) did NOT set PostHog up —
   // abort like a linear agent failure instead of claiming success.
   // A failed optional task is exempt: reported per-task, never run-failing.
-  const verdict = drainVerdict(store.list());
+  const verdict = drainVerdict(store.list(), reportDeliveredIds);
   const blocked = verdict.blocked;
   // A pending task at this point never ran and never will — its dependency
   // failed. No transition fires for it, so without this the step leaves no
