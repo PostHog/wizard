@@ -15,7 +15,8 @@ import { RESUME_INSTRUCTION } from '@agent/signals';
 import { analytics } from '@utils/analytics';
 import { Sequence } from '@shared/constants';
 import type { WizardRunOptions } from '@utils/types';
-import type { SpinnerHandle } from '@ui';
+import type { SpinnerHandle } from '@agent/types';
+import { formatLogLine } from '@utils/debug';
 
 // Mock dependencies
 vi.mock('@utils/analytics');
@@ -25,44 +26,6 @@ vi.mock('@utils/debug');
 const mockQuery = vi.fn();
 vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
   query: (...args: unknown[]) => mockQuery(...args),
-}));
-
-// Mock the UI layer
-const mockUIInstance = {
-  log: {
-    step: vi.fn(),
-    success: vi.fn(),
-    error: vi.fn(),
-    warn: vi.fn(),
-    info: vi.fn(),
-  },
-  spinner: vi.fn(),
-  select: vi.fn(),
-  confirm: vi.fn(),
-  text: vi.fn(),
-  intro: vi.fn(),
-  outro: vi.fn(),
-  cancel: vi.fn(),
-  note: vi.fn(),
-  isCancel: vi.fn(),
-  setDetectedFramework: vi.fn(),
-  setCredentials: vi.fn(),
-  pushStatus: vi.fn(),
-  setLoginUrl: vi.fn(),
-  showBlockingOutage: vi.fn(),
-  setReadinessWarnings: vi.fn(),
-  showSettingsOverride: vi.fn(),
-  showAuthError: vi.fn(),
-  startRun: vi.fn(),
-  syncTodos: vi.fn(),
-  setStage: vi.fn(),
-  groupMultiselect: vi.fn(),
-  multiselect: vi.fn(),
-  addTokenUsage: vi.fn(),
-  setFinalTokenCostUsd: vi.fn(),
-};
-vi.mock('../../ui', () => ({
-  getUI: () => mockUIInstance,
 }));
 
 describe('runAgent', () => {
@@ -106,10 +69,6 @@ describe('runAgent', () => {
       stop: vi.fn(),
       message: vi.fn(),
     };
-
-    mockUIInstance.spinner.mockReturnValue(mockSpinner);
-    // Reset log mocks
-    Object.values(mockUIInstance.log).forEach((fn) => fn.mockReset());
   });
 
   it('forwards the output schema to the SDK and delivers the typed result', async () => {
@@ -163,7 +122,7 @@ describe('runAgent', () => {
     );
     const options = mockQuery.mock.calls[0][0].options;
     expect(options.tools).toEqual(['Read', 'Glob', 'Grep']);
-    expect(options.allowedTools).toEqual(['Read', 'Glob', 'Grep']);
+    expect(options.allowedTools).toEqual(['Glob']);
     expect(options.mcpServers).toEqual({});
     expect(options.agents).toBeUndefined();
     expect(options.settingSources).toEqual([]);
@@ -183,6 +142,33 @@ describe('runAgent', () => {
     expect(
       await options.canUseTool('Read', { file_path: 'package.json' }),
     ).toMatchObject({ behavior: 'allow' });
+  });
+
+  it('denies real env files to every tool and runs no project hooks', async () => {
+    mockQuery.mockImplementation(function* () {
+      yield { type: 'result', subtype: 'success' };
+    });
+    await runAgent(
+      defaultAgentConfig,
+      'Integrate',
+      defaultOptions,
+      mockSpinner,
+      { requestRemark: false },
+    );
+    const { settings, allowedTools } = mockQuery.mock.calls[0][0].options;
+    // Outside the project only canUseTool sees file tools, so none is pre-allowed.
+    for (const tool of ['Read', 'Write', 'Edit', 'Grep']) {
+      expect(allowedTools).not.toContain(tool);
+    }
+    expect(settings.disableAllHooks).toBe(true);
+    expect(settings.permissions.deny).toEqual(
+      expect.arrayContaining([
+        'Read(.env*)',
+        'Read(!.env.example)',
+        'Edit(.env*)',
+        'Edit(!.env.example)',
+      ]),
+    );
   });
 
   it('preserves structured-output exhaustion when the SDK throws after its result', async () => {
@@ -269,6 +255,58 @@ describe('runAgent', () => {
     expect(new Set(snapshots.map((items) => items[0].id)).size).toBe(1);
     expect(snapshots[0][0].id).toEqual(expect.any(String));
     expect(snapshots.at(-1)[0].content).toBe('New label');
+  });
+
+  it('a debug run emits the agent debug lines as info log progress; a non-debug run emits none', async () => {
+    const actual = await vi.importActual<typeof import('@utils/debug')>(
+      '@utils/debug',
+    );
+    vi.mocked(formatLogLine).mockImplementation(actual.formatLogLine);
+    const infoLines = async (debug: boolean): Promise<string[]> => {
+      const progress = vi.fn();
+      mockQuery.mockImplementation(
+        ({
+          options,
+        }: {
+          options: { canUseTool: (n: string, i: unknown) => unknown };
+        }) => {
+          // A denied Bash call: its decision is one of the debug lines.
+          void options.canUseTool('Bash', { command: 'rm -rf /' });
+          return (function* () {
+            yield {
+              type: 'result',
+              subtype: 'success',
+              is_error: false,
+              result: 'Done',
+            };
+          })();
+        },
+      );
+      await runAgent(
+        { ...defaultAgentConfig, emit: progress },
+        'test',
+        { ...defaultOptions, debug },
+        mockSpinner as unknown as SpinnerHandle,
+      );
+      return progress.mock.calls
+        .map(([event]) => event)
+        .filter((event) => event.kind === 'log' && event.level === 'info')
+        .map((event) => event.message as string);
+    };
+
+    const debugLines = await infoLines(true);
+    expect(debugLines).toContain('SDK Message type: result');
+    expect(debugLines).toContainEqual(
+      expect.stringMatching(/^Denying bash command \(.+\): rm -rf \/$/),
+    );
+    const quietLines = await infoLines(false);
+    expect(
+      quietLines.filter(
+        (line) =>
+          line.startsWith('SDK Message type') ||
+          line.startsWith('Denying bash command'),
+      ),
+    ).toEqual([]);
   });
 
   it('aborts an unfinished SDK run at its configured timeout', async () => {
@@ -632,9 +670,6 @@ describe('runAgent', () => {
       // Should return success (empty object), not error
       expect(result).toEqual({ kind: 'success' });
       expect(mockSpinner.stop).toHaveBeenCalledWith('Test success');
-
-      // ui.log.error should NOT have been called (errors suppressed for user)
-      expect(mockUIInstance.log.error).not.toHaveBeenCalled();
     });
 
     it('should return success when a post-success result carries an API Error', async () => {
@@ -689,7 +724,6 @@ describe('runAgent', () => {
 
       expect(result).toEqual({ kind: 'success' });
       expect(mockSpinner.stop).toHaveBeenCalledWith('Test success');
-      expect(mockUIInstance.log.error).not.toHaveBeenCalled();
     });
 
     it('should ignore abort requests when no abort cases are registered', async () => {
@@ -934,7 +968,6 @@ describe('subprocess gateway credentials', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mockUIInstance.spinner.mockReturnValue(spinner);
   });
 
   it('takes the base url and bearer from the run own auth', async () => {
@@ -1087,7 +1120,6 @@ describe('gateway re-mint on 401', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mockUIInstance.spinner.mockReturnValue(spinner);
     emit.mockReset();
   });
 

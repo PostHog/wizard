@@ -28,11 +28,11 @@ import {
 } from 'fs';
 import { join } from 'path';
 import { analytics } from '@utils/analytics';
-import type { WizardSession } from '@programs/session/wizard-session';
+import type { ProgramSession } from '../program-session';
 import type { AbortCase } from '@agent/types';
 import { ErrorCodes } from '@shared/errors';
-import { detectWarehouseSources } from '@programs/warehouse-sources/detect';
-import type { DetectedSource } from '@programs/warehouse-sources/types';
+import { detectWarehouseSources } from '../warehouse-sources/detect';
+import type { DetectedSource } from '../warehouse-sources/types';
 
 /** frameworkContext key holding the deterministic PostHog-presence result. */
 export const POSTHOG_PRESENT_KEY = 'postHogPresent';
@@ -50,7 +50,7 @@ export const SELF_DRIVING_DETECTED_TOOLS_KEY = 'selfDrivingDetectedTools';
 
 /** Read the detected tools out of frameworkContext. */
 export function getSelfDrivingDetectedTools(
-  session: WizardSession,
+  session: ProgramSession,
 ): DetectedSource[] {
   return (
     (session.frameworkContext[SELF_DRIVING_DETECTED_TOOLS_KEY] as
@@ -290,7 +290,7 @@ export const SELF_DRIVING_ABORT_CASES: AbortCase[] = [
  * screen renders it and blocks.
  */
 export function detectSelfDrivingPrerequisites(
-  session: WizardSession,
+  session: ProgramSession,
   setFrameworkContext: (key: string, value: unknown) => void,
 ): void {
   const fail = (error: SelfDrivingDetectError) =>

@@ -1,17 +1,14 @@
 import axios from 'axios';
-import { refreshAccessToken } from '@tui/auth/oauth';
+import { refreshAccessToken } from '../tokens';
 import { POSTHOG_PROXY_CLIENT_ID } from '@shared/constants';
 
 vi.mock('axios');
 // No base-URL override resolves to prod routing (kills IS_DEV's implicit localhost).
-vi.mock('../../../shared/utils/urls', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../../../shared/utils/urls')>()),
+vi.mock(import('@utils/urls'), async (importOriginal) => ({
+  ...(await importOriginal()),
   resolveBaseUrl: (baseUrl?: string) => baseUrl,
 }));
-vi.mock('../../../shared/utils/debug', () => ({
-  logToFile: vi.fn(),
-  setDebugSink: vi.fn(),
-}));
+vi.mock(import('@utils/debug'), () => ({ logToFile: vi.fn() }));
 
 const mockedAxios = axios as Mocked<typeof axios>;
 

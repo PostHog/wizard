@@ -1,45 +1,24 @@
-/** Screens that participate in linear programs. */
+/** Core screen ids and overlays: a leaf module, so program entries and the TUI entry name them at load time. */
+
+/**
+ * The screens the core mounts. A program's own screens are named in its
+ * folder (`programs/<id>/screen-ids.ts`) and mounted through its TUI entry.
+ */
 export enum ScreenId {
-  Intro = 'intro',
-  RevenueIntro = 'revenue-intro',
-  WarehouseIntro = 'warehouse-intro',
-  SourceMapsIntro = 'source-maps-intro',
-  SourceMapsDetect = 'source-maps-detect',
-  SourceMapsOutro = 'source-maps-outro',
-  MigrationIntro = 'migration-intro',
-  AgentSkillIntro = 'agent-skill-intro',
-  AiObservabilityIntro = 'ai-observability-intro',
-  MetricsIntro = 'metrics-intro',
-  ErrorTrackingIntro = 'error-tracking-intro',
-  FeatureFlagsIntro = 'feature-flags-intro',
-  ErrorTrackingDetect = 'error-tracking-detect',
-  SelfDrivingIntro = 'self-driving-intro',
-  SelfDrivingIntegrationCheck = 'self-driving-integration-check',
-  SelfDrivingIntegrationDetect = 'self-driving-integration-detect',
-  SelfDrivingHandoff = 'self-driving-handoff',
-  SelfDrivingGithub = 'self-driving-github',
-  AuditIntro = 'audit-intro',
-  AuditRun = 'audit-run',
-  AuditOutro = 'audit-outro',
   HealthCheck = 'health-check',
-  DoctorIntro = 'doctor-intro',
-  DoctorReport = 'doctor-report',
   Setup = 'setup',
   Auth = 'auth',
   Run = 'run',
   Mcp = 'mcp',
-  McpSuggestedPrompts = 'mcp-suggested-prompts',
   SlackConnect = 'slack-connect',
   KeepSkills = 'keep-skills',
   Outro = 'outro',
   MintFailure = 'mint-failure',
   Exit = 'exit',
-  McpAdd = 'mcp-add',
-  McpRemove = 'mcp-remove',
   AiOptIn = 'ai-opt-in',
 }
 
-/** Screens that interrupt programs as overlays */
+/** Screens that interrupt programs as overlays. */
 export enum Overlay {
   SettingsOverride = 'settings-override',
   ManagedSettings = 'managed-settings',

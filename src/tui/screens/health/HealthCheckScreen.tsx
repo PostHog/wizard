@@ -22,9 +22,10 @@ import {
   SIGNUP_WIZARD_READINESS_CONFIG,
 } from '@shared/health-checks/readiness';
 import { ServiceHealthStatus } from '@shared/health-checks/types';
-import { wizardAbort } from '@host/wizard-abort';
+import { abortOnScreens } from '@tui/abort';
 import { ErrorCodes } from '@shared/errors';
-import { downloadSkill } from '@agent';
+import { scanInstalledSkill } from '@programs';
+import { downloadSkill } from '@shared/skill-install';
 import { fetchSkillMenu } from '@shared/skill-menu';
 import { GITHUB_SKILLS_BASE_URL } from '@shared/constants';
 import { useDismissOnAnyKey } from '@tui/hooks/useDismissOnAnyKey';
@@ -36,8 +37,8 @@ interface HealthCheckScreenProps {
 const EXAMPLE_PROMPT =
   'Integrate PostHog into this project using the skill files in .posthog/skills/. Read SKILL.md first, then follow the numbered program files in order.';
 
-const SkillsDownloadedScreen = () => {
-  useDismissOnAnyKey(() => process.exit(0));
+const SkillsDownloadedScreen = ({ store }: HealthCheckScreenProps) => {
+  useDismissOnAnyKey(() => store.requestExit(0));
 
   return (
     <Box flexDirection="column" flexGrow={1}>
@@ -73,7 +74,7 @@ export const HealthCheckScreen = ({ store }: HealthCheckScreenProps) => {
   const result = store.session.readinessResult;
 
   if (downloaded) {
-    return <SkillsDownloadedScreen />;
+    return <SkillsDownloadedScreen store={store} />;
   }
 
   // Still checking — show spinner
@@ -157,7 +158,7 @@ export const HealthCheckScreen = ({ store }: HealthCheckScreenProps) => {
         // Pre-auth outage cache: no gateway, so a flagged skill fails closed.
         await downloadSkill(skill, store.session.installDir, {
           skillsRoot: '.posthog/skills',
-          triage: undefined,
+          scan: (dir) => scanInstalledSkill(dir, undefined),
         });
       }
     }
@@ -168,7 +169,7 @@ export const HealthCheckScreen = ({ store }: HealthCheckScreenProps) => {
     canDownloadSkills && !isSkillsOriginDown
       ? () => void handleDownloadAndExit()
       : () =>
-          void wizardAbort({
+          void abortOnScreens(store, {
             code: ErrorCodes.EnvServiceOutage,
             message: 'Exited due to service outage.',
           });
@@ -194,13 +195,13 @@ export const HealthCheckScreen = ({ store }: HealthCheckScreenProps) => {
             confirmLabel=""
             cancelLabel="Exit [Esc]"
             onConfirm={() =>
-              void wizardAbort({
+              void abortOnScreens(store, {
                 code: ErrorCodes.EnvServiceOutage,
                 message: 'Exited due to service outage.',
               })
             }
             onCancel={() =>
-              void wizardAbort({
+              void abortOnScreens(store, {
                 code: ErrorCodes.EnvServiceOutage,
                 message: 'Exited due to service outage.',
               })

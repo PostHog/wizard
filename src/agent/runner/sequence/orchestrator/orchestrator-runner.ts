@@ -22,26 +22,37 @@ import {
   writeFileSync,
 } from 'fs';
 import * as path from 'path';
-import { OutroKind, type TaskNotice } from '@agent/progress';
+import { OutroKind } from '@shared/outro';
+import type { TaskNotice } from '../../../progress';
 import {
   POSTHOG_DOCS_URL,
   WIZARD_CONTACT_EMAIL,
   WIZARD_OAUTH_SCOPES,
   WIZARD_PROVISIONING_SCOPES,
 } from '@shared/constants';
-import { installSkillById } from '@agent/tools';
+import { installSkillById } from '@shared/skill-install';
+import {
+  formatYaraAbortMessage,
+  scanInstalledSkill,
+} from '../../../yara-hooks';
 import { fetchSkillMenu, type SkillEntry } from '@shared/skill-menu';
 import { analytics } from '@utils/analytics';
 import { ciExcludedTaskTypes } from '@utils/ci-flag-overrides';
 import { logToFile } from '@utils/debug';
 import { ringTerminalBell } from '@utils/terminal-bell';
-import { AGENT_ERROR_CODE } from '@agent/error-map';
-import { classifyRunFailure, ErrorCodes, WizardError } from '@shared/errors';
+import { AGENT_ERROR_CODE } from '../../../error-map';
+import { AgentErrorType } from '../../../agent-interface';
+import {
+  classifyRunFailure,
+  type ErrorCode,
+  ErrorCodes,
+  WizardError,
+} from '@shared/errors';
 import type { AgentResult } from '../../harness/types';
-import type { AgentInteraction } from '@agent/progress';
+import type { AgentInteraction } from '../../../progress';
 import type {
   AgentFailure,
-  RunConfig,
+  ResolvedRunConfig,
   SequenceResult,
   SequenceContext,
 } from '../../shared/types';
@@ -73,8 +84,7 @@ import {
 import { RunMetrics } from './run-metrics';
 import { dependencyClosure, uncoveredBySink } from './queue-tools';
 import { deferSeededTasks } from './seeded-deps';
-import { LONGER_ASK_TIMEOUT_MS } from '@agent/wizard-ask-bridge';
-import { shouldDisableAsk } from '../../shared/bootstrap';
+import { LONGER_ASK_TIMEOUT_MS, shouldDisableAsk } from '@shared/ask-policy';
 import {
   agentRunTools,
   assembleSeedPrompt,
@@ -86,7 +96,7 @@ import {
   ASK_TOOL,
   type AgentPrompt,
   type OrchestratorPromptContext,
-} from '@agent/agent-prompt-loader';
+} from '../../../agent-prompt-loader';
 
 /** Docs page (`django.md`, `nuxt-js-3-6.md`) — steps start with a digit, agent artifacts (`SKILL.md`, `EXAMPLE*`, `COMMANDMENTS.md`) have uppercase. */
 const isDocPage = (name: string): boolean =>
@@ -165,7 +175,8 @@ function requireTaskHarness(pick: HarnessPick): AgentHarness & {
   };
 }
 
-function terminalResult(
+/** How an agent result ends the run, or undefined when it doesn't. */
+export function terminalResult(
   result: AgentResult,
 ): { outcome: RunOutcome.Failed; failure: AgentFailure } | undefined {
   switch (result.kind) {
@@ -188,7 +199,11 @@ function terminalResult(
         outcome: RunOutcome.Failed,
         failure: {
           code: AGENT_ERROR_CODE[result.classification],
-          message: result.message ?? 'Agent failed',
+          // A security stop says so, as the linear sequence does.
+          message:
+            result.classification === AgentErrorType.YARA_VIOLATION
+              ? formatYaraAbortMessage()
+              : result.message ?? 'Agent failed',
           error: result.error,
         },
       };
@@ -461,6 +476,15 @@ export function drainVerdict(tasks: readonly QueuedTask[]): {
   };
 }
 
+/** A drain where a required step failed, or where nothing failed but steps were blocked and never ran. */
+export function drainFailureCode(verdict: {
+  requiredFailedTypes: readonly string[];
+}): ErrorCode {
+  return verdict.requiredFailedTypes.length > 0
+    ? ErrorCodes.AgentOrchestratorTasksFailed
+    : ErrorCodes.AgentOrchestratorTasksBlocked;
+}
+
 /**
  * The one-line "what went wrong" the abort message leads with.
  *
@@ -556,7 +580,7 @@ export function displayOrder(
  * program config — the registry and seed note both read this one list.
  */
 export function effectiveExcludedTaskTypes(
-  source: Pick<RunConfig, 'excludedTaskTypes'>,
+  source: Pick<ResolvedRunConfig, 'excludedTaskTypes'>,
   flags: Record<string, string>,
 ): string[] {
   return [
@@ -763,7 +787,7 @@ async function executeOrchestrator(
       boot.skillsBaseUrl,
       {
         skillsRoot: path.join(QUEUE_DIR_NAME, 'reference'),
-        triage: boot.triageProvider,
+        scan: (dir) => scanInstalledSkill(dir, boot.triageProvider),
       },
     );
     if (signal?.aborted) return cancelledRun();
@@ -1195,7 +1219,10 @@ async function executeOrchestrator(
           variantId,
           input.installDir,
           boot.skillsBaseUrl,
-          { skillsRoot: taskSkillsRoot, triage: boot.triageProvider },
+          {
+            skillsRoot: taskSkillsRoot,
+            scan: (dir) => scanInstalledSkill(dir, boot.triageProvider),
+          },
         );
         if (signal?.aborted) return;
         if (result.kind === 'ok') {
@@ -1219,9 +1246,9 @@ async function executeOrchestrator(
       // panel shows progress); errors still surface — the harness stops the
       // spinner with its own error text.
       //
-      // Per-task role = task.type — the switchboard consults
-      // PROGRAM_BINDINGS[id].contextMillOverride?.[task.type] for wizard-side
-      // per-agent overrides. Prompt-frontmatter model still wins (§3.6).
+      // Per-task role = task.type — the switchboard consults the program
+      // binding's contextMillOverride?.[task.type] for wizard-side per-agent
+      // overrides. Prompt-frontmatter model still wins (§3.6).
       const taskPick = resolveHarness(switchboardCtx, task.type);
       const taskHarness = requireTaskHarness(taskPick);
       const taskModel = taskModelSpec(registry, task, taskPick.harness);
@@ -1436,11 +1463,14 @@ async function executeOrchestrator(
             ', ',
           )}.\n\nPlease try again, approving all permissions on the PostHog authorization screen. If it still fails, report it to: ${WIZARD_CONTACT_EMAIL}`
         : `The wizard was unable to set up PostHog: ${whatFailed}.\n\nPlease report this to: ${WIZARD_CONTACT_EMAIL}`;
+    const code = drainFailureCode(verdict);
     return failed({
-      code: ErrorCodes.AgentOrchestratorTasksFailed,
+      code,
       message,
       error: new WizardError(
-        'orchestrator drain ended with failed tasks',
+        code === ErrorCodes.AgentOrchestratorTasksFailed
+          ? 'orchestrator drain ended with failed tasks'
+          : 'orchestrator drain ended with blocked tasks',
         {
           tasks_failed: summary.failed,
           tasks_blocked: blocked,
@@ -1448,7 +1478,7 @@ async function executeOrchestrator(
           missing_oauth_scopes: missingScopes.join(' '),
           queue_state: JSON.stringify(store.list()),
         },
-        ErrorCodes.AgentOrchestratorTasksFailed,
+        code,
       ),
     });
   }

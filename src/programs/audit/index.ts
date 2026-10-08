@@ -1,11 +1,9 @@
-import { AGENT_SKILL_STEPS } from '@programs/agent-skill/index';
-import { createSkillProgram } from '@programs/shared/skill-program';
-import { withAuditScreens } from '@tui/programs/audit/flow';
-import type { ProgramStep, ProgramConfig } from '@programs/program-step';
-import type { ProgramRun } from '@programs/program-run';
-import type { RunnerContext } from '@programs/runner-context';
-import type { WizardSession } from '@programs/session/wizard-session';
-import { OutroKind } from '@programs/session/wizard-session';
+import { createSkillProgram } from '../shared/skill-program';
+import type { ProgramConfig } from '../program-step';
+import type { ProgramRun } from '../program-run';
+import type { RunnerContext } from '../runner-context';
+import type { ProgramSession } from '../program-session';
+import { OutroKind } from '@shared/outro';
 import { WIZARD_TOOL_NAMES } from '@agent';
 import { headlessOption, regionOption } from '@shared/headless-mode';
 import { AUDIT_ABORT_CASES } from './detect.js';
@@ -15,13 +13,12 @@ import {
   AUDIT_REPORT_FILE,
 } from './types.js';
 import { AUDIT_SEED_CHECKS, seedAuditLedger } from './seed.js';
+import { config as eventsAudit } from './events/config.js';
 
-const seedBeforeAuditRun = (session: WizardSession): void => {
+const seedBeforeAuditRun = (session: ProgramSession): void => {
   seedAuditLedger(session.installDir);
   session.frameworkContext[AUDIT_CHECKS_KEY] = AUDIT_SEED_CHECKS;
 };
-
-const auditSteps: ProgramStep[] = withAuditScreens(AGENT_SKILL_STEPS);
 
 const baseConfig = createSkillProgram({
   skillId: 'audit',
@@ -42,7 +39,7 @@ const baseConfig = createSkillProgram({
 });
 
 const auditRun = async (
-  session: WizardSession,
+  session: ProgramSession,
   runner: RunnerContext,
 ): Promise<ProgramRun> => {
   seedBeforeAuditRun(session);
@@ -67,12 +64,8 @@ const auditRun = async (
         ? `${cloudUrl}/products?source=wizard`
         : undefined;
 
-      // Note: `sess` here is the agent-runner's snapshot of session at
-      // runAgent() invocation time. Any URL emissions during the run land
-      // on the live store, NOT on this snapshot. The UI layer
-      // (InkUI.setOutroData) merges live URLs in on top of this return
-      // value, so it's safe to leave dashboardUrl/notebookUrl as undefined
-      // here when the snapshot doesn't have them.
+      // The session store lays any URL the agent emitted during the run over
+      // this outro, so dashboardUrl/notebookUrl may stay undefined here.
       return {
         kind: OutroKind.Success as const,
         message: baseRun.successMessage,
@@ -86,9 +79,8 @@ const auditRun = async (
   };
 };
 
-export const auditConfig: ProgramConfig = {
+const audit: ProgramConfig = {
   ...baseConfig,
-  steps: auditSteps,
   run: auditRun,
   auditLedgerFile: AUDIT_CHECKS_FILE,
   // Ledger tools are opt-in per program; pi matches on the short name.
@@ -104,3 +96,24 @@ export const auditConfig: ProgramConfig = {
   // `wizard audit` command; dispatchProgram routes it to runWizardHeadless.
   cliOptions: { ...headlessOption, ...regionOption },
 };
+
+/** Registers `audit` and `events-audit`, which has no entry of its own. */
+export const configs = [
+  audit,
+  eventsAudit,
+] as const satisfies readonly ProgramConfig[];
+
+export {
+  AUDIT_CHECKS_FILE,
+  AUDIT_CHECKS_KEY,
+  AUDIT_REPORT_FILE,
+  getAuditChecks,
+  type AuditCheck,
+  type AuditStatus,
+} from './types.js';
+export {
+  removeAuditLedger,
+  startAuditLedgerWatcher,
+} from './ledger-watcher.js';
+/** The checks every audit run starts from. */
+export { AUDIT_SEED_CHECKS } from './seed.js';

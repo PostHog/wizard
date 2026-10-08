@@ -17,11 +17,7 @@
 
 import type { Options } from 'yargs';
 
-/**
- * The on-CLI flag name. Intentionally ugly + undocumented; do not surface it in
- * `--help`, the README, or user-facing error messages.
- */
-export const HEADLESS_FLAG = 'headless-DONOTUSE-EXPERIMENTAL';
+import { HEADLESS_FLAG } from '@env';
 
 /**
  * The yargs option declaration for the headless flag. Commands opt in so that

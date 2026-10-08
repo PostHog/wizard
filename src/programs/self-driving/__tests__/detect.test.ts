@@ -3,9 +3,9 @@ import * as path from 'path';
 import * as os from 'os';
 import {
   detectSelfDrivingPrerequisites,
-  selfDrivingConfig,
+  config as selfDriving,
   SELF_DRIVING_ABORT_CASES,
-} from '@programs/self-driving/index';
+} from '@programs/self-driving';
 import {
   detectPostHogPresent,
   POSTHOG_MANIFESTS,
@@ -13,8 +13,8 @@ import {
   SELF_DRIVING_TOOL_KINDS,
   getSelfDrivingDetectedTools,
 } from '@programs/self-driving/detect';
-import { getDetectedWarehouseSources } from '@programs/warehouse-source/detect';
-import { WizardStore } from '@tui/store';
+import { getDetectedWarehouseSources } from '@programs/warehouse-sources/detect';
+import { SessionStore } from '@programs/session/session-store';
 import { SOURCE_DETECTORS } from '@programs/warehouse-sources/registry';
 import type { DetectedSource } from '@programs/warehouse-sources/types';
 import { toIntegrationReport } from '@programs/self-driving/detect-agentic';
@@ -23,9 +23,9 @@ import {
   type AgenticDetectionReport,
 } from '@programs/detection/agentic';
 import { Integration } from '@shared/constants';
-import { WIZARD_TOOL_NAMES } from '@agent/tools';
+import { WIZARD_TOOL_NAMES } from '@agent';
 import { buildSession } from '@programs/session/wizard-session';
-import { testRunnerContext } from '../../../../test/runner-context';
+import { testRunnerContext } from '@programs/shared/__tests__/runner-context.no-jest';
 import type { Mock } from 'vitest';
 
 function makeTmpDir(): string {
@@ -132,9 +132,8 @@ describe('the detect step does not leak into the composed integration run', () =
   afterEach(() => cleanup(tmpDir));
 
   it('stashes under its own key and leaves the warehouse key untouched', async () => {
-    const store = new WizardStore('self-driving');
-    store.session = buildSession({ installDir: tmpDir });
-    await store.runReadyHooks();
+    const store = new SessionStore(buildSession({ installDir: tmpDir }));
+    await selfDriving.onReady?.(store.readyContext());
 
     // Self-driving sees its tools...
     expect(
@@ -168,21 +167,16 @@ describe('SELF_DRIVING_ABORT_CASES', () => {
   });
 });
 
-describe('selfDrivingConfig', () => {
+describe('self-driving config', () => {
   it('keeps wizard_ask enabled — the flow is interview-driven', () => {
-    expect(selfDrivingConfig.disallowedTools ?? []).not.toContain(
+    expect(selfDriving.disallowedTools ?? []).not.toContain(
       WIZARD_TOOL_NAMES.wizardAsk,
     );
   });
 
-  it('ships its own Learn deck', () => {
-    const blocks = selfDrivingConfig.getContentBlocks?.() ?? [];
-    expect(blocks.length).toBeGreaterThan(0);
-  });
-
   it('gives wizard_ask a 30-min timeout for the browser-handoff steps', async () => {
     // `run` is resolved per-session so the prompt can carry the integrate flag.
-    const { run } = selfDrivingConfig;
+    const { run } = selfDriving;
     const resolved =
       typeof run === 'function'
         ? await run(buildSession({}), testRunnerContext())
@@ -191,28 +185,10 @@ describe('selfDrivingConfig', () => {
   });
 
   it('wires the self-driving-setup skill and CLI command', () => {
-    expect(selfDrivingConfig.command).toBe('self-driving');
-    expect(selfDrivingConfig.skillId).toBe('self-driving-setup');
-    expect(selfDrivingConfig.id).toBe('self-driving');
-    expect(selfDrivingConfig.requires).toContain('posthog-integration');
-  });
-
-  it('has no keep-skills step — the setup skill is removed in postRun', () => {
-    const stepIds = selfDrivingConfig.steps.map((s) => s.id);
-    expect(stepIds).not.toContain('skills');
-    expect(stepIds).toEqual([
-      'detect',
-      'intro',
-      'integration-check',
-      'health-check',
-      'auth',
-      'integrate-detect',
-      'integrate-run',
-      'self-driving-handoff',
-      'self-driving-github',
-      'run',
-      'outro',
-    ]);
+    expect(selfDriving.command).toBe('self-driving');
+    expect(selfDriving.skillId).toBe('self-driving-setup');
+    expect(selfDriving.id).toBe('self-driving');
+    expect(selfDriving.requires).toContain('posthog-integration');
   });
 });
 
@@ -521,32 +497,6 @@ describe('detectPostHogPresent', () => {
   });
 });
 
-describe('integrate-detect step', () => {
-  const step = selfDrivingConfig.steps.find((s) => s.id === 'integrate-detect');
-
-  it('is incomplete while integrating and no project picked yet', () => {
-    const session = buildSession({});
-    session.integrate = true;
-    session.integration = null;
-    expect(step?.isComplete?.(session)).toBe(false);
-  });
-
-  it('is complete once a project is picked to integrate', () => {
-    const session = buildSession({});
-    session.integrate = true;
-    session.integration = Integration.nextjs;
-    expect(step?.isComplete?.(session)).toBe(true);
-  });
-
-  it('is complete once the user continues with an existing install', () => {
-    // integrate=false must complete the step or the orchestrator hangs.
-    const session = buildSession({});
-    session.integrate = false;
-    session.integration = null;
-    expect(step?.isComplete?.(session)).toBe(true);
-  });
-});
-
 describe('toIntegrationReport', () => {
   const build = (
     p: Partial<AgenticDetectionReport['projects'][number]>,
@@ -621,9 +571,7 @@ describe('manifest list sync', () => {
 });
 
 describe('integrate-run targetDir', () => {
-  const targetDir = selfDrivingConfig.steps.find(
-    (s) => s.id === 'integrate-run',
-  )?.targetDir;
+  const targetDir = selfDriving.runSteps?.['integrate-run']?.targetDir;
 
   const dirFor = (picked: string): string | undefined => {
     const session = buildSession({ installDir: '/repo' });

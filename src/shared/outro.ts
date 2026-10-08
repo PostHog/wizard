@@ -1,3 +1,7 @@
+/** The outro every run ends on: the agent, programs and the UI share this shape. */
+
+import type { ErrorCode } from '@shared/errors';
+
 /** Outcome kind for the outro screen */
 export enum OutroKind {
   Success = 'success',
@@ -9,6 +13,8 @@ export interface OutroData {
   kind: OutroKind;
   /** Main headline (green check for Success, red X for Error, etc.) */
   message?: string;
+  /** Error-only: the primary recovery instruction, above the supporting body. */
+  instruction?: string;
   /** Free-form body text shown under the headline. Use \n for paragraph breaks. */
   body?: string;
   /** Success-only: bulleted list of "what the agent did" */
@@ -27,11 +33,13 @@ export interface OutroData {
    */
   nextSteps?: { heading: string; items: string[] };
   docsUrl?: string;
+  /** Optional label above an error's documentation link. */
+  docsLabel?: string;
   continueUrl?: string;
   /** Report file the agent wrote (e.g. "posthog-setup-report.md") */
   reportFile?: string;
-  /** Stable machine-readable error code from the error catalog (@lib/errors). */
-  errorCode?: import('@shared/errors').ErrorCode;
+  /** Stable machine-readable error code from the error catalog (@shared/errors). */
+  errorCode?: ErrorCode;
   /** Structured context for the error code; safe for telemetry payloads. */
   errorDetail?: Record<string, unknown>;
   /** PostHog dashboard URL the program created on the user's behalf. */

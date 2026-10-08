@@ -1,7 +1,6 @@
-import {
-  OutroKind,
-  type WizardSession,
-} from '@programs/session/wizard-session';
+import { ErrorCodes } from '@shared/errors';
+import { OutroKind } from '@shared/outro';
+import type { WizardSession } from '@programs/types';
 
 export const MINT_FAILURE_MESSAGE = "The Wizard's a little busy";
 
@@ -17,6 +16,9 @@ export function isRunFailure(
   session: Pick<WizardSession, 'outroData' | 'credentials'>,
 ): boolean {
   return (
-    session.outroData?.kind === OutroKind.Error && session.credentials !== null
+    session.outroData?.kind === OutroKind.Error &&
+    session.credentials !== null &&
+    // A security stop is a decision, not an outage: it shows its own outro, never the busy handoff.
+    session.outroData.errorCode !== ErrorCodes.AgentYaraViolation
   );
 }

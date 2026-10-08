@@ -1,5 +1,62 @@
 # Changelog
 
+## [2.81.1](https://github.com/PostHog/wizard/compare/v2.81.0...v2.81.1) (2026-10-08)
+
+
+### Bug Fixes
+
+* Shrink Mcp screens ([#1430](https://github.com/PostHog/wizard/issues/1430)) ([d5d2a55](https://github.com/PostHog/wizard/commit/d5d2a559812edd685e339d0e0a1b74d2a8aeb517))
+
+## [2.81.0](https://github.com/PostHog/wizard/compare/v2.80.1...v2.81.0) (2026-10-07)
+
+
+### Features
+
+* drop the Slack connect step from the integration and MCP flows ([#1410](https://github.com/PostHog/wizard/issues/1410)) ([08c70dd](https://github.com/PostHog/wizard/commit/08c70ddf2e3fd28c9b57b85ca1d4fdd1cb607403))
+* **mcp-analytics:** support Go and Ruby servers in the wizard command ([#1424](https://github.com/PostHog/wizard/issues/1424)) ([08df0a3](https://github.com/PostHog/wizard/commit/08df0a3e2f9a4bdd1127f383717678a3e988c671))
+* **tui:** lead the exit line with the report's needs-attention items ([#1352](https://github.com/PostHog/wizard/issues/1352)) ([146c6b8](https://github.com/PostHog/wizard/commit/146c6b83752b2539033696002a3f6890e453459b))
+
+
+### Bug Fixes
+
+* **agent:** decide scoped rm in the shared bash fence  ([#1337](https://github.com/PostHog/wizard/issues/1337)) ([666c5c4](https://github.com/PostHog/wizard/commit/666c5c44c181ccb2fa09f1b21d1982a786535bd0))
+* **agent:** show a security stop as itself, never the busy handoff ([#1420](https://github.com/PostHog/wizard/issues/1420)) ([4f0e42c](https://github.com/PostHog/wizard/commit/4f0e42cbe4bb57160a107e8f940174c77408c505))
+* **cli:** end the run like Ctrl-C when the terminal closes (SIGHUP) ([#1416](https://github.com/PostHog/wizard/issues/1416)) ([675ad61](https://github.com/PostHog/wizard/commit/675ad61eeb7423687e16a6ab6b5b5e7a677efe2a))
+* **e2e-harness:** exit tui-snapshots with the host's exit code ([#1341](https://github.com/PostHog/wizard/issues/1341)) ([f0d301e](https://github.com/PostHog/wizard/commit/f0d301e4dd59a83851cf03fb4e73ccbb28888b6b))
+* **mcp:** report the MCP outcome when the results show, not on Enter ([#1415](https://github.com/PostHog/wizard/issues/1415)) ([3921605](https://github.com/PostHog/wizard/commit/3921605bf45803444cdc05eacf9e93465e337224))
+* **mcp:** show a hint for invalid Claude Code settings JSON on plugin install ([#1366](https://github.com/PostHog/wizard/issues/1366)) ([72d0500](https://github.com/PostHog/wizard/commit/72d0500a745617aaea809a789b2da21bcfefcbfc))
+* noramlize path for working directory ([#1259](https://github.com/PostHog/wizard/issues/1259)) ([e941407](https://github.com/PostHog/wizard/commit/e941407daa8a49ef48589acb740db25fcd818182))
+* **orchestrator:** handle missing framework before skill preflight ([#1347](https://github.com/PostHog/wizard/issues/1347)) ([d3a68e8](https://github.com/PostHog/wizard/commit/d3a68e83b880aae4c3dacba02bf9de5f0fd04715))
+* **pi:** tell task agents the wizard tools are not behind posthog_exec ([#1419](https://github.com/PostHog/wizard/issues/1419)) ([f604ebe](https://github.com/PostHog/wizard/commit/f604ebe42a7413e4c402c339a43b9e960f626e30))
+* **programs:** record a caller cancel as a cancel outro, not a run failure ([#1418](https://github.com/PostHog/wizard/issues/1418)) ([9759faa](https://github.com/PostHog/wizard/commit/9759faa5662893a2843345a6de632b62501e6aad))
+* **self-driving:** keep the GitHub gate working past the 1-hour token ([#1409](https://github.com/PostHog/wizard/issues/1409)) ([e072e68](https://github.com/PostHog/wizard/commit/e072e6813bb89bf6dffc64a2ac15fe90e89604ae))
+* **telemetry:** fingerprint coded errors by code, name the blocked-only drain ([#1013](https://github.com/PostHog/wizard/issues/1013)) ([622aa92](https://github.com/PostHog/wizard/commit/622aa9290b0cda3c62fb4a23af03ca4ca3f61a91))
+* **tui:** flush analytics before a screen's exit request ends the run ([#1417](https://github.com/PostHog/wizard/issues/1417)) ([3c8fe39](https://github.com/PostHog/wizard/commit/3c8fe39e633d0ae03e287a8352c72174639a7454))
+
+## [2.80.1](https://github.com/PostHog/wizard/compare/v2.80.0...v2.80.1) (2026-10-05)
+
+
+### Bug Fixes
+
+* **agent:** deny .env files with SDK rules and skip project hooks ([#1408](https://github.com/PostHog/wizard/issues/1408)) ([1e1e56c](https://github.com/PostHog/wizard/commit/1e1e56c003712aa2087b6c5d2d5964cac06f35c4))
+* **agent:** let wizard_ask re-collect a field the downstream call rejected ([#1367](https://github.com/PostHog/wizard/issues/1367)) ([690eae5](https://github.com/PostHog/wizard/commit/690eae5883a145f2eeb30494a30030c900faf72b))
+* **orchestrator:** redact secrets from task remarks before capture ([#1412](https://github.com/PostHog/wizard/issues/1412)) ([2fea60d](https://github.com/PostHog/wizard/commit/2fea60db0b4064116b376da8aedc63596ca86247))
+* **outro:** list every detected data source, not the ones the step skipped ([#1395](https://github.com/PostHog/wizard/issues/1395)) ([88a1761](https://github.com/PostHog/wizard/commit/88a17613bde87a4afa5890df374fda53b3543cda))
+
+## [2.80.0](https://github.com/PostHog/wizard/compare/v2.79.1...v2.80.0) (2026-10-02)
+
+
+### Features
+
+* **error-tracking:** describe release linking for Python, Ruby and PHP ([#1399](https://github.com/PostHog/wizard/issues/1399)) ([fb790ab](https://github.com/PostHog/wizard/commit/fb790ab9777e218ec765ee37cc7fbd18cf3493e6))
+
+
+### Bug Fixes
+
+* **ask:** arm the wizard_ask timeout per question, not per request ([#1368](https://github.com/PostHog/wizard/issues/1368)) ([6cb4093](https://github.com/PostHog/wizard/commit/6cb4093ec7efc150853c7d9269e5109377344331))
+* **harness:** tag pi's MCP user-agent with the running program ([#1404](https://github.com/PostHog/wizard/issues/1404)) ([7cdd92c](https://github.com/PostHog/wizard/commit/7cdd92c98ae83d10c32c78504facc08dcdeaec38))
+* **tui:** bump ink to 7.1.1 to stop full-screen flicker ([#1406](https://github.com/PostHog/wizard/issues/1406)) ([3dd8c6f](https://github.com/PostHog/wizard/commit/3dd8c6f6a73aba4104713546042c2fd54b98a0f5))
+
 ## [2.79.1](https://github.com/PostHog/wizard/compare/v2.79.0...v2.79.1) (2026-09-29)
 
 

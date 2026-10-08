@@ -2,7 +2,7 @@ import { Box, Text } from 'ink';
 import type { ReactNode } from 'react';
 import { useState, useSyncExternalStore } from 'react';
 import type { WizardStore } from '@tui/store';
-import { FEATURE_FLAGS_STEP_SKILL_ID } from '@programs/feature-flags/prompts';
+import { FEATURE_FLAGS_STEP_SKILL_ID } from '@programs/feature-flags';
 import { LoadingBox } from '@tui/primitives/index';
 import { IntroScreenLayout } from '@tui/screens/IntroScreenLayout';
 import { SkillSourceInfo, useSkillEntry } from '@tui/screens/SkillSourceInfo';
@@ -81,7 +81,7 @@ export const FeatureFlagsIntroScreen = ({
       ];
 
   const menuActions: Record<string, () => void> = {
-    cancel: () => process.exit(0),
+    cancel: () => store.requestExit(0),
     'more-info': () => setShowingMoreInfo(true),
     back: () => setShowingMoreInfo(false),
     continue: () => store.completeSetup(),

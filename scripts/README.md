@@ -1,13 +1,17 @@
 # scripts/
 
-Helper scripts. The build-related ones (`generate-version.cjs`,
-`smoke-test*.sh`, `check-screens.tsx`) are wired into `package.json`. The rest
-below are **manual, runnable tools** for headless e2e + snapshots — each is a
-standalone `tsx` entry, named `*.no-jest.ts` so Jest ignores it.
+Helper scripts. The build-related ones (`generate-version.cjs`, `smoke-test.sh`,
+`warlock-smoke-test.ts`) are wired into `package.json`. `smoke-test-ci.sh` runs
+from `.github/workflows/smoke-test.yml`. Scripts import the wizard only through
+public entries, like the e2e harness; see
+[`ARCHITECTURE.md`](../e2e-harness/ARCHITECTURE.md#the-pieces). The rest below
+are **manual, runnable tools** for headless e2e + snapshots — each is a
+standalone `tsx` entry, named `*.no-jest.ts` so Vitest ignores it
+(`vitest.config.ts` excludes `**/*.no-jest.*`).
 
 Run from the repo root, e.g. `npx tsx scripts/<name>.no-jest.ts`.
 
-Both e2e routes share one primitive: the **real TUI host** runs `startTUI` (the
+Both e2e routes share one primitive: the **real TUI host** runs `runTui` (the
 real ink render) and is driven purely by store state manipulation; a PTY parent
 ([`e2e-harness/tui-capture.ts`](../e2e-harness/tui-capture.ts), node-pty +
 `@xterm/headless`) captures the real rendered screen.
@@ -46,6 +50,7 @@ exploration does not need either secret. See
 
 The control plane lives in [`e2e-harness/`](../e2e-harness/) — out of `src/`, so
 none of it ships in prod. `WizardCiDriver` (read/act over the store), the
-screen→action registry, the e2e profiles, and `tui-capture` (real-TUI PTY
-capture). See [`ARCHITECTURE.md`](../e2e-harness/ARCHITECTURE.md) for how the
-two routes drive these (env strip, scoped project id, gotchas).
+screen→action registry, the profile loader (`profiles.ts`, which reads each
+`src/programs/<id>/test/e2e.json`), and `tui-capture` (real-TUI PTY capture).
+See [`ARCHITECTURE.md`](../e2e-harness/ARCHITECTURE.md) for how the two routes
+drive these (env strip, scoped project id, gotchas).

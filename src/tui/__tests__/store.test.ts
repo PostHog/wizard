@@ -1,24 +1,26 @@
 import {
   WizardStore,
-  TaskStatus,
   Program,
   type ProgramId,
   ScreenId,
   Overlay,
-  RunPhase,
-  McpOutcome,
 } from '@tui/store';
-import { OutroKind, ScanConsent } from '@programs/session/wizard-session';
-import { EXPANDED_COUNT } from '@tui/constants';
+import { OutroKind } from '@shared/outro';
+import { McpOutcome, RunPhase, ScanConsent } from '@shared/run-state';
+import { TaskStatus } from '@shared/task-status';
 import {
   WizardReadiness,
   evaluateWizardReadiness,
 } from '@shared/health-checks/readiness';
-import { buildSession } from '@programs/session/wizard-session';
+import { buildSession, getProgramConfig } from '@programs';
 import { HostResolution } from '@shared/host-resolution';
 import { Integration } from '@shared/constants';
 import { analytics } from '@utils/analytics';
-import { getProgramConfig } from '@programs';
+import { McpScreenId } from '@tui/tools/mcp';
+import { PosthogDoctorScreenId } from '@tui/tools/doctor';
+import { MetricsScreenId } from '@tui/programs/metrics';
+import { PostHogIntegrationScreenId } from '@tui/programs/posthog-integration';
+import { Tool } from '@tools';
 
 vi.mock('@utils/analytics.js', () => ({
   analytics: {
@@ -85,14 +87,8 @@ describe('WizardStore', () => {
     });
 
     it('accepts a custom flow', () => {
-      const store = createStore(Program.McpAdd);
-      expect(store.router.activeProgram).toBe(Program.McpAdd);
-    });
-
-    it('starts with version 0', () => {
-      const store = createStore();
-      expect(store.getVersion()).toBe(0);
-      expect(store.getSnapshot()).toBe(0);
+      const store = createStore(Tool.McpAdd);
+      expect(store.router.activeProgram).toBe(Tool.McpAdd);
     });
 
     // Runs another command in this session; nothing has happened yet to unwind.
@@ -106,19 +102,30 @@ describe('WizardStore', () => {
       it('routes to the new program instead of finishing the old one', () => {
         const store = createStore();
         store.switchProgram(Program.Metrics);
-        expect(store.router.resolve(store.session)).toBe(ScreenId.MetricsIntro);
+        expect(store.router.resolve(store)).toBe(MetricsScreenId.Intro);
+      });
+
+      // The skill program's flow is the fallback for an unknown id; a tool must never land in it.
+      it("routes to a tool's own first screen and its own gates", async () => {
+        const store = createStore();
+        store.switchProgram(Tool.PosthogDoctor);
+        expect(store.router.resolve(store)).toBe(PosthogDoctorScreenId.Intro);
+        const intro = store.getGate('intro');
+        store.completeSetup();
+        await expect(intro).resolves.toBeUndefined();
+        expect(store.programLabel).toBe(Tool.PosthogDoctor);
       });
 
       // Every program gates its intro on the same flag, so a stale one skips it.
       it('does not carry the old confirmation into the new intro', () => {
         const store = createStore();
         store.completeSetup();
-        expect(store.session.setupConfirmed).toBe(true);
+        expect(store.setupConfirmed).toBe(true);
 
         store.switchProgram(Program.Metrics);
 
-        expect(store.session.setupConfirmed).toBe(false);
-        expect(store.router.resolve(store.session)).toBe(ScreenId.MetricsIntro);
+        expect(store.setupConfirmed).toBe(false);
+        expect(store.router.resolve(store)).toBe(MetricsScreenId.Intro);
       });
 
       // Already resolved for the program we left, so reusing them skips screens.
@@ -167,7 +174,7 @@ describe('WizardStore', () => {
       it('follows the new program for label and skill', () => {
         const store = createStore();
         store.switchProgram(Program.Metrics);
-        expect(store.session.programLabel).toBe(Program.Metrics);
+        expect(store.programLabel).toBe(Program.Metrics);
         expect(store.session.skillId).toBe(
           getProgramConfig(Program.Metrics).skillId ?? null,
         );
@@ -178,7 +185,7 @@ describe('WizardStore', () => {
         const store = createStore();
         store.completeSetup();
         store.switchProgram(Program.PostHogIntegration);
-        expect(store.session.setupConfirmed).toBe(true);
+        expect(store.setupConfirmed).toBe(true);
         expect(store.router.activeProgram).toBe(Program.PostHogIntegration);
       });
     });
@@ -197,28 +204,11 @@ describe('WizardStore', () => {
       expect(store.getVersion()).toBe(1);
       expect(listener).toHaveBeenCalledTimes(1);
     });
-
-    it('version increments on each emitChange', () => {
-      const store = createStore();
-      store.emitChange();
-      store.emitChange();
-      store.emitChange();
-      expect(store.getVersion()).toBe(3);
-    });
   });
 
   // ── React integration (subscribe / getSnapshot) ──────────────────
 
   describe('subscribe / getSnapshot', () => {
-    it('subscribe registers a listener that fires on change', () => {
-      const store = createStore();
-      const cb = vi.fn();
-      store.subscribe(cb);
-
-      store.emitChange();
-      expect(cb).toHaveBeenCalledTimes(1);
-    });
-
     it('subscribe returns an unsubscribe function', () => {
       const store = createStore();
       const cb = vi.fn();
@@ -261,7 +251,7 @@ describe('WizardStore', () => {
 
       store.completeSetup();
 
-      expect(store.session.setupConfirmed).toBe(true);
+      expect(store.setupConfirmed).toBe(true);
       await store.getGate('intro');
       expect(cb).toHaveBeenCalled();
     });
@@ -416,10 +406,10 @@ describe('WizardStore', () => {
     it('setLoginUrl sets and clears the login URL', () => {
       const store = createStore();
       store.setLoginUrl('https://example.com/auth');
-      expect(store.session.loginUrl).toBe('https://example.com/auth');
+      expect(store.loginUrl).toBe('https://example.com/auth');
 
       store.setLoginUrl(null);
-      expect(store.session.loginUrl).toBeNull();
+      expect(store.loginUrl).toBeNull();
     });
 
     it('setReadinessResult sets readiness info', () => {
@@ -438,18 +428,11 @@ describe('WizardStore', () => {
 
     it('setMcpComplete marks MCP step done with outcome', () => {
       const store = createStore();
-      expect(store.session.mcpComplete).toBe(false);
+      expect(store.mcpComplete).toBe(false);
       store.setMcpComplete(McpOutcome.Installed, ['Cursor']);
-      expect(store.session.mcpComplete).toBe(true);
-      expect(store.session.mcpOutcome).toBe(McpOutcome.Installed);
-      expect(store.session.mcpInstalledClients).toEqual(['Cursor']);
-    });
-
-    it('setMcpSuggestedPromptsDismissed flips the session flag', () => {
-      const store = createStore();
-      expect(store.session.mcpSuggestedPromptsDismissed).toBe(false);
-      store.setMcpSuggestedPromptsDismissed();
-      expect(store.session.mcpSuggestedPromptsDismissed).toBe(true);
+      expect(store.mcpComplete).toBe(true);
+      expect(store.mcpOutcome).toBe(McpOutcome.Installed);
+      expect(store.mcpInstalledClients).toEqual(['Cursor']);
     });
 
     it('setOutroData sets outro information', () => {
@@ -466,29 +449,6 @@ describe('WizardStore', () => {
 
       store.setFrameworkContext('srcDir', 'src');
       expect(store.session.frameworkContext['srcDir']).toBe('src');
-    });
-
-    it('every setter emits exactly one change event', () => {
-      const store = createStore();
-      const cb = vi.fn();
-      store.subscribe(cb);
-
-      store.completeSetup();
-      store.setRunPhase(RunPhase.Running);
-      store.setCredentials(null);
-      store.setDetectionComplete();
-      store.setDetectedFramework('React');
-      store.setLoginUrl('url');
-      store.setReadinessResult(null);
-      store.setMcpComplete();
-      store.setMcpSuggestedPromptsDismissed();
-      store.setOutroDismissed();
-      store.setSkillsComplete(true);
-      store.setOutroData({ kind: OutroKind.Success });
-      store.setFrameworkContext('k', 'v');
-      store.setFrameworkConfig(null, null);
-
-      expect(cb).toHaveBeenCalledTimes(14);
     });
   });
 
@@ -557,7 +517,7 @@ describe('WizardStore', () => {
       );
 
       wizardCaptureMock.mockClear();
-      store.setMcpComplete(
+      createStore().setMcpComplete(
         McpOutcome.Installed,
         ['Cursor'],
         ['dashboards', 'insights'],
@@ -577,169 +537,6 @@ describe('WizardStore', () => {
         ([event]) => event === 'mcp complete',
       );
       expect(call?.[1]).not.toHaveProperty('mcp_features_selected');
-    });
-  });
-
-  // ── ScreenId resolution (derived state) ────────────────────────────
-
-  describe('currentScreen', () => {
-    it('starts at intro for Wizard flow', () => {
-      const store = createStore();
-      expect(store.currentScreen).toBe(ScreenId.Intro);
-    });
-
-    it('advances to health check after setup confirmed', () => {
-      const store = createStore();
-      store.completeSetup();
-      expect(store.currentScreen).toBe(ScreenId.HealthCheck);
-    });
-
-    it('advances to auth after health check passes', () => {
-      const store = createStore();
-      store.completeSetup();
-      store.setReadinessResult({
-        decision: WizardReadiness.Yes,
-        health: {} as never,
-        reasons: [],
-      });
-      expect(store.currentScreen).toBe(ScreenId.Auth);
-    });
-
-    it('advances to run after credentials are set', () => {
-      const store = createStore();
-      store.completeSetup();
-      store.setReadinessResult({
-        decision: WizardReadiness.Yes,
-        health: {} as never,
-        reasons: [],
-      });
-      store.setCredentials({
-        accessToken: 'tok',
-        projectApiKey: 'pk',
-        host: HostResolution.fromApiHost('h'),
-        projectId: 1,
-      });
-      expect(store.currentScreen).toBe(ScreenId.Run);
-    });
-
-    it('advances to outro after run completes', () => {
-      const store = createStore();
-      store.completeSetup();
-      store.setReadinessResult({
-        decision: WizardReadiness.Yes,
-        health: {} as never,
-        reasons: [],
-      });
-      store.setCredentials({
-        accessToken: 'tok',
-        projectApiKey: 'pk',
-        host: HostResolution.fromApiHost('h'),
-        projectId: 1,
-      });
-      store.setRunPhase(RunPhase.Completed);
-      expect(store.currentScreen).toBe(ScreenId.Outro);
-    });
-
-    it('advances to mcp after outro dismissed', () => {
-      const store = createStore();
-      store.completeSetup();
-      store.setReadinessResult({
-        decision: WizardReadiness.Yes,
-        health: {} as never,
-        reasons: [],
-      });
-      store.setCredentials({
-        accessToken: 'tok',
-        projectApiKey: 'pk',
-        host: HostResolution.fromApiHost('h'),
-        projectId: 1,
-      });
-      store.setRunPhase(RunPhase.Completed);
-      store.setOutroDismissed();
-      expect(store.currentScreen).toBe(ScreenId.Mcp);
-    });
-
-    it('advances to skills after slack-connect dismissed', () => {
-      const store = createStore();
-      store.completeSetup();
-      store.setReadinessResult({
-        decision: WizardReadiness.Yes,
-        health: {} as never,
-        reasons: [],
-      });
-      store.setCredentials({
-        accessToken: 'tok',
-        projectApiKey: 'pk',
-        host: HostResolution.fromApiHost('h'),
-        projectId: 1,
-      });
-      store.setRunPhase(RunPhase.Completed);
-      store.setOutroDismissed();
-      store.setMcpComplete();
-      store.setSlackStepDismissed();
-      expect(store.currentScreen).toBe(ScreenId.KeepSkills);
-    });
-
-    it('starts at McpAdd for McpAdd flow', () => {
-      const store = createStore(Program.McpAdd);
-      expect(store.currentScreen).toBe(ScreenId.McpAdd);
-    });
-
-    it('starts at McpRemove for McpRemove flow', () => {
-      const store = createStore(Program.McpRemove);
-      expect(store.currentScreen).toBe(ScreenId.McpRemove);
-    });
-  });
-
-  // ── Overlay navigation ───────────────────────────────────────────
-
-  describe('overlay navigation', () => {
-    it('pushOverlay shows the overlay over the current screen', () => {
-      const store = createStore();
-      store.pushOverlay(Overlay.SettingsOverride);
-      expect(store.currentScreen).toBe(Overlay.SettingsOverride);
-    });
-
-    it('popOverlay returns to the underlying screen', () => {
-      const store = createStore();
-      store.pushOverlay(Overlay.SettingsOverride);
-      store.popOverlay();
-      expect(store.currentScreen).toBe(ScreenId.Intro);
-    });
-
-    it('pushOverlay emits change and increments version', () => {
-      const store = createStore();
-      const cb = vi.fn();
-      store.subscribe(cb);
-
-      store.pushOverlay(Overlay.SettingsOverride);
-
-      expect(cb).toHaveBeenCalledTimes(1);
-      expect(store.getVersion()).toBe(1);
-    });
-
-    it('popOverlay emits change and increments version', () => {
-      const store = createStore();
-      store.pushOverlay(Overlay.SettingsOverride);
-
-      const cb = vi.fn();
-      store.subscribe(cb);
-      store.popOverlay();
-
-      expect(cb).toHaveBeenCalledTimes(1);
-    });
-
-    it('pushOverlay sets direction to push', () => {
-      const store = createStore();
-      store.pushOverlay(Overlay.SettingsOverride);
-      expect(store.lastNavDirection).toBe('push');
-    });
-
-    it('popOverlay sets direction to pop', () => {
-      const store = createStore();
-      store.pushOverlay(Overlay.SettingsOverride);
-      store.popOverlay();
-      expect(store.lastNavDirection).toBe('pop');
     });
   });
 
@@ -782,6 +579,21 @@ describe('WizardStore', () => {
       });
       expect(store.session.pendingQuestion).toBeNull();
       expect(store.currentScreen).not.toBe(Overlay.WizardAsk);
+    });
+
+    it('noteAskProgress reports an answered question to the ask bridge', () => {
+      const store = createStore();
+      const onAnswer = vi.fn();
+      const promise = store.requestQuestion(pending, onAnswer);
+
+      store.noteAskProgress();
+      expect(onAnswer).toHaveBeenCalledTimes(1);
+
+      // The request is over: a later call must not re-arm its timeout.
+      store.resolvePendingQuestion({ goal: 'Find export', audience: 'new' });
+      store.noteAskProgress();
+      expect(onAnswer).toHaveBeenCalledTimes(1);
+      return promise;
     });
 
     it('throws when requestQuestion is called while another is pending', () => {
@@ -962,42 +774,6 @@ describe('WizardStore', () => {
 
   // ── Agent observation state ──────────────────────────────────────
 
-  describe('statusMessages', () => {
-    it('pushStatus appends messages', () => {
-      const store = createStore();
-      store.pushStatus('Installing SDK...');
-      store.pushStatus('Configuring...');
-      expect(store.statusMessages).toEqual([
-        'Installing SDK...',
-        'Configuring...',
-      ]);
-    });
-
-    it('pushStatus emits change', () => {
-      const store = createStore();
-      const cb = vi.fn();
-      store.subscribe(cb);
-
-      store.pushStatus('msg');
-      expect(cb).toHaveBeenCalledTimes(1);
-    });
-
-    it('pushStatus caps history as a FIFO, dropping oldest', () => {
-      const store = createStore();
-      for (let i = 0; i < 250; i++) {
-        store.pushStatus(`msg ${i}`);
-      }
-
-      // Cap is tied to EXPANDED_COUNT (the status bar's largest window).
-      const msgs = store.statusMessages;
-      expect(msgs).toHaveLength(EXPANDED_COUNT);
-      // Newest retained, oldest dropped.
-      expect(msgs[msgs.length - 1]).toBe('msg 249');
-      expect(msgs[0]).toBe(`msg ${250 - EXPANDED_COUNT}`);
-      expect(msgs).not.toContain('msg 0');
-    });
-  });
-
   describe('tasks', () => {
     it('setTasks replaces the task list', () => {
       const store = createStore();
@@ -1138,46 +914,16 @@ describe('WizardStore', () => {
     });
   });
 
-  // ── Navigation direction ─────────────────────────────────────────
-
-  describe('lastNavDirection', () => {
-    it('starts as null', () => {
-      const store = createStore();
-      expect(store.lastNavDirection).toBeNull();
-    });
-
-    it('is set to push on emitChange', () => {
-      const store = createStore();
-      store.emitChange();
-      expect(store.lastNavDirection).toBe('push');
-    });
-  });
-
   // ── Concurrent / rapid-fire mutations ─────────────────────────────
 
   describe('concurrent mutations', () => {
-    it('rapid-fire setters each increment version by 1', () => {
-      const store = createStore();
-      const cb = vi.fn();
-      store.subscribe(cb);
-
-      store.completeSetup();
-      store.setRunPhase(RunPhase.Running);
-      store.pushStatus('msg1');
-      store.pushStatus('msg2');
-      store.setDetectedFramework('React');
-
-      expect(store.getVersion()).toBe(5);
-      expect(cb).toHaveBeenCalledTimes(5);
-    });
-
     it('subscriber sees consistent state during a setter call', () => {
       const store = createStore();
       const snapshots: { confirmed: boolean; version: number }[] = [];
 
       store.subscribe(() => {
         snapshots.push({
-          confirmed: store.session.setupConfirmed,
+          confirmed: store.setupConfirmed,
           version: store.getSnapshot(),
         });
       });
@@ -1208,10 +954,7 @@ describe('WizardStore', () => {
       // First subscriber triggers another mutation
       store.subscribe(() => {
         versions.push(store.getSnapshot());
-        if (
-          store.session.setupConfirmed &&
-          store.session.runPhase === RunPhase.Idle
-        ) {
+        if (store.setupConfirmed && store.session.runPhase === RunPhase.Idle) {
           store.setRunPhase(RunPhase.Running);
         }
       });
@@ -1366,26 +1109,7 @@ describe('WizardStore', () => {
     it('popOverlay on empty stack does not crash', () => {
       const store = createStore();
       expect(() => store.popOverlay()).not.toThrow();
-      expect(store.currentScreen).toBe(ScreenId.Intro);
-    });
-
-    it('screen advances to outro on RunPhase.Error too', () => {
-      const store = createStore();
-      store.completeSetup();
-      store.setReadinessResult({
-        decision: WizardReadiness.Yes,
-        health: {} as never,
-        reasons: [],
-      });
-      store.setCredentials({
-        accessToken: 'tok',
-        projectApiKey: 'pk',
-        host: HostResolution.fromApiHost('h'),
-        projectId: 1,
-      });
-      store.setRunPhase(RunPhase.Error);
-      // Run is "complete" (either Completed or Error), so we advance past it
-      expect(store.currentScreen).toBe(ScreenId.Outro);
+      expect(store.currentScreen).toBe(PostHogIntegrationScreenId.Intro);
     });
 
     it('completeSetup can only resolve the promise once', async () => {
@@ -1394,7 +1118,7 @@ describe('WizardStore', () => {
       store.completeSetup(); // second call — promise already resolved
 
       await store.getGate('intro');
-      expect(store.session.setupConfirmed).toBe(true);
+      expect(store.setupConfirmed).toBe(true);
     });
 
     it('version property (string) is independent from internal _version counter', () => {
@@ -1409,142 +1133,11 @@ describe('WizardStore', () => {
     });
   });
 
-  // ── Full wizard flow simulation ──────────────────────────────────
-
-  describe('full wizard flow', () => {
-    it('walks through the posthog integration flow correctly', () => {
-      const store = createStore();
-      const screenHistory: string[] = [];
-      store.subscribe(() => screenHistory.push(store.currentScreen));
-
-      expect(store.currentScreen).toBe(ScreenId.Intro);
-
-      // Step 1: Confirm setup
-      store.completeSetup();
-      expect(store.currentScreen).toBe(ScreenId.HealthCheck);
-
-      // Step 2: Health check passes
-      store.setReadinessResult({
-        decision: WizardReadiness.Yes,
-        health: {} as never,
-        reasons: [],
-      });
-      expect(store.currentScreen).toBe(ScreenId.Auth);
-
-      // Step 3: Authenticate
-      store.setCredentials({
-        accessToken: 'tok',
-        projectApiKey: 'pk',
-        host: HostResolution.fromApiHost('https://app.posthog.com'),
-        projectId: 1,
-      });
-      expect(store.currentScreen).toBe(ScreenId.Run);
-
-      // Step 4: Start and complete run
-      store.setRunPhase(RunPhase.Running);
-      expect(store.currentScreen).toBe(ScreenId.Run);
-
-      store.setRunPhase(RunPhase.Completed);
-      expect(store.currentScreen).toBe(ScreenId.Outro);
-
-      // Step 5: Dismiss outro
-      store.setOutroDismissed();
-      expect(store.currentScreen).toBe(ScreenId.Mcp);
-
-      // Step 6: Complete MCP
-      store.setMcpComplete();
-      expect(store.currentScreen).toBe(ScreenId.SlackConnect);
-
-      // Step 7: Dismiss the Connect-Slack step
-      store.setSlackStepDismissed();
-      expect(store.currentScreen).toBe(ScreenId.KeepSkills);
-
-      // Verify version was bumped for each setter call
-      expect(store.getVersion()).toBe(8);
-    });
-
-    it('walks through the revenue analytics flow correctly', () => {
-      const store = createStore(Program.RevenueAnalyticsSetup);
-
-      expect(store.currentScreen).toBe(ScreenId.RevenueIntro);
-
-      // Step 1: Confirm intro
-      store.completeSetup();
-      expect(store.currentScreen).toBe(ScreenId.HealthCheck);
-
-      // Step 2: Clear the health-check screen with a healthy readiness result
-      store.setReadinessResult({
-        decision: WizardReadiness.Yes,
-        health: {} as never,
-        reasons: [],
-      });
-      expect(store.currentScreen).toBe(ScreenId.Auth);
-
-      // Step 3: Authenticate
-      store.setCredentials({
-        accessToken: 'tok',
-        projectApiKey: 'pk',
-        host: HostResolution.fromApiHost('https://app.posthog.com'),
-        projectId: 1,
-      });
-      expect(store.currentScreen).toBe(ScreenId.Run);
-
-      // Step 4: Start and complete run
-      store.setRunPhase(RunPhase.Running);
-      expect(store.currentScreen).toBe(ScreenId.Run);
-
-      store.setRunPhase(RunPhase.Completed);
-      expect(store.currentScreen).toBe(ScreenId.Outro);
-
-      // Step 5: Dismiss outro
-      store.setOutroDismissed();
-      expect(store.currentScreen).toBe('keep-skills');
-    });
-
-    it('walks through the agent skill flow correctly', () => {
-      const store = createStore(Program.AgentSkill);
-
-      expect(store.currentScreen).toBe(ScreenId.AgentSkillIntro);
-
-      // Step 1: Confirm intro
-      store.completeSetup();
-      expect(store.currentScreen).toBe(ScreenId.HealthCheck);
-
-      // Step 2: Clear the health-check screen with a healthy readiness result
-      store.setReadinessResult({
-        decision: WizardReadiness.Yes,
-        health: {} as never,
-        reasons: [],
-      });
-      expect(store.currentScreen).toBe(ScreenId.Auth);
-
-      // Step 3: Authenticate
-      store.setCredentials({
-        accessToken: 'tok',
-        projectApiKey: 'pk',
-        host: HostResolution.fromApiHost('https://app.posthog.com'),
-        projectId: 1,
-      });
-      expect(store.currentScreen).toBe(ScreenId.Run);
-
-      // Step 4: Start and complete run
-      store.setRunPhase(RunPhase.Running);
-      expect(store.currentScreen).toBe(ScreenId.Run);
-
-      store.setRunPhase(RunPhase.Completed);
-      expect(store.currentScreen).toBe(ScreenId.Outro);
-
-      // Step 5: Dismiss outro
-      store.setOutroDismissed();
-      expect(store.currentScreen).toBe('keep-skills');
-    });
-  });
-
   // ── health-check gate ────────────────────────────────────────────
 
   describe('health-check gate', () => {
     it('resolves immediately for non-Wizard flows', async () => {
-      const store = createStore(Program.McpAdd);
+      const store = createStore(Tool.McpAdd);
 
       await expect(store.getGate('health-check')).resolves.toBeUndefined();
     });
@@ -1592,13 +1185,13 @@ describe('WizardStore', () => {
       await flushMicrotasks();
 
       expect(resolved).toBe(false);
-      expect(store.currentScreen).toBe(ScreenId.Intro);
+      expect(store.currentScreen).toBe(PostHogIntegrationScreenId.Intro);
 
       store.dismissOutage();
       await store.getGate('health-check');
 
       expect(resolved).toBe(true);
-      expect(store.session.outageDismissed).toBe(true);
+      expect(store.outageDismissed).toBe(true);
     });
   });
 
@@ -1656,47 +1249,17 @@ describe('WizardStore', () => {
 
   describe('analyticsProgramId', () => {
     it('reports the running program for a step that claims no override', () => {
-      const store = createStore(Program.McpAdd);
+      const store = createStore(Tool.McpAdd);
 
-      expect(store.currentScreen).toBe(ScreenId.McpAdd);
-      expect(store.analyticsProgramId).toBe(Program.McpAdd);
-    });
-
-    it('reports mcp-tutorial for the tutorial step hosted inside mcp-add', () => {
-      const store = createStore(Program.McpAdd);
-      const session = store.session;
-      session.mcpOutcome = McpOutcome.Installed;
-      session.mcpComplete = true;
-      session.slackStepDismissed = true;
-      store.session = session;
-
-      expect(store.currentScreen).toBe(ScreenId.McpSuggestedPrompts);
-      expect(store.analyticsProgramId).toBe(Program.McpTutorial);
+      expect(store.currentScreen).toBe(McpScreenId.Add);
+      expect(store.analyticsProgramId).toBe(Tool.McpAdd);
     });
 
     it('reports mcp-tutorial for the same step run standalone', () => {
-      const store = createStore(Program.McpTutorial);
+      const store = createStore(Tool.McpTutorial);
 
-      expect(store.currentScreen).toBe(ScreenId.McpSuggestedPrompts);
-      expect(store.analyticsProgramId).toBe(Program.McpTutorial);
-    });
-
-    it('stamps the tutorial program id on the screen transition event', () => {
-      const store = createStore(Program.McpAdd);
-      // Prime the transition detector: the first emit has no previous
-      // screen, so it records the starting one without firing an event.
-      store.emitChange();
-
-      const session = store.session;
-      session.mcpOutcome = McpOutcome.Installed;
-      session.mcpComplete = true;
-      session.slackStepDismissed = true;
-      store.session = session;
-
-      expect(wizardCaptureMock).toHaveBeenCalledWith(
-        `screen ${ScreenId.McpSuggestedPrompts}`,
-        expect.objectContaining({ program_id: Program.McpTutorial }),
-      );
+      expect(store.currentScreen).toBe(McpScreenId.SuggestedPrompts);
+      expect(store.analyticsProgramId).toBe(Tool.McpTutorial);
     });
   });
 
@@ -1707,7 +1270,7 @@ describe('WizardStore', () => {
       const store = createStore();
       store.completeSetup();
       await store.getGate('intro');
-      expect(store.session.setupConfirmed).toBe(true);
+      expect(store.setupConfirmed).toBe(true);
     });
 
     it('is a promise that can be awaited before completeSetup is called', async () => {
@@ -1733,22 +1296,20 @@ describe('WizardStore', () => {
       const store = createStore(Program.SelfDriving);
       store.session = buildSession({});
       store.setIntegrate(true);
-      expect(store.session.integrate).toBe(true);
+      expect(store.integrate).toBe(true);
     });
 
     it('records "yes, already integrated" as integrate=false', () => {
       const store = createStore(Program.SelfDriving);
       store.session = buildSession({});
       store.setIntegrate(false);
-      expect(store.session.integrate).toBe(false);
-    });
-
-    it('defaults to null (undecided) before the question', () => {
-      expect(buildSession({}).integrate).toBeNull();
+      expect(store.integrate).toBe(false);
     });
 
     it('--integrate pre-resolves the decision to true', () => {
-      expect(buildSession({ integrate: true }).integrate).toBe(true);
+      const store = createStore(Program.SelfDriving);
+      store.launch(buildSession({}), { integrate: true });
+      expect(store.integrate).toBe(true);
     });
   });
 
@@ -1762,7 +1323,7 @@ describe('WizardStore', () => {
       expect(store.session.signup).toBe(true);
       expect(store.session.email).toBe('dev@example.com');
       expect(store.session.region).toBe('eu');
-      expect(store.session.integrate).toBe(true);
+      expect(store.integrate).toBe(true);
     });
 
     it('emits exactly one change event', () => {

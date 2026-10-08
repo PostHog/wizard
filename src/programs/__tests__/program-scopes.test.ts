@@ -6,7 +6,7 @@
 import {
   getOAuthScopesForProgram,
   getProvisioningScopesForProgram,
-} from '@programs/oauth/program-scopes';
+} from '../program-registry';
 
 describe('posthog-integration scopes', () => {
   it('includes the warehouse pair for the orchestrator warehouse task', () => {
@@ -15,8 +15,9 @@ describe('posthog-integration scopes', () => {
     expect(scopes).toContain('external_data_source:write');
   });
 
-  it('keeps the Slack outro scope', () => {
-    expect(getOAuthScopesForProgram('posthog-integration')).toContain(
+  // The Slack step left the integration flow, and nothing else in the run reads integrations.
+  it('no longer asks for integration:read', () => {
+    expect(getOAuthScopesForProgram('posthog-integration')).not.toContain(
       'integration:read',
     );
   });
@@ -73,7 +74,7 @@ describe('provisioning scopes', () => {
     expect(getProvisioningScopesForProgram(null)).not.toContain(
       'replay_scanner:write',
     );
-    expect(getProvisioningScopesForProgram('mcp-tutorial')).not.toContain(
+    expect(getProvisioningScopesForProgram('metrics')).not.toContain(
       'replay_scanner:write',
     );
   });

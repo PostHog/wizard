@@ -225,6 +225,22 @@ describe('apply functions', () => {
     expect(store.readHandoff(t.id)).not.toHaveProperty('remark');
   });
 
+  it('a remark is redacted before it reaches analytics', () => {
+    const t = store.enqueue({ type: 'warehouse' });
+    ctx.currentTaskId = t.id;
+    store.start(t.id);
+    applyComplete(ctx, {
+      status: 'not needed',
+      handoff: { goals: 'g', did: 'd', forNextAgent: 'n' },
+      remark: 'postgres://user:hunter2@db.internal/app was rejected',
+    });
+    const call = vi
+      .mocked(analytics.wizardCapture)
+      .mock.calls.find(([name]) => name === 'orchestrator remark');
+    expect(call).toBeDefined();
+    expect(JSON.stringify(call)).not.toContain('hunter2');
+  });
+
   it('read_handoffs returns a dependency handoff for the running task', () => {
     const dep = store.enqueue({ type: 'install' });
     store.start(dep.id);

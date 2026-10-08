@@ -1,50 +1,41 @@
 /**
- * WizardStore — Nanostore-backed reactive store for the TUI.
- * React components subscribe via useSyncExternalStore.
+ * WizardStore — the TUI's store: the shared `SessionStore` plus the state only
+ * the screens use. React components subscribe via useSyncExternalStore.
  *
- * The active screen is derived from session state — WizardRouter walks
- * the flow and shows the first step whose `isComplete` is still false.
+ * The session and the run state live in `sessions`, the same kind of store
+ * headless and embedders use, so `runProgram` writes them directly. This store
+ * adds the TUI's own state (`TuiState`: the screens' answers and what an
+ * overlay shows, read as `store.X`), display state (the token HUD, learn
+ * cards), the router and the flow's gates, and re-resolves the screen and the
+ * gates after every change to either.
  *
- * Define a step `gate` if your screen needs to await user interactions.
- * bin.ts calls `await store.getGate(stepId)` to pause until the gate
- * predicate becomes true.
- *
- * All session mutations that affect screen resolution go through
- * explicit setters so emitChange() is always called.
+ * The active screen is derived from the session and the TUI state —
+ * WizardRouter walks the flow and shows the first step whose `isComplete` is
+ * still false. Define a step `gate` if its screen needs to await user
+ * interactions; the TUI host calls `await store.getGate(stepId)` to pause
+ * until it holds.
  */
 
-import { atom, map } from 'nanostores';
-import {
-  EMPTY_TOKEN_USAGE,
-  totalTokenCount,
-  type TokenUsageSnapshot,
-} from './token-usage.js';
+import { atom } from 'nanostores';
 import { logToFile } from '@utils/debug';
+import { type AuthErrorDetail, type TokenUsageDelta } from '@agent/types';
 import {
-  TaskStatus,
-  isTaskStatus,
-  type AuthErrorDetail,
-  type TokenUsageDelta,
-} from '@ui/wizard-ui';
+  initialTuiState,
+  type TuiLaunchChoices,
+  type TuiState,
+  type TuiView,
+} from '@tui/tui-state';
 import {
-  type WizardSession,
   type OutroData,
-  type DiscoveredFeature,
   type PendingQuestion,
   type AskAnswers,
-  type CloudRegion,
-  McpOutcome,
-  RunPhase,
-  ScanConsent,
-  buildSession,
   type TaskNotice,
-} from '@programs/session/wizard-session';
+} from '@agent/types';
+import { type DiscoveredFeature } from '@shared/discovered-feature';
+import { McpOutcome, RunPhase } from '@shared/run-state';
 import type { SettingsConflict } from '@shared/claude-settings';
-import {
-  WizardReadiness,
-  getBlockingServiceKeys,
-  type WizardReadinessResult,
-} from '@shared/health-checks/readiness';
+import type { CloudRegion } from '@utils/types';
+import { type WizardReadinessResult } from '@shared/health-checks/readiness';
 import {
   WizardRouter,
   type ScreenName,
@@ -54,94 +45,65 @@ import {
   type ProgramId,
 } from './router.js';
 import { analytics, sessionProperties } from '@utils/analytics';
-import type { StoreInitContext, ProgramReadyContext } from '@programs/types';
-import { getProgramConfig } from '@programs';
-import { withAiOptInGate } from '@tui/ai-opt-in-gate';
-import { reportWarehouseSourcesDetected } from '@programs/detection/integration';
-import { appendStatus } from '@shared/status-history';
+import { buildSession, findProgramConfig, SessionStore } from '@programs';
+import type { PlannedEvent, TaskItem, WizardSession } from '@programs/types';
+import {
+  addTokenUsage,
+  EMPTY_TOKEN_USAGE,
+  type TokenUsageSnapshot,
+} from './token-usage.js';
+import type { StoreInitContext } from './flow.js';
+import { programFlowSteps } from './ai-opt-in-gate.js';
+import { flowOwner } from './flow-owner.js';
 import { IS_DEV } from '@shared/constants';
-import { computeTokenCostUsd } from '@shared/token-pricing';
 
-export { TaskStatus, ScreenId, Overlay, Program, RunPhase, McpOutcome };
-export type { ScreenName, OutroData, WizardSession, ProgramId };
-export { totalTokenCount };
-export type { TokenUsageSnapshot };
-
-export interface TaskItem {
-  id?: string;
-  source?: string;
-  sourceStatus?: string;
-  label: string;
-  activeForm?: string;
-  status: TaskStatus;
-  /** Legacy compat */
-  done: boolean;
-}
-
-export interface PlannedEvent {
-  name: string;
-  description: string;
-}
+export { ScreenId, Overlay, Program };
+export type { ScreenName, OutroData, TuiState, TuiView, ProgramId };
 
 interface GateEntry {
-  predicate: (session: WizardSession) => boolean;
+  predicate: (view: TuiView) => boolean;
   promise: Promise<void>;
   resolve: () => void;
   resolved: boolean;
 }
 
-// Capture blocked skill downloads once per readiness result.
-function captureHealthCheckBlocked(result: WizardReadinessResult): void {
-  try {
-    const health = result.health;
-    const blockingKeys = getBlockingServiceKeys(health);
-    const attempts = health.skillsOrigin.rawIndicator?.match(/attempts=(\d+)/);
-    const retriesUsed = Math.max(0, attempts ? Number(attempts[1]) - 1 : 0);
+export class WizardStore implements TuiView {
+  /** The shared session and run state; every session write goes through it. */
+  readonly sessions: SessionStore;
 
-    analytics.wizardCapture('health check blocked', {
-      decision: 'skills-origin-down',
-      blocking_keys: blockingKeys,
-      retries_used: retriesUsed,
-    });
-  } catch (err) {
-    logToFile(
-      `[health-checks] failed to capture analytics: ${
-        err instanceof Error ? err.message : String(err)
-      }`,
-    );
-  }
-}
+  /** The TUI's own state: the screens' answers, overlay contents and launch choices. */
+  private $tui = atom<TuiState>(initialTuiState());
 
-export class WizardStore {
-  // ── Internal nanostore atoms ─────────────────────────────────────
-  private $session = map<WizardSession>(buildSession({}));
-  private $statusMessages = atom<string[]>([]);
+  // ── Display-only atoms ────────────────────────────────────────────
   private $statusExpanded = atom(false);
-  private $tasks = atom<TaskItem[]>([]);
-  private $eventPlan = atom<PlannedEvent[]>([]);
-  private $handoffText = atom<string | null>(null);
   private $learnCardBlockIdx = atom(0);
   private $learnCardComplete = atom(false);
   private $version = atom(0);
-  private $currentStage = atom<{ stage: string; startedAt: number } | null>(
-    null,
-  );
-  private $tokenUsage = atom<TokenUsageSnapshot>(EMPTY_TOKEN_USAGE);
   // Defaults on for local/dev/test runs (tsx, `pnpm try`, vitest) so
   // contributors see it without needing to know the shortcut; defaults off
   // for the published build, where it stays genuinely hidden. Still
   // Ctrl+T-toggleable either way.
   private $tokenHudVisible = atom(IS_DEV);
+  /** The Visualizer tab's NOW PLAYING stage, and when it started. */
+  private $currentStage = atom<{ stage: string; startedAt: number } | null>(
+    null,
+  );
+  private $tokenUsage = atom<TokenUsageSnapshot>(EMPTY_TOKEN_USAGE);
+  /** The code a screen asked to end the run with; the host applies it. */
+  private $exitRequest = atom<number | null>(null);
 
-  private _onTasksChanged: (() => void) | null = null;
   /** Last screen seen — used to detect screen transitions for analytics. */
   private _lastScreen: ScreenName | null = null;
+  /** The ask and notice the overlays last showed, to open and close them as the session changes. */
+  private _shownQuestion: PendingQuestion | null = null;
+  private _shownNotice: TaskNotice | null = null;
 
   /** Hooks run when transitioning onto a screen. */
   private _enterScreenHooks = new Map<ScreenName, (() => void)[]>();
 
   /** Gate promises derived from program step definitions. */
   private _gates = new Map<string, GateEntry>();
+  private _mcpOutcomeReported = false;
 
   version = '';
 
@@ -152,36 +114,34 @@ export class WizardStore {
   private _resolveSettingsOverride: (() => void) | null = null;
   private _backupAndFixSettings: (() => boolean) | null = null;
 
-  /** Blocks the run until an optional step's notice is answered. */
-  private _resolveTaskNotice: ((keep: boolean) => void) | null = null;
   /** Blocks OAuth flow until the port-conflict overlay is dismissed. */
   private _resolvePortConflict: (() => void) | null = null;
 
   /** Resolves the OAuth flow with a manually-entered authorization code. */
   private _resolveManualAuthCode: ((code: string) => void) | null = null;
 
-  /** Resolves the in-flight wizard_ask request. */
-  private _resolvePendingQuestion: ((answers: AskAnswers) => void) | null =
-    null;
-
-  constructor(program: ProgramId = Program.PostHogIntegration) {
+  constructor(
+    program: ProgramId = Program.PostHogIntegration,
+    sessions: SessionStore = new SessionStore(buildSession({})),
+  ) {
+    this.sessions = sessions;
     this.router = new WizardRouter(program);
     this._initFromProgram(program);
+    this._shownQuestion = sessions.session.pendingQuestion;
+    this._shownNotice = sessions.session.taskNotice;
+    sessions.subscribe(() => this._onSessionChange());
   }
 
   /**
    * Scan program steps for gate predicates and create gate promises.
    *
-   * Steps are wrapped with withAiOptInGate so the injected ai-opt-in
-   * step's gate registers here — the agent runner awaits it (via
-   * WizardUI.waitForAiOptIn) before any source leaves the machine.
-   * Same wrapper screen-sequences.ts uses, so the gate and its screen
+   * Steps come from programFlowSteps (withAiOptInGate applied), so the injected ai-opt-in step's
+   * gate registers here — the TUI host awaits it before any source leaves the
+   * machine. Same wrapper screen-sequences.ts uses, so the gate and its screen
    * can't drift apart.
    */
   private _initFromProgram(program: ProgramId): void {
-    const steps = withAiOptInGate(getProgramConfig(program));
-
-    // Create gate promises from steps that define them
+    const steps = programFlowSteps(program);
     for (const step of steps) {
       if (step.gate) {
         let resolve!: () => void;
@@ -198,6 +158,26 @@ export class WizardStore {
     }
   }
 
+  /** Open or close the ask and notice overlays as the shared store's requests come and go. */
+  private _onSessionChange(): void {
+    const { pendingQuestion, taskNotice } = this.session;
+    let closedOnly = false;
+    if (pendingQuestion !== this._shownQuestion) {
+      if (this._shownQuestion) this.router.popOverlay();
+      if (pendingQuestion) this.router.pushOverlay(Overlay.WizardAsk);
+      closedOnly = !pendingQuestion;
+      this._shownQuestion = pendingQuestion;
+    }
+    if (taskNotice !== this._shownNotice) {
+      if (this._shownNotice) this.router.popOverlay();
+      if (taskNotice) this.router.pushOverlay(Overlay.TaskNotice);
+      closedOnly = !taskNotice;
+      this._shownNotice = taskNotice;
+    }
+    this.emitChange();
+    if (closedOnly) this.router._setDirection('pop');
+  }
+
   /**
    * Run the program steps' onInit callbacks. startTUI calls this once
    * the screens are actually rendering — constructing a store alone
@@ -205,7 +185,7 @@ export class WizardStore {
    * pre-flight, whose probes belong only to flows that show its screen.
    */
   runInitHooks(): void {
-    const steps = getProgramConfig(this.router.activeProgram).steps;
+    const steps = flowOwner(this.router.activeProgram).flow;
     const getSession = (): WizardSession => this.session;
     const ctx: StoreInitContext = {
       get session() {
@@ -221,44 +201,29 @@ export class WizardStore {
   }
 
   /**
-   * Run all `onReady` hooks declared by the current flow's steps, in
-   * order. Must be called after `store.session = session` so hooks see
-   * the real installDir. bin.ts calls this generically — it doesn't
-   * need to know which program has which pre-flow work.
+   * Run the active program's `onReady` detection through the shared store, and
+   * mark detection complete so `runProgram` doesn't repeat it. Call it after
+   * the session is set, so it sees the real installDir.
    */
   async runReadyHooks(): Promise<void> {
-    const steps = getProgramConfig(this.router.activeProgram).steps;
-    const ctx: ProgramReadyContext = {
-      session: this.session,
-      setFrameworkContext: (k, v) => this.setFrameworkContext(k, v),
-      setFrameworkConfig: (i, c) => this.setFrameworkConfig(i, c),
-      setDetectedFramework: (l) => this.setDetectedFramework(l),
-      setPosthogSdkDetected: (d) => this.setPosthogSdkDetected(d),
-      setSkillId: (id) => this.setSkillId(id),
-      setUnsupportedVersion: (info) => this.setUnsupportedVersion(info),
-      addDiscoveredFeature: (f) => this.addDiscoveredFeature(f),
-      setDetectionComplete: () => this.setDetectionComplete(),
-    };
-    for (const step of steps) {
-      if (step.onReady) {
-        await step.onReady(ctx);
-      }
-    }
+    const config = findProgramConfig(this.router.activeProgram);
+    await config?.onReady?.(this.sessions.readyContext());
+    this.sessions.setDetectionComplete();
   }
 
   // ── Gate API ────────────────────────────────────────────────────
 
   /**
    * Get a gate promise by step ID — the primary blocking checkpoint API
-   * for bin.ts. `await store.getGate('...')` parks the caller until the
+   * for the TUI host. `await store.getGate('...')` parks the caller until the
    * corresponding program step's gate predicate flips to true (if the
    * predicate stays false, the caller stays parked indefinitely — the
    * TUI keeps rendering so the user can resolve whatever is blocking).
    *
    * If the program doesn't define a step with this ID, or the step
    * has no `gate` predicate, this returns an already-resolved promise
-   * so bin.ts flows straight through. This lets programs opt in to
-   * gates on a per-step basis without bin.ts needing to know which
+   * so the TUI host flows straight through. This lets programs opt in to
+   * gates on a per-step basis without the TUI host needing to know which
    * gates exist in which flow.
    */
   getGate(stepId: string): Promise<void> {
@@ -266,17 +231,17 @@ export class WizardStore {
   }
 
   /**
-   * Resolve once `predicate(session)` is true. Unlike a gate, this is created
-   * at the await point and evaluated live against the current session, so it
+   * Resolve once `predicate(store)` is true. Unlike a gate, this is created
+   * at the await point and evaluated live against the store, so it
    * never latches on a startup value — the orchestrator uses it to wait for a
    * decision (a project picked, a handoff acknowledged) without the "true while
    * undecided" trap that latched gate predicates have.
    */
-  waitUntil(predicate: (session: WizardSession) => boolean): Promise<void> {
-    if (predicate(this.session)) return Promise.resolve();
+  waitUntil(predicate: (view: TuiView) => boolean): Promise<void> {
+    if (predicate(this)) return Promise.resolve();
     return new Promise((resolve) => {
       const unsub = this.subscribe(() => {
-        if (predicate(this.session)) {
+        if (predicate(this)) {
           unsub();
           resolve();
         }
@@ -285,7 +250,28 @@ export class WizardStore {
   }
 
   /**
-   * Re-evaluate every gate predicate against the current session and
+   * Resolve once the flow has reached `stepId`: every step before it is
+   * hidden or complete. Resolves whether `stepId` itself shows; a step the
+   * active flow doesn't have shows.
+   */
+  reachStep(stepId: string): Promise<boolean> {
+    const program = this.router.activeProgram;
+    const steps = programFlowSteps(program);
+    const index = steps.findIndex((step) => step.id === stepId);
+    if (index === -1) return Promise.resolve(true);
+    const before = steps.slice(0, index);
+    const passed = (view: TuiView): boolean =>
+      before.every((step) => {
+        if (step.show && !step.show(view)) return true;
+        const done = step.isComplete ?? step.gate;
+        return !done || done(view);
+      });
+    const shows = steps[index].show;
+    return this.waitUntil(passed).then(() => !shows || shows(this));
+  }
+
+  /**
+   * Re-evaluate every gate predicate against the store and
    * resolve any whose predicate now returns true. Called after every
    * emitChange(), so gates unblock as soon as the session mutation
    * that satisfies them lands. Gates only resolve once — a predicate
@@ -294,42 +280,162 @@ export class WizardStore {
    */
   private _checkGates(): void {
     for (const [, gate] of this._gates) {
-      if (!gate.resolved && gate.predicate(this.session)) {
+      if (!gate.resolved && gate.predicate(this)) {
         gate.resolved = true;
         gate.resolve();
       }
     }
   }
 
-  // ── State accessors (read from atoms) ────────────────────────────
+  // ── Reads ─────────────────────────────────────────────────────────
 
   get session(): WizardSession {
-    return this.$session.get();
+    return this.sessions.session;
   }
 
+  /** Replace the session; the TUI state stays. */
   set session(value: WizardSession) {
-    this.$session.set(value);
-    this.emitChange();
+    this.sessions.session = value;
   }
 
   get statusMessages(): string[] {
-    return this.$statusMessages.get();
+    return this.sessions.statusMessages;
   }
 
   get tasks(): TaskItem[] {
-    return this.$tasks.get();
+    return this.sessions.tasks;
   }
 
   get eventPlan(): PlannedEvent[] {
-    return this.$eventPlan.get();
+    return this.sessions.eventPlan;
   }
 
   get handoffText(): string | null {
-    return this.$handoffText.get();
+    return this.sessions.handoffText;
   }
+
+  // ── TUI state ─────────────────────────────────────────────────────
+
+  get mcpFeatures(): TuiState['mcpFeatures'] {
+    return this.$tui.get().mcpFeatures;
+  }
+
+  get programLabel(): TuiState['programLabel'] {
+    return this.$tui.get().programLabel;
+  }
+
+  get setupConfirmed(): TuiState['setupConfirmed'] {
+    return this.$tui.get().setupConfirmed;
+  }
+
+  get loginUrl(): TuiState['loginUrl'] {
+    return this.$tui.get().loginUrl;
+  }
+
+  get authorizeUrl(): TuiState['authorizeUrl'] {
+    return this.$tui.get().authorizeUrl;
+  }
+
+  get mcpComplete(): TuiState['mcpComplete'] {
+    return this.$tui.get().mcpComplete;
+  }
+
+  get mcpOutcome(): TuiState['mcpOutcome'] {
+    return this.$tui.get().mcpOutcome;
+  }
+
+  get mcpLoginCommands(): TuiState['mcpLoginCommands'] {
+    return this.$tui.get().mcpLoginCommands;
+  }
+
+  get mcpInstalledClients(): TuiState['mcpInstalledClients'] {
+    return this.$tui.get().mcpInstalledClients;
+  }
+
+  get mcpSuggestedPromptsDismissed(): TuiState['mcpSuggestedPromptsDismissed'] {
+    return this.$tui.get().mcpSuggestedPromptsDismissed;
+  }
+
+  get slackStepDismissed(): TuiState['slackStepDismissed'] {
+    return this.$tui.get().slackStepDismissed;
+  }
+
+  get slackConnected(): TuiState['slackConnected'] {
+    return this.$tui.get().slackConnected;
+  }
+
+  get skillsComplete(): TuiState['skillsComplete'] {
+    return this.$tui.get().skillsComplete;
+  }
+
+  get outroDismissed(): TuiState['outroDismissed'] {
+    return this.$tui.get().outroDismissed;
+  }
+
+  get integrate(): TuiState['integrate'] {
+    return this.$tui.get().integrate;
+  }
+
+  get completedRuns(): TuiState['completedRuns'] {
+    return this.$tui.get().completedRuns;
+  }
+
+  get selfDrivingHandoffConfirmed(): TuiState['selfDrivingHandoffConfirmed'] {
+    return this.$tui.get().selfDrivingHandoffConfirmed;
+  }
+
+  get githubConnected(): TuiState['githubConnected'] {
+    return this.$tui.get().githubConnected;
+  }
+
+  get githubDeclined(): TuiState['githubDeclined'] {
+    return this.$tui.get().githubDeclined;
+  }
+
+  get outageDismissed(): TuiState['outageDismissed'] {
+    return this.$tui.get().outageDismissed;
+  }
+
+  get settingsOverrideKeys(): TuiState['settingsOverrideKeys'] {
+    return this.$tui.get().settingsOverrideKeys;
+  }
+
+  get settingsConflicts(): TuiState['settingsConflicts'] {
+    return this.$tui.get().settingsConflicts;
+  }
+
+  get authErrorDetail(): TuiState['authErrorDetail'] {
+    return this.$tui.get().authErrorDetail;
+  }
+
+  get portConflictProcess(): TuiState['portConflictProcess'] {
+    return this.$tui.get().portConflictProcess;
+  }
+
+  get spellbook(): TuiState['spellbook'] {
+    return this.$tui.get().spellbook;
+  }
+
+  get mintHandoff(): TuiState['mintHandoff'] {
+    return this.$tui.get().mintHandoff;
+  }
+
+  /** Write TUI state, then `sessionWrites`' session fields, with one notification either way. */
+  private _write(patch: Partial<TuiState>, sessionWrites?: () => void): void {
+    this.$tui.set({ ...this.$tui.get(), ...patch });
+    const before = this.sessions.getVersion();
+    if (sessionWrites) this.sessions.batch(sessionWrites);
+    if (this.sessions.getVersion() === before) this.emitChange();
+  }
+
+  // ── Display state ───────────────────────────────────────────────
 
   get currentStage(): { stage: string; startedAt: number } | null {
     return this.$currentStage.get();
+  }
+
+  get tokenUsage(): TokenUsageSnapshot {
+    return this.$tokenUsage.get();
   }
 
   /** No-op when the stage hasn't changed, so `startedAt` survives across
@@ -357,19 +463,37 @@ export class WizardStore {
     }
   }
 
-  // ── Session setters ─────────────────────────────────────────────
-  // Every setter that affects screen resolution calls emitChange().
-  // Business logic calls these instead of mutating session directly.
+  get exitRequest(): number | null {
+    return this.$exitRequest.get();
+  }
+
+  /** A screen ends the run with `code`; the first request wins. */
+  requestExit(code: number): void {
+    if (this.$exitRequest.get() !== null) return;
+    this.$exitRequest.set(code);
+    this.emitChange();
+  }
+
+  // ── Writes ──────────────────────────────────────────────────────
+
+  /** Start from the host's launch values: the session, and the TUI state from its defaults, `choices` and the program's label. */
+  launch(
+    session: WizardSession,
+    choices: TuiLaunchChoices = {},
+    programLabel: string | null = null,
+  ): void {
+    this.$tui.set(initialTuiState(choices, programLabel));
+    this.sessions.session = session;
+  }
 
   /** Sets setupConfirmed, and is the point consent becomes final. */
   completeSetup(): void {
-    this.$session.setKey('setupConfirmed', true);
     // Reports first: analytics merges tags into an event as it is sent, so
     // `setup confirmed` only carries the warehouse tags if they are already
     // set. On main they were, because reporting happened back in detect.
-    this._markWarehouseSourcesReportedIfNeeded();
+    this.sessions.markWarehouseSourcesReportedIfNeeded();
     analytics.wizardCapture('setup confirmed', sessionProperties(this.session));
-    this.emitChange();
+    this._write({ setupConfirmed: true });
   }
 
   /**
@@ -378,8 +502,7 @@ export class WizardStore {
    * completeSetup() resolves the intro gate and reports.
    */
   grantSharing(): void {
-    this.$session.setKey('scanConsent', ScanConsent.Granted);
-    this.emitChange();
+    this.sessions.grantSharing();
   }
 
   /**
@@ -392,99 +515,63 @@ export class WizardStore {
    * then on again. completeSetup() owns the single report.
    */
   declineSharing(): void {
-    this.$session.setKey('scanConsent', ScanConsent.Declined);
-    this.emitChange();
-  }
-
-  /**
-   * reportWarehouseSourcesDetected() is the single place scan results turn
-   * into telemetry; this just supplies its idempotency flag via the normal
-   * setter path (never mutate session directly). A no-op once
-   * `warehouseSourcesReported` is set, or for any program that never
-   * populated a warehouse-scan result in the first place.
-   */
-  private _markWarehouseSourcesReportedIfNeeded(): void {
-    if (reportWarehouseSourcesDetected(this.session)) {
-      this.$session.setKey('warehouseSourcesReported', true);
-    }
+    this.sessions.declineSharing();
   }
 
   setRunPhase(phase: RunPhase): void {
-    this.$session.setKey('runPhase', phase);
-    analytics.setTag('run_phase', phase);
-    this.emitChange();
+    this.sessions.setRunPhase(phase);
   }
 
   setCredentials(credentials: WizardSession['credentials']): void {
-    this.$session.setKey('credentials', credentials);
-    if (credentials?.projectId) {
-      analytics.setTag('project_id', credentials.projectId);
-    }
-    analytics.wizardCapture('auth complete', {
-      project_id: credentials?.projectId,
-    });
-    this.emitChange();
+    this.sessions.setCredentials(credentials);
   }
 
-  /** Post-refresh credential swap. No `auth complete` — see WizardUI. */
+  /** Post-refresh credential swap. No `auth complete`. */
   setAccessToken(credentials: WizardSession['credentials']): void {
-    this.$session.setKey('credentials', credentials);
-    this.emitChange();
+    this.sessions.setAccessToken(credentials);
   }
 
   setRoleAtOrganization(role: string | null): void {
-    this.$session.setKey('roleAtOrganization', role);
-    this.emitChange();
+    this.sessions.setRoleAtOrganization(role);
   }
 
   setApiUser(user: WizardSession['apiUser']): void {
-    this.$session.setKey('apiUser', user);
-    this.emitChange();
+    this.sessions.setApiUser(user);
   }
 
   setFrameworkConfig(
     integration: WizardSession['integration'],
     config: WizardSession['frameworkConfig'],
   ): void {
-    this.$session.setKey('integration', integration);
-    this.$session.setKey('frameworkConfig', config);
-    this.$session.setKey('unsupportedVersion', null);
-    if (integration) analytics.setTag('integration', integration);
-    this.emitChange();
+    this.sessions.setFrameworkConfig(integration, config);
   }
 
   setDetectionComplete(): void {
-    this.$session.setKey('detectionComplete', true);
-    this.emitChange();
+    this.sessions.setDetectionComplete();
   }
 
   setDetectedFramework(label: string): void {
-    this.$session.setKey('detectedFrameworkLabel', label);
-    analytics.setTag('detected_framework', label);
-    this.emitChange();
+    this.sessions.setDetectedFramework(label);
   }
 
   setPosthogSdkDetected(detected: boolean): void {
-    this.$session.setKey('posthogSdkDetected', detected);
-    this.emitChange();
+    this.sessions.setPosthogSdkDetected(detected);
   }
 
-  setSpellbook(spellbook: NonNullable<WizardSession['spellbook']>): void {
-    this.$session.setKey('spellbook', spellbook);
-    this.emitChange();
+  setSpellbook(spellbook: NonNullable<TuiState['spellbook']>): void {
+    this._write({ spellbook });
   }
 
-  setMintHandoff(action: NonNullable<WizardSession['mintHandoff']>): void {
+  setMintHandoff(action: NonNullable<TuiState['mintHandoff']>): void {
     // The parked agent may still hold a question or notice open.
-    this.cancelPendingQuestion();
-    if (this.session.taskNotice) this.resolveTaskNotice(false);
-    this.$session.setKey('mintHandoff', action);
-    this.emitChange();
+    this._write({ mintHandoff: action }, () => {
+      this.cancelPendingQuestion();
+      if (this.session.taskNotice) this.resolveTaskNotice(false);
+    });
   }
 
   setSkillId(skillId: string | null): void {
-    this.$session.setKey('skillId', skillId);
-    this.emitChange();
+    this.sessions.setSkillId(skillId);
   }
 
   setUnsupportedVersion(info: {
@@ -492,33 +579,25 @@ export class WizardStore {
     minimum: string;
     docsUrl: string;
   }): void {
-    this.$session.setKey('unsupportedVersion', info);
-    this.emitChange();
+    this.sessions.setUnsupportedVersion(info);
   }
 
   setLoginUrl(url: string | null): void {
-    this.$session.setKey('loginUrl', url);
-    this.emitChange();
+    this._write({ loginUrl: url });
   }
 
   setAuthorizeUrl(url: string | null): void {
-    this.$session.setKey('authorizeUrl', url);
-    this.emitChange();
+    this._write({ authorizeUrl: url });
   }
 
   setReadinessResult(result: WizardReadinessResult | null): void {
-    this.$session.setKey('readinessResult', result);
-    if (result && result.decision === WizardReadiness.No) {
-      captureHealthCheckBlocked(result);
-    }
-    this.emitChange();
+    this.sessions.setReadinessResult(result);
   }
 
   /** User dismissed the blocking outage screen. Gate resolves via _checkGates(). */
   dismissOutage(): void {
     logToFile('[health-checks] user dismissed outage screen, continuing');
-    this.$session.setKey('outageDismissed', true);
-    this.emitChange();
+    this._write({ outageDismissed: true });
   }
 
   /**
@@ -529,17 +608,18 @@ export class WizardStore {
     conflicts: SettingsConflict[],
     backupAndFix: () => boolean,
   ): Promise<void> {
-    const allKeys = conflicts.flatMap((c) => c.keys);
-    this.$session.setKey('settingsOverrideKeys', allKeys);
-    this.$session.setKey('settingsConflicts', conflicts);
     this._backupAndFixSettings = backupAndFix;
 
     const hasReadOnly = conflicts.some((c) => !c.writable);
     if (hasReadOnly) {
-      this.pushOverlay(Overlay.ManagedSettings);
+      this.router.pushOverlay(Overlay.ManagedSettings);
     } else {
-      this.pushOverlay(Overlay.SettingsOverride);
+      this.router.pushOverlay(Overlay.SettingsOverride);
     }
+    this._write({
+      settingsOverrideKeys: conflicts.flatMap((c) => c.keys),
+      settingsConflicts: conflicts,
+    });
 
     return new Promise((resolve) => {
       this._resolveSettingsOverride = resolve;
@@ -556,8 +636,8 @@ export class WizardStore {
     port: number;
     user: string;
   }): Promise<void> {
-    this.$session.setKey('portConflictProcess', processInfo);
-    this.pushOverlay(Overlay.PortConflict);
+    this.router.pushOverlay(Overlay.PortConflict);
+    this._write({ portConflictProcess: processInfo });
     return new Promise((resolve) => {
       this._resolvePortConflict = resolve;
     });
@@ -565,8 +645,9 @@ export class WizardStore {
 
   /** Dismiss the port-conflict overlay and retry the OAuth port loop. */
   resolvePortConflict(): void {
-    this.$session.setKey('portConflictProcess', null);
-    this.popOverlay();
+    this.router.popOverlay();
+    this._write({ portConflictProcess: null });
+    this.router._setDirection('pop');
     this._resolvePortConflict?.();
     this._resolvePortConflict = null;
   }
@@ -576,19 +657,12 @@ export class WizardStore {
    * Asked before the step runs, so nobody is surprised by a prompt mid-run.
    */
   showTaskNotice(notice: TaskNotice): Promise<boolean> {
-    this.$session.setKey('taskNotice', notice);
-    this.pushOverlay(Overlay.TaskNotice);
-    return new Promise((resolve) => {
-      this._resolveTaskNotice = resolve;
-    });
+    return this.sessions.showTaskNotice(notice);
   }
 
   /** Dismiss the notice, keeping (`true`) or skipping (`false`) the step. */
   resolveTaskNotice(keep: boolean): void {
-    this.$session.setKey('taskNotice', null);
-    this.popOverlay();
-    this._resolveTaskNotice?.(keep);
-    this._resolveTaskNotice = null;
+    this.sessions.resolveTaskNotice(keep);
   }
 
   /**
@@ -629,22 +703,19 @@ export class WizardStore {
    * Only one request is in flight at a time — calling this while a request
    * is already pending throws.
    */
-  requestQuestion(question: PendingQuestion): Promise<AskAnswers> {
-    if (this._resolvePendingQuestion) {
-      throw new Error(
-        'requestQuestion called while another wizard_ask request is pending',
-      );
-    }
-    this.$session.setKey('pendingQuestion', question);
-    this.pushOverlay(Overlay.WizardAsk);
-    analytics.wizardCapture('wizard_ask shown', {
-      source: question.source,
-      question_count: question.questions.length,
-      kinds: question.questions.map((q) => q.kind),
-    });
-    return new Promise<AskAnswers>((resolve) => {
-      this._resolvePendingQuestion = resolve;
-    });
+  requestQuestion(
+    question: PendingQuestion,
+    onAnswer?: () => void,
+  ): Promise<AskAnswers> {
+    return this.sessions.requestQuestion(question, onAnswer);
+  }
+
+  /**
+   * Report that the user answered one question of the in-flight request and
+   * another is coming — the ask bridge's timeout heartbeat.
+   */
+  noteAskProgress(): void {
+    this.sessions.noteAskProgress();
   }
 
   /**
@@ -652,11 +723,7 @@ export class WizardStore {
    * dismiss the overlay. Answers flow back to the agent as the tool result.
    */
   resolvePendingQuestion(answers: AskAnswers): void {
-    const resolve = this._resolvePendingQuestion;
-    this._resolvePendingQuestion = null;
-    this.$session.setKey('pendingQuestion', null);
-    this.popOverlay();
-    resolve?.(answers);
+    this.sessions.resolvePendingQuestion(answers);
   }
 
   /**
@@ -664,13 +731,7 @@ export class WizardStore {
    * answer ("__cancelled__") so the skill can decide how to handle it.
    */
   cancelPendingQuestion(): void {
-    const pending = this.session.pendingQuestion;
-    if (!pending) return;
-    const cancelled: AskAnswers = {};
-    for (const q of pending.questions) {
-      cancelled[q.id] = '__cancelled__';
-    }
-    this.resolvePendingQuestion(cancelled);
+    this.sessions.cancelPendingQuestion();
   }
 
   /**
@@ -679,9 +740,9 @@ export class WizardStore {
   backupAndFixSettingsOverride(): boolean {
     const ok = this._backupAndFixSettings?.() ?? false;
     if (ok) {
-      this.$session.setKey('settingsOverrideKeys', null);
-      this.$session.setKey('settingsConflicts', null);
-      this.popOverlay();
+      this.router.popOverlay();
+      this._write({ settingsOverrideKeys: null, settingsConflicts: null });
+      this.router._setDirection('pop');
       this._resolveSettingsOverride?.();
       this._resolveSettingsOverride = null;
       this._backupAndFixSettings = null;
@@ -691,8 +752,8 @@ export class WizardStore {
 
   /** Push the auth-error overlay (no dismiss — user must exit). */
   showAuthError(detail?: AuthErrorDetail): void {
-    this.$session.setKey('authErrorDetail', detail ?? null);
-    this.pushOverlay(Overlay.AuthError);
+    this.router.pushOverlay(Overlay.AuthError);
+    this._write({ authErrorDetail: detail ?? null });
   }
 
   /** Push the session-timeout overlay (no dismiss — user must exit). */
@@ -701,22 +762,17 @@ export class WizardStore {
   }
 
   addDiscoveredFeature(feature: DiscoveredFeature): void {
-    if (!this.session.discoveredFeatures.includes(feature)) {
-      this.session.discoveredFeatures.push(feature);
-      this.emitChange();
-    }
+    this.sessions.addDiscoveredFeature(feature);
   }
 
-  setMcpComplete(
-    outcome: McpOutcome = McpOutcome.Skipped,
+  /** Capture the MCP step's outcome once; the screen reports it as the results show, before Enter. */
+  reportMcpOutcome(
+    outcome: McpOutcome,
     installedClients: string[] = [],
     featuresSelected?: 'all' | string[],
-    loginCommands: string[] = [],
   ): void {
-    this.$session.setKey('mcpComplete', true);
-    this.$session.setKey('mcpOutcome', outcome);
-    this.$session.setKey('mcpInstalledClients', installedClients);
-    this.$session.setKey('mcpLoginCommands', loginCommands);
+    if (this._mcpOutcomeReported) return;
+    this._mcpOutcomeReported = true;
     const featuresPayload =
       outcome === McpOutcome.Installed && featuresSelected !== undefined
         ? { mcp_features_selected: featuresSelected }
@@ -727,36 +783,46 @@ export class WizardStore {
       ...featuresPayload,
       ...sessionProperties(this.session),
     });
-    this.emitChange();
+  }
+
+  /** Complete the MCP step; its `mcp complete` capture goes through `reportMcpOutcome`, so once per store. */
+  setMcpComplete(
+    outcome: McpOutcome = McpOutcome.Skipped,
+    installedClients: string[] = [],
+    featuresSelected?: 'all' | string[],
+    loginCommands: string[] = [],
+  ): void {
+    this.reportMcpOutcome(outcome, installedClients, featuresSelected);
+    this._write({
+      mcpComplete: true,
+      mcpOutcome: outcome,
+      mcpLoginCommands: loginCommands,
+      mcpInstalledClients: installedClients,
+    });
   }
 
   setSkillsComplete(kept: boolean): void {
-    this.$session.setKey('skillsComplete', true);
     analytics.wizardCapture('skills complete', {
       skills_kept: kept,
       ...sessionProperties(this.session),
     });
-    this.emitChange();
+    this._write({ skillsComplete: true });
   }
 
   setMcpSuggestedPromptsDismissed(): void {
-    this.$session.setKey('mcpSuggestedPromptsDismissed', true);
-    this.emitChange();
+    this._write({ mcpSuggestedPromptsDismissed: true });
   }
 
   setSlackStepDismissed(): void {
-    this.$session.setKey('slackStepDismissed', true);
-    this.emitChange();
+    this._write({ slackStepDismissed: true });
   }
 
   setSlackConnected(connected: boolean): void {
-    this.$session.setKey('slackConnected', connected);
-    this.emitChange();
+    this._write({ slackConnected: connected });
   }
 
   setGithubConnected(connected: boolean): void {
-    this.$session.setKey('githubConnected', connected);
-    this.emitChange();
+    this._write({ githubConnected: connected });
   }
 
   /**
@@ -765,28 +831,27 @@ export class WizardStore {
    * case to render one.
    */
   declineGithub(outroData: OutroData): void {
-    this.$session.setKey('githubDeclined', true);
-    this.$session.setKey('outroData', outroData);
-    this.emitChange();
+    this._write({ githubDeclined: true }, () =>
+      this.sessions.update({ outroData }),
+    );
   }
 
   /**
    * Self-driving integration-check answer. `true` → integrate the SDK as part
    * of this run; `false` → PostHog is already set up, go straight to
-   * Self-driving. Resolves `session.integrate` from null.
+   * Self-driving. Resolves `store.integrate` from null.
    */
   setIntegrate(
     integrate: boolean,
     extra?: { via?: string; path?: string },
   ): void {
-    this.$session.setKey('integrate', integrate);
     analytics.wizardCapture('self-driving integration check', {
       self_driving_integrate: integrate,
       ...(extra?.via ? { self_driving_integrate_via: extra.via } : {}),
       ...(extra?.path ? { self_driving_integrate_path: extra.path } : {}),
       ...sessionProperties(this.session),
     });
-    this.emitChange();
+    this._write({ integrate });
   }
 
   /**
@@ -799,17 +864,15 @@ export class WizardStore {
    * leaves `signup` false so auth runs the normal OAuth login.
    */
   chooseProvisionAccount(email: string, region: CloudRegion): void {
-    this.$session.setKey('signup', true);
-    this.$session.setKey('email', email);
-    this.$session.setKey('region', region);
-    this.$session.setKey('integrate', true);
     analytics.wizardCapture('self-driving integration check', {
       self_driving_integrate: true,
       self_driving_has_account: false,
       provision_region: region,
       ...sessionProperties(this.session),
     });
-    this.emitChange();
+    this._write({ integrate: true }, () =>
+      this.sessions.update({ signup: true, email, region }),
+    );
   }
 
   /**
@@ -817,8 +880,7 @@ export class WizardStore {
    * screen, so the Self-driving run can begin. Gate resolves via _checkGates().
    */
   confirmSelfDrivingHandoff(): void {
-    this.$session.setKey('selfDrivingHandoffConfirmed', true);
-    this.emitChange();
+    this._write({ selfDrivingHandoffConfirmed: true });
   }
 
   /**
@@ -827,40 +889,44 @@ export class WizardStore {
    * list, and resets run phase to Idle so the next run step starts fresh.
    */
   completeRunStep(stepId: string): void {
-    const done = this.session.completedRuns;
-    if (!done.includes(stepId)) {
-      this.$session.setKey('completedRuns', [...done, stepId]);
-    }
-    this.$tasks.set([]);
-    this.setRunPhase(RunPhase.Idle);
+    const done = this.completedRuns;
+    this._write(
+      { completedRuns: done.includes(stepId) ? done : [...done, stepId] },
+      () => {
+        this.sessions.setTasks([]);
+        this.sessions.setRunPhase(RunPhase.Idle);
+      },
+    );
   }
 
   setOutroDismissed(dismissed = true): void {
-    this.$session.setKey('outroDismissed', dismissed);
-    this.emitChange();
+    this._write({ outroDismissed: dismissed });
   }
 
   setOutroData(data: OutroData): void {
-    this.$session.setKey('outroData', data);
-    this.emitChange();
+    this.sessions.setOutroData(data);
+  }
+
+  /** Show `data` on the outro screen: the error outro, with the run phase moved to Error. */
+  showOutroError(data: OutroData): void {
+    this.sessions.batch(() => {
+      this.sessions.setOutroData(data);
+      if (this.session.runPhase !== RunPhase.Error) {
+        this.sessions.setRunPhase(RunPhase.Error);
+      }
+    });
   }
 
   setDashboardUrl(url: string): void {
-    logToFile(`store.setDashboardUrl: ${url}`);
-    this.$session.setKey('dashboardUrl', url);
-    this.emitChange();
+    this.sessions.setDashboardUrl(url);
   }
 
   setNotebookUrl(url: string): void {
-    logToFile(`store.setNotebookUrl: ${url}`);
-    this.$session.setKey('notebookUrl', url);
-    this.emitChange();
+    this.sessions.setNotebookUrl(url);
   }
 
   setFrameworkContext(key: string, value: unknown): void {
-    const ctx = { ...this.$session.get().frameworkContext, [key]: value };
-    this.$session.setKey('frameworkContext', ctx);
-    this.emitChange();
+    this.sessions.setFrameworkContext(key, value);
   }
 
   switchProgram(program: ProgramId): void {
@@ -876,21 +942,21 @@ export class WizardStore {
     // after the switch still reports under the program the run started as.
     analytics.setTag('program_id', program);
 
-    const config = getProgramConfig(program);
-    this.$session.setKey('setupConfirmed', false);
-    this.$session.setKey('programLabel', config.id);
-    this.$session.setKey('skillId', config.skillId ?? null);
-    this.emitChange();
+    this._write({ setupConfirmed: false, programLabel: program }, () =>
+      this.sessions.update({
+        skillId: findProgramConfig(program)?.skillId ?? null,
+      }),
+    );
   }
 
   // ── Derived state ───────────────────────────────────────────────
 
   /**
    * The screen that should be rendered right now.
-   * Derived from session state via the router.
+   * Derived from session and TUI state via the router.
    */
   get currentScreen(): ScreenName {
-    return this.router.resolve(this.session);
+    return this.router.resolve(this);
   }
 
   /** Direction hint for screen transitions. */
@@ -944,23 +1010,10 @@ export class WizardStore {
     this._enterScreenHooks.set(screen, list);
   }
 
-  /**
-   * The program `screen` reports under — its step's `reportsAsProgramId` if it
-   * claims one, else the running program (also the fallback for overlays and
-   * screens with no owning step).
-   */
-  private _programIdForScreen(screen: ScreenName): ProgramId {
-    const program = this.router.activeProgram;
-    const step = getProgramConfig(program).steps.find(
-      (s) => s.screenId === screen,
-    );
-    return step?.reportsAsProgramId ?? program;
-  }
-
   /** The program the visible screen reports under; screens stamp this on their
    *  own events rather than relying on the run-level `program_id` tag. */
   get analyticsProgramId(): ProgramId {
-    return this._programIdForScreen(this.router.resolve(this.session));
+    return this.router.activeProgram;
   }
 
   /**
@@ -968,7 +1021,7 @@ export class WizardStore {
    * Called at the end of emitChange/pushOverlay/popOverlay.
    */
   private _detectTransition(): void {
-    const next = this.router.resolve(this.session);
+    const next = this.router.resolve(this);
     const prev = this._lastScreen;
     if (next !== prev) {
       // Every event carries the active TUI screen, filling the
@@ -982,7 +1035,7 @@ export class WizardStore {
       }
       analytics.wizardCapture(`screen ${next}`, {
         from_screen: prev,
-        program_id: this._programIdForScreen(next),
+        program_id: this.router.activeProgram,
         ...sessionProperties(this.session),
       });
     }
@@ -992,15 +1045,7 @@ export class WizardStore {
   // ── Agent observation state ─────────────────────────────────────
 
   pushStatus(message: string): void {
-    const msgs = this.$statusMessages.get();
-    const next = appendStatus(msgs, message);
-    if (next === msgs) return;
-    this.$statusMessages.set(next);
-    this.emitChange();
-  }
-
-  get tokenUsage(): TokenUsageSnapshot {
-    return this.$tokenUsage.get();
+    this.sessions.pushStatus(message);
   }
 
   get tokenHudVisible(): boolean {
@@ -1022,17 +1067,9 @@ export class WizardStore {
    * corrects the total once the run's authoritative cost is known.
    */
   addTokenUsage(delta: TokenUsageDelta): void {
-    const cur = this.$tokenUsage.get();
-    if (cur.costIsFinal) return;
-    const deltaCostUsd = computeTokenCostUsd(delta);
-    this.$tokenUsage.set({
-      inputTokens: cur.inputTokens + delta.inputTokens,
-      outputTokens: cur.outputTokens + delta.outputTokens,
-      cacheReadTokens: cur.cacheReadTokens + delta.cacheReadTokens,
-      cacheCreationTokens: cur.cacheCreationTokens + delta.cacheCreationTokens,
-      costUsd: cur.costUsd + deltaCostUsd,
-      costIsFinal: false,
-    });
+    const next = addTokenUsage(this.$tokenUsage.get(), delta);
+    if (next === this.$tokenUsage.get()) return;
+    this.$tokenUsage.set(next);
     this.emitChange();
   }
 
@@ -1046,35 +1083,19 @@ export class WizardStore {
   }
 
   setTasks(tasks: TaskItem[]): void {
-    this.$tasks.set(tasks);
-    this.emitChange();
+    this.sessions.setTasks(tasks);
   }
 
   updateTask(index: number, done: boolean): void {
-    const tasks = this.$tasks.get();
-    if (tasks[index]) {
-      const updated = [...tasks];
-      updated[index] = {
-        ...updated[index],
-        done,
-        status: done ? TaskStatus.Completed : TaskStatus.Pending,
-      };
-      this.$tasks.set(updated);
-      this.emitChange();
-    }
+    this.sessions.updateTask(index, done);
   }
 
   setEventPlan(events: PlannedEvent[]): void {
-    this.$eventPlan.set(events);
-    this.emitChange();
+    this.sessions.setEventPlan(events);
   }
 
-  /** No-op on identical text: an emit here means a network push downstream. */
   setHandoffText(text: string): void {
-    if (this.$handoffText.get() === text) return;
-    logToFile(`store.setHandoffText: ${text.length} chars`);
-    this.$handoffText.set(text);
-    this.emitChange();
+    this.sessions.setHandoffText(text);
   }
 
   get learnCardBlockIdx(): number {
@@ -1103,40 +1124,7 @@ export class WizardStore {
       activeForm?: string;
     }>,
   ): void {
-    const incoming = todos.map((t) => {
-      const status = isTaskStatus(t.status) ? t.status : TaskStatus.Pending;
-      return {
-        id: t.id,
-        source: t.source,
-        sourceStatus: isTaskStatus(t.status) ? undefined : t.status,
-        label: t.content,
-        activeForm: t.activeForm,
-        status,
-        done: status === TaskStatus.Completed,
-      };
-    });
-
-    const incomingLabels = new Set(incoming.map((t) => t.label));
-    const sources = new Set(todos.map((t) => t.source));
-
-    const retained = this.$tasks
-      .get()
-      .filter(
-        (t) =>
-          (t.status === TaskStatus.Completed ||
-            t.status === TaskStatus.Failed ||
-            t.status === TaskStatus.Skipped) &&
-          (t.source ? !sources.has(t.source) : !incomingLabels.has(t.label)),
-      );
-
-    this.$tasks.set([...retained, ...incoming]);
-    this.emitChange();
-    this._onTasksChanged?.();
-  }
-
-  /** Register a listener for task state changes (e.g. task stream push). */
-  set onTasksChanged(fn: () => void) {
-    this._onTasksChanged = fn;
+    this.sessions.syncTodos(todos);
   }
 
   // ── React integration ───────────────────────────────────────────

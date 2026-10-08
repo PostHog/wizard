@@ -9,8 +9,8 @@ bindings can still select the Anthropic SDK. See
 ## Entry points and transport
 
 - [index.ts](index.ts): `run()` drives a linear conversation.
-- [task.ts](task.ts): `runTask()` drives a seed or task conversation for
-  orchestration.
+- [task.ts](task.ts): `runPiTask()` drives a seed or task conversation for
+  orchestration. The backend's `runTask()` in index.ts loads it on first use.
 - [gateway.ts](gateway.ts): shared scoped-token transport and model
   registration.
 
@@ -33,7 +33,8 @@ The linear path supplies file/exploration tools, shell, Wizard capabilities,
 todos and bounded subagents. The orchestrator task path supplies its task and
 handoff capabilities; it is not an identical tool roster. Inspect the entrypoint
 and [tools](tools.ts) when extending either. [subagent.ts](subagent.ts) applies
-the parent's security factory to bounded read-only exploration agents.
+the parent's subagent security gate, which shares its state and never allows
+`rm`, to bounded exploration agents.
 
 [commandments.ts](../../switchboard/commandments.ts) assembles runtime/tool
 guidance alongside flow/task context. The linear path also supplies MCP server

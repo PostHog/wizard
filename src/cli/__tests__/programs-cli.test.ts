@@ -3,7 +3,7 @@ const { mockRunWizard, mockRunWizardCI } = vi.hoisted(() => ({
   mockRunWizardCI: vi.fn(),
 }));
 
-vi.mock('@cli/runners', () => ({
+vi.mock(import('@cli/runners'), () => ({
   runWizard: mockRunWizard,
   runWizardCI: mockRunWizardCI,
 }));
@@ -29,11 +29,10 @@ import { selfDrivingCommand } from '../commands/self-driving';
 import {
   dispatchFamily,
   pickerChildrenToShow,
-} from '@cli/commands/dispatch-family';
+} from '../commands/dispatch-family';
 import type { Command } from '../commands/command';
 import { fetchSkillMenu, type CliEntry } from '@shared/skill-menu';
-import { auditConfig } from '@programs/audit/index';
-import { webAnalyticsDoctorConfig } from '@programs/web-analytics-doctor/index';
+import { Program } from '@programs';
 import { parseCommand } from './helpers/parse-command.no-jest';
 
 const mockFetchSkillMenu = fetchSkillMenu as MockedFunction<
@@ -166,19 +165,19 @@ describe('dispatchFamily', () => {
     expect(mockFetchSkillMenu).not.toHaveBeenCalled();
     expect(mockRunWizard).toHaveBeenCalledTimes(1);
     const [config] = mockRunWizard.mock.calls[0] as [{ id?: string }];
-    expect(config.id).toBe(webAnalyticsDoctorConfig.id);
+    expect(config.id).toBe(Program.WebAnalyticsDoctor);
   });
 
-  test('the comprehensive `audit all` runs the specialized auditConfig, not agent-skill', async () => {
+  test('the comprehensive `audit all` runs the specialized audit program, not agent-skill', async () => {
     // skillId 'audit' (what context-mill emits for `audit all`) signals
-    // the wizard to use auditConfig (custom hooks, content blocks).
+    // the wizard to use the `audit` program (custom hooks, content blocks).
     mockMenu([
       entry({ skillId: 'audit', command: 'all', parentCommand: 'audit' }),
     ]);
     await dispatchFamily('audit', makeArgv({ skill: 'all' }));
     expect(mockRunWizard).toHaveBeenCalledTimes(1);
     const [config] = mockRunWizard.mock.calls[0] as [{ id?: string }];
-    expect(config.id).toBe(auditConfig.id);
+    expect(config.id).toBe(Program.Audit);
   });
 });
 

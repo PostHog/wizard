@@ -1,37 +1,41 @@
 import { headlessOption, regionOption } from '@shared/headless-mode';
-import { AGENT_SKILL_STEPS } from '@programs/agent-skill/index';
-import { detectPostHogIntegration } from '@programs/detection/integration';
-import { posthogIntegrationConfig } from '@programs/posthog-integration/index';
-import type { ProgramConfig, ProgramStep } from '@programs/program-step';
-import type { CiRunnerContext } from '@programs/runner-context';
-import type { WizardSession } from '@programs/session/wizard-session';
-import { getContentBlocks } from '@tui/programs/feature-flags/deck/index';
-import { getTips } from '@tui/programs/feature-flags/deck/tips';
+import { Harness, Sequence, DEFAULT_AGENT_MODEL } from '@shared/constants';
+import { analytics } from '@utils/analytics';
+import { detectPostHogIntegration } from '../detection/integration.js';
+import { detectFramework } from '../detection/framework';
+import { gatherFrameworkContext } from '../detection/context';
+import { noteDetectedFramework } from '../detection/detected-framework';
+import { scopeInstallDirToProject } from '../detection/project-scope';
+import { FRAMEWORK_REGISTRY } from '../frameworks/registry';
+import type { ProgramConfig } from '../program-step';
+import type { ProgramSession } from '../program-session';
+import type { CiRunnerContext } from '../runner-context';
+import { abortNoFrameworkDetected } from '../shared/abort-no-framework';
 import { FEATURE_FLAGS_PROMPTS, FEATURE_FLAGS_REPORT_FILE } from './prompts.js';
+import { FEATURE_FLAGS_SCOPE_ADDITIONS } from './scopes.js';
 
 const FEATURE_FLAGS_DOCS_URL = 'https://posthog.com/docs/feature-flags';
 
-const DETECT_FRAMEWORK_STEP: ProgramStep = {
-  id: 'detect',
-  label: 'Detecting framework',
-  onReady: detectPostHogIntegration,
-};
+export { FEATURE_FLAGS_STEP_SKILL_ID } from './prompts.js';
 
-export const featureFlagsConfig: ProgramConfig = {
+export const config: ProgramConfig = {
   command: 'feature-flags',
   description: 'Set up example PostHog feature flags',
   id: 'feature-flags',
+  // Orchestrator on pi. The binding routes only; every stage's model and
+  // effort are pinned in the bundled prompts.
+  binding: {
+    sequence: Sequence.orchestrator,
+    harness: Harness.pi,
+    model: DEFAULT_AGENT_MODEL,
+  },
   agentFlow: 'feature-flags',
   agentPrompts: FEATURE_FLAGS_PROMPTS,
-  steps: [
-    DETECT_FRAMEWORK_STEP,
-    ...AGENT_SKILL_STEPS.map((step) =>
-      step.id === 'intro' ? { ...step, screenId: 'feature-flags-intro' } : step,
-    ),
-  ],
+  // Detect the framework before the intro, which blocks Continue until a
+  // supported framework is found.
+  onReady: (ctx) => detectPostHogIntegration(ctx),
+  oauthScopeAdditions: FEATURE_FLAGS_SCOPE_ADDITIONS,
   reportFile: FEATURE_FLAGS_REPORT_FILE,
-  getContentBlocks,
-  getTips,
   cliOptions: { ...headlessOption, ...regionOption },
   run: {
     integrationLabel: 'feature-flags',
@@ -49,11 +53,39 @@ export const featureFlagsConfig: ProgramConfig = {
     }),
   },
 
+  // The headless equivalent of `onReady`, as in posthog-integration: scope
+  // the install dir to the project, detect the framework, gather its context,
+  // and run the flow's tasks against the detected framework's skills.
   ciPreRun: async (
-    session: WizardSession,
+    session: ProgramSession,
     runner: CiRunnerContext,
   ): Promise<void> => {
-    await posthogIntegrationConfig.ciPreRun?.(session, runner);
-    if (session.integration) session.skillId = session.integration;
+    await scopeInstallDirToProject(session, runner);
+
+    const integration = await detectFramework(session.installDir);
+    if (!integration) {
+      abortNoFrameworkDetected();
+    }
+    session.integration = integration;
+    analytics.setTag('integration', integration);
+
+    const frameworkConfig = FRAMEWORK_REGISTRY[integration];
+    session.frameworkConfig = frameworkConfig;
+    session.skillId = integration;
+
+    const context = await gatherFrameworkContext(frameworkConfig, {
+      installDir: session.installDir,
+      debug: session.debug,
+      signup: session.signup,
+      ci: true,
+      benchmark: session.benchmark,
+      yaraReport: session.yaraReport,
+    });
+    for (const [key, value] of Object.entries(context)) {
+      if (!(key in session.frameworkContext)) {
+        session.frameworkContext[key] = value;
+      }
+    }
+    noteDetectedFramework(session, frameworkConfig, context, runner.log);
   },
 };

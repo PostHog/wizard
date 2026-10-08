@@ -1,5 +1,4 @@
 import { boundedGlob, readProjectFile } from '@utils/bounded-fs';
-import { getUI } from '@ui';
 import type { WizardRunOptions } from '@utils/types';
 import { createVersionBucket } from '@utils/semver';
 import * as fs from 'node:fs';
@@ -166,16 +165,13 @@ export async function getLaravelProjectType(
 ): Promise<LaravelProjectType> {
   // Check for SPA/Reactive frameworks (important to detect - affects SDK needs)
   if (await hasInertia(options)) {
-    getUI().setDetectedFramework('Laravel with Inertia.js');
     return LaravelProjectType.INERTIA;
   }
   if (await hasLivewire(options)) {
-    getUI().setDetectedFramework('Laravel with Livewire');
     return LaravelProjectType.LIVEWIRE;
   }
 
   // Default to standard
-  getUI().setDetectedFramework('Laravel');
   return LaravelProjectType.STANDARD;
 }
 

@@ -4,10 +4,7 @@ import {
   isFullyCancelled,
 } from '@agent/wizard-ask-bridge';
 import { analytics } from '@utils/analytics';
-import type {
-  AskAnswers,
-  PendingQuestion,
-} from '@programs/session/wizard-session';
+import type { AskAnswers, PendingQuestion } from '@agent/types';
 
 vi.mock('@utils/analytics', () => ({
   analytics: {
@@ -428,6 +425,79 @@ describe('createWizardAskBridge', () => {
 
         vi.advanceTimersByTime(1000);
         expect(signals[0].aborted).toBe(false);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('re-arms on each answer, so one clock is not shared by every question', async () => {
+      vi.useFakeTimers();
+      try {
+        // The overlay walks a multi-question request one question at a time
+        // and resolves once, at the end — so without the re-arm a user still
+        // filling in a connection form is cut off mid-form and loses every
+        // field they already typed.
+        let noteAnswer: (() => void) | undefined;
+        let settled = false;
+        const bridge = createWizardAskBridge({
+          getSource: () => 'postgres',
+          showQuestion: (_question, { onAnswer }) => {
+            noteAnswer = onAnswer;
+            return new Promise<AskAnswers>(() => undefined);
+          },
+          timeoutMs: 1000,
+        });
+
+        const promise = bridge.request({
+          questions: [
+            { id: 'host', prompt: 'Host?', kind: 'text' },
+            { id: 'port', prompt: 'Port?', kind: 'text' },
+          ],
+        });
+        void promise.then(() => {
+          settled = true;
+        });
+
+        await vi.advanceTimersByTimeAsync(800);
+        noteAnswer?.();
+        // Past the request's age limit, but only 800ms of silence.
+        await vi.advanceTimersByTimeAsync(800);
+        expect(settled).toBe(false);
+
+        await vi.advanceTimersByTimeAsync(200);
+        await expect(promise).resolves.toMatchObject({ timedOut: true });
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('records how many questions the user answered before it expired', async () => {
+      vi.useFakeTimers();
+      try {
+        const bridge = createWizardAskBridge({
+          getSource: () => 'postgres',
+          showQuestion: (_question, { onAnswer }) => {
+            onAnswer();
+            return new Promise<AskAnswers>(() => undefined);
+          },
+          timeoutMs: 1000,
+        });
+        const promise = bridge.request({
+          questions: [
+            { id: 'host', prompt: 'Host?', kind: 'text' },
+            { id: 'port', prompt: 'Port?', kind: 'text' },
+          ],
+        });
+        await vi.advanceTimersByTimeAsync(1000);
+        await promise;
+
+        const cancelledCall = wizardCaptureMock.mock.calls.find(
+          ([name]) => name === 'wizard_ask cancelled',
+        );
+        expect(cancelledCall?.[1]).toMatchObject({
+          questions_answered: 1,
+          question_count: 2,
+        });
       } finally {
         vi.useRealTimers();
       }

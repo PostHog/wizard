@@ -29,7 +29,8 @@ vi.mock('@env', () => ({
 }));
 
 vi.mock('@utils/debug', () => ({
-  debug: vi.fn(),
+  configureLogFile: vi.fn(),
+  logToFile: vi.fn(),
 }));
 
 describe('OpenCodeMCPClient', () => {

@@ -1,0 +1,16 @@
+// The TUI's entry: the registries, the playground and the tests, which may import any part.
+{
+  "extends": "../../tsconfig.base.json",
+  "include": ["index.ts", "programs/index.ts", "tools/index.ts", "playground", "__tests__", "*/__tests__"],
+  "references": [
+    { "path": "tsconfig.core.json" },
+    { "path": "programs/ai-observability" }, { "path": "programs/audit" },
+    { "path": "programs/error-tracking-upload-source-maps" },
+    { "path": "programs/error-tracking" },
+    { "path": "programs/feature-flags" }, { "path": "programs/metrics" },
+    { "path": "programs/migration" }, { "path": "programs/posthog-integration" },
+    { "path": "programs/revenue-analytics" }, { "path": "programs/self-driving" },
+    { "path": "programs/warehouse-source" },
+    { "path": "tools/doctor" }, { "path": "tools/mcp" }, { "path": "tools/slack" }
+  ]
+}

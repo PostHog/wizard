@@ -4,18 +4,16 @@
  * `runAgent` reports through one optional callback and asks through one
  * optional set of capabilities. Neither reaches into a UI singleton, a store,
  * or a session: every payload is copied data, every question is awaited on an
- * injected answerer. The legacy adapter in `src/programs/run-agent-legacy.ts`
- * maps these back onto `WizardUI` one call per event, so the terminal output of
- * every existing runner is unchanged.
+ * injected answerer. The caller decides what each event looks like.
  */
 
 import type { SettingsConflict } from '@shared/claude-settings';
-import type { OutroData } from '@shared/outro';
-
-export { OutroKind } from '@shared/outro';
-export type { OutroData } from '@shared/outro';
 
 // ── What the agent hands back and asks with ─────────────────────────
+
+import type { OutroData } from '@shared/outro';
+import type { ResolvedBinding } from './runner/shared/types';
+export type { OutroData } from '@shared/outro';
 
 /** A single question rendered by the WizardAsk overlay. */
 export interface AskQuestion {
@@ -90,7 +88,7 @@ export interface PendingQuestion {
  * the main session, and some programs override to Haiku, so pricing must key
  * off the per-turn model rather than a single run-wide assumption. Omit only
  * when the caller genuinely has no model context (falls back to Sonnet
- * pricing — see `pricePerMtokForModel` in `@lib/agent/token-pricing`).
+ * pricing — see `pricePerMtokForModel` in `@shared/token-pricing`).
  */
 export interface TokenUsageDelta {
   inputTokens: number;
@@ -102,7 +100,7 @@ export interface TokenUsageDelta {
   model?: string;
 }
 
-/** The run spinner as the agent drives it: `WizardUI.spinner()` returns one. */
+/** The run spinner as the agent drives it. Each call is one `spinner` event. */
 export interface SpinnerHandle {
   start(message?: string): void;
   stop(message?: string): void;
@@ -139,7 +137,7 @@ export interface AuthErrorDetail {
   logFilePath: string;
 }
 
-/** One task as the caller renders it. The same shape `WizardUI.syncTodos` takes. */
+/** One task in the run's task list, as the `tasks` event carries it. */
 export interface TaskSnapshot {
   id?: string;
   source?: string;
@@ -151,43 +149,43 @@ export interface TaskSnapshot {
 export type ProgressLogLevel = 'info' | 'warn' | 'error' | 'success' | 'step';
 
 /**
- * Everything the agent reports while it runs. One event per former
- * `getUI()` call, in the same order, with the same payload, so a reducer that
- * maps each case back onto `WizardUI` reproduces today's output exactly.
+ * Everything the agent reports while it runs, in the order it happens.
  *
  * Payloads are copies. Never a store, a setter, a function or a live
  * collection. The callback returns nothing and the agent never branches on it.
  */
 export type AgentProgress =
-  /** The run's main work has started (`WizardUI.startRun`). */
+  /** The run's resolved sequence, harness and model, once, before it starts. */
+  | { kind: 'binding'; binding: ResolvedBinding }
+  /** The run's main work has started. */
   | { kind: 'lifecycle'; phase: 'started' }
-  /** The run finished and the caller may show its outro (`WizardUI.outro`). */
+  /** The run finished and the caller may show its outro. */
   | { kind: 'lifecycle'; phase: 'completed'; message: string }
-  /** The run spinner (`WizardUI.spinner()`), one handle per run. */
+  /** The run spinner: start, stop or change its message. One per run. */
   | {
       kind: 'spinner';
       action: 'start' | 'stop' | 'message';
       message?: string;
     }
-  /** A log line (`WizardUI.log[level]`). */
+  /** A log line at a level. */
   | { kind: 'log'; level: ProgressLogLevel; message: string }
-  /** A `[STATUS]` line the agent printed (`WizardUI.pushStatus`). */
+  /** A `[STATUS]` line the agent printed. */
   | { kind: 'status'; message: string }
-  /** The full task list, already sorted for display (`WizardUI.syncTodos`). */
+  /** The full task list, already sorted for display. */
   | { kind: 'tasks'; tasks: TaskSnapshot[] }
-  /** The stage of work derived from the active tool (`WizardUI.setStage`). */
+  /** The stage of work derived from the active tool. */
   | { kind: 'stage'; stage: string }
   /** A PostHog URL the agent created (`setDashboardUrl` / `setNotebookUrl`). */
   | { kind: 'url'; which: 'dashboard' | 'notebook'; url: string }
-  /** One assistant turn's token usage (`WizardUI.addTokenUsage`). */
+  /** One assistant turn's token usage. */
   | { kind: 'usage'; delta: TokenUsageDelta }
-  /** The SDK's authoritative run cost (`WizardUI.setFinalTokenCostUsd`). */
+  /** The SDK's authoritative run cost, in USD. */
   | { kind: 'finalCost'; usd: number }
-  /** The gateway returned 401; a failure follows (`WizardUI.showAuthError`). */
+  /** The gateway returned 401; a failure follows. */
   | { kind: 'authError'; detail: AuthErrorDetail }
-  /** The handoff document the agent published (`WizardUI.setHandoffText`). */
+  /** The handoff document the agent published. */
   | { kind: 'handoff'; text: string }
-  /** The run's final outro payload (`WizardUI.setOutroData`). */
+  /** The run's final outro payload. */
   | { kind: 'completion'; outro: OutroData }
   /** One short line per agent step, only from a run that collects its transcript. */
   | { kind: 'activity'; line: string };
@@ -209,10 +207,15 @@ export interface AgentInteraction {
   /**
    * Open a question and resolve with the answers. The bridge that calls this
    * owns the timeout, the `__cancelled__` sentinel and the analytics.
+   *
+   * `onAnswer` reports that the user answered one question of a request that
+   * has more to come, so the bridge can re-arm its timeout against the user's
+   * silence rather than against the age of the whole request. A host that
+   * answers a request in one shot never calls it.
    */
   ask?: (
     question: PendingQuestion,
-    context: { signal: AbortSignal },
+    context: { signal: AbortSignal; onAnswer?: () => void },
   ) => Promise<AskAnswers>;
   /** Offer an optional step and resolve with whether to keep it. */
   taskNotice?: (

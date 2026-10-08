@@ -12,26 +12,26 @@
  * No switch statements, no hardcoded transitions in business logic.
  */
 
-import { RunPhase, type WizardSession } from '@programs/session/wizard-session';
+import { RunPhase } from '@shared/run-state';
+import { OutroKind } from '@shared/outro';
+import { type TuiView } from '@tui/tui-state';
 import { isRunFailure } from '@tui/mint-failure';
 import { Program, type ProgramId } from '@programs';
 import {
-  PROGRAM_SEQUENCES,
   MINT_HANDOFF_SEQUENCE,
   ScreenId,
+  programSequence,
   type Screen,
   type Sequence,
-} from '../ui/tui/screen-sequences.js';
+} from './screen-sequences.js';
 import { Overlay } from './screen-ids.js';
 
 // Re-export so existing imports from './router.js' keep working
 export { ScreenId, Overlay, Program };
 export type { Screen, Sequence, ProgramId };
 
-// ── ScreenId name taxonomy ──────────────────────────────────────────────
-
-/** Union of all screen names */
-export type ScreenName = ScreenId | Overlay;
+/** Any screen name: a core `ScreenId`, an `Overlay`, or a program's own screen id. */
+export type ScreenName = string;
 
 // ── Router ────────────────────────────────────────────────────────────
 
@@ -47,44 +47,40 @@ export class WizardRouter {
   /** Point the router at a different program. */
   setProgram(programId: ProgramId): void {
     this.programId = programId;
-    this.sequence = PROGRAM_SEQUENCES[programId];
+    this.sequence = programSequence(programId);
     this.overlays = [];
   }
 
   /**
-   * Resolve which screen should be active based on session state.
+   * Resolve which screen should be active based on the session and the TUI state.
    * Walks the program sequence, skipping hidden entries and completed entries,
    * returns the first incomplete screen.
    */
-  resolve(session: WizardSession): ScreenName {
+  resolve(view: TuiView): ScreenName {
+    const { session } = view;
     // A failed agent run interrupts every program until the user leaves the
     // handoff screen: exit, or continue through the post-run steps.
     const runFailed = isRunFailure(session);
-    if (runFailed && session.mintHandoff === 'exit') return ScreenId.Exit;
-    if (runFailed && !session.mintHandoff) return ScreenId.MintFailure;
+    if (runFailed && view.mintHandoff === 'exit') return ScreenId.Exit;
+    if (runFailed && !view.mintHandoff) return ScreenId.MintFailure;
 
     if (this.overlays.length > 0) {
       return this.overlays[this.overlays.length - 1];
     }
 
+    // Early aborts must be dismissible even when intro, setup, or auth is incomplete.
+    if (
+      !runFailed &&
+      session.runPhase === RunPhase.Error &&
+      session.outroData?.kind === OutroKind.Error
+    ) {
+      return view.outroDismissed ? ScreenId.Exit : ScreenId.Outro;
+    }
+
     const sequence = runFailed ? MINT_HANDOFF_SEQUENCE : this.sequence;
     for (const entry of sequence) {
-      if (entry.show && !entry.show(session)) continue;
-      if (entry.isComplete && entry.isComplete(session)) continue;
-      // A failed login aborts the run: wizardAbort renders the error outro
-      // and then waits for its dismissal. But the auth step only completes
-      // on credentials — which an aborted login never set — so the walk
-      // would park here forever: auth spinner up, outro unreachable, and
-      // that wait deadlocked. Route to the outro so the error can be read
-      // and dismissed. Auth only: the run steps already complete on
-      // RunPhase.Error, so later aborts reach their program's own outro.
-      if (
-        entry.id === ScreenId.Auth &&
-        session.runPhase === RunPhase.Error &&
-        session.outroData
-      ) {
-        return ScreenId.Outro;
-      }
+      if (entry.show && !entry.show(view)) continue;
+      if (entry.isComplete && entry.isComplete(view)) continue;
       return entry.id;
     }
 

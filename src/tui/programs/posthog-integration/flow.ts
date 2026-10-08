@@ -6,11 +6,10 @@
  * definitions — no hardcoded per-flow logic in the store.
  */
 
-import type { ProgramStep } from '@programs/program-step';
-import type { WizardSession } from '@programs/session/wizard-session';
-import { RunPhase } from '@programs/session/wizard-session';
+import type { FlowStep } from '@tui/flow';
+import { RunPhase } from '@shared/run-state';
 import { HEALTH_CHECK_STEP } from '@tui/programs/shared/health-check-step';
-import { detectPostHogIntegration } from '../../../programs/detection/integration.js';
+import type { WizardSession } from '@programs/types';
 
 function needsSetup(session: WizardSession): boolean {
   const config = session.frameworkConfig;
@@ -21,41 +20,32 @@ function needsSetup(session: WizardSession): boolean {
   );
 }
 
-export const POSTHOG_INTEGRATION_PROGRAM: ProgramStep[] = [
-  {
-    id: 'detect',
-    label: 'Detecting framework',
-    // Headless step: no screen. onReady fires after bin.ts assigns the
-    // session — runs framework detection, context gathering, version
-    // check, and feature discovery. Results are written to the store
-    // for the IntroScreen to render.
-    onReady: (ctx) => detectPostHogIntegration(ctx),
-  },
+export const POSTHOG_INTEGRATION_FLOW: FlowStep[] = [
   {
     id: 'intro',
     label: 'Welcome',
     screenId: 'intro',
-    gate: (session) => session.setupConfirmed,
+    gate: (tui) => tui.setupConfirmed,
   },
   HEALTH_CHECK_STEP,
   {
     id: 'setup',
     label: 'Setup',
     screenId: 'setup',
-    show: needsSetup,
-    isComplete: (session) => !needsSetup(session),
+    show: ({ session }) => needsSetup(session),
+    isComplete: ({ session }) => !needsSetup(session),
   },
   {
     id: 'auth',
     label: 'Authentication',
     screenId: 'auth',
-    isComplete: (session) => session.credentials !== null,
+    isComplete: ({ session }) => session.credentials !== null,
   },
   {
     id: 'run',
     label: 'Integration',
     screenId: 'run',
-    isComplete: (session) =>
+    isComplete: ({ session }) =>
       session.runPhase === RunPhase.Completed ||
       session.runPhase === RunPhase.Error,
   },
@@ -63,20 +53,13 @@ export const POSTHOG_INTEGRATION_PROGRAM: ProgramStep[] = [
     id: 'outro',
     label: 'Done',
     screenId: 'outro',
-    isComplete: (session) => session.outroDismissed,
+    isComplete: (tui) => tui.outroDismissed,
   },
   {
     id: 'mcp',
     label: 'MCP servers',
     screenId: 'mcp',
-    isComplete: (session) => session.mcpComplete,
-  },
-  {
-    id: 'slack-connect',
-    label: 'Connect Slack',
-    screenId: 'slack-connect',
-    // Always shown — the user declines via Skip/esc, never bypassed.
-    isComplete: (session) => session.slackStepDismissed,
+    isComplete: (tui) => tui.mcpComplete,
   },
   {
     id: 'keep-skills',

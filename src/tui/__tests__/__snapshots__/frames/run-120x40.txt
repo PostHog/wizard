@@ -34,6 +34,6 @@
  ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
   ◆ Editing app/layout.tsx
 
-   Status   Event plan   Tail logs   Visualizer   HN
+   Status   Event plan   Tail logs   HN   Visualizer
 
   ←→ switch tab  s toggle status

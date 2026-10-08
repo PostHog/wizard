@@ -1,7 +1,12 @@
 import { piBackend } from '..';
 import { createSecurityExtension } from '../security';
 import { setupPostHogMcp } from '../mcp';
-import { Harness, Sequence, GPT5_6_LUNA_MODEL } from '@shared/constants';
+import {
+  Harness,
+  Sequence,
+  GPT5_6_LUNA_MODEL,
+  WIZARD_USER_AGENT,
+} from '@shared/constants';
 import { AgentErrorType } from '@agent/agent-interface';
 import { HostResolution } from '@shared/host-resolution';
 import type { BackendRunInputs } from '../../types';
@@ -177,16 +182,17 @@ function runInputs(
     projectId: 1,
     host: HostResolution.fromApiHost('https://us.posthog.com'),
   };
+  const binding = {
+    harness: Harness.pi,
+    sequence: Sequence.linear,
+    model: GPT5_6_LUNA_MODEL,
+  };
   return {
     config: {
       programId: 'posthog-integration',
       composed: true,
-      binding: {
-        harness: Harness.pi,
-        sequence: Sequence.linear,
-        model: GPT5_6_LUNA_MODEL,
-      },
-      switchboard: { program: 'posthog-integration', flags: {} },
+      binding,
+      switchboard: { program: 'posthog-integration', binding, flags: {} },
       skillsBaseUrl: '',
       wizardFlags: {},
       wizardFlagPayloads: {},
@@ -352,6 +358,25 @@ it('keeps the remark and leaves the middleware alone on an integration run', asy
   expect(state.prompts).toHaveLength(2);
   expect(onMessage).not.toHaveBeenCalled();
 });
+
+it.each(['self-driving-setup', 'agentic-detect', 'metrics'])(
+  'tags the MCP user-agent with `program: %s`',
+  async (integrationLabel) => {
+    // The backend reads this marker to attribute what the run creates — without it a
+    // self-driving run's warehouse sources record as generic wizard work.
+    const inputs = runInputs(vi.fn());
+    inputs.config.run.integrationLabel = integrationLabel;
+    vi.mocked(setupPostHogMcp).mockClear();
+
+    await piBackend.run(inputs);
+
+    expect(setupPostHogMcp).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userAgent: `${WIZARD_USER_AGENT}; program: ${integrationLabel}`,
+      }),
+    );
+  },
+);
 
 it('registers only filesystem readers for a read-only scan and fences tool calls', async () => {
   const inputs = runInputs(vi.fn());

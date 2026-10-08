@@ -1,24 +1,16 @@
 import * as childProcess from 'node:child_process';
 import * as fs from 'node:fs';
-import * as os from 'node:os';
-import { basename, isAbsolute, join, relative } from 'node:path';
-import { promisify } from 'node:util';
-
-import { withProgress } from './telemetry';
-import { debug } from './debug';
-import type { PackageJson } from './package-json';
+import { basename, join } from 'node:path';
 import {
   type PackageManager,
   detectAllPackageManagers,
   NPM as npm,
 } from './package-manager';
 import type { WizardRunOptions } from './types';
+import type { PackageJson } from './package-json';
 import { getDeclaredVersion } from './package-json';
-import { ISSUES_URL } from '@shared/constants';
 import { analytics } from './analytics';
-import { getUI } from '@ui';
 import { versionSatisfiesRange } from './semver';
-import { wizardAbort } from '../../host/wizard-abort';
 
 export interface CliSetupConfig {
   filename: string;
@@ -40,22 +32,6 @@ export interface CliSetupConfigContent {
   org?: string;
   project?: string;
   url?: string;
-}
-
-/** @deprecated Use wizardAbort() directly for new code. */
-export async function abort(message?: string, status?: number): Promise<never> {
-  return wizardAbort({ message, exitCode: status });
-}
-
-export function isInGitRepo(): boolean {
-  try {
-    childProcess.execSync('git rev-parse --show-toplevel', {
-      stdio: 'ignore',
-    });
-  } catch {
-    return false;
-  }
-  return true;
 }
 
 const FREEMAIL_DOMAINS = new Set([
@@ -117,29 +93,6 @@ export function detectOrgAndProject(email: string): {
   return { orgName, projectName };
 }
 
-export function getUncommittedOrUntrackedFiles(): string[] {
-  let gitStatus: string;
-  try {
-    gitStatus = childProcess
-      .execSync('git status --porcelain=v1', {
-        // we only care about stdout
-        stdio: ['ignore', 'pipe', 'ignore'],
-      })
-      .toString();
-  } catch {
-    return [];
-  }
-
-  const result: string[] = [];
-  for (const rawLine of gitStatus.split(os.EOL)) {
-    const line = rawLine.trim();
-    if (!line) continue;
-    const match = /^\S+\s+(\S+)/.exec(line);
-    result.push(`- ${match?.[1]}`);
-  }
-  return result;
-}
-
 export async function isReact19Installed({
   installDir,
 }: Pick<WizardRunOptions, 'installDir'>): Promise<boolean> {
@@ -163,119 +116,6 @@ export async function isReact19Installed({
 }
 
 /**
- * Installs or updates a package with the user's package manager.
- *
- * IMPORTANT: This function modifies the `package.json`! Be sure to re-read
- * it if you make additional modifications to it after calling this function!
- */
-export async function installPackage({
-  packageName,
-  alreadyInstalled,
-  packageNameDisplayLabel,
-  packageManager,
-  integration,
-  installDir,
-}: {
-  packageName: string;
-  alreadyInstalled: boolean;
-  packageNameDisplayLabel?: string;
-  packageManager?: PackageManager;
-  integration?: string;
-  installDir: string;
-}): Promise<{ packageManager?: PackageManager }> {
-  return withProgress('install-package', async () => {
-    const sdkInstallSpinner = getUI().spinner();
-
-    const pkgManager =
-      packageManager || (await getPackageManager({ installDir }));
-
-    const isReact19 = await isReact19Installed({ installDir });
-    const legacyPeerDepsFlag =
-      isReact19 && pkgManager.name === 'npm' ? '--legacy-peer-deps' : '';
-
-    sdkInstallSpinner.start(
-      `${alreadyInstalled ? 'Updating' : 'Installing'} ${
-        packageNameDisplayLabel ?? packageName
-      } with ${pkgManager.label}.`,
-    );
-
-    const execAsync = promisify(childProcess.exec);
-    const installCommand =
-      `${pkgManager.installCommand} ${packageName} ${pkgManager.flags} ${legacyPeerDepsFlag}`.trim();
-
-    try {
-      await execAsync(installCommand, { cwd: installDir });
-    } catch (e) {
-      const { stdout = '', stderr = '' } = (e ?? {}) as {
-        stdout?: string;
-        stderr?: string;
-      };
-      fs.writeFileSync(
-        join(
-          process.cwd(),
-          `posthog-wizard-installation-error-${Date.now()}.log`,
-        ),
-        JSON.stringify({ stdout, stderr }),
-        { encoding: 'utf8' },
-      );
-      sdkInstallSpinner.stop('Installation failed.');
-      getUI().log.error(
-        // eslint-disable-next-line @typescript-eslint/restrict-template-expressions
-        `Encountered the following error during installation:\n\n${e}\n\nThe wizard has created a \`posthog-wizard-installation-error-*.log\` file. If you think this issue is caused by the PostHog wizard, create an issue on GitHub and include the log file's content:\n${ISSUES_URL}`,
-      );
-      await abort();
-    }
-
-    sdkInstallSpinner.stop(
-      `${alreadyInstalled ? 'Updated' : 'Installed'} ${
-        packageNameDisplayLabel ?? packageName
-      } with ${pkgManager.label}.`,
-    );
-
-    analytics.wizardCapture('package installed', {
-      package_name: packageName,
-      package_manager: pkgManager.name,
-      integration,
-    });
-
-    return { packageManager: pkgManager };
-  });
-}
-
-/**
- * Get package.json or abort the wizard if not found.
- * Only use where package.json is required (e.g., package install, overrides).
- * For detection/version-checks, use tryGetPackageJson() instead.
- */
-export async function getPackageDotJson({
-  installDir,
-}: Pick<WizardRunOptions, 'installDir'>): Promise<PackageJson> {
-  const pkgPath = join(installDir, 'package.json');
-
-  let raw: string;
-  try {
-    raw = await fs.promises.readFile(pkgPath, 'utf8');
-  } catch {
-    getUI().log.error(
-      'Could not find package.json. Make sure to run the wizard in the root of your app!',
-    );
-    await abort();
-    return {};
-  }
-
-  try {
-    const parsed = JSON.parse(raw) as PackageJson | null;
-    return parsed ?? {};
-  } catch {
-    getUI().log.error(
-      `Unable to parse your package.json. Make sure it has a valid format!`,
-    );
-    await abort();
-    return {};
-  }
-}
-
-/**
  * Try to get package.json, returning null if it doesn't exist.
  * Use this for detection purposes where missing package.json is expected (e.g., Python projects).
  */
@@ -290,25 +130,6 @@ export async function tryGetPackageJson({
     return JSON.parse(packageJsonFileContents) as PackageJson;
   } catch {
     return null;
-  }
-}
-
-export async function updatePackageDotJson(
-  packageDotJson: PackageJson,
-  { installDir }: Pick<WizardRunOptions, 'installDir'>,
-): Promise<void> {
-  const pkgPath = join(installDir, 'package.json');
-  const serialized = JSON.stringify(packageDotJson, null, 2);
-
-  try {
-    await fs.promises.writeFile(pkgPath, serialized, {
-      encoding: 'utf8',
-      flag: 'w',
-    });
-    return;
-  } catch {
-    getUI().log.error(`Unable to update your package.json.`);
-    await abort();
   }
 }
 
@@ -344,40 +165,4 @@ export function isUsingTypeScript({
   } catch {
     return false;
   }
-}
-
-/**
- * Creates a new config file with the given filepath and codeSnippet.
- */
-export async function createNewConfigFile(
-  filepath: string,
-  codeSnippet: string,
-  { installDir }: Pick<WizardRunOptions, 'installDir'>,
-  moreInformation?: string,
-): Promise<boolean> {
-  if (!isAbsolute(filepath)) {
-    debug(`createNewConfigFile: filepath is not absolute: ${filepath}`);
-    return false;
-  }
-
-  const prettyFilename = relative(installDir, filepath);
-
-  try {
-    await fs.promises.writeFile(filepath, codeSnippet);
-
-    getUI().log.success(`Added new ${prettyFilename} file.`);
-
-    if (moreInformation) {
-      getUI().log.info(moreInformation);
-    }
-
-    return true;
-  } catch (e) {
-    debug(e);
-    getUI().log.warn(
-      `Could not create a new ${prettyFilename} file. Please create one manually and follow the instructions below.`,
-    );
-  }
-
-  return false;
 }

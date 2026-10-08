@@ -8,13 +8,12 @@
  * The links reach the user two ways, because the two sequences build the outro
  * differently: the linear one asks the program for the whole thing
  * (`buildOutroData`), while the orchestrated one composes its own message from
- * the drain and takes only the bullets (`buildOutroNextSteps`). The second is
- * the sequence that seeds the warehouse step, so it is also the one that can
- * say the run already connected the sources.
+ * the drain and takes only the bullets (`buildOutroNextSteps`). Both list every
+ * detected source, so the bullets do not depend on which sequence ran.
  */
 
-import { POSTHOG_INTEGRATION_PROGRAM } from '@tui/programs/posthog-integration/flow';
 import type { WizardSession } from '@programs/session/wizard-session';
+import { config as posthogIntegration } from '@programs/posthog-integration';
 import type { DetectedSource } from '@programs/warehouse-sources/types';
 import { analytics } from '@utils/analytics';
 
@@ -153,27 +152,11 @@ describe('env tool instruction', () => {
   });
 });
 
-describe('flow shape', () => {
-  it('adds no steps — the suggestion never becomes an inline run', () => {
-    const ids = POSTHOG_INTEGRATION_PROGRAM.map((s) => s.id);
-    expect(ids).toEqual([
-      'detect',
-      'intro',
-      'health-check',
-      'setup',
-      'auth',
-      'run',
-      'outro',
-      'mcp',
-      'slack-connect',
-      'keep-skills',
-    ]);
-  });
-
+describe('run shape', () => {
   it('keeps the program single-run, so the outro stays terminal', () => {
-    // A step carrying its own `run` would flip run-wizard into the composed
-    // walk, where a second agent run could abort before the outro is pushed.
-    expect(POSTHOG_INTEGRATION_PROGRAM.some((s) => s.run)).toBe(false);
+    // A run step naming another program would flip run-wizard into the
+    // composed walk, where a second agent run could abort before the outro.
+    expect(posthogIntegration.runSteps).toBeUndefined();
   });
 });
 
@@ -213,27 +196,27 @@ describe('orchestrated outro suggestion', () => {
     );
   });
 
-  it('offers nothing once the seeded warehouse step connected them', async () => {
+  it('still carries a source the seeded step completed on', async () => {
+    // The step reports success once it has handled each source somehow, and
+    // handing back a link for one whose credentials never arrived is one of
+    // those outcomes — so completing is not evidence the source is connected.
     const s = sessionWith([POSTGRES]);
 
-    expect(await nextSteps(s, ['warehouse'])).toBeUndefined();
+    expect((await nextSteps(s, ['warehouse']))!.items.join('\n')).toContain(
+      'kind=postgres',
+    );
   });
 
-  it('still carries the sources the seeded step was never given', async () => {
-    // The step is capped, so "it completed" means it connected the ones it was
-    // handed — the tail is as unconnected as if the step had never run.
+  it('carries the same sources whether or not the step completed', async () => {
     const tail: DetectedSource = {
       kind: 'resend',
       label: 'Resend',
       mode: 'in-cli',
       matchedSignal: 'resend in package.json',
     };
-    const s = sessionWith([POSTGRES, STRIPE, POSTGRES, tail]);
+    const s = sessionWith([POSTGRES, STRIPE, tail]);
 
-    const text = (await nextSteps(s, ['warehouse']))!.items.join('\n');
-
-    expect(text).toContain('kind=resend');
-    expect(text).not.toContain('kind=stripe');
+    expect(await nextSteps(s, ['warehouse'])).toEqual(await nextSteps(s, []));
   });
 
   it('offers nothing when nothing was detected', async () => {

@@ -1,22 +1,29 @@
 import { join } from 'path';
 import { access, rm } from 'node:fs/promises';
-import type { ProgramConfig } from '@programs/program-step';
-import type { ProgramRun } from '@programs/program-run';
-import {
-  OutroKind,
-  type WizardSession,
-} from '@programs/session/wizard-session';
+import type { ProgramConfig } from '../program-step';
+import type { ProgramRun } from '../program-run';
 import { createSkillProgram } from '../shared/skill-program.js';
-import { SELF_DRIVING_PROGRAM } from '../../tui/programs/self-driving/flow.js';
+import { OutroKind } from '@shared/outro';
+import type { ProgramSession } from '../program-session';
 import {
-  SELF_DRIVING_ABORT_CASES,
+  detectSelfDrivingPrerequisites,
   getSelfDrivingDetectedTools,
+  SELF_DRIVING_ABORT_CASES,
+  SELF_DRIVING_INTEGRATE_PATH_KEY,
 } from './detect.js';
 import { buildSelfDrivingPrompt } from './prompt.js';
 import { resolveSelfDrivingStepKey } from './step-keys.js';
+import { resolveProjectDir } from '../detection/agentic';
+import { prepSelfDrivingIntegration } from './detect-agentic.js';
 import { NO_DEFAULT_LIMIT, PRICE_PER_PR_USD, PRICING_LONG } from './pricing.js';
-import { getTips } from '../../tui/programs/self-driving/deck/tips.js';
-import { getContentBlocks } from '../../tui/programs/self-driving/deck/index.js';
+import { SELF_DRIVING_SCOPE_ADDITIONS } from './scopes.js';
+
+/** Absolute dir to integrate into: the picked sub-app (LLM output — the shared resolver clamps escapes), else the repo root. */
+const integrationDir = (session: ProgramSession): string =>
+  resolveProjectDir(
+    session.installDir,
+    session.frameworkContext[SELF_DRIVING_INTEGRATE_PATH_KEY],
+  );
 
 export const SELF_DRIVING_SKILL_ID = 'self-driving-setup';
 const REPORT_FILE = 'posthog-self-driving-report.md';
@@ -46,7 +53,7 @@ async function removeInstalledSkill(installDir: string): Promise<void> {
 // A session closure (not a static object) so `customPrompt` can read the
 // tools detected in the codebase — written to frameworkContext by the detect
 // step — and hand them to the prompt for STEP 4/STEP 5 prioritisation.
-const buildRun = (session: WizardSession): Promise<ProgramRun> =>
+const buildRun = (session: ProgramSession): Promise<ProgramRun> =>
   Promise.resolve({
     skillId: SELF_DRIVING_SKILL_ID,
     integrationLabel: SELF_DRIVING_SKILL_ID,
@@ -110,7 +117,7 @@ const buildRun = (session: WizardSession): Promise<ProgramRun> =>
     },
   });
 
-export const selfDrivingConfig: ProgramConfig = {
+export const config: ProgramConfig = {
   ...createSkillProgram({
     skillId: SELF_DRIVING_SKILL_ID,
     command: 'self-driving',
@@ -125,15 +132,34 @@ export const selfDrivingConfig: ProgramConfig = {
     requires: ['posthog-integration'],
     abortCases: SELF_DRIVING_ABORT_CASES,
   }),
-  steps: SELF_DRIVING_PROGRAM,
+  onReady: (ctx) =>
+    detectSelfDrivingPrerequisites(ctx.session, ctx.setFrameworkContext),
+  oauthScopeAdditions: SELF_DRIVING_SCOPE_ADDITIONS,
+  // Integrate path: posthog-integration's agent runs composed, in the picked
+  // project's dir, with that project's framework context gathered first.
+  runSteps: {
+    'integrate-run': {
+      runProgramId: 'posthog-integration',
+      onRunPrep: prepSelfDrivingIntegration,
+      targetDir: integrationDir,
+    },
+  },
   run: buildRun,
-  getTips,
-  getContentBlocks,
 };
 
-export { SELF_DRIVING_PROGRAM } from '../../tui/programs/self-driving/flow.js';
 export {
   detectSelfDrivingPrerequisites,
+  GITHUB_REQUIRED_BODY,
+  GITHUB_REQUIRED_MESSAGE,
+  POSTHOG_PRESENT_KEY,
   SELF_DRIVING_ABORT_CASES,
+  SELF_DRIVING_INTEGRATE_PATH_KEY,
   type SelfDrivingDetectError,
 } from './detect.js';
+
+export { NO_DEFAULT_LIMIT, PRICING_LONG, PRICING_SHORT } from './pricing.js';
+export {
+  detectSelfDrivingIntegrationProjects,
+  type IntegrationDetectionReport,
+  type IntegrationProject,
+} from './detect-agentic.js';

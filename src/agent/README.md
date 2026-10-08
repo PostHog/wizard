@@ -1,9 +1,5 @@
 # Agent
 
-> ⚠️ **The bindings table will be gone.** The program bindings table still lives
-> in the agent. By the end of this refactor it moves to programs, and the agent
-> takes a resolved route only.
-
 The agent runs one AI pipeline against a project. It takes resolved data in,
 reports through progress events, asks through an answerer you pass, and returns
 a result. It never reads a session, a store or a UI.
@@ -13,7 +9,8 @@ To call it from code, use `runAgent`. The
 
 ## What goes in and out
 
-- **In.** A `RunConfig`, a `RunInput`, and callbacks for progress and questions.
+- **In.** A `RunConfig` with the caller's routing, a `RunInput`, and callbacks
+  for progress and questions.
 - **Out.** One `RunResult` at the end.
 - **Never in.** A session, a store or the UI.
 
@@ -27,7 +24,16 @@ To call it from code, use `runAgent`. The
 | Sequences, harnesses and route resolution | [`runner`](runner/README.md)                      |
 | The wizard tools both harnesses share     | [`tools`](tools)                                  |
 | The benchmark pipeline                    | [`middleware`](middleware)                        |
-| Security scans of what the run installs   | [`yara-hooks.ts`](yara-hooks.ts)                  |
+| YARA scans of tool calls (Pre/PostToolUse) and of installed skills | [`yara-hooks.ts`](yara-hooks.ts)                  |
 
-Import runtime values from `@agent` and types from `@agent/types`. Nothing
-outside the agent imports deeper, and lint rejects it.
+Import runtime values from `@agent` and types from `@agent/types`. `@agent`
+exports `runAgent`, `RunOutcome` (from `@shared/run-state`, so the hosts read it
+without the agent), `AgentSignals`, `WIZARD_TOOL_NAMES`, `DEFAULT_BINDING`,
+`scanVerdict`, `scanInstalledSkill` and `streamMcpPrompt`, the MCP tutorial's
+prompt stream. `pnpm lint` rejects a deeper import from any other layer, through
+ESLint `no-restricted-syntax`. Files inside `src/agent` import each other by
+relative path. Nothing enforces this: the agent's project maps `@agent`,
+`@agent/types` and `@agent/*` through `tsconfig.no-tui.json`, and its tests use
+them. The agent itself may import `@env`, `@shared/*` and `@utils/*`, and
+nothing else; see
+[layer boundaries](../../.claude/skills/wizard-development/references/ARCHITECTURE.md#layer-boundaries).

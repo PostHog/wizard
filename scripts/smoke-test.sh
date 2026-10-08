@@ -86,7 +86,7 @@ fi
 # not reject the flag, and it must not fall through to the --ci rejection. With
 # no api-key the run exits fast on "Headless mode requires --api-key" — all this
 # asserts is that the flag is recognized and live in the published binary. The
-# flag name is intentionally undocumented; keep it in sync with @lib/headless-mode.
+# flag name is intentionally undocumented; keep it in sync with HEADLESS_FLAG in src/env.ts.
 HEADLESS_FLAG='--headless-DONOTUSE-EXPERIMENTAL'
 hl_output=$(node "$DIST_BIN" "$HEADLESS_FLAG" --install-dir /tmp/wizard-smoke-probe 2>&1) || true
 if echo "$hl_output" | grep -qiE 'unknown argument|not currently supported'; then

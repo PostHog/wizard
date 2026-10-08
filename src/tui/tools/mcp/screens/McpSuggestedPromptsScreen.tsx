@@ -1,7 +1,5 @@
 /**
- * McpSuggestedPromptsScreen — shown after MCP install succeeds in the
- * standalone `wizard mcp add` program, and as the entry point for
- * `wizard mcp tutorial`.
+ * McpSuggestedPromptsScreen — the `wizard mcp tutorial` screen.
  *
  * Phases:
  *   1. Choose          — opens with a Log in / Exit picker, framed by a
@@ -43,7 +41,6 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSyncExternalStore } from 'react';
 
 import type { WizardStore } from '@tui/store';
-import { Program } from '@programs';
 import { Colors, Icons } from '@tui/styles';
 import { useKeyBindings, KeyMatch } from '@tui/hooks/useKeyBindings';
 import {
@@ -63,19 +60,19 @@ import {
   FOLLOW_UP_EXIT_SENTINEL,
   type PromptOption,
   type RoleGreeting,
-} from '@tui/tools/mcp/services/mcp-role-prompts';
+} from '../services/mcp-role-prompts.js';
 import {
   degradedProfile,
   isKnownCloudHost,
   type ProjectDataProfile,
-} from '@tui/tools/mcp/services/mcp-project-profile';
+} from '../services/mcp-project-profile.js';
 import type { Integration } from '@shared/constants';
 import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
 import type {
-  AgentChunk,
+  McpPromptChunk,
   McpSuggestedPromptsServices,
-} from '@tui/tools/mcp/services/suggested-prompts';
+} from '../services/suggested-prompts.js';
 
 interface McpSuggestedPromptsScreenProps {
   store: WizardStore;
@@ -152,14 +149,7 @@ export const McpSuggestedPromptsScreen = ({
 
   // Phase.Choose is the tutorial's no-commitment entry: login fires only when
   // the user picks 'Start tutorial' — explicit consent for the OAuth dance.
-  // After an install (`mcp add`), skip the pitch entirely: land on the
-  // all-set screen with the login commands, no surprise OAuth. The tutorial
-  // stays reachable via `wizard mcp tutorial`.
-  const [phase, setPhase] = useState<Phase>(
-    store.router.activeProgram === Program.McpTutorial
-      ? Phase.Choose
-      : Phase.Goodbye,
-  );
+  const [phase, setPhase] = useState<Phase>(Phase.Choose);
   // The scout's read of the project, set in the Scouting phase. Drives the
   // data-aware picker, greeting flavor, and Goodbye samples. Null until the
   // probe completes (the picker treats null as legacy / data-unaware).
@@ -187,7 +177,7 @@ export const McpSuggestedPromptsScreen = ({
   // for the up-front auth.
   const startedTutorialRef = useRef(false);
   const [runningPrompt, setRunningPrompt] = useState<string | null>(null);
-  const [runChunks, setRunChunks] = useState<AgentChunk[]>([]);
+  const [runChunks, setRunChunks] = useState<McpPromptChunk[]>([]);
   const [runStartedAt, setRunStartedAt] = useState<number | null>(null);
   // Frozen elapsed-seconds value, set the moment the stream emits
   // 'done' / 'error'. Without this, the "Done in Xs." line ticks up
@@ -611,7 +601,7 @@ export const McpSuggestedPromptsScreen = ({
         )}
 
         {phase === Phase.Authenticating && (
-          <AuthenticatingPhase loginUrl={session.loginUrl} />
+          <AuthenticatingPhase loginUrl={store.loginUrl} />
         )}
 
         {phase === Phase.Scouting && <ScoutingPhase />}
@@ -687,12 +677,12 @@ export const McpSuggestedPromptsScreen = ({
 
         {phase === Phase.Goodbye && (
           <GoodbyePhase
-            installedClients={session.mcpInstalledClients}
+            installedClients={store.mcpInstalledClients}
             role={session.roleAtOrganization}
             integration={session.integration}
             profile={profile}
             engaged={branchHistory.length > 0}
-            loginCommands={session.mcpLoginCommands}
+            loginCommands={store.mcpLoginCommands}
             onClose={closeWizard}
           />
         )}
@@ -1000,7 +990,7 @@ const PromptPickerPhase = ({
 
 interface RunningPhaseProps {
   prompt: string;
-  chunks: AgentChunk[];
+  chunks: McpPromptChunk[];
   startedAt: number | null;
   /** Set the instant the stream finishes; freezes the displayed elapsed
    *  time so re-renders under FollowUp don't keep ticking it forward. */
@@ -1077,7 +1067,7 @@ const RunningPhase = ({
  * fall through to whatever chunks survived so the user isn't left with
  * a blank result.
  */
-function collapseToFinalAnswer(chunks: AgentChunk[]): AgentChunk[] {
+function collapseToFinalAnswer(chunks: McpPromptChunk[]): McpPromptChunk[] {
   const textChunks = chunks.filter((c) => c.kind === 'text');
   const errors = chunks.filter((c) => c.kind === 'error');
   if (textChunks.length === 0) return errors;
@@ -1101,7 +1091,7 @@ function collapseToFinalAnswer(chunks: AgentChunk[]): AgentChunk[] {
  * terminal correctly counts as 12, so the cap leaves exactly the room
  * the picker needs.
  */
-function capTextChunks(chunks: AgentChunk[]): AgentChunk[] {
+function capTextChunks(chunks: McpPromptChunk[]): McpPromptChunk[] {
   const rows = process.stdout.rows ?? 24;
   const cols = process.stdout.columns ?? 120;
   // Reserve rows for the FollowUp picker that sits below the result:
@@ -1153,7 +1143,7 @@ function capTextChunks(chunks: AgentChunk[]): AgentChunk[] {
 }
 
 interface ChunkLineProps {
-  chunk: AgentChunk;
+  chunk: McpPromptChunk;
 }
 
 const ChunkLine = ({ chunk }: ChunkLineProps) => {
@@ -1190,7 +1180,7 @@ interface FollowUpPhaseProps {
   lastToolName: string | null;
   lastToolCommand: string | null;
   lastPrompt: string | null;
-  chunks: AgentChunk[];
+  chunks: McpPromptChunk[];
   role: string | null;
   branchHistory: string[];
   canPickAnother: boolean;

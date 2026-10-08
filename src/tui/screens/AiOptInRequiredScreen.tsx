@@ -110,7 +110,7 @@ export const AiOptInRequiredScreen = ({
 
   const handleExit = () => {
     analytics.wizardCapture('ai opt-in action', { variant, action: 'exit' });
-    process.exit(0);
+    store.requestExit(0);
   };
 
   useKeyBindings('ai-opt-in', [

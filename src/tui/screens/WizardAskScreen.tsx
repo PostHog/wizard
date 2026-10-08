@@ -19,7 +19,7 @@ import {
 import { Colors, Icons } from '@tui/styles';
 import { copyToClipboard, openInBrowser } from '@utils/clipboard';
 import { useKeyBindings } from '@tui/hooks/useKeyBindings';
-import type { AskAnswers, AskQuestion } from '@programs/session/wizard-session';
+import type { AskAnswers, AskQuestion } from '@agent/types';
 
 interface WizardAskScreenProps {
   store: WizardStore;
@@ -228,6 +228,10 @@ export const WizardAskScreen = ({ store }: WizardAskScreenProps) => {
     if (index + 1 < total) {
       setAnswers(next);
       setIndex(index + 1);
+      // The request's timeout is armed per question, and only this screen
+      // knows a question was answered — the request itself resolves once, at
+      // the end of the walk.
+      store.noteAskProgress();
       return;
     }
     store.resolvePendingQuestion(next);

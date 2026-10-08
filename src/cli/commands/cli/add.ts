@@ -1,5 +1,7 @@
+import { consoleLog } from '@shared/console-log';
 import { CLI_STEERING_TARGETS } from '@shared/install-cli-steering';
-import { runCliAdd } from '@tools/cli-steering/index';
+import { runCliAdd } from '@tools';
+import { exitWith } from '@cli/runners';
 import type { Command } from '../command';
 
 export const cliAddCommand: Command = {
@@ -42,6 +44,15 @@ export const cliAddCommand: Command = {
     return true;
   },
   handler: (argv) => {
-    void runCliAdd(argv);
+    exitWith(() =>
+      runCliAdd(
+        {
+          agent: typeof argv.agent === 'string' ? argv.agent : undefined,
+          path: typeof argv.path === 'string' ? argv.path : undefined,
+          all: argv.all === true,
+        },
+        { log: consoleLog },
+      ),
+    );
   },
 };

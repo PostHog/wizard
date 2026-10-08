@@ -1,8 +1,8 @@
 import { existsSync, statSync } from 'fs';
-import type { WizardSession } from '@programs/session/wizard-session';
+import type { ProgramSession } from '../program-session';
 import type { AbortCase } from '@agent/types';
 import { ErrorCodes } from '@shared/errors';
-import { findPackageJsons } from '@programs/shared/package-scanning';
+import { findPackageJsons } from '../shared/package-scanning';
 
 export type WebAnalyticsDetectError =
   | {
@@ -46,7 +46,7 @@ export const WEB_ANALYTICS_ABORT_CASES: AbortCase[] = [
 ];
 
 export function detectWebAnalyticsPrerequisites(
-  session: WizardSession,
+  session: ProgramSession,
   setFrameworkContext: (key: string, value: unknown) => void,
 ): void {
   const fail = (error: WebAnalyticsDetectError) =>

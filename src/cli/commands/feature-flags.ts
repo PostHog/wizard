@@ -1,4 +1,4 @@
-import { featureFlagsConfig } from '@programs/feature-flags/index';
+import { config as featureFlagsConfig } from '@programs/feature-flags';
 
 import type { Command } from './command';
 import { nativeCommandFactory } from './factories/native-command-factory';

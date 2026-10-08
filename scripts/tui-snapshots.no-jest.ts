@@ -28,7 +28,7 @@ for (const k of Object.keys(env))
 
 const cap = captureTui({
   cmd: path.join(process.cwd(), 'node_modules/.bin/tsx'),
-  args: ['scripts/tui-host.no-jest.ts'],
+  args: ['--tsconfig', 'tsconfig.base.json', 'scripts/tui-host.no-jest.ts'],
   cwd: process.cwd(),
   env,
 });
@@ -52,10 +52,10 @@ async function drainCtrl() {
 }
 
 const timer = setInterval(() => void drainCtrl(), 150);
-void cap.exited.then(async () => {
+void cap.exited.then(async (code) => {
   await drainCtrl();
   clearInterval(timer);
   // eslint-disable-next-line no-console
-  console.log(`done; ${seq} snapshots in ${OUT}`);
-  process.exit(0);
+  console.log(`done; ${seq} snapshots in ${OUT}; host exited ${code}`);
+  process.exit(code);
 });

@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.no-tui.json",
+  "include": ["index.ts", "types.ts", "program-registry.ts", "run-program.ts", "detect-program.ts", "detect-map.ts", "__tests__"],
+  "references": [
+    { "path": "tsconfig.core.json" }, { "path": "agent-skill" },
+    { "path": "ai-observability" }, { "path": "audit" },
+    { "path": "error-tracking-upload-source-maps" }, { "path": "error-tracking" },
+    { "path": "feature-flags" },
+    { "path": "mcp-analytics" }, { "path": "metrics" }, { "path": "migration" },
+    { "path": "posthog-integration" }, { "path": "replay-vision" },
+    { "path": "revenue-analytics" }, { "path": "self-driving" },
+    { "path": "warehouse-source" }, { "path": "web-analytics-doctor" }
+  ]
+}

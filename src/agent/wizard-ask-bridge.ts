@@ -1,23 +1,20 @@
 /**
  * WizardAskBridge — host-side promise broker for the `wizard_ask` MCP tool.
  *
- * The `wizard_ask` tool needs to (a) read information from the wizard
- * session (the active skill id, used as the analytics `source`) and
- * (b) drive the TUI overlay. Wiring `wizard-tools.ts` directly to either
- * would couple our pure-data MCP server to the runtime UI layer.
+ * The `wizard_ask` tool needs to (a) know the run's skill id, used as the
+ * analytics `source`, and (b) put questions to whoever answers them. Wiring
+ * the tools directly to either would couple our pure-data MCP server to its
+ * host.
  *
- * The bridge is the seam: `wizard-tools.ts` depends on this interface,
- * and `agent-runner.ts` constructs an implementation that knows about
- * both the session and `getUI()`.
+ * The bridge is the seam: the wizard tools depend on this interface, and
+ * the runner builds an implementation over the caller's `AgentInteraction`
+ * (see `runner/shared/ask.ts`).
  */
 import { randomUUID } from 'crypto';
 
 import { analytics } from '@utils/analytics';
-import {
-  DEFAULT_ASK_TIMEOUT_MS,
-  LONGER_ASK_TIMEOUT_MS,
-} from '@shared/ask-policy';
-import type { AskAnswers, AskQuestion, PendingQuestion } from '@agent/progress';
+import { DEFAULT_ASK_TIMEOUT_MS } from '@shared/ask-policy';
+import type { AskAnswers, AskQuestion, PendingQuestion } from './progress';
 
 export interface WizardAskRequest {
   questions: AskQuestion[];
@@ -74,12 +71,13 @@ export interface WizardAskBridgeOptions {
    */
   showQuestion: (
     question: PendingQuestion,
-    context: { signal: AbortSignal },
+    context: { signal: AbortSignal; onAnswer: () => void },
   ) => Promise<AskAnswers>;
   /**
    * Per-question timeout in milliseconds. When the user takes longer than
-   * this to answer, every unanswered field resolves with the
-   * {@link CANCELLED_SENTINEL} value. Defaults to {@link DEFAULT_ASK_TIMEOUT_MS}.
+   * this to answer one question, every unanswered field of the request
+   * resolves with the {@link CANCELLED_SENTINEL} value. Defaults to
+   * {@link DEFAULT_ASK_TIMEOUT_MS}.
    */
   timeoutMs?: number;
   /**
@@ -92,8 +90,6 @@ export interface WizardAskBridgeOptions {
 
 /** Sentinel returned for unanswered fields on cancellation or timeout. */
 export const CANCELLED_SENTINEL = '__cancelled__';
-
-export { DEFAULT_ASK_TIMEOUT_MS, LONGER_ASK_TIMEOUT_MS };
 
 function buildCancelledAnswers(questions: AskQuestion[]): AskAnswers {
   const out: AskAnswers = {};
@@ -137,7 +133,16 @@ export function createWizardAskBridge(
       const controller = new AbortController();
       let timer: ReturnType<typeof setTimeout> | undefined;
       let timedOut = false;
+      let settled = false;
+      let answeredCount = 0;
       let cancelForAbort: (() => void) | undefined;
+      // Re-armed by `onAnswer`, so the clock measures the user's silence and
+      // not the age of the request. One clock over the whole request is the
+      // same allowance for a one-line question and for a nine-field database
+      // form the overlay walks one question at a time — and when it expired on
+      // a user who was still filling that form in, every field they had
+      // already typed was discarded and the agent was told nobody was there.
+      let armTimeout = (): void => undefined;
 
       // Race the user against the timeout and the run. Whichever fires first
       // wins. When the timeout or the run wins we also abort this question's
@@ -145,12 +150,17 @@ export function createWizardAskBridge(
       // would leave the host's pending-question state set, and the next
       // wizard_ask would be rejected as a duplicate request.
       const timeoutPromise = new Promise<AskAnswers>((resolve) => {
-        timer = setTimeout(() => {
-          timedOut = true;
-          // Settle first: a host that rejects once dismissed must not win.
-          resolve(buildCancelledAnswers(questions));
-          controller.abort();
-        }, timeoutMs);
+        armTimeout = () => {
+          if (settled) return;
+          if (timer) clearTimeout(timer);
+          timer = setTimeout(() => {
+            timedOut = true;
+            // Settle first: a host that rejects once dismissed must not win.
+            resolve(buildCancelledAnswers(questions));
+            controller.abort();
+          }, timeoutMs);
+        };
+        armTimeout();
       });
       const aborted = new Promise<AskAnswers>((resolve) => {
         cancelForAbort = () => {
@@ -162,7 +172,13 @@ export function createWizardAskBridge(
 
       try {
         const answers = await Promise.race([
-          opts.showQuestion(pending, { signal: controller.signal }),
+          opts.showQuestion(pending, {
+            signal: controller.signal,
+            onAnswer: () => {
+              answeredCount += 1;
+              armTimeout();
+            },
+          }),
           timeoutPromise,
           aborted,
         ]);
@@ -173,6 +189,11 @@ export function createWizardAskBridge(
             source: pending.source,
             subject,
             question_count: questions.length,
+            // How far the user got before the ask ended. A count, never a
+            // value: it separates a request nobody touched from one abandoned
+            // part-filled, which is the difference between an absent user and
+            // a form that asks for more than they were willing to hand over.
+            questions_answered: answeredCount,
             duration_ms: durationMs,
             timed_out: timedOut,
           });
@@ -187,6 +208,7 @@ export function createWizardAskBridge(
 
         return { answers, timedOut };
       } finally {
+        settled = true;
         if (timer) clearTimeout(timer);
         if (cancelForAbort)
           opts.signal?.removeEventListener('abort', cancelForAbort);

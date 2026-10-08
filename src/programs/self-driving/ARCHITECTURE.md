@@ -26,7 +26,7 @@ anchors are point-in-time — the symbol names are the durable part.
 | What each step _does_                  | `context-mill/context/skills/self-driving/references/*.md` |
 | Program registration / lifecycle       | `src/programs/self-driving/index.ts`                   |
 | `wizard_ask` / `.env` tools            | `src/agent/tools/tools.ts`, `src/agent/wizard-ask-bridge.ts`  |
-| OAuth scopes (+ prod ceiling)          | `src/programs/oauth/program-scopes.ts` (§3, §7)                 |
+| OAuth scopes (+ prod ceiling)          | `src/programs/self-driving/scopes.ts` (§3, §7)                  |
 | Signals models / MCP / sync            | `posthog/products/signals/backend/…` (§5)                  |
 | Why a team gets no findings            | §6                                                         |
 | What to change for prod                | §7                                                         |
@@ -42,7 +42,7 @@ anchors are point-in-time — the symbol names are the durable part.
   Signals-specific code here is the program's **prompt** (`prompt.ts` — the
   _order_ + mechanics), its **config/lifecycle** (`index.ts`), its **abort
   vocabulary** (`detect.ts`), and its **OAuth scope additions**
-  (`program-scopes.ts`).
+  (`scopes.ts`).
 - **`context-mill` (the HOW).** The installed `self-driving-setup` skill is the
   source of truth for _how_ each step runs — tools, recipes, verification. The
   wizard ships only the skill **ID**; the body is fetched at runtime and can
@@ -146,16 +146,16 @@ repos.
 
 ## 3. Wizard internals
 
-**Program definition** (`src/programs/self-driving/`, four core files):
+**Program definition** (`src/programs/self-driving/`, three core files):
 `index.ts` (config + lifecycle), `prompt.ts` (the 10 steps + mechanics + project
-URLs), `detect.ts` (prerequisite check + abort vocabulary), `steps.ts` (TUI
+URLs), `detect.ts` (prerequisite check + abort vocabulary). The TUI
 screen sequence `detect → intro → health-check → auth → self-driving-github →
-run → outro`). The TUI deck at
-`src/ui/tui/decks/self-driving/tips.ts` (the `Tips`-sidebar copy that defines signal
+run → outro` is `src/tui/programs/self-driving/flow.ts`. The TUI deck at
+`src/tui/programs/self-driving/deck/tips.ts` (the `Tips`-sidebar copy that defines signal
 sources + scouts + scanners in plain language, wired via `getTips`; `RunScreen` falls back
 to `DEFAULT_TIPS` for every other program, so nothing else is affected).
-`selfDrivingConfig` is built from the `createSkillProgram` factory
-(`src/programs/agent-skill/`) with overrides. Notables in `index.ts`:
+`config` is built from the `createSkillProgram` factory
+(`src/programs/shared/skill-program.ts`) with overrides. Notables in `index.ts`:
 `SELF_DRIVING_SKILL_ID = 'self-driving-setup'`,
 `REPORT_FILE = 'posthog-self-driving-report.md'`, `maxQuestions: 13` (tracker
 picks + custom-scout proposal), `richLinks: true` (OSC-8 links so long
@@ -163,11 +163,11 @@ OAuth URLs survive wrapping), and `postRun` (just `removeInstalledSkill` — the
 setup skill is transient, marker-guarded by `.posthog-wizard`, so there's no
 keep-skills step). The outro inbox URL is the clean `…/project/:id/inbox` built
 in `buildOutroData` (no auth deep-link — §7 item 7). CLI:
-`src/commands/self-driving.ts`; `--install-dir` becomes `session.installDir`
+`src/cli/commands/self-driving.ts`; `--install-dir` becomes `session.installDir`
 (the agent's working dir and detection target).
 
 **Runner & agent loop (generic — not Signals-aware).** `runProgram`
-(`src/agent/agent-runner.ts`) is the fixed pipeline
+(`src/programs/run-program.ts`) is the fixed pipeline
 `init → health → settings → OAuth → skill install → agent → run → errors → postRun → outro`.
 It installs the skill by ID, resolves the MCP URL, runs the Claude Agent SDK
 `query()` (`src/agent/agent-interface.ts`) in a sandbox with the
@@ -200,7 +200,7 @@ returns an error telling the agent to default or emit
 brokers into the TUI overlay; cancelled/timed-out fields resolve to
 `CANCELLED_SENTINEL = '__cancelled__'`.
 
-**OAuth scopes** (`src/programs/oauth/program-scopes.ts`). Base `WIZARD_OAUTH_SCOPES`
+**OAuth scopes** (`src/programs/self-driving/scopes.ts`). Base `WIZARD_OAUTH_SCOPES`
 (`src/shared/constants.ts`) ∪ `SELF_DRIVING_SCOPE_ADDITIONS` — **12 strings**,
 requested via a PKCE auth-code flow:
 
@@ -374,9 +374,9 @@ source is enabled.
    (`posthog/models/organization.py`, default `True`, nullable; admin toggle at
    `/settings/organization#organization-ai-consent`). Fail-closed; without it
    findings are silently dropped. Enforced for this program by the **base
-   wizard's AI opt-in gate** (`src/programs/ai-opt-in-gate.ts`,
+   wizard's AI opt-in gate** (`src/tui/ai-opt-in-gate.ts`,
    `withAiOptInGate`): it injects an `ai-opt-in` step after `auth` for every
-   program that doesn't set `requiresAi: false` (self-driving doesn't), and
+   program, and
    `store.getGate('ai-opt-in')` parks the agent until approval lands — so the
    run can't reach the agent unapproved. That's why neither the prompt nor the
    skill has an AI-approval step anymore — the gate fully owns consent before
@@ -477,9 +477,9 @@ must be running, or no scout ever dispatches.
 >    Autonomy" in favour of "self-driving". Carried out end-to-end:
 >    - **wizard:** the CLI command (`self-driving`), the program id
 >      (`self-driving` — so the `programLabel` shown in the intro/exit reads
->      `self-driving`), the `program-scopes.ts` map key, the `self-driving/`
+>      `self-driving`), the `scopes.ts` map key, the `self-driving/`
 >      dir + `SELF_DRIVING_*` constants + `SelfDriving*` types / components,
->      `src/commands/self-driving.ts` + `selfDrivingCommand`, the screen id
+>      `src/cli/commands/self-driving.ts` + `selfDrivingCommand`, the screen id
 >      `self-driving-intro`, every user-facing string (intro copy,
 >      success/outro/spinner messages, `detect.ts` abort `message`/`body`,
 >      prompt header + task labels), and the report filename
@@ -583,14 +583,14 @@ must be running, or no scout ever dispatches.
 >     (plus its own `startDelay` of 2 s); `ContentSequencer.handleComplete`
 >     fires `onSequenceComplete` **only after the last block's `pause`
 >     elapses**; the deck self-driving plays is the **shared factory default** >
->     `src/ui/tui/decks/agent-skill/index.tsx` (`getContentBlocks`, last block
+>     `src/tui/programs/shared/skill-deck.tsx` (`getContentBlocks`, last block
 >     `pause: 60000`) — self-driving does **not** override it today. **Scoping
 >     caveat (the whole reason this is a TODO, not a one-liner):** that deck is
 >     inherited by _every_ skill program (audit, revenue-analytics, migration,
->     bare `wizard skill <id>`), so editing `src/ui/tui/decks/agent-skill/index.tsx`
+>     bare `wizard skill <id>`), so editing `src/tui/programs/shared/skill-deck.tsx`
 >     changes all of them. Fix self-driving alone the way `getTips` already is —
 >     add a **self-driving-owned `getContentBlocks`** override to
->     `selfDrivingConfig` (`self-driving/index.ts`, right next to the `getTips`
+>     `config` (`self-driving/index.ts`, right next to the `getTips`
 >     override); only self-driving runs pick it up, every other program keeps
 >     the shared deck. **Do NOT** branch on `activeProgram === 'self-driving'`
 >     inside `RunScreen` / `LearnCard` — product knowledge in shared TUI
@@ -688,7 +688,7 @@ self-driving state and leave the products as they are.
 > **before** sources are enabled. Spans **wizard + posthog + context-mill**.
 > Code anchors: posthog `products/signals/backend/product_enablement.py` (+
 > `routes.py`, `posthog/scopes.py`, `products/signals/mcp/tools.yaml`); wizard
-> `program-scopes.ts` + `prompt.ts`; context-mill
+> `scopes.ts` + `prompt.ts`; context-mill
 > `references/3b-enable-products.md`. The design rationale below is preserved;
 > the corrections from the build are folded into 9.1/9.3/9.7/9.8. Symbol names
 > are durable; `file:line` anchors are point-in-time.
@@ -879,7 +879,7 @@ repo), so it's a context-mill skill change, not platform work:
   that was a misreading of the ceiling — see §7 item 1 for the `@default`
   mechanics and how to verify.)
 - **wizard — DONE.** `product_enablement:write` in
-  `SELF_DRIVING_SCOPE_ADDITIONS` (`program-scopes.ts`); STEP 3 "Enable
+  `SELF_DRIVING_SCOPE_ADDITIONS` (`scopes.ts`); STEP 3 "Enable
   products" in `prompt.ts` (label mirrors the skill's `3-enable-products.md`; +
   README ceiling list). **Deviation:** platform (web vs backend/mobile) is left
   to the skill + the agent's repo read — `session.integration` is null on the
@@ -957,8 +957,8 @@ file for the design; this section records only the facts that are about the
 Code anchors: posthog `products/replay_vision/backend/models/replay_scanner.py`,
 `api/scanners.py`, `temporal/scanners/prompts/signals_step.jinja` (the fixed
 defect-detection turn that `emits_signals` appends — the *why* the skill cares
-more about a scanner's `query` than its prompt); wizard `program-scopes.ts` +
-`prompt.ts` + `src/ui/tui/decks/self-driving/tips.ts`; skill `6c-replay-vision-scanners.md`.
+more about a scanner's `query` than its prompt); wizard `scopes.ts` +
+`prompt.ts` + `src/tui/programs/self-driving/deck/tips.ts`; skill `6c-replay-vision-scanners.md`.
 
 ---
 

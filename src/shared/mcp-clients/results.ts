@@ -1,3 +1,5 @@
+import { analytics } from '@utils/analytics';
+
 /**
  * Per-client outcome of an MCP server / plugin install or removal.
  *
@@ -43,20 +45,25 @@ export interface InstallResult {
  * The plugin stages clone git repositories and read the user's own config, so
  * the text reaching here is no longer only ours: a failing clone echoes the
  * remote URL with any credentials embedded in it, and a config error can quote
- * a foreign provider's key. Each pattern below is a shape we have seen a CLI
- * print, not a guess at every possible secret.
+ * a foreign provider's key. Orchestrator task remarks reach analytics through
+ * here too, from a step that collects database and API credentials. Each
+ * pattern below is a shape one of these sources can carry, not a guess at
+ * every possible secret.
  */
 export const redactSecrets = (raw: string): string =>
   raw
     .replace(/Bearer\s+\S+/gi, 'Bearer [redacted]')
     .replace(/ph[xspc]_[A-Za-z0-9_-]+/g, '[redacted]')
-    // `https://user:token@github.com/...` — git prints the whole remote back.
-    .replace(/(\bhttps?:\/\/)[^/\s:@]+:[^/\s@]+@/gi, '$1[redacted]@')
+    // `https://user:token@github.com/...` — git prints the whole remote back;
+    // `postgres://user:password@host/db` is the same shape for a database.
+    .replace(/(\b[a-z][a-z0-9+.-]*:\/\/)[^/\s:@]+:[^/\s@]+@/gi, '$1[redacted]@')
     // GitHub tokens, which a clone failure quotes verbatim.
     .replace(/\bgh[pousr]_[A-Za-z0-9]{16,}/g, '[redacted]')
     .replace(/\bgithub_pat_[A-Za-z0-9_]{20,}/g, '[redacted]')
     // OpenAI keys: `OPENAI_API_KEY` is already a failure codex reports on.
     .replace(/\bsk-[A-Za-z0-9_-]{16,}/g, '[redacted]')
+    // Stripe secret and restricted keys, which the warehouse step collects.
+    .replace(/\b[rs]k_(?:live|test)_[A-Za-z0-9]{16,}/g, '[redacted]')
     // Google keys, which a config error quotes the same way.
     .replace(/\bAIza[A-Za-z0-9_-]{16,}/g, '[redacted]')
     // The catch-all for providers we have no shape for: a config error prints
@@ -125,6 +132,45 @@ export const expectedFailureHint = (
       f.match.test(text) &&
       !f.unless?.test(text),
   )?.hint;
+};
+
+/**
+ * Turn a failed CLI call into a result: an expected local failure becomes a
+ * hint, anything else is reported under a constant message so one root cause
+ * stays one issue, with the varying detail in properties.
+ *
+ * Shared by every client so the hinted-event shape cannot drift between them.
+ * `Stage` is the caller's union: a hint scoped to a stage nobody passes is
+ * silently dead.
+ */
+export const reportSpawnFailure = <Stage extends string>(opts: {
+  client: string;
+  stage: Stage;
+  details: string;
+  table: ExpectedFailure[];
+  /** Extra exception properties, e.g. a failure that travelled beside this one. */
+  extra?: Record<string, unknown>;
+}): InstallResult => {
+  const { client, stage, details, table, extra } = opts;
+  const hint = expectedFailureHint(details, table, stage);
+  if (hint) {
+    // Hinting takes a failure out of error tracking, so without this the only
+    // evidence a pattern has started over-matching is that our exception count
+    // fell, which reads as the fix working. An event keeps the count.
+    analytics.wizardCapture('mcp expected failure hinted', {
+      client,
+      stage,
+      hint,
+      details: scrubHomePaths(details),
+    });
+    return { success: false, reason: hint };
+  }
+  analytics.captureException(new Error(`${client} ${stage} failed`), {
+    stage,
+    details: scrubHomePaths(details),
+    ...extra,
+  });
+  return { success: false, reason: details };
 };
 
 /** First non-empty line of an error, trimmed to something a TUI line can hold. */

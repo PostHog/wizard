@@ -2,8 +2,9 @@
  * Fail-closed security for the pi backend (#525). pi has no built-in
  * permission layer, so we attach an extension that intercepts every tool call
  * — built-in (bash/read/edit/write/grep) AND custom — through pi's `tool_call`
- * hook and reuses the EXACT anthropic policy: `wizardCanUseTool` (the bash
- * allowlist + .env fencing) plus the YARA pre-scan. A `tool_result` hook
+ * hook and reuses the shared tool policy: `wizardCanUseTool` (the bash fence,
+ * whose one `rm` rule is project-scoped, + .env fencing) plus the YARA
+ * pre-scan. A `tool_result` hook
  * post-scans output. Both fail closed: a scanner error blocks, and a critical
  * post-scan violation latches so every subsequent tool call is blocked and the
  * run terminates as a YARA violation.
@@ -13,14 +14,15 @@
  * harness. pi handlers are async (pi's ExtensionHandler accepts promises), so
  * the WASM scan awaits inline.
  *
- * This is the one fence. Subagents run their own pi session with the SAME
- * extension installed (see subagent.ts), so a child cannot escape it.
+ * This is the one fence. Subagents run their own pi session with its subagent
+ * gate installed (see subagent.ts): the same fence and state, with no `rm`.
  */
 
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import type { LLMProvider, ScanMatch } from '@posthog/warlock';
-import { wizardCanUseTool } from '@agent/agent-interface';
+import { wizardCanUseTool } from '../../../agent-interface';
 import {
   createRepeatBlockTracker,
   isWizardDocumentationPath,
@@ -28,12 +30,12 @@ import {
   repeatBlockReason,
   scanAndTriage,
   type RepeatBlockTracker,
-} from '@agent/yara-hooks';
+} from '../../../yara-hooks';
 import {
   publishBlockingMatch,
   scanVerdict,
   type ScanContext,
-} from '@agent/yara-policy';
+} from '../../../yara-policy';
 import { logToFile } from '@utils/debug';
 import { analytics } from '@utils/analytics';
 
@@ -129,6 +131,18 @@ export interface GateDecision {
 
 const str = (v: unknown): string => (typeof v === 'string' ? v : '');
 
+/** A pi tool path as pi opens it: its `resolveToCwd` strips a leading `@` and decodes `file://`. */
+function piToolPath(v: unknown): string {
+  const raw = str(v);
+  const p = raw.startsWith('@') ? raw.slice(1) : raw;
+  if (!p.startsWith('file://')) return p;
+  try {
+    return fileURLToPath(p);
+  } catch {
+    return p; // pi fails to open it too
+  }
+}
+
 // Shell metacharacters that chain, substitute, or redirect. A command carrying
 // any of these is more than one action, so we never treat it as a plain `rm`.
 const SHELL_OPERATORS = /[;&|`$(){}<>\n'"\\]/;
@@ -143,8 +157,11 @@ function isDeletableProjectFile(
   if (/[*?[\]~]/.test(target)) return false; // glob / home expansion
   if (p.basename(target).startsWith('.env')) return false; // secrets
 
-  const resolved = p.resolve(root, target);
-  return resolved !== root && resolved.startsWith(root + p.sep);
+  const canonicalRoot = p.resolve(root);
+  const resolved = p.resolve(canonicalRoot, target);
+  return (
+    resolved !== canonicalRoot && resolved.startsWith(canonicalRoot + p.sep)
+  );
 }
 
 /**
@@ -215,7 +232,7 @@ async function overwriteShrinkBlock(
   input: Record<string, unknown>,
   workingDirectory: string | undefined,
 ): Promise<string | undefined> {
-  const target = str(input.path);
+  const target = piToolPath(input.path);
   if (!workingDirectory || !target) return undefined;
   let existing: string;
   try {
@@ -242,13 +259,16 @@ function toClaudePolicyCall(
     case 'bash':
       return { name: 'Bash', input: { command: str(input.command) } };
     case 'read':
-      return { name: 'Read', input: { file_path: input.path } };
+      return { name: 'Read', input: { file_path: piToolPath(input.path) } };
     case 'write':
-      return { name: 'Write', input: { file_path: input.path } };
+      return { name: 'Write', input: { file_path: piToolPath(input.path) } };
     case 'edit':
-      return { name: 'Edit', input: { file_path: input.path } };
+      return { name: 'Edit', input: { file_path: piToolPath(input.path) } };
     case 'grep':
-      return { name: 'Grep', input: { path: input.path } };
+      return {
+        name: 'Grep',
+        input: { path: piToolPath(input.path), glob: input.glob },
+      };
     default:
       // Custom tools (load_skill_menu, set_env_values, dispatch_agent, …) +
       // find/ls: no path/command, policy allows (their own handlers are fenced).
@@ -343,7 +363,7 @@ async function preExecutionYaraBlock(
   if (ctx === 'output') observeTransportLeak(tool, content);
 
   let matches = await scanAndTriage(content, ctx, triage);
-  if (ctx === 'output' && isWizardDocumentationPath(str(input.path))) {
+  if (ctx === 'output' && isWizardDocumentationPath(piToolPath(input.path))) {
     matches = matches.filter((m) => m.metadata.category !== 'posthog_pii');
   }
   // Any match blocks — except publish_handoff, critical only.
@@ -386,15 +406,9 @@ export async function evaluateToolCall(
     const decision = wizardCanUseTool(policy.name, policy.input, {
       disallowedTools: ctx.disallowedTools,
       wizardAskPending: ctx.getWizardAskPending?.() ?? false,
+      workingDirectory: ctx.workingDirectory,
     });
-    // The allowlist is a pi-only restriction; the anthropic arm runs bash
-    // unrestricted and leans on the shared YARA scan. Let a plain `rm` of
-    // project files through to that same scan so pi matches that behavior.
-    const allowedLikeAnthropic =
-      toolName === 'bash' &&
-      isScopedFileRemoval(str(input.command), ctx.workingDirectory);
-
-    if (decision.behavior === 'deny' && !allowedLikeAnthropic) {
+    if (decision.behavior === 'deny') {
       return { block: true, reason: decision.message };
     }
 
@@ -439,13 +453,26 @@ export interface SecurityState {
   toolCalls: number;
 }
 
+/** Options for {@link createSecurityExtension}. The root is required, so no run loses the rm allowance or the shrink guard by omission. */
+export type SecurityExtensionOptions = ToolGateContext & {
+  workingDirectory: string;
+};
+
+declare const subagentGate: unique symbol;
+
+/** A gate with no project root, so it never allows rm. Only `subagentFactory` makes one, so a subagent can't be handed the parent's. */
+export type SubagentSecurityFactory = ((pi: PiExtensionApiLike) => void) & {
+  readonly [subagentGate]: true;
+};
+
 /**
  * Build the pi security extension + the shared state the backend inspects.
- * Install the returned factory via `extensionFactories`; pass the same factory
- * into every subagent session so the fence is inherited.
+ * Install `factory` via `extensionFactories`. Give subagent sessions
+ * `subagentFactory`: the same fence and state, with no project root, so no rm.
  */
-export function createSecurityExtension(ctx: ToolGateContext = {}): {
+export function createSecurityExtension(ctx: SecurityExtensionOptions): {
   factory: (pi: PiExtensionApiLike) => void;
+  subagentFactory: SubagentSecurityFactory;
   state: SecurityState;
 } {
   const state: SecurityState = {
@@ -465,7 +492,7 @@ export function createSecurityExtension(ctx: ToolGateContext = {}): {
     repeatTracker: ctx.repeatTracker ?? createRepeatBlockTracker(),
   };
 
-  const factory = (pi: PiExtensionApiLike): void => {
+  const install = (pi: PiExtensionApiLike, gate: ToolGateContext): void => {
     pi.on('tool_call', async (event) => {
       // A latched post-scan violation blocks everything that follows.
       if (state.criticalViolation) {
@@ -484,7 +511,7 @@ export function createSecurityExtension(ctx: ToolGateContext = {}): {
       const decision = await evaluateToolCall(
         event.toolName,
         event.input ?? {},
-        gateCtx,
+        gate,
         llmProvider,
       );
       if (decision.block) {
@@ -536,7 +563,16 @@ export function createSecurityExtension(ctx: ToolGateContext = {}): {
     });
   };
 
-  return { factory, state };
+  const subagentCtx: ToolGateContext = {
+    ...gateCtx,
+    workingDirectory: undefined,
+  };
+  return {
+    factory: (pi) => install(pi, gateCtx),
+    subagentFactory: ((pi: PiExtensionApiLike) =>
+      install(pi, subagentCtx)) as SubagentSecurityFactory,
+    state,
+  };
 }
 
 /**

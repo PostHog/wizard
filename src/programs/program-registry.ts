@@ -1,135 +1,84 @@
 /**
- * Central registry of all wizard programs.
- *
- * Adding a new program:
- *   1. Create src/programs/<name>/ with index.ts exporting a ProgramConfig
- *   2. Import and add it to PROGRAM_REGISTRY below
- *   3. (If custom intro screen) add to src/ui/tui/screen-registry.tsx
- *
- * screen-sequences.ts, store.ts, and bin.ts all derive their wiring from
- * this array — no need to touch those files when adding a program.
+ * Central registry of all wizard programs. A program is an agent run; a
+ * command that runs no agent is a tool, in `src/tools`. To add one, follow
+ * "Add a program" in README.md in this folder, then import it here.
  */
 
-import type { ProgramConfig } from './program-step.js';
-import { POSTHOG_DOCS_URL } from '@shared/constants.js';
-import { posthogIntegrationConfig } from './posthog-integration/index.js';
-import { revenueAnalyticsConfig } from './revenue-analytics/index.js';
-import { warehouseSourceConfig } from './warehouse-source/index.js';
-import { auditConfig } from './audit/index.js';
-import { eventsAuditConfig } from './audit/events/config.js';
-import { posthogDoctorConfig } from './posthog-doctor/index.js';
-import { webAnalyticsDoctorConfig } from './web-analytics-doctor/index.js';
-import { migrationConfig } from './migration/index.js';
-import { errorTrackingUploadSourceMapsConfig } from './error-tracking-upload-source-maps/index.js';
-import { errorTrackingConfig } from './error-tracking/index.js';
-import { featureFlagsConfig } from './feature-flags/index.js';
-import { selfDrivingConfig } from './self-driving/index.js';
-import { AGENT_SKILL_STEPS } from './agent-skill/index.js';
-import { getContentBlocks as agentSkillContentBlocks } from '../tui/programs/shared/skill-deck.js';
+import type { ProgramConfig, ProgramId } from './program-step.js';
 import {
-  mcpAddConfig,
-  mcpRemoveConfig,
-  mcpTutorialConfig,
-} from '../tui/tools/mcp/flow.js';
-import { mcpAnalyticsConfig } from './mcp-analytics/index.js';
-import { replayVisionConfig } from './replay-vision/index.js';
-import { aiObservabilityConfig } from './ai-observability/index.js';
-import { metricsConfig } from './metrics/index.js';
-import { slackConnectConfig } from '../tools/slack/index.js';
+  WIZARD_OAUTH_SCOPES,
+  WIZARD_PROVISIONING_SCOPES,
+} from '@shared/constants';
+import { withScopeAdditions } from '@shared/oauth-scopes';
+import { config as posthogIntegration } from '@programs/posthog-integration';
+import { config as mcpAnalytics } from '@programs/mcp-analytics';
+import { config as replayVision } from '@programs/replay-vision';
+import { config as aiObservability } from '@programs/ai-observability';
+import { config as metrics } from '@programs/metrics';
+import { configs as auditPrograms } from '@programs/audit';
+import { config as webAnalyticsDoctor } from '@programs/web-analytics-doctor';
+import { config as migration } from '@programs/migration';
+import { config as revenueAnalytics } from '@programs/revenue-analytics';
+import { config as warehouseSource } from '@programs/warehouse-source';
+import { config as selfDriving } from '@programs/self-driving';
+import { config as sourceMaps } from '@programs/error-tracking-upload-source-maps';
+import { config as errorTracking } from '@programs/error-tracking';
+import { config as featureFlags } from '@programs/feature-flags';
+import { config as agentSkill } from '@programs/agent-skill';
 
-// Generic skill program — runs an arbitrary context-mill skill chosen at
-// dispatch time (session.skillId) rather than a registered named program.
-// Backs `wizard skill <name>` and the narrow `audit` leaves (events,
-// feature-flags, identify, session-replay, autocapture); each injects its
-// skillId onto the config, which lands on session.skillId before the run.
-//
-// The `run` recipe is a function rather than a static block because the
-// skillId isn't known until dispatch. Without a `run` recipe the runner's
-// `skipAgent` guard (run-wizard.ts) fires and the skill never executes — so we
-// derive generic run metadata from the resolved skill id at run time.
-export const agentSkillConfig: ProgramConfig = {
-  id: 'agent-skill',
-  description: 'Run an arbitrary context-mill skill',
-  steps: AGENT_SKILL_STEPS,
-  getContentBlocks: agentSkillContentBlocks,
-  allowedTools: ['Agent'],
-  run: (session) => {
-    const skillId = session.skillId ?? 'agent-skill';
-    return Promise.resolve({
-      skillId,
-      integrationLabel: skillId,
-      spinnerMessage: `Running ${skillId}...`,
-      successMessage: `${skillId} complete!`,
-      estimatedDurationMinutes: 5,
-      reportFile: `posthog-${skillId}-report.md`,
-      docsUrl: POSTHOG_DOCS_URL,
-    });
-  },
-};
+const [audit, eventsAudit] = auditPrograms;
 
+/** Every program entry, one line each. */
 export const PROGRAM_REGISTRY = [
-  posthogIntegrationConfig,
-  revenueAnalyticsConfig,
-  warehouseSourceConfig,
-  errorTrackingUploadSourceMapsConfig,
-  errorTrackingConfig,
-  featureFlagsConfig,
-  auditConfig,
-  eventsAuditConfig,
-  posthogDoctorConfig,
-  webAnalyticsDoctorConfig,
-  migrationConfig,
-  selfDrivingConfig,
-  agentSkillConfig,
-  mcpAddConfig,
-  mcpRemoveConfig,
-  mcpTutorialConfig,
-  mcpAnalyticsConfig,
-  replayVisionConfig,
-  aiObservabilityConfig,
-  metricsConfig,
-  slackConnectConfig,
+  posthogIntegration,
+  revenueAnalytics,
+  warehouseSource,
+  sourceMaps,
+  errorTracking,
+  featureFlags,
+  ...auditPrograms,
+  webAnalyticsDoctor,
+  migration,
+  selfDriving,
+  agentSkill,
+  mcpAnalytics,
+  replayVision,
+  aiObservability,
+  metrics,
 ] as const satisfies readonly ProgramConfig[];
 
 /**
  * Typed program names. Values come from each config's `id`, so there's
  * no parallel string list to keep in sync — adding `Program.Foo` here is
- * just exposing `fooConfig.id` under a friendly name for call sites.
+ * just exposing that config's `id` under a friendly name for call sites.
  */
 export const Program = {
-  PostHogIntegration: posthogIntegrationConfig.id,
-  RevenueAnalyticsSetup: revenueAnalyticsConfig.id,
-  WarehouseSource: warehouseSourceConfig.id,
-  ErrorTrackingUploadSourceMaps: errorTrackingUploadSourceMapsConfig.id,
-  ErrorTracking: errorTrackingConfig.id,
-  FeatureFlags: featureFlagsConfig.id,
-  Migration: migrationConfig.id,
-  Audit: auditConfig.id,
-  EventsAudit: eventsAuditConfig.id,
-  PosthogDoctor: posthogDoctorConfig.id,
-  WebAnalyticsDoctor: webAnalyticsDoctorConfig.id,
-  SelfDriving: selfDrivingConfig.id,
-  AgentSkill: agentSkillConfig.id,
-  McpAdd: mcpAddConfig.id,
-  McpRemove: mcpRemoveConfig.id,
-  McpTutorial: mcpTutorialConfig.id,
-  McpAnalytics: mcpAnalyticsConfig.id,
-  ReplayVision: replayVisionConfig.id,
-  AiObservability: aiObservabilityConfig.id,
-  Metrics: metricsConfig.id,
-  SlackConnect: slackConnectConfig.id,
+  PostHogIntegration: posthogIntegration.id,
+  RevenueAnalyticsSetup: revenueAnalytics.id,
+  WarehouseSource: warehouseSource.id,
+  ErrorTrackingUploadSourceMaps: sourceMaps.id,
+  ErrorTracking: errorTracking.id,
+  FeatureFlags: featureFlags.id,
+  Migration: migration.id,
+  Audit: audit.id,
+  EventsAudit: eventsAudit.id,
+  WebAnalyticsDoctor: webAnalyticsDoctor.id,
+  SelfDriving: selfDriving.id,
+  AgentSkill: agentSkill.id,
+  McpAnalytics: mcpAnalytics.id,
+  ReplayVision: replayVision.id,
+  AiObservability: aiObservability.id,
+  Metrics: metrics.id,
 } as const;
 
-/** Compile-time union of every registered program id. */
-export type ProgramId = (typeof PROGRAM_REGISTRY)[number]['id'];
-
 /**
- * Look up a program config by its id. `ProgramId` is a union of every
- * registered id, so the lookup is statically guaranteed to find a match
- * — the `!` is a load-bearing assertion of that invariant, not a hope.
+ * Look up a program config by its id. Callers pass ids from `Program` or
+ * from a registered config.
  */
 export function getProgramConfig(id: ProgramId): ProgramConfig {
-  return PROGRAM_REGISTRY.find((c) => c.id === id)!;
+  const config = PROGRAM_REGISTRY.find((c) => c.id === id);
+  if (!config) throw new Error(`Unknown program id "${id}"`);
+  return config;
 }
 
 /** A program config that is exposed as a CLI subcommand. */
@@ -142,31 +91,49 @@ export function getSubcommandPrograms(): SubcommandProgram[] {
   );
 }
 
-/** What a user types to reach the program. Nested ones go through its parent. */
-export function getCommandPath(config: SubcommandProgram): string {
+/** What a user types to reach a command. Nested ones go through its parent. */
+export function getCommandPath(config: {
+  command: string;
+  parentCommand?: string;
+}): string {
   return config.parentCommand
     ? `${config.parentCommand} ${config.command}`
     : config.command;
 }
 
-/** What the intro offers, in order. Curated: no config field ranks these. */
-const INTRO_PROGRAMS = [
-  'self-driving',
-  'error-tracking-upload-source-maps',
-  'warehouse-source',
-  'audit',
-  'posthog-doctor',
-  'mcp-analytics',
-  'replay-vision',
-  'ai-observability',
-  'metrics',
-  'revenue-analytics-setup',
-];
+/** The program with this id, or undefined for a tool's id or none. */
+export function findProgramConfig(
+  programId: ProgramId | null | undefined,
+): ProgramConfig | undefined {
+  return programId
+    ? PROGRAM_REGISTRY.find((c) => c.id === programId)
+    : undefined;
+}
 
-/** The programs the intro can hand off to, in the order it lists them. */
-export function getLaunchablePrograms(): SubcommandProgram[] {
-  const byId = new Map(getSubcommandPrograms().map((c) => [c.id, c]));
-  return INTRO_PROGRAMS.map((id) => byId.get(id)).filter(
-    (config): config is SubcommandProgram => config != null,
+/**
+ * The OAuth scopes a program's login asks for: `WIZARD_OAUTH_SCOPES` plus
+ * the program's `oauthScopeAdditions`. A missing or unknown id gets the base
+ * set unchanged.
+ */
+export function getOAuthScopesForProgram(
+  programId: ProgramId | null | undefined,
+): readonly string[] {
+  return withScopeAdditions(
+    WIZARD_OAUTH_SCOPES,
+    findProgramConfig(programId)?.oauthScopeAdditions,
+  );
+}
+
+/**
+ * The scopes for the signup provisioning path. Same shape as
+ * `getOAuthScopesForProgram`, on `WIZARD_PROVISIONING_SCOPES`, so a
+ * program's extra scopes only reach tokens provisioned for that program.
+ */
+export function getProvisioningScopesForProgram(
+  programId: ProgramId | null | undefined,
+): readonly string[] {
+  return withScopeAdditions(
+    WIZARD_PROVISIONING_SCOPES,
+    findProgramConfig(programId)?.oauthScopeAdditions,
   );
 }

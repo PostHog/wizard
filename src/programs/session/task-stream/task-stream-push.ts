@@ -1,5 +1,5 @@
 /**
- * Task-stream push — subscribes to WizardStore, builds payloads,
+ * Task-stream push — subscribes to SessionStore, builds payloads,
  * and fans out async to all registered destinations.
  *
  * Behaviour:
@@ -16,14 +16,11 @@
  * latest state once the current one settles.
  */
 
-import type { WizardStore, TaskItem } from '@tui/store';
-import { TaskStatus } from '@ui/wizard-ui';
-import {
-  RunPhase,
-  OutroKind,
-  type OutroData,
-  type PendingQuestion,
-} from '@programs/session/wizard-session';
+import type { SessionStore, TaskItem } from '../session-store';
+import { TaskStatus } from '@shared/task-status';
+import { RunPhase } from '@shared/run-state';
+import { OutroKind } from '@shared/outro';
+import { type OutroData, type PendingQuestion } from '@agent/types';
 import {
   type TaskStreamDestination,
   type TaskStreamUpdate,
@@ -35,7 +32,7 @@ import {
 } from './types';
 import { EventPlanWatcher } from './event-plan-watcher';
 import { rollUpAuditAreas } from './audit-areas';
-import type { WizardRunSync, RunOutcome } from './wizard-run-sync';
+import type { WizardRunSync, TaskStreamOutcome } from './wizard-run-sync';
 import { logToFile } from '@utils/debug';
 import { WIZARD_RUN_SYNC_FLAG_KEY } from '@shared/constants';
 import { sanitizeErrorDetail } from '@shared/errors';
@@ -114,7 +111,7 @@ function buildPendingInput(
 }
 
 export interface TaskStreamPushOptions {
-  store: WizardStore;
+  store: SessionStore;
   runSync?: WizardRunSync;
   getFlags?: () => Readonly<Record<string, string>> | null;
   programId: string;
@@ -128,7 +125,7 @@ export interface TaskStreamPushOptions {
 }
 
 export class TaskStreamPush {
-  private readonly store: WizardStore;
+  private readonly store: SessionStore;
   private readonly destinations: TaskStreamDestination[];
   private readonly startedAt: string;
   private readonly programId: string;
@@ -183,7 +180,7 @@ export class TaskStreamPush {
    * remains disabled when `enabled === false`, but the plan still populates the
    * store for local and headless consumers.
    */
-  attach(store?: WizardStore): void {
+  attach(store?: SessionStore): void {
     this.eventPlanWatcher?.start();
     if (!this.enabled) return;
     if (this.unsubscribe) return;
@@ -206,7 +203,7 @@ export class TaskStreamPush {
 
   // Finalize execution while the legacy session continues through the outro.
   async finishRun(
-    outcome: RunOutcome,
+    outcome: TaskStreamOutcome,
     timeoutMs = DEFAULT_SHUTDOWN_TIMEOUT_MS,
   ): Promise<void> {
     await this.runSync?.shutdown(outcome, timeoutMs);
@@ -214,7 +211,8 @@ export class TaskStreamPush {
 
   shutdown(
     timeoutMs: number = DEFAULT_SHUTDOWN_TIMEOUT_MS,
-    outcome: RunOutcome = this.store.session.runPhase === RunPhase.Completed
+    outcome: TaskStreamOutcome = this.store.session.runPhase ===
+    RunPhase.Completed
       ? 'completed'
       : 'failed',
   ): Promise<void> {

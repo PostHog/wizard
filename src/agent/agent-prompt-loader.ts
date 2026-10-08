@@ -28,7 +28,7 @@ import {
 import { logToFile } from '@utils/debug';
 import { analytics } from '@utils/analytics';
 import { fetchWithRetry } from '@shared/fetch-retry';
-import { WIZARD_TOOL_NAMES } from '@agent/tools/tools';
+import { WIZARD_TOOL_NAMES } from './tools/tools';
 
 /**
  * The basics the client injects around every agent-prompt body. The `/agents/`

@@ -1,9 +1,17 @@
+import type { RunnerContext } from '../../runner-context';
+
+export type EnvironmentProviderOptions = {
+  installDir: string;
+  /** Where the upload reports progress: the running program's runner. */
+  runner: Pick<RunnerContext, 'log' | 'spinner'>;
+};
+
 export abstract class EnvironmentProvider {
-  protected options: { installDir: string };
+  protected options: EnvironmentProviderOptions;
 
   name: string;
 
-  constructor(options: { installDir: string }) {
+  constructor(options: EnvironmentProviderOptions) {
     this.options = options;
   }
 

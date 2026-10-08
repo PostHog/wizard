@@ -1,373 +1,54 @@
-import { VERSION } from '@shared/version';
-import { logToFile, getLogFilePath } from '@utils/debug';
-import { runProgramAgent } from '@programs/run-agent-legacy';
-import { authenticate } from '@programs/authenticate';
-import { getProgramConfig } from '@programs';
-import { getAuditChecks } from '@programs/audit/types';
-import { maybeStampAiSdkDetected } from '@programs/detection/integration';
-import type { ProgramConfig } from '@programs/types';
+/** The TUI command runner: parse the launch values, start the TUI host, and exit with its code. */
+import type { ProgramConfig, SessionArgs } from '@programs/types';
 import type { Harness, Sequence } from '@shared/constants';
-import type { startTUI as StartTUIFn } from '@tui/start-tui';
-import type { WizardStore } from '@tui/store';
-import {
-  OutroKind,
-  type WizardSession,
-} from '@programs/session/wizard-session';
-import type { TaskStreamPush as TaskStreamPushClass } from '@programs/session/task-stream/task-stream-push';
-import { resolveNoTelemetry } from './resolve-no-telemetry';
-import { checkLocalServices, getLocalDev } from '@shared/local-dev';
-import { createWizardRunSync } from '@programs/session/task-stream/wizard-run-sync';
+import { resolve } from 'node:path';
 import { runtimeEnv } from '@env';
-import { runCleanups, registerShutdown } from '@host/wizard-abort';
-import { classifyRunFailure, emitWizardError } from '@shared/errors';
-import { isRunFailure } from '@tui/mint-failure';
-import { getUI } from '@ui';
-import { analytics } from '@utils/analytics';
-import { join } from 'node:path';
+import { resolveNoTelemetry } from './resolve-no-telemetry';
+import { withSignals } from './signals';
 
-const WIZARD_VERSION = VERSION;
-
-type Step = ProgramConfig['steps'][number];
-
-/** The session a run step's agent runs in: scoped to the step's target dir
- * (e.g. a monorepo sub-app) with its own framework context, after any prep.
- * A step without `targetDir` runs in the live session, unchanged.
- * The frameworkContext copy is shallow and unfiltered — name keys per owning program. */
-async function prepareRunSession(
-  step: Step,
-  live: WizardSession,
-): Promise<WizardSession> {
-  const session = step.targetDir
-    ? {
-        ...live,
-        installDir: step.targetDir(live),
-        frameworkContext: { ...live.frameworkContext },
-      }
-    : live;
-  if (step.onRunPrep) await step.onRunPrep(session);
-  return session;
+/** The TUI session a command's parsed options launch: a program's run or a tool's screens. */
+export function tuiSessionArgs(
+  options: Record<string, unknown>,
+): SessionArgs & { integrate?: boolean } {
+  return {
+    debug: options.debug as boolean | undefined,
+    localDev: options.localDev as boolean | undefined,
+    localMcp: options.localMcp as boolean | undefined,
+    localPosthog: options.localPosthog as boolean | undefined,
+    installDir: resolve((options.installDir as string) || process.cwd()),
+    ci: false,
+    signup: options.signup as boolean | undefined,
+    apiKey: options.apiKey as string | undefined,
+    projectId: options.projectId as string | undefined,
+    email: options.email as string | undefined,
+    baseUrl: options.baseUrl as string | undefined,
+    benchmark: options.benchmark as boolean | undefined,
+    yaraReport: options.yaraReport as boolean | undefined,
+    noTelemetry: resolveNoTelemetry(options),
+    harness: options.harness as Harness | undefined,
+    sequence: options.sequence as Sequence | undefined,
+    model: options.model as string | undefined,
+    integrate: options.integrate as boolean | undefined,
+    captureAio: options.captureAio as boolean | undefined,
+  };
 }
 
-/** Advance one step of a composed run to completion: the auth screen
- * authenticates (every later run reuses it); a step carrying its own `run`
- * thunk runs that agent in its dir and is recorded in `completedRuns`; the
- * host program's own run screen runs `config.run`; any other screen waits for
- * the user to satisfy `isComplete`. */
-async function advanceStep(
-  step: Step,
-  store: WizardStore,
-  config: ProgramConfig,
-): Promise<void> {
-  if (step.screenId === 'auth') {
-    await authenticate(store.session, config.id);
-    maybeStampAiSdkDetected(store.session);
-  } else if (step.run) {
-    await step.run(await prepareRunSession(step, store.session));
-    store.completeRunStep(step.id);
-  } else if (step.screenId === 'run') {
-    await runProgramAgent(config, await prepareRunSession(step, store.session));
-  } else if (step.isComplete) {
-    await store.waitUntil(step.isComplete);
-  }
-}
-
-/**
- * Run a full wizard program in the TUI. Handles the full lifecycle: start TUI,
- * build session, run detection, wait for intro gate, execute the
- * agent pipeline, wait for outro dismissal, then exit.
- */
+/** Run a full wizard program in the TUI. */
 export function runWizard(
   config: ProgramConfig,
   options: Record<string, unknown>,
 ): void {
-  let tui: ReturnType<typeof StartTUIFn> | null = null;
-  let taskStream: TaskStreamPushClass | null = null;
-  let onSignal: (() => void) | null = null;
-  let exitInProgress = false;
-  let signalled = false;
-  let unregisterShutdown: (() => void) | undefined;
-
-  void (async () => {
-    try {
-      const installDir = (options.installDir as string) || process.cwd();
-
-      const { startTUI } = await import('@tui/start-tui');
-      const { buildSession, RunPhase } = await import(
-        '@programs/session/wizard-session'
-      );
-      const { TaskStreamPush } = await import('@programs/task-stream/index');
-      const { PostHogDestination } = await import(
-        '@programs/session/task-stream/destinations/posthog'
-      );
-      const { createFileDestination } = await import(
-        '@programs/session/task-stream/destinations/file'
-      );
-
-      // Before the TUI mounts: once Ink owns the alt screen, anything written
-      // to it is wiped on unmount (see the catch block below), so an abort here
-      // would leave the user on a loading screen with no message.
-      const local = getLocalDev();
-      const localServicesError = await checkLocalServices({
-        ...local,
-        // An explicit --base-url wins over --local-posthog (see buildSession),
-        // so don't probe :8010 when one was given.
-        localPosthog: local.localPosthog && !options.baseUrl,
-      });
-      if (localServicesError) {
-        const { wizardAbort } = await import('@host/wizard-abort');
-        await wizardAbort({ message: localServicesError });
-        return;
-      }
-
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      tui = startTUI(WIZARD_VERSION, config.id as any, () => onSignal?.());
-      const activeTui = tui;
-
-      const session = buildSession({
-        debug: options.debug as boolean | undefined,
-        localDev: options.localDev as boolean | undefined,
-        localMcp: options.localMcp as boolean | undefined,
-        localPosthog: options.localPosthog as boolean | undefined,
-        installDir,
-        ci: false,
-        signup: options.signup as boolean | undefined,
-        apiKey: options.apiKey as string | undefined,
-        projectId: options.projectId as string | undefined,
-        email: options.email as string | undefined,
-        baseUrl: options.baseUrl as string | undefined,
-        benchmark: options.benchmark as boolean | undefined,
-        yaraReport: options.yaraReport as boolean | undefined,
-        noTelemetry: resolveNoTelemetry(options),
-        harness: options.harness as Harness | undefined,
-        sequence: options.sequence as Sequence | undefined,
-        model: options.model as string | undefined,
-        integrate: options.integrate as boolean | undefined,
-        captureAio: options.captureAio as boolean | undefined,
-      });
-      session.programLabel = config.id;
-      if (options.skillId) {
-        session.skillId = options.skillId as string;
-      } else if (config.skillId) {
-        session.skillId = config.skillId;
-      }
-
-      activeTui.store.session = session;
-
-      // Flush a terminal-phase push on Ctrl-C so the web app sees the
-      // run ended in error rather than hanging on the last "running"
-      // snapshot. Registered before the stream exists: Ctrl-C on the intro
-      // must still restore the terminal and run the cleanups, and there is
-      // no run to report yet.
-      onSignal = (): void => {
-        if (signalled || exitInProgress) return;
-        signalled = true;
-        logToFile('[run-wizard] signal received, flushing task stream');
-        // Run cleanups synchronously first — settings restore is sync fs work
-        // and must complete even if the stream shutdown below times out.
-        runCleanups();
-        if (activeTui.store.session.runPhase === RunPhase.Running) {
-          activeTui.store.setRunPhase(RunPhase.Error);
-        }
-        const teardown = (): void => {
-          unregisterShutdown?.();
-          if (onSignal) {
-            process.off('SIGINT', onSignal);
-            process.off('SIGTERM', onSignal);
-          }
-          try {
-            activeTui.unmount();
-          } catch {
-            // terminal may already be torn down
-          }
-          process.exit(130);
-        };
-        void Promise.all([
-          taskStream?.shutdown(2000, 'cancelled'),
-          analytics.shutdown('cancelled'),
-        ])
-          .catch(() => logToFile('[run-wizard] cancellation shutdown failed'))
-          .finally(teardown);
-      };
-      process.on('SIGINT', onSignal);
-      process.on('SIGTERM', onSignal);
-
-      for (;;) {
-        await activeTui.store.runReadyHooks();
-        // Settle the pre-run screens; `integration-check` is a no-op gate here.
-        await activeTui.store.getGate('intro');
-
-        const active = activeTui.store.router.activeProgram;
-        if (active === config.id) break;
-        config = getProgramConfig(active);
-      }
-
-      // After the switch loop, not before: the stream bakes its program id,
-      // session id, and event-plan path in at construction, so a stream built
-      // for the launch program would report the whole run under a program the
-      // user left on the intro screen. Nothing before this point produces a
-      // task to push.
-      // Consent gates the push, not the dump: `--no-telemetry` still logs.
-      const fileDestination = createFileDestination(options.taskStreamLog);
-      const destinations = [
-        ...(session.noTelemetry
-          ? []
-          : [
-              new PostHogDestination({
-                getCredentials: () => activeTui.store.session.credentials,
-                onError: (err) => logToFile('[task-stream-push]', err.message),
-              }),
-            ]),
-        ...(fileDestination ? [fileDestination] : []),
-      ];
-      const taskStreamEnabled = destinations.length > 0;
-      const activeStream = new TaskStreamPush({
-        store: activeTui.store,
-        getFlags: () => analytics.getCachedWizardFlags(),
-        programId: config.streamWorkflowId ?? config.id,
-        runSync: createWizardRunSync({
-          mode: 'local',
-          programId: config.id,
-          assignedId:
-            (options.runId as string | undefined) ??
-            runtimeEnv('POSTHOG_WIZARD_RUN_ID'),
-          noTelemetry: session.noTelemetry,
-          getSession: () => activeTui.store.session,
-        }),
-        destinations,
-        eventPlanPath: config.eventPlanFile
-          ? join(session.installDir, config.eventPlanFile)
-          : undefined,
-        auditChecks: config.auditLedgerFile
-          ? () => getAuditChecks(activeTui.store.session)
-          : undefined,
-        enabled: taskStreamEnabled,
-      });
-      taskStream = activeStream;
-      activeStream.attach();
-      unregisterShutdown = registerShutdown((outcome) => {
-        if (activeTui.store.session.runPhase === RunPhase.Running) {
-          activeTui.store.setRunPhase(RunPhase.Error);
-        }
-        return activeStream.shutdown(2000, outcome);
-      });
-
-      await activeTui.store.getGate('integration-check');
-      await activeTui.store.getGate('health-check');
-
-      const skipAgent = config.run == null;
-      const shown = (s: ProgramConfig['steps'][number]) =>
-        !s.show || s.show(activeTui.store.session);
-
-      if (config.steps.some((s) => s.run || s.targetDir)) {
-        // A composed program: its step list splices in run steps that carry
-        // their own agent (self-driving runs the integration before its own
-        // run), or scopes its own run to a picked project (error-tracking).
-        // Walk the list once, advancing each step to completion.
-        for (const step of config.steps) {
-          if (step.screenId === 'outro') break; // run-completion wait owns it
-          if (shown(step)) await advanceStep(step, activeTui.store, config);
-        }
-      } else if (skipAgent) {
-        const { getOrAskForProjectData } = await import(
-          '@tui/auth/project-data'
-        );
-        const { projectApiKey, host, accessToken, projectId } =
-          await getOrAskForProjectData({
-            signup: session.signup,
-            ci: session.ci,
-            apiKey: session.apiKey,
-            projectId: session.projectId,
-            baseUrl: session.baseUrl,
-            programId: config.id,
-          });
-        activeTui.store.setCredentials({
-          accessToken,
-          projectApiKey,
-          host,
-          projectId,
-        });
-      } else {
-        try {
-          await runProgramAgent(config, activeTui.store.session);
-        } catch (error) {
-          // The run threw before its own error handling rendered an outro.
-          // Show the handoff screen and let the user's agent take over.
-          const failure = classifyRunFailure(error);
-          logToFile('[run-wizard] run failed, handing off:', error);
-          runCleanups();
-          analytics.captureException(
-            error instanceof Error ? error : new Error(String(error)),
-            { error_code: failure.code },
-          );
-          getUI().outroError({
-            kind: OutroKind.Error,
-            errorCode: failure.code,
-            message: failure.message,
-          });
-        }
-      }
-
-      if (signalled) return;
-      const runFailed = isRunFailure(activeTui.store.session);
-      await activeStream.finishRun(runFailed ? 'failed' : 'completed');
-      await activeTui.store.waitUntil((s) => {
-        if (s.mintHandoff === 'exit') return true;
-        if (skipAgent && !runFailed) return s.outroDismissed;
-        return s.skillsComplete;
-      });
-
-      exitInProgress = true;
-      await activeStream.shutdown(2000);
-      unregisterShutdown?.();
-      process.off('SIGINT', onSignal);
-      process.off('SIGTERM', onSignal);
-      if (runFailed) await analytics.shutdown('error');
-      activeTui.unmount();
-      process.exit(runFailed ? 1 : 0);
-    } catch (err) {
-      if (signalled) return;
-      // File-log first — the cleanup below can throw or exit.
-      logToFile('[run-wizard] FATAL:', err);
-      // Run cleanups before anything async so settings are restored even if
-      // the stream shutdown hangs.
-      runCleanups();
-      // The task-stream debounce timer keeps the event loop alive, so
-      // we have to drain it before exiting on the error path.
-      exitInProgress = true;
-      if (onSignal) {
-        process.off('SIGINT', onSignal);
-        process.off('SIGTERM', onSignal);
-      }
-      if (taskStream) {
-        try {
-          await taskStream.shutdown(2000, 'failed');
-        } catch {
-          // ignore
-        }
-      }
-      unregisterShutdown?.();
-      if (tui) {
-        try {
-          tui.unmount();
-        } catch {
-          // ignore
-        }
-      }
-      // Print after unmount: anything printed into the alt screen is wiped.
-      // A coded failure is a decision with its own message; anything else is
-      // unexpected and goes out whole.
-      const failure = classifyRunFailure(err);
-      if (failure.coded) {
-        // eslint-disable-next-line no-console
-        console.error(failure.message);
-      } else {
-        // eslint-disable-next-line no-console
-        console.error('Wizard run failed:', err);
-      }
-      // eslint-disable-next-line no-console
-      console.error(`Full logs: ${getLogFilePath()}`);
-      emitWizardError({ code: failure.code, message: failure.message });
-      process.exit(1);
-    }
-  })();
+  withSignals(async (signal) => {
+    // Loaded here, not at startup: a headless run never loads the TUI.
+    const { runTui } = await import('@tui');
+    return runTui(config, {
+      session: tuiSessionArgs(options),
+      skillId: options.skillId as string | undefined,
+      taskStreamLog: options.taskStreamLog as string | undefined,
+      runId:
+        (options.runId as string | undefined) ??
+        runtimeEnv('POSTHOG_WIZARD_RUN_ID'),
+      signal,
+    });
+  });
 }

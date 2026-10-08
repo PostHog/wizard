@@ -37,7 +37,7 @@ import type { WizardStore } from '@tui/store';
 import { McpSuggestedPromptsScreen } from '@tui/tools/mcp/screens/McpSuggestedPromptsScreen';
 import { Colors } from '@tui/styles';
 import { Integration } from '@shared/constants';
-import { McpOutcome } from '@programs/session/wizard-session';
+import { McpOutcome } from '@shared/run-state';
 import { HostResolution } from '@shared/host-resolution';
 import { TAILORED_ROLES } from '@tui/tools/mcp/services/mcp-role-prompts';
 import {
@@ -46,7 +46,7 @@ import {
 } from '@tui/tools/mcp/services/mcp-project-profile';
 import { seededProfile } from '@tui/tools/mcp/services/seed-events';
 import type {
-  AgentChunk,
+  McpPromptChunk,
   McpSuggestedPromptsServices,
 } from '@tui/tools/mcp/services/suggested-prompts';
 
@@ -113,7 +113,7 @@ const STREAM_SCRIPTS: StreamScript[] = [
   'mid-stream-error',
 ];
 
-const SCRIPTS: Record<StreamScript, AgentChunk[]> = {
+const SCRIPTS: Record<StreamScript, McpPromptChunk[]> = {
   'short-text': [
     { kind: 'text', text: 'Looking at your project…' },
     { kind: 'text', text: ' here is a quick read of the last 24 hours.' },
@@ -274,7 +274,7 @@ function createMockServices(
 async function* mockStream(
   configRef: { current: MockConfig },
   signal: AbortSignal,
-): AsyncIterable<AgentChunk> {
+): AsyncIterable<McpPromptChunk> {
   const cfg = configRef.current;
   const chunks = SCRIPTS[cfg.script];
   for (const chunk of chunks) {

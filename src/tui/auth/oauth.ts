@@ -2,39 +2,31 @@ import * as crypto from 'node:crypto';
 import * as http from 'node:http';
 import { execSync } from 'node:child_process';
 import axios from 'axios';
-import { logToFile } from '../../shared/utils/debug';
-import { getUI } from '@ui';
 import {
   getOAuthClientId,
   missingOAuthScopes,
   OAuthTokenResponseSchema,
   parseOAuthScopes,
-  type OAuthTokenResponse,
-} from '@programs/oauth/tokens';
+} from '@programs';
+import type { OAuthTokenResponse } from '@programs/types';
 import {
   OAUTH_PORTS,
   OAUTH_TIMEOUT_MS,
   WIZARD_USER_AGENT,
 } from '@shared/constants';
-import { getOAuthUrl, resolveBaseUrl } from '../../shared/utils/urls';
-import { abort } from '../../shared/utils/setup-utils';
-import { openTrackedLink, withUtm } from '../../shared/utils/links';
-import { analytics } from '../../shared/utils/analytics';
+import { abortOnScreens } from '@tui/abort';
+import type { WizardStore } from '@tui/store';
+import { analytics } from '@utils/analytics';
+import { logToFile } from '@utils/debug';
+import { openTrackedLink, withUtm } from '@utils/links';
 import {
   OAuthError,
   buildCallbackErrorHtml,
   buildOAuthFailureMessage,
   oauthErrorFromCallbackParams,
   oauthErrorFromTokenBody,
-} from '../../shared/utils/oauth-errors';
-
-export {
-  missingOAuthScopes,
-  OAuthTokenResponseSchema,
-  parseOAuthScopes,
-  refreshAccessToken,
-} from '@programs/oauth/tokens';
-export type { OAuthTokenResponse } from '@programs/oauth/tokens';
+} from '@utils/oauth-errors';
+import { getOAuthUrl, resolveBaseUrl } from '@utils/urls';
 
 const OAUTH_CALLBACK_STYLES = `
   <style>
@@ -434,6 +426,7 @@ async function exchangeCodeForToken(
 function reportNarrowedGrant(
   requestedScopes: readonly string[],
   grantedScope: string,
+  store: WizardStore,
 ): void {
   const missing = missingOAuthScopes(requestedScopes, grantedScope);
   if (missing.length === 0) return;
@@ -448,7 +441,7 @@ function reportNarrowedGrant(
     missing_scope_count: missing.length,
   });
   const plural = missing.length > 1;
-  getUI().log.warn(
+  store.pushStatus(
     `Your PostHog authorization is missing ${
       plural ? `${missing.length} permissions` : 'a permission'
     } the wizard asked for: ${missing.join(', ')}. ` +
@@ -465,6 +458,7 @@ function reportNarrowedGrant(
 
 export async function performOAuthFlow(
   config: OAuthConfig,
+  store: WizardStore,
 ): Promise<OAuthTokenResponse> {
   const clientId = getOAuthClientId(config.baseUrl);
   const oauthUrl = getOAuthUrl(config.baseUrl);
@@ -532,12 +526,12 @@ export async function performOAuthFlow(
 
       logToFile('[oauth] callback server ready, showing login URL');
 
-      getUI().setLoginUrl(urlToOpen);
+      store.setLoginUrl(urlToOpen);
       // The localhost proxy above only works on this machine. Surface the
       // direct PostHog authorize URL too, for the manual-paste modal — on a
       // remote/headless box the user opens it from another machine, where
       // localhost:<port> is unreachable.
-      getUI().setAuthorizeUrl(
+      store.setAuthorizeUrl(
         config.signup ? signupUrl.toString() : taggedAuthUrl,
       );
 
@@ -545,8 +539,7 @@ export async function performOAuthFlow(
       // it redirects to carries the UTMs.
       openTrackedLink(urlToOpen, 'oauth', { auto: true, skipUtm: true });
 
-      const loginSpinner = getUI().spinner();
-      loginSpinner.start('Waiting for authorization...');
+      store.pushStatus('Waiting for authorization...');
 
       try {
         // Race the local callback server against a manually-pasted code. The
@@ -555,7 +548,7 @@ export async function performOAuthFlow(
         // paste modal and submits the callback URL or code by hand.
         const code = await Promise.race([
           waitForCallback(),
-          getUI().waitForManualAuthCode(),
+          store.waitForManualAuthCode(),
           new Promise<never>((_, reject) =>
             setTimeout(
               () => reject(new Error(AUTHORIZATION_TIMEOUT_MESSAGE)),
@@ -572,11 +565,11 @@ export async function performOAuthFlow(
         );
 
         server.close();
-        getUI().setLoginUrl(null);
-        getUI().setAuthorizeUrl(null);
-        loginSpinner.stop('Authorization complete!');
+        store.setLoginUrl(null);
+        store.setAuthorizeUrl(null);
+        store.pushStatus('Authorization complete!');
 
-        reportNarrowedGrant(config.scopes, token.scope);
+        reportNarrowedGrant(config.scopes, token.scope, store);
 
         return token;
       } catch (e) {
@@ -584,7 +577,7 @@ export async function performOAuthFlow(
         const timedOut = isAuthorizationTimeout(error);
         const flowError = error instanceof OAuthError ? error : null;
 
-        loginSpinner.stop(
+        store.pushStatus(
           timedOut ? 'Session timed out.' : 'Authorization failed.',
         );
         server.close();
@@ -604,13 +597,13 @@ export async function performOAuthFlow(
           // Overlay bypasses the auth-step gating (which never completes
           // without credentials), so the user sees the failure instead of a
           // spinner that never stops; any key exits.
-          getUI().showSessionTimeout();
+          store.showSessionTimeout();
         } else if (accessDenied) {
-          getUI().log.info(
+          store.pushStatus(
             `Authorization was cancelled.\n\nYou denied access to PostHog. To use the wizard, you need to authorize access to your PostHog account.\n\nYou can try again by re-running the wizard.`,
           );
         } else {
-          getUI().log.error(
+          store.pushStatus(
             buildOAuthFailureMessage({
               error,
               requestedScopes: config.scopes,
@@ -643,7 +636,7 @@ export async function performOAuthFlow(
           $exception_fingerprint: `wizard_oauth_${oauthErrorCode}`,
         });
 
-        await abort();
+        await abortOnScreens(store);
         throw error;
       }
     }
@@ -652,7 +645,7 @@ export async function performOAuthFlow(
       throw new Error('No OAuth callback ports configured');
     }
 
-    await getUI().showPortConflict(lastProcessInfo);
+    await store.showPortConflict(lastProcessInfo);
     shouldRetry = true;
   } while (shouldRetry);
 
