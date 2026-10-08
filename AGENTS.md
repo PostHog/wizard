@@ -107,16 +107,17 @@ warning signs that a change is drifting off-pattern. Its references extend it:
 
 ## Skills available
 
-Five skills live under `.claude/skills/`. Read `wizard-development` first for
+Six skills live under `.claude/skills/`. Read `wizard-development` first for
 any structural change; then load the relevant procedural skill:
 
-| Skill                                                                        | When to use                                                                                 |
-| ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| [wizard-development](.claude/skills/wizard-development/SKILL.md)             | Before any structural change. Design principles + decision framework.                       |
-| [adding-framework-support](.claude/skills/adding-framework-support/SKILL.md) | Adding or extending a framework integration.                                                |
-| [adding-skill-program](.claude/skills/adding-skill-program/SKILL.md)         | Adding a new skill-based program (e.g. a new product feature setup).                        |
-| [ink-tui](.claude/skills/ink-tui/SKILL.md)                                   | Building or modifying TUI screens, layouts, and primitives.                                 |
-| [exploring-the-wizard](.claude/skills/exploring-the-wizard/SKILL.md)         | Running/driving/exploring the wizard headlessly (read_state/perform_action, TUI snapshots). |
+| Skill                                                                            | When to use                                                                                 |
+| -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| [wizard-development](.claude/skills/wizard-development/SKILL.md)                 | Before any structural change. Design principles + decision framework.                       |
+| [adding-framework-support](.claude/skills/adding-framework-support/SKILL.md)     | Adding or extending a framework integration.                                                |
+| [adding-skill-program](.claude/skills/adding-skill-program/SKILL.md)             | Adding a new skill-based program (e.g. a new product feature setup).                        |
+| [ink-tui](.claude/skills/ink-tui/SKILL.md)                                       | Building or modifying TUI screens, layouts, and primitives.                                 |
+| [exploring-the-wizard](.claude/skills/exploring-the-wizard/SKILL.md)             | Running/driving/exploring the wizard headlessly (read_state/perform_action, TUI snapshots). |
+| [running-error-tracking-e2e](.claude/skills/running-error-tracking-e2e/SKILL.md) | Running `wizard error-tracking` end to end on a workbench app, then building the app.       |
 
 ## Agent execution policy
 

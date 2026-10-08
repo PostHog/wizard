@@ -5,7 +5,7 @@ description: Accuracy, discovery, and verification for contributor guidance.
 
 # Maintaining the Wizard skills
 
-[AGENTS.md](../../../../AGENTS.md#skills-available) indexes all five contributor
+[AGENTS.md](../../../../AGENTS.md#skills-available) indexes all six contributor
 skills. [CLAUDE.md](../../../../CLAUDE.md) imports AGENTS rather than
 maintaining a second instruction set. Keep links and each skill's frontmatter
 name aligned with its directory. Reference files should be reachable from their
