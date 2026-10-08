@@ -5,7 +5,7 @@
  * importing business logic directly. Testable, no dynamic imports.
  *
  * Supports two modes via the `mode` prop:
- *   - 'install': detect clients → pick clients (esc skips) → pick features → install
+ *   - 'install': detect clients → pick clients (esc cancels) → pick features → install
  *   - 'remove': detect installed clients → confirm → remove
  *
  * A successful install ends on one screen: results, any login commands, sample
@@ -281,7 +281,7 @@ export const McpScreen = ({
           {
             match: KeyMatch.Escape,
             label: 'esc',
-            action: 'skip',
+            action: 'cancel',
             handler: handleSkip,
           },
         ]

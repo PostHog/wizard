@@ -193,7 +193,7 @@ const PAIRS: Pair[] = [
       'keyboard path lands on keep-skills, whose mount scan sets skillsComplete; the action only records the MCP outcome',
     program: Program.PostHogIntegration,
     screen: ScreenId.Mcp,
-    ready: (_, frame) => frame.includes('esc skip'),
+    ready: (_, frame) => frame.includes('esc cancel'),
     arrange: (s) => {
       confirmed(s);
       authed(s);
