@@ -25,11 +25,21 @@ const MAX_PROPOSALS = 3;
 const WIZARD_NAME_SUFFIX = ' (wizard)';
 const EMAIL_RECIPIENT = '{{ person.properties.email }}';
 
+/** What a workflow helps with, as the user reads it in the checklist. */
+export const WORKFLOW_GOALS = {
+  activation: 'Activation',
+  engagement: 'Engagement',
+  retention: 'Retention',
+  conversion: 'Conversion',
+  feedback: 'Feedback',
+} as const;
+
 export type WorkflowProposal = {
   title: string;
+  /** Absent when the agent named no known goal. */
+  goal?: keyof typeof WORKFLOW_GOALS;
+  /** One plain sentence on how it helps; no event names or steps. */
   reason: string;
-  /** One line per step, for the terminal. */
-  steps: string[];
   workflow: Record<string, unknown>;
 };
 
@@ -176,6 +186,7 @@ const ProposalsFile = z.object({
     z
       .object({
         title: z.string().min(1).max(80),
+        goal: z.string().optional(),
         reason: z.string().min(1).max(300),
         workflow: z.unknown(),
       })
@@ -262,30 +273,6 @@ export function workflowProblem(
   return null;
 }
 
-/** The workflow's steps in the order the agent wrote them, one line each. */
-export function describeSteps(workflow: Workflow): string[] {
-  return workflow.actions.flatMap((a): string[] => {
-    switch (a.type) {
-      case 'trigger':
-        return [`When ${eventIds(a.config.filters).join(' or ')} happens`];
-      case 'delay':
-        return [`Wait ${a.config.delay_duration}`];
-      case 'wait_until_condition':
-        return [
-          `Wait up to ${a.config.max_wait_duration} for ${a.config.events
-            .flatMap((e) => eventIds(e.filters))
-            .join(' or ')}`,
-        ];
-      case 'conditional_branch':
-        return [`Split on ${a.name || 'person properties'}`];
-      case 'function_email':
-        return [`Email: "${a.config.inputs.email.value.subject}"`];
-      case 'exit':
-        return [];
-    }
-  });
-}
-
 function readJson(path: string): unknown {
   try {
     return JSON.parse(readFileSync(path, 'utf8'));
@@ -320,8 +307,11 @@ export function readWorkflowProposals(
     const workflow = Workflow.parse(proposal.workflow);
     proposals.push({
       title: proposal.title,
+      goal:
+        proposal.goal && proposal.goal in WORKFLOW_GOALS
+          ? (proposal.goal as keyof typeof WORKFLOW_GOALS)
+          : undefined,
       reason: proposal.reason,
-      steps: describeSteps(workflow),
       workflow: {
         ...workflow,
         name: workflow.name.endsWith(WIZARD_NAME_SUFFIX)

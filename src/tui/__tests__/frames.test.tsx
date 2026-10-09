@@ -512,14 +512,9 @@ const FIXTURES: Record<string, Fixture> = {
         proposals: [
           {
             title: 'Welcome and first notebook nudge',
+            goal: 'activation',
             reason:
-              'Welcomes each user after user_signed_up, and reminds anyone with no notebook_created after 3 days.',
-            steps: [
-              'When user_signed_up happens',
-              'Email: "Welcome to Notely"',
-              'Wait up to 3d for notebook_created',
-              'Email: "Your first notebook takes a minute"',
-            ],
+              'Welcomes new users and nudges them to create their first notebook.',
             workflow: {},
           },
         ],

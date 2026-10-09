@@ -1,8 +1,8 @@
 /**
  * PostHogIntegrationWorkflowsScreen — offers the draft workflows the run's
- * workflows step designed on the events it added. Shown after the outro, where
- * the user is still present, rather than mid-run. Creating them is the user's
- * pick; each one is created as a draft that sends nothing until turned on.
+ * workflows step designed on the events it added, as one checklist. Shown after
+ * the outro, where the user is still present, rather than mid-run. Each ticked
+ * workflow is created as a draft that sends nothing until turned on.
  */
 
 import { Box, Text } from 'ink';
@@ -15,6 +15,7 @@ import { useKeyBindings, KeyMatch } from '@tui/hooks/useKeyBindings';
 import {
   createWorkflowDrafts,
   getWorkflowProposals,
+  WORKFLOW_GOALS,
   type WorkflowDraftResult,
   type WorkflowProposal,
 } from '@programs/posthog-integration';
@@ -24,13 +25,13 @@ interface PostHogIntegrationWorkflowsScreenProps {
   store: WizardStore;
 }
 
-enum Choice {
-  All = 'all',
-  Pick = 'pick',
-  Skip = 'skip',
-}
+type Phase = 'pick' | 'creating' | 'done';
 
-type Phase = 'choose' | 'pick' | 'creating' | 'done';
+function benefit(proposal: WorkflowProposal): string {
+  return proposal.goal
+    ? `${WORKFLOW_GOALS[proposal.goal]} · ${proposal.reason}`
+    : proposal.reason;
+}
 
 export const PostHogIntegrationWorkflowsScreen = ({
   store,
@@ -42,7 +43,7 @@ export const PostHogIntegrationWorkflowsScreen = ({
 
   const proposals = getWorkflowProposals(store.session);
   const credentials = store.session.credentials;
-  const [phase, setPhase] = useState<Phase>('choose');
+  const [phase, setPhase] = useState<Phase>('pick');
   const [results, setResults] = useState<WorkflowDraftResult[]>([]);
 
   const shown = useRef(false);
@@ -51,23 +52,16 @@ export const PostHogIntegrationWorkflowsScreen = ({
     shown.current = true;
     analytics.wizardCapture('workflows proposals shown', {
       proposal_count: proposals.length,
+      goals: proposals.map((p) => p.goal ?? 'none'),
     });
-  }, [proposals.length]);
+  }, [proposals]);
 
-  const answer = (choice: Choice, selected: number): void => {
+  const answer = (picked: WorkflowProposal[]): void => {
     analytics.wizardCapture('workflows proposals answered', {
-      choice,
       proposal_count: proposals.length,
-      selected_count: selected,
+      selected_count: picked.length,
+      selected_goals: picked.map((p) => p.goal ?? 'none'),
     });
-  };
-
-  const skip = (): void => {
-    answer(Choice.Skip, 0);
-    store.setWorkflowsStepDone();
-  };
-
-  const create = (picked: WorkflowProposal[]): void => {
     if (!credentials || picked.length === 0) {
       store.setWorkflowsStepDone();
       return;
@@ -79,22 +73,9 @@ export const PostHogIntegrationWorkflowsScreen = ({
     });
   };
 
-  const handleChoice = (value: Choice | Choice[]): void => {
-    const choice = Array.isArray(value) ? value[0] : value;
-    if (choice === Choice.All) {
-      answer(Choice.All, proposals.length);
-      create(proposals);
-    } else if (choice === Choice.Pick) {
-      setPhase('pick');
-    } else {
-      skip();
-    }
-  };
-
   const handlePick = (value: number | number[]): void => {
     const indexes = Array.isArray(value) ? value : [value];
-    answer(Choice.Pick, indexes.length);
-    create(indexes.map((i) => proposals[i]));
+    answer(indexes.map((i) => proposals[i]));
   };
 
   useKeyBindings('integration-workflows', [
@@ -105,7 +86,7 @@ export const PostHogIntegrationWorkflowsScreen = ({
       handler: () => {
         if (phase === 'creating') return;
         if (phase === 'done') store.setWorkflowsStepDone();
-        else skip();
+        else answer([]);
       },
     },
   ]);
@@ -160,58 +141,25 @@ export const PostHogIntegrationWorkflowsScreen = ({
     <Box flexDirection="column" flexGrow={1}>
       <Box marginTop={1} flexDirection="column">
         <Text bold color={Colors.accent}>
-          Draft workflows for your events
+          Workflows for your events
         </Text>
         <Box marginTop={1}>
           <Text>
-            We designed these email workflows from the events we added. We
-            create them as drafts. A draft sends nothing until you add a sender
-            and turn it on in PostHog.
+            Based on the events we added, these workflows can help you. Tick the
+            ones you want and we create them in PostHog as drafts. A draft sends
+            nothing until you turn it on.
           </Text>
         </Box>
-
-        {proposals.map((proposal) => (
-          <Box key={proposal.title} marginTop={1} flexDirection="column">
-            <Text bold>
-              <Text color="cyan">{Icons.diamond} </Text>
-              {proposal.title}
-            </Text>
-            <Text dimColor>{proposal.reason}</Text>
-            {proposal.steps.map((step, i) => (
-              <Text key={i}>{`  ${i + 1}. ${step}`}</Text>
-            ))}
-          </Box>
-        ))}
-
         <Box marginTop={1}>
-          {phase === 'pick' ? (
-            <PickerMenu<number>
-              mode="multi"
-              message="Pick the workflows to create"
-              options={proposals.map((proposal, i) => ({
-                label: proposal.title,
-                value: i,
-              }))}
-              onSelect={handlePick}
-            />
-          ) : (
-            <PickerMenu<Choice>
-              options={[
-                {
-                  label:
-                    proposals.length === 1
-                      ? 'Create it as a draft'
-                      : `Create all ${proposals.length} as drafts`,
-                  value: Choice.All,
-                },
-                ...(proposals.length > 1
-                  ? [{ label: 'Choose which to create', value: Choice.Pick }]
-                  : []),
-                { label: 'Skip', value: Choice.Skip },
-              ]}
-              onSelect={handleChoice}
-            />
-          )}
+          <PickerMenu<number>
+            mode="multi"
+            options={proposals.map((proposal, i) => ({
+              label: proposal.title,
+              value: i,
+              description: benefit(proposal),
+            }))}
+            onSelect={handlePick}
+          />
         </Box>
       </Box>
     </Box>

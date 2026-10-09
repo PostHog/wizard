@@ -250,6 +250,7 @@ export {
   createWorkflowDrafts,
   getWorkflowProposals,
   WORKFLOW_PROPOSALS_KEY,
+  WORKFLOW_GOALS,
   type WorkflowDraftResult,
   type WorkflowProposal,
 } from './workflows.js';

@@ -122,6 +122,7 @@ describe('workflow proposals', () => {
       JSON.stringify({
         proposals: workflows.map((w, i) => ({
           title: `Proposal ${i}`,
+          goal: i === 0 ? 'activation' : 'growth',
           reason: 'Because',
           workflow: w,
         })),
@@ -130,16 +131,13 @@ describe('workflow proposals', () => {
     return readWorkflowProposals(dir);
   }
 
-  it('keeps a valid proposal, tags its name, and describes its steps', () => {
-    const result = read([workflow()]);
+  it('keeps a valid proposal, tags its name, and keeps only a known goal', () => {
+    const result = read([workflow(), workflow()]);
 
     expect(result?.rejectedCount).toBe(0);
     expect(result?.proposals[0].workflow.name).toBe('Welcome (wizard)');
-    expect(result?.proposals[0].steps).toEqual([
-      'When user_signed_up happens',
-      'Email: "Welcome to Notely"',
-      'Wait up to 3d for notebook_created',
-    ]);
+    expect(result?.proposals[0].goal).toBe('activation');
+    expect(result?.proposals[1].goal).toBeUndefined();
   });
 
   it.each([
@@ -244,7 +242,7 @@ describe('createWorkflowDrafts', () => {
     createDraftWorkflow
       .mockRejectedValueOnce(new Error('Invalid sender'))
       .mockResolvedValueOnce({ id: 'abc' });
-    const proposal = { title: 'A', reason: '', steps: [], workflow: {} };
+    const proposal = { title: 'A', reason: '', workflow: {} };
 
     const results = await createWorkflowDrafts(credentials, [
       proposal,
