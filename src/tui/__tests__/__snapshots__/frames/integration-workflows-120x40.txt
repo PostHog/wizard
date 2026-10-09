@@ -5,14 +5,14 @@
 
  Workflows for your events
 
- Based on the events we added, these workflows can help you. Tick the ones you want and we create them in PostHog as
- drafts. A draft sends nothing until you turn it on.
+ Based on the events we added, these workflows can help you. Untick any you do not want and we create the rest in
+ PostHog as drafts. A draft sends nothing until you turn it on.
 
-   ◻ Welcome and first notebook nudge
+   ◼ Welcome and first notebook nudge
        Activation · Welcomes new users and nudges them to
        create their first notebook.
 
-     Confirm
+     Confirm (1)
 
 
 
@@ -36,4 +36,4 @@
 
 
 
-  ↑↓ navigate  enter select  esc skip
+  esc skip

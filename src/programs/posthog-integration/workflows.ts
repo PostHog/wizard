@@ -9,7 +9,11 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 import { z } from 'zod';
 
-import { createDraftWorkflow, type Credentials } from '@shared/api';
+import {
+  createDraftWorkflow,
+  fetchWorkflowTriggers,
+  type Credentials,
+} from '@shared/api';
 import { EVENT_PLAN_FILE } from '@shared/constants';
 import { analytics } from '@utils/analytics';
 import { withUtm } from '@utils/links';
@@ -24,6 +28,8 @@ export const WORKFLOW_PROPOSALS_KEY = 'workflowProposals';
 const MAX_PROPOSALS = 3;
 const WIZARD_NAME_SUFFIX = ' (wizard)';
 const EMAIL_RECIPIENT = '{{ person.properties.email }}';
+/** Marks the drafts as the wizard's in PostHog, so their adoption is measurable. */
+const WIZARD_ORIGIN_PRODUCT = 'wizard';
 
 /** What a workflow helps with, as the user reads it in the checklist. */
 export const WORKFLOW_GOALS = {
@@ -40,6 +46,8 @@ export type WorkflowProposal = {
   goal?: keyof typeof WORKFLOW_GOALS;
   /** One plain sentence on how it helps; no event names or steps. */
   reason: string;
+  /** The events that start it, for spotting a workflow the project already has. */
+  triggerEvents: string[];
   workflow: Record<string, unknown>;
 };
 
@@ -312,6 +320,9 @@ export function readWorkflowProposals(
           ? (proposal.goal as keyof typeof WORKFLOW_GOALS)
           : undefined,
       reason: proposal.reason,
+      triggerEvents: workflow.actions.flatMap((a) =>
+        a.type === 'trigger' ? eventIds(a.config.filters) : [],
+      ),
       workflow: {
         ...workflow,
         name: workflow.name.endsWith(WIZARD_NAME_SUFFIX)
@@ -363,6 +374,7 @@ export async function createWorkflowDrafts(
         credentials.projectId,
         credentials.host.apiHost,
         proposal.workflow,
+        WIZARD_ORIGIN_PRODUCT,
       );
       results.push({
         title: proposal.title,
@@ -383,4 +395,50 @@ export async function createWorkflowDrafts(
     failed_count: results.filter((r) => 'error' in r).length,
   });
   return results;
+}
+
+/**
+ * Drop proposals the project already covers: a workflow with the same name, or
+ * one that starts on the same event. A failed lookup keeps every proposal.
+ */
+export async function withoutExistingWorkflows(
+  credentials: Credentials,
+  proposals: readonly WorkflowProposal[],
+): Promise<WorkflowProposal[]> {
+  let existing: { name: string; triggerEvents: string[] }[];
+  try {
+    existing = await fetchWorkflowTriggers(
+      credentials.accessToken,
+      credentials.projectId,
+      credentials.host.apiHost,
+    );
+  } catch (error) {
+    analytics.captureException(
+      error instanceof Error ? error : new Error(String(error)),
+      { step: 'workflows_existing_lookup' },
+    );
+    return [...proposals];
+  }
+  const names = new Set(existing.map((w) => w.name));
+  const events = new Set(existing.flatMap((w) => w.triggerEvents));
+  const kept = proposals.filter(
+    (p) =>
+      !names.has(String(p.workflow.name)) &&
+      !p.triggerEvents.some((e) => events.has(e)),
+  );
+  if (kept.length < proposals.length) {
+    analytics.wizardCapture('workflows proposals already covered', {
+      proposal_count: proposals.length,
+      covered_count: proposals.length - kept.length,
+    });
+  }
+  return kept;
+}
+
+/** The project page where the user adds an email sender. */
+export function emailSenderSetupUrl(credentials: Credentials): string {
+  return withUtm(
+    `${credentials.host.appHost}/project/${credentials.projectId}/workflows/channels`,
+    'workflows-sender',
+  );
 }

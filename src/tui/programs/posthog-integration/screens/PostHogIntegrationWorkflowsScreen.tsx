@@ -14,7 +14,9 @@ import { PickerMenu, LoadingBox } from '@tui/primitives/index';
 import { useKeyBindings, KeyMatch } from '@tui/hooks/useKeyBindings';
 import {
   createWorkflowDrafts,
+  emailSenderSetupUrl,
   getWorkflowProposals,
+  withoutExistingWorkflows,
   WORKFLOW_GOALS,
   type WorkflowDraftResult,
   type WorkflowProposal,
@@ -25,7 +27,7 @@ interface PostHogIntegrationWorkflowsScreenProps {
   store: WizardStore;
 }
 
-type Phase = 'pick' | 'creating' | 'done';
+type Phase = 'loading' | 'pick' | 'creating' | 'done';
 
 function benefit(proposal: WorkflowProposal): string {
   return proposal.goal
@@ -41,20 +43,33 @@ export const PostHogIntegrationWorkflowsScreen = ({
     () => store.getSnapshot(),
   );
 
-  const proposals = getWorkflowProposals(store.session);
   const credentials = store.session.credentials;
-  const [phase, setPhase] = useState<Phase>('pick');
+  const [proposals, setProposals] = useState<WorkflowProposal[]>([]);
+  const [phase, setPhase] = useState<Phase>('loading');
   const [results, setResults] = useState<WorkflowDraftResult[]>([]);
 
-  const shown = useRef(false);
+  // Offer only what the project does not already have; nothing left ends the step.
+  const loaded = useRef(false);
   useEffect(() => {
-    if (shown.current) return;
-    shown.current = true;
-    analytics.wizardCapture('workflows proposals shown', {
-      proposal_count: proposals.length,
-      goals: proposals.map((p) => p.goal ?? 'none'),
+    if (loaded.current) return;
+    loaded.current = true;
+    const all = getWorkflowProposals(store.session);
+    const offered = credentials
+      ? withoutExistingWorkflows(credentials, all)
+      : Promise.resolve(all);
+    void offered.then((kept) => {
+      if (kept.length === 0) {
+        store.setWorkflowsStepDone();
+        return;
+      }
+      analytics.wizardCapture('workflows proposals shown', {
+        proposal_count: kept.length,
+        goals: kept.map((p) => p.goal ?? 'none'),
+      });
+      setProposals(kept);
+      setPhase('pick');
     });
-  }, [proposals]);
+  }, [store, credentials]);
 
   const answer = (picked: WorkflowProposal[]): void => {
     analytics.wizardCapture('workflows proposals answered', {
@@ -91,10 +106,16 @@ export const PostHogIntegrationWorkflowsScreen = ({
     },
   ]);
 
-  if (phase === 'creating') {
+  if (phase === 'loading' || phase === 'creating') {
     return (
       <Box flexDirection="column" flexGrow={1} marginTop={1}>
-        <LoadingBox message="Creating draft workflows..." />
+        <LoadingBox
+          message={
+            phase === 'loading'
+              ? 'Checking your workflows...'
+              : 'Creating draft workflows...'
+          }
+        />
       </Box>
     );
   }
@@ -119,12 +140,13 @@ export const PostHogIntegrationWorkflowsScreen = ({
             )}
           </Box>
         ))}
-        {created > 0 && (
-          <Box marginTop={1}>
+        {created > 0 && credentials && (
+          <Box marginTop={1} flexDirection="column">
             <Text>
-              Each one is a draft. Add a sender and turn it on in PostHog when
-              you are ready.
+              Each one is a draft. It can send only once your project has a
+              verified email sender. Set one up, or check yours:
             </Text>
+            <Text color="cyan">{emailSenderSetupUrl(credentials)}</Text>
           </Box>
         )}
         <Box marginTop={1}>
@@ -145,14 +167,15 @@ export const PostHogIntegrationWorkflowsScreen = ({
         </Text>
         <Box marginTop={1}>
           <Text>
-            Based on the events we added, these workflows can help you. Tick the
-            ones you want and we create them in PostHog as drafts. A draft sends
-            nothing until you turn it on.
+            Based on the events we added, these workflows can help you. Untick
+            any you do not want and we create the rest in PostHog as drafts. A
+            draft sends nothing until you turn it on.
           </Text>
         </Box>
         <Box marginTop={1}>
           <PickerMenu<number>
             mode="multi"
+            initialSelected={proposals.map((_, i) => i)}
             options={proposals.map((proposal, i) => ({
               label: proposal.title,
               value: i,

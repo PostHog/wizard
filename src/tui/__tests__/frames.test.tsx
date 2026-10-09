@@ -61,6 +61,7 @@ vi.mock('@shared/api', async (actual) => ({
   fetchUserData: vi.fn(pending),
   fetchSlackConnected: vi.fn(pending),
   fetchGithubConnected: vi.fn(pending),
+  fetchWorkflowTriggers: vi.fn().mockResolvedValue([]),
 }));
 vi.mock(import('@shared/skill-install'), async (actual) => ({
   ...(await actual()),
@@ -515,7 +516,8 @@ const FIXTURES: Record<string, Fixture> = {
             goal: 'activation',
             reason:
               'Welcomes new users and nudges them to create their first notebook.',
-            workflow: {},
+            triggerEvents: ['user_signed_up'],
+            workflow: { name: 'Welcome and first notebook nudge (wizard)' },
           },
         ],
       });

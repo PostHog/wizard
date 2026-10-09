@@ -19,14 +19,17 @@ vi.mock('@utils/analytics', () => ({
 }));
 
 const createDraftWorkflow = vi.fn();
+const fetchWorkflowTriggers = vi.fn();
 vi.mock('@shared/api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@shared/api')>()),
   createDraftWorkflow: (...args: unknown[]) => createDraftWorkflow(...args),
+  fetchWorkflowTriggers: (...args: unknown[]) => fetchWorkflowTriggers(...args),
 }));
 
 import {
   config as posthogIntegration,
   createWorkflowDrafts,
+  withoutExistingWorkflows,
 } from '@programs/posthog-integration';
 import { readWorkflowProposals } from '../workflows';
 
@@ -138,6 +141,7 @@ describe('workflow proposals', () => {
     expect(result?.proposals[0].workflow.name).toBe('Welcome (wizard)');
     expect(result?.proposals[0].goal).toBe('activation');
     expect(result?.proposals[1].goal).toBeUndefined();
+    expect(result?.proposals[0].triggerEvents).toEqual(['user_signed_up']);
   });
 
   it.each([
@@ -242,7 +246,12 @@ describe('createWorkflowDrafts', () => {
     createDraftWorkflow
       .mockRejectedValueOnce(new Error('Invalid sender'))
       .mockResolvedValueOnce({ id: 'abc' });
-    const proposal = { title: 'A', reason: '', workflow: {} };
+    const proposal = {
+      title: 'A',
+      reason: '',
+      triggerEvents: [],
+      workflow: {},
+    };
 
     const results = await createWorkflowDrafts(credentials, [
       proposal,
@@ -250,9 +259,51 @@ describe('createWorkflowDrafts', () => {
     ]);
 
     expect(results[0]).toEqual({ title: 'A', error: 'Invalid sender' });
+    expect(createDraftWorkflow.mock.calls[0][4]).toBe('wizard');
     expect(results[1]).toMatchObject({ title: 'B' });
     expect('url' in results[1] && results[1].url).toContain(
       'https://us.posthog.com/project/2/workflows/abc/workflow',
+    );
+  });
+});
+
+describe('withoutExistingWorkflows', () => {
+  const credentials = {
+    accessToken: 'token',
+    projectId: 2,
+    host: {
+      apiHost: 'https://us.posthog.com',
+      appHost: 'https://us.posthog.com',
+    },
+  } as Credentials;
+  const proposal = (title: string, name: string, event: string) => ({
+    title,
+    reason: '',
+    triggerEvents: [event],
+    workflow: { name },
+  });
+  const proposals = [
+    proposal('Welcome', 'Welcome (wizard)', 'user_signed_up'),
+    proposal('Win back', 'Win back (wizard)', 'subscription_canceled'),
+    proposal('Trial', 'Trial nudge (wizard)', 'trial_started'),
+  ];
+
+  it('drops a proposal the project already has by name or by trigger event', async () => {
+    fetchWorkflowTriggers.mockResolvedValueOnce([
+      { name: 'Welcome (wizard)', triggerEvents: [] },
+      { name: 'Churn alert', triggerEvents: ['subscription_canceled'] },
+    ]);
+
+    const kept = await withoutExistingWorkflows(credentials, proposals);
+
+    expect(kept.map((p) => p.title)).toEqual(['Trial']);
+  });
+
+  it('keeps every proposal when the lookup fails', async () => {
+    fetchWorkflowTriggers.mockRejectedValueOnce(new Error('403'));
+
+    expect(await withoutExistingWorkflows(credentials, proposals)).toHaveLength(
+      3,
     );
   });
 });

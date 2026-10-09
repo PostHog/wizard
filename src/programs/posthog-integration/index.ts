@@ -248,7 +248,9 @@ const workflowsSeedTasks: NonNullable<ProgramConfig['seedTasks']> = (sess) =>
 export { EVENT_PLAN_FILE } from './constants.js';
 export {
   createWorkflowDrafts,
+  emailSenderSetupUrl,
   getWorkflowProposals,
+  withoutExistingWorkflows,
   WORKFLOW_PROPOSALS_KEY,
   WORKFLOW_GOALS,
   type WorkflowDraftResult,
@@ -269,7 +271,8 @@ export const config: ProgramConfig = {
   // When detection finds data sources, the orchestrator's warehouse task
   // creates them through `external-data-sources-create`. Without the
   // warehouse pair that call 403s on a token the user already granted.
-  // The workflows screen creates the drafts the user picks via `hog_flows`.
+  // The workflows screen reads the project's workflows and creates the drafts
+  // the user picks via `hog_flows`.
   oauthScopeAdditions: [...WAREHOUSE_SOURCE_SCOPE_ADDITIONS, 'hog_flow:write'],
 
   seedTasks: (sess) => [
