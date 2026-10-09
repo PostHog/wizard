@@ -320,6 +320,36 @@ export async function fetchGithubConnected(
   return parsed.data.results.some((i) => i.kind === 'github');
 }
 
+const CreatedWorkflowSchema = z.object({ id: z.string() }).passthrough();
+
+/**
+ * Create a workflow in draft status. A draft never runs until the user turns
+ * it on in PostHog. Requires the `hog_flow:write` scope. Throws an `ApiError`
+ * carrying the server's validation detail on failure.
+ */
+export async function createDraftWorkflow(
+  accessToken: string,
+  projectId: number,
+  baseUrl: string,
+  workflow: Record<string, unknown>,
+): Promise<{ id: string }> {
+  try {
+    const response = await axios.post(
+      `${baseUrl}/api/projects/${projectId}/hog_flows/`,
+      { ...workflow, status: 'draft' },
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'User-Agent': WIZARD_USER_AGENT,
+        },
+      },
+    );
+    return CreatedWorkflowSchema.parse(response.data);
+  } catch (error) {
+    throw handleApiError(error, 'create a draft workflow');
+  }
+}
+
 export function handleApiError(error: unknown, operation: string): ApiError {
   if (axios.isAxiosError(error)) {
     const axiosError = error as AxiosError<{ detail?: string }>;

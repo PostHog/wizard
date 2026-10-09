@@ -250,7 +250,7 @@ pre-issued one in `input.credentials.gateway`, as the quack example does.
 | `config.wizardFlags`, `config.wizardFlagPayloads` | `Record` | The flag snapshot the caller evaluated. Empty when there are no flags. |
 | `config.allowedTools`                                                | `readonly string[]`  | Tools added to the base tools.                                                  |
 | `config.disallowedTools`                                             | `readonly string[]`  | Tools removed from the base tools.                                              |
-| `config.hooks` | `RunHooks` | The caller's completion hooks: `postRun`, the outro builders and `recordTaskOutcomes`. |
+| `config.hooks` | `RunHooks` | The caller's completion hooks: `postRun`, the outro builders, `recordTaskOutcomes` and `readRunCache`. |
 | [`input`](../src/agent/runner/shared/types.ts) | `RunInput` | Where and as whom: `installDir`, `credentials`, `project`, `apiUser`, `flags` and `host`. |
 | `options.onProgress` | `(AgentProgress) => unknown` | Every progress event in order. Never awaited. A throwing observer is logged and the run goes on. |
 | `options.interaction` | `AgentInteraction` | Answers the agent's questions and notices. Absent, the agent has no ask bridge and declines notices. |

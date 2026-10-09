@@ -133,6 +133,8 @@ export interface RunHooks {
   recordTaskOutcomes?: (
     outcomes: import('../sequence/orchestrator/queue').TaskOutcome[],
   ) => void;
+  /** Reads the run cache directory before the cache wipe (orchestrated only). */
+  readRunCache?: (cacheDir: string) => void;
 }
 
 /** The run-level routing decision. */

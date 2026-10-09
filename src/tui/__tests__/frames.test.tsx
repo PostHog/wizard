@@ -148,6 +148,7 @@ import { McpScreenId } from '@tui/tools/mcp';
 import { MetricsScreenId } from '@tui/programs/metrics';
 import { MigrationScreenId } from '@tui/programs/migration';
 import { PostHogIntegrationScreenId } from '@tui/programs/posthog-integration';
+import { WORKFLOW_PROPOSALS_KEY } from '@programs/posthog-integration';
 import { PosthogDoctorScreenId } from '@tui/tools/doctor';
 import { RevenueAnalyticsScreenId } from '@tui/programs/revenue-analytics';
 import { SelfDrivingScreenId } from '@tui/programs/self-driving';
@@ -498,6 +499,31 @@ const FIXTURES: Record<string, Fixture> = {
         { name: 'signup_completed', description: 'A new account was created' },
       ]);
       s.pushStatus('Editing app/layout.tsx');
+    },
+  },
+  [PostHogIntegrationScreenId.Workflows]: {
+    program: Program.PostHogIntegration,
+    arrange: (s) => {
+      authed(s);
+      ranSuccessfully(s);
+      s.setOutroDismissed();
+      s.setFrameworkContext(WORKFLOW_PROPOSALS_KEY, {
+        rejectedCount: 0,
+        proposals: [
+          {
+            title: 'Welcome and first notebook nudge',
+            reason:
+              'Welcomes each user after user_signed_up, and reminds anyone with no notebook_created after 3 days.',
+            steps: [
+              'When user_signed_up happens',
+              'Email: "Welcome to Notely"',
+              'Wait up to 3d for notebook_created',
+              'Email: "Your first notebook takes a minute"',
+            ],
+            workflow: {},
+          },
+        ],
+      });
     },
   },
   [ScreenId.Mcp]: {

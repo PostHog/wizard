@@ -1,0 +1,39 @@
+ PostHog Wizard v0.0.0-test                                                                Feedback: wizard@posthog.com
+
+ Cost (running): $0.00 · no agent turns yet                                                              Ctrl+T to hide
+
+
+ Draft workflows for your events
+
+ We designed these email workflows from the events we added. We create them as drafts. A draft sends nothing until you
+ add a sender and turn it on in PostHog.
+
+ ◆ Welcome and first notebook nudge
+ Welcomes each user after user_signed_up, and reminds anyone with no notebook_created after 3 days.
+   1. When user_signed_up happens
+   2. Email: "Welcome to Notely"
+   3. Wait up to 3d for notebook_created
+   4. Email: "Your first notebook takes a minute"
+
+ ▸ Create it as a draft
+   Skip
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  ↑↓ navigate  esc skip  enter select

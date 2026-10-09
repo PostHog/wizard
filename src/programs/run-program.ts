@@ -608,6 +608,9 @@ function sessionHooks(
       ? (creds, completed) =>
           run.buildOutroNextSteps!(session(), creds, completed)
       : undefined,
+    readRunCache: run.readRunCache
+      ? (cacheDir) => run.readRunCache!(session(), cacheDir)
+      : undefined,
     recordTaskOutcomes,
   };
 }

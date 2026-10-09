@@ -23,6 +23,7 @@ import {
   SETUP_REPORT_FILE,
   WIZARD_DEFAULT_AIO_LOGS_FLAG_KEY,
   WIZARD_INTERACTION_EVENT_NAME,
+  WIZARD_WORKFLOWS_SUGGESTION_FLAG_KEY,
 } from '@shared/constants';
 import { requestDeepLink } from '@utils/provisioning';
 import { openTrackedLink, withUtm } from '@utils/links';
@@ -31,6 +32,10 @@ import { getDetectedWarehouseSources } from '../warehouse-sources/detect';
 import { buildCodingAgentPrompt } from './handoff.js';
 import { EVENT_PLAN_FILE } from './constants.js';
 import { WAREHOUSE_SOURCE_SCOPE_ADDITIONS } from '../oauth/program-scopes';
+import {
+  captureWorkflowProposals,
+  WORKFLOWS_SEED_TASK_TYPE,
+} from './workflows.js';
 
 const DASHBOARD_DEEP_LINK_KEY = 'dashboardDeepLink';
 
@@ -231,7 +236,23 @@ const warehouseSeedTasks: NonNullable<ProgramConfig['seedTasks']> = (sess) => {
   ];
 };
 
+/**
+ * The orchestrator task that designs draft workflows on the run's events. It
+ * asks nothing: the user picks which proposals to create on a screen after the
+ * outro. So it is queued only where that screen can be answered, and the
+ * `wizard-workflows-suggestion` flag gates it through `excludedTaskTypes`.
+ */
+const workflowsSeedTasks: NonNullable<ProgramConfig['seedTasks']> = (sess) =>
+  shouldDisableAsk(sess) ? [] : [{ type: WORKFLOWS_SEED_TASK_TYPE }];
+
 export { EVENT_PLAN_FILE } from './constants.js';
+export {
+  createWorkflowDrafts,
+  getWorkflowProposals,
+  WORKFLOW_PROPOSALS_KEY,
+  type WorkflowDraftResult,
+  type WorkflowProposal,
+} from './workflows.js';
 
 export const config: ProgramConfig = {
   description: 'Set up PostHog SDK integration',
@@ -247,16 +268,25 @@ export const config: ProgramConfig = {
   // When detection finds data sources, the orchestrator's warehouse task
   // creates them through `external-data-sources-create`. Without the
   // warehouse pair that call 403s on a token the user already granted.
-  oauthScopeAdditions: [...WAREHOUSE_SOURCE_SCOPE_ADDITIONS],
+  // The workflows screen creates the drafts the user picks via `hog_flows`.
+  oauthScopeAdditions: [...WAREHOUSE_SOURCE_SCOPE_ADDITIONS, 'hog_flow:write'],
 
-  seedTasks: warehouseSeedTasks,
+  seedTasks: (sess) => [
+    ...warehouseSeedTasks(sess),
+    ...workflowsSeedTasks(sess),
+  ],
 
   // Kill switch over the shipped default: only an explicit 'false' excludes,
   // so a failed flag fetch keeps AI Observability and Logs in the run.
-  excludedTaskTypes: (flags) =>
-    flags[WIZARD_DEFAULT_AIO_LOGS_FLAG_KEY] === 'false'
+  // The workflows step is the reverse: only an explicit 'true' includes it.
+  excludedTaskTypes: (flags) => [
+    ...(flags[WIZARD_DEFAULT_AIO_LOGS_FLAG_KEY] === 'false'
       ? ['ai-observability', 'logs']
-      : [],
+      : []),
+    ...(flags[WIZARD_WORKFLOWS_SUGGESTION_FLAG_KEY] === 'true'
+      ? []
+      : [WORKFLOWS_SEED_TASK_TYPE]),
+  ],
 
   // CI-mode prerequisite work: the headless equivalent of the detect step's
   // onReady hook. Auto-detect the framework, then gather context.
@@ -474,6 +504,8 @@ ${warehouseReportInstruction(session)}
 
       buildOutroNextSteps: (sess, credentials) =>
         buildWarehouseNextSteps(sess, credentials.host, credentials.projectId),
+
+      readRunCache: captureWorkflowProposals,
 
       buildOutroData: (sess, credentials) => {
         const envVars = config.environment.getEnvVars(
