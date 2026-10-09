@@ -1366,6 +1366,22 @@ async function executeOrchestrator(
         // Cleanup reporting must not replace the run result.
       }
     }
+    try {
+      if (!signal?.aborted) {
+        config.hooks?.readRunCache?.(
+          path.join(input.installDir, QUEUE_DIR_NAME),
+        );
+      }
+    } catch (err) {
+      try {
+        analytics.captureException(
+          err instanceof Error ? err : new Error(String(err)),
+          { step: 'orchestrator_read_run_cache' },
+        );
+      } catch {
+        // Cleanup reporting must not replace the run result.
+      }
+    }
     cleanupQueue();
     try {
       sweepRunInstalledSkills(

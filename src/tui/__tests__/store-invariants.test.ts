@@ -368,6 +368,11 @@ const MUTATIONS: MutationCase[] = [
     emits: 1,
   },
   {
+    name: 'setWorkflowsStepDone',
+    invoke: (s) => s.setWorkflowsStepDone(),
+    emits: 1,
+  },
+  {
     name: 'setSlackConnected',
     invoke: (s) => s.setSlackConnected(true),
     emits: 1,

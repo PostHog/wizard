@@ -1,0 +1,39 @@
+ PostHog Wizard v0.0.0-test                                                                Feedback: wizard@posthog.com
+
+ Cost (running): $0.00 · no agent turns yet                                                              Ctrl+T to hide
+
+
+ Workflows for your events
+
+ Based on the events we added, these workflows can help you. Untick any you do not want and we create the rest in
+ PostHog as drafts. A draft sends nothing until you turn it on.
+
+   ◼ Welcome and first notebook nudge
+       Activation · Welcomes new users and nudges them to
+       create their first notebook.
+
+     Confirm (1)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  esc skip

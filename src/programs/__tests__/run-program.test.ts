@@ -611,12 +611,19 @@ describe('runProgram', () => {
       const buildOutroData = vi.fn(() => null);
       const nextSteps = { heading: 'Next', items: ['next'] };
       const buildOutroNextSteps = vi.fn(() => nextSteps);
+      const readRunCache = vi.fn();
       const seedTasks = vi.fn(() => []);
 
       await runProgram('metrics', {
         store: s,
         config: {
-          run: { ...run, postRun, buildOutroData, buildOutroNextSteps },
+          run: {
+            ...run,
+            postRun,
+            buildOutroData,
+            buildOutroNextSteps,
+            readRunCache,
+          },
           seedTasks,
         },
         credentials,
@@ -633,6 +640,11 @@ describe('runProgram', () => {
       expect(buildOutroNextSteps).toHaveBeenCalledWith(s.session, creds, [
         'install',
       ]);
+      hooks?.readRunCache?.('/tmp/app/.posthog-wizard-cache');
+      expect(readRunCache).toHaveBeenCalledWith(
+        s.session,
+        '/tmp/app/.posthog-wizard-cache',
+      );
       hooks?.recordTaskOutcomes?.([]);
       expect(s.session.frameworkContext[TASK_OUTCOMES_KEY]).toEqual([]);
       boundSeed?.();

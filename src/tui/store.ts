@@ -368,6 +368,10 @@ export class WizardStore implements TuiView {
     return this.$tui.get().skillsComplete;
   }
 
+  get workflowsStepDone(): TuiState['workflowsStepDone'] {
+    return this.$tui.get().workflowsStepDone;
+  }
+
   get outroDismissed(): TuiState['outroDismissed'] {
     return this.$tui.get().outroDismissed;
   }
@@ -815,6 +819,10 @@ export class WizardStore implements TuiView {
 
   setSlackStepDismissed(): void {
     this._write({ slackStepDismissed: true });
+  }
+
+  setWorkflowsStepDone(): void {
+    this._write({ workflowsStepDone: true });
   }
 
   setSlackConnected(connected: boolean): void {
