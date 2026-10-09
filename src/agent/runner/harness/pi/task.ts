@@ -42,7 +42,7 @@ import {
   GATEWAY_PROVIDER,
   withGatewayRemint,
 } from './gateway';
-import { runErrorType } from './completion';
+import { runErrorType, setupSignalFailure } from './completion';
 import { bindPiCancellation } from './cancellation';
 import { classifyRunFailure, ErrorCodes } from '@shared/errors';
 import { assembleCommandments } from '../../switchboard/commandments';
@@ -522,6 +522,7 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
         !security.state.criticalViolation &&
         !inputs.signal?.aborted &&
         !terminal &&
+        !setupSignalFailure(signals) &&
         !isSettled(orchestrator)
       ) {
         nudges += 1;
@@ -538,6 +539,7 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
         requestRemark &&
         !security.state.criticalViolation &&
         !terminal &&
+        !setupSignalFailure(signals) &&
         !inputs.signal?.aborted
       ) {
         try {
@@ -596,6 +598,14 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
       );
       captureAborted(AgentErrorType.YARA_VIOLATION);
       return { kind: 'failure', classification: AgentErrorType.YARA_VIOLATION };
+    }
+
+    const setupFailure = setupSignalFailure(signals);
+    if (setupFailure) {
+      spinner.stop('Agent could not access setup instructions');
+      logToFile(`[pi-task] setup failed: ${setupFailure}`);
+      captureAborted(setupFailure);
+      return { kind: 'failure', classification: setupFailure };
     }
 
     const remark = signals.remark();

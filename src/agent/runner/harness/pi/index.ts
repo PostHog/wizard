@@ -45,7 +45,11 @@ import type { ProgressEmitter } from '../../../progress';
 import { createEmitLog } from '../../shared/progress-collector';
 import type { TaskStore } from './tasks';
 import type { SecurityState } from './security';
-import { completionFailure, runErrorType } from './completion';
+import {
+  completionFailure,
+  runErrorType,
+  setupSignalFailure,
+} from './completion';
 import { bindPiCancellation } from './cancellation';
 import { structuredOutputExtension } from './structured-output';
 import { classifyRunFailure, ErrorCodes } from '@shared/errors';
@@ -727,6 +731,7 @@ export const piBackend: AgentHarness = {
           !security.state.criticalViolation &&
           !inputs.signal?.aborted &&
           !terminal &&
+          !setupSignalFailure(signals) &&
           hasOpenTasks(wizardTaskTools.store)
         ) {
           continueNudges += 1;
@@ -742,6 +747,7 @@ export const piBackend: AgentHarness = {
           !structured &&
           !security.state.criticalViolation &&
           !terminal &&
+          !setupSignalFailure(signals) &&
           !inputs.signal?.aborted
         ) {
           try {
@@ -800,6 +806,14 @@ export const piBackend: AgentHarness = {
       // A latched post-scan violation terminates the run as a YARA violation,
       // matching the anthropic path's AgentErrorType.YARA_VIOLATION.
       if (security.state.criticalViolation) return yaraViolationResult();
+
+      const setupFailure = setupSignalFailure(signals);
+      if (setupFailure) {
+        spinner.stop('Agent could not access setup instructions');
+        logToFile(`[pi] setup failed: ${setupFailure}`);
+        captureAborted(setupFailure);
+        return { kind: 'failure', classification: setupFailure };
+      }
 
       // pi ends a run on any tool-call-less turn, so guard against a hollow
       // success reaching the outro (nothing done, or stopped mid-plan).
