@@ -1,4 +1,7 @@
 import { piBackend } from '..';
+import { runPiTask } from '../task';
+import { AgentSignals } from '@agent/signals';
+import { analytics } from '@utils/analytics';
 import { createSecurityExtension } from '../security';
 import { setupPostHogMcp } from '../mcp';
 import {
@@ -30,6 +33,8 @@ const state = vi.hoisted(() => ({
   noTools: false,
   // Commentary blocks sent before the answer in the same turn.
   preamble: [] as string[],
+  toolName: 'find',
+  toolError: undefined as string | undefined,
 }));
 vi.mock('@utils/analytics', () => ({
   analytics: { wizardCapture: vi.fn(), capture: vi.fn() },
@@ -75,10 +80,16 @@ vi.mock('../mcp', () => ({
   ),
 }));
 vi.mock('../tools', () => ({
-  createWizardPiTools: () => [{ name: 'set_env_values' }],
+  createWizardPiTools: () => [
+    { name: 'set_env_values' },
+    { name: 'load_skill_menu' },
+  ],
 }));
 vi.mock('../tasks', () => ({
   createWizardPiTaskTools: () => ({ tools: [], store: state.tasks }),
+}));
+vi.mock('../orchestrator-tools', () => ({
+  createPiOrchestratorTools: () => [],
 }));
 vi.mock('../subagent', () => ({
   createDispatchAgentTool: () => ({ name: 'dispatch_agent' }),
@@ -135,8 +146,17 @@ vi.mock('@earendil-works/pi-coding-agent', () => ({
           if (!state.noTools)
             state.listener?.({
               type: 'tool_execution_start',
-              toolName: 'find',
+              toolName: state.toolName,
               args: {},
+            });
+          if (state.toolError)
+            state.listener?.({
+              type: 'tool_execution_end',
+              toolName: state.toolName,
+              isError: true,
+              result: {
+                content: [{ type: 'text', text: state.toolError }],
+              },
             });
           state.listener?.({
             type: 'message_end',
@@ -248,6 +268,9 @@ beforeEach(() => {
   state.hang = false;
   state.noTools = false;
   state.preamble = [];
+  state.toolName = 'find';
+  state.toolError = undefined;
+  vi.mocked(analytics.wizardCapture).mockClear();
 });
 
 it.each([
@@ -338,6 +361,96 @@ it('ends a scan that outlives its budget as a timeout', async () => {
   ).resolves.toMatchObject({
     kind: 'failure',
     classification: AgentErrorType.AGENTIC_DETECTION_TIMEOUT,
+  });
+});
+
+describe.each(['linear', 'task'] as const)('%s setup signals', (mode) => {
+  const run = (inputs: BackendRunInputs) =>
+    mode === 'linear'
+      ? piBackend.run(inputs)
+      : runPiTask({
+          ...inputs,
+          orchestrator: {
+            currentTaskId: 'integration',
+            validTypes: ['integration'],
+            store: { get: () => ({ status: 'running' }) } as never,
+          },
+          spinnerMessage: 'Setting up SDK',
+          successMessage: 'Installed the SDK',
+          requestRemark: true,
+          allowedTools: ['Read', 'load_skill_menu'],
+          analyticsProperties: {},
+        });
+
+  it.each([
+    [AgentSignals.ERROR_MCP_MISSING, AgentErrorType.MCP_MISSING],
+    [AgentSignals.ERROR_RESOURCE_MISSING, AgentErrorType.RESOURCE_MISSING],
+  ])(
+    'fails unavailable setup instructions marked %s',
+    async (marker, classification) => {
+      state.toolName = 'load_skill_menu';
+      state.toolError = 'Setup instructions could not be downloaded.';
+      state.text = `${marker} Could not load setup instructions and halt.`;
+      const inputs = runInputs(vi.fn(), null);
+      inputs.config.run.successMessage = 'Installed the SDK';
+      inputs.prompt = `Load the framework setup skill. If instructions are unavailable, emit ${marker} and halt.`;
+
+      await expect(run(inputs)).resolves.toEqual({
+        kind: 'failure',
+        classification,
+      });
+      expect(state.prompts).toHaveLength(1);
+      expect(analytics.wizardCapture).toHaveBeenCalledWith(
+        'agent aborted',
+        expect.objectContaining({ failure_mode: classification }),
+      );
+      expect(inputs.spinner.stop).not.toHaveBeenCalledWith('Installed the SDK');
+      expect(analytics.wizardCapture).not.toHaveBeenCalledWith(
+        'agent completed',
+        expect.anything(),
+      );
+    },
+  );
+
+  it('does not nudge unfinished work after a fatal setup signal', async () => {
+    state.tasks.set('1', { status: 'in_progress' });
+    state.text = `${AgentSignals.ERROR_MCP_MISSING} Setup unavailable.`;
+
+    await expect(run(runInputs(vi.fn(), null))).resolves.toEqual({
+      kind: 'failure',
+      classification: AgentErrorType.MCP_MISSING,
+    });
+    expect(state.prompts).toHaveLength(1);
+  });
+
+  it('keeps security termination ahead of a fatal setup signal', async () => {
+    state.text = `${AgentSignals.ERROR_RESOURCE_MISSING} Setup unavailable.`;
+    vi.mocked(createSecurityExtension).mockReturnValueOnce({
+      factory: () => undefined,
+      state: { criticalViolation: true, blockedCount: 1 },
+    } as unknown as ReturnType<typeof createSecurityExtension>);
+
+    await expect(run(runInputs(vi.fn(), null))).resolves.toEqual({
+      kind: 'failure',
+      classification: AgentErrorType.YARA_VIOLATION,
+    });
+  });
+
+  it('does not treat tool-result text as an agent-declared setup failure', async () => {
+    state.toolError = `${AgentSignals.ERROR_RESOURCE_MISSING} Retry loading.`;
+    state.text = 'Recovered and completed the setup.';
+
+    await expect(run(runInputs(vi.fn(), null))).resolves.toEqual({
+      kind: 'success',
+    });
+  });
+
+  it('keeps skill-install fallback nonfatal', async () => {
+    state.text = `${AgentSignals.SKILL_INSTALL_FAILED} integration-test — unavailable; completed without the skill.`;
+
+    await expect(run(runInputs(vi.fn(), null))).resolves.toEqual({
+      kind: 'success',
+    });
   });
 });
 
