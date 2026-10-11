@@ -39,4 +39,6 @@ export interface ProgramRun extends AgentRunDefinition {
     credentials: Credentials,
     completedSeededTypes: readonly string[],
   ) => { heading: string; items: string[] } | undefined;
+  /** Reads files the run's tasks left in the run cache, before the orchestrated sequence deletes it. */
+  readRunCache?: (session: ProgramSession, cacheDir: string) => void;
 }

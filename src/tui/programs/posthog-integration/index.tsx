@@ -4,6 +4,7 @@ import { POSTHOG_INTEGRATION_FLOW } from './flow.js';
 import { getContentBlocks } from './deck/index.js';
 import { PostHogIntegrationScreenId } from './screen-ids.js';
 import { PostHogIntegrationIntroScreen } from './screens/PostHogIntegrationIntroScreen.js';
+import { PostHogIntegrationWorkflowsScreen } from './screens/PostHogIntegrationWorkflowsScreen.js';
 
 export { PostHogIntegrationScreenId } from './screen-ids.js';
 
@@ -14,6 +15,9 @@ export const TUI_PROGRAMS: TuiPrograms = {
     screens: {
       [PostHogIntegrationScreenId.Intro]: (store) => (
         <PostHogIntegrationIntroScreen store={store} />
+      ),
+      [PostHogIntegrationScreenId.Workflows]: (store) => (
+        <PostHogIntegrationWorkflowsScreen store={store} />
       ),
     },
   },

@@ -61,6 +61,7 @@ vi.mock('@shared/api', async (actual) => ({
   fetchUserData: vi.fn(pending),
   fetchSlackConnected: vi.fn(pending),
   fetchGithubConnected: vi.fn(pending),
+  fetchWorkflowTriggers: vi.fn().mockResolvedValue([]),
 }));
 vi.mock(import('@shared/skill-install'), async (actual) => ({
   ...(await actual()),
@@ -148,6 +149,7 @@ import { McpScreenId } from '@tui/tools/mcp';
 import { MetricsScreenId } from '@tui/programs/metrics';
 import { MigrationScreenId } from '@tui/programs/migration';
 import { PostHogIntegrationScreenId } from '@tui/programs/posthog-integration';
+import { WORKFLOW_PROPOSALS_KEY } from '@programs/posthog-integration';
 import { PosthogDoctorScreenId } from '@tui/tools/doctor';
 import { RevenueAnalyticsScreenId } from '@tui/programs/revenue-analytics';
 import { SelfDrivingScreenId } from '@tui/programs/self-driving';
@@ -498,6 +500,27 @@ const FIXTURES: Record<string, Fixture> = {
         { name: 'signup_completed', description: 'A new account was created' },
       ]);
       s.pushStatus('Editing app/layout.tsx');
+    },
+  },
+  [PostHogIntegrationScreenId.Workflows]: {
+    program: Program.PostHogIntegration,
+    arrange: (s) => {
+      authed(s);
+      ranSuccessfully(s);
+      s.setOutroDismissed();
+      s.setFrameworkContext(WORKFLOW_PROPOSALS_KEY, {
+        rejectedCount: 0,
+        proposals: [
+          {
+            title: 'Welcome and first notebook nudge',
+            goal: 'activation',
+            reason:
+              'Welcomes new users and nudges them to create their first notebook.',
+            triggerEvents: ['user_signed_up'],
+            workflow: { name: 'Welcome and first notebook nudge (wizard)' },
+          },
+        ],
+      });
     },
   },
   [ScreenId.Mcp]: {

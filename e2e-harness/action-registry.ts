@@ -302,6 +302,14 @@ export const ACTION_REGISTRY: Partial<Record<string, DriverAction[]>> = {
     },
   ],
 
+  [PostHogIntegrationScreenId.Workflows]: [
+    {
+      id: 'dismiss',
+      description: 'Skip the proposed draft workflows; creates nothing.',
+      apply: (store) => store.setWorkflowsStepDone(),
+    },
+  ],
+
   // ── Slack ─────────────────────────────────────────────────────────────
   [SelfDrivingScreenId.Github]: [
     {

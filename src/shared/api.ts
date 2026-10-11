@@ -320,6 +320,103 @@ export async function fetchGithubConnected(
   return parsed.data.results.some((i) => i.kind === 'github');
 }
 
+const CreatedWorkflowSchema = z.object({ id: z.string() }).passthrough();
+
+function authHeaders(accessToken: string) {
+  return {
+    Authorization: `Bearer ${accessToken}`,
+    'User-Agent': WIZARD_USER_AGENT,
+  };
+}
+
+/**
+ * Create a workflow in draft status, tagged with `originProduct`. A draft never
+ * runs until the user turns it on in PostHog. Requires the `hog_flow:write`
+ * scope. A server that does not know the origin yet rejects only that field,
+ * so the create is retried once without it. Throws an `ApiError` carrying the
+ * server's validation detail on any other failure.
+ */
+export async function createDraftWorkflow(
+  accessToken: string,
+  projectId: number,
+  baseUrl: string,
+  workflow: Record<string, unknown>,
+  originProduct?: string,
+): Promise<{ id: string }> {
+  const post = (body: Record<string, unknown>) =>
+    axios.post(`${baseUrl}/api/projects/${projectId}/hog_flows/`, body, {
+      headers: authHeaders(accessToken),
+    });
+  const body = { ...workflow, status: 'draft' };
+  try {
+    try {
+      const response = await post(
+        originProduct ? { ...body, origin_product: originProduct } : body,
+      );
+      return CreatedWorkflowSchema.parse(response.data);
+    } catch (error) {
+      const rejectedOrigin =
+        originProduct &&
+        axios.isAxiosError(error) &&
+        error.response?.status === 400 &&
+        (error.response.data as { attr?: unknown } | undefined)?.attr ===
+          'origin_product';
+      if (!rejectedOrigin) throw error;
+      return CreatedWorkflowSchema.parse((await post(body)).data);
+    }
+  } catch (error) {
+    throw handleApiError(error, 'create a draft workflow');
+  }
+}
+
+const WorkflowListSchema = z.object({
+  results: z.array(
+    z
+      .object({
+        name: z.string().nullish(),
+        status: z.string().nullish(),
+        trigger: z
+          .object({
+            filters: z
+              .object({
+                events: z
+                  .array(z.object({ id: z.string().nullish() }).passthrough())
+                  .nullish(),
+              })
+              .passthrough()
+              .nullish(),
+          })
+          .passthrough()
+          .nullish(),
+      })
+      .passthrough(),
+  ),
+});
+
+/**
+ * The project's workflows that are not archived, as their names and trigger
+ * events. Requires the `hog_flow:read` scope, which `hog_flow:write` grants.
+ */
+export async function fetchWorkflowTriggers(
+  accessToken: string,
+  projectId: number,
+  baseUrl: string,
+): Promise<{ name: string; triggerEvents: string[] }[]> {
+  const response = await axios.get(
+    `${baseUrl}/api/projects/${projectId}/hog_flows/`,
+    { params: { limit: 500 }, headers: authHeaders(accessToken) },
+  );
+  const parsed = WorkflowListSchema.parse(response.data);
+  return parsed.results
+    .filter((w) => w.status !== 'archived')
+    .map((w) => ({
+      name: w.name ?? '',
+      triggerEvents: (w.trigger?.filters?.events ?? [])
+        .map((e) => e.id)
+        .filter((id): id is string => Boolean(id)),
+    }));
+}
+
 export function handleApiError(error: unknown, operation: string): ApiError {
   if (axios.isAxiosError(error)) {
     const axiosError = error as AxiosError<{ detail?: string }>;

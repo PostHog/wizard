@@ -43,6 +43,8 @@ export type TuiState = {
   slackConnected: boolean | null;
   skillsComplete: boolean;
   outroDismissed: boolean;
+  /** True once the user has created or skipped the integration's proposed draft workflows. */
+  workflowsStepDone: boolean;
 
   /**
    * Self-driving only: whether to integrate PostHog as part of this run.
@@ -98,6 +100,7 @@ export function initialTuiState(
     slackConnected: null,
     skillsComplete: false,
     outroDismissed: false,
+    workflowsStepDone: false,
     // `--integrate` forces integration (skip the question); otherwise the
     // integration-check screen resolves it from null.
     integrate: choices.integrate === true ? true : null,

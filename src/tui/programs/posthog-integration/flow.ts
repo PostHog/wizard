@@ -10,6 +10,8 @@ import type { FlowStep } from '@tui/flow';
 import { RunPhase } from '@shared/run-state';
 import { HEALTH_CHECK_STEP } from '@tui/programs/shared/health-check-step';
 import type { WizardSession } from '@programs/types';
+import { getWorkflowProposals } from '@programs/posthog-integration';
+import { PostHogIntegrationScreenId } from './screen-ids.js';
 
 function needsSetup(session: WizardSession): boolean {
   const config = session.frameworkConfig;
@@ -54,6 +56,15 @@ export const POSTHOG_INTEGRATION_FLOW: FlowStep[] = [
     label: 'Done',
     screenId: 'outro',
     isComplete: (tui) => tui.outroDismissed,
+  },
+  {
+    id: 'workflows',
+    label: 'Workflows',
+    screenId: PostHogIntegrationScreenId.Workflows,
+    show: ({ session }) =>
+      session.runPhase === RunPhase.Completed &&
+      getWorkflowProposals(session).length > 0,
+    isComplete: (tui) => tui.workflowsStepDone,
   },
   {
     id: 'mcp',

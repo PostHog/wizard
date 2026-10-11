@@ -196,6 +196,8 @@ interface PickerMenuProps<T> {
    * finding one option means walking pages. Pass `false` to force it off.
    */
   filterable?: boolean;
+  /** Multi-select only: the values ticked when the menu first renders. */
+  initialSelected?: readonly T[];
   onSelect: (value: T | T[]) => void;
 }
 
@@ -211,6 +213,7 @@ export const PickerMenu = <T,>({
   columns = 1,
   optionMarginBottom = 0,
   filterable,
+  initialSelected,
   onSelect,
 }: PickerMenuProps<T>) => {
   const canFilter = filterable ?? options.length >= FILTER_MIN_OPTIONS;
@@ -226,7 +229,14 @@ export const PickerMenu = <T,>({
 
   // Keyed by label, and owned here rather than by MultiPickerMenu: filtering
   // rewrites the list under the ticks, and the remount below would drop them.
-  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [selected, setSelected] = useState<Set<string>>(
+    () =>
+      new Set(
+        options
+          .filter((o) => initialSelected?.includes(o.value))
+          .map((o) => o.label),
+      ),
+  );
 
   const shared = {
     message,

@@ -60,16 +60,19 @@ describe('default observability flag gating', () => {
     posthogIntegration.excludedTaskTypes!(flags);
 
   it("excludes AIO and Logs only on an explicit 'false'", () => {
-    expect(excluded({ [WIZARD_DEFAULT_AIO_LOGS_FLAG_KEY]: 'false' })).toEqual([
-      'ai-observability',
-      'logs',
-    ]);
+    expect(excluded({ [WIZARD_DEFAULT_AIO_LOGS_FLAG_KEY]: 'false' })).toEqual(
+      expect.arrayContaining(['ai-observability', 'logs']),
+    );
   });
 
   it('includes them when the flag is true, absent, or the fetch failed', () => {
-    expect(excluded({ [WIZARD_DEFAULT_AIO_LOGS_FLAG_KEY]: 'true' })).toEqual(
-      [],
-    );
-    expect(excluded({})).toEqual([]);
+    const flagSets: Record<string, string>[] = [
+      { [WIZARD_DEFAULT_AIO_LOGS_FLAG_KEY]: 'true' },
+      {},
+    ];
+    for (const flags of flagSets) {
+      expect(excluded(flags)).not.toContain('ai-observability');
+      expect(excluded(flags)).not.toContain('logs');
+    }
   });
 });

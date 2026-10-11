@@ -34,7 +34,9 @@ function session(over: Partial<WizardSession> = {}): WizardSession {
 }
 
 function seed(sess: WizardSession) {
-  return posthogIntegration.seedTasks?.(sess) ?? [];
+  return (posthogIntegration.seedTasks?.(sess) ?? []).filter(
+    (task) => task.type === 'warehouse',
+  );
 }
 
 function sources(n: number): DetectedSource[] {
