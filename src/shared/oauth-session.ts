@@ -1,6 +1,7 @@
 // The run's one OAuth token, shaped like gateway-session. The host supplies the rotation.
 
 import type { Credentials } from '@shared/api';
+import { isGrantRevoked } from '@shared/auth-session-state';
 import { logToFile } from '@utils/debug';
 
 // Below this remaining lifetime a run risks outliving its token; just-minted and 7-day tokens skip.
@@ -45,6 +46,34 @@ export function configureOAuthSession(
   }
   lineage.add(credentials.accessToken);
   current = credentials;
+}
+
+/** What a caller does after a 401: retry with `credentials`, or stop for the stated reason. */
+export type UnauthorizedRecovery =
+  | { kind: 'rotated'; credentials: Credentials }
+  | { kind: 'refused' }
+  | { kind: 'unchanged' };
+
+/**
+ * Rotate the token after a 401 so the caller can retry once. `refused`: the
+ * grant is revoked, or `requireRefreshToken` is set and none is held, so no
+ * rotation was tried. `unchanged`: the rotation failed and the token is the
+ * same, so a retry would 401 again.
+ */
+export async function rotateAfterUnauthorized(
+  credentials: Credentials,
+  options: { requireRefreshToken: boolean },
+): Promise<UnauthorizedRecovery> {
+  if (
+    (options.requireRefreshToken && !credentials.refreshToken) ||
+    isGrantRevoked()
+  ) {
+    return { kind: 'refused' };
+  }
+  const rotated = await currentCredentials(credentials, true);
+  return rotated.accessToken === credentials.accessToken
+    ? { kind: 'unchanged' }
+    : { kind: 'rotated', credentials: rotated };
 }
 
 /** A key that stays the same across this login's rotations, so caches keyed on it survive one. */

@@ -15,15 +15,14 @@ import axios from 'axios';
 import type { AgentProgress } from '@agent/progress';
 import type { Credentials } from '@shared/api';
 import { HostResolution } from '@shared/host-resolution';
-import { oauthCredentials } from '@shared/oauth-session';
+import {
+  configureOAuthSession,
+  resetOAuthSession,
+} from '@shared/oauth-session';
 import { analytics } from '@utils/analytics';
 import { MAX_HANDOFF_TEXT_CHARS, publishHandoff } from '../handoff';
 
 vi.mock('axios');
-vi.mock('@shared/oauth-session', async (original) => ({
-  ...(await original<typeof import('@shared/oauth-session')>()),
-  oauthCredentials: vi.fn(),
-}));
 
 describe('publishHandoff', () => {
   const captured: string[] = [];
@@ -186,9 +185,11 @@ describe('publishHandoff', () => {
 
 describe('publishHandoff notebook mirror', () => {
   const REPORT = '# Setup report\n\nAll done.';
+  const mirror = { handoffNotebook: true };
   const mockedAxios = axios as Mocked<typeof axios>;
   const credentials: Credentials = {
     accessToken: 'pha_first',
+    refreshToken: 'phr_first',
     projectApiKey: 'phc_unused',
     projectId: 42,
     host: HostResolution.fromApiHost('https://eu.posthog.com'),
@@ -200,6 +201,10 @@ describe('publishHandoff notebook mirror', () => {
       isAxiosError: true,
       response: { status },
     });
+  const networkError = () =>
+    Object.assign(new Error('socket hang up'), { isAxiosError: true });
+  const shortIdOfCreate = () =>
+    (mockedAxios.post.mock.calls[0][1] as { short_id: string }).short_id;
 
   let urls: string[];
   let captures: Record<string, unknown>[];
@@ -215,6 +220,11 @@ describe('publishHandoff notebook mirror', () => {
     urls = [];
     captures = [];
     delete process.env.POSTHOG_HANDOFF_OUTPUT_PATH;
+    resetOAuthSession();
+    configureOAuthSession(credentials, {
+      rotate: (held) =>
+        Promise.resolve({ ...held, accessToken: 'pha_rotated' }),
+    });
     // One run id per test: the notebook a run holds outlives the call.
     vi.spyOn(analytics, 'runId', 'get').mockReturnValue(
       `run-${(runCount += 1)}`,
@@ -226,18 +236,20 @@ describe('publishHandoff notebook mirror', () => {
       (error): error is never =>
         (error as { isAxiosError?: boolean })?.isAxiosError === true,
     );
-    vi.mocked(oauthCredentials).mockResolvedValue(credentials);
     mockedAxios.post.mockResolvedValue({ data: { version: 1 } });
     mockedAxios.patch.mockResolvedValue({ data: { version: 2 } });
+    mockedAxios.get.mockRejectedValue(httpError(404));
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.useRealTimers();
+    resetOAuthSession();
   });
 
-  it('makes no request when the agent passes create_notebook: false', async () => {
+  it('makes no request and names no notebook when the program does not mirror', async () => {
     const result = await publishHandoff(REPORT, emit, {
-      createNotebook: false,
+      programId: 'audit',
     });
 
     expect(result.ok).toBe(true);
@@ -248,8 +260,8 @@ describe('publishHandoff notebook mirror', () => {
     expect(captures[0]).toMatchObject({ notebook_requested: false });
   });
 
-  it('creates the notebook by default and returns its URL', async () => {
-    const result = await publishHandoff(REPORT, emit);
+  it('creates the notebook for a program that mirrors and returns its URL', async () => {
+    const result = await publishHandoff(REPORT, emit, mirror);
 
     const [url, body, config] = mockedAxios.post.mock.calls[0];
     expect(url).toBe('https://eu.posthog.com/api/projects/42/notebooks/');
@@ -270,43 +282,48 @@ describe('publishHandoff notebook mirror', () => {
     expect(config?.headers).toMatchObject({
       Authorization: 'Bearer pha_first',
     });
-    const expectedUrl = notebookUrl((body as { short_id: string }).short_id);
+    const expectedUrl = notebookUrl(shortIdOfCreate());
     expect(urls).toEqual([expectedUrl]);
-    expect(result.ok).toBe(true);
-    expect(result.message).toContain(`Notebook created: ${expectedUrl}`);
-    expect(result.message).toContain('Do not create another notebook');
+    expect(result.message).toContain(
+      `Notebook created: ${expectedUrl}. Do not create another notebook.`,
+    );
     expect(captures[0]).toMatchObject({
       notebook_requested: true,
       notebook_outcome: 'created',
     });
   });
 
-  it('updates the same notebook on a later call in the run', async () => {
-    await publishHandoff(REPORT, emit);
-    const shortId = (mockedAxios.post.mock.calls[0][1] as { short_id: string })
-      .short_id;
+  it('updates the same notebook, sending the version each write returned', async () => {
+    mockedAxios.patch
+      .mockResolvedValueOnce({ data: { version: 2 } })
+      .mockResolvedValueOnce({ data: { version: 3 } });
 
-    const result = await publishHandoff('# Revised report\n\nMore.', emit);
+    await publishHandoff(REPORT, emit, mirror);
+    await publishHandoff('# Second\n\nMore.', emit, mirror);
+    const third = await publishHandoff('# Third\n\nMost.', emit, mirror);
 
+    const shortId = shortIdOfCreate();
     expect(mockedAxios.post).toHaveBeenCalledTimes(1);
-    const [url, body] = mockedAxios.patch.mock.calls[0];
-    expect(url).toBe(
+    expect(mockedAxios.patch.mock.calls.map((call) => call[0])).toEqual([
       `https://eu.posthog.com/api/projects/42/notebooks/${shortId}/`,
-    );
-    expect(body).toMatchObject({
-      text_content: '# Revised report\n\nMore.',
-      version: 1,
-    });
-    expect(urls).toEqual([notebookUrl(shortId), notebookUrl(shortId)]);
-    expect(result.message).toContain(
+      `https://eu.posthog.com/api/projects/42/notebooks/${shortId}/`,
+    ]);
+    expect(
+      mockedAxios.patch.mock.calls.map(
+        (call) => (call[1] as { version: number }).version,
+      ),
+    ).toEqual([1, 2]);
+    expect(third.message).toContain(
       `Notebook updated: ${notebookUrl(shortId)}`,
     );
-    expect(captures[1]).toMatchObject({ notebook_outcome: 'updated' });
   });
 
   it('gives each program in the run its own notebook', async () => {
-    await publishHandoff(REPORT, emit, { programId: 'posthog-integration' });
-    await publishHandoff(REPORT, emit, { programId: 'metrics' });
+    await publishHandoff(REPORT, emit, {
+      ...mirror,
+      programId: 'posthog-integration',
+    });
+    await publishHandoff(REPORT, emit, { ...mirror, programId: 'metrics' });
 
     expect(mockedAxios.post).toHaveBeenCalledTimes(2);
     expect(mockedAxios.patch).not.toHaveBeenCalled();
@@ -319,14 +336,35 @@ describe('publishHandoff notebook mirror', () => {
   it('keeps the handoff published when PostHog refuses the notebook', async () => {
     mockedAxios.post.mockRejectedValue(httpError(403));
 
-    const result = await publishHandoff(REPORT, emit);
+    const result = await publishHandoff(REPORT, emit, mirror);
 
     expect(result.ok).toBe(true);
     expect(urls).toEqual([]);
     expect(result.message).toContain('Handoff published');
-    expect(result.message).toContain('Notebook not created');
+    expect(result.message).toContain(
+      'Notebook not created: PostHog denied access.',
+    );
     expect(captures[0]).toMatchObject({
       notebook_outcome: 'skipped',
+      notebook_skip_reason: 'http_403',
+    });
+  });
+
+  it('says the notebook still holds the earlier report when an update fails', async () => {
+    await publishHandoff(REPORT, emit, mirror);
+    mockedAxios.patch.mockRejectedValue(httpError(403));
+
+    const result = await publishHandoff('# Second\n\nMore.', emit, mirror);
+
+    expect(result.message).toContain(
+      `Notebook not updated: PostHog denied access. It still holds the earlier report: ${notebookUrl(
+        shortIdOfCreate(),
+      )}.`,
+    );
+    expect(result.message).not.toContain('not created');
+    expect(urls).toHaveLength(1);
+    expect(captures[1]).toMatchObject({
+      notebook_outcome: 'not_updated',
       notebook_skip_reason: 'http_403',
     });
   });
@@ -335,13 +373,9 @@ describe('publishHandoff notebook mirror', () => {
     mockedAxios.post
       .mockRejectedValueOnce(httpError(401))
       .mockResolvedValueOnce({ data: { version: 1 } });
-    vi.mocked(oauthCredentials)
-      .mockResolvedValueOnce(credentials)
-      .mockResolvedValueOnce({ ...credentials, accessToken: 'pha_rotated' });
 
-    const result = await publishHandoff(REPORT, emit);
+    const result = await publishHandoff(REPORT, emit, mirror);
 
-    expect(oauthCredentials).toHaveBeenLastCalledWith(true);
     expect(mockedAxios.post).toHaveBeenCalledTimes(2);
     expect(mockedAxios.post.mock.calls[1][2]?.headers).toMatchObject({
       Authorization: 'Bearer pha_rotated',
@@ -349,13 +383,83 @@ describe('publishHandoff notebook mirror', () => {
     expect(result.message).toContain('Notebook created');
   });
 
-  it('skips without a request when the login lacks notebook:write', async () => {
-    vi.mocked(oauthCredentials).mockResolvedValue({
-      ...credentials,
-      missingScopes: ['notebook:write'],
+  it('finds the notebook again when the create response was lost', async () => {
+    mockedAxios.post.mockRejectedValue(networkError());
+    mockedAxios.get.mockResolvedValue({
+      data: { version: 4, text_content: REPORT },
     });
 
-    const result = await publishHandoff(REPORT, emit);
+    const result = await publishHandoff(REPORT, emit, mirror);
+
+    expect(mockedAxios.get).toHaveBeenCalledTimes(1);
+    expect(mockedAxios.post).toHaveBeenCalledTimes(1);
+    expect(mockedAxios.patch).not.toHaveBeenCalled();
+    expect(result.message).toContain('Notebook created');
+
+    // The recovered version is the one the next update sends.
+    await publishHandoff('# Second\n\nMore.', emit, mirror);
+    expect(mockedAxios.patch.mock.calls[0][1]).toMatchObject({ version: 4 });
+  });
+
+  it('updates a notebook that already holds other content after an id clash', async () => {
+    mockedAxios.post.mockRejectedValue(httpError(409));
+    mockedAxios.get.mockResolvedValue({
+      data: { version: 7, text_content: '# Older' },
+    });
+
+    const result = await publishHandoff(REPORT, emit, mirror);
+
+    expect(mockedAxios.patch.mock.calls[0][1]).toMatchObject({
+      version: 7,
+      text_content: REPORT,
+    });
+    expect(result.message).toContain('Notebook created');
+  });
+
+  it('retries a write once after a server error', async () => {
+    mockedAxios.post
+      .mockRejectedValueOnce(httpError(503))
+      .mockResolvedValueOnce({ data: { version: 1 } });
+
+    const result = await publishHandoff(REPORT, emit, mirror);
+
+    expect(mockedAxios.post).toHaveBeenCalledTimes(2);
+    expect(result.message).toContain('Notebook created');
+  });
+
+  it('gives up with a timeout once the deadline passes, without retrying', async () => {
+    vi.useFakeTimers();
+    mockedAxios.post.mockImplementation(
+      (_url, _body, config) =>
+        new Promise((_resolve, reject) => {
+          config?.signal?.addEventListener?.('abort', () =>
+            reject(
+              Object.assign(new Error('canceled'), { code: 'ERR_CANCELED' }),
+            ),
+          );
+        }),
+    );
+
+    const pending = publishHandoff(REPORT, emit, mirror);
+    await vi.advanceTimersByTimeAsync(8000);
+    const result = await pending;
+
+    expect(mockedAxios.post).toHaveBeenCalledTimes(1);
+    expect(result.ok).toBe(true);
+    expect(result.message).toContain(
+      'Notebook not created: PostHog did not answer in time.',
+    );
+    expect(captures[0]).toMatchObject({ notebook_skip_reason: 'timeout' });
+  });
+
+  it('skips without a request when the login lacks notebook:write', async () => {
+    resetOAuthSession();
+    configureOAuthSession(
+      { ...credentials, missingScopes: ['notebook:write'] },
+      { rotate: (held) => Promise.resolve(held) },
+    );
+
+    const result = await publishHandoff(REPORT, emit, mirror);
 
     expect(result.ok).toBe(true);
     expect(mockedAxios.post).not.toHaveBeenCalled();
@@ -365,9 +469,9 @@ describe('publishHandoff notebook mirror', () => {
   });
 
   it('skips without a request when there is no login', async () => {
-    vi.mocked(oauthCredentials).mockResolvedValue(null);
+    resetOAuthSession();
 
-    const result = await publishHandoff(REPORT, emit);
+    const result = await publishHandoff(REPORT, emit, mirror);
 
     expect(result.ok).toBe(true);
     expect(mockedAxios.post).not.toHaveBeenCalled();

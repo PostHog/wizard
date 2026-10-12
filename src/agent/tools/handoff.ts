@@ -42,7 +42,7 @@ export const PUBLISH_HANDOFF_DESCRIPTION =
   'A run publishes once: call it only when your own instructions ask you to write that report, passing the complete report as `content`, and never write the report to a file yourself. ' +
   `When anything is left for the user to do, open the report, right under the H1, with a \`> ⚠️ **${NEEDS_ATTENTION_HEADING}**\` block quote, one \`> - \` bullet per item. ` +
   'It is not how you report your own work — in a run made of several tasks each step finishes with complete_task, and a step that was not asked for the run report leaves this one uncalled, because the section it owns travels in its handoff. ' +
-  'The wizard also mirrors the report into a PostHog notebook and returns its URL in the result, so never create a notebook yourself; pass `create_notebook: false` only when your instructions say not to make one.';
+  'When the result names a PostHog notebook, the wizard already mirrored the report there: never create a notebook yourself.';
 
 /** Appended for a task agent: the reminder lands as it decides it has finished. */
 export const TASK_REPORTING_NOTE =
@@ -50,10 +50,6 @@ export const TASK_REPORTING_NOTE =
 
 export const PUBLISH_HANDOFF_CONTENT_DESCRIPTION =
   'The complete handoff report as markdown, starting with an H1 heading.';
-
-export const PUBLISH_HANDOFF_CREATE_NOTEBOOK_DESCRIPTION =
-  'Defaults to true: the wizard creates a PostHog notebook holding `content` (a repeat call updates that same notebook) and returns its URL in the result. ' +
-  'When the result names a notebook, never create one yourself, with the PostHog MCP or otherwise. Pass false only when your instructions say not to make a notebook.';
 
 export interface PublishHandoffResult {
   ok: boolean;
@@ -155,10 +151,16 @@ function writeHandoffFileAtomically(
   }
 }
 
-const notebookNote = (notebook: NotebookResult): string =>
-  notebook.outcome === 'skipped'
-    ? `Notebook not created: ${notebook.description}.`
-    : `Notebook ${notebook.outcome}: ${notebook.url}. Do not create another notebook.`;
+const notebookNote = (notebook: NotebookResult): string => {
+  switch (notebook.outcome) {
+    case 'skipped':
+      return `Notebook not created: ${notebook.description}.`;
+    case 'not_updated':
+      return `Notebook not updated: ${notebook.description}. It still holds the earlier report: ${notebook.url}.`;
+    default:
+      return `Notebook ${notebook.outcome}: ${notebook.url}. Do not create another notebook.`;
+  }
+};
 
 export async function publishHandoff(
   content: string,
@@ -166,8 +168,8 @@ export async function publishHandoff(
   opts: {
     /** Set by both facades when the caller is one task of an orchestrated run. */
     taskAgent?: boolean;
-    /** The agent's `create_notebook` argument; the notebook is made unless it is false. */
-    createNotebook?: boolean;
+    /** Set when the program mirrors the report into a PostHog notebook; without it no notebook is made. */
+    handoffNotebook?: boolean;
     /** The program publishing, so programs sharing a process keep separate notebooks. */
     programId?: string;
   } = {},
@@ -206,11 +208,11 @@ export async function publishHandoff(
   }
 
   // The notebook gets the text the security gate already cleared; it never fails the handoff.
-  const notebookRequested = opts.createNotebook !== false;
+  const notebookRequested = opts.handoffNotebook === true;
   const notebook = notebookRequested
     ? await syncHandoffNotebook(text, opts.programId)
     : undefined;
-  if (notebook && notebook.outcome !== 'skipped') {
+  if (notebook?.outcome === 'created' || notebook?.outcome === 'updated') {
     emit?.({ kind: 'url', which: 'notebook', url: notebook.url });
   }
 
@@ -223,7 +225,9 @@ export async function publishHandoff(
     notebook_requested: notebookRequested,
     notebook_outcome: notebook?.outcome,
     notebook_skip_reason:
-      notebook?.outcome === 'skipped' ? notebook.reason : undefined,
+      notebook?.outcome === 'skipped' || notebook?.outcome === 'not_updated'
+        ? notebook.reason
+        : undefined,
   });
   const notes: string[] = [];
   if (truncated) notes.push('truncated to the 64 KB limit');

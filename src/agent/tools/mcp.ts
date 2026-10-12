@@ -23,7 +23,6 @@ import {
 import { type WizardAskBridge, isFullyCancelled } from '../wizard-ask-bridge';
 import {
   PUBLISH_HANDOFF_CONTENT_DESCRIPTION,
-  PUBLISH_HANDOFF_CREATE_NOTEBOOK_DESCRIPTION,
   PUBLISH_HANDOFF_DESCRIPTION,
   PUBLISH_HANDOFF_TOOL_NAME,
   publishHandoff,
@@ -156,6 +155,9 @@ export interface WizardToolsOptions {
 
   /** The program running, so its `publish_handoff` notebook stays separate from another program's. */
   programId?: string;
+
+  /** The program mirrors the handoff report into a PostHog notebook. */
+  handoffNotebook?: boolean;
 }
 
 /** Default per-run cap on wizard_ask calls when no override is provided. */
@@ -179,6 +181,7 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
     triageProvider,
     emit,
     programId,
+    handoffNotebook,
   } = options;
   const sdk = await getSDKModule();
   const { tool, createSdkMcpServer } = sdk;
@@ -767,16 +770,12 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
     PUBLISH_HANDOFF_DESCRIPTION,
     {
       content: z.string().describe(PUBLISH_HANDOFF_CONTENT_DESCRIPTION),
-      create_notebook: z
-        .boolean()
-        .optional()
-        .describe(PUBLISH_HANDOFF_CREATE_NOTEBOOK_DESCRIPTION),
     },
-    async (args: { content: string; create_notebook?: boolean }) => {
+    async (args: { content: string }) => {
       const result = await publishHandoff(args.content, emit, {
         taskAgent: orchestrator?.currentTaskId !== undefined,
-        createNotebook: args.create_notebook,
         programId,
+        handoffNotebook,
       });
       logToFile(`publish_handoff: ${result.message}`);
       return {

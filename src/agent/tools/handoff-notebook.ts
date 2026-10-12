@@ -9,11 +9,14 @@ import { createHash } from 'node:crypto';
 import axios from 'axios';
 import {
   createMarkdownNotebook,
+  fetchMarkdownNotebook,
   updateMarkdownNotebook,
   type Credentials,
 } from '@shared/api';
-import { isGrantRevoked } from '@shared/auth-session-state';
-import { oauthCredentials } from '@shared/oauth-session';
+import {
+  oauthCredentials,
+  rotateAfterUnauthorized,
+} from '@shared/oauth-session';
 import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
 
@@ -22,10 +25,24 @@ const DEFAULT_TITLE = 'PostHog setup report';
 
 export type NotebookResult =
   | { outcome: 'created' | 'updated'; url: string }
-  | { outcome: 'skipped'; reason: string; description: string };
+  // No notebook was made.
+  | { outcome: 'skipped'; reason: string; description: string }
+  // The update failed; the notebook still holds the report of the earlier call.
+  | {
+      outcome: 'not_updated';
+      reason: string;
+      description: string;
+      url: string;
+    };
+
+/** One deadline for the whole sync, so a slow PostHog cannot hold the agent's tool call. */
+const SYNC_DEADLINE_MS = 8000;
 
 /** The notebook each program of a run holds: where to update it and the version to send. */
-const notebooks = new Map<string, { shortId: string; version: number }>();
+const notebooks = new Map<
+  string,
+  { shortId: string; version: number; url: string }
+>();
 
 /** An alphanumeric id of the 12 characters the backend allows, the same for one key every time. */
 const shortIdFor = (key: string): string =>
@@ -41,21 +58,78 @@ const titleOf = (markdown: string): string =>
     MAX_TITLE_LENGTH,
   );
 
-const skipped = (reason: string, description: string): NotebookResult => {
-  logToFile(`[publish_handoff] notebook skipped (${reason})`);
-  return { outcome: 'skipped', reason, description };
+const failed = (
+  reason: string,
+  description: string,
+  heldUrl: string | undefined,
+): NotebookResult => {
+  logToFile(
+    `[publish_handoff] notebook ${
+      heldUrl ? 'not updated' : 'skipped'
+    } (${reason})`,
+  );
+  return heldUrl
+    ? { outcome: 'not_updated', reason, description, url: heldUrl }
+    : { outcome: 'skipped', reason, description };
 };
 
+const responseStatus = (err: unknown): number | undefined =>
+  axios.isAxiosError(err) ? err.response?.status : undefined;
+
+const TIMEOUT_CODES = new Set(['ERR_CANCELED', 'ECONNABORTED', 'ETIMEDOUT']);
+
+const isTimeout = (err: unknown, signal: AbortSignal): boolean =>
+  signal.aborted ||
+  (err instanceof Error &&
+    TIMEOUT_CODES.has((err as NodeJS.ErrnoException).code ?? ''));
+
 /** A short code for telemetry and a few words for the agent; neither carries a body or a token. */
-function skipFor(err: unknown): NotebookResult {
-  const status = axios.isAxiosError(err) ? err.response?.status : undefined;
-  if (status === 401)
-    return skipped('unauthorized', 'PostHog rejected the login');
-  if (status === 403) return skipped('http_403', 'PostHog denied access');
-  if (status !== undefined) {
-    return skipped(`http_${status}`, `PostHog returned HTTP ${status}`);
+function failureFor(
+  err: unknown,
+  signal: AbortSignal,
+  heldUrl: string | undefined,
+): NotebookResult {
+  if (isTimeout(err, signal)) {
+    return failed('timeout', 'PostHog did not answer in time', heldUrl);
   }
-  return skipped('error', 'the request to PostHog failed');
+  const status = responseStatus(err);
+  if (status === 401) {
+    return failed('unauthorized', 'PostHog rejected the login', heldUrl);
+  }
+  if (status === 403) {
+    return failed('http_403', 'PostHog denied access', heldUrl);
+  }
+  if (status !== undefined) {
+    return failed(`http_${status}`, `PostHog returned HTTP ${status}`, heldUrl);
+  }
+  return failed('error', 'the request to PostHog failed', heldUrl);
+}
+
+/** A write worth one more try: no response at all (not a cancel), or a server error. */
+function isTransient(err: unknown, signal: AbortSignal): boolean {
+  if (isTimeout(err, signal)) return false;
+  const status = responseStatus(err);
+  return status === undefined || status >= 500;
+}
+
+/** Whether a failed create may still have made the notebook: lost response, server error, or an id clash. */
+function mayHaveLanded(err: unknown): boolean {
+  const status = responseStatus(err);
+  return (
+    status === undefined || status >= 500 || status === 400 || status === 409
+  );
+}
+
+/** Give up on `work` when the deadline passes, even if the call under it ignores the signal. */
+function beforeDeadline<T>(work: Promise<T>, signal: AbortSignal): Promise<T> {
+  if (signal.aborted) return Promise.reject(signal.reason);
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => reject(signal.reason);
+    signal.addEventListener('abort', onAbort, { once: true });
+    work
+      .then(resolve, reject)
+      .finally(() => signal.removeEventListener('abort', onAbort));
+  });
 }
 
 /** Create this program's notebook from `markdown`, or update it when an earlier call in the run made one. */
@@ -64,54 +138,117 @@ export async function syncHandoffNotebook(
   /** One process can run several programs; each keeps its own notebook. */
   programId = '',
 ): Promise<NotebookResult> {
-  let credentials = await oauthCredentials();
-  if (!credentials) return skipped('no_login', 'not logged in to PostHog');
-  if (credentials.missingScopes?.includes(NOTEBOOK_SCOPE)) {
-    return skipped(
-      'missing_scope',
-      `the login lacks the ${NOTEBOOK_SCOPE} permission`,
-    );
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), SYNC_DEADLINE_MS);
+  try {
+    return await sync(markdown, programId, controller.signal);
+  } finally {
+    clearTimeout(timer);
   }
+}
 
+async function sync(
+  markdown: string,
+  programId: string,
+  signal: AbortSignal,
+): Promise<NotebookResult> {
   const key = `${analytics.runId}:${programId}`;
   const held = notebooks.get(key);
   const shortId = held?.shortId ?? shortIdFor(key);
-  const write = (login: Credentials): Promise<number> =>
-    held
-      ? updateMarkdownNotebook(
-          login.accessToken,
-          login.projectId,
-          login.host.apiHost,
-          { shortId, markdown, version: held.version },
-        )
-      : createMarkdownNotebook(
-          login.accessToken,
-          login.projectId,
-          login.host.apiHost,
+  const heldUrl = held?.url;
+  let fetched: Credentials | null;
+  try {
+    fetched = await beforeDeadline(oauthCredentials(), signal);
+  } catch (err) {
+    return failureFor(err, signal, heldUrl);
+  }
+  const urlFor = (login: Credentials): string =>
+    `${login.host.appHost}/project/${login.projectId}/notebooks/${shortId}`;
+  if (!fetched) return failed('no_login', 'not logged in to PostHog', heldUrl);
+  let credentials: Credentials = fetched;
+  if (credentials.missingScopes?.includes(NOTEBOOK_SCOPE)) {
+    return failed(
+      'missing_scope',
+      `the login lacks the ${NOTEBOOK_SCOPE} permission`,
+      heldUrl,
+    );
+  }
+
+  /** Push `markdown` as this login: create, or update at the version the server holds. */
+  const push = async (
+    login: Credentials,
+    retried: boolean,
+  ): Promise<number> => {
+    const args = [
+      login.accessToken,
+      login.projectId,
+      login.host.apiHost,
+    ] as const;
+    let version = held?.version;
+    // A failed try may have landed, so ask the server before writing again.
+    const lookup = async () => {
+      try {
+        return await fetchMarkdownNotebook(...args, shortId, signal);
+      } catch {
+        return null;
+      }
+    };
+    if (retried) {
+      const found = await lookup();
+      if (found?.markdown === markdown) return found.version;
+      version = found?.version ?? version;
+    }
+    if (version === undefined) {
+      try {
+        return await createMarkdownNotebook(
+          ...args,
           { shortId, title: titleOf(markdown), markdown },
+          signal,
         );
+      } catch (err) {
+        const found = mayHaveLanded(err) ? await lookup() : null;
+        if (!found) throw err;
+        if (found.markdown === markdown) return found.version;
+        version = found.version;
+      }
+    }
+    return updateMarkdownNotebook(
+      ...args,
+      { shortId, markdown, version },
+      signal,
+    );
+  };
+
+  /** One try, plus one more with a rotated token after a 401. */
+  const authorized = async (retried: boolean): Promise<number> => {
+    try {
+      return await push(credentials, retried);
+    } catch (err) {
+      if (responseStatus(err) !== 401) throw err;
+      const recovery = await beforeDeadline(
+        rotateAfterUnauthorized(credentials, { requireRefreshToken: false }),
+        signal,
+      );
+      if (recovery.kind !== 'rotated') throw err;
+      credentials = recovery.credentials;
+      return push(credentials, retried);
+    }
+  };
 
   let version: number;
   try {
     try {
-      version = await write(credentials);
+      version = await beforeDeadline(authorized(false), signal);
     } catch (err) {
-      if (!axios.isAxiosError(err) || err.response?.status !== 401) throw err;
-      if (isGrantRevoked()) throw err;
-      const rotated = await oauthCredentials(true);
-      if (!rotated || rotated.accessToken === credentials.accessToken)
-        throw err;
-      credentials = rotated;
-      version = await write(rotated);
+      if (!isTransient(err, signal)) throw err;
+      version = await beforeDeadline(authorized(true), signal);
     }
   } catch (err) {
-    return skipFor(err);
+    return failureFor(err, signal, heldUrl);
   }
 
-  notebooks.set(key, { shortId, version });
+  const url = urlFor(credentials);
+  notebooks.set(key, { shortId, version, url });
   logToFile(`[publish_handoff] notebook ${held ? 'updated' : 'created'}`);
-  return {
-    outcome: held ? 'updated' : 'created',
-    url: `${credentials.host.appHost}/project/${credentials.projectId}/notebooks/${shortId}`,
-  };
+  return { outcome: held ? 'updated' : 'created', url };
 }
