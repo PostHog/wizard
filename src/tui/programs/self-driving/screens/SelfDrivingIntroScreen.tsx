@@ -15,6 +15,12 @@ import type { WizardStore } from '@tui/store';
 import { PickerMenu } from '@tui/primitives/index';
 import { IntroScreenLayout } from '@tui/screens/IntroScreenLayout';
 import {
+  applySharingChoice,
+  isSharing,
+  resolveSharingOnContinue,
+  sharingOptions,
+} from '@tui/components/sharing-options';
+import {
   NO_DEFAULT_LIMIT,
   PRICING_LONG,
   PRICING_SHORT,
@@ -140,7 +146,9 @@ export const SelfDrivingIntroScreen = ({
       programLabel={store.programLabel}
       skillId={session.skillId}
       menuOptions={menuOptions}
+      privacyOptions={sharingOptions(isSharing(store))}
       onSelect={(value) => {
+        if (applySharingChoice(store, value)) return;
         if (value === 'cancel') {
           store.requestExit(0);
         } else if (value === 'more-info') {
@@ -148,6 +156,7 @@ export const SelfDrivingIntroScreen = ({
         } else if (value === 'back') {
           setShowingMoreInfo(false);
         } else {
+          resolveSharingOnContinue(store);
           store.completeSetup();
         }
       }}

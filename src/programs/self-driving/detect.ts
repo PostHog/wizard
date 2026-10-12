@@ -31,8 +31,10 @@ import { analytics } from '@utils/analytics';
 import type { ProgramSession } from '../program-session';
 import type { AbortCase } from '@agent/types';
 import { ErrorCodes } from '@shared/errors';
-import { detectWarehouseSources } from '../warehouse-sources/detect';
-import { loadSourceDetectors } from '../warehouse-sources/registry';
+import {
+  getCodebaseScan,
+  scannedWarehouseSources,
+} from '../codebase-scan/scan';
 import type { DetectedSource } from '../warehouse-sources/types';
 
 /** frameworkContext key holding the deterministic PostHog-presence result. */
@@ -352,37 +354,29 @@ export const SELF_DRIVING_TOOL_KINDS: ReadonlySet<string> = new Set([
   'GoogleSearchConsole',
 ]);
 
-/** Scan for inbox-connectable tools so STEP 5 can surface them first. Best-effort — never blocks detection. */
+/** Pick the inbox-connectable tools out of the run's codebase scan so STEP 5 can surface them first. */
 async function detectConnectedTools(
   session: ProgramSession,
   setFrameworkContext: (key: string, value: unknown) => void,
 ): Promise<void> {
-  try {
-    const detectors = await loadSourceDetectors(session.baseUrl);
-    // No catalog to match against: a failed scan, not one that found nothing.
-    if (detectors.length === 0) {
-      analytics.setTag('connected_tools_detected_count', -1);
-      return;
-    }
-    const tools = detectWarehouseSources(session.installDir, detectors).filter(
-      (s) => SELF_DRIVING_TOOL_KINDS.has(s.kind),
-    );
-
-    // Tagged even at zero, so "found nothing" is distinguishable from "never ran".
-    analytics.setTag('connected_tools_detected_count', tools.length);
-    if (tools.length === 0) return;
-
-    analytics.setTag(
-      'connected_tools_detected',
-      tools.map((s) => s.kind).join(','),
-    );
-    setFrameworkContext(SELF_DRIVING_DETECTED_TOOLS_KEY, tools);
-  } catch (error) {
+  const scan = getCodebaseScan(session);
+  if (!scan) return;
+  if (scan.failed) {
     // -1, not absent, so a failed scan stays distinguishable from one that never ran.
     analytics.setTag('connected_tools_detected_count', -1);
-    analytics.captureException(
-      error instanceof Error ? error : new Error(String(error)),
-      { step: 'detectConnectedTools' },
-    );
+    return;
   }
+
+  const tools = (await scannedWarehouseSources(session)).filter((s) =>
+    SELF_DRIVING_TOOL_KINDS.has(s.kind),
+  );
+  // Tagged even at zero, so "found nothing" is distinguishable from "never ran".
+  analytics.setTag('connected_tools_detected_count', tools.length);
+  if (tools.length === 0) return;
+
+  analytics.setTag(
+    'connected_tools_detected',
+    tools.map((s) => s.kind).join(','),
+  );
+  setFrameworkContext(SELF_DRIVING_DETECTED_TOOLS_KEY, tools);
 }

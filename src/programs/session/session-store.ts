@@ -346,6 +346,11 @@ export class SessionStore {
     }
   }
 
+  setCodebaseScanReported(): void {
+    if (this.session.codebaseScanReported) return;
+    this.set('codebaseScanReported', true);
+  }
+
   setReadinessResult(result: WizardReadinessResult | null): void {
     this.$session.setKey('readinessResult', result);
     if (result && result.decision === WizardReadiness.No) {

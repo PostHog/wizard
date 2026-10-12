@@ -25,6 +25,7 @@ import {
 } from '@programs/self-driving/detect';
 import { getDetectedWarehouseSources } from '@programs/warehouse-sources/detect';
 import { SessionStore } from '@programs/session/session-store';
+import { scanCodebaseFor } from '@programs/codebase-scan';
 import type { DetectedSource } from '@programs/warehouse-sources/types';
 import { toIntegrationReport } from '@programs/self-driving/detect-agentic';
 import {
@@ -85,10 +86,14 @@ describe('detectSelfDrivingPrerequisites', () => {
       path.join(tmpDir, 'package.json'),
       JSON.stringify({ dependencies: deps }),
     );
-    await detectSelfDrivingPrerequisites(
-      buildSession({ installDir: tmpDir }),
-      setCtx,
-    );
+    const session = buildSession({ installDir: tmpDir });
+    await scanCodebaseFor(selfDriving, {
+      session,
+      setFrameworkContext: (key, value) => {
+        session.frameworkContext[key] = value;
+      },
+    });
+    await detectSelfDrivingPrerequisites(session, setCtx);
     const tools = ctx[SELF_DRIVING_DETECTED_TOOLS_KEY] as
       | DetectedSource[]
       | undefined;
@@ -138,6 +143,7 @@ describe('the detect step does not leak into the composed integration run', () =
 
   it('stashes under its own key and leaves the warehouse key untouched', async () => {
     const store = new SessionStore(buildSession({ installDir: tmpDir }));
+    scanCodebaseFor(selfDriving, store.readyContext());
     await selfDriving.onReady?.(store.readyContext());
 
     // Self-driving sees its tools...

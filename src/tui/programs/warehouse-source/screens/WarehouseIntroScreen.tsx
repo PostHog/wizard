@@ -16,6 +16,12 @@ import type { WizardStore } from '@tui/store';
 import { PickerMenu } from '@tui/primitives/index';
 import { IntroScreenLayout } from '@tui/screens/IntroScreenLayout';
 import {
+  applySharingChoice,
+  isSharing,
+  resolveSharingOnContinue,
+  sharingOptions,
+} from '@tui/components/sharing-options';
+import {
   getDetectedWarehouseSources,
   type WarehouseDetectError,
 } from '@programs/warehouse-source';
@@ -119,8 +125,10 @@ export const WarehouseIntroScreen = ({ store }: WarehouseIntroScreenProps) => {
       programLabel={store.programLabel}
       skillId={session.skillId}
       menuOptions={menuOptions}
+      privacyOptions={sharingOptions(isSharing(store))}
       errorView={errorView}
       onSelect={(value) => {
+        if (applySharingChoice(store, value)) return;
         if (value === 'cancel') {
           store.requestExit(0);
         } else if (value === 'more-info') {
@@ -128,6 +136,7 @@ export const WarehouseIntroScreen = ({ store }: WarehouseIntroScreenProps) => {
         } else if (value === 'back') {
           setShowingMoreInfo(false);
         } else {
+          resolveSharingOnContinue(store);
           store.completeSetup();
         }
       }}

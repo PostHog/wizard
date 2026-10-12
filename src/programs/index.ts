@@ -1,6 +1,7 @@
 /** Public runtime entry for the programs surface. */
 export type * from './types';
 export { runProgram, TASK_OUTCOMES_KEY } from './run-program';
+export { reportCodebaseScan, scanCodebaseFor } from './codebase-scan';
 /** How a run ended; `ProgramRunOutcome.outcome` holds one. */
 export { RunOutcome } from '@shared/run-state';
 export { ProgramAbort } from './program-abort';

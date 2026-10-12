@@ -132,6 +132,7 @@ export const config: ProgramConfig = {
     requires: ['posthog-integration'],
     abortCases: SELF_DRIVING_ABORT_CASES,
   }),
+  scansCodebase: true,
   onReady: (ctx) =>
     detectSelfDrivingPrerequisites(ctx.session, ctx.setFrameworkContext),
   oauthScopeAdditions: SELF_DRIVING_SCOPE_ADDITIONS,

@@ -88,3 +88,24 @@ export interface DetectedSource {
   /** Human-readable description of what triggered the match, for display. */
   matchedSignal: string;
 }
+
+/** One codebase signal behind a detected tool, as reported to PostHog. */
+export interface ScanSignal {
+  /** Where the signal came from: an ecosystem (`npm`, `pypi`, ...), `env_key`, or `script_host`. */
+  source: string;
+  /** The package name, env key name, or script hostname. Never an env value. */
+  name: string;
+  /** Project-relative path of the file it was found in, prompt-safe. */
+  file: string | null;
+}
+
+/** A catalog tool found in the project, whether or not the wizard can set it up. */
+export interface DetectedTool {
+  kind: string;
+  label: string;
+  warehouseSourceType: string | null;
+  mode: SourceCreationMode | null;
+  /** Human-readable description of the first matching signal, for display. */
+  matchedSignal: string;
+  signals: ScanSignal[];
+}
