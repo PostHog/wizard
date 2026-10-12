@@ -2,10 +2,10 @@
  * Data warehouse source detection.
  *
  * Scans a project for codebase signals (package manifests, `.env` key
- * names) and matches them against the detectors the caller passes in, from
- * `loadSourceDetectors`. Pure function: no store mutations, no UI calls.
- * Reads files locally — only the wizard process does this; the agent never
- * sees secret values.
+ * names, third-party script hosts in templates) and matches them against the
+ * detectors the caller passes in, from `loadSourceDetectors`. Pure function:
+ * no store mutations, no UI calls. Reads files locally — only the wizard
+ * process does this; the agent never sees secret values.
  *
  * Note we only read `.env` KEY NAMES, never values.
  */
@@ -26,6 +26,18 @@ import {
   parsePyprojectToml,
   parsePipfile,
 } from '../detection/features';
+import {
+  parseCargoToml,
+  parseComposerJson,
+  parseGoMod,
+  parseGradleBuild,
+  parseGradleVersionCatalog,
+  parseMixExs,
+  parsePackageSwift,
+  parsePodfile,
+  parsePomXml,
+  parsePubspecYaml,
+} from './manifests.js';
 import type {
   DetectedSource,
   DetectedTool,
@@ -39,6 +51,10 @@ interface ProjectSignals {
    * path is sanitised on the way in, so nothing here can reach a prompt raw.
    */
   envKeys: Map<string, string>;
+  /** Catalog script hostname found in a template → the file it was found in. */
+  scriptHosts: Map<string, string>;
+  /** Templates read so far, against {@link MAX_TEMPLATE_FILES}. */
+  templatesRead: number;
   /**
    * Ecosystem (`npm`, `pypi`, `rubygems`, ...) → package name → the
    * project-relative manifest that first declared it.
@@ -172,14 +188,15 @@ function isSuperseded(
 }
 
 /**
- * Every signal that matches the detector, capped per tool. Packages come before
- * `.env` keys: a package shows the code uses the tool, while a key can outlive it.
+ * Every signal that matches the detector, capped per tool. Packages and script
+ * hosts come before `.env` keys: they show the code uses the tool, while a key
+ * can outlive it.
  */
 function matchDetector(
   detector: SourceDetector,
   signals: ProjectSignals,
 ): ScanSignal[] {
-  const { envKeys, packages } = detector.signals;
+  const { envKeys, scriptHosts, packages } = detector.signals;
   const matched: ScanSignal[] = [];
 
   for (const [ecosystem, names] of Object.entries(packages)) {
@@ -188,6 +205,14 @@ function matchDetector(
     for (const name of names) {
       const file = found.get(name);
       if (file !== undefined) matched.push({ source: ecosystem, name, file });
+    }
+  }
+
+  if (scriptHosts.length > 0) {
+    for (const [host, file] of signals.scriptHosts) {
+      if (scriptHosts.some((catalogHost) => hostMatches(host, catalogHost))) {
+        matched.push({ source: SCRIPT_HOST_SIGNAL_SOURCE, name: host, file });
+      }
     }
   }
 
@@ -204,6 +229,9 @@ function matchDetector(
 
 /** Signal source for a `.env` key name. */
 const ENV_KEY_SIGNAL_SOURCE = 'env_key';
+
+/** Signal source for a third-party script hostname found in a template. */
+const SCRIPT_HOST_SIGNAL_SOURCE = 'script_host';
 
 /**
  * The human-readable form of a signal, shown on screens and given to the agent.
@@ -222,6 +250,11 @@ function describeSignal(signal: ScanSignal): string {
   if (signal.source === ENV_KEY_SIGNAL_SOURCE) {
     return `found \`${signal.name}\` in \`${signal.file ?? '.env'}\``;
   }
+  if (signal.source === SCRIPT_HOST_SIGNAL_SOURCE) {
+    return `found a \`${signal.name}\` script in \`${
+      signal.file ?? 'a template'
+    }\``;
+  }
   const location =
     PACKAGE_SIGNAL_LOCATIONS[signal.source] ?? `${signal.source} dependencies`;
   return `found \`${signal.name}\` in ${location}`;
@@ -230,6 +263,8 @@ function describeSignal(signal: ScanSignal): string {
 function collectSignals(installDir: string): ProjectSignals {
   const signals: ProjectSignals = {
     envKeys: new Map(),
+    scriptHosts: new Map(),
+    templatesRead: 0,
     packages: new Map(),
     complete: true,
   };
@@ -245,9 +280,9 @@ function collectSignals(installDir: string): ProjectSignals {
 
 /**
  * Route a file to the right parser BY NAME, reading its contents only when the
- * name matches one of the ~6 manifests we care about. Checking the name first
- * avoids slurping every file in the tree (lockfiles, binaries, assets) into
- * memory just to discard it.
+ * name matches a manifest, an env file or a template we read. Checking the
+ * name first avoids slurping every file in the tree (lockfiles, binaries,
+ * assets) into memory just to discard it.
  */
 function ingestFile(
   installDir: string,
@@ -257,6 +292,12 @@ function ingestFile(
 ): void {
   const ingest = ingestorFor(name);
   if (!ingest) return;
+  if (
+    ingest === addScriptHosts &&
+    signals.templatesRead >= MAX_TEMPLATE_FILES
+  ) {
+    return;
+  }
 
   const content = safeReadFile(fullPath);
   if (content === null) return;
@@ -274,6 +315,8 @@ type Ingestor = (
 function ingestorFor(name: string): Ingestor | null {
   if (isEnvFileName(name))
     return (c, s, relativePath) => addEnvKeys(c, s, relativePath);
+  if (isTemplateFileName(name) && CATALOG_SCRIPT_HOSTS.length > 0)
+    return addScriptHosts;
   if (name === 'package.json') return addNpmDeps;
   if (name === 'requirements.txt')
     return (c, s, file) =>
@@ -284,10 +327,103 @@ function ingestorFor(name: string): Ingestor | null {
   if (name === 'Pipfile')
     return (c, s, file) =>
       parsePipfile(c).forEach((d) => addPackage(s, 'pypi', d, file));
-  if (name === 'Gemfile')
+  const manifest = MANIFEST_PARSERS[name];
+  if (manifest)
     return (c, s, file) =>
-      parseGemfile(c).forEach((g) => addPackage(s, 'rubygems', g, file));
+      manifest
+        .parse(c)
+        .forEach((d) => addPackage(s, manifest.ecosystem, d, file));
   return null;
+}
+
+/** Manifests of every ecosystem after npm and pypi, by file name, in ecosystem order. */
+const MANIFEST_PARSERS: Readonly<
+  Record<string, { ecosystem: string; parse: (content: string) => string[] }>
+> = {
+  'Cargo.toml': { ecosystem: 'cargo', parse: parseCargoToml },
+  Podfile: { ecosystem: 'cocoapods', parse: parsePodfile },
+  'composer.json': { ecosystem: 'composer', parse: parseComposerJson },
+  'go.mod': { ecosystem: 'go', parse: parseGoMod },
+  'mix.exs': { ecosystem: 'hex', parse: parseMixExs },
+  'build.gradle': { ecosystem: 'maven', parse: parseGradleBuild },
+  'build.gradle.kts': { ecosystem: 'maven', parse: parseGradleBuild },
+  'libs.versions.toml': {
+    ecosystem: 'maven',
+    parse: parseGradleVersionCatalog,
+  },
+  'pom.xml': { ecosystem: 'maven', parse: parsePomXml },
+  'pubspec.yaml': { ecosystem: 'pub', parse: parsePubspecYaml },
+  Gemfile: { ecosystem: 'rubygems', parse: parseGemfile },
+  'Package.swift': { ecosystem: 'swiftpm', parse: parsePackageSwift },
+};
+
+// Templates are scanned for script hosts only while the catalog lists some.
+const CATALOG_SCRIPT_HOSTS: readonly string[] = [
+  ...new Set(SOURCE_DETECTORS.flatMap((d) => d.signals.scriptHosts)),
+];
+
+/** A scan reads at most this many templates, and skips any larger than {@link MAX_TEMPLATE_BYTES}. */
+const MAX_TEMPLATE_FILES = 300;
+const MAX_TEMPLATE_BYTES = 512 * 1024;
+
+const TEMPLATE_SUFFIXES = [
+  '.html',
+  '.htm',
+  '.erb',
+  '.ejs',
+  '.hbs',
+  '.jinja',
+  '.j2',
+  '.twig',
+  '.blade.php',
+  '.heex',
+  '.liquid',
+  '.vue',
+  '.svelte',
+  '.astro',
+  '.jsx',
+  '.tsx',
+];
+
+function isTemplateFileName(name: string): boolean {
+  return TEMPLATE_SUFFIXES.some((suffix) => name.endsWith(suffix));
+}
+
+function hostMatches(host: string, catalogHost: string): boolean {
+  return host === catalogHost || host.endsWith(`.${catalogHost}`);
+}
+
+// Protocol-relative or absolute URLs, as written in `src` attributes and in
+// inline loader snippets that build the script URL in a string.
+const URL_HOST = /(?:https?:)?\/\/([a-z0-9-]+(?:\.[a-z0-9-]+)+)/gi;
+
+/**
+ * Record the catalog script hosts a template loads. Every other hostname is
+ * dropped as soon as it is read: it could name an internal domain, so it is
+ * never kept, matched against, or reported.
+ */
+function addScriptHosts(
+  content: string,
+  signals: ProjectSignals,
+  file: string,
+): void {
+  if (signals.templatesRead >= MAX_TEMPLATE_FILES) return;
+  if (content.length > MAX_TEMPLATE_BYTES) return;
+  signals.templatesRead += 1;
+  // A JSX or TSX file loads a script only through a `<script>` or Next.js `<Script>` tag.
+  if (/\.(jsx|tsx)$/.test(file) && !/<script\b/i.test(content)) return;
+  for (const match of content.matchAll(URL_HOST)) {
+    const host = match[1].toLowerCase();
+    if (signals.scriptHosts.has(host)) continue;
+    if (
+      !CATALOG_SCRIPT_HOSTS.some((catalogHost) =>
+        hostMatches(host, catalogHost),
+      )
+    ) {
+      continue;
+    }
+    signals.scriptHosts.set(host, file);
+  }
 }
 
 /**
