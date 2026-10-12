@@ -23,7 +23,7 @@ import {
 } from 'fs';
 import * as path from 'path';
 import { OutroKind } from '@shared/outro';
-import type { TaskNotice } from '../../../progress';
+import type { AgentProgress, TaskNotice } from '../../../progress';
 import {
   POSTHOG_DOCS_URL,
   WIZARD_CONTACT_EMAIL,
@@ -453,6 +453,15 @@ export async function askSeededConsent(
 /** Whether a task's prompt lets it ask the user, and so needs the ask bridge. */
 function canAsk(prompt: AgentPrompt | undefined): boolean {
   return (prompt?.allowedTools ?? []).includes(ASK_TOOL);
+}
+
+/** Every task holds publish_handoff, but only the flow's sink owns the run report. */
+export function deliversRunReport(
+  sinkTypes: readonly string[],
+  taskType: string,
+  event: AgentProgress,
+): boolean {
+  return event.kind === 'handoff' && sinkTypes.includes(taskType);
 }
 
 /**
@@ -1265,7 +1274,9 @@ async function executeOrchestrator(
           input,
           boot,
           emit: (event) => {
-            if (event.kind === 'handoff') reportDeliveredIds.add(task.id);
+            if (deliversRunReport(registry.sinkTypes, task.type, event)) {
+              reportDeliveredIds.add(task.id);
+            }
             emit(event);
           },
           prompt: assembleTaskPrompt(

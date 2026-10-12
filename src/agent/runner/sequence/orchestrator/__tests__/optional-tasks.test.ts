@@ -9,6 +9,7 @@ vi.mock('@utils/analytics', () => ({
 
 import { QueueStore } from '@agent/runner/sequence/orchestrator/queue';
 import {
+  deliversRunReport,
   describeDrainFailure,
   drainFailureCode,
   drainVerdict,
@@ -70,6 +71,15 @@ describe('drainVerdict', () => {
     const v = drainVerdict(store.list(), new Set([report.id]));
     expect(v.requiredFailedTypes).toEqual([]);
     expect(v.optionalFailedTypes).toEqual(['report']);
+  });
+
+  it('only the sink task delivers the run report', () => {
+    const handoff = { kind: 'handoff', text: '# Report' } as const;
+    expect(deliversRunReport(['report'], 'report', handoff)).toBe(true);
+    expect(deliversRunReport(['report'], 'init', handoff)).toBe(false);
+    expect(
+      deliversRunReport(['report'], 'report', { kind: 'status', message: 'x' }),
+    ).toBe(false);
   });
 
   it('names a step the user accepted that never became runnable', () => {
