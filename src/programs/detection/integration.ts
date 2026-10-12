@@ -10,15 +10,21 @@
  */
 
 import type { ProgramReadyContext } from '../program-step';
-import { mayReportScanResults, ScanConsent } from '@shared/run-state';
+import {
+  mayReportScanResults,
+  reportableDiscoveredFeatures,
+  ScanConsent,
+} from '@shared/run-state';
 import type { ProgramSession } from '../program-session';
 import { FRAMEWORK_REGISTRY } from '../frameworks/registry';
 import { detectFramework } from './framework';
 import { discoverFeatures } from './features';
 import { checkFrameworkVersion, gatherFrameworkContext } from './context';
 import { analytics } from '@utils/analytics';
-import { detectWarehouseSources } from '../warehouse-sources/detect';
-import { loadSourceDetectors } from '../warehouse-sources/registry';
+import {
+  getCodebaseScan,
+  scannedWarehouseSources,
+} from '../codebase-scan/scan';
 import {
   DETECTED_WAREHOUSE_SOURCES_KEY,
   getDetectedWarehouseSources,
@@ -81,7 +87,7 @@ export async function detectPostHogIntegration(
     ctx.addDiscoveredFeature(feature);
   }
 
-  await detectWarehouseSourcesForSuggestion(ctx, installDir);
+  await offerScannedWarehouseSources(ctx);
   detectExistingPostHog(ctx, installDir);
 
   ctx.setDetectionComplete();
@@ -104,48 +110,32 @@ const WAREHOUSE_SCAN_STATE_KEY = 'warehouseScanState';
 type WarehouseScanState = 'ok' | 'failed';
 
 /**
- * Scan for data warehouse source signals (Postgres, Stripe, Hubspot, …) and,
- * when found, stash them for a `wizard warehouse` suggestion on the outro.
- * Runs unconditionally during `detect`, before the intro screen has asked
- * about sharing. Reporting what this finds is a separate, later concern.
- * See `reportWarehouseSourcesDetected` below.
+ * Stash the run's scanned warehouse sources (Postgres, Stripe, Hubspot, …)
+ * for a `wizard warehouse` suggestion on the outro. The scan itself runs
+ * unconditionally before `onReady`, before the intro screen has asked about
+ * sharing. Reporting what it found is a separate, later concern. See
+ * `reportWarehouseSourcesDetected` below.
  *
  * Deliberately a suggestion, not an inline agent run: a second credential-
  * collecting agent run before the outro could end the run on any of its
  * failure paths and cost the user the success outro on a run where PostHog
  * installed fine.
- *
- * Calls `detectWarehouseSources` (a pure scan) rather than the warehouse
- * program's `detectWarehousePrerequisites`, which writes a `detectError` when
- * it finds nothing — that's right for `wizard warehouse` but here would show a
- * spurious error and trip the CI prerequisites abort. No sources is a no-op.
- *
- * Best-effort: never let a scan failure break the wizard flow.
  */
-async function detectWarehouseSourcesForSuggestion(
+async function offerScannedWarehouseSources(
   ctx: ProgramReadyContext,
-  installDir: string,
 ): Promise<void> {
-  try {
-    const detectors = await loadSourceDetectors(ctx.session.baseUrl);
-    // The loader has already reported why the catalog is missing.
-    if (detectors.length === 0) {
-      ctx.setFrameworkContext(WAREHOUSE_SCAN_STATE_KEY, 'failed');
-      return;
-    }
-    const sources = detectWarehouseSources(installDir, detectors);
-    // Before the empty-list return: a scan that found nothing still ran, and
-    // those rows are the denominator.
-    ctx.setFrameworkContext(WAREHOUSE_SCAN_STATE_KEY, 'ok');
-    if (sources.length === 0) return;
-    ctx.setFrameworkContext(DETECTED_WAREHOUSE_SOURCES_KEY, sources);
-  } catch (error) {
+  const scan = getCodebaseScan(ctx.session);
+  if (!scan) return;
+  if (scan.failed) {
     ctx.setFrameworkContext(WAREHOUSE_SCAN_STATE_KEY, 'failed');
-    analytics.captureException(
-      error instanceof Error ? error : new Error(String(error)),
-      { step: 'detectWarehouseSourcesForSuggestion' },
-    );
+    return;
   }
+  // Before the empty-list return: a scan that found nothing still ran, and
+  // those rows are the denominator.
+  ctx.setFrameworkContext(WAREHOUSE_SCAN_STATE_KEY, 'ok');
+  const sources = await scannedWarehouseSources(ctx.session);
+  if (sources.length === 0) return;
+  ctx.setFrameworkContext(DETECTED_WAREHOUSE_SOURCES_KEY, sources);
 }
 
 /**
@@ -181,10 +171,16 @@ export function reportWarehouseSourcesDetected(
     // Captured on every run, including the empty case. The denominator is
     // the whole point: without the zero rows, "20% of runs have a Postgres"
     // is unanswerable.
+    // Same consent gate as `sessionProperties`. PostHog derives AI SDK
+    // detection from these and the source kinds.
+    const discoveredFeatures = reportableDiscoveredFeatures(session);
     analytics.wizardCapture('warehouse sources detected', {
       warehouse_source_count: sources.length,
       warehouse_source_kinds: sources.map((s) => s.kind),
       warehouse_source_modes: sources.map((s) => s.mode),
+      ...(discoveredFeatures
+        ? { discovered_features: discoveredFeatures }
+        : {}),
     });
 
     if (sources.length > 0) {

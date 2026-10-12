@@ -59,6 +59,8 @@ export interface ProgramSession {
   scanConsent: ScanConsent;
   /** Guards against reporting twice; consent resolves from two paths. */
   warehouseSourcesReported: boolean;
+  /** Guards the codebase scan POST to PostHog: sent once per run. */
+  codebaseScanReported: boolean;
   integration: Integration | null;
   frameworkContext: Record<string, unknown>;
   typescript: boolean;

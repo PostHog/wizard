@@ -1,7 +1,7 @@
 /**
  * Warehouse-source program detection step.
  *
- * Thin adapter over `detectWarehouseSources` that writes results into
+ * Reads the run's codebase scan and writes a `detectError` into
  * frameworkContext for the intro screen, plus the `[ABORT]` cases the
  * data-warehouse-source-setup skill can emit.
  */
@@ -10,11 +10,8 @@ import { existsSync, statSync } from 'fs';
 import { analytics } from '@utils/analytics';
 import type { ProgramSession } from '../program-session';
 import type { AbortCase } from '@agent/types';
-import {
-  detectWarehouseSources,
-  DETECTED_WAREHOUSE_SOURCES_KEY,
-} from '../warehouse-sources/detect';
-import { loadSourceDetectors } from '../warehouse-sources/registry';
+import { scannedWarehouseSources } from '../codebase-scan/scan';
+import { DETECTED_WAREHOUSE_SOURCES_KEY } from '../warehouse-sources/detect';
 
 /** Structured detection errors rendered by the intro screen. */
 export type WarehouseDetectError =
@@ -51,8 +48,8 @@ export const WAREHOUSE_ABORT_CASES: AbortCase[] = [
 ];
 
 /**
- * Scan `session.installDir` for warehouse-source signals. Writes the detected
- * sources (or a `detectError`) into frameworkContext for the intro screen.
+ * Check the run's codebase scan for warehouse sources. Writes a `detectError`
+ * into frameworkContext for the intro screen when there is nothing to set up.
  */
 export async function detectWarehousePrerequisites(
   session: ProgramSession,
@@ -81,10 +78,7 @@ export async function detectWarehousePrerequisites(
     return;
   }
 
-  const sources = detectWarehouseSources(
-    installDir,
-    await loadSourceDetectors(session.baseUrl),
-  );
+  const sources = await scannedWarehouseSources(session);
 
   if (sources.length === 0) {
     fail({ kind: 'no-sources' });

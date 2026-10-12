@@ -27,7 +27,9 @@ import { analytics } from '@utils/analytics';
 import { reportWarehouseSourcesDetected } from '@programs/detection/integration';
 import { DETECTED_WAREHOUSE_SOURCES_KEY } from '@programs/warehouse-sources/detect';
 import { buildSession } from '@programs/session/wizard-session';
+import { scanCodebaseFor } from '@programs/codebase-scan';
 import { detectWarehousePrerequisites } from '../detect';
+import { config as warehouse } from '../index';
 
 describe('reportWarehouseSourcesDetected', () => {
   let tmpDir: string;
@@ -49,9 +51,11 @@ describe('reportWarehouseSourcesDetected', () => {
     // emit this event, which six saved insights read as "the integration flow
     // scanned".
     const session = buildSession({ installDir: tmpDir, ci: true });
-    await detectWarehousePrerequisites(session, (key, value) => {
+    const setFrameworkContext = (key: string, value: unknown) => {
       session.frameworkContext[key] = value;
-    });
+    };
+    await scanCodebaseFor(warehouse, { session, setFrameworkContext });
+    await detectWarehousePrerequisites(session, setFrameworkContext);
     expect(
       session.frameworkContext[DETECTED_WAREHOUSE_SOURCES_KEY],
     ).toBeDefined();

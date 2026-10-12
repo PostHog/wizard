@@ -27,10 +27,8 @@ vi.mock(
 );
 
 import { analytics } from '@utils/analytics';
-import {
-  detectPostHogIntegration,
-  reportWarehouseSourcesDetected,
-} from '@programs/detection/integration';
+import { detectPostHogIntegration } from '@programs/detection/integration';
+import { reportCodebaseScan, scanCodebaseFor } from '@programs/codebase-scan';
 import { DETECTED_WAREHOUSE_SOURCES_KEY } from '@programs/warehouse-sources/detect';
 import type { DetectedSource } from '@programs/warehouse-sources/types';
 import { SessionStore } from '@programs/session/session-store';
@@ -65,44 +63,56 @@ describe('the full decline contract, end to end', () => {
 
   afterEach(() => cleanup(tmpDir));
 
-  it('sets the key, keeps the outro suggestion, and reports nothing, for a declined run', async () => {
-    const session = buildSession({ installDir: tmpDir });
-    session.scanConsent = ScanConsent.Declined;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    session.frameworkConfig = FRAMEWORK_CONFIG as any;
-
-    const store = new SessionStore(session);
-    await detectPostHogIntegration(store.readyContext());
-    reportWarehouseSourcesDetected(store.session);
-
-    const sources = store.session.frameworkContext[
-      DETECTED_WAREHOUSE_SOURCES_KEY
-    ] as DetectedSource[];
-    expect(sources.map((s) => s.kind)).toContain('Stripe');
-
-    const { run } = posthogIntegration;
-    if (typeof run !== 'function') throw new Error('expected a run function');
-    const runDef = await run(store.session, testRunnerContext(store.session));
-    const outro = runDef.buildOutroData!(
-      store.session,
+  it.each([
+    ['declined', { scanConsent: ScanConsent.Declined, noTelemetry: false }],
+    ['undecided', { scanConsent: ScanConsent.Undecided, noTelemetry: false }],
+    ['--no-telemetry', { scanConsent: ScanConsent.Granted, noTelemetry: true }],
+  ])(
+    'sets the key, keeps the outro suggestion, and reports nothing, for a %s run',
+    async (_label, overrides) => {
+      const session = buildSession({ installDir: tmpDir });
+      Object.assign(session, overrides);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      CREDENTIALS as any,
-    );
-    if (!outro) throw new Error('expected outro data');
-    expect(outro.nextSteps).toBeDefined();
-    expect(outro.nextSteps!.items.join(' ')).toContain('Stripe');
+      session.frameworkConfig = FRAMEWORK_CONFIG as any;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      session.credentials = CREDENTIALS as any;
 
-    expect(analytics.wizardCapture).not.toHaveBeenCalledWith(
-      'warehouse sources detected',
-      expect.anything(),
-    );
-    expect(analytics.setTag).not.toHaveBeenCalledWith(
-      'warehouse_source_kinds',
-      expect.anything(),
-    );
-    expect(analytics.setTag).not.toHaveBeenCalledWith(
-      'warehouse_source_count',
-      expect.anything(),
-    );
-  });
+      const store = new SessionStore(session);
+      scanCodebaseFor(posthogIntegration, store.readyContext());
+      await detectPostHogIntegration(store.readyContext());
+      const fetchImpl = vi.fn<typeof fetch>();
+      await reportCodebaseScan(store, { fetchImpl });
+      expect(fetchImpl).not.toHaveBeenCalled();
+
+      const sources = store.session.frameworkContext[
+        DETECTED_WAREHOUSE_SOURCES_KEY
+      ] as DetectedSource[];
+      expect(sources.map((s) => s.kind)).toContain('Stripe');
+
+      const { run } = posthogIntegration;
+      if (typeof run !== 'function') throw new Error('expected a run function');
+      const runDef = await run(store.session, testRunnerContext(store.session));
+      const outro = runDef.buildOutroData!(
+        store.session,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        CREDENTIALS as any,
+      );
+      if (!outro) throw new Error('expected outro data');
+      expect(outro.nextSteps).toBeDefined();
+      expect(outro.nextSteps!.items.join(' ')).toContain('Stripe');
+
+      expect(analytics.wizardCapture).not.toHaveBeenCalledWith(
+        'warehouse sources detected',
+        expect.anything(),
+      );
+      expect(analytics.setTag).not.toHaveBeenCalledWith(
+        'warehouse_source_kinds',
+        expect.anything(),
+      );
+      expect(analytics.setTag).not.toHaveBeenCalledWith(
+        'warehouse_source_count',
+        expect.anything(),
+      );
+    },
+  );
 });

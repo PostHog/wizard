@@ -42,6 +42,7 @@ import {
   rotateCredentials,
   type ResolvedProgramCredentials,
 } from './credentials';
+import { reportCodebaseScan } from './codebase-scan';
 import { logIn } from './login';
 import { applyAgentProgress, type SessionStore } from './session/session-store';
 import type { WizardSession } from './session/wizard-session';
@@ -270,6 +271,7 @@ async function invokeProgram(
         plainSettings = settings;
       }
       credentials = await login();
+      void reportCodebaseScan(store);
       if (needsAiApproval(store.session, credentials)) {
         if (!options.workflow) {
           return fail(

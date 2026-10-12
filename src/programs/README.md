@@ -90,7 +90,7 @@ reaches the UI.
 | One program's config, detection and prompt    | Its own folder, such as [`metrics`](metrics/index.ts)                             |
 | One program's flow, deck and screens          | `src/tui/programs/<id>/`, registered in [`src/tui/programs/index.ts`](../tui/programs/index.ts) |
 | One program's e2e test definition             | Its folder's `test/e2e.json`, read by [`e2e-harness/profiles.ts`](../../e2e-harness/profiles.ts) |
-| Code several programs share                   | [`shared`](shared/skill-program.ts), [`warehouse-sources`](warehouse-sources/registry.ts) and [`oauth`](oauth/program-scopes.ts) |
+| Code several programs share                   | [`shared`](shared/skill-program.ts), [`warehouse-sources`](warehouse-sources/registry.ts), [`codebase-scan`](codebase-scan/index.ts) and [`oauth`](oauth/program-scopes.ts) |
 | The list of every program                     | [`program-registry.ts`](program-registry.ts)                                      |
 | The `ProgramConfig`, ready and run-step types | [`program-step.ts`](program-step.ts)                                              |
 | The session a program reads                   | [`program-session.ts`](program-session.ts)                                        |
