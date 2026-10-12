@@ -44,6 +44,8 @@ const installer: McpInstaller = {
 const ENTER = '\r';
 const DOWN = '\u001B[B';
 const ESC = '\u001B';
+// A prompt's frame renders before its input handler attaches in a passive
+// effect, so a key written on the same turn as the frame can be dropped.
 const tick = () => new Promise((r) => setTimeout(r, 20));
 
 const mcpCompleteCalls = () =>
@@ -56,6 +58,7 @@ it('reports a removal once, as its results show, before the Enter that completes
     <McpScreen store={store} installer={installer} mode="remove" />,
   );
   await vi.waitFor(() => expect(lastFrame()).toContain('Detected: Cursor'));
+  await tick();
   stdin.write('\r');
   await vi.waitFor(() => expect(lastFrame()).toContain('Press enter'));
 
@@ -67,6 +70,7 @@ it('reports a removal once, as its results show, before the Enter that completes
   ]);
   expect(store.mcpComplete).toBe(false);
 
+  await tick();
   stdin.write('\r');
   await vi.waitFor(() => expect(store.mcpComplete).toBe(true));
   expect(mcpCompleteCalls()).toHaveLength(1);
@@ -79,6 +83,7 @@ it('reports an install once, as its results show, before Enter', async () => {
     <McpScreen store={store} installer={installer} />,
   );
   await vi.waitFor(() => expect(lastFrame()).toContain('Select clients'));
+  await tick();
   // Tick Cursor, then move onto Confirm.
   for (const key of [ENTER, DOWN, ENTER]) {
     stdin.write(key);
