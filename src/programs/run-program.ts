@@ -394,6 +394,8 @@ async function invokeProgram(
             wizardFlagPayloads: { ...flags.payloads },
             allowedTools: planned.config.allowedTools,
             disallowedTools: planned.config.disallowedTools,
+            handoffNotebook:
+              agentRun.handoffNotebook ?? planned.config.handoffNotebook,
             agentFlow: planned.config.agentFlow,
             excludedTaskTypes: planned.config.excludedTaskTypes,
             seedTasks: planned.config.seedTasks

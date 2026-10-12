@@ -8,6 +8,7 @@ import type { ProgressEmitter } from '../progress';
 import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
 import { runtimeEnv } from '@env';
+import { syncHandoffNotebook, type NotebookResult } from './handoff-notebook';
 import { NEEDS_ATTENTION_HEADING } from '@utils/needs-attention';
 import { randomBytes } from 'node:crypto';
 import {
@@ -40,7 +41,8 @@ export const PUBLISH_HANDOFF_DESCRIPTION =
   'Publish the handoff document — the full markdown report of what the whole run did — to the wizard session. ' +
   'A run publishes once: call it only when your own instructions ask you to write that report, passing the complete report as `content`, and never write the report to a file yourself. ' +
   `When anything is left for the user to do, open the report, right under the H1, with a \`> ⚠️ **${NEEDS_ATTENTION_HEADING}**\` block quote, one \`> - \` bullet per item. ` +
-  'It is not how you report your own work — in a run made of several tasks each step finishes with complete_task, and a step that was not asked for the run report leaves this one uncalled, because the section it owns travels in its handoff.';
+  'It is not how you report your own work — in a run made of several tasks each step finishes with complete_task, and a step that was not asked for the run report leaves this one uncalled, because the section it owns travels in its handoff. ' +
+  'When the result names a PostHog notebook, the wizard already mirrored the report there: never create a notebook yourself.';
 
 /** Appended for a task agent: the reminder lands as it decides it has finished. */
 export const TASK_REPORTING_NOTE =
@@ -149,12 +151,29 @@ function writeHandoffFileAtomically(
   }
 }
 
-export function publishHandoff(
+const notebookNote = (notebook: NotebookResult): string => {
+  switch (notebook.outcome) {
+    case 'skipped':
+      return `Notebook not created: ${notebook.description}.`;
+    case 'not_updated':
+      return `Notebook not updated: ${notebook.description}. It still holds the earlier report: ${notebook.url}.`;
+    default:
+      return `Notebook ${notebook.outcome}: ${notebook.url}. Do not create another notebook.`;
+  }
+};
+
+export async function publishHandoff(
   content: string,
   emit: ProgressEmitter | undefined,
-  /** Set by both facades when the caller is one task of an orchestrated run. */
-  opts: { taskAgent?: boolean } = {},
-): PublishHandoffResult {
+  opts: {
+    /** Set by both facades when the caller is one task of an orchestrated run. */
+    taskAgent?: boolean;
+    /** Set when the program mirrors the report into a PostHog notebook; without it no notebook is made. */
+    handoffNotebook?: boolean;
+    /** The program publishing, so programs sharing a process keep separate notebooks. */
+    programId?: string;
+  } = {},
+): Promise<PublishHandoffResult> {
   if (content.trim() === '') {
     analytics.wizardCapture('handoff published', {
       handoff_ok: false,
@@ -188,12 +207,27 @@ export function publishHandoff(
     }
   }
 
+  // The notebook gets the text the security gate already cleared; it never fails the handoff.
+  const notebookRequested = opts.handoffNotebook === true;
+  const notebook = notebookRequested
+    ? await syncHandoffNotebook(text, opts.programId)
+    : undefined;
+  if (notebook?.outcome === 'created' || notebook?.outcome === 'updated') {
+    emit?.({ kind: 'url', which: 'notebook', url: notebook.url });
+  }
+
   // Size and truncation only — never the report itself, which quotes the user's code.
   analytics.wizardCapture('handoff published', {
     handoff_ok: true,
     handoff_chars: text.length,
     handoff_truncated: truncated,
     handoff_output_written: handoffOutputWritten,
+    notebook_requested: notebookRequested,
+    notebook_outcome: notebook?.outcome,
+    notebook_skip_reason:
+      notebook?.outcome === 'skipped' || notebook?.outcome === 'not_updated'
+        ? notebook.reason
+        : undefined,
   });
   const notes: string[] = [];
   if (truncated) notes.push('truncated to the 64 KB limit');
@@ -204,6 +238,8 @@ export function publishHandoff(
     ok: true,
     message: `Handoff published (${text.length} chars${
       notes.length > 0 ? `, ${notes.join('; ')}` : ''
-    }).${opts.taskAgent ? TASK_REPORTING_NOTE : ''}`,
+    }).${notebook ? ` ${notebookNote(notebook)}` : ''}${
+      opts.taskAgent ? TASK_REPORTING_NOTE : ''
+    }`,
   };
 }

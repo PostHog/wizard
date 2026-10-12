@@ -11,7 +11,9 @@ import {
   PUBLISH_HANDOFF_DESCRIPTION,
   PUBLISH_HANDOFF_TOOL_NAME,
   TASK_REPORTING_NOTE,
+  publishHandoff,
 } from '../handoff';
+import { syncHandoffNotebook } from '../handoff-notebook';
 
 // The MCP server's tool list, without the SDK's transport around it.
 vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
@@ -23,6 +25,11 @@ vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
   ) => ({ name, description, inputSchema, handler })) as never,
   createSdkMcpServer: (options: unknown) => options,
 }));
+vi.mock('../handoff', async (original) => {
+  const actual = await original<typeof import('../handoff')>();
+  return { ...actual, publishHandoff: vi.fn(actual.publishHandoff) };
+});
+vi.mock('../handoff-notebook', () => ({ syncHandoffNotebook: vi.fn() }));
 vi.mock('../tools', async (original) => ({
   ...(await original<typeof import('../tools')>()),
   fetchSkillMenu: vi.fn().mockResolvedValue(null),
@@ -40,6 +47,11 @@ describe('registered publish_handoff tools', () => {
     events = [];
     ambientOutputPath = process.env.POSTHOG_HANDOFF_OUTPUT_PATH;
     delete process.env.POSTHOG_HANDOFF_OUTPUT_PATH;
+    vi.mocked(syncHandoffNotebook).mockReset().mockResolvedValue({
+      outcome: 'skipped',
+      reason: 'no_login',
+      description: 'not logged in to PostHog',
+    });
   });
 
   afterEach(() => {
@@ -54,7 +66,10 @@ describe('registered publish_handoff tools', () => {
   const handoffs = () =>
     events.flatMap((event) => (event.kind === 'handoff' ? [event.text] : []));
 
-  const mcpPublishTool = async (orchestrator?: OrchestratorToolsContext) => {
+  const mcpPublishTool = async (
+    orchestrator?: OrchestratorToolsContext,
+    program: { programId?: string; handoffNotebook?: boolean } = {},
+  ) => {
     const server = (await createWizardToolsServer({
       workingDirectory,
       detectPackageManager: vi.fn(),
@@ -62,6 +77,7 @@ describe('registered publish_handoff tools', () => {
       triageProvider: {} as LLMProvider,
       emit: (event) => events.push(event),
       orchestrator,
+      ...program,
     })) as unknown as {
       tools: { name: string; handler: (args: unknown) => unknown }[];
     };
@@ -133,6 +149,51 @@ describe('registered publish_handoff tools', () => {
     };
 
     expect(result.content[0].text).toContain(TASK_REPORTING_NOTE);
+  });
+
+  it('both tools pass the program id and its notebook setting to publishHandoff', async () => {
+    const program = { programId: 'metrics', handoffNotebook: true };
+    const piTool = createWizardPiTools({
+      workingDirectory,
+      skillsBaseUrl: 'http://localhost:0',
+      emit: (event) => events.push(event),
+      ...program,
+    }).find((t) => t.name === PUBLISH_HANDOFF_TOOL_NAME);
+    if (!piTool) throw new Error('publish_handoff not registered');
+    const mcpTool = await mcpPublishTool(undefined, program);
+    vi.mocked(publishHandoff).mockClear();
+
+    await (piTool.execute as (id: string, args: unknown) => Promise<unknown>)(
+      'call-1',
+      { content: REPORT },
+    );
+    await mcpTool.handler({ content: REPORT });
+
+    expect(vi.mocked(publishHandoff).mock.calls.map((c) => c[2])).toEqual([
+      expect.objectContaining(program),
+      expect.objectContaining(program),
+    ]);
+    expect(syncHandoffNotebook).toHaveBeenCalledTimes(2);
+    expect(syncHandoffNotebook).toHaveBeenLastCalledWith(REPORT, 'metrics');
+  });
+
+  it('a program that does not mirror makes no notebook through either tool', async () => {
+    const piTool = createWizardPiTools({
+      workingDirectory,
+      skillsBaseUrl: 'http://localhost:0',
+      emit: (event) => events.push(event),
+      programId: 'audit',
+    }).find((t) => t.name === PUBLISH_HANDOFF_TOOL_NAME);
+    if (!piTool) throw new Error('publish_handoff not registered');
+    const mcpTool = await mcpPublishTool(undefined, { programId: 'audit' });
+
+    await (piTool.execute as (id: string, args: unknown) => Promise<unknown>)(
+      'call-1',
+      { content: REPORT },
+    );
+    await mcpTool.handler({ content: REPORT });
+
+    expect(syncHandoffNotebook).not.toHaveBeenCalled();
   });
 
   it('describes publishing as the run report, not a task outcome', () => {

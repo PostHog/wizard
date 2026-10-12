@@ -9,11 +9,15 @@ import { HostResolution } from '@shared/host-resolution';
 import { TaskStatus } from '@shared/task-status';
 import type { TaskItem } from '@programs/session/session-store';
 import { VERSION } from '@shared/version';
-import { currentCredentials } from '@shared/oauth-session';
+import {
+  currentCredentials,
+  rotateAfterUnauthorized,
+} from '@shared/oauth-session';
 
 vi.mock('@shared/oauth-session', async (original) => ({
   ...(await original<typeof import('@shared/oauth-session')>()),
   currentCredentials: vi.fn(),
+  rotateAfterUnauthorized: vi.fn(),
 }));
 
 const ID = '019edb1a-cce4-4000-8f6d-682061862da9';
@@ -330,11 +334,19 @@ it('refreshes a 401 through OAuth but never assumes refresh widens the grant', a
   const { sync, session, fetchImpl } = setup('cloud');
   session.credentials!.refreshToken = 'phr_test';
   fetchImpl.mockResolvedValueOnce(new Response(null, { status: 401 }));
-  let held = session.credentials!;
-  vi.mocked(currentCredentials).mockImplementation((_fallback, force) => {
-    if (force) held = { ...held, accessToken: 'pha_refreshed' };
-    return Promise.resolve(held);
-  });
+  vi.mocked(rotateAfterUnauthorized).mockImplementation((held) =>
+    Promise.resolve({
+      kind: 'rotated',
+      credentials: { ...held, accessToken: 'pha_refreshed' },
+    }),
+  );
+  vi.mocked(currentCredentials).mockImplementation((_fallback) =>
+    Promise.resolve(
+      vi.mocked(rotateAfterUnauthorized).mock.calls.length > 0
+        ? { ...session.credentials!, accessToken: 'pha_refreshed' }
+        : session.credentials!,
+    ),
+  );
   sync.capture([task()]);
   await sync.shutdown('completed', 2000);
   expect(fetchImpl).toHaveBeenCalledTimes(2);

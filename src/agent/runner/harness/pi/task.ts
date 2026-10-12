@@ -395,6 +395,8 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
       triageProvider: boot.triageProvider,
       emit,
       taskAgent: orchestrator.currentTaskId !== undefined,
+      programId: boot.programId,
+      handoffNotebook: boot.handoffNotebook,
       // Present only for a task allowed to ask; without it wizard_ask errors
       // instead of hanging on a prompt nobody will ever see.
       askBridge,

@@ -106,6 +106,10 @@ export interface PiToolsContext {
   emit?: ProgressEmitter;
   /** Set for one task of an orchestrated run: `publish_handoff` then reminds it to report with complete_task. */
   taskAgent?: boolean;
+  /** The program running, so its `publish_handoff` notebook stays separate from another program's. */
+  programId?: string;
+  /** The program mirrors the handoff report into a PostHog notebook. */
+  handoffNotebook?: boolean;
 }
 
 export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
@@ -565,12 +569,14 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
         description: PUBLISH_HANDOFF_CONTENT_DESCRIPTION,
       }),
     }),
-    execute(_id, args) {
-      const result = publishHandoff(args.content, ctx.emit, {
+    async execute(_id, args) {
+      const result = await publishHandoff(args.content, ctx.emit, {
         taskAgent: ctx.taskAgent,
+        programId: ctx.programId,
+        handoffNotebook: ctx.handoffNotebook,
       });
       logToFile(`[pi] publish_handoff: ${result.message}`);
-      return Promise.resolve(text(result.message));
+      return text(result.message);
     },
   });
 
