@@ -69,4 +69,18 @@ describe('reportFsError (via walkProjectFiles / safeReadFile)', () => {
     expect(captureException).not.toHaveBeenCalled();
     expect(mockLogToFile).toHaveBeenCalledTimes(1);
   });
+
+  it.each(['UNKNOWN', 'EBUSY'])(
+    'safeReadFile does not capture Windows read error %s',
+    (code) => {
+      vi.spyOn(fs, 'statSync').mockReturnValue({ size: 1 } as fs.Stats);
+      vi.spyOn(fs, 'readFileSync').mockImplementation(() => {
+        throw errnoError(code);
+      });
+
+      expect(safeReadFile('/some/.env')).toBeNull();
+      expect(captureException).not.toHaveBeenCalled();
+      expect(mockLogToFile).toHaveBeenCalledTimes(1);
+    },
+  );
 });
