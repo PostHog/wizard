@@ -362,6 +362,37 @@ type AgentRunConfig = {
   emit?: ProgressEmitter;
 };
 
+/**
+ * The SDK system prompt for one query: the Claude Code preset with the run's
+ * commandments appended. A pinned token's operator prompt goes last in that
+ * append, with nothing after it, because the gateway accepts a system unit that
+ * ends with the pinned bytes. The SDK merges `append` into the preset's own
+ * block, so a separate block is not available.
+ */
+export function sdkSystemPromptFor(args: {
+  pinned: string | undefined;
+  commandments: string;
+}): {
+  type: 'preset';
+  preset: 'claude_code';
+  append: string;
+  excludeDynamicSections?: true;
+} {
+  const { pinned, commandments } = args;
+  return {
+    type: 'preset',
+    preset: 'claude_code',
+    // Append the run's commandments rather than replacing the preset so we
+    // keep default Claude Code behaviors.
+    append:
+      pinned === undefined ? commandments : `${commandments}\n\n${pinned}`,
+    // Claude Code appends a git-status section after `append` in the same
+    // block, which would leave the pin short of the end. This moves it into
+    // the first user message instead.
+    ...(pinned === undefined ? {} : { excludeDynamicSections: true as const }),
+  };
+}
+
 const NO_PROGRESS: ProgressEmitter = () => undefined;
 
 /**
@@ -614,6 +645,7 @@ export async function initializeAgent(
         baseURL: current.gatewayUrl,
         authToken: current.token,
         teamId: current.teamId,
+        systemPrompt: current.systemPrompt,
         wizardMetadata: triageMetadata,
         wizardFlags: config.wizardFlags ?? {},
       };
@@ -1073,6 +1105,17 @@ export async function runAgent(
     agentConfig.capture?.setInitialPrompt(prompt);
 
     const runQuery = async (resume?: string): Promise<'done' | 'remint'> => {
+      // Read per query: a re-mint may bring a new pinned prompt.
+      const systemPrompt = sdkSystemPromptFor({
+        pinned: agentConfig.gatewayAuth.systemPrompt,
+        // An orchestrator context is present only on a task run — that is
+        // what picks the sequence.
+        commandments: assembleCommandments({
+          program: agentConfig.program,
+          sequence: agentConfig.sequence,
+          harness: Harness.anthropic,
+        }),
+      });
       const response = query({
         prompt: createPromptStream(resume ? RESUME_INSTRUCTION : prompt),
         options: {
@@ -1102,6 +1145,16 @@ export async function runAgent(
                     : undefined,
                 },
               },
+          // A pinned token refuses any call without the pinned system block,
+          // and a subagent's request has its own system prompt, so the Agent
+          // tool is off on pinned runs. Merged with the program's own list.
+          ...(agentConfig.gatewayAuth.systemPrompt === undefined
+            ? {}
+            : {
+                disallowedTools: [
+                  ...new Set([...(agentConfig.disallowedTools ?? []), 'Agent']),
+                ],
+              }),
           // Load skills from project's .claude/skills/ directory
           settingSources: agentConfig.readOnly ? [] : ['project'],
           // The SDK approves file tools inside the project without canUseTool, so env files are
@@ -1109,6 +1162,12 @@ export async function runAgent(
           settings: {
             disableAllHooks: true,
             permissions: { deny: [...ENV_FILE_DENY_RULES] },
+            // Compaction rebuilds the system prompt and puts the git status
+            // after the pin whatever excludeDynamicSections says, so a pinned
+            // run turns the section off.
+            ...(agentConfig.gatewayAuth.systemPrompt === undefined
+              ? {}
+              : { includeGitInstructions: false }),
           },
           // Enable all discovered skills. Omitting this is NOT "skills off" —
           // it just means no SDK auto-config — so we set 'all' explicitly to
@@ -1229,18 +1288,13 @@ export async function runAgent(
             logToFile('canUseTool result:', result);
             return Promise.resolve(result);
           },
-          systemPrompt: {
-            type: 'preset',
-            preset: 'claude_code',
-            // Append the run's commandments rather than replacing the preset so
-            // we keep default Claude Code behaviors. An orchestrator context is
-            // present only on a task run — that is what picks the sequence.
-            append: assembleCommandments({
-              program: agentConfig.program,
-              sequence: agentConfig.sequence,
-              harness: Harness.anthropic,
-            }),
-          },
+          systemPrompt,
+          // The CLI's title call is a model call of its own, with its own
+          // system prompt, so a pinned token would have it refused. A given
+          // title skips it.
+          ...(agentConfig.gatewayAuth.systemPrompt === undefined
+            ? {}
+            : { title: 'PostHog wizard' }),
           tools: agentConfig.readOnly
             ? [...READ_ONLY_TOOLS]
             : { type: 'preset', preset: 'claude_code' },

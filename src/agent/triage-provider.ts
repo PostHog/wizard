@@ -7,7 +7,11 @@
 
 import { Harness } from '@shared/constants';
 import { logToFile } from '@utils/debug';
-import { buildGatewayModel, gatewayApiFor } from './runner/harness/pi/gateway';
+import {
+  buildGatewayModel,
+  gatewayApiFor,
+  pinOperatorPrompt,
+} from './runner/harness/pi/gateway';
 import { modelCapabilities, triageModelFor } from './runner/switchboard/models';
 import type { LLMProvider } from '@posthog/warlock';
 
@@ -27,6 +31,8 @@ export interface TriageGatewayAuth {
    *  `CallType.yaraTriage` so scan spend is separable from agent work. */
   wizardMetadata?: Record<string, string>;
   wizardFlags?: Record<string, string>;
+  /** The operator prompt the run's token is pinned to, when the mint pinned one. */
+  systemPrompt?: string;
 }
 
 /**
@@ -57,6 +63,7 @@ export function createTriageLLMProvider(
     const { completeSimple } = await import('@earendil-works/pi-ai');
     const current = await resolveAuth();
     const authToken = current.authToken;
+    const pinned = current.systemPrompt;
     const model = buildGatewayModel({
       gatewayUrl: current.baseURL,
       accessToken: authToken,
@@ -83,6 +90,11 @@ export function createTriageLLMProvider(
           reasoning:
             reasoning && thinkingLevel !== 'off' ? thinkingLevel : undefined,
           signal: controller.signal,
+          // Triage has no system prompt of its own, so the pinned text is the
+          // request's only system unit.
+          onPayload: pinned
+            ? (payload) => pinOperatorPrompt(model.api, payload, pinned)
+            : undefined,
         },
       );
       const text = message.content

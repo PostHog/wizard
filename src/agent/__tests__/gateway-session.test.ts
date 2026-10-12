@@ -192,6 +192,55 @@ describe('gatewayAuth', () => {
     );
   });
 
+  describe('the pinned operator prompt', () => {
+    const mint = (extra: Record<string, unknown>) =>
+      fetchMock.mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            token: 'phe_minted',
+            expires_at: new Date(Date.now() + 3600_000).toISOString(),
+            gateway_url: 'https://ai-gateway.us.posthog.com',
+            ...extra,
+          }),
+      });
+
+    it('is carried with the session byte for byte, with its version', async () => {
+      // Whitespace and unicode matter: the gateway hashes these exact bytes.
+      const text =
+        '  You are the wizard.\n\n[posthog:abort] \u00e9 \ud83e\udd94\n';
+      mint({ system_prompt: text, system_prompt_version: 4 });
+
+      const auth = await gatewayAuth(host, 'pha_oauth', 'integration');
+
+      expect(auth.systemPrompt).toBe(text);
+      expect(auth.systemPromptVersion).toBe(4);
+      // A cache hit keeps it: later readers get the same pinned text.
+      expect(
+        (await gatewayAuth(host, 'pha_oauth', 'integration')).systemPrompt,
+      ).toBe(text);
+    });
+
+    it('is absent when the mint pins none, leaving the auth as it always was', async () => {
+      mint({});
+
+      const auth = await gatewayAuth(host, 'pha_oauth', 'integration');
+
+      expect(auth).not.toHaveProperty('systemPrompt');
+      expect(auth).not.toHaveProperty('systemPromptVersion');
+    });
+
+    it.each([42, '', { text: 'x' }])(
+      'fails the run when the mint returns %j, which the gateway would refuse on every call',
+      async (bad) => {
+        mint({ system_prompt: bad });
+        await expect(
+          gatewayAuth(host, 'pha_oauth', 'integration'),
+        ).rejects.toBeInstanceOf(GatewayMintFailed);
+      },
+    );
+  });
+
   it.each([
     ['http://localhost:8010', 'http://localhost:8080'],
     ['http://127.0.0.1:8010', 'http://localhost:8080'],

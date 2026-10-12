@@ -39,6 +39,7 @@ import { gatewayAuth, type GatewayAuth } from '../../../gateway-session';
 import { currentAccessToken } from '@shared/oauth-session';
 import {
   buildGatewayProvider,
+  operatorPromptExtension,
   GATEWAY_PROVIDER,
   withGatewayRemint,
 } from './gateway';
@@ -252,12 +253,15 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
     } = sdk;
 
     // Reads the live OAuth token, so a mid-run rotation re-mints on the new one.
+    // `liveAuth` is the bearer pi currently sends, so the operator prompt it
+    // pins follows a re-mint.
+    let liveAuth: GatewayAuth;
     const refreshAuth = async () =>
-      gatewayAuth(
+      (liveAuth = await gatewayAuth(
         boot.credentials.host,
         await currentAccessToken(boot.credentials),
         boot.programId,
-      );
+      ));
     const auth = await refreshAuth();
     const providerInputs = (current: GatewayAuth) => ({
       gatewayUrl: current.gatewayUrl,
@@ -270,7 +274,7 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
       // back to the model table.
       effort,
     });
-    const { provider, caps } = buildGatewayProvider(providerInputs(auth));
+    const { provider, caps, api } = buildGatewayProvider(providerInputs(auth));
     const registry = ModelRegistry.inMemory(AuthStorage.create());
     registry.registerProvider(GATEWAY_PROVIDER, provider as never);
     const model = registry.find(GATEWAY_PROVIDER, modelId);
@@ -303,9 +307,10 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
 
     // PostHog MCP, for the tasks whose prompt requests it. Tasks that never
     // asked skip the handshake and never see a posthog tool.
-    const extensionFactories = [security.factory] as Array<
-      (pi: unknown) => void
-    >;
+    const extensionFactories = [
+      security.factory,
+      operatorPromptExtension(api, () => liveAuth.systemPrompt),
+    ] as Array<(pi: unknown) => void>;
     let posthogMcp = false;
     if (allowsPostHogMcp(allowedTools)) {
       try {

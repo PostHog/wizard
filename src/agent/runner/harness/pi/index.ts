@@ -30,6 +30,7 @@ import { gatewayAuth, type GatewayAuth } from '../../../gateway-session';
 import { currentAccessToken } from '@shared/oauth-session';
 import {
   buildGatewayProvider,
+  operatorPromptExtension,
   GATEWAY_PROVIDER,
   withGatewayRemint,
 } from './gateway';
@@ -335,12 +336,15 @@ export const piBackend: AgentHarness = {
       // orchestrator's per-task sessions (gateway.ts). gatewayAuth mints the
       // run's scoped token.
       // Reads the live OAuth token, so a mid-run rotation re-mints on the new one.
+      // `liveAuth` is the bearer pi currently sends, so the operator prompt it
+      // pins follows a re-mint.
+      let liveAuth: GatewayAuth;
       const refreshAuth = async () =>
-        gatewayAuth(
+        (liveAuth = await gatewayAuth(
           boot.credentials.host,
           await currentAccessToken(boot.credentials),
           boot.programId,
-        );
+        ));
       const auth = await refreshAuth();
       const providerInputs = (current: GatewayAuth) => ({
         gatewayUrl: current.gatewayUrl,
@@ -402,7 +406,11 @@ export const piBackend: AgentHarness = {
       // created through the sanctioned MCP. Best-effort — if it can't load or
       // connect, the run continues (minus the dashboard step) rather than failing
       // the whole integration. The security factory is always first.
-      const extensionFactories = [security.factory] as Array<
+      const operatorPrompt = operatorPromptExtension(
+        api,
+        () => liveAuth.systemPrompt,
+      );
+      const extensionFactories = [security.factory, operatorPrompt] as Array<
         (pi: unknown) => void
       >;
       let mcpInstructions: string | undefined;
@@ -547,6 +555,7 @@ export const piBackend: AgentHarness = {
           cwd: input.installDir,
           agentDir: getAgentDir(),
           securityFactory: security.subagentFactory,
+          operatorPrompt,
           bashTool: scrubbedBash,
           sdk: { createAgentSession, DefaultResourceLoader, SessionManager },
         }),

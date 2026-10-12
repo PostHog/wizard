@@ -91,6 +91,7 @@ export async function prepareRun(
         baseURL: auth.gatewayUrl,
         authToken: auth.token,
         teamId: auth.teamId,
+        systemPrompt: auth.systemPrompt,
         // `call_type` splits scan spend out of the program's agent cost,
         // the same tag the in-run triage provider carries.
         wizardMetadata: { ...wizardMetadata, call_type: CallType.yaraTriage },

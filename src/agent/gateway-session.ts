@@ -29,6 +29,14 @@ export interface GatewayAuth {
    * old bearer may re-mint once. Before it the mint has to be trusted.
    */
   refreshAtMs: number;
+  /**
+   * The operator system prompt the mint pinned to this token, when it pinned
+   * one. The gateway refuses any call whose first system unit is not exactly
+   * this text, so every model call made with the token must send it first.
+   */
+  systemPrompt?: string;
+  /** Which revision of the pinned prompt this is, for logs. */
+  systemPromptVersion?: number;
 }
 
 interface CachedAuth {
@@ -166,13 +174,24 @@ async function resolveGatewayAuth(
   logToFile(
     `[gateway] minted a scoped token: program=${program} team=${
       minted.teamId ?? 'unknown'
-    } ttl=${Math.round(ttlMs / 1000)}s url=${minted.gatewayUrl}`,
+    } ttl=${Math.round(ttlMs / 1000)}s url=${minted.gatewayUrl}${
+      minted.systemPrompt === undefined
+        ? ''
+        : ` prompt_version=${minted.systemPromptVersion ?? 'unknown'}`
+    }`,
   );
   const auth: GatewayAuth = {
     gatewayUrl: minted.gatewayUrl,
     token: minted.token,
     teamId: minted.teamId,
     refreshAtMs: staleAtMs,
+    // Spread so a mint without a prompt yields the auth it always did.
+    ...(minted.systemPrompt === undefined
+      ? {}
+      : {
+          systemPrompt: minted.systemPrompt,
+          systemPromptVersion: minted.systemPromptVersion,
+        }),
   };
   cached = { key, auth, staleAtMs };
   return auth;
@@ -238,6 +257,8 @@ interface MintedToken {
   expiresAt: string;
   gatewayUrl: string;
   teamId?: number;
+  systemPrompt?: string;
+  systemPromptVersion?: number;
 }
 
 /**
@@ -404,6 +425,8 @@ async function mintGatewayToken(
       expires_at?: string;
       gateway_url?: string;
       team_id?: number;
+      system_prompt?: unknown;
+      system_prompt_version?: unknown;
     };
     // Checked one at a time, not in a loop, so each clause narrows the optional
     // field for the return below and each names itself in the failure.
@@ -432,11 +455,36 @@ async function mintGatewayToken(
     ) {
       gatewayUrl.hostname = 'localhost';
     }
+    // Absent means this mint pins no prompt. A present value that is not text
+    // would leave every call refused by the gateway with a bare 400, so it
+    // fails here where the cause is named.
+    const hasPrompt =
+      body.system_prompt !== undefined && body.system_prompt !== null;
+    if (
+      hasPrompt &&
+      (typeof body.system_prompt !== 'string' || !body.system_prompt)
+    ) {
+      logToFile(
+        '[gateway] mint returned a malformed system_prompt; failing the run',
+      );
+      throw new GatewayMintFailed(
+        'mint response carried a malformed system_prompt',
+      );
+    }
     return {
       token: body.token,
       expiresAt: body.expires_at,
       gatewayUrl: gatewayUrl.origin,
       teamId: body.team_id,
+      ...(hasPrompt
+        ? {
+            systemPrompt: body.system_prompt as string,
+            systemPromptVersion:
+              typeof body.system_prompt_version === 'number'
+                ? body.system_prompt_version
+                : undefined,
+          }
+        : {}),
     };
   } catch (e) {
     // Decisions and failures both pass through: this catch exists for transport
