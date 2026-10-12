@@ -27,6 +27,7 @@ const BENIGN_FS_ERROR_CODES = new Set<string>([
   'ENAMETOOLONG', // path too long
   'EMFILE', // too many open files (environmental, not a wizard bug)
   'ENFILE',
+  'UNKNOWN', // libuv could not map the OS error (seen on Windows reads)
 ]);
 
 /**
