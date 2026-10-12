@@ -63,6 +63,7 @@ import {
 } from '../../../wizard-ask-bridge';
 import {
   PUBLISH_HANDOFF_CONTENT_DESCRIPTION,
+  PUBLISH_HANDOFF_CREATE_NOTEBOOK_DESCRIPTION,
   PUBLISH_HANDOFF_DESCRIPTION,
   PUBLISH_HANDOFF_TOOL_NAME,
   publishHandoff,
@@ -106,6 +107,8 @@ export interface PiToolsContext {
   emit?: ProgressEmitter;
   /** Set for one task of an orchestrated run: `publish_handoff` then reminds it to report with complete_task. */
   taskAgent?: boolean;
+  /** The program running, so its `publish_handoff` notebook stays separate from another program's. */
+  programId?: string;
 }
 
 export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
@@ -559,18 +562,25 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
     label: 'Publish handoff',
     description: PUBLISH_HANDOFF_DESCRIPTION,
     promptSnippet:
-      'publish_handoff(content) — publish the full report markdown to the wizard session',
+      'publish_handoff(content, create_notebook?) — publish the full report markdown to the wizard session, mirrored into a PostHog notebook unless create_notebook is false',
     parameters: Type.Object({
       content: Type.String({
         description: PUBLISH_HANDOFF_CONTENT_DESCRIPTION,
       }),
+      create_notebook: Type.Optional(
+        Type.Boolean({
+          description: PUBLISH_HANDOFF_CREATE_NOTEBOOK_DESCRIPTION,
+        }),
+      ),
     }),
-    execute(_id, args) {
-      const result = publishHandoff(args.content, ctx.emit, {
+    async execute(_id, args) {
+      const result = await publishHandoff(args.content, ctx.emit, {
         taskAgent: ctx.taskAgent,
+        createNotebook: args.create_notebook,
+        programId: ctx.programId,
       });
       logToFile(`[pi] publish_handoff: ${result.message}`);
-      return Promise.resolve(text(result.message));
+      return text(result.message);
     },
   });
 

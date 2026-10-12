@@ -23,6 +23,7 @@ import {
 import { type WizardAskBridge, isFullyCancelled } from '../wizard-ask-bridge';
 import {
   PUBLISH_HANDOFF_CONTENT_DESCRIPTION,
+  PUBLISH_HANDOFF_CREATE_NOTEBOOK_DESCRIPTION,
   PUBLISH_HANDOFF_DESCRIPTION,
   PUBLISH_HANDOFF_TOOL_NAME,
   publishHandoff,
@@ -152,6 +153,9 @@ export interface WizardToolsOptions {
 
   /** Where `publish_handoff` reports. Absent → the handoff is written but reported nowhere. */
   emit?: ProgressEmitter;
+
+  /** The program running, so its `publish_handoff` notebook stays separate from another program's. */
+  programId?: string;
 }
 
 /** Default per-run cap on wizard_ask calls when no override is provided. */
@@ -174,6 +178,7 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
     orchestrator,
     triageProvider,
     emit,
+    programId,
   } = options;
   const sdk = await getSDKModule();
   const { tool, createSdkMcpServer } = sdk;
@@ -762,10 +767,16 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
     PUBLISH_HANDOFF_DESCRIPTION,
     {
       content: z.string().describe(PUBLISH_HANDOFF_CONTENT_DESCRIPTION),
+      create_notebook: z
+        .boolean()
+        .optional()
+        .describe(PUBLISH_HANDOFF_CREATE_NOTEBOOK_DESCRIPTION),
     },
-    (args: { content: string }) => {
-      const result = publishHandoff(args.content, emit, {
+    async (args: { content: string; create_notebook?: boolean }) => {
+      const result = await publishHandoff(args.content, emit, {
         taskAgent: orchestrator?.currentTaskId !== undefined,
+        createNotebook: args.create_notebook,
+        programId,
       });
       logToFile(`publish_handoff: ${result.message}`);
       return {

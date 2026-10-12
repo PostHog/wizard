@@ -12,6 +12,7 @@ import {
   PUBLISH_HANDOFF_TOOL_NAME,
   TASK_REPORTING_NOTE,
 } from '../handoff';
+import { syncHandoffNotebook } from '../handoff-notebook';
 
 // The MCP server's tool list, without the SDK's transport around it.
 vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
@@ -23,6 +24,7 @@ vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
   ) => ({ name, description, inputSchema, handler })) as never,
   createSdkMcpServer: (options: unknown) => options,
 }));
+vi.mock('../handoff-notebook', () => ({ syncHandoffNotebook: vi.fn() }));
 vi.mock('../tools', async (original) => ({
   ...(await original<typeof import('../tools')>()),
   fetchSkillMenu: vi.fn().mockResolvedValue(null),
@@ -40,6 +42,11 @@ describe('registered publish_handoff tools', () => {
     events = [];
     ambientOutputPath = process.env.POSTHOG_HANDOFF_OUTPUT_PATH;
     delete process.env.POSTHOG_HANDOFF_OUTPUT_PATH;
+    vi.mocked(syncHandoffNotebook).mockReset().mockResolvedValue({
+      outcome: 'skipped',
+      reason: 'no_login',
+      description: 'not logged in to PostHog',
+    });
   });
 
   afterEach(() => {
@@ -133,6 +140,29 @@ describe('registered publish_handoff tools', () => {
     };
 
     expect(result.content[0].text).toContain(TASK_REPORTING_NOTE);
+  });
+
+  it('both tools forward create_notebook, and mirror the report unless it is false', async () => {
+    const piTool = createWizardPiTools({
+      workingDirectory,
+      skillsBaseUrl: 'http://localhost:0',
+      emit: (event) => events.push(event),
+    }).find((t) => t.name === PUBLISH_HANDOFF_TOOL_NAME);
+    if (!piTool) throw new Error('publish_handoff not registered');
+    const runPi = (args: unknown) =>
+      (piTool.execute as (id: string, args: unknown) => Promise<unknown>)(
+        'call-1',
+        args,
+      );
+    const mcpTool = await mcpPublishTool();
+
+    await runPi({ content: REPORT, create_notebook: false });
+    await mcpTool.handler({ content: REPORT, create_notebook: false });
+    expect(syncHandoffNotebook).not.toHaveBeenCalled();
+
+    await runPi({ content: REPORT });
+    await mcpTool.handler({ content: REPORT });
+    expect(syncHandoffNotebook).toHaveBeenCalledTimes(2);
   });
 
   it('describes publishing as the run report, not a task outcome', () => {

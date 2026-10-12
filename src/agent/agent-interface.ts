@@ -689,6 +689,7 @@ export async function initializeAgent(
       orchestrator: config.orchestrator,
       triageProvider,
       emit: config.emit,
+      programId: config.programId,
     });
     mcpServers['wizard-tools'] = wizardToolsServer;
 

@@ -522,6 +522,7 @@ export const piBackend: AgentHarness = {
           skillsBaseUrl: boot.skillsBaseUrl,
           triageProvider: boot.triageProvider,
           emit,
+          programId: boot.programId,
           detectPackageManager: config.detectPackageManager,
           // The host ask bridge — lets interactive programs (self-driving) ask
           // the user through pi. Threaded from the runner, same path as the
