@@ -24,7 +24,10 @@ import {
 import { analytics } from '@utils/analytics';
 import { AgentErrorType } from '../../../agent-interface';
 import { AgentSignals, REMARK_INSTRUCTION } from '../../../signals';
-import { AgentOutputSignals } from '../../../output-signals';
+import {
+  AgentOutputSignals,
+  operatorAbortReason,
+} from '../../../output-signals';
 import { assembleCommandments } from '../../switchboard/commandments';
 import { gatewayAuth, type GatewayAuth } from '../../../gateway-session';
 import { currentAccessToken } from '@shared/oauth-session';
@@ -299,6 +302,16 @@ export const piBackend: AgentHarness = {
     let mcpCleanup: (() => void) | undefined;
     let aioFailed = true;
     let cancellation: ReturnType<typeof bindPiCancellation> | undefined;
+    let refusalReason: string | undefined;
+    const refusalResult = (): AgentResult => {
+      spinner.stop('Wizard aborted');
+      captureAborted(AgentErrorType.ABORT);
+      return {
+        kind: 'abort',
+        classification: AgentErrorType.ABORT,
+        message: refusalReason,
+      };
+    };
     let timedOut = false;
     let timeoutAbort: Promise<void> | undefined;
     // Read by the catch path; undefined until setup creates the extension.
@@ -626,6 +639,14 @@ export const piBackend: AgentHarness = {
             turns.noteAssistantTurn(event.message);
             const blocks = textBlocks(event.message);
             const assistant = blocks.join('').trim();
+            refusalReason ??= operatorAbortReason(
+              assistant,
+              liveAuth.systemPrompt,
+            );
+            if (refusalReason) {
+              cancellation?.abort();
+              break;
+            }
             // A schema-bound answer is the turn's last block, not the joined text.
             lastAssistantText = (blocks.at(-1) ?? '').trim();
             if (structured) {
@@ -736,6 +757,7 @@ export const piBackend: AgentHarness = {
           !security.state.criticalViolation &&
           !inputs.signal?.aborted &&
           !terminal &&
+          !refusalReason &&
           hasOpenTasks(wizardTaskTools.store)
         ) {
           continueNudges += 1;
@@ -751,6 +773,7 @@ export const piBackend: AgentHarness = {
           !structured &&
           !security.state.criticalViolation &&
           !terminal &&
+          !refusalReason &&
           !inputs.signal?.aborted
         ) {
           try {
@@ -777,6 +800,9 @@ export const piBackend: AgentHarness = {
       }
       if (timedOut && structured && !security.state.criticalViolation)
         return timedOutResult(structured.timeoutMs);
+
+      if (refusalReason && !security.state.criticalViolation)
+        return refusalResult();
 
       if (terminal && !security.state.criticalViolation) {
         spinner.stop(
@@ -895,6 +921,7 @@ export const piBackend: AgentHarness = {
         };
       }
       if (securityState?.criticalViolation) return yaraViolationResult();
+      if (refusalReason) return refusalResult();
       if (timedOut && structured) return timedOutResult(structured.timeoutMs);
       const message = err instanceof Error ? err.message : String(err);
       logToFile(`[pi] run error: ${message}`);

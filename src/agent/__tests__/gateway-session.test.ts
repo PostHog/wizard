@@ -677,7 +677,11 @@ describe('gatewayAuth', () => {
     expect(fetchMock).toHaveBeenCalledWith(
       expect.any(String),
       expect.objectContaining({
-        body: JSON.stringify({ program: 'audit', reads_refusal_reason: true }),
+        body: JSON.stringify({
+          program: 'audit',
+          reads_refusal_reason: true,
+          supports_prompt_pinning: true,
+        }),
       }),
     );
   });

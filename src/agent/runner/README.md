@@ -25,3 +25,17 @@ linear.
 
 A new model needs gateway admission as well as wizard support. See the
 [development guide](../../../.claude/skills/wizard-development/SKILL.md#execution-policy-and-model-admission).
+
+## Operator refusals
+
+The mint receives `supports_prompt_pinning: true`. When it returns a system
+prompt, each model request carries that prompt with the minted bearer. SDK
+queries share prompt composition and side-call settings, including the MCP
+tutorial. Triage resolves the current bearer and prompt together on every call.
+
+A pinned assistant turn beginning `[posthog:abort]` returns an agent abort with
+its reason. Harnesses stop before continuation prompts, remarks or success.
+Sequences report it as failure and skip post-run work. Orchestrated tasks record
+a failed queue entry and publish it through existing task progress. A caller's
+abort signal still means cancellation. Unpinned runs retain their existing
+output handling.

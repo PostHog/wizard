@@ -68,7 +68,7 @@ import {
 } from './signals';
 import { classifyAuthFailure } from '@shared/errors';
 import { isGrantRevoked } from '@shared/auth-session-state';
-import { AgentOutputSignals } from './output-signals';
+import { AgentOutputSignals, operatorAbortReason } from './output-signals';
 
 // Signal vocabulary and the output parser live in dedicated modules; re-export
 // so existing importers of these from agent-interface keep working.
@@ -362,34 +362,32 @@ type AgentRunConfig = {
   emit?: ProgressEmitter;
 };
 
-/**
- * The SDK system prompt for one query: the Claude Code preset with the run's
- * commandments appended. A pinned token's operator prompt goes last in that
- * append, with nothing after it, because the gateway accepts a system unit that
- * ends with the pinned bytes. The SDK merges `append` into the preset's own
- * block, so a separate block is not available.
- */
-export function sdkSystemPromptFor(args: {
+/** Keep the pinned bytes intact across SDK requests, compaction and side calls. */
+export function sdkPromptOptionsFor(args: {
   pinned: string | undefined;
-  commandments: string;
-}): {
-  type: 'preset';
-  preset: 'claude_code';
-  append: string;
-  excludeDynamicSections?: true;
-} {
-  const { pinned, commandments } = args;
+  instructions: string;
+  settings: { disableAllHooks: boolean; permissions?: { deny: string[] } };
+  disallowedTools?: readonly string[];
+}) {
+  const { pinned, instructions, settings, disallowedTools = [] } = args;
   return {
-    type: 'preset',
-    preset: 'claude_code',
-    // Append the run's commandments rather than replacing the preset so we
-    // keep default Claude Code behaviors.
-    append:
-      pinned === undefined ? commandments : `${commandments}\n\n${pinned}`,
-    // Claude Code appends a git-status section after `append` in the same
-    // block, which would leave the pin short of the end. This moves it into
-    // the first user message instead.
-    ...(pinned === undefined ? {} : { excludeDynamicSections: true as const }),
+    systemPrompt: {
+      type: 'preset' as const,
+      preset: 'claude_code' as const,
+      append:
+        pinned === undefined ? instructions : `${instructions}\n\n${pinned}`,
+      ...(pinned === undefined ? {} : { excludeDynamicSections: true }),
+    },
+    settings: {
+      ...settings,
+      ...(pinned === undefined ? {} : { includeGitInstructions: false }),
+    },
+    ...(pinned === undefined
+      ? {}
+      : {
+          title: 'PostHog wizard',
+          disallowedTools: [...new Set([...disallowedTools, 'Agent'])],
+        }),
   };
 }
 
@@ -1106,16 +1104,22 @@ export async function runAgent(
 
     const runQuery = async (resume?: string): Promise<'done' | 'remint'> => {
       // Read per query: a re-mint may bring a new pinned prompt.
-      const systemPrompt = sdkSystemPromptFor({
+      const promptOptions = sdkPromptOptionsFor({
         pinned: agentConfig.gatewayAuth.systemPrompt,
         // An orchestrator context is present only on a task run — that is
         // what picks the sequence.
-        commandments: assembleCommandments({
+        instructions: assembleCommandments({
           program: agentConfig.program,
           sequence: agentConfig.sequence,
           harness: Harness.anthropic,
         }),
+        settings: {
+          disableAllHooks: true,
+          permissions: { deny: [...ENV_FILE_DENY_RULES] },
+        },
+        disallowedTools: agentConfig.disallowedTools,
       });
+      const stopHook = createStopHook(signals, config?.requestRemark ?? true);
       const response = query({
         prompt: createPromptStream(resume ? RESUME_INSTRUCTION : prompt),
         options: {
@@ -1145,30 +1149,8 @@ export async function runAgent(
                     : undefined,
                 },
               },
-          // A pinned token refuses any call without the pinned system block,
-          // and a subagent's request has its own system prompt, so the Agent
-          // tool is off on pinned runs. Merged with the program's own list.
-          ...(agentConfig.gatewayAuth.systemPrompt === undefined
-            ? {}
-            : {
-                disallowedTools: [
-                  ...new Set([...(agentConfig.disallowedTools ?? []), 'Agent']),
-                ],
-              }),
           // Load skills from project's .claude/skills/ directory
           settingSources: agentConfig.readOnly ? [] : ['project'],
-          // The SDK approves file tools inside the project without canUseTool, so env files are
-          // denied as rules, which the sandbox applies to commands too. Repo hooks would bypass both.
-          settings: {
-            disableAllHooks: true,
-            permissions: { deny: [...ENV_FILE_DENY_RULES] },
-            // Compaction rebuilds the system prompt and puts the git status
-            // after the pin whatever excludeDynamicSections says, so a pinned
-            // run turns the section off.
-            ...(agentConfig.gatewayAuth.systemPrompt === undefined
-              ? {}
-              : { includeGitInstructions: false }),
-          },
           // Enable all discovered skills. Omitting this is NOT "skills off" —
           // it just means no SDK auto-config — so we set 'all' explicitly to
           // preserve the prior behavior where 'Skill' in allowedTools exposed
@@ -1288,13 +1270,7 @@ export async function runAgent(
             logToFile('canUseTool result:', result);
             return Promise.resolve(result);
           },
-          systemPrompt,
-          // The CLI's title call is a model call of its own, with its own
-          // system prompt, so a pinned token would have it refused. A given
-          // title skips it.
-          ...(agentConfig.gatewayAuth.systemPrompt === undefined
-            ? {}
-            : { title: 'PostHog wizard' }),
+          ...promptOptions,
           tools: agentConfig.readOnly
             ? [...READ_ONLY_TOOLS]
             : { type: 'preset', preset: 'claude_code' },
@@ -1313,7 +1289,10 @@ export async function runAgent(
               : createPostToolUseYaraHooks(triageProvider, onYaraTerminate),
             Stop: [
               {
-                hooks: [createStopHook(signals, config?.requestRemark ?? true)],
+                hooks: [
+                  (input: { stop_hook_active: boolean }) =>
+                    abortReason ? {} : stopHook(input),
+                ],
                 timeout: 30,
               },
             ],
@@ -1360,6 +1339,24 @@ export async function runAgent(
           // forget: failures are debug-logged inside the module and never touch
           // the stream loop.
           agentConfig.capture?.captureFromAnthropicSDKMessage(message);
+
+          if (message.type === 'assistant' && !abortReason) {
+            const content = message.message?.content;
+            const text = Array.isArray(content)
+              ? content
+                  .filter((block: { type: string }) => block.type === 'text')
+                  .map((block: { text: string }) => block.text)
+                  .join('')
+              : '';
+            abortReason =
+              operatorAbortReason(text, agentConfig.gatewayAuth.systemPrompt) ??
+              null;
+            if (abortReason) {
+              abortController.abort();
+              signalDone();
+              continue;
+            }
+          }
 
           // Pass receivedSuccessResult so handleSDKMessage can suppress user-facing error
           // output for post-success cleanup errors while still logging them to file

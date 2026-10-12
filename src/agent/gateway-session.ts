@@ -389,7 +389,11 @@ async function mintGatewayToken(
       // The flag tells the server this build reads a refusal, so it may answer
       // with the reason. A build that omits it gets a 404, which is its signal
       // to fall back to the legacy gateway.
-      body: JSON.stringify({ program, reads_refusal_reason: true }),
+      body: JSON.stringify({
+        program,
+        reads_refusal_reason: true,
+        supports_prompt_pinning: true,
+      }),
       signal: AbortSignal.timeout(MINT_TIMEOUT_MS),
     });
     if (!resp.ok) {

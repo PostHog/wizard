@@ -34,12 +34,7 @@ export type TaskResolver = (
  *  (via the task agent calling complete_task). */
 export type RunTask = (task: QueuedTask) => Promise<void>;
 
-/**
- * Thrown by a `RunTask` when its harness returned a decided failure that ends
- * the whole run (a 401 the auth screen already reported), not just the task.
- * `drainQueue` lets it through so the sequence can return the failure where
- * the harness used to exit the process.
- */
+/** A terminal harness outcome that fails its task and ends the whole run. */
 export class RunTaskFatal extends Error {
   constructor(
     public readonly failure: AgentFailure,
@@ -77,7 +72,13 @@ async function runOne(
     await runTask(task);
   } catch (error) {
     if (signal?.aborted) return;
-    if (error instanceof RunTaskFatal) throw error;
+    if (error instanceof RunTaskFatal) {
+      store.fail(task.id, {
+        type: error.failure.code,
+        message: error.failure.message ?? 'Agent failed',
+      });
+      throw error;
+    }
     // The task threw rather than reporting. The outcome check below handles
     // the queue; the exception itself should never be silent.
     logToFile(`[executor] runTask threw for ${task.type}:`, error);

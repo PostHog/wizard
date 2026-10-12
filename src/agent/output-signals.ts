@@ -134,3 +134,15 @@ export class AgentOutputSignals {
     return undefined;
   }
 }
+
+/** Only a leading refusal from a pinned assistant turn ends the run. */
+export function operatorAbortReason(
+  text: string,
+  pinned: string | undefined,
+): string | undefined {
+  if (pinned === undefined) return undefined;
+  const match = text.trimStart().match(/^\[posthog:abort\](?:\s|$)([\s\S]*)/);
+  return match
+    ? match[1].trim() || 'The operator policy refused this request.'
+    : undefined;
+}

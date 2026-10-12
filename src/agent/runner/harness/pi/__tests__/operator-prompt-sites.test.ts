@@ -1,4 +1,6 @@
 import { piBackend } from '..';
+import { AgentErrorType } from '@agent/signals';
+import { analytics } from '@utils/analytics';
 import { Harness, Sequence, GPT5_6_LUNA_MODEL } from '@shared/constants';
 import { HostResolution } from '@shared/host-resolution';
 import type { BackendRunInputs, TaskRunInputs } from '../../types';
@@ -18,6 +20,16 @@ const state = vi.hoisted(() => ({
   factories: [] as ExtensionFactory[],
   systemPrompt: undefined as string | undefined,
   auth: {} as Record<string, unknown>,
+  refreshedAuth: undefined as Record<string, unknown> | undefined,
+  provider: {} as { apiKey?: string },
+  requests: [] as { bearer: string | undefined; payload: unknown }[],
+  events: [] as unknown[],
+  prompts: [] as string[],
+  subscriber: undefined as ((event: never) => void) | undefined,
+  abort: vi.fn(() => Promise.resolve()),
+  rejectFirst: false,
+  throwAfterEvents: false,
+  openTasks: new Map(),
 }));
 vi.mock('@utils/analytics', () => ({
   analytics: { wizardCapture: vi.fn(), capture: vi.fn() },
@@ -26,7 +38,14 @@ vi.mock('@utils/debug');
 vi.mock('@agent/yara-hooks', () => ({ prewarmYaraScanner: vi.fn() }));
 vi.mock('@agent/gateway-session', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@agent/gateway-session')>()),
-  gatewayAuth: vi.fn(() => Promise.resolve(state.auth)),
+  gatewayAuth: vi.fn(() => {
+    const auth = state.auth;
+    if (state.refreshedAuth) {
+      state.auth = state.refreshedAuth;
+      state.refreshedAuth = undefined;
+    }
+    return Promise.resolve(auth);
+  }),
 }));
 vi.mock('../security', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../security')>()),
@@ -43,7 +62,7 @@ vi.mock('../mcp', () => ({
 }));
 vi.mock('../tools', () => ({ createWizardPiTools: () => [] }));
 vi.mock('../tasks', () => ({
-  createWizardPiTaskTools: () => ({ tools: [], store: new Map() }),
+  createWizardPiTaskTools: () => ({ tools: [], store: state.openTasks }),
 }));
 vi.mock('../orchestrator-tools', () => ({
   createPiOrchestratorTools: () => [],
@@ -63,7 +82,9 @@ vi.mock('@earendil-works/pi-coding-agent', () => ({
   AuthStorage: { create: () => ({}) },
   ModelRegistry: {
     inMemory: () => ({
-      registerProvider: () => undefined,
+      registerProvider: (_name: string, provider: { apiKey: string }) => {
+        state.provider = provider;
+      },
       find: () => ({ id: GPT5_6_LUNA_MODEL, api: 'openai-responses' }),
     }),
   },
@@ -79,12 +100,37 @@ vi.mock('@earendil-works/pi-coding-agent', () => ({
     Promise.resolve({
       session: {
         bindExtensions: () => Promise.resolve(),
-        subscribe: () => () => undefined,
-        prompt: () => Promise.resolve(),
+        subscribe: (handler: (event: never) => void) => {
+          state.subscriber = handler;
+          return () => {
+            state.subscriber = undefined;
+          };
+        },
+        prompt: async (text: string) => {
+          state.prompts.push(text);
+          state.requests.push({
+            bearer: state.provider.apiKey,
+            payload: await sentRequest(),
+          });
+          if (state.rejectFirst && state.requests.length === 1) {
+            state.subscriber?.({
+              type: 'message_end',
+              message: {
+                role: 'assistant',
+                content: [],
+                stopReason: 'error',
+                errorMessage: '401 Unauthorized',
+              },
+            } as never);
+            return;
+          }
+          for (const event of state.events) state.subscriber?.(event as never);
+          if (state.throwAfterEvents) throw new Error('Session aborted');
+        },
         getSessionStats: () => ({
           tokens: { input: 1, output: 1, cacheWrite: 0, cacheRead: 0 },
         }),
-        abort: () => Promise.resolve(),
+        abort: state.abort,
       },
     }),
 }));
@@ -190,7 +236,7 @@ const runMain = () =>
     middleware: { onMessage: vi.fn(), finalize: vi.fn() },
   } as unknown as BackendRunInputs);
 
-const runTask = () =>
+const runTask = (unsettled = false) =>
   piBackend.runTask?.({
     config,
     input,
@@ -199,15 +245,26 @@ const runTask = () =>
     prompt: 'go',
     model: GPT5_6_LUNA_MODEL,
     spinner,
-    orchestrator: { store: { list: () => [{}], get: () => undefined } },
+    orchestrator: {
+      currentTaskId: unsettled ? 'task-1' : undefined,
+      store: { list: () => [{}], get: () => undefined },
+    },
     spinnerMessage: '',
     successMessage: '',
-    requestRemark: false,
+    requestRemark: true,
     analyticsProperties: {},
   } as unknown as TaskRunInputs);
 
 beforeEach(() => {
   state.factories = [];
+  state.refreshedAuth = undefined;
+  state.requests = [];
+  state.prompts = [];
+  state.events = [{ type: 'tool_execution_start', toolName: 'read', args: {} }];
+  state.rejectFirst = false;
+  state.throwAfterEvents = false;
+  state.openTasks = new Map();
+  vi.clearAllMocks();
 });
 
 const AUTH = { gatewayUrl: 'https://gateway.test', token: 'test' };
@@ -234,5 +291,115 @@ describe.each([
     await run();
 
     expect(await sentRequest()).toEqual(piRequest());
+  });
+});
+
+const refusedTurn = (text: string) => ({
+  type: 'message_end',
+  message: {
+    role: 'assistant',
+    content: [{ type: 'text', text }],
+    stopReason: 'stop',
+  },
+});
+
+describe.each([
+  ['main', runMain],
+  ['seed', () => runTask()],
+  ['task', () => runTask(true)],
+])('operator refusal in %s', (_name, run) => {
+  it.each([false, true])(
+    'returns the refusal without continuation, remarks or completion (SDK throws: %s)',
+    async (throws) => {
+      state.throwAfterEvents = throws;
+      state.auth = { ...AUTH, systemPrompt: PINNED };
+      state.openTasks.set('1', {
+        id: '1',
+        status: 'in_progress',
+        subject: 'Set up SDK',
+      });
+      state.events.push(
+        refusedTurn('[posthog:abort] This request is outside setup.'),
+      );
+      const result = await run();
+      expect(result).toEqual({
+        kind: 'abort',
+        classification: AgentErrorType.ABORT,
+        message: 'This request is outside setup.',
+      });
+      expect(state.prompts).toHaveLength(1);
+      expect(state.abort).toHaveBeenCalledOnce();
+      expect(analytics.wizardCapture).not.toHaveBeenCalledWith(
+        'agent completed',
+        expect.anything(),
+      );
+    },
+  );
+});
+
+describe.each([
+  ['main', runMain],
+  ['task', () => runTask()],
+])('replacement credentials in %s', (_name, run) => {
+  it('uses the replacement bearer and its prompt after an aged-token 401', async () => {
+    state.auth = {
+      ...AUTH,
+      token: 'old-bearer',
+      systemPrompt: 'OLD PROMPT',
+      refreshAtMs: Date.now() - 1,
+    };
+    state.refreshedAuth = {
+      ...AUTH,
+      token: 'new-bearer',
+      systemPrompt: 'NEW PROMPT',
+      refreshAtMs: Date.now() + 60000,
+    };
+    state.rejectFirst = true;
+    await run();
+    expect(state.requests.slice(0, 2)).toEqual([
+      {
+        bearer: 'old-bearer',
+        payload: expect.objectContaining({
+          input: expect.arrayContaining([
+            { role: 'system', content: 'OLD PROMPT' },
+          ]),
+        }),
+      },
+      {
+        bearer: 'new-bearer',
+        payload: expect.objectContaining({
+          input: expect.arrayContaining([
+            { role: 'system', content: 'NEW PROMPT' },
+          ]),
+        }),
+      },
+    ]);
+  });
+});
+
+describe.each([
+  ['main', runMain],
+  ['task', () => runTask()],
+])('ordinary output in %s', (_name, run) => {
+  it.each([
+    [undefined, '[posthog:abort] Not an operator refusal without a pin.'],
+    [PINNED, 'Quoted marker: [posthog:abort] reason'],
+    [PINNED, '```\n[posthog:abort] reason\n```'],
+    [PINNED, '[posthog:aborted] reason'],
+  ])('keeps existing handling for %s / %s', async (systemPrompt, text) => {
+    state.auth = { ...AUTH, systemPrompt };
+    state.events.push(refusedTurn(text));
+    expect((await run())?.kind).toBe('success');
+    expect(state.abort).not.toHaveBeenCalled();
+  });
+  it('preserves a refusal with no reason', async () => {
+    state.auth = { ...AUTH, systemPrompt: PINNED };
+    state.events.push(refusedTurn(' \n[posthog:abort]'));
+    expect(await run()).toEqual({
+      kind: 'abort',
+      classification: AgentErrorType.ABORT,
+      message: 'The operator policy refused this request.',
+    });
+    expect(state.prompts).toHaveLength(1);
   });
 });

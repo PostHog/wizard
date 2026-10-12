@@ -1386,6 +1386,7 @@ async function executeOrchestrator(
   }
 
   if (fatal) {
+    renderQueue();
     // The steps the fatal task stopped still get their terminal event.
     const stoppedBy = drainVerdict(store.list()).requiredFailedTypes;
     if (fatal.taskType && !stoppedBy.includes(fatal.taskType)) {

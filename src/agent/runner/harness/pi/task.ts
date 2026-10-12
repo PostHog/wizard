@@ -31,7 +31,10 @@ import {
 } from '../../../agent-prompt-loader';
 import { AgentErrorType } from '../../../agent-interface';
 import { REMARK_INSTRUCTION } from '../../../signals';
-import { AgentOutputSignals } from '../../../output-signals';
+import {
+  AgentOutputSignals,
+  operatorAbortReason,
+} from '../../../output-signals';
 import { TaskStatus } from '../../sequence/orchestrator/queue';
 import type { OrchestratorToolsContext } from '../../sequence/orchestrator/queue-tools';
 import type { AgentResult, TaskRunInputs } from '../types';
@@ -234,6 +237,16 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
   let mcpCleanup: (() => void) | undefined;
   let aioFailed = true;
   let cancellation: ReturnType<typeof bindPiCancellation> | undefined;
+  let refusalReason: string | undefined;
+  const refusalResult = (): AgentResult => {
+    spinner.stop('Wizard aborted');
+    captureAborted(AgentErrorType.ABORT);
+    return {
+      kind: 'abort',
+      classification: AgentErrorType.ABORT,
+      message: refusalReason,
+    };
+  };
   try {
     const sdk = await import('@earendil-works/pi-coding-agent');
     const {
@@ -470,6 +483,14 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
           assistantTurns += 1;
           turns.noteAssistantTurn(event.message);
           const assistant = extractText(event.message).trim();
+          refusalReason ??= operatorAbortReason(
+            assistant,
+            liveAuth.systemPrompt,
+          );
+          if (refusalReason) {
+            cancellation?.abort();
+            break;
+          }
           if (assistant) {
             logToFile(`[pi-task] assistant: ${assistant.slice(0, 1000)}`);
             applyOutroMarkers(assistant, emit);
@@ -527,6 +548,7 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
         !security.state.criticalViolation &&
         !inputs.signal?.aborted &&
         !terminal &&
+        !refusalReason &&
         !isSettled(orchestrator)
       ) {
         nudges += 1;
@@ -543,6 +565,7 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
         requestRemark &&
         !security.state.criticalViolation &&
         !terminal &&
+        !refusalReason &&
         !inputs.signal?.aborted
       ) {
         try {
@@ -566,6 +589,9 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
         message: 'Agent run cancelled',
       };
     }
+
+    if (refusalReason && !security.state.criticalViolation)
+      return refusalResult();
 
     if (terminal && !security.state.criticalViolation) {
       if (errorMessage || spinnerMessage)
@@ -641,6 +667,7 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
         message: 'Agent run cancelled',
       };
     }
+    if (refusalReason) return refusalResult();
     const message = err instanceof Error ? err.message : String(err);
     logToFile(`[pi-task] run error: ${message}`);
     if (errorMessage || spinnerMessage) {

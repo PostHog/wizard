@@ -103,6 +103,88 @@ describe('runAgent', () => {
     });
   });
 
+  describe('operator refusals', () => {
+    it.each([Sequence.linear, Sequence.orchestrator])(
+      'returns the refusal before success or remarks in %s',
+      async (sequence) => {
+        const reason = 'This request is outside setup.';
+        let stopResult: unknown;
+        mockQuery.mockImplementation(function* ({ options }) {
+          yield {
+            type: 'assistant',
+            message: {
+              content: [
+                { type: 'text', text: '[posthog:' },
+                { type: 'text', text: `abort] ${reason}` },
+              ],
+            },
+          };
+          stopResult = options.hooks.Stop[0].hooks[0]({
+            stop_hook_active: false,
+          });
+          yield { type: 'result', subtype: 'success' };
+        });
+        const result = await runAgent(
+          {
+            ...defaultAgentConfig,
+            sequence,
+            gatewayAuth: {
+              ...defaultAgentConfig.gatewayAuth,
+              systemPrompt: 'operator policy',
+            },
+          },
+          'Set up PostHog',
+          defaultOptions,
+          mockSpinner,
+        );
+        expect(result).toEqual({
+          kind: 'abort',
+          classification: AgentErrorType.ABORT,
+          message: reason,
+        });
+        // A real SDK abort may stop consumption before the hook runs at all.
+        expect(
+          stopResult === undefined || JSON.stringify(stopResult) === '{}',
+        ).toBe(true);
+        expect(analytics.wizardCapture).not.toHaveBeenCalledWith(
+          'agent completed',
+          expect.anything(),
+        );
+        expect(mockSpinner.stop).not.toHaveBeenCalledWith(
+          'PostHog integration complete',
+        );
+      },
+    );
+
+    it.each([
+      ['operator policy', 'Here is a quote: [posthog:abort] reason'],
+      ['operator policy', '```\n[posthog:abort] reason\n```'],
+      [undefined, '[posthog:abort] reason'],
+    ])(
+      'does not abort ordinary output (%s, %s)',
+      async (systemPrompt, text) => {
+        mockQuery.mockImplementation(function* () {
+          yield {
+            type: 'assistant',
+            message: { content: [{ type: 'text', text }] },
+          };
+          yield { type: 'result', subtype: 'success' };
+        });
+        const result = await runAgent(
+          {
+            ...defaultAgentConfig,
+            gatewayAuth: { ...defaultAgentConfig.gatewayAuth, systemPrompt },
+          },
+          'Set up PostHog',
+          defaultOptions,
+          mockSpinner,
+          { requestRemark: false },
+        );
+        expect(result.kind).toBe('success');
+      },
+    );
+  });
+
   describe('the pinned operator prompt', () => {
     const PINNED = '  PINNED \u00e9 \ud83e\udd94\n\n[posthog:abort]\n';
     const queryOptions = async (gatewayAuth: object) => {
