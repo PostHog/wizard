@@ -465,8 +465,9 @@ export function deliversRunReport(
 }
 
 /**
- * Splits terminal failures into run-failing (required) and reported-only
- * (optional, or failed after it delivered the run report to the user).
+ * Splits terminal failures into run-failing (required) and reported-only:
+ * optional tasks, and required tasks that failed after they delivered the run
+ * report to the user.
  */
 export function drainVerdict(
   tasks: readonly QueuedTask[],
@@ -474,18 +475,21 @@ export function drainVerdict(
 ): {
   requiredFailedTypes: string[];
   optionalFailedTypes: string[];
+  deliveredFailedTypes: string[];
   blocked: number;
   blockedTypes: string[];
 } {
   const failed = tasks.filter((t) => t.status === TaskStatus.Failed);
   const pending = tasks.filter((t) => t.status === TaskStatus.Pending);
-  const reportedOnly = (t: QueuedTask) =>
-    t.optional === true || reportDeliveredIds.has(t.id);
+  const optional = (t: QueuedTask) => t.optional === true;
+  const delivered = (t: QueuedTask) =>
+    !optional(t) && reportDeliveredIds.has(t.id);
   return {
     requiredFailedTypes: failed
-      .filter((t) => !reportedOnly(t))
+      .filter((t) => !optional(t) && !delivered(t))
       .map((t) => t.type),
-    optionalFailedTypes: failed.filter(reportedOnly).map((t) => t.type),
+    optionalFailedTypes: failed.filter(optional).map((t) => t.type),
+    deliveredFailedTypes: failed.filter(delivered).map((t) => t.type),
     blocked: pending.length,
     blockedTypes: pending.map((t) => t.type),
   };
@@ -608,7 +612,11 @@ export async function runOrchestrator(
   context: SequenceContext,
 ): Promise<SequenceResult> {
   const controller = new AbortController();
-  const abortFromHost = () => controller.abort();
+  let hostCancelled = false;
+  const abortFromHost = () => {
+    hostCancelled = true;
+    controller.abort();
+  };
   context.signal?.addEventListener('abort', abortFromHost, { once: true });
   if (context.signal?.aborted) abortFromHost();
   let cleaned = false;
@@ -636,6 +644,7 @@ export async function runOrchestrator(
       { ...context, signal: controller.signal },
       cleanupQueue,
       controller,
+      () => hostCancelled,
     );
   } finally {
     context.signal?.removeEventListener('abort', abortFromHost);
@@ -647,6 +656,7 @@ async function executeOrchestrator(
   { config, input, boot, emit, interaction, signal }: SequenceContext,
   cleanupQueue: () => void,
   controller: AbortController,
+  hostCancelled: () => boolean,
 ): Promise<SequenceResult> {
   if (signal?.aborted) return cancelledRun();
   const runId = randomUUID();
@@ -706,7 +716,7 @@ async function executeOrchestrator(
       ? Date.parse(t.finishedAt) - Date.parse(t.startedAt)
       : undefined;
 
-  // Tasks that published the run report: a later failure, such as a notebook copy, leaves the user's report intact.
+  // Tasks that published the run report: any failure after that point leaves the user's report intact.
   const reportDeliveredIds = new Set<string>();
 
   const store = new QueueStore(input.installDir, runId, {
@@ -1354,6 +1364,8 @@ async function executeOrchestrator(
   }
 
   let fatal: RunTaskFatal | undefined;
+  // A fatal from the sink after it published the report, settled as a failed task.
+  let deliveredFatal = false;
   try {
     await drainQueue(store, runTask, {
       ...DEFAULT_DRAIN_OPTIONS,
@@ -1363,6 +1375,23 @@ async function executeOrchestrator(
   } catch (error) {
     if (!(error instanceof RunTaskFatal)) throw error;
     fatal = error;
+    // The fatal task is still Running in the store; the sink that already
+    // published the report ends Failed, as if it had failed on its own.
+    const running = store.list().filter((t) => t.status === TaskStatus.Running);
+    const sink = running.find(
+      (t) => t.type === fatal?.taskType && reportDeliveredIds.has(t.id),
+    );
+    if (!hostCancelled() && sink && running.length === 1) {
+      const verdict = drainVerdict(store.list(), reportDeliveredIds);
+      if (verdict.requiredFailedTypes.length === 0 && verdict.blocked === 0) {
+        store.fail(sink.id, {
+          type: 'fatal-after-report',
+          message: fatal.message,
+        });
+        deliveredFatal = true;
+        fatal = undefined;
+      }
+    }
   } finally {
     // The queue file is wiped below; the e2e harness reads outcomes from here.
     config.hooks?.recordTaskOutcomes?.(
@@ -1373,7 +1402,11 @@ async function executeOrchestrator(
       })) satisfies TaskOutcome[],
     );
     try {
-      if (!signal?.aborted && referenceSkillId && referenceInstallPath) {
+      if (
+        (!signal?.aborted || deliveredFatal) &&
+        referenceSkillId &&
+        referenceInstallPath
+      ) {
         promoteReferenceSkill(
           path.join(input.installDir, referenceInstallPath),
           claudeSkillsDir,
@@ -1409,6 +1442,7 @@ async function executeOrchestrator(
     }
   }
 
+  if (hostCancelled()) return cancelledRun();
   if (fatal) {
     // The steps the fatal task stopped still get their terminal event.
     const stoppedBy = drainVerdict(
@@ -1421,7 +1455,7 @@ async function executeOrchestrator(
     reportBlockedTasks(store.list(), stoppedBy);
     return { outcome: fatal.outcome, failure: fatal.failure };
   }
-  if (signal?.aborted) return cancelledRun();
+  if (signal?.aborted && !deliveredFatal) return cancelledRun();
 
   renderQueue();
 
@@ -1526,6 +1560,10 @@ async function executeOrchestrator(
     notRequired > 0 ? `${notRequired} skipped as not required` : '',
     optionalFailedCount > 0
       ? `${optionalFailedCount} optional step failed`
+      : '',
+    // The report step still counts as a step: it stays in the denominator.
+    verdict.deliveredFailedTypes.length > 0
+      ? 'report delivered, then its step failed'
       : '',
   ].filter(Boolean);
   const message = conflict

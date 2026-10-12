@@ -70,7 +70,8 @@ describe('drainVerdict', () => {
     expect(drainVerdict(store.list()).requiredFailedTypes).toEqual(['report']);
     const v = drainVerdict(store.list(), new Set([report.id]));
     expect(v.requiredFailedTypes).toEqual([]);
-    expect(v.optionalFailedTypes).toEqual(['report']);
+    expect(v.deliveredFailedTypes).toEqual(['report']);
+    expect(v.optionalFailedTypes).toEqual([]);
   });
 
   it('only the sink task delivers the run report', () => {
