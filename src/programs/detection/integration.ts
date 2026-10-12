@@ -25,7 +25,6 @@ import {
 import { findPackageJsons } from '../shared/package-scanning';
 
 // Session-free, so runProgram can stamp without loading the session.
-export { stampAiSdkDetected, type AiSdkStampEvidence } from './ai-sdk-stamp';
 
 export async function detectPostHogIntegration(
   ctx: ProgramReadyContext,

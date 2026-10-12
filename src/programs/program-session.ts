@@ -51,8 +51,6 @@ export interface ProgramSession {
   scanConsent: ScanConsent;
   /** Guards against reporting twice; consent resolves from two paths. */
   warehouseSourcesReported: boolean;
-  /** Guards the AI SDK org stamp: `runProgram` makes it once, after the first login. */
-  aiSdkStampReported: boolean;
   integration: Integration | null;
   frameworkContext: Record<string, unknown>;
   typescript: boolean;

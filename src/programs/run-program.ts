@@ -25,7 +25,7 @@ import {
   WizardReadiness,
 } from '@shared/health-checks/readiness';
 import { OutroKind } from '@shared/outro';
-import { mayReportScanResults, RunPhase } from '@shared/run-state';
+import { RunPhase } from '@shared/run-state';
 import {
   configureOAuthSession,
   currentCredentials,
@@ -42,9 +42,7 @@ import {
   rotateCredentials,
   type ResolvedProgramCredentials,
 } from './credentials';
-import { stampAiSdkDetected } from './detection/ai-sdk-stamp';
 import { logIn } from './login';
-import { getDetectedWarehouseSources } from './warehouse-sources/detect';
 import { applyAgentProgress, type SessionStore } from './session/session-store';
 import type { WizardSession } from './session/wizard-session';
 import type { ProgramConfig, ProgramRunStep } from './program-step';
@@ -272,15 +270,6 @@ async function invokeProgram(
         plainSettings = settings;
       }
       credentials = await login();
-      if (!store.session.aiSdkStampReported) {
-        store.setAiSdkStampReported();
-        stampAiSdkDetected({
-          apiUser: credentials.apiUser,
-          discoveredFeatures: store.session.discoveredFeatures,
-          warehouseSources: getDetectedWarehouseSources(store.session),
-          mayReportScanResults: mayReportScanResults(store.session),
-        });
-      }
       if (needsAiApproval(store.session, credentials)) {
         if (!options.workflow) {
           return fail(

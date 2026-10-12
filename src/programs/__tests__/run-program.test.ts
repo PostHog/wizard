@@ -7,9 +7,8 @@ import { HostResolution } from '@shared/host-resolution';
 import type { ApiUser } from '@shared/api';
 import type { AgentProgress, RunResult } from '@agent/types';
 import { ErrorCodes } from '@shared/errors';
-import { DiscoveredFeature } from '@shared/discovered-feature';
 import { OutroKind } from '@shared/outro';
-import { RunPhase, ScanConsent } from '@shared/run-state';
+import { RunPhase } from '@shared/run-state';
 import {
   checkAllSettingsConflicts,
   backupAndFixClaudeSettings,
@@ -1155,7 +1154,7 @@ describe('runProgram', () => {
     expect(agentConfig().wizardFlags).toEqual({ 'wizard-test-flag': 'on' });
   });
 
-  it('a provider is resolved once, then identified and stamped, and refreshed before the agent starts', async () => {
+  it('a provider is resolved once, then identified, and refreshed before the agent starts', async () => {
     vi.mocked(refreshAccessToken).mockResolvedValueOnce(refreshedToken);
     const apiUser = {
       distinct_id: 'user-1',
@@ -1164,11 +1163,7 @@ describe('runProgram', () => {
     const resolve = vi
       .fn()
       .mockResolvedValue({ posthog: aging(), project: null, apiUser });
-    const s = store({
-      scanConsent: ScanConsent.Granted,
-      discoveredFeatures: [DiscoveredFeature.LLM],
-      baseUrl: 'https://posthog.example',
-    });
+    const s = store({ baseUrl: 'https://posthog.example' });
 
     await runProgram('metrics', input({ store: s }), {
       credentials: { resolve },
@@ -1176,11 +1171,6 @@ describe('runProgram', () => {
 
     expect(resolve).toHaveBeenCalledOnce();
     expect(analytics.identifyUser).toHaveBeenCalledExactlyOnceWith(apiUser);
-    expect(analytics.groupIdentify).toHaveBeenCalledExactlyOnceWith(
-      'organization',
-      'org-1',
-      { wizard_ai_sdk_detected: true },
-    );
     expect(refreshAccessToken).toHaveBeenCalledExactlyOnceWith(
       'phr_aging',
       'https://posthog.example',
@@ -1189,7 +1179,6 @@ describe('runProgram', () => {
     expect(agentInput().credentials.accessToken).toBe('pha_refreshed');
     expect(s.session).toMatchObject({
       credentials: { refreshToken: 'phr_rotated' },
-      aiSdkStampReported: true,
     });
   });
 
@@ -1207,7 +1196,6 @@ describe('runProgram', () => {
     expect(s.session.credentials?.accessToken).toBe('pha_refreshed');
     expect(s.session.credentials?.refreshToken).toBe('phr_rotated');
     expect(s.session.credentials?.host).toBeInstanceOf(HostResolution);
-    expect(s.session.aiSdkStampReported).toBe(true);
   });
 
   it('keeps a throwing observer as a diagnostic, not a failure, and ignores a late event', async () => {

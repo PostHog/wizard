@@ -11,6 +11,11 @@ standalone `tsx` entry, named `*.no-jest.ts` so Vitest ignores it
 
 Run from the repo root, e.g. `npx tsx scripts/<name>.no-jest.ts`.
 
+`generate-tool-registry.no-jest.ts` writes
+`src/programs/warehouse-sources/registry.generated.ts` from PostHog's tool
+catalog JSON (a path or URL). The `sync-tool-catalog` workflow runs it when
+PostHog changes the catalog; change detectors in PostHog, not here.
+
 Both e2e routes share one primitive: the **real TUI host** runs `runTui` (the
 real ink render) and is driven purely by store state manipulation; a PTY parent
 ([`e2e-harness/tui-capture.ts`](../e2e-harness/tui-capture.ts), node-pty +

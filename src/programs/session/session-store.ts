@@ -346,11 +346,6 @@ export class SessionStore {
     }
   }
 
-  setAiSdkStampReported(): void {
-    if (this.session.aiSdkStampReported) return;
-    this.set('aiSdkStampReported', true);
-  }
-
   setReadinessResult(result: WizardReadinessResult | null): void {
     this.$session.setKey('readinessResult', result);
     if (result && result.decision === WizardReadiness.No) {

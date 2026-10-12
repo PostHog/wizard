@@ -524,6 +524,14 @@ describe('detectWarehouseSources — repository-controlled paths', () => {
 });
 
 describe('SOURCE_DETECTORS', () => {
+  it('anchors every env key pattern', () => {
+    for (const detector of SOURCE_DETECTORS) {
+      for (const pattern of detector.signals.envKeys) {
+        expect(pattern.source, `${detector.kind} env pattern`).toMatch(/^\^/);
+      }
+    }
+  });
+
   it('has a unique kind for every entry', () => {
     const seen = new Map<string, number>();
     for (const detector of SOURCE_DETECTORS) {
@@ -548,12 +556,11 @@ describe('SOURCE_DETECTORS', () => {
 
   it('gives every entry a non-empty label and at least one signal', () => {
     for (const detector of SOURCE_DETECTORS) {
-      const { npm, python, ruby, envKeys } = detector.signals;
+      const { packages, envKeys, scriptHosts } = detector.signals;
       const signalCount =
-        (npm?.length ?? 0) +
-        (python?.length ?? 0) +
-        (ruby?.length ?? 0) +
-        (envKeys?.length ?? 0);
+        Object.values(packages).reduce((n, names) => n + names.length, 0) +
+        envKeys.length +
+        scriptHosts.length;
       expect(detector.label.length, `${detector.kind} label`).toBeGreaterThan(
         0,
       );

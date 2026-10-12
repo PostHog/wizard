@@ -143,7 +143,6 @@ export function buildSession(args: SessionArgs): WizardSession {
     // headless `--ci --signup` run stays covered by the ci branch above.
     scanConsent: args.ci ? ScanConsent.Granted : ScanConsent.Undecided,
     warehouseSourcesReported: false,
-    aiSdkStampReported: false,
     integration: args.integration ?? null,
     frameworkContext: {},
     typescript: false,

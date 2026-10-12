@@ -1,0 +1,113 @@
+name: Sync tool catalog
+
+# PostHog owns the tool catalog. A push to PostHog master that changes
+# products/wizard/tool-catalog.generated.json sends `tool-catalog-changed`
+# here, and this workflow opens (or updates) one PR that regenerates the
+# detector registry from that commit.
+on:
+  repository_dispatch:
+    types: [tool-catalog-changed]
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: 'PostHog commit SHA (or branch) to read the catalog from'
+        required: false
+        default: 'master'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tool-catalog-sync
+  cancel-in-progress: true
+
+jobs:
+  sync:
+    name: Regenerate registry
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CATALOG_REF:
+        ${{ github.event.client_payload.sha || inputs.sha || 'master' }}
+      SYNC_BRANCH: chore/sync-tool-catalog
+    steps:
+      - name: Validate catalog ref
+        run: |
+          if ! [[ "$CATALOG_REF" =~ ^([0-9a-f]{40}|master)$ ]]; then
+            echo "Refusing catalog ref '$CATALOG_REF': expected a full commit SHA or master" >&2
+            exit 1
+          fi
+
+      - name: Get app token
+        id: app-token
+        uses: actions/create-github-app-token@29824e69f54612133e76f7eaac726eef6c875baf # v2.2.1
+        with:
+          app-id: ${{ secrets.GH_APP_WIZARD_RELEASER_APP_ID }}
+          private-key: ${{ secrets.GH_APP_WIZARD_RELEASER_PRIVATE_KEY }}
+
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@eae0cfeb286e66ffb5155f1a79b90583a127a68b # v2.4.1
+        with:
+          version: 10.34.5
+          run_install: false
+
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: 'package.json'
+          cache: 'pnpm'
+
+      - name: Install dependencies with pnpm
+        run: pnpm install --frozen-lockfile
+
+      - name: Regenerate registry
+        run: |
+          pnpm exec tsx scripts/generate-tool-registry.no-jest.ts \
+            "https://raw.githubusercontent.com/PostHog/posthog/${CATALOG_REF}/products/wizard/tool-catalog.generated.json"
+
+      - name: Check for changes
+        id: diff
+        run: |
+          if git diff --quiet -- src/programs/warehouse-sources/registry.generated.ts; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "Registry already matches the catalog at $CATALOG_REF"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Typecheck
+        if: steps.diff.outputs.changed == 'true'
+        run: pnpm typecheck
+
+      - name: Detector tests
+        if: steps.diff.outputs.changed == 'true'
+        run:
+          pnpm exec vitest run --project programs src/programs/warehouse-sources
+
+      - name: Open or update the sync PR
+        if: steps.diff.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
+        run: |
+          bot_id=$(gh api "/users/${APP_SLUG}%5Bbot%5D" --jq .id)
+          git config user.name "${APP_SLUG}[bot]"
+          git config user.email "${bot_id}+${APP_SLUG}[bot]@users.noreply.github.com"
+
+          git switch -C "$SYNC_BRANCH"
+          git add src/programs/warehouse-sources/registry.generated.ts
+          git commit -m "chore: sync tool catalog from PostHog ${CATALOG_REF:0:12}"
+          git push --force origin "$SYNC_BRANCH"
+
+          body="Regenerates the detector registry from [PostHog's tool catalog](https://github.com/PostHog/posthog/blob/${CATALOG_REF}/products/wizard/tool-catalog.generated.json) at \`${CATALOG_REF}\`. Opened by the sync-tool-catalog workflow; review the registry diff and merge."
+          existing=$(gh pr list --head "$SYNC_BRANCH" --state open --json number --jq '.[0].number')
+          if [ -n "$existing" ]; then
+            gh pr edit "$existing" --body "$body"
+          else
+            gh pr create --head "$SYNC_BRANCH" --base main \
+              --title "chore: sync tool catalog from PostHog" --body "$body"
+          fi
