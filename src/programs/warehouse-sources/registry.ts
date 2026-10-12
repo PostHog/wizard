@@ -2546,3 +2546,8 @@ export const SOURCE_DETECTORS: SourceDetector[] = [
 export const AI_SOURCE_KINDS: ReadonlySet<string> = new Set(
   LLM_SOURCE_DETECTORS.map((detector) => detector.kind),
 );
+
+/** Kinds from the core section above — databases and primary SaaS sources. */
+export const CORE_SOURCE_KINDS: ReadonlySet<string> = new Set(
+  CORE_SOURCE_DETECTORS.map((detector) => detector.kind),
+);

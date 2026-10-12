@@ -35,6 +35,15 @@ export {
 /** Shared program machinery the TUI, the CLI and the e2e harness call. */
 export { FRAMEWORK_REGISTRY } from './frameworks/registry';
 export { detectFramework } from './detection/framework';
+/** Decisions API detection prototype, for the decisions-detect script. */
+export {
+  detectWithDecisions,
+  sourceHits,
+  type DecisionsChoice,
+  type DecisionsDetectionReport,
+} from './detection/decisions/index';
+export { scanProject, renderDecisionInput } from './detection/decisions/state';
+export { DECISION_QUESTIONS } from './detection/decisions/questions';
 export { createSkillProgram } from './shared/skill-program';
 /** The audit ledger's checks as the session holds them, for a host's task stream. */
 export { getAuditChecks } from './session/audit-checks';

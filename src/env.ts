@@ -76,6 +76,10 @@ type RuntimeEnvKey =
   | 'POSTHOG_HANDOFF_OUTPUT_PATH'
   // Local/CI escape hatch to disable Warlock scanning without the PostHog flag.
   | 'POSTHOG_WIZARD_WARLOCK_DISABLED'
+  // Decisions API detection prototype, dev builds only (@programs/detection/decisions).
+  | 'WIZARD_DECISIONS_DETECTION'
+  | 'OPENAI_API_KEY'
+  | 'OPENAI_BASE_URL'
   | 'DEBUG'
   // Agent / MCP
   | 'MCP_URL'

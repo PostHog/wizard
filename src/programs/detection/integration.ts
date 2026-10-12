@@ -13,7 +13,8 @@ import type { ProgramReadyContext } from '../program-step';
 import { mayReportScanResults, ScanConsent } from '@shared/run-state';
 import type { ProgramSession } from '../program-session';
 import { FRAMEWORK_REGISTRY } from '../frameworks/registry';
-import { detectFramework } from './framework';
+import { detectFrameworkRouted } from './decisions/route';
+import { summarizeDecisionsReport } from './decisions/index';
 import { discoverFeatures } from './features';
 import { checkFrameworkVersion, gatherFrameworkContext } from './context';
 import { analytics } from '@utils/analytics';
@@ -33,7 +34,15 @@ export async function detectPostHogIntegration(
   const session = ctx.session;
   const installDir = session.installDir;
 
-  const detectedIntegration = await detectFramework(installDir);
+  // Static only unless WIZARD_DECISIONS_DETECTION says otherwise.
+  const { integration: detectedIntegration, decisionsReport } =
+    await detectFrameworkRouted(installDir);
+  if (decisionsReport) {
+    ctx.setFrameworkContext(
+      'decisionsDetection',
+      summarizeDecisionsReport(decisionsReport),
+    );
+  }
 
   if (detectedIntegration) {
     const config = FRAMEWORK_REGISTRY[detectedIntegration];
