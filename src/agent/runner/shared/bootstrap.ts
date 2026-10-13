@@ -79,6 +79,7 @@ export async function prepareRun(
     // Carried so per-task sessions re-resolve against the same program the boot
     // minted for, rather than digging it back out of the metadata bag.
     programId,
+    handoffNotebook: config.handoffNotebook,
     wizardFlags,
     wizardFlagPayloads,
     wizardMetadata,

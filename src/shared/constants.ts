@@ -255,7 +255,8 @@ export const DUMMY_PROJECT_API_KEY = '_YOUR_POSTHOG_PROJECT_TOKEN_';
  * - insight:write     create the onboarding insights during setup
  * - notebook:write    upload the events-audit report as a PostHog notebook
  *                     in step 6 of the events-audit skill (notebooks-create
- *                     MCP tool requires this scope)
+ *                     MCP tool requires this scope), and mirror the handoff
+ *                     report into a notebook (`publish_handoff`)
  * - event_definition:write
  *                     create event definitions from the completed wizard
  *                     session's event plan

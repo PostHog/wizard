@@ -152,6 +152,12 @@ export interface WizardToolsOptions {
 
   /** Where `publish_handoff` reports. Absent → the handoff is written but reported nowhere. */
   emit?: ProgressEmitter;
+
+  /** The program running, so its `publish_handoff` notebook stays separate from another program's. */
+  programId?: string;
+
+  /** The program mirrors the handoff report into a PostHog notebook. */
+  handoffNotebook?: boolean;
 }
 
 /** Default per-run cap on wizard_ask calls when no override is provided. */
@@ -174,6 +180,8 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
     orchestrator,
     triageProvider,
     emit,
+    programId,
+    handoffNotebook,
   } = options;
   const sdk = await getSDKModule();
   const { tool, createSdkMcpServer } = sdk;
@@ -763,9 +771,11 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
     {
       content: z.string().describe(PUBLISH_HANDOFF_CONTENT_DESCRIPTION),
     },
-    (args: { content: string }) => {
-      const result = publishHandoff(args.content, emit, {
+    async (args: { content: string }) => {
+      const result = await publishHandoff(args.content, emit, {
         taskAgent: orchestrator?.currentTaskId !== undefined,
+        programId,
+        handoffNotebook,
       });
       logToFile(`publish_handoff: ${result.message}`);
       return {

@@ -136,6 +136,12 @@ export interface ProgramConfig {
    */
   agentFlow?: string;
   /**
+   * Whether `publish_handoff` mirrors the run report into a PostHog notebook.
+   * Set only where the context-mill prompts expect it; every other program
+   * leaves the report in the wizard session alone.
+   */
+  handoffNotebook?: boolean;
+  /**
    * Context-mill skill ID this program installs and runs. When present,
    * the host seeds `session.skillId` with this value before the TUI renders
    * so intro screens can resolve skill metadata without waiting for the

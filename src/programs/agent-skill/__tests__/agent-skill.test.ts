@@ -44,3 +44,17 @@ describe('createSkillProgram', () => {
     expect((without.run as ProgramRun).customPrompt).toBeUndefined();
   });
 });
+
+describe('agent-skill handoff notebook', () => {
+  it('mirrors the report for integration skills only', async () => {
+    const { config } = await import('../index');
+    const run = config.run as (session: {
+      skillId?: string;
+    }) => Promise<ProgramRun>;
+
+    expect(
+      (await run({ skillId: 'integration-nextjs-app-router' })).handoffNotebook,
+    ).toBe(true);
+    expect((await run({ skillId: 'quack' })).handoffNotebook).toBe(false);
+  });
+});

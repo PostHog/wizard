@@ -1,5 +1,20 @@
 # Changelog
 
+## [2.82.0](https://github.com/PostHog/wizard/compare/v2.81.1...v2.82.0) (2026-10-12)
+
+
+### Features
+
+* **handoff:** publish_handoff mirrors the report into a PostHog notebook ([#1437](https://github.com/PostHog/wizard/issues/1437)) ([29c401f](https://github.com/PostHog/wizard/commit/29c401fdb642e2b0d01d1737c2cd4ccbcf653955))
+
+
+### Bug Fixes
+
+* **bounded-fs:** treat Windows UNKNOWN and EBUSY as benign fs errors ([#1436](https://github.com/PostHog/wizard/issues/1436)) ([52220a3](https://github.com/PostHog/wizard/commit/52220a3e60e4c14555fddef61afb0a8dc3b68b94))
+* fail Pi setup runs when required resources are unavailable ([#1433](https://github.com/PostHog/wizard/issues/1433)) ([ce4fa0b](https://github.com/PostHog/wizard/commit/ce4fa0b1479331c425fcf98939971959726a61cb))
+* **kmp:** use projectToken instead of deprecated apiKey in setup hint ([#1440](https://github.com/PostHog/wizard/issues/1440)) ([e88fb8a](https://github.com/PostHog/wizard/commit/e88fb8a8fae5f378ec0a3518e0b9bffb5a6650da))
+* **orchestrator:** keep a delivered run report from failing the run ([#1425](https://github.com/PostHog/wizard/issues/1425)) ([0e5ec54](https://github.com/PostHog/wizard/commit/0e5ec541a4d7896ce7535d0b71afec94aa76a6b4))
+
 ## [2.81.1](https://github.com/PostHog/wizard/compare/v2.81.0...v2.81.1) (2026-10-08)
 
 

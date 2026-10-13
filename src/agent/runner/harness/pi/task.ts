@@ -46,7 +46,7 @@ import {
   GATEWAY_PROVIDER,
   withGatewayRemint,
 } from './gateway';
-import { runErrorType } from './completion';
+import { runErrorType, setupSignalFailure } from './completion';
 import { bindPiCancellation } from './cancellation';
 import { classifyRunFailure, ErrorCodes } from '@shared/errors';
 import { assembleCommandments } from '../../switchboard/commandments';
@@ -413,6 +413,8 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
       triageProvider: boot.triageProvider,
       emit,
       taskAgent: orchestrator.currentTaskId !== undefined,
+      programId: boot.programId,
+      handoffNotebook: boot.handoffNotebook,
       // Present only for a task allowed to ask; without it wizard_ask errors
       // instead of hanging on a prompt nobody will ever see.
       askBridge,
@@ -549,6 +551,7 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
         !inputs.signal?.aborted &&
         !terminal &&
         !refusalReason &&
+        !setupSignalFailure(signals) &&
         !isSettled(orchestrator)
       ) {
         nudges += 1;
@@ -566,6 +569,7 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
         !security.state.criticalViolation &&
         !terminal &&
         !refusalReason &&
+        !setupSignalFailure(signals) &&
         !inputs.signal?.aborted
       ) {
         try {
@@ -627,6 +631,14 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
       );
       captureAborted(AgentErrorType.YARA_VIOLATION);
       return { kind: 'failure', classification: AgentErrorType.YARA_VIOLATION };
+    }
+
+    const setupFailure = setupSignalFailure(signals);
+    if (setupFailure) {
+      spinner.stop('Agent could not access setup instructions');
+      logToFile(`[pi-task] setup failed: ${setupFailure}`);
+      captureAborted(setupFailure);
+      return { kind: 'failure', classification: setupFailure };
     }
 
     const remark = signals.remark();

@@ -9,6 +9,7 @@ vi.mock('@utils/analytics', () => ({
 
 import { QueueStore } from '@agent/runner/sequence/orchestrator/queue';
 import {
+  deliversRunReport,
   describeDrainFailure,
   drainFailureCode,
   drainVerdict,
@@ -58,6 +59,28 @@ describe('drainVerdict', () => {
     expect(v.requiredFailedTypes).toEqual(['install']);
     expect(v.blocked).toBe(1);
     expect(v.blockedTypes).toEqual(['report']);
+  });
+
+  it('a task that failed after it delivered the run report does not fail the run', () => {
+    const install = store.enqueue({ type: 'install' });
+    const report = store.enqueue({ type: 'report', dependsOn: [install.id] });
+    finish(install.id, true);
+    finish(report.id, false);
+
+    expect(drainVerdict(store.list()).requiredFailedTypes).toEqual(['report']);
+    const v = drainVerdict(store.list(), new Set([report.id]));
+    expect(v.requiredFailedTypes).toEqual([]);
+    expect(v.deliveredFailedTypes).toEqual(['report']);
+    expect(v.optionalFailedTypes).toEqual([]);
+  });
+
+  it('only the sink task delivers the run report', () => {
+    const handoff = { kind: 'handoff', text: '# Report' } as const;
+    expect(deliversRunReport(['report'], 'report', handoff)).toBe(true);
+    expect(deliversRunReport(['report'], 'init', handoff)).toBe(false);
+    expect(
+      deliversRunReport(['report'], 'report', { kind: 'status', message: 'x' }),
+    ).toBe(false);
   });
 
   it('names a step the user accepted that never became runnable', () => {

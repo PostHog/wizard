@@ -17,8 +17,10 @@ import axios from 'axios';
 import type { WizardStore } from '@tui/store';
 import type { WizardSession } from '@programs/types';
 import { fetchGithubConnected, type Credentials } from '@shared/api';
-import { currentCredentials } from '@shared/oauth-session';
-import { isGrantRevoked } from '@shared/auth-session-state';
+import {
+  currentCredentials,
+  rotateAfterUnauthorized,
+} from '@shared/oauth-session';
 import { requestDeepLink } from '@utils/provisioning';
 import { analytics } from '@utils/analytics';
 
@@ -57,12 +59,12 @@ export async function checkGithubConnected(
   try {
     return await check(credentials);
   } catch (err) {
-    if (!isUnauthorized(err) || !credentials.refreshToken || isGrantRevoked()) {
-      throw err;
-    }
-    const rotated = await currentCredentials(credentials, true);
-    if (rotated.accessToken === credentials.accessToken) throw err;
-    return check(rotated);
+    if (!isUnauthorized(err)) throw err;
+    const recovery = await rotateAfterUnauthorized(credentials, {
+      requireRefreshToken: true,
+    });
+    if (recovery.kind !== 'rotated') throw err;
+    return check(recovery.credentials);
   }
 }
 
