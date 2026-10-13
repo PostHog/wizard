@@ -8,6 +8,7 @@
  * arrives already resolved in `ResolvedRunConfig` and `RunInput`.
  */
 
+import { OperatorAbort } from '../../output-signals';
 import { createTriageLLMProvider } from '../../triage-provider';
 import { gatewayAuth } from '../../gateway-session';
 import { currentAccessToken } from '@shared/oauth-session';
@@ -72,8 +73,10 @@ export async function prepareRun(
       gatewayAuth(credentials.host, token, programId),
     );
   await currentGatewayAuth();
+  const operatorAbort = new OperatorAbort();
 
   return {
+    operatorAbort,
     skillsBaseUrl,
     credentials,
     // Carried so per-task sessions re-resolve against the same program the boot
@@ -86,18 +89,22 @@ export async function prepareRun(
     project: input.project,
     // Resolved once, here: the only place holding both the run-level harness
     // and the gateway auth. Every skill install downstream reads it off boot.
-    triageProvider: createTriageLLMProvider(async () => {
-      const auth = await currentGatewayAuth();
-      return {
-        baseURL: auth.gatewayUrl,
-        authToken: auth.token,
-        teamId: auth.teamId,
-        systemPrompt: auth.systemPrompt,
-        // `call_type` splits scan spend out of the program's agent cost,
-        // the same tag the in-run triage provider carries.
-        wizardMetadata: { ...wizardMetadata, call_type: CallType.yaraTriage },
-        wizardFlags,
-      };
-    }, config.binding.harness),
+    triageProvider: createTriageLLMProvider(
+      async () => {
+        const auth = await currentGatewayAuth();
+        return {
+          baseURL: auth.gatewayUrl,
+          authToken: auth.token,
+          teamId: auth.teamId,
+          systemPrompt: auth.systemPrompt,
+          // `call_type` splits scan spend out of the program's agent cost,
+          // the same tag the in-run triage provider carries.
+          wizardMetadata: { ...wizardMetadata, call_type: CallType.yaraTriage },
+          wizardFlags,
+        };
+      },
+      config.binding.harness,
+      operatorAbort,
+    ),
   };
 }

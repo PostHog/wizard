@@ -33,8 +33,9 @@ prompt, each model request carries that prompt with the minted bearer. SDK
 queries share prompt composition and side-call settings, including the MCP
 tutorial. Triage resolves the current bearer and prompt together on every call.
 
-A pinned assistant turn beginning `[posthog:abort]` returns an agent abort with
-its reason. Harnesses stop before continuation prompts, remarks or success.
+A pinned model reply containing `[posthog:abort]` returns an agent abort with
+its reason, the text after the marker on its line. This covers turns, subagents
+and YARA triage. Harnesses stop before continuation prompts, remarks or success.
 Sequences report it as failure and skip post-run work. Orchestrated tasks record
 a failed queue entry and publish it through existing task progress. A caller's
 abort signal still means cancellation. Unpinned runs retain their existing

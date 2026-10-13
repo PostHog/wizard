@@ -237,6 +237,7 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
   let mcpCleanup: (() => void) | undefined;
   let aioFailed = true;
   let cancellation: ReturnType<typeof bindPiCancellation> | undefined;
+  let stopWatchingOperatorAbort: (() => void) | undefined;
   let refusalReason: string | undefined;
   const refusalResult = (): AgentResult => {
     spinner.stop('Wizard aborted');
@@ -246,6 +247,10 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
       classification: AgentErrorType.ABORT,
       message: refusalReason,
     };
+  };
+  const refuse = (reason: string) => {
+    refusalReason ??= reason;
+    cancellation?.abort();
   };
   try {
     const sdk = await import('@earendil-works/pi-coding-agent');
@@ -443,6 +448,7 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
     cancellation = bindPiCancellation(inputs.signal, agentSession, (error) => {
       logToFile(`[pi-task] abort failed: ${String(error)}`);
     });
+    stopWatchingOperatorAbort = boot.operatorAbort?.watch(refuse);
     await agentSession.bindExtensions({});
 
     // A turn that ends on a 401 from an aged bearer re-mints once and
@@ -485,12 +491,9 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
           assistantTurns += 1;
           turns.noteAssistantTurn(event.message);
           const assistant = extractText(event.message).trim();
-          refusalReason ??= operatorAbortReason(
-            assistant,
-            liveAuth.systemPrompt,
-          );
-          if (refusalReason) {
-            cancellation?.abort();
+          const reason = operatorAbortReason(assistant, liveAuth.systemPrompt);
+          if (reason !== undefined) {
+            refuse(reason);
             break;
           }
           if (assistant) {
@@ -702,6 +705,7 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
       error: err instanceof Error ? err : undefined,
     };
   } finally {
+    stopWatchingOperatorAbort?.();
     await cancellation?.settle();
     try {
       mcpCleanup?.();

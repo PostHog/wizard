@@ -1,5 +1,6 @@
 import { piBackend } from '..';
 import { AgentErrorType } from '@agent/signals';
+import { OperatorAbort } from '@agent/output-signals';
 import { analytics } from '@utils/analytics';
 import { Harness, Sequence, GPT5_6_LUNA_MODEL } from '@shared/constants';
 import { HostResolution } from '@shared/host-resolution';
@@ -30,6 +31,7 @@ const state = vi.hoisted(() => ({
   rejectFirst: false,
   throwAfterEvents: false,
   openTasks: new Map(),
+  onPrompt: undefined as (() => void) | undefined,
 }));
 vi.mock('@utils/analytics', () => ({
   analytics: { wizardCapture: vi.fn(), capture: vi.fn() },
@@ -108,6 +110,7 @@ vi.mock('@earendil-works/pi-coding-agent', () => ({
         },
         prompt: async (text: string) => {
           state.prompts.push(text);
+          state.onPrompt?.();
           state.requests.push({
             bearer: state.provider.apiKey,
             payload: await sentRequest(),
@@ -181,6 +184,7 @@ const boot = {
   wizardMetadata: {},
   project: null,
   triageProvider: undefined,
+  operatorAbort: undefined as OperatorAbort | undefined,
 };
 const binding = {
   harness: Harness.pi,
@@ -264,6 +268,8 @@ beforeEach(() => {
   state.rejectFirst = false;
   state.throwAfterEvents = false;
   state.openTasks = new Map();
+  state.onPrompt = undefined;
+  boot.operatorAbort = undefined;
   vi.clearAllMocks();
 });
 
@@ -335,6 +341,34 @@ describe.each([
       );
     },
   );
+
+  it('ends the run on a marker in the middle of a reply', async () => {
+    state.auth = { ...AUTH, systemPrompt: PINNED };
+    state.events.push(
+      refusedTurn(
+        'Step one is done.\n[posthog:abort] Outside setup scope.\nMore text.',
+      ),
+    );
+    expect(await run()).toEqual({
+      kind: 'abort',
+      classification: AgentErrorType.ABORT,
+      message: 'Outside setup scope.',
+    });
+    expect(state.prompts).toHaveLength(1);
+    expect(state.abort).toHaveBeenCalledOnce();
+  });
+
+  it('ends the run when the YARA triage model refuses mid-run', async () => {
+    state.auth = { ...AUTH, systemPrompt: PINNED };
+    boot.operatorAbort = new OperatorAbort();
+    state.onPrompt = () => boot.operatorAbort?.trip('Triage refused.');
+    expect(await run()).toEqual({
+      kind: 'abort',
+      classification: AgentErrorType.ABORT,
+      message: 'Triage refused.',
+    });
+    expect(state.abort).toHaveBeenCalledOnce();
+  });
 });
 
 describe.each([
@@ -383,8 +417,6 @@ describe.each([
 ])('ordinary output in %s', (_name, run) => {
   it.each([
     [undefined, '[posthog:abort] Not an operator refusal without a pin.'],
-    [PINNED, 'Quoted marker: [posthog:abort] reason'],
-    [PINNED, '```\n[posthog:abort] reason\n```'],
     [PINNED, '[posthog:aborted] reason'],
   ])('keeps existing handling for %s / %s', async (systemPrompt, text) => {
     state.auth = { ...AUTH, systemPrompt };

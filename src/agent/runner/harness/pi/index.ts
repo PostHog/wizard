@@ -307,6 +307,7 @@ export const piBackend: AgentHarness = {
     let aioFailed = true;
     let cancellation: ReturnType<typeof bindPiCancellation> | undefined;
     let refusalReason: string | undefined;
+    let stopWatchingOperatorAbort: (() => void) | undefined;
     const refusalResult = (): AgentResult => {
       spinner.stop('Wizard aborted');
       captureAborted(AgentErrorType.ABORT);
@@ -427,6 +428,16 @@ export const piBackend: AgentHarness = {
         api,
         () => liveAuth.systemPrompt,
       );
+      // Every model-text path (turns, subagents, YARA triage) ends the run here.
+      const refuse = (reason: string) => {
+        refusalReason ??= reason;
+        cancellation?.abort();
+      };
+      const refuseOnText = (text: string): boolean => {
+        const reason = operatorAbortReason(text, liveAuth.systemPrompt);
+        if (reason !== undefined) refuse(reason);
+        return reason !== undefined;
+      };
       const extensionFactories = [security.factory, operatorPrompt] as Array<
         (pi: unknown) => void
       >;
@@ -575,6 +586,7 @@ export const piBackend: AgentHarness = {
           agentDir: getAgentDir(),
           securityFactory: security.subagentFactory,
           operatorPrompt,
+          refuseOnText,
           bashTool: scrubbedBash,
           sdk: { createAgentSession, DefaultResourceLoader, SessionManager },
         }),
@@ -607,6 +619,7 @@ export const piBackend: AgentHarness = {
           logToFile(`[pi] abort failed: ${String(error)}`);
         },
       );
+      stopWatchingOperatorAbort = boot.operatorAbort?.watch(refuse);
       await agentSession.bindExtensions({});
 
       // A turn that ends on a 401 from an aged bearer re-mints once and
@@ -645,14 +658,7 @@ export const piBackend: AgentHarness = {
             turns.noteAssistantTurn(event.message);
             const blocks = textBlocks(event.message);
             const assistant = blocks.join('').trim();
-            refusalReason ??= operatorAbortReason(
-              assistant,
-              liveAuth.systemPrompt,
-            );
-            if (refusalReason) {
-              cancellation?.abort();
-              break;
-            }
+            if (refuseOnText(assistant)) break;
             // A schema-bound answer is the turn's last block, not the joined text.
             lastAssistantText = (blocks.at(-1) ?? '').trim();
             if (structured) {
@@ -960,6 +966,7 @@ export const piBackend: AgentHarness = {
         error: err instanceof Error ? err : undefined,
       };
     } finally {
+      stopWatchingOperatorAbort?.();
       await cancellation?.settle();
       await timeoutAbort;
       try {

@@ -68,7 +68,11 @@ import {
 } from './signals';
 import { classifyAuthFailure } from '@shared/errors';
 import { isGrantRevoked } from '@shared/auth-session-state';
-import { AgentOutputSignals, operatorAbortReason } from './output-signals';
+import {
+  AgentOutputSignals,
+  OperatorAbort,
+  operatorAbortReason,
+} from './output-signals';
 
 // Signal vocabulary and the output parser live in dedicated modules; re-export
 // so existing importers of these from agent-interface keep working.
@@ -348,6 +352,8 @@ type AgentRunConfig = {
   capture?: AioCapture;
   /** Scan-triage classifier, built from this run's gateway auth. */
   triageProvider: LLMProvider;
+  /** Trips when the triage model refuses, ending the run. */
+  operatorAbort?: OperatorAbort;
   /** The run's minted gateway auth: base url, bearer and team for the subprocess. */
   gatewayAuth: GatewayAuth;
   /**
@@ -639,17 +645,22 @@ export async function initializeAgent(
       ...(config.wizardMetadata ?? {}),
       call_type: CallType.yaraTriage,
     };
-    const triageProvider = createTriageLLMProvider(async () => {
-      const current = await currentGatewayAuth();
-      return {
-        baseURL: current.gatewayUrl,
-        authToken: current.token,
-        teamId: current.teamId,
-        systemPrompt: current.systemPrompt,
-        wizardMetadata: triageMetadata,
-        wizardFlags: config.wizardFlags ?? {},
-      };
-    }, Harness.anthropic);
+    const operatorAbort = new OperatorAbort();
+    const triageProvider = createTriageLLMProvider(
+      async () => {
+        const current = await currentGatewayAuth();
+        return {
+          baseURL: current.gatewayUrl,
+          authToken: current.token,
+          teamId: current.teamId,
+          systemPrompt: current.systemPrompt,
+          wizardMetadata: triageMetadata,
+          wizardFlags: config.wizardFlags ?? {},
+        };
+      },
+      Harness.anthropic,
+      operatorAbort,
+    );
 
     logToFile('Configured LLM gateway:', gatewayUrl);
     logToFile(
@@ -746,6 +757,7 @@ export async function initializeAgent(
       suppressTaskRender: !!config.orchestrator,
       capture: config.capture,
       triageProvider,
+      operatorAbort,
       gatewayAuth: auth,
       refreshGatewayAuth: currentGatewayAuth,
       program: config.integrationLabel,
@@ -1032,6 +1044,7 @@ export async function runAgent(
   };
   let timedOut = false;
   let abortReason: string | null = null;
+  let stopWatchingOperatorAbort: (() => void) | undefined;
   // Set when a YARA hook detects a terminal violation. Returning `stopReason`
   // from a PostToolUse hook does NOT stop the SDK, so we abort the query and
   // surface a YARA_VIOLATION below — mirroring the [ABORT] mechanism.
@@ -1079,6 +1092,12 @@ export async function runAgent(
     const inheritedMcpServerNames = Object.keys(agentConfig.mcpServers);
 
     const triageProvider = agentConfig.triageProvider;
+    // A triage refusal ends the run like one in the stream.
+    stopWatchingOperatorAbort = agentConfig.operatorAbort?.watch((reason) => {
+      abortReason ??= reason;
+      abortController.abort();
+      signalDone();
+    });
 
     // Actually stop the run when a YARA hook hits a terminal violation. The SDK
     // ignores `stopReason` from PostToolUse hooks, so we abort the query (like
@@ -1771,6 +1790,7 @@ export async function runAgent(
     debugLine(emit, options, 'Full error:', error);
     throw error;
   } finally {
+    stopWatchingOperatorAbort?.();
     agentConfig.signal?.removeEventListener('abort', onExternalAbort);
     if (timeoutId) clearTimeout(timeoutId);
     // Always capture run duration, even on abort/error, so we can alert on

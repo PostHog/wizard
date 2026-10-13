@@ -156,9 +156,42 @@ describe('runAgent', () => {
       },
     );
 
+    it('ends the run on a marker in the middle of a reply', async () => {
+      mockQuery.mockImplementation(function* () {
+        yield {
+          type: 'assistant',
+          message: {
+            content: [
+              {
+                type: 'text',
+                text: 'Looking.\n[posthog:abort] Outside setup.\nBye.',
+              },
+            ],
+          },
+        };
+        yield { type: 'result', subtype: 'success' };
+      });
+      const result = await runAgent(
+        {
+          ...defaultAgentConfig,
+          gatewayAuth: {
+            ...defaultAgentConfig.gatewayAuth,
+            systemPrompt: 'operator policy',
+          },
+        },
+        'Set up PostHog',
+        defaultOptions,
+        mockSpinner,
+        { requestRemark: false },
+      );
+      expect(result).toMatchObject({
+        kind: 'abort',
+        message: 'Outside setup.',
+      });
+    });
+
     it.each([
-      ['operator policy', 'Here is a quote: [posthog:abort] reason'],
-      ['operator policy', '```\n[posthog:abort] reason\n```'],
+      ['operator policy', 'A normal reply with no marker.'],
       [undefined, '[posthog:abort] reason'],
     ])(
       'does not abort ordinary output (%s, %s)',

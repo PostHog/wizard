@@ -135,14 +135,43 @@ export class AgentOutputSignals {
   }
 }
 
-/** Only a leading refusal from a pinned assistant turn ends the run. */
+const OPERATOR_ABORT = /\[posthog:abort\](?=\s|$)([^\n]*)/;
+const OPERATOR_ABORT_REASON_MAX = 500;
+
+/** The one detector: a pinned model reply carrying the abort marker anywhere ends the run. */
 export function operatorAbortReason(
   text: string,
   pinned: string | undefined,
 ): string | undefined {
   if (pinned === undefined) return undefined;
-  const match = text.trimStart().match(/^\[posthog:abort\](?:\s|$)([\s\S]*)/);
-  return match
-    ? match[1].trim() || 'The operator policy refused this request.'
-    : undefined;
+  const match = text.match(OPERATOR_ABORT);
+  if (!match) return undefined;
+  return (
+    match[1].trim().slice(0, OPERATOR_ABORT_REASON_MAX) ||
+    'The operator policy refused this request.'
+  );
+}
+
+/**
+ * Carries a refusal from a model call that has no run loop of its own (YARA
+ * triage) to the loop that owns the run. The first reason wins.
+ */
+export class OperatorAbort {
+  reason: string | undefined;
+  private readonly listeners = new Set<(reason: string) => void>();
+
+  trip(reason: string): void {
+    if (this.reason !== undefined) return;
+    this.reason = reason;
+    for (const listener of [...this.listeners]) listener(reason);
+  }
+
+  /** Calls `listener` now when already tripped, then on a later trip. Returns the unsubscribe. */
+  watch(listener: (reason: string) => void): () => void {
+    if (this.reason !== undefined) listener(this.reason);
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
+  }
 }

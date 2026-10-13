@@ -198,6 +198,7 @@ describe('the pinned operator prompt on a subagent call', () => {
       cwd: dir,
       agentDir: dir,
       securityFactory: (() => undefined) as never,
+      refuseOnText: () => false,
       operatorPrompt: operatorPromptExtension(api, () => PINNED),
       bashTool: sdk.createBashToolDefinition(dir) as never,
       sdk,

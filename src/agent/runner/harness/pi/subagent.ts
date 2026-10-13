@@ -74,6 +74,8 @@ export interface SubagentContext {
    * the gateway refuses them too unless they send the pinned prompt first.
    */
   operatorPrompt: (pi: ExtensionAPI) => void;
+  /** Ends the run when a child's reply carries the abort marker; true when it did. */
+  refuseOnText: (text: string) => boolean;
   /** The parent's env-scrubbed bash, so a subagent's subprocesses are locked down too. */
   bashTool: ToolDefinition;
   /** pi SDK entrypoints, already imported by the backend. */
@@ -143,6 +145,12 @@ export function createDispatchAgentTool(ctx: SubagentContext): ToolDefinition {
             finalTurn = e.message as typeof finalTurn;
           const t = extractText(e.message).trim();
           if (t) result = t;
+          if (
+            (e.message as { role?: string })?.role === 'assistant' &&
+            ctx.refuseOnText(t)
+          ) {
+            void child.abort();
+          }
         }
       });
       logToFile(`[pi] subagent dispatch: ${args.description}`);

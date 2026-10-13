@@ -21,6 +21,7 @@ import type { AgentInteraction, ProgressEmitter } from '../../progress';
 import type { EffortLevel } from '../switchboard/models';
 import type { ProgramBinding, SwitchboardCtx } from '../switchboard';
 import type { TranscriptTail } from './transcript-tail';
+import type { OperatorAbort } from '../../output-signals';
 import { RunOutcome } from '@shared/run-state';
 
 export type { PromptContext, Credentials };
@@ -284,6 +285,8 @@ export interface BootstrapResult {
   project: ApiProject | null;
   /** Scan-triage classifier on this run's harness. Undefined → skill scans fail closed. */
   triageProvider: LLMProvider | undefined;
+  /** Trips when the triage model refuses; every harness watches it. */
+  operatorAbort?: OperatorAbort;
 }
 
 /**
