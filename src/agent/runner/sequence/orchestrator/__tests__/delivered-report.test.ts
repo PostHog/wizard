@@ -180,9 +180,10 @@ describe('a task failing after the run report was published', () => {
     expect(result.outcome).toBe(RunOutcome.Failed);
   });
 
-  it("keeps the run successful when the sink publishes, then emits the agent's own [ABORT]", async () => {
-    behaviors.report = (inputs) => {
+  it("fails the run when the sink publishes and completes, then emits the agent's own [ABORT]", async () => {
+    behaviors.report = (inputs, id) => {
       publish(inputs);
+      inputs.orchestrator.store.complete(id);
       return {
         kind: 'abort',
         classification: AgentErrorType.ABORT,
@@ -192,8 +193,7 @@ describe('a task failing after the run report was published', () => {
 
     const result = await run();
 
-    expect(result.outcome).toBe(RunOutcome.Success);
-    expect(result.outro?.message).toContain('report delivered');
+    expect(result.outcome).toBe(RunOutcome.Failed);
   });
 
   it('still fails the run when a task other than the sink published then failed', async () => {

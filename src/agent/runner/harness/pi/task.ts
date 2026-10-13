@@ -600,8 +600,8 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
       };
     }
 
-    if (refusalReason && !security.state.criticalViolation)
-      return refusalResult();
+    // A triage refusal that failed a scan closed is still a policy refusal.
+    if (refusalReason) return refusalResult();
 
     if (terminal && !security.state.criticalViolation) {
       if (errorMessage || spinnerMessage)

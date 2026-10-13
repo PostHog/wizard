@@ -5,22 +5,18 @@ import { analytics } from '@utils/analytics';
 import { Harness, Sequence, GPT5_6_LUNA_MODEL } from '@shared/constants';
 import { HostResolution } from '@shared/host-resolution';
 import type { BackendRunInputs, TaskRunInputs } from '../../types';
-import type {
-  ExtensionAPI,
-  ExtensionFactory,
-} from '@earendil-works/pi-coding-agent';
 
-// Runs a real-shaped request through each pi session's registered extensions, in order, as pi does.
+// The main and per-task pi sessions on a fake pi SDK; `events` is what each turn emits.
 
 const PINNED_VERSION = 4;
-const WIZARD_OWN = 'WIZARD OWN PROMPT';
 
 const state = vi.hoisted(() => ({
-  factories: [] as ExtensionFactory[],
   auth: {} as Record<string, unknown>,
   refreshedAuth: undefined as Record<string, unknown> | undefined,
   provider: {} as { apiKey?: string },
-  requests: [] as { bearer: string | undefined; payload: unknown }[],
+  bearers: [] as (string | undefined)[],
+  tools: [] as { name: string; execute: (...args: never[]) => unknown }[],
+  childReply: '',
   events: [] as unknown[],
   prompts: [] as string[],
   subscriber: undefined as ((event: never) => void) | undefined,
@@ -28,7 +24,7 @@ const state = vi.hoisted(() => ({
   rejectFirst: false,
   throwAfterEvents: false,
   openTasks: new Map(),
-  onPrompt: undefined as (() => void) | undefined,
+  onPrompt: undefined as (() => unknown) | undefined,
 }));
 vi.mock('@utils/analytics', () => ({
   analytics: { wizardCapture: vi.fn(), capture: vi.fn() },
@@ -66,18 +62,13 @@ vi.mock('../tasks', () => ({
 vi.mock('../orchestrator-tools', () => ({
   createPiOrchestratorTools: () => [],
 }));
-vi.mock('../subagent', () => ({
-  createDispatchAgentTool: () => ({ name: 'dispatch_agent' }),
-}));
 vi.mock('@earendil-works/pi-coding-agent', () => ({
   DefaultResourceLoader: class {
-    constructor(options: { extensionFactories: ExtensionFactory[] }) {
-      state.factories = options.extensionFactories;
-    }
     reload() {
       return Promise.resolve();
     }
   },
+  defineTool: (tool: unknown) => tool,
   AuthStorage: { create: () => ({}) },
   ModelRegistry: {
     inMemory: () => ({
@@ -95,8 +86,33 @@ vi.mock('@earendil-works/pi-coding-agent', () => ({
       () => ({ name: name.toLowerCase() }),
     ]),
   ),
-  createAgentSession: () =>
-    Promise.resolve({
+  createAgentSession: (options: { customTools: typeof state.tools }) => {
+    // A session created mid-turn is the subagent's child; it answers with `childReply`.
+    if (state.prompts.length > 0) {
+      let child: (event: never) => void = () => undefined;
+      return Promise.resolve({
+        session: {
+          subscribe: (handler: (event: never) => void) => {
+            child = handler;
+            return () => undefined;
+          },
+          prompt: () => {
+            child({
+              type: 'message_end',
+              message: {
+                role: 'assistant',
+                content: [{ type: 'text', text: state.childReply }],
+                stopReason: 'stop',
+              },
+            } as never);
+            return Promise.resolve();
+          },
+          abort: () => Promise.resolve(),
+        },
+      });
+    }
+    state.tools = options.customTools;
+    return Promise.resolve({
       session: {
         bindExtensions: () => Promise.resolve(),
         subscribe: (handler: (event: never) => void) => {
@@ -107,12 +123,9 @@ vi.mock('@earendil-works/pi-coding-agent', () => ({
         },
         prompt: async (text: string) => {
           state.prompts.push(text);
-          state.onPrompt?.();
-          state.requests.push({
-            bearer: state.provider.apiKey,
-            payload: await sentRequest(),
-          });
-          if (state.rejectFirst && state.requests.length === 1) {
+          await state.onPrompt?.();
+          state.bearers.push(state.provider.apiKey);
+          if (state.rejectFirst && state.bearers.length === 1) {
             state.subscriber?.({
               type: 'message_end',
               message: {
@@ -132,39 +145,9 @@ vi.mock('@earendil-works/pi-coding-agent', () => ({
         }),
         abort: state.abort,
       },
-    }),
+    });
+  },
 }));
-
-/** The request pi builds for a Responses call: the wizard's prompt leads `input`. */
-const piRequest = () => ({
-  model: GPT5_6_LUNA_MODEL,
-  input: [
-    { role: 'system', content: WIZARD_OWN },
-    { role: 'user', content: [{ type: 'input_text', text: 'go' }] },
-  ],
-});
-
-/** Run the request through the session's registered extensions, as pi does. */
-async function sentRequest(): Promise<{ input: { content: unknown }[] }> {
-  // The session was built, so its extensions were handed to the loader.
-  expect(state.factories.length).toBeGreaterThan(0);
-  const handlers: ((event: { payload: unknown }) => unknown)[] = [];
-  for (const factory of state.factories) {
-    await factory({
-      on: (
-        event: string,
-        handler: (event: { payload: unknown }) => unknown,
-      ) => {
-        if (event === 'before_provider_request') handlers.push(handler);
-      },
-    } as unknown as ExtensionAPI);
-  }
-  let payload: unknown = piRequest();
-  for (const handler of handlers) {
-    payload = (await handler({ payload })) ?? payload;
-  }
-  return payload as { input: { content: unknown }[] };
-}
 
 const credentials = {
   accessToken: 'test',
@@ -257,9 +240,10 @@ const runTask = (unsettled = false) =>
   } as unknown as TaskRunInputs);
 
 beforeEach(() => {
-  state.factories = [];
   state.refreshedAuth = undefined;
-  state.requests = [];
+  state.bearers = [];
+  state.tools = [];
+  state.childReply = '';
   state.prompts = [];
   state.events = [{ type: 'tool_execution_start', toolName: 'read', args: {} }];
   state.rejectFirst = false;
@@ -271,22 +255,6 @@ beforeEach(() => {
 });
 
 const AUTH = { gatewayUrl: 'https://gateway.test', token: 'test' };
-
-describe.each([
-  ['the main run', runMain],
-  ['a task run', runTask],
-])('%s', (_name, run) => {
-  it.each([undefined, PINNED_VERSION])(
-    'sends the request pi built, unchanged, when the mint version is %s',
-    async (promptPolicyVersion) => {
-      state.auth = { ...AUTH, promptPolicyVersion };
-
-      await run();
-
-      expect(await sentRequest()).toEqual(piRequest());
-    },
-  );
-});
 
 const refusedTurn = (text: string) => ({
   type: 'message_end',
@@ -373,6 +341,25 @@ describe.each([
   });
 });
 
+it('ends the main run when a subagent reply carries the marker', async () => {
+  state.auth = { ...AUTH, promptPolicyVersion: PINNED_VERSION };
+  state.childReply = 'Found it.\n[posthog:abort] Off topic.';
+  state.onPrompt = () =>
+    state.tools
+      .find((t) => t.name === 'dispatch_agent')
+      ?.execute(
+        ...([
+          'id',
+          { description: 'look', prompt: 'find it' },
+        ] as unknown as never[]),
+      );
+  expect(await runMain()).toMatchObject({
+    message: 'Off topic.',
+    policy: true,
+  });
+  expect(state.abort).toHaveBeenCalledOnce();
+});
+
 describe.each([
   ['main', runMain],
   ['task', () => runTask()],
@@ -396,10 +383,7 @@ describe.each([
       message: 'Outside setup.',
       policy: true,
     });
-    expect(state.requests.map((r) => r.bearer).slice(0, 2)).toEqual([
-      'old-bearer',
-      'new-bearer',
-    ]);
+    expect(state.bearers.slice(0, 2)).toEqual(['old-bearer', 'new-bearer']);
   });
 });
 

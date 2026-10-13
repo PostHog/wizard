@@ -443,15 +443,12 @@ async function mintGatewayToken(
     ) {
       gatewayUrl.hostname = 'localhost';
     }
-    // Absent runs unpinned; a malformed version fails here rather than as gateway 400s.
+    // A positive integer version means the gateway injects the operator prompt; anything else runs unpinned.
     const version = body.system_prompt_version;
-    const pinned = version !== undefined && version !== null;
-    if (pinned && !(Number.isInteger(version) && (version as number) > 0)) {
+    const pinned = Number.isInteger(version) && (version as number) > 0;
+    if (!pinned && version !== undefined && version !== null) {
       logToFile(
-        '[gateway] mint returned a malformed system_prompt_version; failing the run',
-      );
-      throw new GatewayMintFailed(
-        'mint response carried a malformed system_prompt_version',
+        '[gateway] mint returned a malformed system_prompt_version; running unpinned',
       );
     }
     return {

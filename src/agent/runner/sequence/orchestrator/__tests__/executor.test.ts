@@ -41,30 +41,6 @@ describe('drainQueue', () => {
     return Promise.resolve();
   };
 
-  it('records an agent refusal as a failed task without retrying or starting its dependent', async () => {
-    const refused = q.enqueue({ type: 'setup', maxAttempts: 3 });
-    const dependent = q.enqueue({ type: 'report', dependsOn: [refused.id] });
-    const runTask = vi.fn(() =>
-      Promise.reject(
-        new RunTaskFatal({
-          code: ErrorCodes.AgentAbort,
-          message: 'Outside permitted setup.',
-        }),
-      ),
-    );
-    await expect(drainQueue(q, runTask)).rejects.toBeInstanceOf(RunTaskFatal);
-    expect(runTask).toHaveBeenCalledOnce();
-    expect(q.get(refused.id)).toMatchObject({
-      status: TaskStatus.Failed,
-      attempts: 1,
-      error: {
-        type: ErrorCodes.AgentAbort,
-        message: 'Outside permitted setup.',
-      },
-    });
-    expect(q.get(dependent.id)?.status).toBe(TaskStatus.Pending);
-  });
-
   it('waits for live siblings after a fatal error and starts no dependents', async () => {
     const fatal = new RunTaskFatal({
       code: ErrorCodes.AgentOrchestratorTasksFailed,

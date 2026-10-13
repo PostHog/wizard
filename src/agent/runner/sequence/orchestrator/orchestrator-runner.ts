@@ -178,9 +178,7 @@ function requireTaskHarness(pick: HarnessPick): AgentHarness & {
 /** How an agent result ends the run, or undefined when it doesn't. */
 export function terminalResult(
   result: AgentResult,
-):
-  | { outcome: RunOutcome.Failed; failure: AgentFailure; policyAbort?: true }
-  | undefined {
+): { outcome: RunOutcome.Failed; failure: AgentFailure } | undefined {
   switch (result.kind) {
     case 'success':
       return undefined;
@@ -195,7 +193,6 @@ export function terminalResult(
           message: result.message ?? 'Agent aborted',
           error: result.error,
         },
-        ...(result.policy ? { policyAbort: true as const } : {}),
       };
     case 'failure':
       return {
@@ -211,6 +208,11 @@ export function terminalResult(
         },
       };
   }
+}
+
+/** A policy refusal ends the run as a failure with its reason. */
+function refusedFailure(reason: string | undefined): AgentFailure {
+  return { code: ErrorCodes.AgentAbort, message: reason ?? 'Agent aborted' };
 }
 
 function cancelledRun(): SequenceResult {
@@ -818,6 +820,11 @@ async function executeOrchestrator(
       },
     );
     if (signal?.aborted) return cancelledRun();
+    if (boot.operatorAbort?.reason !== undefined)
+      return {
+        outcome: RunOutcome.Failed,
+        failure: refusedFailure(boot.operatorAbort.reason),
+      };
     if (ref.kind === 'ok') {
       referenceInstallPath = ref.path;
       const example = path.join(ref.path, 'references', 'EXAMPLE.md');
@@ -1213,6 +1220,12 @@ async function executeOrchestrator(
   const preexistingSkills = new Set(
     existsSync(claudeSkillsDir) ? readdirSync(claudeSkillsDir) : [],
   );
+  // A refused task ends Failed and ends the run; the executor neither retries nor settles it.
+  const refuseTask = (task: QueuedTask, reason: string | undefined): never => {
+    const failure = refusedFailure(reason);
+    store.fail(task.id, { type: failure.code, message: failure.message });
+    throw new RunTaskFatal(failure, RunOutcome.Failed, task.type);
+  };
   const runTask: RunTask = async (task) => {
     if (signal?.aborted) return;
     renderQueue();
@@ -1258,6 +1271,8 @@ async function executeOrchestrator(
           logToFile(
             `[orchestrator] skill install failed type=${task.type} skill=${variantId} ${result.kind}`,
           );
+          if (boot.operatorAbort?.reason !== undefined)
+            refuseTask(task, boot.operatorAbort.reason);
           // A task without its instructions must fail here, not run blind:
           // run 91cf40eb's report task started after two EACCES install
           // failures (unwritable external-volume cache) and died silently.
@@ -1328,14 +1343,11 @@ async function executeOrchestrator(
         );
       }
       if (signal?.aborted) return;
+      if (taskResult.kind === 'abort' && taskResult.policy)
+        refuseTask(task, taskResult.message);
       const terminal = terminalResult(taskResult);
       if (terminal)
-        throw new RunTaskFatal(
-          terminal.failure,
-          terminal.outcome,
-          task.type,
-          terminal.policyAbort,
-        );
+        throw new RunTaskFatal(terminal.failure, terminal.outcome, task.type);
     } finally {
       // Durable skills a task installed are irrelevant to later tasks — and
       // the sdk harness auto-loads .claude/skills into every agent — so sweep
@@ -1383,19 +1395,19 @@ async function executeOrchestrator(
   } catch (error) {
     if (!(error instanceof RunTaskFatal)) throw error;
     fatal = error;
-    // A sink that published the report then hit a harness error fails alone; a policy refusal fails the run.
-    const sink = store
-      .list()
-      .find(
-        (t) =>
-          t.status === TaskStatus.Failed &&
-          t.type === fatal?.taskType &&
-          reportDeliveredIds.has(t.id),
-      );
-    const inFlight = store.list().some((t) => t.status === TaskStatus.Running);
-    if (!hostCancelled() && sink && !inFlight && !fatal.policyAbort) {
+    // The fatal task is still Running in the store; the sink that already
+    // published the report ends Failed, as if it had failed on its own.
+    const running = store.list().filter((t) => t.status === TaskStatus.Running);
+    const sink = running.find(
+      (t) => t.type === fatal?.taskType && reportDeliveredIds.has(t.id),
+    );
+    if (!hostCancelled() && sink && running.length === 1) {
       const verdict = drainVerdict(store.list(), reportDeliveredIds);
       if (verdict.requiredFailedTypes.length === 0 && verdict.blocked === 0) {
+        store.fail(sink.id, {
+          type: 'fatal-after-report',
+          message: fatal.message,
+        });
         deliveredFatal = true;
         fatal = undefined;
       }
@@ -1452,7 +1464,6 @@ async function executeOrchestrator(
 
   if (hostCancelled()) return cancelledRun();
   if (fatal) {
-    renderQueue();
     // The steps the fatal task stopped still get their terminal event.
     const stoppedBy = drainVerdict(
       store.list(),

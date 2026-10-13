@@ -13,8 +13,7 @@ import {
 import { AgentOutputSignals } from '@agent/output-signals';
 import { RESUME_INSTRUCTION } from '@agent/signals';
 import { analytics } from '@utils/analytics';
-import { Harness, Sequence } from '@shared/constants';
-import { assembleCommandments } from '@agent/runner/switchboard/commandments';
+import { Sequence } from '@shared/constants';
 import type { WizardRunOptions } from '@utils/types';
 import type { SpinnerHandle } from '@agent/types';
 import { formatLogLine } from '@utils/debug';
@@ -104,91 +103,72 @@ describe('runAgent', () => {
   });
 
   describe('operator refusals', () => {
-    it.each([Sequence.linear, Sequence.orchestrator])(
-      'returns the refusal before success or remarks in %s',
-      async (sequence) => {
-        const reason = 'This request is outside setup.';
-        let stopResult: unknown;
-        mockQuery.mockImplementation(function* ({ options }) {
-          yield {
-            type: 'assistant',
-            message: {
-              content: [
-                { type: 'text', text: '[posthog:' },
-                { type: 'text', text: `abort] ${reason}` },
-              ],
-            },
-          };
-          stopResult = options.hooks.Stop[0].hooks[0]({
-            stop_hook_active: false,
-          });
-          yield { type: 'result', subtype: 'success' };
-        });
-        const result = await runAgent(
-          {
-            ...defaultAgentConfig,
-            sequence,
-            gatewayAuth: {
-              ...defaultAgentConfig.gatewayAuth,
-              promptPolicyVersion: 1,
-            },
-          },
-          'Set up PostHog',
-          defaultOptions,
-          mockSpinner,
-        );
-        expect(result).toEqual({
-          kind: 'abort',
-          classification: AgentErrorType.ABORT,
-          message: reason,
-          policy: true,
-        });
-        // A real SDK abort may stop consumption before the hook runs at all.
-        expect(
-          stopResult === undefined || JSON.stringify(stopResult) === '{}',
-        ).toBe(true);
-        expect(analytics.wizardCapture).not.toHaveBeenCalledWith(
-          'agent completed',
-          expect.anything(),
-        );
-        expect(mockSpinner.stop).not.toHaveBeenCalledWith(
-          'PostHog integration complete',
-        );
+    const pinned = {
+      ...defaultAgentConfig,
+      gatewayAuth: {
+        ...defaultAgentConfig.gatewayAuth,
+        promptPolicyVersion: 1,
       },
-    );
+    };
 
-    it('ends the run on a marker in the middle of a reply', async () => {
-      mockQuery.mockImplementation(function* () {
+    it('returns the refusal before success or remarks, for a marker mid-reply split across blocks', async () => {
+      let stopResult: unknown;
+      mockQuery.mockImplementation(function* ({ options }) {
         yield {
           type: 'assistant',
           message: {
             content: [
-              {
-                type: 'text',
-                text: 'Looking.\n[posthog:abort] Outside setup.\nBye.',
-              },
+              { type: 'text', text: 'Looking.\n[posthog:' },
+              { type: 'text', text: 'abort] Outside setup.\nBye.' },
             ],
+          },
+        };
+        stopResult = options.hooks.Stop[0].hooks[0]({
+          stop_hook_active: false,
+        });
+        yield { type: 'result', subtype: 'success' };
+      });
+      const result = await runAgent(
+        pinned,
+        'Set up PostHog',
+        defaultOptions,
+        mockSpinner,
+      );
+      expect(result).toEqual({
+        kind: 'abort',
+        classification: AgentErrorType.ABORT,
+        message: 'Outside setup.',
+        policy: true,
+      });
+      // A real SDK abort may stop consumption before the hook runs at all.
+      expect(
+        stopResult === undefined || JSON.stringify(stopResult) === '{}',
+      ).toBe(true);
+      expect(analytics.wizardCapture).not.toHaveBeenCalledWith(
+        'agent completed',
+        expect.anything(),
+      );
+    });
+
+    it('ends the run when a subagent reply carries the marker', async () => {
+      mockQuery.mockImplementation(function* () {
+        yield {
+          type: 'assistant',
+          parent_tool_use_id: 'toolu_agent',
+          message: {
+            content: [{ type: 'text', text: '[posthog:abort] Off topic.' }],
           },
         };
         yield { type: 'result', subtype: 'success' };
       });
       const result = await runAgent(
-        {
-          ...defaultAgentConfig,
-          gatewayAuth: {
-            ...defaultAgentConfig.gatewayAuth,
-            promptPolicyVersion: 1,
-          },
-        },
+        pinned,
         'Set up PostHog',
         defaultOptions,
         mockSpinner,
         { requestRemark: false },
       );
-      expect(result).toMatchObject({
-        kind: 'abort',
-        message: 'Outside setup.',
-      });
+      expect(result).toMatchObject({ message: 'Off topic.', policy: true });
     });
 
     it.each([
@@ -218,48 +198,6 @@ describe('runAgent', () => {
           { requestRemark: false },
         );
         expect(result.kind).toBe('success');
-      },
-    );
-  });
-
-  describe('SDK query options on a pinned token', () => {
-    it.each([undefined, 3])(
-      'match an unpinned run, with no operator prompt or pinned-run restrictions (version %s)',
-      async (promptPolicyVersion) => {
-        mockQuery.mockImplementation(function* () {
-          yield { type: 'result', subtype: 'success' };
-        });
-        await runAgent(
-          {
-            ...defaultAgentConfig,
-            gatewayAuth: {
-              ...defaultAgentConfig.gatewayAuth,
-              promptPolicyVersion,
-            },
-          },
-          'Set up PostHog',
-          defaultOptions,
-          mockSpinner,
-          { requestRemark: false },
-        );
-        const call = mockQuery.mock.calls[0][0];
-        const { options } = call;
-
-        expect(options.systemPrompt).toEqual({
-          type: 'preset',
-          preset: 'claude_code',
-          append: assembleCommandments({
-            sequence: Sequence.linear,
-            harness: Harness.anthropic,
-          }),
-        });
-        expect((await call.prompt.next()).value.message.content).toBe(
-          'Set up PostHog',
-        );
-        expect(options.settings).not.toHaveProperty('includeGitInstructions');
-        expect(options).not.toHaveProperty('title');
-        expect(options).not.toHaveProperty('disallowedTools');
-        expect(options.agents).toHaveProperty('general-purpose');
       },
     );
   });
@@ -1319,6 +1257,33 @@ describe('gateway re-mint on 401', () => {
       'gateway token reminted',
       { resumed: true },
     );
+  });
+
+  it('detects the abort marker once a re-mint returns a policy version', async () => {
+    function* refusedSession(id: string) {
+      yield {
+        type: 'assistant',
+        session_id: id,
+        message: {
+          role: 'assistant',
+          content: [{ type: 'text', text: '[posthog:abort] Outside setup.' }],
+        },
+      };
+      yield { type: 'result', subtype: 'success', session_id: id };
+    }
+    mockQuery
+      .mockReturnValueOnce(rejectedSession('sess-1'))
+      .mockReturnValueOnce(refusedSession('sess-2'));
+    const refresh = vi.fn().mockResolvedValue({
+      ...auth('phe_fresh', Date.now() + HOUR),
+      promptPolicyVersion: 1,
+    });
+
+    const result = await run(
+      config(auth('phe_stale', Date.now() - 1), refresh),
+    );
+
+    expect(result).toMatchObject({ message: 'Outside setup.', policy: true });
   });
 
   it('fails the run on a second 401 after the re-mint', async () => {

@@ -205,6 +205,8 @@ export function buildAuthErrorContext(
 
 export type AgentConfig = {
   workingDirectory: string;
+  /** The run's policy-refusal latch, shared with the sequence's skill scans. */
+  operatorAbort?: OperatorAbort;
   posthogMcpUrl: string;
   posthogApiKey: string;
   currentPosthogApiKey?: () => Promise<string>;
@@ -616,7 +618,7 @@ export async function initializeAgent(
       ...(config.wizardMetadata ?? {}),
       call_type: CallType.yaraTriage,
     };
-    const operatorAbort = new OperatorAbort();
+    const operatorAbort = config.operatorAbort ?? new OperatorAbort();
     const triageProvider = createTriageLLMProvider(
       async () => {
         const current = await currentGatewayAuth();
@@ -1017,6 +1019,15 @@ export async function runAgent(
   let abortReason: string | null = null;
   // Set when `abortReason` came from the operator policy, not the agent's [ABORT].
   let policyAbort = false;
+  const policyRefusal = (): AgentResult => {
+    spinner.stop('Wizard aborted');
+    return {
+      kind: 'abort',
+      classification: AgentErrorType.ABORT,
+      message: abortReason ?? undefined,
+      policy: true,
+    };
+  };
   let stopWatchingOperatorAbort: (() => void) | undefined;
   // Set when a YARA hook detects a terminal violation. Returning `stopReason`
   // from a PostToolUse hook does NOT stop the SDK, so we abort the query and
@@ -1074,6 +1085,8 @@ export async function runAgent(
       abortController.abort();
       signalDone();
     });
+    // A refusal before the first query (a skill scan) sends nothing.
+    if (policyAbort) return policyRefusal();
 
     // Actually stop the run when a YARA hook hits a terminal violation. The SDK
     // ignores `stopReason` from PostToolUse hooks, so we abort the query (like
@@ -1291,7 +1304,7 @@ export async function runAgent(
               {
                 hooks: [
                   (input: { stop_hook_active: boolean }) =>
-                    abortReason ? {} : stopHook(input),
+                    policyAbort ? {} : stopHook(input),
                 ],
                 timeout: 30,
               },
@@ -1535,7 +1548,9 @@ export async function runAgent(
     if (
       (await runQuery()) === 'remint' &&
       refreshGatewayAuth &&
-      !agentConfig.signal?.aborted
+      !agentConfig.signal?.aborted &&
+      !abortReason &&
+      agentConfig.operatorAbort?.reason === undefined
     ) {
       // The subprocess froze the dead bearer in its env at spawn, so it cannot
       // be handed a new one: mint, then resume the session in a new one.
@@ -1565,7 +1580,8 @@ export async function runAgent(
         resumed: sessionId !== undefined,
       });
       spinner.message(spinnerMessage);
-      await runQuery(sessionId);
+      // A refusal while re-minting never resumes the refused session.
+      if (!abortReason) await runQuery(sessionId);
     }
 
     // A fresh bearer was rejected. The auth screen is already up; hand the
@@ -1580,6 +1596,9 @@ export async function runAgent(
         message: 'Agent run cancelled',
       };
     }
+
+    // A triage refusal that failed a scan closed is still a policy refusal.
+    if (policyAbort) return policyRefusal();
 
     // A YARA hook detected a terminal violation and aborted the run.
     if (yaraViolationReason) {
@@ -1596,7 +1615,6 @@ export async function runAgent(
         kind: 'abort',
         classification: AgentErrorType.ABORT,
         message: abortReason,
-        ...(policyAbort ? { policy: true as const } : {}),
       };
     }
     if (agentConfig.signal?.aborted) {
@@ -1682,6 +1700,8 @@ export async function runAgent(
     // Signal done to unblock the async generator
     signalDone();
 
+    if (policyAbort) return policyRefusal();
+
     // A YARA hook aborted the run (the SDK throws AbortError once the hook
     // calls abortController.abort()). Surface it before anything else so it is
     // never mistaken for a success-cleanup race or a generic abort.
@@ -1699,7 +1719,6 @@ export async function runAgent(
         kind: 'abort',
         classification: AgentErrorType.ABORT,
         message: abortReason,
-        ...(policyAbort ? { policy: true as const } : {}),
       };
     }
 

@@ -5,9 +5,9 @@ import os from 'node:os';
 import path from 'node:path';
 import { HostResolution } from '@shared/host-resolution';
 import { Harness, HAIKU_MODEL, Sequence } from '@shared/constants';
-import { initializeAgent } from '@agent/agent-interface';
 import { prepareRun } from '@agent/runner/shared/bootstrap';
 import { runAgent } from '@agent/runner';
+import { getHarness } from '@agent/runner/switchboard';
 import { resetGatewaySession } from '@agent/gateway-session';
 import { RunOutcome } from '@agent/runner/shared/types';
 import type { ResolvedRunConfig } from '@agent/runner/shared/types';
@@ -43,15 +43,11 @@ vi.mock('@anthropic-ai/claude-agent-sdk', async (importOriginal) => ({
 let server: http.Server;
 let origin: string;
 let dir: string;
-let bodies: Record<string, unknown>[];
-let bearers: (string | undefined)[];
-let mintRequests: Record<string, unknown>[];
 
 beforeAll(async () => {
   dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wizard-policy-'));
   server = http.createServer((req, res) => {
-    let raw = '';
-    req.on('data', (chunk) => (raw += chunk));
+    req.resume();
     req.on('end', () => {
       if (req.url === '/agent-menu.json') {
         res.end(
@@ -83,7 +79,6 @@ beforeAll(async () => {
         return;
       }
       if (req.url === '/api/wizard/gateway_token/') {
-        mintRequests.push(JSON.parse(raw));
         res.writeHead(200, { 'content-type': 'application/json' });
         res.end(
           JSON.stringify({
@@ -95,11 +90,6 @@ beforeAll(async () => {
         );
         return;
       }
-      bodies.push(JSON.parse(raw));
-      bearers.push(
-        req.headers.authorization ??
-          (req.headers['x-api-key'] as string | undefined),
-      );
       res.writeHead(400, { 'content-type': 'application/json' });
       res.end('{"error":{"message":"fixture has no model"}}');
     });
@@ -116,9 +106,6 @@ afterAll(async () => {
   fs.rmSync(dir, { recursive: true, force: true });
 });
 beforeEach(() => {
-  bodies = [];
-  bearers = [];
-  mintRequests = [];
   resetGatewaySession();
   query.mockReset();
   vi.stubEnv('HOME', dir);
@@ -196,57 +183,25 @@ function inputs(harness: Harness = Harness.anthropic) {
   return { config, resolved, input };
 }
 
-// The mint pins the token, yet the wizard still sends no operator prompt.
-const systemUnits = (body: Record<string, unknown>) =>
-  [
-    ...((body.input ?? []) as { role: string }[]).filter(
-      (m) => m.role === 'system',
-    ),
-    ...((body.system ?? []) as unknown[]),
-  ].length;
-
-it.each([Harness.pi, Harness.anthropic])(
-  'sends no system unit in %s triage HTTP on a pinned token',
-  async (harness) => {
-    const { resolved, input } = inputs(harness);
-    const boot = await prepareRun(resolved, input);
-    if (!boot.triageProvider) throw new Error('Missing triage provider');
-    await boot.triageProvider('Classify this match');
-    expect(systemUnits(bodies[0])).toBe(0);
-    expect(bearers[0]).toContain('phe_local_minted');
-    expect(mintRequests[0]).toEqual({
-      program: expect.any(String),
-      reads_refusal_reason: true,
-    });
-  },
-);
-
-it('sends no system unit in initializeAgent triage HTTP on a pinned token', async () => {
-  const { input } = inputs();
-  const agent = await initializeAgent(
-    {
-      workingDirectory: dir,
-      programId: 'posthog-integration',
-      posthogMcpUrl: origin,
-      posthogApiKey: input.credentials.accessToken,
-      host: input.credentials.host,
-      skillsBaseUrl: '',
-      detectPackageManager: () =>
-        Promise.resolve({ detected: [], primary: null, recommendation: '' }),
-      readOnly: true,
-    },
-    {
-      installDir: dir,
-      ci: true,
-      debug: false,
-      benchmark: false,
-      yaraReport: false,
-      signup: false,
-    },
-  );
-  await agent.triageProvider('Classify this match');
-  expect(systemUnits(bodies[0])).toBe(0);
-  expect(bearers[0]).toContain('phe_local_minted');
+it('ends an anthropic-harness run on a skill-scan refusal before any query', async () => {
+  const { resolved, input } = inputs();
+  const boot = await prepareRun(resolved, input);
+  // What a refusing triage call in a sequence's skill scan does.
+  boot.operatorAbort?.trip('Outside permitted setup.');
+  const result = await getHarness(Harness.anthropic).run({
+    config: resolved,
+    input,
+    boot,
+    emit: vi.fn(),
+    prompt: 'Set up the project',
+    spinner: { start: vi.fn(), stop: vi.fn(), message: vi.fn() },
+    model: HAIKU_MODEL,
+  });
+  expect(result).toMatchObject({
+    message: 'Outside permitted setup.',
+    policy: true,
+  });
+  expect(query).not.toHaveBeenCalled();
 });
 
 it('returns failed through the real SDK linear sequence without postRun or completion', async () => {

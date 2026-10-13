@@ -418,11 +418,6 @@ export const piBackend: AgentHarness = {
       const { prewarmYaraScanner } = await import('../../../yara-hooks');
       void prewarmYaraScanner();
 
-      // Wire the real PostHog MCP into pi (#10): load pi's MCP adapter and point
-      // it at the hosted MCP the anthropic path uses, so dashboards/insights are
-      // created through the sanctioned MCP. Best-effort — if it can't load or
-      // connect, the run continues (minus the dashboard step) rather than failing
-      // the whole integration. The security factory is always first.
       // Every model-text path (turns, subagents, YARA triage) ends the run here.
       const refuse = (reason: string) => {
         refusalReason ??= reason;
@@ -433,6 +428,12 @@ export const piBackend: AgentHarness = {
         if (reason !== undefined) refuse(reason);
         return reason !== undefined;
       };
+
+      // Wire the real PostHog MCP into pi (#10): load pi's MCP adapter and point
+      // it at the hosted MCP the anthropic path uses, so dashboards/insights are
+      // created through the sanctioned MCP. Best-effort — if it can't load or
+      // connect, the run continues (minus the dashboard step) rather than failing
+      // the whole integration. The security factory is always first.
       const extensionFactories = [security.factory] as Array<
         (pi: unknown) => void
       >;
@@ -808,11 +809,10 @@ export const piBackend: AgentHarness = {
           message: 'Agent run cancelled',
         };
       }
+      // A triage refusal that failed a scan closed is still a policy refusal.
+      if (refusalReason) return refusalResult();
       if (timedOut && structured && !security.state.criticalViolation)
         return timedOutResult(structured.timeoutMs);
-
-      if (refusalReason && !security.state.criticalViolation)
-        return refusalResult();
 
       if (terminal && !security.state.criticalViolation) {
         spinner.stop(
@@ -938,8 +938,8 @@ export const piBackend: AgentHarness = {
           message: 'Agent run cancelled',
         };
       }
-      if (securityState?.criticalViolation) return yaraViolationResult();
       if (refusalReason) return refusalResult();
+      if (securityState?.criticalViolation) return yaraViolationResult();
       if (timedOut && structured) return timedOutResult(structured.timeoutMs);
       const message = err instanceof Error ? err.message : String(err);
       logToFile(`[pi] run error: ${message}`);

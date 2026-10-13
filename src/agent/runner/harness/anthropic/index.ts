@@ -60,6 +60,7 @@ export const anthropicBackend: AgentHarness = {
         skillsBaseUrl,
         wizardFlags,
         wizardMetadata,
+        operatorAbort: boot.operatorAbort,
         programId: boot.programId,
         handoffNotebook: boot.handoffNotebook,
         integrationLabel: config.integrationLabel,
@@ -151,6 +152,7 @@ export const anthropicBackend: AgentHarness = {
         handoffNotebook: boot.handoffNotebook,
         wizardFlags: boot.wizardFlags,
         wizardMetadata: boot.wizardMetadata,
+        operatorAbort: boot.operatorAbort,
         integrationLabel: config.programId,
         // Only a task allowed to ask carries a bridge, so the Write/Edit pause
         // that rides on a pending question stays inside that task's agent.

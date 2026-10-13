@@ -29,6 +29,7 @@ import { createEmitSpinner } from '../shared/progress-collector';
 import { createAskBridge } from '../shared/ask';
 import { withTranscript } from '../shared/transcript-tail';
 import { getHarness } from '../switchboard';
+import type { AgentResult } from '../harness/types';
 
 export async function runLinearProgram(
   context: SequenceContext,
@@ -79,11 +80,13 @@ async function executeLinear(
       { scan: (dir) => scanInstalledSkill(dir, boot.triageProvider) },
     );
     if (signal?.aborted) return aborted();
-    if (installResult.kind !== 'ok') {
+    // A refused scan skips the harness below and fails as a policy refusal.
+    if (installResult.kind === 'ok') {
+      skillPath = installResult.path;
+      logToFile(`[agent-runner] skill installed at ${skillPath}`);
+    } else if (boot.operatorAbort?.reason === undefined) {
       return failed(installFailure(run.integrationLabel, installResult));
     }
-    skillPath = installResult.path;
-    logToFile(`[agent-runner] skill installed at ${skillPath}`);
   }
 
   // 6. Initialize agent
@@ -140,21 +143,30 @@ async function executeLinear(
   // loop + model transport; everything around it (skill install, prompt, ask
   // bridge, error routing, outro) stays here so every harness shares it.
   const { harness, model, thinkingLevel } = config.binding;
-  const agentResult = await getHarness(harness).run({
-    config,
-    input,
-    boot,
-    emit,
-    prompt,
-    skillPath,
-    spinner,
-    askBridge: ask,
-    middleware,
-    model,
-    thinkingLevel,
-    signal: runSignal,
-    structured: run.structured,
-  });
+  const refusal = boot.operatorAbort?.reason;
+  const agentResult: AgentResult =
+    refusal !== undefined
+      ? {
+          kind: 'abort',
+          classification: AgentErrorType.ABORT,
+          message: refusal,
+          policy: true,
+        }
+      : await getHarness(harness).run({
+          config,
+          input,
+          boot,
+          emit,
+          prompt,
+          skillPath,
+          spinner,
+          askBridge: ask,
+          middleware,
+          model,
+          thinkingLevel,
+          signal: runSignal,
+          structured: run.structured,
+        });
   if (signal?.aborted && agentResult.kind === 'success') return aborted();
 
   // 9. Error handling (full set from both harnesses)

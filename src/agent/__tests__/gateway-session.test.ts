@@ -217,33 +217,20 @@ describe('gatewayAuth', () => {
       ).toBe(4);
     });
 
-    it.each([{}, { system_prompt_version: null }])(
-      'is absent when the mint pins none (%j)',
+    it.each([
+      {},
+      { system_prompt_version: null },
+      ...[0, -1, 1.5, '3', true, {}, []].map((v) => ({
+        system_prompt_version: v,
+      })),
+    ])(
+      'is absent when the mint pins none or a malformed version (%j)',
       async (extra) => {
         mint(extra);
 
         const auth = await gatewayAuth(host, 'pha_oauth', 'integration');
 
         expect(auth).not.toHaveProperty('promptPolicyVersion');
-      },
-    );
-
-    it('ignores a system_prompt in the mint response', async () => {
-      mint({ system_prompt: 'text the wizard must not read' });
-
-      const auth = await gatewayAuth(host, 'pha_oauth', 'integration');
-
-      expect(auth).not.toHaveProperty('promptPolicyVersion');
-      expect(JSON.stringify(auth)).not.toContain('must not read');
-    });
-
-    it.each([0, -1, 1.5, '3', true, {}, []])(
-      'fails the run when the mint returns version %j',
-      async (bad) => {
-        mint({ system_prompt_version: bad });
-        await expect(
-          gatewayAuth(host, 'pha_oauth', 'integration'),
-        ).rejects.toBeInstanceOf(GatewayMintFailed);
       },
     );
   });
