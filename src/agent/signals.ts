@@ -25,6 +25,11 @@ export const AgentSignals = {
    * Programs can declare an onAbort handler to render a custom screen.
    */
   ABORT: '[ABORT]',
+  /**
+   * Marker the AI gateway's operator prompt has the model reply with when it
+   * refuses. Format: "[posthog:abort] <reason>". The run ends as an abort.
+   */
+  POLICY_ABORT: '[posthog:abort]',
   /** Signal emitted when the agent provides a remark about its run */
   WIZARD_REMARK: '[WIZARD-REMARK]',
   /** Signal prefix for benchmark logging */
@@ -44,6 +49,14 @@ export const AgentSignals = {
 } as const;
 
 export type AgentSignal = (typeof AgentSignals)[keyof typeof AgentSignals];
+
+/** The rest of the line after a policy abort marker in `text`, or undefined without one. */
+export function policyAbortReason(text: string): string | undefined {
+  const at = text.indexOf(AgentSignals.POLICY_ABORT);
+  if (at === -1) return undefined;
+  const line = text.slice(at + AgentSignals.POLICY_ABORT.length).split('\n')[0];
+  return line.trim() || 'The AI gateway refused this request';
+}
 
 /**
  * End-of-run reflection ask, shared by both harnesses so remarks are

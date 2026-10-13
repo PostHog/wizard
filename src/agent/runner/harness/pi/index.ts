@@ -23,7 +23,11 @@ import {
 } from '@shared/constants';
 import { analytics } from '@utils/analytics';
 import { AgentErrorType } from '../../../agent-interface';
-import { AgentSignals, REMARK_INSTRUCTION } from '../../../signals';
+import {
+  AgentSignals,
+  REMARK_INSTRUCTION,
+  policyAbortReason,
+} from '../../../signals';
 import { AgentOutputSignals } from '../../../output-signals';
 import { assembleCommandments } from '../../switchboard/commandments';
 import { gatewayAuth, type GatewayAuth } from '../../../gateway-session';
@@ -304,6 +308,7 @@ export const piBackend: AgentHarness = {
     let cancellation: ReturnType<typeof bindPiCancellation> | undefined;
     let timedOut = false;
     let timeoutAbort: Promise<void> | undefined;
+    let abortReason: string | undefined;
     // Read by the catch path; undefined until setup creates the extension.
     let securityState: SecurityState | undefined;
     // A latched violation outranks the timer on both the success and catch paths.
@@ -623,6 +628,9 @@ export const piBackend: AgentHarness = {
             turns.noteAssistantTurn(event.message);
             const blocks = textBlocks(event.message);
             const assistant = blocks.join('').trim();
+            // The gateway's refusal marker ends the run, mid-reply or not.
+            abortReason ??= policyAbortReason(assistant);
+            if (abortReason) cancellation?.abort();
             // A schema-bound answer is the turn's last block, not the joined text.
             lastAssistantText = (blocks.at(-1) ?? '').trim();
             if (structured) {
@@ -733,6 +741,7 @@ export const piBackend: AgentHarness = {
           !security.state.criticalViolation &&
           !inputs.signal?.aborted &&
           !terminal &&
+          !abortReason &&
           !setupSignalFailure(signals) &&
           hasOpenTasks(wizardTaskTools.store)
         ) {
@@ -749,6 +758,7 @@ export const piBackend: AgentHarness = {
           !structured &&
           !security.state.criticalViolation &&
           !terminal &&
+          !abortReason &&
           !setupSignalFailure(signals) &&
           !inputs.signal?.aborted
         ) {
@@ -777,6 +787,11 @@ export const piBackend: AgentHarness = {
       if (timedOut && structured && !security.state.criticalViolation)
         return timedOutResult(structured.timeoutMs);
 
+      if (abortReason)
+        terminal = {
+          classification: AgentErrorType.ABORT,
+          message: abortReason,
+        };
       if (terminal && !security.state.criticalViolation) {
         spinner.stop(
           config.errorMessage ?? `${config.integrationLabel} failed`,

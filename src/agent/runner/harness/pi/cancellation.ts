@@ -3,7 +3,7 @@ export function bindPiCancellation(
   signal: AbortSignal | undefined,
   session: { abort(): Promise<void> },
   onAbortError?: (error: unknown) => void,
-): { settle(): Promise<void> } {
+): { abort(): void; settle(): Promise<void> } {
   let abortPromise: Promise<void> | undefined;
   const onAbort = () => {
     abortPromise ??= Promise.resolve()
@@ -20,6 +20,7 @@ export function bindPiCancellation(
   if (signal?.aborted) onAbort();
 
   return {
+    abort: onAbort,
     async settle() {
       signal?.removeEventListener('abort', onAbort);
       await abortPromise;

@@ -65,6 +65,7 @@ import {
   AgentErrorType,
   REMARK_INSTRUCTION,
   RESUME_INSTRUCTION,
+  policyAbortReason,
 } from './signals';
 import { classifyAuthFailure } from '@shared/errors';
 import { isGrantRevoked } from '@shared/auth-session-state';
@@ -1335,19 +1336,22 @@ export async function runAgent(
           // the prompt doesn't need to cooperate with "and exit" because the
           // abort is enforced here. The reason is surfaced via the returned
           // AgentErrorType.ABORT so the runner can render a custom screen.
-          if (
-            abortCases.length > 0 &&
-            !abortReason &&
-            message.type === 'assistant'
-          ) {
+          if (!abortReason && message.type === 'assistant') {
             const content = message.message?.content;
             if (Array.isArray(content)) {
               for (const block of content) {
                 if (block.type === 'text' && typeof block.text === 'string') {
-                  const match = block.text.match(/\[ABORT\]\s*(.+?)(?:\n|$)/);
-                  if (match) {
-                    abortReason = match[1].trim();
-                    logToFile(`Agent emitted [ABORT]: ${abortReason}`);
+                  // The gateway's policy abort ends every program; [ABORT] only ones with abort cases.
+                  const reason =
+                    policyAbortReason(block.text) ??
+                    (abortCases.length > 0
+                      ? block.text
+                          .match(/\[ABORT\]\s*(.+?)(?:\n|$)/)?.[1]
+                          .trim()
+                      : undefined);
+                  if (reason) {
+                    abortReason = reason;
+                    logToFile(`Agent emitted an abort marker: ${abortReason}`);
                     abortController.abort();
                     signalDone();
                     break;

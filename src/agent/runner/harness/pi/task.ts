@@ -30,7 +30,7 @@ import {
   renderToolInventory,
 } from '../../../agent-prompt-loader';
 import { AgentErrorType } from '../../../agent-interface';
-import { REMARK_INSTRUCTION } from '../../../signals';
+import { REMARK_INSTRUCTION, policyAbortReason } from '../../../signals';
 import { AgentOutputSignals } from '../../../output-signals';
 import { TaskStatus } from '../../sequence/orchestrator/queue';
 import type { OrchestratorToolsContext } from '../../sequence/orchestrator/queue-tools';
@@ -233,6 +233,7 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
   let mcpCleanup: (() => void) | undefined;
   let aioFailed = true;
   let cancellation: ReturnType<typeof bindPiCancellation> | undefined;
+  let abortReason: string | undefined;
   try {
     const sdk = await import('@earendil-works/pi-coding-agent');
     const {
@@ -467,6 +468,9 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
           assistantTurns += 1;
           turns.noteAssistantTurn(event.message);
           const assistant = extractText(event.message).trim();
+          // The gateway's refusal marker ends the run, mid-reply or not.
+          abortReason ??= policyAbortReason(assistant);
+          if (abortReason) cancellation?.abort();
           if (assistant) {
             logToFile(`[pi-task] assistant: ${assistant.slice(0, 1000)}`);
             applyOutroMarkers(assistant, emit);
@@ -524,6 +528,7 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
         !security.state.criticalViolation &&
         !inputs.signal?.aborted &&
         !terminal &&
+        !abortReason &&
         !setupSignalFailure(signals) &&
         !isSettled(orchestrator)
       ) {
@@ -541,6 +546,7 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
         requestRemark &&
         !security.state.criticalViolation &&
         !terminal &&
+        !abortReason &&
         !setupSignalFailure(signals) &&
         !inputs.signal?.aborted
       ) {
@@ -566,6 +572,8 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
       };
     }
 
+    if (abortReason)
+      terminal = { classification: AgentErrorType.ABORT, message: abortReason };
     if (terminal && !security.state.criticalViolation) {
       if (errorMessage || spinnerMessage)
         spinner.stop(errorMessage ?? 'Task failed');

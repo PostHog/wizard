@@ -764,6 +764,38 @@ describe('runAgent', () => {
       expect(result).toEqual({ kind: 'success' });
       expect(mockSpinner.stop).toHaveBeenCalledWith('Test success');
     });
+
+    it('ends the run on a policy abort marker mid-reply with no abort cases', async () => {
+      function* mockGeneratorWithPolicyAbort() {
+        yield {
+          type: 'assistant',
+          message: {
+            content: [
+              {
+                type: 'text',
+                text: 'I cannot help.\n[posthog:abort] Request is out of scope\nSorry.',
+              },
+            ],
+          },
+        };
+      }
+
+      mockQuery.mockReturnValue(mockGeneratorWithPolicyAbort());
+
+      const result = await runAgent(
+        defaultAgentConfig,
+        'test prompt',
+        defaultOptions,
+        mockSpinner as unknown as SpinnerHandle,
+        { successMessage: 'Test success', errorMessage: 'Test error' },
+      );
+
+      expect(result).toEqual({
+        kind: 'abort',
+        classification: AgentErrorType.ABORT,
+        message: 'Request is out of scope',
+      });
+    });
   });
 });
 

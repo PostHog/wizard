@@ -445,6 +445,19 @@ describe.each(['linear', 'task'] as const)('%s setup signals', (mode) => {
     });
   });
 
+  it('ends the run on a policy abort marker mid-reply, without a nudge', async () => {
+    state.tasks.set('1', { status: 'in_progress' });
+    state.text =
+      'I cannot help.\n[posthog:abort] Request is out of scope\nSorry.';
+
+    await expect(run(runInputs(vi.fn(), null))).resolves.toEqual({
+      kind: 'abort',
+      classification: AgentErrorType.ABORT,
+      message: 'Request is out of scope',
+    });
+    expect(state.prompts).toHaveLength(1);
+  });
+
   it('keeps skill-install fallback nonfatal', async () => {
     state.text = `${AgentSignals.SKILL_INSTALL_FAILED} integration-test — unavailable; completed without the skill.`;
 

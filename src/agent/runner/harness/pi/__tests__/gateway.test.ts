@@ -1,4 +1,5 @@
 import {
+  buildGatewayModel,
   buildGatewayProvider,
   buildGatewayHeaders,
   isGatewayAuthRejection,
@@ -65,6 +66,19 @@ describe('buildGatewayProvider transport', () => {
     });
     expect(api).toBe('anthropic-messages');
     expect(baseUrl).toBe('https://ai-gateway.us.posthog.com');
+  });
+});
+
+describe('buildGatewayModel', () => {
+  it('has pi send the system prompt as system, which the gateway accepts on pinned tokens', () => {
+    const model = buildGatewayModel({
+      gatewayUrl: 'https://ai-gateway.us.posthog.com',
+      accessToken: 'phe_x',
+      wizardMetadata: {},
+      wizardFlags: {},
+      modelId: 'openai/gpt-5.6-terra',
+    });
+    expect(model.compat).toEqual({ supportsDeveloperRole: false });
   });
 });
 
