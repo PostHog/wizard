@@ -162,14 +162,27 @@ describe('detectWarehouseSources', () => {
     expect(kinds(tmpDir)).toEqual(['MySQL']);
   });
 
-  it('follows a symlinked directory to find sources', () => {
-    // Manifest lives in an external dir reachable only via a symlink inside
-    // the project — exercises symlink resolution in the walker.
+  it.each([
+    [
+      'a symlinked directory',
+      (external: string) =>
+        fs.symlinkSync(external, path.join(tmpDir, 'linked-pkg'), 'dir'),
+    ],
+    [
+      'a symlinked file',
+      (external: string) =>
+        fs.symlinkSync(
+          path.join(external, 'package.json'),
+          path.join(tmpDir, 'package.json'),
+          'file',
+        ),
+    ],
+  ])('does not read a manifest outside the project through %s', (_, link) => {
     const external = makeTmpDir();
     try {
       writePackageJson(external, { mysql2: '^3.0.0' });
-      fs.symlinkSync(external, path.join(tmpDir, 'linked-pkg'), 'dir');
-      expect(kinds(tmpDir)).toEqual(['MySQL']);
+      link(external);
+      expect(kinds(tmpDir)).toEqual([]);
     } finally {
       cleanup(external);
     }

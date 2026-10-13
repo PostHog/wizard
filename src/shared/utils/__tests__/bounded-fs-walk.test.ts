@@ -91,7 +91,7 @@ describe('reportFsError (via walkProjectFiles / safeReadFile)', () => {
   );
 });
 
-describe('walkProjectFiles completeness', () => {
+describe('walkProjectFiles', () => {
   let root: string;
 
   beforeEach(() => {
@@ -133,5 +133,23 @@ describe('walkProjectFiles completeness', () => {
     } as unknown as fs.Dir);
 
     expect(walkProjectFiles(root, vi.fn())).toBe(false);
+  });
+
+  it.each([
+    [{}, ['index.ts', 'linked.ts']],
+    [{ followSymlinks: false }, ['index.ts']],
+  ])('with options %j reads %j', (options, expected) => {
+    const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'bounded-fs-out-'));
+    try {
+      fs.writeFileSync(path.join(outside, 'linked.ts'), '');
+      fs.symlinkSync(outside, path.join(root, 'src', 'linked'), 'dir');
+      const seen: string[] = [];
+
+      walkProjectFiles(root, (name) => seen.push(name), 3, options);
+
+      expect(seen.sort()).toEqual(expected);
+    } finally {
+      fs.rmSync(outside, { recursive: true, force: true });
+    }
   });
 });

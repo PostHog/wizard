@@ -275,10 +275,13 @@ function collectSignals(
     complete: true,
   };
 
+  // Symlinks are not followed: one can point outside the project, and what
+  // the scan reads is reported to PostHog.
   signals.complete = walkProjectFiles(
     installDir,
     (name, fullPath) => ingestFile(installDir, name, fullPath, signals),
     MAX_DEPTH,
+    { followSymlinks: false },
   );
 
   return signals;
