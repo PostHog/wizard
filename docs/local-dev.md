@@ -182,6 +182,133 @@ together. The log is `posthog-wizard.log` in the temp directory
 (`/tmp/posthog-wizard.log` on macOS and Linux) unless `--log-file` or
 `POSTHOG_WIZARD_LOG_FILE` names another file.
 
+## Run the full stack locally
+
+This recipe runs every service on your machine: PostHog, the AI gateway,
+context mill, and MCP. The wizard logs in to local PostHog, mints its gateway
+token there, and sends model calls to the local gateway.
+
+| Port | Service | Started by |
+|---|---|---|
+| 8010 | PostHog app and API | `./bin/start` in posthog |
+| 8080 | AI gateway | the hogli `ai-gateway` unit, or `just resolver` in ai-gateway |
+| 8765 | context mill (skills) | `npm run dev` in context-mill |
+| 8787 | PostHog MCP server | the hogli `mcp` intent |
+| 6274 | MCP inspector, optional | `pnpm run inspector` in `posthog/services/mcp` |
+| 8888 | mitmproxy, optional | the `mitmproxy` pane in [wizard-workbench](https://github.com/PostHog/wizard-workbench) |
+
+### 1. Configure local PostHog
+
+Local PostHog refuses every gateway mint until four settings are set. Add them
+to `.env.local` in the posthog repo. `./bin/start` loads that file.
+
+```bash
+WIZARD_GATEWAY_URL=http://localhost:8080
+WIZARD_GATEWAY_MINT_KEY=<the local phs_ key, see below>
+WIZARD_GATEWAY_CLIENT_IDS=<POSTHOG_DEV_CLIENT_ID from src/shared/constants.ts>
+WIZARD_GATEWAY_PROGRAM_IDS=posthog-integration,error-tracking
+AI_GATEWAY_REPO=/absolute/path/to/ai-gateway
+```
+
+- The mint key is the fixed, local-only `phs_` key that
+  `bin/setup-gateway-e2e` provisions. It is the `DEV_GATEWAY_PHS` default at
+  the top of that script.
+- A wizard pointed at local PostHog logs in with the dev OAuth client,
+  `POSTHOG_DEV_CLIENT_ID`. The mint only accepts clients on this list.
+- List every program you plan to run. The mint refuses a program that is not
+  listed. Each program's id is the `id` in its config under `src/programs/`.
+- The gateway scripts look for ai-gateway in `~/Development/ai-gateway`. Set
+  `AI_GATEWAY_REPO` when your clone lives somewhere else.
+
+In the ai-gateway repo, copy `.env.example` to `.env` and set real provider
+keys in `AI_GATEWAY_ANTHROPIC_API_KEY` and `AI_GATEWAY_OPENAI_API_KEY`.
+
+### 2. Start PostHog, the gateway, and MCP
+
+Save the units to your hogli dev config once, then start the stack:
+
+```bash
+# in the posthog repo
+hogli dev:apply product_analytics mcp --include ai-gateway
+./bin/start
+```
+
+- The `mcp` intent runs the MCP server on `:8787`.
+- The `ai-gateway` unit runs `bin/start-ai-gateway`. That script runs
+  `bin/setup-gateway-e2e`, which enables the local team, mints the `phs_` key,
+  publishes it to the gateway's Valkey, funds the team's ledger, and sets the
+  gateway to resolver mode. Then it starts the gateway on `:8080`.
+
+To run the gateway yourself instead of through hogli:
+
+```bash
+# in the posthog repo, once PostHog is up
+bin/setup-gateway-e2e
+# in the ai-gateway repo
+just resolver
+```
+
+`just resolver` checks each `phs_` key against what PostHog published. The
+gateway's `just dev` is its standalone loop with seeded test teams. It also
+reads the resolver mode that `setup-gateway-e2e` writes to `ai-gateway/.env`,
+but `just resolver` makes the mode explicit.
+
+Check the gateway with `curl -s localhost:8080/livez`.
+
+### 3. Start context mill
+
+```bash
+# in the context-mill repo
+npm run dev
+```
+
+It serves skills on `:8765`. Set `PORT` to move it, and `CONTEXT_MILL_URL` to
+point the wizard at the new port.
+
+The hogli MCP server does not read these local skills. To make MCP read them
+too, stop the `mcp` intent and run `pnpm dev:local-resources` in
+`posthog/services/mcp` instead. Both bind `:8787`, so run only one.
+
+### 4. Log in to local PostHog
+
+Open `http://localhost:8010` and log in. The wizard's OAuth flow then completes
+against this session. The mint needs a login that covers exactly one project.
+Otherwise it answers HTTP 400, and the wizard says your login must cover
+exactly one project.
+
+### 5. Run the wizard
+
+Use a non-production build, as in [Running the wizard](#running-the-wizard):
+
+```bash
+pnpm try --install-dir=<path> --local-dev
+# or
+pnpm build:ci
+node dist/bin.js --install-dir=<path> --local-dev
+```
+
+`--local-dev` turns on all three local targets, see [Flags](#flags). If a
+service is not listening, the run stops before login. See
+[If a local server isn't running](#if-a-local-server-isnt-running).
+
+Check what the run used:
+
+```bash
+grep -E "\[agent-runner\] targets|\[gateway\] minted" /tmp/posthog-wizard.log
+```
+
+The `targets` line shows the skills, MCP, and PostHog URLs. The `minted` line
+shows that local PostHog issued the gateway token.
+
+### Optional: inspect MCP and HTTP traffic
+
+- MCP inspector. Run `pnpm run inspector` in `posthog/services/mcp`, or start
+  the hogli `mcp-inspector` unit. It opens on `:6274`.
+- mitmproxy. Start the `mitmproxy` and `wizard-run-proxy` panes in
+  wizard-workbench. Run `./proxy/setup-mitmproxy` there first to trust the
+  proxy's CA certificate. The `wizard-run-proxy` pane sends the wizard's fetch
+  calls through `:8888` with a preload script.
+
 ## Implementation
 
 `src/shared/local-dev.ts` defines the endpoints and precedence. Downstream code
