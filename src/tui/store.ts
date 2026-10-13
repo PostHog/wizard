@@ -214,7 +214,7 @@ export class WizardStore implements TuiView {
   async runReadyHooks(): Promise<void> {
     const config = findProgramConfig(this.router.activeProgram);
     const ctx = this.sessions.readyContext();
-    if (config) scanCodebaseFor(config, ctx);
+    if (config) await scanCodebaseFor(config, ctx);
     await config?.onReady?.(ctx);
     this.sessions.setDetectionComplete();
   }

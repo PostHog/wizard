@@ -19,7 +19,7 @@ export async function detectProgram(
   store: SessionStore,
   runner: CiRunnerContext,
 ): Promise<void> {
-  scanCodebaseFor(config, store.readyContext());
+  await scanCodebaseFor(config, store.readyContext());
   const ciPreRun = config.ciPreRun;
   if (store.session.ci && ciPreRun) {
     await store.edit((draft) =>

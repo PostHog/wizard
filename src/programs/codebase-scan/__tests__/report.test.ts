@@ -11,12 +11,23 @@ vi.mock(import('@utils/analytics'), () => ({
   } as never,
 }));
 
+vi.mock(
+  import('@programs/warehouse-sources/registry'),
+  async (importOriginal) =>
+    (
+      await import(
+        '@programs/warehouse-sources/__tests__/helpers/tool-catalog.no-jest'
+      )
+    ).withFixtureCatalog(await importOriginal()),
+);
+
 import {
   CODEBASE_SCAN_KEY,
   reportCodebaseScan,
   scanCodebaseFor,
   type CodebaseScan,
 } from '@programs/codebase-scan';
+import { loadSourceDetectors } from '@programs/warehouse-sources/registry';
 import { SessionStore } from '@programs/session/session-store';
 import { buildSession } from '@programs/session/wizard-session';
 import type { Credentials } from '@shared/api';
@@ -42,19 +53,19 @@ describe('reportCodebaseScan', () => {
   });
   afterEach(() => fs.rmSync(tmpDir, { recursive: true, force: true }));
 
-  function ciStore(): SessionStore {
+  async function ciStore(): Promise<SessionStore> {
     // A CI or headless session starts with sharing granted.
     const store = new SessionStore(
       buildSession({ installDir: tmpDir, ci: true }),
     );
-    scanCodebaseFor(PROGRAM, store.readyContext());
+    await scanCodebaseFor(PROGRAM, store.readyContext());
     return store;
   }
 
   const created = () => new Response('{}', { status: 201 });
 
   it('posts the scan once per run, after login', async () => {
-    const store = ciStore();
+    const store = await ciStore();
     const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(created());
 
     await reportCodebaseScan(store, { fetchImpl });
@@ -99,9 +110,23 @@ describe('reportCodebaseScan', () => {
     expect(fetchImpl).not.toHaveBeenCalled();
   });
 
+  it('marks the scan failed when the tool catalog could not be loaded', async () => {
+    vi.mocked(loadSourceDetectors).mockResolvedValueOnce([]);
+    const store = await ciStore();
+    store.setCredentials(CREDENTIALS);
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(created());
+
+    await reportCodebaseScan(store, { fetchImpl });
+
+    expect(store.session.frameworkContext[CODEBASE_SCAN_KEY]).toMatchObject({
+      failed: true,
+    });
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
   it('retries a server error, and gives up quietly on a missing endpoint', async () => {
     const sleep = vi.fn().mockResolvedValue(undefined);
-    const retried = ciStore();
+    const retried = await ciStore();
     retried.setCredentials(CREDENTIALS);
     const flaky = vi
       .fn<typeof fetch>()
@@ -110,7 +135,7 @@ describe('reportCodebaseScan', () => {
     await reportCodebaseScan(retried, { fetchImpl: flaky, sleep });
     expect(flaky).toHaveBeenCalledTimes(2);
 
-    const selfHosted = ciStore();
+    const selfHosted = await ciStore();
     selfHosted.setCredentials(CREDENTIALS);
     const missing = vi
       .fn<typeof fetch>()
