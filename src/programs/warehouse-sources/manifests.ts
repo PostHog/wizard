@@ -99,7 +99,7 @@ export function parseGoMod(content: string): string[] {
         continue;
       }
       addGoRequirement(line, names);
-    } else if (/^require\s*\($/.test(line)) {
+    } else if (/^require\s*\(\s*(?:\/\/.*)?$/.test(line)) {
       inBlock = true;
     } else if (line.startsWith('require ')) {
       addGoRequirement(line.slice('require '.length).trim(), names);
@@ -181,7 +181,7 @@ export function parsePubspecYaml(content: string): string[] {
     if (!raw.trim() || raw.trim().startsWith('#')) continue;
     const indent = raw.length - raw.trimStart().length;
     if (indent === 0) {
-      inDeps = /^(dev_)?dependencies:\s*$/.test(raw.trim());
+      inDeps = /^(dev_)?dependencies:\s*(?:#.*)?$/.test(raw.trim());
       entryIndent = null;
       continue;
     }

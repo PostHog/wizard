@@ -89,7 +89,7 @@ go 1.22
 
 require github.com/getsentry/sentry-go v0.27.0
 
-require (
+require ( // direct
 \tgithub.com/stripe/stripe-go/v82 v82.0.0
 \tgopkg.in/DataDog/dd-trace-go.v1 v1.60.0
 \tgithub.com/Masterminds/semver/v3 v3.2.1 // indirect
@@ -170,7 +170,7 @@ mixpanel = "com.mixpanel.android:mixpanel-android:7.5.2"
 
   it('pubspec.yaml: top-level dependencies and dev_dependencies only', () => {
     const content = `name: app
-dependencies:
+dependencies: # runtime
   flutter:
     sdk: flutter
   sentry_flutter: ^8.0.0
