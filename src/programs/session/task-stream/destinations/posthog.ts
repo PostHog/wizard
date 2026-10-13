@@ -44,8 +44,6 @@ export interface PostHogDestinationOptions {
   sleep?: (ms: number) => Promise<void>;
 }
 
-type Endpoint = 'sessions' | 'scans';
-
 const MAX_ATTEMPTS = 3;
 const BASE_BACKOFF_MS = 500;
 const MAX_BACKOFF_MS = 8000;
@@ -106,24 +104,29 @@ export class PostHogDestination implements TaskStreamDestination {
     const creds = this.getCredentials();
     if (!creds) return;
 
-    await this.postWithRetry(creds, 'sessions', toWirePayload(payload));
+    const status = await this.postWithRetry(
+      creds,
+      'wizard/sessions',
+      toWirePayload(payload),
+    );
+    if (status === 401 || status === 403) this.disabled = true;
   }
 
   async sendScan(payload: ScanReportPayload): Promise<void> {
     const creds = this.getCredentials();
     if (!creds) return;
 
-    await this.postWithRetry(creds, 'scans', payload);
+    await this.postWithRetry(creds, 'wizard/scans', payload);
   }
 
   private buildRequest(
     creds: Credentials,
-    endpoint: Endpoint,
+    path: string,
     body: object,
   ): { url: string; init: Parameters<typeof fetch>[1] } {
     const url = `${creds.host.apiHost.replace(/\/$/, '')}/api/projects/${
       creds.projectId
-    }/wizard/${endpoint}/`;
+    }/${path}/`;
     return {
       url,
       init: {
@@ -137,13 +140,13 @@ export class PostHogDestination implements TaskStreamDestination {
     };
   }
 
+  /** POST with the retry policy above. Returns the final status, or null when the network failed. */
   private async postWithRetry(
     creds: Credentials,
-    endpoint: Endpoint,
+    path: string,
     body: object,
-  ): Promise<void> {
-    const { url, init } = this.buildRequest(creds, endpoint, body);
-    const label = `wizard/${endpoint}`;
+  ): Promise<number | null> {
+    const { url, init } = this.buildRequest(creds, path, body);
     let attempt = 0;
     let backoff = BASE_BACKOFF_MS;
     let retriedAfter429 = false;
@@ -156,7 +159,7 @@ export class PostHogDestination implements TaskStreamDestination {
       } catch (err) {
         if (attempt >= MAX_ATTEMPTS) {
           this.onError(err instanceof Error ? err : new Error(String(err)));
-          return;
+          return null;
         }
         await this.sleep(backoff);
         backoff = Math.min(backoff * 2, MAX_BACKOFF_MS);
@@ -164,22 +167,21 @@ export class PostHogDestination implements TaskStreamDestination {
       }
 
       if (response.ok) {
-        logToFile(`[task-stream] ${label} push ok: ${response.status}`);
-        return;
+        logToFile(`[task-stream] ${path} push ok: ${response.status}`);
+        return response.status;
       }
 
       const status = response.status;
 
       if (status === 401 || status === 403) {
-        if (endpoint === 'sessions') this.disabled = true;
-        this.onError(new Error(`${label} auth failed: ${status}`));
-        return;
+        this.onError(new Error(`${path} auth failed: ${status}`));
+        return status;
       }
 
       if (status === 429) {
         if (retriedAfter429) {
-          this.onError(new Error(`${label} rate limited`));
-          return;
+          this.onError(new Error(`${path} rate limited`));
+          return status;
         }
         retriedAfter429 = true;
         const wait = parseRetryAfter(response.headers.get('Retry-After'));
@@ -191,8 +193,8 @@ export class PostHogDestination implements TaskStreamDestination {
 
       if (status >= 500) {
         if (attempt >= MAX_ATTEMPTS) {
-          this.onError(new Error(`${label} server error: ${status}`));
-          return;
+          this.onError(new Error(`${path} server error: ${status}`));
+          return status;
         }
         await this.sleep(backoff);
         backoff = Math.min(backoff * 2, MAX_BACKOFF_MS);
@@ -206,12 +208,13 @@ export class PostHogDestination implements TaskStreamDestination {
         } catch {
           // ignore
         }
-        this.onError(new Error(`${label} bad request (400): ${detail}`));
-        return;
+        this.onError(new Error(`${path} bad request (400): ${detail}`));
+        return status;
       }
 
-      this.onError(new Error(`${label} unexpected status: ${status}`));
-      return;
+      this.onError(new Error(`${path} unexpected status: ${status}`));
+      return status;
     }
+    return null;
   }
 }
