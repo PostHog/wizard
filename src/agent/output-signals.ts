@@ -135,7 +135,7 @@ export class AgentOutputSignals {
   }
 }
 
-const OPERATOR_ABORT = /\[posthog:abort\](?=\s|$)([^\n]*)/;
+const OPERATOR_ABORT = /\[posthog:abort\](?=\W|$)([^\n]*)/;
 const OPERATOR_ABORT_REASON_MAX = 500;
 
 /** The one detector: a pinned model reply carrying the abort marker anywhere ends the run. */

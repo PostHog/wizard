@@ -141,6 +141,7 @@ describe('runAgent', () => {
           kind: 'abort',
           classification: AgentErrorType.ABORT,
           message: reason,
+          policy: true,
         });
         // A real SDK abort may stop consumption before the hook runs at all.
         expect(

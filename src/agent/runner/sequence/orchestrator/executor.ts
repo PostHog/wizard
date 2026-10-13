@@ -43,6 +43,8 @@ export class RunTaskFatal extends Error {
       | RunOutcome.Failed = RunOutcome.Failed,
     /** The type of the task that ended the run, for the steps it stopped. */
     public readonly taskType?: string,
+    /** The operator policy refused, so the run fails even after a delivered report. */
+    public readonly policyAbort = false,
   ) {
     super(failure.message ?? 'agent run failed');
     this.name = 'RunTaskFatal';

@@ -315,6 +315,7 @@ export const piBackend: AgentHarness = {
         kind: 'abort',
         classification: AgentErrorType.ABORT,
         message: refusalReason,
+        policy: true,
       };
     };
     let timedOut = false;

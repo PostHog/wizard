@@ -178,7 +178,9 @@ function requireTaskHarness(pick: HarnessPick): AgentHarness & {
 /** How an agent result ends the run, or undefined when it doesn't. */
 export function terminalResult(
   result: AgentResult,
-): { outcome: RunOutcome.Failed; failure: AgentFailure } | undefined {
+):
+  | { outcome: RunOutcome.Failed; failure: AgentFailure; policyAbort?: true }
+  | undefined {
   switch (result.kind) {
     case 'success':
       return undefined;
@@ -193,6 +195,7 @@ export function terminalResult(
           message: result.message ?? 'Agent aborted',
           error: result.error,
         },
+        ...(result.policy ? { policyAbort: true as const } : {}),
       };
     case 'failure':
       return {
@@ -1327,7 +1330,12 @@ async function executeOrchestrator(
       if (signal?.aborted) return;
       const terminal = terminalResult(taskResult);
       if (terminal)
-        throw new RunTaskFatal(terminal.failure, terminal.outcome, task.type);
+        throw new RunTaskFatal(
+          terminal.failure,
+          terminal.outcome,
+          task.type,
+          terminal.policyAbort,
+        );
     } finally {
       // Durable skills a task installed are irrelevant to later tasks — and
       // the sdk harness auto-loads .claude/skills into every agent — so sweep
@@ -1375,7 +1383,7 @@ async function executeOrchestrator(
   } catch (error) {
     if (!(error instanceof RunTaskFatal)) throw error;
     fatal = error;
-    // A sink that published the report then hit a harness error fails alone; a refusal fails the run.
+    // A sink that published the report then hit a harness error fails alone; a policy refusal fails the run.
     const sink = store
       .list()
       .find(
@@ -1385,12 +1393,7 @@ async function executeOrchestrator(
           reportDeliveredIds.has(t.id),
       );
     const inFlight = store.list().some((t) => t.status === TaskStatus.Running);
-    if (
-      !hostCancelled() &&
-      sink &&
-      !inFlight &&
-      fatal.failure.code !== ErrorCodes.AgentAbort
-    ) {
+    if (!hostCancelled() && sink && !inFlight && !fatal.policyAbort) {
       const verdict = drainVerdict(store.list(), reportDeliveredIds);
       if (verdict.requiredFailedTypes.length === 0 && verdict.blocked === 0) {
         deliveredFatal = true;

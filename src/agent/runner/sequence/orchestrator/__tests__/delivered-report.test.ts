@@ -171,12 +171,29 @@ describe('a task failing after the run report was published', () => {
         kind: 'abort',
         classification: AgentErrorType.ABORT,
         message: 'Outside setup.',
+        policy: true,
       };
     };
 
     const result = await run();
 
     expect(result.outcome).toBe(RunOutcome.Failed);
+  });
+
+  it("keeps the run successful when the sink publishes, then emits the agent's own [ABORT]", async () => {
+    behaviors.report = (inputs) => {
+      publish(inputs);
+      return {
+        kind: 'abort',
+        classification: AgentErrorType.ABORT,
+        message: 'Cannot finish.',
+      };
+    };
+
+    const result = await run();
+
+    expect(result.outcome).toBe(RunOutcome.Success);
+    expect(result.outro?.message).toContain('report delivered');
   });
 
   it('still fails the run when a task other than the sink published then failed', async () => {

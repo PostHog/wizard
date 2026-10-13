@@ -1044,6 +1044,8 @@ export async function runAgent(
   };
   let timedOut = false;
   let abortReason: string | null = null;
+  // Set when `abortReason` came from the operator policy, not the agent's [ABORT].
+  let policyAbort = false;
   let stopWatchingOperatorAbort: (() => void) | undefined;
   // Set when a YARA hook detects a terminal violation. Returning `stopReason`
   // from a PostToolUse hook does NOT stop the SDK, so we abort the query and
@@ -1094,7 +1096,10 @@ export async function runAgent(
     const triageProvider = agentConfig.triageProvider;
     // A triage refusal ends the run like one in the stream.
     stopWatchingOperatorAbort = agentConfig.operatorAbort?.watch((reason) => {
-      abortReason ??= reason;
+      if (abortReason === null) {
+        abortReason = reason;
+        policyAbort = true;
+      }
       abortController.abort();
       signalDone();
     });
@@ -1374,6 +1379,7 @@ export async function runAgent(
               operatorAbortReason(text, agentConfig.gatewayAuth.systemPrompt) ??
               null;
             if (abortReason) {
+              policyAbort = true;
               abortController.abort();
               signalDone();
               continue;
@@ -1615,6 +1621,7 @@ export async function runAgent(
         kind: 'abort',
         classification: AgentErrorType.ABORT,
         message: abortReason,
+        ...(policyAbort ? { policy: true as const } : {}),
       };
     }
     if (agentConfig.signal?.aborted) {
@@ -1717,6 +1724,7 @@ export async function runAgent(
         kind: 'abort',
         classification: AgentErrorType.ABORT,
         message: abortReason,
+        ...(policyAbort ? { policy: true as const } : {}),
       };
     }
 

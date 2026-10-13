@@ -246,6 +246,7 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
       kind: 'abort',
       classification: AgentErrorType.ABORT,
       message: refusalReason,
+      policy: true,
     };
   };
   const refuse = (reason: string) => {

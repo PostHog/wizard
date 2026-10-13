@@ -330,6 +330,7 @@ describe.each([
         kind: 'abort',
         classification: AgentErrorType.ABORT,
         message: 'This request is outside setup.',
+        policy: true,
       });
       expect(state.prompts).toHaveLength(1);
       expect(state.abort).toHaveBeenCalledOnce();
@@ -351,6 +352,7 @@ describe.each([
       kind: 'abort',
       classification: AgentErrorType.ABORT,
       message: 'Outside setup scope.',
+      policy: true,
     });
     expect(state.prompts).toHaveLength(1);
     expect(state.abort).toHaveBeenCalledOnce();
@@ -364,6 +366,7 @@ describe.each([
       kind: 'abort',
       classification: AgentErrorType.ABORT,
       message: 'Triage refused.',
+      policy: true,
     });
     expect(state.abort).toHaveBeenCalledOnce();
   });
@@ -440,6 +443,7 @@ describe.each([
       kind: 'abort',
       classification: AgentErrorType.ABORT,
       message: 'The operator policy refused this request.',
+      policy: true,
     });
     expect(state.prompts).toHaveLength(1);
   });
