@@ -29,8 +29,6 @@ export interface GatewayAuth {
    * old bearer may re-mint once. Before it the mint has to be trusted.
    */
   refreshAtMs: number;
-  /** The operator prompt version the gateway injects on this token; absent when unpinned. */
-  promptPolicyVersion?: number;
 }
 
 interface CachedAuth {
@@ -168,20 +166,13 @@ async function resolveGatewayAuth(
   logToFile(
     `[gateway] minted a scoped token: program=${program} team=${
       minted.teamId ?? 'unknown'
-    } ttl=${Math.round(ttlMs / 1000)}s url=${minted.gatewayUrl}${
-      minted.promptPolicyVersion === undefined
-        ? ''
-        : ` prompt_version=${minted.promptPolicyVersion}`
-    }`,
+    } ttl=${Math.round(ttlMs / 1000)}s url=${minted.gatewayUrl}`,
   );
   const auth: GatewayAuth = {
     gatewayUrl: minted.gatewayUrl,
     token: minted.token,
     teamId: minted.teamId,
     refreshAtMs: staleAtMs,
-    ...(minted.promptPolicyVersion === undefined
-      ? {}
-      : { promptPolicyVersion: minted.promptPolicyVersion }),
   };
   cached = { key, auth, staleAtMs };
   return auth;
@@ -247,7 +238,6 @@ interface MintedToken {
   expiresAt: string;
   gatewayUrl: string;
   teamId?: number;
-  promptPolicyVersion?: number;
 }
 
 /**
@@ -414,7 +404,6 @@ async function mintGatewayToken(
       expires_at?: string;
       gateway_url?: string;
       team_id?: number;
-      system_prompt_version?: unknown;
     };
     // Checked one at a time, not in a loop, so each clause narrows the optional
     // field for the return below and each names itself in the failure.
@@ -443,20 +432,11 @@ async function mintGatewayToken(
     ) {
       gatewayUrl.hostname = 'localhost';
     }
-    // A positive integer version means the gateway injects the operator prompt; anything else runs unpinned.
-    const version = body.system_prompt_version;
-    const pinned = Number.isInteger(version) && (version as number) > 0;
-    if (!pinned && version !== undefined && version !== null) {
-      logToFile(
-        '[gateway] mint returned a malformed system_prompt_version; running unpinned',
-      );
-    }
     return {
       token: body.token,
       expiresAt: body.expires_at,
       gatewayUrl: gatewayUrl.origin,
       teamId: body.team_id,
-      ...(pinned ? { promptPolicyVersion: version as number } : {}),
     };
   } catch (e) {
     // Decisions and failures both pass through: this catch exists for transport

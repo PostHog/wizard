@@ -96,8 +96,6 @@ export function buildGatewayModel(inputs: GatewayProviderInputs) {
     // non-reasoning openai models reject `reasoning_effort` (gpt-4o → gateway
     // UnsupportedParamsError → the run no-ops).
     reasoning: modelCapabilities(modelId).reasoning,
-    // The gateway refuses caller `developer` messages, so pi sends `system`.
-    compat: { supportsDeveloperRole: false },
     input: ['text' as const],
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
     contextWindow: 1_000_000,

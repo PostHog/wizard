@@ -25,10 +25,3 @@ linear.
 
 A new model needs gateway admission as well as wizard support. See the
 [development guide](../../../.claude/skills/wizard-development/SKILL.md#execution-policy-and-model-admission).
-
-## Operator refusals
-
-The gateway adds the operator prompt to every call on a pinned token, and the
-mint returns `system_prompt_version` when it does. A reply containing
-`[posthog:abort]` on a pinned run ends the run as a failure, with the rest of
-that line as the reason.

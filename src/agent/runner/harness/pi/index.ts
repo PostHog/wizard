@@ -24,10 +24,7 @@ import {
 import { analytics } from '@utils/analytics';
 import { AgentErrorType } from '../../../agent-interface';
 import { AgentSignals, REMARK_INSTRUCTION } from '../../../signals';
-import {
-  AgentOutputSignals,
-  operatorAbortReason,
-} from '../../../output-signals';
+import { AgentOutputSignals } from '../../../output-signals';
 import { assembleCommandments } from '../../switchboard/commandments';
 import { gatewayAuth, type GatewayAuth } from '../../../gateway-session';
 import { currentAccessToken } from '@shared/oauth-session';
@@ -305,18 +302,6 @@ export const piBackend: AgentHarness = {
     let mcpCleanup: (() => void) | undefined;
     let aioFailed = true;
     let cancellation: ReturnType<typeof bindPiCancellation> | undefined;
-    let refusalReason: string | undefined;
-    let stopWatchingOperatorAbort: (() => void) | undefined;
-    const refusalResult = (): AgentResult => {
-      spinner.stop('Wizard aborted');
-      captureAborted(AgentErrorType.ABORT);
-      return {
-        kind: 'abort',
-        classification: AgentErrorType.ABORT,
-        message: refusalReason,
-        policy: true,
-      };
-    };
     let timedOut = false;
     let timeoutAbort: Promise<void> | undefined;
     // Read by the catch path; undefined until setup creates the extension.
@@ -354,14 +339,12 @@ export const piBackend: AgentHarness = {
       // orchestrator's per-task sessions (gateway.ts). gatewayAuth mints the
       // run's scoped token.
       // Reads the live OAuth token, so a mid-run rotation re-mints on the new one.
-      // `liveAuth` is the bearer pi sends, so the pinned check follows a re-mint.
-      let liveAuth: GatewayAuth;
       const refreshAuth = async () =>
-        (liveAuth = await gatewayAuth(
+        gatewayAuth(
           boot.credentials.host,
           await currentAccessToken(boot.credentials),
           boot.programId,
-        ));
+        );
       const auth = await refreshAuth();
       const providerInputs = (current: GatewayAuth) => ({
         gatewayUrl: current.gatewayUrl,
@@ -417,17 +400,6 @@ export const piBackend: AgentHarness = {
       // path, so the first scanned call doesn't eat cold-start latency.
       const { prewarmYaraScanner } = await import('../../../yara-hooks');
       void prewarmYaraScanner();
-
-      // Every model-text path (turns, subagents, YARA triage) ends the run here.
-      const refuse = (reason: string) => {
-        refusalReason ??= reason;
-        cancellation?.abort();
-      };
-      const refuseOnText = (text: string): boolean => {
-        const reason = operatorAbortReason(text, liveAuth.promptPolicyVersion);
-        if (reason !== undefined) refuse(reason);
-        return reason !== undefined;
-      };
 
       // Wire the real PostHog MCP into pi (#10): load pi's MCP adapter and point
       // it at the hosted MCP the anthropic path uses, so dashboards/insights are
@@ -581,7 +553,6 @@ export const piBackend: AgentHarness = {
           cwd: input.installDir,
           agentDir: getAgentDir(),
           securityFactory: security.subagentFactory,
-          refuseOnText,
           bashTool: scrubbedBash,
           sdk: { createAgentSession, DefaultResourceLoader, SessionManager },
         }),
@@ -614,7 +585,6 @@ export const piBackend: AgentHarness = {
           logToFile(`[pi] abort failed: ${String(error)}`);
         },
       );
-      stopWatchingOperatorAbort = boot.operatorAbort?.watch(refuse);
       await agentSession.bindExtensions({});
 
       // A turn that ends on a 401 from an aged bearer re-mints once and
@@ -653,7 +623,6 @@ export const piBackend: AgentHarness = {
             turns.noteAssistantTurn(event.message);
             const blocks = textBlocks(event.message);
             const assistant = blocks.join('').trim();
-            if (refuseOnText(assistant)) break;
             // A schema-bound answer is the turn's last block, not the joined text.
             lastAssistantText = (blocks.at(-1) ?? '').trim();
             if (structured) {
@@ -748,8 +717,6 @@ export const piBackend: AgentHarness = {
             classification: AgentErrorType.ABORT,
             message: 'Agent run cancelled',
           };
-        // A refusal before the first turn (YARA triage at install) sends nothing.
-        if (refusalReason) return refusalResult();
         // Non-streaming: resolves when the agent run completes. Throws if no
         // model/api key, or on a transport error.
         await turns.prompt(prompt);
@@ -766,7 +733,6 @@ export const piBackend: AgentHarness = {
           !security.state.criticalViolation &&
           !inputs.signal?.aborted &&
           !terminal &&
-          !refusalReason &&
           !setupSignalFailure(signals) &&
           hasOpenTasks(wizardTaskTools.store)
         ) {
@@ -783,7 +749,6 @@ export const piBackend: AgentHarness = {
           !structured &&
           !security.state.criticalViolation &&
           !terminal &&
-          !refusalReason &&
           !setupSignalFailure(signals) &&
           !inputs.signal?.aborted
         ) {
@@ -809,8 +774,6 @@ export const piBackend: AgentHarness = {
           message: 'Agent run cancelled',
         };
       }
-      // A triage refusal that failed a scan closed is still a policy refusal.
-      if (refusalReason) return refusalResult();
       if (timedOut && structured && !security.state.criticalViolation)
         return timedOutResult(structured.timeoutMs);
 
@@ -938,7 +901,6 @@ export const piBackend: AgentHarness = {
           message: 'Agent run cancelled',
         };
       }
-      if (refusalReason) return refusalResult();
       if (securityState?.criticalViolation) return yaraViolationResult();
       if (timedOut && structured) return timedOutResult(structured.timeoutMs);
       const message = err instanceof Error ? err.message : String(err);
@@ -962,7 +924,6 @@ export const piBackend: AgentHarness = {
         error: err instanceof Error ? err : undefined,
       };
     } finally {
-      stopWatchingOperatorAbort?.();
       await cancellation?.settle();
       await timeoutAbort;
       try {

@@ -31,10 +31,7 @@ import {
 } from '../../../agent-prompt-loader';
 import { AgentErrorType } from '../../../agent-interface';
 import { REMARK_INSTRUCTION } from '../../../signals';
-import {
-  AgentOutputSignals,
-  operatorAbortReason,
-} from '../../../output-signals';
+import { AgentOutputSignals } from '../../../output-signals';
 import { TaskStatus } from '../../sequence/orchestrator/queue';
 import type { OrchestratorToolsContext } from '../../sequence/orchestrator/queue-tools';
 import type { AgentResult, TaskRunInputs } from '../types';
@@ -236,22 +233,6 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
   let mcpCleanup: (() => void) | undefined;
   let aioFailed = true;
   let cancellation: ReturnType<typeof bindPiCancellation> | undefined;
-  let stopWatchingOperatorAbort: (() => void) | undefined;
-  let refusalReason: string | undefined;
-  const refusalResult = (): AgentResult => {
-    spinner.stop('Wizard aborted');
-    captureAborted(AgentErrorType.ABORT);
-    return {
-      kind: 'abort',
-      classification: AgentErrorType.ABORT,
-      message: refusalReason,
-      policy: true,
-    };
-  };
-  const refuse = (reason: string) => {
-    refusalReason ??= reason;
-    cancellation?.abort();
-  };
   try {
     const sdk = await import('@earendil-works/pi-coding-agent');
     const {
@@ -271,14 +252,12 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
     } = sdk;
 
     // Reads the live OAuth token, so a mid-run rotation re-mints on the new one.
-    // `liveAuth` is the bearer pi sends, so the pinned check follows a re-mint.
-    let liveAuth: GatewayAuth;
     const refreshAuth = async () =>
-      (liveAuth = await gatewayAuth(
+      gatewayAuth(
         boot.credentials.host,
         await currentAccessToken(boot.credentials),
         boot.programId,
-      ));
+      );
     const auth = await refreshAuth();
     const providerInputs = (current: GatewayAuth) => ({
       gatewayUrl: current.gatewayUrl,
@@ -446,7 +425,6 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
     cancellation = bindPiCancellation(inputs.signal, agentSession, (error) => {
       logToFile(`[pi-task] abort failed: ${String(error)}`);
     });
-    stopWatchingOperatorAbort = boot.operatorAbort?.watch(refuse);
     await agentSession.bindExtensions({});
 
     // A turn that ends on a 401 from an aged bearer re-mints once and
@@ -489,14 +467,6 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
           assistantTurns += 1;
           turns.noteAssistantTurn(event.message);
           const assistant = extractText(event.message).trim();
-          const reason = operatorAbortReason(
-            assistant,
-            liveAuth.promptPolicyVersion,
-          );
-          if (reason !== undefined) {
-            refuse(reason);
-            break;
-          }
           if (assistant) {
             logToFile(`[pi-task] assistant: ${assistant.slice(0, 1000)}`);
             applyOutroMarkers(assistant, emit);
@@ -542,8 +512,6 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
           classification: AgentErrorType.ABORT,
           message: 'Agent run cancelled',
         };
-      // A refusal before the first turn (YARA triage at install) sends nothing.
-      if (refusalReason) return refusalResult();
       await turns.prompt(taskPrompt);
       terminal = turns.terminalFailure();
 
@@ -556,7 +524,6 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
         !security.state.criticalViolation &&
         !inputs.signal?.aborted &&
         !terminal &&
-        !refusalReason &&
         !setupSignalFailure(signals) &&
         !isSettled(orchestrator)
       ) {
@@ -574,7 +541,6 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
         requestRemark &&
         !security.state.criticalViolation &&
         !terminal &&
-        !refusalReason &&
         !setupSignalFailure(signals) &&
         !inputs.signal?.aborted
       ) {
@@ -599,9 +565,6 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
         message: 'Agent run cancelled',
       };
     }
-
-    // A triage refusal that failed a scan closed is still a policy refusal.
-    if (refusalReason) return refusalResult();
 
     if (terminal && !security.state.criticalViolation) {
       if (errorMessage || spinnerMessage)
@@ -685,7 +648,6 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
         message: 'Agent run cancelled',
       };
     }
-    if (refusalReason) return refusalResult();
     const message = err instanceof Error ? err.message : String(err);
     logToFile(`[pi-task] run error: ${message}`);
     if (errorMessage || spinnerMessage) {
@@ -708,7 +670,6 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
       error: err instanceof Error ? err : undefined,
     };
   } finally {
-    stopWatchingOperatorAbort?.();
     await cancellation?.settle();
     try {
       mcpCleanup?.();

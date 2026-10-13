@@ -210,11 +210,6 @@ export function terminalResult(
   }
 }
 
-/** A policy refusal ends the run as a failure with its reason. */
-function refusedFailure(reason: string | undefined): AgentFailure {
-  return { code: ErrorCodes.AgentAbort, message: reason ?? 'Agent aborted' };
-}
-
 function cancelledRun(): SequenceResult {
   return {
     outcome: RunOutcome.Aborted,
@@ -820,11 +815,6 @@ async function executeOrchestrator(
       },
     );
     if (signal?.aborted) return cancelledRun();
-    if (boot.operatorAbort?.reason !== undefined)
-      return {
-        outcome: RunOutcome.Failed,
-        failure: refusedFailure(boot.operatorAbort.reason),
-      };
     if (ref.kind === 'ok') {
       referenceInstallPath = ref.path;
       const example = path.join(ref.path, 'references', 'EXAMPLE.md');
@@ -1220,12 +1210,6 @@ async function executeOrchestrator(
   const preexistingSkills = new Set(
     existsSync(claudeSkillsDir) ? readdirSync(claudeSkillsDir) : [],
   );
-  // A refused task ends Failed and ends the run; the executor neither retries nor settles it.
-  const refuseTask = (task: QueuedTask, reason: string | undefined): never => {
-    const failure = refusedFailure(reason);
-    store.fail(task.id, { type: failure.code, message: failure.message });
-    throw new RunTaskFatal(failure, RunOutcome.Failed, task.type);
-  };
   const runTask: RunTask = async (task) => {
     if (signal?.aborted) return;
     renderQueue();
@@ -1271,8 +1255,6 @@ async function executeOrchestrator(
           logToFile(
             `[orchestrator] skill install failed type=${task.type} skill=${variantId} ${result.kind}`,
           );
-          if (boot.operatorAbort?.reason !== undefined)
-            refuseTask(task, boot.operatorAbort.reason);
           // A task without its instructions must fail here, not run blind:
           // run 91cf40eb's report task started after two EACCES install
           // failures (unwritable external-volume cache) and died silently.
@@ -1343,8 +1325,6 @@ async function executeOrchestrator(
         );
       }
       if (signal?.aborted) return;
-      if (taskResult.kind === 'abort' && taskResult.policy)
-        refuseTask(task, taskResult.message);
       const terminal = terminalResult(taskResult);
       if (terminal)
         throw new RunTaskFatal(terminal.failure, terminal.outcome, task.type);

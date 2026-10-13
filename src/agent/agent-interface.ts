@@ -68,11 +68,7 @@ import {
 } from './signals';
 import { classifyAuthFailure } from '@shared/errors';
 import { isGrantRevoked } from '@shared/auth-session-state';
-import {
-  AgentOutputSignals,
-  OperatorAbort,
-  operatorAbortReason,
-} from './output-signals';
+import { AgentOutputSignals } from './output-signals';
 
 // Signal vocabulary and the output parser live in dedicated modules; re-export
 // so existing importers of these from agent-interface keep working.
@@ -205,8 +201,6 @@ export function buildAuthErrorContext(
 
 export type AgentConfig = {
   workingDirectory: string;
-  /** The run's policy-refusal latch, shared with the sequence's skill scans. */
-  operatorAbort?: OperatorAbort;
   posthogMcpUrl: string;
   posthogApiKey: string;
   currentPosthogApiKey?: () => Promise<string>;
@@ -354,8 +348,6 @@ type AgentRunConfig = {
   capture?: AioCapture;
   /** Scan-triage classifier, built from this run's gateway auth. */
   triageProvider: LLMProvider;
-  /** Trips when the triage model refuses, ending the run. */
-  operatorAbort?: OperatorAbort;
   /** The run's minted gateway auth: base url, bearer and team for the subprocess. */
   gatewayAuth: GatewayAuth;
   /**
@@ -618,22 +610,16 @@ export async function initializeAgent(
       ...(config.wizardMetadata ?? {}),
       call_type: CallType.yaraTriage,
     };
-    const operatorAbort = config.operatorAbort ?? new OperatorAbort();
-    const triageProvider = createTriageLLMProvider(
-      async () => {
-        const current = await currentGatewayAuth();
-        return {
-          baseURL: current.gatewayUrl,
-          authToken: current.token,
-          teamId: current.teamId,
-          promptPolicyVersion: current.promptPolicyVersion,
-          wizardMetadata: triageMetadata,
-          wizardFlags: config.wizardFlags ?? {},
-        };
-      },
-      Harness.anthropic,
-      operatorAbort,
-    );
+    const triageProvider = createTriageLLMProvider(async () => {
+      const current = await currentGatewayAuth();
+      return {
+        baseURL: current.gatewayUrl,
+        authToken: current.token,
+        teamId: current.teamId,
+        wizardMetadata: triageMetadata,
+        wizardFlags: config.wizardFlags ?? {},
+      };
+    }, Harness.anthropic);
 
     logToFile('Configured LLM gateway:', gatewayUrl);
     logToFile(
@@ -730,7 +716,6 @@ export async function initializeAgent(
       suppressTaskRender: !!config.orchestrator,
       capture: config.capture,
       triageProvider,
-      operatorAbort,
       gatewayAuth: auth,
       refreshGatewayAuth: currentGatewayAuth,
       program: config.integrationLabel,
@@ -1017,18 +1002,6 @@ export async function runAgent(
   };
   let timedOut = false;
   let abortReason: string | null = null;
-  // Set when `abortReason` came from the operator policy, not the agent's [ABORT].
-  let policyAbort = false;
-  const policyRefusal = (): AgentResult => {
-    spinner.stop('Wizard aborted');
-    return {
-      kind: 'abort',
-      classification: AgentErrorType.ABORT,
-      message: abortReason ?? undefined,
-      policy: true,
-    };
-  };
-  let stopWatchingOperatorAbort: (() => void) | undefined;
   // Set when a YARA hook detects a terminal violation. Returning `stopReason`
   // from a PostToolUse hook does NOT stop the SDK, so we abort the query and
   // surface a YARA_VIOLATION below — mirroring the [ABORT] mechanism.
@@ -1076,17 +1049,6 @@ export async function runAgent(
     const inheritedMcpServerNames = Object.keys(agentConfig.mcpServers);
 
     const triageProvider = agentConfig.triageProvider;
-    // A triage refusal ends the run like one in the stream.
-    stopWatchingOperatorAbort = agentConfig.operatorAbort?.watch((reason) => {
-      if (abortReason === null) {
-        abortReason = reason;
-        policyAbort = true;
-      }
-      abortController.abort();
-      signalDone();
-    });
-    // A refusal before the first query (a skill scan) sends nothing.
-    if (policyAbort) return policyRefusal();
 
     // Actually stop the run when a YARA hook hits a terminal violation. The SDK
     // ignores `stopReason` from PostToolUse hooks, so we abort the query (like
@@ -1115,7 +1077,6 @@ export async function runAgent(
     agentConfig.capture?.setInitialPrompt(prompt);
 
     const runQuery = async (resume?: string): Promise<'done' | 'remint'> => {
-      const stopHook = createStopHook(signals, config?.requestRemark ?? true);
       const response = query({
         prompt: createPromptStream(resume ? RESUME_INSTRUCTION : prompt),
         options: {
@@ -1302,10 +1263,7 @@ export async function runAgent(
               : createPostToolUseYaraHooks(triageProvider, onYaraTerminate),
             Stop: [
               {
-                hooks: [
-                  (input: { stop_hook_active: boolean }) =>
-                    policyAbort ? {} : stopHook(input),
-                ],
+                hooks: [createStopHook(signals, config?.requestRemark ?? true)],
                 timeout: 30,
               },
             ],
@@ -1352,27 +1310,6 @@ export async function runAgent(
           // forget: failures are debug-logged inside the module and never touch
           // the stream loop.
           agentConfig.capture?.captureFromAnthropicSDKMessage(message);
-
-          if (message.type === 'assistant' && !abortReason) {
-            const content = message.message?.content;
-            const text = Array.isArray(content)
-              ? content
-                  .filter((block: { type: string }) => block.type === 'text')
-                  .map((block: { text: string }) => block.text)
-                  .join('')
-              : '';
-            abortReason =
-              operatorAbortReason(
-                text,
-                agentConfig.gatewayAuth.promptPolicyVersion,
-              ) ?? null;
-            if (abortReason) {
-              policyAbort = true;
-              abortController.abort();
-              signalDone();
-              continue;
-            }
-          }
 
           // Pass receivedSuccessResult so handleSDKMessage can suppress user-facing error
           // output for post-success cleanup errors while still logging them to file
@@ -1548,9 +1485,7 @@ export async function runAgent(
     if (
       (await runQuery()) === 'remint' &&
       refreshGatewayAuth &&
-      !agentConfig.signal?.aborted &&
-      !abortReason &&
-      agentConfig.operatorAbort?.reason === undefined
+      !agentConfig.signal?.aborted
     ) {
       // The subprocess froze the dead bearer in its env at spawn, so it cannot
       // be handed a new one: mint, then resume the session in a new one.
@@ -1580,8 +1515,7 @@ export async function runAgent(
         resumed: sessionId !== undefined,
       });
       spinner.message(spinnerMessage);
-      // A refusal while re-minting never resumes the refused session.
-      if (!abortReason) await runQuery(sessionId);
+      await runQuery(sessionId);
     }
 
     // A fresh bearer was rejected. The auth screen is already up; hand the
@@ -1596,9 +1530,6 @@ export async function runAgent(
         message: 'Agent run cancelled',
       };
     }
-
-    // A triage refusal that failed a scan closed is still a policy refusal.
-    if (policyAbort) return policyRefusal();
 
     // A YARA hook detected a terminal violation and aborted the run.
     if (yaraViolationReason) {
@@ -1700,8 +1631,6 @@ export async function runAgent(
     // Signal done to unblock the async generator
     signalDone();
 
-    if (policyAbort) return policyRefusal();
-
     // A YARA hook aborted the run (the SDK throws AbortError once the hook
     // calls abortController.abort()). Surface it before anything else so it is
     // never mistaken for a success-cleanup race or a generic abort.
@@ -1791,7 +1720,6 @@ export async function runAgent(
     debugLine(emit, options, 'Full error:', error);
     throw error;
   } finally {
-    stopWatchingOperatorAbort?.();
     agentConfig.signal?.removeEventListener('abort', onExternalAbort);
     if (timeoutId) clearTimeout(timeoutId);
     // Always capture run duration, even on abort/error, so we can alert on

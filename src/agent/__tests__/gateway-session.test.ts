@@ -192,49 +192,6 @@ describe('gatewayAuth', () => {
     );
   });
 
-  describe('the prompt policy version', () => {
-    const mint = (extra: Record<string, unknown>) =>
-      fetchMock.mockResolvedValue({
-        ok: true,
-        json: () =>
-          Promise.resolve({
-            token: 'phe_minted',
-            expires_at: new Date(Date.now() + 3600_000).toISOString(),
-            gateway_url: 'https://ai-gateway.us.posthog.com',
-            ...extra,
-          }),
-      });
-
-    it('is carried with the session when the mint returns a positive integer', async () => {
-      mint({ system_prompt_version: 4 });
-
-      const auth = await gatewayAuth(host, 'pha_oauth', 'integration');
-
-      expect(auth.promptPolicyVersion).toBe(4);
-      expect(
-        (await gatewayAuth(host, 'pha_oauth', 'integration'))
-          .promptPolicyVersion,
-      ).toBe(4);
-    });
-
-    it.each([
-      {},
-      { system_prompt_version: null },
-      ...[0, -1, 1.5, '3', true, {}, []].map((v) => ({
-        system_prompt_version: v,
-      })),
-    ])(
-      'is absent when the mint pins none or a malformed version (%j)',
-      async (extra) => {
-        mint(extra);
-
-        const auth = await gatewayAuth(host, 'pha_oauth', 'integration');
-
-        expect(auth).not.toHaveProperty('promptPolicyVersion');
-      },
-    );
-  });
-
   it.each([
     ['http://localhost:8010', 'http://localhost:8080'],
     ['http://127.0.0.1:8010', 'http://localhost:8080'],

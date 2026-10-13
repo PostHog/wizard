@@ -62,7 +62,6 @@ vi.mock('../../../../agent-prompt-loader', async (importActual) => {
 });
 
 import { RunOutcome } from '../../../shared/types';
-import { AgentErrorType } from '../../../../signals';
 import { runOrchestrator } from '../orchestrator-runner';
 import type { SequenceContext } from '../../../shared/types';
 import type { QueueStore } from '../queue';
@@ -74,7 +73,7 @@ type Inputs = {
   orchestrator: { store: QueueStore };
 };
 
-type Behavior = (inputs: Inputs, taskId: string) => object | void;
+type Behavior = (inputs: Inputs, taskId: string) => void;
 let behaviors: Record<string, Behavior>;
 
 /** The fake harness: the seed queues install then report, each task runs its scripted behavior. */
@@ -89,13 +88,10 @@ function harnessRun(raw: unknown) {
       dependsOn: [install.id],
       maxAttempts: 1,
     });
-    return Promise.resolve({ kind: 'success' as const });
+  } else {
+    behaviors[type](inputs, inputs.analyticsProperties.task_id as string);
   }
-  const result = behaviors[type](
-    inputs,
-    inputs.analyticsProperties.task_id as string,
-  );
-  return Promise.resolve(result ?? { kind: 'success' as const });
+  return Promise.resolve({ kind: 'success' as const });
 }
 
 const publish = (inputs: Inputs) =>
@@ -162,38 +158,6 @@ describe('a task failing after the run report was published', () => {
 
     expect(result.outcome).toBe(RunOutcome.Success);
     expect(result.outro?.message).toContain('report delivered');
-  });
-
-  it('fails the run when the sink publishes, then the operator policy refuses', async () => {
-    behaviors.report = (inputs) => {
-      publish(inputs);
-      return {
-        kind: 'abort',
-        classification: AgentErrorType.ABORT,
-        message: 'Outside setup.',
-        policy: true,
-      };
-    };
-
-    const result = await run();
-
-    expect(result.outcome).toBe(RunOutcome.Failed);
-  });
-
-  it("fails the run when the sink publishes and completes, then emits the agent's own [ABORT]", async () => {
-    behaviors.report = (inputs, id) => {
-      publish(inputs);
-      inputs.orchestrator.store.complete(id);
-      return {
-        kind: 'abort',
-        classification: AgentErrorType.ABORT,
-        message: 'Cannot finish.',
-      };
-    };
-
-    const result = await run();
-
-    expect(result.outcome).toBe(RunOutcome.Failed);
   });
 
   it('still fails the run when a task other than the sink published then failed', async () => {

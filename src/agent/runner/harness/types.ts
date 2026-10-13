@@ -81,8 +81,6 @@ export type AgentResult =
       classification: AgentErrorType.ABORT;
       message?: string;
       error?: Error;
-      /** Set when the operator policy refused (`[posthog:abort]` on a pinned run). */
-      policy?: true;
     }
   | {
       kind: 'failure';

@@ -8,7 +8,6 @@
 import { Harness } from '@shared/constants';
 import { logToFile } from '@utils/debug';
 import { buildGatewayModel, gatewayApiFor } from './runner/harness/pi/gateway';
-import { type OperatorAbort, operatorAbortReason } from './output-signals';
 import { modelCapabilities, triageModelFor } from './runner/switchboard/models';
 import type { LLMProvider } from '@posthog/warlock';
 
@@ -28,8 +27,6 @@ export interface TriageGatewayAuth {
    *  `CallType.yaraTriage` so scan spend is separable from agent work. */
   wizardMetadata?: Record<string, string>;
   wizardFlags?: Record<string, string>;
-  /** The operator prompt version the run's token is pinned to, when the mint pinned one. */
-  promptPolicyVersion?: number;
 }
 
 /**
@@ -43,7 +40,6 @@ export interface TriageGatewayAuth {
 export function createTriageLLMProvider(
   auth: TriageGatewayAuth | (() => Promise<TriageGatewayAuth>),
   harness: Harness,
-  operatorAbort?: OperatorAbort,
 ): LLMProvider {
   const resolveAuth =
     typeof auth === 'function' ? auth : () => Promise.resolve(auth);
@@ -101,12 +97,6 @@ export function createTriageLLMProvider(
             message.errorMessage ?? 'unknown'
           } — every flagged match will be acted on`,
         );
-      }
-      // A refusal ends the run; the thrown error leaves warlock to fail closed.
-      const refusal = operatorAbortReason(text, current.promptPolicyVersion);
-      if (refusal !== undefined) {
-        operatorAbort?.trip(refusal);
-        throw new Error('Operator policy refused the triage call');
       }
       return text;
     } finally {
