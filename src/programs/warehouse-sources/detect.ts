@@ -53,7 +53,7 @@ interface ProjectSignals {
    * path is sanitised on the way in, so nothing here can reach a prompt raw.
    */
   envKeys: Map<string, string>;
-  /** Catalog script hostname found in a template → the file it was found in. */
+  /** Catalog script host a template loads from → the file it was found in. */
   scriptHosts: Map<string, string>;
   /** Templates read so far, against {@link MAX_TEMPLATE_FILES}. */
   templatesRead: number;
@@ -210,11 +210,10 @@ function matchDetector(
     }
   }
 
-  if (scriptHosts.length > 0) {
-    for (const [host, file] of signals.scriptHosts) {
-      if (scriptHosts.some((catalogHost) => hostMatches(host, catalogHost))) {
-        matched.push({ source: SCRIPT_HOST_SIGNAL_SOURCE, name: host, file });
-      }
+  for (const host of scriptHosts) {
+    const file = signals.scriptHosts.get(host);
+    if (file !== undefined) {
+      matched.push({ source: SCRIPT_HOST_SIGNAL_SOURCE, name: host, file });
     }
   }
 
@@ -406,9 +405,10 @@ function hostMatches(host: string, catalogHost: string): boolean {
 const URL_HOST = /(?:https?:)?\/\/([a-z0-9-]+(?:\.[a-z0-9-]+)+)/gi;
 
 /**
- * Record the catalog script hosts a template loads. Every other hostname is
- * dropped as soon as it is read: it could name an internal domain, so it is
- * never kept, matched against, or reported.
+ * Record the catalog script hosts a template loads from. A hostname is kept
+ * as the catalog host it matched, never as written, so a customer subdomain
+ * such as `acme.zendesk.com` never leaves the machine. Every other hostname
+ * is dropped as soon as it is read.
  */
 function addScriptHosts(
   content: string,
@@ -422,15 +422,14 @@ function addScriptHosts(
   if (/\.(jsx|tsx)$/.test(file) && !/<script\b/i.test(content)) return;
   for (const match of content.matchAll(URL_HOST)) {
     const host = match[1].toLowerCase();
-    if (signals.scriptHosts.has(host)) continue;
-    if (
-      !signals.catalogScriptHosts.some((catalogHost) =>
-        hostMatches(host, catalogHost),
-      )
-    ) {
-      continue;
+    for (const catalogHost of signals.catalogScriptHosts) {
+      if (
+        hostMatches(host, catalogHost) &&
+        !signals.scriptHosts.has(catalogHost)
+      ) {
+        signals.scriptHosts.set(catalogHost, file);
+      }
     }
-    signals.scriptHosts.set(host, file);
   }
 }
 

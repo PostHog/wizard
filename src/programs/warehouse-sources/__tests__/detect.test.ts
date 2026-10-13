@@ -109,20 +109,20 @@ describe('detectWarehouseSources', () => {
     ]);
   });
 
-  it('reports only catalog script hosts from a template, never other hosts', () => {
+  it('reports the catalog host a template matched, never a hostname as written', () => {
     fs.writeFileSync(
       path.join(tmpDir, 'index.html'),
       `<script src="https://assets.internal.example.com/app.js"></script>
-<script>(function(h,o,t,j){ j='https://static.hotjar.com/c/hotjar-'; })()</script>`,
+<script>(function(h,o,t,j){ j='https://acme-internal.hotjar.com/c/hotjar-'; })()</script>`,
     );
 
     const { tools } = detectTools(tmpDir, DETECTORS);
 
     expect(tools.map((t) => t.kind)).toEqual(['Hotjar']);
     expect(tools[0].signals).toEqual([
-      { source: 'script_host', name: 'static.hotjar.com', file: 'index.html' },
+      { source: 'script_host', name: 'hotjar.com', file: 'index.html' },
     ]);
-    expect(JSON.stringify(tools)).not.toContain('internal.example.com');
+    expect(JSON.stringify(tools)).not.toContain('internal');
   });
 
   it('matches a Go module across major versions', () => {
