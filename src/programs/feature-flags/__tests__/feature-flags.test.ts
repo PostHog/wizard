@@ -4,7 +4,6 @@ import { buildRegistry, parseAgentPrompt } from '@agent';
 import { Integration } from '@shared/constants';
 import { detectFramework } from '@programs/detection/framework';
 import { gatherFrameworkContext } from '@programs/detection/context';
-import { getOAuthScopesForProgram } from '@programs/program-registry';
 import { config as featureFlagsConfig } from '@programs/feature-flags';
 import { FEATURE_FLAGS_PROMPTS } from '@programs/feature-flags/prompts';
 import type { WizardSession } from '@programs/session/wizard-session';
@@ -51,7 +50,7 @@ describe('feature-flags program', () => {
   });
 
   test('requests both feature flag scopes', () => {
-    const scopes = getOAuthScopesForProgram('feature-flags');
+    const scopes = featureFlagsConfig.oauthScopeAdditions;
     expect(scopes).toContain('feature_flag:read');
     expect(scopes).toContain('feature_flag:write');
   });
