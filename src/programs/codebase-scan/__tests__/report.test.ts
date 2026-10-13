@@ -1,4 +1,4 @@
-import * as fs from 'fs';
+import fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 
@@ -77,6 +77,7 @@ describe('reportCodebaseScan', () => {
     expect(store.session.codebaseScanReport).toBe(first);
     expect(first).toMatchObject({
       program: 'posthog-integration',
+      complete: true,
       tools: [
         {
           kind: 'Stripe',
@@ -98,6 +99,7 @@ describe('reportCodebaseScan', () => {
       scannedAt: '2026-10-12T00:00:00.000Z',
       scannedDir: tmpDir,
       tools: [],
+      complete: false,
       failed: true,
     } satisfies CodebaseScan);
     store.setCredentials(CREDENTIALS);
@@ -134,5 +136,27 @@ describe('reportCodebaseScan', () => {
     expect(store.session.codebaseScanReport?.workspace_fingerprint).toBe(
       workspaceFingerprint(CREDENTIALS.projectId, tmpDir),
     );
+  });
+
+  it('reports a scan that could not open a directory as incomplete', async () => {
+    const unreadable = path.join(tmpDir, 'private');
+    fs.mkdirSync(unreadable);
+    const opendirSync = fs.opendirSync;
+    vi.spyOn(fs, 'opendirSync').mockImplementation((dir, options) => {
+      if (dir === unreadable) {
+        throw Object.assign(new Error('EACCES'), { code: 'EACCES' });
+      }
+      return opendirSync(dir, options);
+    });
+    const store = await ciStore();
+    vi.restoreAllMocks();
+    store.setCredentials(CREDENTIALS);
+
+    reportCodebaseScan(store);
+
+    expect(store.session.codebaseScanReport).toMatchObject({
+      complete: false,
+      tools: [{ kind: 'Stripe' }],
+    });
   });
 });

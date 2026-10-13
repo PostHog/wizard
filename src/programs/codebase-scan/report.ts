@@ -34,6 +34,7 @@ export function buildScanReport(
     // The directory the scan walked, which a CI run's install dir may no longer be.
     workspace_fingerprint: workspaceFingerprint(projectId, scan.scannedDir),
     scanned_at: scan.scannedAt,
+    complete: scan.complete,
     tools: scan.tools.map((tool) => ({
       kind: tool.kind,
       signals: tool.signals,

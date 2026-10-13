@@ -117,6 +117,11 @@ export type ScanReport = {
   wizard_version: string;
   workspace_fingerprint: string;
   scanned_at: string;
+  /**
+   * False when the scan could not see the whole project. PostHog then records
+   * the tools it saw but marks none removed.
+   */
+  complete: boolean;
   tools: {
     kind: string;
     signals: { source: string; name: string; file: string | null }[];

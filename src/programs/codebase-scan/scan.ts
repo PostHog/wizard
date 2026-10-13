@@ -28,6 +28,8 @@ export type CodebaseScan = {
    */
   scannedDir: string;
   tools: DetectedTool[];
+  /** False when the walk stopped at a cap or skipped a directory it could not read. */
+  complete: boolean;
   /** The scan threw or had no catalog to match against. Distinct from a scan that found nothing. */
   failed?: true;
 };
@@ -49,6 +51,7 @@ export async function scanCodebaseFor(
     scannedAt,
     scannedDir,
     tools: [],
+    complete: false,
     failed: true,
   };
   // No catalog means the scan could not look, which is not the same as
@@ -58,12 +61,13 @@ export async function scanCodebaseFor(
     return;
   }
   try {
-    const tools = detectTools(scannedDir, detectors);
+    const { tools, complete } = detectTools(scannedDir, detectors);
     ctx.setFrameworkContext(CODEBASE_SCAN_KEY, {
       program: config.id,
       scannedAt,
       scannedDir,
       tools,
+      complete,
     } satisfies CodebaseScan);
   } catch (error) {
     ctx.setFrameworkContext(CODEBASE_SCAN_KEY, failed);

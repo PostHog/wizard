@@ -1,5 +1,11 @@
 import fs from 'fs';
-import { walkProjectFiles, safeReadFile } from '@utils/bounded-fs';
+import os from 'os';
+import path from 'path';
+import {
+  MAX_DIR_ENTRIES,
+  walkProjectFiles,
+  safeReadFile,
+} from '@utils/bounded-fs';
 import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
 
@@ -83,4 +89,49 @@ describe('reportFsError (via walkProjectFiles / safeReadFile)', () => {
       expect(mockLogToFile).toHaveBeenCalledTimes(1);
     },
   );
+});
+
+describe('walkProjectFiles completeness', () => {
+  let root: string;
+
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    root = fs.mkdtempSync(path.join(os.tmpdir(), 'bounded-fs-walk-'));
+    fs.mkdirSync(path.join(root, 'src'));
+    fs.writeFileSync(path.join(root, 'src', 'index.ts'), '');
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+
+  it('reports a walk that saw the whole tree as complete', () => {
+    expect(walkProjectFiles(root, vi.fn())).toBe(true);
+  });
+
+  it('reports a walk that skipped a directory it could not open as partial', () => {
+    const opendirSync = fs.opendirSync;
+    vi.spyOn(fs, 'opendirSync').mockImplementation((dir, options) => {
+      if (dir === path.join(root, 'src')) throw errnoError('EACCES');
+      return opendirSync(dir, options);
+    });
+
+    expect(walkProjectFiles(root, vi.fn())).toBe(false);
+  });
+
+  it('reports a walk that stopped at the per-directory cap as partial', () => {
+    let remaining = MAX_DIR_ENTRIES + 1;
+    const file = {
+      name: 'file.ts',
+      isDirectory: () => false,
+      isFile: () => true,
+      isSymbolicLink: () => false,
+    };
+    vi.spyOn(fs, 'opendirSync').mockReturnValue({
+      readSync: () => (remaining-- > 0 ? file : null),
+      closeSync: () => undefined,
+    } as unknown as fs.Dir);
+
+    expect(walkProjectFiles(root, vi.fn())).toBe(false);
+  });
 });

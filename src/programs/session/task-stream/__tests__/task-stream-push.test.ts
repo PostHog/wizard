@@ -744,6 +744,7 @@ describe('TaskStreamPush', () => {
           wizard_version: '0.0.0',
           workspace_fingerprint: 'f'.repeat(64),
           scanned_at: '2026-05-20T17:00:00Z',
+          complete: true,
           tools: [],
         },
       });

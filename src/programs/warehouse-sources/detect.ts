@@ -44,6 +44,8 @@ interface ProjectSignals {
    * project-relative manifest that first declared it.
    */
   packages: Map<string, Map<string, string>>;
+  /** False when the walk stopped at a cap or skipped a directory it could not read. */
+  complete: boolean;
 }
 
 // Shared with `check_env_keys` so the tool scans exactly what the detector
@@ -77,6 +79,16 @@ const PACKAGE_SIGNAL_LOCATIONS: Readonly<Record<string, string>> = {
   rubygems: 'Gemfile',
 };
 
+/** The catalog tools a scan found, and whether it saw the whole project. */
+export type ToolScan = {
+  tools: DetectedTool[];
+  /**
+   * False when the walk stopped at a cap or skipped a directory it could not
+   * read. A tool missing from a partial scan may still be in the project.
+   */
+  complete: boolean;
+};
+
 /**
  * Detect every catalog tool the project at `installDir` appears to use,
  * including tools the wizard never offers as a warehouse source. Each carries
@@ -85,7 +97,7 @@ const PACKAGE_SIGNAL_LOCATIONS: Readonly<Record<string, string>> = {
 export function detectTools(
   installDir: string,
   detectors: readonly SourceDetector[],
-): DetectedTool[] {
+): ToolScan {
   // No directory guard here: walkProjectFiles is best-effort and yields no
   // signals for a missing/unreadable dir (→ []). The program-level detect
   // step is responsible for surfacing a structured `bad-directory` error.
@@ -104,7 +116,7 @@ export function detectTools(
       signals: matched,
     });
   }
-  return detected;
+  return { tools: detected, complete: signals.complete };
 }
 
 /**
@@ -140,7 +152,10 @@ export function detectWarehouseSources(
   installDir: string,
   detectors: readonly SourceDetector[],
 ): DetectedSource[] {
-  return toWarehouseSources(detectTools(installDir, detectors), detectors);
+  return toWarehouseSources(
+    detectTools(installDir, detectors).tools,
+    detectors,
+  );
 }
 
 /**
@@ -216,9 +231,10 @@ function collectSignals(installDir: string): ProjectSignals {
   const signals: ProjectSignals = {
     envKeys: new Map(),
     packages: new Map(),
+    complete: true,
   };
 
-  walkProjectFiles(
+  signals.complete = walkProjectFiles(
     installDir,
     (name, fullPath) => ingestFile(installDir, name, fullPath, signals),
     MAX_DEPTH,
