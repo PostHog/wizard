@@ -165,6 +165,25 @@ describe('detectWarehouseSources', () => {
     },
   );
 
+  it('does not spend the template budget on components with no script tag', () => {
+    for (let i = 0; i < 300; i += 1) {
+      fs.writeFileSync(
+        path.join(tmpDir, `Component${i}.tsx`),
+        'export const C = () => <div />;',
+      );
+    }
+    // The walk reads a directory's files before its subdirectories.
+    fs.mkdirSync(path.join(tmpDir, 'public'));
+    fs.writeFileSync(
+      path.join(tmpDir, 'public', 'index.html'),
+      '<script src="https://static.hotjar.com/c/h.js"></script>',
+    );
+
+    expect(detectTools(tmpDir, DETECTORS).tools.map((t) => t.kind)).toEqual([
+      'Hotjar',
+    ]);
+  });
+
   it('matches a Go module across major versions', () => {
     fs.writeFileSync(
       path.join(tmpDir, 'go.mod'),

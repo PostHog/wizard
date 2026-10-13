@@ -55,7 +55,7 @@ interface ProjectSignals {
   envKeys: Map<string, string>;
   /** Catalog script host a template loads from → the file it was found in. */
   scriptHosts: Map<string, string>;
-  /** Templates read so far, against {@link MAX_TEMPLATE_FILES}. */
+  /** Templates with a `<script` tag read so far, against {@link MAX_TEMPLATE_FILES}. */
   templatesRead: number;
   /**
    * Ecosystem (`npm`, `pypi`, `rubygems`, ...) → package name → the
@@ -369,7 +369,10 @@ function catalogScriptHosts(detectors: readonly SourceDetector[]): string[] {
   return [...new Set(detectors.flatMap((d) => d.signals.scriptHosts))];
 }
 
-/** A scan reads at most this many templates, and skips any larger than {@link MAX_TEMPLATE_BYTES}. */
+/**
+ * A scan matches script hosts in at most this many templates with a `<script`
+ * tag, and skips any larger than {@link MAX_TEMPLATE_BYTES}.
+ */
 const MAX_TEMPLATE_FILES = 300;
 const MAX_TEMPLATE_BYTES = 512 * 1024;
 
@@ -473,6 +476,9 @@ function addScriptHosts(
 ): void {
   if (signals.templatesRead >= MAX_TEMPLATE_FILES) return;
   if (content.length > MAX_TEMPLATE_BYTES) return;
+  // Checked before the template counts against the budget, so components
+  // that load no script cannot use it up.
+  if (!/<script\b/i.test(content)) return;
   signals.templatesRead += 1;
   for (const element of scriptElements(content)) {
     for (const match of element.matchAll(URL_HOST)) {
