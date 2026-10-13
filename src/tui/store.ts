@@ -499,7 +499,7 @@ export class WizardStore implements TuiView {
     // Reports first: analytics merges tags into an event as it is sent, so
     // `setup confirmed` only carries the warehouse tags if they are already
     // set. On main they were, because reporting happened back in detect.
-    void reportCodebaseScan(this.sessions);
+    reportCodebaseScan(this.sessions);
     analytics.wizardCapture('setup confirmed', sessionProperties(this.session));
     this._write({ setupConfirmed: true });
   }

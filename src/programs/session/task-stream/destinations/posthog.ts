@@ -1,6 +1,7 @@
 /**
  * PostHog destination — pushes wizard run state to the PostHog backend
- * via `POST /api/projects/{project_id}/wizard/sessions/`.
+ * via `POST /api/projects/{project_id}/wizard/sessions/`, and attaches the
+ * run's codebase scan via `POST /api/projects/{project_id}/wizard/scans/`.
  *
  * The endpoint is an upsert keyed by `(team, session_id)`: 201 means
  * the row was created, 200 means it was updated. Both are success.
@@ -12,12 +13,15 @@
  * Retry policy:
  *   5xx / network    → exponential backoff base 500ms cap 8s, max 3 attempts
  *   429              → honour `Retry-After` (seconds), single retry
- *   401 / 403        → disable for the rest of the run, no further pushes
+ *   401 / 403        → disable session pushes for the rest of the run
+ *                      (a scan 403, such as a --signup token without
+ *                      `wizard_session:write`, never disables sessions)
  *   400              → give up for this push, do not disable
  *   other 4xx        → give up for this push, do not disable
  */
 
 import type {
+  ScanReportPayload,
   TaskStreamDestination,
   TaskStreamUpdate,
   StreamEvent,
@@ -39,6 +43,8 @@ export interface PostHogDestinationOptions {
   /** Override for tests. Defaults to setTimeout. */
   sleep?: (ms: number) => Promise<void>;
 }
+
+type Endpoint = 'sessions' | 'scans';
 
 const MAX_ATTEMPTS = 3;
 const BASE_BACKOFF_MS = 500;
@@ -100,16 +106,24 @@ export class PostHogDestination implements TaskStreamDestination {
     const creds = this.getCredentials();
     if (!creds) return;
 
-    await this.postWithRetry(creds, toWirePayload(payload));
+    await this.postWithRetry(creds, 'sessions', toWirePayload(payload));
+  }
+
+  async sendScan(payload: ScanReportPayload): Promise<void> {
+    const creds = this.getCredentials();
+    if (!creds) return;
+
+    await this.postWithRetry(creds, 'scans', payload);
   }
 
   private buildRequest(
     creds: Credentials,
+    endpoint: Endpoint,
     body: object,
   ): { url: string; init: Parameters<typeof fetch>[1] } {
     const url = `${creds.host.apiHost.replace(/\/$/, '')}/api/projects/${
       creds.projectId
-    }/wizard/sessions/`;
+    }/wizard/${endpoint}/`;
     return {
       url,
       init: {
@@ -123,8 +137,13 @@ export class PostHogDestination implements TaskStreamDestination {
     };
   }
 
-  private async postWithRetry(creds: Credentials, body: object): Promise<void> {
-    const { url, init } = this.buildRequest(creds, body);
+  private async postWithRetry(
+    creds: Credentials,
+    endpoint: Endpoint,
+    body: object,
+  ): Promise<void> {
+    const { url, init } = this.buildRequest(creds, endpoint, body);
+    const label = `wizard/${endpoint}`;
     let attempt = 0;
     let backoff = BASE_BACKOFF_MS;
     let retriedAfter429 = false;
@@ -145,21 +164,21 @@ export class PostHogDestination implements TaskStreamDestination {
       }
 
       if (response.ok) {
-        logToFile(`[task-stream] wizard/sessions push ok: ${response.status}`);
+        logToFile(`[task-stream] ${label} push ok: ${response.status}`);
         return;
       }
 
       const status = response.status;
 
       if (status === 401 || status === 403) {
-        this.disabled = true;
-        this.onError(new Error(`wizard/sessions auth failed: ${status}`));
+        if (endpoint === 'sessions') this.disabled = true;
+        this.onError(new Error(`${label} auth failed: ${status}`));
         return;
       }
 
       if (status === 429) {
         if (retriedAfter429) {
-          this.onError(new Error('wizard/sessions rate limited'));
+          this.onError(new Error(`${label} rate limited`));
           return;
         }
         retriedAfter429 = true;
@@ -172,7 +191,7 @@ export class PostHogDestination implements TaskStreamDestination {
 
       if (status >= 500) {
         if (attempt >= MAX_ATTEMPTS) {
-          this.onError(new Error(`wizard/sessions server error: ${status}`));
+          this.onError(new Error(`${label} server error: ${status}`));
           return;
         }
         await this.sleep(backoff);
@@ -187,11 +206,11 @@ export class PostHogDestination implements TaskStreamDestination {
         } catch {
           // ignore
         }
-        this.onError(new Error(`wizard/sessions bad request (400): ${detail}`));
+        this.onError(new Error(`${label} bad request (400): ${detail}`));
         return;
       }
 
-      this.onError(new Error(`wizard/sessions unexpected status: ${status}`));
+      this.onError(new Error(`${label} unexpected status: ${status}`));
       return;
     }
   }

@@ -104,4 +104,24 @@ export interface TaskStreamUpdate {
 export interface TaskStreamDestination {
   readonly name: string;
   send(event: StreamEvent, payload: TaskStreamUpdate): Promise<void>;
+  /** Attach the run's codebase scan to this session. Only PostHog has it. */
+  sendScan?(payload: ScanReportPayload): Promise<void>;
 }
+
+/**
+ * The codebase scan the user agreed to share, without its session. The stream
+ * adds its own `session_id`, so the scan joins the session it came from.
+ */
+export type ScanReport = {
+  program: string;
+  wizard_version: string;
+  workspace_fingerprint: string;
+  scanned_at: string;
+  tools: {
+    kind: string;
+    signals: { source: string; name: string; file: string | null }[];
+  }[];
+};
+
+/** Wire shape of a scan; see the PostHog `wizard/scans` serializer. */
+export type ScanReportPayload = ScanReport & { session_id: string };
