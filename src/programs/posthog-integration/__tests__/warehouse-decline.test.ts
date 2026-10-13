@@ -80,9 +80,8 @@ describe('the full decline contract, end to end', () => {
       const store = new SessionStore(session);
       await scanCodebaseFor(posthogIntegration, store.readyContext());
       await detectPostHogIntegration(store.readyContext());
-      const fetchImpl = vi.fn<typeof fetch>();
-      await reportCodebaseScan(store, { fetchImpl });
-      expect(fetchImpl).not.toHaveBeenCalled();
+      reportCodebaseScan(store);
+      expect(store.session.codebaseScanReport).toBeNull();
 
       const sources = store.session.frameworkContext[
         DETECTED_WAREHOUSE_SOURCES_KEY

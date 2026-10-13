@@ -9,6 +9,7 @@ import type { DiscoveredFeature } from '@shared/discovered-feature';
 import type { ScanConsent } from '@shared/run-state';
 import type { FrameworkConfig } from './framework-config';
 import type { OutroData } from '@agent/types';
+import type { ScanReport } from './session/task-stream/types';
 
 export interface ProgramSession {
   /**
@@ -59,8 +60,8 @@ export interface ProgramSession {
   scanConsent: ScanConsent;
   /** Guards against reporting twice; consent resolves from two paths. */
   warehouseSourcesReported: boolean;
-  /** Guards the codebase scan POST to PostHog: sent once per run. */
-  codebaseScanReported: boolean;
+  /** The scan the user agreed to share. Set once per run; the task stream sends it. */
+  codebaseScanReport: ScanReport | null;
   integration: Integration | null;
   frameworkContext: Record<string, unknown>;
   typescript: boolean;

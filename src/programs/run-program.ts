@@ -271,7 +271,7 @@ async function invokeProgram(
         plainSettings = settings;
       }
       credentials = await login();
-      void reportCodebaseScan(store);
+      reportCodebaseScan(store);
       if (needsAiApproval(store.session, credentials)) {
         if (!options.workflow) {
           return fail(
