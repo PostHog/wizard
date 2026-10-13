@@ -43,6 +43,26 @@ serde = "1"
     ]);
   });
 
+  it('Cargo.toml: dotted keys, commented headers, and renamed dependency tables', () => {
+    const content = `[dependencies] # runtime
+sentry.workspace = true
+tokio.version = "1"
+tokio.features = ["full"]
+stripe.package = "async-stripe"
+stripe.version = "0.34"
+
+[dependencies.http] # renamed
+package = "reqwest"
+version = "0.12"
+`;
+    expect(parseCargoToml(content)).toEqual([
+      'sentry',
+      'tokio',
+      'async-stripe',
+      'reqwest',
+    ]);
+  });
+
   it('Podfile: pod names, subspecs reported as their pod', () => {
     const content = `target 'App' do
   pod 'Sentry', '~> 8.0'
