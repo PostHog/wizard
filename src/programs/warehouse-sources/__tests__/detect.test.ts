@@ -64,12 +64,13 @@ describe('detectWarehouseSources', () => {
     expect(kinds(tmpDir)).toEqual(['Postgres']);
   });
 
-  it('detects Stripe from a dependency', () => {
+  it('detects Stripe from a dependency, naming the package over a matching .env key', () => {
     writePackageJson(tmpDir, { stripe: '^14.0.0' });
+    fs.writeFileSync(path.join(tmpDir, '.env'), 'STRIPE_SECRET_KEY=sk_x\n');
     const [stripe] = detect(tmpDir);
     expect(stripe.kind).toBe('Stripe');
     expect(stripe.mode).toBe('in-cli');
-    expect(stripe.matchedSignal).toContain('stripe');
+    expect(stripe.matchedSignal).toBe('found `stripe` in package.json');
   });
 
   it('detects a deep-link source (Salesforce) and tags its mode', () => {

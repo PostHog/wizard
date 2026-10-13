@@ -117,12 +117,25 @@ function isSuperseded(
   return (detector.supersededBy ?? []).some((kind) => detectedKinds.has(kind));
 }
 
-/** Returns a human-readable description of the first matching signal, or null. */
+/**
+ * Returns a human-readable description of the first matching signal, or null.
+ * A package is checked before `.env` keys: it shows the code uses the tool, while a key can outlive it.
+ */
 function matchDetector(
   detector: SourceDetector,
   signals: ProjectSignals,
 ): string | null {
   const { envKeys, packages } = detector.signals;
+
+  for (const [ecosystem, names] of Object.entries(packages)) {
+    const found = signals.packages.get(ecosystem);
+    const hit = found && names.find((name) => found.has(name));
+    if (hit) {
+      const location =
+        PACKAGE_SIGNAL_LOCATIONS[ecosystem] ?? `${ecosystem} dependencies`;
+      return `found \`${hit}\` in ${location}`;
+    }
+  }
 
   if (envKeys.length > 0) {
     // Name the file that actually matched. The agent acts on this string, so
@@ -138,16 +151,6 @@ function matchDetector(
       if (envKeys.some((re) => re.test(key))) {
         return `found \`${key}\` in \`${file}\``;
       }
-    }
-  }
-
-  for (const [ecosystem, names] of Object.entries(packages)) {
-    const found = signals.packages.get(ecosystem);
-    const hit = found && names.find((name) => found.has(name));
-    if (hit) {
-      const location =
-        PACKAGE_SIGNAL_LOCATIONS[ecosystem] ?? `${ecosystem} dependencies`;
-      return `found \`${hit}\` in ${location}`;
     }
   }
 
