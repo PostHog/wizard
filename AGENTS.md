@@ -236,6 +236,8 @@ a PostHog personal API key and an already-issued gateway token supplied through
 `WIZARD_CI_GATEWAY_TOKEN_FILE`, plus the target project ID. Follow the
 [credential setup](docs/local-dev.md#credentials-for-local-ci-and-headless-runs).
 
+To ship a release, follow the checklist in [`docs/releasing.md`](docs/releasing.md).
+
 ### Local dev targets
 
 Four things can independently point at a local server — the wizard binary,

@@ -176,6 +176,8 @@ Choose the wizard binary through its invocation:
 | Workbench harness | `WIZARD_PATH=<repo>` → `$WIZARD_PATH/dist/bin.js` | whatever you last built |
 | Published | `npx @posthog/wizard` | production |
 
+To test a release candidate before it ships, follow [releasing](releasing.md).
+
 To confirm what a run actually used, look for the `[agent-runner] targets` line
 in the debug log — it prints the build, skills url, MCP url, and PostHog host
 together. The log is `posthog-wizard.log` in the temp directory

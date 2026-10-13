@@ -750,14 +750,12 @@ Example prompt — explore against
 > Then show me the saved snapshots in order, the screen path, whether `posthog`
 > landed in the app, and anything that broke.
 
-## Publishing your tool
+## Releasing
 
-To make your version of a tool usable with a one-line `npx` command:
-
-1. Edit `package.json`, especially details like `name`, `version`
-2. Run [`npm publish`](https://docs.npmjs.com/cli/v7/commands/npm-publish) from
-   your project directory
-3. Now you can run it with `npx yourpackagename`
+Release-please opens the release PR, and merging it publishes
+`@posthog/wizard` to npm through [`publish.yml`](.github/workflows/publish.yml).
+Do not run `npm publish` by hand. Follow the checklist in
+[docs/releasing.md](docs/releasing.md).
 
 # Health checks
 

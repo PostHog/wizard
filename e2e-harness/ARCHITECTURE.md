@@ -201,7 +201,9 @@ host file cannot copy it into the payload.
 ## Visual-regression snapshots (the workbench flow)
 
 [wizard-workbench](https://github.com/PostHog/wizard-workbench) runs the CI
-route for real-run visual regression: each test definition runs `tui-snapshots`,
-the real-TUI screens are rasterized to a side-by-side baseline-vs-current
-review, and run-to-run differences are surfaced for a human, not asserted away.
-See `services/wizard-ci/` there.
+route for real-run snapshot review: each test definition runs `tui-snapshots`,
+the real-TUI screens are rasterized to PNGs, and a workbench PR shows the
+current run's frames for a human to review. Nothing compares them with a
+baseline. A `/wizard-ci-snapshots` comment on a wizard PR starts it. See
+[releasing](../docs/releasing.md#4-attach-snapshots) and `services/wizard-ci/`
+in the workbench.
