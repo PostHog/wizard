@@ -6,8 +6,11 @@ import { VERSION } from '@shared/version';
 import { RunPhase } from '@shared/run-state';
 import { type Credentials } from '@shared/api';
 import type { WizardSession } from '../wizard-session';
-import { currentCredentials } from '@shared/oauth-session';
-import { isGrantRevoked } from '@shared/auth-session-state';
+import {
+  currentCredentials,
+  rotateAfterUnauthorized,
+  type UnauthorizedRecovery,
+} from '@shared/oauth-session';
 import { logToFile } from '@utils/debug';
 import { parseRetryAfter } from './destinations/posthog';
 
@@ -278,28 +281,24 @@ export class WizardRunSync {
           (method === 'PATCH' && res.status === 200)
         )
           return data ?? true;
-        if (
-          res.status === 401 &&
-          current.refreshToken &&
-          !isGrantRevoked() &&
-          !refreshed &&
-          method !== 'POST'
-        ) {
+        let recovery: UnauthorizedRecovery | undefined;
+        if (res.status === 401 && !refreshed && method !== 'POST') {
           refreshed = true;
-          const rotated = await this.bounded(
-            () => currentCredentials(current, true),
+          recovery = await this.bounded(
+            () =>
+              rotateAfterUnauthorized(current, { requireRefreshToken: true }),
             signal,
             5000,
           );
-          if (rotated.accessToken === current.accessToken) {
-            this.authDisabled = true;
-            this.report(
-              'OAuth refresh could not recover the grant; authorize again',
-            );
-            return;
-          }
-          continue;
         }
+        if (recovery?.kind === 'unchanged') {
+          this.authDisabled = true;
+          this.report(
+            'OAuth refresh could not recover the grant; authorize again',
+          );
+          return;
+        }
+        if (recovery?.kind === 'rotated') continue;
         if (res.status === 401 || res.status === 403) this.authDisabled = true;
         if (res.status === 429 && !rateLimited) {
           rateLimited = true;

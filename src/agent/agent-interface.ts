@@ -218,6 +218,8 @@ export type AgentConfig = {
    * another program's budget, so neither should depend on an optional string bag.
    */
   programId: string;
+  /** Whether this program's `publish_handoff` mirrors the report into a PostHog notebook. */
+  handoffNotebook?: boolean;
   /** Program identifier — selects the model for that program. */
   integrationLabel?: string;
   /**
@@ -689,6 +691,8 @@ export async function initializeAgent(
       orchestrator: config.orchestrator,
       triageProvider,
       emit: config.emit,
+      programId: config.programId,
+      handoffNotebook: config.handoffNotebook,
     });
     mcpServers['wizard-tools'] = wizardToolsServer;
 

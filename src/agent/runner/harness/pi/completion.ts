@@ -1,4 +1,14 @@
 import { AgentErrorType } from '../../../signals';
+import type { AgentOutputSignals } from '../../../output-signals';
+
+/** Fatal setup signals use the same precedence as the legacy harness. */
+export function setupSignalFailure(
+  signals: AgentOutputSignals,
+): AgentErrorType.MCP_MISSING | AgentErrorType.RESOURCE_MISSING | undefined {
+  if (signals.has('MCP_MISSING')) return AgentErrorType.MCP_MISSING;
+  if (signals.has('RESOURCE_MISSING')) return AgentErrorType.RESOURCE_MISSING;
+  return undefined;
+}
 
 /** Which completion guard should fail a pi run, or undefined for a clean finish. */
 export function completionFailure(args: {

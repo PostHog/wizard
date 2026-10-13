@@ -320,6 +320,108 @@ export async function fetchGithubConnected(
   return parsed.data.results.some((i) => i.kind === 'github');
 }
 
+/** One `ph-markdown-notebook` node holding the report, the shape the MCP's `notebooks-create-markdown` stores. */
+const markdownNotebookBody = (markdown: string) => ({
+  content: {
+    type: 'doc',
+    content: [
+      {
+        type: 'ph-markdown-notebook',
+        attrs: { nodeId: 'markdown-notebook-v2', markdown },
+      },
+    ],
+  },
+  text_content: markdown,
+});
+
+const NotebookResponseSchema = z.object({ version: z.number() }).passthrough();
+
+const NOTEBOOK_TIMEOUT_MS = 15_000;
+
+const notebookRequest = (accessToken: string, signal?: AbortSignal) => ({
+  headers: {
+    Authorization: `Bearer ${accessToken}`,
+    'User-Agent': WIZARD_USER_AGENT,
+  },
+  timeout: NOTEBOOK_TIMEOUT_MS,
+  signal,
+});
+
+/**
+ * Create a notebook holding `markdown` under a caller-chosen `shortId`.
+ * Requires the `notebook:write` scope. Returns the notebook's version for the
+ * next update; throws on failure — the caller decides how to degrade.
+ */
+export async function createMarkdownNotebook(
+  accessToken: string,
+  projectId: number,
+  baseUrl: string,
+  notebook: { shortId: string; title: string; markdown: string },
+  signal?: AbortSignal,
+): Promise<number> {
+  const response = await axios.post(
+    `${baseUrl}/api/projects/${projectId}/notebooks/`,
+    {
+      title: notebook.title,
+      short_id: notebook.shortId,
+      ...markdownNotebookBody(notebook.markdown),
+    },
+    notebookRequest(accessToken, signal),
+  );
+  return NotebookResponseSchema.parse(response.data).version;
+}
+
+/**
+ * Replace the markdown of a notebook `createMarkdownNotebook` made. `version`
+ * is the one the previous create or update returned. Returns the new version;
+ * throws on failure.
+ */
+export async function updateMarkdownNotebook(
+  accessToken: string,
+  projectId: number,
+  baseUrl: string,
+  notebook: { shortId: string; markdown: string; version: number },
+  signal?: AbortSignal,
+): Promise<number> {
+  const response = await axios.patch(
+    `${baseUrl}/api/projects/${projectId}/notebooks/${notebook.shortId}/`,
+    { ...markdownNotebookBody(notebook.markdown), version: notebook.version },
+    notebookRequest(accessToken, signal),
+  );
+  return NotebookResponseSchema.parse(response.data).version;
+}
+
+/**
+ * Read a notebook's current version and markdown by `shortId`, or null when it
+ * does not exist. Lets a caller whose create or update lost its response find
+ * out whether the write landed.
+ */
+export async function fetchMarkdownNotebook(
+  accessToken: string,
+  projectId: number,
+  baseUrl: string,
+  shortId: string,
+  signal?: AbortSignal,
+): Promise<{ version: number; markdown: string | undefined } | null> {
+  try {
+    const response = await axios.get(
+      `${baseUrl}/api/projects/${projectId}/notebooks/${shortId}/`,
+      notebookRequest(accessToken, signal),
+    );
+    const notebook = NotebookResponseSchema.parse(response.data);
+    const text = (response.data as { text_content?: unknown }).text_content;
+    return {
+      version: notebook.version,
+      markdown: typeof text === 'string' ? text : undefined,
+    };
+  } catch (error) {
+    if (axios.isAxiosError(error) && error.response?.status === 404) {
+      return null;
+    }
+    throw error;
+  }
+}
+
 export function handleApiError(error: unknown, operation: string): ApiError {
   if (axios.isAxiosError(error)) {
     const axiosError = error as AxiosError<{ detail?: string }>;

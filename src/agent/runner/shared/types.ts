@@ -46,6 +46,8 @@ export interface AbortCase {
  * the caller binds those and hands the agent `RunConfig.hooks` instead.
  */
 export interface AgentRunDefinition {
+  /** Overrides the program's `handoffNotebook` for a run whose skill is known only at dispatch. */
+  handoffNotebook?: boolean;
   /** Analytics label (e.g. 'revenue-analytics-setup', 'nextjs') */
   integrationLabel: string;
   /** Skill ID to pre-install. Omit for agent-driven skill discovery. */
@@ -182,6 +184,8 @@ export type RunConfig = Omit<
 export interface ResolvedRunConfig {
   /** Program id: gateway spend pin, analytics label, commandments axis. */
   programId: string;
+  /** The program mirrors its `publish_handoff` report into a PostHog notebook. */
+  handoffNotebook?: boolean;
   /** The run definition. A program's session-taking hooks are the caller's, see `hooks`. */
   run: AgentRunDefinition;
   /** A composed sub-run leaves the terminal outro to its caller. */
@@ -271,6 +275,8 @@ export interface BootstrapResult {
   credentials: Credentials;
   /** Program this run is, and the node its gateway spend pins to. */
   programId: string;
+  /** Whether `publish_handoff` mirrors the report into a PostHog notebook. */
+  handoffNotebook?: boolean;
   wizardFlags: Record<string, string>;
   /** Flag payloads from the same snapshot (e.g. the self-driving pi `{model, effort?, harness?, sequence?}`). */
   wizardFlagPayloads: Record<string, unknown>;

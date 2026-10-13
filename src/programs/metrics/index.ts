@@ -30,6 +30,7 @@ export const config: ProgramConfig = {
   // platform variant themselves. Explicit so renaming the program can't
   // silently detach the flow.
   agentFlow: 'metrics',
+  handoffNotebook: true,
   reportFile: METRICS_REPORT_FILE,
   run: {
     integrationLabel: 'metrics',

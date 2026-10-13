@@ -27,6 +27,8 @@ export const config: ProgramConfig = {
       estimatedDurationMinutes: 5,
       reportFile: `posthog-${skillId}-report.md`,
       docsUrl: POSTHOG_DOCS_URL,
+      // The integration skills' conclude step mirrors the report into a notebook.
+      handoffNotebook: skillId.startsWith('integration-'),
     });
   },
 };

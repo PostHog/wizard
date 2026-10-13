@@ -237,6 +237,7 @@ export const config: ProgramConfig = {
   description: 'Set up PostHog SDK integration',
   id: 'posthog-integration',
   agentFlow: 'integration-v2',
+  handoffNotebook: true,
   eventPlanFile: EVENT_PLAN_FILE,
   onReady: (ctx) => detectPostHogIntegration(ctx),
   // Basic integration runs without structured user input; drop wizard_ask
