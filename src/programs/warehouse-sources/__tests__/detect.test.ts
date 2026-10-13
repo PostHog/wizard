@@ -125,6 +125,46 @@ describe('detectWarehouseSources', () => {
     expect(JSON.stringify(tools)).not.toContain('internal');
   });
 
+  it.each([
+    ['index.html', '<script src="https://static.hotjar.com/c/h.js"></script>'],
+    ['index.html', "<SCRIPT>j='//static.hotjar.com/c/h-';</SCRIPT>"],
+    [
+      'layout.tsx',
+      '<Script src="https://static.hotjar.com/c/h.js" strategy="afterInteractive" />',
+    ],
+    [
+      'layout.tsx',
+      '<Script onLoad={() => n > 0} src="https://static.hotjar.com/c/h.js" />',
+    ],
+    [
+      'layout.tsx',
+      '<Script id="hotjar">{`j = "https://static.hotjar.com/c/h-";`}</Script>',
+    ],
+  ])('matches a script host in a <script> tag in %s: %s', (file, template) => {
+    fs.writeFileSync(path.join(tmpDir, file), template);
+
+    expect(detectTools(tmpDir, DETECTORS).tools.map((t) => t.kind)).toEqual([
+      'Hotjar',
+    ]);
+  });
+
+  it.each([
+    ['index.html', '<a href="https://static.hotjar.com/">Hotjar</a>'],
+    ['index.html', '<p>We moved off https://static.hotjar.com last year.</p>'],
+    [
+      'page.tsx',
+      '<><Script src="/local.js" /><a href="https://static.hotjar.com/">Hotjar</a></>',
+    ],
+    ['page.jsx', 'const docs = "https://static.hotjar.com/docs";'],
+  ])(
+    'ignores a script host outside a <script> tag in %s: %s',
+    (file, template) => {
+      fs.writeFileSync(path.join(tmpDir, file), template);
+
+      expect(detectTools(tmpDir, DETECTORS).tools).toEqual([]);
+    },
+  );
+
   it('matches a Go module across major versions', () => {
     fs.writeFileSync(
       path.join(tmpDir, 'go.mod'),
