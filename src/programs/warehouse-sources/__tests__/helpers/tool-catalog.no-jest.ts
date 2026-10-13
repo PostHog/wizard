@@ -59,7 +59,12 @@ export const FIXTURE_CATALOG: ToolCatalog = {
     tool('Stripe', {
       signals: {
         env_key_patterns: ['^STRIPE_(SECRET|API)_KEY$'],
-        packages: { npm: ['stripe'], pypi: ['stripe'], rubygems: ['stripe'] },
+        packages: {
+          npm: ['stripe'],
+          pypi: ['stripe'],
+          go: ['github.com/stripe/stripe-go'],
+          rubygems: ['stripe'],
+        },
       },
     }),
     tool('Salesforce', {
@@ -86,7 +91,10 @@ export const FIXTURE_CATALOG: ToolCatalog = {
       warehouse_source_type: null,
       wizard_setup_mode: null,
       competes_with: ['session_replay'],
-      signals: { packages: { npm: ['@hotjar/browser'] } },
+      signals: {
+        script_hosts: ['hotjar.com'],
+        packages: { npm: ['@hotjar/browser'] },
+      },
     }),
   ],
 };

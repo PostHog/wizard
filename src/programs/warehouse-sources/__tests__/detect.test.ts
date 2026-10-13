@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import {
+  detectTools,
   detectWarehouseSources,
   parseGemfile,
   parseEnvKeys,
@@ -106,6 +107,30 @@ describe('detectWarehouseSources', () => {
         matchedSignal: 'found `mixpanel` in Python dependencies',
       },
     ]);
+  });
+
+  it('reports only catalog script hosts from a template, never other hosts', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'index.html'),
+      `<script src="https://assets.internal.example.com/app.js"></script>
+<script>(function(h,o,t,j){ j='https://static.hotjar.com/c/hotjar-'; })()</script>`,
+    );
+
+    const { tools } = detectTools(tmpDir, DETECTORS);
+
+    expect(tools.map((t) => t.kind)).toEqual(['Hotjar']);
+    expect(tools[0].signals).toEqual([
+      { source: 'script_host', name: 'static.hotjar.com', file: 'index.html' },
+    ]);
+    expect(JSON.stringify(tools)).not.toContain('internal.example.com');
+  });
+
+  it('matches a Go module across major versions', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'go.mod'),
+      'module example.com/app\n\nrequire github.com/stripe/stripe-go/v82 v82.0.0\n',
+    );
+    expect(kinds(tmpDir)).toEqual(['Stripe']);
   });
 
   it('detects Postgres from a Python requirement', () => {

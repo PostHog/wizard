@@ -46,6 +46,8 @@ import type {
 } from './types.js';
 
 interface ProjectSignals {
+  /** Every script host the catalog lists. A template hostname outside this list is dropped as it is read. */
+  catalogScriptHosts: readonly string[];
   /**
    * Key NAME → the project-relative `.env*` file that first defined it. The
    * path is sanitised on the way in, so nothing here can reach a prompt raw.
@@ -117,7 +119,7 @@ export function detectTools(
   // No directory guard here: walkProjectFiles is best-effort and yields no
   // signals for a missing/unreadable dir (→ []). The program-level detect
   // step is responsible for surfacing a structured `bad-directory` error.
-  const signals = collectSignals(installDir);
+  const signals = collectSignals(installDir, catalogScriptHosts(detectors));
 
   const detected: DetectedTool[] = [];
   for (const detector of detectors) {
@@ -260,8 +262,12 @@ function describeSignal(signal: ScanSignal): string {
   return `found \`${signal.name}\` in ${location}`;
 }
 
-function collectSignals(installDir: string): ProjectSignals {
+function collectSignals(
+  installDir: string,
+  catalogScriptHosts: readonly string[],
+): ProjectSignals {
   const signals: ProjectSignals = {
+    catalogScriptHosts,
     envKeys: new Map(),
     scriptHosts: new Map(),
     templatesRead: 0,
@@ -290,7 +296,7 @@ function ingestFile(
   fullPath: string,
   signals: ProjectSignals,
 ): void {
-  const ingest = ingestorFor(name);
+  const ingest = ingestorFor(name, signals.catalogScriptHosts.length > 0);
   if (!ingest) return;
   if (
     ingest === addScriptHosts &&
@@ -312,11 +318,10 @@ type Ingestor = (
 ) => void;
 
 /** Pick the parser for a manifest filename, or null if it's not one we read. */
-function ingestorFor(name: string): Ingestor | null {
+function ingestorFor(name: string, readTemplates: boolean): Ingestor | null {
   if (isEnvFileName(name))
     return (c, s, relativePath) => addEnvKeys(c, s, relativePath);
-  if (isTemplateFileName(name) && CATALOG_SCRIPT_HOSTS.length > 0)
-    return addScriptHosts;
+  if (readTemplates && isTemplateFileName(name)) return addScriptHosts;
   if (name === 'package.json') return addNpmDeps;
   if (name === 'requirements.txt')
     return (c, s, file) =>
@@ -358,9 +363,9 @@ const MANIFEST_PARSERS: Readonly<
 };
 
 // Templates are scanned for script hosts only while the catalog lists some.
-const CATALOG_SCRIPT_HOSTS: readonly string[] = [
-  ...new Set(SOURCE_DETECTORS.flatMap((d) => d.signals.scriptHosts)),
-];
+function catalogScriptHosts(detectors: readonly SourceDetector[]): string[] {
+  return [...new Set(detectors.flatMap((d) => d.signals.scriptHosts))];
+}
 
 /** A scan reads at most this many templates, and skips any larger than {@link MAX_TEMPLATE_BYTES}. */
 const MAX_TEMPLATE_FILES = 300;
@@ -416,7 +421,7 @@ function addScriptHosts(
     const host = match[1].toLowerCase();
     if (signals.scriptHosts.has(host)) continue;
     if (
-      !CATALOG_SCRIPT_HOSTS.some((catalogHost) =>
+      !signals.catalogScriptHosts.some((catalogHost) =>
         hostMatches(host, catalogHost),
       )
     ) {
