@@ -27,12 +27,12 @@ export type ScanReportStore = {
 export function buildScanReport(
   scan: CodebaseScan,
   projectId: number,
-  installDir: string,
 ): ScanReport {
   return {
     program: scan.program,
     wizard_version: VERSION,
-    workspace_fingerprint: workspaceFingerprint(projectId, installDir),
+    // The directory the scan walked, which a CI run's install dir may no longer be.
+    workspace_fingerprint: workspaceFingerprint(projectId, scan.scannedDir),
     scanned_at: scan.scannedAt,
     tools: scan.tools.map((tool) => ({
       kind: tool.kind,
@@ -57,7 +57,5 @@ export function reportCodebaseScan(store: ScanReportStore): void {
   // A failed scan found nothing because it could not look. Posting its empty
   // list would read as "every tool was removed".
   if (!scan || scan.failed) return;
-  store.shareCodebaseScan(
-    buildScanReport(scan, credentials.projectId, session.installDir),
-  );
+  store.shareCodebaseScan(buildScanReport(scan, credentials.projectId));
 }

@@ -22,6 +22,11 @@ export type CodebaseScan = {
   /** The program whose detection ran the scan. */
   program: string;
   scannedAt: string;
+  /**
+   * The directory the scan walked. A CI run can narrow `installDir` after the
+   * scan, so the report fingerprints this one instead.
+   */
+  scannedDir: string;
   tools: DetectedTool[];
   /** The scan threw or had no catalog to match against. Distinct from a scan that found nothing. */
   failed?: true;
@@ -38,9 +43,11 @@ export async function scanCodebaseFor(
   if (getCodebaseScan(ctx.session)) return;
   const detectors = await loadSourceDetectors(ctx.session.baseUrl);
   const scannedAt = new Date().toISOString();
+  const scannedDir = ctx.session.installDir;
   const failed: CodebaseScan = {
     program: config.id,
     scannedAt,
+    scannedDir,
     tools: [],
     failed: true,
   };
@@ -51,10 +58,11 @@ export async function scanCodebaseFor(
     return;
   }
   try {
-    const tools = detectTools(ctx.session.installDir, detectors);
+    const tools = detectTools(scannedDir, detectors);
     ctx.setFrameworkContext(CODEBASE_SCAN_KEY, {
       program: config.id,
       scannedAt,
+      scannedDir,
       tools,
     } satisfies CodebaseScan);
   } catch (error) {

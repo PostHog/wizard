@@ -27,6 +27,7 @@ import {
   scanCodebaseFor,
   type CodebaseScan,
 } from '@programs/codebase-scan';
+import { workspaceFingerprint } from '@programs/codebase-scan/fingerprint';
 import { loadSourceDetectors } from '@programs/warehouse-sources/registry';
 import { SessionStore } from '@programs/session/session-store';
 import { buildSession } from '@programs/session/wizard-session';
@@ -95,6 +96,7 @@ describe('reportCodebaseScan', () => {
     store.setFrameworkContext(CODEBASE_SCAN_KEY, {
       program: PROGRAM.id,
       scannedAt: '2026-10-12T00:00:00.000Z',
+      scannedDir: tmpDir,
       tools: [],
       failed: true,
     } satisfies CodebaseScan);
@@ -116,5 +118,21 @@ describe('reportCodebaseScan', () => {
       failed: true,
     });
     expect(store.session.codebaseScanReport).toBeNull();
+  });
+
+  it('fingerprints the directory the scan walked after CI narrows the install dir', async () => {
+    const store = await ciStore();
+    const app = path.join(tmpDir, 'apps', 'web');
+    fs.mkdirSync(app, { recursive: true });
+    await store.edit((draft) => {
+      draft.installDir = app;
+    });
+    store.setCredentials(CREDENTIALS);
+
+    reportCodebaseScan(store);
+
+    expect(store.session.codebaseScanReport?.workspace_fingerprint).toBe(
+      workspaceFingerprint(CREDENTIALS.projectId, tmpDir),
+    );
   });
 });
