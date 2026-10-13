@@ -157,6 +157,17 @@ mixpanel = "com.mixpanel.android:mixpanel-android:7.5.2"
     ]);
   });
 
+  it('pom.xml: an unclosed dependency does not swallow the next one', () => {
+    const content = `<dependencies>
+  <dependency><groupId>org.broken</groupId>
+  <dependency>
+    <groupId>io.sentry</groupId>
+    <artifactId>sentry</artifactId>
+  </dependency>
+</dependencies>`;
+    expect(parsePomXml(content)).toEqual(['io.sentry:sentry']);
+  });
+
   it('pubspec.yaml: top-level dependencies and dev_dependencies only', () => {
     const content = `name: app
 dependencies:
