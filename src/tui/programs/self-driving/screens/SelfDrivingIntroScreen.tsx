@@ -40,15 +40,6 @@ export const SelfDrivingIntroScreen = ({
     | SelfDrivingDetectError
     | undefined;
 
-  const subtitle = (
-    <>
-      <Text dimColor>
-        We'll use AI to analyze your project and set up PostHog Self-driving.
-      </Text>
-      <Text dimColor>.env* file contents will not leave your machine.</Text>
-    </>
-  );
-
   const body = showingMoreInfo ? (
     <Box flexDirection="column" width={56} flexShrink={0}>
       <Text>
@@ -133,7 +124,6 @@ export const SelfDrivingIntroScreen = ({
     <IntroScreenLayout
       installDir={session.installDir}
       showSubtitle={!showingMoreInfo}
-      subtitle={subtitle}
       body={body}
       showDetection={!showingMoreInfo}
       errorView={errorView}
