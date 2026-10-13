@@ -81,5 +81,42 @@ describe('workspaceFingerprint', () => {
       expect(workspaceFingerprint(1, path.join(repo, 'apps', 'web'))).toBe(web);
       expect(web).toMatch(/^[0-9a-f]{64}$/);
     });
+
+    /** The fingerprint of `dir` with no repository found, from its path alone. */
+    const byPath = (dir: string): string =>
+      workspaceFingerprint(1, dir, () => null);
+    const ORIGIN_CONFIG =
+      '[remote "origin"]\n\turl = git@github.com:PostHog/wizard.git\n';
+
+    it('falls back to the path for a config over the size cap', () => {
+      fs.writeFileSync(
+        path.join(repo, '.git', 'config'),
+        ORIGIN_CONFIG + '#'.repeat(64 * 1024),
+      );
+      const web = path.join(repo, 'apps', 'web');
+
+      expect(workspaceFingerprint(1, web)).toBe(byPath(web));
+    });
+
+    it('does not follow a gitdir pointer outside the install dir', () => {
+      const app = path.join(repo, 'apps', 'web');
+      fs.writeFileSync(path.join(app, '.git'), `gitdir: ${repo}/.git\n`);
+
+      expect(workspaceFingerprint(1, app)).toBe(byPath(app));
+    });
+
+    it('follows a gitdir pointer inside the install dir', () => {
+      const app = path.join(repo, 'apps', 'web');
+      fs.mkdirSync(path.join(app, 'git-data'));
+      fs.writeFileSync(path.join(app, 'git-data', 'config'), ORIGIN_CONFIG);
+      fs.writeFileSync(path.join(app, '.git'), 'gitdir: git-data\n');
+
+      expect(workspaceFingerprint(1, app)).toBe(
+        workspaceFingerprint(1, app, () => ({
+          remote: 'github.com/posthog/wizard',
+          root: app,
+        })),
+      );
+    });
   });
 });
