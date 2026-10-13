@@ -406,6 +406,39 @@ describe('downloadSkill (e2e over HTTP)', () => {
     }
   });
 
+  it.each([
+    ['.claude', ['.claude']],
+    ['.claude/skills', ['.claude', 'skills']],
+  ])('fails without a retry when %s is a file', async (_label, parts) => {
+    fs.mkdirSync(path.join(tmpDir, ...parts.slice(0, -1)), {
+      recursive: true,
+    });
+    const blocker = path.join(tmpDir, ...parts);
+    fs.writeFileSync(blocker, '../shared/skills');
+    const captured = vi
+      .spyOn(analytics, 'wizardCapture')
+      // eslint-disable-next-line @typescript-eslint/no-empty-function
+      .mockImplementation(() => {});
+
+    try {
+      const result = await downloadSkill(
+        { id: 'dummy', name: 'Dummy', downloadUrl: 'http://127.0.0.1:1/x' },
+        tmpDir,
+        { scan: clean },
+      );
+
+      expect(result).toMatchObject({ success: false, retryable: false });
+      expect(result.error).toContain(blocker);
+      expect(result.error).toContain('must be a folder');
+      expect(captured).toHaveBeenCalledWith(
+        'skill install failed',
+        expect.objectContaining({ step: 'path', skill_id: 'dummy' }),
+      );
+    } finally {
+      captured.mockRestore();
+    }
+  });
+
   // The engine is WASM and has failed to instantiate in the field. Reported as
   // `extract` it reads as a corrupt archive, which the pure-JS unzip cannot
   // produce, and the run is told to check directory permissions instead.

@@ -168,8 +168,9 @@ export const ERROR_CATALOG: Record<ErrorCode, ErrorCatalogEntry> = {
   },
   [ErrorCodes.SkillDownloadFailed]: {
     group: 'skill',
-    retry: 'yes',
-    description: 'The skill download or extraction failed.',
+    retry: 'case-by-case',
+    description:
+      'The skill download or extraction failed. No retry when a part of the skills path is a file.',
   },
   [ErrorCodes.AgentAbort]: {
     group: 'agent',

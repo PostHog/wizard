@@ -25,7 +25,9 @@ export function installFailure(
       case 'skill-not-found':
         return `Could not find the "${result.skillId}" skill in the context-mill menu.\nPlease try again later.`;
       case 'download-failed':
-        return `Failed to install skill: ${result.message}\nPlease try again.`;
+        return result.retryable === false
+          ? `Failed to install skill: ${result.message}`
+          : `Failed to install skill: ${result.message}\nPlease try again.`;
     }
   })();
 
