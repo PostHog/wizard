@@ -10,7 +10,7 @@ import { WIZARD_USER_AGENT } from '@shared/constants';
 import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
 import { resolveBaseUrl } from '@utils/urls';
-import type { CatalogTool, SourceDetector, ToolCatalog } from './types.js';
+import type { CatalogTool, SourceDetector } from './types.js';
 
 const CATALOG_API_PATH = '/api/wizard/tool_catalog/';
 
@@ -29,27 +29,41 @@ const PUBLIC_CATALOG_SOURCES: readonly CatalogSource[] = [
 // Per source. Detection waits on the download, so a hung host must not hold up the run.
 const FETCH_TIMEOUT_MS = 5_000;
 
-const catalogToolSchema = z.object({
-  kind: z.string().min(1),
-  label: z.string(),
-  warehouse_source_type: z.string().nullable(),
-  wizard_setup_mode: z.enum(['in-cli', 'deep-link']).nullable(),
-  competes_with: z.array(z.string()),
-  superseded_by: z.array(z.string()),
-  signals: z.object({
-    env_key_patterns: z.array(z.string()),
-    script_hosts: z.array(z.string()),
-    packages: z.record(z.string(), z.array(z.string())),
-  }),
-});
+// The string contracts below match the ones PostHog enforces on its side. A
+// value that fails one rejects only its tool entry.
+const KIND = /^[A-Za-z0-9]{1,64}$/;
+const LABEL = /^[\w .,&()+/'!-]{1,80}$/;
+const COMPETES_WITH = /^[a-z_]{1,64}$/;
+const PACKAGE_NAME = /^[A-Za-z0-9@/._:+~-]{1,214}$/;
+const SCRIPT_HOST = /^[a-z0-9.-]{1,253}$/;
+// A `^`, then literal characters or groups of literal alternatives, each
+// optionally followed by `?`, and an optional `$`. Patterns of this shape
+// cannot backtrack catastrophically, so a catalog entry cannot stall a scan.
+const ENV_KEY_PATTERN =
+  /^\^(?:(?:[A-Za-z0-9_]|\((?:[A-Za-z0-9_]+\|)*[A-Za-z0-9_]+\))\??)+\$?$/;
+
+const catalogToolSchema: z.ZodType<CatalogTool, z.ZodTypeDef, unknown> =
+  z.object({
+    kind: z.string().regex(KIND),
+    label: z.string().regex(LABEL),
+    warehouse_source_type: z.string().regex(KIND).nullable(),
+    wizard_setup_mode: z.enum(['in-cli', 'deep-link']).nullable(),
+    competes_with: z.array(z.string().regex(COMPETES_WITH)),
+    superseded_by: z.array(z.string().regex(KIND)),
+    signals: z.object({
+      env_key_patterns: z.array(z.string().regex(ENV_KEY_PATTERN)),
+      script_hosts: z.array(z.string().regex(SCRIPT_HOST)),
+      packages: z.record(z.string(), z.array(z.string().regex(PACKAGE_NAME))),
+    }),
+  });
 
 // A catalog with another schema_version may change what a field means, so it
-// is rejected outright rather than read with this version's rules.
-const toolCatalogSchema: z.ZodType<ToolCatalog, z.ZodTypeDef, unknown> =
-  z.object({
-    schema_version: z.literal(1),
-    tools: z.array(catalogToolSchema),
-  });
+// is rejected outright rather than read with this version's rules. Tool
+// entries are checked one at a time, so one bad entry does not cost the rest.
+const catalogEnvelopeSchema = z.object({
+  schema_version: z.literal(1),
+  tools: z.array(z.unknown()),
+});
 
 function toDetector(tool: CatalogTool): SourceDetector {
   return {
@@ -68,9 +82,26 @@ function toDetector(tool: CatalogTool): SourceDetector {
   };
 }
 
-/** Throws when a pattern does not compile, which the loader treats as a malformed catalog. */
-export function toSourceDetectors(catalog: ToolCatalog): SourceDetector[] {
-  return catalog.tools.map(toDetector);
+/**
+ * Reads a downloaded catalog body. Throws when the body is not a version 1
+ * catalog. Skips a tool entry that fails validation, and logs it.
+ */
+export function toSourceDetectors(body: unknown): SourceDetector[] {
+  const catalog = catalogEnvelopeSchema.safeParse(body);
+  if (!catalog.success) {
+    throw new Error(`unreadable catalog: ${catalog.error.message}`);
+  }
+  const detectors: SourceDetector[] = [];
+  catalog.data.tools.forEach((entry, index) => {
+    const tool = catalogToolSchema.safeParse(entry);
+    if (tool.success) {
+      detectors.push(toDetector(tool.data));
+    } else {
+      const reason = tool.error.message.slice(0, 500);
+      logToFile(`[tool-catalog] skipped tool ${index}: ${reason}`);
+    }
+  });
+  return detectors;
 }
 
 function catalogSources(baseUrl: string | undefined): CatalogSource[] {
@@ -91,11 +122,7 @@ async function fetchDetectors(url: string): Promise<SourceDetector[]> {
     signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
   });
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
-  const parsed = toolCatalogSchema.safeParse(await response.json());
-  if (!parsed.success) {
-    throw new Error(`unreadable catalog: ${parsed.error.message}`);
-  }
-  return toSourceDetectors(parsed.data);
+  return toSourceDetectors(await response.json());
 }
 
 async function downloadDetectors(

@@ -10,7 +10,9 @@ import { analytics } from '@utils/analytics';
 import {
   loadSourceDetectors,
   resetSourceDetectors,
+  toSourceDetectors,
 } from '@programs/warehouse-sources/registry';
+import type { CatalogTool } from '@programs/warehouse-sources/types';
 import { FIXTURE_CATALOG } from './helpers/tool-catalog.no-jest';
 
 const US = 'https://us.posthog.com/api/wizard/tool_catalog/';
@@ -77,26 +79,27 @@ describe('loadSourceDetectors', () => {
   it.each([
     ['another schema_version', { ...FIXTURE_CATALOG, schema_version: 2 }],
     ['a body without tools', { schema_version: 1 }],
-    [
-      'an env key pattern that does not compile',
-      {
-        schema_version: 1,
-        tools: [
-          {
-            ...FIXTURE_CATALOG.tools[0],
-            signals: {
-              ...FIXTURE_CATALOG.tools[0].signals,
-              env_key_patterns: ['^(UNCLOSED'],
-            },
-          },
-        ],
-      },
-    ],
+    ['a body that is not an object', ['Postgres']],
   ])('skips a source that serves %s', async (_label, body) => {
     serve({ [US]: () => json(body), [EU]: () => json(FIXTURE_CATALOG) });
 
     const detectors = await loadSourceDetectors();
 
+    expect(kinds(detectors)).toEqual(kinds(FIXTURE_CATALOG.tools));
+  });
+
+  it('uses a source whose catalog has one invalid tool', async () => {
+    const fetchMock = serve({
+      [US]: () =>
+        json({
+          ...FIXTURE_CATALOG,
+          tools: [{ kind: 'Broken' }, ...FIXTURE_CATALOG.tools],
+        }),
+    });
+
+    const detectors = await loadSourceDetectors();
+
+    expect(requestedUrls(fetchMock)).toEqual([US]);
     expect(kinds(detectors)).toEqual(kinds(FIXTURE_CATALOG.tools));
   });
 
@@ -126,5 +129,71 @@ describe('loadSourceDetectors', () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(second).toBe(first);
+  });
+});
+
+describe('toSourceDetectors', () => {
+  const valid = FIXTURE_CATALOG.tools[0];
+  const withSignals = (
+    signals: Partial<CatalogTool['signals']>,
+  ): Record<string, unknown> => ({
+    ...valid,
+    signals: { ...valid.signals, ...signals },
+  });
+
+  it.each<[string, Record<string, unknown>]>([
+    ['a kind with punctuation', { ...valid, kind: 'Post-gres' }],
+    ['a label with markup', { ...valid, label: '<b>PostgreSQL</b>' }],
+    [
+      'a warehouse source type with a space',
+      { ...valid, warehouse_source_type: 'Post gres' },
+    ],
+    ['a superseded_by with a slash', { ...valid, superseded_by: ['Neon/x'] }],
+    [
+      'a competes_with with capitals',
+      { ...valid, competes_with: ['Session_Replay'] },
+    ],
+    ['an unknown setup mode', { ...valid, wizard_setup_mode: 'in-browser' }],
+    [
+      'a package name with a space',
+      withSignals({ packages: { npm: ['p g'] } }),
+    ],
+    [
+      'a script host with a path',
+      withSignals({ script_hosts: ['cdn.example.com/x.js'] }),
+    ],
+    [
+      'an env key pattern that does not compile',
+      withSignals({ env_key_patterns: ['^(UNCLOSED'] }),
+    ],
+    [
+      'an env key pattern with a nested quantifier',
+      withSignals({ env_key_patterns: ['^(A+)+$'] }),
+    ],
+    [
+      'an env key pattern with a wildcard',
+      withSignals({ env_key_patterns: ['^.*_KEY$'] }),
+    ],
+    [
+      'an unanchored env key pattern',
+      withSignals({ env_key_patterns: ['STRIPE_KEY$'] }),
+    ],
+  ])('skips a tool with %s and keeps the rest', (_label, entry) => {
+    const detectors = toSourceDetectors({
+      ...FIXTURE_CATALOG,
+      tools: [entry, ...FIXTURE_CATALOG.tools.slice(1)],
+    });
+
+    expect(kinds(detectors)).toEqual(kinds(FIXTURE_CATALOG.tools.slice(1)));
+  });
+
+  it('accepts optional characters and groups of alternatives in env key patterns', () => {
+    const [detector] = toSourceDetectors({
+      ...FIXTURE_CATALOG,
+      tools: [withSignals({ env_key_patterns: ['^PG(HOST|PORT)?_?URL$'] })],
+    });
+
+    expect(detector.signals.envKeys[0].test('PG_URL')).toBe(true);
+    expect(detector.signals.envKeys[0].test('PGHOSTURL')).toBe(true);
   });
 });
