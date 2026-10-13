@@ -16,7 +16,6 @@ import {
   type ThinkingLevel,
 } from '../../switchboard/models';
 import { AgentErrorType } from '../../../signals';
-import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 
 /** Provider registered on the in-memory registry for this run. */
 export const GATEWAY_PROVIDER = 'posthog-gateway';
@@ -104,56 +103,6 @@ export function buildGatewayModel(inputs: GatewayProviderInputs) {
     contextWindow: 1_000_000,
     maxTokens: 64_000,
     headers: buildGatewayHeaders(wizardMetadata, wizardFlags, teamId),
-  };
-}
-
-/** Prepend the pinned operator prompt as its own system unit; the gateway accepts any system unit that equals or ends with the pin. */
-function pinOperatorPrompt(
-  api: GatewayApi,
-  payload: unknown,
-  pinned: string,
-): unknown {
-  const body = payload as Record<string, unknown>;
-  switch (api) {
-    case 'anthropic-messages':
-      return {
-        ...body,
-        system: [
-          { type: 'text', text: pinned },
-          ...(Array.isArray(body.system) ? body.system : []),
-        ],
-      };
-    case 'openai-completions':
-      return {
-        ...body,
-        messages: [
-          { role: 'system', content: pinned },
-          ...(Array.isArray(body.messages) ? body.messages : []),
-        ],
-      };
-    case 'openai-responses':
-      return {
-        ...body,
-        input: [
-          { role: 'system', content: pinned },
-          ...(Array.isArray(body.input) ? body.input : []),
-        ],
-      };
-  }
-}
-
-/** Pins the operator prompt on every model call of a pi session; `pinned` is read per request so a re-mint is followed. */
-export function operatorPromptExtension(
-  api: GatewayApi,
-  pinned: () => string | undefined,
-): (pi: ExtensionAPI) => void {
-  return (pi) => {
-    pi.on('before_provider_request', (event) => {
-      const text = pinned();
-      return text === undefined
-        ? undefined
-        : pinOperatorPrompt(api, event.payload, text);
-    });
   };
 }
 

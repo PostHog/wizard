@@ -138,12 +138,12 @@ export class AgentOutputSignals {
 const OPERATOR_ABORT = /\[posthog:abort\](?=\W|$)([^\n]*)/;
 const OPERATOR_ABORT_REASON_MAX = 500;
 
-/** The one detector: a pinned model reply carrying the abort marker anywhere ends the run. */
+/** The one detector: a reply on a pinned run (the mint returned a prompt version) carrying the abort marker ends the run. */
 export function operatorAbortReason(
   text: string,
-  pinned: string | undefined,
+  promptPolicyVersion: number | undefined,
 ): string | undefined {
-  if (pinned === undefined) return undefined;
+  if (promptPolicyVersion === undefined) return undefined;
   const match = text.match(OPERATOR_ABORT);
   if (!match) return undefined;
   return (

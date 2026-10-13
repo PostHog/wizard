@@ -4,24 +4,16 @@ import type { McpPromptChunk } from '@agent/types';
 import {
   configureGatewayCredentialsForCI,
   resetGatewaySession,
-  gatewayAuth,
 } from '@agent/gateway-session';
 import { HostResolution } from '@shared/host-resolution';
 
-vi.mock('@agent/gateway-session', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agent/gateway-session')>()),
-  gatewayAuth: vi.fn(),
-}));
-
 const { query } = vi.hoisted(() => ({
-  query: vi.fn<
-    (args: {
-      options: {
-        env: { CLAUDE_CONFIG_DIR: string };
-        systemPrompt?: { append: string };
-      };
-    }) => Generator<unknown>
-  >(),
+  query:
+    vi.fn<
+      (args: {
+        options: { env: { CLAUDE_CONFIG_DIR: string } };
+      }) => Generator<unknown>
+    >(),
 }));
 
 vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
@@ -50,14 +42,7 @@ async function consume(
 }
 
 describe('public agent prompt stream', () => {
-  beforeEach(async () => {
-    vi.mocked(gatewayAuth).mockImplementation(
-      (
-        await vi.importActual<typeof import('@agent/gateway-session')>(
-          '@agent/gateway-session',
-        )
-      ).gatewayAuth,
-    );
+  beforeEach(() => {
     for (const name of [
       'ANTHROPIC_BASE_URL',
       'ANTHROPIC_AUTH_TOKEN',
@@ -99,32 +84,6 @@ describe('public agent prompt stream', () => {
       { kind: 'done', sessionId: 'session-123' },
     ]);
   });
-
-  it.each([undefined, 'session-123'])(
-    'pins the tutorial and its resumed request (%s)',
-    async (resumeSessionId) => {
-      const pinned = '  Operator policy é 🦔\n';
-      vi.mocked(gatewayAuth).mockResolvedValue({
-        gatewayUrl: 'https://gateway.test',
-        token: 'tutorial-bearer',
-        refreshAtMs: Infinity,
-        systemPrompt: pinned,
-      });
-      query.mockImplementation(function* () {
-        yield { type: 'result', subtype: 'success', session_id: 'session-123' };
-      });
-      await consume({ resumeSessionId });
-      const options = query.mock.calls[0][0].options;
-      expect(options.systemPrompt?.append.endsWith(pinned)).toBe(true);
-      expect(options).toMatchObject({
-        systemPrompt: { excludeDynamicSections: true },
-        settings: { disableAllHooks: true, includeGitInstructions: false },
-        title: 'PostHog wizard',
-        disallowedTools: ['Agent'],
-        env: { ANTHROPIC_AUTH_TOKEN: 'tutorial-bearer' },
-      });
-    },
-  );
 
   it('runs no project hooks', async () => {
     query.mockImplementation(function* () {

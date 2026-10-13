@@ -192,7 +192,7 @@ describe('gatewayAuth', () => {
     );
   });
 
-  describe('the pinned operator prompt', () => {
+  describe('the prompt policy version', () => {
     const mint = (extra: Record<string, unknown>) =>
       fetchMock.mockResolvedValue({
         ok: true,
@@ -205,35 +205,42 @@ describe('gatewayAuth', () => {
           }),
       });
 
-    it('is carried with the session byte for byte, with its version', async () => {
-      // Whitespace and unicode matter: the gateway hashes these exact bytes.
-      const text =
-        '  You are the wizard.\n\n[posthog:abort] \u00e9 \ud83e\udd94\n';
-      mint({ system_prompt: text, system_prompt_version: 4 });
+    it('is carried with the session when the mint returns a positive integer', async () => {
+      mint({ system_prompt_version: 4 });
 
       const auth = await gatewayAuth(host, 'pha_oauth', 'integration');
 
-      expect(auth.systemPrompt).toBe(text);
-      expect(auth.systemPromptVersion).toBe(4);
-      // A cache hit keeps it: later readers get the same pinned text.
+      expect(auth.promptPolicyVersion).toBe(4);
       expect(
-        (await gatewayAuth(host, 'pha_oauth', 'integration')).systemPrompt,
-      ).toBe(text);
+        (await gatewayAuth(host, 'pha_oauth', 'integration'))
+          .promptPolicyVersion,
+      ).toBe(4);
     });
 
-    it('is absent when the mint pins none, leaving the auth as it always was', async () => {
-      mint({});
+    it.each([{}, { system_prompt_version: null }])(
+      'is absent when the mint pins none (%j)',
+      async (extra) => {
+        mint(extra);
+
+        const auth = await gatewayAuth(host, 'pha_oauth', 'integration');
+
+        expect(auth).not.toHaveProperty('promptPolicyVersion');
+      },
+    );
+
+    it('ignores a system_prompt in the mint response', async () => {
+      mint({ system_prompt: 'text the wizard must not read' });
 
       const auth = await gatewayAuth(host, 'pha_oauth', 'integration');
 
-      expect(auth).not.toHaveProperty('systemPrompt');
-      expect(auth).not.toHaveProperty('systemPromptVersion');
+      expect(auth).not.toHaveProperty('promptPolicyVersion');
+      expect(JSON.stringify(auth)).not.toContain('must not read');
     });
 
-    it.each([42, '', { text: 'x' }])(
-      'fails the run when the mint returns %j, which the gateway would refuse on every call',
+    it.each([0, -1, 1.5, '3', true, {}, []])(
+      'fails the run when the mint returns version %j',
       async (bad) => {
-        mint({ system_prompt: bad });
+        mint({ system_prompt_version: bad });
         await expect(
           gatewayAuth(host, 'pha_oauth', 'integration'),
         ).rejects.toBeInstanceOf(GatewayMintFailed);

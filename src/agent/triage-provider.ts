@@ -28,8 +28,8 @@ export interface TriageGatewayAuth {
    *  `CallType.yaraTriage` so scan spend is separable from agent work. */
   wizardMetadata?: Record<string, string>;
   wizardFlags?: Record<string, string>;
-  /** The operator prompt the run's token is pinned to, when the mint pinned one. */
-  systemPrompt?: string;
+  /** The operator prompt version the run's token is pinned to, when the mint pinned one. */
+  promptPolicyVersion?: number;
 }
 
 /**
@@ -61,7 +61,6 @@ export function createTriageLLMProvider(
     const { completeSimple } = await import('@earendil-works/pi-ai');
     const current = await resolveAuth();
     const authToken = current.authToken;
-    const pinned = current.systemPrompt;
     const model = buildGatewayModel({
       gatewayUrl: current.baseURL,
       accessToken: authToken,
@@ -76,8 +75,6 @@ export function createTriageLLMProvider(
       const message = await completeSimple(
         model,
         {
-          // pi-ai sends this verbatim as the request's only system unit.
-          ...(pinned === undefined ? {} : { systemPrompt: pinned }),
           messages: [{ role: 'user', content: prompt, timestamp: Date.now() }],
         },
         {
@@ -106,7 +103,7 @@ export function createTriageLLMProvider(
         );
       }
       // A refusal ends the run; the thrown error leaves warlock to fail closed.
-      const refusal = operatorAbortReason(text, pinned);
+      const refusal = operatorAbortReason(text, current.promptPolicyVersion);
       if (refusal !== undefined) {
         operatorAbort?.trip(refusal);
         throw new Error('Operator policy refused the triage call');

@@ -130,7 +130,7 @@ describe('runAgent', () => {
             sequence,
             gatewayAuth: {
               ...defaultAgentConfig.gatewayAuth,
-              systemPrompt: 'operator policy',
+              promptPolicyVersion: 1,
             },
           },
           'Set up PostHog',
@@ -177,7 +177,7 @@ describe('runAgent', () => {
           ...defaultAgentConfig,
           gatewayAuth: {
             ...defaultAgentConfig.gatewayAuth,
-            systemPrompt: 'operator policy',
+            promptPolicyVersion: 1,
           },
         },
         'Set up PostHog',
@@ -192,11 +192,11 @@ describe('runAgent', () => {
     });
 
     it.each([
-      ['operator policy', 'A normal reply with no marker.'],
+      [1, 'A normal reply with no marker.'],
       [undefined, '[posthog:abort] reason'],
     ])(
       'does not abort ordinary output (%s, %s)',
-      async (systemPrompt, text) => {
+      async (promptPolicyVersion, text) => {
         mockQuery.mockImplementation(function* () {
           yield {
             type: 'assistant',
@@ -207,7 +207,10 @@ describe('runAgent', () => {
         const result = await runAgent(
           {
             ...defaultAgentConfig,
-            gatewayAuth: { ...defaultAgentConfig.gatewayAuth, systemPrompt },
+            gatewayAuth: {
+              ...defaultAgentConfig.gatewayAuth,
+              promptPolicyVersion,
+            },
           },
           'Set up PostHog',
           defaultOptions,
@@ -219,100 +222,46 @@ describe('runAgent', () => {
     );
   });
 
-  describe('the pinned operator prompt', () => {
-    const PINNED = '  PINNED \u00e9 \ud83e\udd94\n\n[posthog:abort]\n';
-    const queryOptions = async (gatewayAuth: object) => {
-      mockQuery.mockImplementation(function* () {
-        yield { type: 'result', subtype: 'success' };
-      });
-      await runAgent(
-        { ...defaultAgentConfig, gatewayAuth: gatewayAuth as never },
-        'Set up PostHog',
-        defaultOptions,
-        mockSpinner,
-        { requestRemark: false },
-      );
-      const call = mockQuery.mock.calls[0][0];
-      const first = (await call.prompt.next()).value;
-      return { options: call.options, firstUserMessage: first.message.content };
-    };
+  describe('SDK query options on a pinned token', () => {
+    it.each([undefined, 3])(
+      'match an unpinned run, with no operator prompt or pinned-run restrictions (version %s)',
+      async (promptPolicyVersion) => {
+        mockQuery.mockImplementation(function* () {
+          yield { type: 'result', subtype: 'success' };
+        });
+        await runAgent(
+          {
+            ...defaultAgentConfig,
+            gatewayAuth: {
+              ...defaultAgentConfig.gatewayAuth,
+              promptPolicyVersion,
+            },
+          },
+          'Set up PostHog',
+          defaultOptions,
+          mockSpinner,
+          { requestRemark: false },
+        );
+        const call = mockQuery.mock.calls[0][0];
+        const { options } = call;
 
-    it("ends the preset's appended prompt with the pin, the commandments first and nothing after it", async () => {
-      const commandments = assembleCommandments({
-        sequence: Sequence.linear,
-        harness: Harness.anthropic,
-      });
-      const { options, firstUserMessage } = await queryOptions({
-        ...defaultAgentConfig.gatewayAuth,
-        systemPrompt: PINNED,
-      });
-
-      // The preset stays; the pin is the last bytes, even with its own trailing newline.
-      expect(options.systemPrompt).toMatchObject({
-        type: 'preset',
-        preset: 'claude_code',
-      });
-      const { append } = options.systemPrompt;
-      expect(append.endsWith(PINNED)).toBe(true);
-      // Claude Code's git-status section would otherwise follow the pin.
-      expect(options.systemPrompt.excludeDynamicSections).toBe(true);
-      // Compaction ignores that flag and would append git status after the pin.
-      expect(options.settings.includeGitInstructions).toBe(false);
-      expect(append.startsWith(commandments)).toBe(true);
-      // The user prompt is untouched.
-      expect(firstUserMessage).toBe('Set up PostHog');
-      // The CLI's own title call carries no pinned block, so it is skipped.
-      expect(options.title).toBeDefined();
-      // A subagent's call has its own system prompt, so a pinned token refuses it.
-      expect(options.disallowedTools).toEqual(['Agent']);
-    });
-
-    it("keeps the program's own disallowed tools next to Agent", async () => {
-      mockQuery.mockImplementation(function* () {
-        yield { type: 'result', subtype: 'success' };
-      });
-      await runAgent(
-        {
-          ...defaultAgentConfig,
-          disallowedTools: ['mcp__wizard-tools__wizard_ask'],
-          gatewayAuth: {
-            ...defaultAgentConfig.gatewayAuth,
-            systemPrompt: PINNED,
-          } as never,
-        },
-        'Set up PostHog',
-        defaultOptions,
-        mockSpinner,
-        { requestRemark: false },
-      );
-
-      expect(mockQuery.mock.calls[0][0].options.disallowedTools).toEqual([
-        'mcp__wizard-tools__wizard_ask',
-        'Agent',
-      ]);
-    });
-
-    it('leaves the preset, its appended commandments and the prompt as they were when unpinned', async () => {
-      const { options, firstUserMessage } = await queryOptions(
-        defaultAgentConfig.gatewayAuth,
-      );
-
-      expect(options.systemPrompt).toEqual({
-        type: 'preset',
-        preset: 'claude_code',
-        append: assembleCommandments({
-          sequence: Sequence.linear,
-          harness: Harness.anthropic,
-        }),
-      });
-      expect(firstUserMessage).toBe('Set up PostHog');
-      expect(options).not.toHaveProperty('title');
-      expect(options.systemPrompt).not.toHaveProperty('excludeDynamicSections');
-      expect(options.settings).not.toHaveProperty('includeGitInstructions');
-      expect(options).not.toHaveProperty('disallowedTools');
-      // Its description shows in the Agent tool listing the model reads.
-      expect(options.agents).toHaveProperty('general-purpose');
-    });
+        expect(options.systemPrompt).toEqual({
+          type: 'preset',
+          preset: 'claude_code',
+          append: assembleCommandments({
+            sequence: Sequence.linear,
+            harness: Harness.anthropic,
+          }),
+        });
+        expect((await call.prompt.next()).value.message.content).toBe(
+          'Set up PostHog',
+        );
+        expect(options.settings).not.toHaveProperty('includeGitInstructions');
+        expect(options).not.toHaveProperty('title');
+        expect(options).not.toHaveProperty('disallowedTools');
+        expect(options.agents).toHaveProperty('general-purpose');
+      },
+    );
   });
 
   it('restricts a read-only scan at SDK registration and permission gates', async () => {

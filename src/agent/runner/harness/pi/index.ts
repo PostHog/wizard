@@ -33,7 +33,6 @@ import { gatewayAuth, type GatewayAuth } from '../../../gateway-session';
 import { currentAccessToken } from '@shared/oauth-session';
 import {
   buildGatewayProvider,
-  operatorPromptExtension,
   GATEWAY_PROVIDER,
   withGatewayRemint,
 } from './gateway';
@@ -355,7 +354,7 @@ export const piBackend: AgentHarness = {
       // orchestrator's per-task sessions (gateway.ts). gatewayAuth mints the
       // run's scoped token.
       // Reads the live OAuth token, so a mid-run rotation re-mints on the new one.
-      // `liveAuth` is the bearer pi sends, so the pinned prompt follows a re-mint.
+      // `liveAuth` is the bearer pi sends, so the pinned check follows a re-mint.
       let liveAuth: GatewayAuth;
       const refreshAuth = async () =>
         (liveAuth = await gatewayAuth(
@@ -424,21 +423,17 @@ export const piBackend: AgentHarness = {
       // created through the sanctioned MCP. Best-effort — if it can't load or
       // connect, the run continues (minus the dashboard step) rather than failing
       // the whole integration. The security factory is always first.
-      const operatorPrompt = operatorPromptExtension(
-        api,
-        () => liveAuth.systemPrompt,
-      );
       // Every model-text path (turns, subagents, YARA triage) ends the run here.
       const refuse = (reason: string) => {
         refusalReason ??= reason;
         cancellation?.abort();
       };
       const refuseOnText = (text: string): boolean => {
-        const reason = operatorAbortReason(text, liveAuth.systemPrompt);
+        const reason = operatorAbortReason(text, liveAuth.promptPolicyVersion);
         if (reason !== undefined) refuse(reason);
         return reason !== undefined;
       };
-      const extensionFactories = [security.factory, operatorPrompt] as Array<
+      const extensionFactories = [security.factory] as Array<
         (pi: unknown) => void
       >;
       let mcpInstructions: string | undefined;
@@ -585,7 +580,6 @@ export const piBackend: AgentHarness = {
           cwd: input.installDir,
           agentDir: getAgentDir(),
           securityFactory: security.subagentFactory,
-          operatorPrompt,
           refuseOnText,
           bashTool: scrubbedBash,
           sdk: { createAgentSession, DefaultResourceLoader, SessionManager },

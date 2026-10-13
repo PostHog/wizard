@@ -3,7 +3,7 @@ import { createDispatchAgentTool } from '../subagent';
 
 vi.mock('@utils/debug');
 
-const PINNED = 'PINNED';
+const PINNED_VERSION = 4;
 
 /** A subagent whose only turn is `reply`; returns what the parent was told. */
 async function dispatch(reply: string) {
@@ -45,9 +45,8 @@ async function dispatch(reply: string) {
     cwd: '/tmp',
     agentDir: '/tmp',
     securityFactory: (() => undefined) as never,
-    operatorPrompt: () => undefined,
     refuseOnText: (text) => {
-      refusal = operatorAbortReason(text, PINNED);
+      refusal = operatorAbortReason(text, PINNED_VERSION);
       return refusal !== undefined;
     },
     bashTool: {} as never,

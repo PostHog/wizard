@@ -15,10 +15,7 @@
 
 import { Type } from 'typebox';
 import { defineTool } from '@earendil-works/pi-coding-agent';
-import type {
-  ExtensionAPI,
-  ToolDefinition,
-} from '@earendil-works/pi-coding-agent';
+import type { ToolDefinition } from '@earendil-works/pi-coding-agent';
 import { logToFile } from '@utils/debug';
 import { gatewayTerminalFailure } from './gateway';
 import type { SubagentSecurityFactory } from './security';
@@ -69,8 +66,6 @@ export interface SubagentContext {
   agentDir: string;
   /** The parent's subagent gate: the same fence and shared state, with no rm. */
   securityFactory: SubagentSecurityFactory;
-  /** The parent's operator-prompt pin; a child's calls ride the same pinned token. */
-  operatorPrompt: (pi: ExtensionAPI) => void;
   /** Ends the run when a child's reply carries the abort marker; true when it did. */
   refuseOnText: (text: string) => boolean;
   /** The parent's env-scrubbed bash, so a subagent's subprocesses are locked down too. */
@@ -109,10 +104,7 @@ export function createDispatchAgentTool(ctx: SubagentContext): ToolDefinition {
         noContextFiles: true,
         noPromptTemplates: true,
         noThemes: true,
-        extensionFactories: [
-          ctx.securityFactory as (pi: unknown) => void,
-          ctx.operatorPrompt as (pi: unknown) => void,
-        ],
+        extensionFactories: [ctx.securityFactory as (pi: unknown) => void],
       });
       await loader.reload();
 

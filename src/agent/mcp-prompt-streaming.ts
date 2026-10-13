@@ -16,11 +16,7 @@ import type { Credentials } from '@shared/api';
 import { DEFAULT_AGENT_MODEL, WIZARD_USER_AGENT } from '@shared/constants';
 import { logToFile } from '@utils/debug';
 import { gatewayAuth } from './gateway-session';
-import {
-  buildAgentEnv,
-  buildRunTags,
-  sdkPromptOptionsFor,
-} from './agent-interface';
+import { buildAgentEnv, buildRunTags } from './agent-interface';
 import { sanitizeAgentSubprocessEnv } from '@shared/agent-env-isolation';
 import { createIsolatedAgentConfigDir } from './stored-login';
 import { analytics } from '@utils/analytics';
@@ -323,6 +319,8 @@ export async function* streamMcpPrompt(args: {
         // `~/.claude/settings.json` (apiKeyHelper / env block) can
         // override the OAuth routing we set above.
         settingSources: ['project'],
+        // Repo hooks would run as the developer outside the MCP-only gate.
+        settings: { disableAllHooks: true },
         // When set, the SDK replays the named session's turns into the
         // new query so the follow-up prompt has full conversation
         // context. Omit on the first prompt for a fresh session.
@@ -349,12 +347,11 @@ export async function* streamMcpPrompt(args: {
             message: `${toolName} is not available in the MCP tutorial — only PostHog MCP tools are permitted.`,
           });
         },
-        ...sdkPromptOptionsFor({
-          pinned: auth.systemPrompt,
-          instructions: buildTerminalFitPrompt(),
-          // Repo hooks would run outside the MCP-only gate.
-          settings: { disableAllHooks: true },
-        }),
+        systemPrompt: {
+          type: 'preset',
+          preset: 'claude_code',
+          append: buildTerminalFitPrompt(),
+        },
         mcpServers: {
           'posthog-wizard': {
             type: 'http',

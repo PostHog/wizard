@@ -8,7 +8,6 @@ import {
   buildGatewayModel,
   buildGatewayProvider,
   GATEWAY_PROVIDER,
-  operatorPromptExtension,
 } from '../gateway';
 import type { GatewayApi } from '../gateway';
 import { createTriageLLMProvider } from '@agent/triage-provider';
@@ -17,8 +16,9 @@ import { Harness } from '@shared/constants';
 vi.mock('@utils/debug');
 
 // Real pi-ai request bodies, recorded by a local server standing in for the gateway.
+// On a pinned token the gateway injects the operator prompt, so no body carries it.
 
-const PINNED = '  You are the wizard.\n\n[posthog:abort] é 🦔\n';
+const PINNED_VERSION = 4;
 const WIZARD_OWN = 'WIZARD COMMANDMENTS: follow the checklist.';
 
 let server: http.Server;
@@ -50,12 +50,10 @@ const SHAPES: [GatewayApi, string][] = [
   ['openai-completions', 'openai/gpt-5.6-terra'],
 ];
 
-/** The body pi sends for one call, with the pin extension reading `pinned`. */
+/** The body pi sends for one call. */
 async function sendBody(
   api: GatewayApi,
   modelId: string,
-  pinned: string | undefined,
-  hook = true,
 ): Promise<Record<string, unknown>> {
   const { completeSimple } = await import('@earendil-works/pi-ai');
   const model = {
@@ -69,114 +67,66 @@ async function sendBody(
     api,
   };
   if (api === 'openai-completions') model.baseUrl = `${gatewayUrl}/v1`;
-  const handlers: ((event: { payload: unknown }) => unknown)[] = [];
-  operatorPromptExtension(
-    api,
-    () => pinned,
-  )({
-    on: (_event: string, handler: (event: { payload: unknown }) => unknown) =>
-      handlers.push(handler),
-  } as never);
   await completeSimple(
     model as never,
     {
       systemPrompt: WIZARD_OWN,
       messages: [{ role: 'user', content: 'go', timestamp: 0 }],
     },
-    {
-      apiKey: 'phe_test',
-      maxRetries: 0,
-      onPayload: hook ? (payload) => handlers[0]({ payload }) : undefined,
-    },
+    { apiKey: 'phe_test', maxRetries: 0 },
   );
   expect(bodies).toHaveLength(1);
   return bodies[0];
 }
 
-/** The system units the gateway checks against the pin, per shape. */
+/** The system units in a request body, per shape. */
 function systemUnits(api: GatewayApi, body: Record<string, unknown>): string[] {
-  const units =
-    api === 'anthropic-messages'
-      ? (body.system as { text: string }[]).map((b) => b.text)
-      : ((body.messages ?? body.input) as { role: string; content: string }[])
-          .filter((m) => m.role === 'system' || m.role === 'developer')
-          .map((m) => m.content);
-  return units;
+  if (api === 'anthropic-messages')
+    return ((body.system ?? []) as { text: string }[]).map((b) => b.text);
+  return ((body.messages ?? body.input) as { role: string; content: string }[])
+    .filter((m) => m.role === 'system' || m.role === 'developer')
+    .map((m) => m.content);
 }
 
-describe('the pinned operator prompt on the wire', () => {
+describe('pi request bodies', () => {
   it.each(SHAPES)(
-    'leads %s with the exact text, the wizard prompt a separate unit after it',
+    'carries only the wizard prompt for %s, at the system rank',
     async (api, modelId) => {
-      const body = await sendBody(api, modelId, PINNED);
+      const body = await sendBody(api, modelId);
 
-      expect(systemUnits(api, body)).toEqual([PINNED, WIZARD_OWN]);
-      // Nothing at the developer rank: the gateway refuses it under a pin.
+      expect(systemUnits(api, body)).toEqual([WIZARD_OWN]);
+      // The gateway refuses a caller developer message on a pinned token.
       expect(JSON.stringify(body)).not.toContain('"role":"developer"');
     },
   );
-
-  it.each(SHAPES)(
-    'sends %s unchanged when the mint pinned nothing',
-    async (api, modelId) => {
-      const withoutHook = await sendBody(api, modelId, undefined, false);
-      bodies = [];
-      const withHook = await sendBody(api, modelId, undefined);
-
-      expect(withHook).toEqual(withoutHook);
-      expect(systemUnits(api, withHook)).toEqual([WIZARD_OWN]);
-    },
-  );
 });
 
-describe('the wizard prompt rank', () => {
-  it('is system, not developer, on a reasoning model, since the gateway refuses developer under a pin', async () => {
-    const body = await sendBody(
-      'openai-responses',
-      'openai/gpt-5.6-terra',
-      undefined,
-    );
-
-    expect(body.input).toMatchObject([
-      { role: 'system', content: WIZARD_OWN },
-      {},
-    ]);
-  });
-});
-
-describe('the pinned operator prompt on triage calls', () => {
+describe('triage request bodies', () => {
   it.each([
     [Harness.pi, 'openai-responses'],
     [Harness.anthropic, 'anthropic-messages'],
   ] as const)(
-    "is the only system unit of a %s run's triage request",
+    'carry no system unit on a pinned %s run',
     async (harness, api) => {
       const triage = createTriageLLMProvider(
-        { baseURL: gatewayUrl, authToken: 'phe_test', systemPrompt: PINNED },
+        {
+          baseURL: gatewayUrl,
+          authToken: 'phe_test',
+          promptPolicyVersion: PINNED_VERSION,
+        },
         harness,
       );
 
       await triage('verdict?');
 
-      expect(systemUnits(api, bodies[0])).toEqual([PINNED]);
+      expect(systemUnits(api, bodies[0])).toEqual([]);
+      expect(bodies[0]).not.toHaveProperty('instructions');
     },
   );
-
-  it('sends no system unit when the mint pinned nothing', async () => {
-    const triage = createTriageLLMProvider(
-      { baseURL: gatewayUrl, authToken: 'phe_test' },
-      Harness.pi,
-    );
-
-    await triage('verdict?');
-
-    expect(bodies[0].input).toHaveLength(1);
-    expect(bodies[0]).not.toHaveProperty('instructions');
-  });
 });
 
-describe('the pinned operator prompt on a subagent call', () => {
-  it("leads the child session's request, ahead of the subagent's own prompt", async () => {
+describe('pi subagent request bodies', () => {
+  it("carry only the subagent's own system prompt", async () => {
     const sdk = await import('@earendil-works/pi-coding-agent');
     const { createDispatchAgentTool } = await import('../subagent');
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pin-subagent-'));
@@ -197,7 +147,6 @@ describe('the pinned operator prompt on a subagent call', () => {
       agentDir: dir,
       securityFactory: (() => undefined) as never,
       refuseOnText: () => false,
-      operatorPrompt: operatorPromptExtension(api, () => PINNED),
       bashTool: sdk.createBashToolDefinition(dir) as never,
       sdk,
     });
@@ -214,8 +163,7 @@ describe('the pinned operator prompt on a subagent call', () => {
       .catch(() => undefined);
 
     const units = systemUnits(api, bodies[0]);
-    expect(units[0]).toBe(PINNED);
-    expect(units).toHaveLength(2);
-    expect(units[1]).toContain('read-only research subagent');
+    expect(units).toHaveLength(1);
+    expect(units[0]).toContain('read-only research subagent');
   });
 });

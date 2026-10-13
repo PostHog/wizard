@@ -12,12 +12,11 @@ import type {
 
 // Runs a real-shaped request through each pi session's registered extensions, in order, as pi does.
 
-const PINNED = 'PINNED OPERATOR PROMPT\n';
+const PINNED_VERSION = 4;
 const WIZARD_OWN = 'WIZARD OWN PROMPT';
 
 const state = vi.hoisted(() => ({
   factories: [] as ExtensionFactory[],
-  systemPrompt: undefined as string | undefined,
   auth: {} as Record<string, unknown>,
   refreshedAuth: undefined as Record<string, unknown> | undefined,
   provider: {} as { apiKey?: string },
@@ -277,25 +276,16 @@ describe.each([
   ['the main run', runMain],
   ['a task run', runTask],
 ])('%s', (_name, run) => {
-  it('sends the pinned operator prompt first, the wizard prompt a separate unit after it', async () => {
-    state.auth = { ...AUTH, systemPrompt: PINNED, systemPromptVersion: 4 };
+  it.each([undefined, PINNED_VERSION])(
+    'sends the request pi built, unchanged, when the mint version is %s',
+    async (promptPolicyVersion) => {
+      state.auth = { ...AUTH, promptPolicyVersion };
 
-    await run();
+      await run();
 
-    const { input: units } = await sentRequest();
-    expect(units.map((u) => u.content).slice(0, 2)).toEqual([
-      PINNED,
-      WIZARD_OWN,
-    ]);
-  });
-
-  it('sends the request unchanged when the mint pinned nothing', async () => {
-    state.auth = AUTH;
-
-    await run();
-
-    expect(await sentRequest()).toEqual(piRequest());
-  });
+      expect(await sentRequest()).toEqual(piRequest());
+    },
+  );
 });
 
 const refusedTurn = (text: string) => ({
@@ -316,7 +306,7 @@ describe.each([
     'returns the refusal without continuation, remarks or completion (SDK throws: %s)',
     async (throws) => {
       state.throwAfterEvents = throws;
-      state.auth = { ...AUTH, systemPrompt: PINNED };
+      state.auth = { ...AUTH, promptPolicyVersion: PINNED_VERSION };
       state.openTasks.set('1', {
         id: '1',
         status: 'in_progress',
@@ -342,7 +332,7 @@ describe.each([
   );
 
   it('ends the run on a marker in the middle of a reply', async () => {
-    state.auth = { ...AUTH, systemPrompt: PINNED };
+    state.auth = { ...AUTH, promptPolicyVersion: PINNED_VERSION };
     state.events.push(
       refusedTurn(
         'Step one is done.\n[posthog:abort] Outside setup scope.\nMore text.',
@@ -359,7 +349,7 @@ describe.each([
   });
 
   it('ends the run when the YARA triage model refuses mid-run', async () => {
-    state.auth = { ...AUTH, systemPrompt: PINNED };
+    state.auth = { ...AUTH, promptPolicyVersion: PINNED_VERSION };
     boot.operatorAbort = new OperatorAbort();
     state.onPrompt = () => boot.operatorAbort?.trip('Triage refused.');
     expect(await run()).toEqual({
@@ -372,7 +362,7 @@ describe.each([
   });
 
   it('sends no turn when triage refused before the session started', async () => {
-    state.auth = { ...AUTH, systemPrompt: PINNED };
+    state.auth = { ...AUTH, promptPolicyVersion: PINNED_VERSION };
     boot.operatorAbort = new OperatorAbort();
     boot.operatorAbort.trip('Triage refused.');
     expect(await run()).toMatchObject({
@@ -387,38 +377,28 @@ describe.each([
   ['main', runMain],
   ['task', () => runTask()],
 ])('replacement credentials in %s', (_name, run) => {
-  it('uses the replacement bearer and its prompt after an aged-token 401', async () => {
+  it('checks the replacement mint for the pinned version after an aged-token 401', async () => {
     state.auth = {
       ...AUTH,
       token: 'old-bearer',
-      systemPrompt: 'OLD PROMPT',
       refreshAtMs: Date.now() - 1,
     };
     state.refreshedAuth = {
       ...AUTH,
       token: 'new-bearer',
-      systemPrompt: 'NEW PROMPT',
+      promptPolicyVersion: PINNED_VERSION,
       refreshAtMs: Date.now() + 60000,
     };
     state.rejectFirst = true;
-    await run();
-    expect(state.requests.slice(0, 2)).toEqual([
-      {
-        bearer: 'old-bearer',
-        payload: expect.objectContaining({
-          input: expect.arrayContaining([
-            { role: 'system', content: 'OLD PROMPT' },
-          ]),
-        }),
-      },
-      {
-        bearer: 'new-bearer',
-        payload: expect.objectContaining({
-          input: expect.arrayContaining([
-            { role: 'system', content: 'NEW PROMPT' },
-          ]),
-        }),
-      },
+    state.events.push(refusedTurn('[posthog:abort] Outside setup.'));
+    expect(await run()).toMatchObject({
+      kind: 'abort',
+      message: 'Outside setup.',
+      policy: true,
+    });
+    expect(state.requests.map((r) => r.bearer).slice(0, 2)).toEqual([
+      'old-bearer',
+      'new-bearer',
     ]);
   });
 });
@@ -429,15 +409,18 @@ describe.each([
 ])('ordinary output in %s', (_name, run) => {
   it.each([
     [undefined, '[posthog:abort] Not an operator refusal without a pin.'],
-    [PINNED, '[posthog:aborted] reason'],
-  ])('keeps existing handling for %s / %s', async (systemPrompt, text) => {
-    state.auth = { ...AUTH, systemPrompt };
-    state.events.push(refusedTurn(text));
-    expect((await run())?.kind).toBe('success');
-    expect(state.abort).not.toHaveBeenCalled();
-  });
+    [PINNED_VERSION, '[posthog:aborted] reason'],
+  ])(
+    'keeps existing handling for %s / %s',
+    async (promptPolicyVersion, text) => {
+      state.auth = { ...AUTH, promptPolicyVersion };
+      state.events.push(refusedTurn(text));
+      expect((await run())?.kind).toBe('success');
+      expect(state.abort).not.toHaveBeenCalled();
+    },
+  );
   it('preserves a refusal with no reason', async () => {
-    state.auth = { ...AUTH, systemPrompt: PINNED };
+    state.auth = { ...AUTH, promptPolicyVersion: PINNED_VERSION };
     state.events.push(refusedTurn(' \n[posthog:abort]'));
     expect(await run()).toEqual({
       kind: 'abort',

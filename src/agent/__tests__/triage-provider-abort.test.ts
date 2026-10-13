@@ -17,7 +17,7 @@ vi.mock('@earendil-works/pi-ai', async (importOriginal) => ({
 const auth = {
   baseURL: 'http://127.0.0.1:1',
   authToken: 'phe_test',
-  systemPrompt: 'PINNED',
+  promptPolicyVersion: 4,
 };
 
 describe('YARA triage reply', () => {

@@ -40,13 +40,11 @@ vi.mock('@anthropic-ai/claude-agent-sdk', async (importOriginal) => ({
   createSdkMcpServer: (options: unknown) => options,
 }));
 
-const PINNED = '  Operator policy é 🦔\n';
 let server: http.Server;
 let origin: string;
 let dir: string;
 let bodies: Record<string, unknown>[];
 let bearers: (string | undefined)[];
-let pinned: string | undefined;
 let mintRequests: Record<string, unknown>[];
 
 beforeAll(async () => {
@@ -92,9 +90,7 @@ beforeAll(async () => {
             token: 'phe_local_minted',
             gateway_url: origin,
             expires_at: new Date(Date.now() + 3600_000).toISOString(),
-            ...(pinned === undefined
-              ? {}
-              : { system_prompt: pinned, system_prompt_version: 1 }),
+            system_prompt_version: 1,
           }),
         );
         return;
@@ -120,7 +116,6 @@ afterAll(async () => {
   fs.rmSync(dir, { recursive: true, force: true });
 });
 beforeEach(() => {
-  pinned = PINNED;
   bodies = [];
   bearers = [];
   mintRequests = [];
@@ -201,21 +196,23 @@ function inputs(harness: Harness = Harness.anthropic) {
   return { config, resolved, input };
 }
 
+// The mint pins the token, yet the wizard still sends no operator prompt.
+const systemUnits = (body: Record<string, unknown>) =>
+  [
+    ...((body.input ?? []) as { role: string }[]).filter(
+      (m) => m.role === 'system',
+    ),
+    ...((body.system ?? []) as unknown[]),
+  ].length;
+
 it.each([Harness.pi, Harness.anthropic])(
-  'carries the minted policy from prepareRun into %s triage HTTP',
+  'sends no system unit in %s triage HTTP on a pinned token',
   async (harness) => {
     const { resolved, input } = inputs(harness);
     const boot = await prepareRun(resolved, input);
     if (!boot.triageProvider) throw new Error('Missing triage provider');
     await boot.triageProvider('Classify this match');
-    const body = bodies[0];
-    const systems =
-      harness === Harness.pi
-        ? (body.input as { role: string; content: string }[])
-            .filter((m) => m.role === 'system')
-            .map((m) => m.content)
-        : (body.system as { text: string }[]).map((m) => m.text);
-    expect(systems).toEqual([PINNED]);
+    expect(systemUnits(bodies[0])).toBe(0);
     expect(bearers[0]).toContain('phe_local_minted');
     expect(mintRequests[0]).toEqual({
       program: expect.any(String),
@@ -224,7 +221,7 @@ it.each([Harness.pi, Harness.anthropic])(
   },
 );
 
-it('carries the minted policy from initializeAgent into triage HTTP', async () => {
+it('sends no system unit in initializeAgent triage HTTP on a pinned token', async () => {
   const { input } = inputs();
   const agent = await initializeAgent(
     {
@@ -248,9 +245,7 @@ it('carries the minted policy from initializeAgent into triage HTTP', async () =
     },
   );
   await agent.triageProvider('Classify this match');
-  expect(
-    ((bodies[0].system ?? []) as { text: string }[]).map((m) => m.text),
-  ).toEqual([PINNED]);
+  expect(systemUnits(bodies[0])).toBe(0);
   expect(bearers[0]).toContain('phe_local_minted');
 });
 

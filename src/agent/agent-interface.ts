@@ -370,35 +370,6 @@ type AgentRunConfig = {
   emit?: ProgressEmitter;
 };
 
-/** Keep the pinned bytes intact across SDK requests, compaction and side calls. */
-export function sdkPromptOptionsFor(args: {
-  pinned: string | undefined;
-  instructions: string;
-  settings: { disableAllHooks: boolean; permissions?: { deny: string[] } };
-  disallowedTools?: readonly string[];
-}) {
-  const { pinned, instructions, settings, disallowedTools = [] } = args;
-  return {
-    systemPrompt: {
-      type: 'preset' as const,
-      preset: 'claude_code' as const,
-      append:
-        pinned === undefined ? instructions : `${instructions}\n\n${pinned}`,
-      ...(pinned === undefined ? {} : { excludeDynamicSections: true }),
-    },
-    settings: {
-      ...settings,
-      ...(pinned === undefined ? {} : { includeGitInstructions: false }),
-    },
-    ...(pinned === undefined
-      ? {}
-      : {
-          title: 'PostHog wizard',
-          disallowedTools: [...new Set([...disallowedTools, 'Agent'])],
-        }),
-  };
-}
-
 const NO_PROGRESS: ProgressEmitter = () => undefined;
 
 /**
@@ -653,7 +624,7 @@ export async function initializeAgent(
           baseURL: current.gatewayUrl,
           authToken: current.token,
           teamId: current.teamId,
-          systemPrompt: current.systemPrompt,
+          promptPolicyVersion: current.promptPolicyVersion,
           wizardMetadata: triageMetadata,
           wizardFlags: config.wizardFlags ?? {},
         };
@@ -1131,21 +1102,6 @@ export async function runAgent(
     agentConfig.capture?.setInitialPrompt(prompt);
 
     const runQuery = async (resume?: string): Promise<'done' | 'remint'> => {
-      // Read per query: a re-mint may bring a new pinned prompt.
-      const promptOptions = sdkPromptOptionsFor({
-        pinned: agentConfig.gatewayAuth.systemPrompt,
-        // Only a task run has an orchestrator context, which picks the sequence.
-        instructions: assembleCommandments({
-          program: agentConfig.program,
-          sequence: agentConfig.sequence,
-          harness: Harness.anthropic,
-        }),
-        settings: {
-          disableAllHooks: true,
-          permissions: { deny: [...ENV_FILE_DENY_RULES] },
-        },
-        disallowedTools: agentConfig.disallowedTools,
-      });
       const stopHook = createStopHook(signals, config?.requestRemark ?? true);
       const response = query({
         prompt: createPromptStream(resume ? RESUME_INSTRUCTION : prompt),
@@ -1178,6 +1134,12 @@ export async function runAgent(
               },
           // Load skills from project's .claude/skills/ directory
           settingSources: agentConfig.readOnly ? [] : ['project'],
+          // The SDK approves file tools inside the project without canUseTool, so env files are
+          // denied as rules, which the sandbox applies to commands too. Repo hooks would bypass both.
+          settings: {
+            disableAllHooks: true,
+            permissions: { deny: [...ENV_FILE_DENY_RULES] },
+          },
           // Enable all discovered skills. Omitting this is NOT "skills off" —
           // it just means no SDK auto-config — so we set 'all' explicitly to
           // preserve the prior behavior where 'Skill' in allowedTools exposed
@@ -1297,7 +1259,18 @@ export async function runAgent(
             logToFile('canUseTool result:', result);
             return Promise.resolve(result);
           },
-          ...promptOptions,
+          systemPrompt: {
+            type: 'preset',
+            preset: 'claude_code',
+            // Append the run's commandments rather than replacing the preset so
+            // we keep default Claude Code behaviors. An orchestrator context is
+            // present only on a task run — that is what picks the sequence.
+            append: assembleCommandments({
+              program: agentConfig.program,
+              sequence: agentConfig.sequence,
+              harness: Harness.anthropic,
+            }),
+          },
           tools: agentConfig.readOnly
             ? [...READ_ONLY_TOOLS]
             : { type: 'preset', preset: 'claude_code' },
@@ -1376,8 +1349,10 @@ export async function runAgent(
                   .join('')
               : '';
             abortReason =
-              operatorAbortReason(text, agentConfig.gatewayAuth.systemPrompt) ??
-              null;
+              operatorAbortReason(
+                text,
+                agentConfig.gatewayAuth.promptPolicyVersion,
+              ) ?? null;
             if (abortReason) {
               policyAbort = true;
               abortController.abort();

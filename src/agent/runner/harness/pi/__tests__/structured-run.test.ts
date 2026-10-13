@@ -53,7 +53,6 @@ vi.mock('../gateway', () => ({
     caps: { thinkingLevel: 'low' },
     api: 'openai-responses',
   }),
-  operatorPromptExtension: () => () => undefined,
   withGatewayRemint: ({
     session,
   }: {
