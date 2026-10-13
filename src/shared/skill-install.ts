@@ -74,6 +74,22 @@ async function downloadWithRetry(
   return new Uint8Array(await resp.arrayBuffer());
 }
 
+/** The first existing part of skillDir below installDir that is not a folder; a symlink to a folder passes. */
+function blockingPathPart(installDir: string, skillDir: string): string | null {
+  let current = path.resolve(installDir);
+  for (const part of path.relative(current, skillDir).split(path.sep)) {
+    current = path.join(current, part);
+    let stat: fs.Stats;
+    try {
+      stat = fs.statSync(current);
+    } catch {
+      return null;
+    }
+    if (!stat.isDirectory()) return current;
+  }
+  return null;
+}
+
 /** Scans an extracted skill directory; a returned reason means it is poisoned. Injected because @shared cannot import @agent. */
 export type SkillScanner = (skillDir: string) => Promise<string | null>;
 
@@ -92,11 +108,11 @@ export async function downloadSkill(
   skillEntry: SkillEntry,
   installDir: string,
   { skillsRoot, scan }: SkillInstallOptions,
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; error?: string; retryable?: false }> {
   const skillDir = skillsRoot
     ? path.join(installDir, skillsRoot, skillEntry.id)
     : path.join(installDir, '.claude', 'skills', skillEntry.id);
-  let step: 'download' | 'extract' | 'scan' = 'download';
+  let step: 'path' | 'download' | 'extract' | 'scan' = 'download';
 
   try {
     fs.mkdirSync(skillDir, { recursive: true });
@@ -142,15 +158,26 @@ export async function downloadSkill(
     });
     return { success: true };
   } catch (err: any) {
-    logToFile(`downloadSkill: error: ${err.message}`);
+    // A file in the skills path fails mkdir with ENOTDIR or EEXIST; a retry cannot fix it.
+    const blocker =
+      err.code === 'ENOTDIR' || err.code === 'EEXIST'
+        ? blockingPathPart(installDir, skillDir)
+        : null;
+    if (blocker) step = 'path';
+    const error: string = blocker
+      ? `${blocker} is a file, but it must be a folder (or a symlink to a folder). Move or delete this file, then run the wizard again.`
+      : err.message;
+    logToFile(`downloadSkill: error: ${error}`);
     // A skill-less run still reports success — keep the failure visible.
     analytics.wizardCapture('skill install failed', {
       skill_id: skillEntry.id,
       step,
       platform: process.platform,
-      error: String(err.message).slice(0, 500),
+      error: String(error).slice(0, 500),
     });
-    return { success: false, error: err.message };
+    return blocker
+      ? { success: false, error, retryable: false }
+      : { success: false, error };
   }
 }
 
@@ -161,13 +188,14 @@ export async function downloadSkill(
  * - `menu-fetch-failed`: couldn't fetch or parse the skill menu.
  * - `skill-not-found`: the menu didn't contain a skill with this id.
  * - `download-failed`: found the skill but download/extract failed;
- *   `message` has the underlying error.
+ *   `message` has the underlying error. `retryable: false` means a retry
+ *   cannot succeed until the user changes their project.
  */
 export type InstallSkillResult =
   | { kind: 'ok'; path: string }
   | { kind: 'menu-fetch-failed' }
   | { kind: 'skill-not-found'; skillId: string }
-  | { kind: 'download-failed'; message: string };
+  | { kind: 'download-failed'; message: string; retryable?: false };
 
 /**
  * High-level "install a skill by ID" helper. Fetches the skill menu,
@@ -190,7 +218,11 @@ export async function installSkillById(
 
   const result = await downloadSkill(skill, installDir, options);
   if (!result.success) {
-    return { kind: 'download-failed', message: result.error ?? 'unknown' };
+    return {
+      kind: 'download-failed',
+      message: result.error ?? 'unknown',
+      ...(result.retryable === false && { retryable: false }),
+    };
   }
 
   const relPath = options.skillsRoot
