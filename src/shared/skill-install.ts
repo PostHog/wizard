@@ -108,25 +108,11 @@ export async function downloadSkill(
   skillEntry: SkillEntry,
   installDir: string,
   { skillsRoot, scan }: SkillInstallOptions,
-): Promise<{ success: boolean; error?: string; retryable?: boolean }> {
+): Promise<{ success: boolean; error?: string; retryable?: false }> {
   const skillDir = skillsRoot
     ? path.join(installDir, skillsRoot, skillEntry.id)
     : path.join(installDir, '.claude', 'skills', skillEntry.id);
-  let step: 'download' | 'extract' | 'scan' = 'download';
-
-  // mkdir throws ENOTDIR here, and a retry cannot fix a file in the user's project.
-  const blocker = blockingPathPart(installDir, skillDir);
-  if (blocker) {
-    const error = `${blocker} is a file, but it must be a folder (or a symlink to a folder). Move or delete this file, then run the wizard again.`;
-    logToFile(`downloadSkill: ${error}`);
-    analytics.wizardCapture('skill install failed', {
-      skill_id: skillEntry.id,
-      step: 'path',
-      platform: process.platform,
-      error: error.slice(0, 500),
-    });
-    return { success: false, error, retryable: false };
-  }
+  let step: 'path' | 'download' | 'extract' | 'scan' = 'download';
 
   try {
     fs.mkdirSync(skillDir, { recursive: true });
@@ -172,15 +158,26 @@ export async function downloadSkill(
     });
     return { success: true };
   } catch (err: any) {
-    logToFile(`downloadSkill: error: ${err.message}`);
+    // A file in the skills path fails mkdir with ENOTDIR or EEXIST; a retry cannot fix it.
+    const blocker =
+      err.code === 'ENOTDIR' || err.code === 'EEXIST'
+        ? blockingPathPart(installDir, skillDir)
+        : null;
+    if (blocker) step = 'path';
+    const error: string = blocker
+      ? `${blocker} is a file, but it must be a folder (or a symlink to a folder). Move or delete this file, then run the wizard again.`
+      : err.message;
+    logToFile(`downloadSkill: error: ${error}`);
     // A skill-less run still reports success — keep the failure visible.
     analytics.wizardCapture('skill install failed', {
       skill_id: skillEntry.id,
       step,
       platform: process.platform,
-      error: String(err.message).slice(0, 500),
+      error: String(error).slice(0, 500),
     });
-    return { success: false, error: err.message };
+    return blocker
+      ? { success: false, error, retryable: false }
+      : { success: false, error };
   }
 }
 
@@ -224,7 +221,7 @@ export async function installSkillById(
     return {
       kind: 'download-failed',
       message: result.error ?? 'unknown',
-      ...(result.retryable === false ? { retryable: false as const } : {}),
+      ...(result.retryable === false && { retryable: false }),
     };
   }
 
