@@ -28,7 +28,9 @@ import {
   type CodebaseScan,
 } from '@programs/codebase-scan';
 import { workspaceFingerprint } from '@programs/codebase-scan/fingerprint';
+import { tagScanResults } from '@programs/codebase-scan/tags';
 import { loadSourceDetectors } from '@programs/warehouse-sources/registry';
+import { analytics } from '@utils/analytics';
 import { SessionStore } from '@programs/session/session-store';
 import { buildSession } from '@programs/session/wizard-session';
 import type { Credentials } from '@shared/api';
@@ -157,6 +159,54 @@ describe('reportCodebaseScan', () => {
     expect(store.session.codebaseScanReport).toMatchObject({
       complete: false,
       tools: [{ kind: 'Stripe' }],
+    });
+  });
+
+  describe('scan tags', () => {
+    const tagged = () => vi.mocked(analytics.setTag).mock.calls;
+
+    beforeEach(() => vi.mocked(analytics.setTag).mockClear());
+
+    function tag(session: Parameters<typeof buildSession>[0]): SessionStore {
+      const store = new SessionStore(buildSession(session));
+      const ctx = store.readyContext();
+      tagScanResults(ctx.session, ctx.setFrameworkContext, {
+        warehouse_source_kinds: 'Stripe',
+      });
+      return store;
+    }
+
+    it('applies the tags only once the user grants sharing', () => {
+      const store = tag({ installDir: tmpDir });
+      expect(tagged()).toEqual([]);
+
+      store.grantSharing();
+      reportCodebaseScan(store);
+
+      expect(tagged()).toEqual([['warehouse_source_kinds', 'Stripe']]);
+    });
+
+    it('never applies the tags when the user declines sharing', () => {
+      const store = tag({ installDir: tmpDir });
+
+      store.declineSharing();
+      reportCodebaseScan(store);
+
+      expect(tagged()).toEqual([]);
+    });
+
+    it('applies the tags at once when the run starts with sharing granted', () => {
+      tag({ installDir: tmpDir, ci: true });
+
+      expect(tagged()).toEqual([['warehouse_source_kinds', 'Stripe']]);
+    });
+
+    it('never applies the tags with telemetry off', () => {
+      const store = tag({ installDir: tmpDir, ci: true, noTelemetry: true });
+
+      reportCodebaseScan(store);
+
+      expect(tagged()).toEqual([]);
     });
   });
 });

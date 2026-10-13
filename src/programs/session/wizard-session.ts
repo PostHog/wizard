@@ -27,7 +27,6 @@ export interface WizardSession extends ProgramSession {
   ciGateway: GatewayCredential | null;
   email?: string;
   region?: CloudRegion;
-  noTelemetry: boolean;
 
   /**
    * `--capture-aio`: mirror every wizard LLM call as an `$ai_generation` event

@@ -15,6 +15,7 @@ import { VERSION } from '@shared/version';
 import type { WizardSession } from '../session/wizard-session';
 import { workspaceFingerprint } from './fingerprint';
 import { getCodebaseScan, type CodebaseScan } from './scan';
+import { applyScanTags } from './tags';
 import type { ScanReport } from '../session/task-stream/types';
 
 /** The store surface reporting needs; `SessionStore` provides it. */
@@ -47,6 +48,7 @@ export function reportCodebaseScan(store: ScanReportStore): void {
   if (session.noTelemetry) return;
   // Synchronous on purpose: callers rely on the event and its tags landing
   // before whatever they capture next.
+  applyScanTags(session);
   store.markWarehouseSourcesReportedIfNeeded();
 
   if (!mayReportScanResults(session)) return;

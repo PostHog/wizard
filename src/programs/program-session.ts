@@ -58,6 +58,8 @@ export interface ProgramSession {
    * asked sends nothing rather than everything.
    */
   scanConsent: ScanConsent;
+  /** `--no-telemetry`: nothing about the run leaves the machine, whatever the consent. */
+  noTelemetry: boolean;
   /** Guards against reporting twice; consent resolves from two paths. */
   warehouseSourcesReported: boolean;
   /** The scan the user agreed to share. Set once per run; the task stream sends it. */

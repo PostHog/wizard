@@ -11,6 +11,7 @@ import { analytics } from '@utils/analytics';
 import type { ProgramSession } from '../program-session';
 import type { AbortCase } from '@agent/types';
 import { scannedWarehouseSources } from '../codebase-scan/scan';
+import { tagScanResults } from '../codebase-scan/tags';
 import { DETECTED_WAREHOUSE_SOURCES_KEY } from '../warehouse-sources/detect';
 
 /** Structured detection errors rendered by the intro screen. */
@@ -88,15 +89,11 @@ export async function detectWarehousePrerequisites(
   // Tag every subsequent event (agent started/completed, setup wizard
   // finished, …) with what was detected — without this the analytics can't
   // say which source types a run attempted, only that a run happened.
-  analytics.setTag(
-    'warehouse_source_kinds',
-    sources.map((s) => s.kind).join(','),
-  );
-  analytics.setTag(
-    'warehouse_source_modes',
-    sources.map((s) => `${s.kind}:${s.mode}`).join(','),
-  );
-  analytics.setTag('warehouse_source_count', sources.length);
+  tagScanResults(session, setFrameworkContext, {
+    warehouse_source_kinds: sources.map((s) => s.kind).join(','),
+    warehouse_source_modes: sources.map((s) => `${s.kind}:${s.mode}`).join(','),
+    warehouse_source_count: sources.length,
+  });
 
   setFrameworkContext(DETECTED_WAREHOUSE_SOURCES_KEY, sources);
 }
