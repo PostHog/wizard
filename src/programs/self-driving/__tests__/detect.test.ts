@@ -143,7 +143,7 @@ describe('the detect step does not leak into the composed integration run', () =
 
   it('stashes under its own key and leaves the warehouse key untouched', async () => {
     const store = new SessionStore(buildSession({ installDir: tmpDir }));
-    scanCodebaseFor(selfDriving, store.readyContext());
+    await scanCodebaseFor(selfDriving, store.readyContext());
     await selfDriving.onReady?.(store.readyContext());
 
     // Self-driving sees its tools...

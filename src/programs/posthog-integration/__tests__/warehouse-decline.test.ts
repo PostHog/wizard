@@ -78,7 +78,7 @@ describe('the full decline contract, end to end', () => {
       session.credentials = CREDENTIALS as any;
 
       const store = new SessionStore(session);
-      scanCodebaseFor(posthogIntegration, store.readyContext());
+      await scanCodebaseFor(posthogIntegration, store.readyContext());
       await detectPostHogIntegration(store.readyContext());
       const fetchImpl = vi.fn<typeof fetch>();
       await reportCodebaseScan(store, { fetchImpl });

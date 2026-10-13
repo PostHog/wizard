@@ -12,6 +12,7 @@ import { analytics } from '@utils/analytics';
 import type { ProgramReadyContext, ProgramConfig } from '../program-step';
 import type { ProgramSession } from '../program-session';
 import { detectTools, toWarehouseSources } from '../warehouse-sources/detect';
+import { loadSourceDetectors } from '../warehouse-sources/registry';
 import type { DetectedSource, DetectedTool } from '../warehouse-sources/types';
 
 /** frameworkContext key holding the full scan, every detected tool included. */
@@ -22,34 +23,42 @@ export type CodebaseScan = {
   program: string;
   scannedAt: string;
   tools: DetectedTool[];
-  /** The scan threw. Distinct from a scan that found nothing. */
+  /** The scan threw or had no catalog to match against. Distinct from a scan that found nothing. */
   failed?: true;
 };
 
 type ScanContext = Pick<ProgramReadyContext, 'session' | 'setFrameworkContext'>;
 
 /** Scan once per run, for a program that sets `scansCodebase`. Best-effort: never throws. */
-export function scanCodebaseFor(
+export async function scanCodebaseFor(
   config: Pick<ProgramConfig, 'id' | 'scansCodebase'>,
   ctx: ScanContext,
-): void {
+): Promise<void> {
   if (!config.scansCodebase) return;
   if (getCodebaseScan(ctx.session)) return;
+  const detectors = await loadSourceDetectors(ctx.session.baseUrl);
   const scannedAt = new Date().toISOString();
+  const failed: CodebaseScan = {
+    program: config.id,
+    scannedAt,
+    tools: [],
+    failed: true,
+  };
+  // No catalog means the scan could not look, which is not the same as
+  // finding nothing. The loader has already reported why.
+  if (detectors.length === 0) {
+    ctx.setFrameworkContext(CODEBASE_SCAN_KEY, failed);
+    return;
+  }
   try {
-    const tools = detectTools(ctx.session.installDir);
+    const tools = detectTools(ctx.session.installDir, detectors);
     ctx.setFrameworkContext(CODEBASE_SCAN_KEY, {
       program: config.id,
       scannedAt,
       tools,
     } satisfies CodebaseScan);
   } catch (error) {
-    ctx.setFrameworkContext(CODEBASE_SCAN_KEY, {
-      program: config.id,
-      scannedAt,
-      tools: [],
-      failed: true,
-    } satisfies CodebaseScan);
+    ctx.setFrameworkContext(CODEBASE_SCAN_KEY, failed);
     analytics.captureException(
       error instanceof Error ? error : new Error(String(error)),
       { step: 'scanCodebase' },
@@ -58,11 +67,16 @@ export function scanCodebaseFor(
 }
 
 /** The warehouse sources the scan found, for a program that offers them. */
-export function scannedWarehouseSources(
+export async function scannedWarehouseSources(
   session: ProgramSession,
-): DetectedSource[] {
+): Promise<DetectedSource[]> {
   const scan = getCodebaseScan(session);
-  return scan ? toWarehouseSources(scan.tools) : [];
+  if (!scan) return [];
+  // Resolves at once: the scan already waited for the same download.
+  return toWarehouseSources(
+    scan.tools,
+    await loadSourceDetectors(session.baseUrl),
+  );
 }
 
 export function getCodebaseScan(
