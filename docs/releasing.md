@@ -62,6 +62,7 @@ runs the source with `tsx`, so you do not need to build first.
 ```bash
 gh pr checkout release-please--branches--main--components--wizard
 pnpm install
+node scripts/generate-version.cjs   # pnpm try skips prebuild, which writes src/shared/version.ts
 
 cp -R ../wizard-workbench/apps/basic-integration/javascript-node/express-todo /tmp/express-todo
 git -C /tmp/express-todo init -q
