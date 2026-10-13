@@ -1375,9 +1375,7 @@ async function executeOrchestrator(
   } catch (error) {
     if (!(error instanceof RunTaskFatal)) throw error;
     fatal = error;
-    // The executor already failed the fatal task. A sink that published the
-    // report before a harness error settles as that failed task, not the run;
-    // a refusal always ends the run.
+    // A sink that published the report then hit a harness error fails alone; a refusal fails the run.
     const sink = store
       .list()
       .find(

@@ -152,10 +152,7 @@ export function operatorAbortReason(
   );
 }
 
-/**
- * Carries a refusal from a model call that has no run loop of its own (YARA
- * triage) to the loop that owns the run. The first reason wins.
- */
+/** Carries a triage refusal to the run loop that owns the run; the first reason wins. */
 export class OperatorAbort {
   reason: string | undefined;
   private readonly listeners = new Set<(reason: string) => void>();

@@ -10,9 +10,7 @@ import type {
   ExtensionFactory,
 } from '@earendil-works/pi-coding-agent';
 
-// The main run and a per-task run each build a pi session. Every model call that
-// session makes goes through the extensions it registered, so the test runs a
-// real-shaped request through those extensions, in order, as pi does.
+// Runs a real-shaped request through each pi session's registered extensions, in order, as pi does.
 
 const PINNED = 'PINNED OPERATOR PROMPT\n';
 const WIZARD_OWN = 'WIZARD OWN PROMPT';
@@ -368,6 +366,17 @@ describe.each([
       message: 'Triage refused.',
     });
     expect(state.abort).toHaveBeenCalledOnce();
+  });
+
+  it('sends no turn when triage refused before the session started', async () => {
+    state.auth = { ...AUTH, systemPrompt: PINNED };
+    boot.operatorAbort = new OperatorAbort();
+    boot.operatorAbort.trip('Triage refused.');
+    expect(await run()).toMatchObject({
+      kind: 'abort',
+      message: 'Triage refused.',
+    });
+    expect(state.prompts).toHaveLength(0);
   });
 });
 

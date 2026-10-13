@@ -9,13 +9,13 @@ To call it, use `runAgent`. The
 
 ## The pieces
 
-| Piece       | What it does                                                                     | Where                                 |
-| ----------- | -------------------------------------------------------------------------------- | ------------------------------------- |
-| Entry point | `runAgent` takes a run config and input, and returns one result.                 | [`index.ts`](index.ts)                |
-| Prepare     | Sets up logging, the gateway token and the scan classifier.                      | [`bootstrap.ts`](shared/bootstrap.ts) |
+| Piece       | What it does                                                                                     | Where                                 |
+| ----------- | ------------------------------------------------------------------------------------------------ | ------------------------------------- |
+| Entry point | `runAgent` takes a run config and input, and returns one result.                                 | [`index.ts`](index.ts)                |
+| Prepare     | Sets up logging, the gateway token and the scan classifier.                                      | [`bootstrap.ts`](shared/bootstrap.ts) |
 | Switchboard | Resolves the sequence, harness and model: CLI overrides, then flags, then the program's binding. | [`switchboard`](switchboard/index.ts) |
-| Sequence    | Shapes the work: one conversation (linear), or many from a queue (orchestrator). | [`sequence`](sequence/README.md)      |
-| Harness     | Adapts one SDK: the Anthropic Agent SDK or Pi.                                   | [`harness`](harness/types.ts)         |
+| Sequence    | Shapes the work: one conversation (linear), or many from a queue (orchestrator).                 | [`sequence`](sequence/README.md)      |
+| Harness     | Adapts one SDK: the Anthropic Agent SDK or Pi.                                                   | [`harness`](harness/types.ts)         |
 
 ## Execution policy
 
@@ -28,15 +28,9 @@ A new model needs gateway admission as well as wizard support. See the
 
 ## Operator refusals
 
-The mint receives `supports_prompt_pinning: true`. When it returns a system
-prompt, each model request carries that prompt with the minted bearer. SDK
-queries share prompt composition and side-call settings, including the MCP
-tutorial. Triage resolves the current bearer and prompt together on every call.
-
-A pinned model reply containing `[posthog:abort]` returns an agent abort with
-its reason, the text after the marker on its line. This covers turns, subagents
-and YARA triage. Harnesses stop before continuation prompts, remarks or success.
-Sequences report it as failure and skip post-run work. Orchestrated tasks record
-a failed queue entry and publish it through existing task progress. A caller's
-abort signal still means cancellation. Unpinned runs retain their existing
-output handling.
+When the gateway token mint returns a `system_prompt`, every model call sends
+it: pi as its own system unit, the Claude SDK harness as the last text of the
+`claude_code` preset prompt. A model reply in a turn, subagent or YARA triage
+call that contains `[posthog:abort]` ends the run as a failure, with the rest of
+that line as the reason. The MCP tutorial stream sends the prompt but does not
+check for the marker.

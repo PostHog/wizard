@@ -217,8 +217,8 @@ it.each([Harness.pi, Harness.anthropic])(
         : (body.system as { text: string }[]).map((m) => m.text);
     expect(systems).toEqual([PINNED]);
     expect(bearers[0]).toContain('phe_local_minted');
-    expect(mintRequests[0]).toMatchObject({
-      supports_prompt_pinning: true,
+    expect(mintRequests[0]).toEqual({
+      program: expect.any(String),
       reads_refusal_reason: true,
     });
   },

@@ -29,11 +29,7 @@ export interface GatewayAuth {
    * old bearer may re-mint once. Before it the mint has to be trusted.
    */
   refreshAtMs: number;
-  /**
-   * The operator system prompt the mint pinned to this token, when it pinned
-   * one. The gateway refuses any call whose first system unit is not exactly
-   * this text, so every model call made with the token must send it first.
-   */
+  /** The operator prompt pinned to this token; every model call must send it as, or at the end of, a system unit. */
   systemPrompt?: string;
   /** Which revision of the pinned prompt this is, for logs. */
   systemPromptVersion?: number;
@@ -185,7 +181,6 @@ async function resolveGatewayAuth(
     token: minted.token,
     teamId: minted.teamId,
     refreshAtMs: staleAtMs,
-    // Spread so a mint without a prompt yields the auth it always did.
     ...(minted.systemPrompt === undefined
       ? {}
       : {
@@ -389,11 +384,7 @@ async function mintGatewayToken(
       // The flag tells the server this build reads a refusal, so it may answer
       // with the reason. A build that omits it gets a 404, which is its signal
       // to fall back to the legacy gateway.
-      body: JSON.stringify({
-        program,
-        reads_refusal_reason: true,
-        supports_prompt_pinning: true,
-      }),
+      body: JSON.stringify({ program, reads_refusal_reason: true }),
       signal: AbortSignal.timeout(MINT_TIMEOUT_MS),
     });
     if (!resp.ok) {
@@ -459,9 +450,7 @@ async function mintGatewayToken(
     ) {
       gatewayUrl.hostname = 'localhost';
     }
-    // Absent means this mint pins no prompt. A present value that is not text
-    // would leave every call refused by the gateway with a bare 400, so it
-    // fails here where the cause is named.
+    // Absent runs unpinned; a malformed prompt fails here rather than as gateway 400s.
     const hasPrompt =
       body.system_prompt !== undefined && body.system_prompt !== null;
     if (

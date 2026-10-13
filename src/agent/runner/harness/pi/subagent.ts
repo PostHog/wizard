@@ -69,10 +69,7 @@ export interface SubagentContext {
   agentDir: string;
   /** The parent's subagent gate: the same fence and shared state, with no rm. */
   securityFactory: SubagentSecurityFactory;
-  /**
-   * The parent's operator-prompt pin. A child's calls ride the same token, so
-   * the gateway refuses them too unless they send the pinned prompt first.
-   */
+  /** The parent's operator-prompt pin; a child's calls ride the same pinned token. */
   operatorPrompt: (pi: ExtensionAPI) => void;
   /** Ends the run when a child's reply carries the abort marker; true when it did. */
   refuseOnText: (text: string) => boolean;

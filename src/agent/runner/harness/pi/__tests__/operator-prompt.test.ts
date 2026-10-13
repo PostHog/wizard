@@ -16,9 +16,7 @@ import { Harness } from '@shared/constants';
 
 vi.mock('@utils/debug');
 
-// Real pi-ai, real request bodies: a local server stands in for the gateway and
-// records what pi actually sends. The gateway hashes the first system unit of
-// each shape, so these tests pin the shapes pi emits, not our idea of them.
+// Real pi-ai request bodies, recorded by a local server standing in for the gateway.
 
 const PINNED = '  You are the wizard.\n\n[posthog:abort] é 🦔\n';
 const WIZARD_OWN = 'WIZARD COMMANDMENTS: follow the checklist.';
@@ -48,7 +46,7 @@ beforeEach(() => {
 const SHAPES: [GatewayApi, string][] = [
   ['anthropic-messages', 'claude-sonnet-5'],
   ['openai-responses', 'openai/gpt-5.6-terra'],
-  // The wizard routes no model here today, but the gateway accepts the shape.
+  // No wizard model routes here, but the gateway accepts the shape.
   ['openai-completions', 'openai/gpt-5.6-terra'],
 ];
 
@@ -95,7 +93,7 @@ async function sendBody(
   return bodies[0];
 }
 
-/** What the gateway checks: the first system unit, per shape. */
+/** The system units the gateway checks against the pin, per shape. */
 function systemUnits(api: GatewayApi, body: Record<string, unknown>): string[] {
   const units =
     api === 'anthropic-messages'
@@ -119,7 +117,7 @@ describe('the pinned operator prompt on the wire', () => {
   );
 
   it.each(SHAPES)(
-    'sends %s exactly as it does today when the mint pinned nothing',
+    'sends %s unchanged when the mint pinned nothing',
     async (api, modelId) => {
       const withoutHook = await sendBody(api, modelId, undefined, false);
       bodies = [];
@@ -164,7 +162,7 @@ describe('the pinned operator prompt on triage calls', () => {
     },
   );
 
-  it('sends no system unit when the mint pinned nothing, as it always has', async () => {
+  it('sends no system unit when the mint pinned nothing', async () => {
     const triage = createTriageLLMProvider(
       { baseURL: gatewayUrl, authToken: 'phe_test' },
       Harness.pi,

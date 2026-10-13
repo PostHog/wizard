@@ -1129,8 +1129,7 @@ export async function runAgent(
       // Read per query: a re-mint may bring a new pinned prompt.
       const promptOptions = sdkPromptOptionsFor({
         pinned: agentConfig.gatewayAuth.systemPrompt,
-        // An orchestrator context is present only on a task run — that is
-        // what picks the sequence.
+        // Only a task run has an orchestrator context, which picks the sequence.
         instructions: assembleCommandments({
           program: agentConfig.program,
           sequence: agentConfig.sequence,

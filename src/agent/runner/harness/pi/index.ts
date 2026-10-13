@@ -354,8 +354,7 @@ export const piBackend: AgentHarness = {
       // orchestrator's per-task sessions (gateway.ts). gatewayAuth mints the
       // run's scoped token.
       // Reads the live OAuth token, so a mid-run rotation re-mints on the new one.
-      // `liveAuth` is the bearer pi currently sends, so the operator prompt it
-      // pins follows a re-mint.
+      // `liveAuth` is the bearer pi sends, so the pinned prompt follows a re-mint.
       let liveAuth: GatewayAuth;
       const refreshAuth = async () =>
         (liveAuth = await gatewayAuth(
@@ -753,6 +752,8 @@ export const piBackend: AgentHarness = {
             classification: AgentErrorType.ABORT,
             message: 'Agent run cancelled',
           };
+        // A refusal before the first turn (YARA triage at install) sends nothing.
+        if (refusalReason) return refusalResult();
         // Non-streaming: resolves when the agent run completes. Throws if no
         // model/api key, or on a transport error.
         await turns.prompt(prompt);

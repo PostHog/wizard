@@ -97,9 +97,7 @@ export function buildGatewayModel(inputs: GatewayProviderInputs) {
     // non-reasoning openai models reject `reasoning_effort` (gpt-4o → gateway
     // UnsupportedParamsError → the run no-ops).
     reasoning: modelCapabilities(modelId).reasoning,
-    // The gateway owns the developer role: it refuses a caller message at that
-    // rank under a pinned operator prompt, so pi sends the wizard's own prompt
-    // as `system`, never `developer`.
+    // The gateway refuses caller `developer` messages, so pi sends `system`.
     compat: { supportsDeveloperRole: false },
     input: ['text' as const],
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
@@ -109,15 +107,8 @@ export function buildGatewayModel(inputs: GatewayProviderInputs) {
   };
 }
 
-/**
- * Put the gateway-pinned operator prompt first in a pi request body, as its own
- * system unit ahead of the wizard's. The gateway hashes the first system unit
- * (Anthropic `system[0].text`, chat `messages[0]`, Responses `input[0]`), so the
- * text goes in verbatim and the wizard's own prompt stays a separate later unit.
- * pi sends the wizard's prompt as the first unit on all three shapes (it never
- * sets Responses `instructions`), so the pin is prepended, not merged.
- */
-export function pinOperatorPrompt(
+/** Prepend the pinned operator prompt as its own system unit; the gateway accepts any system unit that equals or ends with the pin. */
+function pinOperatorPrompt(
   api: GatewayApi,
   payload: unknown,
   pinned: string,
@@ -151,12 +142,7 @@ export function pinOperatorPrompt(
   }
 }
 
-/**
- * The pi extension that pins the operator prompt on every model call of a
- * session. `pinned` is read per request, so a re-mint that changes the prompt
- * is followed; it returns undefined when the mint carried none, and the request
- * goes out as it always did.
- */
+/** Pins the operator prompt on every model call of a pi session; `pinned` is read per request so a re-mint is followed. */
 export function operatorPromptExtension(
   api: GatewayApi,
   pinned: () => string | undefined,

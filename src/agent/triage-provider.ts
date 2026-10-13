@@ -7,11 +7,7 @@
 
 import { Harness } from '@shared/constants';
 import { logToFile } from '@utils/debug';
-import {
-  buildGatewayModel,
-  gatewayApiFor,
-  pinOperatorPrompt,
-} from './runner/harness/pi/gateway';
+import { buildGatewayModel, gatewayApiFor } from './runner/harness/pi/gateway';
 import { type OperatorAbort, operatorAbortReason } from './output-signals';
 import { modelCapabilities, triageModelFor } from './runner/switchboard/models';
 import type { LLMProvider } from '@posthog/warlock';
@@ -80,6 +76,8 @@ export function createTriageLLMProvider(
       const message = await completeSimple(
         model,
         {
+          // pi-ai sends this verbatim as the request's only system unit.
+          ...(pinned === undefined ? {} : { systemPrompt: pinned }),
           messages: [{ role: 'user', content: prompt, timestamp: Date.now() }],
         },
         {
@@ -92,11 +90,6 @@ export function createTriageLLMProvider(
           reasoning:
             reasoning && thinkingLevel !== 'off' ? thinkingLevel : undefined,
           signal: controller.signal,
-          // Triage has no system prompt of its own, so the pinned text is the
-          // request's only system unit.
-          onPayload: pinned
-            ? (payload) => pinOperatorPrompt(model.api, payload, pinned)
-            : undefined,
         },
       );
       const text = message.content
