@@ -154,6 +154,7 @@ describe('SELF_DRIVING_ABORT_CASES', () => {
     'self-driving is not available for this project',
     'github connection declined',
     'requires-interactive-mode',
+    'wrong-project',
     'requirements-incomplete',
   ];
 
