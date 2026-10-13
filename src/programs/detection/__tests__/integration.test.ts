@@ -16,6 +16,16 @@ vi.mock('@utils/analytics', () => ({
   },
 }));
 
+vi.mock(
+  import('@programs/warehouse-sources/registry'),
+  async (importOriginal) =>
+    (
+      await import(
+        '@programs/warehouse-sources/__tests__/helpers/tool-catalog.no-jest'
+      )
+    ).withFixtureCatalog(await importOriginal()),
+);
+
 // Wrapped so one test can force a throw; the rest use the real scanner.
 vi.mock('@programs/warehouse-sources/detect', async (importOriginal) => {
   const actual = await importOriginal<
@@ -29,6 +39,7 @@ vi.mock('@programs/warehouse-sources/detect', async (importOriginal) => {
 
 import { analytics } from '@utils/analytics';
 import { detectWarehouseSources } from '@programs/warehouse-sources/detect';
+import { loadSourceDetectors } from '@programs/warehouse-sources/registry';
 import {
   detectPostHogIntegration,
   reportWarehouseSourcesDetected,
@@ -172,6 +183,21 @@ describe('a scan failure is distinguishable from a clean zero-source scan', () =
     expect(fired).toBe(true);
     expect(analytics.wizardCapture).not.toHaveBeenCalled();
     expect(analytics.setTag).not.toHaveBeenCalled();
+  });
+
+  it('no tool catalog: no event fires, since the scan could not look', async () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({ dependencies: { stripe: '^14.0.0' } }),
+    );
+    const session = buildSession({ installDir: tmpDir });
+    session.scanConsent = ScanConsent.Granted;
+    vi.mocked(loadSourceDetectors).mockResolvedValueOnce([]);
+
+    await detectPostHogIntegration(makeCtx(session));
+
+    expect(reportWarehouseSourcesDetected(session)).toBe(true);
+    expect(analytics.wizardCapture).not.toHaveBeenCalled();
   });
 });
 

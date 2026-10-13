@@ -18,6 +18,7 @@ import { discoverFeatures } from './features';
 import { checkFrameworkVersion, gatherFrameworkContext } from './context';
 import { analytics } from '@utils/analytics';
 import { detectWarehouseSources } from '../warehouse-sources/detect';
+import { loadSourceDetectors } from '../warehouse-sources/registry';
 import {
   DETECTED_WAREHOUSE_SOURCES_KEY,
   getDetectedWarehouseSources,
@@ -80,7 +81,7 @@ export async function detectPostHogIntegration(
     ctx.addDiscoveredFeature(feature);
   }
 
-  detectWarehouseSourcesForSuggestion(ctx, installDir);
+  await detectWarehouseSourcesForSuggestion(ctx, installDir);
   detectExistingPostHog(ctx, installDir);
 
   ctx.setDetectionComplete();
@@ -94,8 +95,9 @@ export async function detectPostHogIntegration(
  *            scan below, but every program's intro screen resolves consent
  *            through the same store method, so the reporter is reached on runs
  *            where no scan ever happened.
- *   'failed' the scan threw. A zero-count row would read as "scanned, found
- *            nothing", which is a different fact.
+ *   'failed' the scan threw, or had no tool catalog to match against. A
+ *            zero-count row would read as "scanned, found nothing", which is
+ *            a different fact.
  *   'ok'     the scan ran. Zero sources is a real result and gets reported.
  */
 const WAREHOUSE_SCAN_STATE_KEY = 'warehouseScanState';
@@ -120,12 +122,18 @@ type WarehouseScanState = 'ok' | 'failed';
  *
  * Best-effort: never let a scan failure break the wizard flow.
  */
-function detectWarehouseSourcesForSuggestion(
+async function detectWarehouseSourcesForSuggestion(
   ctx: ProgramReadyContext,
   installDir: string,
-): void {
+): Promise<void> {
   try {
-    const sources = detectWarehouseSources(installDir);
+    const detectors = await loadSourceDetectors(ctx.session.baseUrl);
+    // The loader has already reported why the catalog is missing.
+    if (detectors.length === 0) {
+      ctx.setFrameworkContext(WAREHOUSE_SCAN_STATE_KEY, 'failed');
+      return;
+    }
+    const sources = detectWarehouseSources(installDir, detectors);
     // Before the empty-list return: a scan that found nothing still ran, and
     // those rows are the denominator.
     ctx.setFrameworkContext(WAREHOUSE_SCAN_STATE_KEY, 'ok');

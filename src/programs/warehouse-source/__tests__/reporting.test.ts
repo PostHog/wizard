@@ -13,6 +13,16 @@ vi.mock(import('@utils/analytics'), () => ({
   } as never,
 }));
 
+vi.mock(
+  import('@programs/warehouse-sources/registry'),
+  async (importOriginal) =>
+    (
+      await import(
+        '@programs/warehouse-sources/__tests__/helpers/tool-catalog.no-jest'
+      )
+    ).withFixtureCatalog(await importOriginal()),
+);
+
 import { analytics } from '@utils/analytics';
 import { reportWarehouseSourcesDetected } from '@programs/detection/integration';
 import { DETECTED_WAREHOUSE_SOURCES_KEY } from '@programs/warehouse-sources/detect';
@@ -33,13 +43,13 @@ describe('reportWarehouseSourcesDetected', () => {
 
   afterEach(() => fs.rmSync(tmpDir, { recursive: true, force: true }));
 
-  it('the standalone warehouse command does not report through this path', () => {
+  it('the standalone warehouse command does not report through this path', async () => {
     // `wizard warehouse` writes the same frameworkContext key from its own
     // detect, and sets its own tags. Without a scan-state marker it would also
     // emit this event, which six saved insights read as "the integration flow
     // scanned".
     const session = buildSession({ installDir: tmpDir, ci: true });
-    detectWarehousePrerequisites(session, (key, value) => {
+    await detectWarehousePrerequisites(session, (key, value) => {
       session.frameworkContext[key] = value;
     });
     expect(

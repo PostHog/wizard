@@ -5,7 +5,7 @@
  * the PostHog source type it imports as, and the mode the wizard uses to set it
  * up. The detection loop and the program machinery don't know what any
  * individual source is — they execute against this registry. The registry is
- * generated from PostHog's tool catalog; see `registry.generated.ts`.
+ * built at runtime from PostHog's tool catalog; see `registry.ts`.
  */
 
 /**
@@ -20,7 +20,7 @@
  */
 export type SourceCreationMode = 'in-cli' | 'deep-link';
 
-/** Schema of PostHog's tool catalog JSON (`products/wizard/tool-catalog.generated.json`). */
+/** Schema of PostHog's tool catalog JSON, served at `/api/wizard/tool_catalog/`. */
 export type ToolCatalog = {
   schema_version: 1;
   tools: CatalogTool[];

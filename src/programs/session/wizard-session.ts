@@ -27,14 +27,6 @@ export interface WizardSession extends ProgramSession {
   ciGateway: GatewayCredential | null;
   email?: string;
   region?: CloudRegion;
-  /**
-   * Explicit PostHog base URL (`--base-url`). When set, it pins every PostHog
-   * origin — API host, cloud/app URL, OAuth server — and `region` is ignored.
-   * The runtime equivalent of the dev-build localhost routing; lets the shipped
-   * wizard target a local/self-hosted stack. Threaded into the URL helpers in
-   * `@utils/urls`. Empty/unset → region-based resolution.
-   */
-  baseUrl?: string;
   noTelemetry: boolean;
 
   /**

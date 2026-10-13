@@ -2,9 +2,10 @@
  * Data warehouse source detection.
  *
  * Scans a project for codebase signals (package manifests, `.env` key
- * names) and matches them against the `SOURCE_DETECTORS` registry. Pure
- * function: no store mutations, no UI calls. Reads files locally — only the
- * wizard process does this; the agent never sees secret values.
+ * names) and matches them against the detectors the caller passes in, from
+ * `loadSourceDetectors`. Pure function: no store mutations, no UI calls.
+ * Reads files locally — only the wizard process does this; the agent never
+ * sees secret values.
  *
  * Note we only read `.env` KEY NAMES, never values.
  */
@@ -25,7 +26,6 @@ import {
   parsePyprojectToml,
   parsePipfile,
 } from '../detection/features';
-import { SOURCE_DETECTORS } from './registry.js';
 import type { DetectedSource, SourceDetector } from './types.js';
 
 interface ProjectSignals {
@@ -67,18 +67,21 @@ const PACKAGE_SIGNAL_LOCATIONS: Readonly<Record<string, string>> = {
 
 /**
  * Detect which warehouse sources the project at `installDir` appears to use.
- * Returns one `DetectedSource` per matched registry entry (kinds are unique,
- * so the result is naturally deduped), minus the entries a more specific
- * match supersedes.
+ * Returns one `DetectedSource` per matched detector (kinds are unique, so the
+ * result is naturally deduped), minus the entries a more specific match
+ * supersedes.
  */
-export function detectWarehouseSources(installDir: string): DetectedSource[] {
+export function detectWarehouseSources(
+  installDir: string,
+  detectors: readonly SourceDetector[],
+): DetectedSource[] {
   // No directory guard here: walkProjectFiles is best-effort and yields no
   // signals for a missing/unreadable dir (→ []). The program-level detect
   // step is responsible for surfacing a structured `bad-directory` error.
   const signals = collectSignals(installDir);
 
   const matched: { detector: SourceDetector; source: DetectedSource }[] = [];
-  for (const detector of SOURCE_DETECTORS) {
+  for (const detector of detectors) {
     const { mode, warehouseSourceType } = detector;
     // A tool with no setup mode is detected for reporting only, never offered as a source.
     if (mode === null || warehouseSourceType === null) continue;
