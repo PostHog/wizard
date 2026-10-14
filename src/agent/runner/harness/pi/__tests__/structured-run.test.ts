@@ -35,6 +35,7 @@ const state = vi.hoisted(() => ({
   preamble: [] as string[],
   toolName: 'find',
   toolError: undefined as string | undefined,
+  toolResult: undefined as string | undefined,
 }));
 vi.mock('@utils/analytics', () => ({
   analytics: { wizardCapture: vi.fn(), capture: vi.fn() },
@@ -149,13 +150,15 @@ vi.mock('@earendil-works/pi-coding-agent', () => ({
               toolName: state.toolName,
               args: {},
             });
-          if (state.toolError)
+          if (state.toolError ?? state.toolResult)
             state.listener?.({
               type: 'tool_execution_end',
               toolName: state.toolName,
-              isError: true,
+              isError: state.toolError !== undefined,
               result: {
-                content: [{ type: 'text', text: state.toolError }],
+                content: [
+                  { type: 'text', text: state.toolError ?? state.toolResult },
+                ],
               },
             });
           state.listener?.({
@@ -270,6 +273,7 @@ beforeEach(() => {
   state.preamble = [];
   state.toolName = 'find';
   state.toolError = undefined;
+  state.toolResult = undefined;
   vi.mocked(analytics.wizardCapture).mockClear();
 });
 
@@ -352,6 +356,21 @@ it('ends a scan with a latched security violation as YARA, even past its budget'
     classification: AgentErrorType.YARA_VIOLATION,
   });
 });
+
+it.each([
+  ['dispatch_agent', 'abort'],
+  ['read', 'success'],
+])(
+  'on a policy abort marker in a %s result, ends with %s',
+  async (tool, kind) => {
+    state.toolName = tool;
+    state.toolResult = '[posthog:abort] Request is out of scope';
+    state.text = 'Done.';
+
+    const result = await piBackend.run(runInputs(vi.fn(), null));
+    expect(result.kind).toBe(kind);
+  },
+);
 
 it('ends a scan that outlives its budget as a timeout', async () => {
   state.hang = true;

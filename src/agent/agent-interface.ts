@@ -1003,6 +1003,7 @@ export async function runAgent(
   };
   let timedOut = false;
   let abortReason: string | null = null;
+  const subagentCallIds = new Set<string>();
   // Set when a YARA hook detects a terminal violation. Returning `stopReason`
   // from a PostToolUse hook does NOT stop the SDK, so we abort the query and
   // surface a YARA_VIOLATION below — mirroring the [ABORT] mechanism.
@@ -1357,6 +1358,27 @@ export async function runAgent(
                     break;
                   }
                 }
+              }
+            }
+          }
+
+          // A subagent's refusal reaches us only as the Agent tool's result.
+          const blocks = message.message?.content;
+          for (const block of Array.isArray(blocks) ? blocks : []) {
+            if (block.type === 'tool_use' && SUBAGENT_TOOLS.has(block.name)) {
+              subagentCallIds.add(block.id);
+            } else if (
+              message.type === 'user' &&
+              block.type === 'tool_result' &&
+              !abortReason &&
+              subagentCallIds.has(block.tool_use_id)
+            ) {
+              abortReason =
+                policyAbortReason(toolResultText(block.content)) ?? null;
+              if (abortReason) {
+                logToFile(`Subagent emitted an abort marker: ${abortReason}`);
+                abortController.abort();
+                signalDone();
               }
             }
           }
@@ -1778,6 +1800,9 @@ export const POSTHOG_MCP_SERVER_NAME = 'posthog-wizard';
 
 const READ_ONLY_TOOLS: readonly string[] = ['Read', 'Glob', 'Grep'];
 
+/** The SDK's subagent tool, 'Task' before it was renamed 'Agent'. */
+const SUBAGENT_TOOLS: ReadonlySet<string> = new Set(['Agent', 'Task']);
+
 /** wizardCanUseTool's env-file rule as SDK deny rules for the project; outside it, canUseTool sees the file tools. */
 const ENV_FILE_DENY_RULES: readonly string[] = ['Read', 'Edit'].flatMap(
   (tool) => [
@@ -1947,6 +1972,13 @@ function extractTaskIdFromToolResult(result: unknown): string | undefined {
   if (typeof obj.taskId === 'string') return obj.taskId;
   if (typeof obj.id === 'string') return obj.id;
   return undefined;
+}
+
+/** A tool_result block's text, whether its content is a string or text blocks. */
+function toolResultText(content: unknown): string {
+  if (!Array.isArray(content))
+    return typeof content === 'string' ? content : '';
+  return content.map((b: { text?: string }) => b.text ?? '').join('\n');
 }
 
 /**

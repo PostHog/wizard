@@ -796,6 +796,47 @@ describe('runAgent', () => {
         message: 'Request is out of scope',
       });
     });
+
+    it.each([
+      ['Agent', 'abort'],
+      ['Read', 'success'],
+    ])(
+      'on a policy abort marker in a %s tool result, ends with %s',
+      async (name, kind) => {
+        const text = '[posthog:abort] Request is out of scope';
+        mockQuery.mockReturnValue(
+          (function* () {
+            yield {
+              type: 'assistant',
+              message: { content: [{ type: 'tool_use', id: 't1', name }] },
+            };
+            yield {
+              type: 'user',
+              message: {
+                content: [
+                  {
+                    type: 'tool_result',
+                    tool_use_id: 't1',
+                    content: [{ type: 'text', text }],
+                  },
+                ],
+              },
+            };
+            yield { type: 'result', subtype: 'success', is_error: false };
+          })(),
+        );
+
+        const result = await runAgent(
+          defaultAgentConfig,
+          'test prompt',
+          defaultOptions,
+          mockSpinner as unknown as SpinnerHandle,
+          { successMessage: 'Test success', errorMessage: 'Test error' },
+        );
+
+        expect(result.kind).toBe(kind);
+      },
+    );
   });
 });
 

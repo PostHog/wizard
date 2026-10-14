@@ -691,6 +691,11 @@ export const piBackend: AgentHarness = {
                   : JSON.stringify(event.result ?? '')
               }`,
             );
+            // A subagent's refusal comes back as its tool result, not as parent text.
+            if (event.toolName === 'dispatch_agent') {
+              abortReason ??= policyAbortReason(extractText(event.result));
+              if (abortReason) cancellation?.abort();
+            }
             break;
           }
           case 'agent_end': {

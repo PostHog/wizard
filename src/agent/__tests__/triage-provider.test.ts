@@ -7,8 +7,10 @@ import {
   Harness,
 } from '@shared/constants';
 import { triageModelFor } from '@agent/runner/switchboard/models';
+import { logToFile } from '@utils/debug';
 
 vi.mock('@earendil-works/pi-ai', () => ({ completeSimple: vi.fn() }));
+vi.mock('@utils/debug');
 const complete = vi.mocked(completeSimple);
 
 const AUTH = { baseURL: 'https://gw.posthog.test', authToken: 'tok' };
@@ -144,5 +146,15 @@ describe('createTriageLLMProvider', () => {
     } as never);
     const provider = createTriageLLMProvider(AUTH, Harness.pi);
     await expect(provider('verdict?')).resolves.toBe('false_positive');
+  });
+
+  it('logs a gateway policy refusal and still returns the reply, which fails closed', async () => {
+    complete.mockResolvedValue(reply('[posthog:abort] Out of scope'));
+    const provider = createTriageLLMProvider(AUTH, Harness.pi);
+
+    await expect(provider('verdict?')).resolves.toContain('[posthog:abort]');
+    expect(logToFile).toHaveBeenCalledWith(
+      '[triage] gateway policy refused the triage call: Out of scope',
+    );
   });
 });
