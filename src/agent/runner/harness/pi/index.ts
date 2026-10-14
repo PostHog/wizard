@@ -23,7 +23,11 @@ import {
 } from '@shared/constants';
 import { analytics } from '@utils/analytics';
 import { AgentErrorType } from '../../../agent-interface';
-import { AgentSignals, REMARK_INSTRUCTION } from '../../../signals';
+import {
+  AgentSignals,
+  REMARK_INSTRUCTION,
+  policyAbortReason,
+} from '../../../signals';
 import { AgentOutputSignals } from '../../../output-signals';
 import { assembleCommandments } from '../../switchboard/commandments';
 import { gatewayAuth, type GatewayAuth } from '../../../gateway-session';
@@ -283,9 +287,14 @@ export const piBackend: AgentHarness = {
     // Not `reason`: the linear sequence emits this same event with a `reason`
     // holding the agent's free-text [ABORT] string, and one property cannot be
     // both a closed enum and unbounded prose without making either unreadable.
-    const captureAborted = (failureMode: AgentErrorType) =>
+    // `source` tells a gateway policy refusal apart from a program's [ABORT].
+    const captureAborted = (
+      failureMode: AgentErrorType,
+      source?: 'gateway_policy',
+    ) =>
       analytics.wizardCapture('agent aborted', {
         failure_mode: failureMode,
+        ...(source && { source }),
         ...runDurations(),
         model: modelId,
       });
@@ -304,6 +313,14 @@ export const piBackend: AgentHarness = {
     let cancellation: ReturnType<typeof bindPiCancellation> | undefined;
     let timedOut = false;
     let timeoutAbort: Promise<void> | undefined;
+    let abortReason: string | undefined;
+    let remarkTurn = false;
+    // The gateway's refusal marker ends the run from a work turn, never the remark.
+    const policyAbort = (reply: string) => {
+      if (remarkTurn) return;
+      abortReason ??= policyAbortReason(reply);
+      if (abortReason) cancellation?.abort();
+    };
     // Read by the catch path; undefined until setup creates the extension.
     let securityState: SecurityState | undefined;
     // A latched violation outranks the timer on both the success and catch paths.
@@ -623,6 +640,7 @@ export const piBackend: AgentHarness = {
             turns.noteAssistantTurn(event.message);
             const blocks = textBlocks(event.message);
             const assistant = blocks.join('').trim();
+            policyAbort(assistant);
             // A schema-bound answer is the turn's last block, not the joined text.
             lastAssistantText = (blocks.at(-1) ?? '').trim();
             if (structured) {
@@ -683,6 +701,9 @@ export const piBackend: AgentHarness = {
                   : JSON.stringify(event.result ?? '')
               }`,
             );
+            // A subagent's refusal comes back as its tool result, not as parent text.
+            if (event.toolName === 'dispatch_agent')
+              policyAbort(extractText(event.result));
             break;
           }
           case 'agent_end': {
@@ -733,6 +754,7 @@ export const piBackend: AgentHarness = {
           !security.state.criticalViolation &&
           !inputs.signal?.aborted &&
           !terminal &&
+          !abortReason &&
           !setupSignalFailure(signals) &&
           hasOpenTasks(wizardTaskTools.store)
         ) {
@@ -749,9 +771,11 @@ export const piBackend: AgentHarness = {
           !structured &&
           !security.state.criticalViolation &&
           !terminal &&
+          !abortReason &&
           !setupSignalFailure(signals) &&
           !inputs.signal?.aborted
         ) {
+          remarkTurn = true;
           try {
             await agentSession.prompt(REMARK_INSTRUCTION);
           } catch (err) {
@@ -777,11 +801,19 @@ export const piBackend: AgentHarness = {
       if (timedOut && structured && !security.state.criticalViolation)
         return timedOutResult(structured.timeoutMs);
 
+      if (abortReason)
+        terminal = {
+          classification: AgentErrorType.ABORT,
+          message: abortReason,
+        };
       if (terminal && !security.state.criticalViolation) {
         spinner.stop(
           config.errorMessage ?? `${config.integrationLabel} failed`,
         );
-        captureAborted(terminal.classification);
+        captureAborted(
+          terminal.classification,
+          abortReason ? 'gateway_policy' : undefined,
+        );
         if (terminal.status === 401) {
           return {
             kind: 'decided_failure',

@@ -99,6 +99,20 @@ export interface OrchestratorToolsContext {
   currentTaskId?: string;
 }
 
+/**
+ * Whether the task this context is bound to has reported through
+ * `complete_task`. False for the seed, which is not a task.
+ */
+export function taskReported(ctx: OrchestratorToolsContext): boolean {
+  if (!ctx.currentTaskId) return false;
+  const status = ctx.store.get(ctx.currentTaskId)?.status;
+  return (
+    status === TaskStatus.Done ||
+    status === TaskStatus.Failed ||
+    status === TaskStatus.Skipped
+  );
+}
+
 export interface EnqueueArgs {
   type: string;
   label?: string;

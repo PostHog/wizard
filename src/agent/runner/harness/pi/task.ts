@@ -30,10 +30,12 @@ import {
   renderToolInventory,
 } from '../../../agent-prompt-loader';
 import { AgentErrorType } from '../../../agent-interface';
-import { REMARK_INSTRUCTION } from '../../../signals';
+import { REMARK_INSTRUCTION, policyAbortReason } from '../../../signals';
 import { AgentOutputSignals } from '../../../output-signals';
-import { TaskStatus } from '../../sequence/orchestrator/queue';
-import type { OrchestratorToolsContext } from '../../sequence/orchestrator/queue-tools';
+import {
+  taskReported,
+  type OrchestratorToolsContext,
+} from '../../sequence/orchestrator/queue-tools';
 import type { AgentResult, TaskRunInputs } from '../types';
 import { gatewayAuth, type GatewayAuth } from '../../../gateway-session';
 import { currentAccessToken } from '@shared/oauth-session';
@@ -157,13 +159,7 @@ function isSettled(ctx: OrchestratorToolsContext): boolean {
     // The seed's job is a seeded queue, not a complete_task call.
     return ctx.store.list().length > 0;
   }
-  const task = ctx.store.get(ctx.currentTaskId);
-  return (
-    !!task &&
-    (task.status === TaskStatus.Done ||
-      task.status === TaskStatus.Failed ||
-      task.status === TaskStatus.Skipped)
-  );
+  return taskReported(ctx);
 }
 
 export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
@@ -222,9 +218,14 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
   // Not `reason`: the linear sequence emits this same event with a `reason`
   // holding the agent's free-text [ABORT] string, and one property cannot be
   // both a closed enum and unbounded prose without making either unreadable.
-  const captureAborted = (failureMode: AgentErrorType) =>
+  // `source` tells a gateway policy refusal apart from a program's [ABORT].
+  const captureAborted = (
+    failureMode: AgentErrorType,
+    source?: 'gateway_policy',
+  ) =>
     analytics.wizardCapture('agent aborted', {
       failure_mode: failureMode,
+      ...(source && { source }),
       ...runDurations(),
       model: modelId,
       ...analyticsProperties,
@@ -233,6 +234,8 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
   let mcpCleanup: (() => void) | undefined;
   let aioFailed = true;
   let cancellation: ReturnType<typeof bindPiCancellation> | undefined;
+  let abortReason: string | undefined;
+  let remarkTurn = false;
   try {
     const sdk = await import('@earendil-works/pi-coding-agent');
     const {
@@ -467,6 +470,10 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
           assistantTurns += 1;
           turns.noteAssistantTurn(event.message);
           const assistant = extractText(event.message).trim();
+          // The refusal marker ends the run from a work turn, not the remark or a turn after complete_task.
+          if (!remarkTurn && !taskReported(orchestrator))
+            abortReason ??= policyAbortReason(assistant);
+          if (abortReason) cancellation?.abort();
           if (assistant) {
             logToFile(`[pi-task] assistant: ${assistant.slice(0, 1000)}`);
             applyOutroMarkers(assistant, emit);
@@ -524,6 +531,7 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
         !security.state.criticalViolation &&
         !inputs.signal?.aborted &&
         !terminal &&
+        !abortReason &&
         !setupSignalFailure(signals) &&
         !isSettled(orchestrator)
       ) {
@@ -541,9 +549,11 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
         requestRemark &&
         !security.state.criticalViolation &&
         !terminal &&
+        !abortReason &&
         !setupSignalFailure(signals) &&
         !inputs.signal?.aborted
       ) {
+        remarkTurn = true;
         try {
           await agentSession.prompt(REMARK_INSTRUCTION);
         } catch (err) {
@@ -566,10 +576,15 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
       };
     }
 
+    if (abortReason)
+      terminal = { classification: AgentErrorType.ABORT, message: abortReason };
     if (terminal && !security.state.criticalViolation) {
       if (errorMessage || spinnerMessage)
         spinner.stop(errorMessage ?? 'Task failed');
-      captureAborted(terminal.classification);
+      captureAborted(
+        terminal.classification,
+        abortReason ? 'gateway_policy' : undefined,
+      );
       if (terminal.status === 401) {
         return {
           kind: 'decided_failure',

@@ -1,6 +1,6 @@
 import { piBackend } from '..';
 import { runPiTask } from '../task';
-import { AgentSignals } from '@agent/signals';
+import { AgentSignals, REMARK_INSTRUCTION } from '@agent/signals';
 import { analytics } from '@utils/analytics';
 import { createSecurityExtension } from '../security';
 import { setupPostHogMcp } from '../mcp';
@@ -22,6 +22,8 @@ const state = vi.hoisted(() => ({
   listener: undefined as ((event: unknown) => void) | undefined,
   factories: [] as ExtensionFactory[],
   text: '',
+  // The reply to the remark ask, when it differs from `text`.
+  remark: undefined as string | undefined,
   prompts: [] as string[],
   request: undefined as unknown,
   tools: [] as { name: string }[],
@@ -35,6 +37,9 @@ const state = vi.hoisted(() => ({
   preamble: [] as string[],
   toolName: 'find',
   toolError: undefined as string | undefined,
+  toolResult: undefined as string | undefined,
+  // A second turn in the same prompt: complete_task runs, then the agent replies.
+  report: undefined as { settle: () => void; reply: string } | undefined,
 }));
 vi.mock('@utils/analytics', () => ({
   analytics: { wizardCapture: vi.fn(), capture: vi.fn() },
@@ -149,25 +154,51 @@ vi.mock('@earendil-works/pi-coding-agent', () => ({
               toolName: state.toolName,
               args: {},
             });
-          if (state.toolError)
+          if (state.toolError ?? state.toolResult)
             state.listener?.({
               type: 'tool_execution_end',
               toolName: state.toolName,
-              isError: true,
+              isError: state.toolError !== undefined,
               result: {
-                content: [{ type: 'text', text: state.toolError }],
+                content: [
+                  { type: 'text', text: state.toolError ?? state.toolResult },
+                ],
               },
             });
           state.listener?.({
             type: 'message_end',
             message: {
               role: 'assistant',
-              content: [...state.preamble, state.text].map((text) => ({
+              content: [
+                ...state.preamble,
+                (prompt === REMARK_INSTRUCTION && state.remark) || state.text,
+              ].map((text) => ({
                 type: 'text',
                 text,
               })),
             },
           });
+          if (state.report) {
+            state.listener?.({
+              type: 'tool_execution_start',
+              toolName: 'complete_task',
+              args: {},
+            });
+            state.report.settle();
+            state.listener?.({
+              type: 'tool_execution_end',
+              toolName: 'complete_task',
+              isError: false,
+              result: { content: [{ type: 'text', text: 'ok' }] },
+            });
+            state.listener?.({
+              type: 'message_end',
+              message: {
+                role: 'assistant',
+                content: [{ type: 'text', text: state.report.reply }],
+              },
+            });
+          }
           return state.hang
             ? new Promise<void>((resolve) => (state.release = resolve))
             : Promise.resolve();
@@ -270,6 +301,9 @@ beforeEach(() => {
   state.preamble = [];
   state.toolName = 'find';
   state.toolError = undefined;
+  state.toolResult = undefined;
+  state.remark = undefined;
+  state.report = undefined;
   vi.mocked(analytics.wizardCapture).mockClear();
 });
 
@@ -352,6 +386,23 @@ it('ends a scan with a latched security violation as YARA, even past its budget'
     classification: AgentErrorType.YARA_VIOLATION,
   });
 });
+
+it.each([
+  ['dispatch_agent', 'abort'],
+  ['read', 'success'],
+])(
+  'on a policy abort marker in a %s result, ends with %s',
+  async (tool, kind) => {
+    state.toolName = tool;
+    state.toolResult = '[posthog:abort] Request is out of scope';
+    state.text = 'Done.';
+    // The turn ends only when the harness aborts the session.
+    state.hang = kind === 'abort';
+
+    const result = await piBackend.run(runInputs(vi.fn(), null));
+    expect(result.kind).toBe(kind);
+  },
+);
 
 it('ends a scan that outlives its budget as a timeout', async () => {
   state.hang = true;
@@ -445,12 +496,85 @@ describe.each(['linear', 'task'] as const)('%s setup signals', (mode) => {
     });
   });
 
+  it('ends the run on a policy abort marker at the start of a reply, without a nudge', async () => {
+    state.hang = true;
+    state.tasks.set('1', { status: 'in_progress' });
+    state.text = '[posthog:abort] Request is out of scope\nSorry.';
+
+    await expect(run(runInputs(vi.fn(), null))).resolves.toEqual({
+      kind: 'abort',
+      classification: AgentErrorType.ABORT,
+      message: 'Request is out of scope',
+    });
+    expect(state.prompts).toHaveLength(1);
+    expect(analytics.wizardCapture).toHaveBeenCalledWith(
+      'agent aborted',
+      expect.objectContaining({
+        failure_mode: AgentErrorType.ABORT,
+        source: 'gateway_policy',
+      }),
+    );
+  });
+
+  it('ignores a policy abort marker in the remark reply', async () => {
+    state.text = 'Installed the SDK.';
+    state.remark = '[posthog:abort] Request is out of scope';
+
+    await expect(run(runInputs(vi.fn(), null))).resolves.toEqual({
+      kind: 'success',
+    });
+    expect(state.prompts).toContain(REMARK_INSTRUCTION);
+  });
+
   it('keeps skill-install fallback nonfatal', async () => {
     state.text = `${AgentSignals.SKILL_INSTALL_FAILED} integration-test — unavailable; completed without the skill.`;
 
     await expect(run(runInputs(vi.fn(), null))).resolves.toEqual({
       kind: 'success',
     });
+  });
+});
+
+describe('a task turn after complete_task', () => {
+  const REFUSAL = '[posthog:abort] Request is out of scope';
+  const runOrchestrated = (orchestrator: {
+    currentTaskId?: string;
+    store: unknown;
+  }) =>
+    runPiTask({
+      ...runInputs(vi.fn(), null),
+      orchestrator: { validTypes: ['integration'], ...orchestrator } as never,
+      spinnerMessage: 'Setting up SDK',
+      successMessage: 'Installed the SDK',
+      requestRemark: false,
+      allowedTools: ['Read'],
+      analyticsProperties: {},
+    });
+
+  it('ignores a policy abort marker in the closing reply once the task has reported', async () => {
+    const task = { status: 'running' };
+    state.text = 'Installed the SDK.';
+    state.report = { settle: () => (task.status = 'done'), reply: REFUSAL };
+
+    await expect(
+      runOrchestrated({
+        currentTaskId: 'integration',
+        store: { get: () => task },
+      }),
+    ).resolves.toEqual({ kind: 'success' });
+    expect(state.prompts).toHaveLength(1);
+    expect(analytics.wizardCapture).not.toHaveBeenCalledWith(
+      'agent aborted',
+      expect.anything(),
+    );
+  });
+
+  it('still ends a seeded orchestrator run on a policy abort marker', async () => {
+    state.text = REFUSAL;
+
+    await expect(
+      runOrchestrated({ store: { list: () => [{ id: '1' }] } }),
+    ).resolves.toMatchObject({ kind: 'abort' });
   });
 });
 

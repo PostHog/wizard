@@ -17,6 +17,7 @@ import { Type } from 'typebox';
 import { defineTool } from '@earendil-works/pi-coding-agent';
 import type { ToolDefinition } from '@earendil-works/pi-coding-agent';
 import { logToFile } from '@utils/debug';
+import { AgentSignals, policyAbortReason } from '../../../signals';
 import { gatewayTerminalFailure } from './gateway';
 import type { SubagentSecurityFactory } from './security';
 
@@ -126,17 +127,26 @@ export function createDispatchAgentTool(ctx: SubagentContext): ToolDefinition {
             }[];
           }
         | undefined;
+      // A refusal on any turn ends the child, since a later reply would overwrite it.
+      let refusal: string | undefined;
       const unsub = child.subscribe((e) => {
         if (e.type === 'message_end') {
-          if ((e.message as { role?: string })?.role === 'assistant')
-            finalTurn = e.message as typeof finalTurn;
+          const assistant =
+            (e.message as { role?: string })?.role === 'assistant';
+          if (assistant) finalTurn = e.message as typeof finalTurn;
           const t = extractText(e.message).trim();
           if (t) result = t;
+          const reason = assistant && !refusal && policyAbortReason(t);
+          if (reason) {
+            refusal = `${AgentSignals.POLICY_ABORT} ${reason}`;
+            void child.abort();
+          }
         }
       });
       logToFile(`[pi] subagent dispatch: ${args.description}`);
       try {
         await child.prompt(args.prompt);
+        if (refusal) return text(refusal);
         const failure = gatewayTerminalFailure(finalTurn);
         if (failure) throw new Error(`Subagent failed: ${failure.message}`);
       } finally {

@@ -9,6 +9,7 @@ import { Harness } from '@shared/constants';
 import { logToFile } from '@utils/debug';
 import { buildGatewayModel, gatewayApiFor } from './runner/harness/pi/gateway';
 import { modelCapabilities, triageModelFor } from './runner/switchboard/models';
+import { policyAbortReason } from './signals';
 import type { LLMProvider } from '@posthog/warlock';
 
 const TRIAGE_MAX_TOKENS = 16_384;
@@ -97,6 +98,12 @@ export function createTriageLLMProvider(
             message.errorMessage ?? 'unknown'
           } — every flagged match will be acted on`,
         );
+      }
+      // A refusal is not a verdict, so throw to keep every match in the batch real.
+      const refusal = policyAbortReason(text);
+      if (refusal) {
+        logToFile(`[YARA] gateway policy refused the triage call: ${refusal}`);
+        throw new Error('AI gateway refused the triage call');
       }
       return text;
     } finally {

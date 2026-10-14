@@ -6,6 +6,7 @@ import { randomUUID } from 'node:crypto';
 
 import path from 'path';
 import * as os from 'os';
+import { readFile } from 'fs/promises';
 // eslint-disable-next-line no-restricted-imports -- resolves the SDK's bundled CLI path where ESM has no bare require
 import { createRequire } from 'node:module';
 import type {
@@ -65,10 +66,12 @@ import {
   AgentErrorType,
   REMARK_INSTRUCTION,
   RESUME_INSTRUCTION,
+  policyAbortReason,
 } from './signals';
 import { classifyAuthFailure } from '@shared/errors';
 import { isGrantRevoked } from '@shared/auth-session-state';
 import { AgentOutputSignals } from './output-signals';
+import { taskReported } from './runner/sequence/orchestrator/queue-tools';
 
 // Signal vocabulary and the output parser live in dedicated modules; re-export
 // so existing importers of these from agent-interface keep working.
@@ -263,6 +266,11 @@ export type AgentConfig = {
   emit?: ProgressEmitter;
 };
 
+type StopHookInput = {
+  stop_hook_active: boolean;
+  last_assistant_message?: string;
+};
+
 /**
  * Stop hook return type: either allow stop or block with a reason.
  */
@@ -280,10 +288,12 @@ export type StopHookResult =
 export function createStopHook(
   signals?: AgentOutputSignals,
   requestRemark = true,
-): (input: { stop_hook_active: boolean }) => StopHookResult {
+  /** Called with the last work reply when the remark turn starts. */
+  onRemark?: (lastReply?: string) => void,
+): (input: StopHookInput) => StopHookResult {
   let remarkRequested = false;
 
-  return (input: { stop_hook_active: boolean }): StopHookResult => {
+  return (input: StopHookInput): StopHookResult => {
     logToFile('Stop hook triggered', {
       stop_hook_active: input.stop_hook_active,
       remarkRequested,
@@ -300,6 +310,7 @@ export function createStopHook(
     // orchestrator suppresses it per task so it does not fire on every agent.
     if (requestRemark && !remarkRequested) {
       remarkRequested = true;
+      onRemark?.(input.last_assistant_message);
       logToFile('Stop hook: requesting reflection');
       return {
         decision: 'block',
@@ -344,6 +355,8 @@ type AgentRunConfig = {
    * not touch other programs' linear runs.
    */
   suppressTaskRender?: boolean;
+  /** Whether this task has reported through complete_task. Absent outside a task run. */
+  taskReported?: () => boolean;
   /** AIO capture, forwarded from AgentConfig. Undefined when disabled. */
   capture?: AioCapture;
   /** Scan-triage classifier, built from this run's gateway auth. */
@@ -700,6 +713,7 @@ export async function initializeAgent(
     // fallback can match map_to_bedrock_model()'s strict lookup.
     const model = config.modelOverride ?? DEFAULT_AGENT_MODEL;
 
+    const queue = config.orchestrator;
     const agentRunConfig: AgentRunConfig = {
       workingDirectory: config.workingDirectory,
       mcpServers,
@@ -714,6 +728,7 @@ export async function initializeAgent(
       disallowedTools: config.disallowedTools,
       getPendingQuestion: config.getPendingQuestion,
       suppressTaskRender: !!config.orchestrator,
+      taskReported: queue && (() => taskReported(queue)),
       capture: config.capture,
       triageProvider,
       gatewayAuth: auth,
@@ -1002,6 +1017,21 @@ export async function runAgent(
   };
   let timedOut = false;
   let abortReason: string | null = null;
+  let policyAborted = false;
+  const subagentCallIds = new Set<string>();
+  let remarkTurn = false;
+  // The refusal marker ends the run from a work turn, not the remark or a turn after complete_task.
+  const policyAbort = (reply: unknown) => {
+    const reason =
+      typeof reply === 'string' ? policyAbortReason(reply) : undefined;
+    if (!reason || abortReason || remarkTurn || agentConfig.taskReported?.())
+      return;
+    abortReason = reason;
+    policyAborted = true;
+    logToFile(`Agent emitted [posthog:abort]: ${reason}`);
+    abortController.abort();
+    signalDone();
+  };
   // Set when a YARA hook detects a terminal violation. Returning `stopReason`
   // from a PostToolUse hook does NOT stop the SDK, so we abort the query and
   // surface a YARA_VIOLATION below — mirroring the [ABORT] mechanism.
@@ -1199,6 +1229,8 @@ export async function runAgent(
             // query so it finds the transcript.
             CLAUDE_CONFIG_DIR: agentConfigDir,
             CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS: 'true',
+            // A background agent's result reaches us only as a summary, hiding its refusal.
+            CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: '1',
             // The MCP config resolves this in the child; sending the value would
             // put it on the CLI's argv.
             POSTHOG_MCP_TOKEN:
@@ -1263,7 +1295,31 @@ export async function runAgent(
               : createPostToolUseYaraHooks(triageProvider, onYaraTerminate),
             Stop: [
               {
-                hooks: [createStopHook(signals, config?.requestRemark ?? true)],
+                hooks: [
+                  createStopHook(
+                    signals,
+                    config?.requestRemark ?? true,
+                    // The stream may not have delivered the last work reply yet.
+                    (lastReply) => {
+                      policyAbort(lastReply);
+                      remarkTurn = true;
+                    },
+                  ),
+                ],
+                timeout: 30,
+              },
+            ],
+            // The Agent tool's result is only the final report, which can hide an earlier refusal.
+            SubagentStop: [
+              {
+                hooks: [
+                  async (input: { agent_transcript_path?: string }) => {
+                    policyAbort(
+                      await transcriptRefusal(input.agent_transcript_path),
+                    );
+                    return {};
+                  },
+                ],
                 timeout: 30,
               },
             ],
@@ -1354,6 +1410,23 @@ export async function runAgent(
                   }
                 }
               }
+            }
+          }
+
+          // The gateway's policy abort ends every program, from a work turn's
+          // reply or a subagent's result (the Agent tool's result block).
+          const blocks = message.message?.content;
+          for (const block of Array.isArray(blocks) ? blocks : []) {
+            if (block.type === 'tool_use' && block.name === 'Agent') {
+              subagentCallIds.add(block.id);
+            } else if (message.type === 'assistant' && block.type === 'text') {
+              policyAbort(block.text);
+            } else if (
+              message.type === 'user' &&
+              block.type === 'tool_result' &&
+              subagentCallIds.has(block.tool_use_id)
+            ) {
+              policyAbort(contentText(block.content));
             }
           }
 
@@ -1732,6 +1805,8 @@ export async function runAgent(
           duration_ms: durationMs,
           duration_seconds: Math.round(durationMs / 1000),
           model: agentConfig.model,
+          // Tells a gateway policy refusal apart from a program's [ABORT].
+          ...(policyAborted ? { source: 'gateway_policy' } : {}),
           ...config?.analyticsProperties,
         });
       } catch {
@@ -1942,6 +2017,36 @@ function extractTaskIdFromToolResult(result: unknown): string | undefined {
   if (task && typeof task.id === 'string') return task.id;
   if (typeof obj.taskId === 'string') return obj.taskId;
   if (typeof obj.id === 'string') return obj.id;
+  return undefined;
+}
+
+/** A message's or tool_result's text, whether its content is a string or blocks. */
+function contentText(content: unknown): string {
+  if (!Array.isArray(content))
+    return typeof content === 'string' ? content : '';
+  return content.map((b: { text?: string }) => b.text ?? '').join('\n');
+}
+
+/** The first assistant reply in a subagent transcript that starts with the policy abort marker. */
+async function transcriptRefusal(
+  transcriptPath: string | undefined,
+): Promise<string | undefined> {
+  const raw = transcriptPath
+    ? await readFile(transcriptPath, 'utf8').catch(() => '')
+    : '';
+  for (const line of raw.split('\n')) {
+    if (!line.includes(AgentSignals.POLICY_ABORT)) continue;
+    try {
+      const entry = JSON.parse(line) as {
+        type?: string;
+        message?: { content?: unknown };
+      };
+      const text = contentText(entry.message?.content);
+      if (entry.type === 'assistant' && policyAbortReason(text)) return text;
+    } catch {
+      // A line torn mid-write carries no reply.
+    }
+  }
   return undefined;
 }
 

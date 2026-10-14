@@ -7,8 +7,10 @@ import {
   Harness,
 } from '@shared/constants';
 import { triageModelFor } from '@agent/runner/switchboard/models';
+import { logToFile } from '@utils/debug';
 
 vi.mock('@earendil-works/pi-ai', () => ({ completeSimple: vi.fn() }));
+vi.mock('@utils/debug');
 const complete = vi.mocked(completeSimple);
 
 const AUTH = { baseURL: 'https://gw.posthog.test', authToken: 'tok' };
@@ -144,5 +146,18 @@ describe('createTriageLLMProvider', () => {
     } as never);
     const provider = createTriageLLMProvider(AUTH, Harness.pi);
     await expect(provider('verdict?')).resolves.toBe('false_positive');
+  });
+
+  it('throws on a gateway refusal, so warlock keeps every match real', async () => {
+    // Returned, the refusal would be read as a verdict.
+    complete.mockResolvedValue(reply('[posthog:abort] Out of scope'));
+    const provider = createTriageLLMProvider(AUTH, Harness.pi);
+
+    await expect(provider('verdict?')).rejects.toThrow(
+      'AI gateway refused the triage call',
+    );
+    expect(logToFile).toHaveBeenCalledWith(
+      '[YARA] gateway policy refused the triage call: Out of scope',
+    );
   });
 });

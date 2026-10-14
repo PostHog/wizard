@@ -1,4 +1,5 @@
 import {
+  buildGatewayModel,
   buildGatewayProvider,
   buildGatewayHeaders,
   isGatewayAuthRejection,
@@ -65,6 +66,42 @@ describe('buildGatewayProvider transport', () => {
     });
     expect(api).toBe('anthropic-messages');
     expect(baseUrl).toBe('https://ai-gateway.us.posthog.com');
+  });
+});
+
+describe('buildGatewayModel', () => {
+  it('sends the system prompt as system, not developer, which the gateway accepts on pinned tokens', async () => {
+    const { completeSimple } = await import('@earendil-works/pi-ai');
+    const model = buildGatewayModel({
+      gatewayUrl: 'https://ai-gateway.us.posthog.com',
+      accessToken: 'phe_x',
+      wizardMetadata: {},
+      wizardFlags: {},
+      modelId: 'openai/gpt-5.6-terra',
+    });
+    let payload: { input: { role: string; content: unknown }[] } | undefined;
+
+    // pi builds the real request; throwing from onPayload stops it before any HTTP.
+    await completeSimple(
+      model,
+      {
+        systemPrompt: 'Be terse.',
+        messages: [{ role: 'user', content: 'hi', timestamp: 0 }],
+      },
+      {
+        apiKey: 'phe_x',
+        onPayload: (request) => {
+          payload = request as typeof payload;
+          throw new Error('captured');
+        },
+      },
+    );
+
+    expect(payload?.input.map((item) => item.role)).not.toContain('developer');
+    expect(payload?.input[0]).toMatchObject({
+      role: 'system',
+      content: 'Be terse.',
+    });
   });
 });
 
