@@ -18,7 +18,6 @@ function tool(
     label: kind,
     warehouse_source_type: kind,
     wizard_setup_mode: 'in-cli',
-    competes_with: [],
     superseded_by: [],
     ...fields,
     signals: {
@@ -78,19 +77,16 @@ export const FIXTURE_CATALOG: ToolCatalog = {
       },
     }),
     tool('Mixpanel', {
-      competes_with: ['product_analytics'],
       signals: {
         packages: { pypi: ['mixpanel'], 'not-an-ecosystem-yet': ['mixpanel'] },
       },
     }),
     tool('Sentry', {
-      competes_with: ['error_tracking'],
       signals: { packages: { npm: ['@sentry/node'] } },
     }),
     tool('Hotjar', {
       warehouse_source_type: null,
       wizard_setup_mode: null,
-      competes_with: ['session_replay'],
       signals: {
         script_hosts: ['hotjar.com'],
         packages: { npm: ['@hotjar/browser'] },

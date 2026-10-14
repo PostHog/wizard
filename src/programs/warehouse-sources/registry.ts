@@ -29,7 +29,6 @@ const FETCH_TIMEOUT_MS = 5_000;
 // value that fails one rejects only its tool entry.
 const KIND = /^[A-Za-z0-9]{1,64}$/;
 const LABEL = /^[\w .,&()+/'!-]{1,80}$/;
-const COMPETES_WITH = /^[a-z_]{1,64}$/;
 const PACKAGE_NAME = /^[A-Za-z0-9@/._:+~-]{1,214}$/;
 const SCRIPT_HOST = /^[a-z0-9.-]{1,253}$/;
 // A `^`, then literal characters or groups of literal alternatives, each
@@ -44,7 +43,6 @@ const catalogToolSchema: z.ZodType<CatalogTool, z.ZodTypeDef, unknown> =
     label: z.string().regex(LABEL),
     warehouse_source_type: z.string().regex(KIND).nullable(),
     wizard_setup_mode: z.enum(['in-cli', 'deep-link']).nullable(),
-    competes_with: z.array(z.string().regex(COMPETES_WITH)),
     superseded_by: z.array(z.string().regex(KIND)),
     signals: z.object({
       env_key_patterns: z.array(z.string().regex(ENV_KEY_PATTERN)),

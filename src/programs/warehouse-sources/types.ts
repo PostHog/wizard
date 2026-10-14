@@ -30,9 +30,8 @@ export type CatalogTool = {
   kind: string;
   label: string;
   warehouse_source_type: string | null;
-  /** Null for tools the wizard only detects and reports, such as competitors with no warehouse connector. */
+  /** Null for tools the wizard only detects and reports, such as PostHog alternatives with no warehouse connector. */
   wizard_setup_mode: SourceCreationMode | null;
-  competes_with: string[];
   superseded_by: string[];
   signals: {
     /** Anchored regex sources matched against `.env` key NAMES. */
