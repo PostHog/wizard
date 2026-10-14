@@ -1,6 +1,17 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+
+vi.mock(
+  import('@programs/warehouse-sources/registry'),
+  async (importOriginal) =>
+    (
+      await import(
+        '@programs/warehouse-sources/__tests__/helpers/tool-catalog.no-jest'
+      )
+    ).withFixtureCatalog(await importOriginal()),
+);
+
 import {
   detectSelfDrivingPrerequisites,
   config as selfDriving,
@@ -10,12 +21,10 @@ import {
   detectPostHogPresent,
   POSTHOG_MANIFESTS,
   SELF_DRIVING_DETECTED_TOOLS_KEY,
-  SELF_DRIVING_TOOL_KINDS,
   getSelfDrivingDetectedTools,
 } from '@programs/self-driving/detect';
 import { getDetectedWarehouseSources } from '@programs/warehouse-sources/detect';
 import { SessionStore } from '@programs/session/session-store';
-import { SOURCE_DETECTORS } from '@programs/warehouse-sources/registry';
 import type { DetectedSource } from '@programs/warehouse-sources/types';
 import { toIntegrationReport } from '@programs/self-driving/detect-agentic';
 import {
@@ -50,31 +59,33 @@ describe('detectSelfDrivingPrerequisites', () => {
   });
   afterEach(() => cleanup(tmpDir));
 
-  it('errors when install directory is invalid', () => {
+  it('errors when install directory is invalid', async () => {
     const session = buildSession({ installDir: '/nonexistent/path' });
-    detectSelfDrivingPrerequisites(session, setCtx);
+    await detectSelfDrivingPrerequisites(session, setCtx);
 
     expect(ctx.detectError).toEqual(
       expect.objectContaining({ kind: 'bad-directory' }),
     );
   });
 
-  it('proceeds for a valid directory even when the setup report is absent', () => {
+  it('proceeds for a valid directory even when the setup report is absent', async () => {
     // The setup report is no longer a prerequisite — many users never commit
     // it — so a valid, readable install dir alone clears detection.
     const session = buildSession({ installDir: tmpDir });
-    detectSelfDrivingPrerequisites(session, setCtx);
+    await detectSelfDrivingPrerequisites(session, setCtx);
 
     expect(ctx.detectError).toBeUndefined();
   });
 
   /** Kinds stashed for the connected-tools ask after a scan of `tmpDir`. */
-  const detectedKinds = (deps: Record<string, string>): string[] => {
+  const detectedKinds = async (
+    deps: Record<string, string>,
+  ): Promise<string[]> => {
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
       JSON.stringify({ dependencies: deps }),
     );
-    detectSelfDrivingPrerequisites(
+    await detectSelfDrivingPrerequisites(
       buildSession({ installDir: tmpDir }),
       setCtx,
     );
@@ -84,35 +95,29 @@ describe('detectSelfDrivingPrerequisites', () => {
     return (tools ?? []).map((s) => s.kind);
   };
 
-  it('stashes tools detected in the codebase for the connected-tools ask', () => {
-    expect(detectedKinds({ '@sentry/node': '^7.0.0' })).toContain('Sentry');
-  });
-
-  it('keeps only the tools the inbox can connect', () => {
-    // `pg` and `stripe` are warehouse sources, not connected tools.
-    expect(detectedKinds({ pg: '^8.0.0', stripe: '^14.0.0' })).toEqual([]);
-    expect(detectedKinds({ pg: '^8.0.0', '@sentry/node': '^7.0.0' })).toEqual([
+  it('stashes tools detected in the codebase for the connected-tools ask', async () => {
+    expect(await detectedKinds({ '@sentry/node': '^7.0.0' })).toContain(
       'Sentry',
-    ]);
+    );
   });
 
-  it('writes nothing when the codebase has no detectable tools', () => {
+  it('keeps only the tools the inbox can connect', async () => {
+    // `pg` and `stripe` are warehouse sources, not connected tools.
+    expect(await detectedKinds({ pg: '^8.0.0', stripe: '^14.0.0' })).toEqual(
+      [],
+    );
+    expect(
+      await detectedKinds({ pg: '^8.0.0', '@sentry/node': '^7.0.0' }),
+    ).toEqual(['Sentry']);
+  });
+
+  it('writes nothing when the codebase has no detectable tools', async () => {
     // Bare dir: valid, but no tools to prioritise, so the key stays unset.
     const session = buildSession({ installDir: tmpDir });
-    detectSelfDrivingPrerequisites(session, setCtx);
+    await detectSelfDrivingPrerequisites(session, setCtx);
 
     expect(ctx.detectError).toBeUndefined();
     expect(ctx[SELF_DRIVING_DETECTED_TOOLS_KEY]).toBeUndefined();
-  });
-});
-
-describe('SELF_DRIVING_TOOL_KINDS', () => {
-  it('names only kinds the source registry can actually detect', () => {
-    // A plain string set, so a registry rename would otherwise drop a tool silently.
-    const known = new Set(SOURCE_DETECTORS.map((d) => d.kind));
-    expect([...SELF_DRIVING_TOOL_KINDS].filter((k) => !known.has(k))).toEqual(
-      [],
-    );
   });
 });
 

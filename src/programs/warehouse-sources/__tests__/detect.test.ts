@@ -7,7 +7,15 @@ import {
   parseEnvKeys,
 } from '@programs/warehouse-sources/detect';
 import { MAX_REPORTED_PATH_LENGTH } from '@utils/env-scan';
-import { SOURCE_DETECTORS } from '@programs/warehouse-sources/registry';
+import { toSourceDetectors } from '@programs/warehouse-sources/registry';
+import type { DetectedSource } from '@programs/warehouse-sources/types';
+import { FIXTURE_CATALOG } from './helpers/tool-catalog.no-jest';
+
+const DETECTORS = toSourceDetectors(FIXTURE_CATALOG);
+
+function detect(dir: string): DetectedSource[] {
+  return detectWarehouseSources(dir, DETECTORS);
+}
 
 function makeTmpDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'warehouse-detect-'));
@@ -29,7 +37,7 @@ function writePackageJson(
 }
 
 function kinds(dir: string): string[] {
-  return detectWarehouseSources(dir)
+  return detect(dir)
     .map((s) => s.kind)
     .sort();
 }
@@ -43,12 +51,12 @@ describe('detectWarehouseSources', () => {
   afterEach(() => cleanup(tmpDir));
 
   it('returns empty for a non-existent directory', () => {
-    expect(detectWarehouseSources(path.join(tmpDir, 'nope'))).toEqual([]);
+    expect(detect(path.join(tmpDir, 'nope'))).toEqual([]);
   });
 
   it('returns empty when no source signal is present', () => {
     writePackageJson(tmpDir, { react: '^18.0.0' });
-    expect(detectWarehouseSources(tmpDir)).toEqual([]);
+    expect(detect(tmpDir)).toEqual([]);
   });
 
   it('detects Postgres from an npm driver dependency', () => {
@@ -56,148 +64,48 @@ describe('detectWarehouseSources', () => {
     expect(kinds(tmpDir)).toEqual(['Postgres']);
   });
 
-  it('detects Stripe from a dependency', () => {
+  it('detects Stripe from a dependency, naming the package over a matching .env key', () => {
     writePackageJson(tmpDir, { stripe: '^14.0.0' });
-    const [stripe] = detectWarehouseSources(tmpDir);
+    fs.writeFileSync(path.join(tmpDir, '.env'), 'STRIPE_SECRET_KEY=sk_x\n');
+    const [stripe] = detect(tmpDir);
     expect(stripe.kind).toBe('Stripe');
     expect(stripe.mode).toBe('in-cli');
-    expect(stripe.matchedSignal).toContain('stripe');
+    expect(stripe.matchedSignal).toBe('found `stripe` in package.json');
   });
 
   it('detects a deep-link source (Salesforce) and tags its mode', () => {
     writePackageJson(tmpDir, { jsforce: '^3.0.0' });
-    const [salesforce] = detectWarehouseSources(tmpDir);
+    const [salesforce] = detect(tmpDir);
     expect(salesforce.kind).toBe('Salesforce');
     expect(salesforce.mode).toBe('deep-link');
   });
 
-  it('detects newly added SaaS sources by their SDK package', () => {
-    writePackageJson(tmpDir, {
-      convex: '^1.0.0',
-      '@clerk/nextjs': '^5.0.0',
-      resend: '^4.0.0',
-    });
-    const detected = detectWarehouseSources(tmpDir);
-    const byKind = Object.fromEntries(detected.map((s) => [s.kind, s.mode]));
-    expect(byKind.Convex).toBe('in-cli');
-    expect(byKind.Clerk).toBe('in-cli');
-    expect(byKind.Resend).toBe('in-cli');
-  });
-
-  it('detects newly added in-cli SaaS sources by their SDK package', () => {
-    writePackageJson(tmpDir, {
-      twilio: '^5.0.0',
-      '@sendgrid/mail': '^8.0.0',
-      plaid: '^25.0.0',
-      braintree: '^3.0.0',
-      square: '^38.0.0',
-      'launchdarkly-node-server-sdk': '^7.0.0',
-      '@notionhq/client': '^2.0.0',
-      '@mollie/api-client': '^4.0.0',
-    });
-    const detected = detectWarehouseSources(tmpDir);
-    const byKind = Object.fromEntries(detected.map((s) => [s.kind, s.mode]));
-    expect(byKind.Twilio).toBe('in-cli');
-    expect(byKind.SendGrid).toBe('in-cli');
-    expect(byKind.Plaid).toBe('in-cli');
-    expect(byKind.Braintree).toBe('in-cli');
-    expect(byKind.Square).toBe('in-cli');
-    expect(byKind.LaunchDarkly).toBe('in-cli');
-    expect(byKind.Notion).toBe('in-cli');
-    expect(byKind.Mollie).toBe('in-cli');
-  });
-
-  it('detects Firebase as a deep-link source (service-account key file)', () => {
-    writePackageJson(tmpDir, { 'firebase-admin': '^12.0.0' });
-    const [firebase] = detectWarehouseSources(tmpDir);
-    expect(firebase.kind).toBe('Firebase');
-    // The credential is a JSON key file, which the terminal prompt cannot
-    // collect — so it routes to the browser new-source form, not in-cli.
-    expect(firebase.mode).toBe('deep-link');
-  });
-
-  it('detects BigQuery as a deep-link source (service-account key file)', () => {
-    writePackageJson(tmpDir, { '@google-cloud/bigquery': '^7.0.0' });
-    const [bigquery] = detectWarehouseSources(tmpDir);
-    expect(bigquery.kind).toBe('BigQuery');
-    // Same reason as Firebase: the only required credential is a JSON key
-    // file upload, which the single-line terminal prompt cannot collect.
-    expect(bigquery.mode).toBe('deep-link');
-  });
-
-  it('detects Slack and GitHub as deep-link OAuth sources', () => {
-    writePackageJson(tmpDir, {
-      '@slack/web-api': '^7.0.0',
-      '@octokit/rest': '^21.0.0',
-    });
-    const detected = detectWarehouseSources(tmpDir);
-    const byKind = Object.fromEntries(detected.map((s) => [s.kind, s.mode]));
-    expect(byKind.Slack).toBe('deep-link');
-    // ExternalDataSourceType value is 'Github', not 'GitHub'.
-    expect(byKind.Github).toBe('deep-link');
-  });
-
-  it('detects LLM/AI SaaS sources by their SDK package as in-cli', () => {
-    writePackageJson(tmpDir, {
-      openai: '^4.0.0',
-      '@anthropic-ai/sdk': '^0.30.0',
-      'groq-sdk': '^0.9.0',
-    });
-    const byKind = Object.fromEntries(
-      detectWarehouseSources(tmpDir).map((s) => [s.kind, s.mode]),
-    );
-    expect(byKind.OpenAI).toBe('in-cli');
-    expect(byKind.Anthropic).toBe('in-cli');
-    expect(byKind.Groq).toBe('in-cli');
-  });
-
-  it('detects ad-platform sources as deep-link OAuth sources', () => {
-    writePackageJson(tmpDir, {
-      'google-ads-api': '^17.0.0',
-      'facebook-nodejs-business-sdk': '^20.0.0',
-    });
-    const byKind = Object.fromEntries(
-      detectWarehouseSources(tmpDir).map((s) => [s.kind, s.mode]),
-    );
-    expect(byKind.GoogleAds).toBe('deep-link');
-    expect(byKind.MetaAds).toBe('deep-link');
-  });
-
-  it('detects newly added sources from Python, Ruby, and env signals', () => {
+  it('detects sources from Python, Ruby, and env signals', () => {
+    fs.writeFileSync(path.join(tmpDir, 'requirements.txt'), 'mixpanel==4.10\n');
     fs.writeFileSync(
-      path.join(tmpDir, 'requirements.txt'),
-      'python-gitlab==4.0.0\n',
+      path.join(tmpDir, 'pyproject.toml'),
+      '[project]\ndependencies = ["stripe"]\n',
     );
-    fs.writeFileSync(path.join(tmpDir, 'Gemfile'), "gem 'newrelic_rpm'\n");
-    fs.writeFileSync(
-      path.join(tmpDir, '.env'),
-      'DATADOG_API_KEY=x\nSTYTCH_SECRET=y\n',
-    );
-    expect(kinds(tmpDir)).toEqual(
-      ['Datadog', 'GitLab', 'NewRelic', 'Stytch'].sort(),
-    );
+    fs.writeFileSync(path.join(tmpDir, 'Gemfile'), "gem 'pg'\n");
+    fs.writeFileSync(path.join(tmpDir, '.env'), 'OPENAI_API_KEY=x\n');
+    expect(kinds(tmpDir)).toEqual(['Mixpanel', 'OpenAI', 'Postgres', 'Stripe']);
   });
 
-  it('detects sources from Python and Ruby deps and env keys', () => {
-    fs.writeFileSync(
-      path.join(tmpDir, 'requirements.txt'),
-      'launchdarkly-server-sdk==9.0.0\nrollbar==1.0.0\n',
-    );
-    fs.writeFileSync(path.join(tmpDir, 'Gemfile'), "gem 'recurly'\n");
-    fs.writeFileSync(
-      path.join(tmpDir, '.env'),
-      'TWILIO_AUTH_TOKEN=x\nMJ_APIKEY_PUBLIC=y\nCKO_SECRET_KEY=z\n',
-    );
-    expect(kinds(tmpDir)).toEqual(
-      [
-        'CheckoutCom',
-        'LaunchDarkly',
-        'Mailjet',
-        'Recurly',
-        'Rollbar',
-        'Twilio',
-      ].sort(),
-    );
+  it('never offers a tool without a setup mode as a warehouse source', () => {
+    writePackageJson(tmpDir, { '@hotjar/browser': '^1.0.0' });
+    expect(detect(tmpDir)).toEqual([]);
+  });
+
+  it('ignores an ecosystem it has no parser for and still matches the rest', () => {
+    fs.writeFileSync(path.join(tmpDir, 'requirements.txt'), 'mixpanel==4.10\n');
+    expect(detect(tmpDir)).toEqual([
+      {
+        kind: 'Mixpanel',
+        label: 'Mixpanel',
+        mode: 'in-cli',
+        matchedSignal: 'found `mixpanel` in Python dependencies',
+      },
+    ]);
   });
 
   it('detects Postgres from a Python requirement', () => {
@@ -253,7 +161,7 @@ describe('detectWarehouseSources', () => {
     fs.mkdirSync(path.dirname(full), { recursive: true });
     fs.writeFileSync(full, 'OPENAI_API_KEY=sk-live-secret\n');
 
-    const [openai] = detectWarehouseSources(tmpDir);
+    const [openai] = detect(tmpDir);
     expect(openai.kind).toBe('OpenAI');
     // The agent acts on this string — it must point at the real file, not `.env`.
     expect(openai.matchedSignal).toBe(
@@ -279,7 +187,7 @@ describe('detectWarehouseSources', () => {
       'STRIPE_SECRET_KEY=sk_live_x\n',
     );
 
-    const [stripe] = detectWarehouseSources(tmpDir);
+    const [stripe] = detect(tmpDir);
     expect(stripe.kind).toBe('Stripe');
     expect(stripe.matchedSignal).toBe(
       'found `STRIPE_SECRET_KEY` in `.env.local`',
@@ -290,63 +198,7 @@ describe('detectWarehouseSources', () => {
     const tooDeep = path.join(tmpDir, 'a', 'b', 'c', 'd');
     fs.mkdirSync(tooDeep, { recursive: true });
     fs.writeFileSync(path.join(tooDeep, '.env'), 'STRIPE_SECRET_KEY=x\n');
-    expect(detectWarehouseSources(tmpDir)).toEqual([]);
-  });
-
-  it('detects newly added sources by their npm package', () => {
-    writePackageJson(tmpDir, {
-      '@neondatabase/serverless': '^0.10.0',
-      algoliasearch: '^5.0.0',
-      inngest: '^3.0.0',
-      'google-spreadsheet': '^4.0.0',
-    });
-    const byKind = Object.fromEntries(
-      detectWarehouseSources(tmpDir).map((s) => [s.kind, s.mode]),
-    );
-    expect(byKind.Neon).toBe('in-cli');
-    expect(byKind.Algolia).toBe('in-cli');
-    expect(byKind.Inngest).toBe('in-cli');
-    expect(byKind.GoogleSheets).toBe('in-cli');
-  });
-
-  it('detects newly added sources from Python and env signals', () => {
-    fs.writeFileSync(path.join(tmpDir, 'requirements.txt'), 'wandb==0.18.0\n');
-    fs.writeFileSync(
-      path.join(tmpDir, '.env'),
-      'DATABRICKS_HOST=x\nLOOPS_API_KEY=y\n',
-    );
-    expect(kinds(tmpDir)).toEqual(
-      ['Databricks', 'Loops', 'WeightsAndBiases'].sort(),
-    );
-  });
-
-  it('detects newly added sources from a Gemfile and pyproject.toml', () => {
-    fs.writeFileSync(path.join(tmpDir, 'Gemfile'), "gem 'algolia'\n");
-    fs.writeFileSync(
-      path.join(tmpDir, 'pyproject.toml'),
-      '[project]\ndependencies = ["dbt-core", "temporalio"]\n',
-    );
-    expect(kinds(tmpDir)).toEqual(['Algolia', 'Dbt', 'TemporalIO'].sort());
-  });
-
-  it.each([
-    ['MOTHERDUCK_TOKEN', 'Motherduck'],
-    ['SINGLESTORE_PASSWORD', 'Singlestore'],
-    ['RAZORPAY_KEY_ID', 'Razorpay'],
-    ['FLW_SECRET_KEY', 'Flutterwave'],
-    ['AWS_SES_ACCESS_KEY', 'AwsSes'],
-    ['COURIER_AUTH_TOKEN', 'Courier'],
-    ['TRIGGER_SECRET_KEY', 'TriggerDev'],
-    ['RENDER_API_KEY', 'Render'],
-    ['FLY_API_TOKEN', 'FlyIo'],
-    ['SRC_ACCESS_TOKEN', 'Sourcegraph'],
-    ['TALLY_API_KEY', 'Tally'],
-    ['DUB_API_KEY', 'Dub'],
-    ['GONG_ACCESS_KEY', 'Gong'],
-    ['LOGTAIL_SOURCE_TOKEN', 'BetterStack'],
-  ])('detects %s as %s', (envKey, kind) => {
-    fs.writeFileSync(path.join(tmpDir, '.env'), `${envKey}=x\n`);
-    expect(kinds(tmpDir)).toEqual([kind]);
+    expect(detect(tmpDir)).toEqual([]);
   });
 
   it.each([
@@ -366,45 +218,11 @@ describe('detectWarehouseSources', () => {
     expect(kinds(tmpDir)).toEqual(['Postgres']);
   });
 
-  it.each([
-    ['framer-motion npm package', { 'framer-motion': '^11.0.0' }],
-    ['a Motion animation dependency', { motion: '^11.0.0' }],
-  ])('detects nothing from %s', (_name, deps) => {
-    writePackageJson(tmpDir, deps);
-    expect(detectWarehouseSources(tmpDir)).toEqual([]);
-  });
-
-  it.each([
-    ['TRIGGER_WORKFLOW'],
-    ['COURIER_TRACKING_URL'],
-    ['RENDER_MODE'],
-    ['TALLY_LEDGER_ID'],
-  ])('detects nothing from a lone %s key', (envKey) => {
-    fs.writeFileSync(path.join(tmpDir, '.env'), `${envKey}=x\n`);
-    expect(detectWarehouseSources(tmpDir)).toEqual([]);
-  });
-
-  // These three declare a PostHog feature flag, so they look gated. Each flag
-  // is active at 100% with no targeting, which means every user can complete
-  // them. Detect them like any other source.
-  it.each([
-    ['Intercom', { 'intercom-client': '^5.0.0' }, 'INTERCOM_ACCESS_TOKEN'],
-    ['Plain', { '@team-plain/typescript-sdk': '^5.0.0' }, 'PLAIN_API_KEY'],
-    ['Polar', { '@polar-sh/sdk': '^0.30.0' }, 'POLAR_ACCESS_TOKEN'],
-  ])(
-    'detects %s, whose gating flag is fully rolled out',
-    (kind, deps, envKey) => {
-      writePackageJson(tmpDir, deps);
-      fs.writeFileSync(path.join(tmpDir, '.env'), `${envKey}=x\n`);
-      expect(kinds(tmpDir)).toContain(kind);
-    },
-  );
-
   it('ignores node_modules', () => {
     const nm = path.join(tmpDir, 'node_modules', 'pg');
     fs.mkdirSync(nm, { recursive: true });
     writePackageJson(nm, { pg: '^8.0.0' });
-    expect(detectWarehouseSources(tmpDir)).toEqual([]);
+    expect(detect(tmpDir)).toEqual([]);
   });
 });
 
@@ -430,7 +248,7 @@ describe('detectWarehouseSources — repository-controlled paths', () => {
     fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(path.join(dir, '.env'), 'OPENAI_API_KEY=sk-live-secret\n');
 
-    const [openai] = detectWarehouseSources(tmpDir);
+    const [openai] = detect(tmpDir);
     expect(openai.kind).toBe('OpenAI');
     return openai.matchedSignal;
   }
@@ -513,52 +331,13 @@ describe('detectWarehouseSources — repository-controlled paths', () => {
     fs.mkdirSync(path.dirname(full), { recursive: true });
     fs.writeFileSync(full, 'OPENAI_API_KEY=sk-live-secret\n');
 
-    const [openai] = detectWarehouseSources(tmpDir);
+    const [openai] = detect(tmpDir);
     expect(openai.matchedSignal).toBe(
       `found \`OPENAI_API_KEY\` in \`${relativePath}\``,
     );
     // The agent must still be able to open exactly this file.
     expect(fs.existsSync(path.join(tmpDir, relativePath))).toBe(true);
     expect(openai.matchedSignal).not.toContain('sk-live-secret');
-  });
-});
-
-describe('SOURCE_DETECTORS', () => {
-  it('has a unique kind for every entry', () => {
-    const seen = new Map<string, number>();
-    for (const detector of SOURCE_DETECTORS) {
-      seen.set(detector.kind, (seen.get(detector.kind) ?? 0) + 1);
-    }
-    const duplicates = [...seen.entries()]
-      .filter(([, count]) => count > 1)
-      .map(([kind]) => kind);
-    expect(duplicates).toEqual([]);
-  });
-
-  it('supersedes only kinds the registry knows', () => {
-    const kindSet = new Set(SOURCE_DETECTORS.map((d) => d.kind));
-    for (const detector of SOURCE_DETECTORS) {
-      for (const kind of detector.supersededBy ?? []) {
-        expect(kindSet.has(kind), `${detector.kind} supersededBy ${kind}`).toBe(
-          true,
-        );
-      }
-    }
-  });
-
-  it('gives every entry a non-empty label and at least one signal', () => {
-    for (const detector of SOURCE_DETECTORS) {
-      const { npm, python, ruby, envKeys } = detector.signals;
-      const signalCount =
-        (npm?.length ?? 0) +
-        (python?.length ?? 0) +
-        (ruby?.length ?? 0) +
-        (envKeys?.length ?? 0);
-      expect(detector.label.length, `${detector.kind} label`).toBeGreaterThan(
-        0,
-      );
-      expect(signalCount, `${detector.kind} signals`).toBeGreaterThan(0);
-    }
   });
 });
 

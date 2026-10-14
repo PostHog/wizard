@@ -1,10 +1,11 @@
 /**
  * Data warehouse source detection — typed config surface.
  *
- * A `SourceDetector` is pure data: a codebase signal mapped to a PostHog
- * source-type `kind` and the mode the wizard uses to set it up. The detection
- * loop and the program machinery don't know what any individual source is —
- * they execute against this registry. Adding a source is one registry entry.
+ * A `SourceDetector` is pure data: a codebase signal mapped to a tool `kind`,
+ * the PostHog source type it imports as, and the mode the wizard uses to set it
+ * up. The detection loop and the program machinery don't know what any
+ * individual source is — they execute against this registry. The registry is
+ * built at runtime from PostHog's tool catalog; see `registry.ts`.
  */
 
 /**
@@ -19,31 +20,56 @@
  */
 export type SourceCreationMode = 'in-cli' | 'deep-link';
 
+/** Schema of PostHog's tool catalog JSON, served at `/api/wizard/tool_catalog/`. */
+export type ToolCatalog = {
+  schema_version: 1;
+  tools: CatalogTool[];
+};
+
+export type CatalogTool = {
+  kind: string;
+  label: string;
+  warehouse_source_type: string | null;
+  /** Null for tools the wizard only detects and reports, such as competitors with no warehouse connector. */
+  wizard_setup_mode: SourceCreationMode | null;
+  competes_with: string[];
+  superseded_by: string[];
+  signals: {
+    /** Anchored regex sources matched against `.env` key NAMES. */
+    env_key_patterns: string[];
+    /** Hostnames matched against script URLs, including subdomains. */
+    script_hosts: string[];
+    /** Package names keyed by ecosystem (`npm`, `pypi`, `rubygems`, ...). Unknown ecosystems match nothing. */
+    packages: Record<string, string[]>;
+  };
+};
+
 export interface SourceSignals {
-  /** package.json dependency names (deps + devDeps), e.g. ['pg', 'postgres']. */
-  npm?: string[];
-  /**
-   * Python dependency names as normalized by the parsers in
-   * `@programs/detection/features` (lowercased, `_`→`-`), e.g. ['psycopg', 'psycopg2'].
-   */
-  python?: string[];
-  /** Gemfile gem names, e.g. ['pg']. */
-  ruby?: string[];
   /** `.env` key-NAME patterns (values are never read), e.g. [/^DATABASE_URL$/]. */
-  envKeys?: RegExp[];
+  envKeys: readonly RegExp[];
+  /** Third-party script hostnames, e.g. ['static.hotjar.com']. */
+  scriptHosts: readonly string[];
+  /**
+   * Package names keyed by ecosystem, e.g. `{ npm: ['pg'], pypi: ['psycopg2'] }`.
+   * Python names are normalized like the parsers in `@programs/detection/features`
+   * (lowercased, `_`→`-`).
+   */
+  packages: Readonly<Record<string, readonly string[]>>;
 }
 
 export interface SourceDetector {
-  /**
-   * PostHog source-type name. MUST match the names returned by the MCP
-   * `external-data-sources-wizard` tool (e.g. 'Postgres', 'MySQL', 'Stripe') —
-   * this string is used both for the deep-link `?kind=` param and the
-   * `external-data-sources-create` `source_type` field.
-   */
+  /** Tool identifier, unique across the registry, e.g. 'Postgres' or 'Statsig'. */
   kind: string;
   /** Human-readable label for screens, e.g. 'PostgreSQL'. */
   label: string;
-  mode: SourceCreationMode;
+  /**
+   * PostHog source-type name, used both for the deep-link `?kind=` param and the
+   * `external-data-sources-create` `source_type` field. Null for a tool with no
+   * warehouse connector.
+   */
+  warehouseSourceType: string | null;
+  /** Null for a tool the wizard detects but never offers as a warehouse source. */
+  mode: SourceCreationMode | null;
   signals: SourceSignals;
   /**
    * Kinds that reach the same data as this one through a more specific
@@ -55,6 +81,7 @@ export interface SourceDetector {
 }
 
 export interface DetectedSource {
+  /** The PostHog source type this project can import from. */
   kind: string;
   label: string;
   mode: SourceCreationMode;

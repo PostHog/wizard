@@ -14,6 +14,7 @@ import {
   detectWarehouseSources,
   DETECTED_WAREHOUSE_SOURCES_KEY,
 } from '../warehouse-sources/detect';
+import { loadSourceDetectors } from '../warehouse-sources/registry';
 
 /** Structured detection errors rendered by the intro screen. */
 export type WarehouseDetectError =
@@ -53,10 +54,10 @@ export const WAREHOUSE_ABORT_CASES: AbortCase[] = [
  * Scan `session.installDir` for warehouse-source signals. Writes the detected
  * sources (or a `detectError`) into frameworkContext for the intro screen.
  */
-export function detectWarehousePrerequisites(
+export async function detectWarehousePrerequisites(
   session: ProgramSession,
   setFrameworkContext: (key: string, value: unknown) => void,
-): void {
+): Promise<void> {
   const fail = (error: WarehouseDetectError) =>
     setFrameworkContext('detectError', error);
 
@@ -80,7 +81,10 @@ export function detectWarehousePrerequisites(
     return;
   }
 
-  const sources = detectWarehouseSources(installDir);
+  const sources = detectWarehouseSources(
+    installDir,
+    await loadSourceDetectors(session.baseUrl),
+  );
 
   if (sources.length === 0) {
     fail({ kind: 'no-sources' });

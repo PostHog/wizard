@@ -16,6 +16,16 @@ vi.mock(import('@utils/analytics'), () => ({
   } as never,
 }));
 
+vi.mock(
+  import('@programs/warehouse-sources/registry'),
+  async (importOriginal) =>
+    (
+      await import(
+        '@programs/warehouse-sources/__tests__/helpers/tool-catalog.no-jest'
+      )
+    ).withFixtureCatalog(await importOriginal()),
+);
+
 import { analytics } from '@utils/analytics';
 import {
   detectPostHogIntegration,

@@ -32,6 +32,7 @@ import type { ProgramSession } from '../program-session';
 import type { AbortCase } from '@agent/types';
 import { ErrorCodes } from '@shared/errors';
 import { detectWarehouseSources } from '../warehouse-sources/detect';
+import { loadSourceDetectors } from '../warehouse-sources/registry';
 import type { DetectedSource } from '../warehouse-sources/types';
 
 /** frameworkContext key holding the deterministic PostHog-presence result. */
@@ -289,10 +290,10 @@ export const SELF_DRIVING_ABORT_CASES: AbortCase[] = [
  * `SelfDrivingDetectError` to frameworkContext on failure — the intro
  * screen renders it and blocks.
  */
-export function detectSelfDrivingPrerequisites(
+export async function detectSelfDrivingPrerequisites(
   session: ProgramSession,
   setFrameworkContext: (key: string, value: unknown) => void,
-): void {
+): Promise<void> {
   const fail = (error: SelfDrivingDetectError) =>
     setFrameworkContext('detectError', error);
 
@@ -317,10 +318,10 @@ export function detectSelfDrivingPrerequisites(
   // PostHog first.
   setFrameworkContext(POSTHOG_PRESENT_KEY, detectPostHogPresent(installDir));
 
-  detectConnectedTools(installDir, setFrameworkContext);
+  await detectConnectedTools(session, setFrameworkContext);
 }
 
-/** Step 5's ask options intersected with `SOURCE_DETECTORS` — reconcile when the skill's catalog grows. */
+/** Step 5's ask options intersected with the tool catalog's kinds. Reconcile when the skill's catalog grows. */
 export const SELF_DRIVING_TOOL_KINDS: ReadonlySet<string> = new Set([
   // Issue trackers / code hosts
   'Github',
@@ -352,13 +353,19 @@ export const SELF_DRIVING_TOOL_KINDS: ReadonlySet<string> = new Set([
 ]);
 
 /** Scan for inbox-connectable tools so STEP 5 can surface them first. Best-effort — never blocks detection. */
-function detectConnectedTools(
-  installDir: string,
+async function detectConnectedTools(
+  session: ProgramSession,
   setFrameworkContext: (key: string, value: unknown) => void,
-): void {
+): Promise<void> {
   try {
-    const tools = detectWarehouseSources(installDir).filter((s) =>
-      SELF_DRIVING_TOOL_KINDS.has(s.kind),
+    const detectors = await loadSourceDetectors(session.baseUrl);
+    // No catalog to match against: a failed scan, not one that found nothing.
+    if (detectors.length === 0) {
+      analytics.setTag('connected_tools_detected_count', -1);
+      return;
+    }
+    const tools = detectWarehouseSources(session.installDir, detectors).filter(
+      (s) => SELF_DRIVING_TOOL_KINDS.has(s.kind),
     );
 
     // Tagged even at zero, so "found nothing" is distinguishable from "never ran".

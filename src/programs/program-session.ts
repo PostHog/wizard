@@ -40,6 +40,14 @@ export interface ProgramSession {
    * `mcp add|remove|tutorial --local` populate it from their own flag.
    */
   localMcp: boolean;
+  /**
+   * Explicit PostHog base URL (`--base-url`). When set, it pins every PostHog
+   * origin — API host, cloud/app URL, OAuth server — and the region is ignored.
+   * The runtime equivalent of the dev-build localhost routing; lets the shipped
+   * wizard target a local/self-hosted stack. Threaded into the URL helpers in
+   * `@utils/urls`. Empty/unset → region-based resolution.
+   */
+  baseUrl?: string;
   /** `--harness` override, read by `resolveHarness`. Wins over the runner flag. */
   harness?: Harness;
   projectId?: number;
@@ -51,8 +59,6 @@ export interface ProgramSession {
   scanConsent: ScanConsent;
   /** Guards against reporting twice; consent resolves from two paths. */
   warehouseSourcesReported: boolean;
-  /** Guards the AI SDK org stamp: `runProgram` makes it once, after the first login. */
-  aiSdkStampReported: boolean;
   integration: Integration | null;
   frameworkContext: Record<string, unknown>;
   typescript: boolean;

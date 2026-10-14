@@ -27,6 +27,16 @@ vi.mock('@utils/analytics', () => ({
   sessionProperties: vi.fn(() => ({})),
 }));
 
+vi.mock(
+  import('@programs/warehouse-sources/registry'),
+  async (importOriginal) =>
+    (
+      await import(
+        '@programs/warehouse-sources/__tests__/helpers/tool-catalog.no-jest'
+      )
+    ).withFixtureCatalog(await importOriginal()),
+);
+
 function readyContext(
   session: ReturnType<typeof buildSession>,
 ): ProgramReadyContext {

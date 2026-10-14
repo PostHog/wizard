@@ -16,6 +16,16 @@ vi.mock('@utils/analytics', () => ({
   },
 }));
 
+vi.mock(
+  import('@programs/warehouse-sources/registry'),
+  async (importOriginal) =>
+    (
+      await import(
+        '@programs/warehouse-sources/__tests__/helpers/tool-catalog.no-jest'
+      )
+    ).withFixtureCatalog(await importOriginal()),
+);
+
 // Wrapped so one test can force a throw; the rest use the real scanner.
 vi.mock('@programs/warehouse-sources/detect', async (importOriginal) => {
   const actual = await importOriginal<
@@ -28,10 +38,8 @@ vi.mock('@programs/warehouse-sources/detect', async (importOriginal) => {
 });
 
 import { analytics } from '@utils/analytics';
-import {
-  detectWarehouseSources,
-  getDetectedWarehouseSources,
-} from '@programs/warehouse-sources/detect';
+import { detectWarehouseSources } from '@programs/warehouse-sources/detect';
+import { loadSourceDetectors } from '@programs/warehouse-sources/registry';
 import {
   detectPostHogIntegration,
   reportWarehouseSourcesDetected,
@@ -41,8 +49,7 @@ import type { ProgramReadyContext } from '@programs/program-step';
 import type { WizardSession } from '@programs/session/wizard-session';
 import { buildSession } from '@programs/session/wizard-session';
 import { DiscoveredFeature } from '@shared/discovered-feature';
-import { mayReportScanResults, ScanConsent } from '@shared/run-state';
-import { stampAiSdkDetected } from '@programs/detection/ai-sdk-stamp';
+import { ScanConsent } from '@shared/run-state';
 import type { DetectedSource } from '@programs/warehouse-sources/types';
 
 function makeTmpDir(): string {
@@ -177,6 +184,21 @@ describe('a scan failure is distinguishable from a clean zero-source scan', () =
     expect(analytics.wizardCapture).not.toHaveBeenCalled();
     expect(analytics.setTag).not.toHaveBeenCalled();
   });
+
+  it('no tool catalog: no event fires, since the scan could not look', async () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({ dependencies: { stripe: '^14.0.0' } }),
+    );
+    const session = buildSession({ installDir: tmpDir });
+    session.scanConsent = ScanConsent.Granted;
+    vi.mocked(loadSourceDetectors).mockResolvedValueOnce([]);
+
+    await detectPostHogIntegration(makeCtx(session));
+
+    expect(reportWarehouseSourcesDetected(session)).toBe(true);
+    expect(analytics.wizardCapture).not.toHaveBeenCalled();
+  });
 });
 
 describe('reportWarehouseSourcesDetected', () => {
@@ -295,146 +317,6 @@ describe('reportWarehouseSourcesDetected', () => {
     expect(secondCallFired).toBe(false);
     expect(analytics.wizardCapture).toHaveBeenCalledTimes(1);
     expect(analytics.setTag).toHaveBeenCalledTimes(2);
-  });
-});
-
-/** The org stamp, read from the session after login. */
-function stampAfterLogin(session: WizardSession): void {
-  stampAiSdkDetected({
-    apiUser: session.apiUser,
-    discoveredFeatures: session.discoveredFeatures,
-    warehouseSources: getDetectedWarehouseSources(session),
-    mayReportScanResults: mayReportScanResults(session),
-  });
-}
-
-describe('wizard_ai_sdk_detected group stamp', () => {
-  let tmpDir: string;
-
-  beforeEach(() => {
-    vi.clearAllMocks();
-    tmpDir = makeTmpDir();
-  });
-
-  afterEach(() => cleanup(tmpDir));
-
-  function withOrgUser(session: WizardSession): void {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    session.apiUser = { organization: { id: 'org-1' } } as any;
-  }
-
-  function withDeps(deps: Record<string, string>): void {
-    fs.writeFileSync(
-      path.join(tmpDir, 'package.json'),
-      JSON.stringify({ dependencies: deps }),
-    );
-  }
-
-  it('fires with wizard_ai_sdk_detected: true when consent is granted and an AI kind is detected', async () => {
-    withDeps({ openai: '^4.0.0' });
-    const session = buildSession({ installDir: tmpDir });
-    session.scanConsent = ScanConsent.Granted;
-    withOrgUser(session);
-
-    await detectPostHogIntegration(makeCtx(session));
-    stampAfterLogin(session);
-
-    expect(analytics.groupIdentify).toHaveBeenCalledWith(
-      'organization',
-      'org-1',
-      {
-        wizard_ai_sdk_detected: true,
-      },
-    );
-  });
-
-  it('fires on a discovered LLM feature even without an AI warehouse-source kind', async () => {
-    withDeps({ stripe: '^14.0.0' });
-    const session = buildSession({ installDir: tmpDir });
-    session.scanConsent = ScanConsent.Granted;
-    session.discoveredFeatures = [DiscoveredFeature.LLM];
-    withOrgUser(session);
-
-    await detectPostHogIntegration(makeCtx(session));
-    stampAfterLogin(session);
-
-    expect(analytics.groupIdentify).toHaveBeenCalledWith(
-      'organization',
-      'org-1',
-      {
-        wizard_ai_sdk_detected: true,
-      },
-    );
-  });
-
-  it('does not fire when consent is declined', async () => {
-    withDeps({ openai: '^4.0.0' });
-    const session = buildSession({ installDir: tmpDir });
-    session.scanConsent = ScanConsent.Declined;
-    withOrgUser(session);
-
-    await detectPostHogIntegration(makeCtx(session));
-    stampAfterLogin(session);
-
-    expect(analytics.groupIdentify).not.toHaveBeenCalled();
-  });
-
-  it('does not fire while consent is undecided', async () => {
-    withDeps({ openai: '^4.0.0' });
-    const session = buildSession({ installDir: tmpDir });
-    withOrgUser(session);
-
-    await detectPostHogIntegration(makeCtx(session));
-    stampAfterLogin(session);
-
-    expect(analytics.groupIdentify).not.toHaveBeenCalled();
-  });
-
-  it('does not fire when only non-AI kinds are detected', async () => {
-    withDeps({ stripe: '^14.0.0' });
-    const session = buildSession({ installDir: tmpDir });
-    session.scanConsent = ScanConsent.Granted;
-    withOrgUser(session);
-
-    await detectPostHogIntegration(makeCtx(session));
-    stampAfterLogin(session);
-
-    expect(analytics.groupIdentify).not.toHaveBeenCalled();
-  });
-
-  it('does not fire when the organization id is unknown', async () => {
-    withDeps({ openai: '^4.0.0' });
-    const session = buildSession({ installDir: tmpDir });
-    session.scanConsent = ScanConsent.Granted;
-
-    await detectPostHogIntegration(makeCtx(session));
-    stampAfterLogin(session);
-
-    expect(analytics.groupIdentify).not.toHaveBeenCalled();
-  });
-
-  // Consent resolves before login, so only a stamp after login sees an apiUser.
-  it('stamps only once an apiUser exists and consent is granted', async () => {
-    withDeps({ openai: '^4.0.0' });
-    const session = buildSession({ installDir: tmpDir });
-    await detectPostHogIntegration(makeCtx(session));
-
-    // Consent resolves on the intro screen, before login — same order as
-    // production. reportWarehouseSourcesDetected runs but apiUser is still null.
-    session.scanConsent = ScanConsent.Granted;
-    reportWarehouseSourcesDetected(session);
-    expect(analytics.groupIdentify).not.toHaveBeenCalled();
-
-    // The login sets apiUser, then the stamp runs.
-    withOrgUser(session);
-    stampAfterLogin(session);
-
-    expect(analytics.groupIdentify).toHaveBeenCalledTimes(1);
-    expect(analytics.groupIdentify).toHaveBeenCalledWith(
-      'organization',
-      'org-1',
-      { wizard_ai_sdk_detected: true },
-    );
   });
 });
 
