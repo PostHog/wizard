@@ -112,6 +112,47 @@ describe('warehouse seed task', () => {
   });
 });
 
+describe('warehouse seed task sources', () => {
+  const FIREBASE: DetectedSource = {
+    kind: 'Firebase',
+    label: 'Firebase',
+    mode: 'deep-link',
+    matchedSignal: 'firebase in package.json',
+  };
+
+  it('queues nothing when every detected source is deep-link', () => {
+    const tasks = seed(
+      session({
+        frameworkContext: { [DETECTED_WAREHOUSE_SOURCES_KEY]: [FIREBASE] },
+      }),
+    );
+    expect(tasks).toEqual([]);
+  });
+
+  it('offers only the in-cli sources, which keep the seed slots', () => {
+    const tasks = seed(
+      session({
+        frameworkContext: {
+          [DETECTED_WAREHOUSE_SOURCES_KEY]: [FIREBASE, ...sources(4)],
+        },
+      }),
+    );
+    const inputs = tasks[0].inputs?.sources as DetectedSource[];
+
+    expect(inputs.map((s) => s.kind)).toEqual([
+      'Source0',
+      'Source1',
+      'Source2',
+    ]);
+    expect(tasks[0].notice?.items).toEqual([
+      'Source 0',
+      'Source 1',
+      'Source 2',
+    ]);
+    expect(tasks[0].notice?.body.join(' ')).toContain('2 more');
+  });
+});
+
 describe('warehouse task notice', () => {
   const notice = () =>
     seed(
