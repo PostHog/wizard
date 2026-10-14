@@ -791,22 +791,34 @@ describe('runAgent', () => {
       return { result, aborted: signal.aborted as boolean };
     }
 
-    it('ends the run on a policy abort marker mid-reply with no abort cases', async () => {
-      const { result, aborted } = await runStream(function* () {
-        yield say(`I cannot help.\n${REFUSAL}\nSorry.`);
-      });
+    it.each([
+      [`${REFUSAL}\nSorry.`, 'abort'],
+      [`\n  ${REFUSAL}`, 'abort'],
+      ['Done. [posthog:abort] x', 'success'],
+    ])(
+      'on a policy abort marker in the reply %j with no abort cases, ends with %s',
+      async (reply, kind) => {
+        const { result, aborted } = await runStream(function* () {
+          yield say(reply);
+          // An aborted query yields nothing more; an ordinary reply goes on to finish.
+          if (kind === 'success') yield done;
+        });
 
-      expect(result).toEqual({
-        kind: 'abort',
-        classification: AgentErrorType.ABORT,
-        message: 'Request is out of scope',
-      });
-      expect(aborted).toBe(true);
-      expect(analytics.wizardCapture).toHaveBeenCalledWith(
-        'agent aborted',
-        expect.objectContaining({ source: 'gateway_policy' }),
-      );
-    });
+        expect(result.kind).toBe(kind);
+        expect(aborted).toBe(kind === 'abort');
+        if (kind === 'abort') {
+          expect(result).toEqual({
+            kind: 'abort',
+            classification: AgentErrorType.ABORT,
+            message: 'Request is out of scope',
+          });
+          expect(analytics.wizardCapture).toHaveBeenCalledWith(
+            'agent aborted',
+            expect.objectContaining({ source: 'gateway_policy' }),
+          );
+        }
+      },
+    );
 
     it.each([
       ['Agent', 'abort'],

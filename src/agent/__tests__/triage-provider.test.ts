@@ -149,12 +149,8 @@ describe('createTriageLLMProvider', () => {
   });
 
   it('throws on a gateway refusal, so warlock keeps every match real', async () => {
-    // Returned, warlock would salvage the JSON prefix and clear the match.
-    complete.mockResolvedValue(
-      reply(
-        '[{"index":0,"verdict":"false_positive","reason":"example"}]\n[posthog:abort] Out of scope',
-      ),
-    );
+    // Returned, the refusal would be read as a verdict.
+    complete.mockResolvedValue(reply('[posthog:abort] Out of scope'));
     const provider = createTriageLLMProvider(AUTH, Harness.pi);
 
     await expect(provider('verdict?')).rejects.toThrow(

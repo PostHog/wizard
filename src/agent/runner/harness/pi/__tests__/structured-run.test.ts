@@ -472,11 +472,10 @@ describe.each(['linear', 'task'] as const)('%s setup signals', (mode) => {
     });
   });
 
-  it('ends the run on a policy abort marker mid-reply, without a nudge', async () => {
+  it('ends the run on a policy abort marker at the start of a reply, without a nudge', async () => {
     state.hang = true;
     state.tasks.set('1', { status: 'in_progress' });
-    state.text =
-      'I cannot help.\n[posthog:abort] Request is out of scope\nSorry.';
+    state.text = '[posthog:abort] Request is out of scope\nSorry.';
 
     await expect(run(runInputs(vi.fn(), null))).resolves.toEqual({
       kind: 'abort',

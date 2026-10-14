@@ -40,7 +40,7 @@ function dispatch(replies: string[]) {
 
 it('returns a refusal from a non-final subagent turn and ends the child', async () => {
   const { child, run } = dispatch([
-    'Out of scope.\n[posthog:abort] Request is out of scope',
+    '[posthog:abort] Request is out of scope\nNothing else to add.',
     'Here are my findings.',
   ]);
 

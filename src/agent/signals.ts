@@ -25,7 +25,11 @@ export const AgentSignals = {
    * Programs can declare an onAbort handler to render a custom screen.
    */
   ABORT: '[ABORT]',
-  /** The AI gateway's refusal marker, "[posthog:abort] <reason>"; the run ends as an abort. */
+  /**
+   * The AI gateway's refusal marker. A reply that starts with
+   * "[posthog:abort] <reason>" is a refusal, and the run ends as an abort.
+   * The marker elsewhere in a reply is ordinary text.
+   */
   POLICY_ABORT: '[posthog:abort]',
   /** Signal emitted when the agent provides a remark about its run */
   WIZARD_REMARK: '[WIZARD-REMARK]',
@@ -47,12 +51,17 @@ export const AgentSignals = {
 
 export type AgentSignal = (typeof AgentSignals)[keyof typeof AgentSignals];
 
-/** The rest of the line after a policy abort marker in `text`, or undefined without one. */
+/**
+ * The reason of a reply that starts with the policy abort marker, or undefined
+ * for any other reply. The marker ends at a non-word character or the end of
+ * the text, and the reason is the rest of that first line.
+ */
 export function policyAbortReason(text: string): string | undefined {
-  const at = text.indexOf(AgentSignals.POLICY_ABORT);
-  if (at === -1) return undefined;
-  const line = text.slice(at + AgentSignals.POLICY_ABORT.length).split('\n')[0];
-  return line.trim() || 'The AI gateway refused this request';
+  const reply = text.trimStart();
+  if (!reply.startsWith(AgentSignals.POLICY_ABORT)) return undefined;
+  const rest = reply.slice(AgentSignals.POLICY_ABORT.length);
+  if (/^\w/.test(rest)) return undefined;
+  return rest.split('\n')[0].trim() || 'The AI gateway refused this request';
 }
 
 /**

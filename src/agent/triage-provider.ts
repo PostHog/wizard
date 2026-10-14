@@ -99,7 +99,7 @@ export function createTriageLLMProvider(
           } — every flagged match will be acted on`,
         );
       }
-      // Warlock salvages a JSON prefix, so throw to keep every match in the batch real.
+      // A refusal is not a verdict, so throw to keep every match in the batch real.
       const refusal = policyAbortReason(text);
       if (refusal) {
         logToFile(`[YARA] gateway policy refused the triage call: ${refusal}`);

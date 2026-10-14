@@ -2021,7 +2021,7 @@ function contentText(content: unknown): string {
   return content.map((b: { text?: string }) => b.text ?? '').join('\n');
 }
 
-/** The first assistant reply in a subagent transcript that carries the policy abort marker. */
+/** The first assistant reply in a subagent transcript that starts with the policy abort marker. */
 async function transcriptRefusal(
   transcriptPath: string | undefined,
 ): Promise<string | undefined> {
