@@ -222,9 +222,14 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
   // Not `reason`: the linear sequence emits this same event with a `reason`
   // holding the agent's free-text [ABORT] string, and one property cannot be
   // both a closed enum and unbounded prose without making either unreadable.
-  const captureAborted = (failureMode: AgentErrorType) =>
+  // `source` tells a gateway policy refusal apart from a program's [ABORT].
+  const captureAborted = (
+    failureMode: AgentErrorType,
+    source?: 'gateway_policy',
+  ) =>
     analytics.wizardCapture('agent aborted', {
       failure_mode: failureMode,
+      ...(source && { source }),
       ...runDurations(),
       model: modelId,
       ...analyticsProperties,
@@ -579,7 +584,10 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
     if (terminal && !security.state.criticalViolation) {
       if (errorMessage || spinnerMessage)
         spinner.stop(errorMessage ?? 'Task failed');
-      captureAborted(terminal.classification);
+      captureAborted(
+        terminal.classification,
+        abortReason ? 'gateway_policy' : undefined,
+      );
       if (terminal.status === 401) {
         return {
           kind: 'decided_failure',

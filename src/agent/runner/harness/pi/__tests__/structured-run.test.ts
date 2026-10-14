@@ -484,6 +484,13 @@ describe.each(['linear', 'task'] as const)('%s setup signals', (mode) => {
       message: 'Request is out of scope',
     });
     expect(state.prompts).toHaveLength(1);
+    expect(analytics.wizardCapture).toHaveBeenCalledWith(
+      'agent aborted',
+      expect.objectContaining({
+        failure_mode: AgentErrorType.ABORT,
+        source: 'gateway_policy',
+      }),
+    );
   });
 
   it('ignores a policy abort marker in the remark reply', async () => {

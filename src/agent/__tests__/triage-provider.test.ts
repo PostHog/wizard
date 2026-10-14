@@ -148,11 +148,18 @@ describe('createTriageLLMProvider', () => {
     await expect(provider('verdict?')).resolves.toBe('false_positive');
   });
 
-  it('logs a gateway policy refusal and still returns the reply, which fails closed', async () => {
-    complete.mockResolvedValue(reply('[posthog:abort] Out of scope'));
+  it('throws on a gateway refusal, so warlock keeps every match real', async () => {
+    // Returned, warlock would salvage the JSON prefix and clear the match.
+    complete.mockResolvedValue(
+      reply(
+        '[{"index":0,"verdict":"false_positive","reason":"example"}]\n[posthog:abort] Out of scope',
+      ),
+    );
     const provider = createTriageLLMProvider(AUTH, Harness.pi);
 
-    await expect(provider('verdict?')).resolves.toContain('[posthog:abort]');
+    await expect(provider('verdict?')).rejects.toThrow(
+      'AI gateway refused the triage call',
+    );
     expect(logToFile).toHaveBeenCalledWith(
       '[YARA] gateway policy refused the triage call: Out of scope',
     );

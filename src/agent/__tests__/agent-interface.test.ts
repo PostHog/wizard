@@ -802,6 +802,10 @@ describe('runAgent', () => {
         message: 'Request is out of scope',
       });
       expect(aborted).toBe(true);
+      expect(analytics.wizardCapture).toHaveBeenCalledWith(
+        'agent aborted',
+        expect.objectContaining({ source: 'gateway_policy' }),
+      );
     });
 
     it.each([
@@ -834,6 +838,61 @@ describe('runAgent', () => {
         expect(aborted).toBe(kind === 'abort');
       },
     );
+
+    it('ends the run on a policy abort marker on a non-final subagent turn', async () => {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wz-subagent-'));
+      const transcript = path.join(dir, 'agent.jsonl');
+      const turn = (content: unknown[]) =>
+        JSON.stringify({ type: 'assistant', message: { content } });
+      fs.writeFileSync(
+        transcript,
+        [
+          turn([
+            { type: 'text', text: REFUSAL },
+            { type: 'tool_use', id: 's1', name: 'Read' },
+          ]),
+          turn([{ type: 'text', text: 'Findings.' }]),
+        ].join('\n'),
+      );
+      const report = {
+        type: 'user',
+        message: {
+          content: [
+            { type: 'tool_result', tool_use_id: 't1', content: 'Findings.' },
+          ],
+        },
+      };
+      mockQuery.mockImplementation(({ options }) =>
+        (async function* () {
+          yield {
+            type: 'assistant',
+            message: {
+              content: [{ type: 'tool_use', id: 't1', name: 'Agent' }],
+            },
+          };
+          await options.hooks.SubagentStop[0].hooks[0]({
+            agent_transcript_path: transcript,
+          });
+          yield report;
+          yield done;
+        })(),
+      );
+
+      try {
+        const result = await runAgent(
+          defaultAgentConfig,
+          'test prompt',
+          defaultOptions,
+          mockSpinner as unknown as SpinnerHandle,
+        );
+        expect(result).toMatchObject({
+          kind: 'abort',
+          message: 'Request is out of scope',
+        });
+      } finally {
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
+    });
 
     it('ignores a policy abort marker in the remark reply', async () => {
       const stop = { stop_hook_active: false, last_assistant_message: 'Done.' };

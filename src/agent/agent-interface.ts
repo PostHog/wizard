@@ -6,6 +6,7 @@ import { randomUUID } from 'node:crypto';
 
 import path from 'path';
 import * as os from 'os';
+import { readFile } from 'fs/promises';
 // eslint-disable-next-line no-restricted-imports -- resolves the SDK's bundled CLI path where ESM has no bare require
 import { createRequire } from 'node:module';
 import type {
@@ -1011,6 +1012,7 @@ export async function runAgent(
   };
   let timedOut = false;
   let abortReason: string | null = null;
+  let policyAborted = false;
   const subagentCallIds = new Set<string>();
   let remarkTurn = false;
   // The gateway's refusal marker ends the run from a work turn, never the remark.
@@ -1019,6 +1021,7 @@ export async function runAgent(
       typeof reply === 'string' ? policyAbortReason(reply) : undefined;
     if (!reason || abortReason || remarkTurn) return;
     abortReason = reason;
+    policyAborted = true;
     logToFile(`Agent emitted [posthog:abort]: ${reason}`);
     abortController.abort();
     signalDone();
@@ -1300,6 +1303,20 @@ export async function runAgent(
                 timeout: 30,
               },
             ],
+            // The Agent tool's result is only the final report, which can hide an earlier refusal.
+            SubagentStop: [
+              {
+                hooks: [
+                  async (input: { agent_transcript_path?: string }) => {
+                    policyAbort(
+                      await transcriptRefusal(input.agent_transcript_path),
+                    );
+                    return {};
+                  },
+                ],
+                timeout: 30,
+              },
+            ],
           },
         },
       });
@@ -1403,7 +1420,7 @@ export async function runAgent(
               block.type === 'tool_result' &&
               subagentCallIds.has(block.tool_use_id)
             ) {
-              policyAbort(toolResultText(block.content));
+              policyAbort(contentText(block.content));
             }
           }
 
@@ -1782,6 +1799,8 @@ export async function runAgent(
           duration_ms: durationMs,
           duration_seconds: Math.round(durationMs / 1000),
           model: agentConfig.model,
+          // Tells a gateway policy refusal apart from a program's [ABORT].
+          ...(policyAborted ? { source: 'gateway_policy' } : {}),
           ...config?.analyticsProperties,
         });
       } catch {
@@ -1995,11 +2014,34 @@ function extractTaskIdFromToolResult(result: unknown): string | undefined {
   return undefined;
 }
 
-/** A tool_result block's text, whether its content is a string or text blocks. */
-function toolResultText(content: unknown): string {
+/** A message's or tool_result's text, whether its content is a string or blocks. */
+function contentText(content: unknown): string {
   if (!Array.isArray(content))
     return typeof content === 'string' ? content : '';
   return content.map((b: { text?: string }) => b.text ?? '').join('\n');
+}
+
+/** The first assistant reply in a subagent transcript that carries the policy abort marker. */
+async function transcriptRefusal(
+  transcriptPath: string | undefined,
+): Promise<string | undefined> {
+  const raw = transcriptPath
+    ? await readFile(transcriptPath, 'utf8').catch(() => '')
+    : '';
+  for (const line of raw.split('\n')) {
+    if (!line.includes(AgentSignals.POLICY_ABORT)) continue;
+    try {
+      const entry = JSON.parse(line) as {
+        type?: string;
+        message?: { content?: unknown };
+      };
+      const text = contentText(entry.message?.content);
+      if (entry.type === 'assistant' && policyAbortReason(text)) return text;
+    } catch {
+      // A line torn mid-write carries no reply.
+    }
+  }
+  return undefined;
 }
 
 /**
