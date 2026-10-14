@@ -765,23 +765,21 @@ describe('runAgent', () => {
       expect(mockSpinner.stop).toHaveBeenCalledWith('Test success');
     });
 
-    it('ends the run on a policy abort marker mid-reply with no abort cases', async () => {
-      function* mockGeneratorWithPolicyAbort() {
-        yield {
-          type: 'assistant',
-          message: {
-            content: [
-              {
-                type: 'text',
-                text: 'I cannot help.\n[posthog:abort] Request is out of scope\nSorry.',
-              },
-            ],
-          },
+    const REFUSAL = '[posthog:abort] Request is out of scope';
+    const say = (text: string) => ({
+      type: 'assistant',
+      message: { content: [{ type: 'text', text }] },
+    });
+    const done = { type: 'result', subtype: 'success', is_error: false };
+    // Runs the agent over a stream; `aborted` is whether it aborted the query.
+    async function runStream(
+      stream: (options: {
+        hooks: {
+          Stop: { hooks: ((input: object) => unknown)[] }[];
         };
-      }
-
-      mockQuery.mockReturnValue(mockGeneratorWithPolicyAbort());
-
+      }) => Generator<unknown>,
+    ) {
+      mockQuery.mockImplementation(({ options }) => stream(options));
       const result = await runAgent(
         defaultAgentConfig,
         'test prompt',
@@ -789,12 +787,21 @@ describe('runAgent', () => {
         mockSpinner as unknown as SpinnerHandle,
         { successMessage: 'Test success', errorMessage: 'Test error' },
       );
+      const { signal } = mockQuery.mock.calls[0][0].options.abortController;
+      return { result, aborted: signal.aborted as boolean };
+    }
+
+    it('ends the run on a policy abort marker mid-reply with no abort cases', async () => {
+      const { result, aborted } = await runStream(function* () {
+        yield say(`I cannot help.\n${REFUSAL}\nSorry.`);
+      });
 
       expect(result).toEqual({
         kind: 'abort',
         classification: AgentErrorType.ABORT,
         message: 'Request is out of scope',
       });
+      expect(aborted).toBe(true);
     });
 
     it.each([
@@ -803,40 +810,56 @@ describe('runAgent', () => {
     ])(
       'on a policy abort marker in a %s tool result, ends with %s',
       async (name, kind) => {
-        const text = '[posthog:abort] Request is out of scope';
-        mockQuery.mockReturnValue(
-          (function* () {
-            yield {
-              type: 'assistant',
-              message: { content: [{ type: 'tool_use', id: 't1', name }] },
-            };
-            yield {
-              type: 'user',
-              message: {
-                content: [
-                  {
-                    type: 'tool_result',
-                    tool_use_id: 't1',
-                    content: [{ type: 'text', text }],
-                  },
-                ],
-              },
-            };
-            yield { type: 'result', subtype: 'success', is_error: false };
-          })(),
-        );
-
-        const result = await runAgent(
-          defaultAgentConfig,
-          'test prompt',
-          defaultOptions,
-          mockSpinner as unknown as SpinnerHandle,
-          { successMessage: 'Test success', errorMessage: 'Test error' },
-        );
+        const { result, aborted } = await runStream(function* () {
+          yield {
+            type: 'assistant',
+            message: { content: [{ type: 'tool_use', id: 't1', name }] },
+          };
+          yield {
+            type: 'user',
+            message: {
+              content: [
+                {
+                  type: 'tool_result',
+                  tool_use_id: 't1',
+                  content: [{ type: 'text', text: REFUSAL }],
+                },
+              ],
+            },
+          };
+          yield done;
+        });
 
         expect(result.kind).toBe(kind);
+        expect(aborted).toBe(kind === 'abort');
       },
     );
+
+    it('ignores a policy abort marker in the remark reply', async () => {
+      const stop = { stop_hook_active: false, last_assistant_message: 'Done.' };
+      const { result, aborted } = await runStream(function* ({ hooks }) {
+        yield say('Done.');
+        // The SDK runs the Stop hook as the work ends; the next reply is the remark.
+        hooks.Stop[0].hooks[0](stop);
+        yield say(REFUSAL);
+        yield done;
+      });
+
+      expect(result).toEqual({ kind: 'success' });
+      expect(aborted).toBe(false);
+    });
+
+    it('ends the run on a marker in the last work reply the stop hook sees before the stream', async () => {
+      const stop = { stop_hook_active: false, last_assistant_message: REFUSAL };
+      const { result, aborted } = await runStream(function* ({ hooks }) {
+        hooks.Stop[0].hooks[0](stop);
+        yield say(REFUSAL);
+        yield done;
+      });
+
+      expect(result.kind).toBe('abort');
+      expect(aborted).toBe(true);
+    });
   });
 });
 
@@ -1069,6 +1092,8 @@ describe('subprocess gateway credentials', () => {
     expect(env.ANTHROPIC_BASE_URL).toBe('https://ai-gateway.us.posthog.com');
     expect(env.ANTHROPIC_AUTH_TOKEN).toBe('phe_run_scoped_token');
     expect(env.CLAUDE_CODE_OAUTH_TOKEN).toBe('phe_run_scoped_token');
+    // A background agent's refusal would arrive only as a summary.
+    expect(env.CLAUDE_CODE_DISABLE_BACKGROUND_TASKS).toBe('1');
     // The MCP token is the user's own OAuth key and must not be swapped for
     // the gateway bearer.
     expect(env.POSTHOG_MCP_TOKEN).toBe('phx_user_oauth_token');

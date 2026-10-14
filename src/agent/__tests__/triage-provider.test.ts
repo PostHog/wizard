@@ -154,7 +154,7 @@ describe('createTriageLLMProvider', () => {
 
     await expect(provider('verdict?')).resolves.toContain('[posthog:abort]');
     expect(logToFile).toHaveBeenCalledWith(
-      '[triage] gateway policy refused the triage call: Out of scope',
+      '[YARA] gateway policy refused the triage call: Out of scope',
     );
   });
 });

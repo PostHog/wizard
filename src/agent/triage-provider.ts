@@ -102,9 +102,7 @@ export function createTriageLLMProvider(
       // The refusal still fails closed; the log tells it apart from a verdict.
       const refusal = policyAbortReason(text);
       if (refusal) {
-        logToFile(
-          `[triage] gateway policy refused the triage call: ${refusal}`,
-        );
+        logToFile(`[YARA] gateway policy refused the triage call: ${refusal}`);
       }
       return text;
     } finally {

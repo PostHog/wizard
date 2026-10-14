@@ -25,10 +25,7 @@ export const AgentSignals = {
    * Programs can declare an onAbort handler to render a custom screen.
    */
   ABORT: '[ABORT]',
-  /**
-   * Marker the AI gateway's operator prompt has the model reply with when it
-   * refuses. Format: "[posthog:abort] <reason>". The run ends as an abort.
-   */
+  /** The AI gateway's refusal marker, "[posthog:abort] <reason>"; the run ends as an abort. */
   POLICY_ABORT: '[posthog:abort]',
   /** Signal emitted when the agent provides a remark about its run */
   WIZARD_REMARK: '[WIZARD-REMARK]',

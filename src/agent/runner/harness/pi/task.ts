@@ -234,6 +234,7 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
   let aioFailed = true;
   let cancellation: ReturnType<typeof bindPiCancellation> | undefined;
   let abortReason: string | undefined;
+  let remarkTurn = false;
   try {
     const sdk = await import('@earendil-works/pi-coding-agent');
     const {
@@ -468,8 +469,8 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
           assistantTurns += 1;
           turns.noteAssistantTurn(event.message);
           const assistant = extractText(event.message).trim();
-          // The gateway's refusal marker ends the run, mid-reply or not.
-          abortReason ??= policyAbortReason(assistant);
+          // The gateway's refusal marker ends the run from a work turn, never the remark.
+          if (!remarkTurn) abortReason ??= policyAbortReason(assistant);
           if (abortReason) cancellation?.abort();
           if (assistant) {
             logToFile(`[pi-task] assistant: ${assistant.slice(0, 1000)}`);
@@ -550,6 +551,7 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
         !setupSignalFailure(signals) &&
         !inputs.signal?.aborted
       ) {
+        remarkTurn = true;
         try {
           await agentSession.prompt(REMARK_INSTRUCTION);
         } catch (err) {

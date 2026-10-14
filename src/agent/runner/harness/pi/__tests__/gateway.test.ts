@@ -70,7 +70,8 @@ describe('buildGatewayProvider transport', () => {
 });
 
 describe('buildGatewayModel', () => {
-  it('has pi send the system prompt as system, which the gateway accepts on pinned tokens', () => {
+  it('sends the system prompt as system, not developer, which the gateway accepts on pinned tokens', async () => {
+    const { completeSimple } = await import('@earendil-works/pi-ai');
     const model = buildGatewayModel({
       gatewayUrl: 'https://ai-gateway.us.posthog.com',
       accessToken: 'phe_x',
@@ -78,7 +79,29 @@ describe('buildGatewayModel', () => {
       wizardFlags: {},
       modelId: 'openai/gpt-5.6-terra',
     });
-    expect(model.compat).toEqual({ supportsDeveloperRole: false });
+    let payload: { input: { role: string; content: unknown }[] } | undefined;
+
+    // pi builds the real request; throwing from onPayload stops it before any HTTP.
+    await completeSimple(
+      model,
+      {
+        systemPrompt: 'Be terse.',
+        messages: [{ role: 'user', content: 'hi', timestamp: 0 }],
+      },
+      {
+        apiKey: 'phe_x',
+        onPayload: (request) => {
+          payload = request as typeof payload;
+          throw new Error('captured');
+        },
+      },
+    );
+
+    expect(payload?.input.map((item) => item.role)).not.toContain('developer');
+    expect(payload?.input[0]).toMatchObject({
+      role: 'system',
+      content: 'Be terse.',
+    });
   });
 });
 

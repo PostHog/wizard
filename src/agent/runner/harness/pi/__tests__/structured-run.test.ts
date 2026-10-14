@@ -1,6 +1,6 @@
 import { piBackend } from '..';
 import { runPiTask } from '../task';
-import { AgentSignals } from '@agent/signals';
+import { AgentSignals, REMARK_INSTRUCTION } from '@agent/signals';
 import { analytics } from '@utils/analytics';
 import { createSecurityExtension } from '../security';
 import { setupPostHogMcp } from '../mcp';
@@ -22,6 +22,8 @@ const state = vi.hoisted(() => ({
   listener: undefined as ((event: unknown) => void) | undefined,
   factories: [] as ExtensionFactory[],
   text: '',
+  // The reply to the remark ask, when it differs from `text`.
+  remark: undefined as string | undefined,
   prompts: [] as string[],
   request: undefined as unknown,
   tools: [] as { name: string }[],
@@ -165,7 +167,10 @@ vi.mock('@earendil-works/pi-coding-agent', () => ({
             type: 'message_end',
             message: {
               role: 'assistant',
-              content: [...state.preamble, state.text].map((text) => ({
+              content: [
+                ...state.preamble,
+                (prompt === REMARK_INSTRUCTION && state.remark) || state.text,
+              ].map((text) => ({
                 type: 'text',
                 text,
               })),
@@ -274,6 +279,7 @@ beforeEach(() => {
   state.toolName = 'find';
   state.toolError = undefined;
   state.toolResult = undefined;
+  state.remark = undefined;
   vi.mocked(analytics.wizardCapture).mockClear();
 });
 
@@ -366,6 +372,8 @@ it.each([
     state.toolName = tool;
     state.toolResult = '[posthog:abort] Request is out of scope';
     state.text = 'Done.';
+    // The turn ends only when the harness aborts the session.
+    state.hang = kind === 'abort';
 
     const result = await piBackend.run(runInputs(vi.fn(), null));
     expect(result.kind).toBe(kind);
@@ -465,6 +473,7 @@ describe.each(['linear', 'task'] as const)('%s setup signals', (mode) => {
   });
 
   it('ends the run on a policy abort marker mid-reply, without a nudge', async () => {
+    state.hang = true;
     state.tasks.set('1', { status: 'in_progress' });
     state.text =
       'I cannot help.\n[posthog:abort] Request is out of scope\nSorry.';
@@ -475,6 +484,16 @@ describe.each(['linear', 'task'] as const)('%s setup signals', (mode) => {
       message: 'Request is out of scope',
     });
     expect(state.prompts).toHaveLength(1);
+  });
+
+  it('ignores a policy abort marker in the remark reply', async () => {
+    state.text = 'Installed the SDK.';
+    state.remark = '[posthog:abort] Request is out of scope';
+
+    await expect(run(runInputs(vi.fn(), null))).resolves.toEqual({
+      kind: 'success',
+    });
+    expect(state.prompts).toContain(REMARK_INSTRUCTION);
   });
 
   it('keeps skill-install fallback nonfatal', async () => {

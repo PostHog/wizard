@@ -309,6 +309,13 @@ export const piBackend: AgentHarness = {
     let timedOut = false;
     let timeoutAbort: Promise<void> | undefined;
     let abortReason: string | undefined;
+    let remarkTurn = false;
+    // The gateway's refusal marker ends the run from a work turn, never the remark.
+    const policyAbort = (reply: string) => {
+      if (remarkTurn) return;
+      abortReason ??= policyAbortReason(reply);
+      if (abortReason) cancellation?.abort();
+    };
     // Read by the catch path; undefined until setup creates the extension.
     let securityState: SecurityState | undefined;
     // A latched violation outranks the timer on both the success and catch paths.
@@ -628,9 +635,7 @@ export const piBackend: AgentHarness = {
             turns.noteAssistantTurn(event.message);
             const blocks = textBlocks(event.message);
             const assistant = blocks.join('').trim();
-            // The gateway's refusal marker ends the run, mid-reply or not.
-            abortReason ??= policyAbortReason(assistant);
-            if (abortReason) cancellation?.abort();
+            policyAbort(assistant);
             // A schema-bound answer is the turn's last block, not the joined text.
             lastAssistantText = (blocks.at(-1) ?? '').trim();
             if (structured) {
@@ -692,10 +697,8 @@ export const piBackend: AgentHarness = {
               }`,
             );
             // A subagent's refusal comes back as its tool result, not as parent text.
-            if (event.toolName === 'dispatch_agent') {
-              abortReason ??= policyAbortReason(extractText(event.result));
-              if (abortReason) cancellation?.abort();
-            }
+            if (event.toolName === 'dispatch_agent')
+              policyAbort(extractText(event.result));
             break;
           }
           case 'agent_end': {
@@ -767,6 +770,7 @@ export const piBackend: AgentHarness = {
           !setupSignalFailure(signals) &&
           !inputs.signal?.aborted
         ) {
+          remarkTurn = true;
           try {
             await agentSession.prompt(REMARK_INSTRUCTION);
           } catch (err) {

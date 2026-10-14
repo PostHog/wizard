@@ -264,6 +264,11 @@ export type AgentConfig = {
   emit?: ProgressEmitter;
 };
 
+type StopHookInput = {
+  stop_hook_active: boolean;
+  last_assistant_message?: string;
+};
+
 /**
  * Stop hook return type: either allow stop or block with a reason.
  */
@@ -281,10 +286,12 @@ export type StopHookResult =
 export function createStopHook(
   signals?: AgentOutputSignals,
   requestRemark = true,
-): (input: { stop_hook_active: boolean }) => StopHookResult {
+  /** Called with the last work reply when the remark turn starts. */
+  onRemark?: (lastReply?: string) => void,
+): (input: StopHookInput) => StopHookResult {
   let remarkRequested = false;
 
-  return (input: { stop_hook_active: boolean }): StopHookResult => {
+  return (input: StopHookInput): StopHookResult => {
     logToFile('Stop hook triggered', {
       stop_hook_active: input.stop_hook_active,
       remarkRequested,
@@ -301,6 +308,7 @@ export function createStopHook(
     // orchestrator suppresses it per task so it does not fire on every agent.
     if (requestRemark && !remarkRequested) {
       remarkRequested = true;
+      onRemark?.(input.last_assistant_message);
       logToFile('Stop hook: requesting reflection');
       return {
         decision: 'block',
@@ -1004,6 +1012,17 @@ export async function runAgent(
   let timedOut = false;
   let abortReason: string | null = null;
   const subagentCallIds = new Set<string>();
+  let remarkTurn = false;
+  // The gateway's refusal marker ends the run from a work turn, never the remark.
+  const policyAbort = (reply: unknown) => {
+    const reason =
+      typeof reply === 'string' ? policyAbortReason(reply) : undefined;
+    if (!reason || abortReason || remarkTurn) return;
+    abortReason = reason;
+    logToFile(`Agent emitted [posthog:abort]: ${reason}`);
+    abortController.abort();
+    signalDone();
+  };
   // Set when a YARA hook detects a terminal violation. Returning `stopReason`
   // from a PostToolUse hook does NOT stop the SDK, so we abort the query and
   // surface a YARA_VIOLATION below — mirroring the [ABORT] mechanism.
@@ -1201,6 +1220,8 @@ export async function runAgent(
             // query so it finds the transcript.
             CLAUDE_CONFIG_DIR: agentConfigDir,
             CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS: 'true',
+            // A background agent's result reaches us only as a summary, hiding its refusal.
+            CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: '1',
             // The MCP config resolves this in the child; sending the value would
             // put it on the CLI's argv.
             POSTHOG_MCP_TOKEN:
@@ -1265,7 +1286,17 @@ export async function runAgent(
               : createPostToolUseYaraHooks(triageProvider, onYaraTerminate),
             Stop: [
               {
-                hooks: [createStopHook(signals, config?.requestRemark ?? true)],
+                hooks: [
+                  createStopHook(
+                    signals,
+                    config?.requestRemark ?? true,
+                    // The stream may not have delivered the last work reply yet.
+                    (lastReply) => {
+                      policyAbort(lastReply);
+                      remarkTurn = true;
+                    },
+                  ),
+                ],
                 timeout: 30,
               },
             ],
@@ -1337,22 +1368,19 @@ export async function runAgent(
           // the prompt doesn't need to cooperate with "and exit" because the
           // abort is enforced here. The reason is surfaced via the returned
           // AgentErrorType.ABORT so the runner can render a custom screen.
-          if (!abortReason && message.type === 'assistant') {
+          if (
+            abortCases.length > 0 &&
+            !abortReason &&
+            message.type === 'assistant'
+          ) {
             const content = message.message?.content;
             if (Array.isArray(content)) {
               for (const block of content) {
                 if (block.type === 'text' && typeof block.text === 'string') {
-                  // The gateway's policy abort ends every program; [ABORT] only ones with abort cases.
-                  const reason =
-                    policyAbortReason(block.text) ??
-                    (abortCases.length > 0
-                      ? block.text
-                          .match(/\[ABORT\]\s*(.+?)(?:\n|$)/)?.[1]
-                          .trim()
-                      : undefined);
-                  if (reason) {
-                    abortReason = reason;
-                    logToFile(`Agent emitted an abort marker: ${abortReason}`);
+                  const match = block.text.match(/\[ABORT\]\s*(.+?)(?:\n|$)/);
+                  if (match) {
+                    abortReason = match[1].trim();
+                    logToFile(`Agent emitted [ABORT]: ${abortReason}`);
                     abortController.abort();
                     signalDone();
                     break;
@@ -1362,24 +1390,20 @@ export async function runAgent(
             }
           }
 
-          // A subagent's refusal reaches us only as the Agent tool's result.
+          // The gateway's policy abort ends every program, from a work turn's
+          // reply or a subagent's result (the Agent tool's result block).
           const blocks = message.message?.content;
           for (const block of Array.isArray(blocks) ? blocks : []) {
-            if (block.type === 'tool_use' && SUBAGENT_TOOLS.has(block.name)) {
+            if (block.type === 'tool_use' && block.name === 'Agent') {
               subagentCallIds.add(block.id);
+            } else if (message.type === 'assistant' && block.type === 'text') {
+              policyAbort(block.text);
             } else if (
               message.type === 'user' &&
               block.type === 'tool_result' &&
-              !abortReason &&
               subagentCallIds.has(block.tool_use_id)
             ) {
-              abortReason =
-                policyAbortReason(toolResultText(block.content)) ?? null;
-              if (abortReason) {
-                logToFile(`Subagent emitted an abort marker: ${abortReason}`);
-                abortController.abort();
-                signalDone();
-              }
+              policyAbort(toolResultText(block.content));
             }
           }
 
@@ -1799,9 +1823,6 @@ export enum TaskTool {
 export const POSTHOG_MCP_SERVER_NAME = 'posthog-wizard';
 
 const READ_ONLY_TOOLS: readonly string[] = ['Read', 'Glob', 'Grep'];
-
-/** The SDK's subagent tool, 'Task' before it was renamed 'Agent'. */
-const SUBAGENT_TOOLS: ReadonlySet<string> = new Set(['Agent', 'Task']);
 
 /** wizardCanUseTool's env-file rule as SDK deny rules for the project; outside it, canUseTool sees the file tools. */
 const ENV_FILE_DENY_RULES: readonly string[] = ['Read', 'Edit'].flatMap(
