@@ -1,0 +1,27 @@
+ PostHog Wizard v0.0.0-test                        Feedback: wizard@posthog.com
+
+ Cost (running): $0.00 · no agent turns yet                      Ctrl+T to hide
+
+
+
+
+
+
+                             ███ PostHog Wizard 🦔
+
+             We'll use AI to analyze your project and complete work.
+                .env* file contents will not leave your machine.
+
+                   Could not detect your project's framework.
+
+         The feature-flags program needs a supported framework. Run the
+         wizard from your app's root directory.
+
+                            ▸ Privacy & data
+                              Cancel
+
+
+
+
+
+  ↑↓ navigate  enter select

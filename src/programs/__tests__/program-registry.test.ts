@@ -1,6 +1,7 @@
 import {
   PROGRAM_REGISTRY,
   getCommandPath,
+  getOAuthScopesForProgram,
   getProgramConfig,
   getSubcommandPrograms,
 } from '../program-registry';
@@ -82,8 +83,17 @@ describe('program bindings', () => {
       'self-driving': linearOnSol,
       'error-tracking-upload-source-maps': linearOnSol,
       'error-tracking': orchestratorOnPi,
+      'feature-flags': orchestratorOnPi,
       'agent-skill': linearOnSol,
     });
+  });
+});
+
+describe('getOAuthScopesForProgram', () => {
+  it('adds the feature flag scopes for feature-flags', () => {
+    const scopes = getOAuthScopesForProgram('feature-flags');
+    expect(scopes).toContain('feature_flag:read');
+    expect(scopes).toContain('feature_flag:write');
   });
 });
 

@@ -16,6 +16,7 @@ import { selfDrivingCommand } from './commands/self-driving';
 import { slackCommand } from './commands/slack';
 import { uploadSourcemapsCommand } from './commands/upload-sourcemaps';
 import { errorTrackingCommand } from './commands/error-tracking';
+import { featureFlagsCommand } from './commands/feature-flags';
 import { skillCommand } from './commands/skill';
 
 /** Register every command and run the one `process.argv` names. */
@@ -36,6 +37,7 @@ export function runCli(): void {
     .use(slackCommand)
     .use(uploadSourcemapsCommand)
     .use(errorTrackingCommand)
+    .use(featureFlagsCommand)
     .use(skillCommand)
     .init();
 }

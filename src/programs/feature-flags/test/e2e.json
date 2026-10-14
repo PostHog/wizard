@@ -1,0 +1,39 @@
+{
+  "program": "feature-flags",
+  "summary": "Happy path: detect framework, confirm intro, run the feature-flags orchestrator flow (install/init when PostHog is absent, create one example flag per side (frontend, backend), evaluate each once on its side, report to a notebook), delete installed skills.",
+  "profile": {
+    "setup": "first",
+    "healthCheck": "dismiss",
+    "mcp": "skip",
+    "slack": "skip",
+    "skills": "delete",
+    "ask": "first"
+  },
+  "variations": [
+    {
+      "name": "default",
+      "summary": "orchestrator / pi; stage models from the context-mill feature-flags prompts"
+    }
+  ],
+  "path": [
+    {
+      "screen": "detect",
+      "auto": "(headless) framework detection puts the framework id on session.skillId"
+    },
+    { "screen": "feature-flags-intro", "auto": "confirm & continue" },
+    {
+      "screen": "health-check",
+      "auto": "dismiss outage and proceed even if the readiness probe flags an issue"
+    },
+    {
+      "screen": "auth",
+      "auto": "(external) the runner resolves credentials from the phx key"
+    },
+    {
+      "screen": "run",
+      "auto": "(external) the orchestrator flow"
+    },
+    { "screen": "outro", "auto": "dismiss" },
+    { "screen": "keep-skills", "auto": "delete the installed skills" }
+  ]
+}
