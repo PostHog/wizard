@@ -5,6 +5,7 @@ import {
   GPT5_6_LUNA_MODEL,
   GPT5_6_SOL_MODEL,
   GPT5_6_TERRA_MODEL,
+  GPT6_SOL_MODEL,
   HAIKU_TRIAGE_MODEL,
   Harness,
 } from '@shared/constants';
@@ -59,6 +60,7 @@ export const MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
   [GPT5_6_LUNA_MODEL]: { reasoning: true, thinkingLevel: 'low' },
   [GPT5_6_TERRA_MODEL]: { reasoning: true, thinkingLevel: 'medium' },
   [GPT5_6_SOL_MODEL]: { reasoning: true, thinkingLevel: 'medium' },
+  [GPT6_SOL_MODEL]: { reasoning: true, thinkingLevel: 'medium' },
 };
 
 /**
@@ -72,6 +74,7 @@ export const MINT_ALLOWED_EFFORTS: Record<string, readonly ThinkingLevel[]> = {
   [GPT5_6_LUNA_MODEL]: ['low'],
   [GPT5_6_SOL_MODEL]: ['medium'],
   [GPT5_6_TERRA_MODEL]: ['low', 'medium', 'high'],
+  [GPT6_SOL_MODEL]: ['low', 'medium', 'high'],
 };
 
 // Local model choices; gateway admission also requires allowed models, efforts, and prompt compatibility.

@@ -3,7 +3,7 @@ import {
   Harness,
   Integration,
   Sequence,
-  GPT5_6_SOL_MODEL,
+  GPT6_SOL_MODEL,
   REPLAY_VISION_SUPPORTED,
 } from '@shared/constants';
 import { detectFramework } from '../detection/framework';
@@ -145,7 +145,7 @@ export const config: ProgramConfig = {
   binding: {
     sequence: Sequence.orchestrator,
     harness: Harness.pi,
-    model: GPT5_6_SOL_MODEL,
+    model: GPT6_SOL_MODEL,
   },
   agentFlow: 'replay-vision',
   onReady: detectReplayVisionProject,

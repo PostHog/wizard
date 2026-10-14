@@ -29,6 +29,7 @@ export const HAIKU_MODEL = HAIKU_TRIAGE_MODEL;
 export const GPT5_6_LUNA_MODEL = 'openai/gpt-5.6-luna';
 export const GPT5_6_TERRA_MODEL = 'openai/gpt-5.6-terra';
 export const GPT5_6_SOL_MODEL = 'openai/gpt-5.6-sol';
+export const GPT6_SOL_MODEL = 'openai/gpt-6-sol';
 
 // ── Agent runner routing axes ────────────────────────────────────────
 
