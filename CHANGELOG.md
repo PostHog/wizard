@@ -1,5 +1,14 @@
 # Changelog
 
+## [2.83.0](https://github.com/PostHog/wizard/compare/v2.82.0...v2.83.0) (2026-10-14)
+
+
+### Features
+
+* **agent:** end the run on the gateway's policy abort marker ([#1446](https://github.com/PostHog/wizard/issues/1446)) ([1e0be65](https://github.com/PostHog/wizard/commit/1e0be65f5d084e790c772c04a27b9d626f7cc6ee))
+* **feature-flags:** add the wizard feature-flags command ([#1322](https://github.com/PostHog/wizard/issues/1322)) ([0a66b33](https://github.com/PostHog/wizard/commit/0a66b33a9d9dad6b3d6e7a49d03fcb7d6de4ff6c))
+* **replay-vision:** run on pi with gpt-6-sol ([#1455](https://github.com/PostHog/wizard/issues/1455)) ([c72e078](https://github.com/PostHog/wizard/commit/c72e078f565252c331708b8f19963815cbfbdb0c))
+
 ## [2.82.0](https://github.com/PostHog/wizard/compare/v2.81.1...v2.82.0) (2026-10-12)
 
 
