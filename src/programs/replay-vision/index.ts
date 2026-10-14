@@ -3,7 +3,7 @@ import {
   Harness,
   Integration,
   Sequence,
-  DEFAULT_AGENT_MODEL,
+  GPT5_6_SOL_MODEL,
   REPLAY_VISION_SUPPORTED,
 } from '@shared/constants';
 import { detectFramework } from '../detection/framework';
@@ -141,10 +141,11 @@ const base = createSkillProgram({
  */
 export const config: ProgramConfig = {
   ...base,
+  // Orchestrator on pi; the flow's `model_pi`/`effort_pi` pin each stage, this model is the fallback.
   binding: {
     sequence: Sequence.orchestrator,
-    harness: Harness.anthropic,
-    model: DEFAULT_AGENT_MODEL,
+    harness: Harness.pi,
+    model: GPT5_6_SOL_MODEL,
   },
   agentFlow: 'replay-vision',
   onReady: detectReplayVisionProject,

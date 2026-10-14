@@ -62,8 +62,8 @@ describe('program bindings', () => {
       'mcp-analytics': linearOnSol,
       'replay-vision': {
         sequence: Sequence.orchestrator,
-        harness: Harness.anthropic,
-        model: DEFAULT_AGENT_MODEL,
+        harness: Harness.pi,
+        model: GPT5_6_SOL_MODEL,
       },
       'ai-observability': {
         sequence: Sequence.linear,
