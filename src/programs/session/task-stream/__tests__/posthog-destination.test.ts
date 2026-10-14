@@ -325,4 +325,30 @@ describe('PostHogDestination', () => {
     expect(fetchImpl).toHaveBeenCalledTimes(1);
     expect(onError).not.toHaveBeenCalled();
   });
+
+  it('attaches a scan to the session at wizard/scans/, and a scan 403 leaves session pushes on', async () => {
+    const fetchImpl = makeFetch([makeResponse(403), makeResponse(201)]);
+    const dest = new PostHogDestination({
+      getCredentials: () => SAMPLE_CREDS,
+      fetchImpl,
+    });
+
+    await dest.sendScan({
+      session_id: SAMPLE_PAYLOAD.session_id,
+      program: 'posthog-integration',
+      wizard_version: '0.0.0',
+      workspace_fingerprint: 'f'.repeat(64),
+      scanned_at: '2026-05-20T17:00:00Z',
+      complete: true,
+      tools: [],
+    });
+    await dest.send(StreamEvent.Update, SAMPLE_PAYLOAD);
+
+    expect(fetchImpl.mock.calls.map(([url]) => url)).toEqual([
+      'https://us.posthog.com/api/projects/42/wizard/scans/',
+      'https://us.posthog.com/api/projects/42/wizard/sessions/',
+    ]);
+    const scan = JSON.parse(fetchImpl.mock.calls[0][1].body as string);
+    expect(scan.session_id).toBe(SAMPLE_PAYLOAD.session_id);
+  });
 });

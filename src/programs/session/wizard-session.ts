@@ -27,7 +27,6 @@ export interface WizardSession extends ProgramSession {
   ciGateway: GatewayCredential | null;
   email?: string;
   region?: CloudRegion;
-  noTelemetry: boolean;
 
   /**
    * `--capture-aio`: mirror every wizard LLM call as an `$ai_generation` event
@@ -135,6 +134,7 @@ export function buildSession(args: SessionArgs): WizardSession {
     // headless `--ci --signup` run stays covered by the ci branch above.
     scanConsent: args.ci ? ScanConsent.Granted : ScanConsent.Undecided,
     warehouseSourcesReported: false,
+    codebaseScanReport: null,
     integration: args.integration ?? null,
     frameworkContext: {},
     typescript: false,

@@ -13,21 +13,21 @@ import type { ReactNode } from 'react';
 import { useState, useSyncExternalStore } from 'react';
 import type { WizardStore } from '@tui/store';
 import { Integration } from '@shared/constants';
-import {
-  PickerMenu,
-  LoadingBox,
-  type PickerOption,
-} from '@tui/primitives/index';
+import { PickerMenu, LoadingBox } from '@tui/primitives/index';
 import {
   IntroScreenLayout,
   type DetectionRow,
 } from '@tui/screens/IntroScreenLayout';
 import { SkillSourceInfo, useSkillEntry } from '@tui/screens/SkillSourceInfo';
-import { ScanConsent } from '@shared/run-state';
 import { KeyMatch, useKeyBindings } from '@tui/hooks/useKeyBindings';
-import { Icons } from '@tui/styles';
 import { analytics } from '@utils/analytics';
 import { PRIVACY_PANEL_LABEL } from '@tui/components/PrivacyPanel';
+import {
+  applySharingChoice,
+  isSharing,
+  resolveSharingOnContinue,
+  sharingOptions,
+} from '@tui/components/sharing-options';
 import type { IntroMenuView } from '@tui/programs/posthog-integration/intro-menu';
 import {
   introEntries,
@@ -51,35 +51,6 @@ const SUBTITLE = (
     <Text dimColor>.env* values stay on your machine.</Text>
   </>
 );
-
-/**
- * A blank, unselectable row. Navigation skips disabled options, so this is a
- * margin the menu can hold rather than one the layout has to special-case.
- */
-const MENU_SPACER: PickerOption<string> = {
-  label: '',
-  value: 'spacer',
-  disabled: true,
-};
-
-/**
- * The sharing choice, as two explicit rows rather than one toggle. A toggle
- * label has to describe either the current state or the next action, and a
- * reader cannot tell which; two rows with the filled diamond on the live one
- * say both at once. The trailing spacer separates them from the Back that
- * IntroScreenLayout appends, since leaving the screen is a different kind of
- * act from changing something on it.
- */
-export function sharingOptions(sharing: boolean): PickerOption<string>[] {
-  const mark = (on: boolean) => ({
-    glyph: on ? Icons.diamond : Icons.diamondOpen,
-  });
-  return [
-    { label: 'Share tools', value: 'share', icon: mark(sharing) },
-    { label: "Don't share tools", value: 'no-share', icon: mark(!sharing) },
-    MENU_SPACER,
-  ];
-}
 
 /** Framework picker shown when auto-detection fails. */
 const FrameworkPicker = ({
@@ -130,7 +101,7 @@ export const PostHogIntegrationIntroScreen = ({
   const [view, setView] = useState<IntroMenuView>('default');
 
   const { session } = store;
-  const sharing = session.scanConsent !== ScanConsent.Declined;
+  const sharing = isSharing(store);
   const config = session.frameworkConfig;
   const frameworkLabel =
     session.detectedFrameworkLabel ?? config?.metadata.name;
@@ -348,14 +319,10 @@ export const PostHogIntegrationIntroScreen = ({
       setView('commands');
     } else if (value === 'back') {
       setView('default');
-    } else if (value === 'share') {
-      store.grantSharing();
-    } else if (value === 'no-share') {
-      store.declineSharing();
+    } else if (applySharingChoice(store, value)) {
+      return;
     } else if (value === 'continue') {
-      // Sharing is on by default, so consent nobody touched resolves to granted
-      // here. A choice already made in the panel stands.
-      if (session.scanConsent === ScanConsent.Undecided) store.grantSharing();
+      resolveSharingOnContinue(store);
       store.completeSetup();
     }
   };

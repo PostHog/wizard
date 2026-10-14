@@ -155,6 +155,12 @@ export interface ProgramConfig {
    * store has no detection yet.
    */
   onReady?: (ctx: ProgramReadyContext) => void | Promise<void>;
+  /**
+   * Scan the codebase for catalog tools before `onReady`, once per run. The
+   * result feeds local suggestions, and is reported to PostHog when the user
+   * shares it; see `@programs/codebase-scan`.
+   */
+  scansCodebase?: boolean;
   /** Runs in the flow other than the program's own agent run, keyed by flow step id. */
   runSteps?: Record<string, ProgramRunStep>;
   /**

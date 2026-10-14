@@ -1,6 +1,11 @@
 import { TaskStreamPush } from '../task-stream-push';
 import { StreamEvent, StreamTaskStatus } from '../types';
-import type { TaskStreamDestination, TaskStreamUpdate } from '../types';
+import type {
+  ScanReport,
+  ScanReportPayload,
+  TaskStreamDestination,
+  TaskStreamUpdate,
+} from '../types';
 import type { SessionStore } from '../../session-store';
 import type { TaskItem } from '@programs/session/session-store';
 import { TaskStatus } from '@shared/task-status';
@@ -21,6 +26,7 @@ interface MockStoreState {
   handoffText?: string | null;
   installDir?: string;
   pendingQuestion?: PendingQuestion | null;
+  codebaseScanReport?: ScanReport | null;
 }
 
 function createMockStore(overrides: Partial<MockStoreState> = {}) {
@@ -44,6 +50,7 @@ function createMockStore(overrides: Partial<MockStoreState> = {}) {
         outroData: null,
         installDir: state.installDir,
         pendingQuestion: state.pendingQuestion ?? null,
+        codebaseScanReport: state.codebaseScanReport ?? null,
         frameworkContext,
       };
     },
@@ -720,6 +727,43 @@ describe('TaskStreamPush', () => {
   });
 
   describe('spec: shutdown honours timeout', () => {
+    it('attaches a shared scan to the session once, and shutdown waits for it', async () => {
+      const store = createMockStore({ runPhase: RunPhase.Running });
+      let release!: () => void;
+      const sendScan = vi.fn(
+        (_payload: ScanReportPayload) =>
+          new Promise<void>((resolve) => (release = resolve)),
+      );
+      const dest = { ...createMockDestination(), sendScan };
+      const { push } = createPush(store, { dest });
+      push.attach();
+
+      store._setAndEmit({
+        codebaseScanReport: {
+          program: 'posthog-integration',
+          wizard_version: '0.0.0',
+          workspace_fingerprint: 'f'.repeat(64),
+          scanned_at: '2026-05-20T17:00:00Z',
+          complete: true,
+          tools: [],
+        },
+      });
+      store._emit();
+
+      expect(sendScan).toHaveBeenCalledTimes(1);
+      expect(sendScan.mock.calls[0][0]).toMatchObject({
+        session_id: expect.stringMatching(/^test-program-test-skill-/),
+      });
+
+      let done = false;
+      const shutdown = push.shutdown(5_000).then(() => (done = true));
+      await Promise.resolve();
+      expect(done).toBe(false);
+      release();
+      await shutdown;
+      expect(done).toBe(true);
+    });
+
     it('shutdown returns even when destination hangs forever', async () => {
       vi.useFakeTimers();
       const store = createMockStore({ runPhase: RunPhase.Completed });

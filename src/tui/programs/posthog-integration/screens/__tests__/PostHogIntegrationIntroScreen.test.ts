@@ -6,7 +6,7 @@
  * one character too long.
  */
 
-import { sharingOptions } from '@tui/programs/posthog-integration/screens/PostHogIntegrationIntroScreen';
+import { sharingOptions } from '@tui/components/sharing-options';
 import { introMenuOptions } from '@tui/programs/posthog-integration/intro-menu';
 
 // IntroScreenLayout renders a centered menu in a 24-column box. A row with an

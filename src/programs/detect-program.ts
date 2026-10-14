@@ -3,6 +3,7 @@ import type { RunResult } from '@agent/types';
 import { POSTHOG_DOCS_URL } from '@shared/constants';
 import { ErrorCodes } from '@shared/errors';
 import { WizardError } from '@shared/errors/wizard-error';
+import { scanCodebaseFor } from './codebase-scan';
 import { detectErrorCode } from './detect-map';
 import type { ProgramConfig } from './program-step';
 import type { CiRunnerContext } from './runner-context';
@@ -18,6 +19,7 @@ export async function detectProgram(
   store: SessionStore,
   runner: CiRunnerContext,
 ): Promise<void> {
+  await scanCodebaseFor(config, store.readyContext());
   const ciPreRun = config.ciPreRun;
   if (store.session.ci && ciPreRun) {
     await store.edit((draft) =>

@@ -239,6 +239,7 @@ export const config: ProgramConfig = {
   agentFlow: 'integration-v2',
   handoffNotebook: true,
   eventPlanFile: EVENT_PLAN_FILE,
+  scansCodebase: true,
   onReady: (ctx) => detectPostHogIntegration(ctx),
   // Basic integration runs without structured user input; drop wizard_ask
   // so the model can't pop modal prompts mid-run. The runner forwards this

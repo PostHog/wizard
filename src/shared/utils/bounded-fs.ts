@@ -180,20 +180,28 @@ export async function boundedGlob(
  * directories with realpath-based loop protection, descends at most
  * `maxDepth` levels below `rootDir`, and stops at the per-directory and
  * whole-walk caps. Filesystem errors are reported and skipped (best-effort).
+ *
+ * Returns whether the walk saw the whole tree within `maxDepth`: false when it
+ * stopped at a cap or skipped a directory it could not read.
  */
 export function walkProjectFiles(
   rootDir: string,
   onFile: (name: string, fullPath: string) => void,
   maxDepth = 3,
-): void {
+): boolean {
   const visited = new Set<string>();
   let filesSeen = 0;
+  let complete = true;
   // Explicit stack — no call-stack recursion.
   const stack: Array<{ dir: string; depth: number }> = [
     { dir: rootDir, depth: 0 },
   ];
 
-  while (stack.length > 0 && filesSeen < MAX_WALK_FILES) {
+  while (stack.length > 0) {
+    if (filesSeen >= MAX_WALK_FILES) {
+      complete = false;
+      break;
+    }
     const { dir, depth } = stack.pop()!;
 
     // realpath both resolves symlinked dirs and gives us a stable key to
@@ -203,6 +211,7 @@ export function walkProjectFiles(
       realDir = fs.realpathSync(dir);
     } catch (error) {
       reportFsError('walkProjectFiles.realpath', dir, error);
+      complete = false;
       continue;
     }
     if (visited.has(realDir)) continue;
@@ -213,6 +222,7 @@ export function walkProjectFiles(
       handle = fs.opendirSync(dir);
     } catch (error) {
       reportFsError('walkProjectFiles.opendir', dir, error);
+      complete = false;
       continue;
     }
     try {
@@ -223,6 +233,7 @@ export function walkProjectFiles(
           logToFile(
             `[bounded-fs] walk capped in ${dir} (entries=${entriesRead}, files=${filesSeen})`,
           );
+          complete = false;
           break;
         }
         if (IGNORED_DIRS.has(entry.name)) continue;
@@ -260,6 +271,7 @@ export function walkProjectFiles(
       }
     }
   }
+  return complete;
 }
 
 /**

@@ -45,7 +45,13 @@ import {
   type ProgramId,
 } from './router.js';
 import { analytics, sessionProperties } from '@utils/analytics';
-import { buildSession, findProgramConfig, SessionStore } from '@programs';
+import {
+  buildSession,
+  findProgramConfig,
+  reportCodebaseScan,
+  scanCodebaseFor,
+  SessionStore,
+} from '@programs';
 import type { PlannedEvent, TaskItem, WizardSession } from '@programs/types';
 import {
   addTokenUsage,
@@ -207,7 +213,9 @@ export class WizardStore implements TuiView {
    */
   async runReadyHooks(): Promise<void> {
     const config = findProgramConfig(this.router.activeProgram);
-    await config?.onReady?.(this.sessions.readyContext());
+    const ctx = this.sessions.readyContext();
+    if (config) await scanCodebaseFor(config, ctx);
+    await config?.onReady?.(ctx);
     this.sessions.setDetectionComplete();
   }
 
@@ -491,7 +499,7 @@ export class WizardStore implements TuiView {
     // Reports first: analytics merges tags into an event as it is sent, so
     // `setup confirmed` only carries the warehouse tags if they are already
     // set. On main they were, because reporting happened back in detect.
-    this.sessions.markWarehouseSourcesReportedIfNeeded();
+    reportCodebaseScan(this.sessions);
     analytics.wizardCapture('setup confirmed', sessionProperties(this.session));
     this._write({ setupConfirmed: true });
   }

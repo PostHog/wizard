@@ -32,6 +32,7 @@ import { logToFile } from '@utils/debug';
 import { reportWarehouseSourcesDetected } from '../detection/integration';
 import type { ProgramReadyContext } from '../program-step';
 import type { WizardSession } from './wizard-session';
+import type { ScanReport } from './task-stream/types';
 
 export interface TaskItem {
   id?: string;
@@ -344,6 +345,12 @@ export class SessionStore {
     if (reportWarehouseSourcesDetected(this.session)) {
       this.set('warehouseSourcesReported', true);
     }
+  }
+
+  /** Hand the scan to the task stream. First one wins: a run shares one scan. */
+  shareCodebaseScan(report: ScanReport): void {
+    if (this.session.codebaseScanReport) return;
+    this.set('codebaseScanReport', report);
   }
 
   setReadinessResult(result: WizardReadinessResult | null): void {

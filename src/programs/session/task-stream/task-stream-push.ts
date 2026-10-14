@@ -145,6 +145,8 @@ export class TaskStreamPush {
   private unsubscribe: (() => void) | null = null;
   private debounceTimer: ReturnType<typeof setTimeout> | null = null;
   private inFlight: Promise<void> | null = null;
+  /** The scan send, once the user agreed to share. Shutdown waits for it. */
+  private scanInFlight: Promise<void> | null = null;
   private needsAnotherPush = false;
   private shuttingDown = false;
 
@@ -186,6 +188,7 @@ export class TaskStreamPush {
     if (this.unsubscribe) return;
     const target = store ?? this.store;
     this.unsubscribe = target.subscribe(() => this.onStoreChange());
+    this.sendScanIfShared();
   }
 
   /** Stop subscribing. Does not flush. */
@@ -235,9 +238,11 @@ export class TaskStreamPush {
 
     const phase = this.store.session.runPhase;
     const isTerminal = phase === RunPhase.Completed || phase === RunPhase.Error;
-    if (!isTerminal) return;
-
-    const flush = this.flush();
+    // A cancelled run still drains its scan, so a pending retry isn't lost on exit.
+    const flush = Promise.all([
+      isTerminal ? this.flush() : undefined,
+      this.scanInFlight,
+    ]);
     if (timeoutMs <= 0) return;
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
@@ -264,6 +269,7 @@ export class TaskStreamPush {
 
   private onStoreChange(): void {
     if (!this.enabled || this.shuttingDown) return;
+    this.sendScanIfShared();
     const phase = this.store.session.runPhase;
     if (phase === RunPhase.Idle) return;
     this.selectRemoteSync();
@@ -395,6 +401,23 @@ export class TaskStreamPush {
           d.send(event, payload).catch(() => {}),
         ),
     );
+  }
+
+  /**
+   * Attach the shared scan to this session, once. It carries the stream's
+   * `session_id`, so PostHog can join the scan to the session row.
+   */
+  private sendScanIfShared(): void {
+    if (this.scanInFlight) return;
+    const report = this.store.session.codebaseScanReport;
+    if (!report) return;
+    const payload = { ...report, session_id: this.sessionId };
+    this.scanInFlight = Promise.all(
+      this.destinations.map((d) =>
+        // eslint-disable-next-line @typescript-eslint/no-empty-function
+        d.sendScan?.(payload).catch(() => {}),
+      ),
+    ).then(() => undefined);
   }
 
   private selectRemoteSync(): void {

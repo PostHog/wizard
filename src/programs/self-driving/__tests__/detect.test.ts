@@ -25,6 +25,8 @@ import {
 } from '@programs/self-driving/detect';
 import { getDetectedWarehouseSources } from '@programs/warehouse-sources/detect';
 import { SessionStore } from '@programs/session/session-store';
+import { reportCodebaseScan, scanCodebaseFor } from '@programs/codebase-scan';
+import { analytics } from '@utils/analytics';
 import type { DetectedSource } from '@programs/warehouse-sources/types';
 import { toIntegrationReport } from '@programs/self-driving/detect-agentic';
 import {
@@ -85,10 +87,14 @@ describe('detectSelfDrivingPrerequisites', () => {
       path.join(tmpDir, 'package.json'),
       JSON.stringify({ dependencies: deps }),
     );
-    await detectSelfDrivingPrerequisites(
-      buildSession({ installDir: tmpDir }),
-      setCtx,
-    );
+    const session = buildSession({ installDir: tmpDir });
+    await scanCodebaseFor(selfDriving, {
+      session,
+      setFrameworkContext: (key, value) => {
+        session.frameworkContext[key] = value;
+      },
+    });
+    await detectSelfDrivingPrerequisites(session, setCtx);
     const tools = ctx[SELF_DRIVING_DETECTED_TOOLS_KEY] as
       | DetectedSource[]
       | undefined;
@@ -109,6 +115,35 @@ describe('detectSelfDrivingPrerequisites', () => {
     expect(
       await detectedKinds({ pg: '^8.0.0', '@sentry/node': '^7.0.0' }),
     ).toEqual(['Sentry']);
+  });
+
+  it('stashes connected tools locally but tags events only once sharing is granted', async () => {
+    const setTag = vi.spyOn(analytics, 'setTag');
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({ dependencies: { '@sentry/node': '^7.0.0' } }),
+    );
+    const store = new SessionStore(buildSession({ installDir: tmpDir }));
+    const ready = store.readyContext();
+    await scanCodebaseFor(selfDriving, ready);
+    await detectSelfDrivingPrerequisites(
+      ready.session,
+      ready.setFrameworkContext,
+    );
+
+    expect(
+      getSelfDrivingDetectedTools(store.session).map((s) => s.kind),
+    ).toEqual(['Sentry']);
+    expect(setTag).not.toHaveBeenCalledWith(
+      'connected_tools_detected',
+      expect.anything(),
+    );
+
+    store.grantSharing();
+    reportCodebaseScan(store);
+
+    expect(setTag).toHaveBeenCalledWith('connected_tools_detected', 'Sentry');
+    setTag.mockRestore();
   });
 
   it('writes nothing when the codebase has no detectable tools', async () => {
@@ -138,6 +173,7 @@ describe('the detect step does not leak into the composed integration run', () =
 
   it('stashes under its own key and leaves the warehouse key untouched', async () => {
     const store = new SessionStore(buildSession({ installDir: tmpDir }));
+    await scanCodebaseFor(selfDriving, store.readyContext());
     await selfDriving.onReady?.(store.readyContext());
 
     // Self-driving sees its tools...

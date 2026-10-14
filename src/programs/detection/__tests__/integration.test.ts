@@ -33,12 +33,13 @@ vi.mock('@programs/warehouse-sources/detect', async (importOriginal) => {
   >();
   return {
     ...actual,
-    detectWarehouseSources: vi.fn(actual.detectWarehouseSources),
+    detectTools: vi.fn(actual.detectTools),
   };
 });
 
 import { analytics } from '@utils/analytics';
-import { detectWarehouseSources } from '@programs/warehouse-sources/detect';
+import { detectTools } from '@programs/warehouse-sources/detect';
+import { scanCodebaseFor } from '@programs/codebase-scan';
 import { loadSourceDetectors } from '@programs/warehouse-sources/registry';
 import {
   detectPostHogIntegration,
@@ -76,6 +77,15 @@ function makeCtx(session: WizardSession): ProgramReadyContext {
   };
 }
 
+/** Detection as the runner does it: the shared scan, then the program's onReady. */
+async function detect(ctx: ProgramReadyContext): Promise<void> {
+  await scanCodebaseFor(
+    { id: 'posthog-integration', scansCodebase: true },
+    ctx,
+  );
+  await detectPostHogIntegration(ctx);
+}
+
 describe('detection always runs, independent of consent', () => {
   let tmpDir: string;
 
@@ -95,7 +105,7 @@ describe('detection always runs, independent of consent', () => {
     expect(session.scanConsent).toBe(ScanConsent.Undecided);
     const ctx = makeCtx(session);
 
-    await detectPostHogIntegration(ctx);
+    await detect(ctx);
 
     const sources = session.frameworkContext[
       DETECTED_WAREHOUSE_SOURCES_KEY
@@ -113,7 +123,7 @@ describe('detection always runs, independent of consent', () => {
       addDiscoveredFeature: (f) => discovered.push(f),
     };
 
-    await detectPostHogIntegration(ctx);
+    await detect(ctx);
 
     expect(discovered).toContain(DiscoveredFeature.Stripe);
   });
@@ -137,7 +147,7 @@ describe('a scan failure is distinguishable from a clean zero-source scan', () =
     const session = buildSession({ installDir: tmpDir });
     session.scanConsent = ScanConsent.Granted;
 
-    await detectPostHogIntegration(makeCtx(session));
+    await detect(makeCtx(session));
     reportWarehouseSourcesDetected(session);
 
     expect(analytics.wizardCapture).toHaveBeenCalledWith(
@@ -150,7 +160,7 @@ describe('a scan failure is distinguishable from a clean zero-source scan', () =
     const session = buildSession({ installDir: tmpDir });
     session.scanConsent = ScanConsent.Granted;
 
-    await detectPostHogIntegration(makeCtx(session));
+    await detect(makeCtx(session));
     reportWarehouseSourcesDetected(session);
 
     expect(analytics.wizardCapture).toHaveBeenCalledWith(
@@ -159,6 +169,7 @@ describe('a scan failure is distinguishable from a clean zero-source scan', () =
         warehouse_source_count: 0,
         warehouse_source_kinds: [],
         warehouse_source_modes: [],
+        discovered_features: [],
       },
     );
   });
@@ -167,14 +178,14 @@ describe('a scan failure is distinguishable from a clean zero-source scan', () =
     const session = buildSession({ installDir: tmpDir });
     session.scanConsent = ScanConsent.Granted;
     const scanError = new Error('boom');
-    vi.mocked(detectWarehouseSources).mockImplementationOnce(() => {
+    vi.mocked(detectTools).mockImplementationOnce(() => {
       throw scanError;
     });
 
-    await detectPostHogIntegration(makeCtx(session));
+    await detect(makeCtx(session));
 
     expect(analytics.captureException).toHaveBeenCalledWith(scanError, {
-      step: 'detectWarehouseSourcesForSuggestion',
+      step: 'scanCodebase',
     });
 
     const fired = reportWarehouseSourcesDetected(session);
@@ -194,7 +205,7 @@ describe('a scan failure is distinguishable from a clean zero-source scan', () =
     session.scanConsent = ScanConsent.Granted;
     vi.mocked(loadSourceDetectors).mockResolvedValueOnce([]);
 
-    await detectPostHogIntegration(makeCtx(session));
+    await detect(makeCtx(session));
 
     expect(reportWarehouseSourcesDetected(session)).toBe(true);
     expect(analytics.wizardCapture).not.toHaveBeenCalled();
@@ -218,7 +229,7 @@ describe('reportWarehouseSourcesDetected', () => {
   async function scannedSession(consent: WizardSession['scanConsent']) {
     const session = buildSession({ installDir: tmpDir });
     session.scanConsent = consent;
-    await detectPostHogIntegration(makeCtx(session));
+    await detect(makeCtx(session));
     return session;
   }
 
@@ -232,8 +243,9 @@ describe('reportWarehouseSourcesDetected', () => {
     expect(analytics.setTag).not.toHaveBeenCalled();
   });
 
-  it("'granted' reports the original property shape, nothing extra", async () => {
+  it("'granted' reports the source kinds and the discovered features", async () => {
     const session = await scannedSession(ScanConsent.Granted);
+    session.discoveredFeatures = [DiscoveredFeature.LLM];
 
     const fired = reportWarehouseSourcesDetected(session);
 
@@ -245,6 +257,7 @@ describe('reportWarehouseSourcesDetected', () => {
         warehouse_source_count: 1,
         warehouse_source_kinds: ['Stripe'],
         warehouse_source_modes: ['in-cli'],
+        discovered_features: [DiscoveredFeature.LLM],
       },
     );
     expect(analytics.setTag).toHaveBeenCalledWith(
@@ -258,7 +271,7 @@ describe('reportWarehouseSourcesDetected', () => {
     const emptyDir = makeTmpDir();
     const session = buildSession({ installDir: emptyDir });
     session.scanConsent = ScanConsent.Granted;
-    await detectPostHogIntegration(makeCtx(session));
+    await detect(makeCtx(session));
 
     const fired = reportWarehouseSourcesDetected(session);
 
@@ -269,6 +282,7 @@ describe('reportWarehouseSourcesDetected', () => {
         warehouse_source_count: 0,
         warehouse_source_kinds: [],
         warehouse_source_modes: [],
+        discovered_features: [],
       },
     );
     expect(analytics.setTag).not.toHaveBeenCalled();

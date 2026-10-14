@@ -1,6 +1,7 @@
 /**
  * PostHog destination — pushes wizard run state to the PostHog backend
- * via `POST /api/projects/{project_id}/wizard/sessions/`.
+ * via `POST /api/projects/{project_id}/wizard/sessions/`, and attaches the
+ * run's codebase scan via `POST /api/projects/{project_id}/wizard/scans/`.
  *
  * The endpoint is an upsert keyed by `(team, session_id)`: 201 means
  * the row was created, 200 means it was updated. Both are success.
@@ -12,12 +13,14 @@
  * Retry policy:
  *   5xx / network    → exponential backoff base 500ms cap 8s, max 3 attempts
  *   429              → honour `Retry-After` (seconds), single retry
- *   401 / 403        → disable for the rest of the run, no further pushes
+ *   401 / 403        → disable session pushes for the rest of the run;
+ *                      a rejected scan never disables them
  *   400              → give up for this push, do not disable
  *   other 4xx        → give up for this push, do not disable
  */
 
 import type {
+  ScanReportPayload,
   TaskStreamDestination,
   TaskStreamUpdate,
   StreamEvent,
@@ -38,6 +41,20 @@ export interface PostHogDestinationOptions {
   fetchImpl?: typeof fetch;
   /** Override for tests. Defaults to setTimeout. */
   sleep?: (ms: number) => Promise<void>;
+}
+
+/** PostHog endpoints this destination posts to, under `/api/projects/{project_id}/`. */
+enum WizardEndpoint {
+  Sessions = 'wizard/sessions',
+  Scans = 'wizard/scans',
+}
+
+/** How a POST ended, after its retries. */
+enum PostOutcome {
+  Sent = 'sent',
+  /** 401 or 403: the token can't write here. */
+  AuthRejected = 'auth_rejected',
+  GaveUp = 'gave_up',
 }
 
 const MAX_ATTEMPTS = 3;
@@ -100,16 +117,41 @@ export class PostHogDestination implements TaskStreamDestination {
     const creds = this.getCredentials();
     if (!creds) return;
 
-    await this.postWithRetry(creds, toWirePayload(payload));
+    const outcome = await this.postSession(creds, toWirePayload(payload));
+    if (outcome === PostOutcome.AuthRejected) this.disabled = true;
+  }
+
+  async sendScan(payload: ScanReportPayload): Promise<void> {
+    const creds = this.getCredentials();
+    if (!creds) return;
+
+    // A rejected scan, such as a --signup token without `wizard_session:write`,
+    // leaves session pushes on.
+    await this.postScan(creds, payload);
+  }
+
+  private postSession(
+    creds: Credentials,
+    body: Omit<TaskStreamUpdate, 'timestamp'>,
+  ): Promise<PostOutcome> {
+    return this.postWithRetry(creds, WizardEndpoint.Sessions, body);
+  }
+
+  private postScan(
+    creds: Credentials,
+    body: ScanReportPayload,
+  ): Promise<PostOutcome> {
+    return this.postWithRetry(creds, WizardEndpoint.Scans, body);
   }
 
   private buildRequest(
     creds: Credentials,
+    path: WizardEndpoint,
     body: object,
   ): { url: string; init: Parameters<typeof fetch>[1] } {
     const url = `${creds.host.apiHost.replace(/\/$/, '')}/api/projects/${
       creds.projectId
-    }/wizard/sessions/`;
+    }/${path}/`;
     return {
       url,
       init: {
@@ -123,8 +165,13 @@ export class PostHogDestination implements TaskStreamDestination {
     };
   }
 
-  private async postWithRetry(creds: Credentials, body: object): Promise<void> {
-    const { url, init } = this.buildRequest(creds, body);
+  /** POST with the retry policy above. Never throws. */
+  private async postWithRetry(
+    creds: Credentials,
+    path: WizardEndpoint,
+    body: object,
+  ): Promise<PostOutcome> {
+    const { url, init } = this.buildRequest(creds, path, body);
     let attempt = 0;
     let backoff = BASE_BACKOFF_MS;
     let retriedAfter429 = false;
@@ -137,7 +184,7 @@ export class PostHogDestination implements TaskStreamDestination {
       } catch (err) {
         if (attempt >= MAX_ATTEMPTS) {
           this.onError(err instanceof Error ? err : new Error(String(err)));
-          return;
+          return PostOutcome.GaveUp;
         }
         await this.sleep(backoff);
         backoff = Math.min(backoff * 2, MAX_BACKOFF_MS);
@@ -145,22 +192,21 @@ export class PostHogDestination implements TaskStreamDestination {
       }
 
       if (response.ok) {
-        logToFile(`[task-stream] wizard/sessions push ok: ${response.status}`);
-        return;
+        logToFile(`[task-stream] ${path} push ok: ${response.status}`);
+        return PostOutcome.Sent;
       }
 
       const status = response.status;
 
       if (status === 401 || status === 403) {
-        this.disabled = true;
-        this.onError(new Error(`wizard/sessions auth failed: ${status}`));
-        return;
+        this.onError(new Error(`${path} auth failed: ${status}`));
+        return PostOutcome.AuthRejected;
       }
 
       if (status === 429) {
         if (retriedAfter429) {
-          this.onError(new Error('wizard/sessions rate limited'));
-          return;
+          this.onError(new Error(`${path} rate limited`));
+          return PostOutcome.GaveUp;
         }
         retriedAfter429 = true;
         const wait = parseRetryAfter(response.headers.get('Retry-After'));
@@ -172,8 +218,8 @@ export class PostHogDestination implements TaskStreamDestination {
 
       if (status >= 500) {
         if (attempt >= MAX_ATTEMPTS) {
-          this.onError(new Error(`wizard/sessions server error: ${status}`));
-          return;
+          this.onError(new Error(`${path} server error: ${status}`));
+          return PostOutcome.GaveUp;
         }
         await this.sleep(backoff);
         backoff = Math.min(backoff * 2, MAX_BACKOFF_MS);
@@ -187,12 +233,13 @@ export class PostHogDestination implements TaskStreamDestination {
         } catch {
           // ignore
         }
-        this.onError(new Error(`wizard/sessions bad request (400): ${detail}`));
-        return;
+        this.onError(new Error(`${path} bad request (400): ${detail}`));
+        return PostOutcome.GaveUp;
       }
 
-      this.onError(new Error(`wizard/sessions unexpected status: ${status}`));
-      return;
+      this.onError(new Error(`${path} unexpected status: ${status}`));
+      return PostOutcome.GaveUp;
     }
+    return PostOutcome.GaveUp;
   }
 }

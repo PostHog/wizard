@@ -46,6 +46,7 @@ export const config: ProgramConfig = {
   description: 'Detect and connect Data Warehouse sources',
   id: 'warehouse-source',
   skillId: 'data-warehouse-source-setup',
+  scansCodebase: true,
   onReady: (ctx) =>
     detectWarehousePrerequisites(ctx.session, ctx.setFrameworkContext),
   oauthScopeAdditions: WAREHOUSE_SOURCE_SCOPE_ADDITIONS,
