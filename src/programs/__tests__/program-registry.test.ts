@@ -8,6 +8,7 @@ import { DEFAULT_BINDING } from '@agent';
 import {
   DEFAULT_AGENT_MODEL,
   GPT5_6_SOL_MODEL,
+  GPT6_SOL_MODEL,
   GPT5_6_TERRA_MODEL,
   Harness,
   Sequence,
@@ -62,8 +63,8 @@ describe('program bindings', () => {
       'mcp-analytics': linearOnSol,
       'replay-vision': {
         sequence: Sequence.orchestrator,
-        harness: Harness.anthropic,
-        model: DEFAULT_AGENT_MODEL,
+        harness: Harness.pi,
+        model: GPT6_SOL_MODEL,
       },
       'ai-observability': {
         sequence: Sequence.linear,

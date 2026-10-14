@@ -12,7 +12,7 @@
   "variations": [
     {
       "name": "default",
-      "summary": "orchestrator / anthropic / sonnet — the program's pinned binding"
+      "summary": "orchestrator / pi — the program's pinned binding; stage models from the flow frontmatter (terra on every stage)"
     },
     {
       "name": "linear-fallback",
