@@ -136,12 +136,6 @@ export interface ProgramConfig {
    */
   agentFlow?: string;
   /**
-   * Agent prompts bundled with the wizard for `agentFlow`. When set, the
-   * orchestrator builds the registry from these and does not fetch
-   * `agent-menu.json`.
-   */
-  agentPrompts?: readonly string[];
-  /**
    * Whether `publish_handoff` mirrors the run report into a PostHog notebook.
    * Set only where the context-mill prompts expect it; every other program
    * leaves the report in the wizard session alone.

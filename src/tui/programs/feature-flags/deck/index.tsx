@@ -10,6 +10,7 @@ const GATED_CODE: ContentBlock = {
   interval: 400,
   pause: 7000,
   lines: [
+    <Text> </Text>,
     <Text dimColor>{'example — a flag around new code'}</Text>,
     <Text>
       <Text color="cyan">{'if'}</Text>
@@ -25,6 +26,7 @@ const GRADUAL_ROLLOUT: ContentBlock = {
   interval: 700,
   pause: 7000,
   lines: [
+    <Text> </Text>,
     <Text dimColor>{'example — new-checkout rollout'}</Text>,
     <Text>
       <Text color={Colors.accent}>{'▓'}</Text>
@@ -62,7 +64,7 @@ const RUN_PLAN: ContentBlock = {
     </Text>,
     <Text>
       <Text color="cyan">{'4 '}</Text>
-      <Text>{'Write a report on turning them on'}</Text>
+      <Text>{'Publish a report to a PostHog notebook'}</Text>
     </Text>,
   ],
 };
@@ -74,7 +76,33 @@ export const getContentBlocks = (store?: WizardStore): ContentBlock[] => [
     mode: TextRevealMode.Typewriter,
     animationInterval: 160,
   },
-  { content: "I'm adding PostHog feature flags to your app.", pause: 5000 },
+  { content: 'The Wizard is an agent.', pause: 4000 },
+
+  {
+    content: "It's setting up feature flags for this project.",
+    pause: 5000,
+  },
+
+  { type: 'clear', pause: 2000 },
+
+  {
+    pause: 5000,
+    persist: true,
+    content: <StatusPeekTrigger store={store} />,
+  },
+
+  {
+    pause: 6000,
+    content: (
+      <Text>
+        Press{' '}
+        <Text color={Colors.accent} bold>
+          S
+        </Text>{' '}
+        to expand or collapse the status.
+      </Text>
+    ),
+  },
 
   { type: 'clear', pause: 1500 },
 
@@ -119,30 +147,10 @@ export const getContentBlocks = (store?: WizardStore): ContentBlock[] => [
 
   { type: 'clear', pause: 1500 },
 
-  { content: "Here's what I'm doing now:", pause: 2000 },
+  { content: "Here's what it's doing now:", pause: 2000 },
   RUN_PLAN,
   {
     content: 'Each side gets a flag only when your app has code there.',
     pause: 6000,
-  },
-
-  { type: 'clear', pause: 1500 },
-
-  {
-    pause: 5000,
-    persist: true,
-    content: <StatusPeekTrigger store={store} />,
-  },
-  {
-    pause: 90000,
-    content: (
-      <Text>
-        Press{' '}
-        <Text color={Colors.accent} bold>
-          S
-        </Text>{' '}
-        to follow along — or sit tight, I'll let you know when it's done.
-      </Text>
-    ),
   },
 ];

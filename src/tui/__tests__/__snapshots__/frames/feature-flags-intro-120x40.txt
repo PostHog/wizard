@@ -12,12 +12,12 @@
 
 
 
-                                                 ███ PostHog Wizard 🦔
+                                                  ███ PostHog Wizard 🦔
 
                                  We'll use AI to analyze your project and complete work.
                                     .env* file contents will not leave your machine.
 
-           Let's add your first PostHog feature flags, so you can ship code and turn it on when you're ready.
+                     Let's add your first feature flag, so you can ship safely and control rollouts.
 
                                                     Directory ✔ /app
 

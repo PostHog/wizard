@@ -1,19 +1,18 @@
 {
   "program": "feature-flags",
-  "summary": "Happy path: detect framework, confirm intro, run the feature-flags orchestrator flow (install/init when PostHog is absent, create one example flag per side (frontend, backend), evaluate each once on its side, report), delete installed skills. The driver answers the report's verify ask with \"skip\" because no one runs the app during e2e, so the report ends in \"Verify later\".",
+  "summary": "Happy path: detect framework, confirm intro, run the feature-flags orchestrator flow (install/init when PostHog is absent, create one example flag per side (frontend, backend), evaluate each once on its side, report to a notebook), delete installed skills.",
   "profile": {
     "setup": "first",
     "healthCheck": "dismiss",
     "mcp": "skip",
     "slack": "skip",
     "skills": "delete",
-    "ask": "first",
-    "askAnswers": [{ "match": "verify-flag", "value": "skip" }]
+    "ask": "first"
   },
   "variations": [
     {
       "name": "default",
-      "summary": "orchestrator / pi; stage models from the bundled prompts (terra seed, install, init and create-flag, sol evaluate and report)"
+      "summary": "orchestrator / pi; stage models from the context-mill feature-flags prompts"
     }
   ],
   "path": [
@@ -32,7 +31,7 @@
     },
     {
       "screen": "run",
-      "auto": "(external) the orchestrator flow; the profile answers wizard_ask \"verify-flag\" with \"skip\""
+      "auto": "(external) the orchestrator flow"
     },
     { "screen": "outro", "auto": "dismiss" },
     { "screen": "keep-skills", "auto": "delete the installed skills" }

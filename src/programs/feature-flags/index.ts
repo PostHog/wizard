@@ -1,5 +1,11 @@
 import { headlessOption, regionOption } from '@shared/headless-mode';
-import { Harness, Sequence, DEFAULT_AGENT_MODEL } from '@shared/constants';
+import {
+  Harness,
+  Integration,
+  Sequence,
+  DEFAULT_AGENT_MODEL,
+} from '@shared/constants';
+import { ErrorCodes } from '@shared/errors';
 import { analytics } from '@utils/analytics';
 import { detectPostHogIntegration } from '../detection/integration.js';
 import { detectFramework } from '../detection/framework';
@@ -7,37 +13,54 @@ import { gatherFrameworkContext } from '../detection/context';
 import { noteDetectedFramework } from '../detection/detected-framework';
 import { scopeInstallDirToProject } from '../detection/project-scope';
 import { FRAMEWORK_REGISTRY } from '../frameworks/registry';
+import { ProgramAbort } from '../program-abort';
 import type { ProgramConfig } from '../program-step';
 import type { ProgramSession } from '../program-session';
 import type { CiRunnerContext } from '../runner-context';
 import { abortNoFrameworkDetected } from '../shared/abort-no-framework';
-import { FEATURE_FLAGS_PROMPTS, FEATURE_FLAGS_REPORT_FILE } from './prompts.js';
 import { FEATURE_FLAGS_SCOPE_ADDITIONS } from './scopes.js';
 
+const FEATURE_FLAGS_REPORT_FILE = 'posthog-feature-flags-report.md';
 const FEATURE_FLAGS_DOCS_URL = 'https://posthog.com/docs/feature-flags';
 
-export { FEATURE_FLAGS_STEP_SKILL_ID } from './prompts.js';
+export const FEATURE_FLAGS_STEP_SKILL_ID = 'integration-v2-feature-flags-step';
+
+/** KMP skill variants carry no `framework` tag, so orchestrator preflight aborts every KMP run. */
+export const FEATURE_FLAGS_UNSUPPORTED: ReadonlySet<Integration> = new Set([
+  Integration.kmp,
+]);
+
+function abortUnsupportedPlatform(integration: Integration): never {
+  const name = FRAMEWORK_REGISTRY[integration]?.metadata.name ?? integration;
+  analytics.wizardCapture('feature flags unsupported platform', {
+    integration,
+  });
+  throw new ProgramAbort({
+    code: ErrorCodes.DetectUnsupportedPlatform,
+    message:
+      `The wizard cannot set up feature flags for ${name} projects yet.\n\n` +
+      `Set them up manually:\n  ${FEATURE_FLAGS_DOCS_URL}`,
+  });
+}
 
 export const config: ProgramConfig = {
   command: 'feature-flags',
   description: 'Set up example PostHog feature flags',
   id: 'feature-flags',
-  // Routes only; each stage's model and effort are pinned in the bundled prompts.
   binding: {
     sequence: Sequence.orchestrator,
     harness: Harness.pi,
     model: DEFAULT_AGENT_MODEL,
   },
   agentFlow: 'feature-flags',
-  agentPrompts: FEATURE_FLAGS_PROMPTS,
+  handoffNotebook: true,
   // The intro blocks Continue until a supported framework is detected.
   onReady: (ctx) => detectPostHogIntegration(ctx),
   oauthScopeAdditions: FEATURE_FLAGS_SCOPE_ADDITIONS,
-  reportFile: FEATURE_FLAGS_REPORT_FILE,
   cliOptions: { ...headlessOption, ...regionOption },
   run: {
     integrationLabel: 'feature-flags',
-    successMessage: `Feature flags wired in! View the report at ./${FEATURE_FLAGS_REPORT_FILE}`,
+    successMessage: 'Feature flags wired in!',
     reportFile: FEATURE_FLAGS_REPORT_FILE,
     docsUrl: FEATURE_FLAGS_DOCS_URL,
     spinnerMessage: 'Setting up your first feature flags...',
@@ -45,8 +68,9 @@ export const config: ProgramConfig = {
     buildOutroNextSteps: () => ({
       heading: 'Next steps',
       items: [
-        `Read ./${FEATURE_FLAGS_REPORT_FILE} for each flag's link and call site`,
-        'Enable the example flags in PostHog when you are ready to roll them out',
+        'Open your app and load the page or endpoint that evaluates each flag',
+        "Find the evaluation on each flag's page in PostHog (it can take a few minutes to show up)",
+        "Turn the flags on when you're ready",
       ],
     }),
   },
@@ -61,6 +85,9 @@ export const config: ProgramConfig = {
     const integration = await detectFramework(session.installDir);
     if (!integration) {
       abortNoFrameworkDetected();
+    }
+    if (FEATURE_FLAGS_UNSUPPORTED.has(integration)) {
+      abortUnsupportedPlatform(integration);
     }
     session.integration = integration;
     analytics.setTag('integration', integration);

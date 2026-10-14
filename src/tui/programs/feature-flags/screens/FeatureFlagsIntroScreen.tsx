@@ -2,7 +2,10 @@ import { Box, Text } from 'ink';
 import type { ReactNode } from 'react';
 import { useState, useSyncExternalStore } from 'react';
 import type { WizardStore } from '@tui/store';
-import { FEATURE_FLAGS_STEP_SKILL_ID } from '@programs/feature-flags';
+import {
+  FEATURE_FLAGS_STEP_SKILL_ID,
+  FEATURE_FLAGS_UNSUPPORTED,
+} from '@programs/feature-flags';
 import { LoadingBox } from '@tui/primitives/index';
 import { IntroScreenLayout } from '@tui/screens/IntroScreenLayout';
 import { SkillSourceInfo, useSkillEntry } from '@tui/screens/SkillSourceInfo';
@@ -66,8 +69,8 @@ export const FeatureFlagsIntroScreen = ({
   ) : (
     <Box flexDirection="column" alignItems="center">
       <Text>
-        Let's add your first PostHog feature flags, so you can ship code and
-        turn it on when you're ready.
+        Let's add your first feature flag, so you can ship safely and control
+        rollouts.
       </Text>
     </Box>
   );
@@ -96,7 +99,7 @@ export const FeatureFlagsIntroScreen = ({
         installDir={session.installDir}
         body={blockedBody}
         showDetection={false}
-        programLabel={session.programLabel}
+        programLabel={store.programLabel}
         skillId={session.skillId}
         menuOptions={CANCEL_ONLY_MENU}
         onSelect={selectMenuAction}
@@ -109,7 +112,7 @@ export const FeatureFlagsIntroScreen = ({
       installDir={session.installDir}
       body={body}
       showDetection={!showingMoreInfo}
-      programLabel={session.programLabel}
+      programLabel={store.programLabel}
       skillId={session.skillId}
       menuOptions={menuOptions}
       onSelect={selectMenuAction}
@@ -122,6 +125,9 @@ function bodyThatBlocksContinue(
 ): ReactNode | null {
   if (!session.detectionComplete) return DETECTING_FRAMEWORK_BODY;
   if (session.integration === null) return UNDETECTED_FRAMEWORK_BODY;
+  if (FEATURE_FLAGS_UNSUPPORTED.has(session.integration)) {
+    return UNSUPPORTED_FRAMEWORK_BODY;
+  }
   if (!session.unsupportedVersion) return null;
   const { current, minimum, docsUrl } = session.unsupportedVersion;
   return (
@@ -150,6 +156,17 @@ const UNDETECTED_FRAMEWORK_BODY: ReactNode = (
       <Text dimColor>
         The feature-flags program needs a supported framework. Run the wizard
         from your app's root directory.
+      </Text>
+    </Box>
+  </Box>
+);
+
+const UNSUPPORTED_FRAMEWORK_BODY: ReactNode = (
+  <Box flexDirection="column" alignItems="center" width={64}>
+    <Text>The wizard cannot set up feature flags for this framework yet.</Text>
+    <Box marginTop={1}>
+      <Text dimColor>
+        Manual setup guide: https://posthog.com/docs/feature-flags
       </Text>
     </Box>
   </Box>
