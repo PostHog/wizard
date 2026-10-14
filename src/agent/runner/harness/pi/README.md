@@ -25,9 +25,9 @@ alone cannot grant access.
 Pi sessions explicitly install tools and disable project-controlled extensions,
 skills, context files, prompt templates, and themes. Shell subprocesses receive
 a scrubbed environment. [security.ts](security.ts) adapts shared Wizard tool
-permissions and warlock scanning to Pi's `tool_call` and `tool_result` events,
-and drops every `.env*` line from `grep` results. It distinguishes a blocked
-call from a latched critical violation that ends work.
+permissions and warlock scanning to Pi's `tool_call` and `tool_result` events.
+It distinguishes a blocked call from a latched critical violation that ends
+work.
 
 The linear path supplies file/exploration tools, shell, Wizard capabilities,
 todos and bounded subagents. The orchestrator task path supplies its task and
