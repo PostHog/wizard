@@ -16,14 +16,10 @@ const CATALOG_API_PATH = '/api/wizard/tool_catalog/';
 
 type CatalogSource = { name: string; url: string };
 
-/** Tried in order after a pinned PostHog host. GitHub serves the same file when both regions are down. */
+/** Tried in order after a pinned PostHog host. Both regions serve the same catalog. */
 const PUBLIC_CATALOG_SOURCES: readonly CatalogSource[] = [
   { name: 'us', url: `https://us.posthog.com${CATALOG_API_PATH}` },
   { name: 'eu', url: `https://eu.posthog.com${CATALOG_API_PATH}` },
-  {
-    name: 'github',
-    url: 'https://raw.githubusercontent.com/PostHog/posthog/master/products/wizard/tool-catalog.generated.json',
-  },
 ];
 
 // Per source. Detection waits on the download, so a hung host must not hold up the run.
@@ -150,8 +146,9 @@ let loading: Promise<readonly SourceDetector[]> | null = null;
 
 /**
  * The detectors from PostHog's tool catalog. Tries a pinned PostHog host
- * (`--base-url`, `--local-posthog`, dev builds) first, then US, EU and GitHub.
- * Resolves to an empty list when every source fails, and never rejects.
+ * (`--base-url`, `--local-posthog`, dev builds) first, then US and EU.
+ * Resolves to an empty list when every source fails, and never rejects, so
+ * the run goes on without codebase detection.
  *
  * Every caller in the process shares the first call's download. The base URL
  * is fixed for a run, so the first caller's `baseUrl` is everyone's.

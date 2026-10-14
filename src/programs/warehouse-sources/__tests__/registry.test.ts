@@ -17,8 +17,6 @@ import { FIXTURE_CATALOG } from './helpers/tool-catalog.no-jest';
 
 const US = 'https://us.posthog.com/api/wizard/tool_catalog/';
 const EU = 'https://eu.posthog.com/api/wizard/tool_catalog/';
-const GITHUB =
-  'https://raw.githubusercontent.com/PostHog/posthog/master/products/wizard/tool-catalog.generated.json';
 
 const json = (body: unknown, status = 200): Response =>
   new Response(JSON.stringify(body), {
@@ -51,15 +49,15 @@ describe('loadSourceDetectors', () => {
   });
   afterEach(() => vi.unstubAllGlobals());
 
-  it('falls back from US to EU to GitHub in order', async () => {
+  it('falls back from US to EU in order', async () => {
     const fetchMock = serve({
       [US]: () => json({ detail: 'unavailable' }, 503),
-      [GITHUB]: () => json(FIXTURE_CATALOG),
+      [EU]: () => json(FIXTURE_CATALOG),
     });
 
     const detectors = await loadSourceDetectors();
 
-    expect(requestedUrls(fetchMock)).toEqual([US, EU, GITHUB]);
+    expect(requestedUrls(fetchMock)).toEqual([US, EU]);
     expect(kinds(detectors)).toEqual(kinds(FIXTURE_CATALOG.tools));
   });
 
@@ -104,18 +102,13 @@ describe('loadSourceDetectors', () => {
   });
 
   it('resolves to no detectors and reports it when every source fails', async () => {
-    serve({});
+    const fetchMock = serve({});
 
     await expect(loadSourceDetectors()).resolves.toEqual([]);
+    expect(requestedUrls(fetchMock)).toEqual([US, EU]);
     expect(analytics.wizardCapture).toHaveBeenCalledWith(
       'tool catalog unavailable',
-      {
-        failures: {
-          us: 'fetch failed',
-          eu: 'fetch failed',
-          github: 'fetch failed',
-        },
-      },
+      { failures: { us: 'fetch failed', eu: 'fetch failed' } },
     );
   });
 
