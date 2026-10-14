@@ -32,8 +32,10 @@ import {
 import { AgentErrorType } from '../../../agent-interface';
 import { REMARK_INSTRUCTION, policyAbortReason } from '../../../signals';
 import { AgentOutputSignals } from '../../../output-signals';
-import { TaskStatus } from '../../sequence/orchestrator/queue';
-import type { OrchestratorToolsContext } from '../../sequence/orchestrator/queue-tools';
+import {
+  taskReported,
+  type OrchestratorToolsContext,
+} from '../../sequence/orchestrator/queue-tools';
 import type { AgentResult, TaskRunInputs } from '../types';
 import { gatewayAuth, type GatewayAuth } from '../../../gateway-session';
 import { currentAccessToken } from '@shared/oauth-session';
@@ -157,13 +159,7 @@ function isSettled(ctx: OrchestratorToolsContext): boolean {
     // The seed's job is a seeded queue, not a complete_task call.
     return ctx.store.list().length > 0;
   }
-  const task = ctx.store.get(ctx.currentTaskId);
-  return (
-    !!task &&
-    (task.status === TaskStatus.Done ||
-      task.status === TaskStatus.Failed ||
-      task.status === TaskStatus.Skipped)
-  );
+  return taskReported(ctx);
 }
 
 export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
@@ -474,8 +470,9 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
           assistantTurns += 1;
           turns.noteAssistantTurn(event.message);
           const assistant = extractText(event.message).trim();
-          // The gateway's refusal marker ends the run from a work turn, never the remark.
-          if (!remarkTurn) abortReason ??= policyAbortReason(assistant);
+          // The refusal marker ends the run from a work turn, not the remark or a turn after complete_task.
+          if (!remarkTurn && !taskReported(orchestrator))
+            abortReason ??= policyAbortReason(assistant);
           if (abortReason) cancellation?.abort();
           if (assistant) {
             logToFile(`[pi-task] assistant: ${assistant.slice(0, 1000)}`);

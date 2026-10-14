@@ -71,6 +71,7 @@ import {
 import { classifyAuthFailure } from '@shared/errors';
 import { isGrantRevoked } from '@shared/auth-session-state';
 import { AgentOutputSignals } from './output-signals';
+import { taskReported } from './runner/sequence/orchestrator/queue-tools';
 
 // Signal vocabulary and the output parser live in dedicated modules; re-export
 // so existing importers of these from agent-interface keep working.
@@ -354,6 +355,8 @@ type AgentRunConfig = {
    * not touch other programs' linear runs.
    */
   suppressTaskRender?: boolean;
+  /** Whether this task has reported through complete_task. Absent outside a task run. */
+  taskReported?: () => boolean;
   /** AIO capture, forwarded from AgentConfig. Undefined when disabled. */
   capture?: AioCapture;
   /** Scan-triage classifier, built from this run's gateway auth. */
@@ -710,6 +713,7 @@ export async function initializeAgent(
     // fallback can match map_to_bedrock_model()'s strict lookup.
     const model = config.modelOverride ?? DEFAULT_AGENT_MODEL;
 
+    const queue = config.orchestrator;
     const agentRunConfig: AgentRunConfig = {
       workingDirectory: config.workingDirectory,
       mcpServers,
@@ -724,6 +728,7 @@ export async function initializeAgent(
       disallowedTools: config.disallowedTools,
       getPendingQuestion: config.getPendingQuestion,
       suppressTaskRender: !!config.orchestrator,
+      taskReported: queue && (() => taskReported(queue)),
       capture: config.capture,
       triageProvider,
       gatewayAuth: auth,
@@ -1015,11 +1020,12 @@ export async function runAgent(
   let policyAborted = false;
   const subagentCallIds = new Set<string>();
   let remarkTurn = false;
-  // The gateway's refusal marker ends the run from a work turn, never the remark.
+  // The refusal marker ends the run from a work turn, not the remark or a turn after complete_task.
   const policyAbort = (reply: unknown) => {
     const reason =
       typeof reply === 'string' ? policyAbortReason(reply) : undefined;
-    if (!reason || abortReason || remarkTurn) return;
+    if (!reason || abortReason || remarkTurn || agentConfig.taskReported?.())
+      return;
     abortReason = reason;
     policyAborted = true;
     logToFile(`Agent emitted [posthog:abort]: ${reason}`);

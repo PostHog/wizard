@@ -778,10 +778,11 @@ describe('runAgent', () => {
           Stop: { hooks: ((input: object) => unknown)[] }[];
         };
       }) => Generator<unknown>,
+      agentConfig: object = {},
     ) {
       mockQuery.mockImplementation(({ options }) => stream(options));
       const result = await runAgent(
-        defaultAgentConfig,
+        { ...defaultAgentConfig, ...agentConfig },
         'test prompt',
         defaultOptions,
         mockSpinner as unknown as SpinnerHandle,
@@ -845,6 +846,38 @@ describe('runAgent', () => {
           };
           yield done;
         });
+
+        expect(result.kind).toBe(kind);
+        expect(aborted).toBe(kind === 'abort');
+      },
+    );
+
+    it.each([
+      ['before', 'abort'],
+      ['after', 'success'],
+    ])(
+      'on a policy abort marker %s the task reports through complete_task, ends with %s',
+      async (when, kind) => {
+        let reported = false;
+        const { result, aborted } = await runStream(
+          function* () {
+            yield say('Installed the SDK.');
+            if (when === 'before') yield say(REFUSAL);
+            yield {
+              type: 'assistant',
+              message: {
+                content: [
+                  { type: 'tool_use', id: 'c1', name: 'complete_task' },
+                ],
+              },
+            };
+            // The tool handler runs between the call and the closing reply.
+            reported = true;
+            if (when === 'after') yield say(REFUSAL);
+            if (kind === 'success') yield done;
+          },
+          { taskReported: () => reported },
+        );
 
         expect(result.kind).toBe(kind);
         expect(aborted).toBe(kind === 'abort');

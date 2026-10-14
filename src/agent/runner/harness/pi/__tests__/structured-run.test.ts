@@ -38,6 +38,8 @@ const state = vi.hoisted(() => ({
   toolName: 'find',
   toolError: undefined as string | undefined,
   toolResult: undefined as string | undefined,
+  // A second turn in the same prompt: complete_task runs, then the agent replies.
+  report: undefined as { settle: () => void; reply: string } | undefined,
 }));
 vi.mock('@utils/analytics', () => ({
   analytics: { wizardCapture: vi.fn(), capture: vi.fn() },
@@ -176,6 +178,27 @@ vi.mock('@earendil-works/pi-coding-agent', () => ({
               })),
             },
           });
+          if (state.report) {
+            state.listener?.({
+              type: 'tool_execution_start',
+              toolName: 'complete_task',
+              args: {},
+            });
+            state.report.settle();
+            state.listener?.({
+              type: 'tool_execution_end',
+              toolName: 'complete_task',
+              isError: false,
+              result: { content: [{ type: 'text', text: 'ok' }] },
+            });
+            state.listener?.({
+              type: 'message_end',
+              message: {
+                role: 'assistant',
+                content: [{ type: 'text', text: state.report.reply }],
+              },
+            });
+          }
           return state.hang
             ? new Promise<void>((resolve) => (state.release = resolve))
             : Promise.resolve();
@@ -280,6 +303,7 @@ beforeEach(() => {
   state.toolError = undefined;
   state.toolResult = undefined;
   state.remark = undefined;
+  state.report = undefined;
   vi.mocked(analytics.wizardCapture).mockClear();
 });
 
@@ -508,6 +532,49 @@ describe.each(['linear', 'task'] as const)('%s setup signals', (mode) => {
     await expect(run(runInputs(vi.fn(), null))).resolves.toEqual({
       kind: 'success',
     });
+  });
+});
+
+describe('a task turn after complete_task', () => {
+  const REFUSAL = '[posthog:abort] Request is out of scope';
+  const runOrchestrated = (orchestrator: {
+    currentTaskId?: string;
+    store: unknown;
+  }) =>
+    runPiTask({
+      ...runInputs(vi.fn(), null),
+      orchestrator: { validTypes: ['integration'], ...orchestrator } as never,
+      spinnerMessage: 'Setting up SDK',
+      successMessage: 'Installed the SDK',
+      requestRemark: false,
+      allowedTools: ['Read'],
+      analyticsProperties: {},
+    });
+
+  it('ignores a policy abort marker in the closing reply once the task has reported', async () => {
+    const task = { status: 'running' };
+    state.text = 'Installed the SDK.';
+    state.report = { settle: () => (task.status = 'done'), reply: REFUSAL };
+
+    await expect(
+      runOrchestrated({
+        currentTaskId: 'integration',
+        store: { get: () => task },
+      }),
+    ).resolves.toEqual({ kind: 'success' });
+    expect(state.prompts).toHaveLength(1);
+    expect(analytics.wizardCapture).not.toHaveBeenCalledWith(
+      'agent aborted',
+      expect.anything(),
+    );
+  });
+
+  it('still ends a seeded orchestrator run on a policy abort marker', async () => {
+    state.text = REFUSAL;
+
+    await expect(
+      runOrchestrated({ store: { list: () => [{ id: '1' }] } }),
+    ).resolves.toMatchObject({ kind: 'abort' });
   });
 });
 
