@@ -104,6 +104,18 @@ describe('STEP 6c — Replay Vision scanners', () => {
   });
 });
 
+describe('project check', () => {
+  it('checks the repo token before the first write', () => {
+    const prompt = buildSelfDrivingPrompt(ctx).replace(/\s+/g, ' ');
+    const step2 = prompt.slice(
+      prompt.indexOf('STEP 2 —'),
+      prompt.indexOf('STEP 3 —'),
+    );
+    expect(step2).toContain("This project's token is phc_test");
+    expect(step2).toContain('[ABORT] wrong-project');
+  });
+});
+
 describe('detected-tools block', () => {
   it('lists each detected tool with its source_type and matched signal', () => {
     const prompt = buildSelfDrivingPrompt(ctx, [SENTRY, LINEAR]);

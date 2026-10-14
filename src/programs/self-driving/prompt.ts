@@ -127,6 +127,19 @@ STEP 1 — Check Self-driving access. (skill: "Check access")
    and halt.
 
 STEP 2 — Read project and current Signals state. (skill: "Read context")
+   First confirm that this repo sends events to project ${ctx.projectId}.
+   The user picked that project on the PostHog login screen, and that
+   screen preselects the last project they opened in the browser, so it
+   can be the wrong one. Find the project token in this repo's PostHog
+   client setup (the init call, its env var, and that env var's value in
+   any .env file). This project's token is ${ctx.projectApiKey}. If the
+   repo's token is a different phc_ token, STOP before any write and ask
+   ONE wizard_ask: continue with project ${ctx.projectId}, or stop so they
+   can run the wizard again for the repo's project. Say which token the
+   repo uses and where. If they stop, emit
+   ${AgentSignals.ABORT} wrong-project
+   and halt. If the tokens match, or the repo has no literal token, go on.
+
    If ./posthog-setup-report.md exists, read it as a strong hint for what
    THIS repo instruments — but it is often absent (users frequently don't
    commit it), so do NOT depend on it. Combine whatever you find with the

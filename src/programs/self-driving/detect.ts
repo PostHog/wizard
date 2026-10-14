@@ -274,6 +274,15 @@ export const SELF_DRIVING_ABORT_CASES: AbortCase[] = [
       'the wizard outside CI / non-interactive mode.',
   },
   {
+    // Prompt STEP 2 emits: [ABORT] wrong-project
+    match: /^wrong-project$/i,
+    message: 'This repo uses a different PostHog project',
+    body:
+      'Nothing was changed. Run the wizard again with --project-id set to ' +
+      'the project this repo sends events to. The id is the number after ' +
+      "/project/ in that project's PostHog URL.",
+  },
+  {
     // The wizard_ask tool's own error texts (non-interactive host, ask cap
     // reached) instruct the agent to emit this reason — cover it so those
     // paths render a friendly screen instead of the generic abort outro.
