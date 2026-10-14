@@ -9,6 +9,7 @@ import {
   overwriteShrinkReason,
   MAX_TOOL_CALLS,
   type PiExtensionApiLike,
+  type ToolResultPatch,
 } from '../security';
 import { analytics } from '@utils/analytics';
 
@@ -604,6 +605,66 @@ describe('pi-security: repeat-block escalation (identical retries after a YARA b
     const second = await deny();
     expect(second.block).toBe(true);
     expect(second.reason).not.toContain('ALREADY blocked');
+  });
+});
+
+// pi's real grep over env files no ignore rule hides, then the security
+// extension's tool_result hook. The tool_call gate is skipped, so the hook
+// alone must keep every env value out.
+describe('pi-security: grep never returns .env* content', () => {
+  const VALUE = 'phc_grep_canary_8f3a';
+  const APP_LINE = `app.ts:1: export const TOKEN = '${VALUE}';`;
+  let dir: string;
+  let grepThroughHook: (input: Record<string, unknown>) => Promise<string>;
+
+  beforeAll(async () => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-grep-env-'));
+    const env = `REGION=eu\nTOKEN=${VALUE}\n`;
+    fs.writeFileSync(path.join(dir, '.env'), env);
+    fs.mkdirSync(path.join(dir, 'sub'));
+    fs.writeFileSync(path.join(dir, 'sub', '.env.local'), env);
+    fs.writeFileSync(
+      path.join(dir, 'app.ts'),
+      `export const TOKEN = '${VALUE}';\n`,
+    );
+
+    const { createGrepTool } = await import('@earendil-works/pi-coding-agent');
+    const grep = createGrepTool(dir);
+    let onResult: (e: unknown) => Promise<ToolResultPatch> = () =>
+      Promise.resolve({});
+    createSecurityExtension({ workingDirectory: dir }).factory({
+      on: (event: string, handler: typeof onResult) => {
+        if (event === 'tool_result') onResult = handler;
+      },
+    } as PiExtensionApiLike);
+
+    grepThroughHook = async (input) => {
+      const result = await grep.execute('call', { pattern: VALUE, ...input });
+      const patch = await onResult({ toolName: 'grep', ...result });
+      return (patch.content ?? result.content)
+        .map((c) => (c.type === 'text' ? c.text : ''))
+        .join('\n');
+    };
+  });
+
+  afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
+
+  test.each([
+    ['a directory grep', { path: '.' }],
+    ['a directory grep with context lines', { path: '.', context: 1 }],
+  ])('%s finds the ordinary file and nothing from .env*', async (_, input) => {
+    const text = await grepThroughHook(input);
+    expect(text).toContain(APP_LINE);
+    expect(text).not.toContain('.env');
+    expect(text).not.toContain('REGION');
+  });
+
+  test.each([
+    ['a path at .env', { path: '.env' }],
+    ['a .env* glob', { path: '.', glob: '.env*' }],
+    ['a nested **/.env* glob', { path: '.', glob: '**/.env*' }],
+  ])('%s returns no content', async (_, input) => {
+    expect(await grepThroughHook(input)).toBe('No matches found');
   });
 });
 

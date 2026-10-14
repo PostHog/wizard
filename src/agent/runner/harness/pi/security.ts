@@ -4,8 +4,8 @@
  * — built-in (bash/read/edit/write/grep) AND custom — through pi's `tool_call`
  * hook and reuses the shared tool policy: `wizardCanUseTool` (the bash fence,
  * whose one `rm` rule is project-scoped, + .env fencing) plus the YARA
- * pre-scan. A `tool_result` hook
- * post-scans output. Both fail closed: a scanner error blocks, and a critical
+ * pre-scan. A `tool_result` hook post-scans output and drops `.env*` lines from
+ * grep results. Both fail closed: a scanner error blocks, and a critical
  * post-scan violation latches so every subsequent tool call is blocked and the
  * run terminates as a YARA violation.
  *
@@ -38,6 +38,7 @@ import {
 } from '../../../yara-policy';
 import { logToFile } from '@utils/debug';
 import { analytics } from '@utils/analytics';
+import { isEnvFileNameAnyCase } from '@utils/env-scan';
 
 /** warlock ScanMatch → the report shape `recordExternalScan` expects. */
 function toReportViolation(m: ScanMatch) {
@@ -446,6 +447,47 @@ function isPostScanTool(toolName: string): boolean {
   return toolName === 'read' || toolName === 'bash';
 }
 
+/** A tool_result handler's answer: replacement content and details, or `{}` to keep the result. */
+export type ToolResultPatch = {
+  content?: Array<{ type: 'text'; text: string }>;
+  details?: object;
+};
+
+/** pi's grep prints a match as `path:N: text` and a context line as `path-N- text`. */
+const GREP_LINE_MARKER = /(?::\d+:|-\d+-) /g;
+
+/** True when any prefix of the line that ends at a marker names a `.env*` file; a false positive only drops a line. */
+function isEnvFileGrepLine(line: string): boolean {
+  for (const marker of line.matchAll(GREP_LINE_MARKER)) {
+    const prefix = line.slice(0, marker.index);
+    const name = prefix.slice(
+      Math.max(prefix.lastIndexOf('/'), prefix.lastIndexOf('\\')) + 1,
+    );
+    if (isEnvFileNameAnyCase(name)) return true;
+  }
+  return false;
+}
+
+/**
+ * Drop every `.env*` line from a pi grep result, whatever path, glob or context
+ * the call passed: pi runs ripgrep with `--hidden`, so any env file that
+ * ignore rules miss is searched. A result left with no match reads as pi's own
+ * empty answer, and `details` is replaced since it can copy the raw output.
+ */
+function withoutEnvFileLines(
+  content: Array<{ type: string; text?: string }> | undefined,
+): ToolResultPatch {
+  const lines = (content ?? [])
+    .map((c) => (c && c.type === 'text' ? c.text ?? '' : ''))
+    .join('\n')
+    .split('\n');
+  const kept = lines.filter((line) => !isEnvFileGrepLine(line));
+  if (kept.length === lines.length) return {};
+  const anyMatchLeft = kept.some((line) => line.match(GREP_LINE_MARKER));
+  const text = anyMatchLeft ? kept.join('\n') : 'No matches found';
+  return { content: [{ type: 'text', text }], details: {} };
+}
+
 /** Mutable state the backend reads after the run to classify the outcome. */
 export interface SecurityState {
   criticalViolation: boolean;
@@ -524,6 +566,7 @@ export function createSecurityExtension(ctx: SecurityExtensionOptions): {
     });
 
     pi.on('tool_result', async (event) => {
+      if (event.toolName === 'grep') return withoutEnvFileLines(event.content);
       if (!isPostScanTool(event.toolName)) return {};
       const text = (event.content ?? [])
         .map((c) => (c && c.type === 'text' ? c.text : ''))
@@ -597,6 +640,6 @@ export interface PiExtensionApiLike {
       toolName: string;
       content?: Array<{ type: string; text?: string }>;
       isError?: boolean;
-    }) => Record<string, never> | Promise<Record<string, never>>,
+    }) => ToolResultPatch | Promise<ToolResultPatch>,
   ): void;
 }
