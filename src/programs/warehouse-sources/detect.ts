@@ -2,10 +2,10 @@
  * Data warehouse source detection.
  *
  * Scans a project for codebase signals (package manifests, `.env` key
- * names) and matches them against the detectors the caller passes in, from
- * `loadSourceDetectors`. Pure function: no store mutations, no UI calls.
- * Reads files locally — only the wizard process does this; the agent never
- * sees secret values.
+ * names, third-party script hosts in templates) and matches them against the
+ * detectors the caller passes in, from `loadSourceDetectors`. Pure function:
+ * no store mutations, no UI calls. Reads files locally — only the wizard
+ * process does this; the agent never sees secret values.
  *
  * Note we only read `.env` KEY NAMES, never values.
  */
@@ -26,6 +26,18 @@ import {
   parsePyprojectToml,
   parsePipfile,
 } from '../detection/features';
+import {
+  parseCargoToml,
+  parseComposerJson,
+  parseGoMod,
+  parseGradleBuild,
+  parseGradleVersionCatalog,
+  parseMixExs,
+  parsePackageSwift,
+  parsePodfile,
+  parsePomXml,
+  parsePubspecYaml,
+} from './manifests.js';
 import type {
   DetectedSource,
   DetectedTool,
@@ -34,11 +46,17 @@ import type {
 } from './types.js';
 
 interface ProjectSignals {
+  /** Every script host the catalog lists. A template hostname outside this list is dropped as it is read. */
+  catalogScriptHosts: readonly string[];
   /**
    * Key NAME → the project-relative `.env*` file that first defined it. The
    * path is sanitised on the way in, so nothing here can reach a prompt raw.
    */
   envKeys: Map<string, string>;
+  /** Catalog script host a template loads from → the file it was found in. */
+  scriptHosts: Map<string, string>;
+  /** Templates with a `<script` tag read so far, against {@link MAX_TEMPLATE_FILES}. */
+  templatesRead: number;
   /**
    * Ecosystem (`npm`, `pypi`, `rubygems`, ...) → package name → the
    * project-relative manifest that first declared it.
@@ -101,7 +119,7 @@ export function detectTools(
   // No directory guard here: walkProjectFiles is best-effort and yields no
   // signals for a missing/unreadable dir (→ []). The program-level detect
   // step is responsible for surfacing a structured `bad-directory` error.
-  const signals = collectSignals(installDir);
+  const signals = collectSignals(installDir, catalogScriptHosts(detectors));
 
   const detected: DetectedTool[] = [];
   for (const detector of detectors) {
@@ -172,14 +190,15 @@ function isSuperseded(
 }
 
 /**
- * Every signal that matches the detector, capped per tool. Packages come before
- * `.env` keys: a package shows the code uses the tool, while a key can outlive it.
+ * Every signal that matches the detector, capped per tool. Packages and script
+ * hosts come before `.env` keys: they show the code uses the tool, while a key
+ * can outlive it.
  */
 function matchDetector(
   detector: SourceDetector,
   signals: ProjectSignals,
 ): ScanSignal[] {
-  const { envKeys, packages } = detector.signals;
+  const { envKeys, scriptHosts, packages } = detector.signals;
   const matched: ScanSignal[] = [];
 
   for (const [ecosystem, names] of Object.entries(packages)) {
@@ -188,6 +207,13 @@ function matchDetector(
     for (const name of names) {
       const file = found.get(name);
       if (file !== undefined) matched.push({ source: ecosystem, name, file });
+    }
+  }
+
+  for (const host of scriptHosts) {
+    const file = signals.scriptHosts.get(host);
+    if (file !== undefined) {
+      matched.push({ source: SCRIPT_HOST_SIGNAL_SOURCE, name: host, file });
     }
   }
 
@@ -204,6 +230,9 @@ function matchDetector(
 
 /** Signal source for a `.env` key name. */
 const ENV_KEY_SIGNAL_SOURCE = 'env_key';
+
+/** Signal source for a third-party script hostname found in a template. */
+const SCRIPT_HOST_SIGNAL_SOURCE = 'script_host';
 
 /**
  * The human-readable form of a signal, shown on screens and given to the agent.
@@ -222,22 +251,36 @@ function describeSignal(signal: ScanSignal): string {
   if (signal.source === ENV_KEY_SIGNAL_SOURCE) {
     return `found \`${signal.name}\` in \`${signal.file ?? '.env'}\``;
   }
+  if (signal.source === SCRIPT_HOST_SIGNAL_SOURCE) {
+    return `found a \`${signal.name}\` script in \`${
+      signal.file ?? 'a template'
+    }\``;
+  }
   const location =
     PACKAGE_SIGNAL_LOCATIONS[signal.source] ?? `${signal.source} dependencies`;
   return `found \`${signal.name}\` in ${location}`;
 }
 
-function collectSignals(installDir: string): ProjectSignals {
+function collectSignals(
+  installDir: string,
+  catalogScriptHosts: readonly string[],
+): ProjectSignals {
   const signals: ProjectSignals = {
+    catalogScriptHosts,
     envKeys: new Map(),
+    scriptHosts: new Map(),
+    templatesRead: 0,
     packages: new Map(),
     complete: true,
   };
 
+  // Symlinks are not followed: one can point outside the project, and what
+  // the scan reads is reported to PostHog.
   signals.complete = walkProjectFiles(
     installDir,
     (name, fullPath) => ingestFile(installDir, name, fullPath, signals),
     MAX_DEPTH,
+    { followSymlinks: false },
   );
 
   return signals;
@@ -245,9 +288,9 @@ function collectSignals(installDir: string): ProjectSignals {
 
 /**
  * Route a file to the right parser BY NAME, reading its contents only when the
- * name matches one of the ~6 manifests we care about. Checking the name first
- * avoids slurping every file in the tree (lockfiles, binaries, assets) into
- * memory just to discard it.
+ * name matches a manifest, an env file or a template we read. Checking the
+ * name first avoids slurping every file in the tree (lockfiles, binaries,
+ * assets) into memory just to discard it.
  */
 function ingestFile(
   installDir: string,
@@ -255,8 +298,14 @@ function ingestFile(
   fullPath: string,
   signals: ProjectSignals,
 ): void {
-  const ingest = ingestorFor(name);
+  const ingest = ingestorFor(name, signals.catalogScriptHosts.length > 0);
   if (!ingest) return;
+  if (
+    ingest === addScriptHosts &&
+    signals.templatesRead >= MAX_TEMPLATE_FILES
+  ) {
+    return;
+  }
 
   const content = safeReadFile(fullPath);
   if (content === null) return;
@@ -271,9 +320,10 @@ type Ingestor = (
 ) => void;
 
 /** Pick the parser for a manifest filename, or null if it's not one we read. */
-function ingestorFor(name: string): Ingestor | null {
+function ingestorFor(name: string, readTemplates: boolean): Ingestor | null {
   if (isEnvFileName(name))
     return (c, s, relativePath) => addEnvKeys(c, s, relativePath);
+  if (readTemplates && isTemplateFileName(name)) return addScriptHosts;
   if (name === 'package.json') return addNpmDeps;
   if (name === 'requirements.txt')
     return (c, s, file) =>
@@ -284,10 +334,165 @@ function ingestorFor(name: string): Ingestor | null {
   if (name === 'Pipfile')
     return (c, s, file) =>
       parsePipfile(c).forEach((d) => addPackage(s, 'pypi', d, file));
-  if (name === 'Gemfile')
+  const manifest = MANIFEST_PARSERS[name];
+  if (manifest)
     return (c, s, file) =>
-      parseGemfile(c).forEach((g) => addPackage(s, 'rubygems', g, file));
+      manifest
+        .parse(c)
+        .forEach((d) => addPackage(s, manifest.ecosystem, d, file));
   return null;
+}
+
+/** Manifests of every ecosystem after npm and pypi, by file name, in ecosystem order. */
+const MANIFEST_PARSERS: Readonly<
+  Record<string, { ecosystem: string; parse: (content: string) => string[] }>
+> = {
+  'Cargo.toml': { ecosystem: 'cargo', parse: parseCargoToml },
+  Podfile: { ecosystem: 'cocoapods', parse: parsePodfile },
+  'composer.json': { ecosystem: 'composer', parse: parseComposerJson },
+  'go.mod': { ecosystem: 'go', parse: parseGoMod },
+  'mix.exs': { ecosystem: 'hex', parse: parseMixExs },
+  'build.gradle': { ecosystem: 'maven', parse: parseGradleBuild },
+  'build.gradle.kts': { ecosystem: 'maven', parse: parseGradleBuild },
+  'libs.versions.toml': {
+    ecosystem: 'maven',
+    parse: parseGradleVersionCatalog,
+  },
+  'pom.xml': { ecosystem: 'maven', parse: parsePomXml },
+  'pubspec.yaml': { ecosystem: 'pub', parse: parsePubspecYaml },
+  Gemfile: { ecosystem: 'rubygems', parse: parseGemfile },
+  'Package.swift': { ecosystem: 'swiftpm', parse: parsePackageSwift },
+};
+
+// Templates are scanned for script hosts only while the catalog lists some.
+function catalogScriptHosts(detectors: readonly SourceDetector[]): string[] {
+  return [...new Set(detectors.flatMap((d) => d.signals.scriptHosts))];
+}
+
+/**
+ * A scan matches script hosts in at most this many templates with a `<script`
+ * tag, and skips any larger than {@link MAX_TEMPLATE_BYTES}.
+ */
+const MAX_TEMPLATE_FILES = 300;
+const MAX_TEMPLATE_BYTES = 512 * 1024;
+
+const TEMPLATE_SUFFIXES = [
+  '.html',
+  '.htm',
+  '.erb',
+  '.ejs',
+  '.hbs',
+  '.jinja',
+  '.j2',
+  '.twig',
+  '.blade.php',
+  '.heex',
+  '.liquid',
+  '.vue',
+  '.svelte',
+  '.astro',
+  '.jsx',
+  '.tsx',
+];
+
+function isTemplateFileName(name: string): boolean {
+  return TEMPLATE_SUFFIXES.some((suffix) => name.endsWith(suffix));
+}
+
+function hostMatches(host: string, catalogHost: string): boolean {
+  return host === catalogHost || host.endsWith(`.${catalogHost}`);
+}
+
+// Protocol-relative or absolute URLs, as written in `src` attributes and in
+// inline loader snippets that build the script URL in a string.
+const URL_HOST = /(?:https?:)?\/\/([a-z0-9-]+(?:\.[a-z0-9-]+)+)/gi;
+
+/**
+ * The text of each `<script>` element in a template: its attributes and its
+ * inline body. Case-insensitive, so a Next.js `<Script>` counts. A plain
+ * scan with `indexOf`, so a template full of unclosed tags stays linear.
+ */
+function scriptElements(content: string): string[] {
+  const lower = content.toLowerCase();
+  const elements: string[] = [];
+  let from = 0;
+  for (;;) {
+    const start = lower.indexOf('<script', from);
+    if (start === -1) return elements;
+    const after = lower.charAt(start + '<script'.length);
+    if (after !== '' && !/[\s>/]/.test(after)) {
+      from = start + 1;
+      continue;
+    }
+    const tagEnd = endOfTag(content, start);
+    let end = tagEnd;
+    // A self-closing `<Script ... />` has no body.
+    if (content.charAt(tagEnd - 1) !== '/') {
+      const close = lower.indexOf('</script', tagEnd);
+      end = close === -1 ? content.length : close;
+    }
+    elements.push(content.slice(start, end));
+    if (end >= content.length) return elements;
+    from = end + 1;
+  }
+}
+
+/**
+ * The index of the `>` that closes the tag opened at `start`, or the end of
+ * the content. Skips a `>` inside a quoted value or a JSX `{...}` expression,
+ * such as an arrow function in a `<Script onLoad={() => ...}>` prop.
+ */
+function endOfTag(content: string, start: number): number {
+  let quote: string | null = null;
+  let braces = 0;
+  for (let i = start; i < content.length; i += 1) {
+    const char = content[i];
+    if (quote) {
+      if (char === quote) quote = null;
+    } else if (char === '"' || char === "'" || char === '`') {
+      quote = char;
+    } else if (char === '{') {
+      braces += 1;
+    } else if (char === '}') {
+      braces = Math.max(0, braces - 1);
+    } else if (char === '>' && braces === 0) {
+      return i;
+    }
+  }
+  return content.length;
+}
+
+/**
+ * Record the catalog script hosts a template loads from. Only `<script>`
+ * elements count: a URL in a link or in text loads nothing. A hostname is kept
+ * as the catalog host it matched, never as written, so a customer subdomain
+ * such as `acme.zendesk.com` never leaves the machine. Every other hostname
+ * is dropped as soon as it is read.
+ */
+function addScriptHosts(
+  content: string,
+  signals: ProjectSignals,
+  file: string,
+): void {
+  if (signals.templatesRead >= MAX_TEMPLATE_FILES) return;
+  if (content.length > MAX_TEMPLATE_BYTES) return;
+  // Checked before the template counts against the budget, so components
+  // that load no script cannot use it up.
+  if (!/<script\b/i.test(content)) return;
+  signals.templatesRead += 1;
+  for (const element of scriptElements(content)) {
+    for (const match of element.matchAll(URL_HOST)) {
+      const host = match[1].toLowerCase();
+      for (const catalogHost of signals.catalogScriptHosts) {
+        if (
+          hostMatches(host, catalogHost) &&
+          !signals.scriptHosts.has(catalogHost)
+        ) {
+          signals.scriptHosts.set(catalogHost, file);
+        }
+      }
+    }
+  }
 }
 
 /**

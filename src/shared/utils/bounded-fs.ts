@@ -173,13 +173,23 @@ export async function boundedGlob(
   });
 }
 
+export interface WalkOptions {
+  /**
+   * Follow symlinked files and directories. Defaults to true. A caller that
+   * reports what it reads turns this off: a symlink can point anywhere on the
+   * machine, outside the project it is scanning.
+   */
+  followSymlinks?: boolean;
+}
+
 /**
  * Walk a project tree, invoking `onFile(name, fullPath)` for every regular
  * file — including dotfiles like `.env` (the caller decides what it cares
- * about). Skips `IGNORED_DIRS` and hidden directories, follows symlinked
- * directories with realpath-based loop protection, descends at most
- * `maxDepth` levels below `rootDir`, and stops at the per-directory and
- * whole-walk caps. Filesystem errors are reported and skipped (best-effort).
+ * about). Skips `IGNORED_DIRS` and hidden directories, follows symlinks
+ * (unless `followSymlinks` is false) with realpath-based loop protection,
+ * descends at most `maxDepth` levels below `rootDir`, and stops at the
+ * per-directory and whole-walk caps. Filesystem errors are reported and
+ * skipped (best-effort).
  *
  * Returns whether the walk saw the whole tree within `maxDepth`: false when it
  * stopped at a cap or skipped a directory it could not read.
@@ -188,6 +198,7 @@ export function walkProjectFiles(
   rootDir: string,
   onFile: (name: string, fullPath: string) => void,
   maxDepth = 3,
+  { followSymlinks = true }: WalkOptions = {},
 ): boolean {
   const visited = new Set<string>();
   let filesSeen = 0;
@@ -245,6 +256,7 @@ export function walkProjectFiles(
         let isDir = entry.isDirectory();
         let isFile = entry.isFile();
         if (entry.isSymbolicLink()) {
+          if (!followSymlinks) continue;
           try {
             const st = fs.statSync(fullPath);
             isDir = st.isDirectory();

@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import {
+  detectTools,
   detectWarehouseSources,
   parseGemfile,
   parseEnvKeys,
@@ -108,6 +109,89 @@ describe('detectWarehouseSources', () => {
     ]);
   });
 
+  it('reports the catalog host a template matched, never a hostname as written', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'index.html'),
+      `<script src="https://assets.internal.example.com/app.js"></script>
+<script>(function(h,o,t,j){ j='https://acme-internal.hotjar.com/c/hotjar-'; })()</script>`,
+    );
+
+    const { tools } = detectTools(tmpDir, DETECTORS);
+
+    expect(tools.map((t) => t.kind)).toEqual(['Hotjar']);
+    expect(tools[0].signals).toEqual([
+      { source: 'script_host', name: 'hotjar.com', file: 'index.html' },
+    ]);
+    expect(JSON.stringify(tools)).not.toContain('internal');
+  });
+
+  it.each([
+    ['index.html', '<script src="https://static.hotjar.com/c/h.js"></script>'],
+    ['index.html', "<SCRIPT>j='//static.hotjar.com/c/h-';</SCRIPT>"],
+    [
+      'layout.tsx',
+      '<Script src="https://static.hotjar.com/c/h.js" strategy="afterInteractive" />',
+    ],
+    [
+      'layout.tsx',
+      '<Script onLoad={() => n > 0} src="https://static.hotjar.com/c/h.js" />',
+    ],
+    [
+      'layout.tsx',
+      '<Script id="hotjar">{`j = "https://static.hotjar.com/c/h-";`}</Script>',
+    ],
+  ])('matches a script host in a <script> tag in %s: %s', (file, template) => {
+    fs.writeFileSync(path.join(tmpDir, file), template);
+
+    expect(detectTools(tmpDir, DETECTORS).tools.map((t) => t.kind)).toEqual([
+      'Hotjar',
+    ]);
+  });
+
+  it.each([
+    ['index.html', '<a href="https://static.hotjar.com/">Hotjar</a>'],
+    ['index.html', '<p>We moved off https://static.hotjar.com last year.</p>'],
+    [
+      'page.tsx',
+      '<><Script src="/local.js" /><a href="https://static.hotjar.com/">Hotjar</a></>',
+    ],
+    ['page.jsx', 'const docs = "https://static.hotjar.com/docs";'],
+  ])(
+    'ignores a script host outside a <script> tag in %s: %s',
+    (file, template) => {
+      fs.writeFileSync(path.join(tmpDir, file), template);
+
+      expect(detectTools(tmpDir, DETECTORS).tools).toEqual([]);
+    },
+  );
+
+  it('does not spend the template budget on components with no script tag', () => {
+    for (let i = 0; i < 300; i += 1) {
+      fs.writeFileSync(
+        path.join(tmpDir, `Component${i}.tsx`),
+        'export const C = () => <div />;',
+      );
+    }
+    // The walk reads a directory's files before its subdirectories.
+    fs.mkdirSync(path.join(tmpDir, 'public'));
+    fs.writeFileSync(
+      path.join(tmpDir, 'public', 'index.html'),
+      '<script src="https://static.hotjar.com/c/h.js"></script>',
+    );
+
+    expect(detectTools(tmpDir, DETECTORS).tools.map((t) => t.kind)).toEqual([
+      'Hotjar',
+    ]);
+  });
+
+  it('matches a Go module across major versions', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'go.mod'),
+      'module example.com/app\n\nrequire github.com/stripe/stripe-go/v82 v82.0.0\n',
+    );
+    expect(kinds(tmpDir)).toEqual(['Stripe']);
+  });
+
   it('detects Postgres from a Python requirement', () => {
     fs.writeFileSync(
       path.join(tmpDir, 'requirements.txt'),
@@ -137,14 +221,27 @@ describe('detectWarehouseSources', () => {
     expect(kinds(tmpDir)).toEqual(['MySQL']);
   });
 
-  it('follows a symlinked directory to find sources', () => {
-    // Manifest lives in an external dir reachable only via a symlink inside
-    // the project — exercises symlink resolution in the walker.
+  it.each([
+    [
+      'a symlinked directory',
+      (external: string) =>
+        fs.symlinkSync(external, path.join(tmpDir, 'linked-pkg'), 'dir'),
+    ],
+    [
+      'a symlinked file',
+      (external: string) =>
+        fs.symlinkSync(
+          path.join(external, 'package.json'),
+          path.join(tmpDir, 'package.json'),
+          'file',
+        ),
+    ],
+  ])('does not read a manifest outside the project through %s', (_, link) => {
     const external = makeTmpDir();
     try {
       writePackageJson(external, { mysql2: '^3.0.0' });
-      fs.symlinkSync(external, path.join(tmpDir, 'linked-pkg'), 'dir');
-      expect(kinds(tmpDir)).toEqual(['MySQL']);
+      link(external);
+      expect(kinds(tmpDir)).toEqual([]);
     } finally {
       cleanup(external);
     }

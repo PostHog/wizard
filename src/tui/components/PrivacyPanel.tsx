@@ -78,10 +78,11 @@ export const PrivacyPanel = ({ canOptOut = false }: PrivacyPanelProps = {}) => {
       {canOptOut && (
         <Box marginTop={1}>
           <Text>
-            We also read dependency files and .env variable names, never their
-            values, to find the tools this project uses. We use that list to
-            suggest data sources to connect, and we share it with PostHog to
-            improve our products. You can opt out of sharing below.
+            We also read dependency files, templates, and .env variable names to
+            find this project's tools and suggest data sources. We share each
+            tool with PostHog to improve our products, with the file and name
+            that matched it (a package, .env key name, or script host), never a
+            value. You can opt out of sharing below.
           </Text>
         </Box>
       )}
