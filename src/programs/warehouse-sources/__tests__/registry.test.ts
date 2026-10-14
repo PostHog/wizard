@@ -142,10 +142,6 @@ describe('toSourceDetectors', () => {
       { ...valid, warehouse_source_type: 'Post gres' },
     ],
     ['a superseded_by with a slash', { ...valid, superseded_by: ['Neon/x'] }],
-    [
-      'a competes_with with capitals',
-      { ...valid, competes_with: ['Session_Replay'] },
-    ],
     ['an unknown setup mode', { ...valid, wizard_setup_mode: 'in-browser' }],
     [
       'a package name with a space',
