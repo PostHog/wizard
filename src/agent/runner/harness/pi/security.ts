@@ -520,6 +520,9 @@ export function createSecurityExtension(ctx: SecurityExtensionOptions): {
         logToFile(`[pi-security] BLOCK ${event.toolName}: ${decision.reason}`);
         return { block: true, reason: decision.reason };
       }
+      // Keep .env files out of directory greps; a glob that selects one is refused above.
+      if (event.toolName === 'grep' && event.input && !event.input.glob)
+        event.input.glob = '!.env*';
       return {};
     });
 
