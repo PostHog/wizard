@@ -10,6 +10,7 @@
 # Team-owned programs
 /src/programs/ai-observability/                         @PostHog/team-ai-observability
 /src/programs/audit/                                    @PostHog/team-fde
+/src/programs/error-tracking/                           @PostHog/team-error-tracking
 /src/programs/error-tracking-upload-source-maps/        @PostHog/team-error-tracking
 /src/programs/mcp-analytics/                            @PostHog/team-mcp-analytics
 /src/programs/metrics/                                  @PostHog/apm
@@ -22,8 +23,11 @@
 /src/programs/web-analytics-doctor/                     @PostHog/team-web-analytics
 
 # Team-owned program decks
+/src/tui/programs/ai-observability/                     @PostHog/team-ai-observability
 /src/tui/programs/audit/                                @PostHog/team-fde
+/src/tui/programs/error-tracking/                       @PostHog/team-error-tracking
 /src/tui/programs/error-tracking-upload-source-maps/    @PostHog/team-error-tracking
+/src/tui/programs/metrics/                              @PostHog/apm
 /src/tui/programs/migration/                            @PostHog/team-fde
 /src/tui/programs/posthog-integration/                  @PostHog/team-growth
 /src/tui/programs/revenue-analytics/                    @PostHog/team-web-analytics
