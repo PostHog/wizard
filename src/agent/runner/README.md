@@ -13,7 +13,7 @@ To call it, use `runAgent`. The
 | ----------- | -------------------------------------------------------------------------------- | ------------------------------------- |
 | Entry point | `runAgent` takes a run config and input, and returns one result.                 | [`index.ts`](index.ts)                |
 | Prepare     | Sets up logging, the gateway token and the scan classifier.                      | [`bootstrap.ts`](shared/bootstrap.ts) |
-| Switchboard | Resolves the sequence, harness and model: CLI overrides, then flags, then the program's binding. | [`switchboard`](switchboard/index.ts) |
+| Switchboard | Resolves the sequence, harness and model: CLI overrides, then flags, then the program's binding. | [`switchboard`](switchboard/README.md) |
 | Sequence    | Shapes the work: one conversation (linear), or many from a queue (orchestrator). | [`sequence`](sequence/README.md)      |
 | Harness     | Adapts one SDK: the Anthropic Agent SDK or Pi.                                   | [`harness`](harness/types.ts)         |
 
