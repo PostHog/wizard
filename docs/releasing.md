@@ -139,7 +139,7 @@ with the frames. CI picks the program from the app's category. It can only reach
 apps in CI-capable categories, so `metrics`, `error-tracking`, and
 `error-tracking-upload-source-maps` need the local sweep.
 
-For a big release, run the full sweep on all nine programs locally with the
+For a big release, run the full sweep on every program locally with the
 [prompt below](#sample-prompt-for-a-snapshot-sweep). See
 [e2e-harness/ARCHITECTURE.md](../e2e-harness/ARCHITECTURE.md) for how the
 harness works.
@@ -203,9 +203,9 @@ Setup:
   Without it, the sweep uses the released skills.
 
 Run:
-- The real-TUI snapshot sweep on all nine programs that have src/programs/<id>/test/e2e.json:
-  posthog-integration, error-tracking, error-tracking-upload-source-maps, ai-observability,
-  metrics, audit, replay-vision, self-driving, warehouse-source.
+- The real-TUI snapshot sweep on every program that has src/programs/<id>/test/e2e.json.
+  Today that's ten: posthog-integration, error-tracking, error-tracking-upload-source-maps,
+  ai-observability, metrics, audit, replay-vision, self-driving, warehouse-source, feature-flags.
 - For each one: `pnpm wizard-ci-snapshots <app> --program <id>` from the workbench,
   with an app from apps/ that matches the program.
 - Never scope it down to one app. If a program's e2e.json is broken, stop and report it.
