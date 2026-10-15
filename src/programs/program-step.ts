@@ -5,6 +5,7 @@ import type { ProgramRun } from './program-run';
 import type { Integration } from '@shared/constants';
 import type { FrameworkConfig } from './framework-config';
 import type { CiRunnerContext, RunnerContext } from './runner-context.js';
+import type { ProgramDecisions } from './detection/decisions/types';
 
 /**
  * Context passed to onReady callbacks — fires after the host has assigned
@@ -161,6 +162,13 @@ export interface ProgramConfig {
    * shares it; see `@programs/codebase-scan`.
    */
   scansCodebase?: boolean;
+  /**
+   * Questions this program needs the Decisions judgment service to answer
+   * before its agent runs. The run asks those of this program and of every
+   * program it `requires`, once, after login. Omit to never trigger a call.
+   * Read answers with `actionableAnswer`; see `@programs/detection/decisions`.
+   */
+  decisions?: ProgramDecisions;
   /** Runs in the flow other than the program's own agent run, keyed by flow step id. */
   runSteps?: Record<string, ProgramRunStep>;
   /**
@@ -182,6 +190,12 @@ export interface ProgramConfig {
     session: ProgramSession,
     runner: CiRunnerContext,
   ) => Promise<void>;
+  /**
+   * Facts the program's detection established, one line each, injected into
+   * every orchestrated agent's project context. Evaluated when the
+   * orchestrator starts, so it reads answers stored after login.
+   */
+  projectFacts?: (session: ProgramSession) => readonly string[];
   /**
    * Tasks the orchestrator queues itself, before the planner runs, from what
    * the wizard detected. Their types are marked `runnerSeeded: true` in the

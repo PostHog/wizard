@@ -3,9 +3,11 @@ import {
   getCommandPath,
   getOAuthScopesForProgram,
   getProgramConfig,
+  getProgramDecisions,
   getSubcommandPrograms,
 } from '../program-registry';
 import { DEFAULT_BINDING } from '@agent';
+import { DECISIONS_MAX_QUESTIONS_PER_CALL } from '../detection/decisions';
 import {
   DEFAULT_AGENT_MODEL,
   GPT5_6_SOL_MODEL,
@@ -175,5 +177,47 @@ describe('agent-skill run recipe', () => {
     expect(run.skillId).toBe('audit-events');
     expect(run.integrationLabel).toBe('audit-events');
     expect(run.reportFile).toContain('audit-events');
+  });
+});
+
+describe('Decisions declarations', () => {
+  const declared = getProgramDecisions();
+  const programs = new Map(PROGRAM_REGISTRY.map((c) => [c.id, c]));
+
+  it('give every question a purpose, and every choice its values', () => {
+    for (const { decisions } of declared) {
+      for (const question of decisions.questions) {
+        expect(question.purpose.trim()).not.toBe('');
+        if (question.kind === 'choice') {
+          expect(Object.keys(question.choices ?? {}).length).toBeGreaterThan(1);
+        }
+      }
+    }
+  });
+
+  it('never reuse a name for a different question', () => {
+    const byName = new Map<string, unknown>();
+    for (const { decisions } of declared) {
+      for (const question of decisions.questions) {
+        const seen = byName.get(question.name);
+        if (seen) expect(question).toBe(seen);
+        byName.set(question.name, question);
+      }
+    }
+  });
+
+  it('fit one gateway call per run, with every required program', () => {
+    for (const config of PROGRAM_REGISTRY) {
+      const names = new Set<string>();
+      const visit = (id: string, seen: Set<string>) => {
+        const program = programs.get(id);
+        if (!program || seen.has(id)) return;
+        seen.add(id);
+        for (const q of program.decisions?.questions ?? []) names.add(q.name);
+        for (const required of program.requires ?? []) visit(required, seen);
+      };
+      visit(config.id, new Set());
+      expect(names.size).toBeLessThanOrEqual(DECISIONS_MAX_QUESTIONS_PER_CALL);
+    }
   });
 });

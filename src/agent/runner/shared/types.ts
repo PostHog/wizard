@@ -215,6 +215,8 @@ export interface ResolvedRunConfig {
   excludedTaskTypes?: (flags: Record<string, string>) => readonly string[];
   /** Tasks to queue before the orchestrator's planner runs. */
   seedTasks?: () => SeedTaskEntry[];
+  /** Detected facts about the project, one line each, read when the orchestrator starts. */
+  projectFacts?: () => readonly string[];
   /** Completion hooks, bound by the caller. */
   hooks?: RunHooks;
   scanReport?: 'flush' | 'defer'; // defer leaves the scan report to the outer run

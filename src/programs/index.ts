@@ -36,6 +36,17 @@ export {
 /** Shared program machinery the TUI, the CLI and the e2e harness call. */
 export { FRAMEWORK_REGISTRY } from './frameworks/registry';
 export { detectFramework } from './detection/framework';
+/** The Decisions judgment service and the decisions scan it sends, for the decisions-detect script. */
+export {
+  askDecisions,
+  judgeProjects,
+  renderDecisionInput,
+  summarizeAnswers,
+  toApiQuestion,
+  type DecisionsResult,
+} from './detection/decisions';
+export { collectDecisionsScan } from './detection/decisions/scan';
+export { getProgramDecisions } from './program-registry';
 export { createSkillProgram } from './shared/skill-program';
 /** The audit ledger's checks as the session holds them, for a host's task stream. */
 export { getAuditChecks } from './session/audit-checks';

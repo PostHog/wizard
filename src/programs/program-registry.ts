@@ -102,6 +102,16 @@ export function getCommandPath(config: {
 }
 
 /** The program with this id, or undefined for a tool's id or none. */
+/** Every program that opts into the Decisions judgment service, with what it declares. */
+export function getProgramDecisions(): Array<{
+  id: ProgramId;
+  decisions: NonNullable<ProgramConfig['decisions']>;
+}> {
+  return PROGRAM_REGISTRY.flatMap((config) =>
+    config.decisions ? [{ id: config.id, decisions: config.decisions }] : [],
+  );
+}
+
 export function findProgramConfig(
   programId: ProgramId | null | undefined,
 ): ProgramConfig | undefined {

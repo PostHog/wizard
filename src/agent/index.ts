@@ -38,6 +38,18 @@ export async function scanInstalledSkill(
 }
 
 /**
+ * Drop each line of `content` that holds a secret or PII match, before it goes
+ * to a model outside an agent run. Rejects when the scanner can't load, so
+ * callers fail closed. It loads the scanner on first call.
+ */
+export async function redactSecretLines(
+  content: string,
+): Promise<{ text: string; redactedLines: number }> {
+  const yara = await import('./yara-hooks');
+  return yara.redactSecretLines(content);
+}
+
+/**
  * The MCP tutorial's prompt stream: one prompt against the PostHog MCP server,
  * streamed as chunks. `@tools` re-exports it unchanged, and the TUI reaches it
  * only through there. It loads the streaming module on first call so the

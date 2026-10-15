@@ -43,6 +43,8 @@ import {
   type ResolvedProgramCredentials,
 } from './credentials';
 import { reportCodebaseScan } from './codebase-scan';
+import { runProgramDecisions } from './detection/decisions';
+import type { ProgramDecisions } from './detection/decisions/types';
 import { logIn } from './login';
 import { applyAgentProgress, type SessionStore } from './session/session-store';
 import type { WizardSession } from './session/wizard-session';
@@ -295,6 +297,21 @@ async function invokeProgram(
       return fail(error instanceof Error ? error.message : String(error));
     }
 
+    // Logged in, AI approved and flags known: the one judgment call, before any agent runs.
+    try {
+      await park(
+        runProgramDecisions(decisionDeclarations(config, plannedRuns), {
+          session: store.session,
+          setFrameworkContext: (key, value) =>
+            store.setFrameworkContext(key, value),
+          flags: flags.flags,
+        }),
+      );
+    } catch (error) {
+      if (signal.aborted) return cancelled();
+      logToFile(`[decisions] skipped: ${String(error)}`);
+    }
+
     // Every rotation of this login, before or during a run, lands in the store.
     configureOAuthSession(credentials.posthog, {
       rotate: (held) => rotateCredentials(held, store.session.baseUrl),
@@ -391,6 +408,9 @@ async function invokeProgram(
             excludedTaskTypes: planned.config.excludedTaskTypes,
             seedTasks: planned.config.seedTasks
               ? () => planned.config.seedTasks!(session())
+              : undefined,
+            projectFacts: planned.config.projectFacts
+              ? () => planned.config.projectFacts!(session())
               : undefined,
             hooks: sessionHooks(agentRun, session, (outcomes) => {
               if (scoped) scoped.frameworkContext[TASK_OUTCOMES_KEY] = outcomes;
@@ -491,6 +511,24 @@ function planRuns(
     }
   }
   return [...composed, own];
+}
+
+/** The `decisions` of the program, the programs it requires, and its composed runs. */
+function decisionDeclarations(
+  config: ProgramConfig,
+  plannedRuns: readonly PlannedRun[],
+): ProgramDecisions[] {
+  const seen = new Set<string>();
+  const declarations: ProgramDecisions[] = [];
+  const visit = (program: ProgramConfig | undefined) => {
+    if (!program || seen.has(program.id)) return;
+    seen.add(program.id);
+    if (program.decisions) declarations.push(program.decisions);
+    for (const id of program.requires ?? []) visit(findProgramConfig(id));
+  };
+  visit(config);
+  for (const planned of plannedRuns) visit(planned.config);
+  return declarations;
 }
 
 /** A program's run definition. A `run` function writes to the session copy it is handed. */

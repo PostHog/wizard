@@ -13,6 +13,11 @@ import {
 import { tryGetPackageJson, isUsingTypeScript } from '@utils/setup-utils';
 import { analytics } from '@utils/analytics';
 import { detectFramework } from '../detection/framework';
+import {
+  decisionFacts,
+  judgeMissingIntegration,
+  POSTHOG_INTEGRATION_DECISIONS,
+} from './decisions';
 import { gatherFrameworkContext } from '../detection/context';
 import { noteDetectedFramework } from '../detection/detected-framework';
 import { scopeInstallDirToProject } from '../detection/project-scope';
@@ -252,6 +257,8 @@ export const config: ProgramConfig = {
   oauthScopeAdditions: [...WAREHOUSE_SOURCE_SCOPE_ADDITIONS],
 
   seedTasks: warehouseSeedTasks,
+  decisions: POSTHOG_INTEGRATION_DECISIONS,
+  projectFacts: decisionFacts,
 
   // Kill switch over the shipped default: only an explicit 'false' excludes,
   // so a failed flag fetch keeps AI Observability and Logs in the run.
@@ -268,7 +275,9 @@ export const config: ProgramConfig = {
   ): Promise<void> => {
     await scopeInstallDirToProject(session, runner);
 
-    const integration = await detectFramework(session.installDir);
+    const integration =
+      (await detectFramework(session.installDir)) ??
+      (await judgeMissingIntegration(session, runner));
     if (!integration) {
       abortNoFrameworkDetected();
     }
@@ -372,9 +381,12 @@ export const config: ProgramConfig = {
       richLinks: true,
 
       customPrompt: (ctx) => {
-        const additionalLines = config.prompts.getAdditionalContextLines
-          ? config.prompts.getAdditionalContextLines(frameworkContext)
-          : [];
+        const additionalLines = [
+          ...(config.prompts.getAdditionalContextLines
+            ? config.prompts.getAdditionalContextLines(frameworkContext)
+            : []),
+          ...decisionFacts(session),
+        ];
         const additionalContext =
           additionalLines.length > 0
             ? '\n' + additionalLines.map((line) => `- ${line}`).join('\n')
