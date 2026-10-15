@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { readFileHead } from './bounded-fs';
+import { readFileHead, readProjectFile } from './bounded-fs';
 import { withProgress } from './telemetry';
 import { analytics } from './analytics';
 import type { WizardRunOptions } from './types';
@@ -157,8 +157,64 @@ function serializeNodePM(pm: PackageManager): DetectedPackageManager {
   };
 }
 
+type ManifestSignal =
+  | { kind: 'declared'; pm: PackageManager }
+  | { kind: 'workspace' }
+  | { kind: 'none' };
+
+const DECLARED_MANAGER = /^(npm|pnpm|yarn|bun)@(\d+)\.\d+\.\d+/;
+
+const DEPENDENCY_FIELDS = [
+  'dependencies',
+  'devDependencies',
+  'peerDependencies',
+  'optionalDependencies',
+] as const;
+
+function declaredManager(value: unknown): PackageManager | null {
+  if (typeof value !== 'string') return null;
+  const match = DECLARED_MANAGER.exec(value.trim());
+  if (!match) return null;
+  const [, name, major] = match;
+  if (name === 'yarn') return major === '1' ? YARN_V1 : YARN_V2;
+  return { npm: NPM, pnpm: PNPM, bun: BUN }[name] ?? null;
+}
+
+function usesWorkspaceProtocol(manifest: Record<string, unknown>): boolean {
+  return DEPENDENCY_FIELDS.some((field) => {
+    const deps = manifest[field];
+    if (!deps || typeof deps !== 'object') return false;
+    return Object.values(deps).some(
+      (spec) =>
+        typeof spec === 'string' &&
+        (spec.startsWith('workspace:') || spec.startsWith('catalog:')),
+    );
+  });
+}
+
+/** Reads the local `package.json` for a declared manager or workspace-only specifiers. */
+function readManifestSignal(installDir: string): ManifestSignal {
+  const raw = readProjectFile(path.join(installDir, 'package.json'));
+  if (!raw) return { kind: 'none' };
+  let manifest: unknown;
+  try {
+    manifest = JSON.parse(raw);
+  } catch {
+    return { kind: 'none' };
+  }
+  if (!manifest || typeof manifest !== 'object' || Array.isArray(manifest)) {
+    return { kind: 'none' };
+  }
+  const record = manifest as Record<string, unknown>;
+  const pm = declaredManager(record.packageManager);
+  if (pm) return { kind: 'declared', pm };
+  if (usesWorkspaceProtocol(record)) return { kind: 'workspace' };
+  return { kind: 'none' };
+}
+
 /**
- * Detect Node.js package managers via lockfiles.
+ * Detect Node.js package managers via lockfiles, then the local
+ * `package.json` when no lockfile is present.
  * Wraps detectAllPackageManagers() above.
  */
 export function detectNodePackageManagers(
@@ -169,6 +225,23 @@ export function detectNodePackageManagers(
   );
 
   if (detected.length === 0) {
+    const signal = readManifestSignal(installDir);
+    if (signal.kind === 'declared') {
+      const primary = serializeNodePM(signal.pm);
+      return Promise.resolve({
+        detected: [primary],
+        primary,
+        recommendation: `No lockfile found. Use ${primary.label} (${primary.installCommand}), as declared by the packageManager field in package.json.`,
+      });
+    }
+    if (signal.kind === 'workspace') {
+      return Promise.resolve({
+        detected: [],
+        primary: null,
+        recommendation:
+          'No lockfile found, and package.json has workspace: or catalog: dependencies. This package is part of a workspace, and npm cannot install it. Do not use npm. Find the package manager that the workspace root uses before you install packages.',
+      });
+    }
     return Promise.resolve({
       detected: [],
       primary: null,
