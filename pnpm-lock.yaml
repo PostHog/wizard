@@ -30,8 +30,8 @@ importers:
         specifier: ^1.29.0
         version: 1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76)
       '@posthog/warlock':
-        specifier: 0.2.4
-        version: 0.2.4
+        specifier: 0.2.5
+        version: 0.2.5
       axios:
         specifier: 1.7.4
         version: 1.7.4
@@ -1856,8 +1856,8 @@ packages:
   '@posthog/types@1.397.0':
     resolution: {integrity: sha512-Pa7FtsBo3V0XrhY4y8Xquwp8U07syuZ2IGQdlsRyxhz0yejQLceFjI58UssCXE5zDCDj3km5l7H3ufD6rHChCg==}
 
-  '@posthog/warlock@0.2.4':
-    resolution: {integrity: sha512-miUI0oVQiBTA7eNN2+MZbipmx2q88GbIMrxAnfPTmJnXAoZHMw9ZeL3xq8eajClNw7bb8AOTpaA7yMBgmqu1Qg==}
+  '@posthog/warlock@0.2.5':
+    resolution: {integrity: sha512-+VQKICgHNGB1EgYSwJIKIkKXMyOpho15HsycQnGF1AreQ/BbI5mfLaLF8fHsY+UZA0/1kvXkL/82QOBpf6TnTw==}
     engines: {node: ^20.20.0 || >=22.22.0}
 
   '@protobufjs/aspromise@1.1.2':
@@ -7339,7 +7339,7 @@ snapshots:
 
   '@posthog/types@1.397.0': {}
 
-  '@posthog/warlock@0.2.4':
+  '@posthog/warlock@0.2.5':
     dependencies:
       '@virustotal/yara-x': 1.15.0
 

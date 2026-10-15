@@ -39,7 +39,7 @@
     "@inkjs/ui": "^2.0.0",
     "@langchain/core": "^0.3.40",
     "@modelcontextprotocol/sdk": "^1.29.0",
-    "@posthog/warlock": "0.2.4",
+    "@posthog/warlock": "0.2.5",
     "axios": "1.7.4",
     "fast-glob": "^3.3.3",
     "fflate": "^0.8.3",
