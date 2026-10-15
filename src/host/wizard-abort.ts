@@ -9,7 +9,7 @@ import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
 import { OutroKind, type OutroData } from '@shared/outro';
 import type { ErrorCode } from '@shared/errors';
-import { WizardError } from '@shared/errors';
+import { ERROR_CATALOG, WizardError } from '@shared/errors';
 import { clearCleanups, runCleanups } from '@utils/cleanup';
 
 export interface WizardAbortOptions {
@@ -140,13 +140,15 @@ export async function wizardAbort(
   );
 
   // 2. Capture error in analytics. An 'error' ending with no Error object
-  //    is captured as its code and message.
+  //    is captured as its code and message. A detect code is the user's
+  //    project state, not a wizard bug, so it stays out of error tracking.
   const captured =
     error ??
     (status === 'error'
       ? new WizardError(message, undefined, code)
       : undefined);
-  if (captured) {
+  const expected = code !== undefined && ERROR_CATALOG[code].group === 'detect';
+  if (captured && !expected) {
     analytics.captureException(captured, {
       ...((captured instanceof WizardError && captured.context) || {}),
       ...(code ? { error_code: code } : {}),
