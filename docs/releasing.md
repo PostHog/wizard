@@ -51,6 +51,10 @@ gh pr list --head release-please--branches--main--components--wizard
 
 ## Pre-release checklist
 
+Before you test the release candidate, prepare a monitoring plan with the
+[monitoring-a-wizard-release](../.claude/skills/monitoring-a-wizard-release/SKILL.md)
+skill.
+
 ### 1. Run the basic integration program by hand
 
 Required. This is the one check you never skip.
