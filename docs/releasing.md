@@ -231,5 +231,3 @@ Post:
 
 See
 [handling wizard incidents](https://posthog.com/handbook/wizard-and-docs/wizard-incidents).
-To turn off security scanning without a release, use the
-[Warlock kill switch](runbooks/warlock-kill-switch.md).

@@ -28,6 +28,7 @@ Two flags start a headless run. Both go through `runNonInteractive` to `runHeadl
 - Both log in with an API key (`--api-key`), never OAuth, and answer every step with its default.
 - The headless flag has a deliberately scary name. Its contract is unstable, so external callers must not rely on it. [`src/shared/headless-mode.ts`](../shared/headless-mode.ts) is the only file that names it.
 - A cloud run carries `--run-id` (or `POSTHOG_WIZARD_RUN_ID`), the WizardRun it reports under.
+- A cloud run's caller sets `POSTHOG_HANDOFF_OUTPUT_PATH`, and the wizard writes the final report to that file.
 - The Growth team owns the headless runner and cloud runs.
 
 ## Entry and imports
