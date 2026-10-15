@@ -36,3 +36,6 @@
 
 # Agent runner (harness, model, and tools)
 /src/agent/                                             @PostHog/team-wizard-docs
+
+# Headless runner
+/src/headless/                                          @PostHog/team-growth
