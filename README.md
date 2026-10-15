@@ -170,8 +170,8 @@ their owning team instead.
 | `src/programs/audit/` | `@PostHog/team-fde` |
 | `src/programs/error-tracking/` | `@PostHog/team-error-tracking` |
 | `src/programs/error-tracking-upload-source-maps/` | `@PostHog/team-error-tracking` |
-| `src/programs/mcp-analytics/` | `@PostHog/team-mcp-analytics` |
-| `src/programs/metrics/` | `@PostHog/apm` |
+| `src/programs/mcp-analytics/` | `@PostHog/mcp-analytics` |
+| `src/programs/metrics/` | `@PostHog/team-apm` |
 | `src/programs/migration/` | `@PostHog/team-fde` |
 | `src/programs/posthog-integration/` | `@PostHog/team-growth` |
 | `src/programs/replay-vision/` | `@PostHog/team-replay` |
@@ -183,7 +183,7 @@ their owning team instead.
 | `src/tui/programs/audit/` | `@PostHog/team-fde` |
 | `src/tui/programs/error-tracking/` | `@PostHog/team-error-tracking` |
 | `src/tui/programs/error-tracking-upload-source-maps/` | `@PostHog/team-error-tracking` |
-| `src/tui/programs/metrics/` | `@PostHog/apm` |
+| `src/tui/programs/metrics/` | `@PostHog/team-apm` |
 | `src/tui/programs/migration/` | `@PostHog/team-fde` |
 | `src/tui/programs/posthog-integration/` | `@PostHog/team-growth` |
 | `src/tui/programs/revenue-analytics/` | `@PostHog/team-web-analytics` |
