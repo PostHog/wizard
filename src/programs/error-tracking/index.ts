@@ -21,7 +21,6 @@ import { analytics } from '@utils/analytics';
 import { ProgramAbort } from '../program-abort';
 import { ErrorCodes } from '@shared/errors';
 import { abortNoFrameworkDetected } from '../shared/abort-no-framework';
-import { askQuestions, QUESTIONS } from '../detection/decisions';
 
 const ERROR_TRACKING_REPORT_FILE = 'posthog-error-tracking-report.md';
 const ERROR_TRACKING_DOCS_URL = 'https://posthog.com/docs/error-tracking';
@@ -152,7 +151,7 @@ const ERROR_TRACKING_RUN: ProgramRun = {
  *   of the project picker.
  */
 export const config: ProgramConfig = {
-  ...askQuestions([QUESTIONS.web_frontend, QUESTIONS.server_runtime]),
+  decisions: ['web_frontend', 'server_runtime'],
   // Orchestrator on pi, like metrics. The binding routes only; every stage's
   // model and effort are pinned context-mill side in the flow's frontmatter
   // (`model_pi`/`effort_pi`: terra seed, install and init, sol tasks, luna report).

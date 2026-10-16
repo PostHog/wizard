@@ -21,7 +21,6 @@ import { ProgramAbort } from '../program-abort';
 import { ErrorCodes } from '@shared/errors';
 import { REPLAY_VISION_SCOPE_ADDITIONS } from './scopes.js';
 import { abortNoFrameworkDetected } from '../shared/abort-no-framework';
-import { askQuestions, QUESTIONS } from '../detection/decisions';
 
 const REPLAY_VISION_REPORT_FILE = 'posthog-replay-vision-report.md';
 
@@ -141,11 +140,7 @@ const base = createSkillProgram({
  *   headless equivalent of `onReady`.
  */
 export const config: ProgramConfig = {
-  ...askQuestions([
-    QUESTIONS.framework,
-    QUESTIONS.web_frontend,
-    QUESTIONS.primary_user_flow,
-  ]),
+  decisions: ['framework', 'web_frontend', 'primary_user_flow'],
   ...base,
   // Orchestrator on pi; the flow's `model_pi`/`effort_pi` pin each stage, this model is the fallback.
   binding: {

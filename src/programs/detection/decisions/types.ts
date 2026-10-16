@@ -1,7 +1,5 @@
 /** The Decisions judgment service's contract: what a program declares, and what it reads back. */
 
-import type { ProgramSession } from '../../program-session';
-
 /** One question a program needs answered about the project before its agent runs. */
 export type DecisionQuestionSpec = {
   /** snake_case, unique across every program. */
@@ -19,19 +17,6 @@ export type DecisionQuestionSpec = {
   facts?: { likely?: string; unlikely?: string };
   /** Choice only: what agents read, with `{choice}` replaced by the answer. */
   fact?: string;
-};
-
-/** `ProgramConfig.decisions`: the questions a program opts into. */
-export type ProgramDecisions = {
-  questions: readonly DecisionQuestionSpec[];
-  /**
-   * What the program decided without the answers, logged beside them so shadow
-   * runs show agreement. Return flat values, e.g. `{ framework_static: 'nextjs' }`.
-   */
-  compare?: (
-    session: ProgramSession,
-    answers: Readonly<Record<string, DecisionAnswer>>,
-  ) => Record<string, string | number | boolean | null>;
 };
 
 /** off: no call. shadow: answers are logged and compared, never acted on. primary: programs act on them; no switch sets it yet. */

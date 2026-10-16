@@ -237,6 +237,9 @@ export const QUESTIONS = defineQuestions({
   }),
 });
 
+/** A question's key in the catalog, which is also its name. Programs declare these in `ProgramConfig.decisions`. */
+export type QuestionKey = keyof typeof QUESTIONS;
+
 // ── Asked per repository: their choices are the folders found ──────
 
 /** Choice value meaning "this folder is none of the targets, or not an app". */

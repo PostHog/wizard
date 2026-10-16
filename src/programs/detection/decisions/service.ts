@@ -1,8 +1,8 @@
 /**
- * The Decisions judgment service. A run collects the questions its programs
- * declare in `ProgramConfig.decisions`, asks them in one call over the project
- * decisions scan, and stores the answers for the programs to read. Knows nothing
- * about any program: the questions and what they decide live with each program.
+ * The Decisions judgment service. A run collects the question keys its programs
+ * declare in `ProgramConfig.decisions`, asks them in one call over the decisions
+ * scan, and stores the answers. Loaded only through a dynamic import behind
+ * `!IS_PRODUCTION_BUILD`, so production builds don't bundle it.
  */
 
 import { IS_PRODUCTION_BUILD, runtimeEnv } from '@env';
@@ -23,8 +23,8 @@ import type {
   DecisionQuestionSpec,
   DecisionsMode,
   DecisionsResult,
-  ProgramDecisions,
 } from './types';
+import { QUESTIONS, type QuestionKey } from './questions';
 
 /** frameworkContext key holding the run's `DecisionsResult`. */
 export const DECISIONS_KEY = 'decisions';
@@ -90,18 +90,27 @@ export type RunDecisionsContext = {
 };
 
 /**
- * Ask every declared question once, before the first agent run. Never throws;
+ * Ask the declared questions once, before the first agent run. Never throws;
  * returns null when the mode is off or nothing was declared.
  */
-export async function runProgramDecisions(
-  declarations: readonly ProgramDecisions[],
+export function runProgramDecisions(
+  keys: readonly QuestionKey[],
+  ctx: RunDecisionsContext,
+): Promise<DecisionsResult | null> {
+  return runDecisionSpecs(
+    [...new Set(keys)].map((key) => QUESTIONS[key]),
+    ctx,
+  );
+}
+
+/** {@link runProgramDecisions} for question specs, so tests can ask questions outside the catalog. */
+export async function runDecisionSpecs(
+  questions: readonly DecisionQuestionSpec[],
   ctx: RunDecisionsContext,
 ): Promise<DecisionsResult | null> {
   const mode = getDecisionsMode(ctx.flags);
   const sharing = maySendScanResults(ctx.session);
-  const specs = declarations
-    .flatMap((d) => d.questions)
-    .filter((spec) => sharing || !spec.shared);
+  const specs = questions.filter((spec) => sharing || !spec.shared);
   if (specs.length === 0) return null;
   if (mode === 'off') {
     // Said once, so a run with Decisions off reads differently from one that never reached this hook.
@@ -138,10 +147,9 @@ export async function runProgramDecisions(
   }
   ctx.setFrameworkContext(DECISIONS_KEY, result);
 
-  const compared = Object.assign(
-    {},
-    ...declarations.map((d) => d.compare?.(ctx.session, result.answers) ?? {}),
-  ) as Record<string, string | number | boolean | null>;
+  const compared = specs.some((s) => s.name === QUESTIONS.framework.name)
+    ? compareFramework(ctx.session, result.answers)
+    : {};
   logToFile(
     `[decisions] mode=${mode} answered=${Object.keys(result.answers).length}/${
       specs.length
@@ -166,6 +174,22 @@ export async function runProgramDecisions(
     });
   }
   return result;
+}
+
+/** The framework answer beside static detection's. Agree is null with no answer, so a skipped call never reads as a disagreement. */
+function compareFramework(
+  session: ProgramSession,
+  answers: Readonly<Record<string, DecisionAnswer>>,
+): Record<string, string | boolean | null> {
+  const answer = answers[QUESTIONS.framework.name];
+  const judged = answer?.kind === 'choice' ? answer.choice : null;
+  const staticIntegration = session.integration ?? null;
+  return {
+    framework_static: staticIntegration,
+    framework_decisions: judged,
+    framework_agree:
+      judged === null ? null : judged === (staticIntegration ?? 'none'),
+  };
 }
 
 /** Each answer as one flat value: a predicate's probability, or a choice and its probability. */
@@ -215,15 +239,15 @@ const UNLIKELY = 0.1;
 const NO_FACT_CHOICES: ReadonlySet<string> = new Set(['other', 'none']);
 
 /**
- * The facts `questions` declare, for the answers a program may act on, one
- * line each in question order. Empty in shadow mode and for unsure answers.
+ * The facts the questions behind `keys` declare, for the answers a program may
+ * act on, one line each in key order. Empty in shadow mode and for unsure answers.
  */
 export function questionFacts(
   session: ProgramSession,
-  questions: readonly DecisionQuestionSpec[],
+  keys: readonly QuestionKey[],
 ): string[] {
   const facts: string[] = [];
-  for (const question of questions) {
+  for (const question of keys.map((key) => QUESTIONS[key])) {
     const answer = actionableAnswer(session, question.name);
     if (!answer) continue;
     if (answer.kind === 'predicate') {
@@ -241,18 +265,4 @@ export function questionFacts(
     }
   }
   return facts;
-}
-
-/**
- * The `ProgramConfig` fields for a program that asks `questions`: the
- * declaration, and the facts its answers give the agents.
- */
-export function askQuestions(questions: readonly DecisionQuestionSpec[]): {
-  decisions: ProgramDecisions;
-  projectFacts: (session: ProgramSession) => readonly string[];
-} {
-  return {
-    decisions: { questions },
-    projectFacts: (session) => questionFacts(session, questions),
-  };
 }

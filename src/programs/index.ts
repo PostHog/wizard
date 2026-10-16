@@ -1,4 +1,5 @@
 /** Public runtime entry for the programs surface. */
+import { IS_PRODUCTION_BUILD } from '@env';
 export type * from './types';
 export { runProgram, TASK_OUTCOMES_KEY } from './run-program';
 export { reportCodebaseScan, scanCodebaseFor } from './codebase-scan';
@@ -36,17 +37,21 @@ export {
 /** Shared program machinery the TUI, the CLI and the e2e harness call. */
 export { FRAMEWORK_REGISTRY } from './frameworks/registry';
 export { detectFramework } from './detection/framework';
-/** The Decisions judgment service and the decisions scan it sends, for the decisions-detect script. */
-export {
-  askDecisions,
-  judgeProjects,
-  renderDecisionInput,
-  summarizeAnswers,
-  toApiQuestion,
-  type DecisionsResult,
-} from './detection/decisions';
-export { collectDecisionsScan } from './detection/decisions/scan';
+/** Each program's Decisions question keys, for the decisions-detect script. */
 export { getProgramDecisions } from './program-registry';
+export type {
+  DecisionQuestionSpec,
+  DecisionsResult,
+} from './detection/decisions';
+/**
+ * The Decisions service, for the decisions-detect script. Null in production
+ * builds, which drop the import and don't bundle the service.
+ */
+export async function loadDecisionsService(): Promise<
+  typeof import('./detection/decisions') | null
+> {
+  return IS_PRODUCTION_BUILD ? null : import('./detection/decisions');
+}
 export { createSkillProgram } from './shared/skill-program';
 /** The audit ledger's checks as the session holds them, for a host's task stream. */
 export { getAuditChecks } from './session/audit-checks';

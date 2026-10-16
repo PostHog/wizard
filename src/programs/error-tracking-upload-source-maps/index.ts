@@ -14,7 +14,6 @@ import {
   type SkillVariant,
 } from './detect.js';
 import { preinstallPostHogCliOnce } from '../shared/posthog-cli-preinstall';
-import { askQuestions, QUESTIONS } from '../detection/decisions';
 
 const REPORT_FILE = 'posthog-source-maps-report.md';
 const DOCS_URL = 'https://posthog.com/docs/error-tracking/upload-source-maps';
@@ -36,11 +35,7 @@ function ensurePostHogCli(
 }
 
 export const config: ProgramConfig = {
-  ...askQuestions([
-    QUESTIONS.ships_minified_js,
-    QUESTIONS.build_tool,
-    QUESTIONS.deploy_platform,
-  ]),
+  decisions: ['ships_minified_js', 'build_tool', 'deploy_platform'],
   command: 'upload-source-maps',
   description: 'Upload source maps to PostHog Error Tracking',
   id: 'error-tracking-upload-source-maps',

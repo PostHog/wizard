@@ -1,7 +1,7 @@
 /**
- * posthog-integration's Decisions wiring: which questions from the catalog it
- * asks, and how answers reach the run. The questions and their facts live in
- * `@programs/detection/decisions/questions`.
+ * posthog-integration's use of a Decisions answer: the CI framework fill-in.
+ * Unused until primary mode has a switch. Loaded only through a dynamic import
+ * behind `!IS_PRODUCTION_BUILD`, so production builds don't bundle it.
  */
 
 import type { Integration } from '@shared/constants';
@@ -14,42 +14,10 @@ import {
   decisionsTransport,
   getDecisionsMode,
   getDecisionsScan,
-  questionFacts,
   QUESTIONS,
   renderDecisionInput,
   routeIntegration,
-  type ProgramDecisions,
 } from '../detection/decisions';
-
-export const POSTHOG_INTEGRATION_DECISIONS: ProgramDecisions = {
-  questions: [
-    QUESTIONS.framework,
-    QUESTIONS.is_monorepo,
-    QUESTIONS.product_category,
-    QUESTIONS.calls_llm_api,
-    QUESTIONS.structured_logging,
-    QUESTIONS.otel_exporter,
-    QUESTIONS.server_runtime,
-    QUESTIONS.observability_stack,
-  ],
-  compare: (session, answers) => {
-    const framework = answers[QUESTIONS.framework.name];
-    const staticIntegration = session.integration ?? null;
-    const judged = framework?.kind === 'choice' ? framework.choice : null;
-    return {
-      framework_static: staticIntegration,
-      framework_decisions: judged,
-      // Null when there's no answer to compare, so a skipped call never reads as a disagreement.
-      framework_agree:
-        judged === null ? null : judged === (staticIntegration ?? 'none'),
-    };
-  },
-};
-
-/** What the primary answers tell the agents, one line each. */
-export function decisionFacts(session: ProgramSession): string[] {
-  return questionFacts(session, POSTHOG_INTEGRATION_DECISIONS.questions);
-}
 
 /**
  * CI only, primary mode: ask for the framework when static detection found

@@ -5,7 +5,8 @@ import type { ProgramRun } from './program-run';
 import type { Integration } from '@shared/constants';
 import type { FrameworkConfig } from './framework-config';
 import type { CiRunnerContext, RunnerContext } from './runner-context.js';
-import type { ProgramDecisions } from './detection/decisions/types';
+// Type-only: the catalog stays out of production bundles.
+import type { QuestionKey } from './detection/decisions/questions';
 
 /**
  * Context passed to onReady callbacks — fires after the host has assigned
@@ -163,12 +164,12 @@ export interface ProgramConfig {
    */
   scansCodebase?: boolean;
   /**
-   * Questions this program needs the Decisions judgment service to answer
-   * before its agent runs. The run asks those of this program and of every
-   * program it `requires`, once, after login. Omit to never trigger a call.
-   * Read answers with `actionableAnswer`; see `@programs/detection/decisions`.
+   * Questions this program asks the Decisions judgment service, by catalog key
+   * (`@programs/detection/decisions/questions`). The run asks those of this
+   * program and every program it `requires`, once, after login. Dev and CI
+   * builds only: production builds don't bundle the service.
    */
-  decisions?: ProgramDecisions;
+  decisions?: readonly QuestionKey[];
   /** Runs in the flow other than the program's own agent run, keyed by flow step id. */
   runSteps?: Record<string, ProgramRunStep>;
   /**
@@ -190,12 +191,6 @@ export interface ProgramConfig {
     session: ProgramSession,
     runner: CiRunnerContext,
   ) => Promise<void>;
-  /**
-   * Facts the program's detection established, one line each, injected into
-   * every orchestrated agent's project context. Evaluated when the
-   * orchestrator starts, so it reads answers stored after login.
-   */
-  projectFacts?: (session: ProgramSession) => readonly string[];
   /**
    * Tasks the orchestrator queues itself, before the planner runs, from what
    * the wizard detected. Their types are marked `runnerSeeded: true` in the

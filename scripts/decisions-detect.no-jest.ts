@@ -21,15 +21,11 @@
 import path from 'path';
 import fs from 'fs';
 import {
-  askDecisions,
-  collectDecisionsScan,
   detectFramework,
   FRAMEWORK_REGISTRY,
   getProgramDecisions,
-  judgeProjects,
-  renderDecisionInput,
-  summarizeAnswers,
-  toApiQuestion,
+  loadDecisionsService,
+  type DecisionQuestionSpec,
   type DecisionsResult,
 } from '@programs';
 import { readCiGatewayCredential } from '@shared/ci-gateway';
@@ -42,26 +38,28 @@ import {
 /** The gateway's question limit per request. */
 const MAX_QUESTIONS_PER_CALL = 32;
 
+type DecisionsService = NonNullable<
+  Awaited<ReturnType<typeof loadDecisionsService>>
+>;
+
 type Row = {
   dir: string;
   result: Omit<DecisionsResult, 'mode'>;
-  projects?: Awaited<ReturnType<typeof judgeProjects>>;
+  projects?: Awaited<ReturnType<DecisionsService['judgeProjects']>>;
   staticFramework?: string | null;
 };
 
 const declared = getProgramDecisions();
-/** Each question once, in first-declared order, with every program that asks it. */
+/** Every program that asks each question key, in first-declared order. */
 const askedBy = new Map<string, string[]>();
-const specs = declared
-  .flatMap((d) => d.decisions.questions)
-  .filter((q) => {
-    const first = !askedBy.has(q.name);
-    if (first) askedBy.set(q.name, []);
-    return first;
-  });
 for (const { id, decisions } of declared) {
-  for (const q of decisions.questions) askedBy.get(q.name)?.push(id);
+  for (const key of decisions) {
+    askedBy.set(key, [...(askedBy.get(key) ?? []), id]);
+  }
 }
+// Set in main(), once the service has loaded.
+let svc: DecisionsService;
+let specs: DecisionQuestionSpec[] = [];
 const integrationTargets = Object.entries(FRAMEWORK_REGISTRY).map(
   ([id, config]) => ({ id, name: config.metadata.name }),
 );
@@ -97,7 +95,7 @@ function printRow(row: Row): void {
   const { result } = row;
   console.log(`\n${row.dir}`);
   if (result.error) console.log(`  error: ${result.error}`);
-  const summary = summarizeAnswers(result.answers);
+  const summary = svc.summarizeAnswers(result.answers);
   const width = Math.max(...specs.map((s) => s.name.length));
   for (const spec of specs) {
     const value = summary[spec.name];
@@ -149,6 +147,17 @@ function printRow(row: Row): void {
 }
 
 async function main(): Promise<void> {
+  const loaded = await loadDecisionsService();
+  if (!loaded) {
+    console.error(
+      'The Decisions service is not in production builds. Run this script from source.',
+    );
+    process.exit(1);
+  }
+  svc = loaded;
+  specs = [...askedBy.keys()].map(
+    (key) => svc.QUESTIONS[key as keyof typeof svc.QUESTIONS],
+  );
   const args = process.argv.slice(2);
   const flags = new Set(args.filter((a) => a.startsWith('--')));
   const dirs = args
@@ -170,12 +179,12 @@ async function main(): Promise<void> {
 
   if (flags.has('--state') || flags.has('--request')) {
     for (const dir of dirs) {
-      const input = renderDecisionInput(collectDecisionsScan(dir));
+      const input = svc.renderDecisionInput(svc.collectDecisionsScan(dir));
       if (flags.has('--state')) {
         console.log(input);
         continue;
       }
-      const questions = specs.map(toApiQuestion);
+      const questions = specs.map(svc.toApiQuestion);
       const bodies = [];
       for (let i = 0; i < questions.length; i += MAX_QUESTIONS_PER_CALL) {
         bodies.push(
@@ -203,13 +212,13 @@ async function main(): Promise<void> {
   const compare = flags.has('--compare') || dirs.length > 1;
   const rows: Row[] = [];
   for (const dir of dirs) {
-    const scan = collectDecisionsScan(dir);
+    const scan = svc.collectDecisionsScan(dir);
     const [result, projects] = await Promise.all([
-      askDecisions(renderDecisionInput(scan), specs, {
+      svc.askDecisions(svc.renderDecisionInput(scan), specs, {
         transport: resolved.transport,
       }),
       flags.has('--projects')
-        ? judgeProjects(scan, resolved.transport, {
+        ? svc.judgeProjects(scan, resolved.transport, {
             targets: integrationTargets,
             recommend: true,
             onError: (message) => console.error(message),

@@ -29,7 +29,7 @@ import {
   questionFacts,
   DECISIONS_KEY,
   getDecisions,
-  runProgramDecisions,
+  runDecisionSpecs,
   summarizeAnswers,
 } from '@programs/detection/decisions/service';
 import {
@@ -299,22 +299,16 @@ describe('runProgramDecisions', () => {
     };
   }
 
-  const declarations = [
-    {
-      questions: [
-        predicate('uses_x'),
-        { ...predicate('market'), shared: true as const },
-      ],
-    },
+  const specs = [
+    predicate('uses_x'),
+    { ...predicate('market'), shared: true as const },
   ];
 
   it('makes no call when the mode is off', async () => {
     process.env.WIZARD_DECISIONS_DETECTION = 'off';
     const fetchImpl = fakeGateway();
     const sess = session();
-    expect(
-      await runProgramDecisions(declarations, ctx(sess, fetchImpl)),
-    ).toBeNull();
+    expect(await runDecisionSpecs(specs, ctx(sess, fetchImpl))).toBeNull();
     expect(fetchImpl).not.toHaveBeenCalled();
     expect(getDecisions(sess)).toBeUndefined();
   });
@@ -322,7 +316,7 @@ describe('runProgramDecisions', () => {
   it('stores shadow answers that programs may not act on', async () => {
     process.env.WIZARD_DECISIONS_DETECTION = 'shadow';
     const sess = session();
-    await runProgramDecisions(declarations, ctx(sess, fakeGateway()));
+    await runDecisionSpecs(specs, ctx(sess, fakeGateway()));
     expect(getDecisions(sess)?.answers.uses_x).toBeDefined();
     expect(actionableAnswer(sess, 'uses_x')).toBeUndefined();
   });
@@ -330,15 +324,13 @@ describe('runProgramDecisions', () => {
   it('runs in shadow for true, and treats primary as off', async () => {
     process.env.WIZARD_DECISIONS_DETECTION = 'true';
     const on = session();
-    await runProgramDecisions(declarations, ctx(on, fakeGateway()));
+    await runDecisionSpecs(specs, ctx(on, fakeGateway()));
     expect(getDecisions(on)?.mode).toBe('shadow');
     expect(actionableAnswer(on, 'uses_x')).toBeUndefined();
 
     process.env.WIZARD_DECISIONS_DETECTION = 'primary';
     const fetchImpl = fakeGateway();
-    expect(
-      await runProgramDecisions(declarations, ctx(session(), fetchImpl)),
-    ).toBeNull();
+    expect(await runDecisionSpecs(specs, ctx(session(), fetchImpl))).toBeNull();
     expect(fetchImpl).not.toHaveBeenCalled();
   });
 
@@ -346,7 +338,7 @@ describe('runProgramDecisions', () => {
     process.env.WIZARD_DECISIONS_DETECTION = 'shadow';
     const fetchImpl = fakeGateway();
     const sess = session({ scanConsent: ScanConsent.Declined });
-    await runProgramDecisions(declarations, ctx(sess, fetchImpl));
+    await runDecisionSpecs(specs, ctx(sess, fetchImpl));
     const body = JSON.parse(
       String((fetchImpl.mock.calls[0][1] as Parameters<typeof fetch>[1])?.body),
     ) as GatewayBody;
@@ -357,7 +349,7 @@ describe('runProgramDecisions', () => {
     process.env.WIZARD_DECISIONS_DETECTION = 'shadow';
     const fetchImpl = fakeGateway();
     const sess = session({ credentials: null } as Partial<ProgramSession>);
-    await runProgramDecisions(declarations, ctx(sess, fetchImpl));
+    await runDecisionSpecs(specs, ctx(sess, fetchImpl));
     expect(fetchImpl).not.toHaveBeenCalled();
     expect(
       (sess.frameworkContext[DECISIONS_KEY] as { error: string }).error,
@@ -521,12 +513,12 @@ describe('questionFacts', () => {
       frameworkContext: { [DECISIONS_KEY]: { mode, answers } },
     } as unknown as ProgramSession;
   }
-  const questions = [
-    QUESTIONS.product_category,
-    QUESTIONS.calls_llm_api,
-    QUESTIONS.structured_logging,
-    QUESTIONS.otel_exporter,
-  ];
+  const keys = [
+    'product_category',
+    'calls_llm_api',
+    'structured_logging',
+    'otel_exporter',
+  ] as const;
 
   it('renders the declared facts for confident primary answers only', () => {
     const session = answered('primary', {
@@ -540,7 +532,7 @@ describe('questionFacts', () => {
       structured_logging: { kind: 'predicate', probability: 0.05 },
       otel_exporter: { kind: 'predicate', probability: 0.4 },
     });
-    expect(questionFacts(session, questions)).toEqual([
+    expect(questionFacts(session, keys)).toEqual([
       'Product category: ecommerce. Shape the event plan around it.',
       QUESTIONS.calls_llm_api.facts?.likely,
       QUESTIONS.structured_logging.facts?.unlikely,
@@ -557,9 +549,9 @@ describe('questionFacts', () => {
       },
       calls_llm_api: { kind: 'predicate', probability: 0.95 },
     };
-    expect(questionFacts(answered('shadow', answers), questions)).toEqual([]);
+    expect(questionFacts(answered('shadow', answers), keys)).toEqual([]);
     expect(
-      questionFacts(answered('primary', answers), [QUESTIONS.product_category]),
+      questionFacts(answered('primary', answers), ['product_category']),
     ).toEqual([]);
   });
 });

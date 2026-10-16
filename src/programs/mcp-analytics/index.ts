@@ -2,7 +2,6 @@ import type { AbortCase } from '@agent/types';
 import { ErrorCodes } from '@shared/errors';
 import { createSkillProgram } from '../shared/skill-program';
 import type { ProgramConfig } from '../program-step';
-import { askQuestions, QUESTIONS } from '../detection/decisions';
 
 const MCP_ANALYTICS_REPORT_FILE = 'posthog-mcp-analytics-report.md';
 
@@ -100,7 +99,7 @@ export const MCP_ANALYTICS_ABORT_CASES: AbortCase[] = [
  * not pre-emptively.
  */
 export const config: ProgramConfig = {
-  ...askQuestions([QUESTIONS.is_mcp_server]),
+  decisions: ['is_mcp_server'],
   ...createSkillProgram({
     skillId: 'mcp-analytics',
     command: 'mcp-analytics',

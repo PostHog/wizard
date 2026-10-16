@@ -8,7 +8,6 @@ import {
   WAREHOUSE_ABORT_CASES,
 } from './detect.js';
 import { getDetectedWarehouseSources } from '../warehouse-sources/detect';
-import { askQuestions, QUESTIONS } from '../detection/decisions';
 
 /**
  * Inject the detected sources (and their creation mode) into the prompt so the
@@ -43,7 +42,7 @@ function buildPrompt(session: ProgramSession): string {
 }
 
 export const config: ProgramConfig = {
-  ...askQuestions([QUESTIONS.owns_database]),
+  decisions: ['owns_database'],
   command: 'warehouse',
   description: 'Detect and connect Data Warehouse sources',
   id: 'warehouse-source',
