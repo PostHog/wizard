@@ -327,14 +327,19 @@ describe('runProgramDecisions', () => {
     expect(actionableAnswer(sess, 'uses_x')).toBeUndefined();
   });
 
-  it('lets programs act on primary answers', async () => {
+  it('runs in shadow for true, and treats primary as off', async () => {
+    process.env.WIZARD_DECISIONS_DETECTION = 'true';
+    const on = session();
+    await runProgramDecisions(declarations, ctx(on, fakeGateway()));
+    expect(getDecisions(on)?.mode).toBe('shadow');
+    expect(actionableAnswer(on, 'uses_x')).toBeUndefined();
+
     process.env.WIZARD_DECISIONS_DETECTION = 'primary';
-    const sess = session();
-    await runProgramDecisions(declarations, ctx(sess, fakeGateway()));
-    expect(actionableAnswer(sess, 'uses_x')).toEqual({
-      kind: 'predicate',
-      probability: 0.9,
-    });
+    const fetchImpl = fakeGateway();
+    expect(
+      await runProgramDecisions(declarations, ctx(session(), fetchImpl)),
+    ).toBeNull();
+    expect(fetchImpl).not.toHaveBeenCalled();
   });
 
   it('leaves out shared questions when the user declined sharing', async () => {
@@ -556,5 +561,41 @@ describe('questionFacts', () => {
     expect(
       questionFacts(answered('primary', answers), [QUESTIONS.product_category]),
     ).toEqual([]);
+  });
+});
+
+describe('decisionsTransport', () => {
+  afterEach(() => {
+    delete process.env.WIZARD_CI_GATEWAY_TOKEN_FILE;
+    vi.resetModules();
+  });
+
+  it('uses the dev key file when the run has no pre-issued key', async () => {
+    const tokenFile = path.join(project({ token: 'phs_dev_key\n' }), 'token');
+    process.env.WIZARD_CI_GATEWAY_TOKEN_FILE = tokenFile;
+    vi.resetModules();
+    const { decisionsTransport } = await import(
+      '@programs/detection/decisions/service'
+    );
+    const session = {
+      credentials: { accessToken: 'pha_oauth', host: { region: 'us' } },
+    } as unknown as ProgramSession;
+    expect(decisionsTransport(session)).toEqual({
+      gateway: {
+        token: 'phs_dev_key\n',
+        url: 'https://ai-gateway.us.posthog.com',
+      },
+    });
+  });
+
+  it('has no transport without a pre-issued key or a dev key file', async () => {
+    vi.resetModules();
+    const { decisionsTransport } = await import(
+      '@programs/detection/decisions/service'
+    );
+    const session = {
+      credentials: { accessToken: 'pha_oauth', host: { region: 'us' } },
+    } as unknown as ProgramSession;
+    expect(decisionsTransport(session)).toBeNull();
   });
 });

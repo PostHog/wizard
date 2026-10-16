@@ -34,7 +34,7 @@ export type ProgramDecisions = {
   ) => Record<string, string | number | boolean | null>;
 };
 
-/** off: no call. shadow: answers are logged and compared, never acted on. primary: programs act on them. */
+/** off: no call. shadow: answers are logged and compared, never acted on. primary: programs act on them; no switch sets it yet. */
 export type DecisionsMode = 'off' | 'shadow' | 'primary';
 
 export type DecisionAnswer =

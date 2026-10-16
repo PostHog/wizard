@@ -7,7 +7,10 @@
 
 import { IS_PRODUCTION_BUILD, runtimeEnv } from '@env';
 import { WIZARD_DECISIONS_DETECTION_FLAG_KEY } from '@shared/constants';
+import type { GatewayCredential } from '@shared/api';
+import { readCiGatewayCredential } from '@shared/ci-gateway';
 import type { DecisionsTransport } from '@shared/decisions-client';
+import type { CloudRegion } from '@utils/types';
 import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
 import type { ProgramSession } from '../../program-session';
@@ -26,24 +29,57 @@ import type {
 /** frameworkContext key holding the run's `DecisionsResult`. */
 export const DECISIONS_KEY = 'decisions';
 
-/** The flag decides; a dev build's `WIZARD_DECISIONS_DETECTION` overrides it. */
+/**
+ * On runs the service in shadow: ask, log, compare, never act. The flag decides;
+ * a dev build's `WIZARD_DECISIONS_DETECTION` overrides it. Primary mode has no
+ * switch yet, so the code that acts on answers stays unused.
+ */
 export function getDecisionsMode(flags: Record<string, string>): DecisionsMode {
   if (!IS_PRODUCTION_BUILD) {
-    const override = runtimeEnv('WIZARD_DECISIONS_DETECTION')?.toLowerCase();
-    if (override === 'off' || override === 'shadow' || override === 'primary') {
-      return override;
-    }
+    const override = runtimeEnv('WIZARD_DECISIONS_DETECTION');
+    if (override !== undefined) return isOn(override) ? 'shadow' : 'off';
   }
-  const flag = flags[WIZARD_DECISIONS_DETECTION_FLAG_KEY];
-  return flag === 'shadow' || flag === 'primary' ? flag : 'off';
+  return isOn(flags[WIZARD_DECISIONS_DETECTION_FLAG_KEY]) ? 'shadow' : 'off';
 }
 
-/** The run's pre-issued gateway key (dev and CI runs). Minted production tokens are not wired yet. */
+function isOn(value: string | undefined): boolean {
+  return ['true', '1', 'shadow'].includes(value?.trim().toLowerCase() ?? '');
+}
+
+/**
+ * The run's pre-issued gateway key (`--ci` runs), else, in a dev build, the key
+ * in `WIZARD_CI_GATEWAY_TOKEN_FILE`. Only Decisions uses the second: the
+ * agents keep minting from the login. Minted tokens aren't wired for Decisions.
+ */
 export function decisionsTransport(
   session: ProgramSession,
 ): DecisionsTransport | null {
-  const gateway = session.credentials?.gateway;
+  const gateway =
+    session.credentials?.gateway ??
+    devGatewayKey(session.credentials?.host.region);
   return gateway?.token.trim() ? { gateway } : null;
+}
+
+// Read once: `readCiGatewayCredential` clears the variable after reading it.
+let devGateway: GatewayCredential | null | undefined;
+
+function devGatewayKey(
+  region: CloudRegion | undefined,
+): GatewayCredential | null {
+  if (devGateway !== undefined) return devGateway;
+  devGateway = null;
+  if (IS_PRODUCTION_BUILD || !runtimeEnv('WIZARD_CI_GATEWAY_TOKEN_FILE')) {
+    return devGateway;
+  }
+  try {
+    devGateway = readCiGatewayCredential(region ?? 'us');
+    logToFile(
+      '[decisions] using the dev gateway key from WIZARD_CI_GATEWAY_TOKEN_FILE',
+    );
+  } catch (error) {
+    logToFile(`[decisions] dev gateway key unreadable: ${String(error)}`);
+  }
+  return devGateway;
 }
 
 export type RunDecisionsContext = {
@@ -66,7 +102,14 @@ export async function runProgramDecisions(
   const specs = declarations
     .flatMap((d) => d.questions)
     .filter((spec) => sharing || !spec.shared);
-  if (mode === 'off' || specs.length === 0) return null;
+  if (specs.length === 0) return null;
+  if (mode === 'off') {
+    // Said once, so a run with Decisions off reads differently from one that never reached this hook.
+    logToFile(
+      `[decisions] mode=off: ${specs.length} question(s) not asked. Turn on with the ${WIZARD_DECISIONS_DETECTION_FLAG_KEY} flag, or WIZARD_DECISIONS_DETECTION=true in a dev build.`,
+    );
+    return null;
+  }
 
   const transport = decisionsTransport(ctx.session);
   let result: DecisionsResult;
