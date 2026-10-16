@@ -25,9 +25,14 @@ import type {
   DecisionsTransport,
 } from './types';
 import { QUESTIONS, type QuestionKey } from './questions';
+import {
+  LIKELY_PROBABILITY,
+  UNLIKELY_PROBABILITY,
+  UNSPECIFIC_CHOICES,
+} from '../confidence';
+import { DECISIONS_KEY } from '../../traits';
 
-/** frameworkContext key holding the run's `DecisionsResult`. */
-export const DECISIONS_KEY = 'decisions';
+export { DECISIONS_KEY };
 
 /**
  * On runs the service in shadow: ask, log, compare, never act. The flag decides;
@@ -231,13 +236,6 @@ export function actionableProbability(
   return answer?.kind === 'predicate' ? answer.probability : null;
 }
 
-/** A predicate's `likely` fact applies at or above this; a choice's fact too. */
-const LIKELY = 0.6;
-/** A predicate's `unlikely` fact applies at or below this. */
-const UNLIKELY = 0.1;
-/** Choice values that never become a fact. */
-const NO_FACT_CHOICES: ReadonlySet<string> = new Set(['other', 'none']);
-
 /**
  * The facts the questions behind `keys` declare, for the answers a program may
  * act on, one line each in key order. Empty in shadow mode and for unsure answers.
@@ -251,15 +249,18 @@ export function questionFacts(
     const answer = actionableAnswer(session, question.name);
     if (!answer) continue;
     if (answer.kind === 'predicate') {
-      if (answer.probability >= LIKELY && question.facts?.likely) {
+      if (answer.probability >= LIKELY_PROBABILITY && question.facts?.likely) {
         facts.push(question.facts.likely);
-      } else if (answer.probability <= UNLIKELY && question.facts?.unlikely) {
+      } else if (
+        answer.probability <= UNLIKELY_PROBABILITY &&
+        question.facts?.unlikely
+      ) {
         facts.push(question.facts.unlikely);
       }
     } else if (
       question.fact &&
-      answer.probability >= LIKELY &&
-      !NO_FACT_CHOICES.has(answer.choice)
+      answer.probability >= LIKELY_PROBABILITY &&
+      !UNSPECIFIC_CHOICES.has(answer.choice)
     ) {
       facts.push(question.fact.replace('{choice}', answer.choice));
     }

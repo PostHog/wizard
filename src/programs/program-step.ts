@@ -7,6 +7,7 @@ import type { FrameworkConfig } from './framework-config';
 import type { CiRunnerContext, RunnerContext } from './runner-context.js';
 // Type-only: the catalog stays out of production bundles.
 import type { QuestionKey } from './detection/decisions/questions';
+import type { Flow } from './flow';
 
 /**
  * Context passed to onReady callbacks — fires after the host has assigned
@@ -137,6 +138,10 @@ export interface ProgramConfig {
    * the content-mill flow name diverges from the program id.
    */
   agentFlow?: string;
+  /** This program's orchestrator task graph; see `./flow`. */
+  flow?: Flow;
+  /** This program's agent prompts by task type, from its `agents/` folder; loaded on first use. */
+  agentPrompts?: () => Promise<Readonly<Record<string, string>>>;
   /**
    * Whether `publish_handoff` mirrors the run report into a PostHog notebook.
    * Set only where the context-mill prompts expect it; every other program

@@ -97,6 +97,8 @@ reaches the UI.
 | The session store every host builds           | [`session`](session/session-store.ts): the store and the task stream              |
 | Running one program, and its input and outcome | [`run-program.ts`](run-program.ts), [`detect-program.ts`](detect-program.ts) and [`program-input.ts`](program-input.ts) |
 | What a program's `run` receives from a runner | [`runner-context.ts`](runner-context.ts)                                          |
+| One orchestrator program's task graph and prompts | Its folder's `flow.ts` and `agents/<type>.md`; see [orchestrator flows](#orchestrator-flows) |
+| The run's project traits                      | [`traits.ts`](traits.ts), with Decisions thresholds in [`detection/confidence.ts`](detection/confidence.ts) |
 | Framework detection and project scoping       | [`detection`](detection)                                                          |
 | Framework integrations                        | [`frameworks`](frameworks) and [`frameworks/registry.ts`](frameworks/registry.ts) |
 | Commands that pick a program by skill         | [`dispatch-family.ts`](../cli/commands/dispatch-family.ts)                        |
@@ -115,6 +117,28 @@ import every program. Every programs project extends `tsconfig.no-tui.json`,
 which maps `@programs/*`. A program's project references only the shared program
 code, so an import of a sibling program or the registry fails with TS6307; see
 [layer boundaries](../../.claude/skills/wizard-development/references/ARCHITECTURE.md#layer-boundaries).
+
+## Orchestrator flows
+
+An orchestrator program declares its task graph in `flow.ts` with `defineFlow`
+(see [`flow.ts`](flow.ts)): one node per task type, keyed by type, with
+`dependsOn`, an optional `when` over the run's traits and flags, `picked` for a
+node the planner or the program decides to queue, and `matchInputs` for a
+fanned-out chain. `resolveFlow` applies the conditions; a dropped node's
+dependents inherit its edges. The run hands the result to the orchestrator as
+`RunConfig.taskGraph`. A `when` treats a missing trait as "run the node", and
+lists the traits it reads in `reads`, so the program's `decisions` ask for them.
+
+Each task's prompt is `agents/<type>.md`, the job to be done; the skills it
+names carry the implementation detail. `pnpm bundle:agent-prompts` regenerates
+the program's `agent-prompts.ts` from that folder, which `agentPrompts` loads on
+first use. Tests in [`__tests__`](__tests__) fail when the module is stale, when
+a graph's nodes differ from its prompts, or when a node misses the sink.
+
+[`traits.ts`](traits.ts) builds the run's traits: static detection first, then,
+in Decisions primary mode only, confident answers mapped through
+`QUESTION_TRAITS`. `traitTags` turns them into the tags skill criteria match;
+the framework becomes `framework:<value>`.
 
 ## Session store and task streams
 

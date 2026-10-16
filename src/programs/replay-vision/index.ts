@@ -21,6 +21,7 @@ import { ProgramAbort } from '../program-abort';
 import { ErrorCodes } from '@shared/errors';
 import { REPLAY_VISION_SCOPE_ADDITIONS } from './scopes.js';
 import { abortNoFrameworkDetected } from '../shared/abort-no-framework';
+import { flow } from './flow';
 
 const REPLAY_VISION_REPORT_FILE = 'posthog-replay-vision-report.md';
 
@@ -149,6 +150,8 @@ export const config: ProgramConfig = {
     model: GPT6_SOL_MODEL,
   },
   agentFlow: 'replay-vision',
+  agentPrompts: () => import('./agent-prompts').then((m) => m.AGENT_PROMPTS),
+  flow,
   onReady: detectReplayVisionProject,
   oauthScopeAdditions: REPLAY_VISION_SCOPE_ADDITIONS,
 

@@ -143,5 +143,8 @@ export {
 export {
   isOrchestratorEnabled,
   areSeededTasksEnabled,
+  areBundledPromptsEnabled,
+  isSkillResolverEnabled,
+  isTypedGraphEnabled,
   resolveStageOverrides,
 } from './flags';

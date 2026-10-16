@@ -2,6 +2,7 @@
 
 import { Integration } from '@shared/constants';
 import type { DecisionAnswer } from './types';
+import { judgedValueWins } from '../confidence';
 
 /** Choice value meaning "no supported framework or language detected". */
 export const NO_FRAMEWORK = 'none';
@@ -63,10 +64,10 @@ export function integrationFromChoice(value: string): Integration | null {
   return INTEGRATION_BY_VALUE.get(value) ?? null;
 }
 
-/** Accept the answer outright at or above this probability. Starting point; calibrate from shadow runs. */
-export const DECISIONS_ACCEPT_PROBABILITY = 0.85;
-/** Between the gates, the answer needs static agreement or a static miss. */
-export const DECISIONS_AGREE_PROBABILITY = 0.6;
+export {
+  DECISIONS_ACCEPT_PROBABILITY,
+  DECISIONS_AGREE_PROBABILITY,
+} from '../confidence';
 
 /** Whether a framework answer may decide over `staticResult`, and the Integration it names. */
 export function routeIntegration(
@@ -75,15 +76,10 @@ export function routeIntegration(
 ): { integration: Integration | undefined; source: 'static' | 'decisions' } {
   const integration =
     answer?.kind === 'choice' ? integrationFromChoice(answer.choice) : null;
-  if (!answer || integration === null) {
-    return { integration: staticResult, source: 'static' };
-  }
-  if (answer.probability >= DECISIONS_ACCEPT_PROBABILITY) {
-    return { integration, source: 'decisions' };
-  }
   if (
-    answer.probability >= DECISIONS_AGREE_PROBABILITY &&
-    (staticResult === undefined || staticResult === integration)
+    answer &&
+    integration !== null &&
+    judgedValueWins(integration, answer.probability, staticResult)
   ) {
     return { integration, source: 'decisions' };
   }

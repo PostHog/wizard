@@ -32,6 +32,7 @@ import { getDetectedWarehouseSources } from '../warehouse-sources/detect';
 import { buildCodingAgentPrompt } from './handoff.js';
 import { EVENT_PLAN_FILE } from './constants.js';
 import { WAREHOUSE_SOURCE_SCOPE_ADDITIONS } from '../oauth/program-scopes';
+import { flow } from './flow';
 
 const DASHBOARD_DEEP_LINK_KEY = 'dashboardDeepLink';
 
@@ -238,6 +239,8 @@ export const config: ProgramConfig = {
   description: 'Set up PostHog SDK integration',
   id: 'posthog-integration',
   agentFlow: 'integration-v2',
+  agentPrompts: () => import('./agent-prompts').then((m) => m.AGENT_PROMPTS),
+  flow,
   handoffNotebook: true,
   eventPlanFile: EVENT_PLAN_FILE,
   scansCodebase: true,

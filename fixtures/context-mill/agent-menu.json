@@ -1,0 +1,206 @@
+{
+  "version": "1.0",
+  "buildVersion": "1.57.0",
+  "agents": [
+    {
+      "id": "capture-exceptions",
+      "flow": "error-tracking",
+      "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.57.0/agents-error-tracking-capture-exceptions.md"
+    },
+    {
+      "id": "configure",
+      "flow": "error-tracking",
+      "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.57.0/agents-error-tracking-configure.md"
+    },
+    {
+      "id": "credentials",
+      "flow": "error-tracking",
+      "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.57.0/agents-error-tracking-credentials.md"
+    },
+    {
+      "id": "init",
+      "flow": "error-tracking",
+      "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.57.0/agents-error-tracking-init.md"
+    },
+    {
+      "id": "install",
+      "flow": "error-tracking",
+      "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.57.0/agents-error-tracking-install.md"
+    },
+    {
+      "id": "link-releases",
+      "flow": "error-tracking",
+      "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.57.0/agents-error-tracking-link-releases.md"
+    },
+    {
+      "id": "report",
+      "flow": "error-tracking",
+      "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.57.0/agents-error-tracking-report.md"
+    },
+    {
+      "id": "setup-error-tracking",
+      "flow": "error-tracking",
+      "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.57.0/agents-error-tracking-setup-error-tracking.md"
+    },
+    {
+      "id": "test-setup",
+      "flow": "error-tracking",
+      "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.57.0/agents-error-tracking-test-setup.md"
+    },
+    {
+      "id": "wire-ci",
+      "flow": "error-tracking",
+      "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.57.0/agents-error-tracking-wire-ci.md"
+    },
+    {
+      "id": "create-flag",
+      "flow": "feature-flags",
+      "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.57.0/agents-feature-flags-create-flag.md"
+    },
+    {
+      "id": "evaluate",
+      "flow": "feature-flags",
+      "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.57.0/agents-feature-flags-evaluate.md"
+    },
+    {
+      "id": "init",
+      "flow": "feature-flags",
+      "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.57.0/agents-feature-flags-init.md"
+    },
+    {
+      "id": "install",
+      "flow": "feature-flags",
+      "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.57.0/agents-feature-flags-install.md"
+    },
+    {
+      "id": "report",
+      "flow": "feature-flags",
+      "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.57.0/agents-feature-flags-report.md"
+    },
+    {
+      "id": "setup-feature-flags",
+      "flow": "feature-flags",
+      "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.57.0/agents-feature-flags-setup-feature-flags.md"
+    },
+    {
+      "id": "ai-observability",
+      "flow": "integration-v2",
+      "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.57.0/agents-integration-v2-ai-observability.md"
+    },
+    {
+      "id": "capture",
+      "flow": "integration-v2",
+      "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.57.0/agents-integration-v2-capture.md"
+    },
+    {
+      "id": "dashboard",
+      "flow": "integration-v2",
+      "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.57.0/agents-integration-v2-dashboard.md"
+    },
+    {
+      "id": "error-tracking",
+      "flow": "integration-v2",
+      "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.57.0/agents-integration-v2-error-tracking.md"
+    },
+    {
+      "id": "identify",
+      "flow": "integration-v2",
+      "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.57.0/agents-integration-v2-identify.md"
+    },
+    {
+      "id": "init",
+      "flow": "integration-v2",
+      "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.57.0/agents-integration-v2-init.md"
+    },
+    {
+      "id": "install",
+      "flow": "integration-v2",
+      "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.57.0/agents-integration-v2-install.md"
+    },
+    {
+      "id": "integrate-posthog",
+      "flow": "integration-v2",
+      "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.57.0/agents-integration-v2-integrate-posthog.md"
+    },
+    {
+      "id": "logs",
+      "flow": "integration-v2",
+      "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.57.0/agents-integration-v2-logs.md"
+    },
+    {
+      "id": "report",
+      "flow": "integration-v2",
+      "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.57.0/agents-integration-v2-report.md"
+    },
+    {
+      "id": "review",
+      "flow": "integration-v2",
+      "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.57.0/agents-integration-v2-review.md"
+    },
+    {
+      "id": "warehouse",
+      "flow": "integration-v2",
+      "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.57.0/agents-integration-v2-warehouse.md"
+    },
+    {
+      "id": "instrument-metrics",
+      "flow": "metrics",
+      "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.57.0/agents-metrics-instrument-metrics.md"
+    },
+    {
+      "id": "report",
+      "flow": "metrics",
+      "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.57.0/agents-metrics-report.md"
+    },
+    {
+      "id": "setup-metrics",
+      "flow": "metrics",
+      "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.57.0/agents-metrics-setup-metrics.md"
+    },
+    {
+      "id": "verify-sdk",
+      "flow": "metrics",
+      "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.57.0/agents-metrics-verify-sdk.md"
+    },
+    {
+      "id": "enable-replay",
+      "flow": "replay-vision",
+      "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.57.0/agents-replay-vision-enable-replay.md"
+    },
+    {
+      "id": "init",
+      "flow": "replay-vision",
+      "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.57.0/agents-replay-vision-init.md"
+    },
+    {
+      "id": "install",
+      "flow": "replay-vision",
+      "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.57.0/agents-replay-vision-install.md"
+    },
+    {
+      "id": "report",
+      "flow": "replay-vision",
+      "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.57.0/agents-replay-vision-report.md"
+    },
+    {
+      "id": "scanner-broken-experiences",
+      "flow": "replay-vision",
+      "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.57.0/agents-replay-vision-scanner-broken-experiences.md"
+    },
+    {
+      "id": "scanner-session-summaries",
+      "flow": "replay-vision",
+      "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.57.0/agents-replay-vision-scanner-session-summaries.md"
+    },
+    {
+      "id": "scanner-user-frustration",
+      "flow": "replay-vision",
+      "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.57.0/agents-replay-vision-scanner-user-frustration.md"
+    },
+    {
+      "id": "setup-replay-vision",
+      "flow": "replay-vision",
+      "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.57.0/agents-replay-vision-setup-replay-vision.md"
+    }
+  ]
+}

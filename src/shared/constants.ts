@@ -335,6 +335,13 @@ export const WIZARD_ORCHESTRATOR_SEEDED_TASKS_FLAG_KEY =
 export const WIZARD_DEFAULT_AIO_LOGS_FLAG_KEY = 'wizard-default-aio-logs';
 /** Boolean flag: true runs the Decisions judgment service in shadow (ask and log, never act). */
 export const WIZARD_DECISIONS_DETECTION_FLAG_KEY = 'wizard-decisions-detection';
+/** Boolean flag: true lets the criteria resolver pick each orchestrator task's skills. Off, it runs in shadow beside the old resolver. */
+export const WIZARD_SKILL_RESOLVER_FLAG_KEY = 'wizard-skill-resolver';
+/** Boolean flag: true loads a flow's agent prompts from the wizard's bundle. Off, they are fetched from context-mill. */
+export const WIZARD_BUNDLED_AGENT_PROMPTS_FLAG_KEY =
+  'wizard-bundled-agent-prompts';
+/** Boolean flag whose payload `{flows: string[]}` names the flows whose typed graph replaces the planner's edges. Others compare in shadow. */
+export const WIZARD_TYPED_GRAPH_FLAG_KEY = 'wizard-typed-graph';
 // Reading a flag enters this run into that flag's experiment, so a closed set — not a
 // `wizard-` prefix anyone can name into — decides what a run evaluates. Test-pinned exhaustive.
 export const WIZARD_FLAG_KEYS = [
@@ -346,6 +353,9 @@ export const WIZARD_FLAG_KEYS = [
   WIZARD_BASIC_INTEGRATION_AGENTIC_DETECTION_FLAG_KEY,
   WIZARD_DEFAULT_AIO_LOGS_FLAG_KEY,
   WIZARD_DECISIONS_DETECTION_FLAG_KEY,
+  WIZARD_SKILL_RESOLVER_FLAG_KEY,
+  WIZARD_BUNDLED_AGENT_PROMPTS_FLAG_KEY,
+  WIZARD_TYPED_GRAPH_FLAG_KEY,
 ] as const;
 /** User-Agent for wizard HTTP requests and MCP server identification. */
 export const WIZARD_USER_AGENT = `posthog/wizard; version: ${VERSION}`;

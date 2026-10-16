@@ -20,8 +20,24 @@ export type SkillEntry = {
   default?: boolean;
   /** This entry's download is a bundle JSON of every variant, not a single skill's zip. */
   bundle?: boolean;
+  /** Human name for the skill; menus older than the criteria resolver omit it. */
+  title?: string;
+  /** What the skill covers, for an agent choosing from a narrowed menu. */
+  description?: string;
+  /** Free-form tags the criteria resolver matches; see `@shared/skill-resolution`. */
+  tags?: string[];
   /** Menu-only: the variants inside a bundle, expanded into entries of their own on fetch. */
-  variants?: { id: string; framework?: string; default?: boolean }[];
+  variants?: SkillVariant[];
+};
+
+/** One variant inside a bundle entry. */
+export type SkillVariant = {
+  id: string;
+  framework?: string;
+  default?: boolean;
+  title?: string;
+  description?: string;
+  tags?: string[];
 };
 
 /**
@@ -58,6 +74,10 @@ export function expandBundleEntry(entry: SkillEntry): SkillEntry[] {
     group: entry.group,
     bundle: true,
     downloadUrl: entry.downloadUrl,
+    ...(entry.title && !variant.title ? { title: entry.title } : {}),
+    ...(entry.description && !variant.description
+      ? { description: entry.description }
+      : {}),
   }));
 }
 

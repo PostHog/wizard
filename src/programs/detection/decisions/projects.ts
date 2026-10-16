@@ -25,12 +25,12 @@ import {
 } from './questions';
 import { renderDecisionState } from './input';
 import { decisionsTransport } from './service';
+import { PROJECT_CONFIDENCE } from '../confidence';
 import type { DecisionQuestionSpec, DecisionsTransport } from './types';
 
 /** Folders classified in one call; the gateway takes 32 questions and two are fixed. */
 const MAX_CANDIDATES = 12;
-/** A target or main-app answer below this probability isn't acted on. */
-export const PROJECT_CONFIDENCE = 0.6;
+export { PROJECT_CONFIDENCE };
 
 export type JudgedProjects = {
   report: AgenticDetectionReport;

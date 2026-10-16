@@ -19,10 +19,25 @@ cannot nest through the composition seam.
 
 ## Orchestrator
 
-[orchestrator-runner.ts](orchestrator/orchestrator-runner.ts) loads a flow from
-context-mill, runs its seed planner, then drains a dependency-aware task queue.
+[orchestrator-runner.ts](orchestrator/orchestrator-runner.ts) loads a flow's
+agent prompts, runs its seed planner, then drains a dependency-aware task queue.
 Each task gets a focused conversation, tools, selected model/effort, and
 relevant handoffs. Independent tasks can run concurrently.
+
+The prompts come from context-mill, or from the program's bundle
+(`RunConfig.agentPrompts`) when `wizard-bundled-agent-prompts` is on; a bundle
+that fails to load falls back to context-mill. A program that declares a typed
+graph (`RunConfig.taskGraph`, built from its `flow.ts`) has the planner's graph
+compared to it after seeding, logged as `orchestrator graph diff`. For the flows
+named in the `wizard-typed-graph` payload, the typed graph replaces the
+planner's edges and its conditions replace `excludedTaskTypes`; see
+[task-graph.ts](orchestrator/task-graph.ts).
+
+Task skills resolve through [skill-picks.ts](orchestrator/skill-picks.ts): the
+exact `group` + `framework` match decides, and the criteria resolver in
+`@shared/skill-resolution` runs beside it, logging each disagreement as
+`orchestrator skill resolver disagreement`, until `wizard-skill-resolver` lets
+it decide.
 
 The program selects `agentFlow ?? id`. Its published flow must supply a seed
 prompt and valid task-skill variants. Metrics already has a Pi/orchestrator

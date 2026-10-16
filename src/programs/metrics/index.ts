@@ -1,5 +1,6 @@
 import { Harness, Sequence, DEFAULT_AGENT_MODEL } from '@shared/constants';
 import type { ProgramConfig } from '../program-step';
+import { flow } from './flow';
 
 const METRICS_REPORT_FILE = 'posthog-metrics-report.md';
 
@@ -30,6 +31,8 @@ export const config: ProgramConfig = {
   // platform variant themselves. Explicit so renaming the program can't
   // silently detach the flow.
   agentFlow: 'metrics',
+  agentPrompts: () => import('./agent-prompts').then((m) => m.AGENT_PROMPTS),
+  flow,
   handoffNotebook: true,
   reportFile: METRICS_REPORT_FILE,
   run: {
