@@ -12,10 +12,18 @@ import {
   type TaskHandoff,
   type TransitionEvent,
 } from '@agent/runner/sequence/orchestrator/queue';
+import { ErrorCodes } from '@shared/errors';
+import { writeJsonAtomic } from '@utils/atomic-ledger';
+import { analytics } from '@utils/analytics';
 
 vi.mock('@utils/analytics', () => ({
   analytics: { captureException: vi.fn(), wizardCapture: vi.fn() },
 }));
+
+vi.mock('@utils/atomic-ledger', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@utils/atomic-ledger')>();
+  return { ...actual, writeJsonAtomic: vi.fn(actual.writeJsonAtomic) };
+});
 
 function tmpDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'queue-test-'));
@@ -551,5 +559,103 @@ describe('not-needed reasons', () => {
       false,
     );
     expect(isNotNeededReason(undefined)).toBe(false);
+  });
+});
+
+describe('queue.json write failures', () => {
+  let dir: string;
+  let q: QueueStore;
+  const write = vi.mocked(writeJsonAtomic);
+
+  function errno(code: string): NodeJS.ErrnoException {
+    return Object.assign(new Error(code), { code });
+  }
+
+  function readQueue(): QueueFile {
+    return JSON.parse(
+      fs.readFileSync(path.join(dir, QUEUE_DIR_NAME, 'queue.json'), 'utf8'),
+    ) as QueueFile;
+  }
+
+  beforeEach(() => {
+    dir = tmpDir();
+    q = new QueueStore(dir, 'run-1');
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('recreates a cache folder deleted mid-run and keeps going', () => {
+    fs.rmSync(path.join(dir, QUEUE_DIR_NAME), { recursive: true });
+
+    q.enqueue({ type: 'install' });
+
+    expect(readQueue().tasks).toHaveLength(1);
+    expect(fs.existsSync(path.join(dir, QUEUE_DIR_NAME, '.DELETE-ME.md'))).toBe(
+      true,
+    );
+    expect(analytics.wizardCapture).toHaveBeenCalledWith(
+      'orchestrator cache folder recreated',
+      {},
+    );
+  });
+
+  it('does not recreate the project folder when it is gone too', () => {
+    fs.rmSync(dir, { recursive: true });
+
+    expect(() => q.enqueue({ type: 'install' })).toThrow(
+      expect.objectContaining({ code: 'ENOENT' }),
+    );
+    expect(fs.existsSync(dir)).toBe(false);
+  });
+
+  it('retries a locked file and writes once the lock clears', () => {
+    write.mockImplementationOnce(() => {
+      throw errno('EBUSY');
+    });
+
+    q.enqueue({ type: 'install' });
+
+    expect(readQueue().tasks).toHaveLength(1);
+    expect(analytics.captureException).not.toHaveBeenCalled();
+  });
+
+  it('skips a snapshot while the file stays locked; the next one heals it', () => {
+    for (let i = 0; i < 4; i++) {
+      write.mockImplementationOnce(() => {
+        throw errno('EBUSY');
+      });
+    }
+
+    q.enqueue({ type: 'install' });
+    expect(analytics.captureException).toHaveBeenCalledWith(
+      expect.objectContaining({ code: 'EBUSY' }),
+      { step: 'orchestrator_queue_reflect', kind: 'locked' },
+    );
+
+    q.enqueue({ type: 'verify' });
+    expect(readQueue().tasks.map((t) => t.type)).toEqual(['install', 'verify']);
+  });
+
+  it('ends the run with a coded error when the disk is full', () => {
+    write.mockImplementationOnce(() => {
+      throw errno('ENOSPC');
+    });
+
+    expect(() => q.enqueue({ type: 'install' })).toThrow(
+      expect.objectContaining({ code: ErrorCodes.EnvDiskFull }),
+    );
+  });
+
+  it('rethrows a failure it does not recognise', () => {
+    write.mockImplementationOnce(() => {
+      throw errno('EIO');
+    });
+
+    expect(() => q.enqueue({ type: 'install' })).toThrow(
+      expect.objectContaining({ code: 'EIO' }),
+    );
   });
 });

@@ -82,6 +82,8 @@ screen, debug log) keep the full detail.
 | `PHW_AUTH_PROJECT_FETCH_FAILED`                | auth     | user/project data fetch from the PostHog API failed                                                                                                                                                          | yes          |
 | `PHW_ENV_LOCAL_SERVICES_DOWN`                  | env      | a local dev target (`--local-*`) is not running                                                                                                                                                              | yes          |
 | `PHW_ENV_SERVICE_OUTAGE`                       | env      | blocking external services down (interactive abort; non-interactive continues)                                                                                                                               | yes          |
+| `PHW_ENV_DISK_FULL`                            | env      | a write fails with ENOSPC or EDQUOT: the disk or quota that holds the project is full                                                                                                                        | no           |
+| `PHW_ENV_FILE_ACCESS_DENIED`                   | env      | a write fails with EACCES, EPERM (off Windows) or EROFS: the user cannot write to the project                                                                                                                | no           |
 | `PHW_DETECT_BAD_DIRECTORY`                     | detect   | install dir missing, not a directory, or unreadable                                                                                                                                                          | no           |
 | `PHW_DETECT_NO_FRAMEWORK`                      | detect   | framework auto-detection found nothing (`ciPreRun` headless abort)                                                                                                                                           | no           |
 | `PHW_DETECT_UNSUPPORTED_VERSION`               | detect   | detected framework version below the supported minimum                                                                                                                                                       | no           |
@@ -111,8 +113,8 @@ screen, debug log) keep the full detail.
 | `PHW_AGENT_ORCHESTRATOR_SINK_INVARIANT`        | agent    | orchestrator plan violates sink coverage invariant                                                                                                                                                           | no           |
 | `PHW_SETTINGS_UNFIXABLE_CONFLICT`              | settings | Claude settings conflict that cannot be auto-neutralized (managed/unwritable)                                                                                                                                | no           |
 | `PHW_INTERNAL_UNHANDLED`                       | internal | catch-all: an unexpected error escaped the pipeline                                                                                                                                                          | yes          |
-| `PHW_GATEWAY_MINT_REFUSED`                      | gateway  | the gateway-token mint refused this run (blocked, throttled, unlisted program, rollout off); the server's reason is shown | no |
-| `PHW_GATEWAY_MINT_FAILED`                       | gateway  | the gateway-token mint could not be reached or answered unusably | yes |
+| `PHW_GATEWAY_MINT_REFUSED`                     | gateway  | the gateway-token mint refused this run (blocked, throttled, unlisted program, rollout off); the server's reason is shown                                                                                    | no           |
+| `PHW_GATEWAY_MINT_FAILED`                      | gateway  | the gateway-token mint could not be reached or answered unusably                                                                                                                                             | yes          |
 
 Retry advice is guidance for automated hosts (sandbox re-run policies), not a
 guarantee.
@@ -121,8 +123,8 @@ guarantee.
 
 Program detect steps write `{ kind, ...detail }` into
 `session.frameworkContext.detectError`. `detectErrorCode()`
-([`src/programs/detect-map.ts`](../src/programs/detect-map.ts)) maps `kind`
-→ code, and the whole object — `kind` included — rides along as
+([`src/programs/detect-map.ts`](../src/programs/detect-map.ts)) maps `kind` →
+code, and the whole object — `kind` included — rides along as
 `OutroData.errorDetail`.
 
 `DETECT_CODES` is keyed on `DetectErrorKind`, a union assembled from the
@@ -166,9 +168,9 @@ no distinguishing signal is available. The Pi harness reports every 401 as
 
 1. Add the code to `ErrorCodes` (`codes.ts`) and an entry to `ERROR_CATALOG`
    (`catalog.ts`) — the unit test enforces catalog completeness.
-2. Pass it to `wizardAbort(host, { code })` or `new WizardError(msg, ctx,
-   code)` at the failure site. Prefer explicit `code` over inference so call
-   sites stay greppable. For agent-emitted `[ABORT] <reason>` preconditions,
-   declare `errorCode` on the program's `abortCases` entry so the generic
+2. Pass it to `wizardAbort(host, { code })` or `new WizardError(msg, ctx, code)`
+   at the failure site. Prefer explicit `code` over inference so call sites stay
+   greppable. For agent-emitted `[ABORT] <reason>` preconditions, declare
+   `errorCode` on the program's `abortCases` entry so the generic
    `PHW_AGENT_ABORT` is overridden with the specific class.
 3. Add the row here.

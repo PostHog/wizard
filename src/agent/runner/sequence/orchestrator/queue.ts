@@ -9,13 +9,20 @@
  * Every transition rewrites `<installDir>/.posthog-wizard-cache/queue.json`, a
  * small file holding the whole queue, handoffs included. It is the run's log
  * and the report's source. The whole cache folder is run-scoped and wiped when
- * the run ends.
+ * the run ends. The in-memory queue drives the run, so a write that fails for a
+ * reason the run can outlive (a deleted folder, a locked file) never ends it;
+ * a full disk or a folder the user cannot write ends it with a coded error.
  */
 import * as fs from 'fs';
 import * as path from 'path';
 import { randomUUID } from 'crypto';
 import { writeJsonAtomic } from '@utils/atomic-ledger';
 import { analytics } from '@utils/analytics';
+import {
+  classifyFsFailure,
+  filesystemRunError,
+  FsFailureKind,
+} from '@shared/errors';
 
 export const TaskStatus = {
   Pending: 'pending',
@@ -167,9 +174,15 @@ export interface EnqueueInput {
 
 export const QUEUE_DIR_NAME = '.posthog-wizard-cache';
 const DEFAULT_MAX_ATTEMPTS = 2;
+/** Waits before each retry of a locked queue.json; antivirus scans clear in this time. */
+const LOCKED_RETRY_MS = [25, 100, 250];
 
 function nowIso(): string {
   return new Date().toISOString();
+}
+
+function sleepSync(ms: number): void {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 }
 
 /** Dropped in the cache folder so an orphaned copy explains itself. */
@@ -208,14 +221,15 @@ export class QueueStore {
 
   readonly runId: string;
   readonly queuePath: string;
+  private readonly dir: string;
 
   constructor(installDir: string, runId: string, opts?: QueueStoreOptions) {
     this.onTransition = opts?.onTransition;
     this.runId = runId;
-    const dir = path.join(installDir, QUEUE_DIR_NAME);
-    this.queuePath = path.join(dir, 'queue.json');
-    fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(path.join(dir, DELETE_ME_FILE), DELETE_ME_BODY);
+    this.dir = path.join(installDir, QUEUE_DIR_NAME);
+    this.queuePath = path.join(this.dir, 'queue.json');
+    fs.mkdirSync(this.dir, { recursive: true });
+    fs.writeFileSync(path.join(this.dir, DELETE_ME_FILE), DELETE_ME_BODY);
   }
 
   // ── Reads ───────────────────────────────────────────────────────────
@@ -430,13 +444,50 @@ export class QueueStore {
     return t;
   }
 
+  /** Every write is a whole snapshot, so a skipped one heals on the next transition. */
   private reflect(): void {
     const file: QueueFile = {
       version: 1,
       runId: this.runId,
       tasks: this.tasks,
     };
-    writeJsonAtomic(this.queuePath, file);
+    let recreated = false;
+    for (let attempt = 0; ; attempt++) {
+      try {
+        writeJsonAtomic(this.queuePath, file);
+        return;
+      } catch (error) {
+        const kind = classifyFsFailure(error);
+        if (kind === FsFailureKind.Missing && !recreated) {
+          recreated = true;
+          if (this.recreateDir()) continue;
+        }
+        if (kind === FsFailureKind.Locked) {
+          if (attempt < LOCKED_RETRY_MS.length) {
+            sleepSync(LOCKED_RETRY_MS[attempt]);
+            continue;
+          }
+          analytics.captureException(
+            error instanceof Error ? error : new Error(String(error)),
+            { step: 'orchestrator_queue_reflect', kind },
+          );
+          return;
+        }
+        throw filesystemRunError(error, this.dir) ?? error;
+      }
+    }
+  }
+
+  /** Recreate a cache folder deleted mid-run; false when its parent is gone too. */
+  private recreateDir(): boolean {
+    try {
+      fs.mkdirSync(this.dir);
+      fs.writeFileSync(path.join(this.dir, DELETE_ME_FILE), DELETE_ME_BODY);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') return false;
+    }
+    analytics.wizardCapture('orchestrator cache folder recreated', {});
+    return true;
   }
 
   private notify(event: TransitionEvent, task: QueuedTask): void {
