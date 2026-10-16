@@ -1,6 +1,8 @@
 import type { AbortCase } from '@agent/types';
 import { ErrorCodes } from '@shared/errors';
 import { createSkillProgram } from '../shared/skill-program';
+import type { ProgramConfig } from '../program-step';
+import { askQuestions, QUESTIONS } from '../detection/decisions';
 
 const MCP_ANALYTICS_REPORT_FILE = 'posthog-mcp-analytics-report.md';
 
@@ -97,28 +99,31 @@ export const MCP_ANALYTICS_ABORT_CASES: AbortCase[] = [
  * 'mcp-analytics'` from context-mill — a deliberate breaking change, done then,
  * not pre-emptively.
  */
-export const config = createSkillProgram({
-  skillId: 'mcp-analytics',
-  command: 'mcp-analytics',
-  id: 'mcp-analytics',
-  description: 'Add PostHog MCP Analytics to your MCP server',
-  integrationLabel: 'mcp-analytics',
-  customPrompt:
-    "Instrument this project's MCP server with PostHog MCP analytics. Run the " +
-    '`mcp-analytics` skill end-to-end: detect the language and server ' +
-    'style, install the PostHog MCP SDK for that language (`@posthog/mcp` for ' +
-    'TypeScript, `posthog` for Python, `posthogmcpsdk` for Go, `posthog-ruby` ' +
-    'for Ruby), wrap the server ' +
-    '(or use the custom-dispatcher client where the skill says so), wire the ' +
-    'project API key and host, and verify. ' +
-    'Make only additive changes — do not alter tool behavior. For a Ruby ' +
-    'server, the report must open by saying the Ruby SDK is experimental and ' +
-    'not officially supported. The final report ' +
-    `is written to ./${MCP_ANALYTICS_REPORT_FILE}.`,
-  successMessage: `MCP analytics configured! View the report at ./${MCP_ANALYTICS_REPORT_FILE}`,
-  reportFile: MCP_ANALYTICS_REPORT_FILE,
-  docsUrl: 'https://posthog.com/docs/mcp-analytics',
-  spinnerMessage: 'Setting up MCP analytics...',
-  estimatedDurationMinutes: 5,
-  abortCases: MCP_ANALYTICS_ABORT_CASES,
-});
+export const config: ProgramConfig = {
+  ...askQuestions([QUESTIONS.is_mcp_server]),
+  ...createSkillProgram({
+    skillId: 'mcp-analytics',
+    command: 'mcp-analytics',
+    id: 'mcp-analytics',
+    description: 'Add PostHog MCP Analytics to your MCP server',
+    integrationLabel: 'mcp-analytics',
+    customPrompt:
+      "Instrument this project's MCP server with PostHog MCP analytics. Run the " +
+      '`mcp-analytics` skill end-to-end: detect the language and server ' +
+      'style, install the PostHog MCP SDK for that language (`@posthog/mcp` for ' +
+      'TypeScript, `posthog` for Python, `posthogmcpsdk` for Go, `posthog-ruby` ' +
+      'for Ruby), wrap the server ' +
+      '(or use the custom-dispatcher client where the skill says so), wire the ' +
+      'project API key and host, and verify. ' +
+      'Make only additive changes — do not alter tool behavior. For a Ruby ' +
+      'server, the report must open by saying the Ruby SDK is experimental and ' +
+      'not officially supported. The final report ' +
+      `is written to ./${MCP_ANALYTICS_REPORT_FILE}.`,
+    successMessage: `MCP analytics configured! View the report at ./${MCP_ANALYTICS_REPORT_FILE}`,
+    reportFile: MCP_ANALYTICS_REPORT_FILE,
+    docsUrl: 'https://posthog.com/docs/mcp-analytics',
+    spinnerMessage: 'Setting up MCP analytics...',
+    estimatedDurationMinutes: 5,
+    abortCases: MCP_ANALYTICS_ABORT_CASES,
+  }),
+};

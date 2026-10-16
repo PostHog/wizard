@@ -1,6 +1,7 @@
 import { Harness, Sequence, GPT5_6_TERRA_MODEL } from '@shared/constants';
 import type { ProgramConfig } from '../program-step';
 import { headlessOption, regionOption } from '@shared/headless-mode';
+import { askQuestions, QUESTIONS } from '../detection/decisions';
 
 const AI_OBSERVABILITY_REPORT_FILE = 'posthog-ai-observability-report.md';
 
@@ -15,6 +16,7 @@ const AI_OBSERVABILITY_REPORT_FILE = 'posthog-ai-observability-report.md';
  * "add AIO to a project" flow is the only action.
  */
 export const config: ProgramConfig = {
+  ...askQuestions([QUESTIONS.calls_llm_api]),
   binding: {
     sequence: Sequence.linear,
     harness: Harness.pi,

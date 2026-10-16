@@ -1,13 +1,13 @@
-/** Framework identity as a Decisions question, and the gates that let an answer override static detection. */
+/** Framework identity: the choices the framework question offers, the Integration an answer names, and the gates that let it override static detection. */
 
 import { Integration } from '@shared/constants';
-import type { DecisionAnswer, DecisionQuestionSpec } from './types';
+import type { DecisionAnswer } from './types';
 
 /** Choice value meaning "no supported framework or language detected". */
 export const NO_FRAMEWORK = 'none';
 
-/** One discriminating description per Integration; a unit test keeps it in sync with the enum. */
-export const FRAMEWORK_CRITERIA: Record<string, string> = {
+/** One discriminating description per Integration. */
+export const FRAMEWORK_CHOICES: Readonly<Record<string, string>> = {
   [Integration.nextjs]:
     'Next.js — "next" dependency, next.config.*, app/ or pages/ router',
   [Integration.nuxt]: 'Nuxt — "nuxt" dependency, nuxt.config.*',
@@ -52,23 +52,6 @@ export const FRAMEWORK_CRITERIA: Record<string, string> = {
   [Integration.javascriptNode]:
     'Node.js backend, CLI, or library with no recognized framework',
   [NO_FRAMEWORK]: 'No supported framework or language is identifiable',
-};
-
-export const FRAMEWORK_QUESTION: DecisionQuestionSpec = {
-  name: 'framework',
-  kind: 'choice',
-  instructions:
-    'Which framework or platform should the PostHog wizard integrate first? Judge from the dependencies and file tree. If several apps exist, pick the primary user-facing application. Prefer the most specific framework; use a language fallback only when no framework matches.',
-  choices: FRAMEWORK_CRITERIA,
-  purpose: 'Confirm which framework integration to set up.',
-};
-
-export const IS_MONOREPO_QUESTION: DecisionQuestionSpec = {
-  name: 'is_monorepo',
-  kind: 'predicate',
-  instructions:
-    'This repository holds several independently deployable apps or packages.',
-  purpose: 'Decide whether to offer a choice of app.',
 };
 
 const INTEGRATION_BY_VALUE = new Map<string, Integration>(

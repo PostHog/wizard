@@ -65,7 +65,7 @@ Project context:
 }
 
 /** Facts from the wizard's pre-run scan; a model judged them, so agents confirm before acting. */
-function detectedFacts(facts: readonly string[] | undefined): string {
+export function detectedFacts(facts: readonly string[] | undefined): string {
   if (!facts || facts.length === 0) return '';
   return `
 

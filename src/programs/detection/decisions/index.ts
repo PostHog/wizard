@@ -9,10 +9,12 @@ export type {
 export {
   actionableAnswer,
   actionableProbability,
+  askQuestions,
   DECISIONS_KEY,
   decisionsTransport,
   getDecisions,
   getDecisionsMode,
+  questionFacts,
   runProgramDecisions,
   summarizeAnswers,
 } from './service';
@@ -28,9 +30,10 @@ export {
   type DecisionsScan,
 } from './scan';
 export {
-  FRAMEWORK_QUESTION,
-  IS_MONOREPO_QUESTION,
   integrationFromChoice,
+  NO_FRAMEWORK,
   routeIntegration,
 } from './framework';
+export { QUESTIONS } from './questions';
+export { choice, defineQuestions, predicate } from './builders';
 export { detectProjectsWithDecisions, judgeProjects } from './projects';

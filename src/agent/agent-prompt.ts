@@ -9,6 +9,7 @@
 
 import type { AgentRunDefinition } from './runner/shared/types';
 import type { HostResolution } from '@shared/host-resolution';
+import { detectedFacts } from './agent-prompt-loader';
 
 /**
  * Values available to prompt builders after OAuth completes.
@@ -19,6 +20,8 @@ export interface PromptContext {
   host: HostResolution;
   /** Set when skillId was provided and the skill was installed successfully. */
   skillPath?: string;
+  /** Detected facts about the project, one line each. */
+  facts?: readonly string[];
   /**
    * Org-level AI consent (`is_ai_data_processing_approved`) read from the
    * `/api/users/@me/` payload at auth time. `null` = unknown (older orgs,
@@ -68,8 +71,8 @@ export function assemblePrompt(
 ): string {
   const parts: string[] = [];
 
-  // Always include the default project prompt
-  parts.push(defaultProjectPrompt(ctx));
+  // Always include the default project prompt, with any detected facts
+  parts.push(defaultProjectPrompt(ctx) + detectedFacts(ctx.facts));
 
   // Additional program-specific instructions
   if (runDef.customPrompt) {

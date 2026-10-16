@@ -26,6 +26,7 @@ import {
 } from '@programs/detection/decisions/ask';
 import {
   actionableAnswer,
+  questionFacts,
   DECISIONS_KEY,
   getDecisions,
   runProgramDecisions,
@@ -36,6 +37,7 @@ import {
   DECISIONS_AGREE_PROBABILITY,
   routeIntegration,
 } from '@programs/detection/decisions/framework';
+import { QUESTIONS } from '@programs/detection/decisions/questions';
 import {
   compareProjectReports,
   judgeProjects,
@@ -502,5 +504,57 @@ describe('judgeProjects with one folder', () => {
       recommended: true,
     });
     expect(judged?.confident).toBe(true);
+  });
+});
+
+describe('questionFacts', () => {
+  function answered(
+    mode: 'shadow' | 'primary',
+    answers: Record<string, DecisionAnswer>,
+  ): ProgramSession {
+    return {
+      frameworkContext: { [DECISIONS_KEY]: { mode, answers } },
+    } as unknown as ProgramSession;
+  }
+  const questions = [
+    QUESTIONS.product_category,
+    QUESTIONS.calls_llm_api,
+    QUESTIONS.structured_logging,
+    QUESTIONS.otel_exporter,
+  ];
+
+  it('renders the declared facts for confident primary answers only', () => {
+    const session = answered('primary', {
+      product_category: {
+        kind: 'choice',
+        choice: 'ecommerce',
+        probability: 0.9,
+        probabilities: {},
+      },
+      calls_llm_api: { kind: 'predicate', probability: 0.95 },
+      structured_logging: { kind: 'predicate', probability: 0.05 },
+      otel_exporter: { kind: 'predicate', probability: 0.4 },
+    });
+    expect(questionFacts(session, questions)).toEqual([
+      'Product category: ecommerce. Shape the event plan around it.',
+      QUESTIONS.calls_llm_api.facts?.likely,
+      QUESTIONS.structured_logging.facts?.unlikely,
+    ]);
+  });
+
+  it('gives no facts in shadow mode or for an "other" choice', () => {
+    const answers: Record<string, DecisionAnswer> = {
+      product_category: {
+        kind: 'choice',
+        choice: 'other',
+        probability: 0.99,
+        probabilities: {},
+      },
+      calls_llm_api: { kind: 'predicate', probability: 0.95 },
+    };
+    expect(questionFacts(answered('shadow', answers), questions)).toEqual([]);
+    expect(
+      questionFacts(answered('primary', answers), [QUESTIONS.product_category]),
+    ).toEqual([]);
   });
 });

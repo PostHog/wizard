@@ -381,12 +381,9 @@ export const config: ProgramConfig = {
       richLinks: true,
 
       customPrompt: (ctx) => {
-        const additionalLines = [
-          ...(config.prompts.getAdditionalContextLines
-            ? config.prompts.getAdditionalContextLines(frameworkContext)
-            : []),
-          ...decisionFacts(session),
-        ];
+        const additionalLines = config.prompts.getAdditionalContextLines
+          ? config.prompts.getAdditionalContextLines(frameworkContext)
+          : [];
         const additionalContext =
           additionalLines.length > 0
             ? '\n' + additionalLines.map((line) => `- ${line}`).join('\n')

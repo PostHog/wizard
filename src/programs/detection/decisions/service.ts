@@ -17,6 +17,7 @@ import { askDecisions } from './ask';
 import { renderDecisionInput } from './input';
 import type {
   DecisionAnswer,
+  DecisionQuestionSpec,
   DecisionsMode,
   DecisionsResult,
   ProgramDecisions,
@@ -161,4 +162,54 @@ export function actionableProbability(
 ): number | null {
   const answer = actionableAnswer(session, name);
   return answer?.kind === 'predicate' ? answer.probability : null;
+}
+
+/** A predicate's `likely` fact applies at or above this; a choice's fact too. */
+const LIKELY = 0.6;
+/** A predicate's `unlikely` fact applies at or below this. */
+const UNLIKELY = 0.1;
+/** Choice values that never become a fact. */
+const NO_FACT_CHOICES: ReadonlySet<string> = new Set(['other', 'none']);
+
+/**
+ * The facts `questions` declare, for the answers a program may act on, one
+ * line each in question order. Empty in shadow mode and for unsure answers.
+ */
+export function questionFacts(
+  session: ProgramSession,
+  questions: readonly DecisionQuestionSpec[],
+): string[] {
+  const facts: string[] = [];
+  for (const question of questions) {
+    const answer = actionableAnswer(session, question.name);
+    if (!answer) continue;
+    if (answer.kind === 'predicate') {
+      if (answer.probability >= LIKELY && question.facts?.likely) {
+        facts.push(question.facts.likely);
+      } else if (answer.probability <= UNLIKELY && question.facts?.unlikely) {
+        facts.push(question.facts.unlikely);
+      }
+    } else if (
+      question.fact &&
+      answer.probability >= LIKELY &&
+      !NO_FACT_CHOICES.has(answer.choice)
+    ) {
+      facts.push(question.fact.replace('{choice}', answer.choice));
+    }
+  }
+  return facts;
+}
+
+/**
+ * The `ProgramConfig` fields for a program that asks `questions`: the
+ * declaration, and the facts its answers give the agents.
+ */
+export function askQuestions(questions: readonly DecisionQuestionSpec[]): {
+  decisions: ProgramDecisions;
+  projectFacts: (session: ProgramSession) => readonly string[];
+} {
+  return {
+    decisions: { questions },
+    projectFacts: (session) => questionFacts(session, questions),
+  };
 }

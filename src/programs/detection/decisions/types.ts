@@ -15,6 +15,10 @@ export type DecisionQuestionSpec = {
   purpose: string;
   /** Report-only: asked only when the user shares scan results. */
   shared?: true;
+  /** Predicate only: what agents read when the answer is likely yes, or likely no. */
+  facts?: { likely?: string; unlikely?: string };
+  /** Choice only: what agents read, with `{choice}` replaced by the answer. */
+  fact?: string;
 };
 
 /** `ProgramConfig.decisions`: the questions a program opts into. */

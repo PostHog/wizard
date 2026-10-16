@@ -16,6 +16,14 @@ import type {
 } from '../agentic';
 import { getDecisionsScan, manifestDirs, type DecisionsScan } from './scan';
 import { askDecisions } from './ask';
+import {
+  NOT_A_TARGET,
+  QUESTIONS,
+  PRIMARY_APP,
+  primaryAppQuestion,
+  projectTargetName,
+  projectTargetQuestion,
+} from './questions';
 import { renderDecisionInput } from './input';
 import { decisionsTransport } from './service';
 import type { DecisionQuestionSpec } from './types';
@@ -24,7 +32,6 @@ import type { DecisionQuestionSpec } from './types';
 const MAX_CANDIDATES = 12;
 /** A target or main-app answer below this probability isn't acted on. */
 export const PROJECT_CONFIDENCE = 0.6;
-const NOT_A_TARGET = 'none';
 
 export type JudgedProjects = {
   report: AgenticDetectionReport;
@@ -54,24 +61,6 @@ function hasPostHogIn(scan: DecisionsScan, dir: string): boolean {
   });
 }
 
-function targetQuestion(
-  index: number,
-  dir: string,
-  targets: readonly DetectTarget[],
-  purpose: string,
-): DecisionQuestionSpec {
-  return {
-    name: `project_${index}_target`,
-    kind: 'choice',
-    instructions: `Which of these is the project rooted at \`${dir}\`? Judge from its own dependencies and files. When several match, answer the one listed first. Answer ${NOT_A_TARGET} when it matches none, or when it is a shared library, config or tooling package rather than an app.`,
-    choices: {
-      ...Object.fromEntries(targets.map((t) => [t.id, t.name])),
-      [NOT_A_TARGET]: 'None of these, or not an app',
-    },
-    purpose: `Find the projects to ${purpose}.`,
-  };
-}
-
 /**
  * Classify the repo's candidate apps. Returns null when the call can't be made
  * or fails; the caller then keeps its agent scan.
@@ -97,27 +86,15 @@ export async function judgeProjects(
   const candidates = manifestDirs(scan).slice(0, MAX_CANDIDATES);
   if (candidates.length === 0) candidates.push('.');
 
-  const specs: DecisionQuestionSpec[] = candidates.map((dir, i) =>
-    targetQuestion(i, dir, targets, purpose),
-  );
-  specs.push({
-    name: 'is_monorepo',
-    kind: 'predicate',
-    instructions:
-      'This repository holds several independently deployable apps or packages.',
-    purpose: 'Decide whether to offer a choice of app.',
-  });
   // The API rejects a choice with fewer than two values; one folder needs no pick.
-  if (recommend && candidates.length > 1) {
-    specs.push({
-      name: 'primary_app',
-      kind: 'choice',
-      instructions:
-        'Which folder holds the main user-facing app of this repository?',
-      choices: Object.fromEntries(candidates.map((dir) => [dir, null])),
-      purpose: 'Suggest which app to set up first.',
-    });
-  }
+  const askPrimary = recommend && candidates.length > 1;
+  const specs: DecisionQuestionSpec[] = [
+    ...candidates.map((dir, i) =>
+      projectTargetQuestion(i, dir, targets, purpose),
+    ),
+    QUESTIONS.is_monorepo,
+    ...(askPrimary ? [primaryAppQuestion(candidates)] : []),
+  ];
 
   const result = await askDecisions(renderDecisionInput(scan), specs, {
     transport,
@@ -133,7 +110,7 @@ export async function judgeProjects(
   const projects: AgenticProject[] = [];
   let confident = true;
   for (const [i, dir] of candidates.entries()) {
-    const answer = result.answers[`project_${i}_target`];
+    const answer = result.answers[projectTargetName(i)];
     if (answer?.kind !== 'choice' || answer.choice === NOT_A_TARGET) continue;
     const target = targets.find((t) => t.id === answer.choice);
     if (!target) continue;
@@ -147,7 +124,7 @@ export async function judgeProjects(
   }
 
   if (recommend) {
-    const primary = result.answers.primary_app;
+    const primary = result.answers[PRIMARY_APP];
     const pick =
       candidates.length === 1
         ? projects[0]
@@ -161,7 +138,7 @@ export async function judgeProjects(
     projects.sort((a, b) => Number(b.recommended) - Number(a.recommended));
   }
 
-  const monorepo = result.answers.is_monorepo;
+  const monorepo = result.answers[QUESTIONS.is_monorepo.name];
   const repoType =
     projects.length > 1 ||
     (monorepo?.kind === 'predicate' && monorepo.probability >= 0.5)

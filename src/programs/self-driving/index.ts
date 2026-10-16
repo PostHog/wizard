@@ -17,6 +17,7 @@ import { resolveProjectDir } from '../detection/agentic';
 import { prepSelfDrivingIntegration } from './detect-agentic.js';
 import { NO_DEFAULT_LIMIT, PRICE_PER_PR_USD, PRICING_LONG } from './pricing.js';
 import { SELF_DRIVING_SCOPE_ADDITIONS } from './scopes.js';
+import { askQuestions, QUESTIONS } from '../detection/decisions';
 
 /** Absolute dir to integrate into: the picked sub-app (LLM output — the shared resolver clamps escapes), else the repo root. */
 const integrationDir = (session: ProgramSession): string =>
@@ -118,6 +119,7 @@ const buildRun = (session: ProgramSession): Promise<ProgramRun> =>
   });
 
 export const config: ProgramConfig = {
+  ...askQuestions([QUESTIONS.primary_user_flow, QUESTIONS.user_login]),
   ...createSkillProgram({
     skillId: SELF_DRIVING_SKILL_ID,
     command: 'self-driving',

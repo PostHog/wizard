@@ -50,12 +50,18 @@ type Row = {
 };
 
 const declared = getProgramDecisions();
-const specs = declared.flatMap((d) => d.decisions.questions);
-const purposeOf = new Map(
-  declared.flatMap((d) =>
-    d.decisions.questions.map((q) => [q.name, `${d.id}: ${q.purpose}`]),
-  ),
-);
+/** Each question once, in first-declared order, with every program that asks it. */
+const askedBy = new Map<string, string[]>();
+const specs = declared
+  .flatMap((d) => d.decisions.questions)
+  .filter((q) => {
+    const first = !askedBy.has(q.name);
+    if (first) askedBy.set(q.name, []);
+    return first;
+  });
+for (const { id, decisions } of declared) {
+  for (const q of decisions.questions) askedBy.get(q.name)?.push(id);
+}
 const integrationTargets = Object.entries(FRAMEWORK_REGISTRY).map(
   ([id, config]) => ({ id, name: config.metadata.name }),
 );
@@ -97,18 +103,21 @@ function printRow(row: Row): void {
     const value = summary[spec.name];
     console.log(
       `  ${spec.name.padEnd(width)}  ${String(value ?? 'unanswered').padEnd(
-        22,
-      )} ${purposeOf.get(spec.name) ?? ''}`,
+        24,
+      )} ${spec.purpose} (${askedBy.get(spec.name)?.join(', ') ?? ''})`,
     );
   }
   if (row.staticFramework !== undefined) {
     const framework = result.answers.framework;
     const judged = framework?.kind === 'choice' ? framework.choice : null;
-    const agree = judged === (row.staticFramework ?? 'none');
+    const verdict =
+      judged === null
+        ? 'no answer'
+        : judged === (row.staticFramework ?? 'none')
+        ? 'agrees'
+        : 'disagrees';
     console.log(
-      `  static framework: ${row.staticFramework ?? 'none'} · ${
-        agree ? 'agrees' : 'disagrees'
-      }`,
+      `  static framework: ${row.staticFramework ?? 'none'} · ${verdict}`,
     );
   }
   if (row.projects !== undefined) {

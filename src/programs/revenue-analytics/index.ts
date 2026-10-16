@@ -1,8 +1,10 @@
 import type { ProgramConfig } from '../program-step';
 import { WIZARD_TOOL_NAMES } from '@agent';
 import { detectRevenuePrerequisites, REVENUE_ABORT_CASES } from './detect.js';
+import { askQuestions, QUESTIONS } from '../detection/decisions';
 
 export const config: ProgramConfig = {
+  ...askQuestions([QUESTIONS.billing_code]),
   command: 'revenue-analytics',
   description: 'Set up PostHog for Revenue Analytics',
   id: 'revenue-analytics-setup',

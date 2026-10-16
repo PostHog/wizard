@@ -120,6 +120,7 @@ async function executeLinear(
     projectApiKey,
     host,
     skillPath,
+    facts: config.projectFacts?.() ?? [],
     orgAiDataProcessingApproved:
       input.apiUser?.organization?.is_ai_data_processing_approved ?? null,
     teamProductOptIns: project
