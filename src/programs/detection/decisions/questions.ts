@@ -58,7 +58,7 @@ export const QUESTIONS = defineQuestions({
     },
   }),
 
-  // Asked by: error-tracking
+  // Asked by: error-tracking, posthog-integration
   server_runtime: predicate({
     ask: 'There is a server runtime that handles requests or jobs: an API, a web server, workers or serverless functions.',
     purpose: 'Decide whether server-side setup applies: server error capture.',
@@ -129,6 +129,28 @@ export const QUESTIONS = defineQuestions({
         'The project already uses OpenTelemetry: prefer the OTLP path for Logs.',
       unlikely: 'The project shows no OpenTelemetry setup.',
     },
+  }),
+
+  // Asked by: posthog-integration
+  // Overlaps the tool catalog: packages like dd-trace or newrelic are lookups.
+  // This also reads agent config files and env key names the catalog doesn't match.
+  observability_stack: choice({
+    ask: "Which observability tool already receives this backend's logs or traces? Judge from packages such as dd-trace or newrelic, files such as datadog.yaml or newrelic.js, and env key names such as DD_API_KEY.",
+    choices: {
+      datadog: 'Datadog',
+      new_relic: 'New Relic',
+      sentry: 'Sentry',
+      splunk: 'Splunk',
+      grafana: 'Grafana, Loki or Tempo',
+      honeycomb: 'Honeycomb',
+      elastic: 'Elastic or Logstash',
+      otel_collector: 'OpenTelemetry to a self-hosted collector',
+      none: 'None',
+      other: null,
+    },
+    purpose:
+      'Learn what the backend already uses for logs or traces, before setting up Logs.',
+    fact: 'The backend already sends logs or traces to {choice}: add PostHog Logs alongside it, and leave the existing setup in place.',
   }),
 
   // ── Source maps ──────────────────────────────────────────────────

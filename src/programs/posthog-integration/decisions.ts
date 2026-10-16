@@ -29,6 +29,8 @@ export const POSTHOG_INTEGRATION_DECISIONS: ProgramDecisions = {
     QUESTIONS.calls_llm_api,
     QUESTIONS.structured_logging,
     QUESTIONS.otel_exporter,
+    QUESTIONS.server_runtime,
+    QUESTIONS.observability_stack,
   ],
   compare: (session, answers) => {
     const framework = answers[QUESTIONS.framework.name];
