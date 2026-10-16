@@ -3,7 +3,7 @@
 **Purpose:** turn off the wizard's Warlock / YARA security scanning in the field
 — remotely, without reverting commits or cutting a release — when it misbehaves.
 
-**Owner:** Wizard & Docs team · **Severity to flip:** your call; this disables
+**Owner:** docs-and-wizard team · **Severity to flip:** your call; this disables
 a security control, so treat "on" (scanning enabled) as the safe default.
 
 ---

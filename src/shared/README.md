@@ -72,27 +72,9 @@ A diagnostic with no caller to show it goes to the log file (`logToFile`).
 
 ## Skills
 
-Skills are the instructions an agent follows for one job. They come from
-[context-mill](https://github.com/PostHog/context-mill) releases.
-
-- **Menu.** `fetchSkillMenu` reads `skill-menu.json` from the latest release.
-  `getSkillsBaseUrl()` points at GitHub release downloads.
-- **Mirror.** `fetchWithRetry` tries GitHub first, then the AWS mirror at
-  `https://context-mill.posthog.com/latest`, which has the same files. It
-  tries the origin that last worked first.
-- **Install.** `installSkillById` and `downloadSkill` unzip a skill into
-  `<project>/.claude/skills/<id>/` and write an empty `.posthog-wizard` marker
-  file in it. The agent can install more from the menu with `load_skill_menu`
-  and `install_skill`, see [agent tools](../agent/README.md#wizard-tools).
-- **Orchestrator runs.** Task skills go to `.posthog-wizard-cache/skills/` and
-  are removed after the run. Only the framework's reference docs move into
-  `.claude/skills`.
-- **Keep skills.** At the end of a TUI run, the keep skills screen asks once
-  whether to keep the skills with the marker. Saying no removes all of them.
-  Skills without the marker are never touched.
-- **Local.** `--local-context-mill` reads skills from a local context-mill
-  server, `http://localhost:8765` or `CONTEXT_MILL_URL`. Non-production builds
-  only.
+`@shared/skill-menu` and `@shared/skill-install`, listed above, fetch and
+install [context-mill](https://github.com/PostHog/context-mill) skills.
+[`skill-install.ts`](skill-install.ts) has the details.
 
 ## Intent
 

@@ -722,9 +722,34 @@ Example prompt — explore against
 > Then show me the saved snapshots in order, the screen path, whether `posthog`
 > landed in the app, and anything that broke.
 
-## Releasing
+## Publishing your tool
 
-Release-please opens the release PR, and merging it publishes `@posthog/wizard` to npm. Don't run `npm publish` by hand. See [releasing the wizard](https://posthog.com/handbook/wizard-and-docs/wizard-releases) in the handbook.
+To make your version of a tool usable with a one-line `npx` command:
+
+1. Edit `package.json`, especially details like `name`, `version`
+2. Run [`npm publish`](https://docs.npmjs.com/cli/v7/commands/npm-publish) from
+   your project directory
+3. Now you can run it with `npx yourpackagename`
+
+# Health checks
+
+`src/shared/health-checks/` checks skills download origins before the wizard runs.
+The entry point is `evaluateWizardReadiness()`, which only blocks on skill downloads:
+
+| Decision            | Meaning                                                         |
+| ------------------- | --------------------------------------------------------------- |
+| `yes`               | Skills are reachable — proceed without outage warnings.         |
+| `no`                | Neither skills origin is reachable. Interactive runs show the outage and stop; non-interactive runs report it and continue. |
+
+### Module layout
+
+| File | Responsibility |
+| --- | --- |
+| `types.ts` | Enums, interfaces (`ServiceHealthStatus`, `AllServicesHealth`, etc.) |
+| `endpoints.ts` | Direct gateway (`/readyz`) and skills origin (`skill-menu.json`) checks |
+| `readiness.ts` | `checkAllExternalServices`, `evaluateWizardReadiness`, readiness config |
+| `index.ts` | Barrel re-export |
+| `testme.md` | Test running instructions and endpoint reference |
 
 ## What blocks a run
 

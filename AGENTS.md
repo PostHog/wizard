@@ -2,8 +2,7 @@
 
 Instructions for all agents (and humans) working in this repo. This is the
 single source of truth; [`CLAUDE.md`](CLAUDE.md) just points here. User-facing
-docs: https://posthog.com/docs/ai-engineering/ai-wizard. Ownership, releases,
-and incidents: https://posthog.com/handbook/wizard-and-docs/wizard
+docs: https://posthog.com/docs/ai-engineering/ai-wizard
 
 The PostHog wizard (`npx @posthog/wizard`) is a CLI that adds PostHog to a
 user's project using an AI agent. It authenticates the user, detects their
@@ -237,8 +236,6 @@ a PostHog personal API key and an already-issued gateway token supplied through
 `WIZARD_CI_GATEWAY_TOKEN_FILE`, plus the target project ID. Follow the
 [credential setup](docs/local-dev.md#credentials-for-local-ci-and-headless-runs).
 
-To ship a release, follow [releasing the wizard](https://posthog.com/handbook/wizard-and-docs/wizard-releases) in the handbook.
-
 ### Local dev targets
 
 Four things can independently point at a local server — the wizard binary,
@@ -298,10 +295,9 @@ wizard run points. Full catalog: [`docs/local-dev.md`](docs/local-dev.md).
 - **[wizard-workbench](https://github.com/PostHog/wizard-workbench)** — the
   development and testing environment. Houses framework test apps (Next.js,
   React Router, Django, Flask, Laravel, SvelteKit, Swift, TanStack, FastAPI)
-  with no PostHog installed, plus a `phrocs`-driven local dev stack that runs
-  the context mill and the wizard build together with hot reload. The MCP
-  server runs from the posthog hogli stack. Use this to develop and test wizard
-  changes against real projects.
+  with no PostHog installed, plus an `mprocs`-driven local dev stack that runs
+  context-mill + MCP + the wizard together with hot reload. Use this to develop
+  and test wizard changes against real projects.
 - **[warlock](https://github.com/PostHog/warlock)** — the security scanner
   engine for PostHog's agentic flows. Bundles YARA-X rules for prompt injection,
   exfiltration, destructive operations, supply chain attacks, hardcoded secrets,

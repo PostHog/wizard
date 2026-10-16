@@ -3,7 +3,7 @@
 **Purpose:** mirror the wizard's own LLM calls into the developer's PostHog
 project so you can watch them in the AI Observability tab while iterating.
 
-**Owner:** Wizard & Docs team · **Availability:** dev / test builds only — the flag
+**Owner:** wizard team · **Availability:** dev / test builds only — the flag
 is stripped from published builds. Not a customer feature.
 
 ---

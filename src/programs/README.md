@@ -118,103 +118,18 @@ code, so an import of a sibling program or the registry fails with TS6307; see
 
 ## Session store and task streams
 
-### Session store
-
-[`SessionStore`](session/session-store.ts) holds one run's state.
-
-| It holds | Written by |
-| --- | --- |
-| The `WizardSession`: launch values, detection, the login, readiness, the run phase and the outro | The host builds it with `buildSession(args)` from its launch values. `runProgram` fills in the rest. |
-| The tasks, status messages, event plan and handoff report | `runProgram`, from the agent's progress events |
-| The open question or task notice | `runProgram`, until a screen or an embedder answers it |
-
-Every write goes through a setter, and `subscribe` tells a reader about each
-change. Programs write to the store. Hosts read from it: the TUI renders it, and
-the task stream pushes it.
-
-Each host builds its own store, one per host. The TUI layers its `WizardStore`
-on top of one, headless uses one as is, and an embedder builds one with
-`new SessionStore(buildSession(...))`. The TUI and headless never share state.
-
-### Task streams
-
-A task stream pushes the run's state into the PostHog app while it runs.
-Onboarding is the first place that shows it.
-[`TaskStreamPush`](session/task-stream/task-stream-push.ts) subscribes to the
-store and sends a payload on each change.
-
-- **What it carries.** The tasks and their status, the run phase, the event
-  plan, a notice when the terminal waits on `wizard_ask`, an error, and the
-  final handoff report. A sensitive question's text is never sent.
-- **Where it goes.** The `wizard-run-sync` flag picks one remote destination
-  per run:
-
-  | Flag value | Destination | Endpoint |
-  | --- | --- | --- |
-  | `wizard-run` | [`WizardRunSync`](session/task-stream/wizard-run-sync.ts) | `/api/projects/<id>/wizard/runs/` |
-  | Anything else | [`PostHogDestination`](session/task-stream/destinations/posthog.ts) | `/api/projects/<id>/wizard/sessions/` |
-
-  A cloud run with no `--run-id` always uses `PostHogDestination`.
-- **When.** The TUI opens the stream once the user has picked a program.
-  Headless opens it at the start of the run. Both close it when the run ends,
-  and flush the last phase first.
-- **`--no-telemetry`.** Turns off the push to PostHog. A local log still works.
-- **`--task-stream-log [path]`.** Also appends every payload to a local JSONL
-  file. The default path is `/tmp/posthog-wizard-task-stream.jsonl`.
-  Non-production builds only.
-- **`--ci`.** Writes the local file only, and never pushes to PostHog. See
-  [headless](../headless/README.md#modes-and-callers).
+[`session-store.ts`](session/session-store.ts) holds one run's state. See
+[the session store](../../docs/developer-interfaces.md#the-session-store).
+[`task-stream-push.ts`](session/task-stream/task-stream-push.ts) pushes it to
+PostHog. See
+[WizardRun synchronization](../../docs/local-dev.md#wizardrun-synchronization).
 
 ## Login and signup
 
-`runProgram` logs in once per store through [`logIn`](login.ts). A login the
-caller passes wins, then the store's, then a credentials provider's. The TUI's
-provider runs the browser flow in [`src/tui/auth`](../tui/auth/project-data.ts).
-Shared token code lives in [`oauth`](oauth/tokens.ts) and
-[`@shared/oauth-session`](../shared/oauth-session.ts).
-
-### OAuth
-
-- **Flow.** OAuth with PKCE. The wizard starts a local callback server on the
-  first free port in `OAUTH_PORTS` and opens the authorize page in the browser.
-  The user grants access to one project. See
-  [`oauth.ts`](../tui/auth/oauth.ts).
-- **Fallback.** When the browser can't reach the callback, as on a remote
-  machine, the user pastes the callback URL or the code into the terminal.
-- **Scopes.** The wizard asks for `WIZARD_OAUTH_SCOPES` in
-  [`constants.ts`](../shared/constants.ts). A program adds its own with
-  `oauthScopeAdditions`, such as `external_data_source:write` for warehouse
-  sources.
-- **Narrower grants.** PostHog can grant fewer scopes than asked. The user can
-  deselect a scope, and PostHog drops any scope the OAuth app can't have. The
-  wizard logs what is missing and carries on. It stops only when
-  `event_definition:write` is missing, because it needs it to finish setup.
-- **Region.** The token response names the region, `us` or `eu`. When it
-  doesn't, the wizard asks both regions who the token belongs to. Every app, API
-  and MCP URL follows from that. `--base-url` pins every origin instead.
-- **Refresh.** The token refreshes itself when less than 50 minutes are left.
-  Some callers also refresh it after a `401`. Each refresh rotates the refresh token too. Concurrent
-  callers share one refresh.
-- **API key.** `--api-key` logs in with a personal API key instead, with no
-  browser. CI and headless runs use it. See
-  [`api-key-login.ts`](api-key-login.ts).
-
-### Account provisioning
-
-`wizard --signup --email you@example.com` creates a PostHog account, an
-organization and a project without a browser login. The account goes to US
-Cloud. `--region eu` picks EU in builds that offer the flag.
-
-- It calls PostHog's agentic provisioning endpoints under
-  `/api/agentic/provisioning/` and `/api/agentic/oauth/token`, in
-  [`provisioning.ts`](../shared/utils/provisioning.ts).
-- The organization is named after the git remote's owner. Without a remote, it
-  takes the email's domain, unless that is a free email provider. The project is
-  named after the repo, or else the folder.
-- If the email already has an account, the wizard switches to the normal login.
-- After a `posthog-integration` run, the wizard opens a one-time link from
-  `/api/agentic/provisioning/deep_links` that logs the user in to their new
-  project.
+[`login.ts`](login.ts) logs in once per store. The root README covers
+[scopes](../../README.md#required-api-key-scopes), the
+[OAuth app scope ceiling](../../README.md#oauth-app-scope-ceiling), and
+[signup](../../README.md#headless-signup--install-agents--ci).
 
 ## Add a program
 

@@ -16,21 +16,6 @@ builds. It owns:
   among them. Its intro, outro and log lines are `consoleLog`'s, the printer
   commands that are not program runs use.
 
-## Modes and callers
-
-Two flags start a headless run. Both go through `runNonInteractive` to `runHeadless`, and differ in who calls them and where the run's state goes.
-
-| Mode | Flag | Builds | Callers | Run state goes to |
-| --- | --- | --- | --- | --- |
-| `ci` | `--ci` | Non-production only | Wizard CI, the workbench, benchmarks, smoke tests | A local JSONL file (`--task-stream-log`), never PostHog |
-| `headless` | `--headless-DONOTUSE-EXPERIMENTAL` | Every build, hidden from `--help` | Cloud runs from the PostHog app | The PostHog backend, so the web app shows live progress. `--no-telemetry` turns the push off |
-
-- Both log in with an API key (`--api-key`), never OAuth, and answer every step with its default.
-- The headless flag has a deliberately scary name. Its contract is unstable, so external callers must not rely on it. [`src/shared/headless-mode.ts`](../shared/headless-mode.ts) is the only file that names it.
-- A cloud run carries `--run-id` (or `POSTHOG_WIZARD_RUN_ID`), the WizardRun it reports under.
-- A cloud run's caller sets `POSTHOG_HANDOFF_OUTPUT_PATH`, and the wizard writes the final report to that file.
-- The Growth team owns the headless runner and cloud runs.
-
 ## Entry and imports
 
 Headless's one entry is [`index.ts`](index.ts), `@headless`; no other layer

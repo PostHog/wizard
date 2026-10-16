@@ -176,8 +176,6 @@ Choose the wizard binary through its invocation:
 | Workbench harness | `WIZARD_PATH=<repo>` → `$WIZARD_PATH/dist/bin.js` | whatever you last built |
 | Published | `npx @posthog/wizard` | production |
 
-To test a release candidate before it ships, follow [releasing the wizard](https://posthog.com/handbook/wizard-and-docs/wizard-releases) in the handbook.
-
 To confirm what a run actually used, look for the `[agent-runner] targets` line
 in the debug log — it prints the build, skills url, MCP url, and PostHog host
 together. The log is `posthog-wizard.log` in the temp directory
@@ -185,17 +183,6 @@ together. The log is `posthog-wizard.log` in the temp directory
 `POSTHOG_WIZARD_LOG_FILE` names another file.
 
 ## Run the full stack locally
-
-Run everything on your machine only when one change sweeps across PostHog, the
-AI gateway, the wizard, and the MCP server.
-
-| Service | Port | Started by |
-|---|---|---|
-| PostHog | 8010 | `hogli up` in the posthog repo |
-| AI gateway | 8080 | the `ai-gateway` hogli unit |
-| MCP server | 8787 | the posthog hogli stack |
-| Context mill | 8765 | the `context-mill` pane in the workbench |
-| mitmproxy | 8888 | the `mitmproxy` pane in the workbench, optional |
 
 1. Clone [ai-gateway](https://github.com/PostHog/ai-gateway) next to posthog,
    or point `AI_GATEWAY_REPO` at your clone.
