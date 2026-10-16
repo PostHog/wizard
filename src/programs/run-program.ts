@@ -46,6 +46,8 @@ import { reportCodebaseScan } from './codebase-scan';
 import { IS_PRODUCTION_BUILD } from '@env';
 import type { QuestionKey } from './detection/decisions/questions';
 import { logIn } from './login';
+import { getTraits, traitTags } from './traits';
+import { resolveFlow } from './flow';
 import { applyAgentProgress, type SessionStore } from './session/session-store';
 import type { WizardSession } from './session/wizard-session';
 import type { ProgramConfig, ProgramRunStep } from './program-step';
@@ -410,6 +412,14 @@ async function invokeProgram(
             handoffNotebook:
               agentRun.handoffNotebook ?? planned.config.handoffNotebook,
             agentFlow: planned.config.agentFlow,
+            agentPrompts: planned.config.agentPrompts,
+            taskGraph: planned.config.flow
+              ? () =>
+                  resolveFlow(planned.config.flow!, {
+                    traits: getTraits(session(), planned.config.id),
+                    flags: flags.flags,
+                  })
+              : undefined,
             excludedTaskTypes: planned.config.excludedTaskTypes,
             seedTasks: planned.config.seedTasks
               ? () => planned.config.seedTasks!(session())
@@ -422,6 +432,7 @@ async function invokeProgram(
                       planned.config.decisions ?? [],
                     )
                 : undefined,
+            traitTags: () => traitTags(getTraits(session(), planned.config.id)),
             hooks: sessionHooks(agentRun, session, (outcomes) => {
               if (scoped) scoped.frameworkContext[TASK_OUTCOMES_KEY] = outcomes;
               else store.setFrameworkContext(TASK_OUTCOMES_KEY, outcomes);

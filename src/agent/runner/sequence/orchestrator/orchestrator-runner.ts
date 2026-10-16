@@ -59,7 +59,10 @@ import type {
 import { createEmitSpinner } from '../../shared/progress-collector';
 import { createAskBridge } from '../../shared/ask';
 import {
+  areBundledPromptsEnabled,
   areSeededTasksEnabled,
+  isSkillResolverEnabled,
+  isTypedGraphEnabled,
   getHarness,
   resolveHarness,
   resolveStageOverrides,
@@ -84,10 +87,18 @@ import {
 import { RunMetrics } from './run-metrics';
 import { dependencyClosure, uncoveredBySink } from './queue-tools';
 import { deferSeededTasks } from './seeded-deps';
+import { createSkillPicker } from './skill-picks';
+import {
+  graphDiff,
+  graphsAgree,
+  typedEdges,
+  type TaskGraph,
+} from './task-graph';
 import { LONGER_ASK_TIMEOUT_MS, shouldDisableAsk } from '@shared/ask-policy';
 import {
   agentRunTools,
   assembleSeedPrompt,
+  bundledRegistry,
   assembleTaskPrompt,
   loadAgentRegistry,
   promptModelFor,
@@ -95,6 +106,7 @@ import {
   taskModelSpec,
   ASK_TOOL,
   type AgentPrompt,
+  type AgentRegistry,
   type OrchestratorPromptContext,
 } from '../../../agent-prompt-loader';
 
@@ -226,31 +238,7 @@ async function fetchSkillMenuEntries(
   return Object.values(menu.categories).flat();
 }
 
-/** Menu id for a bare skill id + framework via the menu's declared group/framework/default fields; undefined when nothing matches. */
-export function resolveSkillVariantId(
-  entries: readonly SkillEntry[],
-  skillId: string,
-  framework: string | undefined,
-): string | undefined {
-  if (entries.some((e) => e.id === skillId)) return skillId;
-  if (!framework) return undefined;
-  const family = entries.filter(
-    (e) => e.group === skillId && e.framework === framework,
-  );
-  return (family.find((e) => e.default) ?? family[0])?.id;
-}
-
-/**
- * The framework reference is the full `integration` skill. `input.skillId` is
- * the bare framework (e.g. `django`), but the skill menu ids it as
- * `integration-<variant>`.
- */
-function resolveReferenceSkillId(
-  entries: readonly SkillEntry[],
-  framework: string,
-): string | undefined {
-  return resolveSkillVariantId(entries, 'integration', framework);
-}
+export { resolveSkillVariantId } from './skill-picks';
 
 /**
  * How long an optional step's notice waits for an answer.
@@ -608,6 +596,73 @@ export function effectiveExcludedTaskTypes(
   ];
 }
 
+/** The caller's typed graph, or undefined when it has none or building it failed. */
+function readTaskGraph(
+  config: SequenceContext['config'],
+): TaskGraph | undefined {
+  try {
+    return config.taskGraph?.();
+  } catch (error) {
+    logToFile(`[orchestrator] typed graph unavailable: ${String(error)}`);
+    return undefined;
+  }
+}
+
+/** Logs where the graph's conditions and the program's exclusion list disagree. */
+function compareExclusions(
+  flow: string,
+  excludedTypes: readonly string[],
+  graph: TaskGraph,
+): void {
+  const ci = new Set(ciExcludedTaskTypes());
+  const program = excludedTypes.filter((t) => !ci.has(t)).sort();
+  const typed = [...graph.excluded].sort();
+  if (program.join(',') === typed.join(',')) return;
+  logToFile(
+    `[orchestrator] exclusions differ: program=${program.join(
+      ',',
+    )} graph=${typed.join(',')}`,
+  );
+  analytics.wizardCapture('orchestrator exclusions differ', {
+    flow,
+    program_excluded: program,
+    graph_excluded: typed,
+  });
+}
+
+/** The flow's prompts: the caller's bundle when its flag is on, falling back to context-mill's on any failure. */
+async function loadRegistry(
+  config: SequenceContext['config'],
+  boot: SequenceContext['boot'],
+  flow: string,
+  options: Parameters<typeof loadAgentRegistry>[2],
+): Promise<AgentRegistry> {
+  if (config.agentPrompts && areBundledPromptsEnabled(boot.wizardFlags)) {
+    try {
+      const bundled = bundledRegistry(
+        await config.agentPrompts(),
+        flow,
+        options,
+      );
+      if (bundled.seed) {
+        analytics.wizardCapture('orchestrator agent prompts loaded', {
+          source: 'bundle',
+          flow,
+        });
+        return bundled;
+      }
+      logToFile(`[orchestrator] bundled prompts for ${flow} have no seed`);
+    } catch (error) {
+      logToFile(`[orchestrator] bundled prompts failed: ${String(error)}`);
+    }
+    analytics.wizardCapture('orchestrator agent prompts loaded', {
+      source: 'fallback',
+      flow,
+    });
+  }
+  return loadAgentRegistry(boot.skillsBaseUrl, flow, options);
+}
+
 export async function runOrchestrator(
   context: SequenceContext,
 ): Promise<SequenceResult> {
@@ -672,15 +727,25 @@ async function executeOrchestrator(
   // once up front: its types drive enqueue validation, and resolving a task to
   // its run config is then synchronous, with no mid-drain network latency.
   const flow = config.agentFlow ?? programId;
-  const registry = await loadAgentRegistry(boot.skillsBaseUrl, flow, {
-    exclude: effectiveExcludedTaskTypes(config, boot.wizardFlags),
+  const taskGraph = readTaskGraph(config);
+  const typedGraph =
+    taskGraph !== undefined &&
+    isTypedGraphEnabled(flow, boot.wizardFlags, boot.wizardFlagPayloads);
+  const excludedTypes = effectiveExcludedTaskTypes(config, boot.wizardFlags);
+  if (taskGraph) compareExclusions(flow, excludedTypes, taskGraph);
+  const registryOptions = {
+    exclude:
+      typedGraph && taskGraph
+        ? [...ciExcludedTaskTypes(), ...taskGraph.excluded]
+        : excludedTypes,
     // Baked into the prompts at load, so enqueue, dispatch, and telemetry all read one effective spec.
     overrides: resolveStageOverrides(
       programId,
       boot.wizardFlags,
       boot.wizardFlagPayloads,
     ),
-  });
+  };
+  const registry = await loadRegistry(config, boot, flow, registryOptions);
   if (signal?.aborted) return cancelledRun();
   const seedPrompt = registry.seed;
   if (!seedPrompt) {
@@ -801,9 +866,13 @@ async function executeOrchestrator(
   // (agent-skill commands like replay-vision) would otherwise leak that id in
   // here as a bogus framework after the caller overwrites the detect result.
   const framework = input.integration ?? input.skillId ?? undefined;
-  const referenceSkillId = framework
-    ? resolveReferenceSkillId(menuSkillEntries, framework)
-    : undefined;
+  const skills = createSkillPicker({
+    entries: menuSkillEntries,
+    framework,
+    traits: config.traitTags?.() ?? {},
+    useCriteria: isSkillResolverEnabled(boot.wizardFlags),
+  });
+  const referenceSkillId = skills.reference();
   if (referenceSkillId) {
     const ref = await installSkillById(
       referenceSkillId,
@@ -840,9 +909,7 @@ async function executeOrchestrator(
   const missingVariants: string[] = [];
   for (const type of registry.types) {
     for (const skillId of registry.get(type)?.skills ?? []) {
-      if (resolveSkillVariantId(menuSkillEntries, skillId, framework)) {
-        continue;
-      }
+      if (skills.pick(type, skillId)) continue;
       missingVariants.push(`${type}/${skillId}`);
       logToFile(
         `[orchestrator] no skill variant type=${type} skill=${skillId} framework=${
@@ -1139,6 +1206,32 @@ async function executeOrchestrator(
   }
   if (deferred.length > 0) renderQueue();
 
+  if (taskGraph) {
+    const diff = graphDiff(store, taskGraph);
+    const agree = graphsAgree(diff);
+    logToFile(
+      `[orchestrator] typed graph ${agree ? 'matches' : 'differs'} (${
+        typedGraph ? 'decides' : 'shadow'
+      })${agree ? '' : ` ${JSON.stringify(diff)}`}`,
+    );
+    analytics.wizardCapture('orchestrator graph diff', {
+      flow,
+      deciding: typedGraph ? 'typed' : 'planner',
+      agree,
+      missing_types: diff.missingTypes,
+      extra_types: diff.extraTypes,
+      edge_diff_types: diff.edges.map((e) => e.type),
+    });
+    if (typedGraph && !agree) {
+      const rewired = store.replaceDependencies(typedEdges(store, taskGraph));
+      if (rewired.applied) renderQueue();
+      else
+        logToFile(
+          `[orchestrator] typed graph not applied: ${rewired.reason ?? ''}`,
+        );
+    }
+  }
+
   // Canary for the one-way rule. The enqueue guard rejects the edge outright, so
   // this should never fire — but if it ever does, the seeded task has been
   // pulled back toward the front of the drain and its prompt lands mid-run
@@ -1227,11 +1320,7 @@ async function executeOrchestrator(
         // Agent prompts name the bare step-skill (`integration-v2-install`);
         // SDK-divergent steps ship per-framework variants, so resolve against
         // the menu with the session's framework before installing.
-        const variantId = resolveSkillVariantId(
-          menuSkillEntries,
-          skillId,
-          framework,
-        );
+        const variantId = skills.pick(task.type, skillId);
         if (!variantId) {
           logToFile(
             `[orchestrator] no skill variant type=${

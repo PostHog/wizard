@@ -74,6 +74,11 @@ export function resolveStageOverrides(
 }
 
 export { isOrchestratorEnabled, areSeededTasksEnabled } from './orchestrator';
+export {
+  areBundledPromptsEnabled,
+  isSkillResolverEnabled,
+  isTypedGraphEnabled,
+} from './context-mill';
 export type {
   ConfigFlag,
   FlagRoute,
