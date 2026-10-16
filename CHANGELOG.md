@@ -1,5 +1,20 @@
 # Changelog
 
+## [2.84.0](https://github.com/PostHog/wizard/compare/v2.83.0...v2.84.0) (2026-10-16)
+
+
+### Features
+
+* **detection:** add the Decisions judgment service ([#1472](https://github.com/PostHog/wizard/issues/1472)) ([f8042ef](https://github.com/PostHog/wizard/commit/f8042efea081a3f4b628d882a14b09f47fdf4a27))
+* **warehouse:** detect tools in every ecosystem the wizard installs into ([#1444](https://github.com/PostHog/wizard/issues/1444)) ([c288dcf](https://github.com/PostHog/wizard/commit/c288dcf0a4d63c669bb8c6726391012cc548f37c))
+* **warehouse:** download the detector registry from posthog's tool catalog ([#1442](https://github.com/PostHog/wizard/issues/1442)) ([5730e67](https://github.com/PostHog/wizard/commit/5730e67d2e82874727937dc2e71028e310d82142))
+* **warehouse:** share one codebase scan and report it to posthog ([#1443](https://github.com/PostHog/wizard/issues/1443)) ([029d5b0](https://github.com/PostHog/wizard/commit/029d5b0b00fde31d75c80b2e2019b42a52e3bbe9))
+
+
+### Bug Fixes
+
+* **self-driving:** ask before setup when the repo uses a different project ([#1453](https://github.com/PostHog/wizard/issues/1453)) ([8f33354](https://github.com/PostHog/wizard/commit/8f3335458dd585646f193b824654a8dba6cbd00c))
+
 ## [2.83.0](https://github.com/PostHog/wizard/compare/v2.82.0...v2.83.0) (2026-10-14)
 
 
