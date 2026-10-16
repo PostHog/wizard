@@ -91,6 +91,38 @@ describe('graphDiff', () => {
     expect(graphsAgree(graphDiff(store, CHAIN))).toBe(true);
   });
 
+  it('catches a fanned-out task wired to the wrong sibling', () => {
+    const graph: TaskGraph = {
+      sink: 'report',
+      excluded: [],
+      nodes: {
+        verify: { dependsOn: [], picked: true },
+        instrument: {
+          dependsOn: ['verify'],
+          picked: true,
+          matchInputs: ['service_name'],
+        },
+        report: { dependsOn: ['instrument'] },
+      },
+    };
+    const store = newStore();
+    const api = { service_name: 'api' };
+    const worker = { service_name: 'worker' };
+    const verifyApi = store.enqueue({ type: 'verify', inputs: api });
+    store.enqueue({ type: 'verify', inputs: worker });
+    const instrumentWorker = store.enqueue({
+      type: 'instrument',
+      inputs: worker,
+      dependsOn: [verifyApi.id],
+    });
+    store.enqueue({ type: 'report', dependsOn: [instrumentWorker.id] });
+    expect(graphDiff(store, graph).edges).toContainEqual({
+      type: 'instrument',
+      missing: ['verify'],
+      extra: ['verify'],
+    });
+  });
+
   it('names a dropped edge, a missing node and an extra one', () => {
     const store = newStore();
     store.enqueue({ type: 'install' });

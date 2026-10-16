@@ -97,7 +97,7 @@ reaches the UI.
 | The session store every host builds           | [`session`](session/session-store.ts): the store and the task stream              |
 | Running one program, and its input and outcome | [`run-program.ts`](run-program.ts), [`detect-program.ts`](detect-program.ts) and [`program-input.ts`](program-input.ts) |
 | What a program's `run` receives from a runner | [`runner-context.ts`](runner-context.ts)                                          |
-| One orchestrator program's task graph and prompts | Its folder's `flow.ts` and `agents/<type>.md`; see [orchestrator flows](#orchestrator-flows) |
+| One orchestrator program's task graph and prompts | Its folder's `flow.ts` and `agent/<type>.md`; see [orchestrator flows](#orchestrator-flows) |
 | The run's project traits                      | [`traits.ts`](traits.ts), with Decisions thresholds in [`detection/confidence.ts`](detection/confidence.ts) |
 | Framework detection and project scoping       | [`detection`](detection)                                                          |
 | Framework integrations                        | [`frameworks`](frameworks) and [`frameworks/registry.ts`](frameworks/registry.ts) |
@@ -129,7 +129,7 @@ dependents inherit its edges. The run hands the result to the orchestrator as
 `RunConfig.taskGraph`. A `when` treats a missing trait as "run the node", and
 lists the traits it reads in `reads`, so the program's `decisions` ask for them.
 
-Each task's prompt is `agents/<type>.md`, the job to be done; the skills it
+Each task's prompt is `agent/<type>.md`, the job to be done; the skills it
 names carry the implementation detail. `pnpm bundle:agent-prompts` regenerates
 the program's `agent-prompts.ts` from that folder, which `agentPrompts` loads on
 first use. Tests in [`__tests__`](__tests__) fail when the module is stale, when

@@ -27,9 +27,9 @@ function readPrompts(dir: string): Record<string, string> {
 }
 
 describe.each(BUNDLES)('%s agent prompts', (program, flow, config) => {
-  const own = readPrompts(path.join(PROGRAMS, program, 'agents'));
+  const own = readPrompts(path.join(PROGRAMS, program, 'agent'));
 
-  it('bundles its agents folder exactly (run `pnpm bundle:agent-prompts`)', async () => {
+  it('bundles its agent folder exactly (run `pnpm bundle:agent-prompts`)', async () => {
     expect(await config.agentPrompts!()).toEqual(own);
   });
 

@@ -140,7 +140,7 @@ export interface ProgramConfig {
   agentFlow?: string;
   /** This program's orchestrator task graph; see `./flow`. */
   flow?: Flow;
-  /** This program's agent prompts by task type, from its `agents/` folder; loaded on first use. */
+  /** This program's agent prompts by task type, from its `agent/` folder; loaded on first use. */
   agentPrompts?: () => Promise<Readonly<Record<string, string>>>;
   /**
    * Whether `publish_handoff` mirrors the run report into a PostHog notebook.

@@ -29,7 +29,7 @@ export interface GraphDiff {
   missingTypes: string[];
   /** Queued types the graph does not have, or excluded. */
   extraTypes: string[];
-  /** Per queued task, the ancestor types one graph has and the other lacks. */
+  /** Per queued task, the types of the ancestor tasks one graph has and the other lacks. */
   edges: { type: string; missing: string[]; extra: string[] }[];
 }
 
@@ -93,24 +93,21 @@ export function typedEdges(
   return edges;
 }
 
-function ancestorTypes(
+/** Every task id `id` runs after, transitively. */
+function ancestorIds(
   id: string,
   edgesOf: (id: string) => readonly string[],
-  typeOf: (id: string) => string | undefined,
 ): Set<string> {
   const seen = new Set<string>();
-  const types = new Set<string>();
   const visit = (current: string): void => {
     for (const dep of edgesOf(current)) {
       if (seen.has(dep)) continue;
       seen.add(dep);
-      const type = typeOf(dep);
-      if (type) types.add(type);
       visit(dep);
     }
   };
   visit(id);
-  return types;
+  return seen;
 }
 
 /** The planner's graph against the typed one. Ancestors, not direct edges, so a redundant edge is no difference. */
@@ -130,18 +127,16 @@ export function graphDiff(store: QueueStore, graph: TaskGraph): GraphDiff {
   const edges: GraphDiff['edges'] = [];
   for (const task of tasks) {
     if (!graph.nodes[task.type]) continue;
-    const planned = ancestorTypes(
+    const planned = ancestorIds(
       task.id,
       (id) => store.get(id)?.dependsOn ?? [],
-      typeOf,
     );
-    const expected = ancestorTypes(
-      task.id,
-      (id) => typed.get(id) ?? [],
-      typeOf,
-    );
-    const missing = [...expected].filter((t) => !planned.has(t)).sort();
-    const extra = [...planned].filter((t) => !expected.has(t)).sort();
+    const expected = ancestorIds(task.id, (id) => typed.get(id) ?? []);
+    // By task, so a fanned-out chain wired to the wrong sibling counts; reported by type.
+    const typesOf = (ids: string[]) =>
+      [...new Set(ids.flatMap((id) => typeOf(id) ?? []))].sort();
+    const missing = typesOf([...expected].filter((id) => !planned.has(id)));
+    const extra = typesOf([...planned].filter((id) => !expected.has(id)));
     if (missing.length > 0 || extra.length > 0) {
       edges.push({ type: task.type, missing, extra });
     }

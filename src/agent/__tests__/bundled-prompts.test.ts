@@ -57,7 +57,7 @@ const CONTEXT: OrchestratorPromptContext = {
 };
 
 function programPrompts(program: string): Record<string, string> {
-  const dir = path.join(ROOT, 'src', 'programs', program, 'agents');
+  const dir = path.join(ROOT, 'src', 'programs', program, 'agent');
   return Object.fromEntries(
     fs
       .readdirSync(dir)
