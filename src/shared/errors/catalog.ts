@@ -95,6 +95,17 @@ export const ERROR_CATALOG: Record<ErrorCode, ErrorCatalogEntry> = {
     retry: 'yes',
     description: 'Blocking external services are down.',
   },
+  [ErrorCodes.EnvDiskFull]: {
+    group: 'env',
+    retry: 'no',
+    description: 'The disk or disk quota that holds the project is full.',
+  },
+  [ErrorCodes.EnvFileAccessDenied]: {
+    group: 'env',
+    retry: 'no',
+    description:
+      'The wizard cannot write to the project: permission denied or read-only.',
+  },
   [ErrorCodes.DetectBadDirectory]: {
     group: 'detect',
     retry: 'no',
