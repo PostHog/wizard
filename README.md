@@ -155,46 +155,7 @@ npx @posthog/wizard@latest skill <skill-name>      # run one by name
 
 ## Wizard ownership
 
-Reviews are auto-requested via [`.github/CODEOWNERS`](.github/CODEOWNERS) — the
-file is the source of truth; this table just mirrors it for readability. The
-[wizard handbook](https://posthog.com/handbook/wizard-and-docs/wizard#who-owns-what)
-explains who owns what. `team-wizard-docs` is the default reviewer and owns the
-agent core, harness, hosts, and CLI; the team-owned paths below route review to
-their owning team instead.
-
-| Path | Owning team |
-|---|---|
-| `*` (everything else, including all other programs) | `@PostHog/team-wizard-docs` |
-| `src/agent/` | `@PostHog/team-wizard-docs` |
-| `src/programs/ai-observability/` | `@PostHog/team-ai-observability` |
-| `src/programs/audit/` | `@PostHog/team-fde` |
-| `src/programs/error-tracking/` | `@PostHog/team-error-tracking` |
-| `src/programs/error-tracking-upload-source-maps/` | `@PostHog/team-error-tracking` |
-| `src/programs/mcp-analytics/` | `@PostHog/mcp-analytics` |
-| `src/programs/metrics/` | `@PostHog/team-apm` |
-| `src/programs/migration/` | `@PostHog/team-fde` |
-| `src/programs/posthog-integration/` | `@PostHog/team-growth` |
-| `src/programs/replay-vision/` | `@PostHog/team-replay` |
-| `src/programs/revenue-analytics/` | `@PostHog/team-web-analytics` |
-| `src/programs/self-driving/` | `@PostHog/team-self-driving` |
-| `src/programs/warehouse-source/` | `@PostHog/team-warehouse-sources` |
-| `src/programs/web-analytics-doctor/` | `@PostHog/team-web-analytics` |
-| `src/tui/programs/ai-observability/` | `@PostHog/team-ai-observability` |
-| `src/tui/programs/audit/` | `@PostHog/team-fde` |
-| `src/tui/programs/error-tracking/` | `@PostHog/team-error-tracking` |
-| `src/tui/programs/error-tracking-upload-source-maps/` | `@PostHog/team-error-tracking` |
-| `src/tui/programs/metrics/` | `@PostHog/team-apm` |
-| `src/tui/programs/migration/` | `@PostHog/team-fde` |
-| `src/tui/programs/posthog-integration/` | `@PostHog/team-growth` |
-| `src/tui/programs/revenue-analytics/` | `@PostHog/team-web-analytics` |
-| `src/tui/programs/self-driving/` | `@PostHog/team-self-driving` |
-| `src/tui/programs/warehouse-source/` | `@PostHog/team-warehouse-sources` |
-
-Ownership is by directory. Programs not listed above
-(`agent-skill`, `feature-flags`), the shared program code
-and the tools (`src/tools`, `src/tui/tools`) fall through the default and are
-owned by `team-wizard-docs`. Today CODEOWNERS only auto-requests review —
-approval is not a merge gate.
+[`.github/CODEOWNERS`](.github/CODEOWNERS) is the source of truth, and auto-requests reviews from each owner. The [wizard handbook](https://posthog.com/handbook/wizard-and-docs/wizard#who-owns-what) explains who owns what.
 
 ## Headless signup + install (agents / CI)
 
@@ -763,30 +724,7 @@ Example prompt — explore against
 
 ## Releasing
 
-Release-please opens the release PR, and merging it publishes
-`@posthog/wizard` to npm through [`publish.yml`](.github/workflows/publish.yml).
-Do not run `npm publish` by hand. Follow the checklist in
-[docs/releasing.md](docs/releasing.md).
-
-# Health checks
-
-`src/shared/health-checks/` checks skills download origins before the wizard runs.
-The entry point is `evaluateWizardReadiness()`, which only blocks on skill downloads:
-
-| Decision            | Meaning                                                         |
-| ------------------- | --------------------------------------------------------------- |
-| `yes`               | Skills are reachable — proceed without outage warnings.         |
-| `no`                | Neither skills origin is reachable. Interactive runs show the outage and stop; non-interactive runs report it and continue. |
-
-### Module layout
-
-| File | Responsibility |
-| --- | --- |
-| `types.ts` | Enums, interfaces (`ServiceHealthStatus`, `AllServicesHealth`, etc.) |
-| `endpoints.ts` | Direct gateway (`/readyz`) and skills origin (`skill-menu.json`) checks |
-| `readiness.ts` | `checkAllExternalServices`, `evaluateWizardReadiness`, readiness config |
-| `index.ts` | Barrel re-export |
-| `testme.md` | Test running instructions and endpoint reference |
+Release-please opens the release PR, and merging it publishes `@posthog/wizard` to npm. Don't run `npm publish` by hand. See [releasing the wizard](https://posthog.com/handbook/wizard-and-docs/wizard-releases) in the handbook.
 
 ## What blocks a run
 

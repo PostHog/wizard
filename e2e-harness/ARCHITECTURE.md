@@ -205,5 +205,5 @@ route for real-run snapshot review: each test definition runs `tui-snapshots`,
 the real-TUI screens are rasterized to PNGs, and a workbench PR shows the
 current run's frames for a human to review. Nothing compares them with a
 baseline. A `/wizard-ci-snapshots` comment on a wizard PR starts it. See
-[releasing](../docs/releasing.md#4-attach-snapshots) and `services/wizard-ci/`
+[releasing the wizard](https://posthog.com/handbook/wizard-and-docs/wizard-releases) and `services/wizard-ci/`
 in the workbench.
