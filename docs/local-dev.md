@@ -182,6 +182,29 @@ together. The log is `posthog-wizard.log` in the temp directory
 (`/tmp/posthog-wizard.log` on macOS and Linux) unless `--log-file` or
 `POSTHOG_WIZARD_LOG_FILE` names another file.
 
+## Run the full stack locally
+
+1. Clone [ai-gateway](https://github.com/PostHog/ai-gateway) next to posthog,
+   or point `AI_GATEWAY_REPO` at your clone.
+2. In posthog's `.env.local`, set `WIZARD_GATEWAY_URL=http://localhost:8080`,
+   `WIZARD_GATEWAY_MINT_KEY`, and `WIZARD_GATEWAY_CLIENT_IDS`. Local PostHog
+   then mints wizard tokens for the local gateway, and the mint response tells
+   the wizard which gateway URL to call.
+3. Add the gateway unit and start PostHog:
+   `bin/hogli dev:apply <intents> --include ai-gateway`, then `bin/hogli up`.
+   The unit runs `bin/start-ai-gateway`, which provisions a local key and
+   serves the gateway on `:8080`.
+4. Start the [workbench](https://github.com/PostHog/wizard-workbench) with
+   `phrocs` for the context mill and the wizard build.
+5. Run the wizard with the local flags:
+
+   ```bash
+   pnpm try --install-dir=<path> --local-dev
+   ```
+
+The `[agent-runner] targets` line and the `[gateway] minted` line in the log
+show which servers the run used.
+
 ## Implementation
 
 `src/shared/local-dev.ts` defines the endpoints and precedence. Downstream code

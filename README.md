@@ -155,35 +155,7 @@ npx @posthog/wizard@latest skill <skill-name>      # run one by name
 
 ## Wizard ownership
 
-Reviews are auto-requested via [`.github/CODEOWNERS`](.github/CODEOWNERS) — the
-file is the source of truth; this table just mirrors it for readability.
-`team-wizard-docs` is the default reviewer; the team-owned paths below
-route review to their owning team instead.
-
-| Path | Owning team |
-|---|---|
-| `*` (everything else, including all other programs) | `@PostHog/team-wizard-docs` |
-| `src/agent/` | `@PostHog/team-wizard-docs` |
-| `src/programs/ai-observability/` | `@PostHog/team-ai-observability` |
-| `src/programs/posthog-integration/` | `@PostHog/team-wizard-docs` |
-| `src/programs/error-tracking-upload-source-maps/` | `@PostHog/team-error-tracking` |
-| `src/programs/mcp-analytics/` | `@PostHog/team-mcp-analytics` |
-| `src/programs/metrics/` | `@PostHog/apm` |
-| `src/programs/replay-vision/` | `@PostHog/team-replay` |
-| `src/programs/revenue-analytics/` | `@PostHog/team-web-analytics` |
-| `src/programs/self-driving/` | `@PostHog/team-self-driving` |
-| `src/programs/warehouse-source/` | `@PostHog/team-warehouse-sources` |
-| `src/programs/web-analytics-doctor/` | `@PostHog/team-web-analytics` |
-| `src/tui/programs/error-tracking-upload-source-maps/` | `@PostHog/team-error-tracking` |
-| `src/tui/programs/revenue-analytics/` | `@PostHog/team-web-analytics` |
-| `src/tui/programs/self-driving/` | `@PostHog/team-self-driving` |
-| `src/tui/programs/warehouse-source/` | `@PostHog/team-warehouse-sources` |
-
-Ownership is by directory. Programs not listed above
-(`agent-skill`, `audit`, `error-tracking`, `migration`), the shared program code
-and the tools (`src/tools`, `src/tui/tools`) fall through the default and are
-owned by `team-wizard-docs`. Today CODEOWNERS only auto-requests review —
-approval is not a merge gate.
+[`.github/CODEOWNERS`](.github/CODEOWNERS) is the source of truth, and auto-requests reviews from each owner. The [wizard handbook](https://posthog.com/handbook/wizard-and-docs/wizard#who-owns-what) explains who owns what.
 
 ## Headless signup + install (agents / CI)
 

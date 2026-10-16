@@ -116,6 +116,21 @@ which maps `@programs/*`. A program's project references only the shared program
 code, so an import of a sibling program or the registry fails with TS6307; see
 [layer boundaries](../../.claude/skills/wizard-development/references/ARCHITECTURE.md#layer-boundaries).
 
+## Session store and task streams
+
+[`session-store.ts`](session/session-store.ts) holds one run's state. See
+[the session store](../../docs/developer-interfaces.md#the-session-store).
+[`task-stream-push.ts`](session/task-stream/task-stream-push.ts) pushes it to
+PostHog. See
+[WizardRun synchronization](../../docs/local-dev.md#wizardrun-synchronization).
+
+## Login and signup
+
+[`login.ts`](login.ts) logs in once per store. The root README covers
+[scopes](../../README.md#required-api-key-scopes), the
+[OAuth app scope ceiling](../../README.md#oauth-app-scope-ceiling), and
+[signup](../../README.md#headless-signup--install-agents--ci).
+
 ## Add a program
 
 Follow the

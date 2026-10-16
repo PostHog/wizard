@@ -37,3 +37,10 @@ relative path. Nothing enforces this: the agent's project maps `@agent`,
 them. The agent itself may import `@env`, `@shared/*` and `@utils/*`, and
 nothing else; see
 [layer boundaries](../../.claude/skills/wizard-development/references/ARCHITECTURE.md#layer-boundaries).
+
+## Tools
+
+[`tools/mcp.ts`](tools/mcp.ts) lists the wizard tools, and
+[`tools/tools.ts`](tools/tools.ts) implements them. Pi registers the same tools
+in [`harness/pi/tools.ts`](runner/harness/pi/tools.ts), and reaches the PostHog
+MCP server through [`harness/pi/mcp.ts`](runner/harness/pi/mcp.ts).

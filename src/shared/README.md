@@ -70,6 +70,12 @@ await resolveApiKeyProject(apiKey, { onWarning: (line) => log.warn(line) });
 
 A diagnostic with no caller to show it goes to the log file (`logToFile`).
 
+## Skills
+
+`@shared/skill-menu` and `@shared/skill-install`, listed above, fetch and
+install [context-mill](https://github.com/PostHog/context-mill) skills.
+[`skill-install.ts`](skill-install.ts) has the details.
+
 ## Intent
 
 Shared exists so the agent, programs, TUI, headless and CLI code can use one implementation of the things they all need without importing each other. A helper belongs here when it needs no surface-specific dependency and would otherwise be copied. Module state belongs here only when the whole process shares one copy of it, as in the list above.
