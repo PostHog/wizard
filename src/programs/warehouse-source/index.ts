@@ -42,6 +42,7 @@ function buildPrompt(session: ProgramSession): string {
 }
 
 export const config: ProgramConfig = {
+  decisions: ['owns_database'],
   command: 'warehouse',
   description: 'Detect and connect Data Warehouse sources',
   id: 'warehouse-source',

@@ -44,6 +44,8 @@ export interface OrchestratorPromptContext {
   examplePath?: string;
   /** Path to the framework's rules (COMMANDMENTS.md), if available. */
   commandmentsPath?: string;
+  /** Detected facts about the project, one line each. */
+  facts?: readonly string[];
 }
 
 function projectContext(ctx: OrchestratorPromptContext): string {
@@ -57,7 +59,18 @@ Project context:
 - PostHog Project ID: ${ctx.projectId}
 - PostHog public token: ${ctx.projectApiKey}
 - PostHog Host: ${ctx.host.apiHost}
-- PostHog app URL (base for any link you show the user in a browser): ${ctx.host.appHost}`;
+- PostHog app URL (base for any link you show the user in a browser): ${
+    ctx.host.appHost
+  }${detectedFacts(ctx.facts)}`;
+}
+
+/** Facts from the wizard's pre-run scan; a model judged them, so agents confirm before acting. */
+export function detectedFacts(facts: readonly string[] | undefined): string {
+  if (!facts || facts.length === 0) return '';
+  return `
+
+Detected before this run (confirm in the code before acting on any):
+${facts.map((fact) => `- ${fact}`).join('\n')}`;
 }
 
 /** Points the agent at the framework's reference integration to learn patterns from. */

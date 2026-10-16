@@ -13,6 +13,7 @@ import {
 import { tryGetPackageJson, isUsingTypeScript } from '@utils/setup-utils';
 import { analytics } from '@utils/analytics';
 import { detectFramework } from '../detection/framework';
+import { IS_PRODUCTION_BUILD } from '@env';
 import { gatherFrameworkContext } from '../detection/context';
 import { noteDetectedFramework } from '../detection/detected-framework';
 import { scopeInstallDirToProject } from '../detection/project-scope';
@@ -252,6 +253,16 @@ export const config: ProgramConfig = {
   oauthScopeAdditions: [...WAREHOUSE_SOURCE_SCOPE_ADDITIONS],
 
   seedTasks: warehouseSeedTasks,
+  decisions: [
+    'framework',
+    'is_monorepo',
+    'product_category',
+    'calls_llm_api',
+    'structured_logging',
+    'otel_exporter',
+    'server_runtime',
+    'observability_stack',
+  ],
 
   // Kill switch over the shipped default: only an explicit 'false' excludes,
   // so a failed flag fetch keeps AI Observability and Logs in the run.
@@ -268,7 +279,14 @@ export const config: ProgramConfig = {
   ): Promise<void> => {
     await scopeInstallDirToProject(session, runner);
 
-    const integration = await detectFramework(session.installDir);
+    const integration =
+      (await detectFramework(session.installDir)) ??
+      // Production builds drop this import, and with it the Decisions service.
+      (IS_PRODUCTION_BUILD
+        ? undefined
+        : await (
+            await import('./decisions')
+          ).judgeMissingIntegration(session, runner));
     if (!integration) {
       abortNoFrameworkDetected();
     }

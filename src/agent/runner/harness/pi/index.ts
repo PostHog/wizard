@@ -36,6 +36,7 @@ import {
   buildGatewayProvider,
   GATEWAY_PROVIDER,
   withGatewayRemint,
+  createGatewayRuntime,
 } from './gateway';
 import { createAioCapture } from '../../../aio-capture';
 import type {
@@ -340,8 +341,6 @@ export const piBackend: AgentHarness = {
         createAgentSession,
         DefaultResourceLoader,
         SessionManager,
-        AuthStorage,
-        ModelRegistry,
         getAgentDir,
         createLsToolDefinition,
         createFindToolDefinition,
@@ -375,10 +374,9 @@ export const piBackend: AgentHarness = {
       const { provider, caps, api } = buildGatewayProvider(
         providerInputs(auth),
       );
-      const registry = ModelRegistry.inMemory(AuthStorage.create());
-      registry.registerProvider(GATEWAY_PROVIDER, provider as never);
+      const registry = await createGatewayRuntime(provider);
 
-      const model = registry.find(GATEWAY_PROVIDER, modelId);
+      const model = registry.getModel(GATEWAY_PROVIDER, modelId);
       if (!model) {
         return {
           kind: 'failure',
@@ -566,7 +564,7 @@ export const piBackend: AgentHarness = {
         // escape the fence or recurse.
         createDispatchAgentTool({
           model,
-          modelRegistry: registry,
+          modelRuntime: registry,
           cwd: input.installDir,
           agentDir: getAgentDir(),
           securityFactory: security.subagentFactory,
@@ -577,7 +575,7 @@ export const piBackend: AgentHarness = {
 
       const { session: agentSession } = await createAgentSession({
         model,
-        modelRegistry: registry,
+        modelRuntime: registry,
         // Reasoning effort from the switchboard capability matrix (undefined =
         // pi's default). Sent as `reasoning_effort` for openai-completions.
         thinkingLevel: caps.thinkingLevel,

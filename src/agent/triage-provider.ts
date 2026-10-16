@@ -55,7 +55,7 @@ export function createTriageLLMProvider(
   return async (prompt: string): Promise<string> => {
     // Lazy: pi-ai is a 5MB ESM tree, and this module is in the static graph of
     // every command. Same constraint as the pi harness's SDK imports.
-    const { completeSimple } = await import('@earendil-works/pi-ai');
+    const { completeSimple } = await import('@earendil-works/pi-ai/compat');
     const current = await resolveAuth();
     const authToken = current.authToken;
     const model = buildGatewayModel({

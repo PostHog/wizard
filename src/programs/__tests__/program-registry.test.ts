@@ -3,9 +3,14 @@ import {
   getCommandPath,
   getOAuthScopesForProgram,
   getProgramConfig,
+  getProgramDecisions,
   getSubcommandPrograms,
 } from '../program-registry';
 import { DEFAULT_BINDING } from '@agent';
+import {
+  DECISIONS_MAX_QUESTIONS_PER_CALL,
+  QUESTIONS,
+} from '../detection/decisions';
 import {
   DEFAULT_AGENT_MODEL,
   GPT5_6_SOL_MODEL,
@@ -175,5 +180,38 @@ describe('agent-skill run recipe', () => {
     expect(run.skillId).toBe('audit-events');
     expect(run.integrationLabel).toBe('audit-events');
     expect(run.reportFile).toContain('audit-events');
+  });
+});
+
+describe('Decisions questions', () => {
+  it('give every catalog question a purpose, and every choice two or more values', () => {
+    for (const question of Object.values(QUESTIONS)) {
+      expect(question.purpose.trim()).not.toBe('');
+      if (question.kind === 'choice') {
+        expect(Object.keys(question.choices ?? {}).length).toBeGreaterThan(1);
+      }
+    }
+  });
+
+  it('fit one gateway call per run, with every required program', () => {
+    const programs = new Map(PROGRAM_REGISTRY.map((c) => [c.id, c]));
+    for (const config of PROGRAM_REGISTRY) {
+      const keys = new Set<string>();
+      const visit = (id: string, seen: Set<string>) => {
+        const program = programs.get(id);
+        if (!program || seen.has(id)) return;
+        seen.add(id);
+        for (const key of program.decisions ?? []) keys.add(key);
+        for (const required of program.requires ?? []) visit(required, seen);
+      };
+      visit(config.id, new Set());
+      expect(keys.size).toBeLessThanOrEqual(DECISIONS_MAX_QUESTIONS_PER_CALL);
+    }
+  });
+
+  it('lists every program that asks', () => {
+    expect(getProgramDecisions().map((p) => p.id)).toContain(
+      'posthog-integration',
+    );
   });
 });

@@ -23,6 +23,18 @@ const baseCtx: PromptContext = {
 };
 
 describe('assemblePrompt', () => {
+  it('lists detected facts in the project section, and nothing without any', () => {
+    const prompt = assemblePrompt(makeRunDef(), {
+      ...baseCtx,
+      facts: ['The app has a sign-in flow: identify users when they sign in.'],
+    });
+    expect(prompt).toContain('Detected before this run');
+    expect(prompt).toContain('- The app has a sign-in flow');
+    expect(assemblePrompt(makeRunDef(), baseCtx)).not.toContain(
+      'Detected before this run',
+    );
+  });
+
   it('always includes project credentials in the default section', () => {
     const prompt = assemblePrompt(makeRunDef(), baseCtx);
 

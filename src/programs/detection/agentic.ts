@@ -34,6 +34,13 @@ import {
 } from '@shared/constants';
 import type { ProgramSession } from '../program-session';
 import { loadWizardFlags } from '../wizard-flags';
+import { analytics } from '@utils/analytics';
+import { logToFile } from '@utils/debug';
+import { maySendScanResults } from '../codebase-scan/tags';
+import { IS_PRODUCTION_BUILD } from '@env';
+import type { JudgedProjects } from './decisions/projects';
+
+type DecisionsModule = typeof import('./decisions');
 
 /** A category the agent classifies each project into (id the agent returns). */
 export type DetectTarget = { id: string; name: string };
@@ -375,6 +382,78 @@ export async function detectProjectsWithAgent(
   if (!session.credentials) {
     throw new Error('Detection requires authenticated credentials.');
   }
+  const flags = await loadWizardFlags();
+  // Production builds drop this import, and with it the Decisions service.
+  const decisions: DecisionsModule | null = IS_PRODUCTION_BUILD
+    ? null
+    : await import('./decisions');
+  const mode = decisions?.getDecisionsMode(flags.flags) ?? 'off';
+  const judging: Promise<JudgedProjects | null> | null =
+    !decisions || mode === 'off'
+      ? null
+      : decisions
+          .detectProjectsWithDecisions(session, options)
+          .catch((error: unknown) => {
+            logToFile(`[decisions] project detection threw: ${String(error)}`);
+            return null;
+          });
+
+  if (mode === 'primary' && judging) {
+    const judged = await judging;
+    if (judged?.confident) {
+      logToFile(
+        `[decisions] project detection decided for ${options.programId}`,
+      );
+      return judged.report;
+    }
+  }
+
+  const report = await scanProjectsWithAgent(session, options, flags);
+  if (decisions && judging) {
+    void judging.then((judged) => {
+      if (judged) {
+        logProjectComparison(decisions, session, options, report, judged, mode);
+      }
+    });
+  }
+  return report;
+}
+
+function logProjectComparison(
+  decisions: DecisionsModule,
+  session: ProgramSession,
+  options: AgenticDetectOptions,
+  agent: AgenticDetectionReport,
+  judged: JudgedProjects,
+  mode: string,
+): void {
+  const compared = {
+    ...decisions.compareProjectReports(agent, judged.report),
+    decisions_confident: judged.confident,
+  };
+  logToFile(
+    `[decisions] projects program=${
+      options.programId
+    } mode=${mode} ${JSON.stringify(compared)}`,
+  );
+  if (maySendScanResults(session)) {
+    analytics.wizardCapture('decisions project detection compared', {
+      program_id: options.programId,
+      mode,
+      ...compared,
+    });
+  }
+}
+
+/** The agent run behind {@link detectProjectsWithAgent}. */
+async function scanProjectsWithAgent(
+  session: ProgramSession,
+  options: AgenticDetectOptions,
+  flags: Awaited<ReturnType<typeof loadWizardFlags>>,
+): Promise<AgenticDetectionReport> {
+  if (!session.credentials) {
+    throw new Error('Detection requires authenticated credentials.');
+  }
   const {
     targets,
     programId,
@@ -385,7 +464,6 @@ export async function detectProjectsWithAgent(
     onProgress,
   } = options;
 
-  const flags = await loadWizardFlags();
   const reportSchema = detectionReportSchema(recommend);
   const schema = zodToJsonSchema(reportSchema);
   const config: RunConfig = {

@@ -5,6 +5,8 @@ import type { ProgramRun } from './program-run';
 import type { Integration } from '@shared/constants';
 import type { FrameworkConfig } from './framework-config';
 import type { CiRunnerContext, RunnerContext } from './runner-context.js';
+// Type-only: the catalog stays out of production bundles.
+import type { QuestionKey } from './detection/decisions/questions';
 
 /**
  * Context passed to onReady callbacks — fires after the host has assigned
@@ -161,6 +163,13 @@ export interface ProgramConfig {
    * shares it; see `@programs/codebase-scan`.
    */
   scansCodebase?: boolean;
+  /**
+   * Questions this program asks the Decisions judgment service, by catalog key
+   * (`@programs/detection/decisions/questions`). The run asks those of this
+   * program and every program it `requires`, once, after login. Dev and CI
+   * builds only: production builds don't bundle the service.
+   */
+  decisions?: readonly QuestionKey[];
   /** Runs in the flow other than the program's own agent run, keyed by flow step id. */
   runSteps?: Record<string, ProgramRunStep>;
   /**

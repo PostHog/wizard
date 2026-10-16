@@ -53,6 +53,11 @@ vi.mock('@agent/gateway-session', () => ({
 }));
 vi.mock('../gateway', () => ({
   GATEWAY_PROVIDER: 'test',
+  createGatewayRuntime: () =>
+    Promise.resolve({
+      registerProvider: () => undefined,
+      getModel: () => ({ id: 'openai/gpt-5.6-luna', api: 'openai-responses' }),
+    }),
   buildGatewayProvider: () => ({
     provider: {},
     caps: { thinkingLevel: 'low' },
@@ -108,12 +113,15 @@ vi.mock('@earendil-works/pi-coding-agent', () => ({
       return Promise.resolve();
     }
   },
-  AuthStorage: { create: () => ({}) },
-  ModelRegistry: {
-    inMemory: () => ({
-      registerProvider: () => undefined,
-      find: () => ({ id: 'openai/gpt-5.6-luna', api: 'openai-responses' }),
-    }),
+  ModelRuntime: {
+    create: () =>
+      Promise.resolve({
+        registerProvider: () => undefined,
+        getModel: () => ({
+          id: 'openai/gpt-5.6-luna',
+          api: 'openai-responses',
+        }),
+      }),
   },
   SessionManager: { inMemory: () => ({}) },
   getAgentDir: () => '/tmp/test-agent',

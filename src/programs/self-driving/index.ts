@@ -118,6 +118,7 @@ const buildRun = (session: ProgramSession): Promise<ProgramRun> =>
   });
 
 export const config: ProgramConfig = {
+  decisions: ['primary_user_flow', 'user_login'],
   ...createSkillProgram({
     skillId: SELF_DRIVING_SKILL_ID,
     command: 'self-driving',

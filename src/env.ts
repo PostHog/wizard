@@ -76,6 +76,8 @@ type RuntimeEnvKey =
   | 'POSTHOG_HANDOFF_OUTPUT_PATH'
   // Local/CI escape hatch to disable Warlock scanning without the PostHog flag.
   | 'POSTHOG_WIZARD_WARLOCK_DISABLED'
+  // Dev-build override of the Decisions judgment service's mode: off, shadow or primary.
+  | 'WIZARD_DECISIONS_DETECTION'
   | 'DEBUG'
   // Agent / MCP
   | 'MCP_URL'

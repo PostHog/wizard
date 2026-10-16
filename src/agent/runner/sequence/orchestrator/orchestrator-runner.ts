@@ -887,6 +887,7 @@ async function executeOrchestrator(
     host: boot.credentials.host,
     examplePath,
     commandmentsPath,
+    facts: config.projectFacts?.() ?? [],
   };
 
   logToFile(

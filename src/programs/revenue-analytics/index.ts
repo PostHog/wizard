@@ -3,6 +3,7 @@ import { WIZARD_TOOL_NAMES } from '@agent';
 import { detectRevenuePrerequisites, REVENUE_ABORT_CASES } from './detect.js';
 
 export const config: ProgramConfig = {
+  decisions: ['billing_code'],
   command: 'revenue-analytics',
   description: 'Set up PostHog for Revenue Analytics',
   id: 'revenue-analytics-setup',

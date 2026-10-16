@@ -1,4 +1,4 @@
-import { completeSimple } from '@earendil-works/pi-ai';
+import { completeSimple } from '@earendil-works/pi-ai/compat';
 import { createTriageLLMProvider } from '@agent/triage-provider';
 import {
   CallType,
@@ -9,7 +9,7 @@ import {
 import { triageModelFor } from '@agent/runner/switchboard/models';
 import { logToFile } from '@utils/debug';
 
-vi.mock('@earendil-works/pi-ai', () => ({ completeSimple: vi.fn() }));
+vi.mock('@earendil-works/pi-ai/compat', () => ({ completeSimple: vi.fn() }));
 vi.mock('@utils/debug');
 const complete = vi.mocked(completeSimple);
 

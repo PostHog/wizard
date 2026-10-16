@@ -667,6 +667,41 @@ async function scanForContext(
   return flagged;
 }
 
+/** Categories whose matches are dropped from content sent to a model outside an agent run. */
+const REDACTED_CATEGORIES: ReadonlySet<string> = new Set([
+  'hardcoded_secret',
+  'posthog_hardcoded_key',
+  'posthog_pii',
+]);
+
+/**
+ * Replace every line that holds a secret or PII match with `[redacted]`. A
+ * whole line goes, since a match's string can be length-capped. Rejects when
+ * the scanner can't load, so callers fail closed.
+ */
+export async function redactSecretLines(
+  content: string,
+): Promise<{ text: string; redactedLines: number }> {
+  const warlock = await getWarlock();
+  const flagged: string[] = [];
+  for (const chunk of chunkContent(content)) {
+    const result = await warlock.scan(chunk);
+    if (!result.matched) continue;
+    for (const match of result.matches) {
+      if (!REDACTED_CATEGORIES.has(String(match.metadata.category))) continue;
+      flagged.push(...match.matchedStrings.filter(Boolean));
+    }
+  }
+  if (flagged.length === 0) return { text: content, redactedLines: 0 };
+  let redactedLines = 0;
+  const lines = content.split('\n').map((line) => {
+    if (!flagged.some((s) => line.includes(s))) return line;
+    redactedLines += 1;
+    return '[redacted]';
+  });
+  return { text: lines.join('\n'), redactedLines };
+}
+
 /** The overlap between chunks can surface the same rule twice; count it once. */
 function dedupeByRule(matches: ScanMatch[]): ScanMatch[] {
   const seen = new Set<string>();

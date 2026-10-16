@@ -140,6 +140,7 @@ const base = createSkillProgram({
  *   headless equivalent of `onReady`.
  */
 export const config: ProgramConfig = {
+  decisions: ['framework', 'web_frontend', 'primary_user_flow'],
   ...base,
   // Orchestrator on pi; the flow's `model_pi`/`effort_pi` pin each stage, this model is the fallback.
   binding: {

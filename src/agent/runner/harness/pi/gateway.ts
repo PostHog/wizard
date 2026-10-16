@@ -2,8 +2,8 @@
  * PostHog AI gateway provider spec for pi sessions, shared by the linear run
  * and the orchestrator's per-task runs so both speak to the gateway
  * identically: bearer auth, the wizard properties header, transport shape
- * inferred from the model id. The caller registers the spec on its own
- * (lazily imported, properly typed) pi ModelRegistry.
+ * inferred from the model id. `createGatewayRuntime` registers the spec on a
+ * pi ModelRuntime that holds nothing else.
  */
 
 import {
@@ -216,6 +216,32 @@ export function isGatewayAuthRejection(
       return true;
   }
   return /\b401\b|authentication_error|unauthorized/i.test(errorMessage ?? '');
+}
+
+/** The model runtime a pi session runs on. */
+export type GatewayRuntime =
+  import('@earendil-works/pi-coding-agent').ModelRuntime;
+
+/**
+ * A model runtime holding only the gateway provider. Credentials stay in memory,
+ * and it reads no models.json and refreshes no catalog over the network, so a
+ * run reads nothing of the user's own pi setup.
+ */
+export async function createGatewayRuntime(
+  provider: Record<string, unknown>,
+): Promise<GatewayRuntime> {
+  const [{ ModelRuntime }, { InMemoryCredentialStore }] = await Promise.all([
+    import('@earendil-works/pi-coding-agent'),
+    import('@earendil-works/pi-ai'),
+  ]);
+  const runtime = await ModelRuntime.create({
+    credentials: new InMemoryCredentialStore(),
+    modelsPath: null,
+    allowModelNetwork: false,
+    refreshOnCreate: false,
+  });
+  runtime.registerProvider(GATEWAY_PROVIDER, provider as never);
+  return runtime;
 }
 
 export interface GatewayRemintOptions {
