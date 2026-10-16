@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.84.1](https://github.com/PostHog/wizard/compare/v2.84.0...v2.84.1) (2026-10-16)
+
+
+### Bug Fixes
+
+* **deps:** pin the pi suite to 1.1.0 so npm installs a matching set ([#1474](https://github.com/PostHog/wizard/issues/1474)) ([d1ababd](https://github.com/PostHog/wizard/commit/d1ababd93cd3fe7a20c75ef5756c04deba4c7d75))
+
 ## [2.84.0](https://github.com/PostHog/wizard/compare/v2.83.0...v2.84.0) (2026-10-16)
 
 
