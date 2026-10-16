@@ -106,6 +106,10 @@ const ERROR_TRACKING_PROMPT = `Set up PostHog error tracking end-to-end:
    production deploy path; local runs, tests, and pull-request builds stay
    as they are.
 
+5. Once every edit is in, run the project's production build and fix what
+   this run broke. With upload credentials written, its log shows the
+   release and the upload; without them, the build still has to pass.
+
 The final report is written to ./${ERROR_TRACKING_REPORT_FILE}.`;
 
 const ERROR_TRACKING_RUN: ProgramRun = {
