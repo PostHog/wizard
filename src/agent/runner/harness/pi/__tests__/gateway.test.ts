@@ -71,7 +71,7 @@ describe('buildGatewayProvider transport', () => {
 
 describe('buildGatewayModel', () => {
   it('sends the system prompt as system, not developer, which the gateway accepts on pinned tokens', async () => {
-    const { completeSimple } = await import('@earendil-works/pi-ai');
+    const { completeSimple } = await import('@earendil-works/pi-ai/compat');
     const model = buildGatewayModel({
       gatewayUrl: 'https://ai-gateway.us.posthog.com',
       accessToken: 'phe_x',

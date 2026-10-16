@@ -67,7 +67,7 @@ function project(files: Record<string, string>): string {
 }
 
 type GatewayBody = {
-  state: string;
+  state: Record<string, string>;
   questions: Record<
     string,
     { type: string; criteria?: Record<string, unknown> }
@@ -119,6 +119,14 @@ function fakeGateway(
   ) as unknown as typeof fetch & ReturnType<typeof vi.fn>;
 }
 
+/** A decision state with one field filled; the rest empty. */
+const state = (fileTree: string) => ({
+  file_tree: fileTree,
+  dependencies: '',
+  lockfiles: '',
+  env_key_names: '',
+});
+
 const predicate = (name: string): DecisionQuestionSpec => ({
   name,
   kind: 'predicate',
@@ -169,7 +177,7 @@ describe('renderDecisionInput', () => {
         }),
       ),
     );
-    expect(input).toContain('## File tree');
+    expect(input).toContain('## file_tree');
     expect(input).toContain('package.json (npm): next');
     expect(input).toContain('.env: STRIPE_SECRET_KEY');
     expect(input).not.toContain('sk_live_nope');
@@ -202,7 +210,7 @@ describe('askDecisions', () => {
 
   it('maps predicate and choice answers by name', async () => {
     const fetchImpl = fakeGateway({ choices: { pick: 'b' }, p: 0.3 });
-    const result = await askDecisions('input', specs, {
+    const result = await askDecisions(state('input'), specs, {
       transport: GATEWAY,
       fetchImpl,
     });
@@ -227,19 +235,19 @@ describe('askDecisions', () => {
       redactedLines: 1,
     });
     const fetchImpl = fakeGateway();
-    const redacted = await askDecisions('KEY=sk_live', specs, {
+    const redacted = await askDecisions(state('KEY=sk_live'), specs, {
       transport: GATEWAY,
       fetchImpl,
     });
     const body = JSON.parse(
       String((fetchImpl.mock.calls[0][1] as Parameters<typeof fetch>[1])?.body),
     ) as GatewayBody;
-    expect(body.state).toBe('[redacted]');
+    expect(body.state.file_tree).toBe('[redacted]');
     expect(redacted.redactedLines).toBe(1);
 
     vi.mocked(redactSecretLines).mockRejectedValueOnce(new Error('no wasm'));
     const blocked = fakeGateway();
-    const failed = await askDecisions('input', specs, {
+    const failed = await askDecisions(state('input'), specs, {
       transport: GATEWAY,
       fetchImpl: blocked,
     });
@@ -255,7 +263,7 @@ describe('askDecisions', () => {
     const fetchImpl = fakeGateway({
       status: (call) => (call === 1 ? 400 : undefined),
     });
-    const result = await askDecisions('input', many, {
+    const result = await askDecisions(state('input'), many, {
       transport: GATEWAY,
       fetchImpl,
     });
@@ -264,7 +272,7 @@ describe('askDecisions', () => {
       DECISIONS_MAX_QUESTIONS_PER_CALL,
     );
     expect(result.unanswered).toHaveLength(3);
-    expect(result.error).toMatch(/HTTP 400/);
+    expect(result.error).toMatch(/400/);
   });
 });
 

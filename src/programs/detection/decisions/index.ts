@@ -8,6 +8,7 @@ export type {
   DecisionQuestionSpec,
   DecisionsMode,
   DecisionsResult,
+  DecisionsTransport,
 } from './types';
 export {
   actionableAnswer,
@@ -21,12 +22,18 @@ export {
   runProgramDecisions,
   summarizeAnswers,
 } from './service';
+export { askDecisions, chunk, DECISIONS_MAX_QUESTIONS_PER_CALL } from './ask';
 export {
-  askDecisions,
-  DECISIONS_MAX_QUESTIONS_PER_CALL,
-  toApiQuestion,
-} from './ask';
-export { renderDecisionInput, renderFileTree } from './input';
+  DECISIONS_MODEL,
+  previewRequests,
+  toClassifierQuestion,
+} from './classifier';
+export {
+  renderDecisionInput,
+  renderDecisionState,
+  renderFileTree,
+  type DecisionState,
+} from './input';
 export {
   collectDecisionsScan,
   getDecisionsScan,

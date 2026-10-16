@@ -15,7 +15,7 @@ import {
   getDecisionsMode,
   getDecisionsScan,
   QUESTIONS,
-  renderDecisionInput,
+  renderDecisionState,
   routeIntegration,
 } from '../detection/decisions';
 
@@ -47,7 +47,7 @@ async function askForMissingIntegration(
   const transport = decisionsTransport(session);
   if (!transport) return undefined;
   const result = await askDecisions(
-    renderDecisionInput(getDecisionsScan(session)),
+    renderDecisionState(getDecisionsScan(session)),
     [QUESTIONS.framework],
     { transport },
   );

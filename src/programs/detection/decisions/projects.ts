@@ -6,7 +6,6 @@
  * main one. Whether PostHog is installed is a package lookup, not a judgment.
  */
 
-import type { DecisionsTransport } from '@shared/decisions-client';
 import { logToFile } from '@utils/debug';
 import type { ProgramSession } from '../../program-session';
 import type {
@@ -24,9 +23,9 @@ import {
   projectTargetName,
   projectTargetQuestion,
 } from './questions';
-import { renderDecisionInput } from './input';
+import { renderDecisionState } from './input';
 import { decisionsTransport } from './service';
-import type { DecisionQuestionSpec } from './types';
+import type { DecisionQuestionSpec, DecisionsTransport } from './types';
 
 /** Folders classified in one call; the gateway takes 32 questions and two are fixed. */
 const MAX_CANDIDATES = 12;
@@ -96,7 +95,7 @@ export async function judgeProjects(
     ...(askPrimary ? [primaryAppQuestion(candidates)] : []),
   ];
 
-  const result = await askDecisions(renderDecisionInput(scan), specs, {
+  const result = await askDecisions(renderDecisionState(scan), specs, {
     transport,
     fetchImpl: options.fetchImpl,
   });

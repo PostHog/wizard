@@ -1,5 +1,12 @@
 /** The Decisions judgment service's contract: what a program declares, and what it reads back. */
 
+import type { GatewayCredential } from '@shared/api';
+
+/** The gateway with a gateway key, or OpenAI directly with an API key (dev script only). */
+export type DecisionsTransport =
+  | { gateway: GatewayCredential }
+  | { apiKey: string; baseUrl?: string };
+
 /** One question a program needs answered about the project before its agent runs. */
 export type DecisionQuestionSpec = {
   /** snake_case, unique across every program. */

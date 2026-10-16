@@ -27,16 +27,9 @@ import {
   loadDecisionsService,
   type DecisionQuestionSpec,
   type DecisionsResult,
+  type DecisionsTransport,
 } from '@programs';
 import { readCiGatewayCredential } from '@shared/ci-gateway';
-import {
-  DECISIONS_MODEL,
-  toSystemOneRequest,
-  type DecisionsTransport,
-} from '@shared/decisions-client';
-
-/** The gateway's question limit per request. */
-const MAX_QUESTIONS_PER_CALL = 32;
 
 type DecisionsService = NonNullable<
   Awaited<ReturnType<typeof loadDecisionsService>>
@@ -179,22 +172,22 @@ async function main(): Promise<void> {
 
   if (flags.has('--state') || flags.has('--request')) {
     for (const dir of dirs) {
-      const input = svc.renderDecisionInput(svc.collectDecisionsScan(dir));
+      const scan = svc.collectDecisionsScan(dir);
       if (flags.has('--state')) {
-        console.log(input);
+        console.log(svc.renderDecisionInput(scan));
         continue;
       }
-      const questions = specs.map(svc.toApiQuestion);
-      const bodies = [];
-      for (let i = 0; i < questions.length; i += MAX_QUESTIONS_PER_CALL) {
-        bodies.push(
-          toSystemOneRequest({
-            model: DECISIONS_MODEL,
-            input,
-            questions: questions.slice(i, i + MAX_QUESTIONS_PER_CALL),
-          }),
-        );
-      }
+      // pi-ai builds the bodies; nothing is sent, so any gateway placeholder will do.
+      const bodies = await svc.previewRequests(
+        svc.renderDecisionState(scan),
+        svc.chunk(specs, svc.DECISIONS_MAX_QUESTIONS_PER_CALL),
+        {
+          gateway: {
+            token: 'preview',
+            url: 'https://ai-gateway.us.posthog.com',
+          },
+        },
+      );
       console.log(JSON.stringify(bodies, null, 2));
     }
     return;
@@ -214,7 +207,7 @@ async function main(): Promise<void> {
   for (const dir of dirs) {
     const scan = svc.collectDecisionsScan(dir);
     const [result, projects] = await Promise.all([
-      svc.askDecisions(svc.renderDecisionInput(scan), specs, {
+      svc.askDecisions(svc.renderDecisionState(scan), specs, {
         transport: resolved.transport,
       }),
       flags.has('--projects')

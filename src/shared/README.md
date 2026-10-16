@@ -49,9 +49,6 @@ Modules callers reach most:
 - `@shared/ci-gateway`: `readCiGatewayCredential(region)`, the gateway token a
   dev or test `--ci` run reads from `WIZARD_CI_GATEWAY_TOKEN_FILE`, then clears
   from the environment.
-- `@shared/decisions-client`: `createDecision(params, transport)`, one call to
-  OpenAI's Decisions API, through the AI gateway's `/v1/systemone` or directly
-  with an OpenAI key, with the request and answer shapes.
 - `@shared/console-log`: `consoleLog`, the glyph printer console commands and
   headless's log lines print through, its `ConsoleLog` shape, and
   `printAbortOutro`, the abort presenter for a run that prints.

@@ -9,7 +9,6 @@ import { IS_PRODUCTION_BUILD, runtimeEnv } from '@env';
 import { WIZARD_DECISIONS_DETECTION_FLAG_KEY } from '@shared/constants';
 import type { GatewayCredential } from '@shared/api';
 import { readCiGatewayCredential } from '@shared/ci-gateway';
-import type { DecisionsTransport } from '@shared/decisions-client';
 import type { CloudRegion } from '@utils/types';
 import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
@@ -17,12 +16,13 @@ import type { ProgramSession } from '../../program-session';
 import { getDecisionsScan } from './scan';
 import { maySendScanResults } from '../../codebase-scan/tags';
 import { askDecisions } from './ask';
-import { renderDecisionInput } from './input';
+import { renderDecisionState } from './input';
 import type {
   DecisionAnswer,
   DecisionQuestionSpec,
   DecisionsMode,
   DecisionsResult,
+  DecisionsTransport,
 } from './types';
 import { QUESTIONS, type QuestionKey } from './questions';
 
@@ -134,7 +134,7 @@ export async function runDecisionSpecs(
       error: 'no gateway key for this run',
     };
   } else {
-    const input = renderDecisionInput(
+    const input = renderDecisionState(
       getDecisionsScan(ctx.session, ctx.setFrameworkContext),
     );
     result = {

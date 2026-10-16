@@ -43,6 +43,7 @@ import {
   buildGatewayProvider,
   GATEWAY_PROVIDER,
   withGatewayRemint,
+  createGatewayRuntime,
 } from './gateway';
 import { runErrorType, setupSignalFailure } from './completion';
 import { bindPiCancellation } from './cancellation';
@@ -242,8 +243,6 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
       createAgentSession,
       DefaultResourceLoader,
       SessionManager,
-      AuthStorage,
-      ModelRegistry,
       getAgentDir,
       createLsToolDefinition,
       createFindToolDefinition,
@@ -274,9 +273,8 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
       effort,
     });
     const { provider, caps } = buildGatewayProvider(providerInputs(auth));
-    const registry = ModelRegistry.inMemory(AuthStorage.create());
-    registry.registerProvider(GATEWAY_PROVIDER, provider as never);
-    const model = registry.find(GATEWAY_PROVIDER, modelId);
+    const registry = await createGatewayRuntime(provider);
+    const model = registry.getModel(GATEWAY_PROVIDER, modelId);
     if (!model) {
       return {
         kind: 'failure',
@@ -417,7 +415,7 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
     const customTools = [...codingToolDefs, ...wizardTools, ...queueTools];
     const { session: agentSession } = await createAgentSession({
       model,
-      modelRegistry: registry,
+      modelRuntime: registry,
       thinkingLevel: caps.thinkingLevel,
       cwd: dir,
       sessionManager: SessionManager.inMemory(dir),

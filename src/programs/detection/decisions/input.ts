@@ -1,5 +1,5 @@
 /**
- * The Decisions input: the decisions scan rendered as plain text sections.
+ * The Decisions input: the decisions scan rendered as one text field per kind of fact.
  * The file tree, package names per manifest, lockfile names and `.env` key
  * names. Never file contents or `.env` values.
  */
@@ -75,29 +75,34 @@ export function renderFileTree(
   return lines.join('\n');
 }
 
-/** Render the scan as the Decisions input, one section per kind of fact. */
-export function renderDecisionInput(scan: DecisionsScan): string {
-  const sections = [`## File tree\n${renderFileTree(scan.files) || '(empty)'}`];
+/** The Decisions `state`: one text field per kind of fact. */
+export type DecisionState = {
+  file_tree: string;
+  dependencies: string;
+  lockfiles: string;
+  env_key_names: string;
+};
 
+/** Render the scan as the Decisions `state`, one field per kind of fact. */
+export function renderDecisionState(scan: DecisionsScan): DecisionState {
   const manifests = scan.manifests.slice(0, MAX_MANIFESTS);
-  sections.push(
-    `## Dependencies\n${
+  return {
+    file_tree: renderFileTree(scan.files) || '(empty)',
+    dependencies:
       manifests.length > 0
         ? manifests.map(renderManifest).join('\n')
-        : '(no manifests found)'
-    }`,
-  );
+        : '(no manifests found)',
+    lockfiles: scan.lockfiles.length > 0 ? scan.lockfiles.join('\n') : '(none)',
+    // Values are never read; only names reach this field.
+    env_key_names: renderEnvKeys(scan),
+  };
+}
 
-  sections.push(
-    `## Lockfiles\n${
-      scan.lockfiles.length > 0 ? scan.lockfiles.join('\n') : '(none)'
-    }`,
-  );
-
-  sections.push(
-    `## .env key names (values are never read)\n${renderEnvKeys(scan)}`,
-  );
-  return sections.join('\n\n');
+/** The state as readable text, one heading per field, for the dev script and tests. */
+export function renderDecisionInput(scan: DecisionsScan): string {
+  return Object.entries(renderDecisionState(scan))
+    .map(([field, text]) => `## ${field}\n${text}`)
+    .join('\n\n');
 }
 
 function renderManifest(manifest: DecisionsScan['manifests'][number]): string {

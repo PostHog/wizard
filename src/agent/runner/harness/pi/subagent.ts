@@ -61,8 +61,8 @@ export interface SubagentContext {
   /** Resolved gateway model (same as the parent). */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   model: import('@earendil-works/pi-ai').Model<any>;
-  /** Registry holding the gateway provider. */
-  modelRegistry: import('@earendil-works/pi-coding-agent').ModelRegistry;
+  /** Runtime holding the gateway provider. */
+  modelRuntime: import('@earendil-works/pi-coding-agent').ModelRuntime;
   cwd: string;
   agentDir: string;
   /** The parent's subagent gate: the same fence and shared state, with no rm. */
@@ -109,7 +109,7 @@ export function createDispatchAgentTool(ctx: SubagentContext): ToolDefinition {
 
       const { session: child } = await createAgentSession({
         model: ctx.model,
-        modelRegistry: ctx.modelRegistry,
+        modelRuntime: ctx.modelRuntime,
         cwd: ctx.cwd,
         sessionManager: SessionManager.inMemory(ctx.cwd),
         resourceLoader: loader,

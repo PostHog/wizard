@@ -42,6 +42,7 @@ export { getProgramDecisions } from './program-registry';
 export type {
   DecisionQuestionSpec,
   DecisionsResult,
+  DecisionsTransport,
 } from './detection/decisions';
 /**
  * The Decisions service, for the decisions-detect script. Null in production
