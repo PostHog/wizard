@@ -2,8 +2,10 @@
 
 Helper scripts. The build-related ones (`generate-version.cjs`, `smoke-test.sh`,
 `warlock-smoke-test.ts`) are wired into `package.json`. `smoke-test-ci.sh` runs
-from `.github/workflows/smoke-test.yml`. Scripts import the wizard only through
-public entries, like the e2e harness; see
+from `.github/workflows/smoke-test.yml`. `packed-install-smoke-test.sh` runs
+from `.github/workflows/build.yml`: it installs the packed tarball with npm,
+which ignores `pnpm-lock.yaml`, and loads the Pi agent packages. Scripts import
+the wizard only through public entries, like the e2e harness; see
 [`ARCHITECTURE.md`](../e2e-harness/ARCHITECTURE.md#the-pieces). The rest below
 are **manual, runnable tools** for headless e2e + snapshots — each is a
 standalone `tsx` entry, named `*.no-jest.ts` so Vitest ignores it
