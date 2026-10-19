@@ -29,6 +29,7 @@ const BENIGN_FS_ERROR_CODES = new Set<string>([
   'ENFILE',
   'EBUSY', // file locked by another process (Windows)
   'UNKNOWN', // libuv could not map the OS error (Windows locked/placeholder files)
+  'ECANCELED', // OS canceled the read (e.g. cloud-synced placeholder files on macOS)
 ]);
 
 /**
