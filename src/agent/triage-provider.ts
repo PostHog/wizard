@@ -58,7 +58,7 @@ export function createTriageLLMProvider(
     const { completeSimple } = await import('@earendil-works/pi-ai/compat');
     const current = await resolveAuth();
     const authToken = current.authToken;
-    const model = buildGatewayModel({
+    const gatewayModel = buildGatewayModel({
       gatewayUrl: current.baseURL,
       accessToken: authToken,
       teamId: current.teamId,
@@ -66,6 +66,11 @@ export function createTriageLLMProvider(
       wizardFlags: current.wizardFlags ?? {},
       modelId,
     });
+    // Triage sets its own small cap, so keep sending it on the OpenAI path.
+    const model = {
+      ...gatewayModel,
+      compat: { ...gatewayModel.compat, supportsMaxOutputTokens: true },
+    };
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), TRIAGE_TIMEOUT_MS);
     try {

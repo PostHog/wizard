@@ -97,7 +97,8 @@ export function buildGatewayModel(inputs: GatewayProviderInputs) {
     // UnsupportedParamsError → the run no-ops).
     reasoning: modelCapabilities(modelId).reasoning,
     // The gateway refuses `developer` messages on pinned tokens, so pi sends `system`.
-    compat: { supportsDeveloperRole: false },
+    // It also sizes a scoped token's hold from max_output_tokens, so omit it, as pi 0.79 did.
+    compat: { supportsDeveloperRole: false, supportsMaxOutputTokens: false },
     input: ['text' as const],
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
     contextWindow: 1_000_000,
