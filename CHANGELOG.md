@@ -1,5 +1,18 @@
 # Changelog
 
+## [2.85.0](https://github.com/PostHog/wizard/compare/v2.84.1...v2.85.0) (2026-10-19)
+
+
+### Features
+
+* **error-tracking:** build the project in the linear fallback prompt ([#1438](https://github.com/PostHog/wizard/issues/1438)) ([4a25085](https://github.com/PostHog/wizard/commit/4a25085819b6de13b1947c2ee5ce13660ffd8809))
+
+
+### Bug Fixes
+
+* **bounded-fs:** treat ECANCELED as a benign fs error ([#1477](https://github.com/PostHog/wizard/issues/1477)) ([d45afac](https://github.com/PostHog/wizard/commit/d45afac6362dba6224ffe3d2307ccf2953ea7326))
+* stop declaring max output tokens ([#1479](https://github.com/PostHog/wizard/issues/1479)) ([c5aa9a8](https://github.com/PostHog/wizard/commit/c5aa9a8e23544a00d78503d79cbbea4ebe209c4e))
+
 ## [2.84.1](https://github.com/PostHog/wizard/compare/v2.84.0...v2.84.1) (2026-10-16)
 
 
