@@ -1,8 +1,9 @@
 /**
- * McpDemo — Playground demo for the MCP client selection screen.
+ * McpDemo — Playground demo for the MCP install screen.
  *
- * Uses a mock McpInstaller that simulates detecting three editors,
- * a short install delay, and a successful result.
+ * Uses a mock McpInstaller that detects three coding agents and one AI
+ * assistant, installs with a short delay per client, and fails VS Code so
+ * the demo shows every row state and the retry menu.
  */
 
 import { WizardStore } from '@tui/store';
@@ -48,12 +49,19 @@ function createMockInstaller(): McpInstaller {
       return MOCK_CLIENTS;
     },
     async install(clientNames) {
-      await new Promise((r) => setTimeout(r, 1500));
-      // Mixed outcomes so the demo shows every Done-phase section.
-      return clientNames.map((name, i) => ({
-        name,
-        status: i === 1 ? McpClientStatus.Unchanged : McpClientStatus.Changed,
-      }));
+      await new Promise((r) => setTimeout(r, 700));
+      // Mixed outcomes so the demo shows every row state.
+      return clientNames.map((name) =>
+        name === 'Cursor'
+          ? { name, status: McpClientStatus.Unchanged }
+          : name === 'VS Code'
+          ? {
+              name,
+              status: McpClientStatus.Failed,
+              detail: 'EACCES: permission denied',
+            }
+          : { name, status: McpClientStatus.Changed },
+      );
     },
     async installPlugins(clientNames) {
       await new Promise((r) => setTimeout(r, 800));
