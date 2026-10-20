@@ -11,11 +11,27 @@ import type { McpInstaller, McpClientInfo } from '@tui/services/mcp-installer';
 import { McpClientStatus } from '@shared/mcp-clients/results';
 
 const MOCK_CLIENTS: McpClientInfo[] = [
-  { name: 'Claude Code', supportsPlugin: true, pluginBundlesMcp: false },
-  { name: 'Cursor', supportsPlugin: true, pluginBundlesMcp: false },
-  { name: 'VS Code', supportsPlugin: false, pluginBundlesMcp: false },
+  {
+    name: 'Claude Code',
+    kind: 'local',
+    supportsPlugin: true,
+    pluginBundlesMcp: false,
+  },
+  {
+    name: 'Cursor',
+    kind: 'local',
+    supportsPlugin: true,
+    pluginBundlesMcp: false,
+  },
+  {
+    name: 'VS Code',
+    kind: 'local',
+    supportsPlugin: false,
+    pluginBundlesMcp: false,
+  },
   {
     name: 'Claude Desktop/Web',
+    kind: 'account',
     supportsPlugin: false,
     pluginBundlesMcp: false,
     finish: {

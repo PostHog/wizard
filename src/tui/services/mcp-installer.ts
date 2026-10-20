@@ -26,8 +26,12 @@ import { isBrowserFinishable } from '@shared/mcp-clients/browser-client';
 import { logToFile } from '@utils/debug';
 import { analytics } from '@utils/analytics';
 
+/** Where the install lives: a config on this computer, or a connector in the user's account. */
+export type McpClientKind = 'local' | 'account';
+
 export interface McpClientInfo {
   name: string;
+  kind: McpClientKind;
   supportsPlugin: boolean;
   /** True when the plugin already ships the posthog MCP server (no direct entry needed). */
   pluginBundlesMcp: boolean;
@@ -83,6 +87,7 @@ export function createMcpInstaller(): McpInstaller {
       cachedClients = supported.map((c) => ({ name: c.name, raw: c }));
       return supported.map((c) => ({
         name: c.name,
+        kind: isBrowserFinishable(c) ? 'account' : 'local',
         supportsPlugin: isPluginCapable(c) && c.supportsPlugin(),
         pluginBundlesMcp: isPluginCapable(c) && c.pluginBundlesMcpServer(),
         finish: isBrowserFinishable(c)

@@ -215,8 +215,18 @@ function staticFrameworkConfig(): FrameworkConfig {
 const fakeInstaller: McpInstaller = {
   detectClients: () =>
     Promise.resolve([
-      { name: 'Claude Code', supportsPlugin: true, pluginBundlesMcp: false },
-      { name: 'Cursor', supportsPlugin: false, pluginBundlesMcp: false },
+      {
+        name: 'Claude Code',
+        kind: 'local',
+        supportsPlugin: true,
+        pluginBundlesMcp: false,
+      },
+      {
+        name: 'Cursor',
+        kind: 'local',
+        supportsPlugin: false,
+        pluginBundlesMcp: false,
+      },
     ]),
   install: pending,
   remove: pending,

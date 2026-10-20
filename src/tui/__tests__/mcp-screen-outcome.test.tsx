@@ -32,7 +32,12 @@ afterEach(() => {
 const installer: McpInstaller = {
   detectClients: () =>
     Promise.resolve([
-      { name: 'Cursor', supportsPlugin: false, pluginBundlesMcp: false },
+      {
+        name: 'Cursor',
+        kind: 'local',
+        supportsPlugin: false,
+        pluginBundlesMcp: false,
+      },
     ]),
   install: () =>
     Promise.resolve([{ name: 'Cursor', status: McpClientStatus.Changed }]),

@@ -264,7 +264,7 @@ describe('createMcpInstaller — detectClients', () => {
     vi.clearAllMocks();
   });
 
-  it('surfaces the finish note for browser-finishable clients only', async () => {
+  it('marks browser-finishable clients as account clients with a finish note', async () => {
     mcpModule.getSupportedClients.mockResolvedValue([
       { name: 'Cursor' },
       {
@@ -280,6 +280,7 @@ describe('createMcpInstaller — detectClients', () => {
     expect(detected).toEqual([
       {
         name: 'Cursor',
+        kind: 'local',
         supportsPlugin: false,
         pluginBundlesMcp: false,
         finish: undefined,
@@ -288,6 +289,7 @@ describe('createMcpInstaller — detectClients', () => {
       },
       {
         name: 'Claude Desktop/Web',
+        kind: 'account',
         supportsPlugin: false,
         pluginBundlesMcp: false,
         finish: {
