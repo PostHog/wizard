@@ -212,19 +212,39 @@ describe('createMcpInstaller — install', () => {
   });
 });
 
-describe('createMcpInstaller — remove', () => {
+describe('createMcpInstaller — detectInstalled and remove', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it('passes the local flag through so `mcp remove --local` targets the right server', async () => {
-    mcpModule.getInstalledClients.mockResolvedValue([{ name: 'Codex' }]);
+  it('lists installed local clients only, passing the local flag through', async () => {
+    mcpModule.getInstalledClients.mockResolvedValue([
+      { name: 'Codex' },
+      {
+        name: 'Claude Desktop/Web',
+        connectorUrl: 'https://claude.ai/directory/connectors/posthog',
+        finishInstruction: 'Sign in and click "Connect" to finish.',
+      },
+    ]);
+
+    const installer = createMcpInstaller();
+    const installed = await installer.detectInstalled(true);
+
+    expect(mcpModule.getInstalledClients).toHaveBeenCalledWith(true);
+    expect(installed.map((c) => c.name)).toEqual(['Codex']);
+  });
+
+  it('removes only the selected clients, passing the local flag through so `mcp remove --local` targets the right server', async () => {
+    mcpModule.getInstalledClients.mockResolvedValue([
+      { name: 'Cursor' },
+      { name: 'Codex' },
+    ]);
     mcpModule.removeMCPServer.mockResolvedValue([changed('Codex')]);
 
     const installer = createMcpInstaller();
-    await installer.remove(true);
+    await installer.detectInstalled(true);
+    await installer.remove(['Codex'], true);
 
-    expect(mcpModule.getInstalledClients).toHaveBeenCalledWith(true);
     expect(mcpModule.removeMCPServer).toHaveBeenCalledWith(
       [{ name: 'Codex' }],
       true,
@@ -242,19 +262,21 @@ describe('createMcpInstaller — remove', () => {
     ]);
 
     const installer = createMcpInstaller();
+    await installer.detectInstalled();
 
-    await expect(installer.remove()).resolves.toEqual([
+    await expect(installer.remove(['Cursor', 'Codex'])).resolves.toEqual([
       changed('Cursor'),
       { name: 'Codex', status: McpClientStatus.Failed, detail: 'codex locked' },
     ]);
   });
 
-  it('returns nothing when no client has the server installed', async () => {
+  it('returns nothing when no selected client is installed', async () => {
     mcpModule.getInstalledClients.mockResolvedValue([]);
 
     const installer = createMcpInstaller();
+    await installer.detectInstalled();
 
-    await expect(installer.remove()).resolves.toEqual([]);
+    await expect(installer.remove(['Cursor'])).resolves.toEqual([]);
     expect(mcpModule.removeMCPServer).not.toHaveBeenCalled();
   });
 });

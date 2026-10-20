@@ -20,6 +20,7 @@ import {
   toClientResult,
   type McpClientResult,
 } from '@shared/mcp-clients/results';
+import type { MCPClient } from '@shared/mcp-clients/MCPClient';
 import { isPluginCapable } from '@shared/mcp-clients/plugin-client';
 import { isLoginCapable } from '@shared/mcp-clients/login-client';
 import { isBrowserFinishable } from '@shared/mcp-clients/browser-client';
@@ -64,11 +65,14 @@ export interface McpInstaller {
     apiKey?: string,
   ): Promise<McpClientResult[]>;
 
+  /** The local clients that have the PostHog MCP server or plugin installed. */
+  detectInstalled(local?: boolean): Promise<McpClientInfo[]>;
+
   /**
-   * Remove the PostHog MCP server from every client that has it. Returns one
+   * Remove the PostHog MCP server from the given installed clients. Returns one
    * result per client so a failed removal isn't reported as a success.
    */
-  remove(local?: boolean): Promise<McpClientResult[]>;
+  remove(clientNames: string[], local?: boolean): Promise<McpClientResult[]>;
 
   /** Install the PostHog AI plugin to supported clients. Best-effort: failures do not affect MCP outcome. */
   installPlugins(clientNames: string[]): Promise<McpClientResult[]>;
@@ -77,26 +81,39 @@ export interface McpInstaller {
 /**
  * Production McpInstaller backed by real MCP client detection and installation.
  */
+const toClientInfo = (c: MCPClient): McpClientInfo => ({
+  name: c.name,
+  kind: isBrowserFinishable(c) ? 'account' : 'local',
+  supportsPlugin: isPluginCapable(c) && c.supportsPlugin(),
+  pluginBundlesMcp: isPluginCapable(c) && c.pluginBundlesMcpServer(),
+  finish: isBrowserFinishable(c)
+    ? { url: c.connectorUrl, instruction: c.finishInstruction }
+    : undefined,
+  loginCommand: (isLoginCapable(c) && c.loginCommand(false)) || undefined,
+  pluginLoginCommand:
+    (isLoginCapable(c) && c.pluginLoginCommand?.()) || undefined,
+});
+
 export function createMcpInstaller(): McpInstaller {
   // Cache the raw MCPClient objects so install() can reference them by name
   let cachedClients: Array<{ name: string; raw: unknown }> = [];
+  // Same for remove(): the clients detectInstalled() found.
+  let installedClients: MCPClient[] = [];
 
   return {
     async detectClients(): Promise<McpClientInfo[]> {
       const supported = await getSupportedClients();
       cachedClients = supported.map((c) => ({ name: c.name, raw: c }));
-      return supported.map((c) => ({
-        name: c.name,
-        kind: isBrowserFinishable(c) ? 'account' : 'local',
-        supportsPlugin: isPluginCapable(c) && c.supportsPlugin(),
-        pluginBundlesMcp: isPluginCapable(c) && c.pluginBundlesMcpServer(),
-        finish: isBrowserFinishable(c)
-          ? { url: c.connectorUrl, instruction: c.finishInstruction }
-          : undefined,
-        loginCommand: (isLoginCapable(c) && c.loginCommand(false)) || undefined,
-        pluginLoginCommand:
-          (isLoginCapable(c) && c.pluginLoginCommand?.()) || undefined,
-      }));
+      return supported.map(toClientInfo);
+    },
+
+    async detectInstalled(local?: boolean): Promise<McpClientInfo[]> {
+      // Account clients live in the user's account, so there is nothing local
+      // to remove; they never report installed, and this keeps it that way.
+      installedClients = (await getInstalledClients(local)).filter(
+        (c) => !isBrowserFinishable(c),
+      );
+      return installedClients.map(toClientInfo);
     },
 
     async install(
@@ -151,12 +168,17 @@ export function createMcpInstaller(): McpInstaller {
       return results;
     },
 
-    async remove(local?: boolean): Promise<McpClientResult[]> {
+    async remove(
+      clientNames: string[],
+      local?: boolean,
+    ): Promise<McpClientResult[]> {
       // `local` was dropped here, so `mcp remove --local` looked at (and
       // reported on) the wrong server name.
-      const installed = await getInstalledClients(local);
-      if (installed.length === 0) return [];
-      return removeMCPServer(installed, local);
+      const selected = installedClients.filter((c) =>
+        clientNames.includes(c.name),
+      );
+      if (selected.length === 0) return [];
+      return removeMCPServer(selected, local);
     },
 
     async installPlugins(clientNames: string[]): Promise<McpClientResult[]> {

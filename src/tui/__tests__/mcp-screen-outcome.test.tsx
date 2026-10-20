@@ -39,6 +39,15 @@ const installer: McpInstaller = {
         pluginBundlesMcp: false,
       },
     ]),
+  detectInstalled: () =>
+    Promise.resolve([
+      {
+        name: 'Cursor',
+        kind: 'local',
+        supportsPlugin: false,
+        pluginBundlesMcp: false,
+      },
+    ]),
   install: () =>
     Promise.resolve([{ name: 'Cursor', status: McpClientStatus.Changed }]),
   remove: () =>
@@ -62,9 +71,15 @@ it('reports a removal once, as its results show, before the Enter that completes
   const { stdin, lastFrame } = render(
     <McpScreen store={store} installer={installer} mode="remove" />,
   );
-  await vi.waitFor(() => expect(lastFrame()).toContain('Detected: Cursor'));
+  await vi.waitFor(() =>
+    expect(lastFrame()).toContain('Select the coding agents'),
+  );
   await tick();
-  stdin.write('\r');
+  // Tick Cursor, then move onto Confirm.
+  for (const key of [ENTER, DOWN, ENTER]) {
+    stdin.write(key);
+    await tick();
+  }
   await vi.waitFor(() => expect(lastFrame()).toContain('Press enter'));
 
   expect(mcpCompleteCalls()).toEqual([
@@ -79,6 +94,68 @@ it('reports a removal once, as its results show, before the Enter that completes
   stdin.write('\r');
   await vi.waitFor(() => expect(store.mcpComplete).toBe(true));
   expect(mcpCompleteCalls()).toHaveLength(1);
+});
+
+it('removes only the coding agents the user ticks', async () => {
+  const store = new WizardStore(Tool.McpRemove);
+  store.session = buildSession({ installDir: '/app' });
+  const detectInstalled = () =>
+    Promise.resolve([
+      {
+        name: 'Cursor',
+        kind: 'local' as const,
+        supportsPlugin: false,
+        pluginBundlesMcp: false,
+      },
+      {
+        name: 'Codex',
+        kind: 'local' as const,
+        supportsPlugin: true,
+        pluginBundlesMcp: false,
+      },
+    ]);
+  const remove = vi.fn<McpInstaller['remove']>((names) =>
+    Promise.resolve(
+      names.map((name) => ({ name, status: McpClientStatus.Changed })),
+    ),
+  );
+  const { stdin, lastFrame } = render(
+    <McpScreen
+      store={store}
+      installer={{ ...installer, detectInstalled, remove }}
+      mode="remove"
+    />,
+  );
+  await vi.waitFor(() => expect(lastFrame()).toContain('Codex (plugin + MCP)'));
+  await tick();
+  // Skip Cursor, tick Codex, then move onto Confirm.
+  for (const key of [DOWN, ENTER, DOWN, ENTER]) {
+    stdin.write(key);
+    await tick();
+  }
+  await vi.waitFor(() => expect(lastFrame()).toContain('Press enter'));
+  expect(remove).toHaveBeenCalledWith(['Codex'], false);
+});
+
+it('removes nothing on esc from the remove picker', async () => {
+  const store = new WizardStore(Tool.McpRemove);
+  store.session = buildSession({ installDir: '/app' });
+  const remove = vi.fn<McpInstaller['remove']>(() => Promise.resolve([]));
+  const { stdin, lastFrame } = render(
+    <McpScreen
+      store={store}
+      installer={{ ...installer, remove }}
+      mode="remove"
+    />,
+  );
+  await vi.waitFor(() =>
+    expect(lastFrame()).toContain('Select the coding agents'),
+  );
+  await tick();
+  stdin.write(ESC);
+  await vi.waitFor(() => expect(store.mcpComplete).toBe(true));
+  expect(store.mcpOutcome).toBe(McpOutcome.Skipped);
+  expect(remove).not.toHaveBeenCalled();
 });
 
 it('installs in every coding agent and reports once, as its results show, before Enter', async () => {

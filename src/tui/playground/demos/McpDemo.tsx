@@ -71,11 +71,15 @@ function createMockInstaller(): McpInstaller {
         )
         .map((name) => ({ name, status: McpClientStatus.Changed }));
     },
-    async remove() {
+    async detectInstalled() {
+      await new Promise((r) => setTimeout(r, 800));
+      return MOCK_CLIENTS.filter((c) => c.kind === 'local');
+    },
+    async remove(clientNames) {
       await new Promise((r) => setTimeout(r, 1000));
       // Mixed outcomes so the demo shows the removal failure copy too.
-      return MOCK_CLIENTS.map((c, i) =>
-        i === 2
+      return MOCK_CLIENTS.filter((c) => clientNames.includes(c.name)).map((c) =>
+        c.name === 'VS Code'
           ? {
               name: c.name,
               status: McpClientStatus.Failed,

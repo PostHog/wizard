@@ -7,7 +7,7 @@
  * Supports two modes via the `mode` prop:
  *   - 'install': detect clients → install in every local client (esc skips the rest) → results
  *     → open the connector page of each account client the user picks
- *   - 'remove': detect installed clients → confirm → remove
+ *   - 'remove': detect installed local clients → pick which (esc cancels) → remove
  *
  * A successful install ends on one screen: a row per client, any login
  * commands, sample prompts and the tutorial command. When done, calls
@@ -20,7 +20,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useSyncExternalStore } from 'react';
 import type { WizardStore } from '@tui/store';
 import { McpOutcome } from '@shared/run-state';
-import { ConfirmationInput, PickerMenu } from '@tui/primitives/index';
+import { PickerMenu } from '@tui/primitives/index';
 import { Colors, Icons } from '@tui/styles';
 import { useKeyBindings, KeyMatch } from '@tui/hooks/useKeyBindings';
 import { analytics } from '@utils/analytics';
@@ -284,7 +284,7 @@ export const McpScreen = ({
   );
 
   // Keep stdin active from mount so Windows cmd.exe doesn't drop
-  // the first keypress when ConfirmationInput appears after detection.
+  // the first keypress when a picker appears after detection.
   useInput(() => undefined);
 
   const isRemove = mode === 'remove';
@@ -331,7 +331,9 @@ export const McpScreen = ({
   useEffect(() => {
     void (async () => {
       try {
-        const detected = await installer.detectClients();
+        const detected = isRemove
+          ? await installer.detectInstalled(store.session.localMcp)
+          : await installer.detectClients();
         const local = detected.filter((c) => c.kind === 'local');
         if (detected.length === 0) {
           setPhase(Phase.None);
@@ -577,11 +579,26 @@ export const McpScreen = ({
       : [],
   );
 
-  const doRemove = async () => {
+  // The remove picker has no escape binding of its own; esc removes nothing.
+  useKeyBindings(
+    'mcp-remove-cancel',
+    phase === Phase.Ask
+      ? [
+          {
+            match: KeyMatch.Escape,
+            label: 'esc',
+            action: 'cancel',
+            handler: () => markDone(store, McpOutcome.Skipped),
+          },
+        ]
+      : [],
+  );
+
+  const doRemove = async (names: string[]) => {
     setPhase(Phase.Working);
     let result: McpClientResult[] = [];
     try {
-      result = await installer.remove(store.session.localMcp);
+      result = await installer.remove(names, store.session.localMcp);
     } catch (err) {
       setFlowError(errorText(err));
     }
@@ -670,7 +687,7 @@ export const McpScreen = ({
         {phase === Phase.Detecting && (
           <Text dimColor>
             {isRemove
-              ? 'Detecting supported editors...'
+              ? 'Looking for coding agents with the PostHog MCP...'
               : 'Looking for coding agents...'}
           </Text>
         )}
@@ -692,28 +709,27 @@ export const McpScreen = ({
           ) : (
             <Text dimColor>
               {isRemove
-                ? 'No installed MCP clients detected. Skipping...'
+                ? 'No coding agent has the PostHog MCP installed. Skipping...'
                 : 'No supported coding agents detected. Skipping...'}
             </Text>
           ))}
 
         {phase === Phase.Ask && (
-          <>
-            <Text dimColor>
-              Detected: {clients.map((c) => c.name).join(', ')}
-            </Text>
-            <Box marginTop={1}>
-              <ConfirmationInput
-                message={`Remove the PostHog MCP server${
-                  clients.some((c) => c.supportsPlugin) ? ' and plugin' : ''
-                }?`}
-                confirmLabel="Remove"
-                cancelLabel="No thanks"
-                onConfirm={() => void doRemove()}
-                onCancel={() => markDone(store, McpOutcome.Skipped)}
-              />
-            </Box>
-          </>
+          <PickerMenu
+            message="Select the coding agents to remove the PostHog MCP from"
+            mode="multi"
+            options={clients.map((c) => ({
+              label: c.name,
+              value: c.name,
+              hint: c.supportsPlugin ? 'plugin + MCP' : 'MCP',
+            }))}
+            onSelect={(selected) => {
+              const names = Array.isArray(selected) ? selected : [selected];
+              // Confirming with nothing ticked removes nothing.
+              if (names.length === 0) markDone(store, McpOutcome.Skipped);
+              else void doRemove(names);
+            }}
+          />
         )}
 
         {phase === Phase.Working && isRemove && (
