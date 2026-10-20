@@ -1,4 +1,5 @@
 import z from 'zod';
+import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import {
@@ -40,9 +41,11 @@ export class ZedClient extends DefaultMCPClient {
   }
 
   async isClientSupported(): Promise<boolean> {
-    return Promise.resolve(
-      process.platform === 'darwin' || process.platform === 'linux',
-    );
+    if (process.platform !== 'darwin' && process.platform !== 'linux') {
+      return false;
+    }
+    // Zed creates its config folder on first launch; without it, it isn't installed.
+    return fs.existsSync(path.dirname(await this.getConfigPath()));
   }
 
   async getConfigPath(): Promise<string> {

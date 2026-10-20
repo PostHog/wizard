@@ -1,4 +1,5 @@
 import z from 'zod';
+import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import {
@@ -40,11 +41,9 @@ export class VisualStudioCodeClient extends DefaultMCPClient {
   }
 
   async isClientSupported(): Promise<boolean> {
-    return Promise.resolve(
-      process.platform === 'darwin' ||
-        process.platform === 'win32' ||
-        process.platform === 'linux',
-    );
+    if (!['darwin', 'win32', 'linux'].includes(process.platform)) return false;
+    // VS Code creates its Code/User folder on first launch; without it, it isn't installed.
+    return fs.existsSync(path.dirname(await this.getConfigPath()));
   }
 
   async getConfigPath(): Promise<string> {

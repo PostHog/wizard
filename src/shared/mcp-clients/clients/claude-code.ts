@@ -16,7 +16,8 @@ import {
 } from '@shared/mcp-clients/results';
 import { LoginCapable } from '@shared/mcp-clients/login-client';
 import { z } from 'zod';
-import { execSync, execFile } from 'child_process';
+import { execFileSync, execFile } from 'child_process';
+import { findTrustedBinary } from '@shared/mcp-clients/trusted-binary';
 import { logToFile } from '@utils/debug';
 import * as os from 'os';
 import * as path from 'path';
@@ -148,17 +149,13 @@ export class ClaudeCodeMCPClient
       }
     }
 
-    // Try PATH as fallback
-    try {
-      execSync('command -v claude', { stdio: 'pipe' });
-      logToFile('  Found claude in PATH');
-      this.claudeBinaryPath = 'claude';
-      return 'claude';
-    } catch {
-      // Not in PATH
+    // PATH as fallback, skipping copies the project could have planted.
+    const onPath = findTrustedBinary('claude');
+    if (onPath) {
+      logToFile(`  Found claude in PATH at: ${onPath}`);
+      this.claudeBinaryPath = onPath;
     }
-
-    return null;
+    return onPath;
   }
 
   isClientSupported(): Promise<boolean> {
@@ -177,7 +174,9 @@ export class ClaudeCodeMCPClient
         return Promise.resolve(false);
       }
 
-      const output = execSync(`${claudeBinary} --version`, { stdio: 'pipe' });
+      const output = execFileSync(claudeBinary, ['--version'], {
+        stdio: 'pipe',
+      });
       const version = output.toString().trim();
       logToFile(`  Claude Code detected: ${version}`);
       return Promise.resolve(true);
@@ -199,7 +198,7 @@ export class ClaudeCodeMCPClient
     // scan of `mcp list` also matches the claude.ai "PostHog" connector and the
     // plugin's `plugin:posthog:posthog`, reporting installed forever.
     try {
-      execSync(`${binary} mcp get ${serverName}`, { stdio: 'pipe' });
+      execFileSync(binary, ['mcp', 'get', serverName], { stdio: 'pipe' });
       return Promise.resolve(true);
     } catch {
       return Promise.resolve(false);
@@ -239,9 +238,7 @@ export class ClaudeCodeMCPClient
     }
 
     try {
-      execSync(`${binary} ${args.map((a) => JSON.stringify(a)).join(' ')}`, {
-        stdio: 'pipe',
-      });
+      execFileSync(binary, args, { stdio: 'pipe' });
       return Promise.resolve({ success: true });
     } catch (error) {
       // The failing command echoes back the Authorization header we passed, so
@@ -336,10 +333,15 @@ export class ClaudeCodeMCPClient
     }
 
     const serverName = local ? 'posthog-local' : 'posthog';
-    const command = `${claudeBinary} mcp remove --scope user ${serverName}`;
 
     try {
-      execSync(command, { stdio: 'pipe' });
+      execFileSync(
+        claudeBinary,
+        ['mcp', 'remove', '--scope', 'user', serverName],
+        {
+          stdio: 'pipe',
+        },
+      );
     } catch (error) {
       const reason = redactSecrets(
         error instanceof Error ? error.message : String(error),

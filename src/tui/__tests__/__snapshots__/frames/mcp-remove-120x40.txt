@@ -4,8 +4,9 @@
 
  Remove the PostHog MCP
 
- Detected: Claude Code, Cursor
+  Select the coding agents to remove the PostHog MCP from
 
-  Remove the PostHog MCP server and plugin?
+   ◻ Claude Code (plugin + MCP)
+   ◻ Cursor (MCP)
 
-   ▸ Remove    No thanks
+     Confirm
