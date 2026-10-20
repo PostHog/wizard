@@ -96,9 +96,10 @@ const doneOnEnter = (
 };
 
 /**
- * The editor-owned login commands still to run after this install: fresh
- * config entries use the client's own server name, plugin-provided servers
- * their `plugin:` name. One entry per client.
+ * The editor-owned login commands to run after this install: config entries
+ * use the client's own server name, plugin-provided servers their `plugin:`
+ * name. One entry per client. An entry that was already there still gets its
+ * command, as a plugin does: nothing here knows whether the user signed in.
  */
 const pendingLoginCommands = (
   clients: McpClientInfo[],
@@ -112,7 +113,9 @@ const pendingLoginCommands = (
   }
   for (const r of mcpResult) {
     const command = clients.find((c) => c.name === r.name)?.loginCommand;
-    if (r.status === McpClientStatus.Changed && command)
+    // A fresh entry's command wins; an existing one never replaces the plugin's.
+    if (!isOk(r) || !command) continue;
+    if (r.status === McpClientStatus.Changed || !commands.has(r.name))
       commands.set(r.name, command);
   }
   return [...commands.values()];
@@ -594,13 +597,6 @@ export const McpScreen = ({
     setPhase(Phase.Done);
   };
 
-  // The "what you get" preview shown while installing —
-  // installed users have no idea what "MCP" means; lead with the value.
-  const installValueLines = [
-    'Ask your agent: "List my feature flags" — and it does.',
-    'Run SQL, build dashboards, ship flags, all from your coding agent.',
-  ];
-
   const allResults = [...mcpResults, ...pluginResults];
   const readyCount = localClients.filter((c) =>
     allResults.some((r) => r.name === c.name && isOk(r)),
@@ -650,8 +646,9 @@ export const McpScreen = ({
         label: c.name,
         value: c.name,
         hint: 'opens in your browser',
+        prominent: true,
       })),
-    { label: exitLabel, value: CONTINUE },
+    { label: exitLabel, value: CONTINUE, spaced: true },
   ];
 
   const removedNow = namesWithStatus(mcpResults, McpClientStatus.Changed);
@@ -728,13 +725,6 @@ export const McpScreen = ({
 
         {phase === Phase.Working && !isRemove && (
           <Box flexDirection="column">
-            <Box flexDirection="column" marginBottom={1}>
-              {installValueLines.map((line) => (
-                <Text key={line} dimColor>
-                  {line}
-                </Text>
-              ))}
-            </Box>
             <Box marginBottom={1}>
               <Text dimColor>
                 Found {plural(localClients.length, 'coding agent')}. Setting
@@ -833,24 +823,10 @@ export const McpScreen = ({
 
         {phase === Phase.Assistants && (
           <Box flexDirection="column">
-            {stepOne.current && (
-              <Box marginBottom={1}>
-                <Text>
-                  <Text color="green">{'\u2714'}</Text>{' '}
-                  <Text dimColor>
-                    Coding agents done:{' '}
-                    {stepOne.current.ready.join(', ') || 'none'}
-                  </Text>
-                </Text>
-              </Box>
-            )}
             <Box flexDirection="column" marginBottom={1}>
               <Text>
-                These connect through your account, so they work on every device
-                you sign in on.
-              </Text>
-              <Text>
-                Pick one, we open its page, you sign in and click Connect.
+                Connect PostHog to your chat apps and AI assistants. Sign in to
+                your account and connect.
               </Text>
             </Box>
             {opened.map((r) => {

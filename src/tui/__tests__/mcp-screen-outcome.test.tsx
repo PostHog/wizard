@@ -227,6 +227,8 @@ it('opens an AI assistant after the coding agents and completes with both', asyn
   await tick();
   stdin.write(ENTER);
   await vi.waitFor(() => expect(lastFrame()).toContain('Step 2 of 2'));
+  // Exit sits apart from the assistants, after a blank row.
+  expect(lastFrame()).toMatch(/\(opens in your browser\)\n\s*\n\s+Exit/);
   await tick();
   stdin.write(ENTER);
   await vi.waitFor(() =>
@@ -243,6 +245,32 @@ it('opens an AI assistant after the coding agents and completes with both', asyn
   await vi.waitFor(() => expect(store.mcpComplete).toBe(true));
   expect(store.mcpInstalledClients).toEqual(['Cursor', 'Claude Desktop/Web']);
   expect(mcpCompleteCalls()).toHaveLength(1);
+});
+
+it('shows the login command for a coding agent that was already installed', async () => {
+  const store = new WizardStore(Tool.McpAdd);
+  store.session = buildSession({ installDir: '/app' });
+  const detectClients = () =>
+    Promise.resolve([
+      {
+        name: 'Codex',
+        kind: 'local' as const,
+        supportsPlugin: false,
+        pluginBundlesMcp: false,
+        loginCommand: 'codex mcp login posthog',
+      },
+    ]);
+  const install = () =>
+    Promise.resolve([{ name: 'Codex', status: McpClientStatus.Unchanged }]);
+  const { lastFrame } = render(
+    <McpScreen
+      store={store}
+      installer={{ ...installer, detectClients, install }}
+    />,
+  );
+  await vi.waitFor(() => expect(lastFrame()).toContain('Press enter'));
+  expect(lastFrame()).toContain('Already installed');
+  expect(lastFrame()).toContain('codex mcp login posthog');
 });
 
 it('reports a failed detection once, as its error shows, before Enter', async () => {

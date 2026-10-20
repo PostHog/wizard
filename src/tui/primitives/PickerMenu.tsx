@@ -47,6 +47,10 @@ export interface PickerOption<T> {
   header?: boolean;
   /** Indent the label one level, e.g. items nested under a `header` row. */
   indent?: boolean;
+  /** Single-select only: full brightness when unfocused; its hint stays dim. */
+  prominent?: boolean;
+  /** Single-select only: a blank row above, to set the option apart. */
+  spaced?: boolean;
   /**
    * Multi-select only: marks this option mutually exclusive with every other
    * option. Selecting it clears all other picks; selecting any non-exclusive
@@ -436,10 +440,18 @@ const SinglePickerMenu = <T,>({
 
   const renderOption = (opt: PickerOption<T>, flatIdx: number) => {
     const isFocused = flatIdx === focused;
-    const base = opt.hint ? `${opt.label} (${opt.hint})` : opt.label;
+    // A prominent option dims only its hint, so the hint renders on its own.
+    const splitHint = opt.prominent && opt.hint;
+    const base =
+      opt.hint && !splitHint ? `${opt.label} (${opt.hint})` : opt.label;
     const label = opt.indent ? `  ${base}` : base;
     return (
-      <Box key={flatIdx} gap={1} marginBottom={optionMarginBottom}>
+      <Box
+        key={flatIdx}
+        gap={1}
+        marginBottom={optionMarginBottom}
+        marginTop={opt.spaced ? 1 : 0}
+      >
         <Text
           color={isFocused ? Colors.accent : undefined}
           dimColor={!isFocused}
@@ -458,9 +470,12 @@ const SinglePickerMenu = <T,>({
               : undefined
           }
           bold={opt.header || (isFocused && !opt.disabled)}
-          dimColor={!opt.header && (!isFocused || opt.disabled)}
+          dimColor={
+            !opt.header && (opt.disabled || (!isFocused && !opt.prominent))
+          }
         >
           {label}
+          {splitHint && <Text dimColor> ({opt.hint})</Text>}
         </Text>
       </Box>
     );

@@ -4,9 +4,6 @@
 
  Adding the PostHog MCP to your coding agents
 
- Ask your agent: "List my feature flags" — and it does.
- Run SQL, build dashboards, ship flags, all from your coding agent.
-
  Found 2 coding agents. Setting each one up on this computer.
 
    › Claude Code   plugin + MCP    Installing…
