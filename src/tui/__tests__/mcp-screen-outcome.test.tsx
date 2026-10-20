@@ -46,6 +46,8 @@ const installer: McpInstaller = {
   installPlugins: () => Promise.resolve([]),
 };
 
+const ENTER = '\r';
+const DOWN = '\u001B[B';
 const ESC = '\u001B';
 // A prompt's frame renders before its input handler attaches in a passive
 // effect, so a key written on the same turn as the frame can be dropped.
@@ -143,6 +145,41 @@ it('skips the coding agents not started yet on esc', async () => {
   expect(install).toHaveBeenCalledTimes(1);
   expect(lastFrame()).toContain('Skipped');
   expect(lastFrame()).toContain('ready in 1 of 2 coding agents');
+});
+
+it('retries a failed coding agent from the results menu', async () => {
+  const store = new WizardStore(Tool.McpAdd);
+  store.session = buildSession({ installDir: '/app' });
+  const install = vi
+    .fn<McpInstaller['install']>()
+    .mockResolvedValueOnce([
+      {
+        name: 'Cursor',
+        status: McpClientStatus.Failed,
+        detail: 'EACCES: permission denied',
+      },
+    ])
+    .mockResolvedValueOnce([
+      { name: 'Cursor', status: McpClientStatus.Changed },
+    ]);
+  const { stdin, lastFrame } = render(
+    <McpScreen store={store} installer={{ ...installer, install }} />,
+  );
+  await vi.waitFor(() => expect(lastFrame()).toContain('Retry Cursor'));
+  expect(lastFrame()).toContain('EACCES: permission denied');
+  await tick();
+  for (const key of [DOWN, ENTER]) {
+    stdin.write(key);
+    await tick();
+  }
+  await vi.waitFor(() => expect(lastFrame()).toContain('Press enter'));
+  expect(lastFrame()).toContain('ready in 1 coding agent');
+
+  await tick();
+  stdin.write(ENTER);
+  await vi.waitFor(() => expect(store.mcpComplete).toBe(true));
+  expect(store.mcpInstalledClients).toEqual(['Cursor']);
+  expect(install).toHaveBeenCalledTimes(2);
 });
 
 it('reports a failed detection once, as its error shows, before Enter', async () => {

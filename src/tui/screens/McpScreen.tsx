@@ -19,7 +19,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useSyncExternalStore } from 'react';
 import type { WizardStore } from '@tui/store';
 import { McpOutcome } from '@shared/run-state';
-import { ConfirmationInput } from '@tui/primitives/index';
+import { ConfirmationInput, PickerMenu } from '@tui/primitives/index';
 import { Colors, Icons } from '@tui/styles';
 import { useKeyBindings, KeyMatch } from '@tui/hooks/useKeyBindings';
 import type {
@@ -55,6 +55,9 @@ enum Phase {
   Done = 'done',
   None = 'none',
 }
+
+/** The results menu's leave option; never a client name. */
+const CONTINUE = '\u0000continue';
 
 /** Where a client's install has got to. `done` rows read their result. */
 enum RowState {
@@ -344,6 +347,72 @@ export const McpScreen = ({
   const setRow = (name: string, state: RowState) =>
     setRows((prev) => ({ ...prev, [name]: state }));
 
+  const installDirect = async (
+    name: string,
+    features: string[],
+  ): Promise<McpClientResult[]> => {
+    try {
+      return await installer.install([name], features, store.session.apiKey);
+    } catch (err) {
+      return [{ name, status: McpClientStatus.Failed, detail: errorText(err) }];
+    }
+  };
+
+  const installPluginsFor = async (
+    names: string[],
+  ): Promise<McpClientResult[]> => {
+    try {
+      return await installer.installPlugins(names);
+    } catch (err) {
+      return names.map((name) => ({
+        name,
+        status: McpClientStatus.Failed,
+        detail: errorText(err),
+      }));
+    }
+  };
+
+  // A direct entry for everyone whose plugin doesn't already ship the MCP
+  // server (codex's plugin is skills-only; claude's bundles the server).
+  const needsDirect = (client: McpClientInfo) =>
+    !oauthFlow || !client.pluginBundlesMcp;
+
+  /** Show the results and arm Enter with what ended up installed. */
+  const settle = (
+    local: McpClientInfo[],
+    mcpResult: McpClientResult[],
+    pluginResult: McpClientResult[],
+    features: string[],
+    attempted: boolean,
+  ) => {
+    // Already-installed counts as installed: the user ends up with a working
+    // MCP either way.
+    const ready = [
+      ...new Set(
+        [...mcpResult, ...pluginResult].filter(isOk).map((r) => r.name),
+      ),
+    ];
+    const outcome =
+      ready.length > 0
+        ? McpOutcome.Installed
+        : attempted
+        ? McpOutcome.Failed
+        : McpOutcome.Skipped;
+    const logins = oauthFlow
+      ? pendingLoginCommands(local, mcpResult, pluginResult)
+      : [];
+    setLoginCommands(logins);
+    // Reports once per store, so a retry only updates what Enter completes.
+    finishFlow.current = doneOnEnter(
+      store,
+      outcome,
+      ready,
+      reportFeatures(features),
+      logins,
+    );
+    setPhase(Phase.Done);
+  };
+
   const installAll = async (local: McpClientInfo[]) => {
     setRows(Object.fromEntries(local.map((c) => [c.name, RowState.Waiting])));
     setPhase(Phase.Working);
@@ -356,29 +425,12 @@ export const McpScreen = ({
     const pluginResult: McpClientResult[] = [];
     const started = new Set<string>();
 
-    // A direct entry for everyone whose plugin doesn't already ship the MCP
-    // server (codex's plugin is skills-only; claude's bundles the server).
     for (const client of local) {
       if (skipRest.current) break;
-      const direct = !oauthFlow || !client.pluginBundlesMcp;
-      if (!direct) continue;
+      if (!needsDirect(client)) continue;
       started.add(client.name);
       setRow(client.name, RowState.Installing);
-      try {
-        mcpResult.push(
-          ...(await installer.install(
-            [client.name],
-            features,
-            store.session.apiKey,
-          )),
-        );
-      } catch (err) {
-        mcpResult.push({
-          name: client.name,
-          status: McpClientStatus.Failed,
-          detail: errorText(err),
-        });
-      }
+      mcpResult.push(...(await installDirect(client.name, features)));
       setMcpResults([...mcpResult]);
       // A plugin client still has its plugin to come.
       setRow(
@@ -393,17 +445,7 @@ export const McpScreen = ({
         started.add(name);
         setRow(name, RowState.Installing);
       });
-      try {
-        pluginResult.push(...(await installer.installPlugins(plugins)));
-      } catch (err) {
-        plugins.forEach((name) =>
-          pluginResult.push({
-            name,
-            status: McpClientStatus.Failed,
-            detail: errorText(err),
-          }),
-        );
-      }
+      pluginResult.push(...(await installPluginsFor(plugins)));
       setPluginResults([...pluginResult]);
     }
 
@@ -415,32 +457,26 @@ export const McpScreen = ({
         ]),
       ),
     );
+    settle(local, mcpResult, pluginResult, features, started.size > 0);
+  };
 
-    // Already-installed counts as installed: the user ends up with a working
-    // MCP either way.
-    const ready = [
-      ...new Set(
-        [...mcpResult, ...pluginResult].filter(isOk).map((r) => r.name),
-      ),
-    ];
-    const outcome =
-      ready.length > 0
-        ? McpOutcome.Installed
-        : started.size === 0
-        ? McpOutcome.Skipped
-        : McpOutcome.Failed;
-    const logins = oauthFlow
-      ? pendingLoginCommands(local, mcpResult, pluginResult)
-      : [];
-    setLoginCommands(logins);
-    finishFlow.current = doneOnEnter(
-      store,
-      outcome,
-      ready,
-      reportFeatures(features),
-      logins,
-    );
-    setPhase(Phase.Done);
+  const retry = async (name: string) => {
+    const client = localClients.find((c) => c.name === name);
+    if (!client) return;
+    const features = store.mcpFeatures ?? [...ALL_FEATURE_VALUES];
+    const others = (results: McpClientResult[]) =>
+      results.filter((r) => r.name !== name);
+    setRow(name, RowState.Installing);
+    const mcpResult = needsDirect(client)
+      ? [...others(mcpResults), ...(await installDirect(name, features))]
+      : mcpResults;
+    const pluginResult = pluginNames.includes(name)
+      ? [...others(pluginResults), ...(await installPluginsFor([name]))]
+      : pluginResults;
+    setMcpResults(mcpResult);
+    setPluginResults(pluginResult);
+    setRow(name, RowState.Done);
+    settle(localClients, mcpResult, pluginResult, features, true);
   };
 
   const doRemove = async () => {
@@ -475,6 +511,16 @@ export const McpScreen = ({
     allResults.some((r) => r.name === c.name && isOk(r)),
   ).length;
   const installSucceeded = !isRemove && readyCount > 0;
+  const failedNames = localClients
+    .filter(
+      (c) =>
+        rows[c.name] === RowState.Done &&
+        allResults.some(
+          (r) => r.name === c.name && r.status === McpClientStatus.Failed,
+        ),
+    )
+    .map((c) => c.name);
+  const retrying = Object.values(rows).includes(RowState.Installing);
 
   const heading = isRemove
     ? 'Remove the PostHog MCP'
@@ -641,7 +687,27 @@ export const McpScreen = ({
                 </Text>
               </>
             )}
-            <DoneContinue onContinue={() => finishFlow.current?.()} />
+            {retrying ? null : failedNames.length > 0 ? (
+              <Box marginTop={1}>
+                <PickerMenu
+                  key={failedNames.join(',')}
+                  options={[
+                    { label: 'Continue', value: CONTINUE },
+                    ...failedNames.map((name) => ({
+                      label: `Retry ${name}`,
+                      value: name,
+                    })),
+                  ]}
+                  onSelect={(value) => {
+                    const picked = Array.isArray(value) ? value[0] : value;
+                    if (picked === CONTINUE) finishFlow.current?.();
+                    else if (picked) void retry(picked);
+                  }}
+                />
+              </Box>
+            ) : (
+              <DoneContinue onContinue={() => finishFlow.current?.()} />
+            )}
           </Box>
         )}
 
