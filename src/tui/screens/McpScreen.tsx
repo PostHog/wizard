@@ -5,7 +5,7 @@
  * importing business logic directly. Testable, no dynamic imports.
  *
  * Supports two modes via the `mode` prop:
- *   - 'install': detect clients → install in every local client (esc skips the rest) → results
+ *   - 'install': detect clients → install in every local client → results
  *     → open the connector page of each account client the user picks
  *   - 'remove': detect installed local clients → pick which (esc cancels) → remove
  *
@@ -69,7 +69,6 @@ enum RowState {
   Waiting = 'waiting',
   Installing = 'installing',
   Done = 'done',
-  Skipped = 'skipped',
 }
 
 const markDone = (
@@ -170,7 +169,7 @@ const rowDisplay = (
   results: McpClientResult[],
 ): { icon: string; label: string; color?: string; detail?: string } => {
   if (state === RowState.Waiting) return { icon: '·', label: 'Waiting' };
-  if (state === RowState.Skipped) return { icon: '–', label: 'Skipped' };
+  // ClientRows draws a spinner in place of this icon.
   if (state === RowState.Installing)
     return { icon: '›', label: 'Installing…', color: Colors.accent };
   const failed = results.filter((r) => r.status === McpClientStatus.Failed);
@@ -213,24 +212,32 @@ const ClientRows = ({
   return (
     <Box flexDirection="column">
       {clients.map((c) => {
+        const state = rows[c.name] ?? RowState.Waiting;
         const row = rowDisplay(
-          rows[c.name] ?? RowState.Waiting,
+          state,
           results.filter((r) => r.name === c.name),
         );
         const via = pluginNames.includes(c.name) ? 'plugin + MCP' : 'MCP';
         return (
           <Box key={c.name} flexDirection="column">
-            <Text>
-              {'  '}
-              <Text color={row.color} dimColor={!row.color}>
-                {row.icon}
-              </Text>{' '}
-              {c.name.padEnd(nameWidth)}
-              <Text dimColor>{via.padEnd(viaWidth)}</Text>
-              <Text color={row.color} dimColor={!row.color}>
-                {row.label}
+            <Box>
+              <Text>{'  '}</Text>
+              {state === RowState.Installing ? (
+                <Spinner />
+              ) : (
+                <Text color={row.color} dimColor={!row.color}>
+                  {row.icon}
+                </Text>
+              )}
+              <Text>
+                {' '}
+                {c.name.padEnd(nameWidth)}
+                <Text dimColor>{via.padEnd(viaWidth)}</Text>
+                <Text color={row.color} dimColor={!row.color}>
+                  {row.label}
+                </Text>
               </Text>
-            </Text>
+            </Box>
             {row.detail && (
               <Text dimColor>
                 {' '.repeat(4 + nameWidth + viaWidth)}
@@ -299,8 +306,6 @@ export const McpScreen = ({
   const [detectError, setDetectError] = useState<string | null>(null);
   const [flowError, setFlowError] = useState<string | null>(null);
   const [loginCommands, setLoginCommands] = useState<string[]>([]);
-  // Esc during the install stops before the next client starts.
-  const skipRest = useRef(false);
   // The action that finishes the screen once the user has read the results.
   // Held in a ref so the useInput handler inside DoneContinue can invoke the
   // freshest closure without re-registering listeners on every render.
@@ -358,22 +363,6 @@ export const McpScreen = ({
     })();
   }, [installer]); // eslint-disable-line
 
-  useKeyBindings(
-    'mcp-skip',
-    phase === Phase.Working && !isRemove
-      ? [
-          {
-            match: KeyMatch.Escape,
-            label: 'esc',
-            action: 'skip the rest',
-            handler: () => {
-              skipRest.current = true;
-            },
-          },
-        ]
-      : [],
-  );
-
   const setRow = (name: string, state: RowState) =>
     setRows((prev) => ({ ...prev, [name]: state }));
 
@@ -413,7 +402,6 @@ export const McpScreen = ({
     mcpResult: McpClientResult[],
     pluginResult: McpClientResult[],
     features: string[],
-    attempted: boolean,
   ) => {
     // Already-installed counts as installed: the user ends up with a working
     // MCP either way.
@@ -422,12 +410,7 @@ export const McpScreen = ({
         [...mcpResult, ...pluginResult].filter(isOk).map((r) => r.name),
       ),
     ];
-    const outcome =
-      ready.length > 0
-        ? McpOutcome.Installed
-        : attempted
-        ? McpOutcome.Failed
-        : McpOutcome.Skipped;
+    const outcome = ready.length > 0 ? McpOutcome.Installed : McpOutcome.Failed;
     const logins = oauthFlow
       ? pendingLoginCommands(local, mcpResult, pluginResult)
       : [];
@@ -459,12 +442,9 @@ export const McpScreen = ({
       : [];
     const mcpResult: McpClientResult[] = [];
     const pluginResult: McpClientResult[] = [];
-    const started = new Set<string>();
 
     for (const client of local) {
-      if (skipRest.current) break;
       if (!needsDirect(client)) continue;
-      started.add(client.name);
       setRow(client.name, RowState.Installing);
       mcpResult.push(...(await installDirect(client.name, features)));
       setMcpResults([...mcpResult]);
@@ -476,24 +456,14 @@ export const McpScreen = ({
     }
 
     // One batch, so `mcp plugins installed` stays one event per run.
-    if (plugins.length > 0 && !skipRest.current) {
-      plugins.forEach((name) => {
-        started.add(name);
-        setRow(name, RowState.Installing);
-      });
+    if (plugins.length > 0) {
+      plugins.forEach((name) => setRow(name, RowState.Installing));
       pluginResult.push(...(await installPluginsFor(plugins)));
       setPluginResults([...pluginResult]);
     }
 
-    setRows(
-      Object.fromEntries(
-        local.map((c) => [
-          c.name,
-          started.has(c.name) ? RowState.Done : RowState.Skipped,
-        ]),
-      ),
-    );
-    settle(local, mcpResult, pluginResult, features, started.size > 0);
+    setRows(Object.fromEntries(local.map((c) => [c.name, RowState.Done])));
+    settle(local, mcpResult, pluginResult, features);
   };
 
   const retry = async (name: string) => {
@@ -512,7 +482,7 @@ export const McpScreen = ({
     setMcpResults(mcpResult);
     setPluginResults(pluginResult);
     setRow(name, RowState.Done);
-    settle(localClients, mcpResult, pluginResult, features, true);
+    settle(localClients, mcpResult, pluginResult, features);
   };
 
   /** Leave Step 1: on to the AI assistants, or out when there are none. */

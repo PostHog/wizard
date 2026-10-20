@@ -180,50 +180,6 @@ it('installs in every coding agent and reports once, as its results show, before
   expect(store.mcpComplete).toBe(false);
 });
 
-it('skips the coding agents not started yet on esc', async () => {
-  const store = new WizardStore(Tool.McpAdd);
-  store.session = buildSession({ installDir: '/app' });
-  let finishCursor: () => void = () => undefined;
-  const install = vi.fn<McpInstaller['install']>(
-    (names) =>
-      new Promise((resolve) => {
-        finishCursor = () =>
-          resolve([{ name: names[0], status: McpClientStatus.Changed }]);
-      }),
-  );
-  const detectClients = () =>
-    Promise.resolve([
-      {
-        name: 'Cursor',
-        kind: 'local' as const,
-        supportsPlugin: false,
-        pluginBundlesMcp: false,
-      },
-      {
-        name: 'Zed',
-        kind: 'local' as const,
-        supportsPlugin: false,
-        pluginBundlesMcp: false,
-      },
-    ]);
-  const { stdin, lastFrame } = render(
-    <McpScreen
-      store={store}
-      installer={{ ...installer, detectClients, install }}
-    />,
-  );
-  await vi.waitFor(() => expect(lastFrame()).toContain('Installing'));
-  await tick();
-  stdin.write(ESC);
-  await tick();
-  finishCursor();
-  await vi.waitFor(() => expect(lastFrame()).toContain('Press enter'));
-
-  expect(install).toHaveBeenCalledTimes(1);
-  expect(lastFrame()).toContain('Skipped');
-  expect(lastFrame()).toContain('ready in 1 of 2 coding agents');
-});
-
 it('retries a failed coding agent from the results menu', async () => {
   const store = new WizardStore(Tool.McpAdd);
   store.session = buildSession({ installDir: '/app' });

@@ -6,5 +6,5 @@
 
  Found 2 coding agents. Setting each one up on this computer.
 
-   › Claude Code   plugin + MCP    Installing…
+   ⠋ Claude Code   plugin + MCP    Installing…
    · Cursor        MCP             Waiting
