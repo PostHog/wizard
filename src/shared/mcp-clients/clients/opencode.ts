@@ -2,7 +2,7 @@ import z from 'zod';
 import * as path from 'path';
 import * as os from 'os';
 import * as fs from 'fs';
-import { execSync } from 'node:child_process';
+import { findTrustedBinary } from '@shared/mcp-clients/trusted-binary';
 import {
   DefaultMCPClient,
   MCPServerConfig,
@@ -35,18 +35,8 @@ export class OpenCodeMCPClient extends DefaultMCPClient {
 
   private findOpenCodeBinary(): string | null {
     if (this.opencodeBinaryPath) return this.opencodeBinaryPath;
-    try {
-      const resolved = execSync('command -v opencode', { stdio: 'pipe' })
-        .toString()
-        .trim();
-      if (resolved) {
-        this.opencodeBinaryPath = resolved;
-        return resolved;
-      }
-    } catch {
-      // not in PATH
-    }
-    return null;
+    this.opencodeBinaryPath = findTrustedBinary('opencode');
+    return this.opencodeBinaryPath;
   }
 
   isClientSupported(): Promise<boolean> {

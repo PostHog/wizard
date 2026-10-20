@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { execSync, execFile, type ExecFileException } from 'node:child_process';
+import { execFile, type ExecFileException } from 'node:child_process';
+import { findTrustedBinary } from '@shared/mcp-clients/trusted-binary';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -297,18 +298,8 @@ export class CodexMCPClient
 
   private findCodexBinary(): string | null {
     if (this.codexBinaryPath) return this.codexBinaryPath;
-    try {
-      const resolved = execSync('command -v codex', { stdio: 'pipe' })
-        .toString()
-        .trim();
-      if (resolved) {
-        this.codexBinaryPath = resolved;
-        return resolved;
-      }
-    } catch {
-      // not in PATH
-    }
-    return null;
+    this.codexBinaryPath = findTrustedBinary('codex');
+    return this.codexBinaryPath;
   }
 
   private configPath(): string {

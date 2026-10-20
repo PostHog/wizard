@@ -1,10 +1,10 @@
 import { OpenCodeMCPClient } from '@shared/mcp-clients/clients/opencode';
-import { execSync } from 'node:child_process';
+import { findTrustedBinary } from '@shared/mcp-clients/trusted-binary';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 
-vi.mock('node:child_process', () => ({
-  execSync: vi.fn(),
+vi.mock('@shared/mcp-clients/trusted-binary', () => ({
+  findTrustedBinary: vi.fn(),
 }));
 
 vi.mock('node:fs', async () => {
@@ -34,7 +34,7 @@ vi.mock('@utils/debug', () => ({
 }));
 
 describe('OpenCodeMCPClient', () => {
-  const execSyncMock = execSync as Mock;
+  const findBinaryMock = findTrustedBinary as Mock;
   const existsSyncMock = fs.existsSync as Mock;
   const mkdirMock = fs.promises.mkdir as Mock;
   const readFileMock = fs.promises.readFile as Mock;
@@ -55,28 +55,24 @@ describe('OpenCodeMCPClient', () => {
 
   describe('isClientSupported', () => {
     it('returns true when opencode is in PATH', async () => {
-      execSyncMock.mockReturnValue(Buffer.from('/usr/local/bin/opencode\n'));
+      findBinaryMock.mockReturnValue('/usr/local/bin/opencode');
       const client = new OpenCodeMCPClient();
       await expect(client.isClientSupported()).resolves.toBe(true);
-      expect(execSyncMock).toHaveBeenCalledWith('command -v opencode', {
-        stdio: 'pipe',
-      });
+      expect(findBinaryMock).toHaveBeenCalledWith('opencode');
     });
 
     it('returns false when opencode is not in PATH', async () => {
-      execSyncMock.mockImplementation(() => {
-        throw new Error('command not found');
-      });
+      findBinaryMock.mockReturnValue(null);
       const client = new OpenCodeMCPClient();
       await expect(client.isClientSupported()).resolves.toBe(false);
     });
 
     it('memoizes the binary path after first detection', async () => {
-      execSyncMock.mockReturnValue(Buffer.from('/usr/local/bin/opencode\n'));
+      findBinaryMock.mockReturnValue('/usr/local/bin/opencode');
       const client = new OpenCodeMCPClient();
       await client.isClientSupported();
       await client.isClientSupported();
-      expect(execSyncMock).toHaveBeenCalledTimes(1);
+      expect(findBinaryMock).toHaveBeenCalledTimes(1);
     });
   });
 

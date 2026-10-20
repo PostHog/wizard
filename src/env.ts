@@ -93,7 +93,9 @@ type RuntimeEnvKey =
   // Platform: paths
   | 'APPDATA'
   | 'OPENCODE_CONFIG_DIR'
-  | 'XDG_CONFIG_HOME';
+  | 'XDG_CONFIG_HOME'
+  // Platform: where MCP client CLIs are looked up (mcp-clients/trusted-binary.ts).
+  | 'PATH';
 
 /** Read a runtime environment variable. Only allowlisted keys compile. */
 export function runtimeEnv(key: RuntimeEnvKey): string | undefined {
