@@ -46,8 +46,6 @@ const installer: McpInstaller = {
   installPlugins: () => Promise.resolve([]),
 };
 
-const ENTER = '\r';
-const DOWN = '\u001B[B';
 const ESC = '\u001B';
 // A prompt's frame renders before its input handler attaches in a passive
 // effect, so a key written on the same turn as the frame can be dropped.
@@ -81,20 +79,15 @@ it('reports a removal once, as its results show, before the Enter that completes
   expect(mcpCompleteCalls()).toHaveLength(1);
 });
 
-it('reports an install once, as its results show, before Enter', async () => {
+it('installs in every coding agent and reports once, as its results show, before Enter', async () => {
   const store = new WizardStore(Tool.McpAdd);
   store.session = buildSession({ installDir: '/app' });
-  const { stdin, lastFrame } = render(
+  const { lastFrame } = render(
     <McpScreen store={store} installer={installer} />,
   );
-  await vi.waitFor(() => expect(lastFrame()).toContain('Select clients'));
-  await tick();
-  // Tick Cursor, then move onto Confirm.
-  for (const key of [ENTER, DOWN, ENTER]) {
-    stdin.write(key);
-    await tick();
-  }
   await vi.waitFor(() => expect(lastFrame()).toContain('Press enter'));
+  expect(lastFrame()).toContain('The PostHog MCP is ready in 1 coding agent');
+  expect(lastFrame()).toContain('Installed');
 
   expect(mcpCompleteCalls()).toEqual([
     [
@@ -108,19 +101,48 @@ it('reports an install once, as its results show, before Enter', async () => {
   expect(store.mcpComplete).toBe(false);
 });
 
-it('skips the install on esc from the client picker', async () => {
+it('skips the coding agents not started yet on esc', async () => {
   const store = new WizardStore(Tool.McpAdd);
   store.session = buildSession({ installDir: '/app' });
-  const install = vi.fn<McpInstaller['install']>(() => Promise.resolve([]));
-  const { stdin, lastFrame } = render(
-    <McpScreen store={store} installer={{ ...installer, install }} />,
+  let finishCursor: () => void = () => undefined;
+  const install = vi.fn<McpInstaller['install']>(
+    (names) =>
+      new Promise((resolve) => {
+        finishCursor = () =>
+          resolve([{ name: names[0], status: McpClientStatus.Changed }]);
+      }),
   );
-  await vi.waitFor(() => expect(lastFrame()).toContain('Select clients'));
+  const detectClients = () =>
+    Promise.resolve([
+      {
+        name: 'Cursor',
+        kind: 'local' as const,
+        supportsPlugin: false,
+        pluginBundlesMcp: false,
+      },
+      {
+        name: 'Zed',
+        kind: 'local' as const,
+        supportsPlugin: false,
+        pluginBundlesMcp: false,
+      },
+    ]);
+  const { stdin, lastFrame } = render(
+    <McpScreen
+      store={store}
+      installer={{ ...installer, detectClients, install }}
+    />,
+  );
+  await vi.waitFor(() => expect(lastFrame()).toContain('Installing'));
   await tick();
   stdin.write(ESC);
-  await vi.waitFor(() => expect(store.mcpComplete).toBe(true));
-  expect(store.mcpOutcome).toBe(McpOutcome.Skipped);
-  expect(install).not.toHaveBeenCalled();
+  await tick();
+  finishCursor();
+  await vi.waitFor(() => expect(lastFrame()).toContain('Press enter'));
+
+  expect(install).toHaveBeenCalledTimes(1);
+  expect(lastFrame()).toContain('Skipped');
+  expect(lastFrame()).toContain('ready in 1 of 2 coding agents');
 });
 
 it('reports a failed detection once, as its error shows, before Enter', async () => {

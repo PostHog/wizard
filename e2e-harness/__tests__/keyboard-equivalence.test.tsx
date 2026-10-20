@@ -116,10 +116,12 @@ const ran = (s: WizardStore) => {
 const fakeInstaller = {
   detectClients: () =>
     Promise.resolve([
-      { name: 'Cursor', supportsPlugin: false },
-      { name: 'Claude Code', supportsPlugin: true },
+      { name: 'Cursor', kind: 'local', supportsPlugin: false },
+      { name: 'Claude Code', kind: 'local', supportsPlugin: true },
     ]),
-  install: () => Promise.resolve([]),
+  install: (names: string[]) =>
+    Promise.resolve(names.map((name) => ({ name, status: 'changed' }))),
+  installPlugins: () => Promise.resolve([]),
 } as unknown as McpInstaller;
 
 interface Pair {
@@ -188,21 +190,21 @@ const PAIRS: Pair[] = [
     action: 'dismiss_outro',
   },
   {
-    name: 'mcp: decline install vs set_mcp_outcome skipped',
+    name: 'mcp: enter on install results vs set_mcp_outcome installed',
     knownDivergence:
       'keyboard path lands on keep-skills, whose mount scan sets skillsComplete; the action only records the MCP outcome',
     program: Program.PostHogIntegration,
     screen: ScreenId.Mcp,
-    ready: (_, frame) => frame.includes('esc cancel'),
+    ready: (_, frame) => frame.includes('Press enter'),
     arrange: (s) => {
       confirmed(s);
       authed(s);
       ran(s);
       s.setOutroDismissed();
     },
-    keys: [ESC],
+    keys: [ENTER],
     action: 'set_mcp_outcome',
-    params: { outcome: 'skipped' },
+    params: { outcome: 'installed', clients: ['Cursor', 'Claude Code'] },
   },
   {
     name: 'slack-connect: skip vs dismiss_slack',
