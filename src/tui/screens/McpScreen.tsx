@@ -517,6 +517,7 @@ export const McpScreen = ({
             message="Select the PostHog areas your agent can reach"
             groups={AVAILABLE_FEATURES}
             initialSelected={[]}
+            countNoun={{ one: 'area', other: 'areas' }}
             onSelect={(features) => {
               void doInstall(selectedClientNames, features);
             }}
