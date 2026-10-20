@@ -182,6 +182,69 @@ it('retries a failed coding agent from the results menu', async () => {
   expect(install).toHaveBeenCalledTimes(2);
 });
 
+it('opens an AI assistant after the coding agents and completes with both', async () => {
+  const store = new WizardStore(Tool.McpAdd);
+  store.session = buildSession({ installDir: '/app' });
+  const detectClients = () =>
+    Promise.resolve([
+      {
+        name: 'Cursor',
+        kind: 'local' as const,
+        supportsPlugin: false,
+        pluginBundlesMcp: false,
+      },
+      {
+        name: 'Claude Desktop/Web',
+        kind: 'account' as const,
+        supportsPlugin: false,
+        pluginBundlesMcp: false,
+        finish: {
+          url: 'https://claude.ai/directory/connectors/posthog',
+          instruction: 'Sign in and click "Connect" to finish.',
+        },
+      },
+    ]);
+  const install = vi.fn<McpInstaller['install']>((names) =>
+    Promise.resolve(
+      names.map((name) => ({ name, status: McpClientStatus.Changed })),
+    ),
+  );
+  const { stdin, lastFrame } = render(
+    <McpScreen
+      store={store}
+      installer={{ ...installer, detectClients, install }}
+      exitLabel="Exit"
+    />,
+  );
+  await vi.waitFor(() => expect(lastFrame()).toContain('Press enter'));
+  expect(lastFrame()).toContain('Step 1 of 2');
+  expect(install).toHaveBeenCalledWith(
+    ['Cursor'],
+    expect.anything(),
+    undefined,
+  );
+
+  await tick();
+  stdin.write(ENTER);
+  await vi.waitFor(() => expect(lastFrame()).toContain('Step 2 of 2'));
+  await tick();
+  stdin.write(ENTER);
+  await vi.waitFor(() =>
+    expect(lastFrame()).toContain('Opened in your browser'),
+  );
+  expect(install).toHaveBeenLastCalledWith(['Claude Desktop/Web']);
+  expect(wizardCapture).toHaveBeenCalledWith('mcp assistant opened', {
+    client: 'Claude Desktop/Web',
+    opened: true,
+  });
+
+  await tick();
+  stdin.write(ENTER);
+  await vi.waitFor(() => expect(store.mcpComplete).toBe(true));
+  expect(store.mcpInstalledClients).toEqual(['Cursor', 'Claude Desktop/Web']);
+  expect(mcpCompleteCalls()).toHaveLength(1);
+});
+
 it('reports a failed detection once, as its error shows, before Enter', async () => {
   const store = new WizardStore(Tool.McpAdd);
   store.session = buildSession({ installDir: '/app' });

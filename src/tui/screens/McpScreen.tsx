@@ -6,6 +6,7 @@
  *
  * Supports two modes via the `mode` prop:
  *   - 'install': detect clients → install in every local client (esc skips the rest) → results
+ *     → open the connector page of each account client the user picks
  *   - 'remove': detect installed clients → confirm → remove
  *
  * A successful install ends on one screen: a row per client, any login
@@ -22,6 +23,7 @@ import { McpOutcome } from '@shared/run-state';
 import { ConfirmationInput, PickerMenu } from '@tui/primitives/index';
 import { Colors, Icons } from '@tui/styles';
 import { useKeyBindings, KeyMatch } from '@tui/hooks/useKeyBindings';
+import { analytics } from '@utils/analytics';
 import type {
   McpInstaller,
   McpClientInfo,
@@ -46,6 +48,8 @@ interface McpScreenProps {
   mode?: McpMode;
   /** Prompts to suggest once installed; the MCP tool passes its role-tuned kit. */
   samplePrompts?: string[];
+  /** The last menu item, which leaves the screen. `mcp add` says Exit. */
+  exitLabel?: string;
 }
 
 enum Phase {
@@ -53,6 +57,7 @@ enum Phase {
   Ask = 'ask',
   Working = 'working',
   Done = 'done',
+  Assistants = 'assistants',
   None = 'none',
 }
 
@@ -242,7 +247,13 @@ const ClientRows = ({
  * whipped past too fast to read on a normal install, especially when several
  * result groups were stacked.
  */
-const DoneContinue = ({ onContinue }: { onContinue: () => void }) => {
+const DoneContinue = ({
+  onContinue,
+  label = 'Continue',
+}: {
+  onContinue: () => void;
+  label?: string;
+}) => {
   useInput((_input, key) => {
     if (key.return) {
       onContinue();
@@ -251,7 +262,7 @@ const DoneContinue = ({ onContinue }: { onContinue: () => void }) => {
   return (
     <Box marginTop={1}>
       <Text color={Colors.primary}>
-        Press enter to continue {Icons.triangleRight}
+        Press enter to {label.toLowerCase()} {Icons.triangleRight}
       </Text>
     </Box>
   );
@@ -262,6 +273,7 @@ export const McpScreen = ({
   installer,
   mode = 'install',
   samplePrompts = [],
+  exitLabel = 'Continue',
 }: McpScreenProps) => {
   useSyncExternalStore(
     (cb) => store.subscribe(cb),
@@ -290,6 +302,14 @@ export const McpScreen = ({
   // Held in a ref so the useInput handler inside DoneContinue can invoke the
   // freshest closure without re-registering listeners on every render.
   const finishFlow = useRef<null | (() => void)>(null);
+  // What Step 1 installed, so leaving Step 2 completes the step with both.
+  const stepOne = useRef<{
+    outcome: McpOutcome;
+    ready: string[];
+    features: 'all' | string[];
+    logins: string[];
+  } | null>(null);
+  const [opened, setOpened] = useState<McpClientResult[]>([]);
 
   // An api-key install bakes the key into the client config — no OAuth ever
   // runs, so those flows never get a login command. OAuth flows ask nothing:
@@ -297,6 +317,8 @@ export const McpScreen = ({
   const oauthFlow = !store.session.apiKey;
 
   const localClients = clients.filter((c) => c.kind === 'local');
+  const accountClients = clients.filter((c) => c.kind === 'account');
+  const twoSteps = localClients.length > 0 && accountClients.length > 0;
   // OAuth: plugin-capable clients get the plugin. Api-key installs write
   // key-authed direct entries only — the plugin's server never carries the key.
   const pluginNames = oauthFlow
@@ -308,15 +330,18 @@ export const McpScreen = ({
       try {
         const detected = await installer.detectClients();
         const local = detected.filter((c) => c.kind === 'local');
-        if (detected.length === 0 || (!isRemove && local.length === 0)) {
+        if (detected.length === 0) {
           setPhase(Phase.None);
           setTimeout(() => markDone(store, McpOutcome.NoClients), 1500);
         } else if (isRemove) {
           setClients(detected);
           setPhase(Phase.Ask);
+        } else if (local.length === 0) {
+          setClients(detected);
+          setPhase(Phase.Assistants);
         } else {
           setClients(detected);
-          void installAll(detected.filter((c) => c.kind === 'local'));
+          void installAll(local);
         }
       } catch (err) {
         setDetectError(errorText(err));
@@ -402,6 +427,12 @@ export const McpScreen = ({
       ? pendingLoginCommands(local, mcpResult, pluginResult)
       : [];
     setLoginCommands(logins);
+    stepOne.current = {
+      outcome,
+      ready,
+      features: reportFeatures(features),
+      logins,
+    };
     // Reports once per store, so a retry only updates what Enter completes.
     finishFlow.current = doneOnEnter(
       store,
@@ -479,6 +510,70 @@ export const McpScreen = ({
     settle(localClients, mcpResult, pluginResult, features, true);
   };
 
+  /** Leave Step 1: on to the AI assistants, or out when there are none. */
+  const leaveStepOne = () => {
+    if (accountClients.length > 0) setPhase(Phase.Assistants);
+    else finishFlow.current?.();
+  };
+
+  // A second Enter can land before the list redraws; open each page once.
+  const openedNames = useRef(new Set<string>());
+
+  const openAssistant = async (name: string) => {
+    if (openedNames.current.has(name)) return;
+    openedNames.current.add(name);
+    let result: McpClientResult[];
+    try {
+      result = await installer.install([name]);
+    } catch (err) {
+      result = [
+        { name, status: McpClientStatus.Failed, detail: errorText(err) },
+      ];
+    }
+    analytics.wizardCapture('mcp assistant opened', {
+      client: name,
+      opened: result.some(isOk),
+    });
+    setOpened((prev) => [...prev, ...result]);
+  };
+
+  /** Complete the step with Step 1's installs plus the assistants opened. */
+  const leaveAssistants = () => {
+    const openedNames = opened.filter(isOk).map((r) => r.name);
+    const one = stepOne.current;
+    if (one) {
+      markDone(
+        store,
+        one.outcome === McpOutcome.Installed || openedNames.length === 0
+          ? one.outcome
+          : McpOutcome.Installed,
+        [...one.ready, ...openedNames],
+        one.features,
+        one.logins,
+      );
+      return;
+    }
+    markDone(
+      store,
+      openedNames.length > 0 ? McpOutcome.Installed : McpOutcome.Skipped,
+      openedNames,
+    );
+  };
+
+  useKeyBindings(
+    'mcp-assistants-skip',
+    phase === Phase.Assistants
+      ? [
+          {
+            match: KeyMatch.Escape,
+            label: 'esc',
+            action: 'skip',
+            handler: leaveAssistants,
+          },
+        ]
+      : [],
+  );
+
   const doRemove = async () => {
     setPhase(Phase.Working);
     let result: McpClientResult[] = [];
@@ -524,6 +619,8 @@ export const McpScreen = ({
 
   const heading = isRemove
     ? 'Remove the PostHog MCP'
+    : phase === Phase.Assistants
+    ? 'Connect PostHog to your AI assistants'
     : phase !== Phase.Done
     ? 'Adding the PostHog MCP to your coding agents'
     : readyCount === 0
@@ -535,6 +632,28 @@ export const McpScreen = ({
         'coding agent',
       )}`;
 
+  const stepLabel = isRemove
+    ? null
+    : phase === Phase.Assistants
+    ? twoSteps
+      ? 'Step 2 of 2 · AI assistants'
+      : 'AI assistants'
+    : twoSteps
+    ? 'Step 1 of 2 · Coding agents'
+    : null;
+  // Step 1 leaves the screen only when no AI assistant step follows.
+  const stepOneExit = accountClients.length > 0 ? 'Continue' : exitLabel;
+  const assistantOptions = [
+    ...accountClients
+      .filter((c) => !opened.some((r) => r.name === c.name))
+      .map((c) => ({
+        label: c.name,
+        value: c.name,
+        hint: 'opens in your browser',
+      })),
+    { label: exitLabel, value: CONTINUE },
+  ];
+
   const removedNow = namesWithStatus(mcpResults, McpClientStatus.Changed);
   const alreadyRemoved = namesWithStatus(mcpResults, McpClientStatus.Unchanged);
   // A failure the user can act on — the name alone says nothing, so carry the
@@ -545,6 +664,7 @@ export const McpScreen = ({
 
   return (
     <Box flexDirection="column" flexGrow={1}>
+      {stepLabel && <Text dimColor>{stepLabel}</Text>}
       <Text bold color={Colors.accent}>
         {heading}
       </Text>
@@ -692,7 +812,7 @@ export const McpScreen = ({
                 <PickerMenu
                   key={failedNames.join(',')}
                   options={[
-                    { label: 'Continue', value: CONTINUE },
+                    { label: stepOneExit, value: CONTINUE },
                     ...failedNames.map((name) => ({
                       label: `Retry ${name}`,
                       value: name,
@@ -700,14 +820,87 @@ export const McpScreen = ({
                   ]}
                   onSelect={(value) => {
                     const picked = Array.isArray(value) ? value[0] : value;
-                    if (picked === CONTINUE) finishFlow.current?.();
+                    if (picked === CONTINUE) leaveStepOne();
                     else if (picked) void retry(picked);
                   }}
                 />
               </Box>
             ) : (
-              <DoneContinue onContinue={() => finishFlow.current?.()} />
+              <DoneContinue onContinue={leaveStepOne} label={stepOneExit} />
             )}
+          </Box>
+        )}
+
+        {phase === Phase.Assistants && (
+          <Box flexDirection="column">
+            {stepOne.current && (
+              <Box marginBottom={1}>
+                <Text>
+                  <Text color="green">{'\u2714'}</Text>{' '}
+                  <Text dimColor>
+                    Coding agents done:{' '}
+                    {stepOne.current.ready.join(', ') || 'none'}
+                  </Text>
+                </Text>
+              </Box>
+            )}
+            <Box flexDirection="column" marginBottom={1}>
+              <Text>
+                These connect through your account, so they work on every device
+                you sign in on.
+              </Text>
+              <Text>
+                Pick one, we open its page, you sign in and click Connect.
+              </Text>
+            </Box>
+            {opened.map((r) => {
+              const client = accountClients.find((c) => c.name === r.name);
+              return isOk(r) ? (
+                <Box key={r.name} flexDirection="column" marginBottom={1}>
+                  <Text>
+                    {'  '}
+                    <Text color="green">{'\u2714'}</Text> {r.name}{' '}
+                    <Text color="green">Opened in your browser</Text>
+                  </Text>
+                  {client?.finish && (
+                    <>
+                      <Text dimColor>
+                        {'    '}
+                        {client.finish.instruction}
+                      </Text>
+                      <Text>
+                        {'    '}
+                        <Text dimColor>Didn&apos;t open? </Text>
+                        <Text color="cyan">{client.finish.url}</Text>
+                      </Text>
+                    </>
+                  )}
+                </Box>
+              ) : (
+                <Box key={r.name} flexDirection="column" marginBottom={1}>
+                  <Text>
+                    {'  '}
+                    <Text color="red">{'\u2716'}</Text> {r.name}{' '}
+                    <Text color="red">Couldn&apos;t open</Text>
+                  </Text>
+                  {r.detail && (
+                    <Text dimColor>
+                      {'    '}
+                      {r.detail}
+                    </Text>
+                  )}
+                </Box>
+              );
+            })}
+            <PickerMenu
+              key={opened.map((r) => r.name).join(',')}
+              options={assistantOptions}
+              onSelect={(value) => {
+                const picked = Array.isArray(value) ? value[0] : value;
+                if (picked === CONTINUE) leaveAssistants();
+                else if (picked) void openAssistant(picked);
+              }}
+            />
           </Box>
         )}
 
