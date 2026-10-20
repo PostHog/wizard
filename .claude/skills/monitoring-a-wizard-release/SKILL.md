@@ -42,18 +42,18 @@ when the release touches them.
 All of these fired in the last 14 days. Every wizard event carries `run_id`,
 `version`, `build`, `run_surface`, `program_id`, and `command`.
 
-| Event                               | Use it for                | Properties that matter                                                        |
-| ----------------------------------- | ------------------------- | ----------------------------------------------------------------------------- |
-| `wizard: started`                   | Runs started              | `program_id`, `version`, `run_id`                                             |
-| `wizard: auth complete`             | Runs past login           | `program_id`, `version`                                                       |
-| `wizard: switchboard resolved`      | Runner choice per run     | `harness` (`pi`, `anthropic`), `sequence` (`orchestrator`, `linear`), `model` |
-| `setup wizard finished`             | The one terminal event    | `status` (`success`, `cancelled`, `error`), `run_phase`                       |
-| `wizard: orchestrator run finished` | Orchestrator run shape    | `total_duration_ms`, `tasks_total`, `tasks_failed`, `retried_task_count`      |
-| `wizard: orchestrator task failed`  | Failed tasks              | `type` (task type), `error`                                                   |
-| `wizard: agent aborted`             | Aborted runs              | `failure_mode`, `duration_seconds`                                            |
-| `$exception`                        | Failures by code          | `error_code` (`PHW_*`, see [error catalog](../../../docs/error-catalog.md))   |
-| `$ai_generation`                    | LLM cost                  | `$ai_total_cost_usd`, `$ai_product` (`wizard:<program>`), `run_id`            |
-| `wizard: mcp complete`              | MCP install after the run | `version`                                                                     |
+| Event                               | Use it for                | Properties that matter                                                                                         |
+| ----------------------------------- | ------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `wizard: started`                   | Runs started              | `program_id`, `version`, `run_id`                                                                              |
+| `wizard: auth complete`             | Runs past login           | `program_id`, `version`                                                                                        |
+| `wizard: switchboard resolved`      | Runner choice per run     | `harness` (`pi`, `anthropic`), `sequence` (`orchestrator`, `linear`), `model`                                  |
+| `setup wizard finished`             | The one terminal event    | `status` (`success`, `cancelled`, `error`), `run_phase`                                                        |
+| `wizard: orchestrator run finished` | Orchestrator run shape    | `total_duration_ms`, `tasks_total`, `tasks_failed`, `retried_task_count`                                       |
+| `wizard: orchestrator task failed`  | Failed tasks              | `type` (task type), `error`                                                                                    |
+| `wizard: agent aborted`             | Aborted runs              | `failure_mode`, `duration_seconds`                                                                             |
+| `$exception`                        | Failures by code          | `error_code` (`PHW_*`, see [error catalog](../../../docs/error-catalog.md))                                    |
+| `$ai_generation`                    | LLM cost                  | `$ai_total_cost_usd`, `$ai_product` (`wizard:<program>`), `run_id`                                             |
+| `wizard: mcp complete`              | MCP install after the run | `mcp_outcome`, `mcp_newly_installed_clients`, `mcp_already_installed_clients`, `mcp_failed_clients`, `version` |
 
 Traps:
 
@@ -66,6 +66,14 @@ Traps:
 - The orchestrator sets `model = chosen-per-task`. Per-task models are on
   `wizard: orchestrator task models`.
 - There is no context mill version property.
+- `wizard: mcp complete` counts coding agents only, and reports the first
+  install attempt. A retry from the results screen fires
+  `wizard: mcp install retried` with `client` and `success`. AI assistants
+  (Claude Desktop/Web, ChatGPT) are counted by `wizard: mcp assistant opened`.
+- Since the MCP step started installing in every detected coding agent,
+  `mcp_outcome = skipped` is close to zero (there is no picker to decline) and
+  `mcp_installed_clients` lists every detected coding agent instead of the ones
+  a user ticked. Compare these within a version, not across that release.
 
 ## Insights to build or reuse
 

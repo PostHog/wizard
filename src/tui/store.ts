@@ -73,6 +73,13 @@ interface GateEntry {
   resolved: boolean;
 }
 
+/** How each client's MCP install ended; `mcp_installed_clients` is new plus already installed. */
+export interface McpInstallBreakdown {
+  newlyInstalled: string[];
+  alreadyInstalled: string[];
+  failed: string[];
+}
+
 export class WizardStore implements TuiView {
   /** The shared session and run state; every session write goes through it. */
   readonly sessions: SessionStore;
@@ -778,6 +785,7 @@ export class WizardStore implements TuiView {
     outcome: McpOutcome,
     installedClients: string[] = [],
     featuresSelected?: 'all' | string[],
+    breakdown?: McpInstallBreakdown,
   ): void {
     if (this._mcpOutcomeReported) return;
     this._mcpOutcomeReported = true;
@@ -785,10 +793,18 @@ export class WizardStore implements TuiView {
       outcome === McpOutcome.Installed && featuresSelected !== undefined
         ? { mcp_features_selected: featuresSelected }
         : {};
+    const breakdownPayload = breakdown
+      ? {
+          mcp_newly_installed_clients: breakdown.newlyInstalled,
+          mcp_already_installed_clients: breakdown.alreadyInstalled,
+          mcp_failed_clients: breakdown.failed,
+        }
+      : {};
     analytics.wizardCapture('mcp complete', {
       mcp_outcome: outcome,
       mcp_installed_clients: installedClients,
       ...featuresPayload,
+      ...breakdownPayload,
       ...sessionProperties(this.session),
     });
   }

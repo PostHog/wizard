@@ -174,6 +174,9 @@ it('installs in every coding agent and reports once, as its results show, before
       expect.objectContaining({
         mcp_outcome: McpOutcome.Installed,
         mcp_installed_clients: ['Cursor'],
+        mcp_newly_installed_clients: ['Cursor'],
+        mcp_already_installed_clients: [],
+        mcp_failed_clients: [],
       }),
     ],
   ]);
@@ -200,6 +203,16 @@ it('retries a failed coding agent from the results menu', async () => {
   );
   await vi.waitFor(() => expect(lastFrame()).toContain('Retry Cursor'));
   expect(lastFrame()).toContain('EACCES: permission denied');
+  expect(mcpCompleteCalls()).toEqual([
+    [
+      'mcp complete',
+      expect.objectContaining({
+        mcp_outcome: McpOutcome.Failed,
+        mcp_installed_clients: [],
+        mcp_failed_clients: ['Cursor'],
+      }),
+    ],
+  ]);
   await tick();
   for (const key of [DOWN, ENTER]) {
     stdin.write(key);
@@ -213,6 +226,12 @@ it('retries a failed coding agent from the results menu', async () => {
   await vi.waitFor(() => expect(store.mcpComplete).toBe(true));
   expect(store.mcpInstalledClients).toEqual(['Cursor']);
   expect(install).toHaveBeenCalledTimes(2);
+  // The retry has its own event; `mcp complete` keeps the first attempt.
+  expect(wizardCapture).toHaveBeenCalledWith('mcp install retried', {
+    client: 'Cursor',
+    success: true,
+  });
+  expect(mcpCompleteCalls()).toHaveLength(1);
 });
 
 it('opens an AI assistant after the coding agents and completes with both', async () => {
@@ -304,6 +323,68 @@ it('shows the login command for a coding agent that was already installed', asyn
   await vi.waitFor(() => expect(lastFrame()).toContain('Press enter'));
   expect(lastFrame()).toContain('Already installed');
   expect(lastFrame()).toContain('codex mcp login posthog');
+  expect(mcpCompleteCalls()).toEqual([
+    [
+      'mcp complete',
+      expect.objectContaining({
+        mcp_installed_clients: ['Codex'],
+        mcp_newly_installed_clients: [],
+        mcp_already_installed_clients: ['Codex'],
+      }),
+    ],
+  ]);
+});
+
+it('reports no coding agents when only AI assistants were found', async () => {
+  const store = new WizardStore(Tool.McpAdd);
+  store.session = buildSession({ installDir: '/app' });
+  const detectClients = () =>
+    Promise.resolve([
+      {
+        name: 'Claude Desktop/Web',
+        kind: 'account' as const,
+        supportsPlugin: false,
+        pluginBundlesMcp: false,
+        finish: {
+          url: 'https://claude.ai/directory/connectors/posthog',
+          instruction: 'Sign in and click "Connect" to finish.',
+        },
+      },
+    ]);
+  const install = vi.fn<McpInstaller['install']>((names) =>
+    Promise.resolve(
+      names.map((name) => ({ name, status: McpClientStatus.Changed })),
+    ),
+  );
+  const { stdin, lastFrame } = render(
+    <McpScreen
+      store={store}
+      installer={{ ...installer, detectClients, install }}
+      exitLabel="Exit"
+    />,
+  );
+  await vi.waitFor(() => expect(lastFrame()).toContain('AI assistants'));
+  await tick();
+  stdin.write(ENTER);
+  await vi.waitFor(() =>
+    expect(lastFrame()).toContain('Opened in your browser'),
+  );
+  await tick();
+  stdin.write(ENTER);
+  await vi.waitFor(() => expect(store.mcpComplete).toBe(true));
+
+  expect(mcpCompleteCalls()).toEqual([
+    [
+      'mcp complete',
+      { mcp_outcome: McpOutcome.NoClients, mcp_installed_clients: [] },
+    ],
+  ]);
+  expect(wizardCapture).toHaveBeenCalledWith('mcp assistant opened', {
+    client: 'Claude Desktop/Web',
+    opened: true,
+  });
+  // The session still records the assistant for the rest of the run.
+  expect(store.mcpInstalledClients).toEqual(['Claude Desktop/Web']);
 });
 
 it('reports a failed detection once, as its error shows, before Enter', async () => {

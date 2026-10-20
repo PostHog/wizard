@@ -18,7 +18,7 @@ import { Box, Text, useInput } from 'ink';
 import { Spinner } from '@inkjs/ui';
 import { useState, useEffect, useRef } from 'react';
 import { useSyncExternalStore } from 'react';
-import type { WizardStore } from '@tui/store';
+import type { WizardStore, McpInstallBreakdown } from '@tui/store';
 import { McpOutcome } from '@shared/run-state';
 import { PickerMenu } from '@tui/primitives/index';
 import { Colors, Icons } from '@tui/styles';
@@ -88,8 +88,9 @@ const doneOnEnter = (
   clients: string[] = [],
   featuresSelected?: 'all' | string[],
   loginCommands: string[] = [],
+  breakdown?: McpInstallBreakdown,
 ): (() => void) => {
-  store.reportMcpOutcome(outcome, clients, featuresSelected);
+  store.reportMcpOutcome(outcome, clients, featuresSelected, breakdown);
   return () =>
     markDone(store, outcome, clients, featuresSelected, loginCommands);
 };
@@ -118,6 +119,30 @@ const pendingLoginCommands = (
       commands.set(r.name, command);
   }
   return [...commands.values()];
+};
+
+/**
+ * Sort each client by its MCP and plugin results: new when anything changed,
+ * already installed when everything was in place, failed when nothing worked.
+ */
+const installBreakdown = (
+  local: McpClientInfo[],
+  results: McpClientResult[],
+): McpInstallBreakdown => {
+  const breakdown: McpInstallBreakdown = {
+    newlyInstalled: [],
+    alreadyInstalled: [],
+    failed: [],
+  };
+  for (const c of local) {
+    const mine = results.filter((r) => r.name === c.name);
+    if (mine.length === 0) continue;
+    if (!mine.some(isOk)) breakdown.failed.push(c.name);
+    else if (mine.some((r) => r.status === McpClientStatus.Changed))
+      breakdown.newlyInstalled.push(c.name);
+    else breakdown.alreadyInstalled.push(c.name);
+  }
+  return breakdown;
 };
 
 const reportFeatures = (features: string[]): 'all' | string[] =>
@@ -421,13 +446,15 @@ export const McpScreen = ({
       features: reportFeatures(features),
       logins,
     };
-    // Reports once per store, so a retry only updates what Enter completes.
+    // Reports once per store, so a retry only updates what Enter completes;
+    // `mcp install retried` carries the retry's result.
     finishFlow.current = doneOnEnter(
       store,
       outcome,
       ready,
       reportFeatures(features),
       logins,
+      installBreakdown(local, [...mcpResult, ...pluginResult]),
     );
     setPhase(Phase.Done);
   };
@@ -482,6 +509,12 @@ export const McpScreen = ({
     setMcpResults(mcpResult);
     setPluginResults(pluginResult);
     setRow(name, RowState.Done);
+    analytics.wizardCapture('mcp install retried', {
+      client: name,
+      success: [...mcpResult, ...pluginResult].some(
+        (r) => r.name === name && isOk(r),
+      ),
+    });
     settle(localClients, mcpResult, pluginResult, features);
   };
 
@@ -528,6 +561,9 @@ export const McpScreen = ({
       );
       return;
     }
+    // `mcp complete` counts coding agents only, and there were none; the
+    // assistants are counted by `mcp assistant opened`.
+    store.reportMcpOutcome(McpOutcome.NoClients, []);
     markDone(
       store,
       openedNames.length > 0 ? McpOutcome.Installed : McpOutcome.Skipped,
