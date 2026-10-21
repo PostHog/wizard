@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { detectExistingPostHog } from '@programs/detection/integration';
+import { detectExistingPostHog } from '@services/detection/integration';
 
 function makeTmpDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'ph-detect-'));

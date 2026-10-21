@@ -11,8 +11,8 @@ import {
   loadSourceDetectors,
   resetSourceDetectors,
   toSourceDetectors,
-} from '@programs/warehouse-sources/registry';
-import type { CatalogTool } from '@programs/warehouse-sources/types';
+} from '@services/warehouse-sources/registry';
+import type { CatalogTool } from '@services/warehouse-sources/types';
 import { FIXTURE_CATALOG } from './helpers/tool-catalog.no-jest';
 
 const US = 'https://us.posthog.com/api/wizard/tool_catalog/';

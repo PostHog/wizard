@@ -2,7 +2,7 @@
 import { detectProjectsWithAgent } from '../agentic';
 import { runAgent, RunOutcome } from '@agent';
 import type { AgentProgress } from '@agent/types';
-import { buildSession } from '@programs/session/wizard-session';
+import { buildSession } from '@services/session/wizard-session';
 import { analytics } from '@utils/analytics';
 import { HostResolution } from '@shared/host-resolution';
 import { ErrorCodes } from '@shared/errors';

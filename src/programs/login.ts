@@ -4,7 +4,7 @@ import type {
   CredentialsProvider,
   ResolvedProgramCredentials,
 } from '@shared/credentials';
-import type { SessionStore } from './session/session-store';
+import type { SessionStore } from '@services/session';
 
 /**
  * Log in for `programId` once per store: a login the caller holds wins, then

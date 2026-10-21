@@ -34,24 +34,27 @@ import { analytics } from '@utils/analytics';
 import { registerCleanup } from '@utils/cleanup';
 import { logToFile } from '@utils/debug';
 import { removeAuditLedger, startAuditLedgerWatcher } from '@programs/audit';
-import { FRAMEWORK_REGISTRY } from './frameworks/registry';
+import { FRAMEWORK_REGISTRY } from '@services/frameworks';
 import { findProgramConfig, getProgramConfig } from './program-registry';
-import { ProgramAbort } from './program-abort';
+import { ProgramAbort } from '@services/program-contract';
 import { detectionFailure, detectProgram } from './detect-program';
 import {
   rotateCredentials,
   type ResolvedProgramCredentials,
 } from '@shared/credentials';
-import { reportCodebaseScan } from './codebase-scan';
+import { reportCodebaseScan } from '@services/codebase-scan';
 import { IS_PRODUCTION_BUILD } from '@env';
-import type { QuestionKey } from './detection/decisions/questions';
+import type { QuestionKey } from '@services/detection/decisions';
 import { logIn } from './login';
-import { applyAgentProgress, type SessionStore } from './session/session-store';
-import type { WizardSession } from './session/wizard-session';
-import type { ProgramConfig, ProgramRunStep } from './program-step';
-import type { ProgramRun } from './program-run';
-import type { ProgramSession } from './program-session';
-import type { CiRunnerContext, RunnerContext } from './runner-context';
+import { applyAgentProgress, type SessionStore } from '@services/session';
+import type { WizardSession } from '@services/session';
+import type { ProgramConfig, ProgramRunStep } from '@services/program-contract';
+import type { ProgramRun } from '@services/program-contract';
+import type { ProgramSession } from '@services/program-contract';
+import type {
+  CiRunnerContext,
+  RunnerContext,
+} from '@services/program-contract';
 import type {
   ProgramDiagnostic,
   ProgramInput,
@@ -60,7 +63,7 @@ import type {
   ProgramRunOutcome,
   ProgramStep,
   WizardFlagSnapshot,
-} from './program-input';
+} from '@services/program-contract';
 
 /** The session's frameworkContext slot holding an orchestrated run's final task outcomes. */
 export const TASK_OUTCOMES_KEY = 'orchestrator-task-outcomes';
@@ -299,10 +302,10 @@ async function invokeProgram(
 
     // Logged in, AI approved and flags known: the one judgment call, before any agent runs.
     // Production builds drop this branch, and with it the whole Decisions service.
-    let decisions: typeof import('./detection/decisions') | null = null;
+    let decisions: typeof import('@services/detection/decisions') | null = null;
     if (!IS_PRODUCTION_BUILD) {
       try {
-        decisions = await import('./detection/decisions');
+        decisions = await import('@services/detection/decisions');
         await park(
           decisions.runProgramDecisions(decisionKeys(config, plannedRuns), {
             session: store.session,

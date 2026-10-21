@@ -4,7 +4,7 @@ import * as path from 'path';
 import {
   normalizeGitRemote,
   workspaceFingerprint,
-} from '@programs/codebase-scan/fingerprint';
+} from '@services/codebase-scan/fingerprint';
 
 describe('normalizeGitRemote', () => {
   it.each([

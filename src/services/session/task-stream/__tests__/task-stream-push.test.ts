@@ -7,7 +7,7 @@ import type {
   TaskStreamUpdate,
 } from '../types';
 import type { SessionStore } from '../../session-store';
-import type { TaskItem } from '@programs/session/session-store';
+import type { TaskItem } from '@services/session/session-store';
 import { TaskStatus } from '@shared/task-status';
 import { RunPhase } from '@shared/run-state';
 import { type PendingQuestion } from '@agent/types';

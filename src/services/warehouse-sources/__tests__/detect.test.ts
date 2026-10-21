@@ -6,10 +6,10 @@ import {
   detectWarehouseSources,
   parseGemfile,
   parseEnvKeys,
-} from '@programs/warehouse-sources/detect';
+} from '@services/warehouse-sources/detect';
 import { MAX_REPORTED_PATH_LENGTH } from '@utils/env-scan';
-import { toSourceDetectors } from '@programs/warehouse-sources/registry';
-import type { DetectedSource } from '@programs/warehouse-sources/types';
+import { toSourceDetectors } from '@services/warehouse-sources/registry';
+import type { DetectedSource } from '@services/warehouse-sources/types';
 import { FIXTURE_CATALOG } from './helpers/tool-catalog.no-jest';
 
 const DETECTORS = toSourceDetectors(FIXTURE_CATALOG);

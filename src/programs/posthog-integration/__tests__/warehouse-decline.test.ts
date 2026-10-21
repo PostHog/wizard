@@ -17,22 +17,22 @@ vi.mock(import('@utils/analytics'), () => ({
 }));
 
 vi.mock(
-  import('@programs/warehouse-sources/registry'),
+  import('@services/warehouse-sources/registry'),
   async (importOriginal) =>
     (
       await import(
-        '@programs/warehouse-sources/__tests__/helpers/tool-catalog.no-jest'
+        '@services/warehouse-sources/__tests__/helpers/tool-catalog.no-jest'
       )
     ).withFixtureCatalog(await importOriginal()),
 );
 
 import { analytics } from '@utils/analytics';
-import { detectPostHogIntegration } from '@programs/detection/integration';
-import { reportCodebaseScan, scanCodebaseFor } from '@programs/codebase-scan';
-import { DETECTED_WAREHOUSE_SOURCES_KEY } from '@programs/warehouse-sources/detect';
-import type { DetectedSource } from '@programs/warehouse-sources/types';
-import { SessionStore } from '@programs/session/session-store';
-import { buildSession } from '@programs/session/wizard-session';
+import { detectPostHogIntegration } from '@services/detection';
+import { reportCodebaseScan, scanCodebaseFor } from '@services/codebase-scan';
+import { DETECTED_WAREHOUSE_SOURCES_KEY } from '@services/warehouse-sources';
+import type { DetectedSource } from '@services/warehouse-sources';
+import { SessionStore } from '@services/session';
+import { buildSession } from '@services/session';
 import { testRunnerContext } from '@programs/shared/__tests__/runner-context.no-jest';
 import { ScanConsent } from '@shared/run-state';
 import { config as posthogIntegration } from '../index';

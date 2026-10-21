@@ -3,12 +3,12 @@ import type { RunResult } from '@agent/types';
 import { POSTHOG_DOCS_URL } from '@shared/constants';
 import { ErrorCodes } from '@shared/errors';
 import { WizardError } from '@shared/errors/wizard-error';
-import { scanCodebaseFor } from './codebase-scan';
+import { scanCodebaseFor } from '@services/codebase-scan';
 import { detectErrorCode } from './detect-map';
-import type { ProgramConfig } from './program-step';
-import type { CiRunnerContext } from './runner-context';
-import type { WizardSession } from './session/wizard-session';
-import type { SessionStore } from './session/session-store';
+import type { ProgramConfig } from '@services/program-contract';
+import type { CiRunnerContext } from '@services/program-contract';
+import type { WizardSession } from '@services/session';
+import type { SessionStore } from '@services/session';
 
 /**
  * Scan the project for `config`: a CI session runs the program's `ciPreRun`

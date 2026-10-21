@@ -6,16 +6,16 @@
  */
 
 import { existsSync, statSync } from 'fs';
-import type { ProgramSession } from '../program-session';
+import type { ProgramSession } from '@services/program-contract';
 import type { AbortCase } from '@agent/types';
-import { findPackageJsons } from '../shared/package-scanning';
+import { findPackageJsons } from '@services/detection';
 
 export {
   findPackageJsons,
   POSTHOG_SDKS,
   STRIPE_SDKS,
   type PackageMatch,
-} from '../shared/package-scanning';
+} from '@services/detection';
 
 /**
  * Structured detection errors. The screen renders each kind into JSX

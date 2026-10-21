@@ -60,10 +60,14 @@ const PROGRAM_IDS = fs
       fs.existsSync(path.join(PROGRAMS_DIR, d.name, 'tsconfig.json')),
   )
   .map((d) => d.name);
-const SERVICE_ENTRIES = fs
-  .readdirSync(path.join(__dirname, 'src/services'), { withFileTypes: true })
-  .filter((d) => d.isDirectory())
-  .map((d) => d.name);
+// Each service folder is an entry, plus the Decisions service, which only dev builds load.
+const SERVICE_ENTRIES = [
+  ...fs
+    .readdirSync(path.join(__dirname, 'src/services'), { withFileTypes: true })
+    .filter((d) => d.isDirectory())
+    .map((d) => d.name),
+  'detection/decisions',
+];
 const LAYERS = [
   'src/shared',
   'src/host',
@@ -83,14 +87,13 @@ const DEEP_ALIASES = {
   'src/programs': String.raw`/^@programs\x2F(?!(types|${PROGRAM_IDS.join(
     '|',
   )})$)/`,
-  // Each service folder is an entry; a file inside one is the layer's own.
   'src/services': String.raw`/^@services\x2F(?!(${SERVICE_ENTRIES.join(
     '|',
-  )})$)/`,
+  ).replaceAll('/', String.raw`\x2F`)})$)/`,
   'src/tui': String.raw`/^@tui\x2F/`,
 };
 const MAX_DEPTH = 8;
-const layerBans = (layer, depth) => [
+const layerBans = (layer, depth, { test = false } = {}) => [
   {
     selector: specifierOf(String.raw`/^(\.\.\x2F){${depth + 1},}/`),
     message: `A relative import stays in ${layer}; import another layer through its alias.`,
@@ -113,7 +116,8 @@ const layerBans = (layer, depth) => [
       ]
     : []),
   ...Object.entries(DEEP_ALIASES)
-    .filter(([owner]) => owner !== layer)
+    // A test may mock a service's internal module, so the mock reaches every importer.
+    .filter(([owner]) => owner !== layer && !(test && owner === 'src/services'))
     .map(([, pattern]) => ({
       selector: specifierOf(pattern),
       message: 'Import another layer through its entry alias, not a deep one.',
@@ -169,17 +173,23 @@ const tuiFolderOverrides = ['programs', 'tools'].flatMap((kind) =>
     })),
   ),
 );
+const TEST_FILES = ['**/__tests__/**', '**/*.{test,spec}.{ts,tsx}'];
 const layerOverrides = LAYERS.flatMap((layer) =>
-  Array.from({ length: MAX_DEPTH }, (_, depth) => ({
-    files: [`${layer}/${'*/'.repeat(depth)}*.{ts,tsx}`],
-    rules: {
+  Array.from({ length: MAX_DEPTH }, (_, depth) => {
+    const files = [`${layer}/${'*/'.repeat(depth)}*.{ts,tsx}`];
+    const rules = (opts) => ({
       'no-restricted-syntax': [
         'error',
         ...RESTRICTED_SYNTAX,
-        ...layerBans(layer, depth),
+        ...layerBans(layer, depth, opts),
       ],
-    },
-  })),
+    });
+    // The second override skips tests, so they keep the first one's bans.
+    return [
+      { files, rules: rules({ test: true }) },
+      { files, excludedFiles: TEST_FILES, rules: rules() },
+    ];
+  }).flat(),
 );
 
 module.exports = {

@@ -1,5 +1,5 @@
 import type { AuditCheck } from '@shared/audit-ledger';
-import type { ProgramSession } from '../program-session';
+import type { ProgramSession } from '../program-contract/program-session';
 
 export const AUDIT_CHECKS_KEY = 'auditChecks';
 

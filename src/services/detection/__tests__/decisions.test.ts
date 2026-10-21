@@ -15,15 +15,15 @@ import { redactSecretLines } from '@agent';
 import {
   collectDecisionsScan,
   manifestDirs,
-} from '@programs/detection/decisions/scan';
+} from '@services/detection/decisions/scan';
 import {
   renderDecisionInput,
   renderFileTree,
-} from '@programs/detection/decisions/input';
+} from '@services/detection/decisions/input';
 import {
   askDecisions,
   DECISIONS_MAX_QUESTIONS_PER_CALL,
-} from '@programs/detection/decisions/ask';
+} from '@services/detection/decisions/ask';
 import {
   actionableAnswer,
   questionFacts,
@@ -31,22 +31,22 @@ import {
   getDecisions,
   runDecisionSpecs,
   summarizeAnswers,
-} from '@programs/detection/decisions/service';
+} from '@services/detection/decisions/service';
 import {
   DECISIONS_ACCEPT_PROBABILITY,
   DECISIONS_AGREE_PROBABILITY,
   routeIntegration,
-} from '@programs/detection/decisions/framework';
-import { QUESTIONS } from '@programs/detection/decisions/questions';
+} from '@services/detection/decisions/framework';
+import { QUESTIONS } from '@services/detection/decisions/questions';
 import {
   compareProjectReports,
   judgeProjects,
-} from '@programs/detection/decisions/projects';
+} from '@services/detection/decisions/projects';
 import type {
   DecisionAnswer,
   DecisionQuestionSpec,
-} from '@programs/detection/decisions/types';
-import type { ProgramSession } from '@programs/program-session';
+} from '@services/detection/decisions/types';
+import type { ProgramSession } from '@services/program-contract/program-session';
 
 const GATEWAY = { gateway: { token: 'phs_test', url: 'https://gateway.test' } };
 
@@ -575,7 +575,7 @@ describe('decisionsTransport', () => {
     process.env.WIZARD_CI_GATEWAY_TOKEN_FILE = tokenFile;
     vi.resetModules();
     const { decisionsTransport } = await import(
-      '@programs/detection/decisions/service'
+      '@services/detection/decisions/service'
     );
     const session = {
       credentials: { accessToken: 'pha_oauth', host: { region: 'us' } },
@@ -591,7 +591,7 @@ describe('decisionsTransport', () => {
   it('has no transport without a pre-issued key or a dev key file', async () => {
     vi.resetModules();
     const { decisionsTransport } = await import(
-      '@programs/detection/decisions/service'
+      '@services/detection/decisions/service'
     );
     const session = {
       credentials: { accessToken: 'pha_oauth', host: { region: 'us' } },

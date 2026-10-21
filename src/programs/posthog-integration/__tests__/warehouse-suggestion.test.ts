@@ -12,9 +12,9 @@
  * detected source, so the bullets do not depend on which sequence ran.
  */
 
-import type { WizardSession } from '@programs/session/wizard-session';
+import type { WizardSession } from '@services/session';
 import { config as posthogIntegration } from '@programs/posthog-integration';
-import type { DetectedSource } from '@programs/warehouse-sources/types';
+import type { DetectedSource } from '@services/warehouse-sources';
 import { analytics } from '@utils/analytics';
 
 import {

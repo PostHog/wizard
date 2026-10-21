@@ -24,7 +24,7 @@ import { isAbsolute, resolve, sep } from 'path';
 import { z } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 import { ErrorCodes } from '@shared/errors';
-import { detectNodePackageManagers } from './package-manager.js';
+import { detectNodePackageManagers } from './package-manager';
 import {
   AGENTIC_DETECTION_FIRST_ATTEMPT_TIMEOUT_MS,
   AGENTIC_DETECTION_RETRY_TIMEOUT_MS,
@@ -32,8 +32,8 @@ import {
   getSkillsBaseUrl,
   POSTHOG_DOCS_URL,
 } from '@shared/constants';
-import type { ProgramSession } from '../program-session';
-import { loadWizardFlags } from '../wizard-flags';
+import type { ProgramSession } from '../program-contract/program-session';
+import { loadWizardFlags } from '../program-contract/wizard-flags';
 import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
 import { maySendScanResults } from '../codebase-scan/tags';

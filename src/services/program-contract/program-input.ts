@@ -8,7 +8,7 @@ import type {
   ResolvedProgramCredentials,
 } from '@shared/credentials';
 import type { ProgramConfig, ProgramId } from './program-step';
-import type { SessionStore } from './session/session-store';
+import type { SessionStore } from '../session/session-store';
 
 /** Feature flags and their payloads from one evaluation. */
 export type WizardFlagSnapshot = {

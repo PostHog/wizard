@@ -11,7 +11,7 @@
  */
 
 import { analytics } from '@utils/analytics';
-import type { ProgramSession } from '../program-session';
+import type { ProgramSession } from '../program-contract/program-session';
 import { walkProjectFiles, safeReadFile } from '@utils/bounded-fs';
 import {
   ENV_SCAN_MAX_DEPTH,
@@ -37,13 +37,13 @@ import {
   parsePodfile,
   parsePomXml,
   parsePubspecYaml,
-} from './manifests.js';
+} from './manifests';
 import type {
   DetectedSource,
   DetectedTool,
   ScanSignal,
   SourceDetector,
-} from './types.js';
+} from './types';
 
 interface ProjectSignals {
   /** Every script host the catalog lists. A template hostname outside this list is dropped as it is read. */

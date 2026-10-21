@@ -4,9 +4,9 @@ import type { ProgramBinding, TaskNotice } from '@agent/types';
 import type { ProgramRun } from './program-run';
 import type { Integration } from '@shared/constants';
 import type { FrameworkConfig } from './framework-config';
-import type { CiRunnerContext, RunnerContext } from './runner-context.js';
+import type { CiRunnerContext, RunnerContext } from './runner-context';
 // Type-only: the catalog stays out of production bundles.
-import type { QuestionKey } from './detection/decisions/questions';
+import type { QuestionKey } from '../detection/decisions/questions';
 
 /**
  * Context passed to onReady callbacks — fires after the host has assigned

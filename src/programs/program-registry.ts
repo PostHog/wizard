@@ -4,7 +4,7 @@
  * "Add a program" in README.md in this folder, then import it here.
  */
 
-import type { ProgramConfig, ProgramId } from './program-step.js';
+import type { ProgramConfig, ProgramId } from '@services/program-contract';
 import {
   WIZARD_OAUTH_SCOPES,
   WIZARD_PROVISIONING_SCOPES,

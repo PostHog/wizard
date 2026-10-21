@@ -9,13 +9,13 @@
  * extracted here so the `integrate` subcommand can reuse it.
  */
 
-import type { ProgramReadyContext } from '../program-step';
+import type { ProgramReadyContext } from '../program-contract/program-step';
 import {
   mayReportScanResults,
   reportableDiscoveredFeatures,
   ScanConsent,
 } from '@shared/run-state';
-import type { ProgramSession } from '../program-session';
+import type { ProgramSession } from '../program-contract/program-session';
 import { FRAMEWORK_REGISTRY } from '../frameworks/registry';
 import { detectFramework } from './framework';
 import { discoverFeatures } from './features';
@@ -29,7 +29,7 @@ import {
   DETECTED_WAREHOUSE_SOURCES_KEY,
   getDetectedWarehouseSources,
 } from '../warehouse-sources/detect';
-import { findPackageJsons } from '../shared/package-scanning';
+import { findPackageJsons } from './package-scanning';
 
 // Session-free, so runProgram can stamp without loading the session.
 

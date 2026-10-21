@@ -3,11 +3,11 @@ import * as path from 'path';
 import * as os from 'os';
 
 vi.mock(
-  import('@programs/warehouse-sources/registry'),
+  import('@services/warehouse-sources/registry'),
   async (importOriginal) =>
     (
       await import(
-        '@programs/warehouse-sources/__tests__/helpers/tool-catalog.no-jest'
+        '@services/warehouse-sources/__tests__/helpers/tool-catalog.no-jest'
       )
     ).withFixtureCatalog(await importOriginal()),
 );
@@ -23,19 +23,19 @@ import {
   SELF_DRIVING_DETECTED_TOOLS_KEY,
   getSelfDrivingDetectedTools,
 } from '@programs/self-driving/detect';
-import { getDetectedWarehouseSources } from '@programs/warehouse-sources/detect';
-import { SessionStore } from '@programs/session/session-store';
-import { reportCodebaseScan, scanCodebaseFor } from '@programs/codebase-scan';
+import { getDetectedWarehouseSources } from '@services/warehouse-sources';
+import { SessionStore } from '@services/session';
+import { reportCodebaseScan, scanCodebaseFor } from '@services/codebase-scan';
 import { analytics } from '@utils/analytics';
-import type { DetectedSource } from '@programs/warehouse-sources/types';
+import type { DetectedSource } from '@services/warehouse-sources';
 import { toIntegrationReport } from '@programs/self-driving/detect-agentic';
 import {
   PROJECT_MANIFESTS,
   type AgenticDetectionReport,
-} from '@programs/detection/agentic';
+} from '@services/detection';
 import { Integration } from '@shared/constants';
 import { WIZARD_TOOL_NAMES } from '@agent';
-import { buildSession } from '@programs/session/wizard-session';
+import { buildSession } from '@services/session';
 import { testRunnerContext } from '@programs/shared/__tests__/runner-context.no-jest';
 import type { Mock } from 'vitest';
 

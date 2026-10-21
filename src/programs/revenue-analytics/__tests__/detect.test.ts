@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { detectRevenuePrerequisites } from '@programs/revenue-analytics';
-import { buildSession } from '@programs/session/wizard-session';
+import { buildSession } from '@services/session';
 
 function makeTmpDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'rev-detect-'));

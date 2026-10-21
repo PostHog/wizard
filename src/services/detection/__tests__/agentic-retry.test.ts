@@ -2,9 +2,9 @@
 import {
   AgenticDetectionTimeoutError,
   detectProjectsWithAgent,
-} from '@programs/detection/agentic';
+} from '@services/detection/agentic';
 import { DEFAULT_BINDING, runAgent, RunOutcome } from '@agent';
-import { buildSession } from '@programs/session/wizard-session';
+import { buildSession } from '@services/session/wizard-session';
 import { analytics } from '@utils/analytics';
 import { ErrorCodes, type ErrorCode } from '@shared/errors';
 import { HostResolution } from '@shared/host-resolution';

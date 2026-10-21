@@ -10,7 +10,7 @@ import { DEFAULT_BINDING } from '@agent';
 import {
   DECISIONS_MAX_QUESTIONS_PER_CALL,
   QUESTIONS,
-} from '../detection/decisions';
+} from '@services/detection/decisions';
 import {
   DEFAULT_AGENT_MODEL,
   GPT5_6_SOL_MODEL,
@@ -21,7 +21,7 @@ import {
 } from '@shared/constants';
 import { config as agentSkill } from '@programs/agent-skill';
 import { testRunnerContext } from '../shared/__tests__/runner-context.no-jest';
-import type { WizardSession } from '../session/wizard-session';
+import type { WizardSession } from '@services/session';
 
 describe('PROGRAM_REGISTRY', () => {
   it('every entry has a unique id and a description', () => {

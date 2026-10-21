@@ -1,8 +1,8 @@
-import type { ProgramConfig } from '../../program-step';
-import type { ProgramRun } from '../../program-run';
-import type { ProgramSession } from '../../program-session';
+import type { ProgramConfig } from '@services/program-contract';
+import type { ProgramRun } from '@services/program-contract';
+import type { ProgramSession } from '@services/program-contract';
 import { OutroKind } from '@shared/outro';
-import { SPINNER_MESSAGE } from '../../framework-config';
+import { SPINNER_MESSAGE } from '@services/program-contract';
 import { isUsingTypeScript } from '@utils/setup-utils';
 import { WIZARD_TOOL_NAMES } from '@agent';
 import { AUDIT_CHECKS_FILE, AUDIT_CHECKS_KEY } from '../types.js';

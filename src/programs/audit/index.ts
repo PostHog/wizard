@@ -1,8 +1,8 @@
 import { createSkillProgram } from '../shared/skill-program';
-import type { ProgramConfig } from '../program-step';
-import type { ProgramRun } from '../program-run';
-import type { RunnerContext } from '../runner-context';
-import type { ProgramSession } from '../program-session';
+import type { ProgramConfig } from '@services/program-contract';
+import type { ProgramRun } from '@services/program-contract';
+import type { RunnerContext } from '@services/program-contract';
+import type { ProgramSession } from '@services/program-contract';
 import { OutroKind } from '@shared/outro';
 import { WIZARD_TOOL_NAMES } from '@agent';
 import { headlessOption, regionOption } from '@shared/headless-mode';

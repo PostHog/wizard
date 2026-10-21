@@ -17,19 +17,19 @@ vi.mock('@utils/analytics', () => ({
 }));
 
 vi.mock(
-  import('@programs/warehouse-sources/registry'),
+  import('@services/warehouse-sources/registry'),
   async (importOriginal) =>
     (
       await import(
-        '@programs/warehouse-sources/__tests__/helpers/tool-catalog.no-jest'
+        '@services/warehouse-sources/__tests__/helpers/tool-catalog.no-jest'
       )
     ).withFixtureCatalog(await importOriginal()),
 );
 
 // Wrapped so one test can force a throw; the rest use the real scanner.
-vi.mock('@programs/warehouse-sources/detect', async (importOriginal) => {
+vi.mock('@services/warehouse-sources/detect', async (importOriginal) => {
   const actual = await importOriginal<
-    typeof import('@programs/warehouse-sources/detect')
+    typeof import('@services/warehouse-sources/detect')
   >();
   return {
     ...actual,
@@ -38,20 +38,20 @@ vi.mock('@programs/warehouse-sources/detect', async (importOriginal) => {
 });
 
 import { analytics } from '@utils/analytics';
-import { detectTools } from '@programs/warehouse-sources/detect';
-import { scanCodebaseFor } from '@programs/codebase-scan';
-import { loadSourceDetectors } from '@programs/warehouse-sources/registry';
+import { detectTools } from '@services/warehouse-sources/detect';
+import { scanCodebaseFor } from '@services/codebase-scan';
+import { loadSourceDetectors } from '@services/warehouse-sources/registry';
 import {
   detectPostHogIntegration,
   reportWarehouseSourcesDetected,
-} from '@programs/detection/integration';
-import { DETECTED_WAREHOUSE_SOURCES_KEY } from '@programs/warehouse-sources/detect';
-import type { ProgramReadyContext } from '@programs/program-step';
-import type { WizardSession } from '@programs/session/wizard-session';
-import { buildSession } from '@programs/session/wizard-session';
+} from '@services/detection/integration';
+import { DETECTED_WAREHOUSE_SOURCES_KEY } from '@services/warehouse-sources/detect';
+import type { ProgramReadyContext } from '@services/program-contract/program-step';
+import type { WizardSession } from '@services/session/wizard-session';
+import { buildSession } from '@services/session/wizard-session';
 import { DiscoveredFeature } from '@shared/discovered-feature';
 import { ScanConsent } from '@shared/run-state';
-import type { DetectedSource } from '@programs/warehouse-sources/types';
+import type { DetectedSource } from '@services/warehouse-sources/types';
 
 function makeTmpDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'warehouse-reporting-'));

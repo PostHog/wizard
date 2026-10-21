@@ -2,17 +2,17 @@
 import { IS_PRODUCTION_BUILD } from '@env';
 export type * from './types';
 export { runProgram, TASK_OUTCOMES_KEY } from './run-program';
-export { reportCodebaseScan, scanCodebaseFor } from './codebase-scan';
+export { reportCodebaseScan, scanCodebaseFor } from '@services/codebase-scan';
 /** How a run ended; `ProgramRunOutcome.outcome` holds one. */
 export { RunOutcome } from '@shared/run-state';
-export { ProgramAbort } from './program-abort';
-export { buildSession } from './session/wizard-session';
-export { SessionStore, applyAgentProgress } from './session/session-store';
-export { storeInteraction } from './session/interaction';
-export { createFileDestination } from './session/task-stream/destinations/file';
-export { createWizardRunSync } from './session/task-stream/wizard-run-sync';
-export { PostHogDestination } from './session/task-stream/destinations/posthog';
-export { TaskStreamPush } from './session/task-stream/task-stream-push';
+export { ProgramAbort } from '@services/program-contract';
+export { buildSession } from '@services/session';
+export { SessionStore, applyAgentProgress } from '@services/session';
+export { storeInteraction } from '@services/session';
+export { createFileDestination } from '@services/session';
+export { createWizardRunSync } from '@services/session';
+export { PostHogDestination } from '@services/session';
+export { TaskStreamPush } from '@services/session';
 export { logIn } from './login';
 /** The login's tokens: scope checks, the client id and the refresh grant. */
 export {
@@ -21,7 +21,7 @@ export {
   OAuthTokenResponseSchema,
   parseOAuthScopes,
 } from '@shared/oauth-tokens';
-export { loadWizardFlags } from './wizard-flags';
+export { loadWizardFlags } from '@services/program-contract';
 export { apiKeyCredentials, resolveApiKeyLogin } from './api-key-login';
 export {
   /** OAuth scopes a program's login asks for. */
@@ -35,26 +35,26 @@ export {
   getSubcommandPrograms,
 } from './program-registry';
 /** Shared program machinery the TUI, the CLI and the e2e harness call. */
-export { FRAMEWORK_REGISTRY } from './frameworks/registry';
-export { detectFramework } from './detection/framework';
+export { FRAMEWORK_REGISTRY } from '@services/frameworks';
+export { detectFramework } from '@services/detection';
 /** Each program's Decisions question keys, for the decisions-detect script. */
 export { getProgramDecisions } from './program-registry';
 export type {
   DecisionQuestionSpec,
   DecisionsResult,
   DecisionsTransport,
-} from './detection/decisions';
+} from '@services/detection/decisions';
 /**
  * The Decisions service, for the decisions-detect script. Null in production
  * builds, which drop the import and don't bundle the service.
  */
 export async function loadDecisionsService(): Promise<
-  typeof import('./detection/decisions') | null
+  typeof import('@services/detection/decisions') | null
 > {
-  return IS_PRODUCTION_BUILD ? null : import('./detection/decisions');
+  return IS_PRODUCTION_BUILD ? null : import('@services/detection/decisions');
 }
 export { createSkillProgram } from './shared/skill-program';
 /** The audit ledger's checks as the session holds them, for a host's task stream. */
-export { getAuditChecks } from './session/audit-checks';
+export { getAuditChecks } from '@services/session';
 /** The scan a downloaded skill goes through, for the TUI's spellbook: the TUI cannot import the agent. */
 export { scanInstalledSkill } from '@agent';

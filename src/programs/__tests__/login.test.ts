@@ -12,8 +12,8 @@ import type { ApiUser } from '@shared/api';
 import { HostResolution } from '@shared/host-resolution';
 import { analytics } from '@utils/analytics';
 import { logIn } from '../login';
-import { SessionStore } from '../session/session-store';
-import { buildSession } from '../session/wizard-session';
+import { SessionStore } from '@services/session';
+import { buildSession } from '@services/session';
 
 const apiUser = { role_at_organization: 'engineering' } as ApiUser;
 const login = {

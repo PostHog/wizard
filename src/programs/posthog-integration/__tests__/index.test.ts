@@ -7,8 +7,8 @@
  */
 
 import { config as posthogIntegration } from '@programs/posthog-integration';
-import { buildSession } from '@programs/session/wizard-session';
-import type { WizardSession } from '@programs/session/wizard-session';
+import { buildSession } from '@services/session';
+import type { WizardSession } from '@services/session';
 import { analytics } from '@utils/analytics';
 import { isUsingTypeScript } from '@utils/setup-utils';
 import { testRunnerContext } from '@programs/shared/__tests__/runner-context.no-jest';

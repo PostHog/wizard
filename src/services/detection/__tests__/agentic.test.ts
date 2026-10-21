@@ -3,7 +3,7 @@ import {
   deriveReportJson,
   manifestGlob,
   resolveProjectDir,
-} from '@programs/detection/agentic';
+} from '@services/detection/agentic';
 
 const TARGETS = ['nextjs', 'node', 'vite'];
 

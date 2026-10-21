@@ -7,7 +7,7 @@
  */
 
 import { logToFile } from '@utils/debug';
-import type { ProgramSession } from '../../program-session';
+import type { ProgramSession } from '../../program-contract/program-session';
 import type {
   AgenticDetectionReport,
   AgenticProject,

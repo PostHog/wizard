@@ -12,7 +12,7 @@ import {
   mixPackageManager,
   goModulesPackageManager,
   pubPackageManager,
-} from '@programs/detection/package-manager';
+} from '@services/detection/package-manager';
 
 vi.mock('@utils/debug');
 vi.mock('@utils/analytics', () => ({

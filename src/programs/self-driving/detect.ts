@@ -27,15 +27,15 @@ import {
   type Dirent,
 } from 'fs';
 import { join } from 'path';
-import type { ProgramSession } from '../program-session';
+import type { ProgramSession } from '@services/program-contract';
 import type { AbortCase } from '@agent/types';
 import { ErrorCodes } from '@shared/errors';
 import {
   getCodebaseScan,
   scannedWarehouseSources,
-} from '../codebase-scan/scan';
-import { tagScanResults } from '../codebase-scan/tags';
-import type { DetectedSource } from '../warehouse-sources/types';
+} from '@services/codebase-scan';
+import { tagScanResults } from '@services/codebase-scan';
+import type { DetectedSource } from '@services/warehouse-sources';
 
 /** frameworkContext key holding the deterministic PostHog-presence result. */
 export const POSTHOG_PRESENT_KEY = 'postHogPresent';

@@ -17,15 +17,15 @@ import {
   type AgenticDetectionReport,
   type DetectEvent,
   type DetectProgress,
-} from '../detection/agentic';
-import { gatherFrameworkContext } from '../detection/context';
-import { noteDetectedFramework } from '../detection/detected-framework';
+} from '@services/detection';
+import { gatherFrameworkContext } from '@services/detection';
+import { noteDetectedFramework } from '@services/detection';
 import {
   detectIntegrationProjects,
   toIntegrationCandidates,
-} from '../detection/project-scope';
-import type { ProgramSession } from '../program-session';
-import type { RunnerContext } from '../runner-context';
+} from '@services/detection';
+import type { ProgramSession } from '@services/program-contract';
+import type { RunnerContext } from '@services/program-contract';
 
 /** frameworkContext key for the picked project's path, relative to the repo root. */
 export const ERROR_TRACKING_PROJECT_PATH_KEY = 'errorTrackingProjectPath';

@@ -17,8 +17,8 @@ import {
   type AgenticDetectionReport,
   type DetectEvent,
   type DetectProgress,
-} from '../detection/agentic';
-import type { ProgramSession } from '../program-session';
+} from '@services/detection';
+import type { ProgramSession } from '@services/program-contract';
 import {
   VARIANT_DISPLAY_NAME,
   AUTOMATABLE_VARIANTS,

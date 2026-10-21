@@ -9,7 +9,7 @@ import type { DiscoveredFeature } from '@shared/discovered-feature';
 import type { ScanConsent } from '@shared/run-state';
 import type { FrameworkConfig } from './framework-config';
 import type { OutroData } from '@agent/types';
-import type { ScanReport } from './session/task-stream/types';
+import type { ScanReport } from '../session/task-stream/types';
 
 export interface ProgramSession {
   /**

@@ -7,7 +7,7 @@ import { RunPhase } from '@shared/run-state';
 import { buildSession } from '../../wizard-session';
 import { HostResolution } from '@shared/host-resolution';
 import { TaskStatus } from '@shared/task-status';
-import type { TaskItem } from '@programs/session/session-store';
+import type { TaskItem } from '@services/session/session-store';
 import { VERSION } from '@shared/version';
 import {
   currentCredentials,

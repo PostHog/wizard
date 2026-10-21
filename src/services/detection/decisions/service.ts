@@ -12,7 +12,7 @@ import { readCiGatewayCredential } from '@shared/ci-gateway';
 import type { CloudRegion } from '@utils/types';
 import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
-import type { ProgramSession } from '../../program-session';
+import type { ProgramSession } from '../../program-contract/program-session';
 import { getDecisionsScan } from './scan';
 import { maySendScanResults } from '../../codebase-scan/tags';
 import { askDecisions } from './ask';

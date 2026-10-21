@@ -1,5 +1,5 @@
 import { Harness, Sequence, GPT5_6_TERRA_MODEL } from '@shared/constants';
-import type { ProgramConfig } from '../program-step';
+import type { ProgramConfig } from '@services/program-contract';
 import { headlessOption, regionOption } from '@shared/headless-mode';
 
 const AI_OBSERVABILITY_REPORT_FILE = 'posthog-ai-observability-report.md';

@@ -12,11 +12,11 @@ vi.mock(import('@utils/analytics'), () => ({
 }));
 
 vi.mock(
-  import('@programs/warehouse-sources/registry'),
+  import('@services/warehouse-sources/registry'),
   async (importOriginal) =>
     (
       await import(
-        '@programs/warehouse-sources/__tests__/helpers/tool-catalog.no-jest'
+        '@services/warehouse-sources/__tests__/helpers/tool-catalog.no-jest'
       )
     ).withFixtureCatalog(await importOriginal()),
 );
@@ -26,13 +26,13 @@ import {
   reportCodebaseScan,
   scanCodebaseFor,
   type CodebaseScan,
-} from '@programs/codebase-scan';
-import { workspaceFingerprint } from '@programs/codebase-scan/fingerprint';
-import { tagScanResults } from '@programs/codebase-scan/tags';
-import { loadSourceDetectors } from '@programs/warehouse-sources/registry';
+} from '@services/codebase-scan';
+import { workspaceFingerprint } from '@services/codebase-scan/fingerprint';
+import { tagScanResults } from '@services/codebase-scan/tags';
+import { loadSourceDetectors } from '@services/warehouse-sources/registry';
 import { analytics } from '@utils/analytics';
-import { SessionStore } from '@programs/session/session-store';
-import { buildSession } from '@programs/session/wizard-session';
+import { SessionStore } from '@services/session/session-store';
+import { buildSession } from '@services/session/wizard-session';
 import type { Credentials } from '@shared/api';
 
 const CREDENTIALS = {

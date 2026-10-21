@@ -15,16 +15,16 @@ import type {
   AgenticDetectionReport,
   DetectEvent,
   DetectProgress,
-} from '../detection/agentic';
+} from '@services/detection';
 import {
   detectIntegrationProjects,
   toIntegrationCandidates,
-} from '../detection/project-scope';
-import { gatherFrameworkContext } from '../detection/context';
-import { noteDetectedFramework } from '../detection/detected-framework';
+} from '@services/detection';
+import { gatherFrameworkContext } from '@services/detection';
+import { noteDetectedFramework } from '@services/detection';
 import type { Integration } from '@shared/constants';
-import type { ProgramSession } from '../program-session';
-import type { RunnerContext } from '../runner-context';
+import type { ProgramSession } from '@services/program-contract';
+import type { RunnerContext } from '@services/program-contract';
 
 export type { DetectEvent };
 

@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { detectCloudflareTarget } from '@programs/cloudflare-detection';
+import { detectCloudflareTarget } from '@services/detection/cloudflare-detection';
 
 vi.mock('@utils/debug');
 

@@ -10,7 +10,7 @@ import { WIZARD_USER_AGENT } from '@shared/constants';
 import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
 import { resolveBaseUrl } from '@utils/urls';
-import type { CatalogTool, SourceDetector } from './types.js';
+import type { CatalogTool, SourceDetector } from './types';
 
 const CATALOG_API_PATH = '/api/wizard/tool_catalog/';
 

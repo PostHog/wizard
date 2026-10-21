@@ -2,16 +2,16 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ProgramAbort } from '@programs/program-abort';
-import type { ProgramReadyContext } from '@programs/program-step';
-import { buildSession } from '@programs/session/wizard-session';
+import { ProgramAbort } from '@services/program-contract';
+import type { ProgramReadyContext } from '@services/program-contract';
+import { buildSession } from '@services/session';
 import { config as replayVision } from '@programs/replay-vision';
 import { testCiRunnerContext } from '@programs/shared/__tests__/runner-context.no-jest';
 import { ErrorCodes } from '@shared/errors';
 import { OutroKind } from '@shared/outro';
 import { Integration } from '@shared/constants';
 
-vi.mock('@programs/detection/project-scope', () => ({
+vi.mock('@services/detection/project-scope', () => ({
   scopeInstallDirToProject: vi.fn().mockResolvedValue(undefined),
 }));
 
@@ -28,11 +28,11 @@ vi.mock('@utils/analytics', () => ({
 }));
 
 vi.mock(
-  import('@programs/warehouse-sources/registry'),
+  import('@services/warehouse-sources/registry'),
   async (importOriginal) =>
     (
       await import(
-        '@programs/warehouse-sources/__tests__/helpers/tool-catalog.no-jest'
+        '@services/warehouse-sources/__tests__/helpers/tool-catalog.no-jest'
       )
     ).withFixtureCatalog(await importOriginal()),
 );

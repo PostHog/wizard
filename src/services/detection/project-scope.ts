@@ -9,14 +9,14 @@ import {
   type DetectEvent,
   type DetectProgress,
   type DetectTarget,
-} from './agentic.js';
-import type { CiRunnerContext } from '../runner-context';
+} from './agentic';
+import type { CiRunnerContext } from '../program-contract/runner-context';
 import { FRAMEWORK_REGISTRY } from '../frameworks/registry';
 import {
   Integration,
   WIZARD_BASIC_INTEGRATION_AGENTIC_DETECTION_FLAG_KEY,
 } from '@shared/constants';
-import type { ProgramSession } from '../program-session';
+import type { ProgramSession } from '../program-contract/program-session';
 import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
 

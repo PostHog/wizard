@@ -8,7 +8,7 @@
  * user a quarter of the time the in-run prompt does for identical questions.
  */
 import { testRunnerContext } from '@programs/shared/__tests__/runner-context.no-jest';
-import type { WizardSession } from '@programs/session/wizard-session';
+import type { WizardSession } from '@services/session';
 
 vi.mock('@utils/analytics', () => ({
   analytics: {

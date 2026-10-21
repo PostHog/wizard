@@ -5,7 +5,7 @@ import {
   detectSourceMapsPrerequisites,
   SOURCE_MAPS_CONTEXT_KEYS,
 } from '@programs/error-tracking-upload-source-maps';
-import { buildSession } from '@programs/session/wizard-session';
+import { buildSession } from '@services/session';
 
 function makeTmpDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'source-maps-detect-'));

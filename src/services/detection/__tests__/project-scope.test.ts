@@ -2,19 +2,19 @@ import {
   detectProjectsWithAgent,
   AgenticDetectionTimeoutError,
   type AgenticProject,
-} from '@programs/detection/agentic';
+} from '@services/detection/agentic';
 import {
   chooseIntegrationProject,
   scopeInstallDirToProject,
-} from '@programs/detection/project-scope';
+} from '@services/detection/project-scope';
 import { WIZARD_BASIC_INTEGRATION_AGENTIC_DETECTION_FLAG_KEY } from '@shared/constants';
-import type { CiRunnerContext } from '@programs/runner-context';
-import { buildSession } from '@programs/session/wizard-session';
+import type { CiRunnerContext } from '@services/program-contract/runner-context';
+import { buildSession } from '@services/session/wizard-session';
 import { analytics } from '@utils/analytics';
 
 // Mock only the two network edges of scopeInstallDirToProject; everything else runs real.
-vi.mock('@programs/detection/agentic', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@programs/detection/agentic')>()),
+vi.mock('@services/detection/agentic', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@services/detection/agentic')>()),
   detectProjectsWithAgent: vi.fn(),
 }));
 
