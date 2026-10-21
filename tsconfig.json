@@ -5,7 +5,8 @@
   "files": [],
   "references": [
     { "path": "./src" }, { "path": "./src/shared" }, { "path": "./src/host" },
-    { "path": "./src/agent" }, { "path": "./src/tools" }, { "path": "./src/programs" },
+    { "path": "./src/agent" }, { "path": "./src/tools" }, { "path": "./src/services" },
+    { "path": "./src/programs" },
     { "path": "./src/headless" }, { "path": "./src/tui" }, { "path": "./src/cli" },
     { "path": "./tsconfig.bin.json" }, { "path": "./e2e-harness" }, { "path": "./__mocks__" }
   ]

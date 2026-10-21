@@ -1,0 +1,5 @@
+// Program services: what programs consume. Imports env, shared and the agent; programs import it.
+{
+  "extends": "../../tsconfig.no-tui.json",
+  "references": [{ "path": "../tsconfig.json" }, { "path": "../shared" }, { "path": "../agent" }]
+}

@@ -60,11 +60,16 @@ const PROGRAM_IDS = fs
       fs.existsSync(path.join(PROGRAMS_DIR, d.name, 'tsconfig.json')),
   )
   .map((d) => d.name);
+const SERVICE_ENTRIES = fs
+  .readdirSync(path.join(__dirname, 'src/services'), { withFileTypes: true })
+  .filter((d) => d.isDirectory())
+  .map((d) => d.name);
 const LAYERS = [
   'src/shared',
   'src/host',
   'src/agent',
   'src/tools',
+  'src/services',
   'src/programs',
   'src/headless',
   'src/tui',
@@ -76,6 +81,10 @@ const LAYERS = [
 const DEEP_ALIASES = {
   'src/agent': String.raw`/^@agent\x2F(?!types$)/`,
   'src/programs': String.raw`/^@programs\x2F(?!(types|${PROGRAM_IDS.join(
+    '|',
+  )})$)/`,
+  // Each service folder is an entry; a file inside one is the layer's own.
+  'src/services': String.raw`/^@services\x2F(?!(${SERVICE_ENTRIES.join(
     '|',
   )})$)/`,
   'src/tui': String.raw`/^@tui\x2F/`,
