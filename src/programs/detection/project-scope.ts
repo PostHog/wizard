@@ -88,6 +88,7 @@ export function chooseIntegrationProject(
 
 /** Every run fires exactly one `wizard: agentic detection` event with one of these outcomes — no untracked exits. */
 export type AgenticDetectionOutcome =
+  | 'auth-failed'
   | 'flag-off'
   | 'error'
   | 'timeout'
@@ -108,7 +109,18 @@ export async function scopeInstallDirToProject(
   runner: CiRunnerContext,
 ): Promise<void> {
   // Idempotent early auth: the detector needs credentials and the flag must evaluate as the logged-in user.
-  await runner.authenticate('posthog-integration');
+  try {
+    await runner.authenticate('posthog-integration');
+  } catch (err) {
+    // The run's own login retries and reports a real auth failure; a blip here must not end the run.
+    const error = err instanceof Error ? err : new Error(String(err));
+    analytics.captureException(error, { step: 'agentic_detection_auth' });
+    captureOutcome('auth-failed', { error_message: error.message });
+    runner.log.warn(
+      `Could not log in before the project scan (${error.message}); continuing with the install dir as-is.`,
+    );
+    return;
+  }
   const flags = await analytics.getAllFlagsForWizard();
   if (flags[WIZARD_BASIC_INTEGRATION_AGENTIC_DETECTION_FLAG_KEY] !== 'true') {
     // A failed flag fetch surfaces as an empty map, so flag-off also covers "flags unavailable".
