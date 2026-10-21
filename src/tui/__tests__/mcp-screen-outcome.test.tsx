@@ -32,7 +32,21 @@ afterEach(() => {
 const installer: McpInstaller = {
   detectClients: () =>
     Promise.resolve([
-      { name: 'Cursor', supportsPlugin: false, pluginBundlesMcp: false },
+      {
+        name: 'Cursor',
+        kind: 'local',
+        supportsPlugin: false,
+        pluginBundlesMcp: false,
+      },
+    ]),
+  detectInstalled: () =>
+    Promise.resolve([
+      {
+        name: 'Cursor',
+        kind: 'local',
+        supportsPlugin: false,
+        pluginBundlesMcp: false,
+      },
     ]),
   install: () =>
     Promise.resolve([{ name: 'Cursor', status: McpClientStatus.Changed }]),
@@ -57,9 +71,15 @@ it('reports a removal once, as its results show, before the Enter that completes
   const { stdin, lastFrame } = render(
     <McpScreen store={store} installer={installer} mode="remove" />,
   );
-  await vi.waitFor(() => expect(lastFrame()).toContain('Detected: Cursor'));
+  await vi.waitFor(() =>
+    expect(lastFrame()).toContain('Select the coding agents'),
+  );
   await tick();
-  stdin.write('\r');
+  // Tick Cursor, then move onto Confirm.
+  for (const key of [ENTER, DOWN, ENTER]) {
+    stdin.write(key);
+    await tick();
+  }
   await vi.waitFor(() => expect(lastFrame()).toContain('Press enter'));
 
   expect(mcpCompleteCalls()).toEqual([
@@ -76,20 +96,77 @@ it('reports a removal once, as its results show, before the Enter that completes
   expect(mcpCompleteCalls()).toHaveLength(1);
 });
 
-it('reports an install once, as its results show, before Enter', async () => {
-  const store = new WizardStore(Tool.McpAdd);
+it('removes only the coding agents the user ticks', async () => {
+  const store = new WizardStore(Tool.McpRemove);
   store.session = buildSession({ installDir: '/app' });
-  const { stdin, lastFrame } = render(
-    <McpScreen store={store} installer={installer} />,
+  const detectInstalled = () =>
+    Promise.resolve([
+      {
+        name: 'Cursor',
+        kind: 'local' as const,
+        supportsPlugin: false,
+        pluginBundlesMcp: false,
+      },
+      {
+        name: 'Codex',
+        kind: 'local' as const,
+        supportsPlugin: true,
+        pluginBundlesMcp: false,
+      },
+    ]);
+  const remove = vi.fn<McpInstaller['remove']>((names) =>
+    Promise.resolve(
+      names.map((name) => ({ name, status: McpClientStatus.Changed })),
+    ),
   );
-  await vi.waitFor(() => expect(lastFrame()).toContain('Select clients'));
+  const { stdin, lastFrame } = render(
+    <McpScreen
+      store={store}
+      installer={{ ...installer, detectInstalled, remove }}
+      mode="remove"
+    />,
+  );
+  await vi.waitFor(() => expect(lastFrame()).toContain('Codex (plugin + MCP)'));
   await tick();
-  // Tick Cursor, then move onto Confirm.
-  for (const key of [ENTER, DOWN, ENTER]) {
+  // Skip Cursor, tick Codex, then move onto Confirm.
+  for (const key of [DOWN, ENTER, DOWN, ENTER]) {
     stdin.write(key);
     await tick();
   }
   await vi.waitFor(() => expect(lastFrame()).toContain('Press enter'));
+  expect(remove).toHaveBeenCalledWith(['Codex'], false);
+});
+
+it('removes nothing on esc from the remove picker', async () => {
+  const store = new WizardStore(Tool.McpRemove);
+  store.session = buildSession({ installDir: '/app' });
+  const remove = vi.fn<McpInstaller['remove']>(() => Promise.resolve([]));
+  const { stdin, lastFrame } = render(
+    <McpScreen
+      store={store}
+      installer={{ ...installer, remove }}
+      mode="remove"
+    />,
+  );
+  await vi.waitFor(() =>
+    expect(lastFrame()).toContain('Select the coding agents'),
+  );
+  await tick();
+  stdin.write(ESC);
+  await vi.waitFor(() => expect(store.mcpComplete).toBe(true));
+  expect(store.mcpOutcome).toBe(McpOutcome.Skipped);
+  expect(remove).not.toHaveBeenCalled();
+});
+
+it('installs in every coding agent and reports once, as its results show, before Enter', async () => {
+  const store = new WizardStore(Tool.McpAdd);
+  store.session = buildSession({ installDir: '/app' });
+  const { lastFrame } = render(
+    <McpScreen store={store} installer={installer} />,
+  );
+  await vi.waitFor(() => expect(lastFrame()).toContain('Press enter'));
+  expect(lastFrame()).toContain('The PostHog MCP is ready in 1 coding agent');
+  expect(lastFrame()).toContain('Installed');
 
   expect(mcpCompleteCalls()).toEqual([
     [
@@ -97,25 +174,217 @@ it('reports an install once, as its results show, before Enter', async () => {
       expect.objectContaining({
         mcp_outcome: McpOutcome.Installed,
         mcp_installed_clients: ['Cursor'],
+        mcp_newly_installed_clients: ['Cursor'],
+        mcp_already_installed_clients: [],
+        mcp_failed_clients: [],
       }),
     ],
   ]);
   expect(store.mcpComplete).toBe(false);
 });
 
-it('skips the install on esc from the client picker', async () => {
+it('retries a failed coding agent from the results menu', async () => {
   const store = new WizardStore(Tool.McpAdd);
   store.session = buildSession({ installDir: '/app' });
-  const install = vi.fn<McpInstaller['install']>(() => Promise.resolve([]));
+  const install = vi
+    .fn<McpInstaller['install']>()
+    .mockResolvedValueOnce([
+      {
+        name: 'Cursor',
+        status: McpClientStatus.Failed,
+        detail: 'EACCES: permission denied',
+      },
+    ])
+    .mockResolvedValueOnce([
+      { name: 'Cursor', status: McpClientStatus.Changed },
+    ]);
   const { stdin, lastFrame } = render(
     <McpScreen store={store} installer={{ ...installer, install }} />,
   );
-  await vi.waitFor(() => expect(lastFrame()).toContain('Select clients'));
+  await vi.waitFor(() => expect(lastFrame()).toContain('Retry Cursor'));
+  expect(lastFrame()).toContain('EACCES: permission denied');
+  expect(mcpCompleteCalls()).toEqual([
+    [
+      'mcp complete',
+      expect.objectContaining({
+        mcp_outcome: McpOutcome.Failed,
+        mcp_installed_clients: [],
+        mcp_failed_clients: ['Cursor'],
+      }),
+    ],
+  ]);
   await tick();
-  stdin.write(ESC);
+  for (const key of [DOWN, ENTER]) {
+    stdin.write(key);
+    await tick();
+  }
+  await vi.waitFor(() => expect(lastFrame()).toContain('Press enter'));
+  expect(lastFrame()).toContain('ready in 1 coding agent');
+
+  await tick();
+  stdin.write(ENTER);
   await vi.waitFor(() => expect(store.mcpComplete).toBe(true));
-  expect(store.mcpOutcome).toBe(McpOutcome.Skipped);
-  expect(install).not.toHaveBeenCalled();
+  expect(store.mcpInstalledClients).toEqual(['Cursor']);
+  expect(install).toHaveBeenCalledTimes(2);
+  // The retry has its own event; `mcp complete` keeps the first attempt.
+  expect(wizardCapture).toHaveBeenCalledWith('mcp install retried', {
+    client: 'Cursor',
+    success: true,
+  });
+  expect(mcpCompleteCalls()).toHaveLength(1);
+});
+
+it('opens an AI assistant after the coding agents and completes with both', async () => {
+  const store = new WizardStore(Tool.McpAdd);
+  store.session = buildSession({ installDir: '/app' });
+  const detectClients = () =>
+    Promise.resolve([
+      {
+        name: 'Cursor',
+        kind: 'local' as const,
+        supportsPlugin: false,
+        pluginBundlesMcp: false,
+      },
+      {
+        name: 'Claude Desktop/Web',
+        kind: 'account' as const,
+        supportsPlugin: false,
+        pluginBundlesMcp: false,
+        finish: {
+          url: 'https://claude.ai/directory/connectors/posthog',
+          instruction: 'Sign in and click "Connect" to finish.',
+        },
+      },
+    ]);
+  const install = vi.fn<McpInstaller['install']>((names) =>
+    Promise.resolve(
+      names.map((name) => ({ name, status: McpClientStatus.Changed })),
+    ),
+  );
+  const { stdin, lastFrame } = render(
+    <McpScreen
+      store={store}
+      installer={{ ...installer, detectClients, install }}
+      exitLabel="Exit"
+    />,
+  );
+  await vi.waitFor(() => expect(lastFrame()).toContain('Press enter'));
+  expect(lastFrame()).toContain('Step 1 of 2');
+  expect(install).toHaveBeenCalledWith(
+    ['Cursor'],
+    expect.anything(),
+    undefined,
+  );
+
+  await tick();
+  stdin.write(ENTER);
+  await vi.waitFor(() => expect(lastFrame()).toContain('Step 2 of 2'));
+  // Exit sits apart from the assistants, after a blank row.
+  expect(lastFrame()).toMatch(/\(opens in your browser\)\n\s*\n\s+Exit/);
+  await tick();
+  stdin.write(ENTER);
+  await vi.waitFor(() =>
+    expect(lastFrame()).toContain('Opened in your browser'),
+  );
+  expect(install).toHaveBeenLastCalledWith(['Claude Desktop/Web']);
+  expect(wizardCapture).toHaveBeenCalledWith('mcp assistant opened', {
+    client: 'Claude Desktop/Web',
+    opened: true,
+  });
+
+  await tick();
+  stdin.write(ENTER);
+  await vi.waitFor(() => expect(store.mcpComplete).toBe(true));
+  expect(store.mcpInstalledClients).toEqual(['Cursor', 'Claude Desktop/Web']);
+  expect(mcpCompleteCalls()).toHaveLength(1);
+});
+
+it('shows the login command for a coding agent that was already installed', async () => {
+  const store = new WizardStore(Tool.McpAdd);
+  store.session = buildSession({ installDir: '/app' });
+  const detectClients = () =>
+    Promise.resolve([
+      {
+        name: 'Codex',
+        kind: 'local' as const,
+        supportsPlugin: false,
+        pluginBundlesMcp: false,
+        loginCommand: 'codex mcp login posthog',
+      },
+    ]);
+  const install = () =>
+    Promise.resolve([{ name: 'Codex', status: McpClientStatus.Unchanged }]);
+  const { lastFrame } = render(
+    <McpScreen
+      store={store}
+      installer={{ ...installer, detectClients, install }}
+    />,
+  );
+  await vi.waitFor(() => expect(lastFrame()).toContain('Press enter'));
+  expect(lastFrame()).toContain('Already installed');
+  expect(lastFrame()).toContain('codex mcp login posthog');
+  expect(mcpCompleteCalls()).toEqual([
+    [
+      'mcp complete',
+      expect.objectContaining({
+        mcp_installed_clients: ['Codex'],
+        mcp_newly_installed_clients: [],
+        mcp_already_installed_clients: ['Codex'],
+      }),
+    ],
+  ]);
+});
+
+it('reports no coding agents when only AI assistants were found', async () => {
+  const store = new WizardStore(Tool.McpAdd);
+  store.session = buildSession({ installDir: '/app' });
+  const detectClients = () =>
+    Promise.resolve([
+      {
+        name: 'Claude Desktop/Web',
+        kind: 'account' as const,
+        supportsPlugin: false,
+        pluginBundlesMcp: false,
+        finish: {
+          url: 'https://claude.ai/directory/connectors/posthog',
+          instruction: 'Sign in and click "Connect" to finish.',
+        },
+      },
+    ]);
+  const install = vi.fn<McpInstaller['install']>((names) =>
+    Promise.resolve(
+      names.map((name) => ({ name, status: McpClientStatus.Changed })),
+    ),
+  );
+  const { stdin, lastFrame } = render(
+    <McpScreen
+      store={store}
+      installer={{ ...installer, detectClients, install }}
+      exitLabel="Exit"
+    />,
+  );
+  await vi.waitFor(() => expect(lastFrame()).toContain('AI assistants'));
+  await tick();
+  stdin.write(ENTER);
+  await vi.waitFor(() =>
+    expect(lastFrame()).toContain('Opened in your browser'),
+  );
+  await tick();
+  stdin.write(ENTER);
+  await vi.waitFor(() => expect(store.mcpComplete).toBe(true));
+
+  expect(mcpCompleteCalls()).toEqual([
+    [
+      'mcp complete',
+      { mcp_outcome: McpOutcome.NoClients, mcp_installed_clients: [] },
+    ],
+  ]);
+  expect(wizardCapture).toHaveBeenCalledWith('mcp assistant opened', {
+    client: 'Claude Desktop/Web',
+    opened: true,
+  });
+  // The session still records the assistant for the rest of the run.
+  expect(store.mcpInstalledClients).toEqual(['Claude Desktop/Web']);
 });
 
 it('reports a failed detection once, as its error shows, before Enter', async () => {

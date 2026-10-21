@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.86.0](https://github.com/PostHog/wizard/compare/v2.85.0...v2.86.0) (2026-10-20)
+
+
+### Features
+
+* new mcp install for coding agents and account connections ([#1482](https://github.com/PostHog/wizard/issues/1482)) ([0a6b5ae](https://github.com/PostHog/wizard/commit/0a6b5ae075c9f892e7ba3196e9ed26322712a426))
+
 ## [2.85.0](https://github.com/PostHog/wizard/compare/v2.84.1...v2.85.0) (2026-10-19)
 
 

@@ -1,11 +1,14 @@
 import { CodexMCPClient } from '@shared/mcp-clients/clients/codex';
-import { execSync, execFile } from 'node:child_process';
+import { execFile } from 'node:child_process';
+import { findTrustedBinary } from '@shared/mcp-clients/trusted-binary';
 import * as fs from 'node:fs';
 import { analytics } from '@utils/analytics';
 
 vi.mock('node:child_process', () => ({
-  execSync: vi.fn(),
   execFile: vi.fn(),
+}));
+vi.mock('@shared/mcp-clients/trusted-binary', () => ({
+  findTrustedBinary: vi.fn(),
 }));
 
 vi.mock('node:fs', () => ({
@@ -64,15 +67,15 @@ describe('CodexMCPClient', () => {
     stderr,
   });
 
-  const execSyncMock = execSync as Mock;
+  const findBinaryMock = findTrustedBinary as Mock;
   const readFileSyncMock = fs.readFileSync as Mock;
 
   const CODEX_PATH = '/usr/local/bin/codex';
 
   beforeEach(() => {
     vi.clearAllMocks();
-    // Default: codex found via command -v
-    execSyncMock.mockReturnValue(Buffer.from(CODEX_PATH + '\n'));
+    // Default: codex found on PATH
+    findBinaryMock.mockReturnValue(CODEX_PATH);
     // Default: no plugin marketplace registered yet. clearAllMocks keeps
     // implementations, so without this a config.toml fixture set by one test
     // leaks into the next one's isPluginInstalled() check.
@@ -83,15 +86,11 @@ describe('CodexMCPClient', () => {
     it('returns true when codex is in PATH', async () => {
       const client = new CodexMCPClient();
       await expect(client.isClientSupported()).resolves.toBe(true);
-      expect(execSyncMock).toHaveBeenCalledWith('command -v codex', {
-        stdio: 'pipe',
-      });
+      expect(findBinaryMock).toHaveBeenCalledWith('codex');
     });
 
     it('returns false when codex is not in PATH', async () => {
-      execSyncMock.mockImplementation(() => {
-        throw new Error('not found');
-      });
+      findBinaryMock.mockReturnValue(null);
       const client = new CodexMCPClient();
       await expect(client.isClientSupported()).resolves.toBe(false);
     });
@@ -263,9 +262,7 @@ describe('CodexMCPClient', () => {
     });
 
     it('returns false when codex binary is not found', () => {
-      execSyncMock.mockImplementation(() => {
-        throw new Error('not found');
-      });
+      findBinaryMock.mockReturnValue(null);
       const client = new CodexMCPClient();
       expect(client.supportsPlugin()).toBe(false);
     });

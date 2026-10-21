@@ -148,25 +148,27 @@ export const getContentBlocks = (store?: WizardStore): ContentBlock[] => [
     lines: [
       <Text>
         <Text color="cyan">{'  ◆ '}</Text>
-        {'Product Analytics     '}
+        {'MCP              '}
         <Text color="cyan">{'◆ '}</Text>
-        {'Web Analytics'}
+        {'Product Analytics'}
       </Text>,
       <Text>
         <Text color="cyan">{'  ◆ '}</Text>
-        {'Error Tracking        '}
+        {'Web Analytics    '}
         <Text color="cyan">{'◆ '}</Text>
-        {'Session Replay'}
+        {'Error Tracking'}
       </Text>,
       <Text>
         <Text color="cyan">{'  ◆ '}</Text>
-        {'AI Observability      '}
+        {'Session Replay   '}
         <Text color="cyan">{'◆ '}</Text>
-        {'Logs'}
+        {'AI Observability'}
       </Text>,
       <Text>
         <Text color="cyan">{'  ◆ '}</Text>
-        {'Data Warehouse sources'}
+        {'Logs             '}
+        <Text color="cyan">{'◆ '}</Text>
+        {'Data Pipelines Sources'}
       </Text>,
     ],
   },

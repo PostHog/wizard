@@ -111,7 +111,7 @@ screen, debug log) keep the full detail.
 | `PHW_AGENT_ORCHESTRATOR_SINK_INVARIANT`        | agent    | orchestrator plan violates sink coverage invariant                                                                                                                                                           | no           |
 | `PHW_SETTINGS_UNFIXABLE_CONFLICT`              | settings | Claude settings conflict that cannot be auto-neutralized (managed/unwritable)                                                                                                                                | no           |
 | `PHW_INTERNAL_UNHANDLED`                       | internal | catch-all: an unexpected error escaped the pipeline                                                                                                                                                          | yes          |
-| `PHW_GATEWAY_MINT_REFUSED`                      | gateway  | the gateway-token mint refused this run (blocked, throttled, unlisted program, rollout off); the server's reason is shown | no |
+| `PHW_GATEWAY_MINT_REFUSED`                      | gateway  | the gateway-token mint refused this run (blocked, throttled, unlisted program); the server's reason is shown | no |
 | `PHW_GATEWAY_MINT_FAILED`                       | gateway  | the gateway-token mint could not be reached or answered unusably | yes |
 
 Retry advice is guidance for automated hosts (sandbox re-run policies), not a

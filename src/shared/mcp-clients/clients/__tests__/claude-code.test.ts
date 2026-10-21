@@ -1,12 +1,16 @@
 import { ClaudeCodeMCPClient } from '@shared/mcp-clients/clients/claude-code';
-import { execSync, execFile } from 'child_process';
+import { execFileSync, execFile } from 'child_process';
+import { findTrustedBinary } from '@shared/mcp-clients/trusted-binary';
 import { analytics } from '@utils/analytics';
 
 vi.mock('child_process', () => ({
-  execSync: vi.fn(),
+  execFileSync: vi.fn(),
   execFile: vi.fn(),
 }));
 
+vi.mock('@shared/mcp-clients/trusted-binary', () => ({
+  findTrustedBinary: vi.fn(),
+}));
 vi.mock('fs', () => ({
   existsSync: vi.fn().mockReturnValue(false),
 }));
@@ -64,7 +68,8 @@ const isCmd = (cmd: string, ...parts: string[]) =>
   cmd.includes(parts.join(' '));
 
 describe('ClaudeCodeMCPClient — plugin methods', () => {
-  const execSyncMock = execSync as Mock;
+  const execFileSyncMock = execFileSync as Mock;
+  const findBinaryMock = findTrustedBinary as Mock;
   const execFileMock = execFile as unknown as Mock;
 
   /** Every `claude` invocation, in order, as its joined command. */
@@ -100,11 +105,9 @@ describe('ClaudeCodeMCPClient — plugin methods', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    // Binary discovery is the one sync call, and stays sync.
-    execSyncMock.mockImplementation((cmd: string) => {
-      if (cmd === 'command -v claude') return Buffer.from('');
-      return Buffer.from('');
-    });
+    // The binary is opaque here; trusted-binary.test.ts covers how it is found.
+    findBinaryMock.mockReturnValue('claude');
+    execFileSyncMock.mockReturnValue(Buffer.from(''));
     routeClaude(() => '');
   });
 
@@ -115,9 +118,7 @@ describe('ClaudeCodeMCPClient — plugin methods', () => {
     });
 
     it('returns false when no binary is found', () => {
-      execSyncMock.mockImplementation(() => {
-        throw new Error('not found');
-      });
+      findBinaryMock.mockReturnValue(null);
       const client = new ClaudeCodeMCPClient();
       expect(client.supportsPlugin()).toBe(false);
     });
@@ -192,8 +193,7 @@ describe('ClaudeCodeMCPClient — plugin methods', () => {
     // loop, which freezes the TUI spinner on its first frame — so this path must
     // use the async child-process API.
     it('runs the CLI without blocking the event loop', async () => {
-      execSyncMock.mockImplementation((cmd: string) => {
-        if (cmd === 'command -v claude') return Buffer.from('');
+      execFileSyncMock.mockImplementation(() => {
         throw new Error('installPlugin must not shell out synchronously');
       });
       routeClaude((cmd) => {
@@ -205,10 +205,7 @@ describe('ClaudeCodeMCPClient — plugin methods', () => {
 
       await expect(client.installPlugin()).resolves.toEqual({ success: true });
 
-      // `command -v claude` is the only sync call left (binary discovery).
-      expect(
-        execSyncMock.mock.calls.filter(([c]) => c !== 'command -v claude'),
-      ).toEqual([]);
+      expect(execFileSyncMock).not.toHaveBeenCalled();
       expect(execFileMock).toHaveBeenCalled();
     });
 
@@ -561,9 +558,7 @@ describe('ClaudeCodeMCPClient — plugin methods', () => {
     });
 
     it('returns failure with a reason when no binary is found', async () => {
-      execSyncMock.mockImplementation(() => {
-        throw new Error('not found');
-      });
+      findBinaryMock.mockReturnValue(null);
       const client = new ClaudeCodeMCPClient();
       await expect(client.installPlugin()).resolves.toEqual({
         success: false,

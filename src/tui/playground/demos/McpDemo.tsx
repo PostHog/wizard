@@ -1,8 +1,9 @@
 /**
- * McpDemo — Playground demo for the MCP client selection screen.
+ * McpDemo — Playground demo for the MCP install screen.
  *
- * Uses a mock McpInstaller that simulates detecting three editors,
- * a short install delay, and a successful result.
+ * Uses a mock McpInstaller that detects three coding agents and one AI
+ * assistant, installs with a short delay per client, and fails VS Code so
+ * the demo shows every row state and the retry menu.
  */
 
 import { WizardStore } from '@tui/store';
@@ -11,11 +12,27 @@ import type { McpInstaller, McpClientInfo } from '@tui/services/mcp-installer';
 import { McpClientStatus } from '@shared/mcp-clients/results';
 
 const MOCK_CLIENTS: McpClientInfo[] = [
-  { name: 'Claude Code', supportsPlugin: true, pluginBundlesMcp: false },
-  { name: 'Cursor', supportsPlugin: true, pluginBundlesMcp: false },
-  { name: 'VS Code', supportsPlugin: false, pluginBundlesMcp: false },
+  {
+    name: 'Claude Code',
+    kind: 'local',
+    supportsPlugin: true,
+    pluginBundlesMcp: false,
+  },
+  {
+    name: 'Cursor',
+    kind: 'local',
+    supportsPlugin: true,
+    pluginBundlesMcp: false,
+  },
+  {
+    name: 'VS Code',
+    kind: 'local',
+    supportsPlugin: false,
+    pluginBundlesMcp: false,
+  },
   {
     name: 'Claude Desktop/Web',
+    kind: 'account',
     supportsPlugin: false,
     pluginBundlesMcp: false,
     finish: {
@@ -32,12 +49,19 @@ function createMockInstaller(): McpInstaller {
       return MOCK_CLIENTS;
     },
     async install(clientNames) {
-      await new Promise((r) => setTimeout(r, 1500));
-      // Mixed outcomes so the demo shows every Done-phase section.
-      return clientNames.map((name, i) => ({
-        name,
-        status: i === 1 ? McpClientStatus.Unchanged : McpClientStatus.Changed,
-      }));
+      await new Promise((r) => setTimeout(r, 700));
+      // Mixed outcomes so the demo shows every row state.
+      return clientNames.map((name) =>
+        name === 'Cursor'
+          ? { name, status: McpClientStatus.Unchanged }
+          : name === 'VS Code'
+          ? {
+              name,
+              status: McpClientStatus.Failed,
+              detail: 'EACCES: permission denied',
+            }
+          : { name, status: McpClientStatus.Changed },
+      );
     },
     async installPlugins(clientNames) {
       await new Promise((r) => setTimeout(r, 800));
@@ -47,11 +71,15 @@ function createMockInstaller(): McpInstaller {
         )
         .map((name) => ({ name, status: McpClientStatus.Changed }));
     },
-    async remove() {
+    async detectInstalled() {
+      await new Promise((r) => setTimeout(r, 800));
+      return MOCK_CLIENTS.filter((c) => c.kind === 'local');
+    },
+    async remove(clientNames) {
       await new Promise((r) => setTimeout(r, 1000));
       // Mixed outcomes so the demo shows the removal failure copy too.
-      return MOCK_CLIENTS.map((c, i) =>
-        i === 2
+      return MOCK_CLIENTS.filter((c) => clientNames.includes(c.name)).map((c) =>
+        c.name === 'VS Code'
           ? {
               name: c.name,
               status: McpClientStatus.Failed,

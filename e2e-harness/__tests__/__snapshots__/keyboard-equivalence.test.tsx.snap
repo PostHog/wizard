@@ -64,16 +64,24 @@ exports[`keyboard commit vs control action commit > manual-auth-code: paste code
 }
 `;
 
-exports[`keyboard commit vs control action commit > mcp: decline install vs set_mcp_outcome skipped 1`] = `
+exports[`keyboard commit vs control action commit > mcp: enter on install results vs set_mcp_outcome installed 1`] = `
 {
   "action": {
     "mcpComplete": true,
-    "mcpOutcome": "skipped",
+    "mcpInstalledClients": [
+      "Cursor",
+      "Claude Code",
+    ],
+    "mcpOutcome": "installed",
     "screen": "keep-skills",
   },
   "keyboard": {
     "mcpComplete": true,
-    "mcpOutcome": "skipped",
+    "mcpInstalledClients": [
+      "Cursor",
+      "Claude Code",
+    ],
+    "mcpOutcome": "installed",
     "screen": "keep-skills",
     "skillsComplete": true,
   },

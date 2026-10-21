@@ -21,6 +21,7 @@ const screens: TuiTool['screens'] = {
       )
         .slice(0, 3)
         .map((p) => p.prompt)}
+      exitLabel="Exit"
     />
   ),
   [McpScreenId.Remove]: (store, services) => (

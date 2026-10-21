@@ -212,12 +212,25 @@ function staticFrameworkConfig(): FrameworkConfig {
   };
 }
 
+const fakeClients = () =>
+  Promise.resolve([
+    {
+      name: 'Claude Code',
+      kind: 'local' as const,
+      supportsPlugin: true,
+      pluginBundlesMcp: false,
+    },
+    {
+      name: 'Cursor',
+      kind: 'local' as const,
+      supportsPlugin: false,
+      pluginBundlesMcp: false,
+    },
+  ]);
+
 const fakeInstaller: McpInstaller = {
-  detectClients: () =>
-    Promise.resolve([
-      { name: 'Claude Code', supportsPlugin: true, pluginBundlesMcp: false },
-      { name: 'Cursor', supportsPlugin: false, pluginBundlesMcp: false },
-    ]),
+  detectClients: fakeClients,
+  detectInstalled: fakeClients,
   install: pending,
   remove: pending,
   installPlugins: pending,

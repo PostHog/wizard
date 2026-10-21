@@ -2,14 +2,9 @@
 
  Cost (running): $0.00 · no agent turns yet                      Ctrl+T to hide
 
- Install the MCP so you can chat to your data
+ Adding the PostHog MCP to your coding agents
 
- Ask your agent: "List my feature flags" — and it does.
- Run SQL, build dashboards, ship flags, all from your IDE.
+ Found 2 coding agents. Setting each one up on this computer.
 
-  Select clients to install the PostHog MCP server and plugin
-
-   ◻ Claude Code (plugin)
-   ◻ Cursor (MCP)
-
-     Confirm
+   ⠋ Claude Code   plugin + MCP    Installing…
+   · Cursor        MCP             Waiting

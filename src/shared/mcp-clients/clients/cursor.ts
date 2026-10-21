@@ -2,6 +2,7 @@ import {
   DefaultMCPClient,
   MCPServerConfig,
 } from '@shared/mcp-clients/MCPClient';
+import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import {
@@ -22,9 +23,11 @@ export class CursorMCPClient extends DefaultMCPClient {
   }
 
   async isClientSupported(): Promise<boolean> {
-    return Promise.resolve(
-      process.platform === 'darwin' || process.platform === 'win32',
-    );
+    if (process.platform !== 'darwin' && process.platform !== 'win32') {
+      return false;
+    }
+    // Cursor creates ~/.cursor on first launch; without it, it isn't installed.
+    return fs.existsSync(path.dirname(await this.getConfigPath()));
   }
 
   async getConfigPath(): Promise<string> {
