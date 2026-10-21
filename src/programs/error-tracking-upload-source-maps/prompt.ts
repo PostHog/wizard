@@ -9,7 +9,7 @@ export type SourceMapsUploadPromptParams = {
   projectPath?: string;
   projectId: number;
   host: string;
-  settingsUrl: string;
+  apiKeyUrl: string;
   uiHost: string;
   /** Hand-off report the agent writes in STEP 9; the outro points the user at it. */
   reportFile: string;
@@ -29,7 +29,7 @@ export function buildSourceMapsUploadPrompt(
     projectPath,
     projectId,
     host,
-    settingsUrl,
+    apiKeyUrl,
     uiHost,
     reportFile,
   } = params;
@@ -85,7 +85,7 @@ Project context:
 - Detected platform: ${platformLabel}
 - Skill to use: ${skillId}
 ${projectLine}
-- Personal API keys settings page: ${settingsUrl}
+- Personal API key creation page: ${apiKeyUrl}
 
 All file changes, build/run commands, and config edits target the project directory above${
     inSubproject
@@ -148,7 +148,7 @@ STEP 1 — Get a personal API key from the user. (skill: "Get a personal API key
    STEP 5:
      {
        id: "api-key",
-       prompt: "Paste your PostHog personal API key below.\\n\\nDon't have one yet? Create one here:\\n${settingsUrl}\\n\\nWhen creating the key, choose the 'Source map upload' preset, then come back and paste it here.",
+       prompt: "Paste your PostHog personal API key below. Don't have one yet? Create one here:\\n\\n${apiKeyUrl}",
        kind: "text",
        sensitive: true
      }

@@ -105,7 +105,7 @@ export const config: ProgramConfig = {
           projectPath,
           projectId: ctx.projectId,
           host: ctx.host.apiHost,
-          settingsUrl: `${uiHost}/project/${ctx.projectId}/settings/user-api-keys`,
+          apiKeyUrl: `${uiHost}/source-maps-key`,
           uiHost,
           reportFile: REPORT_FILE,
         });
