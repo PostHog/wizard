@@ -6,7 +6,7 @@ const baseParams = {
   skillId: 'error-tracking-upload-source-maps-node',
   projectId: 123,
   host: 'https://us.i.posthog.com',
-  settingsUrl: 'https://us.posthog.com/settings/user-api-keys',
+  apiKeyUrl: 'https://us.posthog.com/source-maps-key',
   uiHost: 'https://us.posthog.com',
   reportFile: 'posthog-source-maps-report.md',
 };
