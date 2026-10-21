@@ -48,7 +48,7 @@ route.
 
 ### Configuration hooks
 
-Read [ProgramRun](../../../../src/services/program-contract/program-run.ts) and
+Read [ProgramRun](../../../../src/programs/contract/program-run.ts) and
 [AgentRunDefinition](../../../../src/agent/runner/shared/types.ts) for exact
 signatures.
 
@@ -154,7 +154,7 @@ credentials.
 
 Programs never use the UI. A program's `run` gets a `RunnerContext` and its
 `ciPreRun` gets a `CiRunnerContext`, both from
-[runner-context.ts](../../../../src/services/program-contract/runner-context.ts), and it reads a
+[runner-context.ts](../../../../src/programs/contract/runner-context.ts), and it reads a
 `ProgramSession`. Each host reports through its own renderer, with no UI
 interface shared between them: TUI code takes the
 [WizardStore](../../../../src/tui/store.ts) it reports through as an argument,
@@ -214,7 +214,8 @@ rules close the paths the compiler can't see. CI runs `pnpm typecheck` in
 
 `tsconfig.base.json` holds the compiler options and the aliases, entries only:
 `@env`, `@shared/*`, `@utils/*`, `@host/*`, `@agent`, `@agent/types`,
-`@services/<service>`, `@programs`, `@programs/types`, `@programs/<id>`, `@tools`,
+`@services/<service>`, `@programs`, `@programs/types`, `@programs/contract`,
+`@programs/<id>`, `@tools`,
 `@tui`, `@headless` and `@cli`. Four deep aliases stay for the layer that owns
 them: `@agent/*`, `@services/*`, `@programs/*` and `@cli/*` in tests and source,
 and `@tui/*` in the TUI. Any layer's tests may mock a service's internal module
@@ -229,8 +230,9 @@ whole, so the projects that need other aliases list them again.
 | host                | `src/host/tsconfig.json`                                                                                                                         | env, shared                                                          |
 | agent               | `src/agent/tsconfig.json`                                                                                                                        | env, shared                                                          |
 | tools               | `src/tools/tsconfig.json`                                                                                                                        | env, shared, agent                                                   |
-| services            | `src/services/tsconfig.json`                                                                                                                     | env, shared, agent                                                   |
-| shared program code | `src/programs/tsconfig.core.json`                                                                                                                | env, shared, agent, services                                         |
+| program contract    | `src/programs/contract/tsconfig.json`                                                                                                            | env, shared, agent                                                   |
+| services            | `src/services/tsconfig.json`                                                                                                                     | env, shared, agent, program contract                                 |
+| shared program code | `src/programs/tsconfig.core.json`                                                                                                                | env, shared, agent, program contract, services                       |
 | one program         | `src/programs/<id>/tsconfig.json`                                                                                                                | The shared program code                                              |
 | programs entry      | `src/programs/tsconfig.json`: `index.ts`, `types.ts`, `program-registry.ts`, `run-program.ts`, `detect-program.ts`, `detect-map.ts`, `__tests__` | The shared program code and every program                            |
 | headless            | `src/headless/tsconfig.json`                                                                                                                     | env, shared, host, agent, programs entry                             |

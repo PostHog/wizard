@@ -61,7 +61,7 @@ on the screen's needs; `App` remains the shared shell.
 ## Preserve the UI boundary
 
 Programs never use the UI. They get a runner context from
-[runner-context.ts](../../../src/services/program-contract/runner-context.ts). TUI code, the
+[runner-context.ts](../../../src/programs/contract/runner-context.ts). TUI code, the
 login included, takes the [WizardStore](../../../src/tui/store.ts) it reports
 through as an argument: `pushStatus` for a line, `showOutroError` for an error
 outro, and [abortOnScreens](../../../src/tui/abort.ts) for a decided failure.
@@ -73,7 +73,7 @@ selection, not wizard progression.
 
 For new state, first decide whether it belongs in
 the shared [WizardSession](../../../src/services/session/wizard-session.ts),
-which extends the [ProgramSession](../../../src/services/program-contract/program-session.ts)
+which extends the [ProgramSession](../../../src/programs/contract/program-session.ts)
 programs read, in the TUI's own [TuiState](../../../src/tui/tui-state.ts) when
 only screens read it, or in display-only store state. Use an explicit setter
 that notifies subscribers. When TUI code needs a new operation to report

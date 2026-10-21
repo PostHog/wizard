@@ -92,9 +92,10 @@ reaches the UI.
 | One program's e2e test definition             | Its folder's `test/e2e.json`, read by [`e2e-harness/profiles.ts`](../../e2e-harness/profiles.ts) |
 | Code several programs share                   | [`shared`](shared/skill-program.ts): program builders and [`program-scopes.ts`](shared/program-scopes.ts) |
 | The list of every program                     | [`program-registry.ts`](program-registry.ts)                                      |
-| Running one program                           | [`run-program.ts`](run-program.ts) and [`detect-program.ts`](detect-program.ts)   |
+| Running one program, and its input and outcome | [`run-program.ts`](run-program.ts), [`detect-program.ts`](detect-program.ts) and [`program-input.ts`](program-input.ts) |
 | Commands that pick a program by skill         | [`dispatch-family.ts`](../cli/commands/dispatch-family.ts)                        |
-| The program contract, session store, detection, frameworks, codebase scan and tool catalog | [`src/services`](../services/README.md) |
+| The program contract: `ProgramConfig`, `ProgramSession`, `RunnerContext`, `FrameworkConfig` | [`contract`](contract/index.ts), its own project below the services |
+| The session store, detection, frameworks, codebase scan and tool catalog | [`src/services`](../services/README.md) |
 
 Other layers import runtime values from `@programs` and types from
 `@programs/types`, which re-exports the program contract. `@programs` exports
@@ -104,8 +105,8 @@ in a store until a screen or an embedder answers), `resolveApiKeyLogin` (a login
 from a personal API key) and `apiKeyCredentials` (a credentials provider that
 makes one), `logIn`, `TASK_OUTCOMES_KEY`, the task stream, the registry lookups,
 and the shared program code the hosts call. Program code may import `@env`,
-`@shared/*`, `@utils/*`, `@agent`, `@agent/types` and the service entries,
-`@services/<service>`. A program folder also imports the shared program code, by
+`@shared/*`, `@utils/*`, `@agent`, `@agent/types`, the program contract,
+`@programs/contract`, and the service entries, `@services/<service>`. A program folder also imports the shared program code, by
 relative path, and only the registry's entry files import every program. Every
 programs project extends `tsconfig.no-tui.json`, which maps `@programs/*`. A
 program's project references only the shared program code, so an import of a

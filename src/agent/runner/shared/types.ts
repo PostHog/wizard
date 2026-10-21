@@ -42,7 +42,7 @@ export interface AbortCase {
  *
  * Every program provides one of these as `RunConfig.run`. The runner assembles
  * the final prompt from `customPrompt` + `skillId`. Programs extend it with
- * their session-taking completion hooks in `src/services/program-contract/program-run.ts`;
+ * their session-taking completion hooks in `src/programs/contract/program-run.ts`;
  * the caller binds those and hands the agent `RunConfig.hooks` instead.
  */
 export interface AgentRunDefinition {

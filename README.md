@@ -609,10 +609,11 @@ Path aliases defined in `tsconfig.base.json`, resolved by tsdown and `tsx`:
 | `@agent` | `src/agent/index.ts`, the agent's runtime entry |
 | `@agent/types` | `src/agent/types.ts`, type-only |
 | `@agent/*` | `src/agent/*`, for the agent's tests. The agent imports its own modules by relative path, and no other layer maps it |
-| `@services/<service>` | `src/services/<service>/index.ts`, one service's entry, for the programs: `program-contract`, `session`, `detection`, `detection/decisions`, `frameworks`, `codebase-scan` and `warehouse-sources` |
+| `@services/<service>` | `src/services/<service>/index.ts`, one service's entry, for the programs: `session`, `detection`, `detection/decisions`, `frameworks`, `codebase-scan` and `warehouse-sources` |
 | `@services/*` | `src/services/*`. Other layers reach only the service entries; services import each other by relative path, and tests use this alias for a service's own files and for mocks |
 | `@programs` | `src/programs/index.ts`, the programs runtime entry |
 | `@programs/types` | `src/programs/types.ts`, type-only |
+| `@programs/contract` | `src/programs/contract/index.ts`, the program contract: `ProgramConfig`, `ProgramSession`, `RunnerContext`, `FrameworkConfig`. Its own project below the services, which import it; it imports no service |
 | `@programs/<id>` | `src/programs/<id>/index.ts`, one program's entry. Other layers reach nothing else in a program folder |
 | `@programs/*` | `src/programs/*`. Other layers reach only the `@programs/<id>` entries; the programs import their own code by relative path, and only their tests use this alias |
 | `@tools` | `src/tools/index.ts`, the tools' one entry: the commands that run no agent. The TUI and the CLI import it; programs never do |

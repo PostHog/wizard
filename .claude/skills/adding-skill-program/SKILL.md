@@ -34,7 +34,7 @@ linear.
   [family dispatch](../../../src/cli/commands/dispatch-family.ts). Unpromoted
   skills run through [the skill command](../../../src/cli/commands/skill.ts).
 - **Native program:** use a
-  [ProgramConfig](../../../src/services/program-contract/program-step.ts) when the wizard
+  [ProgramConfig](../../../src/programs/contract/program-step.ts) when the wizard
   needs its own flow, screens, detection, composition, or other native behavior.
   Keep product instructions in context-mill.
 
@@ -162,7 +162,7 @@ when a CI session needs a different prerequisite strategy: `detectProgram` runs
 it in place of `onReady` for a CI session. Programs read a `ProgramSession` and
 never use the UI: `run` gets a `RunnerContext`, `ciPreRun` gets a
 `CiRunnerContext` and a run step's `onRunPrep` gets the runner's `log`
-([runner-context.ts](../../../src/services/program-contract/runner-context.ts)).
+([runner-context.ts](../../../src/programs/contract/runner-context.ts)).
 
 `requires` currently records metadata; it does not execute or enforce prior
 programs. Compose real work through `runSteps`, keyed by the flow step id, with

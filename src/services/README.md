@@ -1,16 +1,18 @@
 # Services
 
-What programs consume: the program contract, the session store, detection, the
-codebase scan, the warehouse tool catalog and the framework configs. A service
+What programs consume: the session store, detection, the codebase scan, the
+warehouse tool catalog and the framework configs. A service
 knows what a program, a session or an agent run is; code that doesn't belongs in
 [`src/shared`](../shared/README.md). Some services start agent runs, such as the
 agentic project scan, so the layer sits above the agent:
 
 ```
-env → shared → agent → services → programs → hosts
+env → shared → agent → program contract → services → programs → hosts
 ```
 
-Services import `@env`, `@shared/*`, `@utils/*`, `@agent` and `@agent/types`.
+Services import `@env`, `@shared/*`, `@utils/*`, `@agent`, `@agent/types` and
+the program contract, `@programs/contract`, which defines `ProgramConfig`,
+`ProgramSession`, `RunnerContext` and `FrameworkConfig` and imports no service.
 Programs import services. The hosts reach the session store through the
 `@programs` entry, which re-exports it.
 
@@ -21,8 +23,7 @@ folder, never a file inside one:
 
 | Entry                           | What it holds                                                                                                                                      |
 | ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@services/program-contract`    | `ProgramConfig`, `ProgramSession`, `RunnerContext`, `ProgramRun`, `ProgramAbort`, `FrameworkConfig`, wizard flags and the `runProgram` input types |
-| `@services/session`             | `SessionStore`, `buildSession`, stored interactions, audit checks and the task stream                                                              |
+| `@services/session`             | `SessionStore`, `buildSession`, stored interactions, audit checks, the task stream and `loadWizardFlags`                                                              |
 | `@services/detection`           | Framework, feature and package-manager detection, the agentic project scan and project scoping                                                     |
 | `@services/detection/decisions` | The Decisions service. Only dev builds load it, through an `import()` behind `!IS_PRODUCTION_BUILD`; production builds replace it with a stub      |
 | `@services/frameworks`          | `FRAMEWORK_REGISTRY` and each framework's `FrameworkConfig`                                                                                        |
@@ -35,8 +36,8 @@ nothing else. Add to it when a program needs another export.
 ## Imports inside the layer
 
 Files inside the layer import each other by relative path, across services too.
-The services import each other in a loop (the contract, session, detection,
-frameworks, codebase scan and tool catalog), and a value read through an entry
+The services import each other in a loop (session, detection, frameworks,
+codebase scan and tool catalog), and a value read through an entry
 inside a loop can run before the entry finishes loading.
 
 A service's own tests may import its files by the deep alias,
