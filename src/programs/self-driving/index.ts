@@ -1,10 +1,10 @@
 import { join } from 'path';
 import { access, rm } from 'node:fs/promises';
-import type { ProgramConfig } from '@services/program-contract';
-import type { ProgramRun } from '@services/program-contract';
+import type { ProgramConfig } from '@programs/contract';
+import type { ProgramRun } from '@programs/contract';
 import { createSkillProgram } from '../shared/skill-program.js';
 import { OutroKind } from '@shared/outro';
-import type { ProgramSession } from '@services/program-contract';
+import type { ProgramSession } from '@programs/contract';
 import {
   detectSelfDrivingPrerequisites,
   getSelfDrivingDetectedTools,

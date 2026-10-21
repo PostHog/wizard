@@ -5,7 +5,7 @@ export { runProgram, TASK_OUTCOMES_KEY } from './run-program';
 export { reportCodebaseScan, scanCodebaseFor } from '@services/codebase-scan';
 /** How a run ended; `ProgramRunOutcome.outcome` holds one. */
 export { RunOutcome } from '@shared/run-state';
-export { ProgramAbort } from '@services/program-contract';
+export { ProgramAbort } from './program-abort';
 export { buildSession } from '@services/session';
 export { SessionStore, applyAgentProgress } from '@services/session';
 export { storeInteraction } from '@services/session';
@@ -21,7 +21,7 @@ export {
   OAuthTokenResponseSchema,
   parseOAuthScopes,
 } from '@shared/oauth-tokens';
-export { loadWizardFlags } from '@services/program-contract';
+export { loadWizardFlags } from '@services/session';
 export { apiKeyCredentials, resolveApiKeyLogin } from './api-key-login';
 export {
   /** OAuth scopes a program's login asks for. */

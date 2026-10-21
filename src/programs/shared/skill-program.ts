@@ -19,9 +19,9 @@
  *   })
  */
 
-import type { ProgramConfig } from '@services/program-contract';
+import type { ProgramConfig } from '@programs/contract';
 import type { AbortCase } from '@agent/types';
-import type { ProgramRun } from '@services/program-contract';
+import type { ProgramRun } from '@programs/contract';
 
 export interface SkillProgramOptions {
   /** Context-mill skill ID to install */

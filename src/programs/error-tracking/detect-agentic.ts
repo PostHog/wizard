@@ -24,8 +24,8 @@ import {
   detectIntegrationProjects,
   toIntegrationCandidates,
 } from '@services/detection';
-import type { ProgramSession } from '@services/program-contract';
-import type { RunnerContext } from '@services/program-contract';
+import type { ProgramSession } from '@programs/contract';
+import type { RunnerContext } from '@programs/contract';
 
 /** frameworkContext key for the picked project's path, relative to the repo root. */
 export const ERROR_TRACKING_PROJECT_PATH_KEY = 'errorTrackingProjectPath';

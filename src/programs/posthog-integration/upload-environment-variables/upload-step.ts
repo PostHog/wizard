@@ -1,7 +1,7 @@
 import type { Integration } from '@shared/constants';
 import { withProgress } from '@utils/telemetry';
 import { analytics } from '@utils/analytics';
-import type { RunnerContext } from '@services/program-contract';
+import type { RunnerContext } from '@programs/contract';
 import { EnvironmentProvider } from './EnvironmentProvider';
 import { VercelEnvironmentProvider } from './providers/vercel';
 

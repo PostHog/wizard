@@ -7,7 +7,7 @@
 
 import fs from 'fs';
 import path from 'path';
-import type { RunnerContext } from '@services/program-contract';
+import type { RunnerContext } from '@programs/contract';
 import {
   startFileWatcher,
   type FileWatcherHandle,

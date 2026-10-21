@@ -14,7 +14,7 @@ import type { ApiProject, GatewayCredential } from '@shared/api';
 import type { CloudRegion } from '@utils/types';
 import type { PendingQuestion, TaskNotice } from '@agent/types';
 import { RunPhase, ScanConsent } from '@shared/run-state';
-import type { ProgramSession } from '../program-contract/program-session';
+import type { ProgramSession } from '@programs/contract';
 
 function parseProjectIdArg(value: string | undefined): number | undefined {
   if (value === undefined || value === '') return undefined;

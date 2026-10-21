@@ -46,7 +46,7 @@ import {
   reportWarehouseSourcesDetected,
 } from '@services/detection/integration';
 import { DETECTED_WAREHOUSE_SOURCES_KEY } from '@services/warehouse-sources/detect';
-import type { ProgramReadyContext } from '@services/program-contract/program-step';
+import type { ProgramReadyContext } from '@programs/contract';
 import type { WizardSession } from '@services/session/wizard-session';
 import { buildSession } from '@services/session/wizard-session';
 import { DiscoveredFeature } from '@shared/discovered-feature';

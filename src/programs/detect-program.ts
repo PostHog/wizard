@@ -5,8 +5,8 @@ import { ErrorCodes } from '@shared/errors';
 import { WizardError } from '@shared/errors/wizard-error';
 import { scanCodebaseFor } from '@services/codebase-scan';
 import { detectErrorCode } from './detect-map';
-import type { ProgramConfig } from '@services/program-contract';
-import type { CiRunnerContext } from '@services/program-contract';
+import type { ProgramConfig } from '@programs/contract';
+import type { CiRunnerContext } from '@programs/contract';
 import type { WizardSession } from '@services/session';
 import type { SessionStore } from '@services/session';
 

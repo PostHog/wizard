@@ -3,7 +3,7 @@ import fg from 'fast-glob';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { WizardRunOptions } from '@utils/types';
-import type { FrameworkConfig } from '../../program-contract/framework-config';
+import type { FrameworkConfig } from '@programs/contract';
 import { detectJavaPackageManagers } from '../../detection/package-manager';
 import { Integration } from '@shared/constants';
 

@@ -10,17 +10,14 @@ import { detectFramework } from '@services/detection';
 import { gatherFrameworkContext } from '@services/detection';
 import { noteDetectedFramework } from '@services/detection';
 import { scopeInstallDirToProject } from '@services/detection';
-import type { CiRunnerContext } from '@services/program-contract';
+import type { CiRunnerContext } from '@programs/contract';
 import { FRAMEWORK_REGISTRY } from '@services/frameworks';
 import { createSkillProgram } from '../shared/skill-program';
 import { detectPostHogIntegration } from '@services/detection';
-import type {
-  ProgramConfig,
-  ProgramReadyContext,
-} from '@services/program-contract';
-import type { ProgramSession } from '@services/program-contract';
+import type { ProgramConfig, ProgramReadyContext } from '@programs/contract';
+import type { ProgramSession } from '@programs/contract';
 import { analytics } from '@utils/analytics';
-import { ProgramAbort } from '@services/program-contract';
+import { ProgramAbort } from '../program-abort';
 import { ErrorCodes } from '@shared/errors';
 import { REPLAY_VISION_SCOPE_ADDITIONS } from './scopes.js';
 import { abortNoFrameworkDetected } from '../shared/abort-no-framework';

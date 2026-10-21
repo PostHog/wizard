@@ -9,13 +9,13 @@
  * extracted here so the `integrate` subcommand can reuse it.
  */
 
-import type { ProgramReadyContext } from '../program-contract/program-step';
+import type { ProgramReadyContext } from '@programs/contract';
 import {
   mayReportScanResults,
   reportableDiscoveredFeatures,
   ScanConsent,
 } from '@shared/run-state';
-import type { ProgramSession } from '../program-contract/program-session';
+import type { ProgramSession } from '@programs/contract';
 import { FRAMEWORK_REGISTRY } from '../frameworks/registry';
 import { detectFramework } from './framework';
 import { discoverFeatures } from './features';

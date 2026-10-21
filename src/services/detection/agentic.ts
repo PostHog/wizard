@@ -32,8 +32,8 @@ import {
   getSkillsBaseUrl,
   POSTHOG_DOCS_URL,
 } from '@shared/constants';
-import type { ProgramSession } from '../program-contract/program-session';
-import { loadWizardFlags } from '../program-contract/wizard-flags';
+import type { ProgramSession } from '@programs/contract';
+import { loadWizardFlags } from '../session/wizard-flags';
 import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
 import { maySendScanResults } from '../codebase-scan/tags';

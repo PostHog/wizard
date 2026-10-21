@@ -11,7 +11,7 @@
  */
 
 import { analytics } from '@utils/analytics';
-import type { ProgramSession } from '../program-contract/program-session';
+import type { ProgramSession } from '@programs/contract';
 import { walkProjectFiles, safeReadFile } from '@utils/bounded-fs';
 import {
   ENV_SCAN_MAX_DEPTH,

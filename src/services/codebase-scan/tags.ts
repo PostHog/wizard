@@ -6,7 +6,7 @@
 
 import { mayReportScanResults } from '@shared/run-state';
 import { analytics } from '@utils/analytics';
-import type { ProgramSession } from '../program-contract/program-session';
+import type { ProgramSession } from '@programs/contract';
 
 /** frameworkContext key holding the tags, kept until sharing is granted. */
 export const SCAN_TAGS_KEY = 'codebaseScanTags';

@@ -5,17 +5,11 @@ export type {
   ProgramId,
   ProgramReadyContext,
   ProgramRunStep,
-} from '@services/program-contract';
-export type {
-  FrameworkConfig,
-  SetupQuestion,
-} from '@services/program-contract';
-export type { ProgramRun } from '@services/program-contract';
-export type { ProgramSession } from '@services/program-contract';
-export type {
-  CiRunnerContext,
-  RunnerContext,
-} from '@services/program-contract';
+} from '@programs/contract';
+export type { FrameworkConfig, SetupQuestion } from '@programs/contract';
+export type { ProgramRun } from '@programs/contract';
+export type { ProgramSession } from '@programs/contract';
+export type { CiRunnerContext, RunnerContext } from '@programs/contract';
 export type {
   ProgramDiagnostic,
   ProgramInput,
@@ -24,8 +18,8 @@ export type {
   ProgramRunOutcome,
   ProgramStep,
   ProgramWorkflowConnector,
-  WizardFlagSnapshot,
-} from '@services/program-contract';
+} from './program-input';
+export type { WizardFlagSnapshot } from '@services/session';
 export type {
   CredentialsProvider,
   ResolvedProgramCredentials,

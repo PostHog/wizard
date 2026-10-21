@@ -8,7 +8,7 @@ import {
   scopeInstallDirToProject,
 } from '@services/detection/project-scope';
 import { WIZARD_BASIC_INTEGRATION_AGENTIC_DETECTION_FLAG_KEY } from '@shared/constants';
-import type { CiRunnerContext } from '@services/program-contract/runner-context';
+import type { CiRunnerContext } from '@programs/contract';
 import { buildSession } from '@services/session/wizard-session';
 import { analytics } from '@utils/analytics';
 

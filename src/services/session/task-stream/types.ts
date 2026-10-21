@@ -13,7 +13,7 @@
  */
 
 import type { RunPhase } from '@shared/run-state';
-import type { ScanReport } from '../../program-contract/program-session';
+import type { ScanReport } from '@programs/contract';
 
 export enum StreamTaskStatus {
   Pending = 'pending',

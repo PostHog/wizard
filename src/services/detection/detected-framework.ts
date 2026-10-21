@@ -1,6 +1,6 @@
 /** What a run does with the label a framework gives its gathered context (Django with Wagtail CMS, Next.js App Router). */
-import type { FrameworkConfig } from '../program-contract/framework-config';
-import type { ProgramSession } from '../program-contract/program-session';
+import type { FrameworkConfig } from '@programs/contract';
+import type { ProgramSession } from '@programs/contract';
 import { analytics } from '@utils/analytics';
 
 /** A CI run prints the label, a TUI run keeps it on its session and the `detected_framework` tag. */

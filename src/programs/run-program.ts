@@ -36,7 +36,7 @@ import { logToFile } from '@utils/debug';
 import { removeAuditLedger, startAuditLedgerWatcher } from '@programs/audit';
 import { FRAMEWORK_REGISTRY } from '@services/frameworks';
 import { findProgramConfig, getProgramConfig } from './program-registry';
-import { ProgramAbort } from '@services/program-contract';
+import { ProgramAbort } from './program-abort';
 import { detectionFailure, detectProgram } from './detect-program';
 import {
   rotateCredentials,
@@ -48,13 +48,10 @@ import type { QuestionKey } from '@services/detection/decisions';
 import { logIn } from './login';
 import { applyAgentProgress, type SessionStore } from '@services/session';
 import type { WizardSession } from '@services/session';
-import type { ProgramConfig, ProgramRunStep } from '@services/program-contract';
-import type { ProgramRun } from '@services/program-contract';
-import type { ProgramSession } from '@services/program-contract';
-import type {
-  CiRunnerContext,
-  RunnerContext,
-} from '@services/program-contract';
+import type { ProgramConfig, ProgramRunStep } from '@programs/contract';
+import type { ProgramRun } from '@programs/contract';
+import type { ProgramSession } from '@programs/contract';
+import type { CiRunnerContext, RunnerContext } from '@programs/contract';
 import type {
   ProgramDiagnostic,
   ProgramInput,
@@ -62,8 +59,8 @@ import type {
   ProgramProgress,
   ProgramRunOutcome,
   ProgramStep,
-  WizardFlagSnapshot,
-} from '@services/program-contract';
+} from './program-input';
+import type { WizardFlagSnapshot } from '@services/session';
 
 /** The session's frameworkContext slot holding an orchestrated run's final task outcomes. */
 export const TASK_OUTCOMES_KEY = 'orchestrator-task-outcomes';

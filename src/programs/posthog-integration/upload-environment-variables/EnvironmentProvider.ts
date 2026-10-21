@@ -1,4 +1,4 @@
-import type { RunnerContext } from '@services/program-contract';
+import type { RunnerContext } from '@programs/contract';
 
 export type EnvironmentProviderOptions = {
   installDir: string;

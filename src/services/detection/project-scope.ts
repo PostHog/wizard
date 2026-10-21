@@ -10,13 +10,13 @@ import {
   type DetectProgress,
   type DetectTarget,
 } from './agentic';
-import type { CiRunnerContext } from '../program-contract/runner-context';
+import type { CiRunnerContext } from '@programs/contract';
 import { FRAMEWORK_REGISTRY } from '../frameworks/registry';
 import {
   Integration,
   WIZARD_BASIC_INTEGRATION_AGENTIC_DETECTION_FLAG_KEY,
 } from '@shared/constants';
-import type { ProgramSession } from '../program-contract/program-session';
+import type { ProgramSession } from '@programs/contract';
 import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
 

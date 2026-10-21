@@ -11,7 +11,7 @@
 import { choice, defineQuestions, predicate } from './builders';
 import { FRAMEWORK_CHOICES } from './framework';
 import type { DecisionQuestionSpec } from './types';
-import type { DecisionQuestionKey } from '../../program-contract/program-step';
+import type { DecisionQuestionKey } from '@programs/contract';
 
 export const QUESTIONS = defineQuestions({
   // ── What the project is ──────────────────────────────────────────

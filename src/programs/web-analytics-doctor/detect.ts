@@ -1,5 +1,5 @@
 import { existsSync, statSync } from 'fs';
-import type { ProgramSession } from '@services/program-contract';
+import type { ProgramSession } from '@programs/contract';
 import type { AbortCase } from '@agent/types';
 import { ErrorCodes } from '@shared/errors';
 import { findPackageJsons } from '@services/detection';

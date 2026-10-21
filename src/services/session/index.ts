@@ -22,3 +22,4 @@ export {
   type SessionArgs,
   type WizardSession,
 } from './wizard-session';
+export { loadWizardFlags, type WizardFlagSnapshot } from './wizard-flags';

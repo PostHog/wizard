@@ -23,8 +23,8 @@ import {
 import { gatherFrameworkContext } from '@services/detection';
 import { noteDetectedFramework } from '@services/detection';
 import type { Integration } from '@shared/constants';
-import type { ProgramSession } from '@services/program-contract';
-import type { RunnerContext } from '@services/program-contract';
+import type { ProgramSession } from '@programs/contract';
+import type { RunnerContext } from '@programs/contract';
 
 export type { DetectEvent };
 

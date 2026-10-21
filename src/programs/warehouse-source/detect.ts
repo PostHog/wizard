@@ -8,7 +8,7 @@
 
 import { existsSync, statSync } from 'fs';
 import { analytics } from '@utils/analytics';
-import type { ProgramSession } from '@services/program-contract';
+import type { ProgramSession } from '@programs/contract';
 import type { AbortCase } from '@agent/types';
 import { scannedWarehouseSources } from '@services/codebase-scan';
 import { tagScanResults } from '@services/codebase-scan';

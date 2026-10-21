@@ -1,5 +1,5 @@
 import { Harness, Sequence, DEFAULT_AGENT_MODEL } from '@shared/constants';
-import type { ProgramConfig } from '@services/program-contract';
+import type { ProgramConfig } from '@programs/contract';
 
 const METRICS_REPORT_FILE = 'posthog-metrics-report.md';
 

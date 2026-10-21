@@ -6,9 +6,9 @@
 
 import type { Integration } from '@shared/constants';
 import { logToFile } from '@utils/debug';
-import type { ProgramSession } from '@services/program-contract';
-import type { CiRunnerContext } from '@services/program-contract';
-import { loadWizardFlags } from '@services/program-contract';
+import type { ProgramSession } from '@programs/contract';
+import type { CiRunnerContext } from '@programs/contract';
+import { loadWizardFlags } from '@services/session';
 import {
   askDecisions,
   decisionsTransport,

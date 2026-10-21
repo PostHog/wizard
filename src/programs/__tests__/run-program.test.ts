@@ -37,14 +37,11 @@ import type {
   ProgramOptions,
   ProgramProgress,
   ProgramStep,
-} from '@services/program-contract';
-import type { ProgramSession } from '@services/program-contract';
-import type { ProgramReadyContext } from '@services/program-contract';
-import type { ProgramRun } from '@services/program-contract';
-import type {
-  CiRunnerContext,
-  RunnerContext,
-} from '@services/program-contract';
+} from '../program-input';
+import type { ProgramSession } from '@programs/contract';
+import type { ProgramReadyContext } from '@programs/contract';
+import type { ProgramRun } from '@programs/contract';
+import type { CiRunnerContext, RunnerContext } from '@programs/contract';
 import type { WizardSession } from '@services/session';
 import { AUDIT_CHECKS_KEY } from '@programs/audit';
 import { FRAMEWORK_REGISTRY } from '@services/frameworks';

@@ -18,7 +18,7 @@ import {
   type DetectEvent,
   type DetectProgress,
 } from '@services/detection';
-import type { ProgramSession } from '@services/program-contract';
+import type { ProgramSession } from '@programs/contract';
 import {
   VARIANT_DISPLAY_NAME,
   AUTOMATABLE_VARIANTS,

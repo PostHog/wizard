@@ -1,4 +1,4 @@
-import type { ProgramConfig } from '@services/program-contract';
+import type { ProgramConfig } from '@programs/contract';
 import type { AbortCase } from '@agent/types';
 import { WIZARD_TOOL_NAMES } from '@agent';
 

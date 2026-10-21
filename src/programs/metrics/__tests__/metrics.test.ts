@@ -1,5 +1,5 @@
 import { config as metricsConfig } from '../index';
-import type { ProgramRun } from '@services/program-contract';
+import type { ProgramRun } from '@programs/contract';
 
 function staticRun(config: typeof metricsConfig): ProgramRun {
   if (typeof config.run === 'function') {

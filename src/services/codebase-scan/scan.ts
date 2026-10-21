@@ -9,11 +9,8 @@
  */
 
 import { analytics } from '@utils/analytics';
-import type {
-  ProgramReadyContext,
-  ProgramConfig,
-} from '../program-contract/program-step';
-import type { ProgramSession } from '../program-contract/program-session';
+import type { ProgramReadyContext, ProgramConfig } from '@programs/contract';
+import type { ProgramSession } from '@programs/contract';
 import { detectTools, toWarehouseSources } from '../warehouse-sources/detect';
 import { loadSourceDetectors } from '../warehouse-sources/registry';
 import type { DetectedSource, DetectedTool } from '../warehouse-sources/types';

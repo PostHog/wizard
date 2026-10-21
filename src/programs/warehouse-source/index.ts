@@ -1,6 +1,6 @@
-import type { ProgramConfig } from '@services/program-contract';
-import type { ProgramRun } from '@services/program-contract';
-import type { ProgramSession } from '@services/program-contract';
+import type { ProgramConfig } from '@programs/contract';
+import type { ProgramRun } from '@programs/contract';
+import type { ProgramSession } from '@programs/contract';
 import { LONGER_ASK_TIMEOUT_MS } from '@shared/ask-policy';
 import { WAREHOUSE_SOURCE_SCOPE_ADDITIONS } from '../shared/program-scopes';
 import {
