@@ -80,21 +80,21 @@ export const signature: (
 | Field                                                        | Type                | What it's for                                                                    |
 | ------------------------------------------------------------ | ------------------- | -------------------------------------------------------------------------------- |
 | `programId`                                                  | `string`            | Which registered program runs. It names analytics, the route and the gateway spend. |
-| [`input`](../src/programs/program-input.ts) | `ProgramInput` | What the program runs on. Only `store` is required. |
-| [`input.store`](../src/programs/session/session-store.ts) | `SessionStore` | Launch values, detection and run state. `new SessionStore(buildSession({ installDir }))` builds one. |
+| [`input`](../src/services/program-contract/program-input.ts) | `ProgramInput` | What the program runs on. Only `store` is required. |
+| [`input.store`](../src/services/session/session-store.ts) | `SessionStore` | Launch values, detection and run state. `new SessionStore(buildSession({ installDir }))` builds one. |
 | `input.config` | `Partial<ProgramConfig>` | Laid over the registered config, such as a one-off `run`. |
 | `input.credentials` | `ResolvedProgramCredentials` | A login you already hold. Without it the run uses the store's login, then `options.credentials`. |
 | `input.wizardFlags`, `input.wizardFlagPayloads` | `Record` | A flag snapshot. Without `wizardFlags` the run calls `options.featureFlags`, if you pass it. |
 | `input.runId` | `string` | Labels the program's own agent run in progress events. Generated when absent. |
 | `input.composed` | `boolean` | A run inside another's: its caller writes the outro. `runProgram` still settles the phase. |
-| [`options`](../src/programs/program-input.ts)                | `ProgramOptions`    | The login, the answerer, the workflow, flags, progress and cancellation.         |
+| [`options`](../src/services/program-contract/program-input.ts)                | `ProgramOptions`    | The login, the answerer, the workflow, flags, progress and cancellation.         |
 | `options.credentials` | `CredentialsProvider` | Resolves the login when neither `input` nor the store has one. |
 | `options.interaction` | `AgentInteraction` | Answers the agent's questions and notices. Absent, the agent asks nothing. |
 | `options.workflow` | `ProgramWorkflowConnector` | Answers each [step](#the-steps-a-run-waits-on) with a yes or no. Absent, each step takes its default. |
 | `options.onProgress` | `(ProgramProgress) => void` | Every agent event with its `runId` and, for a composed run, its `stepId`. Never awaited. |
 | `options.featureFlags` | `() => Promise<WizardFlagSnapshot>` | Loads the flags when `input` has none. |
 | `options.signal` | `AbortSignal` | Cancels the run. |
-| [Outcome](../src/programs/program-input.ts) | `ProgramRunOutcome` | How the run ended, each agent run's result in order, the report path, any failure and any observer diagnostics. |
+| [Outcome](../src/services/program-contract/program-input.ts) | `ProgramRunOutcome` | How the run ended, each agent run's result in order, the report path, any failure and any observer diagnostics. |
 
 The store holds PostHog tokens, including the refresh token, once the run logs
 in. Don't log or serialize its credentials.
@@ -176,7 +176,7 @@ own login and its own gateway token, so a later run never uses an earlier one's.
 
 Programs never use the UI. A program's `run` and `ciPreRun` receive a runner
 context instead. Both types come from `@programs/types` and are defined in
-[`runner-context.ts`](../src/programs/runner-context.ts). `runProgram` runs a CI
+[`runner-context.ts`](../src/services/program-contract/runner-context.ts). `runProgram` runs a CI
 session's `ciPreRun`, or any other session's `onReady`, as its detection. It
 calls `run` with a runner over the store: framework-context reads and writes go
 to the store, and log lines and the spinner arrive as the run's progress.
@@ -187,7 +187,7 @@ to the store, and log lines and the spinner arrive as the run's progress.
 | `CiRunnerContext` | `ciPreRun` | `log.info`, `log.warn`, `authenticate(programId)`, which logs in once, and an optional `onProgress(event)` for scan progress. |
 
 Both read the session as a `ProgramSession`, defined in
-[`program-session.ts`](../src/programs/program-session.ts). A `run` or
+[`program-session.ts`](../src/services/program-contract/program-session.ts). A `run` or
 `ciPreRun` that writes to the session it is handed writes to a copy, and
 `runProgram` stores what it changed.
 
@@ -262,7 +262,7 @@ pre-issued one in `input.credentials.gateway`, as the quack example does.
 | Caller                                                                            | What it runs                                    |
 | --------------------------------------------------------------------------------- | ----------------------------------------------- |
 | `runProgram`                                                                      | One program's agent run.                        |
-| `detectProjectsWithAgent` in [`agentic.ts`](../src/programs/detection/agentic.ts) | The agentic project scan, one typed, read-only call per attempt. |
+| `detectProjectsWithAgent` in [`agentic.ts`](../src/services/detection/agentic.ts) | The agentic project scan, one typed, read-only call per attempt. |
 | [`a3-fault-probe.no-jest.ts`](../scripts/a3-fault-probe.no-jest.ts)               | A fault probe against a local gateway.          |
 
 ### Do a quack

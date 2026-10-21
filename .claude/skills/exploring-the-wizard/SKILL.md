@@ -130,5 +130,5 @@ The shared log is `/tmp/posthog-wizard.log` unless the server's environment sets
 and read from that count plus one afterward. Run sweeps serially so their logs
 remain attributable. `read_state` omits `frameworkContext`; an empty
 `setupQuestions` list alone does not prove a router mode. When necessary,
-inspect the detector under [`src/programs/frameworks/`](../../../src/programs/frameworks/) against
+inspect the detector under [`src/services/frameworks/`](../../../src/services/frameworks/) against
 the same fixture.

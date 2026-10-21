@@ -50,7 +50,7 @@ export interface SourceSignals {
   scriptHosts: readonly string[];
   /**
    * Package names keyed by ecosystem, e.g. `{ npm: ['pg'], pypi: ['psycopg2'] }`.
-   * Python names are normalized like the parsers in `@programs/detection/features`
+   * Python names are normalized like the parsers in `@services/detection/features`
    * (lowercased, `_`→`-`).
    */
   packages: Readonly<Record<string, readonly string[]>>;

@@ -1,6 +1,6 @@
 /**
  * Source-maps adapter over the generic agentic detector
- * (`@programs/detection/agentic`). The detector itself is product-knowledge-free;
+ * (`@services/detection/agentic`). The detector itself is product-knowledge-free;
  * this file supplies the source-maps targets (the automatable skill variants),
  * maps the result back to variants, and classifies each project as
  * instrumentable or not. The screen renders the result and the run step

@@ -19,7 +19,7 @@ configuration surfaces.
 
 Each domain has a dedicated boundary:
 
-- **Frameworks** → `FrameworkConfig` in `src/programs/frameworks/<name>/`
+- **Frameworks** → `FrameworkConfig` in `src/services/frameworks/<name>/`
 - **Integration knowledge** → markdown skills in the
   [context-mill](https://github.com/PostHog/context-mill) repo
 - **Security policy** → YARA-X rules in the
@@ -43,6 +43,11 @@ Each domain has a dedicated boundary:
   calls `process.exit`. It imports env and shared only. Headless, the TUI, the
   CLI and the e2e harness may import it. The agent and the programs may not; see
   [src/host/README.md](src/host/README.md)
+- **Services** → `src/services/`, what programs consume: the program contract,
+  the session store, detection, the framework configs, the codebase scan and the
+  tool catalog. It imports env, shared and the agent. Code outside it imports a
+  service through its entry, `@services/<service>`; see
+  [src/services/README.md](src/services/README.md)
 - **Programs** → one folder per program in `src/programs/<id>/`, which other
   layer source enters only through its `index.ts`, plus `runProgram`. A program
   is an agent run; see [src/programs/README.md](src/programs/README.md) and the
@@ -87,7 +92,8 @@ Each domain has a dedicated boundary:
   [layer boundaries](.claude/skills/wizard-development/references/ARCHITECTURE.md#layer-boundaries)
   and [import aliases](README.md#import-aliases). Code outside a layer imports
   it only through its public entries. Each layer's tests sit in its project, so
-  a test deep-imports only its own layer and mocks another through its entry.
+  a test deep-imports only its own layer and mocks another through its entry,
+  except that it may mock a service's internal module by its `@services/*` path.
 
 Adding a new concern means finding the narrowest existing surface, not adding
 logic to the runner. Keep changes local to the boundary that owns them.

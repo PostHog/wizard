@@ -160,12 +160,12 @@ export interface ProgramConfig {
   /**
    * Scan the codebase for catalog tools before `onReady`, once per run. The
    * result feeds local suggestions, and is reported to PostHog when the user
-   * shares it; see `@programs/codebase-scan`.
+   * shares it; see `@services/codebase-scan`.
    */
   scansCodebase?: boolean;
   /**
    * Questions this program asks the Decisions judgment service, by catalog key
-   * (`@programs/detection/decisions/questions`). The run asks those of this
+   * (`@services/detection/decisions/questions`). The run asks those of this
    * program and every program it `requires`, once, after login. Dev and CI
    * builds only: production builds don't bundle the service.
    */

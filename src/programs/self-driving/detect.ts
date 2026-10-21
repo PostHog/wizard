@@ -68,7 +68,7 @@ export function getSelfDrivingDetectedTools(
 const POSTHOG_PACKAGE_RE = /(^|["'\s/=:.@])posthog/im;
 
 // Manifests grepped for a posthog dependency. Distinct from PROJECT_MANIFESTS
-// in @programs/detection/agentic (project-root discovery); keep the two in sync
+// in @services/detection/agentic (project-root discovery); keep the two in sync
 // (a test asserts the shared ecosystem names appear in both). Exported for it.
 export const POSTHOG_MANIFESTS = [
   'package.json',

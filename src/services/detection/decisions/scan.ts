@@ -4,7 +4,7 @@
  * lockfile names, plus `.env` key NAMES from `collectProjectEnvKeys`, the scan
  * `check_env_keys` uses. Never file contents or `.env` values.
  *
- * Separate from the codebase scan (`@programs/codebase-scan`), which matches
+ * Separate from the codebase scan (`@services/codebase-scan`), which matches
  * PostHog's tool catalog and reports tools. This one only reads the manifest
  * parsers both share.
  */

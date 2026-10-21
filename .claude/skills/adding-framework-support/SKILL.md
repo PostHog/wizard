@@ -20,8 +20,8 @@ creating its own runner or changing existing routing defaults.
 
 ## Extend the framework configuration
 
-Start with [FrameworkConfig](../../../src/programs/framework-config.ts) and a nearby
-example under [src/programs/frameworks](../../../src/programs/frameworks/). Framework-specific
+Start with [FrameworkConfig](../../../src/services/program-contract/framework-config.ts) and a nearby
+example under [src/services/frameworks](../../../src/services/frameworks/). Framework-specific
 detection, context, environment conventions, and UI metadata belong here.
 Integration instructions and examples belong in context-mill.
 
@@ -29,18 +29,18 @@ Integration instructions and examples belong in context-mill.
    order controls first-match detection and the framework picker. Keep specific
    frameworks before language fallbacks and generic Node last; preserve the
    overlap rules in the
-   [detection checks](../../../src/programs/detection/__tests__/framework.test.ts).
-2. Add the config under `src/programs/frameworks/<name>/<name>-wizard-agent.ts`. Use a
+   [detection checks](../../../src/services/detection/__tests__/framework.test.ts).
+2. Add the config under `src/services/frameworks/<name>/<name>-wizard-agent.ts`. Use a
    `type` for framework context so it satisfies `Record<string, unknown>`.
    Export the config; the integration program already supplies execution.
 3. Import the config into
-   [FRAMEWORK_REGISTRY](../../../src/programs/frameworks/registry.ts).
+   [FRAMEWORK_REGISTRY](../../../src/services/frameworks/registry.ts).
    `metadata.name` is the framework's label once detection or the picker settles
    it.
 
 Read the current interface for the complete required fields. In particular,
 `detection.detectPackageManager` is required: reuse an adapter from
-[package-manager detection](../../../src/programs/detection/package-manager.ts). Use
+[package-manager detection](../../../src/services/detection/package-manager.ts). Use
 `metadata.setup.questions` for unresolved project variants; `metadata.gatherContext`
 collects framework context. When the gathered context names a more specific variant,
 return its label from `metadata.getDetectedFrameworkLabel(context)`; detection sets
@@ -50,7 +50,7 @@ and extra MCP servers also belong in metadata.
 Use `usesPackageJson: false` for frameworks without a package.json dependency.
 Their required `getVersion` callback can return `undefined`. Minimum-version
 checking requires both `minimumVersion` and `getInstalledVersion`; unknown
-versions pass. [Context detection](../../../src/programs/detection/context.ts)
+versions pass. [Context detection](../../../src/services/detection/context.ts)
 returns unsupported-version data for the integration UI rather than aborting
 itself.
 
@@ -58,10 +58,10 @@ itself.
 
 | Starting point                              | Pattern to reuse                                                                                                            |
 | ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| [Next.js](../../../src/programs/frameworks/nextjs/)  | `hasDeclaredDependency` from `utils/package-json`, `tryGetPackageJson` from `utils/setup-utils`, and router setup questions |
-| [Django](../../../src/programs/frameworks/django/)   | Python project files, context gathering, and Python package-manager detection                                               |
-| [Laravel](../../../src/programs/frameworks/laravel/) | Composer and framework-specific filesystem signals                                                                          |
-| [Rails](../../../src/programs/frameworks/rails/)     | Gemfile detection and Ruby conventions                                                                                      |
+| [Next.js](../../../src/services/frameworks/nextjs/)  | `hasDeclaredDependency` from `utils/package-json`, `tryGetPackageJson` from `utils/setup-utils`, and router setup questions |
+| [Django](../../../src/services/frameworks/django/)   | Python project files, context gathering, and Python package-manager detection                                               |
+| [Laravel](../../../src/services/frameworks/laravel/) | Composer and framework-specific filesystem signals                                                                          |
+| [Rails](../../../src/services/frameworks/rails/)     | Gemfile detection and Ruby conventions                                                                                      |
 
 Use [bounded filesystem helpers](../../../src/shared/utils/bounded-fs.ts) for project
 scans and reads. They bound traversal and skip dependency/build directories; add

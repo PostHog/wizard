@@ -3,7 +3,7 @@
  *
  * Mirrors source-maps: the integration-detect screen runs `detectSelfDriving-
  * IntegrationProjects` (the shared integration scan from
- * @programs/detection/project-scope), shows a project map, and the user picks one.
+ * @services/detection/project-scope), shows a project map, and the user picks one.
  * `toIntegrationCandidates` matches each project to an `Integration`; this file
  * classifies it as instrumentable (a framework the wizard supports that doesn't
  * already have PostHog). The screen writes the choice to the session; `prepSelfDriving-

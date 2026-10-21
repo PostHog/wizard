@@ -4,7 +4,7 @@
 
 | Surface                                                           | Owns                                                                          |
 | ----------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| [WizardSession](../../../../src/programs/session/wizard-session.ts) | Run configuration, decisions, credentials, and lifecycle state                |
+| [WizardSession](../../../../src/services/session/wizard-session.ts) | Run configuration, decisions, credentials, and lifecycle state                |
 | [TuiState](../../../../src/tui/tui-state.ts) | Each screen's answers, what an overlay shows, and the TUI's launch choices |
 | [FlowStep](../../../../src/tui/flow.ts)                       | Screens, visibility/completion predicates, gates, and `onInit` hooks          |
 | [TUI programs](../../../../src/tui/programs/index.ts) | Each program's flow, deck, tips and screens, by program id |

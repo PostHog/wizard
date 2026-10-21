@@ -11,7 +11,7 @@ classify failures without parsing human-readable messages.
   [`src/shared/errors/catalog.ts`](../src/shared/errors/catalog.ts)
 - **Consumers:** `wizardAbort()`
   ([`src/host/wizard-abort.ts`](../src/host/wizard-abort.ts)), the task stream
-  ([`src/programs/session/task-stream/`](../src/programs/session/task-stream/)),
+  ([`src/services/session/task-stream/`](../src/services/session/task-stream/)),
   and non-interactive hosts reading stderr.
 
 ## Stability contract
