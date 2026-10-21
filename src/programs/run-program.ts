@@ -41,7 +41,7 @@ import { detectionFailure, detectProgram } from './detect-program';
 import {
   rotateCredentials,
   type ResolvedProgramCredentials,
-} from './credentials';
+} from '@shared/credentials';
 import { reportCodebaseScan } from './codebase-scan';
 import { IS_PRODUCTION_BUILD } from '@env';
 import type { QuestionKey } from './detection/decisions/questions';

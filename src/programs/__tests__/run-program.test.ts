@@ -24,14 +24,14 @@ import { ServiceHealthStatus } from '@shared/health-checks/types';
 import { analytics } from '@utils/analytics';
 import { registerCleanup } from '@utils/cleanup';
 import { logToFile } from '@utils/debug';
-import { refreshAccessToken } from '../oauth/tokens';
+import { refreshAccessToken } from '@shared/oauth-tokens';
 import {
   configureOAuthSession,
   oauthCredentials,
   resetOAuthSession,
 } from '@shared/oauth-session';
 import { preinstallPostHogCliOnce } from '@programs/shared/posthog-cli-preinstall';
-import type { ResolvedProgramCredentials } from '../credentials';
+import type { ResolvedProgramCredentials } from '@shared/credentials';
 import type {
   ProgramInput,
   ProgramOptions,
@@ -72,7 +72,7 @@ vi.mock('@utils/analytics', async (importOriginal) => ({
     groupIdentify: vi.fn(),
   },
 }));
-vi.mock(import('../oauth/tokens'), () => ({
+vi.mock(import('@shared/oauth-tokens'), () => ({
   refreshAccessToken: vi.fn(),
   missingOAuthScopes: vi.fn(() => []),
 }));

@@ -23,9 +23,9 @@ export type {
 export type {
   CredentialsProvider,
   ResolvedProgramCredentials,
-} from './credentials';
+} from '@shared/credentials';
 export type { ApiKeyLoginOptions } from './api-key-login';
-export type { OAuthTokenResponse } from './oauth/tokens';
+export type { OAuthTokenResponse } from '@shared/oauth-tokens';
 export type { SessionArgs, WizardSession } from './session/wizard-session';
 export type {
   PlannedEvent,

@@ -1,5 +1,5 @@
-import { rotateCredentials } from '../credentials';
-import { refreshAccessToken } from '../oauth/tokens';
+import { rotateCredentials } from '@shared/credentials';
+import { refreshAccessToken } from '@shared/oauth-tokens';
 import { OAuthError } from '@utils/oauth-errors';
 import {
   isGrantRevoked,
@@ -12,7 +12,7 @@ import {
 } from '@shared/oauth-session';
 import type { Credentials } from '@shared/api';
 
-vi.mock(import('../oauth/tokens'), async (original) => ({
+vi.mock(import('@shared/oauth-tokens'), async (original) => ({
   ...(await original()),
   refreshAccessToken: vi.fn(),
 }));

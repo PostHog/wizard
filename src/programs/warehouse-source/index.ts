@@ -2,7 +2,7 @@ import type { ProgramConfig } from '../program-step';
 import type { ProgramRun } from '../program-run';
 import type { ProgramSession } from '../program-session';
 import { LONGER_ASK_TIMEOUT_MS } from '@shared/ask-policy';
-import { WAREHOUSE_SOURCE_SCOPE_ADDITIONS } from '../oauth/program-scopes';
+import { WAREHOUSE_SOURCE_SCOPE_ADDITIONS } from '../shared/program-scopes';
 import {
   detectWarehousePrerequisites,
   WAREHOUSE_ABORT_CASES,

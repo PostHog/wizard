@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { refreshAccessToken } from '../tokens';
+import { refreshAccessToken } from '../oauth-tokens';
 import { POSTHOG_PROXY_CLIENT_ID } from '@shared/constants';
 
 vi.mock('axios');

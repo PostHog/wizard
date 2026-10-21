@@ -7,7 +7,7 @@ import {
 import type {
   CredentialsProvider,
   ResolvedProgramCredentials,
-} from './credentials';
+} from '@shared/credentials';
 
 export type { ApiKeyLoginOptions };
 

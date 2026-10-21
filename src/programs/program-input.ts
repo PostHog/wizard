@@ -6,7 +6,7 @@ import type { WizardReadinessResult } from '@shared/health-checks/readiness';
 import type {
   CredentialsProvider,
   ResolvedProgramCredentials,
-} from './credentials';
+} from '@shared/credentials';
 import type { ProgramConfig, ProgramId } from './program-step';
 import type { SessionStore } from './session/session-store';
 

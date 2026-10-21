@@ -31,7 +31,7 @@ import type { HostResolution } from '@shared/host-resolution';
 import { getDetectedWarehouseSources } from '../warehouse-sources/detect';
 import { buildCodingAgentPrompt } from './handoff.js';
 import { EVENT_PLAN_FILE } from './constants.js';
-import { WAREHOUSE_SOURCE_SCOPE_ADDITIONS } from '../oauth/program-scopes';
+import { WAREHOUSE_SOURCE_SCOPE_ADDITIONS } from '../shared/program-scopes';
 
 const DASHBOARD_DEEP_LINK_KEY = 'dashboardDeepLink';
 

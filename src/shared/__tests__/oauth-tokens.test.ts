@@ -1,4 +1,4 @@
-import { missingOAuthScopes, OAuthTokenResponseSchema } from '../tokens';
+import { missingOAuthScopes, OAuthTokenResponseSchema } from '../oauth-tokens';
 
 // A grant can be narrower than the request with no error: the consent screen
 // lets users deselect non-required scopes, and out-of-ceiling scopes are

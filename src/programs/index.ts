@@ -20,7 +20,7 @@ export {
   missingOAuthScopes,
   OAuthTokenResponseSchema,
   parseOAuthScopes,
-} from './oauth/tokens';
+} from '@shared/oauth-tokens';
 export { loadWizardFlags } from './wizard-flags';
 export { apiKeyCredentials, resolveApiKeyLogin } from './api-key-login';
 export {
