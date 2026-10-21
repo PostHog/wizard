@@ -9,7 +9,6 @@ import type { DiscoveredFeature } from '@shared/discovered-feature';
 import type { ScanConsent } from '@shared/run-state';
 import type { FrameworkConfig } from './framework-config';
 import type { OutroData } from '@agent/types';
-import type { ScanReport } from '../session/task-stream/types';
 
 export interface ProgramSession {
   /**
@@ -96,3 +95,23 @@ export interface ProgramSession {
   // Resolved framework config (set after integration is known)
   frameworkConfig: FrameworkConfig | null;
 }
+
+/**
+ * The codebase scan the user agreed to share, without its session. The stream
+ * adds its own `session_id`, so the scan joins the session it came from.
+ */
+export type ScanReport = {
+  program: string;
+  wizard_version: string;
+  workspace_fingerprint: string;
+  scanned_at: string;
+  /**
+   * False when the scan could not see the whole project. PostHog then records
+   * the tools it saw but marks none removed.
+   */
+  complete: boolean;
+  tools: {
+    kind: string;
+    signals: { source: string; name: string; file: string | null }[];
+  }[];
+};

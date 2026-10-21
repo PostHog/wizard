@@ -1,6 +1,6 @@
 import type { Integration } from '@shared/constants';
 import type { WizardRunOptions } from '@utils/types';
-import type { PackageManagerDetector } from '../detection/package-manager';
+import type { PackageManagerDetector } from '@utils/package-manager';
 
 /**
  * A setup question that the SetupScreen renders for framework disambiguation.

@@ -11,6 +11,7 @@
 import { choice, defineQuestions, predicate } from './builders';
 import { FRAMEWORK_CHOICES } from './framework';
 import type { DecisionQuestionSpec } from './types';
+import type { DecisionQuestionKey } from '../../program-contract/program-step';
 
 export const QUESTIONS = defineQuestions({
   // ── What the project is ──────────────────────────────────────────
@@ -239,6 +240,17 @@ export const QUESTIONS = defineQuestions({
 
 /** A question's key in the catalog, which is also its name. Programs declare these in `ProgramConfig.decisions`. */
 export type QuestionKey = keyof typeof QUESTIONS;
+
+// Typecheck fails when the program contract's key list and this catalog differ.
+type SameKeys<A, B> = [A] extends [B]
+  ? [B] extends [A]
+    ? true
+    : false
+  : false;
+type Assert<T extends true> = T;
+export type QuestionKeysMatch = Assert<
+  SameKeys<QuestionKey, DecisionQuestionKey>
+>;
 
 // ── Asked per repository: their choices are the folders found ──────
 

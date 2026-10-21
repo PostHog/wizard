@@ -5,8 +5,27 @@ import type { ProgramRun } from './program-run';
 import type { Integration } from '@shared/constants';
 import type { FrameworkConfig } from './framework-config';
 import type { CiRunnerContext, RunnerContext } from './runner-context';
+
+/** A question a program may ask the Decisions service; the catalog in `@services/detection/decisions` has exactly these keys. */
+export type DecisionQuestionKey =
+  | 'framework'
+  | 'is_monorepo'
+  | 'product_category'
+  | 'web_frontend'
+  | 'server_runtime'
+  | 'primary_user_flow'
+  | 'user_login'
+  | 'calls_llm_api'
+  | 'structured_logging'
+  | 'otel_exporter'
+  | 'observability_stack'
+  | 'ships_minified_js'
+  | 'build_tool'
+  | 'deploy_platform'
+  | 'owns_database'
+  | 'billing_code'
+  | 'is_mcp_server';
 // Type-only: the catalog stays out of production bundles.
-import type { QuestionKey } from '../detection/decisions/questions';
 
 /**
  * Context passed to onReady callbacks — fires after the host has assigned
@@ -169,7 +188,7 @@ export interface ProgramConfig {
    * program and every program it `requires`, once, after login. Dev and CI
    * builds only: production builds don't bundle the service.
    */
-  decisions?: readonly QuestionKey[];
+  decisions?: readonly DecisionQuestionKey[];
   /** Runs in the flow other than the program's own agent run, keyed by flow step id. */
   runSteps?: Record<string, ProgramRunStep>;
   /**
