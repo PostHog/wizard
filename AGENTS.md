@@ -43,11 +43,12 @@ Each domain has a dedicated boundary:
   calls `process.exit`. It imports env and shared only. Headless, the TUI, the
   CLI and the e2e harness may import it. The agent and the programs may not; see
   [src/host/README.md](src/host/README.md)
-- **Services** → `src/services/`, what programs consume: the session store,
-  detection, the framework configs, the codebase scan and the tool catalog. It
-  imports env, shared, the agent and the program contract (`@programs/contract`,
-  in `src/programs/contract/`), which sits below it and imports no service. Code outside it imports a
-  service through its entry, `@services/<service>`; see
+- **Services** → `src/services/`, part of the program layer: what programs
+  consume, such as the session store, detection, the framework configs, the
+  codebase scan and the tool catalog. It imports env, shared, the agent and the
+  program contract (`@programs/contract`, in `src/programs/contract/`), which
+  sits below it and imports no service. Code outside it imports a service
+  through its entry, `@services/<service>`; see
   [src/services/README.md](src/services/README.md)
 - **Programs** → one folder per program in `src/programs/<id>/`, which other
   layer source enters only through its `index.ts`, plus `runProgram`. A program

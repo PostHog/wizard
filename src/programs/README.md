@@ -7,6 +7,10 @@ performs, and its settings. The screens the TUI walks for it live in the TUI. A
 command that runs no agent, such as `mcp add` or `doctor`, is a tool, in
 [`src/tools`](../tools/README.md); no program imports it.
 
+The program layer has three parts, which import in one direction: the
+program contract ([`contract`](contract/index.ts)), the
+[services](../services/README.md) and the programs.
+
 To run a program from code, call `runProgram`. The
 [developer interfaces](../../docs/developer-interfaces.md) cover it.
 
@@ -112,6 +116,11 @@ programs project extends `tsconfig.no-tui.json`, which maps `@programs/*`. A
 program's project references only the shared program code, so an import of a
 sibling program or the registry fails with TS6307; see
 [layer boundaries](../../.claude/skills/wizard-development/references/ARCHITECTURE.md#layer-boundaries).
+
+## Session store and task streams
+
+The session store and the task stream that pushes it to PostHog are services.
+See [session store and task streams](../services/README.md#session-store-and-task-streams).
 
 ## Login and signup
 
