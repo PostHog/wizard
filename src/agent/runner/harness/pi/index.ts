@@ -166,6 +166,11 @@ export function extractText(message: unknown): string {
   return textBlocks(message).join('');
 }
 
+/** The reason of the first `[ABORT]` marker in any text block of a pi AgentMessage. */
+export function skillAbortIn(message: unknown): string | undefined {
+  return textBlocks(message).map(skillAbortReason).find(Boolean);
+}
+
 /**
  * Surface `[DASHBOARD_URL]` / `[NOTEBOOK_URL]` markers the agent prints (after
  * the MCP creates them) into the outro link, mirroring the anthropic path's
@@ -326,11 +331,6 @@ export const piBackend: AgentHarness = {
     };
     const policyAbort = (reply: string) =>
       endRun(policyAbortReason(reply), 'gateway_policy');
-    // Like the anthropic path, only a program that declares abort cases stops on [ABORT].
-    const skillAbort = (blocks: string[]) => {
-      if (config.abortCases?.length)
-        endRun(blocks.map(skillAbortReason).find(Boolean));
-    };
     // Read by the catch path; undefined until setup creates the extension.
     let securityState: SecurityState | undefined;
     // A latched violation outranks the timer on both the success and catch paths.
@@ -648,7 +648,7 @@ export const piBackend: AgentHarness = {
             const blocks = textBlocks(event.message);
             const assistant = blocks.join('').trim();
             policyAbort(assistant);
-            skillAbort(blocks);
+            endRun(skillAbortIn(event.message));
             // A schema-bound answer is the turn's last block, not the joined text.
             lastAssistantText = (blocks.at(-1) ?? '').trim();
             if (structured) {
