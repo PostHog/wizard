@@ -6,11 +6,10 @@ import type { WizardReadinessResult } from '@shared/health-checks/readiness';
 import type {
   CredentialsProvider,
   ResolvedProgramCredentials,
-} from '@shared/credentials';
+} from './credentials';
 import type { ProgramConfig, ProgramId } from '@programs/program-contract';
-import type { SessionStore, WizardFlagSnapshot } from '@services/session';
-
-export type { WizardFlagSnapshot };
+import type { SessionStore } from '@services/session';
+import type { WizardFlagSnapshot } from '@shared/wizard-flags';
 
 /** What one invocation runs on. The caller owns the store; `runProgram` writes the run into it. */
 export interface ProgramInput {

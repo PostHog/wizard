@@ -8,7 +8,7 @@ import type { Integration } from '@shared/constants';
 import { logToFile } from '@utils/debug';
 import type { ProgramSession } from '@programs/program-contract';
 import type { CiRunnerContext } from '@programs/program-contract';
-import { loadWizardFlags } from '@services/session';
+import { loadWizardFlags } from '@shared/wizard-flags';
 import {
   askDecisions,
   decisionsTransport,

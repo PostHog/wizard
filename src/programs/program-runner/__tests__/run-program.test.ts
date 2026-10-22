@@ -31,7 +31,7 @@ import {
   resetOAuthSession,
 } from '@shared/oauth-session';
 import { preinstallPostHogCliOnce } from '@programs/shared/posthog-cli-preinstall';
-import type { ResolvedProgramCredentials } from '@shared/credentials';
+import type { ResolvedProgramCredentials } from '../credentials';
 import type {
   ProgramInput,
   ProgramOptions,

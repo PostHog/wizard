@@ -26,7 +26,7 @@ folder, never a file inside one:
 
 | Entry                           | What it holds                                                                                                                                      |
 | ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@services/session`             | `SessionStore`, `buildSession`, stored interactions, audit checks, the task stream and `loadWizardFlags`                                                              |
+| `@services/session`             | `SessionStore`, `buildSession`, stored interactions, audit checks and the task stream                                                              |
 | `@services/detection`           | Framework, feature and package-manager detection, the agentic project scan and project scoping                                                     |
 | `@services/detection/decisions` | The Decisions service. Only dev builds load it, through an `import()` behind `!IS_PRODUCTION_BUILD`; production builds replace it with a stub      |
 | `@services/frameworks`          | `FRAMEWORK_REGISTRY` and each framework's `FrameworkConfig`                                                                                        |
@@ -50,8 +50,8 @@ reaches every importer.
 
 ## Wiring
 
-- **Project:** [`tsconfig.json`](tsconfig.json) references env, shared and the
-  agent. The programs' core project references this one.
+- **Project:** [`tsconfig.json`](tsconfig.json) references env, shared, the
+  agent and the program contract. The programs' core project references this one.
 - **Alias:** `@services/*`, in `tsconfig.base.json`, `tsconfig.no-tui.json` and
   `vitest.config.ts`.
 - **Fences:** ESLint in [`.eslintrc.cjs`](../../.eslintrc.cjs) keeps relative

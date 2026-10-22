@@ -10,13 +10,13 @@ import {
   createFileDestination,
   createWizardRunSync,
   getAuditChecks,
-  loadWizardFlags,
   PostHogDestination,
   RunOutcome,
   runProgram,
   SessionStore,
   TaskStreamPush,
 } from '@programs';
+import { loadWizardFlags } from '@shared/wizard-flags';
 import type {
   ProgramConfig,
   SessionArgs,

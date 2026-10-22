@@ -41,7 +41,7 @@ import { detectionFailure, detectProgram } from './detect-program';
 import {
   rotateCredentials,
   type ResolvedProgramCredentials,
-} from '@shared/credentials';
+} from './credentials';
 import { reportCodebaseScan } from '@services/codebase-scan';
 import { IS_PRODUCTION_BUILD } from '@env';
 import type { QuestionKey } from '@services/detection/decisions';
@@ -63,7 +63,7 @@ import type {
   ProgramRunOutcome,
   ProgramStep,
 } from './program-input';
-import type { WizardFlagSnapshot } from '@services/session';
+import type { WizardFlagSnapshot } from '@shared/wizard-flags';
 
 /** The session's frameworkContext slot holding an orchestrated run's final task outcomes. */
 export const TASK_OUTCOMES_KEY = 'orchestrator-task-outcomes';

@@ -3,7 +3,7 @@ import { analytics, groupsFromUser } from '@utils/analytics';
 import type {
   CredentialsProvider,
   ResolvedProgramCredentials,
-} from '@shared/credentials';
+} from './credentials';
 import type { SessionStore } from '@services/session';
 
 /**

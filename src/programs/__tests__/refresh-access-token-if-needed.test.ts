@@ -1,4 +1,4 @@
-import { rotateCredentials } from '@shared/credentials';
+import { rotateCredentials } from '../program-runner/credentials';
 import { refreshAccessToken } from '@shared/oauth-tokens';
 import { OAuthError } from '@utils/oauth-errors';
 import {

@@ -25,11 +25,11 @@ export type {
   ProgramStep,
   ProgramWorkflowConnector,
 } from './program-runner/program-input';
-export type { WizardFlagSnapshot } from '@services/session';
+export type { WizardFlagSnapshot } from '@shared/wizard-flags';
 export type {
   CredentialsProvider,
   ResolvedProgramCredentials,
-} from '@shared/credentials';
+} from './program-runner/credentials';
 export type { ApiKeyLoginOptions } from './program-runner/api-key-login';
 export type { OAuthTokenResponse } from '@shared/oauth-tokens';
 export type { SessionArgs, WizardSession } from '@services/session';

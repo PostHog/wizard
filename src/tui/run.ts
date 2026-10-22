@@ -12,7 +12,6 @@ import {
   createWizardRunSync,
   getAuditChecks,
   getProgramConfig,
-  loadWizardFlags,
   PostHogDestination,
   ProgramAbort,
   RunOutcome,
@@ -20,6 +19,7 @@ import {
   storeInteraction,
   TaskStreamPush,
 } from '@programs';
+import { loadWizardFlags } from '@shared/wizard-flags';
 import type { CredentialsProvider, ProgramConfig } from '@programs/types';
 import { classifyRunFailure } from '@shared/errors';
 import { OutroKind } from '@shared/outro';

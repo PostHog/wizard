@@ -3,7 +3,7 @@
 import type { ApiProject, ApiUser, Credentials } from '@shared/api';
 import { WIZARD_OAUTH_SCOPES } from '@shared/constants';
 import { markGrantRevoked } from '@shared/auth-session-state';
-import { missingOAuthScopes, refreshAccessToken } from './oauth-tokens';
+import { missingOAuthScopes, refreshAccessToken } from '@shared/oauth-tokens';
 import { OAuthError } from '@utils/oauth-errors';
 import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
