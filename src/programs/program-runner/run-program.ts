@@ -10,7 +10,7 @@ import type {
   RunResult,
 } from '@agent/types';
 import { getSkillsBaseUrl, type Integration } from '@shared/constants';
-import { listWizardSkills, removeRunSkills } from '@shared/skill-install';
+import { listSkillFolders, removeRunSkills } from '@shared/skill-install';
 import { classifyRunFailure, ErrorCodes, type ErrorCode } from '@shared/errors';
 import {
   backupAndFixClaudeSettings,
@@ -379,7 +379,7 @@ async function invokeProgram(
         return settle(RunOutcome.Failed, settings.failure);
       }
       // The skills a run installs are for its agent only; remove them when it ends, however it ends.
-      const skillsBefore = listWizardSkills(runDir);
+      const skillsBefore = listSkillFolders(runDir);
       const removeSkills = () => removeRunSkills(runDir, skillsBefore);
       const unregisterSkills = registerCleanup(removeSkills);
       try {

@@ -7,7 +7,7 @@ import { analytics } from '@utils/analytics';
 import {
   __test,
   downloadSkill,
-  listWizardSkills,
+  listSkillFolders,
   removeRunSkills,
 } from '@shared/skill-install';
 
@@ -468,8 +468,11 @@ describe('removeRunSkills', () => {
   it('removes the wizard skills a run added and keeps everything else', () => {
     addSkill('kept-from-last-run', true);
     addSkill('users-own', false);
-    const before = listWizardSkills(dir);
-    expect([...(before ?? [])]).toEqual(['kept-from-last-run']);
+    const before = listSkillFolders(dir);
+    expect([...(before ?? [])].sort()).toEqual([
+      'kept-from-last-run',
+      'users-own',
+    ]);
 
     addSkill('nextjs', true);
     addSkill('integration-nextjs', true);
@@ -485,7 +488,7 @@ describe('removeRunSkills', () => {
   });
 
   it('removes the skills folder when the run left it empty', () => {
-    const before = listWizardSkills(dir);
+    const before = listSkillFolders(dir);
     addSkill('nextjs', true);
 
     removeRunSkills(dir, before);
@@ -498,14 +501,61 @@ describe('removeRunSkills', () => {
   });
 
   it('deletes nothing and does not throw when the skills folder is unreadable', () => {
-    const before = listWizardSkills(dir);
+    const before = listSkillFolders(dir);
     // A file where the folder should be makes readdirSync throw (ENOTDIR).
     fs.mkdirSync(path.dirname(skills()), { recursive: true });
     fs.writeFileSync(skills(), '');
 
-    expect(listWizardSkills(dir)).toBeNull();
+    expect(listSkillFolders(dir)).toBeNull();
     expect(removeRunSkills(dir, before)).toEqual([]);
     expect(removeRunSkills(dir, null)).toEqual([]);
     expect(fs.existsSync(skills())).toBe(true);
+  });
+
+  it('keeps an unmarked folder the run installed a same-named skill into', () => {
+    addSkill('integration-nextjs', false);
+    const before = listSkillFolders(dir);
+    fs.writeFileSync(
+      path.join(skills(), 'integration-nextjs', '.posthog-wizard'),
+      '',
+    );
+
+    expect(removeRunSkills(dir, before)).toEqual([]);
+    expect(fs.existsSync(path.join(skills(), 'integration-nextjs'))).toBe(true);
+  });
+
+  it('deletes nothing when the skills folder links outside the project', () => {
+    const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'wizard-outside-'));
+    try {
+      fs.mkdirSync(path.join(dir, '.claude'));
+      fs.symlinkSync(outside, skills());
+      const before = listSkillFolders(dir);
+      fs.mkdirSync(path.join(outside, 'metrics-nodejs'));
+      fs.writeFileSync(
+        path.join(outside, 'metrics-nodejs', '.posthog-wizard'),
+        '',
+      );
+
+      expect(before).toBeNull();
+      expect(removeRunSkills(dir, new Set())).toEqual([]);
+      expect(fs.existsSync(path.join(outside, 'metrics-nodejs'))).toBe(true);
+    } finally {
+      fs.rmSync(outside, { recursive: true, force: true });
+    }
+  });
+
+  it('leaves a symlinked skill entry and its target alone', () => {
+    const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'wizard-outside-'));
+    try {
+      const before = listSkillFolders(dir);
+      fs.writeFileSync(path.join(outside, '.posthog-wizard'), '');
+      fs.mkdirSync(skills(), { recursive: true });
+      fs.symlinkSync(outside, path.join(skills(), 'linked'));
+
+      expect(removeRunSkills(dir, before)).toEqual([]);
+      expect(fs.existsSync(path.join(outside, '.posthog-wizard'))).toBe(true);
+    } finally {
+      fs.rmSync(outside, { recursive: true, force: true });
+    }
   });
 });
