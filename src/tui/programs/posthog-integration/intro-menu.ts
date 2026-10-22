@@ -31,6 +31,7 @@ const INTRO_ENTRIES = [
   'ai-observability',
   'metrics',
   'revenue-analytics-setup',
+  'transactional-email',
 ];
 
 /** One spell book row: the id the intro hands off to, the words that run it, and its help line. */
