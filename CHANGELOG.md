@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.87.0](https://github.com/PostHog/wizard/compare/v2.86.0...v2.87.0) (2026-10-22)
+
+
+### Features
+
+* (refactor) create /services ([#1486](https://github.com/PostHog/wizard/issues/1486)) ([fef6747](https://github.com/PostHog/wizard/commit/fef6747d21887f1e38acbdcb7a9af9bfed00b1b7))
+* **error-tracking:** link the source maps key page in the API key prompt ([#1484](https://github.com/PostHog/wizard/issues/1484)) ([fa09bd3](https://github.com/PostHog/wizard/commit/fa09bd3850d907328be1db55aae198fe46c98e51))
+
 ## [2.86.0](https://github.com/PostHog/wizard/compare/v2.85.0...v2.86.0) (2026-10-20)
 
 
