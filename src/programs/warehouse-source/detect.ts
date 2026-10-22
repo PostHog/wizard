@@ -8,11 +8,11 @@
 
 import { existsSync, statSync } from 'fs';
 import { analytics } from '@utils/analytics';
-import type { ProgramSession } from '../program-session';
+import type { ProgramSession } from '@programs/program-contract';
 import type { AbortCase } from '@agent/types';
-import { scannedWarehouseSources } from '../codebase-scan/scan';
-import { tagScanResults } from '../codebase-scan/tags';
-import { DETECTED_WAREHOUSE_SOURCES_KEY } from '../warehouse-sources/detect';
+import { scannedWarehouseSources } from '@services/codebase-scan';
+import { tagScanResults } from '@services/codebase-scan';
+import { DETECTED_WAREHOUSE_SOURCES_KEY } from '@services/warehouse-sources';
 
 /** Structured detection errors rendered by the intro screen. */
 export type WarehouseDetectError =

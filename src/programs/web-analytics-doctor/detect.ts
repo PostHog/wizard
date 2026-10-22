@@ -1,8 +1,8 @@
 import { existsSync, statSync } from 'fs';
-import type { ProgramSession } from '../program-session';
+import type { ProgramSession } from '@programs/program-contract';
 import type { AbortCase } from '@agent/types';
 import { ErrorCodes } from '@shared/errors';
-import { findPackageJsons } from '../shared/package-scanning';
+import { findPackageJsons } from '@services/detection';
 
 export type WebAnalyticsDetectError =
   | {

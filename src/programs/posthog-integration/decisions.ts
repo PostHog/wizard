@@ -6,9 +6,9 @@
 
 import type { Integration } from '@shared/constants';
 import { logToFile } from '@utils/debug';
-import type { ProgramSession } from '../program-session';
-import type { CiRunnerContext } from '../runner-context';
-import { loadWizardFlags } from '../wizard-flags';
+import type { ProgramSession } from '@programs/program-contract';
+import type { CiRunnerContext } from '@programs/program-contract';
+import { loadWizardFlags } from '@shared/wizard-flags';
 import {
   askDecisions,
   decisionsTransport,
@@ -17,7 +17,7 @@ import {
   QUESTIONS,
   renderDecisionState,
   routeIntegration,
-} from '../detection/decisions';
+} from '@services/detection/decisions';
 
 /**
  * CI only, primary mode: ask for the framework when static detection found

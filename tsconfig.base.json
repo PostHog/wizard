@@ -36,6 +36,7 @@
       "@programs": ["./src/programs/index.ts"],
       "@programs/types": ["./src/programs/types.ts"],
       "@programs/*": ["./src/programs/*"],
+      "@services/*": ["./src/services/*"],
       "@tools": ["./src/tools/index.ts"],
       "@tui": ["./src/tui/index.ts"],
       "@tui/*": ["./src/tui/*"],

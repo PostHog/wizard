@@ -16,7 +16,7 @@ import {
   MAX_WALK_FILES,
   safeReadFile,
 } from '@utils/bounded-fs';
-import type { ProgramSession } from '../program-session';
+import type { ProgramSession } from '@programs/program-contract';
 import type { AbortCase } from '@agent/types';
 import { ErrorCodes } from '@shared/errors';
 

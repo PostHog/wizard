@@ -3,8 +3,8 @@
  * so it belongs only in a run that has both something to connect and someone
  * to answer — and the wizard, not the planner, is what decides that.
  */
-import type { WizardSession } from '@programs/session/wizard-session';
-import type { DetectedSource } from '@programs/warehouse-sources/types';
+import type { WizardSession } from '@services/session';
+import type { DetectedSource } from '@services/warehouse-sources';
 
 vi.mock('@utils/analytics', () => ({
   analytics: {
@@ -16,7 +16,7 @@ vi.mock('@utils/analytics', () => ({
 }));
 
 import { config as posthogIntegration } from '@programs/posthog-integration';
-import { DETECTED_WAREHOUSE_SOURCES_KEY } from '@programs/warehouse-sources/detect';
+import { DETECTED_WAREHOUSE_SOURCES_KEY } from '@services/warehouse-sources';
 
 const POSTGRES: DetectedSource = {
   kind: 'Postgres',

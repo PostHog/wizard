@@ -2,9 +2,9 @@
 // program folder, which import this and never the other way.
 {
   "extends": "../../tsconfig.no-tui.json",
-  "include": ["*.ts", "codebase-scan", "detection", "frameworks", "oauth", "session", "shared", "warehouse-sources"],
-  "exclude": ["index.ts", "types.ts", "program-registry.ts", "run-program.ts", "detect-program.ts", "detect-map.ts"],
+  "include": ["shared"],
   "references": [
-    { "path": "../tsconfig.json" }, { "path": "../shared" }, { "path": "../agent" }
+    { "path": "../tsconfig.json" }, { "path": "../shared" }, { "path": "../agent" },
+    { "path": "../services" }, { "path": "program-contract" }
   ]
 }

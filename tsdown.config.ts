@@ -19,7 +19,7 @@ const NODE_ENV = process.env.WIZARD_BUILD_NODE_ENV || 'production';
 // those builds drop; a static value import fails the build on the empty stub.
 // `pnpm check:decisions-bundle` verifies the result.
 const DEV_ONLY_MODULES = [
-  'src/programs/detection/decisions',
+  'src/services/detection/decisions',
   'src/programs/posthog-integration/decisions',
 ].map((dir) => path.resolve(dir));
 const DEV_ONLY_STUB = '\0dev-only-stub';
@@ -28,9 +28,16 @@ function stubDevOnlyModules() {
   return {
     name: 'stub-dev-only-modules',
     resolveId(source: string, importer: string | undefined) {
-      if (!importer || !source.startsWith('.')) return null;
+      if (!importer) return null;
+      // A relative path, or the services alias (`@services/detection/decisions`).
+      const base = source.startsWith('.')
+        ? path.dirname(importer)
+        : source.startsWith('@services/')
+        ? path.resolve('src')
+        : null;
+      if (!base) return null;
       const target = path
-        .resolve(path.dirname(importer), source)
+        .resolve(base, source.replace(/^@/, ''))
         .replace(/\.[jt]s$/, '');
       const devOnly = DEV_ONLY_MODULES.some(
         (dir) => target === dir || target.startsWith(dir + path.sep),

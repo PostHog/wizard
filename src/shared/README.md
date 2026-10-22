@@ -44,6 +44,10 @@ Modules callers reach most:
 - `@shared/oauth-scopes`: `withScopeAdditions(base, additions)` and the scope
   additions more than one layer asks for, such as
   `CONNECT_SLACK_SCOPE_ADDITIONS`.
+- `@shared/oauth-tokens`: `refreshAccessToken`, `missingOAuthScopes`,
+  `parseOAuthScopes`, `getOAuthClientId` and `OAuthTokenResponseSchema`.
+- `@shared/wizard-flags`: `loadWizardFlags()` and `WizardFlagSnapshot`, the
+  wizard's feature flags and payloads from one evaluation.
 - `@shared/api-key-login`: `resolveApiKeyProject(apiKey, options)`, the host,
   project and user a personal API key logs in to.
 - `@shared/ci-gateway`: `readCiGatewayCredential(region)`, the gateway token a

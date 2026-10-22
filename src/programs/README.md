@@ -7,6 +7,12 @@ performs, and its settings. The screens the TUI walks for it live in the TUI. A
 command that runs no agent, such as `mcp add` or `doctor`, is a tool, in
 [`src/tools`](../tools/README.md); no program imports it.
 
+The program layer has three parts, which import in one direction: the
+program contract ([`program-contract`](program-contract/index.ts)), the
+[services](../services/README.md) and the programs.
+[`program-runner`](program-runner/run-program.ts) runs them: `runProgram`, the registry,
+detection lookup, the run's input and outcome types, and login.
+
 To run a program from code, call `runProgram`. The
 [developer interfaces](../../docs/developer-interfaces.md) cover it.
 
@@ -39,7 +45,7 @@ folders:
 The lines outside them:
 
 - **Registry.** The program's import and its entry in `PROGRAM_REGISTRY`, in
-  [`program-registry.ts`](program-registry.ts), and `{ "path": "<id>" }` in
+  [`program-registry.ts`](program-runner/program-registry.ts), and `{ "path": "<id>" }` in
   `references` in [`tsconfig.json`](tsconfig.json).
 - **TUI registry.** Its import and spread in
   [`src/tui/programs/index.ts`](../tui/programs/index.ts), and
@@ -90,43 +96,37 @@ reaches the UI.
 | One program's config, detection and prompt    | Its own folder, such as [`metrics`](metrics/index.ts)                             |
 | One program's flow, deck and screens          | `src/tui/programs/<id>/`, registered in [`src/tui/programs/index.ts`](../tui/programs/index.ts) |
 | One program's e2e test definition             | Its folder's `test/e2e.json`, read by [`e2e-harness/profiles.ts`](../../e2e-harness/profiles.ts) |
-| Code several programs share                   | [`shared`](shared/skill-program.ts), [`warehouse-sources`](warehouse-sources/registry.ts), [`codebase-scan`](codebase-scan/index.ts) and [`oauth`](oauth/program-scopes.ts) |
-| The list of every program                     | [`program-registry.ts`](program-registry.ts)                                      |
-| The `ProgramConfig`, ready and run-step types | [`program-step.ts`](program-step.ts)                                              |
-| The session a program reads                   | [`program-session.ts`](program-session.ts)                                        |
-| The session store every host builds           | [`session`](session/session-store.ts): the store and the task stream              |
-| Running one program, and its input and outcome | [`run-program.ts`](run-program.ts), [`detect-program.ts`](detect-program.ts) and [`program-input.ts`](program-input.ts) |
-| What a program's `run` receives from a runner | [`runner-context.ts`](runner-context.ts)                                          |
-| Framework detection and project scoping       | [`detection`](detection)                                                          |
-| Framework integrations                        | [`frameworks`](frameworks) and [`frameworks/registry.ts`](frameworks/registry.ts) |
+| Code several programs share                   | [`shared`](shared/skill-program.ts): program builders and [`program-scopes.ts`](shared/program-scopes.ts) |
+| The list of every program                     | [`program-registry.ts`](program-runner/program-registry.ts)                                      |
+| Running one program, and its input and outcome | [`run-program.ts`](program-runner/run-program.ts), [`detect-program.ts`](program-runner/detect-program.ts) and [`program-input.ts`](program-runner/program-input.ts) |
 | Commands that pick a program by skill         | [`dispatch-family.ts`](../cli/commands/dispatch-family.ts)                        |
+| The program contract: `ProgramConfig`, `ProgramSession`, `RunnerContext`, `FrameworkConfig` | [`program-contract`](program-contract/index.ts), its own project below the services |
+| The session store, detection, frameworks, codebase scan and tool catalog | [`src/services`](../services/README.md) |
 
 Other layers import runtime values from `@programs` and types from
-`@programs/types`. `@programs` exports `runProgram`, `ProgramAbort` (a decided
-stop a program throws instead of exiting), `SessionStore` and `buildSession`,
-`storeInteraction` (questions held in a store until a screen or an embedder
-answers), `resolveApiKeyLogin` (a login from a personal API key) and
-`apiKeyCredentials` (a credentials provider that makes one), `logIn`,
-`TASK_OUTCOMES_KEY`, the task stream, the registry lookups, and the shared
-program code the hosts call. Program code may import `@env`, `@shared/*`,
-`@utils/*`, `@agent` and `@agent/types`. A program folder also imports the
-shared program code, by relative path, and only the registry's entry files
-import every program. Every programs project extends `tsconfig.no-tui.json`,
-which maps `@programs/*`. A program's project references only the shared program
-code, so an import of a sibling program or the registry fails with TS6307; see
+`@programs/types`, which re-exports the program contract. `@programs` exports
+`runProgram`, `ProgramAbort` (a decided stop a program throws instead of
+exiting), `SessionStore` and `buildSession`, `storeInteraction` (questions held
+in a store until a screen or an embedder answers), `resolveApiKeyLogin` (a login
+from a personal API key) and `apiKeyCredentials` (a credentials provider that
+makes one), `logIn`, `TASK_OUTCOMES_KEY`, the task stream, the registry lookups,
+and the shared program code the hosts call. Program code may import `@env`,
+`@shared/*`, `@utils/*`, `@agent`, `@agent/types`, the program contract,
+`@programs/program-contract`, and the service entries, `@services/<service>`. A program folder also imports the shared program code, by
+relative path, and only the registry's entry files import every program. Every
+programs project extends `tsconfig.no-tui.json`, which maps `@programs/*`. A
+program's project references only the shared program code, so an import of a
+sibling program or the registry fails with TS6307; see
 [layer boundaries](../../.claude/skills/wizard-development/references/ARCHITECTURE.md#layer-boundaries).
 
 ## Session store and task streams
 
-[`session-store.ts`](session/session-store.ts) holds one run's state. See
-[the session store](../../docs/developer-interfaces.md#the-session-store).
-[`task-stream-push.ts`](session/task-stream/task-stream-push.ts) pushes it to
-PostHog. See
-[WizardRun synchronization](../../docs/local-dev.md#wizardrun-synchronization).
+The session store and the task stream that pushes it to PostHog are services.
+See [session store and task streams](../services/README.md#session-store-and-task-streams).
 
 ## Login and signup
 
-[`login.ts`](login.ts) logs in once per store. The root README covers
+[`login.ts`](program-runner/login.ts) logs in once per store. The root README covers
 [scopes](../../README.md#required-api-key-scopes), the
 [OAuth app scope ceiling](../../README.md#oauth-app-scope-ceiling), and
 [signup](../../README.md#headless-signup--install-agents--ci).

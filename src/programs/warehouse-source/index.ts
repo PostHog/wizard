@@ -1,13 +1,13 @@
-import type { ProgramConfig } from '../program-step';
-import type { ProgramRun } from '../program-run';
-import type { ProgramSession } from '../program-session';
+import type { ProgramConfig } from '@programs/program-contract';
+import type { ProgramRun } from '@programs/program-contract';
+import type { ProgramSession } from '@programs/program-contract';
 import { LONGER_ASK_TIMEOUT_MS } from '@shared/ask-policy';
-import { WAREHOUSE_SOURCE_SCOPE_ADDITIONS } from '../oauth/program-scopes';
+import { WAREHOUSE_SOURCE_SCOPE_ADDITIONS } from '../shared/program-scopes';
 import {
   detectWarehousePrerequisites,
   WAREHOUSE_ABORT_CASES,
 } from './detect.js';
-import { getDetectedWarehouseSources } from '../warehouse-sources/detect';
+import { getDetectedWarehouseSources } from '@services/warehouse-sources';
 
 /**
  * Inject the detected sources (and their creation mode) into the prompt so the
@@ -83,4 +83,4 @@ export {
 export {
   getDetectedWarehouseSources,
   DETECTED_WAREHOUSE_SOURCES_KEY,
-} from '../warehouse-sources/detect';
+} from '@services/warehouse-sources';

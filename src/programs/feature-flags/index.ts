@@ -7,16 +7,16 @@ import {
 } from '@shared/constants';
 import { ErrorCodes } from '@shared/errors';
 import { analytics } from '@utils/analytics';
-import { detectPostHogIntegration } from '../detection/integration.js';
-import { detectFramework } from '../detection/framework';
-import { gatherFrameworkContext } from '../detection/context';
-import { noteDetectedFramework } from '../detection/detected-framework';
-import { scopeInstallDirToProject } from '../detection/project-scope';
-import { FRAMEWORK_REGISTRY } from '../frameworks/registry';
-import { ProgramAbort } from '../program-abort';
-import type { ProgramConfig } from '../program-step';
-import type { ProgramSession } from '../program-session';
-import type { CiRunnerContext } from '../runner-context';
+import { detectPostHogIntegration } from '@services/detection';
+import { detectFramework } from '@services/detection';
+import { gatherFrameworkContext } from '@services/detection';
+import { noteDetectedFramework } from '@services/detection';
+import { scopeInstallDirToProject } from '@services/detection';
+import { FRAMEWORK_REGISTRY } from '@services/frameworks';
+import { ProgramAbort } from '@programs/program-contract';
+import type { ProgramConfig } from '@programs/program-contract';
+import type { ProgramSession } from '@programs/program-contract';
+import type { CiRunnerContext } from '@programs/program-contract';
 import { abortNoFrameworkDetected } from '../shared/abort-no-framework';
 import { FEATURE_FLAGS_SCOPE_ADDITIONS } from './scopes.js';
 

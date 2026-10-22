@@ -1,10 +1,10 @@
 import { join } from 'path';
 import { access, rm } from 'node:fs/promises';
-import type { ProgramConfig } from '../program-step';
-import type { ProgramRun } from '../program-run';
+import type { ProgramConfig } from '@programs/program-contract';
+import type { ProgramRun } from '@programs/program-contract';
 import { createSkillProgram } from '../shared/skill-program.js';
 import { OutroKind } from '@shared/outro';
-import type { ProgramSession } from '../program-session';
+import type { ProgramSession } from '@programs/program-contract';
 import {
   detectSelfDrivingPrerequisites,
   getSelfDrivingDetectedTools,
@@ -13,7 +13,7 @@ import {
 } from './detect.js';
 import { buildSelfDrivingPrompt } from './prompt.js';
 import { resolveSelfDrivingStepKey } from './step-keys.js';
-import { resolveProjectDir } from '../detection/agentic';
+import { resolveProjectDir } from '@services/detection';
 import { prepSelfDrivingIntegration } from './detect-agentic.js';
 import { NO_DEFAULT_LIMIT, PRICE_PER_PR_USD, PRICING_LONG } from './pricing.js';
 import { SELF_DRIVING_SCOPE_ADDITIONS } from './scopes.js';

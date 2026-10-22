@@ -2,7 +2,7 @@
  * `runAgent` on the Anthropic linear path with only the SDK stubbed: what a
  * read-only scan's run definition does to the SDK run, the transcript it
  * collects, and how the SDK's results come back. Detection's own retry and
- * report logic is locked in `programs/detection/__tests__`.
+ * report logic is locked in `services/detection/__tests__`.
  */
 import { runAgent } from '@agent/runner';
 import { RunOutcome } from '@agent/runner/shared/types';

@@ -21,11 +21,11 @@ host, [runHeadless](../../../../src/headless/run.ts), which builds its own
 session store and calls `runProgram` with no workflow; `runProgram` then runs
 the same `onReady` as its detection, or `ciPreRun` when the program sets one.
 
-[runProgram](../../../../src/programs/run-program.ts) runs detection when the
+[runProgram](../../../../src/programs/program-runner/run-program.ts) runs detection when the
 store hasn't, resolves the program's `run` definition, applies its readiness,
 login, approval and flag policy, and calls `runAgent` for each run step the host
 confirms and then the program's own run, writing everything into the caller's
-[SessionStore](../../../../src/programs/session/session-store.ts).
+[SessionStore](../../../../src/services/session/session-store.ts).
 [runner/index.ts](../../../../src/agent/runner/index.ts) resolves the route from
 `RunConfig.routing`, calls shared bootstrap, dispatches the sequence, and
 flushes the scanner report on cleanup.
@@ -48,7 +48,7 @@ route.
 
 ### Configuration hooks
 
-Read [ProgramRun](../../../../src/programs/program-run.ts) and
+Read [ProgramRun](../../../../src/programs/program-contract/program-run.ts) and
 [AgentRunDefinition](../../../../src/agent/runner/shared/types.ts) for exact
 signatures.
 
@@ -154,7 +154,7 @@ credentials.
 
 Programs never use the UI. A program's `run` gets a `RunnerContext` and its
 `ciPreRun` gets a `CiRunnerContext`, both from
-[runner-context.ts](../../../../src/programs/runner-context.ts), and it reads a
+[runner-context.ts](../../../../src/programs/program-contract/runner-context.ts), and it reads a
 `ProgramSession`. Each host reports through its own renderer, with no UI
 interface shared between them: TUI code takes the
 [WizardStore](../../../../src/tui/store.ts) it reports through as an argument,
@@ -214,31 +214,36 @@ rules close the paths the compiler can't see. CI runs `pnpm typecheck` in
 
 `tsconfig.base.json` holds the compiler options and the aliases, entries only:
 `@env`, `@shared/*`, `@utils/*`, `@host/*`, `@agent`, `@agent/types`,
-`@programs`, `@programs/types`, `@programs/<id>`, `@tools`, `@tui`, `@headless`
-and `@cli`. Three deep aliases stay for the layer that owns them: `@agent/*`,
-`@programs/*` and `@cli/*` in tests and source, and `@tui/*` in the TUI.
+`@services/<service>`, `@programs`, `@programs/types`, `@programs/program-contract`,
+`@programs/<id>`, `@tools`,
+`@tui`, `@headless` and `@cli`. Four deep aliases stay for the layer that owns
+them: `@agent/*`, `@services/*`, `@programs/*` and `@cli/*` in tests and source,
+and `@tui/*` in the TUI. Any layer's tests may mock a service's internal module
+by its `@services/*` path.
 `extends` copies `compilerOptions` but not `references`, and replaces `paths`
 whole, so the projects that need other aliases list them again.
 
-| Layer               | Project                                                                                                                                          | References                                                           |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------- |
-| env                 | `src/tsconfig.json`: `env.ts`                                                                                                                    | Nothing                                                              |
-| shared              | `src/shared/tsconfig.json`                                                                                                                       | env                                                                  |
-| host                | `src/host/tsconfig.json`                                                                                                                         | env, shared                                                          |
-| agent               | `src/agent/tsconfig.json`                                                                                                                        | env, shared                                                          |
-| tools               | `src/tools/tsconfig.json`                                                                                                                        | env, shared, agent                                                   |
-| shared program code | `src/programs/tsconfig.core.json`                                                                                                                | env, shared, agent                                                   |
-| one program         | `src/programs/<id>/tsconfig.json`                                                                                                                | The shared program code                                              |
-| programs entry      | `src/programs/tsconfig.json`: `index.ts`, `types.ts`, `program-registry.ts`, `run-program.ts`, `detect-program.ts`, `detect-map.ts`, `__tests__` | The shared program code and every program                            |
-| headless            | `src/headless/tsconfig.json`                                                                                                                     | env, shared, host, agent, programs entry                             |
-| TUI core            | `src/tui/tsconfig.core.json`                                                                                                                     | env, shared, host, agent, programs entry, tools                      |
-| one TUI program     | `src/tui/programs/<id>/tsconfig.json`                                                                                                            | The TUI core                                                         |
-| one TUI tool        | `src/tui/tools/<id>/tsconfig.json`                                                                                                               | The TUI core                                                         |
-| TUI entry           | `src/tui/tsconfig.json`: `index.ts`, `programs/index.ts`, `tools/index.ts`, `playground/` and the core's tests                                   | The TUI core, every TUI program and tool                             |
-| cli                 | `src/cli/tsconfig.json`                                                                                                                          | env, shared, host, agent, programs entry, tools, TUI entry, headless |
-| bin                 | `tsconfig.bin.json`: `bin.ts`, `main.ts`, `tsdown.config.ts`, `vitest.config.ts`                                                                 | env, shared, cli                                                     |
-| harness             | `e2e-harness/tsconfig.json`: `e2e-harness/`, `scripts/` and `docs/examples/`                                                                     | env, shared, host, agent, tools, programs entry, TUI entry, headless |
-| mocks               | `__mocks__/tsconfig.json`                                                                                                                        | Nothing                                                              |
+| Layer               | Project                                                                                                                                                  | References                                                           |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| env                 | `src/tsconfig.json`: `env.ts`                                                                                                                            | Nothing                                                              |
+| shared              | `src/shared/tsconfig.json`                                                                                                                               | env                                                                  |
+| host                | `src/host/tsconfig.json`                                                                                                                                 | env, shared                                                          |
+| agent               | `src/agent/tsconfig.json`                                                                                                                                | env, shared                                                          |
+| tools               | `src/tools/tsconfig.json`                                                                                                                                | env, shared, agent                                                   |
+| program contract    | `src/programs/program-contract/tsconfig.json`                                                                                                            | env, shared, agent                                                   |
+| services            | `src/services/tsconfig.json`                                                                                                                             | env, shared, agent, program contract                                 |
+| shared program code | `src/programs/tsconfig.core.json`                                                                                                                        | env, shared, agent, program contract, services                       |
+| one program         | `src/programs/<id>/tsconfig.json`                                                                                                                        | The shared program code                                              |
+| programs entry      | `src/programs/tsconfig.json`: `index.ts`, `types.ts`, `program-runner/` (`runProgram`, the registry, login) and `__tests__`                              | The shared program code and every program                            |
+| headless            | `src/headless/tsconfig.json`                                                                                                                             | env, shared, host, agent, programs entry                             |
+| TUI core            | `src/tui/tsconfig.core.json`                                                                                                                             | env, shared, host, agent, programs entry, tools                      |
+| one TUI program     | `src/tui/programs/<id>/tsconfig.json`                                                                                                                    | The TUI core                                                         |
+| one TUI tool        | `src/tui/tools/<id>/tsconfig.json`                                                                                                                       | The TUI core                                                         |
+| TUI entry           | `src/tui/tsconfig.json`: `index.ts`, `programs/index.ts`, `tools/index.ts`, `playground/` and the core's tests                                           | The TUI core, every TUI program and tool                             |
+| cli                 | `src/cli/tsconfig.json`                                                                                                                                  | env, shared, host, agent, programs entry, tools, TUI entry, headless |
+| bin                 | `tsconfig.bin.json`: `bin.ts`, `main.ts`, `tsdown.config.ts`, `vitest.config.ts`                                                                         | env, shared, cli                                                     |
+| harness             | `e2e-harness/tsconfig.json`: `e2e-harness/`, `scripts/` and `docs/examples/`                                                                             | env, shared, host, agent, tools, programs entry, TUI entry, headless |
+| mocks               | `__mocks__/tsconfig.json`                                                                                                                                | Nothing                                                              |
 
 The host layer, `src/host`, is how the hosts end a run: `startHostExit`,
 `wizardAbort` and `registerShutdown` in `@host/wizard-abort`. A host resolves

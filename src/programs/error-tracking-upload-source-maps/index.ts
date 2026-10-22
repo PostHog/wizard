@@ -1,8 +1,8 @@
-import type { ProgramConfig } from '../program-step';
-import type { ProgramRun } from '../program-run';
-import type { ProgramSession } from '../program-session';
+import type { ProgramConfig } from '@programs/program-contract';
+import type { ProgramRun } from '@programs/program-contract';
+import type { ProgramSession } from '@programs/program-contract';
 import { OutroKind } from '@shared/outro';
-import type { RunnerContext } from '../runner-context';
+import type { RunnerContext } from '@programs/program-contract';
 import {
   buildSourceMapsUploadPrompt,
   SOURCE_MAPS_DETECTION_FAILED_PROMPT,

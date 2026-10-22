@@ -3,7 +3,7 @@
  *
  * Mirrors source-maps: the integration-detect screen runs `detectSelfDriving-
  * IntegrationProjects` (the shared integration scan from
- * @programs/detection/project-scope), shows a project map, and the user picks one.
+ * @services/detection/project-scope), shows a project map, and the user picks one.
  * `toIntegrationCandidates` matches each project to an `Integration`; this file
  * classifies it as instrumentable (a framework the wizard supports that doesn't
  * already have PostHog). The screen writes the choice to the session; `prepSelfDriving-
@@ -15,16 +15,16 @@ import type {
   AgenticDetectionReport,
   DetectEvent,
   DetectProgress,
-} from '../detection/agentic';
+} from '@services/detection';
 import {
   detectIntegrationProjects,
   toIntegrationCandidates,
-} from '../detection/project-scope';
-import { gatherFrameworkContext } from '../detection/context';
-import { noteDetectedFramework } from '../detection/detected-framework';
+} from '@services/detection';
+import { gatherFrameworkContext } from '@services/detection';
+import { noteDetectedFramework } from '@services/detection';
 import type { Integration } from '@shared/constants';
-import type { ProgramSession } from '../program-session';
-import type { RunnerContext } from '../runner-context';
+import type { ProgramSession } from '@programs/program-contract';
+import type { RunnerContext } from '@programs/program-contract';
 
 export type { DetectEvent };
 

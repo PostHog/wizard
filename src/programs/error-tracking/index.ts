@@ -4,21 +4,24 @@ import {
   Sequence,
   DEFAULT_AGENT_MODEL,
 } from '@shared/constants';
-import { detectFramework } from '../detection/framework';
-import { scopeInstallDirToProject } from '../detection/project-scope';
-import { FRAMEWORK_REGISTRY } from '../frameworks/registry';
-import type { ProgramRun } from '../program-run';
+import { detectFramework } from '@services/detection';
+import { scopeInstallDirToProject } from '@services/detection';
+import { FRAMEWORK_REGISTRY } from '@services/frameworks';
+import type { ProgramRun } from '@programs/program-contract';
 import {
   ERROR_TRACKING_UNSUPPORTED,
   errorTrackingProjectDir,
   gatherErrorTrackingContext,
 } from './detect-agentic';
-import type { ProgramConfig } from '../program-step';
-import type { ProgramSession } from '../program-session';
-import type { CiRunnerContext, RunnerContext } from '../runner-context';
+import type { ProgramConfig } from '@programs/program-contract';
+import type { ProgramSession } from '@programs/program-contract';
+import type {
+  CiRunnerContext,
+  RunnerContext,
+} from '@programs/program-contract';
 import { preinstallPostHogCliOnce } from '../shared/posthog-cli-preinstall';
 import { analytics } from '@utils/analytics';
-import { ProgramAbort } from '../program-abort';
+import { ProgramAbort } from '@programs/program-contract';
 import { ErrorCodes } from '@shared/errors';
 import { abortNoFrameworkDetected } from '../shared/abort-no-framework';
 

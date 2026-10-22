@@ -1,10 +1,10 @@
 /** Fixtures for the tests that build the default integration's run definition and prompt. */
 
-import { DETECTED_WAREHOUSE_SOURCES_KEY } from '@programs/warehouse-sources/detect';
+import { DETECTED_WAREHOUSE_SOURCES_KEY } from '@services/warehouse-sources';
 import { testRunnerContext } from '@programs/shared/__tests__/runner-context.no-jest';
-import { buildSession } from '@programs/session/wizard-session';
-import type { WizardSession } from '@programs/session/wizard-session';
-import type { DetectedSource } from '@programs/warehouse-sources/types';
+import { buildSession } from '@services/session';
+import type { WizardSession } from '@services/session';
+import type { DetectedSource } from '@services/warehouse-sources';
 import { config as posthogIntegration } from '../../index';
 
 export const CREDENTIALS = {

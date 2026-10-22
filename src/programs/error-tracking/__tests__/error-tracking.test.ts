@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
-import type { ProgramRun } from '@programs/program-run';
+import type { ProgramRun } from '@programs/program-contract';
 import { Integration } from '@shared/constants';
-import type { AgenticDetectionReport } from '@programs/detection/agentic';
-import { detectFramework } from '@programs/detection/framework';
+import type { AgenticDetectionReport } from '@services/detection';
+import { detectFramework } from '@services/detection/framework';
 import { ErrorCodes } from '@shared/errors';
 import {
   ERROR_TRACKING_PROJECT_PATH_KEY,
@@ -15,18 +15,18 @@ import {
   testCiRunnerContext,
   testRunnerContext,
 } from '@programs/shared/__tests__/runner-context.no-jest';
-import type { WizardSession } from '@programs/session/wizard-session';
-import { scopeInstallDirToProject } from '@programs/detection/project-scope';
+import type { WizardSession } from '@services/session';
+import { scopeInstallDirToProject } from '@services/detection/project-scope';
 import { analytics } from '@utils/analytics';
-import { ProgramAbort } from '@programs/program-abort';
+import { ProgramAbort } from '@programs/program-contract';
 
-vi.mock(import('@programs/detection/framework'), async (importOriginal) => ({
+vi.mock(import('@services/detection/framework'), async (importOriginal) => ({
   ...(await importOriginal()),
   detectFramework: vi.fn(),
 }));
-vi.mock('@programs/detection/project-scope', async (importOriginal) => ({
+vi.mock('@services/detection/project-scope', async (importOriginal) => ({
   ...(await importOriginal<
-    typeof import('@programs/detection/project-scope')
+    typeof import('@services/detection/project-scope')
   >()),
   scopeInstallDirToProject: vi.fn(),
   detectIntegrationProjects: vi.fn(),

@@ -1,7 +1,7 @@
 import { buildSelfDrivingPrompt } from '@programs/self-driving/prompt';
 import type { PromptContext } from '@agent/types';
 import { HostResolution } from '@shared/host-resolution';
-import type { DetectedSource } from '@programs/warehouse-sources/types';
+import type { DetectedSource } from '@services/warehouse-sources';
 
 const ctx: PromptContext = {
   projectId: 123,

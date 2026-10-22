@@ -1,24 +1,27 @@
-import { detectPostHogIntegration } from '../detection/integration.js';
-import type { ProgramConfig } from '../program-step';
-import type { ProgramRun } from '../program-run';
+import { detectPostHogIntegration } from '@services/detection';
+import type { ProgramConfig } from '@programs/program-contract';
+import type { ProgramRun } from '@programs/program-contract';
 import { AgentSignals, WIZARD_TOOL_NAMES } from '@agent';
 import { shouldDisableAsk } from '@shared/ask-policy';
-import type { ProgramSession } from '../program-session';
+import type { ProgramSession } from '@programs/program-contract';
 import { mayReportScanResults } from '@shared/run-state';
 import { OutroKind } from '@shared/outro';
 import {
   DEFAULT_PACKAGE_INSTALLATION,
   SPINNER_MESSAGE,
-} from '../framework-config';
+} from '@programs/program-contract';
 import { tryGetPackageJson, isUsingTypeScript } from '@utils/setup-utils';
 import { analytics } from '@utils/analytics';
-import { detectFramework } from '../detection/framework';
+import { detectFramework } from '@services/detection';
 import { IS_PRODUCTION_BUILD } from '@env';
-import { gatherFrameworkContext } from '../detection/context';
-import { noteDetectedFramework } from '../detection/detected-framework';
-import { scopeInstallDirToProject } from '../detection/project-scope';
-import type { CiRunnerContext, RunnerContext } from '../runner-context';
-import { FRAMEWORK_REGISTRY } from '../frameworks/registry';
+import { gatherFrameworkContext } from '@services/detection';
+import { noteDetectedFramework } from '@services/detection';
+import { scopeInstallDirToProject } from '@services/detection';
+import type {
+  CiRunnerContext,
+  RunnerContext,
+} from '@programs/program-contract';
+import { FRAMEWORK_REGISTRY } from '@services/frameworks';
 import { abortNoFrameworkDetected } from '../shared/abort-no-framework';
 import {
   SETUP_REPORT_FILE,
@@ -28,10 +31,10 @@ import {
 import { requestDeepLink } from '@utils/provisioning';
 import { openTrackedLink, withUtm } from '@utils/links';
 import type { HostResolution } from '@shared/host-resolution';
-import { getDetectedWarehouseSources } from '../warehouse-sources/detect';
+import { getDetectedWarehouseSources } from '@services/warehouse-sources';
 import { buildCodingAgentPrompt } from './handoff.js';
 import { EVENT_PLAN_FILE } from './constants.js';
-import { WAREHOUSE_SOURCE_SCOPE_ADDITIONS } from '../oauth/program-scopes';
+import { WAREHOUSE_SOURCE_SCOPE_ADDITIONS } from '../shared/program-scopes';
 
 const DASHBOARD_DEEP_LINK_KEY = 'dashboardDeepLink';
 

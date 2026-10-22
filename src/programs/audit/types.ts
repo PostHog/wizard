@@ -10,4 +10,4 @@ import {
 // views and the ledger watcher keep their import path.
 export { AUDIT_CHECKS_FILE, AUDIT_REPORT_FILE, coerceAuditChecks };
 export type { AuditCheck, AuditStatus };
-export { AUDIT_CHECKS_KEY, getAuditChecks } from '../session/audit-checks';
+export { AUDIT_CHECKS_KEY, getAuditChecks } from '@services/session';

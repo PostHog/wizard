@@ -1,0 +1,5 @@
+// The program contract: types every program and service shares. Imports env, shared and the agent.
+{
+  "extends": "../../../tsconfig.no-tui.json",
+  "references": [{ "path": "../../tsconfig.json" }, { "path": "../../shared" }, { "path": "../../agent" }]
+}

@@ -6,18 +6,21 @@ import {
   GPT6_SOL_MODEL,
   REPLAY_VISION_SUPPORTED,
 } from '@shared/constants';
-import { detectFramework } from '../detection/framework';
-import { gatherFrameworkContext } from '../detection/context';
-import { noteDetectedFramework } from '../detection/detected-framework';
-import { scopeInstallDirToProject } from '../detection/project-scope';
-import type { CiRunnerContext } from '../runner-context';
-import { FRAMEWORK_REGISTRY } from '../frameworks/registry';
+import { detectFramework } from '@services/detection';
+import { gatherFrameworkContext } from '@services/detection';
+import { noteDetectedFramework } from '@services/detection';
+import { scopeInstallDirToProject } from '@services/detection';
+import type { CiRunnerContext } from '@programs/program-contract';
+import { FRAMEWORK_REGISTRY } from '@services/frameworks';
 import { createSkillProgram } from '../shared/skill-program';
-import { detectPostHogIntegration } from '../detection/integration';
-import type { ProgramConfig, ProgramReadyContext } from '../program-step';
-import type { ProgramSession } from '../program-session';
+import { detectPostHogIntegration } from '@services/detection';
+import type {
+  ProgramConfig,
+  ProgramReadyContext,
+} from '@programs/program-contract';
+import type { ProgramSession } from '@programs/program-contract';
 import { analytics } from '@utils/analytics';
-import { ProgramAbort } from '../program-abort';
+import { ProgramAbort } from '@programs/program-contract';
 import { ErrorCodes } from '@shared/errors';
 import { REPLAY_VISION_SCOPE_ADDITIONS } from './scopes.js';
 import { abortNoFrameworkDetected } from '../shared/abort-no-framework';

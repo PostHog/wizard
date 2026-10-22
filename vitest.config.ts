@@ -34,6 +34,7 @@ function resolveTsForJs(): Plugin {
 // alone with `vitest run --project <name>`; `vitest run` runs them all.
 const TESTS = '__tests__/**/*.{js,jsx,ts,tsx}';
 const AGENT_TESTS = [`src/agent/**/${TESTS}`];
+const SERVICE_TESTS = [`src/services/**/${TESTS}`];
 const PROGRAM_TESTS = [`src/programs/**/${TESTS}`];
 const TOOL_TESTS = [`src/tools/**/${TESTS}`];
 const TUI_TESTS = [`src/tui/**/${TESTS}`];
@@ -87,6 +88,7 @@ export default defineConfig({
       { find: /^@programs$/, replacement: r('src/programs/index.ts') },
       { find: /^@programs\/types$/, replacement: r('src/programs/types.ts') },
       { find: /^@programs\/(.*)$/, replacement: `${r('src/programs')}/$1` },
+      { find: /^@services\/(.*)$/, replacement: `${r('src/services')}/$1` },
       { find: /^@tools$/, replacement: r('src/tools/index.ts') },
       // Path aliases — mirror tsconfig `paths`.
       { find: /^@env$/, replacement: r('src/env.ts') },
@@ -112,6 +114,7 @@ export default defineConfig({
     },
     projects: [
       project('agent', AGENT_TESTS),
+      project('services', SERVICE_TESTS),
       project('programs', PROGRAM_TESTS),
       project('tools', TOOL_TESTS),
       project('tui', TUI_TESTS),
@@ -126,6 +129,7 @@ export default defineConfig({
         [`src/**/${TESTS}`, 'src/**/*.{test,spec}.{js,jsx,ts,tsx}'],
         [
           ...AGENT_TESTS,
+          ...SERVICE_TESTS,
           ...PROGRAM_TESTS,
           ...TOOL_TESTS,
           ...TUI_TESTS,

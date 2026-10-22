@@ -290,7 +290,7 @@ are clamped silently (`clamp_scopes_to_ceiling`) — neither path errors;
 `/oauth/token` just returns a smaller `scope`. So never assume the token
 carries what was requested: the token response's `scope` field is the truth.
 The wizard diffs granted vs requested at login (`missingOAuthScopes` in
-`src/programs/oauth/tokens.ts`), warns the user which permissions are missing, and
+`src/shared/oauth-tokens.ts`), warns the user which permissions are missing, and
 emits `wizard: oauth grant narrowed` so narrowed runs are countable in analytics.
 The diff also rides on the session (`credentials.missingScopes`), so when a
 run does fail on a scope-gated step, the error names the missing permission
@@ -470,9 +470,9 @@ program at all.
 | `runTuiTool`                      | Shows a tool's screens on their own store and resolves the code a screen exits with; it runs no program                 | [src/tui/run-tool.ts](src/tui/run-tool.ts)                             |
 | `@tools` runner                   | A tool that runs on the console, such as `addMCPServerToClientsStep`, `runDoctorReport`, `runProvision` or `listSkills` | [src/tools](src/tools/README.md)                                       |
 | `WizardStore`                     | The TUI's own state (the screens' answers), router, gates, overlays and display state, over its session store           | [src/tui/store.ts](src/tui/store.ts)                                   |
-| `SessionStore`                    | Launch values, detection, the login and the run's progress; each host builds its own                                    | [src/programs/session](src/programs/session)                           |
-| `runProgram`                      | Runs a registered program: detection, readiness, login, the host's steps, then each agent run                           | [src/programs/run-program.ts](src/programs/run-program.ts)             |
-| `detectProjectsWithAgent`         | A project scan: one `runAgent` call per attempt, with its own route and deadline                                        | [src/programs/detection/agentic.ts](src/programs/detection/agentic.ts) |
+| `SessionStore`                    | Launch values, detection, the login and the run's progress; each host builds its own                                    | [src/services/session](src/services/session)                           |
+| `runProgram`                      | Runs a registered program: detection, readiness, login, the host's steps, then each agent run                           | [src/programs/program-runner/run-program.ts](src/programs/program-runner/run-program.ts)             |
+| `detectProjectsWithAgent`         | A project scan: one `runAgent` call per attempt, with its own route and deadline                                        | [src/services/detection/agentic.ts](src/services/detection/agentic.ts) |
 | `runAgent`                        | One agent run from a `RunConfig` and `RunInput`; complete on its own                                                    | [src/agent](src/agent/README.md)                                       |
 | `streamMcpPrompt`                 | The MCP tutorial's prompt stream: one prompt against the PostHog MCP server, with its own SDK call                      | [src/agent/mcp-prompt-streaming.ts](src/agent/mcp-prompt-streaming.ts) |
 
@@ -609,8 +609,11 @@ Path aliases defined in `tsconfig.base.json`, resolved by tsdown and `tsx`:
 | `@agent` | `src/agent/index.ts`, the agent's runtime entry |
 | `@agent/types` | `src/agent/types.ts`, type-only |
 | `@agent/*` | `src/agent/*`, for the agent's tests. The agent imports its own modules by relative path, and no other layer maps it |
+| `@services/<service>` | `src/services/<service>/index.ts`, one service's entry, for the programs: `session`, `detection`, `detection/decisions`, `frameworks`, `codebase-scan` and `warehouse-sources` |
+| `@services/*` | `src/services/*`. Other layers reach only the service entries; services import each other by relative path, and tests use this alias for a service's own files and for mocks |
 | `@programs` | `src/programs/index.ts`, the programs runtime entry |
 | `@programs/types` | `src/programs/types.ts`, type-only |
+| `@programs/program-contract` | `src/programs/program-contract/index.ts`, the program contract: `ProgramConfig`, `ProgramSession`, `RunnerContext`, `FrameworkConfig`. Its own project below the services, which import it; it imports no service |
 | `@programs/<id>` | `src/programs/<id>/index.ts`, one program's entry. Other layers reach nothing else in a program folder |
 | `@programs/*` | `src/programs/*`. Other layers reach only the `@programs/<id>` entries; the programs import their own code by relative path, and only their tests use this alias |
 | `@tools` | `src/tools/index.ts`, the tools' one entry: the commands that run no agent. The TUI and the CLI import it; programs never do |

@@ -14,24 +14,24 @@ vi.mock(import('@utils/analytics'), () => ({
 }));
 
 vi.mock(
-  import('@programs/warehouse-sources/registry'),
+  import('@services/warehouse-sources/registry'),
   async (importOriginal) =>
     (
       await import(
-        '@programs/warehouse-sources/__tests__/helpers/tool-catalog.no-jest'
+        '@services/warehouse-sources/__tests__/helpers/tool-catalog.no-jest'
       )
     ).withFixtureCatalog(await importOriginal()),
 );
 
 import { analytics } from '@utils/analytics';
-import { reportWarehouseSourcesDetected } from '@programs/detection/integration';
+import { reportWarehouseSourcesDetected } from '@services/detection';
 import {
   DETECTED_WAREHOUSE_SOURCES_KEY,
   getDetectedWarehouseSources,
-} from '@programs/warehouse-sources/detect';
-import { buildSession } from '@programs/session/wizard-session';
-import { SessionStore } from '@programs/session/session-store';
-import { reportCodebaseScan, scanCodebaseFor } from '@programs/codebase-scan';
+} from '@services/warehouse-sources';
+import { buildSession } from '@services/session';
+import { SessionStore } from '@services/session';
+import { reportCodebaseScan, scanCodebaseFor } from '@services/codebase-scan';
 import { detectWarehousePrerequisites } from '../detect';
 import { config as warehouse } from '../index';
 

@@ -1,6 +1,6 @@
 /**
  * What the TUI shows of a detection scan: `scanProgress` over the events
- * detection forwards (`programs/detection/__tests__/agentic-progress.test.ts`).
+ * detection forwards (`services/detection/__tests__/agentic-progress.test.ts`).
  */
 import type { AgentProgress } from '@agent/types';
 import { scanProgress } from '@tui/agent-progress';
