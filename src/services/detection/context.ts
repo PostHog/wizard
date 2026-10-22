@@ -8,7 +8,7 @@
 
 import * as semver from 'semver';
 import { DETECTION_TIMEOUT_MS } from '@shared/constants';
-import type { FrameworkConfig } from '@programs/contract';
+import type { FrameworkConfig } from '@programs/program-contract';
 import type { WizardRunOptions } from '@utils/types';
 
 /**

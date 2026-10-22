@@ -1,6 +1,6 @@
 /* Astro wizard using posthog-agent with PostHog MCP */
 import type { WizardRunOptions } from '@utils/types';
-import type { FrameworkConfig } from '@programs/contract';
+import type { FrameworkConfig } from '@programs/program-contract';
 import { detectNodePackageManagers } from '../../detection/package-manager';
 import { Integration } from '@shared/constants';
 import {

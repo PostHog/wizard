@@ -1,4 +1,4 @@
-import type { ProgramConfig } from '@programs/contract';
+import type { ProgramConfig } from '@programs/program-contract';
 import { createSkillProgram } from '../shared/skill-program.js';
 import {
   detectWebAnalyticsPrerequisites,

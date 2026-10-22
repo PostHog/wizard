@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
-import type { ProgramRun } from '@programs/contract';
+import type { ProgramRun } from '@programs/program-contract';
 import { Integration } from '@shared/constants';
 import type { AgenticDetectionReport } from '@services/detection';
 import { detectFramework } from '@services/detection/framework';
@@ -18,7 +18,7 @@ import {
 import type { WizardSession } from '@services/session';
 import { scopeInstallDirToProject } from '@services/detection/project-scope';
 import { analytics } from '@utils/analytics';
-import { ProgramAbort } from '@programs/contract';
+import { ProgramAbort } from '@programs/program-contract';
 
 vi.mock(import('@services/detection/framework'), async (importOriginal) => ({
   ...(await importOriginal()),

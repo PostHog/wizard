@@ -7,7 +7,7 @@ import type {
   CredentialsProvider,
   ResolvedProgramCredentials,
 } from '@shared/credentials';
-import type { ProgramConfig, ProgramId } from '@programs/contract';
+import type { ProgramConfig, ProgramId } from '@programs/program-contract';
 import type { SessionStore, WizardFlagSnapshot } from '@services/session';
 
 export type { WizardFlagSnapshot };

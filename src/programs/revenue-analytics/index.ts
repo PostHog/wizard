@@ -1,4 +1,4 @@
-import type { ProgramConfig } from '@programs/contract';
+import type { ProgramConfig } from '@programs/program-contract';
 import { WIZARD_TOOL_NAMES } from '@agent';
 import { detectRevenuePrerequisites, REVENUE_ABORT_CASES } from './detect.js';
 

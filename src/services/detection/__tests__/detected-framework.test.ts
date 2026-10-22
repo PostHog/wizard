@@ -1,6 +1,6 @@
 import { analytics } from '@utils/analytics';
-import type { FrameworkConfig } from '@programs/contract';
-import type { ProgramSession } from '@programs/contract';
+import type { FrameworkConfig } from '@programs/program-contract';
+import type { ProgramSession } from '@programs/program-contract';
 import { noteDetectedFramework } from '../detected-framework';
 
 vi.mock('@utils/analytics', () => ({ analytics: { setTag: vi.fn() } }));

@@ -18,7 +18,7 @@ import {
   toPromptSafeRelativePath,
 } from '@utils/env-scan';
 import type { PackageJson } from '@utils/package-json';
-import type { ProgramSession } from '@programs/contract';
+import type { ProgramSession } from '@programs/program-contract';
 import {
   parseCargoToml,
   parseComposerJson,

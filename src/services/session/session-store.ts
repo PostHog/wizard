@@ -30,7 +30,7 @@ import { TaskStatus, isTaskStatus } from '@shared/task-status';
 import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
 import { reportWarehouseSourcesDetected } from '../detection/integration';
-import type { ProgramReadyContext } from '@programs/contract';
+import type { ProgramReadyContext } from '@programs/program-contract';
 import type { WizardSession } from './wizard-session';
 import type { ScanReport } from './task-stream/types';
 

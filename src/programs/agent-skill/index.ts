@@ -1,4 +1,4 @@
-import type { ProgramConfig } from '@programs/contract';
+import type { ProgramConfig } from '@programs/program-contract';
 import { POSTHOG_DOCS_URL } from '@shared/constants.js';
 import { AGENT_SKILL_SCOPE_ADDITIONS } from './scopes.js';
 

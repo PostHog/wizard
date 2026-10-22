@@ -1,4 +1,7 @@
-import type { CiRunnerContext, RunnerContext } from '@programs/contract';
+import type {
+  CiRunnerContext,
+  RunnerContext,
+} from '@programs/program-contract';
 
 export function testRunnerContext(session?: {
   frameworkContext: Record<string, unknown>;

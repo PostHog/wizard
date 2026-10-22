@@ -1,15 +1,15 @@
 import { detectPostHogIntegration } from '@services/detection';
-import type { ProgramConfig } from '@programs/contract';
-import type { ProgramRun } from '@programs/contract';
+import type { ProgramConfig } from '@programs/program-contract';
+import type { ProgramRun } from '@programs/program-contract';
 import { AgentSignals, WIZARD_TOOL_NAMES } from '@agent';
 import { shouldDisableAsk } from '@shared/ask-policy';
-import type { ProgramSession } from '@programs/contract';
+import type { ProgramSession } from '@programs/program-contract';
 import { mayReportScanResults } from '@shared/run-state';
 import { OutroKind } from '@shared/outro';
 import {
   DEFAULT_PACKAGE_INSTALLATION,
   SPINNER_MESSAGE,
-} from '@programs/contract';
+} from '@programs/program-contract';
 import { tryGetPackageJson, isUsingTypeScript } from '@utils/setup-utils';
 import { analytics } from '@utils/analytics';
 import { detectFramework } from '@services/detection';
@@ -17,7 +17,10 @@ import { IS_PRODUCTION_BUILD } from '@env';
 import { gatherFrameworkContext } from '@services/detection';
 import { noteDetectedFramework } from '@services/detection';
 import { scopeInstallDirToProject } from '@services/detection';
-import type { CiRunnerContext, RunnerContext } from '@programs/contract';
+import type {
+  CiRunnerContext,
+  RunnerContext,
+} from '@programs/program-contract';
 import { FRAMEWORK_REGISTRY } from '@services/frameworks';
 import { abortNoFrameworkDetected } from '../shared/abort-no-framework';
 import {

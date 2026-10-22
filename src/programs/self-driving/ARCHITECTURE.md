@@ -167,7 +167,7 @@ in `buildOutroData` (no auth deep-link — §7 item 7). CLI:
 (the agent's working dir and detection target).
 
 **Runner & agent loop (generic — not Signals-aware).** `runProgram`
-(`src/programs/runner/run-program.ts`) is the fixed pipeline
+(`src/programs/program-runner/run-program.ts`) is the fixed pipeline
 `init → health → settings → OAuth → skill install → agent → run → errors → postRun → outro`.
 It installs the skill by ID, resolves the MCP URL, runs the Claude Agent SDK
 `query()` (`src/agent/agent-interface.ts`) in a sandbox with the

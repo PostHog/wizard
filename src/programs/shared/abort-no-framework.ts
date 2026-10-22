@@ -1,6 +1,6 @@
 import { ErrorCodes } from '@shared/errors';
 import { OutroKind, type OutroData } from '@shared/outro';
-import { ProgramAbort } from '@programs/contract';
+import { ProgramAbort } from '@programs/program-contract';
 
 type NoFrameworkGuidance = Pick<OutroData, 'message' | 'docsLabel' | 'docsUrl'>;
 

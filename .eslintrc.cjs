@@ -52,7 +52,7 @@ const RESTRICTED_SYNTAX = [
 const fs = require('fs');
 const path = require('path');
 const PROGRAMS_DIR = path.join(__dirname, 'src/programs');
-// Each folder with its own project is an entry: the programs, and `contract`, the program contract.
+// Each folder with its own project is an entry: the programs, and `program-contract`, the program contract.
 const PROGRAM_IDS = fs
   .readdirSync(PROGRAMS_DIR, { withFileTypes: true })
   .filter(

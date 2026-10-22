@@ -2,7 +2,7 @@ import {
   createSkillProgram,
   type SkillProgramOptions,
 } from '@programs/shared/skill-program';
-import type { ProgramRun } from '@programs/contract';
+import type { ProgramRun } from '@programs/program-contract';
 
 const baseOpts: SkillProgramOptions = {
   skillId: 'error-tracking-setup',

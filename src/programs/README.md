@@ -8,9 +8,9 @@ command that runs no agent, such as `mcp add` or `doctor`, is a tool, in
 [`src/tools`](../tools/README.md); no program imports it.
 
 The program layer has three parts, which import in one direction: the
-program contract ([`contract`](contract/index.ts)), the
+program contract ([`program-contract`](program-contract/index.ts)), the
 [services](../services/README.md) and the programs.
-[`runner`](runner/run-program.ts) runs them: `runProgram`, the registry,
+[`program-runner`](program-runner/run-program.ts) runs them: `runProgram`, the registry,
 detection lookup, the run's input and outcome types, and login.
 
 To run a program from code, call `runProgram`. The
@@ -45,7 +45,7 @@ folders:
 The lines outside them:
 
 - **Registry.** The program's import and its entry in `PROGRAM_REGISTRY`, in
-  [`program-registry.ts`](runner/program-registry.ts), and `{ "path": "<id>" }` in
+  [`program-registry.ts`](program-runner/program-registry.ts), and `{ "path": "<id>" }` in
   `references` in [`tsconfig.json`](tsconfig.json).
 - **TUI registry.** Its import and spread in
   [`src/tui/programs/index.ts`](../tui/programs/index.ts), and
@@ -97,10 +97,10 @@ reaches the UI.
 | One program's flow, deck and screens          | `src/tui/programs/<id>/`, registered in [`src/tui/programs/index.ts`](../tui/programs/index.ts) |
 | One program's e2e test definition             | Its folder's `test/e2e.json`, read by [`e2e-harness/profiles.ts`](../../e2e-harness/profiles.ts) |
 | Code several programs share                   | [`shared`](shared/skill-program.ts): program builders and [`program-scopes.ts`](shared/program-scopes.ts) |
-| The list of every program                     | [`program-registry.ts`](runner/program-registry.ts)                                      |
-| Running one program, and its input and outcome | [`run-program.ts`](runner/run-program.ts), [`detect-program.ts`](runner/detect-program.ts) and [`program-input.ts`](runner/program-input.ts) |
+| The list of every program                     | [`program-registry.ts`](program-runner/program-registry.ts)                                      |
+| Running one program, and its input and outcome | [`run-program.ts`](program-runner/run-program.ts), [`detect-program.ts`](program-runner/detect-program.ts) and [`program-input.ts`](program-runner/program-input.ts) |
 | Commands that pick a program by skill         | [`dispatch-family.ts`](../cli/commands/dispatch-family.ts)                        |
-| The program contract: `ProgramConfig`, `ProgramSession`, `RunnerContext`, `FrameworkConfig` | [`contract`](contract/index.ts), its own project below the services |
+| The program contract: `ProgramConfig`, `ProgramSession`, `RunnerContext`, `FrameworkConfig` | [`program-contract`](program-contract/index.ts), its own project below the services |
 | The session store, detection, frameworks, codebase scan and tool catalog | [`src/services`](../services/README.md) |
 
 Other layers import runtime values from `@programs` and types from
@@ -112,7 +112,7 @@ from a personal API key) and `apiKeyCredentials` (a credentials provider that
 makes one), `logIn`, `TASK_OUTCOMES_KEY`, the task stream, the registry lookups,
 and the shared program code the hosts call. Program code may import `@env`,
 `@shared/*`, `@utils/*`, `@agent`, `@agent/types`, the program contract,
-`@programs/contract`, and the service entries, `@services/<service>`. A program folder also imports the shared program code, by
+`@programs/program-contract`, and the service entries, `@services/<service>`. A program folder also imports the shared program code, by
 relative path, and only the registry's entry files import every program. Every
 programs project extends `tsconfig.no-tui.json`, which maps `@programs/*`. A
 program's project references only the shared program code, so an import of a
@@ -126,7 +126,7 @@ See [session store and task streams](../services/README.md#session-store-and-tas
 
 ## Login and signup
 
-[`login.ts`](runner/login.ts) logs in once per store. The root README covers
+[`login.ts`](program-runner/login.ts) logs in once per store. The root README covers
 [scopes](../../README.md#required-api-key-scopes), the
 [OAuth app scope ceiling](../../README.md#oauth-app-scope-ceiling), and
 [signup](../../README.md#headless-signup--install-agents--ci).

@@ -46,7 +46,7 @@ Each domain has a dedicated boundary:
 - **Services** → `src/services/`, part of the program layer: what programs
   consume, such as the session store, detection, the framework configs, the
   codebase scan and the tool catalog. It imports env, shared, the agent and the
-  program contract (`@programs/contract`, in `src/programs/contract/`), which
+  program contract (`@programs/program-contract`, in `src/programs/program-contract/`), which
   sits below it and imports no service. Code outside it imports a service
   through its entry, `@services/<service>`; see
   [src/services/README.md](src/services/README.md)

@@ -32,7 +32,7 @@ import {
   getSkillsBaseUrl,
   POSTHOG_DOCS_URL,
 } from '@shared/constants';
-import type { ProgramSession } from '@programs/contract';
+import type { ProgramSession } from '@programs/program-contract';
 import { loadWizardFlags } from '../session/wizard-flags';
 import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';

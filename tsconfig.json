@@ -5,7 +5,7 @@
   "files": [],
   "references": [
     { "path": "./src" }, { "path": "./src/shared" }, { "path": "./src/host" },
-    { "path": "./src/agent" }, { "path": "./src/tools" }, { "path": "./src/programs/contract" },
+    { "path": "./src/agent" }, { "path": "./src/tools" }, { "path": "./src/programs/program-contract" },
     { "path": "./src/services" },
     { "path": "./src/programs" },
     { "path": "./src/headless" }, { "path": "./src/tui" }, { "path": "./src/cli" },

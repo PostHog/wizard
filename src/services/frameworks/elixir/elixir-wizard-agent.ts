@@ -2,7 +2,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { WizardRunOptions } from '@utils/types';
-import type { FrameworkConfig } from '@programs/contract';
+import type { FrameworkConfig } from '@programs/program-contract';
 import { mixPackageManager } from '../../detection/package-manager';
 import { Integration } from '@shared/constants';
 

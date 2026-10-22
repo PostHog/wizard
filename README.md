@@ -471,7 +471,7 @@ program at all.
 | `@tools` runner                   | A tool that runs on the console, such as `addMCPServerToClientsStep`, `runDoctorReport`, `runProvision` or `listSkills` | [src/tools](src/tools/README.md)                                       |
 | `WizardStore`                     | The TUI's own state (the screens' answers), router, gates, overlays and display state, over its session store           | [src/tui/store.ts](src/tui/store.ts)                                   |
 | `SessionStore`                    | Launch values, detection, the login and the run's progress; each host builds its own                                    | [src/services/session](src/services/session)                           |
-| `runProgram`                      | Runs a registered program: detection, readiness, login, the host's steps, then each agent run                           | [src/programs/runner/run-program.ts](src/programs/runner/run-program.ts)             |
+| `runProgram`                      | Runs a registered program: detection, readiness, login, the host's steps, then each agent run                           | [src/programs/program-runner/run-program.ts](src/programs/program-runner/run-program.ts)             |
 | `detectProjectsWithAgent`         | A project scan: one `runAgent` call per attempt, with its own route and deadline                                        | [src/services/detection/agentic.ts](src/services/detection/agentic.ts) |
 | `runAgent`                        | One agent run from a `RunConfig` and `RunInput`; complete on its own                                                    | [src/agent](src/agent/README.md)                                       |
 | `streamMcpPrompt`                 | The MCP tutorial's prompt stream: one prompt against the PostHog MCP server, with its own SDK call                      | [src/agent/mcp-prompt-streaming.ts](src/agent/mcp-prompt-streaming.ts) |
@@ -613,7 +613,7 @@ Path aliases defined in `tsconfig.base.json`, resolved by tsdown and `tsx`:
 | `@services/*` | `src/services/*`. Other layers reach only the service entries; services import each other by relative path, and tests use this alias for a service's own files and for mocks |
 | `@programs` | `src/programs/index.ts`, the programs runtime entry |
 | `@programs/types` | `src/programs/types.ts`, type-only |
-| `@programs/contract` | `src/programs/contract/index.ts`, the program contract: `ProgramConfig`, `ProgramSession`, `RunnerContext`, `FrameworkConfig`. Its own project below the services, which import it; it imports no service |
+| `@programs/program-contract` | `src/programs/program-contract/index.ts`, the program contract: `ProgramConfig`, `ProgramSession`, `RunnerContext`, `FrameworkConfig`. Its own project below the services, which import it; it imports no service |
 | `@programs/<id>` | `src/programs/<id>/index.ts`, one program's entry. Other layers reach nothing else in a program folder |
 | `@programs/*` | `src/programs/*`. Other layers reach only the `@programs/<id>` entries; the programs import their own code by relative path, and only their tests use this alias |
 | `@tools` | `src/tools/index.ts`, the tools' one entry: the commands that run no agent. The TUI and the CLI import it; programs never do |

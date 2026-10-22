@@ -27,7 +27,7 @@ import {
   type Dirent,
 } from 'fs';
 import { join } from 'path';
-import type { ProgramSession } from '@programs/contract';
+import type { ProgramSession } from '@programs/program-contract';
 import type { AbortCase } from '@agent/types';
 import { ErrorCodes } from '@shared/errors';
 import {

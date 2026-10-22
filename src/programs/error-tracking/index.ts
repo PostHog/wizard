@@ -7,18 +7,21 @@ import {
 import { detectFramework } from '@services/detection';
 import { scopeInstallDirToProject } from '@services/detection';
 import { FRAMEWORK_REGISTRY } from '@services/frameworks';
-import type { ProgramRun } from '@programs/contract';
+import type { ProgramRun } from '@programs/program-contract';
 import {
   ERROR_TRACKING_UNSUPPORTED,
   errorTrackingProjectDir,
   gatherErrorTrackingContext,
 } from './detect-agentic';
-import type { ProgramConfig } from '@programs/contract';
-import type { ProgramSession } from '@programs/contract';
-import type { CiRunnerContext, RunnerContext } from '@programs/contract';
+import type { ProgramConfig } from '@programs/program-contract';
+import type { ProgramSession } from '@programs/program-contract';
+import type {
+  CiRunnerContext,
+  RunnerContext,
+} from '@programs/program-contract';
 import { preinstallPostHogCliOnce } from '../shared/posthog-cli-preinstall';
 import { analytics } from '@utils/analytics';
-import { ProgramAbort } from '@programs/contract';
+import { ProgramAbort } from '@programs/program-contract';
 import { ErrorCodes } from '@shared/errors';
 import { abortNoFrameworkDetected } from '../shared/abort-no-framework';
 

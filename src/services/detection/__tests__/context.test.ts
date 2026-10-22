@@ -2,7 +2,7 @@ import {
   gatherFrameworkContext,
   checkFrameworkVersion,
 } from '@services/detection/context';
-import type { FrameworkConfig } from '@programs/contract';
+import type { FrameworkConfig } from '@programs/program-contract';
 import type { WizardRunOptions } from '@utils/types';
 
 const baseOptions: WizardRunOptions = {

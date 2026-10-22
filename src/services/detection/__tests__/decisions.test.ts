@@ -46,7 +46,7 @@ import type {
   DecisionAnswer,
   DecisionQuestionSpec,
 } from '@services/detection/decisions/types';
-import type { ProgramSession } from '@programs/contract';
+import type { ProgramSession } from '@programs/program-contract';
 
 const GATEWAY = { gateway: { token: 'phs_test', url: 'https://gateway.test' } };
 

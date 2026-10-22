@@ -20,7 +20,7 @@ creating its own runner or changing existing routing defaults.
 
 ## Extend the framework configuration
 
-Start with [FrameworkConfig](../../../src/programs/contract/framework-config.ts) and a nearby
+Start with [FrameworkConfig](../../../src/programs/program-contract/framework-config.ts) and a nearby
 example under [src/services/frameworks](../../../src/services/frameworks/). Framework-specific
 detection, context, environment conventions, and UI metadata belong here.
 Integration instructions and examples belong in context-mill.

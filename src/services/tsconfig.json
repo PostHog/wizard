@@ -2,5 +2,5 @@
 {
   "extends": "../../tsconfig.no-tui.json",
   "references": [{ "path": "../tsconfig.json" }, { "path": "../shared" }, { "path": "../agent" },
-    { "path": "../programs/contract" }]
+    { "path": "../programs/program-contract" }]
 }

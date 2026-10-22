@@ -13,10 +13,10 @@ import { gatherFrameworkContext } from '@services/detection';
 import { noteDetectedFramework } from '@services/detection';
 import { scopeInstallDirToProject } from '@services/detection';
 import { FRAMEWORK_REGISTRY } from '@services/frameworks';
-import { ProgramAbort } from '@programs/contract';
-import type { ProgramConfig } from '@programs/contract';
-import type { ProgramSession } from '@programs/contract';
-import type { CiRunnerContext } from '@programs/contract';
+import { ProgramAbort } from '@programs/program-contract';
+import type { ProgramConfig } from '@programs/program-contract';
+import type { ProgramSession } from '@programs/program-contract';
+import type { CiRunnerContext } from '@programs/program-contract';
 import { abortNoFrameworkDetected } from '../shared/abort-no-framework';
 import { FEATURE_FLAGS_SCOPE_ADDITIONS } from './scopes.js';
 

@@ -1,7 +1,7 @@
 # Services
 
 The services are part of the program layer, with the
-[program contract](../programs/contract/index.ts) and the
+[program contract](../programs/program-contract/index.ts) and the
 [programs](../programs/README.md). They hold what programs consume: the session
 store, detection, the codebase scan, the warehouse tool catalog and the
 framework configs. A service knows what a program, a session or an agent run
@@ -14,7 +14,7 @@ env → shared → agent → program contract → services → programs → host
 ```
 
 Services import `@env`, `@shared/*`, `@utils/*`, `@agent`, `@agent/types` and
-the program contract, `@programs/contract`, which defines `ProgramConfig`,
+the program contract, `@programs/program-contract`, which defines `ProgramConfig`,
 `ProgramSession`, `RunnerContext` and `FrameworkConfig` and imports no service.
 Programs import services. The hosts reach the session store through the
 `@programs` entry, which re-exports it.

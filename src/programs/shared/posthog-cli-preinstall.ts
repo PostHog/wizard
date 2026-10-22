@@ -8,7 +8,7 @@
  * needs the CLI.
  */
 
-import type { RunnerContext } from '@programs/contract';
+import type { RunnerContext } from '@programs/program-contract';
 import { installOrUpdatePostHogCli } from '@shared/install-cli-steering';
 import { analytics } from '@utils/analytics';
 

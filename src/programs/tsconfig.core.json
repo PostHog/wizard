@@ -5,6 +5,6 @@
   "include": ["shared"],
   "references": [
     { "path": "../tsconfig.json" }, { "path": "../shared" }, { "path": "../agent" },
-    { "path": "../services" }, { "path": "contract" }
+    { "path": "../services" }, { "path": "program-contract" }
   ]
 }

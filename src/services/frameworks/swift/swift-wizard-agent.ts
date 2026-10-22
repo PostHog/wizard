@@ -1,6 +1,6 @@
 /* Swift wizard using posthog-agent with PostHog MCP */
 import type { WizardRunOptions } from '@utils/types';
-import type { FrameworkConfig } from '@programs/contract';
+import type { FrameworkConfig } from '@programs/program-contract';
 import { swiftPackageManager } from '../../detection/package-manager';
 import { Integration } from '@shared/constants';
 import { boundedGlob } from '@utils/bounded-fs';
