@@ -72,7 +72,7 @@ changing execution behavior.
    variants before running. `run.skillId` alone does not define this flow.
 3. Register the config: import it as
    `import { config as <name> } from '@programs/<id>'` in
-   [program-registry.ts](../../../src/programs/program-registry.ts) and add it
+   [program-registry.ts](../../../src/programs/runner/program-registry.ts) and add it
    to `PROGRAM_REGISTRY`. Set the config's `binding` to Pi and the orchestrator.
    `ProgramId` is a `string`.
 4. For a standalone native command, create a command module in
@@ -156,7 +156,7 @@ structured `frameworkContext.detectError` data in the intro. A step's `onInit`
 runs when the TUI starts rendering with its initial session. `onReady` runs
 after the real session is assigned: `runTui` calls `runReadyHooks` in
 [store.ts](../../../src/tui/store.ts) before the intro, and
-[`detectProgram`](../../../src/programs/detect-program.ts) runs it as the
+[`detectProgram`](../../../src/programs/runner/detect-program.ts) runs it as the
 detection of a run whose store has none, as in headless. Set `ciPreRun` only
 when a CI session needs a different prerequisite strategy: `detectProgram` runs
 it in place of `onReady` for a CI session. Programs read a `ProgramSession` and

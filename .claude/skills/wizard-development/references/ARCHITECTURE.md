@@ -21,7 +21,7 @@ host, [runHeadless](../../../../src/headless/run.ts), which builds its own
 session store and calls `runProgram` with no workflow; `runProgram` then runs
 the same `onReady` as its detection, or `ciPreRun` when the program sets one.
 
-[runProgram](../../../../src/programs/run-program.ts) runs detection when the
+[runProgram](../../../../src/programs/runner/run-program.ts) runs detection when the
 store hasn't, resolves the program's `run` definition, applies its readiness,
 login, approval and flag policy, and calls `runAgent` for each run step the host
 confirms and then the program's own run, writing everything into the caller's
@@ -234,7 +234,7 @@ whole, so the projects that need other aliases list them again.
 | services            | `src/services/tsconfig.json`                                                                                                                     | env, shared, agent, program contract                                 |
 | shared program code | `src/programs/tsconfig.core.json`                                                                                                                | env, shared, agent, program contract, services                       |
 | one program         | `src/programs/<id>/tsconfig.json`                                                                                                                | The shared program code                                              |
-| programs entry      | `src/programs/tsconfig.json`: `index.ts`, `types.ts`, `program-registry.ts`, `run-program.ts`, `detect-program.ts`, `detect-map.ts`, `__tests__` | The shared program code and every program                            |
+| programs entry      | `src/programs/tsconfig.json`: `index.ts`, `types.ts`, `runner/` (`runProgram`, the registry, login) and `__tests__`                              | The shared program code and every program                            |
 | headless            | `src/headless/tsconfig.json`                                                                                                                     | env, shared, host, agent, programs entry                             |
 | TUI core            | `src/tui/tsconfig.core.json`                                                                                                                     | env, shared, host, agent, programs entry, tools                      |
 | one TUI program     | `src/tui/programs/<id>/tsconfig.json`                                                                                                            | The TUI core                                                         |

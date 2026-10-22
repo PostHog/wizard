@@ -80,21 +80,21 @@ export const signature: (
 | Field                                                        | Type                | What it's for                                                                    |
 | ------------------------------------------------------------ | ------------------- | -------------------------------------------------------------------------------- |
 | `programId`                                                  | `string`            | Which registered program runs. It names analytics, the route and the gateway spend. |
-| [`input`](../src/programs/program-input.ts) | `ProgramInput` | What the program runs on. Only `store` is required. |
+| [`input`](../src/programs/runner/program-input.ts) | `ProgramInput` | What the program runs on. Only `store` is required. |
 | [`input.store`](../src/services/session/session-store.ts) | `SessionStore` | Launch values, detection and run state. `new SessionStore(buildSession({ installDir }))` builds one. |
 | `input.config` | `Partial<ProgramConfig>` | Laid over the registered config, such as a one-off `run`. |
 | `input.credentials` | `ResolvedProgramCredentials` | A login you already hold. Without it the run uses the store's login, then `options.credentials`. |
 | `input.wizardFlags`, `input.wizardFlagPayloads` | `Record` | A flag snapshot. Without `wizardFlags` the run calls `options.featureFlags`, if you pass it. |
 | `input.runId` | `string` | Labels the program's own agent run in progress events. Generated when absent. |
 | `input.composed` | `boolean` | A run inside another's: its caller writes the outro. `runProgram` still settles the phase. |
-| [`options`](../src/programs/program-input.ts)                | `ProgramOptions`    | The login, the answerer, the workflow, flags, progress and cancellation.         |
+| [`options`](../src/programs/runner/program-input.ts)                | `ProgramOptions`    | The login, the answerer, the workflow, flags, progress and cancellation.         |
 | `options.credentials` | `CredentialsProvider` | Resolves the login when neither `input` nor the store has one. |
 | `options.interaction` | `AgentInteraction` | Answers the agent's questions and notices. Absent, the agent asks nothing. |
 | `options.workflow` | `ProgramWorkflowConnector` | Answers each [step](#the-steps-a-run-waits-on) with a yes or no. Absent, each step takes its default. |
 | `options.onProgress` | `(ProgramProgress) => void` | Every agent event with its `runId` and, for a composed run, its `stepId`. Never awaited. |
 | `options.featureFlags` | `() => Promise<WizardFlagSnapshot>` | Loads the flags when `input` has none. |
 | `options.signal` | `AbortSignal` | Cancels the run. |
-| [Outcome](../src/programs/program-input.ts) | `ProgramRunOutcome` | How the run ended, each agent run's result in order, the report path, any failure and any observer diagnostics. |
+| [Outcome](../src/programs/runner/program-input.ts) | `ProgramRunOutcome` | How the run ended, each agent run's result in order, the report path, any failure and any observer diagnostics. |
 
 The store holds PostHog tokens, including the refresh token, once the run logs
 in. Don't log or serialize its credentials.
@@ -163,7 +163,7 @@ can't run, such as an input field that can't be copied, or when resolving the
 program's `run` or an agent run throws something other than a `ProgramAbort`. A
 detection throw resolves to `crashed` with the error attached. A rejection
 records its error outro and code in the store first. The cases are in
-[`run-program.ts`](../src/programs/run-program.ts).
+[`run-program.ts`](../src/programs/runner/run-program.ts).
 
 ### Runs in one process
 
