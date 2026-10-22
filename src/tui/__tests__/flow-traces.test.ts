@@ -164,9 +164,6 @@ function advance(store: WizardStore, screen: string): boolean {
     case ScreenId.SlackConnect:
       store.setSlackStepDismissed();
       return true;
-    case ScreenId.KeepSkills:
-      store.setSkillsComplete(true);
-      return true;
     case SelfDrivingScreenId.IntegrationCheck:
       store.setIntegrate(true);
       return true;
@@ -209,7 +206,6 @@ function trace(program: ProgramId, integration: Integration | null) {
       stoppedOn = screen;
       break;
     }
-    if (store.skillsComplete) break;
   }
   return { program, screens, stoppedOn, events: screenEvents() };
 }

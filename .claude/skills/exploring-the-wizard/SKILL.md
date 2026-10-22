@@ -90,8 +90,8 @@ own decisions through the same state and action contract.
    dismissing it. `integration` says `failed` once the run's phase is `error`;
    a host exit can instead surface as a socket error.
 6. After successful agent completion, finish the offered outro and follow-up
-   actions. For the integration flow, `session.skillsComplete` marks the tail's
-   completion. Other programs can have a terminal outro or exit screen.
+   actions. `session.flowComplete` turns true once the flow reaches its exit
+   screen, which ends the run.
 
 | Decision                                 | Action and `params`                                                                          |
 | ---------------------------------------- | -------------------------------------------------------------------------------------------- |
@@ -103,10 +103,10 @@ own decisions through the same state and action contract.
 | Finish outro                             | `dismiss_outro`                                                                              |
 | Record MCP outcome                       | `set_mcp_outcome`, `{ outcome: "skipped" }` or `{ outcome: "installed", clients: [...] }`    |
 | Dismiss suggested prompts / Slack step   | `dismiss` / `dismiss_slack`                                                                  |
-| Record keep-skills choice                | `keep_skills`, `{ kept: true }` or `{ kept: false }`                                         |
 
-MCP and keep-skills actions commit store state; recording an outcome does not
-perform the corresponding installation or cleanup. Report which outcomes were
+The MCP action commits store state; recording an outcome does not perform the
+installation. `runProgram` removes the skills a run installed when the run
+ends, so the app has none left afterwards. Report which outcomes were
 simulated. A completed run also needs a review of the app diff and expected
 integration behavior before calling the integration valid.
 

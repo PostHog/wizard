@@ -7,7 +7,7 @@ import { vi, describe, it, expect } from 'vitest';
 import { mkdtempSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { McpOutcome, RunPhase } from '@shared/run-state';
+import { RunPhase } from '@shared/run-state';
 import { OutroKind } from '@shared/outro';
 import { Integration } from '@shared/constants';
 import { HostResolution } from '@shared/host-resolution';
@@ -71,8 +71,7 @@ vi.mock(import('@host/wizard-abort'), async (importOriginal) => ({
   wizardAbort: vi.fn().mockResolvedValue(undefined),
 }));
 
-// A temp dir so KeepSkillsScreen's readdir of `<installDir>/.claude/skills`
-// never sees a host directory.
+// A temp dir, so no screen that reads the install dir sees a host directory.
 const INSTALL_DIR = mkdtempSync(join(tmpdir(), 'wizard-kb-'));
 
 const ENTER = '\r';
@@ -191,8 +190,6 @@ const PAIRS: Pair[] = [
   },
   {
     name: 'mcp: enter on install results vs set_mcp_outcome installed',
-    knownDivergence:
-      'keyboard path lands on keep-skills, whose mount scan sets skillsComplete; the action only records the MCP outcome',
     program: Program.PostHogIntegration,
     screen: ScreenId.Mcp,
     ready: (_, frame) => frame.includes('Press enter'),
@@ -219,27 +216,7 @@ const PAIRS: Pair[] = [
     action: 'dismiss_slack',
   },
   {
-    name: 'keep-skills: mount with no skills dir vs keep_skills',
-    knownDivergence:
-      'keyboard path runs the skills-dir scan effect, the action only flips the flag',
-    program: Program.PostHogIntegration,
-    screen: ScreenId.KeepSkills,
-    arrange: (s) => {
-      confirmed(s);
-      authed(s);
-      ran(s);
-      s.setOutroDismissed();
-      s.setMcpComplete(McpOutcome.Skipped);
-      s.setSlackStepDismissed();
-    },
-    keys: [],
-    action: 'keep_skills',
-    params: { kept: true },
-  },
-  {
     name: 'audit-outro: any key vs dismiss_outro',
-    knownDivergence:
-      'keyboard path commits mintHandoff alongside outroDismissed',
     program: Program.Audit,
     screen: AuditScreenId.Outro,
     arrange: (s) => {
@@ -252,8 +229,6 @@ const PAIRS: Pair[] = [
   },
   {
     name: 'source-maps-outro: any key vs dismiss_outro',
-    knownDivergence:
-      'keyboard path commits mintHandoff alongside outroDismissed',
     program: Program.ErrorTrackingUploadSourceMaps,
     screen: SourceMapsScreenId.Outro,
     arrange: (s) => {
@@ -436,11 +411,10 @@ function diff(before: Snap, after: Snap): Record<string, unknown> {
   return out;
 }
 
-// These screens commit state from an async effect once they mount: the
-// slack connection check and the skills dir scan.
+// This screen commits state from an async effect once it mounts: the slack
+// connection check.
 const settled = (s: WizardStore) =>
-  (s.currentScreen !== ScreenId.SlackConnect || s.slackConnected !== null) &&
-  (s.currentScreen !== ScreenId.KeepSkills || s.skillsComplete);
+  s.currentScreen !== ScreenId.SlackConnect || s.slackConnected !== null;
 
 async function driveKeyboard(pair: Pair): Promise<Record<string, unknown>> {
   const store = await makeStore(pair);

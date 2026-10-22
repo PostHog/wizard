@@ -1,12 +1,11 @@
 {
   "program": "metrics",
-  "summary": "Happy path: confirm intro, push past health issues, let the agent pick + install the platform variant and instrument the service, delete installed skills.",
+  "summary": "Happy path: confirm intro, push past health issues, let the agent pick + install the platform variant and instrument the service.",
   "profile": {
     "setup": "first",
     "healthCheck": "dismiss",
     "mcp": "skip",
     "slack": "skip",
-    "skills": "delete",
     "ask": "first"
   },
   "variations": [
@@ -26,10 +25,6 @@
       "screen": "run",
       "auto": "(external) — the agent loads the skill menu, picks the metrics-* variant matching the project's platform (wizard_ask answered with the first option if ambiguous), installs it, and instruments the service's choke points"
     },
-    { "screen": "outro", "auto": "dismiss" },
-    {
-      "screen": "keep-skills",
-      "auto": "delete — leave nothing behind (terminal: the run's done-signal)"
-    }
+    { "screen": "outro", "auto": "dismiss" }
   ]
 }

@@ -41,7 +41,6 @@ export type TuiState = {
   slackStepDismissed: boolean;
   /** Whether the project already has a Slack integration; `null` until detected. */
   slackConnected: boolean | null;
-  skillsComplete: boolean;
   outroDismissed: boolean;
 
   /**
@@ -96,7 +95,6 @@ export function initialTuiState(
     mcpSuggestedPromptsDismissed: false,
     slackStepDismissed: false,
     slackConnected: null,
-    skillsComplete: false,
     outroDismissed: false,
     // `--integrate` forces integration (skip the question); otherwise the
     // integration-check screen resolves it from null.

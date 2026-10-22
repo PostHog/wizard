@@ -61,9 +61,4 @@ export const POSTHOG_INTEGRATION_FLOW: FlowStep[] = [
     screenId: 'mcp',
     isComplete: (tui) => tui.mcpComplete,
   },
-  {
-    id: 'keep-skills',
-    label: 'Keep Skills',
-    screenId: 'keep-skills',
-  },
 ];

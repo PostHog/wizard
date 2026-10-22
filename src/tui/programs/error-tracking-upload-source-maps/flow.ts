@@ -57,9 +57,4 @@ export const ERROR_TRACKING_UPLOAD_SOURCE_MAPS_FLOW: FlowStep[] = [
     screenId: 'source-maps-outro',
     isComplete: (tui) => tui.outroDismissed,
   },
-  {
-    id: 'skills',
-    label: 'Skills',
-    screenId: 'keep-skills',
-  },
 ];

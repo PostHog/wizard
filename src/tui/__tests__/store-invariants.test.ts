@@ -353,11 +353,6 @@ const MUTATIONS: MutationCase[] = [
     emits: 1,
   },
   {
-    name: 'setSkillsComplete',
-    invoke: (s) => s.setSkillsComplete(true),
-    emits: 1,
-  },
-  {
     name: 'setMcpSuggestedPromptsDismissed',
     invoke: (s) => s.setMcpSuggestedPromptsDismissed(),
     emits: 1,
@@ -784,7 +779,6 @@ describe('store invariants', () => {
       view.mcpComplete = flip();
       view.mcpOutcome = pick([null, ...Object.values(McpOutcome)]);
       view.slackStepDismissed = flip();
-      view.skillsComplete = flip();
       view.integrate = pick([null, true, false]);
       if (flip()) {
         view.session.integration = Integration.javascriptNode;

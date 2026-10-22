@@ -339,17 +339,6 @@ export const ACTION_REGISTRY: Partial<Record<string, DriverAction[]>> = {
     },
   ],
 
-  // ── Keep skills (terminal step of the integration flow) ───────────────
-  [ScreenId.KeepSkills]: [
-    {
-      id: 'keep_skills',
-      description:
-        'Decide whether to keep installed skills; completes the run.',
-      params: { kept: 'boolean (default true)' },
-      apply: (store, params) => store.setSkillsComplete(params.kept !== false),
-    },
-  ],
-
   // ── Overlays ──────────────────────────────────────────────────────────
   [Overlay.WizardAsk]: [
     {

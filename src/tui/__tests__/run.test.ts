@@ -14,7 +14,7 @@ import { ErrorCodes } from '@shared/errors';
 import { HostResolution } from '@shared/host-resolution';
 import { analytics } from '@utils/analytics';
 import { registerCleanup } from '@utils/cleanup';
-import { RunPhase } from '@shared/run-state';
+import { McpOutcome, RunPhase } from '@shared/run-state';
 import { Tool } from '@tools';
 
 const streamShutdown = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
@@ -128,7 +128,8 @@ it.each(['continue', 'exit'] as const)(
       expect(store.currentScreen).toBe(ScreenId.Mcp);
       await flush();
       expect(code).toBeUndefined();
-      store.setSkillsComplete(true);
+      // The post-run steps end on the exit screen, where the host ends the run.
+      store.setMcpComplete(McpOutcome.Skipped);
     } else {
       store.setMintHandoff('exit');
     }
@@ -205,8 +206,7 @@ it("resolves a screen's exit request with its code and starts no stream shutdown
   const exited = runTui(posthogIntegration, launch('/tmp/screen-exit-test'));
   await vi.waitFor(() => expect(runProgram).toHaveBeenCalled());
   await flush();
-  // KeepSkills after a success: the end-wait holds, then the screen exits.
-  store.setSkillsComplete(true);
+  // The exit screen after a success: the end-wait holds, then the screen exits.
   store.requestExit(0);
   await expect(exited).resolves.toBe(0);
   await flush();
@@ -294,7 +294,7 @@ it.each(['continue', 'exit'] as const)(
     );
     expect(code).toBeUndefined();
     store.setMintHandoff(action);
-    if (action === 'continue') store.setSkillsComplete(true);
+    if (action === 'continue') store.setMcpComplete(McpOutcome.Skipped);
     await vi.waitFor(() => expect(code).toBe(1));
   },
 );

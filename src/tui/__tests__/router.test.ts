@@ -76,8 +76,6 @@ describe('WizardRouter', () => {
     view.mintHandoff = 'continue';
     expect(router.resolve(view)).toBe(ScreenId.Mcp);
     view.mcpComplete = true;
-    expect(router.resolve(view)).toBe(ScreenId.KeepSkills);
-    view.skillsComplete = true;
     expect(router.resolve(view)).toBe(ScreenId.Exit);
     view.mintHandoff = 'exit';
     expect(router.resolve(view)).toBe(ScreenId.Exit);

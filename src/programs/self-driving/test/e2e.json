@@ -1,12 +1,11 @@
 {
   "program": "self-driving",
-  "summary": "Self-driving, integration-first: answer \"no, set it up first\" at the integration check so the run sets up the PostHog SDK before Self-driving. After auth the detector scans the repo and a project is picked; the composed integration run instruments it; a handoff bridges to the Self-driving run; the GitHub gate confirms the App is connected; then the terminal outro exits (no keep-skills). The integration run's own screens + task list are not captured in this self-driving control-plane trace.",
+  "summary": "Self-driving, integration-first: answer \"no, set it up first\" at the integration check so the run sets up the PostHog SDK before Self-driving. After auth the detector scans the repo and a project is picked; the composed integration run instruments it; a handoff bridges to the Self-driving run; the GitHub gate confirms the App is connected; then the terminal outro exits. The integration run's own screens + task list are not captured in this self-driving control-plane trace.",
   "profile": {
     "setup": "first",
     "healthCheck": "dismiss",
     "mcp": "skip",
     "slack": "skip",
-    "skills": "delete",
     "ask": "first",
     "integrate": true
   },
@@ -49,7 +48,7 @@
     },
     {
       "screen": "outro",
-      "auto": "dismiss \u2014 terminal: self-driving has no keep-skills, so the outro exits the wizard"
+      "auto": "dismiss \u2014 terminal: the outro exits the wizard"
     }
   ]
 }

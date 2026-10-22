@@ -4,12 +4,11 @@ exports[`keyboard commit vs control action commit > audit-outro: any key vs dism
 {
   "action": {
     "outroDismissed": true,
-    "screen": "keep-skills",
+    "screen": "exit",
   },
   "keyboard": {
     "outroDismissed": true,
-    "screen": "keep-skills",
-    "skillsComplete": true,
+    "screen": "exit",
   },
 }
 `;
@@ -26,15 +25,6 @@ exports[`keyboard commit vs control action commit > intro: enter on Continue vs 
     "setupConfirmed": true,
     "warehouseSourcesReported": true,
   },
-}
-`;
-
-exports[`keyboard commit vs control action commit > keep-skills: mount with no skills dir vs keep_skills 1`] = `
-{
-  "action": {
-    "skillsComplete": true,
-  },
-  "keyboard": {},
 }
 `;
 
@@ -73,7 +63,7 @@ exports[`keyboard commit vs control action commit > mcp: enter on install result
       "Claude Code",
     ],
     "mcpOutcome": "installed",
-    "screen": "keep-skills",
+    "screen": "exit",
   },
   "keyboard": {
     "mcpComplete": true,
@@ -82,8 +72,7 @@ exports[`keyboard commit vs control action commit > mcp: enter on install result
       "Claude Code",
     ],
     "mcpOutcome": "installed",
-    "screen": "keep-skills",
-    "skillsComplete": true,
+    "screen": "exit",
   },
 }
 `;
@@ -176,12 +165,11 @@ exports[`keyboard commit vs control action commit > source-maps-outro: any key v
 {
   "action": {
     "outroDismissed": true,
-    "screen": "keep-skills",
+    "screen": "exit",
   },
   "keyboard": {
     "outroDismissed": true,
-    "screen": "keep-skills",
-    "skillsComplete": true,
+    "screen": "exit",
   },
 }
 `;

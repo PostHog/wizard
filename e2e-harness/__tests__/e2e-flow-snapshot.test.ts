@@ -158,7 +158,7 @@ async function traceFlow(
       else store.setRunPhase(RunPhase.Completed);
     }
 
-    if (decision.done || store.skillsComplete) break;
+    if (decision.done || store.currentScreen === ScreenId.Exit) break;
   }
   return trace;
 }
@@ -229,7 +229,7 @@ describe('e2e flow snapshot — upload-source-maps', () => {
 describe('e2e flow snapshot — ai-observability', () => {
   const profile = profileFor(Program.AiObservability);
 
-  it('walks intro → health → auth → run → outro → skills', async () => {
+  it('walks intro → health → auth → run → outro → exit', async () => {
     expect({
       program: 'ai-observability',
       profile,
@@ -245,7 +245,7 @@ describe('e2e flow snapshot — ai-observability', () => {
 describe('e2e flow snapshot — metrics', () => {
   const profile = profileFor(Program.Metrics);
 
-  it('walks intro → health → auth → run → outro → skills', async () => {
+  it('walks intro → health → auth → run → outro → exit', async () => {
     expect({
       program: 'metrics',
       profile,
@@ -270,13 +270,13 @@ describe('e2e flow snapshot — metrics', () => {
       screen: 'metrics-intro',
       action: 'confirm_setup',
     });
-    expect(trace.at(-1)?.action).toBe('keep_skills');
+    expect(trace.at(-1)?.action).toBe('dismiss_outro');
     expect(trace.length).toBeLessThan(40);
   });
 });
 
 describe('e2e flow snapshot — warehouse-source', () => {
-  it('walks intro → auth → run → outro → skills', async () => {
+  it('walks intro → auth → run → outro → exit', async () => {
     expect({
       program: 'warehouse-source',
       profile: profileFor(Program.WarehouseSource),
@@ -298,7 +298,7 @@ describe('e2e flow snapshot — warehouse-source', () => {
       screen: 'warehouse-intro',
       action: 'confirm_setup',
     });
-    expect(trace.at(-1)?.action).toBe('keep_skills');
+    expect(trace.at(-1)?.action).toBe('dismiss_outro');
     expect(trace.length).toBeLessThan(40);
   });
 });

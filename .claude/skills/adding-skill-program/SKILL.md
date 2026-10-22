@@ -125,7 +125,8 @@ Outside the folder, the
 [TUI program registry](../../../src/tui/programs/index.ts) imports and spreads
 the entry. A program with no entry runs
 [AGENT_SKILL_STEPS](../../../src/tui/programs/shared/skill-flow.ts): intro,
-health check, auth, run, outro, and keep-skills, with the skill deck. Map
+health check, auth, run, and outro, with the skill deck. `runProgram`
+removes the skills a run installed when it ends. Map
 its steps to swap in your own intro screen, as
 [audit's flow](../../../src/tui/programs/audit/flow.ts) does. Auth also applies
 the shared [AI opt-in gate](../../../src/tui/ai-opt-in-gate.ts),

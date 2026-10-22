@@ -63,9 +63,4 @@ export const EVENTS_AUDIT_FLOW: FlowStep[] = [
     screenId: 'audit-outro',
     isComplete: (tui) => tui.outroDismissed,
   },
-  {
-    id: 'keep-skills',
-    label: 'Keep Skills',
-    screenId: 'keep-skills',
-  },
 ];

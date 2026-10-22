@@ -410,7 +410,7 @@ describe('buildE2eResult', () => {
     newDeps: ['posthog-node'],
     envFile: '/app/.env',
     screenPath: ['warehouse-intro', 'run'],
-    skillsComplete: true,
+    flowComplete: true,
   };
 
   function build(recorder = new E2eRunRecorder()) {
@@ -454,7 +454,7 @@ describe('buildE2eResult', () => {
         'reportFile',
         'runPhase',
         'screenPath',
-        'skillsComplete',
+        'flowComplete',
         'taskOutcomes',
         'tasks',
         'unansweredAsks',
@@ -466,24 +466,24 @@ describe('buildE2eResult', () => {
     expect(build()).toMatchObject(base);
   });
 
-  it('replaces an outro result only when the final skills decision is written', () => {
+  it('replaces an outro result only when the end of the flow is written', () => {
     const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'wizard-result-'));
     const file = path.join(directory, 'result.json');
-    let skillsComplete = false;
+    let flowComplete = false;
     const write = createE2eResultWriter(file, () => ({
       ...build(),
-      skillsComplete,
+      flowComplete,
     }));
     const written = () => JSON.parse(fs.readFileSync(file, 'utf8'));
 
     try {
       write();
-      expect(written()).toMatchObject({ skillsComplete: false });
-      skillsComplete = true;
+      expect(written()).toMatchObject({ flowComplete: false });
+      flowComplete = true;
       write();
-      expect(written()).toMatchObject({ skillsComplete: false });
+      expect(written()).toMatchObject({ flowComplete: false });
       write(true);
-      expect(written()).toMatchObject({ skillsComplete: true });
+      expect(written()).toMatchObject({ flowComplete: true });
     } finally {
       fs.rmSync(directory, { recursive: true, force: true });
     }
@@ -591,7 +591,7 @@ describe('security rail — no answer value reaches the payload', () => {
           newDeps: [],
           envFile: null,
           screenPath: [],
-          skillsComplete: true,
+          flowComplete: true,
         },
         recorder,
         session: { frameworkContext: {}, outroData: null },

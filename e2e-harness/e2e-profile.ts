@@ -54,8 +54,6 @@ export interface WizardE2eProfile {
   mcp: 'skip' | 'install';
   /** Connect-Slack step. */
   slack: 'skip';
-  /** Keep or delete the wizard-installed skills at the end. */
-  skills: 'keep' | 'delete';
   /** Answer strategy for an agent `wizard_ask` overlay: the first option (its
    * affirmative "continue"). */
   ask: 'first';
@@ -85,7 +83,6 @@ export const DEFAULT_E2E_PROFILE: WizardE2eProfile = {
   healthCheck: 'dismiss',
   mcp: 'skip',
   slack: 'skip',
-  skills: 'delete',
   ask: 'first',
   integrate: false,
   notice: 'keep',
@@ -147,8 +144,6 @@ export interface E2eDecision {
   action?: { id: string; params?: Record<string, unknown> };
   /** What this decision resolved, when it resolved an ask or a notice. */
   report?: E2eDecisionReport;
-  /** Set on the keep-skills screen — the orchestrator does the fs deletion. */
-  skillsPolicy?: 'keep' | 'delete';
   /** True once the terminal commit has been made. */
   done?: boolean;
   /** No action — wait for an external transition (probe, auth, agent run). */
@@ -263,7 +258,7 @@ function acceptsSecret(question: AskQuestion): boolean {
 /**
  * Map the current screen + profile to the commit to make. Pure: no store, no
  * fs, and no `process.env` — the caller applies the returned action via the
- * driver and handles `skillsPolicy` itself. Returns `{ wait: true }` for
+ * driver. Returns `{ wait: true }` for
  * screens the runner/agent advances on their own (auth, run, ai-opt-in, a
  * clean health probe).
  *
@@ -310,16 +305,6 @@ export function decideE2eAction(
 
     case ScreenId.SlackConnect:
       return { action: { id: 'dismiss_slack' } };
-
-    case ScreenId.KeepSkills:
-      return {
-        action: {
-          id: 'keep_skills',
-          params: { kept: profile.skills === 'keep' },
-        },
-        skillsPolicy: profile.skills,
-        done: true,
-      };
 
     case Overlay.WizardAsk: {
       const pending = state.pendingQuestion;
@@ -371,7 +356,6 @@ export const E2E_DRIVABLE_SCREENS: readonly string[] = [
   ScreenId.Outro,
   ScreenId.Mcp,
   ScreenId.SlackConnect,
-  ScreenId.KeepSkills,
   Overlay.WizardAsk,
   Overlay.TaskNotice,
 ];

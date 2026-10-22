@@ -1,12 +1,11 @@
 {
   "program": "error-tracking",
-  "summary": "Happy path: detect framework, confirm intro, run the error-tracking orchestrator flow (install/init when PostHog is absent, exception capture, the source-map subgraph where the platform needs it, release linking in the production deploy on Python, Ruby and PHP, a verify task that runs the production build, report), delete installed skills. The driver answers the flow's asks: the upload key via wizard_ask (id \"api-key\"; the raw key is vaulted by the ask tool, the agent only sees a secretRef) and declines the test-affordance offer.",
+  "summary": "Happy path: detect framework, confirm intro, run the error-tracking orchestrator flow (install/init when PostHog is absent, exception capture, the source-map subgraph where the platform needs it, release linking in the production deploy on Python, Ruby and PHP, a verify task that runs the production build, report). The driver answers the flow's asks: the upload key via wizard_ask (id \"api-key\"; the raw key is vaulted by the ask tool, the agent only sees a secretRef) and declines the test-affordance offer.",
   "profile": {
     "setup": "first",
     "healthCheck": "dismiss",
     "mcp": "skip",
     "slack": "skip",
-    "skills": "delete",
     "ask": "first",
     "askAnswers": [
       { "match": "api-key", "value": "${SOURCE_MAPS_CLI_KEY}", "secret": true },
@@ -44,10 +43,6 @@
     {
       "screen": "outro",
       "auto": "dismiss"
-    },
-    {
-      "screen": "keep-skills",
-      "auto": "delete the installed skills"
     }
   ]
 }

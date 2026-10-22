@@ -1,12 +1,11 @@
 {
   "program": "feature-flags",
-  "summary": "Happy path: detect framework, confirm intro, run the feature-flags orchestrator flow (install/init when PostHog is absent, create one example flag per side (frontend, backend), evaluate each once on its side, report to a notebook), delete installed skills.",
+  "summary": "Happy path: detect framework, confirm intro, run the feature-flags orchestrator flow (install/init when PostHog is absent, create one example flag per side (frontend, backend), evaluate each once on its side, report to a notebook).",
   "profile": {
     "setup": "first",
     "healthCheck": "dismiss",
     "mcp": "skip",
     "slack": "skip",
-    "skills": "delete",
     "ask": "first"
   },
   "variations": [
@@ -33,7 +32,6 @@
       "screen": "run",
       "auto": "(external) the orchestrator flow"
     },
-    { "screen": "outro", "auto": "dismiss" },
-    { "screen": "keep-skills", "auto": "delete the installed skills" }
+    { "screen": "outro", "auto": "dismiss" }
   ]
 }
