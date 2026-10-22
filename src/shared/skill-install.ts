@@ -208,8 +208,9 @@ export function removeRunSkills(
     }
   }
   try {
+    // rmdir removes only an empty folder, so it can never take contents with it.
     if (fs.existsSync(dir) && fs.readdirSync(dir).length === 0) {
-      fs.rmSync(dir, { recursive: true, force: true });
+      fs.rmdirSync(dir);
     }
   } catch {
     // Best-effort: an empty skills folder is harmless.
