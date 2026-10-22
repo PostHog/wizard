@@ -27,6 +27,7 @@ import {
   AgentSignals,
   REMARK_INSTRUCTION,
   policyAbortReason,
+  skillAbortReason,
 } from '../../../signals';
 import { AgentOutputSignals } from '../../../output-signals';
 import { assembleCommandments } from '../../switchboard/commandments';
@@ -314,13 +315,21 @@ export const piBackend: AgentHarness = {
     let cancellation: ReturnType<typeof bindPiCancellation> | undefined;
     let timedOut = false;
     let timeoutAbort: Promise<void> | undefined;
-    let abortReason: string | undefined;
+    let abort: { reason: string; source?: 'gateway_policy' } | undefined;
     let remarkTurn = false;
-    // The gateway's refusal marker ends the run from a work turn, never the remark.
-    const policyAbort = (reply: string) => {
-      if (remarkTurn) return;
-      abortReason ??= policyAbortReason(reply);
-      if (abortReason) cancellation?.abort();
+    // An abort marker ends the run from a work turn, never the remark.
+    const endRun = (reason: string | undefined, source?: 'gateway_policy') => {
+      if (remarkTurn || abort || !reason) return;
+      abort = { reason, source };
+      logToFile(`[pi] abort: ${reason}`);
+      cancellation?.abort();
+    };
+    const policyAbort = (reply: string) =>
+      endRun(policyAbortReason(reply), 'gateway_policy');
+    // Like the anthropic path, only a program that declares abort cases stops on [ABORT].
+    const skillAbort = (blocks: string[]) => {
+      if (config.abortCases?.length)
+        endRun(blocks.map(skillAbortReason).find(Boolean));
     };
     // Read by the catch path; undefined until setup creates the extension.
     let securityState: SecurityState | undefined;
@@ -639,6 +648,7 @@ export const piBackend: AgentHarness = {
             const blocks = textBlocks(event.message);
             const assistant = blocks.join('').trim();
             policyAbort(assistant);
+            skillAbort(blocks);
             // A schema-bound answer is the turn's last block, not the joined text.
             lastAssistantText = (blocks.at(-1) ?? '').trim();
             if (structured) {
@@ -752,7 +762,7 @@ export const piBackend: AgentHarness = {
           !security.state.criticalViolation &&
           !inputs.signal?.aborted &&
           !terminal &&
-          !abortReason &&
+          !abort &&
           !setupSignalFailure(signals) &&
           hasOpenTasks(wizardTaskTools.store)
         ) {
@@ -769,7 +779,7 @@ export const piBackend: AgentHarness = {
           !structured &&
           !security.state.criticalViolation &&
           !terminal &&
-          !abortReason &&
+          !abort &&
           !setupSignalFailure(signals) &&
           !inputs.signal?.aborted
         ) {
@@ -799,19 +809,16 @@ export const piBackend: AgentHarness = {
       if (timedOut && structured && !security.state.criticalViolation)
         return timedOutResult(structured.timeoutMs);
 
-      if (abortReason)
+      if (abort)
         terminal = {
           classification: AgentErrorType.ABORT,
-          message: abortReason,
+          message: abort.reason,
         };
       if (terminal && !security.state.criticalViolation) {
         spinner.stop(
           config.errorMessage ?? `${config.integrationLabel} failed`,
         );
-        captureAborted(
-          terminal.classification,
-          abortReason ? 'gateway_policy' : undefined,
-        );
+        captureAborted(terminal.classification, abort?.source);
         if (terminal.status === 401) {
           return {
             kind: 'decided_failure',

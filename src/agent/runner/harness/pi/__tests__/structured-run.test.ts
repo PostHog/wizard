@@ -543,6 +543,71 @@ describe.each(['linear', 'task'] as const)('%s setup signals', (mode) => {
   });
 });
 
+describe('a skill abort marker', () => {
+  const abortingRun = () => {
+    const inputs = runInputs(vi.fn(), null);
+    inputs.config.run.successMessage = 'Revenue analytics is set up';
+    inputs.config.run.abortCases = [
+      { match: /Stripe/, message: 'No Stripe integration', body: '' },
+    ];
+    return inputs;
+  };
+
+  it('ends the run with the skill reason and no success', async () => {
+    state.hang = true;
+    state.tasks.set('1', { status: 'in_progress' });
+    state.text =
+      'Checked the project.\n[ABORT] Could not find a Stripe integration\nStopping.';
+    const inputs = abortingRun();
+
+    await expect(piBackend.run(inputs)).resolves.toEqual({
+      kind: 'abort',
+      classification: AgentErrorType.ABORT,
+      message: 'Could not find a Stripe integration',
+    });
+    expect(state.prompts).toHaveLength(1);
+    expect(inputs.spinner.stop).not.toHaveBeenCalledWith(
+      'Revenue analytics is set up',
+    );
+    expect(analytics.wizardCapture).not.toHaveBeenCalledWith(
+      'agent completed',
+      expect.anything(),
+    );
+    expect(analytics.wizardCapture).toHaveBeenCalledWith(
+      'agent aborted',
+      expect.not.objectContaining({ source: 'gateway_policy' }),
+    );
+  });
+
+  it('reads the marker from any block of the reply', async () => {
+    state.hang = true;
+    state.preamble = ['Checking the Stripe setup.'];
+    state.text = '[ABORT] Could not find a Stripe integration';
+
+    await expect(piBackend.run(abortingRun())).resolves.toMatchObject({
+      kind: 'abort',
+      message: 'Could not find a Stripe integration',
+    });
+  });
+
+  it('ignores the marker in the remark reply', async () => {
+    state.text = 'Connected Stripe.';
+    state.remark = '[WIZARD-REMARK] Say when to emit [ABORT] earlier';
+
+    await expect(piBackend.run(abortingRun())).resolves.toEqual({
+      kind: 'success',
+    });
+  });
+
+  it('ignores the marker for a program that declares no abort cases', async () => {
+    state.text = '[ABORT] Could not find a Stripe integration';
+
+    await expect(piBackend.run(runInputs(vi.fn(), null))).resolves.toEqual({
+      kind: 'success',
+    });
+  });
+});
+
 describe('a task turn after complete_task', () => {
   const REFUSAL = '[posthog:abort] Request is out of scope';
   const runOrchestrated = (orchestrator: {
