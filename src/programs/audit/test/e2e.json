@@ -6,7 +6,6 @@
     "healthCheck": "dismiss",
     "mcp": "skip",
     "slack": "skip",
-    "skills": "delete",
     "ask": "first"
   },
   "variations": [
@@ -35,10 +34,6 @@
     {
       "screen": "audit-outro",
       "auto": "dismiss"
-    },
-    {
-      "screen": "keep-skills",
-      "auto": "delete the installed skills"
     }
   ]
 }

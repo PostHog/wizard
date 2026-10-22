@@ -10,6 +10,7 @@ import type {
   RunResult,
 } from '@agent/types';
 import { getSkillsBaseUrl, type Integration } from '@shared/constants';
+import { listSkillFolders, removeRunSkills } from '@shared/skill-install';
 import { classifyRunFailure, ErrorCodes, type ErrorCode } from '@shared/errors';
 import {
   backupAndFixClaudeSettings,
@@ -377,6 +378,10 @@ async function invokeProgram(
       if ('failure' in settings) {
         return settle(RunOutcome.Failed, settings.failure);
       }
+      // The skills a run installs are for its agent only; remove them when it ends, however it ends.
+      const skillsBefore = listSkillFolders(runDir);
+      const removeSkills = () => removeRunSkills(runDir, skillsBefore);
+      const unregisterSkills = registerCleanup(removeSkills);
       try {
         // Not parked: a rotation spends the old refresh token, so the new one is kept before a cancel returns.
         const posthog = await currentCredentials(credentials.posthog);
@@ -459,6 +464,8 @@ async function invokeProgram(
       } finally {
         // The run neutralized its directory's settings; put them back whatever happened.
         if (settings.backedUp) restoreClaudeSettings(runDir);
+        unregisterSkills();
+        removeSkills();
       }
     };
 

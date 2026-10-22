@@ -112,7 +112,7 @@ import { WarehouseSourceScreenId } from '@tui/programs/warehouse-source';
 import { toFrameText } from './helpers/render-screen.no-jest';
 import { Tool } from '@tools';
 
-// KeepSkills reads `<installDir>/.claude/skills`, so never a host directory.
+// A temp dir, so no screen that reads the install dir sees a host directory.
 const INSTALL_DIR = mkdtempSync(join(tmpdir(), 'wizard-exits-'));
 
 const ENTER = '\r';
@@ -136,15 +136,6 @@ const authed = (s: WizardStore): void => {
     host: HostResolution.fromApiHost('https://us.posthog.com'),
     projectId: 1,
   });
-};
-
-const ranSuccessfully = (s: WizardStore): void => {
-  authed(s);
-  s.setRunPhase(RunPhase.Completed);
-  s.setOutroData({ kind: OutroKind.Success, message: 'done' });
-  s.setOutroDismissed();
-  s.setMcpComplete(McpOutcome.Skipped);
-  s.setSlackStepDismissed();
 };
 
 const runFailed = (s: WizardStore): void => {
@@ -305,15 +296,7 @@ const ROWS: Row[] = [
     settles: ScreenId.Exit,
   },
   {
-    name: 'keep skills with no skills after a success',
-    program: Program.PostHogIntegration,
-    arrange: ranSuccessfully,
-    screen: ScreenId.KeepSkills,
-    keys: [],
-    code: 0,
-  },
-  {
-    name: 'keep skills after the mint handoff continues',
+    name: 'exit screen after the mint handoff continues',
     program: Program.PostHogIntegration,
     arrange: (s) => {
       runFailed(s);
@@ -321,7 +304,7 @@ const ROWS: Row[] = [
       s.setMcpComplete(McpOutcome.Skipped);
       s.setSlackStepDismissed();
     },
-    screen: ScreenId.KeepSkills,
+    screen: ScreenId.Exit,
     keys: [],
     code: null,
     settles: ScreenId.Exit,
@@ -473,7 +456,7 @@ afterEach(cleanup);
 
 it.each(ROWS)('$name asks to end with $code', async (row) => {
   const store = makeStore(row);
-  // Before mounting: a screen such as KeepSkills acts as it mounts.
+  // Before mounting: a screen such as the exit screen acts as it mounts.
   expect(store.currentScreen).toBe(row.screen);
   const services = createServices(store);
   const { stdin, stdout, lastFrame } = render(

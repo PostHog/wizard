@@ -1,13 +1,12 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-exports[`e2e flow snapshot — ai-observability > walks intro → health → auth → run → outro → skills 1`] = `
+exports[`e2e flow snapshot — ai-observability > walks intro → health → auth → run → outro → exit 1`] = `
 {
   "profile": {
     "ask": "first",
     "healthCheck": "dismiss",
     "mcp": "skip",
     "setup": "first",
-    "skills": "delete",
     "slack": "skip",
   },
   "program": "ai-observability",
@@ -32,25 +31,17 @@ exports[`e2e flow snapshot — ai-observability > walks intro → health → aut
       "action": "dismiss_outro",
       "screen": "outro",
     },
-    {
-      "action": "keep_skills",
-      "params": {
-        "kept": false,
-      },
-      "screen": "keep-skills",
-    },
   ],
 }
 `;
 
-exports[`e2e flow snapshot — metrics > walks intro → health → auth → run → outro → skills 1`] = `
+exports[`e2e flow snapshot — metrics > walks intro → health → auth → run → outro → exit 1`] = `
 {
   "profile": {
     "ask": "first",
     "healthCheck": "dismiss",
     "mcp": "skip",
     "setup": "first",
-    "skills": "delete",
     "slack": "skip",
   },
   "program": "metrics",
@@ -75,13 +66,6 @@ exports[`e2e flow snapshot — metrics > walks intro → health → auth → run
       "action": "dismiss_outro",
       "screen": "outro",
     },
-    {
-      "action": "keep_skills",
-      "params": {
-        "kept": false,
-      },
-      "screen": "keep-skills",
-    },
   ],
 }
 `;
@@ -94,7 +78,6 @@ exports[`e2e flow snapshot — posthog-integration > Next.js (with a setup quest
     "mcp": "skip",
     "notice": "keep",
     "setup": "first",
-    "skills": "delete",
     "slack": "skip",
   },
   "program": "posthog-integration",
@@ -134,13 +117,6 @@ exports[`e2e flow snapshot — posthog-integration > Next.js (with a setup quest
       },
       "screen": "mcp",
     },
-    {
-      "action": "keep_skills",
-      "params": {
-        "kept": false,
-      },
-      "screen": "keep-skills",
-    },
   ],
 }
 `;
@@ -175,13 +151,6 @@ exports[`e2e flow snapshot — posthog-integration > Node (no setup question) wa
         "outcome": "skipped",
       },
       "screen": "mcp",
-    },
-    {
-      "action": "keep_skills",
-      "params": {
-        "kept": false,
-      },
-      "screen": "keep-skills",
     },
   ],
 }
@@ -234,7 +203,6 @@ exports[`e2e flow snapshot — self-driving > integration-first (no existing Pos
     "integrate": true,
     "mcp": "skip",
     "setup": "first",
-    "skills": "delete",
     "slack": "skip",
   },
   "program": "self-driving",
@@ -293,7 +261,6 @@ exports[`e2e flow snapshot — upload-source-maps > walks a stable path 1`] = `
     "healthCheck": "dismiss",
     "mcp": "skip",
     "setup": "first",
-    "skills": "delete",
     "slack": "skip",
   },
   "program": "error-tracking-upload-source-maps",
@@ -318,18 +285,11 @@ exports[`e2e flow snapshot — upload-source-maps > walks a stable path 1`] = `
       "action": "dismiss_outro",
       "screen": "source-maps-outro",
     },
-    {
-      "action": "keep_skills",
-      "params": {
-        "kept": false,
-      },
-      "screen": "keep-skills",
-    },
   ],
 }
 `;
 
-exports[`e2e flow snapshot — warehouse-source > walks intro → auth → run → outro → skills 1`] = `
+exports[`e2e flow snapshot — warehouse-source > walks intro → auth → run → outro → exit 1`] = `
 {
   "profile": {
     "ask": "first",
@@ -383,7 +343,6 @@ exports[`e2e flow snapshot — warehouse-source > walks intro → auth → run �
     "mcp": "skip",
     "notice": "keep",
     "setup": "first",
-    "skills": "delete",
     "slack": "skip",
   },
   "program": "warehouse-source",
@@ -403,13 +362,6 @@ exports[`e2e flow snapshot — warehouse-source > walks intro → auth → run �
     {
       "action": "dismiss_outro",
       "screen": "outro",
-    },
-    {
-      "action": "keep_skills",
-      "params": {
-        "kept": false,
-      },
-      "screen": "keep-skills",
     },
   ],
 }

@@ -30,9 +30,4 @@ export const MIGRATION_FLOW: FlowStep[] = [
     screenId: 'outro',
     isComplete: (tui) => tui.outroDismissed,
   },
-  {
-    id: 'skills',
-    label: 'Skills',
-    screenId: 'keep-skills',
-  },
 ];

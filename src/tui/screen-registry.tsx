@@ -29,7 +29,6 @@ import { AiOptInRequiredScreen } from './screens/AiOptInRequiredScreen.js';
 import { RunScreen } from './screens/RunScreen.js';
 import { McpScreen } from './screens/McpScreen.js';
 import { SlackConnectScreen } from './screens/SlackConnectScreen.js';
-import { KeepSkillsScreen } from './screens/KeepSkillsScreen.js';
 import { OutroScreen } from './screens/OutroScreen.js';
 import { MintFailureScreen } from './screens/MintFailureScreen.js';
 import type { MintFailureServices } from './screens/MintFailureScreen.js';
@@ -95,7 +94,6 @@ export function createScreens(
       <McpScreen store={store} installer={services.mcpInstaller} />
     ),
     [ScreenId.SlackConnect]: <SlackConnectScreen store={store} />,
-    [ScreenId.KeepSkills]: <KeepSkillsScreen store={store} />,
     [ScreenId.Outro]: <OutroScreen store={store} />,
     [ScreenId.MintFailure]: (
       <MintFailureScreen store={store} services={services} />

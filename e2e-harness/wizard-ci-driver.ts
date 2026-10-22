@@ -18,7 +18,7 @@
  * the driver issues the final commit directly instead.
  */
 
-import type { WizardStore } from '@tui';
+import { ScreenId, type WizardStore } from '@tui';
 import type { PendingQuestion } from '@agent/types';
 import type { RunPhase } from '@shared/run-state';
 import { actionsForScreen, MissingParamError } from './action-registry.js';
@@ -68,7 +68,8 @@ export interface CiState {
     projectId: number | null;
     mcpComplete: boolean;
     slackStepDismissed: boolean;
-    skillsComplete: boolean;
+    /** True once the flow reached its exit screen: the run is over. */
+    flowComplete: boolean;
     outroDismissed: boolean;
     discoveredFeatures: string[];
   };
@@ -117,7 +118,7 @@ export class WizardCiDriver {
         projectId: s.credentials?.projectId ?? null,
         mcpComplete: this.store.mcpComplete,
         slackStepDismissed: this.store.slackStepDismissed,
-        skillsComplete: this.store.skillsComplete,
+        flowComplete: screen === ScreenId.Exit,
         outroDismissed: this.store.outroDismissed,
         discoveredFeatures: [...s.discoveredFeatures],
       },

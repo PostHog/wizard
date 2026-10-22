@@ -543,9 +543,8 @@ describe('warehouse-source profile', () => {
     expect(warehouse.askAnswers?.length).toBeGreaterThan(0);
   });
 
-  it('keeps the task notice and deletes installed skills', () => {
+  it('keeps the task notice', () => {
     expect(warehouse.notice).toBe('keep');
-    expect(warehouse.skills).toBe('delete');
     expect(warehouse.mcp).toBe('skip');
   });
 

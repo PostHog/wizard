@@ -19,9 +19,8 @@ describe('self-driving TUI program', () => {
     expect(blocks.length).toBeGreaterThan(0);
   });
 
-  it('has no keep-skills step — the setup skill is removed in postRun', () => {
+  it('ends on the outro', () => {
     const stepIds = selfDriving.flow.map((s) => s.id);
-    expect(stepIds).not.toContain('skills');
     expect(stepIds).toEqual([
       'intro',
       'integration-check',

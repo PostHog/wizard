@@ -68,12 +68,10 @@ describe('WizardCiDriver — full integration flow', () => {
     driver.performAction('continue_setup');
     expect(driver.readState().currentScreen).toBe(ScreenId.Mcp);
     driver.performAction('set_mcp_outcome', { outcome: 'skipped' });
-    expect(driver.readState().currentScreen).toBe(ScreenId.KeepSkills);
-    driver.performAction('keep_skills', { kept: true });
     expect(driver.readState().currentScreen).toBe(ScreenId.Exit);
   });
 
-  it('walks intro → setup → run → outro → mcp → keep-skills', async () => {
+  it('walks intro → setup → run → outro → mcp → exit', async () => {
     const store = await freshStore();
     const driver = new WizardCiDriver(store);
 
@@ -120,18 +118,14 @@ describe('WizardCiDriver — full integration flow', () => {
 
     // 7. MCP
     expect(driver.readState().currentScreen).toBe(ScreenId.Mcp);
-    driver.performAction('set_mcp_outcome', { outcome: 'skipped' });
+    const done = driver.performAction('set_mcp_outcome', {
+      outcome: 'skipped',
+    });
     expect(store.mcpOutcome).toBe(McpOutcome.Skipped);
 
-    // 8. Keep skills — terminal commit.
-    expect(driver.readState().currentScreen).toBe(ScreenId.KeepSkills);
-    const done = driver.performAction('keep_skills', { kept: true });
-
-    // keep-skills is the terminal step: it has no isComplete predicate, so the
-    // router rests on it. Completion is signalled by skillsComplete — the exact
-    // condition run-wizard.ts awaits to end the run.
-    expect(store.skillsComplete).toBe(true);
-    expect(done.currentScreen).toBe(ScreenId.KeepSkills);
+    // 8. The exit screen ends the flow; the harness reads it as flowComplete.
+    expect(done.currentScreen).toBe(ScreenId.Exit);
+    expect(done.session.flowComplete).toBe(true);
   });
 
   it('read_state is a truthful projection and never leaks the access token', async () => {
@@ -158,7 +152,7 @@ describe('WizardCiDriver — full integration flow', () => {
     expect(driver.readState().currentScreen).toBe(
       PostHogIntegrationScreenId.Intro,
     );
-    expect(() => driver.performAction('keep_skills')).toThrow(
+    expect(() => driver.performAction('dismiss_outro')).toThrow(
       UnknownActionError,
     );
   });

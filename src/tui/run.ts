@@ -40,6 +40,7 @@ import { abortOnScreens } from './abort.js';
 import { displayProgress } from './agent-progress.js';
 import { oauthCredentials } from './auth/login.js';
 import { isRunFailure } from './mint-failure.js';
+import { ScreenId } from './screen-ids.js';
 import { driveTuiTool, localServicesError, reportFatal } from './run-tool.js';
 import { startTUI } from './start-tui.js';
 import type { WizardStore } from './store.js';
@@ -262,8 +263,14 @@ export async function runTui(
     if (signalled) return;
     const runFailed = isRunFailure(store.session);
     await activeStream.finishRun(runFailed ? 'failed' : 'completed');
-    await store.waitUntil((s) => s.mintHandoff === 'exit' || s.skillsComplete);
-    // A screen already ended the run (KeepSkills after a success): start no flush it would cut off.
+    // After a failed run the host owns the end: the user leaves the handoff, or
+    // continues through the post-run steps to the exit screen.
+    await store.waitUntil(
+      (s) =>
+        s.mintHandoff === 'exit' ||
+        (s.mintHandoff === 'continue' && store.currentScreen === ScreenId.Exit),
+    );
+    // A screen already ended the run (the exit screen after a success): start no flush it would cut off.
     if (exit.ended || exitInProgress) return;
 
     exitInProgress = true;

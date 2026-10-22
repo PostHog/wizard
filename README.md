@@ -719,8 +719,7 @@ Example prompt — explore against
 >    for any setup question, then `run_agent` at auth.
 > 4. Poll `read_state` until `integration` is `done` (or `failed` — then report
 >    `integrationError`), snapshotting as the run screen progresses.
-> 5. Finish the tail: `dismiss_outro`, `set_mcp_outcome`, then
->    `keep_skills`.
+> 5. Finish the tail: `dismiss_outro`, then `set_mcp_outcome`.
 >
 > Then show me the saved snapshots in order, the screen path, whether `posthog`
 > landed in the app, and anything that broke.

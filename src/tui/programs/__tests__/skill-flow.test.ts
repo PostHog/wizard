@@ -4,14 +4,13 @@ import { RunPhase } from '@shared/run-state';
 import { HostResolution } from '@shared/host-resolution';
 
 describe('AGENT_SKILL_STEPS', () => {
-  it('is intro → health-check → auth → run → outro → skills, all with screens and working predicates', () => {
+  it('is intro → health-check → auth → run → outro, all with screens and working predicates', () => {
     expect(AGENT_SKILL_STEPS.map((s) => s.id)).toEqual([
       'intro',
       'health-check',
       'auth',
       'run',
       'outro',
-      'skills',
     ]);
 
     const view = tuiView({});

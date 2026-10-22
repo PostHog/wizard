@@ -117,7 +117,7 @@ import { listTuiTools } from '@tui/tools/index';
 import { ScreenId, Overlay } from '@tui/router';
 import { createServices, type ScreenServices } from '@tui/screen-registry';
 import { OutroKind } from '@shared/outro';
-import { RunPhase, McpOutcome } from '@shared/run-state';
+import { RunPhase } from '@shared/run-state';
 import { HostResolution } from '@shared/host-resolution';
 import { Integration } from '@shared/constants';
 import {
@@ -539,16 +539,7 @@ const FIXTURES: Record<string, Fixture> = {
       s.setSlackConnected(false);
     },
   },
-  [ScreenId.KeepSkills]: {
-    program: Program.PostHogIntegration,
-    arrange: (s) => {
-      authed(s);
-      ranSuccessfully(s);
-      s.setOutroDismissed();
-      s.setMcpComplete(McpOutcome.Skipped);
-      s.setSlackStepDismissed();
-    },
-  },
+
   [ScreenId.Outro]: {
     program: Program.PostHogIntegration,
     arrange: (s) => {

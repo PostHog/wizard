@@ -159,16 +159,15 @@ to `DEFAULT_TIPS` for every other program, so nothing else is affected).
 `SELF_DRIVING_SKILL_ID = 'self-driving-setup'`,
 `REPORT_FILE = 'posthog-self-driving-report.md'`, `maxQuestions: 13` (tracker
 picks + custom-scout proposal), `richLinks: true` (OSC-8 links so long
-OAuth URLs survive wrapping), and `postRun` (just `removeInstalledSkill` — the
-setup skill is transient, marker-guarded by `.posthog-wizard`, so there's no
-keep-skills step). The outro inbox URL is the clean `…/project/:id/inbox` built
+OAuth URLs survive wrapping). `runProgram` removes the setup skill when the
+run ends, as it does every run's skills. The outro inbox URL is the clean `…/project/:id/inbox` built
 in `buildOutroData` (no auth deep-link — §7 item 7). CLI:
 `src/cli/commands/self-driving.ts`; `--install-dir` becomes `session.installDir`
 (the agent's working dir and detection target).
 
 **Runner & agent loop (generic — not Signals-aware).** `runProgram`
 (`src/programs/program-runner/run-program.ts`) is the fixed pipeline
-`init → health → settings → OAuth → skill install → agent → run → errors → postRun → outro`.
+`init → health → settings → OAuth → skill install → agent → run → errors → postRun → skill removal → outro`.
 It installs the skill by ID, resolves the MCP URL, runs the Claude Agent SDK
 `query()` (`src/agent/agent-interface.ts`) in a sandbox with the
 `posthog-wizard` + `wizard-tools` MCP servers, and parses agent output:

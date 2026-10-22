@@ -1,12 +1,11 @@
 {
   "program": "posthog-integration",
-  "summary": "Happy path: confirm intro, push past health issues, take the first setup option, skip MCP, delete installed skills.",
+  "summary": "Happy path: confirm intro, push past health issues, take the first setup option, skip MCP.",
   "profile": {
     "setup": "first",
     "healthCheck": "dismiss",
     "mcp": "skip",
     "slack": "skip",
-    "skills": "delete",
     "ask": "first",
     "notice": "keep"
   },
@@ -49,10 +48,6 @@
       "auto": "(external) — the real agent integrates the SDK + instruments events"
     },
     { "screen": "outro", "auto": "dismiss" },
-    { "screen": "mcp", "auto": "skip — don't install the MCP server" },
-    {
-      "screen": "keep-skills",
-      "auto": "delete — leave nothing behind (terminal: the run's done-signal)"
-    }
+    { "screen": "mcp", "auto": "skip — don't install the MCP server" }
   ]
 }

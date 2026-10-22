@@ -1,12 +1,11 @@
 {
   "program": "warehouse-source",
-  "summary": "Happy path: confirm the intro over the detected sources, keep any task notice, answer the agent's credential questions from E2E_* env vars, delete installed skills. No rule is marked \"secret\". The data-warehouse-source-setup skill tells the agent to collect a warehouse credential as ordinary (non-sensitive) text, because external-data-sources-create rejects a { secretRef }. A secret rule answers only a sensitive text question, so a secret rule refused every credential question the skill asked, and no source could ever be created. Each value here is a fake, unroutable placeholder, and the workbench's \"no secret leakage\" check is what holds those placeholders out of the report, the result payload, the MCP journal and the captured frames.",
+  "summary": "Happy path: confirm the intro over the detected sources, keep any task notice, answer the agent's credential questions from E2E_* env vars. No rule is marked \"secret\". The data-warehouse-source-setup skill tells the agent to collect a warehouse credential as ordinary (non-sensitive) text, because external-data-sources-create rejects a { secretRef }. A secret rule answers only a sensitive text question, so a secret rule refused every credential question the skill asked, and no source could ever be created. Each value here is a fake, unroutable placeholder, and the workbench's \"no secret leakage\" check is what holds those placeholders out of the report, the result payload, the MCP journal and the captured frames.",
   "profile": {
     "setup": "first",
     "healthCheck": "dismiss",
     "mcp": "skip",
     "slack": "skip",
-    "skills": "delete",
     "ask": "first",
     "notice": "keep",
     "askAnswers": [
@@ -91,10 +90,6 @@
       "screen": "wizard-ask",
       "auto": "answer every question in the batch — askAnswers routes each credential field to its E2E_* env var; anything unrouted takes the first option, else the 'e2e' sentinel"
     },
-    { "screen": "outro", "auto": "dismiss" },
-    {
-      "screen": "keep-skills",
-      "auto": "delete — leave nothing behind (terminal: the run's done-signal)"
-    }
+    { "screen": "outro", "auto": "dismiss" }
   ]
 }

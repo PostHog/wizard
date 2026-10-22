@@ -106,10 +106,10 @@ again to refresh background status. Legal actions come from
 `read_state.actions`; the MCP has no `list_actions` or `wait_for_change` tool.
 
 Keep handling overlays while the agent runs. `runPhase=completed` ends the main
-work, while `session.skillsComplete` ends the integration flow's follow-up
-screens and the host with it. Recording MCP or keep-skills outcomes only commits
-store state; it does not perform installation or cleanup. For failures, capture
-the error outro before dismissing it: dismissing it ends the run.
+work, while `session.flowComplete` marks the flow reaching its exit screen,
+which ends the host. Recording an MCP outcome only commits store state; it does
+not perform the installation. For failures, capture the error outro before
+dismissing it: dismissing it ends the run.
 
 ## Current host limitations
 

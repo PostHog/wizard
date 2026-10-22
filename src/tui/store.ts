@@ -379,10 +379,6 @@ export class WizardStore implements TuiView {
     return this.$tui.get().slackConnected;
   }
 
-  get skillsComplete(): TuiState['skillsComplete'] {
-    return this.$tui.get().skillsComplete;
-  }
-
   get outroDismissed(): TuiState['outroDismissed'] {
     return this.$tui.get().outroDismissed;
   }
@@ -823,14 +819,6 @@ export class WizardStore implements TuiView {
       mcpLoginCommands: loginCommands,
       mcpInstalledClients: installedClients,
     });
-  }
-
-  setSkillsComplete(kept: boolean): void {
-    analytics.wizardCapture('skills complete', {
-      skills_kept: kept,
-      ...sessionProperties(this.session),
-    });
-    this._write({ skillsComplete: true });
   }
 
   setMcpSuggestedPromptsDismissed(): void {

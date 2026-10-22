@@ -34,7 +34,7 @@ exports[`flow traces per program > agent-skill (node) 1`] = `
       "program": "agent-skill",
     },
     {
-      "event": "screen keep-skills",
+      "event": "screen exit",
       "from": "outro",
       "program": "agent-skill",
     },
@@ -47,7 +47,7 @@ exports[`flow traces per program > agent-skill (node) 1`] = `
     "ai-opt-in",
     "run",
     "outro",
-    "keep-skills",
+    "exit",
   ],
   "stoppedOn": null,
 }
@@ -87,7 +87,7 @@ exports[`flow traces per program > ai-observability (node) 1`] = `
       "program": "ai-observability",
     },
     {
-      "event": "screen keep-skills",
+      "event": "screen exit",
       "from": "outro",
       "program": "ai-observability",
     },
@@ -100,7 +100,7 @@ exports[`flow traces per program > ai-observability (node) 1`] = `
     "ai-opt-in",
     "run",
     "outro",
-    "keep-skills",
+    "exit",
   ],
   "stoppedOn": null,
 }
@@ -140,7 +140,7 @@ exports[`flow traces per program > audit (node) 1`] = `
       "program": "audit",
     },
     {
-      "event": "screen keep-skills",
+      "event": "screen exit",
       "from": "audit-outro",
       "program": "audit",
     },
@@ -153,7 +153,7 @@ exports[`flow traces per program > audit (node) 1`] = `
     "ai-opt-in",
     "audit-run",
     "audit-outro",
-    "keep-skills",
+    "exit",
   ],
   "stoppedOn": null,
 }
@@ -193,7 +193,7 @@ exports[`flow traces per program > error-tracking (node) 1`] = `
       "program": "error-tracking",
     },
     {
-      "event": "screen keep-skills",
+      "event": "screen exit",
       "from": "outro",
       "program": "error-tracking",
     },
@@ -206,7 +206,7 @@ exports[`flow traces per program > error-tracking (node) 1`] = `
     "ai-opt-in",
     "run",
     "outro",
-    "keep-skills",
+    "exit",
   ],
   "stoppedOn": null,
 }
@@ -246,7 +246,7 @@ exports[`flow traces per program > error-tracking-upload-source-maps (node) 1`] 
       "program": "error-tracking-upload-source-maps",
     },
     {
-      "event": "screen keep-skills",
+      "event": "screen exit",
       "from": "source-maps-outro",
       "program": "error-tracking-upload-source-maps",
     },
@@ -259,7 +259,7 @@ exports[`flow traces per program > error-tracking-upload-source-maps (node) 1`] 
     "source-maps-detect",
     "run",
     "source-maps-outro",
-    "keep-skills",
+    "exit",
   ],
   "stoppedOn": null,
 }
@@ -304,7 +304,7 @@ exports[`flow traces per program > events-audit (node) 1`] = `
       "program": "events-audit",
     },
     {
-      "event": "screen keep-skills",
+      "event": "screen exit",
       "from": "audit-outro",
       "program": "events-audit",
     },
@@ -318,7 +318,7 @@ exports[`flow traces per program > events-audit (node) 1`] = `
     "audit-run",
     "mcp",
     "audit-outro",
-    "keep-skills",
+    "exit",
   ],
   "stoppedOn": null,
 }
@@ -358,7 +358,7 @@ exports[`flow traces per program > feature-flags (node) 1`] = `
       "program": "feature-flags",
     },
     {
-      "event": "screen keep-skills",
+      "event": "screen exit",
       "from": "outro",
       "program": "feature-flags",
     },
@@ -371,7 +371,7 @@ exports[`flow traces per program > feature-flags (node) 1`] = `
     "ai-opt-in",
     "run",
     "outro",
-    "keep-skills",
+    "exit",
   ],
   "stoppedOn": null,
 }
@@ -429,7 +429,7 @@ exports[`flow traces per program > mcp-analytics (node) 1`] = `
       "program": "mcp-analytics",
     },
     {
-      "event": "screen keep-skills",
+      "event": "screen exit",
       "from": "outro",
       "program": "mcp-analytics",
     },
@@ -442,7 +442,7 @@ exports[`flow traces per program > mcp-analytics (node) 1`] = `
     "ai-opt-in",
     "run",
     "outro",
-    "keep-skills",
+    "exit",
   ],
   "stoppedOn": null,
 }
@@ -518,7 +518,7 @@ exports[`flow traces per program > metrics (node) 1`] = `
       "program": "metrics",
     },
     {
-      "event": "screen keep-skills",
+      "event": "screen exit",
       "from": "outro",
       "program": "metrics",
     },
@@ -531,7 +531,7 @@ exports[`flow traces per program > metrics (node) 1`] = `
     "ai-opt-in",
     "run",
     "outro",
-    "keep-skills",
+    "exit",
   ],
   "stoppedOn": null,
 }
@@ -571,7 +571,7 @@ exports[`flow traces per program > migration (node) 1`] = `
       "program": "migration",
     },
     {
-      "event": "screen keep-skills",
+      "event": "screen exit",
       "from": "outro",
       "program": "migration",
     },
@@ -584,7 +584,7 @@ exports[`flow traces per program > migration (node) 1`] = `
     "ai-opt-in",
     "run",
     "outro",
-    "keep-skills",
+    "exit",
   ],
   "stoppedOn": null,
 }
@@ -676,7 +676,7 @@ exports[`flow traces per program > posthog-integration (nextjs, with a setup que
       "program": "posthog-integration",
     },
     {
-      "event": "screen keep-skills",
+      "event": "screen exit",
       "from": "mcp",
       "program": "posthog-integration",
     },
@@ -691,7 +691,7 @@ exports[`flow traces per program > posthog-integration (nextjs, with a setup que
     "run",
     "outro",
     "mcp",
-    "keep-skills",
+    "exit",
   ],
   "stoppedOn": null,
 }
@@ -736,7 +736,7 @@ exports[`flow traces per program > posthog-integration (no framework detected) 1
       "program": "posthog-integration",
     },
     {
-      "event": "screen keep-skills",
+      "event": "screen exit",
       "from": "mcp",
       "program": "posthog-integration",
     },
@@ -750,7 +750,7 @@ exports[`flow traces per program > posthog-integration (no framework detected) 1
     "run",
     "outro",
     "mcp",
-    "keep-skills",
+    "exit",
   ],
   "stoppedOn": null,
 }
@@ -795,7 +795,7 @@ exports[`flow traces per program > posthog-integration (node) 1`] = `
       "program": "posthog-integration",
     },
     {
-      "event": "screen keep-skills",
+      "event": "screen exit",
       "from": "mcp",
       "program": "posthog-integration",
     },
@@ -809,7 +809,7 @@ exports[`flow traces per program > posthog-integration (node) 1`] = `
     "run",
     "outro",
     "mcp",
-    "keep-skills",
+    "exit",
   ],
   "stoppedOn": null,
 }
@@ -849,7 +849,7 @@ exports[`flow traces per program > replay-vision (node) 1`] = `
       "program": "replay-vision",
     },
     {
-      "event": "screen keep-skills",
+      "event": "screen exit",
       "from": "outro",
       "program": "replay-vision",
     },
@@ -862,7 +862,7 @@ exports[`flow traces per program > replay-vision (node) 1`] = `
     "ai-opt-in",
     "run",
     "outro",
-    "keep-skills",
+    "exit",
   ],
   "stoppedOn": null,
 }
@@ -902,7 +902,7 @@ exports[`flow traces per program > revenue-analytics-setup (node) 1`] = `
       "program": "revenue-analytics-setup",
     },
     {
-      "event": "screen keep-skills",
+      "event": "screen exit",
       "from": "outro",
       "program": "revenue-analytics-setup",
     },
@@ -915,7 +915,7 @@ exports[`flow traces per program > revenue-analytics-setup (node) 1`] = `
     "ai-opt-in",
     "run",
     "outro",
-    "keep-skills",
+    "exit",
   ],
   "stoppedOn": null,
 }
@@ -1045,7 +1045,7 @@ exports[`flow traces per program > warehouse-source (node) 1`] = `
       "program": "warehouse-source",
     },
     {
-      "event": "screen keep-skills",
+      "event": "screen exit",
       "from": "outro",
       "program": "warehouse-source",
     },
@@ -1057,7 +1057,7 @@ exports[`flow traces per program > warehouse-source (node) 1`] = `
     "ai-opt-in",
     "run",
     "outro",
-    "keep-skills",
+    "exit",
   ],
   "stoppedOn": null,
 }
@@ -1097,7 +1097,7 @@ exports[`flow traces per program > web-analytics-doctor (node) 1`] = `
       "program": "web-analytics-doctor",
     },
     {
-      "event": "screen keep-skills",
+      "event": "screen exit",
       "from": "outro",
       "program": "web-analytics-doctor",
     },
@@ -1110,7 +1110,7 @@ exports[`flow traces per program > web-analytics-doctor (node) 1`] = `
     "ai-opt-in",
     "run",
     "outro",
-    "keep-skills",
+    "exit",
   ],
   "stoppedOn": null,
 }

@@ -154,6 +154,73 @@ export async function downloadSkill(
   }
 }
 
+/** The file the wizard drops in every skill folder it installs. */
+const WIZARD_MARKER = '.posthog-wizard';
+
+const claudeSkillsDir = (installDir: string): string =>
+  path.join(installDir, '.claude', 'skills');
+
+/**
+ * Every entry in `<installDir>/.claude/skills`, or null when the folder can't
+ * be read or resolves anywhere but there (a symlinked `.claude` or `skills`).
+ */
+export function listSkillFolders(installDir: string): Set<string> | null {
+  const dir = claudeSkillsDir(installDir);
+  try {
+    if (!fs.existsSync(dir)) return new Set();
+    const contained = claudeSkillsDir(fs.realpathSync(installDir));
+    if (fs.realpathSync(dir) !== contained) {
+      logToFile(`listSkillFolders: ${dir} resolves outside ${installDir}`);
+      return null;
+    }
+    return new Set(fs.readdirSync(dir));
+  } catch (err) {
+    logToFile(`listSkillFolders: could not read ${dir}: ${String(err)}`);
+    return null;
+  }
+}
+
+/**
+ * Delete the wizard-marked skill folders that `before` didn't have, then the
+ * skills folder if that left it empty. Anything that was there before the run
+ * stays, as do symlinks and unmarked folders. Best-effort: a folder that won't
+ * delete is logged and left, and a listing that is null, before or now,
+ * deletes nothing.
+ */
+export function removeRunSkills(
+  installDir: string,
+  before: ReadonlySet<string> | null,
+): string[] {
+  const dir = claudeSkillsDir(installDir);
+  const removed: string[] = [];
+  const now = before && listSkillFolders(installDir);
+  if (!before || !now) return removed;
+  for (const id of now) {
+    if (before.has(id)) continue;
+    const skillDir = path.join(dir, id);
+    try {
+      if (!fs.lstatSync(skillDir).isDirectory()) continue;
+      if (!fs.existsSync(path.join(skillDir, WIZARD_MARKER))) continue;
+      fs.rmSync(skillDir, { recursive: true, force: true });
+      removed.push(id);
+    } catch (err) {
+      logToFile(`removeRunSkills: could not remove ${id}: ${String(err)}`);
+    }
+  }
+  try {
+    // rmdir removes only an empty folder, so it can never take contents with it.
+    if (fs.existsSync(dir) && fs.readdirSync(dir).length === 0) {
+      fs.rmdirSync(dir);
+    }
+  } catch {
+    // Best-effort: an empty skills folder is harmless.
+  }
+  if (removed.length > 0) {
+    logToFile(`removeRunSkills: removed ${removed.join(', ')}`);
+  }
+  return removed;
+}
+
 /**
  * Structured result for installSkillById.
  * - `ok`: the skill was fetched and extracted; `path` is where it lives

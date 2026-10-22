@@ -11,7 +11,7 @@
  * `integrate-run` then runs the real integration program's agent (its own task
  * list) in that project. `self-driving-handoff` then bridges to Self-driving
  * ("PostHog is installed — now set up Self-driving"), then `self-driving-github`
- * gates on the GitHub App connection the run cannot proceed without. No keep-skills step: the setup skill is transient, so postRun removes it.
+ * gates on the GitHub App connection the run cannot proceed without.
  */
 
 import type { FlowStep } from '@tui/flow';

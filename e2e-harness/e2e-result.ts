@@ -244,10 +244,11 @@ export interface E2eResultBase {
   newDeps: string[];
   envFile: string | null;
   screenPath: string[];
-  skillsComplete: boolean;
+  /** True once the flow reached its exit screen. */
+  flowComplete: boolean;
 }
 
-/** Write the first outcome once, then allow the final skills decision to replace it. */
+/** Write the first outcome once, then allow the end of the flow to replace it. */
 export function createE2eResultWriter(
   file: string | undefined,
   getResult: () => Record<string, unknown>,

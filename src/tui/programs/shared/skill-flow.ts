@@ -1,7 +1,7 @@
 /**
  * Generic agent skill step list.
  *
- * Minimal flow: intro → health-check → auth → run → outro → skills.
+ * Minimal flow: intro → health-check → auth → run → outro.
  * No detection, no setup, no MCP.
  */
 
@@ -37,10 +37,5 @@ export const AGENT_SKILL_STEPS: FlowStep[] = [
     label: 'Done',
     screenId: 'outro',
     isComplete: (tui) => tui.outroDismissed,
-  },
-  {
-    id: 'skills',
-    label: 'Skills',
-    screenId: 'keep-skills',
   },
 ];

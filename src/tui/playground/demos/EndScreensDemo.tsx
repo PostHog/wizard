@@ -14,10 +14,6 @@
  * while this demo is mounted, so SlackConnectScreen's poll fails fast
  * without real network traffic; `K` drives `store.slackConnected`
  * directly, which is the same store key the poll writes.
- *
- * KeepSkillsScreen is intentionally absent — it reads the install dir's
- * .claude/skills/ from disk and asks to end the run when none are
- * found, which would close the playground.
  */
 
 import { Box, Text, useInput } from 'ink';

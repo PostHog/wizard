@@ -457,7 +457,7 @@ async function main() {
 
     let stop = false;
     const driverLoop = async () => {
-      while (!stop && !store.skillsComplete) {
+      while (!stop && store.currentScreen !== ScreenId.Exit) {
         await snap(); // capture this screen as presented, before acting
         recorder.observe(store.session);
         const state = driver.readState();
@@ -596,7 +596,7 @@ async function main() {
     // Write the structured result the --e2e assertion path reads. Programs whose
     // outro is terminal (self-driving) exit via the outro's ExitScreen before
     // the end-of-run path below, so capture it the moment the outro is reached;
-    // integration re-writes it after keep-skills (skillsComplete). Registered
+    // integration re-writes it when the flow reaches its exit screen. Registered
     // on `exit` too: `wizardAbort` renders the error outro and ends the run, and
     // an aborted run would otherwise write nothing at all.
     const buildResult = () => {
@@ -656,7 +656,7 @@ async function main() {
           newDeps: posthogDeps,
           envFile,
           screenPath,
-          skillsComplete: state.session.skillsComplete,
+          flowComplete: state.session.flowComplete,
         },
         recorder,
         session: store.session,
@@ -687,7 +687,7 @@ async function main() {
         await chain; // flush any pending snapshots
       }
       ended = true;
-      writeResult(mounted || driver.readState().session.skillsComplete);
+      writeResult(mounted || driver.readState().session.flowComplete);
       process.exit(code);
     };
     const unsubDeadline = store.subscribe(() => {
@@ -714,7 +714,6 @@ const FOLLOW_UP_SCREENS: ReadonlySet<string> = new Set<string>([
   ScreenId.MintFailure,
   ScreenId.Mcp,
   ScreenId.SlackConnect,
-  ScreenId.KeepSkills,
   ScreenId.Exit,
 ]);
 

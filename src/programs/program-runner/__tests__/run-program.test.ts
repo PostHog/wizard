@@ -316,6 +316,52 @@ describe('runProgram', () => {
     expect(s.session.outroData).toBeNull();
   });
 
+  describe('skills the run installs', () => {
+    let dir: string;
+    const skill = (id: string) => path.join(dir, '.claude', 'skills', id);
+    const addSkill = (id: string) => {
+      fs.mkdirSync(skill(id), { recursive: true });
+      fs.writeFileSync(path.join(skill(id), '.posthog-wizard'), '');
+    };
+
+    beforeEach(() => {
+      dir = fs.mkdtempSync(path.join(os.tmpdir(), 'run-program-skills-'));
+    });
+    afterEach(() => {
+      fs.rmSync(dir, { recursive: true, force: true });
+    });
+
+    it('removes them when the run ends and keeps skills that were already there', async () => {
+      addSkill('kept-from-last-run');
+      vi.mocked(runAgent).mockImplementationOnce(() => {
+        addSkill('nextjs');
+        return Promise.resolve({ outcome: RunOutcome.Success, snapshot });
+      });
+
+      await runProgram(
+        'metrics',
+        input({ store: store({ installDir: dir }), credentials }),
+      );
+
+      expect(fs.existsSync(skill('nextjs'))).toBe(false);
+      expect(fs.existsSync(skill('kept-from-last-run'))).toBe(true);
+    });
+
+    it('removes them when the run fails', async () => {
+      vi.mocked(runAgent).mockImplementationOnce(() => {
+        addSkill('nextjs');
+        return Promise.reject(new Error('agent crashed'));
+      });
+
+      await runProgram(
+        'metrics',
+        input({ store: store({ installDir: dir }), credentials }),
+      ).catch(() => undefined);
+
+      expect(fs.existsSync(skill('nextjs'))).toBe(false);
+    });
+  });
+
   it('routes a program that declares no binding with the default one', async () => {
     await runProgram('not-registered', input({ credentials }));
     expect(agentConfig().routing.binding).toEqual(DEFAULT_BINDING);

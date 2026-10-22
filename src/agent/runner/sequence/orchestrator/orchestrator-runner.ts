@@ -102,7 +102,7 @@ import {
 const isDocPage = (name: string): boolean =>
   name.endsWith('.md') && name === name.toLowerCase() && !/^\d/.test(name);
 
-/** Copy only the framework docs pages out of the run cache into .claude/skills — the one durable artifact an orchestrator run leaves. Never clobbers an existing install. */
+/** Copy only the framework docs pages out of the run cache into .claude/skills for the run's agents; `runProgram` removes it when the run ends. Never clobbers an existing install. */
 export function promoteReferenceSkill(
   referenceDir: string,
   claudeSkillsDir: string,
