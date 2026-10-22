@@ -2,7 +2,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ProgramAbort } from '../../program-abort';
+import { ProgramAbort } from '@programs/contract';
 import type { ProgramReadyContext } from '@programs/contract';
 import { buildSession } from '@services/session';
 import { config as posthogIntegration } from '@programs/posthog-integration';

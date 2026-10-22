@@ -36,7 +36,7 @@ import { logToFile } from '@utils/debug';
 import { removeAuditLedger, startAuditLedgerWatcher } from '@programs/audit';
 import { FRAMEWORK_REGISTRY } from '@services/frameworks';
 import { findProgramConfig, getProgramConfig } from './program-registry';
-import { ProgramAbort } from './program-abort';
+import { ProgramAbort } from '@programs/contract';
 import { detectionFailure, detectProgram } from './detect-program';
 import {
   rotateCredentials,

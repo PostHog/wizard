@@ -17,7 +17,7 @@ import { detectPostHogIntegration } from '@services/detection';
 import type { ProgramConfig, ProgramReadyContext } from '@programs/contract';
 import type { ProgramSession } from '@programs/contract';
 import { analytics } from '@utils/analytics';
-import { ProgramAbort } from '../program-abort';
+import { ProgramAbort } from '@programs/contract';
 import { ErrorCodes } from '@shared/errors';
 import { REPLAY_VISION_SCOPE_ADDITIONS } from './scopes.js';
 import { abortNoFrameworkDetected } from '../shared/abort-no-framework';

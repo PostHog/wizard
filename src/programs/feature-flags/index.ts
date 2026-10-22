@@ -13,7 +13,7 @@ import { gatherFrameworkContext } from '@services/detection';
 import { noteDetectedFramework } from '@services/detection';
 import { scopeInstallDirToProject } from '@services/detection';
 import { FRAMEWORK_REGISTRY } from '@services/frameworks';
-import { ProgramAbort } from '../program-abort';
+import { ProgramAbort } from '@programs/contract';
 import type { ProgramConfig } from '@programs/contract';
 import type { ProgramSession } from '@programs/contract';
 import type { CiRunnerContext } from '@programs/contract';

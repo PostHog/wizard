@@ -20,7 +20,7 @@ import {
   Sequence,
 } from '@shared/constants';
 import { config as agentSkill } from '@programs/agent-skill';
-import { testRunnerContext } from '../shared/__tests__/runner-context.no-jest';
+import { testRunnerContext } from '../../shared/__tests__/runner-context.no-jest';
 import type { WizardSession } from '@services/session';
 
 describe('PROGRAM_REGISTRY', () => {

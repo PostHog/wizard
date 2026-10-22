@@ -1,5 +1,5 @@
 /** Public type entry for the programs surface. */
-export type { SubcommandProgram } from './program-registry';
+export type { SubcommandProgram } from './runner/program-registry';
 export type {
   ProgramConfig,
   ProgramId,
@@ -18,13 +18,13 @@ export type {
   ProgramRunOutcome,
   ProgramStep,
   ProgramWorkflowConnector,
-} from './program-input';
+} from './runner/program-input';
 export type { WizardFlagSnapshot } from '@services/session';
 export type {
   CredentialsProvider,
   ResolvedProgramCredentials,
 } from '@shared/credentials';
-export type { ApiKeyLoginOptions } from './api-key-login';
+export type { ApiKeyLoginOptions } from './runner/api-key-login';
 export type { OAuthTokenResponse } from '@shared/oauth-tokens';
 export type { SessionArgs, WizardSession } from '@services/session';
 export type { PlannedEvent, SessionLogin, TaskItem } from '@services/session';

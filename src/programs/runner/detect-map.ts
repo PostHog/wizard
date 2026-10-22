@@ -1,9 +1,9 @@
 import { ErrorCodes, type ErrorCode } from '@shared/errors';
-import type { RevenueDetectError } from './revenue-analytics/detect';
-import type { SelfDrivingDetectError } from './self-driving/detect';
-import type { SourceMapsDetectError } from './error-tracking-upload-source-maps/detect';
-import type { WarehouseDetectError } from './warehouse-source/detect';
-import type { WebAnalyticsDetectError } from './web-analytics-doctor/detect';
+import type { RevenueDetectError } from '../revenue-analytics/detect';
+import type { SelfDrivingDetectError } from '../self-driving/detect';
+import type { SourceMapsDetectError } from '../error-tracking-upload-source-maps/detect';
+import type { WarehouseDetectError } from '../warehouse-source/detect';
+import type { WebAnalyticsDetectError } from '../web-analytics-doctor/detect';
 
 /**
  * Every `kind` a program detect step can write into

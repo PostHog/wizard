@@ -18,7 +18,7 @@ import type { ProgramSession } from '@programs/contract';
 import type { CiRunnerContext, RunnerContext } from '@programs/contract';
 import { preinstallPostHogCliOnce } from '../shared/posthog-cli-preinstall';
 import { analytics } from '@utils/analytics';
-import { ProgramAbort } from '../program-abort';
+import { ProgramAbort } from '@programs/contract';
 import { ErrorCodes } from '@shared/errors';
 import { abortNoFrameworkDetected } from '../shared/abort-no-framework';
 

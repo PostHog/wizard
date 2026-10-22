@@ -6,6 +6,7 @@ export {
   type FrameworkConfig,
   type SetupQuestion,
 } from './framework-config';
+export { ProgramAbort } from './program-abort';
 export type { ProgramRun } from './program-run';
 export type { ProgramSession, ScanReport } from './program-session';
 export type {

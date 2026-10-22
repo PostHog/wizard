@@ -1,6 +1,6 @@
 {
   "extends": "../../tsconfig.no-tui.json",
-  "include": ["index.ts", "types.ts", "program-registry.ts", "run-program.ts", "detect-program.ts", "detect-map.ts", "__tests__"],
+  "include": ["index.ts", "types.ts", "runner", "__tests__"],
   "references": [
     { "path": "tsconfig.core.json" }, { "path": "agent-skill" },
     { "path": "ai-observability" }, { "path": "audit" },

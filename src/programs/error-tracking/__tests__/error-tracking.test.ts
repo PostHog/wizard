@@ -18,7 +18,7 @@ import {
 import type { WizardSession } from '@services/session';
 import { scopeInstallDirToProject } from '@services/detection/project-scope';
 import { analytics } from '@utils/analytics';
-import { ProgramAbort } from '../../program-abort';
+import { ProgramAbort } from '@programs/contract';
 
 vi.mock(import('@services/detection/framework'), async (importOriginal) => ({
   ...(await importOriginal()),
