@@ -154,6 +154,56 @@ export async function downloadSkill(
   }
 }
 
+/** The file the wizard drops in every skill folder it installs. */
+const WIZARD_MARKER = '.posthog-wizard';
+
+const claudeSkillsDir = (installDir: string): string =>
+  path.join(installDir, '.claude', 'skills');
+
+/** The wizard-marked skill folders in `<installDir>/.claude/skills`. */
+export function listWizardSkills(installDir: string): Set<string> {
+  const dir = claudeSkillsDir(installDir);
+  if (!fs.existsSync(dir)) return new Set();
+  return new Set(
+    fs
+      .readdirSync(dir)
+      .filter((id) => fs.existsSync(path.join(dir, id, WIZARD_MARKER))),
+  );
+}
+
+/**
+ * Delete the wizard-marked skills that `before` didn't have, then the skills
+ * folder if that left it empty. Skills the user wrote or kept from an earlier
+ * run stay. Best-effort: a folder that won't delete is logged and left.
+ */
+export function removeRunSkills(
+  installDir: string,
+  before: ReadonlySet<string>,
+): string[] {
+  const dir = claudeSkillsDir(installDir);
+  const removed: string[] = [];
+  for (const id of listWizardSkills(installDir)) {
+    if (before.has(id)) continue;
+    try {
+      fs.rmSync(path.join(dir, id), { recursive: true, force: true });
+      removed.push(id);
+    } catch (err) {
+      logToFile(`removeRunSkills: could not remove ${id}: ${String(err)}`);
+    }
+  }
+  try {
+    if (fs.existsSync(dir) && fs.readdirSync(dir).length === 0) {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  } catch {
+    // Best-effort: an empty skills folder is harmless.
+  }
+  if (removed.length > 0) {
+    logToFile(`removeRunSkills: removed ${removed.join(', ')}`);
+  }
+  return removed;
+}
+
 /**
  * Structured result for installSkillById.
  * - `ok`: the skill was fetched and extracted; `path` is where it lives

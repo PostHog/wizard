@@ -4,7 +4,12 @@ import * as os from 'os';
 import * as path from 'path';
 import { zipSync } from 'fflate';
 import { analytics } from '@utils/analytics';
-import { __test, downloadSkill } from '@shared/skill-install';
+import {
+  __test,
+  downloadSkill,
+  listWizardSkills,
+  removeRunSkills,
+} from '@shared/skill-install';
 
 function makeTmpDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'wizard-tools-'));
@@ -440,5 +445,55 @@ describe('downloadSkill (e2e over HTTP)', () => {
       captured.mockRestore();
       await server.close();
     }
+  });
+});
+
+describe('removeRunSkills', () => {
+  let dir: string;
+  const skills = () => path.join(dir, '.claude', 'skills');
+  const addSkill = (id: string, marked: boolean) => {
+    fs.mkdirSync(path.join(skills(), id), { recursive: true });
+    fs.writeFileSync(path.join(skills(), id, 'SKILL.md'), '# skill');
+    if (marked)
+      fs.writeFileSync(path.join(skills(), id, '.posthog-wizard'), '');
+  };
+
+  beforeEach(() => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wizard-skills-'));
+  });
+  afterEach(() => {
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('removes the wizard skills a run added and keeps everything else', () => {
+    addSkill('kept-from-last-run', true);
+    addSkill('users-own', false);
+    const before = listWizardSkills(dir);
+    expect([...before]).toEqual(['kept-from-last-run']);
+
+    addSkill('nextjs', true);
+    addSkill('integration-nextjs', true);
+
+    expect(removeRunSkills(dir, before).sort()).toEqual([
+      'integration-nextjs',
+      'nextjs',
+    ]);
+    expect(fs.readdirSync(skills()).sort()).toEqual([
+      'kept-from-last-run',
+      'users-own',
+    ]);
+  });
+
+  it('removes the skills folder when the run left it empty', () => {
+    const before = listWizardSkills(dir);
+    addSkill('nextjs', true);
+
+    removeRunSkills(dir, before);
+
+    expect(fs.existsSync(skills())).toBe(false);
+  });
+
+  it('does nothing when the project has no skills folder', () => {
+    expect(removeRunSkills(dir, new Set())).toEqual([]);
   });
 });

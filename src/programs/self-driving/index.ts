@@ -1,5 +1,3 @@
-import { join } from 'path';
-import { access, rm } from 'node:fs/promises';
 import type { ProgramConfig } from '@programs/program-contract';
 import type { ProgramRun } from '@programs/program-contract';
 import { createSkillProgram } from '../shared/skill-program.js';
@@ -31,24 +29,6 @@ const DOCS_URL = 'https://posthog.com/docs';
 const SUCCESS_MESSAGE =
   'Self-driving is on. PostHog is scanning your project; first findings ' +
   'hit your inbox within ~30 minutes.';
-const WIZARD_MARKER = '.posthog-wizard';
-
-/**
- * Remove the installed setup skill. It is transient orchestration
- * knowledge (unlike integration skills such as the Next.js one, which
- * are worth keeping for the user's coding agents), so the program
- * cleans it up instead of showing the keep-skills prompt. Marker-
- * guarded: only directories the wizard installed are touched.
- */
-async function removeInstalledSkill(installDir: string): Promise<void> {
-  const skillDir = join(installDir, '.claude', 'skills', SELF_DRIVING_SKILL_ID);
-  try {
-    await access(join(skillDir, WIZARD_MARKER));
-  } catch {
-    return;
-  }
-  await rm(skillDir, { recursive: true, force: true }).catch(() => undefined);
-}
 
 // A session closure (not a static object) so `customPrompt` can read the
 // tools detected in the codebase — written to frameworkContext by the detect
@@ -89,10 +69,6 @@ const buildRun = (session: ProgramSession): Promise<ProgramRun> =>
     // Key those events by step as well as by label, so a funnel over them (GitHub connect
     // conversion, scout enable rate) keeps counting when a run words its tasks differently.
     resolveStepKey: resolveSelfDrivingStepKey,
-
-    postRun: async (session) => {
-      await removeInstalledSkill(session.installDir);
-    },
 
     buildOutroData: (_session, credentials) => {
       const uiHost = credentials.host.appHost.replace(/\/$/, '');
