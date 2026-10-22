@@ -160,29 +160,37 @@ const WIZARD_MARKER = '.posthog-wizard';
 const claudeSkillsDir = (installDir: string): string =>
   path.join(installDir, '.claude', 'skills');
 
-/** The wizard-marked skill folders in `<installDir>/.claude/skills`. */
-export function listWizardSkills(installDir: string): Set<string> {
+/** The wizard-marked skill folders in `<installDir>/.claude/skills`, or null when the folder can't be read. */
+export function listWizardSkills(installDir: string): Set<string> | null {
   const dir = claudeSkillsDir(installDir);
-  if (!fs.existsSync(dir)) return new Set();
-  return new Set(
-    fs
-      .readdirSync(dir)
-      .filter((id) => fs.existsSync(path.join(dir, id, WIZARD_MARKER))),
-  );
+  try {
+    if (!fs.existsSync(dir)) return new Set();
+    return new Set(
+      fs
+        .readdirSync(dir)
+        .filter((id) => fs.existsSync(path.join(dir, id, WIZARD_MARKER))),
+    );
+  } catch (err) {
+    logToFile(`listWizardSkills: could not read ${dir}: ${String(err)}`);
+    return null;
+  }
 }
 
 /**
  * Delete the wizard-marked skills that `before` didn't have, then the skills
  * folder if that left it empty. Skills the user wrote or kept from an earlier
- * run stay. Best-effort: a folder that won't delete is logged and left.
+ * run stay. Best-effort: a folder that won't delete is logged and left, and a
+ * skills folder that couldn't be listed, before or now, deletes nothing.
  */
 export function removeRunSkills(
   installDir: string,
-  before: ReadonlySet<string>,
+  before: ReadonlySet<string> | null,
 ): string[] {
   const dir = claudeSkillsDir(installDir);
   const removed: string[] = [];
-  for (const id of listWizardSkills(installDir)) {
+  const now = before && listWizardSkills(installDir);
+  if (!before || !now) return removed;
+  for (const id of now) {
     if (before.has(id)) continue;
     try {
       fs.rmSync(path.join(dir, id), { recursive: true, force: true });

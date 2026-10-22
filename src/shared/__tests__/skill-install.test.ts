@@ -469,7 +469,7 @@ describe('removeRunSkills', () => {
     addSkill('kept-from-last-run', true);
     addSkill('users-own', false);
     const before = listWizardSkills(dir);
-    expect([...before]).toEqual(['kept-from-last-run']);
+    expect([...(before ?? [])]).toEqual(['kept-from-last-run']);
 
     addSkill('nextjs', true);
     addSkill('integration-nextjs', true);
@@ -495,5 +495,17 @@ describe('removeRunSkills', () => {
 
   it('does nothing when the project has no skills folder', () => {
     expect(removeRunSkills(dir, new Set())).toEqual([]);
+  });
+
+  it('deletes nothing and does not throw when the skills folder is unreadable', () => {
+    const before = listWizardSkills(dir);
+    // A file where the folder should be makes readdirSync throw (ENOTDIR).
+    fs.mkdirSync(path.dirname(skills()), { recursive: true });
+    fs.writeFileSync(skills(), '');
+
+    expect(listWizardSkills(dir)).toBeNull();
+    expect(removeRunSkills(dir, before)).toEqual([]);
+    expect(removeRunSkills(dir, null)).toEqual([]);
+    expect(fs.existsSync(skills())).toBe(true);
   });
 });
