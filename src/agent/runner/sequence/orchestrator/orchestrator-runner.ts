@@ -1376,19 +1376,32 @@ async function executeOrchestrator(
   } catch (error) {
     if (!(error instanceof RunTaskFatal)) throw error;
     fatal = error;
-    // The fatal task is still Running in the store; the sink that already
-    // published the report ends Failed, as if it had failed on its own.
-    const running = store.list().filter((t) => t.status === TaskStatus.Running);
-    const sink = running.find(
-      (t) => t.type === fatal?.taskType && reportDeliveredIds.has(t.id),
+    // A Running sink that already published the report ends Failed, as if it
+    // had failed on its own; a Done sink (a late aborted turn) stays Done.
+    const tasks = store.list();
+    const sink = tasks.find(
+      (t) =>
+        t.type === fatal?.taskType &&
+        reportDeliveredIds.has(t.id) &&
+        (t.status === TaskStatus.Running || t.status === TaskStatus.Done),
     );
-    if (!hostCancelled() && sink && running.length === 1) {
-      const verdict = drainVerdict(store.list(), reportDeliveredIds);
+    const othersRunning = tasks.some(
+      (t) => t.status === TaskStatus.Running && t.id !== sink?.id,
+    );
+    if (!hostCancelled() && sink && !othersRunning) {
+      const verdict = drainVerdict(tasks, reportDeliveredIds);
       if (verdict.requiredFailedTypes.length === 0 && verdict.blocked === 0) {
-        store.fail(sink.id, {
-          type: 'fatal-after-report',
-          message: fatal.message,
-        });
+        if (sink.status === TaskStatus.Running) {
+          store.fail(sink.id, {
+            type: 'fatal-after-report',
+            message: fatal.message,
+          });
+        } else {
+          logToFile(
+            `[orchestrator] ${sink.type} fatal after it completed, ignored:`,
+            fatal.message,
+          );
+        }
         deliveredFatal = true;
         fatal = undefined;
       }
