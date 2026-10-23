@@ -423,23 +423,25 @@ it('ends a scan that outlives its budget as a timeout', async () => {
   });
 });
 
+const runIn = (mode: 'linear' | 'task') => (inputs: BackendRunInputs) =>
+  mode === 'linear'
+    ? piBackend.run(inputs)
+    : runPiTask({
+        ...inputs,
+        orchestrator: {
+          currentTaskId: 'integration',
+          validTypes: ['integration'],
+          store: { get: () => ({ status: 'running' }) } as never,
+        },
+        spinnerMessage: 'Setting up SDK',
+        successMessage: 'Installed the SDK',
+        requestRemark: true,
+        allowedTools: ['Read', 'load_skill_menu'],
+        analyticsProperties: {},
+      });
+
 describe.each(['linear', 'task'] as const)('%s setup signals', (mode) => {
-  const run = (inputs: BackendRunInputs) =>
-    mode === 'linear'
-      ? piBackend.run(inputs)
-      : runPiTask({
-          ...inputs,
-          orchestrator: {
-            currentTaskId: 'integration',
-            validTypes: ['integration'],
-            store: { get: () => ({ status: 'running' }) } as never,
-          },
-          spinnerMessage: 'Setting up SDK',
-          successMessage: 'Installed the SDK',
-          requestRemark: true,
-          allowedTools: ['Read', 'load_skill_menu'],
-          analyticsProperties: {},
-        });
+  const run = runIn(mode);
 
   it.each([
     [AgentSignals.ERROR_MCP_MISSING, AgentErrorType.MCP_MISSING],
@@ -543,6 +545,57 @@ describe.each(['linear', 'task'] as const)('%s setup signals', (mode) => {
   });
 });
 
+describe.each(['linear', 'task'] as const)('%s skill abort marker', (mode) => {
+  const run = runIn(mode);
+  const abortingRun = () => {
+    const inputs = runInputs(vi.fn(), null);
+    inputs.config.run.successMessage = 'Installed the SDK';
+    return inputs;
+  };
+
+  it('ends the run with the skill reason and no success', async () => {
+    state.hang = true;
+    state.tasks.set('1', { status: 'in_progress' });
+    state.text =
+      'Checked the project.\n[ABORT] Could not find a Stripe integration\nStopping.';
+    const inputs = abortingRun();
+
+    await expect(run(inputs)).resolves.toEqual({
+      kind: 'abort',
+      classification: AgentErrorType.ABORT,
+      message: 'Could not find a Stripe integration',
+    });
+    expect(state.prompts).toHaveLength(1);
+    expect(inputs.spinner.stop).not.toHaveBeenCalledWith('Installed the SDK');
+    expect(analytics.wizardCapture).not.toHaveBeenCalledWith(
+      'agent completed',
+      expect.anything(),
+    );
+    expect(analytics.wizardCapture).toHaveBeenCalledWith(
+      'agent aborted',
+      expect.not.objectContaining({ source: 'gateway_policy' }),
+    );
+  });
+
+  it('reads the marker from any block of the reply', async () => {
+    state.hang = true;
+    state.preamble = ['Checking the Stripe setup.'];
+    state.text = '[ABORT] Could not find a Stripe integration';
+
+    await expect(run(abortingRun())).resolves.toMatchObject({
+      kind: 'abort',
+      message: 'Could not find a Stripe integration',
+    });
+  });
+
+  it('ignores the marker in the remark reply', async () => {
+    state.text = 'Connected Stripe.';
+    state.remark = '[WIZARD-REMARK] Say when to emit [ABORT] earlier';
+
+    await expect(run(abortingRun())).resolves.toEqual({ kind: 'success' });
+  });
+});
+
 describe('a task turn after complete_task', () => {
   const REFUSAL = '[posthog:abort] Request is out of scope';
   const runOrchestrated = (orchestrator: {
@@ -559,23 +612,29 @@ describe('a task turn after complete_task', () => {
       analyticsProperties: {},
     });
 
-  it('ignores a policy abort marker in the closing reply once the task has reported', async () => {
-    const task = { status: 'running' };
-    state.text = 'Installed the SDK.';
-    state.report = { settle: () => (task.status = 'done'), reply: REFUSAL };
+  it.each([
+    ['a policy', REFUSAL],
+    ['a skill', '[ABORT] Could not find a Stripe integration'],
+  ])(
+    'ignores %s abort marker in the closing reply once the task has reported',
+    async (_label, reply) => {
+      const task = { status: 'running' };
+      state.text = 'Installed the SDK.';
+      state.report = { settle: () => (task.status = 'done'), reply };
 
-    await expect(
-      runOrchestrated({
-        currentTaskId: 'integration',
-        store: { get: () => task },
-      }),
-    ).resolves.toEqual({ kind: 'success' });
-    expect(state.prompts).toHaveLength(1);
-    expect(analytics.wizardCapture).not.toHaveBeenCalledWith(
-      'agent aborted',
-      expect.anything(),
-    );
-  });
+      await expect(
+        runOrchestrated({
+          currentTaskId: 'integration',
+          store: { get: () => task },
+        }),
+      ).resolves.toEqual({ kind: 'success' });
+      expect(state.prompts).toHaveLength(1);
+      expect(analytics.wizardCapture).not.toHaveBeenCalledWith(
+        'agent aborted',
+        expect.anything(),
+      );
+    },
+  );
 
   it('still ends a seeded orchestrator run on a policy abort marker', async () => {
     state.text = REFUSAL;

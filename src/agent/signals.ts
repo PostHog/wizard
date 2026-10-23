@@ -64,6 +64,11 @@ export function policyAbortReason(text: string): string | undefined {
   return rest.split('\n')[0].trim() || 'The AI gateway refused this request';
 }
 
+/** The reason after a skill's `[ABORT]` marker in a reply, or undefined without one. */
+export function skillAbortReason(text: string): string | undefined {
+  return text.match(/\[ABORT\]\s*(.+?)(?:\n|$)/)?.[1].trim();
+}
+
 /**
  * End-of-run reflection ask, shared by both harnesses so remarks are
  * comparable. The format clause comes FIRST and nothing trails the marker —

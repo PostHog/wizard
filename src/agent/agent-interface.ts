@@ -67,6 +67,7 @@ import {
   REMARK_INSTRUCTION,
   RESUME_INSTRUCTION,
   policyAbortReason,
+  skillAbortReason,
 } from './signals';
 import { classifyAuthFailure } from '@shared/errors';
 import { isGrantRevoked } from '@shared/auth-session-state';
@@ -1400,9 +1401,9 @@ export async function runAgent(
             if (Array.isArray(content)) {
               for (const block of content) {
                 if (block.type === 'text' && typeof block.text === 'string') {
-                  const match = block.text.match(/\[ABORT\]\s*(.+?)(?:\n|$)/);
-                  if (match) {
-                    abortReason = match[1].trim();
+                  const reason = skillAbortReason(block.text);
+                  if (reason) {
+                    abortReason = reason;
                     logToFile(`Agent emitted [ABORT]: ${abortReason}`);
                     abortController.abort();
                     signalDone();
