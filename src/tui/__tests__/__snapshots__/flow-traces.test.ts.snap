@@ -1050,7 +1050,7 @@ exports[`flow traces per program > transactional-email (node) 1`] = `
       "program": "transactional-email",
     },
     {
-      "event": "screen keep-skills",
+      "event": "screen exit",
       "from": "outro",
       "program": "transactional-email",
     },
@@ -1063,7 +1063,7 @@ exports[`flow traces per program > transactional-email (node) 1`] = `
     "ai-opt-in",
     "run",
     "outro",
-    "keep-skills",
+    "exit",
   ],
   "stoppedOn": null,
 }

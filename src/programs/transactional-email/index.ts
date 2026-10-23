@@ -1,6 +1,6 @@
 import type { AbortCase } from '@agent/types';
 import { createSkillProgram } from '../shared/skill-program';
-import type { ProgramConfig } from '../program-step';
+import type { ProgramConfig } from '@programs/program-contract';
 
 const SKILL_ID = 'omnibus-send-transactional-email';
 const REPORT_FILE = 'posthog-transactional-email-report.md';
