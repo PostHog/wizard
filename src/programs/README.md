@@ -73,6 +73,8 @@ the registry:
 - **CLI command.** `command` and `cliOptions` are what the program's command
   file builds its command from, usually with `nativeCommandFactory`.
 - **OAuth scopes.** `oauthScopeAdditions` widen the base set its login asks for.
+  `completionScopeOptional` lets a login without `event_definition:write`
+  proceed, for a program that creates no event definitions.
 - **Route.** `binding` sets the sequence, harness and model; without one the
   program runs on `DEFAULT_BINDING`.
 

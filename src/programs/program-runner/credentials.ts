@@ -19,7 +19,7 @@ export type ResolvedProgramCredentials = {
 export type CredentialsProvider = {
   resolve(
     programId: string,
-    context: { signal: AbortSignal },
+    context: { signal: AbortSignal; completionScopeOptional?: boolean },
   ): Promise<ResolvedProgramCredentials>;
 };
 

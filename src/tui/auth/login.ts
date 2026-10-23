@@ -14,6 +14,7 @@ export async function oauthLogin(
   session: WizardSession,
   programId: string,
   store: WizardStore,
+  completionScopeOptional?: boolean,
 ): Promise<ResolvedProgramCredentials> {
   logToFile('[agent-runner] starting OAuth');
   const data = await getOrAskForProjectData({
@@ -25,6 +26,7 @@ export async function oauthLogin(
     baseUrl: session.baseUrl,
     localMcp: session.localMcp,
     programId,
+    completionScopeOptional,
   });
   analytics.wizardCapture('auth complete', { project_id: data.projectId });
   return {
@@ -47,6 +49,7 @@ export async function oauthLogin(
 /** The OAuth login as `runProgram`'s provider, reading the store's session when it is asked. */
 export function oauthCredentials(store: WizardStore): CredentialsProvider {
   return {
-    resolve: (programId) => oauthLogin(store.session, programId, store),
+    resolve: (programId, { completionScopeOptional }) =>
+      oauthLogin(store.session, programId, store, completionScopeOptional),
   };
 }

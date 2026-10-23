@@ -14,6 +14,7 @@ import {
 } from './types.js';
 import { AUDIT_SEED_CHECKS, seedAuditLedger } from './seed.js';
 import { config as eventsAudit } from './events/config.js';
+import { AUDIT_SCOPE_ADDITIONS } from './scopes.js';
 
 const seedBeforeAuditRun = (session: ProgramSession): void => {
   seedAuditLedger(session.installDir);
@@ -91,6 +92,8 @@ const audit: ProgramConfig = {
     WIZARD_TOOL_NAMES.auditResolveChecks,
   ],
   disallowedTools: [WIZARD_TOOL_NAMES.wizardAsk],
+  oauthScopeAdditions: AUDIT_SCOPE_ADDITIONS,
+  completionScopeOptional: true,
   // The experimental headless flag — declared on `audit` (and basic
   // integration) rather than globally. mergeCommandOptions lands it on the
   // `wizard audit` command; dispatchProgram routes it to runWizardHeadless.

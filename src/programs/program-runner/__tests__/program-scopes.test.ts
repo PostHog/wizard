@@ -57,6 +57,13 @@ describe('error-tracking scopes', () => {
   });
 });
 
+/** The Live Data step's error-tracking call 403s without it, and the step then skips its whole sweep. */
+describe('audit scopes', () => {
+  it('can read error tracking recommendations', () => {
+    expect(getOAuthScopesForProgram('audit')).toContain('error_tracking:read');
+  });
+});
+
 /**
  * The signup path mints a token from these scopes. A program's additions
  * must reach its own provisioned tokens and no one else's.
