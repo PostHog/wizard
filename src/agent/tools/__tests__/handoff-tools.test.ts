@@ -135,6 +135,7 @@ describe('registered publish_handoff tools', () => {
     )('call-1', { content: REPORT })) as { content: [{ text: string }] };
 
     expect(result.content[0].text).toContain(TASK_REPORTING_NOTE);
+    expect(result.content[0].text.endsWith(TASK_REPORTING_NOTE)).toBe(true);
   });
 
   it('tells an MCP task agent that complete_task still has to run', async () => {
@@ -149,6 +150,18 @@ describe('registered publish_handoff tools', () => {
     };
 
     expect(result.content[0].text).toContain(TASK_REPORTING_NOTE);
+    expect(result.content[0].text.endsWith(TASK_REPORTING_NOTE)).toBe(true);
+  });
+
+  it('a task agent is told its next action is one complete_task call, not a closing message', async () => {
+    const result = await publishHandoff(REPORT, undefined, { taskAgent: true });
+
+    expect(result.ok).toBe(true);
+    expect(TASK_REPORTING_NOTE).toMatch(
+      /next action must be exactly one complete_task tool call/,
+    );
+    expect(TASK_REPORTING_NOTE).toMatch(/Do not send a closing message/);
+    expect(result.message.endsWith(TASK_REPORTING_NOTE)).toBe(true);
   });
 
   it('both tools pass the program id and its notebook setting to publishHandoff', async () => {
