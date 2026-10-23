@@ -172,18 +172,21 @@ function warehouseReportInstruction(sess: ProgramSession): string {
  * by `seeded-deps.ts` once the planner has run) — this file only decides whether
  * the task belongs in the run at all.
  *
- * Empty when nothing was detected, and in CI, signup, and any other run where
- * `wizard_ask` is disabled — a credential prompt nobody can answer would burn
- * the task's whole timeout and then fail the run. Capped at
+ * Empty when detection found no `in-cli` source, and in CI, signup, and any
+ * other run where `wizard_ask` is disabled — a credential prompt nobody can
+ * answer would burn the task's whole timeout and then fail the run. Capped at
  * {@link WAREHOUSE_SEED_LIMIT} sources; {@link buildWarehouseNextSteps} hands
  * every detected source over as an outro link.
  */
 const warehouseSeedTasks: NonNullable<ProgramConfig['seedTasks']> = (sess) => {
   if (shouldDisableAsk(sess)) return [];
   const sources = getDetectedWarehouseSources(sess);
-  if (sources.length === 0) return [];
+  // A deep-link source has no credential to ask for, so the outro link is all
+  // the step could give it.
+  const connectable = sources.filter((s) => s.mode === 'in-cli');
+  if (connectable.length === 0) return [];
 
-  const offered = sources.slice(0, WAREHOUSE_SEED_LIMIT);
+  const offered = connectable.slice(0, WAREHOUSE_SEED_LIMIT);
   const deferred = sources.length - offered.length;
 
   // The task is queued either way. A decline withholds reporting, not the
