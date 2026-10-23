@@ -295,4 +295,6 @@ export interface ProgramConfig {
    * (README, "OAuth app scope ceiling").
    */
   oauthScopeAdditions?: readonly string[];
+  /** The run creates no event definitions, so login doesn't require `event_definition:write`. */
+  completionScopeOptional?: boolean;
 }

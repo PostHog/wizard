@@ -97,6 +97,8 @@ export async function getOrAskForProjectData(
     programId?: ProgramId | null;
     /** A tool's or a screen's own widening of the base scopes; wins over `programId`'s. */
     scopeAdditions?: readonly string[];
+    /** The program creates no event definitions, so a grant without `event_definition:write` may proceed. */
+    completionScopeOptional?: boolean;
   },
 ): Promise<{
   host: HostResolution;
@@ -136,6 +138,7 @@ export async function getOrAskForProjectData(
       baseUrl: _options.baseUrl,
       programId: _options.programId,
       scopeAdditions: _options.scopeAdditions,
+      completionScopeOptional: _options.completionScopeOptional,
       projectId: _options.projectId,
       localMcp: _options.localMcp,
     }),
@@ -179,6 +182,7 @@ async function askForWizardLogin(options: {
    *  Omitted → default `WIZARD_OAUTH_SCOPES`. */
   programId?: ProgramId | null;
   scopeAdditions?: readonly string[];
+  completionScopeOptional?: boolean;
   /** `--project-id`, if passed. When the user granted access to it on the consent
    *  screen we use it directly; otherwise we fall back to the first granted team. */
   projectId?: number;
@@ -215,7 +219,9 @@ async function askForWizardLogin(options: {
   );
 
   try {
-    assertWizardCompletionScope(tokenResponse.scope);
+    if (!options.completionScopeOptional) {
+      assertWizardCompletionScope(tokenResponse.scope);
+    }
   } catch (error) {
     const scopeError =
       error instanceof Error ? error : new Error('OAuth scope check failed');

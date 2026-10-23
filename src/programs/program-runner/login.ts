@@ -18,6 +18,7 @@ export async function logIn(
     credentials?: ResolvedProgramCredentials;
     provider?: CredentialsProvider;
     signal: AbortSignal;
+    completionScopeOptional?: boolean;
   },
 ): Promise<ResolvedProgramCredentials> {
   const held = store.session.credentials;
@@ -34,6 +35,7 @@ export async function logIn(
   if (!login && options.provider) {
     login = await options.provider.resolve(programId, {
       signal: options.signal,
+      completionScopeOptional: options.completionScopeOptional,
     });
   }
   if (!login) {

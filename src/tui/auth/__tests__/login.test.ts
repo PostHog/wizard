@@ -8,22 +8,24 @@ import { HostResolution } from '@shared/host-resolution';
 import { analytics } from '@utils/analytics';
 import { buildSession } from '@programs';
 import type { WizardStore } from '@tui/store';
-import { oauthLogin } from '../login';
+import { oauthCredentials, oauthLogin } from '../login';
 import { getOrAskForProjectData } from '../project-data';
 
+const projectData = {
+  host: HostResolution.fromRegion('us'),
+  projectApiKey: 'phc_test',
+  accessToken: 'pha_test',
+  refreshToken: 'phr_test',
+  expiresAt: 1,
+  projectId: 42,
+  roleAtOrganization: 'founder',
+  user: null,
+  project: null,
+  missingScopes: [],
+};
+
 it('reports auth complete for the OAuth login and returns it for the store', async () => {
-  vi.mocked(getOrAskForProjectData).mockResolvedValue({
-    host: HostResolution.fromRegion('us'),
-    projectApiKey: 'phc_test',
-    accessToken: 'pha_test',
-    refreshToken: 'phr_test',
-    expiresAt: 1,
-    projectId: 42,
-    roleAtOrganization: 'founder',
-    user: null,
-    project: null,
-    missingScopes: [],
-  });
+  vi.mocked(getOrAskForProjectData).mockResolvedValue(projectData);
   const login = await oauthLogin(
     buildSession({ installDir: '/project' }),
     'metrics',
@@ -40,4 +42,21 @@ it('reports auth complete for the OAuth login and returns it for the store', asy
     },
     roleAtOrganization: 'founder',
   });
+});
+
+it("passes the program's completion-scope opt-out to the login", async () => {
+  vi.mocked(getOrAskForProjectData).mockResolvedValue(projectData);
+  const store = {
+    session: buildSession({ installDir: '/project' }),
+  } as WizardStore;
+  await oauthCredentials(store).resolve('audit', {
+    signal: new AbortController().signal,
+    completionScopeOptional: true,
+  });
+  expect(getOrAskForProjectData).toHaveBeenCalledWith(
+    expect.objectContaining({
+      programId: 'audit',
+      completionScopeOptional: true,
+    }),
+  );
 });

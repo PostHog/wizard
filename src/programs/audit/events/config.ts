@@ -39,6 +39,7 @@ export const config: ProgramConfig = {
     WIZARD_TOOL_NAMES.auditResolveChecks,
   ],
   disallowedTools: [WIZARD_TOOL_NAMES.wizardAsk],
+  completionScopeOptional: true,
 
   run: (session: ProgramSession): Promise<ProgramRun> => {
     const typeScriptDetected = isUsingTypeScript({

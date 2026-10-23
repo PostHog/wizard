@@ -182,6 +182,7 @@ async function invokeProgram(
         credentials: input.credentials,
         provider: options.credentials,
         signal,
+        completionScopeOptional: config.completionScopeOptional,
       }),
     );
 
