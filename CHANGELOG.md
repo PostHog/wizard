@@ -1,5 +1,18 @@
 # Changelog
 
+## [2.88.0](https://github.com/PostHog/wizard/compare/v2.87.0...v2.88.0) (2026-10-23)
+
+
+### Features
+
+* **skills:** remove the skills a run installed when it ends ([#1489](https://github.com/PostHog/wizard/issues/1489)) ([49ad13a](https://github.com/PostHog/wizard/commit/49ad13a6f52b82a92425b3b576bb24c135a4bf51))
+
+
+### Bug Fixes
+
+* except audit from event def write scope ([#1491](https://github.com/PostHog/wizard/issues/1491)) ([8f5b0d4](https://github.com/PostHog/wizard/commit/8f5b0d4e95f5021db32b1be13573d178f3f2d93c))
+* **warehouse:** offer the seeded task only sources the CLI can connect ([#1457](https://github.com/PostHog/wizard/issues/1457)) ([1c96de6](https://github.com/PostHog/wizard/commit/1c96de6c3ca5ab29bcc1f909d232f41e74c92cec))
+
 ## [2.87.0](https://github.com/PostHog/wizard/compare/v2.86.0...v2.87.0) (2026-10-22)
 
 
