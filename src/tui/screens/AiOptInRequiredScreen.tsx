@@ -167,7 +167,8 @@ export const AiOptInRequiredScreen = ({
       <Box flexDirection="column" marginBottom={1} width={68}>
         {isAdmin ? (
           <Text>
-            The wizard uses Anthropic Claude. To proceed, enable{' '}
+            The wizard sends your project files to third-party AI providers
+            (Anthropic and OpenAI). To proceed, enable{' '}
             <Text italic>
               "Enable PostHog features that use third-party AI services"
             </Text>{' '}
@@ -176,8 +177,8 @@ export const AiOptInRequiredScreen = ({
         ) : (
           <>
             <Text>
-              The wizard uses Anthropic Claude. Your organization admin needs to
-              enable{' '}
+              The wizard sends your project files to third-party AI providers
+              (Anthropic and OpenAI). Your organization admin needs to enable{' '}
               <Text italic>
                 "Enable PostHog features that use third-party AI services"
               </Text>{' '}
