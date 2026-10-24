@@ -113,22 +113,24 @@ export function resolveAskQuestionKinds<
  * the secret-handling guidance cannot drift between them — the same discipline
  * `HANDOFF_FIELDS` applies to the handoff schema.
  *
- * The load-bearing part is the last two sentences: a vaulted `{secretRef}` is
- * resolved only by wizard-tools that accept it, and the PostHog data-warehouse
- * tools reject it. Without that, a pi agent collecting a credential it must hand
- * to `external-data-sources-create` vaults it, gets a ref the create tool
- * rejects, and dead-ends into the browser fallback — the exact loss the wizard's
- * in-cli source setup is meant to avoid.
+ * The load-bearing part is the tail: a vaulted `{secretRef}` is resolved only by
+ * `set_env_values`, and a credential bound for a PostHog data-warehouse tool is
+ * a plain answer passed in that tool's arguments. Read as a ban on secrets in
+ * tool arguments, it leaves the agent holding a credential the user typed and
+ * dead-ending into the browser fallback — the exact loss the wizard's in-cli
+ * source setup is meant to avoid.
  */
 export const WIZARD_ASK_SENSITIVE_DESCRIPTION =
   "Only valid for kind='text'. When true, the user's answer is stored in the " +
   "wizard's secret vault and returned to you as { secretRef: 'secret:...' } " +
-  'instead of the raw string. Use for API keys, tokens, and any other secret ' +
-  'the user types in. The secretRef is only resolved by wizard-tools that ' +
-  'accept it (e.g. set_env_values) — it is NOT resolved when passed to other ' +
-  'MCP tools (e.g. PostHog data-warehouse tools), which will reject it. For a ' +
-  'secret that must reach another tool, write it to the env with set_env_values ' +
-  "first, or use that tool's own credential-reference flow.";
+  'instead of the raw string. Set it only for a secret whose one destination ' +
+  'is a .env file: set_env_values resolves the secretRef, and no other tool ' +
+  'does — the PostHog data-warehouse tools and every other MCP tool reject it. ' +
+  'A credential you must hand to another tool, such as a data-warehouse ' +
+  'source credential, is collected with sensitive unset and passed in that ' +
+  "tool's arguments exactly as the user typed it. That is the intended path: " +
+  'the user typed it for that purpose, so do not withhold it or swap in a ' +
+  'browser or credential-reference flow instead.';
 
 /**
  * The `wizard_ask` `subject` field description, shared by both harness facades
