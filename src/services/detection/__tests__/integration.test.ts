@@ -334,6 +334,58 @@ describe('reportWarehouseSourcesDetected', () => {
   });
 });
 
+describe('detected email providers reach the person', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-26T09:30:00.000Z'));
+    tmpDir = makeTmpDir();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    cleanup(tmpDir);
+  });
+
+  async function reportProject(
+    dependencies: Record<string, string>,
+  ): Promise<void> {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({ dependencies }),
+    );
+    const session = buildSession({ installDir: tmpDir });
+    session.scanConsent = ScanConsent.Granted;
+    await detect(makeCtx(session));
+    reportWarehouseSourcesDetected(session);
+  }
+
+  it('sets the providers and when they were found on the person', async () => {
+    await reportProject({ resend: '^4.0.0', stripe: '^14.0.0' });
+
+    expect(analytics.wizardCapture).toHaveBeenCalledWith(
+      'warehouse sources detected',
+      expect.objectContaining({
+        $set: {
+          wizard_detected_email_providers: ['Resend'],
+          wizard_detected_email_provider_at: '2026-10-26T09:30:00.000Z',
+        },
+      }),
+    );
+  });
+
+  it('leaves the person alone when no email provider is found', async () => {
+    await reportProject({ stripe: '^14.0.0' });
+
+    expect(analytics.wizardCapture).toHaveBeenCalledWith(
+      'warehouse sources detected',
+      expect.not.objectContaining({ $set: expect.anything() }),
+    );
+  });
+});
+
 describe('only a scripted CI run starts with consent already granted', () => {
   it('ci: true builds scanConsent as granted', () => {
     const session = buildSession({ installDir: '/tmp/app', ci: true });
