@@ -293,7 +293,8 @@ export class Analytics {
   }
 
   capture(eventName: string, properties?: Record<string, unknown>) {
-    if (this.distinctId === undefined) this.keepForLogin(properties?.$set);
+    if (this.distinctId === undefined)
+      this.rememberSetForIdentify(properties?.$set);
     this.client.capture({
       distinctId: this.distinctId ?? this.anonymousId,
       event: eventName,
@@ -305,8 +306,7 @@ export class Analytics {
     });
   }
 
-  // The alias merge keeps the identified person's older value, so login sets it again.
-  private keepForLogin(personSet: unknown) {
+  private rememberSetForIdentify(personSet: unknown) {
     if (typeof personSet !== 'object' || personSet === null) return;
     this.anonymousPersonSet = { ...this.anonymousPersonSet, ...personSet };
   }
