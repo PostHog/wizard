@@ -139,11 +139,16 @@ it.each(['continue', 'exit'] as const)(
   },
 );
 
-it('routes Ink cancellation through one cancelled shutdown and preserves exit 130', async () => {
+it('routes Ink cancellation through one cancelled shutdown, delivers queued events, and preserves exit 130', async () => {
   const { store, unmount } = mountedStore();
   vi.mocked(runProgram).mockImplementation(() => {
     store.setRunPhase(RunPhase.Running);
     return new Promise(() => undefined);
+  });
+  let delivered = false;
+  vi.mocked(analytics.flush).mockImplementation(async () => {
+    await flush();
+    delivered = true;
   });
   const exited = runTui(posthogIntegration, launch('/tmp/cancellation-test'));
   await vi.waitFor(() => expect(runProgram).toHaveBeenCalled());
@@ -151,6 +156,7 @@ it('routes Ink cancellation through one cancelled shutdown and preserves exit 13
   interrupt?.();
   interrupt?.();
   await expect(exited).resolves.toBe(130);
+  expect(delivered).toBe(true);
   expect(streamShutdown).toHaveBeenCalledExactlyOnceWith(2000, 'cancelled');
   expect(analytics.shutdown).toHaveBeenCalledWith('cancelled');
   expect(unmount).toHaveBeenCalledOnce();
