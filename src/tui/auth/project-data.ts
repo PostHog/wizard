@@ -324,6 +324,18 @@ async function askForWizardLogin(options: {
   return data;
 }
 
+async function readSignedUpUser(
+  accessToken: string,
+  appHost: string,
+): Promise<ApiUser | null> {
+  try {
+    return await fetchUserData(accessToken, appHost);
+  } catch (error) {
+    analytics.captureException(error as Error, { step: 'wizard_signup' });
+    return null;
+  }
+}
+
 async function askForProvisioningSignup(
   store: WizardStore,
   email?: string,
@@ -362,6 +374,8 @@ async function askForProvisioningSignup(
     const host = HostResolution.fromApiHost(result.host, { localMcp });
 
     analytics.setTag('provisioning-signup', true);
+    const user = await readSignedUpUser(result.accessToken, host.appHost);
+    if (user) analytics.identifyUser(user);
 
     return {
       accessToken: result.accessToken,
@@ -372,6 +386,7 @@ async function askForProvisioningSignup(
       host,
       distinctId: email,
       projectId: parseInt(result.projectId, 10) || 0,
+      user,
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
