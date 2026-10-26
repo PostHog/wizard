@@ -88,6 +88,11 @@ export async function runTui(
     if (tui?.store.session.runPhase === RunPhase.Running) {
       tui.store.setRunPhase(RunPhase.Error);
     }
+    try {
+      tui?.unmount();
+    } catch {
+      // terminal may already be torn down
+    }
     void Promise.all([
       stream?.shutdown(2000, 'cancelled'),
       reportCancellation(),
@@ -95,11 +100,6 @@ export async function runTui(
       .catch(() => logToFile('[run-wizard] cancellation shutdown failed'))
       .finally(() => {
         unregisterShutdown?.();
-        try {
-          tui?.unmount();
-        } catch {
-          // terminal may already be torn down
-        }
         exit.end(signal === 'SIGTERM' ? 143 : 130);
       });
   };

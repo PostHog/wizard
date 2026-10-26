@@ -167,9 +167,10 @@ it.each([
   ['SIGTERM', 143],
   ['SIGHUP', 130],
 ] as const)(
-  'a %s cancels the run and runs the cleanups before the stream flush, then resolves %i',
+  'a %s cancels the run, runs the cleanups before the stream flush, delivers what the unmount captures, then resolves %i',
   async (name, code) => {
     const { store, unmount } = mountedStore();
+    vi.mocked(analytics.flush).mockResolvedValue(undefined);
     const controller = new AbortController();
     const cleanup = vi.fn();
     registerCleanup(cleanup);
@@ -200,6 +201,9 @@ it.each([
     );
     expect(analytics.shutdown).toHaveBeenCalledWith('cancelled');
     expect(unmount).toHaveBeenCalledOnce();
+    expect(unmount.mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(analytics.flush).mock.invocationCallOrder.at(-1) ?? 0,
+    );
   },
 );
 
