@@ -7,12 +7,15 @@
  * because either can happen first. Each part latches, so a run reports once:
  *   - the `warehouse sources detected` event, which needs no login
  *   - the scan, which needs the login for its fingerprint. This hands it to
- *     the task stream, which attaches it to the run's wizard session.
+ *     the task stream, which attaches it to the run's wizard session, and
+ *     sets the email providers it found on the logged-in person.
  */
 
 import { mayReportScanResults } from '@shared/run-state';
 import { VERSION } from '@shared/version';
+import { analytics } from '@utils/analytics';
 import type { WizardSession } from '../session/wizard-session';
+import { emailProviderPersonProperties } from './email-providers';
 import { workspaceFingerprint } from './fingerprint';
 import { getCodebaseScan, type CodebaseScan } from './scan';
 import { applyScanTags } from './tags';
@@ -60,5 +63,11 @@ export function reportCodebaseScan(store: ScanReportStore): void {
   // A failed scan found nothing because it could not look. Posting its empty
   // list would read as "every tool was removed".
   if (!scan || scan.failed) return;
+  setEmailProvidersOnPerson(scan);
   store.shareCodebaseScan(buildScanReport(scan, credentials.projectId));
+}
+
+function setEmailProvidersOnPerson(scan: CodebaseScan): void {
+  const emailProviders = emailProviderPersonProperties(scan);
+  if (emailProviders) analytics.setPersonProperties(emailProviders);
 }

@@ -2,8 +2,12 @@ import type { CodebaseScan } from './scan';
 
 const EMAIL_PROVIDER_KINDS: ReadonlySet<string> = new Set([
   'AwsSes',
+  'Beehiiv',
   'BigMailer',
   'Brevo',
+  'CampaignMonitor',
+  'ConvertKit',
+  'Drip',
   'Elasticemail',
   'EmailOctopus',
   'Flexmail',
