@@ -1,5 +1,3 @@
-/** Person properties naming the email-sending services, by tool catalog kind, that a scan found. */
-
 import type { CodebaseScan } from './scan';
 
 const EMAIL_PROVIDER_KINDS: ReadonlySet<string> = new Set([
@@ -30,7 +28,6 @@ export type EmailProviderPersonProperties = {
   wizard_detected_email_provider_at: string;
 };
 
-/** Undefined when the scan found no email provider, so a person keeps what an earlier run set. */
 export function emailProviderPersonProperties(
   scan: CodebaseScan,
 ): EmailProviderPersonProperties | undefined {
