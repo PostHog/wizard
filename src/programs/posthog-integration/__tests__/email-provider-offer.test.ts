@@ -5,7 +5,11 @@ import { HostResolution } from '@shared/host-resolution';
 import { OutroKind } from '@shared/outro';
 import { ScanConsent } from '@shared/run-state';
 import type { ProgramSession } from '@programs/program-contract';
-import { emailProviderOffer } from '@programs/posthog-integration';
+import {
+  emailProviderOffer,
+  emailProviderOfferChoices,
+  emailProviderOfferQuestion,
+} from '@programs/posthog-integration';
 
 function detected(kind: string, label: string) {
   return {
@@ -63,7 +67,7 @@ describe('emailProviderOffer', () => {
 
     expect(offer).toEqual({
       providers: ['Resend', 'AwsSes'],
-      providerName: 'Resend',
+      providerLabels: ['Resend', 'Amazon SES'],
       workflowsUrl:
         'https://us.posthog.com/project/42/workflows?source=wizard_cli',
     });
@@ -111,4 +115,48 @@ describe('emailProviderOffer', () => {
       emailProviderOffer(finishedRun(scanFinding(RESEND)), flags),
     ).toBeUndefined();
   });
+
+  it.each<[string, ReturnType<typeof detected>[], string, string]>([
+    [
+      'one provider',
+      [RESEND],
+      'Your app sends email with Resend.',
+      "No, I'm happy with Resend",
+    ],
+    [
+      'two providers',
+      [RESEND, detected('SendGrid', 'SendGrid')],
+      'Your app sends email with Resend and SendGrid.',
+      "No, I'm happy with my current setup",
+    ],
+    [
+      'three providers',
+      [
+        RESEND,
+        detected('SendGrid', 'SendGrid'),
+        detected('Postmark', 'Postmark'),
+      ],
+      'Your app sends email with Resend, SendGrid and others.',
+      "No, I'm happy with my current setup",
+    ],
+  ])(
+    'names the providers for %s and keeps all of them in the offer',
+    (_case, tools, opening, decline) => {
+      const offer = emailProviderOffer(
+        finishedRun(scanFinding(...tools)),
+        OFFER_ON,
+      );
+      if (!offer) throw new Error('expected an offer');
+
+      expect(offer.providers).toEqual(tools.map((tool) => tool.kind));
+      expect(emailProviderOfferQuestion(offer)).toBe(
+        `${opening} PostHog can send it too, triggered by the events you already track. Want to try it?`,
+      );
+      expect(emailProviderOfferChoices(offer).map((c) => c.label)).toEqual([
+        'Yes, show me how',
+        'Not now',
+        decline,
+      ]);
+    },
+  );
 });

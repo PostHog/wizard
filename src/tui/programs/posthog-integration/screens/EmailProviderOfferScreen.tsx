@@ -128,7 +128,7 @@ const WorkflowsLink = ({
       {offer.migrateCommand && (
         <Box marginTop={1}>
           <Text>
-            Move your {offer.providerName} emails with{' '}
+            Move your {offer.providerLabels[0]} emails with{' '}
             <Text bold>{offer.migrateCommand}</Text>
           </Text>
         </Box>

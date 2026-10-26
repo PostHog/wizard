@@ -18,7 +18,7 @@ export enum EmailProviderOfferAnswer {
 
 export type EmailProviderOffer = {
   providers: EmailProviderKind[];
-  providerName: string;
+  providerLabels: [string, ...string[]];
   workflowsUrl: string;
   migrateCommand?: string;
 };
@@ -58,14 +58,33 @@ export function emailProviderOffer(
   if (!first) return undefined;
   return {
     providers: [first, ...others].map((tool) => tool.kind),
-    providerName: first.label,
+    providerLabels: [first.label, ...others.map((tool) => tool.label)],
     workflowsUrl: `${credentials.host.appHost}/project/${credentials.projectId}/workflows?source=wizard_cli`,
     migrateCommand: MIGRATE_COMMANDS[first.kind],
   };
 }
 
+function providerList([
+  first,
+  second,
+  ...rest
+]: EmailProviderOffer['providerLabels']): string {
+  if (second === undefined) return first;
+  if (rest.length === 0) return `${first} and ${second}`;
+  return `${first}, ${second} and others`;
+}
+
+function declineLabel(offer: EmailProviderOffer): string {
+  const [only, ...others] = offer.providerLabels;
+  return others.length === 0
+    ? `No, I'm happy with ${only}`
+    : "No, I'm happy with my current setup";
+}
+
 export function emailProviderOfferQuestion(offer: EmailProviderOffer): string {
-  return `Your app sends email with ${offer.providerName}. PostHog can send it too, triggered by the events you already track. Want to try it?`;
+  return `Your app sends email with ${providerList(
+    offer.providerLabels,
+  )}. PostHog can send it too, triggered by the events you already track. Want to try it?`;
 }
 
 export function emailProviderOfferChoices(
@@ -74,10 +93,7 @@ export function emailProviderOfferChoices(
   return [
     { label: 'Yes, show me how', value: EmailProviderOfferAnswer.Yes },
     { label: 'Not now', value: EmailProviderOfferAnswer.NotNow },
-    {
-      label: `No, I'm happy with ${offer.providerName}`,
-      value: EmailProviderOfferAnswer.No,
-    },
+    { label: declineLabel(offer), value: EmailProviderOfferAnswer.No },
   ];
 }
 
