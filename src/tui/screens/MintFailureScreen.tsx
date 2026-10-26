@@ -3,7 +3,7 @@ import { useRef, useState, useSyncExternalStore } from 'react';
 import type { WizardStore } from '@tui/store';
 import { PickerMenu } from '@tui/primitives/index';
 import { useStdoutDimensions } from '@tui/hooks/useStdoutDimensions';
-import { Colors } from '@tui/styles';
+import { Colors, Icons } from '@tui/styles';
 import {
   MINT_FAILURE_MESSAGE,
   MINT_FAILURE_BODY,
@@ -19,14 +19,6 @@ export type MintFailureServices = {
 };
 
 type Action = 'save' | CodingAgent | 'report' | 'continue' | 'exit' | 'retry';
-
-/** Two blocks of the PostHog flag, left of the headline. */
-const Mark = () => (
-  <Text>
-    <Text color="#1D4AFF">█</Text>
-    <Text color={Colors.accent}>█</Text>
-  </Text>
-);
 
 export function MintFailureScreen({
   store,
@@ -117,9 +109,15 @@ export function MintFailureScreen({
         flexDirection="column"
         alignItems="center"
       >
-        <Text bold>
-          <Mark /> {spellbook ? 'Skill saved' : MINT_FAILURE_MESSAGE} 🦔
-        </Text>
+        {spellbook ? (
+          <Text color={Colors.success} bold>
+            {Icons.check} Skill saved
+          </Text>
+        ) : (
+          <Text color={Colors.error} bold>
+            ✘ {MINT_FAILURE_MESSAGE}
+          </Text>
+        )}
         <Box marginTop={1}>
           <Text>
             {spellbook
