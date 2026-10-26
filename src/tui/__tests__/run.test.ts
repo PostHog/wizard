@@ -207,6 +207,34 @@ it.each([
   },
 );
 
+it('an Ink Ctrl-C after a successful run delivers what the unmount captures before it resolves 130', async () => {
+  const { unmount } = mountedStore();
+  vi.mocked(runProgram).mockResolvedValue({
+    outcome: RunOutcome.Success,
+    diagnostics: [],
+  } as never);
+  unmount.mockImplementation(() =>
+    analytics.wizardCapture('email provider offer answered', {
+      answer: 'skipped',
+    }),
+  );
+  const delivered: string[] = [];
+  vi.mocked(analytics.flush).mockImplementation(async () => {
+    const queued = vi
+      .mocked(analytics.wizardCapture)
+      .mock.calls.map(([event]) => event);
+    await flush();
+    delivered.push(...queued);
+  });
+  const exited = runTui(posthogIntegration, launch('/tmp/after-success-test'));
+  await vi.waitFor(() =>
+    expect(analytics.shutdown).toHaveBeenCalledWith('success'),
+  );
+  vi.mocked(startTUI).mock.calls[0][2]?.();
+  await expect(exited).resolves.toBe(130);
+  expect(delivered).toContain('email provider offer answered');
+});
+
 it("resolves a screen's exit request with its code and starts no stream shutdown", async () => {
   const { store, unmount } = mountedStore();
   vi.mocked(runProgram).mockResolvedValue({
