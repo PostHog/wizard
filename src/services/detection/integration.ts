@@ -25,6 +25,7 @@ import {
   getCodebaseScan,
   scannedWarehouseSources,
 } from '../codebase-scan/scan';
+import { emailProviderPersonProperties } from '../codebase-scan/email-providers';
 import {
   DETECTED_WAREHOUSE_SOURCES_KEY,
   getDetectedWarehouseSources,
@@ -174,6 +175,8 @@ export function reportWarehouseSourcesDetected(
     // Same consent gate as `sessionProperties`. PostHog derives AI SDK
     // detection from these and the source kinds.
     const discoveredFeatures = reportableDiscoveredFeatures(session);
+    const scan = getCodebaseScan(session);
+    const emailProviders = scan && emailProviderPersonProperties(scan);
     analytics.wizardCapture('warehouse sources detected', {
       warehouse_source_count: sources.length,
       warehouse_source_kinds: sources.map((s) => s.kind),
@@ -181,6 +184,7 @@ export function reportWarehouseSourcesDetected(
       ...(discoveredFeatures
         ? { discovered_features: discoveredFeatures }
         : {}),
+      ...(emailProviders ? { $set: emailProviders } : {}),
     });
 
     if (sources.length > 0) {

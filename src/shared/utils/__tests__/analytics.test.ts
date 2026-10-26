@@ -503,6 +503,25 @@ describe('Analytics', () => {
       );
     });
 
+    it('sets a person property captured before login on the identified person', () => {
+      analytics.capture('wizard: warehouse sources detected', {
+        $set: { wizard_detected_email_providers: ['Resend'] },
+      });
+
+      analytics.identifyUser(user);
+
+      expect(mockPostHogInstance.identify).toHaveBeenCalledWith({
+        distinctId: 'user-123',
+        properties: {
+          $set: {
+            wizard_detected_email_providers: ['Resend'],
+            email: 'v@posthog.com',
+            name: 'Vincent',
+          },
+        },
+      });
+    });
+
     it('runs once per user — re-login does not re-identify or re-merge', () => {
       analytics.identifyUser(user);
       analytics.identifyUser(user);

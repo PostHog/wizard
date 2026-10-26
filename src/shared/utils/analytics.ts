@@ -126,6 +126,7 @@ export class Analytics {
   private activeFlagPayloads: Record<string, unknown> = {};
   private groups: Record<string, string> = {};
   private personProperties: Record<string, string> = {};
+  private anonymousPersonSet: Record<string, unknown> = {};
   private terminalEventSent = false;
 
   constructor() {
@@ -235,7 +236,10 @@ export class Analytics {
       .trim();
     if (name) props.name = name;
     this.personProperties = props;
-    this.client.identify({ distinctId, properties: { $set: props } });
+    this.client.identify({
+      distinctId,
+      properties: { $set: { ...this.anonymousPersonSet, ...props } },
+    });
     this.client.alias({
       distinctId,
       alias: this.anonymousId,
@@ -289,6 +293,7 @@ export class Analytics {
   }
 
   capture(eventName: string, properties?: Record<string, unknown>) {
+    if (this.distinctId === undefined) this.keepForLogin(properties?.$set);
     this.client.capture({
       distinctId: this.distinctId ?? this.anonymousId,
       event: eventName,
@@ -298,6 +303,12 @@ export class Analytics {
         ...properties,
       },
     });
+  }
+
+  // The alias merge keeps the identified person's older value, so login sets it again.
+  private keepForLogin(personSet: unknown) {
+    if (typeof personSet !== 'object' || personSet === null) return;
+    this.anonymousPersonSet = { ...this.anonymousPersonSet, ...personSet };
   }
 
   groupIdentify(
