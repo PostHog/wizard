@@ -19,6 +19,9 @@ vi.mock('@utils/analytics', () => ({
     wizardCapture,
     capture: vi.fn(),
     setTag: vi.fn(),
+    getCachedWizardFlags: vi.fn(() => ({
+      'wizard-email-provider-offer': 'true',
+    })),
   } as never,
   sessionProperties: vi.fn(() => ({})),
 }));

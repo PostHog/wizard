@@ -20,6 +20,9 @@ vi.mock('@utils/analytics', () => ({
     captureException: vi.fn(),
     setTag: vi.fn(),
     shutdown: vi.fn().mockResolvedValue(undefined),
+    getCachedWizardFlags: vi.fn(() => ({
+      'wizard-email-provider-offer': 'true',
+    })),
   },
   sessionProperties: vi.fn(() => ({})),
 }));

@@ -4,6 +4,7 @@ import {
   maySendScanResults,
   type EmailProviderKind,
 } from '@services/codebase-scan';
+import { WIZARD_EMAIL_PROVIDER_OFFER_FLAG_KEY } from '@shared/constants';
 import { OutroKind } from '@shared/outro';
 import { analytics } from '@utils/analytics';
 import type { ProgramSession } from '@programs/program-contract';
@@ -22,6 +23,8 @@ export type EmailProviderOffer = {
   migrateCommand?: string;
 };
 
+type WizardFlags = Readonly<Record<string, string>> | null;
+
 type OfferSession = Pick<
   ProgramSession,
   | 'ci'
@@ -35,8 +38,9 @@ type OfferSession = Pick<
 const MIGRATE_COMMANDS: Readonly<Partial<Record<EmailProviderKind, string>>> =
   {};
 
-function mayAsk(session: OfferSession): boolean {
+function mayAsk(session: OfferSession, flags: WizardFlags): boolean {
   return (
+    flags?.[WIZARD_EMAIL_PROVIDER_OFFER_FLAG_KEY] === 'true' &&
     !session.ci &&
     maySendScanResults(session) &&
     session.outroData?.kind === OutroKind.Success
@@ -45,10 +49,11 @@ function mayAsk(session: OfferSession): boolean {
 
 export function emailProviderOffer(
   session: OfferSession,
+  flags: WizardFlags = analytics.getCachedWizardFlags(),
 ): EmailProviderOffer | undefined {
   const scan = getCodebaseScan(session);
   const credentials = session.credentials;
-  if (!scan || !credentials || !mayAsk(session)) return undefined;
+  if (!scan || !credentials || !mayAsk(session, flags)) return undefined;
   const [first, ...others] = detectedEmailProviders(scan);
   if (!first) return undefined;
   return {

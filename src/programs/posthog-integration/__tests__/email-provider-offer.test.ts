@@ -46,6 +46,7 @@ function finishedRun(
 }
 
 const RESEND = detected('Resend', 'Resend');
+const OFFER_ON = { 'wizard-email-provider-offer': 'true' };
 
 describe('emailProviderOffer', () => {
   it('offers Workflows in the project to a run that found a provider', () => {
@@ -57,6 +58,7 @@ describe('emailProviderOffer', () => {
           detected('AwsSes', 'Amazon SES'),
         ),
       ),
+      OFFER_ON,
     );
 
     expect(offer).toEqual({
@@ -86,14 +88,27 @@ describe('emailProviderOffer', () => {
       (scan) => finishedRun(scan, { credentials: null }),
     ],
   ])('stays silent when %s', (_case, sessionFor) => {
-    expect(emailProviderOffer(sessionFor(scanFinding(RESEND)))).toBeUndefined();
+    expect(
+      emailProviderOffer(sessionFor(scanFinding(RESEND)), OFFER_ON),
+    ).toBeUndefined();
   });
 
   it('stays silent when the scan found no email provider', () => {
     expect(
       emailProviderOffer(
         finishedRun(scanFinding(detected('Stripe', 'Stripe'))),
+        OFFER_ON,
       ),
+    ).toBeUndefined();
+  });
+
+  it.each<[string, Record<string, string> | null]>([
+    ['the flag is off', { 'wizard-email-provider-offer': 'false' }],
+    ['the flag evaluation left the flag out', {}],
+    ['no flag evaluation finished', null],
+  ])('stays silent when %s', (_case, flags) => {
+    expect(
+      emailProviderOffer(finishedRun(scanFinding(RESEND)), flags),
     ).toBeUndefined();
   });
 });

@@ -45,6 +45,7 @@ vi.mock('@utils/analytics', () => ({
     setTag: vi.fn(),
     captureException: vi.fn(),
     shutdown: vi.fn().mockResolvedValue(undefined),
+    getCachedWizardFlags: vi.fn(() => null),
   },
   sessionProperties: vi.fn(() => ({})),
 }));

@@ -319,6 +319,14 @@ describe('Analytics', () => {
       expect((mockPostHogInstance as any).evaluateFlags).toHaveBeenCalledOnce();
     });
 
+    it('caches a snapshot with no flags when the evaluation fails', async () => {
+      (mockPostHogInstance as any).evaluateFlags = vi
+        .fn()
+        .mockRejectedValue(new Error('flags endpoint down'));
+      await expect(analytics.getAllFlagsForWizard()).resolves.toEqual({});
+      expect(analytics.getCachedWizardFlags()).toEqual({});
+    });
+
     it("skips another team's flag", async () => {
       await analytics.getAllFlagsForWizard();
       expect(snapshot.getFlag).not.toHaveBeenCalledWith('unrelated-flag');
