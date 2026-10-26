@@ -63,7 +63,7 @@ export function reportCodebaseScan(store: ScanReportStore): void {
   // A failed scan found nothing because it could not look. Posting its empty
   // list would read as "every tool was removed".
   if (!scan || scan.failed) return;
-  setEmailProvidersOnPerson(scan);
+  if (session.apiUser) setEmailProvidersOnPerson(scan);
   store.shareCodebaseScan(buildScanReport(scan, credentials.projectId));
 }
 
