@@ -155,6 +155,7 @@ import { SelfDrivingScreenId } from '@tui/programs/self-driving';
 import { SourceMapsScreenId } from '@tui/programs/error-tracking-upload-source-maps';
 import { WarehouseSourceScreenId } from '@tui/programs/warehouse-source';
 import { Tool } from '@tools';
+import { CODEBASE_SCAN_KEY } from '@services/codebase-scan';
 
 // 80x28 is the ScreenContainer minimum. Anything smaller renders the
 // viewport guard instead of the screen, which the last describe pins once.
@@ -546,6 +547,31 @@ const FIXTURES: Record<string, Fixture> = {
       authed(s);
       ranSuccessfully(s);
       s.setDashboardUrl('https://us.posthog.com/project/42/dashboard/7');
+    },
+  },
+  [PostHogIntegrationScreenId.EmailProviderOffer]: {
+    program: Program.PostHogIntegration,
+    arrange: (s) => {
+      s.grantSharing();
+      authed(s);
+      s.setFrameworkContext(CODEBASE_SCAN_KEY, {
+        program: Program.PostHogIntegration,
+        scannedAt: '2026-10-26T09:30:00.000Z',
+        scannedDir: '/app',
+        complete: true,
+        tools: [
+          {
+            kind: 'Resend',
+            label: 'Resend',
+            warehouseSourceType: null,
+            mode: null,
+            matchedSignal: 'package resend',
+            signals: [],
+          },
+        ],
+      });
+      ranSuccessfully(s);
+      s.setOutroDismissed();
     },
   },
   [ScreenId.MintFailure]: {

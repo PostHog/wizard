@@ -1,0 +1,27 @@
+ PostHog Wizard v0.0.0-test                        Feedback: wizard@posthog.com
+
+ Cost (running): $0.00 · no agent turns yet                      Ctrl+T to hide
+
+
+ Your app sends email with Resend. PostHog can send it too, triggered by the
+ events you already track. Want to try it?
+
+ ▸ Yes, show me how
+   Not now
+   No, I'm happy with Resend
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  ↑↓ navigate  esc skip  enter select

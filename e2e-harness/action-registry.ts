@@ -304,6 +304,14 @@ export const ACTION_REGISTRY: Partial<Record<string, DriverAction[]>> = {
     },
   ],
 
+  [PostHogIntegrationScreenId.EmailProviderOffer]: [
+    {
+      id: 'dismiss_email_provider_offer',
+      description: 'Leave the email provider question.',
+      apply: (store) => store.setEmailProviderOfferDone(),
+    },
+  ],
+
   // ── Slack ─────────────────────────────────────────────────────────────
   [SelfDrivingScreenId.Github]: [
     {

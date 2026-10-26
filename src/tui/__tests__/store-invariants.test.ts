@@ -405,6 +405,11 @@ const MUTATIONS: MutationCase[] = [
   },
   { name: 'setOutroDismissed', invoke: (s) => s.setOutroDismissed(), emits: 1 },
   {
+    name: 'setEmailProviderOfferDone',
+    invoke: (s) => s.setEmailProviderOfferDone(),
+    emits: 1,
+  },
+  {
     name: 'setOutroData',
     invoke: (s) => s.setOutroData({ kind: OutroKind.Success, message: 'done' }),
     emits: 1,
