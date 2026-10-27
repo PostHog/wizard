@@ -888,9 +888,10 @@ export const piBackend: AgentHarness = {
         });
       }
 
-      // The skill plans events into .posthog-events.json then asks the agent to
-      // remove it on completion; clean it up host-side too, so a skipped step
-      // never leaves a stale (often empty) artifact (#15).
+      // The skill asks the agent to remove .posthog-events.json on completion.
+      // Scoped project-file `rm` is allowed in pi, but keep this host-side
+      // cleanup as a best-effort backstop so skipped cleanup does not leave a
+      // stale artifact.
       try {
         const planFile = path.join(input.installDir, '.posthog-events.json');
         if (!structured && fs.existsSync(planFile))
