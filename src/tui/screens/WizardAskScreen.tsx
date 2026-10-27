@@ -361,7 +361,8 @@ const QuestionInput = ({ question, onSubmit }: QuestionInputProps) => {
     }
 
     case 'text': {
-      const Input = shouldMaskAnswer(question) ? PasswordInput : TextInput;
+      const masked = shouldMaskAnswer(question);
+      const Input = masked ? PasswordInput : TextInput;
       return (
         // `width="100%"` on both the column and the hint row anchors them to
         // the modal's content width — without it, Ink/Yoga shrinks the column
@@ -372,7 +373,17 @@ const QuestionInput = ({ question, onSubmit }: QuestionInputProps) => {
             placeholder="Type your answer"
             onSubmit={(value) => onSubmit(value)}
           />
-          <Box marginTop={1} width="100%" justifyContent="flex-end">
+          <Box
+            marginTop={1}
+            width="100%"
+            justifyContent={masked ? 'space-between' : 'flex-end'}
+          >
+            {/* A sensitive answer is vaulted; the agent only gets a secretRef. */}
+            {masked && (
+              <Text dimColor>
+                Hidden as you type. The AI agent never sees it.
+              </Text>
+            )}
             <Text>
               <Text color={Colors.accent}>ENTER</Text>
               <Text dimColor> submit</Text>
