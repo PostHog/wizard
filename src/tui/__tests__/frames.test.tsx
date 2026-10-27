@@ -703,6 +703,35 @@ describe('feature-flags-intro with an unsupported framework version', () => {
   });
 });
 
+describe('wizard-ask with a sensitive text question', () => {
+  it.each(SIZES)(`at $columns x $rows`, async (size) => {
+    const store = makeStore(Program.PostHogIntegration);
+    void store.requestQuestion({
+      id: 'q1',
+      source: 'error-tracking',
+      questions: [
+        {
+          id: 'api-key',
+          prompt:
+            'Uploading source maps needs a PostHog personal API key. Source maps let PostHog show your original code in error stack traces, not minified code.\n\nCreate a key with the right permissions here:\nhttps://us.posthog.com/source-maps-key\n\nThen paste it below.',
+          kind: 'text',
+          sensitive: true,
+        },
+      ],
+    });
+    expect(store.currentScreen).toBe(Overlay.WizardAsk);
+    const { frame } = await renderScreen(
+      store,
+      screenShell(store, makeServices(store)),
+      size,
+    );
+    expect(frame).toContain('The AI agent never sees it.');
+    await expect(frame).toMatchFileSnapshot(
+      `__snapshots__/frames/wizard-ask-sensitive-${size.columns}x${size.rows}.txt`,
+    );
+  });
+});
+
 function snapshotPath(screen: ScreenName, size: TerminalSize): string {
   return `__snapshots__/frames/${screen}-${size.columns}x${size.rows}.txt`;
 }

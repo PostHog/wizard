@@ -148,7 +148,7 @@ STEP 1 — Get a personal API key from the user. (skill: "Get a personal API key
    STEP 5:
      {
        id: "api-key",
-       prompt: "Paste your PostHog personal API key below. Don't have one yet? Create one here:\\n\\n${apiKeyUrl}",
+       prompt: "Uploading source maps needs a PostHog personal API key. Source maps let PostHog show your original code in error stack traces, not minified code.\\n\\nCreate a key with the right permissions here:\\n${apiKeyUrl}\\n\\nThen paste it below.",
        kind: "text",
        sensitive: true
      }

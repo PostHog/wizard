@@ -1,0 +1,25 @@
+ PostHog Wizard v0.0.0-test                        Feedback: wizard@posthog.com
+
+ Cost (running): $0.00 · no agent turns yet                      Ctrl+T to hide
+
+
+    ╭──────────────────────────────────────────────────────────────────────╮
+    │                                                                      │
+    │                           ◆ error-tracking                           │
+    │                                                                      │
+    │   Uploading source maps needs a PostHog personal API key. Source     │
+    │   maps let PostHog show your original code in error stack traces,    │
+    │   not minified code.                                                 │
+    │                                                                      │
+    │   Create a key with the right permissions here:                      │
+    │   https://us.posthog.com/source-maps-key                             │
+    │                                                                      │
+    │   Then paste it below.                                               │
+    │                                                                      │
+    │   Type your answer                                                   │
+    │                                                                      │
+    │   Hidden as you type. The AI agent never sees it.     ENTER submit   │
+    │                                                                      │
+    │   ESC skip                                                           │
+    │                                                                      │
+    ╰──────────────────────────────────────────────────────────────────────╯
