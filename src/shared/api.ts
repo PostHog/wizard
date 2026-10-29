@@ -1,6 +1,9 @@
 import axios, { AxiosError } from 'axios';
 import { z } from 'zod';
 import { analytics } from '@utils/analytics';
+import { logToFile } from '@utils/debug';
+import { httpsProxyConfigured } from './http-proxy';
+import { checkCertificateChain, UNTRUSTED_CERT_CODES } from './tls-check';
 import { WIZARD_USER_AGENT } from './constants';
 import type { HostResolution } from './host-resolution';
 
@@ -162,10 +165,70 @@ export class ApiError extends Error {
     message: string,
     public readonly statusCode?: number,
     public readonly endpoint?: string,
+    /** Set after a TLS check: whether the OS store would verify the host's chain. */
+    public readonly systemStoreTrusts?: boolean,
   ) {
     super(message);
     this.name = 'ApiError';
   }
+}
+
+function isUntrustedCertError(error: unknown): error is AxiosError {
+  return (
+    axios.isAxiosError(error) &&
+    !error.response &&
+    UNTRUSTED_CERT_CODES.has(error.code ?? '')
+  );
+}
+
+const RETRY_DELAYS_MS = [500, 1500];
+
+/** No response (a network error), 5xx, 408 and 429 can heal on a retry; an untrusted certificate can't. */
+function isTransient(error: unknown): boolean {
+  if (!axios.isAxiosError(error) || isUntrustedCertError(error)) return false;
+  const status = error.response?.status;
+  // A local server that isn't answering won't start in the next two seconds.
+  if (status === undefined) return !isLocalHost(error);
+  return status >= 500 || status === 408 || status === 429;
+}
+
+/** Runs a login-path request, retrying transient failures with backoff. */
+export async function retryTransient<T>(
+  request: () => Promise<T>,
+  sleep: (ms: number) => Promise<void> = (ms) =>
+    new Promise((resolve) => setTimeout(resolve, ms)),
+): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await request();
+    } catch (error) {
+      const delay = RETRY_DELAYS_MS[attempt];
+      if (delay === undefined || !isTransient(error)) throw error;
+      logToFile(`[api] ${describeAxiosFailure(error)}, retrying in ${delay}ms`);
+      await sleep(delay);
+    }
+  }
+}
+
+function describeAxiosFailure(error: unknown): string {
+  if (!axios.isAxiosError(error)) return String(error);
+  const status = error.response?.status;
+  return `${error.config?.url ?? 'request'} failed: ${
+    status ? `HTTP ${status}` : error.code ?? error.message
+  }`;
+}
+
+/** Why a fetch failed, as exception properties a query can filter on. */
+function failureProperties(
+  error: unknown,
+  apiError: ApiError,
+): Record<string, unknown> {
+  return {
+    status_code: apiError.statusCode,
+    network_code:
+      axios.isAxiosError(error) && !error.response ? error.code : undefined,
+    system_store_trusts: apiError.systemStoreTrusts,
+  };
 }
 
 export async function fetchUserData(
@@ -173,19 +236,22 @@ export async function fetchUserData(
   baseUrl: string,
 ): Promise<ApiUser> {
   try {
-    const response = await axios.get(`${baseUrl}/api/users/@me/`, {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'User-Agent': WIZARD_USER_AGENT,
-      },
-    });
+    const response = await retryTransient(() =>
+      axios.get(`${baseUrl}/api/users/@me/`, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'User-Agent': WIZARD_USER_AGENT,
+        },
+      }),
+    );
 
     return ApiUserSchema.parse(response.data);
   } catch (error) {
-    const apiError = handleApiError(error, 'fetch user data');
+    const apiError = await diagnoseApiError(error, 'fetch user data');
     analytics.captureException(apiError, {
       endpoint: '/api/users/@me/',
       baseUrl,
+      ...failureProperties(error, apiError),
     });
     throw apiError;
   }
@@ -240,20 +306,23 @@ export async function fetchProjectData(
   baseUrl: string,
 ): Promise<ApiProject> {
   try {
-    const response = await axios.get(`${baseUrl}/api/projects/${projectId}/`, {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'User-Agent': WIZARD_USER_AGENT,
-      },
-    });
+    const response = await retryTransient(() =>
+      axios.get(`${baseUrl}/api/projects/${projectId}/`, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'User-Agent': WIZARD_USER_AGENT,
+        },
+      }),
+    );
 
     return ApiProjectSchema.parse(response.data);
   } catch (error) {
-    const apiError = handleApiError(error, 'fetch project data');
+    const apiError = await diagnoseApiError(error, 'fetch project data');
     analytics.captureException(apiError, {
       endpoint: `/api/projects/${projectId}/`,
       baseUrl,
       projectId,
+      ...failureProperties(error, apiError),
     });
     throw apiError;
   }
@@ -422,12 +491,116 @@ export async function fetchMarkdownNotebook(
   }
 }
 
+function hostOf(error: AxiosError): string | undefined {
+  try {
+    return error.config?.url ? new URL(error.config.url).host : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** The request's hostname and port, apart, for a raw TLS connection. */
+function checkTarget(
+  error: AxiosError,
+): { hostname: string; port: number } | undefined {
+  try {
+    const url = new URL(error.config?.url ?? '');
+    if (url.protocol !== 'https:') return undefined;
+    return { hostname: url.hostname, port: Number(url.port) || 443 };
+  } catch {
+    return undefined;
+  }
+}
+
+const LOCAL_HOSTNAMES = new Set(['localhost', '127.0.0.1', '[::1]']);
+
+/** A request to this machine, such as a local PostHog in dev. */
+function isLocalHost(error: AxiosError): boolean {
+  try {
+    return LOCAL_HOSTNAMES.has(new URL(error.config?.url ?? '').hostname);
+  } catch {
+    return false;
+  }
+}
+
+function untrustedCertMessage(
+  host: string,
+  code: string,
+  operation: string,
+): string {
+  return `Couldn't ${operation}: a VPN, proxy or security tool on this network is intercepting HTTPS to ${host} (${code}). Ask your IT team to allow *.posthog.com without HTTPS inspection, then run the wizard again.`;
+}
+
+/**
+ * `handleApiError`, plus a handshake-only TLS check when the chain didn't
+ * verify. The check only diagnoses; the issuer goes to the local log alone,
+ * since it can name the user's company.
+ */
+export async function diagnoseApiError(
+  error: unknown,
+  operation: string,
+  check: typeof checkCertificateChain = checkCertificateChain,
+  proxyConfigured: () => boolean = httpsProxyConfigured,
+): Promise<ApiError> {
+  if (!isUntrustedCertError(error) || isLocalHost(error)) {
+    return handleApiError(error, operation);
+  }
+  const host = hostOf(error);
+  const target = checkTarget(error);
+  // A direct check would bypass the proxy the request went through and see a different chain.
+  const viaProxy = proxyConfigured();
+  if (viaProxy) {
+    logToFile(
+      '[tls] an https proxy is set in the environment; chain check skipped',
+    );
+  }
+  const result =
+    target && !viaProxy ? await check(target.hostname, target.port) : null;
+  if (host && result) {
+    logToFile(
+      `[tls] ${host} chain signed by "${
+        result.issuer ?? 'unknown'
+      }"; trusted by the system store: ${String(result.systemStoreTrusts)}`,
+    );
+  }
+  return new ApiError(
+    untrustedCertMessage(
+      host ?? 'PostHog',
+      error.code ?? 'untrusted certificate',
+      operation,
+    ),
+    undefined,
+    error.config?.url,
+    result?.systemStoreTrusts,
+  );
+}
+
+function unreachableMessage(error: AxiosError, operation: string): string {
+  const host = hostOf(error) ?? 'PostHog';
+  const code = error.code ?? 'no response';
+  if (isLocalHost(error)) {
+    return `Couldn't reach ${host} to ${operation} (${code}). Check that your local server is running.`;
+  }
+  if (UNTRUSTED_CERT_CODES.has(code)) {
+    return untrustedCertMessage(host, code, operation);
+  }
+  return `Couldn't reach ${host} to ${operation} (${code}). A VPN, proxy, firewall or security tool may be blocking it. Allow *.posthog.com, then run the wizard again.`;
+}
+
 export function handleApiError(error: unknown, operation: string): ApiError {
   if (axios.isAxiosError(error)) {
     const axiosError = error as AxiosError<{ detail?: string }>;
     const status = axiosError.response?.status;
     const detail = axiosError.response?.data?.detail;
     const endpoint = axiosError.config?.url;
+
+    if (!axiosError.response) {
+      return new ApiError(
+        unreachableMessage(axiosError, operation),
+        undefined,
+        endpoint,
+      );
+    }
 
     if (status === 401) {
       return new ApiError(
@@ -453,7 +626,8 @@ export function handleApiError(error: unknown, operation: string): ApiError {
       );
     }
 
-    const message = detail || `Failed to ${operation}`;
+    const message =
+      detail || `Failed to ${operation} (HTTP ${axiosError.response.status})`;
     return new ApiError(message, status, endpoint);
   }
 
