@@ -1,5 +1,10 @@
 import axios from 'axios';
-import { IS_DEV, WIZARD_USER_AGENT } from '@shared/constants';
+import { handleApiError } from '@shared/api';
+import {
+  IS_DEV,
+  LOGIN_REQUEST_TIMEOUT_MS,
+  WIZARD_USER_AGENT,
+} from '@shared/constants';
 import type { CloudRegion } from './types';
 
 /**
@@ -77,12 +82,24 @@ export async function detectRegion(
   };
 
   const [usResult, euResult] = await Promise.allSettled([
-    axios.get('https://us.posthog.com/api/users/@me/', { headers }),
-    axios.get('https://eu.posthog.com/api/users/@me/', { headers }),
+    axios.get('https://us.posthog.com/api/users/@me/', {
+      headers,
+      timeout: LOGIN_REQUEST_TIMEOUT_MS,
+    }),
+    axios.get('https://eu.posthog.com/api/users/@me/', {
+      headers,
+      timeout: LOGIN_REQUEST_TIMEOUT_MS,
+    }),
   ]);
 
   if (usResult.status === 'fulfilled') return 'us';
   if (euResult.status === 'fulfilled') return 'eu';
+
+  // Neither region answered: a network cause, not the token.
+  const reason: unknown = usResult.reason;
+  if (axios.isAxiosError(reason) && !reason.response) {
+    throw handleApiError(reason, 'find your PostHog region');
+  }
 
   throw new Error(
     'Could not determine cloud region from access token. Please check your PostHog account.',
