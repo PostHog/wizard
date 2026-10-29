@@ -11,6 +11,7 @@ import {
 } from '@programs';
 import type { OAuthTokenResponse } from '@programs/types';
 import {
+  LOGIN_REQUEST_TIMEOUT_MS,
   OAUTH_PORTS,
   OAUTH_TIMEOUT_MS,
   WIZARD_USER_AGENT,
@@ -349,7 +350,8 @@ function isPortInUseError(error: unknown): boolean {
   );
 }
 
-async function exchangeCodeForToken(
+/** Exported for tests. */
+export async function exchangeCodeForToken(
   code: string,
   codeVerifier: string,
   callbackUrl: string,
@@ -375,6 +377,7 @@ async function exchangeCodeForToken(
           'Content-Type': 'application/json',
           'User-Agent': WIZARD_USER_AGENT,
         },
+        timeout: LOGIN_REQUEST_TIMEOUT_MS,
       },
     );
   } catch (e) {

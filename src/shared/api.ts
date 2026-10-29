@@ -1,7 +1,7 @@
 import axios, { AxiosError } from 'axios';
 import { z } from 'zod';
 import { analytics } from '@utils/analytics';
-import { WIZARD_USER_AGENT } from './constants';
+import { LOGIN_REQUEST_TIMEOUT_MS, WIZARD_USER_AGENT } from './constants';
 import type { HostResolution } from './host-resolution';
 
 /**
@@ -180,6 +180,7 @@ export async function fetchUserData(
         Authorization: `Bearer ${accessToken}`,
         'User-Agent': WIZARD_USER_AGENT,
       },
+      timeout: LOGIN_REQUEST_TIMEOUT_MS,
     });
 
     return ApiUserSchema.parse(response.data);
@@ -249,6 +250,7 @@ export async function fetchProjectData(
         Authorization: `Bearer ${accessToken}`,
         'User-Agent': WIZARD_USER_AGENT,
       },
+      timeout: LOGIN_REQUEST_TIMEOUT_MS,
     });
 
     return ApiProjectSchema.parse(response.data);
@@ -439,14 +441,26 @@ const UNTRUSTED_CERT_CODES = new Set([
 ]);
 
 /** A request that got no response: name the host and Node's code, and who can fix it. */
+const LOCAL_HOSTNAMES = new Set(['localhost', '127.0.0.1', '[::1]']);
+
 function noResponseMessage(error: AxiosError, operation: string): string {
   let host = 'PostHog';
+  let local = false;
   try {
-    host = new URL(error.config?.url ?? '').host;
+    const url = new URL(error.config?.url ?? '');
+    host = url.host;
+    local = LOCAL_HOSTNAMES.has(url.hostname);
   } catch {
     // Keep the generic name.
   }
-  const code = error.code ?? 'no response';
+  // Axios reports its own timeout as ECONNABORTED, which reads as a reset.
+  const code =
+    error.code === AxiosError.ECONNABORTED
+      ? 'timed out'
+      : error.code ?? 'no response';
+  if (local) {
+    return `Couldn't reach ${host} to ${operation} (${code}). Check that your local server is running.`;
+  }
   if (UNTRUSTED_CERT_CODES.has(code)) {
     return `Couldn't ${operation}: a VPN, proxy or security tool on this network is intercepting HTTPS to ${host} (${code}). Ask your IT team to allow *.posthog.com without HTTPS inspection, then run the wizard again.`;
   }

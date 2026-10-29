@@ -1,5 +1,7 @@
+import axios, { AxiosError, AxiosHeaders } from 'axios';
 import {
   assertWizardCompletionScope,
+  exchangeCodeForToken,
   extractOAuthCode,
   isAuthorizationTimeout,
 } from '../oauth';
@@ -124,5 +126,26 @@ describe('wizard OAuth scopes', () => {
       'wizard_session:write',
       'event_definition:write',
     ]);
+  });
+});
+
+describe('exchangeCodeForToken', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('names the cause when the token endpoint gives no response', async () => {
+    const config = {
+      url: 'https://oauth.posthog.com/oauth/token',
+      headers: new AxiosHeaders(),
+    };
+    vi.spyOn(axios, 'post').mockRejectedValue(
+      new AxiosError('failed', 'SELF_SIGNED_CERT_IN_CHAIN', config, {}),
+    );
+
+    await expect(
+      exchangeCodeForToken('code', 'verifier', 'http://localhost:8239'),
+    ).rejects.toMatchObject({
+      code: 'SELF_SIGNED_CERT_IN_CHAIN',
+      message: expect.stringContaining('intercepting HTTPS') as string,
+    });
   });
 });

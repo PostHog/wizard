@@ -381,3 +381,6 @@ export const AGENTIC_DETECTION_RETRY_TIMEOUT_MS = 90_000;
  * from approval to submit the code — not how long this window may stay open.
  */
 export const OAUTH_TIMEOUT_MS = 1_800_000;
+
+/** Per request on the login path, so a dropped connection fails rather than hangs. */
+export const LOGIN_REQUEST_TIMEOUT_MS = 30_000;
