@@ -35,5 +35,8 @@ export type { ProgramBinding, AgentRouting } from './runner';
 /** What `RunHooks.recordTaskOutcomes` receives: each orchestrated task's final state. */
 export type { TaskOutcome } from './runner';
 
+/** A program's typed task graph, as `RunConfig.taskGraph` hands it to the orchestrator. */
+export type { TaskGraph, TaskGraphNode } from './runner';
+
 /** One streamed piece of an MCP prompt run: text, a tool call or result, an error, or the end. */
 export type { McpPromptChunk } from './mcp-prompt-streaming';

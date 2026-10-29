@@ -70,6 +70,10 @@ export type {
 export { DEFAULT_BINDING } from './switchboard';
 export type { ProgramBinding } from './switchboard';
 export type { TaskOutcome } from './sequence/orchestrator/queue';
+export type {
+  TaskGraph,
+  TaskGraphNode,
+} from './sequence/orchestrator/task-graph';
 
 /**
  * Run a program's agent pipeline.
