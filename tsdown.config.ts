@@ -58,6 +58,8 @@ export default defineConfig({
   platform: 'node',
   target: 'es2022',
   fixedExtension: false,
+  // Programs import their agent prompts (`agent/<type>.md`) as text.
+  loader: { '.md': 'text' },
 
   // Lock environment variables at build time.
   // After build, setting NODE_ENV at runtime has zero effect on the wizard.

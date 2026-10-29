@@ -6,6 +6,7 @@ import type { Integration } from '@shared/constants';
 import type { FrameworkConfig } from './framework-config';
 import type { CiRunnerContext, RunnerContext } from './runner-context';
 import type { TraitSource } from './project-traits';
+import type { Flow } from './flow';
 
 /** A question a program may ask the Decisions service; the catalog in `@services/detection/decisions` has exactly these keys. */
 export type DecisionQuestionKey =
@@ -237,6 +238,10 @@ export interface ProgramConfig {
    * runner only applies it.
    */
   excludedTaskTypes?: (flags: Record<string, string>) => readonly string[];
+  /** This program's orchestrator task graph; see `./flow`. */
+  flow?: Flow;
+  /** This program's agent prompts by task type, from its `agent/` folder; loaded on first use. */
+  agentPrompts?: () => Promise<Readonly<Record<string, string>>>;
   /** Prerequisites: other program ids that must have run first */
   requires?: string[];
   /**

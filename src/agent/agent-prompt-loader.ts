@@ -459,6 +459,21 @@ async function fetchText(url: string): Promise<string> {
   return res.text();
 }
 
+/** The registry for one flow from prompts the wizard bundles, keyed by task type; parsed as the fetched ones are. */
+export function bundledRegistry(
+  prompts: Readonly<Record<string, string>>,
+  flow: string,
+  opts?: Parameters<typeof buildRegistry>[2],
+): AgentRegistry {
+  return buildRegistry(
+    Object.entries(prompts).map(([type, text]) =>
+      parseAgentPrompt(text, type, flow),
+    ),
+    flow,
+    opts,
+  );
+}
+
 /**
  * Fetch the agent menu and every agent prompt it lists, parse them, and build
  * the registry for one flow. Throws if the menu cannot be fetched — the

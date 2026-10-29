@@ -30,6 +30,17 @@ function resolveTsForJs(): Plugin {
   };
 }
 
+/** Loads a `.md` import as the file's text, as the build's `.md` loader does. */
+function markdownAsText(): Plugin {
+  return {
+    name: 'markdown-as-text',
+    transform(code, id) {
+      if (!id.split('?')[0].endsWith('.md')) return null;
+      return { code: `export default ${JSON.stringify(code)};`, map: null };
+    },
+  };
+}
+
 // Per-surface Vitest projects keyed by today's directories. Each project runs
 // alone with `vitest run --project <name>`; `vitest run` runs them all.
 const TESTS = '__tests__/**/*.{js,jsx,ts,tsx}';
@@ -58,7 +69,7 @@ const project = (name: string, include: string[], exclude: string[] = []) => ({
 });
 
 export default defineConfig({
-  plugins: [resolveTsForJs()],
+  plugins: [resolveTsForJs(), markdownAsText()],
   // The source targets the React 19 automatic JSX runtime (tsconfig
   // `"jsx": "react-jsx"`); mirror that here so the TUI `.tsx` tests transform.
   esbuild: { jsx: 'automatic' },

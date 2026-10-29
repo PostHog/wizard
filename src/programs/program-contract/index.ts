@@ -15,6 +15,13 @@ export type {
   TraitName,
   TraitSource,
 } from './project-traits';
+export {
+  defineFlow,
+  resolveFlow,
+  type Flow,
+  type FlowContext,
+  type FlowNode,
+} from './flow';
 export type {
   DecisionQuestionKey,
   ProgramConfig,

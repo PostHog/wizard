@@ -98,6 +98,7 @@ reaches the UI.
 | One program's config, detection and prompt    | Its own folder, such as [`metrics`](metrics/index.ts)                             |
 | One program's flow, deck and screens          | `src/tui/programs/<id>/`, registered in [`src/tui/programs/index.ts`](../tui/programs/index.ts) |
 | One program's e2e test definition             | Its folder's `test/e2e.json`, read by [`e2e-harness/profiles.ts`](../../e2e-harness/profiles.ts) |
+| One orchestrator program's task graph and prompts | Its folder's `flow.ts` and `agent/<type>.md`; see [orchestrator flows](#orchestrator-flows) |
 | Code several programs share                   | [`shared`](shared/skill-program.ts): program builders and [`program-scopes.ts`](shared/program-scopes.ts) |
 | The list of every program                     | [`program-registry.ts`](program-runner/program-registry.ts)                                      |
 | Running one program, and its input and outcome | [`run-program.ts`](program-runner/run-program.ts), [`detect-program.ts`](program-runner/detect-program.ts) and [`program-input.ts`](program-runner/program-input.ts) |
@@ -120,6 +121,33 @@ programs project extends `tsconfig.no-tui.json`, which maps `@programs/*`. A
 program's project references only the shared program code, so an import of a
 sibling program or the registry fails with TS6307; see
 [layer boundaries](../../.claude/skills/wizard-development/references/ARCHITECTURE.md#layer-boundaries).
+
+## Orchestrator flows
+
+An orchestrator program declares its task graph in `flow.ts` with `defineFlow`
+from the program contract: one node per task type, keyed by type, with
+`dependsOn`, an optional `when` over the run's project traits and flags,
+`picked` for a node the planner or the program decides to queue, and
+`matchInputs` for a fanned-out chain. `resolveFlow` applies the conditions; a
+dropped node's dependents inherit its edges. The run hands the result to the
+orchestrator as `RunConfig.taskGraph`. A `when` treats a missing trait as "run
+the node". The run's traits come from
+[`@services/project-traits`](../services/README.md).
+
+Each task's prompt is `agent/<type>.md`, the job to be done; the skills it
+names carry the implementation detail. The program's `agent-prompts.ts` imports
+each file as text, and `agentPrompts` loads it on first use. The build inlines
+the files with tsdown's `.md` loader; tests load them through a Vitest plugin,
+and `pnpm try` through a Node hook, `scripts/markdown-loader.no-jest.mjs`.
+Tests in [`__tests__`](__tests__) fail when a file in `agent/` isn't imported,
+when a prompt differs from the recorded context-mill release in
+`fixtures/context-mill/`, when a graph's nodes differ from its prompts, or when
+a node misses the sink.
+
+With `wizard-agent-dag` on, the orchestrator loads the bundled prompts (falling
+back to context-mill's on any failure) and rewires the planner's queue to the
+typed graph. Off, it fetches the prompts and logs where the typed graph and the
+planner's graph differ as `orchestrator graph diff`.
 
 ## Session store and task streams
 
