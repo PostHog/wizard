@@ -175,7 +175,10 @@ npx @posthog/wizard@latest --ci --signup \
   --install-dir .
 ```
 
-Optional flags: `--name "Your Name"`, `--region eu` (default `us`).
+Optional flags: `--name "Your Name"`, `--region eu` (default `us`),
+`--goal "the task you were given"`. An agent that starts the wizard should pass
+`--goal`. PostHog records it on the new account's signup as the prompt that led
+to PostHog. A browser signup that the wizard starts records it too.
 
 ### Provision only
 
