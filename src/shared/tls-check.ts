@@ -23,23 +23,6 @@ type CaStore = { getCACertificates?(type: 'default' | 'system'): string[] };
 
 const CHECK_TIMEOUT_MS = 5000;
 
-/** The variables axios reads (through proxy-from-env) for an https proxy. */
-const HTTPS_PROXY_VARS = [
-  'npm_config_https_proxy',
-  'https_proxy',
-  'HTTPS_PROXY',
-  'npm_config_proxy',
-  'all_proxy',
-  'ALL_PROXY',
-];
-
-/** Whether the environment names an https proxy, which a direct check would bypass. */
-export function httpsProxyConfigured(
-  env: NodeJS.ProcessEnv = process.env,
-): boolean {
-  return HTTPS_PROXY_VARS.some((name) => Boolean(env[name]));
-}
-
 function systemTrustedCAs(store: CaStore): string[] | undefined {
   try {
     if (!store.getCACertificates) return undefined;

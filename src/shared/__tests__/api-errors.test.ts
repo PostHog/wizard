@@ -1,7 +1,17 @@
 import { AxiosError, AxiosHeaders, type AxiosResponse } from 'axios';
-import { diagnoseApiError, handleApiError, retryTransient } from '../api';
+import axios from 'axios';
+import { analytics } from '@utils/analytics';
+import {
+  diagnoseApiError,
+  fetchProjectData,
+  handleApiError,
+  retryTransient,
+} from '../api';
 
 vi.mock('@utils/debug', () => ({ logToFile: vi.fn() }));
+vi.mock('@utils/analytics', () => ({
+  analytics: { captureException: vi.fn() },
+}));
 
 const url = 'https://us.posthog.com/api/projects/1/';
 const config = { url, headers: new AxiosHeaders() };
@@ -206,5 +216,41 @@ describe('diagnoseApiError', () => {
 
     expect(check).not.toHaveBeenCalled();
     expect(error.message).toContain("Couldn't reach us.posthog.com");
+  });
+});
+
+describe('fetchProjectData failure analytics', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('captures the network code', async () => {
+    // A local host isn't retried, so the test needs no timers.
+    vi.spyOn(axios, 'get').mockRejectedValue(
+      networkError('ECONNREFUSED', localUrl),
+    );
+
+    await expect(
+      fetchProjectData('token', 1, 'http://localhost:8010'),
+    ).rejects.toThrow('ECONNREFUSED');
+
+    expect(analytics.captureException).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        network_code: 'ECONNREFUSED',
+        status_code: undefined,
+      }),
+    );
+  });
+
+  it('captures the status code', async () => {
+    vi.spyOn(axios, 'get').mockRejectedValue(httpError(403));
+
+    await expect(
+      fetchProjectData('token', 1, 'https://us.posthog.com'),
+    ).rejects.toThrow('Access denied');
+
+    expect(analytics.captureException).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ status_code: 403, network_code: undefined }),
+    );
   });
 });

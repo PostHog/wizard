@@ -15,6 +15,10 @@ setGlobalDispatcher(new Agent({ allowH2: false }));
 
 import { runCli } from '@cli';
 import { recoverOrphanedSettingsBackups } from '@shared/claude-settings';
+import { routeAxiosThroughEnvProxy } from '@shared/http-proxy';
+
+// axios would send https to an env proxy as plain http; tunnel it instead.
+routeAxiosThroughEnvProxy();
 
 // Heal any .claude/settings backup a previous interrupted run left orphaned,
 // before anything else reads Claude settings — conflict detection, OAuth, and

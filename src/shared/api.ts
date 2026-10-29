@@ -2,11 +2,8 @@ import axios, { AxiosError } from 'axios';
 import { z } from 'zod';
 import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
-import {
-  httpsProxyConfigured,
-  checkCertificateChain,
-  UNTRUSTED_CERT_CODES,
-} from './tls-check';
+import { httpsProxyConfigured } from './http-proxy';
+import { checkCertificateChain, UNTRUSTED_CERT_CODES } from './tls-check';
 import { WIZARD_USER_AGENT } from './constants';
 import type { HostResolution } from './host-resolution';
 
@@ -221,6 +218,19 @@ function describeAxiosFailure(error: unknown): string {
   }`;
 }
 
+/** Why a fetch failed, as exception properties a query can filter on. */
+function failureProperties(
+  error: unknown,
+  apiError: ApiError,
+): Record<string, unknown> {
+  return {
+    status_code: apiError.statusCode,
+    network_code:
+      axios.isAxiosError(error) && !error.response ? error.code : undefined,
+    system_store_trusts: apiError.systemStoreTrusts,
+  };
+}
+
 export async function fetchUserData(
   accessToken: string,
   baseUrl: string,
@@ -241,7 +251,7 @@ export async function fetchUserData(
     analytics.captureException(apiError, {
       endpoint: '/api/users/@me/',
       baseUrl,
-      system_store_trusts: apiError.systemStoreTrusts,
+      ...failureProperties(error, apiError),
     });
     throw apiError;
   }
@@ -312,7 +322,7 @@ export async function fetchProjectData(
       endpoint: `/api/projects/${projectId}/`,
       baseUrl,
       projectId,
-      system_store_trusts: apiError.systemStoreTrusts,
+      ...failureProperties(error, apiError),
     });
     throw apiError;
   }

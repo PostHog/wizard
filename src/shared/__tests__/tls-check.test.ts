@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events';
 import type tls from 'node:tls';
-import { httpsProxyConfigured, checkCertificateChain } from '../tls-check';
+import { checkCertificateChain } from '../tls-check';
 
 type FakeSocket = EventEmitter & {
   destroy: ReturnType<typeof vi.fn>;
@@ -95,25 +95,5 @@ describe('checkCertificateChain', () => {
       checkCertificateChain('us.posthog.com', 443, connect, {}),
     ).resolves.toBeNull();
     expect(connect).not.toHaveBeenCalled();
-  });
-});
-
-describe('httpsProxyConfigured', () => {
-  it.each(['HTTPS_PROXY', 'https_proxy', 'ALL_PROXY', 'npm_config_proxy'])(
-    'sees %s',
-    (name) => {
-      expect(
-        httpsProxyConfigured({ [name]: 'http://proxy.internal:3128' }),
-      ).toBe(true);
-    },
-  );
-
-  it('ignores an http-only or empty proxy', () => {
-    expect(
-      httpsProxyConfigured({
-        HTTP_PROXY: 'http://proxy:3128',
-        HTTPS_PROXY: '',
-      }),
-    ).toBe(false);
   });
 });
