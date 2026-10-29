@@ -387,6 +387,19 @@ describe('Analytics', () => {
       });
     });
 
+    it('stamps the wizard flags on the terminal event', async () => {
+      await analytics.getAllFlagsForWizard();
+      analytics.setTag('program_id', 'posthog-integration');
+      await analytics.shutdown('success');
+      const call = mockPostHogInstance.capture.mock.calls.find(
+        ([arg]) => (arg as any).event === 'setup wizard finished',
+      );
+      const props = (call?.[0] as any).properties;
+      expect(props['$feature/wizard-orchestrator']).toBe(true);
+      expect(props['$feature/unrelated-flag']).toBeUndefined();
+      expect(props.status).toBe('success');
+    });
+
     it('carries no $feature props before the fetch', () => {
       analytics.wizardCapture('early event');
       const call = mockPostHogInstance.capture.mock.calls.find(

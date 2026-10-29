@@ -61,6 +61,7 @@ import { createAskBridge } from '../../shared/ask';
 import {
   areSeededTasksEnabled,
   getHarness,
+  isAgentDagEnabled,
   resolveHarness,
   resolveStageOverrides,
   type HarnessPick,
@@ -84,6 +85,7 @@ import {
 import { RunMetrics } from './run-metrics';
 import { dependencyClosure, uncoveredBySink } from './queue-tools';
 import { deferSeededTasks } from './seeded-deps';
+import { createSkillPicker } from './skill-picks';
 import { LONGER_ASK_TIMEOUT_MS, shouldDisableAsk } from '@shared/ask-policy';
 import {
   agentRunTools,
@@ -226,31 +228,7 @@ async function fetchSkillMenuEntries(
   return Object.values(menu.categories).flat();
 }
 
-/** Menu id for a bare skill id + framework via the menu's declared group/framework/default fields; undefined when nothing matches. */
-export function resolveSkillVariantId(
-  entries: readonly SkillEntry[],
-  skillId: string,
-  framework: string | undefined,
-): string | undefined {
-  if (entries.some((e) => e.id === skillId)) return skillId;
-  if (!framework) return undefined;
-  const family = entries.filter(
-    (e) => e.group === skillId && e.framework === framework,
-  );
-  return (family.find((e) => e.default) ?? family[0])?.id;
-}
-
-/**
- * The framework reference is the full `integration` skill. `input.skillId` is
- * the bare framework (e.g. `django`), but the skill menu ids it as
- * `integration-<variant>`.
- */
-function resolveReferenceSkillId(
-  entries: readonly SkillEntry[],
-  framework: string,
-): string | undefined {
-  return resolveSkillVariantId(entries, 'integration', framework);
-}
+export { resolveSkillVariantId } from './skill-picks';
 
 /**
  * How long an optional step's notice waits for an answer.
@@ -801,9 +779,14 @@ async function executeOrchestrator(
   // (agent-skill commands like replay-vision) would otherwise leak that id in
   // here as a bogus framework after the caller overwrites the detect result.
   const framework = input.integration ?? input.skillId ?? undefined;
-  const referenceSkillId = framework
-    ? resolveReferenceSkillId(menuSkillEntries, framework)
-    : undefined;
+  const skills = createSkillPicker({
+    entries: menuSkillEntries,
+    framework,
+    traits: config.traitTags?.() ?? {},
+    useCriteria: isAgentDagEnabled(boot.wizardFlags),
+  });
+  // The framework reference is the full `integration` skill, which the menu ids as `integration-<variant>`.
+  const referenceSkillId = skills.reference();
   if (referenceSkillId) {
     const ref = await installSkillById(
       referenceSkillId,
@@ -840,9 +823,7 @@ async function executeOrchestrator(
   const missingVariants: string[] = [];
   for (const type of registry.types) {
     for (const skillId of registry.get(type)?.skills ?? []) {
-      if (resolveSkillVariantId(menuSkillEntries, skillId, framework)) {
-        continue;
-      }
+      if (skills.pick(type, skillId)) continue;
       missingVariants.push(`${type}/${skillId}`);
       logToFile(
         `[orchestrator] no skill variant type=${type} skill=${skillId} framework=${
@@ -1227,11 +1208,7 @@ async function executeOrchestrator(
         // Agent prompts name the bare step-skill (`integration-v2-install`);
         // SDK-divergent steps ship per-framework variants, so resolve against
         // the menu with the session's framework before installing.
-        const variantId = resolveSkillVariantId(
-          menuSkillEntries,
-          skillId,
-          framework,
-        );
+        const variantId = skills.pick(task.type, skillId);
         if (!variantId) {
           logToFile(
             `[orchestrator] no skill variant type=${

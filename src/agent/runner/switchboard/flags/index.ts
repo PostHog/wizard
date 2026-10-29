@@ -74,6 +74,7 @@ export function resolveStageOverrides(
 }
 
 export { isOrchestratorEnabled, areSeededTasksEnabled } from './orchestrator';
+export { isAgentDagEnabled } from './agent-dag';
 export type {
   ConfigFlag,
   FlagRoute,

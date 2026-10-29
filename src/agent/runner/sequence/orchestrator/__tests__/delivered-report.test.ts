@@ -24,6 +24,7 @@ vi.mock('../../../switchboard', async () => {
     resolveHarness: () => ({ harness: 'pi', model: [...VALID_MODELS][0] }),
     resolveStageOverrides: () => ({}),
     areSeededTasksEnabled: () => false,
+    isAgentDagEnabled: () => false,
     getHarness: () => ({ runTask: (inputs: unknown) => harnessRun(inputs) }),
   };
 });
