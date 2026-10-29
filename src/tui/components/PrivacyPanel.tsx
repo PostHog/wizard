@@ -19,8 +19,10 @@
 import { useEffect } from 'react';
 import { Box, Text } from 'ink';
 import {
+  POSTHOG_AI_FAQ_URL,
   POSTHOG_ORG_AI_SETTINGS_URL,
   POSTHOG_PRIVACY_URL,
+  POSTHOG_SUBPROCESSORS_URL,
   POSTHOG_TERMS_URL,
 } from '@shared/constants';
 import { analytics } from '@utils/analytics';
@@ -31,6 +33,31 @@ import { analytics } from '@utils/analytics';
  * cannot come back.
  */
 export const PRIVACY_PANEL_LABEL = 'Privacy & data';
+
+/**
+ * The run-time AI disclosure, shown above every program intro's subtitle. It
+ * is the one disclosure a run shows when the org already approved AI use.
+ */
+export const AiDisclosure = () => {
+  useEffect(() => {
+    analytics.wizardCapture('ai disclosure shown');
+  }, []);
+
+  return (
+    <>
+      <Text dimColor>
+        The AI agent reads your project files and sends them to
+      </Text>
+      <Text dimColor>third-party AI providers (Anthropic and OpenAI).</Text>
+      <Text dimColor>
+        AI FAQ: <Text color="cyan">{POSTHOG_AI_FAQ_URL}</Text>
+      </Text>
+      <Text dimColor>
+        Subprocessors: <Text color="cyan">{POSTHOG_SUBPROCESSORS_URL}</Text>
+      </Text>
+    </>
+  );
+};
 
 interface PrivacyPanelProps {
   /**

@@ -6,9 +6,9 @@
 
  ⚠ PostHog AI services are disabled for your organization
 
- The wizard uses Anthropic Claude. To proceed, enable "Enable PostHog
-  features that use third-party AI services" in your organization
- settings.
+ The wizard sends your project files to third-party AI providers
+ (Anthropic and OpenAI). To proceed, enable "Enable PostHog features
+ that use third-party AI services" in your organization settings.
 
  http://localhost:8010/project/42/settings/organization-details#organization-ai
  -consent
