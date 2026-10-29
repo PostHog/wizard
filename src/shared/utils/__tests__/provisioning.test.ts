@@ -313,6 +313,43 @@ describe('provisionNewAccount', () => {
     );
   });
 
+  it('sends the goal in the account configuration', async () => {
+    mockedAxios.post
+      .mockResolvedValueOnce({
+        data: { id: 'req_6', type: 'oauth', oauth: { code: 'code_6' } },
+      })
+      .mockResolvedValueOnce({
+        data: {
+          token_type: 'bearer',
+          access_token: 'pha_6',
+          refresh_token: 'phr_6',
+          expires_in: 3600,
+        },
+      })
+      .mockResolvedValueOnce({
+        data: {
+          status: 'complete',
+          id: '99',
+          complete: {
+            access_configuration: {
+              api_key: 'phc_us',
+              host: 'https://us.posthog.com',
+            },
+          },
+        },
+      });
+
+    await provisionNewAccount('goal@example.com', '', 'US', {
+      goal: 'Track signups in my Next.js app',
+    });
+
+    const accountCall = mockedAxios.post.mock.calls[0];
+    expect((accountCall[1] as Record<string, unknown>).configuration).toEqual({
+      region: 'US',
+      goal: 'Track signups in my Next.js app',
+    });
+  });
+
   it('routes US provisioning to the US host and client', async () => {
     mockedAxios.post
       .mockResolvedValueOnce({

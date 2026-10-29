@@ -85,6 +85,8 @@ export async function getOrAskForProjectData(
     /** Where login progress and errors are shown. */
     store: WizardStore;
     email?: string;
+    /** `--goal`, sent with a new signup. */
+    goal?: string;
     region?: CloudRegion;
     /** Explicit base URL override (`--base-url`, from `session.baseUrl`). When
      *  set, pins every PostHog origin and bypasses region resolution. */
@@ -134,6 +136,7 @@ export async function getOrAskForProjectData(
       store,
       signup: _options.signup,
       email: _options.email,
+      goal: _options.goal,
       region: _options.region,
       baseUrl: _options.baseUrl,
       programId: _options.programId,
@@ -175,6 +178,7 @@ async function askForWizardLogin(options: {
   store: WizardStore;
   signup: boolean;
   email?: string;
+  goal?: string;
   region?: CloudRegion;
   /** Explicit base URL override (`--base-url`); pins every PostHog origin. */
   baseUrl?: string;
@@ -200,6 +204,7 @@ async function askForWizardLogin(options: {
       options.programId,
       options.scopeAdditions,
       options.projectId,
+      options.goal,
     );
   }
 
@@ -214,6 +219,7 @@ async function askForWizardLogin(options: {
       signup: false,
       projectId: options.projectId,
       baseUrl: options.baseUrl,
+      goal: options.goal,
     },
     store,
   );
@@ -333,6 +339,7 @@ async function askForProvisioningSignup(
   programId?: ProgramId | null,
   scopeAdditions?: readonly string[],
   projectId?: number,
+  goal?: string,
 ): Promise<ProjectData> {
   if (!email || !email.includes('@')) {
     store.pushStatus(
@@ -351,6 +358,7 @@ async function askForProvisioningSignup(
       orgName,
       projectName,
       baseUrl,
+      goal,
       scopes: scopeAdditions
         ? withScopeAdditions(WIZARD_PROVISIONING_SCOPES, scopeAdditions)
         : getProvisioningScopesForProgram(programId),
