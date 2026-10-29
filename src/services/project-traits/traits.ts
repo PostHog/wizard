@@ -8,17 +8,7 @@
 
 import { DiscoveredFeature } from '@shared/discovered-feature';
 import { frameworkTag, type TraitTags } from '@shared/skill-resolution';
-import type { ProgramSession } from '@programs/program-contract';
-
-export type TraitName = 'framework' | 'callsLlmApi';
-
-/** A predicate trait's value is `yes` or `no`; the framework's is its integration id. */
-export type Trait = {
-  value: string;
-  source: 'static';
-};
-
-export type ProjectTraits = Partial<Record<TraitName, Trait>>;
+import type { ProgramSession, ProjectTraits } from '@programs/program-contract';
 
 /** What static detection stored on the session that a trait reads. */
 export type DetectionResults = Pick<
