@@ -1,14 +1,24 @@
 import type axios from 'axios';
 import { analytics } from '@utils/analytics';
-import { httpsProxyConfigured, routeAxiosThroughEnvProxy } from '../http-proxy';
+import {
+  httpsProxyConfigured,
+  redactErrorCredentials,
+  redactUrlCredentials,
+  routeAxiosThroughEnvProxy,
+} from '../http-proxy';
 
 vi.mock('@utils/debug', () => ({ logToFile: vi.fn() }));
 vi.mock('@utils/analytics', () => ({ analytics: { setTag: vi.fn() } }));
 
 const proxyUrl = 'http://proxy.internal:3128';
 
-function fakeClient(): Pick<typeof axios, 'defaults'> {
-  return { defaults: {} } as unknown as Pick<typeof axios, 'defaults'>;
+type Client = Pick<typeof axios, 'defaults' | 'interceptors'>;
+
+function fakeClient(): Client {
+  return {
+    defaults: {},
+    interceptors: { response: { use: vi.fn() } },
+  } as unknown as Client;
 }
 
 describe('routeAxiosThroughEnvProxy', () => {
@@ -96,5 +106,43 @@ describe('httpsProxyConfigured', () => {
         HTTPS_PROXY: '',
       }),
     ).toBe(false);
+  });
+});
+
+describe('proxy credential redaction', () => {
+  const tunnelMessage =
+    'Failed to establish tunnel to us.posthog.com:443 via http://alice:s3cret@proxy.internal:3128: HTTP/1.1 407 Proxy Authentication Required';
+
+  it('removes userinfo from a URL in text', () => {
+    expect(redactUrlCredentials(tunnelMessage)).toBe(
+      'Failed to establish tunnel to us.posthog.com:443 via http://***@proxy.internal:3128: HTTP/1.1 407 Proxy Authentication Required',
+    );
+  });
+
+  it('leaves text without credentials alone', () => {
+    const text = 'GET https://us.posthog.com/api/projects/1/ failed';
+    expect(redactUrlCredentials(text)).toBe(text);
+  });
+
+  it('scrubs the message, stack and cause chain', () => {
+    const cause = new Error(tunnelMessage);
+    const error = new Error(`request failed: ${tunnelMessage}`, { cause });
+
+    redactErrorCredentials(error);
+
+    for (const e of [error, cause]) {
+      expect(e.message).not.toContain('s3cret');
+      expect(e.stack).not.toContain('s3cret');
+    }
+  });
+
+  it('installs the scrubber only when tunnelling', () => {
+    const tunnelled = fakeClient();
+    routeAxiosThroughEnvProxy({ HTTPS_PROXY: proxyUrl }, 'v22.22.0', tunnelled);
+    expect(tunnelled.interceptors.response.use).toHaveBeenCalledTimes(1);
+
+    const direct = fakeClient();
+    routeAxiosThroughEnvProxy({}, 'v22.22.0', direct);
+    expect(direct.interceptors.response.use).not.toHaveBeenCalled();
   });
 });

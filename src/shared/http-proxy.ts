@@ -45,6 +45,35 @@ export function httpsProxyConfigured(
 
 type ProxyAgentOptions = { proxyEnv: Record<string, string> };
 
+type ProxyClient = Pick<typeof axios, 'defaults' | 'interceptors'>;
+
+/** `scheme://user:pass@` — the userinfo of a URL in free text. */
+const URL_USERINFO = /([a-z][a-z0-9+.-]*:\/\/)[^\s/@]+@/gi;
+
+/** Removes URL credentials from text, such as a proxy URL in Node's tunnel errors. */
+export function redactUrlCredentials(text: string): string {
+  return text.replace(URL_USERINFO, '$1***@');
+}
+
+/**
+ * Node tunnels from the agent's internal proxy config; the copy left in its
+ * public `options` would put the proxy URL into `JSON.stringify` of an axios
+ * error, whose `config` holds the agent.
+ */
+function withoutPublicProxyEnv<T extends http.Agent>(agent: T): T {
+  delete (agent as unknown as { options: Partial<ProxyAgentOptions> }).options
+    .proxyEnv;
+  return agent;
+}
+
+/** Scrubs an error, and each error in its `cause` chain, in place. */
+export function redactErrorCredentials(error: unknown, depth = 0): void {
+  if (!(error instanceof Error) || depth > 5) return;
+  error.message = redactUrlCredentials(error.message);
+  if (error.stack) error.stack = redactUrlCredentials(error.stack);
+  redactErrorCredentials(error.cause, depth + 1);
+}
+
 /** How axios reaches the network, tagged on every event as `env_proxy`. */
 export type EnvProxyMode = 'none' | 'tunnel' | 'unsupported_node';
 
@@ -58,7 +87,7 @@ export type EnvProxyMode = 'none' | 'tunnel' | 'unsupported_node';
 export function routeAxiosThroughEnvProxy(
   env: NodeJS.ProcessEnv = process.env,
   nodeVersion: string = process.version,
-  client: Pick<typeof axios, 'defaults'> = axios,
+  client: ProxyClient = axios,
 ): EnvProxyMode {
   const mode = applyEnvProxy(env, nodeVersion, client);
   analytics.setTag('env_proxy', mode);
@@ -68,7 +97,7 @@ export function routeAxiosThroughEnvProxy(
 function applyEnvProxy(
   env: NodeJS.ProcessEnv,
   nodeVersion: string,
-  client: Pick<typeof axios, 'defaults'>,
+  client: ProxyClient,
 ): EnvProxyMode {
   const httpsProxy = firstSet(env, HTTPS_PROXY_VARS);
   const httpProxy = firstSet(env, HTTP_PROXY_VARS);
@@ -89,11 +118,17 @@ function applyEnvProxy(
   // The repo's `@types/node` predates `proxyEnv`.
   const options: ProxyAgentOptions = { proxyEnv };
   client.defaults.proxy = false;
-  client.defaults.httpsAgent = new https.Agent(
-    options as unknown as https.AgentOptions,
+  // Node's ERR_PROXY_TUNNEL message names the proxy URL, credentials included;
+  // scrub it before any caller logs or captures the error.
+  client.interceptors.response.use(undefined, (error: unknown) => {
+    redactErrorCredentials(error);
+    return Promise.reject(error);
+  });
+  client.defaults.httpsAgent = withoutPublicProxyEnv(
+    new https.Agent(options as unknown as https.AgentOptions),
   );
-  client.defaults.httpAgent = new http.Agent(
-    options as unknown as http.AgentOptions,
+  client.defaults.httpAgent = withoutPublicProxyEnv(
+    new http.Agent(options as unknown as http.AgentOptions),
   );
   logToFile("[proxy] axios tunnels through the environment's proxy");
   return 'tunnel';
