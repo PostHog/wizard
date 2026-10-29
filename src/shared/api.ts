@@ -2,7 +2,7 @@ import axios, { AxiosError } from 'axios';
 import { z } from 'zod';
 import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
-import { probeCertificateChain } from './tls-probe';
+import { probeCertificateChain, UNTRUSTED_CERT_CODES } from './tls-probe';
 import { WIZARD_USER_AGENT } from './constants';
 import type { HostResolution } from './host-resolution';
 
@@ -171,16 +171,6 @@ export class ApiError extends Error {
     this.name = 'ApiError';
   }
 }
-
-/** Node's codes for a certificate chain it can't verify, as TLS inspection causes. */
-const UNTRUSTED_CERT_CODES = new Set([
-  'SELF_SIGNED_CERT_IN_CHAIN',
-  'DEPTH_ZERO_SELF_SIGNED_CERT',
-  'UNABLE_TO_GET_ISSUER_CERT_LOCALLY',
-  'UNABLE_TO_GET_ISSUER_CERT',
-  'UNABLE_TO_VERIFY_LEAF_SIGNATURE',
-  'CERT_UNTRUSTED',
-]);
 
 function isUntrustedCertError(error: unknown): error is AxiosError {
   return (
@@ -530,14 +520,10 @@ export async function diagnoseApiError(
   const host = hostOf(error);
   const result = host ? await probe(host) : null;
   if (host && result) {
-    const trusted =
-      result.systemStoreTrusts === undefined
-        ? 'unknown'
-        : String(result.systemStoreTrusts);
     logToFile(
       `[tls] ${host} chain signed by "${
         result.issuer ?? 'unknown'
-      }"; trusted by the system store: ${trusted}`,
+      }"; trusted by the system store: ${String(result.systemStoreTrusts)}`,
     );
   }
   return new ApiError(
