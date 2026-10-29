@@ -1,5 +1,18 @@
 # Changelog
 
+## [2.89.0](https://github.com/PostHog/wizard/compare/v2.88.0...v2.89.0) (2026-10-29)
+
+
+### Features
+
+* explain the source maps key prompt and that secret answers stay hidden ([#1496](https://github.com/PostHog/wizard/issues/1496)) ([6560d68](https://github.com/PostHog/wizard/commit/6560d686e0a2040c5ede183d1c6a2996f0727104))
+
+
+### Bug Fixes
+
+* check tls, api, certs ([#1501](https://github.com/PostHog/wizard/issues/1501)) ([d123906](https://github.com/PostHog/wizard/commit/d12390633bbcc1f3561edcdb34716eef2b86e9cb))
+* **tui:** show an error icon on the busy screen headline ([#1494](https://github.com/PostHog/wizard/issues/1494)) ([cb7683e](https://github.com/PostHog/wizard/commit/cb7683e108e0e156701805deb1a17388a40c2048))
+
 ## [2.88.0](https://github.com/PostHog/wizard/compare/v2.87.0...v2.88.0) (2026-10-23)
 
 
