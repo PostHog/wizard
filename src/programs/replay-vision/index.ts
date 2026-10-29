@@ -12,6 +12,7 @@ import { noteDetectedFramework } from '@services/detection';
 import { scopeInstallDirToProject } from '@services/detection';
 import type { CiRunnerContext } from '@programs/program-contract';
 import { FRAMEWORK_REGISTRY } from '@services/frameworks';
+import { applyFramework } from '@services/project-traits';
 import { createSkillProgram } from '../shared/skill-program';
 import { detectPostHogIntegration } from '@services/detection';
 import type {
@@ -168,8 +169,7 @@ export const config: ProgramConfig = {
     if (!REPLAY_VISION_SUPPORTED.has(integration)) {
       abortUnsupportedPlatform(integration);
     }
-    session.integration = integration;
-    analytics.setTag('integration', integration);
+    applyFramework(session, integration);
 
     const frameworkConfig = FRAMEWORK_REGISTRY[integration];
     session.frameworkConfig = frameworkConfig;
