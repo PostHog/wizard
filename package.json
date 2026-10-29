@@ -149,7 +149,7 @@
     "test:coverage": "pnpm build && vitest run --coverage",
     "test:e2e": "pnpm build && ./e2e-tests/run.sh",
     "test:e2e-record": "export RECORD_FIXTURES=true && pnpm build && ./e2e-tests/run.sh",
-    "try": "tsx --tsconfig tsconfig.base.json bin.ts",
+    "try": "tsx --tsconfig tsconfig.base.json --import ./scripts/markdown-loader.no-jest.mjs bin.ts",
     "dev": "pnpm build && pnpm link --global && pnpm build:watch",
     "test:watch": "vitest",
     "prepare": "husky",
@@ -157,8 +157,7 @@
     "wizard-ci-replay": "tsx scripts/tui-replay.no-jest.ts",
     "decisions-detect": "tsx scripts/decisions-detect.no-jest.ts",
     "check:decisions-bundle": "tsx scripts/check-decisions-bundle.no-jest.ts",
-    "record:context-mill-fixtures": "tsx scripts/record-context-mill-fixtures.no-jest.ts",
-    "bundle:agent-prompts": "tsx scripts/bundle-agent-prompts.no-jest.ts"
+    "record:context-mill-fixtures": "tsx scripts/record-context-mill-fixtures.no-jest.ts"
   },
   "lint-staged": {
     ".claude/settings.json": "sh -c 'printf \"\\n\\033[31mDo not commit .claude/settings.json — use .claude/settings.local.json (gitignored).\\nUnstage with: git restore --staged .claude/settings.json\\033[0m\\n\\n\" >&2 && exit 1'",

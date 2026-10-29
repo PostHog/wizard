@@ -135,10 +135,12 @@ the node". The run's traits come from
 [`@services/project-traits`](../services/README.md).
 
 Each task's prompt is `agent/<type>.md`, the job to be done; the skills it
-names carry the implementation detail. `pnpm bundle:agent-prompts` regenerates
-the program's `agent-prompts.ts` from that folder, which `agentPrompts` loads on
-first use. Tests in [`__tests__`](__tests__) fail when the module is stale, when
-a prompt differs from the recorded context-mill release in
+names carry the implementation detail. The program's `agent-prompts.ts` imports
+each file as text, and `agentPrompts` loads it on first use. The build inlines
+the files with tsdown's `.md` loader; tests load them through a Vitest plugin,
+and `pnpm try` through a Node hook, `scripts/markdown-loader.no-jest.mjs`.
+Tests in [`__tests__`](__tests__) fail when a file in `agent/` isn't imported,
+when a prompt differs from the recorded context-mill release in
 `fixtures/context-mill/`, when a graph's nodes differ from its prompts, or when
 a node misses the sink.
 
