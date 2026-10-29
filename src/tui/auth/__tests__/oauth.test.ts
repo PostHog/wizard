@@ -144,7 +144,7 @@ describe('exchangeCodeForToken', () => {
     await expect(
       exchangeCodeForToken('code', 'verifier', 'http://localhost:8239'),
     ).rejects.toMatchObject({
-      code: 'SELF_SIGNED_CERT_IN_CHAIN',
+      networkCode: 'SELF_SIGNED_CERT_IN_CHAIN',
       message: expect.stringContaining('intercepting HTTPS') as string,
     });
   });

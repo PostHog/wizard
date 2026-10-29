@@ -637,7 +637,8 @@ export async function performOAuthFlow(
           step: 'oauth_flow',
           oauth_error_code: oauthErrorCode,
           oauth_error_description: flowError?.description,
-          error_code: error instanceof ApiError ? error.code : undefined,
+          network_code:
+            error instanceof ApiError ? error.networkCode : undefined,
           client_id: clientId,
           requested_scopes: config.scopes.join(' '),
           // Collapse OAuth callback failures of the same kind into one issue
