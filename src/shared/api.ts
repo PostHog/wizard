@@ -162,6 +162,8 @@ export class ApiError extends Error {
     message: string,
     public readonly statusCode?: number,
     public readonly endpoint?: string,
+    /** Node's error code when no response came back, such as `ECONNRESET`. */
+    public readonly code?: string,
   ) {
     super(message);
     this.name = 'ApiError';
@@ -186,6 +188,8 @@ export async function fetchUserData(
     analytics.captureException(apiError, {
       endpoint: '/api/users/@me/',
       baseUrl,
+      status: apiError.statusCode,
+      error_code: apiError.code,
     });
     throw apiError;
   }
@@ -254,6 +258,8 @@ export async function fetchProjectData(
       endpoint: `/api/projects/${projectId}/`,
       baseUrl,
       projectId,
+      status: apiError.statusCode,
+      error_code: apiError.code,
     });
     throw apiError;
   }
@@ -422,12 +428,46 @@ export async function fetchMarkdownNotebook(
   }
 }
 
+/** Node's codes for a certificate chain it can't verify, as TLS inspection causes. */
+const UNTRUSTED_CERT_CODES = new Set([
+  'SELF_SIGNED_CERT_IN_CHAIN',
+  'DEPTH_ZERO_SELF_SIGNED_CERT',
+  'UNABLE_TO_GET_ISSUER_CERT_LOCALLY',
+  'UNABLE_TO_GET_ISSUER_CERT',
+  'UNABLE_TO_VERIFY_LEAF_SIGNATURE',
+  'CERT_UNTRUSTED',
+]);
+
+/** A request that got no response: name the host and Node's code, and who can fix it. */
+function noResponseMessage(error: AxiosError, operation: string): string {
+  let host = 'PostHog';
+  try {
+    host = new URL(error.config?.url ?? '').host;
+  } catch {
+    // Keep the generic name.
+  }
+  const code = error.code ?? 'no response';
+  if (UNTRUSTED_CERT_CODES.has(code)) {
+    return `Couldn't ${operation}: a VPN, proxy or security tool on this network is intercepting HTTPS to ${host} (${code}). Ask your IT team to allow *.posthog.com without HTTPS inspection, then run the wizard again.`;
+  }
+  return `Couldn't reach ${host} to ${operation} (${code}). A VPN, proxy, firewall or security tool may be blocking it. Allow *.posthog.com, then run the wizard again.`;
+}
+
 export function handleApiError(error: unknown, operation: string): ApiError {
   if (axios.isAxiosError(error)) {
     const axiosError = error as AxiosError<{ detail?: string }>;
     const status = axiosError.response?.status;
     const detail = axiosError.response?.data?.detail;
     const endpoint = axiosError.config?.url;
+
+    if (!axiosError.response) {
+      return new ApiError(
+        noResponseMessage(axiosError, operation),
+        undefined,
+        endpoint,
+        axiosError.code,
+      );
+    }
 
     if (status === 401) {
       return new ApiError(
@@ -453,7 +493,8 @@ export function handleApiError(error: unknown, operation: string): ApiError {
       );
     }
 
-    const message = detail || `Failed to ${operation}`;
+    const message =
+      detail || `Failed to ${operation} (HTTP ${axiosError.response.status})`;
     return new ApiError(message, status, endpoint);
   }
 

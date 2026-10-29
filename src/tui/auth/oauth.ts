@@ -2,6 +2,7 @@ import * as crypto from 'node:crypto';
 import * as http from 'node:http';
 import { execSync } from 'node:child_process';
 import axios from 'axios';
+import { ApiError, handleApiError } from '@shared/api';
 import {
   getOAuthClientId,
   missingOAuthScopes,
@@ -395,6 +396,10 @@ async function exchangeCodeForToken(
       );
       throw exchangeError;
     }
+    // No response: name the cause rather than axios's bare message.
+    if (axios.isAxiosError(e) && !e.response) {
+      throw handleApiError(e, 'finish logging in');
+    }
     throw e;
   }
 
@@ -629,6 +634,7 @@ export async function performOAuthFlow(
           step: 'oauth_flow',
           oauth_error_code: oauthErrorCode,
           oauth_error_description: flowError?.description,
+          error_code: error instanceof ApiError ? error.code : undefined,
           client_id: clientId,
           requested_scopes: config.scopes.join(' '),
           // Collapse OAuth callback failures of the same kind into one issue
