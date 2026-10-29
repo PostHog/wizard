@@ -30,7 +30,11 @@ import { TaskStatus, isTaskStatus } from '@shared/task-status';
 import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
 import { reportWarehouseSourcesDetected } from '../detection/integration';
-import type { ProgramReadyContext } from '@programs/program-contract';
+import { tagFramework, withFramework } from '../project-traits/traits';
+import type {
+  ProgramReadyContext,
+  TraitSource,
+} from '@programs/program-contract';
 import type { WizardSession } from './wizard-session';
 import type { ScanReport } from './task-stream/types';
 
@@ -262,14 +266,20 @@ export class SessionStore {
     this.set('apiUser', user);
   }
 
+  /** The one write of the run's framework on a live session: the trait with its source, and `integration` as every reader sees it. */
   setFrameworkConfig(
     integration: WizardSession['integration'],
     config: WizardSession['frameworkConfig'],
+    source: TraitSource = 'static',
   ): void {
     this.$session.setKey('integration', integration);
+    this.$session.setKey(
+      'projectTraits',
+      withFramework(this.session.projectTraits, integration, source),
+    );
     this.$session.setKey('frameworkConfig', config);
     this.$session.setKey('unsupportedVersion', null);
-    if (integration) analytics.setTag('integration', integration);
+    if (integration) tagFramework(integration, source);
     this.emitChange();
   }
 
@@ -546,10 +556,11 @@ export class SessionStore {
         return read();
       },
       setFrameworkContext: (k, v) => this.setFrameworkContext(k, v),
-      setFrameworkConfig: (i, c) =>
+      setFrameworkConfig: (i, c, s) =>
         this.setFrameworkConfig(
           i as WizardSession['integration'],
           c as WizardSession['frameworkConfig'],
+          s,
         ),
       setDetectedFramework: (l) => this.setDetectedFramework(l),
       setPosthogSdkDetected: (d) => this.setPosthogSdkDetected(d),

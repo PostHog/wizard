@@ -12,6 +12,7 @@ export type {
 } from '@programs/program-contract';
 export type { ProgramRun } from '@programs/program-contract';
 export type { ProgramSession } from '@programs/program-contract';
+export type { TraitSource } from '@programs/program-contract';
 export type {
   CiRunnerContext,
   RunnerContext,

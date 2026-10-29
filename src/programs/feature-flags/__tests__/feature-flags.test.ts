@@ -36,12 +36,17 @@ describe('feature-flags program', () => {
       installDir: '/tmp/feature-flags-ci',
       frameworkContext: {},
       integration: null,
+      projectTraits: {},
       skillId: null,
     } as unknown as WizardSession;
 
     await featureFlagsConfig.ciPreRun?.(session, testCiRunnerContext());
 
     expect(session.integration).toBe(Integration.nextjs);
+    expect(session.projectTraits.framework).toEqual({
+      value: Integration.nextjs,
+      source: 'static',
+    });
     expect(session.skillId).toBe(Integration.nextjs);
   });
 });
