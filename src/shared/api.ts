@@ -1,6 +1,8 @@
 import axios, { AxiosError } from 'axios';
 import { z } from 'zod';
 import { analytics } from '@utils/analytics';
+import { logToFile } from '@utils/debug';
+import { probeCertificateChain } from './tls-probe';
 import { WIZARD_USER_AGENT } from './constants';
 import type { HostResolution } from './host-resolution';
 
@@ -162,10 +164,67 @@ export class ApiError extends Error {
     message: string,
     public readonly statusCode?: number,
     public readonly endpoint?: string,
+    /** Set after a TLS probe: whether the OS store would verify the host's chain. */
+    public readonly systemStoreTrusts?: boolean,
   ) {
     super(message);
     this.name = 'ApiError';
   }
+}
+
+/** Node's codes for a certificate chain it can't verify, as TLS inspection causes. */
+const UNTRUSTED_CERT_CODES = new Set([
+  'SELF_SIGNED_CERT_IN_CHAIN',
+  'DEPTH_ZERO_SELF_SIGNED_CERT',
+  'UNABLE_TO_GET_ISSUER_CERT_LOCALLY',
+  'UNABLE_TO_GET_ISSUER_CERT',
+  'UNABLE_TO_VERIFY_LEAF_SIGNATURE',
+  'CERT_UNTRUSTED',
+]);
+
+function isUntrustedCertError(error: unknown): error is AxiosError {
+  return (
+    axios.isAxiosError(error) &&
+    !error.response &&
+    UNTRUSTED_CERT_CODES.has(error.code ?? '')
+  );
+}
+
+const RETRY_DELAYS_MS = [500, 1500];
+
+/** No response (a network error), 5xx, 408 and 429 can heal on a retry; an untrusted certificate can't. */
+function isTransient(error: unknown): boolean {
+  if (!axios.isAxiosError(error) || isUntrustedCertError(error)) return false;
+  const status = error.response?.status;
+  return (
+    status === undefined || status >= 500 || status === 408 || status === 429
+  );
+}
+
+/** Runs a login-path request, retrying transient failures with backoff. */
+export async function retryTransient<T>(
+  request: () => Promise<T>,
+  sleep: (ms: number) => Promise<void> = (ms) =>
+    new Promise((resolve) => setTimeout(resolve, ms)),
+): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await request();
+    } catch (error) {
+      const delay = RETRY_DELAYS_MS[attempt];
+      if (delay === undefined || !isTransient(error)) throw error;
+      logToFile(`[api] ${describeAxiosFailure(error)}, retrying in ${delay}ms`);
+      await sleep(delay);
+    }
+  }
+}
+
+function describeAxiosFailure(error: unknown): string {
+  if (!axios.isAxiosError(error)) return String(error);
+  const status = error.response?.status;
+  return `${error.config?.url ?? 'request'} failed: ${
+    status ? `HTTP ${status}` : error.code ?? error.message
+  }`;
 }
 
 export async function fetchUserData(
@@ -173,19 +232,22 @@ export async function fetchUserData(
   baseUrl: string,
 ): Promise<ApiUser> {
   try {
-    const response = await axios.get(`${baseUrl}/api/users/@me/`, {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'User-Agent': WIZARD_USER_AGENT,
-      },
-    });
+    const response = await retryTransient(() =>
+      axios.get(`${baseUrl}/api/users/@me/`, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'User-Agent': WIZARD_USER_AGENT,
+        },
+      }),
+    );
 
     return ApiUserSchema.parse(response.data);
   } catch (error) {
-    const apiError = handleApiError(error, 'fetch user data');
+    const apiError = await diagnoseApiError(error, 'fetch user data');
     analytics.captureException(apiError, {
       endpoint: '/api/users/@me/',
       baseUrl,
+      system_store_trusts: apiError.systemStoreTrusts,
     });
     throw apiError;
   }
@@ -240,20 +302,23 @@ export async function fetchProjectData(
   baseUrl: string,
 ): Promise<ApiProject> {
   try {
-    const response = await axios.get(`${baseUrl}/api/projects/${projectId}/`, {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'User-Agent': WIZARD_USER_AGENT,
-      },
-    });
+    const response = await retryTransient(() =>
+      axios.get(`${baseUrl}/api/projects/${projectId}/`, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'User-Agent': WIZARD_USER_AGENT,
+        },
+      }),
+    );
 
     return ApiProjectSchema.parse(response.data);
   } catch (error) {
-    const apiError = handleApiError(error, 'fetch project data');
+    const apiError = await diagnoseApiError(error, 'fetch project data');
     analytics.captureException(apiError, {
       endpoint: `/api/projects/${projectId}/`,
       baseUrl,
       projectId,
+      system_store_trusts: apiError.systemStoreTrusts,
     });
     throw apiError;
   }
@@ -422,12 +487,81 @@ export async function fetchMarkdownNotebook(
   }
 }
 
+function hostOf(error: AxiosError): string | undefined {
+  try {
+    return error.config?.url ? new URL(error.config.url).host : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function untrustedCertMessage(
+  host: string,
+  code: string,
+  operation: string,
+): string {
+  return `Couldn't ${operation}: a VPN, proxy or security tool on this network is intercepting HTTPS to ${host} (${code}). Ask your IT team to allow *.posthog.com without HTTPS inspection, then run the wizard again.`;
+}
+
+/**
+ * `handleApiError`, plus a handshake-only TLS probe when the chain didn't
+ * verify. The probe only diagnoses; the issuer goes to the local log alone,
+ * since it can name the user's company.
+ */
+export async function diagnoseApiError(
+  error: unknown,
+  operation: string,
+  probe: typeof probeCertificateChain = probeCertificateChain,
+): Promise<ApiError> {
+  if (!isUntrustedCertError(error)) return handleApiError(error, operation);
+  const host = hostOf(error);
+  const result = host ? await probe(host) : null;
+  if (host && result) {
+    const trusted =
+      result.systemStoreTrusts === undefined
+        ? 'unknown'
+        : String(result.systemStoreTrusts);
+    logToFile(
+      `[tls] ${host} chain signed by "${
+        result.issuer ?? 'unknown'
+      }"; trusted by the system store: ${trusted}`,
+    );
+  }
+  return new ApiError(
+    untrustedCertMessage(
+      host ?? 'PostHog',
+      error.code ?? 'untrusted certificate',
+      operation,
+    ),
+    undefined,
+    error.config?.url,
+    result?.systemStoreTrusts,
+  );
+}
+
+function unreachableMessage(error: AxiosError, operation: string): string {
+  const host = hostOf(error) ?? 'PostHog';
+  const code = error.code ?? 'no response';
+  if (UNTRUSTED_CERT_CODES.has(code)) {
+    return untrustedCertMessage(host, code, operation);
+  }
+  return `Couldn't reach ${host} to ${operation} (${code}). A VPN, proxy, firewall or security tool may be blocking it. Allow *.posthog.com, then run the wizard again.`;
+}
+
 export function handleApiError(error: unknown, operation: string): ApiError {
   if (axios.isAxiosError(error)) {
     const axiosError = error as AxiosError<{ detail?: string }>;
     const status = axiosError.response?.status;
     const detail = axiosError.response?.data?.detail;
     const endpoint = axiosError.config?.url;
+
+    if (!axiosError.response) {
+      return new ApiError(
+        unreachableMessage(axiosError, operation),
+        undefined,
+        endpoint,
+      );
+    }
 
     if (status === 401) {
       return new ApiError(
@@ -453,7 +587,8 @@ export function handleApiError(error: unknown, operation: string): ApiError {
       );
     }
 
-    const message = detail || `Failed to ${operation}`;
+    const message =
+      detail || `Failed to ${operation} (HTTP ${axiosError.response.status})`;
     return new ApiError(message, status, endpoint);
   }
 
