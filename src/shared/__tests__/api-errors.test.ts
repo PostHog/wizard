@@ -6,9 +6,12 @@ vi.mock('@utils/debug', () => ({ logToFile: vi.fn() }));
 const url = 'https://us.posthog.com/api/projects/1/';
 const config = { url, headers: new AxiosHeaders() };
 
-function networkError(code: string): AxiosError {
-  return new AxiosError('request failed', code, config, {});
+function networkError(code: string, requestUrl = url): AxiosError {
+  const requestConfig = { url: requestUrl, headers: new AxiosHeaders() };
+  return new AxiosError('request failed', code, requestConfig, {});
 }
+
+const localUrl = 'http://localhost:8010/api/projects/1/';
 
 function httpError(status: number): AxiosError {
   const response = { status, data: {}, config } as AxiosResponse;
@@ -56,6 +59,17 @@ describe('retryTransient', () => {
     expect(request).toHaveBeenCalledTimes(1);
   });
 
+  it('does not retry a local server that is not answering', async () => {
+    const request = vi
+      .fn()
+      .mockRejectedValue(networkError('ECONNREFUSED', localUrl));
+
+    await expect(retryTransient(request, sleep)).rejects.toBeInstanceOf(
+      AxiosError,
+    );
+    expect(request).toHaveBeenCalledTimes(1);
+  });
+
   it('does not retry an untrusted certificate', async () => {
     const request = vi
       .fn()
@@ -91,6 +105,17 @@ describe('handleApiError', () => {
     expect(error.message).toContain('SELF_SIGNED_CERT_IN_CHAIN');
   });
 
+  it('points at the local server instead of the network for localhost', () => {
+    const error = handleApiError(
+      networkError('ECONNREFUSED', localUrl),
+      'fetch project data',
+    );
+
+    expect(error.message).toBe(
+      "Couldn't reach localhost:8010 to fetch project data (ECONNREFUSED). Check that your local server is running.",
+    );
+  });
+
   it('includes the status of an unexpected response', () => {
     const error = handleApiError(httpError(502), 'fetch project data');
 
@@ -123,6 +148,18 @@ describe('diagnoseApiError', () => {
       expect(error.systemStoreTrusts).toBe(systemStoreTrusts);
     },
   );
+
+  it('skips the probe for a local server', async () => {
+    const probe = vi.fn();
+
+    await diagnoseApiError(
+      networkError('SELF_SIGNED_CERT_IN_CHAIN', 'https://localhost:8010/'),
+      'fetch project data',
+      probe,
+    );
+
+    expect(probe).not.toHaveBeenCalled();
+  });
 
   it('skips the probe for any other failure', async () => {
     const probe = vi.fn();

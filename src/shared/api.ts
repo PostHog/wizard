@@ -196,9 +196,9 @@ const RETRY_DELAYS_MS = [500, 1500];
 function isTransient(error: unknown): boolean {
   if (!axios.isAxiosError(error) || isUntrustedCertError(error)) return false;
   const status = error.response?.status;
-  return (
-    status === undefined || status >= 500 || status === 408 || status === 429
-  );
+  // A local server that isn't answering won't start in the next two seconds.
+  if (status === undefined) return !isLocalHost(error);
+  return status >= 500 || status === 408 || status === 429;
 }
 
 /** Runs a login-path request, retrying transient failures with backoff. */
@@ -495,6 +495,17 @@ function hostOf(error: AxiosError): string | undefined {
   }
 }
 
+const LOCAL_HOSTNAMES = new Set(['localhost', '127.0.0.1', '[::1]']);
+
+/** A request to this machine, such as a local PostHog in dev. */
+function isLocalHost(error: AxiosError): boolean {
+  try {
+    return LOCAL_HOSTNAMES.has(new URL(error.config?.url ?? '').hostname);
+  } catch {
+    return false;
+  }
+}
+
 function untrustedCertMessage(
   host: string,
   code: string,
@@ -513,7 +524,9 @@ export async function diagnoseApiError(
   operation: string,
   probe: typeof probeCertificateChain = probeCertificateChain,
 ): Promise<ApiError> {
-  if (!isUntrustedCertError(error)) return handleApiError(error, operation);
+  if (!isUntrustedCertError(error) || isLocalHost(error)) {
+    return handleApiError(error, operation);
+  }
   const host = hostOf(error);
   const result = host ? await probe(host) : null;
   if (host && result) {
@@ -542,6 +555,9 @@ export async function diagnoseApiError(
 function unreachableMessage(error: AxiosError, operation: string): string {
   const host = hostOf(error) ?? 'PostHog';
   const code = error.code ?? 'no response';
+  if (isLocalHost(error)) {
+    return `Couldn't reach ${host} to ${operation} (${code}). Check that your local server is running.`;
+  }
   if (UNTRUSTED_CERT_CODES.has(code)) {
     return untrustedCertMessage(host, code, operation);
   }
