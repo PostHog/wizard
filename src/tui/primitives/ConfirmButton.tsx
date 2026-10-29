@@ -22,14 +22,21 @@ interface ConfirmButtonProps {
   focused: boolean;
   /** Optional selected-item count, rendered as "Label (n)" when > 0. */
   count?: number;
+  /** What the count counts, rendered as "Label (n noun)" so it reads as scope. */
+  countNoun?: { one: string; other: string };
 }
 
 export const ConfirmButton = ({
   label = 'Confirm',
   focused,
   count,
+  countNoun,
 }: ConfirmButtonProps) => {
-  const text = count && count > 0 ? `${label} (${count})` : label;
+  const noun = count === 1 ? countNoun?.one : countNoun?.other;
+  const text =
+    count && count > 0
+      ? `${label} (${noun ? `${count} ${noun}` : count})`
+      : label;
   return (
     <Text
       color={focused ? Colors.accent : undefined}
