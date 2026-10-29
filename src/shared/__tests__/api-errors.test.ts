@@ -128,9 +128,9 @@ describe('diagnoseApiError', () => {
   const certError = networkError('SELF_SIGNED_CERT_IN_CHAIN');
 
   it.each([true, false])(
-    'advises IT and records the probe when the system store trusts the chain: %s',
+    'advises IT and records the check when the system store trusts the chain: %s',
     async (systemStoreTrusts) => {
-      const probe = vi.fn().mockResolvedValue({
+      const check = vi.fn().mockResolvedValue({
         issuer: 'Example Corp Root CA',
         systemStoreTrusts,
       });
@@ -138,10 +138,11 @@ describe('diagnoseApiError', () => {
       const error = await diagnoseApiError(
         certError,
         'fetch project data',
-        probe,
+        check,
+        () => false,
       );
 
-      expect(probe).toHaveBeenCalledWith('us.posthog.com');
+      expect(check).toHaveBeenCalledWith('us.posthog.com', 443);
       expect(error.message).toContain('Ask your IT team');
       expect(error.message).not.toContain('use-system-ca');
       expect(error.message).not.toContain('Example Corp');
@@ -149,28 +150,61 @@ describe('diagnoseApiError', () => {
     },
   );
 
-  it('skips the probe for a local server', async () => {
-    const probe = vi.fn();
+  it('checks the request port on a host with one', async () => {
+    const check = vi.fn().mockResolvedValue(null);
+
+    await diagnoseApiError(
+      networkError(
+        'SELF_SIGNED_CERT_IN_CHAIN',
+        'https://example.com:8443/api/',
+      ),
+      'fetch project data',
+      check,
+      () => false,
+    );
+
+    expect(check).toHaveBeenCalledWith('example.com', 8443);
+  });
+
+  it('skips the check when an https proxy is set', async () => {
+    const check = vi.fn();
+
+    const error = await diagnoseApiError(
+      certError,
+      'fetch project data',
+      check,
+      () => true,
+    );
+
+    expect(check).not.toHaveBeenCalled();
+    expect(error.message).toContain('Ask your IT team');
+    expect(error.systemStoreTrusts).toBeUndefined();
+  });
+
+  it('skips the check for a local server', async () => {
+    const check = vi.fn();
 
     await diagnoseApiError(
       networkError('SELF_SIGNED_CERT_IN_CHAIN', 'https://localhost:8010/'),
       'fetch project data',
-      probe,
+      check,
+      () => false,
     );
 
-    expect(probe).not.toHaveBeenCalled();
+    expect(check).not.toHaveBeenCalled();
   });
 
-  it('skips the probe for any other failure', async () => {
-    const probe = vi.fn();
+  it('skips the check for any other failure', async () => {
+    const check = vi.fn();
 
     const error = await diagnoseApiError(
       networkError('ECONNRESET'),
       'fetch project data',
-      probe,
+      check,
+      () => false,
     );
 
-    expect(probe).not.toHaveBeenCalled();
+    expect(check).not.toHaveBeenCalled();
     expect(error.message).toContain("Couldn't reach us.posthog.com");
   });
 });

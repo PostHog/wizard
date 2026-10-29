@@ -2,7 +2,11 @@ import axios, { AxiosError } from 'axios';
 import { z } from 'zod';
 import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
-import { probeCertificateChain, UNTRUSTED_CERT_CODES } from './tls-probe';
+import {
+  httpsProxyConfigured,
+  checkCertificateChain,
+  UNTRUSTED_CERT_CODES,
+} from './tls-check';
 import { WIZARD_USER_AGENT } from './constants';
 import type { HostResolution } from './host-resolution';
 
@@ -164,7 +168,7 @@ export class ApiError extends Error {
     message: string,
     public readonly statusCode?: number,
     public readonly endpoint?: string,
-    /** Set after a TLS probe: whether the OS store would verify the host's chain. */
+    /** Set after a TLS check: whether the OS store would verify the host's chain. */
     public readonly systemStoreTrusts?: boolean,
   ) {
     super(message);
@@ -485,6 +489,19 @@ function hostOf(error: AxiosError): string | undefined {
   }
 }
 
+/** The request's hostname and port, apart, for a raw TLS connection. */
+function checkTarget(
+  error: AxiosError,
+): { hostname: string; port: number } | undefined {
+  try {
+    const url = new URL(error.config?.url ?? '');
+    if (url.protocol !== 'https:') return undefined;
+    return { hostname: url.hostname, port: Number(url.port) || 443 };
+  } catch {
+    return undefined;
+  }
+}
+
 const LOCAL_HOSTNAMES = new Set(['localhost', '127.0.0.1', '[::1]']);
 
 /** A request to this machine, such as a local PostHog in dev. */
@@ -505,20 +522,30 @@ function untrustedCertMessage(
 }
 
 /**
- * `handleApiError`, plus a handshake-only TLS probe when the chain didn't
- * verify. The probe only diagnoses; the issuer goes to the local log alone,
+ * `handleApiError`, plus a handshake-only TLS check when the chain didn't
+ * verify. The check only diagnoses; the issuer goes to the local log alone,
  * since it can name the user's company.
  */
 export async function diagnoseApiError(
   error: unknown,
   operation: string,
-  probe: typeof probeCertificateChain = probeCertificateChain,
+  check: typeof checkCertificateChain = checkCertificateChain,
+  proxyConfigured: () => boolean = httpsProxyConfigured,
 ): Promise<ApiError> {
   if (!isUntrustedCertError(error) || isLocalHost(error)) {
     return handleApiError(error, operation);
   }
   const host = hostOf(error);
-  const result = host ? await probe(host) : null;
+  const target = checkTarget(error);
+  // A direct check would bypass the proxy the request went through and see a different chain.
+  const viaProxy = proxyConfigured();
+  if (viaProxy) {
+    logToFile(
+      '[tls] an https proxy is set in the environment; chain check skipped',
+    );
+  }
+  const result =
+    target && !viaProxy ? await check(target.hostname, target.port) : null;
   if (host && result) {
     logToFile(
       `[tls] ${host} chain signed by "${
