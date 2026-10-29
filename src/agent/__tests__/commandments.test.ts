@@ -78,6 +78,12 @@ describe('commandments by axis', () => {
       );
     });
   });
+  it('explains schema lag for newly instrumented events', () => {
+    const text = WIZARD_COMMANDMENTS.join('\n');
+    expect(text).toMatch(/read-data-schema/);
+    expect(text).toMatch(/until they are ingested/);
+  });
+
   describe('wizard_ask correction rules', () => {
     const text = WIZARD_COMMANDMENTS.join('\n');
 
