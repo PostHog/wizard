@@ -19,6 +19,7 @@ import type {
   ProgramReadyContext,
 } from '@programs/program-contract';
 import type { ProgramSession } from '@programs/program-contract';
+import type { Credentials } from '@shared/api';
 import { analytics } from '@utils/analytics';
 import { ProgramAbort } from '@programs/program-contract';
 import { ErrorCodes } from '@shared/errors';
@@ -95,6 +96,23 @@ async function detectReplayVisionProject(
   await detectPostHogIntegration(ctx);
 }
 
+/** The outro's next steps: deploy, check that replay records, and open the scanners. */
+function buildReplayVisionNextSteps(credentials: Credentials): {
+  heading: string;
+  items: string[];
+} {
+  const appHost = credentials.host.appHost.replace(/\/$/, '');
+  const projectUrl = `${appHost}/project/${credentials.projectId}`;
+  return {
+    heading: 'Before your scanners can run:',
+    items: [
+      'If this run changed your code, deploy it. Session replay records only from code your users run, so scanners start with the first recording.',
+      `Check that "Record user sessions" is on: ${projectUrl}/settings/environment-replay`,
+      `See your scanners: ${projectUrl}/replay-vision`,
+    ],
+  };
+}
+
 const base = createSkillProgram({
   // The menu ids this skill `<dir>-<variant>`, and context-mill's
   // `replay-vision/config.yaml` declares a single variant, `setup`. The bare
@@ -120,6 +138,8 @@ const base = createSkillProgram({
   spinnerMessage: 'Setting up Replay vision...',
   estimatedDurationMinutes: 6,
   abortCases: REPLAY_VISION_ABORT_CASES,
+  buildOutroNextSteps: (_session, credentials) =>
+    buildReplayVisionNextSteps(credentials),
 });
 
 /**
