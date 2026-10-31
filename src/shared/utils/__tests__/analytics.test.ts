@@ -67,6 +67,7 @@ describe('Analytics', () => {
       alias: vi.fn(),
       identify: vi.fn(),
       groupIdentify: vi.fn(),
+      setPersonProperties: vi.fn(),
       shutdown: vi.fn().mockResolvedValue(undefined),
     } as any;
 
@@ -751,6 +752,21 @@ describe('Analytics', () => {
         groupType: 'organization',
         groupKey: 'org-1',
         properties: { wizard_ai_sdk_detected: true },
+      });
+    });
+  });
+
+  describe('setPersonProperties', () => {
+    it('sets the properties on the logged-in person', () => {
+      analytics.identifyUser({ distinct_id: 'user-123' } as ApiUser);
+
+      analytics.setPersonProperties({
+        wizard_detected_email_providers: ['Resend'],
+      });
+
+      expect(mockPostHogInstance.setPersonProperties).toHaveBeenCalledWith({
+        distinctId: 'user-123',
+        properties: { wizard_detected_email_providers: ['Resend'] },
       });
     });
   });

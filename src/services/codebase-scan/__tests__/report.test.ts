@@ -6,6 +6,7 @@ vi.mock(import('@utils/analytics'), () => ({
   analytics: {
     wizardCapture: vi.fn(),
     setTag: vi.fn(),
+    setPersonProperties: vi.fn(),
     captureException: vi.fn(),
     runId: 'run-123',
   } as never,
@@ -33,7 +34,7 @@ import { loadSourceDetectors } from '@services/warehouse-sources/registry';
 import { analytics } from '@utils/analytics';
 import { SessionStore } from '@services/session/session-store';
 import { buildSession } from '@services/session/wizard-session';
-import type { Credentials } from '@shared/api';
+import type { ApiUser, Credentials } from '@shared/api';
 
 const CREDENTIALS = {
   accessToken: 'pha_test',
@@ -41,6 +42,8 @@ const CREDENTIALS = {
   projectId: 7,
   host: { apiHost: 'https://us.i.posthog.com' },
 } as unknown as Credentials;
+
+const USER = { distinct_id: 'user-1' } as ApiUser;
 
 const PROGRAM = { id: 'posthog-integration', scansCodebase: true };
 
@@ -159,6 +162,73 @@ describe('reportCodebaseScan', () => {
     expect(store.session.codebaseScanReport).toMatchObject({
       complete: false,
       tools: [{ kind: 'Stripe' }],
+    });
+  });
+
+  describe('detected email providers', () => {
+    beforeEach(() => {
+      vi.mocked(analytics.setPersonProperties).mockClear();
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date('2026-10-26T09:30:00.000Z'));
+    });
+    afterEach(() => vi.useRealTimers());
+
+    async function reportProjectUsing(
+      dependencies: Record<string, string>,
+    ): Promise<void> {
+      fs.writeFileSync(
+        path.join(tmpDir, 'package.json'),
+        JSON.stringify({ dependencies }),
+      );
+      const store = await ciStore();
+      store.setCredentials(CREDENTIALS);
+      store.setApiUser(USER);
+      reportCodebaseScan(store);
+      reportCodebaseScan(store);
+    }
+
+    it('sets the providers and when they were found on the logged-in person, once', async () => {
+      await reportProjectUsing({ resend: '^4.0.0', stripe: '^14.0.0' });
+
+      expect(analytics.setPersonProperties).toHaveBeenCalledExactlyOnceWith({
+        wizard_detected_email_providers: ['Resend'],
+        wizard_detected_email_provider_at: '2026-10-26T09:30:00.000Z',
+      });
+    });
+
+    it('leaves the person alone when no email provider is found', async () => {
+      await reportProjectUsing({ stripe: '^14.0.0' });
+
+      expect(analytics.setPersonProperties).not.toHaveBeenCalled();
+    });
+
+    it('leaves the person alone on a login without a user to set it on', async () => {
+      fs.writeFileSync(
+        path.join(tmpDir, 'package.json'),
+        JSON.stringify({ dependencies: { resend: '^4.0.0' } }),
+      );
+      const store = await ciStore();
+      store.setCredentials(CREDENTIALS);
+
+      reportCodebaseScan(store);
+
+      expect(analytics.setPersonProperties).not.toHaveBeenCalled();
+    });
+
+    it('leaves the person alone when the user declines sharing', async () => {
+      fs.writeFileSync(
+        path.join(tmpDir, 'package.json'),
+        JSON.stringify({ dependencies: { resend: '^4.0.0' } }),
+      );
+      const store = new SessionStore(buildSession({ installDir: tmpDir }));
+      await scanCodebaseFor(PROGRAM, store.readyContext());
+      store.declineSharing();
+      store.setCredentials(CREDENTIALS);
+      store.setApiUser(USER);
+
+      reportCodebaseScan(store);
+
+      expect(analytics.setPersonProperties).not.toHaveBeenCalled();
     });
   });
 

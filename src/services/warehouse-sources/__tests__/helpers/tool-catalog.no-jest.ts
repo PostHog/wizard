@@ -81,6 +81,12 @@ export const FIXTURE_CATALOG: ToolCatalog = {
         packages: { pypi: ['mixpanel'], 'not-an-ecosystem-yet': ['mixpanel'] },
       },
     }),
+    tool('Resend', {
+      signals: {
+        env_key_patterns: ['^RESEND_API_KEY$'],
+        packages: { npm: ['resend'] },
+      },
+    }),
     tool('Sentry', {
       signals: { packages: { npm: ['@sentry/node'] } },
     }),
