@@ -1,15 +1,24 @@
-import { TRANSACTIONAL_EMAIL_ABORT_CASES } from '@programs/transactional-email';
+import { config } from '@programs/transactional-email';
 
-describe('TRANSACTIONAL_EMAIL_ABORT_CASES', () => {
-  // The exact `[ABORT] <reason>` strings of the send-transactional-email skill's
-  // "Inside the PostHog Wizard" section (context-mill), prefix stripped.
+const DOCS_URL = 'https://posthog.com/docs/workflows/transactional-emails';
+
+function abortCases() {
+  const run = config.run;
+  if (!run || typeof run === 'function') {
+    throw new Error('expected a static run object');
+  }
+  return run.abortCases ?? [];
+}
+
+describe('transactional-email abort cases', () => {
   it.each(['transactional email api not enabled', 'no server code found'])(
-    'matches the "%s" abort reason exactly once',
+    'shows the "%s" abort with its own message and the transactional email docs',
     (reason) => {
-      const matched = TRANSACTIONAL_EMAIL_ABORT_CASES.filter((c) =>
-        c.match.test(reason),
-      );
+      const matched = abortCases().filter((c) => c.match.test(reason));
+
       expect(matched).toHaveLength(1);
+      expect(matched[0].message).toBeTruthy();
+      expect(matched[0].docsUrl).toBe(DOCS_URL);
     },
   );
 });
