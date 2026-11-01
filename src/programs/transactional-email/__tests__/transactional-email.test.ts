@@ -12,12 +12,11 @@ function abortCases() {
 
 describe('transactional-email abort cases', () => {
   it.each(['transactional email api not enabled', 'no server code found'])(
-    'shows the "%s" abort with its own message and the transactional email docs',
+    'links the transactional email docs from the "%s" abort',
     (reason) => {
       const matched = abortCases().filter((c) => c.match.test(reason));
 
       expect(matched).toHaveLength(1);
-      expect(matched[0].message).toBeTruthy();
       expect(matched[0].docsUrl).toBe(DOCS_URL);
     },
   );

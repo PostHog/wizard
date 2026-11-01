@@ -1,4 +1,4 @@
-import { DEFAULT_BINDING } from '@agent';
+import { GPT5_6_SOL_MODEL, Harness, Sequence } from '@shared/constants';
 import type { AbortCase } from '@agent/types';
 import { createSkillProgram } from '../shared/skill-program';
 import type { ProgramConfig } from '@programs/program-contract';
@@ -49,5 +49,10 @@ export const config: ProgramConfig = {
     estimatedDurationMinutes: 5,
     abortCases: TRANSACTIONAL_EMAIL_ABORT_CASES,
   }),
-  binding: DEFAULT_BINDING,
+  binding: {
+    sequence: Sequence.linear,
+    harness: Harness.pi,
+    model: GPT5_6_SOL_MODEL,
+    thinkingLevel: 'medium',
+  },
 };
