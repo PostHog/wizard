@@ -47,8 +47,15 @@ import type { WizardStore } from './store.js';
 import type { TuiLaunch } from './launch.js';
 import { tuiWorkflow } from './workflow.js';
 
-/** How long a screen's exit request waits for analytics before it exits anyway. */
+/** How long an exit request or a signal waits for analytics before it exits anyway. */
 const EXIT_REPORT_BUDGET_MS = 2000;
+
+function withinReportBudget(report: Promise<void>): Promise<unknown> {
+  return Promise.race([
+    report,
+    new Promise((resolve) => setTimeout(resolve, EXIT_REPORT_BUDGET_MS)),
+  ]);
+}
 
 /**
  * Run `config` in the TUI. Resolves with the exit code: the run's, a screen's
@@ -95,7 +102,7 @@ export async function runTui(
     }
     void Promise.all([
       stream?.shutdown(2000, 'cancelled'),
-      reportCancellation(),
+      withinReportBudget(reportCancellation()),
     ])
       .catch(() => logToFile('[run-wizard] cancellation shutdown failed'))
       .finally(() => {
@@ -142,10 +149,7 @@ export async function runTui(
         }
         await flushAnalytics();
       };
-      void Promise.race([
-        report(),
-        new Promise((resolve) => setTimeout(resolve, EXIT_REPORT_BUDGET_MS)),
-      ]).then(() => exit.end(code));
+      void withinReportBudget(report()).then(() => exit.end(code));
     });
 
     const session = buildSession(launch.session);

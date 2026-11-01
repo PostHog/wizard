@@ -235,6 +235,27 @@ it('an Ink Ctrl-C after a successful run delivers what the unmount captures befo
   expect(delivered).toContain('email provider offer answered');
 });
 
+it('an Ink Ctrl-C after a successful run resolves 130 within the report budget when the flush hangs', async () => {
+  vi.useFakeTimers({ toFake: ['setTimeout'] });
+  try {
+    mountedStore();
+    vi.mocked(runProgram).mockResolvedValue({
+      outcome: RunOutcome.Success,
+      diagnostics: [],
+    } as never);
+    vi.mocked(analytics.flush).mockReturnValue(new Promise(() => undefined));
+    const exited = runTui(posthogIntegration, launch('/tmp/hung-flush-test'));
+    await vi.waitFor(() =>
+      expect(analytics.shutdown).toHaveBeenCalledWith('success'),
+    );
+    vi.mocked(startTUI).mock.calls[0][2]?.();
+    await vi.advanceTimersByTimeAsync(2000);
+    await expect(exited).resolves.toBe(130);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
 it("resolves a screen's exit request with its code and starts no stream shutdown", async () => {
   const { store, unmount } = mountedStore();
   vi.mocked(runProgram).mockResolvedValue({
