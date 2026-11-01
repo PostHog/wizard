@@ -16,9 +16,10 @@ export enum EmailProviderOfferAnswer {
   Skipped = 'skipped',
 }
 
+type OfferedProvider = { kind: EmailProviderKind; label: string };
+
 export type EmailProviderOffer = {
-  providers: EmailProviderKind[];
-  providerLabels: [string, ...string[]];
+  providers: [OfferedProvider, ...OfferedProvider[]];
   workflowsUrl: string;
   migrateCommand?: string;
 };
@@ -38,6 +39,10 @@ type OfferSession = Pick<
 
 const MIGRATE_COMMANDS: Readonly<Partial<Record<EmailProviderKind, string>>> =
   {};
+
+function offered({ kind, label }: OfferedProvider): OfferedProvider {
+  return { kind, label };
+}
 
 function mayAsk(session: OfferSession, flags: WizardFlags): boolean {
   return (
@@ -59,8 +64,7 @@ export function emailProviderOffer(
   const [first, ...others] = detectedEmailProviders(scan);
   if (!first) return undefined;
   return {
-    providers: [first, ...others].map((tool) => tool.kind),
-    providerLabels: [first.label, ...others.map((tool) => tool.label)],
+    providers: [offered(first), ...others.map(offered)],
     workflowsUrl: `${credentials.host.appHost}/project/${credentials.projectId}/workflows?source=wizard_cli`,
     migrateCommand: MIGRATE_COMMANDS[first.kind],
   };
@@ -70,22 +74,26 @@ function providerList([
   first,
   second,
   ...rest
-]: EmailProviderOffer['providerLabels']): string {
-  if (second === undefined) return first;
-  if (rest.length === 0) return `${first} and ${second}`;
-  return `${first}, ${second} and others`;
+]: EmailProviderOffer['providers']): string {
+  if (second === undefined) return first.label;
+  if (rest.length === 0) return `${first.label} and ${second.label}`;
+  return `${first.label}, ${second.label} and others`;
+}
+
+function providerKinds(offer: EmailProviderOffer): EmailProviderKind[] {
+  return offer.providers.map((provider) => provider.kind);
 }
 
 function declineLabel(offer: EmailProviderOffer): string {
-  const [only, ...others] = offer.providerLabels;
+  const [only, ...others] = offer.providers;
   return others.length === 0
-    ? `No, I'm happy with ${only}`
+    ? `No, I'm happy with ${only.label}`
     : "No, I'm happy with my current setup";
 }
 
 export function emailProviderOfferQuestion(offer: EmailProviderOffer): string {
   return `Your app sends email with ${providerList(
-    offer.providerLabels,
+    offer.providers,
   )}. PostHog can send it too, triggered by the events you already track. Want to try it?`;
 }
 
@@ -101,7 +109,7 @@ export function emailProviderOfferChoices(
 
 export function reportEmailProviderOfferShown(offer: EmailProviderOffer): void {
   analytics.wizardCapture('email provider offer shown', {
-    providers: offer.providers,
+    providers: providerKinds(offer),
   });
 }
 
@@ -110,7 +118,7 @@ export function reportEmailProviderOfferAnswered(
   answer: EmailProviderOfferAnswer,
 ): void {
   analytics.wizardCapture('email provider offer answered', {
-    providers: offer.providers,
+    providers: providerKinds(offer),
     answer,
     $set: {
       wizard_email_offer_answer: answer,

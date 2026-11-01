@@ -68,8 +68,10 @@ describe('emailProviderOffer', () => {
     );
 
     expect(offer).toEqual({
-      providers: ['Resend', 'AwsSes'],
-      providerLabels: ['Resend', 'Amazon SES'],
+      providers: [
+        { kind: 'Resend', label: 'Resend' },
+        { kind: 'AwsSes', label: 'Amazon SES' },
+      ],
       workflowsUrl:
         'https://us.posthog.com/project/42/workflows?source=wizard_cli',
     });
@@ -154,7 +156,9 @@ describe('emailProviderOffer', () => {
       );
       if (!offer) throw new Error('expected an offer');
 
-      expect(offer.providers).toEqual(tools.map((tool) => tool.kind));
+      expect(offer.providers.map((provider) => provider.kind)).toEqual(
+        tools.map((tool) => tool.kind),
+      );
       expect(emailProviderOfferQuestion(offer)).toBe(
         `${opening} PostHog can send it too, triggered by the events you already track. Want to try it?`,
       );
