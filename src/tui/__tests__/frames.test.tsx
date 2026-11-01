@@ -557,6 +557,7 @@ const FIXTURES: Record<string, Fixture> = {
     arrange: (s) => {
       s.grantSharing();
       authed(s);
+      s.setApiUser(apiUser(true));
       s.setFrameworkContext(CODEBASE_SCAN_KEY, {
         program: Program.PostHogIntegration,
         scannedAt: '2026-10-26T09:30:00.000Z',

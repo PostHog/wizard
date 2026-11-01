@@ -32,6 +32,7 @@ type OfferSession = Pick<
   | 'scanConsent'
   | 'outroData'
   | 'credentials'
+  | 'apiUser'
   | 'frameworkContext'
 >;
 
@@ -42,6 +43,7 @@ function mayAsk(session: OfferSession, flags: WizardFlags): boolean {
   return (
     flags?.[WIZARD_EMAIL_PROVIDER_OFFER_FLAG_KEY] === 'true' &&
     !session.ci &&
+    session.apiUser !== null &&
     maySendScanResults(session) &&
     session.outroData?.kind === OutroKind.Success
   );

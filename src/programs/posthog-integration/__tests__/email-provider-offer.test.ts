@@ -5,6 +5,7 @@ import { HostResolution } from '@shared/host-resolution';
 import { OutroKind } from '@shared/outro';
 import { ScanConsent } from '@shared/run-state';
 import type { ProgramSession } from '@programs/program-contract';
+import type { ApiUser } from '@shared/api';
 import {
   emailProviderOffer,
   emailProviderOfferChoices,
@@ -46,6 +47,7 @@ function finishedRun(
     host: HostResolution.fromApiHost('https://us.posthog.com'),
     projectId: 42,
   };
+  session.apiUser = { distinct_id: 'user-distinct-id' } as ApiUser;
   return Object.assign(session, overrides);
 }
 
@@ -90,6 +92,10 @@ describe('emailProviderOffer', () => {
     [
       'the user is not logged in',
       (scan) => finishedRun(scan, { credentials: null }),
+    ],
+    [
+      'the run could not identify the user',
+      (scan) => finishedRun(scan, { apiUser: null }),
     ],
   ])('stays silent when %s', (_case, sessionFor) => {
     expect(

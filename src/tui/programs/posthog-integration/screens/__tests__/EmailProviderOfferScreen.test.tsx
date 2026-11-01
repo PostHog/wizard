@@ -5,6 +5,7 @@ import { ScreenId } from '@tui/screen-ids';
 import { KeyboardHintsProvider } from '@tui/hooks/useKeyboardHints';
 import { OutroKind } from '@shared/outro';
 import { HostResolution } from '@shared/host-resolution';
+import type { ApiUser } from '@shared/api';
 import { RunPhase } from '@shared/run-state';
 import { WizardReadiness } from '@shared/health-checks/readiness';
 import { CODEBASE_SCAN_KEY } from '@services/codebase-scan';
@@ -50,6 +51,10 @@ function storeAfterInstallWithResend(): WizardStore {
     host: HostResolution.fromApiHost('https://us.posthog.com'),
     projectId: 42,
   });
+  store.setApiUser({
+    distinct_id: 'user-distinct-id',
+    organization: { is_ai_data_processing_approved: true },
+  } as ApiUser);
   store.setFrameworkContext(CODEBASE_SCAN_KEY, {
     program: 'posthog-integration',
     scannedAt: '2026-10-26T09:30:00.000Z',
