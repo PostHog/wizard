@@ -296,8 +296,10 @@ export class SessionStore {
 
   setSkillId(skillId: string | null): void {
     this.set('skillId', skillId);
-    const migratedFrom = emailProviderMigratedFrom(skillId);
-    if (migratedFrom) analytics.setTag('migrated_from', migratedFrom);
+    analytics.setTag(
+      'migrated_from',
+      emailProviderMigratedFrom(skillId) ?? undefined,
+    );
   }
 
   setUnsupportedVersion(
