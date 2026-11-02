@@ -182,6 +182,7 @@ function isUntrustedCertError(error: unknown): error is AxiosError {
 }
 
 const RETRY_DELAYS_MS = [500, 1500];
+const USER_DATA_TIMEOUT_MS = 10_000;
 
 /** No response (a network error), 5xx, 408 and 429 can heal on a retry; an untrusted certificate can't. */
 function isTransient(error: unknown): boolean {
@@ -242,6 +243,7 @@ export async function fetchUserData(
           Authorization: `Bearer ${accessToken}`,
           'User-Agent': WIZARD_USER_AGENT,
         },
+        timeout: USER_DATA_TIMEOUT_MS,
       }),
     );
 
