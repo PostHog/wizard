@@ -1,9 +1,12 @@
+import * as http from 'http';
+import type { AddressInfo } from 'net';
 import { AxiosError, AxiosHeaders, type AxiosResponse } from 'axios';
 import axios from 'axios';
 import { analytics } from '@utils/analytics';
 import {
   diagnoseApiError,
   fetchProjectData,
+  fetchUserData,
   handleApiError,
   retryTransient,
 } from '../api';
@@ -253,4 +256,29 @@ describe('fetchProjectData failure analytics', () => {
       expect.objectContaining({ status_code: 403, network_code: undefined }),
     );
   });
+});
+
+describe('fetchUserData', () => {
+  let silentServer: http.Server;
+
+  beforeEach(async () => {
+    vi.restoreAllMocks();
+    silentServer = http.createServer(() => undefined);
+    await new Promise<void>((resolve) =>
+      silentServer.listen(0, '127.0.0.1', resolve),
+    );
+  });
+
+  afterEach(async () => {
+    silentServer.closeAllConnections();
+    await new Promise((resolve) => silentServer.close(resolve));
+  });
+
+  it('gives up on a server that accepts the request and never answers', async () => {
+    const { port } = silentServer.address() as AddressInfo;
+
+    await expect(
+      fetchUserData('token', `http://127.0.0.1:${port}`),
+    ).rejects.toThrow();
+  }, 15_000);
 });
