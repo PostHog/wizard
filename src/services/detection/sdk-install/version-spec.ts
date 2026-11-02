@@ -57,3 +57,31 @@ export function isUnboundedRequirement(spec: string): boolean {
     .filter((token) => token.length > 0);
   return tokens.length > 0 && tokens.every((token) => /^>=?\d/.test(token));
 }
+
+/**
+ * The lowest `major.minor` a requirement admits (`>=3.9`, `^3.41.0`, `1.75`,
+ * `3.38.0-stable`), ignoring upper bounds. Undefined when nothing is bounded.
+ */
+export function lowerBoundVersion(
+  spec: string,
+): { major: number; minor: number } | undefined {
+  let best: { major: number; minor: number } | undefined;
+  const cleaned = spec.trim().replace(/^["']|["']$/g, '');
+  for (const raw of cleaned.split(/\s*(?:,|\|\||\s)\s*/)) {
+    const token = raw.trim();
+    if (!token || token.startsWith('<') || token.startsWith('!=')) continue;
+    const bare = token.replace(/^(?:>=|~=|==|\^|~|>|=)/, '').replace(/^v/, '');
+    const match = /^(\d+)\.(\d+)/.exec(bare);
+    if (!match) continue;
+    const candidate = { major: Number(match[1]), minor: Number(match[2]) };
+    if (!best || compareVersions(candidate, best) < 0) best = candidate;
+  }
+  return best;
+}
+
+export function compareVersions(
+  a: { major: number; minor: number },
+  b: { major: number; minor: number },
+): number {
+  return a.major !== b.major ? a.major - b.major : a.minor - b.minor;
+}

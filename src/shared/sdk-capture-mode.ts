@@ -78,6 +78,8 @@ export type SdkCaptureModeResolution =
       /** The floor that failed, the file an installed copy came from, or the flag value. */
       readonly detail?: string;
       readonly installed: readonly InstalledSdk[];
+      /** The floor as detection read it, kept so a later resolution with flags reuses it. */
+      readonly floor?: SdkFloorCheck;
     }
   | {
       readonly sdk: SdkId;
@@ -165,6 +167,7 @@ export function resolveSdkCaptureMode(
     reason,
     ...(detail === undefined ? {} : { detail }),
     installed,
+    ...(input.floor === undefined ? {} : { floor: input.floor }),
   });
 
   const override = parseSdkCaptureModeOverrides(input.flagPayload)[row.sdk];

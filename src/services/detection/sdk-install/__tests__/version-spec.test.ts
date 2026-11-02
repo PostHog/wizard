@@ -1,6 +1,7 @@
 import {
   isUnboundedRequirement,
   lowerBoundMajor,
+  lowerBoundVersion,
   majorOfVersion,
 } from '@services/detection/sdk-install/version-spec';
 
@@ -87,5 +88,23 @@ describe('isUnboundedRequirement', () => {
     [''],
   ])('%s is bounded or has no requirement', (spec) => {
     expect(isUnboundedRequirement(spec)).toBe(false);
+  });
+});
+
+describe('lowerBoundVersion', () => {
+  it.each([
+    ['>=3.9,<4', { major: 3, minor: 9 }],
+    ['~=3.12', { major: 3, minor: 12 }],
+    ['^3.41.0', { major: 3, minor: 41 }],
+    ['3.38.0-stable', { major: 3, minor: 38 }],
+    ['>=3.38.0 <4.0.0', { major: 3, minor: 38 }],
+    ['1.75', { major: 1, minor: 75 }],
+  ])('%s has lower bound %o', (spec, expected) => {
+    expect(lowerBoundVersion(spec)).toEqual(expected);
+  });
+
+  it('is undefined for an upper bound alone or a bare major', () => {
+    expect(lowerBoundVersion('<4')).toBeUndefined();
+    expect(lowerBoundVersion('3')).toBeUndefined();
   });
 });
