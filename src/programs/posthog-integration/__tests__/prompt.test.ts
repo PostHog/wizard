@@ -73,3 +73,20 @@ describe('default observability flag gating', () => {
     expect(excluded({})).toEqual([]);
   });
 });
+
+describe('detected facts', () => {
+  it('renders the run facts under the project context, as the orchestrator does', async () => {
+    const prompt = await promptFor(
+      [],
+      ['PostHog SDK posthog-node: this run uses the 5.x line.'],
+    );
+    expect(prompt).toContain('Detected before this run');
+    expect(prompt).toContain(
+      '- PostHog SDK posthog-node: this run uses the 5.x line.',
+    );
+  });
+
+  it('adds nothing when there are no facts', async () => {
+    expect(await promptFor([])).not.toContain('Detected before this run');
+  });
+});
