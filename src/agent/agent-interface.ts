@@ -1,3 +1,4 @@
+import type { SdkCaptureMode } from '@shared/sdk-majors';
 import { randomUUID } from 'node:crypto';
 /**
  * Shared agent interface for PostHog wizards
@@ -210,6 +211,8 @@ export type AgentConfig = {
   host: HostResolution;
   additionalMcpServers?: Record<string, { url: string }>;
   detectPackageManager: PackageManagerDetector;
+  /** The run's SDK capture mode; the skill tools hide variants tagged for the other mode. */
+  sdkCaptureMode?: SdkCaptureMode;
   /** Primary skills origin (context-mill dev or GitHub Releases; downloads fail over to the AWS mirror) */
   skillsBaseUrl: string;
   /** Feature flag key -> variant (evaluated at start of run). */
@@ -698,6 +701,7 @@ export async function initializeAgent(
     const wizardToolsServer = await createWizardToolsServer({
       workingDirectory: config.workingDirectory,
       detectPackageManager: config.detectPackageManager,
+      sdkCaptureMode: config.sdkCaptureMode,
       skillsBaseUrl: config.skillsBaseUrl,
       askBridge: config.askBridge,
       askMaxQuestions: config.askMaxQuestions,

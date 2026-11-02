@@ -7,6 +7,7 @@
 
 import { logToFile } from '@utils/debug';
 import { fetchWithRetry, type RetryOpts } from '@shared/fetch-retry';
+import type { SdkCaptureMode } from '@shared/sdk-majors';
 
 export type SkillEntry = {
   id: string;
@@ -20,9 +21,36 @@ export type SkillEntry = {
   default?: boolean;
   /** This entry's download is a bundle JSON of every variant, not a single skill's zip. */
   bundle?: boolean;
+  /** The SDK capture mode this variant is written for; absent means it serves either mode. */
+  captureMode?: SdkCaptureMode;
   /** Menu-only: the variants inside a bundle, expanded into entries of their own on fetch. */
-  variants?: { id: string; framework?: string; default?: boolean }[];
+  variants?: {
+    id: string;
+    framework?: string;
+    default?: boolean;
+    captureMode?: SdkCaptureMode;
+  }[];
 };
+
+/**
+ * Whether a run on `captureMode` may use `entry`. An untagged entry serves
+ * either mode; a tagged one serves its own. A run that resolved no mode reads
+ * as legacy, the content every untagged entry was written against.
+ */
+export function skillEntryMatchesCaptureMode(
+  entry: Pick<SkillEntry, 'captureMode'>,
+  captureMode: SdkCaptureMode | undefined,
+): boolean {
+  return !entry.captureMode || entry.captureMode === (captureMode ?? 'legacy');
+}
+
+export function filterSkillEntriesByCaptureMode<
+  T extends Pick<SkillEntry, 'captureMode'>,
+>(entries: readonly T[], captureMode: SdkCaptureMode | undefined): T[] {
+  return entries.filter((entry) =>
+    skillEntryMatchesCaptureMode(entry, captureMode),
+  );
+}
 
 /**
  * Entry in the wizard's runtime CLI registry. Mirrors the shape context-mill

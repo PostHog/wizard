@@ -9,6 +9,7 @@ import {
   parseSdkCaptureModeOverrides,
   primarySdkCaptureMode,
   resolveSdkCaptureMode,
+  runSdkCaptureMode,
   sdkCaptureModeOverridesFromPayloads,
   sdkCaptureModeProperties,
 } from '@shared/sdk-capture-mode';
@@ -353,5 +354,22 @@ describe('sdkCaptureModeProperties', () => {
       sdk_mode_reason: 'conflict',
       sdk_capture_modes: ['posthog-node:conflict'],
     });
+  });
+});
+
+describe('runSdkCaptureMode', () => {
+  it("is the main SDK's mode, and nothing for a conflict or an empty run", () => {
+    const legacy = resolveSdkCaptureMode({ sdk: 'posthog-node' });
+    const conflict = resolveSdkCaptureMode({
+      sdk: 'posthog-node',
+      installed: [legacyNode, v1Node],
+    });
+    expect(runSdkCaptureMode([legacy], Integration.javascriptNode)).toBe(
+      'legacy',
+    );
+    expect(
+      runSdkCaptureMode([conflict], Integration.javascriptNode),
+    ).toBeUndefined();
+    expect(runSdkCaptureMode([], Integration.javascriptNode)).toBeUndefined();
   });
 });

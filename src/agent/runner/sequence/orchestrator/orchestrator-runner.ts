@@ -35,7 +35,12 @@ import {
   formatYaraAbortMessage,
   scanInstalledSkill,
 } from '../../../yara-hooks';
-import { fetchSkillMenu, type SkillEntry } from '@shared/skill-menu';
+import {
+  fetchSkillMenu,
+  filterSkillEntriesByCaptureMode,
+  type SkillEntry,
+} from '@shared/skill-menu';
+import type { SdkCaptureMode } from '@shared/sdk-majors';
 import { analytics } from '@utils/analytics';
 import { ciExcludedTaskTypes } from '@utils/ci-flag-overrides';
 import { logToFile } from '@utils/debug';
@@ -226,18 +231,27 @@ async function fetchSkillMenuEntries(
   return Object.values(menu.categories).flat();
 }
 
-/** Menu id for a bare skill id + framework via the menu's declared group/framework/default fields; undefined when nothing matches. */
+/**
+ * Menu id for a bare skill id + framework via the menu's declared
+ * group/framework/default fields; undefined when nothing matches. An entry
+ * tagged for the other capture mode never matches; among the matches, one
+ * tagged for this run's mode beats an untagged one, then `default` wins.
+ */
 export function resolveSkillVariantId(
   entries: readonly SkillEntry[],
   skillId: string,
   framework: string | undefined,
+  captureMode?: SdkCaptureMode,
 ): string | undefined {
-  if (entries.some((e) => e.id === skillId)) return skillId;
+  const usable = filterSkillEntriesByCaptureMode(entries, captureMode);
+  if (usable.some((e) => e.id === skillId)) return skillId;
   if (!framework) return undefined;
-  const family = entries.filter(
+  const family = usable.filter(
     (e) => e.group === skillId && e.framework === framework,
   );
-  return (family.find((e) => e.default) ?? family[0])?.id;
+  const tagged = family.filter((e) => e.captureMode !== undefined);
+  const pool = tagged.length > 0 ? tagged : family;
+  return (pool.find((e) => e.default) ?? pool[0])?.id;
 }
 
 /**
@@ -248,8 +262,9 @@ export function resolveSkillVariantId(
 function resolveReferenceSkillId(
   entries: readonly SkillEntry[],
   framework: string,
+  captureMode: SdkCaptureMode | undefined,
 ): string | undefined {
-  return resolveSkillVariantId(entries, 'integration', framework);
+  return resolveSkillVariantId(entries, 'integration', framework, captureMode);
 }
 
 /**
@@ -802,7 +817,7 @@ async function executeOrchestrator(
   // here as a bogus framework after the caller overwrites the detect result.
   const framework = input.integration ?? input.skillId ?? undefined;
   const referenceSkillId = framework
-    ? resolveReferenceSkillId(menuSkillEntries, framework)
+    ? resolveReferenceSkillId(menuSkillEntries, framework, input.sdkCaptureMode)
     : undefined;
   if (referenceSkillId) {
     const ref = await installSkillById(
@@ -840,7 +855,14 @@ async function executeOrchestrator(
   const missingVariants: string[] = [];
   for (const type of registry.types) {
     for (const skillId of registry.get(type)?.skills ?? []) {
-      if (resolveSkillVariantId(menuSkillEntries, skillId, framework)) {
+      if (
+        resolveSkillVariantId(
+          menuSkillEntries,
+          skillId,
+          framework,
+          input.sdkCaptureMode,
+        )
+      ) {
         continue;
       }
       missingVariants.push(`${type}/${skillId}`);
@@ -1231,6 +1253,7 @@ async function executeOrchestrator(
           menuSkillEntries,
           skillId,
           framework,
+          input.sdkCaptureMode,
         );
         if (!variantId) {
           logToFile(
