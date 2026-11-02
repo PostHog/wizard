@@ -71,7 +71,6 @@ export const RUST_AGENT_CONFIG: FrameworkConfig<RustContext> = {
       'Install the PostHog Rust SDK with `cargo add`: when detect_package_manager lists posthog-rs under sdkInstalls, run exactly that command (it pins the major and carries the feature flags the client needs); otherwise `cargo add posthog-rs`. Do not manually edit Cargo.toml; cargo updates it automatically.',
     getAdditionalContextLines: (context) => {
       const lines = [
-        `Framework docs ID: rust (use posthog://docs/frameworks/rust for documentation)`,
         'capture() hands events to a background worker — the client must flush() or shutdown() before the process exits or buffered events are lost.',
       ];
       if (context.asyncRuntime) {

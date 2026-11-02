@@ -104,9 +104,7 @@ export const ANDROID_AGENT_CONFIG: FrameworkConfig<AndroidContext> = {
     packageInstallation:
       'Add the PostHog Android SDK dependency to the app-level build.gradle(.kts) file as implementation("com.posthog:posthog-android:<version>") with an exact version, never a `+` range; when detect_package_manager lists posthog-android under sdkInstalls, use exactly the line it returns. Check the existing dependency format (Groovy vs Kotlin DSL) and match it.',
     getAdditionalContextLines: (context) => {
-      const lines = [
-        `Framework docs ID: android (use posthog://docs/frameworks/android for documentation)`,
-      ];
+      const lines = [];
 
       if (context.kotlinVersion) {
         lines.push(`Kotlin version: ${context.kotlinVersion}`);

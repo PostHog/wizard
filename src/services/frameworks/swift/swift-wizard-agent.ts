@@ -95,10 +95,7 @@ export const SWIFT_AGENT_CONFIG: FrameworkConfig<SwiftContext> = {
         ? getSwiftProjectTypeName(context.projectType)
         : 'unknown';
 
-      const lines = [
-        `Project type: ${projectTypeName}`,
-        `Framework docs ID: swift (use posthog://docs/frameworks/swift for documentation)`,
-      ];
+      const lines = [`Project type: ${projectTypeName}`];
 
       return lines;
     },

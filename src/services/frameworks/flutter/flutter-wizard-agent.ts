@@ -77,7 +77,6 @@ export const FLUTTER_AGENT_CONFIG: FrameworkConfig<FlutterContext> = {
       'Add the PostHog Flutter SDK with `flutter pub add posthog_flutter`, or, when detect_package_manager lists posthog_flutter under sdkInstalls, exactly the command it returns (it pins the major). Do not edit pubspec.yaml by hand; the pub tool updates it and resolves the version automatically.',
     getAdditionalContextLines: (context) => {
       const lines = [
-        'Framework docs ID: flutter (use posthog://docs/frameworks/flutter for documentation)',
         'Prefer manual initialization in Dart (PostHogConfig + Posthog().setup) over the platform auto-init so configuration lives in one place; when doing so, disable auto-init in the Android manifest and iOS Info.plist per the docs.',
       ];
 

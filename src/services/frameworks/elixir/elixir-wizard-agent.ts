@@ -70,7 +70,6 @@ export const ELIXIR_AGENT_CONFIG: FrameworkConfig<ElixirContext> = {
       'Mix has no single add command. Add `{:posthog, "~> 2.0"}` to the deps list in mix.exs, then run `mix deps.get` to fetch it.',
     getAdditionalContextLines: (context) => {
       const lines = [
-        `Framework docs ID: elixir (use posthog://docs/frameworks/elixir for documentation)`,
         'Configure PostHog in application config (api_key, api_host, in_app_otp_apps) reading from environment variables; set test_mode: true in the test environment.',
       ];
       if (context.phoenix) {

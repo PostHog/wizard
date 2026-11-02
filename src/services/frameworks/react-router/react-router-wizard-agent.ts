@@ -84,21 +84,8 @@ export const REACT_ROUTER_AGENT_CONFIG: FrameworkConfig<ReactRouterContext> = {
         : 'unknown';
 
       // Map router mode to framework ID for MCP docs resource
-      const frameworkIdMap: Record<ReactRouterMode, string> = {
-        [ReactRouterMode.V6]: 'react-react-router-6',
-        [ReactRouterMode.V7_FRAMEWORK]: 'react-react-router-7-framework',
-        [ReactRouterMode.V7_DATA]: 'react-react-router-7-data',
-        [ReactRouterMode.V7_DECLARATIVE]: 'react-react-router-7-declarative',
-      };
 
-      const frameworkId = routerMode
-        ? frameworkIdMap[routerMode]
-        : ReactRouterMode.V7_FRAMEWORK;
-
-      return [
-        `Router mode: ${modeName}`,
-        `Framework docs ID: ${frameworkId} (use posthog://docs/frameworks/${frameworkId} for documentation)`,
-      ];
+      return [`Router mode: ${modeName}`];
     },
   },
 

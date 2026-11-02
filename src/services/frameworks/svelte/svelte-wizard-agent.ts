@@ -51,9 +51,7 @@ export const SVELTEKIT_AGENT_CONFIG: FrameworkConfig<SvelteKitContext> = {
   prompts: {
     projectTypeDetection:
       'This is a JavaScript/TypeScript project using SvelteKit. Look for package.json, svelte.config.js, and lockfiles (package-lock.json, yarn.lock, pnpm-lock.yaml, bun.lockb) to confirm.',
-    getAdditionalContextLines: () => [
-      'Framework docs ID: sveltekit (use posthog://docs/frameworks/sveltekit for documentation)',
-    ],
+    getAdditionalContextLines: () => [],
   },
 
   ui: {
