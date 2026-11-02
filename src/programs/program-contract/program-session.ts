@@ -7,6 +7,7 @@ import type { Harness, Integration } from '@shared/constants';
 import type { ApiUser, Credentials } from '@shared/api';
 import type { DiscoveredFeature } from '@shared/discovered-feature';
 import type { ScanConsent } from '@shared/run-state';
+import type { SdkCaptureModeResolution } from '@shared/sdk-capture-mode';
 import type { FrameworkConfig } from './framework-config';
 import type { OutroData } from '@agent/types';
 
@@ -72,6 +73,12 @@ export interface ProgramSession {
 
   /** PostHog found in the project's dependencies. A signal, not a verified install. */
   posthogSdkDetected: boolean;
+  /**
+   * The capture mode resolved for each allowlisted SDK the integration touches,
+   * from the installed copies detection read and the run's flags. Empty for an
+   * integration outside the allowlist.
+   */
+  sdkCaptureModes: SdkCaptureModeResolution[];
 
   // From OAuth
   credentials: Credentials | null;

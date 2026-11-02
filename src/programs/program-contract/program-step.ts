@@ -1,3 +1,4 @@
+import type { SdkCaptureModeResolution } from '@shared/sdk-capture-mode';
 import type { ProgramSession } from './program-session';
 import type { DiscoveredFeature } from '@shared/discovered-feature';
 import type { ProgramBinding, TaskNotice } from '@agent/types';
@@ -51,6 +52,9 @@ export interface ProgramReadyContext {
   readonly addDiscoveredFeature: (feature: DiscoveredFeature) => void;
   readonly setDetectionComplete: () => void;
   readonly setPosthogSdkDetected: (detected: boolean) => void;
+  readonly setSdkCaptureModes: (
+    modes: readonly SdkCaptureModeResolution[],
+  ) => void;
 }
 
 /**

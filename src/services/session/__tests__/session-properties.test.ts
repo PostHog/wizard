@@ -2,6 +2,7 @@
 import { sessionProperties } from '@utils/analytics';
 import { DiscoveredFeature } from '@shared/discovered-feature';
 import { ScanConsent } from '@shared/run-state';
+import { Integration } from '@shared/constants';
 import { buildSession } from '../wizard-session';
 
 describe('sessionProperties: the SDK verdict', () => {
@@ -114,5 +115,45 @@ describe('sessionProperties: discovered features', () => {
       typescript: false,
       run_phase: session.runPhase,
     });
+  });
+});
+
+describe('sessionProperties: SDK capture modes', () => {
+  const legacyNode = {
+    sdk: 'posthog-node' as const,
+    mode: 'legacy' as const,
+    major: 5,
+    reason: 'installed' as const,
+    detail: 'package.json',
+    installed: [{ major: 5, version: '^5.60.0', source: 'package.json' }],
+  };
+
+  it('reports the main SDK flat and every resolution as a summary once sharing is granted', () => {
+    const session = buildSession({});
+    session.integration = Integration.javascriptNode;
+    session.sdkCaptureModes = [legacyNode];
+    session.scanConsent = ScanConsent.Granted;
+
+    expect(sessionProperties(session)).toMatchObject({
+      sdk_id: 'posthog-node',
+      sdk_capture_mode: 'legacy',
+      sdk_resolved_major: 5,
+      sdk_mode_reason: 'installed',
+      sdk_capture_modes: ['posthog-node:legacy:5:installed'],
+    });
+  });
+
+  // Resolved from the dependency files, so it waits on the same consent.
+  it('omits the modes while consent is undecided or declined, and when nothing was resolved', () => {
+    const session = buildSession({});
+    session.sdkCaptureModes = [legacyNode];
+    expect(sessionProperties(session)).not.toHaveProperty('sdk_capture_mode');
+
+    session.scanConsent = ScanConsent.Declined;
+    expect(sessionProperties(session)).not.toHaveProperty('sdk_capture_mode');
+
+    session.scanConsent = ScanConsent.Granted;
+    session.sdkCaptureModes = [];
+    expect(sessionProperties(session)).not.toHaveProperty('sdk_capture_mode');
   });
 });

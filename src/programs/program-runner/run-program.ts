@@ -26,7 +26,8 @@ import {
   WizardReadiness,
 } from '@shared/health-checks/readiness';
 import { OutroKind } from '@shared/outro';
-import { RunPhase } from '@shared/run-state';
+import { mayReportScanResults, RunPhase } from '@shared/run-state';
+import { sdkCaptureModeProperties } from '@shared/sdk-capture-mode';
 import {
   configureOAuthSession,
   currentCredentials,
@@ -44,6 +45,10 @@ import {
   type ResolvedProgramCredentials,
 } from './credentials';
 import { reportCodebaseScan } from '@services/codebase-scan';
+import {
+  applySdkCaptureModeFlags,
+  sdkCaptureModeFacts,
+} from '@services/detection';
 import { IS_PRODUCTION_BUILD } from '@env';
 import type { QuestionKey } from '@services/detection/decisions';
 import { logIn } from './login';
@@ -302,6 +307,20 @@ async function invokeProgram(
       return fail(error instanceof Error ? error.message : String(error));
     }
 
+    // Flags known: settle each SDK's capture mode. An installed copy already won in detection.
+    store.setSdkCaptureModes(
+      applySdkCaptureModeFlags(store.session, flags.payloads),
+    );
+    if (mayReportScanResults(store.session)) {
+      const properties = sdkCaptureModeProperties(
+        store.session.sdkCaptureModes,
+        store.session.integration,
+      );
+      for (const [key, value] of Object.entries(properties)) {
+        analytics.setTag(key, Array.isArray(value) ? value.join(',') : value);
+      }
+    }
+
     // Logged in, AI approved and flags known: the one judgment call, before any agent runs.
     // Production builds drop this branch, and with it the whole Decisions service.
     let decisions: typeof import('@services/detection/decisions') | null = null;
@@ -423,14 +442,15 @@ async function invokeProgram(
             seedTasks: planned.config.seedTasks
               ? () => planned.config.seedTasks!(session())
               : undefined,
-            projectFacts:
-              decisions && planned.config.decisions
-                ? () =>
-                    decisions.questionFacts(
-                      session(),
-                      planned.config.decisions ?? [],
-                    )
-                : undefined,
+            projectFacts: () => [
+              ...sdkCaptureModeFacts(session()),
+              ...(decisions && planned.config.decisions
+                ? decisions.questionFacts(
+                    session(),
+                    planned.config.decisions ?? [],
+                  )
+                : []),
+            ],
             hooks: sessionHooks(agentRun, session, (outcomes) => {
               if (scoped) scoped.frameworkContext[TASK_OUTCOMES_KEY] = outcomes;
               else store.setFrameworkContext(TASK_OUTCOMES_KEY, outcomes);

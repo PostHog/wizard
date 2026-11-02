@@ -30,6 +30,7 @@ import {
   getDetectedWarehouseSources,
 } from '../warehouse-sources/detect';
 import { findPackageJsons } from './package-scanning';
+import { detectSdkCaptureModes } from './sdk-capture-modes';
 
 // Session-free, so runProgram can stamp without loading the session.
 
@@ -80,6 +81,11 @@ export async function detectPostHogIntegration(
     if (versionResult.supported !== true) {
       ctx.setUnsupportedVersion(versionResult.supported);
     }
+
+    // Before login, so without flags; the run applies them once they are known.
+    ctx.setSdkCaptureModes(
+      await detectSdkCaptureModes(installDir, detectedIntegration),
+    );
   }
 
   // Feature discovery

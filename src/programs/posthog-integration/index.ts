@@ -1,4 +1,7 @@
-import { detectPostHogIntegration } from '@services/detection';
+import {
+  detectPostHogIntegration,
+  detectSdkCaptureModes,
+} from '@services/detection';
 import type { ProgramConfig } from '@programs/program-contract';
 import type { ProgramRun } from '@programs/program-contract';
 import { AgentSignals, WIZARD_TOOL_NAMES } from '@agent';
@@ -316,6 +319,10 @@ export const config: ProgramConfig = {
       }
     }
     noteDetectedFramework(session, frameworkConfig, context, runner.log);
+    session.sdkCaptureModes = await detectSdkCaptureModes(
+      session.installDir,
+      integration,
+    );
   },
 
   run: async (

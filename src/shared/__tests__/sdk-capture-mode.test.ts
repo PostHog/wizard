@@ -4,11 +4,13 @@ import {
   WIZARD_SDK_CAPTURE_V1_FLAG_KEY,
 } from '@shared/constants';
 import {
+  SdkCaptureModeInput,
   isSdkCaptureModeEnabled,
   parseSdkCaptureModeOverrides,
+  primarySdkCaptureMode,
   resolveSdkCaptureMode,
   sdkCaptureModeOverridesFromPayloads,
-  type SdkCaptureModeInput,
+  sdkCaptureModeProperties,
 } from '@shared/sdk-capture-mode';
 import { SDK_MAJORS } from '@shared/sdk-majors';
 
@@ -296,5 +298,60 @@ describe('isSdkCaptureModeEnabled', () => {
     ).toBe(false);
     expect(isSdkCaptureModeEnabled({})).toBe(false);
     expect(isSdkCaptureModeEnabled(undefined)).toBe(false);
+  });
+});
+
+describe('sdkCaptureModeProperties', () => {
+  const node = resolveSdkCaptureMode({
+    sdk: 'posthog-node',
+    integration: Integration.nextjs,
+  });
+  const python = resolveSdkCaptureMode({
+    sdk: 'posthog-python',
+    installed: [{ major: 8, version: '8.0.0', source: 'uv.lock' }],
+  });
+
+  it('picks the integration primary row as the main SDK, else the first resolution', () => {
+    expect(primarySdkCaptureMode([node, python], Integration.python)?.sdk).toBe(
+      'posthog-python',
+    );
+    expect(primarySdkCaptureMode([node, python], Integration.nextjs)?.sdk).toBe(
+      'posthog-node',
+    );
+    expect(primarySdkCaptureMode([node, python], null)?.sdk).toBe(
+      'posthog-node',
+    );
+    expect(primarySdkCaptureMode([], Integration.python)).toBeUndefined();
+  });
+
+  it('flattens the main SDK and summarizes every resolution', () => {
+    expect(
+      sdkCaptureModeProperties([node, python], Integration.python),
+    ).toEqual({
+      sdk_id: 'posthog-python',
+      sdk_capture_mode: 'v1',
+      sdk_mode_reason: 'installed',
+      sdk_resolved_major: 8,
+      sdk_capture_modes: [
+        'posthog-node:legacy:5:secondary-policy',
+        'posthog-python:v1:8:installed',
+      ],
+    });
+    expect(sdkCaptureModeProperties([], Integration.python)).toEqual({});
+  });
+
+  it('omits the major for a conflict', () => {
+    const conflict = resolveSdkCaptureMode({
+      sdk: 'posthog-node',
+      installed: [legacyNode, v1Node],
+    });
+    expect(
+      sdkCaptureModeProperties([conflict], Integration.javascriptNode),
+    ).toEqual({
+      sdk_id: 'posthog-node',
+      sdk_capture_mode: 'conflict',
+      sdk_mode_reason: 'conflict',
+      sdk_capture_modes: ['posthog-node:conflict'],
+    });
   });
 });

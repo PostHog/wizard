@@ -22,6 +22,12 @@ export {
   type PackageMatch,
 } from './package-scanning';
 export {
+  applySdkCaptureModeFlags,
+  detectSdkCaptureModes,
+  sdkCaptureModeFacts,
+} from './sdk-capture-modes';
+export { readInstalledSdks } from './sdk-install';
+export {
   detectIntegrationProjects,
   scopeInstallDirToProject,
   toIntegrationCandidates,

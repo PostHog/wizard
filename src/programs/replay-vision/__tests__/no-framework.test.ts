@@ -48,6 +48,7 @@ function readyContext(
     setFrameworkConfig: vi.fn(),
     setDetectedFramework: vi.fn(),
     setPosthogSdkDetected: vi.fn(),
+    setSdkCaptureModes: vi.fn(),
     setSkillId: vi.fn(),
     setUnsupportedVersion: vi.fn(),
     addDiscoveredFeature: vi.fn(),
