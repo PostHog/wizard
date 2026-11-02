@@ -51,7 +51,9 @@ import {
 import { reportCodebaseScan } from '@services/codebase-scan';
 import {
   sdkCaptureModeFacts,
+  sdkConflictFailure,
   settleSdkCaptureModes,
+  verifySdkCaptureModes,
   withSdkInstallInstructions,
 } from '@services/detection';
 import { IS_PRODUCTION_BUILD } from '@env';
@@ -223,7 +225,9 @@ async function invokeProgram(
       error: error instanceof Error ? error : new Error(message),
     });
   }
-  const blocked = detectionFailure(config, store.session);
+  const blocked =
+    detectionFailure(config, store.session) ??
+    sdkConflictFailure(store.session);
   if (blocked) return settle(RunOutcome.Failed, blocked);
 
   // Started before the run resolves: an audit seeds the ledger from inside its recipe.
@@ -699,6 +703,8 @@ function sessionHooks(
           run.buildOutroNextSteps!(session(), creds, completed)
       : undefined,
     recordTaskOutcomes,
+    // The install read-back: the SDK on disk must still be on the line the run was set up for.
+    verify: () => verifySdkCaptureModes(session()),
   };
 }
 

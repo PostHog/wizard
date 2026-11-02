@@ -136,6 +136,12 @@ export interface RunHooks {
   recordTaskOutcomes?: (
     outcomes: import('../sequence/orchestrator/queue').TaskOutcome[],
   ) => void;
+  /**
+   * Deterministic checks on the project after work lands: after each
+   * orchestrated task (with its type) and once after the linear agent, before
+   * anything builds on that work. A returned failure ends the run with it.
+   */
+  verify?: (stage: { task?: string }) => Promise<AgentFailure | undefined>;
 }
 
 /** The run-level routing decision. */
