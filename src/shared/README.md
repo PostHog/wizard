@@ -48,6 +48,13 @@ Modules callers reach most:
   `parseOAuthScopes`, `getOAuthClientId` and `OAuthTokenResponseSchema`.
 - `@shared/wizard-flags`: `loadWizardFlags()` and `WizardFlagSnapshot`, the
   wizard's feature flags and payloads from one evaluation.
+- `@shared/sdk-majors`: `SDK_MAJORS`, the per-SDK allowlist of the last legacy
+  and first capture v1 majors, with `sdkRowsForIntegration` and the mode and
+  major helpers. A row's `v1Released` flips in that SDK's release-day PR.
+- `@shared/sdk-capture-mode`: `resolveSdkCaptureMode(input)`, the pure
+  resolution of one SDK's mode for a run (installed copy, flag override,
+  secondary policy, release state, floor, host), and the
+  `wizard-sdk-capture-v1` payload parser.
 - `@shared/api-key-login`: `resolveApiKeyProject(apiKey, options)`, the host,
   project and user a personal API key logs in to.
 - `@shared/ci-gateway`: `readCiGatewayCredential(region)`, the gateway token a

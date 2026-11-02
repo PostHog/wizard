@@ -335,6 +335,8 @@ export const WIZARD_ORCHESTRATOR_SEEDED_TASKS_FLAG_KEY =
 export const WIZARD_DEFAULT_AIO_LOGS_FLAG_KEY = 'wizard-default-aio-logs';
 /** Boolean flag: true runs the Decisions judgment service in shadow (ask and log, never act). */
 export const WIZARD_DECISIONS_DETECTION_FLAG_KEY = 'wizard-decisions-detection';
+/** Per-SDK capture-mode override. Payload `{ "<sdk>": "legacy" | "v1" }`: `legacy` is the kill switch after a release-day flip, `v1` lets a tester run v1 before it. Absent or invalid, the `SDK_MAJORS` table decides. */
+export const WIZARD_SDK_CAPTURE_V1_FLAG_KEY = 'wizard-sdk-capture-v1';
 // Reading a flag enters this run into that flag's experiment, so a closed set — not a
 // `wizard-` prefix anyone can name into — decides what a run evaluates. Test-pinned exhaustive.
 export const WIZARD_FLAG_KEYS = [
@@ -346,6 +348,7 @@ export const WIZARD_FLAG_KEYS = [
   WIZARD_BASIC_INTEGRATION_AGENTIC_DETECTION_FLAG_KEY,
   WIZARD_DEFAULT_AIO_LOGS_FLAG_KEY,
   WIZARD_DECISIONS_DETECTION_FLAG_KEY,
+  WIZARD_SDK_CAPTURE_V1_FLAG_KEY,
 ] as const;
 /** User-Agent for wizard HTTP requests and MCP server identification. */
 export const WIZARD_USER_AGENT = `posthog/wizard; version: ${VERSION}`;
