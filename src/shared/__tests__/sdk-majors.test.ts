@@ -105,3 +105,19 @@ describe('row helpers', () => {
     );
   });
 });
+
+describe('SDK_MAJORS pins', () => {
+  it.each(SDK_MAJORS.map((row) => [row.sdk, row] as const))(
+    '%s pins both modes',
+    (_sdk, row) => {
+      expect(row.pins.legacy.length).toBeGreaterThan(0);
+      expect(row.pins.v1.length).toBeGreaterThan(0);
+    },
+  );
+
+  it('gives Gradle exact versions, never a dynamic range', () => {
+    const android = getSdkMajorRow('posthog-android');
+    expect(android.pins.legacy).toMatch(/^\d+\.\d+\.\d+$/);
+    expect(android.pins.v1).toMatch(/^\d+\.\d+\.\d+$/);
+  });
+});

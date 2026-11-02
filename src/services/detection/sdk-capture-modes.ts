@@ -135,7 +135,7 @@ export function sdkCaptureModeFacts(session: {
     }
     return `PostHog SDK ${row.sdk}: this run uses the ${line} line (${
       MODE_LABEL[resolution.mode]
-    }). Install ${line} only, never ${other}.${
+    }). Install ${line} only, never ${other}, with the exact command or declaration detect_package_manager returns; it overrides any install line in a skill or rule.${
       resolution.mode === 'v1' ? V1_RULES : ''
     }`;
   });

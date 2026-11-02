@@ -4,6 +4,7 @@ import { readFileHead } from './bounded-fs';
 import { withProgress } from './telemetry';
 import { analytics } from './analytics';
 import type { WizardRunOptions } from './types';
+import type { SdkInstallInstruction } from '@shared/sdk-install-commands';
 
 type InstallDirOpt = Pick<WizardRunOptions, 'installDir'>;
 
@@ -137,6 +138,8 @@ export interface PackageManagerInfo {
   detected: DetectedPackageManager[];
   primary: DetectedPackageManager | null;
   recommendation: string;
+  /** The exact PostHog SDK install per allowlisted SDK, when the run resolved a capture mode. */
+  sdkInstalls?: SdkInstallInstruction[];
 }
 
 /** Signature each framework implements */

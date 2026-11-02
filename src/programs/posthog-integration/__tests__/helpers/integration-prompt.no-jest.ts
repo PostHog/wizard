@@ -33,8 +33,12 @@ export const FRAMEWORK_CONFIG = {
 
 export function sessionWith(sources: DetectedSource[]): WizardSession {
   const s = buildSession({ installDir: '/tmp/app' });
+  // A copy per session: a test may swap the detector without leaking into the next.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  s.frameworkConfig = FRAMEWORK_CONFIG as any;
+  s.frameworkConfig = {
+    ...FRAMEWORK_CONFIG,
+    detection: { ...FRAMEWORK_CONFIG.detection },
+  } as any;
   if (sources.length > 0) {
     s.frameworkContext[DETECTED_WAREHOUSE_SOURCES_KEY] = sources;
   }

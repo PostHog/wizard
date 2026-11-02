@@ -68,7 +68,7 @@ export const RUST_AGENT_CONFIG: FrameworkConfig<RustContext> = {
     projectTypeDetection:
       'This is a Rust project. Look for Cargo.toml with a [package] section, src/main.rs or src/lib.rs, and Cargo.lock to confirm.',
     packageInstallation:
-      'Install the PostHog Rust SDK with `cargo add posthog-rs`. Do not manually edit Cargo.toml; cargo updates it automatically.',
+      'Install the PostHog Rust SDK with the exact `cargo add` command detect_package_manager returns; it pins the major and carries the feature flags the client needs. Do not manually edit Cargo.toml; cargo updates it automatically.',
     getAdditionalContextLines: (context) => {
       const lines = [
         `Framework docs ID: rust (use posthog://docs/frameworks/rust for documentation)`,
@@ -80,7 +80,7 @@ export const RUST_AGENT_CONFIG: FrameworkConfig<RustContext> = {
         );
       } else {
         lines.push(
-          'No async runtime detected — install with `cargo add posthog-rs --no-default-features` and use the blocking client.',
+          'No async runtime detected — use the blocking client. The `cargo add` command detect_package_manager returns carries its features: `--no-default-features`, plus `--features tls` on posthog-rs 1.x, which otherwise loses TLS.',
         );
       }
       return lines;

@@ -69,6 +69,8 @@ Modules callers reach most:
   secondary policy, release state, floor, host), the `wizard-sdk-capture-mode`
   gate (`isSdkCaptureModeEnabled`) and the `wizard-sdk-capture-v1` payload
   parser.
+- `@shared/sdk-install-commands`: `renderSdkInstall(row, mode, packageManager)`,
+  the exact pinned install command or manifest line for one SDK in one mode.
 - `@shared/api-key-login`: `resolveApiKeyProject(apiKey, options)`, the host,
   project and user a personal API key logs in to.
 - `@shared/ci-gateway`: `readCiGatewayCredential(region)`, the gateway token a
