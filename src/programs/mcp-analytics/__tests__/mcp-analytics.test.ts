@@ -17,6 +17,9 @@ describe('MCP_ANALYTICS_ABORT_CASES', () => {
     'ruby mcp server is not built on the official mcp gem',
     'ruby older than 3.0',
     'ruby mcp gem older than 1.4',
+    'rust mcp server is not built on rmcp',
+    'rmcp older than 3.7',
+    'rust toolchain older than 1.88',
   ];
 
   it.each(reasons)('matches the "%s" abort reason exactly once', (reason) => {
@@ -28,8 +31,9 @@ describe('MCP_ANALYTICS_ABORT_CASES', () => {
     expect(matched[0].body).toBeTruthy();
   });
 
-  it('frames the unsupported-language abort as TypeScript, Python, Go, and Ruby supported', () => {
-    // Python (`posthog.mcp`), Go (`posthogmcpsdk`), and Ruby (`PostHog::MCP`)
+  it('frames the unsupported-language abort as TypeScript, Python, Go, Ruby, and Rust supported', () => {
+    // Python (`posthog.mcp`), Go (`posthogmcpsdk`), Ruby (`PostHog::MCP`), and
+    // Rust (`posthog_rs::mcp`)
     // have shipped — the copy must name every supported language and not call
     // any of them "on the roadmap".
     const [langCase] = MCP_ANALYTICS_ABORT_CASES.filter((c) =>
@@ -45,6 +49,7 @@ describe('MCP_ANALYTICS_ABORT_CASES', () => {
       'posthog.mcp',
       'posthogmcpsdk',
       'PostHog::MCP',
+      'posthog_rs::mcp',
     ]) {
       expect(copy).toContain(sdk);
     }
