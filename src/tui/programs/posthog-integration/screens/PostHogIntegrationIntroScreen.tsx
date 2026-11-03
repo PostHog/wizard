@@ -33,6 +33,7 @@ import {
   introEntries,
   introHeadline,
   introMenuOptions,
+  MCP_ANALYTICS_ID,
 } from '@tui/programs/posthog-integration/intro-menu';
 
 /**
@@ -304,6 +305,7 @@ export const PostHogIntegrationIntroScreen = ({
     view,
     showContinue,
     posthogSdkDetected: session.posthogSdkDetected,
+    mcpServerDetected: session.mcpServerDetected,
   });
 
   const handleSelect = (value: string) => {
@@ -315,6 +317,8 @@ export const PostHogIntegrationIntroScreen = ({
       setManuallySelected(true);
     } else if (value === 'more-info') {
       setView('more-info');
+    } else if (value === MCP_ANALYTICS_ID) {
+      store.switchProgram(MCP_ANALYTICS_ID);
     } else if (value === 'commands') {
       setView('commands');
     } else if (value === 'back') {

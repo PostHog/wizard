@@ -29,7 +29,7 @@ import {
   DETECTED_WAREHOUSE_SOURCES_KEY,
   getDetectedWarehouseSources,
 } from '../warehouse-sources/detect';
-import { findPackageJsons } from './package-scanning';
+import { findPackageJsons, hasMcpServerSdk } from './package-scanning';
 
 // Session-free, so runProgram can stamp without loading the session.
 
@@ -89,6 +89,7 @@ export async function detectPostHogIntegration(
 
   await offerScannedWarehouseSources(ctx);
   detectExistingPostHog(ctx, installDir);
+  detectMcpServer(ctx, installDir);
 
   ctx.setDetectionComplete();
 }
@@ -213,5 +214,21 @@ export function detectExistingPostHog(
       { step: 'detectExistingPosthog' },
     );
     ctx.setPosthogSdkDetected(false);
+  }
+}
+
+/** Dependency-level signal that installDir is an MCP server. A failed scan reports false. */
+export function detectMcpServer(
+  ctx: Pick<ProgramReadyContext, 'setMcpServerDetected'>,
+  installDir: string,
+): void {
+  try {
+    ctx.setMcpServerDetected(hasMcpServerSdk(installDir));
+  } catch (error) {
+    analytics.captureException(
+      error instanceof Error ? error : new Error(String(error)),
+      { step: 'detectMcpServer' },
+    );
+    ctx.setMcpServerDetected(false);
   }
 }

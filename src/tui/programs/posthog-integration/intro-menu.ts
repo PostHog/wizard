@@ -19,6 +19,8 @@ export function introHeadline(posthogSdkDetected: boolean): string[] {
   return posthogSdkDetected ? DETECTED_HEADLINE : [DEFAULT_HEADLINE];
 }
 
+export const MCP_ANALYTICS_ID = 'mcp-analytics';
+
 /** What the spell book offers, in order: programs and tools. Curated: no config field ranks these. */
 const INTRO_ENTRIES = [
   'self-driving',
@@ -26,7 +28,7 @@ const INTRO_ENTRIES = [
   'warehouse-source',
   'audit',
   'posthog-doctor',
-  'mcp-analytics',
+  MCP_ANALYTICS_ID,
   'replay-vision',
   'ai-observability',
   'metrics',
@@ -51,10 +53,12 @@ export function introMenuOptions({
   view,
   showContinue,
   posthogSdkDetected,
+  mcpServerDetected,
 }: {
   view: IntroMenuView;
   showContinue: boolean;
   posthogSdkDetected: boolean;
+  mcpServerDetected: boolean;
 }): PickerOption<string>[] | null {
   // Its body is a picker, and a second menu here would move both cursors.
   if (view === 'commands') return null;
@@ -65,6 +69,9 @@ export function introMenuOptions({
 
   if (showContinue) {
     return [
+      ...(mcpServerDetected
+        ? [{ label: 'Set up MCP analytics', value: MCP_ANALYTICS_ID }]
+        : []),
       ...(posthogSdkDetected
         ? [{ label: 'Explore spell book', value: 'commands' }]
         : []),

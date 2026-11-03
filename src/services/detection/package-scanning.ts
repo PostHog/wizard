@@ -15,6 +15,65 @@ export const STRIPE_SDKS = new Set([
   '@stripe/react-stripe-js',
 ]);
 
+export const MCP_SERVER_SDKS = new Set([
+  '@modelcontextprotocol/sdk',
+  '@modelcontextprotocol/server',
+  'fastmcp',
+  '@mastra/mcp',
+  'mcp-handler',
+]);
+
+const PYTHON_MCP_REQUIREMENT =
+  /(?:^\s*|[[,]\s*)["']?(?:mcp|fastmcp)(?:\[[^\]]*\])?\s*(?:[<>=!~;"',\s]|$)/m;
+
+// A server ships its SDK in `dependencies`; a devDependency is a test client or an example.
+function jsDependsOnMcpServerSdk(content: string): boolean {
+  try {
+    const pkg = JSON.parse(content) as {
+      dependencies?: Record<string, string>;
+    };
+    return Object.keys(pkg.dependencies ?? {}).some((d) =>
+      MCP_SERVER_SDKS.has(d),
+    );
+  } catch {
+    return false;
+  }
+}
+
+/** Each manifest that can declare an MCP server SDK, and how to read it. */
+const MCP_SERVER_MANIFESTS: {
+  file: RegExp;
+  declaresSdk: (content: string) => boolean;
+}[] = [
+  { file: /^package\.json$/, declaresSdk: jsDependsOnMcpServerSdk },
+  {
+    file: /^(?:pyproject\.toml|requirements[\w.-]*\.txt)$/,
+    declaresSdk: (c) => PYTHON_MCP_REQUIREMENT.test(c),
+  },
+  {
+    file: /^go\.mod$/,
+    declaresSdk: (c) => c.includes('github.com/modelcontextprotocol/go-sdk'),
+  },
+  { file: /^Gemfile$/, declaresSdk: (c) => /^\s*gem\s+["']mcp["']/m.test(c) },
+  { file: /^Cargo\.toml$/, declaresSdk: (c) => /^\s*rmcp\s*=/m.test(c) },
+];
+
+/** Whether a manifest under installDir declares an MCP server SDK. Dependencies only, no source scan. */
+export function hasMcpServerSdk(installDir: string, maxDepth = 3): boolean {
+  let found = false;
+  walkProjectFiles(
+    installDir,
+    (name, fullPath) => {
+      if (found) return;
+      const manifest = MCP_SERVER_MANIFESTS.find((m) => m.file.test(name));
+      const content = manifest && safeReadFile(fullPath);
+      found = !!content && manifest.declaresSdk(content);
+    },
+    maxDepth,
+  );
+  return found;
+}
+
 export interface PackageMatch {
   /** Path to the package.json relative to installDir */
   path: string;

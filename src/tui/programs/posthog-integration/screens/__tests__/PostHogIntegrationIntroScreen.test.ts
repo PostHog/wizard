@@ -15,12 +15,22 @@ const MENU_BOX_WIDTH = 24;
 const ICON_ROW_PREFIX_WIDTH = 4;
 const MAX_MENU_LABEL_LENGTH = MENU_BOX_WIDTH - ICON_ROW_PREFIX_WIDTH;
 
-const menuFor = (view: 'default' | 'more-info', posthogSdkDetected: boolean) =>
-  introMenuOptions({ view, showContinue: true, posthogSdkDetected }) ?? [];
+const menuFor = (
+  view: 'default' | 'more-info',
+  posthogSdkDetected: boolean,
+  mcpServerDetected = false,
+) =>
+  introMenuOptions({
+    view,
+    showContinue: true,
+    posthogSdkDetected,
+    mcpServerDetected,
+  }) ?? [];
 
-// Both detection states: only one offers the spell book and hedged Continue.
+// Every detection state: only some offer the spell book, hedged Continue, or MCP analytics.
 const EVERY_LABEL = [
   ...menuFor('default', false),
+  ...menuFor('default', true, true),
   ...menuFor('default', true),
   ...menuFor('more-info', true),
   ...sharingOptions(true),
