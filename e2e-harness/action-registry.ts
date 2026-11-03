@@ -28,6 +28,7 @@ import {
   SelfDrivingScreenId,
   SkillScreenId,
   SourceMapsScreenId,
+  WarehouseDestinationScreenId,
   WarehouseSourceScreenId,
   type WizardStore,
 } from '@tui';
@@ -38,6 +39,7 @@ import {
   SOURCE_MAPS_CONTEXT_KEYS,
   VARIANT_DISPLAY_NAME,
 } from '@programs/error-tracking-upload-source-maps';
+import { CHOSEN_WAREHOUSE_DESTINATION_KEY } from '@programs/warehouse-destination';
 import {
   GITHUB_REQUIRED_BODY,
   GITHUB_REQUIRED_MESSAGE,
@@ -133,6 +135,24 @@ export const ACTION_REGISTRY: Partial<Record<string, DriverAction[]>> = {
   [PosthogDoctorScreenId.Intro]: [confirmSetupAction],
   [WarehouseSourceScreenId.Intro]: [confirmSetupAction],
   [SelfDrivingScreenId.Intro]: [confirmSetupAction],
+  [WarehouseDestinationScreenId.Intro]: [
+    {
+      id: 'choose_warehouse',
+      description:
+        'Pick the warehouse to export to and continue, as the intro picker would.',
+      params: {
+        destination:
+          'destination type: BigQuery, Snowflake, Redshift, Databricks, Postgres, S3 or AzureBlob',
+      },
+      apply: (store, params) => {
+        store.setFrameworkContext(
+          CHOSEN_WAREHOUSE_DESTINATION_KEY,
+          requireString('choose_warehouse', params, 'destination'),
+        );
+        store.completeSetup();
+      },
+    },
+  ],
 
   // ── Self-driving integration check ────────────────────────────────────
   [SelfDrivingScreenId.IntegrationCheck]: [

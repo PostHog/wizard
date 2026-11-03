@@ -10,6 +10,7 @@
     { "path": "programs/feature-flags" }, { "path": "programs/metrics" },
     { "path": "programs/migration" }, { "path": "programs/posthog-integration" },
     { "path": "programs/revenue-analytics" }, { "path": "programs/self-driving" },
+    { "path": "programs/warehouse-destination" },
     { "path": "programs/warehouse-source" },
     { "path": "tools/doctor" }, { "path": "tools/mcp" }, { "path": "tools/slack" }
   ]

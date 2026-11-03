@@ -20,6 +20,20 @@
  */
 export type SourceCreationMode = 'in-cli' | 'deep-link';
 
+/** The destination types PostHog can export to, as `external-data-destinations-create` names them. */
+export const WAREHOUSE_DESTINATION_TYPES = [
+  'BigQuery',
+  'Snowflake',
+  'Redshift',
+  'Databricks',
+  'Postgres',
+  'S3',
+  'AzureBlob',
+] as const;
+
+export type WarehouseDestinationType =
+  (typeof WAREHOUSE_DESTINATION_TYPES)[number];
+
 /** Schema of PostHog's tool catalog JSON, served at `/api/wizard/tool_catalog/`. */
 export type ToolCatalog = {
   schema_version: 1;
@@ -32,6 +46,8 @@ export type CatalogTool = {
   warehouse_source_type: string | null;
   /** Null for tools the wizard only detects and reports, such as PostHog alternatives with no warehouse connector. */
   wizard_setup_mode: SourceCreationMode | null;
+  /** Absent in catalogs that predate destinations; null for a tool PostHog never exports to. */
+  warehouse_destination_type?: WarehouseDestinationType | null;
   superseded_by: string[];
   signals: {
     /** Anchored regex sources matched against `.env` key NAMES. */
@@ -69,6 +85,8 @@ export interface SourceDetector {
   warehouseSourceType: string | null;
   /** Null for a tool the wizard detects but never offers as a warehouse source. */
   mode: SourceCreationMode | null;
+  /** The warehouse this tool is, when PostHog can export to it. Null for every other tool. */
+  warehouseDestinationType: WarehouseDestinationType | null;
   signals: SourceSignals;
   /**
    * Kinds that reach the same data as this one through a more specific
@@ -84,6 +102,14 @@ export interface DetectedSource {
   kind: string;
   label: string;
   mode: SourceCreationMode;
+  /** Human-readable description of what triggered the match, for display. */
+  matchedSignal: string;
+}
+
+/** A warehouse the project appears to run, which PostHog can export data to. */
+export interface DetectedDestination {
+  type: WarehouseDestinationType;
+  label: string;
   /** Human-readable description of what triggered the match, for display. */
   matchedSignal: string;
 }

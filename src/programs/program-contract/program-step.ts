@@ -23,6 +23,7 @@ export type DecisionQuestionKey =
   | 'build_tool'
   | 'deploy_platform'
   | 'owns_database'
+  | 'runs_data_warehouse'
   | 'billing_code'
   | 'is_mcp_server';
 // Type-only: the catalog stays out of production bundles.

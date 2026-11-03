@@ -23,6 +23,7 @@ export { RevenueAnalyticsScreenId } from './programs/revenue-analytics/screen-id
 export { SelfDrivingScreenId } from './programs/self-driving/screen-ids.js';
 export { SkillScreenId } from './programs/shared/screen-ids.js';
 export { WarehouseSourceScreenId } from './programs/warehouse-source/screen-ids.js';
+export { WarehouseDestinationScreenId } from './programs/warehouse-destination/screen-ids.js';
 export { PosthogDoctorScreenId } from './tools/doctor/screen-ids.js';
 export { McpScreenId } from './tools/mcp/screen-ids.js';
 export type { FamilyPickerOption } from './family-picker.js';

@@ -10,7 +10,12 @@ import { WIZARD_USER_AGENT } from '@shared/constants';
 import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
 import { resolveBaseUrl } from '@utils/urls';
-import type { CatalogTool, SourceDetector } from './types';
+import {
+  WAREHOUSE_DESTINATION_TYPES,
+  type CatalogTool,
+  type SourceDetector,
+  type WarehouseDestinationType,
+} from './types';
 
 const CATALOG_API_PATH = '/api/wizard/tool_catalog/';
 
@@ -43,6 +48,10 @@ const catalogToolSchema: z.ZodType<CatalogTool, z.ZodTypeDef, unknown> =
     label: z.string().regex(LABEL),
     warehouse_source_type: z.string().regex(KIND).nullable(),
     wizard_setup_mode: z.enum(['in-cli', 'deep-link']).nullable(),
+    warehouse_destination_type: z
+      .enum(WAREHOUSE_DESTINATION_TYPES)
+      .nullable()
+      .optional(),
     superseded_by: z.array(z.string().regex(KIND)),
     signals: z.object({
       env_key_patterns: z.array(z.string().regex(ENV_KEY_PATTERN)),
@@ -59,12 +68,31 @@ const catalogEnvelopeSchema = z.object({
   tools: z.array(z.unknown()),
 });
 
+/**
+ * Stand-in for catalogs that predate `warehouse_destination_type`. Delete it
+ * once PostHog's catalog serves the field. Postgres is left out on purpose: an
+ * app's own database is rarely where its analytics belong.
+ */
+const LEGACY_DESTINATION_TYPES: Readonly<
+  Record<string, WarehouseDestinationType>
+> = {
+  BigQuery: 'BigQuery',
+  Snowflake: 'Snowflake',
+  Redshift: 'Redshift',
+  Databricks: 'Databricks',
+  AzureBlob: 'AzureBlob',
+};
+
 function toDetector(tool: CatalogTool): SourceDetector {
   return {
     kind: tool.kind,
     label: tool.label,
     warehouseSourceType: tool.warehouse_source_type,
     mode: tool.wizard_setup_mode,
+    warehouseDestinationType:
+      tool.warehouse_destination_type === undefined
+        ? LEGACY_DESTINATION_TYPES[tool.kind] ?? null
+        : tool.warehouse_destination_type,
     signals: {
       envKeys: tool.signals.env_key_patterns.map(
         (pattern) => new RegExp(pattern),

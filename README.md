@@ -128,12 +128,24 @@ Detect data sources your project already uses (Postgres, MySQL, MongoDB,
 Snowflake, BigQuery, Stripe, …) and connect them to PostHog's data warehouse:
 
 ```bash
-npx @posthog/wizard@latest warehouse
+npx @posthog/wizard@latest warehouse          # same as `warehouse source`
+npx @posthog/wizard@latest warehouse source
 ```
 
 The wizard scans your dependencies and `.env` key names (never the values) to
 identify sources. Database and API-key sources are created from the terminal;
 OAuth sources open the PostHog app's new-source flow in your browser.
+
+Send your PostHog data to a warehouse you already run (BigQuery, Snowflake,
+Redshift, Databricks, Postgres, S3 or Azure Blob):
+
+```bash
+npx @posthog/wizard@latest warehouse destination
+```
+
+You save the warehouse credentials in the PostHog app, in your browser. They
+never pass through the terminal or the agent. This command is in limited
+rollout.
 
 ### Upload source maps
 
