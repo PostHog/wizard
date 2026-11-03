@@ -422,11 +422,15 @@ async function driveKeyboard(pair: Pair): Promise<Record<string, unknown>> {
   try {
     // Ink attaches the stdin listener from useInput's effect, so keys written
     // before it exists are dropped.
-    await vi.waitFor(() => {
-      expect(screens.listening()).toBe(true);
-      expect(pair.ready?.(store, screens.frame()) ?? true).toBe(true);
-      expect(settled(store)).toBe(true);
-    });
+    // Polling every turn types on the first ready frame, the earliest a user could.
+    await vi.waitFor(
+      () => {
+        expect(screens.listening()).toBe(true);
+        expect(pair.ready?.(store, screens.frame()) ?? true).toBe(true);
+        expect(settled(store)).toBe(true);
+      },
+      { interval: 0 },
+    );
     expect(store.currentScreen).toBe(pair.screen);
     const before = await snap(store);
     for (const key of pair.keys) {
