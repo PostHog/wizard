@@ -18,8 +18,10 @@ export const MCP_ANALYTICS_ABORT_CASES: AbortCase[] = [
     body:
       'MCP analytics supports TypeScript/JavaScript (`@posthog/mcp`), Python ' +
       '(`posthog.mcp`, shipped inside the `posthog` package), Go ' +
-      '(`posthogmcpsdk`, for servers built on the official go-sdk), and Ruby ' +
-      '(`PostHog::MCP`, shipped inside the `posthog-ruby` gem, experimental). ' +
+      '(`posthogmcpsdk`, for servers built on the official go-sdk), Ruby ' +
+      '(`PostHog::MCP`, shipped inside the `posthog-ruby` gem, experimental), ' +
+      'and Rust (`posthog_rs::mcp`, shipped inside the `posthog-rs` crate, ' +
+      'for servers built on rmcp, experimental). ' +
       "This project doesn't look like any of them, so there's nothing to " +
       'instrument. ' +
       'See https://posthog.com/docs/mcp-analytics for the supported setups.',
@@ -73,6 +75,29 @@ export const MCP_ANALYTICS_ABORT_CASES: AbortCase[] = [
       'command again.',
   },
   {
+    match: /^rust mcp server is not built on rmcp$/i,
+    message: 'Rust MCP server not built on rmcp',
+    body:
+      'The Rust SDK instruments servers built on `rmcp`, the official Rust ' +
+      'MCP SDK. This server uses another library or its own JSON-RPC router. ' +
+      'See https://posthog.com/docs/mcp-analytics/installation/rust for the ' +
+      'supported setups.',
+  },
+  {
+    match: /^rmcp older than 3\.7$/i,
+    message: 'rmcp older than 3.7',
+    body:
+      "`posthog_rs::mcp` needs `rmcp` 3.7 or later. The wizard doesn't " +
+      'change your `rmcp` version. Upgrade it, then run the command again.',
+  },
+  {
+    match: /^rust toolchain older than 1\.88$/i,
+    message: 'Rust toolchain older than 1.88',
+    body:
+      '`posthog-rs` with the `mcp` feature needs Rust 1.88 or later. ' +
+      'Upgrade Rust, then run the command again.',
+  },
+  {
     match: /^could not locate the server entry point$/i,
     message: 'Could not locate the MCP server entry point',
     body:
@@ -88,7 +113,7 @@ export const MCP_ANALYTICS_ABORT_CASES: AbortCase[] = [
  * `wizard mcp-analytics` — flat skill command.
  *
  * Instruments the user's own MCP server with the PostHog MCP SDK for its
- * language (TypeScript, Python, Go, or Ruby) so it reports `$mcp_*` analytics about
+ * language (TypeScript, Python, Go, Ruby, or Rust) so it reports `$mcp_*` analytics about
  * itself. This is the opposite of `wizard mcp add` (which installs the
  * PostHog MCP *server* into a coding agent) — keep the two distinct.
  *
@@ -111,12 +136,12 @@ export const config: ProgramConfig = {
       '`mcp-analytics` skill end-to-end: detect the language and server ' +
       'style, install the PostHog MCP SDK for that language (`@posthog/mcp` for ' +
       'TypeScript, `posthog` for Python, `posthogmcpsdk` for Go, `posthog-ruby` ' +
-      'for Ruby), wrap the server ' +
+      'for Ruby, `posthog-rs` for Rust), wrap the server ' +
       '(or use the custom-dispatcher client where the skill says so), wire the ' +
       'project API key and host, and verify. ' +
-      'Make only additive changes — do not alter tool behavior. For a Ruby ' +
-      'server, the report must open by saying the Ruby SDK is experimental and ' +
-      'not officially supported. The final report ' +
+      'Make only additive changes — do not alter tool behavior. For a Ruby or ' +
+      'Rust server, the report must open by saying that SDK is experimental ' +
+      'and not officially supported. The final report ' +
       `is written to ./${MCP_ANALYTICS_REPORT_FILE}.`,
     successMessage: `MCP analytics configured! View the report at ./${MCP_ANALYTICS_REPORT_FILE}`,
     reportFile: MCP_ANALYTICS_REPORT_FILE,
