@@ -3,6 +3,7 @@ import {
   applySdkCaptureModeFlags,
   detectSdkCaptureModes,
   sdkCaptureModeFacts,
+  settleSdkCaptureModes,
 } from '@services/detection/sdk-capture-modes';
 import { withProject } from '@services/detection/sdk-install/__tests__/helpers.no-jest';
 
@@ -52,13 +53,11 @@ describe('detectSdkCaptureModes', () => {
     ).toEqual([]);
   });
 
-  it('applies a flag payload when given one', async () => {
+  it('never reads the flags itself; the run applies them when they load', async () => {
     const modes = await withProject({}, (dir) =>
-      detectSdkCaptureModes(dir, Integration.rust, {
-        [WIZARD_SDK_CAPTURE_V1_FLAG_KEY]: { 'posthog-rs': 'v1' },
-      }),
+      detectSdkCaptureModes(dir, Integration.rust),
     );
-    expect(modes[0]).toMatchObject({ mode: 'v1', major: 1, reason: 'flag' });
+    expect(modes[0]).toMatchObject({ mode: 'legacy', reason: 'not-released' });
   });
 });
 
@@ -116,9 +115,11 @@ describe('sdkCaptureModeFacts', () => {
       },
       (dir) => detectSdkCaptureModes(dir, Integration.go),
     );
-    expect(sdkCaptureModeFacts({ sdkCaptureModes })).toEqual([
+    const [fact] = sdkCaptureModeFacts({ sdkCaptureModes });
+    expect(fact).toContain(
       'PostHog SDK posthog-go: github.com/posthog/posthog-go/v2 v2.0.0 is already installed (go.mod), the 2.x line (capture v1 API). Keep it; do not upgrade or downgrade it in this run.',
-    ]);
+    );
+    expect(fact).toContain('AI capture method');
   });
 
   it('names both copies of a conflict', async () => {
@@ -137,5 +138,85 @@ describe('sdkCaptureModeFacts', () => {
 
   it('is empty when nothing was resolved', () => {
     expect(sdkCaptureModeFacts({ sdkCaptureModes: [] })).toEqual([]);
+  });
+});
+
+describe('settleSdkCaptureModes', () => {
+  it('reads the run directory when detection left no modes, and applies the flags', async () => {
+    const settled = await withProject({ 'uv.lock': UV_LOCK }, (installDir) =>
+      settleSdkCaptureModes(
+        { installDir, integration: Integration.fastapi, sdkCaptureModes: [] },
+        { [WIZARD_SDK_CAPTURE_V1_FLAG_KEY]: { 'posthog-python': 'v1' } },
+      ),
+    );
+    // An installed copy still wins over the flag.
+    expect(settled).toEqual([
+      expect.objectContaining({
+        sdk: 'posthog-python',
+        mode: 'legacy',
+        reason: 'installed',
+      }),
+    ]);
+  });
+
+  it("keeps detection's copies when the run already has modes", async () => {
+    const detected = await withProject({}, (dir) =>
+      detectSdkCaptureModes(dir, Integration.go),
+    );
+    const settled = await withProject(
+      {
+        'go.mod':
+          'module app\n\nrequire github.com/posthog/posthog-go/v2 v2.0.0\n',
+      },
+      (installDir) =>
+        settleSdkCaptureModes(
+          {
+            installDir,
+            integration: Integration.go,
+            sdkCaptureModes: detected,
+          },
+          { [WIZARD_SDK_CAPTURE_V1_FLAG_KEY]: { 'posthog-go': 'v1' } },
+        ),
+    );
+    // The directory is not read again: the flag, not the go.mod, decides.
+    expect(settled[0]).toMatchObject({
+      mode: 'v1',
+      reason: 'flag',
+      installed: [],
+    });
+  });
+
+  it('resolves nothing for a run without an integration', async () => {
+    await expect(
+      settleSdkCaptureModes(
+        { installDir: '/tmp/none', integration: null, sdkCaptureModes: [] },
+        {},
+      ),
+    ).resolves.toEqual([]);
+  });
+});
+
+describe('sdkCaptureModeFacts: the v1 rules', () => {
+  it('adds the four syntax-free v1 rules to a v1 line and nothing to a legacy one', async () => {
+    const legacy = await withProject({}, (dir) =>
+      detectSdkCaptureModes(dir, Integration.rust),
+    );
+    expect(sdkCaptureModeFacts({ sdkCaptureModes: legacy })[0]).not.toContain(
+      'AI capture method',
+    );
+    const v1 = applySdkCaptureModeFlags(
+      { integration: Integration.rust, sdkCaptureModes: legacy },
+      { [WIZARD_SDK_CAPTURE_V1_FLAG_KEY]: { 'posthog-rs': 'v1' } },
+    );
+    const fact = sdkCaptureModeFacts({ sdkCaptureModes: v1 })[0];
+    expect(fact).toContain('this run uses the 1.x line (capture v1 API)');
+    expect(fact).toContain(
+      "send every `$ai_*` event through the SDK's AI capture method",
+    );
+    expect(fact).toContain('never as a `$`-prefixed property');
+    expect(fact).toContain(
+      'a value set on the call beats a global, super or context value',
+    );
+    expect(fact).toContain('`before_send` hook must pass the event');
   });
 });

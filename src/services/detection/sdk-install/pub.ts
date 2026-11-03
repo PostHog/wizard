@@ -1,8 +1,12 @@
 import * as path from 'path';
 import { readProjectFile } from '@utils/bounded-fs';
 import type { InstalledSdk } from '@shared/sdk-capture-mode';
-import { dedupeInstalled } from './types';
-import { lowerBoundMajor, majorOfVersion } from './version-spec';
+import { dedupeInstalled, LOCKFILE_MAX_BYTES } from './types';
+import {
+  isUnboundedRequirement,
+  lowerBoundMajor,
+  majorOfVersion,
+} from './version-spec';
 
 const PUB_PACKAGE = 'posthog_flutter';
 
@@ -27,12 +31,22 @@ function readPubspec(content: string): InstalledSdk[] {
   );
   const major = match ? lowerBoundMajor(match[1]) : undefined;
   return match && major !== undefined
-    ? [{ major, version: match[1], source: 'pubspec.yaml' }]
+    ? [
+        {
+          major,
+          version: match[1],
+          source: 'pubspec.yaml',
+          ...(isUnboundedRequirement(match[1]) ? { unbounded: true } : {}),
+        },
+      ]
     : [];
 }
 
 export function readPubInstalls(installDir: string): InstalledSdk[] {
-  const lock = readProjectFile(path.join(installDir, 'pubspec.lock'));
+  const lock = readProjectFile(
+    path.join(installDir, 'pubspec.lock'),
+    LOCKFILE_MAX_BYTES,
+  );
   if (lock !== null) {
     const copies = dedupeInstalled(readPubspecLock(lock));
     if (copies.length > 0) return copies;

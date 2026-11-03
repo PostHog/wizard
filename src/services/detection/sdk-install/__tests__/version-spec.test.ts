@@ -1,4 +1,5 @@
 import {
+  isUnboundedRequirement,
   lowerBoundMajor,
   majorOfVersion,
 } from '@services/detection/sdk-install/version-spec';
@@ -37,12 +38,18 @@ describe('lowerBoundMajor', () => {
     expect(lowerBoundMajor(spec)).toBe(major);
   });
 
-  it.each([['*'], ['any'], ['latest'], [''], ['<8'], ['!=7.1'], ['x']])(
-    '%s has no lower bound',
-    (spec) => {
-      expect(lowerBoundMajor(spec)).toBeUndefined();
-    },
-  );
+  it.each([
+    ['*'],
+    ['any'],
+    ['latest'],
+    [''],
+    ['<8'],
+    ['!=7.1'],
+    ['x'],
+    ['(,4.0]'],
+  ])('%s has no lower bound', (spec) => {
+    expect(lowerBoundMajor(spec)).toBeUndefined();
+  });
 });
 
 describe('majorOfVersion', () => {
@@ -55,5 +62,30 @@ describe('majorOfVersion', () => {
   it('rejects a requirement or a bare word', () => {
     expect(majorOfVersion('^7.82.1')).toBeUndefined();
     expect(majorOfVersion('latest')).toBeUndefined();
+  });
+});
+
+describe('isUnboundedRequirement', () => {
+  it.each([['>=3.0.0'], ['>=7'], ['>7, >=7.1'], ['[3.0,)'], ['">=0.30"']])(
+    '%s is unbounded',
+    (spec) => {
+      expect(isUnboundedRequirement(spec)).toBe(true);
+    },
+  );
+
+  it.each([
+    ['^5'],
+    ['~5.60.0'],
+    ['>=7,<8'],
+    ['==7.*'],
+    ['~=7.1'],
+    ['5.61.2'],
+    ['0.30'],
+    ['3.+'],
+    ['[3.0,4.0)'],
+    ['*'],
+    [''],
+  ])('%s is bounded or has no requirement', (spec) => {
+    expect(isUnboundedRequirement(spec)).toBe(false);
   });
 });

@@ -225,7 +225,12 @@ function resolveFromInstalled(
   };
 }
 
-/** The run's main SDK among the resolutions: the integration's primary row, else the first. */
+/**
+ * The run's main SDK among the resolutions: the integration's primary row,
+ * else the first. A server-rendered web framework has no primary row (its
+ * posthog-js stays outside the table), so its only secondary row, posthog-node,
+ * is the run's SDK for skill selection and telemetry.
+ */
 export function primarySdkCaptureMode(
   resolutions: readonly SdkCaptureModeResolution[],
   integration: Integration | null | undefined,

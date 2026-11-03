@@ -2,8 +2,12 @@ import * as path from 'path';
 import { readProjectFile } from '@utils/bounded-fs';
 import type { InstalledSdk } from '@shared/sdk-capture-mode';
 import { boundedGlob } from '@utils/bounded-fs';
-import { dedupeInstalled } from './types';
-import { lowerBoundMajor, majorOfVersion } from './version-spec';
+import { dedupeInstalled, LOCKFILE_MAX_BYTES } from './types';
+import {
+  isUnboundedRequirement,
+  lowerBoundMajor,
+  majorOfVersion,
+} from './version-spec';
 
 const PYPI_PACKAGE = 'posthog';
 
@@ -60,7 +64,7 @@ function readRequirements(content: string, source: string): InstalledSdk[] {
   const copies: InstalledSdk[] = [];
   for (const line of content.split('\n')) {
     const found = requirementMajor(line);
-    if (found) copies.push({ major: found.major, version: found.spec, source });
+    if (found) copies.push(manifestCopy(found.major, found.spec, source));
   }
   return copies;
 }
@@ -69,31 +73,100 @@ function readRequirements(content: string, source: string): InstalledSdk[] {
  * PEP 621 `dependencies = ["posthog>=7,<8"]`, and the poetry and pdm tables:
  * `posthog = "^3.0"` or `posthog = { version = ">=7" }`.
  */
+function manifestCopy(
+  major: number,
+  spec: string,
+  source: string,
+): InstalledSdk {
+  return {
+    major,
+    version: spec,
+    source,
+    ...(isUnboundedRequirement(spec) ? { unbounded: true } : {}),
+  };
+}
+
+/** The TOML tables whose arrays and keys declare dependencies. */
+const DEPENDENCY_TABLES = new Set([
+  'project',
+  'project.optional-dependencies',
+  'dependency-groups',
+  'tool.poetry.dependencies',
+  'tool.poetry.dev-dependencies',
+  'tool.poetry.group',
+  'tool.pdm.dev-dependencies',
+  'tool.uv',
+]);
+
+function isDependencyTable(table: string): boolean {
+  if (DEPENDENCY_TABLES.has(table)) return true;
+  return (
+    table.startsWith('tool.poetry.group.') ||
+    table.startsWith('tool.pdm.') ||
+    table.startsWith('tool.uv.')
+  );
+}
+
+/**
+ * PEP 621 `dependencies = ["posthog>=7,<8"]` and the optional-dependency and
+ * dependency-group arrays, plus the poetry and pdm tables: `posthog = "^3.0"`
+ * or `posthog = { version = ">=7" }`. Only dependency tables are read, so a
+ * description or URL that mentions posthog is not a copy.
+ */
 function readPyproject(content: string): InstalledSdk[] {
   const copies: InstalledSdk[] = [];
   const quoted = new RegExp(
     `["']\\s*(${PYPI_PACKAGE}\\s*(?:\\[[^\\]]*\\])?\\s*[^"']*)["']`,
     'gi',
   );
-  for (const match of content.matchAll(quoted)) {
-    const found = requirementMajor(match[1]);
-    if (found)
-      copies.push({
-        major: found.major,
-        version: found.spec,
-        source: 'pyproject.toml',
-      });
-  }
   const table = new RegExp(
     `^\\s*${PYPI_PACKAGE}\\s*=\\s*(?:"([^"]+)"|\\{[^}]*version\\s*=\\s*"([^"]+)")`,
     'gim',
   );
-  for (const match of content.matchAll(table)) {
-    const spec = match[1] ?? match[2];
-    const major = lowerBoundMajor(spec);
-    if (major !== undefined)
-      copies.push({ major, version: spec, source: 'pyproject.toml' });
+  let current = '';
+  let section: string[] = [];
+  const flush = () => {
+    if (!isDependencyTable(current)) return;
+    const text = section.join('\n');
+    const arrays =
+      current === 'project'
+        ? [
+            ...text.matchAll(
+              /^\s*dependencies\s*=\s*\[([\s\S]*?)\](?=[ \t]*(?:#.*)?$)/gm,
+            ),
+          ].map((m) => m[1])
+        : [
+            ...text.matchAll(
+              /^\s*[\w.-]+\s*=\s*\[([\s\S]*?)\](?=[ \t]*(?:#.*)?$)/gm,
+            ),
+          ].map((m) => m[1]);
+    for (const array of arrays) {
+      for (const match of array.matchAll(quoted)) {
+        const found = requirementMajor(match[1]);
+        if (found) {
+          copies.push(manifestCopy(found.major, found.spec, 'pyproject.toml'));
+        }
+      }
+    }
+    for (const match of text.matchAll(table)) {
+      const spec = match[1] ?? match[2];
+      const major = lowerBoundMajor(spec);
+      if (major !== undefined) {
+        copies.push(manifestCopy(major, spec, 'pyproject.toml'));
+      }
+    }
+  };
+  for (const line of content.split('\n')) {
+    const header = /^\s*\[([^\]]+)\]\s*$/.exec(line);
+    if (header) {
+      flush();
+      current = header[1].trim();
+      section = [];
+      continue;
+    }
+    section.push(line);
   }
+  flush();
   return copies;
 }
 
@@ -103,7 +176,7 @@ function readPipfile(content: string): InstalledSdk[] {
   );
   const major = match ? lowerBoundMajor(match[1]) : undefined;
   return match && major !== undefined
-    ? [{ major, version: match[1], source: 'Pipfile' }]
+    ? [manifestCopy(major, match[1], 'Pipfile')]
     : [];
 }
 
@@ -119,7 +192,10 @@ export async function readPypiInstalls(
   installDir: string,
 ): Promise<InstalledSdk[]> {
   for (const [file, parse] of LOCKFILES) {
-    const content = readProjectFile(path.join(installDir, file));
+    const content = readProjectFile(
+      path.join(installDir, file),
+      LOCKFILE_MAX_BYTES,
+    );
     if (content === null) continue;
     try {
       const copies = dedupeInstalled(parse(content));

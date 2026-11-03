@@ -56,16 +56,35 @@ function readPbxproj(content: string, source: string): InstalledSdk[] {
   return copies;
 }
 
-/** XcodeGen: a `packages:` entry with the repo `url` and `from`, `exactVersion`, `majorVersion` or `minVersion`. */
+/**
+ * XcodeGen: the package's own mapping block (the lines indented deeper than
+ * its key) carries `url` and `from`, `exactVersion`, `majorVersion`,
+ * `minVersion` or `version`; a neighbouring package's keys never count.
+ */
 function readXcodeGen(content: string): InstalledSdk[] {
   const copies: InstalledSdk[] = [];
   const lines = content.split('\n');
-  for (let i = 0; i < lines.length; i += 1) {
-    if (!/url:\s*\S*posthog\/posthog-ios/i.test(lines[i])) continue;
-    for (let j = i - 3; j <= i + 5; j += 1) {
+  const indentOf = (line: string) => line.length - line.trimStart().length;
+  for (let u = 0; u < lines.length; u += 1) {
+    if (!/url:\s*\S*posthog\/posthog-ios/i.test(lines[u])) continue;
+    // The package key is the nearest line above with a smaller indent.
+    const urlIndent = indentOf(lines[u]);
+    let k = u - 1;
+    while (
+      k >= 0 &&
+      (lines[k].trim() === '' || indentOf(lines[k]) >= urlIndent)
+    ) {
+      k -= 1;
+    }
+    if (k < 0) continue;
+    const keyIndent = indentOf(lines[k]);
+    for (let j = k + 1; j < lines.length; j += 1) {
+      const line = lines[j];
+      if (line.trim() === '') continue;
+      if (indentOf(line) <= keyIndent) break;
       const match =
         /^\s*(from|exactVersion|majorVersion|minVersion|version):\s*"?([^"\s]+)"?/.exec(
-          lines[j] ?? '',
+          line,
         );
       if (!match) continue;
       const major = lowerBoundMajor(match[2]);

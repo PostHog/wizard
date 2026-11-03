@@ -245,8 +245,13 @@ describe('readInstalledSdks: PyPI (posthog)', () => {
         readInstalledSdks(dir, 'posthog-python'),
       ),
     ).toEqual([
-      { major: 7, version: '>=7', source: 'Pipfile' },
-      { major: 3, version: '>=3.0.0', source: 'requirements.txt' },
+      { major: 7, version: '>=7', source: 'Pipfile', unbounded: true },
+      {
+        major: 3,
+        version: '>=3.0.0',
+        source: 'requirements.txt',
+        unbounded: true,
+      },
     ]);
   });
 });
@@ -553,5 +558,118 @@ describe('readInstalledSdks: Gradle', () => {
       { major: 3, version: '3.+', source: 'app/build.gradle.kts' },
       { major: 3, version: '3.75.0', source: 'lib/build.gradle' },
     ]);
+  });
+});
+
+describe('readInstalledSdks: review regressions', () => {
+  it('reads pnpm lockfile v5 keys', async () => {
+    const lock =
+      'lockfileVersion: 5.4\n\npackages:\n\n  /posthog-node/5.61.2:\n    resolution: {integrity: sha512-x}\n';
+    expect(
+      await withProject({ 'pnpm-lock.yaml': lock }, (dir) =>
+        readInstalledSdks(dir, 'posthog-node'),
+      ),
+    ).toEqual([{ major: 5, version: '5.61.2', source: 'pnpm-lock.yaml' }]);
+  });
+
+  it('flags an unbounded manifest requirement and leaves a bounded one alone', async () => {
+    expect(
+      await withProject(
+        {
+          'package.json': JSON.stringify({
+            dependencies: { 'posthog-node': '>=5' },
+          }),
+        },
+        (dir) => readInstalledSdks(dir, 'posthog-node'),
+      ),
+    ).toEqual([
+      { major: 5, version: '>=5', source: 'package.json', unbounded: true },
+    ]);
+    expect(
+      await withProject({ 'requirements.txt': 'posthog>=3.0.0\n' }, (dir) =>
+        readInstalledSdks(dir, 'posthog-python'),
+      ),
+    ).toEqual([
+      {
+        major: 3,
+        version: '>=3.0.0',
+        source: 'requirements.txt',
+        unbounded: true,
+      },
+    ]);
+    expect(
+      await withProject({ 'requirements.txt': 'posthog>=7,<8\n' }, (dir) =>
+        readInstalledSdks(dir, 'posthog-python'),
+      ),
+    ).toEqual([{ major: 7, version: '>=7,<8', source: 'requirements.txt' }]);
+    expect(
+      await withProject(
+        { 'Cargo.toml': '[dependencies]\nposthog-rs = ">=0.30"\n' },
+        (dir) => readInstalledSdks(dir, 'posthog-rs'),
+      ),
+    ).toEqual([
+      { major: 0, version: '>=0.30', source: 'Cargo.toml', unbounded: true },
+    ]);
+  });
+
+  it('ignores a pyproject string outside the dependency tables', async () => {
+    const pyproject = [
+      '[project]',
+      'name = "app"',
+      'description = "posthog helper >=1"',
+      'dependencies = ["fastapi>=0.115"]',
+      '',
+      '[project.urls]',
+      'homepage = "https://posthog.com"',
+      '',
+      '[project.optional-dependencies]',
+      'analytics = ["posthog>=7,<8"]',
+    ].join('\n');
+    expect(
+      await withProject({ 'pyproject.toml': pyproject }, (dir) =>
+        readInstalledSdks(dir, 'posthog-python'),
+      ),
+    ).toEqual([{ major: 7, version: '>=7,<8', source: 'pyproject.toml' }]);
+  });
+
+  it('reads only the PostHog package block in a multi-package project.yml', async () => {
+    const yml = [
+      'name: App',
+      'packages:',
+      '  Alamofire:',
+      '    url: https://github.com/Alamofire/Alamofire',
+      '    from: 5.9.0',
+      '  PostHog:',
+      '    url: https://github.com/PostHog/posthog-ios',
+      '    from: 3.2.0',
+      '  Lottie:',
+      '    url: https://github.com/airbnb/lottie-ios',
+      '    from: 4.4.0',
+    ].join('\n');
+    expect(
+      await withProject({ 'project.yml': yml }, (dir) =>
+        readInstalledSdks(dir, 'posthog-ios'),
+      ),
+    ).toEqual([{ major: 3, version: 'from: 3.2.0', source: 'project.yml' }]);
+    const branch = yml.replace('from: 3.2.0', 'branch: main');
+    expect(
+      await withProject({ 'project.yml': branch }, (dir) =>
+        readInstalledSdks(dir, 'posthog-ios'),
+      ),
+    ).toEqual([]);
+  });
+
+  it('reads a lockfile larger than the project-file cap', async () => {
+    const padding = '# '.padEnd(3 * 1024 * 1024, 'x') + '\n';
+    const lock =
+      padding +
+      'lockfileVersion: 9.0\npackages:\n  posthog-node@5.61.2:\n    resolution: {integrity: sha512-x}\n';
+    expect(
+      (
+        await withProject({ 'pnpm-lock.yaml': lock }, (dir) =>
+          readInstalledSdks(dir, 'posthog-node'),
+        )
+      )[0],
+    ).toMatchObject({ major: 5, version: '5.61.2' });
   });
 });

@@ -25,6 +25,7 @@ export {
   applySdkCaptureModeFlags,
   detectSdkCaptureModes,
   sdkCaptureModeFacts,
+  settleSdkCaptureModes,
 } from './sdk-capture-modes';
 export { readInstalledSdks } from './sdk-install';
 export {

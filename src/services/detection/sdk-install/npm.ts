@@ -3,8 +3,12 @@ import { readProjectFile } from '@utils/bounded-fs';
 import type { InstalledSdk } from '@shared/sdk-capture-mode';
 import type { PackageJson } from '@utils/package-json';
 import { getDeclaredVersion } from '@utils/package-json';
-import { dedupeInstalled } from './types';
-import { lowerBoundMajor, majorOfVersion } from './version-spec';
+import { dedupeInstalled, LOCKFILE_MAX_BYTES } from './types';
+import {
+  isUnboundedRequirement,
+  lowerBoundMajor,
+  majorOfVersion,
+} from './version-spec';
 
 const NPM_PACKAGE = 'posthog-node';
 
@@ -72,10 +76,10 @@ function walkLockDependencies(
   }
 }
 
-/** `packages:` and `snapshots:` keys look like `posthog-node@5.60.0:` or `/posthog-node@5.60.0:` (older lockfiles). */
+/** `packages:` and `snapshots:` keys look like `posthog-node@5.60.0:`, `/posthog-node@5.60.0:` (v6) or `/posthog-node/5.60.0:` (v5). */
 function readPnpmLock(content: string): InstalledSdk[] {
   const pattern = new RegExp(
-    `^\\s*'?/?${escape(NPM_PACKAGE)}@(\\d+\\.\\d+\\.\\d+[^:'(\\s]*)'?[:(]`,
+    `^\\s*'?/?${escape(NPM_PACKAGE)}[@/](\\d+\\.\\d+\\.\\d+[^:'(\\s]*)'?[:(]`,
     'gm',
   );
   const versions = new Set<string>();
@@ -123,7 +127,10 @@ const LOCKFILES: ReadonlyArray<[string, (content: string) => InstalledSdk[]]> =
 
 export function readNpmInstalls(installDir: string): InstalledSdk[] {
   for (const [file, parse] of LOCKFILES) {
-    const content = readProjectFile(path.join(installDir, file));
+    const content = readProjectFile(
+      path.join(installDir, file),
+      LOCKFILE_MAX_BYTES,
+    );
     if (content === null) continue;
     try {
       const copies = dedupeInstalled(parse(content));
@@ -143,7 +150,14 @@ export function readNpmInstalls(installDir: string): InstalledSdk[] {
     const major = lowerBoundMajor(declared);
     return major === undefined
       ? []
-      : [{ major, version: declared, source: 'package.json' }];
+      : [
+          {
+            major,
+            version: declared,
+            source: 'package.json',
+            ...(isUnboundedRequirement(declared) ? { unbounded: true } : {}),
+          },
+        ];
   } catch {
     return [];
   }

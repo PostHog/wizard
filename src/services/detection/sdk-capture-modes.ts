@@ -28,9 +28,7 @@ function rowsFor(integration: Integration): SdkMajorRow[] {
 export async function detectSdkCaptureModes(
   installDir: string,
   integration: Integration,
-  flagPayloads?: Readonly<Record<string, unknown>>,
 ): Promise<SdkCaptureModeResolution[]> {
-  const flagPayload = flagPayloads?.[WIZARD_SDK_CAPTURE_V1_FLAG_KEY];
   const resolutions: SdkCaptureModeResolution[] = [];
   for (const row of rowsFor(integration)) {
     let installed: SdkCaptureModeResolution['installed'] = [];
@@ -46,12 +44,34 @@ export async function detectSdkCaptureModes(
       sdk: row.sdk,
       integration,
       installed,
-      flagPayload,
     });
     logToFile('[sdk-capture-mode] resolved', resolution);
     resolutions.push(resolution);
   }
   return resolutions;
+}
+
+/**
+ * The modes for one agent run: detection's resolutions when the run has them,
+ * else a fresh read of the run's own directory (a composed or scoped run
+ * settles its integration after detection), then the flag payloads applied.
+ */
+export async function settleSdkCaptureModes(
+  session: {
+    installDir: string;
+    integration: Integration | null;
+    sdkCaptureModes: readonly SdkCaptureModeResolution[];
+  },
+  flagPayloads: Readonly<Record<string, unknown>>,
+): Promise<SdkCaptureModeResolution[]> {
+  const detected =
+    session.sdkCaptureModes.length > 0 || !session.integration
+      ? session.sdkCaptureModes
+      : await detectSdkCaptureModes(session.installDir, session.integration);
+  return applySdkCaptureModeFlags(
+    { integration: session.integration, sdkCaptureModes: detected },
+    flagPayloads,
+  );
 }
 
 /** Resolves again with the flag payloads, from the copies detection already read. */
@@ -74,6 +94,10 @@ export function applySdkCaptureModeFlags(
 }
 
 const MODE_LABEL = { legacy: 'legacy capture API', v1: 'capture v1 API' };
+
+/** The capture v1 rules that hold in every SDK and need no syntax; the SDK's own rules carry the names. */
+const V1_RULES =
+  " On this line: send every `$ai_*` event through the SDK's AI capture method, never through `capture`; put per-event controls such as `process_person_profile` and `cookieless_mode` in the call's `options`, never as a `$`-prefixed property; a value set on the call beats a global, super or context value; a `before_send` hook must pass the event's `options` through unchanged.";
 
 /** One prompt line per SDK, telling the agent which major line this run is on and why. */
 export function sdkCaptureModeFacts(session: {
@@ -98,10 +122,14 @@ export function sdkCaptureModeFacts(session: {
         copy.source
       }), the ${line} line (${
         MODE_LABEL[resolution.mode]
-      }). Keep it; do not upgrade or downgrade it in this run.`;
+      }). Keep it; do not upgrade or downgrade it in this run.${
+        resolution.mode === 'v1' ? V1_RULES : ''
+      }`;
     }
     return `PostHog SDK ${row.sdk}: this run uses the ${line} line (${
       MODE_LABEL[resolution.mode]
-    }). Install ${line} only, never ${other}.`;
+    }). Install ${line} only, never ${other}.${
+      resolution.mode === 'v1' ? V1_RULES : ''
+    }`;
   });
 }

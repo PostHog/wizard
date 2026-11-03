@@ -46,8 +46,8 @@ import {
 } from './credentials';
 import { reportCodebaseScan } from '@services/codebase-scan';
 import {
-  applySdkCaptureModeFlags,
   sdkCaptureModeFacts,
+  settleSdkCaptureModes,
 } from '@services/detection';
 import { IS_PRODUCTION_BUILD } from '@env';
 import type { QuestionKey } from '@services/detection/decisions';
@@ -261,6 +261,13 @@ async function invokeProgram(
       integration: run.integrationLabel,
       program_id: programId,
       skill_id: run.skillId ?? null,
+      // Detection's resolution; the flags have not loaded yet. Later events carry the settled one.
+      ...(mayReportScanResults(store.session)
+        ? sdkCaptureModeProperties(
+            store.session.sdkCaptureModes,
+            store.session.integration,
+          )
+        : {}),
     });
 
     // Everything before the first agent run: a rejection fails the run, unless the caller aborted.
@@ -305,20 +312,6 @@ async function invokeProgram(
       if (signal.aborted) return cancelled();
       if (error instanceof ProgramAbort) return fail(error.message, error.code);
       return fail(error instanceof Error ? error.message : String(error));
-    }
-
-    // Flags known: settle each SDK's capture mode. An installed copy already won in detection.
-    store.setSdkCaptureModes(
-      applySdkCaptureModeFlags(store.session, flags.payloads),
-    );
-    if (mayReportScanResults(store.session)) {
-      const properties = sdkCaptureModeProperties(
-        store.session.sdkCaptureModes,
-        store.session.integration,
-      );
-      for (const [key, value] of Object.entries(properties)) {
-        analytics.setTag(key, Array.isArray(value) ? value.join(',') : value);
-      }
     }
 
     // Logged in, AI approved and flags known: the one judgment call, before any agent runs.
@@ -377,6 +370,24 @@ async function invokeProgram(
         store.setDetectedFramework(scoped.detectedFrameworkLabel);
       }
       const session = (): WizardSession => scoped ?? store.session;
+      // Each run settles the SDK capture modes for its own directory and
+      // integration: a composed or scoped run has none from detection.
+      const sdkCaptureModes = await settleSdkCaptureModes(
+        session(),
+        flags.payloads,
+      );
+      if (signal.aborted) return cancelled();
+      if (scoped) scoped.sdkCaptureModes = sdkCaptureModes;
+      else store.setSdkCaptureModes(sdkCaptureModes);
+      if (mayReportScanResults(session())) {
+        const properties = sdkCaptureModeProperties(
+          sdkCaptureModes,
+          session().integration,
+        );
+        for (const [key, value] of Object.entries(properties)) {
+          analytics.setTag(key, Array.isArray(value) ? value.join(',') : value);
+        }
+      }
       const runDir = session().installDir;
       const agentRun =
         ownRun ?? (await resolveRun(planned.config, store, runner, scoped));
@@ -385,6 +396,9 @@ async function invokeProgram(
           integration: agentRun.integrationLabel,
           program_id: planned.config.id,
           skill_id: agentRun.skillId ?? null,
+          ...(mayReportScanResults(session())
+            ? sdkCaptureModeProperties(sdkCaptureModes, session().integration)
+            : {}),
         });
       }
 
