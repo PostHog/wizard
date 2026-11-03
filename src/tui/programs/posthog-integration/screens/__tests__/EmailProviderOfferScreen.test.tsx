@@ -10,7 +10,12 @@ import { RunPhase } from '@shared/run-state';
 import { WizardReadiness } from '@shared/health-checks/readiness';
 import { CODEBASE_SCAN_KEY } from '@services/codebase-scan';
 import { PostHogIntegrationScreenId } from '@tui/programs/posthog-integration/screen-ids';
-import { EmailProviderOfferScreen } from '@tui/programs/posthog-integration/screens/EmailProviderOfferScreen';
+import {
+  EmailProviderOfferScreen,
+  QUESTION_READ_GUARD_MS,
+} from '@tui/programs/posthog-integration/screens/EmailProviderOfferScreen';
+import { ScreenContainer } from '@tui/primitives/ScreenContainer';
+import { createScreens, createServices } from '@tui/screen-registry';
 
 vi.mock('ink', () => vi.importActual<typeof import('ink')>('ink-actual'));
 const { wizardCapture } = vi.hoisted(() => ({ wizardCapture: vi.fn() }));
@@ -35,7 +40,11 @@ const ESC = '\u001B';
 
 const delay = () => new Promise((resolve) => setTimeout(resolve, 30));
 
-function storeAfterInstallWithResend(): WizardStore {
+/** Lets the question's read guard pass; the clock is otherwise frozen. */
+const readTheQuestion = () =>
+  vi.setSystemTime(Date.now() + QUESTION_READ_GUARD_MS);
+
+function storeAtOutroWithResend(): WizardStore {
   const store = new WizardStore();
   store.grantSharing();
   store.completeSetup();
@@ -73,6 +82,11 @@ function storeAfterInstallWithResend(): WizardStore {
   store.setRunPhase(RunPhase.Running);
   store.setRunPhase(RunPhase.Completed);
   store.setOutroData({ kind: OutroKind.Success, message: 'Done' });
+  return store;
+}
+
+function storeAfterInstallWithResend(): WizardStore {
+  const store = storeAtOutroWithResend();
   store.setOutroDismissed();
   return store;
 }
@@ -86,6 +100,7 @@ function setup() {
   );
   const press = async (...keys: string[]) => {
     await delay();
+    readTheQuestion();
     for (const key of keys) {
       app.stdin.write(key);
       await delay();
@@ -100,10 +115,12 @@ function answeredWith(answer: string) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.useFakeTimers({ toFake: ['Date'] });
 });
 
 afterEach(() => {
   cleanup();
+  vi.useRealTimers();
 });
 
 describe('the email provider offer after install', () => {
@@ -171,5 +188,55 @@ describe('the email provider offer after install', () => {
     app.unmount();
 
     expect(wizardCapture).toHaveBeenCalledWith(...answeredWith('skipped'));
+  });
+
+  it('ignores Enter until the question has had time to be read', async () => {
+    const { app } = setup();
+    await delay();
+
+    app.stdin.write(ENTER);
+    await delay();
+
+    expect(wizardCapture).not.toHaveBeenCalledWith(
+      'email provider offer answered',
+      expect.anything(),
+    );
+    expect(app.lastFrame()).toContain('Want to try it?');
+
+    readTheQuestion();
+    app.stdin.write(ENTER);
+    await delay();
+
+    expect(wizardCapture).toHaveBeenCalledWith(...answeredWith('yes'));
+  });
+});
+
+describe('the outro into the email provider offer', () => {
+  it("doesn't let a quick second Enter after the outro answer the question", async () => {
+    const store = storeAtOutroWithResend();
+    const app = render(
+      <ScreenContainer
+        store={store}
+        screens={createScreens(store, createServices(store))}
+      />,
+    );
+    await delay();
+    expect(store.router.resolve(store)).toBe(ScreenId.Outro);
+
+    app.stdin.write(ENTER);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    app.stdin.write(ENTER);
+    await delay();
+
+    expect(store.router.resolve(store)).toBe(
+      PostHogIntegrationScreenId.EmailProviderOffer,
+    );
+    expect(wizardCapture).toHaveBeenCalledWith('email provider offer shown', {
+      providers: ['Resend'],
+    });
+    expect(wizardCapture).not.toHaveBeenCalledWith(
+      'email provider offer answered',
+      expect.anything(),
+    );
   });
 });

@@ -79,6 +79,13 @@ const OfferFlow = ({
   return <QuestionPicker offer={offer} onAnswer={answer} />;
 };
 
+/**
+ * How long the question ignores Enter after it opens. The cursor starts on
+ * "Yes", so without it a quick second Enter meant for the outro would answer
+ * yes before the question could be read.
+ */
+export const QUESTION_READ_GUARD_MS = 500;
+
 const QuestionPicker = ({
   offer,
   onAnswer,
@@ -86,6 +93,7 @@ const QuestionPicker = ({
   offer: EmailProviderOffer;
   onAnswer: (choice: EmailProviderOfferAnswer) => void;
 }) => {
+  const [openedAt] = useState(() => Date.now());
   useKeyBindings('email-provider-offer', [
     {
       match: KeyMatch.Escape,
@@ -101,9 +109,10 @@ const QuestionPicker = ({
       <Box marginTop={1}>
         <PickerMenu
           options={emailProviderOfferChoices(offer)}
-          onSelect={(value) =>
-            onAnswer(Array.isArray(value) ? value[0] : value)
-          }
+          onSelect={(value) => {
+            if (Date.now() - openedAt < QUESTION_READ_GUARD_MS) return;
+            onAnswer(Array.isArray(value) ? value[0] : value);
+          }}
         />
       </Box>
     </Box>
