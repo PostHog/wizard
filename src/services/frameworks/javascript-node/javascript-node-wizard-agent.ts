@@ -42,7 +42,7 @@ export const JAVASCRIPT_NODE_AGENT_CONFIG: FrameworkConfig<JavaScriptNodeContext
       projectTypeDetection:
         'This is a server-side Node.js project. Look for package.json and lockfiles to confirm.',
       packageInstallation:
-        'Use npm, yarn, pnpm, or bun based on the existing lockfile (package-lock.json, yarn.lock, pnpm-lock.yaml, bun.lockb). Install posthog-node as a regular dependency.',
+        'Use npm, yarn, pnpm, or bun based on the existing lockfile (package-lock.json, yarn.lock, pnpm-lock.yaml, bun.lockb). Install posthog-node as a regular dependency; when detect_package_manager lists posthog-node under sdkInstalls, run exactly the `posthog-node@<range>` command it returns instead of a bare install.',
       getAdditionalContextLines: () => [
         `Framework docs ID: javascript_node (use posthog://docs/frameworks/javascript_node for documentation)`,
       ],

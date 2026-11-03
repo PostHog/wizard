@@ -107,7 +107,7 @@ describe('sdkCaptureModeFacts', () => {
     );
     expect(sdkCaptureModes).toHaveLength(1);
     expect(sdkCaptureModeFacts({ sdkCaptureModes })).toEqual([
-      'PostHog SDK posthog-python: this run uses the 7.x line (legacy capture API). Install 7.x only, never 8.x.',
+      'PostHog SDK posthog-python: this run uses the 7.x line (legacy capture API). Install 7.x only, never 8.x, with the exact command or declaration detect_package_manager returns; it overrides any install line in a skill or rule.',
     ]);
   });
 

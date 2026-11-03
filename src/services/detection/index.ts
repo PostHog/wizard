@@ -28,6 +28,7 @@ export {
   settleSdkCaptureModes,
 } from './sdk-capture-modes';
 export { readInstalledSdks } from './sdk-install';
+export { withSdkInstallInstructions } from './sdk-install-recommendation';
 export {
   detectIntegrationProjects,
   scopeInstallDirToProject,

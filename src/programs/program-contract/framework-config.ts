@@ -162,7 +162,7 @@ export const DEFAULT_PACKAGE_INSTALLATION =
   'Use the detect_package_manager tool to determine the package manager. Do not manually edit package.json; the package manager handles it automatically.';
 
 export const PYTHON_PACKAGE_INSTALLATION =
-  'Use the detect_package_manager tool to determine the package manager. If the detected tool manages dependencies directly (e.g. uv add, poetry add), use it — it will update the manifest automatically. If using pip, you must also add the dependency to requirements.txt or the appropriate manifest file.';
+  'Use the detect_package_manager tool to determine the package manager; when it lists posthog under sdkInstalls, install exactly the specifier it returns (it pins the major). If the detected tool manages dependencies directly (e.g. uv add, poetry add), use it — it will update the manifest automatically. If using pip, you must also add the dependency, with the same specifier, to requirements.txt or the appropriate manifest file.';
 
 /**
  * Prompt configuration

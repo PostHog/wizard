@@ -33,6 +33,7 @@ import {
   currentCredentials,
 } from '@shared/oauth-session';
 import { analytics } from '@utils/analytics';
+import { detectNodePackageManagers } from '@utils/package-manager';
 import { registerCleanup } from '@utils/cleanup';
 import { logToFile } from '@utils/debug';
 import { removeAuditLedger, startAuditLedgerWatcher } from '@programs/audit';
@@ -48,6 +49,7 @@ import { reportCodebaseScan } from '@services/codebase-scan';
 import {
   sdkCaptureModeFacts,
   settleSdkCaptureModes,
+  withSdkInstallInstructions,
 } from '@services/detection';
 import { IS_PRODUCTION_BUILD } from '@env';
 import type { QuestionKey } from '@services/detection/decisions';
@@ -381,6 +383,11 @@ async function invokeProgram(
       const runDir = session().installDir;
       const agentRun =
         ownRun ?? (await resolveRun(planned.config, store, runner, scoped));
+      // The install tool answers with the pinned command for the modes this run settles below.
+      const detectPackageManager = withSdkInstallInstructions(
+        agentRun.detectPackageManager ?? detectNodePackageManagers,
+        session,
+      );
       if (!ownRun) {
         analytics.wizardCapture('agent started', {
           integration: agentRun.integrationLabel,
@@ -423,7 +430,7 @@ async function invokeProgram(
         const result = await runAgent(
           {
             programId: planned.config.id,
-            run: agentRun,
+            run: { ...agentRun, detectPackageManager },
             composed: planned.own ? input.composed ?? false : true,
             // The agent resolves CLI, then flag, then this binding, and reports the pick.
             routing: {

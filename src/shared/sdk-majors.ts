@@ -54,6 +54,13 @@ export interface SdkMajorRow {
   readonly firstV1Major: number;
   /** True once the v1 major is published and its docs and skills are live. */
   readonly v1Released: boolean;
+  /**
+   * The requirement a fresh install pins to, per mode, in the ecosystem's own
+   * spelling: an npm range, a PEP 440 specifier, a Go module version query, a
+   * Cargo requirement, a pub constraint, an SPM `minimumVersion`, or an exact
+   * Gradle version (Gradle never gets a dynamic `+` range).
+   */
+  readonly pins: { readonly legacy: string; readonly v1: string };
   /** Integrations whose main SDK this is. */
   readonly primaryIntegrations: readonly Integration[];
   /** Integrations that install this SDK beside another one, with how each treats the row. */
@@ -81,6 +88,7 @@ export const SDK_MAJORS: readonly SdkMajorRow[] = Object.freeze([
     legacyMajor: 7,
     firstV1Major: 8,
     v1Released: false,
+    pins: { legacy: '>=7,<8', v1: '>=8,<9' },
     primaryIntegrations: [
       Integration.python,
       Integration.django,
@@ -96,6 +104,7 @@ export const SDK_MAJORS: readonly SdkMajorRow[] = Object.freeze([
     legacyMajor: 5,
     firstV1Major: 6,
     v1Released: false,
+    pins: { legacy: '^5', v1: '^6' },
     primaryIntegrations: [Integration.javascriptNode],
     secondary: SSR_FRAMEWORKS_ON_LEGACY_NODE,
   },
@@ -109,6 +118,7 @@ export const SDK_MAJORS: readonly SdkMajorRow[] = Object.freeze([
     legacyMajor: 1,
     firstV1Major: 2,
     v1Released: false,
+    pins: { legacy: '@latest', v1: '@latest' },
     primaryIntegrations: [Integration.go],
     secondary: {},
   },
@@ -119,6 +129,7 @@ export const SDK_MAJORS: readonly SdkMajorRow[] = Object.freeze([
     legacyMajor: 0,
     firstV1Major: 1,
     v1Released: false,
+    pins: { legacy: '0', v1: '1' },
     primaryIntegrations: [Integration.rust],
     secondary: {},
   },
@@ -132,6 +143,7 @@ export const SDK_MAJORS: readonly SdkMajorRow[] = Object.freeze([
     legacyMajor: 3,
     firstV1Major: 4,
     v1Released: false,
+    pins: { legacy: '3.0.0', v1: '4.0.0' },
     primaryIntegrations: [Integration.swift],
     secondary: {},
   },
@@ -145,6 +157,8 @@ export const SDK_MAJORS: readonly SdkMajorRow[] = Object.freeze([
     legacyMajor: 3,
     firstV1Major: 4,
     v1Released: false,
+    // Gradle gets an exact version, so a new posthog-android patch needs a bump here.
+    pins: { legacy: '3.75.0', v1: '4.0.0' },
     primaryIntegrations: [Integration.android],
     secondary: {},
   },
@@ -155,6 +169,7 @@ export const SDK_MAJORS: readonly SdkMajorRow[] = Object.freeze([
     legacyMajor: 5,
     firstV1Major: 6,
     v1Released: false,
+    pins: { legacy: '^5.0.0', v1: '^6.0.0' },
     primaryIntegrations: [Integration.flutter],
     secondary: {},
   },

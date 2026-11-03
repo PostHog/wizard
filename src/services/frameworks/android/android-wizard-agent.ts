@@ -33,8 +33,8 @@ export const ANDROID_AGENT_CONFIG: FrameworkConfig<AndroidContext> = {
     usesPackageJson: false,
     getVersion: () => undefined,
     getVersionBucket: (version: string) => getKotlinVersionBucket(version),
-    // This is actually pretty high for a minimum, but android apis aren't super stable.
-    minimumVersion: '21.0.0',
+    // posthog-android 3.x and 4.x both require minSdk 23.
+    minimumVersion: '23.0.0',
     getInstalledVersion: (options: WizardRunOptions) =>
       getMinSdkVersion(options),
     detectPackageManager: gradlePackageManager,
@@ -102,7 +102,7 @@ export const ANDROID_AGENT_CONFIG: FrameworkConfig<AndroidContext> = {
     projectTypeDetection:
       'This is an Android/Kotlin project. Look for build.gradle or build.gradle.kts files, AndroidManifest.xml, and Kotlin source files (.kt) to confirm.',
     packageInstallation:
-      'Add the PostHog Android SDK dependency to the app-level build.gradle(.kts) file. Use implementation("com.posthog:posthog-android:<VERSION>"). Check the existing dependency format (Groovy vs Kotlin DSL) and match it.',
+      'Add the PostHog Android SDK dependency to the app-level build.gradle(.kts) file as implementation("com.posthog:posthog-android:<version>") with an exact version, never a `+` range; when detect_package_manager lists posthog-android under sdkInstalls, use exactly the line it returns. Check the existing dependency format (Groovy vs Kotlin DSL) and match it.',
     getAdditionalContextLines: (context) => {
       const lines = [
         `Framework docs ID: android (use posthog://docs/frameworks/android for documentation)`,
