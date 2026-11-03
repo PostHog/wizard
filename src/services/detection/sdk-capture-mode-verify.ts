@@ -10,7 +10,12 @@ import type {
   InstalledSdk,
   SdkCaptureModeResolution,
 } from '@shared/sdk-capture-mode';
-import { getSdkMajorRow, modeForInstalledMajor } from '@shared/sdk-majors';
+import {
+  getSdkMajorRow,
+  majorForMode,
+  modeForInstalledMajor,
+} from '@shared/sdk-majors';
+import { renderSdkInstall } from '@shared/sdk-install-commands';
 import { analytics } from '@utils/analytics';
 import { readInstalledSdks } from './sdk-install';
 
@@ -60,23 +65,36 @@ export async function verifySdkCaptureModes(
   const mismatch = await findSdkMajorMismatch(session);
   if (!mismatch) return undefined;
   const { resolution, offending } = mismatch;
+  // Narrowing only: the search above never returns a conflict.
   if (resolution.mode === 'conflict') return undefined;
   const row = getSdkMajorRow(resolution.sdk);
-  const pin = row.pins[resolution.mode];
+  const expectedMajor = majorForMode(row, resolution.mode);
+  // The message names a command the user can run; the ecosystems with a manager choice get their default.
+  const manager =
+    row.ecosystem === 'npm'
+      ? 'npm add'
+      : row.ecosystem === 'pypi'
+      ? 'pip install'
+      : '';
+  const install = renderSdkInstall(row, resolution.mode, manager);
+  const fix = install.command
+    ? `Install it again with \`${install.command}\` (or remove it first), then run the wizard again.`
+    : `Declare it as ${install.manifest}, then run the wizard again.`;
   const code = ErrorCodes.AgentSdkMajorMismatch;
   const message =
-    `This run set up ${row.sdk} for the ${resolution.major}.x line (${
+    `This run set up ${
+      row.packages[resolution.mode][0]
+    } for the ${expectedMajor}.x line (${
       MODE_LINE[resolution.mode]
     }), but ${describe(offending)} is installed now. ` +
-    `The code written in this run does not match that version.\n\n` +
-    `Change the ${row.sdk} dependency to ${pin}, or remove it, then run the wizard again.`;
+    `The code written in this run does not match that version.\n\n${fix}`;
   return {
     code,
     message,
     detail: {
       sdk: row.sdk,
       capture_mode: resolution.mode,
-      expected_major: resolution.major,
+      expected_major: expectedMajor,
       installed_version: offending.version,
       installed_source: offending.source,
     },

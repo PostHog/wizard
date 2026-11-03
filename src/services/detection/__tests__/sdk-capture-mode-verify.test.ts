@@ -49,7 +49,9 @@ describe('verifySdkCaptureModes', () => {
     expect(failure?.message).toContain(
       'set up posthog-node for the 5.x line (legacy capture API), but 6.0.1 (pnpm-lock.yaml) is installed now',
     );
-    expect(failure?.message).toContain('dependency to ^5');
+    expect(failure?.message).toContain(
+      'Install it again with `npm add posthog-node@^5`',
+    );
   });
 
   it('catches a copy that moved off an installed line during the run', async () => {
@@ -118,5 +120,37 @@ describe('sdkConflictFailure', () => {
       sdkConflictFailure({ sdkCaptureModes: [legacyNode] }),
     ).toBeUndefined();
     expect(sdkConflictFailure({ sdkCaptureModes: [] })).toBeUndefined();
+  });
+});
+
+describe('verifySdkCaptureModes: message per ecosystem', () => {
+  it('names the module path and the pinned command for Go, and the declaration for Gradle', async () => {
+    const goRun = resolveSdkCaptureMode({ sdk: 'posthog-go' });
+    const go = await withProject(
+      {
+        'go.mod':
+          'module app\n\nrequire github.com/posthog/posthog-go/v2 v2.0.0\n',
+      },
+      (installDir) =>
+        verifySdkCaptureModes({ installDir, sdkCaptureModes: [goRun] }),
+    );
+    expect(go?.message).toContain(
+      'set up github.com/posthog/posthog-go for the 1.x line',
+    );
+    expect(go?.message).toContain(
+      'go get github.com/posthog/posthog-go@latest',
+    );
+    const androidRun = resolveSdkCaptureMode({ sdk: 'posthog-android' });
+    const android = await withProject(
+      {
+        'app/build.gradle':
+          'dependencies { implementation("com.posthog:posthog-android:4.0.0") }\n',
+      },
+      (installDir) =>
+        verifySdkCaptureModes({ installDir, sdkCaptureModes: [androidRun] }),
+    );
+    expect(android?.message).toContain(
+      'Declare it as implementation("com.posthog:posthog-android:3.75.0")',
+    );
   });
 });
