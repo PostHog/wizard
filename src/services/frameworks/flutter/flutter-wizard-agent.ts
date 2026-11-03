@@ -74,7 +74,7 @@ export const FLUTTER_AGENT_CONFIG: FrameworkConfig<FlutterContext> = {
     projectTypeDetection:
       'This is a Flutter project. Look for pubspec.yaml declaring a dependency on the Flutter SDK (flutter: sdk: flutter) and a lib/ directory with Dart source files to confirm.',
     packageInstallation:
-      'Add the PostHog Flutter SDK with the exact `flutter pub add` command detect_package_manager returns; it pins the major. Do not edit pubspec.yaml by hand; the pub tool updates it and resolves the version automatically.',
+      'Add the PostHog Flutter SDK with `flutter pub add posthog_flutter`, or, when detect_package_manager lists posthog_flutter under sdkInstalls, exactly the command it returns (it pins the major). Do not edit pubspec.yaml by hand; the pub tool updates it and resolves the version automatically.',
     getAdditionalContextLines: (context) => {
       const lines = [
         'Framework docs ID: flutter (use posthog://docs/frameworks/flutter for documentation)',
