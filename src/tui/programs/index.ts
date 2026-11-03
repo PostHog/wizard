@@ -15,6 +15,7 @@ import { TUI_PROGRAMS as audit } from '@tui/programs/audit';
 import { TUI_PROGRAMS as errorTracking } from '@tui/programs/error-tracking';
 import { TUI_PROGRAMS as sourceMaps } from '@tui/programs/error-tracking-upload-source-maps';
 import { TUI_PROGRAMS as featureFlags } from '@tui/programs/feature-flags';
+import { TUI_PROGRAMS as mcpAnalytics } from '@tui/programs/mcp-analytics';
 import { TUI_PROGRAMS as metrics } from '@tui/programs/metrics';
 import { TUI_PROGRAMS as migration } from '@tui/programs/migration';
 import { TUI_PROGRAMS as posthogIntegration } from '@tui/programs/posthog-integration';
@@ -30,6 +31,7 @@ const TUI_PROGRAMS: TuiPrograms = {
   ...errorTracking,
   ...sourceMaps,
   ...featureFlags,
+  ...mcpAnalytics,
   ...metrics,
   ...migration,
   ...posthogIntegration,
