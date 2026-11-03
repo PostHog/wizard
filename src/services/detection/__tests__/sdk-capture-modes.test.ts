@@ -252,3 +252,26 @@ describe('sdkCaptureModeFacts: the v1 rules', () => {
     expect(fact).toContain('`before_send` hook must pass the event');
   });
 });
+
+describe('floors', () => {
+  it('records the floor on the resolution and keeps it through the flag re-resolution', async () => {
+    const detected = await withProject(
+      { 'go.mod': 'module app\n\ngo 1.20\n' },
+      (dir) => detectSdkCaptureModes(dir, Integration.go),
+    );
+    expect(detected[0]).toMatchObject({
+      mode: 'legacy',
+      reason: 'not-released',
+      floor: { ok: false, reason: 'go.mod go directive 1.20 is below 1.21' },
+    });
+    // A tester opt-in to v1 still respects the floor, from the stored check.
+    const forced = applySdkCaptureModeFlags(
+      { integration: Integration.go, sdkCaptureModes: detected },
+      { [WIZARD_SDK_CAPTURE_V1_FLAG_KEY]: { 'posthog-go': 'v1' } },
+    );
+    expect(forced[0]).toMatchObject({ mode: 'legacy', reason: 'floor' });
+    expect(sdkCaptureModeFacts({ sdkCaptureModes: forced })[0]).toContain(
+      'The project does not meet the 2.x floor: go.mod go directive 1.20 is below 1.21. Say so in the setup report; raising it and running the wizard again moves the project to 2.x.',
+    );
+  });
+});

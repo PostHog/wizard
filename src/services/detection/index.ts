@@ -28,6 +28,7 @@ export {
   settleSdkCaptureModes,
 } from './sdk-capture-modes';
 export { readInstalledSdks } from './sdk-install';
+export { checkSdkFloor } from './sdk-floors';
 export { withSdkInstallInstructions } from './sdk-install-recommendation';
 export {
   sdkConflictFailure,

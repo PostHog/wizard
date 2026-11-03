@@ -9,6 +9,7 @@ import {
   isSdkCaptureModeEnabled,
   resolveSdkCaptureMode,
   type SdkCaptureModeResolution,
+  type SdkFloorCheck,
 } from '@shared/sdk-capture-mode';
 import type { WizardFlagSnapshot } from '@shared/wizard-flags';
 import {
@@ -18,6 +19,7 @@ import {
 } from '@shared/sdk-majors';
 import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
+import { checkSdkFloor } from './sdk-floors';
 import { readInstalledSdks } from './sdk-install';
 
 /** Every row the integration installs: its main SDK and the ones beside it. */
@@ -34,8 +36,10 @@ export async function detectSdkCaptureModes(
   const resolutions: SdkCaptureModeResolution[] = [];
   for (const row of rowsFor(integration)) {
     let installed: SdkCaptureModeResolution['installed'] = [];
+    let floor: SdkFloorCheck | undefined;
     try {
       installed = await readInstalledSdks(installDir, row.sdk);
+      floor = await checkSdkFloor(installDir, row.sdk);
     } catch (error) {
       analytics.captureException(
         error instanceof Error ? error : new Error(String(error)),
@@ -46,6 +50,7 @@ export async function detectSdkCaptureModes(
       sdk: row.sdk,
       integration,
       installed,
+      floor,
     });
     logToFile('[sdk-capture-mode] resolved', resolution);
     resolutions.push(resolution);
@@ -96,6 +101,7 @@ export function applySdkCaptureModeFlags(
       integration: session.integration ?? undefined,
       installed: previous.installed,
       flagPayload,
+      floor: previous.mode === 'conflict' ? undefined : previous.floor,
     }),
   );
 }
@@ -133,9 +139,15 @@ export function sdkCaptureModeFacts(session: {
         resolution.mode === 'v1' ? V1_RULES : ''
       }`;
     }
+    const why =
+      resolution.reason === 'floor'
+        ? ` The project does not meet the ${other} floor: ${resolution.detail}. Say so in the setup report; raising it and running the wizard again moves the project to ${other}.`
+        : resolution.reason === 'host'
+        ? ` The PostHog host does not serve the capture v1 routes.`
+        : '';
     return `PostHog SDK ${row.sdk}: this run uses the ${line} line (${
       MODE_LABEL[resolution.mode]
-    }). Install ${line} only, never ${other}, with the exact command or declaration detect_package_manager returns; it overrides any install line in a skill or rule.${
+    }).${why} Install ${line} only, never ${other}, with the exact command or declaration detect_package_manager returns; it overrides any install line in a skill or rule.${
       resolution.mode === 'v1' ? V1_RULES : ''
     }`;
   });
