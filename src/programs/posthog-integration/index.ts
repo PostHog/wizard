@@ -1,7 +1,6 @@
 import {
   detectPostHogIntegration,
   detectSdkCaptureModes,
-  withSdkInstallInstructions,
 } from '@services/detection';
 import type { ProgramConfig } from '@programs/program-contract';
 import type { ProgramRun } from '@programs/program-contract';
@@ -391,10 +390,7 @@ export const config: ProgramConfig = {
     return {
       integrationLabel: config.metadata.integration,
       additionalMcpServers: config.metadata.additionalMcpServers,
-      detectPackageManager: withSdkInstallInstructions(
-        config.detection.detectPackageManager,
-        session,
-      ),
+      detectPackageManager: config.detection.detectPackageManager,
       spinnerMessage: SPINNER_MESSAGE,
       successMessage: config.ui.successMessage,
       estimatedDurationMinutes: config.ui.estimatedDurationMinutes,

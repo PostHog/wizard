@@ -157,6 +157,7 @@ export const SDK_MAJORS: readonly SdkMajorRow[] = Object.freeze([
     legacyMajor: 3,
     firstV1Major: 4,
     v1Released: false,
+    // Gradle gets an exact version, so a new posthog-android patch needs a bump here.
     pins: { legacy: '3.75.0', v1: '4.0.0' },
     primaryIntegrations: [Integration.android],
     secondary: {},

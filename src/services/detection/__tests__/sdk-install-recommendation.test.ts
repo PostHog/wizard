@@ -1,5 +1,6 @@
 import { Integration } from '@shared/constants';
 import { resolveSdkCaptureMode } from '@shared/sdk-capture-mode';
+import { SDK_MAJORS } from '@shared/sdk-majors';
 import { withSdkInstallInstructions } from '@services/detection/sdk-install-recommendation';
 import type { PackageManagerInfo } from '@utils/package-manager';
 
@@ -15,27 +16,33 @@ const base: PackageManagerInfo = {
   recommendation: 'Use pnpm (pnpm add).',
 };
 const detector = () => Promise.resolve(base);
+const nodeSession = (
+  sdkCaptureModes: ReturnType<typeof resolveSdkCaptureMode>[],
+  frameworkContext: Record<string, unknown> = {},
+) => ({
+  integration: Integration.javascriptNode,
+  sdkCaptureModes,
+  frameworkContext,
+});
 
 describe('withSdkInstallInstructions', () => {
-  it('returns the detector untouched when the run resolved no SDK', () => {
-    const wrapped = withSdkInstallInstructions(detector, {
+  it('returns the detector result untouched when the run resolved no SDK', async () => {
+    const wrapped = withSdkInstallInstructions(detector, () => ({
       integration: Integration.javascript_web,
       sdkCaptureModes: [],
       frameworkContext: {},
-    });
-    expect(wrapped).toBe(detector);
+    }));
+    expect(await wrapped('/tmp/app')).toEqual(base);
   });
 
   it('appends the pinned command for a fresh install and lists it in sdkInstalls', async () => {
-    const wrapped = withSdkInstallInstructions(detector, {
-      integration: Integration.javascriptNode,
-      sdkCaptureModes: [resolveSdkCaptureMode({ sdk: 'posthog-node' })],
-      frameworkContext: {},
-    });
+    const wrapped = withSdkInstallInstructions(detector, () =>
+      nodeSession([resolveSdkCaptureMode({ sdk: 'posthog-node' })]),
+    );
     const info = await wrapped('/tmp/app');
     expect(info.detected).toEqual([pnpm]);
-    expect(info.recommendation).toBe(
-      'Use pnpm (pnpm add). PostHog SDK posthog-node: run exactly `pnpm add posthog-node@^5` (the 5.x line this run uses). Never install it by bare name or change the major.',
+    expect(info.recommendation).toContain(
+      'run exactly `pnpm add posthog-node@^5` (the 5.x line this run uses)',
     );
     expect(info.sdkInstalls).toEqual([
       expect.objectContaining({
@@ -47,17 +54,52 @@ describe('withSdkInstallInstructions', () => {
     ]);
   });
 
+  it('reads the session on every call, so a mode settled after the run was built reaches the command', async () => {
+    const session = nodeSession([
+      resolveSdkCaptureMode({ sdk: 'posthog-node' }),
+    ]);
+    const wrapped = withSdkInstallInstructions(detector, () => session);
+    expect((await wrapped('/tmp/app')).sdkInstalls?.[0].command).toBe(
+      'pnpm add posthog-node@^5',
+    );
+    session.sdkCaptureModes = [
+      resolveSdkCaptureMode(
+        { sdk: 'posthog-node', flagPayload: { 'posthog-node': 'v1' } },
+        SDK_MAJORS.map((row) =>
+          row.sdk === 'posthog-node' ? { ...row, v1Released: true } : row,
+        ),
+      ),
+    ];
+    expect((await wrapped('/tmp/app')).sdkInstalls?.[0].command).toBe(
+      'pnpm add posthog-node@^6',
+    );
+  });
+
+  it('defaults a Node project without a lockfile to npm', async () => {
+    const wrapped = withSdkInstallInstructions(
+      () =>
+        Promise.resolve({
+          detected: [],
+          primary: null,
+          recommendation:
+            'No lockfile found. Default to npm (npm add, npm run).',
+        }),
+      () => nodeSession([resolveSdkCaptureMode({ sdk: 'posthog-node' })]),
+    );
+    expect((await wrapped('/tmp/app')).sdkInstalls?.[0].command).toBe(
+      'npm add posthog-node@^5',
+    );
+  });
+
   it('tells the agent to leave an installed copy alone and renders no command', async () => {
-    const wrapped = withSdkInstallInstructions(detector, {
-      integration: Integration.javascriptNode,
-      sdkCaptureModes: [
+    const wrapped = withSdkInstallInstructions(detector, () =>
+      nodeSession([
         resolveSdkCaptureMode({
           sdk: 'posthog-node',
           installed: [{ major: 6, version: '6.0.1', source: 'pnpm-lock.yaml' }],
         }),
-      ],
-      frameworkContext: {},
-    });
+      ]),
+    );
     const info = await wrapped('/tmp/app');
     expect(info.recommendation).toContain(
       'posthog-node: 6.0.1 is already installed (pnpm-lock.yaml); do not install, upgrade or downgrade it.',
@@ -66,9 +108,8 @@ describe('withSdkInstallInstructions', () => {
   });
 
   it('names a conflict and renders no command', async () => {
-    const wrapped = withSdkInstallInstructions(detector, {
-      integration: Integration.javascriptNode,
-      sdkCaptureModes: [
+    const wrapped = withSdkInstallInstructions(detector, () =>
+      nodeSession([
         resolveSdkCaptureMode({
           sdk: 'posthog-node',
           installed: [
@@ -76,9 +117,8 @@ describe('withSdkInstallInstructions', () => {
             { major: 6, version: '6.0.1', source: 'pnpm-lock.yaml' },
           ],
         }),
-      ],
-      frameworkContext: {},
-    });
+      ]),
+    );
     const info = await wrapped('/tmp/app');
     expect(info.recommendation).toContain('copies on different major lines');
     expect(info.sdkInstalls).toEqual([]);
@@ -97,14 +137,13 @@ describe('withSdkInstallInstructions', () => {
           primary: cargo,
           recommendation: 'Use Cargo (cargo add).',
         }),
-      {
+      () => ({
         integration: Integration.rust,
         sdkCaptureModes: [resolveSdkCaptureMode({ sdk: 'posthog-rs' })],
         frameworkContext: { asyncRuntime: false },
-      },
+      }),
     );
-    const info = await wrapped('/tmp/app');
-    expect(info.sdkInstalls?.[0].command).toBe(
+    expect((await wrapped('/tmp/app')).sdkInstalls?.[0].command).toBe(
       'cargo add posthog-rs@0 --no-default-features',
     );
   });
@@ -122,14 +161,13 @@ describe('withSdkInstallInstructions', () => {
           primary: gradle,
           recommendation: 'Add dependencies to build.gradle(.kts).',
         }),
-      {
+      () => ({
         integration: Integration.android,
         sdkCaptureModes: [resolveSdkCaptureMode({ sdk: 'posthog-android' })],
         frameworkContext: {},
-      },
+      }),
     );
-    const info = await wrapped('/tmp/app');
-    expect(info.recommendation).toContain(
+    expect((await wrapped('/tmp/app')).recommendation).toContain(
       'declare exactly: implementation("com.posthog:posthog-android:3.75.0")',
     );
   });

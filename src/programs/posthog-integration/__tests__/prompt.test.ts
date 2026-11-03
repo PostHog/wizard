@@ -10,13 +10,7 @@
 import { WIZARD_DEFAULT_AIO_LOGS_FLAG_KEY } from '@shared/constants';
 import { config as posthogIntegration } from '@programs/posthog-integration';
 import { analytics } from '@utils/analytics';
-import { Integration } from '@shared/constants';
-import { resolveSdkCaptureMode } from '@shared/sdk-capture-mode';
-import {
-  promptFor,
-  resolveRun,
-  sessionWith,
-} from './helpers/integration-prompt.no-jest';
+import { promptFor } from './helpers/integration-prompt.no-jest';
 
 // The run builder reads the run's wizard flags; keep tests hermetic and let
 // each case choose the flag state. Empty map = flags unreadable = include.
@@ -94,28 +88,5 @@ describe('detected facts', () => {
 
   it('adds nothing when there are no facts', async () => {
     expect(await promptFor([])).not.toContain('Detected before this run');
-  });
-});
-
-describe('pinned SDK install through detect_package_manager', () => {
-  it("wraps the framework detector with the run's SDK install instruction", async () => {
-    const session = sessionWith([]);
-    session.integration = Integration.javascriptNode;
-    session.sdkCaptureModes = [resolveSdkCaptureMode({ sdk: 'posthog-node' })];
-    const npm = { name: 'npm', label: 'npm', installCommand: 'npm add' };
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (session.frameworkConfig as any).detection.detectPackageManager = () =>
-      Promise.resolve({
-        detected: [npm],
-        primary: npm,
-        recommendation: 'Use npm.',
-      });
-
-    const runDef = await resolveRun(session);
-    const info = await runDef.detectPackageManager!('/tmp/app');
-    expect(info.recommendation).toContain(
-      'run exactly `npm add posthog-node@^5`',
-    );
-    expect(info.sdkInstalls?.[0].command).toBe('npm add posthog-node@^5');
   });
 });

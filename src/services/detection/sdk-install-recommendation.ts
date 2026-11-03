@@ -42,23 +42,32 @@ export function sdkInstallRecommendation(
   return `PostHog SDK ${sdk}: ${how} (the ${resolution.major}.x line this run uses). Never install it by bare name or change the major.`;
 }
 
+/**
+ * `session` is read on every tool call, never captured: the run settles its
+ * modes after the program's run definition is built, and a kill switch or a
+ * tester override must reach the command the agent runs.
+ */
 export function withSdkInstallInstructions(
   detector: PackageManagerDetector,
-  session: SdkInstallSession,
+  session: () => SdkInstallSession,
 ): PackageManagerDetector {
-  if (session.sdkCaptureModes.length === 0) return detector;
   return async (installDir: string): Promise<PackageManagerInfo> => {
     const info = await detector(installDir);
+    const current = session();
+    if (current.sdkCaptureModes.length === 0) return info;
     const sdkInstalls: SdkInstallInstruction[] = [];
     const sentences: string[] = [];
-    for (const resolution of session.sdkCaptureModes) {
+    for (const resolution of current.sdkCaptureModes) {
       let instruction: SdkInstallInstruction | undefined;
       if (resolution.mode !== 'conflict' && resolution.reason !== 'installed') {
+        const row = getSdkMajorRow(resolution.sdk);
         instruction = renderSdkInstall(
-          getSdkMajorRow(resolution.sdk),
+          row,
           resolution.mode,
-          info.primary?.installCommand ?? '',
-          { rustBlocking: session.frameworkContext.asyncRuntime === false },
+          // The Node detector names no manager when no lockfile exists; its own default is npm.
+          info.primary?.installCommand ??
+            (row.ecosystem === 'npm' ? 'npm add' : ''),
+          { rustBlocking: current.frameworkContext.asyncRuntime === false },
         );
         sdkInstalls.push(instruction);
       }
