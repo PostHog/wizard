@@ -72,6 +72,8 @@ Modules callers reach most:
   parser.
 - `@shared/sdk-install-commands`: `renderSdkInstall(row, mode, packageManager)`,
   the exact pinned install command or manifest line for one SDK in one mode.
+- `@shared/host-v1-probe`: `hostServesCaptureV1(apiHost)`, whether a non-cloud
+  PostHog host serves the capture v1 routes (one unauthenticated POST).
 - `@shared/api-key-login`: `resolveApiKeyProject(apiKey, options)`, the host,
   project and user a personal API key logs in to.
 - `@shared/ci-gateway`: `readCiGatewayCredential(region)`, the gateway token a

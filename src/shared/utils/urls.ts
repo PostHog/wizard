@@ -19,7 +19,9 @@ import type { CloudRegion } from './types';
  * resolver so every URL helper only asks the question once.
  */
 export const resolveBaseUrl = (override?: string): string | undefined => {
-  return override?.trim() || (IS_DEV ? 'http://localhost:8010' : undefined);
+  // posthog-go joins the host and the path verbatim, so a trailing slash becomes `//i/v1/...` and a 404.
+  const trimmed = override?.trim().replace(/\/+$/, '');
+  return trimmed || (IS_DEV ? 'http://localhost:8010' : undefined);
 };
 
 export const getUiHostFromHost = (host: string) => {
