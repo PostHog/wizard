@@ -261,13 +261,6 @@ async function invokeProgram(
       integration: run.integrationLabel,
       program_id: programId,
       skill_id: run.skillId ?? null,
-      // Detection's resolution; the flags have not loaded yet. Later events carry the settled one.
-      ...(mayReportScanResults(store.session)
-        ? sdkCaptureModeProperties(
-            store.session.sdkCaptureModes,
-            store.session.integration,
-          )
-        : {}),
     });
 
     // Everything before the first agent run: a rejection fails the run, unless the caller aborted.
@@ -372,10 +365,7 @@ async function invokeProgram(
       const session = (): WizardSession => scoped ?? store.session;
       // Each run settles the SDK capture modes for its own directory and
       // integration: a composed or scoped run has none from detection.
-      const sdkCaptureModes = await settleSdkCaptureModes(
-        session(),
-        flags.payloads,
-      );
+      const sdkCaptureModes = await settleSdkCaptureModes(session(), flags);
       if (signal.aborted) return cancelled();
       if (scoped) scoped.sdkCaptureModes = sdkCaptureModes;
       else store.setSdkCaptureModes(sdkCaptureModes);

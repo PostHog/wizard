@@ -6,9 +6,11 @@
 import type { Integration } from '@shared/constants';
 import { WIZARD_SDK_CAPTURE_V1_FLAG_KEY } from '@shared/constants';
 import {
+  isSdkCaptureModeEnabled,
   resolveSdkCaptureMode,
   type SdkCaptureModeResolution,
 } from '@shared/sdk-capture-mode';
+import type { WizardFlagSnapshot } from '@shared/wizard-flags';
 import {
   getSdkMajorRow,
   sdkRowsForIntegration,
@@ -55,6 +57,7 @@ export async function detectSdkCaptureModes(
  * The modes for one agent run: detection's resolutions when the run has them,
  * else a fresh read of the run's own directory (a composed or scoped run
  * settles its integration after detection), then the flag payloads applied.
+ * Empty when the `wizard-sdk-capture-mode` gate is off.
  */
 export async function settleSdkCaptureModes(
   session: {
@@ -62,8 +65,12 @@ export async function settleSdkCaptureModes(
     integration: Integration | null;
     sdkCaptureModes: readonly SdkCaptureModeResolution[];
   },
-  flagPayloads: Readonly<Record<string, unknown>>,
+  snapshot: WizardFlagSnapshot,
 ): Promise<SdkCaptureModeResolution[]> {
+  // The gate is the whole feature: off, a run resolves no mode and every
+  // consumer (install tool, read-back, facts, probe, skill filter) stays idle.
+  if (!isSdkCaptureModeEnabled(snapshot.flags)) return [];
+  const flagPayloads = snapshot.payloads;
   const detected =
     session.sdkCaptureModes.length > 0 || !session.integration
       ? session.sdkCaptureModes

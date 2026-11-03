@@ -1,4 +1,8 @@
-import { Integration, WIZARD_SDK_CAPTURE_V1_FLAG_KEY } from '@shared/constants';
+import {
+  Integration,
+  WIZARD_SDK_CAPTURE_MODE_FLAG_KEY,
+  WIZARD_SDK_CAPTURE_V1_FLAG_KEY,
+} from '@shared/constants';
 import {
   applySdkCaptureModeFlags,
   detectSdkCaptureModes,
@@ -141,12 +145,40 @@ describe('sdkCaptureModeFacts', () => {
   });
 });
 
+/** A flag snapshot with the gate on and the given payloads. */
+const on = (payloads: Record<string, unknown>) => ({
+  flags: { [WIZARD_SDK_CAPTURE_MODE_FLAG_KEY]: 'true' },
+  payloads,
+});
+
 describe('settleSdkCaptureModes', () => {
+  it('resolves nothing while the gate is off, whatever detection found', async () => {
+    const detected = await withProject({ 'uv.lock': UV_LOCK }, (dir) =>
+      detectSdkCaptureModes(dir, Integration.fastapi),
+    );
+    expect(detected).toHaveLength(1);
+    await expect(
+      settleSdkCaptureModes(
+        {
+          installDir: '/tmp/app',
+          integration: Integration.fastapi,
+          sdkCaptureModes: detected,
+        },
+        {
+          flags: {},
+          payloads: {
+            [WIZARD_SDK_CAPTURE_V1_FLAG_KEY]: { 'posthog-python': 'v1' },
+          },
+        },
+      ),
+    ).resolves.toEqual([]);
+  });
+
   it('reads the run directory when detection left no modes, and applies the flags', async () => {
     const settled = await withProject({ 'uv.lock': UV_LOCK }, (installDir) =>
       settleSdkCaptureModes(
         { installDir, integration: Integration.fastapi, sdkCaptureModes: [] },
-        { [WIZARD_SDK_CAPTURE_V1_FLAG_KEY]: { 'posthog-python': 'v1' } },
+        on({ [WIZARD_SDK_CAPTURE_V1_FLAG_KEY]: { 'posthog-python': 'v1' } }),
       ),
     );
     // An installed copy still wins over the flag.
@@ -175,7 +207,7 @@ describe('settleSdkCaptureModes', () => {
             integration: Integration.go,
             sdkCaptureModes: detected,
           },
-          { [WIZARD_SDK_CAPTURE_V1_FLAG_KEY]: { 'posthog-go': 'v1' } },
+          on({ [WIZARD_SDK_CAPTURE_V1_FLAG_KEY]: { 'posthog-go': 'v1' } }),
         ),
     );
     // The directory is not read again: the flag, not the go.mod, decides.
@@ -190,7 +222,7 @@ describe('settleSdkCaptureModes', () => {
     await expect(
       settleSdkCaptureModes(
         { installDir: '/tmp/none', integration: null, sdkCaptureModes: [] },
-        {},
+        on({}),
       ),
     ).resolves.toEqual([]);
   });
