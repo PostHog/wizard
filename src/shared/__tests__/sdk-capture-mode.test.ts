@@ -82,16 +82,56 @@ describe('resolveSdkCaptureMode', () => {
       expect(resolution.installed).toEqual([legacyNode, v1Node]);
     });
 
-    it('takes the highest major when the copies agree on the mode', () => {
+    it('takes the highest major, and its file, when the copies agree on the mode', () => {
       expect(
         resolveSdkCaptureMode({
           sdk: 'posthog-python',
           installed: [
-            { major: 3, version: '>=3.0.0', source: 'requirements.txt' },
+            { major: 3, version: '^3.0', source: 'pyproject.toml' },
             { major: 7, version: '7.82.1', source: 'uv.lock' },
           ],
         }),
-      ).toMatchObject({ mode: 'legacy', major: 7, reason: 'installed' });
+      ).toMatchObject({
+        mode: 'legacy',
+        major: 7,
+        reason: 'installed',
+        detail: 'uv.lock',
+      });
+    });
+
+    it('treats an unbounded manifest requirement below the v1 major as a fresh install', () => {
+      const floor = {
+        major: 3,
+        version: '>=3.0.0',
+        source: 'requirements.txt',
+        unbounded: true,
+      };
+      const resolution = resolveSdkCaptureMode({
+        sdk: 'posthog-python',
+        installed: [floor],
+      });
+      expect(resolution).toMatchObject({
+        mode: 'legacy',
+        major: 7,
+        reason: 'not-released',
+      });
+      expect(resolution.installed).toEqual([floor]);
+    });
+
+    it("keeps an unbounded requirement at or above the v1 major as the project's choice", () => {
+      expect(
+        resolveSdkCaptureMode({
+          sdk: 'posthog-python',
+          installed: [
+            {
+              major: 8,
+              version: '>=8',
+              source: 'requirements.txt',
+              unbounded: true,
+            },
+          ],
+        }),
+      ).toMatchObject({ mode: 'v1', major: 8, reason: 'installed' });
     });
   });
 

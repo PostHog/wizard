@@ -26,6 +26,13 @@ export interface InstalledSdk {
   readonly version: string;
   /** The file the version came from, for the report. */
   readonly source: string;
+  /**
+   * A manifest requirement with no upper bound and no lockfile behind it
+   * (`posthog>=3.0.0`): the major it installs is whatever the registry serves
+   * next, so it does not fix the mode. The run treats it as a fresh install
+   * and the pinned install replaces the requirement.
+   */
+  readonly unbounded?: boolean;
 }
 
 export type SdkFloorCheck =
@@ -166,25 +173,30 @@ function resolveFromInstalled(
   row: SdkMajorRow,
   installed: readonly InstalledSdk[],
 ): SdkCaptureModeResolution | undefined {
-  if (installed.length === 0) return undefined;
+  // An unbounded requirement below the first v1 major fixes nothing; one at or
+  // above it is the project's choice of the v1 line.
+  const fixed = installed.filter(
+    (copy) => !copy.unbounded || copy.major >= row.firstV1Major,
+  );
+  if (fixed.length === 0) return undefined;
 
   const modes = new Set(
-    installed.map((copy) => modeForInstalledMajor(row, copy.major)),
+    fixed.map((copy) => modeForInstalledMajor(row, copy.major)),
   );
   if (modes.size > 1) {
     return { sdk: row.sdk, mode: 'conflict', reason: 'conflict', installed };
   }
 
-  const [first] = installed;
-  const mode = modeForInstalledMajor(row, first.major);
   // Copies agree on the mode; the highest major is the one the project builds against.
-  const major = Math.max(...installed.map((copy) => copy.major));
+  const highest = fixed.reduce((best, copy) =>
+    copy.major > best.major ? copy : best,
+  );
   return {
     sdk: row.sdk,
-    mode,
-    major,
+    mode: modeForInstalledMajor(row, highest.major),
+    major: highest.major,
     reason: 'installed',
-    detail: first.source,
+    detail: highest.source,
     installed,
   };
 }
