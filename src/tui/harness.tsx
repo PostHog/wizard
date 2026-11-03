@@ -20,8 +20,8 @@ export type MountServices = { mcpInstaller?: McpInstaller };
 
 /** The screens on a test terminal. */
 export type MountedScreens = {
-  /** Type into the screens, as the terminal would deliver the keys. */
-  write: (input: string) => void;
+  /** Type into the screens once the last frame's effects have run, so a handler that frame shows is attached. */
+  write: (input: string) => Promise<void>;
   /** The last frame the screens drew. */
   frame: () => string;
   /** Whether the screens are reading keys yet; keys typed before that are dropped. */
@@ -91,7 +91,14 @@ export function mountScreens(
     },
   );
   return {
-    write: stdin.write,
+    // React's scheduler runs a commit's effects, useInput's subscription among them, on setImmediate; this queues behind them.
+    write: (input) =>
+      new Promise((resolve) =>
+        setImmediate(() => {
+          stdin.write(input);
+          resolve();
+        }),
+      ),
     frame: () => stdout.lastFrame,
     listening: () => stdin.listenerCount('readable') > 0,
     unmount: app.unmount,
