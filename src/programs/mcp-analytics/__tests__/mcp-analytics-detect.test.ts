@@ -25,6 +25,9 @@ afterEach(() => {
 const GO_SERVER =
   'package main\nimport "github.com/modelcontextprotocol/go-sdk/mcp"\nfunc main() { mcp.NewServer(&mcp.Implementation{Name: "example"}, nil) }';
 
+const RUST_SERVER =
+  'use rmcp::{tool_handler, ServerHandler};\nstruct Notes;\n#[tool_handler]\nimpl ServerHandler for Notes {}';
+
 function file(name: string, contents: string): string {
   const target = join(root, name);
   mkdirSync(dirname(target), { recursive: true });
@@ -56,6 +59,7 @@ describe('findMcpServers', () => {
     ],
     ['python/main.py', 'from fastmcp import FastMCP\nmcp = FastMCP("example")'],
     ['go/main.go', GO_SERVER],
+    ['rust/src/main.rs', RUST_SERVER],
     [
       'ruby/server.rb',
       'require "mcp"\nserver = MCP::Server.new(name: "example")',
@@ -94,6 +98,7 @@ describe('findMcpServers', () => {
     file('src/server.test.ts', source);
     file('go/server_test.go', GO_SERVER);
     file('spec/server_spec.rb', 'MCP::Server.new(name: "example")');
+    file('src/handler.rs', 'impl ServerHandler for Notes {}');
     file('server.py', '# just an ordinary script');
     file(
       'src/documented-server.ts',
@@ -163,14 +168,32 @@ describe('resolveMcpTarget', () => {
     });
   });
 
-  it('runs a selected Go entry file from its module root', () => {
-    file('go.mod', 'module example.com/server');
-    const entryPoint = file('cmd/server/main.go', GO_SERVER);
-    expect(resolveMcpTarget(root, entryPoint)).toEqual({
-      directory: root,
-      entryPoint,
-    });
-  });
+  it.each([
+    [
+      'Go',
+      'go.mod',
+      'module example.com/server',
+      'cmd/server/main.go',
+      GO_SERVER,
+    ],
+    [
+      'Rust',
+      'Cargo.toml',
+      '[package]\nname = "server"',
+      'src/main.rs',
+      RUST_SERVER,
+    ],
+  ])(
+    'runs a selected %s entry file from its module root',
+    (_language, marker, manifest, name, source) => {
+      file(marker, manifest);
+      const entryPoint = file(name, source);
+      expect(resolveMcpTarget(root, entryPoint)).toEqual({
+        directory: root,
+        entryPoint,
+      });
+    },
+  );
 
   it.each(['', 'missing', '.env', 'report.md'])(
     'rejects invalid or non-source input %j',

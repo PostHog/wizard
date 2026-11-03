@@ -16,6 +16,7 @@ const SOURCE_EXTENSIONS = new Set([
   '.py',
   '.go',
   '.rb',
+  '.rs',
 ]);
 const PROJECT_MARKERS = [
   'package.json',
@@ -24,6 +25,7 @@ const PROJECT_MARKERS = [
   'setup.py',
   'go.mod',
   'Gemfile',
+  'Cargo.toml',
   '.git',
 ];
 
@@ -37,7 +39,7 @@ export function resolveMcpTarget(
   const value = input.trim();
   if (!value)
     throw new Error(
-      'Enter a directory or a JavaScript, TypeScript, Python, Go or Ruby server file.',
+      'Enter a directory or a JavaScript, TypeScript, Python, Go, Ruby or Rust server file.',
     );
   const expanded =
     value === '~'
@@ -62,7 +64,7 @@ export function resolveMcpTarget(
   }
   if (!stat.isFile() || !SOURCE_EXTENSIONS.has(extname(target))) {
     throw new Error(
-      'Choose a directory or a JavaScript, TypeScript, Python, Go or Ruby server file.',
+      'Choose a directory or a JavaScript, TypeScript, Python, Go, Ruby or Rust server file.',
     );
   }
 
@@ -93,6 +95,8 @@ function hasServerSignals(source: string): boolean {
     (/\bmcp\.NewServer\s*\(/.test(source) &&
       /"github\.com\/modelcontextprotocol\/go-sdk\/mcp"/.test(source)) ||
     /\bMCP::Server\.new\b/.test(source) ||
+    (/\bimpl\s+(?:rmcp::)?ServerHandler\s+for\b/.test(source) &&
+      /\brmcp::/.test(source)) ||
     /\bcreateMcpHandler\s*\(/.test(source) ||
     (/["']tools\/call["']/.test(source) && /["']tools\/list["']/.test(source))
   );
@@ -102,7 +106,7 @@ export async function findMcpServers(
   directory: string,
 ): Promise<McpServerScan> {
   const target = resolveMcpTarget(directory, '.');
-  const sourceExtensions = '{ts,tsx,mts,cts,js,jsx,mjs,cjs,py,go,rb}';
+  const sourceExtensions = '{ts,tsx,mts,cts,js,jsx,mjs,cjs,py,go,rb,rs}';
   const options = {
     cwd: target.directory,
     deep: 6,

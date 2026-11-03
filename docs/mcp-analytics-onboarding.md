@@ -5,15 +5,15 @@ server. To connect the PostHog MCP server to a coding agent instead, run
 `npx @posthog/wizard@latest mcp add`.
 
 Before authentication, the wizard performs a bounded local scan for JavaScript,
-TypeScript, Python, Go, and Ruby server entry points. A single match is
+TypeScript, Python, Go, Ruby, and Rust server entry points. A single match is
 preselected: choose "Set up MCP analytics" to continue. Multiple matches offer a
 choice. When the scan is inconclusive, the default action lets the agent find
 the server and set up analytics in the current directory. "Choose another
 location" is an optional escape hatch for a different directory or entry-point
 file. The quick scan is a suggestion: no matches does not rule out a supported
 server. Tests, dependencies, and symlinked files are excluded. Suggestions
-recognize the official SDK constructors (including the Go `go-sdk` and the Ruby
-`mcp` gem), TypeScript FastMCP (including generic constructors), and Mastra's
+recognize the official SDK constructors (including the Go `go-sdk`, the Ruby `mcp`
+gem, and Rust `rmcp` `ServerHandler` impls), TypeScript FastMCP (including generic constructors), and Mastra's
 MCPServer. Recognition does not guarantee that a wrapper supports direct
 instrumentation: the agent still verifies its integration path.
 
@@ -32,7 +32,7 @@ server/factory usage, and runtime package dependencies. Development-only
 dependencies and client-only consumers do not establish server applications.
 Package names are shown beside their locations; choosing an application lets the
 agent resolve its entry points and follow workspace imports while keeping
-changes scoped to that application. Python, Go, and Ruby entry-point suggestions
+changes scoped to that application. Python, Go, Ruby, and Rust entry-point suggestions
 remain file-based.
 
 Shared libraries help identify their consumers rather than becoming the default
