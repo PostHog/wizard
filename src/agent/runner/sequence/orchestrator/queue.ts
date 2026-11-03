@@ -103,7 +103,9 @@ export interface QueuedTask {
    * still-pending task, for a runner-seeded task that was queued before the
    * planner ran and so could not name its dependencies then. It is additive,
    * pending-only, and cycle-checked per edge, so the DAG property above still
-   * holds. Nothing else mutates this field.
+   * holds. The other is {@link QueueStore.replaceDependencies}, which swaps in a
+   * program's typed graph whole, before the drain, and refuses any cycle.
+   * Nothing else mutates this field.
    */
   dependsOn: string[];
   inputs: Record<string, unknown>;
@@ -350,6 +352,38 @@ export class QueueStore {
     return { added, refused };
   }
 
+  /**
+   * Replace every listed task's dependencies at once, with a program's typed
+   * graph. All or nothing: refused when a changed task is no longer pending,
+   * an id is unknown, or the result has a cycle.
+   */
+  replaceDependencies(edges: ReadonlyMap<string, readonly string[]>): {
+    applied: boolean;
+    reason?: string;
+  } {
+    const next = new Map(this.tasks.map((t) => [t.id, t.dependsOn]));
+    for (const [id, deps] of edges) {
+      const task = this.get(id);
+      if (!task) return { applied: false, reason: `unknown task ${id}` };
+      const same =
+        deps.length === task.dependsOn.length &&
+        deps.every((d) => task.dependsOn.includes(d));
+      if (same) continue;
+      if (task.status !== TaskStatus.Pending) {
+        return { applied: false, reason: `${task.type} already started` };
+      }
+      if (deps.some((d) => d === id || !this.get(d))) {
+        return { applied: false, reason: `bad dependency for ${task.type}` };
+      }
+      next.set(id, [...deps]);
+    }
+    if (hasCycle(next)) return { applied: false, reason: 'cycle' };
+    for (const task of this.tasks)
+      task.dependsOn = [...(next.get(task.id) ?? [])];
+    this.reflect();
+    return { applied: true };
+  }
+
   start(id: string): QueuedTask {
     const t = this.require(id);
     t.status = TaskStatus.Running;
@@ -470,4 +504,18 @@ export class QueueStore {
     if (!t) throw new Error(`No task ${id} in the queue`);
     return t;
   }
+}
+
+function hasCycle(edges: ReadonlyMap<string, readonly string[]>): boolean {
+  const state = new Map<string, 'open' | 'done'>();
+  const visit = (id: string): boolean => {
+    const seen = state.get(id);
+    if (seen === 'done') return false;
+    if (seen === 'open') return true;
+    state.set(id, 'open');
+    for (const dep of edges.get(id) ?? []) if (visit(dep)) return true;
+    state.set(id, 'done');
+    return false;
+  };
+  return [...edges.keys()].some(visit);
 }

@@ -86,17 +86,25 @@ import { RunMetrics } from './run-metrics';
 import { dependencyClosure, uncoveredBySink } from './queue-tools';
 import { deferSeededTasks } from './seeded-deps';
 import { createSkillPicker } from './skill-picks';
+import {
+  graphDiff,
+  graphsAgree,
+  typedEdges,
+  type TaskGraph,
+} from './task-graph';
 import { LONGER_ASK_TIMEOUT_MS, shouldDisableAsk } from '@shared/ask-policy';
 import {
   agentRunTools,
   assembleSeedPrompt,
   assembleTaskPrompt,
+  bundledRegistry,
   loadAgentRegistry,
   promptModelFor,
   resolveTask,
   taskModelSpec,
   ASK_TOOL,
   type AgentPrompt,
+  type AgentRegistry,
   type OrchestratorPromptContext,
 } from '../../../agent-prompt-loader';
 
@@ -586,6 +594,73 @@ export function effectiveExcludedTaskTypes(
   ];
 }
 
+/** The caller's typed graph, or undefined when it has none or building it failed. */
+function readTaskGraph(
+  config: SequenceContext['config'],
+): TaskGraph | undefined {
+  try {
+    return config.taskGraph?.();
+  } catch (error) {
+    logToFile(`[orchestrator] typed graph unavailable: ${String(error)}`);
+    return undefined;
+  }
+}
+
+/** Logs where the graph's conditions and the program's exclusion list disagree. */
+function compareExclusions(
+  flow: string,
+  excludedTypes: readonly string[],
+  graph: TaskGraph,
+): void {
+  const ci = new Set(ciExcludedTaskTypes());
+  const program = excludedTypes.filter((t) => !ci.has(t)).sort();
+  const typed = [...graph.excluded].sort();
+  if (program.join(',') === typed.join(',')) return;
+  logToFile(
+    `[orchestrator] exclusions differ: program=${program.join(
+      ',',
+    )} graph=${typed.join(',')}`,
+  );
+  analytics.wizardCapture('orchestrator exclusions differ', {
+    flow,
+    program_excluded: program,
+    graph_excluded: typed,
+  });
+}
+
+/** The flow's prompts: the caller's bundle when `wizard-agent-dag` is on, falling back to context-mill's on any failure. */
+async function loadRegistry(
+  config: SequenceContext['config'],
+  boot: SequenceContext['boot'],
+  flow: string,
+  options: Parameters<typeof loadAgentRegistry>[2],
+): Promise<AgentRegistry> {
+  if (config.agentPrompts && isAgentDagEnabled(boot.wizardFlags)) {
+    try {
+      const bundled = bundledRegistry(
+        await config.agentPrompts(),
+        flow,
+        options,
+      );
+      if (bundled.seed) {
+        analytics.wizardCapture('orchestrator agent prompts loaded', {
+          source: 'bundle',
+          flow,
+        });
+        return bundled;
+      }
+      logToFile(`[orchestrator] bundled prompts for ${flow} have no seed`);
+    } catch (error) {
+      logToFile(`[orchestrator] bundled prompts failed: ${String(error)}`);
+    }
+    analytics.wizardCapture('orchestrator agent prompts loaded', {
+      source: 'fallback',
+      flow,
+    });
+  }
+  return loadAgentRegistry(boot.skillsBaseUrl, flow, options);
+}
+
 export async function runOrchestrator(
   context: SequenceContext,
 ): Promise<SequenceResult> {
@@ -650,15 +725,25 @@ async function executeOrchestrator(
   // once up front: its types drive enqueue validation, and resolving a task to
   // its run config is then synchronous, with no mid-drain network latency.
   const flow = config.agentFlow ?? programId;
-  const registry = await loadAgentRegistry(boot.skillsBaseUrl, flow, {
-    exclude: effectiveExcludedTaskTypes(config, boot.wizardFlags),
+  const taskGraph = readTaskGraph(config);
+  // The typed graph decides with `wizard-agent-dag` on; off, it only compares against the planner's.
+  const typedGraph =
+    taskGraph !== undefined && isAgentDagEnabled(boot.wizardFlags);
+  const excludedTypes = effectiveExcludedTaskTypes(config, boot.wizardFlags);
+  if (taskGraph) compareExclusions(flow, excludedTypes, taskGraph);
+  const registryOptions = {
+    exclude:
+      typedGraph && taskGraph
+        ? [...ciExcludedTaskTypes(), ...taskGraph.excluded]
+        : excludedTypes,
     // Baked into the prompts at load, so enqueue, dispatch, and telemetry all read one effective spec.
     overrides: resolveStageOverrides(
       programId,
       boot.wizardFlags,
       boot.wizardFlagPayloads,
     ),
-  });
+  };
+  const registry = await loadRegistry(config, boot, flow, registryOptions);
   if (signal?.aborted) return cancelledRun();
   const seedPrompt = registry.seed;
   if (!seedPrompt) {
@@ -1119,6 +1204,32 @@ async function executeOrchestrator(
     });
   }
   if (deferred.length > 0) renderQueue();
+
+  if (taskGraph) {
+    const diff = graphDiff(store, taskGraph);
+    const agree = graphsAgree(diff);
+    logToFile(
+      `[orchestrator] typed graph ${agree ? 'matches' : 'differs'} (${
+        typedGraph ? 'decides' : 'shadow'
+      })${agree ? '' : ` ${JSON.stringify(diff)}`}`,
+    );
+    analytics.wizardCapture('orchestrator graph diff', {
+      flow,
+      deciding: typedGraph ? 'typed' : 'planner',
+      agree,
+      missing_types: diff.missingTypes,
+      extra_types: diff.extraTypes,
+      edge_diff_types: diff.edges.map((e) => e.type),
+    });
+    if (typedGraph && !agree) {
+      const rewired = store.replaceDependencies(typedEdges(store, taskGraph));
+      if (rewired.applied) renderQueue();
+      else
+        logToFile(
+          `[orchestrator] typed graph not applied: ${rewired.reason ?? ''}`,
+        );
+    }
+  }
 
   // Canary for the one-way rule. The enqueue guard rejects the edge outright, so
   // this should never fire — but if it ever does, the seeded task has been

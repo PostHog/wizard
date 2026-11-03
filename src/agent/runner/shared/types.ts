@@ -17,6 +17,7 @@ import type { ApiProject, ApiUser } from '@shared/api';
 import type { Harness, Integration, Sequence } from '@shared/constants';
 import type { ErrorCode } from '@shared/errors';
 import type { TraitTags } from '@shared/skill-resolution';
+import type { TaskGraph } from '../sequence/orchestrator/task-graph';
 import type { LLMProvider } from '@posthog/warlock';
 import type { AgentInteraction, ProgressEmitter } from '../../progress';
 import type { EffortLevel } from '../switchboard/models';
@@ -220,6 +221,10 @@ export interface ResolvedRunConfig {
   projectFacts?: () => readonly string[];
   /** The run's project traits as tags, which skill criteria require or prefer. Read when the orchestrator starts. */
   traitTags?: () => TraitTags;
+  /** The flow's typed task graph, resolved by the caller from the run's traits and flags. */
+  taskGraph?: () => TaskGraph;
+  /** The flow's agent prompts by task type, bundled by the caller; the orchestrator fetches them from context-mill otherwise. */
+  agentPrompts?: () => Promise<Readonly<Record<string, string>>>;
   /** Completion hooks, bound by the caller. */
   hooks?: RunHooks;
   scanReport?: 'flush' | 'defer'; // defer leaves the scan report to the outer run

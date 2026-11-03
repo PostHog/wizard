@@ -20,6 +20,7 @@ import type { ProgramSession } from '@programs/program-contract';
 import type { CiRunnerContext } from '@programs/program-contract';
 import { abortNoFrameworkDetected } from '../shared/abort-no-framework';
 import { FEATURE_FLAGS_SCOPE_ADDITIONS } from './scopes.js';
+import { flow } from './flow';
 
 const FEATURE_FLAGS_REPORT_FILE = 'posthog-feature-flags-report.md';
 const FEATURE_FLAGS_DOCS_URL = 'https://posthog.com/docs/feature-flags';
@@ -54,6 +55,8 @@ export const config: ProgramConfig = {
     model: DEFAULT_AGENT_MODEL,
   },
   agentFlow: 'feature-flags',
+  agentPrompts: () => import('./agent-prompts').then((m) => m.AGENT_PROMPTS),
+  flow,
   handoffNotebook: true,
   // The intro blocks Continue until a supported framework is detected.
   onReady: (ctx) => detectPostHogIntegration(ctx),

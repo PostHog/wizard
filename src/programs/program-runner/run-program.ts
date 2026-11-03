@@ -37,7 +37,7 @@ import { logToFile } from '@utils/debug';
 import { removeAuditLedger, startAuditLedgerWatcher } from '@programs/audit';
 import { FRAMEWORK_REGISTRY } from '@services/frameworks';
 import { findProgramConfig, getProgramConfig } from './program-registry';
-import { ProgramAbort } from '@programs/program-contract';
+import { ProgramAbort, resolveFlow } from '@programs/program-contract';
 import { detectionFailure, detectProgram } from './detect-program';
 import {
   rotateCredentials,
@@ -415,6 +415,7 @@ async function invokeProgram(
             program_id: planned.config.id,
           });
         }
+        const programFlow = planned.config.flow;
         const result = await runAgent(
           {
             programId: planned.config.id,
@@ -437,6 +438,14 @@ async function invokeProgram(
             handoffNotebook:
               agentRun.handoffNotebook ?? planned.config.handoffNotebook,
             agentFlow: planned.config.agentFlow,
+            agentPrompts: planned.config.agentPrompts,
+            taskGraph: programFlow
+              ? () =>
+                  resolveFlow(programFlow, {
+                    traits: getProjectTraits(session()),
+                    flags: flags.flags,
+                  })
+              : undefined,
             excludedTaskTypes: planned.config.excludedTaskTypes,
             seedTasks: planned.config.seedTasks
               ? () => planned.config.seedTasks!(session())
