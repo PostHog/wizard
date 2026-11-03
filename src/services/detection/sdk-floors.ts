@@ -101,6 +101,22 @@ function lowestBuildSetting(pbxproj: string, key: string): Version | undefined {
   return lowest;
 }
 
+/** The lowest `<platform>: <version>` across the project default and every per-target override. */
+function lowestYamlTarget(yml: string, platform: string): Version | undefined {
+  let lowest: Version | undefined;
+  const pattern = new RegExp(
+    `^\\s*${platform}:\\s*"?(\\d+(?:\\.\\d+)?)"?`,
+    'gm',
+  );
+  for (const match of yml.matchAll(pattern)) {
+    const raw = match[1].includes('.') ? match[1] : `${match[1]}.0`;
+    const found = lowerBoundVersion(raw);
+    if (found && (!lowest || compareVersions(found, lowest) < 0))
+      lowest = found;
+  }
+  return lowest;
+}
+
 function podfilePlatform(
   podfile: string,
   platform: 'ios' | 'osx',
@@ -112,7 +128,7 @@ function podfilePlatform(
   return match ? lowerBoundVersion(match[1]) : undefined;
 }
 
-// posthog-ios 4 is SPM only and needs iOS 15 and macOS 11 (Xcode 26 cannot be read from the project).
+// posthog-ios 4 is SPM only and needs iOS 15, macOS 11, tvOS 15 and watchOS 10 (Xcode 26 cannot be read from the project).
 async function iosFloor(installDir: string): Promise<SdkFloorCheck> {
   const podfile = read(installDir, 'Podfile');
   if (podfile && /^\s*pod\s+['"]PostHog['"]/m.test(podfile)) {
@@ -153,19 +169,29 @@ async function iosFloor(installDir: string): Promise<SdkFloorCheck> {
       `${file} MACOSX_DEPLOYMENT_TARGET`,
     );
     if (!mac.ok) return mac;
+    const tv = atLeast(
+      lowestBuildSetting(pbxproj, 'TVOS_DEPLOYMENT_TARGET'),
+      v(15, 0),
+      `${file} TVOS_DEPLOYMENT_TARGET`,
+    );
+    if (!tv.ok) return tv;
+    const watch = atLeast(
+      lowestBuildSetting(pbxproj, 'WATCHOS_DEPLOYMENT_TARGET'),
+      v(10, 0),
+      `${file} WATCHOS_DEPLOYMENT_TARGET`,
+    );
+    if (!watch.ok) return watch;
   }
   const xcodegen = read(installDir, 'project.yml');
   if (xcodegen) {
-    const ios = /^\s*iOS:\s*"?(\d+(?:\.\d+)?)"?/m.exec(xcodegen)?.[1];
-    const check = atLeast(
-      ios ? lowerBoundVersion(ios.includes('.') ? ios : `${ios}.0`) : undefined,
+    const ios = atLeast(
+      lowestYamlTarget(xcodegen, 'iOS'),
       v(15, 0),
       'project.yml deploymentTarget iOS',
     );
-    if (!check.ok) return check;
-    const mac = /^\s*macOS:\s*"?(\d+(?:\.\d+)?)"?/m.exec(xcodegen)?.[1];
+    if (!ios.ok) return ios;
     return atLeast(
-      mac ? lowerBoundVersion(mac.includes('.') ? mac : `${mac}.0`) : undefined,
+      lowestYamlTarget(xcodegen, 'macOS'),
       v(11, 0),
       'project.yml deploymentTarget macOS',
     );
@@ -173,7 +199,11 @@ async function iosFloor(installDir: string): Promise<SdkFloorCheck> {
   return OK;
 }
 
-/** The Flutter SDK version a project pins, from fvm, asdf or the pubspec environment. */
+/**
+ * The Flutter SDK version a project pins, from fvm or asdf. The pubspec
+ * `environment.flutter` range is a declared minimum, not the SDK in use, so it
+ * is not read: a current project with an old constraint must not go legacy.
+ */
 function flutterVersion(installDir: string): {
   found: Version | undefined;
   source: string;
@@ -195,17 +225,6 @@ function flutterVersion(installDir: string): {
     ? /^flutter\s+(\S+)/m.exec(toolVersions)?.[1]
     : undefined;
   if (asdf) return { found: lowerBoundVersion(asdf), source: '.tool-versions' };
-  const pubspec = read(installDir, 'pubspec.yaml');
-  const env = pubspec
-    ? /^environment:\s*\n(?:[ \t]+.*\n)*?[ \t]+flutter:\s*"?([^"\n]+)"?/m.exec(
-        pubspec,
-      )?.[1]
-    : undefined;
-  if (env)
-    return {
-      found: lowerBoundVersion(env),
-      source: 'pubspec.yaml environment.flutter',
-    };
   return { found: undefined, source: '' };
 }
 
@@ -241,28 +260,9 @@ function flutterFloor(installDir: string): SdkFloorCheck {
   return OK;
 }
 
-// posthog-android 3 and 4 both need minSdk 23; the framework's own version check stops lower projects first.
-async function androidFloor(installDir: string): Promise<SdkFloorCheck> {
-  const scripts = await boundedGlob(
-    [
-      'build.gradle',
-      'build.gradle.kts',
-      '*/build.gradle',
-      '*/build.gradle.kts',
-    ],
-    { cwd: installDir, limit: 20 },
-  );
-  for (const file of scripts.sort()) {
-    const content = read(installDir, file);
-    const match = content
-      ? /minSdk(?:Version)?\s*=?\s*(\d+)/.exec(content)
-      : null;
-    if (match && Number(match[1]) < 23) {
-      return fail(`${file} minSdk ${match[1]} is below 23`);
-    }
-  }
-  return OK;
-}
+// posthog-android 3 and 4 both need minSdk 23; the Android framework config's
+// own version check stops a lower project before any mode is resolved.
+const androidFloor = (): SdkFloorCheck => OK;
 
 const FLOORS: Record<
   SdkId,

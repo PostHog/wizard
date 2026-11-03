@@ -141,7 +141,7 @@ export function sdkCaptureModeFacts(session: {
     }
     const why =
       resolution.reason === 'floor'
-        ? ` The project does not meet the ${other} floor: ${resolution.detail}.`
+        ? ` The project does not meet the ${other} floor: ${resolution.detail}. Say so in the setup report; raising it and running the wizard again moves the project to ${other}.`
         : resolution.reason === 'host'
         ? ` The PostHog host does not serve the capture v1 routes.`
         : '';

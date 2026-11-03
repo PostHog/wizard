@@ -157,6 +157,38 @@ describe('checkSdkFloor', () => {
       });
     });
 
+    it('checks tvOS 15 and watchOS 10 targets too', async () => {
+      const tv =
+        'buildSettings = {\nIPHONEOS_DEPLOYMENT_TARGET = 16.0;\nTVOS_DEPLOYMENT_TARGET = 13.0;\n};';
+      expect(
+        await floor({ 'App.xcodeproj/project.pbxproj': tv }, 'posthog-ios'),
+      ).toMatchObject({
+        ok: false,
+        reason: expect.stringContaining(
+          'TVOS_DEPLOYMENT_TARGET 13.0 is below 15.0',
+        ),
+      });
+      const watch =
+        'buildSettings = {\nIPHONEOS_DEPLOYMENT_TARGET = 16.0;\nWATCHOS_DEPLOYMENT_TARGET = 7.0;\n};';
+      expect(
+        await floor({ 'App.xcodeproj/project.pbxproj': watch }, 'posthog-ios'),
+      ).toMatchObject({
+        ok: false,
+        reason: expect.stringContaining(
+          'WATCHOS_DEPLOYMENT_TARGET 7.0 is below 10.0',
+        ),
+      });
+    });
+
+    it('takes the lowest XcodeGen target across the project default and per-target overrides', async () => {
+      const yml =
+        'name: App\noptions:\n  deploymentTarget:\n    iOS: "16.0"\ntargets:\n  Legacy:\n    deploymentTarget:\n      iOS: 13.0\n';
+      expect(await floor({ 'project.yml': yml }, 'posthog-ios')).toEqual({
+        ok: false,
+        reason: 'project.yml deploymentTarget iOS 13.0 is below 15.0',
+      });
+    });
+
     it('reads Podfile platforms and XcodeGen deployment targets', async () => {
       expect(
         await floor({ Podfile: "platform :ios, '14.0'\n" }, 'posthog-ios'),
@@ -200,6 +232,20 @@ describe('checkSdkFloor', () => {
       });
     });
 
+    it('ignores the pubspec environment range: it declares a minimum, not the SDK in use', async () => {
+      expect(
+        (
+          await floor(
+            {
+              'pubspec.yaml':
+                'name: app\nenvironment:\n  sdk: ^3.5.0\n  flutter: ">=3.22.0"\n',
+            },
+            'posthog-flutter',
+          )
+        ).ok,
+      ).toBe(true);
+    });
+
     it.each([
       ['.fvmrc', '{"flutter": "3.38.0"}', '.fvmrc'],
       [
@@ -211,11 +257,6 @@ describe('checkSdkFloor', () => {
         '.tool-versions',
         'nodejs 22.0.0\nflutter 3.32.0-stable\n',
         '.tool-versions',
-      ],
-      [
-        'pubspec.yaml',
-        'name: app\nenvironment:\n  sdk: ^3.5.0\n  flutter: ">=3.38.0"\n',
-        'pubspec.yaml environment.flutter',
       ],
     ])('reads the Flutter version from %s', async (file, content, source) => {
       const check = await floor({ [file]: content }, 'posthog-flutter');
@@ -260,25 +301,13 @@ describe('checkSdkFloor', () => {
     });
   });
 
-  it('Android: minSdk 23 in any module script', async () => {
-    expect(
-      await floor(
-        {
-          'app/build.gradle.kts':
-            'android {\n    defaultConfig {\n        minSdk = 21\n    }\n}\n',
-        },
-        'posthog-android',
-      ),
-    ).toEqual({
-      ok: false,
-      reason: 'app/build.gradle.kts minSdk 21 is below 23',
-    });
+  it('Android: the framework version check owns minSdk, so the floor passes', async () => {
     expect(
       (
         await floor(
           {
-            'app/build.gradle':
-              'android { defaultConfig { minSdkVersion 24 } }\n',
+            'app/build.gradle.kts':
+              'android {\n    defaultConfig {\n        minSdk = 21\n    }\n}\n',
           },
           'posthog-android',
         )

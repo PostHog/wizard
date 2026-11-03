@@ -271,7 +271,7 @@ describe('floors', () => {
     );
     expect(forced[0]).toMatchObject({ mode: 'legacy', reason: 'floor' });
     expect(sdkCaptureModeFacts({ sdkCaptureModes: forced })[0]).toContain(
-      'The project does not meet the 2.x floor: go.mod go directive 1.20 is below 1.21.',
+      'The project does not meet the 2.x floor: go.mod go directive 1.20 is below 1.21. Say so in the setup report; raising it and running the wizard again moves the project to 2.x.',
     );
   });
 });
