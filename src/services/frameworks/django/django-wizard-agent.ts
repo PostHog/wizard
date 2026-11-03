@@ -130,21 +130,8 @@ export const DJANGO_AGENT_CONFIG: FrameworkConfig<DjangoContext> = {
         : 'unknown';
 
       // Map project type to framework ID for MCP docs resource
-      const frameworkIdMap: Record<DjangoProjectType, string> = {
-        [DjangoProjectType.STANDARD]: 'django',
-        [DjangoProjectType.DRF]: 'django',
-        [DjangoProjectType.WAGTAIL]: 'django',
-        [DjangoProjectType.CHANNELS]: 'django',
-      };
 
-      const frameworkId = context.projectType
-        ? frameworkIdMap[context.projectType]
-        : 'django';
-
-      const lines = [
-        `Project type: ${projectTypeName}`,
-        `Framework docs ID: ${frameworkId} (use posthog://docs/frameworks/${frameworkId} for documentation)`,
-      ];
+      const lines = [`Project type: ${projectTypeName}`];
 
       if (context.settingsFile) {
         lines.push(`Settings file: ${context.settingsFile}`);

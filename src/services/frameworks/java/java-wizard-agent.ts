@@ -121,7 +121,6 @@ export const JAVA_AGENT_CONFIG: FrameworkConfig<JavaContext> = {
       'Neither Maven nor Gradle has a single add command. Add the com.posthog:posthog-server dependency (pinned to the latest release on Maven Central) to pom.xml or build.gradle(.kts), matching the existing dependency format, then run `mvn install` or `gradle build` to resolve it.',
     getAdditionalContextLines: (context) => {
       const lines = [
-        `Framework docs ID: java (use posthog://docs/frameworks/java for documentation)`,
         'Use the posthog-server SDK (com.posthog:posthog-server) — posthog-android is a different library and must not be used on the server.',
         'Create one PostHog client per process with PostHogConfig.builder(...) and PostHog.with(config); call close() during graceful shutdown, and flush() before returning in serverless handlers.',
       ];

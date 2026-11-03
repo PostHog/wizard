@@ -107,7 +107,6 @@ export const JAVASCRIPT_WEB_AGENT_CONFIG: FrameworkConfig<JavaScriptContext> = {
       const lines = [
         `Package manager: ${context.packageManagerName ?? 'unknown'}`,
         `Has TypeScript: ${context.hasTypeScript ? 'yes' : 'no'}`,
-        `Framework docs ID: js (use posthog://docs/frameworks/js for documentation if available)`,
         `Project type: Generic JavaScript/TypeScript application (no specific framework detected)`,
       ];
 

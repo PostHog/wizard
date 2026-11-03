@@ -57,10 +57,7 @@ export const ANGULAR_AGENT_CONFIG: FrameworkConfig<AngularContext> = {
     projectTypeDetection:
       'This is an Angular project. Look for package.json, angular.json, and lockfiles (package-lock.json, yarn.lock, pnpm-lock.yaml) to confirm.',
     getAdditionalContextLines: () => {
-      const frameworkId = 'angular';
-
       return [
-        `Framework docs ID: ${frameworkId} (use posthog://docs/frameworks/${frameworkId} for documentation)`,
         'Angular uses dependency injection for services. PostHog should be initialized as a service.',
         'For standalone components, ensure PostHog is properly provided in the application config.',
       ];

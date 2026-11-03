@@ -128,7 +128,6 @@ export const LARAVEL_AGENT_CONFIG: FrameworkConfig<LaravelContext> = {
 
       const lines = [
         `Project type: ${projectTypeName}`,
-        `Framework docs ID: php (use posthog://docs/frameworks/php for documentation)`,
         `Laravel structure: ${context.laravelStructure} (affects where to add configuration)`,
       ];
 

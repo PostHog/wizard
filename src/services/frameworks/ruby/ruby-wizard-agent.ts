@@ -71,7 +71,6 @@ export const RUBY_AGENT_CONFIG: FrameworkConfig<RubyContext> = {
 
       const lines = [
         `Package manager: ${packageManagerName}`,
-        `Framework docs ID: ruby (use posthog://docs/frameworks/ruby for documentation)`,
         `Project type: Generic Ruby application (CLI, script, gem, worker, etc.)`,
         ``,
         `## CRITICAL: Ruby PostHog Best Practices`,

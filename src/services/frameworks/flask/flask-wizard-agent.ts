@@ -126,22 +126,8 @@ export const FLASK_AGENT_CONFIG: FrameworkConfig<FlaskContext> = {
         : 'unknown';
 
       // Map project type to framework ID for MCP docs resource
-      const frameworkIdMap: Record<FlaskProjectType, string> = {
-        [FlaskProjectType.STANDARD]: 'flask',
-        [FlaskProjectType.RESTFUL]: 'flask',
-        [FlaskProjectType.RESTX]: 'flask',
-        [FlaskProjectType.SMOREST]: 'flask',
-        [FlaskProjectType.BLUEPRINT]: 'flask',
-      };
 
-      const frameworkId = context.projectType
-        ? frameworkIdMap[context.projectType]
-        : 'flask';
-
-      const lines = [
-        `Project type: ${projectTypeName}`,
-        `Framework docs ID: ${frameworkId} (use posthog://docs/frameworks/${frameworkId} for documentation)`,
-      ];
+      const lines = [`Project type: ${projectTypeName}`];
 
       if (context.appFile) {
         lines.push(`App file: ${context.appFile}`);

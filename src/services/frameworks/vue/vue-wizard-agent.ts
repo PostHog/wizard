@@ -53,10 +53,7 @@ export const VUE_AGENT_CONFIG: FrameworkConfig<VueContext> = {
     projectTypeDetection:
       'This is a JavaScript/TypeScript project. Look for package.json and lockfiles (package-lock.json, yarn.lock, pnpm-lock.yaml, bun.lockb) to confirm.',
     getAdditionalContextLines: () => {
-      const frameworkId = 'vue';
-      return [
-        `Framework docs ID: ${frameworkId} (use posthog://docs/frameworks/${frameworkId} for documentation)`,
-      ];
+      return [];
     },
   },
 

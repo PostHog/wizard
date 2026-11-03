@@ -74,10 +74,7 @@ export const RAILS_AGENT_CONFIG: FrameworkConfig<RailsContext> = {
         ? getRailsProjectTypeName(context.projectType)
         : 'unknown';
 
-      const lines = [
-        `Project type: ${projectTypeName}`,
-        `Framework docs ID: ruby-on-rails (use posthog://docs/frameworks/ruby-on-rails for documentation)`,
-      ];
+      const lines = [`Project type: ${projectTypeName}`];
 
       if (context.initializersDir) {
         lines.push(`Initializers directory: ${context.initializersDir}`);

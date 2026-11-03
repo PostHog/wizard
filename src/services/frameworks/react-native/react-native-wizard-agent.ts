@@ -76,12 +76,8 @@ export const REACT_NATIVE_AGENT_CONFIG: FrameworkConfig<ReactNativeContext> = {
       'This is a React Native project. Look for package.json, android/ and ios/ directories, and lockfiles to confirm. Check for expo in package.json to determine the variant.',
     getAdditionalContextLines: (context) => {
       const isExpo = context.variant === ReactNativeVariant.EXPO;
-      const frameworkId = 'react-native';
 
-      const lines = [
-        `Framework docs ID: ${frameworkId} (use posthog://docs/frameworks/${frameworkId} for documentation)`,
-        `Variant: ${isExpo ? 'Expo' : 'React Native'}`,
-      ];
+      const lines = [`Variant: ${isExpo ? 'Expo' : 'React Native'}`];
 
       if (isExpo) {
         lines.push(

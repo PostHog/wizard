@@ -71,10 +71,6 @@ export const NUXT_AGENT_CONFIG: FrameworkConfig<NuxtContext> = {
       if (context.versionBucket) {
         lines.push(`Nuxt version: ${context.versionBucket}`);
       }
-      const frameworkId = 'nuxt';
-      lines.push(
-        `Framework docs ID: ${frameworkId} (use posthog://docs/frameworks/${frameworkId} for documentation)`,
-      );
       return lines;
     },
   },

@@ -170,7 +170,6 @@ export const PYTHON_AGENT_CONFIG: FrameworkConfig<PythonContext> = {
 
       return [
         `Package manager: ${packageManagerName}`,
-        `Framework docs ID: python (use posthog://docs/frameworks/python for documentation)`,
         `Project type: Generic Python application (CLI, script, worker, data pipeline, etc.)`,
       ];
     },

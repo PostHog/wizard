@@ -75,20 +75,8 @@ export const ASTRO_AGENT_CONFIG: FrameworkConfig<AstroContext> = {
       );
 
       // Map rendering mode to framework ID for MCP docs resource
-      const frameworkIdMap: Record<AstroRenderingMode, string> = {
-        [AstroRenderingMode.STATIC]: 'astro-static',
-        [AstroRenderingMode.VIEW_TRANSITIONS]: 'astro-view-transitions',
-        [AstroRenderingMode.SSR]: 'astro-ssr',
-        [AstroRenderingMode.HYBRID]: 'astro-hybrid',
-      };
 
-      const frameworkId =
-        frameworkIdMap[context.renderingMode ?? AstroRenderingMode.STATIC];
-
-      const lines = [
-        `Rendering mode: ${modeName}`,
-        `Framework docs ID: ${frameworkId} (use posthog://docs/frameworks/${frameworkId} for documentation)`,
-      ];
+      const lines = [`Rendering mode: ${modeName}`];
 
       // Add mode-specific guidance
       if (context.renderingMode === AstroRenderingMode.VIEW_TRANSITIONS) {

@@ -95,19 +95,8 @@ export const TANSTACK_ROUTER_AGENT_CONFIG: FrameworkConfig<TanStackRouterContext
           : 'unknown';
 
         // Map router mode to framework ID for MCP docs resource
-        const frameworkIdMap: Record<TanStackRouterMode, string> = {
-          [TanStackRouterMode.FILE_BASED]: 'react-tanstack-router-file-based',
-          [TanStackRouterMode.CODE_BASED]: 'react-tanstack-router-code-based',
-        };
 
-        const frameworkId = routerMode
-          ? frameworkIdMap[routerMode]
-          : 'react-tanstack-router-file-based';
-
-        return [
-          `Router mode: ${modeName}`,
-          `Framework docs ID: ${frameworkId} (use posthog://docs/frameworks/${frameworkId} for documentation)`,
-        ];
+        return [`Router mode: ${modeName}`];
       },
     },
 

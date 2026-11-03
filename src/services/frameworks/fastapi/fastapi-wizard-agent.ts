@@ -147,18 +147,8 @@ export const FASTAPI_AGENT_CONFIG: FrameworkConfig<FastAPIContext> = {
         : 'unknown';
 
       // Map project type to framework ID for MCP docs resource
-      const frameworkIdMap: Record<FastAPIProjectType, string> = {
-        [FastAPIProjectType.STANDARD]: 'fastapi',
-        [FastAPIProjectType.ROUTER]: 'fastapi',
-        [FastAPIProjectType.FULLSTACK]: 'fastapi',
-      };
 
-      const frameworkId = projectType ? frameworkIdMap[projectType] : 'fastapi';
-
-      const lines = [
-        `Project type: ${projectTypeName}`,
-        `Framework docs ID: ${frameworkId} (use posthog://docs/frameworks/${frameworkId} for documentation)`,
-      ];
+      const lines = [`Project type: ${projectTypeName}`];
 
       if (context.appFile) {
         lines.push(`App file: ${context.appFile}`);

@@ -62,11 +62,8 @@ export const TANSTACK_START_AGENT_CONFIG: FrameworkConfig<TanStackStartContext> 
         'This is a JavaScript/TypeScript project. Look for package.json and lockfiles (package-lock.json, yarn.lock, pnpm-lock.yaml, bun.lockb) to confirm.',
       getAdditionalContextLines: () => {
         // TanStack Start always uses file-based routing (it's a full-stack framework built on TanStack Router)
-        const frameworkId = 'react-tanstack-start';
 
-        return [
-          `Framework docs ID: ${frameworkId} (use posthog://docs/frameworks/${frameworkId} for documentation)`,
-        ];
+        return [];
       },
     },
 
