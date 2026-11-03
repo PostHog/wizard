@@ -275,3 +275,90 @@ describe('floors', () => {
     );
   });
 });
+
+describe('host probe', () => {
+  const v1Flag = { [WIZARD_SDK_CAPTURE_V1_FLAG_KEY]: { 'posthog-rs': 'v1' } };
+
+  it('keeps a fresh install on legacy when the host has no v1 routes, and says so', async () => {
+    const detected = await withProject({}, (dir) =>
+      detectSdkCaptureModes(dir, Integration.rust),
+    );
+    const session = {
+      integration: Integration.rust,
+      sdkCaptureModes: detected,
+    };
+    const noRoutes = applySdkCaptureModeFlags(session, v1Flag, {
+      hostServesV1: false,
+    });
+    expect(noRoutes[0]).toMatchObject({
+      mode: 'legacy',
+      reason: 'host',
+      detail: 'no-v1-routes',
+      host: false,
+    });
+    expect(sdkCaptureModeFacts({ sdkCaptureModes: noRoutes })[0]).toContain(
+      'The PostHog host does not serve the capture v1 routes.',
+    );
+    const unreachable = applySdkCaptureModeFlags(session, v1Flag, {
+      hostServesV1: 'unreachable',
+    });
+    expect(unreachable[0]).toMatchObject({
+      mode: 'legacy',
+      reason: 'host',
+      detail: 'unreachable',
+    });
+    expect(sdkCaptureModeFacts({ sdkCaptureModes: unreachable })[0]).toContain(
+      'could not reach the PostHog host',
+    );
+    const cloud = applySdkCaptureModeFlags(session, v1Flag, {
+      hostServesV1: undefined,
+    });
+    expect(cloud[0]).toMatchObject({ mode: 'v1', reason: 'flag' });
+  });
+
+  it('probes only when a resolution lands on v1, and only for a non-cloud host', async () => {
+    const probe = vi.fn().mockResolvedValue(false);
+    const legacy = await withProject({}, (installDir) =>
+      settleSdkCaptureModes(
+        { installDir, integration: Integration.rust, sdkCaptureModes: [] },
+        on({}),
+        { apiHost: 'https://posthog.example.com', probe },
+      ),
+    );
+    expect(legacy[0]).toMatchObject({ mode: 'legacy', reason: 'not-released' });
+    expect(probe).not.toHaveBeenCalled();
+    const forced = await withProject({}, (installDir) =>
+      settleSdkCaptureModes(
+        { installDir, integration: Integration.rust, sdkCaptureModes: [] },
+        on(v1Flag),
+        { apiHost: 'https://posthog.example.com', probe },
+      ),
+    );
+    expect(probe).toHaveBeenCalledTimes(1);
+    expect(forced[0]).toMatchObject({ mode: 'legacy', reason: 'host' });
+  });
+
+  it('warns about an installed v1 copy on a host without the routes instead of changing the mode', async () => {
+    const probe = vi.fn().mockResolvedValue(false);
+    const settled = await withProject(
+      {
+        'go.mod':
+          'module app\n\ngo 1.22\n\nrequire github.com/posthog/posthog-go/v2 v2.0.0\n',
+      },
+      (installDir) =>
+        settleSdkCaptureModes(
+          { installDir, integration: Integration.go, sdkCaptureModes: [] },
+          on({}),
+          { apiHost: 'https://posthog.example.com', probe },
+        ),
+    );
+    expect(settled[0]).toMatchObject({
+      mode: 'v1',
+      reason: 'installed',
+      host: false,
+    });
+    expect(sdkCaptureModeFacts({ sdkCaptureModes: settled })[0]).toContain(
+      'Warning: the PostHog host this run targets does not serve the capture v1 routes',
+    );
+  });
+});

@@ -372,7 +372,10 @@ async function invokeProgram(
       const session = (): WizardSession => scoped ?? store.session;
       // Each run settles the SDK capture modes for its own directory and
       // integration: a composed or scoped run has none from detection.
-      const sdkCaptureModes = await settleSdkCaptureModes(session(), flags);
+      const sdkCaptureModes = await settleSdkCaptureModes(session(), flags, {
+        apiHost: credentials.posthog.host.apiHost,
+        signal,
+      });
       if (signal.aborted) return cancelled();
       if (scoped) scoped.sdkCaptureModes = sdkCaptureModes;
       else store.setSdkCaptureModes(sdkCaptureModes);

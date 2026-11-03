@@ -40,6 +40,9 @@ export interface InstalledSdk {
   readonly unbounded?: boolean;
 }
 
+/** What the host probe found: the routes are served, not served, or the host did not answer. */
+export type HostV1Answer = boolean | 'unreachable';
+
 export type SdkFloorCheck =
   | { readonly ok: true }
   | { readonly ok: false; readonly reason: string };
@@ -54,8 +57,8 @@ export interface SdkCaptureModeInput {
   readonly flagPayload?: unknown;
   /** The SDK's toolchain and platform floor for v1; absent means not checked. */
   readonly floor?: SdkFloorCheck;
-  /** Whether the host serves the v1 routes; absent means a cloud host, which does. */
-  readonly hostServesV1?: boolean;
+  /** Whether the host serves the v1 routes; absent means a cloud host, which does; `unreachable` means the probe got no answer. */
+  readonly hostServesV1?: HostV1Answer;
 }
 
 export type SdkCaptureModeReason =
@@ -80,6 +83,8 @@ export type SdkCaptureModeResolution =
       readonly installed: readonly InstalledSdk[];
       /** The floor as detection read it, kept so a later resolution with flags reuses it. */
       readonly floor?: SdkFloorCheck;
+      /** The host probe's answer, when a non-cloud host was probed. */
+      readonly host?: HostV1Answer;
     }
   | {
       readonly sdk: SdkId;
@@ -87,6 +92,7 @@ export type SdkCaptureModeResolution =
       readonly mode: 'conflict';
       readonly reason: 'conflict';
       readonly installed: readonly InstalledSdk[];
+      readonly host?: HostV1Answer;
     };
 
 export type SdkCaptureModeOverrides = Readonly<
@@ -154,7 +160,11 @@ export function resolveSdkCaptureMode(
   const installed = input.installed ?? [];
 
   const installedResolution = resolveFromInstalled(row, installed);
-  if (installedResolution) return installedResolution;
+  if (installedResolution) {
+    return input.hostServesV1 === undefined
+      ? installedResolution
+      : { ...installedResolution, host: input.hostServesV1 };
+  }
 
   const fresh = (
     mode: SdkCaptureMode,
@@ -168,6 +178,7 @@ export function resolveSdkCaptureMode(
     ...(detail === undefined ? {} : { detail }),
     installed,
     ...(input.floor === undefined ? {} : { floor: input.floor }),
+    ...(input.hostServesV1 === undefined ? {} : { host: input.hostServesV1 }),
   });
 
   const override = parseSdkCaptureModeOverrides(input.flagPayload)[row.sdk];
@@ -189,7 +200,11 @@ export function resolveSdkCaptureMode(
     return fresh('legacy', 'floor', input.floor.reason);
   }
 
-  if (input.hostServesV1 === false) return fresh('legacy', 'host');
+  if (input.hostServesV1 === false)
+    return fresh('legacy', 'host', 'no-v1-routes');
+  if (input.hostServesV1 === 'unreachable') {
+    return fresh('legacy', 'host', 'unreachable');
+  }
 
   return override === 'v1'
     ? fresh('v1', 'flag', override)

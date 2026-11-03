@@ -8,10 +8,12 @@ import { WIZARD_SDK_CAPTURE_V1_FLAG_KEY } from '@shared/constants';
 import {
   isSdkCaptureModeEnabled,
   resolveSdkCaptureMode,
+  type HostV1Answer,
   type SdkCaptureModeResolution,
   type SdkFloorCheck,
 } from '@shared/sdk-capture-mode';
 import type { WizardFlagSnapshot } from '@shared/wizard-flags';
+import { hostServesCaptureV1 } from '@shared/host-v1-probe';
 import {
   getSdkMajorRow,
   sdkRowsForIntegration,
@@ -71,6 +73,7 @@ export async function settleSdkCaptureModes(
     sdkCaptureModes: readonly SdkCaptureModeResolution[];
   },
   snapshot: WizardFlagSnapshot,
+  options: SettleOptions = {},
 ): Promise<SdkCaptureModeResolution[]> {
   // The gate is the whole feature: off, a run resolves no mode and every
   // consumer (install tool, read-back, facts, probe, skill filter) stays idle.
@@ -80,19 +83,39 @@ export async function settleSdkCaptureModes(
     session.sdkCaptureModes.length > 0 || !session.integration
       ? session.sdkCaptureModes
       : await detectSdkCaptureModes(session.installDir, session.integration);
-  return applySdkCaptureModeFlags(
-    { integration: session.integration, sdkCaptureModes: detected },
-    flagPayloads,
-  );
+  const scoped = {
+    integration: session.integration,
+    sdkCaptureModes: detected,
+  };
+  const settled = applySdkCaptureModeFlags(scoped, flagPayloads);
+  // The host matters only once a resolution lands on v1; every other run skips the network.
+  if (!options.apiHost || !settled.some(touchesV1)) return settled;
+  const probe = options.probe ?? hostServesCaptureV1;
+  const hostServesV1 = await probe(options.apiHost, { signal: options.signal });
+  if (hostServesV1 === undefined) return settled;
+  return applySdkCaptureModeFlags(scoped, flagPayloads, { hostServesV1 });
 }
 
-/** Resolves again with the flag payloads, from the copies detection already read. */
+export interface SettleOptions {
+  /** The run's ingestion host; absent skips the probe. */
+  apiHost?: string;
+  signal?: AbortSignal;
+  /** Test seam for the host probe. */
+  probe?: typeof hostServesCaptureV1;
+}
+
+function touchesV1(resolution: SdkCaptureModeResolution): boolean {
+  return resolution.mode === 'v1';
+}
+
+/** Resolves again with the flag payloads and the host probe, from the copies detection already read. */
 export function applySdkCaptureModeFlags(
   session: {
     integration: Integration | null;
     sdkCaptureModes: readonly SdkCaptureModeResolution[];
   },
   flagPayloads: Readonly<Record<string, unknown>>,
+  options: { hostServesV1?: HostV1Answer } = {},
 ): SdkCaptureModeResolution[] {
   const flagPayload = flagPayloads[WIZARD_SDK_CAPTURE_V1_FLAG_KEY];
   return session.sdkCaptureModes.map((previous) =>
@@ -102,6 +125,7 @@ export function applySdkCaptureModeFlags(
       installed: previous.installed,
       flagPayload,
       floor: previous.mode === 'conflict' ? undefined : previous.floor,
+      hostServesV1: options.hostServesV1,
     }),
   );
 }
@@ -130,20 +154,30 @@ export function sdkCaptureModeFacts(session: {
         ? `${row.legacyMajor}.x`
         : `${row.firstV1Major}.x`;
     if (resolution.reason === 'installed') {
-      const copy = resolution.installed[0];
+      const copy =
+        resolution.installed.find((c) => c.source === resolution.detail) ??
+        resolution.installed[0];
+      const hostWarning =
+        resolution.mode === 'v1' && resolution.host === false
+          ? ' Warning: the PostHog host this run targets does not serve the capture v1 routes, so events from this SDK will not be delivered until the instance is upgraded; say so in the setup report.'
+          : resolution.mode === 'v1' && resolution.host === 'unreachable'
+          ? ' Warning: the wizard could not reach the PostHog host to confirm it serves the capture v1 routes; say so in the setup report.'
+          : '';
       return `PostHog SDK ${row.sdk}: ${copy.version} is already installed (${
         copy.source
       }), the ${line} line (${
         MODE_LABEL[resolution.mode]
       }). Keep it; do not upgrade or downgrade it in this run.${
         resolution.mode === 'v1' ? V1_RULES : ''
-      }`;
+      }${hostWarning}`;
     }
     const why =
       resolution.reason === 'floor'
         ? ` The project does not meet the ${other} floor: ${resolution.detail}. Say so in the setup report; raising it and running the wizard again moves the project to ${other}.`
         : resolution.reason === 'host'
-        ? ` The PostHog host does not serve the capture v1 routes.`
+        ? resolution.detail === 'unreachable'
+          ? ' The wizard could not reach the PostHog host to check for the capture v1 routes, so this run stays on the legacy line.'
+          : ' The PostHog host does not serve the capture v1 routes.'
         : '';
     return `PostHog SDK ${row.sdk}: this run uses the ${line} line (${
       MODE_LABEL[resolution.mode]
