@@ -6,7 +6,7 @@ import {
   useSyncExternalStore,
   type ReactElement,
 } from 'react';
-import { relative } from 'path';
+import { isAbsolute, join, relative } from 'path';
 import type { WizardStore } from '@tui/store';
 import { IntroScreenLayout } from '@tui/screens/IntroScreenLayout';
 import {
@@ -81,7 +81,10 @@ export function McpAnalyticsIntroScreen({
     setBusy(true);
     setError(null);
     try {
-      const resolved = resolveMcpTarget(directory, input);
+      const resolved = resolveMcpTarget(
+        directory,
+        selectionSource === 'manual' ? input : join(directory, input),
+      );
       if (selectionSource === 'manual' && !resolved.entryPoint) {
         store.setFrameworkContext(
           MCP_SCAN_KEY,
@@ -89,7 +92,7 @@ export function McpAnalyticsIntroScreen({
         );
         store.setFrameworkContext(MCP_SCAN_ERROR_KEY, undefined);
         setView(View.Select);
-      } else if (startSetup) {
+      } else if (startSetup && projectPath(resolved.directory) !== undefined) {
         completeTarget(resolved, selectionSource);
       } else {
         setTarget(resolved);
@@ -121,9 +124,18 @@ export function McpAnalyticsIntroScreen({
     const name = scan?.packageNames?.[path];
     return name ? (path === '.' ? name : `${name} (${path})`) : path;
   };
+  const projectPath = (path: string): string | undefined => {
+    const fromScan = relative(directory, path);
+    if (fromScan === '') return '.';
+    return fromScan.startsWith('..') || isAbsolute(fromScan)
+      ? undefined
+      : fromScan;
+  };
   const menuOptions =
-    busy || waiting || view === View.Path
+    busy || view === View.Path
       ? null
+      : waiting
+      ? [{ label: 'Cancel', value: 'cancel' }]
       : view === View.Review
       ? [
           { label: 'Instrument this server', value: 'confirm' },
@@ -141,10 +153,7 @@ export function McpAnalyticsIntroScreen({
           ...(!scanError && !suggestedPath
             ? [
                 {
-                  label:
-                    scan?.discoveryHint === McpDiscoveryHint.Launcher
-                      ? 'Find server source and set up analytics'
-                      : 'Find my server and set up analytics',
+                  label: 'Find my server and set up analytics',
                   value: 'search',
                 },
               ]
@@ -192,15 +201,18 @@ export function McpAnalyticsIntroScreen({
             </>
           ) : view === View.Review && target ? (
             <>
-              <Text>Directory: {target.directory}</Text>
               <Text>
-                Server:{' '}
-                {target.entryPoint
-                  ? relative(target.directory, target.entryPoint)
-                  : 'The agent will resolve this app’s entry points'}
+                Directory: {projectPath(target.directory) ?? target.directory}
               </Text>
+              {target.entryPoint ? (
+                <Text>
+                  Server: {relative(target.directory, target.entryPoint)}
+                </Text>
+              ) : null}
               <Text dimColor>
-                The agent will verify this server before changing its code.
+                {target.entryPoint
+                  ? 'The agent will verify this server before changing its code.'
+                  : 'The agent will find this app’s entry points and verify the server before changing its code.'}
               </Text>
             </>
           ) : view === View.Path ? (

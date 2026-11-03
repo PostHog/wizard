@@ -155,6 +155,37 @@ describe('McpAnalyticsIntroScreen', () => {
     await confirmed();
   });
 
+  it('treats a suggested path named ~ as a directory in the project', async () => {
+    const tilde = join(root, '~');
+    mkdirSync(tilde);
+    writeFileSync(join(tilde, 'package.json'), '{}');
+    await open(['~']);
+    await press(ENTER);
+    await confirmed();
+    expect(target()).toEqual({ directory: tilde });
+  });
+
+  it('reviews a suggested directory by its path in the project', async () => {
+    await open(['server', 'another.ts']);
+    await press(ENTER);
+    await shows('Directory: server');
+    expect(screen.lastFrame()).not.toContain('Server:');
+    expect(store.setupConfirmed).toBe(false);
+  });
+
+  it('offers Cancel while the scan runs', async () => {
+    store = new WizardStore(Program.McpAnalytics);
+    store.launch(buildSession({ installDir: root }));
+    const exit = vi
+      .spyOn(store, 'requestExit')
+      .mockImplementation(() => undefined);
+    screen = render(<McpAnalyticsIntroScreen store={store} />);
+    await shows('Looking for MCP server entry points');
+    await shows('Cancel');
+    await press(DOWN, ENTER);
+    expect(exit).toHaveBeenCalledWith(0);
+  });
+
   it('names application packages and selects their directory', async () => {
     await open(['server'], { packageNames: { server: 'example-tools' } });
     await shows('example-tools (server)');
@@ -171,6 +202,7 @@ describe('McpAnalyticsIntroScreen', () => {
     async (discoveryHint, message) => {
       await open([], { discoveryHint } as Partial<McpPackageSuggestions>);
       await shows(message);
+      await shows('Find my server and set up analytics');
       await press(ENTER);
       await confirmed();
       expect(target()).toEqual({ directory: root, agentSearch: true });
