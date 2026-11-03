@@ -66,6 +66,7 @@ import {
   AgentErrorType,
   REMARK_INSTRUCTION,
   RESUME_INSTRUCTION,
+  abortReason as parseAbortReason,
   policyAbortReason,
 } from './signals';
 import { classifyAuthFailure } from '@shared/errors';
@@ -1400,9 +1401,9 @@ export async function runAgent(
             if (Array.isArray(content)) {
               for (const block of content) {
                 if (block.type === 'text' && typeof block.text === 'string') {
-                  const match = block.text.match(/\[ABORT\]\s*(.+?)(?:\n|$)/);
-                  if (match) {
-                    abortReason = match[1].trim();
+                  const reason = parseAbortReason(block.text);
+                  if (reason) {
+                    abortReason = reason;
                     logToFile(`Agent emitted [ABORT]: ${abortReason}`);
                     abortController.abort();
                     signalDone();

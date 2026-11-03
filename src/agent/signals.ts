@@ -65,6 +65,17 @@ export function policyAbortReason(text: string): string | undefined {
 }
 
 /**
+ * The reason on the first `[ABORT]` line of the text, or undefined when there is
+ * none. Programs match it with anchored regexes, so the markdown, colon, and
+ * trailing period a model may wrap around the line are stripped.
+ */
+export function abortReason(text: string): string | undefined {
+  const match = text.match(/\[ABORT\]:?([^\n]*)/);
+  const reason = match?.[1].replace(/^[\s`*_]+|[\s`*_.]+$/g, '');
+  return reason || undefined;
+}
+
+/**
  * End-of-run reflection ask, shared by both harnesses so remarks are
  * comparable. The format clause comes FIRST and nothing trails the marker —
  * literal models (gpt-5-mini) echo whatever text follows it. The parser also
