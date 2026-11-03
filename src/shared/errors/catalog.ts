@@ -112,6 +112,12 @@ export const ERROR_CATALOG: Record<ErrorCode, ErrorCatalogEntry> = {
     description:
       'The detected framework version is below the supported minimum.',
   },
+  [ErrorCodes.DetectSdkMajorConflict]: {
+    group: 'detect',
+    retry: 'no',
+    description:
+      'The project has copies of a PostHog SDK on different major lines.',
+  },
   [ErrorCodes.DetectUnsupportedPlatform]: {
     group: 'detect',
     retry: 'no',
@@ -226,6 +232,12 @@ export const ERROR_CATALOG: Record<ErrorCode, ErrorCatalogEntry> = {
     group: 'agent',
     retry: 'yes',
     description: 'The orchestrator could not download a needed skill variant.',
+  },
+  [ErrorCodes.AgentSdkMajorMismatch]: {
+    group: 'agent',
+    retry: 'case-by-case',
+    description:
+      'The installed PostHog SDK major does not match the capture mode the run was set up for.',
   },
   [ErrorCodes.AgentOrchestratorTasksFailed]: {
     group: 'agent',

@@ -30,6 +30,10 @@ export {
 export { readInstalledSdks } from './sdk-install';
 export { withSdkInstallInstructions } from './sdk-install-recommendation';
 export {
+  sdkConflictFailure,
+  verifySdkCaptureModes,
+} from './sdk-capture-mode-verify';
+export {
   detectIntegrationProjects,
   scopeInstallDirToProject,
   toIntegrationCandidates,

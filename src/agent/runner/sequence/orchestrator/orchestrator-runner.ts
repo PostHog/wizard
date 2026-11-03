@@ -1354,6 +1354,11 @@ async function executeOrchestrator(
       const terminal = terminalResult(taskResult);
       if (terminal)
         throw new RunTaskFatal(terminal.failure, terminal.outcome, task.type);
+      const verifyFailure = await config.hooks?.verify?.({ task: task.type });
+      if (signal?.aborted) return;
+      if (verifyFailure) {
+        throw new RunTaskFatal(verifyFailure, RunOutcome.Failed, task.type);
+      }
     } finally {
       // Durable skills a task installed are irrelevant to later tasks — and
       // the sdk harness auto-loads .claude/skills into every agent — so sweep

@@ -21,6 +21,7 @@ export const ErrorCodes = {
   DetectBadDirectory: 'PHW_DETECT_BAD_DIRECTORY',
   DetectNoFramework: 'PHW_DETECT_NO_FRAMEWORK',
   DetectUnsupportedVersion: 'PHW_DETECT_UNSUPPORTED_VERSION',
+  DetectSdkMajorConflict: 'PHW_DETECT_SDK_MAJOR_CONFLICT',
   DetectUnsupportedPlatform: 'PHW_DETECT_UNSUPPORTED_PLATFORM',
   DetectNoPosthogSdk: 'PHW_DETECT_NO_POSTHOG_SDK',
   DetectNoProjectFiles: 'PHW_DETECT_NO_PROJECT_FILES',
@@ -44,6 +45,7 @@ export const ErrorCodes = {
   AgentIncompleteTasks: 'PHW_AGENT_INCOMPLETE_TASKS',
   AgentOrchestratorSkillVariantMissing:
     'PHW_AGENT_ORCHESTRATOR_SKILL_VARIANT_MISSING',
+  AgentSdkMajorMismatch: 'PHW_AGENT_SDK_MAJOR_MISMATCH',
   AgentOrchestratorTasksFailed: 'PHW_AGENT_ORCHESTRATOR_TASKS_FAILED',
   AgentOrchestratorTasksBlocked: 'PHW_AGENT_ORCHESTRATOR_TASKS_BLOCKED',
   AgentOrchestratorHollowRun: 'PHW_AGENT_ORCHESTRATOR_HOLLOW_RUN',

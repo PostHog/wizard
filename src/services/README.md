@@ -27,7 +27,7 @@ by its folder, never a file inside one:
 | Entry                           | What it holds                                                                                                                                  |
 | ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
 | `@services/session`             | `SessionStore`, `buildSession`, stored interactions, audit checks and the task stream                                                          |
-| `@services/detection`           | Framework, feature and package-manager detection, the installed PostHog SDK and its capture mode, the agentic project scan and project scoping |
+| `@services/detection`           | Framework, feature and package-manager detection, the installed PostHog SDK, its capture mode and the post-install read-back, the agentic project scan and project scoping |
 | `@services/detection/decisions` | The Decisions service. Only dev builds load it, through an `import()` behind `!IS_PRODUCTION_BUILD`; production builds replace it with a stub  |
 | `@services/frameworks`          | `FRAMEWORK_REGISTRY` and each framework's `FrameworkConfig`                                                                                    |
 | `@services/codebase-scan`       | The codebase scan and its report                                                                                                               |

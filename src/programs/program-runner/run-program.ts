@@ -51,7 +51,9 @@ import {
 import { reportCodebaseScan } from '@services/codebase-scan';
 import {
   sdkCaptureModeFacts,
+  sdkConflictFailure,
   settleSdkCaptureModes,
+  verifySdkCaptureModes,
   withSdkInstallInstructions,
 } from '@services/detection';
 import { IS_PRODUCTION_BUILD } from '@env';
@@ -374,6 +376,9 @@ async function invokeProgram(
       if (signal.aborted) return cancelled();
       if (scoped) scoped.sdkCaptureModes = sdkCaptureModes;
       else store.setSdkCaptureModes(sdkCaptureModes);
+      // Copies on two major lines stop the run here, before its agent edits code.
+      const conflict = sdkConflictFailure({ sdkCaptureModes });
+      if (conflict) return settle(RunOutcome.Failed, conflict);
       if (mayReportScanResults(session())) {
         const properties = sdkCaptureModeProperties(
           sdkCaptureModes,
@@ -699,6 +704,8 @@ function sessionHooks(
           run.buildOutroNextSteps!(session(), creds, completed)
       : undefined,
     recordTaskOutcomes,
+    // The install read-back: the SDK on disk must still be on the line the run was set up for.
+    verify: () => verifySdkCaptureModes(session()),
   };
 }
 

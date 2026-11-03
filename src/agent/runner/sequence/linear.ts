@@ -302,6 +302,12 @@ async function executeLinear(
     });
   }
 
+  if (config.hooks?.verify) {
+    const verifyFailure = await config.hooks.verify({});
+    if (signal?.aborted) return aborted();
+    if (verifyFailure) return failed(verifyFailure);
+  }
+
   if (run.structured) {
     return {
       outcome: RunOutcome.Success,
