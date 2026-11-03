@@ -66,13 +66,13 @@ export function policyAbortReason(text: string): string | undefined {
 
 /**
  * The reason on the first `[ABORT]` line of the text, or undefined when there is
- * none. Programs match it with anchored regexes, so the markdown, colon, and
- * trailing period a model may wrap around the line are stripped.
+ * none. Programs match it with anchored regexes, so the markdown, quotes, colon,
+ * and trailing period a model may wrap around the reason are stripped.
  */
 export function abortReason(text: string): string | undefined {
-  const match = text.match(/\[ABORT\]:?([^\n]*)/);
-  const reason = match?.[1].replace(/^[\s`*_]+|[\s`*_.]+$/g, '');
-  return reason || undefined;
+  const raw = text.match(/\[ABORT\]:?\s*(.+?)(?:\r?\n|$)/)?.[1].trim();
+  if (!raw) return undefined;
+  return raw.replace(/^[\s`*_"']+|[\s`*_"'.]+$/g, '') || raw;
 }
 
 /**
