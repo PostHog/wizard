@@ -5,6 +5,7 @@ import type { ProgramRun } from './program-run';
 import type { Integration } from '@shared/constants';
 import type { FrameworkConfig } from './framework-config';
 import type { CiRunnerContext, RunnerContext } from './runner-context';
+import type { TraitSource } from './project-traits';
 
 /** A question a program may ask the Decisions service; the catalog in `@services/detection/decisions` has exactly these keys. */
 export type DecisionQuestionKey =
@@ -40,6 +41,7 @@ export interface ProgramReadyContext {
   readonly setFrameworkConfig: (
     integration: Integration,
     config: FrameworkConfig,
+    source?: TraitSource,
   ) => void;
   readonly setDetectedFramework: (label: string) => void;
   readonly setSkillId: (skillId: string | null) => void;

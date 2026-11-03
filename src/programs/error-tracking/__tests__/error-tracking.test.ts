@@ -139,6 +139,7 @@ describe('error-tracking ciPreRun', () => {
     const session = {
       installDir: '/tmp/error-tracking-ci',
       frameworkContext: {},
+      projectTraits: {},
     } as unknown as WizardSession;
 
     const stopped = errorTracking.ciPreRun?.(session, testCiRunnerContext());
@@ -157,6 +158,7 @@ describe('error-tracking ciPreRun', () => {
     const session = {
       installDir: '/tmp/error-tracking-ci',
       frameworkContext: {},
+      projectTraits: {},
     } as unknown as WizardSession;
 
     const runner = testCiRunnerContext();
@@ -181,6 +183,7 @@ describe('error-tracking posthog-cli pre-install', () => {
     const session = {
       installDir: '/tmp/error-tracking-ci',
       frameworkContext: {},
+      projectTraits: {},
     } as unknown as WizardSession;
 
     await errorTracking.ciPreRun?.(session, runner);

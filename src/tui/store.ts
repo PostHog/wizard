@@ -52,7 +52,12 @@ import {
   scanCodebaseFor,
   SessionStore,
 } from '@programs';
-import type { PlannedEvent, TaskItem, WizardSession } from '@programs/types';
+import type {
+  PlannedEvent,
+  TaskItem,
+  TraitSource,
+  WizardSession,
+} from '@programs/types';
 import {
   addTokenUsage,
   EMPTY_TOKEN_USAGE,
@@ -553,8 +558,9 @@ export class WizardStore implements TuiView {
   setFrameworkConfig(
     integration: WizardSession['integration'],
     config: WizardSession['frameworkConfig'],
+    source?: TraitSource,
   ): void {
-    this.sessions.setFrameworkConfig(integration, config);
+    this.sessions.setFrameworkConfig(integration, config, source);
   }
 
   setDetectionComplete(): void {

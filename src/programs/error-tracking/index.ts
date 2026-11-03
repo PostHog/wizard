@@ -7,6 +7,7 @@ import {
 import { detectFramework } from '@services/detection';
 import { scopeInstallDirToProject } from '@services/detection';
 import { FRAMEWORK_REGISTRY } from '@services/frameworks';
+import { applyFramework } from '@services/project-traits';
 import type { ProgramRun } from '@programs/program-contract';
 import {
   ERROR_TRACKING_UNSUPPORTED,
@@ -196,8 +197,7 @@ export const config: ProgramConfig = {
     if (ERROR_TRACKING_UNSUPPORTED.has(integration)) {
       abortUnsupportedPlatform(integration);
     }
-    session.integration = integration;
-    analytics.setTag('integration', integration);
+    applyFramework(session, integration);
     session.frameworkConfig = FRAMEWORK_REGISTRY[integration];
     session.skillId = integration;
 

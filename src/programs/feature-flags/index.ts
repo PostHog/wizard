@@ -13,6 +13,7 @@ import { gatherFrameworkContext } from '@services/detection';
 import { noteDetectedFramework } from '@services/detection';
 import { scopeInstallDirToProject } from '@services/detection';
 import { FRAMEWORK_REGISTRY } from '@services/frameworks';
+import { applyFramework } from '@services/project-traits';
 import { ProgramAbort } from '@programs/program-contract';
 import type { ProgramConfig } from '@programs/program-contract';
 import type { ProgramSession } from '@programs/program-contract';
@@ -89,8 +90,7 @@ export const config: ProgramConfig = {
     if (FEATURE_FLAGS_UNSUPPORTED.has(integration)) {
       abortUnsupportedPlatform(integration);
     }
-    session.integration = integration;
-    analytics.setTag('integration', integration);
+    applyFramework(session, integration);
 
     const frameworkConfig = FRAMEWORK_REGISTRY[integration];
     session.frameworkConfig = frameworkConfig;

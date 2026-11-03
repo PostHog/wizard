@@ -136,6 +136,10 @@ export function buildSession(args: SessionArgs): WizardSession {
     warehouseSourcesReported: false,
     codebaseScanReport: null,
     integration: args.integration ?? null,
+    // `--integration` is the person's choice; detection that later finds a framework overwrites it, as `integration`.
+    projectTraits: args.integration
+      ? { framework: { value: args.integration, source: 'user' } }
+      : {},
     frameworkContext: {},
     typescript: false,
     detectedFrameworkLabel: null,

@@ -44,7 +44,11 @@ import {
   type ResolvedProgramCredentials,
 } from './credentials';
 import { reportCodebaseScan } from '@services/codebase-scan';
-import { getProjectTraits, traitsToSkillTags } from '@services/project-traits';
+import {
+  frameworkTraitMismatch,
+  getProjectTraits,
+  traitsToSkillTags,
+} from '@services/project-traits';
 import { IS_PRODUCTION_BUILD } from '@env';
 import type { QuestionKey } from '@services/detection/decisions';
 import { logIn } from './login';
@@ -398,6 +402,19 @@ async function invokeProgram(
           planned.own ? undefined : planned.stepId,
         );
         const current = session();
+        // Every framework write records the trait too; a disagreement means one went around it.
+        const mismatch = frameworkTraitMismatch(current);
+        if (mismatch) {
+          logToFile(
+            `[traits] framework trait ${
+              mismatch.trait ?? 'none'
+            } disagrees with integration ${mismatch.integration ?? 'none'}`,
+          );
+          analytics.wizardCapture('framework trait mismatch', {
+            ...mismatch,
+            program_id: planned.config.id,
+          });
+        }
         const result = await runAgent(
           {
             programId: planned.config.id,

@@ -75,7 +75,8 @@ const FrameworkPicker = ({
         const integration = Array.isArray(value) ? value[0] : value;
         void import('@programs').then(({ FRAMEWORK_REGISTRY }) => {
           const config = FRAMEWORK_REGISTRY[integration];
-          store.setFrameworkConfig(integration, config);
+          // The person picked it, so the framework trait records `user`.
+          store.setFrameworkConfig(integration, config, 'user');
           store.setDetectedFramework(config.metadata.name);
           onComplete?.();
         });

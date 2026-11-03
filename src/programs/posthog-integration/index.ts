@@ -22,6 +22,7 @@ import type {
   RunnerContext,
 } from '@programs/program-contract';
 import { FRAMEWORK_REGISTRY } from '@services/frameworks';
+import { applyFramework } from '@services/project-traits';
 import { abortNoFrameworkDetected } from '../shared/abort-no-framework';
 import {
   SETUP_REPORT_FILE,
@@ -296,8 +297,7 @@ export const config: ProgramConfig = {
     if (!integration) {
       abortNoFrameworkDetected();
     }
-    session.integration = integration;
-    analytics.setTag('integration', integration);
+    applyFramework(session, integration);
 
     const frameworkConfig = FRAMEWORK_REGISTRY[integration];
     session.frameworkConfig = frameworkConfig;

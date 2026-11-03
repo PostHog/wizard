@@ -8,6 +8,7 @@ import type { ApiUser, Credentials } from '@shared/api';
 import type { DiscoveredFeature } from '@shared/discovered-feature';
 import type { ScanConsent } from '@shared/run-state';
 import type { FrameworkConfig } from './framework-config';
+import type { ProjectTraits } from './project-traits';
 import type { OutroData } from '@agent/types';
 
 export interface ProgramSession {
@@ -64,6 +65,8 @@ export interface ProgramSession {
   /** The scan the user agreed to share. Set once per run; the task stream sends it. */
   codebaseScanReport: ScanReport | null;
   integration: Integration | null;
+  /** The run's written traits, each with its source; `integration` mirrors the framework. Read them through `@services/project-traits`. */
+  projectTraits: ProjectTraits;
   frameworkContext: Record<string, unknown>;
   typescript: boolean;
 
