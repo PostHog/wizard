@@ -225,9 +225,7 @@ async function invokeProgram(
       error: error instanceof Error ? error : new Error(message),
     });
   }
-  const blocked =
-    detectionFailure(config, store.session) ??
-    sdkConflictFailure(store.session);
+  const blocked = detectionFailure(config, store.session);
   if (blocked) return settle(RunOutcome.Failed, blocked);
 
   // Started before the run resolves: an audit seeds the ledger from inside its recipe.
@@ -378,6 +376,9 @@ async function invokeProgram(
       if (signal.aborted) return cancelled();
       if (scoped) scoped.sdkCaptureModes = sdkCaptureModes;
       else store.setSdkCaptureModes(sdkCaptureModes);
+      // Copies on two major lines stop the run here, before its agent edits code.
+      const conflict = sdkConflictFailure({ sdkCaptureModes });
+      if (conflict) return settle(RunOutcome.Failed, conflict);
       if (mayReportScanResults(session())) {
         const properties = sdkCaptureModeProperties(
           sdkCaptureModes,
