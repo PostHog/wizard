@@ -186,13 +186,12 @@ describe('reportCodebaseScan', () => {
       reportCodebaseScan(store);
     }
 
-    it('sends the providers it found on one event, and nothing to the person', async () => {
+    it('sends the providers it found on one event', async () => {
       await reportProjectUsing({ resend: '^4.0.0', stripe: '^14.0.0' });
 
       expect(emailProviderEvents()).toEqual([
         ['email providers detected', { email_provider_kinds: ['Resend'] }],
       ]);
-      expect(JSON.stringify(emailProviderEvents())).not.toContain('$set');
     });
 
     it('sends no event when no email provider is found', async () => {

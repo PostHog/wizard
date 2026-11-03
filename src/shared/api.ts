@@ -184,9 +184,14 @@ function isUntrustedCertError(error: unknown): error is AxiosError {
 const RETRY_DELAYS_MS = [500, 1500];
 const USER_DATA_TIMEOUT_MS = 10_000;
 
-/** No response (a network error), 5xx, 408 and 429 can heal on a retry; an untrusted certificate can't. */
+/** No response (a network error), 5xx, 408 and 429 can heal on a retry; an untrusted certificate or a cancelled request can't. */
 function isTransient(error: unknown): boolean {
-  if (!axios.isAxiosError(error) || isUntrustedCertError(error)) return false;
+  if (
+    !axios.isAxiosError(error) ||
+    error.code === AxiosError.ERR_CANCELED ||
+    isUntrustedCertError(error)
+  )
+    return false;
   const status = error.response?.status;
   // A local server that isn't answering won't start in the next two seconds.
   if (status === undefined) return !isLocalHost(error);
@@ -236,6 +241,7 @@ export async function fetchUserData(
   accessToken: string,
   baseUrl: string,
 ): Promise<ApiUser> {
+  const deadline = AbortSignal.timeout(USER_DATA_TIMEOUT_MS);
   try {
     const response = await retryTransient(() =>
       axios.get(`${baseUrl}/api/users/@me/`, {
@@ -243,7 +249,7 @@ export async function fetchUserData(
           Authorization: `Bearer ${accessToken}`,
           'User-Agent': WIZARD_USER_AGENT,
         },
-        timeout: USER_DATA_TIMEOUT_MS,
+        signal: deadline,
       }),
     );
 

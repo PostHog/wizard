@@ -281,4 +281,25 @@ describe('fetchUserData', () => {
       fetchUserData('token', `http://127.0.0.1:${port}`),
     ).rejects.toThrow();
   }, 15_000);
+
+  it('gives up on a remote server that never answers within one deadline, retries included', async () => {
+    const get = vi
+      .spyOn(axios, 'get')
+      .mockImplementation(
+        (_url, requestConfig) =>
+          new Promise((_resolve, reject) =>
+            requestConfig?.signal?.addEventListener?.('abort', () =>
+              reject(new axios.CanceledError()),
+            ),
+          ),
+      );
+    const started = Date.now();
+
+    await expect(
+      fetchUserData('token', 'https://us.posthog.com'),
+    ).rejects.toThrow();
+
+    expect(Date.now() - started).toBeLessThan(11_000);
+    expect(get).toHaveBeenCalledOnce();
+  }, 15_000);
 });
