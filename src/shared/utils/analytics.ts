@@ -300,13 +300,6 @@ export class Analytics {
     });
   }
 
-  setPersonProperties(properties: Record<string, unknown>) {
-    this.client.setPersonProperties({
-      distinctId: this.distinctId ?? this.anonymousId,
-      properties,
-    });
-  }
-
   groupIdentify(
     groupType: string,
     groupKey: string,
