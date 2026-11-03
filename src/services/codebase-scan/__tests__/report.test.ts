@@ -6,7 +6,6 @@ vi.mock(import('@utils/analytics'), () => ({
   analytics: {
     wizardCapture: vi.fn(),
     setTag: vi.fn(),
-    setPersonProperties: vi.fn(),
     captureException: vi.fn(),
     runId: 'run-123',
   } as never,
@@ -166,12 +165,12 @@ describe('reportCodebaseScan', () => {
   });
 
   describe('detected email providers', () => {
-    beforeEach(() => {
-      vi.mocked(analytics.setPersonProperties).mockClear();
-      vi.useFakeTimers({ toFake: ['Date'] });
-      vi.setSystemTime(new Date('2026-10-26T09:30:00.000Z'));
-    });
-    afterEach(() => vi.useRealTimers());
+    const emailProviderEvents = () =>
+      vi
+        .mocked(analytics.wizardCapture)
+        .mock.calls.filter(([event]) => event === 'email providers detected');
+
+    beforeEach(() => vi.mocked(analytics.wizardCapture).mockClear());
 
     async function reportProjectUsing(
       dependencies: Record<string, string>,
@@ -187,22 +186,22 @@ describe('reportCodebaseScan', () => {
       reportCodebaseScan(store);
     }
 
-    it('sets the providers and when they were found on the logged-in person, once', async () => {
+    it('sends the providers it found on one event, and nothing to the person', async () => {
       await reportProjectUsing({ resend: '^4.0.0', stripe: '^14.0.0' });
 
-      expect(analytics.setPersonProperties).toHaveBeenCalledExactlyOnceWith({
-        wizard_detected_email_providers: ['Resend'],
-        wizard_detected_email_provider_at: '2026-10-26T09:30:00.000Z',
-      });
+      expect(emailProviderEvents()).toEqual([
+        ['email providers detected', { email_provider_kinds: ['Resend'] }],
+      ]);
+      expect(JSON.stringify(emailProviderEvents())).not.toContain('$set');
     });
 
-    it('leaves the person alone when no email provider is found', async () => {
+    it('sends no event when no email provider is found', async () => {
       await reportProjectUsing({ stripe: '^14.0.0' });
 
-      expect(analytics.setPersonProperties).not.toHaveBeenCalled();
+      expect(emailProviderEvents()).toEqual([]);
     });
 
-    it('leaves the person alone on a login without a user to set it on', async () => {
+    it('sends no event on a login without a user', async () => {
       fs.writeFileSync(
         path.join(tmpDir, 'package.json'),
         JSON.stringify({ dependencies: { resend: '^4.0.0' } }),
@@ -212,10 +211,10 @@ describe('reportCodebaseScan', () => {
 
       reportCodebaseScan(store);
 
-      expect(analytics.setPersonProperties).not.toHaveBeenCalled();
+      expect(emailProviderEvents()).toEqual([]);
     });
 
-    it('leaves the person alone when the user declines sharing', async () => {
+    it('sends no event when the user declines sharing', async () => {
       fs.writeFileSync(
         path.join(tmpDir, 'package.json'),
         JSON.stringify({ dependencies: { resend: '^4.0.0' } }),
@@ -228,7 +227,7 @@ describe('reportCodebaseScan', () => {
 
       reportCodebaseScan(store);
 
-      expect(analytics.setPersonProperties).not.toHaveBeenCalled();
+      expect(emailProviderEvents()).toEqual([]);
     });
   });
 
