@@ -203,10 +203,10 @@ describe('flat skill commands', () => {
     expect(config.skillId).toBe('revenue-analytics-setup');
   });
 
-  test('transactional-email dispatches with omnibus-send-transactional-email skillId', () => {
+  test('transactional-email dispatches with sending-transactional-emails skillId', () => {
     transactionalEmailCommand.handler!(makeArgv({ debug: true }));
     const [config] = mockRunWizard.mock.calls[0] as [{ skillId?: string }];
-    expect(config.skillId).toBe('omnibus-send-transactional-email');
+    expect(config.skillId).toBe('sending-transactional-emails');
   });
 
   test('mcp-analytics dispatches with mcp-analytics skillId', () => {

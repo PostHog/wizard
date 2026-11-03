@@ -3,7 +3,7 @@ import type { AbortCase } from '@agent/types';
 import { createSkillProgram } from '../shared/skill-program';
 import type { ProgramConfig } from '@programs/program-contract';
 
-const SKILL_ID = 'omnibus-send-transactional-email';
+const SKILL_ID = 'sending-transactional-emails';
 const REPORT_FILE = 'posthog-transactional-email-report.md';
 const DOCS_URL = 'https://posthog.com/docs/workflows/transactional-emails';
 
@@ -37,11 +37,12 @@ export const config: ProgramConfig = {
     integrationLabel: 'transactional-email',
     customPrompt:
       `Set up transactional email in this project with the \`${SKILL_ID}\` ` +
-      'skill: verify a sender, set the project secret API key, and write the ' +
-      'first send. Follow the skill\'s "Inside the PostHog Wizard" section. ' +
-      `Write the final report to ./${REPORT_FILE}: the email the app sends, the ` +
-      'files you changed, the environment variables every deployment needs, ' +
-      'and what the person still has to do.',
+      'skill: a verified sender, a transactional template, the project secret ' +
+      'API key, and the first send. Follow the skill\'s "Inside the PostHog ' +
+      `Wizard" section. Write the final report to ./${REPORT_FILE}: the email ` +
+      'the app sends and its template ID, the files you changed, the ' +
+      'environment variables every deployment needs, and what the person ' +
+      'still has to do.',
     successMessage: `Transactional email is set up. View the report at ./${REPORT_FILE}`,
     reportFile: REPORT_FILE,
     docsUrl: DOCS_URL,
