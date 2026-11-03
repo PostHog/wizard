@@ -120,9 +120,5 @@ export function reportEmailProviderOfferAnswered(
   analytics.wizardCapture('email provider offer answered', {
     providers: providerKinds(offer),
     answer,
-    $set: {
-      wizard_email_offer_answer: answer,
-      wizard_email_offer_answered_at: new Date().toISOString(),
-    },
   });
 }

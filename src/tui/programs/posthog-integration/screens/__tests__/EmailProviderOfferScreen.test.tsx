@@ -27,7 +27,6 @@ vi.mock('@utils/analytics', () => ({
   sessionProperties: vi.fn(() => ({})),
 }));
 
-const ANSWERED_AT = '2026-10-26T11:00:00.000Z';
 const WORKFLOWS_URL =
   'https://us.posthog.com/project/42/workflows?source=wizard_cli';
 const DOWN = '\u001B[B';
@@ -96,28 +95,15 @@ function setup() {
 }
 
 function answeredWith(answer: string) {
-  return [
-    'email provider offer answered',
-    {
-      providers: ['Resend'],
-      answer,
-      $set: {
-        wizard_email_offer_answer: answer,
-        wizard_email_offer_answered_at: ANSWERED_AT,
-      },
-    },
-  ];
+  return ['email provider offer answered', { providers: ['Resend'], answer }];
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.useFakeTimers({ toFake: ['Date'] });
-  vi.setSystemTime(new Date(ANSWERED_AT));
 });
 
 afterEach(() => {
   cleanup();
-  vi.useRealTimers();
 });
 
 describe('the email provider offer after install', () => {
