@@ -400,7 +400,7 @@ exports[`flow traces per program > mcp-analytics (node) 1`] = `
   "events": [
     {
       "event": "screen health-check",
-      "from": "agent-skill-intro",
+      "from": "mcp-analytics-intro",
       "program": "mcp-analytics",
     },
     {
@@ -436,7 +436,7 @@ exports[`flow traces per program > mcp-analytics (node) 1`] = `
   ],
   "program": "mcp-analytics",
   "screens": [
-    "agent-skill-intro",
+    "mcp-analytics-intro",
     "health-check",
     "auth",
     "ai-opt-in",

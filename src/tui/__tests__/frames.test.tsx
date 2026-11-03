@@ -146,6 +146,8 @@ import { AuditScreenId } from '@tui/programs/audit';
 import { ErrorTrackingScreenId } from '@tui/programs/error-tracking';
 import { FeatureFlagsScreenId } from '@tui/programs/feature-flags';
 import { McpScreenId } from '@tui/tools/mcp';
+import { McpAnalyticsScreenId } from '@tui/programs/mcp-analytics';
+import { MCP_SCAN_KEY } from '@programs/mcp-analytics';
 import { MetricsScreenId } from '@tui/programs/metrics';
 import { MigrationScreenId } from '@tui/programs/migration';
 import { PostHogIntegrationScreenId } from '@tui/programs/posthog-integration';
@@ -405,6 +407,18 @@ const FIXTURES: Record<string, Fixture> = {
   [SkillScreenId.Intro]: { program: Program.AgentSkill },
   [AiObservabilityScreenId.Intro]: { program: Program.AiObservability },
   [MetricsScreenId.Intro]: { program: Program.Metrics },
+  [McpAnalyticsScreenId.Intro]: {
+    program: Program.McpAnalytics,
+    arrange: (s) =>
+      s.setFrameworkContext(MCP_SCAN_KEY, {
+        directory: s.session.installDir,
+        candidates: ['apps/reports', 'apps/search'],
+        packageNames: {
+          'apps/reports': 'example-reports',
+          'apps/search': 'example-search',
+        },
+      }),
+  },
   [ErrorTrackingScreenId.Intro]: { program: Program.ErrorTracking },
   [FeatureFlagsScreenId.Intro]: {
     program: Program.FeatureFlags,
