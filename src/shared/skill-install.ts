@@ -84,11 +84,19 @@ export type SkillScanner = (skillDir: string) => Promise<string | null>;
 
 /** How to place a skill and what scans it — `scan` is stated by every caller so none inherits a silent default. */
 export interface SkillInstallOptions {
-  /** The run's SDK capture mode; an entry tagged for the other mode is not found. */
-  captureMode?: SdkCaptureMode;
   /** Base directory override, e.g. `.posthog/skills`. Default `.claude/skills`. */
   skillsRoot?: string;
   scan: SkillScanner;
+}
+
+/** `installSkillById` looks the entry up by id, so it must know the run's mode. */
+export interface InstallSkillByIdOptions extends SkillInstallOptions {
+  /**
+   * The run's SDK capture mode; an entry tagged for the other mode is not
+   * found. Required, with `undefined` spelled out, so a caller cannot forget
+   * it and silently lose every tagged variant.
+   */
+  captureMode: SdkCaptureMode | undefined;
 }
 
 /**
@@ -252,7 +260,7 @@ export async function installSkillById(
   skillId: string,
   installDir: string,
   skillsBaseUrl: string,
-  options: SkillInstallOptions,
+  options: InstallSkillByIdOptions,
 ): Promise<InstallSkillResult> {
   const menu = await fetchSkillMenu(skillsBaseUrl);
   if (!menu) return { kind: 'menu-fetch-failed' };

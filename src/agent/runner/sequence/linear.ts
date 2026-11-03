@@ -76,7 +76,10 @@ async function executeLinear(
       run.skillId,
       input.installDir,
       skillsBaseUrl,
-      { scan: (dir) => scanInstalledSkill(dir, boot.triageProvider) },
+      {
+        scan: (dir) => scanInstalledSkill(dir, boot.triageProvider),
+        captureMode: input.sdkCaptureMode,
+      },
     );
     if (signal?.aborted) return aborted();
     if (installResult.kind !== 'ok') {

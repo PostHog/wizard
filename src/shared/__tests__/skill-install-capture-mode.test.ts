@@ -33,7 +33,19 @@ describe('installSkillById: capture mode', () => {
     await expect(
       installSkillById('integration-python-v1', '/tmp/app', 'https://skills', {
         scan: clean,
+        captureMode: undefined,
       }),
     ).resolves.toEqual(notFound);
+  });
+
+  it('finds the variant tagged for the run mode and goes on to download it', async () => {
+    const result = await installSkillById(
+      'integration-python-v1',
+      '/tmp/app',
+      'https://skills',
+      { scan: clean, captureMode: 'v1' },
+    );
+    // Past the lookup: the only remaining failure is the unreachable download URL.
+    expect(result.kind).toBe('download-failed');
   });
 });

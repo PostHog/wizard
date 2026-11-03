@@ -827,6 +827,7 @@ async function executeOrchestrator(
       {
         skillsRoot: path.join(QUEUE_DIR_NAME, 'reference'),
         scan: (dir) => scanInstalledSkill(dir, boot.triageProvider),
+        captureMode: input.sdkCaptureMode,
       },
     );
     if (signal?.aborted) return cancelledRun();
@@ -1270,6 +1271,7 @@ async function executeOrchestrator(
           {
             skillsRoot: taskSkillsRoot,
             scan: (dir) => scanInstalledSkill(dir, boot.triageProvider),
+            captureMode: input.sdkCaptureMode,
           },
         );
         if (signal?.aborted) return;
