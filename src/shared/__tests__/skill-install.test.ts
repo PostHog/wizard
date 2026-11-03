@@ -393,7 +393,9 @@ describe('downloadSkill (e2e over HTTP)', () => {
           downloadUrl: `${server.baseUrl}/skill.zip`,
         },
         tmpDir,
-        { scan: () => Promise.resolve('Poisoned skill detected: test-rule') },
+        {
+          scan: () => Promise.resolve('Poisoned skill detected: test-rule'),
+        },
       );
 
       expect(result).toEqual({
@@ -433,7 +435,9 @@ describe('downloadSkill (e2e over HTTP)', () => {
           downloadUrl: `${server.baseUrl}/skill.zip`,
         },
         tmpDir,
-        { scan: () => Promise.reject(new Error('WebAssembly.Module()')) },
+        {
+          scan: () => Promise.reject(new Error('WebAssembly.Module()')),
+        },
       );
 
       expect(result.success).toBe(false);

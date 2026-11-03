@@ -6,7 +6,12 @@ import { unzipSync } from 'fflate';
 import { logToFile } from '@utils/debug';
 import { analytics } from '@utils/analytics';
 import { fetchWithRetry, type RetryOpts } from '@shared/fetch-retry';
-import { fetchSkillMenu, type SkillEntry } from '@shared/skill-menu';
+import {
+  fetchSkillMenu,
+  skillEntryMatchesCaptureMode,
+  type SkillEntry,
+} from '@shared/skill-menu';
+import type { SdkCaptureMode } from '@shared/sdk-majors';
 
 /** A bundle's files, keyed by variant short id then path. */
 export type SkillBundle = {
@@ -82,6 +87,16 @@ export interface SkillInstallOptions {
   /** Base directory override, e.g. `.posthog/skills`. Default `.claude/skills`. */
   skillsRoot?: string;
   scan: SkillScanner;
+}
+
+/** `installSkillById` looks the entry up by id, so it must know the run's mode. */
+export interface InstallSkillByIdOptions extends SkillInstallOptions {
+  /**
+   * The run's SDK capture mode; an entry tagged for the other mode is not
+   * found. Required, with `undefined` spelled out, so a caller cannot forget
+   * it and silently lose every tagged variant.
+   */
+  captureMode: SdkCaptureMode | undefined;
 }
 
 /**
@@ -245,14 +260,19 @@ export async function installSkillById(
   skillId: string,
   installDir: string,
   skillsBaseUrl: string,
-  options: SkillInstallOptions,
+  options: InstallSkillByIdOptions,
 ): Promise<InstallSkillResult> {
   const menu = await fetchSkillMenu(skillsBaseUrl);
   if (!menu) return { kind: 'menu-fetch-failed' };
 
+  // An entry for the other capture mode is invisible, the same as in the menu tool.
   const skill = Object.values(menu.categories)
     .flat()
-    .find((s) => s.id === skillId);
+    .find(
+      (s) =>
+        s.id === skillId &&
+        skillEntryMatchesCaptureMode(s, options.captureMode),
+    );
   if (!skill) return { kind: 'skill-not-found', skillId };
 
   const result = await downloadSkill(skill, installDir, options);

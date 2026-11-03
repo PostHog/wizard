@@ -27,7 +27,10 @@ import {
 } from '@shared/health-checks/readiness';
 import { OutroKind } from '@shared/outro';
 import { mayReportScanResults, RunPhase } from '@shared/run-state';
-import { sdkCaptureModeProperties } from '@shared/sdk-capture-mode';
+import {
+  runSdkCaptureMode,
+  sdkCaptureModeProperties,
+} from '@shared/sdk-capture-mode';
 import {
   configureOAuthSession,
   currentCredentials,
@@ -475,6 +478,10 @@ async function invokeProgram(
             skillId: agentRun.skillId ?? agentRun.integrationLabel,
             integration: current.integration,
             frameworkDocsUrl: frameworkDocsUrl(current),
+            sdkCaptureMode: runSdkCaptureMode(
+              current.sdkCaptureModes,
+              current.integration,
+            ),
             flags: runFlags(current),
             host: {
               projectId: current.projectId,

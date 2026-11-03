@@ -70,7 +70,12 @@ import {
   WIZARD_ASK_SUBJECT_DESCRIPTION,
   WIZARD_ASK_TOOL_DESCRIPTION,
 } from './tools';
-import { fetchSkillMenu, type SkillEntry } from '@shared/skill-menu';
+import {
+  fetchSkillMenu,
+  filterSkillEntriesByCaptureMode,
+  type SkillEntry,
+} from '@shared/skill-menu';
+import type { SdkCaptureMode } from '@shared/sdk-majors';
 
 const auditCheckSchema = z.object({
   id: z.string().min(1),
@@ -110,6 +115,9 @@ export interface WizardToolsOptions {
 
   /** Framework-specific package manager detector */
   detectPackageManager: PackageManagerDetector;
+
+  /** The run's SDK capture mode; `load_skill_menu` and `install_skill` hide variants tagged for the other mode. */
+  sdkCaptureMode?: SdkCaptureMode;
 
   /** Primary skills origin (e.g. http://localhost:8765 or the GitHub Releases URL); downloads fail over to the AWS mirror */
   skillsBaseUrl: string;
@@ -173,6 +181,7 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
   const {
     workingDirectory,
     detectPackageManager,
+    sdkCaptureMode,
     skillsBaseUrl,
     askBridge,
     askMaxQuestions = DEFAULT_ASK_MAX_QUESTIONS,
@@ -383,8 +392,11 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
       category: z.enum(categoryNames).describe('Skill category'),
     },
     (args: { category: string }) => {
-      const skills = cachedSkillMenu[args.category];
-      if (!skills || skills.length === 0) {
+      const skills = filterSkillEntriesByCaptureMode(
+        cachedSkillMenu[args.category] ?? [],
+        sdkCaptureMode,
+      );
+      if (skills.length === 0) {
         return {
           content: [
             {
@@ -434,7 +446,10 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
       }
 
       // Look up download URL from cached menu
-      const allSkills: SkillEntry[] = Object.values(cachedSkillMenu).flat();
+      const allSkills: SkillEntry[] = filterSkillEntriesByCaptureMode(
+        Object.values(cachedSkillMenu).flat(),
+        sdkCaptureMode,
+      );
       const skill = allSkills.find((s) => s.id === args.skillId);
       if (!skill) {
         return {

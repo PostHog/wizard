@@ -544,6 +544,7 @@ export const piBackend: AgentHarness = {
           programId: boot.programId,
           handoffNotebook: boot.handoffNotebook,
           detectPackageManager: config.detectPackageManager,
+          sdkCaptureMode: input.sdkCaptureMode,
           // The host ask bridge — lets interactive programs (self-driving) ask
           // the user through pi. Threaded from the runner, same path as the
           // anthropic harness. Absent in CI → the tool errors on call.

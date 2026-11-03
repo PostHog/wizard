@@ -278,3 +278,12 @@ export function sdkCaptureModeProperties(
     sdk_capture_modes: summarizeSdkCaptureModes(resolutions),
   };
 }
+
+/** The capture mode a run selects skills by: its main SDK's mode, or none when nothing resolved or it is a conflict. */
+export function runSdkCaptureMode(
+  resolutions: readonly SdkCaptureModeResolution[],
+  integration: Integration | null | undefined,
+): SdkCaptureMode | undefined {
+  const primary = primarySdkCaptureMode(resolutions, integration);
+  return primary && primary.mode !== 'conflict' ? primary.mode : undefined;
+}

@@ -40,7 +40,8 @@ Modules callers reach most:
   `fetchWithRetry(url, { fetchImpl?, sleepImpl?, maxAttempts? })`, one retry and
   failover policy for every critical-path fetch.
 - `@shared/skill-menu`: `fetchSkillMenu(skillsBaseUrl, retryOpts?)` returns the
-  parsed `SkillMenu` or `null`; `expandBundleEntry`, `SkillEntry`, `CliEntry`.
+  parsed `SkillMenu` or `null`; `expandBundleEntry`,
+  `filterSkillEntriesByCaptureMode`, `SkillEntry`, `CliEntry`.
 - `@shared/skill-install`: `downloadSkill(entry, installDir, options?)` and
   `installSkillById(skillId, installDir, skillsBaseUrl, options?)` install a
   skill into a project; `InstallSkillResult`, `isSkillInstallCommand`.

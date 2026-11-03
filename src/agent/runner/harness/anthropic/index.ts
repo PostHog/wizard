@@ -57,6 +57,7 @@ export const anthropicBackend: AgentHarness = {
         additionalMcpServers: config.additionalMcpServers,
         detectPackageManager:
           config.detectPackageManager ?? detectNodePackageManagers,
+        sdkCaptureMode: input.sdkCaptureMode,
         skillsBaseUrl,
         wizardFlags,
         wizardMetadata,
@@ -146,6 +147,7 @@ export const anthropicBackend: AgentHarness = {
         currentPosthogApiKey: () => currentAccessToken(boot.credentials),
         host: boot.credentials.host,
         detectPackageManager: detectNodePackageManagers,
+        sdkCaptureMode: input.sdkCaptureMode,
         skillsBaseUrl: boot.skillsBaseUrl,
         programId: boot.programId,
         handoffNotebook: boot.handoffNotebook,

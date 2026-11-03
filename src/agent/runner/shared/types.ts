@@ -8,6 +8,7 @@
  * hands over plain data.
  */
 
+import type { SdkCaptureMode } from '@shared/sdk-majors';
 import type { CloudRegion } from '@utils/types';
 import type { Credentials } from '@shared/api';
 import type { AuthErrorDetail, OutroData, TaskNotice } from '../../progress';
@@ -253,6 +254,8 @@ export interface RunInput {
   integration?: Integration | null;
   /** Docs page for the detected framework, for the orchestrator's preflight message. */
   frameworkDocsUrl?: string;
+  /** The SDK capture mode the run resolved; skill variants tagged for the other mode stay out of reach. */
+  sdkCaptureMode?: SdkCaptureMode;
   flags: RunFlags;
   /** Where PostHog is, as the CLI was told. */
   host: {

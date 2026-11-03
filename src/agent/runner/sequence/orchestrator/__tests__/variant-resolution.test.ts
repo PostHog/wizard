@@ -208,3 +208,93 @@ describe('expandBundleEntry — a bundle entry stands in for its variants', () =
     expect(expandBundleEntry(zipEntry)).toEqual([zipEntry]);
   });
 });
+
+describe('resolveSkillVariantId: capture mode', () => {
+  const entries: SkillEntry[] = [
+    {
+      id: 'integration-python',
+      name: 'Python',
+      downloadUrl: 'u',
+      group: 'integration',
+      framework: 'python',
+    },
+    {
+      id: 'integration-python-v1',
+      name: 'Python',
+      downloadUrl: 'u',
+      group: 'integration',
+      framework: 'python',
+      captureMode: 'v1',
+    },
+    {
+      id: 'integration-v2-install-python',
+      name: 'Install',
+      downloadUrl: 'u',
+      group: 'integration-v2-install',
+      framework: 'python',
+      captureMode: 'legacy',
+    },
+    {
+      id: 'integration-v2-install-python-v1',
+      name: 'Install',
+      downloadUrl: 'u',
+      group: 'integration-v2-install',
+      framework: 'python',
+      captureMode: 'v1',
+      default: true,
+    },
+    {
+      id: 'integration-v2-init-python',
+      name: 'Init',
+      downloadUrl: 'u',
+      group: 'integration-v2-init',
+      framework: 'python',
+    },
+  ];
+
+  it('prefers the variant tagged for the run mode over an untagged one', () => {
+    expect(resolveSkillVariantId(entries, 'integration', 'python', 'v1')).toBe(
+      'integration-python-v1',
+    );
+    expect(
+      resolveSkillVariantId(entries, 'integration', 'python', 'legacy'),
+    ).toBe('integration-python');
+  });
+
+  it('never returns a variant tagged for the other mode, by family or by exact id', () => {
+    expect(
+      resolveSkillVariantId(
+        entries,
+        'integration-v2-install',
+        'python',
+        'legacy',
+      ),
+    ).toBe('integration-v2-install-python');
+    expect(
+      resolveSkillVariantId(
+        entries,
+        'integration-v2-install-python-v1',
+        'python',
+        'legacy',
+      ),
+    ).toBeUndefined();
+    expect(
+      resolveSkillVariantId(entries, 'integration-v2-install', 'python', 'v1'),
+    ).toBe('integration-v2-install-python-v1');
+  });
+
+  it('serves an untagged family to either mode', () => {
+    expect(
+      resolveSkillVariantId(entries, 'integration-v2-init', 'python', 'v1'),
+    ).toBe('integration-v2-init-python');
+  });
+
+  it("reads no mode as legacy, so today's menus resolve as before", () => {
+    expect(resolveSkillVariantId(entries, 'integration', 'python')).toBe(
+      'integration-python',
+    );
+    expect(
+      resolveSkillVariantId(entries, 'integration-v2-install', 'python'),
+    ).toBe('integration-v2-install-python');
+  });
+});

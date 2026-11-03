@@ -52,7 +52,11 @@ import {
   WIZARD_ASK_SUBJECT_DESCRIPTION,
   WIZARD_ASK_TOOL_DESCRIPTION,
 } from '../../../tools/tools';
-import { fetchSkillMenu } from '@shared/skill-menu';
+import {
+  fetchSkillMenu,
+  filterSkillEntriesByCaptureMode,
+} from '@shared/skill-menu';
+import type { SdkCaptureMode } from '@shared/sdk-majors';
 import { installSkillById } from '@shared/skill-install';
 import type { LLMProvider } from '@posthog/warlock';
 import { scanInstalledSkill } from '../../../yara-hooks';
@@ -92,6 +96,8 @@ export interface PiToolsContext {
   skillsBaseUrl: string;
   /** Framework's package-manager detector. Defaults to Node detection. */
   detectPackageManager?: PackageManagerDetector;
+  /** The run's SDK capture mode; the skill tools hide variants tagged for the other mode. */
+  sdkCaptureMode?: SdkCaptureMode;
   /** Drives the `wizard_ask` overlay. Omitted in CI → the tool errors on call. */
   askBridge?: WizardAskBridge;
   /** Per-run cap on wizard_ask calls. Defaults to {@link DEFAULT_ASK_MAX_QUESTIONS}. */
@@ -151,7 +157,10 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
     async execute(_id, args) {
       const menu = await getSkillMenu();
       if (!menu) return text('Error: could not load the skill menu.');
-      const skills = menu.categories[args.category] ?? [];
+      const skills = filterSkillEntriesByCaptureMode(
+        menu.categories[args.category] ?? [],
+        ctx.sdkCaptureMode,
+      );
       if (skills.length === 0) {
         return text(`No skills found for category "${args.category}".`);
       }
@@ -175,7 +184,10 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
         args.skillId,
         workingDirectory,
         skillsBaseUrl,
-        { scan: (dir) => scanInstalledSkill(dir, triageProvider) },
+        {
+          scan: (dir) => scanInstalledSkill(dir, triageProvider),
+          captureMode: ctx.sdkCaptureMode,
+        },
       );
       if (result.kind !== 'ok') {
         logToFile(`[pi] install_skill ${args.skillId}: ${result.kind}`);
