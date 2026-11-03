@@ -9,7 +9,7 @@ import type {
 import type { Credentials } from '@shared/api';
 import { OutroKind, type OutroData } from '@shared/outro';
 import { join, relative } from 'path';
-import { McpDiscoveryHint } from './packages';
+import { McpDiscoveryHint } from '@services/mcp-servers';
 import {
   MCP_SCAN_ERROR_KEY,
   MCP_SCAN_KEY,
@@ -260,13 +260,16 @@ export const config: ProgramConfig = {
     }),
 };
 
-export { McpDiscoveryHint, type McpPackageSuggestions } from './packages';
+export {
+  McpDiscoveryHint,
+  type McpPackageSuggestions,
+} from '@services/mcp-servers';
 export {
   findMcpServers,
   resolveMcpTarget,
   type McpServerScan,
   type McpTarget,
-} from './detect';
+} from '@services/mcp-servers';
 export {
   MCP_SCAN_ERROR_KEY,
   MCP_SCAN_KEY,

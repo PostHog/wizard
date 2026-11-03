@@ -88,54 +88,38 @@ describe('detectMcpServer', () => {
     fs.mkdirSync(path.dirname(path.join(tmpDir, file)), { recursive: true });
     fs.writeFileSync(path.join(tmpDir, file), content);
   };
-  const dependsOn = (dependencies: Record<string, string>) =>
-    JSON.stringify({ dependencies });
-
-  it.each([
-    ['package.json', dependsOn({ '@modelcontextprotocol/sdk': '^1.20.0' })],
-    ['package.json', dependsOn({ '@modelcontextprotocol/server': '^2.0.0' })],
-    ['package.json', dependsOn({ fastmcp: '^3.0.0' })],
-    ['package.json', dependsOn({ '@mastra/mcp': '^0.10.0' })],
-    ['package.json', dependsOn({ 'mcp-handler': '^1.0.0' })],
-    ['pyproject.toml', '[project]\ndependencies = ["mcp[cli]>=1.26"]'],
-    ['pyproject.toml', '[tool.poetry.dependencies]\nmcp = "^1.26"'],
-    ['requirements.txt', 'fastmcp==2.3.0'],
-    [
-      'go.mod',
-      'module x\n\nrequire github.com/modelcontextprotocol/go-sdk v1.6.1',
-    ],
-    ['Gemfile', 'gem "mcp", "~> 1.8"'],
-    ['Cargo.toml', '[dependencies]\nrmcp = { version = "3.8" }'],
-    ['apps/server/pyproject.toml', 'dependencies = ["mcp>=2"]'],
-  ])('reports true for an MCP server SDK in %s: %s', (file, content) => {
-    write(file, content);
-    detectMcpServer({ setMcpServerDetected }, tmpDir);
-    expect(setMcpServerDetected).toHaveBeenCalledWith(true);
-  });
 
   it.each([
     [
-      'package.json',
-      JSON.stringify({
-        devDependencies: { '@modelcontextprotocol/sdk': '^1.20.0' },
-      }),
+      'a TypeScript server',
+      'src/index.ts',
+      "import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'; new McpServer({});",
+      true,
     ],
-    ['package.json', dependsOn({ react: '^19.0.0' })],
-    ['pyproject.toml', '[project]\nname = "mcp"\ndependencies = ["httpx"]'],
-    ['requirements.txt', 'mcp-proxy==0.8.0'],
-    ['go.mod', 'module x\n\nrequire github.com/mark3labs/mcp-go v0.30.0'],
-    ['Gemfile', 'gem "mcp_client"'],
-    ['Cargo.toml', '[dependencies]\nrmcp-macros = "3.8"'],
-  ])('reports false for %s without an MCP server SDK: %s', (file, content) => {
-    write(file, content);
-    detectMcpServer({ setMcpServerDetected }, tmpDir);
-    expect(setMcpServerDetected).toHaveBeenCalledWith(false);
-  });
+    [
+      'a Python server',
+      'server.py',
+      'from mcp.server.fastmcp import FastMCP\nmcp = FastMCP("x")',
+      true,
+    ],
+    [
+      'a TypeScript MCP client',
+      'src/agent.ts',
+      "import { Client } from '@modelcontextprotocol/sdk/client/index.js'; new Client({});",
+      false,
+    ],
+    ['no MCP code', 'src/index.ts', 'export const x = 1;', false],
+  ])(
+    'reports whether %s is a server',
+    async (_project, file, source, expected) => {
+      write(file, source);
+      await detectMcpServer({ setMcpServerDetected }, tmpDir);
+      expect(setMcpServerDetected).toHaveBeenCalledWith(expected);
+    },
+  );
 
-  it('does not throw and reports false for an invalid install dir', () => {
-    expect(() =>
-      detectMcpServer({ setMcpServerDetected }, '/nonexistent/path'),
-    ).not.toThrow();
+  it('reports false for an invalid install dir', async () => {
+    await detectMcpServer({ setMcpServerDetected }, '/nonexistent/path');
     expect(setMcpServerDetected).toHaveBeenCalledWith(false);
   });
 });

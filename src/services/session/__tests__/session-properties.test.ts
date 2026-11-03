@@ -4,30 +4,29 @@ import { DiscoveredFeature } from '@shared/discovered-feature';
 import { ScanConsent } from '@shared/run-state';
 import { buildSession } from '../wizard-session';
 
-describe('sessionProperties: the SDK verdict', () => {
-  it('includes the posthog_sdk_detected verdict once sharing is granted', () => {
+describe.each([
+  ['posthog_sdk_detected', 'posthogSdkDetected'],
+  ['mcp_server_detected', 'mcpServerDetected'],
+] as const)('sessionProperties: the %s verdict', (property, field) => {
+  it('includes the verdict once sharing is granted', () => {
     const session = buildSession({});
     session.scanConsent = ScanConsent.Granted;
-    expect(sessionProperties(session).posthog_sdk_detected).toBe(false);
+    expect(sessionProperties(session)[property]).toBe(false);
 
-    session.posthogSdkDetected = true;
-    expect(sessionProperties(session).posthog_sdk_detected).toBe(true);
+    session[field] = true;
+    expect(sessionProperties(session)[property]).toBe(true);
   });
 
-  // It is a package.json scan result, so it waits on the same consent.
+  // It is a scan result, so it waits on the same consent.
   it('omits the verdict while consent is undecided or declined', () => {
     const session = buildSession({});
-    session.posthogSdkDetected = true;
+    session[field] = true;
 
     expect(session.scanConsent).toBe(ScanConsent.Undecided);
-    expect(sessionProperties(session)).not.toHaveProperty(
-      'posthog_sdk_detected',
-    );
+    expect(sessionProperties(session)).not.toHaveProperty(property);
 
     session.scanConsent = ScanConsent.Declined;
-    expect(sessionProperties(session)).not.toHaveProperty(
-      'posthog_sdk_detected',
-    );
+    expect(sessionProperties(session)).not.toHaveProperty(property);
   });
 });
 
