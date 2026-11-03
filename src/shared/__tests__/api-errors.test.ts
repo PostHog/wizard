@@ -83,6 +83,21 @@ describe('retryTransient', () => {
     expect(request).toHaveBeenCalledTimes(1);
   });
 
+  it('stops waiting to retry when its deadline passes', async () => {
+    const deadline = new AbortController();
+    const failure = httpError(503);
+    const request = vi.fn().mockRejectedValue(failure);
+    setTimeout(() => deadline.abort(), 50);
+    const started = Date.now();
+
+    await expect(
+      retryTransient(request, undefined, deadline.signal),
+    ).rejects.toBe(failure);
+
+    expect(Date.now() - started).toBeLessThan(400);
+    expect(request).toHaveBeenCalledOnce();
+  });
+
   it('does not retry an untrusted certificate', async () => {
     const request = vi
       .fn()
@@ -280,5 +295,26 @@ describe('fetchUserData', () => {
     await expect(
       fetchUserData('token', `http://127.0.0.1:${port}`),
     ).rejects.toThrow();
+  }, 15_000);
+
+  it('gives up on a remote server that never answers within one deadline, retries included', async () => {
+    const get = vi
+      .spyOn(axios, 'get')
+      .mockImplementation(
+        (_url, requestConfig) =>
+          new Promise((_resolve, reject) =>
+            requestConfig?.signal?.addEventListener?.('abort', () =>
+              reject(new axios.CanceledError()),
+            ),
+          ),
+      );
+    const started = Date.now();
+
+    await expect(
+      fetchUserData('token', 'https://us.posthog.com'),
+    ).rejects.toThrow();
+
+    expect(Date.now() - started).toBeLessThan(11_000);
+    expect(get).toHaveBeenCalledOnce();
   }, 15_000);
 });
