@@ -1,5 +1,6 @@
 /** Run lifecycle and consent states the TUI, the CLI and programs share. */
 
+import type { SdkCaptureModeResolution } from './sdk-capture-mode';
 import type { DiscoveredFeature } from './discovered-feature';
 
 /** How an agent run ended: the agent decides it, and the programs and hosts read it. */
@@ -50,6 +51,14 @@ export function reportableDiscoveredFeatures(session: {
   discoveredFeatures: DiscoveredFeature[];
 }): DiscoveredFeature[] | undefined {
   return mayReportScanResults(session) ? session.discoveredFeatures : undefined;
+}
+
+/** Resolved from the project's dependency files, so it waits on the same consent. */
+export function reportableSdkCaptureModes(session: {
+  scanConsent: ScanConsent;
+  sdkCaptureModes: readonly SdkCaptureModeResolution[];
+}): readonly SdkCaptureModeResolution[] | undefined {
+  return mayReportScanResults(session) ? session.sdkCaptureModes : undefined;
 }
 
 /** Also a scan result, so it travels under the same consent as the rest. */

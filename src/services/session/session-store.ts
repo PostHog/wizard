@@ -9,6 +9,7 @@
  * changes.
  */
 
+import type { SdkCaptureModeResolution } from '@shared/sdk-capture-mode';
 import { atom, map, type MapStore } from 'nanostores';
 import type {
   AgentProgress,
@@ -294,6 +295,10 @@ export class SessionStore {
     this.set('posthogSdkDetected', detected);
   }
 
+  setSdkCaptureModes(modes: readonly SdkCaptureModeResolution[]): void {
+    this.set('sdkCaptureModes', [...modes]);
+  }
+
   setSkillId(skillId: string | null): void {
     this.set('skillId', skillId);
   }
@@ -553,6 +558,7 @@ export class SessionStore {
         ),
       setDetectedFramework: (l) => this.setDetectedFramework(l),
       setPosthogSdkDetected: (d) => this.setPosthogSdkDetected(d),
+      setSdkCaptureModes: (m) => this.setSdkCaptureModes(m),
       setSkillId: (id) => this.setSkillId(id),
       setUnsupportedVersion: (info) =>
         this.setUnsupportedVersion(

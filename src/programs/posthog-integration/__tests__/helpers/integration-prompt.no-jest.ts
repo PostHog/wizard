@@ -47,7 +47,10 @@ export async function resolveRun(session: WizardSession) {
   return run(session, testRunnerContext(session));
 }
 
-export const promptFor = async (sources: DetectedSource[]) => {
+export const promptFor = async (
+  sources: DetectedSource[],
+  facts: readonly string[] = [],
+) => {
   const s = sessionWith(sources);
   const runDef = await resolveRun(s);
   return runDef.customPrompt!({
@@ -55,5 +58,6 @@ export const promptFor = async (sources: DetectedSource[]) => {
     projectApiKey: 'phc_test',
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     host: CREDENTIALS.host as any,
+    facts,
   });
 };

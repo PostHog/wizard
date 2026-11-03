@@ -16,6 +16,7 @@ import {
   SDK_MAJORS,
   getSdkMajorRow,
   isSdkId,
+  sdkRowsForIntegration,
   majorForMode,
   modeForInstalledMajor,
   type SdkCaptureMode,
@@ -221,5 +222,59 @@ function resolveFromInstalled(
     reason: 'installed',
     detail: highest.source,
     installed,
+  };
+}
+
+/**
+ * The run's main SDK among the resolutions: the integration's primary row,
+ * else the first. A server-rendered web framework has no primary row (its
+ * posthog-js stays outside the table), so its only secondary row, posthog-node,
+ * is the run's SDK for skill selection and telemetry.
+ */
+export function primarySdkCaptureMode(
+  resolutions: readonly SdkCaptureModeResolution[],
+  integration: Integration | null | undefined,
+): SdkCaptureModeResolution | undefined {
+  if (resolutions.length === 0) return undefined;
+  const primary =
+    integration == null
+      ? undefined
+      : sdkRowsForIntegration(integration).primary;
+  return (
+    resolutions.find((resolution) => resolution.sdk === primary?.sdk) ??
+    resolutions[0]
+  );
+}
+
+/** One line per resolution for telemetry: `posthog-node:legacy:5:not-released`. */
+export function summarizeSdkCaptureModes(
+  resolutions: readonly SdkCaptureModeResolution[],
+): string[] {
+  return resolutions.map((resolution) =>
+    resolution.mode === 'conflict'
+      ? `${resolution.sdk}:conflict`
+      : `${resolution.sdk}:${resolution.mode}:${resolution.major}:${resolution.reason}`,
+  );
+}
+
+/**
+ * The analytics properties for a run's SDK capture modes: the main SDK's mode,
+ * major and reason as flat keys, and every resolution as a summary list. Empty
+ * when nothing was resolved, so the keys are absent rather than null.
+ */
+export function sdkCaptureModeProperties(
+  resolutions: readonly SdkCaptureModeResolution[],
+  integration: Integration | null | undefined,
+): Record<string, string | number | string[]> {
+  const primary = primarySdkCaptureMode(resolutions, integration);
+  if (!primary) return {};
+  return {
+    sdk_id: primary.sdk,
+    sdk_capture_mode: primary.mode,
+    sdk_mode_reason: primary.reason,
+    ...(primary.mode === 'conflict'
+      ? {}
+      : { sdk_resolved_major: primary.major }),
+    sdk_capture_modes: summarizeSdkCaptureModes(resolutions),
   };
 }

@@ -8,10 +8,15 @@ import {
 import {
   reportableDiscoveredFeatures,
   reportablePosthogSdkDetected,
+  reportableSdkCaptureModes,
   type RunPhase,
   type ScanConsent,
 } from '@shared/run-state';
 import type { DiscoveredFeature } from '@shared/discovered-feature';
+import {
+  sdkCaptureModeProperties,
+  type SdkCaptureModeResolution,
+} from '@shared/sdk-capture-mode';
 import type { Integration } from '@shared/constants';
 import type { ApiUser } from '@shared/api';
 import { v4 as uuidv4 } from 'uuid';
@@ -50,6 +55,7 @@ export type SessionFacts = {
   scanConsent: ScanConsent;
   runPhase: RunPhase;
   posthogSdkDetected: boolean;
+  sdkCaptureModes: readonly SdkCaptureModeResolution[];
 };
 
 /**
@@ -65,6 +71,7 @@ export function sessionProperties(
   // would read as "we looked and found nothing" instead of "not reported".
   const discoveredFeatures = reportableDiscoveredFeatures(session);
   const posthogSdkDetected = reportablePosthogSdkDetected(session);
+  const sdkCaptureModes = reportableSdkCaptureModes(session);
 
   return {
     integration: session.integration,
@@ -81,6 +88,9 @@ export function sessionProperties(
     run_phase: session.runPhase,
     ...(posthogSdkDetected !== undefined
       ? { posthog_sdk_detected: posthogSdkDetected }
+      : {}),
+    ...(sdkCaptureModes !== undefined
+      ? sdkCaptureModeProperties(sdkCaptureModes, session.integration)
       : {}),
   };
 }

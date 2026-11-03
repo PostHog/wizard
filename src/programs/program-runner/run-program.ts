@@ -26,7 +26,8 @@ import {
   WizardReadiness,
 } from '@shared/health-checks/readiness';
 import { OutroKind } from '@shared/outro';
-import { RunPhase } from '@shared/run-state';
+import { mayReportScanResults, RunPhase } from '@shared/run-state';
+import { sdkCaptureModeProperties } from '@shared/sdk-capture-mode';
 import {
   configureOAuthSession,
   currentCredentials,
@@ -44,6 +45,10 @@ import {
   type ResolvedProgramCredentials,
 } from './credentials';
 import { reportCodebaseScan } from '@services/codebase-scan';
+import {
+  sdkCaptureModeFacts,
+  settleSdkCaptureModes,
+} from '@services/detection';
 import { IS_PRODUCTION_BUILD } from '@env';
 import type { QuestionKey } from '@services/detection/decisions';
 import { logIn } from './login';
@@ -358,6 +363,21 @@ async function invokeProgram(
         store.setDetectedFramework(scoped.detectedFrameworkLabel);
       }
       const session = (): WizardSession => scoped ?? store.session;
+      // Each run settles the SDK capture modes for its own directory and
+      // integration: a composed or scoped run has none from detection.
+      const sdkCaptureModes = await settleSdkCaptureModes(session(), flags);
+      if (signal.aborted) return cancelled();
+      if (scoped) scoped.sdkCaptureModes = sdkCaptureModes;
+      else store.setSdkCaptureModes(sdkCaptureModes);
+      if (mayReportScanResults(session())) {
+        const properties = sdkCaptureModeProperties(
+          sdkCaptureModes,
+          session().integration,
+        );
+        for (const [key, value] of Object.entries(properties)) {
+          analytics.setTag(key, Array.isArray(value) ? value.join(',') : value);
+        }
+      }
       const runDir = session().installDir;
       const agentRun =
         ownRun ?? (await resolveRun(planned.config, store, runner, scoped));
@@ -366,6 +386,9 @@ async function invokeProgram(
           integration: agentRun.integrationLabel,
           program_id: planned.config.id,
           skill_id: agentRun.skillId ?? null,
+          ...(mayReportScanResults(session())
+            ? sdkCaptureModeProperties(sdkCaptureModes, session().integration)
+            : {}),
         });
       }
 
@@ -423,14 +446,15 @@ async function invokeProgram(
             seedTasks: planned.config.seedTasks
               ? () => planned.config.seedTasks!(session())
               : undefined,
-            projectFacts:
-              decisions && planned.config.decisions
-                ? () =>
-                    decisions.questionFacts(
-                      session(),
-                      planned.config.decisions ?? [],
-                    )
-                : undefined,
+            projectFacts: () => [
+              ...sdkCaptureModeFacts(session()),
+              ...(decisions && planned.config.decisions
+                ? decisions.questionFacts(
+                    session(),
+                    planned.config.decisions ?? [],
+                  )
+                : []),
+            ],
             hooks: sessionHooks(agentRun, session, (outcomes) => {
               if (scoped) scoped.frameworkContext[TASK_OUTCOMES_KEY] = outcomes;
               else store.setFrameworkContext(TASK_OUTCOMES_KEY, outcomes);
