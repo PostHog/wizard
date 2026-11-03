@@ -416,6 +416,8 @@ export class Analytics {
       properties: {
         // Flat for filtering; the nested `tags` snapshot stays for back-compat.
         ...this.tags,
+        // The run's wizard flags, so an outcome can be split by flag variant.
+        ...this.wizardFlagFeatureProperties(),
         run_id: this._runId,
         ...(this.sessionId ? { $session_id: this.sessionId } : {}),
         status,

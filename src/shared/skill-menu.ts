@@ -5,6 +5,7 @@
  * one fetch, so it lives in shared and depends on nothing in the agent.
  */
 
+import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
 import { fetchWithRetry, type RetryOpts } from '@shared/fetch-retry';
 
@@ -20,8 +21,24 @@ export type SkillEntry = {
   default?: boolean;
   /** This entry's download is a bundle JSON of every variant, not a single skill's zip. */
   bundle?: boolean;
+  /** Human name for the skill; menus older than the criteria resolver omit it. */
+  title?: string;
+  /** What the skill covers, for an agent choosing from a narrowed menu. */
+  description?: string;
+  /** Tags the criteria resolver matches; see `@shared/skill-resolution`. */
+  tags?: string[];
   /** Menu-only: the variants inside a bundle, expanded into entries of their own on fetch. */
-  variants?: { id: string; framework?: string; default?: boolean }[];
+  variants?: SkillVariant[];
+};
+
+/** One variant inside a bundle entry. */
+export type SkillVariant = {
+  id: string;
+  framework?: string;
+  default?: boolean;
+  title?: string;
+  description?: string;
+  tags?: string[];
 };
 
 /**
@@ -41,6 +58,8 @@ export type CliEntry = {
 };
 
 export interface SkillMenu {
+  /** The context-mill release that built the menu (`dev` for a local build). */
+  buildVersion?: string;
   categories: Record<string, SkillEntry[]>;
   /**
    * Skills exposed as CLI commands. Optional because context-mill releases
@@ -58,6 +77,10 @@ export function expandBundleEntry(entry: SkillEntry): SkillEntry[] {
     group: entry.group,
     bundle: true,
     downloadUrl: entry.downloadUrl,
+    ...(entry.title && !variant.title ? { title: entry.title } : {}),
+    ...(entry.description && !variant.description
+      ? { description: entry.description }
+      : {}),
   }));
 }
 
@@ -76,6 +99,10 @@ export async function fetchSkillMenu(
     const data = (await resp.json()) as SkillMenu;
     for (const [category, entries] of Object.entries(data.categories)) {
       data.categories[category] = entries.flatMap(expandBundleEntry);
+    }
+    // Every later event, the terminal one included, says which release the run's skills came from.
+    if (data.buildVersion) {
+      analytics.setTag('context_mill_version', data.buildVersion);
     }
     logToFile(
       `fetchSkillMenu: loaded (${

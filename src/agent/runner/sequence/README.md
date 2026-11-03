@@ -44,6 +44,13 @@ frontmatter contract rather than copying an old manifest example:
   required prompt compatibility.
 - `skills`, `allowedTools`, and `disallowedTools` shape the task's capabilities.
   Inspect the selected harness's effective tool inventory.
+  [skill-picks.ts](orchestrator/skill-picks.ts) turns each skill id into the
+  menu id to install. The exact-match pick (the id itself, else its group's
+  variant for the run's framework) decides; the criteria resolver in
+  `@shared/skill-resolution` picks beside it from menu tags and the run's
+  project traits (`RunConfig.traitTags`), and each disagreement is logged as
+  `orchestrator skill resolver disagreement`. With `wizard-agent-dag` on, the
+  criteria pick decides and the exact match is its fallback.
 - `dependsOn` has different consumers: planner-enqueued tasks use actual task
   IDs supplied to `enqueue_task`, while runner-seeded tasks resolve declared
   task types after planning. It is not a universal automatic graph built from

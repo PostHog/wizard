@@ -32,6 +32,7 @@ folder, never a file inside one:
 | `@services/frameworks`          | `FRAMEWORK_REGISTRY` and each framework's `FrameworkConfig`                                                                                        |
 | `@services/codebase-scan`       | The codebase scan and its report                                                                                                                   |
 | `@services/warehouse-sources`   | The warehouse tool catalog and source detection                                                                                                    |
+| `@services/project-traits`      | The run's project traits from static detection (`getProjectTraits`, `traitsFromDetectors`) and their skill tags (`traitsToSkillTags`)            |
 
 Each entry's `index.ts` re-exports what code outside the service uses, and
 nothing else. Add to it when a program needs another export.

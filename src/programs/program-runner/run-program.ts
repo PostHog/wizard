@@ -44,6 +44,7 @@ import {
   type ResolvedProgramCredentials,
 } from './credentials';
 import { reportCodebaseScan } from '@services/codebase-scan';
+import { getProjectTraits, traitsToSkillTags } from '@services/project-traits';
 import { IS_PRODUCTION_BUILD } from '@env';
 import type { QuestionKey } from '@services/detection/decisions';
 import { logIn } from './login';
@@ -431,6 +432,7 @@ async function invokeProgram(
                       planned.config.decisions ?? [],
                     )
                 : undefined,
+            traitTags: () => traitsToSkillTags(getProjectTraits(session())),
             hooks: sessionHooks(agentRun, session, (outcomes) => {
               if (scoped) scoped.frameworkContext[TASK_OUTCOMES_KEY] = outcomes;
               else store.setFrameworkContext(TASK_OUTCOMES_KEY, outcomes);
