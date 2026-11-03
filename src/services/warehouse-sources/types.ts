@@ -47,7 +47,7 @@ export type CatalogTool = {
   /** Null for tools the wizard only detects and reports, such as PostHog alternatives with no warehouse connector. */
   wizard_setup_mode: SourceCreationMode | null;
   /** Absent in catalogs that predate destinations; null for a tool PostHog never exports to. */
-  warehouse_destination_type?: WarehouseDestinationType | null;
+  warehouse_destination_type?: string | null;
   superseded_by: string[];
   signals: {
     /** Anchored regex sources matched against `.env` key NAMES. */

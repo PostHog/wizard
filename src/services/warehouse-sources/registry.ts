@@ -48,10 +48,8 @@ const catalogToolSchema: z.ZodType<CatalogTool, z.ZodTypeDef, unknown> =
     label: z.string().regex(LABEL),
     warehouse_source_type: z.string().regex(KIND).nullable(),
     wizard_setup_mode: z.enum(['in-cli', 'deep-link']).nullable(),
-    warehouse_destination_type: z
-      .enum(WAREHOUSE_DESTINATION_TYPES)
-      .nullable()
-      .optional(),
+    // A string, not an enum: a type this build doesn't know drops only the destination half.
+    warehouse_destination_type: z.string().nullable().optional(),
     superseded_by: z.array(z.string().regex(KIND)),
     signals: z.object({
       env_key_patterns: z.array(z.string().regex(ENV_KEY_PATTERN)),
@@ -81,7 +79,16 @@ const LEGACY_DESTINATION_TYPES: Readonly<
   Redshift: 'Redshift',
   Databricks: 'Databricks',
   AzureBlob: 'AzureBlob',
+  AmazonS3: 'S3',
 };
+
+function destinationType(tool: CatalogTool): WarehouseDestinationType | null {
+  const raw = tool.warehouse_destination_type;
+  if (raw === undefined) return LEGACY_DESTINATION_TYPES[tool.kind] ?? null;
+  return (WAREHOUSE_DESTINATION_TYPES as readonly string[]).includes(raw ?? '')
+    ? (raw as WarehouseDestinationType)
+    : null;
+}
 
 function toDetector(tool: CatalogTool): SourceDetector {
   return {
@@ -89,10 +96,7 @@ function toDetector(tool: CatalogTool): SourceDetector {
     label: tool.label,
     warehouseSourceType: tool.warehouse_source_type,
     mode: tool.wizard_setup_mode,
-    warehouseDestinationType:
-      tool.warehouse_destination_type === undefined
-        ? LEGACY_DESTINATION_TYPES[tool.kind] ?? null
-        : tool.warehouse_destination_type,
+    warehouseDestinationType: destinationType(tool),
     signals: {
       envKeys: tool.signals.env_key_patterns.map(
         (pattern) => new RegExp(pattern),

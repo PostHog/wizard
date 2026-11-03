@@ -295,6 +295,7 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
     const { createSecurityExtension } = await import('./security');
     const security = createSecurityExtension({
       disallowedTools: fenceDisallowList(disallowedTools),
+      posthogTools: config.posthogTools,
       triageProvider: boot.triageProvider,
       getWizardAskPending: () => askState.pending,
       workingDirectory: input.installDir,

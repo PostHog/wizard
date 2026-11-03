@@ -284,6 +284,8 @@ export interface ProgramConfig {
    * dispatch in a program whose steps are explicitly single-agent.
    */
   disallowedTools?: readonly string[];
+  /** When set, the agent may `call` only these PostHog MCP tools. */
+  posthogTools?: readonly string[];
   /**
    * Declares this program's place in the wizard CLI surface. See
    * `ProgramCliSurface` for semantics.
@@ -296,6 +298,12 @@ export interface ProgramConfig {
    * (README, "OAuth app scope ceiling").
    */
   oauthScopeAdditions?: readonly string[];
+  /**
+   * A feature flag that must be `'true'` for the run to start. The runner
+   * reads it after login, so it evaluates for the real user. When it is off,
+   * the run fails with `unavailableMessage` before any agent starts.
+   */
+  rolloutGate?: { flagKey: string; unavailableMessage: string };
   /** The run creates no event definitions, so login doesn't require `event_definition:write`. */
   completionScopeOptional?: boolean;
 }

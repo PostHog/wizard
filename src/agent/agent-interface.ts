@@ -56,6 +56,7 @@ import {
   createPostToolUseYaraHooks,
   prewarmYaraScanner,
 } from './yara-hooks';
+import { createPostHogToolHook } from './posthog-tool-policy';
 import { createTriageLLMProvider } from './triage-provider';
 import type { LLMProvider } from '@posthog/warlock';
 import { assembleCommandments } from './runner/switchboard/commandments';
@@ -241,6 +242,8 @@ export type AgentConfig = {
   readOnly?: boolean;
   /** Tools removed from BASE_ALLOWED_TOOLS for this run. */
   disallowedTools?: readonly string[];
+  /** When set, the agent may `call` only these PostHog MCP tools. */
+  posthogTools?: readonly string[];
   /**
    * Read accessor for the active pending question. Used by canUseTool to
    * block Write/Edit while the overlay is open (defense in depth).
@@ -343,6 +346,8 @@ type AgentRunConfig = {
   readOnly?: boolean;
   /** Tools removed from BASE_ALLOWED_TOOLS for this run. */
   disallowedTools?: readonly string[];
+  /** When set, the agent may `call` only these PostHog MCP tools. */
+  posthogTools?: readonly string[];
   /**
    * Read accessor for the active pending question. canUseTool reads this
    * to block Write/Edit while the overlay is open.
@@ -726,6 +731,7 @@ export async function initializeAgent(
       readOnly: config.readOnly,
       allowedTools: config.allowedTools,
       disallowedTools: config.disallowedTools,
+      posthogTools: config.posthogTools,
       getPendingQuestion: config.getPendingQuestion,
       suppressTaskRender: !!config.orchestrator,
       taskReported: queue && (() => taskReported(queue)),
@@ -1287,9 +1293,20 @@ export async function runAgent(
           },
           // Stop hook: collect remark, then allow stop
           hooks: {
-            PreToolUse: warlockDisabled
-              ? []
-              : createPreToolUseYaraHooks(triageProvider, onYaraTerminate),
+            PreToolUse: [
+              // The program's PostHog tool allowlist holds even with scanning off.
+              ...(agentConfig.posthogTools
+                ? [
+                    createPostHogToolHook(
+                      agentConfig.posthogTools,
+                      POSTHOG_MCP_SERVER_NAME,
+                    ),
+                  ]
+                : []),
+              ...(warlockDisabled
+                ? []
+                : createPreToolUseYaraHooks(triageProvider, onYaraTerminate)),
+            ],
             PostToolUse: warlockDisabled
               ? []
               : createPostToolUseYaraHooks(triageProvider, onYaraTerminate),

@@ -362,10 +362,66 @@ describe('runProgram', () => {
     });
   });
 
+  it.each([[['batch-export-get', 'batch-export-create']], [[]], [undefined]])(
+    "hands the program's PostHog tool allowlist %j to the agent",
+    async (posthogTools) => {
+      await runProgram(
+        'metrics',
+        input({ config: { run, posthogTools }, credentials }),
+      );
+      expect(agentConfig().posthogTools).toEqual(posthogTools);
+    },
+  );
+
   it('routes a program that declares no binding with the default one', async () => {
     await runProgram('not-registered', input({ credentials }));
     expect(agentConfig().routing.binding).toEqual(DEFAULT_BINDING);
     expect(agentConfig().programId).toBe('not-registered');
+  });
+
+  describe('the rollout gate', () => {
+    const gate = { flagKey: 'wizard-gated', unavailableMessage: 'Not yet.' };
+    const gated = (
+      flags: Record<string, string> | undefined,
+      order: string[] = [],
+    ) =>
+      runProgram('metrics', input({ config: { run, rolloutGate: gate } }), {
+        credentials: {
+          resolve: () => {
+            order.push('login');
+            return Promise.resolve(credentials);
+          },
+        },
+        featureFlags:
+          flags === undefined
+            ? undefined
+            : () => {
+                order.push('flags');
+                return Promise.resolve({ flags, payloads: {} });
+              },
+      });
+
+    it.each([
+      ['no flags loaded', undefined],
+      ['the flag absent', {}],
+      ['the flag false', { 'wizard-gated': 'false' }],
+      ['the flag on another variant', { 'wizard-gated': 'control' }],
+    ])('fails before any agent with %s', async (_name, flags) => {
+      const result = await gated(flags);
+      expect(result).toMatchObject({
+        outcome: RunOutcome.Failed,
+        failure: { code: ErrorCodes.CliFlagUnavailable, message: 'Not yet.' },
+      });
+      expect(runAgent).not.toHaveBeenCalled();
+    });
+
+    it('reads the flag after login and runs when it is on', async () => {
+      const order: string[] = [];
+      const result = await gated({ 'wizard-gated': 'true' }, order);
+      expect(result.outcome).toBe(RunOutcome.Success);
+      expect(order).toEqual(['login', 'flags']);
+      expect(runAgent).toHaveBeenCalledOnce();
+    });
   });
 
   it('fails a program with no run configuration before anything starts', async () => {

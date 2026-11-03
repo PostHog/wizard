@@ -4,10 +4,7 @@ import {
   Sequence,
   WIZARD_WAREHOUSE_DESTINATIONS_FLAG_KEY,
 } from '@shared/constants';
-import { ErrorCodes } from '@shared/errors';
 import { LONGER_ASK_TIMEOUT_MS } from '@shared/ask-policy';
-import { analytics } from '@utils/analytics';
-import { ProgramAbort } from '@programs/program-contract';
 import type {
   ProgramConfig,
   ProgramRun,
@@ -17,7 +14,10 @@ import {
   getDetectedWarehouseDestinations,
   getDetectedWarehouseSources,
 } from '@services/warehouse-sources';
-import { WAREHOUSE_DESTINATION_SCOPE_ADDITIONS } from './scopes.js';
+import {
+  WAREHOUSE_DESTINATION_POSTHOG_TOOLS,
+  WAREHOUSE_DESTINATION_SCOPE_ADDITIONS,
+} from './scopes.js';
 import {
   detectWarehouseDestinationPrerequisites,
   getChosenWarehouseDestination,
@@ -73,18 +73,6 @@ function buildPrompt(session: ProgramSession): string {
   return lines.join('\n');
 }
 
-/** Stop the run unless the rollout flag is on. Runs after login, so flags evaluate for the real user. */
-async function assertEnabled(): Promise<void> {
-  const flags = await analytics.getAllFlagsForWizard();
-  if (flags[WIZARD_WAREHOUSE_DESTINATIONS_FLAG_KEY] === 'true') return;
-  throw new ProgramAbort({
-    code: ErrorCodes.CliFlagUnavailable,
-    message:
-      'Sending PostHog data to your warehouse is not available for your ' +
-      `account yet. You can set up an export in PostHog: ${DOCS_URL}`,
-  });
-}
-
 export const config: ProgramConfig = {
   command: 'destination',
   parentCommand: 'warehouse',
@@ -104,11 +92,17 @@ export const config: ProgramConfig = {
       ctx.setFrameworkContext,
     ),
   oauthScopeAdditions: WAREHOUSE_DESTINATION_SCOPE_ADDITIONS,
+  posthogTools: WAREHOUSE_DESTINATION_POSTHOG_TOOLS,
+  rolloutGate: {
+    flagKey: WIZARD_WAREHOUSE_DESTINATIONS_FLAG_KEY,
+    unavailableMessage:
+      'Sending PostHog data to your warehouse is not available for your ' +
+      `account yet. You can set up an export in PostHog: ${DOCS_URL}`,
+  },
   healthCheck: false,
   reportFile: REPORT_FILE,
-  run: async (session: ProgramSession): Promise<ProgramRun> => {
-    await assertEnabled();
-    return {
+  run: (session: ProgramSession): Promise<ProgramRun> => {
+    return Promise.resolve({
       skillId: SKILL_ID,
       integrationLabel: SKILL_ID,
       customPrompt: () => buildPrompt(session),
@@ -119,8 +113,10 @@ export const config: ProgramConfig = {
       estimatedDurationMinutes: 5,
       // The user leaves the terminal to save credentials in the browser.
       askTimeoutMs: LONGER_ASK_TIMEOUT_MS,
+      // The connect URL carries a long token; rich links let the user open or copy it whole.
+      richLinks: true,
       abortCases: WAREHOUSE_DESTINATION_ABORT_CASES,
-    };
+    });
   },
   requires: ['posthog-integration'],
 };

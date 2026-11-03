@@ -45,6 +45,17 @@ describe('toSourceDetectors destination type', () => {
     ],
     ['absent field, legacy warehouse', catalogTool('Snowflake'), 'Snowflake'],
     ['absent field, legacy AzureBlob', catalogTool('AzureBlob'), 'AzureBlob'],
+    ['absent field, legacy AmazonS3', catalogTool('AmazonS3'), 'S3'],
+    [
+      'an unknown type drops only the destination',
+      catalogTool('Snowflake', { warehouse_destination_type: 'Oracle' }),
+      null,
+    ],
+    [
+      'a lowercase type drops only the destination',
+      catalogTool('Snowflake', { warehouse_destination_type: 'snowflake' }),
+      null,
+    ],
     ['absent field, Postgres stays out', catalogTool('Postgres'), null],
     ['absent field, not a warehouse', catalogTool('Stripe'), null],
   ])('%s', (_name, tool, expected) => {
@@ -53,9 +64,8 @@ describe('toSourceDetectors destination type', () => {
   });
 
   it.each([
-    ['an unknown type', 'Oracle'],
-    ['a lowercase type', 'snowflake'],
     ['a number', 7],
+    ['an object', { type: 'Snowflake' }],
   ])('skips a tool whose destination type is %s', (_name, value) => {
     const detectors = toSourceDetectors(
       catalog(

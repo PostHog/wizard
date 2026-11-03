@@ -16,3 +16,15 @@ export const WAREHOUSE_DESTINATION_SCOPE_ADDITIONS = [
   'external_data_source:read',
   'external_data_source:write',
 ] as const;
+
+// The only PostHog MCP tools the agent may call; no batch export update or delete.
+export const WAREHOUSE_DESTINATION_POSTHOG_TOOLS = [
+  'batch-exports-list',
+  'batch-export-get',
+  'batch-export-create',
+  'external-data-destinations-connect-link',
+  'external-data-destinations-connect-link-status',
+  'external-data-destinations-create',
+  'external-data-destinations-add-sources',
+  'external-data-sources-list',
+] as const;

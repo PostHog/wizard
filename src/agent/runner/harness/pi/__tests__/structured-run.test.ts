@@ -641,3 +641,16 @@ it('registers only filesystem readers for a read-only scan and fences tool calls
     expect.objectContaining({ readOnly: true }),
   );
 });
+
+it("installs the program's PostHog tool allowlist in the security gate", async () => {
+  state.text = '{"repoType":"single","projects":[]}';
+  const inputs = runInputs(vi.fn());
+  inputs.config.posthogTools = ['batch-export-get'];
+  vi.mocked(createSecurityExtension).mockClear();
+
+  await piBackend.run(inputs);
+
+  expect(createSecurityExtension).toHaveBeenCalledWith(
+    expect.objectContaining({ posthogTools: ['batch-export-get'] }),
+  );
+});
