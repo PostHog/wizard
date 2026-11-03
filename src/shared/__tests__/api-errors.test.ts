@@ -83,6 +83,21 @@ describe('retryTransient', () => {
     expect(request).toHaveBeenCalledTimes(1);
   });
 
+  it('stops waiting to retry when its deadline passes', async () => {
+    const deadline = new AbortController();
+    const failure = httpError(503);
+    const request = vi.fn().mockRejectedValue(failure);
+    setTimeout(() => deadline.abort(), 50);
+    const started = Date.now();
+
+    await expect(
+      retryTransient(request, undefined, deadline.signal),
+    ).rejects.toBe(failure);
+
+    expect(Date.now() - started).toBeLessThan(400);
+    expect(request).toHaveBeenCalledOnce();
+  });
+
   it('does not retry an untrusted certificate', async () => {
     const request = vi
       .fn()
