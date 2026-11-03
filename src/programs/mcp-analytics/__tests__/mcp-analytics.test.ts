@@ -1,7 +1,35 @@
 import {
   MCP_ANALYTICS_ABORT_CASES,
+  MCP_SCAN_KEY,
+  MCP_TARGET_KEY,
   config as mcpAnalytics,
 } from '@programs/mcp-analytics';
+import type { ProgramRun } from '@programs/program-contract';
+import { testRunnerContext } from '@programs/shared/__tests__/runner-context.no-jest';
+import { buildSession, type WizardSession } from '@services/session';
+import { HostResolution } from '@shared/host-resolution';
+import { OutroKind } from '@shared/outro';
+
+const credentials = {
+  projectId: 42,
+  projectApiKey: 'phc_example',
+  accessToken: 'example',
+  host: HostResolution.fromApiHost('https://eu.i.posthog.com'),
+};
+
+async function runConfig(
+  session: WizardSession = buildSession({}),
+): Promise<ProgramRun> {
+  const run = mcpAnalytics.run;
+  if (!run) throw new Error('Expected an MCP analytics run');
+  return typeof run === 'function' ? run(session, testRunnerContext()) : run;
+}
+
+function sessionWith(context: Record<string, unknown>): WizardSession {
+  const session = buildSession({ installDir: '/example/server' });
+  Object.assign(session.frameworkContext, context);
+  return session;
+}
 
 describe('MCP_ANALYTICS_ABORT_CASES', () => {
   // These are the exact `[ABORT] <reason>` strings the mcp-analytics skill
@@ -52,13 +80,86 @@ describe('MCP_ANALYTICS_ABORT_CASES', () => {
 });
 
 describe('mcp-analytics config', () => {
-  it('wires the mcp-analytics abort cases into the run config', () => {
-    // `run` is statically a defined object for this program (createSkillProgram
-    // always sets it, and never uses the session-derived function form).
-    const run = mcpAnalytics.run;
-    if (!run || typeof run === 'function') {
-      throw new Error('expected a static run object');
-    }
-    expect(run.abortCases).toBe(MCP_ANALYTICS_ABORT_CASES);
+  it('wires the mcp-analytics abort cases into the run config', async () => {
+    expect((await runConfig()).abortCases).toBe(MCP_ANALYTICS_ABORT_CASES);
+  });
+
+  it('runs the agent in the selected server directory', () => {
+    const targetDir = mcpAnalytics.runSteps?.run?.targetDir;
+    expect(
+      targetDir?.(
+        sessionWith({
+          [MCP_TARGET_KEY]: { directory: '/example/apps/search' },
+        }),
+      ),
+    ).toBe('/example/apps/search');
+    expect(targetDir?.(sessionWith({}))).toBe('/example/server');
+  });
+
+  it.each([
+    [
+      'a selected entry point',
+      {
+        [MCP_TARGET_KEY]: {
+          directory: '/example/server',
+          entryPoint: '/example/server/src/tools.ts',
+        },
+      },
+      ['"src/tools.ts"', 'Verify it and instrument this server'],
+    ],
+    [
+      'a selected application',
+      { [MCP_TARGET_KEY]: { directory: '/example/server' } },
+      ['follow local workspace imports', 'do not instrument every consumer'],
+    ],
+    [
+      'a launcher',
+      {
+        [MCP_SCAN_KEY]: {
+          directory: '/example/server',
+          candidates: [],
+          discoveryHint: 'launcher',
+        },
+      },
+      ['Trace its imports and package metadata', 'Do not edit node_modules'],
+    ],
+    [
+      'shared library code',
+      {
+        [MCP_SCAN_KEY]: {
+          directory: '/example/server',
+          candidates: [],
+          discoveryHint: 'shared_library',
+        },
+      },
+      ['Find the runnable consumer', 'Do not treat the shared constructor'],
+    ],
+  ])('guides the agent to %s', async (_case, context, expected) => {
+    const prompt = (await runConfig(sessionWith(context))).customPrompt?.(
+      credentials,
+    );
+    expect(prompt).toContain('Make only additive changes');
+    for (const text of expected) expect(prompt).toContain(text);
+  });
+
+  it('keeps agent discovery available without a selection', async () => {
+    const prompt = (await runConfig()).customPrompt?.(credentials);
+    expect(prompt).toContain('detect the language and server style');
+    expect(prompt).not.toContain('The user selected');
+  });
+
+  it('links completion to the authenticated project and explains how to send data', async () => {
+    const session = buildSession({});
+    const outro = (await runConfig(session)).buildOutroData?.(
+      session,
+      credentials,
+    );
+    expect(outro?.kind).toBe(OutroKind.Success);
+    expect(outro?.primaryLink?.url).toBe(
+      'https://eu.posthog.com/project/42/mcp-analytics',
+    );
+    const steps = outro?.nextSteps?.items.join(' ');
+    expect(steps).toContain('start or redeploy');
+    expect(steps).toContain('check that the tool call arrived');
   });
 });
