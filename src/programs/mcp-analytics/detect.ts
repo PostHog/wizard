@@ -1,6 +1,14 @@
 import { accessSync, constants, existsSync, realpathSync, statSync } from 'fs';
 import { homedir } from 'os';
-import { dirname, extname, join, resolve } from 'path';
+import {
+  dirname,
+  extname,
+  isAbsolute,
+  join,
+  relative,
+  resolve,
+  sep,
+} from 'path';
 import { boundedGlob, readFileHead } from '@utils/bounded-fs';
 import { suggestMcpPackages, type McpPackageSuggestions } from './packages';
 
@@ -71,14 +79,21 @@ export function resolveMcpTarget(
     );
   }
 
+  const base = realpathSync(resolve(baseDirectory));
+  const ceiling = isWithin(base, target) ? base : undefined;
   let directory = dirname(target);
   while (!PROJECT_MARKERS.some((name) => existsSync(join(directory, name)))) {
     const parent = dirname(directory);
-    if (parent === directory)
+    if (directory === ceiling || parent === directory)
       return { directory: dirname(target), entryPoint: target };
     directory = parent;
   }
   return { directory, entryPoint: target };
+}
+
+function isWithin(parent: string, child: string): boolean {
+  const path = relative(parent, child);
+  return path !== '..' && !path.startsWith(`..${sep}`) && !isAbsolute(path);
 }
 
 // These are suggestions, not an eligibility check: custom dispatchers and

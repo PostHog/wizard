@@ -190,6 +190,16 @@ describe('resolveMcpTarget', () => {
     });
   });
 
+  it('never resolves a file in the scanned directory above that directory', () => {
+    file('package.json', '{}');
+    const app = join(root, 'app');
+    const entryPoint = file('app/tools/server.py', 'mcp.run()');
+    expect(resolveMcpTarget(app, entryPoint)).toEqual({
+      directory: join(app, 'tools'),
+      entryPoint,
+    });
+  });
+
   it('accepts an explicit directory override', () => {
     mkdirSync(join(root, 'another-server'));
     expect(resolveMcpTarget(root, 'another-server')).toEqual({
