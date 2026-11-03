@@ -434,7 +434,7 @@ async function driveKeyboard(pair: Pair): Promise<Record<string, unknown>> {
     expect(store.currentScreen).toBe(pair.screen);
     const before = await snap(store);
     for (const key of pair.keys) {
-      screens.write(key);
+      await screens.write(key);
       await tick();
     }
     await vi.waitFor(() => expect(settled(store)).toBe(true));
