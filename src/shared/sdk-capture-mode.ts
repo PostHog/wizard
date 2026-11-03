@@ -7,7 +7,11 @@
  * meets the SDK's floor, the host serves the v1 routes and no flag says
  * otherwise. Everything else is legacy, pinned.
  */
-import { Integration, WIZARD_SDK_CAPTURE_V1_FLAG_KEY } from './constants';
+import {
+  Integration,
+  WIZARD_SDK_CAPTURE_MODE_FLAG_KEY,
+  WIZARD_SDK_CAPTURE_V1_FLAG_KEY,
+} from './constants';
 import {
   SDK_MAJORS,
   getSdkMajorRow,
@@ -86,13 +90,32 @@ export type SdkCaptureModeOverrides = Readonly<
   Partial<Record<SdkId, SdkCaptureMode>>
 >;
 
+/** Whether the capture-mode machinery is on for this run. Off is today's behavior, untouched. */
+export function isSdkCaptureModeEnabled(
+  flags: Readonly<Record<string, string>> | undefined,
+): boolean {
+  return flags?.[WIZARD_SDK_CAPTURE_MODE_FLAG_KEY] === 'true';
+}
+
+/** PostHog serves a variant's payload as a JSON string; a CI override injects the parsed object. */
+function coercePayload(payload: unknown): unknown {
+  if (typeof payload !== 'string') return payload;
+  try {
+    return JSON.parse(payload) as unknown;
+  } catch {
+    return undefined;
+  }
+}
+
 /**
- * The flag payload is `{ "<sdk>": "legacy" | "v1" }`. Unknown SDK ids and
- * values are dropped, so an unrelated payload on the key overrides nothing.
+ * The flag payload is `{ "<sdk>": "legacy" | "v1" }`, as an object or its JSON
+ * string. Unknown SDK ids and values are dropped, so an unrelated payload on
+ * the key overrides nothing.
  */
 export function parseSdkCaptureModeOverrides(
-  payload: unknown,
+  raw: unknown,
 ): SdkCaptureModeOverrides {
+  const payload = coercePayload(raw);
   if (
     typeof payload !== 'object' ||
     payload === null ||

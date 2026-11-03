@@ -1,5 +1,10 @@
-import { Integration, WIZARD_SDK_CAPTURE_V1_FLAG_KEY } from '@shared/constants';
 import {
+  Integration,
+  WIZARD_SDK_CAPTURE_MODE_FLAG_KEY,
+  WIZARD_SDK_CAPTURE_V1_FLAG_KEY,
+} from '@shared/constants';
+import {
+  isSdkCaptureModeEnabled,
   parseSdkCaptureModeOverrides,
   resolveSdkCaptureMode,
   sdkCaptureModeOverridesFromPayloads,
@@ -19,13 +24,19 @@ describe('parseSdkCaptureModeOverrides', () => {
   it.each([
     ['undefined', undefined],
     ['null', null],
-    ['a string', '{"posthog-node":"v1"}'],
+    ['a string that is not JSON', 'posthog-node=v1'],
     ['an array', ['posthog-node']],
     ['an unrelated object', { model: 'sonnet', effort: 'high' }],
     ['unknown sdk ids', { 'posthog-js': 'v1' }],
     ['unknown values', { 'posthog-node': 'latest' }],
   ])('overrides nothing for %s', (_label, payload) => {
     expect(parseSdkCaptureModeOverrides(payload)).toEqual({});
+  });
+
+  it('reads the JSON string PostHog serves a payload as', () => {
+    expect(
+      parseSdkCaptureModeOverrides('{"posthog-node":"v1","posthog-js":"v1"}'),
+    ).toEqual({ 'posthog-node': 'v1' });
   });
 
   it('keeps the valid entries and drops the rest', () => {
@@ -272,5 +283,18 @@ describe('resolveSdkCaptureMode', () => {
         hostServesV1: false,
       }).reason,
     ).toBe('not-released');
+  });
+});
+
+describe('isSdkCaptureModeEnabled', () => {
+  it("is on only for the literal 'true', so an absent or failed flag fetch keeps today's behavior", () => {
+    expect(
+      isSdkCaptureModeEnabled({ [WIZARD_SDK_CAPTURE_MODE_FLAG_KEY]: 'true' }),
+    ).toBe(true);
+    expect(
+      isSdkCaptureModeEnabled({ [WIZARD_SDK_CAPTURE_MODE_FLAG_KEY]: 'false' }),
+    ).toBe(false);
+    expect(isSdkCaptureModeEnabled({})).toBe(false);
+    expect(isSdkCaptureModeEnabled(undefined)).toBe(false);
   });
 });
