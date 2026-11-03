@@ -22,6 +22,7 @@ type ProjectPackage = {
   dependencies: Record<string, string>;
   runnable: boolean;
   library: boolean;
+  hostsServer: boolean;
   mcpIdentity: boolean;
 };
 
@@ -55,16 +56,23 @@ function readPackage(
         ? [data.bin]
         : Object.values(strings(data.bin));
     const commands = strings(data.scripts);
+    const dependencies = {
+      ...strings(data.dependencies),
+      ...strings(data.optionalDependencies),
+      ...strings(data.peerDependencies),
+    };
+    // xmcp builds the server from tool files that only import types from it.
+    const hostsServer = 'xmcp' in dependencies;
     return {
       directory: packageDir,
       name,
-      dependencies: {
-        ...strings(data.dependencies),
-        ...strings(data.optionalDependencies),
-        ...strings(data.peerDependencies),
-      },
+      dependencies,
       runnable:
-        bin.length > 0 || !!commands.start || deployments.has(packageDir),
+        bin.length > 0 ||
+        !!commands.start ||
+        deployments.has(packageDir) ||
+        hostsServer,
+      hostsServer,
       library: !!data.main || !!data.exports,
       mcpIdentity:
         typeof data.mcpName === 'string' ||
@@ -79,6 +87,7 @@ function readPackage(
 export async function suggestMcpPackages(
   sourceCandidates: string[],
   factoryFiles: string[],
+  hasSharedFactory: boolean,
   options: BoundedGlobOptions,
 ): Promise<McpPackageSuggestions> {
   const metadata = await boundedGlob(
@@ -103,9 +112,12 @@ export async function suggestMcpPackages(
   const byName = new Map(
     packages.filter((pkg) => pkg.name).map((pkg) => [pkg.name, pkg]),
   );
-  const direct = new Set(
-    sourceCandidates.map(owner).filter((pkg): pkg is ProjectPackage => !!pkg),
-  );
+  const direct = new Set([
+    ...sourceCandidates
+      .map(owner)
+      .filter((pkg): pkg is ProjectPackage => !!pkg),
+    ...packages.filter((pkg) => pkg.hostsServer),
+  ]);
   const factories = new Set(factoryFiles.map(owner));
   const related = new Set(direct);
   for (const pkg of packages) {
@@ -171,7 +183,7 @@ export async function suggestMcpPackages(
   return {
     candidates: [...candidates],
     ...(Object.keys(packageNames).length ? { packageNames } : {}),
-    ...(!candidates.size && shared.size
+    ...(!candidates.size && (shared.size || hasSharedFactory)
       ? { discoveryHint: McpDiscoveryHint.SharedLibrary }
       : !candidates.size && root?.runnable && root.mcpIdentity
       ? { discoveryHint: McpDiscoveryHint.Launcher }

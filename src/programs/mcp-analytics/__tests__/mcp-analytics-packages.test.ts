@@ -112,6 +112,58 @@ describe('MCP application suggestions', () => {
     expect(scan.discoveryHint).toBe('shared_library');
   });
 
+  it.each([
+    [
+      'libs/mcpkit/mcpkit/factory.py',
+      'from fastmcp import FastMCP\n\ndef build_server(name):\n    return FastMCP(name)',
+    ],
+    [
+      'libs/mcpkit/server.go',
+      'package mcpkit\nimport "github.com/modelcontextprotocol/go-sdk/mcp"\nfunc NewServer() *mcp.Server {\n\treturn mcp.NewServer(&mcp.Implementation{Name: "example"}, nil)\n}',
+    ],
+  ])(
+    'treats %s, which returns a server it never runs, as a shared factory',
+    async (name, source) => {
+      file(name, source);
+      const scan = await findMcpServers(root);
+      expect(scan.candidates).toEqual([]);
+      expect(scan.discoveryHint).toBe('shared_library');
+    },
+  );
+
+  it('suggests Python apps that run a server from a shared factory', async () => {
+    file('libs/mcpkit/pyproject.toml', '[project]\nname = "mcpkit"');
+    file(
+      'libs/mcpkit/mcpkit/factory.py',
+      'from fastmcp import FastMCP\n\ndef build_server(name):\n    return FastMCP(name)',
+    );
+    for (const app of ['billing', 'search']) {
+      file(`apps/${app}/pyproject.toml`, `[project]\nname = "${app}"`);
+      file(
+        `apps/${app}/main.py`,
+        `from mcpkit.factory import build_server\n\nbuild_server("${app}").run()`,
+      );
+    }
+    const scan = await findMcpServers(root);
+    expect(scan.candidates).toEqual([
+      'apps/billing/main.py',
+      'apps/search/main.py',
+    ]);
+    expect(scan.discoveryHint).toBeUndefined();
+  });
+
+  it('suggests an xmcp app whose tools only import from xmcp', async () => {
+    manifest('apps/tools', {
+      name: 'example-tools',
+      dependencies: { xmcp: '^0.3.0' },
+    });
+    file(
+      'apps/tools/src/tools/greet.ts',
+      "import { type ToolMetadata } from 'xmcp'; export const metadata: ToolMetadata = { name: 'greet' };",
+    );
+    expect((await findMcpServers(root)).candidates).toEqual(['apps/tools']);
+  });
+
   it('explains MCP launchers whose implementation comes from a dependency', async () => {
     manifest('.', {
       name: '@example/mcp',

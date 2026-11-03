@@ -173,7 +173,7 @@ describe('McpAnalyticsIntroScreen', () => {
       await shows(message);
       await press(ENTER);
       await confirmed();
-      expect(target()).toEqual({ directory: root });
+      expect(target()).toEqual({ directory: root, agentSearch: true });
       expect(lastSelection()?.selection_source).toBe('agent_search');
     },
   );
@@ -199,7 +199,7 @@ describe('McpAnalyticsIntroScreen', () => {
     await shows('The quick scan didn’t find a server');
     await press(ENTER);
     await confirmed();
-    expect(target()).toEqual({ directory: root });
+    expect(target()).toEqual({ directory: root, agentSearch: true });
     expect(JSON.stringify(events)).not.toContain(root);
   });
 });

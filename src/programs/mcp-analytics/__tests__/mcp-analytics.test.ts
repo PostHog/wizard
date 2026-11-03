@@ -6,9 +6,16 @@ import {
 } from '@programs/mcp-analytics';
 import type { ProgramRun } from '@programs/program-contract';
 import { testRunnerContext } from '@programs/shared/__tests__/runner-context.no-jest';
-import { buildSession, type WizardSession } from '@services/session';
+import {
+  buildSession,
+  SessionStore,
+  type WizardSession,
+} from '@services/session';
 import { HostResolution } from '@shared/host-resolution';
 import { OutroKind } from '@shared/outro';
+import { mkdtempSync, realpathSync, rmSync } from 'fs';
+import { tmpdir } from 'os';
+import { join } from 'path';
 
 const credentials = {
   projectId: 42,
@@ -23,6 +30,10 @@ async function runConfig(
   const run = mcpAnalytics.run;
   if (!run) throw new Error('Expected an MCP analytics run');
   return typeof run === 'function' ? run(session, testRunnerContext()) : run;
+}
+
+function missing(hook: string): Promise<never> {
+  return Promise.reject(new Error(`mcp-analytics has no ${hook}`));
 }
 
 function sessionWith(context: Record<string, unknown>): WizardSession {
@@ -108,6 +119,16 @@ describe('mcp-analytics config', () => {
       ['"src/tools.ts"', 'Verify it and instrument this server'],
     ],
     [
+      'an entry point in a selected monorepo app',
+      {
+        [MCP_TARGET_KEY]: {
+          directory: '/example/server/apps/search',
+          entryPoint: '/example/server/apps/search/src/server.ts',
+        },
+      },
+      ['"src/server.ts"'],
+    ],
+    [
       'a selected application',
       { [MCP_TARGET_KEY]: { directory: '/example/server' } },
       ['follow local workspace imports', 'do not instrument every consumer'],
@@ -142,11 +163,75 @@ describe('mcp-analytics config', () => {
     for (const text of expected) expect(prompt).toContain(text);
   });
 
-  it('keeps agent discovery available without a selection', async () => {
-    const prompt = (await runConfig()).customPrompt?.(credentials);
+  it.each([
+    ['no target', {}],
+    [
+      'an agent search',
+      { [MCP_TARGET_KEY]: { directory: '/example/server', agentSearch: true } },
+    ],
+  ])('keeps agent discovery available with %s', async (_case, context) => {
+    const prompt = (await runConfig(sessionWith(context))).customPrompt?.(
+      credentials,
+    );
     expect(prompt).toContain('detect the language and server style');
     expect(prompt).not.toContain('The user selected');
   });
+
+  it.each([
+    ['the wizard directory', {}, 'posthog-mcp-analytics-report.md'],
+    [
+      'a selected app',
+      { [MCP_TARGET_KEY]: { directory: '/example/server/apps/search' } },
+      'apps/search/posthog-mcp-analytics-report.md',
+    ],
+  ])(
+    'points the outro at the report in %s',
+    async (_case, context, reportFile) => {
+      const session = sessionWith(context);
+      const run = await runConfig(session);
+      const targetDir = mcpAnalytics.runSteps?.run?.targetDir;
+      // The runner hands buildOutroData the run's session, scoped to targetDir.
+      const scoped = { ...session, installDir: targetDir!(session) };
+      expect(run.buildOutroData?.(scoped, credentials)?.reportFile).toBe(
+        reportFile,
+      );
+    },
+  );
+
+  // The runner calls ciPreRun instead of onReady in CI, where no screen shows the scan.
+  it.each([
+    [
+      'the interactive',
+      (store: SessionStore) =>
+        mcpAnalytics.onReady?.(store.readyContext()) ?? missing('onReady'),
+      true,
+    ],
+    [
+      'the CI',
+      (store: SessionStore) =>
+        store.edit(
+          (draft) =>
+            mcpAnalytics.ciPreRun?.(draft, {
+              log: { info: vi.fn(), warn: vi.fn() },
+              authenticate: vi.fn(),
+              onProgress: vi.fn(),
+            }) ?? missing('ciPreRun'),
+        ),
+      false,
+    ],
+  ])(
+    'scans for servers before %s setup only with a screen to show it',
+    async (_case, prepare, scanned) => {
+      const installDir = realpathSync(mkdtempSync(join(tmpdir(), 'mcp-ci-')));
+      try {
+        const store = new SessionStore(buildSession({ installDir }));
+        await prepare(store);
+        expect(MCP_SCAN_KEY in store.session.frameworkContext).toBe(scanned);
+      } finally {
+        rmSync(installDir, { recursive: true, force: true });
+      }
+    },
+  );
 
   it('links completion to the authenticated project and explains how to send data', async () => {
     const session = buildSession({});

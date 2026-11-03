@@ -72,6 +72,27 @@ describe('findMcpServers', () => {
       'edge/server.ts',
       'const handlers = { "tools/call": callTool, "tools/list": listTools };',
     ],
+    [
+      'edge/router.ts',
+      "if (method === 'tools/list') return list();\nif (method === 'tools/call') return call();",
+    ],
+    [
+      'edge/router.py',
+      'match method:\n    case "tools/list":\n        pass\n    case "tools/call":\n        pass',
+    ],
+    [
+      'edge/router.rb',
+      'case method\nwhen "tools/list" then list\nwhen "tools/call" then call\nend',
+    ],
+    [
+      'src/app.module.ts',
+      "import { McpModule } from '@rekog/mcp-nest';\n@Module({ imports: [McpModule.forRoot({ name: 'example' })] })\nexport class AppModule {}",
+    ],
+    ['python/legacy.py', 'import fastmcp\nmcp = fastmcp.FastMCP("example")'],
+    [
+      'python/single.py',
+      'from fastmcp import FastMCP\ndef create_server():\n    return FastMCP("example")\n\ncreate_server().run()',
+    ],
   ])('suggests a server at %s', async (name, source) => {
     file(name, source);
     const result = await findMcpServers(root);
@@ -100,6 +121,14 @@ describe('findMcpServers', () => {
     file('spec/server_spec.rb', 'MCP::Server.new(name: "example")');
     file('src/handler.rs', 'impl ServerHandler for Notes {}');
     file('server.py', '# just an ordinary script');
+    file(
+      'src/proxy.ts',
+      "await post({ method: 'tools/list' });\nawait post({ method: 'tools/call', params });",
+    );
+    file(
+      'backend/tools.py',
+      'requests.post(url, json={"jsonrpc": "2.0", "method": "tools/list"})\nrequests.post(url, json={"method": "tools/call", "params": params})',
+    );
     file(
       'src/documented-server.ts',
       `/**\n * ${source}\n */\nexport const helper = () => {};`,

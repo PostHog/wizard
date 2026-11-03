@@ -29,7 +29,10 @@ const PROJECT_MARKERS = [
   '.git',
 ];
 
-export type McpTarget = { directory: string; entryPoint?: string };
+/** A server the user selected, or a directory they asked the agent to search. */
+export type McpTarget =
+  | { directory: string; entryPoint?: string; agentSearch?: never }
+  | { directory: string; entryPoint?: never; agentSearch: true };
 export type McpServerScan = { directory: string } & McpPackageSuggestions;
 
 export function resolveMcpTarget(
@@ -92,13 +95,54 @@ function hasServerSignals(source: string): boolean {
       /\bfrom\s+(?:mcp\.server(?:\.[\w.]+)?|fastmcp)\s+import\b/.test(
         source,
       )) ||
+    (/\bfastmcp\.FastMCP\s*\(/.test(source) &&
+      /^\s*import\s+fastmcp\b/m.test(source)) ||
+    (/\bMcpModule\.forRoot\s*\(/.test(source) &&
+      /from\s+['"]@rekog\/mcp-nest['"]/.test(source)) ||
     (/\bmcp\.NewServer\s*\(/.test(source) &&
       /"github\.com\/modelcontextprotocol\/go-sdk\/mcp"/.test(source)) ||
     /\bMCP::Server\.new\b/.test(source) ||
     (/\bimpl\s+(?:rmcp::)?ServerHandler\s+for\b/.test(source) &&
       /\brmcp::/.test(source)) ||
     /\bcreateMcpHandler\s*\(/.test(source) ||
-    (/["']tools\/call["']/.test(source) && /["']tools\/list["']/.test(source))
+    (/(?:\b(?:case|when)\s+|[!=]==?\s*)["']tools\/call["']|["']tools\/call["']\s*(?:[!=]==?|:)/.test(
+      source,
+    ) &&
+      /["']tools\/list["']/.test(source))
+  );
+}
+
+const RUNS_SERVER =
+  /\.(?:run|Run)\w*\s*\(|\b(?:serve|Serve)\w*\s*\(|\.(?:sse|streamable_http|http)_app\s*\(/;
+
+/**
+ * The name of the Python or Go function that returns a server this file never
+ * runs. Apps call that function and run the result, so they are the servers.
+ */
+function serverFactoryName(source: string): string | undefined {
+  const built =
+    /^\s*return\s+(?:(?:fastmcp\.)?FastMCP|MCPServer|Server|mcp\.NewServer)\s*\(/m.exec(
+      source,
+    );
+  if (!built || RUNS_SERVER.test(source)) return;
+  const definitions = [
+    ...source
+      .slice(0, built.index)
+      .matchAll(
+        /^\s*(?:(?:async\s+)?def|func(?:\s*\([^)]*\))?)\s+(\w+)\s*\(/gm,
+      ),
+  ];
+  return definitions.at(-1)?.[1];
+}
+
+function runsFactoryServer(source: string, factory: string): boolean {
+  return (
+    RUNS_SERVER.test(source) &&
+    new RegExp(`\\b${factory}\\s*\\(`).test(source) &&
+    new RegExp(
+      `^\\s*(?:from\\s+\\S+\\s+)?import\\b.*\\b${factory}\\b|\\w\\.${factory}\\s*\\(`,
+      'm',
+    ).test(source)
   );
 }
 
@@ -135,11 +179,19 @@ export async function findMcpServers(
   const files = [...new Set([...likelyFiles, ...otherFiles])];
   const sourceCandidates: string[] = [];
   const factoryFiles: string[] = [];
+  const serverFactories: string[] = [];
+  const runners = new Map<string, string>();
   for (const file of files) {
     const contents = readFileHead(join(target.directory, file), 64 * 1024);
     if (contents === null) continue;
     const source = contents.replace(/^\s*(?:\/[/*]|\*|#).*$/gm, '');
-    if (hasServerSignals(source)) sourceCandidates.push(file);
+    if (!hasServerSignals(source)) {
+      if (RUNS_SERVER.test(source)) runners.set(file, source);
+    } else {
+      const factory = serverFactoryName(source);
+      if (factory === undefined) sourceCandidates.push(file);
+      else serverFactories.push(factory);
+    }
     if (
       /\bcreate\w*(?:Mcp|MCP)(?:Server|App|Handler)\s*(?:<[^;]+?>\s*)?\(/.test(
         source,
@@ -147,9 +199,13 @@ export async function findMcpServers(
     )
       factoryFiles.push(file);
   }
+  for (const [file, source] of runners)
+    if (serverFactories.some((factory) => runsFactoryServer(source, factory)))
+      sourceCandidates.push(file);
   const suggestions = await suggestMcpPackages(
     sourceCandidates,
     factoryFiles,
+    serverFactories.length > 0,
     options,
   );
   const candidates = suggestions.candidates.sort((left, right) => {

@@ -6,8 +6,9 @@ import type {
   ProgramRun,
   ProgramSession,
 } from '@programs/program-contract';
-import { OutroKind } from '@shared/outro';
-import { relative } from 'path';
+import type { Credentials } from '@shared/api';
+import { OutroKind, type OutroData } from '@shared/outro';
+import { join, relative } from 'path';
 import { McpDiscoveryHint } from './packages';
 import {
   MCP_SCAN_ERROR_KEY,
@@ -137,10 +138,14 @@ const skillProgram = createSkillProgram({
   spinnerMessage: 'Setting up MCP analytics...',
   estimatedDurationMinutes: 5,
   abortCases: MCP_ANALYTICS_ABORT_CASES,
-  buildOutroData: (_session, credentials) => ({
+});
+const skillRun = skillProgram.run as ProgramRun;
+
+function outroData(reportFile: string, credentials: Credentials): OutroData {
+  return {
     kind: OutroKind.Success,
     message: 'MCP analytics installed. Send your first tool call next.',
-    reportFile: MCP_ANALYTICS_REPORT_FILE,
+    reportFile,
     primaryLink: {
       label: 'Open MCP analytics',
       url: `${credentials.host.appHost.replace(/\/$/, '')}/project/${
@@ -156,9 +161,8 @@ const skillProgram = createSkillProgram({
       ],
     },
     docsUrl: 'https://posthog.com/docs/mcp-analytics/installation',
-  }),
-});
-const skillRun = skillProgram.run as ProgramRun;
+  };
+}
 
 /** What the user selected before setup, and what the scan found when they left it to the agent. */
 function targetGuidance(session: ProgramSession): string[] {
@@ -166,15 +170,16 @@ function targetGuidance(session: ProgramSession): string[] {
   if (target?.entryPoint) {
     return [
       `The user selected this server entry point: ${JSON.stringify(
-        relative(session.installDir, target.entryPoint),
+        relative(mcpAnalyticsTargetDir(session), target.entryPoint),
       )}. Verify it and instrument this server.`,
     ];
   }
-  const guidance = target
-    ? [
-        'The user selected this application directory. Resolve its launch and deployment entry points and follow local workspace imports. Keep instrumentation scoped to this application; do not instrument every consumer of a shared factory.',
-      ]
-    : [];
+  const guidance =
+    target && !target.agentSearch
+      ? [
+          'The user selected this application directory. Resolve its launch and deployment entry points and follow local workspace imports. Keep instrumentation scoped to this application; do not instrument every consumer of a shared factory.',
+        ]
+      : [];
   const hint = mcpScan(session)?.discoveryHint;
   if (hint === McpDiscoveryHint.Launcher) {
     guidance.push(
@@ -207,6 +212,8 @@ export const config: ProgramConfig = {
       );
     }
   },
+  // Headless runs have no screen to offer the scan's suggestions, and the agent searches anyway.
+  ciPreRun: () => Promise.resolve(),
   runSteps: { run: { targetDir: mcpAnalyticsTargetDir } },
   run: (session) =>
     Promise.resolve({
@@ -215,6 +222,16 @@ export const config: ProgramConfig = {
         [skillRun.customPrompt?.(ctx), ...targetGuidance(session)]
           .filter(Boolean)
           .join('\n'),
+      // The runner passes buildOutroData the run's session, whose installDir is
+      // the selected app; the outro resolves the report from where the wizard started.
+      buildOutroData: (_runSession, credentials) =>
+        outroData(
+          relative(
+            session.installDir,
+            join(mcpAnalyticsTargetDir(session), MCP_ANALYTICS_REPORT_FILE),
+          ),
+          credentials,
+        ),
     }),
 };
 

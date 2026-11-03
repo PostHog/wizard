@@ -172,7 +172,7 @@ export function McpAnalyticsIntroScreen({
           setError(null);
           setView(View.Path);
         } else if (value === 'search')
-          void selectPath('.', 'agent_search', true);
+          completeTarget({ directory, agentSearch: true }, 'agent_search');
         else if (value === 'connect') setView(View.Connect);
         else if (value === 'back') {
           setError(null);
