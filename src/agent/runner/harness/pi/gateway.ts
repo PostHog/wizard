@@ -223,6 +223,19 @@ export function isGatewayAuthRejection(
 export type GatewayRuntime =
   import('@earendil-works/pi-coding-agent').ModelRuntime;
 
+/** Set by `createGatewayRuntime`, which every pi session awaits before its first request. */
+let streamWatchdog: typeof import('./stream-watchdog') | undefined;
+
+/** The provider with its transport's stream behind the idle watchdog, once loaded. */
+function withStreamWatchdog(
+  provider: Record<string, unknown>,
+): Record<string, unknown> {
+  const api = provider.api as GatewayApi;
+  return streamWatchdog
+    ? { ...provider, streamSimple: streamWatchdog.gatewayStreamSimple(api) }
+    : provider;
+}
+
 /**
  * A model runtime holding only the gateway provider. Credentials stay in memory,
  * and it reads no models.json and refreshes no catalog over the network, so a
@@ -231,17 +244,23 @@ export type GatewayRuntime =
 export async function createGatewayRuntime(
   provider: Record<string, unknown>,
 ): Promise<GatewayRuntime> {
-  const [{ ModelRuntime }, { InMemoryCredentialStore }] = await Promise.all([
-    import('@earendil-works/pi-coding-agent'),
-    import('@earendil-works/pi-ai'),
-  ]);
+  const [{ ModelRuntime }, { InMemoryCredentialStore }, watchdog] =
+    await Promise.all([
+      import('@earendil-works/pi-coding-agent'),
+      import('@earendil-works/pi-ai'),
+      import('./stream-watchdog'),
+    ]);
+  streamWatchdog = watchdog;
   const runtime = await ModelRuntime.create({
     credentials: new InMemoryCredentialStore(),
     modelsPath: null,
     allowModelNetwork: false,
     refreshOnCreate: false,
   });
-  runtime.registerProvider(GATEWAY_PROVIDER, provider as never);
+  runtime.registerProvider(
+    GATEWAY_PROVIDER,
+    withStreamWatchdog(provider) as never,
+  );
   return runtime;
 }
 
@@ -295,7 +314,9 @@ export function withGatewayRemint(opts: GatewayRemintOptions): {
       if (opts.signal?.aborted) return;
       opts.registry.registerProvider(
         GATEWAY_PROVIDER,
-        buildGatewayProvider(opts.providerInputs(auth)).provider as never,
+        withStreamWatchdog(
+          buildGatewayProvider(opts.providerInputs(auth)).provider,
+        ) as never,
       );
       opts.onRemint?.();
       rejected = false;

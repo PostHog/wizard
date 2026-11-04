@@ -45,6 +45,7 @@ import {
   withGatewayRemint,
   createGatewayRuntime,
 } from './gateway';
+import { createToolTiming } from './tool-timing';
 import { runErrorType, setupSignalFailure } from './completion';
 import { bindPiCancellation } from './cancellation';
 import { classifyRunFailure, ErrorCodes } from '@shared/errors';
@@ -454,6 +455,7 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
     logToFile(`[pi-task] tools passed to model: ${toolNames.join(', ')}`);
     const taskPrompt = `${prompt}\n\n${renderToolInventory(toolNames)}`;
 
+    const toolTiming = createToolTiming(analyticsProperties);
     const unsubscribe = agentSession.subscribe((event) => {
       // Mirror the turn into AIO. No-op when --capture-aio is off. Runs
       // before the role guard so the module's own filter is authoritative.
@@ -485,11 +487,18 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
           break;
         }
         case 'tool_execution_start': {
+          toolTiming.start(event.toolCallId, event.toolName, event.args);
           const args = JSON.stringify(event.args ?? {}).slice(0, 200);
           logToFile(`[pi-task] → ${event.toolName} ${args}`);
           break;
         }
         case 'tool_execution_end': {
+          toolTiming.end(
+            event.toolCallId,
+            event.toolName,
+            event.isError,
+            event.durationMs,
+          );
           if (event.isError) {
             const detail =
               typeof event.result === 'string'
@@ -638,6 +647,7 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
       output_tokens: stats.tokens.output,
       cache_creation_input_tokens: stats.tokens.cacheWrite,
       cache_read_input_tokens: stats.tokens.cacheRead,
+      ...toolTiming.summary(),
       ...analyticsProperties,
     });
     // Per-task usage on one parseable line so a run's per-task time and cost are

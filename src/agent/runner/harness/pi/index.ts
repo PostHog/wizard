@@ -38,6 +38,7 @@ import {
   withGatewayRemint,
   createGatewayRuntime,
 } from './gateway';
+import { createToolTiming } from './tool-timing';
 import { createAioCapture } from '../../../aio-capture';
 import type {
   AgentResult,
@@ -622,6 +623,7 @@ export const piBackend: AgentHarness = {
       // Map pi events onto the run spinner + the log file, mirroring the
       // anthropic path's log shape (assistant turns + tool I/O) and driving the
       // single run spinner with one stable status at a time (no overlap).
+      const toolTiming = createToolTiming();
       const unsubscribe = agentSession.subscribe((event) => {
         // Mirror the turn into AIO. No-op when --capture-aio is off. Runs
         // before the role guard so the module's own filter (assistant-only)
@@ -666,6 +668,7 @@ export const piBackend: AgentHarness = {
           }
           case 'tool_execution_start': {
             toolCalls += 1;
+            toolTiming.start(event.toolCallId, event.toolName, event.args);
             const args = JSON.stringify(event.args ?? {}).slice(0, 200);
             logToFile(`[pi] → ${event.toolName} ${args}`);
             if (structured) {
@@ -688,6 +691,12 @@ export const piBackend: AgentHarness = {
             break;
           }
           case 'tool_execution_end': {
+            toolTiming.end(
+              event.toolCallId,
+              event.toolName,
+              event.isError,
+              event.durationMs,
+            );
             // Log every result in full, matching the anthropic path's
             // SDK-message logging. Call-only logs make failed runs
             // undiagnosable: a tool can fail (or return something the model
@@ -910,6 +919,7 @@ export const piBackend: AgentHarness = {
         output_tokens: stats.tokens.output,
         cache_creation_input_tokens: stats.tokens.cacheWrite,
         cache_read_input_tokens: stats.tokens.cacheRead,
+        ...toolTiming.summary(),
       });
       spinner.stop(config.successMessage ?? 'PostHog integration complete');
       aioFailed = false;
