@@ -21,6 +21,7 @@ import { detectFramework } from './framework';
 import { discoverFeatures } from './features';
 import { checkFrameworkVersion, gatherFrameworkContext } from './context';
 import { analytics } from '@utils/analytics';
+import { logToFile } from '@utils/debug';
 import {
   getCodebaseScan,
   scannedWarehouseSources,
@@ -30,6 +31,7 @@ import {
   getDetectedWarehouseSources,
 } from '../warehouse-sources/detect';
 import { findPackageJsons } from './package-scanning';
+import { findMcpServers } from '../mcp-servers';
 
 // Session-free, so runProgram can stamp without loading the session.
 
@@ -39,6 +41,8 @@ export async function detectPostHogIntegration(
   const session = ctx.session;
   const installDir = session.installDir;
 
+  // The scan reads source files, so it runs beside framework detection.
+  const mcpServer = detectMcpServer(ctx, installDir);
   const detectedIntegration = await detectFramework(installDir);
 
   if (detectedIntegration) {
@@ -89,6 +93,7 @@ export async function detectPostHogIntegration(
 
   await offerScannedWarehouseSources(ctx);
   detectExistingPostHog(ctx, installDir);
+  await mcpServer;
 
   ctx.setDetectionComplete();
 }
@@ -213,5 +218,23 @@ export function detectExistingPostHog(
       { step: 'detectExistingPosthog' },
     );
     ctx.setPosthogSdkDetected(false);
+  }
+}
+
+/** The servers the mcp-analytics scan suggests in installDir. A failed scan suggests none. */
+export async function detectMcpServer(
+  ctx: Pick<ProgramReadyContext, 'setMcpServerCandidates'>,
+  installDir: string,
+): Promise<void> {
+  try {
+    const scan = await findMcpServers(installDir);
+    logToFile(`[detection] MCP scan: ${scan.candidates.length} candidate(s)`);
+    ctx.setMcpServerCandidates(scan.candidates);
+  } catch (error) {
+    analytics.captureException(
+      error instanceof Error ? error : new Error(String(error)),
+      { step: 'detectMcpServer' },
+    );
+    ctx.setMcpServerCandidates([]);
   }
 }

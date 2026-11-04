@@ -4,8 +4,8 @@ import { DiscoveredFeature } from '@shared/discovered-feature';
 import { ScanConsent } from '@shared/run-state';
 import { buildSession } from '../wizard-session';
 
-describe('sessionProperties: the SDK verdict', () => {
-  it('includes the posthog_sdk_detected verdict once sharing is granted', () => {
+describe('sessionProperties: the posthog_sdk_detected verdict', () => {
+  it('includes the verdict once sharing is granted', () => {
     const session = buildSession({});
     session.scanConsent = ScanConsent.Granted;
     expect(sessionProperties(session).posthog_sdk_detected).toBe(false);
@@ -14,7 +14,7 @@ describe('sessionProperties: the SDK verdict', () => {
     expect(sessionProperties(session).posthog_sdk_detected).toBe(true);
   });
 
-  // It is a package.json scan result, so it waits on the same consent.
+  // It is a scan result, so it waits on the same consent.
   it('omits the verdict while consent is undecided or declined', () => {
     const session = buildSession({});
     session.posthogSdkDetected = true;
@@ -28,6 +28,35 @@ describe('sessionProperties: the SDK verdict', () => {
     expect(sessionProperties(session)).not.toHaveProperty(
       'posthog_sdk_detected',
     );
+  });
+});
+
+describe('sessionProperties: the MCP server scan', () => {
+  it('reports the verdict and candidate count once sharing is granted', () => {
+    const session = buildSession({});
+    session.scanConsent = ScanConsent.Granted;
+    expect(sessionProperties(session)).toMatchObject({
+      mcp_server_detected: false,
+      mcp_server_candidate_count: 0,
+    });
+
+    session.mcpServerCandidates = ['apps/mcp', 'examples/server.ts'];
+    expect(sessionProperties(session)).toMatchObject({
+      mcp_server_detected: true,
+      mcp_server_candidate_count: 2,
+    });
+  });
+
+  it('omits both while consent is undecided or declined', () => {
+    const session = buildSession({});
+    session.mcpServerCandidates = ['apps/mcp'];
+
+    for (const consent of [ScanConsent.Undecided, ScanConsent.Declined]) {
+      session.scanConsent = consent;
+      const properties = sessionProperties(session);
+      expect(properties).not.toHaveProperty('mcp_server_detected');
+      expect(properties).not.toHaveProperty('mcp_server_candidate_count');
+    }
   });
 });
 

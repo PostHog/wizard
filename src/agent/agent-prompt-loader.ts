@@ -552,6 +552,9 @@ function renderHandoffContext(task: QueuedTask, store: QueueStore): string {
     if (handoff.reportSection) {
       lines.push(`- report section:\n${handoff.reportSection}`);
     }
+    if (handoff.packages?.length) {
+      lines.push(`- packages to install: ${handoff.packages.join(', ')}`);
+    }
     lines.push('');
   }
   if (lines.length === 0) return '';

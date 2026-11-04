@@ -333,6 +333,9 @@ export const WIZARD_ORCHESTRATOR_SEEDED_TASKS_FLAG_KEY =
   'wizard-orchestrator-seeded-tasks';
 /** Kill switch over a shipped default: ONLY an explicit 'false' excludes the AI Observability and Logs tasks from default integration runs — absent or fetch-failed means include, so the default never vanishes on a network hiccup. */
 export const WIZARD_DEFAULT_AIO_LOGS_FLAG_KEY = 'wizard-default-aio-logs';
+/** Kill switch over a shipped default: ONLY an explicit 'false' excludes the MCP analytics task from default integration runs — absent or fetch-failed means include. It launches at a 0% rollout, which reads 'false'. */
+export const WIZARD_DEFAULT_MCP_ANALYTICS_FLAG_KEY =
+  'wizard-default-mcp-analytics';
 /** Boolean flag: true runs the Decisions judgment service in shadow (ask and log, never act). */
 export const WIZARD_DECISIONS_DETECTION_FLAG_KEY = 'wizard-decisions-detection';
 // Reading a flag enters this run into that flag's experiment, so a closed set — not a
@@ -345,6 +348,7 @@ export const WIZARD_FLAG_KEYS = [
   WIZARD_SELF_DRIVING_USE_PI_HARNESS_FLAG_KEY,
   WIZARD_BASIC_INTEGRATION_AGENTIC_DETECTION_FLAG_KEY,
   WIZARD_DEFAULT_AIO_LOGS_FLAG_KEY,
+  WIZARD_DEFAULT_MCP_ANALYTICS_FLAG_KEY,
   WIZARD_DECISIONS_DETECTION_FLAG_KEY,
 ] as const;
 /** User-Agent for wizard HTTP requests and MCP server identification. */

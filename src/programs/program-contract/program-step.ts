@@ -51,6 +51,7 @@ export interface ProgramReadyContext {
   readonly addDiscoveredFeature: (feature: DiscoveredFeature) => void;
   readonly setDetectionComplete: () => void;
   readonly setPosthogSdkDetected: (detected: boolean) => void;
+  readonly setMcpServerCandidates: (candidates: readonly string[]) => void;
 }
 
 /**
@@ -229,12 +230,24 @@ export interface ProgramConfig {
     notice?: TaskNotice;
   }>;
   /**
-   * Task types this run excludes, decided from the run's wizard flags. An
-   * excluded type does not exist for the run: the planner cannot enqueue it
-   * and no agent boots for it. The program owns the flag→type mapping; the
+   * Task types this run excludes, decided from the run's wizard flags and the
+   * session. An excluded type does not exist for the run: the planner cannot
+   * enqueue it and no agent boots for it. The program owns the mapping; the
    * runner only applies it.
    */
-  excludedTaskTypes?: (flags: Record<string, string>) => readonly string[];
+  excludedTaskTypes?: (
+    flags: Record<string, string>,
+    session: ProgramSession,
+  ) => readonly string[];
+  /**
+   * Facts the program states itself, one line each, added to every orchestrator
+   * prompt beside the Decisions facts. Same arguments as `excludedTaskTypes`, so
+   * a program states a fact only for a task type it keeps.
+   */
+  detectedFacts?: (
+    flags: Record<string, string>,
+    session: ProgramSession,
+  ) => readonly string[];
   /** Prerequisites: other program ids that must have run first */
   requires?: string[];
   /**
