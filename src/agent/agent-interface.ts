@@ -1420,19 +1420,29 @@ export async function runAgent(
           // The gateway's policy abort ends every program, from a work turn's
           // reply or a subagent's result (the Agent tool's result block).
           const blocks = message.message?.content;
+          const messageType = (message as { type?: unknown }).type;
           for (const block of Array.isArray(blocks) ? blocks : []) {
+            const shellBlock = block as
+              | {
+                  type: 'tool_use';
+                  id: string;
+                  name: string;
+                  input?: { command?: unknown };
+                }
+              | { type: 'tool_result'; tool_use_id: string }
+              | { type: 'text' };
             if (
-              message.type === 'assistant' &&
-              block.type === 'tool_use' &&
-              block.name === 'Bash' &&
-              typeof block.input?.command === 'string'
+              messageType === 'assistant' &&
+              shellBlock.type === 'tool_use' &&
+              shellBlock.name === 'Bash' &&
+              typeof shellBlock.input?.command === 'string'
             ) {
-              activeBashCalls.set(block.id, block.input.command);
-              config?.onBashCommand?.(block.input.command);
+              activeBashCalls.set(shellBlock.id, shellBlock.input.command);
+              config?.onBashCommand?.(shellBlock.input.command);
             } else if (
-              message.type === 'user' &&
-              block.type === 'tool_result' &&
-              activeBashCalls.delete(block.tool_use_id)
+              messageType === 'user' &&
+              shellBlock.type === 'tool_result' &&
+              activeBashCalls.delete(shellBlock.tool_use_id)
             ) {
               config?.onBashCommand?.([...activeBashCalls.values()].at(-1));
             }
