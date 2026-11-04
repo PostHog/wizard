@@ -124,7 +124,7 @@ afterEach(() => {
 });
 
 describe('the email provider offer after install', () => {
-  it('asks about the detected provider once the outro is dismissed', async () => {
+  it('offers PostHog email without naming the detected provider once the outro is dismissed', async () => {
     const { store, app } = setup();
     await delay();
 
@@ -132,9 +132,10 @@ describe('the email provider offer after install', () => {
       PostHogIntegrationScreenId.EmailProviderOffer,
     );
     expect(app.lastFrame()?.replace(/\s+/g, ' ')).toContain(
-      'Your app sends email with Resend. PostHog can send it too, triggered by the events you already track. Want to try it?',
+      "PostHog can send this app's transactional emails directly from code, with delivery and engagement events next to your product analytics. Want to try it?",
     );
-    expect(app.lastFrame()).toContain("No, I'm happy with Resend");
+    expect(app.lastFrame()).toContain('No thanks');
+    expect(app.lastFrame()).not.toContain('Resend');
     expect(wizardCapture).toHaveBeenCalledWith('email provider offer shown', {
       providers: ['Resend'],
     });

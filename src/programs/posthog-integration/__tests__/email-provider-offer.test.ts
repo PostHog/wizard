@@ -9,7 +9,7 @@ import type { ApiUser } from '@shared/api';
 import {
   emailProviderOffer,
   emailProviderOfferChoices,
-  emailProviderOfferQuestion,
+  EMAIL_PROVIDER_OFFER_QUESTION,
 } from '@programs/posthog-integration';
 
 function detected(kind: string, label: string) {
@@ -124,19 +124,9 @@ describe('emailProviderOffer', () => {
     ).toBeUndefined();
   });
 
-  it.each<[string, ReturnType<typeof detected>[], string, string]>([
-    [
-      'one provider',
-      [RESEND],
-      'Your app sends email with Resend.',
-      "No, I'm happy with Resend",
-    ],
-    [
-      'two providers',
-      [RESEND, detected('SendGrid', 'SendGrid')],
-      'Your app sends email with Resend and SendGrid.',
-      "No, I'm happy with my current setup",
-    ],
+  it.each<[string, ReturnType<typeof detected>[]]>([
+    ['one provider', [RESEND]],
+    ['two providers', [RESEND, detected('SendGrid', 'SendGrid')]],
     [
       'three providers',
       [
@@ -144,12 +134,10 @@ describe('emailProviderOffer', () => {
         detected('SendGrid', 'SendGrid'),
         detected('Postmark', 'Postmark'),
       ],
-      'Your app sends email with Resend, SendGrid and others.',
-      "No, I'm happy with my current setup",
     ],
   ])(
-    'names the providers for %s and keeps all of them in the offer',
-    (_case, tools, opening, decline) => {
+    'keeps every provider for analytics but names none of them for %s',
+    (_case, tools) => {
       const offer = emailProviderOffer(
         finishedRun(scanFinding(...tools)),
         OFFER_ON,
@@ -159,13 +147,18 @@ describe('emailProviderOffer', () => {
       expect(offer.providers.map((provider) => provider.kind)).toEqual(
         tools.map((tool) => tool.kind),
       );
-      expect(emailProviderOfferQuestion(offer)).toBe(
-        `${opening} PostHog can send it too, triggered by the events you already track. Want to try it?`,
+      const shown = [
+        EMAIL_PROVIDER_OFFER_QUESTION,
+        ...emailProviderOfferChoices().map((c) => c.label),
+      ].join('\n');
+      for (const tool of tools) expect(shown).not.toContain(tool.label);
+      expect(EMAIL_PROVIDER_OFFER_QUESTION).toBe(
+        "PostHog can send this app's transactional emails directly from code, with delivery and engagement events next to your product analytics. Want to try it?",
       );
-      expect(emailProviderOfferChoices(offer).map((c) => c.label)).toEqual([
+      expect(emailProviderOfferChoices().map((c) => c.label)).toEqual([
         'Yes, show me how',
         'Not now',
-        decline,
+        'No thanks',
       ]);
     },
   );

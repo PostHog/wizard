@@ -9,7 +9,7 @@ import {
   EmailProviderOfferAnswer,
   emailProviderOffer,
   emailProviderOfferChoices,
-  emailProviderOfferQuestion,
+  EMAIL_PROVIDER_OFFER_QUESTION,
   reportEmailProviderOfferAnswered,
   reportEmailProviderOfferShown,
   type EmailProviderOffer,
@@ -76,7 +76,7 @@ const OfferFlow = ({
     );
   }
 
-  return <QuestionPicker offer={offer} onAnswer={answer} />;
+  return <QuestionPicker onAnswer={answer} />;
 };
 
 /**
@@ -87,10 +87,8 @@ const OfferFlow = ({
 export const QUESTION_READ_GUARD_MS = 500;
 
 const QuestionPicker = ({
-  offer,
   onAnswer,
 }: {
-  offer: EmailProviderOffer;
   onAnswer: (choice: EmailProviderOfferAnswer) => void;
 }) => {
   const [openedAt] = useState(() => Date.now());
@@ -105,10 +103,10 @@ const QuestionPicker = ({
 
   return (
     <Box flexDirection="column" flexGrow={1} marginTop={1}>
-      <Text>{emailProviderOfferQuestion(offer)}</Text>
+      <Text>{EMAIL_PROVIDER_OFFER_QUESTION}</Text>
       <Box marginTop={1}>
         <PickerMenu
-          options={emailProviderOfferChoices(offer)}
+          options={emailProviderOfferChoices()}
           onSelect={(value) => {
             if (Date.now() - openedAt < QUESTION_READ_GUARD_MS) return;
             onAnswer(Array.isArray(value) ? value[0] : value);
@@ -137,7 +135,7 @@ const WorkflowsLink = ({
       {offer.migrateCommand && (
         <Box marginTop={1}>
           <Text>
-            Move your {offer.providers[0].label} emails with{' '}
+            Move your existing emails with{' '}
             <Text bold>{offer.migrateCommand}</Text>
           </Text>
         </Box>

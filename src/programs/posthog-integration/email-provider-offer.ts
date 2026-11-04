@@ -70,40 +70,23 @@ export function emailProviderOffer(
   };
 }
 
-function providerList([
-  first,
-  second,
-  ...rest
-]: EmailProviderOffer['providers']): string {
-  if (second === undefined) return first.label;
-  if (rest.length === 0) return `${first.label} and ${second.label}`;
-  return `${first.label}, ${second.label} and others`;
-}
-
 function providerKinds(offer: EmailProviderOffer): EmailProviderKind[] {
   return offer.providers.map((provider) => provider.kind);
 }
 
-function declineLabel(offer: EmailProviderOffer): string {
-  const [only, ...others] = offer.providers;
-  return others.length === 0
-    ? `No, I'm happy with ${only.label}`
-    : "No, I'm happy with my current setup";
-}
+export const EMAIL_PROVIDER_OFFER_QUESTION =
+  "PostHog can send this app's transactional emails directly from code, " +
+  'with delivery and engagement events next to your product analytics. ' +
+  'Want to try it?';
 
-export function emailProviderOfferQuestion(offer: EmailProviderOffer): string {
-  return `Your app sends email with ${providerList(
-    offer.providers,
-  )}. PostHog can send it too, triggered by the events you already track. Want to try it?`;
-}
-
-export function emailProviderOfferChoices(
-  offer: EmailProviderOffer,
-): { label: string; value: EmailProviderOfferAnswer }[] {
+export function emailProviderOfferChoices(): {
+  label: string;
+  value: EmailProviderOfferAnswer;
+}[] {
   return [
     { label: 'Yes, show me how', value: EmailProviderOfferAnswer.Yes },
     { label: 'Not now', value: EmailProviderOfferAnswer.NotNow },
-    { label: declineLabel(offer), value: EmailProviderOfferAnswer.No },
+    { label: 'No thanks', value: EmailProviderOfferAnswer.No },
   ];
 }
 

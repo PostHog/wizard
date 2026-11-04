@@ -243,7 +243,7 @@ export {
   EmailProviderOfferAnswer,
   emailProviderOffer,
   emailProviderOfferChoices,
-  emailProviderOfferQuestion,
+  EMAIL_PROVIDER_OFFER_QUESTION,
   reportEmailProviderOfferAnswered,
   reportEmailProviderOfferShown,
   type EmailProviderOffer,
