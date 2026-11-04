@@ -45,6 +45,7 @@ import type {
   BackendRunInputs,
   TaskRunInputs,
 } from '../types';
+import type { createBashToolDefinition } from '@earendil-works/pi-coding-agent';
 import type { BootstrapResult } from '../../shared/types';
 import type { ProgressEmitter } from '../../../progress';
 import { createEmitLog } from '../../shared/progress-collector';
@@ -139,6 +140,35 @@ export function buildScrubbedEnv(): NodeJS.ProcessEnv {
 export function withMode<T>(tool: T, mode: 'sequential' | 'parallel'): T {
   (tool as { executionMode?: 'sequential' | 'parallel' }).executionMode = mode;
   return tool;
+}
+
+/** Longest one bash command may run, in seconds; pi's bash has no default timeout. */
+export const BASH_TIMEOUT_CAP_SECONDS = 300;
+
+type BashToolDefinition = ReturnType<typeof createBashToolDefinition>;
+
+/** A copy of a bash tool whose `timeout` is clamped to the cap, also when the model sends none. */
+export function withBashTimeoutCap(
+  tool: BashToolDefinition,
+): BashToolDefinition {
+  return {
+    ...tool,
+    description: `${tool.description} Commands are stopped after at most ${BASH_TIMEOUT_CAP_SECONDS} seconds.`,
+    execute: (toolCallId, params, signal, onUpdate, ctx) =>
+      tool.execute(
+        toolCallId,
+        {
+          ...params,
+          timeout: Math.min(
+            params.timeout ?? BASH_TIMEOUT_CAP_SECONDS,
+            BASH_TIMEOUT_CAP_SECONDS,
+          ),
+        },
+        signal,
+        onUpdate,
+        ctx,
+      ),
+  };
 }
 
 /**
@@ -515,9 +545,11 @@ export const piBackend: AgentHarness = {
       // spawns gets a scrubbed env, so no secret or ambient variable reaches an
       // `npm install`. Shared with the subagent so the lockdown is inherited.
       const scrubbedBash = withMode(
-        createBashToolDefinition(input.installDir, {
-          spawnHook: (ctx) => ({ ...ctx, env: buildScrubbedEnv() }),
-        }),
+        withBashTimeoutCap(
+          createBashToolDefinition(input.installDir, {
+            spawnHook: (ctx) => ({ ...ctx, env: buildScrubbedEnv() }),
+          }),
+        ),
         'sequential',
       );
 

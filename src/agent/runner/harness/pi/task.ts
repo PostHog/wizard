@@ -54,6 +54,7 @@ import {
   buildScrubbedEnv,
   extractText,
   lastStatusLine,
+  withBashTimeoutCap,
   withMode,
 } from './index';
 import { createAioCapture } from '../../../aio-capture';
@@ -371,9 +372,11 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
       write: () => withMode(createWriteToolDefinition(dir), 'sequential'),
       bash: () =>
         withMode(
-          createBashToolDefinition(dir, {
-            spawnHook: (ctx) => ({ ...ctx, env: buildScrubbedEnv() }),
-          }),
+          withBashTimeoutCap(
+            createBashToolDefinition(dir, {
+              spawnHook: (ctx) => ({ ...ctx, env: buildScrubbedEnv() }),
+            }),
+          ),
           'sequential',
         ),
       ls: () => withMode(createLsToolDefinition(dir), 'parallel'),
