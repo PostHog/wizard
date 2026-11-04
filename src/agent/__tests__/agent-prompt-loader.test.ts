@@ -32,6 +32,41 @@ function registryOf(prompts: AgentPrompt[]): AgentRegistry {
 }
 
 describe('parseAgentPrompt', () => {
+  it('carries a task budget through resolution and rejects an unbounded or invalid budget', () => {
+    const prompt = parseAgentPrompt(
+      '---\ntimeoutSeconds: 600\n---\nreview',
+      'review',
+    );
+    const dir = tmpDir();
+    try {
+      const store = new QueueStore(dir, 'budget-test');
+      const task = store.enqueue({ type: 'review' });
+      expect(resolveTask(registryOf([prompt]), task, store).timeoutMs).toBe(
+        600_000,
+      );
+      expect(parseAgentPrompt('body', 'review').timeoutMs).toBeUndefined();
+      for (const value of [
+        '0',
+        '-1',
+        'NaN',
+        'Infinity',
+        '0.5',
+        '86401',
+        '[600]',
+        '',
+      ]) {
+        expect(() =>
+          parseAgentPrompt(
+            `---\ntimeoutSeconds: ${value}\n---\nbody`,
+            'review',
+          ),
+        ).toThrow('Invalid timeoutSeconds');
+      }
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   const sample = `---
 type: instrument-events
 model_pi: openai/gpt-5.6-terra     # per-profile model targets

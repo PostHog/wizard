@@ -290,6 +290,42 @@ describe('pi-security: extension state machine (fail-closed + runaway + latch)',
     return { pi, handlers };
   }
 
+  it('blocks new tool calls after cancellation and calls cancelled while scanning', async () => {
+    const controller = new AbortController();
+    const { factory } = createSecurityExtension({
+      workingDirectory: PROJECT,
+      signal: controller.signal,
+    });
+    const { pi, handlers } = fakePi();
+    factory(pi);
+    mockedScan.mockImplementationOnce(() => {
+      controller.abort();
+      return Promise.resolve({ matched: false, matches: [] });
+    });
+    expect(
+      await handlers.tool_call({
+        toolName: 'bash',
+        input: { command: 'npm run build' },
+      }),
+    ).toMatchObject({
+      block: true,
+      reason: expect.stringContaining('cancelled'),
+    });
+    mockedScan.mockClear();
+    for (const toolName of [
+      'bash',
+      'write',
+      'complete_task',
+      'publish_handoff',
+    ]) {
+      expect(await handlers.tool_call({ toolName, input: {} })).toMatchObject({
+        block: true,
+        reason: expect.stringContaining('cancelled'),
+      });
+    }
+    expect(mockedScan).not.toHaveBeenCalled();
+  });
+
   test('blocks a denied call and counts it', async () => {
     const { factory, state } = createSecurityExtension({
       workingDirectory: PROJECT,

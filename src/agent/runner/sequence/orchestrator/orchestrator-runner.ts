@@ -82,6 +82,7 @@ import {
   type RunTask,
 } from './executor';
 import { RunMetrics } from './run-metrics';
+import { TaskDeadlineExceeded, withTaskDeadline } from './task-deadline';
 import { dependencyClosure, uncoveredBySink } from './queue-tools';
 import { deferSeededTasks } from './seeded-deps';
 import { LONGER_ASK_TIMEOUT_MS, shouldDisableAsk } from '@shared/ask-policy';
@@ -1278,42 +1279,63 @@ async function executeOrchestrator(
       const taskHarness = requireTaskHarness(taskPick);
       const taskModel = taskModelSpec(registry, task, taskPick.harness);
       let taskResult: AgentResult;
+      let activeCommand: string | undefined;
       try {
-        taskResult = await taskHarness.runTask({
+        taskResult = await withTaskDeadline(
+          resolved.timeoutMs,
           signal,
-          config,
-          input,
-          boot,
-          emit: (event) => {
-            if (deliversRunReport(registry.sinkTypes, task.type, event)) {
-              reportDeliveredIds.add(task.id);
-            }
-            emit(event);
-          },
-          prompt: assembleTaskPrompt(
-            promptContext,
-            resolved.prompt,
-            skillPaths,
-          ),
-          spinner,
-          model: requireKnownModel(taskModel.model, taskPick.model),
-          effort: taskModel.effort,
-          allowedTools: resolved.allowedTools,
-          disallowedTools: resolved.disallowedTools,
-          askBridge: canAsk(registry.get(task.type)) ? askBridge : undefined,
-          orchestrator: orchestratorCtx(task.id),
-          spinnerMessage: '',
-          successMessage: '',
-          requestRemark: false,
-          analyticsProperties: {
-            task_type: task.type,
-            task_id: task.id,
-            harness: taskPick.harness,
-          },
-        });
+          (taskSignal) =>
+            taskHarness.runTask({
+              onBashCommand: (command) => {
+                activeCommand = command;
+              },
+              signal: taskSignal,
+              config,
+              input,
+              boot,
+              emit: (event) => {
+                if (deliversRunReport(registry.sinkTypes, task.type, event)) {
+                  reportDeliveredIds.add(task.id);
+                }
+                emit(event);
+              },
+              prompt: assembleTaskPrompt(
+                promptContext,
+                resolved.prompt,
+                skillPaths,
+              ),
+              spinner,
+              model: requireKnownModel(taskModel.model, taskPick.model),
+              effort: taskModel.effort,
+              allowedTools: resolved.allowedTools,
+              disallowedTools: resolved.disallowedTools,
+              askBridge: canAsk(registry.get(task.type))
+                ? askBridge
+                : undefined,
+              orchestrator: orchestratorCtx(task.id),
+              spinnerMessage: '',
+              successMessage: '',
+              requestRemark: false,
+              analyticsProperties: {
+                task_type: task.type,
+                task_id: task.id,
+                harness: taskPick.harness,
+              },
+            }),
+          () => activeCommand,
+        );
       } catch (error) {
         if (signal?.aborted) return;
         if (error instanceof RunTaskFatal) throw error;
+        if (error instanceof TaskDeadlineExceeded) {
+          const message = `${task.label ?? task.type}: ${error.message}`;
+          store.fail(task.id, { type: 'timeout', message });
+          throw new RunTaskFatal(
+            { code: ErrorCodes.AgentOrchestratorTasksFailed, message },
+            RunOutcome.Failed,
+            task.type,
+          );
+        }
         const failure = classifyRunFailure(error);
         throw new RunTaskFatal(
           {

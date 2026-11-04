@@ -52,7 +52,7 @@ vi.mock('../../../../agent-prompt-loader', async (importActual) => {
         actual.buildRegistry(
           [
             prompt('plan', { seed: true }),
-            prompt('install'),
+            prompt('install', { timeoutMs: taskTimeoutMs }),
             prompt('report', { sink: true }),
           ],
           'test-flow',
@@ -67,29 +67,32 @@ import type { SequenceContext } from '../../../shared/types';
 import type { QueueStore } from '../queue';
 
 type Inputs = {
+  onBashCommand?: (command: string | undefined) => void;
   emit: (event: { kind: 'handoff'; text: string }) => void;
   signal: AbortSignal;
   analyticsProperties: { task_type: string; task_id?: string };
   orchestrator: { store: QueueStore };
 };
 
-type Behavior = (inputs: Inputs, taskId: string) => void;
+type Behavior = (inputs: Inputs, taskId: string) => void | Promise<void>;
 let behaviors: Record<string, Behavior>;
+let taskTimeoutMs: number | undefined;
+let maxAttempts = 1;
 
 /** The fake harness: the seed queues install then report, each task runs its scripted behavior. */
-function harnessRun(raw: unknown) {
+async function harnessRun(raw: unknown) {
   const inputs = raw as Inputs;
   const { store } = inputs.orchestrator;
   const type = inputs.analyticsProperties.task_type;
   if (type === 'seed') {
-    const install = store.enqueue({ type: 'install', maxAttempts: 1 });
+    const install = store.enqueue({ type: 'install', maxAttempts });
     store.enqueue({
       type: 'report',
       dependsOn: [install.id],
       maxAttempts: 1,
     });
   } else {
-    behaviors[type](inputs, inputs.analyticsProperties.task_id as string);
+    await behaviors[type](inputs, inputs.analyticsProperties.task_id as string);
   }
   return Promise.resolve({ kind: 'success' as const });
 }
@@ -102,8 +105,12 @@ describe('a task failing after the run report was published', () => {
 
   beforeEach(() => {
     dir = fs.mkdtempSync(path.join(os.tmpdir(), 'delivered-report-'));
+    taskTimeoutMs = undefined;
+    maxAttempts = 1;
     behaviors = {
-      install: (inputs, id) => inputs.orchestrator.store.complete(id),
+      install: (inputs, id) => {
+        inputs.orchestrator.store.complete(id);
+      },
     };
   });
 
@@ -133,6 +140,41 @@ describe('a task failing after the run report was published', () => {
       interaction: undefined,
       signal,
     } as unknown as SequenceContext);
+
+  it('joins timed-out work, reports an incomplete task, and neither retries nor starts dependents', async () => {
+    taskTimeoutMs = 10;
+    maxAttempts = 3;
+    let cleaned = false;
+    let queue: QueueStore | undefined;
+    let calls = 0;
+    behaviors.install = async (inputs) => {
+      calls++;
+      inputs.onBashCommand?.('pnpm typecheck');
+      queue = inputs.orchestrator.store;
+      await new Promise<void>((resolve) =>
+        inputs.signal.addEventListener('abort', () => resolve(), {
+          once: true,
+        }),
+      );
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      inputs.onBashCommand?.(undefined);
+      cleaned = true;
+    };
+    behaviors.report = vi.fn();
+    const result = await run();
+    expect(result.outcome).toBe(RunOutcome.Failed);
+    expect(result.failure?.message).toContain('Task incomplete');
+    expect(result.failure?.message).toContain('will not be retried');
+    expect(result.failure?.message).toContain(
+      'Interrupted command: pnpm typecheck',
+    );
+    expect(cleaned).toBe(true);
+    expect(calls).toBe(1);
+    expect(behaviors.report).not.toHaveBeenCalled();
+    expect(queue?.list().find((task) => task.type === 'install')).toMatchObject(
+      { status: 'failed', attempts: 1, error: { type: 'timeout' } },
+    );
+  });
 
   it('keeps the run successful when the sink ends Failed', async () => {
     behaviors.report = (inputs, id) => {

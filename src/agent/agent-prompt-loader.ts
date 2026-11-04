@@ -250,6 +250,8 @@ export interface AgentPrompt {
   runnerSeeded: boolean;
   /** Marks a supplementary task: terminal failure unblocks dependents and never fails the run. */
   optional: boolean;
+  /** Wall-clock budget for one task attempt, including harness setup and cleanup. */
+  timeoutMs?: number;
   /** Per-harness model/effort; both profiles also require gateway admission and prompt compatibility. */
   modelPi?: string;
   effortPi?: ThinkingLevel;
@@ -420,6 +422,22 @@ export function parseAgentPrompt(
   }
 
   const str = (v: unknown) => (typeof v === 'string' ? v : undefined);
+  const timeoutSeconds = fields.timeoutSeconds;
+  let timeoutMs: number | undefined;
+  if (timeoutSeconds !== undefined) {
+    const seconds = Number(timeoutSeconds);
+    if (
+      typeof timeoutSeconds !== 'string' ||
+      !Number.isInteger(seconds) ||
+      seconds <= 0 ||
+      seconds > 86_400
+    ) {
+      throw new Error(
+        `Invalid timeoutSeconds for agent prompt "${fallbackType}"`,
+      );
+    }
+    timeoutMs = seconds * 1000;
+  }
   // Effort is remote data — reject typos here so downstream carries ThinkingLevel.
   const effort = (v: unknown, key: string): ThinkingLevel | undefined => {
     if (v === undefined) return undefined;
@@ -442,6 +460,7 @@ export function parseAgentPrompt(
     sink: fields.sink === 'true',
     runnerSeeded: fields.runnerSeeded === 'true',
     optional: fields.optional === 'true',
+    timeoutMs,
     modelPi: str(fields.model_pi),
     effortPi: effort(fields.effort_pi, 'effort_pi'),
     modelSdk: str(fields.model_sdk),
@@ -586,6 +605,7 @@ export function resolveTask(
     ...agentRunTools(prompt),
     prompt: body,
     skills: prompt.skills,
+    timeoutMs: prompt.timeoutMs,
   };
 }
 

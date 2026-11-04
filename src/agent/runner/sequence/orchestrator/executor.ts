@@ -22,6 +22,7 @@ export interface ResolvedTask {
   /** Mini-skills to install before the task runs (the HOW). */
   skills: readonly string[];
   prompt: string;
+  timeoutMs?: number;
 }
 
 /** Resolves a queued task to what the agent needs. The real one is markdown-backed. */

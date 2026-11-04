@@ -432,6 +432,7 @@ export const piBackend: AgentHarness = {
         './security'
       );
       const security = createSecurityExtension({
+        signal: inputs.signal,
         readOnly: config.readOnly,
         disallowedTools: runConfig.disallowedTools,
         getWizardAskPending: () => askState.pending,

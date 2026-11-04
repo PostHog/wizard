@@ -867,6 +867,8 @@ export async function runAgent(
     analyticsProperties?: Record<string, unknown>;
     /** Abort the SDK query when this run exceeds its own deadline. */
     timeoutMs?: number;
+    /** Active shell command for host-side timeout diagnostics. */
+    onBashCommand?: (command: string | undefined) => void;
   },
   middleware?: {
     onMessage(message: any): void;
@@ -881,6 +883,7 @@ export async function runAgent(
     };
   }
   const emit = agentConfig.emit ?? NO_PROGRESS;
+  const activeBashCalls = new Map<string, string>();
   const {
     spinnerMessage = 'Customizing your PostHog setup...',
     successMessage = 'PostHog integration complete',
@@ -1418,6 +1421,21 @@ export async function runAgent(
           // reply or a subagent's result (the Agent tool's result block).
           const blocks = message.message?.content;
           for (const block of Array.isArray(blocks) ? blocks : []) {
+            if (
+              message.type === 'assistant' &&
+              block.type === 'tool_use' &&
+              block.name === 'Bash' &&
+              typeof block.input?.command === 'string'
+            ) {
+              activeBashCalls.set(block.id, block.input.command);
+              config?.onBashCommand?.(block.input.command);
+            } else if (
+              message.type === 'user' &&
+              block.type === 'tool_result' &&
+              activeBashCalls.delete(block.tool_use_id)
+            ) {
+              config?.onBashCommand?.([...activeBashCalls.values()].at(-1));
+            }
             if (block.type === 'tool_use' && block.name === 'Agent') {
               subagentCallIds.add(block.id);
             } else if (message.type === 'assistant' && block.type === 'text') {

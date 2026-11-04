@@ -98,6 +98,8 @@ export type AgentResult =
  * them from the program-level config the linear pipeline assembles once.
  */
 export interface TaskRunInputs {
+  /** Active shell command for host-side timeout diagnostics; undefined when it finishes. */
+  onBashCommand?: (command: string | undefined) => void;
   config: ResolvedRunConfig;
   input: RunInput;
   boot: BootstrapResult;

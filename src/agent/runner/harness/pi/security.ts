@@ -104,6 +104,7 @@ export const READ_ONLY_PI_TOOLS: ReadonlySet<string> = new Set([
 ]);
 
 export interface ToolGateContext {
+  signal?: AbortSignal;
   readOnly?: boolean;
   disallowedTools?: readonly string[];
   /** True while a wizard_ask overlay is open (interactive); blocks Write/Edit. */
@@ -494,6 +495,12 @@ export function createSecurityExtension(ctx: SecurityExtensionOptions): {
 
   const install = (pi: PiExtensionApiLike, gate: ToolGateContext): void => {
     pi.on('tool_call', async (event) => {
+      if (gate.signal?.aborted) {
+        return {
+          block: true,
+          reason: 'Run cancelled; no further tools may execute.',
+        };
+      }
       // A latched post-scan violation blocks everything that follows.
       if (state.criticalViolation) {
         return {
@@ -514,6 +521,12 @@ export function createSecurityExtension(ctx: SecurityExtensionOptions): {
         gate,
         llmProvider,
       );
+      if (gate.signal?.aborted) {
+        return {
+          block: true,
+          reason: 'Run cancelled; no further tools may execute.',
+        };
+      }
       if (decision.block) {
         state.blockedCount += 1;
         if (decision.terminate) state.criticalViolation = true;

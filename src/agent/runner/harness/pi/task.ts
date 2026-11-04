@@ -295,6 +295,7 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
     // list layered in (both the wizard-vocabulary and pi-short names).
     const { createSecurityExtension } = await import('./security');
     const security = createSecurityExtension({
+      signal: inputs.signal,
       disallowedTools: fenceDisallowList(disallowedTools),
       triageProvider: boot.triageProvider,
       getWizardAskPending: () => askState.pending,
@@ -488,11 +489,19 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
           break;
         }
         case 'tool_execution_start': {
+          if (event.toolName === 'bash') {
+            const command = (event.args as { command?: unknown } | undefined)
+              ?.command;
+            inputs.onBashCommand?.(
+              typeof command === 'string' ? command : undefined,
+            );
+          }
           const args = JSON.stringify(event.args ?? {}).slice(0, 200);
           logToFile(`[pi-task] → ${event.toolName} ${args}`);
           break;
         }
         case 'tool_execution_end': {
+          if (event.toolName === 'bash') inputs.onBashCommand?.(undefined);
           if (event.isError) {
             const detail =
               typeof event.result === 'string'

@@ -44,6 +44,12 @@ frontmatter contract rather than copying an old manifest example:
   required prompt compatibility.
 - `skills`, `allowedTools`, and `disallowedTools` shape the task's capabilities.
   Inspect the selected harness's effective tool inventory.
+- `timeoutSeconds` optionally limits a queued task's wall-clock time, including
+  harness setup and agent work. It is a positive integer up to 86400. The runner
+  cancels through the harness signal, waits for cleanup, and reports a terminal
+  incomplete-task failure without retrying or starting dependents. Tasks without
+  this field retain their existing lifetime. Pi bash commands have a separate
+  five-minute maximum, including installs.
 - `dependsOn` has different consumers: planner-enqueued tasks use actual task
   IDs supplied to `enqueue_task`, while runner-seeded tasks resolve declared
   task types after planning. It is not a universal automatic graph built from

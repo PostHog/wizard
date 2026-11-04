@@ -71,6 +71,39 @@ describe('runAgent', () => {
     };
   });
 
+  it('reports active bash commands and clears them when their result arrives', async () => {
+    mockQuery.mockImplementation(function* () {
+      yield {
+        type: 'assistant',
+        message: {
+          content: [
+            {
+              type: 'tool_use',
+              id: 'bash-1',
+              name: 'Bash',
+              input: { command: 'pnpm typecheck' },
+            },
+          ],
+        },
+      };
+      yield {
+        type: 'user',
+        message: {
+          content: [
+            { type: 'tool_result', tool_use_id: 'bash-1', content: 'ok' },
+          ],
+        },
+      };
+      yield { type: 'result', subtype: 'success', result: 'Done' };
+    });
+    const onBashCommand = vi.fn();
+    await runAgent(defaultAgentConfig, 'test', defaultOptions, mockSpinner, {
+      requestRemark: false,
+      onBashCommand,
+    });
+    expect(onBashCommand.mock.calls).toEqual([['pnpm typecheck'], [undefined]]);
+  });
+
   it('forwards the output schema to the SDK and delivers the typed result', async () => {
     const outputFormat = {
       type: 'json_schema' as const,

@@ -174,6 +174,7 @@ export const anthropicBackend: AgentHarness = {
         errorMessage,
         requestRemark,
         analyticsProperties,
+        onBashCommand: inputs.onBashCommand,
       },
     );
   },
