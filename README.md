@@ -131,9 +131,11 @@ email after signup:
 npx @posthog/wizard@latest transactional-email
 ```
 
-The setup agent checks for a verified sender and a transactional template in
-PostHog, asks for a project secret API key and writes it to your env file, and
-adds the send with `posthog-node`, the `posthog` Python SDK, or the HTTP API.
+The setup agent checks for a verified sender, writes the email in your code by
+default (or as a PostHog template, if you pick that so people who don't edit
+code can change the copy), asks for a project secret API key and writes it to
+your env file, and adds the send with `posthog-node`, the `posthog` Python SDK,
+or the HTTP API.
 Transactional emails are in beta and must be enabled for your project.
 
 ### Data Warehouse

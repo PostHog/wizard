@@ -37,10 +37,12 @@ export const config: ProgramConfig = {
     integrationLabel: 'transactional-email',
     customPrompt:
       `Set up transactional email in this project with the \`${SKILL_ID}\` ` +
-      'skill: a verified sender, a transactional template, the project secret ' +
+      "skill: a verified sender, the email in the app's code by default or " +
+      'as a PostHog template when the person picks that, the project secret ' +
       'API key, and the first send. Follow the skill\'s "Inside the PostHog ' +
       `Wizard" section. Write the final report to ./${REPORT_FILE}: the email ` +
-      'the app sends and its template ID, the files you changed, the ' +
+      'the app sends, where its content lives and its template key or ID, ' +
+      'the files you changed, the ' +
       'environment variables every deployment needs, and what the person ' +
       'still has to do.',
     successMessage: `Transactional email is set up. View the report at ./${REPORT_FILE}`,
