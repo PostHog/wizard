@@ -19,6 +19,21 @@ import type { SpinnerHandle } from '@agent/types';
 import { formatLogLine } from '@utils/debug';
 
 // Mock dependencies
+const yara = vi.hoisted(() => ({
+  terminate: undefined as ((reason: string) => void) | undefined,
+}));
+vi.mock('@agent/yara-hooks', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@agent/yara-hooks')>();
+  return {
+    ...actual,
+    createPostToolUseYaraHooks: (
+      ...args: Parameters<typeof actual.createPostToolUseYaraHooks>
+    ) => {
+      yara.terminate = args[1];
+      return actual.createPostToolUseYaraHooks(...args);
+    },
+  };
+});
 vi.mock('@utils/analytics');
 vi.mock('@utils/debug');
 
@@ -69,6 +84,39 @@ describe('runAgent', () => {
       stop: vi.fn(),
       message: vi.fn(),
     };
+  });
+
+  it('reports active bash commands and clears them when their result arrives', async () => {
+    mockQuery.mockImplementation(function* () {
+      yield {
+        type: 'assistant',
+        message: {
+          content: [
+            {
+              type: 'tool_use',
+              id: 'bash-1',
+              name: 'Bash',
+              input: { command: 'pnpm typecheck' },
+            },
+          ],
+        },
+      };
+      yield {
+        type: 'user',
+        message: {
+          content: [
+            { type: 'tool_result', tool_use_id: 'bash-1', content: 'ok' },
+          ],
+        },
+      };
+      yield { type: 'result', subtype: 'success', result: 'Done' };
+    });
+    const onBashCommand = vi.fn();
+    await runAgent(defaultAgentConfig, 'test', defaultOptions, mockSpinner, {
+      requestRemark: false,
+      onBashCommand,
+    });
+    expect(onBashCommand.mock.calls).toEqual([['pnpm typecheck'], [undefined]]);
   });
 
   it('forwards the output schema to the SDK and delivers the typed result', async () => {
@@ -430,6 +478,26 @@ describe('runAgent', () => {
       expect(result).toMatchObject({
         kind: 'abort',
         classification: 'WIZARD_ABORT',
+      });
+    });
+
+    it('reports a security stop ahead of a cancellation that arrives with it', async () => {
+      const controller = new AbortController();
+      function* stopped() {
+        yara.terminate?.('critical match');
+        controller.abort();
+        yield { type: 'system', subtype: 'init', tools: [], mcp_servers: [] };
+      }
+      mockQuery.mockReturnValue(stopped());
+      const result = await runAgent(
+        { ...defaultAgentConfig, signal: controller.signal },
+        'test prompt',
+        defaultOptions,
+        mockSpinner as unknown as SpinnerHandle,
+      );
+      expect(result).toEqual({
+        kind: 'failure',
+        classification: AgentErrorType.YARA_VIOLATION,
       });
     });
 

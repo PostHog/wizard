@@ -44,6 +44,22 @@ frontmatter contract rather than copying an old manifest example:
   required prompt compatibility.
 - `skills`, `allowedTools`, and `disallowedTools` shape the task's capabilities.
   Inspect the selected harness's effective tool inventory.
+- `timeoutSeconds` optionally limits a queued task's wall-clock time, including
+  harness setup and agent work. It is a positive integer up to 86400, and an
+  invalid value is logged and ignored. The runner cancels through the harness
+  signal, waits for cleanup, and never retries the task. A task that already
+  reported stays as it reported, and a security stop stays fatal. Tasks without
+  this field retain their existing lifetime. In a task with a budget, each Pi
+  bash command stops about a minute before the deadline, so the agent can still
+  write its handoff. A Pi bash command that sets no timeout stops after five
+  minutes in any task.
+- `onTimeout` sets what a required task with a budget does at its deadline.
+  `continue` completes it with a `conflict` saying what is unverified, so
+  dependents run and the outro reports it; this is also the fallback for a
+  missing or invalid value. `fail` stops the run. An optional task always fails
+  once and unblocks its dependents. Every deadline captures
+  `orchestrator task deadline exceeded` with its landing, because a `continue`
+  task also counts as completed.
 - `dependsOn` has different consumers: planner-enqueued tasks use actual task
   IDs supplied to `enqueue_task`, while runner-seeded tasks resolve declared
   task types after planning. It is not a universal automatic graph built from

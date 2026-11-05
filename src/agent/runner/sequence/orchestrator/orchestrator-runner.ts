@@ -82,6 +82,11 @@ import {
   type RunTask,
 } from './executor';
 import { RunMetrics } from './run-metrics';
+import {
+  landTaskDeadline,
+  TaskDeadlineExceeded,
+  withTaskDeadline,
+} from './task-deadline';
 import { dependencyClosure, uncoveredBySink } from './queue-tools';
 import { deferSeededTasks } from './seeded-deps';
 import { LONGER_ASK_TIMEOUT_MS, shouldDisableAsk } from '@shared/ask-policy';
@@ -174,6 +179,12 @@ function requireTaskHarness(pick: HarnessPick): AgentHarness & {
     runTask: NonNullable<AgentHarness['runTask']>;
   };
 }
+
+/** A security stop or decided failure (such as a 401) stays what it is when a deadline also passes. */
+const outranksDeadline = (result: AgentResult): boolean =>
+  result.kind === 'decided_failure' ||
+  (result.kind === 'failure' &&
+    result.classification === AgentErrorType.YARA_VIOLATION);
 
 /** How an agent result ends the run, or undefined when it doesn't. */
 export function terminalResult(
@@ -718,6 +729,8 @@ async function executeOrchestrator(
 
   // Tasks that published the run report: any failure after that point leaves the user's report intact.
   const reportDeliveredIds = new Set<string>();
+  // Tasks completed by their deadline rather than by their agent.
+  const incompleteTaskIds = new Set<string>();
 
   const store = new QueueStore(input.installDir, runId, {
     onTransition: (event, task) => {
@@ -1278,42 +1291,84 @@ async function executeOrchestrator(
       const taskHarness = requireTaskHarness(taskPick);
       const taskModel = taskModelSpec(registry, task, taskPick.harness);
       let taskResult: AgentResult;
+      let activeCommand: string | undefined;
+      const deadlineAt =
+        resolved.timeoutMs === undefined
+          ? undefined
+          : Date.now() + resolved.timeoutMs;
       try {
-        taskResult = await taskHarness.runTask({
+        taskResult = await withTaskDeadline(
+          resolved.timeoutMs,
           signal,
-          config,
-          input,
-          boot,
-          emit: (event) => {
-            if (deliversRunReport(registry.sinkTypes, task.type, event)) {
-              reportDeliveredIds.add(task.id);
-            }
-            emit(event);
-          },
-          prompt: assembleTaskPrompt(
-            promptContext,
-            resolved.prompt,
-            skillPaths,
-          ),
-          spinner,
-          model: requireKnownModel(taskModel.model, taskPick.model),
-          effort: taskModel.effort,
-          allowedTools: resolved.allowedTools,
-          disallowedTools: resolved.disallowedTools,
-          askBridge: canAsk(registry.get(task.type)) ? askBridge : undefined,
-          orchestrator: orchestratorCtx(task.id),
-          spinnerMessage: '',
-          successMessage: '',
-          requestRemark: false,
-          analyticsProperties: {
-            task_type: task.type,
-            task_id: task.id,
-            harness: taskPick.harness,
-          },
-        });
+          (taskSignal) =>
+            taskHarness.runTask({
+              onBashCommand: (command) => {
+                activeCommand = command;
+              },
+              deadlineAt,
+              signal: taskSignal,
+              config,
+              input,
+              boot,
+              emit: (event) => {
+                if (deliversRunReport(registry.sinkTypes, task.type, event)) {
+                  reportDeliveredIds.add(task.id);
+                }
+                emit(event);
+              },
+              prompt: assembleTaskPrompt(
+                promptContext,
+                resolved.prompt,
+                skillPaths,
+              ),
+              spinner,
+              model: requireKnownModel(taskModel.model, taskPick.model),
+              effort: taskModel.effort,
+              allowedTools: resolved.allowedTools,
+              disallowedTools: resolved.disallowedTools,
+              askBridge: canAsk(registry.get(task.type))
+                ? askBridge
+                : undefined,
+              orchestrator: orchestratorCtx(task.id),
+              spinnerMessage: '',
+              successMessage: '',
+              requestRemark: false,
+              analyticsProperties: {
+                task_type: task.type,
+                task_id: task.id,
+                harness: taskPick.harness,
+              },
+            }),
+          () => activeCommand,
+          outranksDeadline,
+        );
       } catch (error) {
         if (signal?.aborted) return;
         if (error instanceof RunTaskFatal) throw error;
+        if (error instanceof TaskDeadlineExceeded) {
+          const landing = landTaskDeadline(
+            store,
+            task,
+            resolved.onTimeout,
+            error,
+          );
+          analytics.wizardCapture('orchestrator task deadline exceeded', {
+            type: task.type,
+            timeout_ms: error.timeoutMs,
+            landing,
+            interrupted_command: error.command !== undefined,
+          });
+          if (landing === 'continued') incompleteTaskIds.add(task.id);
+          if (landing !== 'fatal') return;
+          throw new RunTaskFatal(
+            {
+              code: ErrorCodes.AgentOrchestratorTasksFailed,
+              message: `${task.label ?? task.type}: ${error.message}`,
+            },
+            RunOutcome.Failed,
+            task.type,
+          );
+        }
         const failure = classifyRunFailure(error);
         throw new RunTaskFatal(
           {
@@ -1484,6 +1539,8 @@ async function executeOrchestrator(
   const conflict = reviewTask
     ? store.readHandoff(reviewTask.id)?.conflict
     : undefined;
+  const reviewIncomplete =
+    reviewTask !== undefined && incompleteTaskIds.has(reviewTask.id);
 
   // Not-needed tasks were never work, so they leave the denominator too.
   const notRequired = summary[TaskStatus.Skipped];
@@ -1567,7 +1624,9 @@ async function executeOrchestrator(
       ? 'report delivered, then its step failed'
       : '',
   ].filter(Boolean);
-  const message = conflict
+  const message = reviewIncomplete
+    ? 'PostHog set up, but its final checks did not finish.'
+    : conflict
     ? 'PostHog set up, with one conflict to review.'
     : `PostHog set up: ${summary.done}/${
         summary.total - notRequired - optionalFailedCount
@@ -1578,7 +1637,9 @@ async function executeOrchestrator(
     kind: OutroKind.Success,
     message,
     body: conflict
-      ? `⚠ Build conflict: ${conflict}\nFull details are in the setup report.`
+      ? `⚠ ${
+          reviewIncomplete ? 'Verification incomplete' : 'Build conflict'
+        }: ${conflict}\nFull details are in the setup report.`
       : undefined,
     docsUrl: 'https://posthog.com/docs/ai-engineering/ai-wizard',
     nextSteps: config.hooks?.buildOutroNextSteps?.(

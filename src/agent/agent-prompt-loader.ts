@@ -19,7 +19,10 @@ import type {
   QueueStore,
   QueuedTask,
 } from './runner/sequence/orchestrator/queue';
-import type { ResolvedTask } from './runner/sequence/orchestrator/executor';
+import type {
+  ResolvedTask,
+  TaskTimeoutBehavior,
+} from './runner/sequence/orchestrator/executor';
 import type { HostResolution } from '@shared/host-resolution';
 import {
   isThinkingLevel,
@@ -250,6 +253,10 @@ export interface AgentPrompt {
   runnerSeeded: boolean;
   /** Marks a supplementary task: terminal failure unblocks dependents and never fails the run. */
   optional: boolean;
+  /** Wall-clock budget for one task attempt, including harness setup and cleanup. */
+  timeoutMs?: number;
+  /** What a required task does at its deadline; set whenever `timeoutMs` is. */
+  onTimeout?: TaskTimeoutBehavior;
   /** Per-harness model/effort; both profiles also require gateway admission and prompt compatibility. */
   modelPi?: string;
   effortPi?: ThinkingLevel;
@@ -420,6 +427,50 @@ export function parseAgentPrompt(
   }
 
   const str = (v: unknown) => (typeof v === 'string' ? v : undefined);
+  const timeoutSeconds = fields.timeoutSeconds;
+  let timeoutMs: number | undefined;
+  if (timeoutSeconds !== undefined) {
+    const seconds = Number(timeoutSeconds);
+    // Budgets are remote data: a typo drops the budget, never the whole prompt.
+    if (
+      typeof timeoutSeconds === 'string' &&
+      Number.isInteger(seconds) &&
+      seconds > 0 &&
+      seconds <= 86_400
+    ) {
+      timeoutMs = seconds * 1000;
+    } else {
+      logToFile(
+        `[agent-prompt] ${fallbackType}: ignoring invalid timeoutSeconds "${String(
+          timeoutSeconds,
+        )}"`,
+      );
+      analytics.wizardCapture('agent prompt invalid timeout', {
+        task_type: fallbackType,
+        value: String(timeoutSeconds),
+      });
+    }
+  }
+  let onTimeout: TaskTimeoutBehavior | undefined;
+  if (timeoutMs !== undefined) {
+    const declared = fields.onTimeout;
+    if (declared === 'continue' || declared === 'fail') {
+      onTimeout = declared;
+    } else {
+      // An undeclared landing must not fail the run: review has already written the integration.
+      onTimeout = 'continue';
+      logToFile(
+        `[agent-prompt] ${fallbackType}: invalid onTimeout "${String(
+          declared,
+        )}", using continue`,
+      );
+      analytics.wizardCapture('agent prompt invalid timeout', {
+        task_type: fallbackType,
+        key: 'onTimeout',
+        value: String(declared),
+      });
+    }
+  }
   // Effort is remote data — reject typos here so downstream carries ThinkingLevel.
   const effort = (v: unknown, key: string): ThinkingLevel | undefined => {
     if (v === undefined) return undefined;
@@ -442,6 +493,8 @@ export function parseAgentPrompt(
     sink: fields.sink === 'true',
     runnerSeeded: fields.runnerSeeded === 'true',
     optional: fields.optional === 'true',
+    timeoutMs,
+    onTimeout,
     modelPi: str(fields.model_pi),
     effortPi: effort(fields.effort_pi, 'effort_pi'),
     modelSdk: str(fields.model_sdk),
@@ -586,6 +639,8 @@ export function resolveTask(
     ...agentRunTools(prompt),
     prompt: body,
     skills: prompt.skills,
+    timeoutMs: prompt.timeoutMs,
+    onTimeout: prompt.onTimeout,
   };
 }
 
