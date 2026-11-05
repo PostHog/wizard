@@ -52,10 +52,16 @@ export function reportableDiscoveredFeatures(session: {
   return mayReportScanResults(session) ? session.discoveredFeatures : undefined;
 }
 
-/** Also a scan result, so it travels under the same consent as the rest. */
-export function reportablePosthogSdkDetected(session: {
+/** Also scan results, so they travel under the same consent as the rest. */
+export function reportableDetections(session: {
   scanConsent: ScanConsent;
   posthogSdkDetected: boolean;
-}): boolean | undefined {
-  return mayReportScanResults(session) ? session.posthogSdkDetected : undefined;
+  mcpServerDetected: boolean;
+}): { posthogSdkDetected: boolean; mcpServerDetected: boolean } | undefined {
+  return mayReportScanResults(session)
+    ? {
+        posthogSdkDetected: session.posthogSdkDetected,
+        mcpServerDetected: session.mcpServerDetected,
+      }
+    : undefined;
 }

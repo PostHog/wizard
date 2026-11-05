@@ -51,6 +51,7 @@ export interface ProgramReadyContext {
   readonly addDiscoveredFeature: (feature: DiscoveredFeature) => void;
   readonly setDetectionComplete: () => void;
   readonly setPosthogSdkDetected: (detected: boolean) => void;
+  readonly setMcpServerDetected: (detected: boolean) => void;
 }
 
 /**

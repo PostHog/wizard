@@ -1,6 +1,10 @@
 import { analytics } from '@utils/analytics';
 import type { ProgramSession } from '@programs/program-contract';
-import { findMcpServers, type McpServerScan, type McpTarget } from './detect';
+import {
+  findMcpServers,
+  type McpServerScan,
+  type McpTarget,
+} from '@services/mcp-servers';
 
 export const MCP_SCAN_KEY = 'mcpAnalyticsScan';
 export const MCP_SCAN_ERROR_KEY = 'mcpAnalyticsScanError';

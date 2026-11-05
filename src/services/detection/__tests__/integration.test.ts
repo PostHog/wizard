@@ -70,6 +70,7 @@ function makeCtx(session: WizardSession): ProgramReadyContext {
     setFrameworkConfig: vi.fn(),
     setDetectedFramework: vi.fn(),
     setPosthogSdkDetected: vi.fn(),
+    setMcpServerDetected: vi.fn(),
     setSkillId: vi.fn(),
     setUnsupportedVersion: vi.fn(),
     addDiscoveredFeature: vi.fn(),

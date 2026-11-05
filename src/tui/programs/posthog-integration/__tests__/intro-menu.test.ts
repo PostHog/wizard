@@ -12,12 +12,14 @@ const valuesFor = (args: {
   view?: 'default' | 'more-info' | 'commands';
   showContinue?: boolean;
   posthogSdkDetected?: boolean;
+  mcpServerDetected?: boolean;
 }): string[] =>
   (
     introMenuOptions({
       view: args.view ?? 'default',
       showContinue: args.showContinue ?? true,
       posthogSdkDetected: args.posthogSdkDetected ?? false,
+      mcpServerDetected: args.mcpServerDetected ?? false,
     }) ?? []
   ).map((option) => option.value);
 
@@ -54,6 +56,7 @@ describe('introMenuOptions', () => {
         view: 'default',
         showContinue: true,
         posthogSdkDetected: true,
+        mcpServerDetected: false,
       });
       expect(options?.find((o) => o.value === 'continue')?.label).toBe(
         CONTINUE_ANYWAY_LABEL,
@@ -76,9 +79,44 @@ describe('introMenuOptions', () => {
         view: 'default',
         showContinue: true,
         posthogSdkDetected: false,
+        mcpServerDetected: false,
       });
       expect(options?.find((o) => o.value === 'continue')?.label).toBe(
         CONTINUE_LABEL,
+      );
+    });
+  });
+
+  describe('an MCP server', () => {
+    // A bare-wizard run on an MCP server otherwise gets a product-analytics install.
+    it.each([
+      [
+        false,
+        ['mcp-analytics', 'continue', 'framework', 'more-info', 'cancel'],
+      ],
+      [
+        true,
+        [
+          'mcp-analytics',
+          'commands',
+          'continue',
+          'framework',
+          'more-info',
+          'cancel',
+        ],
+      ],
+    ])(
+      'offers MCP analytics first (PostHog detected: %s)',
+      (posthogSdkDetected, values) => {
+        expect(
+          valuesFor({ mcpServerDetected: true, posthogSdkDetected }),
+        ).toEqual(values);
+      },
+    );
+
+    it('hands the row to the mcp-analytics program', () => {
+      expect(introEntries().map((entry) => entry.id)).toContain(
+        valuesFor({ mcpServerDetected: true })[0],
       );
     });
   });
@@ -96,6 +134,7 @@ describe('introMenuOptions', () => {
           view: 'commands',
           showContinue: true,
           posthogSdkDetected: true,
+          mcpServerDetected: false,
         }),
       ).toBeNull();
     });
@@ -113,6 +152,7 @@ describe('introMenuOptions', () => {
         view: 'default',
         showContinue: false,
         posthogSdkDetected: true,
+        mcpServerDetected: false,
       }),
     ).toBeNull();
   });

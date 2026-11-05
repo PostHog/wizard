@@ -73,6 +73,9 @@ export interface ProgramSession {
   /** PostHog found in the project's dependencies. A signal, not a verified install. */
   posthogSdkDetected: boolean;
 
+  /** An MCP server SDK found in the project's dependencies. A signal, not a verified server. */
+  mcpServerDetected: boolean;
+
   // From OAuth
   credentials: Credentials | null;
 
