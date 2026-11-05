@@ -19,6 +19,21 @@ import type { SpinnerHandle } from '@agent/types';
 import { formatLogLine } from '@utils/debug';
 
 // Mock dependencies
+const yara = vi.hoisted(() => ({
+  terminate: undefined as ((reason: string) => void) | undefined,
+}));
+vi.mock('@agent/yara-hooks', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@agent/yara-hooks')>();
+  return {
+    ...actual,
+    createPostToolUseYaraHooks: (
+      ...args: Parameters<typeof actual.createPostToolUseYaraHooks>
+    ) => {
+      yara.terminate = args[1];
+      return actual.createPostToolUseYaraHooks(...args);
+    },
+  };
+});
 vi.mock('@utils/analytics');
 vi.mock('@utils/debug');
 
@@ -463,6 +478,26 @@ describe('runAgent', () => {
       expect(result).toMatchObject({
         kind: 'abort',
         classification: 'WIZARD_ABORT',
+      });
+    });
+
+    it('reports a security stop ahead of a cancellation that arrives with it', async () => {
+      const controller = new AbortController();
+      function* stopped() {
+        yara.terminate?.('critical match');
+        controller.abort();
+        yield { type: 'system', subtype: 'init', tools: [], mcp_servers: [] };
+      }
+      mockQuery.mockReturnValue(stopped());
+      const result = await runAgent(
+        { ...defaultAgentConfig, signal: controller.signal },
+        'test prompt',
+        defaultOptions,
+        mockSpinner as unknown as SpinnerHandle,
+      );
+      expect(result).toEqual({
+        kind: 'failure',
+        classification: AgentErrorType.YARA_VIOLATION,
       });
     });
 

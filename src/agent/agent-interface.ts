@@ -1587,7 +1587,8 @@ export async function runAgent(
     if (
       (await runQuery()) === 'remint' &&
       refreshGatewayAuth &&
-      !agentConfig.signal?.aborted
+      !agentConfig.signal?.aborted &&
+      !yaraViolationReason
     ) {
       // The subprocess froze the dead bearer in its env at spawn, so it cannot
       // be handed a new one: mint, then resume the session in a new one.
@@ -1625,7 +1626,7 @@ export async function runAgent(
     if (authFailure) {
       return { kind: 'decided_failure', failure: authFailure };
     }
-    if (agentConfig.signal?.aborted) {
+    if (agentConfig.signal?.aborted && !yaraViolationReason) {
       return {
         kind: 'abort',
         classification: AgentErrorType.ABORT,
