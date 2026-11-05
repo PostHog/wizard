@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.90.1](https://github.com/PostHog/wizard/compare/v2.90.0...v2.90.1) (2026-11-05)
+
+
+### Bug Fixes
+
+* **orchestrator:** cap bash commands and enforce task deadlines ([#1525](https://github.com/PostHog/wizard/issues/1525)) ([0f188c7](https://github.com/PostHog/wizard/commit/0f188c757850f781facbcd326427eb3ba087ab8b))
+
 ## [2.90.0](https://github.com/PostHog/wizard/compare/v2.89.0...v2.90.0) (2026-11-05)
 
 
