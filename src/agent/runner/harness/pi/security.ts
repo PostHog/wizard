@@ -521,6 +521,8 @@ export function createSecurityExtension(ctx: SecurityExtensionOptions): {
         gate,
         llmProvider,
       );
+      // Latch first: a cancellation during this scan must not hide what it found.
+      if (decision.block && decision.terminate) state.criticalViolation = true;
       if (gate.signal?.aborted) {
         return {
           block: true,
@@ -529,7 +531,6 @@ export function createSecurityExtension(ctx: SecurityExtensionOptions): {
       }
       if (decision.block) {
         state.blockedCount += 1;
-        if (decision.terminate) state.criticalViolation = true;
         logToFile(`[pi-security] BLOCK ${event.toolName}: ${decision.reason}`);
         return { block: true, reason: decision.reason };
       }

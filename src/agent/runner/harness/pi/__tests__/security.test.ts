@@ -385,6 +385,27 @@ describe('pi-security: extension state machine (fail-closed + runaway + latch)',
     expect(state.criticalViolation).toBe(true);
   });
 
+  test('a critical scan result still latches when cancellation arrives during the scan', async () => {
+    const controller = new AbortController();
+    const { factory, state } = createSecurityExtension({
+      workingDirectory: PROJECT,
+      signal: controller.signal,
+    });
+    const { pi, handlers } = fakePi();
+    factory(pi);
+    mockedScan.mockImplementationOnce(() => {
+      controller.abort();
+      return Promise.reject(new Error('wasm boom'));
+    });
+    expect(
+      await handlers.tool_call({
+        toolName: 'publish_handoff',
+        input: { content: '# Report' },
+      }),
+    ).toMatchObject({ block: true });
+    expect(state.criticalViolation).toBe(true);
+  });
+
   test('a scanner error on a write blocks without ending the run', async () => {
     const { factory, state } = createSecurityExtension({
       workingDirectory: PROJECT,
