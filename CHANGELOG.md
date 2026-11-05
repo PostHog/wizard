@@ -1,5 +1,21 @@
 # Changelog
 
+## [2.90.0](https://github.com/PostHog/wizard/compare/v2.89.0...v2.90.0) (2026-11-05)
+
+
+### Features
+
+* **mcp-analytics:** support Rust servers in the wizard command ([#1519](https://github.com/PostHog/wizard/issues/1519)) ([9a55731](https://github.com/PostHog/wizard/commit/9a557318acbee6468e4a188fec854aadcecb9ea0))
+* **replay-vision:** show deploy and replay checks in the outro ([#1505](https://github.com/PostHog/wizard/issues/1505)) ([b3ee130](https://github.com/PostHog/wizard/commit/b3ee1307d481c3e964550bc26d29ca16c62d4ad6))
+
+
+### Bug Fixes
+
+* **agent:** match an [ABORT] reason the model decorated ([#1522](https://github.com/PostHog/wizard/issues/1522)) ([a222a6b](https://github.com/PostHog/wizard/commit/a222a6b0a565b53d146680ea2eac31cb834664a2))
+* **agent:** tell a task agent to call complete_task next after publish_handoff ([#1468](https://github.com/PostHog/wizard/issues/1468)) ([e0fb703](https://github.com/PostHog/wizard/commit/e0fb70369deefef67490c458047d107c6d0d2636))
+* **harness:** deliver typed keys after the last frame's effects run ([#1523](https://github.com/PostHog/wizard/issues/1523)) ([632e9a9](https://github.com/PostHog/wizard/commit/632e9a9ec74917b90760ef293cc8c7cd599e4990))
+* **mcp-analytics:** suggest server apps before setup ([#1239](https://github.com/PostHog/wizard/issues/1239)) ([222e6fd](https://github.com/PostHog/wizard/commit/222e6fdf1173e6bef2f7ea7c31f63ab39b9edbad))
+
 ## [2.89.0](https://github.com/PostHog/wizard/compare/v2.88.0...v2.89.0) (2026-10-29)
 
 
