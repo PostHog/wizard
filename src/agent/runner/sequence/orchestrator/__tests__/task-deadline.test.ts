@@ -85,3 +85,21 @@ it('returns a result that outranks the deadline, and still times out on any othe
   expect(await stopped).toBe('security stop');
   expect(await other).toBeInstanceOf(TaskDeadlineExceeded);
 });
+
+it('reports the interrupted command on one bounded line', async () => {
+  vi.useFakeTimers();
+  const result = withTaskDeadline(
+    10,
+    undefined,
+    (signal) =>
+      new Promise<void>((resolve) =>
+        signal?.addEventListener('abort', () => resolve(), { once: true }),
+      ),
+    () => `eslint \n  ${'src/file.ts '.repeat(50)}`,
+  ).catch((error: unknown) => error);
+  await vi.advanceTimersByTimeAsync(10);
+  const { command } = (await result) as TaskDeadlineExceeded;
+  expect(command).toMatch(/^eslint src\/file\.ts /);
+  expect(command?.length).toBe(201);
+  expect(command).not.toContain('\n');
+});

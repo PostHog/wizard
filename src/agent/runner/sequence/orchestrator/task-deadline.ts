@@ -1,6 +1,17 @@
 import type { TaskTimeoutBehavior } from './executor';
 import { TaskStatus, type QueueStore, type QueuedTask } from './queue';
 
+const MAX_COMMAND_CHARS = 200;
+
+/** One line of bounded length, because a command reaches the outro and the report. */
+function trimCommand(command: string | undefined): string | undefined {
+  const line = command?.replace(/\s+/g, ' ').trim();
+  if (!line) return undefined;
+  return line.length > MAX_COMMAND_CHARS
+    ? `${line.slice(0, MAX_COMMAND_CHARS)}…`
+    : line;
+}
+
 export class TaskDeadlineExceeded extends Error {
   constructor(
     public readonly timeoutMs: number,
@@ -32,7 +43,10 @@ export async function withTaskDeadline<T>(
   if (signal?.aborted) cancel();
   let expired: TaskDeadlineExceeded | undefined;
   const timer = setTimeout(() => {
-    expired = new TaskDeadlineExceeded(timeoutMs, activeCommand?.());
+    expired = new TaskDeadlineExceeded(
+      timeoutMs,
+      trimCommand(activeCommand?.()),
+    );
     controller.abort();
   }, timeoutMs);
   let result: T;
