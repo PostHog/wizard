@@ -1292,6 +1292,10 @@ async function executeOrchestrator(
       const taskModel = taskModelSpec(registry, task, taskPick.harness);
       let taskResult: AgentResult;
       let activeCommand: string | undefined;
+      const deadlineAt =
+        resolved.timeoutMs === undefined
+          ? undefined
+          : Date.now() + resolved.timeoutMs;
       try {
         taskResult = await withTaskDeadline(
           resolved.timeoutMs,
@@ -1301,6 +1305,7 @@ async function executeOrchestrator(
               onBashCommand: (command) => {
                 activeCommand = command;
               },
+              deadlineAt,
               signal: taskSignal,
               config,
               input,

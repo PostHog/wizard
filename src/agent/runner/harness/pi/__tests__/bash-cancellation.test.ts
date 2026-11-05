@@ -2,7 +2,7 @@ import { mkdtempSync, readFileSync, existsSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createBashToolDefinition } from '@earendil-works/pi-coding-agent';
-import { withBashTimeoutCap } from '..';
+import { withBashTimeout } from '..';
 import {
   withTaskDeadline,
   TaskDeadlineExceeded,
@@ -27,7 +27,7 @@ async function assertStopped() {
 }
 
 it('a real bash timeout kills a hanging shell and its child', async () => {
-  const tool = withBashTimeoutCap(createBashToolDefinition(dir));
+  const tool = withBashTimeout(createBashToolDefinition(dir));
   await expect(
     tool.execute(
       'timeout',
@@ -41,7 +41,7 @@ it('a real bash timeout kills a hanging shell and its child', async () => {
 });
 
 it('a task deadline cancels an active bash process before its own timeout', async () => {
-  const tool = withBashTimeoutCap(createBashToolDefinition(dir));
+  const tool = withBashTimeout(createBashToolDefinition(dir));
   await expect(
     withTaskDeadline(500, undefined, (signal) =>
       tool.execute(
@@ -57,7 +57,7 @@ it('a task deadline cancels an active bash process before its own timeout', asyn
 });
 
 it('host cancellation stops active bash work and preserves its abort result', async () => {
-  const tool = withBashTimeoutCap(createBashToolDefinition(dir));
+  const tool = withBashTimeout(createBashToolDefinition(dir));
   const host = new AbortController();
   await expect(
     tool.execute(

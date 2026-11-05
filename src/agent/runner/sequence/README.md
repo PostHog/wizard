@@ -49,8 +49,10 @@ frontmatter contract rather than copying an old manifest example:
   invalid value is logged and ignored. The runner cancels through the harness
   signal, waits for cleanup, and never retries the task. A task that already
   reported stays as it reported, and a security stop stays fatal. Tasks without
-  this field retain their existing lifetime. Pi bash commands have a separate
-  five-minute maximum, including installs.
+  this field retain their existing lifetime. In a task with a budget, each Pi
+  bash command stops about a minute before the deadline, so the agent can still
+  write its handoff. A Pi bash command that sets no timeout stops after five
+  minutes in any task.
 - `onTimeout` sets what a required task with a budget does at its deadline.
   `continue` completes it with a `conflict` saying what is unverified, so
   dependents run and the outro reports it; this is also the fallback for a

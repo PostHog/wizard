@@ -68,6 +68,7 @@ vi.mock('../../../../agent-prompt-loader', async (importActual) => {
   };
 });
 
+import { createBashToolDefinition } from '@earendil-works/pi-coding-agent';
 import { analytics } from '@utils/analytics';
 import { AgentErrorType } from '../../../../agent-interface';
 import { RunOutcome } from '../../../shared/types';
@@ -262,6 +263,39 @@ describe('a task failing after the run report was published', () => {
     expect(result.outro?.body).toContain('its edits may be partial');
     expect(result.outro?.body).toContain('Interrupted command: pnpm typecheck');
     expect(result.outro?.body).not.toContain('Build conflict');
+  });
+
+  it('takes a real hanging command through the deadline to the outro', async () => {
+    taskTimeoutMs = 500;
+    taskOnTimeout = 'continue';
+    firstTaskType = 'review';
+    const bash = createBashToolDefinition(dir);
+    const script = `require("node:fs").writeFileSync("child.pid", String(process.pid)); setTimeout(() => require("node:fs").writeFileSync("survived", "yes"), 1000); setInterval(() => {}, 1000);`;
+    const hang = `"${process.execPath}" -e '${script}' & wait`;
+    behaviors.review = async (inputs) => {
+      inputs.onBashCommand?.('pnpm build');
+      await bash
+        .execute(
+          'hang',
+          { command: hang, timeout: 300 },
+          inputs.signal,
+          undefined,
+          undefined as never,
+        )
+        .catch(() => undefined);
+      inputs.onBashCommand?.(undefined);
+    };
+    behaviors.report = (inputs, id) => {
+      publish(inputs);
+      inputs.orchestrator.store.complete(id);
+    };
+    const result = await run();
+    expect(result.outcome).toBe(RunOutcome.Success);
+    expect(result.outro?.body).toContain('Verification incomplete');
+    expect(result.outro?.body).toContain('Interrupted command: pnpm build');
+    await new Promise((resolve) => setTimeout(resolve, 1100));
+    expect(fs.existsSync(path.join(dir, 'child.pid'))).toBe(true);
+    expect(fs.existsSync(path.join(dir, 'survived'))).toBe(false);
   });
 
   it('keeps the build conflict label for a conflict the review reported itself', async () => {

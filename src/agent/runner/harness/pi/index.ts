@@ -142,27 +142,42 @@ export function withMode<T>(tool: T, mode: 'sequential' | 'parallel'): T {
   return tool;
 }
 
-/** Longest one bash command may run, in seconds; pi's bash has no default timeout. */
-export const BASH_TIMEOUT_CAP_SECONDS = 300;
+/** How long a bash command the model set no timeout for may run; pi's bash has no default. */
+export const BASH_DEFAULT_TIMEOUT_SECONDS = 300;
+/** Time kept back from a task's budget so its agent can still write a handoff. */
+export const TASK_HANDOFF_RESERVE_SECONDS = 60;
+/** Shortest timeout near a deadline, which still lets a quick command finish. */
+const MIN_TASK_COMMAND_SECONDS = 5;
 
 type BashToolDefinition = ReturnType<typeof createBashToolDefinition>;
 
-/** A copy of a bash tool whose `timeout` is clamped to the cap, also when the model sends none. */
-export function withBashTimeoutCap(
+/** A copy of a bash tool with the default timeout, and a timeout that fits a task's deadline if it has one. */
+export function withBashTimeout(
   tool: BashToolDefinition,
+  deadlineAt?: number,
 ): BashToolDefinition {
+  const fitted = (requested: number): number => {
+    if (deadlineAt === undefined) return requested;
+    const left =
+      Math.floor((deadlineAt - Date.now()) / 1000) -
+      TASK_HANDOFF_RESERVE_SECONDS;
+    return Math.min(requested, Math.max(left, MIN_TASK_COMMAND_SECONDS));
+  };
   return {
     ...tool,
-    description: `${tool.description} Commands are stopped after at most ${BASH_TIMEOUT_CAP_SECONDS} seconds.`,
+    description: `${
+      tool.description
+    } A command that sets no timeout stops after ${BASH_DEFAULT_TIMEOUT_SECONDS} seconds.${
+      deadlineAt === undefined
+        ? ''
+        : " This task's time limit can shorten any timeout."
+    }`,
     execute: (toolCallId, params, signal, onUpdate, ctx) =>
       tool.execute(
         toolCallId,
         {
           ...params,
-          timeout: Math.min(
-            params.timeout ?? BASH_TIMEOUT_CAP_SECONDS,
-            BASH_TIMEOUT_CAP_SECONDS,
-          ),
+          timeout: fitted(params.timeout ?? BASH_DEFAULT_TIMEOUT_SECONDS),
         },
         signal,
         onUpdate,
@@ -546,7 +561,7 @@ export const piBackend: AgentHarness = {
       // spawns gets a scrubbed env, so no secret or ambient variable reaches an
       // `npm install`. Shared with the subagent so the lockdown is inherited.
       const scrubbedBash = withMode(
-        withBashTimeoutCap(
+        withBashTimeout(
           createBashToolDefinition(input.installDir, {
             spawnHook: (ctx) => ({ ...ctx, env: buildScrubbedEnv() }),
           }),
