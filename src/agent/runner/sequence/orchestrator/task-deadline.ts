@@ -1,3 +1,5 @@
+import { TaskStatus, type QueueStore, type QueuedTask } from './queue';
+
 export class TaskDeadlineExceeded extends Error {
   constructor(timeoutMs: number, command?: string) {
     super(
@@ -40,4 +42,18 @@ export async function withTaskDeadline<T>(
   }
   if (expired && !signal?.aborted) throw expired;
   return result;
+}
+
+/** How a queued task ended at its deadline; only `fatal` stops the run. */
+export type DeadlineLanding = 'settled' | 'optional-failed' | 'fatal';
+
+/** Settle a task whose deadline passed, leaving a task that already reported untouched. */
+export function landTaskDeadline(
+  store: QueueStore,
+  task: QueuedTask,
+  message: string,
+): DeadlineLanding {
+  if (store.get(task.id)?.status !== TaskStatus.Running) return 'settled';
+  store.failTerminally(task.id, { type: 'timeout', message });
+  return task.optional === true ? 'optional-failed' : 'fatal';
 }

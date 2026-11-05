@@ -82,7 +82,11 @@ import {
   type RunTask,
 } from './executor';
 import { RunMetrics } from './run-metrics';
-import { TaskDeadlineExceeded, withTaskDeadline } from './task-deadline';
+import {
+  landTaskDeadline,
+  TaskDeadlineExceeded,
+  withTaskDeadline,
+} from './task-deadline';
 import { dependencyClosure, uncoveredBySink } from './queue-tools';
 import { deferSeededTasks } from './seeded-deps';
 import { LONGER_ASK_TIMEOUT_MS, shouldDisableAsk } from '@shared/ask-policy';
@@ -1329,7 +1333,7 @@ async function executeOrchestrator(
         if (error instanceof RunTaskFatal) throw error;
         if (error instanceof TaskDeadlineExceeded) {
           const message = `${task.label ?? task.type}: ${error.message}`;
-          store.fail(task.id, { type: 'timeout', message });
+          if (landTaskDeadline(store, task, message) !== 'fatal') return;
           throw new RunTaskFatal(
             { code: ErrorCodes.AgentOrchestratorTasksFailed, message },
             RunOutcome.Failed,

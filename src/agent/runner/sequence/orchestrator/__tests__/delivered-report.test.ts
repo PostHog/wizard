@@ -78,6 +78,7 @@ type Behavior = (inputs: Inputs, taskId: string) => void | Promise<void>;
 let behaviors: Record<string, Behavior>;
 let taskTimeoutMs: number | undefined;
 let maxAttempts = 1;
+let installOptional = false;
 
 /** The fake harness: the seed queues install then report, each task runs its scripted behavior. */
 async function harnessRun(raw: unknown) {
@@ -85,7 +86,11 @@ async function harnessRun(raw: unknown) {
   const { store } = inputs.orchestrator;
   const type = inputs.analyticsProperties.task_type;
   if (type === 'seed') {
-    const install = store.enqueue({ type: 'install', maxAttempts });
+    const install = store.enqueue({
+      type: 'install',
+      maxAttempts,
+      optional: installOptional,
+    });
     store.enqueue({
       type: 'report',
       dependsOn: [install.id],
@@ -107,6 +112,7 @@ describe('a task failing after the run report was published', () => {
     dir = fs.mkdtempSync(path.join(os.tmpdir(), 'delivered-report-'));
     taskTimeoutMs = undefined;
     maxAttempts = 1;
+    installOptional = false;
     behaviors = {
       install: (inputs, id) => {
         inputs.orchestrator.store.complete(id);
@@ -173,6 +179,59 @@ describe('a task failing after the run report was published', () => {
     expect(behaviors.report).not.toHaveBeenCalled();
     expect(queue?.list().find((task) => task.type === 'install')).toMatchObject(
       { status: 'failed', attempts: 1, error: { type: 'timeout' } },
+    );
+  });
+
+  const untilAborted = (inputs: Inputs) =>
+    new Promise<void>((resolve) =>
+      inputs.signal.addEventListener('abort', () => resolve(), { once: true }),
+    );
+
+  it('keeps a task that reported done before its deadline done', async () => {
+    taskTimeoutMs = 10;
+    let queue: QueueStore | undefined;
+    behaviors.install = async (inputs, id) => {
+      queue = inputs.orchestrator.store;
+      queue.complete(id);
+      await untilAborted(inputs);
+    };
+    behaviors.report = (inputs, id) => {
+      publish(inputs);
+      inputs.orchestrator.store.complete(id);
+    };
+    const result = await run();
+    expect(result.outcome).toBe(RunOutcome.Success);
+    expect(queue?.list().find((task) => task.type === 'install')).toMatchObject(
+      { status: 'done', attempts: 1 },
+    );
+    expect(queue?.list().find((task) => task.type === 'report')?.status).toBe(
+      'done',
+    );
+  });
+
+  it('fails a timed-out optional task once and carries on to its dependents', async () => {
+    taskTimeoutMs = 10;
+    maxAttempts = 3;
+    installOptional = true;
+    let calls = 0;
+    let queue: QueueStore | undefined;
+    behaviors.install = async (inputs) => {
+      calls++;
+      queue = inputs.orchestrator.store;
+      await untilAborted(inputs);
+    };
+    behaviors.report = (inputs, id) => {
+      publish(inputs);
+      inputs.orchestrator.store.complete(id);
+    };
+    const result = await run();
+    expect(result.outcome).toBe(RunOutcome.Success);
+    expect(calls).toBe(1);
+    expect(queue?.list().find((task) => task.type === 'install')).toMatchObject(
+      { status: 'failed', attempts: 1, error: { type: 'timeout' } },
+    );
+    expect(queue?.list().find((task) => task.type === 'report')?.status).toBe(
+      'done',
     );
   });
 

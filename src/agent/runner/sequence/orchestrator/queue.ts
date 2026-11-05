@@ -396,6 +396,16 @@ export class QueueStore {
     return this.finish(id, TaskStatus.Failed, handoff);
   }
 
+  /** Fail with no attempts left, so the task never retries and an optional one unblocks dependents. */
+  failTerminally(
+    id: string,
+    error: { type: string; message: string },
+  ): QueuedTask {
+    const t = this.require(id);
+    t.maxAttempts = t.attempts;
+    return this.fail(id, error);
+  }
+
   /** Put a failed/running task back to pending for a retry within the run. */
   requeue(id: string): QueuedTask {
     const t = this.require(id);
