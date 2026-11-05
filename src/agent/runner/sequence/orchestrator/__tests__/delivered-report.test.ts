@@ -61,6 +61,7 @@ vi.mock('../../../../agent-prompt-loader', async (importActual) => {
   };
 });
 
+import { AgentErrorType } from '../../../../agent-interface';
 import { RunOutcome } from '../../../shared/types';
 import { runOrchestrator } from '../orchestrator-runner';
 import type { SequenceContext } from '../../../shared/types';
@@ -79,6 +80,7 @@ let behaviors: Record<string, Behavior>;
 let taskTimeoutMs: number | undefined;
 let maxAttempts = 1;
 let installOptional = false;
+let installResult: unknown;
 
 /** The fake harness: the seed queues install then report, each task runs its scripted behavior. */
 async function harnessRun(raw: unknown) {
@@ -98,6 +100,7 @@ async function harnessRun(raw: unknown) {
     });
   } else {
     await behaviors[type](inputs, inputs.analyticsProperties.task_id as string);
+    if (type === 'install' && installResult) return installResult;
   }
   return Promise.resolve({ kind: 'success' as const });
 }
@@ -113,6 +116,7 @@ describe('a task failing after the run report was published', () => {
     taskTimeoutMs = undefined;
     maxAttempts = 1;
     installOptional = false;
+    installResult = undefined;
     behaviors = {
       install: (inputs, id) => {
         inputs.orchestrator.store.complete(id);
@@ -233,6 +237,22 @@ describe('a task failing after the run report was published', () => {
     expect(queue?.list().find((task) => task.type === 'report')?.status).toBe(
       'done',
     );
+  });
+
+  it('keeps a security stop fatal when the deadline passes as it lands', async () => {
+    taskTimeoutMs = 10;
+    installResult = {
+      kind: 'failure',
+      classification: AgentErrorType.YARA_VIOLATION,
+    };
+    behaviors.install = async (inputs) => {
+      await untilAborted(inputs);
+    };
+    behaviors.report = vi.fn();
+    const result = await run();
+    expect(result.outcome).toBe(RunOutcome.Failed);
+    expect(result.failure?.message).not.toContain('Task incomplete');
+    expect(behaviors.report).not.toHaveBeenCalled();
   });
 
   it('keeps the run successful when the sink ends Failed', async () => {

@@ -180,6 +180,12 @@ function requireTaskHarness(pick: HarnessPick): AgentHarness & {
   };
 }
 
+/** A security stop or decided failure (such as a 401) stays what it is when a deadline also passes. */
+const outranksDeadline = (result: AgentResult): boolean =>
+  result.kind === 'decided_failure' ||
+  (result.kind === 'failure' &&
+    result.classification === AgentErrorType.YARA_VIOLATION);
+
 /** How an agent result ends the run, or undefined when it doesn't. */
 export function terminalResult(
   result: AgentResult,
@@ -1327,6 +1333,7 @@ async function executeOrchestrator(
               },
             }),
           () => activeCommand,
+          outranksDeadline,
         );
       } catch (error) {
         if (signal?.aborted) return;

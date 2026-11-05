@@ -19,6 +19,7 @@ export async function withTaskDeadline<T>(
   signal: AbortSignal | undefined,
   run: (signal: AbortSignal | undefined) => Promise<T>,
   activeCommand?: () => string | undefined,
+  outranksDeadline?: (result: T) => boolean,
 ): Promise<T> {
   if (timeoutMs === undefined) return run(signal);
   const controller = new AbortController();
@@ -40,7 +41,7 @@ export async function withTaskDeadline<T>(
     clearTimeout(timer);
     signal?.removeEventListener('abort', cancel);
   }
-  if (expired && !signal?.aborted) throw expired;
+  if (expired && !signal?.aborted && !outranksDeadline?.(result)) throw expired;
   return result;
 }
 

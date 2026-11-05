@@ -65,3 +65,23 @@ it('clears the deadline after success and after a harness failure', async () => 
   ).rejects.toBe(failure);
   expect(vi.getTimerCount()).toBe(0);
 });
+
+it('returns a result that outranks the deadline, and still times out on any other', async () => {
+  vi.useFakeTimers();
+  const finish = (result: string) =>
+    withTaskDeadline(
+      10,
+      undefined,
+      async () => {
+        await new Promise<void>((resolve) => setTimeout(resolve, 20));
+        return result;
+      },
+      undefined,
+      (value) => value === 'security stop',
+    ).catch((error: unknown) => error);
+  const stopped = finish('security stop');
+  const other = finish('abort');
+  await vi.advanceTimersByTimeAsync(20);
+  expect(await stopped).toBe('security stop');
+  expect(await other).toBeInstanceOf(TaskDeadlineExceeded);
+});
