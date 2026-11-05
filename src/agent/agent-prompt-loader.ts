@@ -426,17 +426,25 @@ export function parseAgentPrompt(
   let timeoutMs: number | undefined;
   if (timeoutSeconds !== undefined) {
     const seconds = Number(timeoutSeconds);
+    // Budgets are remote data: a typo drops the budget, never the whole prompt.
     if (
-      typeof timeoutSeconds !== 'string' ||
-      !Number.isInteger(seconds) ||
-      seconds <= 0 ||
-      seconds > 86_400
+      typeof timeoutSeconds === 'string' &&
+      Number.isInteger(seconds) &&
+      seconds > 0 &&
+      seconds <= 86_400
     ) {
-      throw new Error(
-        `Invalid timeoutSeconds for agent prompt "${fallbackType}"`,
+      timeoutMs = seconds * 1000;
+    } else {
+      logToFile(
+        `[agent-prompt] ${fallbackType}: ignoring invalid timeoutSeconds "${String(
+          timeoutSeconds,
+        )}"`,
       );
+      analytics.wizardCapture('agent prompt invalid timeout', {
+        task_type: fallbackType,
+        value: String(timeoutSeconds),
+      });
     }
-    timeoutMs = seconds * 1000;
   }
   // Effort is remote data — reject typos here so downstream carries ThinkingLevel.
   const effort = (v: unknown, key: string): ThinkingLevel | undefined => {

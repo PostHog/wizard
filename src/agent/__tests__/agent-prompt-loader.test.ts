@@ -32,7 +32,7 @@ function registryOf(prompts: AgentPrompt[]): AgentRegistry {
 }
 
 describe('parseAgentPrompt', () => {
-  it('carries a task budget through resolution and rejects an unbounded or invalid budget', () => {
+  it('carries a task budget through resolution and ignores an unbounded or invalid budget', () => {
     const prompt = parseAgentPrompt(
       '---\ntimeoutSeconds: 600\n---\nreview',
       'review',
@@ -55,12 +55,12 @@ describe('parseAgentPrompt', () => {
         '[600]',
         '',
       ]) {
-        expect(() =>
-          parseAgentPrompt(
-            `---\ntimeoutSeconds: ${value}\n---\nbody`,
-            'review',
-          ),
-        ).toThrow('Invalid timeoutSeconds');
+        const parsed = parseAgentPrompt(
+          `---\ntimeoutSeconds: ${value}\n---\nbody`,
+          'review',
+        );
+        expect(parsed.timeoutMs).toBeUndefined();
+        expect(parsed.body).toBe('body');
       }
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
