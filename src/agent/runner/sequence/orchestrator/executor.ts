@@ -14,6 +14,9 @@ import { RunOutcome, type AgentFailure } from '../../shared/types';
 import { logToFile } from '@utils/debug';
 import { TaskStatus, type QueueStore, type QueuedTask } from './queue';
 
+/** What a required task does at its deadline: complete with a conflict, or stop the run. */
+export type TaskTimeoutBehavior = 'continue' | 'fail';
+
 /** Per-task agent configuration the resolver produces from a task's type.
  * The model is resolved separately (per-harness profile), not here. */
 export interface ResolvedTask {
@@ -23,6 +26,7 @@ export interface ResolvedTask {
   skills: readonly string[];
   prompt: string;
   timeoutMs?: number;
+  onTimeout?: TaskTimeoutBehavior;
 }
 
 /** Resolves a queued task to what the agent needs. The real one is markdown-backed. */

@@ -1,7 +1,11 @@
+import type { TaskTimeoutBehavior } from './executor';
 import { TaskStatus, type QueueStore, type QueuedTask } from './queue';
 
 export class TaskDeadlineExceeded extends Error {
-  constructor(timeoutMs: number, command?: string) {
+  constructor(
+    public readonly timeoutMs: number,
+    public readonly command?: string,
+  ) {
     super(
       `Task incomplete: exceeded its ${
         timeoutMs / 1000
@@ -46,15 +50,39 @@ export async function withTaskDeadline<T>(
 }
 
 /** How a queued task ended at its deadline; only `fatal` stops the run. */
-export type DeadlineLanding = 'settled' | 'optional-failed' | 'fatal';
+export type DeadlineLanding =
+  | 'settled'
+  | 'optional-failed'
+  | 'continued'
+  | 'fatal';
 
 /** Settle a task whose deadline passed, leaving a task that already reported untouched. */
 export function landTaskDeadline(
   store: QueueStore,
   task: QueuedTask,
-  message: string,
+  onTimeout: TaskTimeoutBehavior | undefined,
+  error: TaskDeadlineExceeded,
 ): DeadlineLanding {
   if (store.get(task.id)?.status !== TaskStatus.Running) return 'settled';
-  store.failTerminally(task.id, { type: 'timeout', message });
+  const label = task.label ?? task.type;
+  if (task.optional !== true && onTimeout === 'continue') {
+    const conflict = `${label} stopped at its ${
+      error.timeoutMs / 1000
+    }-second limit, so its checks are unverified and its edits may be partial.${
+      error.command ? ` Interrupted command: ${error.command}` : ''
+    }`;
+    store.complete(task.id, {
+      goals: label,
+      did: `${conflict} Active work was cancelled and the task was not retried.`,
+      forNextAgent:
+        'Say in the report that this step did not finish and name what is unverified. Do not claim that the build or any check passed unless an earlier handoff shows it.',
+      conflict,
+    });
+    return 'continued';
+  }
+  store.failTerminally(task.id, {
+    type: 'timeout',
+    message: `${label}: ${error.message}`,
+  });
   return task.optional === true ? 'optional-failed' : 'fatal';
 }

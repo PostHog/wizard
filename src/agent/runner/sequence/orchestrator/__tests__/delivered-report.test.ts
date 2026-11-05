@@ -52,7 +52,14 @@ vi.mock('../../../../agent-prompt-loader', async (importActual) => {
         actual.buildRegistry(
           [
             prompt('plan', { seed: true }),
-            prompt('install', { timeoutMs: taskTimeoutMs }),
+            prompt('install', {
+              timeoutMs: taskTimeoutMs,
+              onTimeout: taskOnTimeout,
+            }),
+            prompt('review', {
+              timeoutMs: taskTimeoutMs,
+              onTimeout: taskOnTimeout,
+            }),
             prompt('report', { sink: true }),
           ],
           'test-flow',
@@ -61,6 +68,7 @@ vi.mock('../../../../agent-prompt-loader', async (importActual) => {
   };
 });
 
+import { analytics } from '@utils/analytics';
 import { AgentErrorType } from '../../../../agent-interface';
 import { RunOutcome } from '../../../shared/types';
 import { runOrchestrator } from '../orchestrator-runner';
@@ -78,9 +86,11 @@ type Inputs = {
 type Behavior = (inputs: Inputs, taskId: string) => void | Promise<void>;
 let behaviors: Record<string, Behavior>;
 let taskTimeoutMs: number | undefined;
+let taskOnTimeout: 'continue' | 'fail' | undefined;
 let maxAttempts = 1;
 let installOptional = false;
 let installResult: unknown;
+let firstTaskType = 'install';
 
 /** The fake harness: the seed queues install then report, each task runs its scripted behavior. */
 async function harnessRun(raw: unknown) {
@@ -89,7 +99,7 @@ async function harnessRun(raw: unknown) {
   const type = inputs.analyticsProperties.task_type;
   if (type === 'seed') {
     const install = store.enqueue({
-      type: 'install',
+      type: firstTaskType,
       maxAttempts,
       optional: installOptional,
     });
@@ -114,9 +124,11 @@ describe('a task failing after the run report was published', () => {
   beforeEach(() => {
     dir = fs.mkdtempSync(path.join(os.tmpdir(), 'delivered-report-'));
     taskTimeoutMs = undefined;
+    taskOnTimeout = undefined;
     maxAttempts = 1;
     installOptional = false;
     installResult = undefined;
+    firstTaskType = 'install';
     behaviors = {
       install: (inputs, id) => {
         inputs.orchestrator.store.complete(id);
@@ -153,6 +165,7 @@ describe('a task failing after the run report was published', () => {
 
   it('joins timed-out work, reports an incomplete task, and neither retries nor starts dependents', async () => {
     taskTimeoutMs = 10;
+    taskOnTimeout = 'fail';
     maxAttempts = 3;
     let cleaned = false;
     let queue: QueueStore | undefined;
@@ -191,8 +204,92 @@ describe('a task failing after the run report was published', () => {
       inputs.signal.addEventListener('abort', () => resolve(), { once: true }),
     );
 
+  it('completes a task with onTimeout continue, so its dependents run and the report says what is unverified', async () => {
+    taskTimeoutMs = 10;
+    taskOnTimeout = 'continue';
+    maxAttempts = 3;
+    let calls = 0;
+    let queue: QueueStore | undefined;
+    let forReport: string | undefined;
+    behaviors.install = async (inputs) => {
+      calls++;
+      queue = inputs.orchestrator.store;
+      inputs.onBashCommand?.('pnpm typecheck');
+      await untilAborted(inputs);
+    };
+    behaviors.report = (inputs, id) => {
+      const { store } = inputs.orchestrator;
+      const install = store.list().find((task) => task.type === 'install');
+      forReport = store.readHandoff(install?.id ?? '')?.forNextAgent;
+      publish(inputs);
+      store.complete(id);
+    };
+    const result = await run();
+    expect(result.outcome).toBe(RunOutcome.Success);
+    expect(calls).toBe(1);
+    expect(queue?.list().find((task) => task.type === 'install')).toMatchObject(
+      { status: 'done', attempts: 1 },
+    );
+    expect(forReport).toContain('did not finish');
+    expect(analytics.wizardCapture).toHaveBeenCalledWith(
+      'orchestrator task deadline exceeded',
+      expect.objectContaining({
+        type: 'install',
+        landing: 'continued',
+        interrupted_command: true,
+      }),
+    );
+  });
+
+  it('tells the user a timed-out review left its checks unverified', async () => {
+    taskTimeoutMs = 10;
+    taskOnTimeout = 'continue';
+    firstTaskType = 'review';
+    behaviors.review = async (inputs) => {
+      inputs.onBashCommand?.('pnpm typecheck');
+      await untilAborted(inputs);
+    };
+    behaviors.report = (inputs, id) => {
+      publish(inputs);
+      inputs.orchestrator.store.complete(id);
+    };
+    const result = await run();
+    expect(result.outcome).toBe(RunOutcome.Success);
+    expect(result.outro?.message).toBe(
+      'PostHog set up, but its final checks did not finish.',
+    );
+    expect(result.outro?.body).toContain('Verification incomplete');
+    expect(result.outro?.body).toContain('its edits may be partial');
+    expect(result.outro?.body).toContain('Interrupted command: pnpm typecheck');
+    expect(result.outro?.body).not.toContain('Build conflict');
+  });
+
+  it('keeps the build conflict label for a conflict the review reported itself', async () => {
+    firstTaskType = 'review';
+    behaviors.review = (inputs, id) => {
+      inputs.orchestrator.store.complete(id, {
+        goals: 'g',
+        did: 'd',
+        forNextAgent: 'n',
+        conflict: 'pre-existing build error',
+      });
+    };
+    behaviors.report = (inputs, id) => {
+      publish(inputs);
+      inputs.orchestrator.store.complete(id);
+    };
+    const result = await run();
+    expect(result.outro?.message).toBe(
+      'PostHog set up, with one conflict to review.',
+    );
+    expect(result.outro?.body).toContain(
+      'Build conflict: pre-existing build error',
+    );
+  });
+
   it('keeps a task that reported done before its deadline done', async () => {
     taskTimeoutMs = 10;
+    taskOnTimeout = 'continue';
     let queue: QueueStore | undefined;
     behaviors.install = async (inputs, id) => {
       queue = inputs.orchestrator.store;
@@ -215,6 +312,7 @@ describe('a task failing after the run report was published', () => {
 
   it('fails a timed-out optional task once and carries on to its dependents', async () => {
     taskTimeoutMs = 10;
+    taskOnTimeout = 'continue';
     maxAttempts = 3;
     installOptional = true;
     let calls = 0;
@@ -241,6 +339,7 @@ describe('a task failing after the run report was published', () => {
 
   it('keeps a security stop fatal when the deadline passes as it lands', async () => {
     taskTimeoutMs = 10;
+    taskOnTimeout = 'continue';
     installResult = {
       kind: 'failure',
       classification: AgentErrorType.YARA_VIOLATION,

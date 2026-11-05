@@ -729,6 +729,8 @@ async function executeOrchestrator(
 
   // Tasks that published the run report: any failure after that point leaves the user's report intact.
   const reportDeliveredIds = new Set<string>();
+  // Tasks completed by their deadline rather than by their agent.
+  const incompleteTaskIds = new Set<string>();
 
   const store = new QueueStore(input.installDir, runId, {
     onTransition: (event, task) => {
@@ -1339,10 +1341,25 @@ async function executeOrchestrator(
         if (signal?.aborted) return;
         if (error instanceof RunTaskFatal) throw error;
         if (error instanceof TaskDeadlineExceeded) {
-          const message = `${task.label ?? task.type}: ${error.message}`;
-          if (landTaskDeadline(store, task, message) !== 'fatal') return;
+          const landing = landTaskDeadline(
+            store,
+            task,
+            resolved.onTimeout,
+            error,
+          );
+          analytics.wizardCapture('orchestrator task deadline exceeded', {
+            type: task.type,
+            timeout_ms: error.timeoutMs,
+            landing,
+            interrupted_command: error.command !== undefined,
+          });
+          if (landing === 'continued') incompleteTaskIds.add(task.id);
+          if (landing !== 'fatal') return;
           throw new RunTaskFatal(
-            { code: ErrorCodes.AgentOrchestratorTasksFailed, message },
+            {
+              code: ErrorCodes.AgentOrchestratorTasksFailed,
+              message: `${task.label ?? task.type}: ${error.message}`,
+            },
             RunOutcome.Failed,
             task.type,
           );
@@ -1517,6 +1534,8 @@ async function executeOrchestrator(
   const conflict = reviewTask
     ? store.readHandoff(reviewTask.id)?.conflict
     : undefined;
+  const reviewIncomplete =
+    reviewTask !== undefined && incompleteTaskIds.has(reviewTask.id);
 
   // Not-needed tasks were never work, so they leave the denominator too.
   const notRequired = summary[TaskStatus.Skipped];
@@ -1600,7 +1619,9 @@ async function executeOrchestrator(
       ? 'report delivered, then its step failed'
       : '',
   ].filter(Boolean);
-  const message = conflict
+  const message = reviewIncomplete
+    ? 'PostHog set up, but its final checks did not finish.'
+    : conflict
     ? 'PostHog set up, with one conflict to review.'
     : `PostHog set up: ${summary.done}/${
         summary.total - notRequired - optionalFailedCount
@@ -1611,7 +1632,9 @@ async function executeOrchestrator(
     kind: OutroKind.Success,
     message,
     body: conflict
-      ? `⚠ Build conflict: ${conflict}\nFull details are in the setup report.`
+      ? `⚠ ${
+          reviewIncomplete ? 'Verification incomplete' : 'Build conflict'
+        }: ${conflict}\nFull details are in the setup report.`
       : undefined,
     docsUrl: 'https://posthog.com/docs/ai-engineering/ai-wizard',
     nextSteps: config.hooks?.buildOutroNextSteps?.(

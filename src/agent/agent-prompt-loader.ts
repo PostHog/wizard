@@ -19,7 +19,10 @@ import type {
   QueueStore,
   QueuedTask,
 } from './runner/sequence/orchestrator/queue';
-import type { ResolvedTask } from './runner/sequence/orchestrator/executor';
+import type {
+  ResolvedTask,
+  TaskTimeoutBehavior,
+} from './runner/sequence/orchestrator/executor';
 import type { HostResolution } from '@shared/host-resolution';
 import {
   isThinkingLevel,
@@ -252,6 +255,8 @@ export interface AgentPrompt {
   optional: boolean;
   /** Wall-clock budget for one task attempt, including harness setup and cleanup. */
   timeoutMs?: number;
+  /** What a required task does at its deadline; set whenever `timeoutMs` is. */
+  onTimeout?: TaskTimeoutBehavior;
   /** Per-harness model/effort; both profiles also require gateway admission and prompt compatibility. */
   modelPi?: string;
   effortPi?: ThinkingLevel;
@@ -446,6 +451,26 @@ export function parseAgentPrompt(
       });
     }
   }
+  let onTimeout: TaskTimeoutBehavior | undefined;
+  if (timeoutMs !== undefined) {
+    const declared = fields.onTimeout;
+    if (declared === 'continue' || declared === 'fail') {
+      onTimeout = declared;
+    } else {
+      // An undeclared landing must not fail the run: review has already written the integration.
+      onTimeout = 'continue';
+      logToFile(
+        `[agent-prompt] ${fallbackType}: invalid onTimeout "${String(
+          declared,
+        )}", using continue`,
+      );
+      analytics.wizardCapture('agent prompt invalid timeout', {
+        task_type: fallbackType,
+        key: 'onTimeout',
+        value: String(declared),
+      });
+    }
+  }
   // Effort is remote data — reject typos here so downstream carries ThinkingLevel.
   const effort = (v: unknown, key: string): ThinkingLevel | undefined => {
     if (v === undefined) return undefined;
@@ -469,6 +494,7 @@ export function parseAgentPrompt(
     runnerSeeded: fields.runnerSeeded === 'true',
     optional: fields.optional === 'true',
     timeoutMs,
+    onTimeout,
     modelPi: str(fields.model_pi),
     effortPi: effort(fields.effort_pi, 'effort_pi'),
     modelSdk: str(fields.model_sdk),
@@ -614,6 +640,7 @@ export function resolveTask(
     prompt: body,
     skills: prompt.skills,
     timeoutMs: prompt.timeoutMs,
+    onTimeout: prompt.onTimeout,
   };
 }
 

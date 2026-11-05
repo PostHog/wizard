@@ -67,6 +67,17 @@ describe('parseAgentPrompt', () => {
     }
   });
 
+  it('uses onTimeout only with a valid budget and falls back to continue', () => {
+    const parse = (frontmatter: string) =>
+      parseAgentPrompt(`---\n${frontmatter}\n---\nbody`, 'review').onTimeout;
+    expect(parse('timeoutSeconds: 600\nonTimeout: fail')).toBe('fail');
+    expect(parse('timeoutSeconds: 600\nonTimeout: continue')).toBe('continue');
+    expect(parse('timeoutSeconds: 600')).toBe('continue');
+    expect(parse('timeoutSeconds: 600\nonTimeout: stop')).toBe('continue');
+    expect(parse('onTimeout: fail')).toBeUndefined();
+    expect(parse('timeoutSeconds: 0\nonTimeout: fail')).toBeUndefined();
+  });
+
   const sample = `---
 type: instrument-events
 model_pi: openai/gpt-5.6-terra     # per-profile model targets
