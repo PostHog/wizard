@@ -7,7 +7,10 @@ import { ErrorCodes } from '@shared/errors';
 import { HostResolution } from '@shared/host-resolution';
 import { OutroKind } from '@shared/outro';
 import { resetOAuthSession } from '@shared/oauth-session';
-import { readCiGatewayCredential } from '@shared/ci-gateway';
+import {
+  hasCiGatewayCredential,
+  readCiGatewayCredential,
+} from '@shared/ci-gateway';
 import { analytics } from '@utils/analytics';
 import { registerCleanup } from '@utils/cleanup';
 import { logToFile } from '@utils/debug';
@@ -64,6 +67,7 @@ const ciGateway = vi.hoisted(() => ({
   url: 'https://ai-gateway.eu.posthog.com',
 }));
 vi.mock(import('@shared/ci-gateway'), () => ({
+  hasCiGatewayCredential: vi.fn(() => false),
   readCiGatewayCredential: vi.fn(() => ciGateway),
 }));
 vi.mock(import('@utils/debug'));
@@ -190,11 +194,13 @@ it.each([
 );
 
 it.each([
-  ['ci', ciGateway],
-  ['headless', null],
+  ['ci', false, ciGateway],
+  ['headless', false, null],
+  ['headless', true, ciGateway],
 ] as const)(
-  'a %s run holds the pre-issued gateway token for its region: %j',
-  async (mode, expected) => {
+  'a %s run with a dev gateway token file %s holds the pre-issued gateway token for its region: %j',
+  async (mode, hasDevToken, expected) => {
+    vi.mocked(hasCiGatewayCredential).mockReturnValueOnce(hasDevToken);
     await runHeadless(
       program(),
       launch({ mode, session: { ...launch().session, region: 'eu' } }),

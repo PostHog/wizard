@@ -3,6 +3,13 @@ import { IS_PRODUCTION_BUILD, runtimeEnv } from '@env';
 import type { GatewayCredential } from '@shared/api';
 import type { CloudRegion } from '@utils/types';
 
+/** True when a non-production build has a pre-issued gateway token file to use in place of a mint. */
+export function hasCiGatewayCredential(): boolean {
+  return (
+    !IS_PRODUCTION_BUILD && Boolean(runtimeEnv('WIZARD_CI_GATEWAY_TOKEN_FILE'))
+  );
+}
+
 /** The pre-issued gateway token a dev or test `--ci` run uses, read once and then cleared from the environment. */
 export function readCiGatewayCredential(
   region: CloudRegion,

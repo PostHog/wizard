@@ -45,6 +45,10 @@ pnpm try --ci --api-key "$POSTHOG_PERSONAL_API_KEY" \
 otherwise CI uses `https://ai-gateway.<region>.posthog.com`. The local service
 flags below do not override this CI gateway setting.
 
+A headless run from a non-production build also uses this token file when
+`WIZARD_CI_GATEWAY_TOKEN_FILE` is set, so a local PostHog cloud run that builds
+the wizard from source reaches the gateway without a mint.
+
 For the `wizard-ci` MCP server, set `WIZARD_CI_GATEWAY_TOKEN_FILE` in the
 server's environment before launch; restart an existing server after changing
 it. It is not an `open_app` argument. Pass the personal key via `keyFile` or
