@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import {
+  accountOwnerFromEnv,
   agentRunTools,
   allowsPostHogMcp,
   assembleSeedPrompt,
@@ -563,6 +564,46 @@ describe('assembleTaskPrompt', () => {
     expect(assembled).toContain('PostHog Host: https://eu.i.posthog.com');
     expect(assembled).toContain('PostHog app URL');
     expect(assembled).toContain('https://eu.posthog.com');
+  });
+});
+
+describe('account owner in the project context', () => {
+  const owner = { name: 'Sam Example', email: 'sam@example.com' };
+  const base: OrchestratorPromptContext = {
+    projectId: 1,
+    projectApiKey: 'phc_x',
+    host: HostResolution.fromApiHost('https://us.posthog.com'),
+  };
+
+  it('names the account owner when the host passed one, and nobody otherwise', () => {
+    const named = assembleTaskPrompt({ ...base, accountOwner: owner }, 'go');
+    expect(named).toContain('PostHog account owner');
+    expect(named).toContain('Sam Example <sam@example.com>');
+    expect(assembleTaskPrompt(base, 'go')).not.toContain('account owner');
+  });
+
+  it('reads a whole record from the environment, and treats half of one as none', () => {
+    const saved = {
+      name: process.env.POSTHOG_ACCOUNT_OWNER_NAME,
+      email: process.env.POSTHOG_ACCOUNT_OWNER_EMAIL,
+    };
+    try {
+      process.env.POSTHOG_ACCOUNT_OWNER_NAME = ' Sam Example ';
+      process.env.POSTHOG_ACCOUNT_OWNER_EMAIL = 'sam@example.com';
+      expect(accountOwnerFromEnv()).toEqual(owner);
+      delete process.env.POSTHOG_ACCOUNT_OWNER_EMAIL;
+      expect(accountOwnerFromEnv()).toBeUndefined();
+      delete process.env.POSTHOG_ACCOUNT_OWNER_NAME;
+      expect(accountOwnerFromEnv()).toBeUndefined();
+    } finally {
+      for (const [key, value] of [
+        ['POSTHOG_ACCOUNT_OWNER_NAME', saved.name],
+        ['POSTHOG_ACCOUNT_OWNER_EMAIL', saved.email],
+      ] as const) {
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+      }
+    }
   });
 });
 

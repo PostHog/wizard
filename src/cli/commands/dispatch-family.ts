@@ -5,6 +5,7 @@ import { WIZARD_TOOL_NAMES } from '@agent';
 import { getProgramConfig, Program } from '@programs';
 import { config as agentSkillConfig } from '@programs/agent-skill';
 import { config as webAnalyticsDoctorConfig } from '@programs/web-analytics-doctor';
+import { config as spendAuditConfig } from '@programs/spend-audit';
 import type { ProgramConfig } from '@programs/types';
 import { getSkillsBaseUrl } from '@shared/constants';
 import { fetchSkillMenu, type CliEntry } from '@shared/skill-menu';
@@ -50,7 +51,7 @@ async function exitDispatchError(
 
 /** Wizard-native subcommands keyed by family. */
 const NATIVE_HANDLERS: Record<string, Record<string, ProgramConfig>> = {
-  audit: { 'web-analytics': webAnalyticsDoctorConfig },
+  audit: { 'web-analytics': webAnalyticsDoctorConfig, spend: spendAuditConfig },
 };
 
 /**

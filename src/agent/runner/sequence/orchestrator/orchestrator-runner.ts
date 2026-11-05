@@ -96,6 +96,7 @@ import {
   ASK_TOOL,
   type AgentPrompt,
   type OrchestratorPromptContext,
+  accountOwnerFromEnv,
 } from '../../../agent-prompt-loader';
 
 /** Docs page (`django.md`, `nuxt-js-3-6.md`) — steps start with a digit, agent artifacts (`SKILL.md`, `EXAMPLE*`, `COMMANDMENTS.md`) have uppercase. */
@@ -888,6 +889,7 @@ async function executeOrchestrator(
     examplePath,
     commandmentsPath,
     facts: config.projectFacts?.() ?? [],
+    accountOwner: accountOwnerFromEnv(),
   };
 
   logToFile(

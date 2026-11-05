@@ -27,6 +27,12 @@ import {
   PUBLISH_HANDOFF_TOOL_NAME,
   publishHandoff,
 } from './handoff';
+import {
+  PUBLISH_RESULT_DESCRIPTION,
+  PUBLISH_RESULT_PARAM_DESCRIPTION,
+  PUBLISH_RESULT_TOOL_NAME,
+  publishResult,
+} from './result';
 import { createSecretVault, type SecretVault } from '@shared/secret-vault';
 import { downloadSkill } from '@shared/skill-install';
 import type { ProgressEmitter } from '../progress';
@@ -785,6 +791,26 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
     },
   );
 
+  // -- publish_result -------------------------------------------------------
+
+  const publishResultTool = tool(
+    PUBLISH_RESULT_TOOL_NAME,
+    PUBLISH_RESULT_DESCRIPTION,
+    {
+      result: z.unknown().describe(PUBLISH_RESULT_PARAM_DESCRIPTION),
+    },
+    (args: { result: unknown }) => {
+      const result = publishResult(args.result, {
+        taskAgent: orchestrator?.currentTaskId !== undefined,
+      });
+      logToFile(`publish_result: ${result.message}`);
+      return {
+        content: [{ type: 'text' as const, text: result.message }],
+        ...(result.ok ? {} : { isError: true }),
+      };
+    },
+  );
+
   // -- Assemble server ------------------------------------------------------
 
   const orchestratorTools = orchestrator
@@ -805,6 +831,7 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
       auditResolveChecks,
       wizardAsk,
       publishHandoffTool,
+      publishResultTool,
       ...orchestratorTools,
     ],
   });
