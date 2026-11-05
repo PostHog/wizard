@@ -142,6 +142,14 @@ export function sweepRunInstalledSkills(
   }
 }
 
+/** Whether another task is still running, and may still need a skill it installed. */
+export function hasRunningSibling(
+  tasks: readonly QueuedTask[],
+  taskId: string,
+): boolean {
+  return tasks.some((t) => t.id !== taskId && t.status === TaskStatus.Running);
+}
+
 function toTodoStatus(status: TaskStatus): string {
   switch (status) {
     case TaskStatus.Running:
@@ -547,6 +555,17 @@ export function uninstalledPackages(
     for (const name of readHandoff(task.id)?.packages ?? []) packages.add(name);
   }
   return [...packages];
+}
+
+/** The one-line reasons required tasks gave for failing, for the abort message. */
+export function failedTaskConflicts(
+  tasks: readonly QueuedTask[],
+  readHandoff: (id: string) => TaskHandoff | null,
+): string[] {
+  const conflicts = tasks
+    .filter((t) => t.status === TaskStatus.Failed && !t.optional)
+    .flatMap((t) => readHandoff(t.id)?.conflict ?? []);
+  return [...new Set(conflicts)];
 }
 
 /** The outro paragraph that names those packages. */
@@ -1384,13 +1403,16 @@ async function executeOrchestrator(
     } finally {
       // Durable skills a task installed are irrelevant to later tasks — and
       // the sdk harness auto-loads .claude/skills into every agent — so sweep
-      // as each task ends, not only at run end.
+      // as each task ends, not only at run end. Of tasks running together, the
+      // last to finish sweeps.
       try {
-        sweepRunInstalledSkills(
-          claudeSkillsDir,
-          preexistingSkills,
-          referenceSkillId,
-        );
+        if (!hasRunningSibling(store.list(), task.id)) {
+          sweepRunInstalledSkills(
+            claudeSkillsDir,
+            preexistingSkills,
+            referenceSkillId,
+          );
+        }
       } catch (err) {
         try {
           logToFile('[orchestrator] per-task skill sweep failed:', err);
@@ -1581,10 +1603,11 @@ async function executeOrchestrator(
     const uninstalled = uninstalledPackages(store.list(), (id) =>
       store.readHandoff(id),
     );
-    const message =
-      uninstalled.length > 0
-        ? `${reason}\n\n${uninstalledPackagesNote(uninstalled)}`
-        : reason;
+    const message = [
+      reason,
+      ...failedTaskConflicts(store.list(), (id) => store.readHandoff(id)),
+      ...(uninstalled.length > 0 ? [uninstalledPackagesNote(uninstalled)] : []),
+    ].join('\n\n');
     const code = drainFailureCode(verdict);
     return failed({
       code,

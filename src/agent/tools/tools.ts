@@ -520,17 +520,17 @@ export function checkEnvKeys(
   keys: string[],
   filePath?: string,
 ): Record<string, EnvKeyPresence> {
-  const locations =
-    filePath === undefined
-      ? collectProjectEnvKeys(workingDirectory)
-      : readSingleEnvFile(workingDirectory, filePath);
+  // A model that fills in every argument sends "" for the omitted path.
+  const locations = filePath
+    ? readSingleEnvFile(workingDirectory, filePath)
+    : collectProjectEnvKeys(workingDirectory);
 
   // Key names only — never the values, and never the file contents.
   logToFile(
     `check_env_keys: ${
-      filePath === undefined
-        ? `project scan of ${workingDirectory}`
-        : resolveEnvPath(workingDirectory, filePath)
+      filePath
+        ? resolveEnvPath(workingDirectory, filePath)
+        : `project scan of ${workingDirectory}`
     }, keys: ${keys.join(', ')}`,
   );
 

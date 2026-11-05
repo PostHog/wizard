@@ -13,6 +13,7 @@ import {
   describeDrainFailure,
   drainFailureCode,
   drainVerdict,
+  failedTaskConflicts,
   uninstalledPackages,
   uninstalledPackagesNote,
 } from '@agent/runner/sequence/orchestrator/orchestrator-runner';
@@ -214,5 +215,39 @@ describe('uninstalledPackages', () => {
     expect(
       uninstalledPackages(other.list(), (id) => other.readHandoff(id)),
     ).toEqual([]);
+  });
+});
+
+describe('failedTaskConflicts', () => {
+  let dir: string;
+  let store: QueueStore;
+
+  beforeEach(() => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'conflicts-test-'));
+    store = new QueueStore(dir, 'run-1');
+  });
+
+  afterEach(() => fs.rmSync(dir, { recursive: true, force: true }));
+
+  const failWith = (type: string, optional: boolean, conflict?: string) => {
+    const task = store.enqueue({ type, optional });
+    store.start(task.id);
+    store.fail(
+      task.id,
+      { type: 'self-reported', message: 'x' },
+      { goals: 'g', did: 'd', forNextAgent: 'n', conflict },
+    );
+  };
+
+  it('returns each required failed task reason once, and no optional ones', () => {
+    const wrongFramework = 'This project is TypeScript, not Python.';
+    failWith('init', false, wrongFramework);
+    failWith('install', false, wrongFramework);
+    failWith('logs', true, 'An optional task reason.');
+    failWith('capture', false);
+
+    expect(
+      failedTaskConflicts(store.list(), (id) => store.readHandoff(id)),
+    ).toEqual([wrongFramework]);
   });
 });

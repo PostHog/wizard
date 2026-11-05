@@ -42,6 +42,7 @@ const NODE_SUBCOMMANDS = [
   'uninstall',
   'update',
   'view',
+  'peers',
 ];
 
 // Build/verify script names: exact or `name:variant` (build:prod). No kebab
