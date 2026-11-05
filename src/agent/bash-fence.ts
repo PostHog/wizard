@@ -24,6 +24,12 @@ export type BashFenceDecision =
   | { allowed: true }
   | { allowed: false; message: string; analyticsReason: string };
 
+export const BASH_FENCE_AGENT_GUIDANCE: readonly string[] = [
+  '- `bash` is for project package-manager installs and project-defined build/typecheck/lint/format commands.',
+  '- Plain `rm [-f] <relative-file-inside-project>` is allowed only for cleanup of generated project files.',
+  '- `test` and `start` scripts are intentionally not allowed; use build/typecheck/lint when available, otherwise verify by reading the changed files.',
+];
+
 export type BashFenceOptions = {
   /** Project root. A plain `rm` of files inside it is allowed; absent, every `rm` is denied. */
   projectRoot?: string;
@@ -151,9 +157,7 @@ const GRADLE_TASK_VERBS = ['assemble', 'compile', 'bundle', 'lint'];
 // positive action list is unparseable; only the test actions are out of contract.
 const XCODEBUILD_DENIED_ACTIONS = new Set(['test', 'test-without-building']);
 
-const DANGEROUS_OPERATORS = /[;`$()]/;
-
-// Stricter than DANGEROUS_OPERATORS: a plain `rm` also refuses quotes,
+// Stricter than hasDangerousOperators: a plain `rm` also refuses quotes,
 // escapes, braces, redirects, and any whitespace but a space, so the targets
 // checked here are exactly the words bash passes to rm.
 const RM_SHELL_OPERATORS = /[;&|`$(){}<>'"\\]|[^\S ]/;
@@ -182,6 +186,37 @@ function denyCommand(command: string, feedback: string): BashFenceDecision {
     'not in allowlist',
     `Bash command not allowed: \`${shown}\`. ${feedback}`,
   );
+}
+
+function hasDangerousOperators(command: string): boolean {
+  let quote: "'" | '"' | undefined;
+
+  for (let i = 0; i < command.length; i++) {
+    const ch = command[i];
+
+    if (ch === '`' || ch === '$') return true;
+
+    // Escaped quotes do not open or close shell quoting. Keep substitutions
+    // blocked even when escaped; only skip literal quotes and backslashes.
+    if (ch === '\\' && quote !== "'" && /["'\\]/.test(command[i + 1] ?? '')) {
+      i++;
+      continue;
+    }
+
+    if (quote) {
+      if (ch === quote) quote = undefined;
+      continue;
+    }
+
+    if (ch === "'" || ch === '"') {
+      quote = ch;
+      continue;
+    }
+
+    if (ch === ';' || ch === '(' || ch === ')') return true;
+  }
+
+  return quote !== undefined;
 }
 
 function isNodeScriptName(token: string): boolean {
@@ -563,7 +598,7 @@ export function evaluateBashCommand(
       'Bash command not allowed. Multi-line commands are not permitted — run one command at a time.',
     );
   }
-  if (DANGEROUS_OPERATORS.test(command)) {
+  if (hasDangerousOperators(command)) {
     return deny(
       'dangerous operators',
       'Bash command not allowed. Shell operators like ; ` $ ( ) are not permitted.',
