@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createBashToolDefinition } from '@earendil-works/pi-coding-agent';
 import { withBashTimeout } from '..';
+import { isBashTimeout } from '../task';
 import {
   withTaskDeadline,
   TaskDeadlineExceeded,
@@ -36,7 +37,7 @@ it('a real bash timeout kills a hanging shell and its child', async () => {
       undefined,
       undefined as never,
     ),
-  ).rejects.toThrow('timed out');
+  ).rejects.toSatisfy((error: Error) => isBashTimeout('bash', error.message));
   await assertStopped();
 });
 

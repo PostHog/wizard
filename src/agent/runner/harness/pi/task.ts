@@ -164,6 +164,11 @@ function isSettled(ctx: OrchestratorToolsContext): boolean {
   return taskReported(ctx);
 }
 
+/** Whether a failed tool call's detail is pi's bash timeout, which has no flag of its own. */
+export function isBashTimeout(toolName: string, detail: string): boolean {
+  return toolName === 'bash' && detail.includes('Command timed out after');
+}
+
 export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
   if (inputs.signal?.aborted) {
     return {
@@ -503,13 +508,29 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
         }
         case 'tool_execution_end': {
           if (event.toolName === 'bash') inputs.onBashCommand?.(undefined);
+          const detail = !event.isError
+            ? ''
+            : typeof event.result === 'string'
+            ? event.result
+            : JSON.stringify(event.result ?? '');
           if (event.isError) {
-            const detail =
-              typeof event.result === 'string'
-                ? event.result
-                : JSON.stringify(event.result ?? '');
             logToFile(`[pi-task] ✗ ${event.toolName}: ${detail.slice(0, 300)}`);
           }
+          analytics.wizardCapture('agent tool call completed', {
+            ...analyticsProperties,
+            tool_name: event.toolName,
+            duration_ms: event.durationMs,
+            is_error: event.isError,
+            timed_out: isBashTimeout(event.toolName, detail),
+          });
+          break;
+        }
+        case 'auto_retry_start': {
+          logToFile(
+            `[pi-task] model request retry ${event.attempt}/${
+              event.maxAttempts
+            } in ${event.delayMs}ms: ${event.errorMessage.slice(0, 200)}`,
+          );
           break;
         }
         default:
