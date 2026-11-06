@@ -79,20 +79,31 @@ function* trustedBinaries(
   installDir: string,
   extensions: string[],
   env: NodeJS.ProcessEnv,
+  preferredPaths: readonly string[] = [],
 ): Generator<string, void, unknown> {
   if (!name || /[\\/]/.test(name) || name === '.' || name === '..') return;
   const allowed = trustPolicy(installDir);
-  for (const directory of (env.PATH ?? '').split(path.delimiter)) {
-    if (!directory) continue;
-    for (const extension of extensions) {
-      const file = path.join(directory, name + extension);
-      try {
-        if (!allowed(file) || !fs.statSync(file).isFile()) continue;
-        fs.accessSync(file, fs.constants.X_OK);
-        yield fs.realpathSync(file);
-      } catch {
+  const files = [
+    ...preferredPaths,
+    ...(env.PATH ?? '')
+      .split(path.delimiter)
+      .filter(Boolean)
+      .flatMap((directory) =>
+        extensions.map((extension) => path.join(directory, name + extension)),
+      ),
+  ];
+  for (const file of files) {
+    try {
+      if (
+        !path.isAbsolute(file) ||
+        !allowed(file) ||
+        !fs.statSync(file).isFile()
+      )
         continue;
-      }
+      fs.accessSync(file, fs.constants.X_OK);
+      yield fs.realpathSync(file);
+    } catch {
+      continue;
     }
   }
 }
@@ -135,12 +146,19 @@ function isNodeScript(file: string): boolean {
 export function findTrustedCommand(
   name: string,
   installDir: string = process.cwd(),
+  preferredPaths: readonly string[] = [],
 ): TrustedCommand | null {
   const env = trustedCommandEnv(installDir);
   const windows = process.platform === 'win32';
   const extensions = windows ? ['.exe', '.com', '.cmd'] : [''];
   const allowed = trustPolicy(installDir);
-  for (const binary of trustedBinaries(name, installDir, extensions, env)) {
+  for (const binary of trustedBinaries(
+    name,
+    installDir,
+    extensions,
+    env,
+    preferredPaths,
+  )) {
     try {
       let target = binary;
       if (windows && /\.cmd$/i.test(binary)) {

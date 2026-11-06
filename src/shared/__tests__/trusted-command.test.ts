@@ -77,6 +77,33 @@ describe('trusted native commands', () => {
     expect(process.env.PATH).toBe(original);
   });
 
+  it('resolves a known installation outside PATH through the same interpreter protection', () => {
+    const script = write(
+      path.join(system, 'known-cli'),
+      '#!/usr/bin/env node\n',
+    );
+    setPath('');
+    expect(findTrustedCommand('example', project, [script])).toMatchObject({
+      executable: process.execPath,
+      prefixArgs: [script],
+    });
+  });
+
+  it('skips known installation paths controlled by the project', () => {
+    const planted = write(
+      path.join(project, 'example'),
+      '#!/usr/bin/env node\n',
+    );
+    const script = write(path.join(system, 'example'), '#!/usr/bin/env node\n');
+    setPath('');
+    expect(
+      findTrustedCommand('example', project, [planted, script]),
+    ).toMatchObject({
+      executable: process.execPath,
+      prefixArgs: [script],
+    });
+  });
+
   it.skipIf(platform === 'win32')(
     'rejects symlinked directories and executable targets inside the checkout',
     () => {

@@ -79,6 +79,7 @@ jobs:
         run: >-
           pnpm exec vitest run src/shared/__tests__/trusted-command.test.ts
           src/shared/install-cli-steering/__tests__/install-cli-steering.test.ts
+          src/shared/mcp-clients/clients/__tests__/native-cli-trust.test.ts
           src/services/frameworks/python/__tests__/utils.test.ts
           src/shared/utils/__tests__/setup-utils-trust.test.ts
           src/programs/posthog-integration/upload-environment-variables/providers/__tests__/vercel.test.ts
