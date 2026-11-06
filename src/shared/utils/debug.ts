@@ -41,12 +41,14 @@ export function configureLogFile(opts: {
   if (opts.path !== undefined && !logFilePinned) {
     logFilePath = opts.path;
     ensuredLogDir = false;
+    usedPerUserLog = false;
   }
   if (opts.pin === true) logFilePinned = true;
   if (opts.enabled !== undefined) fileLoggingEnabled = opts.enabled;
 }
 
 let ensuredLogDir = false;
+let usedPerUserLog = false;
 let reportedLogFailure = false;
 
 // Failed log writes go to error tracking, once per process. Dynamic import:
@@ -72,20 +74,44 @@ function reportLogFailureOnce(err: unknown): void {
 
 // The log's directory isn't guaranteed to exist (Windows %TEMP%,
 // POSTHOG_WIZARD_LOG_DIR) — create it on first failure.
-function appendLine(text: string): void {
+function writeLine(text: string): void {
   try {
     appendFileSync(logFilePath, text);
   } catch (err) {
-    if (ensuredLogDir) {
+    if (ensuredLogDir) throw err;
+    ensuredLogDir = true;
+    mkdirSync(path.dirname(logFilePath), { recursive: true });
+    appendFileSync(logFilePath, text);
+  }
+}
+
+function isPermissionError(err: unknown): boolean {
+  const code = (err as NodeJS.ErrnoException | undefined)?.code;
+  return code === 'EACCES' || code === 'EPERM';
+}
+
+// Another user can own the shared /tmp log; switch once to a per-user file beside it.
+function usePerUserLog(): boolean {
+  const uid = process.getuid?.();
+  if (logFilePinned || usedPerUserLog || uid === undefined) return false;
+  usedPerUserLog = true;
+  const { dir, name, ext } = path.parse(logFilePath);
+  logFilePath = path.join(dir, `${name}-${uid}${ext}`);
+  return true;
+}
+
+function appendLine(text: string): void {
+  try {
+    writeLine(text);
+  } catch (err) {
+    if (!isPermissionError(err) || !usePerUserLog()) {
       reportLogFailureOnce(err);
       return;
     }
-    ensuredLogDir = true;
     try {
-      mkdirSync(path.dirname(logFilePath), { recursive: true });
       appendFileSync(logFilePath, text);
-    } catch (retryErr) {
-      reportLogFailureOnce(retryErr);
+    } catch (fallbackErr) {
+      reportLogFailureOnce(fallbackErr);
     }
   }
 }
