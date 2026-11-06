@@ -139,11 +139,16 @@ it.each(['continue', 'exit'] as const)(
   },
 );
 
-it('routes Ink cancellation through one cancelled shutdown and preserves exit 130', async () => {
+it('routes Ink cancellation through one cancelled shutdown, delivers queued events, and preserves exit 130', async () => {
   const { store, unmount } = mountedStore();
   vi.mocked(runProgram).mockImplementation(() => {
     store.setRunPhase(RunPhase.Running);
     return new Promise(() => undefined);
+  });
+  let delivered = false;
+  vi.mocked(analytics.flush).mockImplementation(async () => {
+    await flush();
+    delivered = true;
   });
   const exited = runTui(posthogIntegration, launch('/tmp/cancellation-test'));
   await vi.waitFor(() => expect(runProgram).toHaveBeenCalled());
@@ -151,6 +156,7 @@ it('routes Ink cancellation through one cancelled shutdown and preserves exit 13
   interrupt?.();
   interrupt?.();
   await expect(exited).resolves.toBe(130);
+  expect(delivered).toBe(true);
   expect(streamShutdown).toHaveBeenCalledExactlyOnceWith(2000, 'cancelled');
   expect(analytics.shutdown).toHaveBeenCalledWith('cancelled');
   expect(unmount).toHaveBeenCalledOnce();
@@ -161,9 +167,10 @@ it.each([
   ['SIGTERM', 143],
   ['SIGHUP', 130],
 ] as const)(
-  'a %s cancels the run and runs the cleanups before the stream flush, then resolves %i',
+  'a %s cancels the run, runs the cleanups before the stream flush, delivers what the unmount captures, then resolves %i',
   async (name, code) => {
     const { store, unmount } = mountedStore();
+    vi.mocked(analytics.flush).mockResolvedValue(undefined);
     const controller = new AbortController();
     const cleanup = vi.fn();
     registerCleanup(cleanup);
@@ -194,8 +201,60 @@ it.each([
     );
     expect(analytics.shutdown).toHaveBeenCalledWith('cancelled');
     expect(unmount).toHaveBeenCalledOnce();
+    expect(unmount.mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(analytics.flush).mock.invocationCallOrder.at(-1) ?? 0,
+    );
   },
 );
+
+it('an Ink Ctrl-C after a successful run delivers what the unmount captures before it resolves 130', async () => {
+  const { unmount } = mountedStore();
+  vi.mocked(runProgram).mockResolvedValue({
+    outcome: RunOutcome.Success,
+    diagnostics: [],
+  } as never);
+  unmount.mockImplementation(() =>
+    analytics.wizardCapture('email provider offer answered', {
+      answer: 'skipped',
+    }),
+  );
+  const delivered: string[] = [];
+  vi.mocked(analytics.flush).mockImplementation(async () => {
+    const queued = vi
+      .mocked(analytics.wizardCapture)
+      .mock.calls.map(([event]) => event);
+    await flush();
+    delivered.push(...queued);
+  });
+  const exited = runTui(posthogIntegration, launch('/tmp/after-success-test'));
+  await vi.waitFor(() =>
+    expect(analytics.shutdown).toHaveBeenCalledWith('success'),
+  );
+  vi.mocked(startTUI).mock.calls[0][2]?.();
+  await expect(exited).resolves.toBe(130);
+  expect(delivered).toContain('email provider offer answered');
+});
+
+it('an Ink Ctrl-C after a successful run resolves 130 within the report budget when the flush hangs', async () => {
+  vi.useFakeTimers({ toFake: ['setTimeout'] });
+  try {
+    mountedStore();
+    vi.mocked(runProgram).mockResolvedValue({
+      outcome: RunOutcome.Success,
+      diagnostics: [],
+    } as never);
+    vi.mocked(analytics.flush).mockReturnValue(new Promise(() => undefined));
+    const exited = runTui(posthogIntegration, launch('/tmp/hung-flush-test'));
+    await vi.waitFor(() =>
+      expect(analytics.shutdown).toHaveBeenCalledWith('success'),
+    );
+    vi.mocked(startTUI).mock.calls[0][2]?.();
+    await vi.advanceTimersByTimeAsync(2000);
+    await expect(exited).resolves.toBe(130);
+  } finally {
+    vi.useRealTimers();
+  }
+});
 
 it("resolves a screen's exit request with its code and starts no stream shutdown", async () => {
   const { store, unmount } = mountedStore();

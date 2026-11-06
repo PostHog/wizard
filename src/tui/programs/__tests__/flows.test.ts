@@ -39,6 +39,7 @@ describe('program flows', () => {
       'auth',
       'run',
       'outro',
+      'email-provider-offer',
       'mcp',
     ]);
   });

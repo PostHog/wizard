@@ -45,6 +45,9 @@ vi.mock('@utils/analytics.js', () => ({
     captureException: vi.fn(),
     setTag: vi.fn(),
     shutdown: vi.fn().mockResolvedValue(undefined),
+    getCachedWizardFlags: vi.fn(() => ({
+      'wizard-email-provider-offer': 'true',
+    })),
   },
   sessionProperties: vi.fn(() => ({})),
 }));
@@ -404,6 +407,11 @@ const MUTATIONS: MutationCase[] = [
     emits: 1,
   },
   { name: 'setOutroDismissed', invoke: (s) => s.setOutroDismissed(), emits: 1 },
+  {
+    name: 'setEmailProviderOfferDone',
+    invoke: (s) => s.setEmailProviderOfferDone(),
+    emits: 1,
+  },
   {
     name: 'setOutroData',
     invoke: (s) => s.setOutroData({ kind: OutroKind.Success, message: 'done' }),

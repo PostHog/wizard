@@ -6,4 +6,8 @@ export {
   type CodebaseScan,
 } from './scan';
 export { reportCodebaseScan, type ScanReportStore } from './report';
-export { tagScanResults } from './tags';
+export { maySendScanResults, tagScanResults } from './tags';
+export {
+  detectedEmailProviders,
+  type EmailProviderKind,
+} from './email-providers';

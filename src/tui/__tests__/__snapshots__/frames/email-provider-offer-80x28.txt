@@ -1,0 +1,27 @@
+ PostHog Wizard v0.0.0-test                        Feedback: wizard@posthog.com
+
+ Cost (running): $0.00 · no agent turns yet                      Ctrl+T to hide
+
+
+ PostHog can send this app's transactional emails directly from code, with
+ delivery and engagement events next to your product analytics. Want to try it?
+
+ ▸ Yes, show me how
+   Not now
+   No thanks
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  ↑↓ navigate  esc skip  enter select

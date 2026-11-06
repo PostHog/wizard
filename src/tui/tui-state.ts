@@ -42,6 +42,7 @@ export type TuiState = {
   /** Whether the project already has a Slack integration; `null` until detected. */
   slackConnected: boolean | null;
   outroDismissed: boolean;
+  emailProviderOfferDone: boolean;
 
   /**
    * Self-driving only: whether to integrate PostHog as part of this run.
@@ -96,6 +97,7 @@ export function initialTuiState(
     slackStepDismissed: false,
     slackConnected: null,
     outroDismissed: false,
+    emailProviderOfferDone: false,
     // `--integrate` forces integration (skip the question); otherwise the
     // integration-check screen resolves it from null.
     integrate: choices.integrate === true ? true : null,

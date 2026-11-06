@@ -269,6 +269,15 @@ const warehouseSeedTasks: NonNullable<ProgramConfig['seedTasks']> = (sess) => {
 };
 
 export { EVENT_PLAN_FILE } from './constants.js';
+export {
+  EmailProviderOfferAnswer,
+  emailProviderOffer,
+  emailProviderOfferChoices,
+  EMAIL_PROVIDER_OFFER_QUESTION,
+  reportEmailProviderOfferAnswered,
+  reportEmailProviderOfferShown,
+  type EmailProviderOffer,
+} from './email-provider-offer.js';
 
 export const config: ProgramConfig = {
   description: 'Set up PostHog SDK integration',
