@@ -3,6 +3,7 @@ import { detectRegion } from '@utils/urls';
 import { fetchProjectData, fetchUserData } from '@shared/api';
 import { performOAuthFlow } from '../oauth';
 import { provisionNewAccount } from '@utils/provisioning';
+import { analytics } from '@utils/analytics';
 import type { WizardStore } from '@tui/store';
 import { WIZARD_OAUTH_SCOPES } from '@shared/constants';
 import { CONNECT_SLACK_SCOPE_ADDITIONS } from '@shared/oauth-scopes';
@@ -174,5 +175,51 @@ describe('getOrAskForProjectData signup fallback', () => {
       }),
       store,
     );
+  });
+});
+
+describe('getOrAskForProjectData signup', () => {
+  const newUser = { distinct_id: 'new-user', role_at_organization: null };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(provisionNewAccount).mockResolvedValue({
+      accessToken: 'pha_new',
+      refreshToken: 'phr_new',
+      expiresAt: 0,
+      oauthClientId: 'client',
+      projectApiKey: 'phc_new',
+      host: 'https://us.i.posthog.com',
+      personalApiKey: undefined,
+      projectId: '5',
+      accountId: 'account',
+    } as never);
+  });
+
+  function signUp() {
+    return getOrAskForProjectData({
+      store,
+      signup: true,
+      email: 'dev@example.com',
+    });
+  }
+
+  it('identifies the new account, so the run lands on its person', async () => {
+    mockedFetchUser.mockResolvedValue(newUser);
+
+    const result = await signUp();
+
+    expect(analytics.identifyUser).toHaveBeenCalledWith(newUser);
+    expect(result.user).toEqual(newUser);
+  });
+
+  it('still signs the new account in when its user cannot be read', async () => {
+    mockedFetchUser.mockRejectedValue(new Error('403'));
+
+    const result = await signUp();
+
+    expect(analytics.identifyUser).not.toHaveBeenCalled();
+    expect(result.accessToken).toBe('pha_new');
+    expect(result.user).toBeNull();
   });
 });

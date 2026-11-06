@@ -182,30 +182,54 @@ function isUntrustedCertError(error: unknown): error is AxiosError {
 }
 
 const RETRY_DELAYS_MS = [500, 1500];
+const USER_DATA_TIMEOUT_MS = 10_000;
 
-/** No response (a network error), 5xx, 408 and 429 can heal on a retry; an untrusted certificate can't. */
+/** No response (a network error), 5xx, 408 and 429 can heal on a retry; an untrusted certificate or a cancelled request can't. */
 function isTransient(error: unknown): boolean {
-  if (!axios.isAxiosError(error) || isUntrustedCertError(error)) return false;
+  if (
+    !axios.isAxiosError(error) ||
+    error.code === AxiosError.ERR_CANCELED ||
+    isUntrustedCertError(error)
+  )
+    return false;
   const status = error.response?.status;
   // A local server that isn't answering won't start in the next two seconds.
   if (status === undefined) return !isLocalHost(error);
   return status >= 500 || status === 408 || status === 429;
 }
 
-/** Runs a login-path request, retrying transient failures with backoff. */
+/** Waits `ms`, or less when `signal` aborts first. */
+function backoff(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve) => {
+    const done = () => {
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', done);
+      resolve();
+    };
+    const timer = setTimeout(done, ms);
+    signal?.addEventListener('abort', done, { once: true });
+  });
+}
+
+/**
+ * Runs a login-path request, retrying transient failures with backoff.
+ * Once `signal` aborts, it stops waiting and throws the last failure.
+ */
 export async function retryTransient<T>(
   request: () => Promise<T>,
-  sleep: (ms: number) => Promise<void> = (ms) =>
-    new Promise((resolve) => setTimeout(resolve, ms)),
+  sleep: (ms: number, signal?: AbortSignal) => Promise<void> = backoff,
+  signal?: AbortSignal,
 ): Promise<T> {
   for (let attempt = 0; ; attempt++) {
     try {
       return await request();
     } catch (error) {
       const delay = RETRY_DELAYS_MS[attempt];
-      if (delay === undefined || !isTransient(error)) throw error;
+      if (delay === undefined || !isTransient(error) || signal?.aborted)
+        throw error;
       logToFile(`[api] ${describeAxiosFailure(error)}, retrying in ${delay}ms`);
-      await sleep(delay);
+      await sleep(delay, signal);
+      if (signal?.aborted) throw error;
     }
   }
 }
@@ -235,14 +259,19 @@ export async function fetchUserData(
   accessToken: string,
   baseUrl: string,
 ): Promise<ApiUser> {
+  const deadline = AbortSignal.timeout(USER_DATA_TIMEOUT_MS);
   try {
-    const response = await retryTransient(() =>
-      axios.get(`${baseUrl}/api/users/@me/`, {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          'User-Agent': WIZARD_USER_AGENT,
-        },
-      }),
+    const response = await retryTransient(
+      () =>
+        axios.get(`${baseUrl}/api/users/@me/`, {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'User-Agent': WIZARD_USER_AGENT,
+          },
+          signal: deadline,
+        }),
+      undefined,
+      deadline,
     );
 
     return ApiUserSchema.parse(response.data);

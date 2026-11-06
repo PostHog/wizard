@@ -1,9 +1,12 @@
+import * as http from 'http';
+import type { AddressInfo } from 'net';
 import { AxiosError, AxiosHeaders, type AxiosResponse } from 'axios';
 import axios from 'axios';
 import { analytics } from '@utils/analytics';
 import {
   diagnoseApiError,
   fetchProjectData,
+  fetchUserData,
   handleApiError,
   retryTransient,
 } from '../api';
@@ -78,6 +81,21 @@ describe('retryTransient', () => {
       AxiosError,
     );
     expect(request).toHaveBeenCalledTimes(1);
+  });
+
+  it('stops waiting to retry when its deadline passes', async () => {
+    const deadline = new AbortController();
+    const failure = httpError(503);
+    const request = vi.fn().mockRejectedValue(failure);
+    setTimeout(() => deadline.abort(), 50);
+    const started = Date.now();
+
+    await expect(
+      retryTransient(request, undefined, deadline.signal),
+    ).rejects.toBe(failure);
+
+    expect(Date.now() - started).toBeLessThan(400);
+    expect(request).toHaveBeenCalledOnce();
   });
 
   it('does not retry an untrusted certificate', async () => {
@@ -253,4 +271,50 @@ describe('fetchProjectData failure analytics', () => {
       expect.objectContaining({ status_code: 403, network_code: undefined }),
     );
   });
+});
+
+describe('fetchUserData', () => {
+  let silentServer: http.Server;
+
+  beforeEach(async () => {
+    vi.restoreAllMocks();
+    silentServer = http.createServer(() => undefined);
+    await new Promise<void>((resolve) =>
+      silentServer.listen(0, '127.0.0.1', resolve),
+    );
+  });
+
+  afterEach(async () => {
+    silentServer.closeAllConnections();
+    await new Promise((resolve) => silentServer.close(resolve));
+  });
+
+  it('gives up on a server that accepts the request and never answers', async () => {
+    const { port } = silentServer.address() as AddressInfo;
+
+    await expect(
+      fetchUserData('token', `http://127.0.0.1:${port}`),
+    ).rejects.toThrow();
+  }, 15_000);
+
+  it('gives up on a remote server that never answers within one deadline, retries included', async () => {
+    const get = vi
+      .spyOn(axios, 'get')
+      .mockImplementation(
+        (_url, requestConfig) =>
+          new Promise((_resolve, reject) =>
+            requestConfig?.signal?.addEventListener?.('abort', () =>
+              reject(new axios.CanceledError()),
+            ),
+          ),
+      );
+    const started = Date.now();
+
+    await expect(
+      fetchUserData('token', 'https://us.posthog.com'),
+    ).rejects.toThrow();
+
+    expect(Date.now() - started).toBeLessThan(11_000);
+    expect(get).toHaveBeenCalledOnce();
+  }, 15_000);
 });
