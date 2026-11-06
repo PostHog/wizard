@@ -13,7 +13,7 @@
  * (`npx <anything>` downloads and runs it), and shell injection. Matching is
  * token-exact per manager — keyword prefixes admitted `npm publish` via `pub`.
  * `rm` is allowed only as a plain delete of named files inside the project
- * root.
+ * root, and a package manager directory flag only with a folder inside it.
  */
 import fs from 'fs';
 import path from 'path';
@@ -25,7 +25,7 @@ export type BashFenceDecision =
   | { allowed: false; message: string; analyticsReason: string };
 
 export type BashFenceOptions = {
-  /** Project root. A plain `rm` of files inside it is allowed; absent, every `rm` is denied. */
+  /** Project root. A plain `rm` of files inside it and package manager directory flags naming a folder inside it are allowed; absent, both are denied. */
   projectRoot?: string;
 };
 
@@ -154,6 +154,12 @@ const XCODEBUILD_DENIED_ACTIONS = new Set(['test', 'test-without-building']);
 
 const DANGEROUS_OPERATORS = /[;`$()]/;
 
+// Package manager flags that run a command in another directory.
+const DIRECTORY_FLAGS = new Set(['--dir', '-C', '--prefix', '--cwd']);
+const DIRECTORY_FLAG_ASSIGNMENT = /^--(?:dir|prefix|cwd)=/;
+// Quotes, escapes, globs and home expansion would make the path bash passes differ from the one checked here.
+const DIRECTORY_SHELL_CHARS = /[*?[\]~{}'"\\]/;
+
 // Stricter than DANGEROUS_OPERATORS: a plain `rm` also refuses quotes,
 // escapes, braces, redirects, and any whitespace but a space, so the targets
 // checked here are exactly the words bash passes to rm.
@@ -195,8 +201,52 @@ function isLintingTool(token: string): boolean {
   return LINTING_TOOLS.includes(token) || token === 'tsc';
 }
 
-function nodeDecision(parts: string[], command: string): BashFenceDecision {
+/** The directories a package manager command names with a directory flag. Tool arguments after `exec` or `--` aren't its own. */
+function directoryFlagValues(parts: string[]): string[] {
+  const values: string[] = [];
+  for (let i = 1; i < parts.length; i++) {
+    const t = parts[i];
+    if (t === '--' || t === 'exec') break;
+    if (DIRECTORY_FLAGS.has(t)) {
+      values.push(parts[++i] ?? '');
+    } else if (DIRECTORY_FLAG_ASSIGNMENT.test(t)) {
+      values.push(t.slice(t.indexOf('=') + 1));
+    }
+  }
+  return values;
+}
+
+/** A relative path to the project root or a folder inside it, with symlinks resolved. */
+function isProjectDirectory(
+  target: string,
+  rawRoot: string | undefined,
+): boolean {
+  if (!rawRoot || !target || target.startsWith('-')) return false;
+  if (path.isAbsolute(target) || DIRECTORY_SHELL_CHARS.test(target)) {
+    return false;
+  }
+  if (target.split('/').includes('..')) return false;
+  const root = realPathOf(path.resolve(rawRoot), path);
+  const real = realPathOf(path.resolve(rawRoot, target), path);
+  return real === root || real.startsWith(root + path.sep);
+}
+
+function nodeDecision(
+  parts: string[],
+  command: string,
+  options: BashFenceOptions,
+): BashFenceDecision {
   const bin = parts[0];
+  if (
+    !directoryFlagValues(parts).every((dir) =>
+      isProjectDirectory(dir, options.projectRoot),
+    )
+  ) {
+    return denyCommand(
+      command,
+      `A directory flag needs a relative path inside the project, such as ${bin} --dir <path>.`,
+    );
+  }
   let i = 1;
   if (bin === 'yarn' && parts[i] === 'workspace' && parts[i + 1]) i += 2;
   // Monorepo workspace-scoping flags may precede the subcommand.
@@ -217,6 +267,10 @@ function nodeDecision(parts: string[], command: string): BashFenceDecision {
     ) {
       i += 2;
     } else if (t === '-w' && bin === 'pnpm') {
+      i++;
+    } else if (t && DIRECTORY_FLAGS.has(t) && parts[i + 1]) {
+      i += 2;
+    } else if (t && DIRECTORY_FLAG_ASSIGNMENT.test(t)) {
       i++;
     } else {
       break;
@@ -338,7 +392,7 @@ function commandDecision(
   // anything else under `<venv>/bin/` stays denied (it would be arbitrary exec).
   const venvTool = raw === bin ? raw.match(VENV_TOOL)?.[1] : undefined;
   if (venvTool && isLintingTool(venvTool)) return { allowed: true };
-  if (NODE_MANAGERS.has(bin)) return nodeDecision(parts, command);
+  if (NODE_MANAGERS.has(bin)) return nodeDecision(parts, command, options);
   if (bin === 'npx') return npxDecision(parts, command);
   if (GRADLE_MANAGERS.has(bin)) return gradleDecision(parts, command);
   if (MAVEN_MANAGERS.has(bin)) return mavenDecision(parts, command);
