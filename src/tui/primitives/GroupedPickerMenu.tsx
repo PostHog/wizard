@@ -33,6 +33,8 @@ interface GroupedPickerMenuProps {
   message?: string;
   groups: Record<string, GroupOption[]>;
   initialSelected?: string[];
+  /** What the Confirm button's count counts, e.g. areas. */
+  countNoun?: { one: string; other: string };
   onSelect: (values: string[]) => void;
 }
 
@@ -125,6 +127,7 @@ export const GroupedPickerMenu = ({
   message,
   groups,
   initialSelected,
+  countNoun,
   onSelect,
 }: GroupedPickerMenuProps) => {
   const [termCols, termRows] = useStdoutDimensions();
@@ -272,14 +275,24 @@ export const GroupedPickerMenu = ({
   const hiddenBelow = needsScroll
     ? selectableIndices.filter((s) => s >= visibleEnd).length
     : 0;
+  // One scroll hint, on the bottom row while options remain below, else the top.
+  const hintBelow = hiddenBelow > 0;
+  const scrollHint = ' · ↑↓ to scroll';
+  const aboveText =
+    hiddenAbove > 0
+      ? `↑ ${hiddenAbove} more above${hintBelow ? '' : scrollHint}`
+      : ' ';
+  const belowText = hintBelow
+    ? `↓ ${hiddenBelow} more below${scrollHint}`
+    : ' ';
 
   return (
     <Box flexDirection="column">
       <PromptLabel message={message} />
       <Box flexDirection="column" marginTop={message ? 1 : 0} marginLeft={2}>
         {needsScroll && (
-          <Text dimColor>
-            {hiddenAbove > 0 ? `\u2191 ${hiddenAbove} more` : ' '}
+          <Text dimColor wrap="truncate">
+            {aboveText}
           </Text>
         )}
         {visibleRows.map((row, relIdx) => {
@@ -326,13 +339,17 @@ export const GroupedPickerMenu = ({
           );
         })}
         {needsScroll && (
-          <Text dimColor>
-            {hiddenBelow > 0 ? `\u2193 ${hiddenBelow} more` : ' '}
+          <Text dimColor wrap="truncate">
+            {belowText}
           </Text>
         )}
       </Box>
       <Box marginTop={1} marginLeft={2}>
-        <ConfirmButton focused={onButton} count={selected.size} />
+        <ConfirmButton
+          focused={onButton}
+          count={selected.size}
+          countNoun={countNoun}
+        />
       </Box>
     </Box>
   );

@@ -13,7 +13,7 @@ exports and each source file for its current props. Shared styling lives in
 | Tabs and status         | [TabContainer](../../../../src/tui/primitives/TabContainer.tsx): local active tab, arrow navigation, optional expandable status                                        |
 | Single/multiple choice  | [PickerMenu](../../../../src/tui/primitives/PickerMenu.tsx): columns, paging, filtering, and confirm-button interaction                                                |
 | Categorized choices     | [GroupedPickerMenu](../../../../src/tui/primitives/GroupedPickerMenu.tsx): category headers, scrolling, and multi-select                                               |
-| Multi-select submission | [ConfirmButton](../../../../src/tui/primitives/ConfirmButton.tsx): bordered submit row with focus and optional count                                                   |
+| Multi-select submission | [ConfirmButton](../../../../src/tui/primitives/ConfirmButton.tsx): bordered submit row with focus, an optional count, and what it counts                                |
 | Continue/cancel         | [ConfirmationInput](../../../../src/tui/primitives/ConfirmationInput.tsx): text choices, left/right focus, enter activates, escape cancels                             |
 | Prompt heading          | [PromptLabel](../../../../src/tui/primitives/PromptLabel.tsx)                                                                                                          |
 | Task progress           | [ProgressList](../../../../src/tui/primitives/ProgressList.tsx): active labels, completion count, and skipped-task handling                                            |
