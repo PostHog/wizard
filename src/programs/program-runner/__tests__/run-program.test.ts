@@ -271,7 +271,7 @@ describe('runProgram', () => {
         overrides: { harness: Harness.anthropic, sequence: Sequence.linear },
       },
     });
-    expect(config.excludedTaskTypes).toBe(excludedTaskTypes);
+    expect(config.excludedTaskTypes?.({})).toEqual(['logs']);
     expect(runInput.credentials).toBe(credentials.posthog);
     expect(agentOptions?.signal).toBe(signal);
     // The agent asks and notices through the caller's answerer.
@@ -653,24 +653,33 @@ describe('runProgram', () => {
       });
     });
 
-    it("binds the run's hooks and seed tasks to the store's session", async () => {
+    it("binds the run's hooks, seed tasks, exclusions and facts to the store's session", async () => {
       const s = store();
       const postRun = vi.fn(() => Promise.resolve());
       const buildOutroData = vi.fn(() => null);
       const nextSteps = { heading: 'Next', items: ['next'] };
       const buildOutroNextSteps = vi.fn(() => nextSteps);
       const seedTasks = vi.fn(() => []);
+      const excludedTaskTypes = vi.fn(() => ['logs']);
+      const detectedFacts = vi.fn(() => ['A server lives in apps/mcp']);
 
       await runProgram('metrics', {
         store: s,
         config: {
           run: { ...run, postRun, buildOutroData, buildOutroNextSteps },
           seedTasks,
+          excludedTaskTypes,
+          detectedFacts,
         },
         credentials,
       });
 
-      const { hooks, seedTasks: boundSeed } = agentConfig();
+      const {
+        hooks,
+        seedTasks: boundSeed,
+        excludedTaskTypes: boundExcluded,
+        projectFacts,
+      } = agentConfig();
       const creds = credentials.posthog;
       await hooks?.postRun?.(creds);
       expect(postRun).toHaveBeenCalledWith(s.session, creds);
@@ -685,6 +694,11 @@ describe('runProgram', () => {
       expect(s.session.frameworkContext[TASK_OUTCOMES_KEY]).toEqual([]);
       boundSeed?.();
       expect(seedTasks).toHaveBeenCalledWith(s.session);
+      expect(boundExcluded?.({ flag: 'on' })).toEqual(['logs']);
+      expect(excludedTaskTypes).toHaveBeenCalledWith({ flag: 'on' }, s.session);
+      // Facts reach the run without the Decisions service, as in production.
+      expect(projectFacts?.()).toEqual(['A server lives in apps/mcp']);
+      expect(detectedFacts).toHaveBeenCalledWith({}, s.session);
     });
 
     it("derives the run input from the store's launch values", async () => {

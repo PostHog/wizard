@@ -13,6 +13,9 @@ import {
   describeDrainFailure,
   drainFailureCode,
   drainVerdict,
+  failedTaskConflicts,
+  uninstalledPackages,
+  uninstalledPackagesNote,
 } from '@agent/runner/sequence/orchestrator/orchestrator-runner';
 import { ErrorCodes } from '@shared/errors';
 
@@ -136,5 +139,115 @@ describe('drainFailureCode', () => {
     expect(drainFailureCode({ requiredFailedTypes: [] })).toBe(
       ErrorCodes.AgentOrchestratorTasksBlocked,
     );
+  });
+});
+
+describe('uninstalledPackages', () => {
+  let dir: string;
+  let store: QueueStore;
+
+  beforeEach(() => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'uninstalled-test-'));
+    store = new QueueStore(dir, 'run-1');
+  });
+
+  afterEach(() => fs.rmSync(dir, { recursive: true, force: true }));
+
+  const handoff = (packages?: string[]) => ({
+    goals: 'g',
+    did: 'd',
+    forNextAgent: 'n',
+    ...(packages && { packages }),
+  });
+  const uninstalled = () =>
+    uninstalledPackages(store.list(), (id) => store.readHandoff(id));
+
+  /** Two finished tasks that left packages for review, and a review task. */
+  function queueWithReview() {
+    const mcp = store.enqueue({ type: 'mcp-analytics', optional: true });
+    const logs = store.enqueue({ type: 'logs', optional: true });
+    const review = store.enqueue({
+      type: 'review',
+      dependsOn: [mcp.id, logs.id],
+    });
+    for (const [task, packages] of [
+      [mcp, ['@posthog/mcp (exact)']],
+      [logs, ['@opentelemetry/sdk-logs', '@posthog/mcp (exact)']],
+    ] as const) {
+      store.start(task.id);
+      store.complete(task.id, handoff([...packages]));
+    }
+    return review;
+  }
+
+  it('names every package finished tasks left, once, when review did not finish', () => {
+    const review = queueWithReview();
+    store.start(review.id);
+    store.fail(review.id, { type: 'yara', message: 'stopped' });
+
+    expect(uninstalled()).toEqual([
+      '@posthog/mcp (exact)',
+      '@opentelemetry/sdk-logs',
+    ]);
+    expect(uninstalledPackagesNote(uninstalled())).toContain(
+      'never installed: @posthog/mcp (exact), @opentelemetry/sdk-logs.',
+    );
+  });
+
+  it('names them when review never started', () => {
+    queueWithReview();
+    expect(uninstalled()).toHaveLength(2);
+  });
+
+  it('names none once review finished, or when the run has no review', () => {
+    const review = queueWithReview();
+    store.start(review.id);
+    store.complete(review.id, handoff());
+    expect(uninstalled()).toEqual([]);
+
+    const other = new QueueStore(
+      fs.mkdtempSync(path.join(dir, 'no-review-')),
+      'run-2',
+    );
+    const task = other.enqueue({ type: 'logs' });
+    other.start(task.id);
+    other.complete(task.id, handoff(['@opentelemetry/sdk-logs']));
+    expect(
+      uninstalledPackages(other.list(), (id) => other.readHandoff(id)),
+    ).toEqual([]);
+  });
+});
+
+describe('failedTaskConflicts', () => {
+  let dir: string;
+  let store: QueueStore;
+
+  beforeEach(() => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'conflicts-test-'));
+    store = new QueueStore(dir, 'run-1');
+  });
+
+  afterEach(() => fs.rmSync(dir, { recursive: true, force: true }));
+
+  const failWith = (type: string, optional: boolean, conflict?: string) => {
+    const task = store.enqueue({ type, optional });
+    store.start(task.id);
+    store.fail(
+      task.id,
+      { type: 'self-reported', message: 'x' },
+      { goals: 'g', did: 'd', forNextAgent: 'n', conflict },
+    );
+  };
+
+  it('returns each required failed task reason once, and no optional ones', () => {
+    const wrongFramework = 'This project is TypeScript, not Python.';
+    failWith('init', false, wrongFramework);
+    failWith('install', false, wrongFramework);
+    failWith('logs', true, 'An optional task reason.');
+    failWith('capture', false);
+
+    expect(
+      failedTaskConflicts(store.list(), (id) => store.readHandoff(id)),
+    ).toEqual([wrongFramework]);
   });
 });

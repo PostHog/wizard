@@ -294,6 +294,10 @@ export class SessionStore {
     this.set('posthogSdkDetected', detected);
   }
 
+  setMcpServerCandidates(candidates: readonly string[]): void {
+    this.set('mcpServerCandidates', candidates);
+  }
+
   setSkillId(skillId: string | null): void {
     this.set('skillId', skillId);
   }
@@ -553,6 +557,7 @@ export class SessionStore {
         ),
       setDetectedFramework: (l) => this.setDetectedFramework(l),
       setPosthogSdkDetected: (d) => this.setPosthogSdkDetected(d),
+      setMcpServerCandidates: (c) => this.setMcpServerCandidates(c),
       setSkillId: (id) => this.setSkillId(id),
       setUnsupportedVersion: (info) =>
         this.setUnsupportedVersion(

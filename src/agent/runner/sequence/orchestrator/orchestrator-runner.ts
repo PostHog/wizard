@@ -73,6 +73,7 @@ import {
   SkipReason,
   TaskStatus,
   type QueuedTask,
+  type TaskHandoff,
   type TaskOutcome,
 } from './queue';
 import {
@@ -144,6 +145,14 @@ export function sweepRunInstalledSkills(
     rmSync(path.join(claudeSkillsDir, id), { recursive: true, force: true });
     logToFile(`[orchestrator] removed run-installed skill ${id}`);
   }
+}
+
+/** Whether another task is still running, and may still need a skill it installed. */
+export function hasRunningSibling(
+  tasks: readonly QueuedTask[],
+  taskId: string,
+): boolean {
+  return tasks.some((t) => t.id !== taskId && t.status === TaskStatus.Running);
 }
 
 function toTodoStatus(status: TaskStatus): string {
@@ -541,6 +550,63 @@ export function describeDrainFailure(verdict: {
   return parts.join(', so ');
 }
 
+/**
+ * The packages finished tasks left for review to install, when review did not
+ * finish: their edits import packages the project never got. Empty otherwise.
+ */
+export function uninstalledPackages(
+  tasks: readonly QueuedTask[],
+  readHandoff: (id: string) => TaskHandoff | null,
+): string[] {
+  const review = tasks.find((t) => t.type === 'review');
+  if (!review || review.status === TaskStatus.Done) return [];
+  const packages = new Set<string>();
+  for (const task of tasks) {
+    if (task.status !== TaskStatus.Done) continue;
+    for (const name of readHandoff(task.id)?.packages ?? []) packages.add(name);
+  }
+  return [...packages];
+}
+
+/** The one-line reasons required tasks gave for failing, for the abort message. */
+export function failedTaskConflicts(
+  tasks: readonly QueuedTask[],
+  readHandoff: (id: string) => TaskHandoff | null,
+): string[] {
+  const conflicts = tasks
+    .filter((t) => t.status === TaskStatus.Failed && !t.optional)
+    .flatMap((t) => readHandoff(t.id)?.conflict ?? []);
+  return [...new Set(conflicts)];
+}
+
+/** The outro paragraph that names those packages. */
+export function uninstalledPackagesNote(packages: readonly string[]): string {
+  return `Review did not finish, so the new code imports packages that were never installed: ${packages.join(
+    ', ',
+  )}. Install them, or revert those changes, before you build or run the project.`;
+}
+
+/** A failure whose outro also names the packages left uninstalled. */
+function withUninstalledPackages(
+  failure: AgentFailure,
+  packages: readonly string[],
+): AgentFailure {
+  if (packages.length === 0) return failure;
+  const note = uninstalledPackagesNote(packages);
+  return {
+    ...failure,
+    message: `${failure.message}\n\n${note}`,
+    ...(failure.outroData && {
+      outroData: {
+        ...failure.outroData,
+        body: failure.outroData.body
+          ? `${failure.outroData.body}\n\n${note}`
+          : note,
+      },
+    }),
+  };
+}
+
 /** One `orchestrator task blocked` event per pending task, best effort once the outcome is decided. */
 function reportBlockedTasks(
   tasks: readonly QueuedTask[],
@@ -713,6 +779,11 @@ async function executeOrchestrator(
     `[orchestrator] task models: ${Object.entries(taskModels)
       .map(([t, m]) => `${t}=${m}`)
       .join(' ')}`,
+  );
+  logToFile(
+    `[orchestrator] excluded task types: ${
+      registry.excludedTypes.join(', ') || 'none'
+    }`,
   );
   analytics.wizardCapture('orchestrator task models', taskModels);
 
@@ -1387,13 +1458,16 @@ async function executeOrchestrator(
     } finally {
       // Durable skills a task installed are irrelevant to later tasks — and
       // the sdk harness auto-loads .claude/skills into every agent — so sweep
-      // as each task ends, not only at run end.
+      // as each task ends, not only at run end. Of tasks running together, the
+      // last to finish sweeps.
       try {
-        sweepRunInstalledSkills(
-          claudeSkillsDir,
-          preexistingSkills,
-          referenceSkillId,
-        );
+        if (!hasRunningSibling(store.list(), task.id)) {
+          sweepRunInstalledSkills(
+            claudeSkillsDir,
+            preexistingSkills,
+            referenceSkillId,
+          );
+        }
       } catch (err) {
         try {
           logToFile('[orchestrator] per-task skill sweep failed:', err);
@@ -1509,7 +1583,13 @@ async function executeOrchestrator(
       stoppedBy.push(fatal.taskType);
     }
     reportBlockedTasks(store.list(), stoppedBy);
-    return { outcome: fatal.outcome, failure: fatal.failure };
+    return {
+      outcome: fatal.outcome,
+      failure: withUninstalledPackages(
+        fatal.failure,
+        uninstalledPackages(store.list(), (id) => store.readHandoff(id)),
+      ),
+    };
   }
   if (signal?.aborted && !deliveredFatal) return cancelledRun();
 
@@ -1569,7 +1649,7 @@ async function executeOrchestrator(
         WIZARD_PROVISIONING_SCOPES.some((required) => required === scope) ||
         !WIZARD_OAUTH_SCOPES.some((requested) => requested === scope),
     );
-    const message =
+    const reason =
       missingScopes.length > 0
         ? `The wizard could not finish setup: ${whatFailed}, and this run was authorized without the following permission${
             missingScopes.length === 1 ? '' : 's'
@@ -1577,6 +1657,14 @@ async function executeOrchestrator(
             ', ',
           )}.\n\nPlease try again, approving all permissions on the PostHog authorization screen. If it still fails, report it to: ${WIZARD_CONTACT_EMAIL}`
         : `The wizard was unable to set up PostHog: ${whatFailed}.\n\nPlease report this to: ${WIZARD_CONTACT_EMAIL}`;
+    const uninstalled = uninstalledPackages(store.list(), (id) =>
+      store.readHandoff(id),
+    );
+    const message = [
+      reason,
+      ...failedTaskConflicts(store.list(), (id) => store.readHandoff(id)),
+      ...(uninstalled.length > 0 ? [uninstalledPackagesNote(uninstalled)] : []),
+    ].join('\n\n');
     const code = drainFailureCode(verdict);
     return failed({
       code,

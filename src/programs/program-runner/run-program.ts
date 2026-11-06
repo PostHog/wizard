@@ -419,17 +419,28 @@ async function invokeProgram(
             handoffNotebook:
               agentRun.handoffNotebook ?? planned.config.handoffNotebook,
             agentFlow: planned.config.agentFlow,
-            excludedTaskTypes: planned.config.excludedTaskTypes,
+            excludedTaskTypes: planned.config.excludedTaskTypes
+              ? (runFlags) =>
+                  planned.config.excludedTaskTypes!(runFlags, session())
+              : undefined,
             seedTasks: planned.config.seedTasks
               ? () => planned.config.seedTasks!(session())
               : undefined,
             projectFacts:
-              decisions && planned.config.decisions
-                ? () =>
-                    decisions.questionFacts(
+              (decisions && planned.config.decisions) ||
+              planned.config.detectedFacts
+                ? () => [
+                    ...(decisions && planned.config.decisions
+                      ? decisions.questionFacts(
+                          session(),
+                          planned.config.decisions,
+                        )
+                      : []),
+                    ...(planned.config.detectedFacts?.(
+                      flags.flags,
                       session(),
-                      planned.config.decisions ?? [],
-                    )
+                    ) ?? []),
+                  ]
                 : undefined,
             hooks: sessionHooks(agentRun, session, (outcomes) => {
               if (scoped) scoped.frameworkContext[TASK_OUTCOMES_KEY] = outcomes;
