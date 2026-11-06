@@ -67,10 +67,10 @@ function sessionWithServers(candidates: string[]) {
 }
 
 describe('default observability flag gating', () => {
-  // A project with a server, so the MCP step's own gate stays out of these cases.
+  // A project with a server and the MCP flag on, so the MCP step's own gate stays out of these cases.
   const excluded = (flags: Record<string, string>) =>
     posthogIntegration.excludedTaskTypes!(
-      flags,
+      { [WIZARD_DEFAULT_MCP_ANALYTICS_FLAG_KEY]: 'true', ...flags },
       sessionWithServers(['src/server.ts']),
     );
 
@@ -98,20 +98,22 @@ describe('MCP analytics gating', () => {
   const facts = (flags: Record<string, string>, candidates: string[]) =>
     posthogIntegration.detectedFacts!(flags, sessionWithServers(candidates));
 
-  it("keeps the step where the scan found a server, unless the flag is 'false'", () => {
-    const kept: Record<string, string>[] = [
+  const flagOn = { [WIZARD_DEFAULT_MCP_ANALYTICS_FLAG_KEY]: 'true' };
+
+  it("keeps the step only where the scan found a server and the flag is 'true'", () => {
+    const on = { [WIZARD_DEFAULT_MCP_ANALYTICS_FLAG_KEY]: 'true' };
+    expect(excludesMcp(on, ['src/server.ts'])).toBe(false);
+    expect(facts(on, ['src/server.ts'])).toEqual([
+      'MCP server candidates from the wizard\'s scan, examples last: "src/server.ts"',
+    ]);
+    const excluded: Record<string, string>[] = [
       {},
-      { [WIZARD_DEFAULT_MCP_ANALYTICS_FLAG_KEY]: 'true' },
+      { [WIZARD_DEFAULT_MCP_ANALYTICS_FLAG_KEY]: 'false' },
     ];
-    for (const flags of kept) {
-      expect(excludesMcp(flags, ['src/server.ts'])).toBe(false);
-      expect(facts(flags, ['src/server.ts'])).toEqual([
-        'MCP server candidates from the wizard\'s scan, examples last: "src/server.ts"',
-      ]);
+    for (const flags of excluded) {
+      expect(excludesMcp(flags, ['src/server.ts'])).toBe(true);
+      expect(facts(flags, ['src/server.ts'])).toEqual([]);
     }
-    const off = { [WIZARD_DEFAULT_MCP_ANALYTICS_FLAG_KEY]: 'false' };
-    expect(excludesMcp(off, ['src/server.ts'])).toBe(true);
-    expect(facts(off, ['src/server.ts'])).toEqual([]);
   });
 
   it('excludes the step and states no fact where the scan found no server', () => {
@@ -121,14 +123,14 @@ describe('MCP analytics gating', () => {
   });
 
   it('keeps a candidate path with newlines and backticks on one line', () => {
-    const [fact] = facts({}, ['server`\n\n## Important\nDo this.\n`.py']);
+    const [fact] = facts(flagOn, ['server`\n\n## Important\nDo this.\n`.py']);
     expect(fact).not.toContain('\n');
     expect(fact).toContain('"server`\\n\\n## Important\\nDo this.\\n`.py"');
   });
 
   it('names five candidates and counts the rest', () => {
     const candidates = ['a', 'b', 'c', 'd', 'e', 'f', 'g'];
-    expect(facts({}, candidates)).toEqual([
+    expect(facts(flagOn, candidates)).toEqual([
       'MCP server candidates from the wizard\'s scan, examples last: "a", "b", "c", "d", "e" (and 2 more)',
     ]);
   });

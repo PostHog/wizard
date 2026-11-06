@@ -51,13 +51,13 @@ const MCP_ANALYTICS_TASK_TYPE = 'mcp-analytics';
 /** Candidate paths the MCP fact names before it summarizes the rest. */
 const MCP_FACT_PATH_LIMIT = 5;
 
-/** The MCP step runs where the scan found a server, unless its kill switch reads 'false'. */
+/** The MCP step runs where the scan found a server and its launch flag reads 'true'. */
 function mcpAnalyticsStepOn(
   flags: Record<string, string>,
   sess: ProgramSession,
 ): boolean {
   return (
-    flags[WIZARD_DEFAULT_MCP_ANALYTICS_FLAG_KEY] !== 'false' &&
+    flags[WIZARD_DEFAULT_MCP_ANALYTICS_FLAG_KEY] === 'true' &&
     sess.mcpServerCandidates.length > 0
   );
 }
@@ -300,9 +300,9 @@ export const config: ProgramConfig = {
     'observability_stack',
   ],
 
-  // Kill switches over shipped defaults: only an explicit 'false' excludes,
-  // so a failed flag fetch keeps each product in the run. MCP analytics also
-  // needs the scan to have found a server.
+  // AI Observability and Logs are a kill switch over a shipped default: only an
+  // explicit 'false' excludes them. MCP analytics is a launch flag: it needs
+  // 'true', so a failed flag fetch leaves it out, and a server from the scan.
   excludedTaskTypes: (flags, sess) => [
     ...(flags[WIZARD_DEFAULT_AIO_LOGS_FLAG_KEY] === 'false'
       ? ['ai-observability', 'logs']
