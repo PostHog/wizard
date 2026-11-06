@@ -77,6 +77,11 @@ the registry:
   proceed, for a program that creates no event definitions.
 - **Route.** `binding` sets the sequence, harness and model; without one the
   program runs on `DEFAULT_BINDING`.
+- **Rollout gate.** `rolloutGate` names a feature flag that must be `'true'`.
+  The runner reads it after login and fails the run before any agent starts
+  when it is off.
+- **PostHog tools.** `posthogTools` lists the only PostHog MCP tools the agent
+  may call. The harness blocks every other call.
 
 ## What goes in and out of `runProgram`
 

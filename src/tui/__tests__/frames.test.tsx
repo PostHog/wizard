@@ -156,6 +156,7 @@ import { RevenueAnalyticsScreenId } from '@tui/programs/revenue-analytics';
 import { SelfDrivingScreenId } from '@tui/programs/self-driving';
 import { SourceMapsScreenId } from '@tui/programs/error-tracking-upload-source-maps';
 import { WarehouseSourceScreenId } from '@tui/programs/warehouse-source';
+import { WarehouseDestinationScreenId } from '@tui/programs/warehouse-destination';
 import { Tool } from '@tools';
 
 // 80x28 is the ScreenContainer minimum. Anything smaller renders the
@@ -383,6 +384,18 @@ const FIXTURES: Record<string, Fixture> = {
   },
   [RevenueAnalyticsScreenId.Intro]: { program: Program.RevenueAnalyticsSetup },
   [WarehouseSourceScreenId.Intro]: { program: Program.WarehouseSource },
+  [WarehouseDestinationScreenId.Intro]: {
+    program: Program.WarehouseDestination,
+    arrange: (s) => {
+      s.setFrameworkContext('detectedWarehouseDestinations', [
+        {
+          type: 'Snowflake',
+          label: 'Snowflake',
+          matchedSignal: 'snowflake-sdk in package.json',
+        },
+      ]);
+    },
+  },
   [SourceMapsScreenId.Intro]: {
     program: Program.ErrorTrackingUploadSourceMaps,
   },

@@ -1,0 +1,27 @@
+ PostHog Wizard v0.0.0-test                        Feedback: wizard@posthog.com
+
+ Cost (running): $0.00 · no agent turns yet                      Ctrl+T to hide
+
+
+
+
+                              ███ PostHog Wizard 🦔
+
+             We'll use AI to analyze your project and complete work.
+                .env* file contents will not leave your machine.
+
+               Let's send your PostHog data to your own warehouse.
+                           Which warehouse do you run?
+
+                                Directory ✔ /app
+
+                            ▸ Snowflake (detected)
+                              A different warehouse
+                             I don't run a warehouse
+
+                              More info
+                              Privacy & data
+
+
+
+  ↑↓ navigate  enter select

@@ -85,6 +85,11 @@ describe('program bindings', () => {
       migration: linearOnSol,
       'revenue-analytics-setup': linearOnSol,
       'warehouse-source': linearOnSol,
+      'warehouse-destination': {
+        sequence: Sequence.linear,
+        harness: Harness.pi,
+        model: DEFAULT_AGENT_MODEL,
+      },
       'self-driving': linearOnSol,
       'error-tracking-upload-source-maps': linearOnSol,
       'error-tracking': orchestratorOnPi,

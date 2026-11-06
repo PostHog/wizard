@@ -212,6 +212,23 @@ export const QUESTIONS = defineQuestions({
     },
   }),
 
+  // Asked by: warehouse-destination
+  runs_data_warehouse: choice({
+    ask: "Which analytics data warehouse does this team already run? Judge from dbt adapters, warehouse client packages, env key names such as SNOWFLAKE_ACCOUNT, and pipeline configs. Answer none when the only database is the app's own.",
+    choices: {
+      bigquery: 'BigQuery',
+      snowflake: 'Snowflake',
+      redshift: 'Redshift',
+      databricks: 'Databricks',
+      s3: 'An S3 or S3-compatible data lake',
+      azure_blob: 'Azure Blob Storage',
+      none: 'None',
+      other: null,
+    },
+    purpose: 'Decide which warehouse to offer as an export destination.',
+    fact: 'The team already runs {choice}: offer it as the export destination.',
+  }),
+
   // Asked by: revenue-analytics
   billing_code: predicate({
     ask: 'The app runs billing or checkout code, such as subscriptions, charges or invoices.',

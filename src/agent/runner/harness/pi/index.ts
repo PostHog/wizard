@@ -450,6 +450,7 @@ export const piBackend: AgentHarness = {
         signal: inputs.signal,
         readOnly: config.readOnly,
         disallowedTools: runConfig.disallowedTools,
+        posthogTools: runConfig.posthogTools,
         getWizardAskPending: () => askState.pending,
         triageProvider: boot.triageProvider,
         // Where pi's bash runs; the rm allowance is confined to this tree.

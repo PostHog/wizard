@@ -219,6 +219,58 @@ describe('runAgent', () => {
     );
   });
 
+  describe('PostHog tool allowlist', () => {
+    const blockedCall = {
+      tool_name: 'mcp__posthog-wizard__exec',
+      tool_input: { command: 'call batch-export-delete {}' },
+    };
+    const preToolUse = async (
+      config: Record<string, unknown>,
+      warlockDisabled: boolean,
+    ) => {
+      vi.stubEnv(
+        'POSTHOG_WIZARD_WARLOCK_DISABLED',
+        warlockDisabled ? 'true' : '',
+      );
+      mockQuery.mockImplementation(function* () {
+        yield { type: 'result', subtype: 'success' };
+      });
+      await runAgent(
+        { ...defaultAgentConfig, ...config },
+        'Integrate',
+        defaultOptions,
+        mockSpinner,
+        { requestRemark: false },
+      );
+      vi.unstubAllEnvs();
+      const matchers = mockQuery.mock.calls[0][0].options.hooks.PreToolUse as {
+        hooks: ((i: unknown) => Promise<Record<string, unknown>>)[];
+      }[];
+      return Promise.all(
+        matchers.flatMap((m) => m.hooks.map((h) => h(blockedCall))),
+      );
+    };
+
+    it.each([false, true])(
+      'blocks a call off the list with warlock disabled=%s',
+      async (warlockDisabled) => {
+        const outputs = await preToolUse(
+          { posthogTools: ['batch-export-get'] },
+          warlockDisabled,
+        );
+        expect(outputs).toContainEqual({
+          decision: 'block',
+          reason: expect.stringContaining('batch-export-delete'),
+        });
+      },
+    );
+
+    it('adds no PostHog tool hook without an allowlist', async () => {
+      const outputs = await preToolUse({}, true);
+      expect(outputs).toEqual([]);
+    });
+  });
+
   it('preserves structured-output exhaustion when the SDK throws after its result', async () => {
     const result = {
       type: 'result',
