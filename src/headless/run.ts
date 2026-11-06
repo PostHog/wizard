@@ -22,7 +22,10 @@ import type {
   SessionArgs,
   TaskStreamOutcome,
 } from '@programs/types';
-import { readCiGatewayCredential } from '@shared/ci-gateway';
+import {
+  hasCiGatewayCredential,
+  readCiGatewayCredential,
+} from '@shared/ci-gateway';
 import { ErrorCodes, classifyRunFailure } from '@shared/errors';
 import {
   checkLocalServices,
@@ -185,7 +188,7 @@ async function main(
   });
 
   try {
-    if (launch.mode === 'ci') {
+    if (launch.mode === 'ci' || hasCiGatewayCredential()) {
       store.update({
         ciGateway: readCiGatewayCredential(session.region ?? 'us'),
       });

@@ -8,7 +8,10 @@
 import { IS_PRODUCTION_BUILD, runtimeEnv } from '@env';
 import { WIZARD_DECISIONS_DETECTION_FLAG_KEY } from '@shared/constants';
 import type { GatewayCredential } from '@shared/api';
-import { readCiGatewayCredential } from '@shared/ci-gateway';
+import {
+  hasCiGatewayCredential,
+  readCiGatewayCredential,
+} from '@shared/ci-gateway';
 import type { CloudRegion } from '@utils/types';
 import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
@@ -68,9 +71,7 @@ function devGatewayKey(
 ): GatewayCredential | null {
   if (devGateway !== undefined) return devGateway;
   devGateway = null;
-  if (IS_PRODUCTION_BUILD || !runtimeEnv('WIZARD_CI_GATEWAY_TOKEN_FILE')) {
-    return devGateway;
-  }
+  if (!hasCiGatewayCredential()) return devGateway;
   try {
     devGateway = readCiGatewayCredential(region ?? 'us');
     logToFile(
