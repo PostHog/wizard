@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.91.0](https://github.com/PostHog/wizard/compare/v2.90.1...v2.91.0) (2026-11-06)
+
+
+### Features
+
+* mcp analytics default run ([#1529](https://github.com/PostHog/wizard/issues/1529)) ([9bf57be](https://github.com/PostHog/wizard/commit/9bf57be480678eccb96b5439b1a16c5fc11863f7))
+
 ## [2.90.1](https://github.com/PostHog/wizard/compare/v2.90.0...v2.90.1) (2026-11-05)
 
 
