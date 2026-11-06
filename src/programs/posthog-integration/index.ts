@@ -66,7 +66,7 @@ function mcpAnalyticsStepOn(
 function mcpServerFact(candidates: readonly string[]): string {
   const shown = candidates
     .slice(0, MCP_FACT_PATH_LIMIT)
-    .map((path) => `\`${path}\``)
+    .map((path) => JSON.stringify(path))
     .join(', ');
   const more = candidates.length - MCP_FACT_PATH_LIMIT;
   return `MCP server candidates from the wizard's scan, examples last: ${shown}${

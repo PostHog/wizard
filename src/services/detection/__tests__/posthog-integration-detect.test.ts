@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import { scan } from '@posthog/warlock';
 import {
   detectExistingPostHog,
   detectMcpServer,
@@ -117,6 +118,33 @@ describe('detectMcpServer', () => {
       expect(setMcpServerCandidates).toHaveBeenCalledWith(expected);
     },
   );
+
+  describe('with a candidate the scanner reads', () => {
+    const python = 'from mcp.server.fastmcp import FastMCP\nmcp = FastMCP("x")';
+
+    it('drops a path the scanner flags', async () => {
+      write('server.py', python);
+      vi.mocked(scan).mockResolvedValueOnce({
+        matched: true,
+        matches: [
+          {
+            rule: 'prompt_injection_instruction_override',
+            metadata: { scan_context: 'input' },
+            matchedStrings: [],
+          },
+        ],
+      });
+      await detectMcpServer({ setMcpServerCandidates }, tmpDir);
+      expect(setMcpServerCandidates).toHaveBeenCalledWith([]);
+    });
+
+    it('keeps the path when the scanner fails', async () => {
+      write('server.py', python);
+      vi.mocked(scan).mockRejectedValueOnce(new Error('no engine'));
+      await detectMcpServer({ setMcpServerCandidates }, tmpDir);
+      expect(setMcpServerCandidates).toHaveBeenCalledWith(['server.py']);
+    });
+  });
 
   it('records no candidates for an invalid install dir', async () => {
     await detectMcpServer({ setMcpServerCandidates }, '/nonexistent/path');

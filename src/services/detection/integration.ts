@@ -22,6 +22,7 @@ import { discoverFeatures } from './features';
 import { checkFrameworkVersion, gatherFrameworkContext } from './context';
 import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
+import { isFlaggedInput } from '@agent';
 import {
   getCodebaseScan,
   scannedWarehouseSources,
@@ -221,6 +222,22 @@ export function detectExistingPostHog(
   }
 }
 
+/** Candidate paths reach prompts, so drop flagged ones. With no scanner, keep them: the fact escapes each path. */
+async function withoutFlaggedPaths(
+  paths: readonly string[],
+): Promise<string[]> {
+  try {
+    const kept: string[] = [];
+    for (const path of paths) {
+      if (!(await isFlaggedInput(path))) kept.push(path);
+    }
+    return kept;
+  } catch (error) {
+    logToFile('[detection] MCP path scan failed:', error);
+    return [...paths];
+  }
+}
+
 /** The servers the mcp-analytics scan suggests in installDir. A failed scan suggests none. */
 export async function detectMcpServer(
   ctx: Pick<ProgramReadyContext, 'setMcpServerCandidates'>,
@@ -228,8 +245,9 @@ export async function detectMcpServer(
 ): Promise<void> {
   try {
     const scan = await findMcpServers(installDir);
-    logToFile(`[detection] MCP scan: ${scan.candidates.length} candidate(s)`);
-    ctx.setMcpServerCandidates(scan.candidates);
+    const candidates = await withoutFlaggedPaths(scan.candidates);
+    logToFile(`[detection] MCP scan: ${candidates.length} candidate(s)`);
+    ctx.setMcpServerCandidates(candidates);
   } catch (error) {
     analytics.captureException(
       error instanceof Error ? error : new Error(String(error)),
