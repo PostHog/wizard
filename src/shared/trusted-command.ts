@@ -145,9 +145,22 @@ export function findTrustedCommand(
       let target = binary;
       if (windows && /\.cmd$/i.test(binary)) {
         if (fs.statSync(binary).size > 64 * 1024) continue;
+        let entry: string;
+        try {
+          entry = readCmdShim.sync(binary);
+        } catch (error) {
+          if (
+            name !== 'npm' ||
+            (error as NodeJS.ErrnoException).code !== 'ENOTASHIM'
+          ) {
+            throw error;
+          }
+          // Node's bundled npm.cmd uses variables instead of a cmd-shim target.
+          entry = path.join('node_modules', 'npm', 'bin', 'npm-cli.js');
+        }
         target = path.resolve(
           path.dirname(binary),
-          readCmdShim.sync(binary).replace(/\\/g, path.sep),
+          entry.replace(/\\/g, path.sep),
         );
         if (!allowed(target) || !fs.statSync(target).isFile()) continue;
         target = fs.realpathSync(target);

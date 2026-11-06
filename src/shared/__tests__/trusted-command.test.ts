@@ -184,6 +184,41 @@ describe('trusted native commands', () => {
     expect(findTrustedCommand('example', project)).toBeNull();
   });
 
+  it('resolves the bundled npm layout when npm.cmd uses variables', () => {
+    windows();
+    const script = write(
+      path.join(system, 'node_modules', 'npm', 'bin', 'npm-cli.js'),
+      '#!/usr/bin/env node\nconsole.log("10.9.4");\n',
+    );
+    write(
+      path.join(system, 'npm.cmd'),
+      '@echo off\r\n"%NODE_EXE%" "%NPM_CLI_JS%" %*\r\n',
+    );
+    setPath(system);
+    const command = findTrustedCommand('npm', project);
+    if (!command) throw new Error('Expected bundled npm to resolve.');
+    expect(command.prefixArgs).toEqual([script]);
+    expect(
+      execFileSync(command.executable, [...command.prefixArgs, '--version'], {
+        cwd: project,
+        env: command.env,
+        encoding: 'utf8',
+      }).trim(),
+    ).toBe('10.9.4');
+  });
+
+  it('does not trust a bundled npm entry symlinked into the project', () => {
+    windows();
+    write(
+      path.join(project, 'npm', 'bin', 'npm-cli.js'),
+      '#!/usr/bin/env node\n',
+    );
+    fs.symlinkSync(project, path.join(system, 'node_modules'), 'junction');
+    write(path.join(system, 'npm.cmd'), '@echo npm launcher\n');
+    setPath(system);
+    expect(findTrustedCommand('npm', project)).toBeNull();
+  });
+
   it.skipIf(platform !== 'win32')(
     'runs the npm.cmd installed with Node on Windows',
     () => {

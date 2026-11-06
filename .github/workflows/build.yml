@@ -74,6 +74,7 @@ jobs:
           node-version: '22.22.0'
           cache: 'pnpm'
       - run: pnpm install --frozen-lockfile
+      - run: node scripts/generate-version.cjs
       - name: Verify trusted executables and Windows npm shims
         run: >-
           pnpm exec vitest run src/shared/__tests__/trusted-command.test.ts
