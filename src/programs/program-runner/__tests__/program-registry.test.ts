@@ -83,6 +83,7 @@ describe('program bindings', () => {
       'events-audit': linearOnSol,
       'web-analytics-doctor': linearOnSol,
       migration: linearOnSol,
+      'side-car': linearOnSol,
       'revenue-analytics-setup': linearOnSol,
       'warehouse-source': linearOnSol,
       'self-driving': linearOnSol,

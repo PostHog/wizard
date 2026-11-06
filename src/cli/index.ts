@@ -10,6 +10,7 @@ import { cliCommand } from './commands/cli';
 import { auditCommand } from './commands/audit';
 import { doctorCommand } from './commands/doctor';
 import { migrateCommand } from './commands/migrate';
+import { sideCarCommand } from './commands/side-car';
 import { revenueCommand } from './commands/revenue';
 import { warehouseCommand } from './commands/warehouse';
 import { selfDrivingCommand } from './commands/self-driving';
@@ -31,6 +32,7 @@ export function runCli(): void {
     .use(auditCommand)
     .use(doctorCommand)
     .use(migrateCommand)
+    .use(sideCarCommand)
     .use(revenueCommand)
     .use(warehouseCommand)
     .use(selfDrivingCommand)

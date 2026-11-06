@@ -20,6 +20,7 @@ import type { Arguments } from 'yargs';
 import type { MockedFunction } from 'vitest';
 import { auditCommand } from '../commands/audit';
 import { migrateCommand } from '../commands/migrate';
+import { sideCarCommand } from '../commands/side-car';
 import { mcpAnalyticsCommand } from '../commands/mcp-analytics';
 import { replayVisionCommand } from '../commands/replay-vision';
 import { revenueCommand } from '../commands/revenue';
@@ -193,6 +194,17 @@ describe('flat skill commands', () => {
       Record<string, unknown>,
     ];
     expect(config.skillId).toBe('migrate-statsig');
+    expect(opts.installDir).toBe('/tmp/some-app');
+  });
+
+  test('side-car dispatches with side-car skillId', () => {
+    sideCarCommand.handler!(makeArgv({ installDir: '/tmp/some-app' }));
+    const [config, opts] = mockRunWizard.mock.calls[0] as [
+      { skillId?: string; command?: string },
+      Record<string, unknown>,
+    ];
+    expect(config.command).toBe('side-car');
+    expect(config.skillId).toBe('side-car');
     expect(opts.installDir).toBe('/tmp/some-app');
   });
 
