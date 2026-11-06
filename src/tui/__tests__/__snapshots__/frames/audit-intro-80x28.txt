@@ -5,10 +5,12 @@
 
 
 
-
                              ███ PostHog Wizard 🦔
 
-             We'll use AI to analyze your project and complete work.
+             The AI agent reads your project files and sends them to
+                third-party AI providers (Anthropic and OpenAI).
+                 AI FAQ: https://posthog.com/docs/posthog-ai/faq
+                Subprocessors: https://posthog.com/subprocessors
                 .env* file contents will not leave your machine.
 
           Let's review your existing PostHog setup for best practices.
@@ -19,8 +21,6 @@
                               More info
                               Privacy & data
                               Cancel
-
-
 
 
 

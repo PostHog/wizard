@@ -3,10 +3,12 @@
  Cost (running): $0.00 · no agent turns yet                      Ctrl+T to hide
 
 
-
                              ███ PostHog Wizard 🦔
 
-             We'll use AI to analyze your project and complete work.
+             The AI agent reads your project files and sends them to
+                third-party AI providers (Anthropic and OpenAI).
+                 AI FAQ: https://posthog.com/docs/posthog-ai/faq
+                Subprocessors: https://posthog.com/subprocessors
                 .env* file contents will not leave your machine.
 
           The Wizard will run an agent to detect your project's
@@ -14,14 +16,12 @@
           source-map uploads for you.
 
           Ready?
-
                                 Directory ✔ /app
 
                             ▸ Continue
                               More info
                               Privacy & data
                               Cancel
-
 
 
   ↑↓ navigate  enter select
