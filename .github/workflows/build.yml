@@ -60,6 +60,28 @@ jobs:
       - name: Typecheck, including layer boundaries
         run: node scripts/generate-version.cjs && pnpm typecheck
 
+  job_native_command_security:
+    name: Native command security (Windows)
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: pnpm/action-setup@eae0cfeb286e66ffb5155f1a79b90583a127a68b # v2.4.1
+        with:
+          version: 10.34.5
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22.22.0'
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+      - name: Verify trusted executables and Windows npm shims
+        run: >-
+          pnpm exec vitest run src/shared/__tests__/trusted-command.test.ts
+          src/shared/install-cli-steering/__tests__/install-cli-steering.test.ts
+          src/services/frameworks/python/__tests__/utils.test.ts
+          src/shared/utils/__tests__/setup-utils-trust.test.ts
+          src/programs/posthog-integration/upload-environment-variables/providers/__tests__/vercel.test.ts
+
   job_test:
     name: Node (${{ matrix.node }}) Unit Tests
     needs: job_build
