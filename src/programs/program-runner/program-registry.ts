@@ -18,6 +18,7 @@ import { config as metrics } from '@programs/metrics';
 import { configs as auditPrograms } from '@programs/audit';
 import { config as webAnalyticsDoctor } from '@programs/web-analytics-doctor';
 import { config as migration } from '@programs/migration';
+import { config as sideCar } from '@programs/side-car';
 import { config as revenueAnalytics } from '@programs/revenue-analytics';
 import { config as warehouseSource } from '@programs/warehouse-source';
 import { config as selfDriving } from '@programs/self-driving';
@@ -39,6 +40,7 @@ export const PROGRAM_REGISTRY = [
   ...auditPrograms,
   webAnalyticsDoctor,
   migration,
+  sideCar,
   selfDriving,
   agentSkill,
   mcpAnalytics,
@@ -60,6 +62,7 @@ export const Program = {
   ErrorTracking: errorTracking.id,
   FeatureFlags: featureFlags.id,
   Migration: migration.id,
+  SideCar: sideCar.id,
   Audit: audit.id,
   EventsAudit: eventsAudit.id,
   WebAnalyticsDoctor: webAnalyticsDoctor.id,
