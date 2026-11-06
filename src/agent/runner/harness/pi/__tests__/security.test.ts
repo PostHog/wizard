@@ -270,6 +270,44 @@ describe('pi-security: warlock scan wiring', () => {
     expect(decision.reason).toContain('Fix: Rotate the key');
   });
 
+  // publish_result carries the same agent-authored evidence as the handoff, so
+  // it clears the same critical-only bar instead of Write's any-match bar.
+  test('a high-severity publish_result match does NOT block the result', async () => {
+    mockedScan.mockResolvedValueOnce({ matched: true, matches: [piiMatch] });
+    const decision = await evaluateToolCall('publish_result', {
+      result: { checks_passed: ["posthog.capture('login', { email })"] },
+    });
+    expect(decision.block).toBe(false);
+  });
+
+  // Built at runtime so the literal never sits in source for a secret scanner to flag.
+  const FAKE_PERSONAL_KEY = `phx_${'a'.repeat(40)}`;
+
+  test('a critical publish_result match blocks', async () => {
+    mockedScan.mockResolvedValueOnce({
+      matched: true,
+      matches: [
+        {
+          rule: 'posthog_hardcoded_personal_api_key',
+          metadata: {
+            description: 'PostHog personal API key hardcoded in source',
+            severity: 'critical',
+            category: 'posthog_hardcoded_key',
+            action: 'remediate',
+            remediation: 'Rotate the key and use an environment variable',
+            scan_context: 'output',
+          },
+          matchedStrings: [FAKE_PERSONAL_KEY],
+        },
+      ],
+    });
+    const decision = await evaluateToolCall('publish_result', {
+      result: { checks_passed: [FAKE_PERSONAL_KEY] },
+    });
+    expect(decision.block).toBe(true);
+    expect(decision.reason).toContain('posthog_hardcoded_personal_api_key');
+  });
+
   test('a clean publish_handoff report is allowed through', async () => {
     const decision = await evaluateToolCall('publish_handoff', {
       content: '# Setup report\n\nAll done.',

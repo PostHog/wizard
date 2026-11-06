@@ -67,6 +67,12 @@ import {
   PUBLISH_HANDOFF_TOOL_NAME,
   publishHandoff,
 } from '../../../tools/handoff';
+import {
+  PUBLISH_RESULT_DESCRIPTION,
+  PUBLISH_RESULT_PARAM_DESCRIPTION,
+  PUBLISH_RESULT_TOOL_NAME,
+  publishResult,
+} from '../../../tools/result';
 import { createSecretVault } from '@shared/secret-vault';
 import {
   AUDIT_CHECKS_FILE,
@@ -580,6 +586,25 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
     },
   });
 
+  // Native mirror of the MCP `publish_result` tool (shared description, so no drift).
+  const publishResultTool = defineTool({
+    name: PUBLISH_RESULT_TOOL_NAME,
+    label: 'Publish result',
+    description: PUBLISH_RESULT_DESCRIPTION,
+    promptSnippet:
+      'publish_result(result) — publish the machine-readable run result to the host',
+    parameters: Type.Object({
+      result: Type.Unknown({ description: PUBLISH_RESULT_PARAM_DESCRIPTION }),
+    }),
+    execute(_id, args) {
+      const result = publishResult(args.result, {
+        taskAgent: ctx.taskAgent,
+      });
+      logToFile(`[pi] publish_result: ${result.message}`);
+      return Promise.resolve(text(result.message));
+    },
+  });
+
   const tools = [
     loadSkillMenu,
     installSkill,
@@ -590,8 +615,9 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
     withMode(auditSeedChecks, 'parallel'),
     withMode(auditAddChecks, 'parallel'),
     withMode(auditResolveChecks, 'parallel'),
-    // Sequential: it publishes the run's handoff.
+    // Sequential: they publish the run's handoff and its result.
     withMode(publishHandoffTool, 'sequential'),
+    withMode(publishResultTool, 'sequential'),
   ];
   // Register wizard_ask only when the program allows it. posthog-integration
   // disallows it (runs without structured user input); self-driving keeps it.
