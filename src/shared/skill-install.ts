@@ -162,14 +162,14 @@ const claudeSkillsDir = (installDir: string): string =>
 
 /**
  * Every entry in `<installDir>/.claude/skills`, or null when the folder can't
- * be read or resolves anywhere but there (a symlinked `.claude` or `skills`).
+ * be read or a symlinked `.claude` or `skills` leads out of installDir.
  */
 export function listSkillFolders(installDir: string): Set<string> | null {
   const dir = claudeSkillsDir(installDir);
   try {
     if (!fs.existsSync(dir)) return new Set();
-    const contained = claudeSkillsDir(fs.realpathSync(installDir));
-    if (fs.realpathSync(dir) !== contained) {
+    const root = fs.realpathSync(installDir);
+    if (!fs.realpathSync(dir).startsWith(root + path.sep)) {
       logToFile(`listSkillFolders: ${dir} resolves outside ${installDir}`);
       return null;
     }
