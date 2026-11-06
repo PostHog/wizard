@@ -43,6 +43,8 @@ const NODE_SUBCOMMANDS = [
   'update',
   'view',
   'peers',
+  'list',
+  'ls',
 ];
 
 // Build/verify script names: exact or `name:variant` (build:prod). No kebab
@@ -166,7 +168,7 @@ const DIRECTORY_SHELL_CHARS = /[*?[\]~{}'"\\]/;
 const RM_SHELL_OPERATORS = /[;&|`$(){}<>'"\\]|[^\S ]/;
 
 const ALLOWED_TOOLS_SUMMARY =
-  'Allowed: npm/pnpm/yarn/bun (install|i|ci|add|remove|uninstall|update|view, run <build/lint/typecheck script>), ' +
+  'Allowed: npm/pnpm/yarn/bun (install|i|ci|add|remove|uninstall|update|view|list|ls, run <build/lint/typecheck script>), ' +
   'npx <lint tool|tsc|expo|pod-install|cap>, pip/pip3/poetry/pipenv/uv/pdm/conda (install/add/remove/...), ' +
   'python/python3 (-m venv <dir>, -m pip <install|...>, -m compileall <files>, -m <lint tool>, manage.py check), ' +
   'any <venv>/bin/pip|python plus <venv>/bin/<lint tool>, ' +

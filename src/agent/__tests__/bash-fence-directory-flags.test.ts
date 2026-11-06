@@ -32,6 +32,8 @@ describe('package manager directory flags', () => {
     'bun --cwd mcp-server add posthog-node',
     'pnpm --dir not-created-yet install',
     'pnpm --dir mcp-server exec eslint src',
+    'pnpm --dir mcp-server list @modelcontextprotocol/sdk',
+    'npm --prefix mcp-server ls posthog-node',
     'pnpm --filter web --dir mcp-server add posthog-js',
   ])('allows %s', (command) => {
     expect(allowed(command)).toBe(true);
@@ -52,6 +54,7 @@ describe('package manager directory flags', () => {
     'pnpm --dir --filter add x',
     'pnpm install --dir',
     'pnpm add x --dir ../outside',
+    'pnpm list --dir ../outside',
     'pnpm add x --dir=../outside',
     'npm install x --prefix /tmp',
     'npm --prefix ../outside install x',
