@@ -1,6 +1,9 @@
 # Shared
 
-Library code every surface may import: constants, the API and host types, error codes, fetch retry, the skill menu, Claude settings handling, the secret vault, health checks and the utilities under `utils/`. Nothing here depends on the host layer, the agent, the programs, the TUI, headless or the CLI.
+Library code every surface may import: constants, the API and host types, error
+codes, fetch retry, the skill menu, Claude settings handling, the secret vault,
+health checks and the utilities under `utils/`. Nothing here depends on the host
+layer, the agent, the programs, the TUI, headless or the CLI.
 
 Shared also holds process-global state, one copy per process for every layer
 that imports it:
@@ -20,24 +23,34 @@ that imports it:
 
 ## Signatures
 
-Import by path: `@shared/<module>` for the singles and `@utils/<module>` for `src/shared/utils`. There is no barrel; a shared library loads what a caller names and nothing else.
+Import by path: `@shared/<module>` for the singles and `@utils/<module>` for
+`src/shared/utils`. There is no barrel; a shared library loads what a caller
+names and nothing else.
 
 Modules callers reach most:
 
-- `@shared/constants`: integrations, harnesses, sequences, URLs and `getSkillsBaseUrl()`.
-- `@shared/errors`: `ErrorCodes`, `WizardError`, `emitWizardError`, `classifyRunFailure`, `classifyAuthFailure`, the catalog.
+- `@shared/constants`: integrations, harnesses, sequences, URLs and
+  `getSkillsBaseUrl()`.
+- `@shared/errors`: `ErrorCodes`, `WizardError`, `emitWizardError`,
+  `classifyRunFailure`, `classifyAuthFailure`, the catalog.
 - `@shared/api`: `Credentials`, `ApiUser`, `ApiProject`.
-- `@shared/host-resolution`: `HostResolution`, the immutable snapshot of where the wizard talks to.
-- `@shared/fetch-retry`: `fetchWithRetry(url, { fetchImpl?, sleepImpl?, maxAttempts? })`, one retry and failover policy for every critical-path fetch.
-- `@shared/skill-menu`: `fetchSkillMenu(skillsBaseUrl, retryOpts?)` returns the parsed `SkillMenu` or `null`; `expandBundleEntry`, `SkillEntry`, `CliEntry`.
+- `@shared/host-resolution`: `HostResolution`, the immutable snapshot of where
+  the wizard talks to.
+- `@shared/fetch-retry`:
+  `fetchWithRetry(url, { fetchImpl?, sleepImpl?, maxAttempts? })`, one retry and
+  failover policy for every critical-path fetch.
+- `@shared/skill-menu`: `fetchSkillMenu(skillsBaseUrl, retryOpts?)` returns the
+  parsed `SkillMenu` or `null`; `expandBundleEntry`, `SkillEntry`, `CliEntry`.
 - `@shared/skill-install`: `downloadSkill(entry, installDir, options?)` and
   `installSkillById(skillId, installDir, skillsBaseUrl, options?)` install a
   skill into a project; `InstallSkillResult`, `isSkillInstallCommand`.
 - `@shared/ask-policy`: `shouldDisableAsk(flags)` and `LONGER_ASK_TIMEOUT_MS`,
   when `wizard_ask` may reach a human and how long an errand question waits.
 - `@shared/claude-settings`: settings conflict detection, backup and restore.
-- `@shared/secret-vault`: the session-scoped vault the tools resolve secret references through.
-- `@shared/health-checks`: `evaluateWizardReadiness`, `checkAllExternalServices` and the gateway and skills-origin endpoint checks.
+- `@shared/secret-vault`: the session-scoped vault the tools resolve secret
+  references through.
+- `@shared/health-checks`: `evaluateWizardReadiness`, `checkAllExternalServices`
+  and the gateway and skills-origin endpoint checks.
 - `@shared/mcp-clients/install`: detect the supported MCP clients, and add,
   remove or check the PostHog MCP server and plugin in each, one result per
   client. The TUI's MCP screen and the `mcp` tools share it.
@@ -48,6 +61,14 @@ Modules callers reach most:
   `parseOAuthScopes`, `getOAuthClientId` and `OAuthTokenResponseSchema`.
 - `@shared/wizard-flags`: `loadWizardFlags()` and `WizardFlagSnapshot`, the
   wizard's feature flags and payloads from one evaluation.
+- `@shared/sdk-majors`: `SDK_MAJORS`, the per-SDK allowlist of the last legacy
+  and first capture v1 majors, with `sdkRowsForIntegration` and the mode and
+  major helpers. A row's `v1Released` flips in that SDK's release-day PR.
+- `@shared/sdk-capture-mode`: `resolveSdkCaptureMode(input)`, the pure
+  resolution of one SDK's mode for a run (installed copy, flag override,
+  secondary policy, release state, floor, host), the `wizard-sdk-capture-mode`
+  gate (`isSdkCaptureModeEnabled`) and the `wizard-sdk-capture-v1` payload
+  parser.
 - `@shared/api-key-login`: `resolveApiKeyProject(apiKey, options)`, the host,
   project and user a personal API key logs in to.
 - `@shared/ci-gateway`: `readCiGatewayCredential(region)`, the gateway token a
@@ -58,12 +79,16 @@ Modules callers reach most:
   `printAbortOutro`, the abort presenter for a run that prints.
 - `@utils/debug`: `logToFile`, `initLogFile`, `getLogFilePath`,
   `configureLogFile` and `formatLogLine`, the line format `logToFile` writes.
-- `@utils/analytics`: the `analytics` client (`wizardCapture`, `captureException`, `setTag`, `flush`, `shutdown`).
-  `@utils/flush-analytics`: `flushAnalytics()`, a flush that never fails the caller.
-- `@utils/telemetry`: `withProgress(step, fn)` tags analytics with the current step and runs `fn`.
-- `@utils/package-manager`, `@utils/env-scan`, `@utils/bounded-fs`, `@utils/atomic-ledger`, `@utils/semver`, `@utils/urls`, `@utils/links`.
+- `@utils/analytics`: the `analytics` client (`wizardCapture`,
+  `captureException`, `setTag`, `flush`, `shutdown`). `@utils/flush-analytics`:
+  `flushAnalytics()`, a flush that never fails the caller.
+- `@utils/telemetry`: `withProgress(step, fn)` tags analytics with the current
+  step and runs `fn`.
+- `@utils/package-manager`, `@utils/env-scan`, `@utils/bounded-fs`,
+  `@utils/atomic-ledger`, `@utils/semver`, `@utils/urls`, `@utils/links`.
 
-Callback convention: a shared helper that needs to show something takes a sink or returns data. It never looks the UI up, and no shared module holds a sink.
+Callback convention: a shared helper that needs to show something takes a sink
+or returns data. It never looks the UI up, and no shared module holds a sink.
 
 ```ts
 import { resolveApiKeyProject } from '@shared/api-key-login';
@@ -82,7 +107,11 @@ install [context-mill](https://github.com/PostHog/context-mill) skills.
 
 ## Intent
 
-Shared exists so the agent, programs, TUI, headless and CLI code can use one implementation of the things they all need without importing each other. A helper belongs here when it needs no surface-specific dependency and would otherwise be copied. Module state belongs here only when the whole process shares one copy of it, as in the list above.
+Shared exists so the agent, programs, TUI, headless and CLI code can use one
+implementation of the things they all need without importing each other. A
+helper belongs here when it needs no surface-specific dependency and would
+otherwise be copied. Module state belongs here only when the whole process
+shares one copy of it, as in the list above.
 
 ## Architecture
 

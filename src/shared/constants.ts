@@ -338,6 +338,10 @@ export const WIZARD_DEFAULT_MCP_ANALYTICS_FLAG_KEY =
   'wizard-default-mcp-analytics';
 /** Boolean flag: true runs the Decisions judgment service in shadow (ask and log, never act). */
 export const WIZARD_DECISIONS_DETECTION_FLAG_KEY = 'wizard-decisions-detection';
+/** Boolean gate over the SDK capture-mode machinery (allowlist, pinned installs, read-back, skill variants by mode). Off, every run behaves as before the machinery existed. Rolled out by the `version` person property to the releases that carry it. */
+export const WIZARD_SDK_CAPTURE_MODE_FLAG_KEY = 'wizard-sdk-capture-mode';
+/** Per-SDK capture-mode override, read only when the gate above is on. Payload `{ "<sdk>": "legacy" | "v1" }`: `v1` is the release-day flip for that SDK (the compiled `SDK_MAJORS` default stays false until a later release bakes it in), `legacy` the kill switch after one. Absent or invalid, the table decides. */
+export const WIZARD_SDK_CAPTURE_V1_FLAG_KEY = 'wizard-sdk-capture-v1';
 // Reading a flag enters this run into that flag's experiment, so a closed set — not a
 // `wizard-` prefix anyone can name into — decides what a run evaluates. Test-pinned exhaustive.
 export const WIZARD_FLAG_KEYS = [
@@ -350,6 +354,8 @@ export const WIZARD_FLAG_KEYS = [
   WIZARD_DEFAULT_AIO_LOGS_FLAG_KEY,
   WIZARD_DEFAULT_MCP_ANALYTICS_FLAG_KEY,
   WIZARD_DECISIONS_DETECTION_FLAG_KEY,
+  WIZARD_SDK_CAPTURE_MODE_FLAG_KEY,
+  WIZARD_SDK_CAPTURE_V1_FLAG_KEY,
 ] as const;
 /** User-Agent for wizard HTTP requests and MCP server identification. */
 export const WIZARD_USER_AGENT = `posthog/wizard; version: ${VERSION}`;
