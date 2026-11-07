@@ -17,11 +17,13 @@ import {
 import { LoginCapable } from '@shared/mcp-clients/login-client';
 import { z } from 'zod';
 import { execFileSync, execFile } from 'child_process';
-import { findTrustedBinary } from '@shared/mcp-clients/trusted-binary';
+import {
+  findTrustedCommand,
+  type TrustedCommand,
+} from '@shared/trusted-command';
 import { logToFile } from '@utils/debug';
 import * as os from 'os';
 import * as path from 'path';
-import * as fs from 'fs';
 
 export const ClaudeCodeMCPConfig = DefaultMCPClientConfig;
 
@@ -123,47 +125,28 @@ export class ClaudeCodeMCPClient
   implements PluginCapable, LoginCapable
 {
   name = 'Claude Code';
-  private claudeBinaryPath: string | null = null;
+  private claudeCommand: TrustedCommand | null = null;
 
   constructor() {
     super();
   }
 
-  private findClaudeBinary(): string | null {
-    if (this.claudeBinaryPath) {
-      return this.claudeBinaryPath;
-    }
-
-    // Common installation paths for Claude Code CLI
-    const possiblePaths = [
+  private findClaudeCommand(): TrustedCommand | null {
+    if (this.claudeCommand) return this.claudeCommand;
+    this.claudeCommand = findTrustedCommand('claude', process.cwd(), [
       path.join(os.homedir(), '.claude', 'local', 'claude'),
       '/usr/local/bin/claude',
       '/opt/homebrew/bin/claude',
-    ];
-
-    for (const claudePath of possiblePaths) {
-      if (fs.existsSync(claudePath)) {
-        logToFile(`  Found claude binary at: ${claudePath}`);
-        this.claudeBinaryPath = claudePath;
-        return claudePath;
-      }
-    }
-
-    // PATH as fallback, skipping copies the project could have planted.
-    const onPath = findTrustedBinary('claude');
-    if (onPath) {
-      logToFile(`  Found claude in PATH at: ${onPath}`);
-      this.claudeBinaryPath = onPath;
-    }
-    return onPath;
+    ]);
+    return this.claudeCommand;
   }
 
   isClientSupported(): Promise<boolean> {
     try {
       logToFile('  Checking for Claude Code...');
-      const claudeBinary = this.findClaudeBinary();
+      const command = this.findClaudeCommand();
 
-      if (!claudeBinary) {
+      if (!command) {
         logToFile('  Claude Code not found. Installation paths checked:');
         logToFile(
           `    - ${path.join(os.homedir(), '.claude', 'local', 'claude')}`,
@@ -174,9 +157,14 @@ export class ClaudeCodeMCPClient
         return Promise.resolve(false);
       }
 
-      const output = execFileSync(claudeBinary, ['--version'], {
-        stdio: 'pipe',
-      });
+      const output = execFileSync(
+        command.executable,
+        [...command.prefixArgs, '--version'],
+        {
+          env: command.env,
+          stdio: 'pipe',
+        },
+      );
       const version = output.toString().trim();
       logToFile(`  Claude Code detected: ${version}`);
       return Promise.resolve(true);
@@ -191,14 +179,18 @@ export class ClaudeCodeMCPClient
   }
 
   isServerInstalled(local?: boolean): Promise<boolean> {
-    const binary = this.findClaudeBinary();
-    if (!binary) return Promise.resolve(false);
+    const command = this.findClaudeCommand();
+    if (!command) return Promise.resolve(false);
     const serverName = local ? 'posthog-local' : 'posthog';
     // `mcp get <name>` exits non-zero when the entry doesn't exist. A substring
     // scan of `mcp list` also matches the claude.ai "PostHog" connector and the
     // plugin's `plugin:posthog:posthog`, reporting installed forever.
     try {
-      execFileSync(binary, ['mcp', 'get', serverName], { stdio: 'pipe' });
+      execFileSync(
+        command.executable,
+        [...command.prefixArgs, 'mcp', 'get', serverName],
+        { env: command.env, stdio: 'pipe' },
+      );
       return Promise.resolve(true);
     } catch {
       return Promise.resolve(false);
@@ -214,8 +206,8 @@ export class ClaudeCodeMCPClient
     selectedFeatures?: string[],
     local?: boolean,
   ): Promise<InstallResult> {
-    const binary = this.findClaudeBinary();
-    if (!binary)
+    const command = this.findClaudeCommand();
+    if (!command)
       return Promise.resolve({
         success: false,
         reason: 'The claude CLI is no longer on your PATH.',
@@ -238,7 +230,10 @@ export class ClaudeCodeMCPClient
     }
 
     try {
-      execFileSync(binary, args, { stdio: 'pipe' });
+      execFileSync(command.executable, [...command.prefixArgs, ...args], {
+        env: command.env,
+        stdio: 'pipe',
+      });
       return Promise.resolve({ success: true });
     } catch (error) {
       // The failing command echoes back the Authorization header we passed, so
@@ -271,8 +266,8 @@ export class ClaudeCodeMCPClient
   }
 
   async removePlugin(): Promise<PluginInstallResult> {
-    const binary = this.findClaudeBinary();
-    if (!binary)
+    const command = this.findClaudeCommand();
+    if (!command)
       return {
         success: false,
         reason: 'The claude CLI is no longer on your PATH.',
@@ -281,11 +276,11 @@ export class ClaudeCodeMCPClient
     // `plugin uninstall posthog` removes exactly one match, so with both
     // `posthog@posthog` and `posthog@claude-plugins-official` installed the bare
     // call leaves the other copy enabled — and `mcp remove` would be lying.
-    const ids = await this.installedPluginIds(binary);
+    const ids = await this.installedPluginIds(command);
     // `installPlugin` registers the marketplace, so removal owes the user the
     // other half: a machine left with our catalog and no plugin is a state the
     // wizard created. `codex.ts` clears both on the same call.
-    const marketplace = await this.ourMarketplaceRegistered(binary);
+    const marketplace = await this.ourMarketplaceRegistered(command);
 
     const nothingInstalled =
       ids?.length === 0 || (ids === null && !(await this.isPluginInstalled()));
@@ -296,14 +291,18 @@ export class ClaudeCodeMCPClient
     const targets = nothingInstalled ? [] : ids?.length ? ids : [PLUGIN_NAME];
     const failures: string[] = [];
     for (const target of targets) {
-      const run = await this.runClaude(binary, ['plugin', 'uninstall', target]);
+      const run = await this.runClaude(command, [
+        'plugin',
+        'uninstall',
+        target,
+      ]);
       if (!run.ok) failures.push(`${target}: ${run.output}`);
     }
 
     // Only when we know it is there: `marketplace remove` exits non-zero on a
     // marketplace that is absent, which would report a failure for a no-op.
     if (marketplace) {
-      const run = await this.runClaude(binary, [
+      const run = await this.runClaude(command, [
         'plugin',
         'marketplace',
         'remove',
@@ -324,8 +323,8 @@ export class ClaudeCodeMCPClient
   }
 
   removeServer(local?: boolean): Promise<InstallResult> {
-    const claudeBinary = this.findClaudeBinary();
-    if (!claudeBinary) {
+    const command = this.findClaudeCommand();
+    if (!command) {
       return Promise.resolve({
         success: false,
         reason: 'The claude CLI is no longer on your PATH.',
@@ -336,9 +335,10 @@ export class ClaudeCodeMCPClient
 
     try {
       execFileSync(
-        claudeBinary,
-        ['mcp', 'remove', '--scope', 'user', serverName],
+        command.executable,
+        [...command.prefixArgs, 'mcp', 'remove', '--scope', 'user', serverName],
         {
+          env: command.env,
           stdio: 'pipe',
         },
       );
@@ -370,18 +370,25 @@ export class ClaudeCodeMCPClient
   }
 
   supportsPlugin(): boolean {
-    return this.findClaudeBinary() !== null;
+    return this.findClaudeCommand() !== null;
   }
 
   // Async on purpose: these calls clone git repos and take seconds, and
   // execSync would block the event loop and freeze the TUI spinner. Never
   // throws; the caller decides what a failure means.
-  private runClaude(binary: string, args: string[]): Promise<ClaudeRun> {
+  private runClaude(
+    command: TrustedCommand,
+    args: string[],
+  ): Promise<ClaudeRun> {
     return new Promise((resolve) => {
       execFile(
-        binary,
-        args,
-        { timeout: RUN_TIMEOUT_MS, maxBuffer: MAX_OUTPUT_BYTES },
+        command.executable,
+        [...command.prefixArgs, ...args],
+        {
+          env: command.env,
+          timeout: RUN_TIMEOUT_MS,
+          maxBuffer: MAX_OUTPUT_BYTES,
+        },
         (error, stdout) => {
           if (!error)
             return resolve({ ok: true, output: stdout?.toString() ?? '' });
@@ -411,10 +418,10 @@ export class ClaudeCodeMCPClient
 
   /** Null when `--json` is unsupported, the command failed, or output didn't parse — never "nothing installed". */
   private async listJson<T>(
-    binary: string,
+    command: TrustedCommand,
     args: string[],
   ): Promise<T[] | null> {
-    const result = await this.runClaude(binary, [...args, '--json']);
+    const result = await this.runClaude(command, [...args, '--json']);
     if (!result.ok) return null;
     try {
       const parsed: unknown = JSON.parse(result.output);
@@ -428,9 +435,9 @@ export class ClaudeCodeMCPClient
   // `posthog@posthog` and `posthog@claude-plugins-official` at the same time.
   // Null means the probe is unavailable, which is not the same as none.
   private async installedPlugins(
-    binary: string,
+    command: TrustedCommand,
   ): Promise<ListedPlugin[] | null> {
-    const listed = await this.listJson<ListedPlugin>(binary, [
+    const listed = await this.listJson<ListedPlugin>(command, [
       'plugin',
       'list',
     ]);
@@ -441,30 +448,32 @@ export class ClaudeCodeMCPClient
     );
   }
 
-  private async installedPluginIds(binary: string): Promise<string[] | null> {
-    const listed = await this.installedPlugins(binary);
+  private async installedPluginIds(
+    command: TrustedCommand,
+  ): Promise<string[] | null> {
+    const listed = await this.installedPlugins(command);
     return listed?.map((p) => p.id) ?? null;
   }
 
   async isPluginInstalled(): Promise<boolean> {
-    const binary = this.findClaudeBinary();
-    if (!binary) return false;
+    const command = this.findClaudeCommand();
+    if (!command) return false;
 
     // Presence, not health: `index.ts` asks this to decide whether there is
     // anything to remove, and a disabled plugin still has to be uninstalled.
     // Whether it actually serves is `installPlugin`'s question, not this one.
-    const listed = await this.installedPlugins(binary);
+    const listed = await this.installedPlugins(command);
     if (listed) return listed.length > 0;
 
     // Older CLI without `--json`. A substring scan also matches a plugin merely
     // named `posthog-something`, which is why it's the fallback and not the path.
-    const plain = await this.runClaude(binary, ['plugin', 'list']);
+    const plain = await this.runClaude(command, ['plugin', 'list']);
     return plain.ok && plain.output.toLowerCase().includes(PLUGIN_NAME);
   }
 
   async installPlugin(): Promise<PluginInstallResult> {
-    const binary = this.findClaudeBinary();
-    if (!binary)
+    const command = this.findClaudeCommand();
+    if (!command)
       return {
         success: false,
         reason: 'The claude CLI is no longer on your PATH.',
@@ -477,7 +486,7 @@ export class ClaudeCodeMCPClient
     // Claude Code takes its MCP server from the plugin. Reporting it as
     // already installed leaves the user with no server and a screen saying
     // they are done, so fall through and install: the CLI re-enables it.
-    const listed = await this.installedPlugins(binary);
+    const listed = await this.installedPlugins(command);
     const serving = listed
       ? listed.some((p) => p.enabled !== false)
       : await this.isPluginInstalled();
@@ -485,9 +494,9 @@ export class ClaudeCodeMCPClient
       return { success: true, alreadyInstalled: true };
     }
 
-    const marketplaceFailure = await this.ensurePluginMarketplace(binary);
+    const marketplaceFailure = await this.ensurePluginMarketplace(command);
 
-    let result = await this.runClaude(binary, [
+    let result = await this.runClaude(command, [
       'plugin',
       'install',
       PLUGIN_REF,
@@ -495,19 +504,23 @@ export class ClaudeCodeMCPClient
 
     // A registered but stale catalog still reports the plugin as missing.
     if (!result.ok && NOT_IN_A_MARKETPLACE.test(result.output)) {
-      await this.runClaude(binary, [
+      await this.runClaude(command, [
         'plugin',
         'marketplace',
         'update',
         PLUGIN_MARKETPLACE,
       ]);
-      result = await this.runClaude(binary, ['plugin', 'install', PLUGIN_REF]);
+      result = await this.runClaude(command, ['plugin', 'install', PLUGIN_REF]);
     }
 
     // Last resort: let Claude Code resolve the bare name against whatever the
     // user does have, the way the wizard always did. Never worse than before.
     if (!result.ok && NOT_IN_A_MARKETPLACE.test(result.output)) {
-      result = await this.runClaude(binary, ['plugin', 'install', PLUGIN_NAME]);
+      result = await this.runClaude(command, [
+        'plugin',
+        'install',
+        PLUGIN_NAME,
+      ]);
     }
 
     if (result.ok) return { success: true };
@@ -532,9 +545,9 @@ export class ClaudeCodeMCPClient
   // the user may hold the plugin in another catalog that the fallback finds.
   /** Registered, and ours: a catalog merely named `posthog` is someone else's. */
   private async ourMarketplaceRegistered(
-    binary: string,
+    command: TrustedCommand,
   ): Promise<boolean | null> {
-    const listed = await this.listJson<ListedMarketplace>(binary, [
+    const listed = await this.listJson<ListedMarketplace>(command, [
       'plugin',
       'marketplace',
       'list',
@@ -543,9 +556,9 @@ export class ClaudeCodeMCPClient
   }
 
   private async ensurePluginMarketplace(
-    binary: string,
+    command: TrustedCommand,
   ): Promise<string | undefined> {
-    const listed = await this.listJson<ListedMarketplace>(binary, [
+    const listed = await this.listJson<ListedMarketplace>(command, [
       'plugin',
       'marketplace',
       'list',
@@ -558,7 +571,7 @@ export class ClaudeCodeMCPClient
     // `marketplace add` is idempotent on Claude Code and exits 0 when the
     // marketplace is already on disk, so there's no "already added" text to
     // special-case here — unlike the Codex CLI, where it exits non-zero.
-    const added = await this.runClaude(binary, [
+    const added = await this.runClaude(command, [
       'plugin',
       'marketplace',
       'add',

@@ -1,6 +1,6 @@
 import { ClaudeCodeMCPClient } from '@shared/mcp-clients/clients/claude-code';
 import { execFileSync, execFile } from 'child_process';
-import { findTrustedBinary } from '@shared/mcp-clients/trusted-binary';
+import { findTrustedCommand } from '@shared/trusted-command';
 import { analytics } from '@utils/analytics';
 
 vi.mock('child_process', () => ({
@@ -8,8 +8,8 @@ vi.mock('child_process', () => ({
   execFile: vi.fn(),
 }));
 
-vi.mock('@shared/mcp-clients/trusted-binary', () => ({
-  findTrustedBinary: vi.fn(),
+vi.mock('@shared/trusted-command', () => ({
+  findTrustedCommand: vi.fn(),
 }));
 vi.mock('fs', () => ({
   existsSync: vi.fn().mockReturnValue(false),
@@ -69,7 +69,7 @@ const isCmd = (cmd: string, ...parts: string[]) =>
 
 describe('ClaudeCodeMCPClient — plugin methods', () => {
   const execFileSyncMock = execFileSync as Mock;
-  const findBinaryMock = findTrustedBinary as Mock;
+  const findBinaryMock = findTrustedCommand as Mock;
   const execFileMock = execFile as unknown as Mock;
 
   /** Every `claude` invocation, in order, as its joined command. */
@@ -105,8 +105,12 @@ describe('ClaudeCodeMCPClient — plugin methods', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    // The binary is opaque here; trusted-binary.test.ts covers how it is found.
-    findBinaryMock.mockReturnValue('claude');
+    // Executable selection is covered by trusted-command.test.ts.
+    findBinaryMock.mockReturnValue({
+      executable: 'claude',
+      prefixArgs: [],
+      env: { PATH: '/trusted/bin' },
+    });
     execFileSyncMock.mockReturnValue(Buffer.from(''));
     routeClaude(() => '');
   });
