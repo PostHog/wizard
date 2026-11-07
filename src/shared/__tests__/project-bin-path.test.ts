@@ -37,10 +37,53 @@ describe('withoutProjectBins', () => {
     );
   });
 
-  it('keeps a quoted absolute entry and removes a quoted project bin', () => {
-    const quoted = `"${system}"`;
-    expect(withoutProjectBins(join(`"${bin}"`, quoted))).toBe(quoted);
+  it('on Windows, keeps a quoted absolute entry and removes a quoted project bin', () => {
+    const platform = process.platform;
+    Object.defineProperty(process, 'platform', { value: 'win32' });
+    try {
+      const quoted = `"${system}"`;
+      expect(withoutProjectBins(join(`"${bin}"`, quoted))).toBe(quoted);
+    } finally {
+      Object.defineProperty(process, 'platform', { value: platform });
+    }
   });
+
+  it.skipIf(process.platform === 'win32')(
+    'removes quoted entries, which Unix reads as relative folder names',
+    () => {
+      expect(withoutProjectBins(join(`"${system}"`, '/bin'))).toBe('/bin');
+    },
+  );
+
+  it.skipIf(process.platform === 'win32')(
+    'does not run a file from a folder named like a quoted PATH entry',
+    () => {
+      const tmp = fs.realpathSync(
+        fs.mkdtempSync(path.join(os.tmpdir(), 'project-bin-path-')),
+      );
+      try {
+        const marker = path.join(tmp, 'canary');
+        const folder = path.join(tmp, '"', 'usr', 'bin"');
+        fs.mkdirSync(folder, { recursive: true });
+        fs.writeFileSync(
+          path.join(folder, 'wizard-test-tool'),
+          `#!/bin/sh\ntouch "${marker}"\n`,
+          { mode: 0o755 },
+        );
+        const env = {
+          ...process.env,
+          PATH: withoutProjectBins(join('"/usr/bin"', '/bin')),
+        };
+
+        spawnSync('wizard-test-tool', { cwd: tmp, env });
+        spawnSync('wizard-test-tool', { cwd: tmp, env, shell: true });
+
+        expect(fs.existsSync(marker)).toBe(false);
+      } finally {
+        fs.rmSync(tmp, { recursive: true, force: true });
+      }
+    },
+  );
 
   it.skipIf(process.platform === 'win32')(
     'falls back to the system folders when nothing is left',

@@ -14,7 +14,9 @@ export function withoutProjectBins(searchPath: string): string {
   const kept = searchPath
     .split(path.delimiter)
     .filter((entry) => {
-      const directory = entry.replace(/^"(.*)"$/, '$1');
+      // Only Windows treats quotes in PATH as quoting; elsewhere they're part of a relative name.
+      const directory =
+        process.platform === 'win32' ? entry.replace(/^"(.*)"$/, '$1') : entry;
       return (
         directory && path.isAbsolute(directory) && !NODE_BIN.test(directory)
       );
