@@ -11,19 +11,115 @@ describe('withoutProjectBins', () => {
   const bin = path.join(root, 'node_modules', '.bin');
   const system = path.resolve('/usr/bin');
 
-  it('removes node_modules/.bin folders and keeps the rest in order', () => {
+  beforeEach(() => {
+    vi.spyOn(process, 'cwd').mockReturnValue(root);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('removes the bin folders npx adds and keeps the rest in order', () => {
     const other = path.resolve('/opt/tools');
+    const web = path.join(root, 'apps', 'web');
     expect(
       withoutProjectBins(
         join(
+          path.join(web, 'node_modules', '.bin'),
+          path.join(root, 'apps', 'node_modules', '.bin'),
           bin,
+          path.resolve('/node_modules/.bin'),
           system,
-          path.join(root, 'apps', 'web', 'node_modules', '.bin'),
           other,
         ),
+        web,
       ),
     ).toBe(join(system, other));
   });
+
+  it('keeps package managers and global tools in other node_modules/.bin folders', () => {
+    const setupPnpm = path.resolve('/home/runner/setup-pnpm/node_modules/.bin');
+    const yarnGlobal = path.resolve(
+      '/home/me/.config/yarn/global/node_modules/.bin',
+    );
+    const npxCache = path.resolve('/home/me/.npm/_npx/abc/node_modules/.bin');
+    const entries = join(setupPnpm, yarnGlobal, npxCache, system);
+    expect(
+      withoutProjectBins(entries, path.resolve('/home/runner/work/app')),
+    ).toBe(entries);
+  });
+
+  it('keeps a bin folder inside a sibling project', () => {
+    const sibling = path.join(root, 'tools', 'node_modules', '.bin');
+    expect(withoutProjectBins(join(sibling, system))).toBe(
+      join(sibling, system),
+    );
+  });
+
+  it.skipIf(process.platform === 'win32')(
+    'finds pnpm in another bin folder and skips a planted copy',
+    () => {
+      const tmp = fs.realpathSync(
+        fs.mkdtempSync(path.join(os.tmpdir(), 'project-bin-path-')),
+      );
+      try {
+        const project = path.join(tmp, 'work', 'app');
+        const planted = path.join(project, 'node_modules', '.bin');
+        const setupPnpm = path.join(tmp, 'setup-pnpm', 'node_modules', '.bin');
+        fs.mkdirSync(planted, { recursive: true });
+        fs.mkdirSync(setupPnpm, { recursive: true });
+        fs.writeFileSync(
+          path.join(planted, 'pnpm'),
+          '#!/bin/sh\necho planted\n',
+          {
+            mode: 0o755,
+          },
+        );
+        fs.writeFileSync(
+          path.join(setupPnpm, 'pnpm'),
+          '#!/bin/sh\necho setup-pnpm\n',
+          { mode: 0o755 },
+        );
+        const env = {
+          ...process.env,
+          PATH: withoutProjectBins(
+            join(planted, setupPnpm, '/usr/bin', '/bin'),
+            project,
+          ),
+        };
+
+        expect(
+          execFileSync('pnpm', { cwd: project, env, encoding: 'utf8' }).trim(),
+        ).toBe('setup-pnpm');
+      } finally {
+        fs.rmSync(tmp, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it.skipIf(process.platform === 'win32')(
+    'removes a project bin folder reached through a symlink',
+    () => {
+      const tmp = fs.realpathSync(
+        fs.mkdtempSync(path.join(os.tmpdir(), 'project-bin-path-')),
+      );
+      try {
+        const project = path.join(tmp, 'app');
+        const planted = path.join(project, 'node_modules', '.bin');
+        fs.mkdirSync(planted, { recursive: true });
+        const alias = path.join(tmp, 'alias');
+        fs.symlinkSync(project, alias);
+        const viaAlias = path.join(alias, 'node_modules', '.bin');
+
+        expect(withoutProjectBins(join(viaAlias, system), project)).toBe(
+          system,
+        );
+        expect(withoutProjectBins(join(planted, system), alias)).toBe(system);
+      } finally {
+        fs.rmSync(tmp, { recursive: true, force: true });
+      }
+    },
+  );
 
   it('removes empty and relative entries, which search the working directory', () => {
     expect(withoutProjectBins(join('', '.', 'tools', system))).toBe(system);
@@ -145,6 +241,7 @@ describe('withoutProjectBins', () => {
           ...process.env,
           PATH: withoutProjectBins(
             join(planted, installed, '/usr/bin', '/bin'),
+            path.join(tmp, 'project'),
           ),
         };
 
