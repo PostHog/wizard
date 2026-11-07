@@ -300,6 +300,10 @@ export class SessionStore {
 
   setSkillId(skillId: string | null): void {
     this.set('skillId', skillId);
+    analytics.setTag(
+      'migrated_from',
+      emailProviderMigratedFrom(skillId) ?? undefined,
+    );
   }
 
   setUnsupportedVersion(
@@ -637,4 +641,10 @@ export function applyAgentProgress(
       throw new Error(`Unhandled agent progress: ${JSON.stringify(unhandled)}`);
     }
   }
+}
+
+const EMAIL_MIGRATION_SKILL = /^migrate-email-(.+)$/;
+
+function emailProviderMigratedFrom(skillId: string | null): string | null {
+  return skillId?.match(EMAIL_MIGRATION_SKILL)?.[1] ?? null;
 }

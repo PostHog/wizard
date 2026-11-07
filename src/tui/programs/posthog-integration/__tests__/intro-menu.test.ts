@@ -132,6 +132,7 @@ describe('introEntries', () => {
       'ai-observability',
       'metrics',
       'revenue-analytics-setup',
+      'transactional-email',
     ]);
   });
 

@@ -17,6 +17,7 @@ import { slackCommand } from './commands/slack';
 import { uploadSourcemapsCommand } from './commands/upload-sourcemaps';
 import { errorTrackingCommand } from './commands/error-tracking';
 import { featureFlagsCommand } from './commands/feature-flags';
+import { transactionalEmailCommand } from './commands/transactional-email';
 import { skillCommand } from './commands/skill';
 
 /** Register every command and run the one `process.argv` names. */
@@ -38,6 +39,7 @@ export function runCli(): void {
     .use(uploadSourcemapsCommand)
     .use(errorTrackingCommand)
     .use(featureFlagsCommand)
+    .use(transactionalEmailCommand)
     .use(skillCommand)
     .init();
 }

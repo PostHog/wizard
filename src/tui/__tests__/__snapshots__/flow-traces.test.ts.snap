@@ -1016,6 +1016,59 @@ exports[`flow traces per program > slack (node) 1`] = `
 }
 `;
 
+exports[`flow traces per program > transactional-email (node) 1`] = `
+{
+  "events": [
+    {
+      "event": "screen health-check",
+      "from": "agent-skill-intro",
+      "program": "transactional-email",
+    },
+    {
+      "event": "screen auth",
+      "from": "health-check",
+      "program": "transactional-email",
+    },
+    {
+      "event": "screen run",
+      "from": "auth",
+      "program": "transactional-email",
+    },
+    {
+      "event": "screen ai-opt-in",
+      "from": "run",
+      "program": "transactional-email",
+    },
+    {
+      "event": "screen run",
+      "from": "ai-opt-in",
+      "program": "transactional-email",
+    },
+    {
+      "event": "screen outro",
+      "from": "run",
+      "program": "transactional-email",
+    },
+    {
+      "event": "screen exit",
+      "from": "outro",
+      "program": "transactional-email",
+    },
+  ],
+  "program": "transactional-email",
+  "screens": [
+    "agent-skill-intro",
+    "health-check",
+    "auth",
+    "ai-opt-in",
+    "run",
+    "outro",
+    "exit",
+  ],
+  "stoppedOn": null,
+}
+`;
+
 exports[`flow traces per program > warehouse-source (node) 1`] = `
 {
   "events": [
