@@ -294,6 +294,8 @@ export async function provisionNewAccount(
     orgName?: string;
     projectName?: string;
     baseUrl?: string;
+    /** `--goal`, recorded on the new account's signup. */
+    goal?: string;
     /** Scope list to request; defaults to `WIZARD_PROVISIONING_SCOPES`. */
     scopes?: readonly string[];
   },
@@ -319,6 +321,7 @@ export async function provisionNewAccount(
       configuration: {
         region,
         ...(opts?.orgName ? { organization_name: opts.orgName } : {}),
+        ...(opts?.goal ? { goal: opts.goal } : {}),
       },
     },
     {

@@ -80,6 +80,11 @@ interface OAuthConfig {
    * OAuth server and selects the matching client ID.
    */
   baseUrl?: string;
+  /**
+   * `--goal`. Rides on the authorize URL, so a signup the browser starts from
+   * it records the goal as the prompt that led to PostHog.
+   */
+  goal?: string;
 }
 
 function getLocalOAuthOrigin(port: number): string {
@@ -493,6 +498,9 @@ export async function performOAuthFlow(
       if (config.projectId !== undefined) {
         // Pre-select this project on the consent screen so the user just clicks Authorize.
         authUrl.searchParams.set('team_id', String(config.projectId));
+      }
+      if (config.goal) {
+        authUrl.searchParams.set('goal', config.goal);
       }
 
       // UTM-tag both kickoff URLs so the journey into the app is
