@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.91.2](https://github.com/PostHog/wizard/compare/v2.91.1...v2.91.2) (2026-11-07)
+
+
+### Bug Fixes
+
+* keep package managers and global tools on the wizard's PATH ([#1537](https://github.com/PostHog/wizard/issues/1537)) ([50e6527](https://github.com/PostHog/wizard/commit/50e6527df9734fff32033706de78adc60332be16))
+
 ## [2.91.1](https://github.com/PostHog/wizard/compare/v2.91.0...v2.91.1) (2026-11-07)
 
 
