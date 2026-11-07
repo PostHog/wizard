@@ -42,9 +42,39 @@ describe('withoutProjectBins', () => {
     expect(withoutProjectBins(join(`"${bin}"`, quoted))).toBe(quoted);
   });
 
-  it('handles an empty PATH', () => {
-    expect(withoutProjectBins('')).toBe('');
-  });
+  it.skipIf(process.platform === 'win32')(
+    'falls back to the system folders when nothing is left',
+    () => {
+      expect(withoutProjectBins('')).toBe('/usr/bin:/bin');
+      expect(withoutProjectBins(bin)).toBe('/usr/bin:/bin');
+    },
+  );
+
+  it.skipIf(process.platform === 'win32')(
+    'never leaves a PATH that searches the working directory',
+    () => {
+      const tmp = fs.realpathSync(
+        fs.mkdtempSync(path.join(os.tmpdir(), 'project-bin-path-')),
+      );
+      try {
+        const marker = path.join(tmp, 'canary');
+        fs.writeFileSync(
+          path.join(tmp, 'wizard-test-tool'),
+          `#!/bin/sh\ntouch "${marker}"\n`,
+          { mode: 0o755 },
+        );
+        const env = { ...process.env, PATH: withoutProjectBins(bin) };
+
+        spawnSync('wizard-test-tool', { cwd: tmp, env });
+        spawnSync('wizard-test-tool', { cwd: tmp, env, shell: true });
+
+        expect(fs.existsSync(marker)).toBe(false);
+        expect(spawnSync('ls', ['/'], { env }).status).toBe(0);
+      } finally {
+        fs.rmSync(tmp, { recursive: true, force: true });
+      }
+    },
+  );
 
   it.skipIf(process.platform === 'win32')(
     'runs the installed command, not one planted in the project',

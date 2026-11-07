@@ -36,6 +36,9 @@ if (!satisfies(process.version, NODE_VERSION_RANGE)) {
 
 // Before anything can run a command by name, including at import time.
 process.env.PATH = withoutProjectBins(process.env.PATH ?? '');
+if (process.platform === 'win32') {
+  process.env.NoDefaultCurrentDirectoryInExePath = '1';
+}
 
 // Loaded dynamically so no dependency is evaluated before the check above.
 // eslint-disable-next-line no-restricted-syntax -- main.ts is bin.ts's own layer.
