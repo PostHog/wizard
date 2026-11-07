@@ -2,6 +2,7 @@ import * as crypto from 'node:crypto';
 import * as http from 'node:http';
 import { execSync } from 'node:child_process';
 import axios from 'axios';
+import { ApiError, handleApiError } from '@shared/api';
 import {
   getOAuthClientId,
   missingOAuthScopes,
@@ -10,6 +11,7 @@ import {
 } from '@programs';
 import type { OAuthTokenResponse } from '@programs/types';
 import {
+  LOGIN_REQUEST_TIMEOUT_MS,
   OAUTH_PORTS,
   OAUTH_TIMEOUT_MS,
   WIZARD_USER_AGENT,
@@ -348,7 +350,8 @@ function isPortInUseError(error: unknown): boolean {
   );
 }
 
-async function exchangeCodeForToken(
+/** Exported for tests. */
+export async function exchangeCodeForToken(
   code: string,
   codeVerifier: string,
   callbackUrl: string,
@@ -374,6 +377,7 @@ async function exchangeCodeForToken(
           'Content-Type': 'application/json',
           'User-Agent': WIZARD_USER_AGENT,
         },
+        timeout: LOGIN_REQUEST_TIMEOUT_MS,
       },
     );
   } catch (e) {
@@ -394,6 +398,10 @@ async function exchangeCodeForToken(
           (exchangeError.description ? ` (${exchangeError.description})` : ''),
       );
       throw exchangeError;
+    }
+    // No response: name the cause rather than axios's bare message.
+    if (axios.isAxiosError(e) && !e.response) {
+      throw handleApiError(e, 'finish logging in');
     }
     throw e;
   }
@@ -629,6 +637,8 @@ export async function performOAuthFlow(
           step: 'oauth_flow',
           oauth_error_code: oauthErrorCode,
           oauth_error_description: flowError?.description,
+          network_code:
+            error instanceof ApiError ? error.networkCode : undefined,
           client_id: clientId,
           requested_scopes: config.scopes.join(' '),
           // Collapse OAuth callback failures of the same kind into one issue

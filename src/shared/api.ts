@@ -4,7 +4,7 @@ import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
 import { httpsProxyConfigured } from './http-proxy';
 import { checkCertificateChain, UNTRUSTED_CERT_CODES } from './tls-check';
-import { WIZARD_USER_AGENT } from './constants';
+import { LOGIN_REQUEST_TIMEOUT_MS, WIZARD_USER_AGENT } from './constants';
 import type { HostResolution } from './host-resolution';
 
 /**
@@ -167,6 +167,8 @@ export class ApiError extends Error {
     public readonly endpoint?: string,
     /** Set after a TLS check: whether the OS store would verify the host's chain. */
     public readonly systemStoreTrusts?: boolean,
+    /** Node's error code when no response came back, such as `ECONNRESET`. */
+    public readonly networkCode?: string,
   ) {
     super(message);
     this.name = 'ApiError';
@@ -219,14 +221,10 @@ function describeAxiosFailure(error: unknown): string {
 }
 
 /** Why a fetch failed, as exception properties a query can filter on. */
-function failureProperties(
-  error: unknown,
-  apiError: ApiError,
-): Record<string, unknown> {
+function failureProperties(apiError: ApiError): Record<string, unknown> {
   return {
     status_code: apiError.statusCode,
-    network_code:
-      axios.isAxiosError(error) && !error.response ? error.code : undefined,
+    network_code: apiError.networkCode,
     system_store_trusts: apiError.systemStoreTrusts,
   };
 }
@@ -242,6 +240,7 @@ export async function fetchUserData(
           Authorization: `Bearer ${accessToken}`,
           'User-Agent': WIZARD_USER_AGENT,
         },
+        timeout: LOGIN_REQUEST_TIMEOUT_MS,
       }),
     );
 
@@ -251,7 +250,7 @@ export async function fetchUserData(
     analytics.captureException(apiError, {
       endpoint: '/api/users/@me/',
       baseUrl,
-      ...failureProperties(error, apiError),
+      ...failureProperties(apiError),
     });
     throw apiError;
   }
@@ -312,6 +311,7 @@ export async function fetchProjectData(
           Authorization: `Bearer ${accessToken}`,
           'User-Agent': WIZARD_USER_AGENT,
         },
+        timeout: LOGIN_REQUEST_TIMEOUT_MS,
       }),
     );
 
@@ -322,7 +322,7 @@ export async function fetchProjectData(
       endpoint: `/api/projects/${projectId}/`,
       baseUrl,
       projectId,
-      ...failureProperties(error, apiError),
+      ...failureProperties(apiError),
     });
     throw apiError;
   }
@@ -572,12 +572,17 @@ export async function diagnoseApiError(
     undefined,
     error.config?.url,
     result?.systemStoreTrusts,
+    error.code,
   );
 }
 
 function unreachableMessage(error: AxiosError, operation: string): string {
   const host = hostOf(error) ?? 'PostHog';
-  const code = error.code ?? 'no response';
+  // Axios reports its own timeout as ECONNABORTED, which reads as a reset.
+  const code =
+    error.code === AxiosError.ECONNABORTED
+      ? 'timed out'
+      : error.code ?? 'no response';
   if (isLocalHost(error)) {
     return `Couldn't reach ${host} to ${operation} (${code}). Check that your local server is running.`;
   }
@@ -599,6 +604,8 @@ export function handleApiError(error: unknown, operation: string): ApiError {
         unreachableMessage(axiosError, operation),
         undefined,
         endpoint,
+        undefined,
+        axiosError.code,
       );
     }
 
