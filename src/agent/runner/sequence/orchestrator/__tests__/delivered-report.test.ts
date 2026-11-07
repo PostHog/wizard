@@ -73,6 +73,7 @@ import { analytics } from '@utils/analytics';
 import { AgentErrorType } from '../../../../agent-interface';
 import { RunOutcome } from '../../../shared/types';
 import { runOrchestrator } from '../orchestrator-runner';
+import { RunTaskFatal } from '../executor';
 import type { SequenceContext } from '../../../shared/types';
 import type { QueueStore } from '../queue';
 
@@ -412,6 +413,23 @@ describe('a task failing after the run report was published', () => {
 
     expect(result.outcome).toBe(RunOutcome.Success);
     expect(result.outro?.message).toContain('report delivered');
+  });
+
+  it('keeps the run successful when the sink completes, then its turn ends aborted', async () => {
+    behaviors.report = (inputs, id) => {
+      publish(inputs);
+      inputs.orchestrator.store.complete(id);
+      throw new RunTaskFatal(
+        { code: 'PHW_AGENT_ABORT', message: 'aborted' },
+        RunOutcome.Aborted,
+        'report',
+      );
+    };
+
+    const result = await run();
+
+    expect(result.outcome).toBe(RunOutcome.Success);
+    expect(result.outro?.message).toBe('PostHog set up: 2/2 steps completed.');
   });
 
   it('still fails the run when a task other than the sink published then failed', async () => {
