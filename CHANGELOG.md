@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.91.1](https://github.com/PostHog/wizard/compare/v2.91.0...v2.91.1) (2026-11-07)
+
+
+### Bug Fixes
+
+* avoid running project files as Python, Git, or other installed tools ([#1534](https://github.com/PostHog/wizard/issues/1534)) ([11bd632](https://github.com/PostHog/wizard/commit/11bd632a2cbaca27c469192097823c424b15c393))
+* drop project bin folders from the wizard's PATH at startup ([#1536](https://github.com/PostHog/wizard/issues/1536)) ([e4bab9c](https://github.com/PostHog/wizard/commit/e4bab9c0cddeb1a35dbdfb9ff42e44b484b61cf7))
+
 ## [2.91.0](https://github.com/PostHog/wizard/compare/v2.90.1...v2.91.0) (2026-11-06)
 
 
