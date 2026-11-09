@@ -57,6 +57,11 @@ export const GLOBAL_OPTIONS = {
       'Email address for signup (used with --signup)\nenv: POSTHOG_WIZARD_EMAIL',
     type: 'string' as const,
   },
+  goal: {
+    describe:
+      'The task you or your agent are using PostHog for, sent with a new signup\nenv: POSTHOG_WIZARD_GOAL',
+    type: 'string' as const,
+  },
   // ── Internal modes ─────────────────────────────────────────────────
   // Hidden from `--help`.
   // NB: the experimental headless flag is deliberately NOT global. Supported
