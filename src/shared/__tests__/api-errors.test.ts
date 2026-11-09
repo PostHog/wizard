@@ -1,6 +1,7 @@
 import { AxiosError, AxiosHeaders, type AxiosResponse } from 'axios';
 import axios from 'axios';
 import { analytics } from '@utils/analytics';
+import { detectRegion } from '@utils/urls';
 import {
   diagnoseApiError,
   fetchProjectData,
@@ -9,6 +10,11 @@ import {
 } from '../api';
 
 vi.mock('@utils/debug', () => ({ logToFile: vi.fn() }));
+// Dev builds pin localhost, which skips the us/eu probe.
+vi.mock(import('@shared/constants'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  IS_DEV: false,
+}));
 vi.mock('@utils/analytics', () => ({
   analytics: { captureException: vi.fn() },
 }));
@@ -93,6 +99,16 @@ describe('retryTransient', () => {
 });
 
 describe('handleApiError', () => {
+  it('says the request timed out', () => {
+    const error = handleApiError(
+      networkError(AxiosError.ECONNABORTED),
+      'fetch project data',
+    );
+
+    expect(error.message).toContain('fetch project data (timed out)');
+    expect(error.networkCode).toBe('ECONNABORTED');
+  });
+
   it('names the host and code when no response came back', () => {
     const error = handleApiError(
       networkError('ECONNRESET'),
@@ -251,6 +267,20 @@ describe('fetchProjectData failure analytics', () => {
     expect(analytics.captureException).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ status_code: 403, network_code: undefined }),
+    );
+  });
+});
+
+describe('detectRegion', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('names the network cause when no region answers', async () => {
+    vi.spyOn(axios, 'get').mockRejectedValue(
+      networkError('SELF_SIGNED_CERT_IN_CHAIN'),
+    );
+
+    await expect(detectRegion('token')).rejects.toThrow(
+      'intercepting HTTPS to us.posthog.com',
     );
   });
 });
