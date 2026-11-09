@@ -209,6 +209,8 @@ export interface ResolvedRunConfig {
   allowedTools?: readonly string[];
   /** Tools removed from BASE_ALLOWED_TOOLS for this run. */
   disallowedTools?: readonly string[];
+  /** When set, the agent may `call` only these PostHog MCP tools. */
+  posthogTools?: readonly string[];
   /** Context-mill flow the orchestrator loads. Defaults to `programId`. */
   agentFlow?: string;
   /** Task types the program excludes for these flags. The orchestrator adds the CI gates. */

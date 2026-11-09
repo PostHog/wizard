@@ -2,6 +2,7 @@ export {
   CODEBASE_SCAN_KEY,
   getCodebaseScan,
   scanCodebaseFor,
+  scannedWarehouseDestinations,
   scannedWarehouseSources,
   type CodebaseScan,
 } from './scan';

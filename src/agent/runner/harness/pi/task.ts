@@ -312,6 +312,7 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
     const security = createSecurityExtension({
       signal: inputs.signal,
       disallowedTools: fenceDisallowList(disallowedTools),
+      posthogTools: config.posthogTools,
       triageProvider: boot.triageProvider,
       getWizardAskPending: () => askState.pending,
       workingDirectory: input.installDir,

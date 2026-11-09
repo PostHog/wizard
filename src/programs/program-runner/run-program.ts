@@ -296,6 +296,10 @@ async function invokeProgram(
       if (!input.wizardFlags && options.featureFlags) {
         flags = await park(options.featureFlags());
       }
+      const gate = config.rolloutGate;
+      if (gate && flags.flags[gate.flagKey] !== 'true') {
+        return fail(gate.unavailableMessage, ErrorCodes.CliFlagUnavailable);
+      }
     } catch (error) {
       if (signal.aborted) return cancelled();
       if (error instanceof ProgramAbort) return fail(error.message, error.code);
@@ -416,6 +420,7 @@ async function invokeProgram(
             wizardFlagPayloads: { ...flags.payloads },
             allowedTools: planned.config.allowedTools,
             disallowedTools: planned.config.disallowedTools,
+            posthogTools: planned.config.posthogTools,
             handoffNotebook:
               agentRun.handoffNotebook ?? planned.config.handoffNotebook,
             agentFlow: planned.config.agentFlow,

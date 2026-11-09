@@ -3,6 +3,7 @@ import type { RevenueDetectError } from '../revenue-analytics/detect';
 import type { SelfDrivingDetectError } from '../self-driving/detect';
 import type { SourceMapsDetectError } from '../error-tracking-upload-source-maps/detect';
 import type { WarehouseDetectError } from '../warehouse-source/detect';
+import type { WarehouseDestinationDetectError } from '../warehouse-destination/detect';
 import type { WebAnalyticsDetectError } from '../web-analytics-doctor/detect';
 
 /**
@@ -19,6 +20,7 @@ export type DetectErrorKind =
   | SelfDrivingDetectError['kind']
   | SourceMapsDetectError['kind']
   | WarehouseDetectError['kind']
+  | WarehouseDestinationDetectError['kind']
   | WebAnalyticsDetectError['kind'];
 
 const DETECT_CODES: Record<DetectErrorKind, ErrorCode> = {

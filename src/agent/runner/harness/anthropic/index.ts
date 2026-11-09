@@ -69,6 +69,7 @@ export const anthropicBackend: AgentHarness = {
         readOnly: config.readOnly,
         allowedTools: runConfig.allowedTools,
         disallowedTools: runConfig.disallowedTools,
+        posthogTools: runConfig.posthogTools,
         modelOverride: model,
         outputFormat: structured && {
           type: 'json_schema',
@@ -152,6 +153,7 @@ export const anthropicBackend: AgentHarness = {
         wizardFlags: boot.wizardFlags,
         wizardMetadata: boot.wizardMetadata,
         integrationLabel: config.programId,
+        posthogTools: config.posthogTools,
         // Only a task allowed to ask carries a bridge, so the Write/Edit pause
         // that rides on a pending question stays inside that task's agent.
         askBridge,

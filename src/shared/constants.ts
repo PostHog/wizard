@@ -338,6 +338,9 @@ export const WIZARD_DEFAULT_MCP_ANALYTICS_FLAG_KEY =
   'wizard-default-mcp-analytics';
 /** Boolean flag: true runs the Decisions judgment service in shadow (ask and log, never act). */
 export const WIZARD_DECISIONS_DETECTION_FLAG_KEY = 'wizard-decisions-detection';
+/** Boolean flag: true lets the warehouse-destination program run. */
+export const WIZARD_WAREHOUSE_DESTINATIONS_FLAG_KEY =
+  'wizard-warehouse-destinations';
 // Reading a flag enters this run into that flag's experiment, so a closed set — not a
 // `wizard-` prefix anyone can name into — decides what a run evaluates. Test-pinned exhaustive.
 export const WIZARD_FLAG_KEYS = [
@@ -350,6 +353,7 @@ export const WIZARD_FLAG_KEYS = [
   WIZARD_DEFAULT_AIO_LOGS_FLAG_KEY,
   WIZARD_DEFAULT_MCP_ANALYTICS_FLAG_KEY,
   WIZARD_DECISIONS_DETECTION_FLAG_KEY,
+  WIZARD_WAREHOUSE_DESTINATIONS_FLAG_KEY,
 ] as const;
 /** User-Agent for wizard HTTP requests and MCP server identification. */
 export const WIZARD_USER_AGENT = `posthog/wizard; version: ${VERSION}`;

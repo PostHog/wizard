@@ -21,6 +21,7 @@ import { TUI_PROGRAMS as migration } from '@tui/programs/migration';
 import { TUI_PROGRAMS as posthogIntegration } from '@tui/programs/posthog-integration';
 import { TUI_PROGRAMS as revenueAnalytics } from '@tui/programs/revenue-analytics';
 import { TUI_PROGRAMS as selfDriving } from '@tui/programs/self-driving';
+import { TUI_PROGRAMS as warehouseDestination } from '@tui/programs/warehouse-destination';
 import { TUI_PROGRAMS as warehouseSource } from '@tui/programs/warehouse-source';
 
 export type { TuiProgram };
@@ -37,6 +38,7 @@ const TUI_PROGRAMS: TuiPrograms = {
   ...posthogIntegration,
   ...revenueAnalytics,
   ...selfDriving,
+  ...warehouseDestination,
   ...warehouseSource,
 };
 

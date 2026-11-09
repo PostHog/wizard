@@ -23,6 +23,11 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import type { LLMProvider, ScanMatch } from '@posthog/warlock';
 import { wizardCanUseTool } from '../../../agent-interface';
+import { POSTHOG_MCP_TOOL } from '../../../agent-prompt-loader';
+import {
+  posthogExecBlockReason,
+  posthogToolNotAllowed,
+} from '../../../posthog-tool-policy';
 import {
   createRepeatBlockTracker,
   isWizardDocumentationPath,
@@ -107,6 +112,8 @@ export interface ToolGateContext {
   signal?: AbortSignal;
   readOnly?: boolean;
   disallowedTools?: readonly string[];
+  /** When set, the agent may `call` only these PostHog MCP tools. */
+  posthogTools?: readonly string[];
   /** True while a wizard_ask overlay is open (interactive); blocks Write/Edit. */
   getWizardAskPending?: () => boolean;
   /** Scan-triage classifier, resolved once in bootstrap. Absent → every flagged match is acted on. */
@@ -131,6 +138,23 @@ export interface GateDecision {
 }
 
 const str = (v: unknown): string => (typeof v === 'string' ? v : '');
+
+// The pi-mcp-adapter proxy tool, registered when `posthog_exec` fails to resolve; it can call any MCP tool.
+const MCP_PROXY_TOOL = 'mcp';
+
+/** Why a PostHog MCP call is refused under the program's allowlist, or undefined. */
+function posthogToolBlock(
+  toolName: string,
+  input: Record<string, unknown>,
+  allowed: readonly string[] | undefined,
+): string | undefined {
+  if (!allowed) return undefined;
+  if (toolName === POSTHOG_MCP_TOOL)
+    return posthogExecBlockReason(input, allowed);
+  if (toolName === MCP_PROXY_TOOL || toolName.startsWith('posthog_'))
+    return posthogToolNotAllowed(toolName);
+  return undefined;
+}
 
 /** A pi tool path as pi opens it: its `resolveToCwd` strips a leading `@` and decodes `file://`. */
 function piToolPath(v: unknown): string {
@@ -403,6 +427,8 @@ export async function evaluateToolCall(
         reason: `Tool ${toolName} is disabled for read-only runs.`,
       };
     }
+    const posthogReason = posthogToolBlock(toolName, input, ctx.posthogTools);
+    if (posthogReason) return { block: true, reason: posthogReason };
     const policy = toClaudePolicyCall(toolName, input);
     const decision = wizardCanUseTool(policy.name, policy.input, {
       disallowedTools: ctx.disallowedTools,
