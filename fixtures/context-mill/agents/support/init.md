@@ -1,0 +1,34 @@
+---
+type: init
+flow: support
+label: Set up PostHog initialization
+model_pi: openai/gpt-6.1-terra
+effort_pi: low
+model_sdk: claude-sonnet-5-5
+effort_sdk: medium
+skills: [integration-v2-init, posthog-best-practices]
+allowedTools: [Read, Write, Edit, Glob, Grep, check_env_keys, set_env_values]
+disallowedTools: [enqueue_task]
+dependsOn: []
+---
+
+## Goal
+
+Make sure `posthog-js` is initialized in the app's browser code. An existing
+init counts only when the env variable it reads is defined: check it with
+`check_env_keys`. When the init is complete, leave it alone and say so.
+Otherwise create or finish it following your skill, including the env wiring
+and `.env.example`. A template-script frontend gets the PostHog snippet in
+its base template.
+
+Initialize the SDK and stop. The widget task checks the options that affect
+Support.
+
+You do not install packages, run builds, linters, or tests, or start the app.
+The install task owns packages, and your edits just need to be right by
+reading.
+
+## How you know you succeeded
+
+`posthog-js` initializes from a defined key. Your handoff names the init file
+and the env variable names (never values).
