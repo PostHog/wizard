@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.92.1](https://github.com/PostHog/wizard/compare/v2.92.0...v2.92.1) (2026-11-10)
+
+
+### Bug Fixes
+
+* **detection:** keep a failed warehouse pass from ending the run ([#1547](https://github.com/PostHog/wizard/issues/1547)) ([edb261f](https://github.com/PostHog/wizard/commit/edb261f464d9466274639b980a2f87714bbcc037))
+* **posthog-integration:** detect warehouse sources in headless runs ([#1545](https://github.com/PostHog/wizard/issues/1545)) ([372ce97](https://github.com/PostHog/wizard/commit/372ce97db05a1807afef9c3387c3b1a783b07159))
+
 ## [2.92.0](https://github.com/PostHog/wizard/compare/v2.91.2...v2.92.0) (2026-11-10)
 
 
