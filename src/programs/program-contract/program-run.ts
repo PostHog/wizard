@@ -39,4 +39,13 @@ export interface ProgramRun extends AgentRunDefinition {
     credentials: Credentials,
     completedSeededTypes: readonly string[],
   ) => { heading: string; items: string[] } | undefined;
+  /**
+   * Markdown the orchestrated sequence appends to the run report once the
+   * report step has published it. The text is the program's own and reaches
+   * the user without a model in between. Return undefined to add nothing.
+   */
+  buildReportAppendix?: (
+    session: ProgramSession,
+    credentials: Credentials,
+  ) => string | undefined;
 }

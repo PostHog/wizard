@@ -75,6 +75,7 @@ import { RunOutcome } from '../../../shared/types';
 import { runOrchestrator } from '../orchestrator-runner';
 import type { SequenceContext } from '../../../shared/types';
 import type { QueueStore } from '../queue';
+import type { AgentProgress } from '../../../../progress';
 
 type Inputs = {
   onBashCommand?: (command: string | undefined) => void;
@@ -139,13 +140,17 @@ describe('a task failing after the run report was published', () => {
 
   afterEach(() => fs.rmSync(dir, { recursive: true, force: true }));
 
-  const run = (signal?: AbortSignal) =>
+  const run = (
+    signal?: AbortSignal,
+    over: { hooks?: object; emit?: (event: AgentProgress) => void } = {},
+  ) =>
     runOrchestrator({
       config: {
         programId: 'test-flow',
         wizardFlags: {},
         wizardFlagPayloads: {},
         switchboard: {},
+        hooks: over.hooks,
       },
       input: { installDir: dir, flags: { ci: true } },
       boot: {
@@ -159,7 +164,7 @@ describe('a task failing after the run report was published', () => {
           },
         },
       },
-      emit: vi.fn(),
+      emit: over.emit ?? vi.fn(),
       interaction: undefined,
       signal,
     } as unknown as SequenceContext);
@@ -439,5 +444,42 @@ describe('a task failing after the run report was published', () => {
     const result = await run(host.signal);
 
     expect(result.outcome).toBe(RunOutcome.Aborted);
+  });
+
+  it.each([
+    {
+      name: 'republishes the delivered report with the program appendix',
+      sinkPublishes: true,
+      appendix: '## Connect your data sources',
+      handoffs: ['# Report', '# Report\n\n## Connect your data sources'],
+    },
+    {
+      name: 'publishes the report once when the program adds nothing',
+      sinkPublishes: true,
+      appendix: undefined,
+      handoffs: ['# Report'],
+    },
+    {
+      name: 'publishes no appendix when no report was delivered',
+      sinkPublishes: false,
+      appendix: '## Connect your data sources',
+      handoffs: [],
+    },
+  ])('$name', async ({ sinkPublishes, appendix, handoffs }) => {
+    behaviors.report = (inputs, id) => {
+      if (sinkPublishes) publish(inputs);
+      inputs.orchestrator.store.complete(id);
+    };
+    const events: AgentProgress[] = [];
+
+    const result = await run(undefined, {
+      hooks: { buildReportAppendix: () => appendix },
+      emit: (event) => events.push(event),
+    });
+
+    expect(result.outcome).toBe(RunOutcome.Success);
+    expect(
+      events.flatMap((e) => (e.kind === 'handoff' ? [e.text] : [])),
+    ).toEqual(handoffs);
   });
 });

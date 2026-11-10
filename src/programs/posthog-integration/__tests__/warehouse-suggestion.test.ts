@@ -14,6 +14,16 @@
 
 import type { WizardSession } from '@services/session';
 import { config as posthogIntegration } from '@programs/posthog-integration';
+
+const envState = vi.hoisted(() => ({
+  runSurface: 'local' as 'cloud' | 'local',
+}));
+vi.mock('@env', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@env')>()),
+  get RUN_SURFACE() {
+    return envState.runSurface;
+  },
+}));
 import type { DetectedSource } from '@services/warehouse-sources';
 import { analytics } from '@utils/analytics';
 
@@ -31,6 +41,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   vi.restoreAllMocks();
+  envState.runSurface = 'local';
 });
 
 const POSTGRES: DetectedSource = {
@@ -221,5 +232,62 @@ describe('orchestrated outro suggestion', () => {
 
   it('offers nothing when nothing was detected', async () => {
     expect(await nextSteps(sessionWith([]), [])).toBeUndefined();
+  });
+});
+
+describe('cloud report section', () => {
+  const runWith = async (
+    surface: 'cloud' | 'local',
+    flags: Partial<WizardSession>,
+    sources: DetectedSource[],
+  ) => {
+    envState.runSurface = surface;
+    const s = Object.assign(sessionWith(sources), flags);
+    const runDef = await resolveRun(s);
+    return {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      section: runDef.buildReportAppendix!(s, CREDENTIALS as any),
+      seeded: posthogIntegration.seedTasks!(s),
+    };
+  };
+
+  it('links each source and seeds no task that could ask in a cloud run', async () => {
+    const { section, seeded } = await runWith('cloud', { ci: true }, [
+      POSTGRES,
+      STRIPE,
+    ]);
+
+    expect(section).toContain('## Connect your data sources');
+    expect(section).toContain(
+      'https://us.posthog.com/project/1/data-warehouse/new-source?kind=stripe&utm_source=wizard&utm_medium=cli&utm_content=cloud-handoff',
+    );
+    expect(section).toContain('kind=postgres');
+    expect(section).toContain('npx @posthog/wizard warehouse');
+    expect(seeded).toEqual([]);
+  });
+
+  it.each([
+    { name: 'plain CI', surface: 'local' as const, flags: { ci: true } },
+    { name: 'signup', surface: 'local' as const, flags: { signup: true } },
+    { name: 'an interactive run', surface: 'local' as const, flags: {} },
+    {
+      name: 'a cloud run with an answerer',
+      surface: 'cloud' as const,
+      flags: { ci: true, e2eAsk: true },
+    },
+  ])('adds nothing to the report in $name', async ({ surface, flags }) => {
+    const { section } = await runWith(surface, flags, [POSTGRES]);
+
+    expect(section).toBeUndefined();
+  });
+
+  it('seeds nothing in plain CI', async () => {
+    expect((await runWith('local', { ci: true }, [POSTGRES])).seeded).toEqual(
+      [],
+    );
+  });
+
+  it('adds nothing to a cloud run with no detected source', async () => {
+    expect((await runWith('cloud', { ci: true }, [])).section).toBeUndefined();
   });
 });
