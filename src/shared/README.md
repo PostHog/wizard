@@ -15,6 +15,8 @@ that imports it:
 - `@shared/auth-session-state`: whether the token endpoint refused the grant
   (`markGrantRevoked`, `isGrantRevoked`).
 - `@shared/local-dev`: the resolved local-dev targets (`initLocalDev`).
+- `@shared/context-mill-version`: the context-mill release the run is pinned to
+  (`initContextMillVersion`); unset follows the latest.
 - `@shared/fetch-retry`: the skills origin that last worked, which the next
   fetch tries first.
 

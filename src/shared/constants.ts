@@ -166,6 +166,7 @@ import {
   getLocalDev,
   POSTHOG_LOCAL_URL,
 } from './local-dev';
+import { getContextMillVersion } from './context-mill-version';
 export { IS_DEV };
 export const DEBUG = false;
 
@@ -220,10 +221,13 @@ export const LOCAL_SKILLS_BASE_URL = CONTEXT_MILL_LOCAL_URL;
 /**
  * Driven by `--local-context-mill`, NOT `--local-mcp` (which used to select
  * both). Takes no argument on purpose: callers can't pass the wrong flag.
+ * `--context-mill-version` selects that release's assets instead of the latest.
  */
 export function getSkillsBaseUrl(): string {
-  return getLocalDev().localContextMill
-    ? LOCAL_SKILLS_BASE_URL
+  if (getLocalDev().localContextMill) return LOCAL_SKILLS_BASE_URL;
+  const version = getContextMillVersion();
+  return version
+    ? `${CONTEXT_MILL_URL}/releases/download/${version}`
     : GITHUB_SKILLS_BASE_URL;
 }
 

@@ -45,6 +45,7 @@ import { SELF_DRIVING_INTEGRATE_PATH_KEY } from '@programs/self-driving';
 import type { GatewayCredential } from '@shared/api';
 import type { Harness, Integration, Sequence } from '@shared/constants';
 import { initLocalDev } from '@shared/local-dev';
+import { initContextMillVersion } from '@shared/context-mill-version';
 import { readCiGatewayCredential } from '@shared/ci-gateway';
 import { RunPhase } from '@shared/run-state';
 import { logToFile } from '@utils/debug';
@@ -226,6 +227,7 @@ async function main() {
     localContextMill: envFlag('POSTHOG_WIZARD_LOCAL_CONTEXT_MILL'),
     localPosthog: envFlag('POSTHOG_WIZARD_LOCAL_POSTHOG'),
   });
+  initContextMillVersion(process.env.POSTHOG_WIZARD_CONTEXT_MILL_VERSION);
 
   const session: SessionArgs = {
     installDir: process.env.APP_DIR!,

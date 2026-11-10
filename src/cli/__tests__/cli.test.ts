@@ -91,6 +91,7 @@ describe('CLI argument parsing', () => {
     'POSTHOG_WIZARD_LOCAL_CONTEXT_MILL',
     'POSTHOG_WIZARD_LOCAL_MCP',
     'POSTHOG_WIZARD_LOCAL_POSTHOG',
+    'POSTHOG_WIZARD_CONTEXT_MILL_VERSION',
     'POSTHOG_TASK_RUN_ID',
     'POSTHOG_WIZARD_RUN_ID',
     'POSTHOG_TASK_ID',
@@ -299,6 +300,41 @@ describe('CLI argument parsing', () => {
     test('no global option is named `local`', async () => {
       const { GLOBAL_OPTIONS } = await import('../wizard');
       expect(Object.keys(GLOBAL_OPTIONS)).not.toContain('local');
+    });
+  });
+
+  describe('--context-mill-version', () => {
+    const PINNED =
+      'https://github.com/PostHog/context-mill/releases/download/v1.59.0';
+
+    async function skillsBaseUrl(): Promise<string> {
+      const { getSkillsBaseUrl } = await import('@shared/constants');
+      return getSkillsBaseUrl();
+    }
+
+    test('pins the skills origin to the release', async () => {
+      await runCLI(['--context-mill-version', '1.59.0']);
+      expect(mockRunTuiCli).toHaveBeenCalled();
+      expect(await skillsBaseUrl()).toBe(PINNED);
+    });
+
+    // The cloud runner configures a run through the sandbox environment.
+    test('resolves POSTHOG_WIZARD_CONTEXT_MILL_VERSION from the environment', async () => {
+      process.env.POSTHOG_WIZARD_CONTEXT_MILL_VERSION = 'v1.59.0';
+      await runCLI([]);
+      expect(mockRunTuiCli).toHaveBeenCalled();
+      expect(await skillsBaseUrl()).toBe(PINNED);
+    });
+
+    test('rejects a value that is not a release version', async () => {
+      process.env.POSTHOG_WIZARD_CONTEXT_MILL_VERSION = '../../evil';
+      await runCLI([]);
+      expect(process.exit).toHaveBeenCalledWith(1);
+    });
+
+    test('rejects a pin combined with a local context-mill', async () => {
+      await runCLI(['--context-mill-version', '1.59.0', '--local-dev']);
+      expect(process.exit).toHaveBeenCalledWith(1);
     });
   });
 
