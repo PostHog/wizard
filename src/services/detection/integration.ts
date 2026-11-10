@@ -118,9 +118,9 @@ type WarehouseScanState = 'ok' | 'failed';
 /**
  * Stash the run's scanned warehouse sources (Postgres, Stripe, Hubspot, …)
  * for a `wizard warehouse` suggestion on the outro. The scan itself runs
- * unconditionally before `onReady`, before the intro screen has asked about
- * sharing. Reporting what it found is a separate, later concern. See
- * `reportWarehouseSourcesDetected` below.
+ * unconditionally before `onReady` or `ciPreRun`, before the intro screen has
+ * asked about sharing. Reporting what it found is a separate, later concern.
+ * See `reportWarehouseSourcesDetected` below.
  *
  * Deliberately a suggestion, not an inline agent run: a second credential-
  * collecting agent run before the outro could end the run on any of its
@@ -128,7 +128,7 @@ type WarehouseScanState = 'ok' | 'failed';
  * installed fine.
  */
 async function offerScannedWarehouseSources(
-  ctx: ProgramReadyContext,
+  ctx: Pick<ProgramReadyContext, 'session' | 'setFrameworkContext'>,
 ): Promise<void> {
   const scan = getCodebaseScan(ctx.session);
   if (!scan) return;
@@ -142,6 +142,31 @@ async function offerScannedWarehouseSources(
   const sources = await scannedWarehouseSources(ctx.session);
   if (sources.length === 0) return;
   ctx.setFrameworkContext(DETECTED_WAREHOUSE_SOURCES_KEY, sources);
+}
+
+/**
+ * The headless half of the detect step's warehouse pass. Nobody can answer a
+ * credential prompt in a headless run (`warehouseSeedTasks` queues nothing
+ * there), so the run only names what it found and the user connects it from
+ * PostHog.
+ */
+export async function noteScannedWarehouseSources(
+  session: ProgramSession,
+  log: { info(message: string): void },
+): Promise<void> {
+  await offerScannedWarehouseSources({
+    session,
+    setFrameworkContext: (key, value) => {
+      session.frameworkContext[key] = value;
+    },
+  });
+  const sources = getDetectedWarehouseSources(session);
+  if (sources.length === 0) return;
+  log.info(
+    `Detected data sources PostHog can import: ${sources
+      .map((s) => s.label)
+      .join(', ')}. Connect them in PostHog after the run.`,
+  );
 }
 
 /**
