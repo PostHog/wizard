@@ -6,25 +6,19 @@ import {
   GPT6_SOL_MODEL,
   REPLAY_VISION_SUPPORTED,
 } from '@shared/constants';
-import { detectFramework } from '@services/detection';
-import { gatherFrameworkContext } from '@services/detection';
-import { noteDetectedFramework } from '@services/detection';
-import { scopeInstallDirToProject } from '@services/detection';
-import type { CiRunnerContext } from '@programs/program-contract';
 import { FRAMEWORK_REGISTRY } from '@services/frameworks';
 import { createSkillProgram } from '../shared/skill-program';
-import { detectPostHogIntegration } from '@services/detection';
-import type {
-  ProgramConfig,
-  ProgramReadyContext,
-} from '@programs/program-contract';
-import type { ProgramSession } from '@programs/program-contract';
+import type { ProgramConfig } from '@programs/program-contract';
 import type { Credentials } from '@shared/api';
 import { analytics } from '@utils/analytics';
 import { ProgramAbort } from '@programs/program-contract';
 import { ErrorCodes } from '@shared/errors';
 import { REPLAY_VISION_SCOPE_ADDITIONS } from './scopes.js';
-import { abortNoFrameworkDetected } from '../shared/abort-no-framework';
+import {
+  platformGatedCiPreRun,
+  platformGatedOnReady,
+  type PlatformGate,
+} from '../shared/platform-gated-detection';
 
 const REPLAY_VISION_REPORT_FILE = 'posthog-replay-vision-report.md';
 
@@ -69,32 +63,11 @@ export const REPLAY_VISION_ABORT_CASES: AbortCase[] = [
   },
 ];
 
-/**
- * Framework detection ahead of the run, exactly like the default integration
- * program. The orchestrator requires it: `session.skillId` must hold the
- * detected framework id before the run arm starts, because the runner
- * resolves the reference integration skill and every task's mini-skill
- * variants (`integration-v2-install`, `integration-v2-init`, …) against it in
- * preflight. Without this step the session would still carry the program's
- * own skill id and preflight would abort.
- */
-// The platform gate runs on a direct detectFramework call BEFORE the full
-// detect writes to the store: store setters replace the session with a
-// shallow copy, so `ctx.session` read after detectPostHogIntegration would
-// be the stale pre-copy object (see the warning in detect.ts).
-async function detectReplayVisionProject(
-  ctx: ProgramReadyContext,
-): Promise<void> {
-  const integration = await detectFramework(ctx.session.installDir);
-  if (!integration) {
-    // Stop before skill preflight, matching the CI path below.
-    abortNoFrameworkDetected(NO_FRAMEWORK_GUIDANCE);
-  }
-  if (!REPLAY_VISION_SUPPORTED.has(integration)) {
-    abortUnsupportedPlatform(integration);
-  }
-  await detectPostHogIntegration(ctx);
-}
+const REPLAY_VISION_GATE: PlatformGate = {
+  supported: REPLAY_VISION_SUPPORTED,
+  abortUnsupported: abortUnsupportedPlatform,
+  noFramework: NO_FRAMEWORK_GUIDANCE,
+};
 
 /** The outro's next steps: deploy, check that replay records, and open the scanners. */
 function buildReplayVisionNextSteps(credentials: Credentials): {
@@ -158,9 +131,8 @@ const base = createSkillProgram({
  *   orchestrator's preflight resolves reference + mini-skill variants with.
  * - `agentFlow` pinned (the id would default to the same value — explicit so
  *   renaming the program can't silently detach the flow).
- * - `ciPreRun` mirrors the default integration program: scope the install dir
- *   to the right project (monorepos), then detect the framework — the
- *   headless equivalent of `onReady`.
+ * - `ciPreRun` is the headless equivalent of `onReady`. Both come from the
+ *   shared platform-gated detection, which support uses too.
  */
 export const config: ProgramConfig = {
   decisions: ['framework', 'web_frontend', 'primary_user_flow'],
@@ -172,42 +144,7 @@ export const config: ProgramConfig = {
     model: GPT6_SOL_MODEL,
   },
   agentFlow: 'replay-vision',
-  onReady: detectReplayVisionProject,
+  onReady: platformGatedOnReady(REPLAY_VISION_GATE),
   oauthScopeAdditions: REPLAY_VISION_SCOPE_ADDITIONS,
-
-  ciPreRun: async (
-    session: ProgramSession,
-    runner: CiRunnerContext,
-  ): Promise<void> => {
-    await scopeInstallDirToProject(session, runner);
-
-    const integration = await detectFramework(session.installDir);
-    if (!integration) {
-      abortNoFrameworkDetected(NO_FRAMEWORK_GUIDANCE);
-    }
-    if (!REPLAY_VISION_SUPPORTED.has(integration)) {
-      abortUnsupportedPlatform(integration);
-    }
-    session.integration = integration;
-    analytics.setTag('integration', integration);
-
-    const frameworkConfig = FRAMEWORK_REGISTRY[integration];
-    session.frameworkConfig = frameworkConfig;
-    session.skillId = integration;
-
-    const context = await gatherFrameworkContext(frameworkConfig, {
-      installDir: session.installDir,
-      debug: session.debug,
-      signup: session.signup,
-      ci: true,
-      benchmark: session.benchmark,
-      yaraReport: session.yaraReport,
-    });
-    for (const [key, value] of Object.entries(context)) {
-      if (!(key in session.frameworkContext)) {
-        session.frameworkContext[key] = value;
-      }
-    }
-    noteDetectedFramework(session, frameworkConfig, context, runner.log);
-  },
+  ciPreRun: platformGatedCiPreRun(REPLAY_VISION_GATE),
 };

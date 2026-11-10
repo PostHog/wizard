@@ -95,6 +95,7 @@ describe('program bindings', () => {
       'error-tracking': orchestratorOnPi,
       'feature-flags': orchestratorOnPi,
       'agent-skill': linearOnSol,
+      support: orchestratorOnPi,
     });
   });
 });
@@ -104,6 +105,12 @@ describe('getOAuthScopesForProgram', () => {
     const scopes = getOAuthScopesForProgram('feature-flags');
     expect(scopes).toContain('feature_flag:read');
     expect(scopes).toContain('feature_flag:write');
+  });
+
+  it('adds the product enablement scope for support', () => {
+    expect(getOAuthScopesForProgram('support')).toContain(
+      'product_enablement:write',
+    );
   });
 });
 
