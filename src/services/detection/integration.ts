@@ -92,7 +92,7 @@ export async function detectPostHogIntegration(
     ctx.addDiscoveredFeature(feature);
   }
 
-  await offerScannedWarehouseSources(ctx);
+  await recordScannedWarehouseSources(ctx);
   detectExistingPostHog(ctx, installDir);
   await mcpServer;
 
@@ -127,7 +127,7 @@ type WarehouseScanState = 'ok' | 'failed';
  * failure paths and cost the user the success outro on a run where PostHog
  * installed fine.
  */
-async function offerScannedWarehouseSources(
+async function recordScannedWarehouseSources(
   ctx: Pick<ProgramReadyContext, 'session' | 'setFrameworkContext'>,
 ): Promise<void> {
   const scan = getCodebaseScan(ctx.session);
@@ -154,7 +154,7 @@ export async function noteScannedWarehouseSources(
   session: ProgramSession,
   log: { info(message: string): void },
 ): Promise<void> {
-  await offerScannedWarehouseSources({
+  await recordScannedWarehouseSources({
     session,
     setFrameworkContext: (key, value) => {
       session.frameworkContext[key] = value;
