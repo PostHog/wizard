@@ -118,8 +118,8 @@ type WarehouseScanState = 'ok' | 'failed';
 /**
  * Stash the run's scanned warehouse sources (Postgres, Stripe, Hubspot, …)
  * for a `wizard warehouse` suggestion on the outro. The scan itself runs
- * unconditionally before `onReady`, before the intro screen has asked about
- * sharing. Reporting what it found is a separate, later concern. See
+ * unconditionally before `onReady` or `ciPreRun`, before the intro screen has
+ * asked about sharing. Reporting what it found is a separate, later concern. See
  * `reportWarehouseSourcesDetected` below.
  *
  * Deliberately a suggestion, not an inline agent run: a second credential-
@@ -127,8 +127,8 @@ type WarehouseScanState = 'ok' | 'failed';
  * failure paths and cost the user the success outro on a run where PostHog
  * installed fine.
  */
-async function offerScannedWarehouseSources(
-  ctx: ProgramReadyContext,
+export async function offerScannedWarehouseSources(
+  ctx: Pick<ProgramReadyContext, 'session' | 'setFrameworkContext'>,
 ): Promise<void> {
   const scan = getCodebaseScan(ctx.session);
   if (!scan) return;

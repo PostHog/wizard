@@ -14,6 +14,7 @@ export { detectFramework } from './framework';
 export {
   detectMcpServer,
   detectPostHogIntegration,
+  offerScannedWarehouseSources,
   reportWarehouseSourcesDetected,
 } from './integration';
 export {

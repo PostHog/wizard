@@ -4,7 +4,9 @@ import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ProgramAbort } from '@programs/program-contract';
 import type { ProgramReadyContext } from '@programs/program-contract';
-import { buildSession } from '@services/session';
+import { buildSession, SessionStore } from '@services/session';
+import { scanCodebaseFor } from '@services/codebase-scan';
+import { getDetectedWarehouseSources } from '@services/warehouse-sources';
 import { config as posthogIntegration } from '@programs/posthog-integration';
 import { testCiRunnerContext } from '@programs/shared/__tests__/runner-context.no-jest';
 import { ErrorCodes } from '@shared/errors';
@@ -107,6 +109,43 @@ describe.each([
       expect(ctx.setSkillId).toHaveBeenCalledWith(integration);
       expect(ctx.setDetectionComplete).toHaveBeenCalled();
     });
+
+    it.each([
+      {
+        flow: 'interactive',
+        ci: false,
+        detect: (store: SessionStore) =>
+          program.onReady?.(store.readyContext()),
+      },
+      {
+        flow: 'headless',
+        ci: true,
+        detect: (store: SessionStore) =>
+          store.edit((draft) =>
+            program.ciPreRun?.(draft, testCiRunnerContext()),
+          ),
+      },
+    ])(
+      'records the scanned warehouse sources on the $flow path',
+      async ({ ci, detect }) => {
+        fs.writeFileSync(
+          path.join(installDir, 'package.json'),
+          JSON.stringify({
+            dependencies: { ...dependencies, stripe: '^14.0.0' },
+          }),
+        );
+        const store = new SessionStore(buildSession({ installDir, ci }));
+
+        // detectProgram scans before either detection hook runs.
+        await scanCodebaseFor(program, store.readyContext());
+        await detect(store);
+
+        expect(
+          getDetectedWarehouseSources(store.session).map((s) => s.kind),
+        ).toContain('Stripe');
+        expect(store.session.frameworkContext.warehouseScanState).toBe('ok');
+      },
+    );
   },
 );
 
