@@ -138,6 +138,8 @@ async function main() {
           args: [
             '--tsconfig',
             'tsconfig.base.json',
+            '--import',
+            './scripts/markdown-loader.no-jest.mjs',
             'scripts/tui-host.no-jest.ts',
           ],
           cwd: process.cwd(),
