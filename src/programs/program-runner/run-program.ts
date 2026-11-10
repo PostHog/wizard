@@ -676,6 +676,9 @@ function sessionHooks(
       ? (creds, completed) =>
           run.buildOutroNextSteps!(session(), creds, completed)
       : undefined,
+    buildReportAppendix: run.buildReportAppendix
+      ? (creds) => run.buildReportAppendix!(session(), creds)
+      : undefined,
     recordTaskOutcomes,
   };
 }

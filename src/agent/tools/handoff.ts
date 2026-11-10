@@ -172,6 +172,8 @@ export async function publishHandoff(
     handoffNotebook?: boolean;
     /** The program publishing, so programs sharing a process keep separate notebooks. */
     programId?: string;
+    /** Set when the runner republishes the report with the program's appendix. */
+    runnerAppendix?: boolean;
   } = {},
 ): Promise<PublishHandoffResult> {
   if (content.trim() === '') {
@@ -222,6 +224,7 @@ export async function publishHandoff(
     handoff_chars: text.length,
     handoff_truncated: truncated,
     handoff_output_written: handoffOutputWritten,
+    handoff_runner_appendix: opts.runnerAppendix,
     notebook_requested: notebookRequested,
     notebook_outcome: notebook?.outcome,
     notebook_skip_reason:

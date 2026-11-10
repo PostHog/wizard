@@ -17,7 +17,7 @@ import {
 import { tryGetPackageJson, isUsingTypeScript } from '@utils/setup-utils';
 import { analytics } from '@utils/analytics';
 import { detectFramework } from '@services/detection';
-import { IS_PRODUCTION_BUILD } from '@env';
+import { IS_PRODUCTION_BUILD, RUN_SURFACE } from '@env';
 import { gatherFrameworkContext } from '@services/detection';
 import { noteDetectedFramework } from '@services/detection';
 import { scopeInstallDirToProject } from '@services/detection';
@@ -122,13 +122,14 @@ function warehouseSourceUrl(
   host: HostResolution,
   projectId: number | string,
   kind: string,
+  utmContent = 'outro-warehouse',
 ): string {
   const path = `${
     host.appHost
   }/project/${projectId}/data-warehouse/new-source?kind=${encodeURIComponent(
     kind,
   )}`;
-  return withUtm(path, 'outro-warehouse');
+  return withUtm(path, utmContent);
 }
 
 /**
@@ -177,6 +178,43 @@ function buildWarehouseNextSteps(
 }
 
 /**
+ * The cloud run's report section for the detected data sources.
+ *
+ * A cloud run has nobody to answer a credential question, so it seeds no
+ * warehouse task, and its host shows the run report but not the outro. This
+ * section puts the outro's links in the report. Each link opens the source's
+ * form in the browser, so no credential passes through the sandbox. Undefined
+ * for every other run, which keeps the links in its outro.
+ */
+function cloudWarehouseReportSection(
+  sess: ProgramSession,
+  host: HostResolution,
+  projectId: number | string,
+): string | undefined {
+  if (RUN_SURFACE !== 'cloud' || !shouldDisableAsk(sess)) return undefined;
+  const sources = getDetectedWarehouseSources(sess);
+  if (sources.length === 0) return undefined;
+
+  return [
+    '## Connect your data sources',
+    '',
+    'We found these data sources in your project. Open a link to connect one to PostHog:',
+    '',
+    ...sources.map(
+      (s) =>
+        `- [${s.label}](${warehouseSourceUrl(
+          host,
+          projectId,
+          s.kind,
+          'cloud-handoff',
+        )})`,
+    ),
+    '',
+    'To connect them all from your terminal, run `npx @posthog/wizard warehouse`.',
+  ].join('\n');
+}
+
+/**
  * Prompt fragment asking the agent to note the detected data sources in the
  * setup report's checklist.
  *
@@ -208,7 +246,8 @@ function warehouseReportInstruction(sess: ProgramSession): string {
  *
  * Empty when detection found no `in-cli` source, and in CI, signup, and any
  * other run where `wizard_ask` is disabled — a credential prompt nobody can
- * answer would burn the task's whole timeout and then fail the run. Capped at
+ * answer would burn the task's whole timeout and then fail the run. A cloud run
+ * gets the links in its report instead, from {@link cloudWarehouseReportSection}. Capped at
  * {@link WAREHOUSE_SEED_LIMIT} sources; {@link buildWarehouseNextSteps} hands
  * every detected source over as an outro link.
  */
@@ -558,6 +597,13 @@ ${warehouseReportInstruction(session)}
 
       buildOutroNextSteps: (sess, credentials) =>
         buildWarehouseNextSteps(sess, credentials.host, credentials.projectId),
+
+      buildReportAppendix: (sess, credentials) =>
+        cloudWarehouseReportSection(
+          sess,
+          credentials.host,
+          credentials.projectId,
+        ),
 
       buildOutroData: (sess, credentials) => {
         const envVars = config.environment.getEnvVars(

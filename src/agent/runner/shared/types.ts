@@ -131,6 +131,8 @@ export interface RunHooks {
     credentials: Credentials,
     completedSeededTypes: readonly string[],
   ) => { heading: string; items: string[] } | undefined;
+  /** Markdown the runner appends to the delivered run report (orchestrated only). */
+  buildReportAppendix?: (credentials: Credentials) => string | undefined;
   /** Receives the drained queue's final outcomes before the cache wipe (orchestrated only). */
   recordTaskOutcomes?: (
     outcomes: import('../sequence/orchestrator/queue').TaskOutcome[],

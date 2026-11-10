@@ -41,6 +41,7 @@ import { ciExcludedTaskTypes } from '@utils/ci-flag-overrides';
 import { logToFile } from '@utils/debug';
 import { ringTerminalBell } from '@utils/terminal-bell';
 import { AGENT_ERROR_CODE } from '../../../error-map';
+import { publishHandoff } from '../../../tools/handoff';
 import { AgentErrorType } from '../../../agent-interface';
 import {
   classifyRunFailure,
@@ -802,6 +803,8 @@ async function executeOrchestrator(
   const reportDeliveredIds = new Set<string>();
   // Tasks completed by their deadline rather than by their agent.
   const incompleteTaskIds = new Set<string>();
+  // The run report as the sink last published it, so the program's appendix can follow it.
+  let deliveredReport: string | undefined;
 
   const store = new QueueStore(input.installDir, runId, {
     onTransition: (event, task) => {
@@ -1384,6 +1387,7 @@ async function executeOrchestrator(
               emit: (event) => {
                 if (deliversRunReport(registry.sinkTypes, task.type, event)) {
                   reportDeliveredIds.add(task.id);
+                  if (event.kind === 'handoff') deliveredReport = event.text;
                 }
                 emit(event);
               },
@@ -1697,6 +1701,15 @@ async function executeOrchestrator(
         { queue_state: JSON.stringify(store.list()) },
         ErrorCodes.AgentOrchestratorHollowRun,
       ),
+    });
+  }
+
+  const appendix = config.hooks?.buildReportAppendix?.(boot.credentials);
+  if (appendix && deliveredReport) {
+    await publishHandoff(`${deliveredReport.trimEnd()}\n\n${appendix}`, emit, {
+      handoffNotebook: boot.handoffNotebook,
+      programId: boot.programId,
+      runnerAppendix: true,
     });
   }
 
