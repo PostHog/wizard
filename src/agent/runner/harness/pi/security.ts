@@ -33,7 +33,7 @@ import {
 } from '../../../yara-hooks';
 import {
   publishBlockingMatch,
-  publishResultScanText,
+  flattenJsonForScan,
   scanVerdict,
   type ScanContext,
 } from '../../../yara-policy';
@@ -357,15 +357,15 @@ async function preExecutionYaraBlock(
       phase = 'PreToolUse';
       tool = 'publish_handoff';
       break;
-    case 'publish_result':
+    case 'publish_program_result':
       // The result's evidence strings quote the user's data (hosts, event names),
       // so it clears the same critical-only bar as the handoff before the host
       // file is written.
-      content = publishResultScanText(input.result);
+      content = flattenJsonForScan(input.result);
       ctx = 'output';
       triage = llmProvider;
       phase = 'PreToolUse';
-      tool = 'publish_result';
+      tool = 'publish_program_result';
       break;
     default:
       return undefined;
@@ -379,7 +379,7 @@ async function preExecutionYaraBlock(
   }
   // Any match blocks — except the publish tools, critical only.
   const blocking =
-    toolName === 'publish_handoff' || toolName === 'publish_result'
+    toolName === 'publish_handoff' || toolName === 'publish_program_result'
       ? publishBlockingMatch(matches)
       : matches[0] ?? null;
 

@@ -13,7 +13,7 @@ const SPEND_AUDIT_REPORT_FILE = 'posthog-spend-audit-report.md';
  * The flow (context-mill `agents/spend-audit`) measures 30-day volumes once,
  * audits each product that has volume, edits the repository, creates insights
  * for events nobody queries, and ends with a report that writes the notebook,
- * the pull request body and the machine-readable result (`publish_result`).
+ * the pull request body and the machine-readable result (`publish_program_result`).
  * The product prices the result from the user's billing, so the run never
  * reads billing and never states a dollar figure.
  */

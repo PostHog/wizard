@@ -447,7 +447,7 @@ describe('yara-hooks', () => {
         expect(onTerminate).not.toHaveBeenCalled();
       });
 
-      it('blocks publish_result when a critical key follows a real newline in nested evidence', async () => {
+      it('blocks publish_program_result when a critical key follows a real newline in nested evidence', async () => {
         const key = `phx_${'a'.repeat(40)}`;
         // Stands in for a `\b`-anchored rule: it matches only the text the hook scans.
         mockScan.mockImplementationOnce((content: string) =>
@@ -465,7 +465,7 @@ describe('yara-hooks', () => {
         );
         const result = await handoffHook()(
           input({
-            tool_name: 'mcp__wizard-tools__publish_result',
+            tool_name: 'mcp__wizard-tools__publish_program_result',
             tool_input: {
               result: { savings: [{ evidence: `config:\n${key}` }] },
             },

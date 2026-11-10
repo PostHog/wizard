@@ -58,7 +58,7 @@ it('carries the run shape the caller asked for into the SDK run config', async (
 });
 
 it('hands the run allow list to the wizard-tools server', async () => {
-  const allowedTools = [WIZARD_TOOL_NAMES.publishResult];
+  const allowedTools = [WIZARD_TOOL_NAMES.publishProgramResult];
   await initializeAgent(
     {
       workingDirectory: '/repo',
@@ -78,7 +78,9 @@ it('hands the run allow list to the wizard-tools server', async () => {
   );
 });
 
-it('leaves publish_result out of the tools every program gets', () => {
+it('leaves publish_program_result out of the tools every program gets', () => {
   expect(BASE_ALLOWED_TOOLS).toContain(WIZARD_TOOL_NAMES.publishHandoff);
-  expect(BASE_ALLOWED_TOOLS).not.toContain(WIZARD_TOOL_NAMES.publishResult);
+  expect(BASE_ALLOWED_TOOLS).not.toContain(
+    WIZARD_TOOL_NAMES.publishProgramResult,
+  );
 });

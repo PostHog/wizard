@@ -7,9 +7,9 @@ import { createWizardToolsServer } from '../mcp';
 import { WIZARD_TOOL_NAMES } from '../tools';
 import {
   MAX_RESULT_TEXT_CHARS,
-  PUBLISH_RESULT_TOOL_NAME,
-  publishResult,
-} from '../result';
+  PUBLISH_PROGRAM_RESULT_TOOL_NAME,
+  publishProgramResult,
+} from '../program-result';
 import { TASK_REPORTING_NOTE } from '../handoff';
 
 // The MCP server's tool list, without the SDK's transport around it.
@@ -51,7 +51,7 @@ const RESULT = {
   checks_passed: ['Group analytics is in use'],
 };
 
-describe('publishResult', () => {
+describe('publishProgramResult', () => {
   let temporaryDirectory: string;
   let ambientOutputPath: string | undefined;
 
@@ -74,7 +74,7 @@ describe('publishResult', () => {
     const target = join(temporaryDirectory, 'result.json');
     process.env.POSTHOG_RESULT_OUTPUT_PATH = target;
 
-    const result = publishResult(RESULT);
+    const result = publishProgramResult(RESULT);
 
     expect(result.ok).toBe(true);
     expect(result.message).toContain('1 savings');
@@ -83,13 +83,13 @@ describe('publishResult', () => {
   });
 
   it('publishes without a host path and says the product will not read it', () => {
-    const result = publishResult(RESULT);
+    const result = publishProgramResult(RESULT);
     expect(result.ok).toBe(true);
     expect(result.message).toContain('no host destination');
   });
 
   it('tells a task agent that complete_task still has to run', () => {
-    const result = publishResult(RESULT, { taskAgent: true });
+    const result = publishProgramResult(RESULT, { taskAgent: true });
     expect(result.message.endsWith(TASK_REPORTING_NOTE)).toBe(true);
   });
 
@@ -133,7 +133,7 @@ describe('publishResult', () => {
     const target = join(temporaryDirectory, 'result.json');
     process.env.POSTHOG_RESULT_OUTPUT_PATH = target;
 
-    const result = publishResult(bad);
+    const result = publishProgramResult(bad);
 
     expect(result.ok).toBe(false);
     expect(result.message).toContain(expected);
@@ -141,7 +141,7 @@ describe('publishResult', () => {
   });
 
   it('refuses a result over the size cap', () => {
-    const result = publishResult({
+    const result = publishProgramResult({
       ...RESULT,
       checks_passed: ['x'.repeat(MAX_RESULT_TEXT_CHARS)],
     });
@@ -155,10 +155,10 @@ describe('publishResult', () => {
     const tools = createWizardPiTools({
       workingDirectory: temporaryDirectory,
       skillsBaseUrl: 'http://localhost:0',
-      allowedTools: [PUBLISH_RESULT_TOOL_NAME],
+      allowedTools: [PUBLISH_PROGRAM_RESULT_TOOL_NAME],
     });
-    const tool = tools.find((t) => t.name === PUBLISH_RESULT_TOOL_NAME);
-    if (!tool) throw new Error('publish_result not registered');
+    const tool = tools.find((t) => t.name === PUBLISH_PROGRAM_RESULT_TOOL_NAME);
+    if (!tool) throw new Error('publish_program_result not registered');
 
     const output = (await (
       tool.execute as (id: string, args: unknown) => Promise<unknown>
@@ -169,7 +169,7 @@ describe('publishResult', () => {
   });
 });
 
-describe('publish_result registration', () => {
+describe('publish_program_result registration', () => {
   const piToolNames = (allowedTools?: readonly string[]) =>
     createWizardPiTools({
       workingDirectory: tmpdir(),
@@ -189,23 +189,27 @@ describe('publish_result registration', () => {
   };
 
   it('is left off the Pi tools unless the allow list names it', () => {
-    expect(piToolNames()).not.toContain(PUBLISH_RESULT_TOOL_NAME);
-    expect(piToolNames(['Read'])).not.toContain(PUBLISH_RESULT_TOOL_NAME);
-    expect(piToolNames([PUBLISH_RESULT_TOOL_NAME])).toContain(
-      PUBLISH_RESULT_TOOL_NAME,
+    expect(piToolNames()).not.toContain(PUBLISH_PROGRAM_RESULT_TOOL_NAME);
+    expect(piToolNames(['Read'])).not.toContain(
+      PUBLISH_PROGRAM_RESULT_TOOL_NAME,
     );
-    expect(piToolNames([WIZARD_TOOL_NAMES.publishResult])).toContain(
-      PUBLISH_RESULT_TOOL_NAME,
+    expect(piToolNames([PUBLISH_PROGRAM_RESULT_TOOL_NAME])).toContain(
+      PUBLISH_PROGRAM_RESULT_TOOL_NAME,
+    );
+    expect(piToolNames([WIZARD_TOOL_NAMES.publishProgramResult])).toContain(
+      PUBLISH_PROGRAM_RESULT_TOOL_NAME,
     );
   });
 
   it('is left off the wizard-tools MCP server unless the allow list names it', async () => {
-    expect(await mcpToolNames()).not.toContain(PUBLISH_RESULT_TOOL_NAME);
-    expect(await mcpToolNames([WIZARD_TOOL_NAMES.publishResult])).toContain(
-      PUBLISH_RESULT_TOOL_NAME,
+    expect(await mcpToolNames()).not.toContain(
+      PUBLISH_PROGRAM_RESULT_TOOL_NAME,
     );
-    expect(await mcpToolNames([PUBLISH_RESULT_TOOL_NAME])).toContain(
-      PUBLISH_RESULT_TOOL_NAME,
+    expect(
+      await mcpToolNames([WIZARD_TOOL_NAMES.publishProgramResult]),
+    ).toContain(PUBLISH_PROGRAM_RESULT_TOOL_NAME);
+    expect(await mcpToolNames([PUBLISH_PROGRAM_RESULT_TOOL_NAME])).toContain(
+      PUBLISH_PROGRAM_RESULT_TOOL_NAME,
     );
   });
 });

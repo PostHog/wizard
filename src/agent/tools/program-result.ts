@@ -1,5 +1,5 @@
 /**
- * publish_result — the agent publishes the run's machine-readable result (the
+ * publish_program_result — the agent publishes the run's machine-readable result (the
  * savings it sized and the ids of what it created) in one explicit call. The
  * host designates the destination file; the product reads it after the run.
  */
@@ -11,27 +11,27 @@ import { runtimeEnv } from '@env';
 import { TASK_REPORTING_NOTE, writeHostFileAtomically } from './handoff';
 import { WIZARD_TOOL_NAMES } from './tools';
 
-export const PUBLISH_RESULT_TOOL_NAME = 'publish_result';
+export const PUBLISH_PROGRAM_RESULT_TOOL_NAME = 'publish_program_result';
 
-/** Opt-in: a run gets publish_result only when its allow list names it, MCP-prefixed or bare. */
-export function allowsPublishResult(
+/** Opt-in: a run gets publish_program_result only when its allow list names it, MCP-prefixed or bare. */
+export function allowsPublishProgramResult(
   allowedTools: readonly string[] | undefined,
 ): boolean {
   return (allowedTools ?? []).some(
     (name) =>
-      name === WIZARD_TOOL_NAMES.publishResult ||
-      name === PUBLISH_RESULT_TOOL_NAME,
+      name === WIZARD_TOOL_NAMES.publishProgramResult ||
+      name === PUBLISH_PROGRAM_RESULT_TOOL_NAME,
   );
 }
 
 /** Shared between the MCP server and the pi facade so the contract can't drift. */
-export const PUBLISH_RESULT_DESCRIPTION =
+export const PUBLISH_PROGRAM_RESULT_DESCRIPTION =
   'Publish the run result — the machine-readable summary the product reads after the run: the savings sized in billable units, the ids of every dashboard and insight the run created, the notebook, and the checks that passed. ' +
   'A run publishes once: call it only when your own instructions ask you to write the result, after everything it lists exists, passing the complete object as `result`. ' +
   'Never state a dollar amount; the product prices the volumes. Never write the file yourself. ' +
   'A refusal names the field that failed: fix that field and call again.';
 
-export const PUBLISH_RESULT_PARAM_DESCRIPTION =
+export const PUBLISH_PROGRAM_RESULT_PARAM_DESCRIPTION =
   'The complete result object, exactly the fields the result skill lists: version, notebook_short_id, dashboard_ids, insight_ids, savings, value_items, checks_passed.';
 
 // Cap matching the handoff: the backend reads the file into memory.
@@ -78,7 +78,7 @@ const valueItemSchema = z
  * fields, so refusing them here lets the agent fix the call instead of losing
  * the projection after the run.
  */
-export const runResultSchema = z
+export const programResultSchema = z
   .object({
     version: z.literal(1),
     notebook_short_id: nonEmpty,
@@ -90,9 +90,9 @@ export const runResultSchema = z
   })
   .strict();
 
-export type RunResult = z.infer<typeof runResultSchema>;
+export type ProgramResult = z.infer<typeof programResultSchema>;
 
-export interface PublishResultResult {
+export interface PublishProgramResultResult {
   ok: boolean;
   message: string;
 }
@@ -105,36 +105,36 @@ export function describeResultIssue(error: z.ZodError): string {
   return `${where}: ${issue.message}`;
 }
 
-export function publishResult(
+export function publishProgramResult(
   result: unknown,
   opts: {
     /** Set by both facades when the caller is one task of an orchestrated run. */
     taskAgent?: boolean;
   } = {},
-): PublishResultResult {
-  const parsed = runResultSchema.safeParse(result);
+): PublishProgramResultResult {
+  const parsed = programResultSchema.safeParse(result);
   if (!parsed.success) {
     const reason = describeResultIssue(parsed.error);
-    analytics.wizardCapture('result published', {
+    analytics.wizardCapture('program result published', {
       result_ok: false,
       result_reject_reason: 'invalid_shape',
     });
     return {
       ok: false,
-      message: `Error: the result was not published. ${reason}. Fix that field and call publish_result again.`,
+      message: `Error: the result was not published. ${reason}. Fix that field and call publish_program_result again.`,
     };
   }
 
   const text = JSON.stringify(parsed.data);
   if (text.length > MAX_RESULT_TEXT_CHARS) {
-    analytics.wizardCapture('result published', {
+    analytics.wizardCapture('program result published', {
       result_ok: false,
       result_reject_reason: 'too_large',
       result_chars: text.length,
     });
     return {
       ok: false,
-      message: `Error: the result is ${text.length} characters; the limit is ${MAX_RESULT_TEXT_CHARS}. Shorten evidence and tradeoff strings and call publish_result again.`,
+      message: `Error: the result is ${text.length} characters; the limit is ${MAX_RESULT_TEXT_CHARS}. Shorten evidence and tradeoff strings and call publish_program_result again.`,
     };
   }
 
@@ -149,13 +149,13 @@ export function publishResult(
     if (!write.ok) {
       outputError = write.reason;
       logToFile(
-        `[publish_result] host output write failed (${write.reason}): ${write.detail}`,
+        `[publish_program_result] host output write failed (${write.reason}): ${write.detail}`,
       );
     }
   }
 
   // Counts only — never the result itself, whose evidence quotes the user's data.
-  analytics.wizardCapture('result published', {
+  analytics.wizardCapture('program result published', {
     result_ok: true,
     result_chars: text.length,
     result_savings: parsed.data.savings.length,

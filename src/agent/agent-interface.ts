@@ -1874,9 +1874,9 @@ export const BASE_ALLOWED_TOOLS: readonly string[] = [
   // the agent to call TaskCreate/TaskUpdate to surface progress in the TUI.
   ...Object.values(TaskTool),
   'ListMcpResourcesTool',
-  // publish_result is opt-in: a program that writes the result lists it in allowedTools.
+  // publish_program_result is opt-in: a program that writes the result lists it in allowedTools.
   ...Object.values(WIZARD_TOOL_NAMES).filter(
-    (name) => name !== WIZARD_TOOL_NAMES.publishResult,
+    (name) => name !== WIZARD_TOOL_NAMES.publishProgramResult,
   ),
 ];
 

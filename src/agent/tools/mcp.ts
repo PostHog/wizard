@@ -28,12 +28,12 @@ import {
   publishHandoff,
 } from './handoff';
 import {
-  PUBLISH_RESULT_DESCRIPTION,
-  PUBLISH_RESULT_PARAM_DESCRIPTION,
-  PUBLISH_RESULT_TOOL_NAME,
-  allowsPublishResult,
-  publishResult,
-} from './result';
+  PUBLISH_PROGRAM_RESULT_DESCRIPTION,
+  PUBLISH_PROGRAM_RESULT_PARAM_DESCRIPTION,
+  PUBLISH_PROGRAM_RESULT_TOOL_NAME,
+  allowsPublishProgramResult,
+  publishProgramResult,
+} from './program-result';
 import { createSecretVault, type SecretVault } from '@shared/secret-vault';
 import { downloadSkill } from '@shared/skill-install';
 import type { ProgressEmitter } from '../progress';
@@ -166,7 +166,7 @@ export interface WizardToolsOptions {
   /** The program mirrors the handoff report into a PostHog notebook. */
   handoffNotebook?: boolean;
 
-  /** The run's allow list; opt-in tools such as `publish_result` register only when it names them. */
+  /** The run's allow list; opt-in tools such as `publish_program_result` register only when it names them. */
   allowedTools?: readonly string[];
 }
 
@@ -796,19 +796,19 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
     },
   );
 
-  // -- publish_result -------------------------------------------------------
+  // -- publish_program_result -------------------------------------------------------
 
-  const publishResultTool = tool(
-    PUBLISH_RESULT_TOOL_NAME,
-    PUBLISH_RESULT_DESCRIPTION,
+  const publishProgramResultTool = tool(
+    PUBLISH_PROGRAM_RESULT_TOOL_NAME,
+    PUBLISH_PROGRAM_RESULT_DESCRIPTION,
     {
-      result: z.unknown().describe(PUBLISH_RESULT_PARAM_DESCRIPTION),
+      result: z.unknown().describe(PUBLISH_PROGRAM_RESULT_PARAM_DESCRIPTION),
     },
     (args: { result: unknown }) => {
-      const result = publishResult(args.result, {
+      const result = publishProgramResult(args.result, {
         taskAgent: orchestrator?.currentTaskId !== undefined,
       });
-      logToFile(`publish_result: ${result.message}`);
+      logToFile(`publish_program_result: ${result.message}`);
       return {
         content: [{ type: 'text' as const, text: result.message }],
         ...(result.ok ? {} : { isError: true }),
@@ -837,7 +837,9 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
       wizardAsk,
       publishHandoffTool,
       // Opt-in: only a program or task whose allow list names it writes the result file.
-      ...(allowsPublishResult(allowedTools) ? [publishResultTool] : []),
+      ...(allowsPublishProgramResult(allowedTools)
+        ? [publishProgramResultTool]
+        : []),
       ...orchestratorTools,
     ],
   });

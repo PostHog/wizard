@@ -68,12 +68,12 @@ import {
   publishHandoff,
 } from '../../../tools/handoff';
 import {
-  PUBLISH_RESULT_DESCRIPTION,
-  PUBLISH_RESULT_PARAM_DESCRIPTION,
-  PUBLISH_RESULT_TOOL_NAME,
-  allowsPublishResult,
-  publishResult,
-} from '../../../tools/result';
+  PUBLISH_PROGRAM_RESULT_DESCRIPTION,
+  PUBLISH_PROGRAM_RESULT_PARAM_DESCRIPTION,
+  PUBLISH_PROGRAM_RESULT_TOOL_NAME,
+  allowsPublishProgramResult,
+  publishProgramResult,
+} from '../../../tools/program-result';
 import { createSecretVault } from '@shared/secret-vault';
 import {
   AUDIT_CHECKS_FILE,
@@ -107,7 +107,7 @@ export interface PiToolsContext {
   onAskPendingChange?: (pending: boolean) => void;
   /** Program disallow list; gates wizard_ask here since pi tools carry bare names the MCP-prefixed security gate misses. */
   disallowedTools?: readonly string[];
-  /** Program or task allow list; opt-in tools such as `publish_result` register only when it names them. */
+  /** Program or task allow list; opt-in tools such as `publish_program_result` register only when it names them. */
   allowedTools?: readonly string[];
   /** Scan-triage classifier, resolved once in bootstrap. Absent → scans fail closed. */
   triageProvider?: LLMProvider;
@@ -589,21 +589,23 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
     },
   });
 
-  // Native mirror of the MCP `publish_result` tool (shared description, so no drift).
-  const publishResultTool = defineTool({
-    name: PUBLISH_RESULT_TOOL_NAME,
+  // Native mirror of the MCP `publish_program_result` tool (shared description, so no drift).
+  const publishProgramResultTool = defineTool({
+    name: PUBLISH_PROGRAM_RESULT_TOOL_NAME,
     label: 'Publish result',
-    description: PUBLISH_RESULT_DESCRIPTION,
+    description: PUBLISH_PROGRAM_RESULT_DESCRIPTION,
     promptSnippet:
-      'publish_result(result) — publish the machine-readable run result to the host',
+      'publish_program_result(result) — publish the machine-readable run result to the host',
     parameters: Type.Object({
-      result: Type.Unknown({ description: PUBLISH_RESULT_PARAM_DESCRIPTION }),
+      result: Type.Unknown({
+        description: PUBLISH_PROGRAM_RESULT_PARAM_DESCRIPTION,
+      }),
     }),
     execute(_id, args) {
-      const result = publishResult(args.result, {
+      const result = publishProgramResult(args.result, {
         taskAgent: ctx.taskAgent,
       });
-      logToFile(`[pi] publish_result: ${result.message}`);
+      logToFile(`[pi] publish_program_result: ${result.message}`);
       return Promise.resolve(text(result.message));
     },
   });
@@ -622,8 +624,8 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
     withMode(publishHandoffTool, 'sequential'),
   ];
   // Opt-in: only a program or task whose allow list names it writes the result file.
-  if (allowsPublishResult(ctx.allowedTools)) {
-    tools.push(withMode(publishResultTool, 'sequential'));
+  if (allowsPublishProgramResult(ctx.allowedTools)) {
+    tools.push(withMode(publishProgramResultTool, 'sequential'));
   }
   // Register wizard_ask only when the program allows it. posthog-integration
   // disallows it (runs without structured user input); self-driving keeps it.

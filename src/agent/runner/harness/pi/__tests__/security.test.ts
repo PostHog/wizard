@@ -270,11 +270,11 @@ describe('pi-security: warlock scan wiring', () => {
     expect(decision.reason).toContain('Fix: Rotate the key');
   });
 
-  // publish_result carries the same agent-authored evidence as the handoff, so
+  // publish_program_result carries the same agent-authored evidence as the handoff, so
   // it clears the same critical-only bar instead of Write's any-match bar.
-  test('a high-severity publish_result match does NOT block the result', async () => {
+  test('a high-severity publish_program_result match does NOT block the result', async () => {
     mockedScan.mockResolvedValueOnce({ matched: true, matches: [piiMatch] });
-    const decision = await evaluateToolCall('publish_result', {
+    const decision = await evaluateToolCall('publish_program_result', {
       result: { checks_passed: ["posthog.capture('login', { email })"] },
     });
     expect(decision.block).toBe(false);
@@ -283,7 +283,7 @@ describe('pi-security: warlock scan wiring', () => {
   // Built at runtime so the literal never sits in source for a secret scanner to flag.
   const FAKE_PERSONAL_KEY = `phx_${'a'.repeat(40)}`;
 
-  test('a critical publish_result match blocks', async () => {
+  test('a critical publish_program_result match blocks', async () => {
     mockedScan.mockResolvedValueOnce({
       matched: true,
       matches: [
@@ -301,14 +301,14 @@ describe('pi-security: warlock scan wiring', () => {
         },
       ],
     });
-    const decision = await evaluateToolCall('publish_result', {
+    const decision = await evaluateToolCall('publish_program_result', {
       result: { checks_passed: [FAKE_PERSONAL_KEY] },
     });
     expect(decision.block).toBe(true);
     expect(decision.reason).toContain('posthog_hardcoded_personal_api_key');
   });
 
-  test('a critical key after a real newline in nested evidence blocks publish_result', async () => {
+  test('a critical key after a real newline in nested evidence blocks publish_program_result', async () => {
     // Stands in for a `\b`-anchored rule: it matches only the text the gate scans.
     mockedScan.mockImplementationOnce((content: string) =>
       Promise.resolve(
@@ -331,7 +331,7 @@ describe('pi-security: warlock scan wiring', () => {
           : { matched: false },
       ),
     );
-    const decision = await evaluateToolCall('publish_result', {
+    const decision = await evaluateToolCall('publish_program_result', {
       result: {
         savings: [{ evidence: `config:\n${FAKE_PERSONAL_KEY}` }],
       },

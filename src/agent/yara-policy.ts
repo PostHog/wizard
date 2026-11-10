@@ -57,12 +57,12 @@ export function publishBlockingMatch(matches: ScanMatch[]): ScanMatch | null {
 }
 
 /**
- * The text both gates scan for a publish_result call: every key and leaf value
- * one per line, so a string's own newlines stay real for `\b`-anchored rules
- * (JSON would escape them to `\n` and hide what follows).
+ * Every key and leaf value of a JSON value, one per line, as text for the
+ * scanner. A string's own newlines stay real for `\b`-anchored rules, where
+ * `JSON.stringify` would escape them to `\n` and hide what follows.
  */
-export function publishResultScanText(result: unknown): string {
-  if (typeof result === 'string') return result;
+export function flattenJsonForScan(json: unknown): string {
+  if (typeof json === 'string') return json;
   const parts: string[] = [];
   const visit = (value: unknown): void => {
     if (typeof value === 'string') parts.push(value);
@@ -76,7 +76,7 @@ export function publishResultScanText(result: unknown): string {
       }
     }
   };
-  visit(result);
+  visit(json);
   return parts.join('\n');
 }
 

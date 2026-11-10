@@ -53,7 +53,7 @@ describe('allowedPiWizardTools', () => {
     expect(withheld.has('install_skill')).toBe(false);
   });
 
-  it('exposes publish_result only to a task whose frontmatter declares it', () => {
+  it('exposes publish_program_result only to a task whose frontmatter declares it', () => {
     // The task path: tools built with the task's allow list, then filtered by it.
     const taskTools = (allowedTools: string[]) => {
       const names = allowedPiWizardTools(allowedTools);
@@ -65,8 +65,10 @@ describe('allowedPiWizardTools', () => {
         .filter((t) => names.has(t.name))
         .map((t) => t.name);
     };
-    expect(taskTools(['Read', 'publish_result'])).toContain('publish_result');
-    expect(taskTools(['Read', 'Edit'])).not.toContain('publish_result');
+    expect(taskTools(['Read', 'publish_program_result'])).toContain(
+      'publish_program_result',
+    );
+    expect(taskTools(['Read', 'Edit'])).not.toContain('publish_program_result');
   });
 });
 

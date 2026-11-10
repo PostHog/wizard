@@ -121,7 +121,7 @@ const OPT_IN_WIZARD_TOOLS = [
   'audit_add_checks',
   'audit_resolve_checks',
   // The one task that writes the run's machine-readable result (spend audit).
-  'publish_result',
+  'publish_program_result',
 ];
 
 export function allowedPiWizardTools(
