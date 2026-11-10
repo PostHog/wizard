@@ -12,10 +12,10 @@ prompt assembly, error routing, post-run work, and outro construction. Retain it
 for very simple tasks and legacy support. Its context is subject to the
 harness's compaction behavior.
 
-`AgentRunDefinition.customPrompt`, `abortCases`, and the program's `postRun`
-and `buildOutroData` hooks are linear hooks. The orchestrator does not invoke them. Composed program sub-runs
-are also clamped to linear because an orchestrator owns its full lifecycle and
-cannot nest through the composition seam.
+`AgentRunDefinition.customPrompt`, `abortCases`, and the program's `postRun` and
+`buildOutroData` hooks are linear hooks. The orchestrator does not invoke them.
+Composed program sub-runs are also clamped to linear because an orchestrator
+owns its full lifecycle and cannot nest through the composition seam.
 
 ## Orchestrator
 
@@ -33,8 +33,10 @@ See
 
 A task prompt names its skills by menu id or by skill family, and the runner
 resolves each name to the menu skill to install. With `wizard-agent-dag` on,
-`@shared/skill-resolution` picks the family's skill for the run's framework;
-off, the runner's own menu lookup does. Both pick the same skill for every
+`@shared/skill-resolution` picks the family's skill for the run's match keys;
+off, the runner's own menu lookup does. The match keys are the run config's
+`matchKeys`, which the program runner fills from the project's traits, with the
+run's framework as the `framework` key. Both pick the same skill for every
 family, menu id and framework on the recorded menu, which
 [skill-equivalence.test.ts](orchestrator/__tests__/skill-equivalence.test.ts)
 checks.

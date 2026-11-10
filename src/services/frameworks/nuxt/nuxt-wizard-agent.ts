@@ -30,6 +30,7 @@ export const NUXT_AGENT_CONFIG: FrameworkConfig<NuxtContext> = {
       const versionBucket = getNuxtVersionBucket(version);
       return { versionBucket };
     },
+    getVariant: (context) => context.versionBucket,
   },
 
   detection: {

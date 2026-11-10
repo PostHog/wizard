@@ -16,6 +16,7 @@ import type { PackageManagerDetector } from '@utils/package-manager';
 import type { ApiProject, ApiUser } from '@shared/api';
 import type { Harness, Integration, Sequence } from '@shared/constants';
 import type { ErrorCode } from '@shared/errors';
+import type { MatchKeys } from '@shared/skill-resolution';
 import type { LLMProvider } from '@posthog/warlock';
 import type { AgentInteraction, ProgressEmitter } from '../../progress';
 import type { EffortLevel } from '../switchboard/models';
@@ -219,6 +220,8 @@ export interface ResolvedRunConfig {
   seedTasks?: () => SeedTaskEntry[];
   /** Detected facts about the project, one line each, read when the orchestrator starts. */
   projectFacts?: () => readonly string[];
+  /** The project's traits as skill match keys, read when the orchestrator picks skills. */
+  matchKeys?: () => MatchKeys;
   /** Completion hooks, bound by the caller. */
   hooks?: RunHooks;
   scanReport?: 'flush' | 'defer'; // defer leaves the scan report to the outer run

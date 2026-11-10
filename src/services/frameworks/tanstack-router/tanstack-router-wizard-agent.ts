@@ -38,6 +38,7 @@ export const TANSTACK_ROUTER_AGENT_CONFIG: FrameworkConfig<TanStackRouterContext
         context.routerMode
           ? `TanStack Router ${getTanStackRouterModeName(context.routerMode)}`
           : undefined,
+      getVariant: (context) => context.routerMode,
     },
 
     detection: {

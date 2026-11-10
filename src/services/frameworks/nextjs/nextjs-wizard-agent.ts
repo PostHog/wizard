@@ -40,6 +40,7 @@ export const NEXTJS_AGENT_CONFIG: FrameworkConfig<NextjsContext> = {
         context.router === NextJsRouter.APP_ROUTER ? '\u{1F4F1}' : '\u{1F4C3}';
       return `Next.js ${getNextJsRouterName(context.router)} ${emoji}`;
     },
+    getVariant: (context) => context.router,
     setup: {
       questions: [
         {

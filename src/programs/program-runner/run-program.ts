@@ -36,6 +36,7 @@ import { registerCleanup } from '@utils/cleanup';
 import { logToFile } from '@utils/debug';
 import { removeAuditLedger, startAuditLedgerWatcher } from '@programs/audit';
 import { FRAMEWORK_REGISTRY } from '@services/frameworks';
+import { getTraits, toMatchKeys } from '@services/project-traits';
 import { findProgramConfig, getProgramConfig } from './program-registry';
 import { ProgramAbort } from '@programs/program-contract';
 import { detectionFailure, detectProgram } from './detect-program';
@@ -431,6 +432,7 @@ async function invokeProgram(
             seedTasks: planned.config.seedTasks
               ? () => planned.config.seedTasks!(session())
               : undefined,
+            matchKeys: () => toMatchKeys(getTraits(session())),
             projectFacts:
               (decisions && planned.config.decisions) ||
               planned.config.detectedFacts
