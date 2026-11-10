@@ -36,6 +36,7 @@ import {
   scanInstalledSkill,
 } from '../../../yara-hooks';
 import { fetchSkillMenu, type SkillEntry } from '@shared/skill-menu';
+import { resolveSkill, type MatchKeys } from '@shared/skill-resolution';
 import { analytics } from '@utils/analytics';
 import { ciExcludedTaskTypes } from '@utils/ci-flag-overrides';
 import { logToFile } from '@utils/debug';
@@ -61,6 +62,7 @@ import { createAskBridge } from '../../shared/ask';
 import {
   areSeededTasksEnabled,
   getHarness,
+  isAgentDagEnabled,
   resolveHarness,
   resolveStageOverrides,
   type HarnessPick,
@@ -260,17 +262,8 @@ export function resolveSkillVariantId(
   return (family.find((e) => e.default) ?? family[0])?.id;
 }
 
-/**
- * The framework reference is the full `integration` skill. `input.skillId` is
- * the bare framework (e.g. `django`), but the skill menu ids it as
- * `integration-<variant>`.
- */
-function resolveReferenceSkillId(
-  entries: readonly SkillEntry[],
-  framework: string,
-): string | undefined {
-  return resolveSkillVariantId(entries, 'integration', framework);
-}
+/** The framework reference is the full `integration` skill, which the menu ids as `integration-<variant>`. */
+const REFERENCE_SKILL = 'integration';
 
 /**
  * How long an optional step's notice waits for an answer.
@@ -885,9 +878,14 @@ async function executeOrchestrator(
   // (agent-skill commands like replay-vision) would otherwise leak that id in
   // here as a bogus framework after the caller overwrites the detect result.
   const framework = input.integration ?? input.skillId ?? undefined;
-  const referenceSkillId = framework
-    ? resolveReferenceSkillId(menuSkillEntries, framework)
-    : undefined;
+  // `wizard-agent-dag` picks skills with the shared resolver; off, the menu lookup above does.
+  const matchKeys: MatchKeys = framework ? { framework: [framework] } : {};
+  const pickSkillId = isAgentDagEnabled(boot.wizardFlags)
+    ? (skillId: string) =>
+        resolveSkill(menuSkillEntries, skillId, matchKeys)?.id
+    : (skillId: string) =>
+        resolveSkillVariantId(menuSkillEntries, skillId, framework);
+  const referenceSkillId = framework ? pickSkillId(REFERENCE_SKILL) : undefined;
   if (referenceSkillId) {
     const ref = await installSkillById(
       referenceSkillId,
@@ -924,9 +922,7 @@ async function executeOrchestrator(
   const missingVariants: string[] = [];
   for (const type of registry.types) {
     for (const skillId of registry.get(type)?.skills ?? []) {
-      if (resolveSkillVariantId(menuSkillEntries, skillId, framework)) {
-        continue;
-      }
+      if (pickSkillId(skillId)) continue;
       missingVariants.push(`${type}/${skillId}`);
       logToFile(
         `[orchestrator] no skill variant type=${type} skill=${skillId} framework=${
@@ -1311,11 +1307,7 @@ async function executeOrchestrator(
         // Agent prompts name the bare step-skill (`integration-v2-install`);
         // SDK-divergent steps ship per-framework variants, so resolve against
         // the menu with the session's framework before installing.
-        const variantId = resolveSkillVariantId(
-          menuSkillEntries,
-          skillId,
-          framework,
-        );
+        const variantId = pickSkillId(skillId);
         if (!variantId) {
           logToFile(
             `[orchestrator] no skill variant type=${

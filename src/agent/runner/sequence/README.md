@@ -31,6 +31,17 @@ overrides. The retired `experiment/orchestrator` branch is not a prerequisite.
 See
 [adding a program](../../../../.claude/skills/adding-skill-program/SKILL.md).
 
+A task prompt names its skills by menu id or by skill family, and the runner
+resolves each name to the menu skill to install. With `wizard-agent-dag` on,
+`@shared/skill-resolution` picks the family's skill for the run's framework;
+off, the runner's own menu lookup does. Both pick the same skill for every
+family, menu id and framework on the recorded menu, which
+[skill-equivalence.test.ts](orchestrator/__tests__/skill-equivalence.test.ts)
+checks.
+
+A run pinned to a context-mill release with `--context-mill-version` takes none
+of the `wizard-agent-dag` paths.
+
 ### Task metadata
 
 Read [AgentPrompt and its parser](../../agent-prompt-loader.ts) for the current

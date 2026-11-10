@@ -143,5 +143,6 @@ export {
 export {
   isOrchestratorEnabled,
   areSeededTasksEnabled,
+  isAgentDagEnabled,
   resolveStageOverrides,
 } from './flags';
