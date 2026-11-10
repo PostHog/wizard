@@ -47,6 +47,7 @@ import {
 } from './gateway';
 import { runErrorType, setupSignalFailure } from './completion';
 import { bindPiCancellation } from './cancellation';
+import type { SecurityState } from './security';
 import { classifyRunFailure, ErrorCodes } from '@shared/errors';
 import { assembleCommandments } from '../../switchboard/commandments';
 import {
@@ -54,6 +55,7 @@ import {
   buildScrubbedEnv,
   extractText,
   lastStatusLine,
+  withBashTimeout,
   withMode,
 } from './index';
 import { createAioCapture } from '../../../aio-capture';
@@ -165,6 +167,11 @@ function isSettled(ctx: OrchestratorToolsContext): boolean {
   return taskReported(ctx);
 }
 
+/** Whether a failed tool call's detail is pi's bash timeout, which has no flag of its own. */
+export function isBashTimeout(toolName: string, detail: string): boolean {
+  return toolName === 'bash' && detail.includes('Command timed out after');
+}
+
 export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
   if (inputs.signal?.aborted) {
     return {
@@ -237,8 +244,17 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
   let mcpCleanup: (() => void) | undefined;
   let aioFailed = true;
   let cancellation: ReturnType<typeof bindPiCancellation> | undefined;
+  let securityState: SecurityState | undefined;
   let abortReason: string | undefined;
   let remarkTurn = false;
+  const securityStop = (blockedCount: number): AgentResult => {
+    spinner.stop('Security violation detected');
+    logToFile(
+      `[pi-task] terminated: YARA violation (blocked ${blockedCount} call(s))`,
+    );
+    captureAborted(AgentErrorType.YARA_VIOLATION);
+    return { kind: 'failure', classification: AgentErrorType.YARA_VIOLATION };
+  };
   try {
     const sdk = await import('@earendil-works/pi-coding-agent');
     const {
@@ -296,11 +312,14 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
     // list layered in (both the wizard-vocabulary and pi-short names).
     const { createSecurityExtension } = await import('./security');
     const security = createSecurityExtension({
+      signal: inputs.signal,
       disallowedTools: fenceDisallowList(disallowedTools),
+      posthogTools: config.posthogTools,
       triageProvider: boot.triageProvider,
       getWizardAskPending: () => askState.pending,
       workingDirectory: input.installDir,
     });
+    securityState = security.state;
     const { prewarmYaraScanner } = await import('../../../yara-hooks');
     void prewarmYaraScanner();
 
@@ -373,9 +392,12 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
       write: () => withMode(createWriteToolDefinition(dir), 'sequential'),
       bash: () =>
         withMode(
-          createBashToolDefinition(dir, {
-            spawnHook: (ctx) => ({ ...ctx, env: buildScrubbedEnv() }),
-          }),
+          withBashTimeout(
+            createBashToolDefinition(dir, {
+              spawnHook: (ctx) => ({ ...ctx, env: buildScrubbedEnv() }),
+            }),
+            inputs.deadlineAt,
+          ),
           'sequential',
         ),
       ls: () => withMode(createLsToolDefinition(dir), 'parallel'),
@@ -488,18 +510,42 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
           break;
         }
         case 'tool_execution_start': {
+          if (event.toolName === 'bash') {
+            const command = (event.args as { command?: unknown } | undefined)
+              ?.command;
+            inputs.onBashCommand?.(
+              typeof command === 'string' ? command : undefined,
+            );
+          }
           const args = JSON.stringify(event.args ?? {}).slice(0, 200);
           logToFile(`[pi-task] → ${event.toolName} ${args}`);
           break;
         }
         case 'tool_execution_end': {
+          if (event.toolName === 'bash') inputs.onBashCommand?.(undefined);
+          const detail = !event.isError
+            ? ''
+            : typeof event.result === 'string'
+            ? event.result
+            : JSON.stringify(event.result ?? '');
           if (event.isError) {
-            const detail =
-              typeof event.result === 'string'
-                ? event.result
-                : JSON.stringify(event.result ?? '');
             logToFile(`[pi-task] ✗ ${event.toolName}: ${detail.slice(0, 300)}`);
           }
+          analytics.wizardCapture('agent tool call completed', {
+            ...analyticsProperties,
+            tool_name: event.toolName,
+            duration_ms: event.durationMs,
+            is_error: event.isError,
+            timed_out: isBashTimeout(event.toolName, detail),
+          });
+          break;
+        }
+        case 'auto_retry_start': {
+          logToFile(
+            `[pi-task] model request retry ${event.attempt}/${
+              event.maxAttempts
+            } in ${event.delayMs}ms: ${event.errorMessage.slice(0, 200)}`,
+          );
           break;
         }
         default:
@@ -570,11 +616,15 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
     }
 
     if (inputs.signal?.aborted) {
-      return {
-        kind: 'abort',
-        classification: AgentErrorType.ABORT,
-        message: 'Agent run cancelled',
-      };
+      // Abort waits for idle, so a scan still in flight latches before this reads it.
+      await cancellation?.settle();
+      if (!security.state.criticalViolation) {
+        return {
+          kind: 'abort',
+          classification: AgentErrorType.ABORT,
+          message: 'Agent run cancelled',
+        };
+      }
     }
 
     if (abortReason)
@@ -610,12 +660,7 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
     }
 
     if (security.state.criticalViolation) {
-      spinner.stop('Security violation detected');
-      logToFile(
-        `[pi-task] terminated: YARA violation (blocked ${security.state.blockedCount} call(s))`,
-      );
-      captureAborted(AgentErrorType.YARA_VIOLATION);
-      return { kind: 'failure', classification: AgentErrorType.YARA_VIOLATION };
+      return securityStop(security.state.blockedCount);
     }
 
     const setupFailure = setupSignalFailure(signals);
@@ -658,6 +703,10 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
     return { kind: 'success' };
   } catch (err) {
     if (inputs.signal?.aborted) {
+      await cancellation?.settle();
+      if (securityState?.criticalViolation) {
+        return securityStop(securityState.blockedCount);
+      }
       return {
         kind: 'abort',
         classification: AgentErrorType.ABORT,

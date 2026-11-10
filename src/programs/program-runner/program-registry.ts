@@ -20,6 +20,7 @@ import { config as webAnalyticsDoctor } from '@programs/web-analytics-doctor';
 import { config as migration } from '@programs/migration';
 import { config as revenueAnalytics } from '@programs/revenue-analytics';
 import { config as warehouseSource } from '@programs/warehouse-source';
+import { config as warehouseDestination } from '@programs/warehouse-destination';
 import { config as selfDriving } from '@programs/self-driving';
 import { config as sourceMaps } from '@programs/error-tracking-upload-source-maps';
 import { config as errorTracking } from '@programs/error-tracking';
@@ -34,6 +35,7 @@ export const PROGRAM_REGISTRY = [
   posthogIntegration,
   revenueAnalytics,
   warehouseSource,
+  warehouseDestination,
   sourceMaps,
   errorTracking,
   featureFlags,
@@ -58,6 +60,7 @@ export const Program = {
   PostHogIntegration: posthogIntegration.id,
   RevenueAnalyticsSetup: revenueAnalytics.id,
   WarehouseSource: warehouseSource.id,
+  WarehouseDestination: warehouseDestination.id,
   ErrorTrackingUploadSourceMaps: sourceMaps.id,
   ErrorTracking: errorTracking.id,
   FeatureFlags: featureFlags.id,

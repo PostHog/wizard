@@ -1,6 +1,9 @@
 import { z } from 'zod';
 import { execFile, type ExecFileException } from 'node:child_process';
-import { findTrustedBinary } from '@shared/mcp-clients/trusted-binary';
+import {
+  findTrustedCommand,
+  type TrustedCommand,
+} from '@shared/trusted-command';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -161,7 +164,7 @@ const MAX_OUTPUT_BYTES = 16 * 1024 * 1024;
 
 /**
  * What `execFile` puts in `error.message` when the command itself never spoke:
- * the full binary path and arguments. That path contains the user's home
+ * the full command path and arguments. That path contains the user's home
  * directory, so reporting it fingerprints one root cause per machine — the
  * failure this reporting was built to stop. Never send it onward.
  */
@@ -200,15 +203,19 @@ const describeExecFailure = (error: ExecFileException): string => {
  * reported a blank reason and filed an exception carrying nothing.
  */
 const runCodex = (
-  binary: string,
+  command: TrustedCommand,
   args: string[],
   env?: NodeJS.ProcessEnv,
 ): Promise<CodexRun> =>
   new Promise((resolve) => {
     const child = execFile(
-      binary,
-      args,
-      { env, timeout: RUN_TIMEOUT_MS, maxBuffer: MAX_OUTPUT_BYTES },
+      command.executable,
+      [...command.prefixArgs, ...args],
+      {
+        env: { ...command.env, ...env },
+        timeout: RUN_TIMEOUT_MS,
+        maxBuffer: MAX_OUTPUT_BYTES,
+      },
       (error, stdout, stderr) => {
         if (!error) return resolve({ ok: true, output: stdout ?? '' });
         // stderr first: it carries what codex actually said, and the TUI shows
@@ -290,16 +297,16 @@ export class CodexMCPClient
   implements PluginCapable, LoginCapable
 {
   name = 'Codex';
-  private codexBinaryPath: string | null = null;
+  private codexCommand: TrustedCommand | null = null;
 
   constructor() {
     super();
   }
 
-  private findCodexBinary(): string | null {
-    if (this.codexBinaryPath) return this.codexBinaryPath;
-    this.codexBinaryPath = findTrustedBinary('codex');
-    return this.codexBinaryPath;
+  private findCodexCommand(): TrustedCommand | null {
+    if (this.codexCommand) return this.codexCommand;
+    this.codexCommand = findTrustedCommand('codex');
+    return this.codexCommand;
   }
 
   private configPath(): string {
@@ -307,7 +314,7 @@ export class CodexMCPClient
   }
 
   isClientSupported(): Promise<boolean> {
-    return Promise.resolve(this.findCodexBinary() !== null);
+    return Promise.resolve(this.findCodexCommand() !== null);
   }
 
   getConfigPath(): Promise<string> {
@@ -337,8 +344,8 @@ export class CodexMCPClient
 
     // Api-key installs go through the CLI for its bearer-token env wiring.
     if (apiKey) {
-      const binary = this.findCodexBinary();
-      if (!binary)
+      const command = this.findCodexCommand();
+      if (!command)
         return {
           success: false,
           reason: 'An API-key install into Codex needs the codex CLI.',
@@ -352,8 +359,8 @@ export class CodexMCPClient
         '--bearer-token-env-var',
         'POSTHOG_AUTH_HEADER',
       ];
-      const env = { ...process.env, POSTHOG_AUTH_HEADER: `Bearer ${apiKey}` };
-      const result = await runCodex(binary, args, env);
+      const env = { POSTHOG_AUTH_HEADER: `Bearer ${apiKey}` };
+      const result = await runCodex(command, args, env);
       if (!result.ok) {
         if (ALREADY_INSTALLED_PATTERN.test(result.output)) {
           return { success: true, alreadyInstalled: true };
@@ -435,13 +442,13 @@ export class CodexMCPClient
 
   /** Codex's own login runs its OAuth and owns the token; the wizard only surfaces the command. */
   loginCommand(local?: boolean): string | null {
-    if (!this.findCodexBinary()) return null;
+    if (!this.findCodexCommand()) return null;
     return `codex mcp login ${local ? 'posthog-local' : 'posthog'}`;
   }
 
   async removeServer(local?: boolean): Promise<InstallResult> {
-    const binary = this.findCodexBinary();
-    if (!binary)
+    const command = this.findCodexCommand();
+    if (!command)
       return {
         success: false,
         reason: 'The codex CLI is no longer on your PATH.',
@@ -450,7 +457,7 @@ export class CodexMCPClient
     // `local` was ignored here, so `mcp remove --local` reported success while
     // leaving the posthog-local server in place.
     const serverName = local ? 'posthog-local' : 'posthog';
-    const result = await runCodex(binary, ['mcp', 'remove', serverName]);
+    const result = await runCodex(command, ['mcp', 'remove', serverName]);
 
     if (!result.ok) {
       return reportSpawnFailure('MCP remove', result.output);
@@ -465,14 +472,14 @@ export class CodexMCPClient
   }
 
   supportsPlugin(): boolean {
-    return this.findCodexBinary() !== null;
+    return this.findCodexCommand() !== null;
   }
 
   /** The plugin itself, as the CLI reports it. The install decision's question. */
   private async isPluginPresent(): Promise<boolean> {
-    const binary = this.findCodexBinary();
-    if (!binary) return false;
-    const result = await runCodex(binary, [
+    const command = this.findCodexCommand();
+    if (!command) return false;
+    const result = await runCodex(command, [
       'plugin',
       'list',
       '-m',
@@ -504,8 +511,8 @@ export class CodexMCPClient
   }
 
   async removePlugin(): Promise<PluginInstallResult> {
-    const binary = this.findCodexBinary();
-    if (!binary)
+    const command = this.findCodexCommand();
+    if (!command)
       return {
         success: false,
         reason: 'The codex CLI is no longer on your PATH.',
@@ -522,7 +529,7 @@ export class CodexMCPClient
     if (steps.length === 0) return { success: true, alreadyInstalled: true };
 
     for (const args of steps) {
-      const result = await runCodex(binary, args);
+      const result = await runCodex(command, args);
       if (!result.ok) {
         return reportSpawnFailure('plugin uninstall', result.output);
       }
@@ -531,8 +538,8 @@ export class CodexMCPClient
   }
 
   async installPlugin(): Promise<PluginInstallResult> {
-    const binary = this.findCodexBinary();
-    if (!binary)
+    const command = this.findCodexCommand();
+    if (!command)
       return {
         success: false,
         reason: 'The codex CLI is no longer on your PATH.',
@@ -550,12 +557,12 @@ export class CodexMCPClient
     // `mcp add` looked like a failure and reported nothing at all.
     const marketplace = this.isMarketplaceRegistered()
       ? null
-      : await this.registerMarketplace(binary);
+      : await this.registerMarketplace(command);
     if (marketplace && !marketplace.success) return marketplace;
 
     // Registering the catalog does not install from it. Skipping this left the
     // user with a marketplace, no skills, and a wizard reporting success.
-    const result = await runCodex(binary, ['plugin', 'add', PLUGIN_REF]);
+    const result = await runCodex(command, ['plugin', 'add', PLUGIN_REF]);
 
     if (!result.ok) {
       // The listing above can report "not installed" when it merely failed to
@@ -576,10 +583,10 @@ export class CodexMCPClient
    * clear it and retry once.
    */
   private async registerMarketplace(
-    binary: string,
+    command: TrustedCommand,
   ): Promise<PluginInstallResult> {
     const run = () =>
-      runCodex(binary, [
+      runCodex(command, [
         'plugin',
         'marketplace',
         'add',

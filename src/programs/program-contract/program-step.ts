@@ -23,6 +23,7 @@ export type DecisionQuestionKey =
   | 'build_tool'
   | 'deploy_platform'
   | 'owns_database'
+  | 'runs_data_warehouse'
   | 'billing_code'
   | 'is_mcp_server';
 // Type-only: the catalog stays out of production bundles.
@@ -51,6 +52,7 @@ export interface ProgramReadyContext {
   readonly addDiscoveredFeature: (feature: DiscoveredFeature) => void;
   readonly setDetectionComplete: () => void;
   readonly setPosthogSdkDetected: (detected: boolean) => void;
+  readonly setMcpServerCandidates: (candidates: readonly string[]) => void;
 }
 
 /**
@@ -231,12 +233,24 @@ export interface ProgramConfig {
     notice?: TaskNotice;
   }>;
   /**
-   * Task types this run excludes, decided from the run's wizard flags. An
-   * excluded type does not exist for the run: the planner cannot enqueue it
-   * and no agent boots for it. The program owns the flag→type mapping; the
+   * Task types this run excludes, decided from the run's wizard flags and the
+   * session. An excluded type does not exist for the run: the planner cannot
+   * enqueue it and no agent boots for it. The program owns the mapping; the
    * runner only applies it.
    */
-  excludedTaskTypes?: (flags: Record<string, string>) => readonly string[];
+  excludedTaskTypes?: (
+    flags: Record<string, string>,
+    session: ProgramSession,
+  ) => readonly string[];
+  /**
+   * Facts the program states itself, one line each, added to every orchestrator
+   * prompt beside the Decisions facts. Same arguments as `excludedTaskTypes`, so
+   * a program states a fact only for a task type it keeps.
+   */
+  detectedFacts?: (
+    flags: Record<string, string>,
+    session: ProgramSession,
+  ) => readonly string[];
   /** Prerequisites: other program ids that must have run first */
   requires?: string[];
   /**
@@ -285,6 +299,8 @@ export interface ProgramConfig {
    * dispatch in a program whose steps are explicitly single-agent.
    */
   disallowedTools?: readonly string[];
+  /** When set, the agent may `call` only these PostHog MCP tools. */
+  posthogTools?: readonly string[];
   /**
    * Declares this program's place in the wizard CLI surface. See
    * `ProgramCliSurface` for semantics.
@@ -297,6 +313,12 @@ export interface ProgramConfig {
    * (README, "OAuth app scope ceiling").
    */
   oauthScopeAdditions?: readonly string[];
+  /**
+   * A feature flag that must be `'true'` for the run to start. The runner
+   * reads it after login, so it evaluates for the real user. When it is off,
+   * the run fails with `unavailableMessage` before any agent starts.
+   */
+  rolloutGate?: { flagKey: string; unavailableMessage: string };
   /** The run creates no event definitions, so login doesn't require `event_definition:write`. */
   completionScopeOptional?: boolean;
 }

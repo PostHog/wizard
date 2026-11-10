@@ -38,6 +38,15 @@ export async function scanInstalledSkill(
 }
 
 /**
+ * Whether the scanner flags repository text bound for a prompt. Rejects when
+ * the scanner can't load. It loads the scanner on first call.
+ */
+export async function isFlaggedInput(content: string): Promise<boolean> {
+  const yara = await import('./yara-hooks');
+  return yara.isFlaggedInput(content);
+}
+
+/**
  * Drop each line of `content` that holds a secret or PII match, before it goes
  * to a model outside an agent run. Rejects when the scanner can't load, so
  * callers fail closed. It loads the scanner on first call.

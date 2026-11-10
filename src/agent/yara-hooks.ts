@@ -745,6 +745,14 @@ export async function scanAndTriage(
   return triageFlagged(flagged, ctx, llmProvider);
 }
 
+/**
+ * Whether the scanner flags repository text bound for a prompt, under the rules
+ * tool results get. No triage, since it runs before any agent has a provider.
+ */
+export async function isFlaggedInput(content: string): Promise<boolean> {
+  return (await scanForContext(content, 'input')).length > 0;
+}
+
 // ─── PreToolUse Hooks ────────────────────────────────────────────
 
 /**

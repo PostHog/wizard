@@ -544,6 +544,72 @@ describe('removeRunSkills', () => {
     }
   });
 
+  describe('with a skills folder linked inside the project', () => {
+    const target = () => path.join(dir, '.agents', 'skills');
+    const addSkill = (id: string, marked: boolean) => {
+      fs.mkdirSync(path.join(target(), id), { recursive: true });
+      if (marked) {
+        fs.writeFileSync(path.join(target(), id, '.posthog-wizard'), '');
+      }
+    };
+
+    beforeEach(() => {
+      fs.mkdirSync(path.join(dir, '.claude'));
+      fs.mkdirSync(target(), { recursive: true });
+      fs.symlinkSync('../.agents/skills', skills());
+    });
+
+    it('removes the marked folder this run added', () => {
+      const before = listSkillFolders(dir);
+      addSkill('integration-javascript_web', true);
+
+      expect(removeRunSkills(dir, before)).toEqual([
+        'integration-javascript_web',
+      ]);
+      expect(
+        fs.existsSync(path.join(target(), 'integration-javascript_web')),
+      ).toBe(false);
+    });
+
+    it('keeps the project skills, the folder and the link', () => {
+      addSkill('dev-env', false);
+      addSkill('marked-before-the-run', true);
+      const before = listSkillFolders(dir);
+      addSkill('unmarked-from-the-run', false);
+      addSkill('integration-javascript_web', true);
+
+      removeRunSkills(dir, before);
+
+      expect(fs.readdirSync(target()).sort()).toEqual([
+        'dev-env',
+        'marked-before-the-run',
+        'unmarked-from-the-run',
+      ]);
+      expect(fs.lstatSync(skills()).isSymbolicLink()).toBe(true);
+    });
+
+    it('keeps the link when the run empties the folder', () => {
+      const before = listSkillFolders(dir);
+      addSkill('integration-javascript_web', true);
+
+      removeRunSkills(dir, before);
+
+      expect(fs.lstatSync(skills()).isSymbolicLink()).toBe(true);
+      expect(fs.existsSync(target())).toBe(true);
+    });
+  });
+
+  it('deletes nothing when the skills folder links to the project root', () => {
+    fs.mkdirSync(path.join(dir, '.claude'));
+    fs.symlinkSync('..', skills());
+    fs.mkdirSync(path.join(dir, 'src'));
+    fs.writeFileSync(path.join(dir, 'src', '.posthog-wizard'), '');
+
+    expect(listSkillFolders(dir)).toBeNull();
+    expect(removeRunSkills(dir, new Set())).toEqual([]);
+    expect(fs.existsSync(path.join(dir, 'src'))).toBe(true);
+  });
+
   it('leaves a symlinked skill entry and its target alone', () => {
     const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'wizard-outside-'));
     try {

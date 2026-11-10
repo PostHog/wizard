@@ -124,6 +124,8 @@ export const LINTING_TOOLS: string[] = [
 
   // JavaScript, JSON, TypeScript
   'eslint',
+  'oxfmt',
+  'oxlint',
 
   // Next.js
   'next lint',
