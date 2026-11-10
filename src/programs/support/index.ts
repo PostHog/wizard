@@ -8,20 +8,14 @@ import {
 import { ErrorCodes } from '@shared/errors';
 import type { Credentials } from '@shared/api';
 import { analytics } from '@utils/analytics';
-import { detectFramework } from '@services/detection';
-import { detectPostHogIntegration } from '@services/detection';
-import { gatherFrameworkContext } from '@services/detection';
-import { noteDetectedFramework } from '@services/detection';
-import { scopeInstallDirToProject } from '@services/detection';
 import { FRAMEWORK_REGISTRY } from '@services/frameworks';
 import { ProgramAbort } from '@programs/program-contract';
-import type {
-  CiRunnerContext,
-  ProgramConfig,
-  ProgramReadyContext,
-  ProgramSession,
-} from '@programs/program-contract';
-import { abortNoFrameworkDetected } from '../shared/abort-no-framework';
+import type { ProgramConfig } from '@programs/program-contract';
+import {
+  platformGatedCiPreRun,
+  platformGatedOnReady,
+  type PlatformGate,
+} from '../shared/platform-gated-detection';
 import { SUPPORT_SCOPE_ADDITIONS } from './scopes.js';
 
 const SUPPORT_REPORT_FILE = 'posthog-support-report.md';
@@ -51,12 +45,6 @@ export const SUPPORT_SUPPORTED: ReadonlySet<Integration> = new Set([
   Integration.rails,
 ]);
 
-const NO_FRAMEWORK_GUIDANCE = {
-  message: 'Could not find a web app to add the Support widget to',
-  docsLabel: 'Set up Support manually:',
-  docsUrl: SUPPORT_DOCS_URL,
-};
-
 function abortUnsupportedPlatform(integration: Integration): never {
   const name = FRAMEWORK_REGISTRY[integration]?.metadata.name ?? integration;
   // A clean, intentional exit: one event keyed on the platform.
@@ -72,22 +60,15 @@ function abortUnsupportedPlatform(integration: Integration): never {
   });
 }
 
-/**
- * The platform gate runs on a direct `detectFramework` call before the full
- * detect writes to the store: store setters replace the session with a
- * shallow copy, so `ctx.session` read after `detectPostHogIntegration` would
- * be stale (as in replay-vision).
- */
-async function detectSupportProject(ctx: ProgramReadyContext): Promise<void> {
-  const integration = await detectFramework(ctx.session.installDir);
-  if (!integration) {
-    abortNoFrameworkDetected(NO_FRAMEWORK_GUIDANCE);
-  }
-  if (!SUPPORT_SUPPORTED.has(integration)) {
-    abortUnsupportedPlatform(integration);
-  }
-  await detectPostHogIntegration(ctx);
-}
+const SUPPORT_GATE: PlatformGate = {
+  supported: SUPPORT_SUPPORTED,
+  abortUnsupported: abortUnsupportedPlatform,
+  noFramework: {
+    message: 'Could not find a web app to add the Support widget to',
+    docsLabel: 'Set up Support manually:',
+    docsUrl: SUPPORT_DOCS_URL,
+  },
+};
 
 /** The outro's next steps: deploy, turn the widget on, connect a channel. */
 function buildSupportNextSteps(credentials: Credentials): {
@@ -129,7 +110,8 @@ export const config: ProgramConfig = {
   // Explicit so renaming the program can't silently detach the flow.
   agentFlow: 'support',
   handoffNotebook: true,
-  onReady: detectSupportProject,
+  onReady: platformGatedOnReady(SUPPORT_GATE),
+  ciPreRun: platformGatedCiPreRun(SUPPORT_GATE),
   oauthScopeAdditions: SUPPORT_SCOPE_ADDITIONS,
   cliOptions: { ...headlessOption, ...regionOption },
   run: {
@@ -141,42 +123,5 @@ export const config: ProgramConfig = {
     estimatedDurationMinutes: 5,
     buildOutroNextSteps: (_session, credentials) =>
       buildSupportNextSteps(credentials),
-  },
-
-  // Headless `onReady`: scope to the project, detect, gate the platform.
-  ciPreRun: async (
-    session: ProgramSession,
-    runner: CiRunnerContext,
-  ): Promise<void> => {
-    await scopeInstallDirToProject(session, runner);
-
-    const integration = await detectFramework(session.installDir);
-    if (!integration) {
-      abortNoFrameworkDetected(NO_FRAMEWORK_GUIDANCE);
-    }
-    if (!SUPPORT_SUPPORTED.has(integration)) {
-      abortUnsupportedPlatform(integration);
-    }
-    session.integration = integration;
-    analytics.setTag('integration', integration);
-
-    const frameworkConfig = FRAMEWORK_REGISTRY[integration];
-    session.frameworkConfig = frameworkConfig;
-    session.skillId = integration;
-
-    const context = await gatherFrameworkContext(frameworkConfig, {
-      installDir: session.installDir,
-      debug: session.debug,
-      signup: session.signup,
-      ci: true,
-      benchmark: session.benchmark,
-      yaraReport: session.yaraReport,
-    });
-    for (const [key, value] of Object.entries(context)) {
-      if (!(key in session.frameworkContext)) {
-        session.frameworkContext[key] = value;
-      }
-    }
-    noteDetectedFramework(session, frameworkConfig, context, runner.log);
   },
 };

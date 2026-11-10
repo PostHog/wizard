@@ -4,7 +4,10 @@ import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { ProgramAbort } from '@programs/program-contract';
-import type { ProgramRun } from '@programs/program-contract';
+import type {
+  ProgramReadyContext,
+  ProgramRun,
+} from '@programs/program-contract';
 import { buildSession } from '@services/session';
 import { config as support, SUPPORT_SUPPORTED } from '@programs/support';
 import { testCiRunnerContext } from '@programs/shared/__tests__/runner-context.no-jest';
@@ -14,6 +17,12 @@ import { ErrorCodes } from '@shared/errors';
 
 vi.mock('@services/detection/project-scope', () => ({
   scopeInstallDirToProject: vi.fn().mockResolvedValue(undefined),
+}));
+
+// The CI pre-run's context scan is not under test here.
+vi.mock(import('@services/detection/context'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  gatherFrameworkContext: vi.fn().mockResolvedValue({}),
 }));
 
 vi.mock('@utils/analytics', () => ({
@@ -75,8 +84,33 @@ describe('support platform gate', () => {
   });
 });
 
-describe('support headless detection', () => {
+function readyContext(
+  session: ReturnType<typeof buildSession>,
+): ProgramReadyContext {
+  return {
+    session,
+    setFrameworkContext: (key, value) => {
+      session.frameworkContext[key] = value;
+    },
+    setFrameworkConfig: vi.fn(),
+    setDetectedFramework: vi.fn(),
+    setPosthogSdkDetected: vi.fn(),
+    setMcpServerCandidates: vi.fn(),
+    setSkillId: vi.fn(),
+    setUnsupportedVersion: vi.fn(),
+    addDiscoveredFeature: vi.fn(),
+    setDetectionComplete: vi.fn(),
+  };
+}
+
+describe('support detection', () => {
   let installDir: string;
+
+  const writePackageJson = (dependencies: Record<string, string>) =>
+    fs.writeFileSync(
+      path.join(installDir, 'package.json'),
+      JSON.stringify({ dependencies }),
+    );
 
   beforeEach(() => {
     installDir = fs.mkdtempSync(path.join(os.tmpdir(), 'support-'));
@@ -86,11 +120,42 @@ describe('support headless detection', () => {
     fs.rmSync(installDir, { recursive: true, force: true });
   });
 
-  test('aborts on a backend-only Node project', async () => {
-    fs.writeFileSync(
-      path.join(installDir, 'package.json'),
-      JSON.stringify({ dependencies: { express: '^4.0.0' } }),
-    );
+  test('interactive: aborts on a React Native project before detecting', async () => {
+    writePackageJson({ react: '^18.0.0', 'react-native': '^0.76.0' });
+    const ctx = readyContext(buildSession({ installDir }));
+
+    const stopped = support.onReady?.(ctx);
+
+    await expect(stopped).rejects.toBeInstanceOf(ProgramAbort);
+    await expect(stopped).rejects.toMatchObject({
+      code: ErrorCodes.DetectUnsupportedPlatform,
+      message: expect.stringContaining('React Native'),
+    });
+    expect(ctx.setSkillId).not.toHaveBeenCalled();
+  });
+
+  test('interactive: completes detection for a Next.js project', async () => {
+    writePackageJson({ next: '^15.0.0', react: '^19.0.0' });
+    const ctx = readyContext(buildSession({ installDir }));
+
+    await support.onReady?.(ctx);
+
+    expect(ctx.setSkillId).toHaveBeenCalledWith(Integration.nextjs);
+    expect(ctx.setDetectionComplete).toHaveBeenCalled();
+  });
+
+  test('headless: records the framework as the skill id for a Next.js project', async () => {
+    writePackageJson({ next: '^15.0.0', react: '^19.0.0' });
+    const session = buildSession({ installDir, ci: true });
+
+    await support.ciPreRun?.(session, testCiRunnerContext());
+
+    expect(session.integration).toBe(Integration.nextjs);
+    expect(session.skillId).toBe(Integration.nextjs);
+  });
+
+  test('headless: aborts on a backend-only Node project', async () => {
+    writePackageJson({ express: '^4.0.0' });
     const session = buildSession({ installDir, ci: true });
 
     const stopped = support.ciPreRun?.(session, testCiRunnerContext());
@@ -99,9 +164,10 @@ describe('support headless detection', () => {
     await expect(stopped).rejects.toMatchObject({
       code: ErrorCodes.DetectUnsupportedPlatform,
     });
+    expect(session.skillId).toBeFalsy();
   });
 
-  test('aborts with Support guidance when no framework is found', async () => {
+  test('headless: aborts with Support guidance when no framework is found', async () => {
     const session = buildSession({ installDir, ci: true });
 
     const stopped = support.ciPreRun?.(session, testCiRunnerContext());
