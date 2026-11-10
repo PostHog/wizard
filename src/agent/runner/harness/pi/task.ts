@@ -122,6 +122,8 @@ const OPT_IN_WIZARD_TOOLS = [
   'audit_seed_checks',
   'audit_add_checks',
   'audit_resolve_checks',
+  // The one task that writes the run's machine-readable result (spend audit).
+  'publish_program_result',
 ];
 
 export function allowedPiWizardTools(
@@ -420,6 +422,7 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
       taskAgent: orchestrator.currentTaskId !== undefined,
       programId: boot.programId,
       handoffNotebook: boot.handoffNotebook,
+      allowedTools,
       // Present only for a task allowed to ask; without it wizard_ask errors
       // instead of hanging on a prompt nobody will ever see.
       askBridge,

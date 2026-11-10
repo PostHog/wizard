@@ -164,6 +164,8 @@ export interface ProgramConfig {
    * leaves the report in the wizard session alone.
    */
   handoffNotebook?: boolean;
+  /** Orchestrator tasks see the account owner from `POSTHOG_ACCOUNT_OWNER_NAME`/`_EMAIL` in their project context. */
+  accountOwnerContext?: boolean;
   /**
    * Context-mill skill ID this program installs and runs. When present,
    * the host seeds `session.skillId` with this value before the TUI renders

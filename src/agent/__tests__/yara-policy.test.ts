@@ -3,6 +3,7 @@ import type { ScanMatch } from '@posthog/warlock';
 import {
   isTerminalMatch,
   publishBlockingMatch,
+  flattenJsonForScan,
   scanVerdict,
 } from '../yara-policy';
 
@@ -108,5 +109,28 @@ describe('yara-policy: publish gate', () => {
     expect(publishBlockingMatch([match('high', 'remediate'), critical])).toBe(
       critical,
     );
+  });
+});
+
+describe('flattenJsonForScan', () => {
+  test('keeps a top-level string as is', () => {
+    expect(flattenJsonForScan('a\nb')).toBe('a\nb');
+  });
+
+  test('puts every nested string on its own line with its real newlines', () => {
+    const text = flattenJsonForScan({
+      savings: [{ evidence: 'config:\nkey', before: 10 }],
+      checks_passed: ['ok'],
+    });
+    expect(text.split('\n')).toEqual([
+      'savings',
+      'evidence',
+      'config:',
+      'key',
+      'before',
+      '10',
+      'checks_passed',
+      'ok',
+    ]);
   });
 });

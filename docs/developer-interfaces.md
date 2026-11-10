@@ -250,6 +250,7 @@ pre-issued one in `input.credentials.gateway`, as the quack example does.
 | `config.wizardFlags`, `config.wizardFlagPayloads` | `Record` | The flag snapshot the caller evaluated. Empty when there are no flags. |
 | `config.allowedTools`                                                | `readonly string[]`  | Tools added to the base tools.                                                  |
 | `config.disallowedTools`                                             | `readonly string[]`  | Tools removed from the base tools.                                              |
+| `config.accountOwnerContext` | `boolean` | Adds the account owner from `POSTHOG_ACCOUNT_OWNER_NAME` and `POSTHOG_ACCOUNT_OWNER_EMAIL` to each orchestrator task's project context. |
 | `config.posthogTools` | `readonly string[]` | When set, the only PostHog MCP tools the agent may call. Every harness blocks other calls. |
 | `config.hooks` | `RunHooks` | The caller's completion hooks: `postRun`, the outro builders and `recordTaskOutcomes`. |
 | [`input`](../src/agent/runner/shared/types.ts) | `RunInput` | Where and as whom: `installDir`, `credentials`, `project`, `apiUser`, `flags` and `host`. |

@@ -2,6 +2,7 @@
  * The run report is the run's deliverable. Once the sink task has published it,
  * a failure of that task (its own, or a harness throw that ends the run) must
  * not turn the run into a failure, while any other task's failure still does.
+ * The same fake run checks what project context reaches each task's prompt.
  */
 import * as fs from 'fs';
 import * as os from 'os';
@@ -77,6 +78,7 @@ import type { SequenceContext } from '../../../shared/types';
 import type { QueueStore } from '../queue';
 
 type Inputs = {
+  prompt: string;
   onBashCommand?: (command: string | undefined) => void;
   emit: (event: { kind: 'handoff'; text: string }) => void;
   signal: AbortSignal;
@@ -86,6 +88,7 @@ type Inputs = {
 
 type Behavior = (inputs: Inputs, taskId: string) => void | Promise<void>;
 let behaviors: Record<string, Behavior>;
+let prompts: string[] = [];
 let taskTimeoutMs: number | undefined;
 let taskOnTimeout: 'continue' | 'fail' | undefined;
 let maxAttempts = 1;
@@ -96,6 +99,7 @@ let firstTaskType = 'install';
 /** The fake harness: the seed queues install then report, each task runs its scripted behavior. */
 async function harnessRun(raw: unknown) {
   const inputs = raw as Inputs;
+  prompts.push(inputs.prompt);
   const { store } = inputs.orchestrator;
   const type = inputs.analyticsProperties.task_type;
   if (type === 'seed') {
@@ -439,5 +443,85 @@ describe('a task failing after the run report was published', () => {
     const result = await run(host.signal);
 
     expect(result.outcome).toBe(RunOutcome.Aborted);
+  });
+});
+
+describe('the account owner in task prompts', () => {
+  let dir: string;
+  const saved = {
+    name: process.env.POSTHOG_ACCOUNT_OWNER_NAME,
+    email: process.env.POSTHOG_ACCOUNT_OWNER_EMAIL,
+  };
+
+  beforeEach(() => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'account-owner-'));
+    prompts = [];
+    taskTimeoutMs = undefined;
+    taskOnTimeout = undefined;
+    maxAttempts = 1;
+    installOptional = false;
+    installResult = undefined;
+    firstTaskType = 'install';
+    behaviors = {
+      install: (inputs, id) => {
+        inputs.orchestrator.store.complete(id);
+      },
+      report: (inputs, id) => {
+        publish(inputs);
+        inputs.orchestrator.store.complete(id);
+      },
+    };
+    process.env.POSTHOG_ACCOUNT_OWNER_NAME = 'Sam Example';
+    process.env.POSTHOG_ACCOUNT_OWNER_EMAIL = 'sam@example.com';
+  });
+
+  afterEach(() => {
+    fs.rmSync(dir, { recursive: true, force: true });
+    for (const [key, value] of [
+      ['POSTHOG_ACCOUNT_OWNER_NAME', saved.name],
+      ['POSTHOG_ACCOUNT_OWNER_EMAIL', saved.email],
+    ] as const) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  });
+
+  const run = (accountOwnerContext?: boolean) =>
+    runOrchestrator({
+      config: {
+        programId: 'test-flow',
+        wizardFlags: {},
+        wizardFlagPayloads: {},
+        switchboard: {},
+        accountOwnerContext,
+      },
+      input: { installDir: dir, flags: { ci: true } },
+      boot: {
+        skillsBaseUrl: 'https://skills.test',
+        credentials: {
+          projectId: 1,
+          projectApiKey: 'phc_test',
+          host: {
+            apiHost: 'https://us.posthog.test',
+            appHost: 'https://us.posthog.test',
+          },
+        },
+      },
+      emit: vi.fn(),
+      interaction: undefined,
+    } as unknown as SequenceContext);
+
+  it('leaves the owner out for a program that does not opt in, even with the env set', async () => {
+    await run();
+    expect(prompts.length).toBeGreaterThan(1);
+    for (const prompt of prompts) expect(prompt).not.toContain('Sam Example');
+  });
+
+  it('names the owner in every task prompt for a program that opts in', async () => {
+    await run(true);
+    expect(prompts.length).toBeGreaterThan(1);
+    for (const prompt of prompts) {
+      expect(prompt).toContain('Sam Example <sam@example.com>');
+    }
   });
 });

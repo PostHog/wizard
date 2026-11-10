@@ -67,6 +67,13 @@ import {
   PUBLISH_HANDOFF_TOOL_NAME,
   publishHandoff,
 } from '../../../tools/handoff';
+import {
+  PUBLISH_PROGRAM_RESULT_DESCRIPTION,
+  PUBLISH_PROGRAM_RESULT_PARAM_DESCRIPTION,
+  PUBLISH_PROGRAM_RESULT_TOOL_NAME,
+  allowsPublishProgramResult,
+  publishProgramResult,
+} from '../../../tools/program-result';
 import { createSecretVault } from '@shared/secret-vault';
 import {
   AUDIT_CHECKS_FILE,
@@ -100,6 +107,8 @@ export interface PiToolsContext {
   onAskPendingChange?: (pending: boolean) => void;
   /** Program disallow list; gates wizard_ask here since pi tools carry bare names the MCP-prefixed security gate misses. */
   disallowedTools?: readonly string[];
+  /** Program or task allow list; opt-in tools such as `publish_program_result` register only when it names them. */
+  allowedTools?: readonly string[];
   /** Scan-triage classifier, resolved once in bootstrap. Absent → scans fail closed. */
   triageProvider?: LLMProvider;
   /** Where `publish_handoff` reports. Absent → the handoff is written but reported nowhere. */
@@ -580,6 +589,27 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
     },
   });
 
+  // Native mirror of the MCP `publish_program_result` tool (shared description, so no drift).
+  const publishProgramResultTool = defineTool({
+    name: PUBLISH_PROGRAM_RESULT_TOOL_NAME,
+    label: 'Publish result',
+    description: PUBLISH_PROGRAM_RESULT_DESCRIPTION,
+    promptSnippet:
+      'publish_program_result(result) — publish the machine-readable run result to the host',
+    parameters: Type.Object({
+      result: Type.Unknown({
+        description: PUBLISH_PROGRAM_RESULT_PARAM_DESCRIPTION,
+      }),
+    }),
+    execute(_id, args) {
+      const result = publishProgramResult(args.result, {
+        taskAgent: ctx.taskAgent,
+      });
+      logToFile(`[pi] publish_program_result: ${result.message}`);
+      return Promise.resolve(text(result.message));
+    },
+  });
+
   const tools = [
     loadSkillMenu,
     installSkill,
@@ -593,6 +623,10 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
     // Sequential: it publishes the run's handoff.
     withMode(publishHandoffTool, 'sequential'),
   ];
+  // Opt-in: only a program or task whose allow list names it writes the result file.
+  if (allowsPublishProgramResult(ctx.allowedTools)) {
+    tools.push(withMode(publishProgramResultTool, 'sequential'));
+  }
   // Register wizard_ask only when the program allows it. posthog-integration
   // disallows it (runs without structured user input); self-driving keeps it.
   // Sequential: the ask bridge holds a single in-flight question slot, so a

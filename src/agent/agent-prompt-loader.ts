@@ -32,6 +32,7 @@ import { logToFile } from '@utils/debug';
 import { analytics } from '@utils/analytics';
 import { fetchWithRetry } from '@shared/fetch-retry';
 import { WIZARD_TOOL_NAMES } from './tools/tools';
+import { runtimeEnv } from '@env';
 
 /**
  * The basics the client injects around every agent-prompt body. The `/agents/`
@@ -49,6 +50,32 @@ export interface OrchestratorPromptContext {
   commandmentsPath?: string;
   /** Detected facts about the project, one line each. */
   facts?: readonly string[];
+  /** The organization's PostHog account owner, when the host knows one. */
+  accountOwner?: AccountOwner;
+}
+
+export interface AccountOwner {
+  name: string;
+  email: string;
+}
+
+/**
+ * The account owner the sandbox passed in, or undefined. A cloud run's host
+ * sets both variables from the organization's billing record; a local run has
+ * neither. Half a record (a name with no email) is treated as none.
+ */
+export function accountOwnerFromEnv(): AccountOwner | undefined {
+  const name = runtimeEnv('POSTHOG_ACCOUNT_OWNER_NAME')?.trim();
+  const email = runtimeEnv('POSTHOG_ACCOUNT_OWNER_EMAIL')?.trim();
+  if (!name || !email) return undefined;
+  return { name, email };
+}
+
+/** A line a report can turn into a contact card; absent when the host named no one. */
+function accountOwnerContext(owner: AccountOwner | undefined): string {
+  if (!owner) return '';
+  return `
+- PostHog account owner (the user's PostHog contact; a report may name them with this name and email only): ${owner.name} <${owner.email}>`;
 }
 
 function projectContext(ctx: OrchestratorPromptContext): string {
@@ -64,7 +91,7 @@ Project context:
 - PostHog Host: ${ctx.host.apiHost}
 - PostHog app URL (base for any link you show the user in a browser): ${
     ctx.host.appHost
-  }${detectedFacts(ctx.facts)}`;
+  }${accountOwnerContext(ctx.accountOwner)}${detectedFacts(ctx.facts)}`;
 }
 
 /** Facts from the wizard's pre-run scan; a model judged them, so agents confirm before acting. */

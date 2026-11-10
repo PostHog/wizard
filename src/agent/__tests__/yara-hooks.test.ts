@@ -447,6 +447,36 @@ describe('yara-hooks', () => {
         expect(onTerminate).not.toHaveBeenCalled();
       });
 
+      it('blocks publish_program_result when a critical key follows a real newline in nested evidence', async () => {
+        const key = `phx_${'a'.repeat(40)}`;
+        // Stands in for a `\b`-anchored rule: it matches only the text the hook scans.
+        mockScan.mockImplementationOnce((content: string) =>
+          Promise.resolve(
+            /\bphx_[a-z]{40}\b/.test(content)
+              ? matched(
+                  match('hardcoded_posthog_api_key', {
+                    severity: 'critical',
+                    category: 'hardcoded_secrets',
+                    scan_context: 'output',
+                  }),
+                )
+              : noMatch,
+          ),
+        );
+        const result = await handoffHook()(
+          input({
+            tool_name: 'mcp__wizard-tools__publish_program_result',
+            tool_input: {
+              result: { savings: [{ evidence: `config:\n${key}` }] },
+            },
+          }),
+          'test-r1',
+          { signal: dummySignal },
+        );
+        expect(result.decision).toBe('block');
+        expect(result.reason).toContain('hardcoded_posthog_api_key');
+      });
+
       it('returns empty when content is missing', async () => {
         const result = await handoffHook()(
           input({

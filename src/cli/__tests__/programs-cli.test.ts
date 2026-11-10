@@ -172,6 +172,14 @@ describe('dispatchFamily', () => {
     expect(config.id).toBe(Program.WebAnalyticsDoctor);
   });
 
+  test('runs the wizard-native spend audit for `audit spend` without touching the registry', async () => {
+    await dispatchFamily('audit', makeArgv({ skill: 'spend' }));
+    expect(mockFetchSkillMenu).not.toHaveBeenCalled();
+    expect(mockRunWizard).toHaveBeenCalledTimes(1);
+    const [config] = mockRunWizard.mock.calls[0] as [{ id?: string }];
+    expect(config.id).toBe(Program.SpendAudit);
+  });
+
   test('the comprehensive `audit all` runs the specialized audit program, not agent-skill', async () => {
     // skillId 'audit' (what context-mill emits for `audit all`) signals
     // the wizard to use the `audit` program (custom hooks, content blocks).

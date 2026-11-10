@@ -57,12 +57,13 @@ export interface PublishHandoffResult {
 }
 
 /** Write outcome: success, or failure with an agent-safe reason + log-only detail. */
-type HandoffFileWrite =
+export type HostFileWrite =
   | { ok: true }
   | { ok: false; reason: string; detail: string };
 
 /**
- * Write the handoff report to the host-designated `targetPath`.
+ * Write agent-authored text (the handoff report, the run result) to the
+ * host-designated `targetPath`.
  *
  * The destination comes from the host (`POSTHOG_HANDOFF_OUTPUT_PATH`,
  * process-env only — the agent can neither set nor see it) while the bytes come
@@ -80,10 +81,10 @@ type HandoffFileWrite =
  * `reason` is safe to surface to the agent (it names no path); `detail` carries
  * the specifics for the local log only.
  */
-function writeHandoffFileAtomically(
+export function writeHostFileAtomically(
   targetPath: string,
   text: string,
-): HandoffFileWrite {
+): HostFileWrite {
   if (!path.isAbsolute(targetPath)) {
     return {
       ok: false,
@@ -197,7 +198,7 @@ export async function publishHandoff(
     // Fail-open on purpose: a broken host path must never take the
     // user-facing handoff down with it. But the failure is surfaced to the
     // agent and the log instead of vanishing into a telemetry boolean.
-    const write = writeHandoffFileAtomically(handoffOutputPath, text);
+    const write = writeHostFileAtomically(handoffOutputPath, text);
     handoffOutputWritten = write.ok;
     if (!write.ok) {
       handoffOutputError = write.reason;

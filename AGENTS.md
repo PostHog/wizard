@@ -168,6 +168,7 @@ aliases.
 | `wizard audit identify`       | `$identify` implementation                           |
 | `wizard audit session-replay` | session replay setup                                 |
 | `wizard audit web-analytics`  | web analytics setup (**wizard-native**, not a skill) |
+| `wizard audit spend`          | spend: volume that buys nothing, fixed in a PR and a notebook (**wizard-native** orchestrator) |
 
 ### Commands vs. skills (the `audit [skill]` gotcha)
 

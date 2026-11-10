@@ -74,6 +74,12 @@ type RuntimeEnvKey =
   | 'POSTHOG_TASK_RUN_ID'
   | 'POSTHOG_TASK_ID'
   | 'POSTHOG_HANDOFF_OUTPUT_PATH'
+  // Where the sandbox reads the run's machine-readable result (publish_program_result).
+  | 'POSTHOG_RESULT_OUTPUT_PATH'
+  // The organization's PostHog account owner, when the sandbox knows one. Only
+  // name and email, shown to the user in the run's report.
+  | 'POSTHOG_ACCOUNT_OWNER_NAME'
+  | 'POSTHOG_ACCOUNT_OWNER_EMAIL'
   // Local/CI escape hatch to disable Warlock scanning without the PostHog flag.
   | 'POSTHOG_WIZARD_WARLOCK_DISABLED'
   // Dev-build override of the Decisions judgment service's mode: off, shadow or primary.

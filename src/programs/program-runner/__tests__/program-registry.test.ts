@@ -82,6 +82,7 @@ describe('program bindings', () => {
       audit: linearOnSol,
       'events-audit': linearOnSol,
       'web-analytics-doctor': linearOnSol,
+      'spend-audit': orchestratorOnPi,
       migration: linearOnSol,
       'revenue-analytics-setup': linearOnSol,
       'warehouse-source': linearOnSol,
@@ -128,6 +129,10 @@ describe('getCommandPath', () => {
     expect(getCommandPath(subcommand('web-analytics-doctor'))).toBe(
       'audit web-analytics',
     );
+  });
+
+  it('reaches the spend audit through the audit family', () => {
+    expect(getCommandPath(subcommand('spend-audit'))).toBe('audit spend');
   });
 
   it('leaves a top-level program alone', () => {
