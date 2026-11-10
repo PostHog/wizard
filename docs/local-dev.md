@@ -154,6 +154,41 @@ Only reachability is checked. Any HTTP reply counts, including 404 and 405.
 Pass both flags to use both local services, or `--local-dev` to include local
 PostHog as well.
 
+## Pinning a context-mill release
+
+`--context-mill-version` fetches the skills, the agent prompts and their menus
+from one context-mill release instead of the latest. It is a hidden global
+option: every command accepts it in every build, including published builds and
+headless runs.
+
+| Flag | Env | Effect |
+|---|---|---|
+| `--context-mill-version <version>` | `POSTHOG_WIZARD_CONTEXT_MILL_VERSION` | skills → that release |
+
+```bash
+npx @posthog/wizard --context-mill-version 1.59.0
+POSTHOG_WIZARD_CONTEXT_MILL_VERSION=v1.59.0 npx @posthog/wizard
+```
+
+The value is a release version, with or without the `v` prefix. An empty value
+or `latest` follows the latest release. Any other value stops the run with
+`PHW_CLI_BAD_ARGS`.
+
+A pinned run reads
+`https://github.com/PostHog/context-mill/releases/download/v1.59.0/` and fails
+over to `https://context-mill.posthog.com/v1.59.0/`. A version with no release
+fails when the run first fetches a menu. The `[agent-runner] targets` line in
+the debug log shows the release a run used.
+
+The pin cannot be combined with `--local-context-mill` or `--local-dev`. Pass
+`--no-local-context-mill` to keep the other local targets.
+
+A wizard version that does not declare the option rejects the env var as an
+unknown argument, so a launcher sets it only for versions that accept it.
+
+A caller that runs no CLI parse calls `initContextMillVersion(version)` from
+`@shared/context-mill-version` before the run.
+
 ## Editor MCP configuration
 
 `wizard mcp add --local` writes a `posthog-local` server entry into your

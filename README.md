@@ -682,6 +682,8 @@ wizard --local-dev            # context-mill + MCP + PostHog
 
 See [`docs/local-dev.md`](docs/local-dev.md) for the full catalog.
 `--local-mcp` selects the MCP server; `--local-context-mill` selects the skills server.
+`--context-mill-version <version>` pins skills to one context-mill release in
+any build; see [pinning a context-mill release](docs/local-dev.md#pinning-a-context-mill-release).
 
 ### Testing
 
