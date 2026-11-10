@@ -12,6 +12,7 @@ import { testCiRunnerContext } from '@programs/shared/__tests__/runner-context.n
 import { ErrorCodes } from '@shared/errors';
 import { OutroKind } from '@shared/outro';
 import { Integration } from '@shared/constants';
+import { analytics } from '@utils/analytics';
 
 vi.mock('@services/detection/project-scope', () => ({
   scopeInstallDirToProject: vi.fn().mockResolvedValue(undefined),
@@ -134,6 +135,33 @@ describe.each([
       expect(store.session.frameworkContext.warehouseScanState).toBe('ok');
       expect(info).toHaveBeenCalledWith(expect.stringContaining('Stripe'));
       expect(program.seedTasks?.(store.session)).toEqual([]);
+    });
+
+    it('finishes CI detection when the warehouse pass throws', async () => {
+      fs.writeFileSync(
+        path.join(installDir, 'package.json'),
+        JSON.stringify({ dependencies }),
+      );
+      const session = buildSession({ installDir, ci: true });
+      // A scan with no tool list makes the warehouse pass throw.
+      session.frameworkContext.codebaseScan = { tools: null };
+      const info = vi.fn();
+
+      await program.ciPreRun?.(session, {
+        ...testCiRunnerContext(),
+        log: { info, warn: vi.fn() },
+      });
+
+      expect(session.integration).toBe(integration);
+      expect(session.frameworkContext.warehouseScanState).toBe('failed');
+      expect(getDetectedWarehouseSources(session)).toEqual([]);
+      expect(info).not.toHaveBeenCalledWith(
+        expect.stringContaining('Detected data sources'),
+      );
+      expect(analytics.captureException).toHaveBeenCalledWith(
+        expect.any(Error),
+        { step: 'recordScannedWarehouseSources' },
+      );
     });
   },
 );

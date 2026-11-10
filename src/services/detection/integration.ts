@@ -125,7 +125,8 @@ type WarehouseScanState = 'ok' | 'failed';
  * Deliberately a suggestion, not an inline agent run: a second credential-
  * collecting agent run before the outro could end the run on any of its
  * failure paths and cost the user the success outro on a run where PostHog
- * installed fine.
+ * installed fine. For the same reason it never throws: a failure records
+ * 'failed' and detection goes on.
  */
 async function recordScannedWarehouseSources(
   ctx: Pick<ProgramReadyContext, 'session' | 'setFrameworkContext'>,
@@ -136,12 +137,20 @@ async function recordScannedWarehouseSources(
     ctx.setFrameworkContext(WAREHOUSE_SCAN_STATE_KEY, 'failed');
     return;
   }
-  // Before the empty-list return: a scan that found nothing still ran, and
-  // those rows are the denominator.
-  ctx.setFrameworkContext(WAREHOUSE_SCAN_STATE_KEY, 'ok');
-  const sources = await scannedWarehouseSources(ctx.session);
-  if (sources.length === 0) return;
-  ctx.setFrameworkContext(DETECTED_WAREHOUSE_SOURCES_KEY, sources);
+  try {
+    const sources = await scannedWarehouseSources(ctx.session);
+    // Set even when empty: a scan that found nothing still ran, and those
+    // rows are the denominator.
+    ctx.setFrameworkContext(WAREHOUSE_SCAN_STATE_KEY, 'ok');
+    if (sources.length === 0) return;
+    ctx.setFrameworkContext(DETECTED_WAREHOUSE_SOURCES_KEY, sources);
+  } catch (error) {
+    ctx.setFrameworkContext(WAREHOUSE_SCAN_STATE_KEY, 'failed');
+    analytics.captureException(
+      error instanceof Error ? error : new Error(String(error)),
+      { step: 'recordScannedWarehouseSources' },
+    );
+  }
 }
 
 /**
