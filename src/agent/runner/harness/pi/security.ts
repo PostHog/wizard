@@ -33,6 +33,7 @@ import {
 } from '../../../yara-hooks';
 import {
   publishBlockingMatch,
+  publishResultScanText,
   scanVerdict,
   type ScanContext,
 } from '../../../yara-policy';
@@ -360,10 +361,7 @@ async function preExecutionYaraBlock(
       // The result's evidence strings quote the user's data (hosts, event names),
       // so it clears the same critical-only bar as the handoff before the host
       // file is written.
-      content =
-        typeof input.result === 'string'
-          ? input.result
-          : JSON.stringify(input.result ?? '');
+      content = publishResultScanText(input.result);
       ctx = 'output';
       triage = llmProvider;
       phase = 'PreToolUse';

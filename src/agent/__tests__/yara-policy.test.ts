@@ -3,6 +3,7 @@ import type { ScanMatch } from '@posthog/warlock';
 import {
   isTerminalMatch,
   publishBlockingMatch,
+  publishResultScanText,
   scanVerdict,
 } from '../yara-policy';
 
@@ -108,5 +109,28 @@ describe('yara-policy: publish gate', () => {
     expect(publishBlockingMatch([match('high', 'remediate'), critical])).toBe(
       critical,
     );
+  });
+});
+
+describe('publishResultScanText', () => {
+  test('keeps a top-level string as is', () => {
+    expect(publishResultScanText('a\nb')).toBe('a\nb');
+  });
+
+  test('puts every nested string on its own line with its real newlines', () => {
+    const text = publishResultScanText({
+      savings: [{ evidence: 'config:\nkey', before: 10 }],
+      checks_passed: ['ok'],
+    });
+    expect(text.split('\n')).toEqual([
+      'savings',
+      'evidence',
+      'config:',
+      'key',
+      'before',
+      '10',
+      'checks_passed',
+      'ok',
+    ]);
   });
 });

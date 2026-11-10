@@ -889,7 +889,9 @@ async function executeOrchestrator(
     examplePath,
     commandmentsPath,
     facts: config.projectFacts?.() ?? [],
-    accountOwner: accountOwnerFromEnv(),
+    accountOwner: config.accountOwnerContext
+      ? accountOwnerFromEnv()
+      : undefined,
   };
 
   logToFile(

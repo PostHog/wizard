@@ -1,13 +1,26 @@
 import { mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import type { LLMProvider } from '@posthog/warlock';
 import { createWizardPiTools } from '@agent/runner/harness/pi/tools';
+import { createWizardToolsServer } from '../mcp';
+import { WIZARD_TOOL_NAMES } from '../tools';
 import {
   MAX_RESULT_TEXT_CHARS,
   PUBLISH_RESULT_TOOL_NAME,
-  RESULT_TASK_REPORTING_NOTE,
   publishResult,
 } from '../result';
+import { TASK_REPORTING_NOTE } from '../handoff';
+
+// The MCP server's tool list, without the SDK's transport around it.
+vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
+  tool: ((name: string) => ({ name })) as never,
+  createSdkMcpServer: (options: unknown) => options,
+}));
+vi.mock('../tools', async (original) => ({
+  ...(await original<typeof import('../tools')>()),
+  fetchSkillMenu: vi.fn().mockResolvedValue(null),
+}));
 
 const RESULT = {
   version: 1,
@@ -77,7 +90,7 @@ describe('publishResult', () => {
 
   it('tells a task agent that complete_task still has to run', () => {
     const result = publishResult(RESULT, { taskAgent: true });
-    expect(result.message).toContain(RESULT_TASK_REPORTING_NOTE);
+    expect(result.message.endsWith(TASK_REPORTING_NOTE)).toBe(true);
   });
 
   it.each([
@@ -142,6 +155,7 @@ describe('publishResult', () => {
     const tools = createWizardPiTools({
       workingDirectory: temporaryDirectory,
       skillsBaseUrl: 'http://localhost:0',
+      allowedTools: [PUBLISH_RESULT_TOOL_NAME],
     });
     const tool = tools.find((t) => t.name === PUBLISH_RESULT_TOOL_NAME);
     if (!tool) throw new Error('publish_result not registered');
@@ -152,5 +166,46 @@ describe('publishResult', () => {
 
     expect(output.content[0].text).toContain('Result published');
     expect(JSON.parse(readFileSync(target, 'utf8'))).toEqual(RESULT);
+  });
+});
+
+describe('publish_result registration', () => {
+  const piToolNames = (allowedTools?: readonly string[]) =>
+    createWizardPiTools({
+      workingDirectory: tmpdir(),
+      skillsBaseUrl: 'http://localhost:0',
+      allowedTools,
+    }).map((t) => t.name);
+
+  const mcpToolNames = async (allowedTools?: readonly string[]) => {
+    const server = (await createWizardToolsServer({
+      workingDirectory: tmpdir(),
+      detectPackageManager: vi.fn(),
+      skillsBaseUrl: 'http://localhost:0',
+      triageProvider: {} as LLMProvider,
+      allowedTools,
+    })) as unknown as { tools: { name: string }[] };
+    return server.tools.map((t) => t.name);
+  };
+
+  it('is left off the Pi tools unless the allow list names it', () => {
+    expect(piToolNames()).not.toContain(PUBLISH_RESULT_TOOL_NAME);
+    expect(piToolNames(['Read'])).not.toContain(PUBLISH_RESULT_TOOL_NAME);
+    expect(piToolNames([PUBLISH_RESULT_TOOL_NAME])).toContain(
+      PUBLISH_RESULT_TOOL_NAME,
+    );
+    expect(piToolNames([WIZARD_TOOL_NAMES.publishResult])).toContain(
+      PUBLISH_RESULT_TOOL_NAME,
+    );
+  });
+
+  it('is left off the wizard-tools MCP server unless the allow list names it', async () => {
+    expect(await mcpToolNames()).not.toContain(PUBLISH_RESULT_TOOL_NAME);
+    expect(await mcpToolNames([WIZARD_TOOL_NAMES.publishResult])).toContain(
+      PUBLISH_RESULT_TOOL_NAME,
+    );
+    expect(await mcpToolNames([PUBLISH_RESULT_TOOL_NAME])).toContain(
+      PUBLISH_RESULT_TOOL_NAME,
+    );
   });
 });

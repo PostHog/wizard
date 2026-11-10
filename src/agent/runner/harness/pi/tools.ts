@@ -71,6 +71,7 @@ import {
   PUBLISH_RESULT_DESCRIPTION,
   PUBLISH_RESULT_PARAM_DESCRIPTION,
   PUBLISH_RESULT_TOOL_NAME,
+  allowsPublishResult,
   publishResult,
 } from '../../../tools/result';
 import { createSecretVault } from '@shared/secret-vault';
@@ -106,6 +107,8 @@ export interface PiToolsContext {
   onAskPendingChange?: (pending: boolean) => void;
   /** Program disallow list; gates wizard_ask here since pi tools carry bare names the MCP-prefixed security gate misses. */
   disallowedTools?: readonly string[];
+  /** Program or task allow list; opt-in tools such as `publish_result` register only when it names them. */
+  allowedTools?: readonly string[];
   /** Scan-triage classifier, resolved once in bootstrap. Absent → scans fail closed. */
   triageProvider?: LLMProvider;
   /** Where `publish_handoff` reports. Absent → the handoff is written but reported nowhere. */
@@ -615,10 +618,13 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
     withMode(auditSeedChecks, 'parallel'),
     withMode(auditAddChecks, 'parallel'),
     withMode(auditResolveChecks, 'parallel'),
-    // Sequential: they publish the run's handoff and its result.
+    // Sequential: it publishes the run's handoff.
     withMode(publishHandoffTool, 'sequential'),
-    withMode(publishResultTool, 'sequential'),
   ];
+  // Opt-in: only a program or task whose allow list names it writes the result file.
+  if (allowsPublishResult(ctx.allowedTools)) {
+    tools.push(withMode(publishResultTool, 'sequential'));
+  }
   // Register wizard_ask only when the program allows it. posthog-integration
   // disallows it (runs without structured user input); self-driving keeps it.
   // Sequential: the ask bridge holds a single in-flight question slot, so a

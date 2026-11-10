@@ -8,9 +8,21 @@ import { z } from 'zod';
 import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
 import { runtimeEnv } from '@env';
-import { writeHostFileAtomically } from './handoff';
+import { TASK_REPORTING_NOTE, writeHostFileAtomically } from './handoff';
+import { WIZARD_TOOL_NAMES } from './tools';
 
 export const PUBLISH_RESULT_TOOL_NAME = 'publish_result';
+
+/** Opt-in: a run gets publish_result only when its allow list names it, MCP-prefixed or bare. */
+export function allowsPublishResult(
+  allowedTools: readonly string[] | undefined,
+): boolean {
+  return (allowedTools ?? []).some(
+    (name) =>
+      name === WIZARD_TOOL_NAMES.publishResult ||
+      name === PUBLISH_RESULT_TOOL_NAME,
+  );
+}
 
 /** Shared between the MCP server and the pi facade so the contract can't drift. */
 export const PUBLISH_RESULT_DESCRIPTION =
@@ -21,10 +33,6 @@ export const PUBLISH_RESULT_DESCRIPTION =
 
 export const PUBLISH_RESULT_PARAM_DESCRIPTION =
   'The complete result object, exactly the fields the result skill lists: version, notebook_short_id, dashboard_ids, insight_ids, savings, value_items, checks_passed.';
-
-/** Appended for a task agent: the reminder lands as it decides it has finished. */
-export const RESULT_TASK_REPORTING_NOTE =
-  ' This does not report your task: call complete_task to finish.';
 
 // Cap matching the handoff: the backend reads the file into memory.
 export const MAX_RESULT_TEXT_CHARS = 64 * 1024;
@@ -171,6 +179,6 @@ export function publishResult(
       parsed.data.value_items.length
     } value items, ${parsed.data.checks_passed.length} checks passed${
       notes.length > 0 ? `; ${notes.join('; ')}` : ''
-    }).${opts.taskAgent ? RESULT_TASK_REPORTING_NOTE : ''}`,
+    }).${opts.taskAgent ? TASK_REPORTING_NOTE : ''}`,
   };
 }

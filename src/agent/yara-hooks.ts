@@ -39,6 +39,7 @@ import { isSkillInstallCommand } from '@shared/skill-install';
 import {
   highestSeverityMatch,
   publishBlockingMatch,
+  publishResultScanText,
   scanVerdict,
 } from './yara-policy';
 import type { ScanAction, ScanContext } from './yara-policy';
@@ -835,12 +836,10 @@ export function createPreToolUseYaraHooks(
             }
 
             // publish_result carries an object; its evidence strings quote the
-            // user's data, so the serialized form clears the same bar.
+            // user's data, so its text clears the same bar.
             const toolInput = input.tool_input as Record<string, unknown>;
             const content = toolName.endsWith('__publish_result')
-              ? typeof toolInput?.result === 'string'
-                ? toolInput.result
-                : JSON.stringify(toolInput?.result ?? '')
+              ? publishResultScanText(toolInput?.result)
               : typeof toolInput?.content === 'string'
               ? toolInput.content
               : '';

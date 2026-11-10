@@ -56,6 +56,30 @@ export function publishBlockingMatch(matches: ScanMatch[]): ScanMatch | null {
   return isTerminalMatch(match) ? match : null;
 }
 
+/**
+ * The text both gates scan for a publish_result call: every key and leaf value
+ * one per line, so a string's own newlines stay real for `\b`-anchored rules
+ * (JSON would escape them to `\n` and hide what follows).
+ */
+export function publishResultScanText(result: unknown): string {
+  if (typeof result === 'string') return result;
+  const parts: string[] = [];
+  const visit = (value: unknown): void => {
+    if (typeof value === 'string') parts.push(value);
+    else if (typeof value === 'number' || typeof value === 'boolean') {
+      parts.push(String(value));
+    } else if (Array.isArray(value)) value.forEach(visit);
+    else if (value !== null && typeof value === 'object') {
+      for (const [key, child] of Object.entries(value)) {
+        parts.push(key);
+        visit(child);
+      }
+    }
+  };
+  visit(result);
+  return parts.join('\n');
+}
+
 export interface ScanVerdict {
   /** The match worth reporting: the highest-severity one. */
   match: ScanMatch;

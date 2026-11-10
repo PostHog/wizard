@@ -35,6 +35,8 @@ export const config: ProgramConfig = {
   // The report task builds its own notebook with the sections the product
   // expects; the handoff is the pull request body alone.
   handoffNotebook: false,
+  // The report names the organization's account owner as the user's contact.
+  accountOwnerContext: true,
   scansCodebase: true,
   reportFile: SPEND_AUDIT_REPORT_FILE,
   requires: ['posthog-integration'],

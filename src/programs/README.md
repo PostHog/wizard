@@ -77,6 +77,10 @@ the registry:
   proceed, for a program that creates no event definitions.
 - **Route.** `binding` sets the sequence, harness and model; without one the
   program runs on `DEFAULT_BINDING`.
+- **Account owner.** `accountOwnerContext` adds the account owner from
+  `POSTHOG_ACCOUNT_OWNER_NAME` and `POSTHOG_ACCOUNT_OWNER_EMAIL` to each
+  orchestrator task's project context. Only a program whose report names a
+  contact sets it.
 
 ## What goes in and out of `runProgram`
 

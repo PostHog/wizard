@@ -419,6 +419,7 @@ async function invokeProgram(
             handoffNotebook:
               agentRun.handoffNotebook ?? planned.config.handoffNotebook,
             agentFlow: planned.config.agentFlow,
+            accountOwnerContext: planned.config.accountOwnerContext,
             excludedTaskTypes: planned.config.excludedTaskTypes,
             seedTasks: planned.config.seedTasks
               ? () => planned.config.seedTasks!(session())

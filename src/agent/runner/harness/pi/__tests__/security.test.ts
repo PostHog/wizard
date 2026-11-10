@@ -308,6 +308,38 @@ describe('pi-security: warlock scan wiring', () => {
     expect(decision.reason).toContain('posthog_hardcoded_personal_api_key');
   });
 
+  test('a critical key after a real newline in nested evidence blocks publish_result', async () => {
+    // Stands in for a `\b`-anchored rule: it matches only the text the gate scans.
+    mockedScan.mockImplementationOnce((content: string) =>
+      Promise.resolve(
+        /\bphx_[a-z]{40}\b/.test(content)
+          ? {
+              matched: true,
+              matches: [
+                {
+                  rule: 'posthog_hardcoded_personal_api_key',
+                  metadata: {
+                    severity: 'critical',
+                    category: 'posthog_hardcoded_key',
+                    action: 'remediate',
+                    scan_context: 'output',
+                  },
+                  matchedStrings: [FAKE_PERSONAL_KEY],
+                },
+              ],
+            }
+          : { matched: false },
+      ),
+    );
+    const decision = await evaluateToolCall('publish_result', {
+      result: {
+        savings: [{ evidence: `config:\n${FAKE_PERSONAL_KEY}` }],
+      },
+    });
+    expect(decision.block).toBe(true);
+    expect(decision.reason).toContain('posthog_hardcoded_personal_api_key');
+  });
+
   test('a clean publish_handoff report is allowed through', async () => {
     const decision = await evaluateToolCall('publish_handoff', {
       content: '# Setup report\n\nAll done.',

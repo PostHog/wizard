@@ -31,6 +31,7 @@ import {
   PUBLISH_RESULT_DESCRIPTION,
   PUBLISH_RESULT_PARAM_DESCRIPTION,
   PUBLISH_RESULT_TOOL_NAME,
+  allowsPublishResult,
   publishResult,
 } from './result';
 import { createSecretVault, type SecretVault } from '@shared/secret-vault';
@@ -164,6 +165,9 @@ export interface WizardToolsOptions {
 
   /** The program mirrors the handoff report into a PostHog notebook. */
   handoffNotebook?: boolean;
+
+  /** The run's allow list; opt-in tools such as `publish_result` register only when it names them. */
+  allowedTools?: readonly string[];
 }
 
 /** Default per-run cap on wizard_ask calls when no override is provided. */
@@ -188,6 +192,7 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
     emit,
     programId,
     handoffNotebook,
+    allowedTools,
   } = options;
   const sdk = await getSDKModule();
   const { tool, createSdkMcpServer } = sdk;
@@ -831,7 +836,8 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
       auditResolveChecks,
       wizardAsk,
       publishHandoffTool,
-      publishResultTool,
+      // Opt-in: only a program or task whose allow list names it writes the result file.
+      ...(allowsPublishResult(allowedTools) ? [publishResultTool] : []),
       ...orchestratorTools,
     ],
   });
