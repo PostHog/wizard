@@ -102,6 +102,7 @@ import {
   agentRunTools,
   assembleSeedPrompt,
   assembleTaskPrompt,
+  bundledRegistry,
   loadAgentRegistry,
   promptModelFor,
   resolveTask,
@@ -746,8 +747,9 @@ async function executeOrchestrator(
   // The WHAT (agent prompts) is served from context-mill. Fetch the registry
   // once up front: its types drive enqueue validation, and resolving a task to
   // its run config is then synchronous, with no mid-drain network latency.
+  // With `wizard-agent-dag` on, the prompts the program bundles are the registry.
   const flow = config.agentFlow ?? programId;
-  const registry = await loadAgentRegistry(boot.skillsBaseUrl, flow, {
+  const registryOptions = {
     exclude: effectiveExcludedTaskTypes(config, boot.wizardFlags),
     // Baked into the prompts at load, so enqueue, dispatch, and telemetry all read one effective spec.
     overrides: resolveStageOverrides(
@@ -755,11 +757,21 @@ async function executeOrchestrator(
       boot.wizardFlags,
       boot.wizardFlagPayloads,
     ),
-  });
+  };
+  const bundledPrompts = isAgentDagEnabled(boot.wizardFlags)
+    ? await config.agentPrompts?.()
+    : undefined;
+  const registry = bundledPrompts
+    ? bundledRegistry(bundledPrompts, flow, registryOptions)
+    : await loadAgentRegistry(boot.skillsBaseUrl, flow, registryOptions);
+  analytics.setTag(
+    'orchestrator_prompts',
+    bundledPrompts ? 'bundled' : 'context-mill',
+  );
   if (signal?.aborted) return cancelledRun();
-  // A flow with no planner prompt is queued from its frontmatter, behind `wizard-agent-dag`.
+  // A bundled flow with no planner prompt is queued from its frontmatter; a fetched one needs its planner.
   const seedPrompt = registry.seed;
-  if (!seedPrompt && !isAgentDagEnabled(boot.wizardFlags)) {
+  if (!seedPrompt && !bundledPrompts) {
     throw new Error(
       `No seed agent prompt (frontmatter \`seed: true\`) for flow "${flow}" is available from ${boot.skillsBaseUrl}.`,
     );

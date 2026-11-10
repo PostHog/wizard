@@ -158,6 +158,8 @@ export interface ProgramConfig {
    * the content-mill flow name diverges from the program id.
    */
   agentFlow?: string;
+  /** This program's agent prompts by task type, from its `agent/` folder; loaded on first use. */
+  agentPrompts?: () => Promise<Readonly<Record<string, string>>>;
   /**
    * Whether `publish_handoff` mirrors the run report into a PostHog notebook.
    * Set only where the context-mill prompts expect it; every other program

@@ -1,4 +1,4 @@
-/** With `wizard-agent-dag` on, a flow with no planner prompt is queued from its frontmatter; one with a planner prompt keeps its planner. */
+/** A bundled flow with no planner prompt is queued from its frontmatter; one with a planner prompt, and every fetched flow, keeps its planner. */
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -28,24 +28,19 @@ vi.mock('../../../../agent-prompt-loader', async (importActual) => {
   const actual = await importActual<
     typeof import('../../../../agent-prompt-loader')
   >();
-  const prompt = (type: string) =>
-    actual.parseAgentPrompt(`---\ntype: ${type}\n---\n${type}`, type, 'flow');
   return {
     ...actual,
-    loadAgentRegistry: (_url: string, _flow: string, opts?: object) =>
-      Promise.resolve(
-        actual.buildRegistry(
-          [
-            ...(withPlanner ? [{ ...prompt('plan'), seed: true }] : []),
-            { ...prompt('report'), sink: true, dependsOn: ['capture'] },
-            { ...prompt('capture'), dependsOn: ['install', 'logs'] },
-            { ...prompt('logs'), dependsOn: ['install'], optional: true },
-            prompt('install'),
-          ],
-          'flow',
+    // The fetched flow: the bundled one's prompts, with a planner unless a test removes it.
+    loadAgentRegistry: (_url: string, flow: string, opts?: object) => {
+      fetches++;
+      return Promise.resolve(
+        actual.bundledRegistry(
+          fetchedPlanner ? { ...FLOW, plan: PLANNER } : FLOW,
+          flow,
           opts,
         ),
-      ),
+      );
+    },
   };
 });
 
@@ -55,6 +50,14 @@ import { runOrchestrator } from '../orchestrator-runner';
 import type { SequenceContext } from '../../../shared/types';
 import type { QueueStore } from '../queue';
 
+const FLOW: Record<string, string> = {
+  report: '---\nsink: true\ndependsOn: [capture]\n---\nreport',
+  capture: '---\ndependsOn: [install, logs]\n---\ncapture',
+  logs: '---\ndependsOn: [install]\noptional: true\n---\nlogs',
+  install: '---\ndependsOn: []\n---\ninstall',
+};
+const PLANNER = '---\nseed: true\n---\nplan';
+
 type Inputs = {
   emit: (event: { kind: 'handoff'; text: string }) => void;
   analyticsProperties: { task_type: string; task_id?: string };
@@ -62,7 +65,9 @@ type Inputs = {
 };
 
 let agentDag = true;
-let withPlanner = false;
+let fetchedPlanner = true;
+let fetches = 0;
+let bundled: Record<string, string> | undefined;
 let ran: string[] = [];
 let queue: QueueStore | undefined;
 
@@ -89,10 +94,13 @@ describe('queueing a flow from its frontmatter', () => {
   beforeEach(() => {
     dir = fs.mkdtempSync(path.join(os.tmpdir(), 'frontmatter-queue-'));
     agentDag = true;
-    withPlanner = false;
+    fetchedPlanner = true;
+    fetches = 0;
+    bundled = FLOW;
     ran = [];
     queue = undefined;
     vi.mocked(analytics.wizardCapture).mockClear();
+    vi.mocked(analytics.setTag).mockClear();
   });
 
   afterEach(() => fs.rmSync(dir, { recursive: true, force: true }));
@@ -105,6 +113,7 @@ describe('queueing a flow from its frontmatter', () => {
         wizardFlagPayloads: {},
         switchboard: {},
         excludedTaskTypes: () => excluded,
+        agentPrompts: bundled && (() => Promise.resolve(bundled)),
       },
       input: { installDir: dir, flags: { ci: true } },
       boot: {
@@ -128,18 +137,20 @@ describe('queueing a flow from its frontmatter', () => {
       .mocked(analytics.wizardCapture)
       .mock.calls.find(([event]) => event === 'orchestrator seeded')?.[1];
 
-  it('runs the declared tasks in order, with no planner', async () => {
+  it('runs the bundled tasks in order, with no planner and no fetch', async () => {
     const result = await run();
     expect(result.outcome).toBe(RunOutcome.Success);
-    expect(ran).not.toContain('seed');
-    expect(ran.indexOf('install')).toBeLessThan(ran.indexOf('logs'));
-    expect(ran.indexOf('logs')).toBeLessThan(ran.indexOf('capture'));
-    expect(ran[ran.length - 1]).toBe('report');
+    expect(fetches).toBe(0);
+    expect(ran).toEqual(['install', 'logs', 'capture', 'report']);
     expect(seeded()).toEqual({
       task_count: 4,
       types: ['install', 'logs', 'capture', 'report'],
       source: 'frontmatter',
     });
+    expect(analytics.setTag).toHaveBeenCalledWith(
+      'orchestrator_prompts',
+      'bundled',
+    );
   });
 
   it("leaves out the run's excluded tasks and keeps the order around them", async () => {
@@ -151,17 +162,35 @@ describe('queueing a flow from its frontmatter', () => {
     expect(capture?.dependsOn).toEqual([install?.id]);
   });
 
-  it('keeps the planner of a flow that has a planner prompt', async () => {
-    withPlanner = true;
+  it('keeps the planner of a bundled flow that has a planner prompt', async () => {
+    bundled = { ...FLOW, plan: PLANNER };
     const result = await run();
     expect(result.outcome).toBe(RunOutcome.Success);
+    expect(fetches).toBe(0);
     expect(ran).toEqual(['seed', 'install', 'report']);
     expect(seeded()).toMatchObject({ source: 'planner' });
   });
 
-  it('fails a flow with no planner prompt while the flag is off', async () => {
+  it("fetches context-mill's prompts while the flag is off, bundled or not", async () => {
     agentDag = false;
-    await expect(run()).rejects.toThrow(/No seed agent prompt/);
-    expect(ran).toEqual([]);
+    const result = await run();
+    expect(result.outcome).toBe(RunOutcome.Success);
+    expect(fetches).toBe(1);
+    expect(ran).toEqual(['seed', 'install', 'report']);
+    expect(analytics.setTag).toHaveBeenCalledWith(
+      'orchestrator_prompts',
+      'context-mill',
+    );
   });
+
+  it.each([true, false])(
+    'fails a fetched flow that has no planner prompt (flag on: %s)',
+    async (flag) => {
+      agentDag = flag;
+      bundled = undefined;
+      fetchedPlanner = false;
+      await expect(run()).rejects.toThrow(/No seed agent prompt/);
+      expect(ran).toEqual([]);
+    },
+  );
 });

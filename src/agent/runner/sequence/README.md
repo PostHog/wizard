@@ -19,20 +19,27 @@ owns its full lifecycle and cannot nest through the composition seam.
 
 ## Orchestrator
 
-[orchestrator-runner.ts](orchestrator/orchestrator-runner.ts) loads a flow from
-context-mill, queues its tasks, then drains a dependency-aware task queue. Each
-task gets a focused conversation, tools, selected model/effort, and relevant
+[orchestrator-runner.ts](orchestrator/orchestrator-runner.ts) loads a flow's
+prompts, queues its tasks, then drains a dependency-aware task queue. Each task
+gets a focused conversation, tools, selected model/effort, and relevant
 handoffs. Independent tasks can run concurrently.
 
-A flow's seed planner queues its tasks. With `wizard-agent-dag` on, a flow with
-no seed prompt is queued from the graph its frontmatter declares, by
-[task-graph.ts](orchestrator/task-graph.ts), and no planner runs.
-`orchestrator seeded` carries which one queued the run as `source`.
+With `wizard-agent-dag` on, the prompts are the ones the program bundles, the
+run config's `agentPrompts`; see
+[agent prompts](../../../programs/README.md#agent-prompts). Off, or for a
+program that bundles none, the orchestrator fetches the flow `agentFlow ?? id`
+from context-mill. Every event of the run carries which as the
+`orchestrator_prompts` tag.
 
-The program selects `agentFlow ?? id`. Its published flow must supply valid
-task-skill variants, and a seed prompt unless it is queued from its frontmatter.
-Metrics already has a Pi/orchestrator binding; other routes can be selected
-through scoped flags or development CLI overrides. The retired
+A flow's seed planner queues its tasks. A bundled flow with no seed prompt is
+queued from the graph its frontmatter declares, by
+[task-graph.ts](orchestrator/task-graph.ts), and no planner runs. A fetched flow
+with no seed prompt fails the run. `orchestrator seeded` carries which one
+queued the run as `source`.
+
+A flow must supply valid task-skill variants, and a seed prompt unless it is
+bundled without one. Metrics already has a Pi/orchestrator binding; other routes
+can be selected through scoped flags or development CLI overrides. The retired
 `experiment/orchestrator` branch is not a prerequisite. See
 [adding a program](../../../../.claude/skills/adding-skill-program/SKILL.md).
 

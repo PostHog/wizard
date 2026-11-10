@@ -103,6 +103,7 @@ reaches the UI.
 | One program's config, detection and prompt    | Its own folder, such as [`metrics`](metrics/index.ts)                             |
 | One program's flow, deck and screens          | `src/tui/programs/<id>/`, registered in [`src/tui/programs/index.ts`](../tui/programs/index.ts) |
 | One program's e2e test definition             | Its folder's `test/e2e.json`, read by [`e2e-harness/profiles.ts`](../../e2e-harness/profiles.ts) |
+| One orchestrator program's task prompts and graph | Its folder's `agent/<type>.md`; see [agent prompts](#agent-prompts) |
 | Code several programs share                   | [`shared`](shared/skill-program.ts): program builders and [`program-scopes.ts`](shared/program-scopes.ts) |
 | The list of every program                     | [`program-registry.ts`](program-runner/program-registry.ts)                                      |
 | Running one program, and its input and outcome | [`run-program.ts`](program-runner/run-program.ts), [`detect-program.ts`](program-runner/detect-program.ts) and [`program-input.ts`](program-runner/program-input.ts) |
@@ -125,6 +126,49 @@ programs project extends `tsconfig.no-tui.json`, which maps `@programs/*`. A
 program's project references only the shared program code, so an import of a
 sibling program or the registry fails with TS6307; see
 [layer boundaries](../../.claude/skills/wizard-development/references/ARCHITECTURE.md#layer-boundaries).
+
+## Agent prompts
+
+An orchestrator program keeps one prompt per task in `agent/<type>.md`. The
+body is the job to be done, and the skills the frontmatter names carry the
+implementation detail. The frontmatter also declares the task graph:
+`dependsOn` names the task types a task runs after, `sink` marks the task that
+runs last, `optional` a task whose failure never fails the run, and
+`runnerSeeded` a task only the program's `seedTasks` queues. Read
+[the task metadata](../agent/runner/sequence/README.md#task-metadata) for every
+field.
+
+The program's `agent-prompts.ts` imports each file as text, and the config's
+`agentPrompts` loads that module on first use. The build inlines the files with
+tsdown's `.md` loader, tests load them through a Vitest plugin, and a run from
+source loads them through a Node hook,
+[`markdown-loader.no-jest.mjs`](../../scripts/markdown-loader.no-jest.mjs).
+
+With `wizard-agent-dag` on, the orchestrator reads these prompts. A folder with
+a `seed: true` prompt keeps its planner. A folder without one, such as
+posthog-integration's, is queued from the graph its frontmatter declares, and
+the program's `excludedTaskTypes` and `seedTasks` decide which tasks a run
+leaves out or adds. With the flag off, the orchestrator fetches context-mill's
+copy of the flow, `agentFlow ?? id`, and runs its planner. A local context-mill
+(`--local-context-mill`) serves the skills either way, and the prompts only
+with the flag off. A run pinned to a context-mill release with
+`--context-mill-version` fetches that release's prompts, flag on or off.
+
+Four checks hold the prompts in place:
+
+- [`agent-prompts.test.ts`](__tests__/agent-prompts.test.ts) fails when a file
+  in `agent/` isn't imported, or when a prompt differs from the context-mill
+  release recorded in `fixtures/context-mill/`.
+- [`flow-graphs.test.ts`](../agent/runner/sequence/orchestrator/__tests__/flow-graphs.test.ts)
+  fails when a `dependsOn` names a task outside the folder, when a folder has
+  no single sink or cannot be ordered, or when a `skills` entry is missing from
+  the recorded menu.
+- `pnpm test:warlock`, which every build runs, scans each `agent/` folder as a
+  fetched skill is scanned.
+- `pnpm test:smoke`, which every build also runs, fails when the bundle holds a
+  name that must not ship. The prompts are in the bundle, so it reads them too.
+
+`pnpm visual-dags` draws every program's graph from its frontmatter.
 
 ## Session store and task streams
 

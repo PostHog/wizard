@@ -144,6 +144,7 @@ export const config: ProgramConfig = {
     model: GPT6_SOL_MODEL,
   },
   agentFlow: 'replay-vision',
+  agentPrompts: () => import('./agent-prompts').then((m) => m.AGENT_PROMPTS),
   onReady: platformGatedOnReady(REPLAY_VISION_GATE),
   oauthScopeAdditions: REPLAY_VISION_SCOPE_ADDITIONS,
   ciPreRun: platformGatedCiPreRun(REPLAY_VISION_GATE),
