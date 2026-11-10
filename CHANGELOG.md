@@ -1,5 +1,14 @@
 # Changelog
 
+## [2.92.0](https://github.com/PostHog/wizard/compare/v2.91.2...v2.92.0) (2026-11-10)
+
+
+### Features
+
+* add wizard support command for PostHog Support ([#1539](https://github.com/PostHog/wizard/issues/1539)) ([017c760](https://github.com/PostHog/wizard/commit/017c7607b58c6c388b8b89a1042f8364403b01aa))
+* **cli:** add --context-mill-version to pin skills to a release ([#1541](https://github.com/PostHog/wizard/issues/1541)) ([fdf3553](https://github.com/PostHog/wizard/commit/fdf35535ae06440b07f333737ba3726bc99593ea))
+* **warehouse:** add the warehouse destination program ([#1521](https://github.com/PostHog/wizard/issues/1521)) ([876378d](https://github.com/PostHog/wizard/commit/876378d628ab222ef71e1c8c5ce1d190d7f4c5c5))
+
 ## [2.91.2](https://github.com/PostHog/wizard/compare/v2.91.1...v2.91.2) (2026-11-07)
 
 
