@@ -186,6 +186,32 @@ describe('ClaudeCodeMCPClient — plugin methods', () => {
     });
   });
 
+  describe('isPluginServing', () => {
+    it('returns true for an enabled copy', async () => {
+      routeClaude((cmd) =>
+        isCmd(cmd, 'plugin', 'list') ? listed('posthog@posthog') : '',
+      );
+      const client = new ClaudeCodeMCPClient();
+      await expect(client.isPluginServing()).resolves.toBe(true);
+    });
+
+    it('returns false when the only copy is disabled, since it serves no server', async () => {
+      routeClaude((cmd) =>
+        isCmd(cmd, 'plugin', 'list')
+          ? listedWith(['posthog@posthog', false])
+          : '',
+      );
+      const client = new ClaudeCodeMCPClient();
+      await expect(client.isPluginServing()).resolves.toBe(false);
+    });
+
+    it('returns false when no plugins are installed', async () => {
+      routeClaude((cmd) => (isCmd(cmd, 'plugin', 'list') ? listed() : ''));
+      const client = new ClaudeCodeMCPClient();
+      await expect(client.isPluginServing()).resolves.toBe(false);
+    });
+  });
+
   describe('installPlugin', () => {
     // The CLI calls clone git repos and take seconds. execSync blocks the event
     // loop, which freezes the TUI spinner on its first frame — so this path must

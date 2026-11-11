@@ -371,6 +371,8 @@ export class ClaudeCodeMCPClient
 
   /** The wizard installs the direct MCP entry only, never the plugin. */
   supportsPlugin(): boolean {
+    // TODO(mcp-plugin): return `this.findClaudeCommand() !== null` again once the
+    // PostHog ai-plugin is slimmed down, so the wizard installs it again.
     return false;
   }
 
@@ -472,6 +474,16 @@ export class ClaudeCodeMCPClient
     return plain.ok && plain.output.toLowerCase().includes(PLUGIN_NAME);
   }
 
+  /** Installed and enabled, so the plugin's `plugin:posthog:posthog` server is live. */
+  async isPluginServing(): Promise<boolean> {
+    const command = this.findClaudeCommand();
+    if (!command) return false;
+    const listed = await this.installedPlugins(command);
+    return listed
+      ? listed.some((p) => p.enabled !== false)
+      : this.isPluginInstalled();
+  }
+
   async installPlugin(): Promise<PluginInstallResult> {
     const command = this.findClaudeCommand();
     if (!command)
@@ -487,11 +499,7 @@ export class ClaudeCodeMCPClient
     // Claude Code takes its MCP server from the plugin. Reporting it as
     // already installed leaves the user with no server and a screen saying
     // they are done, so fall through and install: the CLI re-enables it.
-    const listed = await this.installedPlugins(command);
-    const serving = listed
-      ? listed.some((p) => p.enabled !== false)
-      : await this.isPluginInstalled();
-    if (serving) {
+    if (await this.isPluginServing()) {
       return { success: true, alreadyInstalled: true };
     }
 

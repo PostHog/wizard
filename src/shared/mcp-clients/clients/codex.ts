@@ -473,6 +473,8 @@ export class CodexMCPClient
 
   /** The wizard installs the direct MCP entry only, never the plugin. */
   supportsPlugin(): boolean {
+    // TODO(mcp-plugin): return `this.findCodexCommand() !== null` again once the
+    // PostHog ai-plugin is slimmed down, so the wizard installs it again.
     return false;
   }
 
