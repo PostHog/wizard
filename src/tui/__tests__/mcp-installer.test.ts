@@ -1,7 +1,6 @@
 import { createMcpInstaller } from '@tui/services/mcp-installer';
 import { McpClientStatus } from '@shared/mcp-clients/results';
 import * as mcpModuleReal from '@shared/mcp-clients/install';
-import { analytics } from '@utils/analytics';
 
 // The module is mocked below. Expose its exports as plain Mocks so the tests
 // can drive them with lightweight partial fixtures (the same loose access the
@@ -12,8 +11,6 @@ vi.mock(import('@shared/mcp-clients/install'), () => ({
   getSupportedClients: vi.fn(),
   getInstalledClients: vi.fn(),
   removeMCPServer: vi.fn(),
-  getSupportedPluginClients: vi.fn(),
-  installPlugins: vi.fn(),
 }));
 
 vi.mock('@utils/debug.js', () => ({
@@ -31,127 +28,6 @@ const changed = (name: string) => ({
 const alreadyInstalled = (name: string) => ({
   name,
   status: McpClientStatus.Unchanged,
-});
-
-describe('createMcpInstaller — installPlugins', () => {
-  const mockClaudeClient = { name: 'Claude Code' };
-  const mockCursorClient = { name: 'Cursor' };
-
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mcpModule.getSupportedClients.mockResolvedValue([
-      mockClaudeClient,
-      mockCursorClient,
-    ]);
-  });
-
-  it('calls installPlugins on plugin-capable clients and returns their results', async () => {
-    mcpModule.getSupportedPluginClients.mockReturnValue([mockClaudeClient]);
-    mcpModule.installPlugins.mockResolvedValue([changed('Claude Code')]);
-
-    const installer = createMcpInstaller();
-    await installer.detectClients();
-    const result = await installer.installPlugins(['Claude Code', 'Cursor']);
-
-    expect(mcpModule.getSupportedPluginClients).toHaveBeenCalledWith([
-      mockClaudeClient,
-      mockCursorClient,
-    ]);
-    expect(mcpModule.installPlugins).toHaveBeenCalledWith([mockClaudeClient]);
-    expect(result).toEqual([changed('Claude Code')]);
-  });
-
-  it('emits mcp plugins installed analytics with clients and attempted', async () => {
-    mcpModule.getSupportedPluginClients.mockReturnValue([mockClaudeClient]);
-    mcpModule.installPlugins.mockResolvedValue([changed('Claude Code')]);
-
-    const installer = createMcpInstaller();
-    await installer.detectClients();
-    await installer.installPlugins(['Claude Code']);
-
-    expect(analytics.wizardCapture).toHaveBeenCalledWith(
-      'mcp plugins installed',
-      {
-        clients: ['Claude Code'],
-        already_installed: [],
-        attempted: ['Claude Code'],
-      },
-    );
-  });
-
-  it('reports an already-installed plugin separately from a fresh install', async () => {
-    mcpModule.getSupportedPluginClients.mockReturnValue([mockClaudeClient]);
-    mcpModule.installPlugins.mockResolvedValue([
-      alreadyInstalled('Claude Code'),
-    ]);
-
-    const installer = createMcpInstaller();
-    await installer.detectClients();
-    const result = await installer.installPlugins(['Claude Code']);
-
-    expect(result).toEqual([alreadyInstalled('Claude Code')]);
-    // `clients` still counts it — the client ends up with the plugin either way.
-    expect(analytics.wizardCapture).toHaveBeenCalledWith(
-      'mcp plugins installed',
-      {
-        clients: ['Claude Code'],
-        already_installed: ['Claude Code'],
-        attempted: ['Claude Code'],
-      },
-    );
-  });
-
-  it('returns empty array and still emits analytics when no clients support plugins', async () => {
-    mcpModule.getSupportedPluginClients.mockReturnValue([]);
-    mcpModule.installPlugins.mockResolvedValue([]);
-
-    const installer = createMcpInstaller();
-    await installer.detectClients();
-    const result = await installer.installPlugins(['Claude Code']);
-
-    expect(result).toEqual([]);
-    expect(analytics.wizardCapture).toHaveBeenCalledWith(
-      'mcp plugins installed',
-      {
-        clients: [],
-        already_installed: [],
-        attempted: [],
-      },
-    );
-  });
-
-  it('only passes clients matching the requested names to getSupportedPluginClients', async () => {
-    mcpModule.getSupportedPluginClients.mockReturnValue([]);
-    mcpModule.installPlugins.mockResolvedValue([]);
-
-    const installer = createMcpInstaller();
-    await installer.detectClients();
-    await installer.installPlugins(['Claude Code']); // Cursor excluded
-
-    expect(mcpModule.getSupportedPluginClients).toHaveBeenCalledWith([
-      mockClaudeClient,
-    ]);
-  });
-
-  it('returns partial success when plugin install fails for some clients', async () => {
-    mcpModule.getSupportedPluginClients.mockReturnValue([
-      mockClaudeClient,
-      mockCursorClient,
-    ]);
-    mcpModule.installPlugins.mockResolvedValue([
-      changed('Claude Code'),
-      { name: 'Cursor', status: McpClientStatus.Failed, detail: 'boom' },
-    ]);
-
-    const installer = createMcpInstaller();
-    await installer.detectClients();
-    const result = await installer.installPlugins(['Claude Code', 'Cursor']);
-
-    expect(result).toEqual([
-      changed('Claude Code'),
-      { name: 'Cursor', status: McpClientStatus.Failed, detail: 'boom' },
-    ]);
-  });
 });
 
 describe('createMcpInstaller — install', () => {
@@ -304,22 +180,18 @@ describe('createMcpInstaller — detectClients', () => {
         name: 'Cursor',
         kind: 'local',
         supportsPlugin: false,
-        pluginBundlesMcp: false,
         finish: undefined,
         loginCommand: undefined,
-        pluginLoginCommand: undefined,
       },
       {
         name: 'Claude Desktop/Web',
         kind: 'account',
         supportsPlugin: false,
-        pluginBundlesMcp: false,
         finish: {
           url: 'https://claude.ai/directory/connectors/posthog',
           instruction: 'Sign in and click "Connect" to finish.',
         },
         loginCommand: undefined,
-        pluginLoginCommand: undefined,
       },
     ]);
   });

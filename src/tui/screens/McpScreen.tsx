@@ -96,33 +96,24 @@ const doneOnEnter = (
 };
 
 /**
- * The editor-owned login commands to run after this install: config entries
- * use the client's own server name, plugin-provided servers their `plugin:`
- * name. One entry per client. An entry that was already there still gets its
- * command, as a plugin does: nothing here knows whether the user signed in.
+ * The editor-owned login commands to run after this install, one per client
+ * with a working entry. An entry that was already there still gets its
+ * command: nothing here knows whether the user signed in.
  */
 const pendingLoginCommands = (
   clients: McpClientInfo[],
   mcpResult: McpClientResult[],
-  pluginResult: McpClientResult[],
 ): string[] => {
   const commands = new Map<string, string>();
-  for (const r of pluginResult) {
-    const command = clients.find((c) => c.name === r.name)?.pluginLoginCommand;
-    if (isOk(r) && command) commands.set(r.name, command);
-  }
   for (const r of mcpResult) {
     const command = clients.find((c) => c.name === r.name)?.loginCommand;
-    // A fresh entry's command wins; an existing one never replaces the plugin's.
-    if (!isOk(r) || !command) continue;
-    if (r.status === McpClientStatus.Changed || !commands.has(r.name))
-      commands.set(r.name, command);
+    if (isOk(r) && command) commands.set(r.name, command);
   }
   return [...commands.values()];
 };
 
 /**
- * Sort each client by its MCP and plugin results: new when anything changed,
+ * Sort each client by its MCP results: new when anything changed,
  * already installed when everything was in place, failed when nothing worked.
  */
 const installBreakdown = (
@@ -225,12 +216,10 @@ const ClientRows = ({
   clients,
   rows,
   results,
-  pluginNames,
 }: {
   clients: McpClientInfo[];
   rows: Record<string, RowState>;
   results: McpClientResult[];
-  pluginNames: string[];
 }) => {
   const nameWidth = Math.max(...clients.map((c) => c.name.length)) + 3;
   const viaWidth = 16;
@@ -242,7 +231,7 @@ const ClientRows = ({
           state,
           results.filter((r) => r.name === c.name),
         );
-        const via = pluginNames.includes(c.name) ? 'plugin + MCP' : 'MCP';
+        const via = 'MCP';
         return (
           <Box key={c.name} flexDirection="column">
             <Box>
@@ -325,7 +314,6 @@ export const McpScreen = ({
   const [clients, setClients] = useState<McpClientInfo[]>([]);
   const [rows, setRows] = useState<Record<string, RowState>>({});
   const [mcpResults, setMcpResults] = useState<McpClientResult[]>([]);
-  const [pluginResults, setPluginResults] = useState<McpClientResult[]>([]);
   // Detection and the remove call can both blow up. Keep the reason so a crash
   // reads as a crash instead of as "you have nothing installed".
   const [detectError, setDetectError] = useState<string | null>(null);
@@ -352,11 +340,6 @@ export const McpScreen = ({
   const localClients = clients.filter((c) => c.kind === 'local');
   const accountClients = clients.filter((c) => c.kind === 'account');
   const twoSteps = localClients.length > 0 && accountClients.length > 0;
-  // OAuth: plugin-capable clients get the plugin. Api-key installs write
-  // key-authed direct entries only — the plugin's server never carries the key.
-  const pluginNames = oauthFlow
-    ? localClients.filter((c) => c.supportsPlugin).map((c) => c.name)
-    : [];
 
   useEffect(() => {
     void (async () => {
@@ -402,43 +385,17 @@ export const McpScreen = ({
     }
   };
 
-  const installPluginsFor = async (
-    names: string[],
-  ): Promise<McpClientResult[]> => {
-    try {
-      return await installer.installPlugins(names);
-    } catch (err) {
-      return names.map((name) => ({
-        name,
-        status: McpClientStatus.Failed,
-        detail: errorText(err),
-      }));
-    }
-  };
-
-  // A direct entry for everyone whose plugin doesn't already ship the MCP
-  // server (codex's plugin is skills-only; claude's bundles the server).
-  const needsDirect = (client: McpClientInfo) =>
-    !oauthFlow || !client.pluginBundlesMcp;
-
   /** Show the results and arm Enter with what ended up installed. */
   const settle = (
     local: McpClientInfo[],
     mcpResult: McpClientResult[],
-    pluginResult: McpClientResult[],
     features: string[],
   ) => {
     // Already-installed counts as installed: the user ends up with a working
     // MCP either way.
-    const ready = [
-      ...new Set(
-        [...mcpResult, ...pluginResult].filter(isOk).map((r) => r.name),
-      ),
-    ];
+    const ready = [...new Set(mcpResult.filter(isOk).map((r) => r.name))];
     const outcome = ready.length > 0 ? McpOutcome.Installed : McpOutcome.Failed;
-    const logins = oauthFlow
-      ? pendingLoginCommands(local, mcpResult, pluginResult)
-      : [];
+    const logins = oauthFlow ? pendingLoginCommands(local, mcpResult) : [];
     setLoginCommands(logins);
     stepOne.current = {
       outcome,
@@ -454,43 +411,30 @@ export const McpScreen = ({
       ready,
       reportFeatures(features),
       logins,
-      installBreakdown(local, [...mcpResult, ...pluginResult]),
+      installBreakdown(local, mcpResult),
     );
     setPhase(Phase.Done);
   };
 
+  // TODO(mcp-plugin): every client gets a direct MCP entry while the PostHog
+  // ai-plugin install is broken. Restore the plugin path (installPlugins for
+  // supportsPlugin clients, skipping the direct entry where pluginBundlesMcp)
+  // once the plugin is fixed: revert the commit that added this comment.
   const installAll = async (local: McpClientInfo[]) => {
     setRows(Object.fromEntries(local.map((c) => [c.name, RowState.Waiting])));
     setPhase(Phase.Working);
 
     const features = store.mcpFeatures ?? [...ALL_FEATURE_VALUES];
-    const plugins = oauthFlow
-      ? local.filter((c) => c.supportsPlugin).map((c) => c.name)
-      : [];
     const mcpResult: McpClientResult[] = [];
-    const pluginResult: McpClientResult[] = [];
 
     for (const client of local) {
-      if (!needsDirect(client)) continue;
       setRow(client.name, RowState.Installing);
       mcpResult.push(...(await installDirect(client.name, features)));
       setMcpResults([...mcpResult]);
-      // A plugin client still has its plugin to come.
-      setRow(
-        client.name,
-        plugins.includes(client.name) ? RowState.Waiting : RowState.Done,
-      );
+      setRow(client.name, RowState.Done);
     }
 
-    // One batch, so `mcp plugins installed` stays one event per run.
-    if (plugins.length > 0) {
-      plugins.forEach((name) => setRow(name, RowState.Installing));
-      pluginResult.push(...(await installPluginsFor(plugins)));
-      setPluginResults([...pluginResult]);
-    }
-
-    setRows(Object.fromEntries(local.map((c) => [c.name, RowState.Done])));
-    settle(local, mcpResult, pluginResult, features);
+    settle(local, mcpResult, features);
   };
 
   const retry = async (name: string) => {
@@ -500,22 +444,17 @@ export const McpScreen = ({
     const others = (results: McpClientResult[]) =>
       results.filter((r) => r.name !== name);
     setRow(name, RowState.Installing);
-    const mcpResult = needsDirect(client)
-      ? [...others(mcpResults), ...(await installDirect(name, features))]
-      : mcpResults;
-    const pluginResult = pluginNames.includes(name)
-      ? [...others(pluginResults), ...(await installPluginsFor([name]))]
-      : pluginResults;
+    const mcpResult = [
+      ...others(mcpResults),
+      ...(await installDirect(name, features)),
+    ];
     setMcpResults(mcpResult);
-    setPluginResults(pluginResult);
     setRow(name, RowState.Done);
     analytics.wizardCapture('mcp install retried', {
       client: name,
-      success: [...mcpResult, ...pluginResult].some(
-        (r) => r.name === name && isOk(r),
-      ),
+      success: mcpResult.some((r) => r.name === name && isOk(r)),
     });
-    settle(localClients, mcpResult, pluginResult, features);
+    settle(localClients, mcpResult, features);
   };
 
   /** Leave Step 1: on to the AI assistants, or out when there are none. */
@@ -620,7 +559,7 @@ export const McpScreen = ({
     setPhase(Phase.Done);
   };
 
-  const allResults = [...mcpResults, ...pluginResults];
+  const allResults = mcpResults;
   const readyCount = localClients.filter((c) =>
     allResults.some((r) => r.name === c.name && isOk(r)),
   ).length;
@@ -757,7 +696,6 @@ export const McpScreen = ({
               clients={localClients}
               rows={rows}
               results={allResults}
-              pluginNames={pluginNames}
             />
           </Box>
         )}
@@ -769,7 +707,6 @@ export const McpScreen = ({
                 clients={localClients}
                 rows={rows}
                 results={allResults}
-                pluginNames={pluginNames}
               />
             </Box>
             {loginCommands.length > 0 && (

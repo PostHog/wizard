@@ -221,13 +221,11 @@ const fakeClients = () =>
       name: 'Claude Code',
       kind: 'local' as const,
       supportsPlugin: true,
-      pluginBundlesMcp: false,
     },
     {
       name: 'Cursor',
       kind: 'local' as const,
       supportsPlugin: false,
-      pluginBundlesMcp: false,
     },
   ]);
 
@@ -236,7 +234,6 @@ const fakeInstaller: McpInstaller = {
   detectInstalled: fakeClients,
   install: pending,
   remove: pending,
-  installPlugins: pending,
 };
 
 function makeStore(program: ProgramId): WizardStore {

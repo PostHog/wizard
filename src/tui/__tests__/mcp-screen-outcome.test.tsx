@@ -36,7 +36,6 @@ const installer: McpInstaller = {
         name: 'Cursor',
         kind: 'local',
         supportsPlugin: false,
-        pluginBundlesMcp: false,
       },
     ]),
   detectInstalled: () =>
@@ -45,14 +44,12 @@ const installer: McpInstaller = {
         name: 'Cursor',
         kind: 'local',
         supportsPlugin: false,
-        pluginBundlesMcp: false,
       },
     ]),
   install: () =>
     Promise.resolve([{ name: 'Cursor', status: McpClientStatus.Changed }]),
   remove: () =>
     Promise.resolve([{ name: 'Cursor', status: McpClientStatus.Changed }]),
-  installPlugins: () => Promise.resolve([]),
 };
 
 const ENTER = '\r';
@@ -105,13 +102,11 @@ it('removes only the coding agents the user ticks', async () => {
         name: 'Cursor',
         kind: 'local' as const,
         supportsPlugin: false,
-        pluginBundlesMcp: false,
       },
       {
         name: 'Codex',
         kind: 'local' as const,
         supportsPlugin: true,
-        pluginBundlesMcp: false,
       },
     ]);
   const remove = vi.fn<McpInstaller['remove']>((names) =>
@@ -243,13 +238,11 @@ it('opens an AI assistant after the coding agents and completes with both', asyn
         name: 'Cursor',
         kind: 'local' as const,
         supportsPlugin: false,
-        pluginBundlesMcp: false,
       },
       {
         name: 'Claude Desktop/Web',
         kind: 'account' as const,
         supportsPlugin: false,
-        pluginBundlesMcp: false,
         finish: {
           url: 'https://claude.ai/directory/connectors/posthog',
           instruction: 'Sign in and click "Connect" to finish.',
@@ -308,7 +301,6 @@ it('shows the login command for a coding agent that was already installed', asyn
         name: 'Codex',
         kind: 'local' as const,
         supportsPlugin: false,
-        pluginBundlesMcp: false,
         loginCommand: 'codex mcp login posthog',
       },
     ]);
@@ -344,7 +336,6 @@ it('reports no coding agents when only AI assistants were found', async () => {
         name: 'Claude Desktop/Web',
         kind: 'account' as const,
         supportsPlugin: false,
-        pluginBundlesMcp: false,
         finish: {
           url: 'https://claude.ai/directory/connectors/posthog',
           instruction: 'Sign in and click "Connect" to finish.',

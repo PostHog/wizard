@@ -9,13 +9,10 @@ import {
   getSupportedClients,
   removeMCPServer,
   getInstalledClients,
-  getSupportedPluginClients,
-  installPlugins as runPluginInstall,
 } from '@shared/mcp-clients/install';
 import { ALL_FEATURE_VALUES } from '@shared/mcp-clients/defaults';
 import {
   McpClientStatus,
-  namesWithStatus,
   redactSecrets,
   toClientResult,
   type McpClientResult,
@@ -25,7 +22,6 @@ import { isPluginCapable } from '@shared/mcp-clients/plugin-client';
 import { isLoginCapable } from '@shared/mcp-clients/login-client';
 import { isBrowserFinishable } from '@shared/mcp-clients/browser-client';
 import { logToFile } from '@utils/debug';
-import { analytics } from '@utils/analytics';
 
 /** Where the install lives: a config on this computer, or a connector in the user's account. */
 export type McpClientKind = 'local' | 'account';
@@ -34,8 +30,6 @@ export interface McpClientInfo {
   name: string;
   kind: McpClientKind;
   supportsPlugin: boolean;
-  /** True when the plugin already ships the posthog MCP server (no direct entry needed). */
-  pluginBundlesMcp: boolean;
   /**
    * Set for clients connected by opening a hosted page in the browser. The
    * Done screen renders this so the user knows to finish setup in the browser.
@@ -43,8 +37,6 @@ export interface McpClientInfo {
   finish?: { url: string; instruction: string };
   /** The editor's own login command (e.g. `claude mcp login posthog`), the one manual step left. */
   loginCommand?: string;
-  /** Same, for the plugin-provided server (e.g. `claude mcp login plugin:posthog:posthog`). */
-  pluginLoginCommand?: string;
 }
 
 export { McpClientStatus };
@@ -73,9 +65,6 @@ export interface McpInstaller {
    * result per client so a failed removal isn't reported as a success.
    */
   remove(clientNames: string[], local?: boolean): Promise<McpClientResult[]>;
-
-  /** Install the PostHog AI plugin to supported clients. Best-effort: failures do not affect MCP outcome. */
-  installPlugins(clientNames: string[]): Promise<McpClientResult[]>;
 }
 
 /**
@@ -85,13 +74,10 @@ const toClientInfo = (c: MCPClient): McpClientInfo => ({
   name: c.name,
   kind: isBrowserFinishable(c) ? 'account' : 'local',
   supportsPlugin: isPluginCapable(c) && c.supportsPlugin(),
-  pluginBundlesMcp: isPluginCapable(c) && c.pluginBundlesMcpServer(),
   finish: isBrowserFinishable(c)
     ? { url: c.connectorUrl, instruction: c.finishInstruction }
     : undefined,
   loginCommand: (isLoginCapable(c) && c.loginCommand(false)) || undefined,
-  pluginLoginCommand:
-    (isLoginCapable(c) && c.pluginLoginCommand?.()) || undefined,
 });
 
 export function createMcpInstaller(): McpInstaller {
@@ -179,31 +165,6 @@ export function createMcpInstaller(): McpInstaller {
       );
       if (selected.length === 0) return [];
       return removeMCPServer(selected, local);
-    },
-
-    async installPlugins(clientNames: string[]): Promise<McpClientResult[]> {
-      const rawClients = cachedClients
-        .filter((c) => clientNames.includes(c.name))
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        .map((c) => c.raw as any);
-
-      const pluginClients = getSupportedPluginClients(rawClients);
-      const results = await runPluginInstall(pluginClients);
-
-      const already = namesWithStatus(results, McpClientStatus.Unchanged);
-      analytics.wizardCapture('mcp plugins installed', {
-        // `clients` keeps its original meaning — every client that ended up with
-        // the plugin — so existing insights don't dip when a re-run reports
-        // already-installed instead of a fresh write.
-        clients: [
-          ...namesWithStatus(results, McpClientStatus.Changed),
-          ...already,
-        ],
-        already_installed: already,
-        attempted: pluginClients.map((c) => c.name),
-      });
-
-      return results;
     },
   };
 }

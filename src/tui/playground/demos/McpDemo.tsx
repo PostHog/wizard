@@ -16,25 +16,21 @@ const MOCK_CLIENTS: McpClientInfo[] = [
     name: 'Claude Code',
     kind: 'local',
     supportsPlugin: true,
-    pluginBundlesMcp: false,
   },
   {
     name: 'Cursor',
     kind: 'local',
     supportsPlugin: true,
-    pluginBundlesMcp: false,
   },
   {
     name: 'VS Code',
     kind: 'local',
     supportsPlugin: false,
-    pluginBundlesMcp: false,
   },
   {
     name: 'Claude Desktop/Web',
     kind: 'account',
     supportsPlugin: false,
-    pluginBundlesMcp: false,
     finish: {
       url: 'https://claude.ai/directory/connectors/posthog',
       instruction: 'Sign in and click "Connect" to finish.',
@@ -62,14 +58,6 @@ function createMockInstaller(): McpInstaller {
             }
           : { name, status: McpClientStatus.Changed },
       );
-    },
-    async installPlugins(clientNames) {
-      await new Promise((r) => setTimeout(r, 800));
-      return clientNames
-        .filter(
-          (name) => MOCK_CLIENTS.find((c) => c.name === name)?.supportsPlugin,
-        )
-        .map((name) => ({ name, status: McpClientStatus.Changed }));
     },
     async detectInstalled() {
       await new Promise((r) => setTimeout(r, 800));

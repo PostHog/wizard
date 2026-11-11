@@ -9,7 +9,7 @@ import { VisualStudioCodeClient } from './clients/visual-studio-code';
 import { ZedClient } from './clients/zed';
 import { CodexMCPClient } from './clients/codex';
 import { OpenCodeMCPClient } from './clients/opencode';
-import { isPluginCapable, PluginCapable } from './plugin-client';
+import { isPluginCapable } from './plugin-client';
 import { toClientResult, type McpClientResult } from './results';
 
 export const getSupportedClients = async (): Promise<MCPClient[]> => {
@@ -64,6 +64,10 @@ export const getInstalledClients = async (
   return installedClients;
 };
 
+// TODO(mcp-plugin): installs are direct-only while the PostHog ai-plugin is
+// broken; no surface calls a client's installPlugin(). Removal below still
+// uninstalls a plugin users already have. Restore installPlugins (and its
+// TUI caller) by reverting the commit that added this comment.
 export const addMCPServer = async (
   clients: MCPClient[],
   personalApiKey?: string,
@@ -81,34 +85,6 @@ export const addMCPServer = async (
       results.push(toClientResult(client.name, result));
     } catch (err) {
       logToFile(`[addMCPServer] addServer threw for ${client.name}: ${err}`);
-      results.push(
-        toClientResult(client.name, {
-          success: false,
-          reason: err instanceof Error ? err.message : String(err),
-        }),
-      );
-    }
-  }
-  return results;
-};
-
-export const getSupportedPluginClients = (
-  clients: MCPClient[],
-): Array<MCPClient & PluginCapable> => {
-  return clients.filter(isPluginCapable).filter((c) => c.supportsPlugin());
-};
-
-export const installPlugins = async (
-  clients: Array<MCPClient & PluginCapable>,
-): Promise<McpClientResult[]> => {
-  const results: McpClientResult[] = [];
-  for (const client of clients) {
-    try {
-      results.push(toClientResult(client.name, await client.installPlugin()));
-    } catch (err) {
-      logToFile(
-        `[installPlugins] installPlugin threw for ${client.name}: ${err}`,
-      );
       results.push(
         toClientResult(client.name, {
           success: false,
