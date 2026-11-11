@@ -369,8 +369,9 @@ export class ClaudeCodeMCPClient
     return true;
   }
 
+  /** The wizard installs the direct MCP entry only, never the plugin. */
   supportsPlugin(): boolean {
-    return this.findClaudeCommand() !== null;
+    return false;
   }
 
   // Async on purpose: these calls clone git repos and take seconds, and

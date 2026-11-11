@@ -416,10 +416,10 @@ export const McpScreen = ({
     }
   };
 
-  // A direct entry for everyone whose plugin doesn't already ship the MCP
-  // server (codex's plugin is skills-only; claude's bundles the server).
+  // A direct entry for everyone not getting a plugin that ships the MCP server
+  // (codex's plugin is skills-only; claude's bundles the server).
   const needsDirect = (client: McpClientInfo) =>
-    !oauthFlow || !client.pluginBundlesMcp;
+    !oauthFlow || !client.supportsPlugin || !client.pluginBundlesMcp;
 
   /** Show the results and arm Enter with what ended up installed. */
   const settle = (

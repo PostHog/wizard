@@ -116,13 +116,7 @@ describe('ClaudeCodeMCPClient — plugin methods', () => {
   });
 
   describe('supportsPlugin', () => {
-    it('returns true when claude binary is found', () => {
-      const client = new ClaudeCodeMCPClient();
-      expect(client.supportsPlugin()).toBe(true);
-    });
-
-    it('returns false when no binary is found', () => {
-      findBinaryMock.mockReturnValue(null);
+    it('returns false even when claude binary is found', () => {
       const client = new ClaudeCodeMCPClient();
       expect(client.supportsPlugin()).toBe(false);
     });
