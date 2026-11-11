@@ -1,6 +1,6 @@
 /**
  * AI opt-in gate — step injection for programs whose agent run sends
- * source to Anthropic Claude.
+ * source to third-party AI providers.
  *
  * Injected after the `auth` step of every program's flow; a tool runs no
  * agent, so its flow never gets it. The injected step carries three

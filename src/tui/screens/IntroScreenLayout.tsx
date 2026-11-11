@@ -15,6 +15,7 @@ import { Box, Text } from 'ink';
 import { useState, type ReactNode } from 'react';
 import { PickerMenu, type PickerOption } from '@tui/primitives/index';
 import {
+  AiDisclosure,
   PrivacyPanel,
   PRIVACY_PANEL_LABEL,
 } from '@tui/components/PrivacyPanel';
@@ -36,8 +37,8 @@ interface IntroScreenLayoutProps {
   showSubtitle?: boolean;
 
   /**
-   * Custom subtitle content, rendered in place of the default
-   * "We'll use AI… / .env*…" lines when `showSubtitle` is true. Pass the
+   * Custom subtitle content, rendered below the AI disclosure in place of
+   * the default ".env*…" line when `showSubtitle` is true. Pass the
    * inner <Text> lines — the layout owns the centered, top-margined
    * wrapper. Defaults to the generic subtitle when omitted.
    */
@@ -131,12 +132,7 @@ const WizardTitle = ({ title }: { title: string }) => (
 
 /** Generic subtitle shown when a screen doesn't supply its own. */
 const DEFAULT_SUBTITLE = (
-  <>
-    <Text dimColor>
-      We'll use AI to analyze your project and complete work.
-    </Text>
-    <Text dimColor>.env* file contents will not leave your machine.</Text>
-  </>
+  <Text dimColor>.env* file contents will not leave your machine.</Text>
 );
 
 /** Default menu when a screen passes none. */
@@ -250,7 +246,14 @@ export const IntroScreenLayout = ({
           <WizardTitle title={showingPrivacy ? PRIVACY_PANEL_LABEL : title} />
 
           {showSubtitle && !showingPrivacy && (
-            <Box flexDirection="column" alignItems="center" marginTop={1}>
+            // flexShrink 0: Yoga otherwise collapses a line onto its neighbor.
+            <Box
+              flexDirection="column"
+              alignItems="center"
+              marginTop={1}
+              flexShrink={0}
+            >
+              <AiDisclosure />
               {subtitle ?? DEFAULT_SUBTITLE}
             </Box>
           )}
