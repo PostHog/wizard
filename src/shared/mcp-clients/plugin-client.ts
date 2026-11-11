@@ -10,6 +10,11 @@ export interface PluginCapable {
   removePlugin?(): Promise<PluginInstallResult>;
   /** True when the plugin ships its own posthog MCP server, making a direct entry redundant. */
   pluginBundlesMcpServer(): boolean;
+  /**
+   * True when an installed copy is enabled and so serves its bundled server.
+   * Absent for clients whose plugin bundles no server.
+   */
+  isPluginServing?(): Promise<boolean>;
 }
 
 export function isPluginCapable<T>(client: T): client is T & PluginCapable {
