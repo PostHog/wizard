@@ -12,7 +12,11 @@ const PROGRAMS_DIR = path.resolve(
   'src',
   'programs',
 );
-const OUT_PATH = path.join(os.tmpdir(), 'wizard-agent-dags.html');
+/** A folder made for this run, so the page is never written to a path that already exists. */
+const OUT_PATH = path.join(
+  fs.mkdtempSync(path.join(os.tmpdir(), 'wizard-agent-dags-')),
+  'wizard-agent-dags.html',
+);
 
 type Task = {
   id: string;
