@@ -156,6 +156,7 @@
     "prepare": "husky",
     "wizard-ci-explore": "tsx scripts/wizard-ci-explore.no-jest.ts",
     "wizard-ci-replay": "tsx scripts/tui-replay.no-jest.ts",
+    "wizard-ci-record": "tsx scripts/tui-record.no-jest.ts",
     "decisions-detect": "tsx scripts/decisions-detect.no-jest.ts",
     "check:decisions-bundle": "tsx scripts/check-decisions-bundle.no-jest.ts"
   },
