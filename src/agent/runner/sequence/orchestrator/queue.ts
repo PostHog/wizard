@@ -189,11 +189,11 @@ function sleepSync(ms: number): void {
 
 /** Dropped in the cache folder so an orphaned copy explains itself. */
 const DELETE_ME_FILE = '.DELETE-ME.md';
-const DELETE_ME_BODY = `# Safe to delete
+const DELETE_ME_BODY = `# Do not delete while the wizard is running
 
-This folder contains run artifacts from the PostHog Wizard. This should have
-been deleted if the Wizard has finished running. If this wasn't deleted for
-some reason, you can safely delete the entire \`${QUEUE_DIR_NAME}/\` folder.
+The PostHog Wizard keeps its run files here and deletes this folder when the
+run ends. If the wizard is not running and this folder is still here, you can
+safely delete the entire \`${QUEUE_DIR_NAME}/\` folder.
 `;
 
 /** Every queue transition, in the order it is reflected. */
