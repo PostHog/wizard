@@ -29,7 +29,9 @@ run config's `agentPrompts`; see
 [agent prompts](../../../programs/README.md#agent-prompts). Off, or for a
 program that bundles none, the orchestrator fetches the flow `agentFlow ?? id`
 from context-mill. Every event of the run carries which as the
-`orchestrator_prompts` tag.
+`orchestrator_prompts` tag. That tag says which path a run took, and the flag's
+value on an event does not: a pinned run reports the flag as on and still
+fetches.
 
 A flow's seed planner queues its tasks. A bundled flow with no seed prompt is
 queued from the graph its frontmatter declares, by
