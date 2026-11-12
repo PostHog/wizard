@@ -17,21 +17,24 @@ function readFlagsOrExit() {
       app: { type: 'string' },
       'until-screen': { type: 'string' },
       out: { type: 'string' },
+      html: { type: 'string' },
     },
   });
   const program = flags.program;
   const sourceAppDir = flags.app;
   const targetScreen = flags['until-screen'];
   const castPath = flags.out;
+  const replayPagePath = flags.html;
   if (program && sourceAppDir && targetScreen && castPath)
-    return { program, sourceAppDir, targetScreen, castPath };
+    return { program, sourceAppDir, targetScreen, castPath, replayPagePath };
   process.stderr.write(
-    'usage: pnpm wizard-ci-record --program <id> --app <dir> --until-screen <screen-id> --out <file.cast>\n',
+    'usage: pnpm wizard-ci-record --program <id> --app <dir> --until-screen <screen-id> --out <file.cast> [--html <file.html>]\n',
   );
   return process.exit(2);
 }
 
-const { program, sourceAppDir, targetScreen, castPath } = readFlagsOrExit();
+const { program, sourceAppDir, targetScreen, castPath, replayPagePath } =
+  readFlagsOrExit();
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -70,6 +73,13 @@ async function recordUntilTargetScreen(
 ): Promise<number> {
   writeCastHeader(castFile);
   const recordingStartedAt = performance.now();
+  const appendOutputEvent = (chunk: string) => {
+    const elapsedSeconds = (performance.now() - recordingStartedAt) / 1000;
+    fs.writeSync(
+      castFile,
+      JSON.stringify([Number(elapsedSeconds.toFixed(6)), 'o', chunk]) + '\n',
+    );
+  };
   const host = startServeHost({
     appDir: appCopyDir,
     projectId: '1',
@@ -77,13 +87,7 @@ async function recordUntilTargetScreen(
     apiKey: '',
     cols: TERMINAL_COLUMNS,
     rows: TERMINAL_ROWS,
-    onOutput: (chunk) => {
-      const elapsedSeconds = (performance.now() - recordingStartedAt) / 1000;
-      fs.writeSync(
-        castFile,
-        JSON.stringify([Number(elapsedSeconds.toFixed(6)), 'o', chunk]) + '\n',
-      );
-    },
+    onOutput: appendOutputEvent,
   });
   registerCleanup(() => host.dispose());
   let hostExitCode: number | undefined;
@@ -97,6 +101,7 @@ async function recordUntilTargetScreen(
     lastScreen = currentScreenOf(response?.state) ?? lastScreen;
     if (lastScreen === targetScreen) {
       await waitFor(() => hostExitCode !== undefined, HOLD_AFTER_TARGET_MS);
+      appendOutputEvent('');
       process.stdout.write(`recorded ${castPath} ending on ${targetScreen}\n`);
       return 0;
     }
@@ -116,7 +121,7 @@ async function recordUntilTargetScreen(
   return 1;
 }
 
-async function main(): Promise<number> {
+async function recordCast(): Promise<number> {
   const castFile = fs.openSync(castPath, 'w');
   const cleanups: Array<() => void> = [() => fs.closeSync(castFile)];
   const runCleanups = () => {
@@ -139,6 +144,50 @@ async function main(): Promise<number> {
   } finally {
     runCleanups();
   }
+}
+
+function readPlayerAsset(fileName: string): string {
+  return fs.readFileSync(
+    path.join(
+      process.cwd(),
+      'node_modules/asciinema-player/dist/bundle',
+      fileName,
+    ),
+    'utf8',
+  );
+}
+
+function writeReplayPage(castFilePath: string, pagePath: string) {
+  const castText = fs.readFileSync(castFilePath, 'utf8');
+  const playerScript = readPlayerAsset('asciinema-player.min.js').replace(
+    /<\/script/gi,
+    '<\\/script',
+  );
+  const playerStyles = readPlayerAsset('asciinema-player.css');
+  const castLiteral = JSON.stringify(castText).replace(/</g, '\\u003c');
+  const page = `<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Wizard recording</title>
+<style>${playerStyles}</style>
+<style>body{margin:0;background:#121314;display:grid;place-items:center;min-height:100vh}#player{width:min(100vw,1200px)}</style>
+</head>
+<body>
+<div id="player"></div>
+<script>${playerScript}</script>
+<script>AsciinemaPlayer.create({ data: ${castLiteral} }, document.getElementById('player'), { autoPlay: true, fit: 'width' });</script>
+</body>
+</html>
+`;
+  fs.writeFileSync(pagePath, page);
+  process.stdout.write(`wrote replay page ${pagePath}\n`);
+}
+
+async function main(): Promise<number> {
+  const exitCode = await recordCast();
+  if (replayPagePath) writeReplayPage(castPath, replayPagePath);
+  return exitCode;
 }
 
 main().then(
