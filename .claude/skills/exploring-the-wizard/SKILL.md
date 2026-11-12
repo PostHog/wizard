@@ -3,7 +3,7 @@ name: exploring-the-wizard
 description:
   Drive the PostHog wizard headlessly against a throwaway app through wizard-ci
   MCP tools, inspect decisions, and capture the real TUI. Use for detection
-  checks and end-to-end exploration.
+  checks, end-to-end exploration, and recording a TUI clip for a post or doc.
 compatibility:
   Designed for coding agents working on the PostHog wizard codebase with the
   wizard-ci MCP server.
@@ -115,6 +115,35 @@ frames. Keep the screen path and failure evidence with the snapshots. Do not
 stop a progressing run at an invented turn count: the MCP exposes no turn limit;
 Pi's continuation and tool-call guards are described in its
 [harness README](../../../src/agent/runner/harness/pi/README.md).
+
+## Record a clip
+
+For a launch post or a doc, record the real TUI instead of screen-recording a
+terminal:
+
+```sh
+pnpm wizard-ci-record --program warehouse-source \
+  --app ../wizard-workbench/apps/warehouse/multi-source-next \
+  --until-screen warehouse-intro --out /tmp/clip.cast --html /tmp/clip.html
+```
+
+It needs no PostHog key and creates no PostHog resources, so it reaches only the
+screens the TUI shows before input: detection and the program's intro.
+`--until-screen` takes a `read_state.currentScreen` id, such as the ids in
+[`src/tui/screen-ids.ts`](../../../src/tui/screen-ids.ts) or a program's
+`screen-ids.ts`. A run that never reaches it exits 1 and names the last screen.
+Open the `--html` page to check the clip; it plays offline.
+
+Turn the `.cast` into an MP4 that X and LinkedIn accept with
+[agg](https://docs.asciinema.org/manual/agg/) (`brew install agg`) and ffmpeg.
+Keep `fps=30`: without it ffmpeg drops the GIF's last-frame delay, which cuts
+the hold on the final screen.
+
+```sh
+agg --font-size 28 /tmp/clip.cast /tmp/clip.gif
+ffmpeg -i /tmp/clip.gif -movflags +faststart -pix_fmt yuv420p \
+  -vf "fps=30,scale=trunc(iw/2)*2:trunc(ih/2)*2" -c:v libx264 -crf 18 /tmp/clip.mp4
+```
 
 ## Sweep the workbench
 
