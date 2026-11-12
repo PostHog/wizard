@@ -1,18 +1,7 @@
 import { ErrorCodes } from './codes';
 import { WizardError } from './wizard-error';
 
-/**
- * What a failed filesystem call means for the run, read from its errno code.
- *
- * - `missing`: ENOENT, ENOTDIR. A path the run made is gone, usually deleted
- *   while the run was going.
- * - `locked`: EBUSY, EAGAIN, EMFILE, ENFILE, and on Windows EPERM and EACCES.
- *   Another process holds the file (antivirus, search indexer, sync client) or
- *   the process is out of file handles. It clears on its own.
- * - `denied`: EACCES, EPERM off Windows, EROFS. The user cannot write there.
- * - `no-space`: ENOSPC, EDQUOT. The disk or the user's quota is full.
- * - `unknown`: anything else, left for the caller to rethrow.
- */
+/** What a failed filesystem call means for the run, read from its errno code. */
 export const FsFailureKind = {
   Missing: 'missing',
   Locked: 'locked',
@@ -50,11 +39,7 @@ export function classifyFsFailure(
   }
 }
 
-/**
- * The coded error that ends a run on a filesystem failure only the user can
- * fix (a full disk, a folder they cannot write), or undefined when the
- * failure is one the caller should recover from or rethrow.
- */
+/** The coded error for a failure only the user can fix (full disk, no write access), else undefined. */
 export function filesystemRunError(
   error: unknown,
   target: string,
