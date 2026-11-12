@@ -208,12 +208,18 @@ function warehouseReportInstruction(sess: ProgramSession): string {
  *
  * Empty when detection found no `in-cli` source, and in CI, signup, and any
  * other run where `wizard_ask` is disabled — a credential prompt nobody can
- * answer would burn the task's whole timeout and then fail the run. Capped at
+ * answer would burn the task's whole timeout and then fail the run. Empty too
+ * when the login came back without the warehouse scopes: every source call
+ * would be refused, so the offer could only end blocked. Capped at
  * {@link WAREHOUSE_SEED_LIMIT} sources; {@link buildWarehouseNextSteps} hands
  * every detected source over as an outro link.
  */
 const warehouseSeedTasks: NonNullable<ProgramConfig['seedTasks']> = (sess) => {
   if (shouldDisableAsk(sess)) return [];
+  const missingScopes = sess.credentials?.missingScopes ?? [];
+  if (WAREHOUSE_SOURCE_SCOPE_ADDITIONS.some((s) => missingScopes.includes(s))) {
+    return [];
+  }
   const sources = getDetectedWarehouseSources(sess);
   // A deep-link source has no credential to ask for, so the outro link is all
   // the step could give it.
