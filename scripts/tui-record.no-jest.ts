@@ -2,6 +2,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { parseArgs } from 'util';
+import { spawn } from 'child_process';
 import { openCastWriter, type CastWriter } from '@e2e-harness/asciicast';
 import { startServeHost, waitFor } from '@e2e-harness/serve-host';
 
@@ -9,6 +10,7 @@ const TERMINAL_COLUMNS = 100;
 const TERMINAL_ROWS = 30;
 const HOLD_AFTER_TARGET_MS = 3000;
 const RECORDING_TIMEOUT_MS = 90_000;
+const DRIVEN_RECORDING_TIMEOUT_MS = 30 * 60_000;
 const SCREEN_POLL_MS = 150;
 
 function readFlagsOrExit() {
@@ -19,6 +21,7 @@ function readFlagsOrExit() {
       'until-screen': { type: 'string' },
       out: { type: 'string' },
       html: { type: 'string' },
+      drive: { type: 'boolean' },
     },
   });
   const program = flags.program;
@@ -26,16 +29,31 @@ function readFlagsOrExit() {
   const targetScreen = flags['until-screen'];
   const castPath = flags.out;
   const replayPagePath = flags.html;
-  if (program && sourceAppDir && targetScreen && castPath)
-    return { program, sourceAppDir, targetScreen, castPath, replayPagePath };
+  const isDriven = flags.drive ?? false;
+  if (program && sourceAppDir && castPath && (targetScreen || isDriven))
+    return {
+      program,
+      sourceAppDir,
+      targetScreen,
+      castPath,
+      replayPagePath,
+      isDriven,
+    };
   process.stderr.write(
-    'usage: pnpm wizard-ci-record --program <id> --app <dir> --until-screen <screen-id> --out <file.cast> [--html <file.html>]\n',
+    'usage: pnpm wizard-ci-record --program <id> --app <dir> --until-screen <screen-id> --out <file.cast> [--html <file.html>]\n' +
+      '       pnpm wizard-ci-record --drive --program <id> --app <dir> [--until-screen <screen-id>] --out <file.cast> [--html <file.html>]\n',
   );
   return process.exit(2);
 }
 
-const { program, sourceAppDir, targetScreen, castPath, replayPagePath } =
-  readFlagsOrExit();
+const {
+  program,
+  sourceAppDir,
+  targetScreen,
+  castPath,
+  replayPagePath,
+  isDriven,
+} = readFlagsOrExit();
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -55,6 +73,7 @@ function currentScreenOf(state: unknown): string | undefined {
 }
 
 async function recordUntilTargetScreen(
+  untilScreen: string,
   cast: CastWriter,
   appCopyDir: string,
   registerCleanup: (cleanup: () => void) => void,
@@ -78,10 +97,10 @@ async function recordUntilTargetScreen(
   while (socketReady && hostExitCode === undefined && Date.now() < deadline) {
     const response = await host.rpc({ type: 'read_state' }).catch(() => null);
     lastScreen = currentScreenOf(response?.state) ?? lastScreen;
-    if (lastScreen === targetScreen) {
+    if (lastScreen === untilScreen) {
       await waitFor(() => hostExitCode !== undefined, HOLD_AFTER_TARGET_MS);
       cast.close();
-      process.stdout.write(`recorded ${castPath} ending on ${targetScreen}\n`);
+      process.stdout.write(`recorded ${castPath} ending on ${untilScreen}\n`);
       return 0;
     }
     await sleep(SCREEN_POLL_MS);
@@ -93,14 +112,14 @@ async function recordUntilTargetScreen(
       ? `timed out after ${RECORDING_TIMEOUT_MS}ms`
       : `the TUI host exited with code ${hostExitCode}`;
   process.stderr.write(
-    `never reached screen ${targetScreen}: ${reason}; last screen ${
+    `never reached screen ${untilScreen}: ${reason}; last screen ${
       lastScreen ?? 'none'
     }; partial recording kept at ${castPath}\n`,
   );
   return 1;
 }
 
-async function recordCast(): Promise<number> {
+async function recordCast(untilScreen: string): Promise<number> {
   const cast = openCastWriter(castPath, {
     cols: TERMINAL_COLUMNS,
     rows: TERMINAL_ROWS,
@@ -120,11 +139,130 @@ async function recordCast(): Promise<number> {
     cleanups.push(() =>
       fs.rmSync(appCopyDir, { recursive: true, force: true }),
     );
-    return await recordUntilTargetScreen(cast, appCopyDir, (cleanup) =>
-      cleanups.push(cleanup),
+    return await recordUntilTargetScreen(
+      untilScreen,
+      cast,
+      appCopyDir,
+      (cleanup) => cleanups.push(cleanup),
     );
   } finally {
     runCleanups();
+  }
+}
+
+function missingDriveCredential(): string | undefined {
+  if (!process.env.POSTHOG_PERSONAL_API_KEY && !process.env.POSTHOG_KEY_FILE)
+    return 'POSTHOG_PERSONAL_API_KEY or POSTHOG_KEY_FILE';
+  if (!process.env.PROJECT_ID) return 'PROJECT_ID';
+  if (!process.env.WIZARD_CI_GATEWAY_TOKEN_FILE)
+    return 'WIZARD_CI_GATEWAY_TOKEN_FILE';
+  return undefined;
+}
+
+function screensSignalledIn(controlFile: string): string[] {
+  if (!fs.existsSync(controlFile)) return [];
+  return fs
+    .readFileSync(controlFile, 'utf8')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
+async function recordDrivenRun(): Promise<number> {
+  const missingCredential = missingDriveCredential();
+  if (missingCredential) {
+    process.stderr.write(`--drive needs ${missingCredential} set\n`);
+    return 2;
+  }
+  fs.writeFileSync(castPath, '');
+  const appCopyDir = copyAppToThrowawayDir(sourceAppDir);
+  const snapshotDir = fs.mkdtempSync(
+    path.join(os.tmpdir(), 'wizard-record-snaps-'),
+  );
+  const controlFile = path.join(snapshotDir, 'ctrl');
+  const snapshotRoute = spawn(
+    path.join(process.cwd(), 'node_modules/.bin/tsx'),
+    ['scripts/tui-snapshots.no-jest.ts'],
+    {
+      cwd: process.cwd(),
+      stdio: 'inherit',
+      env: {
+        ...process.env,
+        SNAP_RECORD: '1',
+        SNAP_OUT: snapshotDir,
+        APP_DIR: appCopyDir,
+        PROGRAM: program,
+        PTY_COLS: String(TERMINAL_COLUMNS),
+        PTY_ROWS: String(TERMINAL_ROWS),
+      },
+    },
+  );
+  let routeExitCode: number | undefined;
+  const routeExited = new Promise<void>((resolve) =>
+    snapshotRoute.once('exit', (code, signal) => {
+      routeExitCode = code ?? (signal ? 128 : 1);
+      resolve();
+    }),
+  );
+  const stopRoute = () => snapshotRoute.kill('SIGTERM');
+  let wasInterrupted = false;
+  const stopRouteOnSignal = () => {
+    wasInterrupted = true;
+    stopRoute();
+  };
+  process.on('SIGINT', stopRouteOnSignal);
+  process.on('SIGTERM', stopRouteOnSignal);
+
+  try {
+    const deadline = Date.now() + DRIVEN_RECORDING_TIMEOUT_MS;
+    let reachedScreen: string | undefined;
+    while (routeExitCode === undefined && Date.now() < deadline) {
+      if (
+        targetScreen &&
+        screensSignalledIn(controlFile).includes(targetScreen)
+      ) {
+        reachedScreen = targetScreen;
+        await waitFor(() => routeExitCode !== undefined, HOLD_AFTER_TARGET_MS);
+        break;
+      }
+      await sleep(SCREEN_POLL_MS);
+    }
+    const hasTimedOut = routeExitCode === undefined && !reachedScreen;
+    stopRoute();
+    await routeExited;
+
+    const routeCast = path.join(snapshotDir, 'run.cast');
+    if (fs.existsSync(routeCast)) fs.copyFileSync(routeCast, castPath);
+    if (wasInterrupted) return 130;
+    if (reachedScreen) {
+      process.stdout.write(`recorded ${castPath} ending on ${reachedScreen}\n`);
+      return 0;
+    }
+    const lastScreen = screensSignalledIn(controlFile).at(-1) ?? 'none';
+    if (hasTimedOut || targetScreen) {
+      const reason = hasTimedOut
+        ? `timed out after ${DRIVEN_RECORDING_TIMEOUT_MS}ms`
+        : `the driven run exited with code ${routeExitCode ?? 'unknown'}`;
+      process.stderr.write(
+        `${
+          targetScreen
+            ? `never reached screen ${targetScreen}`
+            : 'the driven run did not finish'
+        }: ${reason}; last screen ${lastScreen}; partial recording kept at ${castPath}\n`,
+      );
+      return 1;
+    }
+    process.stdout.write(
+      `recorded ${castPath} ending on ${lastScreen}; driven run exited ${
+        routeExitCode ?? 'unknown'
+      }\n`,
+    );
+    return routeExitCode ?? 1;
+  } finally {
+    process.off('SIGINT', stopRouteOnSignal);
+    process.off('SIGTERM', stopRouteOnSignal);
+    fs.rmSync(appCopyDir, { recursive: true, force: true });
+    fs.rmSync(snapshotDir, { recursive: true, force: true });
   }
 }
 
@@ -167,8 +305,12 @@ function writeReplayPage(castFilePath: string, pagePath: string) {
 }
 
 async function main(): Promise<number> {
-  const exitCode = await recordCast();
-  if (replayPagePath) writeReplayPage(castPath, replayPagePath);
+  const exitCode =
+    targetScreen && !isDriven
+      ? await recordCast(targetScreen)
+      : await recordDrivenRun();
+  if (replayPagePath && exitCode !== 2 && fs.existsSync(castPath))
+    writeReplayPage(castPath, replayPagePath);
   return exitCode;
 }
 

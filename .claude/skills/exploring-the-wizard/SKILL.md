@@ -127,12 +127,21 @@ pnpm wizard-ci-record --program warehouse-source \
   --until-screen warehouse-intro --out /tmp/clip.cast --html /tmp/clip.html
 ```
 
-It needs no PostHog key and creates no PostHog resources, so it reaches only the
-screens the TUI shows before input: detection and the program's intro.
-`--until-screen` takes a `read_state.currentScreen` id, such as the ids in
-[`src/tui/screen-ids.ts`](../../../src/tui/screen-ids.ts) or a program's
-`screen-ids.ts`. A run that never reaches it exits 1 and names the last screen.
-Open the `--html` page to check the clip; it plays offline.
+Without `--drive` it needs no PostHog key and creates no PostHog resources, so
+it reaches only the screens the TUI shows before input: detection and the
+program's intro. `--until-screen` takes a `read_state.currentScreen` id, such
+as the ids in [`src/tui/screen-ids.ts`](../../../src/tui/screen-ids.ts) or a
+program's `screen-ids.ts`. A run that never reaches it exits 1 and names the
+last screen. Open the `--html` page to check the clip; it plays offline.
+
+To record past the first input, add `--drive`. It walks the program's fixed e2e
+profile (`src/programs/<program>/test/e2e.json`) through the real agent run,
+the same walk `tui-snapshots.no-jest.ts` drives, so it creates real PostHog
+resources. It reads `POSTHOG_PERSONAL_API_KEY` (or `POSTHOG_KEY_FILE`),
+`PROJECT_ID` and `WIZARD_CI_GATEWAY_TOKEN_FILE` from the environment, and exits
+2 naming whichever is missing. `--until-screen` is optional here: without it,
+the recording runs until the walk ends. Setting `SNAP_RECORD=1` on
+`tui-snapshots.no-jest.ts` writes the same recording to `SNAP_OUT/run.cast`.
 
 Turn the `.cast` into an MP4 that X and LinkedIn accept with
 [agg](https://docs.asciinema.org/manual/agg/) (`brew install agg`) and ffmpeg.
