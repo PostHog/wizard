@@ -33,7 +33,7 @@ e2e-harness/
   serve-host.ts         spawn tui-host (MODE=serve) via tui-capture + its control-socket rpc
 scripts/
   tui-host.no-jest.ts   the real-TUI host: runTui + WizardCiDriver, MODE=fixed | serve
-  tui-snapshots.no-jest.ts   CI route: host(fixed) in a PTY → per-screen real-TUI snapshots
+  tui-snapshots.no-jest.ts   CI route: host(fixed) in a PTY → per-screen real-TUI snapshots (+ run.cast)
   wizard-ci-mcp.no-jest.ts   agent route: MCP server proxying host(serve)
   tui-record.no-jest.ts      host(serve) output → asciicast .cast until a target screen
 ```
@@ -78,7 +78,8 @@ The same gateway settings apply to development `--ci` runs.
   in a PTY. The host self-drives the fixed profile (`decideE2eAction`) through
   the real agent run and signals each key moment; the parent writes the real
   rendered screen to `SNAP_OUT/NN-<screen>.ans`, preserving colors and
-  attributes.
+  attributes. With `SNAP_RECORD=1` it also writes the whole run to
+  `SNAP_OUT/run.cast` through `asciicast.ts`.
 - **Agent** — `wizard-ci-mcp.no-jest.ts` is a stdio MCP server that spawns
   `tui-host` (`MODE=serve`) and proxies: `read_state` / `perform_action` /
   `run_agent` forward over a unix socket; `render_screen` returns the captured

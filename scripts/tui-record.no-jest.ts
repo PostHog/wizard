@@ -2,6 +2,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { parseArgs } from 'util';
+import { openCastWriter, type CastWriter } from '@e2e-harness/asciicast';
 import { startServeHost, waitFor } from '@e2e-harness/serve-host';
 
 const TERMINAL_COLUMNS = 100;
@@ -53,33 +54,11 @@ function currentScreenOf(state: unknown): string | undefined {
   return typeof screen === 'string' ? screen : undefined;
 }
 
-function writeCastHeader(castFile: number) {
-  fs.writeSync(
-    castFile,
-    JSON.stringify({
-      version: 2,
-      width: TERMINAL_COLUMNS,
-      height: TERMINAL_ROWS,
-      timestamp: Math.floor(Date.now() / 1000),
-      env: { TERM: 'xterm-256color' },
-    }) + '\n',
-  );
-}
-
 async function recordUntilTargetScreen(
-  castFile: number,
+  cast: CastWriter,
   appCopyDir: string,
   registerCleanup: (cleanup: () => void) => void,
 ): Promise<number> {
-  writeCastHeader(castFile);
-  const recordingStartedAt = performance.now();
-  const appendOutputEvent = (chunk: string) => {
-    const elapsedSeconds = (performance.now() - recordingStartedAt) / 1000;
-    fs.writeSync(
-      castFile,
-      JSON.stringify([Number(elapsedSeconds.toFixed(6)), 'o', chunk]) + '\n',
-    );
-  };
   const host = startServeHost({
     appDir: appCopyDir,
     projectId: '1',
@@ -87,7 +66,7 @@ async function recordUntilTargetScreen(
     apiKey: '',
     cols: TERMINAL_COLUMNS,
     rows: TERMINAL_ROWS,
-    onOutput: appendOutputEvent,
+    onOutput: cast.appendOutput,
   });
   registerCleanup(() => host.dispose());
   let hostExitCode: number | undefined;
@@ -101,7 +80,7 @@ async function recordUntilTargetScreen(
     lastScreen = currentScreenOf(response?.state) ?? lastScreen;
     if (lastScreen === targetScreen) {
       await waitFor(() => hostExitCode !== undefined, HOLD_AFTER_TARGET_MS);
-      appendOutputEvent('');
+      cast.close();
       process.stdout.write(`recorded ${castPath} ending on ${targetScreen}\n`);
       return 0;
     }
@@ -122,8 +101,11 @@ async function recordUntilTargetScreen(
 }
 
 async function recordCast(): Promise<number> {
-  const castFile = fs.openSync(castPath, 'w');
-  const cleanups: Array<() => void> = [() => fs.closeSync(castFile)];
+  const cast = openCastWriter(castPath, {
+    cols: TERMINAL_COLUMNS,
+    rows: TERMINAL_ROWS,
+  });
+  const cleanups: Array<() => void> = [() => cast.close()];
   const runCleanups = () => {
     for (const cleanup of cleanups.splice(0).reverse()) cleanup();
   };
@@ -138,7 +120,7 @@ async function recordCast(): Promise<number> {
     cleanups.push(() =>
       fs.rmSync(appCopyDir, { recursive: true, force: true }),
     );
-    return await recordUntilTargetScreen(castFile, appCopyDir, (cleanup) =>
+    return await recordUntilTargetScreen(cast, appCopyDir, (cleanup) =>
       cleanups.push(cleanup),
     );
   } finally {

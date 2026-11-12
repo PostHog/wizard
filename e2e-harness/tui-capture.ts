@@ -44,6 +44,8 @@ export interface TuiCapture {
   /** Fires with each chunk of raw terminal output as it is applied. */
   onData(cb: (chunk: string) => void): void;
   kill(): void;
+  cols: number;
+  rows: number;
   /** Resolves with the child's exit code, or 128 + signal, when it exits. */
   exited: Promise<number>;
 }
@@ -162,6 +164,8 @@ export function captureTui(opts: {
         /* already gone */
       }
     },
+    cols,
+    rows,
     exited,
   };
 }
