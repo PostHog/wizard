@@ -10,25 +10,52 @@ import {
 import { resolveSkillVariantId } from '../orchestrator-runner';
 
 const FIXTURES = path.resolve(__dirname, '../../../../../../fixtures');
+const RECORDED = path.join(FIXTURES, 'context-mill', 'skill-menu.json');
 
-// The recorded menu, plus a context-mill build when CONTEXT_MILL_MENU names its skill-menu.json.
-const MENUS: Array<[string, string]> = [
-  ['recorded menu', path.join(FIXTURES, 'context-mill', 'skill-menu.json')],
+const readMenu = (file: string): SkillMenu =>
+  JSON.parse(fs.readFileSync(file, 'utf8')) as SkillMenu;
+
+/** The menu as a release with no menu metadata publishes it: no entry or bundle variant carries tags. */
+const readMenuWithoutTags = (file: string): SkillMenu =>
+  JSON.parse(fs.readFileSync(file, 'utf8'), (key, value: unknown) =>
+    key === 'tags' ? undefined : value,
+  ) as SkillMenu;
+
+// The recorded menu, the same menu with no tags, and a context-mill build when CONTEXT_MILL_MENU names its skill-menu.json.
+const MENUS: Array<[string, () => SkillMenu]> = [
+  ['recorded menu', () => readMenu(RECORDED)],
+  ['recorded menu without tags', () => readMenuWithoutTags(RECORDED)],
   ...(process.env.CONTEXT_MILL_MENU
-    ? [['CONTEXT_MILL_MENU', process.env.CONTEXT_MILL_MENU] as [string, string]]
+    ? [
+        [
+          'CONTEXT_MILL_MENU',
+          () => readMenu(process.env.CONTEXT_MILL_MENU as string),
+        ] as [string, () => SkillMenu],
+      ]
     : []),
 ];
 
+const allEntries = (menu: SkillMenu) =>
+  Object.values(menu.categories)
+    .flat()
+    .flatMap((entry) => [entry, ...(entry.variants ?? [])]);
+
 it('records a menu whose entries carry tags', () => {
-  const menu = JSON.parse(fs.readFileSync(MENUS[0][1], 'utf8')) as SkillMenu;
-  const entries = Object.values(menu.categories).flat();
-  expect(entries.filter((entry) => entry.tags?.length).length).toBeGreaterThan(
-    100,
+  const tagged = allEntries(readMenu(RECORDED)).filter(
+    (entry) => entry.tags?.length,
   );
+  expect(tagged.length).toBeGreaterThan(100);
 });
 
-describe.each(MENUS)('skill resolver equivalence (%s)', (_, file) => {
-  const menu = JSON.parse(fs.readFileSync(file, 'utf8')) as SkillMenu;
+it('reads the recorded menu with no tags left on any entry or variant', () => {
+  const tagged = allEntries(readMenuWithoutTags(RECORDED)).filter(
+    (entry) => entry.tags,
+  );
+  expect(tagged).toEqual([]);
+});
+
+describe.each(MENUS)('skill resolver equivalence (%s)', (_, read) => {
+  const menu = read();
   const entries = Object.values(menu.categories)
     .flat()
     .flatMap(expandBundleEntry);
