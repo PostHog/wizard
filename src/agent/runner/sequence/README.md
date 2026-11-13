@@ -49,6 +49,11 @@ checks.
 A run pinned to a context-mill release with `--context-mill-version` takes none
 of the `wizard-agent-dag` paths.
 
+Before the tasks run, the runner installs the framework's `integration` skill as
+a reference: its example and its framework rules go into every task's prompt.
+When that install fails, the run goes on without them and sends
+`orchestrator reference skill unavailable` with the reason.
+
 ### Task metadata
 
 Read [AgentPrompt and its parser](../../agent-prompt-loader.ts) for the current
