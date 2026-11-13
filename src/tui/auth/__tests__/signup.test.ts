@@ -1,10 +1,12 @@
 import * as http from 'http';
 import type { AddressInfo } from 'net';
 import { gunzipSync } from 'zlib';
-import { getOrAskForProjectData } from '@tui/auth/project-data';
 import type { WizardStore } from '@tui/store';
-import { analytics } from '@utils/analytics';
 import { ANALYTICS_HOST_URL } from '@shared/constants';
+
+/** Loaded fresh for each run, so every run starts with an anonymous analytics client. */
+let analytics: typeof import('@utils/analytics').analytics;
+let getOrAskForProjectData: typeof import('@tui/auth/project-data').getOrAskForProjectData;
 
 type IngestedEvent = {
   event: string;
@@ -125,8 +127,11 @@ describe('a signup run', () => {
     });
   }
 
-  beforeEach(() => {
+  beforeEach(async () => {
     ingested.length = 0;
+    vi.resetModules();
+    ({ analytics } = await import('@utils/analytics'));
+    ({ getOrAskForProjectData } = await import('@tui/auth/project-data'));
   });
 
   afterEach(async () => {
@@ -164,6 +169,9 @@ describe('a signup run', () => {
     const events = await ingestedEvents();
     expect(events.map((e) => e.event)).not.toContain('$identify');
     expect(events.filter((e) => e.event === '$exception')).toHaveLength(1);
+    expect(events.map((e) => e.distinct_id)).not.toContain(
+      NEW_USER.distinct_id,
+    );
   });
 
   it('signs the new account in unidentified when its user read never answers, after 10 seconds', async () => {
@@ -178,5 +186,8 @@ describe('a signup run', () => {
     const events = await ingestedEvents();
     expect(events.map((e) => e.event)).not.toContain('$identify');
     expect(events.filter((e) => e.event === '$exception')).toHaveLength(1);
+    expect(events.map((e) => e.distinct_id)).not.toContain(
+      NEW_USER.distinct_id,
+    );
   }, 15_000);
 });
