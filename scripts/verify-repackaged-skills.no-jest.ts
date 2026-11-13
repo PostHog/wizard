@@ -62,9 +62,17 @@ async function filesOf(entry: SkillEntry): Promise<SkillFiles> {
 const hash = (contents: string): string =>
   createHash('sha256').update(contents).digest('hex');
 
-/** A SKILL.md without its frontmatter, which names the skill and so differs between a skill and its replacement. */
-const body = (skill: string): string =>
-  skill.replace(/^---\n[\s\S]*?\n---\n\n?/, '');
+const FRONTMATTER = /^---\n([\s\S]*?)\n---\n\n?/;
+
+/** A SKILL.md without its frontmatter. */
+const body = (skill: string): string => skill.replace(FRONTMATTER, '');
+
+/** A SKILL.md's frontmatter without `name`, the one field a skill and its replacement must differ in. */
+const frontmatter = (skill: string): string =>
+  (FRONTMATTER.exec(skill)?.[1] ?? '')
+    .split('\n')
+    .filter((line) => !line.startsWith('name:'))
+    .join('\n');
 
 /** What differs between the files a task reads today and the files it reads from the replacement. */
 function compare(today: SkillFiles, repackaged: SkillFiles): string[] {
@@ -78,6 +86,9 @@ function compare(today: SkillFiles, repackaged: SkillFiles): string[] {
     else if (file === SKILL_FILE) {
       if (body(today[file]) !== body(repackaged[file])) {
         differences.push(`${SKILL_FILE} reads differently`);
+      }
+      if (frontmatter(today[file]) !== frontmatter(repackaged[file])) {
+        differences.push(`${SKILL_FILE} frontmatter differs`);
       }
     } else if (hash(today[file]) !== hash(repackaged[file])) {
       differences.push(`${file} differs`);
@@ -112,12 +123,15 @@ async function main(): Promise<void> {
   for (const name of replaced) {
     const replacement = resolveReplacement(entries, name) as SkillEntry;
     const product = replacement.frameworkReferences;
-    // A skill that reads the same for every framework is compared once.
-    for (const framework of product ? frameworks : [undefined]) {
+    // One skill with a replacement no pack completes reads the same for every framework, so it is compared once.
+    const oneSkill = entries.some((entry) => entry.id === name);
+    let compared = 0;
+    for (const framework of oneSkill && !product ? [undefined] : frameworks) {
       const keys = { [FRAMEWORK_KEY]: framework ? [framework] : undefined };
       const today = resolveSkill(entries, name, keys);
       if (!today) continue;
       pairs += 1;
+      compared += 1;
       const label = `${name} on ${framework ?? 'every framework'}`;
       try {
         let repackaged = await filesOf(replacement);
@@ -140,6 +154,9 @@ async function main(): Promise<void> {
         );
       }
     }
+    if (compared === 0) {
+      differing.push(`${name}: no skill to compare its replacement with`);
+    }
   }
 
   console.log(
@@ -149,7 +166,7 @@ async function main(): Promise<void> {
     console.log('Every pair reads the same documents both ways.');
     return;
   }
-  console.log(`${differing.length} pairs read different documents:`);
+  console.log(`${differing.length} differences:`);
   for (const line of differing) console.log(`  - ${line}`);
   process.exitCode = 1;
 }

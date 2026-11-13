@@ -47,9 +47,11 @@ before choosing credentials or an EU project.
 `dist/skills` folder, or a release's download URL, the latest by default. For
 every framework and every skill a menu entry replaces, it resolves both skills
 as a run does, completes the replacement from the framework's pack, and
-compares the files a task reads. It prints each pair that differs and exits 1
-when there is one. Run it before `wizard-agent-dag-skills` reaches a new group
-of users.
+compares the files a task reads: every file byte for byte, and `SKILL.md` but
+for the `name` in its frontmatter. A skill family is compared once per
+framework, and one skill once. It prints each pair that differs, and each
+replaced name it found no skill to compare with, and exits 1 when there is
+either. Run it before `wizard-agent-dag-skills` reaches a new group of users.
 
 ## Context-mill fixtures
 
