@@ -52,7 +52,7 @@ export function resolveSkill(
     let agreeing = 0;
     let disagrees = false;
     for (const [key, values] of declared) {
-      const run = keys[key];
+      const run = Object.hasOwn(keys, key) ? keys[key] : undefined;
       if (!run?.length) continue;
       if (values.some((value) => run.includes(value))) agreeing += 1;
       else disagrees = true;
