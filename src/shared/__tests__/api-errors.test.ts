@@ -260,24 +260,17 @@ describe('fetchProjectData failure analytics', () => {
 
 describe.concurrent('fetchUserData deadline', () => {
   // Remote hosts are reached through a local HTTP proxy, so their failures count as transient and retry.
-  const behaviours = new Map<
-    string,
-    (attempt: number, res: http.ServerResponse) => void
-  >([
-    [
-      'fails-then-stalls.test',
-      (attempt, res) => {
+  function answer(host: string, attempt: number, res: http.ServerResponse) {
+    switch (host) {
+      case 'fails-then-stalls.test':
         if (attempt === 1) res.writeHead(503).end();
-      },
-    ],
-    [
-      // The second 503 lands about 9 s in, so the 1.5 s backoff after it crosses the deadline.
-      'fails-late.test',
-      (attempt, res) => {
+        return;
+      case 'fails-late.test':
+        // The second 503 lands about 9 s in, so the 1.5 s backoff after it crosses the deadline.
         setTimeout(() => res.writeHead(503).end(), attempt === 1 ? 0 : 8_500);
-      },
-    ],
-  ]);
+        return;
+    }
+  }
   const requests = new Map<string, number>();
   let proxy: http.Server;
   let silentServer: http.Server;
@@ -291,7 +284,7 @@ describe.concurrent('fetchUserData deadline', () => {
       const host = req.headers.host ?? '';
       const attempt = (requests.get(host) ?? 0) + 1;
       requests.set(host, attempt);
-      behaviours.get(host)?.(attempt, res);
+      answer(host, attempt, res);
     });
     await new Promise<void>((resolve) => proxy.listen(0, '127.0.0.1', resolve));
     const proxyUrl = `http://127.0.0.1:${
