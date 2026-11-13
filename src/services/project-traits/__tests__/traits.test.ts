@@ -1,4 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { Integration } from '@shared/constants';
 import { DiscoveredFeature } from '@shared/discovered-feature';
 import { buildSession } from '@services/session/wizard-session';
@@ -6,7 +9,6 @@ import { FRAMEWORK_REGISTRY } from '@services/frameworks/registry';
 import { DETECTED_WAREHOUSE_SOURCES_KEY } from '@services/warehouse-sources/detect';
 import {
   RUN_PROJECT,
-  TRAITS,
   getProject,
   getTraits,
   toMatchKeys,
@@ -23,56 +25,24 @@ describe('getTraits', () => {
   it('reads the framework from the session', () => {
     const value = session();
     value.integration = Integration.django;
-    expect(getTraits(value)).toEqual({
-      framework: { value: Integration.django, source: 'static' },
-    });
+    expect(getTraits(value)).toEqual({ framework: Integration.django });
   });
 
-  it.each([
-    [Integration.nextjs, { router: 'pages-router' }, 'pages-router'],
-    [Integration.reactRouter, { routerMode: 'v7-framework' }, 'v7-framework'],
-    [Integration.tanstackRouter, { routerMode: 'code-based' }, 'code-based'],
-    [Integration.astro, { renderingMode: 'ssr' }, 'ssr'],
-    [Integration.reactNative, { variant: 'expo' }, 'expo'],
-    [Integration.nuxt, { versionBucket: '3.0-3.6' }, '3.0-3.6'],
-  ])('reads the %s variant its config gathered', (framework, context, id) => {
-    const value = session();
-    value.integration = framework;
-    value.frameworkContext = context;
-    expect(getTraits(value).variant).toEqual({ value: id, source: 'static' });
-  });
-
-  it('has no variant until the framework context is gathered', () => {
-    const value = session();
-    value.integration = Integration.nextjs;
-    expect(getTraits(value).variant).toBeUndefined();
-  });
-
-  it('covers every framework that declares a variant', () => {
-    const declaring = Object.values(Integration).filter(
-      (id) => FRAMEWORK_REGISTRY[id].metadata.getVariant,
-    );
-    expect(declaring.sort()).toEqual(
-      [
-        Integration.astro,
-        Integration.nextjs,
-        Integration.nuxt,
-        Integration.reactNative,
-        Integration.reactRouter,
-        Integration.tanstackRouter,
-      ].sort(),
-    );
-  });
+  it.each(Object.values(Integration))(
+    'has no %s variant until the framework context is gathered',
+    (framework) => {
+      const value = session();
+      value.integration = framework;
+      expect(getTraits(value).variant).toBeUndefined();
+    },
+  );
 
   it('says a project calls an LLM API only when an LLM SDK is a dependency', () => {
     const value = session();
     value.discoveredFeatures = [DiscoveredFeature.Stripe];
     expect(getTraits(value).callsLlmApi).toBeUndefined();
     value.discoveredFeatures = [DiscoveredFeature.LLM];
-    expect(getTraits(value).callsLlmApi).toEqual({
-      value: 'yes',
-      source: 'static',
-    });
+    expect(getTraits(value).callsLlmApi).toBe('yes');
   });
 
   it('reads the MCP server candidates and the warehouse sources', () => {
@@ -90,8 +60,8 @@ describe('getTraits', () => {
       ],
     };
     const traits = getTraits(value);
-    expect(traits.mcpServers?.value).toEqual(['apps/mcp']);
-    expect(traits.warehouseSources?.value).toEqual(['Stripe', 'Postgres']);
+    expect(traits.mcpServers).toEqual(['apps/mcp']);
+    expect(traits.warehouseSources).toEqual(['Stripe', 'Postgres']);
   });
 
   it('knows only the directory the run works in', () => {
@@ -102,6 +72,54 @@ describe('getTraits', () => {
       path: RUN_PROJECT,
       traits: getTraits(value),
     });
+  });
+});
+
+describe('the Nuxt variant', () => {
+  let dir: string;
+
+  beforeEach(() => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'nuxt-variant-'));
+  });
+
+  afterEach(() => fs.rmSync(dir, { recursive: true, force: true }));
+
+  /** The variant of a project whose package.json declares these dependencies. */
+  const variantOf = async (dependencies: Record<string, string>) => {
+    fs.writeFileSync(
+      path.join(dir, 'package.json'),
+      JSON.stringify({ dependencies }),
+    );
+    const value = session({ installDir: dir });
+    value.integration = Integration.nuxt;
+    value.frameworkContext =
+      (await FRAMEWORK_REGISTRY[Integration.nuxt].metadata.gatherContext?.({
+        installDir: dir,
+        debug: false,
+        signup: false,
+        ci: false,
+        benchmark: false,
+        yaraReport: false,
+      })) ?? {};
+    return getTraits(value).variant;
+  };
+
+  it.each([
+    ['^3.12.0', '3.x'],
+    ['4.1.2', '4.x'],
+  ])('is the major version of nuxt %s', async (version, variant) => {
+    expect(await variantOf({ nuxt: version })).toBe(variant);
+  });
+
+  it.each(['latest', 'workspace:*', 'github:nuxt/nuxt'])(
+    'is absent when the version %s cannot be read',
+    async (version) => {
+      expect(await variantOf({ nuxt: version })).toBeUndefined();
+    },
+  );
+
+  it('is absent when nuxt is not a dependency', async () => {
+    expect(await variantOf({ vue: '^3.4.0' })).toBeUndefined();
   });
 });
 
@@ -119,12 +137,5 @@ describe('toMatchKeys', () => {
 
   it('is empty when no framework is detected', () => {
     expect(toMatchKeys(getTraits(session()))).toEqual({});
-  });
-
-  it('matches on the framework alone', () => {
-    const matching = Object.entries(TRAITS)
-      .filter(([, definition]) => definition.matchKey)
-      .map(([name]) => name);
-    expect(matching).toEqual(['framework']);
   });
 });

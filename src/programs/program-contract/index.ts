@@ -9,13 +9,7 @@ export {
 export { ProgramAbort } from './program-abort';
 export type { ProgramRun } from './program-run';
 export type { ProgramSession, ScanReport } from './program-session';
-export type {
-  Project,
-  Trait,
-  TraitName,
-  TraitSource,
-  Traits,
-} from './project-traits';
+export type { Project, TraitName, Traits } from './project-traits';
 export type {
   DecisionQuestionKey,
   ProgramConfig,

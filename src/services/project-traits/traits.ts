@@ -14,11 +14,9 @@ import { getDetectedWarehouseSources } from '../warehouse-sources/detect';
 /** The directory the run works in, the one project detection knows. */
 export const RUN_PROJECT = '.';
 
-type TraitValue<K extends TraitName> = NonNullable<Traits[K]>['value'];
-
 type TraitDefinition<K extends TraitName> = {
-  /** Static detection's value, read from the session; undefined when it settles nothing. */
-  detect: (session: ProgramSession) => TraitValue<K> | undefined;
+  /** The value read from the session; undefined when detection settles nothing. */
+  detect: (session: ProgramSession) => NonNullable<Traits[K]> | undefined;
   /** Skills can match on it, as a `<trait>:<value>` tag. */
   matchKey?: true;
 };
@@ -57,16 +55,6 @@ export const TRAITS: { readonly [K in TraitName]: TraitDefinition<K> } = {
 
 const TRAIT_NAMES = Object.keys(TRAITS) as TraitName[];
 
-function detect<K extends TraitName>(
-  name: K,
-  session: ProgramSession,
-): Traits[K] {
-  const value = TRAITS[name].detect(session);
-  return value === undefined
-    ? undefined
-    : ({ value, source: 'static' } as Traits[K]);
-}
-
 /** The traits of one project. Detection covers the run's own directory; any other path has none yet. */
 export function getTraits(
   session: ProgramSession,
@@ -75,8 +63,8 @@ export function getTraits(
   const traits: Traits = {};
   if (projectPath !== RUN_PROJECT) return traits;
   const assign = <K extends TraitName>(name: K): void => {
-    const trait = detect(name, session);
-    if (trait) traits[name] = trait;
+    const value = TRAITS[name].detect(session);
+    if (value !== undefined) traits[name] = value;
   };
   TRAIT_NAMES.forEach(assign);
   return traits;
@@ -91,11 +79,9 @@ export function getProject(session: ProgramSession): Project {
 export function toMatchKeys(traits: Traits): MatchKeys {
   const keys: Record<string, readonly string[]> = {};
   for (const name of TRAIT_NAMES) {
-    const trait = traits[name];
-    if (!trait || !TRAITS[name].matchKey) continue;
-    keys[name] = Array.isArray(trait.value)
-      ? trait.value.map(String)
-      : [String(trait.value)];
+    const value = traits[name];
+    if (value === undefined || !TRAITS[name].matchKey) continue;
+    keys[name] = Array.isArray(value) ? value.map(String) : [String(value)];
   }
   return keys;
 }
