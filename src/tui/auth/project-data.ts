@@ -324,6 +324,24 @@ async function askForWizardLogin(options: {
   return data;
 }
 
+/** How long a signup waits for its new user before it goes on unidentified. */
+const SIGNUP_USER_READ_TIMEOUT_MS = 10_000;
+
+async function readSignedUpUser(
+  accessToken: string,
+  appHost: string,
+): Promise<ApiUser | null> {
+  try {
+    return await fetchUserData(
+      accessToken,
+      appHost,
+      AbortSignal.timeout(SIGNUP_USER_READ_TIMEOUT_MS),
+    );
+  } catch {
+    return null;
+  }
+}
+
 async function askForProvisioningSignup(
   store: WizardStore,
   email?: string,
@@ -362,6 +380,8 @@ async function askForProvisioningSignup(
     const host = HostResolution.fromApiHost(result.host, { localMcp });
 
     analytics.setTag('provisioning-signup', true);
+    const user = await readSignedUpUser(result.accessToken, host.appHost);
+    if (user) analytics.identifyUser(user);
 
     return {
       accessToken: result.accessToken,
@@ -372,6 +392,7 @@ async function askForProvisioningSignup(
       host,
       distinctId: email,
       projectId: parseInt(result.projectId, 10) || 0,
+      user,
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
