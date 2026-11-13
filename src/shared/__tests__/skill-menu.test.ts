@@ -1,4 +1,7 @@
 import { fetchSkillMenu, type SkillMenu } from '@shared/skill-menu';
+import { analytics } from '@utils/analytics';
+
+vi.mock('@utils/analytics', () => ({ analytics: { setTag: vi.fn() } }));
 
 describe('fetchSkillMenu', () => {
   const noSleep = () => Promise.resolve();
@@ -86,5 +89,55 @@ describe('fetchSkillMenu', () => {
         downloadUrl: 'http://localhost:8765/capture.json',
       },
     ]);
+  });
+
+  it("gives each bundle variant the bundle's title and description, keeping its own tags", async () => {
+    const bundled: SkillMenu = {
+      categories: {
+        integration: [
+          {
+            id: 'capture',
+            name: 'Capture',
+            group: 'capture',
+            bundle: true,
+            title: 'Capture step',
+            description: 'Instrument the planned events',
+            downloadUrl: 'http://localhost:8765/capture.json',
+            variants: [
+              {
+                id: 'capture-rails',
+                framework: 'rails',
+                tags: ['framework:rails', 'capture'],
+              },
+              { id: 'capture-react', framework: 'react', title: 'React' },
+            ],
+          },
+        ],
+      },
+    };
+
+    const result = await fetchSkillMenu('http://localhost:8765', {
+      fetchImpl: respond(bundled) as any,
+      sleepImpl: noSleep,
+    });
+
+    const [rails, react] = result?.categories.integration ?? [];
+    expect(rails).toMatchObject({
+      title: 'Capture step',
+      description: 'Instrument the planned events',
+      tags: ['framework:rails', 'capture'],
+    });
+    expect(react.title).toBe('React');
+  });
+
+  it('tags later events with the context-mill release that built the menu', async () => {
+    await fetchSkillMenu('http://localhost:8765', {
+      fetchImpl: respond({ ...menu, buildVersion: '1.60.0' }) as any,
+      sleepImpl: noSleep,
+    });
+    expect(analytics.setTag).toHaveBeenCalledWith(
+      'context_mill_version',
+      '1.60.0',
+    );
   });
 });

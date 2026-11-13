@@ -36,6 +36,14 @@ arguments. For new runs follow the
 [current host limitations](../e2e-harness/ARCHITECTURE.md#current-host-limitations)
 before choosing credentials or an EU project.
 
+## Context-mill fixtures
+
+`pnpm record:context-mill-fixtures [base-url]` runs
+`record-context-mill-fixtures.no-jest.ts`, which records a context-mill
+release's skill menu into `fixtures/context-mill/`, the fixtures the behavior
+checks compare against. Commit the result on its own with the reason, since a
+changed fixture changes what "unchanged" means.
+
 ## Credentials for full agent runs
 
 Full TUI host and snapshot runs require both the personal API key (or
