@@ -70,6 +70,7 @@ let agentDag = true;
 let fetchedPlanner = true;
 let fetches = 0;
 let seededTasks = false;
+let bundleFails = false;
 let bundled: Record<string, string> | undefined;
 let ran: string[] = [];
 let queue: QueueStore | undefined;
@@ -100,11 +101,13 @@ describe('queueing a flow from its frontmatter', () => {
     fetchedPlanner = true;
     fetches = 0;
     seededTasks = false;
+    bundleFails = false;
     bundled = FLOW;
     ran = [];
     queue = undefined;
     vi.mocked(analytics.wizardCapture).mockClear();
     vi.mocked(analytics.setTag).mockClear();
+    vi.mocked(analytics.captureException).mockClear();
   });
 
   afterEach(() => fs.rmSync(dir, { recursive: true, force: true }));
@@ -117,7 +120,12 @@ describe('queueing a flow from its frontmatter', () => {
         wizardFlagPayloads: {},
         switchboard: {},
         excludedTaskTypes: () => excluded,
-        agentPrompts: bundled && (() => Promise.resolve(bundled)),
+        agentPrompts:
+          bundled &&
+          (() =>
+            bundleFails
+              ? Promise.reject(new Error('Cannot find module'))
+              : Promise.resolve(bundled)),
         seedTasks: () => [{ type: 'warehouse' }],
       },
       input: { installDir: dir, flags: { ci: true } },
@@ -229,13 +237,31 @@ describe('queueing a flow from its frontmatter', () => {
     );
   });
 
+  it("fetches context-mill's prompts, and reports it, when the bundle fails to load", async () => {
+    bundleFails = true;
+    const result = await run();
+    expect(result.outcome).toBe(RunOutcome.Success);
+    expect(fetches).toBe(1);
+    expect(ran).toEqual(['seed', 'install', 'report']);
+    expect(analytics.setTag).toHaveBeenCalledWith(
+      'orchestrator_prompts',
+      'context-mill',
+    );
+    expect(analytics.captureException).toHaveBeenCalledWith(expect.any(Error), {
+      step: 'orchestrator_bundled_prompts',
+    });
+  });
+
   it.each([true, false])(
-    'fails a fetched flow that has no planner prompt (flag on: %s)',
+    'fails a fetched flow that has no planner prompt with its own code (flag on: %s)',
     async (flag) => {
       agentDag = flag;
       bundled = undefined;
       fetchedPlanner = false;
-      await expect(run()).rejects.toThrow(/No seed agent prompt/);
+      const result = await run();
+      expect(result.outcome).toBe(RunOutcome.Failed);
+      expect(result.failure?.code).toBe(ErrorCodes.AgentOrchestratorNoPlanner);
+      expect(result.failure?.message).not.toContain('seed');
       expect(ran).toEqual([]);
     },
   );

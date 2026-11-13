@@ -758,8 +758,16 @@ async function executeOrchestrator(
       boot.wizardFlagPayloads,
     ),
   };
+  // A bundle that fails to load is reported, and the run fetches instead.
   const bundledPrompts = isAgentDagEnabled(boot.wizardFlags)
-    ? await config.agentPrompts?.()
+    ? await config.agentPrompts?.().catch((error: unknown) => {
+        logToFile('[orchestrator] bundled prompts failed to load:', error);
+        analytics.captureException(
+          error instanceof Error ? error : new Error(String(error)),
+          { step: 'orchestrator_bundled_prompts' },
+        );
+        return undefined;
+      })
     : undefined;
   const registry = bundledPrompts
     ? bundledRegistry(bundledPrompts, flow, registryOptions)
@@ -772,9 +780,18 @@ async function executeOrchestrator(
   // A bundled flow with no planner prompt is queued from its frontmatter; a fetched one needs its planner.
   const seedPrompt = registry.seed;
   if (!seedPrompt && !bundledPrompts) {
-    throw new Error(
-      `No seed agent prompt (frontmatter \`seed: true\`) for flow "${flow}" is available from ${boot.skillsBaseUrl}.`,
+    logToFile(
+      `[orchestrator] no seed agent prompt (frontmatter \`seed: true\`) for flow "${flow}" from ${boot.skillsBaseUrl}`,
     );
+    return failed({
+      code: ErrorCodes.AgentOrchestratorNoPlanner,
+      message: `The wizard could not load the plan for this setup.\n\nPlease report this to: ${WIZARD_CONTACT_EMAIL}`,
+      error: new WizardError(
+        'orchestrator flow has no seed agent prompt',
+        { flow, skills_base_url: boot.skillsBaseUrl },
+        ErrorCodes.AgentOrchestratorNoPlanner,
+      ),
+    });
   }
 
   // The end decision the switchboard event defers to: the model each task will actually run on.

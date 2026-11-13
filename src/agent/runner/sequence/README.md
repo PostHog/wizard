@@ -28,17 +28,19 @@ With `wizard-agent-dag` on, the prompts are the ones the program bundles, the
 run config's `agentPrompts`; see
 [agent prompts](../../../programs/README.md#agent-prompts). Off, or for a
 program that bundles none, the orchestrator fetches the flow `agentFlow ?? id`
-from context-mill. Every event of the run carries which as the
-`orchestrator_prompts` tag. That tag says which path a run took, and the flag's
-value on an event does not: a pinned run reports the flag as on and still
-fetches.
+from context-mill. A bundle that fails to load is reported as an exception with
+the step `orchestrator_bundled_prompts`, and the run fetches instead. Every
+event sent after the prompts load carries which as the `orchestrator_prompts`
+tag. That tag says which path a run took, and the flag's value on an event does
+not: a pinned run reports the flag as on and still fetches.
 
 A flow's seed planner queues its tasks. A bundled flow with no seed prompt is
 queued from the graph its frontmatter declares, by
 [task-graph.ts](orchestrator/task-graph.ts), and no planner runs. A fetched flow
-with no seed prompt fails the run. `orchestrator seeded` carries which one
-queued the run as `source`. A declared graph that cannot be queued ends the run
-with `PHW_AGENT_ORCHESTRATOR_TASK_GRAPH` and sends `orchestrator task graph
+with no seed prompt fails the run with `PHW_AGENT_ORCHESTRATOR_NO_PLANNER`.
+`orchestrator seeded` carries which one queued the run as `source`. A declared
+graph that cannot be queued ends the run with
+`PHW_AGENT_ORCHESTRATOR_TASK_GRAPH` and sends `orchestrator task graph
 rejected` with the reason.
 
 A flow must supply valid task-skill variants, and a seed prompt unless it is
