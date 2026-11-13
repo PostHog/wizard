@@ -74,10 +74,12 @@ servers and its warehouse sources. Traits describe the code, never the person.
 
 [`traits.ts`](project-traits/traits.ts) declares every trait once in `TRAITS`:
 how static detection reads it from the session, and whether skills can match on
-it. `getTraits(session, projectPath)` returns the traits detection settled, each
-with its source, and leaves out the rest. Detection covers the run's own
-directory, so any other path has no traits. `toMatchKeys` turns the traits
-skills can match on into the run's match keys. `framework` is the only one.
+it. `getTraits(session, projectPath)` returns the traits detection settled and
+leaves out the rest. A trait is its value alone. It does not say whether
+detection or the person's answer to a setup question set it. Detection covers
+the run's own directory, so any other path has no traits. `toMatchKeys` turns
+the traits skills can match on into the run's match keys. `framework` is the
+only one.
 
 ## Session store and task streams
 
