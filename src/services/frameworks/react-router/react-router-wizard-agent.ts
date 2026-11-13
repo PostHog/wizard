@@ -38,6 +38,7 @@ export const REACT_ROUTER_AGENT_CONFIG: FrameworkConfig<ReactRouterContext> = {
       context.routerMode
         ? `React Router ${getReactRouterModeName(context.routerMode)}`
         : undefined,
+    getVariant: (context) => context.routerMode,
   },
 
   detection: {

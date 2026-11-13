@@ -36,7 +36,11 @@ import {
   scanInstalledSkill,
 } from '../../../yara-hooks';
 import { fetchSkillMenu, type SkillEntry } from '@shared/skill-menu';
-import { resolveSkill, type MatchKeys } from '@shared/skill-resolution';
+import {
+  FRAMEWORK_KEY,
+  resolveSkill,
+  type MatchKeys,
+} from '@shared/skill-resolution';
 import { analytics } from '@utils/analytics';
 import { ciExcludedTaskTypes } from '@utils/ci-flag-overrides';
 import { logToFile } from '@utils/debug';
@@ -879,8 +883,13 @@ async function executeOrchestrator(
   // here as a bogus framework after the caller overwrites the detect result.
   const framework = input.integration ?? input.skillId ?? undefined;
   // `wizard-agent-dag` picks skills with the shared resolver; off, the menu lookup above does.
-  const matchKeys: MatchKeys = framework ? { framework: [framework] } : {};
-  const pickSkillId = isAgentDagEnabled(boot.wizardFlags)
+  const agentDag = isAgentDagEnabled(boot.wizardFlags);
+  // The project's traits supply the match keys, and the framework key above replaces theirs.
+  const matchKeys: MatchKeys = {
+    ...(agentDag ? config.matchKeys?.() : undefined),
+    [FRAMEWORK_KEY]: framework ? [framework] : undefined,
+  };
+  const pickSkillId = agentDag
     ? (skillId: string) =>
         resolveSkill(menuSkillEntries, skillId, matchKeys)?.id
     : (skillId: string) =>
