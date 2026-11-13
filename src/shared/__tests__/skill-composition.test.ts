@@ -6,6 +6,7 @@ import {
   VARIANT_FILE,
   completeSkillFromPack,
   composeStepSkill,
+  removeSkillFolder,
   type SkillFiles,
 } from '@shared/skill-composition';
 
@@ -288,7 +289,45 @@ describe('completeSkillFromPack', () => {
         'integration',
         path.join(dir, 'pack'),
       ),
-    ).toThrow(/escapes the skill/);
+    ).toThrow(/escapes its boundary/);
     expect(read('skill/SKILL.md')).toBe(INIT['SKILL.md']);
+  });
+
+  describe('removeSkillFolder', () => {
+    it('removes the folder and leaves the rest of the boundary', () => {
+      removeSkillFolder(path.join(dir, 'skill'), dir);
+
+      expect(fs.readdirSync(dir)).toEqual(['pack']);
+    });
+
+    it.skipIf(process.platform === 'win32')(
+      'removes a link standing where the folder goes, and not what it points at',
+      () => {
+        fs.symlinkSync(path.join(dir, 'pack'), path.join(dir, 'linked'));
+
+        removeSkillFolder(path.join(dir, 'linked'), dir);
+
+        expect(fs.readdirSync(dir).sort()).toEqual(['pack', 'skill']);
+        expect(read('pack/references/next-js.md')).toBe('the library page');
+      },
+    );
+
+    it.skipIf(process.platform === 'win32')(
+      'removes nothing through a linked folder on the way',
+      () => {
+        fs.mkdirSync(path.join(dir, 'outside/skill'), { recursive: true });
+        fs.symlinkSync(path.join(dir, 'outside'), path.join(dir, 'cache'));
+
+        expect(() =>
+          removeSkillFolder(path.join(dir, 'cache/skill'), dir),
+        ).toThrow(/through a link/);
+        expect(fs.existsSync(path.join(dir, 'outside/skill'))).toBe(true);
+      },
+    );
+
+    it('refuses the boundary itself', () => {
+      expect(() => removeSkillFolder(dir, dir)).toThrow(/escapes its boundary/);
+      expect(fs.existsSync(path.join(dir, 'skill'))).toBe(true);
+    });
   });
 });

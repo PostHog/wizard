@@ -268,6 +268,21 @@ describe('repackaged skills', () => {
     );
   });
 
+  it('starts a replacement from an empty folder, so a page an earlier run left does not replace the pack page', async () => {
+    const left = path.join(
+      dir,
+      '.posthog-wizard-cache/skills/integration-install/references',
+    );
+    fs.mkdirSync(left, { recursive: true });
+    fs.writeFileSync(path.join(left, 'next-js.md'), 'an earlier release');
+
+    const result = await run();
+
+    expect(result.outcome).toBe(RunOutcome.Success);
+    expect(completed.page).toBe('the library page');
+    expect(unavailable()).toEqual([]);
+  });
+
   it('installs the skills the prompts name while the flag is off', async () => {
     skillsFlag = false;
     const result = await run();

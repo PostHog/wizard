@@ -139,28 +139,40 @@ const WRITE_NO_FOLLOW =
   fs.constants.O_TRUNC |
   (fs.constants.O_NOFOLLOW ?? 0);
 
-/** The path of `file` under `boundary`, refused when it leaves the boundary or passes through a link. */
-function plainPath(boundary: string, file: string): string {
+/** The path of `file` under `boundary`, refused when it leaves the boundary or passes through a link; its last part is a plain file, or a plain folder when `last` says so. */
+function plainPath(
+  boundary: string,
+  file: string,
+  last: 'file' | 'folder' = 'file',
+): string {
   const base = path.resolve(boundary);
   const target = path.resolve(base, file);
-  if (!target.startsWith(base + path.sep)) {
-    throw new Error(`a composed file escapes the skill: ${file}`);
+  if (target !== base && !target.startsWith(base + path.sep)) {
+    throw new Error(`a skill path escapes its boundary: ${file}`);
   }
-  const parts = path.relative(base, target).split(path.sep);
+  const parts = path.relative(base, target).split(path.sep).filter(Boolean);
   let current = base;
   parts.forEach((part, index) => {
     current = path.join(current, part);
     const found = fs.lstatSync(current, { throwIfNoEntry: false });
     if (!found) return;
     const plain =
-      index === parts.length - 1 ? found.isFile() : found.isDirectory();
+      index === parts.length - 1 && last === 'file'
+        ? found.isFile()
+        : found.isDirectory();
     if (!plain) {
-      throw new Error(
-        `a composed file would be written through a link: ${file}`,
-      );
+      throw new Error(`a skill path passes through a link: ${file}`);
     }
   });
   return target;
+}
+
+/** Remove the skill folder at `skillDir`, or a link standing there, reaching it through no link below `boundaryDir`. */
+export function removeSkillFolder(skillDir: string, boundaryDir: string): void {
+  const dir = path.resolve(skillDir);
+  const parent = path.relative(path.resolve(boundaryDir), path.dirname(dir));
+  plainPath(boundaryDir, parent, 'folder');
+  fs.rmSync(dir, { recursive: true, force: true });
 }
 
 /** Complete the step skill at `skillDir` from the pack at `packDir`, writing through no link below `boundaryDir`; throws and leaves the skill as it was otherwise. */

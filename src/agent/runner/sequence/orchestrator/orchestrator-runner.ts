@@ -30,7 +30,10 @@ import {
   WIZARD_OAUTH_SCOPES,
   WIZARD_PROVISIONING_SCOPES,
 } from '@shared/constants';
-import { completeSkillFromPack } from '@shared/skill-composition';
+import {
+  completeSkillFromPack,
+  removeSkillFolder,
+} from '@shared/skill-composition';
 import { installSkillById } from '@shared/skill-install';
 import {
   formatYaraAbortMessage,
@@ -1404,6 +1407,17 @@ async function executeOrchestrator(
     const product = replacement.frameworkReferences;
     if (product && !referenceInstallPath)
       return unavailable('no framework pack');
+    // A folder an earlier run left behind would pass its old pages off as the skill's own.
+    try {
+      removeSkillFolder(
+        path.join(input.installDir, taskSkillsRoot, replacement.id),
+        input.installDir,
+      );
+    } catch (error) {
+      return unavailable(
+        error instanceof Error ? error.message : String(error),
+      );
+    }
     const result = await installSkillById(
       replacement.id,
       input.installDir,
