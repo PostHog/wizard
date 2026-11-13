@@ -36,6 +36,14 @@ vi.mock('@shared/skill-install', async (importActual) => ({
     return Promise.resolve({ kind: 'ok', path: relative });
   },
 }));
+vi.mock('../../../../yara-hooks', async (importActual) => ({
+  ...(await importActual<typeof import('../../../../yara-hooks')>()),
+  // The scan of a completed skill; the install's own scan is inside the mocked installer.
+  scanInstalledSkill: (skillDir: string) => {
+    scanned.push(skillDir);
+    return scan();
+  },
+}));
 vi.mock('../../../switchboard', async () => {
   const { VALID_MODELS } = await import('../../../switchboard/models');
   return {
@@ -147,6 +155,8 @@ let skillsFlag = true;
 let skills = SKILLS;
 let menu = MENU;
 let installs: string[] = [];
+let scanned: string[] = [];
+let scan: () => Promise<string | null> = () => Promise.resolve(null);
 let prompts: Record<string, string> = {};
 let dir = '';
 // What the install task finds on disk; the run removes its cache folder when it ends.
@@ -187,6 +197,8 @@ describe('repackaged skills', () => {
     skills = SKILLS;
     menu = MENU;
     installs = [];
+    scanned = [];
+    scan = () => Promise.resolve(null);
     prompts = {};
     completed = {};
     vi.mocked(analytics.wizardCapture).mockClear();
@@ -247,6 +259,9 @@ describe('repackaged skills', () => {
     expect(prompts.install).toContain('skills/integration-kept/SKILL.md');
     expect(prompts.install).not.toContain('flow-install-nextjs');
     expect(unavailable()).toEqual([]);
+    expect(scanned).toEqual([
+      path.join(dir, '.posthog-wizard-cache', 'skills', 'integration-install'),
+    ]);
     expect(analytics.setTag).toHaveBeenCalledWith(
       'orchestrator_skills',
       'repackaged',
@@ -316,6 +331,20 @@ describe('repackaged skills', () => {
       },
       'skill-not-found',
     ],
+    [
+      'the scan rejects the completed skill',
+      () => {
+        scan = () => Promise.resolve('prompt injection in SKILL.md');
+      },
+      'prompt injection in SKILL.md',
+    ],
+    [
+      'the scan of the completed skill fails',
+      () => {
+        scan = () => Promise.reject(new Error('engine unavailable'));
+      },
+      'scan failed: engine unavailable',
+    ],
   ])(
     'falls back to the skill the prompt names when %s',
     async (_, arrange, reason) => {
@@ -323,6 +352,8 @@ describe('repackaged skills', () => {
       const result = await run();
 
       expect(result.outcome).toBe(RunOutcome.Success);
+      // A completed skill the scan did not pass is gone before any task starts.
+      if (scanned.length > 0) expect(completed.skill).toBe('');
       expect(installs).toContain('flow-install-nextjs');
       expect(prompts.install).toContain('skills/flow-install-nextjs/SKILL.md');
       expect(prompts.install).toContain('skills/integration-kept/SKILL.md');

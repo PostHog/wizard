@@ -132,25 +132,69 @@ function readFiles(dir: string, prefix = ''): SkillFiles {
   return files;
 }
 
-/**
- * Complete the step skill installed at `skillDir` from the pack installed at
- * `packDir`. Throws, leaving the skill as it was, when the pack cannot complete it.
- */
+/** Opens a file for writing and refuses a link at its last component, where the platform can. */
+const WRITE_NO_FOLLOW =
+  fs.constants.O_WRONLY |
+  fs.constants.O_CREAT |
+  fs.constants.O_TRUNC |
+  (fs.constants.O_NOFOLLOW ?? 0);
+
+/** The path of `file` under `boundary`, refused when it leaves the boundary or passes through a link. */
+function plainPath(boundary: string, file: string): string {
+  const base = path.resolve(boundary);
+  const target = path.resolve(base, file);
+  if (!target.startsWith(base + path.sep)) {
+    throw new Error(`a composed file escapes the skill: ${file}`);
+  }
+  const parts = path.relative(base, target).split(path.sep);
+  let current = base;
+  parts.forEach((part, index) => {
+    current = path.join(current, part);
+    const found = fs.lstatSync(current, { throwIfNoEntry: false });
+    if (!found) return;
+    const plain =
+      index === parts.length - 1 ? found.isFile() : found.isDirectory();
+    if (!plain) {
+      throw new Error(
+        `a composed file would be written through a link: ${file}`,
+      );
+    }
+  });
+  return target;
+}
+
+/** Complete the step skill at `skillDir` from the pack at `packDir`, writing through no link below `boundaryDir`; throws and leaves the skill as it was otherwise. */
 export function completeSkillFromPack(
   skillDir: string,
   packDir: string,
   product: string,
+  boundaryDir: string,
 ): void {
   const stepFiles = readFiles(skillDir);
   const composed = composeStepSkill(stepFiles, readFiles(packDir), product);
-  const root = path.resolve(skillDir);
-  for (const [file, contents] of Object.entries(composed)) {
-    if (stepFiles[file] === contents) continue;
-    const target = path.resolve(root, file);
-    if (!target.startsWith(root + path.sep)) {
-      throw new Error(`a composed file escapes the skill: ${file}`);
-    }
+  const fromBoundary = path.relative(
+    path.resolve(boundaryDir),
+    path.resolve(skillDir),
+  );
+  // The skill's own folder is checked even when nothing is written, so a caller can trust its path.
+  plainPath(boundaryDir, path.join(fromBoundary, SKILL_FILE));
+  // Every target is checked before the first write, so a refusal leaves the skill untouched.
+  const writes = Object.entries(composed)
+    .filter(([file, contents]) => stepFiles[file] !== contents)
+    .map(
+      ([file, contents]) =>
+        [
+          plainPath(boundaryDir, path.join(fromBoundary, file)),
+          contents,
+        ] as const,
+    );
+  for (const [target, contents] of writes) {
     fs.mkdirSync(path.dirname(target), { recursive: true });
-    fs.writeFileSync(target, contents);
+    const file = fs.openSync(target, WRITE_NO_FOLLOW);
+    try {
+      fs.writeFileSync(file, contents);
+    } finally {
+      fs.closeSync(file);
+    }
   }
 }

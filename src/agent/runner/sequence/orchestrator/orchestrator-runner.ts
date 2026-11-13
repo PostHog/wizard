@@ -1415,16 +1415,32 @@ async function executeOrchestrator(
     );
     if (result.kind !== 'ok') return unavailable(result.kind);
     if (product && referenceInstallPath) {
+      const completed = path.join(input.installDir, result.path);
       try {
         completeSkillFromPack(
-          path.join(input.installDir, result.path),
+          completed,
           path.join(input.installDir, referenceInstallPath),
           product,
+          input.installDir,
         );
       } catch (error) {
         return unavailable(
           error instanceof Error ? error.message : String(error),
         );
+      }
+      // Completing writes text the install scan never read, so the finished skill is scanned too.
+      const verdict = await scanInstalledSkill(
+        completed,
+        boot.triageProvider,
+      ).catch(
+        (error: unknown) =>
+          `scan failed: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+      );
+      if (verdict) {
+        rmSync(completed, { recursive: true, force: true });
+        return unavailable(verdict);
       }
     }
     return result.path;

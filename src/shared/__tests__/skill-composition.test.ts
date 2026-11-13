@@ -197,6 +197,7 @@ describe('completeSkillFromPack', () => {
       path.join(dir, 'skill'),
       path.join(dir, 'pack'),
       'integration',
+      dir,
     );
 
     expect(read('skill/SKILL.md')).toContain(
@@ -218,11 +219,76 @@ describe('completeSkillFromPack', () => {
         path.join(dir, 'skill'),
         path.join(dir, 'pack'),
         'integration',
+        dir,
       ),
     ).toThrow(/has no variant\.json/);
     expect(read('skill/SKILL.md')).toBe(INIT['SKILL.md']);
     expect(fs.readdirSync(path.join(dir, 'skill/references'))).toEqual([
       'content-security-policy.md',
     ]);
+  });
+
+  // A project can ship links in the cache folder, and a write through one lands outside the skill.
+  it.skipIf(process.platform === 'win32').each([
+    [
+      'a page that is a link to a file',
+      () => {
+        fs.writeFileSync(path.join(dir, 'outside.md'), 'outside');
+        fs.symlinkSync(
+          path.join(dir, 'outside.md'),
+          path.join(dir, 'skill/references/next-js.md'),
+        );
+      },
+      'skill',
+    ],
+    [
+      'a references folder that is a link',
+      () => {
+        fs.rmSync(path.join(dir, 'skill/references'), { recursive: true });
+        fs.mkdirSync(path.join(dir, 'outside'));
+        fs.symlinkSync(
+          path.join(dir, 'outside'),
+          path.join(dir, 'skill/references'),
+        );
+      },
+      'skill',
+    ],
+    [
+      'a skill folder that is a link',
+      () => {
+        fs.symlinkSync(path.join(dir, 'skill'), path.join(dir, 'linked'));
+      },
+      'linked',
+    ],
+  ])('writes nothing through %s', (_, arrange, skill) => {
+    arrange();
+
+    expect(() =>
+      completeSkillFromPack(
+        path.join(dir, skill),
+        path.join(dir, 'pack'),
+        'integration',
+        dir,
+      ),
+    ).toThrow(/through a link/);
+    expect(read('skill/SKILL.md')).toBe(INIT['SKILL.md']);
+    if (fs.existsSync(path.join(dir, 'outside.md'))) {
+      expect(read('outside.md')).toBe('outside');
+    }
+    if (fs.existsSync(path.join(dir, 'outside'))) {
+      expect(fs.readdirSync(path.join(dir, 'outside'))).toEqual([]);
+    }
+  });
+
+  it('refuses a skill outside the boundary', () => {
+    expect(() =>
+      completeSkillFromPack(
+        path.join(dir, 'skill'),
+        path.join(dir, 'pack'),
+        'integration',
+        path.join(dir, 'pack'),
+      ),
+    ).toThrow(/escapes the skill/);
+    expect(read('skill/SKILL.md')).toBe(INIT['SKILL.md']);
   });
 });

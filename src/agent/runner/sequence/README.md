@@ -63,9 +63,12 @@ With `wizard-agent-dag-skills` on, a task reads the skill that stands in for the
 one its prompt names: the menu entry whose `replaces` is that name. An entry
 with `frameworkReferences` is one skill written for every framework, and the
 runner completes it from the framework's reference skill with
-`@shared/skill-composition`. When a replacement fails to install, or the
-reference skill cannot complete it, the task reads the skill its prompt names
-and the run sends `orchestrator repackaged skill unavailable` with the reason.
+`@shared/skill-composition`, then scans the completed skill, since completing
+it writes text the install scan never read. When a replacement fails to
+install, the reference skill cannot complete it, or the scan rejects it or
+fails, the task reads the skill its prompt names and the run sends
+`orchestrator repackaged skill unavailable` with the reason. A completed skill
+the scan did not pass is deleted.
 Every event sent after the menu loads carries which a run read as the
 `orchestrator_skills` tag: `repackaged` when the flag is on and the menu has a
 replacement, `bundles` otherwise. The flag is independent of `wizard-agent-dag`.
