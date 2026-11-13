@@ -45,7 +45,8 @@ Read the current interface for the complete required fields. In particular,
 collects framework context. When the gathered context names a more specific variant,
 return its label from `metadata.getDetectedFrameworkLabel(context)`; detection sets
 the label through its context. Return the variant's stable id from
-`metadata.getVariant(context)`, which becomes the project's `variant` trait.
+`metadata.getVariant(context)`, which becomes the project's `frameworkVariant`
+trait.
 Framework configs never use the UI. Optional notices
 and extra MCP servers also belong in metadata.
 
