@@ -110,8 +110,9 @@ it('removes only the coding agents the user ticks', async () => {
       {
         name: 'Codex',
         kind: 'local' as const,
-        supportsPlugin: true,
+        supportsPlugin: false,
         pluginBundlesMcp: false,
+        pluginInstalled: true,
       },
     ]);
   const remove = vi.fn<McpInstaller['remove']>((names) =>
@@ -333,6 +334,85 @@ it('shows the login command for a coding agent that was already installed', asyn
       }),
     ],
   ]);
+});
+
+it('keeps an enabled plugin that serves PostHog instead of adding a duplicate direct entry', async () => {
+  const store = new WizardStore(Tool.McpAdd);
+  store.session = buildSession({ installDir: '/app' });
+  const detectClients = () =>
+    Promise.resolve([
+      {
+        name: 'Claude Code',
+        kind: 'local' as const,
+        supportsPlugin: false,
+        pluginBundlesMcp: true,
+        pluginInstalled: true,
+        loginCommand: 'claude mcp login posthog',
+        pluginLoginCommand: 'claude mcp login plugin:posthog:posthog',
+      },
+      {
+        name: 'Cursor',
+        kind: 'local' as const,
+        supportsPlugin: false,
+        pluginBundlesMcp: false,
+      },
+    ]);
+  const install = vi.fn<McpInstaller['install']>((names) =>
+    Promise.resolve(
+      names.map((name) => ({ name, status: McpClientStatus.Changed })),
+    ),
+  );
+  const { lastFrame } = render(
+    <McpScreen
+      store={store}
+      installer={{ ...installer, detectClients, install }}
+    />,
+  );
+  await vi.waitFor(() => expect(lastFrame()).toContain('Press enter'));
+  expect(install.mock.calls.map(([names]) => names)).toEqual([['Cursor']]);
+  expect(lastFrame()).toContain('claude mcp login plugin:posthog:posthog');
+  expect(lastFrame()).not.toContain('claude mcp login posthog');
+  expect(mcpCompleteCalls()).toEqual([
+    [
+      'mcp complete',
+      expect.objectContaining({
+        mcp_installed_clients: ['Cursor', 'Claude Code'],
+        mcp_already_installed_clients: ['Claude Code'],
+      }),
+    ],
+  ]);
+});
+
+it('writes a direct entry when the existing plugin is disabled', async () => {
+  const store = new WizardStore(Tool.McpAdd);
+  store.session = buildSession({ installDir: '/app' });
+  const detectClients = () =>
+    Promise.resolve([
+      {
+        name: 'Claude Code',
+        kind: 'local' as const,
+        supportsPlugin: false,
+        pluginBundlesMcp: true,
+        pluginInstalled: false,
+        loginCommand: 'claude mcp login posthog',
+        pluginLoginCommand: 'claude mcp login plugin:posthog:posthog',
+      },
+    ]);
+  const install = vi.fn<McpInstaller['install']>((names) =>
+    Promise.resolve(
+      names.map((name) => ({ name, status: McpClientStatus.Changed })),
+    ),
+  );
+  const { lastFrame } = render(
+    <McpScreen
+      store={store}
+      installer={{ ...installer, detectClients, install }}
+    />,
+  );
+  await vi.waitFor(() => expect(lastFrame()).toContain('Press enter'));
+  expect(install.mock.calls.map(([names]) => names)).toEqual([['Claude Code']]);
+  expect(lastFrame()).toContain('claude mcp login posthog');
+  expect(lastFrame()).not.toContain('plugin:posthog:posthog');
 });
 
 it('reports no coding agents when only AI assistants were found', async () => {

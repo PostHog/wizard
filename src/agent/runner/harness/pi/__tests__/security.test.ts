@@ -290,6 +290,42 @@ describe('pi-security: extension state machine (fail-closed + runaway + latch)',
     return { pi, handlers };
   }
 
+  it('blocks new tool calls after cancellation and calls cancelled while scanning', async () => {
+    const controller = new AbortController();
+    const { factory } = createSecurityExtension({
+      workingDirectory: PROJECT,
+      signal: controller.signal,
+    });
+    const { pi, handlers } = fakePi();
+    factory(pi);
+    mockedScan.mockImplementationOnce(() => {
+      controller.abort();
+      return Promise.resolve({ matched: false, matches: [] });
+    });
+    expect(
+      await handlers.tool_call({
+        toolName: 'bash',
+        input: { command: 'npm run build' },
+      }),
+    ).toMatchObject({
+      block: true,
+      reason: expect.stringContaining('cancelled'),
+    });
+    mockedScan.mockClear();
+    for (const toolName of [
+      'bash',
+      'write',
+      'complete_task',
+      'publish_handoff',
+    ]) {
+      expect(await handlers.tool_call({ toolName, input: {} })).toMatchObject({
+        block: true,
+        reason: expect.stringContaining('cancelled'),
+      });
+    }
+    expect(mockedScan).not.toHaveBeenCalled();
+  });
+
   test('blocks a denied call and counts it', async () => {
     const { factory, state } = createSecurityExtension({
       workingDirectory: PROJECT,
@@ -346,6 +382,27 @@ describe('pi-security: extension state machine (fail-closed + runaway + latch)',
         input: { content: '# Report' },
       }),
     ).toEqual({ block: true, reason: expect.stringContaining('fail-closed') });
+    expect(state.criticalViolation).toBe(true);
+  });
+
+  test('a critical scan result still latches when cancellation arrives during the scan', async () => {
+    const controller = new AbortController();
+    const { factory, state } = createSecurityExtension({
+      workingDirectory: PROJECT,
+      signal: controller.signal,
+    });
+    const { pi, handlers } = fakePi();
+    factory(pi);
+    mockedScan.mockImplementationOnce(() => {
+      controller.abort();
+      return Promise.reject(new Error('wasm boom'));
+    });
+    expect(
+      await handlers.tool_call({
+        toolName: 'publish_handoff',
+        input: { content: '# Report' },
+      }),
+    ).toMatchObject({ block: true });
     expect(state.criticalViolation).toBe(true);
   });
 
@@ -874,5 +931,135 @@ describe('read-only runs', () => {
         ),
       ).toEqual({ block: false });
     }
+  });
+});
+
+describe('pi-security: PostHog MCP tool allowlist', () => {
+  const POSTHOG_TOOLS = ['batch-export-get', 'batch-export-create'];
+  const execCall = (command: unknown, posthogTools = POSTHOG_TOOLS) =>
+    evaluateToolCall('posthog_exec', { command }, { posthogTools });
+
+  test.each([
+    ['allowed call', 'call batch-export-get {"id":"1"}'],
+    ['allowed call with no args', 'call batch-export-create'],
+    ['tools', 'tools'],
+    ['search', 'search batch-export'],
+    ['search for a blocked tool', 'search batch-export-delete'],
+    ['info for a blocked tool', 'info batch-export-delete'],
+    ['leading and trailing whitespace', '  call batch-export-get {}  '],
+    ['tabs and newlines between tokens', 'call\t\tbatch-export-get\n{}'],
+    ['padded discovery', '\n tools \n'],
+  ])('allows %s', async (_name, command) => {
+    expect(await execCall(command)).toEqual({ block: false });
+  });
+
+  test.each([
+    ['delete', 'call batch-export-delete {"id":"1"}', 'batch-export-delete'],
+    ['update', 'call batch-export-update {}', 'batch-export-update'],
+    ['unrelated tool', 'call dashboard-create {}', 'dashboard-create'],
+    [
+      'suffix on an allowed name',
+      'call batch-export-get-all {}',
+      'batch-export-get-all',
+    ],
+    ['letter suffix', 'call batch-export-getx {}', 'batch-export-getx'],
+    [
+      'json glued to the name',
+      'call batch-export-get{"id":"1"}',
+      'batch-export-get{"id":"1"}',
+    ],
+    ['quoted name', 'call "batch-export-get" {}', '"batch-export-get"'],
+    ['upper-case name', 'call BATCH-EXPORT-GET {}', 'BATCH-EXPORT-GET'],
+  ])(
+    'blocks a call to a tool off the list: %s',
+    async (_name, command, tool) => {
+      const decision = await execCall(command);
+      expect(decision.block).toBe(true);
+      expect(decision.reason).toContain(`PostHog tool ${tool} is not allowed`);
+    },
+  );
+
+  test.each([
+    ['empty command', ''],
+    ['whitespace only', '   \n\t'],
+    ['call with no tool', 'call'],
+    ['call with only whitespace after', 'call   '],
+    ['unknown verb', 'delete batch-export-get'],
+    ['upper-case verb', 'CALL batch-export-get {}'],
+    ['verb glued to the tool', 'callbatch-export-get {}'],
+    ['non-string command', 42],
+    ['missing command', undefined],
+  ])('fails closed on a malformed command: %s', async (_name, command) => {
+    const decision = await execCall(command);
+    expect(decision.block).toBe(true);
+    expect(decision.reason).toContain('not allowed for this program');
+  });
+
+  test('an empty allowlist still allows discovery and blocks every call', async () => {
+    expect(await execCall('tools', [])).toEqual({ block: false });
+    expect((await execCall('call batch-export-get {}', [])).block).toBe(true);
+  });
+
+  test.each(['mcp', 'posthog_get_docs', 'posthog_batch-export-delete'])(
+    'blocks the other PostHog route %s under an allowlist',
+    async (tool) => {
+      const decision = await evaluateToolCall(
+        tool,
+        { tool: 'batch-export-delete', args: '{}' },
+        { posthogTools: POSTHOG_TOOLS },
+      );
+      expect(decision.block).toBe(true);
+      expect(decision.reason).toContain(`PostHog tool ${tool} is not allowed`);
+    },
+  );
+
+  test.each([
+    ['posthog_exec', { command: 'call batch-export-delete {}' }],
+    ['posthog_exec', { command: '' }],
+    ['mcp', { tool: 'batch-export-delete' }],
+  ])('without an allowlist, %s passes as before', async (tool, input) => {
+    expect(await evaluateToolCall(tool, input)).toEqual({ block: false });
+  });
+
+  test('other tools are unaffected by the allowlist', async () => {
+    expect(
+      await evaluateToolCall(
+        'load_skill_menu',
+        {},
+        { posthogTools: POSTHOG_TOOLS },
+      ),
+    ).toEqual({ block: false });
+  });
+
+  test('the parent and subagent gates both enforce it', async () => {
+    const { factory, subagentFactory, state } = createSecurityExtension({
+      workingDirectory: PROJECT,
+      posthogTools: POSTHOG_TOOLS,
+    });
+    const handlers: Record<string, (e: any) => any>[] = [{}, {}];
+    const fake = (h: Record<string, (e: any) => any>) =>
+      ({
+        on: (event: string, handler: (e: any) => any) => {
+          h[event] = handler;
+        },
+      } as PiExtensionApiLike);
+    factory(fake(handlers[0]));
+    subagentFactory(fake(handlers[1]));
+    const blocked = {
+      toolName: 'posthog_exec',
+      input: { command: 'call batch-export-delete {}' },
+    };
+    const allowed = {
+      toolName: 'posthog_exec',
+      input: { command: 'call batch-export-get {}' },
+    };
+    for (const h of handlers) {
+      expect(await h.tool_call(blocked)).toEqual({
+        block: true,
+        reason: expect.stringContaining('batch-export-delete'),
+      });
+      expect(await h.tool_call(allowed)).toEqual({});
+    }
+    expect(state.blockedCount).toBe(2);
   });
 });

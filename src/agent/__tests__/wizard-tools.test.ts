@@ -164,6 +164,14 @@ describe('checkEnvKeys', () => {
       expect(result.ANTHROPIC_API_KEY.foundIn).toEqual(['apps/api/.env.local']);
     });
 
+    it('scans the project when a model sends an empty filePath', () => {
+      writeEnv('apps/api/.env', 'NESTED_KEY=x\n');
+
+      expect(checkEnvKeys(tmpDir, ['NESTED_KEY'], '')).toEqual({
+        NESTED_KEY: { status: 'present', foundIn: ['apps/api/.env'] },
+      });
+    });
+
     it('reports a key defined nowhere as missing with no files', () => {
       writeEnv('.env', 'OTHER=1\n');
       expect(checkEnvKeys(tmpDir, ['NOPE'])).toEqual({

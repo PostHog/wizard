@@ -1,4 +1,5 @@
-import { execSync, spawn, spawnSync } from 'child_process';
+import { execFileSync, spawn, spawnSync } from 'child_process';
+import { findTrustedCommand } from '@shared/trusted-command';
 import {
   EnvironmentProvider,
   type EnvironmentProviderOptions,
@@ -32,7 +33,13 @@ export class VercelEnvironmentProvider extends EnvironmentProvider {
 
   hasVercelCli(): boolean {
     try {
-      execSync('vercel --version', { stdio: 'ignore' });
+      const command = findTrustedCommand('vercel', this.options.installDir);
+      if (!command) throw new Error('No trusted Vercel CLI found.');
+      execFileSync(command.executable, [...command.prefixArgs, '--version'], {
+        env: command.env,
+        stdio: 'ignore',
+        timeout: 5000,
+      });
       analytics.setTag('vercel-cli-installed', true);
       return true;
     } catch {
@@ -52,15 +59,21 @@ export class VercelEnvironmentProvider extends EnvironmentProvider {
   }
 
   isAuthenticated(): boolean {
-    const result = spawnSync('vercel', ['whoami'], {
-      encoding: 'utf-8',
-      stdio: ['pipe', 'pipe', 'pipe'], // suppress prompts
-      env: {
-        ...process.env,
-        FORCE_COLOR: '0', // avoid ANSI formatting
-        CI: '1', // hint to CLI that it's a non-interactive env
+    const command = findTrustedCommand('vercel', this.options.installDir);
+    if (!command) return false;
+    const result = spawnSync(
+      command.executable,
+      [...command.prefixArgs, 'whoami'],
+      {
+        encoding: 'utf-8',
+        stdio: ['pipe', 'pipe', 'pipe'], // suppress prompts
+        env: {
+          ...command.env,
+          FORCE_COLOR: '0', // avoid ANSI formatting
+          CI: '1', // hint to CLI that it's a non-interactive env
+        },
       },
-    });
+    );
 
     const output = (
       String(result.stdout) + String(result.stderr)
@@ -85,13 +98,26 @@ export class VercelEnvironmentProvider extends EnvironmentProvider {
     value: string,
     environment: string,
   ): Promise<void> {
+    const command = findTrustedCommand('vercel', this.options.installDir);
+    if (!command)
+      throw new Error(
+        'No trusted Vercel CLI found. Please upload environment variables manually.',
+      );
     await new Promise<void>((resolve, reject) => {
-      const proc = spawn('vercel', ['env', 'add', key, environment], {
-        stdio: ['pipe', 'pipe', 'pipe'],
-      });
+      const proc = spawn(
+        command.executable,
+        [...command.prefixArgs, 'env', 'add', key, environment],
+        {
+          env: command.env,
+          stdio: ['pipe', 'pipe', 'pipe'],
+        },
+      );
+
+      proc.on('error', reject);
+      proc.stdin.on('error', reject);
 
       let stderr = '';
-      proc.stderr.on('data', (data) => {
+      proc.stderr.on('data', (data: Buffer) => {
         stderr += data.toString();
       });
 

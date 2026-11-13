@@ -1,7 +1,23 @@
 import type { AbortCase } from '@agent/types';
 import { ErrorCodes } from '@shared/errors';
 import { createSkillProgram } from '../shared/skill-program';
-import type { ProgramConfig } from '@programs/program-contract';
+import type {
+  ProgramConfig,
+  ProgramRun,
+  ProgramSession,
+} from '@programs/program-contract';
+import type { Credentials } from '@shared/api';
+import { OutroKind, type OutroData } from '@shared/outro';
+import { join, relative } from 'path';
+import { McpDiscoveryHint } from '@services/mcp-servers';
+import {
+  MCP_SCAN_ERROR_KEY,
+  MCP_SCAN_KEY,
+  mcpAnalyticsTargetDir,
+  mcpScan,
+  mcpTarget,
+  scanMcpAnalyticsProject,
+} from './setup';
 
 const MCP_ANALYTICS_REPORT_FILE = 'posthog-mcp-analytics-report.md';
 
@@ -18,8 +34,10 @@ export const MCP_ANALYTICS_ABORT_CASES: AbortCase[] = [
     body:
       'MCP analytics supports TypeScript/JavaScript (`@posthog/mcp`), Python ' +
       '(`posthog.mcp`, shipped inside the `posthog` package), Go ' +
-      '(`posthogmcpsdk`, for servers built on the official go-sdk), and Ruby ' +
-      '(`PostHog::MCP`, shipped inside the `posthog-ruby` gem, experimental). ' +
+      '(`posthogmcpsdk`, for servers built on the official go-sdk), Ruby ' +
+      '(`PostHog::MCP`, shipped inside the `posthog-ruby` gem, experimental), ' +
+      'and Rust (`posthog_rs::mcp`, shipped inside the `posthog-rs` crate, ' +
+      'for servers built on rmcp, experimental). ' +
       "This project doesn't look like any of them, so there's nothing to " +
       'instrument. ' +
       'See https://posthog.com/docs/mcp-analytics for the supported setups.',
@@ -73,6 +91,29 @@ export const MCP_ANALYTICS_ABORT_CASES: AbortCase[] = [
       'command again.',
   },
   {
+    match: /^rust mcp server is not built on rmcp$/i,
+    message: 'Rust MCP server not built on rmcp',
+    body:
+      'The Rust SDK instruments servers built on `rmcp`, the official Rust ' +
+      'MCP SDK. This server uses another library or its own JSON-RPC router. ' +
+      'See https://posthog.com/docs/mcp-analytics/installation/rust for the ' +
+      'supported setups.',
+  },
+  {
+    match: /^rmcp older than 3\.7$/i,
+    message: 'rmcp older than 3.7',
+    body:
+      "`posthog_rs::mcp` needs `rmcp` 3.7 or later. The wizard doesn't " +
+      'change your `rmcp` version. Upgrade it, then run the command again.',
+  },
+  {
+    match: /^rust toolchain older than 1\.88$/i,
+    message: 'Rust toolchain older than 1.88',
+    body:
+      '`posthog-rs` with the `mcp` feature needs Rust 1.88 or later. ' +
+      'Upgrade Rust, then run the command again.',
+  },
+  {
     match: /^could not locate the server entry point$/i,
     message: 'Could not locate the MCP server entry point',
     body:
@@ -88,7 +129,7 @@ export const MCP_ANALYTICS_ABORT_CASES: AbortCase[] = [
  * `wizard mcp-analytics` — flat skill command.
  *
  * Instruments the user's own MCP server with the PostHog MCP SDK for its
- * language (TypeScript, Python, Go, or Ruby) so it reports `$mcp_*` analytics about
+ * language (TypeScript, Python, Go, Ruby, or Rust) so it reports `$mcp_*` analytics about
  * itself. This is the opposite of `wizard mcp add` (which installs the
  * PostHog MCP *server* into a coding agent) — keep the two distinct.
  *
@@ -98,31 +139,141 @@ export const MCP_ANALYTICS_ABORT_CASES: AbortCase[] = [
  * 'mcp-analytics'` from context-mill — a deliberate breaking change, done then,
  * not pre-emptively.
  */
+const skillProgram = createSkillProgram({
+  skillId: 'mcp-analytics',
+  command: 'mcp-analytics',
+  id: 'mcp-analytics',
+  description: 'Add PostHog MCP Analytics to your MCP server',
+  integrationLabel: 'mcp-analytics',
+  customPrompt:
+    "Instrument this project's MCP server with PostHog MCP analytics. Run the " +
+    '`mcp-analytics` skill end-to-end: detect the language and server ' +
+    'style, install the PostHog MCP SDK for that language (`@posthog/mcp` for ' +
+    'TypeScript, `posthog` for Python, `posthogmcpsdk` for Go, `posthog-ruby` ' +
+    'for Ruby, `posthog-rs` for Rust), wrap the server ' +
+    '(or use the custom-dispatcher client where the skill says so), wire the ' +
+    'project API key and host, and verify. ' +
+    'Make only additive changes — do not alter tool behavior. For a Ruby or ' +
+    'Rust server, the report must open by saying that SDK is experimental ' +
+    'and not officially supported. The final report ' +
+    `is written to ./${MCP_ANALYTICS_REPORT_FILE}.`,
+  successMessage: 'MCP analytics installed. Send your first tool call next.',
+  reportFile: MCP_ANALYTICS_REPORT_FILE,
+  docsUrl: 'https://posthog.com/docs/mcp-analytics',
+  spinnerMessage: 'Setting up MCP analytics...',
+  estimatedDurationMinutes: 5,
+  abortCases: MCP_ANALYTICS_ABORT_CASES,
+});
+const skillRun = skillProgram.run as ProgramRun;
+
+function outroData(reportFile: string, credentials: Credentials): OutroData {
+  return {
+    kind: OutroKind.Success,
+    message: 'MCP analytics installed. Send your first tool call next.',
+    reportFile,
+    primaryLink: {
+      label: 'Open MCP analytics',
+      url: `${credentials.host.appHost.replace(/\/$/, '')}/project/${
+        credentials.projectId
+      }/mcp-analytics`,
+    },
+    nextSteps: {
+      heading: 'Get your first data',
+      items: [
+        'Set the environment variables listed in the setup report, then start or redeploy your server.',
+        'Connect your agent and invoke a tool that is safe to run.',
+        'Open MCP analytics in the selected project to check that the tool call arrived.',
+      ],
+    },
+    docsUrl: 'https://posthog.com/docs/mcp-analytics/installation',
+  };
+}
+
+/** What the user selected before setup, and what the scan found when they left it to the agent. */
+function targetGuidance(session: ProgramSession): string[] {
+  const target = mcpTarget(session);
+  if (target?.entryPoint) {
+    return [
+      `The user selected this server entry point: ${JSON.stringify(
+        relative(mcpAnalyticsTargetDir(session), target.entryPoint),
+      )}. Verify it and instrument this server.`,
+    ];
+  }
+  const guidance =
+    target && !target.agentSearch
+      ? [
+          'The user selected this application directory. Resolve its launch and deployment entry points and follow local workspace imports. Keep instrumentation scoped to this application; do not instrument every consumer of a shared factory.',
+        ]
+      : [];
+  const hint = mcpScan(session)?.discoveryHint;
+  if (hint === McpDiscoveryHint.Launcher) {
+    guidance.push(
+      'This project appears to be an MCP launcher. Trace its imports and package metadata to locate the implementation source. Do not edit node_modules or generated dependency code. If the implementation is outside this checkout, explain where its source lives and what is needed to instrument it; do not report that no MCP server exists merely because this checkout delegates to a dependency.',
+    );
+  } else if (hint === McpDiscoveryHint.SharedLibrary) {
+    guidance.push(
+      'The quick scan found shared MCP library code, not an unambiguous server application. Find the runnable consumer before choosing where to instrument. Do not treat the shared constructor as consent to instrument all consumers.',
+    );
+  }
+  return guidance;
+}
+
 export const config: ProgramConfig = {
   decisions: ['is_mcp_server'],
-  ...createSkillProgram({
-    skillId: 'mcp-analytics',
-    command: 'mcp-analytics',
-    id: 'mcp-analytics',
-    description: 'Add PostHog MCP Analytics to your MCP server',
-    integrationLabel: 'mcp-analytics',
-    customPrompt:
-      "Instrument this project's MCP server with PostHog MCP analytics. Run the " +
-      '`mcp-analytics` skill end-to-end: detect the language and server ' +
-      'style, install the PostHog MCP SDK for that language (`@posthog/mcp` for ' +
-      'TypeScript, `posthog` for Python, `posthogmcpsdk` for Go, `posthog-ruby` ' +
-      'for Ruby), wrap the server ' +
-      '(or use the custom-dispatcher client where the skill says so), wire the ' +
-      'project API key and host, and verify. ' +
-      'Make only additive changes — do not alter tool behavior. For a Ruby ' +
-      'server, the report must open by saying the Ruby SDK is experimental and ' +
-      'not officially supported. The final report ' +
-      `is written to ./${MCP_ANALYTICS_REPORT_FILE}.`,
-    successMessage: `MCP analytics configured! View the report at ./${MCP_ANALYTICS_REPORT_FILE}`,
-    reportFile: MCP_ANALYTICS_REPORT_FILE,
-    docsUrl: 'https://posthog.com/docs/mcp-analytics',
-    spinnerMessage: 'Setting up MCP analytics...',
-    estimatedDurationMinutes: 5,
-    abortCases: MCP_ANALYTICS_ABORT_CASES,
-  }),
+  ...skillProgram,
+  // Before setup, suggest server apps so a monorepo root doesn't instrument a shared helper.
+  onReady: async (ctx) => {
+    try {
+      ctx.setFrameworkContext(
+        MCP_SCAN_KEY,
+        await scanMcpAnalyticsProject(ctx.session.installDir),
+      );
+    } catch (error) {
+      ctx.setFrameworkContext(
+        MCP_SCAN_ERROR_KEY,
+        error instanceof Error
+          ? error.message
+          : 'Could not read this directory.',
+      );
+    }
+  },
+  // Headless runs have no screen to offer the scan's suggestions, and the agent searches anyway.
+  ciPreRun: () => Promise.resolve(),
+  runSteps: { run: { targetDir: mcpAnalyticsTargetDir } },
+  run: (session) =>
+    Promise.resolve({
+      ...skillRun,
+      customPrompt: (ctx) =>
+        [skillRun.customPrompt?.(ctx), ...targetGuidance(session)]
+          .filter(Boolean)
+          .join('\n'),
+      // The runner passes buildOutroData the run's session, whose installDir is
+      // the selected app; the outro resolves the report from where the wizard started.
+      buildOutroData: (_runSession, credentials) =>
+        outroData(
+          relative(
+            session.installDir,
+            join(mcpAnalyticsTargetDir(session), MCP_ANALYTICS_REPORT_FILE),
+          ),
+          credentials,
+        ),
+    }),
 };
+
+export {
+  McpDiscoveryHint,
+  type McpPackageSuggestions,
+} from '@services/mcp-servers';
+export {
+  findMcpServers,
+  resolveMcpTarget,
+  type McpServerScan,
+  type McpTarget,
+} from '@services/mcp-servers';
+export {
+  MCP_SCAN_ERROR_KEY,
+  MCP_SCAN_KEY,
+  MCP_TARGET_KEY,
+  mcpScan,
+  scanMcpAnalyticsProject,
+} from './setup';

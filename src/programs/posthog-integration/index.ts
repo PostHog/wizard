@@ -1,4 +1,8 @@
-import { detectPostHogIntegration } from '@services/detection';
+import {
+  detectMcpServer,
+  detectPostHogIntegration,
+  noteScannedWarehouseSources,
+} from '@services/detection';
 import type { ProgramConfig } from '@programs/program-contract';
 import type { ProgramRun } from '@programs/program-contract';
 import { AgentSignals, WIZARD_TOOL_NAMES } from '@agent';
@@ -26,6 +30,7 @@ import { abortNoFrameworkDetected } from '../shared/abort-no-framework';
 import {
   SETUP_REPORT_FILE,
   WIZARD_DEFAULT_AIO_LOGS_FLAG_KEY,
+  WIZARD_DEFAULT_MCP_ANALYTICS_FLAG_KEY,
   WIZARD_INTERACTION_EVENT_NAME,
 } from '@shared/constants';
 import { requestDeepLink } from '@utils/provisioning';
@@ -43,6 +48,35 @@ const WAREHOUSE_SOURCES_DOCS_URL =
 
 /** Task type of the seeded step below, matched against the drain's result. */
 const WAREHOUSE_SEED_TASK_TYPE = 'warehouse';
+
+/** The context-mill `integration-v2` task that instruments the project's MCP server. */
+const MCP_ANALYTICS_TASK_TYPE = 'mcp-analytics';
+
+/** Candidate paths the MCP fact names before it summarizes the rest. */
+const MCP_FACT_PATH_LIMIT = 5;
+
+/** The MCP step runs where the scan found a server and its launch flag reads 'true'. */
+function mcpAnalyticsStepOn(
+  flags: Record<string, string>,
+  sess: ProgramSession,
+): boolean {
+  return (
+    flags[WIZARD_DEFAULT_MCP_ANALYTICS_FLAG_KEY] === 'true' &&
+    sess.mcpServerCandidates.length > 0
+  );
+}
+
+/** The scan's candidates as the fact the planner and the mcp-analytics task read. */
+function mcpServerFact(candidates: readonly string[]): string {
+  const shown = candidates
+    .slice(0, MCP_FACT_PATH_LIMIT)
+    .map((path) => JSON.stringify(path))
+    .join(', ');
+  const more = candidates.length - MCP_FACT_PATH_LIMIT;
+  return `MCP server candidates from the wizard's scan, examples last: ${shown}${
+    more > 0 ? ` (and ${more} more)` : ''
+  }`;
+}
 
 function resolveContinueUrl(
   sess: ProgramSession,
@@ -270,11 +304,19 @@ export const config: ProgramConfig = {
     'observability_stack',
   ],
 
-  // Kill switch over the shipped default: only an explicit 'false' excludes,
-  // so a failed flag fetch keeps AI Observability and Logs in the run.
-  excludedTaskTypes: (flags) =>
-    flags[WIZARD_DEFAULT_AIO_LOGS_FLAG_KEY] === 'false'
+  // AI Observability and Logs are a kill switch over a shipped default: only an
+  // explicit 'false' excludes them. MCP analytics is a launch flag: it needs
+  // 'true', so a failed flag fetch leaves it out, and a server from the scan.
+  excludedTaskTypes: (flags, sess) => [
+    ...(flags[WIZARD_DEFAULT_AIO_LOGS_FLAG_KEY] === 'false'
       ? ['ai-observability', 'logs']
+      : []),
+    ...(mcpAnalyticsStepOn(flags, sess) ? [] : [MCP_ANALYTICS_TASK_TYPE]),
+  ],
+  // The fact exists only beside the task, so no other task acts on it alone.
+  detectedFacts: (flags, sess) =>
+    mcpAnalyticsStepOn(flags, sess)
+      ? [mcpServerFact(sess.mcpServerCandidates)]
       : [],
 
   // CI-mode prerequisite work: the headless equivalent of the detect step's
@@ -284,6 +326,15 @@ export const config: ProgramConfig = {
     runner: CiRunnerContext,
   ): Promise<void> => {
     await scopeInstallDirToProject(session, runner);
+    // The scan reads source files, so it runs beside framework detection.
+    const mcpServer = detectMcpServer(
+      {
+        setMcpServerCandidates: (candidates) => {
+          session.mcpServerCandidates = candidates;
+        },
+      },
+      session.installDir,
+    );
 
     const integration =
       (await detectFramework(session.installDir)) ??
@@ -316,6 +367,8 @@ export const config: ProgramConfig = {
       }
     }
     noteDetectedFramework(session, frameworkConfig, context, runner.log);
+    await noteScannedWarehouseSources(session, runner.log);
+    await mcpServer;
   },
 
   run: async (

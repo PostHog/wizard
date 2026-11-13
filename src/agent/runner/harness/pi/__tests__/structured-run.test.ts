@@ -31,6 +31,10 @@ const state = vi.hoisted(() => ({
   // A hung turn ends only when the harness aborts the session.
   hang: false,
   release: undefined as (() => void) | undefined,
+  // Runs once the hung turn ended, as a scan still in flight would while abort waits for idle.
+  onAbortSettling: undefined as (() => void) | undefined,
+  // The hung turn throws when aborted, rather than resolving.
+  hangThrows: false,
   // The turn answers without calling a tool.
   noTools: false,
   // Commentary blocks sent before the answer in the same turn.
@@ -208,15 +212,20 @@ vi.mock('@earendil-works/pi-coding-agent', () => ({
             });
           }
           return state.hang
-            ? new Promise<void>((resolve) => (state.release = resolve))
+            ? new Promise<void>((resolve, reject) => {
+                state.release = state.hangThrows
+                  ? () => reject(new Error('aborted'))
+                  : resolve;
+              })
             : Promise.resolve();
         },
         getSessionStats: () => ({
           tokens: { input: 1, output: 1, cacheWrite: 0, cacheRead: 0 },
         }),
-        abort: () => {
+        abort: async () => {
           state.release?.();
-          return Promise.resolve();
+          await Promise.resolve();
+          state.onAbortSettling?.();
         },
       },
     });
@@ -305,6 +314,9 @@ beforeEach(() => {
   state.prompts = [];
   state.tasks.clear();
   state.hang = false;
+  state.release = undefined;
+  state.onAbortSettling = undefined;
+  state.hangThrows = false;
   state.noTools = false;
   state.preamble = [];
   state.toolName = 'find';
@@ -420,6 +432,64 @@ it('ends a scan that outlives its budget as a timeout', async () => {
   ).resolves.toMatchObject({
     kind: 'failure',
     classification: AgentErrorType.AGENTIC_DETECTION_TIMEOUT,
+  });
+});
+
+describe('a task cancelled mid-turn', () => {
+  async function cancelledResult(violationBefore = false) {
+    const security = { criticalViolation: violationBefore, blockedCount: 0 };
+    vi.mocked(createSecurityExtension).mockReturnValueOnce({
+      factory: () => undefined,
+      state: security,
+    } as unknown as ReturnType<typeof createSecurityExtension>);
+    state.hang = true;
+    const controller = new AbortController();
+    const result = runPiTask({
+      ...runInputs(vi.fn(), null),
+      signal: controller.signal,
+      orchestrator: {
+        currentTaskId: 'review',
+        validTypes: ['review'],
+        store: { get: () => ({ status: 'running' }) } as never,
+      },
+      allowedTools: ['Read'],
+      analyticsProperties: {},
+    } as never);
+    await vi.waitFor(() => expect(state.release).toBeDefined());
+    state.onAbortSettling = () => {
+      if (latchWhileSettling) security.criticalViolation = true;
+    };
+    controller.abort();
+    return result;
+  }
+  let latchWhileSettling = false;
+  beforeEach(() => {
+    latchWhileSettling = false;
+  });
+  const YARA = {
+    kind: 'failure',
+    classification: AgentErrorType.YARA_VIOLATION,
+  };
+
+  it('stays a cancellation when no scan found anything', async () => {
+    await expect(cancelledResult()).resolves.toMatchObject({ kind: 'abort' });
+  });
+
+  it('reports a violation latched before the cancellation', async () => {
+    await expect(cancelledResult(true)).resolves.toEqual(YARA);
+  });
+
+  it('reports a violation a scan latches while cancellation settles', async () => {
+    latchWhileSettling = true;
+    await expect(cancelledResult()).resolves.toEqual(YARA);
+  });
+
+  it('reports the violation when the cancelled turn throws', async () => {
+    latchWhileSettling = true;
+    state.hangThrows = true;
+    await expect(cancelledResult()).resolves.toEqual(YARA);
+    latchWhileSettling = false;
+    await expect(cancelledResult()).resolves.toMatchObject({ kind: 'abort' });
   });
 });
 
@@ -639,5 +709,18 @@ it('registers only filesystem readers for a read-only scan and fences tool calls
   expect(setupPostHogMcp).not.toHaveBeenCalled();
   expect(createSecurityExtension).toHaveBeenLastCalledWith(
     expect.objectContaining({ readOnly: true }),
+  );
+});
+
+it("installs the program's PostHog tool allowlist in the security gate", async () => {
+  state.text = '{"repoType":"single","projects":[]}';
+  const inputs = runInputs(vi.fn());
+  inputs.config.posthogTools = ['batch-export-get'];
+  vi.mocked(createSecurityExtension).mockClear();
+
+  await piBackend.run(inputs);
+
+  expect(createSecurityExtension).toHaveBeenCalledWith(
+    expect.objectContaining({ posthogTools: ['batch-export-get'] }),
   );
 });

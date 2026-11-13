@@ -4,12 +4,15 @@ import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ProgramAbort } from '@programs/program-contract';
 import type { ProgramReadyContext } from '@programs/program-contract';
-import { buildSession } from '@services/session';
+import { buildSession, SessionStore } from '@services/session';
+import { scanCodebaseFor } from '@services/codebase-scan';
+import { getDetectedWarehouseSources } from '@services/warehouse-sources';
 import { config as posthogIntegration } from '@programs/posthog-integration';
 import { testCiRunnerContext } from '@programs/shared/__tests__/runner-context.no-jest';
 import { ErrorCodes } from '@shared/errors';
 import { OutroKind } from '@shared/outro';
 import { Integration } from '@shared/constants';
+import { analytics } from '@utils/analytics';
 
 vi.mock('@services/detection/project-scope', () => ({
   scopeInstallDirToProject: vi.fn().mockResolvedValue(undefined),
@@ -48,6 +51,7 @@ function readyContext(
     setFrameworkConfig: vi.fn(),
     setDetectedFramework: vi.fn(),
     setPosthogSdkDetected: vi.fn(),
+    setMcpServerCandidates: vi.fn(),
     setSkillId: vi.fn(),
     setUnsupportedVersion: vi.fn(),
     addDiscoveredFeature: vi.fn(),
@@ -105,6 +109,59 @@ describe.each([
 
       expect(ctx.setSkillId).toHaveBeenCalledWith(integration);
       expect(ctx.setDetectionComplete).toHaveBeenCalled();
+    });
+
+    it('names the scanned warehouse sources in CI without asking for them', async () => {
+      fs.writeFileSync(
+        path.join(installDir, 'package.json'),
+        JSON.stringify({
+          dependencies: { ...dependencies, stripe: '^14.0.0' },
+        }),
+      );
+      const store = new SessionStore(buildSession({ installDir, ci: true }));
+      const info = vi.fn();
+
+      await scanCodebaseFor(program, store.readyContext());
+      await store.edit((draft) =>
+        program.ciPreRun?.(draft, {
+          ...testCiRunnerContext(),
+          log: { info, warn: vi.fn() },
+        }),
+      );
+
+      expect(
+        getDetectedWarehouseSources(store.session).map((s) => s.kind),
+      ).toContain('Stripe');
+      expect(store.session.frameworkContext.warehouseScanState).toBe('ok');
+      expect(info).toHaveBeenCalledWith(expect.stringContaining('Stripe'));
+      expect(program.seedTasks?.(store.session)).toEqual([]);
+    });
+
+    it('finishes CI detection when the warehouse pass throws', async () => {
+      fs.writeFileSync(
+        path.join(installDir, 'package.json'),
+        JSON.stringify({ dependencies }),
+      );
+      const session = buildSession({ installDir, ci: true });
+      // A scan with no tool list makes the warehouse pass throw.
+      session.frameworkContext.codebaseScan = { tools: null };
+      const info = vi.fn();
+
+      await program.ciPreRun?.(session, {
+        ...testCiRunnerContext(),
+        log: { info, warn: vi.fn() },
+      });
+
+      expect(session.integration).toBe(integration);
+      expect(session.frameworkContext.warehouseScanState).toBe('failed');
+      expect(getDetectedWarehouseSources(session)).toEqual([]);
+      expect(info).not.toHaveBeenCalledWith(
+        expect.stringContaining('Detected data sources'),
+      );
+      expect(analytics.captureException).toHaveBeenCalledWith(
+        expect.any(Error),
+        { step: 'recordScannedWarehouseSources' },
+      );
     });
   },
 );

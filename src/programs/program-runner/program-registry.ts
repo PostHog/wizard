@@ -20,11 +20,13 @@ import { config as webAnalyticsDoctor } from '@programs/web-analytics-doctor';
 import { config as migration } from '@programs/migration';
 import { config as revenueAnalytics } from '@programs/revenue-analytics';
 import { config as warehouseSource } from '@programs/warehouse-source';
+import { config as warehouseDestination } from '@programs/warehouse-destination';
 import { config as selfDriving } from '@programs/self-driving';
 import { config as sourceMaps } from '@programs/error-tracking-upload-source-maps';
 import { config as errorTracking } from '@programs/error-tracking';
 import { config as featureFlags } from '@programs/feature-flags';
 import { config as agentSkill } from '@programs/agent-skill';
+import { config as support } from '@programs/support';
 
 const [audit, eventsAudit] = auditPrograms;
 
@@ -33,6 +35,7 @@ export const PROGRAM_REGISTRY = [
   posthogIntegration,
   revenueAnalytics,
   warehouseSource,
+  warehouseDestination,
   sourceMaps,
   errorTracking,
   featureFlags,
@@ -45,6 +48,7 @@ export const PROGRAM_REGISTRY = [
   replayVision,
   aiObservability,
   metrics,
+  support,
 ] as const satisfies readonly ProgramConfig[];
 
 /**
@@ -56,6 +60,7 @@ export const Program = {
   PostHogIntegration: posthogIntegration.id,
   RevenueAnalyticsSetup: revenueAnalytics.id,
   WarehouseSource: warehouseSource.id,
+  WarehouseDestination: warehouseDestination.id,
   ErrorTrackingUploadSourceMaps: sourceMaps.id,
   ErrorTracking: errorTracking.id,
   FeatureFlags: featureFlags.id,
@@ -69,6 +74,7 @@ export const Program = {
   ReplayVision: replayVision.id,
   AiObservability: aiObservability.id,
   Metrics: metrics.id,
+  Support: support.id,
 } as const;
 
 /**

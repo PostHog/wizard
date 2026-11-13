@@ -85,11 +85,17 @@ describe('program bindings', () => {
       migration: linearOnSol,
       'revenue-analytics-setup': linearOnSol,
       'warehouse-source': linearOnSol,
+      'warehouse-destination': {
+        sequence: Sequence.linear,
+        harness: Harness.pi,
+        model: DEFAULT_AGENT_MODEL,
+      },
       'self-driving': linearOnSol,
       'error-tracking-upload-source-maps': linearOnSol,
       'error-tracking': orchestratorOnPi,
       'feature-flags': orchestratorOnPi,
       'agent-skill': linearOnSol,
+      support: orchestratorOnPi,
     });
   });
 });
@@ -99,6 +105,12 @@ describe('getOAuthScopesForProgram', () => {
     const scopes = getOAuthScopesForProgram('feature-flags');
     expect(scopes).toContain('feature_flag:read');
     expect(scopes).toContain('feature_flag:write');
+  });
+
+  it('adds the product enablement scope for support', () => {
+    expect(getOAuthScopesForProgram('support')).toContain(
+      'product_enablement:write',
+    );
   });
 });
 

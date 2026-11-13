@@ -107,6 +107,26 @@ describe('detectFramework (end-to-end over real project dirs)', () => {
     );
   });
 
+  test('Python manifests inside node_modules do not make a project Python', async () => {
+    const opts = project({
+      'package.json': JSON.stringify({ dependencies: { express: '^4' } }),
+      'node_modules/node-gyp/gyp/pyproject.toml': '[project]\nname = "gyp"\n',
+      'node_modules/re2/vendor/re2/python/setup.py': 'setup(name="re2")\n',
+    });
+    await expect(detectFramework(opts.installDir)).resolves.toBe(
+      Integration.javascriptNode,
+    );
+  });
+
+  test('a Python manifest in a subdirectory still resolves to python', async () => {
+    const opts = project({
+      'services/api/pyproject.toml': '[project]\nname = "api"\n',
+    });
+    await expect(detectFramework(opts.installDir)).resolves.toBe(
+      Integration.python,
+    );
+  });
+
   test('a Vite React app resolves to javascript_web, not javascript_node', async () => {
     const opts = project({
       'package.json': JSON.stringify({

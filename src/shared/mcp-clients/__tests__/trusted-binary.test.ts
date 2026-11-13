@@ -86,4 +86,11 @@ describe('findTrustedBinary', () => {
     setPath(path.join(home, '.local', 'bin'));
     expect(findTrustedBinary('codex')).toBe(codex);
   });
+
+  it('preserves user-installed tools when the home folder is a dotfiles repository', () => {
+    fs.mkdirSync(path.join(home, '.git'));
+    const codex = executable(path.join(home, '.local', 'bin'));
+    setPath(path.dirname(codex));
+    expect(findTrustedBinary('codex')).toBe(codex);
+  });
 });
