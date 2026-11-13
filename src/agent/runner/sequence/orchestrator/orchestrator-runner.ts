@@ -96,6 +96,7 @@ import {
 } from './task-deadline';
 import { dependencyClosure, uncoveredBySink } from './queue-tools';
 import { deferSeededTasks } from './seeded-deps';
+import { queueTaskGraph, TaskGraphError } from './task-graph';
 import { LONGER_ASK_TIMEOUT_MS, shouldDisableAsk } from '@shared/ask-policy';
 import {
   agentRunTools,
@@ -756,8 +757,9 @@ async function executeOrchestrator(
     ),
   });
   if (signal?.aborted) return cancelledRun();
+  // A flow with no planner prompt is queued from its frontmatter, behind `wizard-agent-dag`.
   const seedPrompt = registry.seed;
-  if (!seedPrompt) {
+  if (!seedPrompt && !isAgentDagEnabled(boot.wizardFlags)) {
     throw new Error(
       `No seed agent prompt (frontmatter \`seed: true\`) for flow "${flow}" is available from ${boot.skillsBaseUrl}.`,
     );
@@ -765,7 +767,7 @@ async function executeOrchestrator(
 
   // The end decision the switchboard event defers to: the model each task will actually run on.
   const taskModels = Object.fromEntries(
-    ['seed', ...registry.types].map((type) => {
+    [...(seedPrompt ? ['seed'] : []), ...registry.types].map((type) => {
       const prompt = type === 'seed' ? seedPrompt : registry.get(type);
       const pick = resolveHarness(switchboardCtx, type);
       const specModel = prompt && promptModelFor(prompt, pick.harness).model;
@@ -1149,45 +1151,72 @@ async function executeOrchestrator(
 
   // 1. Seed the queue with the orchestrator agent. It is itself an agent prompt
   // (the WHAT), so its model and tools come from its frontmatter. The seed
-  // plans the graph, it is not a task.
+  // plans the graph, it is not a task. A flow with no planner prompt is queued
+  // from the graph its frontmatter declares instead.
   //
   // Prompt-frontmatter model wins over the switchboard pick (§3.6 of the
   // switchboard plan) — the switchboard's model is the fallback when the
   // prompt is silent.
-  const seedPick = resolveHarness(switchboardCtx, 'seed');
-  const seedHarness = requireTaskHarness(seedPick);
-  const seedModel = promptModelFor(seedPrompt, seedPick.harness);
-  const seedResult = await seedHarness.runTask({
-    signal,
-    config,
-    input,
-    boot,
-    emit,
-    // The exclusion note names `registry.excludedTypes` — the excluded types
-    // this flow actually had — so the planner never hears about work that was
-    // never available, and overlapping exclusion sources cannot double-list.
-    prompt: assembleSeedPrompt(
-      promptContext,
-      seedPrompt.body,
-      store.list(),
-      registry.excludedTypes,
-    ),
-    spinner,
-    model: requireKnownModel(seedModel.model, seedPick.model),
-    effort: seedModel.effort,
-    ...agentRunTools(seedPrompt),
-    orchestrator: orchestratorCtx(),
-    spinnerMessage: 'Planning the integration...',
-    successMessage: 'Planned the integration',
-    requestRemark: false,
-    analyticsProperties: { task_type: 'seed', harness: seedPick.harness },
-  });
-  if (signal?.aborted) return cancelledRun();
-  const seedTerminal = terminalResult(seedResult);
-  if (seedTerminal) return seedTerminal;
+  if (seedPrompt) {
+    const seedPick = resolveHarness(switchboardCtx, 'seed');
+    const seedHarness = requireTaskHarness(seedPick);
+    const seedModel = promptModelFor(seedPrompt, seedPick.harness);
+    const seedResult = await seedHarness.runTask({
+      signal,
+      config,
+      input,
+      boot,
+      emit,
+      // The exclusion note names `registry.excludedTypes` — the excluded types
+      // this flow actually had — so the planner never hears about work that was
+      // never available, and overlapping exclusion sources cannot double-list.
+      prompt: assembleSeedPrompt(
+        promptContext,
+        seedPrompt.body,
+        store.list(),
+        registry.excludedTypes,
+      ),
+      spinner,
+      model: requireKnownModel(seedModel.model, seedPick.model),
+      effort: seedModel.effort,
+      ...agentRunTools(seedPrompt),
+      orchestrator: orchestratorCtx(),
+      spinnerMessage: 'Planning the integration...',
+      successMessage: 'Planned the integration',
+      requestRemark: false,
+      analyticsProperties: { task_type: 'seed', harness: seedPick.harness },
+    });
+    if (signal?.aborted) return cancelledRun();
+    const seedTerminal = terminalResult(seedResult);
+    if (seedTerminal) return seedTerminal;
+  } else {
+    try {
+      queueTaskGraph(orchestratorCtx(), registry.graph);
+    } catch (error) {
+      if (!(error instanceof TaskGraphError)) throw error;
+      logToFile(`[orchestrator] task graph rejected: ${error.message}`);
+      analytics.wizardCapture('orchestrator task graph rejected', {
+        reason: error.reason,
+      });
+      return failed({
+        code: ErrorCodes.AgentOrchestratorTaskGraph,
+        message: `The wizard could not plan this setup: its steps could not be queued.\n\nPlease report this to: ${WIZARD_CONTACT_EMAIL}`,
+        error: new WizardError(
+          'orchestrator could not queue the declared task graph',
+          {
+            reason: error.reason,
+            detail: error.message,
+            queue_state: JSON.stringify(store.list()),
+          },
+          ErrorCodes.AgentOrchestratorTaskGraph,
+        ),
+      });
+    }
+  }
   analytics.wizardCapture('orchestrator seeded', {
     task_count: store.list().length,
     types: store.list().map((t) => t.type),
+    source: seedPrompt ? 'planner' : 'frontmatter',
   });
   renderQueue();
 
@@ -1693,12 +1722,15 @@ async function executeOrchestrator(
   }
 
   // A drain that produced no tasks at all means the seed step never got a
-  // usable model response (e.g. the gateway returned empty completions).
+  // usable model response (e.g. the gateway returned empty completions), or
+  // the flow's frontmatter left no task to queue.
   // "0/0 completed" is a dead run, not a success with an empty denominator.
   if (summary.total === 0) {
     return failed({
       code: ErrorCodes.AgentOrchestratorHollowRun,
-      message: `The wizard was unable to set up PostHog: the planning step produced no work, so nothing ran.\n\nPlease try again — and if it happens again, report it to: ${WIZARD_CONTACT_EMAIL}`,
+      message: seedPrompt
+        ? `The wizard was unable to set up PostHog: the planning step produced no work, so nothing ran.\n\nPlease try again — and if it happens again, report it to: ${WIZARD_CONTACT_EMAIL}`
+        : `The wizard was unable to set up PostHog: this setup had no steps to run.\n\nPlease report this to: ${WIZARD_CONTACT_EMAIL}`,
       error: new WizardError(
         'orchestrator drain produced zero tasks',
         { queue_state: JSON.stringify(store.list()) },

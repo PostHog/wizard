@@ -40,9 +40,10 @@ before choosing credentials or an EU project.
 
 `pnpm record:context-mill-fixtures [base-url]` runs
 `record-context-mill-fixtures.no-jest.ts`, which records a context-mill
-release's skill menu into `fixtures/context-mill/`, the fixtures the behavior
-checks compare against. Commit the result on its own with the reason, since a
-changed fixture changes what "unchanged" means.
+release's skill menu, agent menu and agent prompts into
+`fixtures/context-mill/`, the fixtures the behavior checks compare against.
+Commit the result on its own with the reason, since a changed fixture changes
+what "unchanged" means.
 
 ## Credentials for full agent runs
 

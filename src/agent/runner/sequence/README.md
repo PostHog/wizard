@@ -20,15 +20,23 @@ owns its full lifecycle and cannot nest through the composition seam.
 ## Orchestrator
 
 [orchestrator-runner.ts](orchestrator/orchestrator-runner.ts) loads a flow from
-context-mill, runs its seed planner, then drains a dependency-aware task queue.
-Each task gets a focused conversation, tools, selected model/effort, and
-relevant handoffs. Independent tasks can run concurrently.
+context-mill, queues its tasks, then drains a dependency-aware task queue. Each
+task gets a focused conversation, tools, selected model/effort, and relevant
+handoffs. Independent tasks can run concurrently.
 
-The program selects `agentFlow ?? id`. Its published flow must supply a seed
-prompt and valid task-skill variants. Metrics already has a Pi/orchestrator
-binding; other routes can be selected through scoped flags or development CLI
-overrides. The retired `experiment/orchestrator` branch is not a prerequisite.
-See
+A flow's seed planner queues its tasks. With `wizard-agent-dag` on, a flow with
+no seed prompt is queued from the graph its frontmatter declares, by
+[task-graph.ts](orchestrator/task-graph.ts), and no planner runs.
+`orchestrator seeded` carries which one queued the run as `source`. A declared
+graph that cannot be queued ends the run with
+`PHW_AGENT_ORCHESTRATOR_TASK_GRAPH` and sends `orchestrator task graph
+rejected` with the reason.
+
+The program selects `agentFlow ?? id`. Its published flow must supply valid
+task-skill variants, and a seed prompt unless it is queued from its frontmatter.
+Metrics already has a Pi/orchestrator binding; other routes can be selected
+through scoped flags or development CLI overrides. The retired
+`experiment/orchestrator` branch is not a prerequisite. See
 [adding a program](../../../../.claude/skills/adding-skill-program/SKILL.md).
 
 A task prompt names its skills by menu id or by skill family, and the runner
@@ -78,10 +86,14 @@ frontmatter contract rather than copying an old manifest example:
   once and unblocks its dependents. Every deadline captures
   `orchestrator task deadline exceeded` with its landing, because a `continue`
   task also counts as completed.
-- `dependsOn` has different consumers: planner-enqueued tasks use actual task
-  IDs supplied to `enqueue_task`, while runner-seeded tasks resolve declared
-  task types after planning. It is not a universal automatic graph built from
-  frontmatter.
+- `dependsOn` names the task types a task runs after. In a flow with a planner,
+  the planner supplies actual task IDs to `enqueue_task`, and only runner-seeded
+  tasks resolve their declared types, after planning. In a flow queued from its
+  frontmatter, the declared types are the graph: each task is queued after the
+  ones it names, a task the run excludes hands its dependencies to the tasks
+  that waited on it, and the `sink` task also waits for every task its
+  dependencies do not reach. A name the flow does not declare is dropped and
+  logged.
 
 Per-role `contextMillOverride` on the program's `binding` can adjust a task's
 harness, model or effort. New task types usually belong in context-mill; new

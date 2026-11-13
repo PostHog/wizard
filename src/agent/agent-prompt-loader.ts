@@ -275,6 +275,9 @@ export interface AgentPrompt {
    *   planner runs, so it cannot name ids; the runner resolves these types to
    *   the ids the planner produced and applies them (see `seeded-deps.ts`).
    *   Empty means "after everything that is not the sink".
+   *
+   * In a flow with no planner, every task's list is authoritative: the runner
+   * queues the graph they declare (see `task-graph.ts`).
    */
   dependsOn: string[];
   body: string;
@@ -312,8 +315,13 @@ export interface AgentRegistry {
   readonly excludedTypes: string[];
   /** The flow's planner, the one prompt marked `seed: true` in its frontmatter. */
   readonly seed?: AgentPrompt;
+  /** The graph the flow's frontmatter declares: every task, excluded ones included, with what it runs after. */
+  readonly graph: readonly GraphTask[];
   get(type: string): AgentPrompt | undefined;
 }
+
+/** One task of a flow's declared graph. */
+export type GraphTask = Pick<AgentPrompt, 'type' | 'dependsOn' | 'sink'>;
 
 /** The registry for one flow's prompts. Pure; the loader feeds it the fetched set. */
 export function buildRegistry(
@@ -345,9 +353,8 @@ export function buildRegistry(
     });
   const byType = new Map(inFlow.map((p) => [p.type, p]));
   const tasks = inFlow.filter((p) => !p.seed);
-  const flowTypes = new Set(
-    prompts.filter((p) => p.flow === flow && !p.seed).map((p) => p.type),
-  );
+  const flowTasks = prompts.filter((p) => p.flow === flow && !p.seed);
+  const flowTypes = new Set(flowTasks.map((p) => p.type));
   return {
     types: tasks.map((p) => p.type),
     enqueueableTypes: tasks.filter((p) => !p.runnerSeeded).map((p) => p.type),
@@ -356,6 +363,11 @@ export function buildRegistry(
     optionalTypes: tasks.filter((p) => p.optional).map((p) => p.type),
     excludedTypes: [...excluded].filter((t) => flowTypes.has(t)),
     seed: inFlow.find((p) => p.seed),
+    graph: flowTasks.map(({ type, dependsOn, sink }) => ({
+      type,
+      dependsOn,
+      sink,
+    })),
     get: (type) => byType.get(type),
   };
 }
