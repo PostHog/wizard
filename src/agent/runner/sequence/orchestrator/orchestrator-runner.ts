@@ -920,6 +920,12 @@ async function executeOrchestrator(
       logToFile(
         `[orchestrator] reference unavailable: ${ref.kind} (${referenceSkillId})`,
       );
+      // Every task then runs without the example and the framework rules.
+      analytics.wizardCapture('orchestrator reference skill unavailable', {
+        skill: referenceSkillId,
+        reason: ref.kind,
+        framework,
+      });
     }
   } else if (framework) {
     logToFile(
