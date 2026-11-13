@@ -37,7 +37,9 @@ A flow's seed planner queues its tasks. A bundled flow with no seed prompt is
 queued from the graph its frontmatter declares, by
 [task-graph.ts](orchestrator/task-graph.ts), and no planner runs. A fetched flow
 with no seed prompt fails the run. `orchestrator seeded` carries which one
-queued the run as `source`.
+queued the run as `source`. A declared graph that cannot be queued ends the run
+with `PHW_AGENT_ORCHESTRATOR_TASK_GRAPH` and sends `orchestrator task graph
+rejected` with the reason.
 
 A flow must supply valid task-skill variants, and a seed prompt unless it is
 bundled without one. Metrics already has a Pi/orchestrator binding; other routes
@@ -103,7 +105,8 @@ frontmatter contract rather than copying an old manifest example:
   frontmatter, the declared types are the graph: each task is queued after the
   ones it names, a task the run excludes hands its dependencies to the tasks
   that waited on it, and the `sink` task also waits for every task its
-  dependencies do not reach.
+  dependencies do not reach. A name the flow does not declare is dropped and
+  logged.
 
 Per-role `contextMillOverride` on the program's `binding` can adjust a task's
 harness, model or effort. New task types usually belong in context-mill; new

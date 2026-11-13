@@ -19,7 +19,7 @@ vi.mock('../../../switchboard', async () => {
   return {
     resolveHarness: () => ({ harness: 'pi', model: [...VALID_MODELS][0] }),
     resolveStageOverrides: () => ({}),
-    areSeededTasksEnabled: () => false,
+    areSeededTasksEnabled: () => seededTasks,
     isAgentDagEnabled: () => agentDag,
     getHarness: () => ({ runTask: (inputs: unknown) => harnessRun(inputs) }),
   };
@@ -44,6 +44,7 @@ vi.mock('../../../../agent-prompt-loader', async (importActual) => {
   };
 });
 
+import { ErrorCodes } from '@shared/errors';
 import { analytics } from '@utils/analytics';
 import { RunOutcome } from '../../../shared/types';
 import { runOrchestrator } from '../orchestrator-runner';
@@ -55,6 +56,7 @@ const FLOW: Record<string, string> = {
   capture: '---\ndependsOn: [install, logs]\n---\ncapture',
   logs: '---\ndependsOn: [install]\noptional: true\n---\nlogs',
   install: '---\ndependsOn: []\n---\ninstall',
+  warehouse: '---\nrunnerSeeded: true\n---\nwarehouse',
 };
 const PLANNER = '---\nseed: true\n---\nplan';
 
@@ -67,6 +69,7 @@ type Inputs = {
 let agentDag = true;
 let fetchedPlanner = true;
 let fetches = 0;
+let seededTasks = false;
 let bundled: Record<string, string> | undefined;
 let ran: string[] = [];
 let queue: QueueStore | undefined;
@@ -96,6 +99,7 @@ describe('queueing a flow from its frontmatter', () => {
     agentDag = true;
     fetchedPlanner = true;
     fetches = 0;
+    seededTasks = false;
     bundled = FLOW;
     ran = [];
     queue = undefined;
@@ -114,6 +118,7 @@ describe('queueing a flow from its frontmatter', () => {
         switchboard: {},
         excludedTaskTypes: () => excluded,
         agentPrompts: bundled && (() => Promise.resolve(bundled)),
+        seedTasks: () => [{ type: 'warehouse' }],
       },
       input: { installDir: dir, flags: { ci: true } },
       boot: {
@@ -160,6 +165,47 @@ describe('queueing a flow from its frontmatter', () => {
     const capture = queue?.list().find((task) => task.type === 'capture');
     const install = queue?.list().find((task) => task.type === 'install');
     expect(capture?.dependsOn).toEqual([install?.id]);
+  });
+
+  it('runs a task the wizard queued first after the bundled tasks, and the report after it', async () => {
+    seededTasks = true;
+    const result = await run();
+    expect(result.outcome).toBe(RunOutcome.Success);
+    expect(ran).toEqual(['install', 'logs', 'capture', 'warehouse', 'report']);
+    const idOf = (type: string) =>
+      queue?.list().find((task) => task.type === type)?.id;
+    const waitsFor = (type: string) =>
+      queue?.list().find((task) => task.type === type)?.dependsOn ?? [];
+    expect([...waitsFor('warehouse')].sort()).toEqual(
+      [idOf('install'), idOf('logs'), idOf('capture')].sort(),
+    );
+    expect(waitsFor('report')).toContain(idOf('warehouse'));
+    expect(seeded()).toEqual({
+      task_count: 5,
+      types: ['warehouse', 'install', 'logs', 'capture', 'report'],
+      source: 'frontmatter',
+    });
+  });
+
+  it('fails with its own code when the bundled graph cannot be ordered', async () => {
+    bundled = { ...FLOW, install: '---\ndependsOn: [capture]\n---\ninstall' };
+    const result = await run();
+    expect(result.outcome).toBe(RunOutcome.Failed);
+    expect(result.failure?.code).toBe(ErrorCodes.AgentOrchestratorTaskGraph);
+    expect(result.failure?.message).not.toContain('wait on each other');
+    expect(analytics.wizardCapture).toHaveBeenCalledWith(
+      'orchestrator task graph rejected',
+      { reason: 'unorderable' },
+    );
+    expect(ran).toEqual([]);
+  });
+
+  it('fails a run whose frontmatter leaves nothing to queue, without naming a planning step', async () => {
+    const result = await run(['install', 'logs', 'capture', 'report']);
+    expect(result.outcome).toBe(RunOutcome.Failed);
+    expect(result.failure?.code).toBe(ErrorCodes.AgentOrchestratorHollowRun);
+    expect(result.failure?.message).not.toContain('planning step');
+    expect(ran).toEqual([]);
   });
 
   it('keeps the planner of a bundled flow that has a planner prompt', async () => {

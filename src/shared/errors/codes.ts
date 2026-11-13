@@ -48,6 +48,7 @@ export const ErrorCodes = {
   AgentOrchestratorTasksBlocked: 'PHW_AGENT_ORCHESTRATOR_TASKS_BLOCKED',
   AgentOrchestratorHollowRun: 'PHW_AGENT_ORCHESTRATOR_HOLLOW_RUN',
   AgentOrchestratorSinkInvariant: 'PHW_AGENT_ORCHESTRATOR_SINK_INVARIANT',
+  AgentOrchestratorTaskGraph: 'PHW_AGENT_ORCHESTRATOR_TASK_GRAPH',
   /** The backend answered the mint with a deliberate refusal. */
   GatewayMintRefused: 'PHW_GATEWAY_MINT_REFUSED',
   /** The mint was unreachable, errored, or returned an unusable token. */
