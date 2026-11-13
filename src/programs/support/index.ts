@@ -109,6 +109,7 @@ export const config: ProgramConfig = {
   },
   // Explicit so renaming the program can't silently detach the flow.
   agentFlow: 'support',
+  agentPrompts: () => import('./agent-prompts').then((m) => m.AGENT_PROMPTS),
   handoffNotebook: true,
   onReady: platformGatedOnReady(SUPPORT_GATE),
   ciPreRun: platformGatedCiPreRun(SUPPORT_GATE),

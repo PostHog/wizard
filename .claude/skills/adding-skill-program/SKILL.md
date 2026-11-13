@@ -65,11 +65,16 @@ changing execution behavior.
    `agentFlow` when its context-mill flow differs from `id`; setting it
    explicitly also documents the content dependency. Keep a `run` definition so
    `runProgram` executes agent work.
-2. Supply the flow's seed and task prompts in context-mill, including the task
-   dependencies and applicable skill variants. The
+2. Write the flow's task prompts in the program's `agent/` folder, one
+   `<type>.md` per task with its `dependsOn` and applicable skills, import them
+   in `agent-prompts.ts`, and set the config's `agentPrompts`; see
+   [agent prompts](../../../src/programs/README.md#agent-prompts). With
+   `wizard-agent-dag` on, the
    [orchestrator](../../../src/agent/runner/sequence/orchestrator/orchestrator-runner.ts)
-   loads `agentFlow ?? id`, requires a seed prompt, and checks task-skill
-   variants before running. `run.skillId` alone does not define this flow.
+   reads them, queues a folder with no seed prompt from its frontmatter, and
+   checks task-skill variants before running. With the flag off it loads
+   `agentFlow ?? id` from context-mill, which must supply the same prompts and
+   a seed prompt. `run.skillId` alone does not define this flow.
 3. Register the config: import it as
    `import { config as <name> } from '@programs/<id>'` in
    [program-registry.ts](../../../src/programs/program-runner/program-registry.ts) and add it

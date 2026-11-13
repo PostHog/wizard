@@ -255,6 +255,11 @@ export const ERROR_CATALOG: Record<ErrorCode, ErrorCatalogEntry> = {
     description:
       "The orchestrator could not queue the graph a flow's frontmatter declares.",
   },
+  [ErrorCodes.AgentOrchestratorNoPlanner]: {
+    group: 'agent',
+    retry: 'no',
+    description: 'The flow the orchestrator fetched has no planner prompt.',
+  },
   [ErrorCodes.GatewayMintRefused]: {
     group: 'gateway',
     // 429 clears with the daily window, 401 with a fresh login, 403 never.

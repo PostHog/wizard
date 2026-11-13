@@ -9,7 +9,10 @@ are **manual, runnable tools** for headless e2e + snapshots — each is a
 standalone `tsx` entry, named `*.no-jest.ts` so Vitest ignores it
 (`vitest.config.ts` excludes `**/*.no-jest.*`).
 
-Run from the repo root, e.g. `npx tsx scripts/<name>.no-jest.ts`.
+Run from the repo root, e.g. `npx tsx scripts/<name>.no-jest.ts`. A script that
+runs a program from source passes
+`--import ./scripts/markdown-loader.no-jest.mjs` to `tsx`, so the program's
+`agent/<type>.md` imports load as text.
 
 Both e2e routes share one primitive: the **real TUI host** runs `runTui` (the
 real ink render) and is driven purely by store state manipulation; a PTY parent
@@ -22,6 +25,7 @@ real ink render) and is driven purely by store state manipulation; a PTY parent
 | **`tui-snapshots.no-jest.ts`**     | Runs the fixed host and saves colored `SNAP_OUT/NN-<screen>.ans` frames, including within-screen progress.                                                                                                                               | `SNAP_OUT`, `APP_DIR`, `PROJECT_ID`, `POSTHOG_KEY_FILE` or `POSTHOG_PERSONAL_API_KEY`                        |
 | **`wizard-ci-mcp.no-jest.ts`**     | Stdio MCP server: `open_app`, `read_state`, `perform_action`, `render_screen`, `run_agent`. Screen output is plain text.                                                                                                                 | Spawns the host; `open_app` requires `appDir` and `projectId`, with optional `keyFile`, `apiKey`, `region`   |
 | **`chunk-manifest.no-jest.ts`**    | Prints a structural manifest of `dist/`: per chunk, the source files it contains and the chunks it imports, hash suffixes stripped. `--summary` prints chunk names plus the sorted source set. A reading tool, nothing diffs its output. | A built `dist/`                                                                                              |
+| **`visual-dags.no-jest.ts`**       | `pnpm visual-dags`: draws every program's task graph from its `agent/` prompts' frontmatter, as the waves the orchestrator runs, and opens the page. `NO_OPEN=1` only writes it.                                                         | Nothing                                                                                                      |
 | **`wizard-ci-explore.no-jest.ts`** | `pnpm wizard-ci-explore`: opens an app, confirms setup, reads state, prints one frame, and exits. It does not run the agent.                                                                                                             | `APP_DIR`, `PROJECT_ID`; optional `POSTHOG_KEY_FILE`                                                         |
 
 > You usually don't call these directly — `pnpm wizard-ci-snapshots` (in

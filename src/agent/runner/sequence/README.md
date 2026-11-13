@@ -19,23 +19,33 @@ owns its full lifecycle and cannot nest through the composition seam.
 
 ## Orchestrator
 
-[orchestrator-runner.ts](orchestrator/orchestrator-runner.ts) loads a flow from
-context-mill, queues its tasks, then drains a dependency-aware task queue. Each
-task gets a focused conversation, tools, selected model/effort, and relevant
+[orchestrator-runner.ts](orchestrator/orchestrator-runner.ts) loads a flow's
+prompts, queues its tasks, then drains a dependency-aware task queue. Each task
+gets a focused conversation, tools, selected model/effort, and relevant
 handoffs. Independent tasks can run concurrently.
 
-A flow's seed planner queues its tasks. With `wizard-agent-dag` on, a flow with
-no seed prompt is queued from the graph its frontmatter declares, by
-[task-graph.ts](orchestrator/task-graph.ts), and no planner runs.
+With `wizard-agent-dag` on, the prompts are the ones the program bundles, the
+run config's `agentPrompts`; see
+[agent prompts](../../../programs/README.md#agent-prompts). Off, or for a
+program that bundles none, the orchestrator fetches the flow `agentFlow ?? id`
+from context-mill. A bundle that fails to load is reported as an exception with
+the step `orchestrator_bundled_prompts`, and the run fetches instead. Every
+event sent after the prompts load carries which as the `orchestrator_prompts`
+tag. That tag says which path a run took, and the flag's value on an event does
+not: a pinned run reports the flag as on and still fetches.
+
+A flow's seed planner queues its tasks. A bundled flow with no seed prompt is
+queued from the graph its frontmatter declares, by
+[task-graph.ts](orchestrator/task-graph.ts), and no planner runs. A fetched flow
+with no seed prompt fails the run with `PHW_AGENT_ORCHESTRATOR_NO_PLANNER`.
 `orchestrator seeded` carries which one queued the run as `source`. A declared
 graph that cannot be queued ends the run with
 `PHW_AGENT_ORCHESTRATOR_TASK_GRAPH` and sends `orchestrator task graph
 rejected` with the reason.
 
-The program selects `agentFlow ?? id`. Its published flow must supply valid
-task-skill variants, and a seed prompt unless it is queued from its frontmatter.
-Metrics already has a Pi/orchestrator binding; other routes can be selected
-through scoped flags or development CLI overrides. The retired
+A flow must supply valid task-skill variants, and a seed prompt unless it is
+bundled without one. Metrics already has a Pi/orchestrator binding; other routes
+can be selected through scoped flags or development CLI overrides. The retired
 `experiment/orchestrator` branch is not a prerequisite. See
 [adding a program](../../../../.claude/skills/adding-skill-program/SKILL.md).
 
@@ -56,6 +66,11 @@ Before the tasks run, the runner installs the framework's `integration` skill as
 a reference: its example and its framework rules go into every task's prompt.
 When that install fails, the run goes on without them and sends
 `orchestrator reference skill unavailable` with the reason.
+
+A task skill the menu cannot supply fails the run before any task starts. When
+the prompts are bundled and the loaded menu has that name under no id and no
+family, the wizard is older than the skills, and the message says to run the
+latest version. Any other miss keeps the message that asks to try again.
 
 ### Task metadata
 

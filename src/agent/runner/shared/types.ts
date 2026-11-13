@@ -214,6 +214,8 @@ export interface ResolvedRunConfig {
   posthogTools?: readonly string[];
   /** Context-mill flow the orchestrator loads. Defaults to `programId`. */
   agentFlow?: string;
+  /** The flow's agent prompts by task type, bundled by the caller; the orchestrator fetches context-mill's otherwise. */
+  agentPrompts?: () => Promise<Readonly<Record<string, string>>>;
   /** Task types the program excludes for these flags. The orchestrator adds the CI gates. */
   excludedTaskTypes?: (flags: Record<string, string>) => readonly string[];
   /** Tasks to queue before the orchestrator's planner runs. */

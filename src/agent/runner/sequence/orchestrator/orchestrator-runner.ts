@@ -102,6 +102,7 @@ import {
   agentRunTools,
   assembleSeedPrompt,
   assembleTaskPrompt,
+  bundledRegistry,
   loadAgentRegistry,
   promptModelFor,
   resolveTask,
@@ -746,8 +747,9 @@ async function executeOrchestrator(
   // The WHAT (agent prompts) is served from context-mill. Fetch the registry
   // once up front: its types drive enqueue validation, and resolving a task to
   // its run config is then synchronous, with no mid-drain network latency.
+  // With `wizard-agent-dag` on, the prompts the program bundles are the registry.
   const flow = config.agentFlow ?? programId;
-  const registry = await loadAgentRegistry(boot.skillsBaseUrl, flow, {
+  const registryOptions = {
     exclude: effectiveExcludedTaskTypes(config, boot.wizardFlags),
     // Baked into the prompts at load, so enqueue, dispatch, and telemetry all read one effective spec.
     overrides: resolveStageOverrides(
@@ -755,14 +757,41 @@ async function executeOrchestrator(
       boot.wizardFlags,
       boot.wizardFlagPayloads,
     ),
-  });
+  };
+  // A bundle that fails to load is reported, and the run fetches instead.
+  const bundledPrompts = isAgentDagEnabled(boot.wizardFlags)
+    ? await config.agentPrompts?.().catch((error: unknown) => {
+        logToFile('[orchestrator] bundled prompts failed to load:', error);
+        analytics.captureException(
+          error instanceof Error ? error : new Error(String(error)),
+          { step: 'orchestrator_bundled_prompts' },
+        );
+        return undefined;
+      })
+    : undefined;
+  const registry = bundledPrompts
+    ? bundledRegistry(bundledPrompts, flow, registryOptions)
+    : await loadAgentRegistry(boot.skillsBaseUrl, flow, registryOptions);
+  analytics.setTag(
+    'orchestrator_prompts',
+    bundledPrompts ? 'bundled' : 'context-mill',
+  );
   if (signal?.aborted) return cancelledRun();
-  // A flow with no planner prompt is queued from its frontmatter, behind `wizard-agent-dag`.
+  // A bundled flow with no planner prompt is queued from its frontmatter; a fetched one needs its planner.
   const seedPrompt = registry.seed;
-  if (!seedPrompt && !isAgentDagEnabled(boot.wizardFlags)) {
-    throw new Error(
-      `No seed agent prompt (frontmatter \`seed: true\`) for flow "${flow}" is available from ${boot.skillsBaseUrl}.`,
+  if (!seedPrompt && !bundledPrompts) {
+    logToFile(
+      `[orchestrator] no seed agent prompt (frontmatter \`seed: true\`) for flow "${flow}" from ${boot.skillsBaseUrl}`,
     );
+    return failed({
+      code: ErrorCodes.AgentOrchestratorNoPlanner,
+      message: `The wizard could not load the plan for this setup.\n\nPlease report this to: ${WIZARD_CONTACT_EMAIL}`,
+      error: new WizardError(
+        'orchestrator flow has no seed agent prompt',
+        { flow, skills_base_url: boot.skillsBaseUrl },
+        ErrorCodes.AgentOrchestratorNoPlanner,
+      ),
+    });
   }
 
   // The end decision the switchboard event defers to: the model each task will actually run on.
@@ -937,10 +966,12 @@ async function executeOrchestrator(
 
   // Preflight every task's mini-skills: a miss would run tasks skill-less, so fail properly instead.
   const missingVariants: string[] = [];
+  const missingSkills = new Set<string>();
   for (const type of registry.types) {
     for (const skillId of registry.get(type)?.skills ?? []) {
       if (pickSkillId(skillId)) continue;
       missingVariants.push(`${type}/${skillId}`);
+      missingSkills.add(skillId);
       logToFile(
         `[orchestrator] no skill variant type=${type} skill=${skillId} framework=${
           framework ?? 'none'
@@ -956,11 +987,25 @@ async function executeOrchestrator(
   if (missingVariants.length > 0) {
     // The framework's own docs page, resolved by the caller; generic docs when detection found none.
     const docsUrl = framework ? input.frameworkDocsUrl : undefined;
+    // A bundled prompt naming a skill the loaded menu has under no id or family means the wizard is older than the skills.
+    const outdated =
+      bundledPrompts !== undefined &&
+      menuSkillEntries.length > 0 &&
+      [...missingSkills].some(
+        (name) =>
+          !menuSkillEntries.some(
+            (entry) => entry.id === name || entry.group === name,
+          ),
+      );
     return failed({
       code: ErrorCodes.AgentOrchestratorSkillVariantMissing,
       message:
-        'Setup instructions for this project failed to download.\n' +
-        'Please try again, or contact wizard@posthog.com.\n\n' +
+        (outdated
+          ? 'This version of the wizard uses setup instructions that are no longer published.\n' +
+            'Run the latest version and try again:\n' +
+            '  npx @posthog/wizard@latest\n\n'
+          : 'Setup instructions for this project failed to download.\n' +
+            'Please try again, or contact wizard@posthog.com.\n\n') +
         'You can also set up with your agent by downloading the skills here:\n' +
         '  https://github.com/PostHog/context-mill/releases\n' +
         'or integrate manually here:\n' +

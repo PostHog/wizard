@@ -75,7 +75,13 @@ export function startServeHost(opts: {
   };
   const capture = captureTui({
     cmd: path.join(process.cwd(), 'node_modules/.bin/tsx'),
-    args: ['--tsconfig', 'tsconfig.base.json', 'scripts/tui-host.no-jest.ts'],
+    args: [
+      '--tsconfig',
+      'tsconfig.base.json',
+      '--import',
+      './scripts/markdown-loader.no-jest.mjs',
+      'scripts/tui-host.no-jest.ts',
+    ],
     cwd: process.cwd(),
     env,
     cols: opts.cols,

@@ -278,6 +278,7 @@ export const config: ProgramConfig = {
   description: 'Set up PostHog SDK integration',
   id: 'posthog-integration',
   agentFlow: 'integration-v2',
+  agentPrompts: () => import('./agent-prompts').then((m) => m.AGENT_PROMPTS),
   handoffNotebook: true,
   eventPlanFile: EVENT_PLAN_FILE,
   scansCodebase: true,
