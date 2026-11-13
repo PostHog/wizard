@@ -1,9 +1,12 @@
+import * as http from 'http';
+import type { AddressInfo } from 'net';
 import { AxiosError, AxiosHeaders, type AxiosResponse } from 'axios';
 import axios from 'axios';
 import { analytics } from '@utils/analytics';
 import {
   diagnoseApiError,
   fetchProjectData,
+  fetchUserData,
   handleApiError,
   retryTransient,
 } from '../api';
@@ -252,5 +255,101 @@ describe('fetchProjectData failure analytics', () => {
       expect.anything(),
       expect.objectContaining({ status_code: 403, network_code: undefined }),
     );
+  });
+});
+
+describe.concurrent('fetchUserData with a deadline', () => {
+  const DEADLINE_MS = 3_000;
+  // Remote hosts are reached through a local HTTP proxy, so their failures count as transient and retry.
+  function answer(host: string, attempt: number, res: http.ServerResponse) {
+    switch (host) {
+      case 'fails-then-stalls.test':
+        if (attempt === 1) res.writeHead(503).end();
+        return;
+      case 'fails-late.test':
+        // The second 503 lands about 2.5 s in, so the 1.5 s backoff after it crosses the deadline.
+        setTimeout(() => res.writeHead(503).end(), attempt === 1 ? 0 : 2_000);
+        return;
+    }
+  }
+  const requests = new Map<string, number>();
+  let proxy: http.Server;
+  let silentServer: http.Server;
+
+  beforeAll(async () => {
+    silentServer = http.createServer(() => undefined);
+    await new Promise<void>((resolve) =>
+      silentServer.listen(0, '127.0.0.1', resolve),
+    );
+    proxy = http.createServer((req, res) => {
+      const host = req.headers.host ?? '';
+      const attempt = (requests.get(host) ?? 0) + 1;
+      requests.set(host, attempt);
+      answer(host, attempt, res);
+    });
+    await new Promise<void>((resolve) => proxy.listen(0, '127.0.0.1', resolve));
+    const proxyUrl = `http://127.0.0.1:${
+      (proxy.address() as AddressInfo).port
+    }`;
+    for (const name of ['npm_config_http_proxy', 'http_proxy', 'HTTP_PROXY']) {
+      vi.stubEnv(name, proxyUrl);
+    }
+    for (const name of ['npm_config_no_proxy', 'no_proxy', 'NO_PROXY']) {
+      vi.stubEnv(name, '127.0.0.1');
+    }
+  });
+
+  afterAll(async () => {
+    vi.unstubAllEnvs();
+    for (const server of [proxy, silentServer]) {
+      server.closeAllConnections();
+      await new Promise((resolve) => server.close(resolve));
+    }
+  });
+
+  it('gives up on a local server that accepts the request and never answers', async ({
+    expect,
+  }) => {
+    const { port } = silentServer.address() as AddressInfo;
+
+    await expect(
+      fetchUserData(
+        'token',
+        `http://127.0.0.1:${port}`,
+        AbortSignal.timeout(DEADLINE_MS),
+      ),
+    ).rejects.toThrow();
+  });
+
+  it('gives up after one deadline, retries included', async ({ expect }) => {
+    const started = Date.now();
+
+    await expect(
+      fetchUserData(
+        'token',
+        'http://fails-then-stalls.test',
+        AbortSignal.timeout(DEADLINE_MS),
+      ),
+    ).rejects.toThrow();
+
+    expect(Date.now() - started).toBeLessThan(DEADLINE_MS + 400);
+    expect(requests.get('fails-then-stalls.test')).toBe(2);
+  });
+
+  it('throws the last failure when the deadline passes during its backoff', async ({
+    expect,
+  }) => {
+    const started = Date.now();
+
+    await expect(
+      fetchUserData(
+        'token',
+        'http://fails-late.test',
+        AbortSignal.timeout(DEADLINE_MS),
+      ),
+    ).rejects.toMatchObject({ statusCode: 503 });
+
+    expect(Date.now() - started).toBeLessThan(DEADLINE_MS + 400);
+    expect(requests.get('fails-late.test')).toBe(2);
   });
 });
