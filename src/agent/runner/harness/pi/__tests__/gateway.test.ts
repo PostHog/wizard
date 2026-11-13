@@ -109,14 +109,14 @@ describe('buildGatewayHeaders', () => {
   it('carries one properties blob and no per-key or bedrock headers', () => {
     const headers = buildGatewayHeaders(
       { run_id: 'r1' },
-      { 'wizard-orchestrator': 'test' },
+      { 'wizard-agent-dag': 'test' },
       42,
     );
     expect(JSON.parse(headers['X-PostHog-Properties'])).toEqual({
       ai_product: 'wizard',
       team_id: 42,
       run_id: 'r1',
-      'wizard_flag_wizard-orchestrator': 'test',
+      'wizard_flag_wizard-agent-dag': 'test',
     });
     expect(headers['x-posthog-use-bedrock-fallback']).toBeUndefined();
     expect(headers['X-POSTHOG-PROPERTY-run_id']).toBeUndefined();

@@ -28,7 +28,10 @@ import type {
 import { FRAMEWORK_REGISTRY } from '@services/frameworks';
 import { abortNoFrameworkDetected } from '../shared/abort-no-framework';
 import {
+  GPT5_6_SOL_MODEL,
+  Harness,
   SETUP_REPORT_FILE,
+  Sequence,
   WIZARD_DEFAULT_AIO_LOGS_FLAG_KEY,
   WIZARD_DEFAULT_MCP_ANALYTICS_FLAG_KEY,
   WIZARD_INTERACTION_EVENT_NAME,
@@ -277,6 +280,13 @@ export { EVENT_PLAN_FILE } from './constants.js';
 export const config: ProgramConfig = {
   description: 'Set up PostHog SDK integration',
   id: 'posthog-integration',
+  // Orchestrator on pi. Each stage's model and effort come from the flow's frontmatter; a composed sub-run is linear on this model.
+  binding: {
+    sequence: Sequence.orchestrator,
+    harness: Harness.pi,
+    model: GPT5_6_SOL_MODEL,
+    thinkingLevel: 'medium',
+  },
   agentFlow: 'integration-v2',
   agentPrompts: () => import('./agent-prompts').then((m) => m.AGENT_PROMPTS),
   handoffNotebook: true,

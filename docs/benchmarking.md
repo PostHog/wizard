@@ -83,7 +83,7 @@ ruby, gradle) — a missing toolchain fails runs for reasons that are yours, not
 the model's.
 
 Define each config as a `WIZARD_CI_FLAG_OVERRIDES` JSON, plus the baseline as
-`{"wizard-orchestrator":"false"}`.
+`{"wizard-orchestrator-override":"false"}`.
 
 ## Tooling
 
@@ -98,13 +98,12 @@ Everything below ships in this repo (`wizard/`) and its workbench
   `NN-<screen>.ans` frame. An `NN-outro.ans` frame is the flow-completion
   signal. `tsx` runs source — no build step. Invocation: see the run-cell
   recipe below.
-- **Config selection:** the flag axis is `wizard-orchestrator` (on → the
-  orchestrator on pi, per-task models from context-mill frontmatter; off → the
-  linear anthropic default). Per-stage variations ride
+- **Config selection:** the default flow runs the orchestrator on pi, with
+  per-task models from the flow's frontmatter. Per-stage variations ride
   `wizard-orchestrator-override` payloads (`{stage: {model?, effort?}}`,
   variant keys in `wizard/src/agent/runner/switchboard/flags/schemes.ts`).
-  The baseline is `{"wizard-orchestrator":"false"}` — never an empty override,
-  or live remote flags leak into the baseline.
+  The baseline is `{"wizard-orchestrator-override":"false"}` — never an empty
+  override, or live remote flags leak into the baseline.
 
 ## Running one cell
 
@@ -113,7 +112,7 @@ The canonical recipe — save as `run-cell.sh` and run from anywhere:
 ```bash
 #!/bin/bash
 # run-cell.sh <label> <app_src> <flags_json>   e.g.:
-#   run-cell.sh maybe-orch ~/bench/src/maybe '{"wizard-orchestrator":"true"}'
+#   run-cell.sh maybe-base ~/bench/src/maybe '{"wizard-orchestrator-override":"false"}'
 set -uo pipefail
 LABEL="$1"; SRC="$2"; FLAGS="$3"
 WIZARD=~/wizard            # the checkout under test

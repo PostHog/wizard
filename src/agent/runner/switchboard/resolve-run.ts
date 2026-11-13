@@ -2,7 +2,6 @@
 
 import {
   Sequence,
-  WIZARD_ORCHESTRATOR_FLAG_KEY,
   WIZARD_SELF_DRIVING_USE_PI_HARNESS_FLAG_KEY,
 } from '@shared/constants';
 import { analytics } from '@utils/analytics';
@@ -72,7 +71,6 @@ function captureSwitchboardDecision(
     flag_self_driving_pi_payload: JSON.stringify(
       ctx.flagPayloads?.[WIZARD_SELF_DRIVING_USE_PI_HARNESS_FLAG_KEY] ?? null,
     ),
-    flag_orchestrator: ctx.flags[WIZARD_ORCHESTRATOR_FLAG_KEY],
     cli_harness: ctx.cliHarness,
     cli_sequence: ctx.cliSequence,
     cli_model: ctx.cliModel,
@@ -86,8 +84,7 @@ function captureSwitchboardDecision(
   });
   logToFile(
     `[switchboard] decision: program=${ctx.program}` +
-      ` in(orchestrator=${ctx.flags[WIZARD_ORCHESTRATOR_FLAG_KEY] ?? '-'},` +
-      ` cli=${ctx.cliHarness ?? '-'}/${ctx.cliSequence ?? '-'}/${
+      ` in(cli=${ctx.cliHarness ?? '-'}/${ctx.cliSequence ?? '-'}/${
         ctx.cliModel ?? '-'
       })` +
       ` → harness=${binding.harness} (${trace.harness ?? '?'})` +

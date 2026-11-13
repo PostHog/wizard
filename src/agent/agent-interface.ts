@@ -2,6 +2,9 @@ import { randomUUID } from 'node:crypto';
 /**
  * Shared agent interface for PostHog wizards
  * Uses Claude Agent SDK directly with PostHog LLM gateway
+ *
+ * The SDK run path (`initializeAgent`, `runAgent`) is deprecated and unused for
+ * now; the helpers Pi shares stay live.
  */
 
 import path from 'path';
@@ -251,9 +254,8 @@ export type AgentConfig = {
    */
   getPendingQuestion?: () => import('./progress').PendingQuestion | null;
   /**
-   * Orchestrator queue context. Present only when the `wizard-orchestrator`
-   * flag routes the run here; threaded into wizard-tools so the orchestrator
-   * tools register.
+   * Orchestrator queue context. Present only on an orchestrator run; threaded
+   * into wizard-tools so the orchestrator tools register.
    */
   orchestrator?: import('./runner/sequence/orchestrator/queue-tools').OrchestratorToolsContext;
   /**

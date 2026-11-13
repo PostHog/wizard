@@ -44,6 +44,7 @@ export const GPT6_SOL_MODEL = 'openai/gpt-6-sol';
  * and `src/agent/runner/sequence/`.
  */
 export enum Harness {
+  /** Deprecated and unused for now: no program binds it and no run falls back to it. */
   anthropic = 'anthropic',
   pi = 'pi',
 }
@@ -321,8 +322,6 @@ export const WIZARD_INTERACTION_EVENT_NAME = 'wizard interaction';
 export const WIZARD_REMARK_EVENT_NAME = 'wizard remark';
 /** Multivariate flag: `wizard-run` publishes to WizardRun, anything else to WizardSession. */
 export const WIZARD_RUN_SYNC_FLAG_KEY = 'wizard-run-sync';
-/** Boolean feature flag that routes a run to the experimental orchestrator runner. */
-export const WIZARD_ORCHESTRATOR_FLAG_KEY = 'wizard-orchestrator';
 /** Multivariate flag: per-stage orchestrator overrides ride each variant's JSON payload (`{stage: {model?, effort?}}`). */
 export const WIZARD_ORCHESTRATOR_OVERRIDE_FLAG_KEY =
   'wizard-orchestrator-override';
@@ -351,7 +350,6 @@ export const WIZARD_AGENT_DAG_FLAG_KEY = 'wizard-agent-dag';
 // `wizard-` prefix anyone can name into — decides what a run evaluates. Test-pinned exhaustive.
 export const WIZARD_FLAG_KEYS = [
   WIZARD_RUN_SYNC_FLAG_KEY,
-  WIZARD_ORCHESTRATOR_FLAG_KEY,
   WIZARD_ORCHESTRATOR_OVERRIDE_FLAG_KEY,
   WIZARD_ORCHESTRATOR_SEEDED_TASKS_FLAG_KEY,
   WIZARD_SELF_DRIVING_USE_PI_HARNESS_FLAG_KEY,

@@ -15,13 +15,13 @@ To call it, use `runAgent`. The
 | Prepare     | Sets up logging, the gateway token and the scan classifier.                      | [`bootstrap.ts`](shared/bootstrap.ts) |
 | Switchboard | Resolves the sequence, harness and model: CLI overrides, then flags, then the program's binding. | [`switchboard`](switchboard/index.ts) |
 | Sequence    | Shapes the work: one conversation (linear), or many from a queue (orchestrator). | [`sequence`](sequence/README.md)      |
-| Harness     | Adapts one SDK: the Anthropic Agent SDK or Pi.                                   | [`harness`](harness/types.ts)         |
+| Harness     | Adapts one SDK: Pi, or the deprecated Anthropic Agent SDK.                       | [`harness`](harness/types.ts)         |
 
 ## Execution policy
 
 Use Pi for new work, and prefer the orchestrator. Linear is for very simple
-tasks. The Anthropic Agent SDK is a legacy fallback. `DEFAULT_BINDING` is Pi and
-linear.
+tasks. The Anthropic Agent SDK harness is deprecated and unused: no program
+binds it and no run falls back to it. `DEFAULT_BINDING` is Pi and linear.
 
 A new model needs gateway admission as well as wizard support. See the
 [development guide](../../../.claude/skills/wizard-development/SKILL.md#execution-policy-and-model-admission).

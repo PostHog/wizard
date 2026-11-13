@@ -1,10 +1,10 @@
 # Anthropic Agent SDK harness
 
-A **supported legacy fallback**, deprecated as the default. Retained for major
-Pi vulnerabilities or missing support for new Anthropic models. New work should
-use Pi and prefer orchestration; see
-[runner policy](../../README.md#execution-policy). Existing bindings may still
-choose this harness.
+**Deprecated and unused.** No program binds this harness and no run falls back
+to it. The code is retained for a major Pi vulnerability or missing support for
+a new Anthropic model, and a development build reaches it with
+`--harness anthropic`. Use Pi and prefer orchestration; see
+[runner policy](../../README.md#execution-policy).
 
 [index.ts](index.ts) wraps the Claude Agent SDK through
 [agent-interface.ts](../../../agent-interface.ts). Both entry points are

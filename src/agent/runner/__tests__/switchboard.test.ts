@@ -19,7 +19,7 @@ import {
   SONNET_5_MODEL,
   Harness,
   Sequence,
-  WIZARD_ORCHESTRATOR_FLAG_KEY,
+  WIZARD_SELF_DRIVING_USE_PI_HARNESS_FLAG_KEY,
 } from '@shared/constants';
 import {
   DEFAULT_BINDING,
@@ -36,6 +36,10 @@ import {
   VALID_MODELS,
 } from '@agent/runner/switchboard/models';
 import { runBindingCases } from '@agent/runner/switchboard/flags/__tests__/binding-cases.no-jest';
+
+const SD = WIZARD_SELF_DRIVING_USE_PI_HARNESS_FLAG_KEY;
+// A flag payload that pins the model and asks for the orchestrator.
+const SD_PAYLOAD = { model: 'gpt-5-6-terra', sequence: 'orchestrator' };
 
 const DEFAULT_RESOLVED = {
   sequence: Sequence.linear,
@@ -118,20 +122,27 @@ describe('switchboard program bindings', () => {
 describe('switchboard CLI precedence (dev builds)', () => {
   runBindingCases([
     {
-      name: 'cliHarness wins over the orchestrator flag being off',
+      name: "cliHarness wins over the binding's harness",
       ctx: {
-        program: 'posthog-integration',
-        flags: { [WIZARD_ORCHESTRATOR_FLAG_KEY]: 'false' },
+        program: 'bound-program',
+        binding: ORCHESTRATOR_ANTHROPIC,
+        flags: {},
         cliHarness: Harness.pi,
       },
-      binding: { ...DEFAULT_RESOLVED, harness: Harness.pi },
+      binding: {
+        sequence: Sequence.orchestrator,
+        harness: Harness.pi,
+        model: DEFAULT_AGENT_MODEL,
+        thinkingLevel: undefined,
+      },
       trace: { harness: 'cli', model: 'binding', sequence: 'binding' },
     },
     {
       name: 'cliModel wins over the flag pin; the flag still routes harness + sequence',
       ctx: {
-        program: 'posthog-integration',
-        flags: { [WIZARD_ORCHESTRATOR_FLAG_KEY]: 'true' },
+        program: 'self-driving',
+        flags: { [SD]: 'true' },
+        flagPayloads: { [SD]: SD_PAYLOAD },
         cliModel: 'openai/o4-mini',
       },
       binding: {
@@ -140,7 +151,7 @@ describe('switchboard CLI precedence (dev builds)', () => {
         model: 'openai/o4-mini',
         thinkingLevel: 'medium',
       },
-      trace: { harness: 'flag', model: 'cli', sequence: 'flag' },
+      trace: { harness: 'flag', model: 'cli', sequence: 'payload' },
     },
     {
       name: 'cliHarness + cliModel pin both axes',
@@ -180,24 +191,25 @@ describe('switchboard decision trace', () => {
       trace: { harness: 'binding', model: 'binding', sequence: 'binding' },
     },
     {
-      name: 'the one flag → orchestrator on pi; the model stays traced to the binding it fell back to',
+      name: 'a flag payload → harness and model traced to the flag, sequence to the payload',
       ctx: {
-        program: 'posthog-integration',
-        flags: { [WIZARD_ORCHESTRATOR_FLAG_KEY]: 'true' },
+        program: 'self-driving',
+        flags: { [SD]: 'true' },
+        flagPayloads: { [SD]: SD_PAYLOAD },
       },
       binding: {
         sequence: Sequence.orchestrator,
         harness: Harness.pi,
-        model: GPT5_6_SOL_MODEL,
+        model: GPT5_6_TERRA_MODEL,
         thinkingLevel: 'medium',
       },
-      trace: { harness: 'flag', model: 'binding', sequence: 'flag' },
+      trace: { harness: 'flag', model: 'flag', sequence: 'payload' },
     },
   ]);
 });
 
 describe('switchboard composed clamp', () => {
-  it('a composed sub-run is linear for every binding, whatever the flags say', () => {
+  it('a composed sub-run is linear for every binding', () => {
     const cases: Array<[ProgramBinding, typeof DEFAULT_RESOLVED | object]> = [
       [DEFAULT_BINDING, DEFAULT_RESOLVED],
       [
@@ -231,7 +243,7 @@ describe('switchboard composed clamp', () => {
         program: 'bound-program',
         binding,
         composed: true,
-        flags: { [WIZARD_ORCHESTRATOR_FLAG_KEY]: 'true' },
+        flags: {},
         trace: {},
       };
       // The clamp holds every sequence at linear, orchestrator bindings included; other axes keep their bindings.
@@ -253,14 +265,15 @@ describe('switchboard composed clamp', () => {
       trace: { harness: 'binding', model: 'binding', sequence: 'composed' },
     },
     {
-      name: 'a composed run keeps its flag-routed harness — only the sequence is clamped',
+      name: 'a composed run keeps its flag-routed harness and model — only the sequence is clamped',
       ctx: {
-        program: 'posthog-integration',
+        program: 'self-driving',
         composed: true,
-        flags: { [WIZARD_ORCHESTRATOR_FLAG_KEY]: 'true' },
+        flags: { [SD]: 'true' },
+        flagPayloads: { [SD]: SD_PAYLOAD },
       },
-      binding: { ...DEFAULT_RESOLVED, harness: Harness.pi },
-      trace: { harness: 'flag', model: 'binding', sequence: 'composed' },
+      binding: { ...DEFAULT_RESOLVED, model: GPT5_6_TERRA_MODEL },
+      trace: { harness: 'flag', model: 'flag', sequence: 'composed' },
     },
   ]);
 });

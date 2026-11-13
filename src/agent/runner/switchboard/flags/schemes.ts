@@ -47,19 +47,10 @@ export interface FlagRoute {
 
 // ── Config schemes ────────────────────────────────────────────────────────
 
-/** Harness-only scheme: the useFlag routes the harness; model/effort stay at the binding default so prompt frontmatter governs. */
-export interface HarnessConfigFlag {
-  useFlag: string;
-  harness: Harness;
-}
-
 /** Boolean-flag scheme: the useFlag's zod-validated `{model, effort?, harness?, sequence?}` payload picks the route; anything invalid keeps the non-flagged binding default. */
-export interface PayloadConfigFlag {
+export interface ConfigFlag {
   useFlag: string;
-  harness?: never;
 }
-
-export type ConfigFlag = HarnessConfigFlag | PayloadConfigFlag;
 
 /**
  * A harness-axis experiment: ONE program and the flags that route it. The
@@ -69,14 +60,6 @@ export type ConfigFlag = HarnessConfigFlag | PayloadConfigFlag;
 export interface HarnessExperiment {
   program: string;
   flags: ConfigFlag;
-}
-
-/** A sequence-axis experiment: one boolean flag, inert outside its listed programs. */
-export interface SequenceExperiment {
-  programs: readonly string[];
-  flag: string;
-  /** Sequence the flag routes covered programs to. */
-  sequence: Sequence;
 }
 
 /** Variant key validated against the shared vocabulary, transformed to its gateway id. */
@@ -152,7 +135,6 @@ export function routeFromConfigFlag(
   flagPayloads?: Record<string, unknown>,
 ): FlagRoute | undefined {
   if (flags[cfg.useFlag] !== 'true') return undefined;
-  if (cfg.harness) return { harness: cfg.harness };
   const route = parseFlagPayload(flagPayloads?.[cfg.useFlag]);
   if (!route) {
     logToFile(

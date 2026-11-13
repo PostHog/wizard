@@ -140,10 +140,9 @@ export interface WizardToolsOptions {
   secretVault?: SecretVault;
 
   /**
-   * Orchestrator queue context. Present only when the `wizard-orchestrator`
-   * flag routes the run to the orchestrator; when set, the orchestrator tools
-   * (enqueue_task, complete_task, read_handoffs) are registered. Absent on the
-   * linear path.
+   * Orchestrator queue context. Present only on an orchestrator run; when set,
+   * the orchestrator tools (enqueue_task, complete_task, read_handoffs) are
+   * registered. Absent on the linear path.
    */
   orchestrator?: OrchestratorToolsContext;
 

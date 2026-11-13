@@ -133,14 +133,14 @@ export class Wizard {
         // Runner overrides — dev/test only, same lifecycle as --ci.
         .option('harness', {
           describe:
-            'Override the agent harness (anthropic | pi). Wins over the PostHog runner flag.\nenv: POSTHOG_WIZARD_HARNESS',
+            'Override the agent harness (pi | anthropic, deprecated). Wins over the PostHog runner flag.\nenv: POSTHOG_WIZARD_HARNESS',
           choices: Object.values(Harness),
           type: 'string',
           hidden: true,
         })
         .option('sequence', {
           describe:
-            'Override the runner sequence (linear | orchestrator). Wins over the PostHog orchestrator flag.\nenv: POSTHOG_WIZARD_SEQUENCE',
+            "Override the runner sequence (linear | orchestrator). Wins over the program's binding.\nenv: POSTHOG_WIZARD_SEQUENCE",
           choices: Object.values(Sequence),
           type: 'string',
           hidden: true,
