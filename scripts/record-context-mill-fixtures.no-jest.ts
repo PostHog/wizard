@@ -47,8 +47,22 @@ async function fetchText(url: string): Promise<string> {
   return res.text();
 }
 
+/** The menu's build version. Throws on text that is not a skill menu. */
+function menuVersion(text: string): string | undefined {
+  const menu = JSON.parse(text) as {
+    buildVersion?: string;
+    categories?: unknown;
+  };
+  if (typeof menu.categories !== 'object' || menu.categories === null) {
+    throw new Error(`${BASE_URL}/skill-menu.json is not a skill menu`);
+  }
+  return menu.buildVersion;
+}
+
 async function main(): Promise<void> {
   const skillMenu = await fetchText(`${BASE_URL}/skill-menu.json`);
+  // Read before anything is written, so a response that is not a menu leaves the fixture alone.
+  const version = menuVersion(skillMenu);
   const agentMenuText = await fetchText(`${BASE_URL}/agent-menu.json`);
   const agentMenu = JSON.parse(agentMenuText) as AgentMenu;
   // Every destination is checked before a prompt is fetched or a fixture is replaced.
@@ -75,8 +89,6 @@ async function main(): Promise<void> {
     fs.writeFileSync(prompt.file, prompt.text);
   }
 
-  const version = (JSON.parse(skillMenu) as { buildVersion?: string })
-    .buildVersion;
   console.log(
     `Recorded context-mill ${version ?? 'unknown version'}: ${
       prompts.length

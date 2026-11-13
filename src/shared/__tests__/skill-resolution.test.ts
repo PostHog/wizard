@@ -95,6 +95,18 @@ describe('resolveSkill', () => {
     expect(pick('no-such-family', { framework: ['django'] })).toBeUndefined();
   });
 
+  it('reads a match key that names a built-in object property as one the run has no value for', () => {
+    const menu = [
+      entry('integration-odd', {
+        group: 'integration',
+        tags: ['framework:nextjs', 'constructor:x', 'toString:y'],
+      }),
+    ];
+    expect(
+      resolveSkill(menu, 'integration', { framework: ['nextjs'] })?.id,
+    ).toBe('integration-odd');
+  });
+
   it('falls back to menu order when nothing else ranks', () => {
     const twins = [
       entry('first', { group: 'step', framework: 'rails' }),
