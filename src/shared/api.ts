@@ -1,3 +1,4 @@
+import { setTimeout as wait } from 'node:timers/promises';
 import axios, { AxiosError } from 'axios';
 import { z } from 'zod';
 import { analytics } from '@utils/analytics';
@@ -198,26 +199,14 @@ function isTransient(error: unknown): boolean {
   return status >= 500 || status === 408 || status === 429;
 }
 
-/** Waits `ms`, or less when `signal` aborts first. */
-function backoff(ms: number, signal?: AbortSignal): Promise<void> {
-  return new Promise((resolve) => {
-    const done = () => {
-      clearTimeout(timer);
-      signal?.removeEventListener('abort', done);
-      resolve();
-    };
-    const timer = setTimeout(done, ms);
-    signal?.addEventListener('abort', done, { once: true });
-  });
-}
-
 /**
  * Runs a login-path request, retrying transient failures with backoff.
  * Once `signal` aborts, it stops waiting and throws the last failure.
  */
 export async function retryTransient<T>(
   request: () => Promise<T>,
-  sleep: (ms: number, signal?: AbortSignal) => Promise<void> = backoff,
+  sleep: (ms: number, signal?: AbortSignal) => Promise<void> = (ms, signal) =>
+    wait(ms, undefined, { signal }).catch(() => undefined),
   signal?: AbortSignal,
 ): Promise<T> {
   for (let attempt = 0; ; attempt++) {

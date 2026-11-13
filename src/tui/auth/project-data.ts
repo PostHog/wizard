@@ -330,8 +330,7 @@ async function readSignedUpUser(
 ): Promise<ApiUser | null> {
   try {
     return await fetchUserData(accessToken, appHost);
-  } catch (error) {
-    analytics.captureException(error as Error, { step: 'wizard_signup' });
+  } catch {
     return null;
   }
 }
