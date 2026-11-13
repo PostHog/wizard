@@ -63,20 +63,10 @@ vi.stubGlobal(
   },
 );
 
-/** Waits until ingestion has every event captured so far, marked by a sentinel. */
-async function ingestedUpToNow(): Promise<IngestedEvent[]> {
-  const sentinel = `sentinel ${ingested.length}-${Math.random()}`;
-  analytics.wizardCapture(sentinel);
-  await vi.waitFor(() =>
-    expect(ingested.map((e) => e.event)).toContain(`wizard: ${sentinel}`),
-  );
-  return ingested.filter((e) => !e.event.startsWith('wizard: sentinel'));
+async function providerEvents(): Promise<IngestedEvent[]> {
+  await analytics.flush();
+  return ingested.filter((e) => e.event === 'wizard: email providers detected');
 }
-
-const providerEvents = async () =>
-  (await ingestedUpToNow()).filter(
-    (e) => e.event === 'wizard: email providers detected',
-  );
 
 describe('detected email providers reach PostHog', () => {
   let tmpDir: string;

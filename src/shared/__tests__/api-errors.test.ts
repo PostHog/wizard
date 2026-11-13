@@ -260,18 +260,25 @@ describe('fetchProjectData failure analytics', () => {
 
 describe.concurrent('fetchUserData deadline', () => {
   // Remote hosts are reached through a local HTTP proxy, so their failures count as transient and retry.
-  const behaviours: Record<
+  const behaviours = new Map<
     string,
     (attempt: number, res: http.ServerResponse) => void
-  > = {
-    'fails-then-stalls.test': (attempt, res) => {
-      if (attempt === 1) res.writeHead(503).end();
-    },
-    'fails-late.test': (_attempt, res) => {
-      setTimeout(() => res.writeHead(503).end(), 9_600);
-    },
-  };
-  const requests: Record<string, number> = {};
+  >([
+    [
+      'fails-then-stalls.test',
+      (attempt, res) => {
+        if (attempt === 1) res.writeHead(503).end();
+      },
+    ],
+    [
+      // The second 503 lands about 9 s in, so the 1.5 s backoff after it crosses the deadline.
+      'fails-late.test',
+      (attempt, res) => {
+        setTimeout(() => res.writeHead(503).end(), attempt === 1 ? 0 : 8_500);
+      },
+    ],
+  ]);
+  const requests = new Map<string, number>();
   let proxy: http.Server;
   let silentServer: http.Server;
 
@@ -282,8 +289,9 @@ describe.concurrent('fetchUserData deadline', () => {
     );
     proxy = http.createServer((req, res) => {
       const host = req.headers.host ?? '';
-      requests[host] = (requests[host] ?? 0) + 1;
-      behaviours[host]?.(requests[host], res);
+      const attempt = (requests.get(host) ?? 0) + 1;
+      requests.set(host, attempt);
+      behaviours.get(host)?.(attempt, res);
     });
     await new Promise<void>((resolve) => proxy.listen(0, '127.0.0.1', resolve));
     const proxyUrl = `http://127.0.0.1:${
@@ -323,7 +331,7 @@ describe.concurrent('fetchUserData deadline', () => {
     ).rejects.toThrow();
 
     expect(Date.now() - started).toBeLessThan(10_800);
-    expect(requests['fails-then-stalls.test']).toBe(2);
+    expect(requests.get('fails-then-stalls.test')).toBe(2);
   }, 15_000);
 
   it('throws the last failure when the deadline passes during its backoff', async ({
@@ -336,6 +344,6 @@ describe.concurrent('fetchUserData deadline', () => {
     ).rejects.toMatchObject({ statusCode: 503 });
 
     expect(Date.now() - started).toBeLessThan(10_400);
-    expect(requests['fails-late.test']).toBe(1);
+    expect(requests.get('fails-late.test')).toBe(2);
   }, 15_000);
 });

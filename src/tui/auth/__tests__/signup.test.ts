@@ -40,14 +40,10 @@ vi.stubGlobal(
   },
 );
 
-/** Waits until ingestion has every event captured so far, marked by a sentinel. */
-async function ingestedUpToNow(): Promise<IngestedEvent[]> {
-  const sentinel = `sentinel ${ingested.length}-${Math.random()}`;
-  analytics.wizardCapture(sentinel);
-  await vi.waitFor(() =>
-    expect(ingested.map((e) => e.event)).toContain(`wizard: ${sentinel}`),
-  );
-  return ingested.filter((e) => !e.event.startsWith('wizard: sentinel'));
+/** Every event the analytics client has sent so far, once it has sent them all. */
+async function ingestedEvents(): Promise<IngestedEvent[]> {
+  await analytics.flush();
+  return ingested;
 }
 
 const ORG = '0190f0b4-0000-4000-8000-000000000001';
@@ -133,7 +129,7 @@ describe('a signup run', () => {
     analytics.wizardCapture('after signup');
 
     expect(login.user?.distinct_id).toBe('signup-new-user');
-    const events = await ingestedUpToNow();
+    const events = await ingestedEvents();
     expect(events).toContainEqual(
       expect.objectContaining({
         event: '$identify',
@@ -153,7 +149,7 @@ describe('a signup run', () => {
 
     expect(login.accessToken).toBe('pha_new');
     expect(login.user).toBeNull();
-    const events = await ingestedUpToNow();
+    const events = await ingestedEvents();
     expect(events.map((e) => e.event)).not.toContain('$identify');
     expect(events.filter((e) => e.event === '$exception')).toHaveLength(1);
   });
