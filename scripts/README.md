@@ -40,6 +40,17 @@ arguments. For new runs follow the
 [current host limitations](../e2e-harness/ARCHITECTURE.md#current-host-limitations)
 before choosing credentials or an EU project.
 
+## Repackaged skills
+
+`pnpm verify:repackaged-skills [dist-or-url]` runs
+`verify-repackaged-skills.no-jest.ts` against a context-mill build's
+`dist/skills` folder, or a release's download URL, the latest by default. For
+every framework and every skill a menu entry replaces, it resolves both skills
+as a run does, completes the replacement from the framework's pack, and
+compares the files a task reads. It prints each pair that differs and exits 1
+when there is one. Run it before `wizard-agent-dag-skills` reaches a new group
+of users.
+
 ## Context-mill fixtures
 
 `pnpm record:context-mill-fixtures [base-url]` runs

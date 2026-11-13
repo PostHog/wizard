@@ -30,6 +30,7 @@ import {
   WIZARD_OAUTH_SCOPES,
   WIZARD_PROVISIONING_SCOPES,
 } from '@shared/constants';
+import { completeSkillFromPack } from '@shared/skill-composition';
 import { installSkillById } from '@shared/skill-install';
 import {
   formatYaraAbortMessage,
@@ -38,6 +39,7 @@ import {
 import { fetchSkillMenu, type SkillEntry } from '@shared/skill-menu';
 import {
   FRAMEWORK_KEY,
+  resolveReplacement,
   resolveSkill,
   type MatchKeys,
 } from '@shared/skill-resolution';
@@ -67,6 +69,7 @@ import {
   areSeededTasksEnabled,
   getHarness,
   isAgentDagEnabled,
+  isAgentDagSkillsEnabled,
   resolveHarness,
   resolveStageOverrides,
   type HarnessPick,
@@ -925,6 +928,14 @@ async function executeOrchestrator(
         resolveSkill(menuSkillEntries, skillId, matchKeys)?.id
     : (skillId: string) =>
         resolveSkillVariantId(menuSkillEntries, skillId, framework);
+  // `wizard-agent-dag-skills` has a task read the skill that stands in for the one its prompt names, when the menu has any.
+  const repackagedSkills =
+    isAgentDagSkillsEnabled(boot.wizardFlags) &&
+    menuSkillEntries.some((entry) => entry.replaces !== undefined);
+  analytics.setTag(
+    'orchestrator_skills',
+    repackagedSkills ? 'repackaged' : 'bundles',
+  );
   const referenceSkillId = framework ? pickSkillId(REFERENCE_SKILL) : undefined;
   if (referenceSkillId) {
     const ref = await installSkillById(
@@ -1373,6 +1384,66 @@ async function executeOrchestrator(
   // its agent prompt (the WHAT) and the mini-skills it needs (the HOW), then
   // runs on its own model and tools.
   const taskSkillsRoot = path.join(QUEUE_DIR_NAME, 'skills');
+  /** Install a replacement and complete it from the framework's pack; undefined sends the task to the skill its prompt names. */
+  const installReplacement = async (
+    replacement: SkillEntry,
+    name: string,
+  ): Promise<string | undefined> => {
+    const unavailable = (reason: string): undefined => {
+      logToFile(
+        `[orchestrator] repackaged skill ${replacement.id} unavailable for ${name}: ${reason}`,
+      );
+      analytics.wizardCapture('orchestrator repackaged skill unavailable', {
+        skill: replacement.id,
+        replaces: name,
+        reason: reason.slice(0, 200),
+        framework,
+      });
+      return undefined;
+    };
+    const product = replacement.frameworkReferences;
+    if (product && !referenceInstallPath)
+      return unavailable('no framework pack');
+    const result = await installSkillById(
+      replacement.id,
+      input.installDir,
+      boot.skillsBaseUrl,
+      {
+        skillsRoot: taskSkillsRoot,
+        scan: (dir) => scanInstalledSkill(dir, boot.triageProvider),
+      },
+    );
+    if (result.kind !== 'ok') return unavailable(result.kind);
+    if (product && referenceInstallPath) {
+      try {
+        completeSkillFromPack(
+          path.join(input.installDir, result.path),
+          path.join(input.installDir, referenceInstallPath),
+          product,
+        );
+      } catch (error) {
+        return unavailable(
+          error instanceof Error ? error.message : String(error),
+        );
+      }
+    }
+    return result.path;
+  };
+  // A replacement installs once a run, so no task reads one that another is still completing.
+  const replacementInstalls = new Map<string, Promise<string | undefined>>();
+  const installRepackagedSkill = (
+    name: string,
+  ): Promise<string | undefined> => {
+    const replacement = repackagedSkills
+      ? resolveReplacement(menuSkillEntries, name)
+      : undefined;
+    if (!replacement) return Promise.resolve(undefined);
+    const started = replacementInstalls.get(replacement.id);
+    if (started) return started;
+    const install = installReplacement(replacement, name);
+    replacementInstalls.set(replacement.id, install);
+    return install;
+  };
   // Task agents can install durable skills mid-run (load_skill), and only the
   // framework reference docs earn a place — snapshot what was already there so
   // the sweeps remove exactly what this run added.
@@ -1393,6 +1464,12 @@ async function executeOrchestrator(
       const skillPaths: string[] = [];
       for (const skillId of resolved.skills) {
         if (signal?.aborted) return;
+        const repackaged = await installRepackagedSkill(skillId);
+        if (signal?.aborted) return;
+        if (repackaged) {
+          skillPaths.push(path.join(repackaged, 'SKILL.md'));
+          continue;
+        }
         // Agent prompts name the bare step-skill (`integration-v2-install`);
         // SDK-divergent steps ship per-framework variants, so resolve against
         // the menu with the session's framework before installing.

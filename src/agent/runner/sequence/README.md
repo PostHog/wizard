@@ -59,8 +59,23 @@ family, menu id and framework on the recorded menu, which
 [skill-equivalence.test.ts](orchestrator/__tests__/skill-equivalence.test.ts)
 checks.
 
+With `wizard-agent-dag-skills` on, a task reads the skill that stands in for the
+one its prompt names: the menu entry whose `replaces` is that name. An entry
+with `frameworkReferences` is one skill written for every framework, and the
+runner completes it from the framework's reference skill with
+`@shared/skill-composition`. When a replacement fails to install, or the
+reference skill cannot complete it, the task reads the skill its prompt names
+and the run sends `orchestrator repackaged skill unavailable` with the reason.
+Every event sent after the menu loads carries which a run read as the
+`orchestrator_skills` tag: `repackaged` when the flag is on and the menu has a
+replacement, `bundles` otherwise. The flag is independent of `wizard-agent-dag`.
+
+`pnpm verify:repackaged-skills [dist-or-url]` checks a context-mill build or
+release: for every framework and every replaced skill, the files a task reads
+are the same both ways.
+
 A run pinned to a context-mill release with `--context-mill-version` takes none
-of the `wizard-agent-dag` paths.
+of the `wizard-agent-dag` paths, and reads no repackaged skill.
 
 Before the tasks run, the runner installs the framework's `integration` skill as
 a reference: its example and its framework rules go into every task's prompt.
