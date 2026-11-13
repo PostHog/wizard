@@ -96,7 +96,7 @@ import {
 } from './task-deadline';
 import { dependencyClosure, uncoveredBySink } from './queue-tools';
 import { deferSeededTasks } from './seeded-deps';
-import { queueTaskGraph } from './task-graph';
+import { queueTaskGraph, TaskGraphError } from './task-graph';
 import { LONGER_ASK_TIMEOUT_MS, shouldDisableAsk } from '@shared/ask-policy';
 import {
   agentRunTools,
@@ -1190,7 +1190,28 @@ async function executeOrchestrator(
     const seedTerminal = terminalResult(seedResult);
     if (seedTerminal) return seedTerminal;
   } else {
-    queueTaskGraph(orchestratorCtx(), registry.graph);
+    try {
+      queueTaskGraph(orchestratorCtx(), registry.graph);
+    } catch (error) {
+      if (!(error instanceof TaskGraphError)) throw error;
+      logToFile(`[orchestrator] task graph rejected: ${error.message}`);
+      analytics.wizardCapture('orchestrator task graph rejected', {
+        reason: error.reason,
+      });
+      return failed({
+        code: ErrorCodes.AgentOrchestratorTaskGraph,
+        message: `The wizard could not plan this setup: its steps could not be queued.\n\nPlease report this to: ${WIZARD_CONTACT_EMAIL}`,
+        error: new WizardError(
+          'orchestrator could not queue the declared task graph',
+          {
+            reason: error.reason,
+            detail: error.message,
+            queue_state: JSON.stringify(store.list()),
+          },
+          ErrorCodes.AgentOrchestratorTaskGraph,
+        ),
+      });
+    }
   }
   analytics.wizardCapture('orchestrator seeded', {
     task_count: store.list().length,
@@ -1701,12 +1722,15 @@ async function executeOrchestrator(
   }
 
   // A drain that produced no tasks at all means the seed step never got a
-  // usable model response (e.g. the gateway returned empty completions).
+  // usable model response (e.g. the gateway returned empty completions), or
+  // the flow's frontmatter left no task to queue.
   // "0/0 completed" is a dead run, not a success with an empty denominator.
   if (summary.total === 0) {
     return failed({
       code: ErrorCodes.AgentOrchestratorHollowRun,
-      message: `The wizard was unable to set up PostHog: the planning step produced no work, so nothing ran.\n\nPlease try again — and if it happens again, report it to: ${WIZARD_CONTACT_EMAIL}`,
+      message: seedPrompt
+        ? `The wizard was unable to set up PostHog: the planning step produced no work, so nothing ran.\n\nPlease try again — and if it happens again, report it to: ${WIZARD_CONTACT_EMAIL}`
+        : `The wizard was unable to set up PostHog: this setup had no steps to run.\n\nPlease report this to: ${WIZARD_CONTACT_EMAIL}`,
       error: new WizardError(
         'orchestrator drain produced zero tasks',
         { queue_state: JSON.stringify(store.list()) },

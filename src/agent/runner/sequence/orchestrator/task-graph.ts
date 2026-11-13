@@ -1,4 +1,5 @@
 /** Queues a flow with no planner prompt from the graph its frontmatter declares; see the [README](../README.md#orchestrator). */
+import { logToFile } from '@utils/debug';
 import type { GraphTask } from '../../../agent-prompt-loader';
 import {
   applyEnqueue,
@@ -7,13 +8,21 @@ import {
 } from './queue-tools';
 import type { QueuedTask } from './queue';
 
+/** The declared graph could not be queued. `reason` is `unorderable` or the guard that rejected a task. */
+export class TaskGraphError extends Error {
+  constructor(readonly reason: string, message: string) {
+    super(message);
+    this.name = 'TaskGraphError';
+  }
+}
+
 /** A task to queue, with the types it waits for. */
 export interface PlannedTask {
   type: string;
   dependsOn: string[];
 }
 
-/** The tasks `keep` allows, each after every task it waits for and the sinks last. Throws when they cannot be ordered. */
+/** The tasks `keep` allows, each after every task it waits for and the sinks last. Throws a `TaskGraphError` when they cannot be ordered. */
 export function planTaskGraph(
   graph: readonly GraphTask[],
   keep: (type: string) => boolean,
@@ -53,7 +62,8 @@ export function planTaskGraph(
         task.dependsOn.every((dep) => queued.has(dep)),
       );
       if (ready.length === 0) {
-        throw new Error(
+        throw new TaskGraphError(
+          'unorderable',
           `The task graph cannot be ordered: ${waiting
             .map((task) => task.type)
             .join(', ')} wait on each other, or on a task that runs last.`,
@@ -69,13 +79,21 @@ export function planTaskGraph(
   return planned;
 }
 
-/** Queues the graph through the guards `enqueue_task` passes; a sink also waits for every queued task its dependencies do not reach. */
+/** Queues the graph through the guards `enqueue_task` passes; a sink also waits for every queued task its dependencies do not reach. Throws a `TaskGraphError` when it cannot. */
 export function queueTaskGraph(
   ctx: OrchestratorToolsContext,
   graph: readonly GraphTask[],
 ): QueuedTask[] {
   const ids = new Map<string, string>();
   const queued: QueuedTask[] = [];
+  const declared = new Set(graph.map((task) => task.type));
+  for (const { type, dependsOn } of graph) {
+    for (const dep of dependsOn.filter((name) => !declared.has(name))) {
+      logToFile(
+        `[orchestrator] "${type}" waits on "${dep}", which the flow does not declare. Edge dropped.`,
+      );
+    }
+  }
   const plan = planTaskGraph(graph, (type) => ctx.validTypes.includes(type));
   for (const planned of plan) {
     const dependsOn = planned.dependsOn.flatMap((type) => ids.get(type) ?? []);
@@ -88,7 +106,8 @@ export function queueTaskGraph(
       reason: "Declared in the flow's frontmatter",
     });
     if (!result.ok) {
-      throw new Error(
+      throw new TaskGraphError(
+        result.guard,
         `Cannot queue "${planned.type}" from the flow's frontmatter (${result.guard}): ${result.message}`,
       );
     }

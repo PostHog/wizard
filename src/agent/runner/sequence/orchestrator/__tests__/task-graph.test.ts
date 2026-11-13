@@ -6,7 +6,12 @@ import * as path from 'path';
 vi.mock('@utils/analytics', () => ({
   analytics: { wizardCapture: vi.fn() },
 }));
+vi.mock('@utils/debug', async (importActual) => ({
+  ...(await importActual<typeof import('@utils/debug')>()),
+  logToFile: vi.fn(),
+}));
 
+import { logToFile } from '@utils/debug';
 import type { GraphTask } from '../../../../agent-prompt-loader';
 import { QueueStore } from '../queue';
 import type { OrchestratorToolsContext } from '../queue-tools';
@@ -177,6 +182,19 @@ describe('queueTaskGraph', () => {
       'install',
       'capture',
     ]);
+  });
+
+  it('logs a dependency the flow does not declare, once', () => {
+    queueTaskGraph({ ...ctx, validTypes: ['install', 'capture', 'report'] }, [
+      task('report', ['install', 'capture'], true),
+      task('install', ['logs']),
+      task('capture', ['logs']),
+      task('logs', ['no-such-task']),
+    ]);
+    const lines = vi
+      .mocked(logToFile)
+      .mock.calls.filter(([line]) => String(line).includes('no-such-task'));
+    expect(lines).toHaveLength(1);
   });
 
   it('throws when a guard rejects a task', () => {

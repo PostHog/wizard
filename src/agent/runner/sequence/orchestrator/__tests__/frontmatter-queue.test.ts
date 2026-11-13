@@ -19,7 +19,7 @@ vi.mock('../../../switchboard', async () => {
   return {
     resolveHarness: () => ({ harness: 'pi', model: [...VALID_MODELS][0] }),
     resolveStageOverrides: () => ({}),
-    areSeededTasksEnabled: () => false,
+    areSeededTasksEnabled: () => seededTasks,
     isAgentDagEnabled: () => agentDag,
     getHarness: () => ({ runTask: (inputs: unknown) => harnessRun(inputs) }),
   };
@@ -40,7 +40,8 @@ vi.mock('../../../../agent-prompt-loader', async (importActual) => {
             { ...prompt('report'), sink: true, dependsOn: ['capture'] },
             { ...prompt('capture'), dependsOn: ['install', 'logs'] },
             { ...prompt('logs'), dependsOn: ['install'], optional: true },
-            prompt('install'),
+            { ...prompt('install'), dependsOn: installWaitsFor },
+            { ...prompt('warehouse'), runnerSeeded: true },
           ],
           'flow',
           opts,
@@ -49,6 +50,7 @@ vi.mock('../../../../agent-prompt-loader', async (importActual) => {
   };
 });
 
+import { ErrorCodes } from '@shared/errors';
 import { analytics } from '@utils/analytics';
 import { RunOutcome } from '../../../shared/types';
 import { runOrchestrator } from '../orchestrator-runner';
@@ -63,6 +65,8 @@ type Inputs = {
 
 let agentDag = true;
 let withPlanner = false;
+let seededTasks = false;
+let installWaitsFor: string[] = [];
 let ran: string[] = [];
 let queue: QueueStore | undefined;
 
@@ -90,6 +94,8 @@ describe('queueing a flow from its frontmatter', () => {
     dir = fs.mkdtempSync(path.join(os.tmpdir(), 'frontmatter-queue-'));
     agentDag = true;
     withPlanner = false;
+    seededTasks = false;
+    installWaitsFor = [];
     ran = [];
     queue = undefined;
     vi.mocked(analytics.wizardCapture).mockClear();
@@ -105,6 +111,7 @@ describe('queueing a flow from its frontmatter', () => {
         wizardFlagPayloads: {},
         switchboard: {},
         excludedTaskTypes: () => excluded,
+        seedTasks: () => [{ type: 'warehouse' }],
       },
       input: { installDir: dir, flags: { ci: true } },
       boot: {
@@ -149,6 +156,47 @@ describe('queueing a flow from its frontmatter', () => {
     const capture = queue?.list().find((task) => task.type === 'capture');
     const install = queue?.list().find((task) => task.type === 'install');
     expect(capture?.dependsOn).toEqual([install?.id]);
+  });
+
+  it('runs a task the wizard queued first after the declared tasks, and the report after it', async () => {
+    seededTasks = true;
+    const result = await run();
+    expect(result.outcome).toBe(RunOutcome.Success);
+    expect(ran).toEqual(['install', 'logs', 'capture', 'warehouse', 'report']);
+    const idOf = (type: string) =>
+      queue?.list().find((task) => task.type === type)?.id;
+    const waitsFor = (type: string) =>
+      queue?.list().find((task) => task.type === type)?.dependsOn ?? [];
+    expect([...waitsFor('warehouse')].sort()).toEqual(
+      [idOf('install'), idOf('logs'), idOf('capture')].sort(),
+    );
+    expect(waitsFor('report')).toContain(idOf('warehouse'));
+    expect(seeded()).toEqual({
+      task_count: 5,
+      types: ['warehouse', 'install', 'logs', 'capture', 'report'],
+      source: 'frontmatter',
+    });
+  });
+
+  it('fails with its own code when the declared graph cannot be ordered', async () => {
+    installWaitsFor = ['capture'];
+    const result = await run();
+    expect(result.outcome).toBe(RunOutcome.Failed);
+    expect(result.failure?.code).toBe(ErrorCodes.AgentOrchestratorTaskGraph);
+    expect(result.failure?.message).not.toContain('wait on each other');
+    expect(analytics.wizardCapture).toHaveBeenCalledWith(
+      'orchestrator task graph rejected',
+      { reason: 'unorderable' },
+    );
+    expect(ran).toEqual([]);
+  });
+
+  it('fails a run whose frontmatter leaves nothing to queue, without naming a planning step', async () => {
+    const result = await run(['install', 'logs', 'capture', 'report']);
+    expect(result.outcome).toBe(RunOutcome.Failed);
+    expect(result.failure?.code).toBe(ErrorCodes.AgentOrchestratorHollowRun);
+    expect(result.failure?.message).not.toContain('planning step');
+    expect(ran).toEqual([]);
   });
 
   it('keeps the planner of a flow that has a planner prompt', async () => {
