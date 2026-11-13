@@ -17,6 +17,7 @@ import {
 } from '.';
 
 export const HARNESS_OPTIONS: Partial<Record<Harness, AgentHarness>> = {
+  // Deprecated and unused for now; registered so `--harness anthropic` still resolves in dev builds.
   [Harness.anthropic]: anthropicBackend,
   [Harness.pi]: piBackend,
 };
@@ -39,7 +40,7 @@ const flagRunnerOverride: Middleware<HarnessPick> = (ctx, next) => {
   if (!route) return pick;
   if (ctx.trace) {
     ctx.trace.harness = 'flag';
-    // Harness-only routes keep the binding's model — trace it truthfully so
+    // A route that pins no model keeps the binding's — trace it truthfully so
     // analytics never attributes the fallback model to the flag.
     if (route.model) ctx.trace.model = 'flag';
   }

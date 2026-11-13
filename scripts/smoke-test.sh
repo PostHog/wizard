@@ -43,7 +43,7 @@ if [ "${WIZARD_BUILD_NODE_ENV:-production}" = "ci" ]; then
   # unknown ones during command parse (--version/--help short-circuit and
   # prove nothing). The run exits fast on the missing api key — all this
   # asserts is that yargs did not reject the environment.
-  ci_probe=$(WIZARD_CI_FLAG_OVERRIDES='{"wizard-orchestrator":true}' node "$DIST_BIN" --ci --install-dir /tmp/wizard-smoke-probe 2>&1) || true
+  ci_probe=$(WIZARD_CI_FLAG_OVERRIDES='{"wizard-agent-dag":true}' node "$DIST_BIN" --ci --install-dir /tmp/wizard-smoke-probe 2>&1) || true
   if echo "$ci_probe" | grep -q 'Unknown argument'; then
     echo 'Smoke test failed: CI binary rejects WIZARD_CI_FLAG_OVERRIDES in the environment' >&2
     echo "$ci_probe" | head -3 >&2

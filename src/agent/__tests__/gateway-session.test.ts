@@ -836,7 +836,7 @@ describe('buildWizardPropertiesBlob', () => {
     const blob = JSON.parse(
       buildWizardPropertiesBlob(
         { run_id: 'r1', 'X-POSTHOG-PROPERTY-integration': 'nextjs' },
-        { 'wizard-orchestrator': 'test', 'unrelated-flag': 'x' },
+        { 'wizard-agent-dag': 'test', 'unrelated-flag': 'x' },
         42,
       ),
     );
@@ -845,7 +845,7 @@ describe('buildWizardPropertiesBlob', () => {
       team_id: 42,
       run_id: 'r1',
       integration: 'nextjs',
-      'wizard_flag_wizard-orchestrator': 'test',
+      'wizard_flag_wizard-agent-dag': 'test',
     });
   });
 

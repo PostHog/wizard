@@ -41,8 +41,8 @@ flushes the scanner report on cleanup.
 The contribution policy is
 [Pi by default, orchestration preferred](../SKILL.md#execution-policy-and-model-admission).
 Linear remains useful for very simple tasks and legacy support. Existing
-bindings and composed sub-runs still use it; the Anthropic SDK remains a
-supported legacy fallback. These are separate choices: sequence describes the
+bindings and composed sub-runs still use it. The Anthropic SDK harness is
+deprecated and unused. These are separate choices: sequence describes the
 work shape, harness selects the SDK, and the model selects a gateway/provider
 route.
 

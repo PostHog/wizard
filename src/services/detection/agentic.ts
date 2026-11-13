@@ -477,6 +477,7 @@ async function scanProjectsWithAgent(
       binding: DEFAULT_BINDING,
       overrides: { harness: session.harness },
       record: false,
+      scan: true,
     },
     skillsBaseUrl: getSkillsBaseUrl(),
     wizardFlags: flags.flags,
@@ -516,10 +517,6 @@ async function scanProjectsWithAgent(
     const result = await runAgent(
       {
         ...config,
-        routing: {
-          ...config.routing,
-          scan: attempt === 0 ? 'first' : 'retry',
-        },
         run: { ...config.run, structured: { schema, timeoutMs } },
       },
       input,

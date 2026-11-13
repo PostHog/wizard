@@ -78,7 +78,7 @@ describe('createTriageLLMProvider', () => {
         ...AUTH,
         teamId: 42,
         wizardMetadata: { run_id: 'r1' },
-        wizardFlags: { 'wizard-orchestrator': 'true' },
+        wizardFlags: { 'wizard-agent-dag': 'true' },
       },
       Harness.pi,
     )!;
@@ -90,7 +90,7 @@ describe('createTriageLLMProvider', () => {
       ai_product: 'wizard',
       team_id: 42,
       run_id: 'r1',
-      'wizard_flag_wizard-orchestrator': 'true',
+      'wizard_flag_wizard-agent-dag': 'true',
     });
     expect(headers['x-posthog-use-bedrock-fallback']).toBeUndefined();
   });

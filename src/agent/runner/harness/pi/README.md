@@ -1,9 +1,8 @@
 # Pi harness
 
-The default harness for new Wizard work, built on
+The harness every program runs on, built on
 `@earendil-works/pi-coding-agent`. Prefer orchestrated flows; linear execution
-remains useful for very simple tasks and legacy support. Existing program
-bindings can still select the Anthropic SDK. See
+remains useful for very simple tasks and legacy support. See
 [runner policy](../../README.md#execution-policy).
 
 ## Entry points and transport

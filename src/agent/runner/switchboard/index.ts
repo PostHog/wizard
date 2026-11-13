@@ -11,13 +11,7 @@ import { resolveSequence } from './sequence';
 export interface SwitchboardTrace {
   harness?: 'cli' | 'flag' | 'binding';
   model?: 'cli' | 'flag' | 'binding';
-  sequence?:
-    | 'cli'
-    | 'composed'
-    | 'runtask-clamp'
-    | 'payload'
-    | 'flag'
-    | 'binding';
+  sequence?: 'cli' | 'composed' | 'runtask-clamp' | 'payload' | 'binding';
 }
 
 /** Everything a resolver middleware may branch on. Built once per run. */
@@ -51,7 +45,7 @@ export type Middleware<D> = (ctx: SwitchboardCtx, next: () => D) => D;
  *
  * **Earlier in the array = higher precedence.** Index 0 runs first and can
  * short-circuit the rest; index 1 only runs if index 0 deferred. So
- * `[cliSequenceMw, orchestratorFeatureFlagMw]` means CLI takes precedence over the
+ * `[cliSequenceMw, flagRouteSequenceMw]` means CLI takes precedence over the
  * flag, not the other way around.
  *
  * `fallback` runs at the end — reached only when every middleware deferred.
@@ -97,7 +91,7 @@ export interface ProgramBinding {
   contextMillOverride?: Record<string, Partial<HarnessPick>>;
 }
 
-// Legacy fallback; new programs should explicitly choose Pi and prefer orchestration.
+// The route of a program that declares no binding; new programs should bind Pi explicitly and prefer orchestration.
 export const DEFAULT_BINDING: ProgramBinding = {
   sequence: Sequence.linear,
   harness: Harness.pi,
@@ -118,17 +112,9 @@ export function resolveBinding(
   return { sequence, harness, model, thinkingLevel };
 }
 
-/**
- * A scan's binding: linear on a triage model. The first attempt takes the
- * harness the run resolves to; the retry runs the SDK, a second provider,
- * whatever the flags say.
- */
-export function resolveScanBinding(
-  ctx: SwitchboardCtx,
-  attempt: 'first' | 'retry',
-): ProgramBinding {
-  const harness =
-    attempt === 'retry' ? Harness.anthropic : resolveBinding(ctx).harness;
+/** A scan's binding: linear, on the triage model of the harness the run resolves to. */
+export function resolveScanBinding(ctx: SwitchboardCtx): ProgramBinding {
+  const { harness } = resolveBinding(ctx);
   return { sequence: Sequence.linear, harness, model: triageModelFor(harness) };
 }
 
@@ -141,7 +127,6 @@ export {
   type SequenceRunner,
 } from './sequence';
 export {
-  isOrchestratorEnabled,
   areSeededTasksEnabled,
   isAgentDagEnabled,
   resolveStageOverrides,

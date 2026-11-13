@@ -1,7 +1,7 @@
 /**
- * Experimental task-queue orchestrator runner.
+ * Task-queue orchestrator runner.
  *
- * Branches from the linear runner when the `wizard-orchestrator` flag is on. An
+ * Runs a program whose route resolves to the orchestrator sequence. An
  * orchestrator agent inspects the repo and seeds an in-memory task queue; an
  * executor drains it, running one fresh agent per task.
  *

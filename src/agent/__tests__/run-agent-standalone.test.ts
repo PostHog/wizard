@@ -1068,30 +1068,23 @@ describe('runAgent standalone', () => {
     expect(result.outro).toBeUndefined();
   });
 
-  it('runs a scan on the triage model of the harness it resolves to, and its retry on the SDK', async () => {
-    const scan = (attempt: 'first' | 'retry') =>
-      config({
-        routing: {
-          binding: {
-            sequence: Sequence.orchestrator,
-            harness: Harness.anthropic,
-            model: DEFAULT_AGENT_MODEL,
-          },
-          overrides: { harness: Harness.pi },
-          scan: attempt,
+  it('runs a scan on the triage model of the harness it resolves to', async () => {
+    const scan = config({
+      routing: {
+        binding: {
+          sequence: Sequence.orchestrator,
+          harness: Harness.anthropic,
+          model: DEFAULT_AGENT_MODEL,
         },
-      });
+        overrides: { harness: Harness.pi },
+        scan: true,
+      },
+    });
 
-    await runAgent(scan('first'), input());
+    await runAgent(scan, input());
     expect(harnessState.selected.at(-1)).toBe(Harness.pi);
     expect((harnessState.lastInputs as BackendRunInputs).model).toBe(
       triageModelFor(Harness.pi),
-    );
-
-    await runAgent(scan('retry'), input());
-    expect(harnessState.selected.at(-1)).toBe(Harness.anthropic);
-    expect((harnessState.lastInputs as BackendRunInputs).model).toBe(
-      triageModelFor(Harness.anthropic),
     );
   });
 
