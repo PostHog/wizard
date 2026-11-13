@@ -22,6 +22,8 @@ type Task = {
   id: string;
   label: string;
   seed: boolean;
+  sink: boolean;
+  runnerSeeded: boolean;
   dependsOn: string[];
   model: string;
   effort: string;
@@ -63,6 +65,8 @@ function loadPrograms(): Map<string, Task[]> {
           id,
           label: fields.label || id,
           seed: fields.seed === 'true',
+          sink: fields.sink === 'true',
+          runnerSeeded: fields.runnerSeeded === 'true',
           dependsOn: list(fields.dependsOn),
           model: (fields.model_pi ?? '').replace(/^.*\//, '') || '—',
           effort: fields.effort_pi || '—',
@@ -73,9 +77,16 @@ function loadPrograms(): Map<string, Task[]> {
   return programs;
 }
 
-/** Tasks grouped by wave: a task's wave is one past its deepest dependency. */
+/** A task the wizard queues itself that names no dependency: it runs after every task but the sink. */
+const runsAfterTheRest = (task: Task): boolean =>
+  task.runnerSeeded && task.dependsOn.length === 0;
+
+/** Tasks grouped by wave: one past a task's deepest dependency, then the tasks that wait for the rest, then the sink. */
 function wavesOf(tasks: Task[]): Task[][] {
-  const byId = new Map(tasks.map((task) => [task.id, task]));
+  const drawn = tasks.filter((task) => !task.seed);
+  const byId = new Map(
+    drawn.filter((task) => !task.sink).map((task) => [task.id, task]),
+  );
   const depth = new Map<string, number>();
   const depthOf = (id: string): number => {
     const known = depth.get(id);
@@ -87,24 +98,33 @@ function wavesOf(tasks: Task[]): Task[][] {
     return own;
   };
   const waves: Task[][] = [];
-  for (const task of tasks.filter((t) => !t.seed)) {
-    (waves[depthOf(task.id)] ??= []).push(task);
+  for (const task of byId.values()) {
+    if (!runsAfterTheRest(task)) (waves[depthOf(task.id)] ??= []).push(task);
   }
-  return waves.filter(Boolean);
+  return [
+    ...waves,
+    drawn.filter((task) => !task.sink && runsAfterTheRest(task)),
+    drawn.filter((task) => task.sink),
+  ].filter((wave) => wave?.length);
 }
 
 const escape = (text: string): string =>
   text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+/** What a task waits for, in words: the sink and a task that names nothing wait for more than they declare. */
+function waitsFor(task: Task): string {
+  if (task.sink) return 'last, after every other task';
+  if (runsAfterTheRest(task)) return 'queued by the wizard, after the rest';
+  return task.dependsOn.length ? `after ${task.dependsOn.join(', ')}` : '';
+}
 
 const card = (task: Task): string => `
         <div class="task${task.seed ? ' seed' : ''}">
           <div class="name">${escape(task.label)}</div>
           <div class="meta">${escape(task.model)} · ${escape(task.effort)}</div>
           ${
-            task.dependsOn.length
-              ? `<div class="deps">after ${task.dependsOn
-                  .map(escape)
-                  .join(', ')}</div>`
+            waitsFor(task)
+              ? `<div class="deps">${escape(waitsFor(task))}</div>`
               : ''
           }
         </div>`;
@@ -181,5 +201,8 @@ if (!process.env.NO_OPEN) {
       : process.platform === 'win32'
       ? 'explorer'
       : 'xdg-open';
-  spawn(opener, [OUT_PATH], { stdio: 'ignore', detached: true }).unref();
+  const child = spawn(opener, [OUT_PATH], { stdio: 'ignore', detached: true });
+  // The page is written either way, so a missing opener only skips the open.
+  child.on('error', () => undefined);
+  child.unref();
 }
