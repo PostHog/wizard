@@ -324,12 +324,19 @@ async function askForWizardLogin(options: {
   return data;
 }
 
+/** How long a signup waits for its new user before it goes on unidentified. */
+const SIGNUP_USER_READ_TIMEOUT_MS = 10_000;
+
 async function readSignedUpUser(
   accessToken: string,
   appHost: string,
 ): Promise<ApiUser | null> {
   try {
-    return await fetchUserData(accessToken, appHost);
+    return await fetchUserData(
+      accessToken,
+      appHost,
+      AbortSignal.timeout(SIGNUP_USER_READ_TIMEOUT_MS),
+    );
   } catch {
     return null;
   }

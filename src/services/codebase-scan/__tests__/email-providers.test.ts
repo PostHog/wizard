@@ -109,7 +109,10 @@ describe('detected email providers reach PostHog', () => {
     const events = await providerEvents();
     expect(events).toHaveLength(1);
     expect(events[0].properties.email_provider_kinds).toEqual(['Resend']);
-    expect(events[0].properties).not.toHaveProperty('$set');
+    const personWrites = ingested.flatMap((e) =>
+      [e.properties.$set, e.properties.$set_once].filter(Boolean),
+    );
+    expect(JSON.stringify(personWrites)).not.toMatch(/email_provider|Resend/);
   });
 
   it('sends nothing when the project uses no email provider', async () => {

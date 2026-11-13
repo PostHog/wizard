@@ -57,8 +57,13 @@ const NEW_USER = {
   organizations: [{ id: ORG }],
 };
 
-/** PostHog's provisioning API and `/api/users/@me/` for a new account. */
-function posthogServer(userRead: 'answers' | 'forbidden'): http.Server {
+type UserRead = 'answers' | 'forbidden' | 'never';
+
+/**
+ * PostHog's provisioning API and `/api/users/@me/` for a new account. A user read that never
+ * answers goes to a second server, as on a fresh connection to the project's host.
+ */
+function posthogServer(userRead: UserRead, silentHost: string): http.Server {
   const server = http.createServer((req, res) => {
     const json = (status: number, body: unknown) => {
       res.writeHead(status, { 'content-type': 'application/json' });
@@ -82,7 +87,8 @@ function posthogServer(userRead: 'answers' | 'forbidden'): http.Server {
           complete: {
             access_configuration: {
               api_key: 'phc_new',
-              host: `http://127.0.0.1:${port}`,
+              host:
+                userRead === 'never' ? silentHost : `http://127.0.0.1:${port}`,
             },
           },
         });
@@ -97,21 +103,25 @@ function posthogServer(userRead: 'answers' | 'forbidden'): http.Server {
   return server;
 }
 
+async function listen(server: http.Server): Promise<string> {
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  return `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+}
+
 describe('a signup run', () => {
-  let server: http.Server;
+  let servers: http.Server[] = [];
   const store = { pushStatus: () => undefined } as unknown as WizardStore;
 
-  async function signUp(userRead: 'answers' | 'forbidden') {
-    server = posthogServer(userRead);
-    await new Promise<void>((resolve) =>
-      server.listen(0, '127.0.0.1', resolve),
-    );
-    const { port } = server.address() as AddressInfo;
+  async function signUp(userRead: UserRead) {
+    const silent = http.createServer(() => undefined);
+    const server = posthogServer(userRead, await listen(silent));
+    servers = [server, silent];
+    const baseUrl = await listen(server);
     return getOrAskForProjectData({
       store,
       signup: true,
       email: 'new@example.com',
-      baseUrl: `http://127.0.0.1:${port}`,
+      baseUrl,
     });
   }
 
@@ -120,8 +130,10 @@ describe('a signup run', () => {
   });
 
   afterEach(async () => {
-    server.closeAllConnections();
-    await new Promise((resolve) => server.close(resolve));
+    for (const server of servers) {
+      server.closeAllConnections();
+      await new Promise((resolve) => server.close(resolve));
+    }
   });
 
   it('identifies the new account, so its events land on its person', async () => {
@@ -153,4 +165,18 @@ describe('a signup run', () => {
     expect(events.map((e) => e.event)).not.toContain('$identify');
     expect(events.filter((e) => e.event === '$exception')).toHaveLength(1);
   });
+
+  it('signs the new account in unidentified when its user read never answers, after 10 seconds', async () => {
+    const started = Date.now();
+    const login = await signUp('never');
+    const waited = Date.now() - started;
+
+    expect(login.accessToken).toBe('pha_new');
+    expect(login.user).toBeNull();
+    expect(waited).toBeGreaterThanOrEqual(9_500);
+    expect(waited).toBeLessThan(11_000);
+    const events = await ingestedEvents();
+    expect(events.map((e) => e.event)).not.toContain('$identify');
+    expect(events.filter((e) => e.event === '$exception')).toHaveLength(1);
+  }, 15_000);
 });
