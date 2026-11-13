@@ -118,17 +118,9 @@ export function resolveBinding(
   return { sequence, harness, model, thinkingLevel };
 }
 
-/**
- * A scan's binding: linear on a triage model. The first attempt takes the
- * harness the run resolves to; the retry runs the SDK, a second provider,
- * whatever the flags say.
- */
-export function resolveScanBinding(
-  ctx: SwitchboardCtx,
-  attempt: 'first' | 'retry',
-): ProgramBinding {
-  const harness =
-    attempt === 'retry' ? Harness.anthropic : resolveBinding(ctx).harness;
+/** A scan's binding: linear, on the triage model of the harness the run resolves to. */
+export function resolveScanBinding(ctx: SwitchboardCtx): ProgramBinding {
+  const { harness } = resolveBinding(ctx);
   return { sequence: Sequence.linear, harness, model: triageModelFor(harness) };
 }
 

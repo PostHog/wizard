@@ -29,7 +29,7 @@ export function resolveRunConfig(config: RunConfig): ResolvedRunConfig {
     cliModel: routing.overrides?.model,
   };
   const binding = routing.scan
-    ? resolveScanBinding(switchboard, routing.scan)
+    ? resolveScanBinding(switchboard)
     : resolveBinding(switchboard);
   const record = routing.record ?? true;
   if (record) {
