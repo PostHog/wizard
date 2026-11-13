@@ -63,6 +63,11 @@ a reference: its example and its framework rules go into every task's prompt.
 When that install fails, the run goes on without them and sends
 `orchestrator reference skill unavailable` with the reason.
 
+A task skill the menu cannot supply fails the run before any task starts. When
+the prompts are bundled and the loaded menu has that name under no id and no
+family, the wizard is older than the skills, and the message says to run the
+latest version. Any other miss keeps the message that asks to try again.
+
 ### Task metadata
 
 Read [AgentPrompt and its parser](../../agent-prompt-loader.ts) for the current

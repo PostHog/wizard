@@ -949,10 +949,12 @@ async function executeOrchestrator(
 
   // Preflight every task's mini-skills: a miss would run tasks skill-less, so fail properly instead.
   const missingVariants: string[] = [];
+  const missingSkills = new Set<string>();
   for (const type of registry.types) {
     for (const skillId of registry.get(type)?.skills ?? []) {
       if (pickSkillId(skillId)) continue;
       missingVariants.push(`${type}/${skillId}`);
+      missingSkills.add(skillId);
       logToFile(
         `[orchestrator] no skill variant type=${type} skill=${skillId} framework=${
           framework ?? 'none'
@@ -968,11 +970,25 @@ async function executeOrchestrator(
   if (missingVariants.length > 0) {
     // The framework's own docs page, resolved by the caller; generic docs when detection found none.
     const docsUrl = framework ? input.frameworkDocsUrl : undefined;
+    // A bundled prompt naming a skill the loaded menu has under no id or family means the wizard is older than the skills.
+    const outdated =
+      bundledPrompts !== undefined &&
+      menuSkillEntries.length > 0 &&
+      [...missingSkills].some(
+        (name) =>
+          !menuSkillEntries.some(
+            (entry) => entry.id === name || entry.group === name,
+          ),
+      );
     return failed({
       code: ErrorCodes.AgentOrchestratorSkillVariantMissing,
       message:
-        'Setup instructions for this project failed to download.\n' +
-        'Please try again, or contact wizard@posthog.com.\n\n' +
+        (outdated
+          ? 'This version of the wizard uses setup instructions that are no longer published.\n' +
+            'Run the latest version and try again:\n' +
+            '  npx @posthog/wizard@latest\n\n'
+          : 'Setup instructions for this project failed to download.\n' +
+            'Please try again, or contact wizard@posthog.com.\n\n') +
         'You can also set up with your agent by downloading the skills here:\n' +
         '  https://github.com/PostHog/context-mill/releases\n' +
         'or integrate manually here:\n' +
