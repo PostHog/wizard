@@ -1,6 +1,6 @@
 {
   "name": "@posthog/wizard",
-  "version": "2.92.1",
+  "version": "2.93.0",
   "homepage": "https://github.com/PostHog/wizard",
   "repository": "https://github.com/PostHog/wizard",
   "description": "The PostHog wizard helps you to configure your project",
@@ -95,6 +95,7 @@
     "@typescript-eslint/parser": "^5.13.0",
     "@vitest/coverage-v8": "^3.2.4",
     "@xterm/headless": "^6.0.0",
+    "asciinema-player": "3.17.0",
     "babel-jest": "^29.7.0",
     "dotenv": "^16.4.7",
     "eslint": "^8.18.0",
@@ -156,6 +157,7 @@
     "prepare": "husky",
     "wizard-ci-explore": "tsx scripts/wizard-ci-explore.no-jest.ts",
     "wizard-ci-replay": "tsx scripts/tui-replay.no-jest.ts",
+    "wizard-ci-record": "tsx scripts/tui-record.no-jest.ts",
     "decisions-detect": "tsx scripts/decisions-detect.no-jest.ts",
     "check:decisions-bundle": "tsx scripts/check-decisions-bundle.no-jest.ts",
     "record:context-mill-fixtures": "tsx scripts/record-context-mill-fixtures.no-jest.ts"
