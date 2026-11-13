@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.94.0](https://github.com/PostHog/wizard/compare/v2.93.0...v2.94.0) (2026-11-13)
+
+
+### Features
+
+* **analytics:** report detected email providers and identify signup runs ([#1506](https://github.com/PostHog/wizard/issues/1506)) ([b311f2f](https://github.com/PostHog/wizard/commit/b311f2f2990aa0de15c2f58e90e5bb8de784b43c))
+* **e2e-harness:** record the real TUI to an asciicast ([#1557](https://github.com/PostHog/wizard/issues/1557)) ([00c63a8](https://github.com/PostHog/wizard/commit/00c63a8b6d4398f1b0e431e1d92f19f21247eddc))
+* **orchestrator:** queue a flow with no planner prompt from its frontmatter ([#1553](https://github.com/PostHog/wizard/issues/1553)) ([1097024](https://github.com/PostHog/wizard/commit/1097024708410e4bc9b211b79771b8487199c1d0))
+* **programs:** bundle each orchestrator flow's agent prompts ([#1554](https://github.com/PostHog/wizard/issues/1554)) ([b715077](https://github.com/PostHog/wizard/commit/b71507732f116e8d0a497265689680a36be2ea81))
+* **skills:** pick task skills with one shared resolver, behind wizard-agent-dag ([#1551](https://github.com/PostHog/wizard/issues/1551)) ([126ded2](https://github.com/PostHog/wizard/commit/126ded22a46680d2a9382378ff1211e280b72b33))
+* **traits:** describe a project by its traits and hand the runner its match keys ([#1552](https://github.com/PostHog/wizard/issues/1552)) ([3032557](https://github.com/PostHog/wizard/commit/3032557b7ecd01adde5d397863b85173b2c1c129))
+
 ## [2.93.0](https://github.com/PostHog/wizard/compare/v2.92.1...v2.93.0) (2026-11-12)
 
 
