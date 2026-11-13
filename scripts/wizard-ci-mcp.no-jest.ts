@@ -12,11 +12,11 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
-import fs from 'fs';
-import os from 'os';
-import path from 'path';
-import net from 'net';
-import { captureTui, type TuiCapture } from '@e2e-harness/tui-capture';
+import {
+  startServeHost,
+  waitFor,
+  type ServeHost,
+} from '@e2e-harness/serve-host';
 
 const text = (data: unknown) => ({
   content: [
@@ -38,49 +38,12 @@ const errorOut = (e: unknown) => ({
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-let cap: TuiCapture | null = null;
-let sockPath = '';
+let host: ServeHost | null = null;
 
-/** One request/response over the host's control socket (newline-delimited JSON). */
-function rpc(req: object): Promise<{
-  ok: boolean;
-  state?: unknown;
-  error?: string;
-  runStatus?: string;
-}> {
-  return new Promise((resolve, reject) => {
-    if (!sockPath)
-      return reject(new Error('No app open. Call open_app first.'));
-    const sock = net.connect(sockPath);
-    let buf = '';
-    const timer = setTimeout(() => {
-      sock.destroy();
-      reject(new Error('control socket timeout'));
-    }, 600_000);
-    sock.on('connect', () => sock.write(JSON.stringify(req) + '\n'));
-    sock.on('data', (d) => {
-      buf += d;
-      const i = buf.indexOf('\n');
-      if (i >= 0) {
-        clearTimeout(timer);
-        sock.end();
-        resolve(JSON.parse(buf.slice(0, i)));
-      }
-    });
-    sock.on('error', (e) => {
-      clearTimeout(timer);
-      reject(e);
-    });
-  });
-}
-
-async function waitFor(cond: () => boolean, ms: number): Promise<boolean> {
-  const end = Date.now() + ms;
-  while (Date.now() < end) {
-    if (cond()) return true;
-    await sleep(150);
-  }
-  return false;
+function rpc(req: object) {
+  if (!host)
+    return Promise.reject(new Error('No app open. Call open_app first.'));
+  return host.rpc(req);
 }
 
 async function main() {
@@ -111,43 +74,12 @@ async function main() {
     },
     async ({ appDir, keyFile, apiKey, projectId, region }) => {
       try {
-        if (cap) cap.kill();
-        const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wizard-ci-'));
-        sockPath = path.join(dir, 'host.sock');
-        // Strip the host's Claude Code / Anthropic auth so the wizard's agent
-        // subprocess authenticates with the phx key instead of deferring to the
-        // host session (which yields apiKeySource=none → 401).
-        const env: NodeJS.ProcessEnv = { ...process.env };
-        for (const k of Object.keys(env))
-          if (/^(CLAUDE|ANTHROPIC|AI_AGENT)/.test(k)) delete env[k];
-        Object.assign(env, {
-          MODE: 'serve',
-          CONTROL_SOCK: sockPath,
-          SNAP_CTRL: path.join(dir, 'ctrl'),
-          APP_DIR: appDir,
-          PROJECT_ID: projectId,
-          POSTHOG_REGION: region ?? 'us',
-          // Pass the key the way the caller gave it; never write an inline key to
-          // disk. The host reads either form (POSTHOG_PERSONAL_API_KEY wins).
-          ...(keyFile
-            ? { POSTHOG_KEY_FILE: keyFile }
-            : { POSTHOG_PERSONAL_API_KEY: (apiKey ?? '').trim() }),
-        });
-        cap = captureTui({
-          cmd: path.join(process.cwd(), 'node_modules/.bin/tsx'),
-          args: [
-            '--tsconfig',
-            'tsconfig.base.json',
-            '--import',
-            './scripts/markdown-loader.no-jest.mjs',
-            'scripts/tui-host.no-jest.ts',
-          ],
-          cwd: process.cwd(),
-          env,
-        });
-        if (!(await waitFor(() => fs.existsSync(sockPath), 30_000)))
+        if (host) host.dispose();
+        host = startServeHost({ appDir, projectId, region, keyFile, apiKey });
+        if (!(await host.waitForSocketOrExit(30_000)))
           return errorOut(new Error('the TUI host did not start'));
-        await waitFor(() => cap!.frame().includes('PostHog'), 30_000);
+        const { capture } = host;
+        await waitFor(() => capture.frame().includes('PostHog'), 30_000);
         const r = await rpc({ type: 'read_state' });
         return text(r.state ?? r);
       } catch (e) {
@@ -200,9 +132,9 @@ async function main() {
     {},
     async () => {
       try {
-        if (!cap) throw new Error('No app open. Call open_app first.');
+        if (!host) throw new Error('No app open. Call open_app first.');
         await sleep(150); // let the emulator apply the latest frame
-        return text(cap.frame());
+        return text(host.capture.frame());
       } catch (e) {
         return errorOut(e);
       }

@@ -12,6 +12,7 @@
 import fs from 'fs';
 import path from 'path';
 import { captureTui } from '@e2e-harness/tui-capture';
+import { openCastWriter } from '@e2e-harness/asciicast';
 
 const OUT = process.env.SNAP_OUT!;
 const CTRL = path.join(OUT, 'ctrl');
@@ -38,6 +39,18 @@ const cap = captureTui({
   cwd: process.cwd(),
   env,
 });
+const cast =
+  process.env.SNAP_RECORD === '1'
+    ? openCastWriter(path.join(OUT, 'run.cast'), cap)
+    : null;
+if (cast) cap.onData(cast.appendOutput);
+const stopHostOnSignal = () => {
+  cap.kill();
+  cast?.close();
+  process.exit(130);
+};
+process.once('SIGINT', stopHostOnSignal);
+process.once('SIGTERM', stopHostOnSignal);
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 let pos = 0;
@@ -61,6 +74,7 @@ const timer = setInterval(() => void drainCtrl(), 150);
 void cap.exited.then(async (code) => {
   await drainCtrl();
   clearInterval(timer);
+  cast?.close();
   // eslint-disable-next-line no-console
   console.log(`done; ${seq} snapshots in ${OUT}; host exited ${code}`);
   process.exit(code);
