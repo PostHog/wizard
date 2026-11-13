@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.93.0](https://github.com/PostHog/wizard/compare/v2.92.1...v2.93.0) (2026-11-12)
+
+
+### Features
+
+* **tui:** add community tip linking the forum and Discord ([#1548](https://github.com/PostHog/wizard/issues/1548)) ([56b9098](https://github.com/PostHog/wizard/commit/56b9098275fae817de8a899b3668e3547df994c7))
+
+
+### Bug Fixes
+
+* **mcp:** install the direct MCP entry for Claude Code and Codex, never the AI plugin ([#1549](https://github.com/PostHog/wizard/issues/1549)) ([da4df45](https://github.com/PostHog/wizard/commit/da4df45dc26d5216eb1e0dacaa7758f2da169dc0))
+
 ## [2.92.1](https://github.com/PostHog/wizard/compare/v2.92.0...v2.92.1) (2026-11-10)
 
 
