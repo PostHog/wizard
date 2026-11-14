@@ -613,6 +613,46 @@ describe.each(['linear', 'task'] as const)('%s setup signals', (mode) => {
   });
 });
 
+describe("a program's [ABORT] on the linear Pi run", () => {
+  const withAbortCases = () => {
+    const inputs = runInputs(vi.fn(), null);
+    inputs.config.run.abortCases = [
+      {
+        match: /^no server code found$/i,
+        message: 'No server code found',
+        body: 'Run this command again from the project that runs your server.',
+      },
+    ];
+    return inputs;
+  };
+
+  it('ends the run with the reason, without a nudge', async () => {
+    state.hang = true;
+    state.tasks.set('1', { status: 'in_progress' });
+    state.text = 'Checked the project.\n[ABORT] no server code found';
+
+    await expect(piBackend.run(withAbortCases())).resolves.toEqual({
+      kind: 'abort',
+      classification: AgentErrorType.ABORT,
+      message: 'no server code found',
+    });
+    expect(state.prompts).toHaveLength(1);
+    expect(analytics.wizardCapture).toHaveBeenCalledWith(
+      'agent aborted',
+      expect.not.objectContaining({ source: 'gateway_policy' }),
+    );
+  });
+
+  it('ignores an [ABORT] line in the remark reply', async () => {
+    state.text = 'Wrote the first send.';
+    state.remark = '[ABORT] no server code found';
+
+    await expect(piBackend.run(withAbortCases())).resolves.toEqual({
+      kind: 'success',
+    });
+  });
+});
+
 describe('a task turn after complete_task', () => {
   const REFUSAL = '[posthog:abort] Request is out of scope';
   const runOrchestrated = (orchestrator: {

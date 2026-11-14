@@ -26,6 +26,7 @@ import { AgentErrorType } from '../../../agent-interface';
 import {
   AgentSignals,
   REMARK_INSTRUCTION,
+  abortReason as programAbortReason,
   policyAbortReason,
 } from '../../../signals';
 import { AgentOutputSignals } from '../../../output-signals';
@@ -360,11 +361,20 @@ export const piBackend: AgentHarness = {
     let timedOut = false;
     let timeoutAbort: Promise<void> | undefined;
     let abortReason: string | undefined;
+    let policyAborted = false;
     let remarkTurn = false;
     // The gateway's refusal marker ends the run from a work turn, never the remark.
     const policyAbort = (reply: string) => {
-      if (remarkTurn) return;
-      abortReason ??= policyAbortReason(reply);
+      if (remarkTurn || abortReason) return;
+      abortReason = policyAbortReason(reply);
+      policyAborted = abortReason !== undefined;
+      if (abortReason) cancellation?.abort();
+    };
+    // So does the [ABORT] line of a program that has abort cases.
+    const abortOnReply = (reply: string) => {
+      policyAbort(reply);
+      if (remarkTurn || abortReason || !config.abortCases?.length) return;
+      abortReason = programAbortReason(reply);
       if (abortReason) cancellation?.abort();
     };
     // Read by the catch path; undefined until setup creates the extension.
@@ -687,7 +697,7 @@ export const piBackend: AgentHarness = {
             turns.noteAssistantTurn(event.message);
             const blocks = textBlocks(event.message);
             const assistant = blocks.join('').trim();
-            policyAbort(assistant);
+            abortOnReply(assistant);
             // A schema-bound answer is the turn's last block, not the joined text.
             lastAssistantText = (blocks.at(-1) ?? '').trim();
             if (structured) {
@@ -859,7 +869,7 @@ export const piBackend: AgentHarness = {
         );
         captureAborted(
           terminal.classification,
-          abortReason ? 'gateway_policy' : undefined,
+          policyAborted ? 'gateway_policy' : undefined,
         );
         if (terminal.status === 401) {
           return {
