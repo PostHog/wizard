@@ -370,11 +370,15 @@ export const piBackend: AgentHarness = {
       policyAborted = abortReason !== undefined;
       if (abortReason) cancellation?.abort();
     };
-    // So does the [ABORT] line of a program that has abort cases.
+    // So does a line that starts with [ABORT], for a program that has abort cases.
+    // A reply that only mentions the marker mid-line keeps the run going.
     const abortOnReply = (reply: string) => {
       policyAbort(reply);
       if (remarkTurn || abortReason || !config.abortCases?.length) return;
-      abortReason = programAbortReason(reply);
+      const line = reply
+        .split(/\r?\n/)
+        .find((text) => /^[\s`*_>]*\[ABORT\]/.test(text));
+      abortReason = line && programAbortReason(line);
       if (abortReason) cancellation?.abort();
     };
     // Read by the catch path; undefined until setup creates the extension.
@@ -697,7 +701,7 @@ export const piBackend: AgentHarness = {
             turns.noteAssistantTurn(event.message);
             const blocks = textBlocks(event.message);
             const assistant = blocks.join('').trim();
-            abortOnReply(assistant);
+            abortOnReply(blocks.join('\n'));
             // A schema-bound answer is the turn's last block, not the joined text.
             lastAssistantText = (blocks.at(-1) ?? '').trim();
             if (structured) {

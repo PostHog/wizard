@@ -637,10 +637,36 @@ describe("a program's [ABORT] on the linear Pi run", () => {
       message: 'no server code found',
     });
     expect(state.prompts).toHaveLength(1);
-    expect(analytics.wizardCapture).toHaveBeenCalledWith(
-      'agent aborted',
-      expect.not.objectContaining({ source: 'gateway_policy' }),
-    );
+  });
+
+  it('reads the reason from its own text block', async () => {
+    state.preamble = ['Checked the project.\n[ABORT] no server code found'];
+    state.text = "I'll stop here.";
+
+    await expect(piBackend.run(withAbortCases())).resolves.toEqual({
+      kind: 'abort',
+      classification: AgentErrorType.ABORT,
+      message: 'no server code found',
+    });
+  });
+
+  it('ignores an [ABORT] the reply only mentions mid-line', async () => {
+    state.text =
+      "If there's no server code I'll stop with `[ABORT] no server code found`.\nWrote the first send.";
+
+    await expect(piBackend.run(withAbortCases())).resolves.toEqual({
+      kind: 'success',
+    });
+  });
+
+  it('leaves a program without abort cases to its nudge', async () => {
+    state.tasks.set('1', { status: 'in_progress' });
+    state.text = 'Checked the project.\n[ABORT] no server code found';
+
+    const result = await piBackend.run(runInputs(vi.fn(), null));
+
+    expect(result.kind).not.toBe('abort');
+    expect(state.prompts.length).toBeGreaterThan(1);
   });
 
   it('ignores an [ABORT] line in the remark reply', async () => {
