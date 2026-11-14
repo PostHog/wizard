@@ -96,6 +96,44 @@ describe('composeStepSkill', () => {
     );
   });
 
+  it('reads a pack with no rules key as a pack with no rules, as context-mill does', () => {
+    const composed = composeStepSkill(
+      step('{framework_docs}\n- own\n{framework_rules}\n'),
+      {
+        [VARIANT_FILE]: JSON.stringify({
+          id: 'nextjs-app-router',
+          displayName: 'Next.js App Router',
+          products: { integration: [] },
+        }),
+      },
+      'integration',
+    );
+
+    expect(composed['SKILL.md']).toBe(
+      '---\nname: integration-init\n---\n\n- own\n',
+    );
+  });
+
+  // The install scan reads lowercase extensions and skips dotfiles, so a page it would skip is never copied.
+  it.each([
+    'references/next-js.MD',
+    'references/.next-js.md',
+    'references/.hidden/next-js.md',
+    'references/next-js.txt',
+    '../next-js.md',
+  ])('refuses the page %s', (file) => {
+    expect(() =>
+      composeStepSkill(
+        step('{framework_docs}\n'),
+        pack(
+          { products: { integration: [{ file, description: 'Page' }] } },
+          { [file]: 'a page' },
+        ),
+        'integration',
+      ),
+    ).toThrow(/unusable reference name/);
+  });
+
   it('lets a later file replace an earlier one of the same name, as the build does', () => {
     const composed = composeStepSkill(
       step('{framework_docs}\n', { 'references/shared.md': 'the step page' }),
@@ -295,7 +333,7 @@ describe('completeSkillFromPack', () => {
 
   describe('removeSkillFolder', () => {
     it('removes the folder and leaves the rest of the boundary', () => {
-      removeSkillFolder(path.join(dir, 'skill'), dir);
+      removeSkillFolder(dir, 'skill', dir);
 
       expect(fs.readdirSync(dir)).toEqual(['pack']);
     });
@@ -305,7 +343,7 @@ describe('completeSkillFromPack', () => {
       () => {
         fs.symlinkSync(path.join(dir, 'pack'), path.join(dir, 'linked'));
 
-        removeSkillFolder(path.join(dir, 'linked'), dir);
+        removeSkillFolder(dir, 'linked', dir);
 
         expect(fs.readdirSync(dir).sort()).toEqual(['pack', 'skill']);
         expect(read('pack/references/next-js.md')).toBe('the library page');
@@ -319,15 +357,22 @@ describe('completeSkillFromPack', () => {
         fs.symlinkSync(path.join(dir, 'outside'), path.join(dir, 'cache'));
 
         expect(() =>
-          removeSkillFolder(path.join(dir, 'cache/skill'), dir),
+          removeSkillFolder(path.join(dir, 'cache'), 'skill', dir),
         ).toThrow(/through a link/);
         expect(fs.existsSync(path.join(dir, 'outside/skill'))).toBe(true);
       },
     );
 
-    it('refuses the boundary itself', () => {
-      expect(() => removeSkillFolder(dir, dir)).toThrow(/escapes its boundary/);
-      expect(fs.existsSync(path.join(dir, 'skill'))).toBe(true);
-    });
+    // The id comes from the menu, so one that names another folder must remove nothing.
+    it.each(['../pack', '..', '../../pack', 'a/b', '.hidden', ''])(
+      'removes nothing for the id %j',
+      (id) => {
+        expect(() =>
+          removeSkillFolder(path.join(dir, 'skill'), id, dir),
+        ).toThrow(/unusable skill id/);
+        expect(fs.readdirSync(dir).sort()).toEqual(['pack', 'skill']);
+        expect(read('skill/SKILL.md')).toBe(INIT['SKILL.md']);
+      },
+    );
   });
 });

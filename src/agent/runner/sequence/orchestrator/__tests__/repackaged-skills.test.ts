@@ -38,9 +38,9 @@ vi.mock('@shared/skill-install', async (importActual) => ({
 }));
 vi.mock('../../../../yara-hooks', async (importActual) => ({
   ...(await importActual<typeof import('../../../../yara-hooks')>()),
-  // The scan of a completed skill; the install's own scan is inside the mocked installer.
-  scanInstalledSkill: (skillDir: string) => {
-    scanned.push(skillDir);
+  // The scan of a completed skill's SKILL.md; the install's own scan is inside the mocked installer.
+  scanInstalledSkillFile: (file: string) => {
+    scanned.push(file);
     return scan();
   },
 }));
@@ -260,7 +260,10 @@ describe('repackaged skills', () => {
     expect(prompts.install).not.toContain('flow-install-nextjs');
     expect(unavailable()).toEqual([]);
     expect(scanned).toEqual([
-      path.join(dir, '.posthog-wizard-cache', 'skills', 'integration-install'),
+      path.join(
+        dir,
+        '.posthog-wizard-cache/skills/integration-install/SKILL.md',
+      ),
     ]);
     expect(analytics.setTag).toHaveBeenCalledWith(
       'orchestrator_skills',
@@ -282,6 +285,31 @@ describe('repackaged skills', () => {
     expect(completed.page).toBe('the library page');
     expect(unavailable()).toEqual([]);
   });
+
+  it.skipIf(process.platform === 'win32')(
+    'falls back to the skill the prompt names when the skills folder is a link',
+    async () => {
+      fs.mkdirSync(path.join(dir, 'outside'));
+      fs.mkdirSync(path.join(dir, '.posthog-wizard-cache'));
+      fs.symlinkSync(
+        path.join(dir, 'outside'),
+        path.join(dir, '.posthog-wizard-cache/skills'),
+      );
+
+      const result = await run();
+
+      expect(result.outcome).toBe(RunOutcome.Success);
+      expect(prompts.install).toContain('skills/flow-install-nextjs/SKILL.md');
+      expect(installs).not.toContain('integration-install');
+      expect(unavailable()).toContainEqual({
+        skill: 'integration-install',
+        replaces: 'flow-install',
+        reason:
+          'a skill path passes through a link: .posthog-wizard-cache/skills',
+        framework: 'nextjs',
+      });
+    },
+  );
 
   it('installs the skills the prompts name while the flag is off', async () => {
     skillsFlag = false;
@@ -345,6 +373,13 @@ describe('repackaged skills', () => {
         skills = without(SKILLS, 'integration-install');
       },
       'skill-not-found',
+    ],
+    [
+      'the run has no reference skill to complete it from',
+      () => {
+        skills = without(SKILLS, 'integration-nextjs');
+      },
+      'no framework pack',
     ],
     [
       'the scan rejects the completed skill',

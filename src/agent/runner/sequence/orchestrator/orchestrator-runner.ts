@@ -30,19 +30,15 @@ import {
   WIZARD_OAUTH_SCOPES,
   WIZARD_PROVISIONING_SCOPES,
 } from '@shared/constants';
-import {
-  completeSkillFromPack,
-  removeSkillFolder,
-} from '@shared/skill-composition';
 import { installSkillById } from '@shared/skill-install';
 import {
   formatYaraAbortMessage,
   scanInstalledSkill,
+  scanInstalledSkillFile,
 } from '../../../yara-hooks';
 import { fetchSkillMenu, type SkillEntry } from '@shared/skill-menu';
 import {
   FRAMEWORK_KEY,
-  resolveReplacement,
   resolveSkill,
   type MatchKeys,
 } from '@shared/skill-resolution';
@@ -102,6 +98,7 @@ import {
 } from './task-deadline';
 import { dependencyClosure, uncoveredBySink } from './queue-tools';
 import { deferSeededTasks } from './seeded-deps';
+import { repackagedSkillInstaller } from './repackaged-skills';
 import { queueTaskGraph, TaskGraphError } from './task-graph';
 import { LONGER_ASK_TIMEOUT_MS, shouldDisableAsk } from '@shared/ask-policy';
 import {
@@ -1387,93 +1384,32 @@ async function executeOrchestrator(
   // its agent prompt (the WHAT) and the mini-skills it needs (the HOW), then
   // runs on its own model and tools.
   const taskSkillsRoot = path.join(QUEUE_DIR_NAME, 'skills');
-  /** Install a replacement and complete it from the framework's pack; undefined sends the task to the skill its prompt names. */
-  const installReplacement = async (
-    replacement: SkillEntry,
-    name: string,
-  ): Promise<string | undefined> => {
-    const unavailable = (reason: string): undefined => {
-      logToFile(
-        `[orchestrator] repackaged skill ${replacement.id} unavailable for ${name}: ${reason}`,
-      );
-      analytics.wizardCapture('orchestrator repackaged skill unavailable', {
-        skill: replacement.id,
-        replaces: name,
-        reason: reason.slice(0, 200),
-        framework,
-      });
-      return undefined;
-    };
-    const product = replacement.frameworkReferences;
-    if (product && !referenceInstallPath)
-      return unavailable('no framework pack');
-    // A folder an earlier run left behind would pass its old pages off as the skill's own.
-    try {
-      removeSkillFolder(
-        path.join(input.installDir, taskSkillsRoot, replacement.id),
-        input.installDir,
-      );
-    } catch (error) {
-      return unavailable(
-        error instanceof Error ? error.message : String(error),
-      );
-    }
-    const result = await installSkillById(
-      replacement.id,
-      input.installDir,
-      boot.skillsBaseUrl,
-      {
+  // With the flag off, or a menu with no replacement, every task reads the skill its prompt names.
+  const installRepackagedSkill = repackagedSkills
+    ? repackagedSkillInstaller({
+        entries: menuSkillEntries,
+        installDir: input.installDir,
         skillsRoot: taskSkillsRoot,
-        scan: (dir) => scanInstalledSkill(dir, boot.triageProvider),
-      },
-    );
-    if (result.kind !== 'ok') return unavailable(result.kind);
-    if (product && referenceInstallPath) {
-      const completed = path.join(input.installDir, result.path);
-      try {
-        completeSkillFromPack(
-          completed,
-          path.join(input.installDir, referenceInstallPath),
-          product,
-          input.installDir,
-        );
-      } catch (error) {
-        return unavailable(
-          error instanceof Error ? error.message : String(error),
-        );
-      }
-      // Completing writes text the install scan never read, so the finished skill is scanned too.
-      const verdict = await scanInstalledSkill(
-        completed,
-        boot.triageProvider,
-      ).catch(
-        (error: unknown) =>
-          `scan failed: ${
-            error instanceof Error ? error.message : String(error)
-          }`,
-      );
-      if (verdict) {
-        rmSync(completed, { recursive: true, force: true });
-        return unavailable(verdict);
-      }
-    }
-    return result.path;
-  };
-  // A replacement installs once a run, so no task reads one that another is still completing.
-  const replacementInstalls = new Map<string, Promise<string | undefined>>();
-  const installRepackagedSkill = (
-    name: string,
-  ): Promise<string | undefined> => {
-    const replacement = repackagedSkills
-      ? resolveReplacement(menuSkillEntries, name)
-      : undefined;
-    if (!replacement) return Promise.resolve(undefined);
-    const started = replacementInstalls.get(replacement.id);
-    if (started) return started;
-    const install = installReplacement(replacement, name);
-    replacementInstalls.set(replacement.id, install);
-    return install;
-  };
+        referencePath: referenceInstallPath,
+        install: (skillId) =>
+          installSkillById(skillId, input.installDir, boot.skillsBaseUrl, {
+            skillsRoot: taskSkillsRoot,
+            scan: (dir) => scanInstalledSkill(dir, boot.triageProvider),
+          }),
+        scanFile: (file) => scanInstalledSkillFile(file, boot.triageProvider),
+        onUnavailable: (replacement, name, reason) => {
+          logToFile(
+            `[orchestrator] repackaged skill ${replacement.id} unavailable for ${name}: ${reason}`,
+          );
+          analytics.wizardCapture('orchestrator repackaged skill unavailable', {
+            skill: replacement.id,
+            replaces: name,
+            reason: reason.slice(0, 200),
+            framework,
+          });
+        },
+      })
+    : () => Promise.resolve(undefined);
   // Task agents can install durable skills mid-run (load_skill), and only the
   // framework reference docs earn a place — snapshot what was already there so
   // the sweeps remove exactly what this run added.

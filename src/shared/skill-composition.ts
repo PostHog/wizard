@@ -43,17 +43,21 @@ function parseVariant(text: string): PackVariant {
     typeof variant.displayName !== 'string' ||
     typeof products !== 'object' ||
     products === null ||
-    (variant.rules !== null && !isReference(variant.rules))
+    (variant.rules != null && !isReference(variant.rules))
   ) {
     throw new Error(`malformed ${VARIANT_FILE}`);
   }
-  return variant as PackVariant;
+  return { ...variant, rules: variant.rules ?? null } as PackVariant;
 }
 
-/** Where a pack's file lands in the skill: `references/<name>`, whatever folder the pack keeps it in. */
+/** One plain part of a path or one skill id: it starts with a letter or digit and has no separator. */
+const PLAIN_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
+
+/** Where a pack's file lands in the skill: `references/<name>`. A page the install scan would skip is refused: every part is plain and it ends in `.md`. */
 function referencePath(file: string): string {
-  const name = path.posix.basename(file);
-  if (!name || name === '.' || name === '..' || name.includes('\\')) {
+  const parts = file.split('/');
+  const name = parts[parts.length - 1];
+  if (!parts.every((part) => PLAIN_NAME.test(part)) || !name.endsWith('.md')) {
     throw new Error(`unusable reference name: ${file}`);
   }
   return `${REFERENCES_DIR}/${name}`;
@@ -167,12 +171,19 @@ function plainPath(
   return target;
 }
 
-/** Remove the skill folder at `skillDir`, or a link standing there, reaching it through no link below `boundaryDir`. */
-export function removeSkillFolder(skillDir: string, boundaryDir: string): void {
-  const dir = path.resolve(skillDir);
-  const parent = path.relative(path.resolve(boundaryDir), path.dirname(dir));
-  plainPath(boundaryDir, parent, 'folder');
-  fs.rmSync(dir, { recursive: true, force: true });
+/** Remove the folder of skill `id` under `skillsRoot`, or a link standing there; `id` is one plain name, and `skillsRoot` is reached through no link below `boundaryDir`. */
+export function removeSkillFolder(
+  skillsRoot: string,
+  id: string,
+  boundaryDir: string,
+): void {
+  if (!PLAIN_NAME.test(id)) throw new Error(`unusable skill id: ${id}`);
+  const root = plainPath(
+    boundaryDir,
+    path.relative(path.resolve(boundaryDir), path.resolve(skillsRoot)),
+    'folder',
+  );
+  fs.rmSync(path.join(root, id), { recursive: true, force: true });
 }
 
 /** Complete the step skill at `skillDir` from the pack at `packDir`, writing through no link below `boundaryDir`; throws and leaves the skill as it was otherwise. */

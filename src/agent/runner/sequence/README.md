@@ -60,16 +60,22 @@ family, menu id and framework on the recorded menu, which
 checks.
 
 With `wizard-agent-dag-skills` on, a task reads the skill that stands in for the
-one its prompt names: the menu entry whose `replaces` is that name. An entry
-with `frameworkReferences` is one skill written for every framework, and the
-runner installs it into an emptied folder, so a page an earlier run left
-there does not replace the pack's, completes it from the framework's reference
-skill with `@shared/skill-composition`, then scans the completed skill, since
-completing it writes text the install scan never read. When a replacement fails to
-install, the reference skill cannot complete it, or the scan rejects it or
-fails, the task reads the skill its prompt names and the run sends
-`orchestrator repackaged skill unavailable` with the reason. A completed skill
-the scan did not pass is deleted.
+one its prompt names: the menu entry whose `replaces` is that name.
+[repackaged-skills.ts](orchestrator/repackaged-skills.ts) installs it, once a
+run. An entry with `frameworkReferences` is one skill written for every
+framework. It is installed into an emptied folder, so a page an earlier run
+left there does not replace the pack's, and completed from the framework's
+reference skill with `@shared/skill-composition`. Completing it rewrites
+`SKILL.md`, the one file no install scan has read, so that file is scanned.
+
+The replacement's id comes from the menu and names a folder, so an id that is
+not one plain name is refused before anything is removed or installed. When a
+replacement cannot be used for any reason, a thrown error included, the task
+reads the skill its prompt names and the run sends
+`orchestrator repackaged skill unavailable` with the reason: no reference
+skill, a failed install, a pack that cannot complete it, a link on the way, or
+a scan that rejects it or fails. A completed skill the scan did not pass is
+deleted.
 Every event sent after the menu loads carries which a run read as the
 `orchestrator_skills` tag: `repackaged` when the flag is on and the menu has a
 replacement, `bundles` otherwise. The flag is independent of `wizard-agent-dag`.
