@@ -196,6 +196,7 @@ describe('withGatewayRemint', () => {
     turns: unknown[],
     remintedAt = Date.now() + HOUR,
   ) {
+    const controller = new AbortController();
     const prompts: string[] = [];
     const session = {
       prompt: vi.fn((text: string) => {
@@ -222,8 +223,9 @@ describe('withGatewayRemint', () => {
         modelId: 'openai/gpt-5.6-terra',
       }),
       continueText: 'continue',
+      signal: controller.signal,
     });
-    return { wrapped, registry, refreshAuth, prompts };
+    return { wrapped, registry, refreshAuth, prompts, controller };
   }
 
   it.each([
@@ -351,6 +353,22 @@ describe('withGatewayRemint', () => {
     await wrapped.prompt('do it');
 
     expect(refreshAuth).not.toHaveBeenCalled();
+    expect(prompts).toEqual(['do it']);
+  });
+
+  it('does not continue when the host cancels during the re-mint', async () => {
+    const { wrapped, registry, refreshAuth, prompts, controller } = harness(
+      gatewayAuth('phe_old', Date.now() - 1),
+      [rejected],
+    );
+    refreshAuth.mockImplementation(() => {
+      controller.abort();
+      return Promise.resolve(gatewayAuth('phe_new', Date.now() + HOUR));
+    });
+
+    await wrapped.prompt('do it');
+
+    expect(registry.registerProvider).not.toHaveBeenCalled();
     expect(prompts).toEqual(['do it']);
   });
 });
