@@ -17,6 +17,7 @@ import { slackCommand } from './commands/slack';
 import { uploadSourcemapsCommand } from './commands/upload-sourcemaps';
 import { errorTrackingCommand } from './commands/error-tracking';
 import { featureFlagsCommand } from './commands/feature-flags';
+import { transactionalEmailCommand } from './commands/transactional-email';
 import { skillCommand } from './commands/skill';
 import { supportCommand } from './commands/support';
 
@@ -39,6 +40,7 @@ export function runCli(): void {
     .use(uploadSourcemapsCommand)
     .use(errorTrackingCommand)
     .use(featureFlagsCommand)
+    .use(transactionalEmailCommand)
     .use(supportCommand)
     .use(skillCommand)
     .init();

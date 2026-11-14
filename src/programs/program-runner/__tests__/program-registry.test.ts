@@ -95,6 +95,7 @@ describe('program bindings', () => {
       'error-tracking': orchestratorOnPi,
       'feature-flags': orchestratorOnPi,
       'agent-skill': linearOnSol,
+      'transactional-email': linearOnSol,
       support: orchestratorOnPi,
     });
   });
