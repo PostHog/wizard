@@ -75,6 +75,9 @@ export interface FrameworkMetadata<
   /** Label for the gathered variant, if gathering found a more specific name. */
   getDetectedFrameworkLabel?: (context: TContext) => string | undefined;
 
+  /** The gathered variant as a stable id, such as `pages-router` or `expo`; undefined when the context settles none. */
+  getVariant?: (context: TContext) => string | undefined;
+
   /** Optional additional MCP servers for this framework (e.g., Svelte MCP). */
   additionalMcpServers?: Record<string, { url: string }>;
 

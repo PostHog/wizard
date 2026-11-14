@@ -73,6 +73,9 @@ export interface ProgramSession {
   /** PostHog found in the project's dependencies. A signal, not a verified install. */
   posthogSdkDetected: boolean;
 
+  /** Paths the MCP scan suggests as servers, relative to `installDir`. Empty when it finds none. */
+  mcpServerCandidates: readonly string[];
+
   // From OAuth
   credentials: Credentials | null;
 

@@ -45,6 +45,8 @@ export interface SkillProgramOptions {
   requires?: string[];
   /** Override the default outro. Receives the same args as ProgramRun.buildOutroData. */
   buildOutroData?: ProgramRun['buildOutroData'];
+  /** Outro bullets on the orchestrated sequence. Same args as ProgramRun.buildOutroNextSteps. */
+  buildOutroNextSteps?: ProgramRun['buildOutroNextSteps'];
   /** Known `[ABORT] <reason>` cases the skill can emit. */
   abortCases?: AbortCase[];
 }
@@ -66,6 +68,7 @@ export function createSkillProgram(opts: SkillProgramOptions): ProgramConfig {
       spinnerMessage: opts.spinnerMessage,
       estimatedDurationMinutes: opts.estimatedDurationMinutes,
       buildOutroData: opts.buildOutroData,
+      buildOutroNextSteps: opts.buildOutroNextSteps,
       abortCases: opts.abortCases,
     },
     requires: opts.requires,

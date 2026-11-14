@@ -1,5 +1,91 @@
 # Changelog
 
+## [2.94.0](https://github.com/PostHog/wizard/compare/v2.93.0...v2.94.0) (2026-11-13)
+
+
+### Features
+
+* **analytics:** report detected email providers and identify signup runs ([#1506](https://github.com/PostHog/wizard/issues/1506)) ([b311f2f](https://github.com/PostHog/wizard/commit/b311f2f2990aa0de15c2f58e90e5bb8de784b43c))
+* **e2e-harness:** record the real TUI to an asciicast ([#1557](https://github.com/PostHog/wizard/issues/1557)) ([00c63a8](https://github.com/PostHog/wizard/commit/00c63a8b6d4398f1b0e431e1d92f19f21247eddc))
+* **orchestrator:** queue a flow with no planner prompt from its frontmatter ([#1553](https://github.com/PostHog/wizard/issues/1553)) ([1097024](https://github.com/PostHog/wizard/commit/1097024708410e4bc9b211b79771b8487199c1d0))
+* **programs:** bundle each orchestrator flow's agent prompts ([#1554](https://github.com/PostHog/wizard/issues/1554)) ([b715077](https://github.com/PostHog/wizard/commit/b71507732f116e8d0a497265689680a36be2ea81))
+* **skills:** pick task skills with one shared resolver, behind wizard-agent-dag ([#1551](https://github.com/PostHog/wizard/issues/1551)) ([126ded2](https://github.com/PostHog/wizard/commit/126ded22a46680d2a9382378ff1211e280b72b33))
+* **traits:** describe a project by its traits and hand the runner its match keys ([#1552](https://github.com/PostHog/wizard/issues/1552)) ([3032557](https://github.com/PostHog/wizard/commit/3032557b7ecd01adde5d397863b85173b2c1c129))
+
+## [2.93.0](https://github.com/PostHog/wizard/compare/v2.92.1...v2.93.0) (2026-11-12)
+
+
+### Features
+
+* **tui:** add community tip linking the forum and Discord ([#1548](https://github.com/PostHog/wizard/issues/1548)) ([56b9098](https://github.com/PostHog/wizard/commit/56b9098275fae817de8a899b3668e3547df994c7))
+
+
+### Bug Fixes
+
+* **mcp:** install the direct MCP entry for Claude Code and Codex, never the AI plugin ([#1549](https://github.com/PostHog/wizard/issues/1549)) ([da4df45](https://github.com/PostHog/wizard/commit/da4df45dc26d5216eb1e0dacaa7758f2da169dc0))
+
+## [2.92.1](https://github.com/PostHog/wizard/compare/v2.92.0...v2.92.1) (2026-11-10)
+
+
+### Bug Fixes
+
+* **detection:** keep a failed warehouse pass from ending the run ([#1547](https://github.com/PostHog/wizard/issues/1547)) ([edb261f](https://github.com/PostHog/wizard/commit/edb261f464d9466274639b980a2f87714bbcc037))
+* **posthog-integration:** detect warehouse sources in headless runs ([#1545](https://github.com/PostHog/wizard/issues/1545)) ([372ce97](https://github.com/PostHog/wizard/commit/372ce97db05a1807afef9c3387c3b1a783b07159))
+
+## [2.92.0](https://github.com/PostHog/wizard/compare/v2.91.2...v2.92.0) (2026-11-10)
+
+
+### Features
+
+* add wizard support command for PostHog Support ([#1539](https://github.com/PostHog/wizard/issues/1539)) ([017c760](https://github.com/PostHog/wizard/commit/017c7607b58c6c388b8b89a1042f8364403b01aa))
+* **cli:** add --context-mill-version to pin skills to a release ([#1541](https://github.com/PostHog/wizard/issues/1541)) ([fdf3553](https://github.com/PostHog/wizard/commit/fdf35535ae06440b07f333737ba3726bc99593ea))
+* **warehouse:** add the warehouse destination program ([#1521](https://github.com/PostHog/wizard/issues/1521)) ([876378d](https://github.com/PostHog/wizard/commit/876378d628ab222ef71e1c8c5ce1d190d7f4c5c5))
+
+## [2.91.2](https://github.com/PostHog/wizard/compare/v2.91.1...v2.91.2) (2026-11-07)
+
+
+### Bug Fixes
+
+* keep package managers and global tools on the wizard's PATH ([#1537](https://github.com/PostHog/wizard/issues/1537)) ([50e6527](https://github.com/PostHog/wizard/commit/50e6527df9734fff32033706de78adc60332be16))
+
+## [2.91.1](https://github.com/PostHog/wizard/compare/v2.91.0...v2.91.1) (2026-11-07)
+
+
+### Bug Fixes
+
+* avoid running project files as Python, Git, or other installed tools ([#1534](https://github.com/PostHog/wizard/issues/1534)) ([11bd632](https://github.com/PostHog/wizard/commit/11bd632a2cbaca27c469192097823c424b15c393))
+* drop project bin folders from the wizard's PATH at startup ([#1536](https://github.com/PostHog/wizard/issues/1536)) ([e4bab9c](https://github.com/PostHog/wizard/commit/e4bab9c0cddeb1a35dbdfb9ff42e44b484b61cf7))
+
+## [2.91.0](https://github.com/PostHog/wizard/compare/v2.90.1...v2.91.0) (2026-11-06)
+
+
+### Features
+
+* mcp analytics default run ([#1529](https://github.com/PostHog/wizard/issues/1529)) ([9bf57be](https://github.com/PostHog/wizard/commit/9bf57be480678eccb96b5439b1a16c5fc11863f7))
+
+## [2.90.1](https://github.com/PostHog/wizard/compare/v2.90.0...v2.90.1) (2026-11-05)
+
+
+### Bug Fixes
+
+* **orchestrator:** cap bash commands and enforce task deadlines ([#1525](https://github.com/PostHog/wizard/issues/1525)) ([0f188c7](https://github.com/PostHog/wizard/commit/0f188c757850f781facbcd326427eb3ba087ab8b))
+
+## [2.90.0](https://github.com/PostHog/wizard/compare/v2.89.0...v2.90.0) (2026-11-05)
+
+
+### Features
+
+* **mcp-analytics:** support Rust servers in the wizard command ([#1519](https://github.com/PostHog/wizard/issues/1519)) ([9a55731](https://github.com/PostHog/wizard/commit/9a557318acbee6468e4a188fec854aadcecb9ea0))
+* **replay-vision:** show deploy and replay checks in the outro ([#1505](https://github.com/PostHog/wizard/issues/1505)) ([b3ee130](https://github.com/PostHog/wizard/commit/b3ee1307d481c3e964550bc26d29ca16c62d4ad6))
+
+
+### Bug Fixes
+
+* **agent:** match an [ABORT] reason the model decorated ([#1522](https://github.com/PostHog/wizard/issues/1522)) ([a222a6b](https://github.com/PostHog/wizard/commit/a222a6b0a565b53d146680ea2eac31cb834664a2))
+* **agent:** tell a task agent to call complete_task next after publish_handoff ([#1468](https://github.com/PostHog/wizard/issues/1468)) ([e0fb703](https://github.com/PostHog/wizard/commit/e0fb70369deefef67490c458047d107c6d0d2636))
+* **harness:** deliver typed keys after the last frame's effects run ([#1523](https://github.com/PostHog/wizard/issues/1523)) ([632e9a9](https://github.com/PostHog/wizard/commit/632e9a9ec74917b90760ef293cc8c7cd599e4990))
+* **mcp-analytics:** suggest server apps before setup ([#1239](https://github.com/PostHog/wizard/issues/1239)) ([222e6fd](https://github.com/PostHog/wizard/commit/222e6fdf1173e6bef2f7ea7c31f63ab39b9edbad))
+
 ## [2.89.0](https://github.com/PostHog/wizard/compare/v2.88.0...v2.89.0) (2026-10-29)
 
 

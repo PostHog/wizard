@@ -357,6 +357,17 @@ export const McpScreen = ({
   const pluginNames = oauthFlow
     ? localClients.filter((c) => c.supportsPlugin).map((c) => c.name)
     : [];
+  // OAuth clients whose existing plugin already serves PostHog: a direct entry
+  // next to it would give the editor two copies of every PostHog tool.
+  const existingPlugin = (client: McpClientInfo) =>
+    oauthFlow &&
+    !client.supportsPlugin &&
+    client.pluginBundlesMcp &&
+    client.pluginInstalled === true;
+  const viaPluginNames = [
+    ...pluginNames,
+    ...localClients.filter(existingPlugin).map((c) => c.name),
+  ];
 
   useEffect(() => {
     void (async () => {
@@ -416,10 +427,20 @@ export const McpScreen = ({
     }
   };
 
-  // A direct entry for everyone whose plugin doesn't already ship the MCP
-  // server (codex's plugin is skills-only; claude's bundles the server).
+  // A direct entry for everyone not getting, or already having, a plugin that
+  // ships the MCP server (codex's plugin is skills-only; claude's bundles it).
+  // TODO(mcp-plugin): drop the `existingPlugin` half once the wizard installs
+  // the plugin again; `supportsPlugin` covers it then.
   const needsDirect = (client: McpClientInfo) =>
-    !oauthFlow || !client.pluginBundlesMcp;
+    !oauthFlow ||
+    !client.pluginBundlesMcp ||
+    (!client.supportsPlugin && !existingPlugin(client));
+
+  /** The plugin already on the machine, reported as already installed. */
+  const existingPluginResults = (local: McpClientInfo[]): McpClientResult[] =>
+    local
+      .filter(existingPlugin)
+      .map((c) => ({ name: c.name, status: McpClientStatus.Unchanged }));
 
   /** Show the results and arm Enter with what ended up installed. */
   const settle = (
@@ -468,7 +489,8 @@ export const McpScreen = ({
       ? local.filter((c) => c.supportsPlugin).map((c) => c.name)
       : [];
     const mcpResult: McpClientResult[] = [];
-    const pluginResult: McpClientResult[] = [];
+    const pluginResult: McpClientResult[] = existingPluginResults(local);
+    setPluginResults([...pluginResult]);
 
     for (const client of local) {
       if (!needsDirect(client)) continue;
@@ -727,7 +749,8 @@ export const McpScreen = ({
             options={clients.map((c) => ({
               label: c.name,
               value: c.name,
-              hint: c.supportsPlugin ? 'plugin + MCP' : 'MCP',
+              // What removal will touch, whatever the wizard installs today.
+              hint: c.pluginInstalled ? 'plugin + MCP' : 'MCP',
             }))}
             onSelect={(selected) => {
               const names = Array.isArray(selected) ? selected : [selected];
@@ -757,7 +780,7 @@ export const McpScreen = ({
               clients={localClients}
               rows={rows}
               results={allResults}
-              pluginNames={pluginNames}
+              pluginNames={viaPluginNames}
             />
           </Box>
         )}
@@ -769,7 +792,7 @@ export const McpScreen = ({
                 clients={localClients}
                 rows={rows}
                 results={allResults}
-                pluginNames={pluginNames}
+                pluginNames={viaPluginNames}
               />
             </Box>
             {loginCommands.length > 0 && (

@@ -1,7 +1,9 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { QueueStore } from '@agent/runner/sequence/orchestrator/queue';
 import {
+  hasRunningSibling,
   promoteReferenceSkill,
   sweepRunInstalledSkills,
 } from '@agent/runner/sequence/orchestrator/orchestrator-runner';
@@ -81,6 +83,40 @@ describe('sweepRunInstalledSkills', () => {
         undefined,
       ),
     ).not.toThrow();
+  });
+});
+
+describe('hasRunningSibling', () => {
+  let dir: string;
+  let store: QueueStore;
+
+  beforeEach(() => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'skill-sweep-queue-'));
+    store = new QueueStore(dir, 'run-1');
+  });
+
+  afterEach(() => fs.rmSync(dir, { recursive: true, force: true }));
+
+  it('holds the sweep until the last task running together finishes', () => {
+    const dashboard = store.enqueue({ type: 'dashboard' });
+    const aio = store.enqueue({ type: 'ai-observability' });
+    store.start(dashboard.id);
+    store.start(aio.id);
+
+    // dashboard finishes first: aio may still be reading its skill.
+    store.complete(dashboard.id);
+    expect(hasRunningSibling(store.list(), dashboard.id)).toBe(true);
+
+    // aio ends without reporting, still marked running: only itself counts.
+    expect(hasRunningSibling(store.list(), aio.id)).toBe(false);
+  });
+
+  it('ignores tasks that have not started', () => {
+    const install = store.enqueue({ type: 'install' });
+    store.enqueue({ type: 'report', dependsOn: [install.id] });
+    store.start(install.id);
+
+    expect(hasRunningSibling(store.list(), install.id)).toBe(false);
   });
 });
 

@@ -242,12 +242,23 @@ export const ERROR_CATALOG: Record<ErrorCode, ErrorCatalogEntry> = {
     group: 'agent',
     retry: 'yes',
     description:
-      'The orchestrator drained with zero tasks — the seed step got no usable model output.',
+      "The orchestrator drained with zero tasks: the seed step got no usable model output, or the flow's frontmatter left no task to queue.",
   },
   [ErrorCodes.AgentOrchestratorSinkInvariant]: {
     group: 'agent',
     retry: 'no',
     description: 'The orchestrator plan failed the sink coverage invariant.',
+  },
+  [ErrorCodes.AgentOrchestratorTaskGraph]: {
+    group: 'agent',
+    retry: 'no',
+    description:
+      "The orchestrator could not queue the graph a flow's frontmatter declares.",
+  },
+  [ErrorCodes.AgentOrchestratorNoPlanner]: {
+    group: 'agent',
+    retry: 'no',
+    description: 'The flow the orchestrator fetched has no planner prompt.',
   },
   [ErrorCodes.GatewayMintRefused]: {
     group: 'gateway',

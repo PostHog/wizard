@@ -19,7 +19,10 @@ import type {
   QueueStore,
   QueuedTask,
 } from './runner/sequence/orchestrator/queue';
-import type { ResolvedTask } from './runner/sequence/orchestrator/executor';
+import type {
+  ResolvedTask,
+  TaskTimeoutBehavior,
+} from './runner/sequence/orchestrator/executor';
 import type { HostResolution } from '@shared/host-resolution';
 import {
   isThinkingLevel,
@@ -250,6 +253,10 @@ export interface AgentPrompt {
   runnerSeeded: boolean;
   /** Marks a supplementary task: terminal failure unblocks dependents and never fails the run. */
   optional: boolean;
+  /** Wall-clock budget for one task attempt, including harness setup and cleanup. */
+  timeoutMs?: number;
+  /** What a required task does at its deadline; set whenever `timeoutMs` is. */
+  onTimeout?: TaskTimeoutBehavior;
   /** Per-harness model/effort; both profiles also require gateway admission and prompt compatibility. */
   modelPi?: string;
   effortPi?: ThinkingLevel;
@@ -268,6 +275,9 @@ export interface AgentPrompt {
    *   planner runs, so it cannot name ids; the runner resolves these types to
    *   the ids the planner produced and applies them (see `seeded-deps.ts`).
    *   Empty means "after everything that is not the sink".
+   *
+   * In a flow with no planner, every task's list is authoritative: the runner
+   * queues the graph they declare (see `task-graph.ts`).
    */
   dependsOn: string[];
   body: string;
@@ -305,8 +315,13 @@ export interface AgentRegistry {
   readonly excludedTypes: string[];
   /** The flow's planner, the one prompt marked `seed: true` in its frontmatter. */
   readonly seed?: AgentPrompt;
+  /** The graph the flow's frontmatter declares: every task, excluded ones included, with what it runs after. */
+  readonly graph: readonly GraphTask[];
   get(type: string): AgentPrompt | undefined;
 }
+
+/** One task of a flow's declared graph. */
+export type GraphTask = Pick<AgentPrompt, 'type' | 'dependsOn' | 'sink'>;
 
 /** The registry for one flow's prompts. Pure; the loader feeds it the fetched set. */
 export function buildRegistry(
@@ -338,9 +353,8 @@ export function buildRegistry(
     });
   const byType = new Map(inFlow.map((p) => [p.type, p]));
   const tasks = inFlow.filter((p) => !p.seed);
-  const flowTypes = new Set(
-    prompts.filter((p) => p.flow === flow && !p.seed).map((p) => p.type),
-  );
+  const flowTasks = prompts.filter((p) => p.flow === flow && !p.seed);
+  const flowTypes = new Set(flowTasks.map((p) => p.type));
   return {
     types: tasks.map((p) => p.type),
     enqueueableTypes: tasks.filter((p) => !p.runnerSeeded).map((p) => p.type),
@@ -349,6 +363,11 @@ export function buildRegistry(
     optionalTypes: tasks.filter((p) => p.optional).map((p) => p.type),
     excludedTypes: [...excluded].filter((t) => flowTypes.has(t)),
     seed: inFlow.find((p) => p.seed),
+    graph: flowTasks.map(({ type, dependsOn, sink }) => ({
+      type,
+      dependsOn,
+      sink,
+    })),
     get: (type) => byType.get(type),
   };
 }
@@ -420,6 +439,50 @@ export function parseAgentPrompt(
   }
 
   const str = (v: unknown) => (typeof v === 'string' ? v : undefined);
+  const timeoutSeconds = fields.timeoutSeconds;
+  let timeoutMs: number | undefined;
+  if (timeoutSeconds !== undefined) {
+    const seconds = Number(timeoutSeconds);
+    // Budgets are remote data: a typo drops the budget, never the whole prompt.
+    if (
+      typeof timeoutSeconds === 'string' &&
+      Number.isInteger(seconds) &&
+      seconds > 0 &&
+      seconds <= 86_400
+    ) {
+      timeoutMs = seconds * 1000;
+    } else {
+      logToFile(
+        `[agent-prompt] ${fallbackType}: ignoring invalid timeoutSeconds "${String(
+          timeoutSeconds,
+        )}"`,
+      );
+      analytics.wizardCapture('agent prompt invalid timeout', {
+        task_type: fallbackType,
+        value: String(timeoutSeconds),
+      });
+    }
+  }
+  let onTimeout: TaskTimeoutBehavior | undefined;
+  if (timeoutMs !== undefined) {
+    const declared = fields.onTimeout;
+    if (declared === 'continue' || declared === 'fail') {
+      onTimeout = declared;
+    } else {
+      // An undeclared landing must not fail the run: review has already written the integration.
+      onTimeout = 'continue';
+      logToFile(
+        `[agent-prompt] ${fallbackType}: invalid onTimeout "${String(
+          declared,
+        )}", using continue`,
+      );
+      analytics.wizardCapture('agent prompt invalid timeout', {
+        task_type: fallbackType,
+        key: 'onTimeout',
+        value: String(declared),
+      });
+    }
+  }
   // Effort is remote data — reject typos here so downstream carries ThinkingLevel.
   const effort = (v: unknown, key: string): ThinkingLevel | undefined => {
     if (v === undefined) return undefined;
@@ -442,6 +505,8 @@ export function parseAgentPrompt(
     sink: fields.sink === 'true',
     runnerSeeded: fields.runnerSeeded === 'true',
     optional: fields.optional === 'true',
+    timeoutMs,
+    onTimeout,
     modelPi: str(fields.model_pi),
     effortPi: effort(fields.effort_pi, 'effort_pi'),
     modelSdk: str(fields.model_sdk),
@@ -457,6 +522,21 @@ export function parseAgentPrompt(
 async function fetchText(url: string): Promise<string> {
   const res = await fetchWithRetry(url);
   return res.text();
+}
+
+/** The registry for one flow from prompts the wizard bundles, keyed by task type and parsed as the fetched ones are. */
+export function bundledRegistry(
+  prompts: Readonly<Record<string, string>>,
+  flow: string,
+  opts?: Parameters<typeof buildRegistry>[2],
+): AgentRegistry {
+  return buildRegistry(
+    Object.entries(prompts).map(([type, text]) =>
+      parseAgentPrompt(text, type, flow),
+    ),
+    flow,
+    opts,
+  );
 }
 
 /**
@@ -552,6 +632,9 @@ function renderHandoffContext(task: QueuedTask, store: QueueStore): string {
     if (handoff.reportSection) {
       lines.push(`- report section:\n${handoff.reportSection}`);
     }
+    if (handoff.packages?.length) {
+      lines.push(`- packages to install: ${handoff.packages.join(', ')}`);
+    }
     lines.push('');
   }
   if (lines.length === 0) return '';
@@ -586,6 +669,8 @@ export function resolveTask(
     ...agentRunTools(prompt),
     prompt: body,
     skills: prompt.skills,
+    timeoutMs: prompt.timeoutMs,
+    onTimeout: prompt.onTimeout,
   };
 }
 

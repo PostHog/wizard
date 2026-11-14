@@ -91,9 +91,13 @@ describe('top-level command shapes', () => {
     expect(replayVisionCommand.children).toBeUndefined();
   });
 
-  test('warehouse is a flat skill command', () => {
-    expect(warehouseCommand.name).toBe('warehouse');
+  test('warehouse registers as a family with a [skill] positional', () => {
+    expect(warehouseCommand.name).toBe('warehouse [skill]');
     expect(warehouseCommand.children).toBeUndefined();
+    expect(warehouseCommand.interactiveDefault).toBeDefined();
+    expect(warehouseCommand.options).toMatchObject({
+      'install-dir': expect.any(Object),
+    });
   });
 
   test('audit exposes the shared skill options on the parent', () => {
@@ -182,6 +186,60 @@ describe('dispatchFamily', () => {
   });
 });
 
+describe('warehouse family', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  test.each([
+    ['bare', undefined, Program.WarehouseSource, 'data-warehouse-source-setup'],
+    [
+      'source',
+      'source',
+      Program.WarehouseSource,
+      'data-warehouse-source-setup',
+    ],
+    [
+      'destination',
+      'destination',
+      Program.WarehouseDestination,
+      'data-warehouse-destination-setup',
+    ],
+  ])(
+    '`wizard warehouse` %s runs its program without the registry',
+    async (_name, skill, programId, skillId) => {
+      warehouseCommand.handler!(
+        makeArgv({ installDir: '/tmp/some-app', skill }),
+      );
+      await vi.waitFor(() => expect(mockRunWizard).toHaveBeenCalledTimes(1));
+      const [config, opts] = mockRunWizard.mock.calls[0] as [
+        { id?: string; skillId?: string },
+        Record<string, unknown>,
+      ];
+      expect(config.id).toBe(programId);
+      expect(config.skillId).toBe(skillId);
+      expect(opts.installDir).toBe('/tmp/some-app');
+      expect(mockFetchSkillMenu).not.toHaveBeenCalled();
+    },
+  );
+
+  test('the interactive default runs source, not a picker', async () => {
+    await warehouseCommand.interactiveDefault!(makeArgv());
+    const [config] = mockRunWizard.mock.calls[0] as [{ id?: string }];
+    expect(config.id).toBe(Program.WarehouseSource);
+    expect(mockFetchSkillMenu).not.toHaveBeenCalled();
+  });
+
+  test('routes `warehouse destination --ci` through runWizardCI', async () => {
+    await dispatchFamily(
+      'warehouse',
+      makeArgv({ skill: 'destination', ci: true }),
+    );
+    expect(mockRunWizardCI).toHaveBeenCalledTimes(1);
+    expect(mockRunWizard).not.toHaveBeenCalled();
+  });
+});
+
 describe('flat skill commands', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -219,16 +277,6 @@ describe('flat skill commands', () => {
     replayVisionCommand.handler!(makeArgv({ debug: true }));
     const [config] = mockRunWizard.mock.calls[0] as [{ skillId?: string }];
     expect(config.skillId).toBe('replay-vision-setup');
-  });
-
-  test('warehouse dispatches with data-warehouse-source-setup skillId', () => {
-    warehouseCommand.handler!(makeArgv({ installDir: '/tmp/some-app' }));
-    const [config, opts] = mockRunWizard.mock.calls[0] as [
-      { skillId?: string },
-      Record<string, unknown>,
-    ];
-    expect(config.skillId).toBe('data-warehouse-source-setup');
-    expect(opts.installDir).toBe('/tmp/some-app');
   });
 });
 

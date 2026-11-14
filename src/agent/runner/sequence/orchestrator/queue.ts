@@ -152,6 +152,8 @@ export interface TaskHandoff {
   conflict?: string;
   /** A finished section for the run's report, written by the task that owns the subject. */
   reportSection?: string;
+  /** Packages the task's edits import that it left for a later task to install. */
+  packages?: string[];
 }
 
 export interface EnqueueInput {
@@ -394,6 +396,16 @@ export class QueueStore {
     const t = this.require(id);
     t.error = error;
     return this.finish(id, TaskStatus.Failed, handoff);
+  }
+
+  /** Fail with no attempts left, so the task never retries and an optional one unblocks dependents. */
+  failTerminally(
+    id: string,
+    error: { type: string; message: string },
+  ): QueuedTask {
+    const t = this.require(id);
+    t.maxAttempts = t.attempts;
+    return this.fail(id, error);
   }
 
   /** Put a failed/running task back to pending for a retry within the run. */

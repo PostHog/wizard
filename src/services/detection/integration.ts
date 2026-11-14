@@ -21,6 +21,8 @@ import { detectFramework } from './framework';
 import { discoverFeatures } from './features';
 import { checkFrameworkVersion, gatherFrameworkContext } from './context';
 import { analytics } from '@utils/analytics';
+import { logToFile } from '@utils/debug';
+import { isFlaggedInput } from '@agent';
 import {
   getCodebaseScan,
   scannedWarehouseSources,
@@ -30,6 +32,7 @@ import {
   getDetectedWarehouseSources,
 } from '../warehouse-sources/detect';
 import { findPackageJsons } from './package-scanning';
+import { findMcpServers } from '../mcp-servers';
 
 // Session-free, so runProgram can stamp without loading the session.
 
@@ -39,6 +42,8 @@ export async function detectPostHogIntegration(
   const session = ctx.session;
   const installDir = session.installDir;
 
+  // The scan reads source files, so it runs beside framework detection.
+  const mcpServer = detectMcpServer(ctx, installDir);
   const detectedIntegration = await detectFramework(installDir);
 
   if (detectedIntegration) {
@@ -87,8 +92,9 @@ export async function detectPostHogIntegration(
     ctx.addDiscoveredFeature(feature);
   }
 
-  await offerScannedWarehouseSources(ctx);
+  await recordScannedWarehouseSources(ctx);
   detectExistingPostHog(ctx, installDir);
+  await mcpServer;
 
   ctx.setDetectionComplete();
 }
@@ -112,17 +118,18 @@ type WarehouseScanState = 'ok' | 'failed';
 /**
  * Stash the run's scanned warehouse sources (Postgres, Stripe, Hubspot, …)
  * for a `wizard warehouse` suggestion on the outro. The scan itself runs
- * unconditionally before `onReady`, before the intro screen has asked about
- * sharing. Reporting what it found is a separate, later concern. See
- * `reportWarehouseSourcesDetected` below.
+ * unconditionally before `onReady` or `ciPreRun`, before the intro screen has
+ * asked about sharing. Reporting what it found is a separate, later concern.
+ * See `reportWarehouseSourcesDetected` below.
  *
  * Deliberately a suggestion, not an inline agent run: a second credential-
  * collecting agent run before the outro could end the run on any of its
  * failure paths and cost the user the success outro on a run where PostHog
- * installed fine.
+ * installed fine. For the same reason it never throws: a failure records
+ * 'failed' and detection goes on.
  */
-async function offerScannedWarehouseSources(
-  ctx: ProgramReadyContext,
+async function recordScannedWarehouseSources(
+  ctx: Pick<ProgramReadyContext, 'session' | 'setFrameworkContext'>,
 ): Promise<void> {
   const scan = getCodebaseScan(ctx.session);
   if (!scan) return;
@@ -130,12 +137,45 @@ async function offerScannedWarehouseSources(
     ctx.setFrameworkContext(WAREHOUSE_SCAN_STATE_KEY, 'failed');
     return;
   }
-  // Before the empty-list return: a scan that found nothing still ran, and
-  // those rows are the denominator.
-  ctx.setFrameworkContext(WAREHOUSE_SCAN_STATE_KEY, 'ok');
-  const sources = await scannedWarehouseSources(ctx.session);
+  try {
+    const sources = await scannedWarehouseSources(ctx.session);
+    // Set even when empty: a scan that found nothing still ran, and those
+    // rows are the denominator.
+    ctx.setFrameworkContext(WAREHOUSE_SCAN_STATE_KEY, 'ok');
+    if (sources.length === 0) return;
+    ctx.setFrameworkContext(DETECTED_WAREHOUSE_SOURCES_KEY, sources);
+  } catch (error) {
+    ctx.setFrameworkContext(WAREHOUSE_SCAN_STATE_KEY, 'failed');
+    analytics.captureException(
+      error instanceof Error ? error : new Error(String(error)),
+      { step: 'recordScannedWarehouseSources' },
+    );
+  }
+}
+
+/**
+ * The headless half of the detect step's warehouse pass. Nobody can answer a
+ * credential prompt in a headless run (`warehouseSeedTasks` queues nothing
+ * there), so the run only names what it found and the user connects it from
+ * PostHog.
+ */
+export async function noteScannedWarehouseSources(
+  session: ProgramSession,
+  log: { info(message: string): void },
+): Promise<void> {
+  await recordScannedWarehouseSources({
+    session,
+    setFrameworkContext: (key, value) => {
+      session.frameworkContext[key] = value;
+    },
+  });
+  const sources = getDetectedWarehouseSources(session);
   if (sources.length === 0) return;
-  ctx.setFrameworkContext(DETECTED_WAREHOUSE_SOURCES_KEY, sources);
+  log.info(
+    `Detected data sources PostHog can import: ${sources
+      .map((s) => s.label)
+      .join(', ')}. Connect them in PostHog after the run.`,
+  );
 }
 
 /**
@@ -213,5 +253,40 @@ export function detectExistingPostHog(
       { step: 'detectExistingPosthog' },
     );
     ctx.setPosthogSdkDetected(false);
+  }
+}
+
+/** Candidate paths reach prompts, so drop flagged ones. With no scanner, keep them: the fact escapes each path. */
+async function withoutFlaggedPaths(
+  paths: readonly string[],
+): Promise<string[]> {
+  try {
+    const kept: string[] = [];
+    for (const path of paths) {
+      if (!(await isFlaggedInput(path))) kept.push(path);
+    }
+    return kept;
+  } catch (error) {
+    logToFile('[detection] MCP path scan failed:', error);
+    return [...paths];
+  }
+}
+
+/** The servers the mcp-analytics scan suggests in installDir. A failed scan suggests none. */
+export async function detectMcpServer(
+  ctx: Pick<ProgramReadyContext, 'setMcpServerCandidates'>,
+  installDir: string,
+): Promise<void> {
+  try {
+    const scan = await findMcpServers(installDir);
+    const candidates = await withoutFlaggedPaths(scan.candidates);
+    logToFile(`[detection] MCP scan: ${candidates.length} candidate(s)`);
+    ctx.setMcpServerCandidates(candidates);
+  } catch (error) {
+    analytics.captureException(
+      error instanceof Error ? error : new Error(String(error)),
+      { step: 'detectMcpServer' },
+    );
+    ctx.setMcpServerCandidates([]);
   }
 }

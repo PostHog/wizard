@@ -1,5 +1,31 @@
 import { AgentOutputSignals } from '@agent/output-signals';
-import { AgentSignals, REMARK_INSTRUCTION } from '@agent/signals';
+import { AgentSignals, REMARK_INSTRUCTION, abortReason } from '@agent/signals';
+
+describe('abortReason', () => {
+  // Programs match the reason with anchored regexes, so the decoration a model
+  // adds around the line must not reach them.
+  it.each([
+    ['[ABORT] no mcp server found', 'no mcp server found'],
+    ['Stopping.\n[ABORT] no mcp server found\nDone', 'no mcp server found'],
+    ['[ABORT] no mcp server found.', 'no mcp server found'],
+    ['[ABORT] `no mcp server found`', 'no mcp server found'],
+    ['**[ABORT] no mcp server found**', 'no mcp server found'],
+    ['[ABORT]: no mcp server found', 'no mcp server found'],
+    ['[ABORT] no mcp server found\r\n', 'no mcp server found'],
+    ['[ABORT] rmcp older than 3.7', 'rmcp older than 3.7'],
+    ['[ABORT] "no mcp server found"', 'no mcp server found'],
+    ['[ABORT]\nno mcp server found', 'no mcp server found'],
+    // Nothing left after stripping still aborts, with the raw text as the reason.
+    ['[ABORT] .', '.'],
+    ['[ABORT] **', '**'],
+  ])('reads %j as %j', (text, reason) => {
+    expect(abortReason(text)).toBe(reason);
+  });
+
+  it.each(['no marker here', '[ABORT]'])('finds no reason in %j', (text) => {
+    expect(abortReason(text)).toBeUndefined();
+  });
+});
 
 describe('REMARK_INSTRUCTION', () => {
   it('carries the marker but no literal placeholder a model could echo', () => {

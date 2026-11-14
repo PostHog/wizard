@@ -5,6 +5,7 @@
  * real package and fails `pnpm build` (→ every CI build + publish) if a bump
  * guts a category. One-per-category, not per-rule — per-rule coverage is
  * warlock's job. Replaces the removed `wizard-warlock-disabled` kill switch.
+ * It also scans the agent prompts the programs bundle.
  */
 
 import { scan, CATEGORIES, type Category } from '@posthog/warlock';
@@ -12,6 +13,8 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { scanVerdict, scanInstalledSkill } from '@agent';
+
+const PROGRAMS_DIR = path.resolve('src/programs');
 
 // Assembled at runtime so no scannable secret literal is committed.
 const fakeStripeKey = 'sk_' + 'live_' + '5'.repeat(24);
@@ -319,18 +322,38 @@ async function run(): Promise<void> {
     }
   }
 
+  // The bundled agent prompts pass the install scan a fetched skill passes, so one that would end a run cannot ship.
+  const promptDirs = fs
+    .readdirSync(PROGRAMS_DIR)
+    .map((program) => path.join(PROGRAMS_DIR, program, 'agent'))
+    .filter((dir) => fs.existsSync(dir));
+  if (promptDirs.length === 0) fail('no bundled agent prompts found to scan');
+  for (const dir of promptDirs) {
+    const name = path.relative(process.cwd(), dir);
+    try {
+      const reason = await scanInstalledSkill(dir, undefined);
+      if (reason) {
+        fail(`${name}: a bundled agent prompt would end the run — ${reason}`);
+        continue;
+      }
+      console.log(`  ✓ [agent prompts] ${name}`);
+    } catch (err) {
+      fail(`${name}: scanInstalledSkill threw — ${(err as Error).message}`);
+    }
+  }
+
   if (failures.length > 0) {
     console.error(`\n✗ warlock smoke test FAILED (${failures.length}):`);
     for (const f of failures) console.error(`  - ${f}`);
     console.error(
-      '\nA pinned @posthog/warlock version regressed a rule the wizard depends on. ' +
-        'Do NOT release. Fix or revert the bump.',
+      '\nA pinned @posthog/warlock version regressed a rule the wizard depends on, ' +
+        'or a bundled agent prompt trips one. Do NOT release. Fix the prompt, or fix or revert the bump.',
     );
     process.exit(1);
   }
 
   console.log(
-    `\n✓ warlock smoke test passed (${POSITIVES.length} categories + ${NEGATIVES.length} FP contracts + ${TERMINAL.length} terminal + ${NON_TERMINAL.length} non-terminal + ${SKILL_DIRS.length} install)`,
+    `\n✓ warlock smoke test passed (${POSITIVES.length} categories + ${NEGATIVES.length} FP contracts + ${TERMINAL.length} terminal + ${NON_TERMINAL.length} non-terminal + ${SKILL_DIRS.length} install + ${promptDirs.length} agent prompt folders)`,
   );
 }
 

@@ -36,6 +36,11 @@ import {
   scanInstalledSkill,
 } from '../../../yara-hooks';
 import { fetchSkillMenu, type SkillEntry } from '@shared/skill-menu';
+import {
+  FRAMEWORK_KEY,
+  resolveSkill,
+  type MatchKeys,
+} from '@shared/skill-resolution';
 import { analytics } from '@utils/analytics';
 import { ciExcludedTaskTypes } from '@utils/ci-flag-overrides';
 import { logToFile } from '@utils/debug';
@@ -61,6 +66,7 @@ import { createAskBridge } from '../../shared/ask';
 import {
   areSeededTasksEnabled,
   getHarness,
+  isAgentDagEnabled,
   resolveHarness,
   resolveStageOverrides,
   type HarnessPick,
@@ -73,6 +79,7 @@ import {
   SkipReason,
   TaskStatus,
   type QueuedTask,
+  type TaskHandoff,
   type TaskOutcome,
 } from './queue';
 import {
@@ -82,13 +89,20 @@ import {
   type RunTask,
 } from './executor';
 import { RunMetrics } from './run-metrics';
+import {
+  landTaskDeadline,
+  TaskDeadlineExceeded,
+  withTaskDeadline,
+} from './task-deadline';
 import { dependencyClosure, uncoveredBySink } from './queue-tools';
 import { deferSeededTasks } from './seeded-deps';
+import { queueTaskGraph, TaskGraphError } from './task-graph';
 import { LONGER_ASK_TIMEOUT_MS, shouldDisableAsk } from '@shared/ask-policy';
 import {
   agentRunTools,
   assembleSeedPrompt,
   assembleTaskPrompt,
+  bundledRegistry,
   loadAgentRegistry,
   promptModelFor,
   resolveTask,
@@ -141,6 +155,14 @@ export function sweepRunInstalledSkills(
   }
 }
 
+/** Whether another task is still running, and may still need a skill it installed. */
+export function hasRunningSibling(
+  tasks: readonly QueuedTask[],
+  taskId: string,
+): boolean {
+  return tasks.some((t) => t.id !== taskId && t.status === TaskStatus.Running);
+}
+
 function toTodoStatus(status: TaskStatus): string {
   switch (status) {
     case TaskStatus.Running:
@@ -174,6 +196,12 @@ function requireTaskHarness(pick: HarnessPick): AgentHarness & {
     runTask: NonNullable<AgentHarness['runTask']>;
   };
 }
+
+/** A security stop or decided failure (such as a 401) stays what it is when a deadline also passes. */
+const outranksDeadline = (result: AgentResult): boolean =>
+  result.kind === 'decided_failure' ||
+  (result.kind === 'failure' &&
+    result.classification === AgentErrorType.YARA_VIOLATION);
 
 /** How an agent result ends the run, or undefined when it doesn't. */
 export function terminalResult(
@@ -240,17 +268,8 @@ export function resolveSkillVariantId(
   return (family.find((e) => e.default) ?? family[0])?.id;
 }
 
-/**
- * The framework reference is the full `integration` skill. `input.skillId` is
- * the bare framework (e.g. `django`), but the skill menu ids it as
- * `integration-<variant>`.
- */
-function resolveReferenceSkillId(
-  entries: readonly SkillEntry[],
-  framework: string,
-): string | undefined {
-  return resolveSkillVariantId(entries, 'integration', framework);
-}
+/** The framework reference is the full `integration` skill, which the menu ids as `integration-<variant>`. */
+const REFERENCE_SKILL = 'integration';
 
 /**
  * How long an optional step's notice waits for an answer.
@@ -530,6 +549,63 @@ export function describeDrainFailure(verdict: {
   return parts.join(', so ');
 }
 
+/**
+ * The packages finished tasks left for review to install, when review did not
+ * finish: their edits import packages the project never got. Empty otherwise.
+ */
+export function uninstalledPackages(
+  tasks: readonly QueuedTask[],
+  readHandoff: (id: string) => TaskHandoff | null,
+): string[] {
+  const review = tasks.find((t) => t.type === 'review');
+  if (!review || review.status === TaskStatus.Done) return [];
+  const packages = new Set<string>();
+  for (const task of tasks) {
+    if (task.status !== TaskStatus.Done) continue;
+    for (const name of readHandoff(task.id)?.packages ?? []) packages.add(name);
+  }
+  return [...packages];
+}
+
+/** The one-line reasons required tasks gave for failing, for the abort message. */
+export function failedTaskConflicts(
+  tasks: readonly QueuedTask[],
+  readHandoff: (id: string) => TaskHandoff | null,
+): string[] {
+  const conflicts = tasks
+    .filter((t) => t.status === TaskStatus.Failed && !t.optional)
+    .flatMap((t) => readHandoff(t.id)?.conflict ?? []);
+  return [...new Set(conflicts)];
+}
+
+/** The outro paragraph that names those packages. */
+export function uninstalledPackagesNote(packages: readonly string[]): string {
+  return `Review did not finish, so the new code imports packages that were never installed: ${packages.join(
+    ', ',
+  )}. Install them, or revert those changes, before you build or run the project.`;
+}
+
+/** A failure whose outro also names the packages left uninstalled. */
+function withUninstalledPackages(
+  failure: AgentFailure,
+  packages: readonly string[],
+): AgentFailure {
+  if (packages.length === 0) return failure;
+  const note = uninstalledPackagesNote(packages);
+  return {
+    ...failure,
+    message: `${failure.message}\n\n${note}`,
+    ...(failure.outroData && {
+      outroData: {
+        ...failure.outroData,
+        body: failure.outroData.body
+          ? `${failure.outroData.body}\n\n${note}`
+          : note,
+      },
+    }),
+  };
+}
+
 /** One `orchestrator task blocked` event per pending task, best effort once the outcome is decided. */
 function reportBlockedTasks(
   tasks: readonly QueuedTask[],
@@ -671,8 +747,9 @@ async function executeOrchestrator(
   // The WHAT (agent prompts) is served from context-mill. Fetch the registry
   // once up front: its types drive enqueue validation, and resolving a task to
   // its run config is then synchronous, with no mid-drain network latency.
+  // With `wizard-agent-dag` on, the prompts the program bundles are the registry.
   const flow = config.agentFlow ?? programId;
-  const registry = await loadAgentRegistry(boot.skillsBaseUrl, flow, {
+  const registryOptions = {
     exclude: effectiveExcludedTaskTypes(config, boot.wizardFlags),
     // Baked into the prompts at load, so enqueue, dispatch, and telemetry all read one effective spec.
     overrides: resolveStageOverrides(
@@ -680,18 +757,46 @@ async function executeOrchestrator(
       boot.wizardFlags,
       boot.wizardFlagPayloads,
     ),
-  });
+  };
+  // A bundle that fails to load is reported, and the run fetches instead.
+  const bundledPrompts = isAgentDagEnabled(boot.wizardFlags)
+    ? await config.agentPrompts?.().catch((error: unknown) => {
+        logToFile('[orchestrator] bundled prompts failed to load:', error);
+        analytics.captureException(
+          error instanceof Error ? error : new Error(String(error)),
+          { step: 'orchestrator_bundled_prompts' },
+        );
+        return undefined;
+      })
+    : undefined;
+  const registry = bundledPrompts
+    ? bundledRegistry(bundledPrompts, flow, registryOptions)
+    : await loadAgentRegistry(boot.skillsBaseUrl, flow, registryOptions);
+  analytics.setTag(
+    'orchestrator_prompts',
+    bundledPrompts ? 'bundled' : 'context-mill',
+  );
   if (signal?.aborted) return cancelledRun();
+  // A bundled flow with no planner prompt is queued from its frontmatter; a fetched one needs its planner.
   const seedPrompt = registry.seed;
-  if (!seedPrompt) {
-    throw new Error(
-      `No seed agent prompt (frontmatter \`seed: true\`) for flow "${flow}" is available from ${boot.skillsBaseUrl}.`,
+  if (!seedPrompt && !bundledPrompts) {
+    logToFile(
+      `[orchestrator] no seed agent prompt (frontmatter \`seed: true\`) for flow "${flow}" from ${boot.skillsBaseUrl}`,
     );
+    return failed({
+      code: ErrorCodes.AgentOrchestratorNoPlanner,
+      message: `The wizard could not load the plan for this setup.\n\nPlease report this to: ${WIZARD_CONTACT_EMAIL}`,
+      error: new WizardError(
+        'orchestrator flow has no seed agent prompt',
+        { flow, skills_base_url: boot.skillsBaseUrl },
+        ErrorCodes.AgentOrchestratorNoPlanner,
+      ),
+    });
   }
 
   // The end decision the switchboard event defers to: the model each task will actually run on.
   const taskModels = Object.fromEntries(
-    ['seed', ...registry.types].map((type) => {
+    [...(seedPrompt ? ['seed'] : []), ...registry.types].map((type) => {
       const prompt = type === 'seed' ? seedPrompt : registry.get(type);
       const pick = resolveHarness(switchboardCtx, type);
       const specModel = prompt && promptModelFor(prompt, pick.harness).model;
@@ -702,6 +807,11 @@ async function executeOrchestrator(
     `[orchestrator] task models: ${Object.entries(taskModels)
       .map(([t, m]) => `${t}=${m}`)
       .join(' ')}`,
+  );
+  logToFile(
+    `[orchestrator] excluded task types: ${
+      registry.excludedTypes.join(', ') || 'none'
+    }`,
   );
   analytics.wizardCapture('orchestrator task models', taskModels);
 
@@ -718,6 +828,8 @@ async function executeOrchestrator(
 
   // Tasks that published the run report: any failure after that point leaves the user's report intact.
   const reportDeliveredIds = new Set<string>();
+  // Tasks completed by their deadline rather than by their agent.
+  const incompleteTaskIds = new Set<string>();
 
   const store = new QueueStore(input.installDir, runId, {
     onTransition: (event, task) => {
@@ -801,9 +913,19 @@ async function executeOrchestrator(
   // (agent-skill commands like replay-vision) would otherwise leak that id in
   // here as a bogus framework after the caller overwrites the detect result.
   const framework = input.integration ?? input.skillId ?? undefined;
-  const referenceSkillId = framework
-    ? resolveReferenceSkillId(menuSkillEntries, framework)
-    : undefined;
+  // `wizard-agent-dag` picks skills with the shared resolver; off, the menu lookup above does.
+  const agentDag = isAgentDagEnabled(boot.wizardFlags);
+  // The project's traits supply the match keys, and the framework key above replaces theirs.
+  const matchKeys: MatchKeys = {
+    ...(agentDag ? config.matchKeys?.() : undefined),
+    [FRAMEWORK_KEY]: framework ? [framework] : undefined,
+  };
+  const pickSkillId = agentDag
+    ? (skillId: string) =>
+        resolveSkill(menuSkillEntries, skillId, matchKeys)?.id
+    : (skillId: string) =>
+        resolveSkillVariantId(menuSkillEntries, skillId, framework);
+  const referenceSkillId = framework ? pickSkillId(REFERENCE_SKILL) : undefined;
   if (referenceSkillId) {
     const ref = await installSkillById(
       referenceSkillId,
@@ -829,6 +951,12 @@ async function executeOrchestrator(
       logToFile(
         `[orchestrator] reference unavailable: ${ref.kind} (${referenceSkillId})`,
       );
+      // Every task then runs without the example and the framework rules.
+      analytics.wizardCapture('orchestrator reference skill unavailable', {
+        skill: referenceSkillId,
+        reason: ref.kind,
+        framework,
+      });
     }
   } else if (framework) {
     logToFile(
@@ -838,12 +966,12 @@ async function executeOrchestrator(
 
   // Preflight every task's mini-skills: a miss would run tasks skill-less, so fail properly instead.
   const missingVariants: string[] = [];
+  const missingSkills = new Set<string>();
   for (const type of registry.types) {
     for (const skillId of registry.get(type)?.skills ?? []) {
-      if (resolveSkillVariantId(menuSkillEntries, skillId, framework)) {
-        continue;
-      }
+      if (pickSkillId(skillId)) continue;
       missingVariants.push(`${type}/${skillId}`);
+      missingSkills.add(skillId);
       logToFile(
         `[orchestrator] no skill variant type=${type} skill=${skillId} framework=${
           framework ?? 'none'
@@ -859,11 +987,25 @@ async function executeOrchestrator(
   if (missingVariants.length > 0) {
     // The framework's own docs page, resolved by the caller; generic docs when detection found none.
     const docsUrl = framework ? input.frameworkDocsUrl : undefined;
+    // A bundled prompt naming a skill the loaded menu has under no id or family means the wizard is older than the skills.
+    const outdated =
+      bundledPrompts !== undefined &&
+      menuSkillEntries.length > 0 &&
+      [...missingSkills].some(
+        (name) =>
+          !menuSkillEntries.some(
+            (entry) => entry.id === name || entry.group === name,
+          ),
+      );
     return failed({
       code: ErrorCodes.AgentOrchestratorSkillVariantMissing,
       message:
-        'Setup instructions for this project failed to download.\n' +
-        'Please try again, or contact wizard@posthog.com.\n\n' +
+        (outdated
+          ? 'This version of the wizard uses setup instructions that are no longer published.\n' +
+            'Run the latest version and try again:\n' +
+            '  npx @posthog/wizard@latest\n\n'
+          : 'Setup instructions for this project failed to download.\n' +
+            'Please try again, or contact wizard@posthog.com.\n\n') +
         'You can also set up with your agent by downloading the skills here:\n' +
         '  https://github.com/PostHog/context-mill/releases\n' +
         'or integrate manually here:\n' +
@@ -1054,45 +1196,72 @@ async function executeOrchestrator(
 
   // 1. Seed the queue with the orchestrator agent. It is itself an agent prompt
   // (the WHAT), so its model and tools come from its frontmatter. The seed
-  // plans the graph, it is not a task.
+  // plans the graph, it is not a task. A flow with no planner prompt is queued
+  // from the graph its frontmatter declares instead.
   //
   // Prompt-frontmatter model wins over the switchboard pick (§3.6 of the
   // switchboard plan) — the switchboard's model is the fallback when the
   // prompt is silent.
-  const seedPick = resolveHarness(switchboardCtx, 'seed');
-  const seedHarness = requireTaskHarness(seedPick);
-  const seedModel = promptModelFor(seedPrompt, seedPick.harness);
-  const seedResult = await seedHarness.runTask({
-    signal,
-    config,
-    input,
-    boot,
-    emit,
-    // The exclusion note names `registry.excludedTypes` — the excluded types
-    // this flow actually had — so the planner never hears about work that was
-    // never available, and overlapping exclusion sources cannot double-list.
-    prompt: assembleSeedPrompt(
-      promptContext,
-      seedPrompt.body,
-      store.list(),
-      registry.excludedTypes,
-    ),
-    spinner,
-    model: requireKnownModel(seedModel.model, seedPick.model),
-    effort: seedModel.effort,
-    ...agentRunTools(seedPrompt),
-    orchestrator: orchestratorCtx(),
-    spinnerMessage: 'Planning the integration...',
-    successMessage: 'Planned the integration',
-    requestRemark: false,
-    analyticsProperties: { task_type: 'seed', harness: seedPick.harness },
-  });
-  if (signal?.aborted) return cancelledRun();
-  const seedTerminal = terminalResult(seedResult);
-  if (seedTerminal) return seedTerminal;
+  if (seedPrompt) {
+    const seedPick = resolveHarness(switchboardCtx, 'seed');
+    const seedHarness = requireTaskHarness(seedPick);
+    const seedModel = promptModelFor(seedPrompt, seedPick.harness);
+    const seedResult = await seedHarness.runTask({
+      signal,
+      config,
+      input,
+      boot,
+      emit,
+      // The exclusion note names `registry.excludedTypes` — the excluded types
+      // this flow actually had — so the planner never hears about work that was
+      // never available, and overlapping exclusion sources cannot double-list.
+      prompt: assembleSeedPrompt(
+        promptContext,
+        seedPrompt.body,
+        store.list(),
+        registry.excludedTypes,
+      ),
+      spinner,
+      model: requireKnownModel(seedModel.model, seedPick.model),
+      effort: seedModel.effort,
+      ...agentRunTools(seedPrompt),
+      orchestrator: orchestratorCtx(),
+      spinnerMessage: 'Planning the integration...',
+      successMessage: 'Planned the integration',
+      requestRemark: false,
+      analyticsProperties: { task_type: 'seed', harness: seedPick.harness },
+    });
+    if (signal?.aborted) return cancelledRun();
+    const seedTerminal = terminalResult(seedResult);
+    if (seedTerminal) return seedTerminal;
+  } else {
+    try {
+      queueTaskGraph(orchestratorCtx(), registry.graph);
+    } catch (error) {
+      if (!(error instanceof TaskGraphError)) throw error;
+      logToFile(`[orchestrator] task graph rejected: ${error.message}`);
+      analytics.wizardCapture('orchestrator task graph rejected', {
+        reason: error.reason,
+      });
+      return failed({
+        code: ErrorCodes.AgentOrchestratorTaskGraph,
+        message: `The wizard could not plan this setup: its steps could not be queued.\n\nPlease report this to: ${WIZARD_CONTACT_EMAIL}`,
+        error: new WizardError(
+          'orchestrator could not queue the declared task graph',
+          {
+            reason: error.reason,
+            detail: error.message,
+            queue_state: JSON.stringify(store.list()),
+          },
+          ErrorCodes.AgentOrchestratorTaskGraph,
+        ),
+      });
+    }
+  }
   analytics.wizardCapture('orchestrator seeded', {
     task_count: store.list().length,
     types: store.list().map((t) => t.type),
+    source: seedPrompt ? 'planner' : 'frontmatter',
   });
   renderQueue();
 
@@ -1227,11 +1396,7 @@ async function executeOrchestrator(
         // Agent prompts name the bare step-skill (`integration-v2-install`);
         // SDK-divergent steps ship per-framework variants, so resolve against
         // the menu with the session's framework before installing.
-        const variantId = resolveSkillVariantId(
-          menuSkillEntries,
-          skillId,
-          framework,
-        );
+        const variantId = pickSkillId(skillId);
         if (!variantId) {
           logToFile(
             `[orchestrator] no skill variant type=${
@@ -1278,42 +1443,84 @@ async function executeOrchestrator(
       const taskHarness = requireTaskHarness(taskPick);
       const taskModel = taskModelSpec(registry, task, taskPick.harness);
       let taskResult: AgentResult;
+      let activeCommand: string | undefined;
+      const deadlineAt =
+        resolved.timeoutMs === undefined
+          ? undefined
+          : Date.now() + resolved.timeoutMs;
       try {
-        taskResult = await taskHarness.runTask({
+        taskResult = await withTaskDeadline(
+          resolved.timeoutMs,
           signal,
-          config,
-          input,
-          boot,
-          emit: (event) => {
-            if (deliversRunReport(registry.sinkTypes, task.type, event)) {
-              reportDeliveredIds.add(task.id);
-            }
-            emit(event);
-          },
-          prompt: assembleTaskPrompt(
-            promptContext,
-            resolved.prompt,
-            skillPaths,
-          ),
-          spinner,
-          model: requireKnownModel(taskModel.model, taskPick.model),
-          effort: taskModel.effort,
-          allowedTools: resolved.allowedTools,
-          disallowedTools: resolved.disallowedTools,
-          askBridge: canAsk(registry.get(task.type)) ? askBridge : undefined,
-          orchestrator: orchestratorCtx(task.id),
-          spinnerMessage: '',
-          successMessage: '',
-          requestRemark: false,
-          analyticsProperties: {
-            task_type: task.type,
-            task_id: task.id,
-            harness: taskPick.harness,
-          },
-        });
+          (taskSignal) =>
+            taskHarness.runTask({
+              onBashCommand: (command) => {
+                activeCommand = command;
+              },
+              deadlineAt,
+              signal: taskSignal,
+              config,
+              input,
+              boot,
+              emit: (event) => {
+                if (deliversRunReport(registry.sinkTypes, task.type, event)) {
+                  reportDeliveredIds.add(task.id);
+                }
+                emit(event);
+              },
+              prompt: assembleTaskPrompt(
+                promptContext,
+                resolved.prompt,
+                skillPaths,
+              ),
+              spinner,
+              model: requireKnownModel(taskModel.model, taskPick.model),
+              effort: taskModel.effort,
+              allowedTools: resolved.allowedTools,
+              disallowedTools: resolved.disallowedTools,
+              askBridge: canAsk(registry.get(task.type))
+                ? askBridge
+                : undefined,
+              orchestrator: orchestratorCtx(task.id),
+              spinnerMessage: '',
+              successMessage: '',
+              requestRemark: false,
+              analyticsProperties: {
+                task_type: task.type,
+                task_id: task.id,
+                harness: taskPick.harness,
+              },
+            }),
+          () => activeCommand,
+          outranksDeadline,
+        );
       } catch (error) {
         if (signal?.aborted) return;
         if (error instanceof RunTaskFatal) throw error;
+        if (error instanceof TaskDeadlineExceeded) {
+          const landing = landTaskDeadline(
+            store,
+            task,
+            resolved.onTimeout,
+            error,
+          );
+          analytics.wizardCapture('orchestrator task deadline exceeded', {
+            type: task.type,
+            timeout_ms: error.timeoutMs,
+            landing,
+            interrupted_command: error.command !== undefined,
+          });
+          if (landing === 'continued') incompleteTaskIds.add(task.id);
+          if (landing !== 'fatal') return;
+          throw new RunTaskFatal(
+            {
+              code: ErrorCodes.AgentOrchestratorTasksFailed,
+              message: `${task.label ?? task.type}: ${error.message}`,
+            },
+            RunOutcome.Failed,
+            task.type,
+          );
+        }
         const failure = classifyRunFailure(error);
         throw new RunTaskFatal(
           {
@@ -1332,13 +1539,16 @@ async function executeOrchestrator(
     } finally {
       // Durable skills a task installed are irrelevant to later tasks — and
       // the sdk harness auto-loads .claude/skills into every agent — so sweep
-      // as each task ends, not only at run end.
+      // as each task ends, not only at run end. Of tasks running together, the
+      // last to finish sweeps.
       try {
-        sweepRunInstalledSkills(
-          claudeSkillsDir,
-          preexistingSkills,
-          referenceSkillId,
-        );
+        if (!hasRunningSibling(store.list(), task.id)) {
+          sweepRunInstalledSkills(
+            claudeSkillsDir,
+            preexistingSkills,
+            referenceSkillId,
+          );
+        }
       } catch (err) {
         try {
           logToFile('[orchestrator] per-task skill sweep failed:', err);
@@ -1454,7 +1664,13 @@ async function executeOrchestrator(
       stoppedBy.push(fatal.taskType);
     }
     reportBlockedTasks(store.list(), stoppedBy);
-    return { outcome: fatal.outcome, failure: fatal.failure };
+    return {
+      outcome: fatal.outcome,
+      failure: withUninstalledPackages(
+        fatal.failure,
+        uninstalledPackages(store.list(), (id) => store.readHandoff(id)),
+      ),
+    };
   }
   if (signal?.aborted && !deliveredFatal) return cancelledRun();
 
@@ -1484,6 +1700,8 @@ async function executeOrchestrator(
   const conflict = reviewTask
     ? store.readHandoff(reviewTask.id)?.conflict
     : undefined;
+  const reviewIncomplete =
+    reviewTask !== undefined && incompleteTaskIds.has(reviewTask.id);
 
   // Not-needed tasks were never work, so they leave the denominator too.
   const notRequired = summary[TaskStatus.Skipped];
@@ -1512,7 +1730,7 @@ async function executeOrchestrator(
         WIZARD_PROVISIONING_SCOPES.some((required) => required === scope) ||
         !WIZARD_OAUTH_SCOPES.some((requested) => requested === scope),
     );
-    const message =
+    const reason =
       missingScopes.length > 0
         ? `The wizard could not finish setup: ${whatFailed}, and this run was authorized without the following permission${
             missingScopes.length === 1 ? '' : 's'
@@ -1520,6 +1738,14 @@ async function executeOrchestrator(
             ', ',
           )}.\n\nPlease try again, approving all permissions on the PostHog authorization screen. If it still fails, report it to: ${WIZARD_CONTACT_EMAIL}`
         : `The wizard was unable to set up PostHog: ${whatFailed}.\n\nPlease report this to: ${WIZARD_CONTACT_EMAIL}`;
+    const uninstalled = uninstalledPackages(store.list(), (id) =>
+      store.readHandoff(id),
+    );
+    const message = [
+      reason,
+      ...failedTaskConflicts(store.list(), (id) => store.readHandoff(id)),
+      ...(uninstalled.length > 0 ? [uninstalledPackagesNote(uninstalled)] : []),
+    ].join('\n\n');
     const code = drainFailureCode(verdict);
     return failed({
       code,
@@ -1541,12 +1767,15 @@ async function executeOrchestrator(
   }
 
   // A drain that produced no tasks at all means the seed step never got a
-  // usable model response (e.g. the gateway returned empty completions).
+  // usable model response (e.g. the gateway returned empty completions), or
+  // the flow's frontmatter left no task to queue.
   // "0/0 completed" is a dead run, not a success with an empty denominator.
   if (summary.total === 0) {
     return failed({
       code: ErrorCodes.AgentOrchestratorHollowRun,
-      message: `The wizard was unable to set up PostHog: the planning step produced no work, so nothing ran.\n\nPlease try again — and if it happens again, report it to: ${WIZARD_CONTACT_EMAIL}`,
+      message: seedPrompt
+        ? `The wizard was unable to set up PostHog: the planning step produced no work, so nothing ran.\n\nPlease try again — and if it happens again, report it to: ${WIZARD_CONTACT_EMAIL}`
+        : `The wizard was unable to set up PostHog: this setup had no steps to run.\n\nPlease report this to: ${WIZARD_CONTACT_EMAIL}`,
       error: new WizardError(
         'orchestrator drain produced zero tasks',
         { queue_state: JSON.stringify(store.list()) },
@@ -1567,7 +1796,9 @@ async function executeOrchestrator(
       ? 'report delivered, then its step failed'
       : '',
   ].filter(Boolean);
-  const message = conflict
+  const message = reviewIncomplete
+    ? 'PostHog set up, but its final checks did not finish.'
+    : conflict
     ? 'PostHog set up, with one conflict to review.'
     : `PostHog set up: ${summary.done}/${
         summary.total - notRequired - optionalFailedCount
@@ -1578,7 +1809,9 @@ async function executeOrchestrator(
     kind: OutroKind.Success,
     message,
     body: conflict
-      ? `⚠ Build conflict: ${conflict}\nFull details are in the setup report.`
+      ? `⚠ ${
+          reviewIncomplete ? 'Verification incomplete' : 'Build conflict'
+        }: ${conflict}\nFull details are in the setup report.`
       : undefined,
     docsUrl: 'https://posthog.com/docs/ai-engineering/ai-wizard',
     nextSteps: config.hooks?.buildOutroNextSteps?.(

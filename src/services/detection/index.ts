@@ -12,7 +12,9 @@ export { gatherFrameworkContext } from './context';
 export { noteDetectedFramework } from './detected-framework';
 export { detectFramework } from './framework';
 export {
+  detectMcpServer,
   detectPostHogIntegration,
+  noteScannedWarehouseSources,
   reportWarehouseSourcesDetected,
 } from './integration';
 export {

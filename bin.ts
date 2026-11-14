@@ -2,6 +2,7 @@
 import { satisfies } from 'semver';
 import { ErrorCodes } from '@shared/errors/codes.js';
 import { emitWizardError } from '@shared/errors/emit.js';
+import { withoutProjectBins } from '@shared/project-bin-path.js';
 
 // Keep in sync with `engines.node` in package.json. npx does not enforce
 // engines, so this preflight is the only thing standing between an old Node
@@ -31,6 +32,12 @@ if (!satisfies(process.version, NODE_VERSION_RANGE)) {
     message: `Node ${process.version} is below the required range ${NODE_VERSION_RANGE}`,
   });
   process.exit(1);
+}
+
+// Before anything can run a command by name, including at import time.
+process.env.PATH = withoutProjectBins(process.env.PATH ?? '');
+if (process.platform === 'win32') {
+  process.env.NoDefaultCurrentDirectoryInExePath = '1';
 }
 
 // Loaded dynamically so no dependency is evaluated before the check above.

@@ -1,8 +1,10 @@
 import { VercelEnvironmentProvider } from '@programs/posthog-integration/upload-environment-variables/providers/vercel';
 import * as fs from 'fs';
 import * as child_process from 'child_process';
+import { findTrustedCommand } from '@shared/trusted-command';
 
 vi.mock('fs');
+vi.mock('@shared/trusted-command');
 vi.mock('child_process');
 
 const mockOptions = {
@@ -19,10 +21,15 @@ describe('VercelEnvironmentProvider', () => {
   beforeEach(() => {
     provider = new VercelEnvironmentProvider(mockOptions as any);
     vi.clearAllMocks();
+    vi.mocked(findTrustedCommand).mockReturnValue({
+      executable: '/trusted/vercel',
+      prefixArgs: [],
+      env: { PATH: '/trusted' },
+    });
   });
 
   it('should detect Vercel CLI, project link, and authentication', async () => {
-    (child_process.execSync as Mock).mockReturnValue(undefined);
+    (child_process.execFileSync as Mock).mockReturnValue(undefined);
     (fs.existsSync as Mock).mockImplementation((p: string) => {
       if (p.endsWith('.vercel')) return true;
       if (p.endsWith('project.json')) return true;
@@ -38,20 +45,30 @@ describe('VercelEnvironmentProvider', () => {
   });
 
   it('should return false if Vercel CLI is missing', async () => {
-    (child_process.execSync as Mock).mockImplementation(() => {
+    (child_process.execFileSync as Mock).mockImplementation(() => {
       throw new Error();
     });
     await expect(provider.detect()).resolves.toBe(false);
   });
 
+  it('does not probe or upload through an untrusted Vercel executable', async () => {
+    vi.mocked(findTrustedCommand).mockReturnValue(null);
+    await expect(provider.detect()).resolves.toBe(false);
+    await expect(
+      provider.uploadEnvironmentVariable('FOO', 'secret', 'production'),
+    ).rejects.toThrow('No trusted Vercel CLI');
+    expect(child_process.execFileSync).not.toHaveBeenCalled();
+    expect(child_process.spawn).not.toHaveBeenCalled();
+  });
+
   it('should return false if project is not linked', async () => {
-    (child_process.execSync as Mock).mockReturnValue(undefined);
+    (child_process.execFileSync as Mock).mockReturnValue(undefined);
     (fs.existsSync as Mock).mockReturnValue(false);
     await expect(provider.detect()).resolves.toBe(false);
   });
 
   it('should return false if not authenticated', async () => {
-    (child_process.execSync as Mock).mockReturnValue(undefined);
+    (child_process.execFileSync as Mock).mockReturnValue(undefined);
     (fs.existsSync as Mock).mockReturnValue(true);
     (child_process.spawnSync as Mock).mockReturnValue({
       stdout: 'Log in to Vercel',
@@ -62,7 +79,7 @@ describe('VercelEnvironmentProvider', () => {
   });
 
   it('should return false if env var already exists', async () => {
-    const stdinMock = { write: vi.fn(), end: vi.fn() };
+    const stdinMock = { write: vi.fn(), end: vi.fn(), on: vi.fn() };
     let closeCallback: ((code: number) => void) | undefined;
     const onMock = vi.fn((event, cb) => {
       if (event === 'close') closeCallback = cb;
@@ -82,24 +99,39 @@ describe('VercelEnvironmentProvider', () => {
       stderr,
     });
 
-    const uploadPromise = provider.uploadEnvVars({ FOO: 'bar' });
+    const uploadPromise = provider.uploadEnvironmentVariable(
+      'FOO',
+      'bar',
+      'production',
+    );
 
     // Simulate "already exists" error on stderr, then process close
     stderrListener && stderrListener('already exists');
     closeCallback && closeCallback(1);
 
-    await expect(uploadPromise).resolves.toEqual({ FOO: false });
+    await expect(uploadPromise).rejects.toThrow('already exists');
   });
 
   it('should attempt to upload environment variables', async () => {
-    (child_process.spawn as Mock).mockReturnValue({});
+    (child_process.spawn as Mock).mockImplementation(() => ({
+      stdin: { write: vi.fn(), end: vi.fn(), on: vi.fn() },
+      stderr: { on: vi.fn() },
+      on: vi.fn((event, cb) => {
+        if (event === 'close') queueMicrotask(() => cb(0));
+      }),
+    }));
 
-    await provider.uploadEnvVars({ FOO: 'bar' });
+    await expect(provider.uploadEnvVars({ FOO: 'bar' })).resolves.toEqual({
+      FOO: true,
+    });
 
     expect(child_process.spawn).toHaveBeenCalledWith(
-      'vercel',
+      '/trusted/vercel',
       ['env', 'add', 'FOO', 'production'],
-      expect.objectContaining({ stdio: ['pipe', 'pipe', 'pipe'] }),
+      expect.objectContaining({
+        stdio: ['pipe', 'pipe', 'pipe'],
+        env: { PATH: '/trusted' },
+      }),
     );
   });
 });

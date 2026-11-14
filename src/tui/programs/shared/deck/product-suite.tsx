@@ -48,7 +48,7 @@ export const PRODUCT_SUITE_BLOCK: ContentBlock = {
     </Text>,
     <Text>
       <Text color="cyan">{'  ◆ '}</Text>
-      {'Product Tours         '}
+      {'Tracing               '}
       <Text color="cyan">{'◆ '}</Text>
       {'Support'}
     </Text>,

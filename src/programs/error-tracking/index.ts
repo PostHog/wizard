@@ -172,6 +172,7 @@ export const config: ProgramConfig = {
     'Set up PostHog error tracking, source-map upload and release linking included',
   id: 'error-tracking',
   agentFlow: 'error-tracking',
+  agentPrompts: () => import('./agent-prompts').then((m) => m.AGENT_PROMPTS),
   reportFile: ERROR_TRACKING_REPORT_FILE,
   // The run is scoped to the project the user picks after login.
   runSteps: {

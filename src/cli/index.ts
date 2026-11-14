@@ -19,6 +19,7 @@ import { errorTrackingCommand } from './commands/error-tracking';
 import { featureFlagsCommand } from './commands/feature-flags';
 import { transactionalEmailCommand } from './commands/transactional-email';
 import { skillCommand } from './commands/skill';
+import { supportCommand } from './commands/support';
 
 /** Register every command and run the one `process.argv` names. */
 export function runCli(): void {
@@ -40,6 +41,7 @@ export function runCli(): void {
     .use(errorTrackingCommand)
     .use(featureFlagsCommand)
     .use(transactionalEmailCommand)
+    .use(supportCommand)
     .use(skillCommand)
     .init();
 }

@@ -56,6 +56,7 @@ import {
   createPostToolUseYaraHooks,
   prewarmYaraScanner,
 } from './yara-hooks';
+import { createPostHogToolHook } from './posthog-tool-policy';
 import { createTriageLLMProvider } from './triage-provider';
 import type { LLMProvider } from '@posthog/warlock';
 import { assembleCommandments } from './runner/switchboard/commandments';
@@ -66,6 +67,7 @@ import {
   AgentErrorType,
   REMARK_INSTRUCTION,
   RESUME_INSTRUCTION,
+  abortReason as parseAbortReason,
   policyAbortReason,
 } from './signals';
 import { classifyAuthFailure } from '@shared/errors';
@@ -241,6 +243,8 @@ export type AgentConfig = {
   readOnly?: boolean;
   /** Tools removed from BASE_ALLOWED_TOOLS for this run. */
   disallowedTools?: readonly string[];
+  /** When set, the agent may `call` only these PostHog MCP tools. */
+  posthogTools?: readonly string[];
   /**
    * Read accessor for the active pending question. Used by canUseTool to
    * block Write/Edit while the overlay is open (defense in depth).
@@ -343,6 +347,8 @@ type AgentRunConfig = {
   readOnly?: boolean;
   /** Tools removed from BASE_ALLOWED_TOOLS for this run. */
   disallowedTools?: readonly string[];
+  /** When set, the agent may `call` only these PostHog MCP tools. */
+  posthogTools?: readonly string[];
   /**
    * Read accessor for the active pending question. canUseTool reads this
    * to block Write/Edit while the overlay is open.
@@ -726,6 +732,7 @@ export async function initializeAgent(
       readOnly: config.readOnly,
       allowedTools: config.allowedTools,
       disallowedTools: config.disallowedTools,
+      posthogTools: config.posthogTools,
       getPendingQuestion: config.getPendingQuestion,
       suppressTaskRender: !!config.orchestrator,
       taskReported: queue && (() => taskReported(queue)),
@@ -866,6 +873,8 @@ export async function runAgent(
     analyticsProperties?: Record<string, unknown>;
     /** Abort the SDK query when this run exceeds its own deadline. */
     timeoutMs?: number;
+    /** Active shell command for host-side timeout diagnostics. */
+    onBashCommand?: (command: string | undefined) => void;
   },
   middleware?: {
     onMessage(message: any): void;
@@ -880,6 +889,7 @@ export async function runAgent(
     };
   }
   const emit = agentConfig.emit ?? NO_PROGRESS;
+  const activeBashCalls = new Map<string, string>();
   const {
     spinnerMessage = 'Customizing your PostHog setup...',
     successMessage = 'PostHog integration complete',
@@ -1287,9 +1297,20 @@ export async function runAgent(
           },
           // Stop hook: collect remark, then allow stop
           hooks: {
-            PreToolUse: warlockDisabled
-              ? []
-              : createPreToolUseYaraHooks(triageProvider, onYaraTerminate),
+            PreToolUse: [
+              // The program's PostHog tool allowlist holds even with scanning off.
+              ...(agentConfig.posthogTools
+                ? [
+                    createPostHogToolHook(
+                      agentConfig.posthogTools,
+                      POSTHOG_MCP_SERVER_NAME,
+                    ),
+                  ]
+                : []),
+              ...(warlockDisabled
+                ? []
+                : createPreToolUseYaraHooks(triageProvider, onYaraTerminate)),
+            ],
             PostToolUse: warlockDisabled
               ? []
               : createPostToolUseYaraHooks(triageProvider, onYaraTerminate),
@@ -1400,9 +1421,9 @@ export async function runAgent(
             if (Array.isArray(content)) {
               for (const block of content) {
                 if (block.type === 'text' && typeof block.text === 'string') {
-                  const match = block.text.match(/\[ABORT\]\s*(.+?)(?:\n|$)/);
-                  if (match) {
-                    abortReason = match[1].trim();
+                  const reason = parseAbortReason(block.text);
+                  if (reason) {
+                    abortReason = reason;
                     logToFile(`Agent emitted [ABORT]: ${abortReason}`);
                     abortController.abort();
                     signalDone();
@@ -1416,7 +1437,32 @@ export async function runAgent(
           // The gateway's policy abort ends every program, from a work turn's
           // reply or a subagent's result (the Agent tool's result block).
           const blocks = message.message?.content;
+          const messageType = (message as { type?: unknown }).type;
           for (const block of Array.isArray(blocks) ? blocks : []) {
+            const shellBlock = block as
+              | {
+                  type: 'tool_use';
+                  id: string;
+                  name: string;
+                  input?: { command?: unknown };
+                }
+              | { type: 'tool_result'; tool_use_id: string }
+              | { type: 'text' };
+            if (
+              messageType === 'assistant' &&
+              shellBlock.type === 'tool_use' &&
+              shellBlock.name === 'Bash' &&
+              typeof shellBlock.input?.command === 'string'
+            ) {
+              activeBashCalls.set(shellBlock.id, shellBlock.input.command);
+              config?.onBashCommand?.(shellBlock.input.command);
+            } else if (
+              messageType === 'user' &&
+              shellBlock.type === 'tool_result' &&
+              activeBashCalls.delete(shellBlock.tool_use_id)
+            ) {
+              config?.onBashCommand?.([...activeBashCalls.values()].at(-1));
+            }
             if (block.type === 'tool_use' && block.name === 'Agent') {
               subagentCallIds.add(block.id);
             } else if (message.type === 'assistant' && block.type === 'text') {
@@ -1558,7 +1604,8 @@ export async function runAgent(
     if (
       (await runQuery()) === 'remint' &&
       refreshGatewayAuth &&
-      !agentConfig.signal?.aborted
+      !agentConfig.signal?.aborted &&
+      !yaraViolationReason
     ) {
       // The subprocess froze the dead bearer in its env at spawn, so it cannot
       // be handed a new one: mint, then resume the session in a new one.
@@ -1596,7 +1643,7 @@ export async function runAgent(
     if (authFailure) {
       return { kind: 'decided_failure', failure: authFailure };
     }
-    if (agentConfig.signal?.aborted) {
+    if (agentConfig.signal?.aborted && !yaraViolationReason) {
       return {
         kind: 'abort',
         classification: AgentErrorType.ABORT,
