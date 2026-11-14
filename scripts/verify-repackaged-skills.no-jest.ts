@@ -3,8 +3,13 @@
 import { createHash } from 'crypto';
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import { unzipSync } from 'fflate';
-import { composeStepSkill, type SkillFiles } from '@shared/skill-composition';
+import {
+  VARIANT_FILE,
+  composeStepSkill,
+  type SkillFiles,
+} from '@shared/skill-composition';
 import type { SkillBundle } from '@shared/skill-install';
 import {
   expandBundleEntry,
@@ -17,9 +22,20 @@ import {
   resolveSkill,
 } from '@shared/skill-resolution';
 
+const ARGS = process.argv.slice(2);
 const SOURCE =
-  process.argv[2] ??
+  ARGS.find((arg) => !arg.startsWith('--')) ??
   'https://github.com/PostHog/context-mill/releases/latest/download';
+/** With `--record`, one matching pair is written as the fixture the composition test reads. */
+const RECORD = ARGS.includes('--record');
+const FIXTURE = { name: 'integration-v2-init', framework: 'flask' };
+const FIXTURE_DIR = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '..',
+  'fixtures',
+  'context-mill',
+  'repackaged',
+);
 /** The skill family whose pick is the run's framework pack. */
 const PACK_FAMILY = 'integration';
 const SKILL_FILE = 'SKILL.md';
@@ -97,6 +113,43 @@ function compare(today: SkillFiles, repackaged: SkillFiles): string[] {
   return differences;
 }
 
+/** The files of a pack that completing a skill reads: its variant.json, the product's pages and its rules file. */
+function packFilesRead(pack: SkillFiles, product: string): SkillFiles {
+  const variant = JSON.parse(pack[VARIANT_FILE]) as {
+    rules: { file: string } | null;
+    products: Record<string, { file: string }[]>;
+  };
+  const names = [
+    VARIANT_FILE,
+    ...variant.products[product].map((page) => page.file),
+    ...(variant.rules ? [variant.rules.file] : []),
+  ];
+  return Object.fromEntries(names.map((name) => [name, pack[name]]));
+}
+
+/** One pair as recorded: the step as published, what completing it reads from the pack, and the skill it replaces. */
+type RecordedPair = {
+  pair: Record<string, string | undefined>;
+  step: SkillFiles;
+  pack: SkillFiles;
+  original: SkillFiles;
+};
+
+function writeFixture(recorded: RecordedPair): void {
+  fs.rmSync(FIXTURE_DIR, { recursive: true, force: true });
+  for (const folder of ['step', 'pack', 'original'] as const) {
+    for (const [file, contents] of Object.entries(recorded[folder])) {
+      const target = path.join(FIXTURE_DIR, folder, file);
+      fs.mkdirSync(path.dirname(target), { recursive: true });
+      fs.writeFileSync(target, contents);
+    }
+  }
+  fs.writeFileSync(
+    path.join(FIXTURE_DIR, 'pair.json'),
+    `${JSON.stringify(recorded.pair, null, 2)}\n`,
+  );
+}
+
 async function main(): Promise<void> {
   const menu = JSON.parse(text(await load('skill-menu.json'))) as SkillMenu;
   const entries = Object.values(menu.categories)
@@ -119,6 +172,7 @@ async function main(): Promise<void> {
   }
 
   let pairs = 0;
+  let recorded: RecordedPair | undefined;
   const differing: string[] = [];
   for (const name of replaced) {
     const replacement = resolveReplacement(entries, name) as SkillEntry;
@@ -134,19 +188,41 @@ async function main(): Promise<void> {
       compared += 1;
       const label = `${name} on ${framework ?? 'every framework'}`;
       try {
-        let repackaged = await filesOf(replacement);
-        if (product) {
-          const pack = resolveSkill(entries, PACK_FAMILY, keys);
-          if (!pack) throw new Error('no pack for the framework');
-          repackaged = composeStepSkill(
-            repackaged,
-            await filesOf(pack),
-            product,
-          );
-        }
-        const differences = compare(await filesOf(today), repackaged);
+        const step = await filesOf(replacement);
+        const pack = product
+          ? resolveSkill(entries, PACK_FAMILY, keys)
+          : undefined;
+        if (product && !pack) throw new Error('no pack for the framework');
+        const packFiles = pack ? await filesOf(pack) : undefined;
+        const repackaged =
+          product && packFiles
+            ? composeStepSkill(step, packFiles, product)
+            : step;
+        const original = await filesOf(today);
+        const differences = compare(original, repackaged);
         if (differences.length > 0) {
           differing.push(`${label} (${today.id}): ${differences.join('; ')}`);
+        } else if (
+          product &&
+          pack &&
+          packFiles &&
+          name === FIXTURE.name &&
+          framework === FIXTURE.framework
+        ) {
+          recorded = {
+            pair: {
+              replaces: name,
+              framework,
+              product,
+              original: today.id,
+              step: replacement.id,
+              pack: pack.id,
+              contextMill: menu.buildVersion,
+            },
+            step,
+            pack: packFilesRead(packFiles, product),
+            original,
+          };
         }
       } catch (error) {
         differing.push(
@@ -162,6 +238,20 @@ async function main(): Promise<void> {
   console.log(
     `${replaced.length} skills have a replacement. Compared ${pairs} skill and framework pairs across ${frameworks.length} frameworks.`,
   );
+  if (RECORD) {
+    if (!recorded) {
+      throw new Error(
+        `Nothing recorded: ${FIXTURE.name} on ${FIXTURE.framework} has no matching pair at ${SOURCE}.`,
+      );
+    }
+    writeFixture(recorded);
+    console.log(
+      `Recorded ${FIXTURE.name} on ${FIXTURE.framework} into ${path.relative(
+        process.cwd(),
+        FIXTURE_DIR,
+      )}.`,
+    );
+  }
   if (differing.length === 0) {
     console.log('Every pair reads the same documents both ways.');
     return;

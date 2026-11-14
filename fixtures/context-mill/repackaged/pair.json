@@ -1,0 +1,9 @@
+{
+  "replaces": "integration-v2-init",
+  "framework": "flask",
+  "product": "integration",
+  "original": "integration-v2-init-flask",
+  "step": "integration-init",
+  "pack": "integration-flask",
+  "contextMill": "dev"
+}
