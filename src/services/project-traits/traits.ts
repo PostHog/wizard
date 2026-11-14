@@ -30,7 +30,7 @@ export const TRAITS: { readonly [K in TraitName]: TraitDefinition<K> } = {
     detect: (session) => session.integration ?? undefined,
     matchKey: true,
   },
-  variant: {
+  frameworkVariant: {
     detect: (session) =>
       session.integration
         ? FRAMEWORK_REGISTRY[session.integration].metadata.getVariant?.(

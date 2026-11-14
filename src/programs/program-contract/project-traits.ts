@@ -7,7 +7,7 @@ export type Traits = {
   /** The framework the wizard integrates. */
   framework?: Integration;
   /** The framework's variant as its config reads it, such as `pages-router` or `expo`. */
-  variant?: string;
+  frameworkVariant?: string;
   /** `yes` when an LLM SDK is a dependency. Its absence proves nothing, so detection never says `no`. */
   callsLlmApi?: 'yes' | 'no';
   /** Paths the MCP scan suggests as servers, relative to the project. */

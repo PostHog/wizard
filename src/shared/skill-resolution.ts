@@ -31,6 +31,14 @@ function matchKeysOf(tags: ReadonlySet<string>): Map<string, string[]> {
   return keys;
 }
 
+/** The skill that stands in for `name`, a menu id or a skill family, or undefined when the menu has none. */
+export function resolveReplacement(
+  entries: readonly SkillEntry[],
+  name: string,
+): SkillEntry | undefined {
+  return entries.find((entry) => entry.replaces === name);
+}
+
 /** The skill `name` stands for, a menu id or a skill family, or undefined when none fits the run's match keys. */
 export function resolveSkill(
   entries: readonly SkillEntry[],
