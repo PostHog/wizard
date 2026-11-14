@@ -1,4 +1,3 @@
-import { setTimeout as wait } from 'node:timers/promises';
 import axios, { AxiosError } from 'axios';
 import { z } from 'zod';
 import { analytics } from '@utils/analytics';
@@ -198,26 +197,20 @@ function isTransient(error: unknown): boolean {
   return status >= 500 || status === 408 || status === 429;
 }
 
-/**
- * Runs a login-path request, retrying transient failures with backoff.
- * Once `signal` aborts, it stops waiting and throws the last failure.
- */
+/** Runs a login-path request, retrying transient failures with backoff. */
 export async function retryTransient<T>(
   request: () => Promise<T>,
-  sleep: (ms: number, signal?: AbortSignal) => Promise<void> = (ms, signal) =>
-    wait(ms, undefined, { signal }).catch(() => undefined),
-  signal?: AbortSignal,
+  sleep: (ms: number) => Promise<void> = (ms) =>
+    new Promise((resolve) => setTimeout(resolve, ms)),
 ): Promise<T> {
   for (let attempt = 0; ; attempt++) {
     try {
       return await request();
     } catch (error) {
       const delay = RETRY_DELAYS_MS[attempt];
-      if (delay === undefined || !isTransient(error) || signal?.aborted)
-        throw error;
+      if (delay === undefined || !isTransient(error)) throw error;
       logToFile(`[api] ${describeAxiosFailure(error)}, retrying in ${delay}ms`);
-      await sleep(delay, signal);
-      if (signal?.aborted) throw error;
+      await sleep(delay);
     }
   }
 }
@@ -243,24 +236,21 @@ function failureProperties(
   };
 }
 
-/** Reads the token's user. Once `signal` aborts, it cancels the request and stops retrying. */
+/** Reads the token's user. Once `signal` aborts, it cancels the request, which ends the retries. */
 export async function fetchUserData(
   accessToken: string,
   baseUrl: string,
   signal?: AbortSignal,
 ): Promise<ApiUser> {
   try {
-    const response = await retryTransient(
-      () =>
-        axios.get(`${baseUrl}/api/users/@me/`, {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            'User-Agent': WIZARD_USER_AGENT,
-          },
-          signal,
-        }),
-      undefined,
-      signal,
+    const response = await retryTransient(() =>
+      axios.get(`${baseUrl}/api/users/@me/`, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'User-Agent': WIZARD_USER_AGENT,
+        },
+        signal,
+      }),
     );
 
     return ApiUserSchema.parse(response.data);
