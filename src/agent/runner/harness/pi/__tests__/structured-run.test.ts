@@ -650,6 +650,16 @@ describe("a program's [ABORT] on the linear Pi run", () => {
     });
   });
 
+  it('reads a reason on the line after a bare [ABORT]', async () => {
+    state.text = 'Checked the project.\n[ABORT]\nno server code found';
+
+    await expect(piBackend.run(withAbortCases())).resolves.toEqual({
+      kind: 'abort',
+      classification: AgentErrorType.ABORT,
+      message: 'no server code found',
+    });
+  });
+
   it('ignores an [ABORT] the reply only mentions mid-line', async () => {
     state.text =
       "If there's no server code I'll stop with `[ABORT] no server code found`.\nWrote the first send.";

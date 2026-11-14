@@ -375,10 +375,11 @@ export const piBackend: AgentHarness = {
     const abortOnReply = (reply: string) => {
       policyAbort(reply);
       if (remarkTurn || abortReason || !config.abortCases?.length) return;
-      const line = reply
-        .split(/\r?\n/)
-        .find((text) => /^[\s`*_>]*\[ABORT\]/.test(text));
-      abortReason = line && programAbortReason(line);
+      const lines = reply.split(/\r?\n/);
+      const at = lines.findIndex((text) => /^[\s`*_>]*\[ABORT\]/.test(text));
+      // The reason may sit on the line after a bare marker.
+      abortReason =
+        at < 0 ? undefined : programAbortReason(lines.slice(at).join('\n'));
       if (abortReason) cancellation?.abort();
     };
     // Read by the catch path; undefined until setup creates the extension.
