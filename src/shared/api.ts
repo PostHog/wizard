@@ -77,7 +77,8 @@ export const ApiUserSchema = z
     role_at_organization: z.string().nullish(),
 
     // Current team + organization (objects from the API, kept typed on
-    // the fields the wizard uses; passthrough preserves the rest).
+    // the fields the wizard uses; passthrough preserves the rest). Null when
+    // the credential can't reach the user's current project or organization.
     team: z
       .object({
         id: z.number(),
@@ -88,7 +89,8 @@ export const ApiUserSchema = z
         name: z.string().nullish(),
         timezone: z.string().nullish(),
       })
-      .passthrough(),
+      .passthrough()
+      .nullish(),
     organization: z
       .object({
         id: z.string().uuid(),
@@ -101,7 +103,8 @@ export const ApiUserSchema = z
         // flip) — treat null as "unknown", not "off".
         is_ai_data_processing_approved: z.boolean().nullish(),
       })
-      .passthrough(),
+      .passthrough()
+      .nullish(),
     organizations: z.array(
       z
         .object({
