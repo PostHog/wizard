@@ -1,45 +1,54 @@
-import { SessionStore } from '../session-store';
-import { buildSession } from '../wizard-session';
+type SentEvent = { event: string; properties?: Record<string, unknown> };
 
-const tags = vi.hoisted(() => ({} as Record<string, unknown>));
+const sent = vi.hoisted(() => [] as SentEvent[]);
 
-vi.mock('@utils/analytics.js', () => ({
-  analytics: {
-    setTag: vi.fn((key: string, value: unknown) => {
-      tags[key] = value;
-    }),
+vi.mock('posthog-node', () => ({
+  PostHog: class {
+    capture(event: SentEvent) {
+      sent.push(event);
+    }
+    shutdown() {
+      return Promise.resolve();
+    }
   },
-  sessionProperties: vi.fn(() => ({})),
 }));
 
-function runSkills(...skillIds: (string | null)[]) {
+async function finishedEventAfter(...skillIds: (string | null)[]) {
+  vi.resetModules();
+  sent.length = 0;
+  const { analytics } = await import('@utils/analytics');
+  const { SessionStore } = await import('../session-store');
+  const { buildSession } = await import('../wizard-session');
   const store = new SessionStore(buildSession({}));
   for (const skillId of skillIds) store.setSkillId(skillId);
+  await analytics.shutdown('success');
+  return sent.find((e) => e.event === 'setup wizard finished')?.properties;
 }
 
-describe('migrated_from', () => {
-  beforeEach(() => {
-    for (const key of Object.keys(tags)) delete tags[key];
+describe('migrated_from on setup wizard finished', () => {
+  it('names the provider an email migration skill moves from', async () => {
+    const finished = await finishedEventAfter('migrate-email-resend');
+
+    expect(finished).toMatchObject({ migrated_from: 'resend' });
   });
 
-  it('tags a run of an email migration skill with the provider it moves from', () => {
-    runSkills('migrate-email-resend');
+  it('is absent from a run of any other skill', async () => {
+    const finished = await finishedEventAfter('migrate-statsig');
 
-    expect(tags.migrated_from).toBe('resend');
-  });
-
-  it('leaves a run of any other skill without the tag', () => {
-    runSkills('migrate-statsig');
-
-    expect(tags.migrated_from).toBeUndefined();
+    expect(finished).toBeDefined();
+    expect(finished?.migrated_from).toBeUndefined();
   });
 
   it.each([['migrate-statsig'], [null]])(
-    'drops the tag when the run moves on from an email migration to %s',
-    (nextSkillId) => {
-      runSkills('migrate-email-resend', nextSkillId);
+    'is absent when the run moves on from an email migration to %s',
+    async (nextSkillId) => {
+      const finished = await finishedEventAfter(
+        'migrate-email-resend',
+        nextSkillId,
+      );
 
-      expect(tags.migrated_from).toBeUndefined();
+      expect(finished).toBeDefined();
+      expect(finished?.migrated_from).toBeUndefined();
     },
   );
 });

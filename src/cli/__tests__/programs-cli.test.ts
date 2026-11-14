@@ -23,7 +23,6 @@ import { migrateCommand } from '../commands/migrate';
 import { mcpAnalyticsCommand } from '../commands/mcp-analytics';
 import { replayVisionCommand } from '../commands/replay-vision';
 import { revenueCommand } from '../commands/revenue';
-import { transactionalEmailCommand } from '../commands/transactional-email';
 import { warehouseCommand } from '../commands/warehouse';
 import { uploadSourcemapsCommand } from '../commands/upload-sourcemaps';
 import { selfDrivingCommand } from '../commands/self-driving';
@@ -259,12 +258,6 @@ describe('flat skill commands', () => {
     revenueCommand.handler!(makeArgv({ debug: true }));
     const [config] = mockRunWizard.mock.calls[0] as [{ skillId?: string }];
     expect(config.skillId).toBe('revenue-analytics-setup');
-  });
-
-  test('transactional-email dispatches with sending-transactional-emails skillId', () => {
-    transactionalEmailCommand.handler!(makeArgv({ debug: true }));
-    const [config] = mockRunWizard.mock.calls[0] as [{ skillId?: string }];
-    expect(config.skillId).toBe('sending-transactional-emails');
   });
 
   test('mcp-analytics dispatches with mcp-analytics skillId', () => {
