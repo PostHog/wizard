@@ -135,14 +135,27 @@ type RecordedPair = {
   original: SkillFiles;
 };
 
+/** Where a recorded file goes. Throws unless it stays inside its folder of the fixture, so a published file name cannot write anywhere else. */
+function fixtureFile(folder: string, file: string): string {
+  const root = path.join(FIXTURE_DIR, folder);
+  const target = path.resolve(root, file);
+  if (!target.startsWith(root + path.sep)) {
+    throw new Error(`${file} would be recorded outside ${root}`);
+  }
+  return target;
+}
+
 function writeFixture(recorded: RecordedPair): void {
+  // Every destination is checked before the fixture is replaced or a file is written.
+  const writes = (['step', 'pack', 'original'] as const).flatMap((folder) =>
+    Object.entries(recorded[folder]).map(
+      ([file, contents]) => [fixtureFile(folder, file), contents] as const,
+    ),
+  );
   fs.rmSync(FIXTURE_DIR, { recursive: true, force: true });
-  for (const folder of ['step', 'pack', 'original'] as const) {
-    for (const [file, contents] of Object.entries(recorded[folder])) {
-      const target = path.join(FIXTURE_DIR, folder, file);
-      fs.mkdirSync(path.dirname(target), { recursive: true });
-      fs.writeFileSync(target, contents);
-    }
+  for (const [target, contents] of writes) {
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, contents);
   }
   fs.writeFileSync(
     path.join(FIXTURE_DIR, 'pair.json'),
