@@ -4,6 +4,7 @@ import * as path from 'path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   VARIANT_FILE,
+  compareSkillFiles,
   completeSkillFromPack,
   composeStepSkill,
   removeSkillFolder,
@@ -210,6 +211,73 @@ describe('composeStepSkill', () => {
       ).toThrow(message);
     },
   );
+});
+
+describe('compareSkillFiles', () => {
+  const skill = (
+    name: string,
+    body = 'Do the step.',
+    rest: SkillFiles = {},
+  ): SkillFiles => ({
+    'SKILL.md': `---\nname: ${name}\ndescription: A step\n---\n\n${body}\n`,
+    'references/page.md': 'a page',
+    ...rest,
+  });
+  const today = skill('integration-v2-init-nextjs');
+
+  it('finds nothing between a skill and a replacement that differs only in its name', () => {
+    expect(compareSkillFiles(today, skill('integration-init'))).toEqual([]);
+  });
+
+  it.each([
+    [
+      'a different body',
+      skill('integration-init', 'Do another step.'),
+      ['SKILL.md reads differently'],
+    ],
+    [
+      'a different description',
+      {
+        ...skill('integration-init'),
+        'SKILL.md':
+          '---\nname: integration-init\ndescription: Another step\n---\n\nDo the step.\n',
+      },
+      ['SKILL.md frontmatter differs'],
+    ],
+    [
+      'a page with other content',
+      skill('integration-init', undefined, {
+        'references/page.md': 'another page',
+      }),
+      ['references/page.md differs'],
+    ],
+    [
+      'a page too many',
+      skill('integration-init', undefined, { 'references/extra.md': 'x' }),
+      ['references/extra.md is new'],
+    ],
+    [
+      'a page too few',
+      { 'SKILL.md': skill('integration-init')['SKILL.md'] },
+      ['references/page.md is gone'],
+    ],
+    ['no SKILL.md', { 'references/page.md': 'a page' }, ['SKILL.md is gone']],
+  ])('reports a replacement with %s', (_, repackaged, differences) => {
+    expect(compareSkillFiles(today, repackaged)).toEqual(differences);
+  });
+
+  it('reports every difference, not the first alone', () => {
+    const repackaged = skill('integration-init', 'Do another step.', {
+      'references/page.md': 'another page',
+      'references/extra.md': 'x',
+    });
+
+    expect(compareSkillFiles(today, repackaged).sort()).toEqual([
+      'SKILL.md reads differently',
+      'references/extra.md is new',
+      'references/page.md differs',
+    ]);
+  });
 });
 
 describe('completeSkillFromPack', () => {

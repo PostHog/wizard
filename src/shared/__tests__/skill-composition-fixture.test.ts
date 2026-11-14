@@ -1,7 +1,11 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { describe, expect, it } from 'vitest';
-import { composeStepSkill, type SkillFiles } from '@shared/skill-composition';
+import {
+  compareSkillFiles,
+  composeStepSkill,
+  type SkillFiles,
+} from '@shared/skill-composition';
 
 // A pair recorded from a context-mill build: this fill is a copy of context-mill's, and the pair keeps the two in step.
 describe('a recorded context-mill pair', () => {
@@ -23,9 +27,6 @@ describe('a recorded context-mill pair', () => {
             },
       ),
     ) as SkillFiles;
-  /** A SKILL.md without the `name` in its frontmatter, the one line a skill and its replacement differ in. */
-  const unnamed = (skill: string) => skill.replace(/^name: .*\n/m, '');
-
   it('completes the recorded step from the recorded pack into the skill it replaces', () => {
     const pair = JSON.parse(
       fs.readFileSync(path.join(root, 'pair.json'), 'utf8'),
@@ -38,12 +39,7 @@ describe('a recorded context-mill pair', () => {
       pair.product,
     );
 
-    expect(Object.keys(composed).sort()).toEqual(Object.keys(original).sort());
-    for (const [file, contents] of Object.entries(original)) {
-      if (file === 'SKILL.md') {
-        expect(unnamed(composed[file])).toBe(unnamed(contents));
-      } else expect(composed[file], file).toBe(contents);
-    }
+    expect(compareSkillFiles(original, composed)).toEqual([]);
     expect(composed['SKILL.md']).not.toBe(original['SKILL.md']);
   });
 });

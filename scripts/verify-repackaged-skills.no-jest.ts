@@ -1,12 +1,12 @@
 /** Checks that a run reads the same documents from the repackaged skills as from the skills they replace; see scripts/README.md. */
 
-import { createHash } from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { unzipSync } from 'fflate';
 import {
   VARIANT_FILE,
+  compareSkillFiles,
   composeStepSkill,
   type SkillFiles,
 } from '@shared/skill-composition';
@@ -38,7 +38,6 @@ const FIXTURE_DIR = path.resolve(
 );
 /** The skill family whose pick is the run's framework pack. */
 const PACK_FAMILY = 'integration';
-const SKILL_FILE = 'SKILL.md';
 
 const cache = new Map<string, Promise<Uint8Array>>();
 
@@ -73,44 +72,6 @@ async function filesOf(entry: SkillEntry): Promise<SkillFiles> {
       .filter(([file]) => !file.endsWith('/'))
       .map(([file, contents]) => [file, text(contents)]),
   );
-}
-
-const hash = (contents: string): string =>
-  createHash('sha256').update(contents).digest('hex');
-
-const FRONTMATTER = /^---\n([\s\S]*?)\n---\n\n?/;
-
-/** A SKILL.md without its frontmatter. */
-const body = (skill: string): string => skill.replace(FRONTMATTER, '');
-
-/** A SKILL.md's frontmatter without `name`, the one field a skill and its replacement must differ in. */
-const frontmatter = (skill: string): string =>
-  (FRONTMATTER.exec(skill)?.[1] ?? '')
-    .split('\n')
-    .filter((line) => !line.startsWith('name:'))
-    .join('\n');
-
-/** What differs between the files a task reads today and the files it reads from the replacement. */
-function compare(today: SkillFiles, repackaged: SkillFiles): string[] {
-  const differences: string[] = [];
-  for (const file of new Set([
-    ...Object.keys(today),
-    ...Object.keys(repackaged),
-  ])) {
-    if (!Object.hasOwn(repackaged, file)) differences.push(`${file} is gone`);
-    else if (!Object.hasOwn(today, file)) differences.push(`${file} is new`);
-    else if (file === SKILL_FILE) {
-      if (body(today[file]) !== body(repackaged[file])) {
-        differences.push(`${SKILL_FILE} reads differently`);
-      }
-      if (frontmatter(today[file]) !== frontmatter(repackaged[file])) {
-        differences.push(`${SKILL_FILE} frontmatter differs`);
-      }
-    } else if (hash(today[file]) !== hash(repackaged[file])) {
-      differences.push(`${file} differs`);
-    }
-  }
-  return differences;
 }
 
 /** The files of a pack that completing a skill reads: its variant.json, the product's pages and its rules file. */
@@ -212,7 +173,7 @@ async function main(): Promise<void> {
             ? composeStepSkill(step, packFiles, product)
             : step;
         const original = await filesOf(today);
-        const differences = compare(original, repackaged);
+        const differences = compareSkillFiles(original, repackaged);
         if (differences.length > 0) {
           differing.push(`${label} (${today.id}): ${differences.join('; ')}`);
         } else if (

@@ -124,6 +124,47 @@ export function composeStepSkill(
   return files;
 }
 
+const FRONTMATTER = /^---\n([\s\S]*?)\n---\n\n?/;
+
+/** A SKILL.md's frontmatter without `name`, the one field a skill and its replacement must differ in. */
+const frontmatterWithoutName = (skill: string): string =>
+  (FRONTMATTER.exec(skill)?.[1] ?? '')
+    .split('\n')
+    .filter((line) => !line.startsWith('name:'))
+    .join('\n');
+
+/** What differs between the files a task reads today and the files it reads from the replacement: one line each, and none when they read the same. */
+export function compareSkillFiles(
+  today: SkillFiles,
+  repackaged: SkillFiles,
+): string[] {
+  const differences: string[] = [];
+  for (const file of new Set([
+    ...Object.keys(today),
+    ...Object.keys(repackaged),
+  ])) {
+    if (!Object.hasOwn(repackaged, file)) differences.push(`${file} is gone`);
+    else if (!Object.hasOwn(today, file)) differences.push(`${file} is new`);
+    else if (file === SKILL_FILE) {
+      if (
+        today[file].replace(FRONTMATTER, '') !==
+        repackaged[file].replace(FRONTMATTER, '')
+      ) {
+        differences.push(`${SKILL_FILE} reads differently`);
+      }
+      if (
+        frontmatterWithoutName(today[file]) !==
+        frontmatterWithoutName(repackaged[file])
+      ) {
+        differences.push(`${SKILL_FILE} frontmatter differs`);
+      }
+    } else if (today[file] !== repackaged[file]) {
+      differences.push(`${file} differs`);
+    }
+  }
+  return differences;
+}
+
 /** Every file under `dir`, keyed by its path from `dir` with `/` separators. */
 function readFiles(dir: string, prefix = ''): SkillFiles {
   const files: SkillFiles = {};
