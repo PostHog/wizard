@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.94.1](https://github.com/PostHog/wizard/compare/v2.94.0...v2.94.1) (2026-11-14)
+
+
+### Bug Fixes
+
+* **auth:** accept a user with no reachable current project ([#1563](https://github.com/PostHog/wizard/issues/1563)) ([39e6166](https://github.com/PostHog/wizard/commit/39e6166812974bff7a02e1ee6a94e786b5c21e2a))
+
 ## [2.94.0](https://github.com/PostHog/wizard/compare/v2.93.0...v2.94.0) (2026-11-13)
 
 
