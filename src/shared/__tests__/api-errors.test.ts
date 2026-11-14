@@ -266,6 +266,10 @@ describe.concurrent('fetchUserData with a deadline', () => {
       case 'fails-then-stalls.test':
         if (attempt === 1) res.writeHead(503).end();
         return;
+      case 'fails-late.test':
+        // The second 503 lands about 2.5 s in, so the 1.5 s backoff after it crosses the deadline.
+        setTimeout(() => res.writeHead(503).end(), attempt === 1 ? 0 : 2_000);
+        return;
     }
   }
   const requests = new Map<string, number>();
@@ -330,5 +334,22 @@ describe.concurrent('fetchUserData with a deadline', () => {
 
     expect(Date.now() - started).toBeLessThan(DEADLINE_MS + 400);
     expect(requests.get('fails-then-stalls.test')).toBe(2);
+  });
+
+  it('stops after a backoff that outlasts the deadline, without another request', async ({
+    expect,
+  }) => {
+    const started = Date.now();
+
+    await expect(
+      fetchUserData(
+        'token',
+        'http://fails-late.test',
+        AbortSignal.timeout(DEADLINE_MS),
+      ),
+    ).rejects.toThrow();
+
+    expect(Date.now() - started).toBeLessThan(DEADLINE_MS + 1_500 + 400);
+    expect(requests.get('fails-late.test')).toBe(2);
   });
 });
