@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.95.0](https://github.com/PostHog/wizard/compare/v2.94.0...v2.95.0) (2026-11-16)
+
+
+### Features
+
+* **orchestrator:** read the repackaged step skills behind wizard-agent-dag-skills ([#1559](https://github.com/PostHog/wizard/issues/1559)) ([555947b](https://github.com/PostHog/wizard/commit/555947b8ff3bd65bcb484afc332f615dc36f44d7))
+
+
+### Bug Fixes
+
+* **auth:** accept a user with no reachable current project ([#1563](https://github.com/PostHog/wizard/issues/1563)) ([39e6166](https://github.com/PostHog/wizard/commit/39e6166812974bff7a02e1ee6a94e786b5c21e2a))
+
 ## [2.94.0](https://github.com/PostHog/wizard/compare/v2.93.0...v2.94.0) (2026-11-13)
 
 
