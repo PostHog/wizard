@@ -33,7 +33,7 @@ describe('getTraits', () => {
     (framework) => {
       const value = session();
       value.integration = framework;
-      expect(getTraits(value).variant).toBeUndefined();
+      expect(getTraits(value).frameworkVariant).toBeUndefined();
     },
   );
 
@@ -101,7 +101,7 @@ describe('the Nuxt variant', () => {
         benchmark: false,
         yaraReport: false,
       })) ?? {};
-    return getTraits(value).variant;
+    return getTraits(value).frameworkVariant;
   };
 
   it.each([

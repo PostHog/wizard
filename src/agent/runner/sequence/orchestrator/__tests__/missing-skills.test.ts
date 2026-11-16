@@ -25,6 +25,7 @@ vi.mock('../../../switchboard', async () => {
     resolveStageOverrides: () => ({}),
     areSeededTasksEnabled: () => false,
     isAgentDagEnabled: () => agentDag,
+    isAgentDagSkillsEnabled: () => false,
     getHarness: () => ({ runTask: (inputs: unknown) => harnessRun(inputs) }),
   };
 });

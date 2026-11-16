@@ -40,12 +40,33 @@ arguments. For new runs follow the
 [current host limitations](../e2e-harness/ARCHITECTURE.md#current-host-limitations)
 before choosing credentials or an EU project.
 
+## Repackaged skills
+
+`pnpm verify:repackaged-skills [dist-or-url]` runs
+`verify-repackaged-skills.no-jest.ts` against a context-mill build's
+`dist/skills` folder, or a release's download URL, the latest by default. For
+every framework and every skill a menu entry replaces, it resolves both skills
+as a run does, completes the replacement from the framework's pack, and
+compares the files a task reads: every file byte for byte, and `SKILL.md` but
+for the `name` in its frontmatter. A skill family is compared once per
+framework, and one skill once. It prints each pair that differs, and each
+replaced name it found no skill to compare with, and exits 1 when there is
+either. Run it before `wizard-agent-dag-skills` reaches a new group of users.
+
+With `--record` it also writes one matching pair into
+`fixtures/context-mill/repackaged/`: the step skill as published, the files of
+the pack that completing it reads, and the skill it replaces. A unit test
+completes that step from that pack and expects that skill, which keeps the
+wizard's fill in step with context-mill's in CI. Record it again when
+context-mill changes how it builds a step skill or a pack.
+
 ## Context-mill fixtures
 
 `pnpm record:context-mill-fixtures [base-url]` runs
 `record-context-mill-fixtures.no-jest.ts`, which records a context-mill
 release's skill menu, agent menu and agent prompts into
-`fixtures/context-mill/`, the fixtures the behavior checks compare against.
+`fixtures/context-mill/`, the fixtures the behavior checks compare against. It
+leaves `repackaged/` as it is.
 Commit the result on its own with the reason, since a changed fixture changes
 what "unchanged" means.
 

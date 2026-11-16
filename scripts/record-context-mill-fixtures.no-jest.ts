@@ -80,7 +80,8 @@ async function main(): Promise<void> {
     })),
   );
 
-  fs.rmSync(OUT_DIR, { recursive: true, force: true });
+  // Only what this script records is replaced; `repackaged/` belongs to `verify:repackaged-skills --record`.
+  fs.rmSync(AGENTS_DIR, { recursive: true, force: true });
   fs.mkdirSync(OUT_DIR, { recursive: true });
   fs.writeFileSync(path.join(OUT_DIR, 'skill-menu.json'), skillMenu);
   fs.writeFileSync(path.join(OUT_DIR, 'agent-menu.json'), agentMenuText);

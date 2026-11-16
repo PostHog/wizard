@@ -161,6 +161,7 @@
     "decisions-detect": "tsx scripts/decisions-detect.no-jest.ts",
     "check:decisions-bundle": "tsx scripts/check-decisions-bundle.no-jest.ts",
     "record:context-mill-fixtures": "tsx scripts/record-context-mill-fixtures.no-jest.ts",
+    "verify:repackaged-skills": "tsx --tsconfig tsconfig.base.json scripts/verify-repackaged-skills.no-jest.ts",
     "visual-dags": "tsx scripts/visual-dags.no-jest.ts"
   },
   "lint-staged": {

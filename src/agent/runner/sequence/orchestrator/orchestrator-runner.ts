@@ -34,6 +34,7 @@ import { installSkillById } from '@shared/skill-install';
 import {
   formatYaraAbortMessage,
   scanInstalledSkill,
+  scanInstalledSkillFile,
 } from '../../../yara-hooks';
 import { fetchSkillMenu, type SkillEntry } from '@shared/skill-menu';
 import {
@@ -67,6 +68,7 @@ import {
   areSeededTasksEnabled,
   getHarness,
   isAgentDagEnabled,
+  isAgentDagSkillsEnabled,
   resolveHarness,
   resolveStageOverrides,
   type HarnessPick,
@@ -96,6 +98,7 @@ import {
 } from './task-deadline';
 import { dependencyClosure, uncoveredBySink } from './queue-tools';
 import { deferSeededTasks } from './seeded-deps';
+import { repackagedSkillInstaller } from './repackaged-skills';
 import { queueTaskGraph, TaskGraphError } from './task-graph';
 import { LONGER_ASK_TIMEOUT_MS, shouldDisableAsk } from '@shared/ask-policy';
 import {
@@ -925,6 +928,14 @@ async function executeOrchestrator(
         resolveSkill(menuSkillEntries, skillId, matchKeys)?.id
     : (skillId: string) =>
         resolveSkillVariantId(menuSkillEntries, skillId, framework);
+  // `wizard-agent-dag-skills` has a task read the skill that stands in for the one its prompt names, when the menu has any.
+  const repackagedSkills =
+    isAgentDagSkillsEnabled(boot.wizardFlags) &&
+    menuSkillEntries.some((entry) => entry.replaces !== undefined);
+  analytics.setTag(
+    'orchestrator_skills',
+    repackagedSkills ? 'repackaged' : 'bundles',
+  );
   const referenceSkillId = framework ? pickSkillId(REFERENCE_SKILL) : undefined;
   if (referenceSkillId) {
     const ref = await installSkillById(
@@ -1373,6 +1384,32 @@ async function executeOrchestrator(
   // its agent prompt (the WHAT) and the mini-skills it needs (the HOW), then
   // runs on its own model and tools.
   const taskSkillsRoot = path.join(QUEUE_DIR_NAME, 'skills');
+  // With the flag off, or a menu with no replacement, every task reads the skill its prompt names.
+  const installRepackagedSkill = repackagedSkills
+    ? repackagedSkillInstaller({
+        entries: menuSkillEntries,
+        installDir: input.installDir,
+        skillsRoot: taskSkillsRoot,
+        referencePath: referenceInstallPath,
+        install: (skillId) =>
+          installSkillById(skillId, input.installDir, boot.skillsBaseUrl, {
+            skillsRoot: taskSkillsRoot,
+            scan: (dir) => scanInstalledSkill(dir, boot.triageProvider),
+          }),
+        scanFile: (file) => scanInstalledSkillFile(file, boot.triageProvider),
+        onUnavailable: (replacement, name, reason) => {
+          logToFile(
+            `[orchestrator] repackaged skill ${replacement.id} unavailable for ${name}: ${reason}`,
+          );
+          analytics.wizardCapture('orchestrator repackaged skill unavailable', {
+            skill: replacement.id,
+            replaces: name,
+            reason: reason.slice(0, 200),
+            framework,
+          });
+        },
+      })
+    : () => Promise.resolve(undefined);
   // Task agents can install durable skills mid-run (load_skill), and only the
   // framework reference docs earn a place — snapshot what was already there so
   // the sweeps remove exactly what this run added.
@@ -1393,6 +1430,12 @@ async function executeOrchestrator(
       const skillPaths: string[] = [];
       for (const skillId of resolved.skills) {
         if (signal?.aborted) return;
+        const repackaged = await installRepackagedSkill(skillId);
+        if (signal?.aborted) return;
+        if (repackaged) {
+          skillPaths.push(path.join(repackaged, 'SKILL.md'));
+          continue;
+        }
         // Agent prompts name the bare step-skill (`integration-v2-install`);
         // SDK-divergent steps ship per-framework variants, so resolve against
         // the menu with the session's framework before installing.
