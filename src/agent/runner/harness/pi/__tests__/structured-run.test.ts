@@ -626,7 +626,7 @@ describe("a program's [ABORT] on the linear Pi run", () => {
     return inputs;
   };
 
-  it('ends the run with the reason, without a nudge', async () => {
+  it('ends the run with the reason, with a task still open', async () => {
     state.hang = true;
     state.tasks.set('1', { status: 'in_progress' });
     state.text = 'Checked the project.\n[ABORT] no server code found';
@@ -636,7 +636,6 @@ describe("a program's [ABORT] on the linear Pi run", () => {
       classification: AgentErrorType.ABORT,
       message: 'no server code found',
     });
-    expect(state.prompts).toHaveLength(1);
   });
 
   it('reads the reason from its own text block', async () => {
@@ -669,14 +668,14 @@ describe("a program's [ABORT] on the linear Pi run", () => {
     });
   });
 
-  it('leaves a program without abort cases to its nudge', async () => {
+  it('runs a program without abort cases on to its open tasks', async () => {
     state.tasks.set('1', { status: 'in_progress' });
     state.text = 'Checked the project.\n[ABORT] no server code found';
 
-    const result = await piBackend.run(runInputs(vi.fn(), null));
-
-    expect(result.kind).not.toBe('abort');
-    expect(state.prompts.length).toBeGreaterThan(1);
+    await expect(piBackend.run(runInputs(vi.fn(), null))).resolves.toEqual({
+      kind: 'failure',
+      classification: AgentErrorType.INCOMPLETE_TASKS,
+    });
   });
 
   it('ignores an [ABORT] line in the remark reply', async () => {
