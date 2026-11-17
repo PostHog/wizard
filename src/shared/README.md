@@ -38,7 +38,9 @@ Modules callers reach most:
   `installSkillById(skillId, installDir, skillsBaseUrl, options?)` install a
   skill into a project; `InstallSkillResult`, `isSkillInstallCommand`. An
   install that fails removes the folder it made and keeps one that was there
-  first. `WIZARD_MARKER` is the file every installed skill folder carries.
+  first, and an entry whose id is not one plain name is refused before a
+  folder is made. `WIZARD_MARKER` is the file every installed skill folder
+  carries.
 - `@shared/ask-policy`: `shouldDisableAsk(flags)` and `LONGER_ASK_TIMEOUT_MS`,
   when `wizard_ask` may reach a human and how long an errand question waits.
 - `@shared/claude-settings`: settings conflict detection, backup and restore.

@@ -51,7 +51,7 @@ function parseVariant(text: string): PackVariant {
 }
 
 /** One plain part of a path or one skill id: it starts with a letter or digit and has no separator. */
-const PLAIN_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
+export const PLAIN_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 
 /** Where a pack's file lands in the skill: `references/<name>`. A page the install scan would skip is refused: every part is plain and it ends in `.md`. */
 function referencePath(file: string): string {

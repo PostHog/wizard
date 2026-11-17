@@ -6,6 +6,7 @@ import { unzipSync } from 'fflate';
 import { logToFile } from '@utils/debug';
 import { analytics } from '@utils/analytics';
 import { fetchWithRetry, type RetryOpts } from '@shared/fetch-retry';
+import { PLAIN_NAME } from '@shared/skill-composition';
 import { fetchSkillMenu, type SkillEntry } from '@shared/skill-menu';
 
 /** A bundle's files, keyed by variant short id then path. */
@@ -96,6 +97,18 @@ export async function downloadSkill(
   installDir: string,
   { skillsRoot, scan }: SkillInstallOptions,
 ): Promise<{ success: boolean; error?: string }> {
+  // The id comes from the menu and names the folder written to, so it is one plain name.
+  if (!PLAIN_NAME.test(skillEntry.id)) {
+    const error = `unusable skill id: ${skillEntry.id}`;
+    logToFile(`downloadSkill: ${error}`);
+    analytics.wizardCapture('skill install failed', {
+      skill_id: skillEntry.id.slice(0, 200),
+      step: 'download',
+      platform: process.platform,
+      error,
+    });
+    return { success: false, error };
+  }
   const skillDir = skillsRoot
     ? path.join(installDir, skillsRoot, skillEntry.id)
     : path.join(installDir, '.claude', 'skills', skillEntry.id);
