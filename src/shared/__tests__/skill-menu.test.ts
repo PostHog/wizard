@@ -46,84 +46,49 @@ describe('fetchSkillMenu', () => {
     expect(result).toBeNull();
   });
 
-  it('expands a bundle entry into one entry per variant, each with the family of its category', async () => {
-    const bundled: SkillMenu = {
+  it('gives each entry the family of its category, and leaves out a bundle of variants with any category it empties', async () => {
+    const published = {
       categories: {
         'flow/capture': [
           {
-            id: 'capture',
+            id: 'flow-capture',
+            name: 'Capture',
+            downloadUrl: 'http://localhost:8765/flow-capture.zip',
+          },
+          {
+            id: 'old-capture',
             name: 'Capture',
             bundle: true,
-            downloadUrl: 'http://localhost:8765/capture.json',
-            variants: [
-              { id: 'capture-rails', tags: ['framework:rails', 'default'] },
-              { id: 'capture-react', tags: ['framework:react'] },
-            ],
+            downloadUrl: 'http://localhost:8765/old-capture.json',
+            variants: [{ id: 'old-capture-rails' }],
+          },
+        ],
+        'old/only': [
+          {
+            id: 'old-only',
+            name: 'Only',
+            bundle: true,
+            downloadUrl: 'http://localhost:8765/old-only.json',
+            variants: [{ id: 'old-only-rails' }],
           },
         ],
       },
     };
 
     const result = await fetchSkillMenu('http://localhost:8765', {
-      fetchImpl: respond(bundled) as any,
+      fetchImpl: respond(published) as any,
       sleepImpl: noSleep,
     });
 
     expect(result?.categories['flow/capture']).toEqual([
       {
-        id: 'capture-rails',
-        tags: ['framework:rails', 'default'],
+        id: 'flow-capture',
         name: 'Capture',
         family: 'flow-capture',
-        bundle: true,
-        downloadUrl: 'http://localhost:8765/capture.json',
-      },
-      {
-        id: 'capture-react',
-        tags: ['framework:react'],
-        name: 'Capture',
-        family: 'flow-capture',
-        bundle: true,
-        downloadUrl: 'http://localhost:8765/capture.json',
+        downloadUrl: 'http://localhost:8765/flow-capture.zip',
       },
     ]);
-  });
-
-  it("gives each bundle variant the bundle's title and description, keeping its own tags", async () => {
-    const bundled: SkillMenu = {
-      categories: {
-        integration: [
-          {
-            id: 'capture',
-            name: 'Capture',
-            bundle: true,
-            title: 'Capture step',
-            description: 'Instrument the planned events',
-            downloadUrl: 'http://localhost:8765/capture.json',
-            variants: [
-              {
-                id: 'capture-rails',
-                tags: ['framework:rails', 'capture'],
-              },
-              { id: 'capture-react', title: 'React' },
-            ],
-          },
-        ],
-      },
-    };
-
-    const result = await fetchSkillMenu('http://localhost:8765', {
-      fetchImpl: respond(bundled) as any,
-      sleepImpl: noSleep,
-    });
-
-    const [rails, react] = result?.categories.integration ?? [];
-    expect(rails).toMatchObject({
-      title: 'Capture step',
-      description: 'Instrument the planned events',
-      tags: ['framework:rails', 'capture'],
-    });
-    expect(react.title).toBe('React');
+    expect(Object.keys(result?.categories ?? {})).toEqual(['flow/capture']);
   });
 
   it('tags later events with the context-mill release that built the menu', async () => {

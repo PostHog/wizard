@@ -15,8 +15,6 @@ export type SkillEntry = {
   downloadUrl: string;
   /** The skill family, set on fetch from the category the menu lists the entry under, with `/` as `-`. */
   family?: string;
-  /** This entry's download is a bundle JSON of every variant, not a single skill's zip. */
-  bundle?: boolean;
   /** Human name for the skill. Older menus omit it. */
   title?: string;
   /** What the skill covers. */
@@ -25,16 +23,6 @@ export type SkillEntry = {
   tags?: string[];
   /** The product whose pages, from the framework's pack, complete this skill; see `@shared/skill-composition`. */
   frameworkReferences?: string;
-  /** Menu-only: the variants inside a bundle, expanded into entries of their own on fetch. */
-  variants?: SkillVariant[];
-};
-
-/** One variant inside a bundle entry. */
-export type SkillVariant = {
-  id: string;
-  title?: string;
-  description?: string;
-  tags?: string[];
 };
 
 /**
@@ -64,31 +52,18 @@ export interface SkillMenu {
   cliEntries?: CliEntry[];
 }
 
-/** Expand a bundle entry into one entry per variant, so the menu reads the same whether a group ships bundled or as zips. */
-export function expandBundleEntry(entry: SkillEntry): SkillEntry[] {
-  if (!entry.bundle || !entry.variants) return [entry];
-  return entry.variants.map((variant) => ({
-    ...variant,
-    name: entry.name,
-    bundle: true,
-    downloadUrl: entry.downloadUrl,
-    ...(entry.title && !variant.title ? { title: entry.title } : {}),
-    ...(entry.description && !variant.description
-      ? { description: entry.description }
-      : {}),
-  }));
-}
-
 /** A category's skill family: its key with `/` as `-`, so `integration/install` is `integration-install`. */
 const skillFamily = (category: string): string => category.replaceAll('/', '-');
 
-/** The menu as the wizard reads it: each bundle expanded into its variants, and each entry given its family. */
+/** The menu as the wizard reads it: each entry given its family, and an entry that is a bundle of variants left out with any category it empties. */
 export function prepareSkillMenu(menu: SkillMenu): SkillMenu {
   for (const [category, entries] of Object.entries(menu.categories)) {
     const family = skillFamily(category);
-    menu.categories[category] = entries
-      .flatMap(expandBundleEntry)
+    const kept = entries
+      .filter((entry) => !('bundle' in entry && entry.bundle))
       .map((entry) => ({ ...entry, family }));
+    if (kept.length > 0) menu.categories[category] = kept;
+    else delete menu.categories[category];
   }
   return menu;
 }
