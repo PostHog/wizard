@@ -228,11 +228,9 @@ describe('step skills completed from the pack', () => {
     expect(prompts.install).toContain('skills/integration-install/SKILL.md');
     expect(prompts.install).toContain('skills/kept-skill/SKILL.md');
     expect(unavailable()).toEqual([]);
-    expect(scanned).toEqual([
-      path.join(
-        dir,
-        '.posthog-wizard-cache/skills/integration-install/SKILL.md',
-      ),
+    // The one file scanned is the rewritten SKILL.md, in the temp folder the skill is built in.
+    expect(scanned.map((file) => file.split(path.sep).slice(-2))).toEqual([
+      ['integration-install', 'SKILL.md'],
     ]);
   });
 

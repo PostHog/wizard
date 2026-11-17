@@ -51,7 +51,7 @@ function parseVariant(text: string): PackVariant {
 }
 
 /** One plain part of a path or one skill id: it starts with a letter or digit and has no separator. */
-const PLAIN_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
+export const PLAIN_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 
 /** Where a pack's file lands in the skill: `references/<name>`. A page the install scan would skip is refused: every part is plain and it ends in `.md`. */
 function referencePath(file: string): string {
@@ -171,19 +171,19 @@ function plainPath(
   return target;
 }
 
-/** Remove the folder of skill `id` under `skillsRoot`, or a link standing there; `id` is one plain name, and `skillsRoot` is reached through no link below `boundaryDir`. */
-export function removeSkillFolder(
+/** The folder of skill `id` under `skillsRoot`: `id` is one plain name, and `skillsRoot` is reached through no link below `boundaryDir`. */
+export function skillFolder(
   skillsRoot: string,
   id: string,
   boundaryDir: string,
-): void {
+): string {
   if (!PLAIN_NAME.test(id)) throw new Error(`unusable skill id: ${id}`);
   const root = plainPath(
     boundaryDir,
     path.relative(path.resolve(boundaryDir), path.resolve(skillsRoot)),
     'folder',
   );
-  fs.rmSync(path.join(root, id), { recursive: true, force: true });
+  return path.join(root, id);
 }
 
 /** Complete the step skill at `skillDir` from the pack at `packDir`, writing through no link below `boundaryDir`; throws and leaves the skill as it was otherwise. */

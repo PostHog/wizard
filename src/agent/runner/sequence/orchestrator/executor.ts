@@ -78,11 +78,14 @@ async function runOne(
 ): Promise<void> {
   if (signal?.aborted) return;
   store.start(task.id);
+  // Why the task could not run, when it threw instead of ending without a report.
+  let thrown: string | undefined;
   try {
     await runTask(task);
   } catch (error) {
     if (signal?.aborted) return;
     if (error instanceof RunTaskFatal) throw error;
+    thrown = error instanceof Error ? error.message : String(error);
     // The task threw rather than reporting. The outcome check below handles
     // the queue; the exception itself should never be silent.
     logToFile(`[executor] runTask threw for ${task.type}:`, error);
@@ -104,7 +107,9 @@ async function runOne(
     } else {
       store.fail(task.id, {
         type: 'no-report',
-        message: 'Task ended without calling complete_task.',
+        message: thrown
+          ? `Task ended without calling complete_task: ${thrown}`
+          : 'Task ended without calling complete_task.',
       });
     }
     return;
