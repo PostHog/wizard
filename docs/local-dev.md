@@ -166,8 +166,8 @@ headless runs.
 | `--context-mill-version <version>` | `POSTHOG_WIZARD_CONTEXT_MILL_VERSION` | skills → that release |
 
 ```bash
-npx @posthog/wizard --context-mill-version 1.59.0
-POSTHOG_WIZARD_CONTEXT_MILL_VERSION=v1.59.0 npx @posthog/wizard
+npx @posthog/wizard --context-mill-version 1.66.0
+POSTHOG_WIZARD_CONTEXT_MILL_VERSION=v1.66.0 npx @posthog/wizard
 ```
 
 The value is a release version, with or without the `v` prefix. An empty value
@@ -175,14 +175,17 @@ or `latest` follows the latest release. Any other value stops the run with
 `PHW_CLI_BAD_ARGS`.
 
 A pinned run reads
-`https://github.com/PostHog/context-mill/releases/download/v1.59.0/` and fails
-over to `https://context-mill.posthog.com/v1.59.0/`. A version with no release
+`https://github.com/PostHog/context-mill/releases/download/v1.66.0/` and fails
+over to `https://context-mill.posthog.com/v1.66.0/`. A version with no release
 fails when the run first fetches a menu. The `[agent-runner] targets` line in
 the debug log shows the release a run used.
 
-A pinned run reads no repackaged skill; see the
+The oldest release a pin may name is 1.66.0, the first that publishes the
+skills the bundled agent prompts name. An older version, or a prerelease of
+1.66.0 itself, stops the run with `PHW_CLI_BAD_ARGS` and a message that names
+that release. A pinned run's agent
+prompts are the ones the wizard bundles, as in any run; see the
 [orchestrator sequence](../src/agent/runner/sequence/README.md#orchestrator).
-Its agent prompts are the ones the wizard bundles, as in any run.
 
 The pin cannot be combined with `--local-context-mill` or `--local-dev`. Pass
 `--no-local-context-mill` to keep the other local targets.

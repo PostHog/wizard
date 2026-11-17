@@ -4,10 +4,9 @@ import * as path from 'path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   VARIANT_FILE,
-  compareSkillFiles,
   completeSkillFromPack,
   composeStepSkill,
-  removeSkillFolder,
+  skillFolder,
   type SkillFiles,
 } from '@shared/skill-composition';
 
@@ -213,73 +212,6 @@ describe('composeStepSkill', () => {
   );
 });
 
-describe('compareSkillFiles', () => {
-  const skill = (
-    name: string,
-    body = 'Do the step.',
-    rest: SkillFiles = {},
-  ): SkillFiles => ({
-    'SKILL.md': `---\nname: ${name}\ndescription: A step\n---\n\n${body}\n`,
-    'references/page.md': 'a page',
-    ...rest,
-  });
-  const today = skill('integration-v2-init-nextjs');
-
-  it('finds nothing between a skill and a replacement that differs only in its name', () => {
-    expect(compareSkillFiles(today, skill('integration-init'))).toEqual([]);
-  });
-
-  it.each([
-    [
-      'a different body',
-      skill('integration-init', 'Do another step.'),
-      ['SKILL.md reads differently'],
-    ],
-    [
-      'a different description',
-      {
-        ...skill('integration-init'),
-        'SKILL.md':
-          '---\nname: integration-init\ndescription: Another step\n---\n\nDo the step.\n',
-      },
-      ['SKILL.md frontmatter differs'],
-    ],
-    [
-      'a page with other content',
-      skill('integration-init', undefined, {
-        'references/page.md': 'another page',
-      }),
-      ['references/page.md differs'],
-    ],
-    [
-      'a page too many',
-      skill('integration-init', undefined, { 'references/extra.md': 'x' }),
-      ['references/extra.md is new'],
-    ],
-    [
-      'a page too few',
-      { 'SKILL.md': skill('integration-init')['SKILL.md'] },
-      ['references/page.md is gone'],
-    ],
-    ['no SKILL.md', { 'references/page.md': 'a page' }, ['SKILL.md is gone']],
-  ])('reports a replacement with %s', (_, repackaged, differences) => {
-    expect(compareSkillFiles(today, repackaged)).toEqual(differences);
-  });
-
-  it('reports every difference, not the first alone', () => {
-    const repackaged = skill('integration-init', 'Do another step.', {
-      'references/page.md': 'another page',
-      'references/extra.md': 'x',
-    });
-
-    expect(compareSkillFiles(today, repackaged).sort()).toEqual([
-      'SKILL.md reads differently',
-      'references/extra.md is new',
-      'references/page.md differs',
-    ]);
-  });
-});
-
 describe('completeSkillFromPack', () => {
   let dir: string;
 
@@ -399,47 +331,30 @@ describe('completeSkillFromPack', () => {
     expect(read('skill/SKILL.md')).toBe(INIT['SKILL.md']);
   });
 
-  describe('removeSkillFolder', () => {
-    it('removes the folder and leaves the rest of the boundary', () => {
-      removeSkillFolder(dir, 'skill', dir);
-
-      expect(fs.readdirSync(dir)).toEqual(['pack']);
+  describe('skillFolder', () => {
+    it('names the folder of a skill under the skills root', () => {
+      expect(skillFolder(dir, 'skill', dir)).toBe(path.join(dir, 'skill'));
     });
 
     it.skipIf(process.platform === 'win32')(
-      'removes a link standing where the folder goes, and not what it points at',
-      () => {
-        fs.symlinkSync(path.join(dir, 'pack'), path.join(dir, 'linked'));
-
-        removeSkillFolder(dir, 'linked', dir);
-
-        expect(fs.readdirSync(dir).sort()).toEqual(['pack', 'skill']);
-        expect(read('pack/references/next-js.md')).toBe('the library page');
-      },
-    );
-
-    it.skipIf(process.platform === 'win32')(
-      'removes nothing through a linked folder on the way',
+      'names nothing through a linked folder on the way',
       () => {
         fs.mkdirSync(path.join(dir, 'outside/skill'), { recursive: true });
         fs.symlinkSync(path.join(dir, 'outside'), path.join(dir, 'cache'));
 
         expect(() =>
-          removeSkillFolder(path.join(dir, 'cache'), 'skill', dir),
+          skillFolder(path.join(dir, 'cache'), 'skill', dir),
         ).toThrow(/through a link/);
-        expect(fs.existsSync(path.join(dir, 'outside/skill'))).toBe(true);
       },
     );
 
-    // The id comes from the menu, so one that names another folder must remove nothing.
+    // The id comes from the menu, so one that names another folder is refused.
     it.each(['../pack', '..', '../../pack', 'a/b', '.hidden', ''])(
-      'removes nothing for the id %j',
+      'refuses the id %j',
       (id) => {
-        expect(() =>
-          removeSkillFolder(path.join(dir, 'skill'), id, dir),
-        ).toThrow(/unusable skill id/);
-        expect(fs.readdirSync(dir).sort()).toEqual(['pack', 'skill']);
-        expect(read('skill/SKILL.md')).toBe(INIT['SKILL.md']);
+        expect(() => skillFolder(path.join(dir, 'skill'), id, dir)).toThrow(
+          /unusable skill id/,
+        );
       },
     );
   });

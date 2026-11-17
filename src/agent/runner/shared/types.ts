@@ -293,6 +293,8 @@ export interface BootstrapResult {
   project: ApiProject | null;
   /** Scan-triage classifier on this run's harness. Undefined → skill scans fail closed. */
   triageProvider: LLMProvider | undefined;
+  /** The run's match keys, read when a tool installs a skill completed from the framework's pack. */
+  matchKeys: () => MatchKeys;
 }
 
 /**

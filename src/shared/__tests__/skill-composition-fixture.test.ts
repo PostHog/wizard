@@ -1,13 +1,9 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { describe, expect, it } from 'vitest';
-import {
-  compareSkillFiles,
-  composeStepSkill,
-  type SkillFiles,
-} from '@shared/skill-composition';
+import { composeStepSkill, type SkillFiles } from '@shared/skill-composition';
 
-// A pair recorded from a context-mill build: this fill is a copy of context-mill's, and the pair keeps the two in step.
+// `completed/` is the skill context-mill itself published for the pair's framework, so this fill is checked against context-mill's own.
 describe('a recorded context-mill pair', () => {
   const root = path.resolve(
     __dirname,
@@ -27,11 +23,16 @@ describe('a recorded context-mill pair', () => {
             },
       ),
     ) as SkillFiles;
-  it('completes the recorded step from the recorded pack into the skill it replaces', () => {
+  // The two skills carry different ids, so the frontmatter `name` line is the one line left out.
+  const unnamed = (files: SkillFiles): SkillFiles => ({
+    ...files,
+    'SKILL.md': files['SKILL.md'].replace(/^name: .*\n/m, ''),
+  });
+
+  it('completes the recorded step from the recorded pack into the skill context-mill published', () => {
     const pair = JSON.parse(
       fs.readFileSync(path.join(root, 'pair.json'), 'utf8'),
     ) as { product: string };
-    const original = tree(path.join(root, 'original'));
 
     const composed = composeStepSkill(
       tree(path.join(root, 'step')),
@@ -39,7 +40,8 @@ describe('a recorded context-mill pair', () => {
       pair.product,
     );
 
-    expect(compareSkillFiles(original, composed)).toEqual([]);
-    expect(composed['SKILL.md']).not.toBe(original['SKILL.md']);
+    expect(unnamed(composed)).toEqual(
+      unnamed(tree(path.join(root, 'completed'))),
+    );
   });
 });

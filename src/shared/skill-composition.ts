@@ -51,7 +51,7 @@ function parseVariant(text: string): PackVariant {
 }
 
 /** One plain part of a path or one skill id: it starts with a letter or digit and has no separator. */
-const PLAIN_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
+export const PLAIN_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 
 /** Where a pack's file lands in the skill: `references/<name>`. A page the install scan would skip is refused: every part is plain and it ends in `.md`. */
 function referencePath(file: string): string {
@@ -124,47 +124,6 @@ export function composeStepSkill(
   return files;
 }
 
-const FRONTMATTER = /^---\n([\s\S]*?)\n---\n\n?/;
-
-/** A SKILL.md's frontmatter without `name`, the one field a skill and its replacement must differ in. */
-const frontmatterWithoutName = (skill: string): string =>
-  (FRONTMATTER.exec(skill)?.[1] ?? '')
-    .split('\n')
-    .filter((line) => !line.startsWith('name:'))
-    .join('\n');
-
-/** What differs between the files a task reads today and the files it reads from the replacement: one line each, and none when they read the same. */
-export function compareSkillFiles(
-  today: SkillFiles,
-  repackaged: SkillFiles,
-): string[] {
-  const differences: string[] = [];
-  for (const file of new Set([
-    ...Object.keys(today),
-    ...Object.keys(repackaged),
-  ])) {
-    if (!Object.hasOwn(repackaged, file)) differences.push(`${file} is gone`);
-    else if (!Object.hasOwn(today, file)) differences.push(`${file} is new`);
-    else if (file === SKILL_FILE) {
-      if (
-        today[file].replace(FRONTMATTER, '') !==
-        repackaged[file].replace(FRONTMATTER, '')
-      ) {
-        differences.push(`${SKILL_FILE} reads differently`);
-      }
-      if (
-        frontmatterWithoutName(today[file]) !==
-        frontmatterWithoutName(repackaged[file])
-      ) {
-        differences.push(`${SKILL_FILE} frontmatter differs`);
-      }
-    } else if (today[file] !== repackaged[file]) {
-      differences.push(`${file} differs`);
-    }
-  }
-  return differences;
-}
-
 /** Every file under `dir`, keyed by its path from `dir` with `/` separators. */
 function readFiles(dir: string, prefix = ''): SkillFiles {
   const files: SkillFiles = {};
@@ -212,19 +171,19 @@ function plainPath(
   return target;
 }
 
-/** Remove the folder of skill `id` under `skillsRoot`, or a link standing there; `id` is one plain name, and `skillsRoot` is reached through no link below `boundaryDir`. */
-export function removeSkillFolder(
+/** The folder of skill `id` under `skillsRoot`: `id` is one plain name, and `skillsRoot` is reached through no link below `boundaryDir`. */
+export function skillFolder(
   skillsRoot: string,
   id: string,
   boundaryDir: string,
-): void {
+): string {
   if (!PLAIN_NAME.test(id)) throw new Error(`unusable skill id: ${id}`);
   const root = plainPath(
     boundaryDir,
     path.relative(path.resolve(boundaryDir), path.resolve(skillsRoot)),
     'folder',
   );
-  fs.rmSync(path.join(root, id), { recursive: true, force: true });
+  return path.join(root, id);
 }
 
 /** Complete the step skill at `skillDir` from the pack at `packDir`, writing through no link below `boundaryDir`; throws and leaves the skill as it was otherwise. */

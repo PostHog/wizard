@@ -3,7 +3,7 @@ name: integration-init
 description: Initialize PostHog and set its environment variables
 metadata:
   author: PostHog
-  version: dev
+  version: 1.66.0
 ---
 
 # Initialize PostHog

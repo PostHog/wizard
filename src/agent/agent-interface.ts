@@ -43,6 +43,7 @@ import type { AgentFailure } from './runner/shared/types';
 import type { AgentResult } from './runner/harness/types';
 import { createCustomHeaders } from '@utils/custom-headers';
 import type { HostResolution } from '@shared/host-resolution';
+import type { MatchKeys } from '@shared/skill-resolution';
 import {
   buildWizardPropertiesBlob,
   gatewayAuth,
@@ -225,6 +226,8 @@ export type AgentConfig = {
   programId: string;
   /** Whether this program's `publish_handoff` mirrors the report into a PostHog notebook. */
   handoffNotebook?: boolean;
+  /** The run's match keys, which `install_skill` picks the framework's pack with. */
+  matchKeys?: () => MatchKeys;
   /** Program identifier — selects the model for that program. */
   integrationLabel?: string;
   /**
@@ -705,6 +708,7 @@ export async function initializeAgent(
       workingDirectory: config.workingDirectory,
       detectPackageManager: config.detectPackageManager,
       skillsBaseUrl: config.skillsBaseUrl,
+      matchKeys: config.matchKeys,
       askBridge: config.askBridge,
       askMaxQuestions: config.askMaxQuestions,
       orchestrator: config.orchestrator,

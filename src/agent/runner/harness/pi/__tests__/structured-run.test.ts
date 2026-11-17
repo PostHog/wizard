@@ -295,6 +295,7 @@ function runInputs(
       credentials,
       programId: 'posthog-integration',
       skillsBaseUrl: '',
+      matchKeys: () => ({}),
       wizardFlags: {},
       wizardFlagPayloads: {},
       wizardMetadata: {},

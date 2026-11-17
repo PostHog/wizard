@@ -3,7 +3,7 @@
  * so the tools the wizard prompt depends on — skill discovery/install and
  * fenced `.env` edits — are exposed to pi as native `defineTool` tools backed
  * by the same helpers the claude-agent-sdk path uses (`fetchSkillMenu`,
- * `installSkillById`, `checkEnvKeys`, `mergeEnvValues`). Same tool names as the
+ * `installToolSkill`, `checkEnvKeys`, `mergeEnvValues`). Same tool names as the
  * MCP server so the shared prompt is unchanged. `wizard_ask` is wired here too
  * (same schema, caps, and askBridge as the MCP tool) so interactive programs
  * can interview the user on pi; without a bridge (CI) it errors on call.
@@ -53,9 +53,16 @@ import {
   WIZARD_ASK_TOOL_DESCRIPTION,
 } from '../../../tools/tools';
 import { fetchSkillMenu } from '@shared/skill-menu';
-import { installSkillById } from '@shared/skill-install';
 import type { LLMProvider } from '@posthog/warlock';
-import { scanInstalledSkill } from '../../../yara-hooks';
+import {
+  scanInstalledSkill,
+  scanInstalledSkillFile,
+} from '../../../yara-hooks';
+import {
+  incompleteSkillMessage,
+  installToolSkill,
+} from '../../sequence/orchestrator/repackaged-skills';
+import type { MatchKeys } from '@shared/skill-resolution';
 import type { ProgressEmitter } from '../../../progress';
 import {
   isFullyCancelled,
@@ -102,6 +109,8 @@ export interface PiToolsContext {
   disallowedTools?: readonly string[];
   /** Scan-triage classifier, resolved once in bootstrap. Absent → scans fail closed. */
   triageProvider?: LLMProvider;
+  /** The run's match keys, which pick the framework's pack for a skill `install_skill` completes from it. */
+  matchKeys?: () => MatchKeys;
   /** Where `publish_handoff` reports. Absent → the handoff is written but reported nowhere. */
   emit?: ProgressEmitter;
   /** Set for one task of an orchestrated run: `publish_handoff` then reminds it to report with complete_task. */
@@ -171,12 +180,17 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
       skillId: Type.String({ description: 'Skill ID from load_skill_menu' }),
     }),
     async execute(_id, args) {
-      const result = await installSkillById(
-        args.skillId,
-        workingDirectory,
+      const result = await installToolSkill(args.skillId, {
+        installDir: workingDirectory,
         skillsBaseUrl,
-        { scan: (dir) => scanInstalledSkill(dir, triageProvider) },
-      );
+        matchKeys: ctx.matchKeys?.() ?? {},
+        scan: (dir) => scanInstalledSkill(dir, triageProvider),
+        scanFile: (file) => scanInstalledSkillFile(file, triageProvider),
+      });
+      if (result.kind === 'incomplete') {
+        logToFile(`[pi] install_skill ${args.skillId}: ${result.reason}`);
+        return text(incompleteSkillMessage(args.skillId, result.reason));
+      }
       if (result.kind !== 'ok') {
         logToFile(`[pi] install_skill ${args.skillId}: ${result.kind}`);
         return text(

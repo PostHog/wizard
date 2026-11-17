@@ -25,7 +25,7 @@ export const config: ProgramConfig = {
     harness: Harness.pi,
     model: DEFAULT_AGENT_MODEL,
   },
-  // Orchestrator flow (context-mill `context/agents/metrics`): the seed queues
+  // Orchestrator flow (the prompts in this program's `agent/` folder): the seed queues
   // verify-sdk → instrument-metrics → report; the tasks install the matching
   // platform variant themselves. Explicit so renaming the program can't
   // silently detach the flow.

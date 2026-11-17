@@ -441,8 +441,67 @@ describe('downloadSkill (e2e over HTTP)', () => {
         'skill install failed',
         expect.objectContaining({ step: 'scan', skill_id: 'dummy' }),
       );
+      // The files no scan read go with the folder the install made.
+      expect(fs.existsSync(path.dirname(skillFile()))).toBe(false);
     } finally {
       captured.mockRestore();
+      await server.close();
+    }
+  });
+
+  // A menu id names the folder an install writes to.
+  it.each(['../../outside', '..', 'a/b', '/tmp/x'])(
+    'refuses the menu id %j, and fetches and writes nothing',
+    async (id) => {
+      let requests = 0;
+      const server = await startServer((_req, res) => {
+        requests += 1;
+        res.writeHead(200, { 'Content-Type': 'application/zip' });
+        res.end(Buffer.from(dummyZip()));
+      });
+
+      try {
+        const result = await downloadSkill(
+          { id, name: 'Dummy', downloadUrl: `${server.baseUrl}/skill.zip` },
+          path.join(tmpDir, 'project'),
+          { scan: clean },
+        );
+
+        expect(result).toEqual({
+          success: false,
+          error: `unusable skill id: ${id}`,
+        });
+        expect(requests).toBe(0);
+        expect(fs.readdirSync(tmpDir)).toEqual([]);
+      } finally {
+        await server.close();
+      }
+    },
+  );
+
+  it('keeps a folder that was there first when the install fails', async () => {
+    const server = await startServer((_req, res) => {
+      res.writeHead(404);
+      res.end();
+    });
+    const notes = path.join(path.dirname(skillFile()), 'my-notes.md');
+    fs.mkdirSync(path.dirname(notes), { recursive: true });
+    fs.writeFileSync(notes, 'mine');
+
+    try {
+      const result = await downloadSkill(
+        {
+          id: 'dummy',
+          name: 'Dummy',
+          downloadUrl: `${server.baseUrl}/skill.zip`,
+        },
+        tmpDir,
+        { scan: clean },
+      );
+
+      expect(result.success).toBe(false);
+      expect(fs.readFileSync(notes, 'utf8')).toBe('mine');
+    } finally {
       await server.close();
     }
   });

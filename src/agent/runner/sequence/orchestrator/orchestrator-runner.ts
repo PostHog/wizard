@@ -37,11 +37,7 @@ import {
   scanInstalledSkillFile,
 } from '../../../yara-hooks';
 import { fetchSkillMenu, type SkillEntry } from '@shared/skill-menu';
-import {
-  FRAMEWORK_KEY,
-  resolveSkill,
-  type MatchKeys,
-} from '@shared/skill-resolution';
+import { resolveSkill } from '@shared/skill-resolution';
 import { analytics } from '@utils/analytics';
 import { ciExcludedTaskTypes } from '@utils/ci-flag-overrides';
 import { logToFile } from '@utils/debug';
@@ -62,12 +58,12 @@ import type {
   SequenceResult,
   SequenceContext,
 } from '../../shared/types';
+import { runFramework, runMatchKeys } from '../../shared/match-keys';
 import { createEmitSpinner } from '../../shared/progress-collector';
 import { createAskBridge } from '../../shared/ask';
 import {
   areSeededTasksEnabled,
   getHarness,
-  isAgentDagSkillsEnabled,
   resolveHarness,
   resolveStageOverrides,
   type HarnessPick,
@@ -97,7 +93,11 @@ import {
 } from './task-deadline';
 import { dependencyClosure, uncoveredBySink } from './queue-tools';
 import { deferSeededTasks } from './seeded-deps';
-import { repackagedSkillInstaller } from './repackaged-skills';
+import {
+  FRAMEWORK_PACK_FAMILY,
+  repackagedSkillInstaller,
+  reportSkillUnavailable,
+} from './repackaged-skills';
 import { queueTaskGraph, TaskGraphError } from './task-graph';
 import { LONGER_ASK_TIMEOUT_MS, shouldDisableAsk } from '@shared/ask-policy';
 import {
@@ -254,9 +254,6 @@ async function fetchSkillMenuEntries(
   if (!menu) return [];
   return Object.values(menu.categories).flat();
 }
-
-/** The framework reference is the full `integration` skill, which the menu ids as `integration-<variant>`. */
-const REFERENCE_SKILL = 'integration';
 
 /**
  * How long an optional step's notice waits for an answer.
@@ -884,29 +881,15 @@ async function executeOrchestrator(
   let referenceInstallPath: string | undefined;
   const menuSkillEntries = await fetchSkillMenuEntries(boot.skillsBaseUrl);
   if (signal?.aborted) return cancelledRun();
-  // The framework key for reference + variant resolution. `input.integration`
-  // is the detected framework and always wins; `input.skillId` is the
-  // fallback for the basic-integration path, where the caller sets it to the
-  // framework label. Programs whose run config carries their own skill id
-  // (agent-skill commands like replay-vision) would otherwise leak that id in
-  // here as a bogus framework after the caller overwrites the detect result.
-  const framework = input.integration ?? input.skillId ?? undefined;
-  // The project's traits supply the match keys, and the framework key above replaces theirs.
-  const matchKeys: MatchKeys = {
-    ...config.matchKeys?.(),
-    [FRAMEWORK_KEY]: framework ? [framework] : undefined,
-  };
-  const pickSkillId = (skillId: string) =>
-    resolveSkill(menuSkillEntries, skillId, matchKeys)?.id;
-  // `wizard-agent-dag-skills` has a task read the skill that stands in for the one its prompt names, when the menu has any.
-  const repackagedSkills =
-    isAgentDagSkillsEnabled(boot.wizardFlags) &&
-    menuSkillEntries.some((entry) => entry.replaces !== undefined);
-  analytics.setTag(
-    'orchestrator_skills',
-    repackagedSkills ? 'repackaged' : 'bundles',
-  );
-  const referenceSkillId = framework ? pickSkillId(REFERENCE_SKILL) : undefined;
+  // The framework the reference skill and every skill family resolve for.
+  const framework = runFramework(input);
+  const matchKeys = runMatchKeys(config, input);
+  const pickSkillEntry = (skillId: string) =>
+    resolveSkill(menuSkillEntries, skillId, matchKeys);
+  const pickSkillId = (skillId: string) => pickSkillEntry(skillId)?.id;
+  const referenceSkillId = framework
+    ? pickSkillId(FRAMEWORK_PACK_FAMILY)
+    : undefined;
   if (referenceSkillId) {
     const ref = await installSkillById(
       referenceSkillId,
@@ -950,7 +933,11 @@ async function executeOrchestrator(
   const missingSkills = new Set<string>();
   for (const type of registry.types) {
     for (const skillId of registry.get(type)?.skills ?? []) {
-      if (pickSkillId(skillId)) continue;
+      const picked = pickSkillEntry(skillId);
+      // A skill completed from the framework's pack is missing when the run installed no pack.
+      if (picked && !(picked.frameworkReferences && !referenceInstallPath)) {
+        continue;
+      }
       missingVariants.push(`${type}/${skillId}`);
       missingSkills.add(skillId);
       logToFile(
@@ -1353,32 +1340,22 @@ async function executeOrchestrator(
   // its agent prompt (the WHAT) and the mini-skills it needs (the HOW), then
   // runs on its own model and tools.
   const taskSkillsRoot = path.join(QUEUE_DIR_NAME, 'skills');
-  // With the flag off, or a menu with no replacement, every task reads the skill its prompt names.
-  const installRepackagedSkill = repackagedSkills
-    ? repackagedSkillInstaller({
-        entries: menuSkillEntries,
-        installDir: input.installDir,
-        skillsRoot: taskSkillsRoot,
-        referencePath: referenceInstallPath,
-        install: (skillId) =>
-          installSkillById(skillId, input.installDir, boot.skillsBaseUrl, {
-            skillsRoot: taskSkillsRoot,
-            scan: (dir) => scanInstalledSkill(dir, boot.triageProvider),
-          }),
-        scanFile: (file) => scanInstalledSkillFile(file, boot.triageProvider),
-        onUnavailable: (replacement, name, reason) => {
-          logToFile(
-            `[orchestrator] repackaged skill ${replacement.id} unavailable for ${name}: ${reason}`,
-          );
-          analytics.wizardCapture('orchestrator repackaged skill unavailable', {
-            skill: replacement.id,
-            replaces: name,
-            reason: reason.slice(0, 200),
-            framework,
-          });
-        },
-      })
-    : () => Promise.resolve(undefined);
+  // A skill written once for every framework is completed from the run's pack before a task reads it.
+  const installCompletedSkill = repackagedSkillInstaller({
+    installDir: input.installDir,
+    skillsRoot: taskSkillsRoot,
+    // The run's cache is the wizard's own, so a folder an earlier run left there is replaced.
+    ownsSkillsRoot: true,
+    referencePath: referenceInstallPath,
+    install: (skillId, dir) =>
+      installSkillById(skillId, dir, boot.skillsBaseUrl, {
+        skillsRoot: 'skill',
+        scan: (scanned) => scanInstalledSkill(scanned, boot.triageProvider),
+      }),
+    scanFile: (file) => scanInstalledSkillFile(file, boot.triageProvider),
+    onUnavailable: (skill, reason) =>
+      reportSkillUnavailable(skill, reason, framework),
+  });
   // Task agents can install durable skills mid-run (load_skill), and only the
   // framework reference docs earn a place — snapshot what was already there so
   // the sweeps remove exactly what this run added.
@@ -1399,22 +1376,35 @@ async function executeOrchestrator(
       const skillPaths: string[] = [];
       for (const skillId of resolved.skills) {
         if (signal?.aborted) return;
-        const repackaged = await installRepackagedSkill(skillId);
-        if (signal?.aborted) return;
-        if (repackaged) {
-          skillPaths.push(path.join(repackaged, 'SKILL.md'));
-          continue;
-        }
-        // Agent prompts name the bare step-skill (`integration-v2-install`);
-        // SDK-divergent steps ship per-framework variants, so resolve against
-        // the menu with the session's framework before installing.
-        const variantId = pickSkillId(skillId);
-        if (!variantId) {
+        // A prompt names a skill by menu id or by family; a family resolves
+        // against the menu with the run's match keys before installing.
+        const picked = pickSkillEntry(skillId);
+        const variantId = picked?.id;
+        if (!picked || !variantId) {
           logToFile(
             `[orchestrator] no skill variant type=${
               task.type
             } skill=${skillId} framework=${framework ?? 'none'}`,
           );
+          continue;
+        }
+        const { frameworkReferences } = picked;
+        if (frameworkReferences) {
+          // A task without its instructions must fail here, not run blind.
+          const completed = await installCompletedSkill({
+            ...picked,
+            frameworkReferences,
+          }).catch((error: unknown) => {
+            throw new Error(
+              `Skill "${variantId}" for task "${
+                task.type
+              }" could not be completed from the framework's pack (${
+                error instanceof Error ? error.message : String(error)
+              }).`,
+            );
+          });
+          if (signal?.aborted) return;
+          skillPaths.push(path.join(completed, 'SKILL.md'));
           continue;
         }
         const result = await installSkillById(
