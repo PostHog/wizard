@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { describe, expect, it } from 'vitest';
 import { PROGRAM_REGISTRY } from '@programs/program-runner/program-registry';
+import { Sequence } from '@shared/constants';
 
 const PROGRAMS = path.resolve(__dirname, '..');
 // Every program that bundles prompts.
@@ -34,6 +35,17 @@ it('loads the prompts of every program that has an agent folder', () => {
     .readdirSync(PROGRAMS)
     .filter((program) => fs.existsSync(path.join(PROGRAMS, program, 'agent')));
   expect(BUNDLES.map(([id]) => id).sort()).toEqual(withFolder.sort());
+});
+
+// The orchestrator reads a flow's prompts from its program alone, so a run of one that bundles none fails.
+it('bundles the prompts of every program that runs the orchestrator', () => {
+  const without = PROGRAM_REGISTRY.filter(
+    (c) =>
+      (c.agentFlow !== undefined ||
+        c.binding?.sequence === Sequence.orchestrator) &&
+      !c.agentPrompts,
+  ).map((c) => c.id);
+  expect(without).toEqual([]);
 });
 
 describe.each(BUNDLES)('%s agent prompts', (program, config) => {
