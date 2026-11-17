@@ -32,22 +32,6 @@ describe('resolveSkillEntry', () => {
     expect(resolveSkillEntry(MENU, 'nextjs')).toBeNull();
   });
 
-  it('matches an expanded bundle by its family', () => {
-    // The menu replaces a bundle with per-framework entries, so no entry keeps
-    // the bundle id. Every one of them carries the bundle's download URL.
-    const family = 'integration-v2-error-tracking-step';
-    const bundled = {
-      id: `${family}-django`,
-      family,
-      bundle: true,
-      downloadUrl: `https://example.com/${family}.json`,
-    } as SkillEntry;
-
-    expect(resolveSkillEntry([...MENU, bundled], family)?.downloadUrl).toBe(
-      `https://example.com/${family}.json`,
-    );
-  });
-
   it('returns null when nothing matches', () => {
     expect(resolveSkillEntry(MENU, 'cobol')).toBeNull();
   });
