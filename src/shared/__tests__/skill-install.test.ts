@@ -441,8 +441,37 @@ describe('downloadSkill (e2e over HTTP)', () => {
         'skill install failed',
         expect.objectContaining({ step: 'scan', skill_id: 'dummy' }),
       );
+      // The files no scan read go with the folder the install made.
+      expect(fs.existsSync(path.dirname(skillFile()))).toBe(false);
     } finally {
       captured.mockRestore();
+      await server.close();
+    }
+  });
+
+  it('keeps a folder that was there first when the install fails', async () => {
+    const server = await startServer((_req, res) => {
+      res.writeHead(404);
+      res.end();
+    });
+    const notes = path.join(path.dirname(skillFile()), 'my-notes.md');
+    fs.mkdirSync(path.dirname(notes), { recursive: true });
+    fs.writeFileSync(notes, 'mine');
+
+    try {
+      const result = await downloadSkill(
+        {
+          id: 'dummy',
+          name: 'Dummy',
+          downloadUrl: `${server.baseUrl}/skill.zip`,
+        },
+        tmpDir,
+        { scan: clean },
+      );
+
+      expect(result.success).toBe(false);
+      expect(fs.readFileSync(notes, 'utf8')).toBe('mine');
+    } finally {
       await server.close();
     }
   });

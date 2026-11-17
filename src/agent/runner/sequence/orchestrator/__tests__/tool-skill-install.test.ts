@@ -21,6 +21,8 @@ vi.mock('@shared/skill-install', async (importActual) => ({
     const files = SKILLS[id];
     if (!files)
       return Promise.resolve({ kind: 'skill-not-found', skillId: id });
+    if (offline.has(id))
+      return Promise.resolve({ kind: 'download-failed', message: 'offline' });
     const relative = `${options.skillsRoot ?? '.claude/skills'}/${id}`;
     installed.push(path.join(installDir, relative));
     for (const [file, contents] of Object.entries(files)) {
@@ -78,6 +80,8 @@ const SKILLS: Record<string, Record<string, string>> = {
 
 const menu = MENU;
 let installed: string[] = [];
+// Skills whose download fails.
+let offline = new Set<string>();
 let dir = '';
 
 const read = (id: string, file: string): string | undefined => {
@@ -89,6 +93,7 @@ describe('installToolSkill', () => {
   beforeEach(() => {
     dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tool-skill-install-'));
     installed = [];
+    offline = new Set();
     vi.mocked(analytics.wizardCapture).mockClear();
   });
 
@@ -155,7 +160,46 @@ describe('installToolSkill', () => {
     );
   });
 
-  it('refuses a step skill, and deletes it, when the scan rejects the completed SKILL.md', async () => {
+  it.each([
+    ['the install would succeed', false],
+    ['the download fails', true],
+  ])(
+    'keeps a skill folder the project made itself when %s',
+    async (_, fails) => {
+      const mine = path.join(dir, '.claude/skills/integration-install');
+      fs.mkdirSync(mine, { recursive: true });
+      fs.writeFileSync(path.join(mine, 'my-notes.md'), 'mine');
+      if (fails) offline.add('integration-install');
+
+      expect(
+        await install('integration-install', { framework: 'nextjs' }),
+      ).toEqual({
+        kind: 'incomplete',
+        skillId: 'integration-install',
+        reason:
+          '.claude/skills/integration-install is already there and the wizard did not install it',
+      });
+
+      expect(fs.readdirSync(mine)).toEqual(['my-notes.md']);
+      expect(read('integration-install', 'my-notes.md')).toBe('mine');
+    },
+  );
+
+  it('installs nothing, and says why, when the download of a step skill fails', async () => {
+    offline.add('integration-install');
+
+    expect(
+      await install('integration-install', { framework: 'nextjs' }),
+    ).toEqual({
+      kind: 'incomplete',
+      skillId: 'integration-install',
+      reason: 'download-failed: offline',
+    });
+
+    expect(fs.existsSync(path.join(dir, '.claude/skills'))).toBe(false);
+  });
+
+  it('refuses a step skill, and installs nothing, when the scan rejects the completed SKILL.md', async () => {
     const result = await install('integration-install', {
       framework: 'nextjs',
       scanFile: () => Promise.resolve('prompt injection in SKILL.md'),

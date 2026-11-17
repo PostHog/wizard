@@ -1344,11 +1344,13 @@ async function executeOrchestrator(
   const installCompletedSkill = repackagedSkillInstaller({
     installDir: input.installDir,
     skillsRoot: taskSkillsRoot,
+    // The run's cache is the wizard's own, so a folder an earlier run left there is replaced.
+    ownsSkillsRoot: true,
     referencePath: referenceInstallPath,
-    install: (skillId) =>
-      installSkillById(skillId, input.installDir, boot.skillsBaseUrl, {
-        skillsRoot: taskSkillsRoot,
-        scan: (dir) => scanInstalledSkill(dir, boot.triageProvider),
+    install: (skillId, dir) =>
+      installSkillById(skillId, dir, boot.skillsBaseUrl, {
+        skillsRoot: 'skill',
+        scan: (scanned) => scanInstalledSkill(scanned, boot.triageProvider),
       }),
     scanFile: (file) => scanInstalledSkillFile(file, boot.triageProvider),
     onUnavailable: (skill, reason) =>

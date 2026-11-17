@@ -171,19 +171,31 @@ function plainPath(
   return target;
 }
 
-/** Remove the folder of skill `id` under `skillsRoot`, or a link standing there; `id` is one plain name, and `skillsRoot` is reached through no link below `boundaryDir`. */
-export function removeSkillFolder(
+/** The folder of skill `id` under `skillsRoot`: `id` is one plain name, and `skillsRoot` is reached through no link below `boundaryDir`. */
+export function skillFolder(
   skillsRoot: string,
   id: string,
   boundaryDir: string,
-): void {
+): string {
   if (!PLAIN_NAME.test(id)) throw new Error(`unusable skill id: ${id}`);
   const root = plainPath(
     boundaryDir,
     path.relative(path.resolve(boundaryDir), path.resolve(skillsRoot)),
     'folder',
   );
-  fs.rmSync(path.join(root, id), { recursive: true, force: true });
+  return path.join(root, id);
+}
+
+/** Remove the folder `skillFolder` names, or a link standing there. */
+export function removeSkillFolder(
+  skillsRoot: string,
+  id: string,
+  boundaryDir: string,
+): void {
+  fs.rmSync(skillFolder(skillsRoot, id, boundaryDir), {
+    recursive: true,
+    force: true,
+  });
 }
 
 /** Complete the step skill at `skillDir` from the pack at `packDir`, writing through no link below `boundaryDir`; throws and leaves the skill as it was otherwise. */
