@@ -3,10 +3,23 @@
  * latest. See docs/local-dev.md#pinning-a-context-mill-release.
  */
 
-/** `1.59.0` or `v1.59.0`, with an optional prerelease. */
-const RELEASE_VERSION = /^v?(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)$/;
+/** `1.66.0` or `v1.66.0`, with an optional prerelease. */
+const RELEASE_VERSION = /^v?((\d+)\.(\d+)\.(\d+)(?:-[0-9A-Za-z.-]+)?)$/;
 
-/** Returns the release tag (`v1.59.0`), or undefined for empty and `latest`; throws on anything else, since the value becomes a URL path. */
+/** The oldest release whose skills the bundled agent prompts name. */
+export const CONTEXT_MILL_FLOOR = '1.66.0';
+
+const FLOOR_PARTS = CONTEXT_MILL_FLOOR.split('.').map(Number);
+
+/** Whether a release's `major.minor.patch` is older than the floor's. */
+function belowFloor(parts: readonly number[]): boolean {
+  for (let i = 0; i < FLOOR_PARTS.length; i++) {
+    if (parts[i] !== FLOOR_PARTS[i]) return parts[i] < FLOOR_PARTS[i];
+  }
+  return false;
+}
+
+/** Returns the release tag (`v1.66.0`), or undefined for empty and `latest`; throws on anything else, since the value becomes a URL path, and on a release older than the floor. */
 export function parseContextMillVersion(raw: unknown): string | undefined {
   if (raw === undefined || raw === null) return undefined;
   const value = String(raw).trim();
@@ -14,7 +27,12 @@ export function parseContextMillVersion(raw: unknown): string | undefined {
   const match = RELEASE_VERSION.exec(value);
   if (!match) {
     throw new Error(
-      `Invalid context-mill version "${value}". Use a release version such as 1.59.0, or "latest".`,
+      `Invalid context-mill version "${value}". Use a release version such as ${CONTEXT_MILL_FLOOR}, or "latest".`,
+    );
+  }
+  if (belowFloor([Number(match[2]), Number(match[3]), Number(match[4])])) {
+    throw new Error(
+      `context-mill ${match[1]} is older than ${CONTEXT_MILL_FLOOR}, the oldest release this wizard can read. Use ${CONTEXT_MILL_FLOOR} or later, or "latest".`,
     );
   }
   return `v${match[1]}`;

@@ -7,7 +7,7 @@ model_pi: openai/gpt-5.6-luna
 effort_pi: low
 model_sdk: claude-sonnet-5
 effort_sdk: medium
-skills: [integration-v2-notebook]
+skills: [integration-notebook]
 allowedTools: [Read, Glob, Grep, posthog_exec]
 disallowedTools: [enqueue_task]
 dependsOn: [instrument-metrics]

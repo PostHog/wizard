@@ -7,7 +7,7 @@ model_pi: openai/gpt-5.6-terra
 effort_pi: medium
 model_sdk: claude-sonnet-5
 effort_sdk: medium
-skills: [integration-v2-warehouse, integration-v2-mcp]
+skills: [integration-warehouse, integration-mcp]
 allowedTools: [Read, Glob, Grep, wizard_ask, posthog_exec]
 disallowedTools: [Write, Edit, Bash, enqueue_task]
 dependsOn: []

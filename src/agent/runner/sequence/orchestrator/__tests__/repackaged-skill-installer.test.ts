@@ -1,4 +1,4 @@
-/** Each way the installer of a repackaged skill ends: installed, completed and scanned, or handed back to the skill the prompt names. */
+/** Each way the installer of a step skill ends: installed, completed and scanned, or refused with its reason. */
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -36,17 +36,16 @@ const entry = (id: string, rest: Partial<SkillEntry>): SkillEntry => ({
   downloadUrl: `https://skills.test/${id}.zip`,
   ...rest,
 });
-const INSTALL = entry('integration-install', {
-  replaces: 'flow-install',
+const INSTALL = {
+  ...entry('integration-install', {}),
   frameworkReferences: 'integration',
-});
-const KEPT = entry('integration-kept', { replaces: 'kept-skill' });
+};
 
 describe('repackagedSkillInstaller', () => {
   let dir = '';
   let installed: string[] = [];
   let scanned: string[] = [];
-  let unavailable: { skill: string; name: string; reason: string }[] = [];
+  let unavailable: { skill: string; reason: string }[] = [];
 
   const write = (root: string, files: Record<string, string>) => {
     for (const [file, contents] of Object.entries(files)) {
@@ -64,15 +63,12 @@ describe('repackagedSkillInstaller', () => {
   /** Unpacks a skill the way the installer does: over whatever is in its folder. */
   const install = (id: string): Promise<InstallSkillResult> => {
     installed.push(id);
-    write(path.join(dir, SKILLS_ROOT, id), {
-      'SKILL.md': id === INSTALL.id ? STEP : 'kept, republished',
-    });
+    write(path.join(dir, SKILLS_ROOT, id), { 'SKILL.md': STEP });
     return Promise.resolve({ kind: 'ok', path: `${SKILLS_ROOT}/${id}` });
   };
 
   const run = (overrides: Partial<RepackagedSkillRun> = {}) =>
     repackagedSkillInstaller({
-      entries: [INSTALL, KEPT],
       installDir: dir,
       skillsRoot: SKILLS_ROOT,
       referencePath: REFERENCE,
@@ -81,8 +77,8 @@ describe('repackagedSkillInstaller', () => {
         scanned.push(file);
         return Promise.resolve(null);
       },
-      onUnavailable: (replacement, name, reason) =>
-        unavailable.push({ skill: replacement.id, name, reason }),
+      onUnavailable: (skill, reason) =>
+        unavailable.push({ skill: skill.id, reason }),
       ...overrides,
     });
 
@@ -96,8 +92,8 @@ describe('repackagedSkillInstaller', () => {
 
   afterEach(() => fs.rmSync(dir, { recursive: true, force: true }));
 
-  it('installs the replacement, completes it from the pack and scans the SKILL.md it rewrote', async () => {
-    expect(await run()('flow-install')).toBe(`${SKILLS_ROOT}/${INSTALL.id}`);
+  it('installs the skill, completes it from the pack and scans the SKILL.md it rewrote', async () => {
+    expect(await run()(INSTALL)).toBe(`${SKILLS_ROOT}/${INSTALL.id}`);
 
     expect(read(INSTALL.id, 'SKILL.md')).toBe(COMPLETED);
     expect(read(INSTALL.id, 'references/next-js.md')).toBe('the library page');
@@ -105,27 +101,10 @@ describe('repackagedSkillInstaller', () => {
     expect(unavailable).toEqual([]);
   });
 
-  it('installs a replacement no pack completes as it is', async () => {
-    expect(await run({ referencePath: undefined })('kept-skill')).toBe(
-      `${SKILLS_ROOT}/${KEPT.id}`,
-    );
-
-    expect(read(KEPT.id, 'SKILL.md')).toBe('kept, republished');
-    expect(scanned).toEqual([]);
-    expect(unavailable).toEqual([]);
-  });
-
-  it('installs nothing for a name the menu has no replacement for', async () => {
-    expect(await run()('unreplaced-skill')).toBeUndefined();
-
-    expect(installed).toEqual([]);
-    expect(unavailable).toEqual([]);
-  });
-
-  it('installs a replacement once, however many tasks name it', async () => {
+  it('installs a skill once, however many tasks name it', async () => {
     const installer = run();
 
-    await Promise.all([installer('flow-install'), installer('flow-install')]);
+    await Promise.all([installer(INSTALL), installer(INSTALL)]);
 
     expect(installed).toEqual([INSTALL.id]);
   });
@@ -135,19 +114,19 @@ describe('repackagedSkillInstaller', () => {
       'references/next-js.md': 'an earlier release',
     });
 
-    await run()('flow-install');
+    await run()(INSTALL);
 
     expect(read(INSTALL.id, 'references/next-js.md')).toBe('the library page');
   });
 
-  it('hands the task back when the run has no framework pack, and installs nothing', async () => {
-    expect(
-      await run({ referencePath: undefined })('flow-install'),
-    ).toBeUndefined();
+  it('refuses the skill when the run has no framework pack, and installs nothing', async () => {
+    await expect(run({ referencePath: undefined })(INSTALL)).rejects.toThrow(
+      'no framework pack',
+    );
 
     expect(installed).toEqual([]);
     expect(unavailable).toEqual([
-      { skill: INSTALL.id, name: 'flow-install', reason: 'no framework pack' },
+      { skill: INSTALL.id, reason: 'no framework pack' },
     ]);
   });
 
@@ -156,9 +135,10 @@ describe('repackagedSkillInstaller', () => {
     'removes and installs nothing for the menu id %j',
     async (id) => {
       write(path.join(dir, 'src'), { 'app.ts': 'the app' });
-      const entries = [{ ...INSTALL, id }];
 
-      expect(await run({ entries })('flow-install')).toBeUndefined();
+      await expect(run()({ ...INSTALL, id })).rejects.toThrow(
+        `unusable skill id: ${id}`,
+      );
 
       expect(fs.readFileSync(path.join(dir, 'src/app.ts'), 'utf8')).toBe(
         'the app',
@@ -168,7 +148,7 @@ describe('repackagedSkillInstaller', () => {
       );
       expect(installed).toEqual([]);
       expect(unavailable).toEqual([
-        { skill: id, name: 'flow-install', reason: `unusable skill id: ${id}` },
+        { skill: id, reason: `unusable skill id: ${id}` },
       ]);
     },
   );
@@ -190,31 +170,27 @@ describe('repackagedSkillInstaller', () => {
       },
       'disk full',
     ],
-  ])('hands the task back when %s', async (_, overrides, reason) => {
+  ])('refuses the skill when %s', async (_, overrides, reason) => {
     const installer = run(overrides);
 
-    expect(await installer('flow-install')).toBeUndefined();
-    expect(await installer('flow-install')).toBeUndefined();
+    await expect(installer(INSTALL)).rejects.toThrow(reason);
+    await expect(installer(INSTALL)).rejects.toThrow(reason);
 
-    // A replacement is reported once, however many tasks wait on it.
-    expect(unavailable).toEqual([
-      { skill: INSTALL.id, name: 'flow-install', reason },
-    ]);
+    // A skill is reported once, however many tasks wait on it.
+    expect(unavailable).toEqual([{ skill: INSTALL.id, reason }]);
   });
 
-  it('hands the task back and leaves the skill as installed when the pack cannot complete it', async () => {
+  it('refuses the skill and deletes it when the pack cannot complete it', async () => {
     fs.rmSync(path.join(dir, REFERENCE, 'variant.json'));
 
-    expect(await run()('flow-install')).toBeUndefined();
+    await expect(run()(INSTALL)).rejects.toThrow(
+      'the pack has no variant.json',
+    );
 
-    expect(read(INSTALL.id, 'SKILL.md')).toBe(STEP);
+    expect(fs.existsSync(path.join(dir, SKILLS_ROOT, INSTALL.id))).toBe(false);
     expect(scanned).toEqual([]);
     expect(unavailable).toEqual([
-      {
-        skill: INSTALL.id,
-        name: 'flow-install',
-        reason: 'the pack has no variant.json',
-      },
+      { skill: INSTALL.id, reason: 'the pack has no variant.json' },
     ]);
   });
 
@@ -230,36 +206,29 @@ describe('repackagedSkillInstaller', () => {
       'scan failed: engine unavailable',
     ],
   ])(
-    'hands the task back and deletes the completed skill when %s',
+    'refuses the skill and deletes the completed one when %s',
     async (_, scanFile, reason) => {
-      expect(await run({ scanFile })('flow-install')).toBeUndefined();
+      await expect(run({ scanFile })(INSTALL)).rejects.toThrow(reason);
 
       expect(fs.existsSync(path.join(dir, SKILLS_ROOT, INSTALL.id))).toBe(
         false,
       );
-      expect(unavailable).toEqual([
-        { skill: INSTALL.id, name: 'flow-install', reason },
-      ]);
+      expect(unavailable).toEqual([{ skill: INSTALL.id, reason }]);
     },
   );
 
   it.skipIf(process.platform === 'win32')(
-    'hands the task back, and writes nothing through it, when the skills folder is a link',
+    'refuses the skill, and writes nothing through it, when the skills folder is a link',
     async () => {
       fs.mkdirSync(path.join(dir, 'outside', INSTALL.id), { recursive: true });
       fs.symlinkSync(path.join(dir, 'outside'), path.join(dir, SKILLS_ROOT));
 
-      expect(await run()('flow-install')).toBeUndefined();
+      const reason = `a skill path passes through a link: ${SKILLS_ROOT}`;
+      await expect(run()(INSTALL)).rejects.toThrow(reason);
 
       expect(fs.readdirSync(path.join(dir, 'outside'))).toEqual([INSTALL.id]);
       expect(installed).toEqual([]);
-      expect(unavailable).toEqual([
-        {
-          skill: INSTALL.id,
-          name: 'flow-install',
-          reason: `a skill path passes through a link: ${SKILLS_ROOT}`,
-        },
-      ]);
+      expect(unavailable).toEqual([{ skill: INSTALL.id, reason }]);
     },
   );
 });

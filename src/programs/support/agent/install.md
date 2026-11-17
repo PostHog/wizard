@@ -5,7 +5,7 @@ label: Add posthog-js to the manifest
 model_pi: openai/gpt-6.1-terra
 effort_pi: low
 model_sdk: claude-haiku-4-5
-skills: [integration-v2-install]
+skills: [integration-install]
 allowedTools: [Read, Edit, Glob, Grep, Bash]
 disallowedTools: [enqueue_task]
 dependsOn: []

@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { SkillEntry } from '@shared/skill-menu';
-import {
-  resolveReplacement,
-  resolveSkill,
-  skillTags,
-} from '@shared/skill-resolution';
+import { resolveSkill, skillTags } from '@shared/skill-resolution';
 
 const entry = (id: string, rest: Partial<SkillEntry> = {}): SkillEntry => ({
   id,
@@ -119,23 +115,5 @@ describe('resolveSkill', () => {
     expect(resolveSkill(twins, 'step', { framework: ['rails'] })?.id).toBe(
       'first',
     );
-  });
-});
-
-describe('resolveReplacement', () => {
-  const entries = [
-    ...MENU,
-    entry('integration-install', { replaces: 'integration-v2-install' }),
-  ];
-
-  it('finds the skill that stands in for a name', () => {
-    expect(resolveReplacement(entries, 'integration-v2-install')?.id).toBe(
-      'integration-install',
-    );
-  });
-
-  it('finds none for a name nothing replaces, or for the replacement itself', () => {
-    expect(resolveReplacement(entries, 'integration')).toBeUndefined();
-    expect(resolveReplacement(entries, 'integration-install')).toBeUndefined();
   });
 });

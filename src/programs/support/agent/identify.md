@@ -6,7 +6,7 @@ model_pi: openai/gpt-6.1-terra
 effort_pi: medium
 model_sdk: claude-sonnet-5-5
 effort_sdk: high
-skills: [integration-v2-identify, posthog-best-practices]
+skills: [integration-identify, posthog-best-practices]
 allowedTools: [Read, Edit, Glob, Grep]
 disallowedTools: [enqueue_task]
 dependsOn: [widget]

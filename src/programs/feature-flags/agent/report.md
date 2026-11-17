@@ -7,7 +7,7 @@ model_pi: openai/gpt-5.6-sol
 effort_pi: medium
 model_sdk: claude-sonnet-5
 effort_sdk: medium
-skills: [integration-v2-notebook, integration-v2-mcp]
+skills: [integration-notebook, integration-mcp]
 allowedTools: [Read, Glob, Grep, posthog_exec]
 disallowedTools: [enqueue_task]
 dependsOn: []

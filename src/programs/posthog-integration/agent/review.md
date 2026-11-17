@@ -8,7 +8,7 @@ model_pi: openai/gpt-5.6-sol
 effort_pi: medium
 model_sdk: claude-sonnet-5
 effort_sdk: high
-skills: [posthog-best-practices, integration-v2-build]
+skills: [posthog-best-practices, integration-build]
 allowedTools: [Read, Edit, Glob, Grep, Bash]
 disallowedTools: [enqueue_task]
 dependsOn: [install, init, identify, mcp-analytics, error-tracking, capture, ai-observability, logs]

@@ -1,4 +1,4 @@
-/** With `wizard-agent-dag-skills` on, a task reads the skill that stands in for the one its prompt names, completed from the framework's pack. */
+/** A task reads a skill written once for every framework after the run completes it from the framework's pack. */
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -50,10 +50,10 @@ vi.mock('../../../switchboard', async () => {
     resolveHarness: () => ({ harness: 'pi', model: [...VALID_MODELS][0] }),
     resolveStageOverrides: () => ({}),
     areSeededTasksEnabled: () => false,
-    isAgentDagSkillsEnabled: () => skillsFlag,
     getHarness: () => ({ runTask: (inputs: unknown) => harnessRun(inputs) }),
   };
 });
+import { ErrorCodes } from '@shared/errors';
 import { analytics } from '@utils/analytics';
 import { RunOutcome } from '../../../shared/types';
 import { runOrchestrator } from '../orchestrator-runner';
@@ -62,7 +62,7 @@ import type { QueueStore } from '../queue';
 
 const FLOW: Record<string, string> = {
   install:
-    '---\nskills: [flow-install, kept-skill]\ndependsOn: []\n---\ninstall',
+    '---\nskills: [integration-install, kept-skill]\ndependsOn: []\n---\ninstall',
   report:
     '---\nsink: true\nskills: [kept-skill]\ndependsOn: [install]\n---\nreport',
 };
@@ -82,16 +82,8 @@ const MENU = {
         framework: 'nextjs',
         default: true,
       }),
-      entry('flow-install-nextjs', {
-        group: 'flow-install',
-        framework: 'nextjs',
-      }),
       entry('kept-skill'),
-      entry('integration-install', {
-        replaces: 'flow-install',
-        frameworkReferences: 'integration',
-      }),
-      entry('integration-kept', { replaces: 'kept-skill' }),
+      entry('integration-install', { frameworkReferences: 'integration' }),
     ],
   },
 };
@@ -111,13 +103,11 @@ const PACK = {
 };
 const SKILLS: Record<string, Record<string, string>> = {
   'integration-nextjs': PACK,
-  'flow-install-nextjs': { 'SKILL.md': 'install, as bundled today' },
-  'kept-skill': { 'SKILL.md': 'kept, as published today' },
+  'kept-skill': { 'SKILL.md': 'kept, as published' },
   'integration-install': {
     'SKILL.md':
       '# Install for {framework_name}\n\n{framework_docs}\n{framework_rules}\n',
   },
-  'integration-kept': { 'SKILL.md': 'kept, republished' },
 };
 
 /** A record without one of its keys. */
@@ -134,9 +124,8 @@ type Inputs = {
   orchestrator: { store: QueueStore };
 };
 
-let skillsFlag = true;
 let skills = SKILLS;
-let menu = MENU;
+const menu = MENU;
 let installs: string[] = [];
 let scanned: string[] = [];
 let scan: () => Promise<string | null> = () => Promise.resolve(null);
@@ -172,12 +161,10 @@ function harnessRun(raw: unknown) {
   return Promise.resolve({ kind: 'success' as const });
 }
 
-describe('repackaged skills', () => {
+describe('step skills completed from the pack', () => {
   beforeEach(() => {
     dir = fs.mkdtempSync(path.join(os.tmpdir(), 'repackaged-skills-'));
-    skillsFlag = true;
     skills = SKILLS;
-    menu = MENU;
     installs = [];
     scanned = [];
     scan = () => Promise.resolve(null);
@@ -223,14 +210,15 @@ describe('repackaged skills', () => {
       )
       .map(([, properties]) => properties);
 
-  it('installs the skill that stands in for each name, completed from the pack', async () => {
+  it('installs each skill a prompt names, and completes the one written for every framework', async () => {
     const result = await run();
 
     expect(result.outcome).toBe(RunOutcome.Success);
     expect(installs).toEqual([
       'integration-nextjs',
       'integration-install',
-      'integration-kept',
+      'kept-skill',
+      'kept-skill',
     ]);
     expect(completed).toEqual({
       skill:
@@ -238,8 +226,7 @@ describe('repackaged skills', () => {
       page: 'the library page',
     });
     expect(prompts.install).toContain('skills/integration-install/SKILL.md');
-    expect(prompts.install).toContain('skills/integration-kept/SKILL.md');
-    expect(prompts.install).not.toContain('flow-install-nextjs');
+    expect(prompts.install).toContain('skills/kept-skill/SKILL.md');
     expect(unavailable()).toEqual([]);
     expect(scanned).toEqual([
       path.join(
@@ -247,13 +234,9 @@ describe('repackaged skills', () => {
         '.posthog-wizard-cache/skills/integration-install/SKILL.md',
       ),
     ]);
-    expect(analytics.setTag).toHaveBeenCalledWith(
-      'orchestrator_skills',
-      'repackaged',
-    );
   });
 
-  it('starts a replacement from an empty folder, so a page an earlier run left does not replace the pack page', async () => {
+  it('starts the skill from an empty folder, so a page an earlier run left does not replace the pack page', async () => {
     const left = path.join(
       dir,
       '.posthog-wizard-cache/skills/integration-install/references',
@@ -268,66 +251,16 @@ describe('repackaged skills', () => {
     expect(unavailable()).toEqual([]);
   });
 
-  it.skipIf(process.platform === 'win32')(
-    'falls back to the skill the prompt names when the skills folder is a link',
-    async () => {
-      fs.mkdirSync(path.join(dir, 'outside'));
-      fs.mkdirSync(path.join(dir, '.posthog-wizard-cache'));
-      fs.symlinkSync(
-        path.join(dir, 'outside'),
-        path.join(dir, '.posthog-wizard-cache/skills'),
-      );
-
-      const result = await run();
-
-      expect(result.outcome).toBe(RunOutcome.Success);
-      expect(prompts.install).toContain('skills/flow-install-nextjs/SKILL.md');
-      expect(installs).not.toContain('integration-install');
-      expect(unavailable()).toContainEqual({
-        skill: 'integration-install',
-        replaces: 'flow-install',
-        reason:
-          'a skill path passes through a link: .posthog-wizard-cache/skills',
-        framework: 'nextjs',
-      });
-    },
-  );
-
-  it('installs the skills the prompts name while the flag is off', async () => {
-    skillsFlag = false;
+  it('fails the run before any task starts when the pack did not install', async () => {
+    skills = without(SKILLS, 'integration-nextjs');
     const result = await run();
 
-    expect(result.outcome).toBe(RunOutcome.Success);
-    expect(installs).toEqual([
-      'integration-nextjs',
-      'flow-install-nextjs',
-      'kept-skill',
-      'kept-skill',
-    ]);
-    expect(prompts.install).toContain('skills/flow-install-nextjs/SKILL.md');
-    expect(analytics.setTag).toHaveBeenCalledWith(
-      'orchestrator_skills',
-      'bundles',
+    expect(result.outcome).toBe(RunOutcome.Failed);
+    expect(result.failure?.code).toBe(
+      ErrorCodes.AgentOrchestratorSkillVariantMissing,
     );
-  });
-
-  it('reports bundles when the menu has no replacement, whatever the flag says', async () => {
-    menu = {
-      categories: {
-        skills: MENU.categories.skills.filter(
-          (skill) => !('replaces' in skill),
-        ),
-      },
-    };
-    const result = await run();
-
-    expect(result.outcome).toBe(RunOutcome.Success);
-    expect(prompts.install).toContain('skills/flow-install-nextjs/SKILL.md');
-    expect(analytics.setTag).toHaveBeenCalledWith(
-      'orchestrator_skills',
-      'bundles',
-    );
-    expect(unavailable()).toEqual([]);
+    expect(installs).not.toContain('integration-install');
+    expect(prompts).toEqual({});
   });
 
   it.each([
@@ -349,13 +282,6 @@ describe('repackaged skills', () => {
       'skill-not-found',
     ],
     [
-      'the run has no reference skill to complete it from',
-      () => {
-        skills = without(SKILLS, 'integration-nextjs');
-      },
-      'no framework pack',
-    ],
-    [
       'the scan rejects the completed skill',
       () => {
         scan = () => Promise.resolve('prompt injection in SKILL.md');
@@ -370,22 +296,41 @@ describe('repackaged skills', () => {
       'scan failed: engine unavailable',
     ],
   ])(
-    'falls back to the skill the prompt names when %s',
+    'fails the task, which never reads the skill, when %s',
     async (_, arrange, reason) => {
       arrange();
       const result = await run();
 
-      expect(result.outcome).toBe(RunOutcome.Success);
-      // A completed skill the scan did not pass is gone before any task starts.
-      if (scanned.length > 0) expect(completed.skill).toBe('');
-      expect(installs).toContain('flow-install-nextjs');
-      expect(prompts.install).toContain('skills/flow-install-nextjs/SKILL.md');
-      expect(prompts.install).toContain('skills/integration-kept/SKILL.md');
+      expect(result.outcome).toBe(RunOutcome.Failed);
+      expect(prompts.install).toBeUndefined();
+      expect(read('integration-install', 'SKILL.md')).toBeUndefined();
+      // The skill is reported once, however many attempts wait on it.
+      expect(unavailable()).toEqual([
+        { skill: 'integration-install', reason, framework: 'nextjs' },
+      ]);
+    },
+  );
+
+  it.skipIf(process.platform === 'win32')(
+    'fails the task, and writes nothing through it, when the skills folder is a link',
+    async () => {
+      fs.mkdirSync(path.join(dir, 'outside'));
+      fs.mkdirSync(path.join(dir, '.posthog-wizard-cache'));
+      fs.symlinkSync(
+        path.join(dir, 'outside'),
+        path.join(dir, '.posthog-wizard-cache/skills'),
+      );
+
+      const result = await run();
+
+      expect(result.outcome).toBe(RunOutcome.Failed);
+      expect(prompts.install).toBeUndefined();
+      expect(installs).not.toContain('integration-install');
       expect(unavailable()).toEqual([
         {
           skill: 'integration-install',
-          replaces: 'flow-install',
-          reason,
+          reason:
+            'a skill path passes through a link: .posthog-wizard-cache/skills',
           framework: 'nextjs',
         },
       ]);

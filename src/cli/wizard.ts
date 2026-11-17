@@ -82,7 +82,7 @@ export const GLOBAL_OPTIONS = {
   },
   'context-mill-version': {
     describe:
-      'Fetch skills from this context-mill release (e.g. 1.59.0) instead of the latest\nenv: POSTHOG_WIZARD_CONTEXT_MILL_VERSION',
+      'Fetch skills from this context-mill release (e.g. 1.66.0) instead of the latest\nenv: POSTHOG_WIZARD_CONTEXT_MILL_VERSION',
     type: 'string' as const,
     coerce: parseContextMillVersion,
     hidden: true,

@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { join, dirname } from 'node:path';
-import { afterEach, describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import * as constants from '@shared/constants';
 import {
   DEFAULT_AGENT_MODEL,
@@ -10,19 +10,13 @@ import {
   GPT5_6_TERRA_MODEL,
   Harness,
   Sequence,
-  WIZARD_AGENT_DAG_SKILLS_FLAG_KEY,
   WIZARD_ORCHESTRATOR_FLAG_KEY,
   WIZARD_ORCHESTRATOR_OVERRIDE_FLAG_KEY,
   WIZARD_SELF_DRIVING_USE_PI_HARNESS_FLAG_KEY,
 } from '@shared/constants';
 import {
-  initContextMillVersion,
-  resetContextMillVersion,
-} from '@shared/context-mill-version';
-import {
   areSeededTasksEnabled,
   DEFAULT_BINDING,
-  isAgentDagSkillsEnabled,
   resolveBinding,
   resolveStageOverrides,
   type SwitchboardCtx,
@@ -381,24 +375,5 @@ describe('areSeededTasksEnabled', () => {
     expect(areSeededTasksEnabled({ [key]: 'banana' })).toBe(false);
     expect(areSeededTasksEnabled({})).toBe(false);
     expect(areSeededTasksEnabled()).toBe(false);
-  });
-});
-
-describe('isAgentDagSkillsEnabled', () => {
-  afterEach(() => resetContextMillVersion());
-
-  it("only literal 'true' enables the repackaged skills", () => {
-    const key = WIZARD_AGENT_DAG_SKILLS_FLAG_KEY;
-    expect(isAgentDagSkillsEnabled({ [key]: 'true' })).toBe(true);
-    expect(isAgentDagSkillsEnabled({ [key]: 'false' })).toBe(false);
-    expect(isAgentDagSkillsEnabled({})).toBe(false);
-    expect(isAgentDagSkillsEnabled()).toBe(false);
-  });
-
-  it('a run pinned to a context-mill release never reads them', () => {
-    initContextMillVersion('1.59.0');
-    expect(
-      isAgentDagSkillsEnabled({ [WIZARD_AGENT_DAG_SKILLS_FLAG_KEY]: 'true' }),
-    ).toBe(false);
   });
 });

@@ -50,33 +50,26 @@ picks the family's skill for the run's match keys. The match keys are the run
 config's `matchKeys`, which the program runner fills from the project's traits,
 with the run's framework as the `framework` key.
 
-With `wizard-agent-dag-skills` on, a task reads the skill that stands in for the
-one its prompt names: the menu entry whose `replaces` is that name.
-[repackaged-skills.ts](orchestrator/repackaged-skills.ts) installs it, once a
-run. An entry with `frameworkReferences` is one skill written for every
-framework. It is installed into an emptied folder, so a page an earlier run
-left there does not replace the pack's, and completed from the framework's
+A menu entry with `frameworkReferences` is a step skill written once for every
+framework. [repackaged-skills.ts](orchestrator/repackaged-skills.ts) installs
+it, once a run, into an emptied folder, so a page an earlier run left there
+does not replace the pack's. It then completes the skill from the framework's
 reference skill with `@shared/skill-composition`. Completing it rewrites
 `SKILL.md`, the one file no install scan has read, so that file is scanned.
 
-The replacement's id comes from the menu and names a folder, so an id that is
-not one plain name is refused before anything is removed or installed. When a
-replacement cannot be used for any reason, a thrown error included, the task
-reads the skill its prompt names and the run sends
-`orchestrator repackaged skill unavailable` with the reason: no reference
-skill, a failed install, a pack that cannot complete it, a link on the way, or
-a scan that rejects it or fails. A completed skill the scan did not pass is
-deleted.
-Every event sent after the menu loads carries which a run read as the
-`orchestrator_skills` tag: `repackaged` when the flag is on and the menu has a
-replacement, `bundles` otherwise.
-
-`pnpm verify:repackaged-skills [dist-or-url]` checks a context-mill build or
-release: for every framework and every replaced skill, the files a task reads
-are the same both ways.
+The skill's id comes from the menu and names a folder, so an id that is not one
+plain name is refused before anything is removed or installed. When the skill
+cannot be completed for any reason, a thrown error included, its folder is
+deleted, every task that names it fails as it does when a skill fails to
+install, and the run sends `orchestrator repackaged skill unavailable` once
+with the reason: a failed install, a pack that cannot complete it, a link on
+the way, or a scan that rejects it or fails. A run that installed no reference
+skill cannot complete one, so it fails before any task starts, as it does for a
+skill the menu cannot supply.
 
 A run pinned to a context-mill release with `--context-mill-version` reads its
-skills from that release, and reads no repackaged skill. Its prompts are the
+skills from that release. The oldest release a pin may name is 1.66.0, the
+first that publishes the skills the bundled prompts name. Its prompts are the
 bundled ones, as in any run.
 
 Before the tasks run, the runner installs the framework's `integration` skill as
