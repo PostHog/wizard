@@ -90,7 +90,7 @@ function buildSupportNextSteps(credentials: Credentials): {
 /**
  * `wizard support` — set up PostHog Support (code name: conversations).
  *
- * Runs the `support` orchestrator flow (context-mill `context/agents/support`):
+ * Runs the `support` orchestrator flow (the prompts in this program's `agent/` folder):
  * the seed queues install/init when PostHog is missing, then enables the
  * product server-side, makes sure the posthog-js init doesn't cancel the
  * widget, wires identification, and writes the report.
