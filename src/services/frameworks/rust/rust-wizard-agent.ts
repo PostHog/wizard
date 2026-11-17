@@ -80,7 +80,7 @@ export const RUST_AGENT_CONFIG: FrameworkConfig<RustContext> = {
         );
       } else {
         lines.push(
-          'No async runtime detected — install with `cargo add posthog-rs --no-default-features` and use the blocking client.',
+          'No async runtime detected — install with `cargo add posthog-rs --no-default-features --features tls` and use the blocking client. posthog-rs 1.x has no TLS without the `tls` feature, so captures to an https host never send. posthog-rs 0.x has no `tls` feature and keeps TLS on, so leave `--features tls` out there.',
         );
       }
       return lines;
