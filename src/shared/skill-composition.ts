@@ -186,18 +186,6 @@ export function skillFolder(
   return path.join(root, id);
 }
 
-/** Remove the folder `skillFolder` names, or a link standing there. */
-export function removeSkillFolder(
-  skillsRoot: string,
-  id: string,
-  boundaryDir: string,
-): void {
-  fs.rmSync(skillFolder(skillsRoot, id, boundaryDir), {
-    recursive: true,
-    force: true,
-  });
-}
-
 /** Complete the step skill at `skillDir` from the pack at `packDir`, writing through no link below `boundaryDir`; throws and leaves the skill as it was otherwise. */
 export function completeSkillFromPack(
   skillDir: string,
