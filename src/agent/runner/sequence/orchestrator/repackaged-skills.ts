@@ -1,21 +1,40 @@
 /** Installs a step skill written once for every framework and completes it from the framework's pack; the sequence README's step skills passage has the rule. */
 
+import fs from 'fs';
+import os from 'os';
 import path from 'path';
 import {
   completeSkillFromPack,
   removeSkillFolder,
 } from '@shared/skill-composition';
-import type { InstallSkillResult } from '@shared/skill-install';
-import type { SkillEntry } from '@shared/skill-menu';
+import {
+  installSkillById,
+  type InstallSkillResult,
+  type SkillScanner,
+} from '@shared/skill-install';
+import { fetchSkillMenu, type SkillEntry } from '@shared/skill-menu';
+import {
+  FRAMEWORK_KEY,
+  resolveSkill,
+  type MatchKeys,
+} from '@shared/skill-resolution';
+import { analytics } from '@utils/analytics';
+import { logToFile } from '@utils/debug';
 
 const SKILL_FILE = 'SKILL.md';
+
+/** The skill family whose pick for a run is its framework's pack, which the menu ids as `integration-<variant>`. */
+export const FRAMEWORK_PACK_FAMILY = 'integration';
+
+/** Where a tool call installs a skill, relative to the install directory. */
+const TOOL_SKILLS_ROOT = path.join('.claude', 'skills');
 
 /** What one run gives the installer. */
 export type RepackagedSkillRun = {
   installDir: string;
   /** Where task skills install, relative to `installDir`. */
   skillsRoot: string;
-  /** The framework's reference skill, relative to `installDir`; undefined when the run has none. */
+  /** The framework's reference skill, relative to `installDir` or absolute; undefined when the run has none. */
   referencePath: string | undefined;
   /** Installs a menu skill under `skillsRoot`. */
   install: (skillId: string) => Promise<InstallSkillResult>;
@@ -45,7 +64,7 @@ async function installCompleted(
   try {
     completeSkillFromPack(
       completed,
-      path.join(run.installDir, run.referencePath),
+      path.resolve(run.installDir, run.referencePath),
       product,
       run.installDir,
     );
@@ -85,4 +104,95 @@ export function repackagedSkillInstaller(
     installs.set(skill.id, install);
     return install;
   };
+}
+
+/** What a tool call gives `installToolSkill`. */
+export type ToolSkillInstall = {
+  installDir: string;
+  skillsBaseUrl: string;
+  /** The run's match keys, which pick the framework's pack. */
+  matchKeys: MatchKeys;
+  /** Scans an installed skill folder; a string is the reason it is refused. */
+  scan: SkillScanner;
+  /** Scans one file; a string is the reason the file is refused. */
+  scanFile: (file: string) => Promise<string | null>;
+};
+
+/** Report a skill the run could not complete from the framework's pack. */
+export function reportSkillUnavailable(
+  skill: SkillEntry,
+  reason: string,
+  framework: string | undefined,
+): void {
+  logToFile(`[skills] ${skill.id} could not be completed: ${reason}`);
+  analytics.wizardCapture('orchestrator repackaged skill unavailable', {
+    skill: skill.id,
+    reason: reason.slice(0, 200),
+    framework,
+  });
+}
+
+/** What a tool tells its agent about an `incomplete` result. */
+export const incompleteSkillMessage = (
+  skillId: string,
+  reason: string,
+): string =>
+  `Error installing skill "${skillId}": it is completed from the project's framework pack, and that failed (${reason}).`;
+
+/** `incomplete`: the skill is completed from the framework's pack, and the run could not complete it. */
+export type ToolSkillResult =
+  | InstallSkillResult
+  | { kind: 'incomplete'; skillId: string; reason: string };
+
+/** Install the menu skill `skillId` for a tool call: as published, or completed from the framework's pack when its entry has `frameworkReferences`. */
+export async function installToolSkill(
+  skillId: string,
+  run: ToolSkillInstall,
+): Promise<ToolSkillResult> {
+  const menu = await fetchSkillMenu(run.skillsBaseUrl);
+  if (!menu) return { kind: 'menu-fetch-failed' };
+  const entries = Object.values(menu.categories).flat();
+  const skill = entries.find((entry) => entry.id === skillId);
+  if (!skill) return { kind: 'skill-not-found', skillId };
+  const install = (id: string, installDir = run.installDir, root?: string) =>
+    installSkillById(id, installDir, run.skillsBaseUrl, {
+      skillsRoot: root,
+      scan: run.scan,
+    });
+  const { frameworkReferences } = skill;
+  if (!frameworkReferences) return install(skill.id);
+  const onUnavailable = (unavailable: SkillEntry, reason: string) =>
+    reportSkillUnavailable(
+      unavailable,
+      reason,
+      run.matchKeys[FRAMEWORK_KEY]?.[0],
+    );
+
+  // The pack is read once and thrown away, so it never lands in the project.
+  const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'posthog-wizard-'));
+  try {
+    const pack = resolveSkill(entries, FRAMEWORK_PACK_FAMILY, run.matchKeys);
+    const packInstall = pack && (await install(pack.id, scratch, 'pack'));
+    if (packInstall && packInstall.kind !== 'ok') {
+      const reason = `the framework pack did not install: ${packInstall.kind}`;
+      onUnavailable(skill, reason);
+      return { kind: 'incomplete', skillId, reason };
+    }
+    const complete = repackagedSkillInstaller({
+      installDir: run.installDir,
+      skillsRoot: TOOL_SKILLS_ROOT,
+      referencePath: packInstall && path.join(scratch, packInstall.path),
+      install: (id) => install(id),
+      scanFile: run.scanFile,
+      onUnavailable,
+    });
+    return {
+      kind: 'ok',
+      path: await complete({ ...skill, frameworkReferences }),
+    };
+  } catch (error) {
+    return { kind: 'incomplete', skillId, reason: message(error) };
+  } finally {
+    fs.rmSync(scratch, { recursive: true, force: true });
+  }
 }

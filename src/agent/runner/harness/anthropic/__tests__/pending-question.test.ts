@@ -78,6 +78,7 @@ async function initializeHarness(
     boot: {
       programId: 'test',
       skillsBaseUrl: 'https://skills.test',
+      matchKeys: () => ({}),
       credentials,
       wizardFlags: {},
       wizardFlagPayloads: {},

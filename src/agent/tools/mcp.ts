@@ -28,14 +28,18 @@ import {
   publishHandoff,
 } from './handoff';
 import { createSecretVault, type SecretVault } from '@shared/secret-vault';
-import { downloadSkill } from '@shared/skill-install';
 import type { ProgressEmitter } from '../progress';
 import {
   buildOrchestratorTools,
   type OrchestratorToolsContext,
 } from '../runner/sequence/orchestrator/queue-tools';
 import type { LLMProvider } from '@posthog/warlock';
-import { scanInstalledSkill } from '../yara-hooks';
+import { scanInstalledSkill, scanInstalledSkillFile } from '../yara-hooks';
+import {
+  incompleteSkillMessage,
+  installToolSkill,
+} from '../runner/sequence/orchestrator/repackaged-skills';
+import type { MatchKeys } from '@shared/skill-resolution';
 import {
   ASK_MAX_QUESTIONS_PER_CALL,
   DEFAULT_ASK_MAX_QUESTIONS,
@@ -149,6 +153,9 @@ export interface WizardToolsOptions {
 
   /** Scan-triage classifier for install_skill's scan, resolved by the caller. */
   triageProvider: LLMProvider;
+
+  /** The run's match keys, which pick the framework's pack for a skill `install_skill` completes from it. */
+  matchKeys?: () => MatchKeys;
 
   /** Where `publish_handoff` reports. Absent → the handoff is written but reported nowhere. */
   emit?: ProgressEmitter;
@@ -433,10 +440,24 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
         };
       }
 
-      // Look up download URL from cached menu
-      const allSkills: SkillEntry[] = Object.values(cachedSkillMenu).flat();
-      const skill = allSkills.find((s) => s.id === args.skillId);
-      if (!skill) {
+      const result = await installToolSkill(args.skillId, {
+        installDir: workingDirectory,
+        skillsBaseUrl,
+        matchKeys: options.matchKeys?.() ?? {},
+        scan: (dir) => scanInstalledSkill(dir, triageProvider),
+        scanFile: (file) => scanInstalledSkillFile(file, triageProvider),
+      });
+      if (result.kind === 'ok') {
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: `Skill installed to .claude/skills/${args.skillId}/`,
+            },
+          ],
+        };
+      }
+      if (result.kind === 'skill-not-found') {
         return {
           content: [
             {
@@ -447,40 +468,38 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
           isError: true,
         };
       }
-
-      const result = await downloadSkill(skill, workingDirectory, {
-        scan: (dir) => scanInstalledSkill(dir, triageProvider),
-      });
-      if (result.success) {
+      if (result.kind === 'incomplete') {
         return {
           content: [
             {
               type: 'text' as const,
-              text: `Skill installed to .claude/skills/${args.skillId}/`,
-            },
-          ],
-        };
-      } else {
-        // The agent only sees a tool-result string — report the failure too.
-        analytics.captureException(
-          new Error('Skill install failed: download-failed'),
-          {
-            source: 'install_skill_tool',
-            skill_id: args.skillId,
-            error_detail: String(result.error).slice(0, 500),
-            platform: process.platform,
-          },
-        );
-        return {
-          content: [
-            {
-              type: 'text' as const,
-              text: `Error installing skill: ${result.error}`,
+              text: incompleteSkillMessage(args.skillId, result.reason),
             },
           ],
           isError: true,
         };
       }
+      const detail =
+        result.kind === 'download-failed' ? result.message : result.kind;
+      // The agent only sees a tool-result string — report the failure too.
+      analytics.captureException(
+        new Error(`Skill install failed: ${result.kind}`),
+        {
+          source: 'install_skill_tool',
+          skill_id: args.skillId,
+          error_detail: String(detail).slice(0, 500),
+          platform: process.platform,
+        },
+      );
+      return {
+        content: [
+          {
+            type: 'text' as const,
+            text: `Error installing skill: ${detail}`,
+          },
+        ],
+        isError: true,
+      };
     },
   );
 
