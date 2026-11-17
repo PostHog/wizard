@@ -6,7 +6,9 @@ vi.mock('@utils/analytics', () => ({
   analytics: { wizardCapture: vi.fn() },
 }));
 
+import { Integration } from '@shared/constants';
 import { prepareSkillMenu, type SkillMenu } from '@shared/skill-menu';
+import { resolveSkill } from '@shared/skill-resolution';
 import {
   buildRegistry,
   type AgentPrompt,
@@ -22,11 +24,21 @@ const menu = prepareSkillMenu(
     ),
   ) as SkillMenu,
 );
+const entries = Object.values(menu.categories).flat();
 const menuNames = new Set(
-  Object.values(menu.categories)
-    .flat()
-    .flatMap((entry) => (entry.family ? [entry.family, entry.id] : [entry.id])),
+  entries.flatMap((entry) =>
+    entry.family ? [entry.family, entry.id] : [entry.id],
+  ),
 );
+// What a run resolves for one framework: the framework's pack, then each skill a task names.
+const unresolvedFor = (names: readonly string[]): string[] =>
+  Object.values(Integration).flatMap((framework) =>
+    names
+      .filter(
+        (name) => !resolveSkill(entries, name, { framework: [framework] }),
+      )
+      .map((name) => `${name} for ${framework}`),
+  );
 
 const plan = (
   prompts: readonly AgentPrompt[],
@@ -42,6 +54,10 @@ const plan = (
 const bundled = bundledFlows();
 
 describe('the bundled flows', () => {
+  it('resolves a framework pack for every framework', () => {
+    expect(unresolvedFor(['integration'])).toEqual([]);
+  });
+
   describe.each([...bundled.keys()])('%s', (flow) => {
     const tasks = (bundled.get(flow) ?? []).filter((prompt) => !prompt.seed);
     const types = tasks.map((prompt) => prompt.type);
@@ -67,6 +83,11 @@ describe('the bundled flows', () => {
       );
       const last = planned[planned.length - 1].type;
       expect(tasks.find((prompt) => prompt.type === last)?.sink).toBe(true);
+    });
+
+    it('resolves every skill it names for every framework', () => {
+      const names = [...new Set(tasks.flatMap((prompt) => prompt.skills))];
+      expect(unresolvedFor(names)).toEqual([]);
     });
 
     it('names skills the recorded menu has', () => {
