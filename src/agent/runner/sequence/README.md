@@ -67,6 +67,12 @@ the way, or a scan that rejects it or fails. A run that installed no reference
 skill cannot complete one, so it fails before any task starts, as it does for a
 skill the menu cannot supply.
 
+The `install_skill` tool completes such a skill the same way, in both
+sequences: `installToolSkill` in the same file picks the framework's pack with
+the run's match keys, reads it from a scratch folder, and completes the skill
+in `.claude/skills`. A run with no framework gets an error that says so, and
+nothing is installed.
+
 A run pinned to a context-mill release with `--context-mill-version` reads its
 skills from that release. The oldest release a pin may name is 1.66.0, the
 first that publishes the skills the bundled prompts name. Its prompts are the

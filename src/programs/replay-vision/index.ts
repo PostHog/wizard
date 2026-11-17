@@ -120,15 +120,15 @@ const base = createSkillProgram({
  *
  * Makes session replay record (server toggle + client init check), then
  * creates vision scanners scoped to the product's key flows, read out of the
- * repo. The orchestrator runs the `replay-vision` agent flow (context-mill
- * `context/agents/replay-vision`): the seed enqueues the install/init tasks
- * (copied from integration-v2, sharing its step-skills) when the project has
- * no PostHog yet, so the command works on uninstrumented repos instead of
- * aborting.
+ * repo. The orchestrator runs the `replay-vision` agent flow, the prompts in
+ * this program's `agent/` folder: the seed enqueues the install/init tasks
+ * (on the `integration-install` and `integration-init` step skills) when the
+ * project has no PostHog yet, so the command works on uninstrumented repos
+ * instead of aborting.
  *
  * Departures from a plain `createSkillProgram`:
- * - `onReady` detection, so `session.skillId` carries the framework id the
- *   orchestrator's preflight resolves reference + mini-skill variants with.
+ * - `onReady` detection, so the session carries the framework the
+ *   orchestrator's preflight resolves the framework pack with.
  * - `agentFlow` pinned (the id would default to the same value — explicit so
  *   renaming the program can't silently detach the flow).
  * - `ciPreRun` is the headless equivalent of `onReady`. Both come from the

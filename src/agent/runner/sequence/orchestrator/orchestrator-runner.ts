@@ -37,11 +37,7 @@ import {
   scanInstalledSkillFile,
 } from '../../../yara-hooks';
 import { fetchSkillMenu, type SkillEntry } from '@shared/skill-menu';
-import {
-  FRAMEWORK_KEY,
-  resolveSkill,
-  type MatchKeys,
-} from '@shared/skill-resolution';
+import { resolveSkill } from '@shared/skill-resolution';
 import { analytics } from '@utils/analytics';
 import { ciExcludedTaskTypes } from '@utils/ci-flag-overrides';
 import { logToFile } from '@utils/debug';
@@ -62,6 +58,7 @@ import type {
   SequenceResult,
   SequenceContext,
 } from '../../shared/types';
+import { runFramework, runMatchKeys } from '../../shared/match-keys';
 import { createEmitSpinner } from '../../shared/progress-collector';
 import { createAskBridge } from '../../shared/ask';
 import {
@@ -96,7 +93,11 @@ import {
 } from './task-deadline';
 import { dependencyClosure, uncoveredBySink } from './queue-tools';
 import { deferSeededTasks } from './seeded-deps';
-import { repackagedSkillInstaller } from './repackaged-skills';
+import {
+  FRAMEWORK_PACK_FAMILY,
+  repackagedSkillInstaller,
+  reportSkillUnavailable,
+} from './repackaged-skills';
 import { queueTaskGraph, TaskGraphError } from './task-graph';
 import { LONGER_ASK_TIMEOUT_MS, shouldDisableAsk } from '@shared/ask-policy';
 import {
@@ -253,9 +254,6 @@ async function fetchSkillMenuEntries(
   if (!menu) return [];
   return Object.values(menu.categories).flat();
 }
-
-/** The framework reference is the full `integration` skill, which the menu ids as `integration-<variant>`. */
-const REFERENCE_SKILL = 'integration';
 
 /**
  * How long an optional step's notice waits for an answer.
@@ -883,22 +881,15 @@ async function executeOrchestrator(
   let referenceInstallPath: string | undefined;
   const menuSkillEntries = await fetchSkillMenuEntries(boot.skillsBaseUrl);
   if (signal?.aborted) return cancelledRun();
-  // The framework key for reference + variant resolution. `input.integration`
-  // is the detected framework and always wins; `input.skillId` is the
-  // fallback for the basic-integration path, where the caller sets it to the
-  // framework label. Programs whose run config carries their own skill id
-  // (agent-skill commands like replay-vision) would otherwise leak that id in
-  // here as a bogus framework after the caller overwrites the detect result.
-  const framework = input.integration ?? input.skillId ?? undefined;
-  // The project's traits supply the match keys, and the framework key above replaces theirs.
-  const matchKeys: MatchKeys = {
-    ...config.matchKeys?.(),
-    [FRAMEWORK_KEY]: framework ? [framework] : undefined,
-  };
+  // The framework the reference skill and every skill family resolve for.
+  const framework = runFramework(input);
+  const matchKeys = runMatchKeys(config, input);
   const pickSkillEntry = (skillId: string) =>
     resolveSkill(menuSkillEntries, skillId, matchKeys);
   const pickSkillId = (skillId: string) => pickSkillEntry(skillId)?.id;
-  const referenceSkillId = framework ? pickSkillId(REFERENCE_SKILL) : undefined;
+  const referenceSkillId = framework
+    ? pickSkillId(FRAMEWORK_PACK_FAMILY)
+    : undefined;
   if (referenceSkillId) {
     const ref = await installSkillById(
       referenceSkillId,
@@ -1360,16 +1351,8 @@ async function executeOrchestrator(
         scan: (dir) => scanInstalledSkill(dir, boot.triageProvider),
       }),
     scanFile: (file) => scanInstalledSkillFile(file, boot.triageProvider),
-    onUnavailable: (skill, reason) => {
-      logToFile(
-        `[orchestrator] skill ${skill.id} could not be completed: ${reason}`,
-      );
-      analytics.wizardCapture('orchestrator repackaged skill unavailable', {
-        skill: skill.id,
-        reason: reason.slice(0, 200),
-        framework,
-      });
-    },
+    onUnavailable: (skill, reason) =>
+      reportSkillUnavailable(skill, reason, framework),
   });
   // Task agents can install durable skills mid-run (load_skill), and only the
   // framework reference docs earn a place — snapshot what was already there so

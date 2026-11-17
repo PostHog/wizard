@@ -589,6 +589,7 @@ export const piBackend: AgentHarness = {
           workingDirectory: input.installDir,
           skillsBaseUrl: boot.skillsBaseUrl,
           triageProvider: boot.triageProvider,
+          matchKeys: boot.matchKeys,
           emit,
           programId: boot.programId,
           handoffNotebook: boot.handoffNotebook,

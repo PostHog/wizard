@@ -8,8 +8,8 @@ import { nativeCommandFactory } from './factories/native-command-factory';
  *
  * Wires up exception capture and — where the platform needs it — source-map /
  * debug-symbol upload. Runs the `error-tracking` orchestrator flow, which
- * reuses the integration-v2 install/init mini-agents when the repo has no
- * PostHog integration yet, so it works on uninstrumented projects too.
+ * installs and initializes the SDK first when the repo has no PostHog
+ * integration yet, so it works on uninstrumented projects too.
  */
 export const errorTrackingCommand: Command =
   nativeCommandFactory(errorTrackingConfig);

@@ -16,6 +16,7 @@ import { CallType, IS_DEV } from '@shared/constants';
 import { VERSION } from '@shared/version';
 import { mcpUrlFor } from '@shared/host-resolution';
 import type { WizardRunOptions } from '@utils/types';
+import { runMatchKeys } from './match-keys';
 import type { BootstrapResult, ResolvedRunConfig, RunInput } from './types';
 
 // ── Helpers ──────────────────────────────────────────────────────────
@@ -84,6 +85,7 @@ export async function prepareRun(
     wizardFlagPayloads,
     wizardMetadata,
     project: input.project,
+    matchKeys: () => runMatchKeys(config, input),
     // Resolved once, here: the only place holding both the run-level harness
     // and the gateway auth. Every skill install downstream reads it off boot.
     triageProvider: createTriageLLMProvider(async () => {
