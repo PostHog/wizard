@@ -10,7 +10,6 @@ import {
   GPT5_6_TERRA_MODEL,
   Harness,
   Sequence,
-  WIZARD_AGENT_DAG_FLAG_KEY,
   WIZARD_AGENT_DAG_SKILLS_FLAG_KEY,
   WIZARD_ORCHESTRATOR_FLAG_KEY,
   WIZARD_ORCHESTRATOR_OVERRIDE_FLAG_KEY,
@@ -23,7 +22,6 @@ import {
 import {
   areSeededTasksEnabled,
   DEFAULT_BINDING,
-  isAgentDagEnabled,
   isAgentDagSkillsEnabled,
   resolveBinding,
   resolveStageOverrides,
@@ -386,35 +384,14 @@ describe('areSeededTasksEnabled', () => {
   });
 });
 
-describe('isAgentDagEnabled', () => {
-  afterEach(() => resetContextMillVersion());
-
-  it("only literal 'true' enables the agent DAG paths", () => {
-    const key = WIZARD_AGENT_DAG_FLAG_KEY;
-    expect(isAgentDagEnabled({ [key]: 'true' })).toBe(true);
-    expect(isAgentDagEnabled({ [key]: 'false' })).toBe(false);
-    expect(isAgentDagEnabled({})).toBe(false);
-    expect(isAgentDagEnabled()).toBe(false);
-  });
-
-  it('a run pinned to a context-mill release never takes them', () => {
-    initContextMillVersion('1.59.0');
-    expect(isAgentDagEnabled({ [WIZARD_AGENT_DAG_FLAG_KEY]: 'true' })).toBe(
-      false,
-    );
-  });
-});
-
 describe('isAgentDagSkillsEnabled', () => {
   afterEach(() => resetContextMillVersion());
 
-  it("only literal 'true' enables the repackaged skills, whatever the agent DAG flag says", () => {
+  it("only literal 'true' enables the repackaged skills", () => {
     const key = WIZARD_AGENT_DAG_SKILLS_FLAG_KEY;
     expect(isAgentDagSkillsEnabled({ [key]: 'true' })).toBe(true);
     expect(isAgentDagSkillsEnabled({ [key]: 'false' })).toBe(false);
-    expect(
-      isAgentDagSkillsEnabled({ [WIZARD_AGENT_DAG_FLAG_KEY]: 'true' }),
-    ).toBe(false);
+    expect(isAgentDagSkillsEnabled({})).toBe(false);
     expect(isAgentDagSkillsEnabled()).toBe(false);
   });
 

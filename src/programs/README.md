@@ -144,21 +144,19 @@ tsdown's `.md` loader, tests load them through a Vitest plugin, and a run from
 source loads them through a Node hook,
 [`markdown-loader.no-jest.mjs`](../../scripts/markdown-loader.no-jest.mjs).
 
-With `wizard-agent-dag` on, the orchestrator reads these prompts. A folder with
-a `seed: true` prompt keeps its planner. A folder without one, such as
-posthog-integration's, is queued from the graph its frontmatter declares, and
-the program's `excludedTaskTypes` and `seedTasks` decide which tasks a run
-leaves out or adds. With the flag off, the orchestrator fetches context-mill's
-copy of the flow, `agentFlow ?? id`, and runs its planner. A local context-mill
-(`--local-context-mill`) serves the skills either way, and the prompts only
-with the flag off. A run pinned to a context-mill release with
-`--context-mill-version` fetches that release's prompts, flag on or off.
+The orchestrator reads these prompts, and a program that runs the orchestrator
+must bundle them. A folder with a `seed: true` prompt keeps its planner. A
+folder without one, such as posthog-integration's, is queued from the graph its
+frontmatter declares, and the program's `excludedTaskTypes` and `seedTasks`
+decide which tasks a run leaves out or adds. A local context-mill
+(`--local-context-mill`) and a release pinned with `--context-mill-version`
+serve the skills, never the prompts.
 
 Four checks hold the prompts in place:
 
 - [`agent-prompts.test.ts`](__tests__/agent-prompts.test.ts) fails when a file
-  in `agent/` isn't imported, or when a prompt differs from the context-mill
-  release recorded in `fixtures/context-mill/`.
+  in `agent/` isn't imported, or when a prompt's frontmatter is missing or has
+  a flag that is neither `true` nor `false`.
 - [`flow-graphs.test.ts`](../agent/runner/sequence/orchestrator/__tests__/flow-graphs.test.ts)
   fails when a `dependsOn` names a task outside the folder, when a folder has
   no single sink or cannot be ordered, or when a `skills` entry is missing from

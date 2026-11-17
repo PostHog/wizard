@@ -50,32 +50,16 @@ vi.mock('../../../switchboard', async () => {
     resolveHarness: () => ({ harness: 'pi', model: [...VALID_MODELS][0] }),
     resolveStageOverrides: () => ({}),
     areSeededTasksEnabled: () => false,
-    isAgentDagEnabled: () => agentDag,
     isAgentDagSkillsEnabled: () => skillsFlag,
     getHarness: () => ({ runTask: (inputs: unknown) => harnessRun(inputs) }),
   };
 });
-vi.mock('../../../../agent-prompt-loader', async (importActual) => {
-  const actual = await importActual<
-    typeof import('../../../../agent-prompt-loader')
-  >();
-  return {
-    ...actual,
-    // The fetched flow: the same prompts, with the planner a fetched flow needs.
-    loadAgentRegistry: (_url: string, flow: string, opts?: object) =>
-      Promise.resolve(
-        actual.bundledRegistry({ ...FLOW, plan: PLANNER }, flow, opts),
-      ),
-  };
-});
-
 import { analytics } from '@utils/analytics';
 import { RunOutcome } from '../../../shared/types';
 import { runOrchestrator } from '../orchestrator-runner';
 import type { SequenceContext } from '../../../shared/types';
 import type { QueueStore } from '../queue';
 
-const PLANNER = '---\nseed: true\n---\nplan';
 const FLOW: Record<string, string> = {
   install:
     '---\nskills: [flow-install, kept-skill]\ndependsOn: []\n---\ninstall',
@@ -150,7 +134,6 @@ type Inputs = {
   orchestrator: { store: QueueStore };
 };
 
-let agentDag = true;
 let skillsFlag = true;
 let skills = SKILLS;
 let menu = MENU;
@@ -192,7 +175,6 @@ function harnessRun(raw: unknown) {
 describe('repackaged skills', () => {
   beforeEach(() => {
     dir = fs.mkdtempSync(path.join(os.tmpdir(), 'repackaged-skills-'));
-    agentDag = true;
     skillsFlag = true;
     skills = SKILLS;
     menu = MENU;
@@ -346,14 +328,6 @@ describe('repackaged skills', () => {
       'bundles',
     );
     expect(unavailable()).toEqual([]);
-  });
-
-  it('reads them with fetched prompts too, since the two flags are independent', async () => {
-    agentDag = false;
-    const result = await run();
-
-    expect(result.outcome).toBe(RunOutcome.Success);
-    expect(prompts.install).toContain('skills/integration-install/SKILL.md');
   });
 
   it.each([

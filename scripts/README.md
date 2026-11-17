@@ -64,9 +64,8 @@ context-mill changes how it builds a step skill or a pack.
 
 `pnpm record:context-mill-fixtures [base-url]` runs
 `record-context-mill-fixtures.no-jest.ts`, which records a context-mill
-release's skill menu, agent menu and agent prompts into
-`fixtures/context-mill/`, the fixtures the behavior checks compare against. It
-leaves `repackaged/` as it is.
+release's skill menu into `fixtures/context-mill/`, the fixture the behavior
+checks compare against. It leaves `repackaged/` as it is.
 Commit the result on its own with the reason, since a changed fixture changes
 what "unchanged" means.
 
