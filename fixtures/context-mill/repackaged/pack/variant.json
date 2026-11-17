@@ -1,0 +1,43 @@
+{
+  "id": "flask",
+  "displayName": "Flask",
+  "match": {
+    "framework": "flask"
+  },
+  "rules": {
+    "file": "references/COMMANDMENTS.md",
+    "description": "Framework-specific rules the integration must follow"
+  },
+  "products": {
+    "integration": [
+      {
+        "file": "references/flask.md",
+        "description": "Flask"
+      }
+    ],
+    "error-tracking": [
+      {
+        "file": "references/error-tracking/python.md",
+        "description": "Python error tracking installation"
+      },
+      {
+        "file": "references/error-tracking/flask.md",
+        "description": "Flask"
+      }
+    ],
+    "feature-flags": [
+      {
+        "file": "references/feature-flags/python.md",
+        "description": "Python feature flags installation"
+      },
+      {
+        "file": "references/feature-flags/flask.md",
+        "description": "Flask"
+      },
+      {
+        "file": "references/feature-flags/web.md",
+        "description": "Web feature flags installation"
+      }
+    ]
+  }
+}

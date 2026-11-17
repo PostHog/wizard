@@ -27,6 +27,10 @@ export type SkillEntry = {
   description?: string;
   /** What the skill is, and as `key:value` the projects it is written for; see `@shared/skill-resolution`. */
   tags?: string[];
+  /** The menu id or skill family this skill stands in for; see `resolveReplacement`. */
+  replaces?: string;
+  /** The product whose pages, from the framework's pack, complete this skill; see `@shared/skill-composition`. */
+  frameworkReferences?: string;
   /** Menu-only: the variants inside a bundle, expanded into entries of their own on fetch. */
   variants?: SkillVariant[];
 };

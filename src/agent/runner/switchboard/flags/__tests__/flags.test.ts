@@ -11,6 +11,7 @@ import {
   Harness,
   Sequence,
   WIZARD_AGENT_DAG_FLAG_KEY,
+  WIZARD_AGENT_DAG_SKILLS_FLAG_KEY,
   WIZARD_ORCHESTRATOR_FLAG_KEY,
   WIZARD_ORCHESTRATOR_OVERRIDE_FLAG_KEY,
   WIZARD_SELF_DRIVING_USE_PI_HARNESS_FLAG_KEY,
@@ -23,6 +24,7 @@ import {
   areSeededTasksEnabled,
   DEFAULT_BINDING,
   isAgentDagEnabled,
+  isAgentDagSkillsEnabled,
   resolveBinding,
   resolveStageOverrides,
   type SwitchboardCtx,
@@ -400,5 +402,26 @@ describe('isAgentDagEnabled', () => {
     expect(isAgentDagEnabled({ [WIZARD_AGENT_DAG_FLAG_KEY]: 'true' })).toBe(
       false,
     );
+  });
+});
+
+describe('isAgentDagSkillsEnabled', () => {
+  afterEach(() => resetContextMillVersion());
+
+  it("only literal 'true' enables the repackaged skills, whatever the agent DAG flag says", () => {
+    const key = WIZARD_AGENT_DAG_SKILLS_FLAG_KEY;
+    expect(isAgentDagSkillsEnabled({ [key]: 'true' })).toBe(true);
+    expect(isAgentDagSkillsEnabled({ [key]: 'false' })).toBe(false);
+    expect(
+      isAgentDagSkillsEnabled({ [WIZARD_AGENT_DAG_FLAG_KEY]: 'true' }),
+    ).toBe(false);
+    expect(isAgentDagSkillsEnabled()).toBe(false);
+  });
+
+  it('a run pinned to a context-mill release never reads them', () => {
+    initContextMillVersion('1.59.0');
+    expect(
+      isAgentDagSkillsEnabled({ [WIZARD_AGENT_DAG_SKILLS_FLAG_KEY]: 'true' }),
+    ).toBe(false);
   });
 });

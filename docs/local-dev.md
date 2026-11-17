@@ -180,7 +180,8 @@ over to `https://context-mill.posthog.com/v1.59.0/`. A version with no release
 fails when the run first fetches a menu. The `[agent-runner] targets` line in
 the debug log shows the release a run used.
 
-A pinned run takes none of the `wizard-agent-dag` paths; see the
+A pinned run takes none of the `wizard-agent-dag` paths and reads no
+repackaged skill; see the
 [orchestrator sequence](../src/agent/runner/sequence/README.md#orchestrator).
 
 The pin cannot be combined with `--local-context-mill` or `--local-dev`. Pass
