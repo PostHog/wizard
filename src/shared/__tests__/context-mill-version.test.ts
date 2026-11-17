@@ -45,16 +45,24 @@ describe('parseContextMillVersion', () => {
 });
 
 describe('the oldest release a pin may name', () => {
-  it.each(['1.65.0', 'v1.59.0', '0.99.0', '1.65.9-rc.1'])(
-    'refuses %j and names the floor',
+  // A prerelease of the oldest release comes before it.
+  it.each([
+    '1.65.0',
+    'v1.59.0',
+    '0.99.0',
+    '1.65.9-rc.1',
+    '1.66.0-rc.1',
+    'v1.66.0-beta',
+  ])('refuses %j and names the floor', (raw) => {
+    expect(() => parseContextMillVersion(raw)).toThrow(/older than 1\.66\.0/);
+  });
+
+  it.each(['1.66.0', '1.66.1', '1.66.1-rc.1', '1.100.0', '2.0.0'])(
+    'accepts %j',
     (raw) => {
-      expect(() => parseContextMillVersion(raw)).toThrow(/older than 1\.66\.0/);
+      expect(parseContextMillVersion(raw)).toBe(`v${raw}`);
     },
   );
-
-  it.each(['1.66.0', '1.66.1', '1.100.0', '2.0.0'])('accepts %j', (raw) => {
-    expect(parseContextMillVersion(raw)).toBe(`v${raw}`);
-  });
 });
 
 describe('getSkillsBaseUrl with a pinned release', () => {
