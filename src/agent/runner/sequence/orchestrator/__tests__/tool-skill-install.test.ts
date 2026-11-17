@@ -1,5 +1,5 @@
 /** What `install_skill` installs: a skill as published, or one completed from the framework's pack, never a half-completed one. */
-import * as fs from 'fs';
+import fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 
@@ -21,10 +21,10 @@ vi.mock('@shared/skill-install', async (importActual) => ({
     const files = SKILLS[id];
     if (!files)
       return Promise.resolve({ kind: 'skill-not-found', skillId: id });
-    if (offline.has(id))
-      return Promise.resolve({ kind: 'download-failed', message: 'offline' });
     const relative = `${options.skillsRoot ?? '.claude/skills'}/${id}`;
     installed.push(path.join(installDir, relative));
+    if (offline.has(id))
+      return Promise.resolve({ kind: 'download-failed', message: 'offline' });
     for (const [file, contents] of Object.entries(files)) {
       const target = path.join(installDir, relative, file);
       fs.mkdirSync(path.dirname(target), { recursive: true });
@@ -78,7 +78,8 @@ const SKILLS: Record<string, Record<string, string>> = {
   },
 };
 
-const menu = MENU;
+// Null when the menu cannot be fetched.
+let menu: typeof MENU | null = MENU;
 let installed: string[] = [];
 // Skills whose download fails.
 let offline = new Set<string>();
@@ -92,6 +93,7 @@ const read = (id: string, file: string): string | undefined => {
 describe('installToolSkill', () => {
   beforeEach(() => {
     dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tool-skill-install-'));
+    menu = MENU;
     installed = [];
     offline = new Set();
     vi.mocked(analytics.wizardCapture).mockClear();
@@ -113,6 +115,17 @@ describe('installToolSkill', () => {
       scan: () => Promise.resolve(null),
       scanFile: over.scanFile ?? (() => Promise.resolve(null)),
     });
+
+  it('installs nothing when the menu cannot be fetched', async () => {
+    menu = null;
+
+    expect(
+      await install('integration-install', { framework: 'nextjs' }),
+    ).toEqual({ kind: 'menu-fetch-failed' });
+
+    expect(installed).toEqual([]);
+    expect(fs.existsSync(path.join(dir, '.claude'))).toBe(false);
+  });
 
   it('installs a skill with no framework references as it is published', async () => {
     expect(await install('plain-skill')).toEqual({
@@ -197,6 +210,67 @@ describe('installToolSkill', () => {
     });
 
     expect(fs.existsSync(path.join(dir, '.claude/skills'))).toBe(false);
+  });
+
+  it("refuses a step skill, says why and installs nothing when the framework's pack does not install", async () => {
+    offline.add('integration-nextjs');
+    const reason =
+      'the framework pack did not install: download-failed: offline';
+
+    expect(
+      await install('integration-install', { framework: 'nextjs' }),
+    ).toEqual({ kind: 'incomplete', skillId: 'integration-install', reason });
+
+    // Only the pack was tried, and its scratch folder is gone.
+    expect(installed).toHaveLength(1);
+    expect(fs.existsSync(path.dirname(path.dirname(installed[0])))).toBe(false);
+    expect(fs.existsSync(path.join(dir, '.claude'))).toBe(false);
+    expect(analytics.wizardCapture).toHaveBeenCalledWith(
+      'orchestrator repackaged skill unavailable',
+      { skill: 'integration-install', reason, framework: 'nextjs' },
+    );
+  });
+
+  it('reports a scratch folder that cannot be made as a skill it could not complete', async () => {
+    const made = vi.spyOn(fs, 'mkdtempSync').mockImplementationOnce(() => {
+      throw new Error('ENOSPC: no space left on device');
+    });
+
+    try {
+      expect(
+        await install('integration-install', { framework: 'nextjs' }),
+      ).toEqual({
+        kind: 'incomplete',
+        skillId: 'integration-install',
+        reason: 'ENOSPC: no space left on device',
+      });
+      expect(installed).toEqual([]);
+    } finally {
+      made.mockRestore();
+    }
+  });
+
+  it('keeps the result of an install whose temp folders cannot be removed', async () => {
+    const remove = fs.rmSync.bind(fs);
+    const kept: string[] = [];
+    const removing = vi
+      .spyOn(fs, 'rmSync')
+      .mockImplementation((target, options) => {
+        if (String(target).startsWith(dir)) return remove(target, options);
+        kept.push(String(target));
+        throw new Error('EBUSY: resource busy or locked');
+      });
+
+    try {
+      expect(
+        await install('integration-install', { framework: 'nextjs' }),
+      ).toEqual({ kind: 'ok', path: '.claude/skills/integration-install' });
+      expect(kept).toHaveLength(2);
+    } finally {
+      removing.mockRestore();
+      for (const target of kept)
+        remove(target, { recursive: true, force: true });
+    }
   });
 
   it('refuses a step skill, and installs nothing, when the scan rejects the completed SKILL.md', async () => {

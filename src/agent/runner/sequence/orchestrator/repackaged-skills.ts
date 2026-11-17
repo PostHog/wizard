@@ -205,12 +205,15 @@ export async function installToolSkill(
     );
 
   // The pack is read once and thrown away, so it never lands in the project.
-  const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'posthog-wizard-'));
+  let scratch: string | undefined;
   try {
+    scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'posthog-wizard-'));
     const pack = resolveSkill(entries, FRAMEWORK_PACK_FAMILY, run.matchKeys);
     const packInstall = pack && (await install(pack.id, scratch, 'pack'));
     if (packInstall && packInstall.kind !== 'ok') {
-      const reason = `the framework pack did not install: ${packInstall.kind}`;
+      const reason = `the framework pack did not install: ${installFailure(
+        packInstall,
+      )}`;
       onUnavailable(skill, reason);
       return { kind: 'incomplete', skillId, reason };
     }
@@ -231,6 +234,10 @@ export async function installToolSkill(
   } catch (error) {
     return { kind: 'incomplete', skillId, reason: message(error) };
   } finally {
-    fs.rmSync(scratch, { recursive: true, force: true });
+    try {
+      if (scratch) fs.rmSync(scratch, { recursive: true, force: true });
+    } catch {
+      // A scratch folder that will not delete does not change what was installed.
+    }
   }
 }
