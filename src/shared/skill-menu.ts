@@ -55,13 +55,15 @@ export interface SkillMenu {
 /** A category's skill family: its key with `/` as `-`, so `integration/install` is `integration-install`. */
 const skillFamily = (category: string): string => category.replaceAll('/', '-');
 
-/** The menu as the wizard reads it: each entry given its family, and an entry that is a bundle of variants left out. */
+/** The menu as the wizard reads it: each entry given its family, and an entry that is a bundle of variants left out with any category it empties. */
 export function prepareSkillMenu(menu: SkillMenu): SkillMenu {
   for (const [category, entries] of Object.entries(menu.categories)) {
     const family = skillFamily(category);
-    menu.categories[category] = entries
+    const kept = entries
       .filter((entry) => !('bundle' in entry && entry.bundle))
       .map((entry) => ({ ...entry, family }));
+    if (kept.length > 0) menu.categories[category] = kept;
+    else delete menu.categories[category];
   }
   return menu;
 }
