@@ -181,8 +181,9 @@ fails when the run first fetches a menu. The `[agent-runner] targets` line in
 the debug log shows the release a run used.
 
 The oldest release a pin may name is 1.66.0, the first that publishes the
-skills the bundled agent prompts name. An older version stops the run with
-`PHW_CLI_BAD_ARGS` and a message that names that release. A pinned run's agent
+skills the bundled agent prompts name. An older version, or a prerelease of
+1.66.0 itself, stops the run with `PHW_CLI_BAD_ARGS` and a message that names
+that release. A pinned run's agent
 prompts are the ones the wizard bundles, as in any run; see the
 [orchestrator sequence](../src/agent/runner/sequence/README.md#orchestrator).
 

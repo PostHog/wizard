@@ -4,11 +4,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { unzipSync } from 'fflate';
-import {
-  VARIANT_FILE,
-  composeStepSkill,
-  type SkillFiles,
-} from '@shared/skill-composition';
+import { VARIANT_FILE, type SkillFiles } from '@shared/skill-composition';
 import {
   prepareSkillMenu,
   type SkillEntry,
@@ -30,6 +26,23 @@ const PAIR_DIR = path.join(OUT_DIR, 'repackaged');
 /** The step skill and framework recorded as a pair, and the skill family whose pick is the framework's pack. */
 const PAIR = { step: 'integration-init', framework: 'flask' };
 const PACK_FAMILY = 'integration';
+
+/** A menu entry as a release publishes it, with the fields only older releases carry. */
+type PublishedEntry = SkillEntry & {
+  replaces?: string;
+  bundle?: boolean;
+};
+
+/** What `pair.json` records. */
+type PairRecord = {
+  framework: string;
+  product: string;
+  step: string;
+  pack: string;
+  contextMill?: string;
+  /** The skill context-mill published for the pair, and the release `completed/` was recorded from. */
+  completed?: { skill: string; contextMill?: string };
+};
 
 async function fetchBytes(url: string): Promise<Uint8Array> {
   const res = await fetch(url, { redirect: 'follow' });
@@ -74,6 +87,31 @@ function packFilesRead(pack: SkillFiles, product: string): SkillFiles {
   return Object.fromEntries(names.map((name) => [name, pack[name]]));
 }
 
+/** The skill context-mill itself publishes for the pair, written for one framework, or undefined when the release publishes none. */
+async function publishedSkill(
+  entries: readonly PublishedEntry[],
+  step: PublishedEntry,
+  pack: SkillEntry,
+): Promise<{ id: string; files: SkillFiles } | undefined> {
+  const family = step.replaces;
+  if (!family) return undefined;
+  const variant = pack.id.slice(PACK_FAMILY.length + 1);
+  const id = `${family}-${variant}`;
+  const own = entries.find((entry) => entry.id === id && !entry.bundle);
+  if (own) return { id, files: await filesOf(own) };
+  const bundle = entries.find((entry) => entry.id === family && entry.bundle);
+  if (!bundle) return undefined;
+  const { variants } = JSON.parse(
+    text(
+      await fetchBytes(
+        `${BASE_URL}/${path.posix.basename(bundle.downloadUrl)}`,
+      ),
+    ),
+  ) as { variants: Record<string, SkillFiles | undefined> };
+  const files = variants[variant];
+  return files && { id, files };
+}
+
 /** Where a recorded file goes. Throws unless it stays inside its folder of the fixture, so a published file name cannot write anywhere else. */
 function pairFile(folder: string, file: string): string {
   const root = path.join(PAIR_DIR, folder);
@@ -89,6 +127,11 @@ async function main(): Promise<void> {
   // Read before anything is written, so a response that is not a menu leaves the fixtures alone.
   const menu = prepareSkillMenu(parseMenu(skillMenu));
   const entries = Object.values(menu.categories).flat();
+  // The skill context-mill published is looked up on the menu as the release wrote it.
+  const rawEntries: PublishedEntry[] = Object.values(
+    parseMenu(skillMenu).categories,
+  ).flat();
+  const rawStep = rawEntries.find((entry) => entry.id === PAIR.step);
   const step = entries.find((entry) => entry.id === PAIR.step);
   const product = step?.frameworkReferences;
   const pack = resolveSkill(entries, PACK_FAMILY, {
@@ -101,39 +144,46 @@ async function main(): Promise<void> {
   }
   const stepFiles = await filesOf(step);
   const packFiles = await filesOf(pack);
-  const recorded = {
+  // The expected result is context-mill's own skill, never this fill's output, so the two cannot drift unseen.
+  const published =
+    rawStep && (await publishedSkill(rawEntries, rawStep, pack));
+  const recorded: Record<string, SkillFiles> = {
     step: stepFiles,
     pack: packFilesRead(packFiles, product),
-    completed: composeStepSkill(stepFiles, packFiles, product),
+    ...(published ? { completed: published.files } : {}),
   };
   // Every destination is checked before a fixture is replaced or a file is written.
-  const writes = (['step', 'pack', 'completed'] as const).flatMap((folder) =>
-    Object.entries(recorded[folder]).map(
+  const writes = Object.entries(recorded).flatMap(([folder, files]) =>
+    Object.entries(files).map(
       ([file, contents]) => [pairFile(folder, file), contents] as const,
     ),
   );
+  const pairPath = path.join(PAIR_DIR, 'pair.json');
+  const before = fs.existsSync(pairPath)
+    ? (JSON.parse(fs.readFileSync(pairPath, 'utf8')) as PairRecord)
+    : undefined;
 
   fs.mkdirSync(OUT_DIR, { recursive: true });
   fs.writeFileSync(path.join(OUT_DIR, 'skill-menu.json'), skillMenu);
-  fs.rmSync(PAIR_DIR, { recursive: true, force: true });
+  // A folder that is not recorded again stays as it is.
+  for (const folder of Object.keys(recorded)) {
+    fs.rmSync(path.join(PAIR_DIR, folder), { recursive: true, force: true });
+  }
   for (const [target, contents] of writes) {
     fs.mkdirSync(path.dirname(target), { recursive: true });
     fs.writeFileSync(target, contents);
   }
-  fs.writeFileSync(
-    path.join(PAIR_DIR, 'pair.json'),
-    `${JSON.stringify(
-      {
-        framework: PAIR.framework,
-        product,
-        step: step.id,
-        pack: pack.id,
-        contextMill: menu.buildVersion,
-      },
-      null,
-      2,
-    )}\n`,
-  );
+  const pair: PairRecord = {
+    framework: PAIR.framework,
+    product,
+    step: step.id,
+    pack: pack.id,
+    contextMill: menu.buildVersion,
+    completed: published
+      ? { skill: published.id, contextMill: menu.buildVersion }
+      : before?.completed,
+  };
+  fs.writeFileSync(pairPath, `${JSON.stringify(pair, null, 2)}\n`);
 
   console.log(
     `Recorded context-mill ${
@@ -142,6 +192,11 @@ async function main(): Promise<void> {
       process.cwd(),
       OUT_DIR,
     )}`,
+  );
+  console.log(
+    published
+      ? `Recorded ${published.id}, the skill context-mill publishes for the pair, as completed/.`
+      : 'This release publishes no skill written for the pair, so completed/ is left as it was.',
   );
 }
 

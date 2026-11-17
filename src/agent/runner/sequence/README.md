@@ -53,27 +53,36 @@ framework pack.
 
 A menu entry with `frameworkReferences` is a step skill written once for every
 framework. [repackaged-skills.ts](orchestrator/repackaged-skills.ts) installs
-it, once a run, into an emptied folder, so a page an earlier run left there
-does not replace the pack's. It then completes the skill from the framework's
-reference skill with `@shared/skill-composition`. Completing it rewrites
-`SKILL.md`, the one file no install scan has read, so that file is scanned.
+it once a run. It builds the skill in a temp folder outside the project:
+it installs the skill there, completes it from the framework's reference
+skill with `@shared/skill-composition`, and scans `SKILL.md`, the one file
+completing rewrites and no install scan has read. Only a skill that is
+complete and scanned is put in place, and the temp folder is removed either
+way.
+
+The skill replaces its folder whole, so a page an earlier run left there does
+not survive. In the run's own cache any folder may be replaced. In
+`.claude/skills`, which is the project's, a folder is replaced only when it
+carries the wizard's `.posthog-wizard` marker: one the wizard did not install,
+or a link standing there, is refused and left as it is, before anything is
+downloaded.
 
 The skill's id comes from the menu and names a folder, so an id that is not one
-plain name is refused before anything is removed or installed. When the skill
-cannot be completed for any reason, a thrown error included, its folder is
-deleted, every task that names it fails as it does when a skill fails to
-install, and the run sends `orchestrator repackaged skill unavailable` once
-with the reason: a failed install, a pack that cannot complete it, a link on
-the way, or a scan that rejects it or fails. A run that installed no reference
-skill cannot complete one, so it fails before any task starts, as it does for a
-skill the menu cannot supply.
+plain name is refused before anything is installed. When the skill cannot be
+completed for any reason, a thrown error included, nothing reaches its folder,
+every task that names it fails as it does when a skill fails to install, and
+the run sends `orchestrator repackaged skill unavailable` once with the
+reason: a failed install, a pack that cannot complete it, a link on the way, a
+folder the wizard does not own, or a scan that rejects it or fails. A run that
+installed no reference skill cannot complete one, so it fails before any task
+starts, as it does for a skill the menu cannot supply.
 
 The `install_skill` tool resolves the name it is given as a task prompt's is,
 a menu id or a skill family, and completes such a skill the same way, in both
 sequences: `installToolSkill` in the same file picks the framework's pack with
-the run's match keys, reads it from a scratch folder, and completes the skill
-in `.claude/skills`. A run with no framework gets an error that says so, and
-nothing is installed.
+the run's match keys, reads it from a scratch folder, and puts the completed
+skill in `.claude/skills`. A run with no framework gets an error that says so,
+and nothing is installed.
 
 A run pinned to a context-mill release with `--context-mill-version` reads its
 skills from that release. The oldest release a pin may name is 1.66.0, the

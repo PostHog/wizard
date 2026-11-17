@@ -3,11 +3,9 @@
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import { completeSkillFromPack, skillFolder } from '@shared/skill-composition';
 import {
-  completeSkillFromPack,
-  removeSkillFolder,
-} from '@shared/skill-composition';
-import {
+  WIZARD_MARKER,
   installSkillById,
   type InstallSkillResult,
   type SkillScanner,
@@ -29,15 +27,20 @@ export const FRAMEWORK_PACK_FAMILY = 'integration';
 /** Where a tool call installs a skill, relative to the install directory. */
 const TOOL_SKILLS_ROOT = path.join('.claude', 'skills');
 
+/** Where a skill unpacks inside the temp folder it is built in. */
+const STAGE_ROOT = 'skill';
+
 /** What one run gives the installer. */
 export type RepackagedSkillRun = {
   installDir: string;
   /** Where task skills install, relative to `installDir`. */
   skillsRoot: string;
+  /** Whether every folder under `skillsRoot` is the wizard's own, so one already there may be replaced. */
+  ownsSkillsRoot: boolean;
   /** The framework's reference skill, relative to `installDir` or absolute; undefined when the run has none. */
   referencePath: string | undefined;
-  /** Installs a menu skill under `skillsRoot`. */
-  install: (skillId: string) => Promise<InstallSkillResult>;
+  /** Installs a menu skill under `dir`; an `ok` result's path is relative to `dir`. */
+  install: (skillId: string, dir: string) => Promise<InstallSkillResult>;
   /** Scans one file; a string is the reason the file is refused. */
   scanFile: (file: string) => Promise<string | null>;
   /** Called once for a skill the run cannot complete, before every task that waits on it fails. */
@@ -47,6 +50,34 @@ export type RepackagedSkillRun = {
 const message = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);
 
+/** Why an install did not end `ok`, with the detail a failed download carries. */
+const installFailure = (
+  result: Exclude<InstallSkillResult, { kind: 'ok' }>,
+): string =>
+  result.kind === 'download-failed'
+    ? `${result.kind}: ${result.message}`
+    : result.kind;
+
+/** The folder a completed skill lands in; throws when one the wizard did not install is already there. */
+function landingFolder(skill: SkillEntry, run: RepackagedSkillRun): string {
+  const target = skillFolder(
+    path.join(run.installDir, run.skillsRoot),
+    skill.id,
+    run.installDir,
+  );
+  const found = fs.lstatSync(target, { throwIfNoEntry: false });
+  if (!found || run.ownsSkillsRoot) return target;
+  const marker = fs.lstatSync(path.join(target, WIZARD_MARKER), {
+    throwIfNoEntry: false,
+  });
+  if (!found.isDirectory() || !marker?.isFile()) {
+    throw new Error(
+      `${run.skillsRoot}/${skill.id} is already there and the wizard did not install it`,
+    );
+  }
+  return target;
+}
+
 /** Install a skill and complete it from the framework's pack; throws the reason when the run cannot use it. */
 async function installCompleted(
   skill: SkillEntry,
@@ -54,35 +85,40 @@ async function installCompleted(
   run: RepackagedSkillRun,
 ): Promise<string> {
   if (!run.referencePath) throw new Error('no framework pack');
-  const skillsDir = path.join(run.installDir, run.skillsRoot);
-  // A folder an earlier run left behind would pass its old pages off as the skill's own.
-  removeSkillFolder(skillsDir, skill.id, run.installDir);
-  const result = await run.install(skill.id);
-  if (result.kind !== 'ok') throw new Error(result.kind);
-
-  const completed = path.join(run.installDir, result.path);
+  // Checked before anything is fetched, so a skill that cannot land is never downloaded.
+  landingFolder(skill, run);
+  // The skill is built outside the project, so an unfinished one never reaches a folder an agent reads.
+  const stage = fs.mkdtempSync(path.join(os.tmpdir(), 'posthog-wizard-'));
   try {
+    const result = await run.install(skill.id, stage);
+    if (result.kind !== 'ok') throw new Error(installFailure(result));
+    const staged = path.join(stage, result.path);
     completeSkillFromPack(
-      completed,
+      staged,
       path.resolve(run.installDir, run.referencePath),
       product,
-      run.installDir,
+      stage,
     );
     // Completing rewrites SKILL.md, the one file no install scan has read.
     const verdict = await run
-      .scanFile(path.join(completed, SKILL_FILE))
+      .scanFile(path.join(staged, SKILL_FILE))
       .catch((error: unknown) => `scan failed: ${message(error)}`);
     if (verdict) throw new Error(verdict);
-  } catch (error) {
+
+    // Checked again, since the install took time, then replaced whole so no earlier page survives.
+    const target = landingFolder(skill, run);
+    fs.rmSync(target, { recursive: true, force: true });
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.cpSync(staged, target, { recursive: true });
+    fs.writeFileSync(path.join(target, WIZARD_MARKER), '');
+  } finally {
     try {
-      // A skill that is not complete and scanned is never left for a task to read.
-      removeSkillFolder(skillsDir, skill.id, run.installDir);
+      fs.rmSync(stage, { recursive: true, force: true });
     } catch {
-      // The task fails either way.
+      // A temp folder that will not delete is the system's to clear.
     }
-    throw error;
   }
-  return result.path;
+  return `${run.skillsRoot}/${skill.id}`;
 }
 
 /** The installer for one run: the installed path of a skill whose menu entry has `frameworkReferences`, completed from the framework's pack. It rejects with the reason when the run cannot complete the skill. */
@@ -169,20 +205,25 @@ export async function installToolSkill(
     );
 
   // The pack is read once and thrown away, so it never lands in the project.
-  const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'posthog-wizard-'));
+  let scratch: string | undefined;
   try {
+    scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'posthog-wizard-'));
     const pack = resolveSkill(entries, FRAMEWORK_PACK_FAMILY, run.matchKeys);
     const packInstall = pack && (await install(pack.id, scratch, 'pack'));
     if (packInstall && packInstall.kind !== 'ok') {
-      const reason = `the framework pack did not install: ${packInstall.kind}`;
+      const reason = `the framework pack did not install: ${installFailure(
+        packInstall,
+      )}`;
       onUnavailable(skill, reason);
       return { kind: 'incomplete', skillId: skill.id, reason };
     }
     const complete = repackagedSkillInstaller({
       installDir: run.installDir,
       skillsRoot: TOOL_SKILLS_ROOT,
+      // `.claude/skills` is the project's, so a folder there is replaced only when the wizard installed it.
+      ownsSkillsRoot: false,
       referencePath: packInstall && path.join(scratch, packInstall.path),
-      install: (id) => install(id),
+      install: (id, dir) => install(id, dir, STAGE_ROOT),
       scanFile: run.scanFile,
       onUnavailable,
     });
@@ -193,6 +234,10 @@ export async function installToolSkill(
   } catch (error) {
     return { kind: 'incomplete', skillId: skill.id, reason: message(error) };
   } finally {
-    fs.rmSync(scratch, { recursive: true, force: true });
+    try {
+      if (scratch) fs.rmSync(scratch, { recursive: true, force: true });
+    } catch {
+      // A scratch folder that will not delete does not change what was installed.
+    }
   }
 }

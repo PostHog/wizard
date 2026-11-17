@@ -6,7 +6,7 @@ import {
   VARIANT_FILE,
   completeSkillFromPack,
   composeStepSkill,
-  removeSkillFolder,
+  skillFolder,
   type SkillFiles,
 } from '@shared/skill-composition';
 
@@ -331,47 +331,30 @@ describe('completeSkillFromPack', () => {
     expect(read('skill/SKILL.md')).toBe(INIT['SKILL.md']);
   });
 
-  describe('removeSkillFolder', () => {
-    it('removes the folder and leaves the rest of the boundary', () => {
-      removeSkillFolder(dir, 'skill', dir);
-
-      expect(fs.readdirSync(dir)).toEqual(['pack']);
+  describe('skillFolder', () => {
+    it('names the folder of a skill under the skills root', () => {
+      expect(skillFolder(dir, 'skill', dir)).toBe(path.join(dir, 'skill'));
     });
 
     it.skipIf(process.platform === 'win32')(
-      'removes a link standing where the folder goes, and not what it points at',
-      () => {
-        fs.symlinkSync(path.join(dir, 'pack'), path.join(dir, 'linked'));
-
-        removeSkillFolder(dir, 'linked', dir);
-
-        expect(fs.readdirSync(dir).sort()).toEqual(['pack', 'skill']);
-        expect(read('pack/references/next-js.md')).toBe('the library page');
-      },
-    );
-
-    it.skipIf(process.platform === 'win32')(
-      'removes nothing through a linked folder on the way',
+      'names nothing through a linked folder on the way',
       () => {
         fs.mkdirSync(path.join(dir, 'outside/skill'), { recursive: true });
         fs.symlinkSync(path.join(dir, 'outside'), path.join(dir, 'cache'));
 
         expect(() =>
-          removeSkillFolder(path.join(dir, 'cache'), 'skill', dir),
+          skillFolder(path.join(dir, 'cache'), 'skill', dir),
         ).toThrow(/through a link/);
-        expect(fs.existsSync(path.join(dir, 'outside/skill'))).toBe(true);
       },
     );
 
-    // The id comes from the menu, so one that names another folder must remove nothing.
+    // The id comes from the menu, so one that names another folder is refused.
     it.each(['../pack', '..', '../../pack', 'a/b', '.hidden', ''])(
-      'removes nothing for the id %j',
+      'refuses the id %j',
       (id) => {
-        expect(() =>
-          removeSkillFolder(path.join(dir, 'skill'), id, dir),
-        ).toThrow(/unusable skill id/);
-        expect(fs.readdirSync(dir).sort()).toEqual(['pack', 'skill']);
-        expect(read('skill/SKILL.md')).toBe(INIT['SKILL.md']);
+        expect(() => skillFolder(path.join(dir, 'skill'), id, dir)).toThrow(
+          /unusable skill id/,
+        );
       },
     );
   });
