@@ -59,8 +59,9 @@ export function platformGatedOnReady(
 /**
  * `ciPreRun`, the headless `onReady`: scope the install dir to the project
  * (monorepos), gate the platform, then record the framework on the session.
- * `session.skillId` gets the framework id because the orchestrator resolves
- * the reference skill and every task's skill variants against it.
+ * The orchestrator picks the framework's pack from `session.integration`, as
+ * the project's `framework` trait; `session.skillId` gets the framework id for
+ * the screens that show the skill's source.
  */
 export function platformGatedCiPreRun(
   gate: PlatformGate,

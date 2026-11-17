@@ -9,7 +9,11 @@ import {
   composeStepSkill,
   type SkillFiles,
 } from '@shared/skill-composition';
-import type { SkillEntry, SkillMenu } from '@shared/skill-menu';
+import {
+  prepareSkillMenu,
+  type SkillEntry,
+  type SkillMenu,
+} from '@shared/skill-menu';
 import { FRAMEWORK_KEY, resolveSkill } from '@shared/skill-resolution';
 
 const BASE_URL =
@@ -83,7 +87,7 @@ function pairFile(folder: string, file: string): string {
 async function main(): Promise<void> {
   const skillMenu = text(await fetchBytes(`${BASE_URL}/skill-menu.json`));
   // Read before anything is written, so a response that is not a menu leaves the fixtures alone.
-  const menu = parseMenu(skillMenu);
+  const menu = prepareSkillMenu(parseMenu(skillMenu));
   const entries = Object.values(menu.categories).flat();
   const step = entries.find((entry) => entry.id === PAIR.step);
   const product = step?.frameworkReferences;

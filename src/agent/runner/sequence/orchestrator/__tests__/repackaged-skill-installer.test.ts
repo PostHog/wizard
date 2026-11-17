@@ -32,7 +32,7 @@ const COMPLETED =
 const entry = (id: string, rest: Partial<SkillEntry>): SkillEntry => ({
   id,
   name: id,
-  group: id,
+  family: id,
   downloadUrl: `https://skills.test/${id}.zip`,
   ...rest,
 });

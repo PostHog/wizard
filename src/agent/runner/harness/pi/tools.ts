@@ -189,7 +189,7 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
       });
       if (result.kind === 'incomplete') {
         logToFile(`[pi] install_skill ${args.skillId}: ${result.reason}`);
-        return text(incompleteSkillMessage(args.skillId, result.reason));
+        return text(incompleteSkillMessage(result.skillId, result.reason));
       }
       if (result.kind !== 'ok') {
         logToFile(`[pi] install_skill ${args.skillId}: ${result.kind}`);

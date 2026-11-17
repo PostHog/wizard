@@ -27,9 +27,8 @@ const skill = {
   id: 'integration-nextjs',
   name: 'Next.js integration',
   downloadUrl: 'https://example.com/skill.zip',
-  group: 'integration',
-  framework: 'nextjs',
-  default: true,
+  family: 'integration',
+  tags: ['framework:nextjs', 'default'],
 };
 
 describe('writeWizardSpellbook', () => {
@@ -56,10 +55,14 @@ describe('writeWizardSpellbook', () => {
     vi.mocked(fetchSkillMenu).mockResolvedValue({
       categories: {
         integration: [
-          { ...skill, id: 'integration-nextjs-alt', default: false },
+          {
+            ...skill,
+            id: 'integration-nextjs-alt',
+            tags: ['framework:nextjs'],
+          },
           skill,
         ],
-        unsafe: [{ ...skill, id: '../escaped', group: 'example-flow-unsafe' }],
+        unsafe: [{ ...skill, id: '../escaped', family: 'example-flow-unsafe' }],
       },
     });
 

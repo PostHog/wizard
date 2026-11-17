@@ -70,7 +70,7 @@ const FLOW: Record<string, string> = {
 const entry = (id: string, rest: object = {}) => ({
   id,
   name: id,
-  group: id,
+  family: id,
   downloadUrl: `https://skills.test/${id}.zip`,
   ...rest,
 });
@@ -78,9 +78,8 @@ const MENU = {
   categories: {
     skills: [
       entry('integration-nextjs', {
-        group: 'integration',
-        framework: 'nextjs',
-        default: true,
+        family: 'integration',
+        tags: ['framework:nextjs', 'default'],
       }),
       entry('kept-skill'),
       entry('integration-install', { frameworkReferences: 'integration' }),
@@ -184,8 +183,9 @@ describe('step skills completed from the pack', () => {
         wizardFlagPayloads: {},
         switchboard: {},
         agentPrompts: () => Promise.resolve(FLOW),
+        matchKeys: () => ({ framework: ['nextjs'] }),
       },
-      input: { installDir: dir, flags: { ci: true }, integration: 'nextjs' },
+      input: { installDir: dir, flags: { ci: true } },
       boot: {
         skillsBaseUrl: 'https://skills.test',
         wizardFlags: {},

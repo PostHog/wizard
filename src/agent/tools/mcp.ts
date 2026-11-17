@@ -452,7 +452,7 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
           content: [
             {
               type: 'text' as const,
-              text: `Skill installed to .claude/skills/${args.skillId}/`,
+              text: `Skill installed to ${result.path}/`,
             },
           ],
         };
@@ -473,7 +473,7 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
           content: [
             {
               type: 'text' as const,
-              text: incompleteSkillMessage(args.skillId, result.reason),
+              text: incompleteSkillMessage(result.skillId, result.reason),
             },
           ],
           isError: true,

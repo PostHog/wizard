@@ -6,7 +6,7 @@ vi.mock('@utils/analytics', () => ({
   analytics: { wizardCapture: vi.fn() },
 }));
 
-import { expandBundleEntry, type SkillMenu } from '@shared/skill-menu';
+import { prepareSkillMenu, type SkillMenu } from '@shared/skill-menu';
 import {
   buildRegistry,
   type AgentPrompt,
@@ -14,14 +14,18 @@ import {
 import { planTaskGraph } from '../task-graph';
 import { CONTEXT_MILL_FIXTURES, bundledFlows } from './flow-prompts.no-jest';
 
-const menu = JSON.parse(
-  fs.readFileSync(path.join(CONTEXT_MILL_FIXTURES, 'skill-menu.json'), 'utf8'),
-) as SkillMenu;
+const menu = prepareSkillMenu(
+  JSON.parse(
+    fs.readFileSync(
+      path.join(CONTEXT_MILL_FIXTURES, 'skill-menu.json'),
+      'utf8',
+    ),
+  ) as SkillMenu,
+);
 const menuNames = new Set(
   Object.values(menu.categories)
     .flat()
-    .flatMap(expandBundleEntry)
-    .flatMap((entry) => (entry.group ? [entry.group, entry.id] : [entry.id])),
+    .flatMap((entry) => (entry.family ? [entry.family, entry.id] : [entry.id])),
 );
 
 const plan = (

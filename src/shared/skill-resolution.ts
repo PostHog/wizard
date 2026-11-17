@@ -11,12 +11,9 @@ export const DEFAULT_SKILL_TAG = 'default';
 /** The match key every family pick requires. */
 export const FRAMEWORK_KEY = 'framework';
 
-/** An entry's tags, with its `framework` and `default` fields as tags, so a menu without tags resolves the same. */
+/** An entry's tags. */
 export function skillTags(entry: SkillEntry): ReadonlySet<string> {
-  const tags = new Set(entry.tags ?? []);
-  if (entry.framework) tags.add(`${FRAMEWORK_KEY}:${entry.framework}`);
-  if (entry.default) tags.add(DEFAULT_SKILL_TAG);
-  return tags;
+  return new Set(entry.tags ?? []);
 }
 
 /** The `key:value` tags among `tags`, as values per key. */
@@ -44,7 +41,7 @@ export function resolveSkill(
   let best: SkillEntry | undefined;
   let bestScore = -1;
   for (const entry of entries) {
-    if (entry.group !== name) continue;
+    if (entry.family !== name) continue;
     const tags = skillTags(entry);
     const declared = matchKeysOf(tags);
     if (!declared.has(FRAMEWORK_KEY)) continue;

@@ -85,7 +85,7 @@ export async function prepareRun(
     wizardFlagPayloads,
     wizardMetadata,
     project: input.project,
-    matchKeys: () => runMatchKeys(config, input),
+    matchKeys: () => runMatchKeys(config),
     // Resolved once, here: the only place holding both the run-level harness
     // and the gateway auth. Every skill install downstream reads it off boot.
     triageProvider: createTriageLLMProvider(async () => {

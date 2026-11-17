@@ -144,16 +144,16 @@ export type ToolSkillResult =
   | InstallSkillResult
   | { kind: 'incomplete'; skillId: string; reason: string };
 
-/** Install the menu skill `skillId` for a tool call: as published, or completed from the framework's pack when its entry has `frameworkReferences`. */
+/** Install the skill `name` stands for, a menu id or a skill family, for a tool call: as published, or completed from the framework's pack when its entry has `frameworkReferences`. */
 export async function installToolSkill(
-  skillId: string,
+  name: string,
   run: ToolSkillInstall,
 ): Promise<ToolSkillResult> {
   const menu = await fetchSkillMenu(run.skillsBaseUrl);
   if (!menu) return { kind: 'menu-fetch-failed' };
   const entries = Object.values(menu.categories).flat();
-  const skill = entries.find((entry) => entry.id === skillId);
-  if (!skill) return { kind: 'skill-not-found', skillId };
+  const skill = resolveSkill(entries, name, run.matchKeys);
+  if (!skill) return { kind: 'skill-not-found', skillId: name };
   const install = (id: string, installDir = run.installDir, root?: string) =>
     installSkillById(id, installDir, run.skillsBaseUrl, {
       skillsRoot: root,
@@ -176,7 +176,7 @@ export async function installToolSkill(
     if (packInstall && packInstall.kind !== 'ok') {
       const reason = `the framework pack did not install: ${packInstall.kind}`;
       onUnavailable(skill, reason);
-      return { kind: 'incomplete', skillId, reason };
+      return { kind: 'incomplete', skillId: skill.id, reason };
     }
     const complete = repackagedSkillInstaller({
       installDir: run.installDir,
@@ -191,7 +191,7 @@ export async function installToolSkill(
       path: await complete({ ...skill, frameworkReferences }),
     };
   } catch (error) {
-    return { kind: 'incomplete', skillId, reason: message(error) };
+    return { kind: 'incomplete', skillId: skill.id, reason: message(error) };
   } finally {
     fs.rmSync(scratch, { recursive: true, force: true });
   }

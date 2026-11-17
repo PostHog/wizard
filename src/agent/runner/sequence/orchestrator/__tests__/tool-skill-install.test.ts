@@ -38,7 +38,7 @@ import { installToolSkill } from '../repackaged-skills';
 const entry = (id: string, rest: object = {}) => ({
   id,
   name: id,
-  group: id,
+  family: id,
   downloadUrl: `https://skills.test/${id}.zip`,
   ...rest,
 });
@@ -46,7 +46,7 @@ const MENU = {
   categories: {
     skills: [
       entry('integration-nextjs', {
-        group: 'integration',
+        family: 'integration',
         tags: ['framework:nextjs', 'default'],
       }),
       entry('plain-skill'),
@@ -115,6 +115,17 @@ describe('installToolSkill', () => {
       path: '.claude/skills/plain-skill',
     });
     expect(read('plain-skill', 'SKILL.md')).toBe('as published');
+  });
+
+  it("installs the skill a family name stands for, picked with the run's match keys", async () => {
+    expect(await install('integration', { framework: 'nextjs' })).toEqual({
+      kind: 'ok',
+      path: '.claude/skills/integration-nextjs',
+    });
+    expect(await install('integration')).toEqual({
+      kind: 'skill-not-found',
+      skillId: 'integration',
+    });
   });
 
   it("completes a step skill from the framework's pack, and leaves no pack behind", async () => {

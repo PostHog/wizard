@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { SkillEntry } from '@shared/skill-menu';
-import { resolveSkill, skillTags } from '@shared/skill-resolution';
+import { resolveSkill } from '@shared/skill-resolution';
 
 const entry = (id: string, rest: Partial<SkillEntry> = {}): SkillEntry => ({
   id,
@@ -10,41 +10,36 @@ const entry = (id: string, rest: Partial<SkillEntry> = {}): SkillEntry => ({
 });
 
 const MENU: SkillEntry[] = [
-  entry('posthog-best-practices', { group: 'posthog-best-practices' }),
+  entry('posthog-best-practices', { family: 'posthog-best-practices' }),
   entry('integration-nextjs-app-router', {
-    group: 'integration',
+    family: 'integration',
     tags: ['nextjs', 'framework:nextjs', 'variant:app', 'default'],
   }),
   entry('integration-nextjs-pages-router', {
-    group: 'integration',
+    family: 'integration',
     tags: ['nextjs', 'framework:nextjs', 'variant:pages'],
   }),
   entry('integration-react-native', {
-    group: 'integration',
+    family: 'integration',
     tags: ['framework:react-native', 'default'],
   }),
   entry('integration-expo', {
-    group: 'integration',
+    family: 'integration',
     tags: ['framework:react-native', 'variant:expo'],
   }),
-  entry('integration-django', { group: 'integration', framework: 'django' }),
-  entry('integration-react-vite', { group: 'integration', tags: ['react'] }),
+  entry('integration-django', {
+    family: 'integration',
+    tags: ['framework:django'],
+  }),
+  entry('integration-react-vite', { family: 'integration', tags: ['react'] }),
   entry('error-tracking-step-django', {
-    group: 'error-tracking-step',
+    family: 'error-tracking-step',
     tags: ['integration', 'framework:django'],
   }),
 ];
 
 const pick = (name: string, keys: Record<string, string[]>) =>
   resolveSkill(MENU, name, keys)?.id;
-
-describe('skillTags', () => {
-  it('reads framework and default as tags, so a menu without tags resolves the same', () => {
-    expect([
-      ...skillTags(entry('a', { framework: 'rails', default: true })),
-    ]).toEqual(['framework:rails', 'default']);
-  });
-});
 
 describe('resolveSkill', () => {
   it('returns the skill a menu id names, whatever the keys', () => {
@@ -84,7 +79,7 @@ describe('resolveSkill', () => {
     expect(pick('integration', { framework: ['react'] })).toBeUndefined();
   });
 
-  it('reads a family from the group, never from a tag another family carries', () => {
+  it('reads a family from the entry, never from a tag another family carries', () => {
     expect(pick('integration', { framework: ['django'] })).toBe(
       'integration-django',
     );
@@ -98,7 +93,7 @@ describe('resolveSkill', () => {
   it('reads a match key that names a built-in object property as one the run has no value for', () => {
     const menu = [
       entry('integration-odd', {
-        group: 'integration',
+        family: 'integration',
         tags: ['framework:nextjs', 'constructor:x', 'toString:y'],
       }),
     ];
@@ -109,8 +104,8 @@ describe('resolveSkill', () => {
 
   it('falls back to menu order when nothing else ranks', () => {
     const twins = [
-      entry('first', { group: 'step', framework: 'rails' }),
-      entry('second', { group: 'step', framework: 'rails' }),
+      entry('first', { family: 'step', tags: ['framework:rails'] }),
+      entry('second', { family: 'step', tags: ['framework:rails'] }),
     ];
     expect(resolveSkill(twins, 'step', { framework: ['rails'] })?.id).toBe(
       'first',
