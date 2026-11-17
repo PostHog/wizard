@@ -46,19 +46,18 @@ describe('fetchSkillMenu', () => {
     expect(result).toBeNull();
   });
 
-  it('expands a bundle entry into one entry per variant', async () => {
+  it('expands a bundle entry into one entry per variant, each with the family of its category', async () => {
     const bundled: SkillMenu = {
       categories: {
-        integration: [
+        'flow/capture': [
           {
             id: 'capture',
             name: 'Capture',
-            group: 'capture',
             bundle: true,
             downloadUrl: 'http://localhost:8765/capture.json',
             variants: [
-              { id: 'capture-rails', framework: 'rails', default: true },
-              { id: 'capture-react', framework: 'react' },
+              { id: 'capture-rails', tags: ['framework:rails', 'default'] },
+              { id: 'capture-react', tags: ['framework:react'] },
             ],
           },
         ],
@@ -70,21 +69,20 @@ describe('fetchSkillMenu', () => {
       sleepImpl: noSleep,
     });
 
-    expect(result?.categories.integration).toEqual([
+    expect(result?.categories['flow/capture']).toEqual([
       {
         id: 'capture-rails',
-        framework: 'rails',
-        default: true,
+        tags: ['framework:rails', 'default'],
         name: 'Capture',
-        group: 'capture',
+        family: 'flow-capture',
         bundle: true,
         downloadUrl: 'http://localhost:8765/capture.json',
       },
       {
         id: 'capture-react',
-        framework: 'react',
+        tags: ['framework:react'],
         name: 'Capture',
-        group: 'capture',
+        family: 'flow-capture',
         bundle: true,
         downloadUrl: 'http://localhost:8765/capture.json',
       },
@@ -98,7 +96,6 @@ describe('fetchSkillMenu', () => {
           {
             id: 'capture',
             name: 'Capture',
-            group: 'capture',
             bundle: true,
             title: 'Capture step',
             description: 'Instrument the planned events',
@@ -106,10 +103,9 @@ describe('fetchSkillMenu', () => {
             variants: [
               {
                 id: 'capture-rails',
-                framework: 'rails',
                 tags: ['framework:rails', 'capture'],
               },
-              { id: 'capture-react', framework: 'react', title: 'React' },
+              { id: 'capture-react', title: 'React' },
             ],
           },
         ],

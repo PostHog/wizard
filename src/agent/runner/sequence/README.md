@@ -47,8 +47,9 @@ prerequisite. See
 A task prompt names its skills by menu id or by skill family, and the runner
 resolves each name to the menu skill to install. `@shared/skill-resolution`
 picks the family's skill for the run's match keys. The match keys are the run
-config's `matchKeys`, which the program runner fills from the project's traits,
-with the run's framework as the `framework` key.
+config's `matchKeys`, which the program runner fills from the project's traits.
+A run whose project has no `framework` trait resolves no family, so it has no
+framework pack.
 
 A menu entry with `frameworkReferences` is a step skill written once for every
 framework. [repackaged-skills.ts](orchestrator/repackaged-skills.ts) installs
@@ -76,7 +77,8 @@ folder the wizard does not own, or a scan that rejects it or fails. A run that
 installed no reference skill cannot complete one, so it fails before any task
 starts, as it does for a skill the menu cannot supply.
 
-The `install_skill` tool completes such a skill the same way, in both
+The `install_skill` tool resolves the name it is given as a task prompt's is,
+a menu id or a skill family, and completes such a skill the same way, in both
 sequences: `installToolSkill` in the same file picks the framework's pack with
 the run's match keys, reads it from a scratch folder, and puts the completed
 skill in `.claude/skills`. A run with no framework gets an error that says so,

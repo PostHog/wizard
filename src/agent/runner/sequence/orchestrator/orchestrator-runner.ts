@@ -37,7 +37,7 @@ import {
   scanInstalledSkillFile,
 } from '../../../yara-hooks';
 import { fetchSkillMenu, type SkillEntry } from '@shared/skill-menu';
-import { resolveSkill } from '@shared/skill-resolution';
+import { FRAMEWORK_KEY, resolveSkill } from '@shared/skill-resolution';
 import { analytics } from '@utils/analytics';
 import { ciExcludedTaskTypes } from '@utils/ci-flag-overrides';
 import { logToFile } from '@utils/debug';
@@ -58,7 +58,7 @@ import type {
   SequenceResult,
   SequenceContext,
 } from '../../shared/types';
-import { runFramework, runMatchKeys } from '../../shared/match-keys';
+import { runMatchKeys } from '../../shared/match-keys';
 import { createEmitSpinner } from '../../shared/progress-collector';
 import { createAskBridge } from '../../shared/ask';
 import {
@@ -881,9 +881,9 @@ async function executeOrchestrator(
   let referenceInstallPath: string | undefined;
   const menuSkillEntries = await fetchSkillMenuEntries(boot.skillsBaseUrl);
   if (signal?.aborted) return cancelledRun();
-  // The framework the reference skill and every skill family resolve for.
-  const framework = runFramework(input);
-  const matchKeys = runMatchKeys(config, input);
+  // The project's traits are the match keys; their framework is the one the pack resolves for.
+  const matchKeys = runMatchKeys(config);
+  const framework = matchKeys[FRAMEWORK_KEY]?.[0];
   const pickSkillEntry = (skillId: string) =>
     resolveSkill(menuSkillEntries, skillId, matchKeys);
   const pickSkillId = (skillId: string) => pickSkillEntry(skillId)?.id;
@@ -961,7 +961,7 @@ async function executeOrchestrator(
       [...missingSkills].some(
         (name) =>
           !menuSkillEntries.some(
-            (entry) => entry.id === name || entry.group === name,
+            (entry) => entry.id === name || entry.family === name,
           ),
       );
     return failed({

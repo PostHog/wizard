@@ -5,7 +5,11 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { unzipSync } from 'fflate';
 import { VARIANT_FILE, type SkillFiles } from '@shared/skill-composition';
-import type { SkillEntry, SkillMenu } from '@shared/skill-menu';
+import {
+  prepareSkillMenu,
+  type SkillEntry,
+  type SkillMenu,
+} from '@shared/skill-menu';
 import { FRAMEWORK_KEY, resolveSkill } from '@shared/skill-resolution';
 
 const BASE_URL =
@@ -121,8 +125,13 @@ function pairFile(folder: string, file: string): string {
 async function main(): Promise<void> {
   const skillMenu = text(await fetchBytes(`${BASE_URL}/skill-menu.json`));
   // Read before anything is written, so a response that is not a menu leaves the fixtures alone.
-  const menu = parseMenu(skillMenu);
-  const entries: PublishedEntry[] = Object.values(menu.categories).flat();
+  const menu = prepareSkillMenu(parseMenu(skillMenu));
+  const entries = Object.values(menu.categories).flat();
+  // The skill context-mill published is looked up on the menu as the release wrote it.
+  const rawEntries: PublishedEntry[] = Object.values(
+    parseMenu(skillMenu).categories,
+  ).flat();
+  const rawStep = rawEntries.find((entry) => entry.id === PAIR.step);
   const step = entries.find((entry) => entry.id === PAIR.step);
   const product = step?.frameworkReferences;
   const pack = resolveSkill(entries, PACK_FAMILY, {
@@ -136,7 +145,8 @@ async function main(): Promise<void> {
   const stepFiles = await filesOf(step);
   const packFiles = await filesOf(pack);
   // The expected result is context-mill's own skill, never this fill's output, so the two cannot drift unseen.
-  const published = await publishedSkill(entries, step, pack);
+  const published =
+    rawStep && (await publishedSkill(rawEntries, rawStep, pack));
   const recorded: Record<string, SkillFiles> = {
     step: stepFiles,
     pack: packFilesRead(packFiles, product),

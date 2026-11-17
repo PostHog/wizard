@@ -45,7 +45,7 @@ const flowNaming = (skill?: string): Record<string, string> => ({
 const entry = (id: string, rest: object = {}) => ({
   id,
   name: id,
-  group: id,
+  family: id,
   downloadUrl: `https://skills.test/${id}.zip`,
   ...rest,
 });
@@ -54,9 +54,8 @@ const MENU = {
     skills: [
       entry('kept-skill'),
       entry('integration-nextjs', {
-        group: 'integration',
-        framework: 'nextjs',
-        default: true,
+        family: 'integration',
+        tags: ['framework:nextjs', 'default'],
       }),
     ],
   },
@@ -108,8 +107,9 @@ describe('a skill the menu cannot supply', () => {
         wizardFlagPayloads: {},
         switchboard: {},
         agentPrompts: () => Promise.resolve(prompts),
+        matchKeys: () => (integration ? { framework: [integration] } : {}),
       },
-      input: { installDir: dir, flags: { ci: true }, integration },
+      input: { installDir: dir, flags: { ci: true } },
       boot: {
         skillsBaseUrl: 'https://skills.test',
         wizardFlags: {},

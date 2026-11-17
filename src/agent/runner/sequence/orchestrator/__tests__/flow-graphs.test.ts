@@ -7,7 +7,7 @@ vi.mock('@utils/analytics', () => ({
 }));
 
 import { Integration } from '@shared/constants';
-import { expandBundleEntry, type SkillMenu } from '@shared/skill-menu';
+import { prepareSkillMenu, type SkillMenu } from '@shared/skill-menu';
 import { resolveSkill } from '@shared/skill-resolution';
 import {
   buildRegistry,
@@ -16,15 +16,18 @@ import {
 import { planTaskGraph } from '../task-graph';
 import { CONTEXT_MILL_FIXTURES, bundledFlows } from './flow-prompts.no-jest';
 
-const menu = JSON.parse(
-  fs.readFileSync(path.join(CONTEXT_MILL_FIXTURES, 'skill-menu.json'), 'utf8'),
-) as SkillMenu;
-const entries = Object.values(menu.categories)
-  .flat()
-  .flatMap(expandBundleEntry);
+const menu = prepareSkillMenu(
+  JSON.parse(
+    fs.readFileSync(
+      path.join(CONTEXT_MILL_FIXTURES, 'skill-menu.json'),
+      'utf8',
+    ),
+  ) as SkillMenu,
+);
+const entries = Object.values(menu.categories).flat();
 const menuNames = new Set(
   entries.flatMap((entry) =>
-    entry.group ? [entry.group, entry.id] : [entry.id],
+    entry.family ? [entry.family, entry.id] : [entry.id],
   ),
 );
 // What a run resolves for one framework: the framework's pack, then each skill a task names.
