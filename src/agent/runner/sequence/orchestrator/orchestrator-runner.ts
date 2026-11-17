@@ -5,10 +5,10 @@
  * orchestrator agent inspects the repo and seeds an in-memory task queue; an
  * executor drains it, running one fresh agent per task.
  *
- * Both the WHAT (agent prompts: model, goal, success criteria, tools) and the
- * HOW (mini-skills) are markdown served from context-mill — the seed and every
- * task resolve to a prompt fetched at startup into the registry. The wizard side
- * stays product-ignorant: it is the queue, the executor, and the loader.
+ * The WHAT (agent prompts: model, goal, success criteria, tools) is markdown
+ * each program bundles, and the HOW (mini-skills) is markdown served from
+ * context-mill. The runner stays product-ignorant: it is the queue, the
+ * executor, and the loader.
  */
 import { failed } from '../../shared/errors';
 import { RunOutcome } from '../../shared/types';
@@ -67,7 +67,6 @@ import { createAskBridge } from '../../shared/ask';
 import {
   areSeededTasksEnabled,
   getHarness,
-  isAgentDagEnabled,
   isAgentDagSkillsEnabled,
   resolveHarness,
   resolveStageOverrides,
@@ -106,7 +105,6 @@ import {
   assembleSeedPrompt,
   assembleTaskPrompt,
   bundledRegistry,
-  loadAgentRegistry,
   promptModelFor,
   resolveTask,
   taskModelSpec,
@@ -255,20 +253,6 @@ async function fetchSkillMenuEntries(
   const menu = await fetchSkillMenu(skillsBaseUrl);
   if (!menu) return [];
   return Object.values(menu.categories).flat();
-}
-
-/** Menu id for a bare skill id + framework via the menu's declared group/framework/default fields; undefined when nothing matches. */
-export function resolveSkillVariantId(
-  entries: readonly SkillEntry[],
-  skillId: string,
-  framework: string | undefined,
-): string | undefined {
-  if (entries.some((e) => e.id === skillId)) return skillId;
-  if (!framework) return undefined;
-  const family = entries.filter(
-    (e) => e.group === skillId && e.framework === framework,
-  );
-  return (family.find((e) => e.default) ?? family[0])?.id;
 }
 
 /** The framework reference is the full `integration` skill, which the menu ids as `integration-<variant>`. */
@@ -747,10 +731,9 @@ async function executeOrchestrator(
   // `binding.contextMillOverride[role]` on the same inputs.
   const switchboardCtx = { ...config.switchboard, trace: undefined };
 
-  // The WHAT (agent prompts) is served from context-mill. Fetch the registry
+  // The WHAT (agent prompts) is bundled with the program. Build the registry
   // once up front: its types drive enqueue validation, and resolving a task to
-  // its run config is then synchronous, with no mid-drain network latency.
-  // With `wizard-agent-dag` on, the prompts the program bundles are the registry.
+  // its run config is then synchronous.
   const flow = config.agentFlow ?? programId;
   const registryOptions = {
     exclude: effectiveExcludedTaskTypes(config, boot.wizardFlags),
@@ -761,41 +744,33 @@ async function executeOrchestrator(
       boot.wizardFlagPayloads,
     ),
   };
-  // A bundle that fails to load is reported, and the run fetches instead.
-  const bundledPrompts = isAgentDagEnabled(boot.wizardFlags)
-    ? await config.agentPrompts?.().catch((error: unknown) => {
-        logToFile('[orchestrator] bundled prompts failed to load:', error);
-        analytics.captureException(
-          error instanceof Error ? error : new Error(String(error)),
-          { step: 'orchestrator_bundled_prompts' },
-        );
-        return undefined;
-      })
-    : undefined;
-  const registry = bundledPrompts
-    ? bundledRegistry(bundledPrompts, flow, registryOptions)
-    : await loadAgentRegistry(boot.skillsBaseUrl, flow, registryOptions);
-  analytics.setTag(
-    'orchestrator_prompts',
-    bundledPrompts ? 'bundled' : 'context-mill',
-  );
-  if (signal?.aborted) return cancelledRun();
-  // A bundled flow with no planner prompt is queued from its frontmatter; a fetched one needs its planner.
-  const seedPrompt = registry.seed;
-  if (!seedPrompt && !bundledPrompts) {
-    logToFile(
-      `[orchestrator] no seed agent prompt (frontmatter \`seed: true\`) for flow "${flow}" from ${boot.skillsBaseUrl}`,
-    );
+  // A program that runs the orchestrator bundles its prompts; without them the run has no plan.
+  const bundledPrompts = await config
+    .agentPrompts?.()
+    .catch((error: unknown) => {
+      logToFile('[orchestrator] bundled prompts failed to load:', error);
+      analytics.captureException(
+        error instanceof Error ? error : new Error(String(error)),
+        { step: 'orchestrator_bundled_prompts' },
+      );
+      return undefined;
+    });
+  if (!bundledPrompts) {
+    logToFile(`[orchestrator] no bundled agent prompts for flow "${flow}"`);
     return failed({
       code: ErrorCodes.AgentOrchestratorNoPlanner,
       message: `The wizard could not load the plan for this setup.\n\nPlease report this to: ${WIZARD_CONTACT_EMAIL}`,
       error: new WizardError(
-        'orchestrator flow has no seed agent prompt',
-        { flow, skills_base_url: boot.skillsBaseUrl },
+        'orchestrator flow has no bundled agent prompts',
+        { flow },
         ErrorCodes.AgentOrchestratorNoPlanner,
       ),
     });
   }
+  const registry = bundledRegistry(bundledPrompts, flow, registryOptions);
+  if (signal?.aborted) return cancelledRun();
+  // A flow with no planner prompt is queued from its frontmatter.
+  const seedPrompt = registry.seed;
 
   // The end decision the switchboard event defers to: the model each task will actually run on.
   const taskModels = Object.fromEntries(
@@ -916,18 +891,13 @@ async function executeOrchestrator(
   // (agent-skill commands like replay-vision) would otherwise leak that id in
   // here as a bogus framework after the caller overwrites the detect result.
   const framework = input.integration ?? input.skillId ?? undefined;
-  // `wizard-agent-dag` picks skills with the shared resolver; off, the menu lookup above does.
-  const agentDag = isAgentDagEnabled(boot.wizardFlags);
   // The project's traits supply the match keys, and the framework key above replaces theirs.
   const matchKeys: MatchKeys = {
-    ...(agentDag ? config.matchKeys?.() : undefined),
+    ...config.matchKeys?.(),
     [FRAMEWORK_KEY]: framework ? [framework] : undefined,
   };
-  const pickSkillId = agentDag
-    ? (skillId: string) =>
-        resolveSkill(menuSkillEntries, skillId, matchKeys)?.id
-    : (skillId: string) =>
-        resolveSkillVariantId(menuSkillEntries, skillId, framework);
+  const pickSkillId = (skillId: string) =>
+    resolveSkill(menuSkillEntries, skillId, matchKeys)?.id;
   // `wizard-agent-dag-skills` has a task read the skill that stands in for the one its prompt names, when the menu has any.
   const repackagedSkills =
     isAgentDagSkillsEnabled(boot.wizardFlags) &&
@@ -998,9 +968,8 @@ async function executeOrchestrator(
   if (missingVariants.length > 0) {
     // The framework's own docs page, resolved by the caller; generic docs when detection found none.
     const docsUrl = framework ? input.frameworkDocsUrl : undefined;
-    // A bundled prompt naming a skill the loaded menu has under no id or family means the wizard is older than the skills.
+    // A prompt naming a skill the loaded menu has under no id or family means the wizard is older than the skills.
     const outdated =
-      bundledPrompts !== undefined &&
       menuSkillEntries.length > 0 &&
       [...missingSkills].some(
         (name) =>

@@ -156,8 +156,8 @@ PostHog as well.
 
 ## Pinning a context-mill release
 
-`--context-mill-version` fetches the skills, the agent prompts and their menus
-from one context-mill release instead of the latest. It is a hidden global
+`--context-mill-version` fetches the skills and their menu from one
+context-mill release instead of the latest. It is a hidden global
 option: every command accepts it in every build, including published builds and
 headless runs.
 
@@ -180,9 +180,9 @@ over to `https://context-mill.posthog.com/v1.59.0/`. A version with no release
 fails when the run first fetches a menu. The `[agent-runner] targets` line in
 the debug log shows the release a run used.
 
-A pinned run takes none of the `wizard-agent-dag` paths and reads no
-repackaged skill; see the
+A pinned run reads no repackaged skill; see the
 [orchestrator sequence](../src/agent/runner/sequence/README.md#orchestrator).
+Its agent prompts are the ones the wizard bundles, as in any run.
 
 The pin cannot be combined with `--local-context-mill` or `--local-dev`. Pass
 `--no-local-context-mill` to keep the other local targets.

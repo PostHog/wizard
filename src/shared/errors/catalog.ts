@@ -258,7 +258,8 @@ export const ERROR_CATALOG: Record<ErrorCode, ErrorCatalogEntry> = {
   [ErrorCodes.AgentOrchestratorNoPlanner]: {
     group: 'agent',
     retry: 'no',
-    description: 'The flow the orchestrator fetched has no planner prompt.',
+    description:
+      'The program bundles no agent prompts, or they failed to load.',
   },
   [ErrorCodes.GatewayMintRefused]: {
     group: 'gateway',
