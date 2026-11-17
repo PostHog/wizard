@@ -13,7 +13,7 @@ export type SkillEntry = {
   id: string;
   name: string;
   downloadUrl: string;
-  /** The skill family, set on fetch from the category the menu lists the entry under; see `skillFamily`. */
+  /** The skill family, set on fetch from the category the menu lists the entry under, with `/` as `-`. */
   family?: string;
   /** This entry's download is a bundle JSON of every variant, not a single skill's zip. */
   bundle?: boolean;
@@ -80,8 +80,7 @@ export function expandBundleEntry(entry: SkillEntry): SkillEntry[] {
 }
 
 /** A category's skill family: its key with `/` as `-`, so `integration/install` is `integration-install`. */
-export const skillFamily = (category: string): string =>
-  category.replaceAll('/', '-');
+const skillFamily = (category: string): string => category.replaceAll('/', '-');
 
 /** The menu as the wizard reads it: each bundle expanded into its variants, and each entry given its family. */
 export function prepareSkillMenu(menu: SkillMenu): SkillMenu {
