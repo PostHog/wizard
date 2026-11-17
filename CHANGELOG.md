@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.96.0](https://github.com/PostHog/wizard/compare/v2.95.0...v2.96.0) (2026-11-17)
+
+
+### Features
+
+* **orchestrator:** read the step skills by name and complete them from the pack ([#1566](https://github.com/PostHog/wizard/issues/1566)) ([a5e776a](https://github.com/PostHog/wizard/commit/a5e776a9d2f59b5c1eadf30b8b59308ba3997684))
+
 ## [2.95.0](https://github.com/PostHog/wizard/compare/v2.94.0...v2.95.0) (2026-11-16)
 
 
