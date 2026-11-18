@@ -1,5 +1,18 @@
 # Changelog
 
+## [2.97.0](https://github.com/PostHog/wizard/compare/v2.96.0...v2.97.0) (2026-11-18)
+
+
+### Features
+
+* **transactional-email:** add a command that sets up the first email send ([#1507](https://github.com/PostHog/wizard/issues/1507)) ([6bd1a27](https://github.com/PostHog/wizard/commit/6bd1a279335ad95daef7398b63e36a92c1537661))
+
+
+### Bug Fixes
+
+* **rust:** add the tls feature to the blocking-client install ([#1572](https://github.com/PostHog/wizard/issues/1572)) ([b779973](https://github.com/PostHog/wizard/commit/b7799730366f95c14b8db8e3a4e7e0ea98999716))
+* **skills:** refuse a context-mill pin older than 1.67.0 ([#1576](https://github.com/PostHog/wizard/issues/1576)) ([e0cb6f4](https://github.com/PostHog/wizard/commit/e0cb6f4ecfd847325788a3f568b76243ff3f5a53))
+
 ## [2.96.0](https://github.com/PostHog/wizard/compare/v2.95.0...v2.96.0) (2026-11-17)
 
 
