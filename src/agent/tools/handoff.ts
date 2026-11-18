@@ -46,7 +46,7 @@ export const PUBLISH_HANDOFF_DESCRIPTION =
 
 /** Appended for a task agent: the reminder lands as it decides it has finished. */
 export const TASK_REPORTING_NOTE =
-  ' This does not report your task: call complete_task to finish.';
+  ' Your task is not reported yet. Stop here: your next action must be exactly one complete_task tool call with your structured handoff. Do not send a closing message before you call complete_task.';
 
 export const PUBLISH_HANDOFF_CONTENT_DESCRIPTION =
   'The complete handoff report as markdown, starting with an H1 heading.';

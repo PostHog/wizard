@@ -14,6 +14,9 @@ import { RunOutcome, type AgentFailure } from '../../shared/types';
 import { logToFile } from '@utils/debug';
 import { TaskStatus, type QueueStore, type QueuedTask } from './queue';
 
+/** What a required task does at its deadline: complete with a conflict, or stop the run. */
+export type TaskTimeoutBehavior = 'continue' | 'fail';
+
 /** Per-task agent configuration the resolver produces from a task's type.
  * The model is resolved separately (per-harness profile), not here. */
 export interface ResolvedTask {
@@ -22,6 +25,8 @@ export interface ResolvedTask {
   /** Mini-skills to install before the task runs (the HOW). */
   skills: readonly string[];
   prompt: string;
+  timeoutMs?: number;
+  onTimeout?: TaskTimeoutBehavior;
 }
 
 /** Resolves a queued task to what the agent needs. The real one is markdown-backed. */
@@ -73,11 +78,14 @@ async function runOne(
 ): Promise<void> {
   if (signal?.aborted) return;
   store.start(task.id);
+  // Why the task could not run, when it threw instead of ending without a report.
+  let thrown: string | undefined;
   try {
     await runTask(task);
   } catch (error) {
     if (signal?.aborted) return;
     if (error instanceof RunTaskFatal) throw error;
+    thrown = error instanceof Error ? error.message : String(error);
     // The task threw rather than reporting. The outcome check below handles
     // the queue; the exception itself should never be silent.
     logToFile(`[executor] runTask threw for ${task.type}:`, error);
@@ -99,7 +107,9 @@ async function runOne(
     } else {
       store.fail(task.id, {
         type: 'no-report',
-        message: 'Task ended without calling complete_task.',
+        message: thrown
+          ? `Task ended without calling complete_task: ${thrown}`
+          : 'Task ended without calling complete_task.',
       });
     }
     return;

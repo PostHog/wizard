@@ -4,7 +4,7 @@ import type { FrameworkConfig } from '@programs/program-contract';
 import { PYTHON_PACKAGE_INSTALLATION } from '@programs/program-contract';
 import { detectPythonPackageManagers } from '../../detection/package-manager';
 import { Integration } from '@shared/constants';
-import fg from 'fast-glob';
+import { boundedGlob } from '@utils/bounded-fs';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import {
@@ -14,6 +14,8 @@ import {
   getPackageManagerName,
   PythonPackageManager,
 } from './utils';
+
+const EXTRA_IGNORE = ['**/env/**', '**/.env/**'];
 
 type PythonContext = {
   packageManager?: PythonPackageManager;
@@ -43,7 +45,7 @@ export const PYTHON_AGENT_CONFIG: FrameworkConfig<PythonContext> = {
       const { installDir } = options;
 
       // Look for Python package management files
-      const pythonConfigFiles = await fg(
+      const pythonConfigFiles = await boundedGlob(
         [
           '**/requirements*.txt',
           '**/pyproject.toml',
@@ -52,7 +54,7 @@ export const PYTHON_AGENT_CONFIG: FrameworkConfig<PythonContext> = {
         ],
         {
           cwd: installDir,
-          ignore: ['**/venv/**', '**/.venv/**', '**/env/**', '**/.env/**'],
+          extraIgnore: EXTRA_IGNORE,
         },
       );
 
@@ -62,9 +64,9 @@ export const PYTHON_AGENT_CONFIG: FrameworkConfig<PythonContext> = {
 
       // Make sure this isn't Django or Flask (those should be detected first)
       // Check for Django
-      const managePyMatches = await fg('**/manage.py', {
+      const managePyMatches = await boundedGlob('**/manage.py', {
         cwd: installDir,
-        ignore: ['**/venv/**', '**/.venv/**', '**/env/**', '**/.env/**'],
+        extraIgnore: EXTRA_IGNORE,
       });
 
       for (const match of managePyMatches) {
@@ -102,17 +104,11 @@ export const PYTHON_AGENT_CONFIG: FrameworkConfig<PythonContext> = {
         }
       }
 
-      const pyFiles = await fg(
+      const pyFiles = await boundedGlob(
         ['**/app.py', '**/wsgi.py', '**/application.py', '**/__init__.py'],
         {
           cwd: installDir,
-          ignore: [
-            '**/venv/**',
-            '**/.venv/**',
-            '**/env/**',
-            '**/.env/**',
-            '**/__pycache__/**',
-          ],
+          extraIgnore: EXTRA_IGNORE,
         },
       );
 

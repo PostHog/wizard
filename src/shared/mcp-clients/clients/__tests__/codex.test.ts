@@ -1,14 +1,14 @@
 import { CodexMCPClient } from '@shared/mcp-clients/clients/codex';
 import { execFile } from 'node:child_process';
-import { findTrustedBinary } from '@shared/mcp-clients/trusted-binary';
+import { findTrustedCommand } from '@shared/trusted-command';
 import * as fs from 'node:fs';
 import { analytics } from '@utils/analytics';
 
 vi.mock('node:child_process', () => ({
   execFile: vi.fn(),
 }));
-vi.mock('@shared/mcp-clients/trusted-binary', () => ({
-  findTrustedBinary: vi.fn(),
+vi.mock('@shared/trusted-command', () => ({
+  findTrustedCommand: vi.fn(),
 }));
 
 vi.mock('node:fs', () => ({
@@ -67,7 +67,7 @@ describe('CodexMCPClient', () => {
     stderr,
   });
 
-  const findBinaryMock = findTrustedBinary as Mock;
+  const findBinaryMock = findTrustedCommand as Mock;
   const readFileSyncMock = fs.readFileSync as Mock;
 
   const CODEX_PATH = '/usr/local/bin/codex';
@@ -75,7 +75,11 @@ describe('CodexMCPClient', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     // Default: codex found on PATH
-    findBinaryMock.mockReturnValue(CODEX_PATH);
+    findBinaryMock.mockReturnValue({
+      executable: CODEX_PATH,
+      prefixArgs: [],
+      env: { PATH: '/trusted/bin' },
+    });
     // Default: no plugin marketplace registered yet. clearAllMocks keeps
     // implementations, so without this a config.toml fixture set by one test
     // leaks into the next one's isPluginInstalled() check.
@@ -256,13 +260,7 @@ describe('CodexMCPClient', () => {
   });
 
   describe('supportsPlugin', () => {
-    it('returns true when codex is in PATH', () => {
-      const client = new CodexMCPClient();
-      expect(client.supportsPlugin()).toBe(true);
-    });
-
-    it('returns false when codex binary is not found', () => {
-      findBinaryMock.mockReturnValue(null);
+    it('returns false even when codex is in PATH', () => {
       const client = new CodexMCPClient();
       expect(client.supportsPlugin()).toBe(false);
     });

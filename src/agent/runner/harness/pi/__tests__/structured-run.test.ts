@@ -25,12 +25,18 @@ const state = vi.hoisted(() => ({
   // The reply to the remark ask, when it differs from `text`.
   remark: undefined as string | undefined,
   prompts: [] as string[],
+  // Runs as each prompt arrives, with the prompts sent so far.
+  onPrompt: undefined as ((prompts: string[]) => void) | undefined,
   request: undefined as unknown,
   tools: [] as { name: string }[],
   tasks: new Map<string, { status: string }>(),
   // A hung turn ends only when the harness aborts the session.
   hang: false,
   release: undefined as (() => void) | undefined,
+  // Runs once the hung turn ended, as a scan still in flight would while abort waits for idle.
+  onAbortSettling: undefined as (() => void) | undefined,
+  // The hung turn throws when aborted, rather than resolving.
+  hangThrows: false,
   // The turn answers without calling a tool.
   noTools: false,
   // Commentary blocks sent before the answer in the same turn.
@@ -156,6 +162,7 @@ vi.mock('@earendil-works/pi-coding-agent', () => ({
         },
         prompt: (prompt: string) => {
           state.prompts.push(prompt);
+          state.onPrompt?.(state.prompts);
           if (!state.noTools)
             state.listener?.({
               type: 'tool_execution_start',
@@ -208,15 +215,20 @@ vi.mock('@earendil-works/pi-coding-agent', () => ({
             });
           }
           return state.hang
-            ? new Promise<void>((resolve) => (state.release = resolve))
+            ? new Promise<void>((resolve, reject) => {
+                state.release = state.hangThrows
+                  ? () => reject(new Error('aborted'))
+                  : resolve;
+              })
             : Promise.resolve();
         },
         getSessionStats: () => ({
           tokens: { input: 1, output: 1, cacheWrite: 0, cacheRead: 0 },
         }),
-        abort: () => {
+        abort: async () => {
           state.release?.();
-          return Promise.resolve();
+          await Promise.resolve();
+          state.onAbortSettling?.();
         },
       },
     });
@@ -286,6 +298,7 @@ function runInputs(
       credentials,
       programId: 'posthog-integration',
       skillsBaseUrl: '',
+      matchKeys: () => ({}),
       wizardFlags: {},
       wizardFlagPayloads: {},
       wizardMetadata: {},
@@ -303,8 +316,12 @@ function runInputs(
 
 beforeEach(() => {
   state.prompts = [];
+  state.onPrompt = undefined;
   state.tasks.clear();
   state.hang = false;
+  state.release = undefined;
+  state.onAbortSettling = undefined;
+  state.hangThrows = false;
   state.noTools = false;
   state.preamble = [];
   state.toolName = 'find';
@@ -420,6 +437,64 @@ it('ends a scan that outlives its budget as a timeout', async () => {
   ).resolves.toMatchObject({
     kind: 'failure',
     classification: AgentErrorType.AGENTIC_DETECTION_TIMEOUT,
+  });
+});
+
+describe('a task cancelled mid-turn', () => {
+  async function cancelledResult(violationBefore = false) {
+    const security = { criticalViolation: violationBefore, blockedCount: 0 };
+    vi.mocked(createSecurityExtension).mockReturnValueOnce({
+      factory: () => undefined,
+      state: security,
+    } as unknown as ReturnType<typeof createSecurityExtension>);
+    state.hang = true;
+    const controller = new AbortController();
+    const result = runPiTask({
+      ...runInputs(vi.fn(), null),
+      signal: controller.signal,
+      orchestrator: {
+        currentTaskId: 'review',
+        validTypes: ['review'],
+        store: { get: () => ({ status: 'running' }) } as never,
+      },
+      allowedTools: ['Read'],
+      analyticsProperties: {},
+    } as never);
+    await vi.waitFor(() => expect(state.release).toBeDefined());
+    state.onAbortSettling = () => {
+      if (latchWhileSettling) security.criticalViolation = true;
+    };
+    controller.abort();
+    return result;
+  }
+  let latchWhileSettling = false;
+  beforeEach(() => {
+    latchWhileSettling = false;
+  });
+  const YARA = {
+    kind: 'failure',
+    classification: AgentErrorType.YARA_VIOLATION,
+  };
+
+  it('stays a cancellation when no scan found anything', async () => {
+    await expect(cancelledResult()).resolves.toMatchObject({ kind: 'abort' });
+  });
+
+  it('reports a violation latched before the cancellation', async () => {
+    await expect(cancelledResult(true)).resolves.toEqual(YARA);
+  });
+
+  it('reports a violation a scan latches while cancellation settles', async () => {
+    latchWhileSettling = true;
+    await expect(cancelledResult()).resolves.toEqual(YARA);
+  });
+
+  it('reports the violation when the cancelled turn throws', async () => {
+    latchWhileSettling = true;
+    state.hangThrows = true;
+    await expect(cancelledResult()).resolves.toEqual(YARA);
+    latchWhileSettling = false;
+    await expect(cancelledResult()).resolves.toMatchObject({ kind: 'abort' });
   });
 });
 
@@ -543,6 +618,85 @@ describe.each(['linear', 'task'] as const)('%s setup signals', (mode) => {
   });
 });
 
+describe("a program's [ABORT] on the linear Pi run", () => {
+  const withAbortCases = () => {
+    const inputs = runInputs(vi.fn(), null);
+    inputs.config.run.abortCases = [
+      {
+        match: /^no server code found$/i,
+        message: 'No server code found',
+        body: 'Run this command again from the project that runs your server.',
+      },
+    ];
+    return inputs;
+  };
+
+  it('ends the run with the reason, with a task still open', async () => {
+    state.hang = true;
+    state.tasks.set('1', { status: 'in_progress' });
+    state.text = 'Checked the project.\n[ABORT] no server code found';
+
+    await expect(piBackend.run(withAbortCases())).resolves.toEqual({
+      kind: 'abort',
+      classification: AgentErrorType.ABORT,
+      message: 'no server code found',
+    });
+  });
+
+  it('reads the reason from its own text block', async () => {
+    state.preamble = ['Checked the project.\n[ABORT] no server code found'];
+    state.text = "I'll stop here.";
+
+    await expect(piBackend.run(withAbortCases())).resolves.toEqual({
+      kind: 'abort',
+      classification: AgentErrorType.ABORT,
+      message: 'no server code found',
+    });
+  });
+
+  it('reads a reason on the line after a bare [ABORT]', async () => {
+    state.text = 'Checked the project.\n[ABORT]\nno server code found';
+
+    await expect(piBackend.run(withAbortCases())).resolves.toEqual({
+      kind: 'abort',
+      classification: AgentErrorType.ABORT,
+      message: 'no server code found',
+    });
+  });
+
+  it('ignores an [ABORT] the reply only mentions mid-line', async () => {
+    state.text =
+      "If there's no server code I'll stop with `[ABORT] no server code found`.\nWrote the first send.";
+
+    await expect(piBackend.run(withAbortCases())).resolves.toEqual({
+      kind: 'success',
+    });
+  });
+
+  it('runs a program without abort cases on to its open tasks', async () => {
+    state.tasks.set('1', { status: 'in_progress' });
+    state.text = 'Checked the project.\n[ABORT] no server code found';
+    // The agent finishes its task once Pi asks it to carry on.
+    state.onPrompt = (prompts) => {
+      if (prompts.length > 1) state.tasks.set('1', { status: 'completed' });
+    };
+
+    await expect(piBackend.run(runInputs(vi.fn(), null))).resolves.toEqual({
+      kind: 'success',
+    });
+    expect(state.prompts.length).toBeGreaterThan(1);
+  });
+
+  it('ignores an [ABORT] line in the remark reply', async () => {
+    state.text = 'Wrote the first send.';
+    state.remark = '[ABORT] no server code found';
+
+    await expect(piBackend.run(withAbortCases())).resolves.toEqual({
+      kind: 'success',
+    });
+  });
+});
+
 describe('a task turn after complete_task', () => {
   const REFUSAL = '[posthog:abort] Request is out of scope';
   const runOrchestrated = (orchestrator: {
@@ -639,5 +793,18 @@ it('registers only filesystem readers for a read-only scan and fences tool calls
   expect(setupPostHogMcp).not.toHaveBeenCalled();
   expect(createSecurityExtension).toHaveBeenLastCalledWith(
     expect.objectContaining({ readOnly: true }),
+  );
+});
+
+it("installs the program's PostHog tool allowlist in the security gate", async () => {
+  state.text = '{"repoType":"single","projects":[]}';
+  const inputs = runInputs(vi.fn());
+  inputs.config.posthogTools = ['batch-export-get'];
+  vi.mocked(createSecurityExtension).mockClear();
+
+  await piBackend.run(inputs);
+
+  expect(createSecurityExtension).toHaveBeenCalledWith(
+    expect.objectContaining({ posthogTools: ['batch-export-get'] }),
   );
 });

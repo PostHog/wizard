@@ -294,8 +294,16 @@ export class SessionStore {
     this.set('posthogSdkDetected', detected);
   }
 
+  setMcpServerCandidates(candidates: readonly string[]): void {
+    this.set('mcpServerCandidates', candidates);
+  }
+
   setSkillId(skillId: string | null): void {
     this.set('skillId', skillId);
+    analytics.setTag(
+      'migrated_from',
+      emailProviderMigratedFrom(skillId) ?? undefined,
+    );
   }
 
   setUnsupportedVersion(
@@ -553,6 +561,7 @@ export class SessionStore {
         ),
       setDetectedFramework: (l) => this.setDetectedFramework(l),
       setPosthogSdkDetected: (d) => this.setPosthogSdkDetected(d),
+      setMcpServerCandidates: (c) => this.setMcpServerCandidates(c),
       setSkillId: (id) => this.setSkillId(id),
       setUnsupportedVersion: (info) =>
         this.setUnsupportedVersion(
@@ -632,4 +641,10 @@ export function applyAgentProgress(
       throw new Error(`Unhandled agent progress: ${JSON.stringify(unhandled)}`);
     }
   }
+}
+
+const EMAIL_MIGRATION_SKILL = /^migrate-email-(.+)$/;
+
+function emailProviderMigratedFrom(skillId: string | null): string | null {
+  return skillId?.match(EMAIL_MIGRATION_SKILL)?.[1] ?? null;
 }

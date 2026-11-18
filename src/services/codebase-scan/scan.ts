@@ -14,9 +14,17 @@ import type {
   ProgramConfig,
 } from '@programs/program-contract';
 import type { ProgramSession } from '@programs/program-contract';
-import { detectTools, toWarehouseSources } from '../warehouse-sources/detect';
+import {
+  detectTools,
+  toWarehouseDestinations,
+  toWarehouseSources,
+} from '../warehouse-sources/detect';
 import { loadSourceDetectors } from '../warehouse-sources/registry';
-import type { DetectedSource, DetectedTool } from '../warehouse-sources/types';
+import type {
+  DetectedDestination,
+  DetectedSource,
+  DetectedTool,
+} from '../warehouse-sources/types';
 
 /** frameworkContext key holding the full scan, every detected tool included. */
 export const CODEBASE_SCAN_KEY = 'codebaseScan';
@@ -89,6 +97,18 @@ export async function scannedWarehouseSources(
   if (!scan) return [];
   // Resolves at once: the scan already waited for the same download.
   return toWarehouseSources(
+    scan.tools,
+    await loadSourceDetectors(session.baseUrl),
+  );
+}
+
+/** The warehouses the scan found that PostHog can export to. */
+export async function scannedWarehouseDestinations(
+  session: ProgramSession,
+): Promise<DetectedDestination[]> {
+  const scan = getCodebaseScan(session);
+  if (!scan) return [];
+  return toWarehouseDestinations(
     scan.tools,
     await loadSourceDetectors(session.baseUrl),
   );

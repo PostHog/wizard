@@ -1,6 +1,6 @@
 import { ClaudeCodeMCPClient } from '@shared/mcp-clients/clients/claude-code';
 import { execFileSync, execFile } from 'child_process';
-import { findTrustedBinary } from '@shared/mcp-clients/trusted-binary';
+import { findTrustedCommand } from '@shared/trusted-command';
 import { analytics } from '@utils/analytics';
 
 vi.mock('child_process', () => ({
@@ -8,8 +8,8 @@ vi.mock('child_process', () => ({
   execFile: vi.fn(),
 }));
 
-vi.mock('@shared/mcp-clients/trusted-binary', () => ({
-  findTrustedBinary: vi.fn(),
+vi.mock('@shared/trusted-command', () => ({
+  findTrustedCommand: vi.fn(),
 }));
 vi.mock('fs', () => ({
   existsSync: vi.fn().mockReturnValue(false),
@@ -69,7 +69,7 @@ const isCmd = (cmd: string, ...parts: string[]) =>
 
 describe('ClaudeCodeMCPClient — plugin methods', () => {
   const execFileSyncMock = execFileSync as Mock;
-  const findBinaryMock = findTrustedBinary as Mock;
+  const findBinaryMock = findTrustedCommand as Mock;
   const execFileMock = execFile as unknown as Mock;
 
   /** Every `claude` invocation, in order, as its joined command. */
@@ -105,20 +105,18 @@ describe('ClaudeCodeMCPClient — plugin methods', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    // The binary is opaque here; trusted-binary.test.ts covers how it is found.
-    findBinaryMock.mockReturnValue('claude');
+    // Executable selection is covered by trusted-command.test.ts.
+    findBinaryMock.mockReturnValue({
+      executable: 'claude',
+      prefixArgs: [],
+      env: { PATH: '/trusted/bin' },
+    });
     execFileSyncMock.mockReturnValue(Buffer.from(''));
     routeClaude(() => '');
   });
 
   describe('supportsPlugin', () => {
-    it('returns true when claude binary is found', () => {
-      const client = new ClaudeCodeMCPClient();
-      expect(client.supportsPlugin()).toBe(true);
-    });
-
-    it('returns false when no binary is found', () => {
-      findBinaryMock.mockReturnValue(null);
+    it('returns false even when claude binary is found', () => {
       const client = new ClaudeCodeMCPClient();
       expect(client.supportsPlugin()).toBe(false);
     });
@@ -185,6 +183,32 @@ describe('ClaudeCodeMCPClient — plugin methods', () => {
       routeClaude(() => new Error('command failed'));
       const client = new ClaudeCodeMCPClient();
       await expect(client.isPluginInstalled()).resolves.toBe(false);
+    });
+  });
+
+  describe('isPluginServing', () => {
+    it('returns true for an enabled copy', async () => {
+      routeClaude((cmd) =>
+        isCmd(cmd, 'plugin', 'list') ? listed('posthog@posthog') : '',
+      );
+      const client = new ClaudeCodeMCPClient();
+      await expect(client.isPluginServing()).resolves.toBe(true);
+    });
+
+    it('returns false when the only copy is disabled, since it serves no server', async () => {
+      routeClaude((cmd) =>
+        isCmd(cmd, 'plugin', 'list')
+          ? listedWith(['posthog@posthog', false])
+          : '',
+      );
+      const client = new ClaudeCodeMCPClient();
+      await expect(client.isPluginServing()).resolves.toBe(false);
+    });
+
+    it('returns false when no plugins are installed', async () => {
+      routeClaude((cmd) => (isCmd(cmd, 'plugin', 'list') ? listed() : ''));
+      const client = new ClaudeCodeMCPClient();
+      await expect(client.isPluginServing()).resolves.toBe(false);
     });
   });
 

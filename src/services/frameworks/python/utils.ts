@@ -1,4 +1,5 @@
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
+import { findTrustedCommand } from '@shared/trusted-command';
 import type { WizardRunOptions } from '@utils/types';
 
 export enum PythonPackageManager {
@@ -19,17 +20,27 @@ export enum PythonPackageManager {
 export function getPythonVersion(
   options: WizardRunOptions,
 ): string | undefined {
-  try {
-    const version = execSync('python --version || python3 --version', {
-      cwd: options.installDir,
-      encoding: 'utf-8',
-    })
-      .trim()
-      .replace('Python ', '');
-    return version;
-  } catch {
-    return undefined;
+  for (const name of ['python', 'python3']) {
+    const command = findTrustedCommand(name, options.installDir);
+    if (!command) continue;
+    try {
+      return execFileSync(
+        command.executable,
+        [...command.prefixArgs, '--version'],
+        {
+          cwd: options.installDir,
+          env: command.env,
+          encoding: 'utf-8',
+          timeout: 5000,
+        },
+      )
+        .trim()
+        .replace('Python ', '');
+    } catch {
+      continue;
+    }
   }
+  return undefined;
 }
 
 /**

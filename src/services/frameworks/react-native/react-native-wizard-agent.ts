@@ -34,6 +34,7 @@ export const REACT_NATIVE_AGENT_CONFIG: FrameworkConfig<ReactNativeContext> = {
       context.variant
         ? `${getReactNativeVariantName(context.variant)} 📱`
         : undefined,
+    getVariant: (context) => context.variant,
   },
 
   detection: {

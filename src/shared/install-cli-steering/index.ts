@@ -4,6 +4,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 
 import { logToFile } from '@utils/debug';
+import { findTrustedCommand } from '@shared/trusted-command';
 
 /**
  * A coding agent whose global instructions file the PostHog CLI steering
@@ -77,9 +78,7 @@ export interface CliInstallResult {
 
 const spawnOptions = {
   encoding: 'utf-8' as const,
-  // npm/posthog-cli are npm.cmd/posthog-cli.cmd on Windows; spawnSync only
-  // resolves them through a shell.
-  shell: process.platform === 'win32',
+  shell: false,
 };
 
 /**
@@ -91,7 +90,21 @@ export function installOrUpdatePostHogCli(): CliInstallResult {
   const args = ['install', '--global', '@posthog/cli@latest'];
   logToFile(`Running npm ${args.join(' ')}`);
 
-  const result = spawnSync('npm', args, spawnOptions);
+  const command = findTrustedCommand('npm');
+  if (!command) {
+    const error = new Error(
+      'No trusted npm executable found outside the project.',
+    );
+    return { success: false, error: error.message, errorObject: error };
+  }
+  const result = spawnSync(
+    command.executable,
+    [...command.prefixArgs, ...args],
+    {
+      ...spawnOptions,
+      env: command.env,
+    },
+  );
 
   if (result.error) {
     return {
@@ -128,10 +141,23 @@ export function installSteeringSnippet(
   const args = ['api', 'agents-md', 'install', '--path', filePath];
   logToFile(`Running posthog-cli ${args.join(' ')}`);
 
-  const result = spawnSync('posthog-cli', args, {
-    ...spawnOptions,
-    env: { ...process.env, POSTHOG_CLI_EXPERIMENTAL_API: '1' },
-  });
+  const command = findTrustedCommand('posthog-cli');
+  if (!command) {
+    return {
+      success: false,
+      filePath,
+      error:
+        "No trusted posthog-cli executable found. Make sure npm's global bin directory is on your PATH.",
+    };
+  }
+  const result = spawnSync(
+    command.executable,
+    [...command.prefixArgs, ...args],
+    {
+      ...spawnOptions,
+      env: { ...command.env, POSTHOG_CLI_EXPERIMENTAL_API: '1' },
+    },
+  );
 
   if (result.error) {
     return {

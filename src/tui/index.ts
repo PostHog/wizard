@@ -16,6 +16,7 @@ export { AuditScreenId } from './programs/audit/screen-ids.js';
 export { ErrorTrackingScreenId } from './programs/error-tracking/screen-ids.js';
 export { SourceMapsScreenId } from './programs/error-tracking-upload-source-maps/screen-ids.js';
 export { FeatureFlagsScreenId } from './programs/feature-flags/screen-ids.js';
+export { McpAnalyticsScreenId } from './programs/mcp-analytics/screen-ids.js';
 export { MetricsScreenId } from './programs/metrics/screen-ids.js';
 export { MigrationScreenId } from './programs/migration/screen-ids.js';
 export { PostHogIntegrationScreenId } from './programs/posthog-integration/screen-ids.js';
@@ -23,6 +24,7 @@ export { RevenueAnalyticsScreenId } from './programs/revenue-analytics/screen-id
 export { SelfDrivingScreenId } from './programs/self-driving/screen-ids.js';
 export { SkillScreenId } from './programs/shared/screen-ids.js';
 export { WarehouseSourceScreenId } from './programs/warehouse-source/screen-ids.js';
+export { WarehouseDestinationScreenId } from './programs/warehouse-destination/screen-ids.js';
 export { PosthogDoctorScreenId } from './tools/doctor/screen-ids.js';
 export { McpScreenId } from './tools/mcp/screen-ids.js';
 export type { FamilyPickerOption } from './family-picker.js';

@@ -7,7 +7,7 @@ import {
 } from '@shared/constants';
 import {
   reportableDiscoveredFeatures,
-  reportablePosthogSdkDetected,
+  reportableDetections,
   type RunPhase,
   type ScanConsent,
 } from '@shared/run-state';
@@ -50,6 +50,7 @@ export type SessionFacts = {
   scanConsent: ScanConsent;
   runPhase: RunPhase;
   posthogSdkDetected: boolean;
+  mcpServerCandidates: readonly string[];
 };
 
 /**
@@ -64,7 +65,7 @@ export function sessionProperties(
   // might be absent. An absent key is unambiguous, while an empty array
   // would read as "we looked and found nothing" instead of "not reported".
   const discoveredFeatures = reportableDiscoveredFeatures(session);
-  const posthogSdkDetected = reportablePosthogSdkDetected(session);
+  const detections = reportableDetections(session);
 
   return {
     integration: session.integration,
@@ -79,8 +80,12 @@ export function sessionProperties(
       : {}),
     scan_consent: session.scanConsent,
     run_phase: session.runPhase,
-    ...(posthogSdkDetected !== undefined
-      ? { posthog_sdk_detected: posthogSdkDetected }
+    ...(detections
+      ? {
+          posthog_sdk_detected: detections.posthogSdkDetected,
+          mcp_server_detected: detections.mcpServerDetected,
+          mcp_server_candidate_count: detections.mcpServerCandidateCount,
+        }
       : {}),
   };
 }
@@ -416,6 +421,8 @@ export class Analytics {
       properties: {
         // Flat for filtering; the nested `tags` snapshot stays for back-compat.
         ...this.tags,
+        // The run's wizard flags, so an outcome can be split by flag variant.
+        ...this.wizardFlagFeatureProperties(),
         run_id: this._runId,
         ...(this.sessionId ? { $session_id: this.sessionId } : {}),
         status,

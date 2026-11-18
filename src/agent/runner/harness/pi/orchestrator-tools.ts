@@ -56,6 +56,9 @@ const HANDOFF_PARAMS = Type.Object({
   reportSection: Type.Optional(
     Type.String({ description: HANDOFF_FIELDS.reportSection }),
   ),
+  packages: Type.Optional(
+    Type.Array(Type.String(), { description: HANDOFF_FIELDS.packages }),
+  ),
 });
 
 /** Exported so the parity test can compare both harnesses' field sets. */

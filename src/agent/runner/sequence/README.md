@@ -12,24 +12,91 @@ prompt assembly, error routing, post-run work, and outro construction. Retain it
 for very simple tasks and legacy support. Its context is subject to the
 harness's compaction behavior.
 
-`AgentRunDefinition.customPrompt`, `abortCases`, and the program's `postRun`
-and `buildOutroData` hooks are linear hooks. The orchestrator does not invoke them. Composed program sub-runs
-are also clamped to linear because an orchestrator owns its full lifecycle and
-cannot nest through the composition seam.
+`AgentRunDefinition.customPrompt`, `abortCases`, and the program's `postRun` and
+`buildOutroData` hooks are linear hooks. The orchestrator does not invoke them.
+Composed program sub-runs are also clamped to linear because an orchestrator
+owns its full lifecycle and cannot nest through the composition seam.
 
 ## Orchestrator
 
-[orchestrator-runner.ts](orchestrator/orchestrator-runner.ts) loads a flow from
-context-mill, runs its seed planner, then drains a dependency-aware task queue.
-Each task gets a focused conversation, tools, selected model/effort, and
-relevant handoffs. Independent tasks can run concurrently.
+[orchestrator-runner.ts](orchestrator/orchestrator-runner.ts) loads a flow's
+prompts, queues its tasks, then drains a dependency-aware task queue. Each task
+gets a focused conversation, tools, selected model/effort, and relevant
+handoffs. Independent tasks can run concurrently.
 
-The program selects `agentFlow ?? id`. Its published flow must supply a seed
-prompt and valid task-skill variants. Metrics already has a Pi/orchestrator
-binding; other routes can be selected through scoped flags or development CLI
-overrides. The retired `experiment/orchestrator` branch is not a prerequisite.
-See
+The prompts are the ones the program bundles, the run config's `agentPrompts`;
+see [agent prompts](../../../programs/README.md#agent-prompts). A program that
+bundles none, or whose bundle fails to load, fails the run with
+`PHW_AGENT_ORCHESTRATOR_NO_PLANNER`. A failed load is also reported as an
+exception with the step `orchestrator_bundled_prompts`.
+
+A flow's seed planner queues its tasks. A flow with no seed prompt is queued
+from the graph its frontmatter declares, by
+[task-graph.ts](orchestrator/task-graph.ts), and no planner runs.
+`orchestrator seeded` carries which one queued the run as `source`. A declared
+graph that cannot be queued ends the run with
+`PHW_AGENT_ORCHESTRATOR_TASK_GRAPH` and sends `orchestrator task graph
+rejected` with the reason.
+
+A flow must supply valid task-skill variants. Metrics already has a
+Pi/orchestrator binding; other routes can be selected through scoped flags or
+development CLI overrides. The retired `experiment/orchestrator` branch is not a
+prerequisite. See
 [adding a program](../../../../.claude/skills/adding-skill-program/SKILL.md).
+
+A task prompt names its skills by menu id or by skill family, and the runner
+resolves each name to the menu skill to install. `@shared/skill-resolution`
+picks the family's skill for the run's match keys. The match keys are the run
+config's `matchKeys`, which the program runner fills from the project's traits.
+A run whose project has no `framework` trait resolves no family, so it has no
+framework pack.
+
+A menu entry with `frameworkReferences` is a step skill written once for every
+framework. [repackaged-skills.ts](orchestrator/repackaged-skills.ts) installs
+it once a run. It builds the skill in a temp folder outside the project:
+it installs the skill there, completes it from the framework's reference
+skill with `@shared/skill-composition`, and scans `SKILL.md`, the one file
+completing rewrites and no install scan has read. Only a skill that is
+complete and scanned is put in place, and the temp folder is removed either
+way.
+
+The skill replaces its folder whole, so a page an earlier run left there does
+not survive. In the run's own cache any folder may be replaced. In
+`.claude/skills`, which is the project's, a folder is replaced only when it
+carries the wizard's `.posthog-wizard` marker: one the wizard did not install,
+or a link standing there, is refused and left as it is, before anything is
+downloaded.
+
+The skill's id comes from the menu and names a folder, so an id that is not one
+plain name is refused before anything is installed. When the skill cannot be
+completed for any reason, a thrown error included, nothing reaches its folder,
+every task that names it fails as it does when a skill fails to install, and
+the run sends `orchestrator repackaged skill unavailable` once with the
+reason: a failed install, a pack that cannot complete it, a link on the way, a
+folder the wizard does not own, or a scan that rejects it or fails. A run that
+installed no reference skill cannot complete one, so it fails before any task
+starts, as it does for a skill the menu cannot supply.
+
+The `install_skill` tool resolves the name it is given as a task prompt's is,
+a menu id or a skill family, and completes such a skill the same way, in both
+sequences: `installToolSkill` in the same file picks the framework's pack with
+the run's match keys, reads it from a scratch folder, and puts the completed
+skill in `.claude/skills`. A run with no framework gets an error that says so,
+and nothing is installed.
+
+A run pinned to a context-mill release with `--context-mill-version` reads its
+skills from that release. The oldest release a pin may name is 1.66.0, the
+first that publishes the skills the bundled prompts name. Its prompts are the
+bundled ones, as in any run.
+
+Before the tasks run, the runner installs the framework's `integration` skill as
+a reference: its example and its framework rules go into every task's prompt.
+When that install fails, the run goes on without them and sends
+`orchestrator reference skill unavailable` with the reason.
+
+A task skill the menu cannot supply fails the run before any task starts. When
+the loaded menu has that name under no id and no family, the wizard is older
+than the skills, and the message says to run the latest version. Any other miss keeps the message that asks to try again.
 
 ### Task metadata
 
@@ -44,10 +111,30 @@ frontmatter contract rather than copying an old manifest example:
   required prompt compatibility.
 - `skills`, `allowedTools`, and `disallowedTools` shape the task's capabilities.
   Inspect the selected harness's effective tool inventory.
-- `dependsOn` has different consumers: planner-enqueued tasks use actual task
-  IDs supplied to `enqueue_task`, while runner-seeded tasks resolve declared
-  task types after planning. It is not a universal automatic graph built from
-  frontmatter.
+- `timeoutSeconds` optionally limits a queued task's wall-clock time, including
+  harness setup and agent work. It is a positive integer up to 86400, and an
+  invalid value is logged and ignored. The runner cancels through the harness
+  signal, waits for cleanup, and never retries the task. A task that already
+  reported stays as it reported, and a security stop stays fatal. Tasks without
+  this field retain their existing lifetime. In a task with a budget, each Pi
+  bash command stops about a minute before the deadline, so the agent can still
+  write its handoff. A Pi bash command that sets no timeout stops after five
+  minutes in any task.
+- `onTimeout` sets what a required task with a budget does at its deadline.
+  `continue` completes it with a `conflict` saying what is unverified, so
+  dependents run and the outro reports it; this is also the fallback for a
+  missing or invalid value. `fail` stops the run. An optional task always fails
+  once and unblocks its dependents. Every deadline captures
+  `orchestrator task deadline exceeded` with its landing, because a `continue`
+  task also counts as completed.
+- `dependsOn` names the task types a task runs after. In a flow with a planner,
+  the planner supplies actual task IDs to `enqueue_task`, and only runner-seeded
+  tasks resolve their declared types, after planning. In a flow queued from its
+  frontmatter, the declared types are the graph: each task is queued after the
+  ones it names, a task the run excludes hands its dependencies to the tasks
+  that waited on it, and the `sink` task also waits for every task its
+  dependencies do not reach. A name the flow does not declare is dropped and
+  logged.
 
 Per-role `contextMillOverride` on the program's `binding` can adjust a task's
 harness, model or effort. New task types usually belong in context-mill; new

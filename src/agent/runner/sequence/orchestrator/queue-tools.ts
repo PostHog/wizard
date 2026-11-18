@@ -430,6 +430,8 @@ export const HANDOFF_FIELDS = {
     'A one-line summary of any conflict you could not cleanly resolve (e.g. a dependency or build conflict). Put full detail in your work; this line is surfaced to the user.',
   reportSection:
     'A finished markdown section about your work for the run report, written only when your task instructions ask for one. The reporting task includes it as its own section instead of rewriting it.',
+  packages:
+    'Packages your edits import that you did not install, one per entry, written the way a later task should install each one — with any exact pin or feature it needs. Leave it out when you need nothing installed.',
 } as const satisfies Record<keyof Required<TaskHandoff>, string>;
 
 const HANDOFF_SHAPE = {
@@ -464,6 +466,11 @@ const HANDOFF_SHAPE = {
     .max(HANDOFF_TEXT_MAX)
     .optional()
     .describe(HANDOFF_FIELDS.reportSection),
+  packages: z
+    .array(z.string().max(1_000))
+    .max(50)
+    .optional()
+    .describe(HANDOFF_FIELDS.packages),
 };
 
 /** Exported so the parity test can compare both harnesses' field sets. */

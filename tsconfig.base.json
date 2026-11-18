@@ -22,7 +22,7 @@
     "esModuleInterop": true,
     "jsx": "react-jsx",
     "typeRoots": ["./node_modules/@types", "./types"],
-    "types": ["node", "read-env", "xcode", "vitest-global-types"],
+    "types": ["node", "read-env", "xcode", "vitest-global-types", "markdown"],
     // Entries only. A layer reads another through its entry, and the layer's
     // `references` decide which projects it can reach at all.
     "paths": {

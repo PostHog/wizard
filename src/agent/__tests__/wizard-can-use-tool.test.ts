@@ -254,6 +254,11 @@ describe('bash fence — allows real toolchain commands (from skills + field log
     expect(allow('npm run build:prod')).toBe('allow');
     expect(allow('npm run build 2>&1 | tail -5')).toBe('allow');
     expect(allow('pnpm exec eslint --fix src')).toBe('allow');
+    expect(allow('pnpm exec oxfmt src/index.ts')).toBe('allow');
+    expect(allow('pnpm peers check')).toBe('allow');
+    expect(allow('pnpm list posthog-node')).toBe('allow');
+    expect(allow('npm ls posthog-node')).toBe('allow');
+    expect(allow('yarn list --pattern posthog-node')).toBe('allow');
     expect(allow('npx eslint .')).toBe('allow');
     expect(allow('npx tsc --noEmit')).toBe('allow');
     expect(allow('npx expo install posthog-react-native')).toBe('allow');

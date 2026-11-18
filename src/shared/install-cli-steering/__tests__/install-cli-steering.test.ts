@@ -1,4 +1,5 @@
 import * as childProcess from 'node:child_process';
+import { findTrustedCommand } from '@shared/trusted-command';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -13,6 +14,7 @@ import {
 } from '@shared/install-cli-steering';
 
 vi.mock('@utils/debug');
+vi.mock('@shared/trusted-command');
 vi.mock('node:child_process', () => ({
   spawnSync: vi.fn(),
 }));
@@ -26,6 +28,11 @@ const existsSyncMock = fs.existsSync as Mock;
 describe('install-cli-steering', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(findTrustedCommand).mockImplementation((name) => ({
+      executable: `/trusted/${name}`,
+      prefixArgs: [],
+      env: { PATH: '/trusted' },
+    }));
   });
 
   describe('targets', () => {
@@ -58,6 +65,12 @@ describe('install-cli-steering', () => {
   });
 
   describe('installOrUpdatePostHogCli', () => {
+    it('does not launch npm when only an untrusted executable is available', () => {
+      vi.mocked(findTrustedCommand).mockReturnValue(null);
+      expect(installOrUpdatePostHogCli()).toMatchObject({ success: false });
+      expect(spawnSyncMock).not.toHaveBeenCalled();
+    });
+
     it('installs or updates the latest published CLI globally', () => {
       spawnSyncMock.mockReturnValue({ status: 0, stdout: '', stderr: '' });
 
@@ -65,7 +78,9 @@ describe('install-cli-steering', () => {
 
       expect(result).toEqual({ success: true });
       const [command, args, options] = spawnSyncMock.mock.calls[0];
-      expect(command).toBe('npm');
+      expect(command).toBe('/trusted/npm');
+      expect(options.shell).toBe(false);
+      expect(options.env.PATH).toBe('/trusted');
       expect(args).toEqual(['install', '--global', '@posthog/cli@latest']);
       expect(options.encoding).toBe('utf-8');
     });
@@ -95,6 +110,37 @@ describe('install-cli-steering', () => {
   });
 
   describe('installSteeringSnippet', () => {
+    it('does not launch an untrusted PostHog CLI', () => {
+      vi.mocked(findTrustedCommand).mockReturnValue(null);
+      expect(
+        installSteeringSnippet('/home/user/.claude/CLAUDE.md'),
+      ).toMatchObject({ success: false });
+      expect(spawnSyncMock).not.toHaveBeenCalled();
+    });
+
+    it('passes a Windows npm entry point as an argument without a shell', () => {
+      vi.mocked(findTrustedCommand).mockReturnValue({
+        executable: 'C:\\Program Files\\nodejs\\node.exe',
+        prefixArgs: ['C:\\Users\\Sarah\\npm\\posthog-cli.js'],
+        env: { PATH: 'C:\\Program Files\\nodejs' },
+      });
+      spawnSyncMock.mockReturnValue({ status: 0, stdout: '', stderr: '' });
+      const filePath = 'C:\\Users\\Sarah Smith\\.claude\\CLAUDE.md';
+      expect(installSteeringSnippet(filePath).success).toBe(true);
+      expect(spawnSyncMock).toHaveBeenCalledWith(
+        'C:\\Program Files\\nodejs\\node.exe',
+        [
+          'C:\\Users\\Sarah\\npm\\posthog-cli.js',
+          'api',
+          'agents-md',
+          'install',
+          '--path',
+          filePath,
+        ],
+        expect.objectContaining({ shell: false }),
+      );
+    });
+
     it('delegates to the installed CLI with the experimental env set', () => {
       spawnSyncMock.mockReturnValue({ status: 0, stdout: '', stderr: '' });
 
@@ -105,7 +151,8 @@ describe('install-cli-steering', () => {
         filePath: '/home/user/.claude/CLAUDE.md',
       });
       const [command, args, options] = spawnSyncMock.mock.calls[0];
-      expect(command).toBe('posthog-cli');
+      expect(command).toBe('/trusted/posthog-cli');
+      expect(options.shell).toBe(false);
       expect(args).toEqual([
         'api',
         'agents-md',

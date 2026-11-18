@@ -50,6 +50,13 @@ export const DEFAULT_TIPS: Tip[] = [
     url: 'https://posthog.com/slack',
   },
   {
+    id: 'community',
+    title: 'Chat with other builders',
+    description:
+      'Introduce yourself on the forum at https://posthog.com/forum, or see what other builders are working on in Discord while you wait:',
+    url: 'https://discord.gg/xBXBD8edK3',
+  },
+  {
     id: 'stripe',
     title: 'You can track Stripe revenue with PostHog',
     description: 'Add Stripe as a data source while you wait:',

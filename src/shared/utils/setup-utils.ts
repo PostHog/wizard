@@ -11,6 +11,7 @@ import type { PackageJson } from './package-json';
 import { getDeclaredVersion } from './package-json';
 import { analytics } from './analytics';
 import { versionSatisfiesRange } from './semver';
+import { findTrustedCommand } from '@shared/trusted-command';
 
 export interface CliSetupConfig {
   filename: string;
@@ -55,10 +56,19 @@ const FREEMAIL_DOMAINS = new Set([
 
 function parseGitRemote(): { org: string; repo: string } | null {
   try {
+    const command = findTrustedCommand('git');
+    if (!command) return null;
     const url = childProcess
-      .execSync('git remote get-url origin', {
-        stdio: ['ignore', 'pipe', 'ignore'],
-      })
+      .execFileSync(
+        command.executable,
+        [...command.prefixArgs, 'remote', 'get-url', 'origin'],
+        {
+          cwd: process.cwd(),
+          env: command.env,
+          timeout: 5000,
+          stdio: ['ignore', 'pipe', 'ignore'],
+        },
+      )
       .toString()
       .trim();
     // git@github.com:acme-corp/my-app.git or https://github.com/acme-corp/my-app.git

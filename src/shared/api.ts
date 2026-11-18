@@ -76,7 +76,8 @@ export const ApiUserSchema = z
     role_at_organization: z.string().nullish(),
 
     // Current team + organization (objects from the API, kept typed on
-    // the fields the wizard uses; passthrough preserves the rest).
+    // the fields the wizard uses; passthrough preserves the rest). Null when
+    // the credential can't reach the user's current project or organization.
     team: z
       .object({
         id: z.number(),
@@ -87,7 +88,8 @@ export const ApiUserSchema = z
         name: z.string().nullish(),
         timezone: z.string().nullish(),
       })
-      .passthrough(),
+      .passthrough()
+      .nullish(),
     organization: z
       .object({
         id: z.string().uuid(),
@@ -100,7 +102,8 @@ export const ApiUserSchema = z
         // flip) — treat null as "unknown", not "off".
         is_ai_data_processing_approved: z.boolean().nullish(),
       })
-      .passthrough(),
+      .passthrough()
+      .nullish(),
     organizations: z.array(
       z
         .object({
@@ -182,7 +185,6 @@ function isUntrustedCertError(error: unknown): error is AxiosError {
 }
 
 const RETRY_DELAYS_MS = [500, 1500];
-const USER_DATA_TIMEOUT_MS = 10_000;
 
 /** No response (a network error), 5xx, 408 and 429 can heal on a retry; an untrusted certificate or a cancelled request can't. */
 function isTransient(error: unknown): boolean {
@@ -198,38 +200,20 @@ function isTransient(error: unknown): boolean {
   return status >= 500 || status === 408 || status === 429;
 }
 
-/** Waits `ms`, or less when `signal` aborts first. */
-function backoff(ms: number, signal?: AbortSignal): Promise<void> {
-  return new Promise((resolve) => {
-    const done = () => {
-      clearTimeout(timer);
-      signal?.removeEventListener('abort', done);
-      resolve();
-    };
-    const timer = setTimeout(done, ms);
-    signal?.addEventListener('abort', done, { once: true });
-  });
-}
-
-/**
- * Runs a login-path request, retrying transient failures with backoff.
- * Once `signal` aborts, it stops waiting and throws the last failure.
- */
+/** Runs a login-path request, retrying transient failures with backoff. */
 export async function retryTransient<T>(
   request: () => Promise<T>,
-  sleep: (ms: number, signal?: AbortSignal) => Promise<void> = backoff,
-  signal?: AbortSignal,
+  sleep: (ms: number) => Promise<void> = (ms) =>
+    new Promise((resolve) => setTimeout(resolve, ms)),
 ): Promise<T> {
   for (let attempt = 0; ; attempt++) {
     try {
       return await request();
     } catch (error) {
       const delay = RETRY_DELAYS_MS[attempt];
-      if (delay === undefined || !isTransient(error) || signal?.aborted)
-        throw error;
+      if (delay === undefined || !isTransient(error)) throw error;
       logToFile(`[api] ${describeAxiosFailure(error)}, retrying in ${delay}ms`);
-      await sleep(delay, signal);
-      if (signal?.aborted) throw error;
+      await sleep(delay);
     }
   }
 }
@@ -255,23 +239,21 @@ function failureProperties(
   };
 }
 
+/** Reads the token's user. Once `signal` aborts, it cancels the request, which ends the retries. */
 export async function fetchUserData(
   accessToken: string,
   baseUrl: string,
+  signal?: AbortSignal,
 ): Promise<ApiUser> {
-  const deadline = AbortSignal.timeout(USER_DATA_TIMEOUT_MS);
   try {
-    const response = await retryTransient(
-      () =>
-        axios.get(`${baseUrl}/api/users/@me/`, {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            'User-Agent': WIZARD_USER_AGENT,
-          },
-          signal: deadline,
-        }),
-      undefined,
-      deadline,
+    const response = await retryTransient(() =>
+      axios.get(`${baseUrl}/api/users/@me/`, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'User-Agent': WIZARD_USER_AGENT,
+        },
+        signal,
+      }),
     );
 
     return ApiUserSchema.parse(response.data);

@@ -70,6 +70,25 @@ describe('WizardRouter', () => {
     expect(router.resolve(view)).not.toBe(ScreenId.MintFailure);
   });
 
+  it.each([ErrorCodes.AgentAbort, ErrorCodes.DetectUnsupportedPlatform])(
+    "shows an agent's [ABORT] (%s) on its own outro, never the busy handoff",
+    (errorCode) => {
+      const router = new WizardRouter(Program.TransactionalEmail);
+      const view = failedRunView();
+      view.session.runPhase = RunPhase.Error;
+      view.session.outroData = {
+        kind: OutroKind.Error,
+        message: 'No server code found',
+        body: 'Run this command again from the project that runs your server.',
+        errorCode,
+      };
+
+      expect(router.resolve(view)).toBe(ScreenId.Outro);
+      view.outroDismissed = true;
+      expect(router.resolve(view)).toBe(ScreenId.Exit);
+    },
+  );
+
   it('continues a failed run through the post-run steps, then exits', () => {
     const router = new WizardRouter(Program.SelfDriving);
     const view = failedRunView();

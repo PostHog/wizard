@@ -36,6 +36,7 @@ import { registerCleanup } from '@utils/cleanup';
 import { logToFile } from '@utils/debug';
 import { removeAuditLedger, startAuditLedgerWatcher } from '@programs/audit';
 import { FRAMEWORK_REGISTRY } from '@services/frameworks';
+import { getTraits, toMatchKeys } from '@services/project-traits';
 import { findProgramConfig, getProgramConfig } from './program-registry';
 import { ProgramAbort } from '@programs/program-contract';
 import { detectionFailure, detectProgram } from './detect-program';
@@ -296,6 +297,10 @@ async function invokeProgram(
       if (!input.wizardFlags && options.featureFlags) {
         flags = await park(options.featureFlags());
       }
+      const gate = config.rolloutGate;
+      if (gate && flags.flags[gate.flagKey] !== 'true') {
+        return fail(gate.unavailableMessage, ErrorCodes.CliFlagUnavailable);
+      }
     } catch (error) {
       if (signal.aborted) return cancelled();
       if (error instanceof ProgramAbort) return fail(error.message, error.code);
@@ -416,20 +421,34 @@ async function invokeProgram(
             wizardFlagPayloads: { ...flags.payloads },
             allowedTools: planned.config.allowedTools,
             disallowedTools: planned.config.disallowedTools,
+            posthogTools: planned.config.posthogTools,
             handoffNotebook:
               agentRun.handoffNotebook ?? planned.config.handoffNotebook,
             agentFlow: planned.config.agentFlow,
-            excludedTaskTypes: planned.config.excludedTaskTypes,
+            agentPrompts: planned.config.agentPrompts,
+            excludedTaskTypes: planned.config.excludedTaskTypes
+              ? (runFlags) =>
+                  planned.config.excludedTaskTypes!(runFlags, session())
+              : undefined,
             seedTasks: planned.config.seedTasks
               ? () => planned.config.seedTasks!(session())
               : undefined,
+            matchKeys: () => toMatchKeys(getTraits(session())),
             projectFacts:
-              decisions && planned.config.decisions
-                ? () =>
-                    decisions.questionFacts(
+              (decisions && planned.config.decisions) ||
+              planned.config.detectedFacts
+                ? () => [
+                    ...(decisions && planned.config.decisions
+                      ? decisions.questionFacts(
+                          session(),
+                          planned.config.decisions,
+                        )
+                      : []),
+                    ...(planned.config.detectedFacts?.(
+                      flags.flags,
                       session(),
-                      planned.config.decisions ?? [],
-                    )
+                    ) ?? []),
+                  ]
                 : undefined,
             hooks: sessionHooks(agentRun, session, (outcomes) => {
               if (scoped) scoped.frameworkContext[TASK_OUTCOMES_KEY] = outcomes;

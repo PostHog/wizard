@@ -257,6 +257,11 @@ Note `wizard mcp add --local` is **not** one of these — it writes a
 `posthog-local` entry into your editor's MCP config, and is unrelated to where a
 wizard run points. Full catalog: [`docs/local-dev.md`](docs/local-dev.md).
 
+`--context-mill-version <version>` (`POSTHOG_WIZARD_CONTEXT_MILL_VERSION`) pins
+skills to one context-mill release instead of the latest. Every build accepts
+it; see
+[pinning a context-mill release](docs/local-dev.md#pinning-a-context-mill-release).
+
 ## Repository conventions
 
 - Write documentation as the current design. Describe behavior and usage

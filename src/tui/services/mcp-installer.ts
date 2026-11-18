@@ -36,6 +36,8 @@ export interface McpClientInfo {
   supportsPlugin: boolean;
   /** True when the plugin already ships the posthog MCP server (no direct entry needed). */
   pluginBundlesMcp: boolean;
+  /** True when the PostHog plugin is already on this machine, e.g. from an earlier wizard run. */
+  pluginInstalled?: boolean;
   /**
    * Set for clients connected by opening a hosted page in the browser. The
    * Done screen renders this so the user knows to finish setup in the browser.
@@ -81,7 +83,10 @@ export interface McpInstaller {
 /**
  * Production McpInstaller backed by real MCP client detection and installation.
  */
-const toClientInfo = (c: MCPClient): McpClientInfo => ({
+const toClientInfo = (
+  c: MCPClient,
+  pluginInstalled = false,
+): McpClientInfo => ({
   name: c.name,
   kind: isBrowserFinishable(c) ? 'account' : 'local',
   supportsPlugin: isPluginCapable(c) && c.supportsPlugin(),
@@ -92,7 +97,28 @@ const toClientInfo = (c: MCPClient): McpClientInfo => ({
   loginCommand: (isLoginCapable(c) && c.loginCommand(false)) || undefined,
   pluginLoginCommand:
     (isLoginCapable(c) && c.pluginLoginCommand?.()) || undefined,
+  pluginInstalled,
 });
+
+/**
+ * Whether the PostHog plugin is already on the machine. For an install it
+ * counts only when the plugin bundles the server and is enabled: that copy
+ * already serves PostHog, and a direct entry beside it would duplicate every
+ * tool. For a removal any copy counts, since removal uninstalls it.
+ */
+const hasPlugin = async (
+  c: MCPClient,
+  purpose: 'install' | 'remove',
+): Promise<boolean> => {
+  if (!isPluginCapable(c)) return false;
+  try {
+    if (purpose === 'remove') return await c.isPluginInstalled();
+    if (!c.pluginBundlesMcpServer() || !c.isPluginServing) return false;
+    return await c.isPluginServing();
+  } catch {
+    return false;
+  }
+};
 
 export function createMcpInstaller(): McpInstaller {
   // Cache the raw MCPClient objects so install() can reference them by name
@@ -104,7 +130,11 @@ export function createMcpInstaller(): McpInstaller {
     async detectClients(): Promise<McpClientInfo[]> {
       const supported = await getSupportedClients();
       cachedClients = supported.map((c) => ({ name: c.name, raw: c }));
-      return supported.map(toClientInfo);
+      return Promise.all(
+        supported.map(async (c) =>
+          toClientInfo(c, await hasPlugin(c, 'install')),
+        ),
+      );
     },
 
     async detectInstalled(local?: boolean): Promise<McpClientInfo[]> {
@@ -113,7 +143,12 @@ export function createMcpInstaller(): McpInstaller {
       installedClients = (await getInstalledClients(local)).filter(
         (c) => !isBrowserFinishable(c),
       );
-      return installedClients.map(toClientInfo);
+      // `--local` removal leaves the plugin alone, so it never lists one.
+      return Promise.all(
+        installedClients.map(async (c) =>
+          toClientInfo(c, !local && (await hasPlugin(c, 'remove'))),
+        ),
+      );
     },
 
     async install(

@@ -202,6 +202,10 @@ describe('drainQueue', () => {
     await drainQueue(q, noReport, { maxStarts: 50 });
     expect(q.get(a.id)?.status).toBe('failed');
     expect(q.get(a.id)?.attempts).toBe(2);
+    expect(q.get(a.id)?.error).toEqual({
+      type: 'no-report',
+      message: 'Task ended without calling complete_task.',
+    });
   });
 
   it('succeeds on a retry within the attempt budget', async () => {
@@ -223,6 +227,23 @@ describe('drainQueue', () => {
     await drainQueue(q, throwing, { maxStarts: 50 });
     expect(q.get(a.id)?.status).toBe('failed');
     expect(analytics.captureException).toHaveBeenCalled();
+    // The failure says why the task could not run, not only that it did not report.
+    expect(q.get(a.id)?.error).toEqual({
+      type: 'no-report',
+      message: 'Task ended without calling complete_task: agent exploded',
+    });
+  });
+
+  it('records the error of the last attempt when a throwing task is retried', async () => {
+    let calls = 0;
+    const a = q.enqueue({ type: 'install', maxAttempts: 2 });
+    const throwing: RunTask = () =>
+      Promise.reject(new Error(`attempt ${(calls += 1)} failed`));
+    await drainQueue(q, throwing, { maxStarts: 50 });
+    expect(q.get(a.id)?.attempts).toBe(2);
+    expect(q.get(a.id)?.error?.message).toBe(
+      'Task ended without calling complete_task: attempt 2 failed',
+    );
   });
 
   it('does not run a task whose dependency failed', async () => {

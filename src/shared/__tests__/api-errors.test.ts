@@ -83,21 +83,6 @@ describe('retryTransient', () => {
     expect(request).toHaveBeenCalledTimes(1);
   });
 
-  it('stops waiting to retry when its deadline passes', async () => {
-    const deadline = new AbortController();
-    const failure = httpError(503);
-    const request = vi.fn().mockRejectedValue(failure);
-    setTimeout(() => deadline.abort(), 50);
-    const started = Date.now();
-
-    await expect(
-      retryTransient(request, undefined, deadline.signal),
-    ).rejects.toBe(failure);
-
-    expect(Date.now() - started).toBeLessThan(400);
-    expect(request).toHaveBeenCalledOnce();
-  });
-
   it('does not retry an untrusted certificate', async () => {
     const request = vi
       .fn()
@@ -273,48 +258,98 @@ describe('fetchProjectData failure analytics', () => {
   });
 });
 
-describe('fetchUserData', () => {
+describe.concurrent('fetchUserData with a deadline', () => {
+  const DEADLINE_MS = 3_000;
+  // Remote hosts are reached through a local HTTP proxy, so their failures count as transient and retry.
+  function answer(host: string, attempt: number, res: http.ServerResponse) {
+    switch (host) {
+      case 'fails-then-stalls.test':
+        if (attempt === 1) res.writeHead(503).end();
+        return;
+      case 'fails-late.test':
+        // The second 503 lands about 2.5 s in, so the 1.5 s backoff after it crosses the deadline.
+        setTimeout(() => res.writeHead(503).end(), attempt === 1 ? 0 : 2_000);
+        return;
+    }
+  }
+  const requests = new Map<string, number>();
+  let proxy: http.Server;
   let silentServer: http.Server;
 
-  beforeEach(async () => {
-    vi.restoreAllMocks();
+  beforeAll(async () => {
     silentServer = http.createServer(() => undefined);
     await new Promise<void>((resolve) =>
       silentServer.listen(0, '127.0.0.1', resolve),
     );
+    proxy = http.createServer((req, res) => {
+      const host = req.headers.host ?? '';
+      const attempt = (requests.get(host) ?? 0) + 1;
+      requests.set(host, attempt);
+      answer(host, attempt, res);
+    });
+    await new Promise<void>((resolve) => proxy.listen(0, '127.0.0.1', resolve));
+    const proxyUrl = `http://127.0.0.1:${
+      (proxy.address() as AddressInfo).port
+    }`;
+    for (const name of ['npm_config_http_proxy', 'http_proxy', 'HTTP_PROXY']) {
+      vi.stubEnv(name, proxyUrl);
+    }
+    for (const name of ['npm_config_no_proxy', 'no_proxy', 'NO_PROXY']) {
+      vi.stubEnv(name, '127.0.0.1');
+    }
   });
 
-  afterEach(async () => {
-    silentServer.closeAllConnections();
-    await new Promise((resolve) => silentServer.close(resolve));
+  afterAll(async () => {
+    vi.unstubAllEnvs();
+    for (const server of [proxy, silentServer]) {
+      server.closeAllConnections();
+      await new Promise((resolve) => server.close(resolve));
+    }
   });
 
-  it('gives up on a server that accepts the request and never answers', async () => {
+  it('gives up on a local server that accepts the request and never answers', async ({
+    expect,
+  }) => {
     const { port } = silentServer.address() as AddressInfo;
 
     await expect(
-      fetchUserData('token', `http://127.0.0.1:${port}`),
+      fetchUserData(
+        'token',
+        `http://127.0.0.1:${port}`,
+        AbortSignal.timeout(DEADLINE_MS),
+      ),
     ).rejects.toThrow();
-  }, 15_000);
+  });
 
-  it('gives up on a remote server that never answers within one deadline, retries included', async () => {
-    const get = vi
-      .spyOn(axios, 'get')
-      .mockImplementation(
-        (_url, requestConfig) =>
-          new Promise((_resolve, reject) =>
-            requestConfig?.signal?.addEventListener?.('abort', () =>
-              reject(new axios.CanceledError()),
-            ),
-          ),
-      );
+  it('gives up after one deadline, retries included', async ({ expect }) => {
     const started = Date.now();
 
     await expect(
-      fetchUserData('token', 'https://us.posthog.com'),
+      fetchUserData(
+        'token',
+        'http://fails-then-stalls.test',
+        AbortSignal.timeout(DEADLINE_MS),
+      ),
     ).rejects.toThrow();
 
-    expect(Date.now() - started).toBeLessThan(11_000);
-    expect(get).toHaveBeenCalledOnce();
-  }, 15_000);
+    expect(Date.now() - started).toBeLessThan(DEADLINE_MS + 400);
+    expect(requests.get('fails-then-stalls.test')).toBe(2);
+  });
+
+  it('stops after a backoff that outlasts the deadline, without another request', async ({
+    expect,
+  }) => {
+    const started = Date.now();
+
+    await expect(
+      fetchUserData(
+        'token',
+        'http://fails-late.test',
+        AbortSignal.timeout(DEADLINE_MS),
+      ),
+    ).rejects.toThrow();
+
+    expect(Date.now() - started).toBeLessThan(DEADLINE_MS + 1_500 + 400);
+    expect(requests.get('fails-late.test')).toBe(2);
+  });
 });

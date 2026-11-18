@@ -234,6 +234,23 @@ describe('createMcpInstaller — detectInstalled and remove', () => {
     expect(installed.map((c) => c.name)).toEqual(['Codex']);
   });
 
+  it('flags any installed plugin for removal, but never under --local, which leaves it alone', async () => {
+    const codex = {
+      name: 'Codex',
+      supportsPlugin: () => false,
+      installPlugin: vi.fn(),
+      isPluginInstalled: vi.fn().mockResolvedValue(true),
+      pluginBundlesMcpServer: () => false,
+    };
+    mcpModule.getInstalledClients.mockResolvedValue([codex]);
+    const installer = createMcpInstaller();
+
+    expect((await installer.detectInstalled())[0].pluginInstalled).toBe(true);
+    expect((await installer.detectInstalled(true))[0].pluginInstalled).toBe(
+      false,
+    );
+  });
+
   it('removes only the selected clients, passing the local flag through so `mcp remove --local` targets the right server', async () => {
     mcpModule.getInstalledClients.mockResolvedValue([
       { name: 'Cursor' },
@@ -308,6 +325,7 @@ describe('createMcpInstaller — detectClients', () => {
         finish: undefined,
         loginCommand: undefined,
         pluginLoginCommand: undefined,
+        pluginInstalled: false,
       },
       {
         name: 'Claude Desktop/Web',
@@ -320,7 +338,40 @@ describe('createMcpInstaller — detectClients', () => {
         },
         loginCommand: undefined,
         pluginLoginCommand: undefined,
+        pluginInstalled: false,
       },
     ]);
+  });
+
+  /** A plugin-capable client stub; `serving` is what `isPluginServing` answers. */
+  const pluginClient = (bundles: boolean, serving: boolean) => ({
+    name: bundles ? 'Claude Code' : 'Codex',
+    supportsPlugin: () => false,
+    installPlugin: vi.fn(),
+    isPluginInstalled: vi.fn().mockResolvedValue(true),
+    pluginBundlesMcpServer: () => bundles,
+    isPluginServing: vi.fn().mockResolvedValue(serving),
+  });
+
+  it('flags an enabled plugin that bundles the server, so the screen skips a duplicate direct entry', async () => {
+    mcpModule.getSupportedClients.mockResolvedValue([pluginClient(true, true)]);
+    const [claude] = await createMcpInstaller().detectClients();
+    expect(claude.pluginInstalled).toBe(true);
+  });
+
+  it('does not flag a disabled plugin, which serves nothing', async () => {
+    mcpModule.getSupportedClients.mockResolvedValue([
+      pluginClient(true, false),
+    ]);
+    const [claude] = await createMcpInstaller().detectClients();
+    expect(claude.pluginInstalled).toBe(false);
+  });
+
+  it('does not ask about a plugin that bundles no server', async () => {
+    const codex = pluginClient(false, true);
+    mcpModule.getSupportedClients.mockResolvedValue([codex]);
+    const [detected] = await createMcpInstaller().detectClients();
+    expect(detected.pluginInstalled).toBe(false);
+    expect(codex.isPluginServing).not.toHaveBeenCalled();
   });
 });

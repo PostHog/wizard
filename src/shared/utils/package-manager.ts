@@ -157,6 +157,40 @@ function serializeNodePM(pm: PackageManager): DetectedPackageManager {
   };
 }
 
+/** The directories above installDir, up to its repository root. None outside a repository. */
+function ancestorsUpToRepoRoot(installDir: string): string[] {
+  const ancestors: string[] = [];
+  let dir = path.resolve(installDir);
+  while (!fs.existsSync(path.join(dir, '.git'))) {
+    const parent = path.dirname(dir);
+    if (parent === dir) return [];
+    ancestors.push(parent);
+    dir = parent;
+  }
+  return ancestors;
+}
+
+/**
+ * Without a lockfile in installDir: what a pnpm-built node_modules, then a
+ * workspace root's lockfile, say. npm crashes on a pnpm-built node_modules.
+ */
+function inferNodePackageManager(
+  installDir: string,
+): { manager: PackageManager; reason: string } | undefined {
+  if (fs.existsSync(path.join(installDir, 'node_modules', '.modules.yaml'))) {
+    return { manager: PNPM, reason: 'pnpm installed node_modules' };
+  }
+  for (const dir of ancestorsUpToRepoRoot(installDir)) {
+    const manager = packageManagers.find((pm) =>
+      pm.detect({ installDir: dir }),
+    );
+    if (manager) {
+      return { manager, reason: `the workspace lockfile is in ${dir}` };
+    }
+  }
+  return undefined;
+}
+
 /**
  * Detect Node.js package managers via lockfiles.
  * Wraps detectAllPackageManagers() above.
@@ -169,6 +203,15 @@ export function detectNodePackageManagers(
   );
 
   if (detected.length === 0) {
+    const inferred = inferNodePackageManager(installDir);
+    if (inferred) {
+      const primary = serializeNodePM(inferred.manager);
+      return Promise.resolve({
+        detected: [primary],
+        primary,
+        recommendation: `No lockfile here, but ${inferred.reason}. Use ${primary.label} (${primary.installCommand}).`,
+      });
+    }
     return Promise.resolve({
       detected: [],
       primary: null,

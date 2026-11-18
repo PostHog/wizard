@@ -5,6 +5,7 @@
  * one fetch, so it lives in shared and depends on nothing in the agent.
  */
 
+import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
 import { fetchWithRetry, type RetryOpts } from '@shared/fetch-retry';
 
@@ -12,16 +13,16 @@ export type SkillEntry = {
   id: string;
   name: string;
   downloadUrl: string;
-  /** The hyphenated skill-group prefix of `id` (e.g. `posthog-integration-install`). */
-  group?: string;
-  /** The detection id this variant serves (e.g. `rails`, `react-router`). */
-  framework?: string;
-  /** The variant a bare framework id resolves to when its family has several. */
-  default?: boolean;
-  /** This entry's download is a bundle JSON of every variant, not a single skill's zip. */
-  bundle?: boolean;
-  /** Menu-only: the variants inside a bundle, expanded into entries of their own on fetch. */
-  variants?: { id: string; framework?: string; default?: boolean }[];
+  /** The skill family, set on fetch from the category the menu lists the entry under, with `/` as `-`. */
+  family?: string;
+  /** Human name for the skill. Older menus omit it. */
+  title?: string;
+  /** What the skill covers. */
+  description?: string;
+  /** What the skill is, and as `key:value` the projects it is written for; see `@shared/skill-resolution`. */
+  tags?: string[];
+  /** The product whose pages, from the framework's pack, complete this skill; see `@shared/skill-composition`. */
+  frameworkReferences?: string;
 };
 
 /**
@@ -41,6 +42,8 @@ export type CliEntry = {
 };
 
 export interface SkillMenu {
+  /** The context-mill release that built the menu (`dev` for a local build). */
+  buildVersion?: string;
   categories: Record<string, SkillEntry[]>;
   /**
    * Skills exposed as CLI commands. Optional because context-mill releases
@@ -49,16 +52,20 @@ export interface SkillMenu {
   cliEntries?: CliEntry[];
 }
 
-/** Expand a bundle entry into one entry per variant, so the menu reads the same whether a group ships bundled or as zips. */
-export function expandBundleEntry(entry: SkillEntry): SkillEntry[] {
-  if (!entry.bundle || !entry.variants) return [entry];
-  return entry.variants.map((variant) => ({
-    ...variant,
-    name: entry.name,
-    group: entry.group,
-    bundle: true,
-    downloadUrl: entry.downloadUrl,
-  }));
+/** A category's skill family: its key with `/` as `-`, so `integration/install` is `integration-install`. */
+const skillFamily = (category: string): string => category.replaceAll('/', '-');
+
+/** The menu as the wizard reads it: each entry given its family, and an entry that is a bundle of variants left out with any category it empties. */
+export function prepareSkillMenu(menu: SkillMenu): SkillMenu {
+  for (const [category, entries] of Object.entries(menu.categories)) {
+    const family = skillFamily(category);
+    const kept = entries
+      .filter((entry) => !('bundle' in entry && entry.bundle))
+      .map((entry) => ({ ...entry, family }));
+    if (kept.length > 0) menu.categories[category] = kept;
+    else delete menu.categories[category];
+  }
+  return menu;
 }
 
 /**
@@ -73,9 +80,10 @@ export async function fetchSkillMenu(
   try {
     logToFile(`fetchSkillMenu: fetching from ${menuUrl}`);
     const resp = await fetchWithRetry(menuUrl, opts);
-    const data = (await resp.json()) as SkillMenu;
-    for (const [category, entries] of Object.entries(data.categories)) {
-      data.categories[category] = entries.flatMap(expandBundleEntry);
+    const data = prepareSkillMenu((await resp.json()) as SkillMenu);
+    // Every later event, the terminal one included, says which release the run's skills came from.
+    if (data.buildVersion) {
+      analytics.setTag('context_mill_version', data.buildVersion);
     }
     logToFile(
       `fetchSkillMenu: loaded (${

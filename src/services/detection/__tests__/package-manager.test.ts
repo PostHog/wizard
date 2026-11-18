@@ -98,6 +98,31 @@ describe('detectNodePackageManagers', () => {
     expect(result.recommendation).toContain('Multiple');
   });
 
+  it('detects pnpm from a pnpm-built node_modules when there is no lockfile', async () => {
+    fs.mkdirSync(path.join(tmpDir, 'node_modules'));
+    fs.writeFileSync(path.join(tmpDir, 'node_modules', '.modules.yaml'), '{}');
+    const result = await detectNodePackageManagers(tmpDir);
+    expect(result.primary?.name).toBe('pnpm');
+    expect(result.recommendation).toContain('pnpm installed node_modules');
+  });
+
+  it("uses the lockfile at a workspace package's repository root", async () => {
+    fs.mkdirSync(path.join(tmpDir, '.git'));
+    fs.writeFileSync(path.join(tmpDir, 'pnpm-lock.yaml'), '');
+    const pkg = path.join(tmpDir, 'apps', 'web');
+    fs.mkdirSync(pkg, { recursive: true });
+    const result = await detectNodePackageManagers(pkg);
+    expect(result.primary?.name).toBe('pnpm');
+    expect(result.recommendation).toContain('workspace lockfile');
+  });
+
+  it('ignores a lockfile above the project outside a repository', async () => {
+    fs.writeFileSync(path.join(tmpDir, 'pnpm-lock.yaml'), '');
+    const pkg = path.join(tmpDir, 'project');
+    fs.mkdirSync(pkg);
+    expect((await detectNodePackageManagers(pkg)).primary).toBeNull();
+  });
+
   it('includes runCommand in detected entries', async () => {
     fs.writeFileSync(path.join(tmpDir, 'package-lock.json'), '{}');
     const result = await detectNodePackageManagers(tmpDir);

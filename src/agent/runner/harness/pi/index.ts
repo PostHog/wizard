@@ -26,6 +26,7 @@ import { AgentErrorType } from '../../../agent-interface';
 import {
   AgentSignals,
   REMARK_INSTRUCTION,
+  abortReason as programAbortReason,
   policyAbortReason,
 } from '../../../signals';
 import { AgentOutputSignals } from '../../../output-signals';
@@ -45,6 +46,7 @@ import type {
   BackendRunInputs,
   TaskRunInputs,
 } from '../types';
+import type { createBashToolDefinition } from '@earendil-works/pi-coding-agent';
 import type { BootstrapResult } from '../../shared/types';
 import type { ProgressEmitter } from '../../../progress';
 import { createEmitLog } from '../../shared/progress-collector';
@@ -139,6 +141,50 @@ export function buildScrubbedEnv(): NodeJS.ProcessEnv {
 export function withMode<T>(tool: T, mode: 'sequential' | 'parallel'): T {
   (tool as { executionMode?: 'sequential' | 'parallel' }).executionMode = mode;
   return tool;
+}
+
+/** How long a bash command the model set no timeout for may run; pi's bash has no default. */
+export const BASH_DEFAULT_TIMEOUT_SECONDS = 300;
+/** Time kept back from a task's budget so its agent can still write a handoff. */
+export const TASK_HANDOFF_RESERVE_SECONDS = 60;
+/** Shortest timeout near a deadline, which still lets a quick command finish. */
+const MIN_TASK_COMMAND_SECONDS = 5;
+
+type BashToolDefinition = ReturnType<typeof createBashToolDefinition>;
+
+/** A copy of a bash tool with the default timeout, and a timeout that fits a task's deadline if it has one. */
+export function withBashTimeout(
+  tool: BashToolDefinition,
+  deadlineAt?: number,
+): BashToolDefinition {
+  const fitted = (requested: number): number => {
+    if (deadlineAt === undefined) return requested;
+    const left =
+      Math.floor((deadlineAt - Date.now()) / 1000) -
+      TASK_HANDOFF_RESERVE_SECONDS;
+    return Math.min(requested, Math.max(left, MIN_TASK_COMMAND_SECONDS));
+  };
+  return {
+    ...tool,
+    description: `${
+      tool.description
+    } A command that sets no timeout stops after ${BASH_DEFAULT_TIMEOUT_SECONDS} seconds.${
+      deadlineAt === undefined
+        ? ''
+        : " This task's time limit can shorten any timeout."
+    }`,
+    execute: (toolCallId, params, signal, onUpdate, ctx) =>
+      tool.execute(
+        toolCallId,
+        {
+          ...params,
+          timeout: fitted(params.timeout ?? BASH_DEFAULT_TIMEOUT_SECONDS),
+        },
+        signal,
+        onUpdate,
+        ctx,
+      ),
+  };
 }
 
 /**
@@ -315,11 +361,25 @@ export const piBackend: AgentHarness = {
     let timedOut = false;
     let timeoutAbort: Promise<void> | undefined;
     let abortReason: string | undefined;
+    let policyAborted = false;
     let remarkTurn = false;
     // The gateway's refusal marker ends the run from a work turn, never the remark.
     const policyAbort = (reply: string) => {
-      if (remarkTurn) return;
-      abortReason ??= policyAbortReason(reply);
+      if (remarkTurn || abortReason) return;
+      abortReason = policyAbortReason(reply);
+      policyAborted = abortReason !== undefined;
+      if (abortReason) cancellation?.abort();
+    };
+    // So does a line that starts with [ABORT], for a program that has abort cases.
+    // A reply that only mentions the marker mid-line keeps the run going.
+    const abortOnReply = (reply: string) => {
+      policyAbort(reply);
+      if (remarkTurn || abortReason || !config.abortCases?.length) return;
+      const lines = reply.split(/\r?\n/);
+      const at = lines.findIndex((text) => /^[\s`*_>]*\[ABORT\]/.test(text));
+      // The reason may sit on the line after a bare marker.
+      abortReason =
+        at < 0 ? undefined : programAbortReason(lines.slice(at).join('\n'));
       if (abortReason) cancellation?.abort();
     };
     // Read by the catch path; undefined until setup creates the extension.
@@ -402,8 +462,10 @@ export const piBackend: AgentHarness = {
         './security'
       );
       const security = createSecurityExtension({
+        signal: inputs.signal,
         readOnly: config.readOnly,
         disallowedTools: runConfig.disallowedTools,
+        posthogTools: runConfig.posthogTools,
         getWizardAskPending: () => askState.pending,
         triageProvider: boot.triageProvider,
         // Where pi's bash runs; the rm allowance is confined to this tree.
@@ -515,9 +577,11 @@ export const piBackend: AgentHarness = {
       // spawns gets a scrubbed env, so no secret or ambient variable reaches an
       // `npm install`. Shared with the subagent so the lockdown is inherited.
       const scrubbedBash = withMode(
-        createBashToolDefinition(input.installDir, {
-          spawnHook: (ctx) => ({ ...ctx, env: buildScrubbedEnv() }),
-        }),
+        withBashTimeout(
+          createBashToolDefinition(input.installDir, {
+            spawnHook: (ctx) => ({ ...ctx, env: buildScrubbedEnv() }),
+          }),
+        ),
         'sequential',
       );
 
@@ -540,6 +604,7 @@ export const piBackend: AgentHarness = {
           workingDirectory: input.installDir,
           skillsBaseUrl: boot.skillsBaseUrl,
           triageProvider: boot.triageProvider,
+          matchKeys: boot.matchKeys,
           emit,
           programId: boot.programId,
           handoffNotebook: boot.handoffNotebook,
@@ -638,7 +703,7 @@ export const piBackend: AgentHarness = {
             turns.noteAssistantTurn(event.message);
             const blocks = textBlocks(event.message);
             const assistant = blocks.join('').trim();
-            policyAbort(assistant);
+            abortOnReply(blocks.join('\n'));
             // A schema-bound answer is the turn's last block, not the joined text.
             lastAssistantText = (blocks.at(-1) ?? '').trim();
             if (structured) {
@@ -810,7 +875,7 @@ export const piBackend: AgentHarness = {
         );
         captureAborted(
           terminal.classification,
-          abortReason ? 'gateway_policy' : undefined,
+          policyAborted ? 'gateway_policy' : undefined,
         );
         if (terminal.status === 401) {
           return {

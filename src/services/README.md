@@ -4,54 +4,57 @@ The services are part of the program layer, with the
 [program contract](../programs/program-contract/index.ts) and the
 [programs](../programs/README.md). They hold what programs consume: the session
 store, detection, the codebase scan, the warehouse tool catalog and the
-framework configs. A service knows what a program, a session or an agent run
-is; code that doesn't belongs in [`src/shared`](../shared/README.md). Some
-services start agent runs, such as the agentic project scan, so the services sit
-above the agent. The program layer's three parts import in one direction:
+framework configs. A service knows what a program, a session or an agent run is;
+code that doesn't belongs in [`src/shared`](../shared/README.md). Some services
+start agent runs, such as the agentic project scan, so the services sit above
+the agent. The program layer's three parts import in one direction:
 
 ```
 env → shared → agent → program contract → services → programs → hosts
 ```
 
 Services import `@env`, `@shared/*`, `@utils/*`, `@agent`, `@agent/types` and
-the program contract, `@programs/program-contract`, which defines `ProgramConfig`,
-`ProgramSession`, `RunnerContext` and `FrameworkConfig` and imports no service.
-Programs import services. The hosts reach the session store through the
-`@programs` entry, which re-exports it.
+the program contract, `@programs/program-contract`, which defines
+`ProgramConfig`, `ProgramSession`, `RunnerContext` and `FrameworkConfig` and
+imports no service. Programs import services. The hosts reach the session store
+through the `@programs` entry, which re-exports it.
 
 ## Entries
 
-Each service folder is an entry. Code outside `src/services` imports a service by its
-folder, never a file inside one:
+Each service folder is an entry. Code outside `src/services` imports a service
+by its folder, never a file inside one:
 
-| Entry                           | What it holds                                                                                                                                      |
-| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@services/session`             | `SessionStore`, `buildSession`, stored interactions, audit checks and the task stream                                                              |
-| `@services/detection`           | Framework, feature and package-manager detection, the agentic project scan and project scoping                                                     |
-| `@services/detection/decisions` | The Decisions service. Only dev builds load it, through an `import()` behind `!IS_PRODUCTION_BUILD`; production builds replace it with a stub      |
-| `@services/frameworks`          | `FRAMEWORK_REGISTRY` and each framework's `FrameworkConfig`                                                                                        |
-| `@services/codebase-scan`       | The codebase scan and its report                                                                                                                   |
-| `@services/warehouse-sources`   | The warehouse tool catalog and source detection                                                                                                    |
+| Entry                           | What it holds                                                                                                                                 |
+| ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@services/session`             | `SessionStore`, `buildSession`, stored interactions, audit checks and the task stream                                                         |
+| `@services/detection`           | Framework, feature and package-manager detection, the agentic project scan and project scoping                                                |
+| `@services/detection/decisions` | The Decisions service. Only dev builds load it, through an `import()` behind `!IS_PRODUCTION_BUILD`; production builds replace it with a stub |
+| `@services/frameworks`          | `FRAMEWORK_REGISTRY` and each framework's `FrameworkConfig`                                                                                   |
+| `@services/codebase-scan`       | The codebase scan and its report                                                                                                              |
+| `@services/warehouse-sources`   | The warehouse tool catalog and source detection                                                                                               |
+| `@services/mcp-servers`         | The MCP server scan: where a project's servers live, and resolving a chosen path to a target                                                  |
+| `@services/project-traits`      | Project traits: what detection read from a project's code, and the traits skills match on                                                     |
 
 Each entry's `index.ts` re-exports what code outside the service uses, and
 nothing else. Add to it when a program needs another export.
 
 ## Imports inside the services
 
-Files inside `src/services` import each other by relative path, across services too.
-The services import each other in a loop (session, detection, frameworks,
-codebase scan and tool catalog), and a value read through an entry
-inside a loop can run before the entry finishes loading.
+Files inside `src/services` import each other by relative path, across services
+too. The services import each other in a loop (session, detection, frameworks,
+codebase scan and tool catalog), and a value read through an entry inside a loop
+can run before the entry finishes loading.
 
 A service's own tests may import its files by the deep alias,
-`@services/<service>/<file>`. A test outside `src/services` imports a service through
-its entry, and may mock a service's internal module by its deep path so the mock
-reaches every importer.
+`@services/<service>/<file>`. A test outside `src/services` imports a service
+through its entry, and may mock a service's internal module by its deep path so
+the mock reaches every importer.
 
 ## Wiring
 
 - **Project:** [`tsconfig.json`](tsconfig.json) references env, shared, the
-  agent and the program contract. The programs' core project references this one.
+  agent and the program contract. The programs' core project references this
+  one.
 - **Alias:** `@services/*`, in `tsconfig.base.json`, `tsconfig.no-tui.json` and
   `vitest.config.ts`.
 - **Fences:** ESLint in [`.eslintrc.cjs`](../../.eslintrc.cjs) keeps relative
@@ -61,6 +64,22 @@ reaches every importer.
 - **Build:** [`tsdown.config.ts`](../../tsdown.config.ts) stubs
   `src/services/detection/decisions` in production builds, matching relative and
   `@services/` specifiers. `pnpm check:decisions-bundle` verifies it.
+
+## Project traits
+
+A project is a directory in the repo with its traits, and `.` is the directory
+the run works in. A trait is one thing detection read from the project's code:
+its framework, the framework's variant, whether it calls an LLM API, its MCP
+servers and its warehouse sources. Traits describe the code, never the person.
+
+[`traits.ts`](project-traits/traits.ts) declares every trait once in `TRAITS`:
+how static detection reads it from the session, and whether skills can match on
+it. `getTraits(session, projectPath)` returns the traits detection settled and
+leaves out the rest. A trait is its value alone. It does not say whether
+detection or the person's answer to a setup question set it. Detection covers
+the run's own directory, so any other path has no traits. `toMatchKeys` turns
+the traits skills can match on into the run's match keys. `framework` is the
+only one.
 
 ## Session store and task streams
 

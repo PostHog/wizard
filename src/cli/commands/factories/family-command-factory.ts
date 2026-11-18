@@ -24,6 +24,11 @@ export interface FamilyCommandFactoryOpts {
    * generic agent-skill config.
    */
   optionsFrom: ProgramConfig;
+  /**
+   * The subcommand a bare `wizard <family>` runs, in any terminal. Keeps the
+   * old behavior of a flat command that grew into a family.
+   */
+  defaultSubcommand?: string;
 }
 
 /**
@@ -46,6 +51,7 @@ export function familyCommandFactory({
   family,
   description,
   optionsFrom,
+  defaultSubcommand,
 }: FamilyCommandFactoryOpts): Command {
   // Bare `wizard <family>` in an interactive terminal. With a single option
   // today (e.g. `audit events`), skip the picker and run it directly so the
@@ -53,6 +59,9 @@ export function familyCommandFactory({
   // family grows past one shown option, this opens the picker instead — no
   // wiring change needed.
   const openFamilyEntry = async (argv: Arguments): Promise<void> => {
+    if (defaultSubcommand) {
+      return dispatchFamily(family, { ...argv, skill: defaultSubcommand });
+    }
     const skillsBaseUrl = getSkillsBaseUrl();
     const menu = await fetchSkillMenu(skillsBaseUrl);
     const children = buildFamilyPickerChildren(family, menu?.cliEntries ?? []);
@@ -76,7 +85,8 @@ export function familyCommandFactory({
       },
     },
     handler: (argv: Arguments) => {
-      const sub = (argv.skill as string | undefined)?.trim();
+      const sub =
+        (argv.skill as string | undefined)?.trim() || defaultSubcommand;
       // With a subcommand, resolve and run it. Without one, run the family's
       // default entry (or open the picker if there's more than one) — but only
       // in an interactive terminal. In non-TTY/CI, fall through to
@@ -86,7 +96,7 @@ export function familyCommandFactory({
       // clean error instead of an unhandled promise rejection.
       runCommandHandler(() =>
         sub || !process.stdout.isTTY
-          ? dispatchFamily(family, argv)
+          ? dispatchFamily(family, { ...argv, skill: sub })
           : openFamilyEntry(argv),
       );
     },

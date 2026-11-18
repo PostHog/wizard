@@ -1,25 +1,26 @@
 /**
  * Agent-prompt loader + registry.
  *
- * Agent prompts are the WHAT of a task: a markdown file per type, served from
- * context-mill as the `agents` content type (parallel to skills). The frontmatter
- * carries the artifacts the executor needs — model, the mini-skills to load (the
- * HOW), the tools the task may use, and its dependencies — and the body is the
- * instruction the agent reads.
+ * Agent prompts are the WHAT of a task: a markdown file per type, bundled in
+ * its program's `agent/` folder. The frontmatter carries the artifacts the
+ * executor needs — model, the mini-skills to load (the HOW), the tools the task
+ * may use, and its dependencies — and the body is the instruction the agent
+ * reads.
  *
- * The registry is fetched once at startup and scoped to one flow — agents
+ * The registry is built once at startup and scoped to one flow — agents
  * declare `flow` and (for the planner) `seed: true` in frontmatter, so each
- * program (integration, audit, migration, ...) ships its own agent set and the
- * loader stays generic. Every prompt is downloaded and parsed up front, so
- * resolving a task to its run config is synchronous and adds no mid-drain
- * network latency. The registry's type list also drives `enqueue_task`
- * validation.
+ * program ships its own agent set and the loader stays generic. Every prompt
+ * is parsed up front, so resolving a task to its run config is synchronous.
+ * The registry's type list also drives `enqueue_task` validation.
  */
 import type {
   QueueStore,
   QueuedTask,
 } from './runner/sequence/orchestrator/queue';
-import type { ResolvedTask } from './runner/sequence/orchestrator/executor';
+import type {
+  ResolvedTask,
+  TaskTimeoutBehavior,
+} from './runner/sequence/orchestrator/executor';
 import type { HostResolution } from '@shared/host-resolution';
 import {
   isThinkingLevel,
@@ -27,7 +28,6 @@ import {
 } from './runner/switchboard/models';
 import { logToFile } from '@utils/debug';
 import { analytics } from '@utils/analytics';
-import { fetchWithRetry } from '@shared/fetch-retry';
 import { WIZARD_TOOL_NAMES } from './tools/tools';
 
 /**
@@ -250,6 +250,10 @@ export interface AgentPrompt {
   runnerSeeded: boolean;
   /** Marks a supplementary task: terminal failure unblocks dependents and never fails the run. */
   optional: boolean;
+  /** Wall-clock budget for one task attempt, including harness setup and cleanup. */
+  timeoutMs?: number;
+  /** What a required task does at its deadline; set whenever `timeoutMs` is. */
+  onTimeout?: TaskTimeoutBehavior;
   /** Per-harness model/effort; both profiles also require gateway admission and prompt compatibility. */
   modelPi?: string;
   effortPi?: ThinkingLevel;
@@ -268,6 +272,9 @@ export interface AgentPrompt {
    *   planner runs, so it cannot name ids; the runner resolves these types to
    *   the ids the planner produced and applies them (see `seeded-deps.ts`).
    *   Empty means "after everything that is not the sink".
+   *
+   * In a flow with no planner, every task's list is authoritative: the runner
+   * queues the graph they declare (see `task-graph.ts`).
    */
   dependsOn: string[];
   body: string;
@@ -305,10 +312,15 @@ export interface AgentRegistry {
   readonly excludedTypes: string[];
   /** The flow's planner, the one prompt marked `seed: true` in its frontmatter. */
   readonly seed?: AgentPrompt;
+  /** The graph the flow's frontmatter declares: every task, excluded ones included, with what it runs after. */
+  readonly graph: readonly GraphTask[];
   get(type: string): AgentPrompt | undefined;
 }
 
-/** The registry for one flow's prompts. Pure; the loader feeds it the fetched set. */
+/** One task of a flow's declared graph. */
+export type GraphTask = Pick<AgentPrompt, 'type' | 'dependsOn' | 'sink'>;
+
+/** The registry for one flow's prompts. Pure. */
 export function buildRegistry(
   prompts: readonly AgentPrompt[],
   flow: string,
@@ -338,9 +350,8 @@ export function buildRegistry(
     });
   const byType = new Map(inFlow.map((p) => [p.type, p]));
   const tasks = inFlow.filter((p) => !p.seed);
-  const flowTypes = new Set(
-    prompts.filter((p) => p.flow === flow && !p.seed).map((p) => p.type),
-  );
+  const flowTasks = prompts.filter((p) => p.flow === flow && !p.seed);
+  const flowTypes = new Set(flowTasks.map((p) => p.type));
   return {
     types: tasks.map((p) => p.type),
     enqueueableTypes: tasks.filter((p) => !p.runnerSeeded).map((p) => p.type),
@@ -349,13 +360,13 @@ export function buildRegistry(
     optionalTypes: tasks.filter((p) => p.optional).map((p) => p.type),
     excludedTypes: [...excluded].filter((t) => flowTypes.has(t)),
     seed: inFlow.find((p) => p.seed),
+    graph: flowTasks.map(({ type, dependsOn, sink }) => ({
+      type,
+      dependsOn,
+      sink,
+    })),
     get: (type) => byType.get(type),
   };
-}
-
-interface AgentMenu {
-  /** `flow` arrived with context-mill's flow-scoped agents folder; older menus omit it. */
-  agents: { id: string; flow?: string; downloadUrl: string }[];
 }
 
 /** A native tool passes through; an MCP tool gets its fully-qualified name. */
@@ -420,6 +431,50 @@ export function parseAgentPrompt(
   }
 
   const str = (v: unknown) => (typeof v === 'string' ? v : undefined);
+  const timeoutSeconds = fields.timeoutSeconds;
+  let timeoutMs: number | undefined;
+  if (timeoutSeconds !== undefined) {
+    const seconds = Number(timeoutSeconds);
+    // Budgets are remote data: a typo drops the budget, never the whole prompt.
+    if (
+      typeof timeoutSeconds === 'string' &&
+      Number.isInteger(seconds) &&
+      seconds > 0 &&
+      seconds <= 86_400
+    ) {
+      timeoutMs = seconds * 1000;
+    } else {
+      logToFile(
+        `[agent-prompt] ${fallbackType}: ignoring invalid timeoutSeconds "${String(
+          timeoutSeconds,
+        )}"`,
+      );
+      analytics.wizardCapture('agent prompt invalid timeout', {
+        task_type: fallbackType,
+        value: String(timeoutSeconds),
+      });
+    }
+  }
+  let onTimeout: TaskTimeoutBehavior | undefined;
+  if (timeoutMs !== undefined) {
+    const declared = fields.onTimeout;
+    if (declared === 'continue' || declared === 'fail') {
+      onTimeout = declared;
+    } else {
+      // An undeclared landing must not fail the run: review has already written the integration.
+      onTimeout = 'continue';
+      logToFile(
+        `[agent-prompt] ${fallbackType}: invalid onTimeout "${String(
+          declared,
+        )}", using continue`,
+      );
+      analytics.wizardCapture('agent prompt invalid timeout', {
+        task_type: fallbackType,
+        key: 'onTimeout',
+        value: String(declared),
+      });
+    }
+  }
   // Effort is remote data — reject typos here so downstream carries ThinkingLevel.
   const effort = (v: unknown, key: string): ThinkingLevel | undefined => {
     if (v === undefined) return undefined;
@@ -442,6 +497,8 @@ export function parseAgentPrompt(
     sink: fields.sink === 'true',
     runnerSeeded: fields.runnerSeeded === 'true',
     optional: fields.optional === 'true',
+    timeoutMs,
+    onTimeout,
     modelPi: str(fields.model_pi),
     effortPi: effort(fields.effort_pi, 'effort_pi'),
     modelSdk: str(fields.model_sdk),
@@ -454,38 +511,19 @@ export function parseAgentPrompt(
   };
 }
 
-async function fetchText(url: string): Promise<string> {
-  const res = await fetchWithRetry(url);
-  return res.text();
-}
-
-/**
- * Fetch the agent menu and every agent prompt it lists, parse them, and build
- * the registry for one flow. Throws if the menu cannot be fetched — the
- * orchestrator cannot run without its prompts.
- */
-export async function loadAgentRegistry(
-  skillsBaseUrl: string,
+/** The registry for one flow from the prompts a program bundles, keyed by task type. */
+export function bundledRegistry(
+  prompts: Readonly<Record<string, string>>,
   flow: string,
   opts?: Parameters<typeof buildRegistry>[2],
-): Promise<AgentRegistry> {
-  const menuRaw = await fetchText(`${skillsBaseUrl}/agent-menu.json`);
-  const menu = JSON.parse(menuRaw) as AgentMenu;
-
-  // Menus that carry a flow per entry let us skip other flows' prompts before
-  // fetching them; entries without one are fetched and filtered by their
-  // frontmatter in buildRegistry, as before.
-  const entries = (menu.agents ?? []).filter(
-    (entry) => !entry.flow || entry.flow === flow,
+): AgentRegistry {
+  return buildRegistry(
+    Object.entries(prompts).map(([type, text]) =>
+      parseAgentPrompt(text, type, flow),
+    ),
+    flow,
+    opts,
   );
-  const prompts = await Promise.all(
-    entries.map(async (entry) => {
-      const text = await fetchText(entry.downloadUrl);
-      return parseAgentPrompt(text, entry.id, entry.flow);
-    }),
-  );
-
-  return buildRegistry(prompts, flow, opts);
 }
 
 /**
@@ -552,6 +590,9 @@ function renderHandoffContext(task: QueuedTask, store: QueueStore): string {
     if (handoff.reportSection) {
       lines.push(`- report section:\n${handoff.reportSection}`);
     }
+    if (handoff.packages?.length) {
+      lines.push(`- packages to install: ${handoff.packages.join(', ')}`);
+    }
     lines.push('');
   }
   if (lines.length === 0) return '';
@@ -586,6 +627,8 @@ export function resolveTask(
     ...agentRunTools(prompt),
     prompt: body,
     skills: prompt.skills,
+    timeoutMs: prompt.timeoutMs,
+    onTimeout: prompt.onTimeout,
   };
 }
 

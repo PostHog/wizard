@@ -162,6 +162,16 @@ it("gives the SDK the scan's schema, deadline and read-only tools, and returns t
   });
 });
 
+it("hands the program's PostHog tool allowlist to the SDK agent", async () => {
+  emitResult(verdict);
+
+  await runAgent({ ...config, posthogTools: ['batch-export-get'] }, input);
+
+  expect(init.mock.calls[0][0]).toMatchObject({
+    posthogTools: ['batch-export-get'],
+  });
+});
+
 it('starts each run on a fresh agent with the same prompt', async () => {
   emitResult('No JSON here.');
   emitResult(verdict);

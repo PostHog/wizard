@@ -39,6 +39,7 @@ import {
   parsePubspecYaml,
 } from './manifests';
 import type {
+  DetectedDestination,
   DetectedSource,
   DetectedTool,
   ScanSignal,
@@ -174,6 +175,36 @@ export function detectWarehouseSources(
     detectTools(installDir, detectors).tools,
     detectors,
   );
+}
+
+/**
+ * The detected tools that are warehouses PostHog can export to, one per
+ * destination type. A tool's warehouse is found through its detector, so the
+ * scan result needs no destination field.
+ */
+export function toWarehouseDestinations(
+  tools: readonly DetectedTool[],
+  detectors: readonly SourceDetector[],
+): DetectedDestination[] {
+  const destinationTypes = new Map(
+    detectors.map((detector) => [
+      detector.kind,
+      detector.warehouseDestinationType,
+    ]),
+  );
+  const seen = new Set<string>();
+  const destinations: DetectedDestination[] = [];
+  for (const tool of tools) {
+    const type = destinationTypes.get(tool.kind);
+    if (!type || seen.has(type)) continue;
+    seen.add(type);
+    destinations.push({
+      type,
+      label: tool.label,
+      matchedSignal: tool.matchedSignal,
+    });
+  }
+  return destinations;
 }
 
 /**
@@ -563,6 +594,21 @@ export function getDetectedWarehouseSources(
   return (
     (session.frameworkContext[DETECTED_WAREHOUSE_SOURCES_KEY] as
       | DetectedSource[]
+      | undefined) ?? []
+  );
+}
+
+/** frameworkContext key holding the detected warehouse destinations. */
+export const DETECTED_WAREHOUSE_DESTINATIONS_KEY =
+  'detectedWarehouseDestinations';
+
+/** Read the detected warehouse destinations out of frameworkContext. */
+export function getDetectedWarehouseDestinations(
+  session: ProgramSession,
+): DetectedDestination[] {
+  return (
+    (session.frameworkContext[DETECTED_WAREHOUSE_DESTINATIONS_KEY] as
+      | DetectedDestination[]
       | undefined) ?? []
   );
 }

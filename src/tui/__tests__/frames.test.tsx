@@ -149,6 +149,8 @@ import { AuditScreenId } from '@tui/programs/audit';
 import { ErrorTrackingScreenId } from '@tui/programs/error-tracking';
 import { FeatureFlagsScreenId } from '@tui/programs/feature-flags';
 import { McpScreenId } from '@tui/tools/mcp';
+import { McpAnalyticsScreenId } from '@tui/programs/mcp-analytics';
+import { MCP_SCAN_KEY } from '@programs/mcp-analytics';
 import { MetricsScreenId } from '@tui/programs/metrics';
 import { MigrationScreenId } from '@tui/programs/migration';
 import { PostHogIntegrationScreenId } from '@tui/programs/posthog-integration';
@@ -157,6 +159,7 @@ import { RevenueAnalyticsScreenId } from '@tui/programs/revenue-analytics';
 import { SelfDrivingScreenId } from '@tui/programs/self-driving';
 import { SourceMapsScreenId } from '@tui/programs/error-tracking-upload-source-maps';
 import { WarehouseSourceScreenId } from '@tui/programs/warehouse-source';
+import { WarehouseDestinationScreenId } from '@tui/programs/warehouse-destination';
 import { Tool } from '@tools';
 import { CODEBASE_SCAN_KEY } from '@services/codebase-scan';
 
@@ -223,6 +226,7 @@ const fakeClients = () =>
       kind: 'local' as const,
       supportsPlugin: true,
       pluginBundlesMcp: false,
+      pluginInstalled: true,
     },
     {
       name: 'Cursor',
@@ -385,6 +389,18 @@ const FIXTURES: Record<string, Fixture> = {
   },
   [RevenueAnalyticsScreenId.Intro]: { program: Program.RevenueAnalyticsSetup },
   [WarehouseSourceScreenId.Intro]: { program: Program.WarehouseSource },
+  [WarehouseDestinationScreenId.Intro]: {
+    program: Program.WarehouseDestination,
+    arrange: (s) => {
+      s.setFrameworkContext('detectedWarehouseDestinations', [
+        {
+          type: 'Snowflake',
+          label: 'Snowflake',
+          matchedSignal: 'snowflake-sdk in package.json',
+        },
+      ]);
+    },
+  },
   [SourceMapsScreenId.Intro]: {
     program: Program.ErrorTrackingUploadSourceMaps,
   },
@@ -409,6 +425,18 @@ const FIXTURES: Record<string, Fixture> = {
   [SkillScreenId.Intro]: { program: Program.AgentSkill },
   [AiObservabilityScreenId.Intro]: { program: Program.AiObservability },
   [MetricsScreenId.Intro]: { program: Program.Metrics },
+  [McpAnalyticsScreenId.Intro]: {
+    program: Program.McpAnalytics,
+    arrange: (s) =>
+      s.setFrameworkContext(MCP_SCAN_KEY, {
+        directory: s.session.installDir,
+        candidates: ['apps/reports', 'apps/search'],
+        packageNames: {
+          'apps/reports': 'example-reports',
+          'apps/search': 'example-search',
+        },
+      }),
+  },
   [ErrorTrackingScreenId.Intro]: { program: Program.ErrorTracking },
   [FeatureFlagsScreenId.Intro]: {
     program: Program.FeatureFlags,

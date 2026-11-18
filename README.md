@@ -122,18 +122,46 @@ npx @posthog/wizard@latest revenue-analytics
 Requires PostHog and Stripe SDKs already installed. Supports `--ci` with the
 same flags as the main wizard.
 
+### Transactional email
+
+Send your first transactional email from your server code, such as a welcome
+email after signup:
+
+```bash
+npx @posthog/wizard@latest email
+```
+
+The setup agent checks for a verified sender, writes the email in your code by
+default (or as a PostHog template, if you pick that so people who don't edit
+code can change the copy), asks for a project secret API key and writes it to
+your env file, and adds the send with PostHog's SDK for your backend's
+language, or the HTTP API.
+Transactional emails are in beta and must be enabled for your project.
+
 ### Data Warehouse
 
 Detect data sources your project already uses (Postgres, MySQL, MongoDB,
 Snowflake, BigQuery, Stripe, …) and connect them to PostHog's data warehouse:
 
 ```bash
-npx @posthog/wizard@latest warehouse
+npx @posthog/wizard@latest warehouse          # same as `warehouse source`
+npx @posthog/wizard@latest warehouse source
 ```
 
 The wizard scans your dependencies and `.env` key names (never the values) to
 identify sources. Database and API-key sources are created from the terminal;
 OAuth sources open the PostHog app's new-source flow in your browser.
+
+Send your PostHog data to a warehouse you already run (BigQuery, Snowflake,
+Redshift, Databricks, Postgres, S3 or Azure Blob):
+
+```bash
+npx @posthog/wizard@latest warehouse destination
+```
+
+You save the warehouse credentials in the PostHog app, in your browser. They
+never pass through the terminal or the agent. This command is in limited
+rollout.
 
 ### Upload source maps
 
@@ -670,6 +698,8 @@ wizard --local-dev            # context-mill + MCP + PostHog
 
 See [`docs/local-dev.md`](docs/local-dev.md) for the full catalog.
 `--local-mcp` selects the MCP server; `--local-context-mill` selects the skills server.
+`--context-mill-version <version>` pins skills to one context-mill release in
+any build; see [pinning a context-mill release](docs/local-dev.md#pinning-a-context-mill-release).
 
 ### Testing
 
