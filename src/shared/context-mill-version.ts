@@ -3,11 +3,11 @@
  * latest. See docs/local-dev.md#pinning-a-context-mill-release.
  */
 
-/** `1.66.0` or `v1.66.0`, with an optional prerelease. */
+/** `1.67.0` or `v1.67.0`, with an optional prerelease. */
 const RELEASE_VERSION = /^v?((\d+)\.(\d+)\.(\d+)(-[0-9A-Za-z.-]+)?)$/;
 
-/** The oldest release whose skills the bundled agent prompts name. */
-const CONTEXT_MILL_FLOOR = '1.66.0';
+/** The oldest release whose menu lists every skill as its own entry. */
+const CONTEXT_MILL_FLOOR = '1.67.0';
 
 const FLOOR_PARTS = CONTEXT_MILL_FLOOR.split('.').map(Number);
 
@@ -19,7 +19,7 @@ function belowFloor(parts: readonly number[], prerelease: boolean): boolean {
   return prerelease;
 }
 
-/** Returns the release tag (`v1.66.0`), or undefined for empty and `latest`; throws on anything else, since the value becomes a URL path, and on a release older than the floor. */
+/** Returns the release tag (`v1.67.0`), or undefined for empty and `latest`; throws on anything else, since the value becomes a URL path, and on a release older than the floor. */
 export function parseContextMillVersion(raw: unknown): string | undefined {
   if (raw === undefined || raw === null) return undefined;
   const value = String(raw).trim();

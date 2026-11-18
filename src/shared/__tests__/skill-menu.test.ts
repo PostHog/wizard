@@ -46,7 +46,7 @@ describe('fetchSkillMenu', () => {
     expect(result).toBeNull();
   });
 
-  it('gives each entry the family of its category, and leaves out a bundle of variants with any category it empties', async () => {
+  it('gives each entry the family of its category', async () => {
     const published = {
       categories: {
         'flow/capture': [
@@ -54,22 +54,6 @@ describe('fetchSkillMenu', () => {
             id: 'flow-capture',
             name: 'Capture',
             downloadUrl: 'http://localhost:8765/flow-capture.zip',
-          },
-          {
-            id: 'old-capture',
-            name: 'Capture',
-            bundle: true,
-            downloadUrl: 'http://localhost:8765/old-capture.json',
-            variants: [{ id: 'old-capture-rails' }],
-          },
-        ],
-        'old/only': [
-          {
-            id: 'old-only',
-            name: 'Only',
-            bundle: true,
-            downloadUrl: 'http://localhost:8765/old-only.json',
-            variants: [{ id: 'old-only-rails' }],
           },
         ],
       },
@@ -88,7 +72,6 @@ describe('fetchSkillMenu', () => {
         downloadUrl: 'http://localhost:8765/flow-capture.zip',
       },
     ]);
-    expect(Object.keys(result?.categories ?? {})).toEqual(['flow/capture']);
   });
 
   it('tags later events with the context-mill release that built the menu', async () => {
