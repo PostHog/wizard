@@ -673,6 +673,29 @@ describe("a program's [ABORT] on the linear Pi run", () => {
     });
   });
 
+  it.each([
+    '> [ABORT] no server code found',
+    '```text\n[ABORT] no server code found\n```',
+    '~~~~\n~~~\n[ABORT] no server code found\n~~~~',
+  ])('ignores an [ABORT] example in %j', async (example) => {
+    state.text = `The docs show this example:\n${example}\nI found server code and added the send.`;
+
+    await expect(piBackend.run(withAbortCases())).resolves.toEqual({
+      kind: 'success',
+    });
+  });
+
+  it('reads a real abort after a fenced example', async () => {
+    state.text =
+      '```\n[ABORT] example reason\n```\n[ABORT] no server code found';
+
+    await expect(piBackend.run(withAbortCases())).resolves.toEqual({
+      kind: 'abort',
+      classification: AgentErrorType.ABORT,
+      message: 'no server code found',
+    });
+  });
+
   it('runs a program without abort cases on to its open tasks', async () => {
     state.tasks.set('1', { status: 'in_progress' });
     state.text = 'Checked the project.\n[ABORT] no server code found';
