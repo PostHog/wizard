@@ -1,4 +1,4 @@
-/** A bundled flow with no planner prompt is queued from its frontmatter; one with a planner prompt, and every fetched flow, keeps its planner. */
+/** A flow with no planner prompt is queued from its frontmatter; one with a planner prompt keeps its planner. */
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -20,30 +20,9 @@ vi.mock('../../../switchboard', async () => {
     resolveHarness: () => ({ harness: 'pi', model: [...VALID_MODELS][0] }),
     resolveStageOverrides: () => ({}),
     areSeededTasksEnabled: () => seededTasks,
-    isAgentDagEnabled: () => agentDag,
     getHarness: () => ({ runTask: (inputs: unknown) => harnessRun(inputs) }),
   };
 });
-vi.mock('../../../../agent-prompt-loader', async (importActual) => {
-  const actual = await importActual<
-    typeof import('../../../../agent-prompt-loader')
-  >();
-  return {
-    ...actual,
-    // The fetched flow: the bundled one's prompts, with a planner unless a test removes it.
-    loadAgentRegistry: (_url: string, flow: string, opts?: object) => {
-      fetches++;
-      return Promise.resolve(
-        actual.bundledRegistry(
-          fetchedPlanner ? { ...FLOW, plan: PLANNER } : FLOW,
-          flow,
-          opts,
-        ),
-      );
-    },
-  };
-});
-
 import { ErrorCodes } from '@shared/errors';
 import { analytics } from '@utils/analytics';
 import { RunOutcome } from '../../../shared/types';
@@ -66,9 +45,6 @@ type Inputs = {
   orchestrator: { store: QueueStore };
 };
 
-let agentDag = true;
-let fetchedPlanner = true;
-let fetches = 0;
 let seededTasks = false;
 let bundleFails = false;
 let bundled: Record<string, string> | undefined;
@@ -97,9 +73,6 @@ describe('queueing a flow from its frontmatter', () => {
 
   beforeEach(() => {
     dir = fs.mkdtempSync(path.join(os.tmpdir(), 'frontmatter-queue-'));
-    agentDag = true;
-    fetchedPlanner = true;
-    fetches = 0;
     seededTasks = false;
     bundleFails = false;
     bundled = FLOW;
@@ -150,20 +123,15 @@ describe('queueing a flow from its frontmatter', () => {
       .mocked(analytics.wizardCapture)
       .mock.calls.find(([event]) => event === 'orchestrator seeded')?.[1];
 
-  it('runs the bundled tasks in order, with no planner and no fetch', async () => {
+  it('runs the bundled tasks in order, with no planner', async () => {
     const result = await run();
     expect(result.outcome).toBe(RunOutcome.Success);
-    expect(fetches).toBe(0);
     expect(ran).toEqual(['install', 'logs', 'capture', 'report']);
     expect(seeded()).toEqual({
       task_count: 4,
       types: ['install', 'logs', 'capture', 'report'],
       source: 'frontmatter',
     });
-    expect(analytics.setTag).toHaveBeenCalledWith(
-      'orchestrator_prompts',
-      'bundled',
-    );
   });
 
   it("leaves out the run's excluded tasks and keeps the order around them", async () => {
@@ -220,49 +188,27 @@ describe('queueing a flow from its frontmatter', () => {
     bundled = { ...FLOW, plan: PLANNER };
     const result = await run();
     expect(result.outcome).toBe(RunOutcome.Success);
-    expect(fetches).toBe(0);
     expect(ran).toEqual(['seed', 'install', 'report']);
     expect(seeded()).toMatchObject({ source: 'planner' });
   });
 
-  it("fetches context-mill's prompts while the flag is off, bundled or not", async () => {
-    agentDag = false;
-    const result = await run();
-    expect(result.outcome).toBe(RunOutcome.Success);
-    expect(fetches).toBe(1);
-    expect(ran).toEqual(['seed', 'install', 'report']);
-    expect(analytics.setTag).toHaveBeenCalledWith(
-      'orchestrator_prompts',
-      'context-mill',
-    );
-  });
-
-  it("fetches context-mill's prompts, and reports it, when the bundle fails to load", async () => {
+  it('fails the run, and reports it, when the bundle fails to load', async () => {
     bundleFails = true;
     const result = await run();
-    expect(result.outcome).toBe(RunOutcome.Success);
-    expect(fetches).toBe(1);
-    expect(ran).toEqual(['seed', 'install', 'report']);
-    expect(analytics.setTag).toHaveBeenCalledWith(
-      'orchestrator_prompts',
-      'context-mill',
-    );
+    expect(result.outcome).toBe(RunOutcome.Failed);
+    expect(result.failure?.code).toBe(ErrorCodes.AgentOrchestratorNoPlanner);
+    expect(ran).toEqual([]);
     expect(analytics.captureException).toHaveBeenCalledWith(expect.any(Error), {
       step: 'orchestrator_bundled_prompts',
     });
   });
 
-  it.each([true, false])(
-    'fails a fetched flow that has no planner prompt with its own code (flag on: %s)',
-    async (flag) => {
-      agentDag = flag;
-      bundled = undefined;
-      fetchedPlanner = false;
-      const result = await run();
-      expect(result.outcome).toBe(RunOutcome.Failed);
-      expect(result.failure?.code).toBe(ErrorCodes.AgentOrchestratorNoPlanner);
-      expect(result.failure?.message).not.toContain('seed');
-      expect(ran).toEqual([]);
-    },
-  );
+  it('fails a program that bundles no prompts with the same code', async () => {
+    bundled = undefined;
+    const result = await run();
+    expect(result.outcome).toBe(RunOutcome.Failed);
+    expect(result.failure?.code).toBe(ErrorCodes.AgentOrchestratorNoPlanner);
+    expect(result.failure?.message).not.toContain('seed');
+    expect(ran).toEqual([]);
+  });
 });

@@ -1,19 +1,17 @@
 /**
  * Agent-prompt loader + registry.
  *
- * Agent prompts are the WHAT of a task: a markdown file per type, served from
- * context-mill as the `agents` content type (parallel to skills). The frontmatter
- * carries the artifacts the executor needs — model, the mini-skills to load (the
- * HOW), the tools the task may use, and its dependencies — and the body is the
- * instruction the agent reads.
+ * Agent prompts are the WHAT of a task: a markdown file per type, bundled in
+ * its program's `agent/` folder. The frontmatter carries the artifacts the
+ * executor needs — model, the mini-skills to load (the HOW), the tools the task
+ * may use, and its dependencies — and the body is the instruction the agent
+ * reads.
  *
- * The registry is fetched once at startup and scoped to one flow — agents
+ * The registry is built once at startup and scoped to one flow — agents
  * declare `flow` and (for the planner) `seed: true` in frontmatter, so each
- * program (integration, audit, migration, ...) ships its own agent set and the
- * loader stays generic. Every prompt is downloaded and parsed up front, so
- * resolving a task to its run config is synchronous and adds no mid-drain
- * network latency. The registry's type list also drives `enqueue_task`
- * validation.
+ * program ships its own agent set and the loader stays generic. Every prompt
+ * is parsed up front, so resolving a task to its run config is synchronous.
+ * The registry's type list also drives `enqueue_task` validation.
  */
 import type {
   QueueStore,
@@ -30,7 +28,6 @@ import {
 } from './runner/switchboard/models';
 import { logToFile } from '@utils/debug';
 import { analytics } from '@utils/analytics';
-import { fetchWithRetry } from '@shared/fetch-retry';
 import { WIZARD_TOOL_NAMES } from './tools/tools';
 
 /**
@@ -323,7 +320,7 @@ export interface AgentRegistry {
 /** One task of a flow's declared graph. */
 export type GraphTask = Pick<AgentPrompt, 'type' | 'dependsOn' | 'sink'>;
 
-/** The registry for one flow's prompts. Pure; the loader feeds it the fetched set. */
+/** The registry for one flow's prompts. Pure. */
 export function buildRegistry(
   prompts: readonly AgentPrompt[],
   flow: string,
@@ -370,11 +367,6 @@ export function buildRegistry(
     })),
     get: (type) => byType.get(type),
   };
-}
-
-interface AgentMenu {
-  /** `flow` arrived with context-mill's flow-scoped agents folder; older menus omit it. */
-  agents: { id: string; flow?: string; downloadUrl: string }[];
 }
 
 /** A native tool passes through; an MCP tool gets its fully-qualified name. */
@@ -519,12 +511,7 @@ export function parseAgentPrompt(
   };
 }
 
-async function fetchText(url: string): Promise<string> {
-  const res = await fetchWithRetry(url);
-  return res.text();
-}
-
-/** The registry for one flow from prompts the wizard bundles, keyed by task type and parsed as the fetched ones are. */
+/** The registry for one flow from the prompts a program bundles, keyed by task type. */
 export function bundledRegistry(
   prompts: Readonly<Record<string, string>>,
   flow: string,
@@ -537,35 +524,6 @@ export function bundledRegistry(
     flow,
     opts,
   );
-}
-
-/**
- * Fetch the agent menu and every agent prompt it lists, parse them, and build
- * the registry for one flow. Throws if the menu cannot be fetched — the
- * orchestrator cannot run without its prompts.
- */
-export async function loadAgentRegistry(
-  skillsBaseUrl: string,
-  flow: string,
-  opts?: Parameters<typeof buildRegistry>[2],
-): Promise<AgentRegistry> {
-  const menuRaw = await fetchText(`${skillsBaseUrl}/agent-menu.json`);
-  const menu = JSON.parse(menuRaw) as AgentMenu;
-
-  // Menus that carry a flow per entry let us skip other flows' prompts before
-  // fetching them; entries without one are fetched and filtered by their
-  // frontmatter in buildRegistry, as before.
-  const entries = (menu.agents ?? []).filter(
-    (entry) => !entry.flow || entry.flow === flow,
-  );
-  const prompts = await Promise.all(
-    entries.map(async (entry) => {
-      const text = await fetchText(entry.downloadUrl);
-      return parseAgentPrompt(text, entry.id, entry.flow);
-    }),
-  );
-
-  return buildRegistry(prompts, flow, opts);
 }
 
 /**

@@ -88,8 +88,9 @@ async function prepareErrorTrackingRun(
 const ERROR_TRACKING_PROMPT = `Set up PostHog error tracking end-to-end:
 
 1. If PostHog is not integrated yet, install and initialize the SDK first —
-   do not abort. Pick the matching variant from the skill menu's
-   "integration-v2/install" and "integration-v2/init" categories.
+   do not abort. Install the "integration-install" skill, then the
+   "integration-init" skill (the skill menu's "integration/install" and
+   "integration/init" categories), and follow each.
 
 2. Wire up exception capture: install the "error-tracking" skill variant that
    matches this project's platform (\`load_skill_menu\` with
@@ -134,10 +135,11 @@ const ERROR_TRACKING_RUN: ProgramRun = {
  * `wizard error-tracking` — flat command on the orchestrator sequence.
  *
  * Makes uncaught errors reach PostHog with readable stack traces. The
- * orchestrator runs the `error-tracking` agent flow (context-mill
- * `context/agents/error-tracking`): the seed enqueues the install/init tasks
- * (sharing integration-v2's step-skills, like replay-vision) when the project
- * has no PostHog yet, then exception capture, then — when the platform needs
+ * orchestrator runs the `error-tracking` agent flow, the prompts in this
+ * program's `agent/` folder: the seed enqueues the install/init tasks (on the
+ * `integration-install` and `integration-init` step skills, like
+ * replay-vision) when the project has no PostHog yet, then exception capture,
+ * then — when the platform needs
  * it — the source-map subgraph adapted from the standalone
  * `upload-source-maps` flow, or, on Python, Ruby and PHP, the `link-releases`
  * task that resolves a release in the production deploy.

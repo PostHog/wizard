@@ -126,8 +126,4 @@ export {
   resolveSequence,
   type SequenceRunner,
 } from './sequence';
-export {
-  areSeededTasksEnabled,
-  isAgentDagEnabled,
-  resolveStageOverrides,
-} from './flags';
+export { areSeededTasksEnabled, resolveStageOverrides } from './flags';

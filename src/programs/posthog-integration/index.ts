@@ -52,7 +52,7 @@ const WAREHOUSE_SOURCES_DOCS_URL =
 /** Task type of the seeded step below, matched against the drain's result. */
 const WAREHOUSE_SEED_TASK_TYPE = 'warehouse';
 
-/** The context-mill `integration-v2` task that instruments the project's MCP server. */
+/** The `integration-v2` flow's task that instruments the project's MCP server. */
 const MCP_ANALYTICS_TASK_TYPE = 'mcp-analytics';
 
 /** Candidate paths the MCP fact names before it summarizes the rest. */

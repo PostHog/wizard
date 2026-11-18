@@ -1,6 +1,6 @@
 {
   "name": "@posthog/wizard",
-  "version": "2.94.0",
+  "version": "2.97.0",
   "homepage": "https://github.com/PostHog/wizard",
   "repository": "https://github.com/PostHog/wizard",
   "description": "The PostHog wizard helps you to configure your project",
@@ -160,7 +160,7 @@
     "wizard-ci-record": "tsx scripts/tui-record.no-jest.ts",
     "decisions-detect": "tsx scripts/decisions-detect.no-jest.ts",
     "check:decisions-bundle": "tsx scripts/check-decisions-bundle.no-jest.ts",
-    "record:context-mill-fixtures": "tsx scripts/record-context-mill-fixtures.no-jest.ts",
+    "record:context-mill-fixtures": "tsx --tsconfig tsconfig.base.json scripts/record-context-mill-fixtures.no-jest.ts",
     "visual-dags": "tsx scripts/visual-dags.no-jest.ts"
   },
   "lint-staged": {

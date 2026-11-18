@@ -174,31 +174,6 @@ vi.mock('@agent/runner/switchboard/harness', () => {
   };
 });
 
-vi.mock('@agent/agent-prompt-loader', async (original) => {
-  const actual = await original<typeof import('@agent/agent-prompt-loader')>();
-  return {
-    ...actual,
-    loadAgentRegistry: vi.fn(() =>
-      Promise.resolve(
-        actual.buildRegistry(
-          [
-            actual.parseAgentPrompt(
-              '---\ntype: seed\nseed: true\n---\nPlan work',
-              'seed',
-              'test-program',
-            ),
-            actual.parseAgentPrompt(
-              '---\ntype: install\nallowedTools: [wizard_ask]\n---\nInstall it',
-              'install',
-              'test-program',
-            ),
-          ],
-          'test-program',
-        ),
-      ),
-    ),
-  };
-});
 vi.mock('@shared/skill-menu', async (original) => ({
   ...(await original<typeof import('@shared/skill-menu')>()),
   fetchSkillMenu: vi.fn().mockResolvedValue({ categories: {} }),
@@ -237,6 +212,12 @@ const config = (over: Partial<RunConfig> = {}): RunConfig => ({
     binding: { sequence: Sequence.linear, harness: Harness.pi, model: 'm' },
   },
   skillsBaseUrl: 'https://skills.test',
+  agentPrompts: () =>
+    Promise.resolve({
+      seed: '---\ntype: seed\nseed: true\n---\nPlan work',
+      install:
+        '---\ntype: install\nallowedTools: [wizard_ask]\n---\nInstall it',
+    }),
   wizardFlags: {},
   wizardFlagPayloads: {},
   ...over,

@@ -98,6 +98,7 @@ describe('program bindings', () => {
       'error-tracking': orchestratorOnPi,
       'feature-flags': orchestratorOnPi,
       'agent-skill': linearOnSol,
+      'transactional-email': linearOnSol,
       support: orchestratorOnPi,
     });
   });
@@ -144,6 +145,10 @@ describe('getCommandPath', () => {
     expect(getCommandPath(subcommand('revenue-analytics-setup'))).toBe(
       'revenue-analytics',
     );
+  });
+
+  it('runs transactional email as the flat `email` command', () => {
+    expect(getCommandPath(subcommand('transactional-email'))).toBe('email');
   });
 
   it('keeps `metrics` a flat command', () => {

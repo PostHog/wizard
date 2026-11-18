@@ -58,6 +58,7 @@ export const anthropicBackend: AgentHarness = {
         detectPackageManager:
           config.detectPackageManager ?? detectNodePackageManagers,
         skillsBaseUrl,
+        matchKeys: boot.matchKeys,
         wizardFlags,
         wizardMetadata,
         programId: boot.programId,
@@ -148,6 +149,7 @@ export const anthropicBackend: AgentHarness = {
         host: boot.credentials.host,
         detectPackageManager: detectNodePackageManagers,
         skillsBaseUrl: boot.skillsBaseUrl,
+        matchKeys: boot.matchKeys,
         programId: boot.programId,
         handoffNotebook: boot.handoffNotebook,
         wizardFlags: boot.wizardFlags,

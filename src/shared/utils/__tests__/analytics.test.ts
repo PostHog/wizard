@@ -296,7 +296,7 @@ describe('Analytics', () => {
 
     beforeEach(() => {
       mockFlags({
-        'wizard-agent-dag': true,
+        'wizard-orchestrator-seeded-tasks': true,
         'wizard-orchestrator-override': 'sol-review',
         'unrelated-flag': 'variant-x',
       });
@@ -335,7 +335,7 @@ describe('Analytics', () => {
     it('resolves only wizard flags into the map', async () => {
       const flags = await analytics.getAllFlagsForWizard();
       expect(flags).toEqual({
-        'wizard-agent-dag': 'true',
+        'wizard-orchestrator-seeded-tasks': 'true',
         'wizard-orchestrator-override': 'sol-review',
       });
     });
@@ -347,14 +347,14 @@ describe('Analytics', () => {
         ([arg]) => (arg as any).event === 'wizard: switchboard resolved',
       );
       const props = (call![0] as any).properties;
-      expect(props['$feature/wizard-agent-dag']).toBe(true);
+      expect(props['$feature/wizard-orchestrator-seeded-tasks']).toBe(true);
       expect(props['$feature/wizard-orchestrator-override']).toBe('sol-review');
       expect(props['$feature/unrelated-flag']).toBeUndefined();
     });
 
     it('lists only enabled wizard flags in $active_feature_flags', async () => {
       mockFlags({
-        'wizard-agent-dag': true,
+        'wizard-orchestrator-seeded-tasks': true,
         'wizard-self-driving-use-pi-harness': false,
         'wizard-orchestrator-override': 'sol-review',
         'unrelated-flag': 'variant-x',
@@ -365,8 +365,8 @@ describe('Analytics', () => {
         ([arg]) => (arg as any).event === 'wizard: switchboard resolved',
       );
       expect((call![0] as any).properties.$active_feature_flags).toEqual([
-        'wizard-agent-dag',
         'wizard-orchestrator-override',
+        'wizard-orchestrator-seeded-tasks',
       ]);
     });
 
@@ -376,10 +376,10 @@ describe('Analytics', () => {
       ) => any;
       const sent = beforeSend({
         event: '$feature_flag_called',
-        properties: { $feature_flag: 'wizard-agent-dag' },
+        properties: { $feature_flag: 'wizard-orchestrator-seeded-tasks' },
       });
       expect(sent.properties).toMatchObject({
-        $feature_flag: 'wizard-agent-dag',
+        $feature_flag: 'wizard-orchestrator-seeded-tasks',
         $app_name: 'wizard',
         run_id: 'run-uuid',
         run_surface: 'local',
@@ -395,7 +395,7 @@ describe('Analytics', () => {
         ([arg]) => (arg as any).event === 'setup wizard finished',
       );
       const props = (call?.[0] as any).properties;
-      expect(props['$feature/wizard-agent-dag']).toBe(true);
+      expect(props['$feature/wizard-orchestrator-seeded-tasks']).toBe(true);
       expect(props['$feature/unrelated-flag']).toBeUndefined();
       expect(props.status).toBe('success');
     });

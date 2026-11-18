@@ -24,43 +24,70 @@ prompts, queues its tasks, then drains a dependency-aware task queue. Each task
 gets a focused conversation, tools, selected model/effort, and relevant
 handoffs. Independent tasks can run concurrently.
 
-With `wizard-agent-dag` on, the prompts are the ones the program bundles, the
-run config's `agentPrompts`; see
-[agent prompts](../../../programs/README.md#agent-prompts). Off, or for a
-program that bundles none, the orchestrator fetches the flow `agentFlow ?? id`
-from context-mill. A bundle that fails to load is reported as an exception with
-the step `orchestrator_bundled_prompts`, and the run fetches instead. Every
-event sent after the prompts load carries which as the `orchestrator_prompts`
-tag. That tag says which path a run took, and the flag's value on an event does
-not: a pinned run reports the flag as on and still fetches.
+The prompts are the ones the program bundles, the run config's `agentPrompts`;
+see [agent prompts](../../../programs/README.md#agent-prompts). A program that
+bundles none, or whose bundle fails to load, fails the run with
+`PHW_AGENT_ORCHESTRATOR_NO_PLANNER`. A failed load is also reported as an
+exception with the step `orchestrator_bundled_prompts`.
 
-A flow's seed planner queues its tasks. A bundled flow with no seed prompt is
-queued from the graph its frontmatter declares, by
-[task-graph.ts](orchestrator/task-graph.ts), and no planner runs. A fetched flow
-with no seed prompt fails the run with `PHW_AGENT_ORCHESTRATOR_NO_PLANNER`.
+A flow's seed planner queues its tasks. A flow with no seed prompt is queued
+from the graph its frontmatter declares, by
+[task-graph.ts](orchestrator/task-graph.ts), and no planner runs.
 `orchestrator seeded` carries which one queued the run as `source`. A declared
 graph that cannot be queued ends the run with
 `PHW_AGENT_ORCHESTRATOR_TASK_GRAPH` and sends `orchestrator task graph
 rejected` with the reason.
 
-A flow must supply valid task-skill variants, and a seed prompt unless it is
-bundled without one. Metrics already has a Pi/orchestrator binding; other routes
-can be selected through scoped flags or development CLI overrides. The retired
-`experiment/orchestrator` branch is not a prerequisite. See
+A flow must supply valid task-skill variants. Metrics already has a
+Pi/orchestrator binding; other routes can be selected through scoped flags or
+development CLI overrides. The retired `experiment/orchestrator` branch is not a
+prerequisite. See
 [adding a program](../../../../.claude/skills/adding-skill-program/SKILL.md).
 
 A task prompt names its skills by menu id or by skill family, and the runner
-resolves each name to the menu skill to install. With `wizard-agent-dag` on,
-`@shared/skill-resolution` picks the family's skill for the run's match keys;
-off, the runner's own menu lookup does. The match keys are the run config's
-`matchKeys`, which the program runner fills from the project's traits, with the
-run's framework as the `framework` key. Both pick the same skill for every
-family, menu id and framework on the recorded menu, which
-[skill-equivalence.test.ts](orchestrator/__tests__/skill-equivalence.test.ts)
-checks.
+resolves each name to the menu skill to install. `@shared/skill-resolution`
+picks the family's skill for the run's match keys. The match keys are the run
+config's `matchKeys`, which the program runner fills from the project's traits.
+A run whose project has no `framework` trait resolves no family, so it has no
+framework pack.
 
-A run pinned to a context-mill release with `--context-mill-version` takes none
-of the `wizard-agent-dag` paths.
+A menu entry with `frameworkReferences` is a step skill written once for every
+framework. [repackaged-skills.ts](orchestrator/repackaged-skills.ts) installs
+it once a run. It builds the skill in a temp folder outside the project:
+it installs the skill there, completes it from the framework's reference
+skill with `@shared/skill-composition`, and scans `SKILL.md`, the one file
+completing rewrites and no install scan has read. Only a skill that is
+complete and scanned is put in place, and the temp folder is removed either
+way.
+
+The skill replaces its folder whole, so a page an earlier run left there does
+not survive. In the run's own cache any folder may be replaced. In
+`.claude/skills`, which is the project's, a folder is replaced only when it
+carries the wizard's `.posthog-wizard` marker: one the wizard did not install,
+or a link standing there, is refused and left as it is, before anything is
+downloaded.
+
+The skill's id comes from the menu and names a folder, so an id that is not one
+plain name is refused before anything is installed. When the skill cannot be
+completed for any reason, a thrown error included, nothing reaches its folder,
+every task that names it fails as it does when a skill fails to install, and
+the run sends `orchestrator repackaged skill unavailable` once with the
+reason: a failed install, a pack that cannot complete it, a link on the way, a
+folder the wizard does not own, or a scan that rejects it or fails. A run that
+installed no reference skill cannot complete one, so it fails before any task
+starts, as it does for a skill the menu cannot supply.
+
+The `install_skill` tool resolves the name it is given as a task prompt's is,
+a menu id or a skill family, and completes such a skill the same way, in both
+sequences: `installToolSkill` in the same file picks the framework's pack with
+the run's match keys, reads it from a scratch folder, and puts the completed
+skill in `.claude/skills`. A run with no framework gets an error that says so,
+and nothing is installed.
+
+A run pinned to a context-mill release with `--context-mill-version` reads its
+skills from that release. The oldest release a pin may name is 1.67.0, the
+first whose menu lists every skill as its own entry. Its prompts are the
+bundled ones, as in any run.
 
 Before the tasks run, the runner installs the framework's `integration` skill as
 a reference: its example and its framework rules go into every task's prompt.
@@ -68,9 +95,8 @@ When that install fails, the run goes on without them and sends
 `orchestrator reference skill unavailable` with the reason.
 
 A task skill the menu cannot supply fails the run before any task starts. When
-the prompts are bundled and the loaded menu has that name under no id and no
-family, the wizard is older than the skills, and the message says to run the
-latest version. Any other miss keeps the message that asks to try again.
+the loaded menu has that name under no id and no family, the wizard is older
+than the skills, and the message says to run the latest version. Any other miss keeps the message that asks to try again.
 
 ### Task metadata
 

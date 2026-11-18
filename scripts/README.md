@@ -43,11 +43,24 @@ before choosing credentials or an EU project.
 ## Context-mill fixtures
 
 `pnpm record:context-mill-fixtures [base-url]` runs
-`record-context-mill-fixtures.no-jest.ts`, which records a context-mill
-release's skill menu, agent menu and agent prompts into
-`fixtures/context-mill/`, the fixtures the behavior checks compare against.
-Commit the result on its own with the reason, since a changed fixture changes
-what "unchanged" means.
+`record-context-mill-fixtures.no-jest.ts`, which records two fixtures from a
+context-mill release, the latest by default, into `fixtures/context-mill/`: the
+skill menu, and one step skill with its framework's pack in `repackaged/`.
+
+The pair is the step skill as published in `step/`, the files of the pack that
+completing it reads in `pack/`, and in `completed/` the skill context-mill
+itself published for the same step and framework. The step's menu entry names
+the skill family it replaces, and `completed/` is that family's skill for the
+pair's framework. A unit test completes the step from the pack and expects
+`completed/`, leaving out only the frontmatter `name` line, where the two ids
+differ.
+
+The recorder never writes `completed/` from the wizard's own fill. A release
+that no longer publishes the replaced family leaves `completed/` as it is, and
+the recorder says so; `pair.json` names the skill and the release it was
+recorded from, 1.66.0 today. Record the pair again when context-mill changes
+how it builds a step skill or a pack. Commit the result on its own with the
+reason, since a changed fixture changes what "unchanged" means.
 
 ## Credentials for full agent runs
 

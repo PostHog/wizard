@@ -6,7 +6,7 @@ model_pi: openai/gpt-5.6-sol
 effort_pi: medium
 model_sdk: claude-sonnet-5
 effort_sdk: high
-skills: [integration-v2-feature-flags-step]
+skills: [integration-feature-flags]
 allowedTools: [Read, Write, Edit, Glob, Grep]
 disallowedTools: [enqueue_task]
 dependsOn: []

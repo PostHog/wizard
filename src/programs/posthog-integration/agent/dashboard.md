@@ -6,7 +6,7 @@ model_pi: openai/gpt-5.6-terra
 effort_pi: low
 model_sdk: claude-sonnet-5
 effort_sdk: high
-skills: [integration-v2-dashboard, integration-v2-insight, integration-v2-mcp]
+skills: [integration-dashboard, integration-insight, integration-mcp]
 allowedTools: [Read, Glob, Grep, posthog_exec]
 disallowedTools: [Write, Edit, Bash, enqueue_task]
 dependsOn: [capture, mcp-analytics]

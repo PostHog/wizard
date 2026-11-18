@@ -26,6 +26,7 @@ import {
   AgentSignals,
   REMARK_INSTRUCTION,
   policyAbortReason,
+  standaloneAbortReason,
 } from '../../../signals';
 import { AgentOutputSignals } from '../../../output-signals';
 import { assembleCommandments } from '../../switchboard/commandments';
@@ -359,11 +360,20 @@ export const piBackend: AgentHarness = {
     let timedOut = false;
     let timeoutAbort: Promise<void> | undefined;
     let abortReason: string | undefined;
+    let policyAborted = false;
     let remarkTurn = false;
     // The gateway's refusal marker ends the run from a work turn, never the remark.
     const policyAbort = (reply: string) => {
-      if (remarkTurn) return;
-      abortReason ??= policyAbortReason(reply);
+      if (remarkTurn || abortReason) return;
+      abortReason = policyAbortReason(reply);
+      policyAborted = abortReason !== undefined;
+      if (abortReason) cancellation?.abort();
+    };
+    // Programs with abort cases can also stop on a standalone [ABORT] line.
+    const abortOnReply = (reply: string) => {
+      policyAbort(reply);
+      if (remarkTurn || abortReason || !config.abortCases?.length) return;
+      abortReason = standaloneAbortReason(reply);
       if (abortReason) cancellation?.abort();
     };
     // Read by the catch path; undefined until setup creates the extension.
@@ -588,6 +598,7 @@ export const piBackend: AgentHarness = {
           workingDirectory: input.installDir,
           skillsBaseUrl: boot.skillsBaseUrl,
           triageProvider: boot.triageProvider,
+          matchKeys: boot.matchKeys,
           emit,
           programId: boot.programId,
           handoffNotebook: boot.handoffNotebook,
@@ -686,7 +697,7 @@ export const piBackend: AgentHarness = {
             turns.noteAssistantTurn(event.message);
             const blocks = textBlocks(event.message);
             const assistant = blocks.join('').trim();
-            policyAbort(assistant);
+            abortOnReply(blocks.join('\n'));
             // A schema-bound answer is the turn's last block, not the joined text.
             lastAssistantText = (blocks.at(-1) ?? '').trim();
             if (structured) {
@@ -858,7 +869,7 @@ export const piBackend: AgentHarness = {
         );
         captureAborted(
           terminal.classification,
-          abortReason ? 'gateway_policy' : undefined,
+          policyAborted ? 'gateway_policy' : undefined,
         );
         if (terminal.status === 401) {
           return {

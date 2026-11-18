@@ -13,32 +13,16 @@ export type SkillEntry = {
   id: string;
   name: string;
   downloadUrl: string;
-  /** The hyphenated skill-group prefix of `id` (e.g. `posthog-integration-install`). */
-  group?: string;
-  /** The detection id this variant serves (e.g. `rails`, `react-router`). */
-  framework?: string;
-  /** The variant a bare framework id resolves to when its family has several. */
-  default?: boolean;
-  /** This entry's download is a bundle JSON of every variant, not a single skill's zip. */
-  bundle?: boolean;
+  /** The skill family, set on fetch from the category the menu lists the entry under, with `/` as `-`. */
+  family?: string;
   /** Human name for the skill. Older menus omit it. */
   title?: string;
   /** What the skill covers. */
   description?: string;
   /** What the skill is, and as `key:value` the projects it is written for; see `@shared/skill-resolution`. */
   tags?: string[];
-  /** Menu-only: the variants inside a bundle, expanded into entries of their own on fetch. */
-  variants?: SkillVariant[];
-};
-
-/** One variant inside a bundle entry. */
-export type SkillVariant = {
-  id: string;
-  framework?: string;
-  default?: boolean;
-  title?: string;
-  description?: string;
-  tags?: string[];
+  /** The product whose pages, from the framework's pack, complete this skill; see `@shared/skill-composition`. */
+  frameworkReferences?: string;
 };
 
 /**
@@ -68,20 +52,16 @@ export interface SkillMenu {
   cliEntries?: CliEntry[];
 }
 
-/** Expand a bundle entry into one entry per variant, so the menu reads the same whether a group ships bundled or as zips. */
-export function expandBundleEntry(entry: SkillEntry): SkillEntry[] {
-  if (!entry.bundle || !entry.variants) return [entry];
-  return entry.variants.map((variant) => ({
-    ...variant,
-    name: entry.name,
-    group: entry.group,
-    bundle: true,
-    downloadUrl: entry.downloadUrl,
-    ...(entry.title && !variant.title ? { title: entry.title } : {}),
-    ...(entry.description && !variant.description
-      ? { description: entry.description }
-      : {}),
-  }));
+/** A category's skill family: its key with `/` as `-`, so `integration/install` is `integration-install`. */
+const skillFamily = (category: string): string => category.replaceAll('/', '-');
+
+/** The menu as the wizard reads it: each entry given the family of its category. */
+export function prepareSkillMenu(menu: SkillMenu): SkillMenu {
+  for (const [category, entries] of Object.entries(menu.categories)) {
+    const family = skillFamily(category);
+    menu.categories[category] = entries.map((entry) => ({ ...entry, family }));
+  }
+  return menu;
 }
 
 /**
@@ -96,10 +76,7 @@ export async function fetchSkillMenu(
   try {
     logToFile(`fetchSkillMenu: fetching from ${menuUrl}`);
     const resp = await fetchWithRetry(menuUrl, opts);
-    const data = (await resp.json()) as SkillMenu;
-    for (const [category, entries] of Object.entries(data.categories)) {
-      data.categories[category] = entries.flatMap(expandBundleEntry);
-    }
+    const data = prepareSkillMenu((await resp.json()) as SkillMenu);
     // Every later event, the terminal one included, says which release the run's skills came from.
     if (data.buildVersion) {
       analytics.setTag('context_mill_version', data.buildVersion);

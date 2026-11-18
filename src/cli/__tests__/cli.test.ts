@@ -207,6 +207,15 @@ describe('CLI argument parsing', () => {
     );
   });
 
+  describe('email command', () => {
+    test('`wizard email` starts the transactional email program', async () => {
+      await runCLI(['email']);
+
+      expect(mockRunTuiCli).toHaveBeenCalledTimes(1);
+      expect(mockRunTuiCli.mock.calls[0][0].id).toBe('transactional-email');
+    });
+  });
+
   describe('environment variables', () => {
     test('respects POSTHOG_WIZARD_REGION', async () => {
       process.env.POSTHOG_WIZARD_REGION = 'eu';
@@ -305,7 +314,7 @@ describe('CLI argument parsing', () => {
 
   describe('--context-mill-version', () => {
     const PINNED =
-      'https://github.com/PostHog/context-mill/releases/download/v1.59.0';
+      'https://github.com/PostHog/context-mill/releases/download/v1.67.0';
 
     async function skillsBaseUrl(): Promise<string> {
       const { getSkillsBaseUrl } = await import('@shared/constants');
@@ -313,14 +322,14 @@ describe('CLI argument parsing', () => {
     }
 
     test('pins the skills origin to the release', async () => {
-      await runCLI(['--context-mill-version', '1.59.0']);
+      await runCLI(['--context-mill-version', '1.67.0']);
       expect(mockRunTuiCli).toHaveBeenCalled();
       expect(await skillsBaseUrl()).toBe(PINNED);
     });
 
     // The cloud runner configures a run through the sandbox environment.
     test('resolves POSTHOG_WIZARD_CONTEXT_MILL_VERSION from the environment', async () => {
-      process.env.POSTHOG_WIZARD_CONTEXT_MILL_VERSION = 'v1.59.0';
+      process.env.POSTHOG_WIZARD_CONTEXT_MILL_VERSION = 'v1.67.0';
       await runCLI([]);
       expect(mockRunTuiCli).toHaveBeenCalled();
       expect(await skillsBaseUrl()).toBe(PINNED);
@@ -333,7 +342,7 @@ describe('CLI argument parsing', () => {
     });
 
     test('rejects a pin combined with a local context-mill', async () => {
-      await runCLI(['--context-mill-version', '1.59.0', '--local-dev']);
+      await runCLI(['--context-mill-version', '1.67.0', '--local-dev']);
       expect(process.exit).toHaveBeenCalledWith(1);
     });
   });

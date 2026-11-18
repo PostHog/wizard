@@ -6,13 +6,8 @@ import { unzipSync } from 'fflate';
 import { logToFile } from '@utils/debug';
 import { analytics } from '@utils/analytics';
 import { fetchWithRetry, type RetryOpts } from '@shared/fetch-retry';
+import { PLAIN_NAME } from '@shared/skill-composition';
 import { fetchSkillMenu, type SkillEntry } from '@shared/skill-menu';
-
-/** A bundle's files, keyed by variant short id then path. */
-export type SkillBundle = {
-  id: string;
-  variants: Record<string, Record<string, string>>;
-};
 
 /** Extract a zip buffer, refusing entries that escape destDir (zip-slip). */
 function extractZipArchive(zip: Uint8Array, destDir: string): number {
@@ -34,37 +29,6 @@ function extractZipArchive(zip: Uint8Array, destDir: string): number {
   return written;
 }
 
-/** Unpack the one variant this entry names out of a bundle; the rest is noise and never hits disk. */
-function extractBundle(
-  bundle: SkillBundle,
-  destDir: string,
-  entryId: string,
-): number {
-  if (
-    typeof bundle?.id !== 'string' ||
-    typeof bundle?.variants !== 'object' ||
-    bundle.variants === null
-  ) {
-    throw new Error('malformed bundle: expected { id, variants }');
-  }
-  const files = bundle.variants[entryId.slice(bundle.id.length + 1)];
-  if (!files) {
-    throw new Error(`bundle ${bundle.id} has no variant "${entryId}"`);
-  }
-  const root = path.resolve(destDir);
-  let written = 0;
-  for (const [entryPath, contents] of Object.entries(files)) {
-    const target = path.resolve(root, entryPath);
-    if (target !== root && !target.startsWith(root + path.sep)) {
-      throw new Error(`bundle entry escapes destination: ${entryPath}`);
-    }
-    fs.mkdirSync(path.dirname(target), { recursive: true });
-    fs.writeFileSync(target, contents);
-    written++;
-  }
-  return written;
-}
-
 /** Download a URL to a buffer, retrying transient failures with backoff. */
 async function downloadWithRetry(
   url: string,
@@ -73,6 +37,9 @@ async function downloadWithRetry(
   const resp = await fetchWithRetry(url, opts);
   return new Uint8Array(await resp.arrayBuffer());
 }
+
+/** The file the wizard drops in every skill folder it installs. */
+export const WIZARD_MARKER = '.posthog-wizard';
 
 /** Scans an extracted skill directory; a returned reason means it is poisoned. Injected because @shared cannot import @agent. */
 export type SkillScanner = (skillDir: string) => Promise<string | null>;
@@ -93,23 +60,31 @@ export async function downloadSkill(
   installDir: string,
   { skillsRoot, scan }: SkillInstallOptions,
 ): Promise<{ success: boolean; error?: string }> {
+  // The id comes from the menu and names the folder written to, so it is one plain name.
+  if (!PLAIN_NAME.test(skillEntry.id)) {
+    const error = `unusable skill id: ${skillEntry.id}`;
+    logToFile(`downloadSkill: ${error}`);
+    analytics.wizardCapture('skill install failed', {
+      skill_id: skillEntry.id.slice(0, 200),
+      step: 'download',
+      platform: process.platform,
+      error,
+    });
+    return { success: false, error };
+  }
   const skillDir = skillsRoot
     ? path.join(installDir, skillsRoot, skillEntry.id)
     : path.join(installDir, '.claude', 'skills', skillEntry.id);
   let step: 'download' | 'extract' | 'scan' = 'download';
+  // A failed install removes only a folder it made, so files that were there first stay.
+  const existed = fs.existsSync(skillDir);
 
   try {
     fs.mkdirSync(skillDir, { recursive: true });
     const data = await downloadWithRetry(skillEntry.downloadUrl);
     step = 'extract';
-    const fileCount = skillEntry.bundle
-      ? extractBundle(
-          JSON.parse(Buffer.from(data).toString('utf8')) as SkillBundle,
-          skillDir,
-          skillEntry.id,
-        )
-      : extractZipArchive(data, skillDir);
-    fs.writeFileSync(path.join(skillDir, '.posthog-wizard'), '');
+    const fileCount = extractZipArchive(data, skillDir);
+    fs.writeFileSync(path.join(skillDir, WIZARD_MARKER), '');
 
     // Same scan the Bash-install hook runs — TS-path installs (linear
     // pre-install, MCP/pi install_skill, orchestrator cache + reference)
@@ -143,6 +118,13 @@ export async function downloadSkill(
     return { success: true };
   } catch (err: any) {
     logToFile(`downloadSkill: error: ${err.message}`);
+    if (!existed) {
+      try {
+        fs.rmSync(skillDir, { recursive: true, force: true });
+      } catch {
+        // The install has failed either way.
+      }
+    }
     // A skill-less run still reports success — keep the failure visible.
     analytics.wizardCapture('skill install failed', {
       skill_id: skillEntry.id,
@@ -153,9 +135,6 @@ export async function downloadSkill(
     return { success: false, error: err.message };
   }
 }
-
-/** The file the wizard drops in every skill folder it installs. */
-const WIZARD_MARKER = '.posthog-wizard';
 
 const claudeSkillsDir = (installDir: string): string =>
   path.join(installDir, '.claude', 'skills');
@@ -298,6 +277,5 @@ export function isSkillInstallCommand(command: string): boolean {
 
 export const __test = {
   extractZipArchive,
-  extractBundle,
   downloadWithRetry,
 };

@@ -1,0 +1,11 @@
+{
+  "framework": "flask",
+  "product": "integration",
+  "step": "integration-init",
+  "pack": "integration-flask",
+  "contextMill": "1.66.0",
+  "completed": {
+    "skill": "integration-v2-init-flask",
+    "contextMill": "1.66.0"
+  }
+}

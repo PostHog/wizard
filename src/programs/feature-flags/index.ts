@@ -23,7 +23,7 @@ import { FEATURE_FLAGS_SCOPE_ADDITIONS } from './scopes.js';
 const FEATURE_FLAGS_REPORT_FILE = 'posthog-feature-flags-report.md';
 const FEATURE_FLAGS_DOCS_URL = 'https://posthog.com/docs/feature-flags';
 
-export const FEATURE_FLAGS_STEP_SKILL_ID = 'integration-v2-feature-flags-step';
+export const FEATURE_FLAGS_STEP_SKILL_ID = 'integration-feature-flags';
 
 /** KMP skill variants carry no `framework` tag, so orchestrator preflight aborts every KMP run. */
 export const FEATURE_FLAGS_UNSUPPORTED: ReadonlySet<Integration> = new Set([

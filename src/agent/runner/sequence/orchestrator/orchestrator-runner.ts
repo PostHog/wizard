@@ -5,10 +5,10 @@
  * orchestrator agent inspects the repo and seeds an in-memory task queue; an
  * executor drains it, running one fresh agent per task.
  *
- * Both the WHAT (agent prompts: model, goal, success criteria, tools) and the
- * HOW (mini-skills) are markdown served from context-mill — the seed and every
- * task resolve to a prompt fetched at startup into the registry. The wizard side
- * stays product-ignorant: it is the queue, the executor, and the loader.
+ * The WHAT (agent prompts: model, goal, success criteria, tools) is markdown
+ * each program bundles, and the HOW (mini-skills) is markdown served from
+ * context-mill. The runner stays product-ignorant: it is the queue, the
+ * executor, and the loader.
  */
 import { failed } from '../../shared/errors';
 import { RunOutcome } from '../../shared/types';
@@ -34,13 +34,10 @@ import { installSkillById } from '@shared/skill-install';
 import {
   formatYaraAbortMessage,
   scanInstalledSkill,
+  scanInstalledSkillFile,
 } from '../../../yara-hooks';
 import { fetchSkillMenu, type SkillEntry } from '@shared/skill-menu';
-import {
-  FRAMEWORK_KEY,
-  resolveSkill,
-  type MatchKeys,
-} from '@shared/skill-resolution';
+import { FRAMEWORK_KEY, resolveSkill } from '@shared/skill-resolution';
 import { analytics } from '@utils/analytics';
 import { ciExcludedTaskTypes } from '@utils/ci-flag-overrides';
 import { logToFile } from '@utils/debug';
@@ -61,12 +58,12 @@ import type {
   SequenceResult,
   SequenceContext,
 } from '../../shared/types';
+import { runMatchKeys } from '../../shared/match-keys';
 import { createEmitSpinner } from '../../shared/progress-collector';
 import { createAskBridge } from '../../shared/ask';
 import {
   areSeededTasksEnabled,
   getHarness,
-  isAgentDagEnabled,
   resolveHarness,
   resolveStageOverrides,
   type HarnessPick,
@@ -96,6 +93,11 @@ import {
 } from './task-deadline';
 import { dependencyClosure, uncoveredBySink } from './queue-tools';
 import { deferSeededTasks } from './seeded-deps';
+import {
+  FRAMEWORK_PACK_FAMILY,
+  repackagedSkillInstaller,
+  reportSkillUnavailable,
+} from './repackaged-skills';
 import { queueTaskGraph, TaskGraphError } from './task-graph';
 import { LONGER_ASK_TIMEOUT_MS, shouldDisableAsk } from '@shared/ask-policy';
 import {
@@ -103,7 +105,6 @@ import {
   assembleSeedPrompt,
   assembleTaskPrompt,
   bundledRegistry,
-  loadAgentRegistry,
   promptModelFor,
   resolveTask,
   taskModelSpec,
@@ -253,23 +254,6 @@ async function fetchSkillMenuEntries(
   if (!menu) return [];
   return Object.values(menu.categories).flat();
 }
-
-/** Menu id for a bare skill id + framework via the menu's declared group/framework/default fields; undefined when nothing matches. */
-export function resolveSkillVariantId(
-  entries: readonly SkillEntry[],
-  skillId: string,
-  framework: string | undefined,
-): string | undefined {
-  if (entries.some((e) => e.id === skillId)) return skillId;
-  if (!framework) return undefined;
-  const family = entries.filter(
-    (e) => e.group === skillId && e.framework === framework,
-  );
-  return (family.find((e) => e.default) ?? family[0])?.id;
-}
-
-/** The framework reference is the full `integration` skill, which the menu ids as `integration-<variant>`. */
-const REFERENCE_SKILL = 'integration';
 
 /**
  * How long an optional step's notice waits for an answer.
@@ -744,10 +728,9 @@ async function executeOrchestrator(
   // `binding.contextMillOverride[role]` on the same inputs.
   const switchboardCtx = { ...config.switchboard, trace: undefined };
 
-  // The WHAT (agent prompts) is served from context-mill. Fetch the registry
+  // The WHAT (agent prompts) is bundled with the program. Build the registry
   // once up front: its types drive enqueue validation, and resolving a task to
-  // its run config is then synchronous, with no mid-drain network latency.
-  // With `wizard-agent-dag` on, the prompts the program bundles are the registry.
+  // its run config is then synchronous.
   const flow = config.agentFlow ?? programId;
   const registryOptions = {
     exclude: effectiveExcludedTaskTypes(config, boot.wizardFlags),
@@ -758,41 +741,33 @@ async function executeOrchestrator(
       boot.wizardFlagPayloads,
     ),
   };
-  // A bundle that fails to load is reported, and the run fetches instead.
-  const bundledPrompts = isAgentDagEnabled(boot.wizardFlags)
-    ? await config.agentPrompts?.().catch((error: unknown) => {
-        logToFile('[orchestrator] bundled prompts failed to load:', error);
-        analytics.captureException(
-          error instanceof Error ? error : new Error(String(error)),
-          { step: 'orchestrator_bundled_prompts' },
-        );
-        return undefined;
-      })
-    : undefined;
-  const registry = bundledPrompts
-    ? bundledRegistry(bundledPrompts, flow, registryOptions)
-    : await loadAgentRegistry(boot.skillsBaseUrl, flow, registryOptions);
-  analytics.setTag(
-    'orchestrator_prompts',
-    bundledPrompts ? 'bundled' : 'context-mill',
-  );
-  if (signal?.aborted) return cancelledRun();
-  // A bundled flow with no planner prompt is queued from its frontmatter; a fetched one needs its planner.
-  const seedPrompt = registry.seed;
-  if (!seedPrompt && !bundledPrompts) {
-    logToFile(
-      `[orchestrator] no seed agent prompt (frontmatter \`seed: true\`) for flow "${flow}" from ${boot.skillsBaseUrl}`,
-    );
+  // A program that runs the orchestrator bundles its prompts; without them the run has no plan.
+  const bundledPrompts = await config
+    .agentPrompts?.()
+    .catch((error: unknown) => {
+      logToFile('[orchestrator] bundled prompts failed to load:', error);
+      analytics.captureException(
+        error instanceof Error ? error : new Error(String(error)),
+        { step: 'orchestrator_bundled_prompts' },
+      );
+      return undefined;
+    });
+  if (!bundledPrompts) {
+    logToFile(`[orchestrator] no bundled agent prompts for flow "${flow}"`);
     return failed({
       code: ErrorCodes.AgentOrchestratorNoPlanner,
       message: `The wizard could not load the plan for this setup.\n\nPlease report this to: ${WIZARD_CONTACT_EMAIL}`,
       error: new WizardError(
-        'orchestrator flow has no seed agent prompt',
-        { flow, skills_base_url: boot.skillsBaseUrl },
+        'orchestrator flow has no bundled agent prompts',
+        { flow },
         ErrorCodes.AgentOrchestratorNoPlanner,
       ),
     });
   }
+  const registry = bundledRegistry(bundledPrompts, flow, registryOptions);
+  if (signal?.aborted) return cancelledRun();
+  // A flow with no planner prompt is queued from its frontmatter.
+  const seedPrompt = registry.seed;
 
   // The end decision the switchboard event defers to: the model each task will actually run on.
   const taskModels = Object.fromEntries(
@@ -906,26 +881,15 @@ async function executeOrchestrator(
   let referenceInstallPath: string | undefined;
   const menuSkillEntries = await fetchSkillMenuEntries(boot.skillsBaseUrl);
   if (signal?.aborted) return cancelledRun();
-  // The framework key for reference + variant resolution. `input.integration`
-  // is the detected framework and always wins; `input.skillId` is the
-  // fallback for the basic-integration path, where the caller sets it to the
-  // framework label. Programs whose run config carries their own skill id
-  // (agent-skill commands like replay-vision) would otherwise leak that id in
-  // here as a bogus framework after the caller overwrites the detect result.
-  const framework = input.integration ?? input.skillId ?? undefined;
-  // `wizard-agent-dag` picks skills with the shared resolver; off, the menu lookup above does.
-  const agentDag = isAgentDagEnabled(boot.wizardFlags);
-  // The project's traits supply the match keys, and the framework key above replaces theirs.
-  const matchKeys: MatchKeys = {
-    ...(agentDag ? config.matchKeys?.() : undefined),
-    [FRAMEWORK_KEY]: framework ? [framework] : undefined,
-  };
-  const pickSkillId = agentDag
-    ? (skillId: string) =>
-        resolveSkill(menuSkillEntries, skillId, matchKeys)?.id
-    : (skillId: string) =>
-        resolveSkillVariantId(menuSkillEntries, skillId, framework);
-  const referenceSkillId = framework ? pickSkillId(REFERENCE_SKILL) : undefined;
+  // The project's traits are the match keys; their framework is the one the pack resolves for.
+  const matchKeys = runMatchKeys(config);
+  const framework = matchKeys[FRAMEWORK_KEY]?.[0];
+  const pickSkillEntry = (skillId: string) =>
+    resolveSkill(menuSkillEntries, skillId, matchKeys);
+  const pickSkillId = (skillId: string) => pickSkillEntry(skillId)?.id;
+  const referenceSkillId = framework
+    ? pickSkillId(FRAMEWORK_PACK_FAMILY)
+    : undefined;
   if (referenceSkillId) {
     const ref = await installSkillById(
       referenceSkillId,
@@ -969,7 +933,11 @@ async function executeOrchestrator(
   const missingSkills = new Set<string>();
   for (const type of registry.types) {
     for (const skillId of registry.get(type)?.skills ?? []) {
-      if (pickSkillId(skillId)) continue;
+      const picked = pickSkillEntry(skillId);
+      // A skill completed from the framework's pack is missing when the run installed no pack.
+      if (picked && !(picked.frameworkReferences && !referenceInstallPath)) {
+        continue;
+      }
       missingVariants.push(`${type}/${skillId}`);
       missingSkills.add(skillId);
       logToFile(
@@ -987,14 +955,13 @@ async function executeOrchestrator(
   if (missingVariants.length > 0) {
     // The framework's own docs page, resolved by the caller; generic docs when detection found none.
     const docsUrl = framework ? input.frameworkDocsUrl : undefined;
-    // A bundled prompt naming a skill the loaded menu has under no id or family means the wizard is older than the skills.
+    // A prompt naming a skill the loaded menu has under no id or family means the wizard is older than the skills.
     const outdated =
-      bundledPrompts !== undefined &&
       menuSkillEntries.length > 0 &&
       [...missingSkills].some(
         (name) =>
           !menuSkillEntries.some(
-            (entry) => entry.id === name || entry.group === name,
+            (entry) => entry.id === name || entry.family === name,
           ),
       );
     return failed({
@@ -1373,6 +1340,22 @@ async function executeOrchestrator(
   // its agent prompt (the WHAT) and the mini-skills it needs (the HOW), then
   // runs on its own model and tools.
   const taskSkillsRoot = path.join(QUEUE_DIR_NAME, 'skills');
+  // A skill written once for every framework is completed from the run's pack before a task reads it.
+  const installCompletedSkill = repackagedSkillInstaller({
+    installDir: input.installDir,
+    skillsRoot: taskSkillsRoot,
+    // The run's cache is the wizard's own, so a folder an earlier run left there is replaced.
+    ownsSkillsRoot: true,
+    referencePath: referenceInstallPath,
+    install: (skillId, dir) =>
+      installSkillById(skillId, dir, boot.skillsBaseUrl, {
+        skillsRoot: 'skill',
+        scan: (scanned) => scanInstalledSkill(scanned, boot.triageProvider),
+      }),
+    scanFile: (file) => scanInstalledSkillFile(file, boot.triageProvider),
+    onUnavailable: (skill, reason) =>
+      reportSkillUnavailable(skill, reason, framework),
+  });
   // Task agents can install durable skills mid-run (load_skill), and only the
   // framework reference docs earn a place — snapshot what was already there so
   // the sweeps remove exactly what this run added.
@@ -1393,16 +1376,35 @@ async function executeOrchestrator(
       const skillPaths: string[] = [];
       for (const skillId of resolved.skills) {
         if (signal?.aborted) return;
-        // Agent prompts name the bare step-skill (`integration-v2-install`);
-        // SDK-divergent steps ship per-framework variants, so resolve against
-        // the menu with the session's framework before installing.
-        const variantId = pickSkillId(skillId);
-        if (!variantId) {
+        // A prompt names a skill by menu id or by family; a family resolves
+        // against the menu with the run's match keys before installing.
+        const picked = pickSkillEntry(skillId);
+        const variantId = picked?.id;
+        if (!picked || !variantId) {
           logToFile(
             `[orchestrator] no skill variant type=${
               task.type
             } skill=${skillId} framework=${framework ?? 'none'}`,
           );
+          continue;
+        }
+        const { frameworkReferences } = picked;
+        if (frameworkReferences) {
+          // A task without its instructions must fail here, not run blind.
+          const completed = await installCompletedSkill({
+            ...picked,
+            frameworkReferences,
+          }).catch((error: unknown) => {
+            throw new Error(
+              `Skill "${variantId}" for task "${
+                task.type
+              }" could not be completed from the framework's pack (${
+                error instanceof Error ? error.message : String(error)
+              }).`,
+            );
+          });
+          if (signal?.aborted) return;
+          skillPaths.push(path.join(completed, 'SKILL.md'));
           continue;
         }
         const result = await installSkillById(

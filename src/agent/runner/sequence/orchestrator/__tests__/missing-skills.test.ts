@@ -24,24 +24,9 @@ vi.mock('../../../switchboard', async () => {
     resolveHarness: () => ({ harness: 'pi', model: [...VALID_MODELS][0] }),
     resolveStageOverrides: () => ({}),
     areSeededTasksEnabled: () => false,
-    isAgentDagEnabled: () => agentDag,
     getHarness: () => ({ runTask: (inputs: unknown) => harnessRun(inputs) }),
   };
 });
-vi.mock('../../../../agent-prompt-loader', async (importActual) => {
-  const actual = await importActual<
-    typeof import('../../../../agent-prompt-loader')
-  >();
-  return {
-    ...actual,
-    // The fetched flow: the same prompts, with the planner a fetched flow needs.
-    loadAgentRegistry: (_url: string, flow: string, opts?: object) =>
-      Promise.resolve(
-        actual.bundledRegistry({ ...prompts, plan: PLANNER }, flow, opts),
-      ),
-  };
-});
-
 import type { InstallSkillResult } from '@shared/skill-install';
 import { analytics } from '@utils/analytics';
 import { RunOutcome } from '../../../shared/types';
@@ -49,7 +34,6 @@ import { runOrchestrator } from '../orchestrator-runner';
 import type { SequenceContext } from '../../../shared/types';
 import type { QueueStore } from '../queue';
 
-const PLANNER = '---\nseed: true\n---\nplan';
 const REPORT = '---\nsink: true\ndependsOn: [install]\n---\nreport';
 const flowNaming = (skill?: string): Record<string, string> => ({
   install: `---\n${
@@ -61,7 +45,7 @@ const flowNaming = (skill?: string): Record<string, string> => ({
 const entry = (id: string, rest: object = {}) => ({
   id,
   name: id,
-  group: id,
+  family: id,
   downloadUrl: `https://skills.test/${id}.zip`,
   ...rest,
 });
@@ -70,9 +54,8 @@ const MENU = {
     skills: [
       entry('kept-skill'),
       entry('integration-nextjs', {
-        group: 'integration',
-        framework: 'nextjs',
-        default: true,
+        family: 'integration',
+        tags: ['framework:nextjs', 'default'],
       }),
     ],
   },
@@ -84,7 +67,6 @@ type Inputs = {
   orchestrator: { store: QueueStore };
 };
 
-let agentDag = true;
 let menu: typeof MENU | null = MENU;
 let installResult: InstallSkillResult = { kind: 'ok', path: 'skills/x' };
 let prompts: Record<string, string> = flowNaming();
@@ -109,7 +91,6 @@ describe('a skill the menu cannot supply', () => {
 
   beforeEach(() => {
     dir = fs.mkdtempSync(path.join(os.tmpdir(), 'missing-skills-'));
-    agentDag = true;
     menu = MENU;
     installResult = { kind: 'ok', path: 'skills/x' };
     prompts = flowNaming();
@@ -126,8 +107,9 @@ describe('a skill the menu cannot supply', () => {
         wizardFlagPayloads: {},
         switchboard: {},
         agentPrompts: () => Promise.resolve(prompts),
+        matchKeys: () => (integration ? { framework: [integration] } : {}),
       },
-      input: { installDir: dir, flags: { ci: true }, integration },
+      input: { installDir: dir, flags: { ci: true } },
       boot: {
         skillsBaseUrl: 'https://skills.test',
         wizardFlags: {},
@@ -158,7 +140,7 @@ describe('a skill the menu cannot supply', () => {
     );
   });
 
-  it('says to run the latest wizard when a bundled prompt names a skill the menu no longer has', async () => {
+  it('says to run the latest wizard when a prompt names a skill the menu no longer has', async () => {
     prompts = flowNaming('gone-skill');
     const result = await run();
     expect(result.outcome).toBe(RunOutcome.Failed);
@@ -167,13 +149,6 @@ describe('a skill the menu cannot supply', () => {
   });
 
   it.each([
-    [
-      'the prompts are fetched',
-      () => {
-        agentDag = false;
-        prompts = flowNaming('gone-skill');
-      },
-    ],
     [
       'the menu did not load',
       () => {

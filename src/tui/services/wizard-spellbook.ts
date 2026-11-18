@@ -9,6 +9,12 @@ import {
   type SkillEntry,
   type SkillMenu,
 } from '@shared/skill-menu';
+import {
+  DEFAULT_SKILL_TAG,
+  FRAMEWORK_KEY,
+  resolveSkill,
+  skillTags,
+} from '@shared/skill-resolution';
 
 export type WizardSpellbook = { path: string; skillsIncluded: boolean };
 type SpellbookSession = Pick<
@@ -16,6 +22,7 @@ type SpellbookSession = Pick<
   'installDir' | 'integration' | 'skillId' | 'frameworkConfig'
 >;
 
+/** The skills handed over: the program's own, else the framework's pack, else every skill of the program's flow. */
 function selectSkills(
   menu: SkillMenu,
   session: SpellbookSession,
@@ -25,31 +32,37 @@ function selectSkills(
     .flat()
     .filter((entry) => /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(entry.id));
   const skillId = program.skillId ?? session.skillId;
-  const exact = entries.find((entry) => entry.id === skillId);
-  if (exact) return [exact];
-
   const framework = session.integration;
-  const referenceGroup = skillId === framework ? 'integration' : skillId;
-  const references = entries.filter(
-    (entry) => entry.group === referenceGroup && entry.framework === framework,
-  );
-  const reference = references.find((entry) => entry.default) ?? references[0];
-  if (reference) return [reference];
+  // A skill id that is the framework's own names the framework's pack.
+  const name = skillId === framework ? 'integration' : skillId;
+  const picked =
+    name &&
+    resolveSkill(entries, name, {
+      [FRAMEWORK_KEY]: framework ? [framework] : undefined,
+    });
+  if (picked) return [picked];
 
   const flow = program.agentFlow ?? program.id;
-  const groups = new Map<string, SkillEntry>();
+  const families = new Map<string, SkillEntry>();
   for (const entry of entries) {
-    const group = entry.group;
+    const { family } = entry;
+    const tags = skillTags(entry);
+    const frameworks = [...tags].filter((tag) =>
+      tag.startsWith(`${FRAMEWORK_KEY}:`),
+    );
     if (
-      !group ||
-      (group !== flow && !group.startsWith(`${flow}-`)) ||
-      (entry.framework && entry.framework !== framework)
+      !family ||
+      (family !== flow && !family.startsWith(`${flow}-`)) ||
+      (frameworks.length > 0 &&
+        !frameworks.includes(`${FRAMEWORK_KEY}:${framework}`))
     ) {
       continue;
     }
-    if (!groups.has(group) || entry.default) groups.set(group, entry);
+    if (!families.has(family) || tags.has(DEFAULT_SKILL_TAG)) {
+      families.set(family, entry);
+    }
   }
-  return [...groups.values()];
+  return [...families.values()];
 }
 
 function spellbookText(
