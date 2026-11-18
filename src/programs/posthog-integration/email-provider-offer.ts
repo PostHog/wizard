@@ -21,6 +21,8 @@ type OfferedProvider = { kind: EmailProviderKind; label: string };
 export type EmailProviderOffer = {
   providers: [OfferedProvider, ...OfferedProvider[]];
   workflowsUrl: string;
+  projectId: number;
+  installDir: string;
   migrateCommand?: string;
 };
 
@@ -35,6 +37,7 @@ type OfferSession = Pick<
   | 'credentials'
   | 'apiUser'
   | 'frameworkContext'
+  | 'installDir'
 >;
 
 const MIGRATE_COMMANDS: Readonly<Partial<Record<EmailProviderKind, string>>> =
@@ -66,6 +69,8 @@ export function emailProviderOffer(
   return {
     providers: [offered(first), ...others.map(offered)],
     workflowsUrl: `${credentials.host.appHost}/project/${credentials.projectId}/workflows?source=wizard_cli`,
+    projectId: credentials.projectId,
+    installDir: session.installDir,
     migrateCommand: MIGRATE_COMMANDS[first.kind],
   };
 }
@@ -73,8 +78,6 @@ export function emailProviderOffer(
 function providerKinds(offer: EmailProviderOffer): EmailProviderKind[] {
   return offer.providers.map((provider) => provider.kind);
 }
-
-export const EMAIL_SETUP_COMMAND = 'npx @posthog/wizard@latest email';
 
 export const EMAIL_PROVIDER_OFFER_QUESTION =
   "PostHog can send this app's transactional emails directly from code, " +

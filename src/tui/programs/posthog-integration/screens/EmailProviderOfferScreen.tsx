@@ -5,12 +5,12 @@ import { Colors } from '@tui/styles';
 import { PickerMenu } from '@tui/primitives/index';
 import { useKeyBindings, KeyMatch } from '@tui/hooks/useKeyBindings';
 import { useDismissOnAnyKey } from '@tui/hooks/useDismissOnAnyKey';
+import { emailSetupCommand } from '@tui/programs/posthog-integration/email-setup-command';
 import {
   EmailProviderOfferAnswer,
   emailProviderOffer,
   emailProviderOfferChoices,
   EMAIL_PROVIDER_OFFER_QUESTION,
-  EMAIL_SETUP_COMMAND,
   reportEmailProviderOfferAnswered,
   reportEmailProviderOfferShown,
   type EmailProviderOffer,
@@ -126,13 +126,14 @@ const WorkflowsLink = ({
   onContinue: () => void;
 }) => {
   useDismissOnAnyKey(onContinue);
+  const [command] = useState(() => emailSetupCommand(offer));
 
   return (
     <Box flexDirection="column" flexGrow={1} marginTop={1}>
       <Text>
-        Let the setup agent add your first email send:{' '}
-        <Text bold>{EMAIL_SETUP_COMMAND}</Text>
+        Let the setup agent add your first email send to your server code:
       </Text>
+      <Text bold>{command}</Text>
       <Box marginTop={1}>
         <Text>
           Or set up email in Workflows:{' '}

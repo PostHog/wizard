@@ -160,7 +160,9 @@ describe('the email provider offer after install', () => {
     await press(ENTER);
 
     expect(wizardCapture).toHaveBeenCalledWith(...answeredWith('yes'));
-    expect(app.lastFrame()).toContain('npx @posthog/wizard@latest email');
+    expect(app.lastFrame()).toContain(
+      'npx @posthog/wizard@latest email --project-id 42',
+    );
     expect(app.lastFrame()).toContain(WORKFLOWS_URL);
     expect(store.router.resolve(store)).toBe(
       PostHogIntegrationScreenId.EmailProviderOffer,

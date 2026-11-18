@@ -74,6 +74,8 @@ describe('emailProviderOffer', () => {
       ],
       workflowsUrl:
         'https://us.posthog.com/project/42/workflows?source=wizard_cli',
+      projectId: 42,
+      installDir: '/tmp/app',
     });
   });
 
