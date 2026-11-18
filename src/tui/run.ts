@@ -50,11 +50,18 @@ import { tuiWorkflow } from './workflow.js';
 /** How long an exit request or a signal waits for analytics before it exits anyway. */
 const EXIT_REPORT_BUDGET_MS = 2000;
 
-function withinReportBudget(report: Promise<void>): Promise<unknown> {
-  return Promise.race([
-    report,
-    new Promise((resolve) => setTimeout(resolve, EXIT_REPORT_BUDGET_MS)),
-  ]);
+async function withinReportBudget(report: Promise<void>): Promise<void> {
+  let timer: NodeJS.Timeout | undefined;
+  try {
+    await Promise.race([
+      report,
+      new Promise((resolve) => {
+        timer = setTimeout(resolve, EXIT_REPORT_BUDGET_MS);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 /**
@@ -76,9 +83,10 @@ export async function runTui(
   // A tool the intro handed off to ends the run once its analytics flush.
   let handedOff = false;
 
+  // Only events a finished run captures after its report, such as an unmount's answer, get the budget.
   const reportCancellation = async (): Promise<void> => {
     await analytics.shutdown('cancelled');
-    await flushAnalytics();
+    await withinReportBudget(flushAnalytics());
   };
 
   // Flush a terminal-phase push so the web app sees the run ended in error
@@ -102,7 +110,7 @@ export async function runTui(
     }
     void Promise.all([
       stream?.shutdown(2000, 'cancelled'),
-      withinReportBudget(reportCancellation()),
+      reportCancellation(),
     ])
       .catch(() => logToFile('[run-wizard] cancellation shutdown failed'))
       .finally(() => {

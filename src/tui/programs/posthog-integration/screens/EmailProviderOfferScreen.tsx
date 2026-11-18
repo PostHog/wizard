@@ -5,12 +5,14 @@ import { Colors } from '@tui/styles';
 import { PickerMenu } from '@tui/primitives/index';
 import { useKeyBindings, KeyMatch } from '@tui/hooks/useKeyBindings';
 import { useDismissOnAnyKey } from '@tui/hooks/useDismissOnAnyKey';
-import { emailSetupCommand } from '@tui/programs/posthog-integration/email-setup-command';
+import { useScreenVisible } from '@tui/hooks/useScreenVisible';
+import {
+  emailSetupCommand,
+  type EmailSetup,
+} from '@tui/programs/posthog-integration/email-setup-command';
 import {
   EmailProviderOfferAnswer,
   emailProviderOffer,
-  emailProviderOfferChoices,
-  EMAIL_PROVIDER_OFFER_QUESTION,
   reportEmailProviderOfferAnswered,
   reportEmailProviderOfferShown,
   type EmailProviderOffer,
@@ -33,19 +35,26 @@ export const EmailProviderOfferScreen = ({
   return <OfferFlow offer={offer} store={store} />;
 };
 
-function useAnswerOnce(offer: EmailProviderOffer) {
+function useAnswerOnce(offer: EmailProviderOffer, visible: boolean) {
+  const shown = useRef(false);
   const answered = useRef(false);
 
   useEffect(() => {
+    if (!visible || shown.current) return;
+    shown.current = true;
     reportEmailProviderOfferShown(offer);
-    return () => {
-      if (answered.current) return;
+  }, [offer, visible]);
+
+  useEffect(
+    () => () => {
+      if (!shown.current || answered.current) return;
       reportEmailProviderOfferAnswered(offer, EmailProviderOfferAnswer.Skipped);
-    };
-  }, [offer]);
+    },
+    [offer],
+  );
 
   return (answer: EmailProviderOfferAnswer): boolean => {
-    if (answered.current) return false;
+    if (!shown.current || answered.current) return false;
     answered.current = true;
     reportEmailProviderOfferAnswered(offer, answer);
     return true;
@@ -59,59 +68,88 @@ const OfferFlow = ({
   offer: EmailProviderOffer;
   store: WizardStore;
 }) => {
-  const [showingWorkflows, setShowingWorkflows] = useState(false);
-  const answerOnce = useAnswerOnce(offer);
+  const visible = useScreenVisible();
+  const [setup, setSetup] = useState<EmailSetup | null>(null);
+  const answerOnce = useAnswerOnce(offer, visible);
 
   const answer = (choice: EmailProviderOfferAnswer): void => {
     if (!answerOnce(choice)) return;
-    if (choice === EmailProviderOfferAnswer.Yes) setShowingWorkflows(true);
-    else store.setEmailProviderOfferDone();
+    if (choice !== EmailProviderOfferAnswer.Yes) {
+      store.setEmailProviderOfferDone();
+      return;
+    }
+    const accepted = {
+      ...emailSetupCommand(offer),
+      workflowsUrl: offer.workflowsUrl,
+    };
+    store.setEmailSetup(accepted);
+    setSetup(accepted);
   };
 
-  if (showingWorkflows) {
+  if (setup) {
     return (
       <WorkflowsLink
-        offer={offer}
+        setup={setup}
+        migrateCommand={offer.migrateCommand}
         onContinue={() => store.setEmailProviderOfferDone()}
       />
     );
   }
 
-  return <QuestionPicker onAnswer={answer} />;
+  return <QuestionPicker visible={visible} onAnswer={answer} />;
 };
 
-/**
- * How long the question ignores Enter after it opens. The cursor starts on
- * "Yes", so without it a quick second Enter meant for the outro would answer
- * yes before the question could be read.
- */
-export const QUESTION_READ_GUARD_MS = 500;
+// Enter must follow this long a pause, so a quick or held Enter meant for the outro can't answer yes unread.
+const QUESTION_READ_GUARD_MS = 500;
+
+const QUESTION =
+  "PostHog can send this app's transactional emails directly from code, " +
+  'with delivery and engagement events next to your product analytics. ' +
+  'Want to try it?';
+
+const CHOICES = [
+  { label: 'Yes, show me how', value: EmailProviderOfferAnswer.Yes },
+  { label: 'Not now', value: EmailProviderOfferAnswer.NotNow },
+  { label: 'No thanks', value: EmailProviderOfferAnswer.No },
+];
 
 const QuestionPicker = ({
+  visible,
   onAnswer,
 }: {
+  visible: boolean;
   onAnswer: (choice: EmailProviderOfferAnswer) => void;
 }) => {
-  const [openedAt] = useState(() => Date.now());
+  const quietSince = useRef(Date.now());
+  useEffect(() => {
+    quietSince.current = Date.now();
+  }, [visible]);
+
+  const answerAfterPause = (choice: EmailProviderOfferAnswer): void => {
+    const now = Date.now();
+    const paused = now - quietSince.current >= QUESTION_READ_GUARD_MS;
+    quietSince.current = now;
+    if (visible && paused) onAnswer(choice);
+  };
+
   useKeyBindings('email-provider-offer', [
     {
       match: KeyMatch.Escape,
       label: 'esc',
       action: 'skip',
-      handler: () => onAnswer(EmailProviderOfferAnswer.Skipped),
+      handler: () => answerAfterPause(EmailProviderOfferAnswer.Skipped),
     },
   ]);
 
   return (
     <Box flexDirection="column" flexGrow={1} marginTop={1}>
-      <Text>{EMAIL_PROVIDER_OFFER_QUESTION}</Text>
+      <Text>{QUESTION}</Text>
       <Box marginTop={1}>
         <PickerMenu
-          options={emailProviderOfferChoices()}
-          onSelect={(value) => {
-            if (Date.now() - openedAt < QUESTION_READ_GUARD_MS) return;
-            onAnswer(Array.isArray(value) ? value[0] : value);
-          }}
+          options={CHOICES}
+          onSelect={(value) =>
+            answerAfterPause(Array.isArray(value) ? value[0] : value)
+          }
         />
       </Box>
     </Box>
@@ -119,33 +157,33 @@ const QuestionPicker = ({
 };
 
 const WorkflowsLink = ({
-  offer,
+  setup,
+  migrateCommand,
   onContinue,
 }: {
-  offer: EmailProviderOffer;
+  setup: EmailSetup;
+  migrateCommand?: string;
   onContinue: () => void;
 }) => {
   useDismissOnAnyKey(onContinue);
-  const [{ command, runIn }] = useState(() => emailSetupCommand(offer));
 
   return (
     <Box flexDirection="column" flexGrow={1} marginTop={1}>
       <Text>
         Let the setup agent add your first email send to your server code.
-        {runIn ? ` Run this in ${runIn}:` : ' Run this:'}
+        {setup.runIn ? ` Run this in ${setup.runIn}:` : ' Run this:'}
       </Text>
-      <Text bold>{command}</Text>
+      <Text bold>{setup.command}</Text>
       <Box marginTop={1}>
         <Text>
           Or set up email in Workflows:{' '}
-          <Text color="cyan">{offer.workflowsUrl}</Text>
+          <Text color="cyan">{setup.workflowsUrl}</Text>
         </Text>
       </Box>
-      {offer.migrateCommand && (
+      {migrateCommand && (
         <Box marginTop={1}>
           <Text>
-            Move your existing emails with{' '}
-            <Text bold>{offer.migrateCommand}</Text>
+            Move your existing emails with <Text bold>{migrateCommand}</Text>
           </Text>
         </Box>
       )}

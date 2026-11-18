@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildSession } from '@services/session';
 import { CODEBASE_SCAN_KEY, type CodebaseScan } from '@services/codebase-scan';
 import { HostResolution } from '@shared/host-resolution';
@@ -6,11 +6,8 @@ import { OutroKind } from '@shared/outro';
 import { ScanConsent } from '@shared/run-state';
 import type { ProgramSession } from '@programs/program-contract';
 import type { ApiUser } from '@shared/api';
-import {
-  emailProviderOffer,
-  emailProviderOfferChoices,
-  EMAIL_PROVIDER_OFFER_QUESTION,
-} from '@programs/posthog-integration';
+import { analytics } from '@utils/analytics';
+import { emailProviderOffer } from '@programs/posthog-integration';
 
 function detected(kind: string, label: string) {
   return {
@@ -52,7 +49,12 @@ function finishedRun(
 }
 
 const RESEND = detected('Resend', 'Resend');
-const OFFER_ON = { 'wizard-email-provider-offer': 'true' };
+
+function flagsAre(flags: Record<string, string> | null): void {
+  vi.spyOn(analytics, 'getCachedWizardFlags').mockReturnValue(flags);
+}
+
+beforeEach(() => flagsAre({ 'wizard-email-provider-offer': 'true' }));
 
 describe('emailProviderOffer', () => {
   it('offers Workflows in the project to a run that found a provider', () => {
@@ -64,19 +66,23 @@ describe('emailProviderOffer', () => {
           detected('AwsSes', 'Amazon SES'),
         ),
       ),
-      OFFER_ON,
     );
 
     expect(offer).toEqual({
-      providers: [
-        { kind: 'Resend', label: 'Resend' },
-        { kind: 'AwsSes', label: 'Amazon SES' },
-      ],
+      providers: ['Resend', 'AwsSes'],
       workflowsUrl:
         'https://us.posthog.com/project/42/workflows?source=wizard_cli',
       projectId: 42,
       installDir: '/tmp/app',
     });
+  });
+
+  it('keeps the instance a run pinned with --base-url', () => {
+    const offer = emailProviderOffer(
+      finishedRun(scanFinding(RESEND), { baseUrl: 'http://localhost:8010' }),
+    );
+
+    expect(offer?.baseUrl).toBe('http://localhost:8010');
   });
 
   it.each<[string, (scan: CodebaseScan) => ProgramSession]>([
@@ -102,16 +108,13 @@ describe('emailProviderOffer', () => {
       (scan) => finishedRun(scan, { apiUser: null }),
     ],
   ])('stays silent when %s', (_case, sessionFor) => {
-    expect(
-      emailProviderOffer(sessionFor(scanFinding(RESEND)), OFFER_ON),
-    ).toBeUndefined();
+    expect(emailProviderOffer(sessionFor(scanFinding(RESEND)))).toBeUndefined();
   });
 
   it('stays silent when the scan found no email provider', () => {
     expect(
       emailProviderOffer(
         finishedRun(scanFinding(detected('Stripe', 'Stripe'))),
-        OFFER_ON,
       ),
     ).toBeUndefined();
   });
@@ -121,8 +124,9 @@ describe('emailProviderOffer', () => {
     ['the flag evaluation left the flag out', {}],
     ['no flag evaluation finished', null],
   ])('stays silent when %s', (_case, flags) => {
+    flagsAre(flags);
     expect(
-      emailProviderOffer(finishedRun(scanFinding(RESEND)), flags),
+      emailProviderOffer(finishedRun(scanFinding(RESEND))),
     ).toBeUndefined();
   });
 
@@ -137,31 +141,9 @@ describe('emailProviderOffer', () => {
         detected('Postmark', 'Postmark'),
       ],
     ],
-  ])(
-    'keeps every provider for analytics but names none of them for %s',
-    (_case, tools) => {
-      const offer = emailProviderOffer(
-        finishedRun(scanFinding(...tools)),
-        OFFER_ON,
-      );
-      if (!offer) throw new Error('expected an offer');
+  ])('keeps every provider kind for analytics with %s', (_case, tools) => {
+    const offer = emailProviderOffer(finishedRun(scanFinding(...tools)));
 
-      expect(offer.providers.map((provider) => provider.kind)).toEqual(
-        tools.map((tool) => tool.kind),
-      );
-      const shown = [
-        EMAIL_PROVIDER_OFFER_QUESTION,
-        ...emailProviderOfferChoices().map((c) => c.label),
-      ].join('\n');
-      for (const tool of tools) expect(shown).not.toContain(tool.label);
-      expect(EMAIL_PROVIDER_OFFER_QUESTION).toBe(
-        "PostHog can send this app's transactional emails directly from code, with delivery and engagement events next to your product analytics. Want to try it?",
-      );
-      expect(emailProviderOfferChoices().map((c) => c.label)).toEqual([
-        'Yes, show me how',
-        'Not now',
-        'No thanks',
-      ]);
-    },
-  );
+    expect(offer?.providers).toEqual(tools.map((tool) => tool.kind));
+  });
 });

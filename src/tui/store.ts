@@ -387,6 +387,10 @@ export class WizardStore implements TuiView {
     return this.$tui.get().emailProviderOfferDone;
   }
 
+  get emailSetup(): TuiState['emailSetup'] {
+    return this.$tui.get().emailSetup;
+  }
+
   get integrate(): TuiState['integrate'] {
     return this.$tui.get().integrate;
   }
@@ -921,6 +925,10 @@ export class WizardStore implements TuiView {
 
   setEmailProviderOfferDone(): void {
     this._write({ emailProviderOfferDone: true });
+  }
+
+  setEmailSetup(setup: NonNullable<TuiState['emailSetup']>): void {
+    this._write({ emailSetup: setup });
   }
 
   setOutroData(data: OutroData): void {

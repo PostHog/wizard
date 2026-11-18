@@ -276,8 +276,6 @@ export { EVENT_PLAN_FILE } from './constants.js';
 export {
   EmailProviderOfferAnswer,
   emailProviderOffer,
-  emailProviderOfferChoices,
-  EMAIL_PROVIDER_OFFER_QUESTION,
   reportEmailProviderOfferAnswered,
   reportEmailProviderOfferShown,
   type EmailProviderOffer,

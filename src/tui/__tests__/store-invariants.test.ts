@@ -413,6 +413,15 @@ const MUTATIONS: MutationCase[] = [
     emits: 1,
   },
   {
+    name: 'setEmailSetup',
+    invoke: (s) =>
+      s.setEmailSetup({
+        command: 'npx @posthog/wizard@latest email',
+        workflowsUrl: 'https://us.posthog.com/project/1/workflows',
+      }),
+    emits: 1,
+  },
+  {
     name: 'setOutroData',
     invoke: (s) => s.setOutroData({ kind: OutroKind.Success, message: 'done' }),
     emits: 1,
