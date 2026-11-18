@@ -16,6 +16,7 @@ import {
 } from '@tui/programs/posthog-integration/screens/EmailProviderOfferScreen';
 import { ScreenContainer } from '@tui/primitives/ScreenContainer';
 import { createScreens, createServices } from '@tui/screen-registry';
+import { buildSession } from '@programs';
 
 vi.mock('ink', () => vi.importActual<typeof import('ink')>('ink-actual'));
 const { wizardCapture } = vi.hoisted(() => ({ wizardCapture: vi.fn() }));
@@ -46,6 +47,7 @@ const readTheQuestion = () =>
 
 function storeAtOutroWithResend(): WizardStore {
   const store = new WizardStore();
+  store.launch(buildSession({ installDir: `${process.cwd()}/apps/web` }));
   store.grantSharing();
   store.completeSetup();
   store.setReadinessResult({
@@ -161,7 +163,7 @@ describe('the email provider offer after install', () => {
 
     expect(wizardCapture).toHaveBeenCalledWith(...answeredWith('yes'));
     expect(app.lastFrame()).toContain(
-      'npx @posthog/wizard@latest email --project-id 42',
+      'npx @posthog/wizard@latest email --project-id 42 --install-dir=apps/web',
     );
     expect(app.lastFrame()).toContain(WORKFLOWS_URL);
     expect(store.router.resolve(store)).toBe(
