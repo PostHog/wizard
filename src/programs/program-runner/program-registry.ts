@@ -26,6 +26,7 @@ import { config as sourceMaps } from '@programs/error-tracking-upload-source-map
 import { config as errorTracking } from '@programs/error-tracking';
 import { config as featureFlags } from '@programs/feature-flags';
 import { config as agentSkill } from '@programs/agent-skill';
+import { config as transactionalEmail } from '@programs/transactional-email';
 import { config as support } from '@programs/support';
 
 const [audit, eventsAudit] = auditPrograms;
@@ -48,6 +49,7 @@ export const PROGRAM_REGISTRY = [
   replayVision,
   aiObservability,
   metrics,
+  transactionalEmail,
   support,
 ] as const satisfies readonly ProgramConfig[];
 
@@ -74,6 +76,7 @@ export const Program = {
   ReplayVision: replayVision.id,
   AiObservability: aiObservability.id,
   Metrics: metrics.id,
+  TransactionalEmail: transactionalEmail.id,
   Support: support.id,
 } as const;
 
