@@ -19,7 +19,6 @@ vi.mock('../../../switchboard', async () => {
   return {
     resolveHarness: () => ({ harness: 'pi', model: [...VALID_MODELS][0] }),
     resolveStageOverrides: () => ({}),
-    areSeededTasksEnabled: () => seededTasks,
     getHarness: () => ({ runTask: (inputs: unknown) => harnessRun(inputs) }),
   };
 });
@@ -99,7 +98,7 @@ describe('queueing a flow from its frontmatter', () => {
             bundleFails
               ? Promise.reject(new Error('Cannot find module'))
               : Promise.resolve(bundled)),
-        seedTasks: () => [{ type: 'warehouse' }],
+        seedTasks: () => (seededTasks ? [{ type: 'warehouse' }] : []),
       },
       input: { installDir: dir, flags: { ci: true } },
       boot: {

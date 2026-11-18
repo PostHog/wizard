@@ -14,7 +14,6 @@ import {
   WIZARD_SELF_DRIVING_USE_PI_HARNESS_FLAG_KEY,
 } from '@shared/constants';
 import {
-  areSeededTasksEnabled,
   DEFAULT_BINDING,
   resolveBinding,
   resolveStageOverrides,
@@ -302,17 +301,4 @@ describe('seam scan — routing reads live only in flags/', () => {
       expect(src).not.toMatch(/WIZARD_\w+_FLAG_KEY/);
     });
   }
-});
-
-describe('areSeededTasksEnabled', () => {
-  // Off or unset, the orchestrator queues no runner-seeded task at all.
-  it("only literal 'true' enables the runner-seeded mechanism", () => {
-    expect(constants.WIZARD_ORCHESTRATOR_SEEDED_TASKS_FLAG_KEY).toBeTruthy();
-    const key = constants.WIZARD_ORCHESTRATOR_SEEDED_TASKS_FLAG_KEY;
-    expect(areSeededTasksEnabled({ [key]: 'true' })).toBe(true);
-    expect(areSeededTasksEnabled({ [key]: 'false' })).toBe(false);
-    expect(areSeededTasksEnabled({ [key]: 'banana' })).toBe(false);
-    expect(areSeededTasksEnabled({})).toBe(false);
-    expect(areSeededTasksEnabled()).toBe(false);
-  });
 });

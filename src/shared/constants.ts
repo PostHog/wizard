@@ -331,9 +331,6 @@ export const WIZARD_SELF_DRIVING_USE_PI_HARNESS_FLAG_KEY =
 /** Boolean flag: agentic project scoping for non-interactive basic-integration runs. */
 export const WIZARD_BASIC_INTEGRATION_AGENTIC_DETECTION_FLAG_KEY =
   'wizard-basic-integration-agentic-detection';
-/** Boolean flag: the orchestrator queues the program's runner-seeded tasks (the warehouse step). Off, no task is queued and the run is byte-identical to a no-sources project. */
-export const WIZARD_ORCHESTRATOR_SEEDED_TASKS_FLAG_KEY =
-  'wizard-orchestrator-seeded-tasks';
 /** Kill switch over a shipped default: ONLY an explicit 'false' excludes the AI Observability and Logs tasks from default integration runs — absent or fetch-failed means include, so the default never vanishes on a network hiccup. */
 export const WIZARD_DEFAULT_AIO_LOGS_FLAG_KEY = 'wizard-default-aio-logs';
 /** Launch flag: ONLY an explicit 'true' includes the MCP analytics task in default integration runs — absent or fetch-failed means exclude. */
@@ -349,7 +346,6 @@ export const WIZARD_WAREHOUSE_DESTINATIONS_FLAG_KEY =
 export const WIZARD_FLAG_KEYS = [
   WIZARD_RUN_SYNC_FLAG_KEY,
   WIZARD_ORCHESTRATOR_OVERRIDE_FLAG_KEY,
-  WIZARD_ORCHESTRATOR_SEEDED_TASKS_FLAG_KEY,
   WIZARD_SELF_DRIVING_USE_PI_HARNESS_FLAG_KEY,
   WIZARD_BASIC_INTEGRATION_AGENTIC_DETECTION_FLAG_KEY,
   WIZARD_DEFAULT_AIO_LOGS_FLAG_KEY,

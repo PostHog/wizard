@@ -1237,7 +1237,7 @@ describe('buildAuthErrorContext', () => {
 
 describe('buildAgentEnv header shape', () => {
   const metadata = { run_id: 'r1', integration: 'nextjs' };
-  const flags = { 'wizard-orchestrator-seeded-tasks': 'test' };
+  const flags = { 'wizard-default-aio-logs': 'test' };
 
   it('sends one properties blob and no per-key or bedrock headers', () => {
     const encoded = buildAgentEnv(metadata, flags, 42);
@@ -1250,7 +1250,7 @@ describe('buildAgentEnv header shape', () => {
       team_id: 42,
       run_id: 'r1',
       integration: 'nextjs',
-      'wizard_flag_wizard-orchestrator-seeded-tasks': 'test',
+      'wizard_flag_wizard-default-aio-logs': 'test',
     });
     expect(encoded).not.toContain('x-posthog-use-bedrock-fallback');
     expect(encoded).not.toContain('X-POSTHOG-PROPERTY-');
