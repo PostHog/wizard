@@ -214,6 +214,16 @@ describe('CLI argument parsing', () => {
       expect(mockRunTuiCli).toHaveBeenCalledTimes(1);
       expect(mockRunTuiCli.mock.calls[0][0].id).toBe('transactional-email');
     });
+
+    test("the email offer's command runs where it is pasted, whatever POSTHOG_WIZARD_INSTALL_DIR says", async () => {
+      process.env.POSTHOG_WIZARD_INSTALL_DIR = '/elsewhere';
+
+      await runCLI(['email', '--project-id', '42', '--install-dir=.']);
+
+      const args = getLastBuildSessionArgs();
+      expect(args.projectId).toBe('42');
+      expect(args.installDir).toBe(process.cwd());
+    });
   });
 
   describe('environment variables', () => {

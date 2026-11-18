@@ -7,7 +7,7 @@ describe('emailSetupCommand', () => {
   it('sets up email in the installed project', () => {
     expect(
       emailSetupCommand({ projectId: 42, installDir: CWD }, CWD).command,
-    ).toBe('npx @posthog/wizard@latest email --project-id 42');
+    ).toBe('npx @posthog/wizard@latest email --project-id 42 --install-dir=.');
   });
 
   it.each([

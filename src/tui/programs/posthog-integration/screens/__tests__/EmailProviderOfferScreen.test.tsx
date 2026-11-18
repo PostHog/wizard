@@ -1,3 +1,4 @@
+import path from 'node:path';
 import { vi, it, expect, afterEach, beforeEach, describe } from 'vitest';
 import { render, cleanup } from 'ink-testing-library';
 import { WizardStore } from '@tui/store';
@@ -47,7 +48,9 @@ const readTheQuestion = () =>
 
 function storeAtOutroWithResend(): WizardStore {
   const store = new WizardStore();
-  store.launch(buildSession({ installDir: `${process.cwd()}/apps/web` }));
+  store.launch(
+    buildSession({ installDir: path.join(process.cwd(), 'apps', 'web') }),
+  );
   store.grantSharing();
   store.completeSetup();
   store.setReadinessResult({
@@ -162,9 +165,11 @@ describe('the email provider offer after install', () => {
     await press(ENTER);
 
     expect(wizardCapture).toHaveBeenCalledWith(...answeredWith('yes'));
-    expect(app.lastFrame()).toContain('Run this in apps/web:');
     expect(app.lastFrame()).toContain(
-      'npx @posthog/wizard@latest email --project-id 42\n',
+      `Run this in ${path.join('apps', 'web')}:`,
+    );
+    expect(app.lastFrame()).toContain(
+      'npx @posthog/wizard@latest email --project-id 42 --install-dir=.\n',
     );
     expect(app.lastFrame()).toContain(WORKFLOWS_URL);
     expect(store.router.resolve(store)).toBe(

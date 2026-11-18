@@ -20,9 +20,10 @@ export function emailSetupCommand(
     (config) => config.id === Program.TransactionalEmail,
   );
   if (!program) throw new Error('The email program has no command');
+  // `--install-dir=.` outranks an exported POSTHOG_WIZARD_INSTALL_DIR, so the command runs where it is pasted.
   const command = `npx @posthog/wizard@latest ${getCommandPath(
     program,
-  )} --project-id ${projectId}`;
+  )} --project-id ${projectId} --install-dir=.`;
   const fromCwd = relative(cwd, installDir);
   if (!fromCwd) return { command };
   return { command, runIn: fromCwd.startsWith('..') ? installDir : fromCwd };
