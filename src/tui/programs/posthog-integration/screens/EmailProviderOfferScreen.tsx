@@ -137,7 +137,9 @@ const QuestionPicker = ({
       match: KeyMatch.Escape,
       label: 'esc',
       action: 'skip',
-      handler: () => answerAfterPause(EmailProviderOfferAnswer.Skipped),
+      handler: () => {
+        if (visible) onAnswer(EmailProviderOfferAnswer.Skipped);
+      },
     },
   ]);
 
@@ -169,10 +171,7 @@ const WorkflowsLink = ({
 
   return (
     <Box flexDirection="column" flexGrow={1} marginTop={1}>
-      <Text>
-        Let the setup agent add your first email send to your server code.
-        {setup.runIn ? ` Run this in ${setup.runIn}:` : ' Run this:'}
-      </Text>
+      <Text>{setup.lead}</Text>
       <Text bold>{setup.command}</Text>
       <Box marginTop={1}>
         <Text>

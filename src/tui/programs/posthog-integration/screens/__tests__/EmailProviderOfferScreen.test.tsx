@@ -228,31 +228,33 @@ describe('the email provider offer after install', () => {
     expect(await offerEvents()).toEqual([SHOWN, answered('skipped')]);
   });
 
-  it.each([
-    ['Enter', ENTER],
-    ['Esc', ESC],
-  ])(
-    'ignores %s until the question has been open for a second',
-    async (_key, key) => {
-      const { app } = setup();
-      await delay();
+  it('ignores Enter until the question has been open for a second', async () => {
+    const { app } = setup();
+    await delay();
 
-      pause(999);
-      app.stdin.write(key);
-      await delay();
+    pause(999);
+    app.stdin.write(ENTER);
+    await delay();
 
-      expect(await offerEvents()).toEqual([SHOWN]);
-      expect(app.lastFrame()).toContain('Want to try it?');
+    expect(await offerEvents()).toEqual([SHOWN]);
+    expect(app.lastFrame()).toContain('Want to try it?');
 
-      pause(1000);
-      app.stdin.write(key);
-      await delay();
+    pause(1000);
+    app.stdin.write(ENTER);
+    await delay();
 
-      expect((await offerEvents()).at(-1)?.event).toBe(
-        'wizard: email provider offer answered',
-      );
-    },
-  );
+    expect(await offerEvents()).toEqual([SHOWN, answered('yes')]);
+  });
+
+  it('skips at once on Esc, which can only decline', async () => {
+    const { app } = setup();
+    await delay();
+
+    app.stdin.write(ESC);
+    await delay();
+
+    expect(await offerEvents()).toEqual([SHOWN, answered('skipped')]);
+  });
 
   it('never answers yes from an Enter held from the outro, even when its first repeat comes late', async () => {
     const { app } = setup();
@@ -299,6 +301,8 @@ describe('the email provider offer after install', () => {
     await delay();
     pause();
     app.stdin.write(ENTER);
+    await delay();
+    app.stdin.write(ESC);
     await delay();
 
     expect(await offerEvents()).toEqual([SHOWN]);

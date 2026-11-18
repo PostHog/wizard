@@ -18,40 +18,60 @@ describe('emailSetupCommand', () => {
       'https://example.com/posthog/',
       ' --base-url https://example.com/posthog/',
     ],
-    ['http://[::1]:8010', " --base-url 'http://[::1]:8010'"],
-    ['https://a&b.example.com', " --base-url 'https://a&b.example.com'"],
-    ["https://example.com/it's", " --base-url 'https://example.com/it'\\''s'"],
+    ['https://example.com\n', ' --base-url https://example.com'],
     [undefined, ''],
-  ])('keeps the instance a run pinned to %s', (baseUrl, flag) => {
-    expect(
-      emailSetupCommand({ projectId: 42, installDir: CWD, baseUrl }, CWD)
-        .command,
-    ).toBe(
+  ])('keeps the instance a run pinned to %j', (baseUrl, flag) => {
+    const setup = emailSetupCommand(
+      { projectId: 42, installDir: CWD, baseUrl },
+      CWD,
+    );
+    expect(setup.command).toBe(
       `npx @posthog/wizard@latest email --project-id 42 --install-dir=.${flag}`,
+    );
+    expect(setup.lead).not.toContain('--base-url');
+  });
+
+  it.each([
+    'http://[::1]:8010',
+    'http://localhost:8010/a&b',
+    "https://example.com/it's",
+  ])('names the base URL in text when a shell could expand %s', (baseUrl) => {
+    const setup = emailSetupCommand(
+      { projectId: 42, installDir: CWD, baseUrl },
+      CWD,
+    );
+    expect(setup.command).toBe(
+      'npx @posthog/wizard@latest email --project-id 42 --install-dir=.',
+    );
+    expect(setup.lead).toMatch(
+      /Run this, adding the --base-url this run used:$/,
     );
   });
 
   it.each([
-    ['the install ran here', CWD, undefined],
+    ['the install ran here', CWD, 'Run this:'],
     [
       'the install ran in a subdirectory',
       path.join(CWD, 'apps', "it's web"),
-      path.join('apps', "it's web"),
+      `Run this in ${path.join('apps', "it's web")}:`,
     ],
     [
       'the install ran in a subdirectory named like a parent',
       path.join(CWD, '..web'),
-      '..web',
+      'Run this in ..web:',
     ],
-    ['the install ran outside this directory', OUTSIDE, OUTSIDE],
+    [
+      'the install ran outside this directory',
+      OUTSIDE,
+      `Run this in ${OUTSIDE}:`,
+    ],
     [
       'the directory name holds terminal control characters',
-      path.join(CWD, 'web\u001b[2J\nfake'),
-      'web?[2J?fake',
+      path.join(CWD, 'web\t'),
+      'Run this in "web\\t":',
     ],
-  ])('names where to run it when %s', (_, installDir, runIn) => {
-    expect(emailSetupCommand({ projectId: 42, installDir }, CWD).runIn).toBe(
-      runIn,
-    );
+  ])('names where to run it when %s', (_, installDir, where) => {
+    const { lead } = emailSetupCommand({ projectId: 42, installDir }, CWD);
+    expect(lead.slice(-where.length)).toBe(where);
   });
 });
