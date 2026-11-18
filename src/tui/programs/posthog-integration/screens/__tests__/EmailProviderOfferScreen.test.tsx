@@ -162,8 +162,9 @@ describe('the email provider offer after install', () => {
     await press(ENTER);
 
     expect(wizardCapture).toHaveBeenCalledWith(...answeredWith('yes'));
+    expect(app.lastFrame()).toContain('Run this in apps/web:');
     expect(app.lastFrame()).toContain(
-      'npx @posthog/wizard@latest email --project-id 42 --install-dir=apps/web',
+      'npx @posthog/wizard@latest email --project-id 42\n',
     );
     expect(app.lastFrame()).toContain(WORKFLOWS_URL);
     expect(store.router.resolve(store)).toBe(

@@ -214,14 +214,6 @@ describe('CLI argument parsing', () => {
       expect(mockRunTuiCli).toHaveBeenCalledTimes(1);
       expect(mockRunTuiCli.mock.calls[0][0].id).toBe('transactional-email');
     });
-
-    test("the email offer's command reaches the installed app and project", async () => {
-      await runCLI(['email', '--project-id', '42', '--install-dir=-web']);
-
-      const args = getLastBuildSessionArgs();
-      expect(args.projectId).toBe('42');
-      expect(args.installDir).toBe(`${process.cwd()}/-web`);
-    });
   });
 
   describe('environment variables', () => {

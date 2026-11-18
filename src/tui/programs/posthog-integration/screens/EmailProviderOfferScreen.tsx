@@ -126,12 +126,13 @@ const WorkflowsLink = ({
   onContinue: () => void;
 }) => {
   useDismissOnAnyKey(onContinue);
-  const [command] = useState(() => emailSetupCommand(offer));
+  const [{ command, runIn }] = useState(() => emailSetupCommand(offer));
 
   return (
     <Box flexDirection="column" flexGrow={1} marginTop={1}>
       <Text>
-        Let the setup agent add your first email send to your server code:
+        Let the setup agent add your first email send to your server code.
+        {runIn ? ` Run this in ${runIn}:` : ' Run this:'}
       </Text>
       <Text bold>{command}</Text>
       <Box marginTop={1}>
