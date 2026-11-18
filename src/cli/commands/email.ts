@@ -3,6 +3,6 @@ import { config as transactionalEmailConfig } from '@programs/transactional-emai
 import type { Command } from './command';
 import { nativeCommandFactory } from './factories/native-command-factory';
 
-export const transactionalEmailCommand: Command = nativeCommandFactory(
+export const emailCommand: Command = nativeCommandFactory(
   transactionalEmailConfig,
 );

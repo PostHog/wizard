@@ -128,7 +128,7 @@ Send your first transactional email from your server code, such as a welcome
 email after signup:
 
 ```bash
-npx @posthog/wizard@latest transactional-email
+npx @posthog/wizard@latest email
 ```
 
 The setup agent checks for a verified sender, writes the email in your code by

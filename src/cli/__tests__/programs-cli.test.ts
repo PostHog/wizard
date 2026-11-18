@@ -26,6 +26,7 @@ import { revenueCommand } from '../commands/revenue';
 import { warehouseCommand } from '../commands/warehouse';
 import { uploadSourcemapsCommand } from '../commands/upload-sourcemaps';
 import { selfDrivingCommand } from '../commands/self-driving';
+import { emailCommand } from '../commands/email';
 import {
   dispatchFamily,
   pickerChildrenToShow,
@@ -88,6 +89,11 @@ describe('top-level command shapes', () => {
   test('replay-vision is a flat skill command', () => {
     expect(replayVisionCommand.name).toBe('replay-vision');
     expect(replayVisionCommand.children).toBeUndefined();
+  });
+
+  test('email is a flat command that runs transactional email', () => {
+    expect(emailCommand.name).toBe('email');
+    expect(emailCommand.children).toBeUndefined();
   });
 
   test('warehouse registers as a family with a [skill] positional', () => {

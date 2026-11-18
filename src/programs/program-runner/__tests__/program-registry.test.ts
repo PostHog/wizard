@@ -144,6 +144,10 @@ describe('getCommandPath', () => {
     );
   });
 
+  it('runs transactional email as the flat `email` command', () => {
+    expect(getCommandPath(subcommand('transactional-email'))).toBe('email');
+  });
+
   it('keeps `metrics` a flat command', () => {
     expect(getCommandPath(subcommand('metrics'))).toBe('metrics');
   });

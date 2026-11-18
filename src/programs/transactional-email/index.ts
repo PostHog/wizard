@@ -31,7 +31,7 @@ const TRANSACTIONAL_EMAIL_ABORT_CASES: AbortCase[] = [
 export const config: ProgramConfig = {
   ...createSkillProgram({
     skillId: SKILL_ID,
-    command: 'transactional-email',
+    command: 'email',
     id: 'transactional-email',
     description: 'Send your first transactional email from code',
     integrationLabel: 'transactional-email',
