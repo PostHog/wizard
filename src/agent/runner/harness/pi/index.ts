@@ -26,8 +26,8 @@ import { AgentErrorType } from '../../../agent-interface';
 import {
   AgentSignals,
   REMARK_INSTRUCTION,
-  abortReason as programAbortReason,
   policyAbortReason,
+  standaloneAbortReason,
 } from '../../../signals';
 import { AgentOutputSignals } from '../../../output-signals';
 import { assembleCommandments } from '../../switchboard/commandments';
@@ -370,16 +370,11 @@ export const piBackend: AgentHarness = {
       policyAborted = abortReason !== undefined;
       if (abortReason) cancellation?.abort();
     };
-    // So does a line that starts with [ABORT], for a program that has abort cases.
-    // A reply that only mentions the marker mid-line keeps the run going.
+    // Programs with abort cases can also stop on a standalone [ABORT] line.
     const abortOnReply = (reply: string) => {
       policyAbort(reply);
       if (remarkTurn || abortReason || !config.abortCases?.length) return;
-      const lines = reply.split(/\r?\n/);
-      const at = lines.findIndex((text) => /^[\s`*_>]*\[ABORT\]/.test(text));
-      // The reason may sit on the line after a bare marker.
-      abortReason =
-        at < 0 ? undefined : programAbortReason(lines.slice(at).join('\n'));
+      abortReason = standaloneAbortReason(reply);
       if (abortReason) cancellation?.abort();
     };
     // Read by the catch path; undefined until setup creates the extension.

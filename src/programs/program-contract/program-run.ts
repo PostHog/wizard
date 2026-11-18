@@ -9,6 +9,8 @@ import type { Credentials } from '@shared/api';
 import type { ProgramSession } from './program-session';
 
 export interface ProgramRun extends AgentRunDefinition {
+  /** Tags on analytics events for the selected program. */
+  analyticsTags?: Readonly<Record<string, string>>;
   /** Runs after agent completes, before outro (e.g. env var upload). */
   postRun?: (
     session: ProgramSession,
