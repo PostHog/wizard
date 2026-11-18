@@ -207,6 +207,15 @@ describe('CLI argument parsing', () => {
     );
   });
 
+  describe('email command', () => {
+    test('`wizard email` starts the transactional email program', async () => {
+      await runCLI(['email']);
+
+      expect(mockRunTuiCli).toHaveBeenCalledTimes(1);
+      expect(mockRunTuiCli.mock.calls[0][0].id).toBe('transactional-email');
+    });
+  });
+
   describe('environment variables', () => {
     test('respects POSTHOG_WIZARD_REGION', async () => {
       process.env.POSTHOG_WIZARD_REGION = 'eu';

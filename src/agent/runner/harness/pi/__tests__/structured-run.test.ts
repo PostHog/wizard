@@ -25,6 +25,8 @@ const state = vi.hoisted(() => ({
   // The reply to the remark ask, when it differs from `text`.
   remark: undefined as string | undefined,
   prompts: [] as string[],
+  // Runs as each prompt arrives, with the prompts sent so far.
+  onPrompt: undefined as ((prompts: string[]) => void) | undefined,
   request: undefined as unknown,
   tools: [] as { name: string }[],
   tasks: new Map<string, { status: string }>(),
@@ -160,6 +162,7 @@ vi.mock('@earendil-works/pi-coding-agent', () => ({
         },
         prompt: (prompt: string) => {
           state.prompts.push(prompt);
+          state.onPrompt?.(state.prompts);
           if (!state.noTools)
             state.listener?.({
               type: 'tool_execution_start',
@@ -312,6 +315,7 @@ function runInputs(
 
 beforeEach(() => {
   state.prompts = [];
+  state.onPrompt = undefined;
   state.tasks.clear();
   state.hang = false;
   state.release = undefined;
@@ -671,11 +675,15 @@ describe("a program's [ABORT] on the linear Pi run", () => {
   it('runs a program without abort cases on to its open tasks', async () => {
     state.tasks.set('1', { status: 'in_progress' });
     state.text = 'Checked the project.\n[ABORT] no server code found';
+    // The agent finishes its task once Pi asks it to carry on.
+    state.onPrompt = (prompts) => {
+      if (prompts.length > 1) state.tasks.set('1', { status: 'completed' });
+    };
 
     await expect(piBackend.run(runInputs(vi.fn(), null))).resolves.toEqual({
-      kind: 'failure',
-      classification: AgentErrorType.INCOMPLETE_TASKS,
+      kind: 'success',
     });
+    expect(state.prompts.length).toBeGreaterThan(1);
   });
 
   it('ignores an [ABORT] line in the remark reply', async () => {
