@@ -16,17 +16,10 @@ function outside(fromCwd: string): boolean {
   );
 }
 
-/**
- * Letters, their accents and digits in any script, a plain space, and the punctuation paths use. Anything else,
- * such as a control or bidi character, could move the cursor, reorder the line, or fake one.
- */
+/** Letters, accents and digits in any script, a plain space, and path punctuation; anything else could move the cursor or reorder the line. */
 const PLAIN = /^[\p{L}\p{M}\p{N} ._\-/\\:@+,~'()]+$/u;
 
-/**
- * How to set up email for the app and project this run installed into, seen from `cwd`.
- * A run pinned with `--base-url`, or a directory whose name isn't plain text, gets the
- * bare command instead: no form of those values is safe to print for every shell and terminal.
- */
+/** How to set up email for the app and project this run installed into, seen from `cwd`. */
 export function emailSetupCommand(
   {
     projectId,
@@ -39,22 +32,24 @@ export function emailSetupCommand(
     (config) => config.id === Program.TransactionalEmail,
   );
   if (!program) throw new Error('The email program has no command');
-  const bare = `npx @posthog/wizard@latest ${getCommandPath(program)}`;
+  // `--install-dir=.` outranks an exported POSTHOG_WIZARD_INSTALL_DIR, so the command runs where it is pasted.
+  const command = `npx @posthog/wizard@latest ${getCommandPath(
+    program,
+  )} --project-id ${projectId} --install-dir=.`;
 
   if (baseUrl) {
     return {
       lead: `${LEAD} Run this in your app, adding the --base-url this run used:`,
-      command: bare,
+      command,
     };
   }
   const fromCwd = relative(cwd, installDir);
   const runIn = !fromCwd ? undefined : outside(fromCwd) ? installDir : fromCwd;
   if (runIn !== undefined && !PLAIN.test(runIn)) {
-    return { lead: `${LEAD} Run this in your app:`, command: bare };
+    return { lead: `${LEAD} Run this in your app:`, command };
   }
   return {
     lead: `${LEAD} ${runIn ? `Run this in ${runIn}:` : 'Run this:'}`,
-    // `--install-dir=.` outranks an exported POSTHOG_WIZARD_INSTALL_DIR, so the command runs where it is pasted.
-    command: `${bare} --project-id ${projectId} --install-dir=.`,
+    command,
   };
 }

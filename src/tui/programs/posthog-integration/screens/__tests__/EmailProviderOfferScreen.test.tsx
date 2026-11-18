@@ -28,7 +28,6 @@ const WORKFLOWS_URL =
   'https://us.posthog.com/project/42/workflows?source=wizard_cli';
 const COMMAND =
   'npx @posthog/wizard@latest email --project-id 42 --install-dir=.';
-const BARE_COMMAND = 'npx @posthog/wizard@latest email';
 const APP_DIR = path.join(process.cwd(), 'apps', 'web');
 const DOWN = '\u001B[B';
 const ENTER = '\r';
@@ -80,7 +79,9 @@ function storeAtOutroWithResend(
   store.setCredentials({
     accessToken: 'token',
     projectApiKey: 'phc_example',
-    host: HostResolution.fromApiHost('https://us.posthog.com'),
+    host: run.baseUrl
+      ? HostResolution.fromRegion('us', { baseUrl: run.baseUrl })
+      : HostResolution.fromApiHost('https://us.posthog.com'),
     projectId: 42,
   });
   store.setApiUser({
@@ -217,19 +218,21 @@ describe('the email provider offer after install', () => {
   it.each([
     [
       'a run pinned with --base-url',
-      { installDir: APP_DIR, baseUrl: 'http://localhost:8010' },
+      { installDir: APP_DIR, baseUrl: 'https://user:secret@example.com' },
       'Run this in your app, adding the --base-url this run used:',
-      'localhost:8010',
+      'https://example.com/project/42/workflows?source=wizard_cli',
+      'secret',
     ],
     [
       'an install directory whose name is not plain text',
       { installDir: path.join(process.cwd(), 'web\u001b[2J') },
       'Run this in your app:',
+      WORKFLOWS_URL,
       '\u001b[2J',
     ],
   ])(
-    'shows the email command without flags on yes for %s, and prints neither value',
-    async (_, run, lead, value) => {
+    'shows the email command on yes for %s, and prints neither the credentials nor the directory',
+    async (_, run, lead, link, value) => {
       const { store, app, press } = setup(true, run);
 
       await press(ENTER);
@@ -237,16 +240,16 @@ describe('the email provider offer after install', () => {
       const frame = app.lastFrame() ?? '';
       const unwrapped = frame.replace(/\s+/g, ' ');
       expect(unwrapped).toContain(lead);
-      expect(frame).toContain(`${BARE_COMMAND}\n`);
-      expect(unwrapped).not.toContain('--project-id');
-      expect(frame).toContain(WORKFLOWS_URL);
+      expect(frame).toContain(`${COMMAND}\n`);
+      expect(frame).toContain(link);
+      expect(unwrapped).not.toContain('apps');
       expect(frame).not.toContain(value);
 
       await press(ENTER);
 
       const exitLine = getExitLine(store);
-      expect(exitLine.split('\n')).toContain(BARE_COMMAND);
-      expect(exitLine).toContain(WORKFLOWS_URL);
+      expect(exitLine.split('\n')).toContain(COMMAND);
+      expect(exitLine).toContain(link);
       expect(exitLine).not.toContain(value);
     },
   );

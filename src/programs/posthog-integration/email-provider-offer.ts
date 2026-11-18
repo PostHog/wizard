@@ -41,6 +41,21 @@ type OfferSession = Pick<
 const MIGRATE_COMMANDS: Readonly<Partial<Record<EmailProviderKind, string>>> =
   {};
 
+/** Parsing drops credentials and line breaks from a pinned URL and percent-encodes control characters, so the link is safe to print. */
+function workflowsUrl(appHost: string, projectId: number): string | undefined {
+  if (!URL.canParse(appHost)) return undefined;
+  const url = new URL(appHost);
+  url.username = '';
+  url.password = '';
+  url.pathname = `${url.pathname.replace(
+    /\/+$/,
+    '',
+  )}/project/${projectId}/workflows`;
+  url.search = 'source=wizard_cli';
+  url.hash = '';
+  return url.href;
+}
+
 function mayAsk(session: OfferSession): boolean {
   return (
     !session.ci &&
@@ -59,13 +74,15 @@ export function emailProviderOffer(
   const credentials = session.credentials;
   if (!scan || !credentials || !mayAsk(session)) return undefined;
   const [first, ...others] = detectedEmailProviders(scan);
-  if (!first) return undefined;
+  const link = workflowsUrl(credentials.host.appHost, credentials.projectId);
+  if (!first || !link) return undefined;
   return {
     providers: [first.kind, ...others.map((provider) => provider.kind)],
-    workflowsUrl: `${credentials.host.appHost}/project/${credentials.projectId}/workflows?source=wizard_cli`,
+    workflowsUrl: link,
     projectId: credentials.projectId,
     installDir: session.installDir,
-    baseUrl: session.baseUrl,
+    // Host resolution trims it too, so a blank `--base-url` pins nothing.
+    baseUrl: session.baseUrl?.trim() || undefined,
     migrateCommand: MIGRATE_COMMANDS[first.kind],
   };
 }

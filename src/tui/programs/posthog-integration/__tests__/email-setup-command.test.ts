@@ -5,7 +5,6 @@ import { emailSetupCommand } from '@tui/programs/posthog-integration/email-setup
 const CWD = path.resolve('/home/dev/monorepo');
 const OUTSIDE = path.resolve('/srv/app');
 const FULL = 'npx @posthog/wizard@latest email --project-id 42 --install-dir=.';
-const BARE = 'npx @posthog/wizard@latest email';
 
 const ending = (lead: string, where: string) => lead.slice(-where.length);
 
@@ -46,17 +45,21 @@ describe('emailSetupCommand', () => {
     'https://user:secret@example.com/posthog',
     'http://[::1]:8010',
     'https://example.com\n',
-  ])('gives the bare command when the run was pinned to %j', (baseUrl) => {
-    const setup = emailSetupCommand(
-      { projectId: 42, installDir: path.join(CWD, 'apps', 'web'), baseUrl },
-      CWD,
-    );
-    expect(setup.command).toBe(BARE);
-    expect(setup.lead).toMatch(
-      /Run this in your app, adding the --base-url this run used:$/,
-    );
-    expect(setup.lead).not.toContain(baseUrl.trim());
-  });
+  ])(
+    'names neither the instance nor the directory when the run was pinned to %j',
+    (baseUrl) => {
+      const setup = emailSetupCommand(
+        { projectId: 42, installDir: path.join(CWD, 'apps', 'web'), baseUrl },
+        CWD,
+      );
+      expect(setup.command).toBe(FULL);
+      expect(setup.lead).toMatch(
+        /Run this in your app, adding the --base-url this run used:$/,
+      );
+      expect(setup.lead).not.toContain(baseUrl.trim());
+      expect(setup.lead).not.toContain('apps');
+    },
+  );
 
   it.each([
     ['an escape sequence', 'web\u001b[2J'],
@@ -69,12 +72,12 @@ describe('emailSetupCommand', () => {
     ['a backtick', 'web`id`'],
     ['a no-break space', 'web\u00a0app'],
     ['an emoji', 'web\u{1F680}'],
-  ])('gives the bare command when the directory name holds %s', (_, name) => {
+  ])('names no directory when its name holds %s', (_, name) => {
     const setup = emailSetupCommand(
       { projectId: 42, installDir: path.join(CWD, name) },
       CWD,
     );
-    expect(setup.command).toBe(BARE);
+    expect(setup.command).toBe(FULL);
     expect(setup.lead).toMatch(/Run this in your app:$/);
     expect(setup.lead).not.toContain(name);
   });

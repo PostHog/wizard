@@ -85,6 +85,48 @@ describe('emailProviderOffer', () => {
     expect(offer?.baseUrl).toBe('http://localhost:8010');
   });
 
+  it('treats a blank --base-url as no pin, as host resolution does', () => {
+    const offer = emailProviderOffer(
+      finishedRun(scanFinding(RESEND), { baseUrl: '  ' }),
+    );
+
+    expect(offer?.baseUrl).toBeUndefined();
+  });
+
+  function pinnedRun(baseUrl: string): ProgramSession {
+    const run = finishedRun(scanFinding(RESEND), { baseUrl });
+    if (!run.credentials) throw new Error('A finished run has credentials');
+    run.credentials = {
+      ...run.credentials,
+      host: HostResolution.fromRegion('us', { baseUrl }),
+    };
+    return run;
+  }
+
+  it.each([
+    [
+      'https://user:secret@example.com/posthog/',
+      'https://example.com/posthog/project/42/workflows?source=wizard_cli',
+    ],
+    [
+      'https://example.com/pos\nthog',
+      'https://example.com/posthog/project/42/workflows?source=wizard_cli',
+    ],
+    [
+      'http://[::1]:8010',
+      'http://[::1]:8010/project/42/workflows?source=wizard_cli',
+    ],
+  ])(
+    'links to Workflows on the pinned instance %j without its credentials or line breaks',
+    (baseUrl, link) => {
+      expect(emailProviderOffer(pinnedRun(baseUrl))?.workflowsUrl).toBe(link);
+    },
+  );
+
+  it('asks nothing when the pinned instance is no URL it can link to', () => {
+    expect(emailProviderOffer(pinnedRun('not a url'))).toBeUndefined();
+  });
+
   it.each<[string, (scan: CodebaseScan) => ProgramSession]>([
     ['a CI run', (scan) => finishedRun(scan, { ci: true })],
     ['telemetry is off', (scan) => finishedRun(scan, { noTelemetry: true })],
