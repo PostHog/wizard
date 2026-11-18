@@ -99,8 +99,8 @@ const OfferFlow = ({
   return <QuestionPicker visible={visible} onAnswer={answer} />;
 };
 
-// Longer than a held key's first repeat on default desktop settings, so an Enter held from the outro can't answer yes unread.
-const QUESTION_READ_GUARD_MS = 1000;
+// Enter must follow this long a pause, so a quick or held Enter meant for the outro can't answer yes unread.
+const QUESTION_READ_GUARD_MS = 500;
 
 const QUESTION =
   "PostHog can send this app's transactional emails directly from code, " +

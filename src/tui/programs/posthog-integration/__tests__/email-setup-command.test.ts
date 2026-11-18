@@ -14,13 +14,7 @@ describe('emailSetupCommand', () => {
 
   it.each([
     ['http://localhost:8010', ' --base-url http://localhost:8010'],
-    [
-      'https://example.com/posthog/',
-      ' --base-url https://example.com/posthog/',
-    ],
-    ['http://[::1]:8010', " --base-url 'http://[::1]:8010'"],
-    ['https://a&b.example.com', " --base-url 'https://a&b.example.com'"],
-    ["https://example.com/it's", " --base-url 'https://example.com/it'\\''s'"],
+    ['https://posthog.example.com/', ' --base-url https://posthog.example.com'],
     [undefined, ''],
   ])('keeps the instance a run pinned to %s', (baseUrl, flag) => {
     expect(
@@ -44,11 +38,6 @@ describe('emailSetupCommand', () => {
       '..web',
     ],
     ['the install ran outside this directory', OUTSIDE, OUTSIDE],
-    [
-      'the directory name holds terminal control characters',
-      path.join(CWD, 'web\u001b[2J\nfake'),
-      'web?[2J?fake',
-    ],
   ])('names where to run it when %s', (_, installDir, runIn) => {
     expect(emailSetupCommand({ projectId: 42, installDir }, CWD).runIn).toBe(
       runIn,

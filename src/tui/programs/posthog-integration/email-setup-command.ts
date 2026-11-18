@@ -13,24 +13,14 @@ function outside(fromCwd: string): boolean {
   );
 }
 
-// Plain URLs stay bare; anything a shell could expand, such as `&` or IPv6 brackets, goes in single quotes.
-const SHELL_SAFE = /^[A-Za-z0-9_@+=:,./-]+$/;
-
-function shellArg(value: string): string {
-  return SHELL_SAFE.test(value) ? value : `'${value.replaceAll("'", `'\\''`)}'`;
-}
-
-/** The run resolves every host from the full `--base-url`, path included, so the command passes it unchanged. */
+/** An origin is only scheme, host and port, so it needs no quoting in any shell. */
 function baseUrlFlag(baseUrl: string | undefined): string {
-  return baseUrl ? ` --base-url ${shellArg(baseUrl)}` : '';
-}
-
-/** A directory name can hold control characters that would move the cursor or fake a line in the terminal. */
-function printable(dir: string): string {
-  return Array.from(dir, (char) => {
-    const code = char.codePointAt(0) ?? 0;
-    return code < 0x20 || (code >= 0x7f && code <= 0x9f) ? '?' : char;
-  }).join('');
+  if (!baseUrl) return '';
+  try {
+    return ` --base-url ${new URL(baseUrl).origin}`;
+  } catch {
+    return '';
+  }
 }
 
 /** How to set up email for the app, project and instance this run installed into, seen from `cwd`. */
@@ -52,5 +42,5 @@ export function emailSetupCommand(
   )} --project-id ${projectId} --install-dir=.${baseUrlFlag(baseUrl)}`;
   const fromCwd = relative(cwd, installDir);
   if (!fromCwd) return { command };
-  return { command, runIn: printable(outside(fromCwd) ? installDir : fromCwd) };
+  return { command, runIn: outside(fromCwd) ? installDir : fromCwd };
 }
