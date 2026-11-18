@@ -10,6 +10,7 @@ import {
   emailProviderOffer,
   emailProviderOfferChoices,
   EMAIL_PROVIDER_OFFER_QUESTION,
+  EMAIL_SETUP_COMMAND,
   reportEmailProviderOfferAnswered,
   reportEmailProviderOfferShown,
   type EmailProviderOffer,
@@ -129,9 +130,15 @@ const WorkflowsLink = ({
   return (
     <Box flexDirection="column" flexGrow={1} marginTop={1}>
       <Text>
-        Set up email in Workflows:{' '}
-        <Text color="cyan">{offer.workflowsUrl}</Text>
+        Let the setup agent add your first email send:{' '}
+        <Text bold>{EMAIL_SETUP_COMMAND}</Text>
       </Text>
+      <Box marginTop={1}>
+        <Text>
+          Or set up email in Workflows:{' '}
+          <Text color="cyan">{offer.workflowsUrl}</Text>
+        </Text>
+      </Box>
       {offer.migrateCommand && (
         <Box marginTop={1}>
           <Text>

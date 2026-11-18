@@ -74,6 +74,8 @@ function providerKinds(offer: EmailProviderOffer): EmailProviderKind[] {
   return offer.providers.map((provider) => provider.kind);
 }
 
+export const EMAIL_SETUP_COMMAND = 'npx @posthog/wizard@latest email';
+
 export const EMAIL_PROVIDER_OFFER_QUESTION =
   "PostHog can send this app's transactional emails directly from code, " +
   'with delivery and engagement events next to your product analytics. ' +

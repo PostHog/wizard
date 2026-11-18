@@ -278,6 +278,7 @@ export {
   emailProviderOffer,
   emailProviderOfferChoices,
   EMAIL_PROVIDER_OFFER_QUESTION,
+  EMAIL_SETUP_COMMAND,
   reportEmailProviderOfferAnswered,
   reportEmailProviderOfferShown,
   type EmailProviderOffer,

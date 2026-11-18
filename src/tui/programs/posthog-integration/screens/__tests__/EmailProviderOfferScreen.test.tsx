@@ -154,12 +154,13 @@ describe('the email provider offer after install', () => {
     expect(store.router.resolve(store)).toBe(ScreenId.Mcp);
   });
 
-  it('shows the Workflows link on yes and moves on at the next key', async () => {
+  it('shows the email command and the Workflows link on yes, and moves on at the next key', async () => {
     const { store, app, press } = setup();
 
     await press(ENTER);
 
     expect(wizardCapture).toHaveBeenCalledWith(...answeredWith('yes'));
+    expect(app.lastFrame()).toContain('npx @posthog/wizard@latest email');
     expect(app.lastFrame()).toContain(WORKFLOWS_URL);
     expect(store.router.resolve(store)).toBe(
       PostHogIntegrationScreenId.EmailProviderOffer,
