@@ -99,8 +99,8 @@ const OfferFlow = ({
   return <QuestionPicker visible={visible} onAnswer={answer} />;
 };
 
-// Enter must follow this long a pause, so a quick or held Enter meant for the outro can't answer yes unread.
-const QUESTION_READ_GUARD_MS = 500;
+// Longer than a held key's first repeat on default desktop settings, so an Enter held from the outro can't answer yes unread.
+const QUESTION_READ_GUARD_MS = 1000;
 
 const QUESTION =
   "PostHog can send this app's transactional emails directly from code, " +
@@ -137,7 +137,9 @@ const QuestionPicker = ({
       match: KeyMatch.Escape,
       label: 'esc',
       action: 'skip',
-      handler: () => answerAfterPause(EmailProviderOfferAnswer.Skipped),
+      handler: () => {
+        if (visible) onAnswer(EmailProviderOfferAnswer.Skipped);
+      },
     },
   ]);
 
@@ -169,10 +171,7 @@ const WorkflowsLink = ({
 
   return (
     <Box flexDirection="column" flexGrow={1} marginTop={1}>
-      <Text>
-        Let the setup agent add your first email send to your server code.
-        {setup.runIn ? ` Run this in ${setup.runIn}:` : ' Run this:'}
-      </Text>
+      <Text>{setup.lead}</Text>
       <Text bold>{setup.command}</Text>
       <Box marginTop={1}>
         <Text>

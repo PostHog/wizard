@@ -28,6 +28,8 @@ const WORKFLOWS_URL =
   'https://us.posthog.com/project/42/workflows?source=wizard_cli';
 const COMMAND =
   'npx @posthog/wizard@latest email --project-id 42 --install-dir=.';
+const BARE_COMMAND = 'npx @posthog/wizard@latest email';
+const APP_DIR = path.join(process.cwd(), 'apps', 'web');
 const DOWN = '\u001B[B';
 const ENTER = '\r';
 const ESC = '\u001B';
@@ -35,7 +37,7 @@ const ESC = '\u001B';
 const delay = () => new Promise((resolve) => setTimeout(resolve, 30));
 
 /** Moves the frozen clock on; the question takes Enter only after a pause this long. */
-const pause = (ms = 500) => vi.setSystemTime(Date.now() + ms);
+const pause = (ms = 1000) => vi.setSystemTime(Date.now() + ms);
 
 /** The offer events PostHog received, after the client delivers what it queued. */
 async function offerEvents(): Promise<
@@ -61,11 +63,13 @@ const answered = (answer: string) => ({
   answer,
 });
 
-function storeAtOutroWithResend(): WizardStore {
+type Run = Parameters<typeof buildSession>[0];
+
+function storeAtOutroWithResend(
+  run: Run = { installDir: APP_DIR },
+): WizardStore {
   const store = new WizardStore();
-  store.launch(
-    buildSession({ installDir: path.join(process.cwd(), 'apps', 'web') }),
-  );
+  store.launch(buildSession(run));
   store.grantSharing();
   store.completeSetup();
   store.setReadinessResult({
@@ -105,14 +109,14 @@ function storeAtOutroWithResend(): WizardStore {
   return store;
 }
 
-function storeAfterInstallWithResend(): WizardStore {
-  const store = storeAtOutroWithResend();
+function storeAfterInstallWithResend(run?: Run): WizardStore {
+  const store = storeAtOutroWithResend(run);
   store.setOutroDismissed();
   return store;
 }
 
-function setup(visible = true) {
-  const store = storeAfterInstallWithResend();
+function setup(visible = true, run?: Run) {
+  const store = storeAfterInstallWithResend(run);
   const screen = (isVisible: boolean) => (
     <KeyboardHintsProvider>
       <ScreenVisibleContext.Provider value={isVisible}>
@@ -210,6 +214,43 @@ describe('the email provider offer after install', () => {
     );
   });
 
+  it.each([
+    [
+      'a run pinned with --base-url',
+      { installDir: APP_DIR, baseUrl: 'http://localhost:8010' },
+      'Run this in your app, adding the --base-url this run used:',
+      'localhost:8010',
+    ],
+    [
+      'an install directory whose name is not plain text',
+      { installDir: path.join(process.cwd(), 'web\u001b[2J') },
+      'Run this in your app:',
+      '\u001b[2J',
+    ],
+  ])(
+    'shows the email command without flags on yes for %s, and prints neither value',
+    async (_, run, lead, value) => {
+      const { store, app, press } = setup(true, run);
+
+      await press(ENTER);
+
+      const frame = app.lastFrame() ?? '';
+      const unwrapped = frame.replace(/\s+/g, ' ');
+      expect(unwrapped).toContain(lead);
+      expect(frame).toContain(`${BARE_COMMAND}\n`);
+      expect(unwrapped).not.toContain('--project-id');
+      expect(frame).toContain(WORKFLOWS_URL);
+      expect(frame).not.toContain(value);
+
+      await press(ENTER);
+
+      const exitLine = getExitLine(store);
+      expect(exitLine.split('\n')).toContain(BARE_COMMAND);
+      expect(exitLine).toContain(WORKFLOWS_URL);
+      expect(exitLine).not.toContain(value);
+    },
+  );
+
   it('sends one answer when the screen closes after an answer', async () => {
     const { app, press } = setup();
 
@@ -228,36 +269,41 @@ describe('the email provider offer after install', () => {
     expect(await offerEvents()).toEqual([SHOWN, answered('skipped')]);
   });
 
-  it.each([
-    ['Enter', ENTER],
-    ['Esc', ESC],
-  ])(
-    'ignores %s until the question has been open for a pause',
-    async (_key, key) => {
-      const { app } = setup();
-      await delay();
-
-      pause(499);
-      app.stdin.write(key);
-      await delay();
-
-      expect(await offerEvents()).toEqual([SHOWN]);
-      expect(app.lastFrame()).toContain('Want to try it?');
-
-      pause(500);
-      app.stdin.write(key);
-      await delay();
-
-      expect((await offerEvents()).at(-1)?.event).toBe(
-        'wizard: email provider offer answered',
-      );
-    },
-  );
-
-  it('never answers yes from a held Enter', async () => {
+  it('ignores Enter until the question has been open for a second', async () => {
     const { app } = setup();
     await delay();
 
+    pause(999);
+    app.stdin.write(ENTER);
+    await delay();
+
+    expect(await offerEvents()).toEqual([SHOWN]);
+    expect(app.lastFrame()).toContain('Want to try it?');
+
+    pause(1000);
+    app.stdin.write(ENTER);
+    await delay();
+
+    expect(await offerEvents()).toEqual([SHOWN, answered('yes')]);
+  });
+
+  it('skips at once on Esc, which can only decline', async () => {
+    const { app } = setup();
+    await delay();
+
+    app.stdin.write(ESC);
+    await delay();
+
+    expect(await offerEvents()).toEqual([SHOWN, answered('skipped')]);
+  });
+
+  it('never answers yes from an Enter held from the outro, even when its first repeat comes late', async () => {
+    const { app } = setup();
+    await delay();
+
+    pause(700);
+    app.stdin.write(ENTER);
+    await delay();
     for (let held = 0; held < 30; held++) {
       pause(30);
       app.stdin.write(ENTER);
@@ -296,6 +342,8 @@ describe('the email provider offer after install', () => {
     await delay();
     pause();
     app.stdin.write(ENTER);
+    await delay();
+    app.stdin.write(ESC);
     await delay();
 
     expect(await offerEvents()).toEqual([SHOWN]);

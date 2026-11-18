@@ -416,6 +416,7 @@ const MUTATIONS: MutationCase[] = [
     name: 'setEmailSetup',
     invoke: (s) =>
       s.setEmailSetup({
+        lead: 'Run this:',
         command: 'npx @posthog/wizard@latest email',
         workflowsUrl: 'https://us.posthog.com/project/1/workflows',
       }),
