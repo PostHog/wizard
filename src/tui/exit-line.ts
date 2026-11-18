@@ -78,8 +78,9 @@ function mcpLoginBlock(store: WizardStore): string | null {
 function emailSetupBlock(store: WizardStore): string | null {
   const setup = store.emailSetup;
   if (!setup) return null;
+  const where = setup.runIn ? ` Run this in ${setup.runIn}:` : ' Run this:';
   return (
-    `${DIM}${setup.lead}${RESET_ATTRS}\n` +
+    `${DIM}Let the setup agent add your first email send to your server code.${where}${RESET_ATTRS}\n` +
     `${setup.command}\n` +
     `${DIM}Or set up email in Workflows:${RESET_ATTRS}\n${setup.workflowsUrl}`
   );

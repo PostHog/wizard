@@ -2,8 +2,8 @@ import { isAbsolute, relative, sep } from 'node:path';
 import { getCommandPath, getSubcommandPrograms, Program } from '@programs';
 import type { EmailProviderOffer } from '@programs/posthog-integration';
 
-/** `lead` says where to run `command` in text, so no shell has to parse the directory. */
-export type EmailSetupCommand = { lead: string; command: string };
+/** `runIn` names the directory in text, so no shell has to parse the path; unset when that is `cwd`. */
+export type EmailSetupCommand = { command: string; runIn?: string };
 
 export type EmailSetup = EmailSetupCommand & { workflowsUrl: string };
 
@@ -13,56 +13,44 @@ function outside(fromCwd: string): boolean {
   );
 }
 
-// A value outside this set stays out of the command: no quoting works in every shell, cmd.exe included.
+// Plain URLs stay bare; anything a shell could expand, such as `&` or IPv6 brackets, goes in single quotes.
 const SHELL_SAFE = /^[A-Za-z0-9_@+=:,./-]+$/;
 
-/** Host resolution trims `--base-url`, so the command uses the same value. */
-function pinnedBaseUrl(baseUrl: string | undefined): string | undefined {
-  return baseUrl?.trim() || undefined;
+function shellArg(value: string): string {
+  return SHELL_SAFE.test(value) ? value : `'${value.replaceAll("'", `'\\''`)}'`;
 }
 
-function hasControlCharacters(text: string): boolean {
-  return Array.from(text).some((char) => {
+/** The run resolves every host from the full `--base-url`, path included, so the command passes it unchanged. */
+function baseUrlFlag(baseUrl: string | undefined): string {
+  return baseUrl ? ` --base-url ${shellArg(baseUrl)}` : '';
+}
+
+/** A directory name can hold control characters that would move the cursor or fake a line in the terminal. */
+function printable(dir: string): string {
+  return Array.from(dir, (char) => {
     const code = char.codePointAt(0) ?? 0;
-    return code < 0x20 || (code >= 0x7f && code <= 0x9f);
-  });
-}
-
-/** A directory name with control characters is shown escaped, so it can neither move the cursor nor read as another name. */
-function displayed(dir: string): string {
-  return hasControlCharacters(dir) ? JSON.stringify(dir) : dir;
-}
-
-function lead(runIn: string | undefined, baseUrlLeftOut: boolean): string {
-  const where = runIn ? `Run this in ${displayed(runIn)}` : 'Run this';
-  const addBaseUrl = baseUrlLeftOut
-    ? ', adding the --base-url this run used'
-    : '';
-  return `Let the setup agent add your first email send to your server code. ${where}${addBaseUrl}:`;
+    return code < 0x20 || (code >= 0x7f && code <= 0x9f) ? '?' : char;
+  }).join('');
 }
 
 /** How to set up email for the app, project and instance this run installed into, seen from `cwd`. */
 export function emailSetupCommand(
-  offer: Pick<EmailProviderOffer, 'projectId' | 'installDir' | 'baseUrl'>,
+  {
+    projectId,
+    installDir,
+    baseUrl,
+  }: Pick<EmailProviderOffer, 'projectId' | 'installDir' | 'baseUrl'>,
   cwd: string = process.cwd(),
 ): EmailSetupCommand {
   const program = getSubcommandPrograms().find(
     (config) => config.id === Program.TransactionalEmail,
   );
   if (!program) throw new Error('The email program has no command');
-  const baseUrl = pinnedBaseUrl(offer.baseUrl);
-  const inCommand = baseUrl !== undefined && SHELL_SAFE.test(baseUrl);
   // `--install-dir=.` outranks an exported POSTHOG_WIZARD_INSTALL_DIR, so the command runs where it is pasted.
   const command = `npx @posthog/wizard@latest ${getCommandPath(
     program,
-  )} --project-id ${offer.projectId} --install-dir=.${
-    inCommand ? ` --base-url ${baseUrl}` : ''
-  }`;
-  const fromCwd = relative(cwd, offer.installDir);
-  const runIn = !fromCwd
-    ? undefined
-    : outside(fromCwd)
-    ? offer.installDir
-    : fromCwd;
-  return { command, lead: lead(runIn, baseUrl !== undefined && !inCommand) };
+  )} --project-id ${projectId} --install-dir=.${baseUrlFlag(baseUrl)}`;
+  const fromCwd = relative(cwd, installDir);
+  if (!fromCwd) return { command };
+  return { command, runIn: printable(outside(fromCwd) ? installDir : fromCwd) };
 }

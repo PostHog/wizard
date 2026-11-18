@@ -44,7 +44,7 @@ export type TuiState = {
   outroDismissed: boolean;
   emailProviderOfferDone: boolean;
   /** The email setup the user said yes to, echoed at exit because the alternate screen is wiped. */
-  emailSetup: { lead: string; command: string; workflowsUrl: string } | null;
+  emailSetup: { command: string; runIn?: string; workflowsUrl: string } | null;
 
   /**
    * Self-driving only: whether to integrate PostHog as part of this run.
