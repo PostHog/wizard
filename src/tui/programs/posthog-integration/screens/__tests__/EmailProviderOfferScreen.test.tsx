@@ -35,7 +35,7 @@ const ESC = '\u001B';
 const delay = () => new Promise((resolve) => setTimeout(resolve, 30));
 
 /** Moves the frozen clock on; the question takes Enter only after a pause this long. */
-const pause = (ms = 500) => vi.setSystemTime(Date.now() + ms);
+const pause = (ms = 1000) => vi.setSystemTime(Date.now() + ms);
 
 /** The offer events PostHog received, after the client delivers what it queued. */
 async function offerEvents(): Promise<
@@ -232,19 +232,19 @@ describe('the email provider offer after install', () => {
     ['Enter', ENTER],
     ['Esc', ESC],
   ])(
-    'ignores %s until the question has been open for a pause',
+    'ignores %s until the question has been open for a second',
     async (_key, key) => {
       const { app } = setup();
       await delay();
 
-      pause(499);
+      pause(999);
       app.stdin.write(key);
       await delay();
 
       expect(await offerEvents()).toEqual([SHOWN]);
       expect(app.lastFrame()).toContain('Want to try it?');
 
-      pause(500);
+      pause(1000);
       app.stdin.write(key);
       await delay();
 
@@ -254,10 +254,13 @@ describe('the email provider offer after install', () => {
     },
   );
 
-  it('never answers yes from a held Enter', async () => {
+  it('never answers yes from an Enter held from the outro, even when its first repeat comes late', async () => {
     const { app } = setup();
     await delay();
 
+    pause(700);
+    app.stdin.write(ENTER);
+    await delay();
     for (let held = 0; held < 30; held++) {
       pause(30);
       app.stdin.write(ENTER);
