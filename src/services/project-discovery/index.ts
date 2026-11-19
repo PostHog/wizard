@@ -24,7 +24,7 @@ export { reportDiscovery, type DiscoveryReportStore } from './report';
 export { maySendDiscovery, tagDiscovery } from './tags';
 export type { DetectedTool, DiscoveredTools, ToolSignal } from './tools';
 export { applyDetectionReport, joinProjectPath } from './traits/adapter';
-export { toMatchKeys } from './traits/match-keys';
+export { toMatchKeys, toTraitKeys } from './traits/match-keys';
 export { TRAITS } from './traits/registry';
 export { SDK_REGISTRY } from './traits/sdks';
 export { selectProjects, type ProjectPredicate } from './traits/select';

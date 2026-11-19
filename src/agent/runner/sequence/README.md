@@ -127,6 +127,11 @@ frontmatter contract rather than copying an old manifest example:
   once and unblocks its dependents. Every deadline captures
   `orchestrator task deadline exceeded` with its landing, because a `continue`
   task also counts as completed.
+- `skipWhen` lists `key:value` conditions on the project's traits, as a list
+  (`[posthogInstalled:yes]`) or an inline map (`{ callsLlmApi: 'no' }`). The
+  run drops the task when one condition holds for the keys its caller passes in
+  `traitKeys`, as it drops an excluded type. A key the project has no value for
+  drops nothing.
 - `dependsOn` names the task types a task runs after. In a flow with a planner,
   the planner supplies actual task IDs to `enqueue_task`, and only runner-seeded
   tasks resolve their declared types, after planning. In a flow queued from its

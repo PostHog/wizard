@@ -131,14 +131,30 @@ program's project references only the shared program code, so an import of a
 sibling program or the registry fails with TS6307; see
 [layer boundaries](../../.claude/skills/wizard-development/references/ARCHITECTURE.md#layer-boundaries).
 
+## Programs and projects
+
+A run is one `(program, project)` pair. `runProgram` takes the pair's project
+in `input.project`, as a path from the workspace root. It discovers the repo,
+points the session at that project's directory, and runs the program's own
+detection there. Without `input.project` the pair's project is the one the run
+started in, `session.runProject`. The pair's skills resolve from its own
+project's traits: `matchKeys` and `traitKeys` both read
+`getTraits(session, pair.project.path)`.
+
+A program's `appliesTo(traits)` says which projects it applies to, over one
+project's settled traits. posthog-integration applies to an app with a
+supported framework that PostHog is not in yet. A program without one applies
+to every project. `rankWith` names the model sources that rank its projects.
+
 ## Agent prompts
 
 An orchestrator program keeps one prompt per task in `agent/<type>.md`. The
 body is the job to be done, and the skills the frontmatter names carry the
 implementation detail. The frontmatter also declares the task graph:
 `dependsOn` names the task types a task runs after, `sink` marks the task that
-runs last, `optional` a task whose failure never fails the run, and
-`runnerSeeded` a task only the program's `seedTasks` queues. Read
+runs last, `optional` a task whose failure never fails the run,
+`runnerSeeded` a task only the program's `seedTasks` queues, and `skipWhen` the
+project traits that drop the task, such as `skipWhen: [callsLlmApi:no]`. Read
 [the task metadata](../agent/runner/sequence/README.md#task-metadata) for every
 field.
 
@@ -152,15 +168,16 @@ The orchestrator reads these prompts, and a program that runs the orchestrator
 must bundle them. A folder with a `seed: true` prompt keeps its planner. A
 folder without one, such as posthog-integration's, is queued from the graph its
 frontmatter declares, and the program's `excludedTaskTypes` and `seedTasks`
-decide which tasks a run leaves out or adds. A local context-mill
+and each task's `skipWhen` decide which tasks a run leaves out or adds. A local context-mill
 (`--local-context-mill`) and a release pinned with `--context-mill-version`
 serve the skills, never the prompts.
 
 Four checks hold the prompts in place:
 
 - [`agent-prompts.test.ts`](__tests__/agent-prompts.test.ts) fails when a file
-  in `agent/` isn't imported, or when a prompt's frontmatter is missing or has
-  a flag that is neither `true` nor `false`.
+  in `agent/` isn't imported, when a prompt's frontmatter is missing or has a
+  flag that is neither `true` nor `false`, or when a `skipWhen` condition names
+  a trait the registry does not hold.
 - [`flow-graphs.test.ts`](../agent/runner/sequence/orchestrator/__tests__/flow-graphs.test.ts)
   fails when a `dependsOn` names a task outside the folder, when a folder has
   no single sink or cannot be ordered, or when a `skills` entry is missing from

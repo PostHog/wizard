@@ -222,6 +222,8 @@ export interface ResolvedRunConfig {
   projectFacts?: () => readonly string[];
   /** The project's traits as skill match keys, read when the orchestrator picks skills. */
   matchKeys?: () => MatchKeys;
+  /** The project's traits by name, read when the orchestrator applies each task's `skipWhen`. */
+  traitKeys?: () => MatchKeys;
   /** Completion hooks, bound by the caller. */
   hooks?: RunHooks;
   scanReport?: 'flush' | 'defer'; // defer leaves the scan report to the outer run

@@ -287,6 +287,8 @@ export interface AgentPrompt {
   modelSdk?: string;
   effortSdk?: ThinkingLevel;
   skills: string[];
+  /** `key:value` conditions on the project's traits; the task is dropped when one holds. A key the project has no value for drops nothing. */
+  skipWhen?: string[];
   allowedTools: string[];
   disallowedTools: string[];
   /**
@@ -345,7 +347,10 @@ export interface AgentRegistry {
 }
 
 /** One task of a flow's declared graph. */
-export type GraphTask = Pick<AgentPrompt, 'type' | 'dependsOn' | 'sink'>;
+export type GraphTask = Pick<
+  AgentPrompt,
+  'type' | 'dependsOn' | 'sink' | 'skipWhen'
+>;
 
 /** The registry for one flow's prompts. Pure. */
 export function buildRegistry(
@@ -387,10 +392,11 @@ export function buildRegistry(
     optionalTypes: tasks.filter((p) => p.optional).map((p) => p.type),
     excludedTypes: [...excluded].filter((t) => flowTypes.has(t)),
     seed: inFlow.find((p) => p.seed),
-    graph: flowTasks.map(({ type, dependsOn, sink }) => ({
+    graph: flowTasks.map(({ type, dependsOn, sink, skipWhen }) => ({
       type,
       dependsOn,
       sink,
+      skipWhen,
     })),
     get: (type) => byType.get(type),
   };
@@ -425,7 +431,8 @@ function toStringArray(value: unknown): string[] {
 
 /**
  * Parse the leading `---` frontmatter block and the markdown body. The
- * frontmatter is a small, known schema (scalars and inline `[a, b]` arrays), so
+ * frontmatter is a small, known schema (scalars, inline `[a, b]` arrays and
+ * inline `{a: b}` maps), so
  * a tiny parser covers it without a YAML dependency. Inline `# comments` after a
  * value are stripped. `fallbackType` (the menu id) and `fallbackFlow` (the
  * menu entry's flow) apply when the frontmatter omits `type:`/`flow:`.
@@ -446,7 +453,19 @@ export function parseAgentPrompt(
     const kv = line.match(/^([\w-]+):\s*(.*)$/);
     if (!kv) continue;
     const [, key, raw] = kv;
-    if (raw.startsWith('[') && raw.endsWith(']')) {
+    if (raw.startsWith('{') && raw.endsWith('}')) {
+      // An inline map reads as its `key:value` pairs.
+      fields[key] = raw
+        .slice(1, -1)
+        .split(',')
+        .map((pair) =>
+          pair
+            .split(':')
+            .map((part) => part.trim().replace(/^['"]|['"]$/g, ''))
+            .join(':'),
+        )
+        .filter((pair) => pair !== '');
+    } else if (raw.startsWith('[') && raw.endsWith(']')) {
       fields[key] = raw
         .slice(1, -1)
         .split(',')
@@ -531,6 +550,7 @@ export function parseAgentPrompt(
     modelSdk: str(fields.model_sdk),
     effortSdk: effort(fields.effort_sdk, 'effort_sdk'),
     skills: toStringArray(fields.skills),
+    skipWhen: toStringArray(fields.skipWhen),
     allowedTools: toStringArray(fields.allowedTools),
     disallowedTools: toStringArray(fields.disallowedTools),
     dependsOn: toStringArray(fields.dependsOn),

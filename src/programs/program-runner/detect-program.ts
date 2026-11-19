@@ -3,7 +3,14 @@ import type { RunResult } from '@agent/types';
 import { POSTHOG_DOCS_URL } from '@shared/constants';
 import { ErrorCodes } from '@shared/errors';
 import { WizardError } from '@shared/errors/wizard-error';
-import { runDiscovery, settleProjects } from '@services/project-discovery';
+import path from 'path';
+import { ProgramAbort } from '@programs/program-contract';
+import {
+  DISCOVERY_KEY,
+  getDiscovery,
+  runDiscovery,
+  settleProjects,
+} from '@services/project-discovery';
 import { detectErrorCode } from './detect-map';
 import type { ProgramConfig } from '@programs/program-contract';
 import type { CiRunnerContext } from '@programs/program-contract';
@@ -11,15 +18,41 @@ import type { WizardSession } from '@services/session';
 import type { SessionStore } from '@services/session';
 
 /**
- * Scan the project for `config`: a CI session runs the program's `ciPreRun`
- * when it has one, anything else its `onReady`. Marks detection complete.
+ * Point the run at one discovered project, the pair's: its directory becomes
+ * the install dir and it becomes the run project. Aborts on a path discovery
+ * did not find.
+ */
+export function scopeToProject(store: SessionStore, project: string): void {
+  const { session } = store;
+  if (project === session.runProject) return;
+  const rootDir = getDiscovery(session)?.rootDir;
+  if (!rootDir || !session.projects.some((found) => found.path === project)) {
+    throw new ProgramAbort({
+      code: ErrorCodes.DetectBadDirectory,
+      message: `No project at "${project}". Projects found: ${
+        session.projects.map((found) => found.path).join(', ') || 'none'
+      }.`,
+    });
+  }
+  store.scopeToProject(path.resolve(rootDir, project), project, [
+    DISCOVERY_KEY,
+  ]);
+}
+
+/**
+ * Scan the project for `config`: discovery, then the pair's project when the
+ * caller names one, then the program's own detection in it. A CI session runs
+ * the program's `ciPreRun` when it has one, anything else its `onReady`. Marks
+ * detection complete.
  */
 export async function detectProgram(
   config: ProgramConfig,
   store: SessionStore,
   runner: CiRunnerContext,
+  project?: string,
 ): Promise<void> {
   await runDiscovery(config, store.readyContext());
+  if (project !== undefined) scopeToProject(store, project);
   const ciPreRun = config.ciPreRun;
   if (store.session.ci && ciPreRun) {
     await store.edit((draft) =>
