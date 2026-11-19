@@ -28,6 +28,7 @@ export const RUST_AGENT_CONFIG: FrameworkConfig<RustContext> = {
   metadata: {
     name: 'Rust',
     integration: Integration.rust,
+    sdkSkillFamily: 'sdk-posthog-rust',
     docsUrl: 'https://posthog.com/docs/libraries/rust',
     gatherContext: (options: WizardRunOptions) => {
       const asyncRuntime = hasAsyncRuntime(options.installDir);

@@ -39,7 +39,7 @@ import {
   incompleteSkillMessage,
   installToolSkill,
 } from '../runner/sequence/orchestrator/repackaged-skills';
-import type { MatchKeys } from '@shared/skill-resolution';
+import { filterSkillsForRun, type MatchKeys } from '@shared/skill-resolution';
 import {
   ASK_MAX_QUESTIONS_PER_CALL,
   DEFAULT_ASK_MAX_QUESTIONS,
@@ -389,7 +389,12 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
       category: z.enum(categoryNames).describe('Skill category'),
     },
     (args: { category: string }) => {
-      const skills = cachedSkillMenu[args.category];
+      const allSkills = cachedSkillMenu[args.category];
+      const matchKeys = options.matchKeys?.();
+      const skills =
+        allSkills && matchKeys
+          ? filterSkillsForRun(allSkills, matchKeys)
+          : allSkills;
       if (!skills || skills.length === 0) {
         return {
           content: [

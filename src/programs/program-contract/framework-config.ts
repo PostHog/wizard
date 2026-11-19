@@ -78,6 +78,9 @@ export interface FrameworkMetadata<
   /** The gathered variant as a stable id, such as `pages-router` or `expo`; undefined when the context settles none. */
   getVariant?: (context: TContext) => string | undefined;
 
+  /** Menu skill family (`sdk-posthog-*`) for this framework's server SDK when versioned SDK skills apply. */
+  sdkSkillFamily?: string;
+
   /** Optional additional MCP servers for this framework (e.g., Svelte MCP). */
   additionalMcpServers?: Record<string, { url: string }>;
 

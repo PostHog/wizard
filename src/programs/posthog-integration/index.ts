@@ -287,6 +287,7 @@ export const config: ProgramConfig = {
     model: GPT5_6_SOL_MODEL,
     thinkingLevel: 'medium',
   },
+  sdkSupport: true,
   agentFlow: 'integration-v2',
   agentPrompts: () => import('./agent-prompts').then((m) => m.AGENT_PROMPTS),
   handoffNotebook: true,

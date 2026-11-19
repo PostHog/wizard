@@ -17,6 +17,7 @@ export const config: ProgramConfig = {
   command: 'metrics',
   description: 'Add PostHog application metrics to your project',
   id: 'metrics',
+  sdkSupport: true,
   // Orchestrator on pi. The binding routes only; every stage's model and
   // effort are pinned context-mill side in the flow's frontmatter
   // (`model_pi`/`effort_pi`: terra seed, sol tasks, luna report).

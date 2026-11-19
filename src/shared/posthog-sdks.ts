@@ -1,6 +1,7 @@
 /** PostHog SDK specifications shared across detection and agent runtime. */
 
-import type { MatchKeys } from './skill-resolution';
+import type { SkillEntry } from './skill-menu';
+import { resolveSkill, type MatchKeys } from './skill-resolution';
 
 export type PostHogSdkKey =
   | 'posthog-python'
@@ -95,4 +96,63 @@ export function sdkFamiliesForRun(
     families.add(frameworkSdkFamily);
   }
   return [...families];
+}
+
+export type ResolvedSdkSkillPick =
+  | {
+      kind: 'ok';
+      family: string;
+      spec?: PostHogSdkSpec;
+      entry: SkillEntry;
+      matchKeys: MatchKeys;
+    }
+  | {
+      kind: 'no-skill';
+      family: string;
+      spec?: PostHogSdkSpec;
+      major?: string;
+    };
+
+/**
+ * Resolve every applicable `sdk-posthog-*` entry across all detected SDK majors
+ * (splitting multi-major `matchKeys` per major so secondary majors are never dropped)
+ * plus any greenfield framework SDK family.
+ */
+export function resolveSdkSkillEntries(opts: {
+  menuEntries: readonly SkillEntry[];
+  matchKeys: MatchKeys;
+  frameworkSdkFamily?: string;
+}): ResolvedSdkSkillPick[] {
+  const { menuEntries, matchKeys, frameworkSdkFamily } = opts;
+  const picks: ResolvedSdkSkillPick[] = [];
+
+  for (const family of sdkFamiliesForRun(matchKeys, frameworkSdkFamily)) {
+    const familyEntries = menuEntries.filter(
+      (entry) => entry.family === family,
+    );
+    // Stub menus in unit tests or pre-release mirrors may omit sdk/* categories.
+    if (familyEntries.length === 0) continue;
+
+    const spec = sdkSpecForFamily(family);
+    const detectedMajors = spec ? matchKeys[spec.trait] : undefined;
+    const perMajorKeys: MatchKeys[] =
+      spec && detectedMajors && detectedMajors.length > 1
+        ? detectedMajors.map((major) => ({
+            ...matchKeys,
+            [spec.trait]: [major],
+          }))
+        : [matchKeys];
+
+    for (const keys of perMajorKeys) {
+      const entry = resolveSkill(menuEntries, family, keys);
+      if (!entry) {
+        const major = spec ? keys[spec.trait]?.[0] : undefined;
+        picks.push({ kind: 'no-skill', family, spec, major });
+        continue;
+      }
+      picks.push({ kind: 'ok', family, spec, entry, matchKeys: keys });
+    }
+  }
+
+  return picks;
 }

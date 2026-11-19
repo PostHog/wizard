@@ -14,6 +14,14 @@ export type Traits = {
   mcpServers?: readonly string[];
   /** The kinds of data source detection found. */
   warehouseSources?: readonly string[];
+  /** Detected major version(s) of an existing PostHog SDK, when already installed. */
+  sdkPython?: readonly string[];
+  sdkNode?: readonly string[];
+  sdkGo?: readonly string[];
+  sdkRust?: readonly string[];
+  sdkIos?: readonly string[];
+  sdkAndroid?: readonly string[];
+  sdkFlutter?: readonly string[];
 };
 
 export type TraitName = keyof Traits;

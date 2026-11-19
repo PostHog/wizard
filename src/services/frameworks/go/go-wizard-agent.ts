@@ -28,6 +28,7 @@ export const GO_AGENT_CONFIG: FrameworkConfig<GoContext> = {
   metadata: {
     name: 'Go',
     integration: Integration.go,
+    sdkSkillFamily: 'sdk-posthog-go',
     docsUrl: 'https://posthog.com/docs/libraries/go',
     gatherContext: (options: WizardRunOptions) => {
       const goVersion = getGoVersion(options.installDir);

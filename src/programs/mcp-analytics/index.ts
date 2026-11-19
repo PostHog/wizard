@@ -221,6 +221,7 @@ function targetGuidance(session: ProgramSession): string[] {
 export const config: ProgramConfig = {
   decisions: ['is_mcp_server'],
   ...skillProgram,
+  sdkSupport: true,
   // Before setup, suggest server apps so a monorepo root doesn't instrument a shared helper.
   onReady: async (ctx) => {
     try {

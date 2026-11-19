@@ -30,6 +30,7 @@ export const FASTAPI_AGENT_CONFIG: FrameworkConfig<FastAPIContext> = {
   metadata: {
     name: 'FastAPI',
     integration: Integration.fastapi,
+    sdkSkillFamily: 'sdk-posthog-python',
     docsUrl: 'https://posthog.com/docs/libraries/python',
     unsupportedVersionDocsUrl: 'https://posthog.com/docs/libraries/python',
     gatherContext: async (options: WizardRunOptions) => {

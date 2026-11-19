@@ -102,6 +102,7 @@ export const config: ProgramConfig = {
   command: 'support',
   description: 'Set up PostHog Support and its in-app chat widget',
   id: 'support',
+  sdkSupport: true,
   binding: {
     sequence: Sequence.orchestrator,
     harness: Harness.pi,

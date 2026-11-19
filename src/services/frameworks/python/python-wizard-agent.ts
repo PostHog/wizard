@@ -25,6 +25,7 @@ export const PYTHON_AGENT_CONFIG: FrameworkConfig<PythonContext> = {
   metadata: {
     name: 'Python Language',
     integration: Integration.python,
+    sdkSkillFamily: 'sdk-posthog-python',
     docsUrl: 'https://posthog.com/docs/libraries/python',
     gatherContext: async (options: WizardRunOptions) => {
       const packageManager = await detectPackageManager(options);

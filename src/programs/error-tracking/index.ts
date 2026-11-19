@@ -173,6 +173,7 @@ export const config: ProgramConfig = {
   description:
     'Set up PostHog error tracking, source-map upload and release linking included',
   id: 'error-tracking',
+  sdkSupport: true,
   agentFlow: 'error-tracking',
   agentPrompts: () => import('./agent-prompts').then((m) => m.AGENT_PROMPTS),
   reportFile: ERROR_TRACKING_REPORT_FILE,
