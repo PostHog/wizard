@@ -54,6 +54,20 @@ const PYTHON_LLM_PACKAGES = new Set([
   'portkey-ai',
 ]);
 
+/** Whether a manifest's package names include an LLM SDK. */
+export function usesLlmSdk(
+  ecosystem: string,
+  packages: readonly string[],
+): boolean {
+  const known =
+    ecosystem === 'npm'
+      ? LLM_PACKAGES
+      : ecosystem === 'pypi'
+      ? PYTHON_LLM_PACKAGES
+      : undefined;
+  return known !== undefined && packages.some((name) => known.has(name));
+}
+
 export function discoverFeatures(installDir: string): DiscoveredFeature[] {
   const features: DiscoveredFeature[] = [];
   discoverNodeFeatures(installDir, features);

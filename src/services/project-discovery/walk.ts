@@ -108,7 +108,7 @@ const isUnder = (dir: string, file: string): boolean =>
   dir === '.' || file === dir || file.startsWith(`${dir}/`);
 
 /** The manifest's directory; a Gradle version catalog sits in `gradle/`, so its project is the parent. */
-function manifestDir(manifestPath: string): string {
+export function manifestDir(manifestPath: string): string {
   const dir = path.posix.dirname(manifestPath);
   return path.posix.basename(dir) === 'gradle' ? path.posix.dirname(dir) : dir;
 }

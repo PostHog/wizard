@@ -135,6 +135,7 @@ const base = createSkillProgram({
  *   shared platform-gated detection, which support uses too.
  */
 export const config: ProgramConfig = {
+  rankWith: ['agentic'],
   decisions: ['framework', 'web_frontend', 'primary_user_flow'],
   ...base,
   // Orchestrator on pi; the flow's `model_pi`/`effort_pi` pin each stage, this model is the fallback.

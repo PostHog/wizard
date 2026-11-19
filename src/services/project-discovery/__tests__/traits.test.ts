@@ -24,7 +24,10 @@ describe('getTraits', () => {
   it('reads the framework from the session', () => {
     const value = session();
     value.integration = Integration.django;
-    expect(getTraits(value)).toEqual({ framework: Integration.django });
+    expect(getTraits(value)).toEqual({
+      framework: Integration.django,
+      projectRole: 'app',
+    });
   });
 
   it.each(Object.values(Integration))(
@@ -136,7 +139,7 @@ describe('the Nuxt variant', () => {
 });
 
 describe('toMatchKeys', () => {
-  it('carries the framework and no other trait', () => {
+  it('carries the framework and its variant, keyed as skills tag them', () => {
     const value = session();
     value.integration = Integration.nextjs;
     value.frameworkContext = { router: 'pages-router' };
@@ -144,6 +147,7 @@ describe('toMatchKeys', () => {
     value.mcpServerCandidates = ['apps/mcp'];
     expect(toMatchKeys(getTraits(value))).toEqual({
       framework: [Integration.nextjs],
+      variant: ['pages-router'],
     });
   });
 

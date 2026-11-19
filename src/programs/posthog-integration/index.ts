@@ -278,6 +278,7 @@ const warehouseSeedTasks: NonNullable<ProgramConfig['seedTasks']> = (sess) => {
 export { EVENT_PLAN_FILE } from './constants.js';
 
 export const config: ProgramConfig = {
+  rankWith: ['agentic'],
   description: 'Set up PostHog SDK integration',
   id: 'posthog-integration',
   // Orchestrator on pi. Each stage's model and effort come from the flow's frontmatter; a composed sub-run is linear on this model.
