@@ -146,10 +146,11 @@ async function atTheQuestion(store: () => WizardStore): Promise<void> {
   await vi.waitFor(() =>
     expect(terminal.app?.lastFrame()).toContain('Press any key to continue'),
   );
-  // The outro's key handler mounts after its first frame, so Enter until it leaves the outro.
+  // The outro's key handler mounts after its first frame, so Enter until it leaves the outro; then finish the MCP step.
   await vi.waitFor(() => {
     if (store().currentScreen === ScreenId.Outro)
       terminal.app?.stdin.write(ENTER);
+    if (store().currentScreen === ScreenId.Mcp) store().setMcpComplete();
     expect(store().currentScreen).toBe(
       PostHogIntegrationScreenId.EmailProviderOffer,
     );

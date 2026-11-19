@@ -113,6 +113,7 @@ function storeAtOutroWithResend(
 function storeAfterInstallWithResend(run?: Run): WizardStore {
   const store = storeAtOutroWithResend(run);
   store.setOutroDismissed();
+  store.setMcpComplete();
   return store;
 }
 
@@ -155,7 +156,7 @@ afterEach(async () => {
 });
 
 describe('the email provider offer after install', () => {
-  it('asks without naming the detected provider once the outro is dismissed, and tells PostHog it asked', async () => {
+  it('asks without naming the detected provider once the MCP step is done, and tells PostHog it asked', async () => {
     const { store, app } = setup();
     await delay();
 
@@ -186,7 +187,7 @@ describe('the email provider offer after install', () => {
     await press(...keys);
 
     expect(await offerEvents()).toEqual([SHOWN, answered(answer)]);
-    expect(store.router.resolve(store)).toBe(ScreenId.Mcp);
+    expect(store.router.resolve(store)).toBe(ScreenId.Exit);
   });
 
   it('shows the email command and the Workflows link on yes, keeps them for the exit summary, and moves on at the next key', async () => {
@@ -206,7 +207,7 @@ describe('the email provider offer after install', () => {
 
     await press(ENTER);
 
-    expect(store.router.resolve(store)).toBe(ScreenId.Mcp);
+    expect(store.router.resolve(store)).toBe(ScreenId.Exit);
     const exitLines = getExitLine(store).split('\n');
     expect(exitLines).toContain(COMMAND);
     expect(exitLines).toContain(WORKFLOWS_URL);
@@ -300,7 +301,7 @@ describe('the email provider offer after install', () => {
     expect(await offerEvents()).toEqual([SHOWN, answered('skipped')]);
   });
 
-  it('never answers yes from an Enter held from the outro, even when its first repeat comes late', async () => {
+  it('never answers yes from an Enter held from the previous screen, even when its first repeat comes late', async () => {
     const { app } = setup();
     await delay();
 
@@ -370,9 +371,10 @@ describe('the email provider offer after install', () => {
   });
 });
 
-describe('the outro into the email provider offer', () => {
-  it("doesn't let a quick second Enter after the outro answer the question", async () => {
+describe('the MCP step into the email provider offer', () => {
+  it("doesn't let a quick Enter after the MCP step answer the question", async () => {
     const store = storeAtOutroWithResend();
+    store.setOutroDismissed();
     const app = render(
       <ScreenContainer
         store={store}
@@ -380,9 +382,9 @@ describe('the outro into the email provider offer', () => {
       />,
     );
     await delay();
-    expect(store.router.resolve(store)).toBe(ScreenId.Outro);
+    expect(store.router.resolve(store)).toBe(ScreenId.Mcp);
 
-    app.stdin.write(ENTER);
+    store.setMcpComplete();
     await new Promise((resolve) => setTimeout(resolve, 50));
     app.stdin.write(ENTER);
     await delay();

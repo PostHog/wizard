@@ -604,6 +604,7 @@ const FIXTURES: Record<string, Fixture> = {
       });
       ranSuccessfully(s);
       s.setOutroDismissed();
+      s.setMcpComplete();
     },
   },
   [ScreenId.MintFailure]: {
