@@ -38,7 +38,6 @@ export const config: ProgramConfig = {
   handoffNotebook: false,
   // The report names the organization's account owner as the user's contact.
   accountOwnerContext: true,
-  scansCodebase: true,
   reportFile: SPEND_AUDIT_REPORT_FILE,
   requires: ['posthog-integration'],
   // A cloud run has nobody to answer, and the audit decides from data alone.

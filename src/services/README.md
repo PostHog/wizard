@@ -67,31 +67,66 @@ the mock reaches every importer.
 ## Project discovery
 
 [`project-discovery`](project-discovery/index.ts) holds everything the wizard
-learns by reading the repo. `runDiscovery` runs once per run, for a program that
-sets `scansCodebase`, and keeps a `Discovery` in the session:
+learns by reading the repo. `runDiscovery` runs once per run, before the
+program's detection, and keeps a `Discovery` in the session:
 
-| Field          | What it holds                                                                              |
-| -------------- | ------------------------------------------------------------------------------------------ |
-| `rootDir`      | The directory discovery walked                                                             |
-| `discoveredAt` | When it ran                                                                                |
-| `files`        | The walk (`RepoFiles`): file tree, manifests, lockfiles and `.env` key names               |
-| `tools`        | The tool match (`DiscoveredTools`): catalog tools, whether the walk was complete, `failed` |
+| Field          | What it holds                                                                                |
+| -------------- | -------------------------------------------------------------------------------------------- |
+| `rootDir`      | The directory discovery walked: the workspace root, or the run directory                     |
+| `runDir`       | The directory the run started in                                                             |
+| `discoveredAt` | When it ran                                                                                  |
+| `files`        | The walk (`RepoFiles`): file tree, manifests, lockfiles, workspace markers, `.env` key names |
+| `tools`        | The tool match (`DiscoveredTools`): catalog tools, whether the walk was complete, `failed`   |
+| `projects`     | The project list (`DiscoveredProjects`): `repoType`, `workspaceTool`, workspaces, projects   |
 
-- [`walk.ts`](project-discovery/walk.ts) walks a directory once, within its
-  bounds. It reads manifests for package names and `.env` files for key names,
-  never other file contents or `.env` values. `getRepoFiles` returns the walk of
-  the run's install directory, which the Decisions input renders.
+It also writes `session.projects` and `session.runProject` through the store's
+`setProjects` and `setRunProject`. A project's path is relative to `rootDir`, so
+`.` is the workspace root, and `session.runProject` is the project the run
+started in.
+
+- [`walk.ts`](project-discovery/walk.ts) is the only module that reads the repo.
+  `findWorkspaceRoot` looks up from the run directory for the nearest workspace
+  marker that holds it, stopping at the git root, or at the home directory when
+  there is none. `walkRepoFiles` walks once, the run project's subtree first. It
+  reads manifests for package names, workspace markers for member globs and
+  `.env` files for key names, never other file contents or `.env` values. It
+  keeps at most 4,000 file paths: the run project's first, then an even share
+  for each other manifest directory. `readScriptHosts` reads the templates the
+  walk passed, once a catalog names script hosts. `getRepoFiles` returns the
+  walk of the run's install directory, which the Decisions input renders.
 - [`manifests/`](project-discovery/manifests/index.ts) holds every manifest
   parser, one ecosystem per file, and `MANIFEST_PARSERS`, the table by file
-  name.
+  name. [`markers.ts`](project-discovery/markers.ts) holds the workspace marker
+  parsers: `pnpm-workspace.yaml`, `workspaces` in `package.json`, `turbo.json`,
+  `nx.json`, `lerna.json`, `[workspace]` in `Cargo.toml`, `go.work`, `include`
+  in `settings.gradle` and uv workspaces.
+- [`projects.ts`](project-discovery/projects.ts) turns the walk into projects. A
+  candidate is a directory with a manifest. A workspace's member globs prune the
+  candidates below it that it does not name; the run project always stays.
+  `repoType` is `monorepo` when some workspace root has members. `complete` is
+  false when the walk hit a cap. `parentOf` gives the project that contains
+  another.
 - [`tools.ts`](project-discovery/tools.ts) matches PostHog's tool catalog
-  against the project's packages, `.env` key names and script hosts.
+  against the walk's packages, `.env` key names and script hosts. Tools and
+  projects fail apart: a missing catalog sets `tools.failed` and leaves
+  `projects` whole.
 - [`report.ts`](project-discovery/report.ts) is the one place discovery leaves
   the machine, as a `DiscoveryReport`. It needs discovery consent
   (`maySendDiscovery`) and telemetry. [`tags.ts`](project-discovery/tags.ts)
   holds the analytics tags under the same consent.
 - [`fingerprint.ts`](project-discovery/fingerprint.ts) hashes the workspace for
-  the report.
+  the report, from `runDir`.
+
+[`flag.ts`](project-discovery/flag.ts) reads the `wizard-project-discovery`
+flag:
+
+| Value         | What runs                                                                                            |
+| ------------- | ---------------------------------------------------------------------------------------------------- |
+| `off`         | Discovery walks from the run directory, so `rootDir` is the run directory and the run project is `.` |
+| `one-project` | The walk up to the workspace root                                                                    |
+| `run-lists`   | Everything in `one-project`                                                                          |
+
+Any other value, or a failed flag read, is `off`.
 
 PostHog reads the report's wire names, so they keep theirs: the `wizard/scans`
 endpoint, its `scanned_at`, `workspace_fingerprint`, `complete` and `tools`
@@ -100,10 +135,10 @@ separate concern and keeps "scan" throughout.
 
 ### Project traits
 
-A project is a directory in the repo with its traits, and `.` is the directory
-the run works in. A trait is one thing detection read from the project's code:
-its framework, the framework's variant, whether it calls an LLM API, its MCP
-servers and its warehouse sources. Traits describe the code, never the person.
+A project is a directory in the repo with its traits. A trait is one thing
+detection read from the project's code: its framework, the framework's variant,
+whether it calls an LLM API, its MCP servers and its warehouse sources. Traits
+describe the code, never the person.
 
 [`traits/registry.ts`](project-discovery/traits/registry.ts) declares every
 trait once in `TRAITS`: how static detection reads it from the session, and
@@ -111,8 +146,8 @@ whether skills can match on it. `getTraits(session, projectPath)`, in
 [`traits/store.ts`](project-discovery/traits/store.ts), returns the traits
 detection settled and leaves out the rest. A trait is its value alone. It does
 not say whether detection or the person's answer to a setup question set it.
-Detection covers the run's own directory, so any other path has no traits.
-`toMatchKeys`, in
+Detection covers the run project, `session.runProject`, so any other path has no
+traits. `toMatchKeys`, in
 [`traits/match-keys.ts`](project-discovery/traits/match-keys.ts), turns the
 traits skills can match on into the run's match keys. `framework` is the only
 one.

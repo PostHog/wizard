@@ -1,7 +1,7 @@
 /**
  * The sharing choice a program intro offers on its privacy view. Every program
- * that scans the codebase (`scansCodebase`) shows the same rows, so consent
- * reads and behaves the same wherever it is asked.
+ * that asks shows the same rows, so consent reads and behaves the same wherever
+ * it is asked.
  */
 
 import { DiscoveryConsent } from '@shared/run-state';

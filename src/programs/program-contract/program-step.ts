@@ -5,6 +5,7 @@ import type { ProgramRun } from './program-run';
 import type { Integration } from '@shared/constants';
 import type { FrameworkConfig } from './framework-config';
 import type { CiRunnerContext, RunnerContext } from './runner-context';
+import type { Project } from './project-traits';
 
 /** A question a program may ask the Decisions service; the catalog in `@services/detection/decisions` has exactly these keys. */
 export type DecisionQuestionKey =
@@ -53,6 +54,11 @@ export interface ProgramReadyContext {
   readonly setDetectionComplete: () => void;
   readonly setPosthogSdkDetected: (detected: boolean) => void;
   readonly setMcpServerCandidates: (candidates: readonly string[]) => void;
+  /** The projects discovery found, and the one the run started in. */
+  readonly setProjects: (
+    projects: readonly Project[],
+    runProject: string,
+  ) => void;
 }
 
 /**
@@ -182,12 +188,6 @@ export interface ProgramConfig {
    * store has no detection yet.
    */
   onReady?: (ctx: ProgramReadyContext) => void | Promise<void>;
-  /**
-   * Scan the codebase for catalog tools before `onReady`, once per run. The
-   * result feeds local suggestions, and is reported to PostHog when the user
-   * shares it; see `@services/project-discovery`.
-   */
-  scansCodebase?: boolean;
   /**
    * Questions this program asks the Decisions judgment service, by catalog key
    * (`@services/detection/decisions/questions`). The run asks those of this

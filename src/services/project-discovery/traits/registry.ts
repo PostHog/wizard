@@ -9,9 +9,6 @@ import type {
 import { FRAMEWORK_REGISTRY } from '../../frameworks/registry';
 import { getDetectedWarehouseSources } from '../../warehouse-sources/detect';
 
-/** The directory the run works in, the one project detection knows. */
-export const RUN_PROJECT = '.';
-
 export type TraitDefinition<K extends TraitName> = {
   /** The value read from the session; undefined when detection settles nothing. */
   detect: (session: ProgramSession) => NonNullable<Traits[K]> | undefined;

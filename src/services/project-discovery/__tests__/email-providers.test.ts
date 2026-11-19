@@ -33,7 +33,7 @@ const CREDENTIALS = {
   host: { apiHost: 'https://us.i.posthog.com' },
 } as unknown as Credentials;
 
-const PROGRAM = { id: 'posthog-integration', scansCodebase: true };
+const PROGRAM = { id: 'posthog-integration' };
 
 /** What PostHog ingestion receives from the Wizard's analytics client. */
 const ingested: IngestedEvent[] = [];

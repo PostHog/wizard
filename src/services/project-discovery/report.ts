@@ -35,8 +35,8 @@ export function buildDiscoveryReport(
   return {
     program: discovery.program,
     wizard_version: VERSION,
-    // The directory discovery walked, which a CI run's install dir may no longer be.
-    workspace_fingerprint: workspaceFingerprint(projectId, discovery.rootDir),
+    // The directory the run started in, which a CI run's install dir may no longer be.
+    workspace_fingerprint: workspaceFingerprint(projectId, discovery.runDir),
     scanned_at: discovery.discoveredAt,
     complete: discovery.tools.complete,
     tools: discovery.tools.tools.map((tool) => ({

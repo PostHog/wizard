@@ -181,6 +181,8 @@ export interface WalkOptions {
    * machine, outside the project it is scanning.
    */
   followSymlinks?: boolean;
+  /** A directory the walk does not enter, by full path. */
+  skipDir?: (fullPath: string) => boolean;
 }
 
 /**
@@ -199,7 +201,7 @@ export function walkProjectFiles(
   rootDir: string,
   onFile: (name: string, fullPath: string) => void,
   maxDepth = 3,
-  { followSymlinks = true }: WalkOptions = {},
+  { followSymlinks = true, skipDir }: WalkOptions = {},
 ): boolean {
   const visited = new Set<string>();
   let filesSeen = 0;
@@ -270,6 +272,7 @@ export function walkProjectFiles(
 
         if (isDir) {
           if (entry.name.startsWith('.')) continue; // skip hidden directories
+          if (skipDir?.(fullPath)) continue;
           if (depth < maxDepth) stack.push({ dir: fullPath, depth: depth + 1 });
         } else if (isFile) {
           filesSeen += 1;

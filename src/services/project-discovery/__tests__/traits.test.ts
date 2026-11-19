@@ -8,7 +8,6 @@ import { buildSession } from '@services/session/wizard-session';
 import { FRAMEWORK_REGISTRY } from '@services/frameworks/registry';
 import { DETECTED_WAREHOUSE_SOURCES_KEY } from '@services/warehouse-sources/detect';
 import {
-  RUN_PROJECT,
   getProject,
   getTraits,
   toMatchKeys,
@@ -64,14 +63,27 @@ describe('getTraits', () => {
     expect(traits.warehouseSources).toEqual(['Stripe', 'Postgres']);
   });
 
-  it('knows only the directory the run works in', () => {
+  it('knows only the run project', () => {
     const value = session();
     value.integration = Integration.django;
     expect(getTraits(value, 'apps/web')).toEqual({});
     expect(getProject(value)).toEqual({
-      path: RUN_PROJECT,
+      path: '.',
       traits: getTraits(value),
     });
+  });
+
+  it('reads the same traits wherever the workspace root puts the run project', () => {
+    const atRoot = session();
+    atRoot.integration = Integration.django;
+    const inMember = session();
+    inMember.integration = Integration.django;
+    inMember.runProject = 'apps/web';
+    expect(getTraits(inMember, inMember.runProject)).toEqual(
+      getTraits(atRoot, '.'),
+    );
+    expect(getTraits(inMember, '.')).toEqual({});
+    expect(getProject(inMember).path).toBe('apps/web');
   });
 });
 

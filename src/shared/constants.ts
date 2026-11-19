@@ -341,6 +341,8 @@ export const WIZARD_DECISIONS_DETECTION_FLAG_KEY = 'wizard-decisions-detection';
 /** Boolean flag: true lets the warehouse-destination program run. */
 export const WIZARD_WAREHOUSE_DESTINATIONS_FLAG_KEY =
   'wizard-warehouse-destinations';
+/** Multivariate flag: `one-project` or `run-lists` turns project discovery on; anything else is `off`. */
+export const WIZARD_PROJECT_DISCOVERY_FLAG_KEY = 'wizard-project-discovery';
 // Reading a flag enters this run into that flag's experiment, so a closed set — not a
 // `wizard-` prefix anyone can name into — decides what a run evaluates. Test-pinned exhaustive.
 export const WIZARD_FLAG_KEYS = [
@@ -352,6 +354,7 @@ export const WIZARD_FLAG_KEYS = [
   WIZARD_DEFAULT_MCP_ANALYTICS_FLAG_KEY,
   WIZARD_DECISIONS_DETECTION_FLAG_KEY,
   WIZARD_WAREHOUSE_DESTINATIONS_FLAG_KEY,
+  WIZARD_PROJECT_DISCOVERY_FLAG_KEY,
 ] as const;
 /** User-Agent for wizard HTTP requests and MCP server identification. */
 export const WIZARD_USER_AGENT = `posthog/wizard; version: ${VERSION}`;

@@ -85,7 +85,6 @@ export const config: ProgramConfig = {
   },
   skillId: SKILL_ID,
   decisions: ['runs_data_warehouse'],
-  scansCodebase: true,
   onReady: (ctx) =>
     detectWarehouseDestinationPrerequisites(
       ctx.session,
