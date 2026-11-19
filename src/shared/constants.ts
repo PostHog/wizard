@@ -375,6 +375,8 @@ export const DETECTION_TIMEOUT_MS = 10_000;
 
 /** Timeout for the agentic project scan (ms); past it the run falls back to root detection. */
 export const AGENTIC_DETECTION_FIRST_ATTEMPT_TIMEOUT_MS = 60_000;
+/** Base pause before a timed-out scan's retry (ms); the scan adds up to as much again as jitter. */
+export const AGENTIC_DETECTION_RETRY_BACKOFF_MS = 1_000;
 export const AGENTIC_DETECTION_RETRY_TIMEOUT_MS = 90_000;
 
 /**

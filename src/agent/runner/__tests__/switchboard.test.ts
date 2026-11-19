@@ -24,6 +24,7 @@ import {
 import {
   DEFAULT_BINDING,
   resolveBinding,
+  resolveScanBinding,
   type ProgramBinding,
   type SwitchboardCtx,
 } from '@agent/runner/switchboard';
@@ -405,5 +406,45 @@ describe('switchboard model allow-list', () => {
     expect(() => requireKnownModel(undefined, '', 'openai/gpt-5')).toThrow(
       /No valid model/,
     );
+  });
+});
+
+describe('a project scan binding', () => {
+  const scan = (ctx: Partial<SwitchboardCtx> = {}) =>
+    resolveScanBinding({
+      program: 'posthog-integration',
+      binding: DEFAULT_BINDING,
+      flags: {},
+      ...ctx,
+    });
+
+  it('is linear on the triage model of the harness the run resolves to', () => {
+    expect(scan()).toEqual({
+      sequence: Sequence.linear,
+      harness: Harness.pi,
+      model: TRIAGE_MODELS[Harness.pi],
+    });
+  });
+
+  it('follows a --harness override', () => {
+    expect(scan({ cliHarness: Harness.anthropic })).toEqual({
+      sequence: Sequence.linear,
+      harness: Harness.anthropic,
+      model: TRIAGE_MODELS[Harness.anthropic],
+    });
+  });
+
+  it('follows a flag payload that names a harness, and ignores its sequence', () => {
+    expect(
+      scan({
+        program: 'self-driving',
+        flags: { [SD]: 'true' },
+        flagPayloads: { [SD]: { ...SD_PAYLOAD, harness: 'anthropic' } },
+      }),
+    ).toEqual({
+      sequence: Sequence.linear,
+      harness: Harness.anthropic,
+      model: TRIAGE_MODELS[Harness.anthropic],
+    });
   });
 });

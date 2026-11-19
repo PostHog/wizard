@@ -38,15 +38,10 @@ const flagRunnerOverride: Middleware<HarnessPick> = (ctx, next) => {
   const pick = next();
   const route = resolveFlagRoute(ctx.program, ctx.flags, ctx.flagPayloads);
   if (!route) return pick;
-  if (ctx.trace) {
-    ctx.trace.harness = 'flag';
-    // A route that pins no model keeps the binding's — trace it truthfully so
-    // analytics never attributes the fallback model to the flag.
-    if (route.model) ctx.trace.model = 'flag';
-  }
+  if (ctx.trace) Object.assign(ctx.trace, { harness: 'flag', model: 'flag' });
   return {
     harness: route.harness ?? Harness.pi,
-    model: route.model ?? pick.model,
+    model: route.model,
     thinkingLevel: route.thinkingLevel ?? pick.thinkingLevel,
   };
 };

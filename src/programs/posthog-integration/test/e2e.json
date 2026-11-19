@@ -18,7 +18,8 @@
       "name": "pi-anthropic-linear",
       "summary": "pi harness on the anthropic transport",
       "harness": "pi",
-      "sequence": "linear"
+      "sequence": "linear",
+      "model": "claude-sonnet-5"
     },
     {
       "name": "pi-openai-linear",

@@ -37,9 +37,9 @@ const EFFORT_FLAG_VARIANTS = [
   'xhigh',
 ] as const satisfies readonly EffortLevel[];
 
-/** A resolved flag route. Absent fields keep the axis's default (pi harness, sequence resolved by its own chain, table effort). */
+/** A resolved flag route: it always pins the model. Absent fields keep the axis's default (pi harness, sequence resolved by its own chain, table effort). */
 export interface FlagRoute {
-  model?: string;
+  model: string;
   thinkingLevel?: EffortLevel;
   harness?: Harness;
   sequence?: Sequence;

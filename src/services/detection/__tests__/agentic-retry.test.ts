@@ -1,4 +1,5 @@
 /** Detection's scan and its one retry, over a stubbed runAgent. */
+import { setTimeout as sleep } from 'node:timers/promises';
 import {
   AgenticDetectionTimeoutError,
   detectProjectsWithAgent,
@@ -12,6 +13,7 @@ import { Harness } from '@shared/constants';
 import { snapshot } from './helpers/run-snapshot.no-jest';
 
 vi.mock('@utils/analytics');
+vi.mock('node:timers/promises', () => ({ setTimeout: vi.fn() }));
 vi.mock('@agent', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@agent')>()),
   runAgent: vi.fn(),
@@ -111,6 +113,11 @@ describe('agentic detection retry', () => {
     expect(calls.map(([config]) => config.run.structured?.timeoutMs)).toEqual([
       60_000, 90_000,
     ]);
+    // One jittered pause sits between the timed-out attempt and its retry.
+    const [[pauseMs]] = vi.mocked(sleep).mock.calls;
+    expect(vi.mocked(sleep)).toHaveBeenCalledTimes(1);
+    expect(pauseMs).toBeGreaterThanOrEqual(1_000);
+    expect(pauseMs).toBeLessThan(2_000);
     for (const [config] of calls) {
       expect(config.wizardFlags).toEqual({ 'a-flag': 'variant' });
       expect(config.wizardFlagPayloads).toEqual({ 'a-flag': { route: 'pi' } });
