@@ -69,7 +69,7 @@ export const RUST_AGENT_CONFIG: FrameworkConfig<RustContext> = {
     projectTypeDetection:
       'This is a Rust project. Look for Cargo.toml with a [package] section, src/main.rs or src/lib.rs, and Cargo.lock to confirm.',
     packageInstallation:
-      'Install the PostHog Rust SDK with `cargo add posthog-rs`. Do not manually edit Cargo.toml; cargo updates it automatically.',
+      'Stay on the existing Rust SDK crate major if already declared (`posthog-rs` 0.x vs `posthog` 1.x). On greenfield installs, follow the SDK reference skill (e.g., `cargo add posthog` for 1.x). Do not manually edit Cargo.toml; cargo updates it automatically.',
     getAdditionalContextLines: (context) => {
       const lines = [
         `Framework docs ID: rust (use posthog://docs/frameworks/rust for documentation)`,
@@ -77,11 +77,11 @@ export const RUST_AGENT_CONFIG: FrameworkConfig<RustContext> = {
       ];
       if (context.asyncRuntime) {
         lines.push(
-          'An async runtime is present — use the default async posthog-rs client.',
+          'An async runtime is present — use the default async PostHog client (`posthog` 1.x or `posthog-rs` 0.x).',
         );
       } else {
         lines.push(
-          'No async runtime detected — install with `cargo add posthog-rs --no-default-features --features tls` and use the blocking client. posthog-rs 1.x has no TLS without the `tls` feature, so captures to an https host never send. posthog-rs 0.x has no `tls` feature and keeps TLS on, so leave `--features tls` out there.',
+          'No async runtime detected — install with `--no-default-features --features tls` (for `posthog` 1.x or `posthog-rs` 1.x) and use the blocking client. `posthog-rs` 0.x has no `tls` feature and keeps TLS on, so omit `--features tls` when staying on `0.x`.',
         );
       }
       return lines;

@@ -42,8 +42,8 @@ export {
   detectFramework,
   POSTHOG_SDKS_KEY,
   recordPostHogSdksIfNeeded,
+  resolveProjectDir,
 } from '@services/detection';
-export { hasOwnTargetDir } from './program-runner/sdk-run-context';
 /** Each program's Decisions question keys, for the decisions-detect script. */
 export { getProgramDecisions } from './program-runner/program-registry';
 export type {
@@ -65,3 +65,10 @@ export { createSkillProgram } from './shared/skill-program';
 export { getAuditChecks } from '@services/session';
 /** The scan a downloaded skill goes through, for the TUI's spellbook: the TUI cannot import the agent. */
 export { scanInstalledSkill } from '@agent';
+export { getTraits, toMatchKeys } from '@services/project-traits';
+export {
+  frameworkSdkSkillFamily,
+  hasOwnTargetDir,
+  ownTargetDir,
+  programMatchKeys,
+} from './program-runner/sdk-run-context';

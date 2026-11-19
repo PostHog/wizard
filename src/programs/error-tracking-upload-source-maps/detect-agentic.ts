@@ -109,14 +109,17 @@ const JS_RERANK_VARIANTS: readonly SkillVariant[] = [
   'web',
 ];
 
-/** Comment-stripped substring check for the Rust SDK in one manifest. */
+/** Comment-stripped check for the Rust SDK crate (`posthog-rs` 0.x or `posthog` 1.x) in one manifest. */
 function manifestMentionsSdk(manifestPath: string): boolean {
   const content = readProjectFile(manifestPath);
   return (
     content != null &&
     content.split('\n').some((line) => {
       const code = line.split('#', 1)[0];
-      return code.includes(RUST_SDK_CRATE);
+      return (
+        code.includes(RUST_SDK_CRATE) ||
+        /^\s*posthog\s*=|\[(?:workspace\.)?dependencies\.posthog\]/.test(code)
+      );
     })
   );
 }

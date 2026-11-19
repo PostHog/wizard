@@ -167,7 +167,9 @@ export interface EnqueueInput {
   optional?: boolean;
 }
 
-export const QUEUE_DIR_NAME = '.posthog-wizard-cache';
+import { WIZARD_CACHE_DIR } from '../../shared/sdk-skills';
+
+export const QUEUE_DIR_NAME = WIZARD_CACHE_DIR;
 const DEFAULT_MAX_ATTEMPTS = 2;
 
 function nowIso(): string {

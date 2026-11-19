@@ -34,7 +34,7 @@ describe('PROGRAM_REGISTRY', () => {
   });
 });
 
-// SDK-aware programs detect the installed PostHog SDK major; dropping the flag disables that silently.
+// SDK-aware programs block unsupported PostHog SDK majors and install SDK skills; dropping the flag disables both silently.
 describe('sdkSupport', () => {
   it('is enabled on exactly the SDK-aware programs', () => {
     const enabled = PROGRAM_REGISTRY.filter((c) => c.sdkSupport === true)

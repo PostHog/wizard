@@ -39,7 +39,11 @@ import { FRAMEWORK_REGISTRY } from '@services/frameworks';
 import { findProgramConfig, getProgramConfig } from './program-registry';
 import { ProgramAbort } from '@programs/program-contract';
 import { detectionFailure, detectProgram } from './detect-program';
-import { hasOwnTargetDir, programMatchKeys } from './sdk-run-context';
+import {
+  frameworkSdkSkillFamily,
+  hasOwnTargetDir,
+  programMatchKeys,
+} from './sdk-run-context';
 import {
   rotateCredentials,
   type ResolvedProgramCredentials,
@@ -48,6 +52,7 @@ import { reportCodebaseScan } from '@services/codebase-scan';
 import {
   POSTHOG_SDKS_KEY,
   recordPostHogSdksIfNeeded,
+  safePosthogSdkFacts,
   scanPostHogSdks,
 } from '@services/detection';
 import { IS_PRODUCTION_BUILD } from '@env';
@@ -421,6 +426,8 @@ async function invokeProgram(
           planned.own ? undefined : planned.stepId,
         );
         const current = session();
+        const sdkSupported = Boolean(planned.config.sdkSupport);
+        const sdkFacts = sdkSupported ? await safePosthogSdkFacts(current) : [];
         const result = await runAgent(
           {
             programId: planned.config.id,
@@ -452,23 +459,18 @@ async function invokeProgram(
             seedTasks: planned.config.seedTasks
               ? () => planned.config.seedTasks!(session())
               : undefined,
+            installSdkSkills: sdkSupported,
+            frameworkSdkFamily: sdkSupported
+              ? frameworkSdkSkillFamily(current)
+              : undefined,
             matchKeys: () => programMatchKeys(session(), planned.config),
-            projectFacts:
-              (decisions && planned.config.decisions) ||
-              planned.config.detectedFacts
-                ? () => [
-                    ...(decisions && planned.config.decisions
-                      ? decisions.questionFacts(
-                          session(),
-                          planned.config.decisions,
-                        )
-                      : []),
-                    ...(planned.config.detectedFacts?.(
-                      flags.flags,
-                      session(),
-                    ) ?? []),
-                  ]
-                : undefined,
+            projectFacts: () => [
+              ...(decisions && planned.config.decisions
+                ? decisions.questionFacts(session(), planned.config.decisions)
+                : []),
+              ...(planned.config.detectedFacts?.(flags.flags, session()) ?? []),
+              ...sdkFacts,
+            ],
             hooks: sessionHooks(agentRun, session, (outcomes) => {
               if (scoped) scoped.frameworkContext[TASK_OUTCOMES_KEY] = outcomes;
               else store.setFrameworkContext(TASK_OUTCOMES_KEY, outcomes);

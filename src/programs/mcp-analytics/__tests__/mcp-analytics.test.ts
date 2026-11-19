@@ -59,6 +59,7 @@ describe('MCP_ANALYTICS_ABORT_CASES', () => {
     'rust mcp server is not built on rmcp',
     'rmcp older than 3.7',
     'rust toolchain older than 1.88',
+    'posthog package pinned below required floor',
   ];
 
   it.each(reasons)('matches the "%s" abort reason exactly once', (reason) => {
@@ -68,6 +69,13 @@ describe('MCP_ANALYTICS_ABORT_CASES', () => {
     expect(matched).toHaveLength(1);
     expect(matched[0].message).toBeTruthy();
     expect(matched[0].body).toBeTruthy();
+  });
+
+  it('shows the pinned-floor abort as its own outro, like its sibling aborts', () => {
+    const [pinned] = MCP_ANALYTICS_ABORT_CASES.filter((c) =>
+      c.match.test('posthog package pinned below required floor'),
+    );
+    expect(pinned.errorCode).toBeUndefined();
   });
 
   it('frames the unsupported-language abort as TypeScript, Python, Go, Ruby, and Rust supported', () => {

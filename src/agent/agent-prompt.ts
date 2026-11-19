@@ -9,7 +9,12 @@
 
 import type { AgentRunDefinition } from './runner/shared/types';
 import type { HostResolution } from '@shared/host-resolution';
-import { detectedFacts } from './agent-prompt-loader';
+import type { NonDefaultSdkRef } from './runner/shared/sdk-skills';
+import {
+  detectedFacts,
+  nonDefaultExampleFraming,
+  sdkReference,
+} from './agent-prompt-loader';
 
 /**
  * Values available to prompt builders after OAuth completes.
@@ -22,6 +27,10 @@ export interface PromptContext {
   skillPath?: string;
   /** Detected facts about the project, one line each. */
   facts?: readonly string[];
+  /** Paths to resolved SDK major SKILL.md files installed for the run. */
+  sdkSkillPaths?: readonly string[];
+  /** Non-default SDK majors detected for the run. */
+  nonDefaultSdks?: readonly NonDefaultSdkRef[];
   /**
    * Org-level AI consent (`is_ai_data_processing_approved`) read from the
    * `/api/users/@me/` payload at auth time. `null` = unknown (older orgs,
@@ -78,6 +87,12 @@ export function assemblePrompt(
   if (runDef.customPrompt) {
     parts.push(runDef.customPrompt(ctx));
   }
+
+  const sdkNote = nonDefaultExampleFraming(undefined, ctx.nonDefaultSdks);
+  if (sdkNote) parts.push(sdkNote);
+
+  const sdkRef = sdkReference(ctx.sdkSkillPaths);
+  if (sdkRef) parts.push(sdkRef);
 
   // Skill prompt (appended when a skill was pre-installed)
   if (ctx.skillPath) {

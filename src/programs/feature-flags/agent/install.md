@@ -16,7 +16,11 @@ dependsOn: []
 
 Make sure each side in your `sides` input has its PostHog SDK in the
 manifest: the server library for `backend`, the browser or mobile library
-for `frontend`. Leave an SDK that is already there alone and say so.
+for `frontend`. For an SDK that is already there, stay on its declared major
+(never cross breaking majors, never override hard pins; bump within-major only
+on open ranges if a feature floor requires it, by editing the manifest directly
+and then running the manifest install, never by passing `<` or `>` in a Bash
+command) and say so.
 Install a missing one following your skill, which owns the package manager
 and version rules.
 

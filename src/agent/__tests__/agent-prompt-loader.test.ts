@@ -610,6 +610,35 @@ describe('assembleTaskPrompt', () => {
     expect(assembled).toContain('PostHog app URL');
     expect(assembled).toContain('https://eu.posthog.com');
   });
+
+  it('adds SDK skill references and frames EXAMPLE.md as procedural guide when nonDefaultSdks is present', () => {
+    const base = assembleTaskPrompt(
+      {
+        ...ctx,
+        examplePath:
+          '.posthog-wizard-cache/reference/integration-fastapi/references/EXAMPLE.md',
+      },
+      'do the task',
+    );
+    expect(base).toContain('target implementation pattern');
+    expect(base).not.toContain('high-level procedures and file placement');
+
+    const older = assembleTaskPrompt(
+      {
+        ...ctx,
+        examplePath:
+          '.posthog-wizard-cache/reference/integration-fastapi/references/EXAMPLE.md',
+        sdkSkillPaths: [
+          '.posthog-wizard-cache/sdk/sdk-posthog-python-v7/SKILL.md',
+        ],
+        nonDefaultSdks: [{ pkg: 'posthog-python', major: '7' }],
+      },
+      'do the task',
+    );
+    expect(older).toContain('sdk-posthog-python-v7/SKILL.md');
+    expect(older).toContain('high-level procedures and file placement');
+    expect(older).toContain('posthog-python 7.x');
+  });
 });
 
 describe('renderToolInventory', () => {

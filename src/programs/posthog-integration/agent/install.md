@@ -23,12 +23,34 @@ pins, or the bare package name if it pins none, and let the manager resolve the 
 EXAMPLE.md shows code patterns only; never take a version from its manifests.
 If the wizard refuses that command, write the pin into the manifest and run the
 manifest install. Never invent a version — one that was never published fails the
-whole run with `ETARGET`, and guessing another just fails again. The only version you
-write by hand is one copied from the library doc, and only in the environment
-fallback below.
+whole run with `ETARGET`, and guessing another just fails again. For a new
+install, the only version you write by hand is one copied from the library doc,
+and only in the environment fallback below (existing-SDK floor bumps edit the
+manifest directly).
 
 Add the client library, plus the server library if the app has server-side code
-that sends events. If the SDK is already installed, leave it and say so.
+that sends events.
+
+When a PostHog SDK is already declared (see Detected facts and the SDK major
+reference skill):
+
+- **Never cross breaking major versions.** Stay on the project's declared major
+  `M` (for example `posthog` `7.x`, `posthog-node` `5.x`, `posthog-go` v1, or
+  `posthog-rs` `0.x`).
+- **If it already meets every feature floor needed by this run, leave it
+  untouched** and record its declared version, major, and constraint type in
+  your handoff.
+- **If declared via an open range below a required feature floor** (see the SDK
+  reference skill's `Guidelines & version bounds` rules, such as
+  `posthog>=7.62.0,<8` for MCP or `posthog>=7.69.0,<8` for Flask/ASGI/DRF error
+  tracking middleware on major `7`), edit the manifest directly with the bumped
+  range within major `M` keeping `<(M+1)` as the upper bound (never jump to
+  `M+1`), then run the manifest install — never put `<` or `>` constraints in a
+  Bash command.
+- **If hard-pinned (`==X.Y.Z`, `=X.Y.Z`, exact version) below a required feature
+  floor**, leave the pin untouched and note the exact pin plus the required
+  floor in your handoff so downstream steps use compatible fallbacks or report
+  it cleanly.
 
 Where a web app or other application sits beside an MCP server (the detected facts
 name any MCP server), install for the app, in its own package. Review installs what a

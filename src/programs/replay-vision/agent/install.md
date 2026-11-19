@@ -14,7 +14,8 @@ dependsOn: []
 ## Goal
 
 Make sure the PostHog SDK is in the manifest. If it's already installed,
-leave it alone and say so in your handoff. If it isn't, install it following
+stay on its declared major (never cross breaking majors or override hard pins)
+and say so in your handoff. If it isn't, install it following
 your skill — it owns the how: the package manager rules, the version rules,
 what counts as an environment failure, and the fallback.
 

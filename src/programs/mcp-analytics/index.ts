@@ -36,7 +36,7 @@ export const MCP_ANALYTICS_ABORT_CASES: AbortCase[] = [
       '(`posthog.mcp`, shipped inside the `posthog` package), Go ' +
       '(`posthogmcpsdk`, for servers built on the official go-sdk), Ruby ' +
       '(`PostHog::MCP`, shipped inside the `posthog-ruby` gem, experimental), ' +
-      'and Rust (`posthog_rs::mcp`, shipped inside the `posthog-rs` crate, ' +
+      'and Rust (`posthog_rs::mcp`, shipped inside the `posthog` / `posthog-rs` crate, ' +
       'for servers built on rmcp, experimental). ' +
       "This project doesn't look like any of them, so there's nothing to " +
       'instrument. ' +
@@ -110,8 +110,16 @@ export const MCP_ANALYTICS_ABORT_CASES: AbortCase[] = [
     match: /^rust toolchain older than 1\.88$/i,
     message: 'Rust toolchain older than 1.88',
     body:
-      '`posthog-rs` with the `mcp` feature needs Rust 1.88 or later. ' +
+      '`posthog` / `posthog-rs` with the `mcp` feature needs Rust 1.88 or later. ' +
       'Upgrade Rust, then run the command again.',
+  },
+  {
+    match: /^posthog package pinned below required floor$/i,
+    message: 'PostHog SDK pinned below required floor',
+    body:
+      'An existing PostHog SDK dependency is hard-pinned below the minimum version ' +
+      'required for MCP analytics. The wizard preserves explicit version pins rather ' +
+      'than overriding them. Raise that pin to meet the MCP minimum, then run the command again.',
   },
   {
     match: /^could not locate the server entry point$/i,
@@ -149,8 +157,8 @@ const skillProgram = createSkillProgram({
     "Instrument this project's MCP server with PostHog MCP analytics. Run the " +
     '`mcp-analytics` skill end-to-end: detect the language and server ' +
     'style, install the PostHog MCP SDK for that language (`@posthog/mcp` for ' +
-    'TypeScript, `posthog` for Python, `posthogmcpsdk` for Go, `posthog-ruby` ' +
-    'for Ruby, `posthog-rs` for Rust), wrap the server ' +
+    '`@posthog/mcp` for TypeScript, `posthog` for Python, `posthogmcpsdk` for Go, ' +
+    '`posthog-ruby` for Ruby, `posthog` / `posthog-rs` for Rust), wrap the server ' +
     '(or use the custom-dispatcher client where the skill says so), wire the ' +
     'project API key and host, and verify. ' +
     'Make only additive changes — do not alter tool behavior. For a Ruby or ' +
