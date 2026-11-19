@@ -4,7 +4,7 @@
  * names. Never file contents or `.env` values.
  */
 
-import type { DecisionsScan } from './scan';
+import type { RepoFiles } from '../../project-discovery/walk';
 
 const MAX_ENTRIES_PER_DIR = 25;
 const MAX_TREE_LINES = 500;
@@ -84,7 +84,7 @@ export type DecisionState = {
 };
 
 /** Render the scan as the Decisions `state`, one field per kind of fact. */
-export function renderDecisionState(scan: DecisionsScan): DecisionState {
+export function renderDecisionState(scan: RepoFiles): DecisionState {
   const manifests = scan.manifests.slice(0, MAX_MANIFESTS);
   return {
     file_tree: renderFileTree(scan.files) || '(empty)',
@@ -99,13 +99,13 @@ export function renderDecisionState(scan: DecisionsScan): DecisionState {
 }
 
 /** The state as readable text, one heading per field, for the dev script and tests. */
-export function renderDecisionInput(scan: DecisionsScan): string {
+export function renderDecisionInput(scan: RepoFiles): string {
   return Object.entries(renderDecisionState(scan))
     .map(([field, text]) => `## ${field}\n${text}`)
     .join('\n\n');
 }
 
-function renderManifest(manifest: DecisionsScan['manifests'][number]): string {
+function renderManifest(manifest: RepoFiles['manifests'][number]): string {
   const shown = manifest.packages.slice(0, MAX_PACKAGES_PER_MANIFEST);
   const more = manifest.packages.length - shown.length;
   const list = shown.length > 0 ? shown.join(', ') : '(no dependencies)';
@@ -115,7 +115,7 @@ function renderManifest(manifest: DecisionsScan['manifests'][number]): string {
 }
 
 /** Key names grouped by the file that defines them. */
-function renderEnvKeys(scan: DecisionsScan): string {
+function renderEnvKeys(scan: RepoFiles): string {
   const byFile = new Map<string, string[]>();
   for (const { name, files } of scan.envKeys.slice(0, MAX_ENV_KEYS)) {
     for (const file of files) {

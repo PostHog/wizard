@@ -13,7 +13,8 @@ import type {
   AgenticProject,
   DetectTarget,
 } from '../agentic';
-import { getDecisionsScan, manifestDirs, type DecisionsScan } from './scan';
+import { getRepoFiles } from '../../project-discovery/discover';
+import { manifestDirs, type RepoFiles } from '../../project-discovery/walk';
 import { askDecisions } from './ask';
 import {
   NOT_A_TARGET,
@@ -48,7 +49,7 @@ export type JudgeProjectsOptions = {
 };
 
 /** Whether a manifest in `dir` (not a subfolder) declares a PostHog SDK. */
-function hasPostHogIn(scan: DecisionsScan, dir: string): boolean {
+function hasPostHogIn(scan: RepoFiles, dir: string): boolean {
   return scan.manifests.some((m) => {
     const manifestDir = m.path.includes('/')
       ? m.path.slice(0, m.path.lastIndexOf('/'))
@@ -70,12 +71,12 @@ export async function detectProjectsWithDecisions(
 ): Promise<JudgedProjects | null> {
   const transport = decisionsTransport(session);
   if (!transport) return null;
-  return judgeProjects(getDecisionsScan(session), transport, options);
+  return judgeProjects(getRepoFiles(session), transport, options);
 }
 
 /** {@link detectProjectsWithDecisions} for a scan and transport the caller holds. */
 export async function judgeProjects(
-  scan: DecisionsScan,
+  scan: RepoFiles,
   transport: DecisionsTransport,
   options: JudgeProjectsOptions,
 ): Promise<JudgedProjects | null> {

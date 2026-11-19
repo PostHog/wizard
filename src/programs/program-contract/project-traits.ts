@@ -1,4 +1,4 @@
-/** Project traits: what detection read from one project's code. `@services/project-traits` produces the values. */
+/** Project traits: what detection read from one project's code. `@services/project-discovery` produces the values. */
 
 import type { Integration } from '@shared/constants';
 

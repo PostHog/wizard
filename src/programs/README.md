@@ -113,7 +113,7 @@ reaches the UI.
 | Running one program, and its input and outcome | [`run-program.ts`](program-runner/run-program.ts), [`detect-program.ts`](program-runner/detect-program.ts) and [`program-input.ts`](program-runner/program-input.ts) |
 | Commands that pick a program by skill         | [`dispatch-family.ts`](../cli/commands/dispatch-family.ts)                        |
 | The program contract: `ProgramConfig`, `ProgramSession`, `RunnerContext`, `FrameworkConfig` | [`program-contract`](program-contract/index.ts), its own project below the services |
-| The session store, detection, frameworks, codebase scan and tool catalog | [`src/services`](../services/README.md) |
+| The session store, detection, frameworks, project discovery and tool catalog | [`src/services`](../services/README.md) |
 
 Other layers import runtime values from `@programs` and types from
 `@programs/types`, which re-exports the program contract. `@programs` exports

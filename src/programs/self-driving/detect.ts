@@ -31,10 +31,10 @@ import type { ProgramSession } from '@programs/program-contract';
 import type { AbortCase } from '@agent/types';
 import { ErrorCodes } from '@shared/errors';
 import {
-  getCodebaseScan,
-  scannedWarehouseSources,
-} from '@services/codebase-scan';
-import { tagScanResults } from '@services/codebase-scan';
+  getDiscovery,
+  discoveredWarehouseSources,
+} from '@services/project-discovery';
+import { tagDiscovery } from '@services/project-discovery';
 import type { DetectedSource } from '@services/warehouse-sources';
 
 /** frameworkContext key holding the deterministic PostHog-presence result. */
@@ -363,26 +363,26 @@ export const SELF_DRIVING_TOOL_KINDS: ReadonlySet<string> = new Set([
   'GoogleSearchConsole',
 ]);
 
-/** Pick the inbox-connectable tools out of the run's codebase scan so STEP 5 can surface them first. */
+/** Pick the inbox-connectable tools out of the run's discovery so STEP 5 can surface them first. */
 async function detectConnectedTools(
   session: ProgramSession,
   setFrameworkContext: (key: string, value: unknown) => void,
 ): Promise<void> {
-  const scan = getCodebaseScan(session);
-  if (!scan) return;
-  if (scan.failed) {
-    // -1, not absent, so a failed scan stays distinguishable from one that never ran.
-    tagScanResults(session, setFrameworkContext, {
+  const discovery = getDiscovery(session);
+  if (!discovery) return;
+  if (discovery.tools.failed) {
+    // -1, not absent, so a failed tool match stays distinguishable from one that never ran.
+    tagDiscovery(session, setFrameworkContext, {
       connected_tools_detected_count: -1,
     });
     return;
   }
 
-  const tools = (await scannedWarehouseSources(session)).filter((s) =>
+  const tools = (await discoveredWarehouseSources(session)).filter((s) =>
     SELF_DRIVING_TOOL_KINDS.has(s.kind),
   );
   // Tagged even at zero, so "found nothing" is distinguishable from "never ran".
-  tagScanResults(session, setFrameworkContext, {
+  tagDiscovery(session, setFrameworkContext, {
     connected_tools_detected_count: tools.length,
     ...(tools.length > 0 && {
       connected_tools_detected: tools.map((s) => s.kind).join(','),

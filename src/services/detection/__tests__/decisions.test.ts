@@ -2,7 +2,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { Integration } from '@shared/constants';
-import { ScanConsent } from '@shared/run-state';
+import { DiscoveryConsent } from '@shared/run-state';
 
 vi.mock('@agent', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@agent')>()),
@@ -12,10 +12,7 @@ vi.mock('@agent', async (importOriginal) => ({
 }));
 
 import { redactSecretLines } from '@agent';
-import {
-  collectDecisionsScan,
-  manifestDirs,
-} from '@services/detection/decisions/scan';
+import { walkRepo, manifestDirs } from '@services/project-discovery/walk';
 import {
   renderDecisionInput,
   renderFileTree,
@@ -134,7 +131,7 @@ const predicate = (name: string): DecisionQuestionSpec => ({
   purpose: `test ${name}`,
 });
 
-describe('collectDecisionsScan', () => {
+describe('walkRepo', () => {
   it('records the tree, each manifest, lockfiles and env key names, never values', () => {
     const dir = project({
       'package.json': JSON.stringify({ dependencies: { next: '15' } }),
@@ -143,7 +140,7 @@ describe('collectDecisionsScan', () => {
       'apps/api/.env.local': 'DATABASE_URL=postgres://secret\n',
       'app/page.tsx': 'export default function Page() {}',
     });
-    const snapshot = collectDecisionsScan(dir);
+    const snapshot = walkRepo(dir);
     expect(snapshot.files).toEqual(
       expect.arrayContaining(['package.json', 'app/page.tsx']),
     );
@@ -169,7 +166,7 @@ describe('collectDecisionsScan', () => {
 describe('renderDecisionInput', () => {
   it('renders each fact as a section without file contents', () => {
     const input = renderDecisionInput(
-      collectDecisionsScan(
+      walkRepo(
         project({
           'package.json': JSON.stringify({ dependencies: { next: '15' } }),
           '.env': 'STRIPE_SECRET_KEY=sk_live_nope\n',
@@ -290,7 +287,7 @@ describe('runProgramDecisions', () => {
       }),
       frameworkContext: {},
       credentials: { gateway: GATEWAY.gateway },
-      scanConsent: ScanConsent.Granted,
+      discoveryConsent: DiscoveryConsent.Granted,
       noTelemetry: false,
       ...overrides,
     } as unknown as ProgramSession;
@@ -345,7 +342,7 @@ describe('runProgramDecisions', () => {
   it('leaves out shared questions when the user declined sharing', async () => {
     process.env.WIZARD_DECISIONS_DETECTION = 'shadow';
     const fetchImpl = fakeGateway();
-    const sess = session({ scanConsent: ScanConsent.Declined });
+    const sess = session({ discoveryConsent: DiscoveryConsent.Declined });
     await runDecisionSpecs(specs, ctx(sess, fetchImpl));
     const body = JSON.parse(
       String((fetchImpl.mock.calls[0][1] as Parameters<typeof fetch>[1])?.body),
@@ -412,7 +409,7 @@ describe('judgeProjects', () => {
   ];
 
   it('classifies candidate folders, recommends one and looks up PostHog', async () => {
-    const snapshot = collectDecisionsScan(
+    const snapshot = walkRepo(
       project({
         'package.json': JSON.stringify({ workspaces: ['apps/*'] }),
         'apps/web/package.json': JSON.stringify({
@@ -456,7 +453,7 @@ describe('judgeProjects', () => {
   });
 
   it('returns null when the call fails, so the caller keeps its agent scan', async () => {
-    const snapshot = collectDecisionsScan(project({ 'go.mod': 'module x' }));
+    const snapshot = walkRepo(project({ 'go.mod': 'module x' }));
     expect(
       await judgeProjects(snapshot, GATEWAY, {
         targets,
@@ -488,7 +485,7 @@ describe('judgeProjects with one folder', () => {
   it('recommends it without asking a one-value choice', async () => {
     const fetchImpl = fakeGateway({ choices: { project_0_target: 'nextjs' } });
     const judged = await judgeProjects(
-      collectDecisionsScan(
+      walkRepo(
         project({
           'package.json': JSON.stringify({ dependencies: { next: '15' } }),
         }),

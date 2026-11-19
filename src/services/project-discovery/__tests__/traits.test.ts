@@ -12,7 +12,7 @@ import {
   getProject,
   getTraits,
   toMatchKeys,
-} from '@services/project-traits/traits';
+} from '@services/project-discovery';
 
 const session = (overrides: Parameters<typeof buildSession>[0] = {}) =>
   buildSession({ installDir: '/repo', ...overrides });

@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ProgramAbort } from '@programs/program-contract';
 import type { ProgramReadyContext } from '@programs/program-contract';
 import { buildSession, SessionStore } from '@services/session';
-import { scanCodebaseFor } from '@services/codebase-scan';
+import { runDiscovery } from '@services/project-discovery';
 import { getDetectedWarehouseSources } from '@services/warehouse-sources';
 import { config as posthogIntegration } from '@programs/posthog-integration';
 import { testCiRunnerContext } from '@programs/shared/__tests__/runner-context.no-jest';
@@ -121,7 +121,7 @@ describe.each([
       const store = new SessionStore(buildSession({ installDir, ci: true }));
       const info = vi.fn();
 
-      await scanCodebaseFor(program, store.readyContext());
+      await runDiscovery(program, store.readyContext());
       await store.edit((draft) =>
         program.ciPreRun?.(draft, {
           ...testCiRunnerContext(),
@@ -143,8 +143,8 @@ describe.each([
         JSON.stringify({ dependencies }),
       );
       const session = buildSession({ installDir, ci: true });
-      // A scan with no tool list makes the warehouse pass throw.
-      session.frameworkContext.codebaseScan = { tools: null };
+      // A discovery with no tool list makes the warehouse pass throw.
+      session.frameworkContext.discovery = { tools: { tools: null } };
       const info = vi.fn();
 
       await program.ciPreRun?.(session, {

@@ -11,9 +11,9 @@
 
 import type { ProgramReadyContext } from '@programs/program-contract';
 import {
-  mayReportScanResults,
+  mayReportDiscovery,
   reportableDiscoveredFeatures,
-  ScanConsent,
+  DiscoveryConsent,
 } from '@shared/run-state';
 import type { ProgramSession } from '@programs/program-contract';
 import { FRAMEWORK_REGISTRY } from '../frameworks/registry';
@@ -24,9 +24,9 @@ import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
 import { isFlaggedInput } from '@agent';
 import {
-  getCodebaseScan,
-  scannedWarehouseSources,
-} from '../codebase-scan/scan';
+  getDiscovery,
+  discoveredWarehouseSources,
+} from '../project-discovery/discover';
 import {
   DETECTED_WAREHOUSE_SOURCES_KEY,
   getDetectedWarehouseSources,
@@ -131,14 +131,14 @@ type WarehouseScanState = 'ok' | 'failed';
 async function recordScannedWarehouseSources(
   ctx: Pick<ProgramReadyContext, 'session' | 'setFrameworkContext'>,
 ): Promise<void> {
-  const scan = getCodebaseScan(ctx.session);
-  if (!scan) return;
-  if (scan.failed) {
+  const discovery = getDiscovery(ctx.session);
+  if (!discovery) return;
+  if (discovery.tools.failed) {
     ctx.setFrameworkContext(WAREHOUSE_SCAN_STATE_KEY, 'failed');
     return;
   }
   try {
-    const sources = await scannedWarehouseSources(ctx.session);
+    const sources = await discoveredWarehouseSources(ctx.session);
     // Set even when empty: a scan that found nothing still ran, and those
     // rows are the denominator.
     ctx.setFrameworkContext(WAREHOUSE_SCAN_STATE_KEY, 'ok');
@@ -159,7 +159,7 @@ async function recordScannedWarehouseSources(
  * there), so the run only names what it found and the user connects it from
  * PostHog.
  */
-export async function noteScannedWarehouseSources(
+export async function noteDiscoveredWarehouseSources(
   session: ProgramSession,
   log: { info(message: string): void },
 ): Promise<void> {
@@ -195,9 +195,9 @@ export function reportWarehouseSourcesDetected(
 ): boolean {
   if (session.warehouseSourcesReported) return false;
   // 'undecided' means come back later, not no.
-  if (session.scanConsent === ScanConsent.Undecided) return false;
+  if (session.discoveryConsent === DiscoveryConsent.Undecided) return false;
 
-  if (mayReportScanResults(session)) {
+  if (mayReportDiscovery(session)) {
     const sources = getDetectedWarehouseSources(session);
 
     // Only an 'ok' scan has something to say. Absent means this program never

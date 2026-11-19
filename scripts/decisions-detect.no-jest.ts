@@ -30,6 +30,7 @@ import {
   type DecisionsTransport,
 } from '@programs';
 import { readCiGatewayCredential } from '@shared/ci-gateway';
+import { walkRepo } from '@services/project-discovery';
 
 type DecisionsService = NonNullable<
   Awaited<ReturnType<typeof loadDecisionsService>>
@@ -172,7 +173,7 @@ async function main(): Promise<void> {
 
   if (flags.has('--state') || flags.has('--request')) {
     for (const dir of dirs) {
-      const scan = svc.collectDecisionsScan(dir);
+      const scan = walkRepo(dir);
       if (flags.has('--state')) {
         console.log(svc.renderDecisionInput(scan));
         continue;
@@ -205,7 +206,7 @@ async function main(): Promise<void> {
   const compare = flags.has('--compare') || dirs.length > 1;
   const rows: Row[] = [];
   for (const dir of dirs) {
-    const scan = svc.collectDecisionsScan(dir);
+    const scan = walkRepo(dir);
     const [result, projects] = await Promise.all([
       svc.askDecisions(svc.renderDecisionState(scan), specs, {
         transport: resolved.transport,

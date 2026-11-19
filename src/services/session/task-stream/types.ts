@@ -13,7 +13,7 @@
  */
 
 import type { RunPhase } from '@shared/run-state';
-import type { ScanReport } from '@programs/program-contract';
+import type { DiscoveryReport } from '@programs/program-contract';
 
 export enum StreamTaskStatus {
   Pending = 'pending',
@@ -105,11 +105,11 @@ export interface TaskStreamUpdate {
 export interface TaskStreamDestination {
   readonly name: string;
   send(event: StreamEvent, payload: TaskStreamUpdate): Promise<void>;
-  /** Attach the run's codebase scan to this session. Only PostHog has it. */
-  sendScan?(payload: ScanReportPayload): Promise<void>;
+  /** Attach the run's discovery report to this session. Only PostHog has it. */
+  sendDiscovery?(payload: DiscoveryReportPayload): Promise<void>;
 }
 
-export type { ScanReport };
+export type { DiscoveryReport };
 
 /** Wire shape of a scan; see the PostHog `wizard/scans` serializer. */
-export type ScanReportPayload = ScanReport & { session_id: string };
+export type DiscoveryReportPayload = DiscoveryReport & { session_id: string };

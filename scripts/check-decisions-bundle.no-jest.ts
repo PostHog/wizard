@@ -13,7 +13,6 @@ import path from 'path';
 const MARKERS = [
   '/v1/systemone',
   'runProgramDecisions',
-  'decisionsScan',
   'judgeMissingIntegration',
   // The question catalog.
   'Which framework or platform should the PostHog wizard integrate first',

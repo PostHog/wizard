@@ -1,21 +1,18 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import {
-  detectTools,
-  detectWarehouseSources,
-  parseGemfile,
-  parseEnvKeys,
-} from '@services/warehouse-sources/detect';
+import { discoverTools, parseEnvKeys } from '@services/project-discovery/tools';
+import { parseGemfile } from '@services/project-discovery/manifests';
+import { toWarehouseSources } from '@services/warehouse-sources/detect';
 import { MAX_REPORTED_PATH_LENGTH } from '@utils/env-scan';
 import { toSourceDetectors } from '@services/warehouse-sources/registry';
 import type { DetectedSource } from '@services/warehouse-sources/types';
-import { FIXTURE_CATALOG } from './helpers/tool-catalog.no-jest';
+import { FIXTURE_CATALOG } from '@services/warehouse-sources/__tests__/helpers/tool-catalog.no-jest';
 
 const DETECTORS = toSourceDetectors(FIXTURE_CATALOG);
 
 function detect(dir: string): DetectedSource[] {
-  return detectWarehouseSources(dir, DETECTORS);
+  return toWarehouseSources(discoverTools(dir, DETECTORS).tools, DETECTORS);
 }
 
 function makeTmpDir(): string {
@@ -43,7 +40,7 @@ function kinds(dir: string): string[] {
     .sort();
 }
 
-describe('detectWarehouseSources', () => {
+describe('discoverTools', () => {
   let tmpDir: string;
 
   beforeEach(() => {
@@ -116,7 +113,7 @@ describe('detectWarehouseSources', () => {
 <script>(function(h,o,t,j){ j='https://acme-internal.hotjar.com/c/hotjar-'; })()</script>`,
     );
 
-    const { tools } = detectTools(tmpDir, DETECTORS);
+    const { tools } = discoverTools(tmpDir, DETECTORS);
 
     expect(tools.map((t) => t.kind)).toEqual(['Hotjar']);
     expect(tools[0].signals).toEqual([
@@ -143,7 +140,7 @@ describe('detectWarehouseSources', () => {
   ])('matches a script host in a <script> tag in %s: %s', (file, template) => {
     fs.writeFileSync(path.join(tmpDir, file), template);
 
-    expect(detectTools(tmpDir, DETECTORS).tools.map((t) => t.kind)).toEqual([
+    expect(discoverTools(tmpDir, DETECTORS).tools.map((t) => t.kind)).toEqual([
       'Hotjar',
     ]);
   });
@@ -161,7 +158,7 @@ describe('detectWarehouseSources', () => {
     (file, template) => {
       fs.writeFileSync(path.join(tmpDir, file), template);
 
-      expect(detectTools(tmpDir, DETECTORS).tools).toEqual([]);
+      expect(discoverTools(tmpDir, DETECTORS).tools).toEqual([]);
     },
   );
 
@@ -179,7 +176,7 @@ describe('detectWarehouseSources', () => {
       '<script src="https://static.hotjar.com/c/h.js"></script>',
     );
 
-    expect(detectTools(tmpDir, DETECTORS).tools.map((t) => t.kind)).toEqual([
+    expect(discoverTools(tmpDir, DETECTORS).tools.map((t) => t.kind)).toEqual([
       'Hotjar',
     ]);
   });
@@ -328,7 +325,7 @@ describe('detectWarehouseSources', () => {
  * repository picks its own directory names. A directory named with embedded
  * newlines and instructions must therefore not become prompt text.
  */
-describe('detectWarehouseSources — repository-controlled paths', () => {
+describe('discoverTools — repository-controlled paths', () => {
   let tmpDir: string;
 
   beforeEach(() => {

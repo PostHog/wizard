@@ -637,7 +637,7 @@ Path aliases defined in `tsconfig.base.json`, resolved by tsdown and `tsx`:
 | `@agent` | `src/agent/index.ts`, the agent's runtime entry |
 | `@agent/types` | `src/agent/types.ts`, type-only |
 | `@agent/*` | `src/agent/*`, for the agent's tests. The agent imports its own modules by relative path, and no other layer maps it |
-| `@services/<service>` | `src/services/<service>/index.ts`, one service's entry, for the programs: `session`, `detection`, `detection/decisions`, `frameworks`, `codebase-scan` and `warehouse-sources` |
+| `@services/<service>` | `src/services/<service>/index.ts`, one service's entry, for the programs: `session`, `detection`, `detection/decisions`, `frameworks`, `project-discovery` and `warehouse-sources` |
 | `@services/*` | `src/services/*`. Other layers reach only the service entries; services import each other by relative path, and tests use this alias for a service's own files and for mocks |
 | `@programs` | `src/programs/index.ts`, the programs runtime entry |
 | `@programs/types` | `src/programs/types.ts`, type-only |

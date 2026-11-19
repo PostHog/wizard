@@ -36,7 +36,7 @@ function renderDetectedTools(sources: DetectedSource[]): string {
  * to verify); this prompt carries the order, the wizard-specific
  * mechanics (wizard_ask, abort signals), and the project URLs.
  *
- * `detectedSources` is the deterministic codebase scan (from the detect step);
+ * `detectedSources` is the deterministic project discovery (from the detect step);
  * it drives STEP 4/STEP 5 tool prioritisation. Empty is fine — the block then
  * tells the agent to use the skill's default ordering.
  *

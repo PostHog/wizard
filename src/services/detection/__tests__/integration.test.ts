@@ -26,20 +26,20 @@ vi.mock(
     ).withFixtureCatalog(await importOriginal()),
 );
 
-// Wrapped so one test can force a throw; the rest use the real scanner.
-vi.mock('@services/warehouse-sources/detect', async (importOriginal) => {
+// Wrapped so one test can force a throw; the rest use the real tool match.
+vi.mock('@services/project-discovery/tools', async (importOriginal) => {
   const actual = await importOriginal<
-    typeof import('@services/warehouse-sources/detect')
+    typeof import('@services/project-discovery/tools')
   >();
   return {
     ...actual,
-    detectTools: vi.fn(actual.detectTools),
+    discoverTools: vi.fn(actual.discoverTools),
   };
 });
 
 import { analytics } from '@utils/analytics';
-import { detectTools } from '@services/warehouse-sources/detect';
-import { scanCodebaseFor } from '@services/codebase-scan';
+import { discoverTools } from '@services/project-discovery/tools';
+import { runDiscovery } from '@services/project-discovery';
 import { loadSourceDetectors } from '@services/warehouse-sources/registry';
 import {
   detectPostHogIntegration,
@@ -50,7 +50,7 @@ import type { ProgramReadyContext } from '@programs/program-contract';
 import type { WizardSession } from '@services/session/wizard-session';
 import { buildSession } from '@services/session/wizard-session';
 import { DiscoveredFeature } from '@shared/discovered-feature';
-import { ScanConsent } from '@shared/run-state';
+import { DiscoveryConsent } from '@shared/run-state';
 import type { DetectedSource } from '@services/warehouse-sources/types';
 
 function makeTmpDir(): string {
@@ -80,10 +80,7 @@ function makeCtx(session: WizardSession): ProgramReadyContext {
 
 /** Detection as the runner does it: the shared scan, then the program's onReady. */
 async function detect(ctx: ProgramReadyContext): Promise<void> {
-  await scanCodebaseFor(
-    { id: 'posthog-integration', scansCodebase: true },
-    ctx,
-  );
+  await runDiscovery({ id: 'posthog-integration', scansCodebase: true }, ctx);
   await detectPostHogIntegration(ctx);
 }
 
@@ -103,7 +100,7 @@ describe('detection always runs, independent of consent', () => {
 
   it('populates DETECTED_WAREHOUSE_SOURCES_KEY while consent is still undecided', async () => {
     const session = buildSession({ installDir: tmpDir });
-    expect(session.scanConsent).toBe(ScanConsent.Undecided);
+    expect(session.discoveryConsent).toBe(DiscoveryConsent.Undecided);
     const ctx = makeCtx(session);
 
     await detect(ctx);
@@ -146,7 +143,7 @@ describe('a scan failure is distinguishable from a clean zero-source scan', () =
       JSON.stringify({ dependencies: { stripe: '^14.0.0' } }),
     );
     const session = buildSession({ installDir: tmpDir });
-    session.scanConsent = ScanConsent.Granted;
+    session.discoveryConsent = DiscoveryConsent.Granted;
 
     await detect(makeCtx(session));
     reportWarehouseSourcesDetected(session);
@@ -159,7 +156,7 @@ describe('a scan failure is distinguishable from a clean zero-source scan', () =
 
   it('scan succeeds with zero sources: the event still fires, with count 0', async () => {
     const session = buildSession({ installDir: tmpDir });
-    session.scanConsent = ScanConsent.Granted;
+    session.discoveryConsent = DiscoveryConsent.Granted;
 
     await detect(makeCtx(session));
     reportWarehouseSourcesDetected(session);
@@ -177,9 +174,9 @@ describe('a scan failure is distinguishable from a clean zero-source scan', () =
 
   it('scan throws: no event fires at all, but the exception is still captured', async () => {
     const session = buildSession({ installDir: tmpDir });
-    session.scanConsent = ScanConsent.Granted;
+    session.discoveryConsent = DiscoveryConsent.Granted;
     const scanError = new Error('boom');
-    vi.mocked(detectTools).mockImplementationOnce(() => {
+    vi.mocked(discoverTools).mockImplementationOnce(() => {
       throw scanError;
     });
 
@@ -203,7 +200,7 @@ describe('a scan failure is distinguishable from a clean zero-source scan', () =
       JSON.stringify({ dependencies: { stripe: '^14.0.0' } }),
     );
     const session = buildSession({ installDir: tmpDir });
-    session.scanConsent = ScanConsent.Granted;
+    session.discoveryConsent = DiscoveryConsent.Granted;
     vi.mocked(loadSourceDetectors).mockResolvedValueOnce([]);
 
     await detect(makeCtx(session));
@@ -227,15 +224,15 @@ describe('reportWarehouseSourcesDetected', () => {
 
   afterEach(() => cleanup(tmpDir));
 
-  async function scannedSession(consent: WizardSession['scanConsent']) {
+  async function scannedSession(consent: WizardSession['discoveryConsent']) {
     const session = buildSession({ installDir: tmpDir });
-    session.scanConsent = consent;
+    session.discoveryConsent = consent;
     await detect(makeCtx(session));
     return session;
   }
 
   it("'undecided' reports nothing and does not mark itself reported", async () => {
-    const session = await scannedSession(ScanConsent.Undecided);
+    const session = await scannedSession(DiscoveryConsent.Undecided);
 
     const fired = reportWarehouseSourcesDetected(session);
 
@@ -245,7 +242,7 @@ describe('reportWarehouseSourcesDetected', () => {
   });
 
   it("'granted' reports the source kinds and the discovered features", async () => {
-    const session = await scannedSession(ScanConsent.Granted);
+    const session = await scannedSession(DiscoveryConsent.Granted);
     session.discoveredFeatures = [DiscoveredFeature.LLM];
 
     const fired = reportWarehouseSourcesDetected(session);
@@ -271,7 +268,7 @@ describe('reportWarehouseSourcesDetected', () => {
   it("'granted' with zero sources still captures the denominator row, no tags", async () => {
     const emptyDir = makeTmpDir();
     const session = buildSession({ installDir: emptyDir });
-    session.scanConsent = ScanConsent.Granted;
+    session.discoveryConsent = DiscoveryConsent.Granted;
     await detect(makeCtx(session));
 
     const fired = reportWarehouseSourcesDetected(session);
@@ -291,7 +288,7 @@ describe('reportWarehouseSourcesDetected', () => {
   });
 
   it("'declined' reports nothing, but the local suggestion still has its data", async () => {
-    const session = await scannedSession(ScanConsent.Declined);
+    const session = await scannedSession(DiscoveryConsent.Declined);
 
     const fired = reportWarehouseSourcesDetected(session);
 
@@ -309,7 +306,7 @@ describe('reportWarehouseSourcesDetected', () => {
     // reporter is reached on runs of programs that never scan, and --ci grants
     // consent up front, so the guard cannot be consent alone.
     const session = buildSession({ installDir: tmpDir, ci: true });
-    expect(session.scanConsent).toBe(ScanConsent.Granted);
+    expect(session.discoveryConsent).toBe(DiscoveryConsent.Granted);
 
     const fired = reportWarehouseSourcesDetected(session);
 
@@ -321,7 +318,7 @@ describe('reportWarehouseSourcesDetected', () => {
   });
 
   it('is idempotent: a second call, from either consent path, does nothing', async () => {
-    const session = await scannedSession(ScanConsent.Granted);
+    const session = await scannedSession(DiscoveryConsent.Granted);
 
     expect(reportWarehouseSourcesDetected(session)).toBe(true);
     session.warehouseSourcesReported = true; // the store setter's job, done here directly
@@ -336,27 +333,27 @@ describe('reportWarehouseSourcesDetected', () => {
 });
 
 describe('only a scripted CI run starts with consent already granted', () => {
-  it('ci: true builds scanConsent as granted', () => {
+  it('ci: true builds discoveryConsent as granted', () => {
     const session = buildSession({ installDir: '/tmp/app', ci: true });
-    expect(session.scanConsent).toBe(ScanConsent.Granted);
+    expect(session.discoveryConsent).toBe(DiscoveryConsent.Granted);
   });
 
   it('signup: true alone starts undecided: the new account never saw the disclosure', () => {
     const session = buildSession({ installDir: '/tmp/app', signup: true });
-    expect(session.scanConsent).toBe(ScanConsent.Undecided);
+    expect(session.discoveryConsent).toBe(DiscoveryConsent.Undecided);
   });
 
-  it('ci: true with signup: true still builds scanConsent as granted', () => {
+  it('ci: true with signup: true still builds discoveryConsent as granted', () => {
     const session = buildSession({
       installDir: '/tmp/app',
       ci: true,
       signup: true,
     });
-    expect(session.scanConsent).toBe(ScanConsent.Granted);
+    expect(session.discoveryConsent).toBe(DiscoveryConsent.Granted);
   });
 
   it('a plain interactive session starts undecided', () => {
     const session = buildSession({ installDir: '/tmp/app' });
-    expect(session.scanConsent).toBe(ScanConsent.Undecided);
+    expect(session.discoveryConsent).toBe(DiscoveryConsent.Undecided);
   });
 });
