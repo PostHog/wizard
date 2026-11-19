@@ -1,3 +1,6 @@
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import {
   WizardStore,
   Program,
@@ -12,7 +15,13 @@ import {
   WizardReadiness,
   evaluateWizardReadiness,
 } from '@shared/health-checks/readiness';
-import { buildSession, getProgramConfig } from '@programs';
+import {
+  buildSession,
+  FRAMEWORK_REGISTRY,
+  findProgramConfig,
+  getProgramConfig,
+  POSTHOG_SDKS_KEY,
+} from '@programs';
 import { HostResolution } from '@shared/host-resolution';
 import { Integration } from '@shared/constants';
 import { analytics } from '@utils/analytics';
@@ -177,6 +186,90 @@ describe('WizardStore', () => {
         expect(store.programLabel).toBe(Program.Metrics);
         expect(store.session.skillId).toBe(
           getProgramConfig(Program.Metrics).skillId ?? null,
+        );
+      });
+
+      // Detection belongs to the program left: a stale framework or SDK would pick the wrong skills.
+      it('resets what detection found for the program it leaves', () => {
+        const store = createStore();
+        store.setFrameworkConfig(
+          Integration.nextjs,
+          FRAMEWORK_REGISTRY[Integration.nextjs],
+        );
+        store.setDetectedFramework('Next.js');
+        store.setPosthogSdkDetected(true);
+        store.setFrameworkContext(POSTHOG_SDKS_KEY, [{ key: 'posthog-node' }]);
+        store.setFrameworkContext('posthogSdksDir', '/project');
+        store.sessions.setUnsupportedVersion({
+          current: 'x 1',
+          minimum: 'x 2',
+          docsUrl: 'https://example.com',
+        });
+        store.sessions.setDetectionComplete();
+
+        store.switchProgram(Program.McpAnalytics);
+
+        expect(store.session).toMatchObject({
+          integration: null,
+          frameworkConfig: null,
+          detectedFrameworkLabel: null,
+          unsupportedVersion: null,
+          posthogSdkDetected: false,
+          detectionComplete: false,
+        });
+        expect(store.session.frameworkContext).toEqual({});
+      });
+
+      it('takes the skill id of a program that names one', () => {
+        const store = createStore();
+        store.setSkillId('stale');
+
+        store.switchProgram(Program.Audit);
+
+        expect(store.session.skillId).toBe('audit');
+      });
+
+      it('clears the skill id when the program names none', () => {
+        const store = createStore();
+        store.switchProgram(Program.Audit);
+        expect(store.session.skillId).toBe('audit');
+        expect(getProgramConfig(Program.Metrics).skillId).toBeUndefined();
+
+        store.switchProgram(Program.Metrics);
+
+        expect(store.session.skillId).toBeNull();
+      });
+
+      it('keeps gates only for the program it moved to', () => {
+        const gateKeys = (s: WizardStore) =>
+          [
+            ...(s as unknown as { _gates: Map<string, unknown> })._gates.keys(),
+          ].sort();
+        const store = createStore();
+
+        store.switchProgram(Tool.PosthogDoctor);
+
+        expect(gateKeys(store)).toEqual(
+          gateKeys(createStore(Tool.PosthogDoctor)),
+        );
+      });
+
+      // Later events would otherwise keep reporting the framework of the program left.
+      it('clears the integration and detected framework tags', () => {
+        const store = createStore();
+        store.setFrameworkConfig(
+          Integration.nextjs,
+          FRAMEWORK_REGISTRY[Integration.nextjs],
+        );
+        store.setDetectedFramework('Next.js');
+        vi.mocked(analytics.setTag).mockClear();
+
+        store.switchProgram(Program.McpAnalytics);
+
+        expect(analytics.setTag).toHaveBeenCalledWith('integration', null);
+        expect(analytics.setTag).toHaveBeenCalledWith(
+          'detected_framework',
+          null,
         );
       });
 
@@ -1335,6 +1428,114 @@ describe('WizardStore', () => {
       store.chooseProvisionAccount('dev@example.com', 'us');
 
       expect(cb).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('runReadyHooks and SDK scanning', () => {
+    let tmpDir: string;
+
+    beforeEach(() => {
+      tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tui-store-sdk-'));
+    });
+
+    afterEach(() => {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    });
+
+    it('scans the live installDir after onReady changes it on an sdkSupport program', async () => {
+      const subDir = path.join(tmpDir, 'apps', 'backend');
+      fs.mkdirSync(subDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(subDir, 'requirements.txt'),
+        'posthog>=7.40.0,<8\n',
+      );
+      const store = createStore(Program.Metrics);
+      store.session = buildSession({ installDir: tmpDir });
+
+      const metricsConfig = findProgramConfig(Program.Metrics);
+      if (!metricsConfig) throw new Error('Metrics config missing');
+      const originalOnReady = metricsConfig.onReady;
+      metricsConfig.onReady = () => {
+        store.session = { ...store.session, installDir: subDir };
+        return Promise.resolve();
+      };
+      try {
+        await store.runReadyHooks();
+      } finally {
+        metricsConfig.onReady = originalOnReady;
+      }
+
+      expect(store.session.detectionComplete).toBe(true);
+      expect(store.session.installDir).toBe(subDir);
+      expect(store.session.frameworkContext.posthogSdks).toMatchObject([
+        { key: 'posthog-python', major: 7 },
+      ]);
+    });
+
+    it('bounds the lockfile walk by the root onReady started from', async () => {
+      const subDir = path.join(tmpDir, 'apps', 'api');
+      fs.mkdirSync(subDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(tmpDir, 'pnpm-lock.yaml'),
+        [
+          'packages:',
+          "  'posthog-node@5.12.0(typescript@5.0.0)':",
+          '    resolution: {integrity: sha512-ph}',
+        ].join('\n'),
+      );
+      fs.writeFileSync(
+        path.join(subDir, 'package.json'),
+        JSON.stringify({
+          dependencies: { 'posthog-node': '^4.18.0 || ^5.0.0' },
+        }),
+      );
+      const store = createStore(Program.Metrics);
+      store.session = buildSession({ installDir: tmpDir });
+      const metricsConfig = findProgramConfig(Program.Metrics);
+      if (!metricsConfig) throw new Error('Metrics config missing');
+      const originalOnReady = metricsConfig.onReady;
+      metricsConfig.onReady = () => {
+        store.session = { ...store.session, installDir: subDir };
+        return Promise.resolve();
+      };
+      try {
+        await store.runReadyHooks();
+      } finally {
+        metricsConfig.onReady = originalOnReady;
+      }
+
+      expect(store.session.frameworkContext.posthogSdks).toMatchObject([
+        { key: 'posthog-node', major: 5, resolvedVersion: '5.12.0' },
+      ]);
+    });
+
+    it('skips SDK scanning on programs without sdkSupport', async () => {
+      fs.writeFileSync(
+        path.join(tmpDir, 'requirements.txt'),
+        'posthog==6.0.0\n',
+      );
+      const store = createStore(Program.Migration);
+      store.session = buildSession({ installDir: tmpDir });
+
+      await store.runReadyHooks();
+
+      expect(store.session.detectionComplete).toBe(true);
+      expect(store.session.frameworkContext.posthogSdks).toBeUndefined();
+    });
+
+    it('skips root SDK scanning in runReadyHooks for targetDir-scoped programs', async () => {
+      fs.writeFileSync(
+        path.join(tmpDir, 'requirements.txt'),
+        'posthog==6.0.0\n',
+      );
+      const errorTrackingStore = createStore(Program.ErrorTracking);
+      errorTrackingStore.session = buildSession({ installDir: tmpDir });
+      await errorTrackingStore.runReadyHooks();
+
+      expect(errorTrackingStore.session.detectionComplete).toBe(true);
+      expect(
+        errorTrackingStore.session.frameworkContext.posthogSdks,
+      ).toBeUndefined();
     });
   });
 });

@@ -25,6 +25,7 @@ export const NEXTJS_AGENT_CONFIG: FrameworkConfig<NextjsContext> = {
   metadata: {
     name: 'Next.js',
     integration: Integration.nextjs,
+    sdkSkillFamily: 'sdk-posthog-node',
     docsUrl: 'https://posthog.com/docs/libraries/next-js',
     unsupportedVersionDocsUrl: 'https://posthog.com/docs/libraries/next-js',
     gatherContext: async (options: WizardRunOptions) => {

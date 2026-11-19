@@ -1,6 +1,12 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import type { SkillEntry } from '@shared/skill-menu';
-import { resolveSkill } from '@shared/skill-resolution';
+import {
+  prepareSkillMenu,
+  type SkillEntry,
+  type SkillMenu,
+} from '@shared/skill-menu';
+import { filterSkillsForRun, resolveSkill } from '@shared/skill-resolution';
 
 const entry = (id: string, rest: Partial<SkillEntry> = {}): SkillEntry => ({
   id,
@@ -110,5 +116,115 @@ describe('resolveSkill', () => {
     expect(resolveSkill(twins, 'step', { framework: ['rails'] })?.id).toBe(
       'first',
     );
+  });
+
+  describe('non-framework families (sdk-posthog-*)', () => {
+    const SDK_MENU: SkillEntry[] = [
+      entry('sdk-posthog-python-v7', {
+        family: 'sdk-posthog-python',
+        tags: ['sdk-python-7', 'sdkPython:7', 'sdk-posthog-python'],
+      }),
+      entry('sdk-posthog-python-v8', {
+        family: 'sdk-posthog-python',
+        tags: ['sdk-python-8', 'sdkPython:8', 'sdk-posthog-python', 'default'],
+      }),
+      entry('sdk-posthog-node-v5', {
+        family: 'sdk-posthog-node',
+        tags: ['sdk-node-5', 'sdkNode:5', 'sdk-posthog-node'],
+      }),
+      entry('sdk-posthog-node-v6', {
+        family: 'sdk-posthog-node',
+        tags: ['sdk-node-6', 'sdkNode:6', 'sdk-posthog-node', 'default'],
+      }),
+    ];
+
+    it('resolves the default major when sdk trait is absent on greenfield runs', () => {
+      expect(resolveSkill(SDK_MENU, 'sdk-posthog-python', {})?.id).toBe(
+        'sdk-posthog-python-v8',
+      );
+      expect(
+        resolveSkill(SDK_MENU, 'sdk-posthog-python', { framework: ['django'] })
+          ?.id,
+      ).toBe('sdk-posthog-python-v8');
+    });
+
+    it('resolves exact major when sdk trait is set and isolates multi-SDK full-stack runs', () => {
+      expect(
+        resolveSkill(SDK_MENU, 'sdk-posthog-python', {
+          framework: ['django'],
+          sdkPython: ['7'],
+        })?.id,
+      ).toBe('sdk-posthog-python-v7');
+      expect(
+        resolveSkill(SDK_MENU, 'sdk-posthog-node', {
+          framework: ['nextjs'],
+          sdkNode: ['5'],
+        })?.id,
+      ).toBe('sdk-posthog-node-v5');
+    });
+
+    it('returns undefined when installed major is unsupported by all entries', () => {
+      expect(
+        resolveSkill(SDK_MENU, 'sdk-posthog-python', {
+          framework: ['django'],
+          sdkPython: ['3'],
+        }),
+      ).toBeUndefined();
+    });
+
+    it('filters menu entries for load_skill_menu to matching variants', () => {
+      expect(
+        filterSkillsForRun(
+          SDK_MENU.filter((e) => e.family === 'sdk-posthog-python'),
+          { framework: ['django'], sdkPython: ['7'] },
+        ).map((e) => e.id),
+      ).toEqual(['sdk-posthog-python-v7']);
+
+      expect(
+        filterSkillsForRun(
+          SDK_MENU.filter((e) => e.family === 'sdk-posthog-node'),
+          { framework: ['nextjs'], sdkNode: ['5', '6'] },
+        ).map((e) => e.id),
+      ).toEqual(['sdk-posthog-node-v5', 'sdk-posthog-node-v6']);
+
+      expect(
+        filterSkillsForRun(MENU, {
+          framework: ['nextjs'],
+          variant: ['pages'],
+        }).map((e) => e.id),
+      ).not.toContain('integration-nextjs-app-router');
+
+      expect(
+        filterSkillsForRun(
+          MENU.filter((e) => e.family === 'integration'),
+          { framework: ['cobol'] },
+        ).map((e) => e.id),
+      ).toEqual(['integration-react-vite']);
+    });
+
+    it('preserves real ai-observability entries whose framework:<provider> tags are LLM providers rather than wizard integrations', () => {
+      const fixturePath = path.resolve(
+        __dirname,
+        '../../../fixtures/context-mill/skill-menu.json',
+      );
+      const rawMenu = JSON.parse(
+        fs.readFileSync(fixturePath, 'utf8'),
+      ) as SkillMenu;
+      const menu = prepareSkillMenu(rawMenu);
+      const aioEntries = menu.categories['ai-observability'] ?? [];
+      expect(aioEntries.length).toBeGreaterThan(0);
+
+      const filtered = filterSkillsForRun(aioEntries, {
+        framework: ['nextjs'],
+        sdkNode: ['5'],
+      });
+      expect(filtered).toHaveLength(aioEntries.length);
+      expect(filtered.map((e) => e.id)).toContain(
+        'ai-observability-anthropic-node',
+      );
+      expect(filtered.map((e) => e.id)).toContain(
+        'ai-observability-openai-python',
+      );
+    });
   });
 });

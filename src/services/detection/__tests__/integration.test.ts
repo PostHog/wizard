@@ -360,3 +360,60 @@ describe('only a scripted CI run starts with consent already granted', () => {
     expect(session.scanConsent).toBe(ScanConsent.Undecided);
   });
 });
+
+describe('detectPostHogIntegration SDK major detection', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    tmpDir = makeTmpDir();
+  });
+
+  afterEach(() => {
+    cleanup(tmpDir);
+  });
+
+  it('records supported SDK major in frameworkContext without setting unsupportedVersion', async () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'requirements.txt'),
+      'fastapi>=0.110\nposthog>=7.40.0,<8\n',
+    );
+    const session = buildSession({ installDir: tmpDir });
+    const ctx = makeCtx(session);
+
+    await detectPostHogIntegration(ctx);
+
+    expect(ctx.setPosthogSdkDetected).toHaveBeenCalledWith(true);
+    expect(ctx.setUnsupportedVersion).not.toHaveBeenCalled();
+    expect(session.frameworkContext.posthogSdks).toMatchObject([
+      {
+        key: 'posthog-python',
+        packageName: 'posthog',
+        major: 7,
+        constraintKind: 'range',
+      },
+    ]);
+  });
+
+  it('records legacy SDK major in frameworkContext without overwriting session.unsupportedVersion', async () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'requirements.txt'),
+      'fastapi>=0.110\nposthog==6.0.0\n',
+    );
+    const session = buildSession({ installDir: tmpDir });
+    const ctx = makeCtx(session);
+
+    await detectPostHogIntegration(ctx);
+
+    expect(ctx.setPosthogSdkDetected).toHaveBeenCalledWith(true);
+    expect(ctx.setUnsupportedVersion).not.toHaveBeenCalled();
+    expect(session.frameworkContext.posthogSdks).toMatchObject([
+      {
+        key: 'posthog-python',
+        packageName: 'posthog',
+        major: 6,
+        resolvedVersion: '6.0.0',
+      },
+    ]);
+  });
+});

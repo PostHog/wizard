@@ -137,6 +137,7 @@ const base = createSkillProgram({
 export const config: ProgramConfig = {
   decisions: ['framework', 'web_frontend', 'primary_user_flow'],
   ...base,
+  sdkSupport: true,
   // Orchestrator on pi; the flow's `model_pi`/`effort_pi` pin each stage, this model is the fallback.
   binding: {
     sequence: Sequence.orchestrator,

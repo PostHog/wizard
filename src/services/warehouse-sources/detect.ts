@@ -589,7 +589,7 @@ export const DETECTED_WAREHOUSE_SOURCES_KEY = 'detectedWarehouseSources';
  * the intro screen and the prompt builder so the key + cast live in one place.
  */
 export function getDetectedWarehouseSources(
-  session: ProgramSession,
+  session: Pick<ProgramSession, 'frameworkContext'>,
 ): DetectedSource[] {
   return (
     (session.frameworkContext[DETECTED_WAREHOUSE_SOURCES_KEY] as

@@ -70,7 +70,8 @@ the mock reaches every importer.
 A project is a directory in the repo with its traits, and `.` is the directory
 the run works in. A trait is one thing detection read from the project's code:
 its framework, the framework's variant, whether it calls an LLM API, its MCP
-servers and its warehouse sources. Traits describe the code, never the person.
+servers, its warehouse sources and any detected PostHog SDK majors. Traits
+describe the code, never the person.
 
 [`traits.ts`](project-traits/traits.ts) declares every trait once in `TRAITS`:
 how static detection reads it from the session, and whether skills can match on
@@ -78,8 +79,11 @@ it. `getTraits(session, projectPath)` returns the traits detection settled and
 leaves out the rest. A trait is its value alone. It does not say whether
 detection or the person's answer to a setup question set it. Detection covers
 the run's own directory, so any other path has no traits. `toMatchKeys` turns
-the traits skills can match on into the run's match keys. `framework` is the
-only one.
+the traits skills can match on into the run's match keys: `framework`,
+`frameworkVariant`, and the `sdk*` major traits (`sdkPython`, `sdkNode`,
+`sdkGo`, `sdkRust`, `sdkIos`, `sdkAndroid`, `sdkFlutter`). A detected SDK
+major only selects a skill: no major stops a run, and one with no skill runs
+without it.
 
 ## Session store and task streams
 

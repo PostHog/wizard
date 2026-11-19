@@ -47,6 +47,7 @@ import type {
 } from '@programs/program-contract';
 import type { WizardSession } from '@services/session';
 import { AUDIT_CHECKS_KEY } from '@programs/audit';
+import { POSTHOG_SDKS_KEY } from '@services/detection';
 import { FRAMEWORK_REGISTRY } from '@services/frameworks';
 import { detectErrorCode } from '../detect-map';
 import { config as metrics } from '@programs/metrics';
@@ -1558,6 +1559,575 @@ describe('runProgram', () => {
       const s = new SessionStore(buildSession({ installDir }));
       await runProgram('audit', audit(s));
       expect(s.session.frameworkContext[AUDIT_CHECKS_KEY]).toEqual(checks);
+    });
+  });
+
+  describe('SDK traits, facts, and scoped sub-project gating', () => {
+    let tmpDir: string;
+
+    beforeEach(() => {
+      tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'run-prog-sdk-'));
+    });
+
+    afterEach(() => {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    });
+
+    it('forwards sdk* matchKeys to runAgent when sdkSupport is enabled', async () => {
+      const s = store({
+        detectionComplete: true,
+        frameworkContext: {
+          [POSTHOG_SDKS_KEY]: [
+            {
+              key: 'posthog-python',
+              packageName: 'posthog',
+              major: 7,
+              resolvedVersion: '7.62.0',
+              constraintKind: 'range',
+              rawSpec: '>=7.40.0,<8',
+              source: 'requirements.txt',
+            },
+          ],
+        },
+      });
+
+      await runProgram('metrics', {
+        store: s,
+        config: {
+          run,
+          sdkSupport: true,
+          detectedFacts: () => ['Custom project fact'],
+        },
+        credentials,
+      });
+
+      expect(agentConfig().matchKeys?.()).toMatchObject({ sdkPython: ['7'] });
+      expect(agentConfig().projectFacts?.()).toEqual(['Custom project fact']);
+    });
+
+    it('omits sdk* matchKeys when sdkSupport is not enabled even if session retains integration and legacy SDKs', async () => {
+      const s = store({
+        detectionComplete: true,
+        integration: Integration.nextjs,
+        frameworkConfig: FRAMEWORK_REGISTRY[Integration.nextjs],
+        frameworkContext: {
+          [POSTHOG_SDKS_KEY]: [
+            {
+              key: 'posthog-python',
+              packageName: 'posthog',
+              major: 6,
+              resolvedVersion: '6.0.0',
+              constraintKind: 'pinned',
+              rawSpec: '==6.0.0',
+              source: 'requirements.txt',
+            },
+          ],
+        },
+      });
+
+      const result = await runProgram('audit', {
+        store: s,
+        config: {
+          run,
+          detectedFacts: () => ['Audit-only fact'],
+        },
+        credentials,
+      });
+
+      expect(result.outcome).toBe(RunOutcome.Success);
+      expect(agentConfig().matchKeys?.()).toEqual({ framework: ['nextjs'] });
+      expect(agentConfig().projectFacts?.()).toEqual(['Audit-only fact']);
+    });
+
+    it('matches a scoped targetDir program against its own directory SDKs, not the root scan', async () => {
+      const legacySibling = path.join(tmpDir, 'apps', 'legacy-py');
+      const webApp = path.join(tmpDir, 'apps', 'web');
+      fs.mkdirSync(legacySibling, { recursive: true });
+      fs.mkdirSync(webApp, { recursive: true });
+      fs.writeFileSync(
+        path.join(legacySibling, 'requirements.txt'),
+        'posthog==6.0.0\n',
+      );
+      fs.writeFileSync(
+        path.join(webApp, 'package.json'),
+        JSON.stringify({ dependencies: { 'posthog-node': '^5.0.0' } }),
+      );
+
+      // Simulate root scan from WizardStore.runReadyHooks picking up legacySibling at depth 3.
+      const s = store({
+        installDir: tmpDir,
+        detectionComplete: true,
+        frameworkContext: {
+          [POSTHOG_SDKS_KEY]: [
+            {
+              key: 'posthog-python',
+              packageName: 'posthog',
+              major: 6,
+              resolvedVersion: '6.0.0',
+              constraintKind: 'pinned',
+              rawSpec: '==6.0.0',
+              source: 'apps/legacy-py/requirements.txt',
+            },
+          ],
+        },
+      });
+      const host = workflow(() => true);
+
+      const webResult = await runProgram(
+        'error-tracking',
+        {
+          store: s,
+          config: {
+            run,
+            sdkSupport: true,
+            runSteps: {
+              run: {
+                targetDir: () => webApp,
+              },
+            },
+          },
+          credentials,
+        },
+        { workflow: host },
+      );
+
+      expect(webResult.outcome).toBe(RunOutcome.Success);
+      expect(runAgent).toHaveBeenCalledOnce();
+      expect(agentInput().installDir).toBe(webApp);
+      expect(agentConfig().matchKeys?.()).toMatchObject({ sdkNode: ['5'] });
+      expect(agentConfig().matchKeys?.().sdkPython).toBeUndefined();
+
+      vi.mocked(runAgent).mockClear();
+      const legacyResult = await runProgram(
+        'mcp-analytics',
+        {
+          store: store({
+            installDir: tmpDir,
+            detectionComplete: true,
+          }),
+          config: {
+            run,
+            sdkSupport: true,
+            runSteps: {
+              run: {
+                targetDir: () => legacySibling,
+              },
+            },
+          },
+          credentials,
+        },
+        { workflow: host },
+      );
+
+      expect(legacyResult.outcome).toBe(RunOutcome.Success);
+      expect(runAgent).toHaveBeenCalledOnce();
+      expect(agentInput().installDir).toBe(legacySibling);
+      expect(agentConfig().matchKeys?.()).toMatchObject({ sdkPython: ['6'] });
+    });
+
+    // detectProgram runs here (detectionComplete false); the root's SDKs must not reach the session before the scoped run scans its own dir.
+    it('keeps the root SDK scan out of the session for an own run step under any key', async () => {
+      const webApp = path.join(tmpDir, 'apps', 'web');
+      fs.mkdirSync(webApp, { recursive: true });
+      fs.writeFileSync(
+        path.join(tmpDir, 'requirements.txt'),
+        'posthog==6.0.0\n',
+      );
+      const s = store({ installDir: tmpDir });
+
+      const result = await runProgram(
+        'error-tracking',
+        {
+          store: s,
+          config: {
+            run,
+            sdkSupport: true,
+            runSteps: { 'scoped-run': { targetDir: () => webApp } },
+          },
+          credentials,
+        },
+        { workflow: workflow() },
+      );
+
+      expect(result.outcome).toBe(RunOutcome.Success);
+      expect(agentInput().installDir).toBe(webApp);
+      expect(s.session.frameworkContext[POSTHOG_SDKS_KEY]).toBeUndefined();
+    });
+
+    describe('workspace-root lockfile for scoped scans', () => {
+      let api: string;
+      beforeEach(() => {
+        api = path.join(tmpDir, 'apps', 'api');
+        fs.mkdirSync(api, { recursive: true });
+        fs.writeFileSync(
+          path.join(tmpDir, 'pnpm-lock.yaml'),
+          [
+            'packages:',
+            "  'posthog-node@5.12.0(typescript@5.0.0)':",
+            '    resolution: {integrity: sha512-ph}',
+          ].join('\n'),
+        );
+        fs.writeFileSync(
+          path.join(api, 'package.json'),
+          JSON.stringify({
+            dependencies: { 'posthog-node': '^4.18.0 || ^5.0.0' },
+          }),
+        );
+      });
+
+      it('scopeSession resolves a targetDir run against the live root lockfile', async () => {
+        const result = await runProgram(
+          'error-tracking',
+          {
+            store: store({ installDir: tmpDir, detectionComplete: true }),
+            config: {
+              run,
+              sdkSupport: true,
+              runSteps: { run: { targetDir: () => api } },
+            },
+            credentials,
+          },
+          { workflow: workflow() },
+        );
+        expect(result.outcome).toBe(RunOutcome.Success);
+        expect(agentConfig().matchKeys?.()).toMatchObject({ sdkNode: ['5'] });
+      });
+
+      it('scopeSession resolves an onRunPrep-moved dir against the live root lockfile', async () => {
+        const result = await runProgram(
+          'self-driving',
+          {
+            store: store({ installDir: tmpDir, detectionComplete: true }),
+            config: {
+              run,
+              sdkSupport: true,
+              runSteps: {
+                run: {
+                  onRunPrep: (session: ProgramSession) => {
+                    session.installDir = api;
+                    return Promise.resolve();
+                  },
+                },
+              },
+            },
+            credentials,
+          },
+          { workflow: workflow() },
+        );
+        expect(result.outcome).toBe(RunOutcome.Success);
+        expect(agentConfig().matchKeys?.()).toMatchObject({ sdkNode: ['5'] });
+      });
+    });
+
+    describe('scopeSession SDK scan', () => {
+      const node = (major: number) => ({
+        key: 'posthog-node',
+        packageName: 'posthog-node',
+        major,
+        constraintKind: 'range',
+        rawSpec: `^${major}.0.0`,
+        source: 'package.json',
+      });
+      let api: string;
+      beforeEach(() => {
+        api = path.join(tmpDir, 'apps', 'api');
+        fs.mkdirSync(api, { recursive: true });
+        fs.writeFileSync(
+          path.join(api, 'package.json'),
+          JSON.stringify({ dependencies: { 'posthog-node': '^5.0.0' } }),
+        );
+        fs.writeFileSync(
+          path.join(tmpDir, 'package.json'),
+          JSON.stringify({ dependencies: { 'posthog-node': '^5.0.0' } }),
+        );
+      });
+      // The session `onRunPrep` gets is the scoped copy, so keeping it shows what the run's scan wrote to it.
+      let prepped: ProgramSession | undefined;
+      const moveTo = (dir?: string) => ({
+        onRunPrep: (session: ProgramSession) => {
+          prepped = session;
+          if (dir) session.installDir = dir;
+          return Promise.resolve();
+        },
+      });
+      const scoped = async (
+        fields: Partial<WizardSession>,
+        runStep: object,
+        over: object = { sdkSupport: true },
+      ) => {
+        const result = await runProgram(
+          'self-driving',
+          {
+            store: store({
+              installDir: tmpDir,
+              detectionComplete: true,
+              ...fields,
+            }),
+            config: { run, runSteps: { run: runStep }, ...over },
+            credentials,
+          },
+          { workflow: workflow() },
+        );
+        expect(result.outcome).toBe(RunOutcome.Success);
+        if (!prepped) throw new Error('onRunPrep did not run');
+        return prepped;
+      };
+
+      it('rescans a moved dir even when a root scan is present', async () => {
+        const session = await scoped(
+          { frameworkContext: { [POSTHOG_SDKS_KEY]: [node(6)] } },
+          moveTo(api),
+        );
+        expect(session.installDir).toBe(api);
+        expect(session.frameworkContext[POSTHOG_SDKS_KEY]).toMatchObject([
+          { major: 5 },
+        ]);
+      });
+
+      it('scans an unmoved dir that has no scan', async () => {
+        const session = await scoped({}, moveTo());
+        expect(session.installDir).toBe(tmpDir);
+        expect(session.frameworkContext[POSTHOG_SDKS_KEY]).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({ source: 'package.json' }),
+          ]),
+        );
+      });
+
+      it('keeps the scan of an unmoved dir', async () => {
+        const session = await scoped(
+          { frameworkContext: { [POSTHOG_SDKS_KEY]: [node(6)] } },
+          moveTo(),
+        );
+        expect(session.frameworkContext[POSTHOG_SDKS_KEY]).toMatchObject([
+          { major: 6 },
+        ]);
+      });
+
+      it('leaves a run step with neither a target dir nor a prep unscoped', async () => {
+        const result = await runProgram(
+          'self-driving',
+          {
+            store: store({ installDir: tmpDir, detectionComplete: true }),
+            config: { run, sdkSupport: true, runSteps: { run: {} } },
+            credentials,
+          },
+          { workflow: workflow() },
+        );
+        expect(result.outcome).toBe(RunOutcome.Success);
+        expect(agentConfig().matchKeys?.().sdkNode).toBeUndefined();
+      });
+
+      it('waits for an async prep that moves the dir before it scans', async () => {
+        const session = await scoped(
+          {},
+          {
+            onRunPrep: async (draft: ProgramSession) => {
+              prepped = draft;
+              await Promise.resolve();
+              await Promise.resolve();
+              draft.installDir = api;
+            },
+          },
+        );
+        expect(session.installDir).toBe(api);
+        expect(session.frameworkContext[POSTHOG_SDKS_KEY]).toHaveLength(1);
+      });
+
+      it("records the target dir's scan against that dir", async () => {
+        const session = await scoped({}, { ...moveTo(), targetDir: () => api });
+        expect(session.frameworkContext.posthogSdksDir).toBe(api);
+      });
+
+      it("runs a composed program's own run function on the scoped session", async () => {
+        const result = await runProgram(
+          'self-driving',
+          {
+            store: store({ installDir: tmpDir, detectionComplete: true }),
+            config: {
+              run,
+              runSteps: {
+                'skill-run': {
+                  runProgramId: 'agent-skill',
+                  targetDir: () => api,
+                  onRunPrep: (draft: ProgramSession) => {
+                    draft.skillId = 'scoped-skill';
+                    return Promise.resolve();
+                  },
+                },
+              },
+            },
+            credentials,
+          },
+          { workflow: workflow() },
+        );
+        expect(result.outcome).toBe(RunOutcome.Success);
+        expect(
+          vi.mocked(runAgent).mock.calls.map(([c]) => c.run),
+        ).toContainEqual(expect.objectContaining({ skillId: 'scoped-skill' }));
+        expect(agentInput().installDir).toBe(api);
+      });
+
+      it('runs without a workflow on an old SDK in the root scan', async () => {
+        const result = await runProgram('metrics', {
+          store: store({
+            installDir: tmpDir,
+            detectionComplete: true,
+            frameworkContext: {
+              [POSTHOG_SDKS_KEY]: [
+                {
+                  key: 'posthog-python',
+                  packageName: 'posthog',
+                  major: 6,
+                  resolvedVersion: '6.0.0',
+                  constraintKind: 'pinned',
+                  rawSpec: '==6.0.0',
+                  source: 'requirements.txt',
+                },
+              ],
+            },
+          }),
+          config: { run, sdkSupport: true },
+          credentials,
+        });
+        expect(result.outcome).toBe(RunOutcome.Success);
+        expect(runAgent).toHaveBeenCalledOnce();
+        expect(agentConfig().matchKeys?.()).toMatchObject({ sdkPython: ['6'] });
+      });
+
+      it('scans nothing for a program without sdkSupport', async () => {
+        const targetDir = await scoped(
+          {},
+          { ...moveTo(), targetDir: () => api },
+          {},
+        );
+        expect(targetDir.installDir).toBe(api);
+        expect(targetDir.frameworkContext[POSTHOG_SDKS_KEY]).toBeUndefined();
+        const moved = await scoped({}, moveTo(api), {});
+        expect(moved.frameworkContext[POSTHOG_SDKS_KEY]).toBeUndefined();
+      });
+
+      it('scans the root for a non-workflow run of a program with its own target dir', async () => {
+        const s = store({ installDir: tmpDir });
+        const result = await runProgram('error-tracking', {
+          store: s,
+          config: {
+            run,
+            sdkSupport: true,
+            runSteps: { run: { targetDir: () => api } },
+          },
+          credentials,
+        });
+        expect(result.outcome).toBe(RunOutcome.Success);
+        expect(s.session.frameworkContext[POSTHOG_SDKS_KEY]).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({ source: 'package.json' }),
+          ]),
+        );
+        expect(agentInput().installDir).toBe(tmpDir);
+      });
+
+      it('scans the root for a workflow run of a program without its own target dir', async () => {
+        const s = store({ installDir: tmpDir });
+        await runProgram(
+          'metrics',
+          { store: s, config: { run, sdkSupport: true }, credentials },
+          { workflow: workflow() },
+        );
+        expect(s.session.frameworkContext[POSTHOG_SDKS_KEY]).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({ source: 'package.json' }),
+          ]),
+        );
+      });
+    });
+
+    it('re-scans scoped sub-project dir and updates matchKeys for that run', async () => {
+      const subDir = path.join(tmpDir, 'apps', 'api');
+      fs.mkdirSync(subDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(subDir, 'requirements.txt'),
+        'posthog>=7.40.0,<8\n',
+      );
+      const s = store({
+        installDir: tmpDir,
+        detectionComplete: true,
+        frameworkContext: {
+          [POSTHOG_SDKS_KEY]: [
+            {
+              key: 'posthog-node',
+              packageName: 'posthog-node',
+              major: 5,
+              constraintKind: 'range',
+              rawSpec: '^5.0.0',
+              source: 'package.json',
+            },
+          ],
+        },
+      });
+      const host = workflow(
+        (step) => step.kind !== 'run' || step.stepId === 'integrate-run',
+      );
+
+      const result = await runProgram(
+        'self-driving',
+        {
+          store: s,
+          config: {
+            run,
+            runSteps: {
+              'integrate-run': {
+                runProgramId: 'metrics',
+                targetDir: () => subDir,
+              },
+            },
+          },
+          credentials,
+        },
+        { workflow: host },
+      );
+
+      expect(result.outcome).toBe(RunOutcome.Success);
+      expect(runAgent).toHaveBeenCalledOnce();
+      expect(agentInput().installDir).toBe(subDir);
+      expect(agentConfig().matchKeys?.()).toMatchObject({ sdkPython: ['7'] });
+      expect(agentConfig().matchKeys?.().sdkNode).toBeUndefined();
+    });
+
+    it('runs a scoped sub-project on an old SDK', async () => {
+      const subDir = path.join(tmpDir, 'apps', 'legacy');
+      fs.mkdirSync(subDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(subDir, 'requirements.txt'),
+        'posthog==6.0.0\n',
+      );
+      const s = store({ installDir: tmpDir, detectionComplete: true });
+      const host = workflow(
+        (step) => step.kind !== 'run' || step.stepId === 'integrate-run',
+      );
+
+      const result = await runProgram(
+        'self-driving',
+        {
+          store: s,
+          config: {
+            run,
+            runSteps: {
+              'integrate-run': {
+                runProgramId: 'metrics',
+                targetDir: () => subDir,
+              },
+            },
+          },
+          credentials,
+        },
+        { workflow: host },
+      );
+
+      expect(result.outcome).toBe(RunOutcome.Success);
+      expect(runAgent).toHaveBeenCalledOnce();
+      expect(agentInput().installDir).toBe(subDir);
+      expect(agentConfig().matchKeys?.()).toMatchObject({ sdkPython: ['6'] });
     });
   });
 });

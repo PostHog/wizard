@@ -11,6 +11,7 @@ export const JAVASCRIPT_NODE_AGENT_CONFIG: FrameworkConfig<JavaScriptNodeContext
     metadata: {
       name: 'Node.js',
       integration: Integration.javascriptNode,
+      sdkSkillFamily: 'sdk-posthog-node',
       docsUrl: 'https://posthog.com/docs/libraries/node',
     },
 

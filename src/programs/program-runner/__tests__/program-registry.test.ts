@@ -34,6 +34,25 @@ describe('PROGRAM_REGISTRY', () => {
   });
 });
 
+// SDK-aware programs detect the installed PostHog SDK major; dropping the flag disables that silently.
+describe('sdkSupport', () => {
+  it('is enabled on exactly the SDK-aware programs', () => {
+    const enabled = PROGRAM_REGISTRY.filter((c) => c.sdkSupport === true)
+      .map((c) => c.id)
+      .sort();
+    expect(enabled).toEqual([
+      'ai-observability',
+      'error-tracking',
+      'feature-flags',
+      'mcp-analytics',
+      'metrics',
+      'posthog-integration',
+      'replay-vision',
+      'support',
+    ]);
+  });
+});
+
 describe('getProgramConfig', () => {
   it('finds known configs by id', () => {
     expect(getProgramConfig('posthog-integration').id).toBe(

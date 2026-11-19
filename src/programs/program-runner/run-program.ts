@@ -36,15 +36,20 @@ import { registerCleanup } from '@utils/cleanup';
 import { logToFile } from '@utils/debug';
 import { removeAuditLedger, startAuditLedgerWatcher } from '@programs/audit';
 import { FRAMEWORK_REGISTRY } from '@services/frameworks';
-import { getTraits, toMatchKeys } from '@services/project-traits';
 import { findProgramConfig, getProgramConfig } from './program-registry';
 import { ProgramAbort } from '@programs/program-contract';
 import { detectionFailure, detectProgram } from './detect-program';
+import { hasOwnTargetDir, programMatchKeys } from './sdk-run-context';
 import {
   rotateCredentials,
   type ResolvedProgramCredentials,
 } from './credentials';
 import { reportCodebaseScan } from '@services/codebase-scan';
+import {
+  POSTHOG_SDKS_KEY,
+  recordPostHogSdksIfNeeded,
+  scanPostHogSdks,
+} from '@services/detection';
 import { IS_PRODUCTION_BUILD } from '@env';
 import type { QuestionKey } from '@services/detection/decisions';
 import { logIn } from './login';
@@ -188,15 +193,22 @@ async function invokeProgram(
       }),
     );
 
+  // A workflow's scoped run scans its own directory, so the root's SDKs stay out of the session.
+  const deferSdkScan = Boolean(options.workflow && hasOwnTargetDir(config));
   try {
     if (!store.session.detectionComplete) {
-      await detectProgram(config, store, {
-        log: runner.log,
-        authenticate: async () => {
-          await login();
-        },
-        onProgress: emit,
-      } satisfies CiRunnerContext);
+      await detectProgram(
+        config,
+        store,
+        {
+          log: runner.log,
+          authenticate: async () => {
+            await login();
+          },
+          onProgress: emit,
+        } satisfies CiRunnerContext,
+        { deferSdkScan },
+      );
     }
   } catch (error) {
     // A decided stop ends the run cancelled, as main's wizardAbort({ code, message }) did.
@@ -356,7 +368,12 @@ async function invokeProgram(
     ): Promise<RunResult | ProgramRunOutcome> => {
       // A scoped run works on its own copy of the session; its writes don't leak into later runs.
       const scoped = planned.runStep
-        ? await scopeSession(planned.runStep, store.session, runner)
+        ? await scopeSession(
+            planned.runStep,
+            store.session,
+            runner,
+            planned.config,
+          )
         : null;
       if (
         scoped?.detectedFrameworkLabel &&
@@ -435,7 +452,7 @@ async function invokeProgram(
             seedTasks: planned.config.seedTasks
               ? () => planned.config.seedTasks!(session())
               : undefined,
-            matchKeys: () => toMatchKeys(getTraits(session())),
+            matchKeys: () => programMatchKeys(session(), planned.config),
             projectFacts:
               (decisions && planned.config.decisions) ||
               planned.config.detectedFacts
@@ -597,6 +614,7 @@ async function scopeSession(
   runStep: ProgramRunStep,
   live: WizardSession,
   runner: RunnerContext,
+  config: ProgramConfig,
 ): Promise<WizardSession | null> {
   if (!runStep.targetDir && !runStep.onRunPrep) return null;
   const session: WizardSession = {
@@ -605,6 +623,29 @@ async function scopeSession(
     frameworkContext: { ...live.frameworkContext },
   };
   if (runStep.onRunPrep) await runStep.onRunPrep(session, runner.log);
+  if (config.sdkSupport && runStep.targetDir) {
+    // The live root bounds the lockfile walk, so a subpackage sees the workspace lockfile.
+    recordPostHogSdksIfNeeded(
+      config,
+      {
+        session,
+        setFrameworkContext: (key, value) => {
+          session.frameworkContext[key] = value;
+        },
+      },
+      live.installDir,
+    );
+  } else if (
+    config.sdkSupport &&
+    (session.installDir !== live.installDir ||
+      !Array.isArray(session.frameworkContext[POSTHOG_SDKS_KEY]))
+  ) {
+    session.frameworkContext[POSTHOG_SDKS_KEY] = scanPostHogSdks(
+      session.installDir,
+      undefined,
+      live.installDir,
+    );
+  }
   return session;
 }
 

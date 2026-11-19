@@ -47,6 +47,7 @@ export const config: ProgramConfig = {
   command: 'feature-flags',
   description: 'Set up example PostHog feature flags',
   id: 'feature-flags',
+  sdkSupport: true,
   binding: {
     sequence: Sequence.orchestrator,
     harness: Harness.pi,

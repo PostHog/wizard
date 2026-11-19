@@ -68,6 +68,39 @@ describe('detectExistingPosthog', () => {
     expect(setPosthogSdkDetected).toHaveBeenCalledWith(true);
   });
 
+  it('reports true for Python, Go, and Rust PostHog SDKs', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'requirements.txt'),
+      'posthog>=7.40.0,<8\n',
+    );
+    run(tmpDir);
+    expect(setPosthogSdkDetected).toHaveBeenCalledWith(true);
+
+    const goDir = makeTmpDir();
+    try {
+      fs.writeFileSync(
+        path.join(goDir, 'go.mod'),
+        'module example.com/app\n\nrequire github.com/posthog/posthog-go v1.2.3\n',
+      );
+      detectExistingPostHog({ setPosthogSdkDetected }, goDir);
+      expect(setPosthogSdkDetected).toHaveBeenLastCalledWith(true);
+    } finally {
+      fs.rmSync(goDir, { recursive: true, force: true });
+    }
+
+    const rustDir = makeTmpDir();
+    try {
+      fs.writeFileSync(
+        path.join(rustDir, 'Cargo.toml'),
+        '[dependencies]\nposthog = "1.0"\n',
+      );
+      detectExistingPostHog({ setPosthogSdkDetected }, rustDir);
+      expect(setPosthogSdkDetected).toHaveBeenLastCalledWith(true);
+    } finally {
+      fs.rmSync(rustDir, { recursive: true, force: true });
+    }
+  });
+
   it('does not throw and reports false for an invalid install dir', () => {
     expect(() => run('/nonexistent/path')).not.toThrow();
     expect(setPosthogSdkDetected).toHaveBeenCalledWith(false);

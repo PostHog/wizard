@@ -31,7 +31,10 @@ import {
   DETECTED_WAREHOUSE_SOURCES_KEY,
   getDetectedWarehouseSources,
 } from '../warehouse-sources/detect';
-import { findPackageJsons } from './package-scanning';
+import {
+  recordPostHogSdksWithPresence,
+  scanPostHogSdksWithPresence,
+} from './posthog-sdks';
 import { findMcpServers } from '../mcp-servers';
 
 // Session-free, so runProgram can stamp without loading the session.
@@ -93,7 +96,10 @@ export async function detectPostHogIntegration(
   }
 
   await recordScannedWarehouseSources(ctx);
-  detectExistingPostHog(ctx, installDir);
+  // SDK blocks stay derived from frameworkContext.posthogSdks rather than
+  // overwriting session.unsupportedVersion (which tracks framework versions).
+  const { hasAnySdk } = recordPostHogSdksWithPresence(ctx, installDir);
+  ctx.setPosthogSdkDetected(hasAnySdk);
   await mcpServer;
 
   ctx.setDetectionComplete();
@@ -245,8 +251,8 @@ export function detectExistingPostHog(
   installDir: string,
 ): void {
   try {
-    const pkgJsons = findPackageJsons(installDir);
-    ctx.setPosthogSdkDetected(pkgJsons.some((p) => p.posthogSdks.length > 0));
+    const { hasAnySdk } = scanPostHogSdksWithPresence(installDir);
+    ctx.setPosthogSdkDetected(hasAnySdk);
   } catch (error) {
     analytics.captureException(
       error instanceof Error ? error : new Error(String(error)),

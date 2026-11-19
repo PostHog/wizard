@@ -7,6 +7,7 @@ import { DiscoveredFeature } from '@shared/discovered-feature';
 import { buildSession } from '@services/session/wizard-session';
 import { FRAMEWORK_REGISTRY } from '@services/frameworks/registry';
 import { DETECTED_WAREHOUSE_SOURCES_KEY } from '@services/warehouse-sources/detect';
+import { POSTHOG_SDKS_KEY } from '@services/detection/posthog-sdks';
 import {
   RUN_PROJECT,
   getProject,
@@ -124,18 +125,66 @@ describe('the Nuxt variant', () => {
 });
 
 describe('toMatchKeys', () => {
-  it('carries the framework and no other trait', () => {
+  it('carries framework, frameworkVariant, and detected sdk majors while leaving non-match traits out', () => {
     const value = session();
     value.integration = Integration.nextjs;
-    value.frameworkContext = { router: 'pages-router' };
+    value.frameworkContext = {
+      router: 'pages-router',
+      [POSTHOG_SDKS_KEY]: [
+        {
+          key: 'posthog-node',
+          packageName: 'posthog-node',
+          major: 5,
+          constraintKind: 'range',
+          rawSpec: '^5.28.1',
+          source: 'package.json',
+        },
+      ],
+    };
     value.discoveredFeatures = [DiscoveredFeature.LLM];
     value.mcpServerCandidates = ['apps/mcp'];
     expect(toMatchKeys(getTraits(value))).toEqual({
       framework: [Integration.nextjs],
+      frameworkVariant: ['pages-router'],
+      sdkNode: ['5'],
     });
   });
 
-  it('is empty when no framework is detected', () => {
+  it('collects distinct majors across multiple manifests for one SDK key', () => {
+    const value = session();
+    value.frameworkContext = {
+      [POSTHOG_SDKS_KEY]: [
+        {
+          key: 'posthog-node',
+          packageName: 'posthog-node',
+          major: 5,
+          constraintKind: 'range',
+          rawSpec: '^5.28.1',
+          source: 'apps/a/package.json',
+        },
+        {
+          key: 'posthog-node',
+          packageName: 'posthog-node',
+          major: 6,
+          constraintKind: 'range',
+          rawSpec: '^6.0.0',
+          source: 'apps/b/package.json',
+        },
+        {
+          key: 'posthog-node',
+          packageName: 'posthog-node',
+          major: 5,
+          constraintKind: 'pinned',
+          rawSpec: '5.10.0',
+          source: 'apps/c/package.json',
+        },
+      ],
+    };
+    expect(getTraits(value).sdkNode).toEqual(['5', '6']);
+    expect(toMatchKeys(getTraits(value)).sdkNode).toEqual(['5', '6']);
+  });
+
+  it('is empty when no framework or PostHog SDK is detected', () => {
     expect(toMatchKeys(getTraits(session()))).toEqual({});
   });
 });

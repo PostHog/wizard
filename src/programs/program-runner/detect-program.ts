@@ -4,6 +4,7 @@ import { POSTHOG_DOCS_URL } from '@shared/constants';
 import { ErrorCodes } from '@shared/errors';
 import { WizardError } from '@shared/errors/wizard-error';
 import { scanCodebaseFor } from '@services/codebase-scan';
+import { recordPostHogSdksIfNeeded } from '@services/detection';
 import { detectErrorCode } from './detect-map';
 import type { ProgramConfig } from '@programs/program-contract';
 import type { CiRunnerContext } from '@programs/program-contract';
@@ -12,14 +13,19 @@ import type { SessionStore } from '@services/session';
 
 /**
  * Scan the project for `config`: a CI session runs the program's `ciPreRun`
- * when it has one, anything else its `onReady`. Marks detection complete.
+ * when it has one, anything else its `onReady`. Marks detection complete. The
+ * root's PostHog SDK scan is skipped when `deferSdkScan` is set: the run scans
+ * its own directory instead.
  */
 export async function detectProgram(
   config: ProgramConfig,
   store: SessionStore,
   runner: CiRunnerContext,
+  options?: { deferSdkScan?: boolean },
 ): Promise<void> {
   await scanCodebaseFor(config, store.readyContext());
+  // `ciPreRun` and `onReady` may narrow installDir; the launch root still bounds the lockfile walk.
+  const rootDir = store.session.installDir;
   const ciPreRun = config.ciPreRun;
   if (store.session.ci && ciPreRun) {
     await store.edit((draft) =>
@@ -41,6 +47,9 @@ export async function detectProgram(
     );
   } else {
     await config.onReady?.(store.readyContext());
+  }
+  if (!options?.deferSdkScan) {
+    recordPostHogSdksIfNeeded(config, store.readyContext(), rootDir);
   }
   store.setDetectionComplete();
 }

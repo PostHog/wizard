@@ -48,6 +48,8 @@ import { analytics, sessionProperties } from '@utils/analytics';
 import {
   buildSession,
   findProgramConfig,
+  hasOwnTargetDir,
+  recordPostHogSdksIfNeeded,
   reportCodebaseScan,
   scanCodebaseFor,
   SessionStore,
@@ -222,7 +224,12 @@ export class WizardStore implements TuiView {
     const config = findProgramConfig(this.router.activeProgram);
     const ctx = this.sessions.readyContext();
     if (config) await scanCodebaseFor(config, ctx);
+    // `onReady` may narrow installDir; the launch root still bounds the lockfile walk.
+    const rootDir = this.session.installDir;
     await config?.onReady?.(ctx);
+    if (!hasOwnTargetDir(config)) {
+      recordPostHogSdksIfNeeded(config, ctx, rootDir);
+    }
     this.sessions.setDetectionComplete();
   }
 
@@ -954,11 +961,11 @@ export class WizardStore implements TuiView {
     // after the switch still reports under the program the run started as.
     analytics.setTag('program_id', program);
 
-    this._write({ setupConfirmed: false, programLabel: program }, () =>
-      this.sessions.update({
-        skillId: findProgramConfig(program)?.skillId ?? null,
-      }),
-    );
+    this._write({ setupConfirmed: false, programLabel: program }, () => {
+      this.sessions.setSkillId(findProgramConfig(program)?.skillId ?? null);
+      // What detection found belongs to the program left; `runReadyHooks` re-detects for the new one.
+      this.sessions.resetDetection();
+    });
   }
 
   // ── Derived state ───────────────────────────────────────────────

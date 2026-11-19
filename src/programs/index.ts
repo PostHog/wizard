@@ -38,7 +38,12 @@ export {
 } from './program-runner/program-registry';
 /** Shared program machinery the TUI, the CLI and the e2e harness call. */
 export { FRAMEWORK_REGISTRY } from '@services/frameworks';
-export { detectFramework } from '@services/detection';
+export {
+  detectFramework,
+  POSTHOG_SDKS_KEY,
+  recordPostHogSdksIfNeeded,
+} from '@services/detection';
+export { hasOwnTargetDir } from './program-runner/sdk-run-context';
 /** Each program's Decisions question keys, for the decisions-detect script. */
 export { getProgramDecisions } from './program-runner/program-registry';
 export type {

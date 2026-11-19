@@ -273,6 +273,21 @@ export class SessionStore {
     this.emitChange();
   }
 
+  /** Forget everything detection found, and the analytics tags it set. */
+  resetDetection(): void {
+    this.update({
+      integration: null,
+      frameworkConfig: null,
+      detectedFrameworkLabel: null,
+      unsupportedVersion: null,
+      posthogSdkDetected: false,
+      detectionComplete: false,
+      frameworkContext: {},
+    });
+    analytics.setTag('integration', null);
+    analytics.setTag('detected_framework', null);
+  }
+
   setFrameworkContext(key: string, value: unknown): void {
     this.set('frameworkContext', {
       ...this.session.frameworkContext,
