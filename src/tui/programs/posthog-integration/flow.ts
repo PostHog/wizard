@@ -58,16 +58,16 @@ export const POSTHOG_INTEGRATION_FLOW: FlowStep[] = [
     isComplete: (tui) => tui.outroDismissed,
   },
   {
+    id: 'mcp',
+    label: 'MCP servers',
+    screenId: 'mcp',
+    isComplete: (tui) => tui.mcpComplete,
+  },
+  {
     id: 'email-provider-offer',
     label: 'Email',
     screenId: PostHogIntegrationScreenId.EmailProviderOffer,
     show: ({ session }) => emailProviderOffer(session) !== undefined,
     isComplete: (tui) => tui.emailProviderOfferDone,
-  },
-  {
-    id: 'mcp',
-    label: 'MCP servers',
-    screenId: 'mcp',
-    isComplete: (tui) => tui.mcpComplete,
   },
 ];

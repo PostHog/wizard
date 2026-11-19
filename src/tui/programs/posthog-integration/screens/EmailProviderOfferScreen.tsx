@@ -99,7 +99,7 @@ const OfferFlow = ({
   return <QuestionPicker visible={visible} onAnswer={answer} />;
 };
 
-// Longer than a held key's first repeat on default desktop settings, so an Enter held from the outro can't answer yes unread.
+// Longer than a held key's first repeat on default desktop settings, so an Enter held from the previous screen can't answer yes unread.
 const QUESTION_READ_GUARD_MS = 1000;
 
 const QUESTION =
