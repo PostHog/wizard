@@ -10,7 +10,7 @@ const SPEND_AUDIT_REPORT_FILE = 'posthog-spend-audit-report.md';
  * nothing from, fix the code side in a pull request, and list the settings
  * side in a notebook the user acts on.
  *
- * The flow (context-mill `agents/spend-audit`) measures 30-day volumes once,
+ * The flow, one prompt per task in `agent/`, measures 30-day volumes once,
  * audits each product that has volume, edits the repository, creates insights
  * for events nobody queries, and ends with a report that writes the notebook,
  * the pull request body and the machine-readable result (`publish_program_result`).
@@ -24,7 +24,7 @@ export const config: ProgramConfig = {
     'Find savings in your PostHog setup and open a pull request with the fixes',
   id: 'spend-audit',
   // Orchestrator on pi. The binding routes only; every stage's model and
-  // effort are pinned context-mill side in the flow's frontmatter.
+  // effort are pinned in each prompt's frontmatter.
   binding: {
     sequence: Sequence.orchestrator,
     harness: Harness.pi,
@@ -32,6 +32,7 @@ export const config: ProgramConfig = {
   },
   // Explicit so renaming the program can't silently detach the flow.
   agentFlow: 'spend-audit',
+  agentPrompts: () => import('./agent-prompts').then((m) => m.AGENT_PROMPTS),
   // The report task builds its own notebook with the sections the product
   // expects; the handoff is the pull request body alone.
   handoffNotebook: false,

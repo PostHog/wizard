@@ -491,6 +491,7 @@ describe('the account owner in task prompts', () => {
         wizardFlags: {},
         wizardFlagPayloads: {},
         switchboard: {},
+        agentPrompts: () => Promise.resolve({}),
         accountOwnerContext,
       },
       input: { installDir: dir, flags: { ci: true } },

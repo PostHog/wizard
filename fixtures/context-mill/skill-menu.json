@@ -3496,6 +3496,174 @@
           "audit"
         ]
       }
+    ],
+    "spend-audit/code-fixes": [
+      {
+        "id": "spend-audit-code-fixes",
+        "name": "How the spend audit applies SDK-side fixes for a pull request",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/spend-audit-code-fixes.zip",
+        "title": "Spend audit — code fixes",
+        "description": "How the spend audit applies SDK-side fixes for a pull request",
+        "tags": [
+          "orchestrator",
+          "spend-audit",
+          "spend-audit-code-fixes"
+        ]
+      }
+    ],
+    "spend-audit/errors": [
+      {
+        "id": "spend-audit-errors",
+        "name": "Error tracking volume checks for the spend audit",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/spend-audit-errors.zip",
+        "title": "Spend audit — error tracking",
+        "description": "Error tracking volume checks for the spend audit",
+        "tags": [
+          "orchestrator",
+          "spend-audit",
+          "spend-audit-errors"
+        ]
+      }
+    ],
+    "spend-audit/events": [
+      {
+        "id": "spend-audit-events",
+        "name": "Event capture and autocapture checks for the spend audit",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/spend-audit-events.zip",
+        "title": "Spend audit — events",
+        "description": "Event capture and autocapture checks for the spend audit",
+        "tags": [
+          "orchestrator",
+          "spend-audit",
+          "spend-audit-events"
+        ]
+      }
+    ],
+    "spend-audit/findings": [
+      {
+        "id": "spend-audit-findings",
+        "name": "How a spend audit task records a finding and sizes a saving",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/spend-audit-findings.zip",
+        "title": "Spend audit — findings",
+        "description": "How a spend audit task records a finding and sizes a saving",
+        "tags": [
+          "orchestrator",
+          "spend-audit",
+          "spend-audit-findings"
+        ]
+      }
+    ],
+    "spend-audit/flags": [
+      {
+        "id": "spend-audit-flags",
+        "name": "Feature flag evaluation checks for the spend audit",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/spend-audit-flags.zip",
+        "title": "Spend audit — feature flags",
+        "description": "Feature flag evaluation checks for the spend audit",
+        "tags": [
+          "orchestrator",
+          "spend-audit",
+          "spend-audit-flags"
+        ]
+      }
+    ],
+    "spend-audit/groups": [
+      {
+        "id": "spend-audit-groups",
+        "name": "Group analytics checks for the spend audit",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/spend-audit-groups.zip",
+        "title": "Spend audit — groups",
+        "description": "Group analytics checks for the spend audit",
+        "tags": [
+          "orchestrator",
+          "spend-audit",
+          "spend-audit-groups"
+        ]
+      }
+    ],
+    "spend-audit/identify": [
+      {
+        "id": "spend-audit-identify",
+        "name": "Identify and person profile checks for the spend audit",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/spend-audit-identify.zip",
+        "title": "Spend audit — identify",
+        "description": "Identify and person profile checks for the spend audit",
+        "tags": [
+          "orchestrator",
+          "spend-audit",
+          "spend-audit-identify"
+        ]
+      }
+    ],
+    "spend-audit/insights": [
+      {
+        "id": "spend-audit-insights",
+        "name": "How the spend audit creates insights and dashboards from value findings",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/spend-audit-insights.zip",
+        "title": "Spend audit — insights",
+        "description": "How the spend audit creates insights and dashboards from value findings",
+        "tags": [
+          "orchestrator",
+          "spend-audit",
+          "spend-audit-insights"
+        ]
+      }
+    ],
+    "spend-audit/notebook": [
+      {
+        "id": "spend-audit-notebook",
+        "name": "The spend audit notebook: title, sections, embeds and the account owner card",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/spend-audit-notebook.zip",
+        "title": "Spend audit — notebook",
+        "description": "The spend audit notebook: title, sections, embeds and the account owner card",
+        "tags": [
+          "orchestrator",
+          "spend-audit",
+          "spend-audit-notebook"
+        ]
+      }
+    ],
+    "spend-audit/queries": [
+      {
+        "id": "spend-audit-queries",
+        "name": "The HogQL measurements every spend audit task shares",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/spend-audit-queries.zip",
+        "title": "Spend audit — queries",
+        "description": "The HogQL measurements every spend audit task shares",
+        "tags": [
+          "orchestrator",
+          "spend-audit",
+          "spend-audit-queries"
+        ]
+      }
+    ],
+    "spend-audit/replay": [
+      {
+        "id": "spend-audit-replay",
+        "name": "Session replay settings checks for the spend audit",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/spend-audit-replay.zip",
+        "title": "Spend audit — session replay",
+        "description": "Session replay settings checks for the spend audit",
+        "tags": [
+          "orchestrator",
+          "spend-audit",
+          "spend-audit-replay"
+        ]
+      }
+    ],
+    "spend-audit/result": [
+      {
+        "id": "spend-audit-result",
+        "name": "The spend audit result file the product prices and lists",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/spend-audit-result.zip",
+        "title": "Spend audit — result file",
+        "description": "The spend audit result file the product prices and lists",
+        "tags": [
+          "orchestrator",
+          "spend-audit",
+          "spend-audit-result"
+        ]
+      }
     ]
   },
   "cliEntries": [
@@ -4159,6 +4327,78 @@
       "role": "internal",
       "displayName": "Replay vision scanner mechanics",
       "description": "Shared mechanics for creating Replay vision scanners"
+    },
+    {
+      "skillId": "spend-audit-code-fixes",
+      "role": "internal",
+      "displayName": "Spend audit — code fixes",
+      "description": "How the spend audit applies SDK-side fixes for a pull request"
+    },
+    {
+      "skillId": "spend-audit-errors",
+      "role": "internal",
+      "displayName": "Spend audit — error tracking",
+      "description": "Error tracking volume checks for the spend audit"
+    },
+    {
+      "skillId": "spend-audit-events",
+      "role": "internal",
+      "displayName": "Spend audit — events",
+      "description": "Event capture and autocapture checks for the spend audit"
+    },
+    {
+      "skillId": "spend-audit-findings",
+      "role": "internal",
+      "displayName": "Spend audit — findings",
+      "description": "How a spend audit task records a finding and sizes a saving"
+    },
+    {
+      "skillId": "spend-audit-flags",
+      "role": "internal",
+      "displayName": "Spend audit — feature flags",
+      "description": "Feature flag evaluation checks for the spend audit"
+    },
+    {
+      "skillId": "spend-audit-groups",
+      "role": "internal",
+      "displayName": "Spend audit — groups",
+      "description": "Group analytics checks for the spend audit"
+    },
+    {
+      "skillId": "spend-audit-identify",
+      "role": "internal",
+      "displayName": "Spend audit — identify",
+      "description": "Identify and person profile checks for the spend audit"
+    },
+    {
+      "skillId": "spend-audit-insights",
+      "role": "internal",
+      "displayName": "Spend audit — insights",
+      "description": "How the spend audit creates insights and dashboards from value findings"
+    },
+    {
+      "skillId": "spend-audit-notebook",
+      "role": "internal",
+      "displayName": "Spend audit — notebook",
+      "description": "The spend audit notebook: title, sections, embeds and the account owner card"
+    },
+    {
+      "skillId": "spend-audit-queries",
+      "role": "internal",
+      "displayName": "Spend audit — queries",
+      "description": "The HogQL measurements every spend audit task shares"
+    },
+    {
+      "skillId": "spend-audit-replay",
+      "role": "internal",
+      "displayName": "Spend audit — session replay",
+      "description": "Session replay settings checks for the spend audit"
+    },
+    {
+      "skillId": "spend-audit-result",
+      "role": "internal",
+      "displayName": "Spend audit — result file",
+      "description": "The spend audit result file the product prices and lists"
     }
   ]
 }
