@@ -38,6 +38,11 @@ import {
 } from '../../../yara-hooks';
 import { fetchSkillMenu, type SkillEntry } from '@shared/skill-menu';
 import { FRAMEWORK_KEY, resolveSkill } from '@shared/skill-resolution';
+import {
+  installPlannedSdkSkills,
+  planSdkSkillInstalls,
+  registerWizardCacheCleanup,
+} from '../../shared/sdk-skills';
 import { analytics } from '@utils/analytics';
 import { ciExcludedTaskTypes } from '@utils/ci-flag-overrides';
 import { logToFile } from '@utils/debug';
@@ -678,26 +683,7 @@ export async function runOrchestrator(
   };
   context.signal?.addEventListener('abort', abortFromHost, { once: true });
   if (context.signal?.aborted) abortFromHost();
-  let cleaned = false;
-  const cleanupQueue = (): void => {
-    if (cleaned) return;
-    cleaned = true;
-    try {
-      rmSync(path.join(context.input.installDir, QUEUE_DIR_NAME), {
-        recursive: true,
-        force: true,
-      });
-    } catch (error) {
-      try {
-        analytics.captureException(
-          error instanceof Error ? error : new Error(String(error)),
-          { step: 'orchestrator_cache_cleanup' },
-        );
-      } catch {
-        // Cleanup reporting must not replace the run result.
-      }
-    }
-  };
+  const cleanupQueue = registerWizardCacheCleanup(context.input.installDir);
   try {
     return await executeOrchestrator(
       { ...context, signal: controller.signal },
@@ -886,20 +872,41 @@ async function executeOrchestrator(
   const pickSkillEntry = (skillId: string) =>
     resolveSkill(menuSkillEntries, skillId, matchKeys);
   const pickSkillId = (skillId: string) => pickSkillEntry(skillId)?.id;
+  const sdkPlan = config.installSdkSkills
+    ? planSdkSkillInstalls({
+        menuEntries: menuSkillEntries,
+        matchKeys,
+        frameworkSdkFamily: config.frameworkSdkFamily,
+      })
+    : undefined;
+
   const referenceSkillId = framework
     ? pickSkillId(FRAMEWORK_PACK_FAMILY)
     : undefined;
-  if (referenceSkillId) {
-    const ref = await installSkillById(
-      referenceSkillId,
-      input.installDir,
-      boot.skillsBaseUrl,
-      {
-        skillsRoot: path.join(QUEUE_DIR_NAME, 'reference'),
-        scan: (dir) => scanInstalledSkill(dir, boot.triageProvider),
-      },
-    );
-    if (signal?.aborted) return cancelledRun();
+  const [ref, sdkInstall] = await Promise.all([
+    referenceSkillId
+      ? installSkillById(
+          referenceSkillId,
+          input.installDir,
+          boot.skillsBaseUrl,
+          {
+            skillsRoot: path.join(QUEUE_DIR_NAME, 'reference'),
+            scan: (dir) => scanInstalledSkill(dir, boot.triageProvider),
+          },
+        )
+      : Promise.resolve(undefined),
+    sdkPlan
+      ? installPlannedSdkSkills(sdkPlan, {
+          installDir: input.installDir,
+          triageProvider: boot.triageProvider,
+          skillsRoot: path.join(QUEUE_DIR_NAME, 'sdk'),
+          signal,
+        })
+      : Promise.resolve(undefined),
+  ]);
+  if (signal?.aborted || sdkInstall?.kind === 'aborted') return cancelledRun();
+
+  if (referenceSkillId && ref) {
     if (ref.kind === 'ok') {
       referenceInstallPath = ref.path;
       const example = path.join(ref.path, 'references', 'EXAMPLE.md');
@@ -926,6 +933,8 @@ async function executeOrchestrator(
       `[orchestrator] no integration skill for framework "${framework}"`,
     );
   }
+  const sdkSkillPaths = sdkInstall?.sdkSkillPaths ?? [];
+  const nonDefaultSdks = sdkInstall?.nonDefaultSdks ?? [];
 
   // Preflight every task's mini-skills: a miss would run tasks skill-less, so fail properly instead.
   const missingVariants: string[] = [];
@@ -995,7 +1004,12 @@ async function executeOrchestrator(
     host: boot.credentials.host,
     examplePath,
     commandmentsPath,
-    facts: config.projectFacts?.() ?? [],
+    sdkSkillPaths,
+    nonDefaultSdks,
+    facts: [
+      ...(config.projectFacts?.() ?? []),
+      ...(sdkPlan?.noSkillFacts ?? []),
+    ],
   };
 
   logToFile(

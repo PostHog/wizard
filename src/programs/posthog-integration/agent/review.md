@@ -29,11 +29,15 @@ verifying and reviewing are the same reading of the same changeset:
 
 **Install.** The earlier steps edited code but did not install — install now.
 Install what the manifest declares plus every package the
-upstream handoffs name, in their `packages` field or their text, adding the
-named ones by bare name with the project's package manager so it resolves real
-versions. The app's existing dependencies
-are not yours to touch: never upgrade, downgrade, or re-add a package this
-integration did not introduce. Check peer warnings after each install (`pnpm peers check` lists them on pnpm). An optional
+upstream handoffs name, in their `packages` field or their text, adding new
+packages by bare name (or editing the manifest for within-major `<`/`>` bounds
+before running the manifest install rather than passing `<` or `>` in Bash) so
+the package manager resolves real versions. Never upgrade a pre-existing PostHog
+SDK across breaking majors, and never override a hard-pinned version the user
+already declared. The app's existing dependencies are not yours to touch: never
+upgrade, downgrade, or re-add a package this integration did not introduce
+(unless an upstream handoff explicitly raised a within-major minimum bound for a
+new PostHog feature without crossing majors). Check peer warnings after each install (`pnpm peers check` lists them on pnpm). An optional
 peer range the app's version falls short of is not a conflict: keep that version if its
 install exits zero and the chosen compile checks pass, and name the mismatch in your
 handoff so the report can say so. If an instrumentation package's required peer range
@@ -62,7 +66,8 @@ capture replaced the wrapper, and why.
 A handoff that names a package with a feature or an exact pin (`cargo add
 posthog-rs --features mcp`, `@posthog/mcp@latest` saved exact) gets installed that
 way. A minimum version is a floor, not the version to install: install the latest
-unless a peer conflict forces an older one, and never go below the minimum. Install an exact-pinned package in its own command, so the pin doesn't
+within the declared major unless a peer conflict forces an older one, and never
+go below the minimum. Install an exact-pinned package in its own command, so the pin doesn't
 spread to packages named without one. In a workspace, install each package into the
 workspace package that imports it, not the repository root. A package outside any workspace
 takes a directory flag with a relative path, for its install and its checks: `pnpm --dir <path> add`,
@@ -71,9 +76,12 @@ the project's install once more without changing the lockfile (`pnpm install
 --frozen-lockfile` or its equivalent): if it fails on a package this run added, that package
 does not fit. Judge a minimum by the version that installs, not the low end of a declared
 range: `^1.12.0` that resolves to 1.32.2 meets a 1.26.0 minimum, so install before you decide, and ask
-the package manager which version resolved. When a package, or a dependency like
-`rmcp`, still resolves below a handoff's minimum because of the project's pin, cap or lockfile, do not raise it: revert that task's
-instrumentation and record the pin the user would raise. A toolchain older than
+the package manager which version resolved. When a non-PostHog dependency like
+`rmcp`, or a hard-pinned or major-capped PostHog SDK, still resolves below a
+handoff's minimum because of the project's pin, cap, or locked non-PostHog
+dependency, do not raise it: revert that task's instrumentation and record the
+pin the user would raise (for an existing PostHog SDK on an open major range
+whose lockfile is simply stale, update it within the declared major). A toolchain older than
 a handoff's minimum surfaces here as a failed install or build in that task's
 files; handle it the same way. Build Go with `go build -o /dev/null ./...` so no
 binary lands in the project, and never run `cargo fmt`, which reformats the

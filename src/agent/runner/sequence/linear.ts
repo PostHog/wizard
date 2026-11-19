@@ -18,12 +18,22 @@ import { ErrorCodes } from '@shared/errors';
 import { AGENT_ERROR_CODE } from '../../error-map';
 import { analytics } from '@utils/analytics';
 import { formatYaraAbortMessage, scanInstalledSkill } from '../../yara-hooks';
-import { installSkillById } from '@shared/skill-install';
+import { downloadSkill } from '@shared/skill-install';
+import { fetchSkillMenu, type SkillEntry } from '@shared/skill-menu';
+import { sdkFamiliesForRun } from '@shared/posthog-sdks';
 import { assemblePrompt, type PromptContext } from '../../agent-prompt';
 import type { SequenceResult, SequenceContext } from '../shared/types';
 import { failed, installFailure } from '../shared/errors';
 import { RunOutcome } from '../shared/types';
 import { runOptions } from '../shared/bootstrap';
+import { runMatchKeys } from '../shared/match-keys';
+import {
+  installPlannedSdkSkills,
+  planSdkSkillInstalls,
+  registerWizardCacheCleanup,
+  type NonDefaultSdkRef,
+  type PlannedSdkSkills,
+} from '../shared/sdk-skills';
 import { shouldDisableAsk } from '@shared/ask-policy';
 import { createEmitSpinner } from '../shared/progress-collector';
 import { createAskBridge } from '../shared/ask';
@@ -38,11 +48,16 @@ export async function runLinearProgram(
   const abortFromHost = () => controller.abort();
   context.signal?.addEventListener('abort', abortFromHost, { once: true });
   if (context.signal?.aborted) abortFromHost();
+  const cleanupSdkCache = registerWizardCacheCleanup(
+    context.input.installDir,
+    'sdk',
+  );
   try {
     return await executeLinear(context, controller.signal);
   } finally {
     context.signal?.removeEventListener('abort', abortFromHost);
     controller.abort();
+    cleanupSdkCache();
   }
 }
 
@@ -68,22 +83,91 @@ async function executeLinear(
   });
   if (signal?.aborted) return aborted();
 
-  // 5. Skill install (if skillId provided)
+  // 5. Skill install (run skill + exact-major SDK skills, sharing one menu fetch)
   let skillPath: string | undefined;
-  if (run.skillId) {
-    logToFile(`[agent-runner] installing skill ${run.skillId}`);
-    const installResult = await installSkillById(
-      run.skillId,
-      input.installDir,
-      skillsBaseUrl,
-      { scan: (dir) => scanInstalledSkill(dir, boot.triageProvider) },
-    );
+  let sdkSkillPaths: string[] = [];
+  let nonDefaultSdks: NonDefaultSdkRef[] = [];
+  let sdkPlan: PlannedSdkSkills | undefined;
+
+  const matchKeys =
+    !run.structured && config.matchKeys ? runMatchKeys(config) : undefined;
+  const needsSdkSkills =
+    Boolean(config.installSdkSkills) &&
+    matchKeys !== undefined &&
+    sdkFamiliesForRun(matchKeys, config.frameworkSdkFamily).length > 0;
+
+  if (run.skillId || needsSdkSkills) {
+    const menu = await fetchSkillMenu(skillsBaseUrl);
     if (signal?.aborted) return aborted();
-    if (installResult.kind !== 'ok') {
-      return failed(installFailure(run.integrationLabel, installResult));
+
+    const menuEntries: SkillEntry[] = menu
+      ? Object.values(menu.categories).flat()
+      : [];
+
+    let mainSkill: SkillEntry | undefined;
+    if (run.skillId) {
+      if (!menu) {
+        return failed(
+          installFailure(run.integrationLabel, { kind: 'menu-fetch-failed' }),
+        );
+      }
+      mainSkill = menuEntries.find((s) => s.id === run.skillId);
+      if (!mainSkill) {
+        return failed(
+          installFailure(run.integrationLabel, {
+            kind: 'skill-not-found',
+            skillId: run.skillId,
+          }),
+        );
+      }
     }
-    skillPath = installResult.path;
-    logToFile(`[agent-runner] skill installed at ${skillPath}`);
+
+    if (needsSdkSkills && menu && matchKeys) {
+      sdkPlan = planSdkSkillInstalls({
+        menuEntries,
+        matchKeys,
+        frameworkSdkFamily: config.frameworkSdkFamily,
+      });
+    }
+
+    if (mainSkill) {
+      logToFile(`[agent-runner] installing skill ${mainSkill.id}`);
+    }
+
+    const [mainResult, sdkInstall] = await Promise.all([
+      mainSkill
+        ? downloadSkill(mainSkill, input.installDir, {
+            scan: (dir) => scanInstalledSkill(dir, boot.triageProvider),
+          })
+        : Promise.resolve(undefined),
+      sdkPlan
+        ? installPlannedSdkSkills(sdkPlan, {
+            installDir: input.installDir,
+            triageProvider: boot.triageProvider,
+            signal,
+          })
+        : Promise.resolve(undefined),
+    ]);
+    if (signal?.aborted) return aborted();
+
+    if (mainSkill && mainResult) {
+      if (!mainResult.success) {
+        return failed(
+          installFailure(run.integrationLabel, {
+            kind: 'download-failed',
+            message: mainResult.error ?? 'unknown',
+          }),
+        );
+      }
+      skillPath = `.claude/skills/${mainSkill.id}`;
+      logToFile(`[agent-runner] skill installed at ${skillPath}`);
+    }
+
+    if (sdkInstall) {
+      if (sdkInstall.kind === 'aborted') return aborted();
+      sdkSkillPaths = sdkInstall.sdkSkillPaths;
+      nonDefaultSdks = sdkInstall.nonDefaultSdks;
+    }
   }
 
   // 6. Initialize agent
@@ -120,7 +204,12 @@ async function executeLinear(
     projectApiKey,
     host,
     skillPath,
-    facts: config.projectFacts?.() ?? [],
+    sdkSkillPaths,
+    nonDefaultSdks,
+    facts: [
+      ...(config.projectFacts?.() ?? []),
+      ...(sdkPlan?.noSkillFacts ?? []),
+    ],
     orgAiDataProcessingApproved:
       input.apiUser?.organization?.is_ai_data_processing_approved ?? null,
     teamProductOptIns: project

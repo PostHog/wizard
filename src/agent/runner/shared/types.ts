@@ -220,6 +220,10 @@ export interface ResolvedRunConfig {
   projectFacts?: () => readonly string[];
   /** The project's traits as skill match keys, read when the orchestrator picks skills. */
   matchKeys?: () => MatchKeys;
+  /** Whether this run installs exact-major `sdk-posthog-*` reference skills (derived from `ProgramConfig.sdkSupport`). */
+  installSdkSkills?: boolean;
+  /** Versioned `sdk-posthog-*` skill family declared on the detected framework's `FrameworkConfig.metadata.sdkSkillFamily`. */
+  frameworkSdkFamily?: string;
   /** Completion hooks, bound by the caller. */
   hooks?: RunHooks;
   scanReport?: 'flush' | 'defer'; // defer leaves the scan report to the outer run

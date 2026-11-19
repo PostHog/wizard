@@ -22,6 +22,7 @@ import type {
   TaskTimeoutBehavior,
 } from './runner/sequence/orchestrator/executor';
 import type { HostResolution } from '@shared/host-resolution';
+import type { NonDefaultSdkRef } from './runner/shared/sdk-skills';
 import {
   isThinkingLevel,
   type ThinkingLevel,
@@ -46,6 +47,10 @@ export interface OrchestratorPromptContext {
   commandmentsPath?: string;
   /** Detected facts about the project, one line each. */
   facts?: readonly string[];
+  /** Paths to resolved SDK major SKILL.md files installed for the run. */
+  sdkSkillPaths?: readonly string[];
+  /** Non-default SDK majors detected for the run (so docs/EXAMPLE.md are framed procedurally). */
+  nonDefaultSdks?: readonly NonDefaultSdkRef[];
 }
 
 function projectContext(ctx: OrchestratorPromptContext): string {
@@ -74,9 +79,46 @@ ${facts.map((fact) => `- ${fact}`).join('\n')}`;
 }
 
 /** Points the agent at the framework's reference integration to learn patterns from. */
+export function nonDefaultExampleFraming(
+  examplePath: string | undefined,
+  nonDefaultSdks?: readonly NonDefaultSdkRef[],
+): string | null {
+  if (!nonDefaultSdks?.length) return null;
+  const sdkList = nonDefaultSdks.map((s) => `${s.pkg} ${s.major}.x`).join(', ');
+  const source = examplePath
+    ? `\`${examplePath}\` and the bundled product docs`
+    : 'bundled product docs and skills';
+  return (
+    `Because this project stays on ${sdkList}, treat ${source} as guides for high-level procedures and file placement only: ` +
+    `exact function names, options, and client signatures may differ from ${sdkList}. ` +
+    `Verify every API signature, import, and initialization option against the installed SDK major skill before editing.`
+  );
+}
+
+/**
+ * The reference integration installed alongside the task skills. Present
+ * when the integration skill is available for the detected framework.
+ */
 function exampleReference(ctx: OrchestratorPromptContext): string | null {
-  if (!ctx.examplePath) return null;
+  if (!ctx.examplePath) {
+    return nonDefaultExampleFraming(undefined, ctx.nonDefaultSdks);
+  }
+  const nonDefault = nonDefaultExampleFraming(
+    ctx.examplePath,
+    ctx.nonDefaultSdks,
+  );
+  if (nonDefault) return nonDefault;
   return `A reference PostHog integration for this framework is at \`${ctx.examplePath}\`. It shows the target implementation pattern. Reference its patterns and conventions, adapting them to this codebase.`;
+}
+
+/** Exact-major SDK reference skill(s) installed for the project runtime(s). */
+export function sdkReference(sdkSkillPaths?: readonly string[]): string | null {
+  if (!sdkSkillPaths?.length) return null;
+  const list = sdkSkillPaths.map((p) => `- \`${p}\``).join('\n');
+  return (
+    `SDK major reference skill(s) for this project are installed at:\n${list}\n` +
+    `Read each SDK \`SKILL.md\` before editing PostHog SDK code, and use spot-searches (\`Grep\` for headings/symbols + bounded \`Read\` slices with \`offset\`/\`limit\`) on any \`references/*.md\` files instead of reading whole reference files.`
+  );
 }
 
 /** The framework's rules ship with the reference skill; every task follows them. */
@@ -161,6 +203,7 @@ export function assembleTaskPrompt(
     projectContext(ctx),
     exampleReference(ctx),
     commandmentsReference(ctx),
+    sdkReference(ctx.sdkSkillPaths),
     skillReference(skillPaths),
     TASK_BASICS,
     body,

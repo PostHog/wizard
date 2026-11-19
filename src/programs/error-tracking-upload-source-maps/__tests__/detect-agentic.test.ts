@@ -717,4 +717,12 @@ describe('rustSdkVerifier', () => {
     );
     expect(rustSdkVerifier(tmpDir)('.')).toBe(true);
   });
+
+  it('accepts the posthog 1.x crate directly in dependencies', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'Cargo.toml'),
+      '[package]\nname = "svc"\n\n[dependencies]\nposthog = "1.0"\n',
+    );
+    expect(rustSdkVerifier(tmpDir)('.')).toBe(true);
+  });
 });

@@ -178,7 +178,14 @@ vi.mock('@shared/skill-menu', async (original) => ({
   ...(await original<typeof import('@shared/skill-menu')>()),
   fetchSkillMenu: vi.fn().mockResolvedValue({ categories: {} }),
 }));
+vi.mock('@shared/skill-install', async (original) => ({
+  ...(await original<typeof import('@shared/skill-install')>()),
+  downloadSkill: vi.fn().mockResolvedValue({ success: true }),
+}));
 
+import { noSkillFact } from '@agent/runner/shared/sdk-skills';
+import { fetchSkillMenu } from '@shared/skill-menu';
+import { downloadSkill } from '@shared/skill-install';
 import { runAgent, RunOutcome } from '@agent/runner';
 import type { RunAgentOptions, RunConfig, RunInput } from '@agent/runner';
 import { analytics } from '@utils/analytics';
@@ -266,6 +273,8 @@ beforeEach(() => {
   vi.mocked(analytics.wizardCapture).mockClear();
   vi.mocked(initLogFile).mockClear();
   vi.mocked(flushScanReport).mockClear();
+  vi.mocked(fetchSkillMenu).mockReset().mockResolvedValue({ categories: {} });
+  vi.mocked(downloadSkill).mockReset().mockResolvedValue({ success: true });
 });
 
 afterEach(() => fs.rmSync(tmp, { recursive: true, force: true }));
@@ -1211,4 +1220,302 @@ describe('runAgent standalone', () => {
       });
     },
   );
+
+  describe('linear SDK skill resolution and cache cleanup', () => {
+    const lastPrompt = () =>
+      (harnessState.lastInputs as BackendRunInputs).prompt;
+
+    const sdkMenu = {
+      categories: {
+        integrations: [
+          {
+            id: 'integration-python',
+            name: 'Integration Python',
+            description: 'Main integration skill',
+            family: 'integration',
+            downloadUrl: 'https://skills.test/integration-python.zip',
+          },
+        ],
+        'sdk/posthog-python': [
+          {
+            id: 'posthog-python-v7',
+            name: 'PostHog Python v7',
+            description: 'Python SDK v7',
+            family: 'sdk-posthog-python',
+            tags: ['sdk-python-7', 'sdkPython:7', 'sdk-posthog-python'],
+            downloadUrl: 'https://skills.test/py7.zip',
+          },
+          {
+            id: 'posthog-python-v8',
+            name: 'PostHog Python v8',
+            description: 'Python SDK v8',
+            family: 'sdk-posthog-python',
+            tags: [
+              'sdk-python-8',
+              'sdkPython:8',
+              'sdk-posthog-python',
+              'default',
+            ],
+            downloadUrl: 'https://skills.test/py8.zip',
+          },
+        ],
+      },
+    };
+
+    const writeFakeSkillOnDownload = () => {
+      vi.mocked(downloadSkill).mockImplementation((entry, installDir, opts) => {
+        const dest = path.join(
+          installDir,
+          opts.skillsRoot ?? '.claude/skills',
+          entry.id,
+        );
+        fs.mkdirSync(dest, { recursive: true });
+        fs.writeFileSync(path.join(dest, 'SKILL.md'), `# ${entry.id}\n`);
+        return Promise.resolve({ success: true });
+      });
+    };
+
+    it('fetches menu once with run.skillId, installs non-default SDK skill, frames prompt, and cleans up cache', async () => {
+      vi.mocked(fetchSkillMenu).mockResolvedValueOnce(sdkMenu);
+      writeFakeSkillOnDownload();
+      let cachePresentDuringRun = false;
+      harnessState.run = () => {
+        cachePresentDuringRun = fs.existsSync(
+          path.join(tmp, QUEUE_DIR_NAME, 'sdk'),
+        );
+        return Promise.resolve({ kind: 'success' });
+      };
+
+      const base = config();
+      const result = await runAgent(
+        {
+          ...base,
+          run: { ...base.run, skillId: 'integration-python' },
+          routing: {
+            binding: {
+              sequence: Sequence.linear,
+              harness: Harness.pi,
+              model: DEFAULT_AGENT_MODEL,
+            },
+          },
+          matchKeys: () => ({ framework: ['fastapi'], sdkPython: ['7'] }),
+          installSdkSkills: true,
+          frameworkSdkFamily: 'sdk-posthog-python',
+        },
+        input(),
+        {},
+      );
+
+      expect(result.outcome).toBe(RunOutcome.Success);
+      expect(fetchSkillMenu).toHaveBeenCalledOnce();
+      expect(cachePresentDuringRun).toBe(true);
+      expect(fs.existsSync(path.join(tmp, QUEUE_DIR_NAME, 'sdk'))).toBe(false);
+      expect(lastPrompt()).toContain('posthog-python-v7/SKILL.md');
+      expect(lastPrompt()).toContain(
+        'high-level procedures and file placement',
+      );
+      expect(lastPrompt()).toContain('posthog-python 7.x');
+    });
+
+    it('keeps default fallback behavior (no non-default framing) when matching SDK entry is marked default', async () => {
+      vi.mocked(fetchSkillMenu).mockResolvedValueOnce(sdkMenu);
+      writeFakeSkillOnDownload();
+
+      const result = await runAgent(
+        config({
+          routing: {
+            binding: {
+              sequence: Sequence.linear,
+              harness: Harness.pi,
+              model: DEFAULT_AGENT_MODEL,
+            },
+          },
+          matchKeys: () => ({ framework: ['fastapi'], sdkPython: ['8'] }),
+          installSdkSkills: true,
+          frameworkSdkFamily: 'sdk-posthog-python',
+        }),
+        input(),
+        {},
+      );
+
+      expect(result.outcome).toBe(RunOutcome.Success);
+      expect(lastPrompt()).toContain('posthog-python-v8/SKILL.md');
+      expect(lastPrompt()).not.toContain(
+        'high-level procedures and file placement',
+      );
+    });
+
+    it('installs the default SDK skill on a greenfield run through frameworkSdkFamily alone', async () => {
+      vi.mocked(fetchSkillMenu).mockResolvedValueOnce(sdkMenu);
+      writeFakeSkillOnDownload();
+
+      const result = await runAgent(
+        config({
+          routing: {
+            binding: {
+              sequence: Sequence.linear,
+              harness: Harness.pi,
+              model: DEFAULT_AGENT_MODEL,
+            },
+          },
+          // No sdkPython key: nothing is installed to detect a major from.
+          matchKeys: () => ({ framework: ['fastapi'] }),
+          installSdkSkills: true,
+          frameworkSdkFamily: 'sdk-posthog-python',
+        }),
+        input(),
+        {},
+      );
+
+      expect(result.outcome).toBe(RunOutcome.Success);
+      expect(downloadSkill).toHaveBeenCalledOnce();
+      expect(vi.mocked(downloadSkill).mock.calls[0][0].id).toBe(
+        'posthog-python-v8',
+      );
+      expect(lastPrompt()).toContain('posthog-python-v8/SKILL.md');
+    });
+
+    it('preserves non-default framing even when SDK skill download fails', async () => {
+      vi.mocked(fetchSkillMenu).mockResolvedValueOnce(sdkMenu);
+      vi.mocked(downloadSkill).mockResolvedValueOnce({
+        success: false,
+        error: 'network error',
+      });
+
+      const result = await runAgent(
+        config({
+          routing: {
+            binding: {
+              sequence: Sequence.linear,
+              harness: Harness.pi,
+              model: DEFAULT_AGENT_MODEL,
+            },
+          },
+          matchKeys: () => ({ framework: ['fastapi'], sdkPython: ['7'] }),
+          installSdkSkills: true,
+          frameworkSdkFamily: 'sdk-posthog-python',
+        }),
+        input(),
+        {},
+      );
+
+      expect(result.outcome).toBe(RunOutcome.Success);
+      expect(lastPrompt()).not.toContain('posthog-python-v7/SKILL.md');
+      expect(lastPrompt()).toContain(
+        'high-level procedures and file placement',
+      );
+      expect(lastPrompt()).toContain('posthog-python 7.x');
+    });
+
+    it('runs without an SDK skill and says so in the prompt when the detected major has none', async () => {
+      vi.mocked(fetchSkillMenu).mockResolvedValueOnce(sdkMenu);
+
+      const result = await runAgent(
+        config({
+          routing: {
+            binding: {
+              sequence: Sequence.linear,
+              harness: Harness.pi,
+              model: DEFAULT_AGENT_MODEL,
+            },
+          },
+          matchKeys: () => ({ framework: ['fastapi'], sdkPython: ['6'] }),
+          installSdkSkills: true,
+          frameworkSdkFamily: 'sdk-posthog-python',
+        }),
+        input(),
+        {},
+      );
+
+      expect(result.outcome).toBe(RunOutcome.Success);
+      expect(downloadSkill).not.toHaveBeenCalled();
+      expect(lastPrompt()).toContain(noSkillFact('posthog-python', '6'));
+      expect(lastPrompt()).not.toContain('SKILL.md');
+    });
+
+    it('skips SDK skill resolution when installSdkSkills is not enabled', async () => {
+      const result = await runAgent(
+        config({
+          routing: {
+            binding: {
+              sequence: Sequence.linear,
+              harness: Harness.pi,
+              model: DEFAULT_AGENT_MODEL,
+            },
+          },
+          matchKeys: () => ({ framework: ['fastapi'], sdkPython: ['6'] }),
+          installSdkSkills: false,
+          frameworkSdkFamily: 'sdk-posthog-python',
+        }),
+        input(),
+        {},
+      );
+
+      expect(result.outcome).toBe(RunOutcome.Success);
+      expect(fetchSkillMenu).not.toHaveBeenCalled();
+      expect(downloadSkill).not.toHaveBeenCalled();
+    });
+
+    it('cleans up .posthog-wizard-cache/sdk even when the linear harness throws', async () => {
+      vi.mocked(fetchSkillMenu).mockResolvedValueOnce(sdkMenu);
+      writeFakeSkillOnDownload();
+      harnessState.throws = new Error('SDK boom');
+
+      const result = await runAgent(
+        config({
+          routing: {
+            binding: {
+              sequence: Sequence.linear,
+              harness: Harness.pi,
+              model: DEFAULT_AGENT_MODEL,
+            },
+          },
+          matchKeys: () => ({ framework: ['fastapi'], sdkPython: ['7'] }),
+          installSdkSkills: true,
+          frameworkSdkFamily: 'sdk-posthog-python',
+        }),
+        input(),
+        {},
+      );
+
+      expect(result.outcome).toBe(RunOutcome.Crashed);
+      expect(fs.existsSync(path.join(tmp, QUEUE_DIR_NAME, 'sdk'))).toBe(false);
+    });
+
+    it('does not delete outside target when .posthog-wizard-cache is symlinked outside installDir', async () => {
+      const outsideDir = fs.mkdtempSync(
+        path.join(os.tmpdir(), 'linear-cache-outside-'),
+      );
+      try {
+        const outsideSdk = path.join(outsideDir, 'sdk');
+        fs.mkdirSync(outsideSdk, { recursive: true });
+        fs.writeFileSync(path.join(outsideSdk, 'keep.txt'), 'intact');
+        fs.symlinkSync(outsideDir, path.join(tmp, QUEUE_DIR_NAME));
+        vi.mocked(fetchSkillMenu).mockResolvedValueOnce(sdkMenu);
+
+        const result = await runAgent(
+          config({
+            routing: {
+              binding: {
+                sequence: Sequence.linear,
+                harness: Harness.pi,
+                model: DEFAULT_AGENT_MODEL,
+              },
+            },
+            matchKeys: () => ({ framework: ['fastapi'], sdkPython: ['7'] }),
+            installSdkSkills: true,
+            frameworkSdkFamily: 'sdk-posthog-python',
+          }),
+          input(),
+          {},
+        );
+
+        expect(result.outcome).toBe(RunOutcome.Success);
+        expect(downloadSkill).not.toHaveBeenCalled();
+        expect(fs.existsSync(path.join(outsideSdk, 'keep.txt'))).toBe(true);
+      } finally {
+        fs.rmSync(outsideDir, { recursive: true, force: true });
+      }
+    });
+  });
 });

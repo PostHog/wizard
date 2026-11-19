@@ -53,11 +53,19 @@ to install, and list each one in the handoff's `packages` field, and say which
 package directory they belong in. Read the skill's install step for this, without
 running its commands: take each package, minimum version, feature and toolchain
 requirement from there. On TypeScript, name `@posthog/mcp@latest` saved exact; the
-skill's minimum is only the oldest version that works. Do not edit dependency
+skill's minimum is only the oldest version that works, and keep any existing
+`posthog-node` on its declared major (`5.x` or `6.x` — `@posthog/mcp` supports
+both). On Go (`v1` vs `/v2`) and Rust (`posthog-rs` `0.x` vs `posthog` `1.x`),
+stay on the project's declared SDK major if already present. Do not edit dependency
 manifests or write a version number you invented. If the project already declares
-one of these packages, or a dependency the skill sets a minimum for such as `rmcp`,
-with a pin or cap that can't reach its minimum, say so in your handoff. A range that
-can reach it, such as `^1.12.0` for a 1.26.0 minimum, is fine. Do not run the server.
+one of these packages, or a dependency the skill sets a minimum for such as
+`posthog` or `rmcp`, with a hard pin or cap below its minimum, say so in your
+handoff (complete as `not needed` if MCP analytics cannot run cleanly within a
+hard pin). A non-SDK dependency range that can reach its minimum, such as
+`^1.12.0` for a 1.26.0 minimum, is fine. When an existing SDK range starts below
+the skill's floor (such as `posthog>=7.40,<8` when `7.62.0` is required), name
+the bumped within-major floor (`posthog>=7.62.0,<8`) in `packages` for review
+and never cross breaking majors. Do not run the server.
 
 Skip the skill's credentials step. Use the project and host the wizard supplied
 and the env names from upstream handoffs, not the skill's

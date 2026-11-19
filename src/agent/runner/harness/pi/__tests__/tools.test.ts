@@ -3,7 +3,7 @@
  * server): sensitive text answers come back as `{secretRef}` — never the raw
  * value — and set_env_values resolves refs host-side into the .env file.
  */
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -718,5 +718,76 @@ describe('audit ledger tools', () => {
       ['init-correct', 'pending'],
       ['live-data-source-maps', 'pending'],
     ]);
+  });
+
+  it('load_skill_menu filters entries using matchKeys via filterSkillsForRun', async () => {
+    const workingDirectory = mkdtempSync(join(tmpdir(), 'pi-tools-menu-'));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            categories: {
+              'sdk/posthog-python': [
+                {
+                  id: 'sdk-posthog-python-v7',
+                  name: 'PostHog Python SDK 7.x.x reference',
+                  downloadUrl: 'https://skills.test/sdk-posthog-python-v7.zip',
+                  tags: ['sdk-python-7', 'sdkPython:7', 'sdk-posthog-python'],
+                },
+                {
+                  id: 'sdk-posthog-python-v8',
+                  name: 'PostHog Python SDK 8.x.x reference',
+                  downloadUrl: 'https://skills.test/sdk-posthog-python-v8.zip',
+                  tags: [
+                    'sdk-python-8',
+                    'sdkPython:8',
+                    'sdk-posthog-python',
+                    'default',
+                  ],
+                },
+              ],
+            },
+          }),
+      }),
+    );
+
+    try {
+      const brownfieldTools = createWizardPiTools({
+        workingDirectory,
+        skillsBaseUrl: 'https://skills.test',
+        matchKeys: () => ({ framework: ['fastapi'], sdkPython: ['7'] }),
+      });
+      const menuTool = brownfieldTools.find(
+        (t) => t.name === 'load_skill_menu',
+      );
+      if (!menuTool) throw new Error('load_skill_menu not registered');
+
+      const brownfieldOut = textOf(
+        await call(menuTool, { category: 'sdk/posthog-python' }),
+      );
+      expect(brownfieldOut).toContain('sdk-posthog-python-v7');
+      expect(brownfieldOut).not.toContain('sdk-posthog-python-v8');
+
+      const greenfieldTools = createWizardPiTools({
+        workingDirectory,
+        skillsBaseUrl: 'https://skills.test',
+        matchKeys: () => ({ framework: ['fastapi'] }),
+      });
+      const greenMenuTool = greenfieldTools.find(
+        (t) => t.name === 'load_skill_menu',
+      );
+      if (!greenMenuTool) throw new Error('load_skill_menu not registered');
+
+      const greenfieldOut = textOf(
+        await call(greenMenuTool, { category: 'sdk/posthog-python' }),
+      );
+      expect(greenfieldOut).toContain('sdk-posthog-python-v8');
+      expect(greenfieldOut).not.toContain('sdk-posthog-python-v7');
+    } finally {
+      vi.unstubAllGlobals();
+      rmSync(workingDirectory, { recursive: true, force: true });
+    }
   });
 });

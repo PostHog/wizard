@@ -78,4 +78,44 @@ describe('assemblePrompt', () => {
     });
     expect(prompt.length).toBeLessThan(full.length);
   });
+
+  it('includes SDK major reference skill paths when provided and omits when empty', () => {
+    const withPaths = assemblePrompt(makeRunDef(), {
+      ...baseCtx,
+      sdkSkillPaths: [
+        '/proj/.posthog-wizard-cache/sdk/posthog-python-v7/SKILL.md',
+      ],
+    });
+    expect(withPaths).toContain(
+      'SDK major reference skill(s) for this project are installed at:',
+    );
+    expect(withPaths).toContain(
+      '`/proj/.posthog-wizard-cache/sdk/posthog-python-v7/SKILL.md`',
+    );
+
+    const emptyPaths = assemblePrompt(makeRunDef(), {
+      ...baseCtx,
+      sdkSkillPaths: [],
+    });
+    expect(emptyPaths).not.toContain('SDK major reference skill(s)');
+  });
+
+  it('includes non-default SDK framing when nonDefaultSdks is provided and omits when empty', () => {
+    const withNonDefault = assemblePrompt(makeRunDef(), {
+      ...baseCtx,
+      nonDefaultSdks: [{ pkg: 'posthog-python', major: '7' }],
+    });
+    expect(withNonDefault).toContain(
+      'high-level procedures and file placement',
+    );
+    expect(withNonDefault).toContain('posthog-python 7.x');
+
+    const emptyNonDefault = assemblePrompt(makeRunDef(), {
+      ...baseCtx,
+      nonDefaultSdks: [],
+    });
+    expect(emptyNonDefault).not.toContain(
+      'high-level procedures and file placement',
+    );
+  });
 });

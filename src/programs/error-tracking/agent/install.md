@@ -14,7 +14,12 @@ dependsOn: []
 ## Goal
 
 Make sure the PostHog SDK is in the manifest. If it's already installed,
-leave it alone and say so in your handoff. If it isn't, install it following
+stay on its declared major (never cross breaking majors, never override hard
+pins, and only bump within the same major on an open range if a downstream
+error-tracking feature floor requires it: edit the manifest directly with the
+bumped range, keeping the upper bound at the next major, then run the manifest
+install, and never put `<` or `>` constraints in a Bash command. Note any
+pin/floor constraint in your handoff). If it isn't, install it following
 your skill — it owns the version rules, what counts as an environment failure,
 and the fallback. The package manager comes from the section below, which wins
 over your skill's own rule: the skill looks at this directory only.

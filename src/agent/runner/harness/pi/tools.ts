@@ -62,7 +62,7 @@ import {
   incompleteSkillMessage,
   installToolSkill,
 } from '../../sequence/orchestrator/repackaged-skills';
-import type { MatchKeys } from '@shared/skill-resolution';
+import { filterSkillsForRun, type MatchKeys } from '@shared/skill-resolution';
 import type { ProgressEmitter } from '../../../progress';
 import {
   isFullyCancelled,
@@ -160,7 +160,11 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
     async execute(_id, args) {
       const menu = await getSkillMenu();
       if (!menu) return text('Error: could not load the skill menu.');
-      const skills = menu.categories[args.category] ?? [];
+      const allSkills = menu.categories[args.category] ?? [];
+      const matchKeys = ctx.matchKeys?.();
+      const skills = matchKeys
+        ? filterSkillsForRun(allSkills, matchKeys)
+        : allSkills;
       if (skills.length === 0) {
         return text(`No skills found for category "${args.category}".`);
       }

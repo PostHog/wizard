@@ -1573,7 +1573,7 @@ describe('runProgram', () => {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     });
 
-    it('forwards sdk* matchKeys to runAgent when sdkSupport is enabled', async () => {
+    it('forwards sdk* matchKeys and posthogSdkFacts to runAgent when sdkSupport is enabled', async () => {
       const s = store({
         detectionComplete: true,
         frameworkContext: {
@@ -1601,11 +1601,54 @@ describe('runProgram', () => {
         credentials,
       });
 
+      expect(agentConfig().installSdkSkills).toBe(true);
       expect(agentConfig().matchKeys?.()).toMatchObject({ sdkPython: ['7'] });
-      expect(agentConfig().projectFacts?.()).toEqual(['Custom project fact']);
+      expect(agentConfig().projectFacts?.()).toEqual([
+        'Custom project fact',
+        expect.stringContaining(
+          'Existing PostHog SDK in requirements.txt: posthog==7.62.0 (>=7.40.0,<8), major 7',
+        ),
+      ]);
     });
 
-    it('omits sdk* matchKeys when sdkSupport is not enabled even if session retains integration and legacy SDKs', async () => {
+    it('forwards the framework SDK skill family on sdkSupport runs from frameworkConfig and the integration registry', async () => {
+      const family =
+        FRAMEWORK_REGISTRY[Integration.nextjs].metadata.sdkSkillFamily;
+      expect(family).toBe('sdk-posthog-node');
+      const cases: [string, Partial<WizardSession>, string | undefined][] = [
+        [
+          'frameworkConfig',
+          {
+            integration: null,
+            frameworkConfig: FRAMEWORK_REGISTRY[Integration.nextjs],
+          },
+          family,
+        ],
+        [
+          'integration registry fallback',
+          { integration: Integration.nextjs, frameworkConfig: null },
+          family,
+        ],
+        [
+          'nothing detected',
+          { integration: null, frameworkConfig: null },
+          undefined,
+        ],
+      ];
+      for (const [label, patch, expected] of cases) {
+        vi.mocked(runAgent).mockClear();
+        const s = store({ detectionComplete: true, ...patch });
+        await runProgram('metrics', {
+          store: s,
+          config: { run, sdkSupport: true },
+          credentials,
+        });
+        expect(agentConfig().installSdkSkills, label).toBe(true);
+        expect(agentConfig().frameworkSdkFamily, label).toBe(expected);
+      }
+    });
+
+    it('omits posthogSdkFacts, sdk* matchKeys, and installSdkSkills when sdkSupport is not enabled even if session retains integration and legacy SDKs', async () => {
       const s = store({
         detectionComplete: true,
         integration: Integration.nextjs,
@@ -1635,6 +1678,8 @@ describe('runProgram', () => {
       });
 
       expect(result.outcome).toBe(RunOutcome.Success);
+      expect(agentConfig().installSdkSkills).toBe(false);
+      expect(agentConfig().frameworkSdkFamily).toBeUndefined();
       expect(agentConfig().matchKeys?.()).toEqual({ framework: ['nextjs'] });
       expect(agentConfig().projectFacts?.()).toEqual(['Audit-only fact']);
     });
