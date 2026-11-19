@@ -5,6 +5,7 @@
  */
 import { describe, it, expect, vi } from 'vitest';
 import { createWizardPiTaskTools } from '../tasks';
+import { createWizardPiTools } from '../tools';
 const syncTodos = vi.fn();
 import {
   allowedPiCodingTools,
@@ -50,6 +51,24 @@ describe('allowedPiWizardTools', () => {
     const withheld = allowedPiWizardTools(['Read', 'Edit']);
     expect(withheld.has('load_skill_menu')).toBe(false);
     expect(withheld.has('install_skill')).toBe(false);
+  });
+
+  it('exposes publish_program_result only to a task whose frontmatter declares it', () => {
+    // The task path: tools built with the task's allow list, then filtered by it.
+    const taskTools = (allowedTools: string[]) => {
+      const names = allowedPiWizardTools(allowedTools);
+      return createWizardPiTools({
+        workingDirectory: '/project',
+        skillsBaseUrl: 'http://localhost:0',
+        allowedTools,
+      })
+        .filter((t) => names.has(t.name))
+        .map((t) => t.name);
+    };
+    expect(taskTools(['Read', 'publish_program_result'])).toContain(
+      'publish_program_result',
+    );
+    expect(taskTools(['Read', 'Edit'])).not.toContain('publish_program_result');
   });
 });
 

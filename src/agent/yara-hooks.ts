@@ -39,6 +39,7 @@ import { isSkillInstallCommand } from '@shared/skill-install';
 import {
   highestSeverityMatch,
   publishBlockingMatch,
+  flattenJsonForScan,
   scanVerdict,
 } from './yara-policy';
 import type { ScanAction, ScanContext } from './yara-policy';
@@ -834,14 +835,22 @@ export function createPreToolUseYaraHooks(
             // exact FQN lives in WIZARD_TOOL_NAMES (wizard-tools/tools.ts).
             if (
               typeof toolName !== 'string' ||
-              !toolName.endsWith('__publish_handoff')
+              !(
+                toolName.endsWith('__publish_handoff') ||
+                toolName.endsWith('__publish_program_result')
+              )
             ) {
               return {};
             }
 
+            // publish_program_result carries an object; its evidence strings quote the
+            // user's data, so its text clears the same bar.
             const toolInput = input.tool_input as Record<string, unknown>;
-            const content =
-              typeof toolInput?.content === 'string' ? toolInput.content : '';
+            const content = toolName.endsWith('__publish_program_result')
+              ? flattenJsonForScan(toolInput?.result)
+              : typeof toolInput?.content === 'string'
+              ? toolInput.content
+              : '';
 
             if (!content) return {};
 

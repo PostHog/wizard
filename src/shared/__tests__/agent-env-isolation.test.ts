@@ -32,6 +32,9 @@ describe('isBlockedAgentEnvKey', () => {
     // a discoverable symlink target. The task ids fingerprint the sandbox run
     // dir where that path typically sits.
     expect(isBlockedAgentEnvKey('POSTHOG_HANDOFF_OUTPUT_PATH')).toBe(true);
+    expect(isBlockedAgentEnvKey('POSTHOG_RESULT_OUTPUT_PATH')).toBe(true);
+    expect(isBlockedAgentEnvKey('POSTHOG_ACCOUNT_OWNER_NAME')).toBe(true);
+    expect(isBlockedAgentEnvKey('POSTHOG_ACCOUNT_OWNER_EMAIL')).toBe(true);
     expect(isBlockedAgentEnvKey('POSTHOG_TASK_RUN_ID')).toBe(true);
     expect(isBlockedAgentEnvKey('POSTHOG_WIZARD_RUN_ID')).toBe(true);
     expect(isBlockedAgentEnvKey('POSTHOG_TASK_ID')).toBe(true);
@@ -134,6 +137,9 @@ describe('sanitizeAgentSubprocessEnv', () => {
       //   wizard process only; leaking them fingerprints the run + the
       //   handoff output target) —
       POSTHOG_HANDOFF_OUTPUT_PATH: '/run/task-42/handoff.md',
+      POSTHOG_RESULT_OUTPUT_PATH: '/run/task-42/result.json',
+      POSTHOG_ACCOUNT_OWNER_NAME: 'Sam Example',
+      POSTHOG_ACCOUNT_OWNER_EMAIL: 'sam@example.com',
       POSTHOG_TASK_RUN_ID: 'task-42',
       POSTHOG_TASK_ID: '019abc',
       // — user-facing PostHog config the agent may need for the project .env

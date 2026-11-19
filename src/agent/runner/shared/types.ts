@@ -210,6 +210,8 @@ export interface ResolvedRunConfig {
   posthogTools?: readonly string[];
   /** Context-mill flow the orchestrator loads. Defaults to `programId`. */
   agentFlow?: string;
+  /** Orchestrator tasks see the account owner from the run's env in their project context. */
+  accountOwnerContext?: boolean;
   /** The flow's agent prompts by task type, bundled by the caller; the orchestrator fetches context-mill's otherwise. */
   agentPrompts?: () => Promise<Readonly<Record<string, string>>>;
   /** Task types the program excludes for these flags. The orchestrator adds the CI gates. */

@@ -26,6 +26,7 @@ import { config as sourceMaps } from '@programs/error-tracking-upload-source-map
 import { config as errorTracking } from '@programs/error-tracking';
 import { config as featureFlags } from '@programs/feature-flags';
 import { config as agentSkill } from '@programs/agent-skill';
+import { config as spendAudit } from '@programs/spend-audit';
 import { config as transactionalEmail } from '@programs/transactional-email';
 import { config as support } from '@programs/support';
 
@@ -42,6 +43,7 @@ export const PROGRAM_REGISTRY = [
   featureFlags,
   ...auditPrograms,
   webAnalyticsDoctor,
+  spendAudit,
   migration,
   selfDriving,
   agentSkill,
@@ -70,6 +72,7 @@ export const Program = {
   Audit: audit.id,
   EventsAudit: eventsAudit.id,
   WebAnalyticsDoctor: webAnalyticsDoctor.id,
+  SpendAudit: spendAudit.id,
   SelfDriving: selfDriving.id,
   AgentSkill: agentSkill.id,
   McpAnalytics: mcpAnalytics.id,

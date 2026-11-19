@@ -427,6 +427,7 @@ async function invokeProgram(
             handoffNotebook:
               agentRun.handoffNotebook ?? planned.config.handoffNotebook,
             agentFlow: planned.config.agentFlow,
+            accountOwnerContext: planned.config.accountOwnerContext,
             agentPrompts: planned.config.agentPrompts,
             excludedTaskTypes: planned.config.excludedTaskTypes
               ? (runFlags) =>

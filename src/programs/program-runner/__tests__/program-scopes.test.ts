@@ -62,6 +62,17 @@ describe('audit scopes', () => {
   it('can read error tracking recommendations', () => {
     expect(getOAuthScopesForProgram('audit')).toContain('error_tracking:read');
   });
+
+  // The spend audit reads flags, recordings and exceptions to size savings, and
+  // never billing: the product prices the volumes it reports.
+  it('gives the spend audit its read scopes and no billing scope', () => {
+    const scopes = getOAuthScopesForProgram('spend-audit');
+    expect(scopes).toContain('feature_flag:read');
+    expect(scopes).toContain('session_recording:read');
+    expect(scopes).toContain('error_tracking:read');
+    expect(scopes).not.toContain('feature_flag:write');
+    expect(scopes.some((scope) => scope.startsWith('billing'))).toBe(false);
+  });
 });
 
 /**
