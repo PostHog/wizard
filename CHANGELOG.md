@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.98.0](https://github.com/PostHog/wizard/compare/v2.97.0...v2.98.0) (2026-11-19)
+
+
+### Features
+
+* **switchboard:** make the orchestrator permanent for the default flow ([#1561](https://github.com/PostHog/wizard/issues/1561)) ([2885dcb](https://github.com/PostHog/wizard/commit/2885dcb1211af4157fee6638d60e77754d43c831))
+
+
+### Bug Fixes
+
+* **wizard:** ignore quoted aborts and scope migration analytics ([#1575](https://github.com/PostHog/wizard/issues/1575)) ([0e1ea8c](https://github.com/PostHog/wizard/commit/0e1ea8c0fc89fbe2765e636ab4e16cbed8e34223))
+
 ## [2.97.0](https://github.com/PostHog/wizard/compare/v2.96.0...v2.97.0) (2026-11-18)
 
 
