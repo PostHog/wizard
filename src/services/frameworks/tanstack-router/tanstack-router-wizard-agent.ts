@@ -26,6 +26,7 @@ export const TANSTACK_ROUTER_AGENT_CONFIG: FrameworkConfig<TanStackRouterContext
     metadata: {
       name: 'React (TanStack Router)',
       integration: Integration.tanstackRouter,
+      webFrontend: true,
       docsUrl: 'https://posthog.com/docs/libraries/react',
       gatherContext: async (options: WizardRunOptions) => {
         const routerMode = await getTanStackRouterMode(options);

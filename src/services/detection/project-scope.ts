@@ -19,6 +19,10 @@ import {
 import type { ProgramSession } from '@programs/program-contract';
 import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
+import {
+  applyDetectionReport,
+  joinProjectPath,
+} from '../project-discovery/traits/adapter';
 
 /** Integration framework targets for the agentic detector (id → display name). */
 const INTEGRATION_TARGETS: DetectTarget[] = Object.entries(
@@ -148,6 +152,18 @@ export async function scopeInstallDirToProject(
     return;
   }
 
+  // The report's answers become traits, read beside static detection's.
+  applyDetectionReport(
+    {
+      session,
+      setProjects: (found) => {
+        session.projects = found;
+      },
+    },
+    report,
+    'agentic',
+  );
+
   const { projects } = report;
   const recommended = projects.find((p) => p.recommended === true);
   // The event carries at most this many projects; project_count is the true total.
@@ -172,6 +188,8 @@ export async function scopeInstallDirToProject(
   }
 
   session.installDir = resolveProjectDir(session.installDir, project.path);
+  // The run now works in the picked project, so that is the run project.
+  session.runProject = joinProjectPath(session.runProject, project.path);
   captureOutcome(project.recommended ? 'recommended' : 'first-instrumentable', {
     ...scanProperties,
     chosen_framework: project.targetId,

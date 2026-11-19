@@ -99,6 +99,7 @@ function buildSupportNextSteps(credentials: Credentials): {
  * `widgetEnabled` yet), so the outro links the setting.
  */
 export const config: ProgramConfig = {
+  rankWith: ['agentic'],
   command: 'support',
   description: 'Set up PostHog Support and its in-app chat widget',
   id: 'support',

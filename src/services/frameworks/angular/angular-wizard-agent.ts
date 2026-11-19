@@ -18,6 +18,7 @@ export const ANGULAR_AGENT_CONFIG: FrameworkConfig<AngularContext> = {
   metadata: {
     name: 'Angular',
     integration: Integration.angular,
+    webFrontend: true,
     docsUrl: 'https://posthog.com/docs/libraries/angular',
   },
 

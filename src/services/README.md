@@ -135,22 +135,62 @@ separate concern and keeps "scan" throughout.
 
 ### Project traits
 
-A project is a directory in the repo with its traits. A trait is one thing
-detection read from the project's code: its framework, the framework's variant,
-whether it calls an LLM API, its MCP servers and its warehouse sources. Traits
-describe the code, never the person.
+A project is a directory in the repo with its traits. A trait is one thing the
+wizard knows about the project's code. Traits describe the code, never the
+person.
+
+| Trait              | What it says                                                                            | Static detector                                   |
+| ------------------ | --------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| `framework`        | The framework the wizard integrates                                                     | `detectFramework` and the framework configs       |
+| `frameworkVariant` | The framework's variant, such as `pages-router`                                         | The framework config's `getVariant`               |
+| `callsLlmApi`      | `yes` when an LLM SDK is a dependency                                                   | Manifest lookup                                   |
+| `mcpServers`       | Paths the MCP scan suggests as servers                                                  | The MCP scan, in the run project                  |
+| `warehouseSources` | The kinds of data source found                                                          | The tool match, assigned by path                  |
+| `posthogInstalled` | Whether a PostHog SDK is a dependency                                                   | Manifest lookup                                   |
+| `installedSdks`    | The SDKs in [`traits/sdks.ts`](project-discovery/traits/sdks.ts) the project depends on | Manifest lookup                                   |
+| `projectRole`      | `app`, `library` or `tooling`                                                           | The framework, the workspace and the package name |
+| `workspaceRoot`    | The path of the workspace root the project belongs to; its own path on a root           | Workspace markers                                 |
+| `webFrontend`      | `yes` when the project serves a web UI                                                  | The framework config's `webFrontend`              |
+| `mainApp`          | `yes` on the project a source picked as the repo's main app                             | None                                              |
 
 [`traits/registry.ts`](project-discovery/traits/registry.ts) declares every
-trait once in `TRAITS`: how static detection reads it from the session, and
-whether skills can match on it. `getTraits(session, projectPath)`, in
-[`traits/store.ts`](project-discovery/traits/store.ts), returns the traits
-detection settled and leaves out the rest. A trait is its value alone. It does
-not say whether detection or the person's answer to a setup question set it.
-Detection covers the run project, `session.runProject`, so any other path has no
-traits. `toMatchKeys`, in
+trait once in `TRAITS`: its static detector, its fallback source and its match
+key. A static detector reads one project by its path. For the run project,
+`session.runProject`, it reads what the program's own detection left on the
+session. For any other project it reads discovery: the walk's manifests, the
+workspaces, and `Discovery.detected`, the framework and warehouse sources
+discovery read in that project's directory.
+
+Four sources say what a trait is: `static` detection, `decisions`, `agentic`
+detection and the `person`. No source outranks another.
+
+- **Writing.** Every source but static detection writes through `setTrait` in
+  [`traits/store.ts`](project-discovery/traits/store.ts). The session keeps one
+  `Trait<T> = { value, source, confidence }` per source on the project, in
+  `claims`. Static detection is read each time, never kept.
+  [`traits/adapter.ts`](project-discovery/traits/adapter.ts) turns an
+  `AgenticDetectionReport`, from agentic detection or Decisions, into writes:
+  `targetId` as `framework`, `recommended` as `mainApp` and `hasPostHog` as
+  `posthogInstalled`. A path with no project becomes one.
+- **Settling.** A trait settles when its sources agree, or when the person
+  picks. When sources disagree and nobody picks, the run reads the trait's
+  fallback source, the one today's code reads for it: static detection, and for
+  `mainApp` agentic detection, else Decisions. The trait stays unsettled, and
+  `unsettledTraits` and the project's `unsettled` list say so.
+- **Selecting.** `getTraits(session, projectPath)` returns one project's settled
+  traits, and `selectProjects(session, predicate)`, in
+  [`traits/select.ts`](project-discovery/traits/select.ts), the projects whose
+  settled traits satisfy a predicate. `settleProjects` refreshes the settled
+  traits the session keeps on each project once detection has run.
+
+`toMatchKeys`, in
 [`traits/match-keys.ts`](project-discovery/traits/match-keys.ts), turns the
-traits skills can match on into the run's match keys. `framework` is the only
-one.
+traits skills can match on into match keys. A trait's `matchKey` is `true` to
+key by its own name, or the key to use: `framework` keys as `framework`, and
+`frameworkVariant` as `variant`.
+
+A program's `rankWith` names the model sources that rank its projects beside
+static detection: `decisions`, `agentic`, both or neither.
 
 ## Session store and task streams
 

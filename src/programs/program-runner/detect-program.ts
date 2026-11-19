@@ -3,7 +3,7 @@ import type { RunResult } from '@agent/types';
 import { POSTHOG_DOCS_URL } from '@shared/constants';
 import { ErrorCodes } from '@shared/errors';
 import { WizardError } from '@shared/errors/wizard-error';
-import { runDiscovery } from '@services/project-discovery';
+import { runDiscovery, settleProjects } from '@services/project-discovery';
 import { detectErrorCode } from './detect-map';
 import type { ProgramConfig } from '@programs/program-contract';
 import type { CiRunnerContext } from '@programs/program-contract';
@@ -42,6 +42,8 @@ export async function detectProgram(
   } else {
     await config.onReady?.(store.readyContext());
   }
+  // Detection has run, so the session's projects take their settled traits.
+  settleProjects(store.readyContext());
   store.setDetectionComplete();
 }
 

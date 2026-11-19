@@ -9,8 +9,11 @@ export function toMatchKeys(traits: Traits): MatchKeys {
   const keys: Record<string, readonly string[]> = {};
   for (const name of TRAIT_NAMES) {
     const value = traits[name];
-    if (value === undefined || !TRAITS[name].matchKey) continue;
-    keys[name] = Array.isArray(value) ? value.map(String) : [String(value)];
+    const { matchKey } = TRAITS[name];
+    if (value === undefined || !matchKey) continue;
+    keys[matchKey === true ? name : matchKey] = Array.isArray(value)
+      ? value.map(String)
+      : [String(value)];
   }
   return keys;
 }

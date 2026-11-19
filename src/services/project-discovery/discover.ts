@@ -9,13 +9,18 @@
  * Discovery always runs; consent only gates reporting (see `report.ts`).
  */
 
+import path from 'path';
+import type { Integration } from '@shared/constants';
 import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
 import type {
   ProgramReadyContext,
   ProgramConfig,
 } from '@programs/program-contract';
-import type { ProgramSession } from '@programs/program-contract';
+import type { ProgramSession, Project } from '@programs/program-contract';
+import { gatherFrameworkContext } from '../detection/context';
+import { detectFramework } from '../detection/framework';
+import { FRAMEWORK_REGISTRY } from '../frameworks/registry';
 import {
   toWarehouseDestinations,
   toWarehouseSources,
@@ -24,14 +29,17 @@ import { loadSourceDetectors } from '../warehouse-sources/registry';
 import type {
   DetectedDestination,
   DetectedSource,
+  SourceDetector,
 } from '../warehouse-sources/types';
 import { loadProjectDiscoveryMode } from './flag';
 import { discoverProjects, type DiscoveredProjects } from './projects';
 import {
   catalogScriptHosts,
   discoverTools,
+  type DetectedTool,
   type DiscoveredTools,
 } from './tools';
+import { getProjects } from './traits/store';
 import {
   findWorkspaceRoot,
   readScriptHosts,
@@ -59,6 +67,16 @@ export type Discovery = {
   files: RepoFiles;
   tools: DiscoveredTools;
   projects: DiscoveredProjects;
+  /** What static detection read in each project but the run project, by path. */
+  detected: Record<string, DetectedProject>;
+};
+
+/** Static detection in one project the run did not start in. */
+export type DetectedProject = {
+  framework?: Integration;
+  frameworkVariant?: string;
+  /** The kinds of data source whose signals sit in the project. */
+  warehouseSources?: string[];
 };
 
 type DiscoveryContext = Pick<
@@ -72,28 +90,123 @@ const FAILED_TOOLS: DiscoveredTools = {
   failed: true,
 };
 
+type ToolMatch = {
+  tools: DiscoveredTools;
+  detectors: readonly SourceDetector[];
+};
+
 /** The tool match, which needs the catalog download. Never throws: a failure is a `failed` match. */
 async function matchTools(
   session: ProgramSession,
   walk: RepoWalk,
-): Promise<DiscoveredTools> {
+): Promise<ToolMatch> {
   const detectors = await loadSourceDetectors(session.baseUrl);
   // No catalog means discovery could not look, which is not the same as
   // finding nothing. The loader has already reported why.
-  if (detectors.length === 0) return FAILED_TOOLS;
+  if (detectors.length === 0) return { tools: FAILED_TOOLS, detectors };
   try {
     walk.files.scriptHosts = readScriptHosts(
       walk.templates,
       catalogScriptHosts(detectors),
     );
-    return discoverTools(walk.files, detectors);
+    return { tools: discoverTools(walk.files, detectors), detectors };
   } catch (error) {
     analytics.captureException(
       error instanceof Error ? error : new Error(String(error)),
       { step: 'scanCodebase' },
     );
-    return FAILED_TOOLS;
+    return { tools: FAILED_TOOLS, detectors };
   }
+}
+
+/** Static detection runs in at most this many projects beside the run project. */
+const MAX_DETECTED_PROJECTS = 25;
+
+/** Static detection in the other projects gets this long in all; a project it has not reached stays undetected. */
+const DETECT_BUDGET_MS = 5_000;
+
+/** The framework of one project directory, with its variant when its config reads one. */
+async function detectFrameworkIn(dir: string): Promise<DetectedProject> {
+  const framework = await detectFramework(dir);
+  if (!framework) return {};
+  const { metadata } = FRAMEWORK_REGISTRY[framework];
+  if (!metadata.getVariant) return { framework };
+  const context = await gatherFrameworkContext(FRAMEWORK_REGISTRY[framework], {
+    installDir: dir,
+    ci: true,
+    debug: false,
+    benchmark: false,
+    yaraReport: false,
+    signup: false,
+  });
+  const frameworkVariant = metadata.getVariant(context);
+  return { framework, ...(frameworkVariant && { frameworkVariant }) };
+}
+
+/** The deepest project that holds `file`, both as paths from the root. */
+function projectOf(file: string, projects: readonly Project[]): string {
+  const holders = projects
+    .map((project) => project.path)
+    .filter((dir) => dir === '.' || file.startsWith(`${dir}/`));
+  return holders.sort((a, b) => b.length - a.length)[0] ?? '.';
+}
+
+/** Each project's tools: a tool belongs to every project one of its signals sits in. */
+export function toolsByProject(
+  tools: readonly DetectedTool[],
+  projects: readonly Project[],
+): Map<string, DetectedTool[]> {
+  const byProject = new Map<string, DetectedTool[]>();
+  for (const tool of tools) {
+    const owners = new Set(
+      tool.signals
+        .filter((signal) => signal.file !== null)
+        .map((signal) => projectOf(signal.file ?? '', projects)),
+    );
+    for (const owner of owners) {
+      byProject.set(owner, [...(byProject.get(owner) ?? []), tool]);
+    }
+  }
+  return byProject;
+}
+
+/** Static detection in every project but the run project: its framework, and the sources among its tools. */
+async function detectProjects(
+  rootDir: string,
+  runProject: string,
+  projects: readonly Project[],
+  match: ToolMatch,
+): Promise<Record<string, DetectedProject>> {
+  const detected: Record<string, DetectedProject> = {};
+  const others = projects
+    .map((project) => project.path)
+    .filter((projectPath) => projectPath !== runProject)
+    .slice(0, MAX_DETECTED_PROJECTS);
+  const frameworks = Promise.all(
+    others.map(async (projectPath) => {
+      detected[projectPath] = await detectFrameworkIn(
+        path.resolve(rootDir, projectPath),
+      );
+    }),
+  ).catch((error) => {
+    logToFile(`[discovery] framework detection failed: ${String(error)}`);
+  });
+  await Promise.race([
+    frameworks,
+    new Promise((resolve) => setTimeout(resolve, DETECT_BUDGET_MS).unref()),
+  ]);
+  for (const [projectPath, tools] of toolsByProject(
+    match.tools.tools,
+    projects,
+  )) {
+    const sources = toWarehouseSources(tools, match.detectors);
+    if (sources.length === 0 || projectPath === runProject) continue;
+    detected[projectPath] = {
+      ...detected[projectPath],
+      warehouseSources: sources.map((source) => source.kind),
+    };
+  }
+  return detected;
 }
 
 /**
@@ -116,15 +229,19 @@ export async function runDiscovery(
   const projects = discoverProjects(walk.files, runProject);
   ctx.setProjects(projects.projects, runProject);
 
-  const tools = await matchTools(ctx.session, walk);
+  const match = await matchTools(ctx.session, walk);
   ctx.setFrameworkContext(DISCOVERY_KEY, {
     program: config.id,
     discoveredAt: new Date().toISOString(),
     rootDir,
     runDir,
     files: walk.files,
-    tools,
+    tools: match.tools,
     projects,
+    // A snapshot: detection past its budget writes to a copy nobody reads.
+    detected: {
+      ...(await detectProjects(rootDir, runProject, projects.projects, match)),
+    },
   } satisfies Discovery);
 
   logToFile(
@@ -138,6 +255,17 @@ export async function runDiscovery(
       ` runProject=${runProject} projects=${projects.projects
         .map((project) => project.path)
         .join(',')}`,
+  );
+  // The run project's own traits settle later, once its program's detection runs.
+  logToFile(
+    `[discovery] traits ${JSON.stringify(
+      getProjects(ctx.session)
+        .filter((project) => project.path !== runProject)
+        .map(({ path: projectPath, traits }) => ({
+          path: projectPath,
+          traits,
+        })),
+    )}`,
   );
 }
 

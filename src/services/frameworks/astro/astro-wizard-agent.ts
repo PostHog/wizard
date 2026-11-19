@@ -25,6 +25,7 @@ export const ASTRO_AGENT_CONFIG: FrameworkConfig<AstroContext> = {
   metadata: {
     name: 'Astro',
     integration: Integration.astro,
+    webFrontend: true,
     docsUrl: 'https://posthog.com/docs/libraries/astro',
     gatherContext: async (options: WizardRunOptions) => {
       const renderingMode = await getAstroRenderingMode(options);

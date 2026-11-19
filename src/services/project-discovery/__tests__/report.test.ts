@@ -106,6 +106,7 @@ describe('reportDiscovery', () => {
       files: walkRepo(tmpDir),
       tools: { tools: [], complete: false, failed: true },
       projects: discoverProjects(walkRepo(tmpDir)),
+      detected: {},
     } satisfies Discovery);
     store.setCredentials(CREDENTIALS);
 
