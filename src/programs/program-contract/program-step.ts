@@ -5,7 +5,7 @@ import type { ProgramRun } from './program-run';
 import type { Integration } from '@shared/constants';
 import type { FrameworkConfig } from './framework-config';
 import type { CiRunnerContext, RunnerContext } from './runner-context';
-import type { Project } from './project-traits';
+import type { Project, Traits } from './project-traits';
 
 /** A question a program may ask the Decisions service; the catalog in `@services/detection/decisions` has exactly these keys. */
 export type DecisionQuestionKey =
@@ -198,6 +198,11 @@ export interface ProgramConfig {
    * builds only: production builds don't bundle the service.
    */
   decisions?: readonly DecisionQuestionKey[];
+  /**
+   * The projects this program applies to, as a predicate over one project's
+   * settled traits. A program without one applies to every project.
+   */
+  appliesTo?: (traits: Traits) => boolean;
   /**
    * The model sources that rank this program's projects, beside static
    * detection: Decisions, agentic detection, both, or neither. Each marks the

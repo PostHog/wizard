@@ -36,7 +36,11 @@ import { registerCleanup } from '@utils/cleanup';
 import { logToFile } from '@utils/debug';
 import { removeAuditLedger, startAuditLedgerWatcher } from '@programs/audit';
 import { FRAMEWORK_REGISTRY } from '@services/frameworks';
-import { getTraits, toMatchKeys } from '@services/project-discovery';
+import {
+  getTraits,
+  toMatchKeys,
+  toTraitKeys,
+} from '@services/project-discovery';
 import { findProgramConfig, getProgramConfig } from './program-registry';
 import { ProgramAbort } from '@programs/program-contract';
 import { detectionFailure, detectProgram } from './detect-program';
@@ -189,14 +193,24 @@ async function invokeProgram(
     );
 
   try {
-    if (!store.session.detectionComplete) {
-      await detectProgram(config, store, {
-        log: runner.log,
-        authenticate: async () => {
-          await login();
-        },
-        onProgress: emit,
-      } satisfies CiRunnerContext);
+    // A pair's project the store is not scoped to yet needs its own detection.
+    if (
+      !store.session.detectionComplete ||
+      (input.project !== undefined &&
+        input.project !== store.session.runProject)
+    ) {
+      await detectProgram(
+        config,
+        store,
+        {
+          log: runner.log,
+          authenticate: async () => {
+            await login();
+          },
+          onProgress: emit,
+        } satisfies CiRunnerContext,
+        input.project,
+      );
     }
   } catch (error) {
     // A decided stop ends the run cancelled, as main's wizardAbort({ code, message }) did.
@@ -217,6 +231,18 @@ async function invokeProgram(
   }
   const blocked = detectionFailure(config, store.session);
   if (blocked) return settle(RunOutcome.Failed, blocked);
+  // The run is one (program, project) pair: its skills resolve for its own project.
+  const pair = {
+    program: programId,
+    project: { path: store.session.runProject },
+  };
+  logToFile(
+    `[agent-runner] pair program=${pair.program} project=${
+      pair.project.path
+    } applies=${String(
+      config.appliesTo?.(getTraits(store.session, pair.project.path)) ?? true,
+    )}`,
+  );
 
   // Started before the run resolves: an audit seeds the ledger from inside its recipe.
   const installDir = store.session.installDir;
@@ -436,7 +462,10 @@ async function invokeProgram(
             seedTasks: planned.config.seedTasks
               ? () => planned.config.seedTasks!(session())
               : undefined,
-            matchKeys: () => toMatchKeys(getTraits(session())),
+            matchKeys: () =>
+              toMatchKeys(getTraits(session(), pair.project.path)),
+            traitKeys: () =>
+              toTraitKeys(getTraits(session(), pair.project.path)),
             projectFacts:
               (decisions && planned.config.decisions) ||
               planned.config.detectedFacts

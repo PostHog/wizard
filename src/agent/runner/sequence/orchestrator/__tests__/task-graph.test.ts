@@ -15,7 +15,7 @@ import { logToFile } from '@utils/debug';
 import type { GraphTask } from '../../../../agent-prompt-loader';
 import { QueueStore } from '../queue';
 import type { OrchestratorToolsContext } from '../queue-tools';
-import { planTaskGraph, queueTaskGraph } from '../task-graph';
+import { planTaskGraph, queueTaskGraph, skippedTaskTypes } from '../task-graph';
 
 const task = (
   type: string,
@@ -40,6 +40,28 @@ const without =
     !dropped.includes(type);
 const edges = (plan: ReturnType<typeof planTaskGraph>) =>
   Object.fromEntries(plan.map((t) => [t.type, t.dependsOn]));
+
+describe('skippedTaskTypes', () => {
+  const tasks = [
+    { type: 'install', skipWhen: ['posthogInstalled:yes'] },
+    { type: 'ai-observability', skipWhen: ['callsLlmApi:no'] },
+    { type: 'capture' },
+  ];
+
+  it('drops a task when one of its conditions holds for the project', () => {
+    expect(
+      skippedTaskTypes(tasks, {
+        posthogInstalled: ['yes'],
+        framework: ['vue'],
+      }),
+    ).toEqual(['install']);
+  });
+
+  it('drops nothing on a trait the project has no value for', () => {
+    expect(skippedTaskTypes(tasks, { framework: ['vue'] })).toEqual([]);
+    expect(skippedTaskTypes(tasks, { callsLlmApi: ['yes'] })).toEqual([]);
+  });
+});
 
 describe('planTaskGraph', () => {
   it('places every task after the tasks it waits for, and the sink last', () => {

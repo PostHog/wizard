@@ -33,6 +33,20 @@ function registryOf(prompts: AgentPrompt[]): AgentRegistry {
 }
 
 describe('parseAgentPrompt', () => {
+  it('reads skipWhen as key:value conditions, from a list or an inline map', () => {
+    const list = parseAgentPrompt(
+      '---\ntype: install\nskipWhen: [posthogInstalled:yes]\n---\nbody',
+      'install',
+    );
+    const map = parseAgentPrompt(
+      "---\ntype: ai\nskipWhen: { callsLlmApi: 'no' }  # an absent trait skips nothing\n---\nbody",
+      'ai',
+    );
+    expect(list.skipWhen).toEqual(['posthogInstalled:yes']);
+    expect(map.skipWhen).toEqual(['callsLlmApi:no']);
+    expect(parseAgentPrompt('body', 'review').skipWhen).toEqual([]);
+  });
+
   it('carries a task budget through resolution and ignores an unbounded or invalid budget', () => {
     const prompt = parseAgentPrompt(
       '---\ntimeoutSeconds: 600\n---\nreview',

@@ -14,6 +14,7 @@ import type { WizardFlagSnapshot } from '@shared/wizard-flags';
 /** What one invocation runs on. The caller owns the store; `runProgram` writes the run into it. */
 export interface ProgramInput {
   store: SessionStore; // launch values, detection results and run state
+  project?: string; // the pair's project, as a path from the workspace root; else the project the run started in
   config?: Partial<ProgramConfig>; // laid over the registered config
   credentials?: ResolvedProgramCredentials; // a login you hold; else the store's, else options.credentials
   runId?: string; // labels the program's own run; generated when absent

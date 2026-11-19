@@ -1,4 +1,5 @@
 /** Queues a flow with no planner prompt from the graph its frontmatter declares; see the [README](../README.md#orchestrator). */
+import type { MatchKeys } from '@shared/skill-resolution';
 import { logToFile } from '@utils/debug';
 import type { GraphTask } from '../../../agent-prompt-loader';
 import {
@@ -14,6 +15,22 @@ export class TaskGraphError extends Error {
     super(message);
     this.name = 'TaskGraphError';
   }
+}
+
+/** The task types a flow's `skipWhen` conditions drop for a project with these trait keys. A key the project has no value for drops nothing. */
+export function skippedTaskTypes(
+  tasks: readonly Pick<GraphTask, 'type' | 'skipWhen'>[],
+  traitKeys: MatchKeys,
+): string[] {
+  const holds = (condition: string): boolean => {
+    const at = condition.indexOf(':');
+    if (at <= 0) return false;
+    const values = traitKeys[condition.slice(0, at)];
+    return values?.includes(condition.slice(at + 1)) ?? false;
+  };
+  return tasks
+    .filter((task) => (task.skipWhen ?? []).some(holds))
+    .map((task) => task.type);
 }
 
 /** A task to queue, with the types it waits for. */

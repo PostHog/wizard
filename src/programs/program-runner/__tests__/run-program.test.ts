@@ -1570,4 +1570,67 @@ describe('runProgram', () => {
       expect(s.session.frameworkContext[AUDIT_CHECKS_KEY]).toEqual(checks);
     });
   });
+
+  describe('a (program, project) pair', () => {
+    let repo: string;
+
+    beforeEach(() => {
+      repo = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'pair-')));
+      const write = (file: string, content: string) => {
+        fs.mkdirSync(path.dirname(path.join(repo, file)), { recursive: true });
+        fs.writeFileSync(path.join(repo, file), content);
+      };
+      write('package.json', '{}');
+      write('pnpm-workspace.yaml', 'packages:\n  - apps/*\n');
+      write(
+        'apps/web/package.json',
+        JSON.stringify({ dependencies: { 'posthog-js': '^1.0.0' } }),
+      );
+      write('apps/api/package.json', '{}');
+    });
+
+    afterEach(() => fs.rmSync(repo, { recursive: true, force: true }));
+
+    const pairStore = () =>
+      new SessionStore(buildSession({ installDir: repo }));
+
+    it("runs in the pair's project and reads its traits", async () => {
+      const s = pairStore();
+      const result = await runProgram(
+        'metrics',
+        input({ store: s, project: 'apps/web' }),
+        { credentials: login() },
+      );
+
+      expect(result.outcome).toBe(RunOutcome.Success);
+      expect(agentInput().installDir).toBe(path.join(repo, 'apps/web'));
+      expect(s.session.runProject).toBe('apps/web');
+      expect(agentConfig().traitKeys?.()).toMatchObject({
+        posthogInstalled: ['yes'],
+        workspaceRoot: ['.'],
+      });
+    });
+
+    it('runs in the project the run started in when the caller names none', async () => {
+      const s = pairStore();
+      await runProgram('metrics', input({ store: s }), {
+        credentials: login(),
+      });
+
+      expect(agentInput().installDir).toBe(repo);
+      expect(s.session.runProject).toBe('.');
+    });
+
+    it('stops on a project discovery did not find', async () => {
+      const result = await runProgram(
+        'metrics',
+        input({ store: pairStore(), project: 'apps/missing' }),
+        { credentials: login() },
+      );
+
+      expect(result.outcome).toBe(RunOutcome.Aborted);
+      expect(result.failure?.code).toBe(ErrorCodes.DetectBadDirectory);
+      expect(runAgent).not.toHaveBeenCalled();
+    });
+  });
 });
