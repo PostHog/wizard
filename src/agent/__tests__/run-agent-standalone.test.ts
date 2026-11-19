@@ -174,31 +174,6 @@ vi.mock('@agent/runner/switchboard/harness', () => {
   };
 });
 
-vi.mock('@agent/agent-prompt-loader', async (original) => {
-  const actual = await original<typeof import('@agent/agent-prompt-loader')>();
-  return {
-    ...actual,
-    loadAgentRegistry: vi.fn(() =>
-      Promise.resolve(
-        actual.buildRegistry(
-          [
-            actual.parseAgentPrompt(
-              '---\ntype: seed\nseed: true\n---\nPlan work',
-              'seed',
-              'test-program',
-            ),
-            actual.parseAgentPrompt(
-              '---\ntype: install\nallowedTools: [wizard_ask]\n---\nInstall it',
-              'install',
-              'test-program',
-            ),
-          ],
-          'test-program',
-        ),
-      ),
-    ),
-  };
-});
 vi.mock('@shared/skill-menu', async (original) => ({
   ...(await original<typeof import('@shared/skill-menu')>()),
   fetchSkillMenu: vi.fn().mockResolvedValue({ categories: {} }),
@@ -237,6 +212,12 @@ const config = (over: Partial<RunConfig> = {}): RunConfig => ({
     binding: { sequence: Sequence.linear, harness: Harness.pi, model: 'm' },
   },
   skillsBaseUrl: 'https://skills.test',
+  agentPrompts: () =>
+    Promise.resolve({
+      seed: '---\ntype: seed\nseed: true\n---\nPlan work',
+      install:
+        '---\ntype: install\nallowedTools: [wizard_ask]\n---\nInstall it',
+    }),
   wizardFlags: {},
   wizardFlagPayloads: {},
   ...over,
@@ -1068,30 +1049,23 @@ describe('runAgent standalone', () => {
     expect(result.outro).toBeUndefined();
   });
 
-  it('runs a scan on the triage model of the harness it resolves to, and its retry on the SDK', async () => {
-    const scan = (attempt: 'first' | 'retry') =>
-      config({
-        routing: {
-          binding: {
-            sequence: Sequence.orchestrator,
-            harness: Harness.anthropic,
-            model: DEFAULT_AGENT_MODEL,
-          },
-          overrides: { harness: Harness.pi },
-          scan: attempt,
+  it('runs a scan on the triage model of the harness it resolves to', async () => {
+    const scan = config({
+      routing: {
+        binding: {
+          sequence: Sequence.orchestrator,
+          harness: Harness.anthropic,
+          model: DEFAULT_AGENT_MODEL,
         },
-      });
+        overrides: { harness: Harness.pi },
+        scan: true,
+      },
+    });
 
-    await runAgent(scan('first'), input());
+    await runAgent(scan, input());
     expect(harnessState.selected.at(-1)).toBe(Harness.pi);
     expect((harnessState.lastInputs as BackendRunInputs).model).toBe(
       triageModelFor(Harness.pi),
-    );
-
-    await runAgent(scan('retry'), input());
-    expect(harnessState.selected.at(-1)).toBe(Harness.anthropic);
-    expect((harnessState.lastInputs as BackendRunInputs).model).toBe(
-      triageModelFor(Harness.anthropic),
     );
   });
 

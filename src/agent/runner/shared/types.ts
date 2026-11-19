@@ -16,6 +16,7 @@ import type { PackageManagerDetector } from '@utils/package-manager';
 import type { ApiProject, ApiUser } from '@shared/api';
 import type { Harness, Integration, Sequence } from '@shared/constants';
 import type { ErrorCode } from '@shared/errors';
+import type { MatchKeys } from '@shared/skill-resolution';
 import type { LLMProvider } from '@posthog/warlock';
 import type { AgentInteraction, ProgressEmitter } from '../../progress';
 import type { EffortLevel } from '../switchboard/models';
@@ -158,12 +159,8 @@ export interface AgentRouting {
   overrides?: { harness?: Harness; sequence?: Sequence; model?: string };
   /** Record the decision in analytics tags and the `switchboard resolved` event. Default true. */
   record?: boolean;
-  /**
-   * A project scan: linear, on the triage model of the harness it runs on.
-   * `first` takes the harness the routing resolves to; `retry` runs the SDK, a
-   * second provider, whatever the flags say.
-   */
-  scan?: 'first' | 'retry';
+  /** A project scan: linear, on the triage model of the harness the routing resolves to. */
+  scan?: boolean;
 }
 
 /**
@@ -215,12 +212,16 @@ export interface ResolvedRunConfig {
   agentFlow?: string;
   /** Orchestrator tasks see the account owner from the run's env in their project context. */
   accountOwnerContext?: boolean;
+  /** The flow's agent prompts by task type, bundled by the caller; the orchestrator fetches context-mill's otherwise. */
+  agentPrompts?: () => Promise<Readonly<Record<string, string>>>;
   /** Task types the program excludes for these flags. The orchestrator adds the CI gates. */
   excludedTaskTypes?: (flags: Record<string, string>) => readonly string[];
   /** Tasks to queue before the orchestrator's planner runs. */
   seedTasks?: () => SeedTaskEntry[];
   /** Detected facts about the project, one line each, read when the orchestrator starts. */
   projectFacts?: () => readonly string[];
+  /** The project's traits as skill match keys, read when the orchestrator picks skills. */
+  matchKeys?: () => MatchKeys;
   /** Completion hooks, bound by the caller. */
   hooks?: RunHooks;
   scanReport?: 'flush' | 'defer'; // defer leaves the scan report to the outer run
@@ -290,6 +291,8 @@ export interface BootstrapResult {
   project: ApiProject | null;
   /** Scan-triage classifier on this run's harness. Undefined → skill scans fail closed. */
   triageProvider: LLMProvider | undefined;
+  /** The run's match keys, read when a tool installs a skill completed from the framework's pack. */
+  matchKeys: () => MatchKeys;
 }
 
 /**

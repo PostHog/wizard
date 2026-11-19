@@ -76,7 +76,8 @@ export const ApiUserSchema = z
     role_at_organization: z.string().nullish(),
 
     // Current team + organization (objects from the API, kept typed on
-    // the fields the wizard uses; passthrough preserves the rest).
+    // the fields the wizard uses; passthrough preserves the rest). Null when
+    // the credential can't reach the user's current project or organization.
     team: z
       .object({
         id: z.number(),
@@ -87,7 +88,8 @@ export const ApiUserSchema = z
         name: z.string().nullish(),
         timezone: z.string().nullish(),
       })
-      .passthrough(),
+      .passthrough()
+      .nullish(),
     organization: z
       .object({
         id: z.string().uuid(),
@@ -100,7 +102,8 @@ export const ApiUserSchema = z
         // flip) — treat null as "unknown", not "off".
         is_ai_data_processing_approved: z.boolean().nullish(),
       })
-      .passthrough(),
+      .passthrough()
+      .nullish(),
     organizations: z.array(
       z
         .object({
@@ -183,9 +186,14 @@ function isUntrustedCertError(error: unknown): error is AxiosError {
 
 const RETRY_DELAYS_MS = [500, 1500];
 
-/** No response (a network error), 5xx, 408 and 429 can heal on a retry; an untrusted certificate can't. */
+/** No response (a network error), 5xx, 408 and 429 can heal on a retry; an untrusted certificate or a cancelled request can't. */
 function isTransient(error: unknown): boolean {
-  if (!axios.isAxiosError(error) || isUntrustedCertError(error)) return false;
+  if (
+    !axios.isAxiosError(error) ||
+    error.code === AxiosError.ERR_CANCELED ||
+    isUntrustedCertError(error)
+  )
+    return false;
   const status = error.response?.status;
   // A local server that isn't answering won't start in the next two seconds.
   if (status === undefined) return !isLocalHost(error);
@@ -231,9 +239,11 @@ function failureProperties(
   };
 }
 
+/** Reads the token's user. Once `signal` aborts, it cancels the request, which ends the retries. */
 export async function fetchUserData(
   accessToken: string,
   baseUrl: string,
+  signal?: AbortSignal,
 ): Promise<ApiUser> {
   try {
     const response = await retryTransient(() =>
@@ -242,6 +252,7 @@ export async function fetchUserData(
           Authorization: `Bearer ${accessToken}`,
           'User-Agent': WIZARD_USER_AGENT,
         },
+        signal,
       }),
     );
 

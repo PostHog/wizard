@@ -2,6 +2,9 @@ import { randomUUID } from 'node:crypto';
 /**
  * Shared agent interface for PostHog wizards
  * Uses Claude Agent SDK directly with PostHog LLM gateway
+ *
+ * The SDK run path (`initializeAgent`, `runAgent`) is deprecated and unused for
+ * now; the helpers Pi shares stay live.
  */
 
 import path from 'path';
@@ -43,6 +46,7 @@ import type { AgentFailure } from './runner/shared/types';
 import type { AgentResult } from './runner/harness/types';
 import { createCustomHeaders } from '@utils/custom-headers';
 import type { HostResolution } from '@shared/host-resolution';
+import type { MatchKeys } from '@shared/skill-resolution';
 import {
   buildWizardPropertiesBlob,
   gatewayAuth,
@@ -225,6 +229,8 @@ export type AgentConfig = {
   programId: string;
   /** Whether this program's `publish_handoff` mirrors the report into a PostHog notebook. */
   handoffNotebook?: boolean;
+  /** The run's match keys, which `install_skill` picks the framework's pack with. */
+  matchKeys?: () => MatchKeys;
   /** Program identifier — selects the model for that program. */
   integrationLabel?: string;
   /**
@@ -251,9 +257,8 @@ export type AgentConfig = {
    */
   getPendingQuestion?: () => import('./progress').PendingQuestion | null;
   /**
-   * Orchestrator queue context. Present only when the `wizard-orchestrator`
-   * flag routes the run here; threaded into wizard-tools so the orchestrator
-   * tools register.
+   * Orchestrator queue context. Present only on an orchestrator run; threaded
+   * into wizard-tools so the orchestrator tools register.
    */
   orchestrator?: import('./runner/sequence/orchestrator/queue-tools').OrchestratorToolsContext;
   /**
@@ -705,6 +710,7 @@ export async function initializeAgent(
       workingDirectory: config.workingDirectory,
       detectPackageManager: config.detectPackageManager,
       skillsBaseUrl: config.skillsBaseUrl,
+      matchKeys: config.matchKeys,
       askBridge: config.askBridge,
       askMaxQuestions: config.askMaxQuestions,
       orchestrator: config.orchestrator,

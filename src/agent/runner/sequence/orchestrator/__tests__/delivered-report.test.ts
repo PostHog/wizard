@@ -24,7 +24,6 @@ vi.mock('../../../switchboard', async () => {
   return {
     resolveHarness: () => ({ harness: 'pi', model: [...VALID_MODELS][0] }),
     resolveStageOverrides: () => ({}),
-    areSeededTasksEnabled: () => false,
     getHarness: () => ({ runTask: (inputs: unknown) => harnessRun(inputs) }),
   };
 });
@@ -48,23 +47,21 @@ vi.mock('../../../../agent-prompt-loader', async (importActual) => {
   });
   return {
     ...actual,
-    loadAgentRegistry: () =>
-      Promise.resolve(
-        actual.buildRegistry(
-          [
-            prompt('plan', { seed: true }),
-            prompt('install', {
-              timeoutMs: taskTimeoutMs,
-              onTimeout: taskOnTimeout,
-            }),
-            prompt('review', {
-              timeoutMs: taskTimeoutMs,
-              onTimeout: taskOnTimeout,
-            }),
-            prompt('report', { sink: true }),
-          ],
-          'test-flow',
-        ),
+    bundledRegistry: () =>
+      actual.buildRegistry(
+        [
+          prompt('plan', { seed: true }),
+          prompt('install', {
+            timeoutMs: taskTimeoutMs,
+            onTimeout: taskOnTimeout,
+          }),
+          prompt('review', {
+            timeoutMs: taskTimeoutMs,
+            onTimeout: taskOnTimeout,
+          }),
+          prompt('report', { sink: true }),
+        ],
+        'test-flow',
       ),
   };
 });
@@ -150,6 +147,7 @@ describe('a task failing after the run report was published', () => {
         wizardFlags: {},
         wizardFlagPayloads: {},
         switchboard: {},
+        agentPrompts: () => Promise.resolve({}),
       },
       input: { installDir: dir, flags: { ci: true } },
       boot: {

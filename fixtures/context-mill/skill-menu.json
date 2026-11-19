@@ -1,0 +1,4164 @@
+{
+  "version": "1.0",
+  "buildVersion": "1.67.0",
+  "categories": {
+    "ai-observability": [
+      {
+        "id": "ai-observability-openai-python",
+        "name": "PostHog AI Observability integration for OpenAI (Python)",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/ai-observability-openai-python.zip",
+        "title": "OpenAI (Python)",
+        "description": "PostHog AI Observability integration for OpenAI (Python)",
+        "tags": [
+          "ai_observability",
+          "openai",
+          "python",
+          "framework:openai",
+          "ai-observability",
+          "default"
+        ]
+      },
+      {
+        "id": "ai-observability-openai-node",
+        "name": "PostHog AI Observability integration for OpenAI (Node)",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/ai-observability-openai-node.zip",
+        "title": "OpenAI (Node)",
+        "description": "PostHog AI Observability integration for OpenAI (Node)",
+        "tags": [
+          "ai_observability",
+          "openai",
+          "javascript_node",
+          "framework:openai",
+          "ai-observability"
+        ]
+      },
+      {
+        "id": "ai-observability-anthropic-python",
+        "name": "PostHog AI Observability integration for Anthropic (Python)",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/ai-observability-anthropic-python.zip",
+        "title": "Anthropic (Python)",
+        "description": "PostHog AI Observability integration for Anthropic (Python)",
+        "tags": [
+          "ai_observability",
+          "anthropic",
+          "python",
+          "framework:anthropic",
+          "ai-observability",
+          "default"
+        ]
+      },
+      {
+        "id": "ai-observability-anthropic-node",
+        "name": "PostHog AI Observability integration for Anthropic (Node)",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/ai-observability-anthropic-node.zip",
+        "title": "Anthropic (Node)",
+        "description": "PostHog AI Observability integration for Anthropic (Node)",
+        "tags": [
+          "ai_observability",
+          "anthropic",
+          "javascript_node",
+          "framework:anthropic",
+          "ai-observability"
+        ]
+      },
+      {
+        "id": "ai-observability-langchain-python",
+        "name": "PostHog AI Observability integration for LangChain (Python)",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/ai-observability-langchain-python.zip",
+        "title": "LangChain (Python)",
+        "description": "PostHog AI Observability integration for LangChain (Python)",
+        "tags": [
+          "ai_observability",
+          "langchain",
+          "python",
+          "framework:langchain",
+          "ai-observability",
+          "default"
+        ]
+      },
+      {
+        "id": "ai-observability-langchain-node",
+        "name": "PostHog AI Observability integration for LangChain (Node)",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/ai-observability-langchain-node.zip",
+        "title": "LangChain (Node)",
+        "description": "PostHog AI Observability integration for LangChain (Node)",
+        "tags": [
+          "ai_observability",
+          "langchain",
+          "javascript_node",
+          "framework:langchain",
+          "ai-observability"
+        ]
+      },
+      {
+        "id": "ai-observability-vercel-ai",
+        "name": "PostHog AI Observability integration for Vercel AI SDK",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/ai-observability-vercel-ai.zip",
+        "title": "Vercel AI SDK",
+        "description": "PostHog AI Observability integration for Vercel AI SDK",
+        "tags": [
+          "ai_observability",
+          "vercel-ai",
+          "javascript_node",
+          "framework:vercel-ai",
+          "ai-observability"
+        ]
+      },
+      {
+        "id": "ai-observability-google-python",
+        "name": "PostHog AI Observability integration for Google Gemini (Python)",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/ai-observability-google-python.zip",
+        "title": "Google Gemini (Python)",
+        "description": "PostHog AI Observability integration for Google Gemini (Python)",
+        "tags": [
+          "ai_observability",
+          "google-gemini",
+          "python",
+          "framework:google-gemini",
+          "ai-observability",
+          "default"
+        ]
+      },
+      {
+        "id": "ai-observability-google-node",
+        "name": "PostHog AI Observability integration for Google Gemini (Node)",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/ai-observability-google-node.zip",
+        "title": "Google Gemini (Node)",
+        "description": "PostHog AI Observability integration for Google Gemini (Node)",
+        "tags": [
+          "ai_observability",
+          "google-gemini",
+          "javascript_node",
+          "framework:google-gemini",
+          "ai-observability"
+        ]
+      },
+      {
+        "id": "ai-observability-manual-capture",
+        "name": "PostHog AI Observability using explicit $ai_generation capture calls (no auto-instrumentation)",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/ai-observability-manual-capture.zip",
+        "title": "Manual capture",
+        "description": "PostHog AI Observability using explicit $ai_generation capture calls (no auto-instrumentation)",
+        "tags": [
+          "ai_observability",
+          "manual-capture",
+          "framework:manual-capture",
+          "ai-observability"
+        ]
+      },
+      {
+        "id": "ai-observability-azure-openai-python",
+        "name": "PostHog AI Observability integration for Azure OpenAI (Python)",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/ai-observability-azure-openai-python.zip",
+        "title": "Azure OpenAI (Python)",
+        "description": "PostHog AI Observability integration for Azure OpenAI (Python)",
+        "tags": [
+          "ai_observability",
+          "azure-openai",
+          "python",
+          "framework:azure-openai",
+          "ai-observability",
+          "default"
+        ]
+      },
+      {
+        "id": "ai-observability-azure-openai-node",
+        "name": "PostHog AI Observability integration for Azure OpenAI (Node)",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/ai-observability-azure-openai-node.zip",
+        "title": "Azure OpenAI (Node)",
+        "description": "PostHog AI Observability integration for Azure OpenAI (Node)",
+        "tags": [
+          "ai_observability",
+          "azure-openai",
+          "javascript_node",
+          "framework:azure-openai",
+          "ai-observability"
+        ]
+      },
+      {
+        "id": "ai-observability-aws-bedrock-python",
+        "name": "PostHog AI Observability integration for AWS Bedrock (Python)",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/ai-observability-aws-bedrock-python.zip",
+        "title": "AWS Bedrock (Python)",
+        "description": "PostHog AI Observability integration for AWS Bedrock (Python)",
+        "tags": [
+          "ai_observability",
+          "aws-bedrock",
+          "python",
+          "framework:aws-bedrock",
+          "ai-observability",
+          "default"
+        ]
+      },
+      {
+        "id": "ai-observability-aws-bedrock-node",
+        "name": "PostHog AI Observability integration for AWS Bedrock (Node)",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/ai-observability-aws-bedrock-node.zip",
+        "title": "AWS Bedrock (Node)",
+        "description": "PostHog AI Observability integration for AWS Bedrock (Node)",
+        "tags": [
+          "ai_observability",
+          "aws-bedrock",
+          "javascript_node",
+          "framework:aws-bedrock",
+          "ai-observability"
+        ]
+      },
+      {
+        "id": "ai-observability-cerebras-python",
+        "name": "PostHog AI Observability integration for Cerebras (Python)",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/ai-observability-cerebras-python.zip",
+        "title": "Cerebras (Python)",
+        "description": "PostHog AI Observability integration for Cerebras (Python)",
+        "tags": [
+          "ai_observability",
+          "cerebras",
+          "python",
+          "framework:cerebras",
+          "ai-observability",
+          "default"
+        ]
+      },
+      {
+        "id": "ai-observability-cerebras-node",
+        "name": "PostHog AI Observability integration for Cerebras (Node)",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/ai-observability-cerebras-node.zip",
+        "title": "Cerebras (Node)",
+        "description": "PostHog AI Observability integration for Cerebras (Node)",
+        "tags": [
+          "ai_observability",
+          "cerebras",
+          "javascript_node",
+          "framework:cerebras",
+          "ai-observability"
+        ]
+      },
+      {
+        "id": "ai-observability-cohere-python",
+        "name": "PostHog AI Observability integration for Cohere (Python)",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/ai-observability-cohere-python.zip",
+        "title": "Cohere (Python)",
+        "description": "PostHog AI Observability integration for Cohere (Python)",
+        "tags": [
+          "ai_observability",
+          "cohere",
+          "python",
+          "framework:cohere",
+          "ai-observability",
+          "default"
+        ]
+      },
+      {
+        "id": "ai-observability-cohere-node",
+        "name": "PostHog AI Observability integration for Cohere (Node)",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/ai-observability-cohere-node.zip",
+        "title": "Cohere (Node)",
+        "description": "PostHog AI Observability integration for Cohere (Node)",
+        "tags": [
+          "ai_observability",
+          "cohere",
+          "javascript_node",
+          "framework:cohere",
+          "ai-observability"
+        ]
+      },
+      {
+        "id": "ai-observability-deepseek-python",
+        "name": "PostHog AI Observability integration for DeepSeek (Python)",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/ai-observability-deepseek-python.zip",
+        "title": "DeepSeek (Python)",
+        "description": "PostHog AI Observability integration for DeepSeek (Python)",
+        "tags": [
+          "ai_observability",
+          "deepseek",
+          "python",
+          "framework:deepseek",
+          "ai-observability",
+          "default"
+        ]
+      },
+      {
+        "id": "ai-observability-deepseek-node",
+        "name": "PostHog AI Observability integration for DeepSeek (Node)",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/ai-observability-deepseek-node.zip",
+        "title": "DeepSeek (Node)",
+        "description": "PostHog AI Observability integration for DeepSeek (Node)",
+        "tags": [
+          "ai_observability",
+          "deepseek",
+          "javascript_node",
+          "framework:deepseek",
+          "ai-observability"
+        ]
+      },
+      {
+        "id": "ai-observability-fireworks-ai-python",
+        "name": "PostHog AI Observability integration for Fireworks AI (Python)",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/ai-observability-fireworks-ai-python.zip",
+        "title": "Fireworks AI (Python)",
+        "description": "PostHog AI Observability integration for Fireworks AI (Python)",
+        "tags": [
+          "ai_observability",
+          "fireworks-ai",
+          "python",
+          "framework:fireworks-ai",
+          "ai-observability",
+          "default"
+        ]
+      },
+      {
+        "id": "ai-observability-fireworks-ai-node",
+        "name": "PostHog AI Observability integration for Fireworks AI (Node)",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/ai-observability-fireworks-ai-node.zip",
+        "title": "Fireworks AI (Node)",
+        "description": "PostHog AI Observability integration for Fireworks AI (Node)",
+        "tags": [
+          "ai_observability",
+          "fireworks-ai",
+          "javascript_node",
+          "framework:fireworks-ai",
+          "ai-observability"
+        ]
+      },
+      {
+        "id": "ai-observability-groq-python",
+        "name": "PostHog AI Observability integration for Groq (Python)",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/ai-observability-groq-python.zip",
+        "title": "Groq (Python)",
+        "description": "PostHog AI Observability integration for Groq (Python)",
+        "tags": [
+          "ai_observability",
+          "groq",
+          "python",
+          "framework:groq",
+          "ai-observability",
+          "default"
+        ]
+      },
+      {
+        "id": "ai-observability-groq-node",
+        "name": "PostHog AI Observability integration for Groq (Node)",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/ai-observability-groq-node.zip",
+        "title": "Groq (Node)",
+        "description": "PostHog AI Observability integration for Groq (Node)",
+        "tags": [
+          "ai_observability",
+          "groq",
+          "javascript_node",
+          "framework:groq",
+          "ai-observability"
+        ]
+      },
+      {
+        "id": "ai-observability-hugging-face-python",
+        "name": "PostHog AI Observability integration for Hugging Face (Python)",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/ai-observability-hugging-face-python.zip",
+        "title": "Hugging Face (Python)",
+        "description": "PostHog AI Observability integration for Hugging Face (Python)",
+        "tags": [
+          "ai_observability",
+          "hugging-face",
+          "python",
+          "framework:hugging-face",
+          "ai-observability",
+          "default"
+        ]
+      },
+      {
+        "id": "ai-observability-hugging-face-node",
+        "name": "PostHog AI Observability integration for Hugging Face (Node)",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/ai-observability-hugging-face-node.zip",
+        "title": "Hugging Face (Node)",
+        "description": "PostHog AI Observability integration for Hugging Face (Node)",
+        "tags": [
+          "ai_observability",
+          "hugging-face",
+          "javascript_node",
+          "framework:hugging-face",
+          "ai-observability"
+        ]
+      },
+      {
+        "id": "ai-observability-mistral-python",
+        "name": "PostHog AI Observability integration for Mistral (Python)",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/ai-observability-mistral-python.zip",
+        "title": "Mistral (Python)",
+        "description": "PostHog AI Observability integration for Mistral (Python)",
+        "tags": [
+          "ai_observability",
+          "mistral",
+          "python",
+          "framework:mistral",
+          "ai-observability",
+          "default"
+        ]
+      },
+      {
+        "id": "ai-observability-mistral-node",
+        "name": "PostHog AI Observability integration for Mistral (Node)",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/ai-observability-mistral-node.zip",
+        "title": "Mistral (Node)",
+        "description": "PostHog AI Observability integration for Mistral (Node)",
+        "tags": [
+          "ai_observability",
+          "mistral",
+          "javascript_node",
+          "framework:mistral",
+          "ai-observability"
+        ]
+      },
+      {
+        "id": "ai-observability-ollama-python",
+        "name": "PostHog AI Observability integration for Ollama (Python)",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/ai-observability-ollama-python.zip",
+        "title": "Ollama (Python)",
+        "description": "PostHog AI Observability integration for Ollama (Python)",
+        "tags": [
+          "ai_observability",
+          "ollama",
+          "python",
+          "framework:ollama",
+          "ai-observability",
+          "default"
+        ]
+      },
+      {
+        "id": "ai-observability-ollama-node",
+        "name": "PostHog AI Observability integration for Ollama (Node)",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/ai-observability-ollama-node.zip",
+        "title": "Ollama (Node)",
+        "description": "PostHog AI Observability integration for Ollama (Node)",
+        "tags": [
+          "ai_observability",
+          "ollama",
+          "javascript_node",
+          "framework:ollama",
+          "ai-observability"
+        ]
+      },
+      {
+        "id": "ai-observability-perplexity-python",
+        "name": "PostHog AI Observability integration for Perplexity (Python)",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/ai-observability-perplexity-python.zip",
+        "title": "Perplexity (Python)",
+        "description": "PostHog AI Observability integration for Perplexity (Python)",
+        "tags": [
+          "ai_observability",
+          "perplexity",
+          "python",
+          "framework:perplexity",
+          "ai-observability",
+          "default"
+        ]
+      },
+      {
+        "id": "ai-observability-perplexity-node",
+        "name": "PostHog AI Observability integration for Perplexity (Node)",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/ai-observability-perplexity-node.zip",
+        "title": "Perplexity (Node)",
+        "description": "PostHog AI Observability integration for Perplexity (Node)",
+        "tags": [
+          "ai_observability",
+          "perplexity",
+          "javascript_node",
+          "framework:perplexity",
+          "ai-observability"
+        ]
+      },
+      {
+        "id": "ai-observability-together-ai-python",
+        "name": "PostHog AI Observability integration for Together AI (Python)",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/ai-observability-together-ai-python.zip",
+        "title": "Together AI (Python)",
+        "description": "PostHog AI Observability integration for Together AI (Python)",
+        "tags": [
+          "ai_observability",
+          "together-ai",
+          "python",
+          "framework:together-ai",
+          "ai-observability",
+          "default"
+        ]
+      },
+      {
+        "id": "ai-observability-together-ai-node",
+        "name": "PostHog AI Observability integration for Together AI (Node)",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/ai-observability-together-ai-node.zip",
+        "title": "Together AI (Node)",
+        "description": "PostHog AI Observability integration for Together AI (Node)",
+        "tags": [
+          "ai_observability",
+          "together-ai",
+          "javascript_node",
+          "framework:together-ai",
+          "ai-observability"
+        ]
+      },
+      {
+        "id": "ai-observability-xai-python",
+        "name": "PostHog AI Observability integration for xAI (Python)",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/ai-observability-xai-python.zip",
+        "title": "xAI (Python)",
+        "description": "PostHog AI Observability integration for xAI (Python)",
+        "tags": [
+          "ai_observability",
+          "xai",
+          "python",
+          "framework:xai",
+          "ai-observability",
+          "default"
+        ]
+      },
+      {
+        "id": "ai-observability-xai-node",
+        "name": "PostHog AI Observability integration for xAI (Node)",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/ai-observability-xai-node.zip",
+        "title": "xAI (Node)",
+        "description": "PostHog AI Observability integration for xAI (Node)",
+        "tags": [
+          "ai_observability",
+          "xai",
+          "javascript_node",
+          "framework:xai",
+          "ai-observability"
+        ]
+      },
+      {
+        "id": "ai-observability-autogen",
+        "name": "PostHog AI Observability for AutoGen (multi-agent framework, Python)",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/ai-observability-autogen.zip",
+        "title": "AutoGen",
+        "description": "PostHog AI Observability for AutoGen (multi-agent framework, Python)",
+        "tags": [
+          "ai_observability",
+          "autogen",
+          "python",
+          "framework:autogen",
+          "ai-observability"
+        ]
+      },
+      {
+        "id": "ai-observability-claude-agent-sdk",
+        "name": "PostHog AI Observability for Anthropic's Claude Agent SDK (Python)",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/ai-observability-claude-agent-sdk.zip",
+        "title": "Claude Agent SDK",
+        "description": "PostHog AI Observability for Anthropic's Claude Agent SDK (Python)",
+        "tags": [
+          "ai_observability",
+          "claude-agent-sdk",
+          "python",
+          "framework:claude-agent-sdk",
+          "ai-observability"
+        ]
+      },
+      {
+        "id": "ai-observability-crewai",
+        "name": "PostHog AI Observability for CrewAI (multi-agent orchestration, Python)",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/ai-observability-crewai.zip",
+        "title": "CrewAI",
+        "description": "PostHog AI Observability for CrewAI (multi-agent orchestration, Python)",
+        "tags": [
+          "ai_observability",
+          "crewai",
+          "python",
+          "framework:crewai",
+          "ai-observability"
+        ]
+      },
+      {
+        "id": "ai-observability-dspy",
+        "name": "PostHog AI Observability for DSPy (Python)",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/ai-observability-dspy.zip",
+        "title": "DSPy",
+        "description": "PostHog AI Observability for DSPy (Python)",
+        "tags": [
+          "ai_observability",
+          "dspy",
+          "python",
+          "framework:dspy",
+          "ai-observability"
+        ]
+      },
+      {
+        "id": "ai-observability-llamaindex",
+        "name": "PostHog AI Observability for LlamaIndex (Python)",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/ai-observability-llamaindex.zip",
+        "title": "LlamaIndex",
+        "description": "PostHog AI Observability for LlamaIndex (Python)",
+        "tags": [
+          "ai_observability",
+          "llamaindex",
+          "python",
+          "framework:llamaindex",
+          "ai-observability"
+        ]
+      },
+      {
+        "id": "ai-observability-mirascope",
+        "name": "PostHog AI Observability for Mirascope (Python)",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/ai-observability-mirascope.zip",
+        "title": "Mirascope",
+        "description": "PostHog AI Observability for Mirascope (Python)",
+        "tags": [
+          "ai_observability",
+          "mirascope",
+          "python",
+          "framework:mirascope",
+          "ai-observability"
+        ]
+      },
+      {
+        "id": "ai-observability-openai-agents",
+        "name": "PostHog AI Observability for the OpenAI Agents SDK (Python)",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/ai-observability-openai-agents.zip",
+        "title": "OpenAI Agents SDK",
+        "description": "PostHog AI Observability for the OpenAI Agents SDK (Python)",
+        "tags": [
+          "ai_observability",
+          "openai-agents",
+          "python",
+          "framework:openai-agents",
+          "ai-observability"
+        ]
+      },
+      {
+        "id": "ai-observability-pydantic-ai",
+        "name": "PostHog AI Observability for Pydantic AI (Python)",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/ai-observability-pydantic-ai.zip",
+        "title": "Pydantic AI",
+        "description": "PostHog AI Observability for Pydantic AI (Python)",
+        "tags": [
+          "ai_observability",
+          "pydantic-ai",
+          "python",
+          "framework:pydantic-ai",
+          "ai-observability"
+        ]
+      },
+      {
+        "id": "ai-observability-semantic-kernel",
+        "name": "PostHog AI Observability for Microsoft Semantic Kernel (Python)",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/ai-observability-semantic-kernel.zip",
+        "title": "Semantic Kernel",
+        "description": "PostHog AI Observability for Microsoft Semantic Kernel (Python)",
+        "tags": [
+          "ai_observability",
+          "semantic-kernel",
+          "python",
+          "framework:semantic-kernel",
+          "ai-observability"
+        ]
+      },
+      {
+        "id": "ai-observability-smolagents",
+        "name": "PostHog AI Observability for smolagents (Python)",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/ai-observability-smolagents.zip",
+        "title": "smolagents",
+        "description": "PostHog AI Observability for smolagents (Python)",
+        "tags": [
+          "ai_observability",
+          "smolagents",
+          "python",
+          "framework:smolagents",
+          "ai-observability"
+        ]
+      },
+      {
+        "id": "ai-observability-convex",
+        "name": "PostHog AI Observability for Convex (Node, Vercel AI SDK inside)",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/ai-observability-convex.zip",
+        "title": "Convex",
+        "description": "PostHog AI Observability for Convex (Node, Vercel AI SDK inside)",
+        "tags": [
+          "ai_observability",
+          "convex",
+          "javascript_node",
+          "framework:convex",
+          "ai-observability"
+        ]
+      },
+      {
+        "id": "ai-observability-mastra",
+        "name": "PostHog AI Observability for Mastra (agent framework, Node)",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/ai-observability-mastra.zip",
+        "title": "Mastra",
+        "description": "PostHog AI Observability for Mastra (agent framework, Node)",
+        "tags": [
+          "ai_observability",
+          "mastra",
+          "javascript_node",
+          "framework:mastra",
+          "ai-observability"
+        ]
+      },
+      {
+        "id": "ai-observability-google-adk",
+        "name": "PostHog AI Observability for the Google Agent Development Kit (agent framework, Node)",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/ai-observability-google-adk.zip",
+        "title": "Google ADK",
+        "description": "PostHog AI Observability for the Google Agent Development Kit (agent framework, Node)",
+        "tags": [
+          "ai_observability",
+          "google-adk",
+          "javascript_node",
+          "framework:google-adk",
+          "ai-observability"
+        ]
+      },
+      {
+        "id": "ai-observability-instructor-python",
+        "name": "PostHog AI Observability integration for Instructor (Python)",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/ai-observability-instructor-python.zip",
+        "title": "Instructor (Python)",
+        "description": "PostHog AI Observability integration for Instructor (Python)",
+        "tags": [
+          "ai_observability",
+          "instructor",
+          "python",
+          "framework:instructor",
+          "ai-observability",
+          "default"
+        ]
+      },
+      {
+        "id": "ai-observability-instructor-node",
+        "name": "PostHog AI Observability integration for Instructor (Node)",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/ai-observability-instructor-node.zip",
+        "title": "Instructor (Node)",
+        "description": "PostHog AI Observability integration for Instructor (Node)",
+        "tags": [
+          "ai_observability",
+          "instructor",
+          "javascript_node",
+          "framework:instructor",
+          "ai-observability"
+        ]
+      },
+      {
+        "id": "ai-observability-langgraph-python",
+        "name": "PostHog AI Observability integration for LangGraph (Python)",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/ai-observability-langgraph-python.zip",
+        "title": "LangGraph (Python)",
+        "description": "PostHog AI Observability integration for LangGraph (Python)",
+        "tags": [
+          "ai_observability",
+          "langgraph",
+          "python",
+          "framework:langgraph",
+          "ai-observability",
+          "default"
+        ]
+      },
+      {
+        "id": "ai-observability-langgraph-node",
+        "name": "PostHog AI Observability integration for LangGraph (Node)",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/ai-observability-langgraph-node.zip",
+        "title": "LangGraph (Node)",
+        "description": "PostHog AI Observability integration for LangGraph (Node)",
+        "tags": [
+          "ai_observability",
+          "langgraph",
+          "javascript_node",
+          "framework:langgraph",
+          "ai-observability"
+        ]
+      },
+      {
+        "id": "ai-observability-cloudflare-ai-gateway-python",
+        "name": "PostHog AI Observability integration for Cloudflare AI Gateway (Python)",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/ai-observability-cloudflare-ai-gateway-python.zip",
+        "title": "Cloudflare AI Gateway (Python)",
+        "description": "PostHog AI Observability integration for Cloudflare AI Gateway (Python)",
+        "tags": [
+          "ai_observability",
+          "cloudflare-ai-gateway",
+          "python",
+          "framework:cloudflare-ai-gateway",
+          "ai-observability",
+          "default"
+        ]
+      },
+      {
+        "id": "ai-observability-cloudflare-ai-gateway-node",
+        "name": "PostHog AI Observability integration for Cloudflare AI Gateway (Node)",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/ai-observability-cloudflare-ai-gateway-node.zip",
+        "title": "Cloudflare AI Gateway (Node)",
+        "description": "PostHog AI Observability integration for Cloudflare AI Gateway (Node)",
+        "tags": [
+          "ai_observability",
+          "cloudflare-ai-gateway",
+          "javascript_node",
+          "framework:cloudflare-ai-gateway",
+          "ai-observability"
+        ]
+      },
+      {
+        "id": "ai-observability-helicone-python",
+        "name": "PostHog AI Observability integration for Helicone (Python)",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/ai-observability-helicone-python.zip",
+        "title": "Helicone (Python)",
+        "description": "PostHog AI Observability integration for Helicone (Python)",
+        "tags": [
+          "ai_observability",
+          "helicone",
+          "python",
+          "framework:helicone",
+          "ai-observability",
+          "default"
+        ]
+      },
+      {
+        "id": "ai-observability-helicone-node",
+        "name": "PostHog AI Observability integration for Helicone (Node)",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/ai-observability-helicone-node.zip",
+        "title": "Helicone (Node)",
+        "description": "PostHog AI Observability integration for Helicone (Node)",
+        "tags": [
+          "ai_observability",
+          "helicone",
+          "javascript_node",
+          "framework:helicone",
+          "ai-observability"
+        ]
+      },
+      {
+        "id": "ai-observability-openrouter-python",
+        "name": "PostHog AI Observability integration for OpenRouter (Python)",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/ai-observability-openrouter-python.zip",
+        "title": "OpenRouter (Python)",
+        "description": "PostHog AI Observability integration for OpenRouter (Python)",
+        "tags": [
+          "ai_observability",
+          "openrouter",
+          "python",
+          "framework:openrouter",
+          "ai-observability",
+          "default"
+        ]
+      },
+      {
+        "id": "ai-observability-openrouter-node",
+        "name": "PostHog AI Observability integration for OpenRouter (Node)",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/ai-observability-openrouter-node.zip",
+        "title": "OpenRouter (Node)",
+        "description": "PostHog AI Observability integration for OpenRouter (Node)",
+        "tags": [
+          "ai_observability",
+          "openrouter",
+          "javascript_node",
+          "framework:openrouter",
+          "ai-observability"
+        ]
+      },
+      {
+        "id": "ai-observability-portkey-python",
+        "name": "PostHog AI Observability integration for Portkey (Python)",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/ai-observability-portkey-python.zip",
+        "title": "Portkey (Python)",
+        "description": "PostHog AI Observability integration for Portkey (Python)",
+        "tags": [
+          "ai_observability",
+          "portkey",
+          "python",
+          "framework:portkey",
+          "ai-observability",
+          "default"
+        ]
+      },
+      {
+        "id": "ai-observability-portkey-node",
+        "name": "PostHog AI Observability integration for Portkey (Node)",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/ai-observability-portkey-node.zip",
+        "title": "Portkey (Node)",
+        "description": "PostHog AI Observability integration for Portkey (Node)",
+        "tags": [
+          "ai_observability",
+          "portkey",
+          "javascript_node",
+          "framework:portkey",
+          "ai-observability"
+        ]
+      },
+      {
+        "id": "ai-observability-dedalus-python",
+        "name": "PostHog AI Observability integration for Dedalus Labs (Python)",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/ai-observability-dedalus-python.zip",
+        "title": "Dedalus Labs (Python)",
+        "description": "PostHog AI Observability integration for Dedalus Labs (Python)",
+        "tags": [
+          "ai_observability",
+          "dedalus",
+          "python",
+          "framework:dedalus",
+          "ai-observability",
+          "default"
+        ]
+      },
+      {
+        "id": "ai-observability-dedalus-node",
+        "name": "PostHog AI Observability integration for Dedalus Labs (Node)",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/ai-observability-dedalus-node.zip",
+        "title": "Dedalus Labs (Node)",
+        "description": "PostHog AI Observability integration for Dedalus Labs (Node)",
+        "tags": [
+          "ai_observability",
+          "dedalus",
+          "javascript_node",
+          "framework:dedalus",
+          "ai-observability"
+        ]
+      },
+      {
+        "id": "ai-observability-litellm",
+        "name": "PostHog AI Observability for LiteLLM (unified LLM SDK / proxy, Python)",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/ai-observability-litellm.zip",
+        "title": "LiteLLM",
+        "description": "PostHog AI Observability for LiteLLM (unified LLM SDK / proxy, Python)",
+        "tags": [
+          "ai_observability",
+          "litellm",
+          "python",
+          "framework:litellm",
+          "ai-observability"
+        ]
+      },
+      {
+        "id": "ai-observability-opentelemetry-python",
+        "name": "PostHog AI Observability integration for OpenTelemetry (Python)",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/ai-observability-opentelemetry-python.zip",
+        "title": "OpenTelemetry (Python)",
+        "description": "PostHog AI Observability integration for OpenTelemetry (Python)",
+        "tags": [
+          "ai_observability",
+          "opentelemetry",
+          "python",
+          "framework:opentelemetry",
+          "ai-observability",
+          "default"
+        ]
+      },
+      {
+        "id": "ai-observability-opentelemetry-node",
+        "name": "PostHog AI Observability integration for OpenTelemetry (Node)",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/ai-observability-opentelemetry-node.zip",
+        "title": "OpenTelemetry (Node)",
+        "description": "PostHog AI Observability integration for OpenTelemetry (Node)",
+        "tags": [
+          "ai_observability",
+          "opentelemetry",
+          "javascript_node",
+          "framework:opentelemetry",
+          "ai-observability"
+        ]
+      },
+      {
+        "id": "ai-observability-opentelemetry-go",
+        "name": "PostHog AI Observability integration for OpenTelemetry (Go)",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/ai-observability-opentelemetry-go.zip",
+        "title": "OpenTelemetry (Go)",
+        "description": "PostHog AI Observability integration for OpenTelemetry (Go)",
+        "tags": [
+          "ai_observability",
+          "opentelemetry",
+          "go",
+          "framework:opentelemetry",
+          "ai-observability"
+        ]
+      },
+      {
+        "id": "ai-observability-claude-code",
+        "name": "PostHog AI Observability for Anthropic Claude Code sessions via the @posthog/ai-plugin",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/ai-observability-claude-code.zip",
+        "title": "Claude Code",
+        "description": "PostHog AI Observability for Anthropic Claude Code sessions via the @posthog/ai-plugin",
+        "tags": [
+          "ai_observability",
+          "claude-code",
+          "framework:claude-code",
+          "ai-observability"
+        ]
+      },
+      {
+        "id": "ai-observability-openclaw",
+        "name": "PostHog AI Observability for the OpenClaw self-hosted AI gateway via the @posthog/openclaw plugin",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/ai-observability-openclaw.zip",
+        "title": "OpenClaw",
+        "description": "PostHog AI Observability for the OpenClaw self-hosted AI gateway via the @posthog/openclaw plugin",
+        "tags": [
+          "ai_observability",
+          "openclaw",
+          "framework:openclaw",
+          "ai-observability"
+        ]
+      },
+      {
+        "id": "ai-observability-pi",
+        "name": "PostHog AI Observability for the Pi terminal coding agent via the @posthog/pi extension",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/ai-observability-pi.zip",
+        "title": "Pi Coding Agent",
+        "description": "PostHog AI Observability for the Pi terminal coding agent via the @posthog/pi extension",
+        "tags": [
+          "ai_observability",
+          "pi",
+          "framework:pi",
+          "ai-observability"
+        ]
+      }
+    ],
+    "audit": [
+      {
+        "id": "audit",
+        "name": "Audit an existing PostHog integration for correctness and best practices",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/audit.zip",
+        "title": "PostHog audit",
+        "description": "Audit an existing PostHog integration for correctness and best practices",
+        "tags": [
+          "best-practices",
+          "audit"
+        ]
+      }
+    ],
+    "audit-attribution": [
+      {
+        "id": "audit-attribution",
+        "name": "Audit a PostHog integration's marketing attribution capture for UTM survival, click-id coverage, cross-subdomain identity, and consent/cookieless interactions",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/audit-attribution.zip",
+        "title": "PostHog audit — attribution",
+        "description": "Audit a PostHog integration's marketing attribution capture for UTM survival, click-id coverage, cross-subdomain identity, and consent/cookieless interactions",
+        "tags": [
+          "best-practices",
+          "audit-attribution"
+        ]
+      }
+    ],
+    "audit-autocapture": [
+      {
+        "id": "audit-autocapture",
+        "name": "Audit a PostHog autocapture setup for correctness and cost-optimization opportunities",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/audit-autocapture.zip",
+        "title": "PostHog audit — autocapture",
+        "description": "Audit a PostHog autocapture setup for correctness and cost-optimization opportunities",
+        "tags": [
+          "best-practices",
+          "audit-autocapture"
+        ]
+      }
+    ],
+    "audit-events": [
+      {
+        "id": "audit-events",
+        "name": "Audit a PostHog integration's event capture quality and cost-optimization opportunities",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/audit-events.zip",
+        "title": "PostHog audit — events",
+        "description": "Audit a PostHog integration's event capture quality and cost-optimization opportunities",
+        "tags": [
+          "best-practices",
+          "audit-events"
+        ]
+      }
+    ],
+    "audit-feature-flags": [
+      {
+        "id": "audit-feature-flags",
+        "name": "Audit a PostHog integration's feature flag usage for correctness and cost-optimization opportunities",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/audit-feature-flags.zip",
+        "title": "PostHog audit — feature flags",
+        "description": "Audit a PostHog integration's feature flag usage for correctness and cost-optimization opportunities",
+        "tags": [
+          "best-practices",
+          "audit-feature-flags"
+        ]
+      }
+    ],
+    "audit-identify": [
+      {
+        "id": "audit-identify",
+        "name": "Audit a PostHog integration's $identify implementation for correctness and cost-optimization opportunities",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/audit-identify.zip",
+        "title": "PostHog audit — identify",
+        "description": "Audit a PostHog integration's $identify implementation for correctness and cost-optimization opportunities",
+        "tags": [
+          "best-practices",
+          "audit-identify"
+        ]
+      }
+    ],
+    "audit-session-replay": [
+      {
+        "id": "audit-session-replay",
+        "name": "Audit a PostHog session replay setup for correctness and cost-optimization opportunities",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/audit-session-replay.zip",
+        "title": "PostHog audit — session replay",
+        "description": "Audit a PostHog session replay setup for correctness and cost-optimization opportunities",
+        "tags": [
+          "best-practices",
+          "audit-session-replay"
+        ]
+      }
+    ],
+    "creating-product-tours": [
+      {
+        "id": "creating-product-tours",
+        "name": "Build an in-app product tour that guides users through a feature inside the user's own application. Targeting via PostHog feature flags, tracking via PostHog events, custom reusable UI components. Use when a user asks to create a product tour, onboarding walkthrough, feature spotlight, or step-by-step guide in their app.",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/creating-product-tours.zip",
+        "title": "Creating product tours",
+        "description": "Build an in-app product tour that guides users through a feature inside the user's own application. Targeting via PostHog feature flags, tracking via PostHog events, custom reusable UI components. Use when a user asks to create a product tour, onboarding walkthrough, feature spotlight, or step-by-step guide in their app.",
+        "tags": [
+          "product-tours",
+          "feature-flags",
+          "product-analytics",
+          "creating-product-tours"
+        ]
+      }
+    ],
+    "data-warehouse-destination": [
+      {
+        "id": "data-warehouse-destination-setup",
+        "name": "Send PostHog events to the user's own data warehouse with a batch export",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/data-warehouse-destination-setup.zip",
+        "title": "Data Warehouse Destination Setup",
+        "description": "Send PostHog events to the user's own data warehouse with a batch export",
+        "tags": [
+          "data-warehouse",
+          "batch-exports",
+          "destinations",
+          "data-warehouse-destination"
+        ]
+      }
+    ],
+    "data-warehouse-source": [
+      {
+        "id": "data-warehouse-source-setup",
+        "name": "Connect a detected data source to the PostHog data warehouse",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/data-warehouse-source-setup.zip",
+        "title": "Data Warehouse Source Setup",
+        "description": "Connect a detected data source to the PostHog data warehouse",
+        "tags": [
+          "data-warehouse",
+          "sources",
+          "postgres",
+          "stripe",
+          "data-warehouse-source"
+        ]
+      }
+    ],
+    "error-tracking": [
+      {
+        "id": "error-tracking-react",
+        "name": "PostHog error tracking for React",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/error-tracking-react.zip",
+        "title": "React",
+        "description": "PostHog error tracking for React",
+        "tags": [
+          "error-tracking",
+          "react",
+          "javascript"
+        ]
+      },
+      {
+        "id": "error-tracking-web",
+        "name": "PostHog error tracking for Web (JavaScript)",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/error-tracking-web.zip",
+        "title": "Web (JavaScript)",
+        "description": "PostHog error tracking for Web (JavaScript)",
+        "tags": [
+          "error-tracking",
+          "javascript_web",
+          "javascript"
+        ]
+      },
+      {
+        "id": "error-tracking-nextjs",
+        "name": "PostHog error tracking for Next.js",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/error-tracking-nextjs.zip",
+        "title": "Next.js",
+        "description": "PostHog error tracking for Next.js",
+        "tags": [
+          "error-tracking",
+          "nextjs",
+          "react",
+          "javascript"
+        ]
+      },
+      {
+        "id": "error-tracking-node",
+        "name": "PostHog error tracking for Node.js",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/error-tracking-node.zip",
+        "title": "Node.js",
+        "description": "PostHog error tracking for Node.js",
+        "tags": [
+          "error-tracking",
+          "javascript_node",
+          "javascript"
+        ]
+      },
+      {
+        "id": "error-tracking-python",
+        "name": "PostHog error tracking for Python",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/error-tracking-python.zip",
+        "title": "Python",
+        "description": "PostHog error tracking for Python",
+        "tags": [
+          "error-tracking",
+          "python"
+        ]
+      },
+      {
+        "id": "error-tracking-django",
+        "name": "PostHog error tracking for Django",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/error-tracking-django.zip",
+        "title": "Django",
+        "description": "PostHog error tracking for Django",
+        "tags": [
+          "error-tracking",
+          "django",
+          "python"
+        ]
+      },
+      {
+        "id": "error-tracking-flask",
+        "name": "PostHog error tracking for Flask",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/error-tracking-flask.zip",
+        "title": "Flask",
+        "description": "PostHog error tracking for Flask",
+        "tags": [
+          "error-tracking",
+          "flask",
+          "python"
+        ]
+      },
+      {
+        "id": "error-tracking-php",
+        "name": "PostHog error tracking for PHP",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/error-tracking-php.zip",
+        "title": "PHP",
+        "description": "PostHog error tracking for PHP",
+        "tags": [
+          "error-tracking",
+          "php"
+        ]
+      },
+      {
+        "id": "error-tracking-laravel",
+        "name": "PostHog error tracking for Laravel",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/error-tracking-laravel.zip",
+        "title": "Laravel",
+        "description": "PostHog error tracking for Laravel",
+        "tags": [
+          "error-tracking",
+          "laravel",
+          "php"
+        ]
+      },
+      {
+        "id": "error-tracking-wordpress",
+        "name": "PostHog error tracking for WordPress",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/error-tracking-wordpress.zip",
+        "title": "WordPress",
+        "description": "PostHog error tracking for WordPress",
+        "tags": [
+          "error-tracking",
+          "wordpress",
+          "php",
+          "cms"
+        ]
+      },
+      {
+        "id": "error-tracking-ruby",
+        "name": "PostHog error tracking for Ruby",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/error-tracking-ruby.zip",
+        "title": "Ruby",
+        "description": "PostHog error tracking for Ruby",
+        "tags": [
+          "error-tracking",
+          "ruby"
+        ]
+      },
+      {
+        "id": "error-tracking-ruby-on-rails",
+        "name": "PostHog error tracking for Ruby on Rails",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/error-tracking-ruby-on-rails.zip",
+        "title": "Ruby on Rails",
+        "description": "PostHog error tracking for Ruby on Rails",
+        "tags": [
+          "error-tracking",
+          "ruby-on-rails",
+          "ruby"
+        ]
+      },
+      {
+        "id": "error-tracking-go",
+        "name": "PostHog error tracking for Go",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/error-tracking-go.zip",
+        "title": "Go",
+        "description": "PostHog error tracking for Go",
+        "tags": [
+          "error-tracking",
+          "go"
+        ]
+      },
+      {
+        "id": "error-tracking-rust",
+        "name": "PostHog error tracking for Rust",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/error-tracking-rust.zip",
+        "title": "Rust",
+        "description": "PostHog error tracking for Rust",
+        "tags": [
+          "error-tracking",
+          "rust"
+        ]
+      },
+      {
+        "id": "error-tracking-dotnet",
+        "name": "PostHog error tracking for .NET / ASP.NET Core",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/error-tracking-dotnet.zip",
+        "title": ".NET / ASP.NET Core",
+        "description": "PostHog error tracking for .NET / ASP.NET Core",
+        "tags": [
+          "error-tracking",
+          "dotnet",
+          "aspnetcore",
+          "csharp"
+        ]
+      },
+      {
+        "id": "error-tracking-elixir",
+        "name": "PostHog error tracking for Elixir",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/error-tracking-elixir.zip",
+        "title": "Elixir",
+        "description": "PostHog error tracking for Elixir",
+        "tags": [
+          "error-tracking",
+          "elixir"
+        ]
+      },
+      {
+        "id": "error-tracking-angular",
+        "name": "PostHog error tracking for Angular",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/error-tracking-angular.zip",
+        "title": "Angular",
+        "description": "PostHog error tracking for Angular",
+        "tags": [
+          "error-tracking",
+          "angular",
+          "javascript"
+        ]
+      },
+      {
+        "id": "error-tracking-svelte",
+        "name": "PostHog error tracking for Svelte",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/error-tracking-svelte.zip",
+        "title": "Svelte",
+        "description": "PostHog error tracking for Svelte",
+        "tags": [
+          "error-tracking",
+          "sveltekit",
+          "javascript"
+        ]
+      },
+      {
+        "id": "error-tracking-nuxt",
+        "name": "PostHog error tracking for Nuxt",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/error-tracking-nuxt.zip",
+        "title": "Nuxt",
+        "description": "PostHog error tracking for Nuxt",
+        "tags": [
+          "error-tracking",
+          "nuxt",
+          "javascript"
+        ]
+      },
+      {
+        "id": "error-tracking-react-native",
+        "name": "PostHog error tracking for React Native",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/error-tracking-react-native.zip",
+        "title": "React Native",
+        "description": "PostHog error tracking for React Native",
+        "tags": [
+          "error-tracking",
+          "react-native",
+          "javascript"
+        ]
+      },
+      {
+        "id": "error-tracking-flutter",
+        "name": "PostHog error tracking for Flutter",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/error-tracking-flutter.zip",
+        "title": "Flutter",
+        "description": "PostHog error tracking for Flutter",
+        "tags": [
+          "error-tracking",
+          "flutter",
+          "dart"
+        ]
+      },
+      {
+        "id": "error-tracking-ios",
+        "name": "PostHog error tracking for iOS",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/error-tracking-ios.zip",
+        "title": "iOS",
+        "description": "PostHog error tracking for iOS",
+        "tags": [
+          "error-tracking",
+          "ios",
+          "swift"
+        ]
+      },
+      {
+        "id": "error-tracking-android",
+        "name": "PostHog error tracking for Android",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/error-tracking-android.zip",
+        "title": "Android",
+        "description": "PostHog error tracking for Android",
+        "tags": [
+          "error-tracking",
+          "android",
+          "java",
+          "kotlin"
+        ]
+      },
+      {
+        "id": "error-tracking-hono",
+        "name": "PostHog error tracking for Hono",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/error-tracking-hono.zip",
+        "title": "Hono",
+        "description": "PostHog error tracking for Hono",
+        "tags": [
+          "error-tracking",
+          "javascript"
+        ]
+      }
+    ],
+    "error-tracking-link-releases": [
+      {
+        "id": "error-tracking-link-releases-python",
+        "name": "Link each production deploy to a PostHog Error Tracking release for Python",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/error-tracking-link-releases-python.zip",
+        "title": "Python",
+        "description": "Link each production deploy to a PostHog Error Tracking release for Python",
+        "tags": [
+          "error-tracking",
+          "releases",
+          "python",
+          "error-tracking-link-releases"
+        ]
+      },
+      {
+        "id": "error-tracking-link-releases-ruby",
+        "name": "Link each production deploy to a PostHog Error Tracking release for Ruby",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/error-tracking-link-releases-ruby.zip",
+        "title": "Ruby",
+        "description": "Link each production deploy to a PostHog Error Tracking release for Ruby",
+        "tags": [
+          "error-tracking",
+          "releases",
+          "ruby",
+          "error-tracking-link-releases"
+        ]
+      },
+      {
+        "id": "error-tracking-link-releases-php",
+        "name": "Link each production deploy to a PostHog Error Tracking release for PHP",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/error-tracking-link-releases-php.zip",
+        "title": "PHP",
+        "description": "Link each production deploy to a PostHog Error Tracking release for PHP",
+        "tags": [
+          "error-tracking",
+          "releases",
+          "php",
+          "error-tracking-link-releases"
+        ]
+      }
+    ],
+    "error-tracking-upload-source-maps": [
+      {
+        "id": "error-tracking-upload-source-maps-web",
+        "name": "Upload source maps to PostHog Error Tracking for Web (JavaScript)",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/error-tracking-upload-source-maps-web.zip",
+        "title": "Web (JavaScript)",
+        "description": "Upload source maps to PostHog Error Tracking for Web (JavaScript)",
+        "tags": [
+          "error-tracking",
+          "source-maps",
+          "javascript_web",
+          "javascript",
+          "error-tracking-upload-source-maps"
+        ]
+      },
+      {
+        "id": "error-tracking-upload-source-maps-nextjs",
+        "name": "Upload source maps to PostHog Error Tracking for Next.js",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/error-tracking-upload-source-maps-nextjs.zip",
+        "title": "Next.js",
+        "description": "Upload source maps to PostHog Error Tracking for Next.js",
+        "tags": [
+          "error-tracking",
+          "source-maps",
+          "nextjs",
+          "react",
+          "javascript",
+          "error-tracking-upload-source-maps"
+        ]
+      },
+      {
+        "id": "error-tracking-upload-source-maps-node",
+        "name": "Upload source maps to PostHog Error Tracking for Node.js",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/error-tracking-upload-source-maps-node.zip",
+        "title": "Node.js",
+        "description": "Upload source maps to PostHog Error Tracking for Node.js",
+        "tags": [
+          "error-tracking",
+          "source-maps",
+          "javascript_node",
+          "javascript",
+          "error-tracking-upload-source-maps"
+        ]
+      },
+      {
+        "id": "error-tracking-upload-source-maps-react",
+        "name": "Upload source maps to PostHog Error Tracking for React",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/error-tracking-upload-source-maps-react.zip",
+        "title": "React",
+        "description": "Upload source maps to PostHog Error Tracking for React",
+        "tags": [
+          "error-tracking",
+          "source-maps",
+          "react",
+          "javascript",
+          "error-tracking-upload-source-maps"
+        ]
+      },
+      {
+        "id": "error-tracking-upload-source-maps-angular",
+        "name": "Upload source maps to PostHog Error Tracking for Angular",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/error-tracking-upload-source-maps-angular.zip",
+        "title": "Angular",
+        "description": "Upload source maps to PostHog Error Tracking for Angular",
+        "tags": [
+          "error-tracking",
+          "source-maps",
+          "angular",
+          "javascript",
+          "error-tracking-upload-source-maps"
+        ]
+      },
+      {
+        "id": "error-tracking-upload-source-maps-nuxt",
+        "name": "Upload source maps to PostHog Error Tracking for Nuxt",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/error-tracking-upload-source-maps-nuxt.zip",
+        "title": "Nuxt",
+        "description": "Upload source maps to PostHog Error Tracking for Nuxt",
+        "tags": [
+          "error-tracking",
+          "source-maps",
+          "nuxt",
+          "vue",
+          "javascript",
+          "error-tracking-upload-source-maps"
+        ]
+      },
+      {
+        "id": "error-tracking-upload-source-maps-react-native",
+        "name": "Upload source maps to PostHog Error Tracking for React Native",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/error-tracking-upload-source-maps-react-native.zip",
+        "title": "React Native",
+        "description": "Upload source maps to PostHog Error Tracking for React Native",
+        "tags": [
+          "error-tracking",
+          "source-maps",
+          "react-native",
+          "javascript",
+          "error-tracking-upload-source-maps"
+        ]
+      },
+      {
+        "id": "error-tracking-upload-source-maps-android",
+        "name": "Upload ProGuard / R8 mapping files to PostHog Error Tracking for Android",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/error-tracking-upload-source-maps-android.zip",
+        "title": "Android",
+        "description": "Upload ProGuard / R8 mapping files to PostHog Error Tracking for Android",
+        "tags": [
+          "error-tracking",
+          "source-maps",
+          "android",
+          "java",
+          "kotlin",
+          "error-tracking-upload-source-maps"
+        ]
+      },
+      {
+        "id": "error-tracking-upload-source-maps-flutter",
+        "name": "Upload Flutter debug symbols to PostHog Error Tracking",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/error-tracking-upload-source-maps-flutter.zip",
+        "title": "Flutter",
+        "description": "Upload Flutter debug symbols to PostHog Error Tracking",
+        "tags": [
+          "error-tracking",
+          "source-maps",
+          "flutter",
+          "dart",
+          "error-tracking-upload-source-maps"
+        ]
+      },
+      {
+        "id": "error-tracking-upload-source-maps-ios",
+        "name": "Upload dSYM debug symbols to PostHog Error Tracking for iOS",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/error-tracking-upload-source-maps-ios.zip",
+        "title": "iOS",
+        "description": "Upload dSYM debug symbols to PostHog Error Tracking for iOS",
+        "tags": [
+          "error-tracking",
+          "source-maps",
+          "ios",
+          "swift",
+          "error-tracking-upload-source-maps"
+        ]
+      },
+      {
+        "id": "error-tracking-upload-source-maps-go",
+        "name": "Upload native debug symbols to PostHog Error Tracking for Go",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/error-tracking-upload-source-maps-go.zip",
+        "title": "Go",
+        "description": "Upload native debug symbols to PostHog Error Tracking for Go",
+        "tags": [
+          "error-tracking",
+          "source-maps",
+          "go",
+          "error-tracking-upload-source-maps"
+        ]
+      },
+      {
+        "id": "error-tracking-upload-source-maps-rust",
+        "name": "Upload native debug symbols to PostHog Error Tracking for Rust",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/error-tracking-upload-source-maps-rust.zip",
+        "title": "Rust",
+        "description": "Upload native debug symbols to PostHog Error Tracking for Rust",
+        "tags": [
+          "error-tracking",
+          "source-maps",
+          "rust",
+          "error-tracking-upload-source-maps"
+        ]
+      },
+      {
+        "id": "error-tracking-upload-source-maps-vite",
+        "name": "Upload source maps to PostHog Error Tracking for Vite",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/error-tracking-upload-source-maps-vite.zip",
+        "title": "Vite",
+        "description": "Upload source maps to PostHog Error Tracking for Vite",
+        "tags": [
+          "error-tracking",
+          "source-maps",
+          "vite",
+          "javascript",
+          "error-tracking-upload-source-maps"
+        ]
+      },
+      {
+        "id": "error-tracking-upload-source-maps-webpack",
+        "name": "Upload source maps to PostHog Error Tracking for Webpack",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/error-tracking-upload-source-maps-webpack.zip",
+        "title": "Webpack",
+        "description": "Upload source maps to PostHog Error Tracking for Webpack",
+        "tags": [
+          "error-tracking",
+          "source-maps",
+          "webpack",
+          "javascript",
+          "error-tracking-upload-source-maps"
+        ]
+      },
+      {
+        "id": "error-tracking-upload-source-maps-rollup",
+        "name": "Upload source maps to PostHog Error Tracking for Rollup",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/error-tracking-upload-source-maps-rollup.zip",
+        "title": "Rollup",
+        "description": "Upload source maps to PostHog Error Tracking for Rollup",
+        "tags": [
+          "error-tracking",
+          "source-maps",
+          "rollup",
+          "javascript",
+          "error-tracking-upload-source-maps"
+        ]
+      }
+    ],
+    "events-audit": [
+      {
+        "id": "events-audit",
+        "name": "Audit PostHog events in a codebase — produce an inventory of every captured event mapped to its file, area, and 30-day volume for the product team to query",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/events-audit.zip",
+        "title": "PostHog events audit",
+        "description": "Audit PostHog events in a codebase — produce an inventory of every captured event mapped to its file, area, and 30-day volume for the product team to query",
+        "tags": [
+          "analytics",
+          "audit",
+          "best-practices",
+          "events-audit"
+        ]
+      }
+    ],
+    "feature-flags": [
+      {
+        "id": "feature-flags-react",
+        "name": "PostHog feature flags for React applications",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/feature-flags-react.zip",
+        "title": "React",
+        "description": "PostHog feature flags for React applications",
+        "tags": [
+          "feature-flags",
+          "react",
+          "javascript"
+        ]
+      },
+      {
+        "id": "feature-flags-nextjs",
+        "name": "PostHog feature flags for Next.js applications",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/feature-flags-nextjs.zip",
+        "title": "Next.js",
+        "description": "PostHog feature flags for Next.js applications",
+        "tags": [
+          "feature-flags",
+          "nextjs",
+          "nextjs-feature-flags",
+          "react",
+          "javascript"
+        ]
+      },
+      {
+        "id": "feature-flags-react-native",
+        "name": "PostHog feature flags for React Native applications",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/feature-flags-react-native.zip",
+        "title": "React Native",
+        "description": "PostHog feature flags for React Native applications",
+        "tags": [
+          "feature-flags",
+          "react",
+          "react-native",
+          "javascript"
+        ]
+      },
+      {
+        "id": "feature-flags-web",
+        "name": "PostHog feature flags for Web (JavaScript) applications",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/feature-flags-web.zip",
+        "title": "Web (JavaScript)",
+        "description": "PostHog feature flags for Web (JavaScript) applications",
+        "tags": [
+          "feature-flags",
+          "javascript"
+        ]
+      },
+      {
+        "id": "feature-flags-nodejs",
+        "name": "PostHog feature flags for Node.js applications",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/feature-flags-nodejs.zip",
+        "title": "Node.js",
+        "description": "PostHog feature flags for Node.js applications",
+        "tags": [
+          "feature-flags",
+          "javascript"
+        ]
+      },
+      {
+        "id": "feature-flags-python",
+        "name": "PostHog feature flags for Python applications",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/feature-flags-python.zip",
+        "title": "Python",
+        "description": "PostHog feature flags for Python applications",
+        "tags": [
+          "feature-flags",
+          "python"
+        ]
+      },
+      {
+        "id": "feature-flags-django",
+        "name": "PostHog feature flags for Django applications",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/feature-flags-django.zip",
+        "title": "Django",
+        "description": "PostHog feature flags for Django applications",
+        "tags": [
+          "feature-flags",
+          "django",
+          "python"
+        ]
+      },
+      {
+        "id": "feature-flags-flask",
+        "name": "PostHog feature flags for Flask applications",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/feature-flags-flask.zip",
+        "title": "Flask",
+        "description": "PostHog feature flags for Flask applications",
+        "tags": [
+          "feature-flags",
+          "flask",
+          "python"
+        ]
+      },
+      {
+        "id": "feature-flags-php",
+        "name": "PostHog feature flags for PHP applications",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/feature-flags-php.zip",
+        "title": "PHP",
+        "description": "PostHog feature flags for PHP applications",
+        "tags": [
+          "feature-flags",
+          "php"
+        ]
+      },
+      {
+        "id": "feature-flags-laravel",
+        "name": "PostHog feature flags for Laravel applications",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/feature-flags-laravel.zip",
+        "title": "Laravel",
+        "description": "PostHog feature flags for Laravel applications",
+        "tags": [
+          "feature-flags",
+          "laravel",
+          "php"
+        ]
+      },
+      {
+        "id": "feature-flags-wordpress",
+        "name": "PostHog feature flags for WordPress applications",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/feature-flags-wordpress.zip",
+        "title": "WordPress",
+        "description": "PostHog feature flags for WordPress applications",
+        "tags": [
+          "feature-flags",
+          "wordpress",
+          "php",
+          "cms"
+        ]
+      },
+      {
+        "id": "feature-flags-ruby",
+        "name": "PostHog feature flags for Ruby applications",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/feature-flags-ruby.zip",
+        "title": "Ruby",
+        "description": "PostHog feature flags for Ruby applications",
+        "tags": [
+          "feature-flags",
+          "ruby"
+        ]
+      },
+      {
+        "id": "feature-flags-ruby-on-rails",
+        "name": "PostHog feature flags for Ruby on Rails applications",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/feature-flags-ruby-on-rails.zip",
+        "title": "Ruby on Rails",
+        "description": "PostHog feature flags for Ruby on Rails applications",
+        "tags": [
+          "feature-flags",
+          "ruby-on-rails",
+          "ruby"
+        ]
+      },
+      {
+        "id": "feature-flags-go",
+        "name": "PostHog feature flags for Go applications",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/feature-flags-go.zip",
+        "title": "Go",
+        "description": "PostHog feature flags for Go applications",
+        "tags": [
+          "feature-flags",
+          "go"
+        ]
+      },
+      {
+        "id": "feature-flags-java",
+        "name": "PostHog feature flags for Java applications",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/feature-flags-java.zip",
+        "title": "Java",
+        "description": "PostHog feature flags for Java applications",
+        "tags": [
+          "feature-flags",
+          "java"
+        ]
+      },
+      {
+        "id": "feature-flags-rust",
+        "name": "PostHog feature flags for Rust applications",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/feature-flags-rust.zip",
+        "title": "Rust",
+        "description": "PostHog feature flags for Rust applications",
+        "tags": [
+          "feature-flags",
+          "rust"
+        ]
+      },
+      {
+        "id": "feature-flags-dotnet",
+        "name": "PostHog feature flags for .NET applications",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/feature-flags-dotnet.zip",
+        "title": ".NET",
+        "description": "PostHog feature flags for .NET applications",
+        "tags": [
+          "feature-flags",
+          "dotnet",
+          "csharp"
+        ]
+      },
+      {
+        "id": "feature-flags-aspnetcore-feature-management",
+        "name": "PostHog feature flags for ASP.NET Core applications using Microsoft.FeatureManagement",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/feature-flags-aspnetcore-feature-management.zip",
+        "title": "ASP.NET Core Feature Management",
+        "description": "PostHog feature flags for ASP.NET Core applications using Microsoft.FeatureManagement",
+        "tags": [
+          "feature-flags",
+          "aspnetcore",
+          "dotnet",
+          "csharp",
+          "feature-management"
+        ]
+      },
+      {
+        "id": "feature-flags-elixir",
+        "name": "PostHog feature flags for Elixir applications",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/feature-flags-elixir.zip",
+        "title": "Elixir",
+        "description": "PostHog feature flags for Elixir applications",
+        "tags": [
+          "feature-flags",
+          "elixir"
+        ]
+      },
+      {
+        "id": "feature-flags-android",
+        "name": "PostHog feature flags for Android applications",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/feature-flags-android.zip",
+        "title": "Android",
+        "description": "PostHog feature flags for Android applications",
+        "tags": [
+          "feature-flags",
+          "android",
+          "java"
+        ]
+      },
+      {
+        "id": "feature-flags-ios",
+        "name": "PostHog feature flags for iOS applications",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/feature-flags-ios.zip",
+        "title": "iOS",
+        "description": "PostHog feature flags for iOS applications",
+        "tags": [
+          "feature-flags",
+          "ios",
+          "swift"
+        ]
+      },
+      {
+        "id": "feature-flags-flutter",
+        "name": "PostHog feature flags for Flutter applications",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/feature-flags-flutter.zip",
+        "title": "Flutter",
+        "description": "PostHog feature flags for Flutter applications",
+        "tags": [
+          "feature-flags",
+          "flutter",
+          "dart"
+        ]
+      },
+      {
+        "id": "feature-flags-api",
+        "name": "PostHog feature flags for API applications",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/feature-flags-api.zip",
+        "title": "API",
+        "description": "PostHog feature flags for API applications",
+        "tags": [
+          "feature-flags",
+          "api"
+        ]
+      }
+    ],
+    "integration": [
+      {
+        "id": "integration-nextjs-app-router",
+        "name": "PostHog integration for Next.js App Router applications",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/integration-nextjs-app-router.zip",
+        "title": "Next.js App Router",
+        "description": "PostHog integration for Next.js App Router applications",
+        "tags": [
+          "nextjs",
+          "react",
+          "ssr",
+          "app-router",
+          "javascript",
+          "javascript_web",
+          "javascript_node",
+          "framework:nextjs",
+          "frameworkVariant:app-router",
+          "integration",
+          "default"
+        ]
+      },
+      {
+        "id": "integration-nextjs-pages-router",
+        "name": "PostHog integration for Next.js Pages Router applications",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/integration-nextjs-pages-router.zip",
+        "title": "Next.js Pages Router",
+        "description": "PostHog integration for Next.js Pages Router applications",
+        "tags": [
+          "nextjs",
+          "react",
+          "ssr",
+          "pages-router",
+          "javascript",
+          "javascript_web",
+          "javascript_node",
+          "framework:nextjs",
+          "frameworkVariant:pages-router",
+          "integration"
+        ]
+      },
+      {
+        "id": "integration-react-react-router-6",
+        "name": "PostHog integration for React Router v6 applications",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/integration-react-react-router-6.zip",
+        "title": "React Router v6",
+        "description": "PostHog integration for React Router v6 applications",
+        "tags": [
+          "react",
+          "react-router",
+          "v6",
+          "spa",
+          "javascript",
+          "javascript_web",
+          "framework:react-router",
+          "frameworkVariant:v6",
+          "integration",
+          "default"
+        ]
+      },
+      {
+        "id": "integration-react-react-router-7-framework",
+        "name": "PostHog integration for React Router v7 - Framework mode applications",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/integration-react-react-router-7-framework.zip",
+        "title": "React Router v7 - Framework mode",
+        "description": "PostHog integration for React Router v7 - Framework mode applications",
+        "tags": [
+          "react",
+          "react-router",
+          "v7",
+          "framework",
+          "ssr",
+          "javascript",
+          "javascript_node",
+          "javascript_web",
+          "framework:react-router",
+          "frameworkVariant:v7-framework",
+          "integration"
+        ]
+      },
+      {
+        "id": "integration-react-react-router-7-data",
+        "name": "PostHog integration for React Router v7 - Data mode applications",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/integration-react-react-router-7-data.zip",
+        "title": "React Router v7 - Data mode",
+        "description": "PostHog integration for React Router v7 - Data mode applications",
+        "tags": [
+          "react",
+          "react-router",
+          "v7",
+          "data",
+          "spa",
+          "javascript",
+          "javascript_web",
+          "framework:react-router",
+          "frameworkVariant:v7-data",
+          "integration"
+        ]
+      },
+      {
+        "id": "integration-react-react-router-7-declarative",
+        "name": "PostHog integration for React Router v7 - Declarative mode applications",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/integration-react-react-router-7-declarative.zip",
+        "title": "React Router v7 - Declarative mode",
+        "description": "PostHog integration for React Router v7 - Declarative mode applications",
+        "tags": [
+          "react",
+          "react-router",
+          "v7",
+          "declarative",
+          "spa",
+          "javascript",
+          "javascript_web",
+          "framework:react-router",
+          "frameworkVariant:v7-declarative",
+          "integration"
+        ]
+      },
+      {
+        "id": "integration-react-vite",
+        "name": "PostHog integration for React applications built with Vite (no router)",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/integration-react-vite.zip",
+        "title": "React (Vite)",
+        "description": "PostHog integration for React applications built with Vite (no router)",
+        "tags": [
+          "react",
+          "vite",
+          "spa",
+          "javascript",
+          "javascript_web",
+          "integration"
+        ]
+      },
+      {
+        "id": "integration-nuxt-3-6",
+        "name": "PostHog integration for Nuxt versions 3.0 to 3.6",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/integration-nuxt-3-6.zip",
+        "title": "Nuxt 3.6",
+        "description": "PostHog integration for Nuxt versions 3.0 to 3.6",
+        "tags": [
+          "nuxt",
+          "javascript",
+          "javascript_web",
+          "javascript_node",
+          "framework:nuxt",
+          "integration",
+          "default"
+        ]
+      },
+      {
+        "id": "integration-nuxt-4",
+        "name": "PostHog integration for Nuxt 4 applications",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/integration-nuxt-4.zip",
+        "title": "Nuxt 4",
+        "description": "PostHog integration for Nuxt 4 applications",
+        "tags": [
+          "nuxt",
+          "vue",
+          "ssr",
+          "javascript",
+          "typescript",
+          "javascript_web",
+          "javascript_node",
+          "framework:nuxt",
+          "frameworkVariant:4.x",
+          "integration"
+        ]
+      },
+      {
+        "id": "integration-vue-3",
+        "name": "PostHog integration for Vue 3 applications",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/integration-vue-3.zip",
+        "title": "Vue 3",
+        "description": "PostHog integration for Vue 3 applications",
+        "tags": [
+          "vue",
+          "javascript",
+          "typescript",
+          "javascript_web",
+          "framework:vue",
+          "integration"
+        ]
+      },
+      {
+        "id": "integration-django",
+        "name": "PostHog integration for Django applications",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/integration-django.zip",
+        "title": "Django",
+        "description": "PostHog integration for Django applications",
+        "tags": [
+          "django",
+          "python",
+          "framework:django",
+          "integration"
+        ]
+      },
+      {
+        "id": "integration-flask",
+        "name": "PostHog integration for Flask applications",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/integration-flask.zip",
+        "title": "Flask",
+        "description": "PostHog integration for Flask applications",
+        "tags": [
+          "flask",
+          "python",
+          "framework:flask",
+          "integration"
+        ]
+      },
+      {
+        "id": "integration-fastapi",
+        "name": "PostHog integration for FastAPI applications",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/integration-fastapi.zip",
+        "title": "FastAPI",
+        "description": "PostHog integration for FastAPI applications",
+        "tags": [
+          "fastapi",
+          "python",
+          "framework:fastapi",
+          "integration"
+        ]
+      },
+      {
+        "id": "integration-react-tanstack-router-file-based",
+        "name": "PostHog integration for React applications using TanStack Router with file-based routing",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/integration-react-tanstack-router-file-based.zip",
+        "title": "React with TanStack Router (file-based)",
+        "description": "PostHog integration for React applications using TanStack Router with file-based routing",
+        "tags": [
+          "react",
+          "tanstack-router",
+          "spa",
+          "javascript",
+          "javascript_web",
+          "framework:tanstack-router",
+          "frameworkVariant:file-based",
+          "integration"
+        ]
+      },
+      {
+        "id": "integration-react-tanstack-router-code-based",
+        "name": "PostHog integration for React applications using TanStack Router with code-based routing",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/integration-react-tanstack-router-code-based.zip",
+        "title": "React with TanStack Router (code-based)",
+        "description": "PostHog integration for React applications using TanStack Router with code-based routing",
+        "tags": [
+          "react",
+          "tanstack-router",
+          "spa",
+          "javascript",
+          "javascript_web",
+          "framework:tanstack-router",
+          "frameworkVariant:code-based",
+          "integration",
+          "default"
+        ]
+      },
+      {
+        "id": "integration-tanstack-start",
+        "name": "PostHog integration for TanStack Start full-stack applications",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/integration-tanstack-start.zip",
+        "title": "TanStack Start",
+        "description": "PostHog integration for TanStack Start full-stack applications",
+        "tags": [
+          "react",
+          "tanstack-start",
+          "tanstack-router",
+          "javascript",
+          "javascript_web",
+          "javascript_node",
+          "framework:tanstack-start",
+          "integration"
+        ]
+      },
+      {
+        "id": "integration-laravel",
+        "name": "PostHog integration for Laravel applications",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/integration-laravel.zip",
+        "title": "Laravel",
+        "description": "PostHog integration for Laravel applications",
+        "tags": [
+          "laravel",
+          "php",
+          "framework:laravel",
+          "integration"
+        ]
+      },
+      {
+        "id": "integration-php",
+        "name": "PostHog integration for any PHP application using the PHP SDK",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/integration-php.zip",
+        "title": "PHP",
+        "description": "PostHog integration for any PHP application using the PHP SDK",
+        "tags": [
+          "php",
+          "integration"
+        ]
+      },
+      {
+        "id": "integration-wordpress",
+        "name": "PostHog integration for self-hosted WordPress sites and plugins, combining client-side autocapture with server-side PHP SDK capture",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/integration-wordpress.zip",
+        "title": "WordPress",
+        "description": "PostHog integration for self-hosted WordPress sites and plugins, combining client-side autocapture with server-side PHP SDK capture",
+        "tags": [
+          "wordpress",
+          "php",
+          "cms",
+          "framework:wordpress",
+          "integration"
+        ]
+      },
+      {
+        "id": "integration-ruby-on-rails",
+        "name": "PostHog integration for Ruby on Rails applications",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/integration-ruby-on-rails.zip",
+        "title": "Ruby on Rails",
+        "description": "PostHog integration for Ruby on Rails applications",
+        "tags": [
+          "ruby-on-rails",
+          "ruby",
+          "framework:rails",
+          "integration"
+        ]
+      },
+      {
+        "id": "integration-android",
+        "name": "PostHog integration for Android applications",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/integration-android.zip",
+        "title": "Android",
+        "description": "PostHog integration for Android applications",
+        "tags": [
+          "android",
+          "java",
+          "kotlin",
+          "framework:android",
+          "integration"
+        ]
+      },
+      {
+        "id": "integration-sveltekit",
+        "name": "PostHog integration for SvelteKit applications",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/integration-sveltekit.zip",
+        "title": "SvelteKit",
+        "description": "PostHog integration for SvelteKit applications",
+        "tags": [
+          "sveltekit",
+          "svelte",
+          "javascript",
+          "javascript_web",
+          "javascript_node",
+          "framework:sveltekit",
+          "integration"
+        ]
+      },
+      {
+        "id": "integration-python",
+        "name": "PostHog integration for any Python application using the Python SDK",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/integration-python.zip",
+        "title": "Python",
+        "description": "PostHog integration for any Python application using the Python SDK",
+        "tags": [
+          "python",
+          "framework:python",
+          "integration"
+        ]
+      },
+      {
+        "id": "integration-javascript_node",
+        "name": "PostHog integration for server-side Node.js applications using posthog-node",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/integration-javascript_node.zip",
+        "title": "JavaScript Node",
+        "description": "PostHog integration for server-side Node.js applications using posthog-node",
+        "tags": [
+          "javascript_node",
+          "javascript",
+          "framework:javascript_node",
+          "integration"
+        ]
+      },
+      {
+        "id": "integration-javascript_web",
+        "name": "PostHog integration for client-side web JavaScript applications using posthog-js",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/integration-javascript_web.zip",
+        "title": "JavaScript Web",
+        "description": "PostHog integration for client-side web JavaScript applications using posthog-js",
+        "tags": [
+          "javascript_web",
+          "javascript",
+          "framework:javascript_web",
+          "integration"
+        ]
+      },
+      {
+        "id": "integration-ruby",
+        "name": "PostHog integration for any Ruby application using the Ruby SDK",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/integration-ruby.zip",
+        "title": "Ruby",
+        "description": "PostHog integration for any Ruby application using the Ruby SDK",
+        "tags": [
+          "ruby",
+          "framework:ruby",
+          "integration"
+        ]
+      },
+      {
+        "id": "integration-elixir",
+        "name": "PostHog integration for Elixir and Phoenix applications using the posthog SDK",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/integration-elixir.zip",
+        "title": "Elixir",
+        "description": "PostHog integration for Elixir and Phoenix applications using the posthog SDK",
+        "tags": [
+          "elixir",
+          "phoenix",
+          "plug",
+          "framework:elixir",
+          "integration"
+        ]
+      },
+      {
+        "id": "integration-java",
+        "name": "PostHog integration for Java and Spring Boot applications using the posthog-server SDK",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/integration-java.zip",
+        "title": "Java (Spring Boot)",
+        "description": "PostHog integration for Java and Spring Boot applications using the posthog-server SDK",
+        "tags": [
+          "java",
+          "java-server",
+          "framework:java",
+          "integration"
+        ]
+      },
+      {
+        "id": "integration-go",
+        "name": "PostHog integration for Go applications using the posthog-go SDK",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/integration-go.zip",
+        "title": "Go",
+        "description": "PostHog integration for Go applications using the posthog-go SDK",
+        "tags": [
+          "go",
+          "framework:go",
+          "integration"
+        ]
+      },
+      {
+        "id": "integration-rust",
+        "name": "PostHog integration for Rust applications using the posthog-rs SDK",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/integration-rust.zip",
+        "title": "Rust",
+        "description": "PostHog integration for Rust applications using the posthog-rs SDK",
+        "tags": [
+          "rust",
+          "framework:rust",
+          "integration"
+        ]
+      },
+      {
+        "id": "integration-swift",
+        "name": "PostHog integration for Swift iOS and macOS applications",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/integration-swift.zip",
+        "title": "Swift (iOS/macOS)",
+        "description": "PostHog integration for Swift iOS and macOS applications",
+        "tags": [
+          "swift",
+          "ios",
+          "macos",
+          "swiftui",
+          "xcodegen",
+          "framework:swift",
+          "integration"
+        ]
+      },
+      {
+        "id": "integration-flutter",
+        "name": "PostHog integration for Flutter applications using the posthog_flutter SDK",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/integration-flutter.zip",
+        "title": "Flutter",
+        "description": "PostHog integration for Flutter applications using the posthog_flutter SDK",
+        "tags": [
+          "flutter",
+          "dart",
+          "mobile",
+          "framework:flutter",
+          "integration"
+        ]
+      },
+      {
+        "id": "integration-kmp",
+        "name": "PostHog integration for Kotlin Multiplatform (KMP) shared code targeting Android, iOS, and web using the posthog-kmp SDK",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/integration-kmp.zip",
+        "title": "Kotlin Multiplatform",
+        "description": "PostHog integration for Kotlin Multiplatform (KMP) shared code targeting Android, iOS, and web using the posthog-kmp SDK",
+        "tags": [
+          "kmp",
+          "kotlin",
+          "multiplatform",
+          "mobile",
+          "framework:kmp",
+          "integration"
+        ]
+      },
+      {
+        "id": "integration-react-native",
+        "name": "PostHog integration for React Native applications",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/integration-react-native.zip",
+        "title": "React Native",
+        "description": "PostHog integration for React Native applications",
+        "tags": [
+          "react-native",
+          "javascript",
+          "typescript",
+          "framework:react-native",
+          "integration",
+          "default"
+        ]
+      },
+      {
+        "id": "integration-expo",
+        "name": "PostHog integration for Expo applications",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/integration-expo.zip",
+        "title": "Expo",
+        "description": "PostHog integration for Expo applications",
+        "tags": [
+          "expo",
+          "react-native",
+          "javascript",
+          "typescript",
+          "framework:react-native",
+          "frameworkVariant:expo",
+          "integration"
+        ]
+      },
+      {
+        "id": "integration-astro-static",
+        "name": "PostHog integration for static Astro sites using SSG",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/integration-astro-static.zip",
+        "title": "Astro (Static)",
+        "description": "PostHog integration for static Astro sites using SSG",
+        "tags": [
+          "astro",
+          "javascript",
+          "typescript",
+          "javascript_web",
+          "framework:astro",
+          "frameworkVariant:static",
+          "integration"
+        ]
+      },
+      {
+        "id": "integration-astro-view-transitions",
+        "name": "PostHog integration for Astro with ClientRouter view transitions",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/integration-astro-view-transitions.zip",
+        "title": "Astro (View Transitions)",
+        "description": "PostHog integration for Astro with ClientRouter view transitions",
+        "tags": [
+          "astro",
+          "astro-view-transitions",
+          "javascript",
+          "typescript",
+          "javascript_web",
+          "framework:astro",
+          "frameworkVariant:view-transitions",
+          "integration"
+        ]
+      },
+      {
+        "id": "integration-astro-ssr",
+        "name": "PostHog integration for server-rendered Astro applications with API routes",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/integration-astro-ssr.zip",
+        "title": "Astro (SSR)",
+        "description": "PostHog integration for server-rendered Astro applications with API routes",
+        "tags": [
+          "astro",
+          "astro-ssr",
+          "javascript",
+          "typescript",
+          "javascript_web",
+          "javascript_node",
+          "framework:astro",
+          "frameworkVariant:ssr",
+          "integration"
+        ]
+      },
+      {
+        "id": "integration-astro-hybrid",
+        "name": "PostHog integration for Astro hybrid rendering with both static and server-rendered pages",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/integration-astro-hybrid.zip",
+        "title": "Astro (Hybrid)",
+        "description": "PostHog integration for Astro hybrid rendering with both static and server-rendered pages",
+        "tags": [
+          "astro",
+          "astro-hybrid",
+          "javascript",
+          "typescript",
+          "javascript_web",
+          "javascript_node",
+          "framework:astro",
+          "frameworkVariant:hybrid",
+          "integration",
+          "default"
+        ]
+      },
+      {
+        "id": "integration-angular",
+        "name": "PostHog integration for Angular applications",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/integration-angular.zip",
+        "title": "Angular",
+        "description": "PostHog integration for Angular applications",
+        "tags": [
+          "angular",
+          "javascript",
+          "typescript",
+          "javascript_web",
+          "framework:angular",
+          "integration"
+        ]
+      }
+    ],
+    "integration/build": [
+      {
+        "id": "integration-build",
+        "name": "Install dependencies and verify the project builds",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/integration-build.zip",
+        "title": "PostHog build step",
+        "description": "Install dependencies and verify the project builds",
+        "tags": [
+          "orchestrator",
+          "build",
+          "integration-build"
+        ]
+      }
+    ],
+    "integration/capture": [
+      {
+        "id": "integration-capture",
+        "name": "Instrument the planned events with PostHog capture calls",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/integration-capture.zip",
+        "frameworkReferences": "integration",
+        "title": "PostHog capture step",
+        "description": "Instrument the planned events with PostHog capture calls",
+        "tags": [
+          "orchestrator",
+          "capture",
+          "integration-capture"
+        ]
+      }
+    ],
+    "integration/dashboard": [
+      {
+        "id": "integration-dashboard",
+        "name": "Create a starter PostHog dashboard from the captured events",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/integration-dashboard.zip",
+        "title": "PostHog dashboard step",
+        "description": "Create a starter PostHog dashboard from the captured events",
+        "tags": [
+          "orchestrator",
+          "dashboard",
+          "integration-dashboard"
+        ]
+      }
+    ],
+    "integration/error-tracking": [
+      {
+        "id": "integration-error-tracking",
+        "name": "Capture exceptions with PostHog around critical flows",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/integration-error-tracking.zip",
+        "frameworkReferences": "error-tracking",
+        "title": "PostHog error tracking step",
+        "description": "Capture exceptions with PostHog around critical flows",
+        "tags": [
+          "orchestrator",
+          "error-tracking",
+          "integration-error-tracking"
+        ]
+      }
+    ],
+    "integration/feature-flags": [
+      {
+        "id": "integration-feature-flags",
+        "name": "Evaluate the example PostHog feature flags, one per side of the app",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/integration-feature-flags.zip",
+        "frameworkReferences": "feature-flags",
+        "title": "PostHog feature flags step",
+        "description": "Evaluate the example PostHog feature flags, one per side of the app",
+        "tags": [
+          "orchestrator",
+          "feature-flags",
+          "integration-feature-flags"
+        ]
+      }
+    ],
+    "integration/identify": [
+      {
+        "id": "integration-identify",
+        "name": "Identify users at login and signup",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/integration-identify.zip",
+        "title": "PostHog identify step",
+        "description": "Identify users at login and signup",
+        "tags": [
+          "orchestrator",
+          "identify",
+          "integration-identify"
+        ]
+      }
+    ],
+    "integration/init": [
+      {
+        "id": "integration-init",
+        "name": "Initialize PostHog and set its environment variables",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/integration-init.zip",
+        "frameworkReferences": "integration",
+        "title": "PostHog init step",
+        "description": "Initialize PostHog and set its environment variables",
+        "tags": [
+          "orchestrator",
+          "init",
+          "integration-init"
+        ]
+      }
+    ],
+    "integration/insight": [
+      {
+        "id": "integration-insight",
+        "name": "Create PostHog insights (trends, funnels) attached to a dashboard",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/integration-insight.zip",
+        "title": "PostHog insight step",
+        "description": "Create PostHog insights (trends, funnels) attached to a dashboard",
+        "tags": [
+          "orchestrator",
+          "insight",
+          "integration-insight"
+        ]
+      }
+    ],
+    "integration/install": [
+      {
+        "id": "integration-install",
+        "name": "Install the PostHog SDK with the project's package manager",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/integration-install.zip",
+        "frameworkReferences": "integration",
+        "title": "PostHog install step",
+        "description": "Install the PostHog SDK with the project's package manager",
+        "tags": [
+          "orchestrator",
+          "install",
+          "integration-install"
+        ]
+      }
+    ],
+    "integration/mcp": [
+      {
+        "id": "integration-mcp",
+        "name": "How to call PostHog MCP tools (discover, inspect, then call)",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/integration-mcp.zip",
+        "title": "PostHog MCP step",
+        "description": "How to call PostHog MCP tools (discover, inspect, then call)",
+        "tags": [
+          "orchestrator",
+          "mcp",
+          "integration-mcp"
+        ]
+      }
+    ],
+    "integration/notebook": [
+      {
+        "id": "integration-notebook",
+        "name": "Mirror the setup report into a shareable PostHog notebook",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/integration-notebook.zip",
+        "title": "PostHog notebook step",
+        "description": "Mirror the setup report into a shareable PostHog notebook",
+        "tags": [
+          "orchestrator",
+          "notebook",
+          "integration-notebook"
+        ]
+      }
+    ],
+    "integration/report": [
+      {
+        "id": "integration-report",
+        "name": "Publish the PostHog setup report from the run's handoffs",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/integration-report.zip",
+        "title": "PostHog report step",
+        "description": "Publish the PostHog setup report from the run's handoffs",
+        "tags": [
+          "orchestrator",
+          "report",
+          "integration-report"
+        ]
+      }
+    ],
+    "integration/session-replay": [
+      {
+        "id": "integration-session-replay",
+        "name": "Make session replay record on server and client",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/integration-session-replay.zip",
+        "frameworkReferences": "integration",
+        "title": "PostHog session replay step",
+        "description": "Make session replay record on server and client",
+        "tags": [
+          "orchestrator",
+          "replay-vision",
+          "session-replay",
+          "integration-session-replay"
+        ]
+      }
+    ],
+    "integration/warehouse": [
+      {
+        "id": "integration-warehouse",
+        "name": "Connect the detected data sources to the PostHog data warehouse",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/integration-warehouse.zip",
+        "title": "PostHog warehouse step",
+        "description": "Connect the detected data sources to the PostHog data warehouse",
+        "tags": [
+          "orchestrator",
+          "data-warehouse",
+          "sources",
+          "integration-warehouse"
+        ]
+      }
+    ],
+    "llm-analytics": [
+      {
+        "id": "llm-analytics-setup",
+        "name": "PostHog AI Observability for all supported providers",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/llm-analytics-setup.zip",
+        "title": "all supported providers",
+        "description": "PostHog AI Observability for all supported providers",
+        "tags": [
+          "llm-analytics",
+          "python",
+          "javascript"
+        ]
+      },
+      {
+        "id": "llm-analytics-dotnet-openai",
+        "name": "PostHog AI Observability for .NET applications using PostHog.AI with OpenAI or Azure OpenAI",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/llm-analytics-dotnet-openai.zip",
+        "title": ".NET OpenAI / Azure OpenAI (PostHog.AI)",
+        "description": "PostHog AI Observability for .NET applications using PostHog.AI with OpenAI or Azure OpenAI",
+        "tags": [
+          "llm-analytics",
+          "dotnet",
+          "aspnetcore",
+          "csharp",
+          "openai",
+          "azure-openai"
+        ]
+      }
+    ],
+    "logs": [
+      {
+        "id": "logs-javascript",
+        "name": "PostHog logs for Web (JavaScript)",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/logs-javascript.zip",
+        "title": "Web (JavaScript)",
+        "description": "PostHog logs for Web (JavaScript)",
+        "tags": [
+          "logs",
+          "javascript_web",
+          "javascript"
+        ]
+      },
+      {
+        "id": "logs-nextjs",
+        "name": "PostHog logs for Next.js",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/logs-nextjs.zip",
+        "title": "Next.js",
+        "description": "PostHog logs for Next.js",
+        "tags": [
+          "logs",
+          "nextjs",
+          "javascript"
+        ]
+      },
+      {
+        "id": "logs-nodejs",
+        "name": "PostHog logs for Node.js",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/logs-nodejs.zip",
+        "title": "Node.js",
+        "description": "PostHog logs for Node.js",
+        "tags": [
+          "logs",
+          "javascript"
+        ]
+      },
+      {
+        "id": "logs-python",
+        "name": "PostHog logs for Python",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/logs-python.zip",
+        "title": "Python",
+        "description": "PostHog logs for Python",
+        "tags": [
+          "logs",
+          "python"
+        ]
+      },
+      {
+        "id": "logs-go",
+        "name": "PostHog logs for Go",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/logs-go.zip",
+        "title": "Go",
+        "description": "PostHog logs for Go",
+        "tags": [
+          "logs",
+          "go"
+        ]
+      },
+      {
+        "id": "logs-java",
+        "name": "PostHog logs for Java",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/logs-java.zip",
+        "title": "Java",
+        "description": "PostHog logs for Java",
+        "tags": [
+          "logs",
+          "java"
+        ]
+      },
+      {
+        "id": "logs-datadog",
+        "name": "PostHog logs for Datadog",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/logs-datadog.zip",
+        "title": "Datadog",
+        "description": "PostHog logs for Datadog",
+        "tags": [
+          "logs",
+          "datadog"
+        ]
+      },
+      {
+        "id": "logs-react-native",
+        "name": "PostHog logs for React Native",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/logs-react-native.zip",
+        "title": "React Native",
+        "description": "PostHog logs for React Native",
+        "tags": [
+          "logs",
+          "react-native",
+          "javascript"
+        ]
+      },
+      {
+        "id": "logs-android",
+        "name": "PostHog logs for Android",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/logs-android.zip",
+        "title": "Android",
+        "description": "PostHog logs for Android",
+        "tags": [
+          "logs",
+          "android",
+          "kotlin",
+          "java"
+        ]
+      },
+      {
+        "id": "logs-ios",
+        "name": "PostHog logs for iOS",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/logs-ios.zip",
+        "title": "iOS",
+        "description": "PostHog logs for iOS",
+        "tags": [
+          "logs",
+          "ios",
+          "swift"
+        ]
+      },
+      {
+        "id": "logs-flutter",
+        "name": "PostHog logs for Flutter",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/logs-flutter.zip",
+        "title": "Flutter",
+        "description": "PostHog logs for Flutter",
+        "tags": [
+          "logs",
+          "flutter",
+          "dart"
+        ]
+      },
+      {
+        "id": "logs-other",
+        "name": "PostHog logs for Other Languages",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/logs-other.zip",
+        "title": "Other Languages",
+        "description": "PostHog logs for Other Languages",
+        "tags": [
+          "logs"
+        ]
+      }
+    ],
+    "mcp-analytics": [
+      {
+        "id": "mcp-analytics",
+        "name": "Add PostHog MCP analytics to a TypeScript, JavaScript, Python, Go, Ruby (experimental), or Rust (experimental) MCP server. Captures tool calls, agent intent, failures, protocol revision, the calling model, and conversation IDs, with the same defaults in every SDK. Each SDK supports legacy sessions and the handshake-free 2026-07-28 revision. Detects the server style and wires in compatible instrumentation, credentials, conversation correlation, and graceful shutdown.",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/mcp-analytics.zip",
+        "title": "any TypeScript, JavaScript, Python, Go, Ruby, or Rust MCP server",
+        "description": "Add PostHog MCP analytics to a TypeScript, JavaScript, Python, Go, Ruby (experimental), or Rust (experimental) MCP server. Captures tool calls, agent intent, failures, protocol revision, the calling model, and conversation IDs, with the same defaults in every SDK. Each SDK supports legacy sessions and the handshake-free 2026-07-28 revision. Detects the server style and wires in compatible instrumentation, credentials, conversation correlation, and graceful shutdown.",
+        "tags": [
+          "mcp-analytics",
+          "mcp"
+        ]
+      },
+      {
+        "id": "mcp-analytics-python",
+        "name": "Add PostHog MCP analytics to a TypeScript, JavaScript, Python, Go, Ruby (experimental), or Rust (experimental) MCP server. Captures tool calls, agent intent, failures, protocol revision, the calling model, and conversation IDs, with the same defaults in every SDK. Each SDK supports legacy sessions and the handshake-free 2026-07-28 revision. Detects the server style and wires in compatible instrumentation, credentials, conversation correlation, and graceful shutdown.",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/mcp-analytics-python.zip",
+        "title": "any Python MCP server",
+        "description": "Add PostHog MCP analytics to a TypeScript, JavaScript, Python, Go, Ruby (experimental), or Rust (experimental) MCP server. Captures tool calls, agent intent, failures, protocol revision, the calling model, and conversation IDs, with the same defaults in every SDK. Each SDK supports legacy sessions and the handshake-free 2026-07-28 revision. Detects the server style and wires in compatible instrumentation, credentials, conversation correlation, and graceful shutdown.",
+        "tags": [
+          "mcp-analytics",
+          "mcp",
+          "python"
+        ]
+      }
+    ],
+    "metrics": [
+      {
+        "id": "metrics-javascript",
+        "name": "PostHog metrics for Web (JavaScript)",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/metrics-javascript.zip",
+        "title": "Web (JavaScript)",
+        "description": "PostHog metrics for Web (JavaScript)",
+        "tags": [
+          "metrics",
+          "javascript_web",
+          "javascript"
+        ]
+      },
+      {
+        "id": "metrics-nodejs",
+        "name": "PostHog metrics for Node.js",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/metrics-nodejs.zip",
+        "title": "Node.js",
+        "description": "PostHog metrics for Node.js",
+        "tags": [
+          "metrics",
+          "javascript"
+        ]
+      },
+      {
+        "id": "metrics-python",
+        "name": "PostHog metrics for Python",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/metrics-python.zip",
+        "title": "Python",
+        "description": "PostHog metrics for Python",
+        "tags": [
+          "metrics",
+          "python"
+        ]
+      },
+      {
+        "id": "metrics-kubernetes",
+        "name": "PostHog metrics for Kubernetes",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/metrics-kubernetes.zip",
+        "title": "Kubernetes",
+        "description": "PostHog metrics for Kubernetes",
+        "tags": [
+          "metrics",
+          "kubernetes"
+        ]
+      },
+      {
+        "id": "metrics-other",
+        "name": "PostHog metrics for Other Languages",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/metrics-other.zip",
+        "title": "Other Languages",
+        "description": "PostHog metrics for Other Languages",
+        "tags": [
+          "metrics"
+        ]
+      }
+    ],
+    "migrate": [
+      {
+        "id": "migrate-statsig",
+        "name": "Migrate an existing analytics or feature-flag vendor to PostHog. Replaces SDK call sites in-place, removes the source package, and writes a migration report. Replacement-only, doesn't adds new instrumentation.",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/migrate-statsig.zip",
+        "title": "Statsig → PostHog",
+        "description": "Migrate an existing analytics or feature-flag vendor to PostHog. Replaces SDK call sites in-place, removes the source package, and writes a migration report. Replacement-only, doesn't adds new instrumentation.",
+        "tags": [
+          "migration",
+          "statsig",
+          "migrate"
+        ]
+      }
+    ],
+    "migrate-email": [
+      {
+        "id": "migrate-email-resend",
+        "name": "Migrate transactional email from Resend to PostHog. Use when asked to migrate from Resend, replace Resend with PostHog, switch email providers, or re-import the Resend suppression list into PostHog after a migration. It finds every Resend send in the code, sets up the sender and DNS next to the records the app sends with now, imports the suppression list, moves each send PostHog can take to PostHog's SDK for its language (Node.js, Python, Go, Ruby, PHP, .NET, Rust, or Elixir), and writes a migration report that lists the sends that stay.",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/migrate-email-resend.zip",
+        "title": "Resend",
+        "description": "Migrate transactional email from Resend to PostHog. Use when asked to migrate from Resend, replace Resend with PostHog, switch email providers, or re-import the Resend suppression list into PostHog after a migration. It finds every Resend send in the code, sets up the sender and DNS next to the records the app sends with now, imports the suppression list, moves each send PostHog can take to PostHog's SDK for its language (Node.js, Python, Go, Ruby, PHP, .NET, Rust, or Elixir), and writes a migration report that lists the sends that stay.",
+        "tags": [
+          "migration",
+          "workflows",
+          "resend",
+          "migrate-email"
+        ]
+      },
+      {
+        "id": "migrate-email-sendgrid",
+        "name": "Migrate transactional email from SendGrid to PostHog. Use when asked to migrate from SendGrid, replace SendGrid with PostHog, switch email providers, or re-import the SendGrid suppression list into PostHog after a migration. It finds every SendGrid send in the code, sets up the sender and DNS next to the records the app sends with now, imports the suppression list, moves each send PostHog can take to PostHog's SDK for its language (Node.js, Python, Go, Ruby, PHP, .NET, Rust, or Elixir), and writes a migration report that lists the sends that stay.",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/migrate-email-sendgrid.zip",
+        "title": "SendGrid",
+        "description": "Migrate transactional email from SendGrid to PostHog. Use when asked to migrate from SendGrid, replace SendGrid with PostHog, switch email providers, or re-import the SendGrid suppression list into PostHog after a migration. It finds every SendGrid send in the code, sets up the sender and DNS next to the records the app sends with now, imports the suppression list, moves each send PostHog can take to PostHog's SDK for its language (Node.js, Python, Go, Ruby, PHP, .NET, Rust, or Elixir), and writes a migration report that lists the sends that stay.",
+        "tags": [
+          "migration",
+          "workflows",
+          "sendgrid",
+          "migrate-email"
+        ]
+      }
+    ],
+    "omnibus/instrument-error-tracking": [
+      {
+        "id": "omnibus-instrument-error-tracking",
+        "name": "Add PostHog error tracking to capture and monitor exceptions. Use after implementing features or reviewing PRs to ensure errors are tracked with stack traces and source maps. Also handles initial PostHog SDK setup if not yet installed.",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/omnibus-instrument-error-tracking.zip",
+        "title": "all supported platforms",
+        "description": "Add PostHog error tracking to capture and monitor exceptions. Use after implementing features or reviewing PRs to ensure errors are tracked with stack traces and source maps. Also handles initial PostHog SDK setup if not yet installed.",
+        "tags": [
+          "error-tracking",
+          "sdk-install",
+          "omnibus-instrument-error-tracking"
+        ]
+      }
+    ],
+    "omnibus/instrument-feature-flags": [
+      {
+        "id": "omnibus-instrument-feature-flags",
+        "name": "Add PostHog feature flags to gate new functionality. Use after implementing features or reviewing PRs to ensure safe rollouts with feature flag controls. Also handles initial PostHog SDK setup if not yet installed.",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/omnibus-instrument-feature-flags.zip",
+        "title": "all supported platforms",
+        "description": "Add PostHog feature flags to gate new functionality. Use after implementing features or reviewing PRs to ensure safe rollouts with feature flag controls. Also handles initial PostHog SDK setup if not yet installed.",
+        "tags": [
+          "feature-flags",
+          "sdk-install",
+          "omnibus-instrument-feature-flags"
+        ]
+      }
+    ],
+    "omnibus/instrument-integration": [
+      {
+        "id": "omnibus-instrument-integration",
+        "name": "Add PostHog SDK integration to your application. Use when setting up PostHog for the first time or reviewing PRs that need PostHog initialization. Covers SDK installation, provider setup, and basic configuration for any framework.",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/omnibus-instrument-integration.zip",
+        "title": "all supported frameworks",
+        "description": "Add PostHog SDK integration to your application. Use when setting up PostHog for the first time or reviewing PRs that need PostHog initialization. Covers SDK installation, provider setup, and basic configuration for any framework.",
+        "tags": [
+          "sdk-install",
+          "omnibus-instrument-integration"
+        ]
+      }
+    ],
+    "omnibus/instrument-llm-analytics": [
+      {
+        "id": "omnibus-instrument-llm-analytics",
+        "name": "Add PostHog AI Observability to trace AI model usage. Use after implementing LLM features or reviewing PRs to ensure all generations are captured with token counts, latency, and costs. Also handles initial PostHog SDK setup if not yet installed.",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/omnibus-instrument-llm-analytics.zip",
+        "title": "all supported providers",
+        "description": "Add PostHog AI Observability to trace AI model usage. Use after implementing LLM features or reviewing PRs to ensure all generations are captured with token counts, latency, and costs. Also handles initial PostHog SDK setup if not yet installed.",
+        "tags": [
+          "llm-analytics",
+          "sdk-install",
+          "omnibus-instrument-llm-analytics"
+        ]
+      }
+    ],
+    "omnibus/instrument-logs": [
+      {
+        "id": "omnibus-instrument-logs",
+        "name": "Add PostHog log capture to track application logs. Use after implementing features or reviewing PRs to ensure meaningful log events are captured with structured properties. Also handles initial OTLP exporter setup if not yet configured.",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/omnibus-instrument-logs.zip",
+        "title": "all supported platforms",
+        "description": "Add PostHog log capture to track application logs. Use after implementing features or reviewing PRs to ensure meaningful log events are captured with structured properties. Also handles initial OTLP exporter setup if not yet configured.",
+        "tags": [
+          "logs",
+          "omnibus-instrument-logs"
+        ]
+      }
+    ],
+    "omnibus/instrument-metrics": [
+      {
+        "id": "omnibus-instrument-metrics",
+        "name": "Add PostHog metric capture to track counters, gauges, and histograms. Use after implementing features or reviewing PRs to ensure key operations are measured, or when asked to add metrics, counters, or track a value over time. Also handles mirroring existing Prometheus/StatsD/OpenTelemetry metrics into PostHog and initial OTLP exporter setup.",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/omnibus-instrument-metrics.zip",
+        "title": "all supported platforms",
+        "description": "Add PostHog metric capture to track counters, gauges, and histograms. Use after implementing features or reviewing PRs to ensure key operations are measured, or when asked to add metrics, counters, or track a value over time. Also handles mirroring existing Prometheus/StatsD/OpenTelemetry metrics into PostHog and initial OTLP exporter setup.",
+        "tags": [
+          "metrics",
+          "omnibus-instrument-metrics"
+        ]
+      }
+    ],
+    "omnibus/instrument-product-analytics": [
+      {
+        "id": "omnibus-instrument-product-analytics",
+        "name": "Add PostHog product analytics events to track user behavior. Use after implementing new features or reviewing PRs to ensure meaningful user actions are captured. Also handles initial PostHog SDK setup if not yet installed.",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/omnibus-instrument-product-analytics.zip",
+        "title": "all supported frameworks",
+        "description": "Add PostHog product analytics events to track user behavior. Use after implementing new features or reviewing PRs to ensure meaningful user actions are captured. Also handles initial PostHog SDK setup if not yet installed.",
+        "tags": [
+          "sdk-install",
+          "omnibus-instrument-product-analytics"
+        ]
+      }
+    ],
+    "omnibus/instrument-reverse-proxy": [
+      {
+        "id": "omnibus-instrument-reverse-proxy",
+        "name": "Route PostHog's browser traffic through the app's own domain, so ad blockers don't drop events, session replays, and feature flag calls. Use when the user asks for a reverse proxy or agrees to one you suggested, for example after adding posthog-js or when events or recordings seem to be missing. Don't set one up unprompted. Prefers a self-hosted proxy where the app's platform makes it a small change, such as Next.js or Cloudflare, and PostHog's managed reverse proxy elsewhere.",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/omnibus-instrument-reverse-proxy.zip",
+        "title": "all supported platforms",
+        "description": "Route PostHog's browser traffic through the app's own domain, so ad blockers don't drop events, session replays, and feature flag calls. Use when the user asks for a reverse proxy or agrees to one you suggested, for example after adding posthog-js or when events or recordings seem to be missing. Don't set one up unprompted. Prefers a self-hosted proxy where the app's platform makes it a small change, such as Next.js or Cloudflare, and PostHog's managed reverse proxy elsewhere.",
+        "tags": [
+          "reverse-proxy",
+          "javascript_web",
+          "omnibus-instrument-reverse-proxy"
+        ]
+      }
+    ],
+    "omnibus/instrument-tracing": [
+      {
+        "id": "omnibus-instrument-tracing",
+        "name": "Add PostHog distributed tracing to see how requests flow through services and where time goes. Use after implementing features or reviewing PRs to ensure request entry points, outbound calls, and background jobs produce spans, or when asked to add tracing or spans. Also handles pointing existing OpenTelemetry tracing at PostHog and initial OTLP exporter setup.",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/omnibus-instrument-tracing.zip",
+        "title": "all supported platforms",
+        "description": "Add PostHog distributed tracing to see how requests flow through services and where time goes. Use after implementing features or reviewing PRs to ensure request entry points, outbound calls, and background jobs produce spans, or when asked to add tracing or spans. Also handles pointing existing OpenTelemetry tracing at PostHog and initial OTLP exporter setup.",
+        "tags": [
+          "tracing",
+          "omnibus-instrument-tracing"
+        ]
+      }
+    ],
+    "posthog-best-practices": [
+      {
+        "id": "posthog-best-practices",
+        "name": "Framework-agnostic, distilled best practices for using PostHog",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/posthog-best-practices.zip",
+        "title": "PostHog best practices",
+        "description": "Framework-agnostic, distilled best practices for using PostHog",
+        "tags": [
+          "best-practices",
+          "posthog-best-practices"
+        ]
+      }
+    ],
+    "quack": [
+      {
+        "id": "quack-quack",
+        "name": "Add QUACK QUACK comments to your codebase (for internal dev and testing)",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/quack-quack.zip",
+        "title": "Quack Quack Duck Comments (for internal dev and testing)",
+        "description": "Add QUACK QUACK comments to your codebase (for internal dev and testing)",
+        "tags": [
+          "quack",
+          "internal-test"
+        ]
+      }
+    ],
+    "replay-vision": [
+      {
+        "id": "replay-vision-setup",
+        "name": "Set up PostHog Replay vision. Makes sure session replay is recording (server-side enable plus a posthog-js init check), then creates vision scanners scoped to the product's key flows, read out of the repo. Scanners watch each new session recording with an LLM and report scores, tags, and summaries as queryable events.",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/replay-vision-setup.zip",
+        "title": "PostHog Replay vision",
+        "description": "Set up PostHog Replay vision. Makes sure session replay is recording (server-side enable plus a posthog-js init check), then creates vision scanners scoped to the product's key flows, read out of the repo. Scanners watch each new session recording with an LLM and report scores, tags, and summaries as queryable events.",
+        "tags": [
+          "replay-vision",
+          "session-replay"
+        ]
+      }
+    ],
+    "replay-vision-scanner-broken-experiences": [
+      {
+        "id": "replay-vision-scanner-broken-experiences",
+        "name": "The breakage monitor brief for Replay vision",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/replay-vision-scanner-broken-experiences.zip",
+        "title": "Breakage scanner",
+        "description": "The breakage monitor brief for Replay vision",
+        "tags": [
+          "orchestrator",
+          "replay-vision",
+          "replay-vision-scanner-broken-experiences"
+        ]
+      }
+    ],
+    "replay-vision-scanner-flow-outcome": [
+      {
+        "id": "replay-vision-scanner-flow-outcome",
+        "name": "The key flow outcome classifier brief for Replay vision",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/replay-vision-scanner-flow-outcome.zip",
+        "title": "Key flow outcome scanner",
+        "description": "The key flow outcome classifier brief for Replay vision",
+        "tags": [
+          "orchestrator",
+          "replay-vision",
+          "replay-vision-scanner-flow-outcome"
+        ]
+      }
+    ],
+    "replay-vision-scanner-problems": [
+      {
+        "id": "replay-vision-scanner-problems",
+        "name": "The problems monitor brief for Replay vision",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/replay-vision-scanner-problems.zip",
+        "title": "Problems scanner",
+        "description": "The problems monitor brief for Replay vision",
+        "tags": [
+          "orchestrator",
+          "replay-vision",
+          "replay-vision-scanner-problems"
+        ]
+      }
+    ],
+    "replay-vision-scanner-session-summaries": [
+      {
+        "id": "replay-vision-scanner-session-summaries",
+        "name": "The summary scanner brief for Replay vision",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/replay-vision-scanner-session-summaries.zip",
+        "title": "Summary scanner",
+        "description": "The summary scanner brief for Replay vision",
+        "tags": [
+          "orchestrator",
+          "replay-vision",
+          "replay-vision-scanner-session-summaries"
+        ]
+      }
+    ],
+    "replay-vision-scanner-user-frustration": [
+      {
+        "id": "replay-vision-scanner-user-frustration",
+        "name": "The frustration monitor brief for Replay vision",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/replay-vision-scanner-user-frustration.zip",
+        "title": "Frustration scanner",
+        "description": "The frustration monitor brief for Replay vision",
+        "tags": [
+          "orchestrator",
+          "replay-vision",
+          "replay-vision-scanner-user-frustration"
+        ]
+      }
+    ],
+    "replay-vision-scanners-core": [
+      {
+        "id": "replay-vision-scanners-core",
+        "name": "Shared mechanics for creating Replay vision scanners",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/replay-vision-scanners-core.zip",
+        "title": "Replay vision scanner mechanics",
+        "description": "Shared mechanics for creating Replay vision scanners",
+        "tags": [
+          "orchestrator",
+          "replay-vision",
+          "replay-vision-scanners-core"
+        ]
+      }
+    ],
+    "revenue-analytics": [
+      {
+        "id": "revenue-analytics-setup",
+        "name": "Set up Stripe revenue analytics with PostHog",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/revenue-analytics-setup.zip",
+        "title": "Stripe Revenue Analytics",
+        "description": "Set up Stripe revenue analytics with PostHog",
+        "tags": [
+          "revenue-analytics",
+          "stripe"
+        ]
+      }
+    ],
+    "self-driving": [
+      {
+        "id": "self-driving-setup",
+        "name": "Set up PostHog Self-driving — enable the right signal sources, tune the scout troop, and design custom scouts",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/self-driving-setup.zip",
+        "title": "PostHog Self-driving",
+        "description": "Set up PostHog Self-driving — enable the right signal sources, tune the scout troop, and design custom scouts",
+        "tags": [
+          "signals",
+          "self-driving"
+        ]
+      }
+    ],
+    "sending-transactional-emails": [
+      {
+        "id": "sending-transactional-emails",
+        "name": "Set up PostHog transactional emails, one-off emails that code sends to one person, such as password resets, sign-in codes, magic links, receipts, and invites. Use when asked to send one of those emails with PostHog, or to set up transactional email. It checks for a verified sender, writes the email in the app's code by default or as a PostHog template when the person picks that, hands over the project secret API key, and writes the send with PostHog's SDK for the backend's language (Node.js, Python, Go, Ruby, PHP, .NET, Rust or Elixir) or the HTTP API.",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/sending-transactional-emails.zip",
+        "title": "Transactional Emails",
+        "description": "Set up PostHog transactional emails, one-off emails that code sends to one person, such as password resets, sign-in codes, magic links, receipts, and invites. Use when asked to send one of those emails with PostHog, or to set up transactional email. It checks for a verified sender, writes the email in the app's code by default or as a PostHog template when the person picks that, hands over the project secret API key, and writes the send with PostHog's SDK for the backend's language (Node.js, Python, Go, Ruby, PHP, .NET, Rust or Elixir) or the HTTP API.",
+        "tags": [
+          "workflows",
+          "sending-transactional-emails"
+        ]
+      }
+    ],
+    "tools-and-features": [
+      {
+        "id": "tools-and-features-hogql",
+        "name": "HogQL queries for PostHog analytics",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/tools-and-features-hogql.zip",
+        "title": "HogQL",
+        "description": "HogQL queries for PostHog analytics",
+        "tags": [
+          "hogql",
+          "tools-and-features"
+        ]
+      }
+    ],
+    "tracing": [
+      {
+        "id": "tracing-nodejs",
+        "name": "PostHog distributed tracing for Node.js",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/tracing-nodejs.zip",
+        "title": "Node.js",
+        "description": "PostHog distributed tracing for Node.js",
+        "tags": [
+          "tracing",
+          "javascript"
+        ]
+      },
+      {
+        "id": "tracing-nextjs",
+        "name": "PostHog distributed tracing for Next.js",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/tracing-nextjs.zip",
+        "title": "Next.js",
+        "description": "PostHog distributed tracing for Next.js",
+        "tags": [
+          "tracing",
+          "nextjs",
+          "javascript"
+        ]
+      },
+      {
+        "id": "tracing-python",
+        "name": "PostHog distributed tracing for Python",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/tracing-python.zip",
+        "title": "Python",
+        "description": "PostHog distributed tracing for Python",
+        "tags": [
+          "tracing",
+          "python"
+        ]
+      },
+      {
+        "id": "tracing-go",
+        "name": "PostHog distributed tracing for Go",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/tracing-go.zip",
+        "title": "Go",
+        "description": "PostHog distributed tracing for Go",
+        "tags": [
+          "tracing",
+          "go"
+        ]
+      },
+      {
+        "id": "tracing-java",
+        "name": "PostHog distributed tracing for Java",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/tracing-java.zip",
+        "title": "Java",
+        "description": "PostHog distributed tracing for Java",
+        "tags": [
+          "tracing",
+          "java"
+        ]
+      },
+      {
+        "id": "tracing-dotnet",
+        "name": "PostHog distributed tracing for .NET",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/tracing-dotnet.zip",
+        "title": ".NET",
+        "description": "PostHog distributed tracing for .NET",
+        "tags": [
+          "tracing",
+          "dotnet",
+          "csharp"
+        ]
+      },
+      {
+        "id": "tracing-php",
+        "name": "PostHog distributed tracing for PHP",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/tracing-php.zip",
+        "title": "PHP",
+        "description": "PostHog distributed tracing for PHP",
+        "tags": [
+          "tracing",
+          "php"
+        ]
+      },
+      {
+        "id": "tracing-ruby",
+        "name": "PostHog distributed tracing for Ruby",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/tracing-ruby.zip",
+        "title": "Ruby",
+        "description": "PostHog distributed tracing for Ruby",
+        "tags": [
+          "tracing",
+          "ruby"
+        ]
+      },
+      {
+        "id": "tracing-other",
+        "name": "PostHog distributed tracing for Other Languages",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/tracing-other.zip",
+        "title": "Other Languages",
+        "description": "PostHog distributed tracing for Other Languages",
+        "tags": [
+          "tracing"
+        ]
+      }
+    ],
+    "web-analytics": [
+      {
+        "id": "web-analytics-doctor",
+        "name": "Audit and fix common PostHog web analytics misconfigurations",
+        "downloadUrl": "https://github.com/PostHog/context-mill/releases/download/v1.67.0/web-analytics-doctor.zip",
+        "title": "Web Analytics Doctor",
+        "description": "Audit and fix common PostHog web analytics misconfigurations",
+        "tags": [
+          "web-analytics",
+          "audit"
+        ]
+      }
+    ]
+  },
+  "cliEntries": [
+    {
+      "skillId": "mcp-analytics",
+      "role": "command",
+      "command": "mcp-analytics",
+      "displayName": "any TypeScript, JavaScript, Python, Go, Ruby, or Rust MCP server",
+      "description": "Add PostHog MCP analytics to a TypeScript, JavaScript, Python, Go, Ruby (experimental), or Rust (experimental) MCP server. Captures tool calls, agent intent, failures, protocol revision, the calling model, and conversation IDs, with the same defaults in every SDK. Each SDK supports legacy sessions and the handshake-free 2026-07-28 revision. Detects the server style and wires in compatible instrumentation, credentials, conversation correlation, and graceful shutdown."
+    },
+    {
+      "skillId": "mcp-analytics-python",
+      "role": "command",
+      "command": "mcp-analytics",
+      "displayName": "any Python MCP server",
+      "description": "Add PostHog MCP analytics to a TypeScript, JavaScript, Python, Go, Ruby (experimental), or Rust (experimental) MCP server. Captures tool calls, agent intent, failures, protocol revision, the calling model, and conversation IDs, with the same defaults in every SDK. Each SDK supports legacy sessions and the handshake-free 2026-07-28 revision. Detects the server style and wires in compatible instrumentation, credentials, conversation correlation, and graceful shutdown."
+    },
+    {
+      "skillId": "replay-vision-setup",
+      "role": "command",
+      "command": "replay-vision",
+      "displayName": "PostHog Replay vision",
+      "description": "Set up PostHog Replay vision. Makes sure session replay is recording (server-side enable plus a posthog-js init check), then creates vision scanners scoped to the product's key flows, read out of the repo. Scanners watch each new session recording with an LLM and report scores, tags, and summaries as queryable events."
+    },
+    {
+      "skillId": "revenue-analytics-setup",
+      "role": "command",
+      "command": "revenue-analytics",
+      "displayName": "Stripe Revenue Analytics",
+      "description": "Set up Stripe revenue analytics with PostHog"
+    },
+    {
+      "skillId": "audit",
+      "role": "command",
+      "parentCommand": "audit",
+      "command": "all",
+      "default": true,
+      "displayName": "PostHog audit",
+      "description": "Audit an existing PostHog integration for correctness and best practices"
+    },
+    {
+      "skillId": "audit-attribution",
+      "role": "command",
+      "parentCommand": "audit",
+      "command": "attribution",
+      "displayName": "PostHog audit — attribution",
+      "description": "Audit a PostHog integration's marketing attribution capture for UTM survival, click-id coverage, cross-subdomain identity, and consent/cookieless interactions"
+    },
+    {
+      "skillId": "audit-autocapture",
+      "role": "command",
+      "parentCommand": "audit",
+      "command": "autocapture",
+      "displayName": "PostHog audit — autocapture",
+      "description": "Audit a PostHog autocapture setup for correctness and cost-optimization opportunities"
+    },
+    {
+      "skillId": "audit-events",
+      "role": "command",
+      "parentCommand": "audit",
+      "command": "events",
+      "displayName": "PostHog audit — events",
+      "description": "Audit a PostHog integration's event capture quality and cost-optimization opportunities"
+    },
+    {
+      "skillId": "audit-feature-flags",
+      "role": "command",
+      "parentCommand": "audit",
+      "command": "feature-flags",
+      "displayName": "PostHog audit — feature flags",
+      "description": "Audit a PostHog integration's feature flag usage for correctness and cost-optimization opportunities"
+    },
+    {
+      "skillId": "audit-identify",
+      "role": "command",
+      "parentCommand": "audit",
+      "command": "identify",
+      "displayName": "PostHog audit — identify",
+      "description": "Audit a PostHog integration's $identify implementation for correctness and cost-optimization opportunities"
+    },
+    {
+      "skillId": "audit-session-replay",
+      "role": "command",
+      "parentCommand": "audit",
+      "command": "session-replay",
+      "displayName": "PostHog audit — session replay",
+      "description": "Audit a PostHog session replay setup for correctness and cost-optimization opportunities"
+    },
+    {
+      "skillId": "migrate-email-resend",
+      "role": "command",
+      "parentCommand": "migrate",
+      "command": "resend",
+      "displayName": "Resend",
+      "description": "Migrate transactional email from Resend to PostHog. Use when asked to migrate from Resend, replace Resend with PostHog, switch email providers, or re-import the Resend suppression list into PostHog after a migration. It finds every Resend send in the code, sets up the sender and DNS next to the records the app sends with now, imports the suppression list, moves each send PostHog can take to PostHog's SDK for its language (Node.js, Python, Go, Ruby, PHP, .NET, Rust, or Elixir), and writes a migration report that lists the sends that stay."
+    },
+    {
+      "skillId": "migrate-email-sendgrid",
+      "role": "command",
+      "parentCommand": "migrate",
+      "command": "sendgrid",
+      "displayName": "SendGrid",
+      "description": "Migrate transactional email from SendGrid to PostHog. Use when asked to migrate from SendGrid, replace SendGrid with PostHog, switch email providers, or re-import the SendGrid suppression list into PostHog after a migration. It finds every SendGrid send in the code, sets up the sender and DNS next to the records the app sends with now, imports the suppression list, moves each send PostHog can take to PostHog's SDK for its language (Node.js, Python, Go, Ruby, PHP, .NET, Rust, or Elixir), and writes a migration report that lists the sends that stay."
+    },
+    {
+      "skillId": "migrate-statsig",
+      "role": "command",
+      "parentCommand": "migrate",
+      "command": "statsig",
+      "displayName": "Statsig → PostHog",
+      "description": "Migrate an existing analytics or feature-flag vendor to PostHog. Replaces SDK call sites in-place, removes the source package, and writes a migration report. Replacement-only, doesn't adds new instrumentation."
+    },
+    {
+      "skillId": "ai-observability-openai-python",
+      "role": "skill",
+      "displayName": "OpenAI (Python)",
+      "description": "PostHog AI Observability integration for OpenAI (Python)"
+    },
+    {
+      "skillId": "ai-observability-openai-node",
+      "role": "skill",
+      "displayName": "OpenAI (Node)",
+      "description": "PostHog AI Observability integration for OpenAI (Node)"
+    },
+    {
+      "skillId": "ai-observability-anthropic-python",
+      "role": "skill",
+      "displayName": "Anthropic (Python)",
+      "description": "PostHog AI Observability integration for Anthropic (Python)"
+    },
+    {
+      "skillId": "ai-observability-anthropic-node",
+      "role": "skill",
+      "displayName": "Anthropic (Node)",
+      "description": "PostHog AI Observability integration for Anthropic (Node)"
+    },
+    {
+      "skillId": "ai-observability-langchain-python",
+      "role": "skill",
+      "displayName": "LangChain (Python)",
+      "description": "PostHog AI Observability integration for LangChain (Python)"
+    },
+    {
+      "skillId": "ai-observability-langchain-node",
+      "role": "skill",
+      "displayName": "LangChain (Node)",
+      "description": "PostHog AI Observability integration for LangChain (Node)"
+    },
+    {
+      "skillId": "ai-observability-vercel-ai",
+      "role": "skill",
+      "displayName": "Vercel AI SDK",
+      "description": "PostHog AI Observability integration for Vercel AI SDK"
+    },
+    {
+      "skillId": "ai-observability-google-python",
+      "role": "skill",
+      "displayName": "Google Gemini (Python)",
+      "description": "PostHog AI Observability integration for Google Gemini (Python)"
+    },
+    {
+      "skillId": "ai-observability-google-node",
+      "role": "skill",
+      "displayName": "Google Gemini (Node)",
+      "description": "PostHog AI Observability integration for Google Gemini (Node)"
+    },
+    {
+      "skillId": "ai-observability-manual-capture",
+      "role": "skill",
+      "displayName": "Manual capture",
+      "description": "PostHog AI Observability using explicit $ai_generation capture calls (no auto-instrumentation)"
+    },
+    {
+      "skillId": "ai-observability-azure-openai-python",
+      "role": "skill",
+      "displayName": "Azure OpenAI (Python)",
+      "description": "PostHog AI Observability integration for Azure OpenAI (Python)"
+    },
+    {
+      "skillId": "ai-observability-azure-openai-node",
+      "role": "skill",
+      "displayName": "Azure OpenAI (Node)",
+      "description": "PostHog AI Observability integration for Azure OpenAI (Node)"
+    },
+    {
+      "skillId": "ai-observability-aws-bedrock-python",
+      "role": "skill",
+      "displayName": "AWS Bedrock (Python)",
+      "description": "PostHog AI Observability integration for AWS Bedrock (Python)"
+    },
+    {
+      "skillId": "ai-observability-aws-bedrock-node",
+      "role": "skill",
+      "displayName": "AWS Bedrock (Node)",
+      "description": "PostHog AI Observability integration for AWS Bedrock (Node)"
+    },
+    {
+      "skillId": "ai-observability-cerebras-python",
+      "role": "skill",
+      "displayName": "Cerebras (Python)",
+      "description": "PostHog AI Observability integration for Cerebras (Python)"
+    },
+    {
+      "skillId": "ai-observability-cerebras-node",
+      "role": "skill",
+      "displayName": "Cerebras (Node)",
+      "description": "PostHog AI Observability integration for Cerebras (Node)"
+    },
+    {
+      "skillId": "ai-observability-cohere-python",
+      "role": "skill",
+      "displayName": "Cohere (Python)",
+      "description": "PostHog AI Observability integration for Cohere (Python)"
+    },
+    {
+      "skillId": "ai-observability-cohere-node",
+      "role": "skill",
+      "displayName": "Cohere (Node)",
+      "description": "PostHog AI Observability integration for Cohere (Node)"
+    },
+    {
+      "skillId": "ai-observability-deepseek-python",
+      "role": "skill",
+      "displayName": "DeepSeek (Python)",
+      "description": "PostHog AI Observability integration for DeepSeek (Python)"
+    },
+    {
+      "skillId": "ai-observability-deepseek-node",
+      "role": "skill",
+      "displayName": "DeepSeek (Node)",
+      "description": "PostHog AI Observability integration for DeepSeek (Node)"
+    },
+    {
+      "skillId": "ai-observability-fireworks-ai-python",
+      "role": "skill",
+      "displayName": "Fireworks AI (Python)",
+      "description": "PostHog AI Observability integration for Fireworks AI (Python)"
+    },
+    {
+      "skillId": "ai-observability-fireworks-ai-node",
+      "role": "skill",
+      "displayName": "Fireworks AI (Node)",
+      "description": "PostHog AI Observability integration for Fireworks AI (Node)"
+    },
+    {
+      "skillId": "ai-observability-groq-python",
+      "role": "skill",
+      "displayName": "Groq (Python)",
+      "description": "PostHog AI Observability integration for Groq (Python)"
+    },
+    {
+      "skillId": "ai-observability-groq-node",
+      "role": "skill",
+      "displayName": "Groq (Node)",
+      "description": "PostHog AI Observability integration for Groq (Node)"
+    },
+    {
+      "skillId": "ai-observability-hugging-face-python",
+      "role": "skill",
+      "displayName": "Hugging Face (Python)",
+      "description": "PostHog AI Observability integration for Hugging Face (Python)"
+    },
+    {
+      "skillId": "ai-observability-hugging-face-node",
+      "role": "skill",
+      "displayName": "Hugging Face (Node)",
+      "description": "PostHog AI Observability integration for Hugging Face (Node)"
+    },
+    {
+      "skillId": "ai-observability-mistral-python",
+      "role": "skill",
+      "displayName": "Mistral (Python)",
+      "description": "PostHog AI Observability integration for Mistral (Python)"
+    },
+    {
+      "skillId": "ai-observability-mistral-node",
+      "role": "skill",
+      "displayName": "Mistral (Node)",
+      "description": "PostHog AI Observability integration for Mistral (Node)"
+    },
+    {
+      "skillId": "ai-observability-ollama-python",
+      "role": "skill",
+      "displayName": "Ollama (Python)",
+      "description": "PostHog AI Observability integration for Ollama (Python)"
+    },
+    {
+      "skillId": "ai-observability-ollama-node",
+      "role": "skill",
+      "displayName": "Ollama (Node)",
+      "description": "PostHog AI Observability integration for Ollama (Node)"
+    },
+    {
+      "skillId": "ai-observability-perplexity-python",
+      "role": "skill",
+      "displayName": "Perplexity (Python)",
+      "description": "PostHog AI Observability integration for Perplexity (Python)"
+    },
+    {
+      "skillId": "ai-observability-perplexity-node",
+      "role": "skill",
+      "displayName": "Perplexity (Node)",
+      "description": "PostHog AI Observability integration for Perplexity (Node)"
+    },
+    {
+      "skillId": "ai-observability-together-ai-python",
+      "role": "skill",
+      "displayName": "Together AI (Python)",
+      "description": "PostHog AI Observability integration for Together AI (Python)"
+    },
+    {
+      "skillId": "ai-observability-together-ai-node",
+      "role": "skill",
+      "displayName": "Together AI (Node)",
+      "description": "PostHog AI Observability integration for Together AI (Node)"
+    },
+    {
+      "skillId": "ai-observability-xai-python",
+      "role": "skill",
+      "displayName": "xAI (Python)",
+      "description": "PostHog AI Observability integration for xAI (Python)"
+    },
+    {
+      "skillId": "ai-observability-xai-node",
+      "role": "skill",
+      "displayName": "xAI (Node)",
+      "description": "PostHog AI Observability integration for xAI (Node)"
+    },
+    {
+      "skillId": "ai-observability-autogen",
+      "role": "skill",
+      "displayName": "AutoGen",
+      "description": "PostHog AI Observability for AutoGen (multi-agent framework, Python)"
+    },
+    {
+      "skillId": "ai-observability-claude-agent-sdk",
+      "role": "skill",
+      "displayName": "Claude Agent SDK",
+      "description": "PostHog AI Observability for Anthropic's Claude Agent SDK (Python)"
+    },
+    {
+      "skillId": "ai-observability-crewai",
+      "role": "skill",
+      "displayName": "CrewAI",
+      "description": "PostHog AI Observability for CrewAI (multi-agent orchestration, Python)"
+    },
+    {
+      "skillId": "ai-observability-dspy",
+      "role": "skill",
+      "displayName": "DSPy",
+      "description": "PostHog AI Observability for DSPy (Python)"
+    },
+    {
+      "skillId": "ai-observability-llamaindex",
+      "role": "skill",
+      "displayName": "LlamaIndex",
+      "description": "PostHog AI Observability for LlamaIndex (Python)"
+    },
+    {
+      "skillId": "ai-observability-mirascope",
+      "role": "skill",
+      "displayName": "Mirascope",
+      "description": "PostHog AI Observability for Mirascope (Python)"
+    },
+    {
+      "skillId": "ai-observability-openai-agents",
+      "role": "skill",
+      "displayName": "OpenAI Agents SDK",
+      "description": "PostHog AI Observability for the OpenAI Agents SDK (Python)"
+    },
+    {
+      "skillId": "ai-observability-pydantic-ai",
+      "role": "skill",
+      "displayName": "Pydantic AI",
+      "description": "PostHog AI Observability for Pydantic AI (Python)"
+    },
+    {
+      "skillId": "ai-observability-semantic-kernel",
+      "role": "skill",
+      "displayName": "Semantic Kernel",
+      "description": "PostHog AI Observability for Microsoft Semantic Kernel (Python)"
+    },
+    {
+      "skillId": "ai-observability-smolagents",
+      "role": "skill",
+      "displayName": "smolagents",
+      "description": "PostHog AI Observability for smolagents (Python)"
+    },
+    {
+      "skillId": "ai-observability-convex",
+      "role": "skill",
+      "displayName": "Convex",
+      "description": "PostHog AI Observability for Convex (Node, Vercel AI SDK inside)"
+    },
+    {
+      "skillId": "ai-observability-mastra",
+      "role": "skill",
+      "displayName": "Mastra",
+      "description": "PostHog AI Observability for Mastra (agent framework, Node)"
+    },
+    {
+      "skillId": "ai-observability-google-adk",
+      "role": "skill",
+      "displayName": "Google ADK",
+      "description": "PostHog AI Observability for the Google Agent Development Kit (agent framework, Node)"
+    },
+    {
+      "skillId": "ai-observability-instructor-python",
+      "role": "skill",
+      "displayName": "Instructor (Python)",
+      "description": "PostHog AI Observability integration for Instructor (Python)"
+    },
+    {
+      "skillId": "ai-observability-instructor-node",
+      "role": "skill",
+      "displayName": "Instructor (Node)",
+      "description": "PostHog AI Observability integration for Instructor (Node)"
+    },
+    {
+      "skillId": "ai-observability-langgraph-python",
+      "role": "skill",
+      "displayName": "LangGraph (Python)",
+      "description": "PostHog AI Observability integration for LangGraph (Python)"
+    },
+    {
+      "skillId": "ai-observability-langgraph-node",
+      "role": "skill",
+      "displayName": "LangGraph (Node)",
+      "description": "PostHog AI Observability integration for LangGraph (Node)"
+    },
+    {
+      "skillId": "ai-observability-cloudflare-ai-gateway-python",
+      "role": "skill",
+      "displayName": "Cloudflare AI Gateway (Python)",
+      "description": "PostHog AI Observability integration for Cloudflare AI Gateway (Python)"
+    },
+    {
+      "skillId": "ai-observability-cloudflare-ai-gateway-node",
+      "role": "skill",
+      "displayName": "Cloudflare AI Gateway (Node)",
+      "description": "PostHog AI Observability integration for Cloudflare AI Gateway (Node)"
+    },
+    {
+      "skillId": "ai-observability-helicone-python",
+      "role": "skill",
+      "displayName": "Helicone (Python)",
+      "description": "PostHog AI Observability integration for Helicone (Python)"
+    },
+    {
+      "skillId": "ai-observability-helicone-node",
+      "role": "skill",
+      "displayName": "Helicone (Node)",
+      "description": "PostHog AI Observability integration for Helicone (Node)"
+    },
+    {
+      "skillId": "ai-observability-openrouter-python",
+      "role": "skill",
+      "displayName": "OpenRouter (Python)",
+      "description": "PostHog AI Observability integration for OpenRouter (Python)"
+    },
+    {
+      "skillId": "ai-observability-openrouter-node",
+      "role": "skill",
+      "displayName": "OpenRouter (Node)",
+      "description": "PostHog AI Observability integration for OpenRouter (Node)"
+    },
+    {
+      "skillId": "ai-observability-portkey-python",
+      "role": "skill",
+      "displayName": "Portkey (Python)",
+      "description": "PostHog AI Observability integration for Portkey (Python)"
+    },
+    {
+      "skillId": "ai-observability-portkey-node",
+      "role": "skill",
+      "displayName": "Portkey (Node)",
+      "description": "PostHog AI Observability integration for Portkey (Node)"
+    },
+    {
+      "skillId": "ai-observability-dedalus-python",
+      "role": "skill",
+      "displayName": "Dedalus Labs (Python)",
+      "description": "PostHog AI Observability integration for Dedalus Labs (Python)"
+    },
+    {
+      "skillId": "ai-observability-dedalus-node",
+      "role": "skill",
+      "displayName": "Dedalus Labs (Node)",
+      "description": "PostHog AI Observability integration for Dedalus Labs (Node)"
+    },
+    {
+      "skillId": "ai-observability-litellm",
+      "role": "skill",
+      "displayName": "LiteLLM",
+      "description": "PostHog AI Observability for LiteLLM (unified LLM SDK / proxy, Python)"
+    },
+    {
+      "skillId": "ai-observability-opentelemetry-python",
+      "role": "skill",
+      "displayName": "OpenTelemetry (Python)",
+      "description": "PostHog AI Observability integration for OpenTelemetry (Python)"
+    },
+    {
+      "skillId": "ai-observability-opentelemetry-node",
+      "role": "skill",
+      "displayName": "OpenTelemetry (Node)",
+      "description": "PostHog AI Observability integration for OpenTelemetry (Node)"
+    },
+    {
+      "skillId": "ai-observability-opentelemetry-go",
+      "role": "skill",
+      "displayName": "OpenTelemetry (Go)",
+      "description": "PostHog AI Observability integration for OpenTelemetry (Go)"
+    },
+    {
+      "skillId": "ai-observability-claude-code",
+      "role": "skill",
+      "displayName": "Claude Code",
+      "description": "PostHog AI Observability for Anthropic Claude Code sessions via the @posthog/ai-plugin"
+    },
+    {
+      "skillId": "ai-observability-openclaw",
+      "role": "skill",
+      "displayName": "OpenClaw",
+      "description": "PostHog AI Observability for the OpenClaw self-hosted AI gateway via the @posthog/openclaw plugin"
+    },
+    {
+      "skillId": "ai-observability-pi",
+      "role": "skill",
+      "displayName": "Pi Coding Agent",
+      "description": "PostHog AI Observability for the Pi terminal coding agent via the @posthog/pi extension"
+    },
+    {
+      "skillId": "creating-product-tours",
+      "role": "skill",
+      "displayName": "Creating product tours",
+      "description": "Build an in-app product tour that guides users through a feature inside the user's own application. Targeting via PostHog feature flags, tracking via PostHog events, custom reusable UI components. Use when a user asks to create a product tour, onboarding walkthrough, feature spotlight, or step-by-step guide in their app."
+    },
+    {
+      "skillId": "data-warehouse-destination-setup",
+      "role": "internal",
+      "displayName": "Data Warehouse Destination Setup",
+      "description": "Send PostHog events to the user's own data warehouse with a batch export"
+    },
+    {
+      "skillId": "integration-build",
+      "role": "internal",
+      "displayName": "PostHog build step",
+      "description": "Install dependencies and verify the project builds"
+    },
+    {
+      "skillId": "integration-capture",
+      "role": "internal",
+      "displayName": "PostHog capture step",
+      "description": "Instrument the planned events with PostHog capture calls"
+    },
+    {
+      "skillId": "integration-dashboard",
+      "role": "internal",
+      "displayName": "PostHog dashboard step",
+      "description": "Create a starter PostHog dashboard from the captured events"
+    },
+    {
+      "skillId": "integration-error-tracking",
+      "role": "internal",
+      "displayName": "PostHog error tracking step",
+      "description": "Capture exceptions with PostHog around critical flows"
+    },
+    {
+      "skillId": "integration-feature-flags",
+      "role": "internal",
+      "displayName": "PostHog feature flags step",
+      "description": "Evaluate the example PostHog feature flags, one per side of the app"
+    },
+    {
+      "skillId": "integration-identify",
+      "role": "internal",
+      "displayName": "PostHog identify step",
+      "description": "Identify users at login and signup"
+    },
+    {
+      "skillId": "integration-init",
+      "role": "internal",
+      "displayName": "PostHog init step",
+      "description": "Initialize PostHog and set its environment variables"
+    },
+    {
+      "skillId": "integration-insight",
+      "role": "internal",
+      "displayName": "PostHog insight step",
+      "description": "Create PostHog insights (trends, funnels) attached to a dashboard"
+    },
+    {
+      "skillId": "integration-install",
+      "role": "internal",
+      "displayName": "PostHog install step",
+      "description": "Install the PostHog SDK with the project's package manager"
+    },
+    {
+      "skillId": "integration-mcp",
+      "role": "internal",
+      "displayName": "PostHog MCP step",
+      "description": "How to call PostHog MCP tools (discover, inspect, then call)"
+    },
+    {
+      "skillId": "integration-notebook",
+      "role": "internal",
+      "displayName": "PostHog notebook step",
+      "description": "Mirror the setup report into a shareable PostHog notebook"
+    },
+    {
+      "skillId": "integration-report",
+      "role": "internal",
+      "displayName": "PostHog report step",
+      "description": "Publish the PostHog setup report from the run's handoffs"
+    },
+    {
+      "skillId": "integration-session-replay",
+      "role": "internal",
+      "displayName": "PostHog session replay step",
+      "description": "Make session replay record on server and client"
+    },
+    {
+      "skillId": "integration-warehouse",
+      "role": "internal",
+      "displayName": "PostHog warehouse step",
+      "description": "Connect the detected data sources to the PostHog data warehouse"
+    },
+    {
+      "skillId": "replay-vision-scanner-broken-experiences",
+      "role": "internal",
+      "displayName": "Breakage scanner",
+      "description": "The breakage monitor brief for Replay vision"
+    },
+    {
+      "skillId": "replay-vision-scanner-flow-outcome",
+      "role": "internal",
+      "displayName": "Key flow outcome scanner",
+      "description": "The key flow outcome classifier brief for Replay vision"
+    },
+    {
+      "skillId": "replay-vision-scanner-problems",
+      "role": "internal",
+      "displayName": "Problems scanner",
+      "description": "The problems monitor brief for Replay vision"
+    },
+    {
+      "skillId": "replay-vision-scanner-session-summaries",
+      "role": "internal",
+      "displayName": "Summary scanner",
+      "description": "The summary scanner brief for Replay vision"
+    },
+    {
+      "skillId": "replay-vision-scanner-user-frustration",
+      "role": "internal",
+      "displayName": "Frustration scanner",
+      "description": "The frustration monitor brief for Replay vision"
+    },
+    {
+      "skillId": "replay-vision-scanners-core",
+      "role": "internal",
+      "displayName": "Replay vision scanner mechanics",
+      "description": "Shared mechanics for creating Replay vision scanners"
+    }
+  ]
+}

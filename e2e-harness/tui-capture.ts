@@ -41,9 +41,11 @@ export interface TuiCapture {
   frame(): string;
   /** The current screen serialized back to ANSI — colors and attributes kept. */
   frameAnsi(): string;
-  /** Fires after each chunk of terminal output is applied. */
-  onData(cb: () => void): void;
+  /** Fires with each chunk of raw terminal output as it is applied. */
+  onData(cb: (chunk: string) => void): void;
   kill(): void;
+  cols: number;
+  rows: number;
   /** Resolves with the child's exit code, or 128 + signal, when it exits. */
   exited: Promise<number>;
 }
@@ -114,10 +116,10 @@ export function captureTui(opts: {
     env: childEnv as { [key: string]: string },
   });
 
-  const cbs: Array<() => void> = [];
+  const cbs: Array<(chunk: string) => void> = [];
   child.onData((d) => {
     term.write(d);
-    for (const cb of cbs) cb();
+    for (const cb of cbs) cb(d);
   });
   let resolveExit!: (code: number) => void;
   const exited = new Promise<number>((r) => (resolveExit = r));
@@ -162,6 +164,8 @@ export function captureTui(opts: {
         /* already gone */
       }
     },
+    cols,
+    rows,
     exited,
   };
 }

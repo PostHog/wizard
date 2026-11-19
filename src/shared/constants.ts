@@ -44,6 +44,7 @@ export const GPT6_SOL_MODEL = 'openai/gpt-6-sol';
  * and `src/agent/runner/sequence/`.
  */
 export enum Harness {
+  /** Deprecated and unused for now: no program binds it and no run falls back to it. */
   anthropic = 'anthropic',
   pi = 'pi',
 }
@@ -166,6 +167,7 @@ import {
   getLocalDev,
   POSTHOG_LOCAL_URL,
 } from './local-dev';
+import { getContextMillVersion } from './context-mill-version';
 export { IS_DEV };
 export const DEBUG = false;
 
@@ -220,10 +222,13 @@ export const LOCAL_SKILLS_BASE_URL = CONTEXT_MILL_LOCAL_URL;
 /**
  * Driven by `--local-context-mill`, NOT `--local-mcp` (which used to select
  * both). Takes no argument on purpose: callers can't pass the wrong flag.
+ * `--context-mill-version` selects that release's assets instead of the latest.
  */
 export function getSkillsBaseUrl(): string {
-  return getLocalDev().localContextMill
-    ? LOCAL_SKILLS_BASE_URL
+  if (getLocalDev().localContextMill) return LOCAL_SKILLS_BASE_URL;
+  const version = getContextMillVersion();
+  return version
+    ? `${CONTEXT_MILL_URL}/releases/download/${version}`
     : GITHUB_SKILLS_BASE_URL;
 }
 
@@ -317,8 +322,6 @@ export const WIZARD_INTERACTION_EVENT_NAME = 'wizard interaction';
 export const WIZARD_REMARK_EVENT_NAME = 'wizard remark';
 /** Multivariate flag: `wizard-run` publishes to WizardRun, anything else to WizardSession. */
 export const WIZARD_RUN_SYNC_FLAG_KEY = 'wizard-run-sync';
-/** Boolean feature flag that routes a run to the experimental orchestrator runner. */
-export const WIZARD_ORCHESTRATOR_FLAG_KEY = 'wizard-orchestrator';
 /** Multivariate flag: per-stage orchestrator overrides ride each variant's JSON payload (`{stage: {model?, effort?}}`). */
 export const WIZARD_ORCHESTRATOR_OVERRIDE_FLAG_KEY =
   'wizard-orchestrator-override';
@@ -328,9 +331,6 @@ export const WIZARD_SELF_DRIVING_USE_PI_HARNESS_FLAG_KEY =
 /** Boolean flag: agentic project scoping for non-interactive basic-integration runs. */
 export const WIZARD_BASIC_INTEGRATION_AGENTIC_DETECTION_FLAG_KEY =
   'wizard-basic-integration-agentic-detection';
-/** Boolean flag: the orchestrator queues the program's runner-seeded tasks (the warehouse step). Off, no task is queued and the run is byte-identical to a no-sources project. */
-export const WIZARD_ORCHESTRATOR_SEEDED_TASKS_FLAG_KEY =
-  'wizard-orchestrator-seeded-tasks';
 /** Kill switch over a shipped default: ONLY an explicit 'false' excludes the AI Observability and Logs tasks from default integration runs — absent or fetch-failed means include, so the default never vanishes on a network hiccup. */
 export const WIZARD_DEFAULT_AIO_LOGS_FLAG_KEY = 'wizard-default-aio-logs';
 /** Launch flag: ONLY an explicit 'true' includes the MCP analytics task in default integration runs — absent or fetch-failed means exclude. */
@@ -345,9 +345,7 @@ export const WIZARD_WAREHOUSE_DESTINATIONS_FLAG_KEY =
 // `wizard-` prefix anyone can name into — decides what a run evaluates. Test-pinned exhaustive.
 export const WIZARD_FLAG_KEYS = [
   WIZARD_RUN_SYNC_FLAG_KEY,
-  WIZARD_ORCHESTRATOR_FLAG_KEY,
   WIZARD_ORCHESTRATOR_OVERRIDE_FLAG_KEY,
-  WIZARD_ORCHESTRATOR_SEEDED_TASKS_FLAG_KEY,
   WIZARD_SELF_DRIVING_USE_PI_HARNESS_FLAG_KEY,
   WIZARD_BASIC_INTEGRATION_AGENTIC_DETECTION_FLAG_KEY,
   WIZARD_DEFAULT_AIO_LOGS_FLAG_KEY,
@@ -377,6 +375,8 @@ export const DETECTION_TIMEOUT_MS = 10_000;
 
 /** Timeout for the agentic project scan (ms); past it the run falls back to root detection. */
 export const AGENTIC_DETECTION_FIRST_ATTEMPT_TIMEOUT_MS = 60_000;
+/** Base pause before a timed-out scan's retry (ms); the scan adds up to as much again as jitter. */
+export const AGENTIC_DETECTION_RETRY_BACKOFF_MS = 1_000;
 export const AGENTIC_DETECTION_RETRY_TIMEOUT_MS = 90_000;
 
 /**

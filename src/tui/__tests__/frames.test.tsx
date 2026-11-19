@@ -222,6 +222,7 @@ const fakeClients = () =>
       kind: 'local' as const,
       supportsPlugin: true,
       pluginBundlesMcp: false,
+      pluginInstalled: true,
     },
     {
       name: 'Cursor',

@@ -19,8 +19,10 @@ export const config: ProgramConfig = {
   oauthScopeAdditions: AGENT_SKILL_SCOPE_ADDITIONS,
   run: (session) => {
     const skillId = session.skillId ?? 'agent-skill';
+    const provider = /^migrate-email-(.+)$/.exec(skillId)?.[1];
     return Promise.resolve({
       skillId,
+      analyticsTags: provider ? { migrated_from: provider } : undefined,
       integrationLabel: skillId,
       spinnerMessage: `Running ${skillId}...`,
       successMessage: `${skillId} complete!`,

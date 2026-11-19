@@ -296,7 +296,7 @@ describe('Analytics', () => {
 
     beforeEach(() => {
       mockFlags({
-        'wizard-orchestrator': true,
+        'wizard-default-aio-logs': true,
         'wizard-orchestrator-override': 'sol-review',
         'unrelated-flag': 'variant-x',
       });
@@ -335,7 +335,7 @@ describe('Analytics', () => {
     it('resolves only wizard flags into the map', async () => {
       const flags = await analytics.getAllFlagsForWizard();
       expect(flags).toEqual({
-        'wizard-orchestrator': 'true',
+        'wizard-default-aio-logs': 'true',
         'wizard-orchestrator-override': 'sol-review',
       });
     });
@@ -347,14 +347,14 @@ describe('Analytics', () => {
         ([arg]) => (arg as any).event === 'wizard: switchboard resolved',
       );
       const props = (call![0] as any).properties;
-      expect(props['$feature/wizard-orchestrator']).toBe(true);
+      expect(props['$feature/wizard-default-aio-logs']).toBe(true);
       expect(props['$feature/wizard-orchestrator-override']).toBe('sol-review');
       expect(props['$feature/unrelated-flag']).toBeUndefined();
     });
 
     it('lists only enabled wizard flags in $active_feature_flags', async () => {
       mockFlags({
-        'wizard-orchestrator': true,
+        'wizard-default-aio-logs': true,
         'wizard-self-driving-use-pi-harness': false,
         'wizard-orchestrator-override': 'sol-review',
         'unrelated-flag': 'variant-x',
@@ -365,7 +365,7 @@ describe('Analytics', () => {
         ([arg]) => (arg as any).event === 'wizard: switchboard resolved',
       );
       expect((call![0] as any).properties.$active_feature_flags).toEqual([
-        'wizard-orchestrator',
+        'wizard-default-aio-logs',
         'wizard-orchestrator-override',
       ]);
     });
@@ -376,15 +376,28 @@ describe('Analytics', () => {
       ) => any;
       const sent = beforeSend({
         event: '$feature_flag_called',
-        properties: { $feature_flag: 'wizard-orchestrator' },
+        properties: { $feature_flag: 'wizard-default-aio-logs' },
       });
       expect(sent.properties).toMatchObject({
-        $feature_flag: 'wizard-orchestrator',
+        $feature_flag: 'wizard-default-aio-logs',
         $app_name: 'wizard',
         run_id: 'run-uuid',
         run_surface: 'local',
         build: 'dev',
       });
+    });
+
+    it('stamps the wizard flags on the terminal event', async () => {
+      await analytics.getAllFlagsForWizard();
+      analytics.setTag('program_id', 'posthog-integration');
+      await analytics.shutdown('success');
+      const call = mockPostHogInstance.capture.mock.calls.find(
+        ([arg]) => (arg as any).event === 'setup wizard finished',
+      );
+      const props = (call?.[0] as any).properties;
+      expect(props['$feature/wizard-default-aio-logs']).toBe(true);
+      expect(props['$feature/unrelated-flag']).toBeUndefined();
+      expect(props.status).toBe('success');
     });
 
     it('carries no $feature props before the fetch', () => {

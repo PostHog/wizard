@@ -36,6 +36,7 @@ import { registerCleanup } from '@utils/cleanup';
 import { logToFile } from '@utils/debug';
 import { removeAuditLedger, startAuditLedgerWatcher } from '@programs/audit';
 import { FRAMEWORK_REGISTRY } from '@services/frameworks';
+import { getTraits, toMatchKeys } from '@services/project-traits';
 import { findProgramConfig, getProgramConfig } from './program-registry';
 import { ProgramAbort } from '@programs/program-contract';
 import { detectionFailure, detectProgram } from './detect-program';
@@ -123,6 +124,7 @@ async function invokeProgram(
 ): Promise<ProgramRunOutcome> {
   const input = snapshotProgramInput(callerInput);
   const { store } = input;
+  analytics.setProgramTags();
   // An unregistered id runs on input.config alone.
   const config = {
     ...findProgramConfig(programId),
@@ -234,13 +236,14 @@ async function invokeProgram(
   const unregisterLedger = ledger ? registerCleanup(releaseLedger) : undefined;
   let plainSettings: { backedUp: boolean } | undefined;
   try {
-    let run: AgentRunDefinition;
+    let run: ProgramRun;
     try {
       run = await resolveRun(config, store, runner);
     } catch (error) {
       if (error instanceof ProgramAbort) return fail(error.message, error.code);
       throw error;
     }
+    analytics.setProgramTags(run.analyticsTags);
     store.setSkillId(run.skillId ?? run.integrationLabel);
 
     const plannedRuns = planRuns(config, options);
@@ -425,6 +428,7 @@ async function invokeProgram(
               agentRun.handoffNotebook ?? planned.config.handoffNotebook,
             agentFlow: planned.config.agentFlow,
             accountOwnerContext: planned.config.accountOwnerContext,
+            agentPrompts: planned.config.agentPrompts,
             excludedTaskTypes: planned.config.excludedTaskTypes
               ? (runFlags) =>
                   planned.config.excludedTaskTypes!(runFlags, session())
@@ -432,6 +436,7 @@ async function invokeProgram(
             seedTasks: planned.config.seedTasks
               ? () => planned.config.seedTasks!(session())
               : undefined,
+            matchKeys: () => toMatchKeys(getTraits(session())),
             projectFacts:
               (decisions && planned.config.decisions) ||
               planned.config.detectedFacts
@@ -575,7 +580,7 @@ async function resolveRun(
   store: SessionStore,
   runner: RunnerContext,
   scoped?: WizardSession | null,
-): Promise<AgentRunDefinition> {
+): Promise<ProgramRun> {
   const run = config.run;
   if (!run) {
     throw new ProgramAbort({

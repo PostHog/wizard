@@ -1,4 +1,7 @@
 import { fetchSkillMenu, type SkillMenu } from '@shared/skill-menu';
+import { analytics } from '@utils/analytics';
+
+vi.mock('@utils/analytics', () => ({ analytics: { setTag: vi.fn() } }));
 
 describe('fetchSkillMenu', () => {
   const noSleep = () => Promise.resolve();
@@ -43,48 +46,42 @@ describe('fetchSkillMenu', () => {
     expect(result).toBeNull();
   });
 
-  it('expands a bundle entry into one entry per variant', async () => {
-    const bundled: SkillMenu = {
+  it('gives each entry the family of its category', async () => {
+    const published = {
       categories: {
-        integration: [
+        'flow/capture': [
           {
-            id: 'capture',
+            id: 'flow-capture',
             name: 'Capture',
-            group: 'capture',
-            bundle: true,
-            downloadUrl: 'http://localhost:8765/capture.json',
-            variants: [
-              { id: 'capture-rails', framework: 'rails', default: true },
-              { id: 'capture-react', framework: 'react' },
-            ],
+            downloadUrl: 'http://localhost:8765/flow-capture.zip',
           },
         ],
       },
     };
 
     const result = await fetchSkillMenu('http://localhost:8765', {
-      fetchImpl: respond(bundled) as any,
+      fetchImpl: respond(published) as any,
       sleepImpl: noSleep,
     });
 
-    expect(result?.categories.integration).toEqual([
+    expect(result?.categories['flow/capture']).toEqual([
       {
-        id: 'capture-rails',
-        framework: 'rails',
-        default: true,
+        id: 'flow-capture',
         name: 'Capture',
-        group: 'capture',
-        bundle: true,
-        downloadUrl: 'http://localhost:8765/capture.json',
-      },
-      {
-        id: 'capture-react',
-        framework: 'react',
-        name: 'Capture',
-        group: 'capture',
-        bundle: true,
-        downloadUrl: 'http://localhost:8765/capture.json',
+        family: 'flow-capture',
+        downloadUrl: 'http://localhost:8765/flow-capture.zip',
       },
     ]);
+  });
+
+  it('tags later events with the context-mill release that built the menu', async () => {
+    await fetchSkillMenu('http://localhost:8765', {
+      fetchImpl: respond({ ...menu, buildVersion: '1.60.0' }) as any,
+      sleepImpl: noSleep,
+    });
+    expect(analytics.setTag).toHaveBeenCalledWith(
+      'context_mill_version',
+      '1.60.0',
+    );
   });
 });

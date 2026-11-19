@@ -27,9 +27,8 @@ const skill = {
   id: 'integration-nextjs',
   name: 'Next.js integration',
   downloadUrl: 'https://example.com/skill.zip',
-  group: 'integration',
-  framework: 'nextjs',
-  default: true,
+  family: 'integration',
+  tags: ['framework:nextjs', 'default'],
 };
 
 describe('writeWizardSpellbook', () => {
@@ -56,10 +55,14 @@ describe('writeWizardSpellbook', () => {
     vi.mocked(fetchSkillMenu).mockResolvedValue({
       categories: {
         integration: [
-          { ...skill, id: 'integration-nextjs-alt', default: false },
+          {
+            ...skill,
+            id: 'integration-nextjs-alt',
+            tags: ['framework:nextjs'],
+          },
           skill,
         ],
-        unsafe: [{ ...skill, id: '../escaped', group: 'example-flow-unsafe' }],
+        unsafe: [{ ...skill, id: '../escaped', family: 'example-flow-unsafe' }],
       },
     });
 
@@ -78,6 +81,51 @@ describe('writeWizardSpellbook', () => {
     expect(readme).toContain(program.description);
     expect(readme).toContain(`[${skill.id}](skills/${skill.id}/SKILL.md)`);
     expect(readme).not.toMatch(/secret/);
+  });
+
+  it("hands over the flow's own skills when no skill is named for the run", async () => {
+    const session = buildSession({ installDir });
+    session.integration = Integration.nextjs;
+    session.skillId = 'not-on-the-menu';
+    const entry = (id: string, family: string, tags: string[]) => ({
+      ...skill,
+      id,
+      family,
+      tags,
+    });
+    const first = entry('example-flow-install-a', 'example-flow-install', [
+      'framework:nextjs',
+    ]);
+    const preferred = entry('example-flow-install-b', 'example-flow-install', [
+      'framework:nextjs',
+      'default',
+    ]);
+    const anyFramework = entry(
+      'example-flow-report',
+      'example-flow-report',
+      [],
+    );
+    vi.mocked(fetchSkillMenu).mockResolvedValue({
+      categories: {
+        install: [first, preferred],
+        report: [anyFramework],
+        other: [
+          entry('example-flow-install-nuxt', 'example-flow-install', [
+            'framework:nuxt',
+            'default',
+          ]),
+          entry('another-flow-install', 'another-flow-install', [
+            'framework:nextjs',
+          ]),
+        ],
+      },
+    });
+
+    await writeWizardSpellbook(session, program);
+
+    expect(
+      vi.mocked(downloadSkill).mock.calls.map(([picked]) => picked.id),
+    ).toEqual([preferred.id, anyFramework.id]);
   });
 
   it('still leaves usable instructions when the menu or download fails', async () => {

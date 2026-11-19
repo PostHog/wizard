@@ -116,13 +116,7 @@ describe('ClaudeCodeMCPClient — plugin methods', () => {
   });
 
   describe('supportsPlugin', () => {
-    it('returns true when claude binary is found', () => {
-      const client = new ClaudeCodeMCPClient();
-      expect(client.supportsPlugin()).toBe(true);
-    });
-
-    it('returns false when no binary is found', () => {
-      findBinaryMock.mockReturnValue(null);
+    it('returns false even when claude binary is found', () => {
       const client = new ClaudeCodeMCPClient();
       expect(client.supportsPlugin()).toBe(false);
     });
@@ -189,6 +183,32 @@ describe('ClaudeCodeMCPClient — plugin methods', () => {
       routeClaude(() => new Error('command failed'));
       const client = new ClaudeCodeMCPClient();
       await expect(client.isPluginInstalled()).resolves.toBe(false);
+    });
+  });
+
+  describe('isPluginServing', () => {
+    it('returns true for an enabled copy', async () => {
+      routeClaude((cmd) =>
+        isCmd(cmd, 'plugin', 'list') ? listed('posthog@posthog') : '',
+      );
+      const client = new ClaudeCodeMCPClient();
+      await expect(client.isPluginServing()).resolves.toBe(true);
+    });
+
+    it('returns false when the only copy is disabled, since it serves no server', async () => {
+      routeClaude((cmd) =>
+        isCmd(cmd, 'plugin', 'list')
+          ? listedWith(['posthog@posthog', false])
+          : '',
+      );
+      const client = new ClaudeCodeMCPClient();
+      await expect(client.isPluginServing()).resolves.toBe(false);
+    });
+
+    it('returns false when no plugins are installed', async () => {
+      routeClaude((cmd) => (isCmd(cmd, 'plugin', 'list') ? listed() : ''));
+      const client = new ClaudeCodeMCPClient();
+      await expect(client.isPluginServing()).resolves.toBe(false);
     });
   });
 

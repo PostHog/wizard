@@ -1,14 +1,14 @@
 /**
- * Experimental task-queue orchestrator runner.
+ * Task-queue orchestrator runner.
  *
- * Branches from the linear runner when the `wizard-orchestrator` flag is on. An
+ * Runs a program whose route resolves to the orchestrator sequence. An
  * orchestrator agent inspects the repo and seeds an in-memory task queue; an
  * executor drains it, running one fresh agent per task.
  *
- * Both the WHAT (agent prompts: model, goal, success criteria, tools) and the
- * HOW (mini-skills) are markdown served from context-mill — the seed and every
- * task resolve to a prompt fetched at startup into the registry. The wizard side
- * stays product-ignorant: it is the queue, the executor, and the loader.
+ * The WHAT (agent prompts: model, goal, success criteria, tools) is markdown
+ * each program bundles, and the HOW (mini-skills) is markdown served from
+ * context-mill. The runner stays product-ignorant: it is the queue, the
+ * executor, and the loader.
  */
 import { failed } from '../../shared/errors';
 import { RunOutcome } from '../../shared/types';
@@ -34,8 +34,10 @@ import { installSkillById } from '@shared/skill-install';
 import {
   formatYaraAbortMessage,
   scanInstalledSkill,
+  scanInstalledSkillFile,
 } from '../../../yara-hooks';
 import { fetchSkillMenu, type SkillEntry } from '@shared/skill-menu';
+import { FRAMEWORK_KEY, resolveSkill } from '@shared/skill-resolution';
 import { analytics } from '@utils/analytics';
 import { ciExcludedTaskTypes } from '@utils/ci-flag-overrides';
 import { logToFile } from '@utils/debug';
@@ -56,10 +58,10 @@ import type {
   SequenceResult,
   SequenceContext,
 } from '../../shared/types';
+import { runMatchKeys } from '../../shared/match-keys';
 import { createEmitSpinner } from '../../shared/progress-collector';
 import { createAskBridge } from '../../shared/ask';
 import {
-  areSeededTasksEnabled,
   getHarness,
   resolveHarness,
   resolveStageOverrides,
@@ -90,12 +92,18 @@ import {
 } from './task-deadline';
 import { dependencyClosure, uncoveredBySink } from './queue-tools';
 import { deferSeededTasks } from './seeded-deps';
+import {
+  FRAMEWORK_PACK_FAMILY,
+  repackagedSkillInstaller,
+  reportSkillUnavailable,
+} from './repackaged-skills';
+import { queueTaskGraph, TaskGraphError } from './task-graph';
 import { LONGER_ASK_TIMEOUT_MS, shouldDisableAsk } from '@shared/ask-policy';
 import {
   agentRunTools,
   assembleSeedPrompt,
   assembleTaskPrompt,
-  loadAgentRegistry,
+  bundledRegistry,
   promptModelFor,
   resolveTask,
   taskModelSpec,
@@ -245,32 +253,6 @@ async function fetchSkillMenuEntries(
   const menu = await fetchSkillMenu(skillsBaseUrl);
   if (!menu) return [];
   return Object.values(menu.categories).flat();
-}
-
-/** Menu id for a bare skill id + framework via the menu's declared group/framework/default fields; undefined when nothing matches. */
-export function resolveSkillVariantId(
-  entries: readonly SkillEntry[],
-  skillId: string,
-  framework: string | undefined,
-): string | undefined {
-  if (entries.some((e) => e.id === skillId)) return skillId;
-  if (!framework) return undefined;
-  const family = entries.filter(
-    (e) => e.group === skillId && e.framework === framework,
-  );
-  return (family.find((e) => e.default) ?? family[0])?.id;
-}
-
-/**
- * The framework reference is the full `integration` skill. `input.skillId` is
- * the bare framework (e.g. `django`), but the skill menu ids it as
- * `integration-<variant>`.
- */
-function resolveReferenceSkillId(
-  entries: readonly SkillEntry[],
-  framework: string,
-): string | undefined {
-  return resolveSkillVariantId(entries, 'integration', framework);
 }
 
 /**
@@ -746,11 +728,11 @@ async function executeOrchestrator(
   // `binding.contextMillOverride[role]` on the same inputs.
   const switchboardCtx = { ...config.switchboard, trace: undefined };
 
-  // The WHAT (agent prompts) is served from context-mill. Fetch the registry
+  // The WHAT (agent prompts) is bundled with the program. Build the registry
   // once up front: its types drive enqueue validation, and resolving a task to
-  // its run config is then synchronous, with no mid-drain network latency.
+  // its run config is then synchronous.
   const flow = config.agentFlow ?? programId;
-  const registry = await loadAgentRegistry(boot.skillsBaseUrl, flow, {
+  const registryOptions = {
     exclude: effectiveExcludedTaskTypes(config, boot.wizardFlags),
     // Baked into the prompts at load, so enqueue, dispatch, and telemetry all read one effective spec.
     overrides: resolveStageOverrides(
@@ -758,18 +740,38 @@ async function executeOrchestrator(
       boot.wizardFlags,
       boot.wizardFlagPayloads,
     ),
-  });
-  if (signal?.aborted) return cancelledRun();
-  const seedPrompt = registry.seed;
-  if (!seedPrompt) {
-    throw new Error(
-      `No seed agent prompt (frontmatter \`seed: true\`) for flow "${flow}" is available from ${boot.skillsBaseUrl}.`,
-    );
+  };
+  // A program that runs the orchestrator bundles its prompts; without them the run has no plan.
+  const bundledPrompts = await config
+    .agentPrompts?.()
+    .catch((error: unknown) => {
+      logToFile('[orchestrator] bundled prompts failed to load:', error);
+      analytics.captureException(
+        error instanceof Error ? error : new Error(String(error)),
+        { step: 'orchestrator_bundled_prompts' },
+      );
+      return undefined;
+    });
+  if (!bundledPrompts) {
+    logToFile(`[orchestrator] no bundled agent prompts for flow "${flow}"`);
+    return failed({
+      code: ErrorCodes.AgentOrchestratorNoPlanner,
+      message: `The wizard could not load the plan for this setup.\n\nPlease report this to: ${WIZARD_CONTACT_EMAIL}`,
+      error: new WizardError(
+        'orchestrator flow has no bundled agent prompts',
+        { flow },
+        ErrorCodes.AgentOrchestratorNoPlanner,
+      ),
+    });
   }
+  const registry = bundledRegistry(bundledPrompts, flow, registryOptions);
+  if (signal?.aborted) return cancelledRun();
+  // A flow with no planner prompt is queued from its frontmatter.
+  const seedPrompt = registry.seed;
 
   // The end decision the switchboard event defers to: the model each task will actually run on.
   const taskModels = Object.fromEntries(
-    ['seed', ...registry.types].map((type) => {
+    [...(seedPrompt ? ['seed'] : []), ...registry.types].map((type) => {
       const prompt = type === 'seed' ? seedPrompt : registry.get(type);
       const pick = resolveHarness(switchboardCtx, type);
       const specModel = prompt && promptModelFor(prompt, pick.harness).model;
@@ -879,15 +881,14 @@ async function executeOrchestrator(
   let referenceInstallPath: string | undefined;
   const menuSkillEntries = await fetchSkillMenuEntries(boot.skillsBaseUrl);
   if (signal?.aborted) return cancelledRun();
-  // The framework key for reference + variant resolution. `input.integration`
-  // is the detected framework and always wins; `input.skillId` is the
-  // fallback for the basic-integration path, where the caller sets it to the
-  // framework label. Programs whose run config carries their own skill id
-  // (agent-skill commands like replay-vision) would otherwise leak that id in
-  // here as a bogus framework after the caller overwrites the detect result.
-  const framework = input.integration ?? input.skillId ?? undefined;
+  // The project's traits are the match keys; their framework is the one the pack resolves for.
+  const matchKeys = runMatchKeys(config);
+  const framework = matchKeys[FRAMEWORK_KEY]?.[0];
+  const pickSkillEntry = (skillId: string) =>
+    resolveSkill(menuSkillEntries, skillId, matchKeys);
+  const pickSkillId = (skillId: string) => pickSkillEntry(skillId)?.id;
   const referenceSkillId = framework
-    ? resolveReferenceSkillId(menuSkillEntries, framework)
+    ? pickSkillId(FRAMEWORK_PACK_FAMILY)
     : undefined;
   if (referenceSkillId) {
     const ref = await installSkillById(
@@ -914,6 +915,12 @@ async function executeOrchestrator(
       logToFile(
         `[orchestrator] reference unavailable: ${ref.kind} (${referenceSkillId})`,
       );
+      // Every task then runs without the example and the framework rules.
+      analytics.wizardCapture('orchestrator reference skill unavailable', {
+        skill: referenceSkillId,
+        reason: ref.kind,
+        framework,
+      });
     }
   } else if (framework) {
     logToFile(
@@ -923,12 +930,16 @@ async function executeOrchestrator(
 
   // Preflight every task's mini-skills: a miss would run tasks skill-less, so fail properly instead.
   const missingVariants: string[] = [];
+  const missingSkills = new Set<string>();
   for (const type of registry.types) {
     for (const skillId of registry.get(type)?.skills ?? []) {
-      if (resolveSkillVariantId(menuSkillEntries, skillId, framework)) {
+      const picked = pickSkillEntry(skillId);
+      // A skill completed from the framework's pack is missing when the run installed no pack.
+      if (picked && !(picked.frameworkReferences && !referenceInstallPath)) {
         continue;
       }
       missingVariants.push(`${type}/${skillId}`);
+      missingSkills.add(skillId);
       logToFile(
         `[orchestrator] no skill variant type=${type} skill=${skillId} framework=${
           framework ?? 'none'
@@ -944,11 +955,24 @@ async function executeOrchestrator(
   if (missingVariants.length > 0) {
     // The framework's own docs page, resolved by the caller; generic docs when detection found none.
     const docsUrl = framework ? input.frameworkDocsUrl : undefined;
+    // A prompt naming a skill the loaded menu has under no id or family means the wizard is older than the skills.
+    const outdated =
+      menuSkillEntries.length > 0 &&
+      [...missingSkills].some(
+        (name) =>
+          !menuSkillEntries.some(
+            (entry) => entry.id === name || entry.family === name,
+          ),
+      );
     return failed({
       code: ErrorCodes.AgentOrchestratorSkillVariantMissing,
       message:
-        'Setup instructions for this project failed to download.\n' +
-        'Please try again, or contact wizard@posthog.com.\n\n' +
+        (outdated
+          ? 'This version of the wizard uses setup instructions that are no longer published.\n' +
+            'Run the latest version and try again:\n' +
+            '  npx @posthog/wizard@latest\n\n'
+          : 'Setup instructions for this project failed to download.\n' +
+            'Please try again, or contact wizard@posthog.com.\n\n') +
         'You can also set up with your agent by downloading the skills here:\n' +
         '  https://github.com/PostHog/context-mill/releases\n' +
         'or integrate manually here:\n' +
@@ -1028,11 +1052,7 @@ async function executeOrchestrator(
   // Tasks the wizard queues itself, from what detection found. They exist
   // before the planner runs, so the sink guard forces the reporting task to
   // depend on them, and no prompt has to remember they are there.
-  // Kill switch: off (or unset), the wizard queues nothing itself and the run
-  // is byte-identical to a project with no detected sources.
-  const seedEntries = areSeededTasksEnabled(boot.wizardFlags)
-    ? config.seedTasks?.() ?? []
-    : [];
+  const seedEntries = config.seedTasks?.() ?? [];
   const seededTypes: string[] = [];
   // Kept so their dependencies can be resolved once the planner has run — they
   // are queued before it, so they cannot name what they wait for yet.
@@ -1142,45 +1162,72 @@ async function executeOrchestrator(
 
   // 1. Seed the queue with the orchestrator agent. It is itself an agent prompt
   // (the WHAT), so its model and tools come from its frontmatter. The seed
-  // plans the graph, it is not a task.
+  // plans the graph, it is not a task. A flow with no planner prompt is queued
+  // from the graph its frontmatter declares instead.
   //
   // Prompt-frontmatter model wins over the switchboard pick (§3.6 of the
   // switchboard plan) — the switchboard's model is the fallback when the
   // prompt is silent.
-  const seedPick = resolveHarness(switchboardCtx, 'seed');
-  const seedHarness = requireTaskHarness(seedPick);
-  const seedModel = promptModelFor(seedPrompt, seedPick.harness);
-  const seedResult = await seedHarness.runTask({
-    signal,
-    config,
-    input,
-    boot,
-    emit,
-    // The exclusion note names `registry.excludedTypes` — the excluded types
-    // this flow actually had — so the planner never hears about work that was
-    // never available, and overlapping exclusion sources cannot double-list.
-    prompt: assembleSeedPrompt(
-      promptContext,
-      seedPrompt.body,
-      store.list(),
-      registry.excludedTypes,
-    ),
-    spinner,
-    model: requireKnownModel(seedModel.model, seedPick.model),
-    effort: seedModel.effort,
-    ...agentRunTools(seedPrompt),
-    orchestrator: orchestratorCtx(),
-    spinnerMessage: 'Planning the integration...',
-    successMessage: 'Planned the integration',
-    requestRemark: false,
-    analyticsProperties: { task_type: 'seed', harness: seedPick.harness },
-  });
-  if (signal?.aborted) return cancelledRun();
-  const seedTerminal = terminalResult(seedResult);
-  if (seedTerminal) return seedTerminal;
+  if (seedPrompt) {
+    const seedPick = resolveHarness(switchboardCtx, 'seed');
+    const seedHarness = requireTaskHarness(seedPick);
+    const seedModel = promptModelFor(seedPrompt, seedPick.harness);
+    const seedResult = await seedHarness.runTask({
+      signal,
+      config,
+      input,
+      boot,
+      emit,
+      // The exclusion note names `registry.excludedTypes` — the excluded types
+      // this flow actually had — so the planner never hears about work that was
+      // never available, and overlapping exclusion sources cannot double-list.
+      prompt: assembleSeedPrompt(
+        promptContext,
+        seedPrompt.body,
+        store.list(),
+        registry.excludedTypes,
+      ),
+      spinner,
+      model: requireKnownModel(seedModel.model, seedPick.model),
+      effort: seedModel.effort,
+      ...agentRunTools(seedPrompt),
+      orchestrator: orchestratorCtx(),
+      spinnerMessage: 'Planning the integration...',
+      successMessage: 'Planned the integration',
+      requestRemark: false,
+      analyticsProperties: { task_type: 'seed', harness: seedPick.harness },
+    });
+    if (signal?.aborted) return cancelledRun();
+    const seedTerminal = terminalResult(seedResult);
+    if (seedTerminal) return seedTerminal;
+  } else {
+    try {
+      queueTaskGraph(orchestratorCtx(), registry.graph);
+    } catch (error) {
+      if (!(error instanceof TaskGraphError)) throw error;
+      logToFile(`[orchestrator] task graph rejected: ${error.message}`);
+      analytics.wizardCapture('orchestrator task graph rejected', {
+        reason: error.reason,
+      });
+      return failed({
+        code: ErrorCodes.AgentOrchestratorTaskGraph,
+        message: `The wizard could not plan this setup: its steps could not be queued.\n\nPlease report this to: ${WIZARD_CONTACT_EMAIL}`,
+        error: new WizardError(
+          'orchestrator could not queue the declared task graph',
+          {
+            reason: error.reason,
+            detail: error.message,
+            queue_state: JSON.stringify(store.list()),
+          },
+          ErrorCodes.AgentOrchestratorTaskGraph,
+        ),
+      });
+    }
+  }
   analytics.wizardCapture('orchestrator seeded', {
     task_count: store.list().length,
     types: store.list().map((t) => t.type),
+    source: seedPrompt ? 'planner' : 'frontmatter',
   });
   renderQueue();
 
@@ -1292,6 +1339,22 @@ async function executeOrchestrator(
   // its agent prompt (the WHAT) and the mini-skills it needs (the HOW), then
   // runs on its own model and tools.
   const taskSkillsRoot = path.join(QUEUE_DIR_NAME, 'skills');
+  // A skill written once for every framework is completed from the run's pack before a task reads it.
+  const installCompletedSkill = repackagedSkillInstaller({
+    installDir: input.installDir,
+    skillsRoot: taskSkillsRoot,
+    // The run's cache is the wizard's own, so a folder an earlier run left there is replaced.
+    ownsSkillsRoot: true,
+    referencePath: referenceInstallPath,
+    install: (skillId, dir) =>
+      installSkillById(skillId, dir, boot.skillsBaseUrl, {
+        skillsRoot: 'skill',
+        scan: (scanned) => scanInstalledSkill(scanned, boot.triageProvider),
+      }),
+    scanFile: (file) => scanInstalledSkillFile(file, boot.triageProvider),
+    onUnavailable: (skill, reason) =>
+      reportSkillUnavailable(skill, reason, framework),
+  });
   // Task agents can install durable skills mid-run (load_skill), and only the
   // framework reference docs earn a place — snapshot what was already there so
   // the sweeps remove exactly what this run added.
@@ -1312,20 +1375,35 @@ async function executeOrchestrator(
       const skillPaths: string[] = [];
       for (const skillId of resolved.skills) {
         if (signal?.aborted) return;
-        // Agent prompts name the bare step-skill (`integration-v2-install`);
-        // SDK-divergent steps ship per-framework variants, so resolve against
-        // the menu with the session's framework before installing.
-        const variantId = resolveSkillVariantId(
-          menuSkillEntries,
-          skillId,
-          framework,
-        );
-        if (!variantId) {
+        // A prompt names a skill by menu id or by family; a family resolves
+        // against the menu with the run's match keys before installing.
+        const picked = pickSkillEntry(skillId);
+        const variantId = picked?.id;
+        if (!picked || !variantId) {
           logToFile(
             `[orchestrator] no skill variant type=${
               task.type
             } skill=${skillId} framework=${framework ?? 'none'}`,
           );
+          continue;
+        }
+        const { frameworkReferences } = picked;
+        if (frameworkReferences) {
+          // A task without its instructions must fail here, not run blind.
+          const completed = await installCompletedSkill({
+            ...picked,
+            frameworkReferences,
+          }).catch((error: unknown) => {
+            throw new Error(
+              `Skill "${variantId}" for task "${
+                task.type
+              }" could not be completed from the framework's pack (${
+                error instanceof Error ? error.message : String(error)
+              }).`,
+            );
+          });
+          if (signal?.aborted) return;
+          skillPaths.push(path.join(completed, 'SKILL.md'));
           continue;
         }
         const result = await installSkillById(
@@ -1690,12 +1768,15 @@ async function executeOrchestrator(
   }
 
   // A drain that produced no tasks at all means the seed step never got a
-  // usable model response (e.g. the gateway returned empty completions).
+  // usable model response (e.g. the gateway returned empty completions), or
+  // the flow's frontmatter left no task to queue.
   // "0/0 completed" is a dead run, not a success with an empty denominator.
   if (summary.total === 0) {
     return failed({
       code: ErrorCodes.AgentOrchestratorHollowRun,
-      message: `The wizard was unable to set up PostHog: the planning step produced no work, so nothing ran.\n\nPlease try again — and if it happens again, report it to: ${WIZARD_CONTACT_EMAIL}`,
+      message: seedPrompt
+        ? `The wizard was unable to set up PostHog: the planning step produced no work, so nothing ran.\n\nPlease try again — and if it happens again, report it to: ${WIZARD_CONTACT_EMAIL}`
+        : `The wizard was unable to set up PostHog: this setup had no steps to run.\n\nPlease report this to: ${WIZARD_CONTACT_EMAIL}`,
       error: new WizardError(
         'orchestrator drain produced zero tasks',
         { queue_state: JSON.stringify(store.list()) },

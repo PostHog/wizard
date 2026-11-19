@@ -4,7 +4,15 @@ import type { Argv } from 'yargs';
 import { IS_PRODUCTION_BUILD } from '@env';
 import { Harness, Sequence } from '@shared/constants';
 import { regionOption } from '@shared/headless-mode';
-import { initLocalDev, localMcpSkillsNotice } from '@shared/local-dev';
+import {
+  initLocalDev,
+  localDevFromArgv,
+  localMcpSkillsNotice,
+} from '@shared/local-dev';
+import {
+  initContextMillVersion,
+  parseContextMillVersion,
+} from '@shared/context-mill-version';
 import { configureLogFile } from '@utils/debug';
 import { toCommandModule, type Command } from './commands/command';
 import { ErrorCodes } from '@shared/errors';
@@ -72,6 +80,13 @@ export const GLOBAL_OPTIONS = {
     type: 'string' as const,
     hidden: true,
   },
+  'context-mill-version': {
+    describe:
+      'Fetch skills from this context-mill release (e.g. 1.67.0) instead of the latest\nenv: POSTHOG_WIZARD_CONTEXT_MILL_VERSION',
+    type: 'string' as const,
+    coerce: parseContextMillVersion,
+    hidden: true,
+  },
   benchmark: {
     default: false,
     describe:
@@ -118,14 +133,14 @@ export class Wizard {
         // Runner overrides — dev/test only, same lifecycle as --ci.
         .option('harness', {
           describe:
-            'Override the agent harness (anthropic | pi). Wins over the PostHog runner flag.\nenv: POSTHOG_WIZARD_HARNESS',
+            'Override the agent harness (pi | anthropic, deprecated). Wins over the PostHog runner flag.\nenv: POSTHOG_WIZARD_HARNESS',
           choices: Object.values(Harness),
           type: 'string',
           hidden: true,
         })
         .option('sequence', {
           describe:
-            'Override the runner sequence (linear | orchestrator). Wins over the PostHog orchestrator flag.\nenv: POSTHOG_WIZARD_SEQUENCE',
+            "Override the runner sequence (linear | orchestrator). Wins over the program's binding.\nenv: POSTHOG_WIZARD_SEQUENCE",
           choices: Object.values(Sequence),
           type: 'string',
           hidden: true,
@@ -190,6 +205,7 @@ export class Wizard {
         // The one place local targets are resolved; everything downstream reads
         // getLocalDev().
         initLocalDev(argv);
+        initContextMillVersion(argv.contextMillVersion);
 
         // Temporary.
         const notice = localMcpSkillsNotice({
@@ -200,6 +216,18 @@ export class Wizard {
         if (notice) {
           process.stderr.write(`\n\x1b[33m! ${notice}\x1b[0m\n\n`);
         }
+      })
+      // A local context-mill server has no releases to pin.
+      .check((argv) => {
+        if (
+          argv.contextMillVersion &&
+          localDevFromArgv(argv).localContextMill
+        ) {
+          throw new Error(
+            '--context-mill-version cannot be combined with --local-context-mill or --local-dev. Add --no-local-context-mill to keep the other local targets.',
+          );
+        }
+        return true;
       })
       .strictOptions()
       // Reject unrecognized commands (e.g. `wizard bogus`) instead of letting

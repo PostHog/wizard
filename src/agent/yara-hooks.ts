@@ -1162,6 +1162,24 @@ export async function scanInstalledSkill(
 ): Promise<string | null> {
   recordScan();
   const matches = await scanSkillFiles(absoluteSkillDir, '.', llmProvider);
+  return installScanVerdict(matches, absoluteSkillDir);
+}
+
+/** Scan one file of an installed skill, on `scanInstalledSkill`'s verdict; throws when the file cannot be read, so an unread file never passes. */
+export async function scanInstalledSkillFile(
+  absoluteFile: string,
+  llmProvider: LLMProvider | undefined,
+): Promise<string | null> {
+  recordScan();
+  const matches = await scanTextFiles([absoluteFile], llmProvider, 'throw');
+  return installScanVerdict(matches, absoluteFile);
+}
+
+/** The reason an installed skill is refused, or null to keep it: terminal on a critical match only, as every scan surface is. */
+function installScanVerdict(
+  matches: ScanMatch[],
+  scanned: string,
+): string | null {
   const verdict = scanVerdict(matches);
   if (!verdict) return null;
   recordMatch(
@@ -1174,13 +1192,13 @@ export async function scanInstalledSkill(
     logToFile(
       `[YARA] ${verdict.match.rule} (${
         verdict.match.metadata.severity ?? 'unknown'
-      }) in ${absoluteSkillDir} — non-terminal, keeping the skill`,
+      }) in ${scanned} — non-terminal, keeping the skill`,
     );
     return null;
   }
   return `Poisoned skill detected: ${verdict.match.rule} (${
     verdict.match.metadata.severity ?? 'unknown'
-  }) in ${absoluteSkillDir}`;
+  }) in ${scanned}`;
 }
 
 /**
@@ -1214,7 +1232,15 @@ async function scanSkillFiles(
   logToFile(
     `[YARA] Scanning ${files.length} files in skill directory: ${skillDir}`,
   );
+  return scanTextFiles(files, llmProvider, 'skip');
+}
 
+/** Scan the given files for prompt injection and triage what they flag; an unreadable file is skipped, or thrown on when the caller cannot do without it. */
+async function scanTextFiles(
+  files: string[],
+  llmProvider: LLMProvider | undefined,
+  unreadable: 'skip' | 'throw',
+): Promise<ScanMatch[]> {
   // Pass 1 (sequential): read and scan ONE file at a time through the
   // chunk-aware path. Oversized files are scanned up to the cap and logged —
   // never silently skipped. Flagged chunks keep a reference to the exact
@@ -1233,6 +1259,7 @@ async function scanSkillFiles(
       }
     } catch (err) {
       logToFile(`[YARA] Could not read skill file ${filePath}:`, err);
+      if (unreadable === 'throw') throw err;
       continue;
     }
     if (content) {

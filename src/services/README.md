@@ -33,6 +33,7 @@ by its folder, never a file inside one:
 | `@services/codebase-scan`       | The codebase scan and its report                                                                                                              |
 | `@services/warehouse-sources`   | The warehouse tool catalog and source detection                                                                                               |
 | `@services/mcp-servers`         | The MCP server scan: where a project's servers live, and resolving a chosen path to a target                                                  |
+| `@services/project-traits`      | Project traits: what detection read from a project's code, and the traits skills match on                                                     |
 
 Each entry's `index.ts` re-exports what code outside the service uses, and
 nothing else. Add to it when a program needs another export.
@@ -63,6 +64,22 @@ the mock reaches every importer.
 - **Build:** [`tsdown.config.ts`](../../tsdown.config.ts) stubs
   `src/services/detection/decisions` in production builds, matching relative and
   `@services/` specifiers. `pnpm check:decisions-bundle` verifies it.
+
+## Project traits
+
+A project is a directory in the repo with its traits, and `.` is the directory
+the run works in. A trait is one thing detection read from the project's code:
+its framework, the framework's variant, whether it calls an LLM API, its MCP
+servers and its warehouse sources. Traits describe the code, never the person.
+
+[`traits.ts`](project-traits/traits.ts) declares every trait once in `TRAITS`:
+how static detection reads it from the session, and whether skills can match on
+it. `getTraits(session, projectPath)` returns the traits detection settled and
+leaves out the rest. A trait is its value alone. It does not say whether
+detection or the person's answer to a setup question set it. Detection covers
+the run's own directory, so any other path has no traits. `toMatchKeys` turns
+the traits skills can match on into the run's match keys. `framework` is the
+only one.
 
 ## Session store and task streams
 

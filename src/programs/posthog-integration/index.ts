@@ -1,4 +1,8 @@
-import { detectMcpServer, detectPostHogIntegration } from '@services/detection';
+import {
+  detectMcpServer,
+  detectPostHogIntegration,
+  noteScannedWarehouseSources,
+} from '@services/detection';
 import type { ProgramConfig } from '@programs/program-contract';
 import type { ProgramRun } from '@programs/program-contract';
 import { AgentSignals, WIZARD_TOOL_NAMES } from '@agent';
@@ -24,7 +28,10 @@ import type {
 import { FRAMEWORK_REGISTRY } from '@services/frameworks';
 import { abortNoFrameworkDetected } from '../shared/abort-no-framework';
 import {
+  GPT5_6_SOL_MODEL,
+  Harness,
   SETUP_REPORT_FILE,
+  Sequence,
   WIZARD_DEFAULT_AIO_LOGS_FLAG_KEY,
   WIZARD_DEFAULT_MCP_ANALYTICS_FLAG_KEY,
   WIZARD_INTERACTION_EVENT_NAME,
@@ -45,7 +52,7 @@ const WAREHOUSE_SOURCES_DOCS_URL =
 /** Task type of the seeded step below, matched against the drain's result. */
 const WAREHOUSE_SEED_TASK_TYPE = 'warehouse';
 
-/** The context-mill `integration-v2` task that instruments the project's MCP server. */
+/** The `integration-v2` flow's task that instruments the project's MCP server. */
 const MCP_ANALYTICS_TASK_TYPE = 'mcp-analytics';
 
 /** Candidate paths the MCP fact names before it summarizes the rest. */
@@ -273,7 +280,15 @@ export { EVENT_PLAN_FILE } from './constants.js';
 export const config: ProgramConfig = {
   description: 'Set up PostHog SDK integration',
   id: 'posthog-integration',
+  // Orchestrator on pi. Each stage's model and effort come from the flow's frontmatter; a composed sub-run is linear on this model.
+  binding: {
+    sequence: Sequence.orchestrator,
+    harness: Harness.pi,
+    model: GPT5_6_SOL_MODEL,
+    thinkingLevel: 'medium',
+  },
   agentFlow: 'integration-v2',
+  agentPrompts: () => import('./agent-prompts').then((m) => m.AGENT_PROMPTS),
   handoffNotebook: true,
   eventPlanFile: EVENT_PLAN_FILE,
   scansCodebase: true,
@@ -363,6 +378,7 @@ export const config: ProgramConfig = {
       }
     }
     noteDetectedFramework(session, frameworkConfig, context, runner.log);
+    await noteScannedWarehouseSources(session, runner.log);
     await mcpServer;
   },
 

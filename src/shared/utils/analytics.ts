@@ -120,6 +120,7 @@ function flagResponseValue(value: string): string | boolean {
 
 export class Analytics {
   private client: PostHog;
+  private programTags: Readonly<Record<string, string>> = {};
   private tags: Record<string, string | boolean | number | null | undefined> =
     {};
   private distinctId?: string;
@@ -152,11 +153,19 @@ export class Analytics {
           const { $process_person_profile, ...properties } =
             event.properties ?? {};
           void $process_person_profile;
-          event.properties = { ...this.tags, ...properties };
+          event.properties = {
+            ...this.tags,
+            ...this.programTags,
+            ...properties,
+          };
         }
         // The SDK captures this one itself, bypassing capture(), so tags merge here.
         if (event.event === '$feature_flag_called') {
-          event.properties = { ...this.tags, ...(event.properties ?? {}) };
+          event.properties = {
+            ...this.tags,
+            ...this.programTags,
+            ...(event.properties ?? {}),
+          };
         }
         return event;
       },
@@ -272,6 +281,10 @@ export class Analytics {
     };
   }
 
+  setProgramTags(tags: Readonly<Record<string, string>> = {}) {
+    this.programTags = tags;
+  }
+
   setTag(key: string, value: string | boolean | number | null | undefined) {
     this.tags[key] = value;
   }
@@ -289,6 +302,7 @@ export class Analytics {
       // One issue per error code: the stack's install path and chunk hash otherwise split it per route and release.
       ...(code ? { $exception_fingerprint: `wizard_${code}` } : {}),
       ...this.tags,
+      ...this.programTags,
       ...properties,
     });
   }
@@ -299,6 +313,7 @@ export class Analytics {
       event: eventName,
       properties: {
         ...this.tags,
+        ...this.programTags,
         ...this.wizardFlagFeatureProperties(),
         ...properties,
       },
@@ -421,10 +436,13 @@ export class Analytics {
       properties: {
         // Flat for filtering; the nested `tags` snapshot stays for back-compat.
         ...this.tags,
+        ...this.programTags,
+        // The run's wizard flags, so an outcome can be split by flag variant.
+        ...this.wizardFlagFeatureProperties(),
         run_id: this._runId,
         ...(this.sessionId ? { $session_id: this.sessionId } : {}),
         status,
-        tags: this.tags,
+        tags: { ...this.tags, ...this.programTags },
       },
     });
 

@@ -130,8 +130,9 @@ any structural change; then load the relevant procedural skill:
 
 Default new work to **Pi**, and prefer the **orchestrator** sequence. Linear
 execution remains useful for very simple tasks and legacy support. The Anthropic
-Agent SDK is a supported legacy fallback, deprecated as the default; retain it
-for major Pi vulnerabilities or gaps in support for new Anthropic models.
+Agent SDK harness is deprecated and unused: no program binds it and no run falls
+back to it. Its code is retained for a major Pi vulnerability or a gap in Pi's
+support for a new Anthropic model.
 
 This is the contribution policy; existing programs' bindings vary, and
 `DEFAULT_BINDING` is Pi + linear. Set new bindings
@@ -257,6 +258,11 @@ package and the `pnpm dev` link, reject them.
 Note `wizard mcp add --local` is **not** one of these — it writes a
 `posthog-local` entry into your editor's MCP config, and is unrelated to where a
 wizard run points. Full catalog: [`docs/local-dev.md`](docs/local-dev.md).
+
+`--context-mill-version <version>` (`POSTHOG_WIZARD_CONTEXT_MILL_VERSION`) pins
+skills to one context-mill release instead of the latest. Every build accepts
+it; see
+[pinning a context-mill release](docs/local-dev.md#pinning-a-context-mill-release).
 
 ## Repository conventions
 

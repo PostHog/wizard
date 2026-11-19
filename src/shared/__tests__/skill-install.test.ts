@@ -69,89 +69,6 @@ describe('extractZipArchive', () => {
   });
 });
 
-describe('extractBundle', () => {
-  let dest: string;
-
-  const bundle = (files: Record<string, string>) => ({
-    id: 'integration-v2-capture',
-    variants: { django: files },
-  });
-
-  beforeEach(() => {
-    dest = fs.mkdtempSync(path.join(os.tmpdir(), 'wizard-bundle-'));
-  });
-
-  afterEach(() => {
-    cleanup(dest);
-  });
-
-  it('writes only the named variant, including nested paths', () => {
-    const written = __test.extractBundle(
-      bundle({ 'SKILL.md': '# skill', 'references/deep/notes.md': 'notes' }),
-      dest,
-      'integration-v2-capture-django',
-    );
-
-    expect(written).toBe(2);
-    expect(fs.readFileSync(path.join(dest, 'SKILL.md'), 'utf8')).toBe(
-      '# skill',
-    );
-    expect(
-      fs.readFileSync(path.join(dest, 'references/deep/notes.md'), 'utf8'),
-    ).toBe('notes');
-  });
-
-  it('rejects entries that escape the destination', () => {
-    expect(() =>
-      __test.extractBundle(
-        bundle({ '../evil.txt': 'pwned' }),
-        dest,
-        'integration-v2-capture-django',
-      ),
-    ).toThrow(/escapes destination/);
-    expect(fs.existsSync(path.join(dest, '..', 'evil.txt'))).toBe(false);
-  });
-
-  it('rejects absolute entry paths', () => {
-    expect(() =>
-      __test.extractBundle(
-        bundle({ '/etc/evil.txt': 'pwned' }),
-        dest,
-        'integration-v2-capture-django',
-      ),
-    ).toThrow(/escapes destination/);
-  });
-
-  it('throws when the bundle lacks the named variant', () => {
-    expect(() =>
-      __test.extractBundle(
-        bundle({ 'SKILL.md': '# skill' }),
-        dest,
-        'integration-v2-capture-nextjs',
-      ),
-    ).toThrow(/has no variant/);
-  });
-
-  it('throws a clean error on JSON that is not a bundle', () => {
-    for (const malformed of [
-      null,
-      [],
-      'oops',
-      { id: 'x' },
-      { variants: {} },
-      { id: 'x', variants: null },
-    ]) {
-      expect(() =>
-        __test.extractBundle(
-          malformed as never,
-          dest,
-          'integration-v2-capture-django',
-        ),
-      ).toThrow(/malformed bundle/);
-    }
-  });
-});
-
 describe('downloadWithRetry', () => {
   const url = 'https://example.com/skill.zip';
   const noSleep = () => Promise.resolve();
@@ -441,8 +358,67 @@ describe('downloadSkill (e2e over HTTP)', () => {
         'skill install failed',
         expect.objectContaining({ step: 'scan', skill_id: 'dummy' }),
       );
+      // The files no scan read go with the folder the install made.
+      expect(fs.existsSync(path.dirname(skillFile()))).toBe(false);
     } finally {
       captured.mockRestore();
+      await server.close();
+    }
+  });
+
+  // A menu id names the folder an install writes to.
+  it.each(['../../outside', '..', 'a/b', '/tmp/x'])(
+    'refuses the menu id %j, and fetches and writes nothing',
+    async (id) => {
+      let requests = 0;
+      const server = await startServer((_req, res) => {
+        requests += 1;
+        res.writeHead(200, { 'Content-Type': 'application/zip' });
+        res.end(Buffer.from(dummyZip()));
+      });
+
+      try {
+        const result = await downloadSkill(
+          { id, name: 'Dummy', downloadUrl: `${server.baseUrl}/skill.zip` },
+          path.join(tmpDir, 'project'),
+          { scan: clean },
+        );
+
+        expect(result).toEqual({
+          success: false,
+          error: `unusable skill id: ${id}`,
+        });
+        expect(requests).toBe(0);
+        expect(fs.readdirSync(tmpDir)).toEqual([]);
+      } finally {
+        await server.close();
+      }
+    },
+  );
+
+  it('keeps a folder that was there first when the install fails', async () => {
+    const server = await startServer((_req, res) => {
+      res.writeHead(404);
+      res.end();
+    });
+    const notes = path.join(path.dirname(skillFile()), 'my-notes.md');
+    fs.mkdirSync(path.dirname(notes), { recursive: true });
+    fs.writeFileSync(notes, 'mine');
+
+    try {
+      const result = await downloadSkill(
+        {
+          id: 'dummy',
+          name: 'Dummy',
+          downloadUrl: `${server.baseUrl}/skill.zip`,
+        },
+        tmpDir,
+        { scan: clean },
+      );
+
+      expect(result.success).toBe(false);
+      expect(fs.readFileSync(notes, 'utf8')).toBe('mine');
+    } finally {
       await server.close();
     }
   });

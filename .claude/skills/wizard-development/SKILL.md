@@ -20,7 +20,8 @@ infrastructure should consume those boundaries.
 | Concern                                               | Owner                                                                                                                                                                           |
 | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Framework detection, context, env conventions         | [FrameworkConfig](../../../src/programs/program-contract/framework-config.ts) and [framework configs](../../../src/services/frameworks/)                                                                       |
-| Integration instructions and orchestrator flows/tasks | [context-mill](https://github.com/PostHog/context-mill)                                                                                                                         |
+| Integration instructions (skills)                     | [context-mill](https://github.com/PostHog/context-mill). A step skill written once for every framework is completed from the framework's pack; see the [orchestrator sequence](../../../src/agent/runner/sequence/README.md#orchestrator)             |
+| Orchestrator task graphs and task prompts             | Each program's `agent/` folder; see [agent prompts](../../../src/programs/README.md#agent-prompts)                                                                                |
 | Programs: detection, runs, prerequisites and outcomes | One folder per program in [programs](../../../src/programs/), entered through its `index.ts`                                                                                                  |
 | Tools: commands that run no agent                     | [tools](../../../src/tools/), entered through `@tools`, with their screens in [TUI tools](../../../src/tui/tools/)                                                                            |
 | Program screens, flows and decks                      | [TUI programs](../../../src/tui/programs/)                                                                                                                                                    |
@@ -41,9 +42,10 @@ infrastructure should consume those boundaries.
 - **Linear is for very simple tasks and legacy support.** Composed program
   sub-runs are also structurally clamped to linear; orchestration cannot nest
   through that seam.
-- **Anthropic Agent SDK remains supported as a legacy fallback, deprecated as
-  the default.** Retain it for major Pi vulnerabilities or missing support for
-  new Anthropic models.
+- **The Anthropic Agent SDK harness is deprecated and unused.** No program
+  binds it and no run falls back to it. Its code is retained for a major Pi
+  vulnerability or missing support for a new Anthropic model; a development
+  build reaches it with `--harness anthropic`.
 
 [DEFAULT_BINDING](../../../src/agent/runner/switchboard/index.ts) selects
 Pi + linear for a program whose config sets no `binding`; flags and development

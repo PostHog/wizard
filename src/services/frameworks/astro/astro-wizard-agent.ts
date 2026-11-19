@@ -34,6 +34,7 @@ export const ASTRO_AGENT_CONFIG: FrameworkConfig<AstroContext> = {
       context.renderingMode
         ? `Astro ${getAstroRenderingModeName(context.renderingMode)}`
         : undefined,
+    getVariant: (context) => context.renderingMode,
   },
 
   detection: {

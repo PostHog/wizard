@@ -75,6 +75,34 @@ export function abortReason(text: string): string | undefined {
   return raw.replace(/^[\s`*_"']+|[\s`*_"'.]+$/g, '') || raw;
 }
 
+/** Reads a program abort marker outside Markdown blockquotes and code fences. */
+export function standaloneAbortReason(text: string): string | undefined {
+  let openFence: string | undefined;
+  let bareMarker: string | undefined;
+  for (const line of text.split(/\r?\n/)) {
+    const fence = /^[ \t]*(`{3,}|~{3,})(.*)$/.exec(line);
+    if (openFence) {
+      if (fence?.[1].startsWith(openFence) && !fence[2].trim()) {
+        openFence = undefined;
+      }
+      continue;
+    }
+    if (fence || /^\s*>/.test(line)) {
+      openFence = fence?.[1];
+      bareMarker = undefined;
+      continue;
+    }
+    if (/^[ \t`*_]*\[ABORT\]/.test(line)) {
+      const reason = abortReason(line);
+      if (reason) return reason;
+      bareMarker = line;
+    } else if (bareMarker && line.trim()) {
+      return abortReason(bareMarker + '\n' + line);
+    }
+  }
+  return undefined;
+}
+
 /**
  * End-of-run reflection ask, shared by both harnesses so remarks are
  * comparable. The format clause comes FIRST and nothing trails the marker —

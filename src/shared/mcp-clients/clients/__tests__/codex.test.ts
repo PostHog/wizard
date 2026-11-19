@@ -260,13 +260,7 @@ describe('CodexMCPClient', () => {
   });
 
   describe('supportsPlugin', () => {
-    it('returns true when codex is in PATH', () => {
-      const client = new CodexMCPClient();
-      expect(client.supportsPlugin()).toBe(true);
-    });
-
-    it('returns false when codex binary is not found', () => {
-      findBinaryMock.mockReturnValue(null);
+    it('returns false even when codex is in PATH', () => {
       const client = new CodexMCPClient();
       expect(client.supportsPlugin()).toBe(false);
     });

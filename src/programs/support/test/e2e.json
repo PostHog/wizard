@@ -1,0 +1,31 @@
+{
+  "program": "support",
+  "summary": "Happy path: detect framework (platform gate), confirm intro, run the support orchestrator flow (install/init when PostHog is absent, enable Support, check the posthog-js init and identification, report to a notebook). On an unsupported platform (mobile, pure backend) the run aborts at detect with the platform message.",
+  "profile": {
+    "setup": "first",
+    "healthCheck": "dismiss",
+    "mcp": "skip",
+    "slack": "skip",
+    "ask": "first"
+  },
+  "variations": [
+    {
+      "name": "default",
+      "summary": "orchestrator / pi; stage models from the context-mill support prompts"
+    }
+  ],
+  "path": [
+    {
+      "screen": "(headless detect)",
+      "auto": "framework detection; unsupported platforms abort here with the Support platform message"
+    },
+    { "screen": "agent-skill-intro", "auto": "confirm & continue" },
+    {
+      "screen": "health-check",
+      "auto": "dismiss outage and proceed even if the readiness probe flags an issue"
+    },
+    { "screen": "auth", "auto": "(external) the runner resolves credentials" },
+    { "screen": "run", "auto": "(external) the orchestrator flow" },
+    { "screen": "outro", "auto": "dismiss" }
+  ]
+}

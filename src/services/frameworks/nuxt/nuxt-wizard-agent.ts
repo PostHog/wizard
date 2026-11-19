@@ -30,6 +30,11 @@ export const NUXT_AGENT_CONFIG: FrameworkConfig<NuxtContext> = {
       const versionBucket = getNuxtVersionBucket(version);
       return { versionBucket };
     },
+    // A bucket for a version that could not be read, such as `unknown`, names no variant.
+    getVariant: (context) =>
+      /^\d+\.x$/.test(context.versionBucket ?? '')
+        ? context.versionBucket
+        : undefined,
   },
 
   detection: {

@@ -1,4 +1,4 @@
-// Supported legacy SDK fallback; both this adapter and Pi implement run and runTask.
+// Deprecated and unused for now: no program binds this harness and no run falls back to it; dev builds reach it with `--harness anthropic`.
 
 import { Harness } from '@shared/constants';
 import {
@@ -58,6 +58,7 @@ export const anthropicBackend: AgentHarness = {
         detectPackageManager:
           config.detectPackageManager ?? detectNodePackageManagers,
         skillsBaseUrl,
+        matchKeys: boot.matchKeys,
         wizardFlags,
         wizardMetadata,
         programId: boot.programId,
@@ -148,6 +149,7 @@ export const anthropicBackend: AgentHarness = {
         host: boot.credentials.host,
         detectPackageManager: detectNodePackageManagers,
         skillsBaseUrl: boot.skillsBaseUrl,
+        matchKeys: boot.matchKeys,
         programId: boot.programId,
         handoffNotebook: boot.handoffNotebook,
         wizardFlags: boot.wizardFlags,
