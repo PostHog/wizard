@@ -372,7 +372,7 @@ describe('the email provider offer after install', () => {
 });
 
 describe('the MCP step into the email provider offer', () => {
-  it("doesn't let a quick Enter after the MCP step answer the question", async () => {
+  it("doesn't let Enter held from the MCP step answer the question", async () => {
     const store = storeAtOutroWithResend();
     store.setOutroDismissed();
     const app = render(
@@ -385,13 +385,29 @@ describe('the MCP step into the email provider offer', () => {
     expect(store.router.resolve(store)).toBe(ScreenId.Mcp);
 
     store.setMcpComplete();
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    let presses = 0;
+    const held = setInterval(() => {
+      app.stdin.write(ENTER);
+      presses += 1;
+    }, 33);
+    try {
+      await vi.waitFor(
+        () => expect(app.lastFrame()).toContain('Yes, show me how'),
+        { timeout: 5000 },
+      );
+      const pressesBeforeQuestion = presses;
+      await vi.waitFor(() =>
+        expect(presses).toBeGreaterThanOrEqual(pressesBeforeQuestion + 3),
+      );
+      await delay();
+    } finally {
+      clearInterval(held);
+    }
+    expect(await offerEvents()).toEqual([SHOWN]);
+
+    pause();
     app.stdin.write(ENTER);
     await delay();
-
-    expect(store.router.resolve(store)).toBe(
-      PostHogIntegrationScreenId.EmailProviderOffer,
-    );
-    expect(await offerEvents()).toEqual([SHOWN]);
+    expect(await offerEvents()).toEqual([SHOWN, answered('yes')]);
   });
 });
