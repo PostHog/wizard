@@ -1621,6 +1621,88 @@ describe('runProgram', () => {
       expect(s.session.runProject).toBe('.');
     });
 
+    const DISCOVERY_ON = { 'wizard-project-discovery': 'one-project' };
+    const everyProject = { run, appliesTo: () => true };
+
+    it('asks the host which project to work in, and works in the pick', async () => {
+      const s = pairStore();
+      const host = workflow();
+      host.confirmStep.mockImplementation((step: ProgramStep) => {
+        host.steps.push(step);
+        if (step.kind === 'plan') step.pick('apps/api');
+        return Promise.resolve(true);
+      });
+
+      const result = await runProgram(
+        'metrics',
+        input({ store: s, config: everyProject, wizardFlags: DISCOVERY_ON }),
+        { credentials: login(), workflow: host },
+      );
+
+      expect(result.outcome).toBe(RunOutcome.Success);
+      const plan = host.steps.find((step) => step.kind === 'plan');
+      expect(plan).toMatchObject({
+        plan: { repoType: 'monorepo', picked: '.' },
+      });
+      expect(agentInput().installDir).toBe(path.join(repo, 'apps/api'));
+      expect(s.session.runProject).toBe('apps/api');
+    });
+
+    it('stays in the project the run started in when the person keeps the default', async () => {
+      const s = pairStore();
+      const host = workflow();
+      host.confirmStep.mockImplementation((step: ProgramStep) => {
+        if (step.kind === 'plan') step.pick(step.plan.picked);
+        return Promise.resolve(true);
+      });
+
+      await runProgram(
+        'metrics',
+        input({ store: s, config: everyProject, wizardFlags: DISCOVERY_ON }),
+        { credentials: login(), workflow: host },
+      );
+
+      expect(agentInput().installDir).toBe(repo);
+    });
+
+    it('asks nobody without a host, or with the flag off', async () => {
+      await runProgram(
+        'metrics',
+        input({
+          store: pairStore(),
+          config: everyProject,
+          wizardFlags: DISCOVERY_ON,
+        }),
+        { credentials: login() },
+      );
+      expect(agentInput().installDir).toBe(repo);
+
+      const host = workflow();
+      await runProgram(
+        'metrics',
+        input({ store: pairStore(), config: everyProject }),
+        { credentials: login(), workflow: host },
+      );
+      expect(host.steps.some((step) => step.kind === 'plan')).toBe(false);
+    });
+
+    it('stops when the host declines the plan', async () => {
+      const result = await runProgram(
+        'metrics',
+        input({
+          store: pairStore(),
+          config: everyProject,
+          wizardFlags: DISCOVERY_ON,
+        }),
+        {
+          credentials: login(),
+          workflow: workflow((step) => step.kind !== 'plan'),
+        },
+      );
+      expect(result.outcome).toBe(RunOutcome.Aborted);
+      expect(runAgent).not.toHaveBeenCalled();
+    });
+
     it('stops on a project discovery did not find', async () => {
       const result = await runProgram(
         'metrics',

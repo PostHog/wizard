@@ -110,6 +110,15 @@ started in.
   against the walk's packages, `.env` key names and script hosts. Tools and
   projects fail apart: a missing catalog sets `tools.failed` and leaves
   `projects` whole.
+- [`plan.ts`](project-discovery/plan.ts) builds the plan for one program: every
+  project, the ones `appliesTo` offers, a reason for each of the others (already
+  has PostHog, unsupported framework, library, tooling, workspace root), and the
+  project that starts picked. A run that started inside a project keeps it. A
+  run at a workspace root takes the main app, else the only app offered, else
+  stays where it started. `reportProjectsDiscovered` and
+  `reportProjectsSelected` send the `wizard: projects discovered` and
+  `wizard: projects selected` events under discovery consent. The second carries
+  the pick beside the default and each model source's main app.
 - [`report.ts`](project-discovery/report.ts) is the one place discovery leaves
   the machine, as a `DiscoveryReport`. It needs discovery consent
   (`maySendDiscovery`) and telemetry. [`tags.ts`](project-discovery/tags.ts)
@@ -120,11 +129,11 @@ started in.
 [`flag.ts`](project-discovery/flag.ts) reads the `wizard-project-discovery`
 flag:
 
-| Value         | What runs                                                                                            |
-| ------------- | ---------------------------------------------------------------------------------------------------- |
-| `off`         | Discovery walks from the run directory, so `rootDir` is the run directory and the run project is `.` |
-| `one-project` | The walk up to the workspace root                                                                    |
-| `run-lists`   | Everything in `one-project`                                                                          |
+| Value         | What runs                                                                                                       |
+| ------------- | --------------------------------------------------------------------------------------------------------------- |
+| `off`         | Discovery walks from the run directory, so `rootDir` is the run directory and the run project is `.`            |
+| `one-project` | The walk up to the workspace root, and the plan: a program with `appliesTo` works in one picked project per run |
+| `run-lists`   | Everything in `one-project`                                                                                     |
 
 Any other value, or a failed flag read, is `off`.
 

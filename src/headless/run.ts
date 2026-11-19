@@ -60,6 +60,7 @@ export type HeadlessLaunch = {
   mode: NonInteractiveMode;
   session: SessionArgs; // launch values, flags already merged over the environment
   taskStreamLog?: string; // --task-stream-log: a path, or '' for the default one
+  project?: string; // --project: the project the run works in, as a path from the workspace root
   runId?: string; // the cloud WizardRun this run reports under
   signal: AbortSignal; // the CLI aborts it on SIGINT, SIGTERM or SIGHUP, with the signal name as the reason
 };
@@ -193,7 +194,7 @@ async function main(
 
     const result = await runProgram(
       config.id,
-      { store, config },
+      { store, config, project: launch.project },
       {
         credentials,
         onProgress: logProgress(log),

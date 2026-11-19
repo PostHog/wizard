@@ -141,6 +141,16 @@ started in, `session.runProject`. The pair's skills resolve from its own
 project's traits: `matchKeys` and `traitKeys` both read
 `getTraits(session, pair.project.path)`.
 
+With `wizard-project-discovery` on, a program with `appliesTo` picks its
+project after login. `runProgram` builds the plan, and when more than one
+project is offered it asks the host through the `plan` workflow step. The TUI
+shows the plan screen in the default flow; the picked project comes first, so
+Enter keeps the default. A headless or `--ci` run asks nobody: it takes
+`--project <path>`, else the default. A program's `rankWith: ['agentic']` runs
+agentic detection before the plan opens, so the main app is marked. A pick
+other than the run project points the session at it and runs the program's
+detection again there.
+
 A program's `appliesTo(traits)` says which projects it applies to, over one
 project's settled traits. posthog-integration applies to an app with a
 supported framework that PostHog is not in yet. A program without one applies

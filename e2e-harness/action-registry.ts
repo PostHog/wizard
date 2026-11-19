@@ -226,6 +226,20 @@ export const ACTION_REGISTRY: Partial<Record<string, DriverAction[]>> = {
     },
   ],
 
+  // ── Project pick ──────────────────────────────────────────────────────
+  [ScreenId.Plan]: [
+    {
+      id: 'pick_project',
+      description:
+        'Pick the project the run works in, by its path from the workspace root. ' +
+        'Read read_state for the offered projects.',
+      params: { project: 'project path, such as apps/web' },
+      apply: (store, params) => {
+        store.confirmPlan(requireString('pick_project', params, 'project'));
+      },
+    },
+  ],
+
   // ── Framework disambiguation ──────────────────────────────────────────
   [ScreenId.Setup]: [
     {

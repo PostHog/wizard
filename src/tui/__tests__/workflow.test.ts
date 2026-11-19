@@ -5,6 +5,8 @@ import { WizardReadiness } from '@shared/health-checks/readiness';
 import { RunOutcome } from '@programs';
 import { SOURCE_MAPS_CONTEXT_KEYS } from '@programs/error-tracking-upload-source-maps';
 import { WizardStore } from '../store';
+import type { PlanOffer } from '@programs/types';
+import { planOptions } from '../screens/PlanScreen';
 import { tuiWorkflow } from '../workflow';
 
 const approvedUser = {
@@ -110,5 +112,50 @@ describe('tuiWorkflow', () => {
       ),
     ).resolves.toBe(false);
     expect(store.session.readinessResult).toBe(readiness);
+  });
+
+  it('holds the plan step on the plan screen until the person picks, then holds the run behind it', async () => {
+    const store = new WizardStore('posthog-integration');
+    loggedIn(store);
+    const offer: PlanOffer = {
+      repoType: 'monorepo',
+      complete: true,
+      picked: 'apps/web',
+      projects: [
+        { path: 'apps/web', offered: true, mainApp: false },
+        { path: 'apps/api', offered: true, mainApp: false },
+      ],
+    };
+    const ranked: PlanOffer = { ...offer, picked: 'apps/api' };
+    const pick = vi.fn();
+    const signal = new AbortController().signal;
+    const host = tuiWorkflow(store, 'posthog-integration');
+
+    const plan = host.confirmStep(
+      {
+        kind: 'plan',
+        programId: 'posthog-integration',
+        installDir: '/repo',
+        plan: offer,
+        rank: () => Promise.resolve(ranked),
+        pick,
+      },
+      { signal },
+    );
+    expect(await settles(plan)).toBe(false);
+    // The model sources answered: the screen shows their plan.
+    expect(store.plan).toEqual({
+      offer: ranked,
+      ranking: false,
+      confirmed: null,
+    });
+    expect(store.currentScreen).toBe('plan');
+
+    store.confirmPlan('apps/api');
+    expect(await plan).toBe(true);
+    expect(pick).toHaveBeenCalledWith('apps/api');
+    expect(planOptions(ranked.projects, ranked.picked)[0].value).toBe(
+      'apps/api',
+    );
   });
 });

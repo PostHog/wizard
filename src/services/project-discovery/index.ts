@@ -15,13 +15,22 @@ export {
   type ProjectDiscoveryMode,
 } from './flag';
 export {
+  buildPlan,
+  planNeedsPick,
+  reportProjectsDiscovered,
+  reportProjectsSelected,
+  type PlanOffer,
+  type PlanProject,
+  type PlanReason,
+} from './plan';
+export {
   discoverProjects,
   parentOf,
   type DiscoveredProjects,
   type Workspace,
 } from './projects';
 export { reportDiscovery, type DiscoveryReportStore } from './report';
-export { maySendDiscovery, tagDiscovery } from './tags';
+export { DISCOVERY_TAGS_KEY, maySendDiscovery, tagDiscovery } from './tags';
 export type { DetectedTool, DiscoveredTools, ToolSignal } from './tools';
 export { applyDetectionReport, joinProjectPath } from './traits/adapter';
 export { toMatchKeys, toTraitKeys } from './traits/match-keys';
