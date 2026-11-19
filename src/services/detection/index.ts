@@ -24,6 +24,12 @@ export {
   type PackageMatch,
 } from './package-scanning';
 export {
+  POSTHOG_SDKS_KEY,
+  recordPostHogSdksIfNeeded,
+  safePosthogSdkFacts,
+  scanPostHogSdks,
+} from './posthog-sdks';
+export {
   detectIntegrationProjects,
   scopeInstallDirToProject,
   toIntegrationCandidates,

@@ -187,6 +187,13 @@ export interface ProgramConfig {
    */
   scansCodebase?: boolean;
   /**
+   * Whether this program inspects or edits PostHog SDK integrations. When set,
+   * detection records PostHog SDK majors, the run installs the matching SDK
+   * skills, and the agent gets SDK version/pin facts. Leave unset for read-only
+   * or non-SDK programs (such as `audit` or `migration`).
+   */
+  sdkSupport?: boolean;
+  /**
    * Questions this program asks the Decisions judgment service, by catalog key
    * (`@services/detection/decisions/questions`). The run asks those of this
    * program and every program it `requires`, once, after login. Dev and CI
