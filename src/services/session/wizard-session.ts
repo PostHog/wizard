@@ -143,6 +143,8 @@ export function buildSession(args: SessionArgs): WizardSession {
     detectedFrameworkLabel: null,
     posthogSdkDetected: false,
     mcpServerCandidates: [],
+    projects: [],
+    runProject: '.',
     detectionComplete: false,
     unsupportedVersion: null,
 

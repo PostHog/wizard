@@ -9,6 +9,7 @@ import type { DiscoveredFeature } from '@shared/discovered-feature';
 import type { DiscoveryConsent } from '@shared/run-state';
 import type { FrameworkConfig } from './framework-config';
 import type { OutroData } from '@agent/types';
+import type { Project } from './project-traits';
 
 export interface ProgramSession {
   /**
@@ -69,6 +70,11 @@ export interface ProgramSession {
 
   /** Human-readable label for the detected framework variant (e.g., "Django with Wagtail CMS") */
   detectedFrameworkLabel: string | null;
+
+  /** The projects discovery found, with paths relative to the workspace root. Empty until discovery runs. */
+  projects: readonly Project[];
+  /** The project the run started in, as a path from the workspace root. `.` with no workspace. */
+  runProject: string;
 
   /** PostHog found in the project's dependencies. A signal, not a verified install. */
   posthogSdkDetected: boolean;

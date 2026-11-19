@@ -1,7 +1,16 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { discoverTools, parseEnvKeys } from '@services/project-discovery/tools';
+import {
+  catalogScriptHosts,
+  discoverTools,
+  parseEnvKeys,
+  type DiscoveredTools,
+} from '@services/project-discovery/tools';
+import {
+  readScriptHosts,
+  walkRepoFiles,
+} from '@services/project-discovery/walk';
 import { parseGemfile } from '@services/project-discovery/manifests';
 import { toWarehouseSources } from '@services/warehouse-sources/detect';
 import { MAX_REPORTED_PATH_LENGTH } from '@utils/env-scan';
@@ -11,8 +20,18 @@ import { FIXTURE_CATALOG } from '@services/warehouse-sources/__tests__/helpers/t
 
 const DETECTORS = toSourceDetectors(FIXTURE_CATALOG);
 
+/** Walk `dir` and match it against the fixture catalog, as discovery does. */
+function discover(dir: string, detectors = DETECTORS): DiscoveredTools {
+  const walk = walkRepoFiles(dir);
+  walk.files.scriptHosts = readScriptHosts(
+    walk.templates,
+    catalogScriptHosts(detectors),
+  );
+  return discoverTools(walk.files, detectors);
+}
+
 function detect(dir: string): DetectedSource[] {
-  return toWarehouseSources(discoverTools(dir, DETECTORS).tools, DETECTORS);
+  return toWarehouseSources(discover(dir).tools, DETECTORS);
 }
 
 function makeTmpDir(): string {
@@ -113,7 +132,7 @@ describe('discoverTools', () => {
 <script>(function(h,o,t,j){ j='https://acme-internal.hotjar.com/c/hotjar-'; })()</script>`,
     );
 
-    const { tools } = discoverTools(tmpDir, DETECTORS);
+    const { tools } = discover(tmpDir);
 
     expect(tools.map((t) => t.kind)).toEqual(['Hotjar']);
     expect(tools[0].signals).toEqual([
@@ -140,9 +159,7 @@ describe('discoverTools', () => {
   ])('matches a script host in a <script> tag in %s: %s', (file, template) => {
     fs.writeFileSync(path.join(tmpDir, file), template);
 
-    expect(discoverTools(tmpDir, DETECTORS).tools.map((t) => t.kind)).toEqual([
-      'Hotjar',
-    ]);
+    expect(discover(tmpDir).tools.map((t) => t.kind)).toEqual(['Hotjar']);
   });
 
   it.each([
@@ -158,7 +175,7 @@ describe('discoverTools', () => {
     (file, template) => {
       fs.writeFileSync(path.join(tmpDir, file), template);
 
-      expect(discoverTools(tmpDir, DETECTORS).tools).toEqual([]);
+      expect(discover(tmpDir).tools).toEqual([]);
     },
   );
 
@@ -176,9 +193,7 @@ describe('discoverTools', () => {
       '<script src="https://static.hotjar.com/c/h.js"></script>',
     );
 
-    expect(discoverTools(tmpDir, DETECTORS).tools.map((t) => t.kind)).toEqual([
-      'Hotjar',
-    ]);
+    expect(discover(tmpDir).tools.map((t) => t.kind)).toEqual(['Hotjar']);
   });
 
   it('matches a Go module across major versions', () => {

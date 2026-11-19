@@ -58,7 +58,11 @@ describe('reportWarehouseSourcesDetected', () => {
     const setFrameworkContext = (key: string, value: unknown) => {
       session.frameworkContext[key] = value;
     };
-    await runDiscovery(warehouse, { session, setFrameworkContext });
+    await runDiscovery(warehouse, {
+      session,
+      setFrameworkContext,
+      setProjects: vi.fn(),
+    });
     await detectWarehousePrerequisites(session, setFrameworkContext);
     expect(
       session.frameworkContext[DETECTED_WAREHOUSE_SOURCES_KEY],

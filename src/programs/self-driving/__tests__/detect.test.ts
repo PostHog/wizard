@@ -90,6 +90,7 @@ describe('detectSelfDrivingPrerequisites', () => {
     const session = buildSession({ installDir: tmpDir });
     await runDiscovery(selfDriving, {
       session,
+      setProjects: vi.fn(),
       setFrameworkContext: (key, value) => {
         session.frameworkContext[key] = value;
       },

@@ -96,6 +96,7 @@ function readyContext(
     setDetectedFramework: vi.fn(),
     setPosthogSdkDetected: vi.fn(),
     setMcpServerCandidates: vi.fn(),
+    setProjects: vi.fn(),
     setSkillId: vi.fn(),
     setUnsupportedVersion: vi.fn(),
     addDiscoveredFeature: vi.fn(),

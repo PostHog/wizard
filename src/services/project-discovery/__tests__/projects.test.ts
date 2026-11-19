@@ -1,0 +1,251 @@
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('@utils/analytics', () => ({
+  analytics: {
+    captureException: vi.fn(),
+    wizardCapture: vi.fn(),
+    setTag: vi.fn(),
+    getAllFlagsForWizard: vi.fn().mockResolvedValue({}),
+  },
+}));
+
+vi.mock(
+  import('@services/warehouse-sources/registry'),
+  async (importOriginal) =>
+    (
+      await import(
+        '@services/warehouse-sources/__tests__/helpers/tool-catalog.no-jest'
+      )
+    ).withFixtureCatalog(await importOriginal()),
+);
+
+import { WIZARD_PROJECT_DISCOVERY_FLAG_KEY } from '@shared/constants';
+import { analytics } from '@utils/analytics';
+import { getDiscovery, runDiscovery } from '@services/project-discovery';
+import {
+  discoverProjects,
+  parentOf,
+} from '@services/project-discovery/projects';
+import {
+  MAX_TREE_FILES,
+  findWorkspaceRoot,
+  walkRepo,
+} from '@services/project-discovery/walk';
+import { SessionStore } from '@services/session/session-store';
+import { buildSession } from '@services/session/wizard-session';
+
+let repo: string;
+
+function write(file: string, content = ''): void {
+  const full = path.join(repo, file);
+  fs.mkdirSync(path.dirname(full), { recursive: true });
+  fs.writeFileSync(full, content);
+}
+
+const pkg = (deps: Record<string, string> = {}, extra: object = {}): string =>
+  JSON.stringify({ dependencies: deps, ...extra });
+
+/** A pnpm monorepo: two apps, a library and a package outside the workspace globs. */
+function pnpmMonorepo(): void {
+  fs.mkdirSync(path.join(repo, '.git'));
+  write('package.json', pkg());
+  write('pnpm-workspace.yaml', "packages:\n  - 'apps/*'\n  - packages/*\n");
+  write('turbo.json', '{}');
+  write('apps/web/package.json', pkg({ next: '15.0.0', stripe: '^14.0.0' }));
+  write('apps/web/app/page.tsx');
+  write('apps/api/package.json', pkg({ express: '^4.0.0' }));
+  write('packages/ui/package.json', pkg({ react: '^18.0.0' }));
+  write('examples/demo/package.json', pkg());
+}
+
+const paths = (projects: readonly { path: string }[]): string[] =>
+  projects.map((project) => project.path);
+
+beforeEach(() => {
+  // realpath: the lookup compares resolved paths, and macOS tmp is a symlink.
+  repo = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'projects-')));
+});
+
+afterEach(() => {
+  fs.rmSync(repo, { recursive: true, force: true });
+  vi.mocked(analytics.getAllFlagsForWizard).mockResolvedValue({});
+});
+
+describe('findWorkspaceRoot', () => {
+  it('finds the workspace above a member the run started in', () => {
+    pnpmMonorepo();
+    expect(findWorkspaceRoot(path.join(repo, 'apps/web'))).toEqual({
+      rootDir: repo,
+      runProject: 'apps/web',
+    });
+  });
+
+  it('keeps the run directory when no marker above holds it', () => {
+    pnpmMonorepo();
+    const outside = path.join(repo, 'examples/demo');
+    expect(findWorkspaceRoot(outside)).toEqual({
+      rootDir: outside,
+      runProject: '.',
+    });
+  });
+
+  it('stops at the git root', () => {
+    pnpmMonorepo();
+    const nested = path.join(repo, 'apps/web');
+    fs.mkdirSync(path.join(nested, '.git'));
+    expect(findWorkspaceRoot(nested)).toEqual({
+      rootDir: nested,
+      runProject: '.',
+    });
+  });
+
+  it('keeps a single-app repo as its own root', () => {
+    write('package.json', pkg({ next: '15.0.0' }));
+    expect(findWorkspaceRoot(repo)).toEqual({ rootDir: repo, runProject: '.' });
+  });
+});
+
+describe('discoverProjects', () => {
+  it('reads one project in a single-app repo', () => {
+    write('package.json', pkg({ next: '15.0.0' }));
+    expect(discoverProjects(walkRepo(repo))).toMatchObject({
+      repoType: 'single',
+      workspaces: [],
+      projects: [{ path: '.', traits: {} }],
+      complete: true,
+    });
+  });
+
+  it('reads the members of a workspace and prunes what its globs leave out', () => {
+    pnpmMonorepo();
+    const found = discoverProjects(walkRepo(repo));
+    expect(found.repoType).toBe('monorepo');
+    expect(found.workspaceTool).toBe('turbo');
+    expect(found.workspaces).toEqual([
+      {
+        root: '.',
+        tool: 'turbo',
+        members: ['apps/api', 'apps/web', 'packages/ui'],
+      },
+    ]);
+    expect(paths(found.projects)).toEqual([
+      '.',
+      'apps/api',
+      'apps/web',
+      'packages/ui',
+    ]);
+    expect(parentOf('apps/web', found.projects)?.path).toBe('.');
+  });
+
+  it('keeps the run project even outside every workspace', () => {
+    pnpmMonorepo();
+    const found = discoverProjects(walkRepo(repo), 'examples/demo');
+    expect(paths(found.projects)).toContain('examples/demo');
+  });
+
+  it('gives each workspace its own root in a repo with two', () => {
+    write('package.json', pkg({}, { workspaces: ['web/*'] }));
+    write('web/app/package.json', pkg());
+    write('services/go.work', 'go 1.22\n\nuse (\n\t./api\n\t./worker\n)\n');
+    write('services/api/go.mod', 'module example.com/api\n');
+    write('services/worker/go.mod', 'module example.com/worker\n');
+    expect(discoverProjects(walkRepo(repo)).workspaces).toEqual([
+      { root: '.', tool: 'npm', members: ['web/app'] },
+      {
+        root: 'services',
+        tool: 'go',
+        members: ['services/api', 'services/worker'],
+      },
+    ]);
+  });
+
+  it('reads a Gradle build with one module as one project, not a workspace', () => {
+    write('settings.gradle', "include ':app'\n");
+    write('build.gradle', '');
+    write('app/build.gradle', '');
+    expect(discoverProjects(walkRepo(repo)).repoType).toBe('single');
+  });
+});
+
+describe('the walk budget', () => {
+  it('spends the file cap on the run project first, then shares the rest', () => {
+    pnpmMonorepo();
+    for (let i = 0; i < MAX_TREE_FILES - 100; i += 1) {
+      write(`apps/web/src/file-${i}.ts`);
+    }
+    for (let i = 0; i < 400; i += 1) write(`apps/api/src/file-${i}.ts`);
+    for (let i = 0; i < 400; i += 1) write(`packages/ui/src/file-${i}.ts`);
+
+    const walked = walkRepo(repo, { runProject: 'apps/web' });
+    const under = (dir: string) =>
+      walked.files.filter((file) => file.startsWith(`${dir}/`)).length;
+
+    expect(walked.files).toHaveLength(MAX_TREE_FILES);
+    expect(walked.truncated).toBe(true);
+    // Every file of the run project, then a share for each other project.
+    expect(under('apps/web')).toBe(MAX_TREE_FILES - 100 + 2);
+    expect(under('apps/api')).toBeGreaterThan(0);
+    expect(under('packages/ui')).toBeGreaterThan(0);
+    // Manifests are read past the cap, so no project goes missing.
+    const found = discoverProjects(walked, 'apps/web');
+    expect(paths(found.projects)).toEqual([
+      '.',
+      'apps/api',
+      'apps/web',
+      'packages/ui',
+    ]);
+    expect(found.complete).toBe(false);
+  });
+});
+
+describe('runDiscovery', () => {
+  const discoverFrom = async (runDir: string) => {
+    const store = new SessionStore(buildSession({ installDir: runDir }));
+    await runDiscovery({ id: 'posthog-integration' }, store.readyContext());
+    return store.session;
+  };
+
+  it('walks from the run directory while the flag is off', async () => {
+    pnpmMonorepo();
+    const runDir = path.join(repo, 'apps/web');
+    const session = await discoverFrom(runDir);
+    expect(getDiscovery(session)).toMatchObject({ rootDir: runDir, runDir });
+    expect(session.runProject).toBe('.');
+    expect(paths(session.projects)).toEqual(['.']);
+  });
+
+  it('walks from the workspace root once the flag is on', async () => {
+    vi.mocked(analytics.getAllFlagsForWizard).mockResolvedValue({
+      [WIZARD_PROJECT_DISCOVERY_FLAG_KEY]: 'one-project',
+    });
+    pnpmMonorepo();
+    const runDir = path.join(repo, 'apps/web');
+    const session = await discoverFrom(runDir);
+    const discovery = getDiscovery(session);
+    expect(discovery).toMatchObject({ rootDir: repo, runDir });
+    expect(discovery?.projects.repoType).toBe('monorepo');
+    expect(session.runProject).toBe('apps/web');
+    expect(paths(session.projects)).toEqual([
+      '.',
+      'apps/api',
+      'apps/web',
+      'packages/ui',
+    ]);
+    // The run project is walked first, so its manifest names the tool.
+    expect(discovery?.tools.tools.map((tool) => tool.kind)).toContain('Stripe');
+  });
+
+  it('finds the projects when the tool catalog is missing', async () => {
+    const registry = await import('@services/warehouse-sources/registry');
+    vi.mocked(registry.loadSourceDetectors).mockResolvedValueOnce([]);
+    pnpmMonorepo();
+    const session = await discoverFrom(repo);
+    const discovery = getDiscovery(session);
+    expect(discovery?.tools).toMatchObject({ failed: true });
+    expect(discovery?.projects.repoType).toBe('monorepo');
+    expect(paths(session.projects)).toHaveLength(4);
+  });
+});

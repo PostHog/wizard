@@ -1,15 +1,16 @@
 /**
  * The run's one discovery: what the wizard learns by reading the repo. Every
- * program that sets `scansCodebase` reads this result instead of looking on its
- * own, so local suggestions, the warehouse flow, the self-driving prompt and
- * the report all agree. Each program derives its own view from it in
- * `onReady`; discovery writes no program's keys, so a composed run sees only
- * what its own program chose.
+ * run discovers once, before its program's detection, and every reader reads
+ * that result instead of looking on its own, so local suggestions, the
+ * warehouse flow, the self-driving prompt and the report all agree. Each
+ * program derives its own view from it in `onReady`; discovery writes no
+ * program's keys, so a composed run sees only what its own program chose.
  *
  * Discovery always runs; consent only gates reporting (see `report.ts`).
  */
 
 import { analytics } from '@utils/analytics';
+import { logToFile } from '@utils/debug';
 import type {
   ProgramReadyContext,
   ProgramConfig,
@@ -24,8 +25,21 @@ import type {
   DetectedDestination,
   DetectedSource,
 } from '../warehouse-sources/types';
-import { discoverTools, type DiscoveredTools } from './tools';
-import { walkRepo, type RepoFiles } from './walk';
+import { loadProjectDiscoveryMode } from './flag';
+import { discoverProjects, type DiscoveredProjects } from './projects';
+import {
+  catalogScriptHosts,
+  discoverTools,
+  type DiscoveredTools,
+} from './tools';
+import {
+  findWorkspaceRoot,
+  readScriptHosts,
+  walkRepo,
+  walkRepoFiles,
+  type RepoFiles,
+  type RepoWalk,
+} from './walk';
 
 /** frameworkContext key holding the run's discovery, every discovered tool included. */
 export const DISCOVERY_KEY = 'discovery';
@@ -35,57 +49,96 @@ export type Discovery = {
   program: string;
   discoveredAt: string;
   /**
-   * The directory discovery walked. A CI run can narrow `installDir` after
-   * discovery, so the report fingerprints this one instead.
+   * The directory discovery walked: the workspace root, or the run directory
+   * with no workspace or the flag off.
    */
   rootDir: string;
+  /** The directory the run started in. A CI run can narrow `installDir` later, so the report fingerprints this one. */
+  runDir: string;
   /** The walk: tree, manifests, lockfiles, `.env` key names. Local only: never reported. */
   files: RepoFiles;
   tools: DiscoveredTools;
+  projects: DiscoveredProjects;
 };
 
 type DiscoveryContext = Pick<
   ProgramReadyContext,
-  'session' | 'setFrameworkContext'
+  'session' | 'setFrameworkContext' | 'setProjects'
 >;
 
-/** Discover once per run, for a program that sets `scansCodebase`. Best-effort: never throws. */
-export async function runDiscovery(
-  config: Pick<ProgramConfig, 'id' | 'scansCodebase'>,
-  ctx: DiscoveryContext,
-): Promise<void> {
-  if (!config.scansCodebase) return;
-  if (getDiscovery(ctx.session)) return;
-  const detectors = await loadSourceDetectors(ctx.session.baseUrl);
-  const rootDir = ctx.session.installDir;
-  const discoveredAt = new Date().toISOString();
-  const files = walkRepo(rootDir);
-  const discovery = (tools: DiscoveredTools): Discovery => ({
-    program: config.id,
-    discoveredAt,
-    rootDir,
-    files,
-    tools,
-  });
-  const failed: DiscoveredTools = { tools: [], complete: false, failed: true };
+const FAILED_TOOLS: DiscoveredTools = {
+  tools: [],
+  complete: false,
+  failed: true,
+};
+
+/** The tool match, which needs the catalog download. Never throws: a failure is a `failed` match. */
+async function matchTools(
+  session: ProgramSession,
+  walk: RepoWalk,
+): Promise<DiscoveredTools> {
+  const detectors = await loadSourceDetectors(session.baseUrl);
   // No catalog means discovery could not look, which is not the same as
   // finding nothing. The loader has already reported why.
-  if (detectors.length === 0) {
-    ctx.setFrameworkContext(DISCOVERY_KEY, discovery(failed));
-    return;
-  }
+  if (detectors.length === 0) return FAILED_TOOLS;
   try {
-    ctx.setFrameworkContext(
-      DISCOVERY_KEY,
-      discovery(discoverTools(rootDir, detectors)),
+    walk.files.scriptHosts = readScriptHosts(
+      walk.templates,
+      catalogScriptHosts(detectors),
     );
+    return discoverTools(walk.files, detectors);
   } catch (error) {
-    ctx.setFrameworkContext(DISCOVERY_KEY, discovery(failed));
     analytics.captureException(
       error instanceof Error ? error : new Error(String(error)),
       { step: 'scanCodebase' },
     );
+    return FAILED_TOOLS;
   }
+}
+
+/**
+ * Discover once per run. Tools and projects fail apart: projects need only the
+ * walk, tools also need the catalog. Best-effort: never throws.
+ */
+export async function runDiscovery(
+  config: Pick<ProgramConfig, 'id'>,
+  ctx: DiscoveryContext,
+): Promise<void> {
+  if (getDiscovery(ctx.session)) return;
+  const runDir = ctx.session.installDir;
+  const mode = await loadProjectDiscoveryMode();
+  // The walk up to the workspace root stays off with the flag.
+  const { rootDir, runProject } =
+    mode === 'off'
+      ? { rootDir: runDir, runProject: '.' }
+      : findWorkspaceRoot(runDir);
+  const walk = walkRepoFiles(rootDir, { runProject });
+  const projects = discoverProjects(walk.files, runProject);
+  ctx.setProjects(projects.projects, runProject);
+
+  const tools = await matchTools(ctx.session, walk);
+  ctx.setFrameworkContext(DISCOVERY_KEY, {
+    program: config.id,
+    discoveredAt: new Date().toISOString(),
+    rootDir,
+    runDir,
+    files: walk.files,
+    tools,
+    projects,
+  } satisfies Discovery);
+
+  logToFile(
+    `[discovery] mode=${mode} walked ${walk.files.files.length} file(s) in ${walk.durationMs}ms` +
+      ` complete=${String(walk.files.complete)} truncated=${String(
+        walk.files.truncated,
+      )}` +
+      ` repoType=${projects.repoType} tool=${
+        projects.workspaceTool ?? 'none'
+      }` +
+      ` runProject=${runProject} projects=${projects.projects
+        .map((project) => project.path)
+        .join(',')}`,
+  );
 }
 
 /** The warehouse sources discovery found, for a program that offers them. */
