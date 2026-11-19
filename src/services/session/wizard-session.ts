@@ -13,7 +13,7 @@ import type { WizardReadinessResult } from '@shared/health-checks/readiness';
 import type { ApiProject, GatewayCredential } from '@shared/api';
 import type { CloudRegion } from '@utils/types';
 import type { PendingQuestion, TaskNotice } from '@agent/types';
-import { RunPhase, ScanConsent } from '@shared/run-state';
+import { RunPhase, DiscoveryConsent } from '@shared/run-state';
 import type { ProgramSession } from '@programs/program-contract';
 
 function parseProjectIdArg(value: string | undefined): number | undefined {
@@ -132,9 +132,11 @@ export function buildSession(args: SessionArgs): WizardSession {
     // telemetry as it was. --signup alone still provisions a brand-new
     // account headlessly, and that user has never seen the disclosure — a
     // headless `--ci --signup` run stays covered by the ci branch above.
-    scanConsent: args.ci ? ScanConsent.Granted : ScanConsent.Undecided,
+    discoveryConsent: args.ci
+      ? DiscoveryConsent.Granted
+      : DiscoveryConsent.Undecided,
     warehouseSourcesReported: false,
-    codebaseScanReport: null,
+    discoveryReport: null,
     integration: args.integration ?? null,
     frameworkContext: {},
     typescript: false,

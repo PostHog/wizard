@@ -4,7 +4,7 @@
  * reads and behaves the same wherever it is asked.
  */
 
-import { ScanConsent } from '@shared/run-state';
+import { DiscoveryConsent } from '@shared/run-state';
 import type { PickerOption } from '@tui/primitives/index';
 import type { WizardStore } from '@tui/store';
 import { Icons } from '@tui/styles';
@@ -45,7 +45,7 @@ type SharingStore = Pick<
 
 /** Sharing is on by default, so only an explicit decline turns it off. */
 export function isSharing(store: SharingStore): boolean {
-  return store.session.scanConsent !== ScanConsent.Declined;
+  return store.session.discoveryConsent !== DiscoveryConsent.Declined;
 }
 
 /** Apply a sharing row the user picked. Returns false for any other value. */
@@ -61,5 +61,6 @@ export function applySharingChoice(
 
 /** Continue with no choice made means sharing, the default. A choice already made stands. */
 export function resolveSharingOnContinue(store: SharingStore): void {
-  if (store.session.scanConsent === ScanConsent.Undecided) store.grantSharing();
+  if (store.session.discoveryConsent === DiscoveryConsent.Undecided)
+    store.grantSharing();
 }

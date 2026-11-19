@@ -188,7 +188,7 @@ export class TaskStreamPush {
     if (this.unsubscribe) return;
     const target = store ?? this.store;
     this.unsubscribe = target.subscribe(() => this.onStoreChange());
-    this.sendScanIfShared();
+    this.sendDiscoveryIfShared();
   }
 
   /** Stop subscribing. Does not flush. */
@@ -269,7 +269,7 @@ export class TaskStreamPush {
 
   private onStoreChange(): void {
     if (!this.enabled || this.shuttingDown) return;
-    this.sendScanIfShared();
+    this.sendDiscoveryIfShared();
     const phase = this.store.session.runPhase;
     if (phase === RunPhase.Idle) return;
     this.selectRemoteSync();
@@ -407,15 +407,15 @@ export class TaskStreamPush {
    * Attach the shared scan to this session, once. It carries the stream's
    * `session_id`, so PostHog can join the scan to the session row.
    */
-  private sendScanIfShared(): void {
+  private sendDiscoveryIfShared(): void {
     if (this.scanInFlight) return;
-    const report = this.store.session.codebaseScanReport;
+    const report = this.store.session.discoveryReport;
     if (!report) return;
     const payload = { ...report, session_id: this.sessionId };
     this.scanInFlight = Promise.all(
       this.destinations.map((d) =>
         // eslint-disable-next-line @typescript-eslint/no-empty-function
-        d.sendScan?.(payload).catch(() => {}),
+        d.sendDiscovery?.(payload).catch(() => {}),
       ),
     ).then(() => undefined);
   }

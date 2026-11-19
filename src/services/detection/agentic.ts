@@ -38,7 +38,7 @@ import type { ProgramSession } from '@programs/program-contract';
 import { loadWizardFlags } from '@shared/wizard-flags';
 import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
-import { maySendScanResults } from '../codebase-scan/tags';
+import { maySendDiscovery } from '../project-discovery/tags';
 import { IS_PRODUCTION_BUILD } from '@env';
 import type { JudgedProjects } from './decisions/projects';
 
@@ -438,7 +438,7 @@ function logProjectComparison(
       options.programId
     } mode=${mode} ${JSON.stringify(compared)}`,
   );
-  if (maySendScanResults(session)) {
+  if (maySendDiscovery(session)) {
     analytics.wizardCapture('decisions project detection compared', {
       program_id: options.programId,
       mode,

@@ -35,11 +35,6 @@ export {
   type DecisionState,
 } from './input';
 export {
-  collectDecisionsScan,
-  getDecisionsScan,
-  type DecisionsScan,
-} from './scan';
-export {
   integrationFromChoice,
   NO_FRAMEWORK,
   routeIntegration,

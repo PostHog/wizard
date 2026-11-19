@@ -1,13 +1,13 @@
 /** What `sessionProperties` reports for a session `buildSession` made: scan results wait on consent. */
 import { sessionProperties } from '@utils/analytics';
 import { DiscoveredFeature } from '@shared/discovered-feature';
-import { ScanConsent } from '@shared/run-state';
+import { DiscoveryConsent } from '@shared/run-state';
 import { buildSession } from '../wizard-session';
 
 describe('sessionProperties: the posthog_sdk_detected verdict', () => {
   it('includes the verdict once sharing is granted', () => {
     const session = buildSession({});
-    session.scanConsent = ScanConsent.Granted;
+    session.discoveryConsent = DiscoveryConsent.Granted;
     expect(sessionProperties(session).posthog_sdk_detected).toBe(false);
 
     session.posthogSdkDetected = true;
@@ -19,12 +19,12 @@ describe('sessionProperties: the posthog_sdk_detected verdict', () => {
     const session = buildSession({});
     session.posthogSdkDetected = true;
 
-    expect(session.scanConsent).toBe(ScanConsent.Undecided);
+    expect(session.discoveryConsent).toBe(DiscoveryConsent.Undecided);
     expect(sessionProperties(session)).not.toHaveProperty(
       'posthog_sdk_detected',
     );
 
-    session.scanConsent = ScanConsent.Declined;
+    session.discoveryConsent = DiscoveryConsent.Declined;
     expect(sessionProperties(session)).not.toHaveProperty(
       'posthog_sdk_detected',
     );
@@ -34,7 +34,7 @@ describe('sessionProperties: the posthog_sdk_detected verdict', () => {
 describe('sessionProperties: the MCP server scan', () => {
   it('reports the verdict and candidate count once sharing is granted', () => {
     const session = buildSession({});
-    session.scanConsent = ScanConsent.Granted;
+    session.discoveryConsent = DiscoveryConsent.Granted;
     expect(sessionProperties(session)).toMatchObject({
       mcp_server_detected: false,
       mcp_server_candidate_count: 0,
@@ -51,8 +51,11 @@ describe('sessionProperties: the MCP server scan', () => {
     const session = buildSession({});
     session.mcpServerCandidates = ['apps/mcp'];
 
-    for (const consent of [ScanConsent.Undecided, ScanConsent.Declined]) {
-      session.scanConsent = consent;
+    for (const consent of [
+      DiscoveryConsent.Undecided,
+      DiscoveryConsent.Declined,
+    ]) {
+      session.discoveryConsent = consent;
       const properties = sessionProperties(session);
       expect(properties).not.toHaveProperty('mcp_server_detected');
       expect(properties).not.toHaveProperty('mcp_server_candidate_count');
@@ -64,7 +67,7 @@ describe('sessionProperties: discovered features', () => {
   it('includes discovered_features once consent is granted', () => {
     const session = buildSession({ installDir: '/tmp/app' });
     session.discoveredFeatures = [DiscoveredFeature.Stripe];
-    session.scanConsent = ScanConsent.Granted;
+    session.discoveryConsent = DiscoveryConsent.Granted;
 
     const properties = sessionProperties(session);
 
@@ -74,7 +77,7 @@ describe('sessionProperties: discovered features', () => {
   it('omits discovered_features entirely when the user declined sharing', () => {
     const session = buildSession({ installDir: '/tmp/app' });
     session.discoveredFeatures = [DiscoveredFeature.Stripe];
-    session.scanConsent = ScanConsent.Declined;
+    session.discoveryConsent = DiscoveryConsent.Declined;
 
     const properties = sessionProperties(session);
 
@@ -96,7 +99,7 @@ describe('sessionProperties: discovered features', () => {
   it('omits discovered_features while consent is still undecided', () => {
     const session = buildSession({ installDir: '/tmp/app' });
     session.discoveredFeatures = [DiscoveredFeature.Stripe];
-    session.scanConsent = ScanConsent.Undecided;
+    session.discoveryConsent = DiscoveryConsent.Undecided;
 
     const properties = sessionProperties(session);
 
@@ -107,12 +110,12 @@ describe('sessionProperties: discovered features', () => {
 
   it('sends scan_consent in every state, so an absent list is explainable', () => {
     for (const consent of [
-      ScanConsent.Undecided,
-      ScanConsent.Granted,
-      ScanConsent.Declined,
+      DiscoveryConsent.Undecided,
+      DiscoveryConsent.Granted,
+      DiscoveryConsent.Declined,
     ]) {
       const session = buildSession({ installDir: '/tmp/app' });
-      session.scanConsent = consent;
+      session.discoveryConsent = consent;
 
       expect(sessionProperties(session).scan_consent).toBe(consent);
     }
@@ -121,7 +124,7 @@ describe('sessionProperties: discovered features', () => {
   it('never sends an empty array in place of the omitted key', () => {
     const session = buildSession({ installDir: '/tmp/app' });
     session.discoveredFeatures = [];
-    session.scanConsent = ScanConsent.Declined;
+    session.discoveryConsent = DiscoveryConsent.Declined;
 
     const properties = sessionProperties(session);
 
@@ -132,7 +135,7 @@ describe('sessionProperties: discovered features', () => {
 
   it('leaves every other property untouched by a decline', () => {
     const session = buildSession({ installDir: '/tmp/app' });
-    session.scanConsent = ScanConsent.Declined;
+    session.discoveryConsent = DiscoveryConsent.Declined;
     session.integration = null;
 
     const properties = sessionProperties(session);

@@ -1,5 +1,5 @@
-import type { DetectedTool } from '../warehouse-sources/types';
-import type { CodebaseScan } from './scan';
+import type { Discovery } from './discover';
+import type { DetectedTool } from './tools';
 
 const EMAIL_PROVIDER_KINDS = [
   'AwsSes',
@@ -40,6 +40,6 @@ function isEmailProvider(tool: DetectedTool): tool is EmailProvider {
   return EMAIL_PROVIDER_KIND_SET.has(tool.kind);
 }
 
-export function detectedEmailProviders(scan: CodebaseScan): EmailProvider[] {
-  return scan.tools.filter(isEmailProvider);
+export function detectedEmailProviders(discovery: Discovery): EmailProvider[] {
+  return discovery.tools.tools.filter(isEmailProvider);
 }

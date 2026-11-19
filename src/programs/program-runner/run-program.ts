@@ -36,7 +36,7 @@ import { registerCleanup } from '@utils/cleanup';
 import { logToFile } from '@utils/debug';
 import { removeAuditLedger, startAuditLedgerWatcher } from '@programs/audit';
 import { FRAMEWORK_REGISTRY } from '@services/frameworks';
-import { getTraits, toMatchKeys } from '@services/project-traits';
+import { getTraits, toMatchKeys } from '@services/project-discovery';
 import { findProgramConfig, getProgramConfig } from './program-registry';
 import { ProgramAbort } from '@programs/program-contract';
 import { detectionFailure, detectProgram } from './detect-program';
@@ -44,7 +44,7 @@ import {
   rotateCredentials,
   type ResolvedProgramCredentials,
 } from './credentials';
-import { reportCodebaseScan } from '@services/codebase-scan';
+import { reportDiscovery } from '@services/project-discovery';
 import { IS_PRODUCTION_BUILD } from '@env';
 import type { QuestionKey } from '@services/detection/decisions';
 import { logIn } from './login';
@@ -281,7 +281,7 @@ async function invokeProgram(
         plainSettings = settings;
       }
       credentials = await login();
-      reportCodebaseScan(store);
+      reportDiscovery(store);
       if (needsAiApproval(store.session, credentials)) {
         if (!options.workflow) {
           return fail(

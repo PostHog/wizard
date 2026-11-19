@@ -4,7 +4,7 @@ vi.mock(import('@utils/analytics'), () => ({
 
 import { toSourceDetectors } from '@services/warehouse-sources/registry';
 import { toWarehouseDestinations } from '@services/warehouse-sources/detect';
-import type { DetectedTool } from '@services/warehouse-sources/types';
+import type { DetectedTool } from '@services/project-discovery/tools';
 
 function catalogTool(kind: string, extra: Record<string, unknown> = {}) {
   return {

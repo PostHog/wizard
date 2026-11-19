@@ -13,11 +13,11 @@ import {
   askDecisions,
   decisionsTransport,
   getDecisionsMode,
-  getDecisionsScan,
   QUESTIONS,
   renderDecisionState,
   routeIntegration,
 } from '@services/detection/decisions';
+import { getRepoFiles } from '@services/project-discovery';
 
 /**
  * CI only, primary mode: ask for the framework when static detection found
@@ -47,7 +47,7 @@ async function askForMissingIntegration(
   const transport = decisionsTransport(session);
   if (!transport) return undefined;
   const result = await askDecisions(
-    renderDecisionState(getDecisionsScan(session)),
+    renderDecisionState(getRepoFiles(session)),
     [QUESTIONS.framework],
     { transport },
   );

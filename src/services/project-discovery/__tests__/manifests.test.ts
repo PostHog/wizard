@@ -9,7 +9,7 @@ import {
   parsePomXml,
   parsePubspecYaml,
   parsePackageSwift,
-} from '@services/warehouse-sources/manifests';
+} from '@services/project-discovery/manifests';
 
 describe('manifest parsers', () => {
   it('Cargo.toml: every dependency table, renames, and not array tables', () => {

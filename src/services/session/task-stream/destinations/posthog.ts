@@ -1,7 +1,7 @@
 /**
  * PostHog destination — pushes wizard run state to the PostHog backend
  * via `POST /api/projects/{project_id}/wizard/sessions/`, and attaches the
- * run's codebase scan via `POST /api/projects/{project_id}/wizard/scans/`.
+ * run's discovery report via `POST /api/projects/{project_id}/wizard/scans/`.
  *
  * The endpoint is an upsert keyed by `(team, session_id)`: 201 means
  * the row was created, 200 means it was updated. Both are success.
@@ -20,7 +20,7 @@
  */
 
 import type {
-  ScanReportPayload,
+  DiscoveryReportPayload,
   TaskStreamDestination,
   TaskStreamUpdate,
   StreamEvent,
@@ -121,7 +121,7 @@ export class PostHogDestination implements TaskStreamDestination {
     if (outcome === PostOutcome.AuthRejected) this.disabled = true;
   }
 
-  async sendScan(payload: ScanReportPayload): Promise<void> {
+  async sendDiscovery(payload: DiscoveryReportPayload): Promise<void> {
     const creds = this.getCredentials();
     if (!creds) return;
 
@@ -139,7 +139,7 @@ export class PostHogDestination implements TaskStreamDestination {
 
   private postScan(
     creds: Credentials,
-    body: ScanReportPayload,
+    body: DiscoveryReportPayload,
   ): Promise<PostOutcome> {
     return this.postWithRetry(creds, WizardEndpoint.Scans, body);
   }

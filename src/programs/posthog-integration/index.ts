@@ -1,14 +1,14 @@
 import {
   detectMcpServer,
   detectPostHogIntegration,
-  noteScannedWarehouseSources,
+  noteDiscoveredWarehouseSources,
 } from '@services/detection';
 import type { ProgramConfig } from '@programs/program-contract';
 import type { ProgramRun } from '@programs/program-contract';
 import { AgentSignals, WIZARD_TOOL_NAMES } from '@agent';
 import { shouldDisableAsk } from '@shared/ask-policy';
 import type { ProgramSession } from '@programs/program-contract';
-import { mayReportScanResults } from '@shared/run-state';
+import { mayReportDiscovery } from '@shared/run-state';
 import { OutroKind } from '@shared/outro';
 import {
   DEFAULT_PACKAGE_INSTALLATION,
@@ -228,7 +228,7 @@ const warehouseSeedTasks: NonNullable<ProgramConfig['seedTasks']> = (sess) => {
 
   // The task is queued either way. A decline withholds reporting, not the
   // feature. See the matching gate in reportWarehouseSourcesDetected.
-  if (mayReportScanResults(sess)) {
+  if (mayReportDiscovery(sess)) {
     analytics.wizardCapture('orchestrator warehouse task queued', {
       warehouse_source_count: sources.length,
       warehouse_source_kinds: sources.map((s) => s.kind),
@@ -378,7 +378,7 @@ export const config: ProgramConfig = {
       }
     }
     noteDetectedFramework(session, frameworkConfig, context, runner.log);
-    await noteScannedWarehouseSources(session, runner.log);
+    await noteDiscoveredWarehouseSources(session, runner.log);
     await mcpServer;
   },
 

@@ -22,13 +22,14 @@ vi.mock(
 );
 
 import {
-  CODEBASE_SCAN_KEY,
-  reportCodebaseScan,
-  scanCodebaseFor,
-  type CodebaseScan,
-} from '@services/codebase-scan';
-import { workspaceFingerprint } from '@services/codebase-scan/fingerprint';
-import { tagScanResults } from '@services/codebase-scan/tags';
+  DISCOVERY_KEY,
+  reportDiscovery,
+  runDiscovery,
+  type Discovery,
+} from '@services/project-discovery';
+import { workspaceFingerprint } from '@services/project-discovery/fingerprint';
+import { tagDiscovery } from '@services/project-discovery/tags';
+import { walkRepo } from '@services/project-discovery/walk';
 import { loadSourceDetectors } from '@services/warehouse-sources/registry';
 import { analytics } from '@utils/analytics';
 import { SessionStore } from '@services/session/session-store';
@@ -44,11 +45,11 @@ const CREDENTIALS = {
 
 const PROGRAM = { id: 'posthog-integration', scansCodebase: true };
 
-describe('reportCodebaseScan', () => {
+describe('reportDiscovery', () => {
   let tmpDir: string;
 
   beforeEach(() => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'codebase-scan-'));
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'project-discovery-'));
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
       JSON.stringify({ dependencies: { stripe: '^14.0.0' } }),
@@ -61,22 +62,22 @@ describe('reportCodebaseScan', () => {
     const store = new SessionStore(
       buildSession({ installDir: tmpDir, ci: true }),
     );
-    await scanCodebaseFor(PROGRAM, store.readyContext());
+    await runDiscovery(PROGRAM, store.readyContext());
     return store;
   }
 
   it('hands the scan to the task stream once per run, after login', async () => {
     const store = await ciStore();
 
-    reportCodebaseScan(store);
-    expect(store.session.codebaseScanReport).toBeNull();
+    reportDiscovery(store);
+    expect(store.session.discoveryReport).toBeNull();
 
     store.setCredentials(CREDENTIALS);
-    reportCodebaseScan(store);
-    const first = store.session.codebaseScanReport;
-    reportCodebaseScan(store);
+    reportDiscovery(store);
+    const first = store.session.discoveryReport;
+    reportDiscovery(store);
 
-    expect(store.session.codebaseScanReport).toBe(first);
+    expect(store.session.discoveryReport).toBe(first);
     expect(first).toMatchObject({
       program: 'posthog-integration',
       complete: true,
@@ -96,19 +97,18 @@ describe('reportCodebaseScan', () => {
     const store = new SessionStore(
       buildSession({ installDir: tmpDir, ci: true }),
     );
-    store.setFrameworkContext(CODEBASE_SCAN_KEY, {
+    store.setFrameworkContext(DISCOVERY_KEY, {
       program: PROGRAM.id,
-      scannedAt: '2026-10-12T00:00:00.000Z',
-      scannedDir: tmpDir,
-      tools: [],
-      complete: false,
-      failed: true,
-    } satisfies CodebaseScan);
+      discoveredAt: '2026-10-12T00:00:00.000Z',
+      rootDir: tmpDir,
+      files: walkRepo(tmpDir),
+      tools: { tools: [], complete: false, failed: true },
+    } satisfies Discovery);
     store.setCredentials(CREDENTIALS);
 
-    reportCodebaseScan(store);
+    reportDiscovery(store);
 
-    expect(store.session.codebaseScanReport).toBeNull();
+    expect(store.session.discoveryReport).toBeNull();
   });
 
   it('marks the scan failed when the tool catalog could not be loaded', async () => {
@@ -116,12 +116,12 @@ describe('reportCodebaseScan', () => {
     const store = await ciStore();
     store.setCredentials(CREDENTIALS);
 
-    reportCodebaseScan(store);
+    reportDiscovery(store);
 
-    expect(store.session.frameworkContext[CODEBASE_SCAN_KEY]).toMatchObject({
-      failed: true,
+    expect(store.session.frameworkContext[DISCOVERY_KEY]).toMatchObject({
+      tools: { failed: true },
     });
-    expect(store.session.codebaseScanReport).toBeNull();
+    expect(store.session.discoveryReport).toBeNull();
   });
 
   it('fingerprints the directory the scan walked after CI narrows the install dir', async () => {
@@ -133,9 +133,9 @@ describe('reportCodebaseScan', () => {
     });
     store.setCredentials(CREDENTIALS);
 
-    reportCodebaseScan(store);
+    reportDiscovery(store);
 
-    expect(store.session.codebaseScanReport?.workspace_fingerprint).toBe(
+    expect(store.session.discoveryReport?.workspace_fingerprint).toBe(
       workspaceFingerprint(CREDENTIALS.projectId, tmpDir),
     );
   });
@@ -154,9 +154,9 @@ describe('reportCodebaseScan', () => {
     vi.restoreAllMocks();
     store.setCredentials(CREDENTIALS);
 
-    reportCodebaseScan(store);
+    reportDiscovery(store);
 
-    expect(store.session.codebaseScanReport).toMatchObject({
+    expect(store.session.discoveryReport).toMatchObject({
       complete: false,
       tools: [{ kind: 'Stripe' }],
     });
@@ -170,7 +170,7 @@ describe('reportCodebaseScan', () => {
     function tag(session: Parameters<typeof buildSession>[0]): SessionStore {
       const store = new SessionStore(buildSession(session));
       const ctx = store.readyContext();
-      tagScanResults(ctx.session, ctx.setFrameworkContext, {
+      tagDiscovery(ctx.session, ctx.setFrameworkContext, {
         warehouse_source_kinds: 'Stripe',
       });
       return store;
@@ -181,7 +181,7 @@ describe('reportCodebaseScan', () => {
       expect(tagged()).toEqual([]);
 
       store.grantSharing();
-      reportCodebaseScan(store);
+      reportDiscovery(store);
 
       expect(tagged()).toEqual([['warehouse_source_kinds', 'Stripe']]);
     });
@@ -190,7 +190,7 @@ describe('reportCodebaseScan', () => {
       const store = tag({ installDir: tmpDir });
 
       store.declineSharing();
-      reportCodebaseScan(store);
+      reportDiscovery(store);
 
       expect(tagged()).toEqual([]);
     });
@@ -204,7 +204,7 @@ describe('reportCodebaseScan', () => {
     it('never applies the tags with telemetry off', () => {
       const store = tag({ installDir: tmpDir, ci: true, noTelemetry: true });
 
-      reportCodebaseScan(store);
+      reportDiscovery(store);
 
       expect(tagged()).toEqual([]);
     });

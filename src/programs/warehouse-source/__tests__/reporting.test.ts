@@ -31,7 +31,7 @@ import {
 } from '@services/warehouse-sources';
 import { buildSession } from '@services/session';
 import { SessionStore } from '@services/session';
-import { reportCodebaseScan, scanCodebaseFor } from '@services/codebase-scan';
+import { reportDiscovery, runDiscovery } from '@services/project-discovery';
 import { detectWarehousePrerequisites } from '../detect';
 import { config as warehouse } from '../index';
 
@@ -58,7 +58,7 @@ describe('reportWarehouseSourcesDetected', () => {
     const setFrameworkContext = (key: string, value: unknown) => {
       session.frameworkContext[key] = value;
     };
-    await scanCodebaseFor(warehouse, { session, setFrameworkContext });
+    await runDiscovery(warehouse, { session, setFrameworkContext });
     await detectWarehousePrerequisites(session, setFrameworkContext);
     expect(
       session.frameworkContext[DETECTED_WAREHOUSE_SOURCES_KEY],
@@ -75,7 +75,7 @@ describe('reportWarehouseSourcesDetected', () => {
   it('offers the sources locally but tags events only once sharing is granted', async () => {
     const store = new SessionStore(buildSession({ installDir: tmpDir }));
     const ctx = store.readyContext();
-    await scanCodebaseFor(warehouse, ctx);
+    await runDiscovery(warehouse, ctx);
     await detectWarehousePrerequisites(ctx.session, ctx.setFrameworkContext);
 
     expect(
@@ -84,7 +84,7 @@ describe('reportWarehouseSourcesDetected', () => {
     expect(analytics.setTag).not.toHaveBeenCalled();
 
     store.grantSharing();
-    reportCodebaseScan(store);
+    reportDiscovery(store);
 
     expect(analytics.setTag).toHaveBeenCalledWith(
       'warehouse_source_kinds',

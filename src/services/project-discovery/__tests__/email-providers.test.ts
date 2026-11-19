@@ -13,7 +13,7 @@ vi.mock(
     ).withFixtureCatalog(await importOriginal()),
 );
 
-import { reportCodebaseScan, scanCodebaseFor } from '@services/codebase-scan';
+import { reportDiscovery, runDiscovery } from '@services/project-discovery';
 import { SessionStore } from '@services/session/session-store';
 import { buildSession } from '@services/session/wizard-session';
 import { analytics } from '@utils/analytics';
@@ -89,7 +89,7 @@ describe('detected email providers reach PostHog', () => {
     const store = new SessionStore(
       buildSession({ installDir: tmpDir, ...session }),
     );
-    await scanCodebaseFor(PROGRAM, store.readyContext());
+    await runDiscovery(PROGRAM, store.readyContext());
     return store;
   }
 
@@ -101,10 +101,10 @@ describe('detected email providers reach PostHog', () => {
   it('sends the providers a logged-in run found, once, on an event and not on the person', async () => {
     const store = await scannedProject({ resend: '^4.0.0', stripe: '^14.0.0' });
 
-    reportCodebaseScan(store);
+    reportDiscovery(store);
     logIn(store, { distinct_id: 'user-1' } as ApiUser);
-    reportCodebaseScan(store);
-    reportCodebaseScan(store);
+    reportDiscovery(store);
+    reportDiscovery(store);
 
     const events = await providerEvents();
     expect(events).toHaveLength(1);
@@ -119,7 +119,7 @@ describe('detected email providers reach PostHog', () => {
     const store = await scannedProject({ stripe: '^14.0.0' });
     logIn(store, { distinct_id: 'user-1' } as ApiUser);
 
-    reportCodebaseScan(store);
+    reportDiscovery(store);
 
     expect(await providerEvents()).toEqual([]);
   });
@@ -128,7 +128,7 @@ describe('detected email providers reach PostHog', () => {
     const store = await scannedProject({ resend: '^4.0.0' });
     logIn(store);
 
-    reportCodebaseScan(store);
+    reportDiscovery(store);
 
     expect(await providerEvents()).toEqual([]);
   });
@@ -138,7 +138,7 @@ describe('detected email providers reach PostHog', () => {
     store.declineSharing();
     logIn(store, { distinct_id: 'user-1' } as ApiUser);
 
-    reportCodebaseScan(store);
+    reportDiscovery(store);
 
     expect(await providerEvents()).toEqual([]);
   });

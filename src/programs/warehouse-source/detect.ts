@@ -1,7 +1,7 @@
 /**
  * Warehouse-source program detection step.
  *
- * Reads the run's codebase scan and writes a `detectError` into
+ * Reads the run's discovery and writes a `detectError` into
  * frameworkContext for the intro screen, plus the `[ABORT]` cases the
  * data-warehouse-source-setup skill can emit.
  */
@@ -10,8 +10,8 @@ import { existsSync, statSync } from 'fs';
 import { analytics } from '@utils/analytics';
 import type { ProgramSession } from '@programs/program-contract';
 import type { AbortCase } from '@agent/types';
-import { scannedWarehouseSources } from '@services/codebase-scan';
-import { tagScanResults } from '@services/codebase-scan';
+import { discoveredWarehouseSources } from '@services/project-discovery';
+import { tagDiscovery } from '@services/project-discovery';
 import { DETECTED_WAREHOUSE_SOURCES_KEY } from '@services/warehouse-sources';
 
 /** Structured detection errors rendered by the intro screen. */
@@ -49,7 +49,7 @@ export const WAREHOUSE_ABORT_CASES: AbortCase[] = [
 ];
 
 /**
- * Check the run's codebase scan for warehouse sources. Writes a `detectError`
+ * Check the run's discovery for warehouse sources. Writes a `detectError`
  * into frameworkContext for the intro screen when there is nothing to set up.
  */
 export async function detectWarehousePrerequisites(
@@ -79,7 +79,7 @@ export async function detectWarehousePrerequisites(
     return;
   }
 
-  const sources = await scannedWarehouseSources(session);
+  const sources = await discoveredWarehouseSources(session);
 
   if (sources.length === 0) {
     fail({ kind: 'no-sources' });
@@ -89,7 +89,7 @@ export async function detectWarehousePrerequisites(
   // Tag every subsequent event (agent started/completed, setup wizard
   // finished, …) with what was detected — without this the analytics can't
   // say which source types a run attempted, only that a run happened.
-  tagScanResults(session, setFrameworkContext, {
+  tagDiscovery(session, setFrameworkContext, {
     warehouse_source_kinds: sources.map((s) => s.kind).join(','),
     warehouse_source_modes: sources.map((s) => `${s.kind}:${s.mode}`).join(','),
     warehouse_source_count: sources.length,

@@ -6,7 +6,7 @@ import {
   Overlay,
 } from '@tui/store';
 import { OutroKind } from '@shared/outro';
-import { McpOutcome, RunPhase, ScanConsent } from '@shared/run-state';
+import { McpOutcome, RunPhase, DiscoveryConsent } from '@shared/run-state';
 import { TaskStatus } from '@shared/task-status';
 import {
   WizardReadiness,
@@ -256,25 +256,25 @@ describe('WizardStore', () => {
       expect(cb).toHaveBeenCalled();
     });
 
-    it('grantSharing sets scanConsent to granted and emits a change', () => {
+    it('grantSharing sets discoveryConsent to granted and emits a change', () => {
       const store = createStore();
       const cb = vi.fn();
       store.subscribe(cb);
 
       store.grantSharing();
 
-      expect(store.session.scanConsent).toBe(ScanConsent.Granted);
+      expect(store.session.discoveryConsent).toBe(DiscoveryConsent.Granted);
       expect(cb).toHaveBeenCalled();
     });
 
-    it('declineSharing sets scanConsent to declined and emits a change', () => {
+    it('declineSharing sets discoveryConsent to declined and emits a change', () => {
       const store = createStore();
       const cb = vi.fn();
       store.subscribe(cb);
 
       store.declineSharing();
 
-      expect(store.session.scanConsent).toBe(ScanConsent.Declined);
+      expect(store.session.discoveryConsent).toBe(DiscoveryConsent.Declined);
       expect(cb).toHaveBeenCalled();
     });
 
@@ -293,7 +293,7 @@ describe('WizardStore', () => {
       // A granted run with a scan behind it, which is when tags get set.
       store.session = {
         ...store.session,
-        scanConsent: ScanConsent.Granted,
+        discoveryConsent: DiscoveryConsent.Granted,
         frameworkContext: {
           warehouseScanState: 'ok',
           detectedWarehouseSources: [
@@ -348,7 +348,7 @@ describe('WizardStore', () => {
       store.grantSharing();
       store.completeSetup();
 
-      expect(store.session.scanConsent).toBe(ScanConsent.Granted);
+      expect(store.session.discoveryConsent).toBe(DiscoveryConsent.Granted);
       expect(store.session.warehouseSourcesReported).toBe(true);
     });
 

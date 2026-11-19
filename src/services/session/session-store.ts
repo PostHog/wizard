@@ -24,7 +24,7 @@ import {
   type WizardReadinessResult,
 } from '@shared/health-checks/readiness';
 import { OutroKind, type OutroData } from '@shared/outro';
-import { RunPhase, ScanConsent } from '@shared/run-state';
+import { RunPhase, DiscoveryConsent } from '@shared/run-state';
 import { appendStatus } from '@shared/status-history';
 import { TaskStatus, isTaskStatus } from '@shared/task-status';
 import { analytics } from '@utils/analytics';
@@ -32,7 +32,7 @@ import { logToFile } from '@utils/debug';
 import { reportWarehouseSourcesDetected } from '../detection/integration';
 import type { ProgramReadyContext } from '@programs/program-contract';
 import type { WizardSession } from './wizard-session';
-import type { ScanReport } from './task-stream/types';
+import type { DiscoveryReport } from './task-stream/types';
 
 export interface TaskItem {
   id?: string;
@@ -322,20 +322,20 @@ export class SessionStore {
    * completeSetup() resolves the intro gate and reports.
    */
   grantSharing(): void {
-    this.set('scanConsent', ScanConsent.Granted);
+    this.set('discoveryConsent', DiscoveryConsent.Granted);
   }
 
   /**
    * Sharing is off. Suppresses reporting only — local detection still ran and
    * the results stay in the session, so the outro suggestion and the warehouse
-   * task are unaffected; see `scanConsent` on `WizardSession`.
+   * task are unaffected; see `discoveryConsent` on `WizardSession`.
    *
    * Deliberately does not report. The panel's toggle can come back here, so
    * marking the run reported would strand a user who turns sharing off and
    * then on again. completeSetup() owns the single report.
    */
   declineSharing(): void {
-    this.set('scanConsent', ScanConsent.Declined);
+    this.set('discoveryConsent', DiscoveryConsent.Declined);
   }
 
   /**
@@ -351,10 +351,10 @@ export class SessionStore {
     }
   }
 
-  /** Hand the scan to the task stream. First one wins: a run shares one scan. */
-  shareCodebaseScan(report: ScanReport): void {
-    if (this.session.codebaseScanReport) return;
-    this.set('codebaseScanReport', report);
+  /** Hand the discovery report to the task stream. First one wins: a run shares one report. */
+  shareDiscovery(report: DiscoveryReport): void {
+    if (this.session.discoveryReport) return;
+    this.set('discoveryReport', report);
   }
 
   setReadinessResult(result: WizardReadinessResult | null): void {
