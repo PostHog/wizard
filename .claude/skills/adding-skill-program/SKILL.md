@@ -15,10 +15,9 @@ metadata:
 
 Read [wizard-development](../wizard-development/SKILL.md) for the shared design
 policy. Use Pi for new agent work and prefer an orchestrator flow. Linear runs
-are for very simple work and existing flows. The Anthropic SDK remains a
-supported legacy fallback, deprecated as the default for new work; the shared
-guide owns the fallback criteria and gateway model/effort/system-prompt
-contract.
+are for very simple work and existing flows. The Anthropic SDK harness is
+deprecated and unused, so do not bind it; the shared guide owns the gateway
+model/effort/system-prompt contract.
 
 These are contribution defaults. A program whose config sets no `binding` runs
 on [DEFAULT_BINDING](../../../src/agent/runner/switchboard/index.ts), Pi and

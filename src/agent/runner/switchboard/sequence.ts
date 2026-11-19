@@ -1,16 +1,11 @@
 /**
- * Sequence axis: gate helpers, registry, middleware, resolver.
- * Percentage rollouts are PostHog-side — the gate just reads the resolved bool.
+ * Sequence axis: registry, middleware, resolver.
  */
 
 import { IS_PRODUCTION_BUILD } from '@env';
 import { Sequence } from '@shared/constants';
 import { logToFile } from '@utils/debug';
-import {
-  isOrchestratorEnabled,
-  resolveFlagRoute,
-  resolveFlagSequence,
-} from './flags';
+import { resolveFlagRoute } from './flags';
 import { getHarness, resolveHarness } from './harness';
 import type { SequenceResult, SequenceContext } from '../shared/types';
 import { runLinearProgram } from '../sequence/linear';
@@ -64,20 +59,12 @@ const cliSequenceMw: Middleware<Sequence> = (ctx, next) => {
   return ctx.cliSequence;
 };
 
-/** A program's own flag route may pin the sequence; wins over the global orchestrator flag. Traced as 'payload' to stay distinguishable from sequence experiments ('flag'). */
+/** A program's own flag route may pin the sequence, traced as 'payload'. */
 const flagRouteSequenceMw: Middleware<Sequence> = (ctx, next) => {
   const route = resolveFlagRoute(ctx.program, ctx.flags, ctx.flagPayloads);
   if (!route?.sequence) return next();
   if (ctx.trace) ctx.trace.sequence = 'payload';
   return route.sequence;
-};
-
-/** Sequence experiments (e.g. wizard-orchestrator), each inert outside its declared programs. */
-const sequenceExperimentMw: Middleware<Sequence> = (ctx, next) => {
-  const sequence = resolveFlagSequence(ctx.program, ctx.flags);
-  if (!sequence) return next();
-  if (ctx.trace) ctx.trace.sequence = 'flag';
-  return sequence;
 };
 
 /**
@@ -90,26 +77,20 @@ const sequenceExperimentMw: Middleware<Sequence> = (ctx, next) => {
 const runTaskCapabilityClampMw: Middleware<Sequence> = (ctx, next) => {
   const pick = resolveHarness(ctx);
   if (getHarness(pick.harness).runTask) return next();
-  if (isOrchestratorEnabled(ctx.flags)) {
-    logToFile(
-      `[switchboard] wizard-orchestrator ignored: ${pick.harness} has no runTask, clamping to linear`,
-    );
-  }
   if (ctx.trace) ctx.trace.sequence = 'runtask-clamp';
   return Sequence.linear;
 };
 
-// Order = precedence: CLI > capability clamp > flag > binding default. The
-// prod spread collapses to [], dropping cliSequenceMw from the chain.
+// Order = precedence: composed clamp > CLI > capability clamp > flag payload > binding.
+// The prod spread collapses to [], dropping cliSequenceMw from the chain.
 const SEQUENCE_MIDDLEWARE: Middleware<Sequence>[] = [
   composedClampMw,
   ...(IS_PRODUCTION_BUILD ? [] : [cliSequenceMw]),
   runTaskCapabilityClampMw,
   flagRouteSequenceMw,
-  sequenceExperimentMw,
 ];
 
-/** CLI wins over `wizard-orchestrator` flag wins over binding default. */
+/** CLI wins over a program's flag payload, which wins over its binding. */
 export function resolveSequence(ctx: SwitchboardCtx): Sequence {
   const sequence = runChain(SEQUENCE_MIDDLEWARE, ctx, () => {
     if (ctx.trace) ctx.trace.sequence = 'binding';

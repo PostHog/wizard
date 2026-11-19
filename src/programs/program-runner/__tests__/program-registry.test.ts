@@ -65,7 +65,10 @@ describe('program bindings', () => {
       PROGRAM_REGISTRY.map((c) => [c.id, c.binding ?? DEFAULT_BINDING]),
     );
     expect(routes).toEqual({
-      'posthog-integration': linearOnSol,
+      'posthog-integration': {
+        ...linearOnSol,
+        sequence: Sequence.orchestrator,
+      },
       'mcp-analytics': linearOnSol,
       'replay-vision': {
         sequence: Sequence.orchestrator,

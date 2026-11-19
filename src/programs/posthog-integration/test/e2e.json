@@ -12,13 +12,14 @@
   "variations": [
     {
       "name": "default",
-      "summary": "linear / anthropic / sonnet — parity with main"
+      "summary": "orchestrator / pi — the program's pinned binding; stage models from the flow frontmatter"
     },
     {
       "name": "pi-anthropic-linear",
       "summary": "pi harness on the anthropic transport",
       "harness": "pi",
-      "sequence": "linear"
+      "sequence": "linear",
+      "model": "claude-sonnet-5"
     },
     {
       "name": "pi-openai-linear",

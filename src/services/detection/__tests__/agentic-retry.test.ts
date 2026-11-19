@@ -1,4 +1,5 @@
 /** Detection's scan and its one retry, over a stubbed runAgent. */
+import { setTimeout as sleep } from 'node:timers/promises';
 import {
   AgenticDetectionTimeoutError,
   detectProjectsWithAgent,
@@ -12,6 +13,7 @@ import { Harness } from '@shared/constants';
 import { snapshot } from './helpers/run-snapshot.no-jest';
 
 vi.mock('@utils/analytics');
+vi.mock('node:timers/promises', () => ({ setTimeout: vi.fn() }));
 vi.mock('@agent', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@agent')>()),
   runAgent: vi.fn(),
@@ -99,19 +101,23 @@ describe('agentic detection retry', () => {
 
     const calls = execute.mock.calls;
     expect(calls).toHaveLength(2);
-    // The launch's harness applies to the first attempt and the retry runs the
-    // SDK; the scan keeps out of the run's routing analytics.
-    expect(calls.map(([config]) => config.routing)).toEqual(
-      (['first', 'retry'] as const).map((scan) => ({
+    // Both attempts take the launch's harness; the scan keeps out of the run's routing analytics.
+    for (const [config] of calls) {
+      expect(config.routing).toEqual({
         binding: DEFAULT_BINDING,
         overrides: { harness: Harness.pi },
         record: false,
-        scan,
-      })),
-    );
+        scan: true,
+      });
+    }
     expect(calls.map(([config]) => config.run.structured?.timeoutMs)).toEqual([
       60_000, 90_000,
     ]);
+    // One jittered pause sits between the timed-out attempt and its retry.
+    const [[pauseMs]] = vi.mocked(sleep).mock.calls;
+    expect(vi.mocked(sleep)).toHaveBeenCalledTimes(1);
+    expect(pauseMs).toBeGreaterThanOrEqual(1_000);
+    expect(pauseMs).toBeLessThan(2_000);
     for (const [config] of calls) {
       expect(config.wizardFlags).toEqual({ 'a-flag': 'variant' });
       expect(config.wizardFlagPayloads).toEqual({ 'a-flag': { route: 'pi' } });
@@ -248,10 +254,6 @@ describe('agentic detection retry', () => {
       },
     ]);
     expect(execute).toHaveBeenCalledTimes(2);
-    expect(execute.mock.calls.map(([config]) => config.routing.scan)).toEqual([
-      'first',
-      'retry',
-    ]);
   });
 
   it('returns the first valid report without starting a retry', async () => {
@@ -263,7 +265,7 @@ describe('agentic detection retry', () => {
     expect(execute).toHaveBeenCalledTimes(1);
   });
 
-  it('retries a timed-out first run on the SDK', async () => {
+  it('retries a timed-out first run', async () => {
     const events: string[] = [];
     timeOut();
     emitResult(verdict);
@@ -275,10 +277,7 @@ describe('agentic detection retry', () => {
 
     expect(report.projects).toHaveLength(1);
     expect(events).toContain('Project scan timed out; retrying...');
-    expect(execute.mock.calls.map(([config]) => config.routing.scan)).toEqual([
-      'first',
-      'retry',
-    ]);
+    expect(execute).toHaveBeenCalledTimes(2);
   });
 
   it('reports a typed timeout when the retry also times out', async () => {

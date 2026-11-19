@@ -5,10 +5,11 @@
  * NOT own bootstrap, prompt assembly, error routing, or the outro — those stay
  * in `linear.ts` so every runner shares them.
  *
- * `anthropic` (claude-agent-sdk) is the control. `pi` (pi.dev) is the
- * challenger. The harness is chosen by `resolveHarness` in `switchboard.ts`.
+ * `pi` (pi.dev) runs every program. `anthropic` (claude-agent-sdk) is
+ * deprecated and unused for now. The harness is chosen by `resolveHarness` in
+ * the switchboard.
  *
- * Orchestrator mode (the experimental task-queue pipeline) drives the harness
+ * Orchestrator mode (the task-queue pipeline) drives the harness
  * through the OPTIONAL `runTask` method below — one call per seed plan and one
  * per drained task. A harness without orchestrator support omits the method;
  * `orchestrator-runner.ts` checks for it at the call site and fails loudly

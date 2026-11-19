@@ -1,9 +1,8 @@
 /**
- * The `pi` backend — the challenger. Drives pi.dev's coding agent
- * (`@earendil-works/pi-coding-agent`) against the PostHog LLM gateway, behind
- * `wizard-orchestrator`. It owns the agent loop and model transport; prompt
- * assembly, error routing, and the outro stay in `linear.ts`, shared with the
- * `anthropic` control.
+ * The `pi` backend — the harness every program runs on. Drives pi.dev's coding
+ * agent (`@earendil-works/pi-coding-agent`) against the PostHog LLM gateway. It
+ * owns the agent loop and model transport; prompt assembly, error routing, and
+ * the outro stay in `linear.ts`, shared with the deprecated `anthropic` harness.
  *
  * Transport: the gateway is registered as an `anthropic-messages` provider
  * (same protocol the claude-agent-sdk path uses), bearer auth, Bedrock-fallback
