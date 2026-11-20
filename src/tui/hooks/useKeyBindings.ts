@@ -68,21 +68,17 @@ export function useKeyBindings(
     // eslint-disable-next-line
   }, [id, serialized]);
 
-  // Wire up input handling
-  useInput(
-    (input, key) => {
-      // isActive detaches the listener only in a passive effect, after the render that turned it off.
-      if (!active) return;
-      for (const binding of bindings) {
-        const matches = Array.isArray(binding.match)
-          ? binding.match
-          : [binding.match];
-        if (matches.some((m) => matchesKey(m, input, key))) {
-          binding.handler(input, key);
-          return;
-        }
+  // Not Ink's isActive: it attaches and detaches the listener in a passive effect, a render late, so the first frame after a change would act on the old value.
+  useInput((input, key) => {
+    if (!active) return;
+    for (const binding of bindings) {
+      const matches = Array.isArray(binding.match)
+        ? binding.match
+        : [binding.match];
+      if (matches.some((m) => matchesKey(m, input, key))) {
+        binding.handler(input, key);
+        return;
       }
-    },
-    { isActive: active },
-  );
+    }
+  });
 }

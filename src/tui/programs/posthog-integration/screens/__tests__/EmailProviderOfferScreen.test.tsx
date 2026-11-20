@@ -141,9 +141,7 @@ function setup(visible = true, run?: Run) {
   return { store, app, press, show, hide };
 }
 
-/** The flow's real screen container, so a terminal resize hides the screen the way it does for a user. */
-function setupInContainer() {
-  const store = storeAfterInstallWithResend();
+function setupInContainer(store = storeAfterInstallWithResend()) {
   const app = render(
     <ScreenContainer
       store={store}
@@ -160,20 +158,32 @@ function setupInContainer() {
   };
   const notice = () =>
     app.lastFrame()?.replace(/\s+/g, ' ').includes(VIEWPORT_TOO_SMALL_MESSAGE);
-  const grow = async () => {
-    setSize(120, 40);
+  const resize = async (columns: number, rows: number) => {
+    setSize(columns, rows);
     await delay();
   };
-  /** Sends the key on the first frame that shows the notice, before effects of that render have run. */
-  const shrinkThenPress = async (key: string) => {
-    setSize(70, 24);
-    for (let i = 0; i < 1000 && !notice(); i++)
+  /** Sends the key on the first frame after the resize, before that render's effects have run. */
+  const resizeThenPress = async (
+    columns: number,
+    rows: number,
+    key: string,
+  ) => {
+    const hides = columns < 80;
+    setSize(columns, rows);
+    for (let i = 0; i < 1000 && notice() !== hides; i++)
       await new Promise((resolve) => setImmediate(resolve));
-    expect(notice()).toBe(true);
+    expect(notice()).toBe(hides);
     app.stdin.write(key);
     await delay();
   };
-  return { store, app, grow, shrinkThenPress };
+  return {
+    store,
+    app,
+    grow: () => resize(120, 40),
+    shrink: () => resize(70, 24),
+    shrinkThenPress: (key: string) => resizeThenPress(70, 24, key),
+    growThenPress: (key: string) => resizeThenPress(120, 40, key),
+  };
 }
 
 beforeEach(() => {
@@ -362,7 +372,12 @@ describe('the email provider offer after install', () => {
   });
 
   it('neither counts nor takes an answer while a too-small terminal hides it', async () => {
-    const { app, show, hide } = setup(false);
+    const store = storeAtOutroWithResend();
+    store.setOutroDismissed();
+    const { app, grow, shrink } = setupInContainer(store);
+    await grow();
+    await shrink();
+    store.setMcpComplete();
     await delay();
 
     pause();
@@ -372,29 +387,12 @@ describe('the email provider offer after install', () => {
     expect(await offerEvents()).toEqual([]);
 
     pause();
-    show();
-    await delay();
+    await grow();
     app.stdin.write(ENTER);
     await delay();
 
     expect(await offerEvents()).toEqual([SHOWN]);
 
-    hide();
-    await delay();
-    pause();
-    app.stdin.write(DOWN);
-    await delay();
-    app.stdin.write(DOWN);
-    await delay();
-    app.stdin.write(ENTER);
-    await delay();
-    app.stdin.write(ESC);
-    await delay();
-
-    expect(await offerEvents()).toEqual([SHOWN]);
-
-    show();
-    await delay();
     pause();
     app.stdin.write(ENTER);
     await delay();
@@ -402,8 +400,8 @@ describe('the email provider offer after install', () => {
     expect(await offerEvents()).toEqual([SHOWN, answered('yes')]);
   });
 
-  it('keeps the highlight and takes no key from the first frame a too-small terminal hides the question', async () => {
-    const { app, grow, shrinkThenPress } = setupInContainer();
+  it('keeps the highlight while a too-small terminal hides the question, and takes keys from the first frame it shows again', async () => {
+    const { app, grow, shrinkThenPress, growThenPress } = setupInContainer();
     await grow();
     app.stdin.write(DOWN);
     await delay();
@@ -415,12 +413,12 @@ describe('the email provider offer after install', () => {
     }
     expect(await offerEvents()).toEqual([SHOWN]);
 
-    await grow();
+    await growThenPress(DOWN);
     pause();
     app.stdin.write(ENTER);
     await delay();
 
-    expect(await offerEvents()).toEqual([SHOWN, answered('not_now')]);
+    expect(await offerEvents()).toEqual([SHOWN, answered('no')]);
   });
 
   it('keeps the setup lines after yes while a too-small terminal hides them', async () => {
