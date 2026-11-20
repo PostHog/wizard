@@ -54,7 +54,7 @@ describe('emailSetupCommand', () => {
       );
       expect(setup.command).toBe(FULL);
       expect(setup.lead).toMatch(
-        /Run this in your app, adding the --base-url this run used:$/,
+        /Change into your app's directory, then run this, adding the --base-url this run used:$/,
       );
       expect(setup.lead).not.toContain(baseUrl.trim());
       expect(setup.lead).not.toContain('apps');
@@ -78,7 +78,9 @@ describe('emailSetupCommand', () => {
       CWD,
     );
     expect(setup.command).toBe(FULL);
-    expect(setup.lead).toMatch(/Run this in your app:$/);
+    expect(setup.lead).toMatch(
+      /Change into your app's directory, then run this:$/,
+    );
     expect(setup.lead).not.toContain(name);
   });
 });

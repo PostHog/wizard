@@ -201,6 +201,7 @@ describe('the email provider offer after install', () => {
     );
     expect(app.lastFrame()).toContain(`${COMMAND}\n`);
     expect(app.lastFrame()).toContain(WORKFLOWS_URL);
+    expect(app.lastFrame()).toContain('Press any key to exit');
     expect(store.router.resolve(store)).toBe(
       PostHogIntegrationScreenId.EmailProviderOffer,
     );
@@ -220,14 +221,14 @@ describe('the email provider offer after install', () => {
     [
       'a run pinned with --base-url',
       { installDir: APP_DIR, baseUrl: 'https://user:secret@example.com' },
-      'Run this in your app, adding the --base-url this run used:',
+      "Change into your app's directory, then run this, adding the --base-url this run used:",
       'https://example.com/project/42/workflows?source=wizard_cli',
       'secret',
     ],
     [
       'an install directory whose name is not plain text',
       { installDir: path.join(process.cwd(), 'web\u001b[2J') },
-      'Run this in your app:',
+      "Change into your app's directory, then run this:",
       WORKFLOWS_URL,
       '\u001b[2J',
     ],
@@ -345,6 +346,10 @@ describe('the email provider offer after install', () => {
     hide();
     await delay();
     pause();
+    app.stdin.write(DOWN);
+    await delay();
+    app.stdin.write(DOWN);
+    await delay();
     app.stdin.write(ENTER);
     await delay();
     app.stdin.write(ESC);
@@ -359,6 +364,27 @@ describe('the email provider offer after install', () => {
     await delay();
 
     expect(await offerEvents()).toEqual([SHOWN, answered('yes')]);
+  });
+
+  it('keeps the setup lines after yes while a too-small terminal hides them', async () => {
+    const { store, app, press, show, hide } = setup();
+    await press(ENTER);
+
+    hide();
+    await delay();
+    app.stdin.write('x');
+    await delay();
+
+    expect(store.router.resolve(store)).toBe(
+      PostHogIntegrationScreenId.EmailProviderOffer,
+    );
+
+    show();
+    await delay();
+    app.stdin.write('x');
+    await delay();
+
+    expect(store.router.resolve(store)).toBe(ScreenId.Exit);
   });
 
   it('sends nothing when it closes while still hidden', async () => {

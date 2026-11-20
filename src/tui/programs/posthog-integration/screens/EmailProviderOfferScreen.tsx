@@ -91,6 +91,7 @@ const OfferFlow = ({
       <WorkflowsLink
         setup={setup}
         migrateCommand={offer.migrateCommand}
+        visible={visible}
         onContinue={() => store.setEmailProviderOfferDone()}
       />
     );
@@ -146,14 +147,17 @@ const QuestionPicker = ({
   return (
     <Box flexDirection="column" flexGrow={1} marginTop={1}>
       <Text>{QUESTION}</Text>
-      <Box marginTop={1}>
-        <PickerMenu
-          options={CHOICES}
-          onSelect={(value) =>
-            answerAfterPause(Array.isArray(value) ? value[0] : value)
-          }
-        />
-      </Box>
+      {/* Unmounted while hidden, so arrow keys can't move a highlight nobody can see. */}
+      {visible && (
+        <Box marginTop={1}>
+          <PickerMenu
+            options={CHOICES}
+            onSelect={(value) =>
+              answerAfterPause(Array.isArray(value) ? value[0] : value)
+            }
+          />
+        </Box>
+      )}
     </Box>
   );
 };
@@ -161,13 +165,17 @@ const QuestionPicker = ({
 const WorkflowsLink = ({
   setup,
   migrateCommand,
+  visible,
   onContinue,
 }: {
   setup: EmailSetup;
   migrateCommand?: string;
+  visible: boolean;
   onContinue: () => void;
 }) => {
-  useDismissOnAnyKey(onContinue);
+  useDismissOnAnyKey(() => {
+    if (visible) onContinue();
+  });
 
   return (
     <Box flexDirection="column" flexGrow={1} marginTop={1}>
@@ -187,7 +195,7 @@ const WorkflowsLink = ({
         </Box>
       )}
       <Box marginTop={1}>
-        <Text color={Colors.muted}>Press any key to continue</Text>
+        <Text color={Colors.muted}>Press any key to exit</Text>
       </Box>
     </Box>
   );
