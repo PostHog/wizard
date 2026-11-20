@@ -39,8 +39,13 @@ export interface KeyBinding {
  *
  * @param id Unique identifier for this component's hints registration
  * @param bindings Array of key binding definitions
+ * @param options.active False to ignore keys while mounted. Defaults to true.
  */
-export function useKeyBindings(id: string, bindings: KeyBinding[]): void {
+export function useKeyBindings(
+  id: string,
+  bindings: KeyBinding[],
+  { active = true }: { active?: boolean } = {},
+): void {
   const ctx = useKeyboardHintsContext();
 
   // Extract hints and register. Use a serialized key to avoid unnecessary updates.
@@ -64,15 +69,18 @@ export function useKeyBindings(id: string, bindings: KeyBinding[]): void {
   }, [id, serialized]);
 
   // Wire up input handling
-  useInput((input, key) => {
-    for (const binding of bindings) {
-      const matches = Array.isArray(binding.match)
-        ? binding.match
-        : [binding.match];
-      if (matches.some((m) => matchesKey(m, input, key))) {
-        binding.handler(input, key);
-        return;
+  useInput(
+    (input, key) => {
+      for (const binding of bindings) {
+        const matches = Array.isArray(binding.match)
+          ? binding.match
+          : [binding.match];
+        if (matches.some((m) => matchesKey(m, input, key))) {
+          binding.handler(input, key);
+          return;
+        }
       }
-    }
-  });
+    },
+    { isActive: active },
+  );
 }

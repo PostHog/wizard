@@ -130,34 +130,34 @@ const QuestionPicker = ({
     const now = Date.now();
     const paused = now - quietSince.current >= QUESTION_READ_GUARD_MS;
     quietSince.current = now;
-    if (visible && paused) onAnswer(choice);
+    if (paused) onAnswer(choice);
   };
 
-  useKeyBindings('email-provider-offer', [
-    {
-      match: KeyMatch.Escape,
-      label: 'esc',
-      action: 'skip',
-      handler: () => {
-        if (visible) onAnswer(EmailProviderOfferAnswer.Skipped);
+  useKeyBindings(
+    'email-provider-offer',
+    [
+      {
+        match: KeyMatch.Escape,
+        label: 'esc',
+        action: 'skip',
+        handler: () => onAnswer(EmailProviderOfferAnswer.Skipped),
       },
-    },
-  ]);
+    ],
+    { active: visible },
+  );
 
   return (
     <Box flexDirection="column" flexGrow={1} marginTop={1}>
       <Text>{QUESTION}</Text>
-      {/* Unmounted while hidden, so arrow keys can't move a highlight nobody can see. */}
-      {visible && (
-        <Box marginTop={1}>
-          <PickerMenu
-            options={CHOICES}
-            onSelect={(value) =>
-              answerAfterPause(Array.isArray(value) ? value[0] : value)
-            }
-          />
-        </Box>
-      )}
+      <Box marginTop={1}>
+        <PickerMenu
+          options={CHOICES}
+          active={visible}
+          onSelect={(value) =>
+            answerAfterPause(Array.isArray(value) ? value[0] : value)
+          }
+        />
+      </Box>
     </Box>
   );
 };

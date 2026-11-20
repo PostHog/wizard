@@ -326,7 +326,7 @@ describe('the email provider offer after install', () => {
     expect(await offerEvents()).toEqual([SHOWN, answered('yes')]);
   });
 
-  it('neither counts nor takes an answer while a too-small terminal hides it', async () => {
+  it('neither counts nor takes an answer while a too-small terminal hides it, and keeps the highlight', async () => {
     const { app, show, hide } = setup(false);
     await delay();
 
@@ -344,6 +344,8 @@ describe('the email provider offer after install', () => {
 
     expect(await offerEvents()).toEqual([SHOWN]);
 
+    app.stdin.write(DOWN);
+    await delay();
     hide();
     await delay();
     pause();
@@ -364,7 +366,7 @@ describe('the email provider offer after install', () => {
     app.stdin.write(ENTER);
     await delay();
 
-    expect(await offerEvents()).toEqual([SHOWN, answered('yes')]);
+    expect(await offerEvents()).toEqual([SHOWN, answered('not_now')]);
   });
 
   it('keeps the setup lines after yes while a too-small terminal hides them', async () => {
@@ -399,13 +401,11 @@ describe('the email provider offer after install', () => {
 
     await resizeTo(120, 40);
     expect(app.lastFrame()).toContain(COMMAND);
-    expect(store.router.resolve(store)).toBe(
-      PostHogIntegrationScreenId.EmailProviderOffer,
-    );
+    expect(store.exitRequest).toBeNull();
 
     app.stdin.write('x');
     await delay();
-    expect(store.router.resolve(store)).toBe(ScreenId.Exit);
+    expect(store.exitRequest).toBe(0);
   });
 
   it('sends nothing when it closes while still hidden', async () => {
