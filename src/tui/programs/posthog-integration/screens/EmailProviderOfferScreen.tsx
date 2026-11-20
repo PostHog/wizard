@@ -1,5 +1,5 @@
 import { Box, Text } from 'ink';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { WizardStore } from '@tui/store';
 import { Colors } from '@tui/styles';
 import { PickerMenu } from '@tui/primitives/index';
@@ -122,7 +122,8 @@ const QuestionPicker = ({
   onAnswer: (choice: EmailProviderOfferAnswer) => void;
 }) => {
   const quietSince = useRef(Date.now());
-  useEffect(() => {
+  // A layout effect, so an Enter on the first frame the question shows again already meets the reset.
+  useLayoutEffect(() => {
     quietSince.current = Date.now();
   }, [visible]);
 

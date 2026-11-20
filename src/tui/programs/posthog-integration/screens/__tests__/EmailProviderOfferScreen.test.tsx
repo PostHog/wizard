@@ -18,6 +18,7 @@ import { PostHogIntegrationScreenId } from '@tui/programs/posthog-integration/sc
 import { EmailProviderOfferScreen } from '@tui/programs/posthog-integration/screens/EmailProviderOfferScreen';
 import { ScreenContainer } from '@tui/primitives/ScreenContainer';
 import { VIEWPORT_TOO_SMALL_MESSAGE } from '@tui/primitives/index';
+import { Icons } from '@tui/styles';
 import { createScreens, createServices } from '@tui/screen-registry';
 import { buildSession } from '@programs';
 
@@ -136,9 +137,7 @@ function setup(visible = true, run?: Run) {
       await delay();
     }
   };
-  const show = () => app.rerender(screen(true));
-  const hide = () => app.rerender(screen(false));
-  return { store, app, press, show, hide };
+  return { store, app, press };
 }
 
 function setupInContainer(store = storeAfterInstallWithResend()) {
@@ -162,7 +161,7 @@ function setupInContainer(store = storeAfterInstallWithResend()) {
     setSize(columns, rows);
     await delay();
   };
-  /** Sends the key on the first frame after the resize, before that render's effects have run. */
+  /** Sends the key on the first frame after the resize, before that render's effects have run, and returns that frame. */
   const resizeThenPress = async (
     columns: number,
     rows: number,
@@ -173,8 +172,10 @@ function setupInContainer(store = storeAfterInstallWithResend()) {
     for (let i = 0; i < 1000 && notice() !== hides; i++)
       await new Promise((resolve) => setImmediate(resolve));
     expect(notice()).toBe(hides);
+    const frame = app.lastFrame();
     app.stdin.write(key);
     await delay();
+    return frame;
   };
   return {
     store,
@@ -413,12 +414,28 @@ describe('the email provider offer after install', () => {
     }
     expect(await offerEvents()).toEqual([SHOWN]);
 
-    await growThenPress(DOWN);
+    const restored = await growThenPress(DOWN);
+    expect(restored).toContain(`${Icons.triangleSmallRight} Not now`);
     pause();
     app.stdin.write(ENTER);
     await delay();
 
     expect(await offerEvents()).toEqual([SHOWN, answered('no')]);
+  });
+
+  it('takes no Enter on the first frame the question shows again after a long hide', async () => {
+    const { app, grow, shrink, growThenPress } = setupInContainer();
+    await grow();
+    await shrink();
+    pause(2000);
+
+    await growThenPress(ENTER);
+    expect(await offerEvents()).toEqual([SHOWN]);
+
+    pause();
+    app.stdin.write(ENTER);
+    await delay();
+    expect(await offerEvents()).toEqual([SHOWN, answered('yes')]);
   });
 
   it('keeps the setup lines after yes while a too-small terminal hides them', async () => {
