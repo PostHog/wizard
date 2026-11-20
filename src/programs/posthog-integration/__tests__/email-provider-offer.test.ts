@@ -123,9 +123,12 @@ describe('emailProviderOffer', () => {
     },
   );
 
-  it('asks nothing when the pinned instance is no URL it can link to', () => {
-    expect(emailProviderOffer(pinnedRun('not a url'))).toBeUndefined();
-  });
+  it.each(['not a url', 'file:///srv/posthog', 'javascript:alert(1)'])(
+    'asks nothing when the pinned instance %j is no web page it can link to',
+    (baseUrl) => {
+      expect(emailProviderOffer(pinnedRun(baseUrl))).toBeUndefined();
+    },
+  );
 
   it.each<[string, (scan: CodebaseScan) => ProgramSession]>([
     ['a CI run', (scan) => finishedRun(scan, { ci: true })],

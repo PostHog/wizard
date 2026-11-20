@@ -41,10 +41,11 @@ type OfferSession = Pick<
 const MIGRATE_COMMANDS: Readonly<Partial<Record<EmailProviderKind, string>>> =
   {};
 
-/** Parsing drops credentials and line breaks from a pinned URL and percent-encodes control characters, so the link is safe to print. */
+/** Only a web page can be the link. Parsing drops line breaks and percent-encodes control characters, and clearing the user and password drops credentials, so the link is safe to print. */
 function workflowsUrl(appHost: string, projectId: number): string | undefined {
   if (!URL.canParse(appHost)) return undefined;
   const url = new URL(appHost);
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return undefined;
   url.username = '';
   url.password = '';
   url.pathname = `${url.pathname.replace(

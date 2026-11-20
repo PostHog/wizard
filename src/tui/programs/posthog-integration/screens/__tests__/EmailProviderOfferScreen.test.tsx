@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { stripVTControlCharacters } from 'node:util';
 import { vi, it, expect, afterEach, beforeEach, describe } from 'vitest';
 import { render, cleanup } from 'ink-testing-library';
 import { WizardStore } from '@tui/store';
@@ -17,6 +18,7 @@ import { recordAnalyticsIngestion } from '@shared/utils/__tests__/helpers/analyt
 import { PostHogIntegrationScreenId } from '@tui/programs/posthog-integration/screen-ids';
 import { EmailProviderOfferScreen } from '@tui/programs/posthog-integration/screens/EmailProviderOfferScreen';
 import { ScreenContainer } from '@tui/primitives/ScreenContainer';
+import { VIEWPORT_TOO_SMALL_MESSAGE } from '@tui/primitives/index';
 import { createScreens, createServices } from '@tui/screen-registry';
 import { buildSession } from '@programs';
 
@@ -135,9 +137,47 @@ function setup(visible = true, run?: Run) {
       await delay();
     }
   };
-  const show = () => app.rerender(screen(true));
-  const hide = () => app.rerender(screen(false));
-  return { store, app, press, show, hide };
+  return { store, app, press };
+}
+
+function setupInContainer(store = storeAfterInstallWithResend()) {
+  const app = render(
+    <ScreenContainer
+      store={store}
+      screens={createScreens(store, createServices(store))}
+    />,
+  );
+  const setSize = (columns: number, rows: number) => {
+    Object.defineProperties(app.stdout, {
+      isTTY: { value: true, configurable: true },
+      columns: { value: columns, configurable: true },
+      rows: { value: rows, configurable: true },
+    });
+    app.stdout.emit('resize');
+  };
+  const frame = () => stripVTControlCharacters(app.lastFrame() ?? '');
+  const notice = () =>
+    frame().replace(/\s+/g, ' ').includes(VIEWPORT_TOO_SMALL_MESSAGE);
+  const resize = async (columns: number, rows: number) => {
+    setSize(columns, rows);
+    await delay();
+  };
+  /** Sends the key on the first frame that shows the notice, before that render's effects have run. */
+  const shrinkThenPress = async (key: string) => {
+    setSize(70, 24);
+    for (let i = 0; i < 1000 && !notice(); i++)
+      await new Promise((resolve) => setImmediate(resolve));
+    expect(notice()).toBe(true);
+    app.stdin.write(key);
+    await delay();
+  };
+  return {
+    store,
+    app,
+    grow: () => resize(120, 40),
+    shrink: () => resize(70, 24),
+    shrinkThenPress,
+  };
 }
 
 beforeEach(() => {
@@ -201,6 +241,7 @@ describe('the email provider offer after install', () => {
     );
     expect(app.lastFrame()).toContain(`${COMMAND}\n`);
     expect(app.lastFrame()).toContain(WORKFLOWS_URL);
+    expect(app.lastFrame()).toContain('Press any key to exit');
     expect(store.router.resolve(store)).toBe(
       PostHogIntegrationScreenId.EmailProviderOffer,
     );
@@ -220,14 +261,14 @@ describe('the email provider offer after install', () => {
     [
       'a run pinned with --base-url',
       { installDir: APP_DIR, baseUrl: 'https://user:secret@example.com' },
-      'Run this in your app, adding the --base-url this run used:',
+      "Change into your app's directory, then run this, adding the --base-url this run used:",
       'https://example.com/project/42/workflows?source=wizard_cli',
       'secret',
     ],
     [
       'an install directory whose name is not plain text',
       { installDir: path.join(process.cwd(), 'web\u001b[2J') },
-      'Run this in your app:',
+      "Change into your app's directory, then run this:",
       WORKFLOWS_URL,
       '\u001b[2J',
     ],
@@ -325,7 +366,12 @@ describe('the email provider offer after install', () => {
   });
 
   it('neither counts nor takes an answer while a too-small terminal hides it', async () => {
-    const { app, show, hide } = setup(false);
+    const store = storeAtOutroWithResend();
+    store.setOutroDismissed();
+    const { app, grow, shrink } = setupInContainer(store);
+    await grow();
+    await shrink();
+    store.setMcpComplete();
     await delay();
 
     pause();
@@ -335,15 +381,13 @@ describe('the email provider offer after install', () => {
     expect(await offerEvents()).toEqual([]);
 
     pause();
-    show();
-    await delay();
+    await grow();
     app.stdin.write(ENTER);
     await delay();
 
     expect(await offerEvents()).toEqual([SHOWN]);
 
-    hide();
-    await delay();
+    await shrink();
     pause();
     app.stdin.write(ENTER);
     await delay();
@@ -352,13 +396,45 @@ describe('the email provider offer after install', () => {
 
     expect(await offerEvents()).toEqual([SHOWN]);
 
-    show();
-    await delay();
+    await grow();
     pause();
     app.stdin.write(ENTER);
     await delay();
 
     expect(await offerEvents()).toEqual([SHOWN, answered('yes')]);
+  });
+
+  it('takes no Enter on the first frame a too-small terminal hides the question', async () => {
+    const { app, grow, shrinkThenPress } = setupInContainer();
+    await grow();
+    pause();
+    await shrinkThenPress(ENTER);
+    expect(await offerEvents()).toEqual([SHOWN]);
+
+    await grow();
+    pause();
+    app.stdin.write(ENTER);
+    await delay();
+    expect(await offerEvents()).toEqual([SHOWN, answered('yes')]);
+  });
+
+  it('keeps the setup lines after yes while a too-small terminal hides them', async () => {
+    const { store, app, grow, shrinkThenPress } = setupInContainer();
+    await grow();
+    pause();
+    app.stdin.write(ENTER);
+    await delay();
+    expect(app.lastFrame()).toContain(COMMAND);
+
+    await shrinkThenPress('x');
+    expect(store.exitRequest).toBeNull();
+
+    await grow();
+    expect(app.lastFrame()).toContain(COMMAND);
+    expect(store.exitRequest).toBeNull();
+
+    app.stdin.write('x');
+    await vi.waitFor(() => expect(store.exitRequest).toBe(0));
   });
 
   it('sends nothing when it closes while still hidden', async () => {

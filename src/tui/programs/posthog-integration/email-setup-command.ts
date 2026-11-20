@@ -39,14 +39,17 @@ export function emailSetupCommand(
 
   if (baseUrl) {
     return {
-      lead: `${LEAD} Run this in your app, adding the --base-url this run used:`,
+      lead: `${LEAD} Change into your app's directory, then run this, adding the --base-url this run used:`,
       command,
     };
   }
   const fromCwd = relative(cwd, installDir);
   const runIn = !fromCwd ? undefined : outside(fromCwd) ? installDir : fromCwd;
   if (runIn !== undefined && !PLAIN.test(runIn)) {
-    return { lead: `${LEAD} Run this in your app:`, command };
+    return {
+      lead: `${LEAD} Change into your app's directory, then run this:`,
+      command,
+    };
   }
   return {
     lead: `${LEAD} ${runIn ? `Run this in ${runIn}:` : 'Run this:'}`,

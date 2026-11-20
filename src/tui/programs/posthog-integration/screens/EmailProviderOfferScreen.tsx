@@ -91,6 +91,7 @@ const OfferFlow = ({
       <WorkflowsLink
         setup={setup}
         migrateCommand={offer.migrateCommand}
+        visible={visible}
         onContinue={() => store.setEmailProviderOfferDone()}
       />
     );
@@ -161,13 +162,17 @@ const QuestionPicker = ({
 const WorkflowsLink = ({
   setup,
   migrateCommand,
+  visible,
   onContinue,
 }: {
   setup: EmailSetup;
   migrateCommand?: string;
+  visible: boolean;
   onContinue: () => void;
 }) => {
-  useDismissOnAnyKey(onContinue);
+  useDismissOnAnyKey(() => {
+    if (visible) onContinue();
+  });
 
   return (
     <Box flexDirection="column" flexGrow={1} marginTop={1}>
@@ -187,7 +192,7 @@ const WorkflowsLink = ({
         </Box>
       )}
       <Box marginTop={1}>
-        <Text color={Colors.muted}>Press any key to continue</Text>
+        <Text color={Colors.muted}>Press any key to exit</Text>
       </Box>
     </Box>
   );
