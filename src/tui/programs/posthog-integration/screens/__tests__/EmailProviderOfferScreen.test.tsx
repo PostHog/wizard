@@ -393,6 +393,16 @@ describe('the email provider offer after install', () => {
 
     expect(await offerEvents()).toEqual([SHOWN]);
 
+    await shrink();
+    pause();
+    app.stdin.write(ENTER);
+    await delay();
+    app.stdin.write(ESC);
+    await delay();
+
+    expect(await offerEvents()).toEqual([SHOWN]);
+
+    await grow();
     pause();
     app.stdin.write(ENTER);
     await delay();
