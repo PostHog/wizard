@@ -51,13 +51,21 @@ produced or changed, in properties that vary from call to call. Where no tool ha
 such an outcome, add no events for them. Where that task was not needed or never
 ran, instrument tool calls like any other action.
 
+Capture an outcome where it completes. Where a sign-up, sign-in, checkout or webhook
+finishes on the server — a server action, a route handler — capture it there, with
+the server client the init step set up: a browser event there only records that a
+form was submitted. An action that lives in the browser is captured in the browser.
+Where the init handoff names no server client, capture in the browser and name in
+your handoff the outcomes that complete on the server.
+
 Never put PII in an event. When new information about the user surfaces, tag the
 user the way the identify docs describe, not the event.
 
 ## How you know you succeeded
 
 The meaningful user actions across the app have capture calls that fire on the
-real action, not on page load, each one attributable to the user who took it, and
+real action, where it completes, not on page load, each one attributable to the
+user who took it, and
 `.posthog-wizard-cache/.posthog-events.json` lists the events you instrumented. Only
 where the MCP server is the whole project and `$mcp_tool_call` already covers every
 action is no events the right result: leave that list empty and say why in your
