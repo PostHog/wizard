@@ -1,5 +1,18 @@
 # Changelog
 
+## [2.99.0](https://github.com/PostHog/wizard/compare/v2.98.0...v2.99.0) (2026-11-20)
+
+
+### Features
+
+* **analytics:** ask about the email provider after install ([#1508](https://github.com/PostHog/wizard/issues/1508)) ([a695952](https://github.com/PostHog/wizard/commit/a69595291dac47730668f3efcfa8a891560da687))
+* **audit:** add the spend audit program ([#1528](https://github.com/PostHog/wizard/issues/1528)) ([a496915](https://github.com/PostHog/wizard/commit/a496915662ef292f196f10561217d04ba81e1a8e))
+
+
+### Bug Fixes
+
+* **email-offer:** say the last key exits and ignore keys while hidden ([#1591](https://github.com/PostHog/wizard/issues/1591)) ([3872773](https://github.com/PostHog/wizard/commit/387277362b836cae44602b304205d0f414c55e9c))
+
 ## [2.98.0](https://github.com/PostHog/wizard/compare/v2.97.0...v2.98.0) (2026-11-19)
 
 
