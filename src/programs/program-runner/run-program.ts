@@ -58,8 +58,11 @@ import {
   type ResolvedProgramCredentials,
 } from './credentials';
 import { reportDiscovery } from '@services/project-discovery';
-import { IS_PRODUCTION_BUILD } from '@env';
-import type { QuestionKey } from '@services/detection/decisions';
+import {
+  questionFacts,
+  runDecisionsSource,
+  type QuestionKey,
+} from '@services/detection/decisions';
 import { logIn } from './login';
 import { applyAgentProgress, type SessionStore } from '@services/session';
 import type { WizardSession } from '@services/session';
@@ -344,23 +347,25 @@ async function invokeProgram(
       return fail(error instanceof Error ? error.message : String(error));
     }
 
-    // Logged in, AI approved and flags known: the one judgment call, before any agent runs.
-    // Production builds drop this branch, and with it the whole Decisions service.
-    let decisions: typeof import('@services/detection/decisions') | null = null;
-    if (!IS_PRODUCTION_BUILD) {
-      try {
-        decisions = await import('@services/detection/decisions');
-        await park(
-          decisions.runProgramDecisions(decisionKeys(config, plannedRuns), {
-            session: store.session,
-            setFrameworkContext: (key, value) =>
-              store.setFrameworkContext(key, value),
-            flags: flags.flags,
-          }),
-        );
-      } catch (error) {
-        if (signal.aborted) return cancelled();
-        logToFile(`[decisions] skipped: ${String(error)}`);
+    // Logged in, AI approved and flags known: Decisions answers for a program that ranks with it.
+    if (config.rankWith?.includes('decisions')) {
+      // With project discovery on, the answers become traits, so the run waits for them.
+      const discovering = projectDiscoveryMode(flags.flags) !== 'off';
+      const asking = runDecisionsSource(decisionKeys(config, plannedRuns), {
+        session: store.session,
+        setFrameworkContext: (key, value) =>
+          store.setFrameworkContext(key, value),
+        programId,
+        ...(discovering && { sink: store.readyContext() }),
+      });
+      // Otherwise the call runs beside the agent run, and its answers reach only the log.
+      if (discovering) {
+        try {
+          await park(asking);
+        } catch (error) {
+          if (signal.aborted) return cancelled();
+          logToFile(`[decisions] skipped: ${String(error)}`);
+        }
       }
     }
 
@@ -394,6 +399,19 @@ async function invokeProgram(
           analytics.setProgramTags(run.analyticsTags);
           store.setSkillId(run.skillId ?? run.integrationLabel);
           pair.project.path = picked;
+          // The questions were asked of the project the run started in; the pair's project gets its own answers.
+          if (config.rankWith?.includes('decisions')) {
+            await park(
+              runDecisionsSource(decisionKeys(config, plannedRuns), {
+                session: store.session,
+                setFrameworkContext: (key, value) =>
+                  store.setFrameworkContext(key, value),
+                programId,
+                sink: store.readyContext(),
+                rankProjects: false,
+              }),
+            );
+          }
         }
       } catch (error) {
         if (signal.aborted) return cancelled();
@@ -515,14 +533,10 @@ async function invokeProgram(
             traitKeys: () =>
               toTraitKeys(getTraits(session(), pair.project.path)),
             projectFacts:
-              (decisions && planned.config.decisions) ||
-              planned.config.detectedFacts
+              planned.config.decisions || planned.config.detectedFacts
                 ? () => [
-                    ...(decisions && planned.config.decisions
-                      ? decisions.questionFacts(
-                          session(),
-                          planned.config.decisions,
-                        )
+                    ...(planned.config.decisions
+                      ? questionFacts(session(), planned.config.decisions)
                       : []),
                     ...(planned.config.detectedFacts?.(
                       flags.flags,

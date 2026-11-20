@@ -141,14 +141,7 @@ function printRow(row: Row): void {
 }
 
 async function main(): Promise<void> {
-  const loaded = await loadDecisionsService();
-  if (!loaded) {
-    console.error(
-      'The Decisions service is not in production builds. Run this script from source.',
-    );
-    process.exit(1);
-  }
-  svc = loaded;
+  svc = await loadDecisionsService();
   specs = [...askedBy.keys()].map(
     (key) => svc.QUESTIONS[key as keyof typeof svc.QUESTIONS],
   );

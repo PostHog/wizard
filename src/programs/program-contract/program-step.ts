@@ -194,8 +194,8 @@ export interface ProgramConfig {
   /**
    * Questions this program asks the Decisions judgment service, by catalog key
    * (`@services/detection/decisions/questions`). The run asks those of this
-   * program and every program it `requires`, once, after login. Dev and CI
-   * builds only: production builds don't bundle the service.
+   * program and every program it `requires`, once, after login, when
+   * `rankWith` names `decisions`.
    */
   decisions?: readonly DecisionQuestionKey[];
   /**
@@ -206,7 +206,8 @@ export interface ProgramConfig {
   /**
    * The model sources that rank this program's projects, beside static
    * detection: Decisions, agentic detection, both, or neither. Each marks the
-   * main app and names apps static detection missed.
+   * main app and names apps static detection missed. Decisions also answers
+   * the program's `decisions` questions.
    */
   rankWith?: readonly RankSource[];
   /** Runs in the flow other than the program's own agent run, keyed by flow step id. */

@@ -61,7 +61,7 @@ const PROGRAM_IDS = fs
       fs.existsSync(path.join(PROGRAMS_DIR, d.name, 'tsconfig.json')),
   )
   .map((d) => d.name);
-// Each service folder is an entry, plus the Decisions service, which only dev builds load.
+// Each service folder is an entry, plus the Decisions service inside detection.
 const SERVICE_ENTRIES = [
   ...fs
     .readdirSync(path.join(__dirname, 'src/services'), { withFileTypes: true })

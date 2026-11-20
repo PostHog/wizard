@@ -24,8 +24,8 @@ import {
   joinProjectPath,
 } from '../project-discovery/traits/adapter';
 
-/** Integration framework targets for the agentic detector (id → display name). */
-const INTEGRATION_TARGETS: DetectTarget[] = Object.entries(
+/** Integration framework targets for a project scan, agentic or Decisions (id → display name). */
+export const INTEGRATION_TARGETS: DetectTarget[] = Object.entries(
   FRAMEWORK_REGISTRY,
 ).map(([id, config]) => ({ id, name: config.metadata.name }));
 

@@ -1,4 +1,3 @@
-import path from 'path';
 import { defineConfig } from 'tsdown';
 
 // TODO(publish-library): to publish runProgram (with SessionStore) and runAgent,
@@ -12,43 +11,6 @@ const LIBRARY_ENTRIES = {
 };
 
 const NODE_ENV = process.env.WIZARD_BUILD_NODE_ENV || 'production';
-
-// Dev-only modules (and everything under them) that production builds replace
-// with an empty stub, so their code isn't even emitted as an unreachable chunk.
-// Reach them only through an `import()` behind `!IS_PRODUCTION_BUILD`, which
-// those builds drop; a static value import fails the build on the empty stub.
-// `pnpm check:decisions-bundle` verifies the result.
-const DEV_ONLY_MODULES = [
-  'src/services/detection/decisions',
-  'src/programs/posthog-integration/decisions',
-].map((dir) => path.resolve(dir));
-const DEV_ONLY_STUB = '\0dev-only-stub';
-
-function stubDevOnlyModules() {
-  return {
-    name: 'stub-dev-only-modules',
-    resolveId(source: string, importer: string | undefined) {
-      if (!importer) return null;
-      // A relative path, or the services alias (`@services/detection/decisions`).
-      const base = source.startsWith('.')
-        ? path.dirname(importer)
-        : source.startsWith('@services/')
-        ? path.resolve('src')
-        : null;
-      if (!base) return null;
-      const target = path
-        .resolve(base, source.replace(/^@/, ''))
-        .replace(/\.[jt]s$/, '');
-      const devOnly = DEV_ONLY_MODULES.some(
-        (dir) => target === dir || target.startsWith(dir + path.sep),
-      );
-      return devOnly ? DEV_ONLY_STUB : null;
-    },
-    load(id: string) {
-      return id === DEV_ONLY_STUB ? 'export {};' : null;
-    },
-  };
-}
 
 export default defineConfig({
   entry: PUBLISH_LIBRARY ? { bin: 'bin.ts', ...LIBRARY_ENTRIES } : ['bin.ts'],
@@ -72,8 +34,6 @@ export default defineConfig({
   env: {
     NODE_ENV,
   },
-
-  plugins: NODE_ENV === 'production' ? [stubDevOnlyModules()] : [],
 
   // Keep npm dependencies external — they're installed at runtime.
   skipNodeModulesBundle: true,

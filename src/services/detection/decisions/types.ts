@@ -18,7 +18,7 @@ export type DecisionQuestionSpec = {
   choices?: Readonly<Record<string, string | null>>;
   /** Why the program asks, in one line. Shown in disclosure and dev output. */
   purpose: string;
-  /** Report-only: asked only when the user shares scan results. */
+  /** Report-only: asked only when the user shares discovery results. */
   shared?: true;
   /** Predicate only: what agents read when the answer is likely yes, or likely no. */
   facts?: { likely?: string; unlikely?: string };
@@ -26,8 +26,8 @@ export type DecisionQuestionSpec = {
   fact?: string;
 };
 
-/** off: no call. shadow: answers are logged and compared, never acted on. primary: programs act on them; no switch sets it yet. */
-export type DecisionsMode = 'off' | 'shadow' | 'primary';
+/** shadow: answers are logged, compared and written as traits, never read as facts. primary: agents also read them as facts; no switch sets it yet. */
+export type DecisionsMode = 'shadow' | 'primary';
 
 export type DecisionAnswer =
   | { kind: 'predicate'; probability: number }

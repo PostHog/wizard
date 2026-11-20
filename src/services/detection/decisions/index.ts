@@ -1,8 +1,4 @@
-/**
- * The Decisions judgment service. Outside this folder, import it only with a
- * dynamic `import()` behind `!IS_PRODUCTION_BUILD`, so production builds drop
- * it, and type-only otherwise. `pnpm check:decisions-bundle` verifies that.
- */
+/** The Decisions judgment service: a program's questions about the code, and Decisions as a trait source. */
 export type {
   DecisionAnswer,
   DecisionQuestionSpec,
@@ -14,9 +10,9 @@ export {
   actionableAnswer,
   actionableProbability,
   DECISIONS_KEY,
+  decisionsMode,
   decisionsTransport,
   getDecisions,
-  getDecisionsMode,
   questionFacts,
   runDecisionSpecs,
   runProgramDecisions,
@@ -40,6 +36,12 @@ export {
   routeIntegration,
 } from './framework';
 export { QUESTIONS, type QuestionKey } from './questions';
+export {
+  decisionTraitWrites,
+  rankProjectsWithDecisions,
+  runDecisionsSource,
+  type DecisionsSourceContext,
+} from './traits';
 export { choice, defineQuestions, predicate } from './builders';
 export {
   compareProjectReports,

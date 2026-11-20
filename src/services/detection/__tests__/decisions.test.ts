@@ -9,9 +9,10 @@ vi.mock('@agent', async (importOriginal) => ({
   redactSecretLines: vi.fn((text: string) =>
     Promise.resolve({ text, redactedLines: 0 }),
   ),
+  gatewayAuth: vi.fn(),
 }));
 
-import { redactSecretLines } from '@agent';
+import { gatewayAuth, redactSecretLines } from '@agent';
 import { walkRepo, manifestDirs } from '@services/project-discovery/walk';
 import {
   renderDecisionInput,
@@ -25,10 +26,15 @@ import {
   actionableAnswer,
   questionFacts,
   DECISIONS_KEY,
+  decisionsTransport,
   getDecisions,
   runDecisionSpecs,
   summarizeAnswers,
 } from '@services/detection/decisions/service';
+import {
+  decisionTraitWrites,
+  runDecisionsSource,
+} from '@services/detection/decisions/traits';
 import {
   DECISIONS_ACCEPT_PROBABILITY,
   DECISIONS_AGREE_PROBABILITY,
@@ -274,12 +280,6 @@ describe('askDecisions', () => {
 });
 
 describe('runProgramDecisions', () => {
-  const envMode = process.env.WIZARD_DECISIONS_DETECTION;
-  afterEach(() => {
-    if (envMode === undefined) delete process.env.WIZARD_DECISIONS_DETECTION;
-    else process.env.WIZARD_DECISIONS_DETECTION = envMode;
-  });
-
   function session(overrides: Partial<ProgramSession> = {}): ProgramSession {
     return {
       installDir: project({
@@ -289,6 +289,11 @@ describe('runProgramDecisions', () => {
       credentials: { gateway: GATEWAY.gateway },
       discoveryConsent: DiscoveryConsent.Granted,
       noTelemetry: false,
+      projects: [],
+      runProject: '.',
+      discoveredFeatures: [],
+      mcpServerCandidates: [],
+      integration: null,
       ...overrides,
     } as unknown as ProgramSession;
   }
@@ -299,7 +304,7 @@ describe('runProgramDecisions', () => {
       setFrameworkContext: (key: string, value: unknown) => {
         sess.frameworkContext[key] = value;
       },
-      flags: {},
+      programId: 'posthog-integration',
       fetchImpl,
     };
   }
@@ -309,38 +314,15 @@ describe('runProgramDecisions', () => {
     { ...predicate('market'), shared: true as const },
   ];
 
-  it('makes no call when the mode is off', async () => {
-    process.env.WIZARD_DECISIONS_DETECTION = 'off';
-    const fetchImpl = fakeGateway();
-    const sess = session();
-    expect(await runDecisionSpecs(specs, ctx(sess, fetchImpl))).toBeNull();
-    expect(fetchImpl).not.toHaveBeenCalled();
-    expect(getDecisions(sess)).toBeUndefined();
-  });
-
   it('stores shadow answers that programs may not act on', async () => {
-    process.env.WIZARD_DECISIONS_DETECTION = 'shadow';
     const sess = session();
     await runDecisionSpecs(specs, ctx(sess, fakeGateway()));
+    expect(getDecisions(sess)?.mode).toBe('shadow');
     expect(getDecisions(sess)?.answers.uses_x).toBeDefined();
     expect(actionableAnswer(sess, 'uses_x')).toBeUndefined();
   });
 
-  it('runs in shadow for true, and treats primary as off', async () => {
-    process.env.WIZARD_DECISIONS_DETECTION = 'true';
-    const on = session();
-    await runDecisionSpecs(specs, ctx(on, fakeGateway()));
-    expect(getDecisions(on)?.mode).toBe('shadow');
-    expect(actionableAnswer(on, 'uses_x')).toBeUndefined();
-
-    process.env.WIZARD_DECISIONS_DETECTION = 'primary';
-    const fetchImpl = fakeGateway();
-    expect(await runDecisionSpecs(specs, ctx(session(), fetchImpl))).toBeNull();
-    expect(fetchImpl).not.toHaveBeenCalled();
-  });
-
   it('leaves out shared questions when the user declined sharing', async () => {
-    process.env.WIZARD_DECISIONS_DETECTION = 'shadow';
     const fetchImpl = fakeGateway();
     const sess = session({ discoveryConsent: DiscoveryConsent.Declined });
     await runDecisionSpecs(specs, ctx(sess, fetchImpl));
@@ -350,15 +332,94 @@ describe('runProgramDecisions', () => {
     expect(Object.keys(body.questions)).toEqual(['uses_x']);
   });
 
-  it('records why nothing was asked without a gateway key', async () => {
-    process.env.WIZARD_DECISIONS_DETECTION = 'shadow';
+  it('records why nothing was asked without a login', async () => {
     const fetchImpl = fakeGateway();
     const sess = session({ credentials: null } as Partial<ProgramSession>);
     await runDecisionSpecs(specs, ctx(sess, fetchImpl));
     expect(fetchImpl).not.toHaveBeenCalled();
     expect(
       (sess.frameworkContext[DECISIONS_KEY] as { error: string }).error,
-    ).toMatch(/no gateway key/);
+    ).toMatch(/no gateway token/);
+  });
+
+  describe('as a trait source', () => {
+    const sink = (sess: ProgramSession) => ({
+      session: sess,
+      setProjects: (projects: ProgramSession['projects']) => {
+        sess.projects = projects;
+      },
+    });
+
+    it('writes nothing without a sink, so the answers reach only the log', async () => {
+      const sess = session();
+      await runDecisionsSource(['calls_llm_api'], ctx(sess, fakeGateway()));
+      expect(getDecisions(sess)?.answers.calls_llm_api).toBeDefined();
+      expect(sess.projects).toEqual([]);
+    });
+
+    it('writes its answers as traits of the run project', async () => {
+      const sess = session();
+      await runDecisionsSource(['calls_llm_api', 'web_frontend'], {
+        ...ctx(sess, fakeGateway()),
+        sink: sink(sess),
+      });
+      const claims = sess.projects.find((p) => p.path === '.')?.claims;
+      for (const claim of [
+        claims?.callsLlmApi?.[0],
+        claims?.webFrontend?.[0],
+      ]) {
+        expect(claim).toMatchObject({ source: 'decisions' });
+        expect(claim?.confidence).toBeGreaterThan(0);
+      }
+    });
+  });
+});
+
+describe('decisionTraitWrites', () => {
+  const answers = (probability: number): Record<string, DecisionAnswer> => ({
+    calls_llm_api: { kind: 'predicate', probability },
+    web_frontend: { kind: 'predicate', probability },
+    is_mcp_server: { kind: 'predicate', probability },
+    owns_database: { kind: 'predicate', probability },
+  });
+
+  it('reads a likely answer as yes, with its probability as confidence', () => {
+    expect(decisionTraitWrites('apps/web', answers(0.9))).toEqual([
+      {
+        projectPath: 'apps/web',
+        source: 'decisions',
+        name: 'callsLlmApi',
+        value: 'yes',
+        confidence: 0.9,
+      },
+      {
+        projectPath: 'apps/web',
+        source: 'decisions',
+        name: 'webFrontend',
+        value: 'yes',
+        confidence: 0.9,
+      },
+      {
+        projectPath: 'apps/web',
+        source: 'decisions',
+        name: 'mcpServers',
+        value: ['.'],
+        confidence: 0.9,
+      },
+    ]);
+  });
+
+  it('reads an unlikely answer as no, and names no MCP server', () => {
+    const writes = decisionTraitWrites('.', answers(0.05));
+    expect(writes.map((write) => [write.name, write.value])).toEqual([
+      ['callsLlmApi', 'no'],
+      ['webFrontend', 'no'],
+    ]);
+    expect(writes[0].confidence).toBeCloseTo(0.95);
+  });
+
+  it('says nothing for an unsure answer', () => {
+    expect(decisionTraitWrites('.', answers(0.4))).toEqual([]);
   });
 });
 
@@ -562,37 +623,46 @@ describe('questionFacts', () => {
 });
 
 describe('decisionsTransport', () => {
-  afterEach(() => {
-    delete process.env.WIZARD_CI_GATEWAY_TOKEN_FILE;
-    vi.resetModules();
+  const login = {
+    accessToken: 'pha_oauth',
+    host: { region: 'us', apiHost: 'https://us.posthog.com' },
+  };
+
+  beforeEach(() => {
+    vi.mocked(gatewayAuth).mockReset();
   });
 
-  it('uses the dev key file when the run has no pre-issued key', async () => {
-    const tokenFile = path.join(project({ token: 'phs_dev_key\n' }), 'token');
-    process.env.WIZARD_CI_GATEWAY_TOKEN_FILE = tokenFile;
-    vi.resetModules();
-    const { decisionsTransport } = await import(
-      '@services/detection/decisions/service'
-    );
+  it("uses the run's pre-issued key without minting", async () => {
     const session = {
-      credentials: { accessToken: 'pha_oauth', host: { region: 'us' } },
+      credentials: { ...login, gateway: GATEWAY.gateway },
     } as unknown as ProgramSession;
-    expect(decisionsTransport(session)).toEqual({
-      gateway: {
-        token: 'phs_dev_key\n',
-        url: 'https://ai-gateway.us.posthog.com',
-      },
+    expect(await decisionsTransport(session, 'metrics')).toEqual(GATEWAY);
+    expect(gatewayAuth).not.toHaveBeenCalled();
+  });
+
+  it('mints a token for the program, as the agents do', async () => {
+    vi.mocked(gatewayAuth).mockResolvedValue({
+      gatewayUrl: 'https://gateway.test',
+      token: 'phs_minted',
+      refreshAtMs: 0,
     });
+    const session = { credentials: login } as unknown as ProgramSession;
+    expect(await decisionsTransport(session, 'metrics')).toEqual({
+      gateway: { token: 'phs_minted', url: 'https://gateway.test' },
+    });
+    expect(gatewayAuth).toHaveBeenCalledWith(
+      login.host,
+      login.accessToken,
+      'metrics',
+    );
   });
 
-  it('has no transport without a pre-issued key or a dev key file', async () => {
-    vi.resetModules();
-    const { decisionsTransport } = await import(
-      '@services/detection/decisions/service'
-    );
-    const session = {
-      credentials: { accessToken: 'pha_oauth', host: { region: 'us' } },
-    } as unknown as ProgramSession;
-    expect(decisionsTransport(session)).toBeNull();
+  it('has no transport without a login, or when the mint fails', async () => {
+    const loggedOut = { credentials: null } as unknown as ProgramSession;
+    expect(await decisionsTransport(loggedOut, 'metrics')).toBeNull();
+
+    vi.mocked(gatewayAuth).mockRejectedValue(new Error('mint refused'));
+    const session = { credentials: login } as unknown as ProgramSession;
+    expect(await decisionsTransport(session, 'metrics')).toBeNull();
   });
 });

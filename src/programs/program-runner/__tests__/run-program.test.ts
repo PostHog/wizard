@@ -21,6 +21,7 @@ import {
   type WizardReadinessResult,
 } from '@shared/health-checks/readiness';
 import { ServiceHealthStatus } from '@shared/health-checks/types';
+import { runDecisionsSource } from '@services/detection/decisions';
 import { analytics } from '@utils/analytics';
 import { registerCleanup } from '@utils/cleanup';
 import { logToFile } from '@utils/debug';
@@ -61,6 +62,8 @@ import {
 vi.mock('@agent', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@agent')>()),
   runAgent: vi.fn(),
+  // Decisions mints through this; no test reaches the gateway.
+  gatewayAuth: vi.fn(() => Promise.reject(new Error('no gateway in tests'))),
 }));
 vi.mock('@utils/analytics', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@utils/analytics')>()),
@@ -81,6 +84,10 @@ vi.mock(import('@shared/oauth-tokens'), () => ({
   missingOAuthScopes: vi.fn(() => []),
 }));
 vi.mock('@utils/debug');
+vi.mock('@services/detection/decisions', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@services/detection/decisions')>()),
+  runDecisionsSource: vi.fn(() => Promise.resolve(null)),
+}));
 // Every run discovers, and discovery downloads the tool catalog.
 vi.mock(
   import('@services/warehouse-sources/registry'),
@@ -1713,6 +1720,81 @@ describe('runProgram', () => {
       expect(result.outcome).toBe(RunOutcome.Aborted);
       expect(result.failure?.code).toBe(ErrorCodes.DetectBadDirectory);
       expect(runAgent).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Decisions as a source', () => {
+    const asks = { run, rankWith: ['decisions' as const] };
+
+    it('asks nothing for a program that does not rank with Decisions', async () => {
+      await runProgram('metrics', input(), { credentials: login() });
+      expect(runDecisionsSource).not.toHaveBeenCalled();
+    });
+
+    it('asks beside the run, with nowhere to write traits, while project discovery is off', async () => {
+      await runProgram('metrics', input({ config: asks }), {
+        credentials: login(),
+      });
+      expect(runDecisionsSource).toHaveBeenCalledOnce();
+      expect(vi.mocked(runDecisionsSource).mock.calls[0][1]).toMatchObject({
+        programId: 'metrics',
+      });
+      expect(
+        vi.mocked(runDecisionsSource).mock.calls[0][1].sink,
+      ).toBeUndefined();
+    });
+
+    it('writes its answers as traits once project discovery is on', async () => {
+      await runProgram(
+        'metrics',
+        input({
+          config: asks,
+          wizardFlags: { 'wizard-project-discovery': 'one-project' },
+        }),
+        { credentials: login() },
+      );
+      expect(vi.mocked(runDecisionsSource).mock.calls[0][1].sink).toBeDefined();
+    });
+
+    it("asks the questions again for the pair's project when the plan moves the run", async () => {
+      const repo = fs.realpathSync(
+        fs.mkdtempSync(path.join(os.tmpdir(), 'decisions-pair-')),
+      );
+      try {
+        fs.writeFileSync(path.join(repo, 'package.json'), '{}');
+        fs.writeFileSync(
+          path.join(repo, 'pnpm-workspace.yaml'),
+          'packages:\n  - apps/*\n',
+        );
+        for (const app of ['web', 'api']) {
+          fs.mkdirSync(path.join(repo, 'apps', app), { recursive: true });
+          fs.writeFileSync(path.join(repo, 'apps', app, 'package.json'), '{}');
+        }
+        const host = workflow();
+        host.confirmStep.mockImplementation((step: ProgramStep) => {
+          if (step.kind === 'plan') step.pick('apps/api');
+          return Promise.resolve(true);
+        });
+
+        await runProgram(
+          'metrics',
+          input({
+            store: new SessionStore(buildSession({ installDir: repo })),
+            config: { ...asks, appliesTo: () => true },
+            wizardFlags: { 'wizard-project-discovery': 'one-project' },
+          }),
+          { credentials: login(), workflow: host },
+        );
+
+        const calls = vi.mocked(runDecisionsSource).mock.calls;
+        expect(calls).toHaveLength(2);
+        // The repo is ranked once; the picked project only answers the questions.
+        expect(calls[0][1].rankProjects).toBeUndefined();
+        expect(calls[1][1]).toMatchObject({ rankProjects: false });
+        expect(calls[1][1].session.runProject).toBe('apps/api');
+      } finally {
+        fs.rmSync(repo, { recursive: true, force: true });
+      }
     });
   });
 });
