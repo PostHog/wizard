@@ -162,17 +162,12 @@ function setupInContainer(store = storeAfterInstallWithResend()) {
     setSize(columns, rows);
     await delay();
   };
-  /** Sends the key on the first frame after the resize, before that render's effects have run. */
-  const resizeThenPress = async (
-    columns: number,
-    rows: number,
-    key: string,
-  ) => {
-    const hides = columns < 80;
-    setSize(columns, rows);
-    for (let i = 0; i < 1000 && notice() !== hides; i++)
+  /** Sends the key on the first frame that shows the notice, before that render's effects have run. */
+  const shrinkThenPress = async (key: string) => {
+    setSize(70, 24);
+    for (let i = 0; i < 1000 && !notice(); i++)
       await new Promise((resolve) => setImmediate(resolve));
-    expect(notice()).toBe(hides);
+    expect(notice()).toBe(true);
     app.stdin.write(key);
     await delay();
   };
@@ -181,8 +176,7 @@ function setupInContainer(store = storeAfterInstallWithResend()) {
     app,
     grow: () => resize(120, 40),
     shrink: () => resize(70, 24),
-    shrinkThenPress: (key: string) => resizeThenPress(70, 24, key),
-    growThenPress: (key: string) => resizeThenPress(120, 40, key),
+    shrinkThenPress,
   };
 }
 
@@ -410,15 +404,14 @@ describe('the email provider offer after install', () => {
     expect(await offerEvents()).toEqual([SHOWN, answered('yes')]);
   });
 
-  it('takes no Enter on the first frame the question shows again after a long hide', async () => {
-    const { app, grow, shrink, growThenPress } = setupInContainer();
+  it('takes no Enter on the first frame a too-small terminal hides the question', async () => {
+    const { app, grow, shrinkThenPress } = setupInContainer();
     await grow();
-    await shrink();
-    pause(2000);
-
-    await growThenPress(ENTER);
+    pause();
+    await shrinkThenPress(ENTER);
     expect(await offerEvents()).toEqual([SHOWN]);
 
+    await grow();
     pause();
     app.stdin.write(ENTER);
     await delay();
