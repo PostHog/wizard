@@ -39,13 +39,8 @@ export interface KeyBinding {
  *
  * @param id Unique identifier for this component's hints registration
  * @param bindings Array of key binding definitions
- * @param options.active False to ignore keys while mounted. Defaults to true.
  */
-export function useKeyBindings(
-  id: string,
-  bindings: KeyBinding[],
-  { active = true }: { active?: boolean } = {},
-): void {
+export function useKeyBindings(id: string, bindings: KeyBinding[]): void {
   const ctx = useKeyboardHintsContext();
 
   // Extract hints and register. Use a serialized key to avoid unnecessary updates.
@@ -68,9 +63,8 @@ export function useKeyBindings(
     // eslint-disable-next-line
   }, [id, serialized]);
 
-  // Not Ink's isActive: it attaches and detaches the listener in a passive effect, a render late, so the first frame after a change would act on the old value.
+  // Wire up input handling
   useInput((input, key) => {
-    if (!active) return;
     for (const binding of bindings) {
       const matches = Array.isArray(binding.match)
         ? binding.match

@@ -200,8 +200,6 @@ interface PickerMenuProps<T> {
    * finding one option means walking pages. Pass `false` to force it off.
    */
   filterable?: boolean;
-  /** False to ignore keys and keep the highlight, such as while the screen is hidden. Defaults to true. */
-  active?: boolean;
   onSelect: (value: T | T[]) => void;
 }
 
@@ -217,7 +215,6 @@ export const PickerMenu = <T,>({
   columns = 1,
   optionMarginBottom = 0,
   filterable,
-  active = true,
   onSelect,
 }: PickerMenuProps<T>) => {
   const canFilter = filterable ?? options.length >= FILTER_MIN_OPTIONS;
@@ -241,7 +238,6 @@ export const PickerMenu = <T,>({
     centered,
     optionMarginBottom,
     onSelect,
-    active,
     filter: canFilter ? filter : null,
     setFilter,
     totalCount: options.length,
@@ -323,7 +319,6 @@ const SinglePickerMenu = <T,>({
   setFilter,
   totalCount,
   onSelect,
-  active,
 }: {
   message?: string;
   options: PickerOption<T>[];
@@ -335,7 +330,6 @@ const SinglePickerMenu = <T,>({
   setFilter: (query: string) => void;
   totalCount: number;
   onSelect: (value: T | T[]) => void;
-  active: boolean;
 }) => {
   const [focused, setFocused] = useState(() => firstEnabled(options));
   const rows = Math.ceil(options.length / columns);
@@ -434,7 +428,7 @@ const SinglePickerMenu = <T,>({
     bindings.push(...filterBindings(filter, setFilter));
   }
 
-  useKeyBindings('single-picker', bindings, { active });
+  useKeyBindings('single-picker', bindings);
 
   // Chunk options into columns (column-first ordering)
   const columnArrays: PickerOption<T>[][] = [];
@@ -555,7 +549,6 @@ const MultiPickerMenu = <T,>({
   selected,
   setSelected,
   onSelect,
-  active,
 }: {
   message?: string;
   options: PickerOption<T>[];
@@ -572,7 +565,6 @@ const MultiPickerMenu = <T,>({
   selected: Set<string>;
   setSelected: (update: (prev: Set<string>) => Set<string>) => void;
   onSelect: (value: T | T[]) => void;
-  active: boolean;
 }) => {
   const [focused, setFocused] = useState(() => firstEnabled(options));
   // When true, the cursor is on the Confirm button rather than an option.
@@ -746,7 +738,7 @@ const MultiPickerMenu = <T,>({
     bindings.push(...filterBindings(filter, setFilter));
   }
 
-  useKeyBindings('multi-picker', bindings, { active });
+  useKeyBindings('multi-picker', bindings);
 
   const columnArrays: PickerOption<T>[][] = [];
   for (let c = 0; c < columns; c++) {

@@ -1,5 +1,5 @@
 import { Box, Text } from 'ink';
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { WizardStore } from '@tui/store';
 import { Colors } from '@tui/styles';
 import { PickerMenu } from '@tui/primitives/index';
@@ -122,8 +122,7 @@ const QuestionPicker = ({
   onAnswer: (choice: EmailProviderOfferAnswer) => void;
 }) => {
   const quietSince = useRef(Date.now());
-  // A layout effect, so an Enter on the first frame the question shows again already meets the reset.
-  useLayoutEffect(() => {
+  useEffect(() => {
     quietSince.current = Date.now();
   }, [visible]);
 
@@ -131,21 +130,19 @@ const QuestionPicker = ({
     const now = Date.now();
     const paused = now - quietSince.current >= QUESTION_READ_GUARD_MS;
     quietSince.current = now;
-    if (paused) onAnswer(choice);
+    if (visible && paused) onAnswer(choice);
   };
 
-  useKeyBindings(
-    'email-provider-offer',
-    [
-      {
-        match: KeyMatch.Escape,
-        label: 'esc',
-        action: 'skip',
-        handler: () => onAnswer(EmailProviderOfferAnswer.Skipped),
+  useKeyBindings('email-provider-offer', [
+    {
+      match: KeyMatch.Escape,
+      label: 'esc',
+      action: 'skip',
+      handler: () => {
+        if (visible) onAnswer(EmailProviderOfferAnswer.Skipped);
       },
-    ],
-    { active: visible },
-  );
+    },
+  ]);
 
   return (
     <Box flexDirection="column" flexGrow={1} marginTop={1}>
@@ -153,7 +150,6 @@ const QuestionPicker = ({
       <Box marginTop={1}>
         <PickerMenu
           options={CHOICES}
-          active={visible}
           onSelect={(value) =>
             answerAfterPause(Array.isArray(value) ? value[0] : value)
           }
