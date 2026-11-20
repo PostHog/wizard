@@ -71,6 +71,8 @@ export function useKeyBindings(
   // Wire up input handling
   useInput(
     (input, key) => {
+      // isActive detaches the listener only in a passive effect, after the render that turned it off.
+      if (!active) return;
       for (const binding of bindings) {
         const matches = Array.isArray(binding.match)
           ? binding.match

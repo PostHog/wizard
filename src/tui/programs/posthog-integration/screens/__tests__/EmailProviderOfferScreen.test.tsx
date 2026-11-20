@@ -141,6 +141,41 @@ function setup(visible = true, run?: Run) {
   return { store, app, press, show, hide };
 }
 
+/** The flow's real screen container, so a terminal resize hides the screen the way it does for a user. */
+function setupInContainer() {
+  const store = storeAfterInstallWithResend();
+  const app = render(
+    <ScreenContainer
+      store={store}
+      screens={createScreens(store, createServices(store))}
+    />,
+  );
+  const setSize = (columns: number, rows: number) => {
+    Object.defineProperties(app.stdout, {
+      isTTY: { value: true, configurable: true },
+      columns: { value: columns, configurable: true },
+      rows: { value: rows, configurable: true },
+    });
+    app.stdout.emit('resize');
+  };
+  const notice = () =>
+    app.lastFrame()?.replace(/\s+/g, ' ').includes(VIEWPORT_TOO_SMALL_MESSAGE);
+  const grow = async () => {
+    setSize(120, 40);
+    await delay();
+  };
+  /** Sends the key on the first frame that shows the notice, before effects of that render have run. */
+  const shrinkThenPress = async (key: string) => {
+    setSize(70, 24);
+    for (let i = 0; i < 1000 && !notice(); i++)
+      await new Promise((resolve) => setImmediate(resolve));
+    expect(notice()).toBe(true);
+    app.stdin.write(key);
+    await delay();
+  };
+  return { store, app, grow, shrinkThenPress };
+}
+
 beforeEach(() => {
   ingestion.events.length = 0;
   vi.spyOn(analytics, 'getCachedWizardFlags').mockReturnValue({
@@ -326,7 +361,7 @@ describe('the email provider offer after install', () => {
     expect(await offerEvents()).toEqual([SHOWN, answered('yes')]);
   });
 
-  it('neither counts nor takes an answer while a too-small terminal hides it, and keeps the highlight', async () => {
+  it('neither counts nor takes an answer while a too-small terminal hides it', async () => {
     const { app, show, hide } = setup(false);
     await delay();
 
@@ -344,8 +379,6 @@ describe('the email provider offer after install', () => {
 
     expect(await offerEvents()).toEqual([SHOWN]);
 
-    app.stdin.write(DOWN);
-    await delay();
     hide();
     await delay();
     pause();
@@ -366,40 +399,42 @@ describe('the email provider offer after install', () => {
     app.stdin.write(ENTER);
     await delay();
 
+    expect(await offerEvents()).toEqual([SHOWN, answered('yes')]);
+  });
+
+  it('keeps the highlight and takes no key from the first frame a too-small terminal hides the question', async () => {
+    const { app, grow, shrinkThenPress } = setupInContainer();
+    await grow();
+    app.stdin.write(DOWN);
+    await delay();
+
+    await shrinkThenPress(DOWN);
+    for (const key of [DOWN, ENTER, ESC]) {
+      app.stdin.write(key);
+      await delay();
+    }
+    expect(await offerEvents()).toEqual([SHOWN]);
+
+    await grow();
+    pause();
+    app.stdin.write(ENTER);
+    await delay();
+
     expect(await offerEvents()).toEqual([SHOWN, answered('not_now')]);
   });
 
   it('keeps the setup lines after yes while a too-small terminal hides them', async () => {
-    const store = storeAfterInstallWithResend();
-    const app = render(
-      <ScreenContainer
-        store={store}
-        screens={createScreens(store, createServices(store))}
-      />,
-    );
-    const resizeTo = async (columns: number, rows: number) => {
-      Object.defineProperties(app.stdout, {
-        isTTY: { value: true, configurable: true },
-        columns: { value: columns, configurable: true },
-        rows: { value: rows, configurable: true },
-      });
-      app.stdout.emit('resize');
-      await delay();
-    };
-    await resizeTo(120, 40);
+    const { store, app, grow, shrinkThenPress } = setupInContainer();
+    await grow();
     pause();
     app.stdin.write(ENTER);
     await delay();
     expect(app.lastFrame()).toContain(COMMAND);
 
-    await resizeTo(70, 24);
-    expect(app.lastFrame()?.replace(/\s+/g, ' ')).toContain(
-      VIEWPORT_TOO_SMALL_MESSAGE,
-    );
-    app.stdin.write('x');
-    await delay();
+    await shrinkThenPress('x');
+    expect(store.exitRequest).toBeNull();
 
-    await resizeTo(120, 40);
+    await grow();
     expect(app.lastFrame()).toContain(COMMAND);
     expect(store.exitRequest).toBeNull();
 
