@@ -5,6 +5,7 @@ import {
   isHeadless,
   regionOption,
 } from '@shared/headless-mode';
+import { wantsDiscoveryTest } from '@cli/runners';
 import { provisionCommand } from '../provision';
 import type { Command } from '../command';
 
@@ -68,7 +69,8 @@ export const basicIntegrationCommand: Command = {
         const { runCIInstall } = await import('./ci-install');
         return runCIInstall(argv);
       }
-      if (isNonInteractiveEnvironment()) {
+      // Test discovery mode prints and exits, so it needs no terminal.
+      if (isNonInteractiveEnvironment() && !wantsDiscoveryTest(argv)) {
         const { failNonInteractive } = await import('./non-interactive');
         return failNonInteractive();
       }

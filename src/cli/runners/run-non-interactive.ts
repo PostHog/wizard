@@ -11,6 +11,7 @@ import { runtimeEnv } from '@env';
 import { configureLogFileFromEnvironment } from '@utils/debug';
 import { consoleLog } from '@shared/console-log';
 import { resolveNoTelemetry } from './resolve-no-telemetry';
+import { runDiscoveryTest, wantsDiscoveryTest } from './run-discovery-test';
 import { withSignals } from './signals';
 
 /** The credentials every non-interactive mode accepts, for error messages. */
@@ -55,6 +56,7 @@ export function runNonInteractive(
   options: Record<string, unknown>,
   mode: NonInteractiveMode,
 ): void {
+  if (wantsDiscoveryTest(options)) return runDiscoveryTest(config, options);
   validateNonInteractiveOptions(options, mode);
   configureLogFileFromEnvironment();
 
