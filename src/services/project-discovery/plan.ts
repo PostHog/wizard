@@ -12,6 +12,7 @@ import type {
 import { FRAMEWORK_REGISTRY } from '../frameworks/registry';
 import { getDiscovery } from './discover';
 import { maySendDiscovery } from './tags';
+import { isLanguageFallback } from './traits/registry';
 import { getProjects, getTraitClaims } from './traits/store';
 
 /** Why a project is listed but not offered. */
@@ -59,10 +60,17 @@ function reasonFor(traits: Traits, projectPath: string): PlanReason {
   return 'not-applicable';
 }
 
-/** A workspace root with members is where the apps live, not an app to pick. */
+/** A workspace root with members. */
 function isWorkspaceRoot(session: ProgramSession, project: Project): boolean {
   const workspaces = getDiscovery(session)?.projects.workspaces ?? [];
   return workspaces.some((workspace) => workspace.root === project.path);
+}
+
+/** A project with a framework of its own, not only a language fallback. */
+function isApp(traits: Traits): boolean {
+  return (
+    traits.framework !== undefined && !isLanguageFallback(traits.framework)
+  );
 }
 
 function toPlanProject(
@@ -72,7 +80,8 @@ function toPlanProject(
 ): PlanProject {
   const { traits } = project;
   const isRunProject = project.path === session.runProject;
-  const root = isWorkspaceRoot(session, project);
+  // A workspace root that is no app itself is where the apps live, not one to pick.
+  const root = isWorkspaceRoot(session, project) && !isApp(traits);
   const applies = !root && (config.appliesTo?.(traits) ?? true);
   // The project the run started in is always a choice: it is today's default.
   const offered = applies || isRunProject;
@@ -92,16 +101,17 @@ function toPlanProject(
 
 /**
  * The project that starts picked. A run that started inside a project keeps
- * it. A run at a workspace root takes the main app, else the only app offered,
- * else stays where it started.
+ * it, and so does a run at a workspace root that is an app itself. A run at
+ * any other workspace root takes the main app, else the only app offered, else
+ * stays where it started.
  */
 function defaultPick(
   session: ProgramSession,
   projects: readonly PlanProject[],
-  atWorkspaceRoot: boolean,
+  atHub: boolean,
 ): string {
   const { runProject } = session;
-  if (!atWorkspaceRoot) return runProject;
+  if (!atHub) return runProject;
   const apps = projects.filter(
     (project) => project.offered && project.path !== runProject,
   );
@@ -123,22 +133,32 @@ export function buildPlan(
     toPlanProject(session, config, project),
   );
   const runProject = all.find((project) => project.path === session.runProject);
-  const atWorkspaceRoot =
-    runProject !== undefined && isWorkspaceRoot(session, runProject);
+  // The run started at a workspace root that is no app itself.
+  const atHub =
+    runProject !== undefined &&
+    isWorkspaceRoot(session, runProject) &&
+    !isApp(runProject.traits);
   return {
     repoType: discovered?.repoType ?? 'single',
     ...(discovered?.workspaceTool && {
       workspaceTool: discovered.workspaceTool,
     }),
     projects,
-    picked: requested ?? defaultPick(session, projects, atWorkspaceRoot),
+    picked: requested ?? defaultPick(session, projects, atHub),
     complete: discovered?.complete ?? true,
   };
 }
 
-/** Whether there is a choice to make: more than one project is offered. */
+/**
+ * Whether there is a choice to make: the repo is a monorepo and more than one
+ * project is offered. A single app is one project, whatever manifests sit
+ * below it, such as an Android module or a Swift package.
+ */
 export function planNeedsPick(plan: PlanOffer): boolean {
-  return plan.projects.filter((project) => project.offered).length > 1;
+  return (
+    plan.repoType === 'monorepo' &&
+    plan.projects.filter((project) => project.offered).length > 1
+  );
 }
 
 /** The event carries at most this many projects; `project_count` is the true total. */

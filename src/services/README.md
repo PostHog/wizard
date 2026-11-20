@@ -113,9 +113,11 @@ started in.
 - [`plan.ts`](project-discovery/plan.ts) builds the plan for one program: every
   project, the ones `appliesTo` offers, a reason for each of the others (already
   has PostHog, unsupported framework, library, tooling, workspace root), and the
-  project that starts picked. A run that started inside a project keeps it. A
-  run at a workspace root takes the main app, else the only app offered, else
-  stays where it started. `reportProjectsDiscovered` and
+  project that starts picked. A run that started inside a project keeps it, and
+  so does a run at a workspace root that is an app itself. A run at any other
+  workspace root takes the main app, else the only app offered, else stays where
+  it started. There is a choice to make only in a monorepo: a single app is one
+  project, whatever manifests sit below it. `reportProjectsDiscovered` and
   `reportProjectsSelected` send the `wizard: projects discovered` and
   `wizard: projects selected` events under discovery consent. The second carries
   the pick beside the default and each model source's main app.

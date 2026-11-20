@@ -22,7 +22,10 @@ vi.mock(
     ).withFixtureCatalog(await importOriginal()),
 );
 
-import { WIZARD_PROJECT_DISCOVERY_FLAG_KEY } from '@shared/constants';
+import {
+  Integration,
+  WIZARD_PROJECT_DISCOVERY_FLAG_KEY,
+} from '@shared/constants';
 import { analytics } from '@utils/analytics';
 import type { ProgramConfig } from '@programs/program-contract';
 import {
@@ -128,6 +131,34 @@ describe('buildPlan', () => {
   it('starts on the project the caller asked for', async () => {
     const { session } = await discovered();
     expect(buildPlan(session, PROGRAM, 'apps/admin').picked).toBe('apps/admin');
+  });
+
+  it('asks nothing in a single app that holds manifests below it', async () => {
+    write('package.json', pkg({ next: '15.0.0' }));
+    write('app/layout.tsx');
+    write('tools/seed/package.json', pkg());
+    const store = new SessionStore(buildSession({ installDir: repo }));
+    await runDiscovery({ id: 'posthog-integration' }, store.readyContext());
+    const plan = buildPlan(store.session, PROGRAM);
+    expect(plan.repoType).toBe('single');
+    expect(plan.projects).toHaveLength(2);
+    expect(plan.picked).toBe('.');
+    expect(planNeedsPick(plan)).toBe(false);
+  });
+
+  it('keeps a workspace root that is an app itself', async () => {
+    write('package.json', pkg({ next: '15.0.0' }));
+    write('app/layout.tsx');
+    write('pnpm-workspace.yaml', 'packages:\n  - proxy\n');
+    write('proxy/package.json', pkg({ express: '^4.0.0' }));
+    const store = new SessionStore(buildSession({ installDir: repo }));
+    await runDiscovery({ id: 'posthog-integration' }, store.readyContext());
+    store.setFrameworkConfig(Integration.nextjs, null);
+    const plan = buildPlan(store.session, PROGRAM);
+    expect(plan.repoType).toBe('monorepo');
+    expect(row(plan, '.')).toMatchObject({ offered: true });
+    expect(row(plan, '.')?.reason).toBeUndefined();
+    expect(plan.picked).toBe('.');
   });
 
   it('has no choice to offer in a single-app repo', async () => {
