@@ -147,14 +147,17 @@ const QuestionPicker = ({
   return (
     <Box flexDirection="column" flexGrow={1} marginTop={1}>
       <Text>{QUESTION}</Text>
-      <Box marginTop={1}>
-        <PickerMenu
-          options={CHOICES}
-          onSelect={(value) =>
-            answerAfterPause(Array.isArray(value) ? value[0] : value)
-          }
-        />
-      </Box>
+      {/* Unmounted while hidden, so arrow keys can't move a highlight nobody can see. */}
+      {visible && (
+        <Box marginTop={1}>
+          <PickerMenu
+            options={CHOICES}
+            onSelect={(value) =>
+              answerAfterPause(Array.isArray(value) ? value[0] : value)
+            }
+          />
+        </Box>
+      )}
     </Box>
   );
 };

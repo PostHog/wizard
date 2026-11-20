@@ -162,12 +162,17 @@ function setupInContainer(store = storeAfterInstallWithResend()) {
     setSize(columns, rows);
     await delay();
   };
-  /** Sends the key on the first frame that shows the notice, before that render's effects have run. */
-  const shrinkThenPress = async (key: string) => {
-    setSize(70, 24);
-    for (let i = 0; i < 1000 && !notice(); i++)
+  /** Sends the key on the first frame after the resize, before that render's effects have run. */
+  const resizeThenPress = async (
+    columns: number,
+    rows: number,
+    key: string,
+  ) => {
+    const hides = columns < 80;
+    setSize(columns, rows);
+    for (let i = 0; i < 1000 && notice() !== hides; i++)
       await new Promise((resolve) => setImmediate(resolve));
-    expect(notice()).toBe(true);
+    expect(notice()).toBe(hides);
     app.stdin.write(key);
     await delay();
   };
@@ -176,7 +181,8 @@ function setupInContainer(store = storeAfterInstallWithResend()) {
     app,
     grow: () => resize(120, 40),
     shrink: () => resize(70, 24),
-    shrinkThenPress,
+    shrinkThenPress: (key: string) => resizeThenPress(70, 24, key),
+    growThenPress: (key: string) => resizeThenPress(120, 40, key),
   };
 }
 
@@ -394,6 +400,21 @@ describe('the email provider offer after install', () => {
     expect(await offerEvents()).toEqual([SHOWN, answered('yes')]);
   });
 
+  it('takes no Enter on the first frame the question shows again after a long hide', async () => {
+    const { app, grow, shrink, growThenPress } = setupInContainer();
+    await grow();
+    await shrink();
+    pause(2000);
+
+    await growThenPress(ENTER);
+    expect(await offerEvents()).toEqual([SHOWN]);
+
+    pause();
+    app.stdin.write(ENTER);
+    await delay();
+    expect(await offerEvents()).toEqual([SHOWN, answered('yes')]);
+  });
+
   it('keeps the setup lines after yes while a too-small terminal hides them', async () => {
     const { store, app, grow, shrinkThenPress } = setupInContainer();
     await grow();
@@ -410,8 +431,7 @@ describe('the email provider offer after install', () => {
     expect(store.exitRequest).toBeNull();
 
     app.stdin.write('x');
-    await delay();
-    expect(store.exitRequest).toBe(0);
+    await vi.waitFor(() => expect(store.exitRequest).toBe(0));
   });
 
   it('sends nothing when it closes while still hidden', async () => {
