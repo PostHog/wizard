@@ -17,7 +17,7 @@ import {
 import { tryGetPackageJson, isUsingTypeScript } from '@utils/setup-utils';
 import { analytics } from '@utils/analytics';
 import { detectFramework } from '@services/detection';
-import { IS_PRODUCTION_BUILD } from '@env';
+import { judgeMissingIntegration } from './decisions';
 import { gatherFrameworkContext } from '@services/detection';
 import { noteDetectedFramework } from '@services/detection';
 import { scopeInstallDirToProject } from '@services/detection';
@@ -283,7 +283,7 @@ export const config: ProgramConfig = {
     traits.projectRole === 'app' &&
     traits.framework !== undefined &&
     traits.posthogInstalled !== 'yes',
-  rankWith: ['agentic'],
+  rankWith: ['agentic', 'decisions'],
   description: 'Set up PostHog SDK integration',
   id: 'posthog-integration',
   // Orchestrator on pi. Each stage's model and effort come from the flow's frontmatter; a composed sub-run is linear on this model.
@@ -354,12 +354,7 @@ export const config: ProgramConfig = {
 
     const integration =
       (await detectFramework(session.installDir)) ??
-      // Production builds drop this import, and with it the Decisions service.
-      (IS_PRODUCTION_BUILD
-        ? undefined
-        : await (
-            await import('./decisions')
-          ).judgeMissingIntegration(session, runner));
+      (await judgeMissingIntegration(session, runner));
     if (!integration) {
       abortNoFrameworkDetected();
     }

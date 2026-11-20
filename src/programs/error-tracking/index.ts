@@ -160,7 +160,7 @@ const ERROR_TRACKING_RUN: ProgramRun = {
  *   of the project picker.
  */
 export const config: ProgramConfig = {
-  rankWith: ['agentic'],
+  rankWith: ['agentic', 'decisions'],
   decisions: ['web_frontend', 'server_runtime'],
   // Orchestrator on pi, like metrics. The binding routes only; every stage's
   // model and effort are pinned context-mill side in the flow's frontmatter

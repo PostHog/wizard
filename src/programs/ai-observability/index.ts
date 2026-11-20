@@ -15,6 +15,7 @@ const AI_OBSERVABILITY_REPORT_FILE = 'posthog-ai-observability-report.md';
  * "add AIO to a project" flow is the only action.
  */
 export const config: ProgramConfig = {
+  rankWith: ['decisions'],
   decisions: ['calls_llm_api'],
   binding: {
     sequence: Sequence.linear,

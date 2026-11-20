@@ -17,6 +17,8 @@ vi.mock('node:timers/promises', () => ({ setTimeout: vi.fn() }));
 vi.mock('@agent', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@agent')>()),
   runAgent: vi.fn(),
+  // Decisions mints through this; no test reaches the gateway.
+  gatewayAuth: vi.fn(() => Promise.reject(new Error('no gateway in tests'))),
 }));
 
 const execute = vi.mocked(runAgent);

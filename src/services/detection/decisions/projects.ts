@@ -35,12 +35,16 @@ export const PROJECT_CONFIDENCE = 0.6;
 
 export type JudgedProjects = {
   report: AgenticDetectionReport;
+  /** The probability of each listed project's target, by project path. */
+  confidence: Record<string, number>;
   /** Every listed project's target, and the main app when asked for, cleared {@link PROJECT_CONFIDENCE}. */
   confident: boolean;
 };
 
 export type JudgeProjectsOptions = {
   targets: readonly DetectTarget[];
+  /** The program the call bills to. */
+  programId: string;
   purpose?: string;
   recommend?: boolean;
   fetchImpl?: typeof fetch;
@@ -69,7 +73,7 @@ export async function detectProjectsWithDecisions(
   session: ProgramSession,
   options: JudgeProjectsOptions,
 ): Promise<JudgedProjects | null> {
-  const transport = decisionsTransport(session);
+  const transport = await decisionsTransport(session, options.programId);
   if (!transport) return null;
   return judgeProjects(getRepoFiles(session), transport, options);
 }
@@ -78,7 +82,7 @@ export async function detectProjectsWithDecisions(
 export async function judgeProjects(
   scan: RepoFiles,
   transport: DecisionsTransport,
-  options: JudgeProjectsOptions,
+  options: Omit<JudgeProjectsOptions, 'programId'>,
 ): Promise<JudgedProjects | null> {
   const { targets, recommend = false } = options;
   const purpose = options.purpose ?? 'set up a PostHog integration';
@@ -108,6 +112,7 @@ export async function judgeProjects(
   }
 
   const projects: AgenticProject[] = [];
+  const confidence: Record<string, number> = {};
   let confident = true;
   for (const [i, dir] of candidates.entries()) {
     const answer = result.answers[projectTargetName(i)];
@@ -115,6 +120,7 @@ export async function judgeProjects(
     const target = targets.find((t) => t.id === answer.choice);
     if (!target) continue;
     if (answer.probability < PROJECT_CONFIDENCE) confident = false;
+    confidence[dir] = answer.probability;
     projects.push({
       path: dir,
       framework: target.name,
@@ -146,6 +152,7 @@ export async function judgeProjects(
       : 'single';
   return {
     report: { repoType, projects },
+    confidence,
     confident: confident && projects.length > 0,
   };
 }

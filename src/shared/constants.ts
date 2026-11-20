@@ -336,8 +336,6 @@ export const WIZARD_DEFAULT_AIO_LOGS_FLAG_KEY = 'wizard-default-aio-logs';
 /** Launch flag: ONLY an explicit 'true' includes the MCP analytics task in default integration runs — absent or fetch-failed means exclude. */
 export const WIZARD_DEFAULT_MCP_ANALYTICS_FLAG_KEY =
   'wizard-default-mcp-analytics';
-/** Boolean flag: true runs the Decisions judgment service in shadow (ask and log, never act). */
-export const WIZARD_DECISIONS_DETECTION_FLAG_KEY = 'wizard-decisions-detection';
 /** Boolean flag: true lets the warehouse-destination program run. */
 export const WIZARD_WAREHOUSE_DESTINATIONS_FLAG_KEY =
   'wizard-warehouse-destinations';
@@ -352,7 +350,6 @@ export const WIZARD_FLAG_KEYS = [
   WIZARD_BASIC_INTEGRATION_AGENTIC_DETECTION_FLAG_KEY,
   WIZARD_DEFAULT_AIO_LOGS_FLAG_KEY,
   WIZARD_DEFAULT_MCP_ANALYTICS_FLAG_KEY,
-  WIZARD_DECISIONS_DETECTION_FLAG_KEY,
   WIZARD_WAREHOUSE_DESTINATIONS_FLAG_KEY,
   WIZARD_PROJECT_DISCOVERY_FLAG_KEY,
 ] as const;
