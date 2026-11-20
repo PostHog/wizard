@@ -74,6 +74,7 @@ export function runNonInteractive(
         localPosthog: options.localPosthog as boolean | undefined,
         apiKey: (options.apiKey as string) ?? readApiKeyFromEnv() ?? undefined,
         email: options.email as string | undefined,
+        goal: options.goal as string | undefined,
         projectId: options.projectId as string | undefined,
         baseUrl: options.baseUrl as string | undefined,
         benchmark: options.benchmark as boolean | undefined,

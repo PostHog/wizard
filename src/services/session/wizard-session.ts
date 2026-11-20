@@ -26,6 +26,8 @@ export interface WizardSession extends ProgramSession {
   /** A pre-issued gateway token a dev or test `--ci` run logs in with; the login puts it on the credentials. */
   ciGateway: GatewayCredential | null;
   email?: string;
+  /** `--goal`: the task the run was started for, sent with a new signup. */
+  goal?: string;
   region?: CloudRegion;
 
   /**
@@ -89,6 +91,7 @@ export type SessionArgs = {
   localPosthog?: boolean;
   apiKey?: string;
   email?: string;
+  goal?: string;
   region?: CloudRegion;
   baseUrl?: string;
   integration?: Integration;
@@ -115,6 +118,7 @@ export function buildSession(args: SessionArgs): WizardSession {
     localMcp: local.localMcp,
     apiKey: args.apiKey,
     email: args.email,
+    goal: args.goal?.trim() || undefined,
     region: args.region,
     // `--local-posthog` is sugar over `--base-url`, which every downstream URL
     // helper already honours. An explicit `--base-url` is more specific, so it wins.

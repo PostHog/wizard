@@ -22,6 +22,7 @@ export async function oauthLogin(
     signup: session.signup,
     projectId: session.projectId,
     email: session.email,
+    goal: session.goal,
     region: session.region,
     baseUrl: session.baseUrl,
     localMcp: session.localMcp,
