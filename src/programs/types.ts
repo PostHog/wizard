@@ -35,5 +35,10 @@ export type { OAuthTokenResponse } from '@shared/oauth-tokens';
 export type { SessionArgs, WizardSession } from '@services/session';
 export type { PlannedEvent, SessionLogin, TaskItem } from '@services/session';
 export type { DetectedSource } from '@services/warehouse-sources';
+export type {
+  PlanOffer,
+  PlanProject,
+  PlanReason,
+} from '@services/project-discovery';
 export type { TaskStreamOutcome } from '@services/session';
 export type { TaskStreamPushOptions } from '@services/session';

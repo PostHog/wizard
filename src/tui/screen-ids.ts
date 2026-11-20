@@ -15,6 +15,7 @@ export enum ScreenId {
   MintFailure = 'mint-failure',
   Exit = 'exit',
   AiOptIn = 'ai-opt-in',
+  Plan = 'plan',
 }
 
 /** Screens that interrupt programs as overlays. */

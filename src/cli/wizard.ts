@@ -65,6 +65,13 @@ export const GLOBAL_OPTIONS = {
       'Email address for signup (used with --signup)\nenv: POSTHOG_WIZARD_EMAIL',
     type: 'string' as const,
   },
+  // Hidden while `wizard-project-discovery` rolls out.
+  project: {
+    describe:
+      'The project a non-interactive run works in, as a path from the workspace root (e.g. apps/web)\nenv: POSTHOG_WIZARD_PROJECT',
+    type: 'string' as const,
+    hidden: true,
+  },
   // ── Internal modes ─────────────────────────────────────────────────
   // Hidden from `--help`.
   // NB: the experimental headless flag is deliberately NOT global. Supported

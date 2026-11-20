@@ -126,7 +126,7 @@ import {
   Program,
   type ProgramId,
 } from '@programs';
-import type { FrameworkConfig } from '@programs/types';
+import type { FrameworkConfig, PlanOffer } from '@programs/types';
 import {
   WizardReadiness,
   type WizardReadinessResult,
@@ -269,6 +269,40 @@ interface Fixture {
   program: ProgramId;
   arrange?: (store: WizardStore) => void;
 }
+
+/** A pnpm monorepo's plan: two apps offered, the rest listed with a reason. */
+const PLAN_OFFER: PlanOffer = {
+  repoType: 'monorepo',
+  workspaceTool: 'pnpm',
+  complete: true,
+  picked: 'apps/web',
+  projects: [
+    { path: '.', offered: false, reason: 'workspace-root', mainApp: false },
+    {
+      path: 'apps/web',
+      framework: Integration.nextjs,
+      frameworkName: 'Next.js',
+      offered: true,
+      mainApp: true,
+    },
+    {
+      path: 'apps/docs',
+      framework: Integration.vue,
+      frameworkName: 'Vue',
+      offered: false,
+      reason: 'has-posthog',
+      mainApp: false,
+    },
+    {
+      path: 'apps/api',
+      framework: Integration.javascriptNode,
+      frameworkName: 'Node.js',
+      offered: true,
+      mainApp: false,
+    },
+    { path: 'packages/ui', offered: false, reason: 'library', mainApp: false },
+  ],
+};
 
 const FIXTURES: Record<string, Fixture> = {
   // ── Overlays ───────────────────────────────────────────────────
@@ -529,6 +563,13 @@ const FIXTURES: Record<string, Fixture> = {
     arrange: (s) => {
       authed(s);
       s.setApiUser(apiUser(false));
+    },
+  },
+  [ScreenId.Plan]: {
+    program: Program.PostHogIntegration,
+    arrange: (s) => {
+      authed(s);
+      s.showPlan(PLAN_OFFER, false);
     },
   },
   [ScreenId.Run]: {

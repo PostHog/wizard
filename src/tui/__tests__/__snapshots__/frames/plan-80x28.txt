@@ -1,0 +1,27 @@
+ PostHog Wizard v0.0.0-test                        Feedback: wizard@posthog.com
+
+ Cost (running): $0.00 · no agent turns yet                      Ctrl+T to hide
+
+ ✔ Found a pnpm monorepo
+
+  Which project should PostHog be set up in?
+ ▸ ◆ apps/web (Next.js • main app)
+   ◇ apps/api (Node.js)
+   repo root (workspace root)
+   apps/docs (Vue • already has PostHog)
+   packages/ui (library)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  ↑↓ navigate  enter select

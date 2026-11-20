@@ -85,6 +85,11 @@ const LANGUAGE_FALLBACKS: ReadonlySet<Integration> = new Set([
   Integration.javascriptNode,
 ]);
 
+/** Whether a framework is a language fallback, which says what a package is written in, not what app it is. */
+export function isLanguageFallback(framework: Integration): boolean {
+  return LANGUAGE_FALLBACKS.has(framework);
+}
+
 /** Every trait, declared once. */
 export const TRAITS: { readonly [K in TraitName]: TraitDefinition<K> } = {
   framework: {

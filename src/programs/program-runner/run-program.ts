@@ -37,10 +37,19 @@ import { logToFile } from '@utils/debug';
 import { removeAuditLedger, startAuditLedgerWatcher } from '@programs/audit';
 import { FRAMEWORK_REGISTRY } from '@services/frameworks';
 import {
+  applyDetectionReport,
+  buildPlan,
+  getProjects,
   getTraits,
+  planNeedsPick,
+  projectDiscoveryMode,
+  reportProjectsDiscovered,
+  reportProjectsSelected,
   toMatchKeys,
   toTraitKeys,
+  type PlanOffer,
 } from '@services/project-discovery';
+import { detectIntegrationProjects } from '@services/detection';
 import { findProgramConfig, getProgramConfig } from './program-registry';
 import { ProgramAbort } from '@programs/program-contract';
 import { detectionFailure, detectProgram } from './detect-program';
@@ -355,6 +364,45 @@ async function invokeProgram(
       }
     }
 
+    // One project per run: with discovery on, the host picks among the projects the program is offered.
+    if (projectDiscoveryMode(flags.flags) !== 'off' && config.appliesTo) {
+      const ciRunner = {
+        log: runner.log,
+        authenticate: async () => {
+          await login();
+        },
+        onProgress: emit,
+      } satisfies CiRunnerContext;
+      try {
+        const picked = await park(
+          pickProject(config, store, {
+            requested: input.project,
+            workflow: options.workflow,
+            emit,
+            signal,
+          }),
+        );
+        if (picked === null) return abort('Project selection cancelled.');
+        if (picked !== store.session.runProject) {
+          // The settings were checked for the directory the run started in.
+          if (plainSettings?.backedUp) restoreClaudeSettings(installDir);
+          plainSettings = undefined;
+          await detectProgram(config, store, ciRunner, picked);
+          const unmet = detectionFailure(config, store.session);
+          if (unmet) return settle(RunOutcome.Failed, unmet);
+          run = await resolveRun(config, store, runner);
+          analytics.setProgramTags(run.analyticsTags);
+          store.setSkillId(run.skillId ?? run.integrationLabel);
+          pair.project.path = picked;
+        }
+      } catch (error) {
+        if (signal.aborted) return cancelled();
+        if (error instanceof ProgramAbort)
+          return fail(error.message, error.code);
+        throw error;
+      }
+    }
+
     // Every rotation of this login, before or during a run, lands in the store.
     configureOAuthSession(credentials.posthog, {
       rotate: (held) => rotateCredentials(held, store.session.baseUrl),
@@ -558,6 +606,82 @@ async function invokeProgram(
     releaseLedger();
     unregisterLedger?.();
   }
+}
+
+/**
+ * The project the run works in. Ranks the projects with the program's model
+ * sources when a host will show them, asks the host when there is a choice,
+ * and reports the list and the pick. Null when the host declined.
+ */
+async function pickProject(
+  config: ProgramConfig,
+  store: SessionStore,
+  context: {
+    requested?: string;
+    workflow?: ProgramOptions['workflow'];
+    emit: (event: AgentProgress) => void;
+    signal: AbortSignal;
+  },
+): Promise<string | null> {
+  const { requested, workflow, emit, signal } = context;
+  const plan = (): PlanOffer => buildPlan(store.session, config, requested);
+  // Agentic detection ranks only where a person will look at its answer, and only once.
+  const ranked = getProjects(store.session).some((project) =>
+    Object.values(project.claims ?? {}).some((claims) =>
+      claims.some((claim) => claim.source === 'agentic'),
+    ),
+  );
+  const rank =
+    config.rankWith?.includes('agentic') && !ranked
+      ? async (): Promise<PlanOffer> => {
+          try {
+            const report = await detectIntegrationProjects(store.session, {
+              programId: config.id,
+              recommend: true,
+              onEvent: (line) => logToFile('[agentic detect]', line),
+              onProgress: emit,
+            });
+            applyDetectionReport(store.readyContext(), report, 'agentic');
+          } catch (error) {
+            // No answer: the plan opens on static detection alone.
+            logToFile(
+              `[agent-runner] project ranking failed: ${String(error)}`,
+            );
+          }
+          return plan();
+        }
+      : undefined;
+
+  let offer = plan();
+  let picked = offer.picked;
+  let pickedBy: 'person' | 'caller' | 'default' =
+    requested === undefined ? 'default' : 'caller';
+  const asks =
+    workflow !== undefined &&
+    requested === undefined &&
+    !store.session.ci &&
+    planNeedsPick(offer);
+  if (asks) {
+    const go = await workflow.confirmStep(
+      {
+        kind: 'plan',
+        programId: config.id,
+        installDir: store.session.installDir,
+        plan: offer,
+        rank,
+        pick: (projectPath) => {
+          picked = projectPath;
+          pickedBy = 'person';
+        },
+      },
+      { signal },
+    );
+    if (!go) return null;
+    offer = plan();
+  }
+  reportProjectsDiscovered(store.session, offer, config.id);
+  reportProjectsSelected(store.session, offer, picked, config.id, pickedBy);
+  return picked;
 }
 
 /** The program's own run, and before it every composed sub-run a host workflow can confirm. */
