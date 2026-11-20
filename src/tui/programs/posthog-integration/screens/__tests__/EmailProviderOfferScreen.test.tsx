@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { stripVTControlCharacters } from 'node:util';
 import { vi, it, expect, afterEach, beforeEach, describe } from 'vitest';
 import { render, cleanup } from 'ink-testing-library';
 import { WizardStore } from '@tui/store';
@@ -155,8 +156,9 @@ function setupInContainer(store = storeAfterInstallWithResend()) {
     });
     app.stdout.emit('resize');
   };
+  const frame = () => stripVTControlCharacters(app.lastFrame() ?? '');
   const notice = () =>
-    app.lastFrame()?.replace(/\s+/g, ' ').includes(VIEWPORT_TOO_SMALL_MESSAGE);
+    frame().replace(/\s+/g, ' ').includes(VIEWPORT_TOO_SMALL_MESSAGE);
   const resize = async (columns: number, rows: number) => {
     setSize(columns, rows);
     await delay();
@@ -172,10 +174,10 @@ function setupInContainer(store = storeAfterInstallWithResend()) {
     for (let i = 0; i < 1000 && notice() !== hides; i++)
       await new Promise((resolve) => setImmediate(resolve));
     expect(notice()).toBe(hides);
-    const frame = app.lastFrame();
+    const pressedOn = frame();
     app.stdin.write(key);
     await delay();
-    return frame;
+    return pressedOn;
   };
   return {
     store,
