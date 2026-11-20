@@ -17,6 +17,7 @@ import { recordAnalyticsIngestion } from '@shared/utils/__tests__/helpers/analyt
 import { PostHogIntegrationScreenId } from '@tui/programs/posthog-integration/screen-ids';
 import { EmailProviderOfferScreen } from '@tui/programs/posthog-integration/screens/EmailProviderOfferScreen';
 import { ScreenContainer } from '@tui/primitives/ScreenContainer';
+import { VIEWPORT_TOO_SMALL_MESSAGE } from '@tui/primitives/index';
 import { createScreens, createServices } from '@tui/screen-registry';
 import { buildSession } from '@programs';
 
@@ -367,23 +368,43 @@ describe('the email provider offer after install', () => {
   });
 
   it('keeps the setup lines after yes while a too-small terminal hides them', async () => {
-    const { store, app, press, show, hide } = setup();
-    await press(ENTER);
-
-    hide();
+    const store = storeAfterInstallWithResend();
+    const app = render(
+      <ScreenContainer
+        store={store}
+        screens={createScreens(store, createServices(store))}
+      />,
+    );
+    const resizeTo = async (columns: number, rows: number) => {
+      Object.defineProperties(app.stdout, {
+        isTTY: { value: true, configurable: true },
+        columns: { value: columns, configurable: true },
+        rows: { value: rows, configurable: true },
+      });
+      app.stdout.emit('resize');
+      await delay();
+    };
+    await resizeTo(120, 40);
+    pause();
+    app.stdin.write(ENTER);
     await delay();
+    expect(app.lastFrame()).toContain(COMMAND);
+
+    await resizeTo(70, 24);
+    expect(app.lastFrame()?.replace(/\s+/g, ' ')).toContain(
+      VIEWPORT_TOO_SMALL_MESSAGE,
+    );
     app.stdin.write('x');
     await delay();
 
+    await resizeTo(120, 40);
+    expect(app.lastFrame()).toContain(COMMAND);
     expect(store.router.resolve(store)).toBe(
       PostHogIntegrationScreenId.EmailProviderOffer,
     );
 
-    show();
-    await delay();
     app.stdin.write('x');
     await delay();
-
     expect(store.router.resolve(store)).toBe(ScreenId.Exit);
   });
 
