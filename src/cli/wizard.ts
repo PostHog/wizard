@@ -165,6 +165,12 @@ export class Wizard {
           type: 'boolean',
           hidden: true,
         })
+        .option('test-discovery', {
+          describe:
+            'Test discovery mode: print the projects, traits and plan a run finds before login, then exit. Pass json for JSON.',
+          type: 'string',
+          choices: ['', 'text', 'json'],
+        })
         // Rides beside the PostHog destination rather than replacing it, so a
         // logged run is the same run the backend sees.
         .option('task-stream-log', {

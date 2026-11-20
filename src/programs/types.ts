@@ -33,6 +33,10 @@ export type {
 export type { ApiKeyLoginOptions } from './program-runner/api-key-login';
 export type { OAuthTokenResponse } from '@shared/oauth-tokens';
 export type { SessionArgs, WizardSession } from '@services/session';
+export type {
+  DiscoveryTestProject,
+  DiscoveryTestReport,
+} from './program-runner/discovery-test';
 export type { PlannedEvent, SessionLogin, TaskItem } from '@services/session';
 export type { DetectedSource } from '@services/warehouse-sources';
 export type {

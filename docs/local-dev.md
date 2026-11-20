@@ -224,6 +224,39 @@ together. The log is `posthog-wizard.log` in the temp directory
 (`/tmp/posthog-wizard.log` on macOS and Linux) unless `--log-file` or
 `POSTHOG_WIZARD_LOG_FILE` names another file.
 
+## Test discovery mode
+
+`--test-discovery` runs project discovery and the program's own detection as a
+run does before login, prints what they found, and exits. It logs in to
+nothing, runs no agent and changes no file. It works on any program command,
+with or without a terminal, in non-production builds such as `pnpm try`.
+
+```bash
+pnpm try --test-discovery --install-dir=/absolute/path/to/app
+pnpm try error-tracking --test-discovery --install-dir=/absolute/path/to/app
+pnpm try --test-discovery=json --install-dir=/absolute/path/to/app
+```
+
+The report holds:
+
+- the `wizard-project-discovery` value the run read, the run directory, the
+  workspace root, the run project, `repoType` and the workspace tool
+- what the program's detection read in the run project, and the run project's
+  match keys
+- every project with its traits: the value a run uses, then each source's
+  value, and `(unsettled)` where the sources disagree
+- the catalog tools found in each project
+- the plan the program would open after login: the projects offered, a reason
+  for each of the others, and the one that starts picked
+
+It shows static detection only, since Decisions and agentic detection answer
+after login. To see discovery with the flag on, set the flag for this run:
+
+```bash
+WIZARD_CI_FLAG_OVERRIDES='{"wizard-project-discovery":"one-project"}' \
+  pnpm try --test-discovery --install-dir=/absolute/path/to/app
+```
+
 ## Run the full stack locally
 
 1. Clone [ai-gateway](https://github.com/PostHog/ai-gateway) next to posthog,
