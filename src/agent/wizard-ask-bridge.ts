@@ -99,6 +99,32 @@ function buildCancelledAnswers(questions: AskQuestion[]): AskAnswers {
   return out;
 }
 
+/** What a one-question picker ask chose, reduced to an intent so no label or typed text is captured. */
+export type AskChoice = 'connected' | 'skip' | 'other';
+
+/**
+ * The intent of the option picked in a one-question `single` ask, such as the
+ * warehouse task's "I connected Postgres" / "Skip Postgres". Undefined for any
+ * other ask shape. An answer that matches no option is `other`.
+ */
+export function classifyAskChoice(
+  questions: AskQuestion[],
+  answers: AskAnswers,
+): AskChoice | undefined {
+  if (questions.length !== 1 || questions[0].kind !== 'single') {
+    return undefined;
+  }
+  const [question] = questions;
+  const option = question.options?.find(
+    (o) => o.value === answers[question.id],
+  );
+  if (!option) return 'other';
+  const text = `${option.value} ${option.label}`;
+  if (/\bskip/i.test(text)) return 'skip';
+  if (/\b(connected|done)\b/i.test(text)) return 'connected';
+  return 'other';
+}
+
 export function isFullyCancelled(answers: AskAnswers): boolean {
   const values = Object.values(answers);
   if (values.length === 0) return false;
@@ -203,6 +229,7 @@ export function createWizardAskBridge(
             subject,
             question_count: questions.length,
             duration_ms: durationMs,
+            choice: classifyAskChoice(questions, answers),
           });
         }
 
