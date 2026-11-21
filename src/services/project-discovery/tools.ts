@@ -278,7 +278,7 @@ function ingestorFor(name: string, readTemplates: boolean): Ingestor | null {
   if (readTemplates && isTemplateFileName(name)) return addScriptHosts;
   // Kept apart from the table: a malformed `package.json` is reported.
   if (name === 'package.json') return addNpmDeps;
-  const manifest = MANIFEST_PARSERS[name];
+  const manifest = MANIFEST_PARSERS.get(name);
   if (manifest)
     return (c, s, file) =>
       (manifest.parse(c) ?? []).forEach((d) =>

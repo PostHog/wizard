@@ -3,6 +3,7 @@ import * as path from 'path';
 import * as os from 'os';
 import { discoverTools, parseEnvKeys } from '@services/project-discovery/tools';
 import { parseGemfile } from '@services/project-discovery/manifests';
+import { walkRepo } from '@services/project-discovery/walk';
 import { toWarehouseSources } from '@services/warehouse-sources/detect';
 import { MAX_REPORTED_PATH_LENGTH } from '@utils/env-scan';
 import { toSourceDetectors } from '@services/warehouse-sources/registry';
@@ -50,6 +51,19 @@ describe('discoverTools', () => {
 
   it('returns empty for a non-existent directory', () => {
     expect(detect(path.join(tmpDir, 'nope'))).toEqual([]);
+  });
+
+  it('reads no manifest from a file named after an object member', () => {
+    writePackageJson(tmpDir, { stripe: '^14.0.0' });
+    fs.mkdirSync(path.join(tmpDir, 'src'));
+    for (const name of ['constructor', 'toString', '__proto__']) {
+      fs.writeFileSync(path.join(tmpDir, 'src', name), '');
+    }
+    expect(walkRepo(tmpDir).manifests.map((m) => m.path)).toEqual([
+      'package.json',
+    ]);
+    expect(discoverTools(tmpDir, DETECTORS).failed).toBeUndefined();
+    expect(kinds(tmpDir)).toEqual(['Stripe']);
   });
 
   it('returns empty when no source signal is present', () => {

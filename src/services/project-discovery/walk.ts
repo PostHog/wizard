@@ -75,7 +75,7 @@ export function walkRepo(dir: string): RepoFiles {
       if (LOCKFILE_NAMES.has(name)) repo.lockfiles.push(relativePath);
       // Key names come from the env scan below; a value is never read here.
       if (isEnvFileName(name)) return;
-      const manifest = MANIFEST_PARSERS[name];
+      const manifest = MANIFEST_PARSERS.get(name);
       if (!manifest) return;
       const content = safeReadFile(fullPath);
       if (content === null) return;

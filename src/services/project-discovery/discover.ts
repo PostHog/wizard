@@ -49,6 +49,25 @@ type DiscoveryContext = Pick<
   'session' | 'setFrameworkContext'
 >;
 
+/** The walk, or an empty one when it throws, so discovery stays best-effort. */
+function walkSafely(rootDir: string): RepoFiles {
+  try {
+    return walkRepo(rootDir);
+  } catch (error) {
+    analytics.captureException(
+      error instanceof Error ? error : new Error(String(error)),
+      { step: 'walkRepo' },
+    );
+    return {
+      dir: rootDir,
+      files: [],
+      manifests: [],
+      lockfiles: [],
+      envKeys: [],
+    };
+  }
+}
+
 /** Discover once per run, for a program that sets `scansCodebase`. Best-effort: never throws. */
 export async function runDiscovery(
   config: Pick<ProgramConfig, 'id' | 'scansCodebase'>,
@@ -59,7 +78,7 @@ export async function runDiscovery(
   const detectors = await loadSourceDetectors(ctx.session.baseUrl);
   const rootDir = ctx.session.installDir;
   const discoveredAt = new Date().toISOString();
-  const files = walkRepo(rootDir);
+  const files = walkSafely(rootDir);
   const discovery = (tools: DiscoveredTools): Discovery => ({
     program: config.id,
     discoveredAt,
@@ -133,7 +152,7 @@ export function getRepoFiles(
     | RepoFiles
     | undefined;
   if (kept?.dir === session.installDir) return kept;
-  const files = walkRepo(session.installDir);
+  const files = walkSafely(session.installDir);
   setFrameworkContext?.(REPO_FILES_KEY, files);
   return files;
 }
