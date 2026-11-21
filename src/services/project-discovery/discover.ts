@@ -24,8 +24,9 @@ import { loadSourceDetectors } from '../warehouse-sources/registry';
 import type {
   DetectedDestination,
   DetectedSource,
+  SourceDetector,
 } from '../warehouse-sources/types';
-import { loadProjectDiscoveryMode } from './flag';
+import { loadProjectDiscoveryMode, type ProjectDiscoveryMode } from './flag';
 import { discoverProjects, type DiscoveredProjects } from './projects';
 import {
   catalogScriptHosts,
@@ -54,8 +55,15 @@ export type Discovery = {
    * with no workspace or the flag off.
    */
   rootDir: string;
-  /** The directory the run started in. A CI run can narrow `installDir` later, so the report fingerprints this one. */
+  /** The directory the run started in. */
   runDir: string;
+  /**
+   * The project the run started in, as a path from `rootDir`. A CI run can
+   * narrow `installDir` later, so the report fingerprints this project.
+   */
+  runProject: string;
+  /** The flag mode discovery ran in. Every later step follows this value and never reads the flag itself. */
+  mode: ProjectDiscoveryMode;
   /** The walk: tree, manifests, lockfiles, `.env` key names. Local only: never reported. */
   files: RepoFiles;
   tools: DiscoveredTools;
@@ -75,10 +83,10 @@ const FAILED_TOOLS: DiscoveredTools = {
 
 /** The tool match, which needs the catalog download. Never throws: a failure is a `failed` match. */
 async function matchTools(
-  session: ProgramSession,
+  catalog: Promise<readonly SourceDetector[]>,
   walk: RepoWalk,
 ): Promise<DiscoveredTools> {
-  const detectors = await loadSourceDetectors(session.baseUrl);
+  const detectors = await catalog;
   // No catalog means discovery could not look, which is not the same as
   // finding nothing. The loader has already reported why.
   if (detectors.length === 0) return FAILED_TOOLS;
@@ -128,8 +136,45 @@ export async function runDiscovery(
   ctx: DiscoveryContext,
 ): Promise<void> {
   if (getDiscovery(ctx.session)) return;
-  const runDir = ctx.session.installDir;
+  // Started first, so the download overlaps the flag read and the walk.
+  const catalog = loadCatalog(ctx.session);
   const mode = await loadProjectDiscoveryMode();
+  await discover(config, ctx, ctx.session.installDir, mode, catalog);
+}
+
+/**
+ * Discover again when login changed the flag's answer. The first discovery
+ * runs before login, where a flag rolled out to people or organizations still
+ * answers `off`. Call it once, right after login.
+ */
+export async function rediscoverAfterLogin(
+  config: Pick<ProgramConfig, 'id'>,
+  ctx: DiscoveryContext,
+): Promise<void> {
+  const discovery = getDiscovery(ctx.session);
+  if (!discovery) return;
+  const mode = await loadProjectDiscoveryMode();
+  if (mode === discovery.mode) return;
+  const catalog = loadCatalog(ctx.session);
+  await discover(config, ctx, discovery.runDir, mode, catalog);
+}
+
+/** The catalog download. Never rejects: no catalog is an empty one. */
+function loadCatalog(
+  session: ProgramSession,
+): Promise<readonly SourceDetector[]> {
+  return loadSourceDetectors(session.baseUrl).catch(
+    (): readonly SourceDetector[] => [],
+  );
+}
+
+async function discover(
+  config: Pick<ProgramConfig, 'id'>,
+  ctx: DiscoveryContext,
+  runDir: string,
+  mode: ProjectDiscoveryMode,
+  catalog: Promise<readonly SourceDetector[]>,
+): Promise<void> {
   // The walk up to the workspace root stays off with the flag.
   const atRunDir = () => ({ rootDir: runDir, runProject: '.' });
   const { rootDir, runProject } =
@@ -141,15 +186,21 @@ export async function runDiscovery(
     () => walkRepoFiles(rootDir, { runProject }),
     () => failedWalk(rootDir),
   );
-  const projects = discoverProjects(walk.files, runProject);
+  const projects = guarded(
+    'discoverProjects',
+    () => discoverProjects(walk.files, runProject),
+    () => discoverProjects(emptyRepoFiles(rootDir), runProject),
+  );
   ctx.setProjects(projects.projects, runProject);
 
-  const tools = await matchTools(ctx.session, walk);
+  const tools = await matchTools(catalog, walk);
   ctx.setFrameworkContext(DISCOVERY_KEY, {
     program: config.id,
     discoveredAt: new Date().toISOString(),
     rootDir,
     runDir,
+    runProject,
+    mode,
     files: walk.files,
     tools,
     projects,

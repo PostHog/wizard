@@ -196,6 +196,25 @@ function describeSignal(signal: ToolSignal): string {
   return `found \`${signal.name}\` in ${location}`;
 }
 
+/**
+ * The tools with a signal at or below `projectPath`, each with only those
+ * signals. `.` is the walked root, which keeps every tool.
+ */
+export function toolsUnder(
+  tools: readonly DetectedTool[],
+  projectPath: string,
+): DetectedTool[] {
+  if (projectPath === '.') return [...tools];
+  const prefix = `${projectPath}/`;
+  return tools.flatMap((tool) => {
+    const signals = tool.signals.filter(
+      (signal) => signal.file?.startsWith(prefix) === true,
+    );
+    if (signals.length === 0) return [];
+    return [{ ...tool, signals, matchedSignal: describeSignal(signals[0]) }];
+  });
+}
+
 /** Every script host the catalog lists; templates are read for them only while it lists some. */
 export function catalogScriptHosts(
   detectors: readonly SourceDetector[],

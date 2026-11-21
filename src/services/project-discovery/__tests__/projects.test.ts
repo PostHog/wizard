@@ -24,7 +24,13 @@ vi.mock(
 
 import { WIZARD_PROJECT_DISCOVERY_FLAG_KEY } from '@shared/constants';
 import { analytics } from '@utils/analytics';
-import { getDiscovery, runDiscovery } from '@services/project-discovery';
+import {
+  getDiscovery,
+  rediscoverAfterLogin,
+  runDiscovery,
+} from '@services/project-discovery';
+import { workspaceFingerprint } from '@services/project-discovery/fingerprint';
+import { buildDiscoveryReport } from '@services/project-discovery/report';
 import {
   discoverProjects,
   parentOf,
@@ -316,7 +322,12 @@ describe('runDiscovery', () => {
     pnpmMonorepo();
     const runDir = path.join(repo, 'apps/web');
     const session = await discoverFrom(runDir);
-    expect(getDiscovery(session)).toMatchObject({ rootDir: runDir, runDir });
+    expect(getDiscovery(session)).toMatchObject({
+      rootDir: runDir,
+      runDir,
+      runProject: '.',
+      mode: 'off',
+    });
     expect(session.runProject).toBe('.');
     expect(paths(session.projects)).toEqual(['.']);
   });
@@ -329,7 +340,12 @@ describe('runDiscovery', () => {
     const runDir = path.join(repo, 'apps/web');
     const session = await discoverFrom(runDir);
     const discovery = getDiscovery(session);
-    expect(discovery).toMatchObject({ rootDir: repo, runDir });
+    expect(discovery).toMatchObject({
+      rootDir: repo,
+      runDir,
+      runProject: 'apps/web',
+      mode: 'one-project',
+    });
     expect(discovery?.projects.repoType).toBe('monorepo');
     expect(session.runProject).toBe('apps/web');
     expect(paths(session.projects)).toEqual([
@@ -340,6 +356,65 @@ describe('runDiscovery', () => {
     ]);
     // The run project is walked first, so its manifest names the tool.
     expect(discovery?.tools.tools.map((tool) => tool.kind)).toContain('Stripe');
+  });
+
+  it('discovers again when login changes what the flag answers', async () => {
+    pnpmMonorepo();
+    const runDir = path.join(repo, 'apps/web');
+    const store = new SessionStore(buildSession({ installDir: runDir }));
+    const program = { id: 'posthog-integration' };
+    await runDiscovery(program, store.readyContext());
+    expect(getDiscovery(store.session)).toMatchObject({ mode: 'off' });
+
+    // Nothing changed: the first discovery stays.
+    const first = getDiscovery(store.session);
+    await rediscoverAfterLogin(program, store.readyContext());
+    expect(getDiscovery(store.session)).toBe(first);
+
+    vi.mocked(analytics.getAllFlagsForWizard).mockResolvedValue({
+      [WIZARD_PROJECT_DISCOVERY_FLAG_KEY]: 'one-project',
+    });
+    await rediscoverAfterLogin(program, store.readyContext());
+    expect(getDiscovery(store.session)).toMatchObject({
+      mode: 'one-project',
+      rootDir: repo,
+      runDir,
+      runProject: 'apps/web',
+    });
+    expect(store.session.runProject).toBe('apps/web');
+    expect(paths(store.session.projects)).toContain('apps/api');
+  });
+
+  it('reports only the tools of the project the run started in', async () => {
+    vi.mocked(analytics.getAllFlagsForWizard).mockResolvedValue({
+      [WIZARD_PROJECT_DISCOVERY_FLAG_KEY]: 'one-project',
+    });
+    pnpmMonorepo();
+    const reportFrom = async (runDir: string) => {
+      const discovery = getDiscovery(await discoverFrom(runDir));
+      if (!discovery) throw new Error('no discovery');
+      // The whole workspace is matched; only the report is narrowed.
+      expect(discovery.tools.tools.map((tool) => tool.kind)).toContain(
+        'Stripe',
+      );
+      return buildDiscoveryReport(discovery, 7);
+    };
+
+    const api = await reportFrom(path.join(repo, 'apps/api'));
+    expect(api.tools).toEqual([]);
+    expect(api.workspace_fingerprint).toBe(
+      workspaceFingerprint(7, path.join(repo, 'apps/api')),
+    );
+
+    const web = await reportFrom(path.join(repo, 'apps/web'));
+    expect(web.tools).toEqual([
+      expect.objectContaining({
+        kind: 'Stripe',
+        signals: [
+          { source: 'npm', name: 'stripe', file: 'apps/web/package.json' },
+        ],
+      }),
+    ]);
   });
 
   it('finds the projects when the tool catalog is missing', async () => {

@@ -4,6 +4,7 @@ export {
   discoveredWarehouseSources,
   getDiscovery,
   getRepoFiles,
+  rediscoverAfterLogin,
   runDiscovery,
   type Discovery,
 } from './discover';
