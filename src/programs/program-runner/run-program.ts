@@ -48,7 +48,10 @@ import {
   rotateCredentials,
   type ResolvedProgramCredentials,
 } from './credentials';
-import { reportDiscovery } from '@services/project-discovery';
+import {
+  rediscoverAfterLogin,
+  reportDiscovery,
+} from '@services/project-discovery';
 import { IS_PRODUCTION_BUILD } from '@env';
 import type { QuestionKey } from '@services/detection/decisions';
 import { logIn } from './login';
@@ -307,6 +310,8 @@ async function invokeProgram(
         plainSettings = settings;
       }
       credentials = await login();
+      // Discovery ran before login; the flag can answer differently for the person.
+      await park(rediscoverAfterLogin(config, store.readyContext()));
       reportDiscovery(store);
       if (needsAiApproval(store.session, credentials)) {
         if (!options.workflow) {

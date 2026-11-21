@@ -31,34 +31,49 @@ export interface DetectedTool {
   mode: SourceCreationMode | null;
   /** Human-readable description of the first matching signal, for display. */
   matchedSignal: string;
+  /**
+   * In the walk's match, one signal per file that holds a matching name, so
+   * each project keeps its own evidence. {@link toolsUnder} gives one project's
+   * tools, with one signal per name.
+   */
   signals: ToolSignal[];
 }
 
 interface ProjectSignals {
-  /** Key NAME → the root-relative `.env*` file that first defined it. */
-  envKeys: Map<string, string>;
-  /** Catalog script host a template loads from → the file it was found in. */
-  scriptHosts: Map<string, string>;
+  /** Key NAME → the root-relative `.env*` files that define it, in walk order. */
+  envKeys: Map<string, readonly string[]>;
+  /** Catalog script host → the templates that load from it, in walk order. */
+  scriptHosts: Map<string, string[]>;
   /**
    * Ecosystem (`npm`, `pypi`, `rubygems`, ...) → package name → the
-   * root-relative manifest that first declared it.
+   * root-relative manifests that declare it, in walk order.
    */
-  packages: Map<string, Map<string, string>>;
+  packages: Map<string, Map<string, string[]>>;
 }
 
 // Each signal Set retains at most this many entries.
 const MAX_SIGNAL_SET = MAX_ENV_KEY_SET;
 
-// A tool reports at most this many matched signals.
+// One project's tool shows and reports at most this many signals.
 const MAX_SIGNALS_PER_TOOL = 50;
 
-/** The walk as match signals: the first file wins for a name several files hold. */
+// One name keeps at most this many files, and one tool this many signals in all.
+const MAX_FILES_PER_SIGNAL = 50;
+const MAX_TOOL_EVIDENCE = 500;
+
+/** The walk as match signals: every file that holds a name, so two projects that share one both keep it. */
 function signalsFrom(repo: RepoFiles): ProjectSignals {
   const signals: ProjectSignals = {
     envKeys: new Map(),
-    scriptHosts: new Map(repo.scriptHosts.map((m) => [m.host, m.file])),
+    scriptHosts: new Map(),
     packages: new Map(),
   };
+  for (const { host, file } of repo.scriptHosts) {
+    signals.scriptHosts.set(host, [
+      ...(signals.scriptHosts.get(host) ?? []),
+      file,
+    ]);
+  }
   for (const manifest of repo.manifests) {
     let names = signals.packages.get(manifest.ecosystem);
     if (!names) {
@@ -66,14 +81,17 @@ function signalsFrom(repo: RepoFiles): ProjectSignals {
       signals.packages.set(manifest.ecosystem, names);
     }
     for (const name of manifest.packages) {
-      if (names.size < MAX_SIGNAL_SET && !names.has(name)) {
-        names.set(name, manifest.path);
+      const files = names.get(name);
+      if (files) {
+        if (files.length < MAX_FILES_PER_SIGNAL) files.push(manifest.path);
+      } else if (names.size < MAX_SIGNAL_SET) {
+        names.set(name, [manifest.path]);
       }
     }
   }
   for (const { name, files } of repo.envKeys) {
     if (signals.envKeys.size >= MAX_SIGNAL_SET) break;
-    signals.envKeys.set(name, files[0]);
+    signals.envKeys.set(name, files);
   }
   return signals;
 }
@@ -125,9 +143,9 @@ export function discoverTools(
 }
 
 /**
- * Every signal that matches the detector, capped per tool. Packages and script
- * hosts come before `.env` keys: they show the code uses the tool, while a key
- * can outlive it.
+ * Every signal that matches the detector, one per file that holds the name,
+ * capped per tool. Packages and script hosts come before `.env` keys: they show
+ * the code uses the tool, while a key can outlive it.
  */
 function matchDetector(
   detector: SourceDetector,
@@ -140,27 +158,28 @@ function matchDetector(
     const found = signals.packages.get(ecosystem);
     if (!found) continue;
     for (const name of names) {
-      const file = found.get(name);
-      if (file !== undefined) matched.push({ source: ecosystem, name, file });
+      for (const file of found.get(name) ?? []) {
+        matched.push({ source: ecosystem, name, file });
+      }
     }
   }
 
   for (const host of scriptHosts) {
-    const file = signals.scriptHosts.get(host);
-    if (file !== undefined) {
+    for (const file of signals.scriptHosts.get(host) ?? []) {
       matched.push({ source: SCRIPT_HOST_SIGNAL_SOURCE, name: host, file });
     }
   }
 
   if (envKeys.length > 0) {
-    for (const [key, file] of signals.envKeys) {
-      if (envKeys.some((re) => re.test(key))) {
+    for (const [key, files] of signals.envKeys) {
+      if (!envKeys.some((re) => re.test(key))) continue;
+      for (const file of files) {
         matched.push({ source: ENV_KEY_SIGNAL_SOURCE, name: key, file });
       }
     }
   }
 
-  return matched.slice(0, MAX_SIGNALS_PER_TOOL);
+  return matched.slice(0, MAX_TOOL_EVIDENCE);
 }
 
 /** Signal source for a `.env` key name. */
@@ -194,6 +213,34 @@ function describeSignal(signal: ToolSignal): string {
   const location =
     PACKAGE_SIGNAL_LOCATIONS[signal.source] ?? `${signal.source} dependencies`;
   return `found \`${signal.name}\` in ${location}`;
+}
+
+/**
+ * One project's tools: those with a signal at or below `projectPath`, each
+ * with only those signals, one per name. `.` is the walked root, which holds
+ * every tool. This is how a tool is shown, offered and reported.
+ */
+export function toolsUnder(
+  tools: readonly DetectedTool[],
+  projectPath: string,
+): DetectedTool[] {
+  const prefix = projectPath === '.' ? '' : `${projectPath}/`;
+  return tools.flatMap((tool) => {
+    const names = new Set<string>();
+    const signals: ToolSignal[] = [];
+    for (const signal of tool.signals) {
+      if (signals.length >= MAX_SIGNALS_PER_TOOL) break;
+      if (prefix && signal.file?.startsWith(prefix) !== true) continue;
+      // The first file wins for a name several of the project's files hold.
+      const name = `${signal.source}\n${signal.name}`;
+      if (names.has(name)) continue;
+      names.add(name);
+      signals.push(signal);
+    }
+    // The root holds every tool, one with no file to place it by included.
+    if (signals.length === 0) return prefix ? [] : [tool];
+    return [{ ...tool, signals, matchedSignal: describeSignal(signals[0]) }];
+  });
 }
 
 /** Every script host the catalog lists; templates are read for them only while it lists some. */
