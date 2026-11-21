@@ -68,7 +68,9 @@ the mock reaches every importer.
 
 [`project-discovery`](project-discovery/index.ts) holds everything the wizard
 learns by reading the repo. `runDiscovery` runs once per run, for a program that
-sets `scansCodebase`, and keeps a `Discovery` in the session:
+sets `scansCodebase`, and keeps a `Discovery` in the session. Discovery holds
+facts and decides nothing: each program reads them in its `onReady` and decides
+there.
 
 | Field          | What it holds                                                                              |
 | -------------- | ------------------------------------------------------------------------------------------ |

@@ -11,15 +11,10 @@ export {
   detectedEmailProviders,
   type EmailProviderKind,
 } from './email-providers';
-export { reportDiscovery, type DiscoveryReportStore } from './report';
+export { reportDiscovery } from './report';
 export { maySendDiscovery, tagDiscovery } from './tags';
-export type { DetectedTool, DiscoveredTools, ToolSignal } from './tools';
+export type { DetectedTool, DiscoveredTools } from './tools';
 export { RUN_PROJECT, TRAITS } from './traits/registry';
 export { getProject, getTraits } from './traits/store';
 export { toMatchKeys } from './traits/match-keys';
-export {
-  manifestDirs,
-  walkRepo,
-  type DiscoveredManifest,
-  type RepoFiles,
-} from './walk';
+export { manifestDirs, walkRepo, type RepoFiles } from './walk';
