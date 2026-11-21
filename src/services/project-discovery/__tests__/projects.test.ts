@@ -106,6 +106,64 @@ describe('findWorkspaceRoot', () => {
     write('package.json', pkg({ next: '15.0.0' }));
     expect(findWorkspaceRoot(repo)).toEqual({ rootDir: repo, runProject: '.' });
   });
+
+  it('starts in the member that holds a source folder the run started in', () => {
+    pnpmMonorepo();
+    expect(findWorkspaceRoot(path.join(repo, 'apps/web/app'))).toEqual({
+      rootDir: repo,
+      runProject: 'apps/web',
+    });
+  });
+
+  it('keeps a workspace nested in another as its own root', () => {
+    write('pnpm-workspace.yaml', "packages:\n  - '**'\n");
+    write('package.json', pkg());
+    write('tools/build/Cargo.toml', '[workspace]\nmembers = ["crates/*"]\n');
+    write('tools/build/crates/cli/Cargo.toml', '[package]\nname = "cli"\n');
+    const nested = path.join(repo, 'tools/build');
+    expect(findWorkspaceRoot(nested)).toEqual({
+      rootDir: nested,
+      runProject: '.',
+    });
+  });
+
+  it('reads a package turbo.json as configuration, not as a workspace root', () => {
+    pnpmMonorepo();
+    write('apps/web/turbo.json', '{ "extends": ["//"] }');
+    expect(findWorkspaceRoot(path.join(repo, 'apps/web'))).toEqual({
+      rootDir: repo,
+      runProject: 'apps/web',
+    });
+  });
+
+  it('never looks above the home directory', () => {
+    write('turbo.json', '{}');
+    write('home/package.json', pkg());
+    const home = path.join(repo, 'home');
+    // `os.homedir()` reads these.
+    vi.stubEnv('HOME', home);
+    vi.stubEnv('USERPROFILE', home);
+    expect(findWorkspaceRoot(home)).toEqual({ rootDir: home, runProject: '.' });
+    vi.unstubAllEnvs();
+  });
+
+  it.skipIf(process.platform === 'win32')(
+    'takes no root from a directory others can write',
+    () => {
+      write('turbo.json', '{}');
+      write('app/package.json', pkg());
+      fs.chmodSync(repo, 0o777);
+      const app = path.join(repo, 'app');
+      expect(findWorkspaceRoot(app)).toEqual({ rootDir: app, runProject: '.' });
+    },
+  );
+
+  it('keeps the run where it started when a prompt cannot carry its path', () => {
+    write('turbo.json', '{}');
+    write('apps/we`b/package.json', pkg());
+    const odd = path.join(repo, 'apps/we`b');
+    expect(findWorkspaceRoot(odd)).toEqual({ rootDir: odd, runProject: '.' });
+  });
 });
 
 describe('discoverProjects', () => {

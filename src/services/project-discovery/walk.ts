@@ -369,31 +369,77 @@ function workspaceHolds(
   );
 }
 
+/** Whether others can write `dir`, such as `/tmp`: a marker there may not be the user's. */
+function isSharedDir(dir: string): boolean {
+  // Windows reports no permission bits a directory's mode can be read from.
+  if (process.platform === 'win32') return false;
+  try {
+    return (fs.statSync(dir).mode & 0o002) !== 0;
+  } catch {
+    return true;
+  }
+}
+
+const holdsManifest = (dir: string): boolean =>
+  [...MANIFEST_PARSERS.keys()].some((name) =>
+    fs.existsSync(path.join(dir, name)),
+  );
+
+const toPosix = (relativePath: string): string =>
+  relativePath.split(path.sep).join('/');
+
 /**
- * The workspace root above the run directory, and the run directory as a path
- * from it. Looks up for the nearest workspace marker that holds the run
- * directory, stopping at the git root, or at the home directory when there is
- * none. With no marker, the run directory is the root and the run project `.`.
+ * The project the run starts in, as a path from `rootDir`: the nearest
+ * directory from `start` upward that is a workspace member and holds a
+ * manifest. A launch inside `apps/web/src` starts in `apps/web`. With no such
+ * member it is `start` itself.
+ */
+function memberHolding(
+  workspace: MarkerRead,
+  rootDir: string,
+  start: string,
+): string {
+  for (let dir = start; dir !== rootDir; dir = path.dirname(dir)) {
+    const relative = toPosix(path.relative(rootDir, dir));
+    if (isWorkspaceMember(relative, workspace) && holdsManifest(dir)) {
+      return relative;
+    }
+  }
+  return toPosix(path.relative(rootDir, start));
+}
+
+/**
+ * The workspace root for the run directory, and the project the run starts in
+ * as a path from it. A run directory that declares a workspace is its own
+ * root. Otherwise this looks up for the nearest workspace marker that holds the
+ * run directory, stopping at the git root, below the home directory, and at a
+ * directory others can write. With no marker, the run directory is the root and
+ * the run project `.`.
  */
 export function findWorkspaceRoot(runDir: string): {
   rootDir: string;
   runProject: string;
 } {
   const start = path.resolve(runDir);
+  const atStart = { rootDir: start, runProject: '.' };
+  // Read before any parent, so a workspace nested in another is its own root.
+  if (readWorkspaceAt(start)) return atStart;
   const home = path.resolve(os.homedir());
   let dir = start;
   for (let level = 0; level < MAX_LEVELS_UP; level += 1) {
     const parent = path.dirname(dir);
     if (fs.existsSync(path.join(dir, '.git'))) break;
-    if (parent === dir || parent === home) break;
+    if (parent === dir || dir === home || parent === home) break;
     dir = parent;
+    if (isSharedDir(dir)) break;
     const workspace = readWorkspaceAt(dir);
     if (workspace && workspaceHolds(workspace, dir, start)) {
-      return {
-        rootDir: dir,
-        runProject: path.relative(dir, start).split(path.sep).join('/'),
-      };
+      const runProject = memberHolding(workspace, dir, start);
+      // A path a prompt cannot carry is never a project, so the run stays where it started.
+      return hasOnlyPromptSafeChars(runProject)
+        ? { rootDir: dir, runProject }
+        : atStart;
     }
   }
-  return { rootDir: start, runProject: '.' };
+  return atStart;
 }
