@@ -163,6 +163,13 @@ project, what stops the run there waits for the pick: a failed detection, an
 unmet prerequisite or a run that does not resolve. A run that moves resolves in
 the picked project. A run that stays ends with the failure it had.
 
+A host that shows the plan can read `pickLeavesRunProject` before login: the
+plan does not offer the project the run started in, and it asks for a pick or
+its default is another project. The TUI's integration intro then asks for no
+framework and shows the projects found in place of that project's detection. The
+TUI passes the mode it showed as `input.discoveryMode`, and the run keeps that
+mode through login.
+
 The older CI auto-picker, `scopeInstallDirToProject`, stands down when discovery
 is on and when the caller named a project.
 

@@ -1750,6 +1750,35 @@ describe('runProgram', () => {
         expect(runAgent).not.toHaveBeenCalled();
       });
 
+      it('keeps the mode the host showed the person, whatever the flag says after login', async () => {
+        const flagOnThenOff = () =>
+          vi
+            .mocked(analytics.getAllFlagsForWizard)
+            .mockResolvedValueOnce(DISCOVERY_ON);
+        // Without the host's mode, login turns discovery off and the root's failure stands.
+        flagOnThenOff();
+        const unpinned = await runProgram(
+          'metrics',
+          input({ store: pairStore(), config: noFrameworkAtRoot }),
+          { credentials: login(), workflow: picking('apps/api') },
+        );
+        expect(unpinned.failure?.code).toBe(ErrorCodes.DetectNoFramework);
+
+        flagOnThenOff();
+        const s = pairStore();
+        const pinned = await runProgram(
+          'metrics',
+          input({
+            store: s,
+            config: noFrameworkAtRoot,
+            discoveryMode: 'one-project',
+          }),
+          { credentials: login(), workflow: picking('apps/api') },
+        );
+        expect(pinned.outcome).toBe(RunOutcome.Success);
+        expect(s.session.runProject).toBe('apps/api');
+      });
+
       it('stops at once with the flag off, as before', async () => {
         const host = picking('apps/api');
         const result = await runProgram(

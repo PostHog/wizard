@@ -191,6 +191,26 @@ export function planAsks(
   );
 }
 
+/**
+ * Whether the pick takes the run out of the project it started in: the plan
+ * does not offer that project, and it asks for a pick or its default is
+ * another one. A host that shows the plan reads this before login, to ask
+ * nothing about a project the run leaves.
+ */
+export function pickLeavesRunProject(
+  session: ProgramSession,
+  config: Applies,
+  plan: PlanOffer = buildPlan(session, config),
+): boolean {
+  if (!picksProject(session, config)) return false;
+  const { runProject } = session;
+  const staysOffered = plan.projects.some(
+    (project) => project.offered && project.path === runProject,
+  );
+  if (staysOffered) return false;
+  return planAsks(session, config, plan) || plan.picked !== runProject;
+}
+
 /** The event carries at most this many projects; `project_count` is the true total. */
 const MAX_PROJECTS_CAPTURED = 25;
 
