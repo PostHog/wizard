@@ -33,6 +33,7 @@ import {
 } from '@services/detection/decisions/service';
 import {
   decisionTraitWrites,
+  rankProjectsWithDecisions,
   runDecisionsSource,
 } from '@services/detection/decisions/traits';
 import {
@@ -43,6 +44,7 @@ import {
 import { QUESTIONS } from '@services/detection/decisions/questions';
 import {
   compareProjectReports,
+  detectProjectsWithDecisions,
   judgeProjects,
 } from '@services/detection/decisions/projects';
 import type {
@@ -85,6 +87,8 @@ function fakeGateway(
   options: {
     choices?: Record<string, string>;
     p?: number;
+    /** The probability of every choice answer. */
+    confidence?: number;
     status?: (call: number) => number | undefined;
   } = {},
 ) {
@@ -108,8 +112,8 @@ function fakeGateway(
             {
               type: 'choice',
               choice,
-              confidence: 0.9,
-              probabilities: { [choice]: 0.9 },
+              confidence: options.confidence ?? 0.9,
+              probabilities: { [choice]: options.confidence ?? 0.9 },
             },
           ];
         }),
@@ -560,6 +564,200 @@ describe('judgeProjects', () => {
       projects_agree: true,
       repo_type_agree: true,
     });
+  });
+});
+
+describe('the folder paths a project judgment sends', () => {
+  afterEach(() => {
+    vi.mocked(redactSecretLines).mockImplementation((text: string) =>
+      Promise.resolve({ text, redactedLines: 0 }),
+    );
+  });
+
+  it('leaves out a folder whose path the secret filter flags, from the whole request', async () => {
+    const TOKEN = 'phx_live_0123456789abcdef';
+    // The filter replaces a whole line that holds a match, as the real one does.
+    vi.mocked(redactSecretLines).mockImplementation((text: string) => {
+      const lines = text.split('\n');
+      const kept = lines.map((line) =>
+        line.includes(TOKEN) ? '[redacted]' : line,
+      );
+      return Promise.resolve({
+        text: kept.join('\n'),
+        redactedLines: kept.filter((line, i) => line !== lines[i]).length,
+      });
+    });
+    const fetchImpl = fakeGateway({
+      choices: { project_0_target: 'nextjs', primary_app: 'apps/web' },
+    });
+    const judged = await judgeProjects(
+      walkRepo(
+        project({
+          'apps/web/package.json': JSON.stringify({ dependencies: {} }),
+          [`apps/${TOKEN}/package.json`]: JSON.stringify({ dependencies: {} }),
+        }),
+      ),
+      GATEWAY,
+      {
+        targets: [{ id: 'nextjs', name: 'Next.js' }],
+        recommend: true,
+        fetchImpl,
+      },
+    );
+    const sent = String(
+      (fetchImpl.mock.calls[0][1] as Parameters<typeof fetch>[1])?.body,
+    );
+    expect(sent).not.toContain(TOKEN);
+    expect(sent).toContain('apps/web');
+    expect(judged?.report.projects.map((p) => p.path)).toEqual(['apps/web']);
+  });
+
+  it('sends nothing when the secret filter cannot load', async () => {
+    vi.mocked(redactSecretLines).mockRejectedValue(new Error('no scanner'));
+    const fetchImpl = fakeGateway();
+    const onError = vi.fn();
+    expect(
+      await judgeProjects(
+        walkRepo(project({ 'go.mod': 'module x' })),
+        GATEWAY,
+        {
+          targets: [{ id: 'nextjs', name: 'Next.js' }],
+          fetchImpl,
+          onError,
+        },
+      ),
+    ).toBeNull();
+    expect(fetchImpl).not.toHaveBeenCalled();
+    expect(onError).toHaveBeenCalledWith(
+      expect.stringContaining('nothing sent'),
+    );
+  });
+});
+
+describe('ranking projects as a trait source', () => {
+  const monorepo = () =>
+    project({
+      'package.json': JSON.stringify({ workspaces: ['apps/*'] }),
+      'apps/web/package.json': JSON.stringify({ dependencies: { next: '15' } }),
+      'apps/api/requirements.txt': 'django\n',
+    });
+
+  function ranking(installDir: string, context: Record<string, unknown> = {}) {
+    const session = {
+      installDir,
+      frameworkContext: { decisionsUse: 'traits', ...context },
+      credentials: { gateway: GATEWAY.gateway },
+      discoveryConsent: DiscoveryConsent.Granted,
+      noTelemetry: false,
+      projects: [],
+      runProject: '.',
+      discoveredFeatures: [],
+      mcpServerCandidates: [],
+      integration: null,
+    } as unknown as ProgramSession;
+    const sink = {
+      session,
+      setProjects: (projects: ProgramSession['projects']) => {
+        session.projects = projects;
+      },
+    };
+    const claims = (projectPath: string) =>
+      session.projects.find((p) => p.path === projectPath)?.claims;
+    return { session, sink, claims };
+  }
+
+  const ANSWERS = {
+    project_0_target: 'none',
+    project_1_target: 'django',
+    project_2_target: 'nextjs',
+    primary_app: 'apps/api',
+  };
+
+  it('writes each confident target and the main app as traits, with their probability', async () => {
+    const { sink, claims } = ranking(monorepo());
+    await rankProjectsWithDecisions(
+      sink,
+      'posthog-integration',
+      fakeGateway({ choices: ANSWERS }),
+    );
+    expect(claims('apps/api')).toMatchObject({
+      framework: [
+        { value: Integration.django, source: 'decisions', confidence: 0.9 },
+      ],
+      mainApp: [{ value: 'yes', source: 'decisions' }],
+    });
+    expect(claims('apps/web')?.framework?.[0].value).toBe(Integration.nextjs);
+    expect(claims('apps/web')?.mainApp).toBeUndefined();
+  });
+
+  it('writes nothing for a guess below the confidence threshold', async () => {
+    const { session, sink } = ranking(monorepo());
+    await rankProjectsWithDecisions(
+      sink,
+      'posthog-integration',
+      fakeGateway({ choices: ANSWERS, confidence: 0.25 }),
+    );
+    expect(session.projects).toEqual([]);
+
+    // One folder is the main app only when its own target is confident.
+    const single = ranking(
+      project({ 'package.json': JSON.stringify({ dependencies: {} }) }),
+    );
+    await rankProjectsWithDecisions(
+      single.sink,
+      'posthog-integration',
+      fakeGateway({ choices: { project_0_target: 'nextjs' }, confidence: 0.4 }),
+    );
+    expect(single.session.projects).toEqual([]);
+  });
+
+  it('ranks the whole workspace when the run started in one member of it', async () => {
+    const root = monorepo();
+    const { session, sink, claims } = ranking(path.join(root, 'apps/web'), {
+      // What discovery leaves with the flag on: the walk of the workspace root.
+      discovery: {
+        rootDir: root,
+        files: walkRepo(root),
+        mode: 'one-project',
+        runProject: 'apps/web',
+        detected: {},
+        projects: { workspaces: [] },
+      },
+    });
+    session.runProject = 'apps/web';
+    const fetchImpl = fakeGateway({ choices: ANSWERS });
+    await rankProjectsWithDecisions(sink, 'posthog-integration', fetchImpl);
+
+    // Paths are from the workspace root, and the sibling is ranked too.
+    expect(session.projects.map((p) => p.path).sort()).toEqual([
+      'apps/api',
+      'apps/web',
+    ]);
+    expect(claims('apps/api')?.mainApp?.[0].value).toBe('yes');
+    expect(claims('apps/web')?.mainApp).toBeUndefined();
+  });
+
+  it('asks the same question of the same walk once in a run', async () => {
+    const dir = monorepo();
+    const { session } = ranking(dir);
+    // One walk, as a run holds: the trait source and the agent scan's comparison both judge it.
+    const scan = walkRepo(dir);
+    const gateway = fakeGateway({ choices: ANSWERS });
+    vi.stubGlobal('fetch', gateway);
+    try {
+      const options = {
+        targets: [{ id: 'nextjs', name: 'Next.js' }],
+        programId: 'posthog-integration',
+        recommend: true,
+      };
+      const first = await detectProjectsWithDecisions(session, options, scan);
+      const second = await detectProjectsWithDecisions(session, options, scan);
+      expect(first).not.toBeNull();
+      expect(second).toBe(first);
+      expect(gateway).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });
 

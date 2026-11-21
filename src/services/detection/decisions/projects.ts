@@ -6,6 +6,7 @@
  * main one. Whether PostHog is installed is a package lookup, not a judgment.
  */
 
+import { redactSecretLines } from '@agent';
 import { logToFile } from '@utils/debug';
 import type { ProgramSession } from '@programs/program-contract';
 import type {
@@ -14,6 +15,7 @@ import type {
   DetectTarget,
 } from '../agentic';
 import { getRepoFiles } from '../../project-discovery/discover';
+import { POSTHOG_SDK, sdksIn } from '../../project-discovery/traits/sdks';
 import { manifestDirs, type RepoFiles } from '../../project-discovery/walk';
 import { askDecisions } from './ask';
 import {
@@ -54,28 +56,59 @@ export type JudgeProjectsOptions = {
 
 /** Whether a manifest in `dir` (not a subfolder) declares a PostHog SDK. */
 function hasPostHogIn(scan: RepoFiles, dir: string): boolean {
-  return scan.manifests.some((m) => {
-    const manifestDir = m.path.includes('/')
-      ? m.path.slice(0, m.path.lastIndexOf('/'))
-      : '.';
-    return (
-      manifestDir === dir &&
-      m.packages.some((p) => p.toLowerCase().includes('posthog'))
-    );
-  });
+  return scan.manifests.some(
+    (m) => m.dir === dir && sdksIn(m.packages).includes(POSTHOG_SDK),
+  );
 }
+
+/** Each walk's judgment by what was asked of it, so the trait source and the agent scan's comparison share one call. */
+const JUDGED = new WeakMap<
+  RepoFiles,
+  Map<string, Promise<JudgedProjects | null>>
+>();
 
 /**
  * Classify the repo's candidate apps. Returns null when the call can't be made
- * or fails; the caller then keeps its agent scan.
+ * or fails; the caller then keeps its agent scan. `scan` is the walk to judge,
+ * the run directory's by default. The same question of the same walk is asked
+ * once per run.
  */
-export async function detectProjectsWithDecisions(
+export function detectProjectsWithDecisions(
   session: ProgramSession,
   options: JudgeProjectsOptions,
+  scan: RepoFiles = getRepoFiles(session),
 ): Promise<JudgedProjects | null> {
-  const transport = await decisionsTransport(session, options.programId);
-  if (!transport) return null;
-  return judgeProjects(getRepoFiles(session), transport, options);
+  const asked = JSON.stringify([
+    options.programId,
+    options.targets.map((target) => target.id),
+    options.purpose ?? null,
+    options.recommend ?? false,
+  ]);
+  const known = JUDGED.get(scan) ?? new Map();
+  JUDGED.set(scan, known);
+  const kept = known.get(asked);
+  // A stand-in network function is a test's; it always asks.
+  if (kept && !options.fetchImpl) return kept;
+  const judging = (async () => {
+    const transport = await decisionsTransport(session, options.programId);
+    if (!transport) return null;
+    return judgeProjects(scan, transport, options);
+  })();
+  known.set(asked, judging);
+  // A call that gave no answer is asked again next time.
+  void judging.then(
+    (judged) => judged ?? known.delete(asked),
+    () => known.delete(asked),
+  );
+  return judging;
+}
+
+/** The candidate folders whose path the secret filter leaves alone. Rejects when the filter can't load. */
+async function withoutFlaggedPaths(dirs: readonly string[]): Promise<string[]> {
+  const { text, redactedLines } = await redactSecretLines(dirs.join('\n'));
+  if (redactedLines === 0) return [...dirs];
+  const lines = text.split('\n');
+  return dirs.filter((dir, index) => lines[index] === dir);
 }
 
 /** {@link detectProjectsWithDecisions} for a scan and transport the caller holds. */
@@ -87,7 +120,19 @@ export async function judgeProjects(
   const { targets, recommend = false } = options;
   const purpose = options.purpose ?? 'set up a PostHog integration';
 
-  const candidates = manifestDirs(scan).slice(0, MAX_CANDIDATES);
+  // A folder's path goes into its question and into the main-app choices, which
+  // the summary's secret filter never reads. A flagged path is left out.
+  let candidates: string[];
+  try {
+    candidates = await withoutFlaggedPaths(
+      manifestDirs(scan).slice(0, MAX_CANDIDATES),
+    );
+  } catch (error) {
+    (options.onError ?? logToFile)(
+      `[decisions] secret scanner unavailable, nothing sent: ${String(error)}`,
+    );
+    return null;
+  }
   if (candidates.length === 0) candidates.push('.');
 
   // The API rejects a choice with fewer than two values; one folder needs no pick.

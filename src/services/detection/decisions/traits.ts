@@ -8,7 +8,8 @@ import {
   type TraitWrite,
 } from '../../project-discovery/traits/store';
 import { INTEGRATION_TARGETS } from '../project-scope';
-import { detectProjectsWithDecisions } from './projects';
+import { getDiscovery } from '../../project-discovery/discover';
+import { detectProjectsWithDecisions, PROJECT_CONFIDENCE } from './projects';
 import { QUESTIONS, type QuestionKey } from './questions';
 import { runProgramDecisions, type RunDecisionsContext } from './service';
 import type { DecisionAnswer, DecisionsResult } from './types';
@@ -60,23 +61,40 @@ export function decisionTraitWrites(
   return writes;
 }
 
-/** Rank the repo's projects with Decisions and write its report as traits: frameworks, the main app and PostHog's presence. */
+/**
+ * Rank the repo's projects with Decisions and write its report as traits:
+ * frameworks, the main app and PostHog's presence. It judges the walk of the
+ * workspace root, so a run that started in one member still ranks them all. A
+ * project whose target is below {@link PROJECT_CONFIDENCE} writes nothing.
+ */
 export async function rankProjectsWithDecisions(
   sink: TraitSink,
   programId: string,
+  fetchImpl?: typeof fetch,
 ): Promise<void> {
-  const judged = await detectProjectsWithDecisions(sink.session, {
-    targets: INTEGRATION_TARGETS,
-    purpose: 'set up a PostHog SDK integration',
-    programId,
-    recommend: true,
-  });
+  const workspace = getDiscovery(sink.session)?.files;
+  const judged = await detectProjectsWithDecisions(
+    sink.session,
+    {
+      targets: INTEGRATION_TARGETS,
+      purpose: 'set up a PostHog SDK integration',
+      programId,
+      recommend: true,
+      fetchImpl,
+    },
+    workspace,
+  );
   if (!judged) return;
+  const confident = judged.report.projects.filter(
+    (project) => (judged.confidence[project.path] ?? 0) >= PROJECT_CONFIDENCE,
+  );
   applyDetectionReport(
     sink,
-    judged.report,
+    { ...judged.report, projects: confident },
     'decisions',
     (project) => judged.confidence[project.path],
+    // The workspace walk's paths are already from the workspace root.
+    workspace ? '.' : undefined,
   );
 }
 
@@ -107,7 +125,7 @@ export async function runDecisionsSource(
       );
     }
     if (ctx.rankProjects !== false) {
-      await rankProjectsWithDecisions(ctx.sink, ctx.programId);
+      await rankProjectsWithDecisions(ctx.sink, ctx.programId, ctx.fetchImpl);
     }
     return result;
   } catch (error) {
