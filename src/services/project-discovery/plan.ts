@@ -83,8 +83,8 @@ function toPlanProject(
   // A workspace root that is no app itself is where the apps live, not one to pick.
   const root = isWorkspaceRoot(session, project) && !isApp(traits);
   const applies = !root && (config.appliesTo?.(traits) ?? true);
-  // The project the run started in is always a choice: it is today's default.
-  const offered = applies || isRunProject;
+  // The project the run started in is a choice, as today's default, unless it only holds the apps.
+  const offered = applies || (isRunProject && !root);
   return {
     path: project.path,
     ...(traits.framework && {
@@ -103,7 +103,7 @@ function toPlanProject(
  * The project that starts picked. A run that started inside a project keeps
  * it, and so does a run at a workspace root that is an app itself. A run at
  * any other workspace root takes the main app, else the only app offered, else
- * stays where it started.
+ * stays where it started, though that root is not offered.
  */
 function defaultPick(
   session: ProgramSession,

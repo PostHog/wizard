@@ -54,13 +54,15 @@ export function planOption(
   };
 }
 
-/** The plan's rows: the picked project first, then the others offered, then the rest. */
+/** The plan's rows: the picked project first when it is offered, then the others offered, then the rest. */
 export function planOptions(
   projects: readonly PlanProject[],
   picked: string,
 ): PickerOption<string>[] {
-  const rank = (project: PlanProject): number =>
-    project.path === picked ? 0 : project.offered ? 1 : 2;
+  const rank = (project: PlanProject): number => {
+    if (!project.offered) return 2;
+    return project.path === picked ? 0 : 1;
+  };
   return [...projects]
     .sort((a, b) => rank(a) - rank(b))
     .map((project) => planOption(project, picked));

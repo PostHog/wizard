@@ -137,11 +137,13 @@ started in.
   project that starts picked. A run that started inside a project keeps it, and
   so does a run at a workspace root that is an app itself. A run at any other
   workspace root takes the main app, else the only app offered, else stays where
-  it started. There is a choice to make only in a monorepo: a single app is one
-  project, whatever manifests sit below it. `reportProjectsDiscovered` and
-  `reportProjectsSelected` send the `wizard: projects discovered` and
-  `wizard: projects selected` events under discovery consent. The second carries
-  the pick beside the default and each model source's main app.
+  it started. That root is listed with the reason `workspace-root` and is not
+  offered, so one app below it is no choice to make. There is a choice to make
+  only in a monorepo: a single app is one project, whatever manifests sit below
+  it. `reportProjectsDiscovered` and `reportProjectsSelected` send the
+  `wizard: projects discovered` and `wizard: projects selected` events under
+  discovery consent. The second carries the pick beside the default and each
+  model source's main app.
 - [`report.ts`](project-discovery/report.ts) is the one place discovery leaves
   the machine, as a `DiscoveryReport`. It carries the tools found at or below
   the run project, under that project's fingerprint. It needs discovery consent
