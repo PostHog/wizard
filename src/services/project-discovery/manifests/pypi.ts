@@ -1,3 +1,5 @@
+import { tomlArrayStrings } from '../toml';
+
 // PyPI normalizes `_` to `-` and is case-insensitive.
 function normalizePyName(name: string): string {
   return name.toLowerCase().replace(/_/g, '-');
@@ -18,12 +20,9 @@ export function parseRequirementsTxt(content: string): string[] {
 export function parsePyprojectToml(content: string): string[] {
   const depNames: string[] = [];
 
-  for (const arrayMatch of content.matchAll(
-    /dependencies\s*=\s*\[([^\]]*)\]/g,
-  )) {
-    const arrayBody = arrayMatch[1];
-    for (const quotedMatch of arrayBody.matchAll(/["']([^"']+)["']/g)) {
-      const depSpec = quotedMatch[1];
+  for (const header of content.matchAll(/dependencies\s*=\s*\[/g)) {
+    const start = (header.index ?? 0) + header[0].length;
+    for (const depSpec of tomlArrayStrings(content, start)) {
       const name = depSpec.replace(/\[[^\]]*\]/, '').split(/[<>=!~;\s]/)[0];
       if (name) depNames.push(normalizePyName(name));
     }

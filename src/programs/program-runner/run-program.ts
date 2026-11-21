@@ -39,10 +39,14 @@ import { FRAMEWORK_REGISTRY } from '@services/frameworks';
 import {
   applyDetectionReport,
   buildPlan,
+  getDiscovery,
   getProjects,
   getTraits,
   planNeedsPick,
   projectDiscoveryMode,
+  projectPathOf,
+  rediscoverAfterLogin,
+  reportDiscovery,
   reportProjectsDiscovered,
   reportProjectsSelected,
   toMatchKeys,
@@ -57,7 +61,6 @@ import {
   rotateCredentials,
   type ResolvedProgramCredentials,
 } from './credentials';
-import { reportDiscovery } from '@services/project-discovery';
 import { IS_PRODUCTION_BUILD } from '@env';
 import type { QuestionKey } from '@services/detection/decisions';
 import { logIn } from './login';
@@ -201,6 +204,41 @@ async function invokeProgram(
       }),
     );
 
+  /** With discovery on, a program that says which projects it applies to works in one picked project. */
+  const picksProject = (): boolean =>
+    config.appliesTo !== undefined &&
+    (getDiscovery(store.session)?.mode ?? 'off') !== 'off';
+  /**
+   * Discovery under the mode the run now knows. Discovery first runs before
+   * login, as an anonymous user. A flag snapshot the caller gave the run says
+   * the mode at once, and otherwise the flag is read again once someone is
+   * logged in. A no-op when the mode did not change.
+   */
+  const settleDiscoveryMode = async (): Promise<void> => {
+    const known = input.wizardFlags && projectDiscoveryMode(input.wizardFlags);
+    if (known === undefined && !store.session.credentials) return;
+    await park(rediscoverAfterLogin(config, store.readyContext(), known));
+  };
+  /**
+   * The picker can still move the run: no caller named a project, and the
+   * plan offers one other than the project the run started in. What stops the
+   * run in that first project then waits for the pick, so a workspace root with
+   * no framework of its own still reaches the plan.
+   */
+  const mayMove = async (): Promise<boolean> => {
+    if (!config.appliesTo || input.project !== undefined) return false;
+    await settleDiscoveryMode();
+    return (
+      picksProject() &&
+      buildPlan(store.session, config).projects.some(
+        (project) =>
+          project.offered && project.path !== store.session.runProject,
+      )
+    );
+  };
+  /** What stopped the run in the project it started in, kept while the picker can move it. */
+  let stopped: (() => ProgramRunOutcome) | null = null;
+
   try {
     // A pair's project the store is not scoped to yet needs its own detection.
     if (
@@ -224,22 +262,30 @@ async function invokeProgram(
   } catch (error) {
     // A decided stop ends the run cancelled, as main's wizardAbort({ code, message }) did.
     if (error instanceof ProgramAbort) {
-      return settle(RunOutcome.Aborted, {
-        code: error.code,
-        message: error.message,
+      const stop = () =>
+        settle(RunOutcome.Aborted, {
+          code: error.code,
+          message: error.message,
+        });
+      if (!(await mayMove())) return stop();
+      stopped = stop;
+    } else if (signal.aborted) return cancelled();
+    else {
+      // A crash keeps its error, so the host reports its stack.
+      const { code, message } = classifyRunFailure(error);
+      return settle(RunOutcome.Crashed, {
+        code,
+        message,
+        error: error instanceof Error ? error : new Error(message),
       });
     }
-    if (signal.aborted) return cancelled();
-    // A crash keeps its error, so the host reports its stack.
-    const { code, message } = classifyRunFailure(error);
-    return settle(RunOutcome.Crashed, {
-      code,
-      message,
-      error: error instanceof Error ? error : new Error(message),
-    });
   }
-  const blocked = detectionFailure(config, store.session);
-  if (blocked) return settle(RunOutcome.Failed, blocked);
+  const blocked = stopped ? null : detectionFailure(config, store.session);
+  if (blocked) {
+    const stop = () => settle(RunOutcome.Failed, blocked);
+    if (!(await mayMove())) return stop();
+    stopped = stop;
+  }
   // The run is one (program, project) pair: its skills resolve for its own project.
   const pair = {
     program: programId,
@@ -271,15 +317,28 @@ async function invokeProgram(
   const unregisterLedger = ledger ? registerCleanup(releaseLedger) : undefined;
   let plainSettings: { backedUp: boolean } | undefined;
   try {
-    let run: ProgramRun;
-    try {
-      run = await resolveRun(config, store, runner);
-    } catch (error) {
-      if (error instanceof ProgramAbort) return fail(error.message, error.code);
-      throw error;
+    let run: ProgramRun | undefined;
+    /** The run is resolved: tag the analytics, name the skill and report the start, once. */
+    const started = (resolved: ProgramRun, report: boolean): void => {
+      analytics.setProgramTags(resolved.analyticsTags);
+      store.setSkillId(resolved.skillId ?? resolved.integrationLabel);
+      if (!report) return;
+      analytics.wizardCapture('agent started', {
+        integration: resolved.integrationLabel,
+        program_id: programId,
+        skill_id: resolved.skillId ?? null,
+      });
+    };
+    if (!stopped) {
+      try {
+        run = await resolveRun(config, store, runner);
+      } catch (error) {
+        if (!(error instanceof ProgramAbort)) throw error;
+        const stop = () => fail(error.message, error.code);
+        if (!(await mayMove())) return stop();
+        stopped = stop;
+      }
     }
-    analytics.setProgramTags(run.analyticsTags);
-    store.setSkillId(run.skillId ?? run.integrationLabel);
 
     const plannedRuns = planRuns(config, options);
     const outage = await checkReadiness(programId, config, store, {
@@ -290,11 +349,9 @@ async function invokeProgram(
     });
     if (outage) return settle(RunOutcome.Failed, outage);
 
-    analytics.wizardCapture('agent started', {
-      integration: run.integrationLabel,
-      program_id: programId,
-      skill_id: run.skillId ?? null,
-    });
+    // A run whose start waits for the pick reports it once the pick resolves it.
+    const reportedStart = run !== undefined;
+    if (run) started(run, true);
 
     // Everything before the first agent run: a rejection fails the run, unless the caller aborted.
     let credentials: ResolvedProgramCredentials;
@@ -316,6 +373,8 @@ async function invokeProgram(
         plainSettings = settings;
       }
       credentials = await login();
+      // Discovery ran before login; the flag can answer differently for the person.
+      await settleDiscoveryMode();
       reportDiscovery(store);
       if (needsAiApproval(store.session, credentials)) {
         if (!options.workflow) {
@@ -365,7 +424,7 @@ async function invokeProgram(
     }
 
     // One project per run: with discovery on, the host picks among the projects the program is offered.
-    if (projectDiscoveryMode(flags.flags) !== 'off' && config.appliesTo) {
+    if (picksProject()) {
       const ciRunner = {
         log: runner.log,
         authenticate: async () => {
@@ -387,12 +446,13 @@ async function invokeProgram(
           // The settings were checked for the directory the run started in.
           if (plainSettings?.backedUp) restoreClaudeSettings(installDir);
           plainSettings = undefined;
+          // The run moves: what stopped it where it started no longer applies.
+          stopped = null;
           await detectProgram(config, store, ciRunner, picked);
           const unmet = detectionFailure(config, store.session);
           if (unmet) return settle(RunOutcome.Failed, unmet);
           run = await resolveRun(config, store, runner);
-          analytics.setProgramTags(run.analyticsTags);
-          store.setSkillId(run.skillId ?? run.integrationLabel);
+          started(run, !reportedStart);
           pair.project.path = picked;
         }
       } catch (error) {
@@ -402,6 +462,11 @@ async function invokeProgram(
         throw error;
       }
     }
+
+    // The run stayed in the project it started in, so what stopped it there stands.
+    if (stopped) return stopped();
+    if (!run) return fail(`Program "${programId}" resolved no run.`);
+    const ownRunDefinition = run;
 
     // Every rotation of this login, before or during a run, lands in the store.
     configureOAuthSession(credentials.posthog, {
@@ -510,10 +575,9 @@ async function invokeProgram(
             seedTasks: planned.config.seedTasks
               ? () => planned.config.seedTasks!(session())
               : undefined,
-            matchKeys: () =>
-              toMatchKeys(getTraits(session(), pair.project.path)),
-            traitKeys: () =>
-              toTraitKeys(getTraits(session(), pair.project.path)),
+            // The session's own run project: a step scoped to a sub-folder reads that folder's traits.
+            matchKeys: () => toMatchKeys(getTraits(session())),
+            traitKeys: () => toTraitKeys(getTraits(session())),
             projectFacts:
               (decisions && planned.config.decisions) ||
               planned.config.detectedFacts
@@ -583,7 +647,7 @@ async function invokeProgram(
         }
         result = await runOne(
           planned,
-          planned.own ? run : undefined,
+          planned.own ? ownRunDefinition : undefined,
           planned.runStep ? undefined : plainSettings,
         );
       } catch (error) {
@@ -753,9 +817,14 @@ async function scopeSession(
   runner: RunnerContext,
 ): Promise<WizardSession | null> {
   if (!runStep.targetDir && !runStep.onRunPrep) return null;
+  const installDir = runStep.targetDir
+    ? runStep.targetDir(live)
+    : live.installDir;
   const session: WizardSession = {
     ...live,
-    installDir: runStep.targetDir ? runStep.targetDir(live) : live.installDir,
+    installDir,
+    // The step's directory is its run project, so its traits are that directory's.
+    runProject: projectPathOf(live, installDir) ?? live.runProject,
     frameworkContext: { ...live.frameworkContext },
   };
   if (runStep.onRunPrep) await runStep.onRunPrep(session, runner.log);

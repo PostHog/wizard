@@ -310,9 +310,12 @@ export function readProjectFile(
  * `readProjectFile` that also reports unexpected errors to error tracking.
  * For walk callbacks where a failing read is worth a telemetry breadcrumb.
  */
-export function safeReadFile(fullPath: string): string | null {
+export function safeReadFile(
+  fullPath: string,
+  maxBytes = MAX_PROJECT_FILE_BYTES,
+): string | null {
   try {
-    if (fs.statSync(fullPath).size > MAX_PROJECT_FILE_BYTES) {
+    if (fs.statSync(fullPath).size > maxBytes) {
       logToFile(`[bounded-fs] skipped oversized file: ${fullPath}`);
       return null;
     }

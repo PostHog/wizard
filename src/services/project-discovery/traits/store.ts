@@ -10,6 +10,7 @@ import type {
   TraitSource,
   Traits,
 } from '@programs/program-contract';
+import { DISCOVERY_KEY, getDiscovery, type Discovery } from '../discover';
 import { TRAIT_NAMES, TRAITS } from './registry';
 
 /** Where trait writes land: the session, and the setter that replaces its project list. */
@@ -217,7 +218,40 @@ export function setTrait<K extends TraitName>(
   ]);
 }
 
-/** Refresh the settled traits the session keeps on each project, once detection has run. */
-export function settleProjects(sink: TraitSink): void {
+/** The traits static detection reads from the session, which holds them for the run project only. */
+const SESSION_TRAITS = [
+  'framework',
+  'frameworkVariant',
+  'mcpServers',
+  'warehouseSources',
+] as const;
+
+/** Keep what static detection read for the run project in the discovery, so a run that moves to another project still knows it. */
+function keepRunProjectDetection(sink: DetectionSink): void {
+  const { session } = sink;
+  const discovery = getDiscovery(session);
+  if (!discovery) return;
+  const detected: Record<string, unknown> = {};
+  for (const name of SESSION_TRAITS) {
+    const value = TRAITS[name].detect(session, session.runProject);
+    if (value !== undefined) detected[name] = value;
+  }
+  sink.setFrameworkContext(DISCOVERY_KEY, {
+    ...discovery,
+    detected: { ...discovery.detected, [session.runProject]: detected },
+  } satisfies Discovery);
+}
+
+/** Where {@link settleProjects} writes: the trait sink, and the discovery. */
+export type DetectionSink = TraitSink &
+  Pick<ProgramReadyContext, 'setFrameworkContext'>;
+
+/**
+ * Call once a program's detection has run. It keeps the run project's static
+ * detection in the discovery, and refreshes the settled traits the session
+ * keeps on each project.
+ */
+export function settleProjects(sink: DetectionSink): void {
+  keepRunProjectDetection(sink);
   sink.setProjects(getProjects(sink.session), sink.session.runProject);
 }

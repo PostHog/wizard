@@ -45,6 +45,7 @@ type Inputs = {
 };
 
 let seededTasks = false;
+let traitKeys: Record<string, readonly string[]> | undefined;
 let bundleFails = false;
 let bundled: Record<string, string> | undefined;
 let ran: string[] = [];
@@ -73,6 +74,7 @@ describe('queueing a flow from its frontmatter', () => {
   beforeEach(() => {
     dir = fs.mkdtempSync(path.join(os.tmpdir(), 'frontmatter-queue-'));
     seededTasks = false;
+    traitKeys = undefined;
     bundleFails = false;
     bundled = FLOW;
     ran = [];
@@ -92,6 +94,7 @@ describe('queueing a flow from its frontmatter', () => {
         wizardFlagPayloads: {},
         switchboard: {},
         excludedTaskTypes: () => excluded,
+        traitKeys: traitKeys && (() => traitKeys),
         agentPrompts:
           bundled &&
           (() =>
@@ -140,6 +143,22 @@ describe('queueing a flow from its frontmatter', () => {
     const capture = queue?.list().find((task) => task.type === 'capture');
     const install = queue?.list().find((task) => task.type === 'install');
     expect(capture?.dependsOn).toEqual([install?.id]);
+  });
+
+  it("leaves out a task whose skipWhen holds for the project's traits", async () => {
+    bundled = {
+      ...FLOW,
+      logs: "---\ndependsOn: [install]\noptional: true\nskipWhen: { callsLlmApi: 'no' }\n---\nlogs",
+    };
+    traitKeys = { callsLlmApi: ['no'] };
+    expect((await run()).outcome).toBe(RunOutcome.Success);
+    expect(ran).toEqual(['install', 'capture', 'report']);
+
+    // A trait the project has no value for skips nothing.
+    ran = [];
+    traitKeys = { framework: ['nextjs'] };
+    expect((await run()).outcome).toBe(RunOutcome.Success);
+    expect(ran).toEqual(['install', 'logs', 'capture', 'report']);
   });
 
   it('runs a task the wizard queued first after the bundled tasks, and the report after it', async () => {

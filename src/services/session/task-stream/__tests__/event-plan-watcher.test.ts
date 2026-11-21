@@ -1,4 +1,5 @@
 import {
+  mkdirSync,
   mkdtempSync,
   rmSync,
   symlinkSync,
@@ -89,6 +90,27 @@ describe('EventPlanWatcher', () => {
     expect(store.eventPlan).toEqual([
       { name: 'completed_onboarding', description: '' },
     ]);
+  });
+
+  it('follows the plan file when the run moves to another directory', async () => {
+    const store = createStore(installDir);
+    const moved = join(installDir, 'apps', 'web');
+    mkdirSync(moved, { recursive: true });
+    let dir = installDir;
+    watcher = new EventPlanWatcher(store, () => join(dir, EVENT_PLAN_FILE), {
+      pollIntervalMs: 30,
+    });
+    watcher.start();
+
+    dir = moved;
+    watcher.follow();
+    writeFileSync(
+      join(moved, EVENT_PLAN_FILE),
+      JSON.stringify([{ event_name: 'signed_up' }]),
+    );
+    await wait(120);
+
+    expect(store.eventPlan).toEqual([{ name: 'signed_up', description: '' }]);
   });
 
   it('captures the first non-empty plan once', async () => {

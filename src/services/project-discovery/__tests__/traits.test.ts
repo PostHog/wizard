@@ -147,7 +147,7 @@ describe('toMatchKeys', () => {
     value.mcpServerCandidates = ['apps/mcp'];
     expect(toMatchKeys(getTraits(value))).toEqual({
       framework: [Integration.nextjs],
-      variant: ['pages-router'],
+      frameworkVariant: ['pages-router'],
     });
   });
 

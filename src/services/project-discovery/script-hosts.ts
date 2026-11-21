@@ -6,6 +6,8 @@
  */
 export const MAX_TEMPLATE_FILES = 300;
 export const MAX_TEMPLATE_BYTES = 512 * 1024;
+/** A walk keeps at most this many templates to read, whatever they hold. */
+export const MAX_TEMPLATES_READ = 4_000;
 
 const TEMPLATE_SUFFIXES = [
   '.html',
