@@ -1,5 +1,5 @@
 import type { Discovery } from './discover';
-import type { DetectedTool } from './tools';
+import { toolsUnder, type DetectedTool } from './tools';
 
 const EMAIL_PROVIDER_KINDS = [
   'AwsSes',
@@ -40,6 +40,10 @@ function isEmailProvider(tool: DetectedTool): tool is EmailProvider {
   return EMAIL_PROVIDER_KIND_SET.has(tool.kind);
 }
 
-export function detectedEmailProviders(discovery: Discovery): EmailProvider[] {
-  return discovery.tools.tools.filter(isEmailProvider);
+/** The email providers found at or below one project, the one the run started in by default. */
+export function detectedEmailProviders(
+  discovery: Discovery,
+  projectPath: string = discovery.runProject,
+): EmailProvider[] {
+  return toolsUnder(discovery.tools.tools, projectPath).filter(isEmailProvider);
 }

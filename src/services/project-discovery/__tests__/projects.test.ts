@@ -358,6 +358,38 @@ describe('runDiscovery', () => {
     expect(discovery?.tools.tools.map((tool) => tool.kind)).toContain('Stripe');
   });
 
+  it('starts no framework detection once its budget has run out', async () => {
+    vi.useFakeTimers();
+    const framework = await import('@services/detection/framework');
+    const pending: Array<() => void> = [];
+    const detect = vi.spyOn(framework, 'detectFramework').mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          pending.push(() => resolve(undefined));
+        }),
+    );
+    try {
+      vi.mocked(analytics.getAllFlagsForWizard).mockResolvedValue({
+        [WIZARD_PROJECT_DISCOVERY_FLAG_KEY]: 'one-project',
+      });
+      pnpmMonorepo();
+      for (const app of ['a', 'b', 'c', 'd', 'e', 'f']) {
+        write(`apps/${app}/package.json`, pkg());
+      }
+      const discovering = discoverFrom(path.join(repo, 'apps/web'));
+      await vi.advanceTimersByTimeAsync(5_000);
+      await discovering;
+      // Nine other projects, and only the first four were started.
+      expect(pending).toHaveLength(4);
+      pending.forEach((finish) => finish());
+      await vi.advanceTimersByTimeAsync(0);
+      expect(detect).toHaveBeenCalledTimes(4);
+    } finally {
+      detect.mockRestore();
+      vi.useRealTimers();
+    }
+  });
+
   it('discovers again when login changes what the flag answers', async () => {
     pnpmMonorepo();
     const runDir = path.join(repo, 'apps/web');

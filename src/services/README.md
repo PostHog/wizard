@@ -125,7 +125,12 @@ started in.
 - [`tools.ts`](project-discovery/tools.ts) matches PostHog's tool catalog
   against the walk's packages, `.env` key names and script hosts. Tools and
   projects fail apart: a missing catalog sets `tools.failed` and leaves
-  `projects` whole.
+  `projects` whole. The match keeps one signal per file that holds a name, so
+  two projects that share a package both keep it. A project's tools are those
+  with a signal at or below its directory: read them with `getTools(session)`,
+  the run project's by default. The warehouse lists, the email provider offer,
+  the report and each project's `warehouseSources` all read that, so a sibling
+  project's tools never reach the run.
 - [`report.ts`](project-discovery/report.ts) is the one place discovery leaves
   the machine, as a `DiscoveryReport`. It carries the tools found at or below
   the run project, under that project's fingerprint. It needs discovery consent

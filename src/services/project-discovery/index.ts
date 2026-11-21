@@ -4,6 +4,7 @@ export {
   discoveredWarehouseSources,
   getDiscovery,
   getRepoFiles,
+  getTools,
   rediscoverAfterLogin,
   runDiscovery,
   toolsByProject,

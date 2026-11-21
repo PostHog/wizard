@@ -53,7 +53,7 @@ export type WorkspaceMarker = MarkerRead & {
   dir: string | null;
 };
 
-/** A catalog script host a template loads from, with the first template found for it. */
+/** A catalog script host with one template that loads from it. A host has one match per template, up to {@link MAX_FILES_PER_ENV_KEY}. */
 export type ScriptHostMatch = { host: string; file: string };
 
 export type RepoFiles = {
@@ -91,7 +91,7 @@ export type WalkOptions = {
 
 export const MAX_TREE_FILES = 4_000;
 
-/** The walk keeps at most this many files for one `.env` key name. */
+/** The walk keeps at most this many files for one `.env` key name, and for one script host. */
 const MAX_FILES_PER_ENV_KEY = 20;
 
 /** A marker file larger than this is read for its packages only, never for members. */
@@ -307,7 +307,7 @@ export function readScriptHosts(
   catalogHosts: readonly string[],
 ): ScriptHostMatch[] {
   if (catalogHosts.length === 0) return [];
-  const matches = new Map<string, string>();
+  const matches = new Map<string, string[]>();
   let templatesRead = 0;
   for (const template of templates) {
     if (templatesRead >= MAX_TEMPLATE_FILES) break;
@@ -319,10 +319,14 @@ export function readScriptHosts(
     if (!hasScriptTag(content)) continue;
     templatesRead += 1;
     for (const host of catalogHostsIn(content, catalogHosts)) {
-      if (!matches.has(host)) matches.set(host, template.file);
+      const files = matches.get(host);
+      if (!files) matches.set(host, [template.file]);
+      else if (files.length < MAX_FILES_PER_ENV_KEY) files.push(template.file);
     }
   }
-  return [...matches].map(([host, file]) => ({ host, file }));
+  return [...matches].flatMap(([host, files]) =>
+    files.map((file) => ({ host, file })),
+  );
 }
 
 /** Folders that hold a manifest, shallowest first: the candidate projects in a repo. `.` is the root. */

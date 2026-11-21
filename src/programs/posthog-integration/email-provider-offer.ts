@@ -34,6 +34,7 @@ type OfferSession = Pick<
   | 'credentials'
   | 'apiUser'
   | 'frameworkContext'
+  | 'runProject'
   | 'installDir'
   | 'baseUrl'
 >;
@@ -74,7 +75,10 @@ export function emailProviderOffer(
   const discovery = getDiscovery(session);
   const credentials = session.credentials;
   if (!discovery || !credentials || !mayAsk(session)) return undefined;
-  const [first, ...others] = detectedEmailProviders(discovery);
+  const [first, ...others] = detectedEmailProviders(
+    discovery,
+    session.runProject,
+  );
   const link = workflowsUrl(credentials.host.appHost, credentials.projectId);
   if (!first || !link) return undefined;
   return {

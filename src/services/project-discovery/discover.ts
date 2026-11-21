@@ -36,10 +36,11 @@ import { discoverProjects, type DiscoveredProjects } from './projects';
 import {
   catalogScriptHosts,
   discoverTools,
+  toolsUnder,
   type DetectedTool,
   type DiscoveredTools,
 } from './tools';
-import { getProjects } from './traits/store';
+import { getTraits } from './traits/store';
 import {
   emptyRepoFiles,
   findWorkspaceRoot,
@@ -133,6 +134,9 @@ const MAX_DETECTED_PROJECTS = 25;
 /** Static detection in the other projects gets this long in all; a project it has not reached stays undetected. */
 const DETECT_BUDGET_MS = 5_000;
 
+/** Static detection reads this many projects at once, so a lapsed budget leaves at most this many still running. */
+const DETECT_CONCURRENCY = 4;
+
 /** The framework of one project directory, with its variant when its config reads one. */
 async function detectFrameworkIn(dir: string): Promise<DetectedProject> {
   const framework = await detectFramework(dir);
@@ -151,31 +155,38 @@ async function detectFrameworkIn(dir: string): Promise<DetectedProject> {
   return { framework, ...(frameworkVariant && { frameworkVariant }) };
 }
 
-/** The deepest project that holds `file`, both as paths from the root. */
-function projectOf(file: string, projects: readonly Project[]): string {
-  const holders = projects
-    .map((project) => project.path)
-    .filter((dir) => dir === '.' || file.startsWith(`${dir}/`));
-  return holders.sort((a, b) => b.length - a.length)[0] ?? '.';
-}
-
-/** Each project's tools: a tool belongs to every project one of its signals sits in. */
+/** Each project's tools: those with a signal at or below it. A project with none has no entry. */
 export function toolsByProject(
   tools: readonly DetectedTool[],
   projects: readonly Project[],
 ): Map<string, DetectedTool[]> {
   const byProject = new Map<string, DetectedTool[]>();
-  for (const tool of tools) {
-    const owners = new Set(
-      tool.signals
-        .filter((signal) => signal.file !== null)
-        .map((signal) => projectOf(signal.file ?? '', projects)),
-    );
-    for (const owner of owners) {
-      byProject.set(owner, [...(byProject.get(owner) ?? []), tool]);
-    }
+  for (const project of projects) {
+    const own = toolsUnder(tools, project.path);
+    if (own.length > 0) byProject.set(project.path, own);
   }
   return byProject;
+}
+
+/**
+ * Run `detect` for each project, at most {@link DETECT_CONCURRENCY} at a time,
+ * and start none once `deadline` has passed. A project it did not reach stays
+ * undetected.
+ */
+async function detectWithin(
+  projectPaths: readonly string[],
+  deadline: number,
+  detect: (projectPath: string) => Promise<void>,
+): Promise<void> {
+  let next = 0;
+  const worker = async (): Promise<void> => {
+    while (next < projectPaths.length && Date.now() < deadline) {
+      const projectPath = projectPaths[next];
+      next += 1;
+      await detect(projectPath);
+    }
+  };
+  await Promise.all(Array.from({ length: DETECT_CONCURRENCY }, worker));
 }
 
 /** Static detection in every project but the run project: its framework, and the sources among its tools. */
@@ -187,28 +198,30 @@ async function detectProjects(
 ): Promise<Record<string, DetectedProject>> {
   const detected: Record<string, DetectedProject> = {};
   const others = projects
-    .map((project) => project.path)
-    .filter((projectPath) => projectPath !== runProject)
+    .filter((project) => project.path !== runProject)
     .slice(0, MAX_DETECTED_PROJECTS);
-  const frameworks = Promise.all(
-    others.map(async (projectPath) => {
+  const frameworks = detectWithin(
+    others.map((project) => project.path),
+    Date.now() + DETECT_BUDGET_MS,
+    async (projectPath) => {
       detected[projectPath] = await detectFrameworkIn(
         path.resolve(rootDir, projectPath),
       );
-    }),
+    },
   ).catch((error) => {
     logToFile(`[discovery] framework detection failed: ${String(error)}`);
   });
+  // The timer covers a detection that hangs; the deadline stops new ones.
   await Promise.race([
     frameworks,
     new Promise((resolve) => setTimeout(resolve, DETECT_BUDGET_MS).unref()),
   ]);
   for (const [projectPath, tools] of toolsByProject(
     match.tools.tools,
-    projects,
+    others,
   )) {
     const sources = toWarehouseSources(tools, match.detectors);
-    if (sources.length === 0 || projectPath === runProject) continue;
+    if (sources.length === 0) continue;
     detected[projectPath] = {
       ...detected[projectPath],
       warehouseSources: sources.map((source) => source.kind),
@@ -337,17 +350,31 @@ async function discover(
   // The run project's own traits settle later, once its program's detection runs.
   logToFile(
     `[discovery] traits ${JSON.stringify(
-      getProjects(ctx.session)
+      projects.projects
         .filter((project) => project.path !== runProject)
-        .map(({ path: projectPath, traits }) => ({
-          path: projectPath,
-          traits,
+        .slice(0, MAX_DETECTED_PROJECTS)
+        .map((project) => ({
+          path: project.path,
+          traits: getTraits(ctx.session, project.path),
         })),
     )}`,
   );
 }
 
-/** The warehouse sources discovery found, for a program that offers them. */
+/**
+ * One project's tools, the run project's by default: the tools found at or
+ * below it. Every reader takes tools from here, so a sibling project's tools
+ * never reach the run's prompts, traits or offers.
+ */
+export function getTools(
+  session: Pick<ProgramSession, 'frameworkContext' | 'runProject'>,
+  projectPath: string = session.runProject,
+): DetectedTool[] {
+  const discovery = getDiscovery(session);
+  return discovery ? toolsUnder(discovery.tools.tools, projectPath) : [];
+}
+
+/** The warehouse sources discovery found in the run project, for a program that offers them. */
 export async function discoveredWarehouseSources(
   session: ProgramSession,
 ): Promise<DetectedSource[]> {
@@ -355,19 +382,19 @@ export async function discoveredWarehouseSources(
   if (!discovery) return [];
   // Resolves at once: discovery already waited for the same download.
   return toWarehouseSources(
-    discovery.tools.tools,
+    getTools(session),
     await loadSourceDetectors(session.baseUrl),
   );
 }
 
-/** The warehouses discovery found that PostHog can export to. */
+/** The warehouses discovery found in the run project that PostHog can export to. */
 export async function discoveredWarehouseDestinations(
   session: ProgramSession,
 ): Promise<DetectedDestination[]> {
   const discovery = getDiscovery(session);
   if (!discovery) return [];
   return toWarehouseDestinations(
-    discovery.tools.tools,
+    getTools(session),
     await loadSourceDetectors(session.baseUrl),
   );
 }
