@@ -282,10 +282,12 @@ export async function runDiscovery(
 export async function rediscoverAfterLogin(
   config: Pick<ProgramConfig, 'id'>,
   ctx: DiscoveryContext,
+  /** The mode of a flag snapshot the caller gave the run. Without one the flag is read. */
+  known?: ProjectDiscoveryMode,
 ): Promise<void> {
   const discovery = getDiscovery(ctx.session);
   if (!discovery) return;
-  const mode = await loadProjectDiscoveryMode();
+  const mode = known ?? (await loadProjectDiscoveryMode());
   if (mode === discovery.mode) return;
   const catalog = loadCatalog(ctx.session);
   await discover(config, ctx, discovery.runDir, mode, catalog);
