@@ -1935,10 +1935,52 @@ describe('runProgram', () => {
       expect(runDecisionsSource).not.toHaveBeenCalled();
     });
 
-    it('asks beside the run, with nowhere to write traits, while project discovery is off', async () => {
-      await runProgram('metrics', input({ config: asks }), {
+    const COMPARE = { 'wizard-decisions-detection': 'compare' };
+    const TRAITS = { 'wizard-decisions-detection': 'traits' };
+    const DISCOVERING = { 'wizard-project-discovery': 'one-project' };
+
+    it('asks nothing while its flag is off, absent or unreadable', async () => {
+      const s = store();
+      await runProgram('metrics', input({ store: s, config: asks }), {
         credentials: login(),
       });
+      await runProgram(
+        'metrics',
+        input({
+          config: asks,
+          wizardFlags: { 'wizard-decisions-detection': 'false' },
+        }),
+        { credentials: login() },
+      );
+      expect(runDecisionsSource).not.toHaveBeenCalled();
+      // Every Decisions request reads this, so nothing else asks either.
+      expect(s.session.frameworkContext.decisionsUse).toBe('off');
+    });
+
+    it('only compares, with nowhere to write traits, when the flag says compare', async () => {
+      for (const wizardFlags of [
+        COMPARE,
+        { 'wizard-decisions-detection': 'true' },
+        // Discovery on does not turn a comparison into traits.
+        { ...COMPARE, ...DISCOVERING },
+      ]) {
+        vi.mocked(runDecisionsSource).mockClear();
+        await runProgram('metrics', input({ config: asks, wizardFlags }), {
+          credentials: login(),
+        });
+        expect(runDecisionsSource).toHaveBeenCalledOnce();
+        expect(
+          vi.mocked(runDecisionsSource).mock.calls[0][1].sink,
+        ).toBeUndefined();
+      }
+    });
+
+    it('asks beside the run, with nowhere to write traits, while project discovery is off', async () => {
+      await runProgram(
+        'metrics',
+        input({ config: asks, wizardFlags: TRAITS }),
+        { credentials: login() },
+      );
       expect(runDecisionsSource).toHaveBeenCalledOnce();
       expect(vi.mocked(runDecisionsSource).mock.calls[0][1]).toMatchObject({
         programId: 'metrics',
@@ -1951,13 +1993,13 @@ describe('runProgram', () => {
     it('writes its answers as traits once project discovery is on', async () => {
       await runProgram(
         'metrics',
-        input({
-          config: asks,
-          wizardFlags: { 'wizard-project-discovery': 'one-project' },
-        }),
+        input({ config: asks, wizardFlags: { ...TRAITS, ...DISCOVERING } }),
         { credentials: login() },
       );
-      expect(vi.mocked(runDecisionsSource).mock.calls[0][1].sink).toBeDefined();
+      const asked = vi.mocked(runDecisionsSource).mock.calls[0][1];
+      expect(asked.sink).toBeDefined();
+      // A program with no project to pick reads no ranking of them.
+      expect(asked.rankProjects).toBe(false);
     });
 
     it("asks the questions again for the pair's project when the plan moves the run", async () => {
@@ -1985,7 +2027,7 @@ describe('runProgram', () => {
           input({
             store: new SessionStore(buildSession({ installDir: repo })),
             config: { ...asks, appliesTo: () => true },
-            wizardFlags: { 'wizard-project-discovery': 'one-project' },
+            wizardFlags: { ...TRAITS, ...DISCOVERING },
           }),
           { credentials: login(), workflow: host },
         );
@@ -1993,7 +2035,7 @@ describe('runProgram', () => {
         const calls = vi.mocked(runDecisionsSource).mock.calls;
         expect(calls).toHaveLength(2);
         // The repo is ranked once; the picked project only answers the questions.
-        expect(calls[0][1].rankProjects).toBeUndefined();
+        expect(calls[0][1].rankProjects).toBe(true);
         expect(calls[1][1]).toMatchObject({ rankProjects: false });
         expect(calls[1][1].session.runProject).toBe('apps/api');
       } finally {

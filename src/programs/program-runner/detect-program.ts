@@ -12,6 +12,7 @@ import {
   runDiscovery,
   settleProjects,
 } from '@services/project-discovery';
+import { DECISIONS_USE_KEY } from '@services/detection/decisions';
 import { detectErrorCode } from './detect-map';
 import type { ProgramConfig } from '@programs/program-contract';
 import type { CiRunnerContext } from '@programs/program-contract';
@@ -66,7 +67,8 @@ export function scopeToProject(store: SessionStore, project: string): void {
   ) {
     throw noProject();
   }
-  store.scopeToProject(target, project, [DISCOVERY_KEY]);
+  // What the run already settled about the repo and its flags stays; what detection read in the old directory goes.
+  store.scopeToProject(target, project, [DISCOVERY_KEY, DECISIONS_USE_KEY]);
 }
 
 /**

@@ -336,6 +336,8 @@ export const WIZARD_DEFAULT_AIO_LOGS_FLAG_KEY = 'wizard-default-aio-logs';
 /** Launch flag: ONLY an explicit 'true' includes the MCP analytics task in default integration runs — absent or fetch-failed means exclude. */
 export const WIZARD_DEFAULT_MCP_ANALYTICS_FLAG_KEY =
   'wizard-default-mcp-analytics';
+/** Multivariate flag for the Decisions service. `compare`, or `true`, asks and only logs the answers. `traits` also writes them as traits when project discovery is on. Anything else, a failed read included, makes no request. */
+export const WIZARD_DECISIONS_DETECTION_FLAG_KEY = 'wizard-decisions-detection';
 /** Boolean flag: true lets the warehouse-destination program run. */
 export const WIZARD_WAREHOUSE_DESTINATIONS_FLAG_KEY =
   'wizard-warehouse-destinations';
@@ -353,6 +355,7 @@ export const WIZARD_FLAG_KEYS = [
   WIZARD_BASIC_INTEGRATION_AGENTIC_DETECTION_FLAG_KEY,
   WIZARD_DEFAULT_AIO_LOGS_FLAG_KEY,
   WIZARD_DEFAULT_MCP_ANALYTICS_FLAG_KEY,
+  WIZARD_DECISIONS_DETECTION_FLAG_KEY,
   WIZARD_WAREHOUSE_DESTINATIONS_FLAG_KEY,
   WIZARD_PROJECT_DISCOVERY_FLAG_KEY,
   WIZARD_EMAIL_PROVIDER_OFFER_FLAG_KEY,

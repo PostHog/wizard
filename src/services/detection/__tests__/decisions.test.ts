@@ -51,7 +51,10 @@ import type {
 } from '@services/detection/decisions/types';
 import type { ProgramSession } from '@programs/program-contract';
 
-const GATEWAY = { gateway: { token: 'phs_test', url: 'https://gateway.test' } };
+// A cloud gateway origin: a pre-issued gateway has to be one the agent run would trust.
+const GATEWAY = {
+  gateway: { token: 'phs_test', url: 'https://ai-gateway.us.posthog.com' },
+};
 
 const tmpDirs: string[] = [];
 afterAll(() => {
@@ -234,7 +237,7 @@ describe('askDecisions', () => {
     });
     expect(result.unanswered).toEqual([]);
     expect(String(fetchImpl.mock.calls[0][0])).toBe(
-      'https://gateway.test/v1/systemone',
+      'https://ai-gateway.us.posthog.com/v1/systemone',
     );
   });
 
@@ -291,7 +294,8 @@ describe('runProgramDecisions', () => {
       installDir: project({
         'package.json': JSON.stringify({ dependencies: { next: '15' } }),
       }),
-      frameworkContext: {},
+      // The run's flag lets Decisions ask.
+      frameworkContext: { decisionsUse: 'traits' },
       credentials: { gateway: GATEWAY.gateway },
       discoveryConsent: DiscoveryConsent.Granted,
       noTelemetry: false,
@@ -326,6 +330,17 @@ describe('runProgramDecisions', () => {
     expect(getDecisions(sess)?.mode).toBe('shadow');
     expect(getDecisions(sess)?.answers.uses_x).toBeDefined();
     expect(actionableAnswer(sess, 'uses_x')).toBeUndefined();
+  });
+
+  it('asks nothing and stores nothing while the flag leaves Decisions off', async () => {
+    const fetchImpl = fakeGateway();
+    const sess = session({ frameworkContext: {} });
+    expect(await runDecisionSpecs(specs, ctx(sess, fetchImpl))).toBeNull();
+    expect(
+      await runDecisionsSource(['calls_llm_api'], ctx(sess, fetchImpl)),
+    ).toBeNull();
+    expect(fetchImpl).not.toHaveBeenCalled();
+    expect(getDecisions(sess)).toBeUndefined();
   });
 
   it('leaves out shared questions when the user declined sharing', async () => {
@@ -638,13 +653,44 @@ describe('decisionsTransport', () => {
     vi.mocked(gatewayAuth).mockReset();
   });
 
+  const ON = { frameworkContext: { decisionsUse: 'compare' } };
+
   it("uses the run's pre-issued key without minting", async () => {
     const session = {
+      ...ON,
       credentials: { ...login, gateway: GATEWAY.gateway },
     } as unknown as ProgramSession;
     expect(await decisionsTransport(session, 'metrics')).toEqual(GATEWAY);
     expect(gatewayAuth).not.toHaveBeenCalled();
   });
+
+  it('gives no transport, and so sends nothing, while the flag leaves Decisions off', async () => {
+    for (const frameworkContext of [{}, { decisionsUse: 'off' }]) {
+      const session = {
+        frameworkContext,
+        credentials: { ...login, gateway: GATEWAY.gateway },
+      } as unknown as ProgramSession;
+      expect(await decisionsTransport(session, 'metrics')).toBeNull();
+    }
+    expect(gatewayAuth).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    'https://gateway.attacker.test',
+    'http://ai-gateway.us.posthog.com',
+    'https://ai-gateway.us.posthog.com/v1',
+    'not a url',
+  ])(
+    'sends nothing to a pre-issued gateway that is no trusted origin: %s',
+    async (url) => {
+      const session = {
+        ...ON,
+        credentials: { ...login, gateway: { token: 'phs_test', url } },
+      } as unknown as ProgramSession;
+      expect(await decisionsTransport(session, 'metrics')).toBeNull();
+      expect(gatewayAuth).not.toHaveBeenCalled();
+    },
+  );
 
   it('mints a token for the program, as the agents do', async () => {
     vi.mocked(gatewayAuth).mockResolvedValue({
@@ -652,7 +698,7 @@ describe('decisionsTransport', () => {
       token: 'phs_minted',
       refreshAtMs: 0,
     });
-    const session = { credentials: login } as unknown as ProgramSession;
+    const session = { ...ON, credentials: login } as unknown as ProgramSession;
     expect(await decisionsTransport(session, 'metrics')).toEqual({
       gateway: { token: 'phs_minted', url: 'https://gateway.test' },
     });
@@ -664,11 +710,11 @@ describe('decisionsTransport', () => {
   });
 
   it('has no transport without a login, or when the mint fails', async () => {
-    const loggedOut = { credentials: null } as unknown as ProgramSession;
+    const loggedOut = { ...ON, credentials: null } as unknown as ProgramSession;
     expect(await decisionsTransport(loggedOut, 'metrics')).toBeNull();
 
     vi.mocked(gatewayAuth).mockRejectedValue(new Error('mint refused'));
-    const session = { credentials: login } as unknown as ProgramSession;
+    const session = { ...ON, credentials: login } as unknown as ProgramSession;
     expect(await decisionsTransport(session, 'metrics')).toBeNull();
   });
 });

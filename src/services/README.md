@@ -65,30 +65,46 @@ the mock reaches every importer.
 
 [`detection/decisions`](detection/decisions/index.ts) asks a classifier about
 the repo walk: file tree, package names, lockfiles and `.env` key names, with
-every line that holds a secret dropped first. It has no flag. It runs for a
-program whose `rankWith` names `decisions`, after login, once the AI opt-in gate
-has cleared.
+every line that holds a secret dropped first. It runs for a program whose
+`rankWith` names `decisions`, after login, once the AI opt-in gate has cleared,
+and only as far as its flag allows.
 
+- **Flag.** `wizard-decisions-detection` sets what a run may do, read as the
+  logged-in user. `compare`, or `true`, asks and only logs the answers. `traits`
+  also writes them as traits when project discovery is on. Anything else, a
+  failed read included, is off: no request leaves the machine. The runner keeps
+  the answer in the session (`getDecisionsUse`), and `decisionsTransport` gives
+  no gateway while it is off. Every Decisions request takes its gateway from
+  there, so off stops them all.
 - **Transport.** `decisionsTransport(session, programId)` uses the run's
-  pre-issued gateway key on a `--ci` run. Otherwise it takes the token
-  `gatewayAuth` mints for the program, as the agents do, so the spend lands on
-  `wizard:<program>`. A refused call is recorded as the result's `error`, and
-  the other sources settle the traits.
+  pre-issued gateway key on a `--ci` run, once it has passed the trusted-origin
+  check the agent run applies. Otherwise it takes the token `gatewayAuth` mints
+  for the program, as the agents do, so the spend lands on `wizard:<program>`. A
+  refused call is recorded as the result's `error`, and the other sources settle
+  the traits.
 - **Questions.** A program lists its questions in `ProgramConfig.decisions`.
   `runDecisionsSource` asks them once per run and keeps the result in the
   session.
-- **Traits.** With `wizard-project-discovery` on, the run waits for the answers
-  and writes them as traits of source `decisions`: `calls_llm_api` as
-  `callsLlmApi`, `web_frontend` as `webFrontend` and `is_mcp_server` as
-  `mcpServers`, each with its probability as confidence. It also ranks the
-  repo's projects with `judgeProjects` and writes that report through the
-  detection report adapter. A predicate reads as `yes` at 0.6 or above and as
-  `no` at 0.1 or below; between the two it writes nothing.
+- **Traits.** With the flag at `traits` and `wizard-project-discovery` on, the
+  run waits for the answers and writes them as traits of source `decisions`:
+  `calls_llm_api` as `callsLlmApi`, `web_frontend` as `webFrontend` and
+  `is_mcp_server` as `mcpServers`, each with its probability as confidence. A
+  predicate reads as `yes` at 0.6 or above and as `no` at 0.1 or below; between
+  the two it writes nothing.
+- **Ranking.** A program that picks its project also has the repo's projects
+  ranked, with `judgeProjects`, and that report written through the detection
+  report adapter. The ranking reads the walk of the workspace root, so a run
+  that started in one member ranks them all. A project whose target is below 0.6
+  writes nothing, the main-app mark included. A folder whose path the secret
+  filter flags is left out of the questions and of the choices. The same
+  question of the same walk is asked once in a run, and the summary is filtered
+  once.
 - **Per pair.** The questions are asked of the run project. When the plan moves
   the run to another project, the run asks them again there, without ranking the
   repo a second time.
-- **With the flag off** the call runs beside the agent run and nothing waits on
-  it. Its answers reach the log, and its events under discovery consent.
+- **Comparing.** At `compare`, and at `traits` with project discovery off, the
+  call runs beside the agent run and nothing waits on it but a short grace at
+  the end. Its answers reach the log, and its events under discovery consent.
 - An agentic project scan also asks Decisions for the same report and logs how
   the two compare.
 

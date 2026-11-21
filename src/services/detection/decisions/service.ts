@@ -5,7 +5,8 @@
  * `decisions`, once the AI opt-in gate has cleared.
  */
 
-import { gatewayAuth } from '@agent';
+import { gatewayAuth, isTrustedGatewayUrl } from '@agent';
+import { WIZARD_DECISIONS_DETECTION_FLAG_KEY } from '@shared/constants';
 import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
 import type { ProgramSession } from '@programs/program-contract';
@@ -31,18 +32,55 @@ export function decisionsMode(): DecisionsMode {
 }
 
 /**
+ * What a run may do with Decisions. `off`: no request leaves the machine.
+ * `compare`: ask, and only log the answers. `traits`: also write the answers
+ * as traits.
+ */
+export type DecisionsUse = 'off' | 'compare' | 'traits';
+
+/** The use the `wizard-decisions-detection` flag sets. Anything but its on-values is `off`, a failed flag read included. */
+export function decisionsUse(
+  flags: Readonly<Record<string, string>>,
+): DecisionsUse {
+  const value = flags[WIZARD_DECISIONS_DETECTION_FLAG_KEY];
+  if (value === 'traits') return 'traits';
+  return value === 'compare' || value === 'true' ? 'compare' : 'off';
+}
+
+/** frameworkContext key holding the run's {@link DecisionsUse}. The runner sets it once the logged-in flags are known. */
+export const DECISIONS_USE_KEY = 'decisionsUse';
+
+/** The run's use of Decisions: `off` until the runner sets it, so nothing asks before the flag is read. */
+export function getDecisionsUse(
+  session: Pick<ProgramSession, 'frameworkContext'>,
+): DecisionsUse {
+  const use = session.frameworkContext[DECISIONS_USE_KEY];
+  return use === 'compare' || use === 'traits' ? use : 'off';
+}
+
+/**
  * The gateway a run's Decisions call goes through: the run's pre-issued
  * gateway key (`--ci` runs), else the token `gatewayAuth` mints for the
  * program, as the agents use, so the spend lands on `wizard:<program>`. Null
- * with no login, or when the mint fails.
+ * when the run's flag leaves Decisions off, with no login, when a pre-issued
+ * gateway is no trusted origin, or when the mint fails. Every Decisions
+ * request takes its gateway from here, so a null stops the request.
  */
 export async function decisionsTransport(
   session: ProgramSession,
   programId: string,
 ): Promise<DecisionsTransport | null> {
+  if (getDecisionsUse(session) === 'off') return null;
   const { credentials } = session;
   if (!credentials) return null;
   if (credentials.gateway?.token.trim()) {
+    // The agent run checks this origin later. The repo summary must not reach an origin it would refuse.
+    const { url } = credentials.gateway;
+    // The same check the agent run applies to a pre-issued gateway.
+    if (!/^https?:\/\//.test(url) || !isTrustedGatewayUrl(url, '')) {
+      logToFile('[decisions] the pre-issued gateway is no trusted origin');
+      return null;
+    }
     return { gateway: credentials.gateway };
   }
   try {
@@ -87,6 +125,8 @@ export async function runDecisionSpecs(
   questions: readonly DecisionQuestionSpec[],
   ctx: RunDecisionsContext,
 ): Promise<DecisionsResult | null> {
+  // The flag leaves Decisions off: nothing is asked and nothing is stored.
+  if (getDecisionsUse(ctx.session) === 'off') return null;
   const mode = decisionsMode();
   const sharing = maySendDiscovery(ctx.session);
   const specs = questions.filter((spec) => sharing || !spec.shared);

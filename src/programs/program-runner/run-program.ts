@@ -39,6 +39,7 @@ import { FRAMEWORK_REGISTRY } from '@services/frameworks';
 import {
   applyDetectionReport,
   buildPlan,
+  getDiscovery,
   getProjects,
   getTraits,
   picksProject,
@@ -62,6 +63,8 @@ import {
   type ResolvedProgramCredentials,
 } from './credentials';
 import {
+  DECISIONS_USE_KEY,
+  decisionsUse,
   questionFacts,
   runDecisionsSource,
   type QuestionKey,
@@ -93,6 +96,9 @@ export const TASK_OUTCOMES_KEY = 'orchestrator-task-outcomes';
 const NEVER_ABORTED = new AbortController().signal;
 
 const MAX_DIAGNOSTICS = 10;
+
+/** How long a run that has ended waits for a Decisions comparison call that is still in flight. */
+const COMPARISON_GRACE_MS = 3_000;
 
 type Failure = NonNullable<RunResult['failure']>;
 
@@ -315,6 +321,8 @@ async function invokeProgram(
   };
   const unregisterLedger = ledger ? registerCleanup(releaseLedger) : undefined;
   let plainSettings: { backedUp: boolean } | undefined;
+  /** A Decisions call that runs beside the agent run, for comparison only. */
+  let comparing: Promise<unknown> | undefined;
   try {
     let run: ProgramRun | undefined;
     /** The run is resolved: tag the analytics, name the skill and report the start, once. */
@@ -402,25 +410,37 @@ async function invokeProgram(
       return fail(error instanceof Error ? error.message : String(error));
     }
 
-    // Logged in, AI approved and flags known: Decisions answers for a program that ranks with it.
-    if (config.rankWith?.includes('decisions')) {
-      // With project discovery on, the answers become traits, so the run waits for them.
-      const discovering = projectDiscoveryMode(flags.flags) !== 'off';
+    // Logged in, AI approved and flags known: Decisions answers for a program that ranks with it, when its flag allows.
+    const use = config.rankWith?.includes('decisions')
+      ? decisionsUse(flags.flags)
+      : 'off';
+    // Every Decisions request reads this, so `off` stops them all.
+    store.setFrameworkContext(DECISIONS_USE_KEY, use);
+    // The answers become traits only when the flag says so and project discovery is on.
+    const decisionsAsTraits =
+      use === 'traits' &&
+      (getDiscovery(store.session)?.mode ?? 'off') !== 'off';
+    if (use !== 'off') {
       const asking = runDecisionsSource(decisionKeys(config, plannedRuns), {
         session: store.session,
         setFrameworkContext: (key, value) =>
           store.setFrameworkContext(key, value),
         programId,
-        ...(discovering && { sink: store.readyContext() }),
+        ...(decisionsAsTraits && { sink: store.readyContext() }),
+        // Only a program that picks its project reads a ranking of them.
+        rankProjects: picksProject(store.session, config),
       });
-      // Otherwise the call runs beside the agent run, and its answers reach only the log.
-      if (discovering) {
+      if (decisionsAsTraits) {
+        // The run waits for the answers it will read as traits.
         try {
           await park(asking);
         } catch (error) {
           if (signal.aborted) return cancelled();
           logToFile(`[decisions] skipped: ${String(error)}`);
         }
+      } else {
+        // Otherwise the call runs beside the agent run, and its answers reach only the log.
+        comparing = asking;
       }
     }
 
@@ -456,7 +476,7 @@ async function invokeProgram(
           started(run, !reportedStart);
           pair.project.path = picked;
           // The questions were asked of the project the run started in; the pair's project gets its own answers.
-          if (config.rankWith?.includes('decisions')) {
+          if (decisionsAsTraits) {
             await park(
               runDecisionsSource(decisionKeys(config, plannedRuns), {
                 session: store.session,
@@ -675,6 +695,15 @@ async function invokeProgram(
     }
     return settle(RunOutcome.Success);
   } finally {
+    // A run that ends before the comparison call does gives it a moment to log.
+    if (comparing) {
+      await Promise.race([
+        comparing,
+        new Promise((resolve) =>
+          setTimeout(resolve, COMPARISON_GRACE_MS).unref(),
+        ),
+      ]);
+    }
     // A plain run's settings were neutralized before login; put them back if the run never started.
     if (plainSettings?.backedUp) restoreClaudeSettings(installDir);
     releaseLedger();

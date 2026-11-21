@@ -15,7 +15,7 @@ import type { LLMProvider } from '@posthog/warlock';
 export type * from './types';
 export { runAgent, RunOutcome } from './runner';
 export { AgentSignals } from './agent-interface';
-export { gatewayAuth } from './gateway-session';
+export { gatewayAuth, isTrustedGatewayUrl } from './gateway-session';
 export { WIZARD_TOOL_NAMES } from './tools';
 
 /** The binding a program gets when it declares none. */
