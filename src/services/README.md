@@ -68,7 +68,9 @@ the mock reaches every importer.
 
 [`project-discovery`](project-discovery/index.ts) holds everything the wizard
 learns by reading the repo. `runDiscovery` runs once per run, before the
-program's detection, and keeps a `Discovery` in the session:
+program's detection, and keeps a `Discovery` in the session. Discovery holds
+facts and decides nothing: each program reads them in its `onReady` and decides
+there.
 
 | Field          | What it holds                                                                                |
 | -------------- | -------------------------------------------------------------------------------------------- |

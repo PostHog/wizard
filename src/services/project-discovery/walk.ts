@@ -151,17 +151,9 @@ function budgetFiles(
   return [...kept, ...rest.filter((_, index) => chosen.has(index))];
 }
 
-/**
- * Walk `dir` once, the run project's subtree first. Never throws: a missing or
- * unreadable directory yields an empty walk.
- */
-export function walkRepoFiles(
-  dir: string,
-  options: WalkOptions = {},
-): RepoWalk {
-  const startedAt = Date.now();
-  const runProject = options.runProject ?? '.';
-  const repo: RepoFiles = {
+/** A walk of `dir` that found nothing. */
+export function emptyRepoFiles(dir: string): RepoFiles {
+  return {
     dir,
     files: [],
     manifests: [],
@@ -172,6 +164,19 @@ export function walkRepoFiles(
     complete: true,
     truncated: false,
   };
+}
+
+/**
+ * Walk `dir` once, the run project's subtree first. Never throws: a missing or
+ * unreadable directory yields an empty walk.
+ */
+export function walkRepoFiles(
+  dir: string,
+  options: WalkOptions = {},
+): RepoWalk {
+  const startedAt = Date.now();
+  const runProject = options.runProject ?? '.';
+  const repo = emptyRepoFiles(dir);
   const templates: TemplateFile[] = [];
   const envKeys = new Map<string, string[]>();
 
@@ -197,8 +202,8 @@ export function walkRepoFiles(
       if (LOCKFILE_NAMES.has(name)) repo.lockfiles.push(file);
       if (isEnvFileName(name)) return readEnvKeys(fullPath, file);
       if (isTemplateFileName(name)) templates.push({ fullPath, file });
-      const manifest = MANIFEST_PARSERS[name];
-      const marker = WORKSPACE_MARKERS[name];
+      const manifest = MANIFEST_PARSERS.get(name);
+      const marker = WORKSPACE_MARKERS.get(name);
       if (!manifest && !marker) return;
       const content = safeReadFile(fullPath);
       if (content === null) return;
@@ -291,7 +296,7 @@ const MAX_LEVELS_UP = 8;
 /** The workspace the markers in `dir` declare, or null when it holds none. */
 function readWorkspaceAt(dir: string): MarkerRead | null {
   const reads: MarkerRead[] = [];
-  for (const [name, parse] of Object.entries(WORKSPACE_MARKERS)) {
+  for (const [name, parse] of WORKSPACE_MARKERS) {
     const content = safeReadFile(path.join(dir, name));
     const read = content === null ? null : parse(content);
     if (read) reads.push(read);

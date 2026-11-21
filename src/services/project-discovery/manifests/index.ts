@@ -29,28 +29,31 @@ export type ManifestParser = {
   parse: (content: string) => string[] | null;
 };
 
-/** Every manifest the wizard reads, by file name. */
-export const MANIFEST_PARSERS: Readonly<Record<string, ManifestParser>> = {
-  'package.json': { ecosystem: 'npm', parse: parsePackageJson },
-  'requirements.txt': { ecosystem: 'pypi', parse: parseRequirementsTxt },
-  'pyproject.toml': { ecosystem: 'pypi', parse: parsePyprojectToml },
-  Pipfile: { ecosystem: 'pypi', parse: parsePipfile },
-  Gemfile: { ecosystem: 'rubygems', parse: parseGemfile },
-  'Cargo.toml': { ecosystem: 'cargo', parse: parseCargoToml },
-  Podfile: { ecosystem: 'cocoapods', parse: parsePodfile },
-  'composer.json': { ecosystem: 'composer', parse: parseComposerJson },
-  'go.mod': { ecosystem: 'go', parse: parseGoMod },
-  'mix.exs': { ecosystem: 'hex', parse: parseMixExs },
-  'build.gradle': { ecosystem: 'maven', parse: parseGradleBuild },
-  'build.gradle.kts': { ecosystem: 'maven', parse: parseGradleBuild },
-  'libs.versions.toml': {
-    ecosystem: 'maven',
-    parse: parseGradleVersionCatalog,
-  },
-  'pom.xml': { ecosystem: 'maven', parse: parsePomXml },
-  'pubspec.yaml': { ecosystem: 'pub', parse: parsePubspecYaml },
-  'Package.swift': { ecosystem: 'swiftpm', parse: parsePackageSwift },
-};
+/** Every manifest the wizard reads, by file name. A map, so a file named `constructor` finds no parser. */
+export const MANIFEST_PARSERS: ReadonlyMap<string, ManifestParser> = new Map<
+  string,
+  ManifestParser
+>([
+  ['package.json', { ecosystem: 'npm', parse: parsePackageJson }],
+  ['requirements.txt', { ecosystem: 'pypi', parse: parseRequirementsTxt }],
+  ['pyproject.toml', { ecosystem: 'pypi', parse: parsePyprojectToml }],
+  ['Pipfile', { ecosystem: 'pypi', parse: parsePipfile }],
+  ['Gemfile', { ecosystem: 'rubygems', parse: parseGemfile }],
+  ['Cargo.toml', { ecosystem: 'cargo', parse: parseCargoToml }],
+  ['Podfile', { ecosystem: 'cocoapods', parse: parsePodfile }],
+  ['composer.json', { ecosystem: 'composer', parse: parseComposerJson }],
+  ['go.mod', { ecosystem: 'go', parse: parseGoMod }],
+  ['mix.exs', { ecosystem: 'hex', parse: parseMixExs }],
+  ['build.gradle', { ecosystem: 'maven', parse: parseGradleBuild }],
+  ['build.gradle.kts', { ecosystem: 'maven', parse: parseGradleBuild }],
+  [
+    'libs.versions.toml',
+    { ecosystem: 'maven', parse: parseGradleVersionCatalog },
+  ],
+  ['pom.xml', { ecosystem: 'maven', parse: parsePomXml }],
+  ['pubspec.yaml', { ecosystem: 'pub', parse: parsePubspecYaml }],
+  ['Package.swift', { ecosystem: 'swiftpm', parse: parsePackageSwift }],
+]);
 
 export {
   parseCargoToml,

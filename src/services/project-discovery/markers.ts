@@ -135,19 +135,22 @@ const open =
   (tool: string): MarkerParser =>
   () => ({ tool, members: [], open: true });
 
-/** Every workspace marker the wizard reads, by file name. */
-export const WORKSPACE_MARKERS: Readonly<Record<string, MarkerParser>> = {
-  'pnpm-workspace.yaml': parsePnpmWorkspace,
-  'package.json': parsePackageJsonWorkspaces,
-  'turbo.json': open('turbo'),
-  'nx.json': open('nx'),
-  'lerna.json': parseLernaJson,
-  'Cargo.toml': parseCargoWorkspace,
-  'go.work': parseGoWork,
-  'settings.gradle': parseSettingsGradle,
-  'settings.gradle.kts': parseSettingsGradle,
-  'pyproject.toml': parseUvWorkspace,
-};
+/** Every workspace marker the wizard reads, by file name. A map, so a file named `constructor` finds no parser. */
+export const WORKSPACE_MARKERS: ReadonlyMap<string, MarkerParser> = new Map<
+  string,
+  MarkerParser
+>([
+  ['pnpm-workspace.yaml', parsePnpmWorkspace],
+  ['package.json', parsePackageJsonWorkspaces],
+  ['turbo.json', open('turbo')],
+  ['nx.json', open('nx')],
+  ['lerna.json', parseLernaJson],
+  ['Cargo.toml', parseCargoWorkspace],
+  ['go.work', parseGoWork],
+  ['settings.gradle', parseSettingsGradle],
+  ['settings.gradle.kts', parseSettingsGradle],
+  ['pyproject.toml', parseUvWorkspace],
+]);
 
 /** The tool a workspace reports when several markers share its root: the build tool before the package manager. */
 const TOOL_PRIORITY = [

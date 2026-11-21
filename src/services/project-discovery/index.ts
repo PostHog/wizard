@@ -18,9 +18,13 @@ export {
   type DiscoveredProjects,
   type Workspace,
 } from './projects';
-export { reportDiscovery, type DiscoveryReportStore } from './report';
+export {
+  detectedEmailProviders,
+  type EmailProviderKind,
+} from './email-providers';
+export { reportDiscovery } from './report';
 export { maySendDiscovery, tagDiscovery } from './tags';
-export type { DetectedTool, DiscoveredTools, ToolSignal } from './tools';
+export type { DetectedTool, DiscoveredTools } from './tools';
 export { TRAITS } from './traits/registry';
 export { getProject, getTraits } from './traits/store';
 export { toMatchKeys } from './traits/match-keys';
@@ -28,6 +32,5 @@ export {
   findWorkspaceRoot,
   manifestDirs,
   walkRepo,
-  type DiscoveredManifest,
   type RepoFiles,
 } from './walk';

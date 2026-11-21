@@ -33,6 +33,7 @@ import {
   type DiscoveredTools,
 } from './tools';
 import {
+  emptyRepoFiles,
   findWorkspaceRoot,
   readScriptHosts,
   walkRepo,
@@ -96,6 +97,28 @@ async function matchTools(
   }
 }
 
+/** `read()`, or `fallback()` when it throws, so discovery stays best-effort. */
+function guarded<T>(step: string, read: () => T, fallback: () => T): T {
+  try {
+    return read();
+  } catch (error) {
+    analytics.captureException(
+      error instanceof Error ? error : new Error(String(error)),
+      { step },
+    );
+    return fallback();
+  }
+}
+
+/** A walk that found nothing and says it is not complete, for a walk that threw. */
+function failedWalk(dir: string): RepoWalk {
+  return {
+    files: { ...emptyRepoFiles(dir), complete: false },
+    templates: [],
+    durationMs: 0,
+  };
+}
+
 /**
  * Discover once per run. Tools and projects fail apart: projects need only the
  * walk, tools also need the catalog. Best-effort: never throws.
@@ -108,11 +131,16 @@ export async function runDiscovery(
   const runDir = ctx.session.installDir;
   const mode = await loadProjectDiscoveryMode();
   // The walk up to the workspace root stays off with the flag.
+  const atRunDir = () => ({ rootDir: runDir, runProject: '.' });
   const { rootDir, runProject } =
     mode === 'off'
-      ? { rootDir: runDir, runProject: '.' }
-      : findWorkspaceRoot(runDir);
-  const walk = walkRepoFiles(rootDir, { runProject });
+      ? atRunDir()
+      : guarded('findWorkspaceRoot', () => findWorkspaceRoot(runDir), atRunDir);
+  const walk = guarded(
+    'walkRepo',
+    () => walkRepoFiles(rootDir, { runProject }),
+    () => failedWalk(rootDir),
+  );
   const projects = discoverProjects(walk.files, runProject);
   ctx.setProjects(projects.projects, runProject);
 
@@ -166,7 +194,9 @@ export async function discoveredWarehouseDestinations(
   );
 }
 
-export function getDiscovery(session: ProgramSession): Discovery | undefined {
+export function getDiscovery(
+  session: Pick<ProgramSession, 'frameworkContext'>,
+): Discovery | undefined {
   return session.frameworkContext[DISCOVERY_KEY] as Discovery | undefined;
 }
 
@@ -184,7 +214,11 @@ export function getRepoFiles(
     | RepoFiles
     | undefined;
   if (kept?.dir === session.installDir) return kept;
-  const files = walkRepo(session.installDir);
+  const files = guarded(
+    'walkRepo',
+    () => walkRepo(session.installDir),
+    () => failedWalk(session.installDir).files,
+  );
   setFrameworkContext?.(REPO_FILES_KEY, files);
   return files;
 }
