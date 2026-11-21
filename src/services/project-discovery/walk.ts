@@ -122,7 +122,7 @@ const realPath = (rawPath: string): string | null =>
   hasOnlyPromptSafeChars(rawPath) ? rawPath : null;
 
 /** The manifest's directory; a Gradle version catalog sits in `gradle/`, so its project is the parent. */
-export function manifestDir(manifestPath: string): string {
+function manifestDir(manifestPath: string): string {
   const dir = path.posix.dirname(manifestPath);
   return path.posix.basename(dir) === 'gradle' ? path.posix.dirname(dir) : dir;
 }

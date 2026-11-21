@@ -13,7 +13,7 @@ import { usesLlmSdk } from '../../detection/features';
 import { FRAMEWORK_REGISTRY } from '../../frameworks/registry';
 import { getDetectedWarehouseSources } from '../../warehouse-sources/detect';
 import { getDiscovery } from '../discover';
-import { manifestDir } from '../walk';
+import type { RepoFiles } from '../walk';
 import { POSTHOG_SDK, sdksIn } from './sdks';
 
 export type TraitDefinition<K extends TraitName> = {
@@ -43,10 +43,25 @@ const nonEmpty = <T>(list: readonly T[]): readonly T[] | undefined =>
 const isRunProject = (session: ProgramSession, projectPath: string): boolean =>
   projectPath === session.runProject;
 
+type Manifests = RepoFiles['manifests'];
+
+/** Each walk's manifests by project directory, indexed once: every trait read of every project looks here. */
+const MANIFESTS_BY_DIR = new WeakMap<Manifests, Map<string, Manifests>>();
+
 /** The manifests of one project, read by the walk. */
-function manifestsOf(session: ProgramSession, projectPath: string) {
-  const manifests = getDiscovery(session)?.files.manifests ?? [];
-  return manifests.filter((m) => manifestDir(m.path) === projectPath);
+function manifestsOf(session: ProgramSession, projectPath: string): Manifests {
+  const manifests = getDiscovery(session)?.files.manifests;
+  if (!manifests) return [];
+  let byDir = MANIFESTS_BY_DIR.get(manifests);
+  if (!byDir) {
+    byDir = new Map();
+    for (const manifest of manifests) {
+      if (manifest.dir === null) continue;
+      byDir.set(manifest.dir, [...(byDir.get(manifest.dir) ?? []), manifest]);
+    }
+    MANIFESTS_BY_DIR.set(manifests, byDir);
+  }
+  return byDir.get(projectPath) ?? [];
 }
 
 const packagesOf = (session: ProgramSession, projectPath: string): string[] =>
