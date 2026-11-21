@@ -229,7 +229,11 @@ together. The log is `posthog-wizard.log` in the temp directory
 `--test-discovery` runs project discovery and the program's own detection as a
 run does before login, prints what they found, and exits. It logs in to
 nothing, runs no agent and changes no file. It works on any program command,
-with or without a terminal, in non-production builds such as `pnpm try`.
+with or without a terminal, in non-production builds such as `pnpm try`. It
+comes before every other mode: with `--ci`, `--signup` or `--playground` on the
+same command it still only prints and exits. It sends no discovery report and
+no usage events; an error event can still be sent when something fails, as in
+any run.
 
 ```bash
 pnpm try --test-discovery --install-dir=/absolute/path/to/app
@@ -247,7 +251,12 @@ The report holds:
   value, and `(unsettled)` where the sources disagree
 - the catalog tools found in each project
 - the plan the program would open after login: the projects offered, a reason
-  for each of the others, and the one that starts picked
+  for each of the others, the one that starts picked, and whether the run would
+  ask. A program that picks no project, a CI run and a run with the flag off all
+  ask nothing and work in the run project
+
+The text report replaces control characters in names from the repo with `?`.
+The JSON report escapes them.
 
 It shows static detection only, since Decisions and agentic detection answer
 after login. To see discovery with the flag on, set the flag for this run:

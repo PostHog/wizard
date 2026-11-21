@@ -19,6 +19,8 @@ export {
 } from './flag';
 export {
   buildPlan,
+  picksProject,
+  planAsks,
   planNeedsPick,
   reportProjectsDiscovered,
   reportProjectsSelected,

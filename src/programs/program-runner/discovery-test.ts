@@ -11,8 +11,8 @@ import {
   getDiscovery,
   getProjects,
   getTraitClaims,
-  loadProjectDiscoveryMode,
-  planNeedsPick,
+  picksProject,
+  planAsks,
   runDiscovery,
   settleProjects,
   toMatchKeys,
@@ -64,8 +64,10 @@ export type DiscoveryTestReport = {
 
 /**
  * Run discovery and `config`'s detection as a run does before login, and
- * report what they found. Nothing leaves the machine but the flag read and
- * the tool catalog download.
+ * report what they found. It sends no discovery report and no usage events.
+ * What still leaves the machine: the flag read, the tool catalog download, and
+ * an error event when something fails, such as a malformed manifest, as in
+ * any run. An error event holds no file content.
  */
 export async function testDiscovery(
   config: ProgramConfig,
@@ -73,7 +75,6 @@ export async function testDiscovery(
 ): Promise<DiscoveryTestReport> {
   const store = new SessionStore(buildSession({ ...args, noTelemetry: true }));
   const ctx = store.readyContext();
-  const mode = await loadProjectDiscoveryMode();
   await runDiscovery(config, ctx);
   await config.onReady?.(ctx);
   settleProjects(ctx);
@@ -83,9 +84,13 @@ export async function testDiscovery(
   const projects = getProjects(session);
   const tools = toolsByProject(discovery?.tools.tools ?? [], projects);
   const plan = buildPlan(session, config);
+  // A program that picks no project works where the run started.
+  const picked = picksProject(session, config)
+    ? plan.picked
+    : session.runProject;
   return {
     program: config.id,
-    mode,
+    mode: discovery?.mode ?? 'off',
     runDir: discovery?.runDir ?? session.installDir,
     rootDir: discovery?.rootDir ?? session.installDir,
     runProject: session.runProject,
@@ -109,7 +114,7 @@ export async function testDiscovery(
       tools: (tools.get(project.path) ?? []).map((tool) => tool.kind),
     })),
     toolsMatched: discovery?.tools.failed !== true,
-    plan: { ...plan, asks: planNeedsPick(plan) },
+    plan: { ...plan, picked, asks: planAsks(session, config, plan) },
     matchKeys: toMatchKeys(
       projects.find((project) => project.path === session.runProject)?.traits ??
         {},

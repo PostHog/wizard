@@ -39,10 +39,10 @@ import { FRAMEWORK_REGISTRY } from '@services/frameworks';
 import {
   applyDetectionReport,
   buildPlan,
-  getDiscovery,
   getProjects,
   getTraits,
-  planNeedsPick,
+  picksProject,
+  planAsks,
   projectDiscoveryMode,
   projectPathOf,
   rediscoverAfterLogin,
@@ -204,10 +204,6 @@ async function invokeProgram(
       }),
     );
 
-  /** With discovery on, a program that says which projects it applies to works in one picked project. */
-  const picksProject = (): boolean =>
-    config.appliesTo !== undefined &&
-    (getDiscovery(store.session)?.mode ?? 'off') !== 'off';
   /**
    * Discovery under the mode the run now knows. Discovery first runs before
    * login, as an anonymous user. A flag snapshot the caller gave the run says
@@ -229,7 +225,7 @@ async function invokeProgram(
     if (!config.appliesTo || input.project !== undefined) return false;
     await settleDiscoveryMode();
     return (
-      picksProject() &&
+      picksProject(store.session, config) &&
       buildPlan(store.session, config).projects.some(
         (project) =>
           project.offered && project.path !== store.session.runProject,
@@ -424,7 +420,7 @@ async function invokeProgram(
     }
 
     // One project per run: with discovery on, the host picks among the projects the program is offered.
-    if (picksProject()) {
+    if (picksProject(store.session, config)) {
       const ciRunner = {
         log: runner.log,
         authenticate: async () => {
@@ -721,10 +717,7 @@ async function pickProject(
   let pickedBy: 'person' | 'caller' | 'default' =
     requested === undefined ? 'default' : 'caller';
   const asks =
-    workflow !== undefined &&
-    requested === undefined &&
-    !store.session.ci &&
-    planNeedsPick(offer);
+    workflow !== undefined && planAsks(store.session, config, offer, requested);
   if (asks) {
     const go = await workflow.confirmStep(
       {

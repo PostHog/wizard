@@ -4,6 +4,7 @@ import type {
   DiscoveryTestReport,
   ProgramConfig,
 } from '@programs/types';
+import { replaceUnsafeChars } from '@utils/env-scan';
 import { tuiSessionArgs } from './run-wizard';
 import { exitWith } from './signals';
 
@@ -14,11 +15,14 @@ export function wantsDiscoveryTest(options: Record<string, unknown>): boolean {
 
 const pad = (label: string, width = 18): string => label.padEnd(width);
 
+/** A value from the repo as terminal text: control characters replaced, so a file name cannot send an escape sequence. JSON output escapes them itself. */
+const clean = (value: unknown): string => replaceUnsafeChars(String(value));
+
 const show = (value: unknown): string =>
-  Array.isArray(value) ? value.join(', ') : String(value);
+  Array.isArray(value) ? value.map(clean).join(', ') : clean(value);
 
 function projectLines(project: DiscoveryTestProject): string[] {
-  const title = project.path === '.' ? '. (root)' : project.path;
+  const title = project.path === '.' ? '. (root)' : clean(project.path);
   const lines = [`  ${title}${project.isRunProject ? '  <- run project' : ''}`];
   for (const [name, value] of Object.entries(project.traits)) {
     const claims = project.sources[name as keyof typeof project.sources] ?? [];
@@ -56,7 +60,7 @@ export function formatDiscoveryTest(report: DiscoveryTestReport): string {
     `  ${pad('Workspace root')} ${
       report.rootDir === report.runDir ? '(the run directory)' : report.rootDir
     }`,
-    `  ${pad('Run project')} ${report.runProject}`,
+    `  ${pad('Run project')} ${clean(report.runProject)}`,
     `  ${pad('Repo')} ${report.repoType}${
       report.workspaceTool ? `, ${report.workspaceTool}` : ''
     }`,
@@ -80,9 +84,13 @@ export function formatDiscoveryTest(report: DiscoveryTestReport): string {
     '',
     `Plan for ${report.program}: ${
       report.mode === 'off'
-        ? 'not used while the flag is off. With it on: '
-        : ''
-    }${plan.asks ? 'asks after login' : 'asks nothing'}, picks ${plan.picked}`,
+        ? `not used while the flag is off; the run works in ${clean(
+            plan.picked,
+          )}`
+        : `${plan.asks ? 'asks after login' : 'asks nothing'}, picks ${clean(
+            plan.picked,
+          )}`
+    }`,
     ...plan.projects.map((project) => {
       const mark = project.path === plan.picked ? '*' : ' ';
       const detail = [
@@ -90,7 +98,7 @@ export function formatDiscoveryTest(report: DiscoveryTestReport): string {
         project.mainApp ? 'main app' : undefined,
         project.offered ? undefined : `not offered: ${project.reason ?? ''}`,
       ].filter((part): part is string => part !== undefined);
-      return `  ${mark} ${pad(project.path, 24)} ${detail.join(', ')}`;
+      return `  ${mark} ${pad(clean(project.path), 24)} ${detail.join(', ')}`;
     }),
   ];
   return lines.join('\n');

@@ -161,6 +161,36 @@ export function planNeedsPick(plan: PlanOffer): boolean {
   );
 }
 
+/** Whether the program works in one picked project: it says which projects it applies to, and discovery ran with the flag on. */
+export function picksProject(
+  session: ProgramSession,
+  config: Applies,
+): boolean {
+  return (
+    config.appliesTo !== undefined &&
+    (getDiscovery(session)?.mode ?? 'off') !== 'off'
+  );
+}
+
+/**
+ * Whether a host is asked to pick: the program picks its project, no caller
+ * named one, the run is interactive and the plan has a choice to make. The
+ * runner and the test discovery preview both read this.
+ */
+export function planAsks(
+  session: ProgramSession,
+  config: Applies,
+  plan: PlanOffer,
+  requested?: string,
+): boolean {
+  return (
+    picksProject(session, config) &&
+    requested === undefined &&
+    !session.ci &&
+    planNeedsPick(plan)
+  );
+}
+
 /** The event carries at most this many projects; `project_count` is the true total. */
 const MAX_PROJECTS_CAPTURED = 25;
 
