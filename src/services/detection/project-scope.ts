@@ -23,6 +23,7 @@ import {
   applyDetectionReport,
   joinProjectPath,
 } from '../project-discovery/traits/adapter';
+import { getDiscovery } from '../project-discovery/discover';
 
 /** Integration framework targets for the agentic detector (id → display name). */
 const INTEGRATION_TARGETS: DetectTarget[] = Object.entries(
@@ -111,6 +112,9 @@ export async function scopeInstallDirToProject(
   session: ProgramSession,
   runner: CiRunnerContext,
 ): Promise<void> {
+  // With project discovery on, the plan picks the project. A run already moved off its start has its project too: the caller named it.
+  const mode = getDiscovery(session)?.mode ?? 'off';
+  if (mode !== 'off' || session.runProject !== '.') return;
   // Idempotent early auth: the detector needs credentials and the flag must evaluate as the logged-in user.
   await runner.authenticate('posthog-integration');
   const flags = await analytics.getAllFlagsForWizard();

@@ -114,6 +114,30 @@ describe('scopeInstallDirToProject', () => {
     return calls[0][1] as Record<string, unknown>;
   };
 
+  it.each<[string, (session: ReturnType<typeof buildSession>) => void]>([
+    [
+      'project discovery is on, so the plan picks the project',
+      (session) => {
+        session.frameworkContext.discovery = { mode: 'one-project' };
+      },
+    ],
+    [
+      'the run already works in a project the caller named',
+      (session) => {
+        session.runProject = 'apps/api';
+      },
+    ],
+  ])('stands down when %s', async (_name, arrange) => {
+    flagsSpy.mockResolvedValue(FLAG_ON);
+    const session = buildSession({ installDir: '/repo' });
+    arrange(session);
+    await scopeInstallDirToProject(session, runner);
+
+    expect(authenticate).not.toHaveBeenCalled();
+    expect(scan).not.toHaveBeenCalled();
+    expect(session.installDir).toBe('/repo');
+  });
+
   it('fires flag-off and never scans when the flag is off (or the fetch failed)', async () => {
     // A failed flag fetch surfaces as an empty map, so this path also covers "flags unavailable".
     const session = buildSession({ installDir: '/repo' });
