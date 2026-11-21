@@ -162,6 +162,31 @@ describe('discoverProjects', () => {
     ]);
   });
 
+  it('gives a project its real path however long it is', () => {
+    const long = `apps/${'a'.repeat(60)}/${'b'.repeat(70)}`;
+    write('package.json', pkg());
+    write(`${long}/package.json`, pkg({ next: '15.0.0' }));
+    const walk = walkRepo(repo);
+    // The path shown is cut; the directory the project resolves to is not.
+    expect(walk.manifests.map((m) => m.path)).toContain(
+      `${long}/package.json`.slice(0, 120) + '…',
+    );
+    expect(paths(discoverProjects(walk).projects)).toEqual(['.', long]);
+    expect(fs.existsSync(path.join(repo, long))).toBe(true);
+  });
+
+  it('lists no project whose folder name a prompt cannot carry', () => {
+    write('package.json', pkg());
+    write('apps/we`b/package.json', pkg({ stripe: '^14.0.0' }));
+    write('apps/api/package.json', pkg());
+    const walk = walkRepo(repo);
+    // Its packages are still read for the tool match, under a cleaned path.
+    expect(walk.manifests.map((m) => m.path)).toContain(
+      'apps/we?b/package.json',
+    );
+    expect(paths(discoverProjects(walk).projects)).toEqual(['.', 'apps/api']);
+  });
+
   it('reads a Gradle build with one module as one project, not a workspace', () => {
     write('settings.gradle', "include ':app'\n");
     write('build.gradle', '');
@@ -198,6 +223,27 @@ describe('the walk budget', () => {
       'packages/ui',
     ]);
     expect(found.complete).toBe(false);
+  });
+});
+
+describe('the walk bounds', () => {
+  it('reports malformed manifests once, however many there are', () => {
+    write('package.json', pkg());
+    for (const app of ['a', 'b', 'c']) write(`apps/${app}/package.json`, '{');
+    vi.mocked(analytics.captureException).mockClear();
+    walkRepo(repo);
+    expect(analytics.captureException).toHaveBeenCalledTimes(1);
+    expect(analytics.captureException).toHaveBeenCalledWith(
+      expect.objectContaining({ message: 'Malformed package.json' }),
+      expect.objectContaining({ count: 3 }),
+    );
+  });
+
+  it('keeps a bounded number of files for one env key', () => {
+    for (let i = 0; i < 30; i += 1) write(`.env.${i}`, 'DATABASE_URL=x\n');
+    const [key] = walkRepo(repo).envKeys;
+    expect(key.name).toBe('DATABASE_URL');
+    expect(key.files).toHaveLength(20);
   });
 });
 

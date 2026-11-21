@@ -13,9 +13,11 @@ import { safeReadFile, walkProjectFiles } from '@utils/bounded-fs';
 import {
   ENV_SCAN_MAX_DEPTH,
   MAX_ENV_KEY_SET,
+  hasOnlyPromptSafeChars,
   isEnvFileName,
   parseEnvKeyNames,
-  toPromptSafeRelativePath,
+  sanitizeReportedPath,
+  toRelativePosixPath,
 } from '@utils/env-scan';
 import { MANIFEST_PARSERS } from './manifests';
 import {
@@ -27,14 +29,17 @@ import {
 import {
   MAX_TEMPLATE_BYTES,
   MAX_TEMPLATE_FILES,
+  MAX_TEMPLATES_READ,
   catalogHostsIn,
   hasScriptTag,
   isTemplateFileName,
 } from './script-hosts';
 
 export type DiscoveredManifest = {
-  /** Root-relative POSIX path, e.g. `apps/web/package.json`. */
+  /** Root-relative POSIX path, e.g. `apps/web/package.json`, cleaned for a prompt. Shown, never resolved. */
   path: string;
+  /** The real root-relative directory of the manifest's project. Null when a prompt cannot carry its name, so it is no project. */
+  dir: string | null;
   /** Package ecosystem: `npm`, `pypi`, `rubygems`, `cargo`, ... */
   ecosystem: string;
   packages: string[];
@@ -42,8 +47,10 @@ export type DiscoveredManifest = {
 
 /** A workspace marker file the walk read. */
 export type WorkspaceMarker = MarkerRead & {
-  /** Root-relative POSIX path of the marker file. */
+  /** Root-relative POSIX path of the marker file, cleaned for a prompt. Shown, never resolved. */
   path: string;
+  /** The real root-relative directory the marker makes a workspace root. Null like a manifest's. */
+  dir: string | null;
 };
 
 /** A catalog script host a template loads from, with the first template found for it. */
@@ -84,6 +91,12 @@ export type WalkOptions = {
 
 export const MAX_TREE_FILES = 4_000;
 
+/** The walk keeps at most this many files for one `.env` key name. */
+const MAX_FILES_PER_ENV_KEY = 20;
+
+/** A marker file larger than this is read for its packages only, never for members. */
+const MAX_MARKER_BYTES = 512 * 1024;
+
 const LOCKFILE_NAMES = new Set([
   'pnpm-lock.yaml',
   'yarn.lock',
@@ -104,8 +117,9 @@ const LOCKFILE_NAMES = new Set([
   'gradle.lockfile',
 ]);
 
-const isUnder = (dir: string, file: string): boolean =>
-  dir === '.' || file === dir || file.startsWith(`${dir}/`);
+/** A real path a prompt can carry as it is, or null. A cleaned path can name another directory, so it is never resolved. */
+const realPath = (rawPath: string): string | null =>
+  hasOnlyPromptSafeChars(rawPath) ? rawPath : null;
 
 /** The manifest's directory; a Gradle version catalog sits in `gradle/`, so its project is the parent. */
 function manifestDir(manifestPath: string): string {
@@ -127,18 +141,22 @@ function budgetFiles(
   if (rest.length <= remaining) return [...kept, ...rest];
   if (remaining === 0) return kept;
 
-  // Deepest first, so a file counts toward its nearest project.
-  const dirs = [...new Set(manifests.map((m) => manifestDir(m.path)))].sort(
-    (a, b) => b.length - a.length,
-  );
-  const groupOf = (file: string): string =>
-    dirs.find((dir) => dir !== '.' && isUnder(dir, file)) ?? '.';
+  // A file counts toward its nearest project: the first ancestor that holds a manifest.
+  const dirs = new Set(manifests.map((m) => m.dir));
+  const groupOf = (file: string): string => {
+    let dir = path.posix.dirname(file);
+    while (dir !== '.' && !dirs.has(dir)) {
+      const parent = path.posix.dirname(dir);
+      if (parent === dir) return '.';
+      dir = parent;
+    }
+    return dir;
+  };
+  const groupByFile = rest.map(groupOf);
   const taken = new Map<string, number>();
-  const groups = new Set(rest.map(groupOf));
-  const share = Math.floor(remaining / groups.size);
+  const share = Math.floor(remaining / new Set(groupByFile).size);
   const chosen = new Set<number>();
-  rest.forEach((file, index) => {
-    const group = groupOf(file);
+  groupByFile.forEach((group, index) => {
     const count = taken.get(group) ?? 0;
     if (count >= share) return;
     taken.set(group, count + 1);
@@ -179,6 +197,7 @@ export function walkRepoFiles(
   const repo = emptyRepoFiles(dir);
   const templates: TemplateFile[] = [];
   const envKeys = new Map<string, string[]>();
+  let malformedManifests = 0;
 
   const readEnvKeys = (fullPath: string, file: string): void => {
     // null when unreadable or oversized, such as a `.env` that is a directory.
@@ -187,7 +206,9 @@ export function walkRepoFiles(
     for (const key of parseEnvKeyNames(content)) {
       const files = envKeys.get(key);
       if (files) {
-        if (!files.includes(file)) files.push(file);
+        if (files.length < MAX_FILES_PER_ENV_KEY && !files.includes(file)) {
+          files.push(file);
+        }
       } else if (envKeys.size < MAX_ENV_KEY_SET) {
         envKeys.set(key, [file]);
       }
@@ -197,29 +218,45 @@ export function walkRepoFiles(
   const collect =
     (into: string[]) =>
     (name: string, fullPath: string): void => {
-      const file = toPromptSafeRelativePath(dir, fullPath);
-      into.push(file);
-      if (LOCKFILE_NAMES.has(name)) repo.lockfiles.push(file);
-      if (isEnvFileName(name)) return readEnvKeys(fullPath, file);
-      if (isTemplateFileName(name)) templates.push({ fullPath, file });
+      // The real path decides structure; only its cleaned copy is recorded for showing.
+      const raw = toRelativePosixPath(dir, fullPath);
+      into.push(raw);
+      const isLockfile = LOCKFILE_NAMES.has(name);
+      const isEnvFile = isEnvFileName(name);
+      const isTemplate = isTemplateFileName(name);
       const manifest = MANIFEST_PARSERS.get(name);
       const marker = WORKSPACE_MARKERS.get(name);
+      if (!isLockfile && !isEnvFile && !isTemplate && !manifest && !marker) {
+        return;
+      }
+      const file = sanitizeReportedPath(raw);
+      if (isLockfile) repo.lockfiles.push(file);
+      if (isEnvFile) return readEnvKeys(fullPath, file);
+      if (isTemplate && templates.length < MAX_TEMPLATES_READ) {
+        templates.push({ fullPath, file });
+      }
       if (!manifest && !marker) return;
       const content = safeReadFile(fullPath);
       if (content === null) return;
-      const read = marker?.(content);
-      if (read) repo.workspaceMarkers.push({ ...read, path: file });
+      const read =
+        marker && content.length <= MAX_MARKER_BYTES ? marker(content) : null;
+      if (read) {
+        repo.workspaceMarkers.push({
+          ...read,
+          path: file,
+          dir: realPath(path.posix.dirname(raw)),
+        });
+      }
       if (!manifest) return;
       const packages = manifest.parse(content);
       if (packages === null) {
-        // Malformed: skipped, but recorded that the walk hit it.
-        analytics.captureException(new Error(`Malformed ${name}`), {
-          step: 'detectWarehouseSources.parsePackageJson',
-        });
+        // Malformed: skipped, and counted for the one report below.
+        malformedManifests += 1;
         return;
       }
       repo.manifests.push({
         path: file,
+        dir: realPath(manifestDir(raw)),
         ecosystem: manifest.ecosystem,
         packages: [...new Set(packages)],
       });
@@ -241,8 +278,17 @@ export function walkRepoFiles(
     repo.complete = repo.complete && complete;
   }
 
-  repo.files = budgetFiles(first, rest, repo.manifests);
+  repo.files = budgetFiles(first, rest, repo.manifests).map(
+    sanitizeReportedPath,
+  );
   repo.truncated = repo.files.length < first.length + rest.length;
+  if (malformedManifests > 0) {
+    // One event for the walk, however many manifests are malformed.
+    analytics.captureException(new Error('Malformed package.json'), {
+      step: 'detectWarehouseSources.parsePackageJson',
+      count: malformedManifests,
+    });
+  }
   repo.envKeys = [...envKeys].map(([name, files]) => ({ name, files }));
   return { files: repo, templates, durationMs: Date.now() - startedAt };
 }
@@ -265,8 +311,9 @@ export function readScriptHosts(
   let templatesRead = 0;
   for (const template of templates) {
     if (templatesRead >= MAX_TEMPLATE_FILES) break;
-    const content = safeReadFile(template.fullPath);
-    if (content === null || content.length > MAX_TEMPLATE_BYTES) continue;
+    // The size is checked before the read, so a large template is never loaded.
+    const content = safeReadFile(template.fullPath, MAX_TEMPLATE_BYTES);
+    if (content === null) continue;
     // Checked before the template counts against the budget, so components
     // that load no script cannot use it up.
     if (!hasScriptTag(content)) continue;
@@ -280,7 +327,9 @@ export function readScriptHosts(
 
 /** Folders that hold a manifest, shallowest first: the candidate projects in a repo. `.` is the root. */
 export function manifestDirs(repo: RepoFiles): string[] {
-  const dirs = new Set(repo.manifests.map((m) => manifestDir(m.path)));
+  const dirs = new Set(
+    repo.manifests.flatMap((m) => (m.dir === null ? [] : [m.dir])),
+  );
   return [...dirs].sort(
     (a, b) => depthOf(a) - depthOf(b) || a.localeCompare(b),
   );
@@ -297,7 +346,11 @@ const MAX_LEVELS_UP = 8;
 function readWorkspaceAt(dir: string): MarkerRead | null {
   const reads: MarkerRead[] = [];
   for (const [name, parse] of WORKSPACE_MARKERS) {
-    const content = safeReadFile(path.join(dir, name));
+    const file = path.join(dir, name);
+    // Checked first: a missing marker is the usual case, not a read error to report.
+    const content = fs.existsSync(file)
+      ? safeReadFile(file, MAX_MARKER_BYTES)
+      : null;
     const read = content === null ? null : parse(content);
     if (read) reads.push(read);
   }
