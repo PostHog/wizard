@@ -368,6 +368,18 @@ async function discover(
   );
 }
 
+/** The path of `dir` from the discovery root, as a project is named. Undefined before discovery, and for a directory outside the root. */
+export function projectPathOf(
+  session: Pick<ProgramSession, 'frameworkContext'>,
+  dir: string,
+): string | undefined {
+  const rootDir = getDiscovery(session)?.rootDir;
+  if (!rootDir) return undefined;
+  const relative = path.relative(rootDir, dir);
+  if (relative.startsWith('..') || path.isAbsolute(relative)) return undefined;
+  return relative === '' ? '.' : relative.split(path.sep).join('/');
+}
+
 /**
  * One project's tools, the run project's by default: the tools found at or
  * below it. Every reader takes tools from here, so a sibling project's tools

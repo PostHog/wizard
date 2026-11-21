@@ -50,6 +50,7 @@ import {
   findProgramConfig,
   reportDiscovery,
   runDiscovery,
+  scopeToProject,
   SessionStore,
   settleProjects,
 } from '@programs';
@@ -222,7 +223,11 @@ export class WizardStore implements TuiView {
   async runReadyHooks(): Promise<void> {
     const config = findProgramConfig(this.router.activeProgram);
     const ctx = this.sessions.readyContext();
-    if (config) await runDiscovery(config, ctx);
+    if (config) {
+      await runDiscovery(config, ctx);
+      // The run works in the project it started in, also when launched below it.
+      scopeToProject(this.sessions, this.sessions.session.runProject);
+    }
     await config?.onReady?.(ctx);
     settleProjects(ctx);
     this.sessions.setDetectionComplete();

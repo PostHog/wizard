@@ -38,6 +38,7 @@ import { removeAuditLedger, startAuditLedgerWatcher } from '@programs/audit';
 import { FRAMEWORK_REGISTRY } from '@services/frameworks';
 import {
   getTraits,
+  projectPathOf,
   toMatchKeys,
   toTraitKeys,
 } from '@services/project-discovery';
@@ -467,10 +468,9 @@ async function invokeProgram(
             seedTasks: planned.config.seedTasks
               ? () => planned.config.seedTasks!(session())
               : undefined,
-            matchKeys: () =>
-              toMatchKeys(getTraits(session(), pair.project.path)),
-            traitKeys: () =>
-              toTraitKeys(getTraits(session(), pair.project.path)),
+            // The session's own run project: a step scoped to a sub-folder reads that folder's traits.
+            matchKeys: () => toMatchKeys(getTraits(session())),
+            traitKeys: () => toTraitKeys(getTraits(session())),
             projectFacts:
               (decisions && planned.config.decisions) ||
               planned.config.detectedFacts
@@ -634,9 +634,14 @@ async function scopeSession(
   runner: RunnerContext,
 ): Promise<WizardSession | null> {
   if (!runStep.targetDir && !runStep.onRunPrep) return null;
+  const installDir = runStep.targetDir
+    ? runStep.targetDir(live)
+    : live.installDir;
   const session: WizardSession = {
     ...live,
-    installDir: runStep.targetDir ? runStep.targetDir(live) : live.installDir,
+    installDir,
+    // The step's directory is its run project, so its traits are that directory's.
+    runProject: projectPathOf(live, installDir) ?? live.runProject,
     frameworkContext: { ...live.frameworkContext },
   };
   if (runStep.onRunPrep) await runStep.onRunPrep(session, runner.log);
