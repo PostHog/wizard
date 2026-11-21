@@ -152,9 +152,15 @@ describe('walkRepo', () => {
     );
     expect(snapshot.manifests).toEqual(
       expect.arrayContaining([
-        { path: 'package.json', ecosystem: 'npm', packages: ['next'] },
+        {
+          path: 'package.json',
+          dir: '.',
+          ecosystem: 'npm',
+          packages: ['next'],
+        },
         {
           path: 'apps/api/requirements.txt',
+          dir: 'apps/api',
           ecosystem: 'pypi',
           packages: ['django', 'posthog'],
         },

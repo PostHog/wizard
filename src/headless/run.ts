@@ -139,7 +139,8 @@ async function main(
     }),
     destinations,
     eventPlanPath: config.eventPlanFile
-      ? join(session.installDir, config.eventPlanFile)
+      ? // Read from the live session: the plan can move the run to another project.
+        () => join(store.session.installDir, config.eventPlanFile ?? '')
       : undefined,
     auditChecks: config.auditLedgerFile
       ? () => getAuditChecks(store.session)

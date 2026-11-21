@@ -116,8 +116,8 @@ export interface TaskStreamPushOptions {
   getFlags?: () => Readonly<Record<string, string>> | null;
   programId: string;
   destinations: TaskStreamDestination[];
-  /** Optional absolute event-plan path to load into the store once. */
-  eventPlanPath?: string;
+  /** Optional absolute event-plan path to load into the store once. A function follows a run whose directory moves. */
+  eventPlanPath?: string | (() => string);
   /** The run's audit ledger, when it has one. The runner owns the watcher. */
   auditChecks?: () => unknown;
   /** When false, destination subscription/delivery remains disabled. */
@@ -131,6 +131,7 @@ export class TaskStreamPush {
   private readonly programId: string;
   private readonly sessionId: string;
   private readonly eventPlanWatcher: EventPlanWatcher | null;
+  private unfollowEventPlan: (() => void) | null = null;
   private readonly auditChecks: (() => unknown) | null;
 
   private readonly runSync?: WizardRunSync;
@@ -184,6 +185,12 @@ export class TaskStreamPush {
    */
   attach(store?: SessionStore): void {
     this.eventPlanWatcher?.start();
+    if (this.eventPlanWatcher && !this.unfollowEventPlan) {
+      // The run can move to another project's directory after the stream attaches.
+      this.unfollowEventPlan = (store ?? this.store).subscribe(() =>
+        this.eventPlanWatcher?.follow(),
+      );
+    }
     if (!this.enabled) return;
     if (this.unsubscribe) return;
     const target = store ?? this.store;
@@ -194,6 +201,8 @@ export class TaskStreamPush {
   /** Stop subscribing. Does not flush. */
   detach(): void {
     this.eventPlanWatcher?.stop();
+    this.unfollowEventPlan?.();
+    this.unfollowEventPlan = null;
     if (this.unsubscribe) {
       this.unsubscribe();
       this.unsubscribe = null;

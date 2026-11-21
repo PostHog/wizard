@@ -83,8 +83,8 @@ function toPlanProject(
   // A workspace root that is no app itself is where the apps live, not one to pick.
   const root = isWorkspaceRoot(session, project) && !isApp(traits);
   const applies = !root && (config.appliesTo?.(traits) ?? true);
-  // The project the run started in is always a choice: it is today's default.
-  const offered = applies || isRunProject;
+  // The project the run started in is a choice, as today's default, unless it only holds the apps.
+  const offered = applies || (isRunProject && !root);
   return {
     path: project.path,
     ...(traits.framework && {
@@ -103,7 +103,7 @@ function toPlanProject(
  * The project that starts picked. A run that started inside a project keeps
  * it, and so does a run at a workspace root that is an app itself. A run at
  * any other workspace root takes the main app, else the only app offered, else
- * stays where it started.
+ * stays where it started, though that root is not offered.
  */
 function defaultPick(
   session: ProgramSession,
@@ -158,6 +158,36 @@ export function planNeedsPick(plan: PlanOffer): boolean {
   return (
     plan.repoType === 'monorepo' &&
     plan.projects.filter((project) => project.offered).length > 1
+  );
+}
+
+/** Whether the program works in one picked project: it says which projects it applies to, and discovery ran with the flag on. */
+export function picksProject(
+  session: ProgramSession,
+  config: Applies,
+): boolean {
+  return (
+    config.appliesTo !== undefined &&
+    (getDiscovery(session)?.mode ?? 'off') !== 'off'
+  );
+}
+
+/**
+ * Whether a host is asked to pick: the program picks its project, no caller
+ * named one, the run is interactive and the plan has a choice to make. The
+ * runner and the test discovery preview both read this.
+ */
+export function planAsks(
+  session: ProgramSession,
+  config: Applies,
+  plan: PlanOffer,
+  requested?: string,
+): boolean {
+  return (
+    picksProject(session, config) &&
+    requested === undefined &&
+    !session.ci &&
+    planNeedsPick(plan)
   );
 }
 

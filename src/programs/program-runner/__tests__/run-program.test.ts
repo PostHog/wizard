@@ -2,7 +2,12 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { DEFAULT_BINDING, runAgent, RunOutcome } from '@agent';
-import { Harness, Integration, Sequence } from '@shared/constants';
+import {
+  Harness,
+  Integration,
+  Sequence,
+  WIZARD_PROJECT_DISCOVERY_FLAG_KEY,
+} from '@shared/constants';
 import { HostResolution } from '@shared/host-resolution';
 import type { ApiUser } from '@shared/api';
 import type { AgentProgress, RunResult } from '@agent/types';
@@ -47,6 +52,8 @@ import type {
   RunnerContext,
 } from '@programs/program-contract';
 import type { WizardSession } from '@services/session';
+import { runDiscovery } from '@services/project-discovery';
+import { detectIntegrationProjects } from '@services/detection';
 import { AUDIT_CHECKS_KEY } from '@programs/audit';
 import { FRAMEWORK_REGISTRY } from '@services/frameworks';
 import { detectErrorCode } from '../detect-map';
@@ -77,6 +84,7 @@ vi.mock('@utils/analytics', async (importOriginal) => ({
     identifyUser: vi.fn(),
     setGroups: vi.fn(),
     groupIdentify: vi.fn(),
+    getAllFlagsForWizard: vi.fn().mockResolvedValue({}),
   },
 }));
 vi.mock(import('@shared/oauth-tokens'), () => ({
@@ -87,6 +95,11 @@ vi.mock('@utils/debug');
 vi.mock('@services/detection/decisions', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@services/detection/decisions')>()),
   runDecisionsSource: vi.fn(() => Promise.resolve(null)),
+}));
+// The plan's agentic ranking is one model call; everything else in detection runs real.
+vi.mock(import('@services/detection'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  detectIntegrationProjects: vi.fn(),
 }));
 // Every run discovers, and discovery downloads the tool catalog.
 vi.mock(
@@ -1672,6 +1685,124 @@ describe('runProgram', () => {
       expect(agentInput().installDir).toBe(repo);
     });
 
+    describe('at a workspace root with no framework of its own', () => {
+      /** A program that cannot run in the root, as posthog-integration cannot with no framework there. */
+      const noFrameworkAtRoot = {
+        appliesTo: () => true,
+        run: (session: ProgramSession) =>
+          session.installDir === repo
+            ? Promise.reject(
+                new ProgramAbort({
+                  message: 'No framework detected',
+                  code: ErrorCodes.DetectNoFramework,
+                }),
+              )
+            : Promise.resolve(run),
+      };
+      const picking = (projectPath: string | undefined) => {
+        const host = workflow();
+        host.confirmStep.mockImplementation((step: ProgramStep) => {
+          host.steps.push(step);
+          if (step.kind === 'plan') step.pick(projectPath ?? step.plan.picked);
+          return Promise.resolve(true);
+        });
+        return host;
+      };
+      const started = () =>
+        vi
+          .mocked(analytics.wizardCapture)
+          .mock.calls.filter(([event]) => event === 'agent started');
+
+      it('reaches the plan, and runs in the app the person picks', async () => {
+        const host = picking('apps/api');
+        const s = pairStore();
+        const result = await runProgram(
+          'metrics',
+          input({
+            store: s,
+            config: noFrameworkAtRoot,
+            wizardFlags: DISCOVERY_ON,
+          }),
+          { credentials: login(), workflow: host },
+        );
+
+        expect(host.steps.some((step) => step.kind === 'plan')).toBe(true);
+        expect(result.outcome).toBe(RunOutcome.Success);
+        expect(agentInput().installDir).toBe(path.join(repo, 'apps/api'));
+        expect(s.session.runProject).toBe('apps/api');
+        // The start is reported once, for the project the run works in.
+        expect(started()).toHaveLength(1);
+      });
+
+      it('stops with the root\u2019s own failure when the run stays there', async () => {
+        const result = await runProgram(
+          'metrics',
+          input({
+            store: pairStore(),
+            config: noFrameworkAtRoot,
+            wizardFlags: DISCOVERY_ON,
+          }),
+          { credentials: login(), workflow: picking(undefined) },
+        );
+
+        expect(result.outcome).toBe(RunOutcome.Failed);
+        expect(result.failure?.code).toBe(ErrorCodes.DetectNoFramework);
+        expect(runAgent).not.toHaveBeenCalled();
+      });
+
+      it('stops at once with the flag off, as before', async () => {
+        const host = picking('apps/api');
+        const result = await runProgram(
+          'metrics',
+          input({ store: pairStore(), config: noFrameworkAtRoot }),
+          { credentials: login(), workflow: host },
+        );
+
+        expect(result.failure?.code).toBe(ErrorCodes.DetectNoFramework);
+        expect(host.steps).toEqual([]);
+        expect(runAgent).not.toHaveBeenCalled();
+      });
+    });
+
+    it('ranks the projects with agentic detection when the plan screen asks, and starts on its main app', async () => {
+      vi.mocked(detectIntegrationProjects).mockResolvedValue({
+        repoType: 'monorepo',
+        projects: [
+          {
+            path: 'apps/api',
+            framework: 'Express',
+            targetId: 'javascript_node',
+            hasPostHog: false,
+            recommended: true,
+          },
+        ],
+      });
+      const host = workflow();
+      host.confirmStep.mockImplementation(async (step: ProgramStep) => {
+        if (step.kind !== 'plan') return true;
+        // What the plan screen does: rank once it opens, then confirm the project that starts picked.
+        const ranked = await step.rank?.();
+        step.pick(ranked?.picked ?? step.plan.picked);
+        return true;
+      });
+      const s = pairStore();
+
+      const result = await runProgram(
+        'metrics',
+        input({
+          store: s,
+          config: { ...everyProject, rankWith: ['agentic'] },
+          wizardFlags: DISCOVERY_ON,
+        }),
+        { credentials: login(), workflow: host },
+      );
+
+      expect(result.outcome).toBe(RunOutcome.Success);
+      expect(detectIntegrationProjects).toHaveBeenCalledTimes(1);
+      expect(s.session.runProject).toBe('apps/api');
+      expect(agentInput().installDir).toBe(path.join(repo, 'apps/api'));
+    });
+
     it('asks nobody without a host, or with the flag off', async () => {
       await runProgram(
         'metrics',
@@ -1708,6 +1839,79 @@ describe('runProgram', () => {
       );
       expect(result.outcome).toBe(RunOutcome.Aborted);
       expect(runAgent).not.toHaveBeenCalled();
+    });
+
+    it('works in the project a launch below it started in', async () => {
+      vi.mocked(analytics.getAllFlagsForWizard).mockResolvedValue({
+        [WIZARD_PROJECT_DISCOVERY_FLAG_KEY]: 'one-project',
+      });
+      fs.mkdirSync(path.join(repo, 'apps/web/src'));
+      const s = new SessionStore(
+        buildSession({ installDir: path.join(repo, 'apps/web/src') }),
+      );
+      try {
+        await runProgram('metrics', input({ store: s }), {
+          credentials: login(),
+        });
+      } finally {
+        vi.mocked(analytics.getAllFlagsForWizard).mockResolvedValue({});
+      }
+
+      expect(s.session.runProject).toBe('apps/web');
+      expect(agentInput().installDir).toBe(path.join(repo, 'apps/web'));
+    });
+
+    it('reads the traits of the sub-folder a composed step runs in', async () => {
+      const s = pairStore();
+      await runDiscovery({ id: 'self-driving' }, s.readyContext());
+      s.setDetectionComplete();
+      const composed = {
+        run,
+        runSteps: {
+          'integrate-run': {
+            runProgramId: 'metrics' as const,
+            targetDir: () => path.join(repo, 'apps/web'),
+          },
+        },
+      };
+
+      const result = await runProgram(
+        'self-driving',
+        input({ store: s, config: composed }),
+        { credentials: login(), workflow: workflow() },
+      );
+
+      expect(result.outcome).toBe(RunOutcome.Success);
+      expect(agentInput(0).installDir).toBe(path.join(repo, 'apps/web'));
+      // apps/web holds posthog-js; the root project does not.
+      expect(agentConfig(0).traitKeys?.()).toMatchObject({
+        posthogInstalled: ['yes'],
+      });
+      expect(s.session.runProject).toBe('.');
+    });
+
+    it('stops on a project whose real directory is outside the workspace', async () => {
+      const outside = fs.realpathSync(
+        fs.mkdtempSync(path.join(os.tmpdir(), 'outside-')),
+      );
+      fs.writeFileSync(path.join(outside, 'package.json'), '{}');
+      fs.rmSync(path.join(repo, 'apps/api'), { recursive: true });
+      const s = pairStore();
+      await runDiscovery({ id: 'metrics' }, s.readyContext());
+      // Discovery never follows a link, so it lists none; a project list from elsewhere could.
+      fs.symlinkSync(outside, path.join(repo, 'apps/api'));
+      s.setProjects([...s.session.projects, { path: 'apps/api', traits: {} }]);
+
+      const result = await runProgram(
+        'metrics',
+        input({ store: s, project: 'apps/api' }),
+        { credentials: login() },
+      );
+
+      expect(result.outcome).toBe(RunOutcome.Aborted);
+      expect(result.failure?.code).toBe(ErrorCodes.DetectBadDirectory);
+      expect(runAgent).not.toHaveBeenCalled();
+      fs.rmSync(outside, { recursive: true, force: true });
     });
 
     it('stops on a project discovery did not find', async () => {

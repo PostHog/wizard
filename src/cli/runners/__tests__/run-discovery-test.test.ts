@@ -59,6 +59,35 @@ const report: DiscoveryTestReport = {
 };
 
 describe('test discovery mode', () => {
+  it('prints no control character a file name in the repo holds', () => {
+    const escape = '\u001b[2J\u001b]0;owned\u0007';
+    const text = formatDiscoveryTest({
+      ...report,
+      runProject: `apps/${escape}web`,
+      projects: [
+        {
+          ...report.projects[0],
+          path: `apps/${escape}web`,
+          traits: { mcpServers: [`src/${escape}server.ts`] },
+          sources: {
+            mcpServers: [
+              { value: [`src/${escape}server.ts`], source: 'static' },
+            ],
+          },
+          unsettled: [],
+        },
+      ],
+      plan: {
+        ...report.plan,
+        picked: `apps/${escape}web`,
+        projects: [{ ...report.plan.projects[0], path: `apps/${escape}web` }],
+      },
+    });
+    // eslint-disable-next-line no-control-regex
+    expect(text).not.toMatch(/[\u0000-\u0009\u000B-\u001F\u007F]/);
+    expect(text).toContain('src/?[2J?]0;owned?server.ts');
+  });
+
   it('is asked for by the flag alone or with a format', () => {
     expect(wantsDiscoveryTest({})).toBe(false);
     expect(wantsDiscoveryTest({ testDiscovery: '' })).toBe(true);

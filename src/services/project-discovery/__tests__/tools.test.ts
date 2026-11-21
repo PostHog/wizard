@@ -9,6 +9,7 @@ import {
 } from '@services/project-discovery/tools';
 import {
   readScriptHosts,
+  walkRepo,
   walkRepoFiles,
 } from '@services/project-discovery/walk';
 import { parseGemfile } from '@services/project-discovery/manifests';
@@ -69,6 +70,18 @@ describe('discoverTools', () => {
 
   it('returns empty for a non-existent directory', () => {
     expect(detect(path.join(tmpDir, 'nope'))).toEqual([]);
+  });
+
+  it('reads no manifest from a file named after an object member', () => {
+    writePackageJson(tmpDir, { stripe: '^14.0.0' });
+    fs.mkdirSync(path.join(tmpDir, 'src'));
+    for (const name of ['constructor', 'toString', '__proto__']) {
+      fs.writeFileSync(path.join(tmpDir, 'src', name), '');
+    }
+    expect(walkRepo(tmpDir).manifests.map((m) => m.path)).toEqual([
+      'package.json',
+    ]);
+    expect(kinds(tmpDir)).toEqual(['Stripe']);
   });
 
   it('returns empty when no source signal is present', () => {

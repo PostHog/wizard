@@ -108,7 +108,24 @@ describe('buildPlan', () => {
       offered: false,
       reason: 'library',
     });
+    // The root only holds the apps, so the run starting there does not offer it.
+    expect(row(plan, '.')).toMatchObject({
+      offered: false,
+      reason: 'workspace-root',
+    });
     expect(planNeedsPick(plan)).toBe(true);
+  });
+
+  it('asks nothing at a workspace root that holds one app, and takes that app', async () => {
+    fs.mkdirSync(path.join(repo, '.git'));
+    write('package.json', pkg());
+    write('pnpm-workspace.yaml', 'packages:\n  - apps/*\n');
+    write('apps/web/package.json', pkg({ next: '15.0.0' }));
+    const store = new SessionStore(buildSession({ installDir: repo }));
+    await runDiscovery({ id: 'posthog-integration' }, store.readyContext());
+    const plan = buildPlan(store.session, PROGRAM);
+    expect(planNeedsPick(plan)).toBe(false);
+    expect(plan.picked).toBe('apps/web');
   });
 
   it('keeps the project the run started in', async () => {
@@ -206,7 +223,7 @@ describe('plan events', () => {
         repo_type: 'monorepo',
         workspace_tool: 'pnpm',
         project_count: 5,
-        offered_count: 3,
+        offered_count: 2,
         projects: expect.arrayContaining([
           {
             path: 'apps/web',

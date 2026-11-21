@@ -260,10 +260,7 @@ const UNSAFE_PATH_CHARS =
  * untouched, so the agent can still open the file the signal names.
  */
 export function sanitizeReportedPath(relativePath: string): string {
-  const flattened = relativePath.replace(
-    UNSAFE_PATH_CHARS,
-    UNSAFE_PATH_REPLACEMENT,
-  );
+  const flattened = replaceUnsafeChars(relativePath);
   const capped =
     flattened.length > MAX_REPORTED_PATH_LENGTH
       ? flattened.slice(0, MAX_REPORTED_PATH_LENGTH) + TRUNCATION_MARKER
@@ -272,6 +269,16 @@ export function sanitizeReportedPath(relativePath: string): string {
   // conventional path instead, so the signal survives and the agent still has
   // somewhere to look. Dropping the signal would be the worse outcome.
   return UNUSABLE_PATH.test(capped) ? FALLBACK_ENV_PATH : capped;
+}
+
+/** Repository-controlled text with each character that must not reach a prompt or a terminal replaced. Its length is kept. */
+export function replaceUnsafeChars(text: string): string {
+  return text.replace(UNSAFE_PATH_CHARS, UNSAFE_PATH_REPLACEMENT);
+}
+
+/** Whether a path holds none of the characters {@link sanitizeReportedPath} replaces. Its length is not checked. */
+export function hasOnlyPromptSafeChars(relativePath: string): boolean {
+  return relativePath.search(UNSAFE_PATH_CHARS) === -1;
 }
 
 /**

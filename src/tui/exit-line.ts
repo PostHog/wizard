@@ -74,6 +74,17 @@ function mcpLoginBlock(store: WizardStore): string | null {
   );
 }
 
+/** The email setup the user said yes to; the command on its own line for triple-click. */
+function emailSetupBlock(store: WizardStore): string | null {
+  const setup = store.emailSetup;
+  if (!setup) return null;
+  return (
+    `${DIM}${setup.lead}${RESET_ATTRS}\n` +
+    `${setup.command}\n` +
+    `${DIM}Or set up email in Workflows:${RESET_ATTRS}\n${setup.workflowsUrl}`
+  );
+}
+
 /** The report's warning items, from the published handoff or else the report file. */
 function needsAttentionBlock(store: WizardStore): string | null {
   const reportFile = store.session.outroData?.reportFile;
@@ -155,6 +166,8 @@ function exitSummary(store: WizardStore): string {
       );
     }
 
+    const emailBlock = emailSetupBlock(store);
+    if (emailBlock) parts.push(emailBlock);
     if (loginBlock) parts.push(loginBlock);
     if (costLine) parts.push(costLine);
 

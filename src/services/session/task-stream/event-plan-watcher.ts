@@ -43,18 +43,26 @@ export function normalizeEventPlan(parsed: unknown): PlannedEvent[] | null {
 export class EventPlanWatcher {
   private handle: FileWatcherHandle | null = null;
   private captured = false;
+  /** The path the running watcher reads. */
+  private watching: string | null = null;
 
   constructor(
     private readonly store: SessionStore,
-    private readonly path: string,
+    /** The plan file. A function is read again by {@link follow}, for a run whose directory can move. */
+    private readonly path: string | (() => string),
     private readonly options: FileWatcherOptions = {},
   ) {}
+
+  private resolvePath(): string {
+    return typeof this.path === 'function' ? this.path() : this.path;
+  }
 
   start(): void {
     if (this.handle || this.captured) return;
 
+    this.watching = this.resolvePath();
     this.handle = startFileWatcher(
-      this.path,
+      this.watching,
       (parsed) => {
         const events = normalizeEventPlan(parsed);
         if (!events || events.length === 0) return;
@@ -69,6 +77,14 @@ export class EventPlanWatcher {
         ...this.options,
       },
     );
+  }
+
+  /** Watch the plan file where it is now, when the run moved to another project's directory. */
+  follow(): void {
+    if (this.captured || !this.handle) return;
+    if (this.resolvePath() === this.watching) return;
+    this.stop();
+    this.start();
   }
 
   refresh(): void {

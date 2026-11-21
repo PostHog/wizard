@@ -47,8 +47,22 @@ import type { WizardStore } from './store.js';
 import type { TuiLaunch } from './launch.js';
 import { tuiWorkflow } from './workflow.js';
 
-/** How long a screen's exit request waits for analytics before it exits anyway. */
+/** How long an exit request or a signal waits for analytics before it exits anyway. */
 const EXIT_REPORT_BUDGET_MS = 2000;
+
+async function withinReportBudget(report: Promise<void>): Promise<void> {
+  let timer: NodeJS.Timeout | undefined;
+  try {
+    await Promise.race([
+      report,
+      new Promise((resolve) => {
+        timer = setTimeout(resolve, EXIT_REPORT_BUDGET_MS);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 /**
  * Run `config` in the TUI. Resolves with the exit code: the run's, a screen's
@@ -69,6 +83,12 @@ export async function runTui(
   // A tool the intro handed off to ends the run once its analytics flush.
   let handedOff = false;
 
+  // Only events a finished run captures after its report, such as an unmount's answer, get the budget.
+  const reportCancellation = async (): Promise<void> => {
+    await analytics.shutdown('cancelled');
+    await withinReportBudget(flushAnalytics());
+  };
+
   // Flush a terminal-phase push so the web app sees the run ended in error
   // rather than hanging on the last "running" snapshot. Registered before the
   // stream exists: Ctrl-C on the intro must still restore the terminal and run
@@ -83,18 +103,18 @@ export async function runTui(
     if (tui?.store.session.runPhase === RunPhase.Running) {
       tui.store.setRunPhase(RunPhase.Error);
     }
+    try {
+      tui?.unmount();
+    } catch {
+      // terminal may already be torn down
+    }
     void Promise.all([
       stream?.shutdown(2000, 'cancelled'),
-      analytics.shutdown('cancelled'),
+      reportCancellation(),
     ])
       .catch(() => logToFile('[run-wizard] cancellation shutdown failed'))
       .finally(() => {
         unregisterShutdown?.();
-        try {
-          tui?.unmount();
-        } catch {
-          // terminal may already be torn down
-        }
         exit.end(signal === 'SIGTERM' ? 143 : 130);
       });
   };
@@ -137,10 +157,7 @@ export async function runTui(
         }
         await flushAnalytics();
       };
-      void Promise.race([
-        report(),
-        new Promise((resolve) => setTimeout(resolve, EXIT_REPORT_BUDGET_MS)),
-      ]).then(() => exit.end(code));
+      void withinReportBudget(report()).then(() => exit.end(code));
     });
 
     const session = buildSession(launch.session);
@@ -219,7 +236,9 @@ export async function runTui(
       }),
       destinations,
       eventPlanPath: programConfig.eventPlanFile
-        ? join(session.installDir, programConfig.eventPlanFile)
+        ? // Read from the live session: the plan can move the run to another project.
+          () =>
+            join(store.session.installDir, programConfig.eventPlanFile ?? '')
         : undefined,
       auditChecks: programConfig.auditLedgerFile
         ? () => getAuditChecks(store.session)

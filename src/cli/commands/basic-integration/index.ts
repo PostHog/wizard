@@ -53,6 +53,11 @@ export const basicIntegrationCommand: Command = {
     // Each mode file is loaded only when its branch is taken, so a plain
     // `npx @posthog/wizard` never pulls in the CI or playground paths.
     void (async () => {
+      // Test discovery mode only reads the repo, prints and exits. It comes before every path that checks CI credentials, signs up or opens a screen.
+      if (wantsDiscoveryTest(argv)) {
+        const { runInteractive } = await import('./interactive');
+        return runInteractive(argv);
+      }
       // ── The CI / headless division ───────────────────────────────────
       // --ci (dev/test only) and the experimental headless flag (the
       // published-build, non-interactive path; see @shared/headless-mode) both
@@ -69,8 +74,7 @@ export const basicIntegrationCommand: Command = {
         const { runCIInstall } = await import('./ci-install');
         return runCIInstall(argv);
       }
-      // Test discovery mode prints and exits, so it needs no terminal.
-      if (isNonInteractiveEnvironment() && !wantsDiscoveryTest(argv)) {
+      if (isNonInteractiveEnvironment()) {
         const { failNonInteractive } = await import('./non-interactive');
         return failNonInteractive();
       }
