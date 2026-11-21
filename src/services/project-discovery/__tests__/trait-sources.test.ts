@@ -25,12 +25,15 @@ vi.mock(
 import { Integration } from '@shared/constants';
 import {
   applyDetectionReport,
+  discoveredWarehouseSources,
   getProjects,
+  getTools,
   getTraitClaims,
   getTraits,
   runDiscovery,
   selectProjects,
   setTrait,
+  settleProjects,
   unsettledTraits,
 } from '@services/project-discovery';
 import { SessionStore } from '@services/session/session-store';
@@ -102,6 +105,77 @@ describe('static detection in each project', () => {
     );
     // The root is its own workspace root.
     expect(getTraits(session, '.').workspaceRoot).toBe('.');
+  });
+
+  it('gives each project that shares a package the tool', async () => {
+    write('apps/api/package.json', pkg({ express: '^4.0.0', stripe: '^14' }));
+    const { session } = await discoveredMonorepo();
+    expect(getTraits(session, 'apps/web').warehouseSources).toEqual(['Stripe']);
+    expect(getTraits(session, 'apps/api').warehouseSources).toEqual(['Stripe']);
+    expect(getTraits(session, 'apps/docs').warehouseSources).toEqual([
+      'OpenAI',
+    ]);
+    expect(getTraits(session, 'packages/ui').warehouseSources).toBeUndefined();
+  });
+
+  it('offers the run project its own tools and never a sibling project\u2019s', async () => {
+    // A package below the app is the app's too.
+    write('apps/docs/functions/package.json', pkg({ pg: '^8.0.0' }));
+    const store = await discoveredMonorepo();
+    const sourcesOf = async (runProject: string) => {
+      store.setRunProject(runProject);
+      const sources = await discoveredWarehouseSources(store.session);
+      return sources.map((source) => source.kind).sort();
+    };
+    expect(await sourcesOf('apps/web')).toEqual(['Stripe']);
+    expect(await sourcesOf('apps/docs')).toEqual(['OpenAI', 'Postgres']);
+    expect(await sourcesOf('packages/ui')).toEqual([]);
+    // The root holds every project.
+    expect(await sourcesOf('.')).toEqual(['OpenAI', 'Postgres', 'Stripe']);
+    expect(getTools(store.session, 'apps/web')).toEqual([
+      expect.objectContaining({
+        kind: 'Stripe',
+        signals: [
+          { source: 'npm', name: 'stripe', file: 'apps/web/package.json' },
+        ],
+      }),
+    ]);
+  });
+
+  it('counts a PostHog SDK as installed, and never its CLI', async () => {
+    write(
+      'apps/cli-only/package.json',
+      pkg({ next: '15', '@posthog/cli': '1' }),
+    );
+    const { session } = await discoveredMonorepo();
+    expect(getTraits(session, 'apps/cli-only')).toMatchObject({
+      posthogInstalled: 'no',
+    });
+    expect(getTraits(session, 'apps/cli-only').installedSdks).toBeUndefined();
+    expect(getTraits(session, 'apps/docs').posthogInstalled).toBe('yes');
+  });
+
+  it('still knows the first run project once the run moves to another', async () => {
+    const store = await discoveredMonorepo();
+    await store.edit((draft) => {
+      draft.integration = Integration.django;
+      draft.mcpServerCandidates = ['server.py'];
+    });
+    settleProjects(store.readyContext());
+
+    // What a move to another project does: the session now holds that one's detection.
+    store.setRunProject('apps/web');
+    await store.edit((draft) => {
+      draft.integration = Integration.nextjs;
+      draft.mcpServerCandidates = [];
+    });
+    expect(getTraits(store.session, '.')).toMatchObject({
+      framework: Integration.django,
+      mcpServers: ['server.py'],
+    });
+    expect(getTraits(store.session, 'apps/web').framework).toBe(
+      Integration.nextjs,
+    );
   });
 
   it('selects projects on their settled traits', async () => {

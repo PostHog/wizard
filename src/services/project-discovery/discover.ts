@@ -76,16 +76,23 @@ export type Discovery = {
   files: RepoFiles;
   tools: DiscoveredTools;
   projects: DiscoveredProjects;
-  /** What static detection read in each project but the run project, by path. */
+  /**
+   * What static detection read in each project, by path. Discovery fills it
+   * for every project but the run project. The run project's entry is kept
+   * once its program's detection has run, so a run that moves to another
+   * project still knows it.
+   */
   detected: Record<string, DetectedProject>;
 };
 
-/** Static detection in one project the run did not start in. */
+/** Static detection in one project, kept apart from the session, which holds the run project's only. */
 export type DetectedProject = {
   framework?: Integration;
   frameworkVariant?: string;
+  /** Paths the MCP scan suggests as servers. */
+  mcpServers?: readonly string[];
   /** The kinds of data source whose signals sit in the project. */
-  warehouseSources?: string[];
+  warehouseSources?: readonly string[];
 };
 
 type DiscoveryContext = Pick<

@@ -134,9 +134,11 @@ export const TRAITS: { readonly [K in TraitName]: TraitDefinition<K> } = {
   },
   mcpServers: {
     detect: (session, projectPath) =>
-      isRunProject(session, projectPath)
-        ? nonEmpty(session.mcpServerCandidates)
-        : undefined,
+      nonEmpty(
+        isRunProject(session, projectPath)
+          ? session.mcpServerCandidates
+          : getDiscovery(session)?.detected[projectPath]?.mcpServers ?? [],
+      ),
     fallback: STATIC,
   },
   warehouseSources: {

@@ -202,8 +202,10 @@ detection and the `person`. No source outranks another.
 - **Selecting.** `getTraits(session, projectPath)` returns one project's settled
   traits, and `selectProjects(session, predicate)`, in
   [`traits/select.ts`](project-discovery/traits/select.ts), the projects whose
-  settled traits satisfy a predicate. `settleProjects` refreshes the settled
-  traits the session keeps on each project once detection has run.
+  settled traits satisfy a predicate. Call `settleProjects` once a program's
+  detection has run: it keeps the run project's static detection in
+  `Discovery.detected`, so a run that moves to another project still knows it,
+  and refreshes the settled traits the session keeps on each project.
 
 `toMatchKeys`, in
 [`traits/match-keys.ts`](project-discovery/traits/match-keys.ts), turns the
