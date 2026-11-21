@@ -10,6 +10,8 @@ import type { FlowStep } from '@tui/flow';
 import { RunPhase } from '@shared/run-state';
 import { HEALTH_CHECK_STEP } from '@tui/programs/shared/health-check-step';
 import type { WizardSession } from '@programs/types';
+import { emailProviderOffer } from '@programs/posthog-integration';
+import { PostHogIntegrationScreenId } from './screen-ids.js';
 
 function needsSetup(session: WizardSession): boolean {
   const config = session.frameworkConfig;
@@ -60,5 +62,12 @@ export const POSTHOG_INTEGRATION_FLOW: FlowStep[] = [
     label: 'MCP servers',
     screenId: 'mcp',
     isComplete: (tui) => tui.mcpComplete,
+  },
+  {
+    id: 'email-provider-offer',
+    label: 'Email',
+    screenId: PostHogIntegrationScreenId.EmailProviderOffer,
+    show: ({ session }) => emailProviderOffer(session) !== undefined,
+    isComplete: (tui) => tui.emailProviderOfferDone,
   },
 ];

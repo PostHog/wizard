@@ -24,7 +24,13 @@ vi.mock(
 
 import { WIZARD_PROJECT_DISCOVERY_FLAG_KEY } from '@shared/constants';
 import { analytics } from '@utils/analytics';
-import { getDiscovery, runDiscovery } from '@services/project-discovery';
+import {
+  getDiscovery,
+  rediscoverAfterLogin,
+  runDiscovery,
+} from '@services/project-discovery';
+import { workspaceFingerprint } from '@services/project-discovery/fingerprint';
+import { buildDiscoveryReport } from '@services/project-discovery/report';
 import {
   discoverProjects,
   parentOf,
@@ -106,6 +112,64 @@ describe('findWorkspaceRoot', () => {
     write('package.json', pkg({ next: '15.0.0' }));
     expect(findWorkspaceRoot(repo)).toEqual({ rootDir: repo, runProject: '.' });
   });
+
+  it('starts in the member that holds a source folder the run started in', () => {
+    pnpmMonorepo();
+    expect(findWorkspaceRoot(path.join(repo, 'apps/web/app'))).toEqual({
+      rootDir: repo,
+      runProject: 'apps/web',
+    });
+  });
+
+  it('keeps a workspace nested in another as its own root', () => {
+    write('pnpm-workspace.yaml', "packages:\n  - '**'\n");
+    write('package.json', pkg());
+    write('tools/build/Cargo.toml', '[workspace]\nmembers = ["crates/*"]\n');
+    write('tools/build/crates/cli/Cargo.toml', '[package]\nname = "cli"\n');
+    const nested = path.join(repo, 'tools/build');
+    expect(findWorkspaceRoot(nested)).toEqual({
+      rootDir: nested,
+      runProject: '.',
+    });
+  });
+
+  it('reads a package turbo.json as configuration, not as a workspace root', () => {
+    pnpmMonorepo();
+    write('apps/web/turbo.json', '{ "extends": ["//"] }');
+    expect(findWorkspaceRoot(path.join(repo, 'apps/web'))).toEqual({
+      rootDir: repo,
+      runProject: 'apps/web',
+    });
+  });
+
+  it('never looks above the home directory', () => {
+    write('turbo.json', '{}');
+    write('home/package.json', pkg());
+    const home = path.join(repo, 'home');
+    // `os.homedir()` reads these.
+    vi.stubEnv('HOME', home);
+    vi.stubEnv('USERPROFILE', home);
+    expect(findWorkspaceRoot(home)).toEqual({ rootDir: home, runProject: '.' });
+    vi.unstubAllEnvs();
+  });
+
+  it.skipIf(process.platform === 'win32')(
+    'takes no root from a directory others can write',
+    () => {
+      write('turbo.json', '{}');
+      write('app/package.json', pkg());
+      fs.chmodSync(repo, 0o777);
+      const app = path.join(repo, 'app');
+      expect(findWorkspaceRoot(app)).toEqual({ rootDir: app, runProject: '.' });
+    },
+  );
+
+  it('keeps the run where it started when a prompt cannot carry its path', () => {
+    write('turbo.json', '{}');
+    write('apps/we`b/package.json', pkg());
+    const odd = path.join(repo, 'apps/we`b');
+    expect(findWorkspaceRoot(odd)).toEqual({ rootDir: odd, runProject: '.' });
+  });
 });
 
 describe('discoverProjects', () => {
@@ -162,6 +226,31 @@ describe('discoverProjects', () => {
     ]);
   });
 
+  it('gives a project its real path however long it is', () => {
+    const long = `apps/${'a'.repeat(60)}/${'b'.repeat(70)}`;
+    write('package.json', pkg());
+    write(`${long}/package.json`, pkg({ next: '15.0.0' }));
+    const walk = walkRepo(repo);
+    // The path shown is cut; the directory the project resolves to is not.
+    expect(walk.manifests.map((m) => m.path)).toContain(
+      `${long}/package.json`.slice(0, 120) + '…',
+    );
+    expect(paths(discoverProjects(walk).projects)).toEqual(['.', long]);
+    expect(fs.existsSync(path.join(repo, long))).toBe(true);
+  });
+
+  it('lists no project whose folder name a prompt cannot carry', () => {
+    write('package.json', pkg());
+    write('apps/we`b/package.json', pkg({ stripe: '^14.0.0' }));
+    write('apps/api/package.json', pkg());
+    const walk = walkRepo(repo);
+    // Its packages are still read for the tool match, under a cleaned path.
+    expect(walk.manifests.map((m) => m.path)).toContain(
+      'apps/we?b/package.json',
+    );
+    expect(paths(discoverProjects(walk).projects)).toEqual(['.', 'apps/api']);
+  });
+
   it('reads a Gradle build with one module as one project, not a workspace', () => {
     write('settings.gradle', "include ':app'\n");
     write('build.gradle', '');
@@ -201,6 +290,27 @@ describe('the walk budget', () => {
   });
 });
 
+describe('the walk bounds', () => {
+  it('reports malformed manifests once, however many there are', () => {
+    write('package.json', pkg());
+    for (const app of ['a', 'b', 'c']) write(`apps/${app}/package.json`, '{');
+    vi.mocked(analytics.captureException).mockClear();
+    walkRepo(repo);
+    expect(analytics.captureException).toHaveBeenCalledTimes(1);
+    expect(analytics.captureException).toHaveBeenCalledWith(
+      expect.objectContaining({ message: 'Malformed package.json' }),
+      expect.objectContaining({ count: 3 }),
+    );
+  });
+
+  it('keeps a bounded number of files for one env key', () => {
+    for (let i = 0; i < 30; i += 1) write(`.env.${i}`, 'DATABASE_URL=x\n');
+    const [key] = walkRepo(repo).envKeys;
+    expect(key.name).toBe('DATABASE_URL');
+    expect(key.files).toHaveLength(20);
+  });
+});
+
 describe('runDiscovery', () => {
   const discoverFrom = async (runDir: string) => {
     const store = new SessionStore(buildSession({ installDir: runDir }));
@@ -212,7 +322,12 @@ describe('runDiscovery', () => {
     pnpmMonorepo();
     const runDir = path.join(repo, 'apps/web');
     const session = await discoverFrom(runDir);
-    expect(getDiscovery(session)).toMatchObject({ rootDir: runDir, runDir });
+    expect(getDiscovery(session)).toMatchObject({
+      rootDir: runDir,
+      runDir,
+      runProject: '.',
+      mode: 'off',
+    });
     expect(session.runProject).toBe('.');
     expect(paths(session.projects)).toEqual(['.']);
   });
@@ -225,7 +340,12 @@ describe('runDiscovery', () => {
     const runDir = path.join(repo, 'apps/web');
     const session = await discoverFrom(runDir);
     const discovery = getDiscovery(session);
-    expect(discovery).toMatchObject({ rootDir: repo, runDir });
+    expect(discovery).toMatchObject({
+      rootDir: repo,
+      runDir,
+      runProject: 'apps/web',
+      mode: 'one-project',
+    });
     expect(discovery?.projects.repoType).toBe('monorepo');
     expect(session.runProject).toBe('apps/web');
     expect(paths(session.projects)).toEqual([
@@ -236,6 +356,65 @@ describe('runDiscovery', () => {
     ]);
     // The run project is walked first, so its manifest names the tool.
     expect(discovery?.tools.tools.map((tool) => tool.kind)).toContain('Stripe');
+  });
+
+  it('discovers again when login changes what the flag answers', async () => {
+    pnpmMonorepo();
+    const runDir = path.join(repo, 'apps/web');
+    const store = new SessionStore(buildSession({ installDir: runDir }));
+    const program = { id: 'posthog-integration' };
+    await runDiscovery(program, store.readyContext());
+    expect(getDiscovery(store.session)).toMatchObject({ mode: 'off' });
+
+    // Nothing changed: the first discovery stays.
+    const first = getDiscovery(store.session);
+    await rediscoverAfterLogin(program, store.readyContext());
+    expect(getDiscovery(store.session)).toBe(first);
+
+    vi.mocked(analytics.getAllFlagsForWizard).mockResolvedValue({
+      [WIZARD_PROJECT_DISCOVERY_FLAG_KEY]: 'one-project',
+    });
+    await rediscoverAfterLogin(program, store.readyContext());
+    expect(getDiscovery(store.session)).toMatchObject({
+      mode: 'one-project',
+      rootDir: repo,
+      runDir,
+      runProject: 'apps/web',
+    });
+    expect(store.session.runProject).toBe('apps/web');
+    expect(paths(store.session.projects)).toContain('apps/api');
+  });
+
+  it('reports only the tools of the project the run started in', async () => {
+    vi.mocked(analytics.getAllFlagsForWizard).mockResolvedValue({
+      [WIZARD_PROJECT_DISCOVERY_FLAG_KEY]: 'one-project',
+    });
+    pnpmMonorepo();
+    const reportFrom = async (runDir: string) => {
+      const discovery = getDiscovery(await discoverFrom(runDir));
+      if (!discovery) throw new Error('no discovery');
+      // The whole workspace is matched; only the report is narrowed.
+      expect(discovery.tools.tools.map((tool) => tool.kind)).toContain(
+        'Stripe',
+      );
+      return buildDiscoveryReport(discovery, 7);
+    };
+
+    const api = await reportFrom(path.join(repo, 'apps/api'));
+    expect(api.tools).toEqual([]);
+    expect(api.workspace_fingerprint).toBe(
+      workspaceFingerprint(7, path.join(repo, 'apps/api')),
+    );
+
+    const web = await reportFrom(path.join(repo, 'apps/web'));
+    expect(web.tools).toEqual([
+      expect.objectContaining({
+        kind: 'Stripe',
+        signals: [
+          { source: 'npm', name: 'stripe', file: 'apps/web/package.json' },
+        ],
+      }),
+    ]);
   });
 
   it('finds the projects when the tool catalog is missing', async () => {

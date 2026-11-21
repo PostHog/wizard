@@ -18,7 +18,13 @@ export function projectDiscoveryMode(
   return value === 'one-project' || value === 'run-lists' ? value : 'off';
 }
 
-/** The run's mode. A failed flag read is `off`, so discovery never changes a run it cannot place. */
+/**
+ * The run's mode. A failed flag read is `off`, so discovery never changes a run
+ * it cannot place. Only discovery calls this: before login, and once more right
+ * after it, when the flag can answer for the person. It keeps the answer in
+ * `Discovery.mode`, and every other step reads that, so a run never holds two
+ * modes at once.
+ */
 export async function loadProjectDiscoveryMode(): Promise<ProjectDiscoveryMode> {
   try {
     return projectDiscoveryMode(await analytics.getAllFlagsForWizard());

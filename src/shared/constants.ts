@@ -343,6 +343,9 @@ export const WIZARD_WAREHOUSE_DESTINATIONS_FLAG_KEY =
   'wizard-warehouse-destinations';
 /** Multivariate flag: `one-project` or `run-lists` turns project discovery on; anything else is `off`. */
 export const WIZARD_PROJECT_DISCOVERY_FLAG_KEY = 'wizard-project-discovery';
+/** Boolean flag: ONLY an explicit 'true' asks the email provider question after a successful interactive install. */
+export const WIZARD_EMAIL_PROVIDER_OFFER_FLAG_KEY =
+  'wizard-email-provider-offer';
 // Reading a flag enters this run into that flag's experiment, so a closed set — not a
 // `wizard-` prefix anyone can name into — decides what a run evaluates. Test-pinned exhaustive.
 export const WIZARD_FLAG_KEYS = [
@@ -355,6 +358,7 @@ export const WIZARD_FLAG_KEYS = [
   WIZARD_DECISIONS_DETECTION_FLAG_KEY,
   WIZARD_WAREHOUSE_DESTINATIONS_FLAG_KEY,
   WIZARD_PROJECT_DISCOVERY_FLAG_KEY,
+  WIZARD_EMAIL_PROVIDER_OFFER_FLAG_KEY,
 ] as const;
 /** User-Agent for wizard HTTP requests and MCP server identification. */
 export const WIZARD_USER_AGENT = `posthog/wizard; version: ${VERSION}`;

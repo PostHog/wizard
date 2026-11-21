@@ -20,6 +20,9 @@ vi.mock('@utils/analytics', () => ({
     captureException: vi.fn(),
     setTag: vi.fn(),
     shutdown: vi.fn().mockResolvedValue(undefined),
+    getCachedWizardFlags: vi.fn(() => ({
+      'wizard-email-provider-offer': 'true',
+    })),
   },
   sessionProperties: vi.fn(() => ({})),
 }));
@@ -158,6 +161,7 @@ import { SourceMapsScreenId } from '@tui/programs/error-tracking-upload-source-m
 import { WarehouseSourceScreenId } from '@tui/programs/warehouse-source';
 import { WarehouseDestinationScreenId } from '@tui/programs/warehouse-destination';
 import { Tool } from '@tools';
+import { DISCOVERY_KEY } from '@services/project-discovery';
 
 // 80x28 is the ScreenContainer minimum. Anything smaller renders the
 // viewport guard instead of the screen, which the last describe pins once.
@@ -574,6 +578,42 @@ const FIXTURES: Record<string, Fixture> = {
       authed(s);
       ranSuccessfully(s);
       s.setDashboardUrl('https://us.posthog.com/project/42/dashboard/7');
+    },
+  },
+  [PostHogIntegrationScreenId.EmailProviderOffer]: {
+    program: Program.PostHogIntegration,
+    arrange: (s) => {
+      s.grantSharing();
+      authed(s);
+      s.setApiUser(apiUser(true));
+      s.setFrameworkContext(DISCOVERY_KEY, {
+        program: Program.PostHogIntegration,
+        discoveredAt: '2026-10-26T09:30:00.000Z',
+        rootDir: '/app',
+        files: {
+          dir: '/app',
+          files: [],
+          manifests: [],
+          lockfiles: [],
+          envKeys: [],
+        },
+        tools: {
+          complete: true,
+          tools: [
+            {
+              kind: 'Resend',
+              label: 'Resend',
+              warehouseSourceType: null,
+              mode: null,
+              matchedSignal: 'package resend',
+              signals: [],
+            },
+          ],
+        },
+      });
+      ranSuccessfully(s);
+      s.setOutroDismissed();
+      s.setMcpComplete();
     },
   },
   [ScreenId.MintFailure]: {

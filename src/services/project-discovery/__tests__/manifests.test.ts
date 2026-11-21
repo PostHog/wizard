@@ -9,9 +9,34 @@ import {
   parsePomXml,
   parsePubspecYaml,
   parsePackageSwift,
+  parsePyprojectToml,
 } from '@services/project-discovery/manifests';
 
 describe('manifest parsers', () => {
+  it('pyproject.toml: PEP 621 dependencies keep packages after bracketed extras', () => {
+    const content = `[project]
+dependencies = [
+  "fastapi[standard]>=0.115",
+  # "retired[extra]" is a comment, not a dependency
+  'posthog>=3.0',
+  "openai>=1.0",
+]
+
+[tool.other]
+unrelated = ["not-a-dependency"]`;
+    expect(parsePyprojectToml(content)).toEqual([
+      'fastapi',
+      'posthog',
+      'openai',
+    ]);
+  });
+
+  it('pyproject.toml: a dependencies array that never closes is not read', () => {
+    expect(
+      parsePyprojectToml('[project]\ndependencies = ["posthog", "openai"'),
+    ).toEqual([]);
+  });
+
   it('Cargo.toml: every dependency table, renames, and not array tables', () => {
     const content = `[package]
 name = "app"

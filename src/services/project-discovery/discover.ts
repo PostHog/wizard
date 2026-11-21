@@ -31,7 +31,7 @@ import type {
   DetectedSource,
   SourceDetector,
 } from '../warehouse-sources/types';
-import { loadProjectDiscoveryMode } from './flag';
+import { loadProjectDiscoveryMode, type ProjectDiscoveryMode } from './flag';
 import { discoverProjects, type DiscoveredProjects } from './projects';
 import {
   catalogScriptHosts,
@@ -41,6 +41,7 @@ import {
 } from './tools';
 import { getProjects } from './traits/store';
 import {
+  emptyRepoFiles,
   findWorkspaceRoot,
   readScriptHosts,
   walkRepo,
@@ -61,8 +62,15 @@ export type Discovery = {
    * with no workspace or the flag off.
    */
   rootDir: string;
-  /** The directory the run started in. A CI run can narrow `installDir` later, so the report fingerprints this one. */
+  /** The directory the run started in. */
   runDir: string;
+  /**
+   * The project the run started in, as a path from `rootDir`. A CI run can
+   * narrow `installDir` later, so the report fingerprints this project.
+   */
+  runProject: string;
+  /** The flag mode discovery ran in. Every later step follows this value and never reads the flag itself. */
+  mode: ProjectDiscoveryMode;
   /** The walk: tree, manifests, lockfiles, `.env` key names. Local only: never reported. */
   files: RepoFiles;
   tools: DiscoveredTools;
@@ -97,10 +105,10 @@ type ToolMatch = {
 
 /** The tool match, which needs the catalog download. Never throws: a failure is a `failed` match. */
 async function matchTools(
-  session: ProgramSession,
+  catalog: Promise<readonly SourceDetector[]>,
   walk: RepoWalk,
 ): Promise<ToolMatch> {
-  const detectors = await loadSourceDetectors(session.baseUrl);
+  const detectors = await catalog;
   // No catalog means discovery could not look, which is not the same as
   // finding nothing. The loader has already reported why.
   if (detectors.length === 0) return { tools: FAILED_TOOLS, detectors };
@@ -209,6 +217,28 @@ async function detectProjects(
   return detected;
 }
 
+/** `read()`, or `fallback()` when it throws, so discovery stays best-effort. */
+function guarded<T>(step: string, read: () => T, fallback: () => T): T {
+  try {
+    return read();
+  } catch (error) {
+    analytics.captureException(
+      error instanceof Error ? error : new Error(String(error)),
+      { step },
+    );
+    return fallback();
+  }
+}
+
+/** A walk that found nothing and says it is not complete, for a walk that threw. */
+function failedWalk(dir: string): RepoWalk {
+  return {
+    files: { ...emptyRepoFiles(dir), complete: false },
+    templates: [],
+    durationMs: 0,
+  };
+}
+
 /**
  * Discover once per run. Tools and projects fail apart: projects need only the
  * walk, tools also need the catalog. Best-effort: never throws.
@@ -218,23 +248,71 @@ export async function runDiscovery(
   ctx: DiscoveryContext,
 ): Promise<void> {
   if (getDiscovery(ctx.session)) return;
-  const runDir = ctx.session.installDir;
+  // Started first, so the download overlaps the flag read and the walk.
+  const catalog = loadCatalog(ctx.session);
   const mode = await loadProjectDiscoveryMode();
+  await discover(config, ctx, ctx.session.installDir, mode, catalog);
+}
+
+/**
+ * Discover again when login changed the flag's answer. The first discovery
+ * runs before login, where a flag rolled out to people or organizations still
+ * answers `off`. Call it once, right after login.
+ */
+export async function rediscoverAfterLogin(
+  config: Pick<ProgramConfig, 'id'>,
+  ctx: DiscoveryContext,
+): Promise<void> {
+  const discovery = getDiscovery(ctx.session);
+  if (!discovery) return;
+  const mode = await loadProjectDiscoveryMode();
+  if (mode === discovery.mode) return;
+  const catalog = loadCatalog(ctx.session);
+  await discover(config, ctx, discovery.runDir, mode, catalog);
+}
+
+/** The catalog download. Never rejects: no catalog is an empty one. */
+function loadCatalog(
+  session: ProgramSession,
+): Promise<readonly SourceDetector[]> {
+  return loadSourceDetectors(session.baseUrl).catch(
+    (): readonly SourceDetector[] => [],
+  );
+}
+
+async function discover(
+  config: Pick<ProgramConfig, 'id'>,
+  ctx: DiscoveryContext,
+  runDir: string,
+  mode: ProjectDiscoveryMode,
+  catalog: Promise<readonly SourceDetector[]>,
+): Promise<void> {
   // The walk up to the workspace root stays off with the flag.
+  const atRunDir = () => ({ rootDir: runDir, runProject: '.' });
   const { rootDir, runProject } =
     mode === 'off'
-      ? { rootDir: runDir, runProject: '.' }
-      : findWorkspaceRoot(runDir);
-  const walk = walkRepoFiles(rootDir, { runProject });
-  const projects = discoverProjects(walk.files, runProject);
+      ? atRunDir()
+      : guarded('findWorkspaceRoot', () => findWorkspaceRoot(runDir), atRunDir);
+  const walk = guarded(
+    'walkRepo',
+    () => walkRepoFiles(rootDir, { runProject }),
+    () => failedWalk(rootDir),
+  );
+  const projects = guarded(
+    'discoverProjects',
+    () => discoverProjects(walk.files, runProject),
+    () => discoverProjects(emptyRepoFiles(rootDir), runProject),
+  );
   ctx.setProjects(projects.projects, runProject);
 
-  const match = await matchTools(ctx.session, walk);
+  const match = await matchTools(catalog, walk);
   ctx.setFrameworkContext(DISCOVERY_KEY, {
     program: config.id,
     discoveredAt: new Date().toISOString(),
     rootDir,
     runDir,
+    runProject,
+    mode,
     files: walk.files,
     tools: match.tools,
     projects,
@@ -294,7 +372,9 @@ export async function discoveredWarehouseDestinations(
   );
 }
 
-export function getDiscovery(session: ProgramSession): Discovery | undefined {
+export function getDiscovery(
+  session: Pick<ProgramSession, 'frameworkContext'>,
+): Discovery | undefined {
   return session.frameworkContext[DISCOVERY_KEY] as Discovery | undefined;
 }
 
@@ -312,7 +392,11 @@ export function getRepoFiles(
     | RepoFiles
     | undefined;
   if (kept?.dir === session.installDir) return kept;
-  const files = walkRepo(session.installDir);
+  const files = guarded(
+    'walkRepo',
+    () => walkRepo(session.installDir),
+    () => failedWalk(session.installDir).files,
+  );
   setFrameworkContext?.(REPO_FILES_KEY, files);
   return files;
 }
