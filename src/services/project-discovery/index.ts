@@ -31,7 +31,6 @@ export type { DetectedTool, DiscoveredTools } from './tools';
 export { applyDetectionReport, joinProjectPath } from './traits/adapter';
 export { toMatchKeys } from './traits/match-keys';
 export { TRAITS } from './traits/registry';
-export { SDK_REGISTRY } from './traits/sdks';
 export { selectProjects, type ProjectPredicate } from './traits/select';
 export {
   getProject,
