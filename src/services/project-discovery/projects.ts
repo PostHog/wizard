@@ -1,6 +1,5 @@
 /** Projects: the candidate projects a walk found, and the workspaces that hold them. Pure: it reads the walk. */
 
-import path from 'path';
 import type { Project } from '@programs/program-contract';
 import { isWorkspaceMember, mergeMarkers, type MarkerRead } from './markers';
 import { manifestDirs, type RepoFiles } from './walk';
@@ -26,6 +25,9 @@ export type DiscoveredProjects = {
   complete: boolean;
 };
 
+/** Workspace roots come from the repo, so only this many are read, shallowest first. */
+const MAX_WORKSPACE_ROOTS = 50;
+
 const depthOf = (dir: string): number =>
   dir === '.' ? 0 : dir.split('/').length;
 
@@ -43,8 +45,8 @@ function below(root: string, dir: string): string | null {
 function workspacesByRoot(repo: RepoFiles): Map<string, MarkerRead> {
   const reads = new Map<string, MarkerRead[]>();
   for (const marker of repo.workspaceMarkers) {
-    const root = path.posix.dirname(marker.path);
-    reads.set(root, [...(reads.get(root) ?? []), marker]);
+    if (marker.dir === null) continue;
+    reads.set(marker.dir, [...(reads.get(marker.dir) ?? []), marker]);
   }
   const workspaces = new Map<string, MarkerRead>();
   for (const [root, markers] of reads) {
@@ -69,9 +71,8 @@ export function discoverProjects(
   const members = new Set<string>();
   const pruned = new Set<string>();
   const workspaces: Workspace[] = [];
-  for (const [root, workspace] of [...declared].sort(([a], [b]) =>
-    byDepth(a, b),
-  )) {
+  const roots = [...declared].sort(([a], [b]) => byDepth(a, b));
+  for (const [root, workspace] of roots.slice(0, MAX_WORKSPACE_ROOTS)) {
     const own: string[] = [];
     for (const candidate of candidates) {
       const relative = below(root, candidate);
@@ -97,7 +98,8 @@ export function discoverProjects(
     ...(workspaces.length > 0 && { workspaceTool: workspaces[0].tool }),
     workspaces,
     projects: paths.map((projectPath) => ({ path: projectPath, traits: {} })),
-    complete: repo.complete && !repo.truncated,
+    complete:
+      repo.complete && !repo.truncated && roots.length <= MAX_WORKSPACE_ROOTS,
   };
 }
 

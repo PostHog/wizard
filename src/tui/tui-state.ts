@@ -42,6 +42,9 @@ export type TuiState = {
   /** Whether the project already has a Slack integration; `null` until detected. */
   slackConnected: boolean | null;
   outroDismissed: boolean;
+  emailProviderOfferDone: boolean;
+  /** The email setup the user said yes to, echoed at exit because the alternate screen is wiped. */
+  emailSetup: { lead: string; command: string; workflowsUrl: string } | null;
 
   /**
    * Self-driving only: whether to integrate PostHog as part of this run.
@@ -107,6 +110,8 @@ export function initialTuiState(
     slackStepDismissed: false,
     slackConnected: null,
     outroDismissed: false,
+    emailProviderOfferDone: false,
+    emailSetup: null,
     // `--integrate` forces integration (skip the question); otherwise the
     // integration-check screen resolves it from null.
     integrate: choices.integrate === true ? true : null,

@@ -274,6 +274,11 @@ export function sanitizeReportedPath(relativePath: string): string {
   return UNUSABLE_PATH.test(capped) ? FALLBACK_ENV_PATH : capped;
 }
 
+/** Whether a path holds none of the characters {@link sanitizeReportedPath} replaces. Its length is not checked. */
+export function hasOnlyPromptSafeChars(relativePath: string): boolean {
+  return relativePath.search(UNSAFE_PATH_CHARS) === -1;
+}
+
 /**
  * `toRelativePosixPath` with the result sanitised for a prompt or a tool
  * result.

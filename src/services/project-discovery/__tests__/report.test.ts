@@ -103,6 +103,8 @@ describe('reportDiscovery', () => {
       discoveredAt: '2026-10-12T00:00:00.000Z',
       rootDir: tmpDir,
       runDir: tmpDir,
+      runProject: '.',
+      mode: 'off',
       files: walkRepo(tmpDir),
       tools: { tools: [], complete: false, failed: true },
       projects: discoverProjects(walkRepo(tmpDir)),

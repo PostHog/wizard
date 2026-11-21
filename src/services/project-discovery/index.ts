@@ -4,6 +4,9 @@ export {
   discoveredWarehouseSources,
   getDiscovery,
   getRepoFiles,
+  getTools,
+  projectPathOf,
+  rediscoverAfterLogin,
   runDiscovery,
   toolsByProject,
   type DetectedProject,
@@ -29,13 +32,16 @@ export {
   type DiscoveredProjects,
   type Workspace,
 } from './projects';
-export { reportDiscovery, type DiscoveryReportStore } from './report';
+export {
+  detectedEmailProviders,
+  type EmailProviderKind,
+} from './email-providers';
+export { reportDiscovery } from './report';
 export { DISCOVERY_TAGS_KEY, maySendDiscovery, tagDiscovery } from './tags';
-export type { DetectedTool, DiscoveredTools, ToolSignal } from './tools';
+export type { DetectedTool, DiscoveredTools } from './tools';
 export { applyDetectionReport, joinProjectPath } from './traits/adapter';
 export { toMatchKeys, toTraitKeys } from './traits/match-keys';
 export { TRAITS } from './traits/registry';
-export { SDK_REGISTRY } from './traits/sdks';
 export { selectProjects, type ProjectPredicate } from './traits/select';
 export {
   getProject,
@@ -53,6 +59,5 @@ export {
   findWorkspaceRoot,
   manifestDirs,
   walkRepo,
-  type DiscoveredManifest,
   type RepoFiles,
 } from './walk';

@@ -11,6 +11,7 @@
  *     sends the email providers it found on one event.
  */
 
+import path from 'path';
 import { mayReportDiscovery } from '@shared/run-state';
 import { VERSION } from '@shared/version';
 import { analytics } from '@utils/analytics';
@@ -19,6 +20,7 @@ import { detectedEmailProviders } from './email-providers';
 import { workspaceFingerprint } from './fingerprint';
 import { getDiscovery, type Discovery } from './discover';
 import { applyDiscoveryTags } from './tags';
+import { toolsUnder } from './tools';
 import type { DiscoveryReport } from '../session/task-stream/types';
 
 /** The store surface reporting needs; `SessionStore` provides it. */
@@ -35,14 +37,17 @@ export function buildDiscoveryReport(
   return {
     program: discovery.program,
     wizard_version: VERSION,
-    // The directory the run started in, which a CI run's install dir may no longer be.
-    workspace_fingerprint: workspaceFingerprint(projectId, discovery.runDir),
+    // The project the run started in, which a CI run's install dir may no longer be.
+    workspace_fingerprint: workspaceFingerprint(
+      projectId,
+      path.resolve(discovery.rootDir, discovery.runProject),
+    ),
     scanned_at: discovery.discoveredAt,
     complete: discovery.tools.complete,
-    tools: discovery.tools.tools.map((tool) => ({
-      kind: tool.kind,
-      signals: tool.signals,
-    })),
+    // Only that project's tools: a sibling's never travel under its fingerprint.
+    tools: toolsUnder(discovery.tools.tools, discovery.runProject).map(
+      (tool) => ({ kind: tool.kind, signals: tool.signals }),
+    ),
   };
 }
 
