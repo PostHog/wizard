@@ -8,7 +8,10 @@ import type {
   ResolvedProgramCredentials,
 } from './credentials';
 import type { ProgramConfig, ProgramId } from '@programs/program-contract';
-import type { PlanOffer } from '@services/project-discovery';
+import type {
+  PlanOffer,
+  ProjectDiscoveryMode,
+} from '@services/project-discovery';
 import type { SessionStore } from '@services/session';
 import type { WizardFlagSnapshot } from '@shared/wizard-flags';
 
@@ -22,6 +25,7 @@ export interface ProgramInput {
   composed?: boolean; // true for a run inside another's: its caller writes the success outro; a failure still records its error outro and the phase, a caller cancel its cancel outro
   wizardFlags?: Record<string, string>; // a flag snapshot; else options.featureFlags
   wizardFlagPayloads?: Record<string, unknown>; // payloads for wizardFlags
+  discoveryMode?: ProjectDiscoveryMode; // the project discovery mode the host already showed the person; the run keeps it through login
 }
 
 /** A point where the run waits on the host. */

@@ -206,12 +206,14 @@ async function invokeProgram(
 
   /**
    * Discovery under the mode the run now knows. Discovery first runs before
-   * login, as an anonymous user. A flag snapshot the caller gave the run says
-   * the mode at once, and otherwise the flag is read again once someone is
-   * logged in. A no-op when the mode did not change.
+   * login, as an anonymous user. A mode or a flag snapshot the caller gave the
+   * run says the mode at once, and otherwise the flag is read again once
+   * someone is logged in. A no-op when the mode did not change.
    */
   const settleDiscoveryMode = async (): Promise<void> => {
-    const known = input.wizardFlags && projectDiscoveryMode(input.wizardFlags);
+    const known =
+      input.discoveryMode ??
+      (input.wizardFlags && projectDiscoveryMode(input.wizardFlags));
     if (known === undefined && !store.session.credentials) return;
     await park(rediscoverAfterLogin(config, store.readyContext(), known));
   };
