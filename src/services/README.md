@@ -203,8 +203,8 @@ detection and the `person`. No source outranks another.
 `toMatchKeys`, in
 [`traits/match-keys.ts`](project-discovery/traits/match-keys.ts), turns the
 traits skills can match on into match keys. A trait's `matchKey` is `true` to
-key by its own name, or the key to use: `framework` keys as `framework`, and
-`frameworkVariant` as `variant`.
+key by its own name, or the key to use: `framework` keys as `framework` and
+`frameworkVariant` as `frameworkVariant`, the tags context-mill puts on a skill.
 
 A program's `rankWith` names the model sources that rank its projects beside
 static detection: `decisions`, `agentic`, both or neither.

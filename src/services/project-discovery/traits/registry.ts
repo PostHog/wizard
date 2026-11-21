@@ -104,7 +104,7 @@ export const TRAITS: { readonly [K in TraitName]: TraitDefinition<K> } = {
         : undefined;
     },
     fallback: STATIC,
-    matchKey: 'variant',
+    matchKey: true,
   },
   callsLlmApi: {
     detect: (session, projectPath) => {
