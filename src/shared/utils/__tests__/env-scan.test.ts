@@ -65,6 +65,39 @@ describe('isTemplateEnvFileName', () => {
 });
 
 describe('parseEnvKeyNames', () => {
+  it('reads no key name from the lines of a multi-line quoted value', () => {
+    const keys = parseEnvKeyNames(
+      [
+        'DATABASE_URL=postgres://localhost',
+        'PRIVATE_KEY="-----BEGIN KEY-----',
+        'c2VjcmV0X2tleV9tYXRlcmlhbA==',
+        'tail_of_base64=',
+        '-----END KEY-----"',
+        "NOTE='first line",
+        'inner_name=looks like a key',
+        "last line'",
+        'STRIPE_SECRET_KEY=sk_test_x',
+      ].join('\n'),
+    );
+    expect(keys).toEqual([
+      'DATABASE_URL',
+      'PRIVATE_KEY',
+      'NOTE',
+      'STRIPE_SECRET_KEY',
+    ]);
+  });
+
+  it('reads a quote that never closes as one line, so the keys after it are kept', () => {
+    expect(
+      parseEnvKeyNames('TITLE="unfinished\nAPI_KEY=abc\nOTHER=1\n'),
+    ).toEqual(['TITLE', 'API_KEY', 'OTHER']);
+    expect(parseEnvKeyNames('A="one"\nB=\'two\' # note\nC="x\\"y"\n')).toEqual([
+      'A',
+      'B',
+      'C',
+    ]);
+  });
+
   it('extracts key names and never the values', () => {
     const keys = parseEnvKeyNames(
       [
