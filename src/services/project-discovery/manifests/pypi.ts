@@ -14,16 +14,47 @@ export function parseRequirementsTxt(content: string): string[] {
     .map(normalizePyName);
 }
 
+/** The strings of the TOML array that opens at `start`. A bracket inside a string, such as an extra, does not close the array. */
+function tomlArrayStrings(content: string, start: number): string[] {
+  const strings: string[] = [];
+  let i = start;
+  while (i < content.length) {
+    const ch = content[i];
+    if (ch === ']') return strings;
+    if (ch === '#') {
+      const lineEnd = content.indexOf('\n', i);
+      if (lineEnd === -1) break;
+      i = lineEnd + 1;
+    } else if (ch === '"' || ch === "'") {
+      const end = closingQuote(content, i);
+      if (end === -1) break;
+      strings.push(content.slice(i + 1, end));
+      i = end + 1;
+    } else {
+      i += 1;
+    }
+  }
+  // An array that never closes is not read.
+  return [];
+}
+
+/** The index of the quote that closes the string opened at `open`, or -1. Only a basic (`"`) string has escapes. */
+function closingQuote(content: string, open: number): number {
+  const quote = content[open];
+  for (let i = open + 1; i < content.length; i += 1) {
+    if (content[i] === '\\' && quote === '"') i += 1;
+    else if (content[i] === quote) return i;
+  }
+  return -1;
+}
+
 // Pragmatic, not a full TOML parser — only the dep shapes we care about.
 export function parsePyprojectToml(content: string): string[] {
   const depNames: string[] = [];
 
-  for (const arrayMatch of content.matchAll(
-    /dependencies\s*=\s*\[([^\]]*)\]/g,
-  )) {
-    const arrayBody = arrayMatch[1];
-    for (const quotedMatch of arrayBody.matchAll(/["']([^"']+)["']/g)) {
-      const depSpec = quotedMatch[1];
+  for (const header of content.matchAll(/dependencies\s*=\s*\[/g)) {
+    const start = (header.index ?? 0) + header[0].length;
+    for (const depSpec of tomlArrayStrings(content, start)) {
       const name = depSpec.replace(/\[[^\]]*\]/, '').split(/[<>=!~;\s]/)[0];
       if (name) depNames.push(normalizePyName(name));
     }
