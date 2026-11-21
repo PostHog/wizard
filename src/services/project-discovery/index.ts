@@ -7,6 +7,10 @@ export {
   runDiscovery,
   type Discovery,
 } from './discover';
+export {
+  detectedEmailProviders,
+  type EmailProviderKind,
+} from './email-providers';
 export { reportDiscovery, type DiscoveryReportStore } from './report';
 export { maySendDiscovery, tagDiscovery } from './tags';
 export type { DetectedTool, DiscoveredTools, ToolSignal } from './tools';

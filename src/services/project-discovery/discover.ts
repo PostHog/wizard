@@ -113,7 +113,9 @@ export async function discoveredWarehouseDestinations(
   );
 }
 
-export function getDiscovery(session: ProgramSession): Discovery | undefined {
+export function getDiscovery(
+  session: Pick<ProgramSession, 'frameworkContext'>,
+): Discovery | undefined {
   return session.frameworkContext[DISCOVERY_KEY] as Discovery | undefined;
 }
 
