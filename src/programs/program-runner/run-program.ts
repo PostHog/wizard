@@ -39,9 +39,9 @@ import { FRAMEWORK_REGISTRY } from '@services/frameworks';
 import {
   applyDetectionReport,
   buildPlan,
-  getDiscovery,
   getProjects,
   getTraits,
+  picksProject,
   planNeedsPick,
   projectDiscoveryMode,
   projectPathOf,
@@ -204,18 +204,16 @@ async function invokeProgram(
       }),
     );
 
-  /** With discovery on, a program that says which projects it applies to works in one picked project. */
-  const picksProject = (): boolean =>
-    config.appliesTo !== undefined &&
-    (getDiscovery(store.session)?.mode ?? 'off') !== 'off';
   /**
    * Discovery under the mode the run now knows. Discovery first runs before
-   * login, as an anonymous user. A flag snapshot the caller gave the run says
-   * the mode at once, and otherwise the flag is read again once someone is
-   * logged in. A no-op when the mode did not change.
+   * login, as an anonymous user. A mode or a flag snapshot the caller gave the
+   * run says the mode at once, and otherwise the flag is read again once
+   * someone is logged in. A no-op when the mode did not change.
    */
   const settleDiscoveryMode = async (): Promise<void> => {
-    const known = input.wizardFlags && projectDiscoveryMode(input.wizardFlags);
+    const known =
+      input.discoveryMode ??
+      (input.wizardFlags && projectDiscoveryMode(input.wizardFlags));
     if (known === undefined && !store.session.credentials) return;
     await park(rediscoverAfterLogin(config, store.readyContext(), known));
   };
@@ -229,7 +227,7 @@ async function invokeProgram(
     if (!config.appliesTo || input.project !== undefined) return false;
     await settleDiscoveryMode();
     return (
-      picksProject() &&
+      picksProject(store.session, config) &&
       buildPlan(store.session, config).projects.some(
         (project) =>
           project.offered && project.path !== store.session.runProject,
@@ -424,7 +422,7 @@ async function invokeProgram(
     }
 
     // One project per run: with discovery on, the host picks among the projects the program is offered.
-    if (picksProject()) {
+    if (picksProject(store.session, config)) {
       const ciRunner = {
         log: runner.log,
         authenticate: async () => {

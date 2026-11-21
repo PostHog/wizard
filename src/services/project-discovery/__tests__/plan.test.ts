@@ -30,6 +30,7 @@ import { analytics } from '@utils/analytics';
 import type { ProgramConfig } from '@programs/program-contract';
 import {
   buildPlan,
+  pickLeavesRunProject,
   planNeedsPick,
   reportProjectsDiscovered,
   reportProjectsSelected,
@@ -186,6 +187,45 @@ describe('buildPlan', () => {
     expect(plan.projects.map((project) => project.path)).toEqual(['.']);
     expect(plan.picked).toBe('.');
     expect(planNeedsPick(plan)).toBe(false);
+  });
+});
+
+describe('pickLeavesRunProject', () => {
+  it('holds at a workspace root that only holds the apps', async () => {
+    const { session } = await discovered();
+    expect(pickLeavesRunProject(session, PROGRAM)).toBe(true);
+  });
+
+  it('holds where the one app below is taken without a question', async () => {
+    fs.mkdirSync(path.join(repo, '.git'));
+    write('pnpm-workspace.yaml', 'packages:\n  - apps/*\n');
+    write('apps/web/package.json', pkg({ next: '15.0.0' }));
+    const store = new SessionStore(buildSession({ installDir: repo }));
+    await runDiscovery({ id: 'posthog-integration' }, store.readyContext());
+    expect(pickLeavesRunProject(store.session, PROGRAM)).toBe(true);
+  });
+
+  it('does not hold while the run can stay where it started', async () => {
+    // Inside an app, the run keeps it.
+    const inApp = await discovered('apps/admin');
+    expect(pickLeavesRunProject(inApp.session, PROGRAM)).toBe(false);
+  });
+
+  it('does not hold where nobody is asked and no default leaves the root', async () => {
+    // CI asks nobody, and no source named a main app among the two.
+    const { session } = await discovered('.', { ci: true });
+    expect(pickLeavesRunProject(session, PROGRAM)).toBe(false);
+  });
+
+  it('does not hold with discovery off, or for a program that picks no project', async () => {
+    const on = await discovered();
+    expect(pickLeavesRunProject(on.session, {})).toBe(false);
+
+    fs.rmSync(repo, { recursive: true, force: true });
+    fs.mkdirSync(repo);
+    vi.mocked(analytics.getAllFlagsForWizard).mockResolvedValue({});
+    const off = await discovered();
+    expect(pickLeavesRunProject(off.session, PROGRAM)).toBe(false);
   });
 });
 
