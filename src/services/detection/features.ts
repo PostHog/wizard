@@ -9,6 +9,7 @@
 import { join } from 'path';
 import { readProjectFile } from '@utils/bounded-fs';
 import { DiscoveredFeature } from '@shared/discovered-feature';
+import { parsePackageJson } from '@utils/package-json';
 
 const STRIPE_PACKAGES = new Set(['stripe', '@stripe/stripe-js']);
 
@@ -63,15 +64,8 @@ function discoverNodeFeatures(
   const packageJsonText = safeRead(installDir, 'package.json');
   if (!packageJsonText) return;
 
-  let packageJson: {
-    dependencies?: Record<string, string>;
-    devDependencies?: Record<string, string>;
-  };
-  try {
-    packageJson = JSON.parse(packageJsonText);
-  } catch {
-    return;
-  }
+  const packageJson = parsePackageJson(packageJsonText);
+  if (!packageJson) return;
 
   const depNames = Object.keys({
     ...packageJson.dependencies,

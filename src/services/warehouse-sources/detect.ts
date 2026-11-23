@@ -10,7 +10,6 @@
  * Note we only read `.env` KEY NAMES, never values.
  */
 
-import { analytics } from '@utils/analytics';
 import type { ProgramSession } from '@programs/program-contract';
 import { walkProjectFiles, safeReadFile } from '@utils/bounded-fs';
 import {
@@ -20,7 +19,7 @@ import {
   parseEnvKeyNames,
   toPromptSafeRelativePath,
 } from '@utils/env-scan';
-import type { PackageJson } from '@utils/package-json';
+import { parsePackageJson } from '@utils/package-json';
 import {
   parseRequirementsTxt,
   parsePyprojectToml,
@@ -548,20 +547,14 @@ function addNpmDeps(
   signals: ProjectSignals,
   file: string,
 ): void {
-  try {
-    const pkg = JSON.parse(content) as PackageJson;
-    for (const dep of Object.keys({
-      ...pkg.dependencies,
-      ...pkg.devDependencies,
-    })) {
-      addPackage(signals, 'npm', dep, file);
-    }
-  } catch (error) {
-    // Malformed package.json — skip it, but record that we hit it.
-    analytics.captureException(
-      error instanceof Error ? error : new Error(String(error)),
-      { step: 'detectWarehouseSources.parsePackageJson' },
-    );
+  // A malformed package.json is the user's file, not a wizard fault: skip it.
+  const pkg = parsePackageJson(content);
+  if (!pkg) return;
+  for (const dep of Object.keys({
+    ...pkg.dependencies,
+    ...pkg.devDependencies,
+  })) {
+    addPackage(signals, 'npm', dep, file);
   }
 }
 

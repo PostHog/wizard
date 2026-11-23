@@ -17,7 +17,7 @@ import {
   isEnvFileName,
   toPromptSafeRelativePath,
 } from '@utils/env-scan';
-import type { PackageJson } from '@utils/package-json';
+import { parsePackageJson as parsePackageJsonText } from '@utils/package-json';
 import type { ProgramSession } from '@programs/program-contract';
 import {
   parseCargoToml,
@@ -108,12 +108,10 @@ const MANIFEST_PARSERS: Readonly<Record<string, ManifestParser>> = {
 };
 
 function parsePackageJson(content: string): string[] | null {
-  try {
-    const pkg = JSON.parse(content) as PackageJson;
-    return Object.keys({ ...pkg.dependencies, ...pkg.devDependencies });
-  } catch {
-    return null;
-  }
+  const pkg = parsePackageJsonText(content);
+  return pkg
+    ? Object.keys({ ...pkg.dependencies, ...pkg.devDependencies })
+    : null;
 }
 
 /** Walk `dir` once. Never throws: a missing or unreadable directory yields an empty scan. */
