@@ -87,7 +87,12 @@ here: if the install fails because a declared version does not exist (npm `ETARG
 package by bare name and let the package manager pick, matching the framework
 reference example's spec only if that also fails. If the failure is the environment, not the
 integration's own change (a pre-existing broken dependency, a package manager that
-cannot provision), note it and move on; do not spiral. When you revert a
+cannot provision), note it and move on; do not spiral. For a task whose
+instrumentation stays, still declare each package its handoff names in the manifest,
+writing a minimum as a range (`^x` or `>=x`), so its code doesn't ship without the
+dependency. Those packages never installed, so the frozen recheck doesn't count them
+against the run; say in your handoff that the lockfile needs a refresh once the
+environment can install. When you revert a
 task's instrumentation because its packages could not be installed, record the
 failed command and its error as the reason, not a version minimum: the report
 should send the user to the install problem. A build that then fails against an

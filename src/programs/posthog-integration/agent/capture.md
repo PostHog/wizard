@@ -61,6 +61,8 @@ real action, not on page load, each one attributable to the user who took it, an
 `.posthog-wizard-cache/.posthog-events.json` lists the events you instrumented. Only
 where the MCP server is the whole project and `$mcp_tool_call` already covers every
 action is no events the right result: leave that list empty and say why in your
-handoff.
+handoff. A content or docs site still has actions autocapture and pageviews don't
+name: searching, copying a code sample, following an outbound or download link,
+sending feedback. Capture those.
 
 You do not run builds, linters, or tests — the review task verifies the whole integration after you; your edits just need to be right by reading.
