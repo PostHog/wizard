@@ -19,6 +19,7 @@ export const VUE_AGENT_CONFIG: FrameworkConfig<VueContext> = {
   metadata: {
     name: 'Vue',
     integration: Integration.vue,
+    webFrontend: true,
     docsUrl: 'https://posthog.com/docs/libraries/vue',
   },
 

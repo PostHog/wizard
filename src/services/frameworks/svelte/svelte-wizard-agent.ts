@@ -15,6 +15,7 @@ export const SVELTEKIT_AGENT_CONFIG: FrameworkConfig<SvelteKitContext> = {
   metadata: {
     name: 'SvelteKit',
     integration: Integration.sveltekit,
+    webFrontend: true,
     docsUrl: 'https://posthog.com/docs/libraries/svelte',
     additionalMcpServers: {
       svelte: { url: 'https://mcp.svelte.dev/mcp' },

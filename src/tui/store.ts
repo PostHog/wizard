@@ -51,6 +51,7 @@ import {
   reportDiscovery,
   runDiscovery,
   SessionStore,
+  settleProjects,
 } from '@programs';
 import type { PlannedEvent, TaskItem, WizardSession } from '@programs/types';
 import {
@@ -223,6 +224,7 @@ export class WizardStore implements TuiView {
     const ctx = this.sessions.readyContext();
     if (config) await runDiscovery(config, ctx);
     await config?.onReady?.(ctx);
+    settleProjects(ctx);
     this.sessions.setDetectionComplete();
   }
 

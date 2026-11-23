@@ -44,6 +44,7 @@ function abortUnsupportedPlatform(integration: Integration): never {
 }
 
 export const config: ProgramConfig = {
+  rankWith: ['agentic'],
   command: 'feature-flags',
   description: 'Set up example PostHog feature flags',
   id: 'feature-flags',

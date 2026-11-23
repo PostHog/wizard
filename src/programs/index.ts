@@ -2,7 +2,11 @@
 import { IS_PRODUCTION_BUILD } from '@env';
 export type * from './types';
 export { runProgram, TASK_OUTCOMES_KEY } from './program-runner/run-program';
-export { reportDiscovery, runDiscovery } from '@services/project-discovery';
+export {
+  reportDiscovery,
+  runDiscovery,
+  settleProjects,
+} from '@services/project-discovery';
 /** How a run ended; `ProgramRunOutcome.outcome` holds one. */
 export { RunOutcome } from '@shared/run-state';
 export { ProgramAbort } from '@programs/program-contract';

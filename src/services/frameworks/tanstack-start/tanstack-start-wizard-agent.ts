@@ -19,6 +19,7 @@ export const TANSTACK_START_AGENT_CONFIG: FrameworkConfig<TanStackStartContext> 
     metadata: {
       name: 'TanStack Start',
       integration: Integration.tanstackStart,
+      webFrontend: true,
       docsUrl: 'https://posthog.com/docs/libraries/react',
     },
 

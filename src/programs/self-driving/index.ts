@@ -94,6 +94,7 @@ const buildRun = (session: ProgramSession): Promise<ProgramRun> =>
   });
 
 export const config: ProgramConfig = {
+  rankWith: ['agentic'],
   decisions: ['primary_user_flow', 'user_login'],
   ...createSkillProgram({
     skillId: SELF_DRIVING_SKILL_ID,

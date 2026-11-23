@@ -59,6 +59,9 @@ export interface FrameworkMetadata<
    */
   unsupportedVersionDocsUrl?: string;
 
+  /** The framework serves a web UI in the browser; sets the `webFrontend` trait. */
+  webFrontend?: true;
+
   /** If true, shows a beta notice before running the wizard. */
   beta?: boolean;
 

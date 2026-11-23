@@ -285,6 +285,7 @@ export {
 } from './email-provider-offer.js';
 
 export const config: ProgramConfig = {
+  rankWith: ['agentic'],
   description: 'Set up PostHog SDK integration',
   id: 'posthog-integration',
   // Orchestrator on pi. Each stage's model and effort come from the flow's frontmatter; a composed sub-run is linear on this model.

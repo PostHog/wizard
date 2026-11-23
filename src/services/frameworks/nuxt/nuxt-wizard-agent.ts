@@ -22,6 +22,7 @@ export const NUXT_AGENT_CONFIG: FrameworkConfig<NuxtContext> = {
   metadata: {
     name: 'Nuxt',
     integration: Integration.nuxt,
+    webFrontend: true,
     docsUrl: 'https://posthog.com/docs/libraries/nuxt',
     gatherContext: async (options: WizardRunOptions) => {
       const packageJson = await tryGetPackageJson(options);

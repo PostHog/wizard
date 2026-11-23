@@ -25,6 +25,7 @@ export const REACT_ROUTER_AGENT_CONFIG: FrameworkConfig<ReactRouterContext> = {
   metadata: {
     name: 'React Router',
     integration: Integration.reactRouter,
+    webFrontend: true,
     docsUrl: 'https://posthog.com/docs/libraries/react',
     unsupportedVersionDocsUrl: 'https://posthog.com/docs/libraries/react',
     gatherContext: async (options: WizardRunOptions) => {

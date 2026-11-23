@@ -4,8 +4,11 @@ export {
   discoveredWarehouseSources,
   getDiscovery,
   getRepoFiles,
+  getTools,
   rediscoverAfterLogin,
   runDiscovery,
+  toolsByProject,
+  type DetectedProject,
   type Discovery,
 } from './discover';
 export {
@@ -26,9 +29,22 @@ export {
 export { reportDiscovery } from './report';
 export { maySendDiscovery, tagDiscovery } from './tags';
 export type { DetectedTool, DiscoveredTools } from './tools';
-export { TRAITS } from './traits/registry';
-export { getProject, getTraits } from './traits/store';
+export { applyDetectionReport, joinProjectPath } from './traits/adapter';
 export { toMatchKeys } from './traits/match-keys';
+export { TRAITS } from './traits/registry';
+export { selectProjects, type ProjectPredicate } from './traits/select';
+export {
+  getProject,
+  getProjects,
+  getTraitClaims,
+  getTraits,
+  setTrait,
+  setTraits,
+  settleProjects,
+  unsettledTraits,
+  type TraitSink,
+  type TraitWrite,
+} from './traits/store';
 export {
   findWorkspaceRoot,
   manifestDirs,

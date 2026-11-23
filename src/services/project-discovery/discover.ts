@@ -9,13 +9,18 @@
  * Discovery always runs; consent only gates reporting (see `report.ts`).
  */
 
+import path from 'path';
+import type { Integration } from '@shared/constants';
 import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
 import type {
   ProgramReadyContext,
   ProgramConfig,
 } from '@programs/program-contract';
-import type { ProgramSession } from '@programs/program-contract';
+import type { ProgramSession, Project } from '@programs/program-contract';
+import { gatherFrameworkContext } from '../detection/context';
+import { detectFramework } from '../detection/framework';
+import { FRAMEWORK_REGISTRY } from '../frameworks/registry';
 import {
   toWarehouseDestinations,
   toWarehouseSources,
@@ -31,8 +36,11 @@ import { discoverProjects, type DiscoveredProjects } from './projects';
 import {
   catalogScriptHosts,
   discoverTools,
+  toolsUnder,
+  type DetectedTool,
   type DiscoveredTools,
 } from './tools';
+import { getTraits } from './traits/store';
 import {
   emptyRepoFiles,
   findWorkspaceRoot,
@@ -68,6 +76,23 @@ export type Discovery = {
   files: RepoFiles;
   tools: DiscoveredTools;
   projects: DiscoveredProjects;
+  /**
+   * What static detection read in each project, by path. Discovery fills it
+   * for every project but the run project. The run project's entry is kept
+   * once its program's detection has run, so a run that moves to another
+   * project still knows it.
+   */
+  detected: Record<string, DetectedProject>;
+};
+
+/** Static detection in one project, kept apart from the session, which holds the run project's only. */
+export type DetectedProject = {
+  framework?: Integration;
+  frameworkVariant?: string;
+  /** Paths the MCP scan suggests as servers. */
+  mcpServers?: readonly string[];
+  /** The kinds of data source whose signals sit in the project. */
+  warehouseSources?: readonly string[];
 };
 
 type DiscoveryContext = Pick<
@@ -81,28 +106,135 @@ const FAILED_TOOLS: DiscoveredTools = {
   failed: true,
 };
 
+type ToolMatch = {
+  tools: DiscoveredTools;
+  detectors: readonly SourceDetector[];
+};
+
 /** The tool match, which needs the catalog download. Never throws: a failure is a `failed` match. */
 async function matchTools(
   catalog: Promise<readonly SourceDetector[]>,
   walk: RepoWalk,
-): Promise<DiscoveredTools> {
+): Promise<ToolMatch> {
   const detectors = await catalog;
   // No catalog means discovery could not look, which is not the same as
   // finding nothing. The loader has already reported why.
-  if (detectors.length === 0) return FAILED_TOOLS;
+  if (detectors.length === 0) return { tools: FAILED_TOOLS, detectors };
   try {
     walk.files.scriptHosts = readScriptHosts(
       walk.templates,
       catalogScriptHosts(detectors),
     );
-    return discoverTools(walk.files, detectors);
+    return { tools: discoverTools(walk.files, detectors), detectors };
   } catch (error) {
     analytics.captureException(
       error instanceof Error ? error : new Error(String(error)),
       { step: 'scanCodebase' },
     );
-    return FAILED_TOOLS;
+    return { tools: FAILED_TOOLS, detectors };
   }
+}
+
+/** Static detection runs in at most this many projects beside the run project. */
+const MAX_DETECTED_PROJECTS = 25;
+
+/** Static detection in the other projects gets this long in all; a project it has not reached stays undetected. */
+const DETECT_BUDGET_MS = 5_000;
+
+/** Static detection reads this many projects at once, so a lapsed budget leaves at most this many still running. */
+const DETECT_CONCURRENCY = 4;
+
+/** The framework of one project directory, with its variant when its config reads one. */
+async function detectFrameworkIn(dir: string): Promise<DetectedProject> {
+  const framework = await detectFramework(dir);
+  if (!framework) return {};
+  const { metadata } = FRAMEWORK_REGISTRY[framework];
+  if (!metadata.getVariant) return { framework };
+  const context = await gatherFrameworkContext(FRAMEWORK_REGISTRY[framework], {
+    installDir: dir,
+    ci: true,
+    debug: false,
+    benchmark: false,
+    yaraReport: false,
+    signup: false,
+  });
+  const frameworkVariant = metadata.getVariant(context);
+  return { framework, ...(frameworkVariant && { frameworkVariant }) };
+}
+
+/** Each project's tools: those with a signal at or below it. A project with none has no entry. */
+export function toolsByProject(
+  tools: readonly DetectedTool[],
+  projects: readonly Project[],
+): Map<string, DetectedTool[]> {
+  const byProject = new Map<string, DetectedTool[]>();
+  for (const project of projects) {
+    const own = toolsUnder(tools, project.path);
+    if (own.length > 0) byProject.set(project.path, own);
+  }
+  return byProject;
+}
+
+/**
+ * Run `detect` for each project, at most {@link DETECT_CONCURRENCY} at a time,
+ * and start none once `deadline` has passed. A project it did not reach stays
+ * undetected.
+ */
+async function detectWithin(
+  projectPaths: readonly string[],
+  deadline: number,
+  detect: (projectPath: string) => Promise<void>,
+): Promise<void> {
+  let next = 0;
+  const worker = async (): Promise<void> => {
+    while (next < projectPaths.length && Date.now() < deadline) {
+      const projectPath = projectPaths[next];
+      next += 1;
+      await detect(projectPath);
+    }
+  };
+  await Promise.all(Array.from({ length: DETECT_CONCURRENCY }, worker));
+}
+
+/** Static detection in every project but the run project: its framework, and the sources among its tools. */
+async function detectProjects(
+  rootDir: string,
+  runProject: string,
+  projects: readonly Project[],
+  match: ToolMatch,
+): Promise<Record<string, DetectedProject>> {
+  const detected: Record<string, DetectedProject> = {};
+  const others = projects
+    .filter((project) => project.path !== runProject)
+    .slice(0, MAX_DETECTED_PROJECTS);
+  const frameworks = detectWithin(
+    others.map((project) => project.path),
+    Date.now() + DETECT_BUDGET_MS,
+    async (projectPath) => {
+      detected[projectPath] = await detectFrameworkIn(
+        path.resolve(rootDir, projectPath),
+      );
+    },
+  ).catch((error) => {
+    logToFile(`[discovery] framework detection failed: ${String(error)}`);
+  });
+  // The timer covers a detection that hangs; the deadline stops new ones.
+  await Promise.race([
+    frameworks,
+    new Promise((resolve) => setTimeout(resolve, DETECT_BUDGET_MS).unref()),
+  ]);
+  for (const [projectPath, tools] of toolsByProject(
+    match.tools.tools,
+    others,
+  )) {
+    const sources = toWarehouseSources(tools, match.detectors);
+    if (sources.length === 0) continue;
+    detected[projectPath] = {
+      ...detected[projectPath],
+      warehouseSources: sources.map((source) => source.kind),
+    };
+  }
+  return detected;
 }
 
 /** `read()`, or `fallback()` when it throws, so discovery stays best-effort. */
@@ -193,7 +325,7 @@ async function discover(
   );
   ctx.setProjects(projects.projects, runProject);
 
-  const tools = await matchTools(catalog, walk);
+  const match = await matchTools(catalog, walk);
   ctx.setFrameworkContext(DISCOVERY_KEY, {
     program: config.id,
     discoveredAt: new Date().toISOString(),
@@ -202,8 +334,12 @@ async function discover(
     runProject,
     mode,
     files: walk.files,
-    tools,
+    tools: match.tools,
     projects,
+    // A snapshot: detection past its budget writes to a copy nobody reads.
+    detected: {
+      ...(await detectProjects(rootDir, runProject, projects.projects, match)),
+    },
   } satisfies Discovery);
 
   logToFile(
@@ -218,9 +354,34 @@ async function discover(
         .map((project) => project.path)
         .join(',')}`,
   );
+  // The run project's own traits settle later, once its program's detection runs.
+  logToFile(
+    `[discovery] traits ${JSON.stringify(
+      projects.projects
+        .filter((project) => project.path !== runProject)
+        .slice(0, MAX_DETECTED_PROJECTS)
+        .map((project) => ({
+          path: project.path,
+          traits: getTraits(ctx.session, project.path),
+        })),
+    )}`,
+  );
 }
 
-/** The warehouse sources discovery found, for a program that offers them. */
+/**
+ * One project's tools, the run project's by default: the tools found at or
+ * below it. Every reader takes tools from here, so a sibling project's tools
+ * never reach the run's prompts, traits or offers.
+ */
+export function getTools(
+  session: Pick<ProgramSession, 'frameworkContext' | 'runProject'>,
+  projectPath: string = session.runProject,
+): DetectedTool[] {
+  const discovery = getDiscovery(session);
+  return discovery ? toolsUnder(discovery.tools.tools, projectPath) : [];
+}
+
+/** The warehouse sources discovery found in the run project, for a program that offers them. */
 export async function discoveredWarehouseSources(
   session: ProgramSession,
 ): Promise<DetectedSource[]> {
@@ -228,19 +389,19 @@ export async function discoveredWarehouseSources(
   if (!discovery) return [];
   // Resolves at once: discovery already waited for the same download.
   return toWarehouseSources(
-    discovery.tools.tools,
+    getTools(session),
     await loadSourceDetectors(session.baseUrl),
   );
 }
 
-/** The warehouses discovery found that PostHog can export to. */
+/** The warehouses discovery found in the run project that PostHog can export to. */
 export async function discoveredWarehouseDestinations(
   session: ProgramSession,
 ): Promise<DetectedDestination[]> {
   const discovery = getDiscovery(session);
   if (!discovery) return [];
   return toWarehouseDestinations(
-    discovery.tools.tools,
+    getTools(session),
     await loadSourceDetectors(session.baseUrl),
   );
 }

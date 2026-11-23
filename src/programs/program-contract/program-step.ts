@@ -133,6 +133,9 @@ export interface ProgramCliSurface {
   parentCommand?: string;
 }
 
+/** A model source that ranks a program's projects. */
+export type RankSource = 'decisions' | 'agentic';
+
 /** A program's `id`. */
 export type ProgramId = string;
 
@@ -195,6 +198,12 @@ export interface ProgramConfig {
    * builds only: production builds don't bundle the service.
    */
   decisions?: readonly DecisionQuestionKey[];
+  /**
+   * The model sources that rank this program's projects, beside static
+   * detection: Decisions, agentic detection, both, or neither. Each marks the
+   * main app and names apps static detection missed.
+   */
+  rankWith?: readonly RankSource[];
   /** Runs in the flow other than the program's own agent run, keyed by flow step id. */
   runSteps?: Record<string, ProgramRunStep>;
   /**
