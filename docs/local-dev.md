@@ -231,9 +231,10 @@ run does before login, prints what they found, and exits. It logs in to
 nothing, runs no agent and changes no file. It works on any program command,
 with or without a terminal, in non-production builds such as `pnpm try`. It
 comes before every other mode: with `--ci`, `--signup` or `--playground` on the
-same command it still only prints and exits. It sends no discovery report and
-no usage events; an error event can still be sent when something fails, as in
-any run.
+same command it still only prints and exits. It previews the run as asked, so
+`--ci` and `--project` change the plan it prints. It sends no discovery report
+and no usage events; an error event can still be sent when something fails, as
+in any run.
 
 ```bash
 pnpm try --test-discovery --install-dir=/absolute/path/to/app
