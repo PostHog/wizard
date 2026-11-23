@@ -667,6 +667,16 @@ describe('store invariants', () => {
     });
   });
 
+  describe('the plan', () => {
+    it('keeps a pick made while the sources still ranked', () => {
+      const s = createStore();
+      s.showPlan(PLAN_OFFER, true);
+      s.confirmPlan('.');
+      s.setPlanRanked(PLAN_OFFER);
+      expect(s.plan).toMatchObject({ ranking: false, confirmed: '.' });
+    });
+  });
+
   describe('gates latch once', () => {
     it('resolves when the predicate turns true and stays resolved after it turns false', async () => {
       const store = createStore();

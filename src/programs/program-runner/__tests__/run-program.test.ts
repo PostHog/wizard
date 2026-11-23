@@ -1825,6 +1825,84 @@ describe('runProgram', () => {
       expect(agentInput().installDir).toBe(path.join(repo, 'apps/api'));
     });
 
+    it("takes the ranking's pick when there is nobody to ask", async () => {
+      vi.mocked(detectIntegrationProjects).mockResolvedValue({
+        repoType: 'monorepo',
+        projects: [
+          {
+            path: 'apps/api',
+            framework: 'Express',
+            targetId: 'javascript_node',
+            hasPostHog: false,
+            recommended: true,
+          },
+        ],
+      });
+      const s = pairStore();
+
+      const result = await runProgram(
+        'metrics',
+        input({
+          store: s,
+          config: { ...everyProject, rankWith: ['agentic'] },
+          wizardFlags: DISCOVERY_ON,
+        }),
+        { credentials: login() },
+      );
+
+      expect(result.outcome).toBe(RunOutcome.Success);
+      expect(detectIntegrationProjects).toHaveBeenCalledTimes(1);
+      expect(agentInput().installDir).toBe(path.join(repo, 'apps/api'));
+    });
+
+    it('reads the project again when login turns discovery on', async () => {
+      fs.mkdirSync(path.join(repo, 'apps/web/src'));
+      vi.mocked(analytics.getAllFlagsForWizard)
+        .mockResolvedValueOnce({})
+        .mockResolvedValueOnce(DISCOVERY_ON);
+      const onReady = vi.fn();
+      const s = new SessionStore(
+        buildSession({ installDir: path.join(repo, 'apps/web/src') }),
+      );
+
+      const result = await runProgram(
+        'metrics',
+        input({ store: s, config: { run, onReady } }),
+        { credentials: login() },
+      );
+
+      expect(result.outcome).toBe(RunOutcome.Success);
+      // Once before login, in the folder the run started in, and once after, in its project.
+      expect(onReady).toHaveBeenCalledTimes(2);
+      expect(s.session.runProject).toBe('apps/web');
+      expect(agentInput().installDir).toBe(path.join(repo, 'apps/web'));
+    });
+
+    it('reads --project from the workspace root with the flag off too', async () => {
+      // Discovery roots at the run directory here, so the member is its `.`.
+      const inMember = () =>
+        new SessionStore(
+          buildSession({ installDir: path.join(repo, 'apps/web') }),
+        );
+      const s = inMember();
+      const result = await runProgram(
+        'metrics',
+        input({ store: s, project: 'apps/web' }),
+        { credentials: login() },
+      );
+      expect(result.outcome).toBe(RunOutcome.Success);
+      expect(s.session.runProject).toBe('.');
+      expect(agentInput().installDir).toBe(path.join(repo, 'apps/web'));
+
+      // A sibling is outside the run directory, which a run with the flag off never leaves.
+      const sibling = await runProgram(
+        'metrics',
+        input({ store: inMember(), project: 'apps/api' }),
+        { credentials: login() },
+      );
+      expect(sibling.failure?.code).toBe(ErrorCodes.DetectBadDirectory);
+    });
+
     it('asks nobody without a host, or with the flag off', async () => {
       await runProgram(
         'metrics',

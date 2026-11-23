@@ -392,6 +392,7 @@ describe('bash fence — allows real toolchain commands (from skills + field log
 
   it('flutter/dart ecosystem (the flutter field-log denial)', () => {
     expect(allow('flutter pub add posthog_flutter')).toBe('allow');
+    expect(allow("flutter pub add 'posthog_flutter:^6.0.0'")).toBe('allow');
     expect(allow('flutter pub get')).toBe('allow');
     expect(allow('flutter pub remove posthog_flutter')).toBe('allow');
     expect(allow('flutter analyze')).toBe('allow');

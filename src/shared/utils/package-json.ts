@@ -13,6 +13,27 @@ export type PackageJson = {
   };
 };
 
+/**
+ * Parses package.json text the way npm does: a leading byte order mark is
+ * ignored. Returns null for malformed JSON or a root that is not an object.
+ */
+export function parsePackageJson(content: string): PackageJson | null {
+  const text = content.charCodeAt(0) === 0xfeff ? content.slice(1) : content;
+  try {
+    const parsed: unknown = JSON.parse(text);
+    if (
+      typeof parsed !== 'object' ||
+      parsed === null ||
+      Array.isArray(parsed)
+    ) {
+      return null;
+    }
+    return parsed as PackageJson;
+  } catch {
+    return null;
+  }
+}
+
 type InstalledPackage = {
   name: string;
   version: string;

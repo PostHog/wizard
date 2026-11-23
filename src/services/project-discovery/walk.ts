@@ -8,7 +8,6 @@
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { analytics } from '@utils/analytics';
 import { safeReadFile, walkProjectFiles } from '@utils/bounded-fs';
 import {
   ENV_SCAN_MAX_DEPTH,
@@ -197,7 +196,6 @@ export function walkRepoFiles(
   const repo = emptyRepoFiles(dir);
   const templates: TemplateFile[] = [];
   const envKeys = new Map<string, string[]>();
-  let malformedManifests = 0;
 
   const readEnvKeys = (fullPath: string, file: string): void => {
     // null when unreadable or oversized, such as a `.env` that is a directory.
@@ -249,11 +247,8 @@ export function walkRepoFiles(
       }
       if (!manifest) return;
       const packages = manifest.parse(content);
-      if (packages === null) {
-        // Malformed: skipped, and counted for the one report below.
-        malformedManifests += 1;
-        return;
-      }
+      // A malformed manifest is the user's file: skipped, with no event.
+      if (packages === null) return;
       repo.manifests.push({
         path: file,
         dir: realPath(manifestDir(raw)),
@@ -282,13 +277,6 @@ export function walkRepoFiles(
     sanitizeReportedPath,
   );
   repo.truncated = repo.files.length < first.length + rest.length;
-  if (malformedManifests > 0) {
-    // One event for the walk, however many manifests are malformed.
-    analytics.captureException(new Error('Malformed package.json'), {
-      step: 'detectWarehouseSources.parsePackageJson',
-      count: malformedManifests,
-    });
-  }
   repo.envKeys = [...envKeys].map(([name, files]) => ({ name, files }));
   return { files: repo, templates, durationMs: Date.now() - startedAt };
 }

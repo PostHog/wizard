@@ -147,7 +147,8 @@ export const anthropicBackend: AgentHarness = {
         posthogApiKey: boot.credentials.accessToken,
         currentPosthogApiKey: () => currentAccessToken(boot.credentials),
         host: boot.credentials.host,
-        detectPackageManager: detectNodePackageManagers,
+        detectPackageManager:
+          config.run?.detectPackageManager ?? detectNodePackageManagers,
         skillsBaseUrl: boot.skillsBaseUrl,
         matchKeys: boot.matchKeys,
         programId: boot.programId,

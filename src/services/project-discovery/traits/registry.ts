@@ -12,7 +12,7 @@ import type {
 import { usesLlmSdk } from '../../detection/features';
 import { FRAMEWORK_REGISTRY } from '../../frameworks/registry';
 import { getDetectedWarehouseSources } from '../../warehouse-sources/detect';
-import { getDiscovery } from '../discover';
+import { detectedProjectOf, getDiscovery } from '../discover';
 import type { RepoFiles } from '../walk';
 import { POSTHOG_SDK, sdksIn } from './sdks';
 
@@ -40,8 +40,9 @@ const STATIC: readonly TraitSource[] = ['static'];
 const nonEmpty = <T>(list: readonly T[]): readonly T[] | undefined =>
   list.length > 0 ? list : undefined;
 
+/** Whether the session's own detection fields describe `projectPath`. A step scoped to another folder reads that folder from discovery. */
 const isRunProject = (session: ProgramSession, projectPath: string): boolean =>
-  projectPath === session.runProject;
+  projectPath === detectedProjectOf(session);
 
 type Manifests = RepoFiles['manifests'];
 
@@ -68,9 +69,15 @@ const packagesOf = (session: ProgramSession, projectPath: string): string[] =>
   manifestsOf(session, projectPath).flatMap((m) => m.packages);
 
 function frameworkOf(session: ProgramSession, projectPath: string) {
-  return isRunProject(session, projectPath)
-    ? session.integration ?? undefined
-    : getDiscovery(session)?.detected[projectPath]?.framework;
+  if (isRunProject(session, projectPath)) {
+    return session.integration ?? undefined;
+  }
+  const detected = getDiscovery(session)?.detected[projectPath];
+  // A scoped step in a folder discovery detected nothing in keeps what its own prep found.
+  if (!detected && projectPath === session.runProject) {
+    return session.integration ?? undefined;
+  }
+  return detected?.framework;
 }
 
 /** The workspace that holds the project as its root or as a member, innermost first. */

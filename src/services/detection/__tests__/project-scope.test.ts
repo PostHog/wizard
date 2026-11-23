@@ -114,28 +114,36 @@ describe('scopeInstallDirToProject', () => {
     return calls[0][1] as Record<string, unknown>;
   };
 
-  it.each<[string, (session: ReturnType<typeof buildSession>) => void]>([
-    [
-      'project discovery is on, so the plan picks the project',
-      (session) => {
-        session.frameworkContext.discovery = { mode: 'one-project' };
-      },
-    ],
+  it.each<
+    [string, (session: ReturnType<typeof buildSession>) => void, boolean]
+  >([
+    ["the program's plan picks the project", () => undefined, true],
     [
       'the run already works in a project the caller named',
       (session) => {
         session.runProject = 'apps/api';
       },
+      false,
     ],
-  ])('stands down when %s', async (_name, arrange) => {
+  ])('stands down when %s', async (_name, arrange, planPicks) => {
     flagsSpy.mockResolvedValue(FLAG_ON);
     const session = buildSession({ installDir: '/repo' });
     arrange(session);
-    await scopeInstallDirToProject(session, runner);
+    await scopeInstallDirToProject(session, runner, planPicks);
 
     expect(authenticate).not.toHaveBeenCalled();
     expect(scan).not.toHaveBeenCalled();
     expect(session.installDir).toBe('/repo');
+  });
+
+  it('still scans with project discovery on, for a program whose plan picks no project', async () => {
+    flagsSpy.mockResolvedValue(FLAG_ON);
+    scan.mockResolvedValue({ repoType: 'single', projects: [] });
+    const session = buildSession({ installDir: '/repo' });
+    session.frameworkContext.discovery = { mode: 'one-project' };
+    await scopeInstallDirToProject(session, runner);
+
+    expect(scan).toHaveBeenCalledTimes(1);
   });
 
   it('fires flag-off and never scans when the flag is off (or the fetch failed)', async () => {

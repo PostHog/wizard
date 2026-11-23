@@ -5,6 +5,7 @@ import type { BackendRunInputs, TaskRunInputs } from '../../types';
 import type { AskAnswers } from '@agent/types';
 import { Harness, Sequence } from '@shared/constants';
 import { HostResolution } from '@shared/host-resolution';
+import { detectNodePackageManagers } from '@utils/package-manager';
 
 vi.mock('@utils/analytics');
 vi.mock('@utils/debug');
@@ -207,3 +208,111 @@ describe.each(['linear', 'task'] as const)(
     });
   },
 );
+
+describe('Anthropic runTask detectPackageManager forwarding', () => {
+  const makeInputs = (
+    detectPackageManager?: TaskRunInputs['config']['run']['detectPackageManager'],
+  ): TaskRunInputs => ({
+    config: {
+      programId: 'test',
+      run: {
+        integrationLabel: 'test',
+        detectPackageManager,
+        spinnerMessage: 'Working',
+        successMessage: 'Done',
+        estimatedDurationMinutes: 1,
+        reportFile: 'report.md',
+        docsUrl: 'https://docs.test',
+      },
+      composed: false,
+      binding: {
+        harness: Harness.anthropic,
+        sequence: Sequence.orchestrator,
+        model: 'test',
+      },
+      switchboard: {
+        program: 'test',
+        binding: {
+          harness: Harness.anthropic,
+          sequence: Sequence.orchestrator,
+          model: 'test',
+        },
+        flags: {},
+      },
+      skillsBaseUrl: 'https://skills.test',
+      wizardFlags: {},
+      wizardFlagPayloads: {},
+      wizardMetadata: {},
+    },
+    input: {
+      installDir: '/test',
+      flags: {
+        ci: false,
+        signup: false,
+        debug: false,
+        e2eAsk: false,
+        localMcp: false,
+        captureAio: false,
+        benchmark: false,
+        yaraReport: false,
+      },
+      host: {},
+      credentials: {
+        accessToken: 'test',
+        projectApiKey: 'test',
+        projectId: 1,
+        host: HostResolution.fromApiHost('https://us.posthog.com'),
+      },
+      project: null,
+      apiUser: null,
+    },
+    boot: {
+      programId: 'test',
+      skillsBaseUrl: 'https://skills.test',
+      matchKeys: () => ({}),
+      credentials: {
+        accessToken: 'test',
+        projectApiKey: 'test',
+        projectId: 1,
+        host: HostResolution.fromApiHost('https://us.posthog.com'),
+      },
+      wizardFlags: {},
+      wizardFlagPayloads: {},
+      wizardMetadata: {},
+      project: null,
+      triageProvider: undefined,
+    },
+    emit: vi.fn(),
+    prompt: 'test',
+    spinner: { start: vi.fn(), stop: vi.fn(), message: vi.fn() },
+    model: 'test',
+    spinnerMessage: 'Working',
+    successMessage: 'Done',
+    requestRemark: false,
+    analyticsProperties: {},
+    orchestrator: {} as TaskRunInputs['orchestrator'],
+  });
+
+  it('forwards config.run.detectPackageManager when supplied', async () => {
+    const runTask = anthropicBackend.runTask;
+    if (!runTask) throw new Error('Missing task harness');
+    const customDetector = vi.fn();
+    await runTask(makeInputs(customDetector));
+    expect(initializeAgent).toHaveBeenCalledWith(
+      expect.objectContaining({ detectPackageManager: customDetector }),
+      expect.anything(),
+    );
+  });
+
+  it('falls back to detectNodePackageManagers when omitted', async () => {
+    const runTask = anthropicBackend.runTask;
+    if (!runTask) throw new Error('Missing task harness');
+    await runTask(makeInputs(undefined));
+    expect(initializeAgent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        detectPackageManager: detectNodePackageManagers,
+      }),
+      expect.anything(),
+    );
+  });
+});

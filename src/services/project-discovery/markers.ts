@@ -11,6 +11,8 @@ export type MarkerRead = {
   members: string[];
   /** The tool names no members itself: they come from another marker beside it, else every project below. */
   open?: true;
+  /** The manifest ecosystems the merged workspace lists members of. Set by {@link mergeMarkers}. */
+  ecosystems?: string[];
 };
 
 type MarkerParser = (content: string) => MarkerRead | null;
@@ -201,6 +203,19 @@ export const WORKSPACE_MARKERS: ReadonlyMap<string, MarkerParser> = new Map<
   ['pyproject.toml', parseUvWorkspace],
 ]);
 
+/** The manifest ecosystem each workspace tool lists members of. */
+export const TOOL_ECOSYSTEM: Readonly<Record<string, string>> = {
+  turbo: 'npm',
+  nx: 'npm',
+  lerna: 'npm',
+  pnpm: 'npm',
+  npm: 'npm',
+  cargo: 'cargo',
+  go: 'go',
+  gradle: 'maven',
+  uv: 'pypi',
+};
+
 /** The tool a workspace reports when several markers share its root: the build tool before the package manager. */
 const TOOL_PRIORITY = [
   'turbo',
@@ -221,11 +236,25 @@ export function mergeMarkers(reads: readonly MarkerRead[]): MarkerRead | null {
   const tool = [...reads].sort(
     (a, b) => TOOL_PRIORITY.indexOf(a.tool) - TOOL_PRIORITY.indexOf(b.tool),
   )[0].tool;
-  return members.length > 0 ? { tool, members } : { tool, members, open: true };
+  const ecosystems = [
+    ...new Set(reads.map((read) => TOOL_ECOSYSTEM[read.tool])),
+  ];
+  if (members.length > 0) return { tool, members, ecosystems };
+  // A marker that lists no member is a workspace only when its tool names none itself: a settings-only file is not one.
+  return reads.some((read) => read.open)
+    ? { tool, members, ecosystems, open: true }
+    : null;
 }
 
-const normalizeGlob = (glob: string): string =>
-  glob.replace(/^\.\//, '').replace(/\/+$/, '');
+/** A member glob without its leading `./` and trailing slashes. A loop, so a long run of slashes stays linear. */
+function normalizeGlob(glob: string): string {
+  let end = glob.length;
+  while (end > 0 && glob[end - 1] === '/') end -= 1;
+  return glob.slice(glob.startsWith('./') ? 2 : 0, end);
+}
+
+/** Each brace set in a member glob expands to at most this many patterns. */
+const MAX_BRACE_EXPANSIONS = 64;
 
 /** A workspace's member globs come from the repo, so only this many are read, each no longer than {@link MAX_GLOB_LENGTH}. */
 const MAX_MEMBER_GLOBS = 200;
@@ -247,11 +276,18 @@ function matchersOf(workspace: MarkerRead): MemberMatchers {
   if (known) return known;
   const matchers: MemberMatchers = { included: [], excluded: [] };
   for (const member of workspace.members.slice(0, MAX_MEMBER_GLOBS)) {
+    // Checked as written, before any work on it.
+    if (member.length > MAX_GLOB_LENGTH) continue;
     const excludes = member.startsWith('!');
     const glob = normalizeGlob(excludes ? member.slice(1) : member);
     if (!isUsableGlob(glob)) continue;
     (excludes ? matchers.excluded : matchers.included).push(
-      new Minimatch(glob, { dot: true }),
+      new Minimatch(glob, {
+        dot: true,
+        braceExpandMax: MAX_BRACE_EXPANSIONS,
+        nonegate: true,
+        nocomment: true,
+      }),
     );
   }
   MATCHERS.set(workspace, matchers);
