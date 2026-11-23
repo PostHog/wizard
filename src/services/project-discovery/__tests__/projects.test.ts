@@ -204,6 +204,61 @@ describe('discoverProjects', () => {
     expect(parentOf('apps/web', found.projects)?.path).toBe('.');
   });
 
+  it('keeps a JS app beside a Rust and Go workspace that does not name it', () => {
+    write('Cargo.toml', '[workspace]\nmembers = ["crates/*"]\n');
+    write('crates/core/Cargo.toml', '[package]\nname = "core"\n');
+    write('tools/gen/Cargo.toml', '[package]\nname = "gen"\n');
+    write('go.work', 'go 1.22\n\nuse ./services/api\n');
+    write('services/api/go.mod', 'module example.com/api\n');
+    write('web/package.json', pkg({ next: '15.0.0' }));
+    const found = discoverProjects(walkRepo(repo));
+    // The crate outside the globs is still pruned; the JS app is not the workspace's to prune.
+    expect(paths(found.projects)).toEqual([
+      '.',
+      'web',
+      'crates/core',
+      'services/api',
+    ]);
+  });
+
+  it('reads a pnpm-workspace.yaml that only holds settings as no workspace', () => {
+    write('package.json', pkg({ next: '15.0.0' }));
+    write('pnpm-workspace.yaml', 'onlyBuiltDependencies:\n  - esbuild\n');
+    write('scripts/package.json', pkg());
+    const found = discoverProjects(walkRepo(repo));
+    expect(found.repoType).toBe('single');
+    expect(found.workspaces).toEqual([]);
+  });
+
+  it.each([
+    [
+      'a brace set',
+      "packages:\n  - 'apps/{web,api}'\n",
+      ['.', 'apps/api', 'apps/web'],
+    ],
+    [
+      'a huge brace range',
+      "packages:\n  - '{1..100000}'\n  - apps/web\n",
+      ['.', 'apps/web'],
+    ],
+    [
+      'a long run of slashes',
+      `packages:\n  - apps/web${'/'.repeat(100)}\n`,
+      ['.', 'apps/web'],
+    ],
+    [
+      'a glob over the length cap',
+      `packages:\n  - apps/web${'/'.repeat(80_000)}\n  - apps/api\n`,
+      ['.', 'apps/api'],
+    ],
+  ])('matches members through %s', (_label, workspace, expected) => {
+    write('package.json', pkg());
+    write('pnpm-workspace.yaml', workspace);
+    write('apps/web/package.json', pkg());
+    write('apps/api/package.json', pkg());
+    expect(paths(discoverProjects(walkRepo(repo)).projects)).toEqual(expected);
+  });
+
   it('keeps the run project even outside every workspace', () => {
     pnpmMonorepo();
     const found = discoverProjects(walkRepo(repo), 'examples/demo');
