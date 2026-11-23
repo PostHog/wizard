@@ -234,6 +234,50 @@ describe('detectJavaPackageManagers', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Swift detection
+// ---------------------------------------------------------------------------
+
+describe('swiftPackageManager', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = makeTmpDir();
+  });
+  afterEach(() => cleanup(tmpDir));
+
+  it.each([
+    "pod 'PostHog'",
+    '  pod "PostHog", "~> 3.0"',
+    "pod 'PostHog', '3.92.0'",
+  ])('keeps CocoaPods when the Podfile has %s', async (line) => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'Podfile'),
+      `platform :ios, '15.0'\ntarget 'App' do\n${line}\nend\n`,
+    );
+    const result = await swiftPackageManager(tmpDir);
+    expect(result.primary?.name).toBe('cocoapods');
+    expect(result.recommendation).toContain('Keep the PostHog pod');
+    expect(result.recommendation).toContain(
+      "Don't add the posthog-ios Swift package",
+    );
+  });
+
+  it.each([
+    { name: 'no Podfile', podfile: undefined },
+    { name: 'a Podfile without PostHog', podfile: "pod 'Alamofire'\n" },
+    { name: 'a commented-out PostHog pod', podfile: "# pod 'PostHog'\n" },
+    { name: 'a different pod name', podfile: "pod 'PostHogExtras'\n" },
+  ])('uses SPM with $name', async ({ podfile }) => {
+    if (podfile !== undefined) {
+      fs.writeFileSync(path.join(tmpDir, 'Podfile'), podfile);
+    }
+    const result = await swiftPackageManager(tmpDir);
+    expect(result.primary?.name).toBe('spm');
+    expect(result.recommendation).toContain("don't add a PostHog pod");
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Static helpers
 // ---------------------------------------------------------------------------
 

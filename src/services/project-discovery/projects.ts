@@ -58,8 +58,8 @@ function workspacesByRoot(repo: RepoFiles): Map<string, MarkerRead> {
 
 /**
  * The projects in a walked repo. Candidates are the directories that hold a
- * manifest; a workspace's member globs prune the candidates below it that it
- * does not name. The run project always stays.
+ * manifest; a workspace's member globs prune the candidates of its own
+ * ecosystem below it that it does not name. The run project always stays.
  */
 export function discoverProjects(
   repo: RepoFiles,
@@ -67,6 +67,18 @@ export function discoverProjects(
 ): DiscoveredProjects {
   const candidates = manifestDirs(repo);
   const declared = workspacesByRoot(repo);
+
+  const ecosystemsAt = new Map<string, Set<string>>();
+  for (const manifest of repo.manifests) {
+    if (manifest.dir === null) continue;
+    const found = ecosystemsAt.get(manifest.dir) ?? new Set<string>();
+    ecosystemsAt.set(manifest.dir, found.add(manifest.ecosystem));
+  }
+  // A workspace speaks only for folders whose every manifest is of an ecosystem it lists members of.
+  const speaksFor = (workspace: MarkerRead, candidate: string): boolean =>
+    [...(ecosystemsAt.get(candidate) ?? [])].every(
+      (ecosystem) => workspace.ecosystems?.includes(ecosystem) ?? true,
+    );
 
   const members = new Set<string>();
   const pruned = new Set<string>();
@@ -78,7 +90,7 @@ export function discoverProjects(
       const relative = below(root, candidate);
       if (relative === null) continue;
       if (isWorkspaceMember(relative, workspace)) own.push(candidate);
-      else pruned.add(candidate);
+      else if (speaksFor(workspace, candidate)) pruned.add(candidate);
     }
     own.forEach((member) => members.add(member));
     if (own.length > 0) {

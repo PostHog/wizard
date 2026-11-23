@@ -4,6 +4,7 @@ import { AgentSignals, REMARK_INSTRUCTION } from '@agent/signals';
 import { analytics } from '@utils/analytics';
 import { createSecurityExtension } from '../security';
 import { setupPostHogMcp } from '../mcp';
+import { createWizardPiTools } from '../tools';
 import {
   Harness,
   Sequence,
@@ -96,10 +97,10 @@ vi.mock('../mcp', () => ({
   ),
 }));
 vi.mock('../tools', () => ({
-  createWizardPiTools: () => [
+  createWizardPiTools: vi.fn(() => [
     { name: 'set_env_values' },
     { name: 'load_skill_menu' },
-  ],
+  ]),
 }));
 vi.mock('../tasks', () => ({
   createWizardPiTaskTools: () => ({ tools: [], store: state.tasks }),
@@ -829,5 +830,33 @@ it("installs the program's PostHog tool allowlist in the security gate", async (
 
   expect(createSecurityExtension).toHaveBeenCalledWith(
     expect.objectContaining({ posthogTools: ['batch-export-get'] }),
+  );
+});
+
+it('forwards config.run.detectPackageManager into createWizardPiTools on orchestrated tasks', async () => {
+  const customDetector = vi.fn();
+  const task = { status: 'running' };
+  state.text = 'Installed SDK.';
+  state.report = { settle: () => (task.status = 'done'), reply: 'Done' };
+  const inputs = runInputs(vi.fn(), null);
+  inputs.config.run.detectPackageManager = customDetector;
+  vi.mocked(createWizardPiTools).mockClear();
+
+  await runPiTask({
+    ...inputs,
+    orchestrator: {
+      currentTaskId: 'install',
+      validTypes: ['install'],
+      store: { get: () => task },
+    } as never,
+    spinnerMessage: 'Installing SDK',
+    successMessage: 'Installed SDK',
+    requestRemark: false,
+    allowedTools: ['Read'],
+    analyticsProperties: {},
+  });
+
+  expect(createWizardPiTools).toHaveBeenCalledWith(
+    expect.objectContaining({ detectPackageManager: customDetector }),
   );
 });

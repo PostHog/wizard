@@ -41,6 +41,8 @@ import {
   buildPlan,
   getProjects,
   getTraits,
+  DETECTED_PROJECT_KEY,
+  detectedProjectOf,
   picksProject,
   planNeedsPick,
   projectDiscoveryMode,
@@ -818,12 +820,19 @@ async function scopeSession(
   const installDir = runStep.targetDir
     ? runStep.targetDir(live)
     : live.installDir;
+  const runProject = projectPathOf(live, installDir) ?? live.runProject;
   const session: WizardSession = {
     ...live,
     installDir,
     // The step's directory is its run project, so its traits are that directory's.
-    runProject: projectPathOf(live, installDir) ?? live.runProject,
-    frameworkContext: { ...live.frameworkContext },
+    runProject,
+    frameworkContext: {
+      ...live.frameworkContext,
+      // The detection fields copied here still describe the project they were read in.
+      ...(runProject !== live.runProject && {
+        [DETECTED_PROJECT_KEY]: detectedProjectOf(live),
+      }),
+    },
   };
   if (runStep.onRunPrep) await runStep.onRunPrep(session, runner.log);
   return session;

@@ -2,6 +2,8 @@ export {
   DISCOVERY_KEY,
   discoveredWarehouseDestinations,
   discoveredWarehouseSources,
+  DETECTED_PROJECT_KEY,
+  detectedProjectOf,
   getDiscovery,
   getRepoFiles,
   getTools,

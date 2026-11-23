@@ -1,5 +1,6 @@
 import { relative } from 'path';
 import { safeReadFile, walkProjectFiles } from '@utils/bounded-fs';
+import { parsePackageJson } from '@utils/package-json';
 
 export const POSTHOG_SDKS = new Set([
   'posthog-js',
@@ -44,25 +45,19 @@ export function findPackageJsons(
       }
       const content = safeReadFile(fullPath);
       if (content === null) return;
-      try {
-        const pkg = JSON.parse(content) as {
-          dependencies?: Record<string, string>;
-          devDependencies?: Record<string, string>;
-        };
-        const depNames = [
-          ...Object.keys(pkg.dependencies ?? {}),
-          ...Object.keys(pkg.devDependencies ?? {}),
-        ];
-        const posthogSdks = depNames.filter((d) => POSTHOG_SDKS.has(d));
-        const stripeSdks = depNames.filter((d) => STRIPE_SDKS.has(d));
-        matches.push({
-          path: relative(installDir, fullPath) || 'package.json',
-          posthogSdks,
-          stripeSdks,
-        });
-      } catch {
-        // Skip malformed package.json
-      }
+      const pkg = parsePackageJson(content);
+      if (!pkg) return;
+      const depNames = [
+        ...Object.keys(pkg.dependencies ?? {}),
+        ...Object.keys(pkg.devDependencies ?? {}),
+      ];
+      const posthogSdks = depNames.filter((d) => POSTHOG_SDKS.has(d));
+      const stripeSdks = depNames.filter((d) => STRIPE_SDKS.has(d));
+      matches.push({
+        path: relative(installDir, fullPath) || 'package.json',
+        posthogSdks,
+        stripeSdks,
+      });
     },
     maxDepth,
   );
