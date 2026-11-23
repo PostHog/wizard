@@ -2,9 +2,12 @@ export {
   DISCOVERY_KEY,
   discoveredWarehouseDestinations,
   discoveredWarehouseSources,
+  DETECTED_PROJECT_KEY,
+  detectedProjectOf,
   getDiscovery,
   getRepoFiles,
   getTools,
+  projectPathOf,
   rediscoverAfterLogin,
   runDiscovery,
   toolsByProject,
@@ -30,7 +33,7 @@ export { reportDiscovery } from './report';
 export { maySendDiscovery, tagDiscovery } from './tags';
 export type { DetectedTool, DiscoveredTools } from './tools';
 export { applyDetectionReport, joinProjectPath } from './traits/adapter';
-export { toMatchKeys } from './traits/match-keys';
+export { toMatchKeys, toTraitKeys } from './traits/match-keys';
 export { TRAITS } from './traits/registry';
 export { selectProjects, type ProjectPredicate } from './traits/select';
 export {

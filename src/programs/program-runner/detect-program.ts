@@ -3,23 +3,87 @@ import type { RunResult } from '@agent/types';
 import { POSTHOG_DOCS_URL } from '@shared/constants';
 import { ErrorCodes } from '@shared/errors';
 import { WizardError } from '@shared/errors/wizard-error';
-import { runDiscovery, settleProjects } from '@services/project-discovery';
+import fs from 'fs';
+import path from 'path';
+import { ProgramAbort } from '@programs/program-contract';
+import {
+  DISCOVERY_KEY,
+  getDiscovery,
+  runDiscovery,
+  settleProjects,
+} from '@services/project-discovery';
 import { detectErrorCode } from './detect-map';
 import type { ProgramConfig } from '@programs/program-contract';
 import type { CiRunnerContext } from '@programs/program-contract';
 import type { WizardSession } from '@services/session';
 import type { SessionStore } from '@services/session';
 
+/** Whether `target` is a directory at or below `rootDir` once symlinks are resolved. */
+function isDirectoryInside(rootDir: string, target: string): boolean {
+  try {
+    const root = fs.realpathSync(rootDir);
+    const real = fs.realpathSync(target);
+    return (
+      fs.statSync(real).isDirectory() &&
+      (real === root || real.startsWith(root + path.sep))
+    );
+  } catch {
+    return false;
+  }
+}
+
 /**
- * Scan the project for `config`: a CI session runs the program's `ciPreRun`
- * when it has one, anything else its `onReady`. Marks detection complete.
+ * Point the run at one discovered project, the pair's: its directory becomes
+ * the install dir and it becomes the run project. Aborts on a path discovery
+ * did not find, and on one whose real directory is outside the workspace.
+ */
+export function scopeToProject(store: SessionStore, project: string): void {
+  const { session } = store;
+  const noProject = () =>
+    new ProgramAbort({
+      code: ErrorCodes.DetectBadDirectory,
+      message: `No project at "${project}". Projects found: ${
+        session.projects.map((found) => found.path).join(', ') || 'none'
+      }.`,
+    });
+  const rootDir = getDiscovery(session)?.rootDir;
+  if (!rootDir) {
+    // No discovery: the one project is the one the run started in.
+    if (project === session.runProject) return;
+    throw noProject();
+  }
+  const target = path.resolve(rootDir, project);
+  // A run that started below its project, such as in `apps/web/src`, still moves up to it.
+  if (
+    project === session.runProject &&
+    target === path.resolve(session.installDir)
+  ) {
+    return;
+  }
+  if (
+    !session.projects.some((found) => found.path === project) ||
+    !isDirectoryInside(rootDir, target)
+  ) {
+    throw noProject();
+  }
+  store.scopeToProject(target, project, [DISCOVERY_KEY]);
+}
+
+/**
+ * Scan the project for `config`: discovery, then the pair's project when the
+ * caller names one, then the program's own detection in it. A CI session runs
+ * the program's `ciPreRun` when it has one, anything else its `onReady`. Marks
+ * detection complete.
  */
 export async function detectProgram(
   config: ProgramConfig,
   store: SessionStore,
   runner: CiRunnerContext,
+  project?: string,
 ): Promise<void> {
   await runDiscovery(config, store.readyContext());
+  // With no project named, the run works in the project it started in.
+  scopeToProject(store, project ?? store.session.runProject);
   const ciPreRun = config.ciPreRun;
   if (store.session.ci && ciPreRun) {
     await store.edit((draft) =>

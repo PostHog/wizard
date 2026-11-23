@@ -7,6 +7,7 @@ effort_pi: high
 model_sdk: claude-sonnet-5
 effort_sdk: high
 skills: []
+skipWhen: [callsLlmApi:no]
 allowedTools: [Read, Write, Edit, Glob, Grep, load_skill_menu, install_skill]
 disallowedTools: [enqueue_task]
 dependsOn: [capture]

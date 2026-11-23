@@ -7,11 +7,11 @@ performs, and its settings. The screens the TUI walks for it live in the TUI. A
 command that runs no agent, such as `mcp add` or `doctor`, is a tool, in
 [`src/tools`](../tools/README.md); no program imports it.
 
-The program layer has three parts, which import in one direction: the
-program contract ([`program-contract`](program-contract/index.ts)), the
+The program layer has three parts, which import in one direction: the program
+contract ([`program-contract`](program-contract/index.ts)), the
 [services](../services/README.md) and the programs.
-[`program-runner`](program-runner/run-program.ts) runs them: `runProgram`, the registry,
-detection lookup, the run's input and outcome types, and login.
+[`program-runner`](program-runner/run-program.ts) runs them: `runProgram`, the
+registry, detection lookup, the run's input and outcome types, and login.
 
 To run a program from code, call `runProgram`. The
 [developer interfaces](../../docs/developer-interfaces.md) cover it.
@@ -45,8 +45,8 @@ folders:
 The lines outside them:
 
 - **Registry.** The program's import and its entry in `PROGRAM_REGISTRY`, in
-  [`program-registry.ts`](program-runner/program-registry.ts), and `{ "path": "<id>" }` in
-  `references` in [`tsconfig.json`](tsconfig.json).
+  [`program-registry.ts`](program-runner/program-registry.ts), and
+  `{ "path": "<id>" }` in `references` in [`tsconfig.json`](tsconfig.json).
 - **TUI registry.** Its import and spread in
   [`src/tui/programs/index.ts`](../tui/programs/index.ts), and
   `{ "path": "programs/<id>" }` in `references` in
@@ -82,8 +82,8 @@ the registry:
   orchestrator task's project context. Only a program whose report names a
   contact sets it.
 - **Rollout gate.** `rolloutGate` names a feature flag that must be `'true'`.
-  The runner reads it after login and fails the run before any agent starts
-  when it is off.
+  The runner reads it after login and fails the run before any agent starts when
+  it is off.
 - **PostHog tools.** `posthogTools` lists the only PostHog MCP tools the agent
   may call. The harness blocks every other call.
 
@@ -102,18 +102,18 @@ reaches the UI.
 
 ## Where things live
 
-| What                                          | Where                                                                             |
-| --------------------------------------------- | --------------------------------------------------------------------------------- |
-| One program's config, detection and prompt    | Its own folder, such as [`metrics`](metrics/index.ts)                             |
-| One program's flow, deck and screens          | `src/tui/programs/<id>/`, registered in [`src/tui/programs/index.ts`](../tui/programs/index.ts) |
-| One program's e2e test definition             | Its folder's `test/e2e.json`, read by [`e2e-harness/profiles.ts`](../../e2e-harness/profiles.ts) |
-| One orchestrator program's task prompts and graph | Its folder's `agent/<type>.md`; see [agent prompts](#agent-prompts) |
-| Code several programs share                   | [`shared`](shared/skill-program.ts): program builders and [`program-scopes.ts`](shared/program-scopes.ts) |
-| The list of every program                     | [`program-registry.ts`](program-runner/program-registry.ts)                                      |
-| Running one program, and its input and outcome | [`run-program.ts`](program-runner/run-program.ts), [`detect-program.ts`](program-runner/detect-program.ts) and [`program-input.ts`](program-runner/program-input.ts) |
-| Commands that pick a program by skill         | [`dispatch-family.ts`](../cli/commands/dispatch-family.ts)                        |
-| The program contract: `ProgramConfig`, `ProgramSession`, `RunnerContext`, `FrameworkConfig` | [`program-contract`](program-contract/index.ts), its own project below the services |
-| The session store, detection, frameworks, project discovery and tool catalog | [`src/services`](../services/README.md) |
+| What                                                                                        | Where                                                                                                                                                                |
+| ------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| One program's config, detection and prompt                                                  | Its own folder, such as [`metrics`](metrics/index.ts)                                                                                                                |
+| One program's flow, deck and screens                                                        | `src/tui/programs/<id>/`, registered in [`src/tui/programs/index.ts`](../tui/programs/index.ts)                                                                      |
+| One program's e2e test definition                                                           | Its folder's `test/e2e.json`, read by [`e2e-harness/profiles.ts`](../../e2e-harness/profiles.ts)                                                                     |
+| One orchestrator program's task prompts and graph                                           | Its folder's `agent/<type>.md`; see [agent prompts](#agent-prompts)                                                                                                  |
+| Code several programs share                                                                 | [`shared`](shared/skill-program.ts): program builders and [`program-scopes.ts`](shared/program-scopes.ts)                                                            |
+| The list of every program                                                                   | [`program-registry.ts`](program-runner/program-registry.ts)                                                                                                          |
+| Running one program, and its input and outcome                                              | [`run-program.ts`](program-runner/run-program.ts), [`detect-program.ts`](program-runner/detect-program.ts) and [`program-input.ts`](program-runner/program-input.ts) |
+| Commands that pick a program by skill                                                       | [`dispatch-family.ts`](../cli/commands/dispatch-family.ts)                                                                                                           |
+| The program contract: `ProgramConfig`, `ProgramSession`, `RunnerContext`, `FrameworkConfig` | [`program-contract`](program-contract/index.ts), its own project below the services                                                                                  |
+| The session store, detection, frameworks, project discovery and tool catalog                | [`src/services`](../services/README.md)                                                                                                                              |
 
 Other layers import runtime values from `@programs` and types from
 `@programs/types`, which re-exports the program contract. `@programs` exports
@@ -124,21 +124,42 @@ from a personal API key) and `apiKeyCredentials` (a credentials provider that
 makes one), `logIn`, `TASK_OUTCOMES_KEY`, the task stream, the registry lookups,
 and the shared program code the hosts call. Program code may import `@env`,
 `@shared/*`, `@utils/*`, `@agent`, `@agent/types`, the program contract,
-`@programs/program-contract`, and the service entries, `@services/<service>`. A program folder also imports the shared program code, by
-relative path, and only the registry's entry files import every program. Every
-programs project extends `tsconfig.no-tui.json`, which maps `@programs/*`. A
-program's project references only the shared program code, so an import of a
-sibling program or the registry fails with TS6307; see
+`@programs/program-contract`, and the service entries, `@services/<service>`. A
+program folder also imports the shared program code, by relative path, and only
+the registry's entry files import every program. Every programs project extends
+`tsconfig.no-tui.json`, which maps `@programs/*`. A program's project references
+only the shared program code, so an import of a sibling program or the registry
+fails with TS6307; see
 [layer boundaries](../../.claude/skills/wizard-development/references/ARCHITECTURE.md#layer-boundaries).
+
+## Programs and projects
+
+A run is one `(program, project)` pair. `runProgram` takes the pair's project in
+`input.project`, as a path from the workspace root. It discovers the repo,
+points the session at that project's directory, and runs the program's own
+detection there. Without `input.project` the pair's project is the one the run
+started in, `session.runProject`; a run launched below that project, such as in
+`apps/web/src`, moves up to it. `scopeToProject` stops the run on a path
+discovery did not find, and on one whose real directory is outside the
+workspace. The pair's skills resolve from its own project's traits: `matchKeys`
+and `traitKeys` both read `getTraits(session)`, the session's run project. A
+composed step with a `targetDir` runs on a copy of the session whose run project
+is that directory, so it reads that directory's traits.
+
+A program's `appliesTo(traits)` says which projects it applies to, over one
+project's settled traits. posthog-integration applies to an app with a supported
+framework that PostHog is not in yet. A program without one applies to every
+project. `rankWith` names the model sources that rank its projects.
 
 ## Agent prompts
 
-An orchestrator program keeps one prompt per task in `agent/<type>.md`. The
-body is the job to be done, and the skills the frontmatter names carry the
-implementation detail. The frontmatter also declares the task graph:
-`dependsOn` names the task types a task runs after, `sink` marks the task that
-runs last, `optional` a task whose failure never fails the run, and
-`runnerSeeded` a task only the program's `seedTasks` queues. Read
+An orchestrator program keeps one prompt per task in `agent/<type>.md`. The body
+is the job to be done, and the skills the frontmatter names carry the
+implementation detail. The frontmatter also declares the task graph: `dependsOn`
+names the task types a task runs after, `sink` marks the task that runs last,
+`optional` a task whose failure never fails the run, `runnerSeeded` a task only
+the program's `seedTasks` queues, and `skipWhen` the project traits that drop
+the task, such as `skipWhen: [callsLlmApi:no]`. Read
 [the task metadata](../agent/runner/sequence/README.md#task-metadata) for every
 field.
 
@@ -151,20 +172,21 @@ source loads them through a Node hook,
 The orchestrator reads these prompts, and a program that runs the orchestrator
 must bundle them. A folder with a `seed: true` prompt keeps its planner. A
 folder without one, such as posthog-integration's, is queued from the graph its
-frontmatter declares, and the program's `excludedTaskTypes` and `seedTasks`
-decide which tasks a run leaves out or adds. A local context-mill
-(`--local-context-mill`) and a release pinned with `--context-mill-version`
-serve the skills, never the prompts.
+frontmatter declares, and the program's `excludedTaskTypes` and `seedTasks` and
+each task's `skipWhen` decide which tasks a run leaves out or adds. A local
+context-mill (`--local-context-mill`) and a release pinned with
+`--context-mill-version` serve the skills, never the prompts.
 
 Four checks hold the prompts in place:
 
 - [`agent-prompts.test.ts`](__tests__/agent-prompts.test.ts) fails when a file
-  in `agent/` isn't imported, or when a prompt's frontmatter is missing or has
-  a flag that is neither `true` nor `false`.
+  in `agent/` isn't imported, when a prompt's frontmatter is missing or has a
+  flag that is neither `true` nor `false`, or when a `skipWhen` condition names
+  a trait the registry does not hold.
 - [`flow-graphs.test.ts`](../agent/runner/sequence/orchestrator/__tests__/flow-graphs.test.ts)
-  fails when a `dependsOn` names a task outside the folder, when a folder has
-  no single sink or cannot be ordered, or when a `skills` entry is missing from
-  the recorded menu.
+  fails when a `dependsOn` names a task outside the folder, when a folder has no
+  single sink or cannot be ordered, or when a `skills` entry is missing from the
+  recorded menu.
 - `pnpm test:warlock`, which every build runs, scans each `agent/` folder as a
   fetched skill is scanned.
 - `pnpm test:smoke`, which every build also runs, fails when the bundle holds a
@@ -175,12 +197,13 @@ Four checks hold the prompts in place:
 ## Session store and task streams
 
 The session store and the task stream that pushes it to PostHog are services.
-See [session store and task streams](../services/README.md#session-store-and-task-streams).
+See
+[session store and task streams](../services/README.md#session-store-and-task-streams).
 
 ## Login and signup
 
-[`login.ts`](program-runner/login.ts) logs in once per store. The root README covers
-[scopes](../../README.md#required-api-key-scopes), the
+[`login.ts`](program-runner/login.ts) logs in once per store. The root README
+covers [scopes](../../README.md#required-api-key-scopes), the
 [OAuth app scope ceiling](../../README.md#oauth-app-scope-ceiling), and
 [signup](../../README.md#headless-signup--install-agents--ci).
 

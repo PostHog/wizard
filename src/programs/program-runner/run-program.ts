@@ -36,7 +36,14 @@ import { registerCleanup } from '@utils/cleanup';
 import { logToFile } from '@utils/debug';
 import { removeAuditLedger, startAuditLedgerWatcher } from '@programs/audit';
 import { FRAMEWORK_REGISTRY } from '@services/frameworks';
-import { getTraits, toMatchKeys } from '@services/project-discovery';
+import {
+  getTraits,
+  DETECTED_PROJECT_KEY,
+  detectedProjectOf,
+  projectPathOf,
+  toMatchKeys,
+  toTraitKeys,
+} from '@services/project-discovery';
 import { findProgramConfig, getProgramConfig } from './program-registry';
 import { ProgramAbort } from '@programs/program-contract';
 import { detectionFailure, detectProgram } from './detect-program';
@@ -192,14 +199,24 @@ async function invokeProgram(
     );
 
   try {
-    if (!store.session.detectionComplete) {
-      await detectProgram(config, store, {
-        log: runner.log,
-        authenticate: async () => {
-          await login();
-        },
-        onProgress: emit,
-      } satisfies CiRunnerContext);
+    // A pair's project the store is not scoped to yet needs its own detection.
+    if (
+      !store.session.detectionComplete ||
+      (input.project !== undefined &&
+        input.project !== store.session.runProject)
+    ) {
+      await detectProgram(
+        config,
+        store,
+        {
+          log: runner.log,
+          authenticate: async () => {
+            await login();
+          },
+          onProgress: emit,
+        } satisfies CiRunnerContext,
+        input.project,
+      );
     }
   } catch (error) {
     // A decided stop ends the run cancelled, as main's wizardAbort({ code, message }) did.
@@ -220,6 +237,18 @@ async function invokeProgram(
   }
   const blocked = detectionFailure(config, store.session);
   if (blocked) return settle(RunOutcome.Failed, blocked);
+  // The run is one (program, project) pair: its skills resolve for its own project.
+  const pair = {
+    program: programId,
+    project: { path: store.session.runProject },
+  };
+  logToFile(
+    `[agent-runner] pair program=${pair.program} project=${
+      pair.project.path
+    } applies=${String(
+      config.appliesTo?.(getTraits(store.session, pair.project.path)) ?? true,
+    )}`,
+  );
 
   // Started before the run resolves: an audit seeds the ledger from inside its recipe.
   const installDir = store.session.installDir;
@@ -441,7 +470,9 @@ async function invokeProgram(
             seedTasks: planned.config.seedTasks
               ? () => planned.config.seedTasks!(session())
               : undefined,
+            // The session's own run project: a step scoped to a sub-folder reads that folder's traits.
             matchKeys: () => toMatchKeys(getTraits(session())),
+            traitKeys: () => toTraitKeys(getTraits(session())),
             projectFacts:
               (decisions && planned.config.decisions) ||
               planned.config.detectedFacts
@@ -605,10 +636,22 @@ async function scopeSession(
   runner: RunnerContext,
 ): Promise<WizardSession | null> {
   if (!runStep.targetDir && !runStep.onRunPrep) return null;
+  const installDir = runStep.targetDir
+    ? runStep.targetDir(live)
+    : live.installDir;
+  const runProject = projectPathOf(live, installDir) ?? live.runProject;
   const session: WizardSession = {
     ...live,
-    installDir: runStep.targetDir ? runStep.targetDir(live) : live.installDir,
-    frameworkContext: { ...live.frameworkContext },
+    installDir,
+    // The step's directory is its run project, so its traits are that directory's.
+    runProject,
+    frameworkContext: {
+      ...live.frameworkContext,
+      // The detection fields copied here still describe the project they were read in.
+      ...(runProject !== live.runProject && {
+        [DETECTED_PROJECT_KEY]: detectedProjectOf(live),
+      }),
+    },
   };
   if (runStep.onRunPrep) await runStep.onRunPrep(session, runner.log);
   return session;

@@ -2,7 +2,12 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { DEFAULT_BINDING, runAgent, RunOutcome } from '@agent';
-import { Harness, Integration, Sequence } from '@shared/constants';
+import {
+  Harness,
+  Integration,
+  Sequence,
+  WIZARD_PROJECT_DISCOVERY_FLAG_KEY,
+} from '@shared/constants';
 import { HostResolution } from '@shared/host-resolution';
 import type { ApiUser } from '@shared/api';
 import type { AgentProgress, RunResult } from '@agent/types';
@@ -46,6 +51,7 @@ import type {
   RunnerContext,
 } from '@programs/program-contract';
 import type { WizardSession } from '@services/session';
+import { runDiscovery } from '@services/project-discovery';
 import { AUDIT_CHECKS_KEY } from '@programs/audit';
 import { FRAMEWORK_REGISTRY } from '@services/frameworks';
 import { detectErrorCode } from '../detect-map';
@@ -74,6 +80,7 @@ vi.mock('@utils/analytics', async (importOriginal) => ({
     identifyUser: vi.fn(),
     setGroups: vi.fn(),
     groupIdentify: vi.fn(),
+    getAllFlagsForWizard: vi.fn().mockResolvedValue({}),
   },
 }));
 vi.mock(import('@shared/oauth-tokens'), () => ({
@@ -1568,6 +1575,142 @@ describe('runProgram', () => {
       const s = new SessionStore(buildSession({ installDir }));
       await runProgram('audit', audit(s));
       expect(s.session.frameworkContext[AUDIT_CHECKS_KEY]).toEqual(checks);
+    });
+  });
+
+  describe('a (program, project) pair', () => {
+    let repo: string;
+
+    beforeEach(() => {
+      repo = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'pair-')));
+      const write = (file: string, content: string) => {
+        fs.mkdirSync(path.dirname(path.join(repo, file)), { recursive: true });
+        fs.writeFileSync(path.join(repo, file), content);
+      };
+      write('package.json', '{}');
+      write('pnpm-workspace.yaml', 'packages:\n  - apps/*\n');
+      write(
+        'apps/web/package.json',
+        JSON.stringify({ dependencies: { 'posthog-js': '^1.0.0' } }),
+      );
+      write('apps/api/package.json', '{}');
+    });
+
+    afterEach(() => fs.rmSync(repo, { recursive: true, force: true }));
+
+    const pairStore = () =>
+      new SessionStore(buildSession({ installDir: repo }));
+
+    it("runs in the pair's project and reads its traits", async () => {
+      const s = pairStore();
+      const result = await runProgram(
+        'metrics',
+        input({ store: s, project: 'apps/web' }),
+        { credentials: login() },
+      );
+
+      expect(result.outcome).toBe(RunOutcome.Success);
+      expect(agentInput().installDir).toBe(path.join(repo, 'apps/web'));
+      expect(s.session.runProject).toBe('apps/web');
+      expect(agentConfig().traitKeys?.()).toMatchObject({
+        posthogInstalled: ['yes'],
+        workspaceRoot: ['.'],
+      });
+    });
+
+    it('runs in the project the run started in when the caller names none', async () => {
+      const s = pairStore();
+      await runProgram('metrics', input({ store: s }), {
+        credentials: login(),
+      });
+
+      expect(agentInput().installDir).toBe(repo);
+      expect(s.session.runProject).toBe('.');
+    });
+
+    it('works in the project a launch below it started in', async () => {
+      vi.mocked(analytics.getAllFlagsForWizard).mockResolvedValue({
+        [WIZARD_PROJECT_DISCOVERY_FLAG_KEY]: 'one-project',
+      });
+      fs.mkdirSync(path.join(repo, 'apps/web/src'));
+      const s = new SessionStore(
+        buildSession({ installDir: path.join(repo, 'apps/web/src') }),
+      );
+      try {
+        await runProgram('metrics', input({ store: s }), {
+          credentials: login(),
+        });
+      } finally {
+        vi.mocked(analytics.getAllFlagsForWizard).mockResolvedValue({});
+      }
+
+      expect(s.session.runProject).toBe('apps/web');
+      expect(agentInput().installDir).toBe(path.join(repo, 'apps/web'));
+    });
+
+    it('reads the traits of the sub-folder a composed step runs in', async () => {
+      const s = pairStore();
+      await runDiscovery({ id: 'self-driving' }, s.readyContext());
+      s.setDetectionComplete();
+      const composed = {
+        run,
+        runSteps: {
+          'integrate-run': {
+            runProgramId: 'metrics' as const,
+            targetDir: () => path.join(repo, 'apps/web'),
+          },
+        },
+      };
+
+      const result = await runProgram(
+        'self-driving',
+        input({ store: s, config: composed }),
+        { credentials: login(), workflow: workflow() },
+      );
+
+      expect(result.outcome).toBe(RunOutcome.Success);
+      expect(agentInput(0).installDir).toBe(path.join(repo, 'apps/web'));
+      // apps/web holds posthog-js; the root project does not.
+      expect(agentConfig(0).traitKeys?.()).toMatchObject({
+        posthogInstalled: ['yes'],
+      });
+      expect(s.session.runProject).toBe('.');
+    });
+
+    it('stops on a project whose real directory is outside the workspace', async () => {
+      const outside = fs.realpathSync(
+        fs.mkdtempSync(path.join(os.tmpdir(), 'outside-')),
+      );
+      fs.writeFileSync(path.join(outside, 'package.json'), '{}');
+      fs.rmSync(path.join(repo, 'apps/api'), { recursive: true });
+      const s = pairStore();
+      await runDiscovery({ id: 'metrics' }, s.readyContext());
+      // Discovery never follows a link, so it lists none; a project list from elsewhere could.
+      fs.symlinkSync(outside, path.join(repo, 'apps/api'));
+      s.setProjects([...s.session.projects, { path: 'apps/api', traits: {} }]);
+
+      const result = await runProgram(
+        'metrics',
+        input({ store: s, project: 'apps/api' }),
+        { credentials: login() },
+      );
+
+      expect(result.outcome).toBe(RunOutcome.Aborted);
+      expect(result.failure?.code).toBe(ErrorCodes.DetectBadDirectory);
+      expect(runAgent).not.toHaveBeenCalled();
+      fs.rmSync(outside, { recursive: true, force: true });
+    });
+
+    it('stops on a project discovery did not find', async () => {
+      const result = await runProgram(
+        'metrics',
+        input({ store: pairStore(), project: 'apps/missing' }),
+        { credentials: login() },
+      );
+
+      expect(result.outcome).toBe(RunOutcome.Aborted);
+      expect(result.failure?.code).toBe(ErrorCodes.DetectBadDirectory);
+      expect(runAgent).not.toHaveBeenCalled();
     });
   });
 });

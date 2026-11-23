@@ -3,6 +3,7 @@ import path from 'path';
 import { describe, expect, it } from 'vitest';
 import { PROGRAM_REGISTRY } from '@programs/program-runner/program-registry';
 import { Sequence } from '@shared/constants';
+import { TRAITS } from '@services/project-discovery';
 
 const PROGRAMS = path.resolve(__dirname, '..');
 // Every program that bundles prompts.
@@ -63,6 +64,19 @@ describe.each(BUNDLES)('%s agent prompts', (program, config) => {
       return [...block.matchAll(FLAG_LINE)]
         .filter(([, , value]) => !['true', 'false'].includes(flagValue(value)))
         .map(([line]) => `${type}: ${line.trim()}`);
+    });
+    expect(problems).toEqual([]);
+  });
+
+  // A condition on an unregistered trait never holds, so the task would never be skipped.
+  it('names a registered trait in every skipWhen condition', () => {
+    const problems = Object.entries(own).flatMap(([type, text]) => {
+      const raw = /^skipWhen:\s*[[{](.*)[\]}]/m.exec(text)?.[1] ?? '';
+      return raw
+        .split(',')
+        .map((condition) => condition.split(':')[0].trim())
+        .filter((trait) => trait !== '' && !(trait in TRAITS))
+        .map((trait) => `${type}: ${trait}`);
     });
     expect(problems).toEqual([]);
   });

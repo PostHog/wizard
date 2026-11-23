@@ -87,6 +87,7 @@ export const signature: (
 | `input.wizardFlags`, `input.wizardFlagPayloads` | `Record` | A flag snapshot. Without `wizardFlags` the run calls `options.featureFlags`, if you pass it. |
 | `input.runId` | `string` | Labels the program's own agent run in progress events. Generated when absent. |
 | `input.composed` | `boolean` | A run inside another's: its caller writes the outro. `runProgram` still settles the phase. |
+| `input.project` | `string` | The pair's project, as a path from the workspace root. The run works in that project's directory and resolves skills from its traits. Without it the run works in the project it started in. |
 | [`options`](../src/programs/program-runner/program-input.ts)                | `ProgramOptions`    | The login, the answerer, the workflow, flags, progress and cancellation.         |
 | `options.credentials` | `CredentialsProvider` | Resolves the login when neither `input` nor the store has one. |
 | `options.interaction` | `AgentInteraction` | Answers the agent's questions and notices. Absent, the agent asks nothing. |
@@ -248,6 +249,7 @@ pre-issued one in `input.credentials.gateway`, as the quack example does.
 | `config.routing` | `AgentRouting` | The program's binding (`DEFAULT_BINDING` from `@agent` when it has none), the launch overrides, and `scan` for a project scan's triage route. |
 | `config.skillsBaseUrl` | `string` | The skills origin, from `getSkillsBaseUrl()`. |
 | `config.wizardFlags`, `config.wizardFlagPayloads` | `Record` | The flag snapshot the caller evaluated. Empty when there are no flags. |
+| `config.matchKeys`, `config.traitKeys` | `() => MatchKeys` | The project's traits: as match keys, which pick each skill, and by name, which each task's `skipWhen` reads. |
 | `config.allowedTools`                                                | `readonly string[]`  | Tools added to the base tools.                                                  |
 | `config.disallowedTools`                                             | `readonly string[]`  | Tools removed from the base tools.                                              |
 | `config.accountOwnerContext` | `boolean` | Adds the account owner from `POSTHOG_ACCOUNT_OWNER_NAME` and `POSTHOG_ACCOUNT_OWNER_EMAIL` to each orchestrator task's project context. |

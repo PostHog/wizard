@@ -285,6 +285,11 @@ export {
 } from './email-provider-offer.js';
 
 export const config: ProgramConfig = {
+  // An app with a supported framework that PostHog is not in yet.
+  appliesTo: (traits) =>
+    traits.projectRole === 'app' &&
+    traits.framework !== undefined &&
+    traits.posthogInstalled !== 'yes',
   rankWith: ['agentic'],
   description: 'Set up PostHog SDK integration',
   id: 'posthog-integration',

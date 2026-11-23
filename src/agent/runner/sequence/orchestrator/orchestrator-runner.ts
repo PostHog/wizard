@@ -97,7 +97,7 @@ import {
   repackagedSkillInstaller,
   reportSkillUnavailable,
 } from './repackaged-skills';
-import { queueTaskGraph, TaskGraphError } from './task-graph';
+import { queueTaskGraph, skippedTaskTypes, TaskGraphError } from './task-graph';
 import { LONGER_ASK_TIMEOUT_MS, shouldDisableAsk } from '@shared/ask-policy';
 import {
   agentRunTools,
@@ -668,6 +668,17 @@ export function effectiveExcludedTaskTypes(
   ];
 }
 
+/** The flow's task types the project's traits rule out, through each task's `skipWhen`. */
+function traitSkippedTaskTypes(
+  prompts: Readonly<Record<string, string>>,
+  flow: string,
+  source: Pick<ResolvedRunConfig, 'traitKeys'>,
+): string[] {
+  const traitKeys = source.traitKeys?.();
+  if (!traitKeys) return [];
+  return skippedTaskTypes(bundledRegistry(prompts, flow).graph, traitKeys);
+}
+
 export async function runOrchestrator(
   context: SequenceContext,
 ): Promise<SequenceResult> {
@@ -764,7 +775,13 @@ async function executeOrchestrator(
       ),
     });
   }
-  const registry = bundledRegistry(bundledPrompts, flow, registryOptions);
+  const registry = bundledRegistry(bundledPrompts, flow, {
+    ...registryOptions,
+    exclude: [
+      ...registryOptions.exclude,
+      ...traitSkippedTaskTypes(bundledPrompts, flow, config),
+    ],
+  });
   if (signal?.aborted) return cancelledRun();
   // A flow with no planner prompt is queued from its frontmatter.
   const seedPrompt = registry.seed;

@@ -306,6 +306,36 @@ export class SessionStore {
     this.set('runProject', runProject);
   }
 
+  /**
+   * Point the run at one project: its directory, and its path from the
+   * workspace root. What detection read in the previous directory is cleared,
+   * but for the `keep` keys of the framework context, so detection runs again.
+   */
+  scopeToProject(
+    installDir: string,
+    runProject: string,
+    keep: readonly string[] = [],
+  ): void {
+    const context = this.session.frameworkContext;
+    this.$session.set({
+      ...this.session,
+      installDir,
+      runProject,
+      integration: null,
+      frameworkConfig: null,
+      detectedFrameworkLabel: null,
+      unsupportedVersion: null,
+      posthogSdkDetected: false,
+      mcpServerCandidates: [],
+      discoveredFeatures: [],
+      detectionComplete: false,
+      frameworkContext: Object.fromEntries(
+        keep.filter((key) => key in context).map((key) => [key, context[key]]),
+      ),
+    });
+    this.emitChange();
+  }
+
   setSkillId(skillId: string | null): void {
     this.set('skillId', skillId);
   }
