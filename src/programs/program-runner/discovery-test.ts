@@ -1,6 +1,9 @@
 /** Test discovery mode: project discovery and a program's own detection, with no login and no agent run. */
 
+import type { GatewayCredential } from '@shared/api';
+import { HostResolution } from '@shared/host-resolution';
 import type { MatchKeys } from '@shared/skill-resolution';
+import { analytics } from '@utils/analytics';
 import type {
   ProgramConfig,
   Project,
@@ -21,6 +24,15 @@ import {
   type ProjectDiscoveryMode,
 } from '@services/project-discovery';
 import { scopeToRunProject } from './detect-program';
+import { decisionKeys } from './run-program';
+import {
+  DECISIONS_MODEL,
+  DECISIONS_USE_KEY,
+  decisionsUse,
+  runDecisionsSource,
+  summarizeAnswers,
+  type DecisionsUse,
+} from '@services/detection/decisions';
 import {
   buildSession,
   SessionStore,
@@ -61,20 +73,99 @@ export type DiscoveryTestReport = {
   plan: PlanOffer & { asks: boolean };
   /** The run project's match keys, which pick each skill. */
   matchKeys: MatchKeys;
+  /** What the Decisions call did, or why none was made. */
+  decisions: DecisionsPreview;
 };
+
+/** A Decisions call a preview made with a pre-issued gateway token, or the reason it made none. */
+export type DecisionsPreview =
+  | { asked: false; reason: string }
+  | {
+      asked: true;
+      /** What the flag lets a run do with the answers. */
+      use: Exclude<DecisionsUse, 'off'>;
+      model: string;
+      answered: number;
+      total: number;
+      durationMs: number;
+      inputTokens: number;
+      error?: string;
+      /** Each answer: a predicate's probability, or a choice with its probability. */
+      answers: Record<string, string | number>;
+    };
+
+/** Ask Decisions as a run would after login, with a pre-issued gateway token in place of the login. */
+async function previewDecisions(
+  config: ProgramConfig,
+  store: SessionStore,
+  gateway: GatewayCredential | undefined,
+): Promise<DecisionsPreview> {
+  if (!gateway) {
+    return {
+      asked: false,
+      reason: 'no gateway token; set WIZARD_CI_GATEWAY_TOKEN_FILE to ask',
+    };
+  }
+  if (!config.rankWith?.includes('decisions')) {
+    return {
+      asked: false,
+      reason: 'this program does not rank with Decisions',
+    };
+  }
+  const use = decisionsUse(await analytics.getAllFlagsForWizard());
+  if (use === 'off') {
+    return { asked: false, reason: 'wizard-decisions-detection is off' };
+  }
+  store.setFrameworkContext(DECISIONS_USE_KEY, use);
+  // Decisions reads only the gateway from the credentials, so nothing logs in to PostHog.
+  store.setCredentials({
+    accessToken: '',
+    projectApiKey: '',
+    projectId: 0,
+    host: HostResolution.fromRegion(store.session.region ?? 'us'),
+    gateway,
+  });
+  const asTraits =
+    use === 'traits' && (getDiscovery(store.session)?.mode ?? 'off') !== 'off';
+  const result = await runDecisionsSource(decisionKeys(config, []), {
+    session: store.session,
+    setFrameworkContext: (key, value) => store.setFrameworkContext(key, value),
+    programId: config.id,
+    ...(asTraits && { sink: store.readyContext() }),
+    rankProjects: picksProject(store.session, config),
+  });
+  if (!result) {
+    return { asked: false, reason: 'the program declares no question to ask' };
+  }
+  const answered = Object.keys(result.answers).length;
+  return {
+    asked: true,
+    use,
+    model: result.model || DECISIONS_MODEL,
+    answered,
+    total: answered + result.unanswered.length,
+    durationMs: result.durationMs,
+    inputTokens: result.inputTokens,
+    ...(result.error && { error: result.error }),
+    answers: summarizeAnswers(result.answers),
+  };
+}
 
 /**
  * Run discovery and `config`'s detection as a run does before login, and
  * report what they found. It sends no discovery report and no usage events.
  * What still leaves the machine: the flag read, the tool catalog download, and
  * an error event when something fails, such as a malformed manifest, as in
- * any run. An error event holds no file content.
+ * any run. An error event holds no file content. With a gateway token, the
+ * Decisions input also goes to the gateway.
  */
 export async function testDiscovery(
   config: ProgramConfig,
   args: SessionArgs,
   /** The caller's `--project`, as a path from the workspace root. */
   project?: string,
+  /** A pre-issued gateway token. With one, and where its flag allows, the preview asks Decisions. */
+  gateway?: GatewayCredential,
 ): Promise<DiscoveryTestReport> {
   const store = new SessionStore(buildSession({ ...args, noTelemetry: true }));
   const ctx = store.readyContext();
@@ -83,6 +174,7 @@ export async function testDiscovery(
   scopeToRunProject(store, project);
   await config.onReady?.(ctx);
   settleProjects(ctx);
+  const decisions = await previewDecisions(config, store, gateway);
 
   const { session } = store;
   const discovery = getDiscovery(session);
@@ -129,5 +221,6 @@ export async function testDiscovery(
       projects.find((project) => project.path === session.runProject)?.traits ??
         {},
     ),
+    decisions,
   };
 }

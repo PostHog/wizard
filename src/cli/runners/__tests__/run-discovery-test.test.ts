@@ -56,6 +56,10 @@ const report: DiscoveryTestReport = {
     ],
   },
   matchKeys: { framework: ['nextjs'] },
+  decisions: {
+    asked: false,
+    reason: 'no gateway token; set WIZARD_CI_GATEWAY_TOKEN_FILE to ask',
+  },
 };
 
 describe('test discovery mode', () => {
@@ -130,8 +134,34 @@ describe('test discovery mode', () => {
     expect(text).toMatch(/webFrontend\s+yes\s+static, decisions 0\.91\n/);
   });
 
-  it('says which sources test mode ran', () => {
-    expect(formatDiscoveryTest(report)).toMatch(/Sources\s+static only/);
+  it('says which sources ran, and why Decisions was not asked', () => {
+    const text = formatDiscoveryTest(report);
+    expect(text).toMatch(/Sources\s+static only\n/);
+    expect(text).toMatch(/Decisions\s+not asked: no gateway token/);
+    expect(text).toMatch(/Agentic\s+not run/);
+    expect(text).not.toContain('Decisions answers');
+  });
+
+  it('prints what a Decisions call answered', () => {
+    const text = formatDiscoveryTest({
+      ...report,
+      decisions: {
+        asked: true,
+        use: 'traits',
+        model: 'gpt-6-luna',
+        answered: 2,
+        total: 3,
+        durationMs: 640,
+        inputTokens: 219,
+        answers: { calls_llm_api: 0.91, framework: 'nextjs@0.88' },
+      },
+    });
+    expect(text).toMatch(/Sources\s+static and decisions\n/);
+    expect(text).toMatch(
+      /Decisions\s+gpt-6-luna, written as traits: 2 of 3 answered in 640 ms, 219 input tokens/,
+    );
+    expect(text).toMatch(/calls_llm_api\s+0\.91/);
+    expect(text).toMatch(/framework\s+nextjs@0\.88/);
   });
 
   it('says the plan is unused while the flag is off', () => {

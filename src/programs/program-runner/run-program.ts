@@ -850,7 +850,7 @@ function planRuns(
 }
 
 /** The question keys of the program, the programs it requires, and its composed runs. */
-function decisionKeys(
+export function decisionKeys(
   config: ProgramConfig,
   plannedRuns: readonly PlannedRun[],
 ): QuestionKey[] {
