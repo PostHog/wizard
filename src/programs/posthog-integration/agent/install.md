@@ -42,6 +42,12 @@ Some ecosystems pin an explicit version in a manifest no install command resolve
 (Swift SPM, Gradle). There, declare the dependency the way the library doc shows, with
 the version it pins — do not invent one.
 
+Call `detect_package_manager` before installing. For Swift apps whose `Podfile` already
+declares `pod 'PostHog'`, keep CocoaPods and its version rather than adding `posthog-ios`
+via Swift Package Manager (`posthog-ios` 4.x isn't on CocoaPods, and both together link
+two copies of the SDK). For Flutter, quote the version range as the docs show
+(`flutter pub add 'posthog_flutter:^<VERSION>'`).
+
 Attempt the install once. If it fails on something you own — a wrong package name or
 the wrong manager — fix that and run it one more time.
 

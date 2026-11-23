@@ -418,6 +418,7 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
       workingDirectory: dir,
       skillsBaseUrl: boot.skillsBaseUrl,
       triageProvider: boot.triageProvider,
+      detectPackageManager: config.run.detectPackageManager,
       matchKeys: boot.matchKeys,
       emit,
       taskAgent: orchestrator.currentTaskId !== undefined,
