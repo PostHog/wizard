@@ -673,9 +673,10 @@ async function invokeProgram(
 }
 
 /**
- * The project the run works in. Ranks the projects with the program's model
- * sources when a host will show them, asks the host when there is a choice,
- * and reports the list and the pick. Null when the host declined.
+ * The project the run works in. Asks the host when there is a choice, with
+ * the program's model sources ranking the projects. A run with no host to ask
+ * takes the ranking's pick. Reports the list and the pick. Null when the host
+ * declined.
  */
 async function pickProject(
   config: ProgramConfig,
@@ -689,7 +690,7 @@ async function pickProject(
 ): Promise<string | null> {
   const { requested, workflow, emit, signal } = context;
   const plan = (): PlanOffer => buildPlan(store.session, config, requested);
-  // Agentic detection ranks only where a person will look at its answer, and only once.
+  // Agentic detection ranks only where there is a choice to make, and only once.
   const ranked = getProjects(store.session).some((project) =>
     Object.values(project.claims ?? {}).some((claims) =>
       claims.some((claim) => claim.source === 'agentic'),
@@ -742,6 +743,10 @@ async function pickProject(
     );
     if (!go) return null;
     offer = plan();
+  } else if (requested === undefined && planNeedsPick(offer) && rank) {
+    // Nobody to ask: the ranking picks, as a person reading it would.
+    offer = await rank();
+    picked = offer.picked;
   }
   reportProjectsDiscovered(store.session, offer, config.id);
   reportProjectsSelected(store.session, offer, picked, config.id, pickedBy);

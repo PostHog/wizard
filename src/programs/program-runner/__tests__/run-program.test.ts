@@ -1825,6 +1825,36 @@ describe('runProgram', () => {
       expect(agentInput().installDir).toBe(path.join(repo, 'apps/api'));
     });
 
+    it("takes the ranking's pick when there is nobody to ask", async () => {
+      vi.mocked(detectIntegrationProjects).mockResolvedValue({
+        repoType: 'monorepo',
+        projects: [
+          {
+            path: 'apps/api',
+            framework: 'Express',
+            targetId: 'javascript_node',
+            hasPostHog: false,
+            recommended: true,
+          },
+        ],
+      });
+      const s = pairStore();
+
+      const result = await runProgram(
+        'metrics',
+        input({
+          store: s,
+          config: { ...everyProject, rankWith: ['agentic'] },
+          wizardFlags: DISCOVERY_ON,
+        }),
+        { credentials: login() },
+      );
+
+      expect(result.outcome).toBe(RunOutcome.Success);
+      expect(detectIntegrationProjects).toHaveBeenCalledTimes(1);
+      expect(agentInput().installDir).toBe(path.join(repo, 'apps/api'));
+    });
+
     it('asks nobody without a host, or with the flag off', async () => {
       await runProgram(
         'metrics',
