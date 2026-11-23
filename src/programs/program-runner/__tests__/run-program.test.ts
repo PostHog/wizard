@@ -2145,6 +2145,21 @@ describe('runProgram', () => {
         expect(calls[0][1].rankProjects).toBe(true);
         expect(calls[1][1]).toMatchObject({ rankProjects: false });
         expect(calls[1][1].session.runProject).toBe('apps/api');
+
+        // A comparison asks once, after the pick, about the project the run works in.
+        vi.mocked(runDecisionsSource).mockClear();
+        await runProgram(
+          'metrics',
+          input({
+            store: new SessionStore(buildSession({ installDir: repo })),
+            config: { ...asks, appliesTo: () => true },
+            wizardFlags: { ...COMPARE, ...DISCOVERING },
+          }),
+          { credentials: login(), workflow: host },
+        );
+        const compared = vi.mocked(runDecisionsSource).mock.calls;
+        expect(compared).toHaveLength(1);
+        expect(compared[0][1].session.runProject).toBe('apps/api');
       } finally {
         fs.rmSync(repo, { recursive: true, force: true });
       }

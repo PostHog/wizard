@@ -432,16 +432,24 @@ async function invokeProgram(
     const decisionsAsTraits =
       use === 'traits' &&
       (getDiscovery(store.session)?.mode ?? 'off') !== 'off';
-    if (use !== 'off') {
-      const asking = runDecisionsSource(decisionKeys(config, plannedRuns), {
+    /** One Decisions call about the project the run works in now. */
+    const askDecisions = (rankProjects: boolean) =>
+      runDecisionsSource(decisionKeys(config, plannedRuns), {
         session: store.session,
         setFrameworkContext: (key, value) =>
           store.setFrameworkContext(key, value),
         programId,
         ...(decisionsAsTraits && { sink: store.readyContext() }),
-        // Only a program that picks its project reads a ranking of them.
-        rankProjects: picksProject(store.session, config),
+        rankProjects,
       });
+    // A comparison waits for the pick, so it describes the project the run works in.
+    const compareAfterPick =
+      use !== 'off' &&
+      !decisionsAsTraits &&
+      picksProject(store.session, config);
+    if (use !== 'off' && !compareAfterPick) {
+      // Only a program that picks its project reads a ranking of them.
+      const asking = askDecisions(picksProject(store.session, config));
       if (decisionsAsTraits) {
         // The run waits for the answers it will read as traits.
         try {
@@ -512,18 +520,7 @@ async function invokeProgram(
           started(run, !reportedStart);
           pair.project.path = target;
           // The questions were asked of the project the run started in; the pair's project gets its own answers.
-          if (decisionsAsTraits) {
-            await park(
-              runDecisionsSource(decisionKeys(config, plannedRuns), {
-                session: store.session,
-                setFrameworkContext: (key, value) =>
-                  store.setFrameworkContext(key, value),
-                programId,
-                sink: store.readyContext(),
-                rankProjects: false,
-              }),
-            );
-          }
+          if (decisionsAsTraits) await park(askDecisions(false));
         }
       } catch (error) {
         if (signal.aborted) return cancelled();
@@ -537,6 +534,8 @@ async function invokeProgram(
     if (stopped) return stopped();
     if (!run) return fail(`Program "${programId}" resolved no run.`);
     const ownRunDefinition = run;
+    // The pick is settled, so the comparison runs beside the agent run for the project it works in.
+    if (compareAfterPick) comparing = askDecisions(false);
 
     // Every rotation of this login, before or during a run, lands in the store.
     configureOAuthSession(credentials.posthog, {
