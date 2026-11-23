@@ -6,6 +6,7 @@ import {
   readFileHead,
   readProjectFile,
   MAX_GLOB_MATCHES,
+  safeReadFile,
 } from '@utils/bounded-fs';
 
 describe('boundedGlob', () => {
@@ -78,6 +79,15 @@ describe('readProjectFile', () => {
   it('returns null for a missing file', () => {
     expect(readProjectFile(path.join(dir, 'nope.txt'))).toBeNull();
   });
+});
+
+describe('safeReadFile', () => {
+  it.skipIf(process.platform === 'win32')(
+    'returns null for a device, which is not a regular file',
+    () => {
+      expect(safeReadFile('/dev/null')).toBeNull();
+    },
+  );
 });
 
 describe('readFileHead', () => {

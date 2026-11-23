@@ -315,7 +315,10 @@ export function safeReadFile(
   maxBytes = MAX_PROJECT_FILE_BYTES,
 ): string | null {
   try {
-    if (fs.statSync(fullPath).size > maxBytes) {
+    const stat = fs.statSync(fullPath);
+    // A device or a pipe reports no size and may never end.
+    if (!stat.isFile()) return null;
+    if (stat.size > maxBytes) {
       logToFile(`[bounded-fs] skipped oversized file: ${fullPath}`);
       return null;
     }
