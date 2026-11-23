@@ -1,4 +1,5 @@
 import * as fs from 'fs';
+import nodeFs from 'fs';
 import * as http from 'http';
 import * as os from 'os';
 import * as path from 'path';
@@ -66,6 +67,457 @@ describe('extractZipArchive', () => {
     expect(() => __test.extractZipArchive(zip, dest)).toThrow(
       /escapes destination/,
     );
+  });
+
+  it('refuses a "." file entry that targets the destination root', () => {
+    const zip = zipSync({
+      '.': new TextEncoder().encode('pwned'),
+    });
+
+    expect(() => __test.extractZipArchive(zip, dest)).toThrow(
+      /overwrites destination/,
+    );
+  });
+
+  it('refuses a hard-linked target file and extracts nothing ahead of it', () => {
+    const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'wizard-hardlink-'));
+    try {
+      const victim = path.join(outside, 'victim.txt');
+      fs.writeFileSync(victim, 'safe');
+      fs.linkSync(victim, path.join(dest, 'linked.md'));
+      const zip = zipSync({
+        'first.md': new TextEncoder().encode('should not land'),
+        'linked.md': new TextEncoder().encode('pwned'),
+      });
+
+      expect(() => __test.extractZipArchive(zip, dest)).toThrow(/hard link/);
+      expect(fs.readFileSync(victim, 'utf8')).toBe('safe');
+      expect(fs.existsSync(path.join(dest, 'first.md'))).toBe(false);
+    } finally {
+      cleanup(outside);
+    }
+  });
+});
+
+describe('extractZipArchive and a raced hard link', () => {
+  it('refuses a hard link that appears after validation without truncating its target', () => {
+    const dest = fs.mkdtempSync(path.join(os.tmpdir(), 'wizard-zip-'));
+    const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'wizard-outside-'));
+    const victim = path.join(outside, 'victim.txt');
+    fs.writeFileSync(victim, 'safe');
+    const realOpen = nodeFs.openSync.bind(nodeFs);
+    const open = vi
+      .spyOn(nodeFs, 'openSync')
+      .mockImplementation((target, ...rest) => {
+        const file = String(target);
+        if (file.endsWith('SKILL.md') && !fs.existsSync(file)) {
+          fs.linkSync(victim, file);
+        }
+        return realOpen(target, ...rest);
+      });
+    try {
+      const zip = zipSync({ 'SKILL.md': new TextEncoder().encode('pwned') });
+      expect(() => __test.extractZipArchive(zip, dest)).toThrow(/hard link/);
+      expect(open).toHaveBeenCalled();
+      expect(fs.readFileSync(victim, 'utf8')).toBe('safe');
+    } finally {
+      open.mockRestore();
+      cleanup(dest);
+      cleanup(outside);
+    }
+  });
+});
+
+describe('extractZipArchive and symlinks', () => {
+  let dest: string;
+  let outside: string;
+
+  beforeEach(() => {
+    dest = fs.mkdtempSync(path.join(os.tmpdir(), 'wizard-zip-'));
+    outside = fs.mkdtempSync(path.join(os.tmpdir(), 'wizard-outside-'));
+  });
+  afterEach(() => {
+    cleanup(dest);
+    cleanup(outside);
+  });
+
+  it('refuses an entry that lands on a symlinked file', () => {
+    const victim = path.join(outside, 'victim.txt');
+    fs.writeFileSync(victim, 'safe');
+    fs.symlinkSync(victim, path.join(dest, 'SKILL.md'));
+    const zip = zipSync({ 'SKILL.md': new TextEncoder().encode('pwned') });
+
+    expect(() => __test.extractZipArchive(zip, dest)).toThrow(/link/);
+    expect(fs.readFileSync(victim, 'utf8')).toBe('safe');
+  });
+
+  it('refuses an entry under a symlinked folder', () => {
+    fs.symlinkSync(outside, path.join(dest, 'references'));
+    const zip = zipSync({
+      'references/EXAMPLE.md': new TextEncoder().encode('pwned'),
+    });
+
+    expect(() => __test.extractZipArchive(zip, dest)).toThrow(/link/);
+    expect(fs.readdirSync(outside)).toEqual([]);
+  });
+
+  it('refuses a symlinked destination folder', () => {
+    const link = path.join(dest, 'link');
+    fs.symlinkSync(outside, link);
+    const zip = zipSync({ 'SKILL.md': new TextEncoder().encode('pwned') });
+
+    expect(() => __test.extractZipArchive(zip, link)).toThrow();
+    expect(fs.readdirSync(outside)).toEqual([]);
+  });
+});
+
+describe('extractZipArchive over what is already there', () => {
+  let dest: string;
+  const bytes = (text: string) => new TextEncoder().encode(text);
+  const none = new Uint8Array(0);
+
+  beforeEach(() => {
+    dest = fs.mkdtempSync(path.join(os.tmpdir(), 'wizard-zip-'));
+  });
+  afterEach(() => cleanup(dest));
+
+  it('overwrites plain files and folders when extracted twice', () => {
+    const first = zipSync({
+      'SKILL.md': bytes('a long first body'),
+      'refs/': none,
+      'refs/deep/': none,
+      'refs/deep/note.md': bytes('first long note'),
+    });
+    const second = zipSync({
+      'SKILL.md': bytes('short'),
+      'refs/': none,
+      'refs/deep/': none,
+      'refs/deep/note.md': bytes('2nd'),
+    });
+
+    expect(__test.extractZipArchive(first, dest)).toBe(2);
+    expect(__test.extractZipArchive(second, dest)).toBe(2);
+
+    expect(fs.readFileSync(path.join(dest, 'SKILL.md'), 'utf8')).toBe('short');
+    expect(fs.readFileSync(path.join(dest, 'refs/deep/note.md'), 'utf8')).toBe(
+      '2nd',
+    );
+  });
+
+  it('creates an empty folder entry without counting it, and the destination when missing', () => {
+    const target = path.join(dest, 'new', 'skill');
+
+    expect(__test.extractZipArchive(zipSync({ 'empty/': none }), target)).toBe(
+      0,
+    );
+
+    expect(fs.statSync(path.join(target, 'empty')).isDirectory()).toBe(true);
+  });
+
+  it('accepts a folder entry for the destination itself', () => {
+    expect(
+      __test.extractZipArchive(
+        zipSync({ './': none, 'SKILL.md': bytes('x') }),
+        dest,
+      ),
+    ).toBe(1);
+  });
+
+  it('refuses a file entry that lands on a folder and leaves the folder', () => {
+    fs.mkdirSync(path.join(dest, 'SKILL.md'));
+
+    expect(() =>
+      __test.extractZipArchive(zipSync({ 'SKILL.md': bytes('x') }), dest),
+    ).toThrow(/link/);
+
+    expect(fs.statSync(path.join(dest, 'SKILL.md')).isDirectory()).toBe(true);
+  });
+
+  it('refuses a folder entry that lands on a file and leaves the file', () => {
+    fs.writeFileSync(path.join(dest, 'refs'), 'keep');
+
+    expect(() =>
+      __test.extractZipArchive(zipSync({ 'refs/': none }), dest),
+    ).toThrow(/link/);
+
+    expect(fs.readFileSync(path.join(dest, 'refs'), 'utf8')).toBe('keep');
+  });
+
+  it('refuses an entry whose parent is an existing file', () => {
+    fs.writeFileSync(path.join(dest, 'refs'), 'keep');
+
+    expect(() =>
+      __test.extractZipArchive(zipSync({ 'refs/a.md': bytes('x') }), dest),
+    ).toThrow(/link/);
+
+    expect(fs.readFileSync(path.join(dest, 'refs'), 'utf8')).toBe('keep');
+  });
+
+  it('refuses a destination that is a file', () => {
+    const file = path.join(dest, 'file');
+    fs.writeFileSync(file, 'keep');
+
+    expect(() =>
+      __test.extractZipArchive(zipSync({ 'a.md': bytes('x') }), file),
+    ).toThrow(/not a plain folder/);
+
+    expect(fs.readFileSync(file, 'utf8')).toBe('keep');
+  });
+
+  it('closes every file it opens', () => {
+    const close = vi.spyOn(nodeFs, 'closeSync');
+    try {
+      __test.extractZipArchive(
+        zipSync({ 'a.md': bytes('a'), 'b/c.md': bytes('c') }),
+        dest,
+      );
+      expect(close).toHaveBeenCalledTimes(2);
+    } finally {
+      close.mockRestore();
+    }
+  });
+});
+
+describe('downloadSkill and symlinks', () => {
+  let installDir: string;
+  let outside: string;
+  const zip = zipSync({ 'SKILL.md': new TextEncoder().encode('# skill') });
+  const entry = {
+    id: 'dummy',
+    name: 'Dummy',
+    downloadUrl: 'http://x.test/a.zip',
+  };
+
+  beforeEach(() => {
+    installDir = makeTmpDir();
+    outside = makeTmpDir();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.resolve(new Response(Buffer.from(zip)))),
+    );
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    cleanup(installDir);
+    cleanup(outside);
+  });
+
+  it('refuses a symlinked leaf skill folder and writes nothing outside', async () => {
+    const root = path.join(installDir, '.cache', 'sdk');
+    fs.mkdirSync(root, { recursive: true });
+    fs.symlinkSync(outside, path.join(root, 'dummy'));
+
+    const result = await downloadSkill(entry, installDir, {
+      skillsRoot: '.cache/sdk',
+      scan: () => Promise.resolve(null),
+    });
+
+    expect(result.success).toBe(false);
+    expect(fs.readdirSync(outside)).toEqual([]);
+  });
+
+  it('refuses a symlinked folder above the skill under a wizard-owned root', async () => {
+    fs.symlinkSync(outside, path.join(installDir, '.cache'));
+
+    const result = await downloadSkill(entry, installDir, {
+      skillsRoot: '.cache/sdk',
+      scan: () => Promise.resolve(null),
+    });
+
+    expect(result.success).toBe(false);
+    expect(fs.readdirSync(outside)).toEqual([]);
+  });
+
+  it('installs through a symlinked .claude, which belongs to the user', async () => {
+    fs.symlinkSync(outside, path.join(installDir, '.claude'));
+
+    const result = await downloadSkill(entry, installDir, {
+      scan: () => Promise.resolve(null),
+    });
+
+    expect(result.success).toBe(true);
+    expect(
+      fs.existsSync(path.join(outside, 'skills', 'dummy', 'SKILL.md')),
+    ).toBe(true);
+  });
+
+  it('refuses a symlinked skill folder under the default root', async () => {
+    const skills = path.join(installDir, '.claude', 'skills');
+    fs.mkdirSync(skills, { recursive: true });
+    fs.symlinkSync(outside, path.join(skills, 'dummy'));
+
+    const result = await downloadSkill(entry, installDir, {
+      scan: () => Promise.resolve(null),
+    });
+
+    expect(result.success).toBe(false);
+    expect(fs.readdirSync(outside)).toEqual([]);
+  });
+
+  it('refuses a symlinked wizard marker file and leaves zero newly extracted files', async () => {
+    const skillDir = path.join(installDir, '.claude', 'skills', 'dummy');
+    fs.mkdirSync(skillDir, { recursive: true });
+    const victim = path.join(outside, 'marker-target');
+    fs.writeFileSync(victim, 'safe');
+    fs.symlinkSync(victim, path.join(skillDir, '.posthog-wizard'));
+
+    const result = await downloadSkill(entry, installDir, {
+      scan: () => Promise.resolve(null),
+    });
+
+    expect(result.success).toBe(false);
+    expect(fs.readFileSync(victim, 'utf8')).toBe('safe');
+    expect(fs.existsSync(path.join(skillDir, 'SKILL.md'))).toBe(false);
+  });
+
+  it('refuses a hard-linked wizard marker file', async () => {
+    const skillDir = path.join(installDir, '.claude', 'skills', 'dummy');
+    fs.mkdirSync(skillDir, { recursive: true });
+    const victim = path.join(outside, 'marker-hardlink');
+    fs.writeFileSync(victim, 'safe');
+    fs.linkSync(victim, path.join(skillDir, '.posthog-wizard'));
+
+    const result = await downloadSkill(entry, installDir, {
+      scan: () => Promise.resolve(null),
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error).toMatch(/hard link/);
+    expect(fs.readFileSync(victim, 'utf8')).toBe('safe');
+    expect(fs.existsSync(path.join(skillDir, 'SKILL.md'))).toBe(false);
+  });
+
+  it('refuses an absolute skillsRoot before creating directories', async () => {
+    const result = await downloadSkill(entry, installDir, {
+      skillsRoot: path.join(outside, 'abs'),
+      scan: () => Promise.resolve(null),
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error).toMatch(/escapes destination/);
+    expect(fetch).not.toHaveBeenCalled();
+    expect(fs.readdirSync(outside)).toEqual([]);
+  });
+
+  it('handles relative installDir ("." and "apps/web") and still refuses escaping skillsRoot', async () => {
+    const origCwd = process.cwd();
+    const webDir = path.join(installDir, 'apps', 'web');
+    fs.mkdirSync(webDir, { recursive: true });
+    process.chdir(installDir);
+    try {
+      const dotInstall = await downloadSkill(entry, '.', {
+        scan: () => Promise.resolve(null),
+      });
+      expect(dotInstall).toEqual({ success: true });
+      expect(
+        fs.existsSync(
+          path.join(
+            installDir,
+            '.claude',
+            'skills',
+            'dummy',
+            '.posthog-wizard',
+          ),
+        ),
+      ).toBe(true);
+
+      const relInstall = await downloadSkill(entry, 'apps/web', {
+        scan: () => Promise.resolve(null),
+      });
+      expect(relInstall).toEqual({ success: true });
+      expect(
+        fs.existsSync(
+          path.join(webDir, '.claude', 'skills', 'dummy', 'SKILL.md'),
+        ),
+      ).toBe(true);
+
+      const escaped = await downloadSkill(entry, 'apps/web', {
+        skillsRoot: '../outside',
+        scan: () => Promise.resolve(null),
+      });
+      expect(escaped.success).toBe(false);
+      expect(escaped.error).toMatch(/escapes destination/);
+      expect(fs.existsSync(path.join(installDir, 'apps', 'outside'))).toBe(
+        false,
+      );
+    } finally {
+      process.chdir(origCwd);
+    }
+  });
+
+  it('refuses a skills root that leaves installDir and writes nothing outside', async () => {
+    const result = await downloadSkill(entry, installDir, {
+      skillsRoot: path.relative(installDir, path.join(outside, 'out')),
+      scan: () => Promise.resolve(null),
+    });
+
+    expect(result).toMatchObject({ success: false });
+    expect(result.error).toMatch(/escapes destination/);
+    expect(fs.readdirSync(outside)).toEqual([]);
+  });
+
+  it.each(['../escaped', '..', '.', '', 'a/b', '-x'])(
+    'refuses the skill id %j before touching the disk',
+    async (id) => {
+      const result = await downloadSkill({ ...entry, id }, installDir, {
+        scan: () => Promise.resolve(null),
+      });
+
+      expect(result).toEqual({
+        success: false,
+        error: `unusable skill id: ${id}`,
+      });
+      expect(fetch).not.toHaveBeenCalled();
+      expect(fs.readdirSync(installDir)).toEqual([]);
+    },
+  );
+
+  it('installs over its own earlier install, marker included', async () => {
+    const options = { scan: () => Promise.resolve(null) };
+
+    expect(await downloadSkill(entry, installDir, options)).toEqual({
+      success: true,
+    });
+    expect(await downloadSkill(entry, installDir, options)).toEqual({
+      success: true,
+    });
+
+    const skillDir = path.join(installDir, '.claude', 'skills', 'dummy');
+    expect(fs.existsSync(path.join(skillDir, '.posthog-wizard'))).toBe(true);
+  });
+
+  it('leaves no folder behind when the archive is unusable', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.resolve(new Response(Buffer.from('not a zip')))),
+    );
+
+    const result = await downloadSkill(entry, installDir, {
+      scan: () => Promise.resolve(null),
+    });
+
+    expect(result.success).toBe(false);
+    expect(
+      fs.existsSync(path.join(installDir, '.claude', 'skills', 'dummy')),
+    ).toBe(false);
+  });
+
+  it('installs through a symlinked installDir', async () => {
+    const link = `${installDir}-link`;
+    fs.symlinkSync(installDir, link);
+    try {
+      const result = await downloadSkill(entry, link, {
+        scan: () => Promise.resolve(null),
+      });
+      expect(result.success).toBe(true);
+      expect(
+        fs.existsSync(
+          path.join(installDir, '.claude', 'skills', 'dummy', 'SKILL.md'),
+        ),
+      ).toBe(true);
+    } finally {
+      fs.rmSync(link, { force: true });
+    }
   });
 });
 

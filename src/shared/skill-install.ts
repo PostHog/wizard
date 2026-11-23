@@ -9,21 +9,82 @@ import { fetchWithRetry, type RetryOpts } from '@shared/fetch-retry';
 import { PLAIN_NAME } from '@shared/skill-composition';
 import { fetchSkillMenu, type SkillEntry } from '@shared/skill-menu';
 
-/** Extract a zip buffer, refusing entries that escape destDir (zip-slip). */
+/** Opens a file for writing and refuses a link at its last component, where the platform can. */
+const WRITE_NO_FOLLOW =
+  fs.constants.O_WRONLY | fs.constants.O_CREAT | (fs.constants.O_NOFOLLOW ?? 0);
+
+/** `target` under `boundary` (which may itself be a link), refused when it leaves it or passes through a link. */
+function plainTarget(
+  boundary: string,
+  target: string,
+  last: 'file' | 'folder',
+): string {
+  const base = path.resolve(boundary);
+  const resolved = path.resolve(base, target);
+  if (resolved !== base && !resolved.startsWith(base + path.sep)) {
+    throw new Error(`path escapes destination: ${target}`);
+  }
+  const parts = path.relative(base, resolved).split(path.sep).filter(Boolean);
+  let current = base;
+  parts.forEach((part, index) => {
+    current = path.join(current, part);
+    const found = fs.lstatSync(current, { throwIfNoEntry: false });
+    if (!found) return;
+    const isLeafFile = index === parts.length - 1 && last === 'file';
+    const plain = isLeafFile ? found.isFile() : found.isDirectory();
+    if (!plain) {
+      throw new Error(`path passes through a link: ${target}`);
+    }
+    if (isLeafFile && found.nlink > 1) {
+      throw new Error(`path is a hard link: ${target}`);
+    }
+  });
+  return resolved;
+}
+
+function writeFileNoFollow(target: string, data: Uint8Array | string): void {
+  const fd = fs.openSync(target, WRITE_NO_FOLLOW, 0o666);
+  try {
+    // Truncate only after the open file proves plain, so a hard link raced in after validation keeps its bytes.
+    const opened = fs.fstatSync(fd);
+    if (!opened.isFile() || opened.nlink !== 1) {
+      throw new Error(`path is a hard link: ${target}`);
+    }
+    fs.ftruncateSync(fd, 0);
+    fs.writeFileSync(fd, data);
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
+/** Extract a zip buffer, refusing entries that escape destDir (zip-slip) or pass through a link. */
 function extractZipArchive(zip: Uint8Array, destDir: string): number {
   const root = path.resolve(destDir);
-  let written = 0;
-  for (const [entryPath, data] of Object.entries(unzipSync(zip))) {
+  const rootStat = fs.lstatSync(root, { throwIfNoEntry: false });
+  if (rootStat && !rootStat.isDirectory()) {
+    throw new Error(`destination is not a plain folder: ${destDir}`);
+  }
+  // Pre-validate every entry before writing anything so a late failure leaves no unscanned files behind.
+  const entries = Object.entries(unzipSync(zip)).map(([entryPath, data]) => {
+    const isDir = entryPath.endsWith('/');
     const target = path.resolve(root, entryPath);
     if (target !== root && !target.startsWith(root + path.sep)) {
       throw new Error(`zip entry escapes destination: ${entryPath}`);
     }
-    if (entryPath.endsWith('/')) {
+    if (!isDir && target === root) {
+      throw new Error(`zip entry overwrites destination: ${entryPath}`);
+    }
+    plainTarget(root, target, isDir ? 'folder' : 'file');
+    return { isDir, target, data };
+  });
+  let written = 0;
+  for (const { isDir, target, data } of entries) {
+    if (isDir) {
       fs.mkdirSync(target, { recursive: true });
       continue;
     }
     fs.mkdirSync(path.dirname(target), { recursive: true });
-    fs.writeFileSync(target, data);
+    writeFileNoFollow(target, data);
     written++;
   }
   return written;
@@ -72,19 +133,42 @@ export async function downloadSkill(
     });
     return { success: false, error };
   }
-  const skillDir = skillsRoot
-    ? path.join(installDir, skillsRoot, skillEntry.id)
-    : path.join(installDir, '.claude', 'skills', skillEntry.id);
+  const absInstallDir = path.resolve(installDir);
+  let skillDir: string;
+  let boundary: string;
+  // Only a wizard-owned `skillsRoot` is held link-free from installDir down; `.claude/skills` may be shared.
+  try {
+    if (skillsRoot !== undefined && path.isAbsolute(skillsRoot)) {
+      throw new Error(`path escapes destination: ${skillsRoot}`);
+    }
+    skillDir = skillsRoot
+      ? path.resolve(absInstallDir, skillsRoot, skillEntry.id)
+      : path.resolve(absInstallDir, '.claude', 'skills', skillEntry.id);
+    boundary = skillsRoot ? absInstallDir : path.dirname(skillDir);
+    plainTarget(boundary, skillDir, 'folder');
+  } catch (err: any) {
+    logToFile(`downloadSkill: refusing unsafe path: ${err.message}`);
+    analytics.wizardCapture('skill install failed', {
+      skill_id: skillEntry.id,
+      step: 'download',
+      platform: process.platform,
+      error: String(err.message).slice(0, 500),
+    });
+    return { success: false, error: err.message };
+  }
   let step: 'download' | 'extract' | 'scan' = 'download';
   // A failed install removes only a folder it made, so files that were there first stay.
-  const existed = fs.existsSync(skillDir);
+  const existed =
+    fs.lstatSync(skillDir, { throwIfNoEntry: false }) !== undefined;
 
   try {
-    fs.mkdirSync(skillDir, { recursive: true });
     const data = await downloadWithRetry(skillEntry.downloadUrl);
     step = 'extract';
+    plainTarget(boundary, skillDir, 'folder');
+    plainTarget(skillDir, WIZARD_MARKER, 'file');
+    fs.mkdirSync(skillDir, { recursive: true });
     const fileCount = extractZipArchive(data, skillDir);
-    fs.writeFileSync(path.join(skillDir, WIZARD_MARKER), '');
+    writeFileNoFollow(plainTarget(skillDir, WIZARD_MARKER, 'file'), '');
 
     // Same scan the Bash-install hook runs — TS-path installs (linear
     // pre-install, MCP/pi install_skill, orchestrator cache + reference)
