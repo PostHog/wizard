@@ -4,9 +4,21 @@ export {
   discoveredWarehouseSources,
   getDiscovery,
   getRepoFiles,
+  rediscoverAfterLogin,
   runDiscovery,
   type Discovery,
 } from './discover';
+export {
+  loadProjectDiscoveryMode,
+  projectDiscoveryMode,
+  type ProjectDiscoveryMode,
+} from './flag';
+export {
+  discoverProjects,
+  parentOf,
+  type DiscoveredProjects,
+  type Workspace,
+} from './projects';
 export {
   detectedEmailProviders,
   type EmailProviderKind,
@@ -14,7 +26,12 @@ export {
 export { reportDiscovery } from './report';
 export { maySendDiscovery, tagDiscovery } from './tags';
 export type { DetectedTool, DiscoveredTools } from './tools';
-export { RUN_PROJECT, TRAITS } from './traits/registry';
+export { TRAITS } from './traits/registry';
 export { getProject, getTraits } from './traits/store';
 export { toMatchKeys } from './traits/match-keys';
-export { manifestDirs, walkRepo, type RepoFiles } from './walk';
+export {
+  findWorkspaceRoot,
+  manifestDirs,
+  walkRepo,
+  type RepoFiles,
+} from './walk';

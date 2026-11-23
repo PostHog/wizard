@@ -146,9 +146,15 @@ describe('walkRepo', () => {
     );
     expect(snapshot.manifests).toEqual(
       expect.arrayContaining([
-        { path: 'package.json', ecosystem: 'npm', packages: ['next'] },
+        {
+          path: 'package.json',
+          dir: '.',
+          ecosystem: 'npm',
+          packages: ['next'],
+        },
         {
           path: 'apps/api/requirements.txt',
+          dir: 'apps/api',
           ecosystem: 'pypi',
           packages: ['django', 'posthog'],
         },
@@ -166,7 +172,7 @@ describe('walkRepo', () => {
       'package.json':
         '\uFEFF' + JSON.stringify({ dependencies: { next: '15' } }),
     });
-    expect(walkRepo(dir).manifests).toEqual([
+    expect(walkRepo(dir).manifests).toMatchObject([
       { path: 'package.json', ecosystem: 'npm', packages: ['next'] },
     ]);
   });

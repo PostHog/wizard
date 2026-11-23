@@ -30,7 +30,7 @@ import { TaskStatus, isTaskStatus } from '@shared/task-status';
 import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
 import { reportWarehouseSourcesDetected } from '../detection/integration';
-import type { ProgramReadyContext } from '@programs/program-contract';
+import type { ProgramReadyContext, Project } from '@programs/program-contract';
 import type { WizardSession } from './wizard-session';
 import type { DiscoveryReport } from './task-stream/types';
 
@@ -298,6 +298,14 @@ export class SessionStore {
     this.set('mcpServerCandidates', candidates);
   }
 
+  setProjects(projects: readonly Project[]): void {
+    this.set('projects', projects);
+  }
+
+  setRunProject(runProject: string): void {
+    this.set('runProject', runProject);
+  }
+
   setSkillId(skillId: string | null): void {
     this.set('skillId', skillId);
   }
@@ -558,6 +566,10 @@ export class SessionStore {
       setDetectedFramework: (l) => this.setDetectedFramework(l),
       setPosthogSdkDetected: (d) => this.setPosthogSdkDetected(d),
       setMcpServerCandidates: (c) => this.setMcpServerCandidates(c),
+      setProjects: (projects, runProject) => {
+        this.setProjects(projects);
+        this.setRunProject(runProject);
+      },
       setSkillId: (id) => this.setSkillId(id),
       setUnsupportedVersion: (info) =>
         this.setUnsupportedVersion(

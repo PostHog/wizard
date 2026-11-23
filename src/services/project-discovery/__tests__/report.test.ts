@@ -29,6 +29,7 @@ import {
 } from '@services/project-discovery';
 import { workspaceFingerprint } from '@services/project-discovery/fingerprint';
 import { tagDiscovery } from '@services/project-discovery/tags';
+import { discoverProjects } from '@services/project-discovery/projects';
 import { walkRepo } from '@services/project-discovery/walk';
 import { loadSourceDetectors } from '@services/warehouse-sources/registry';
 import { analytics } from '@utils/analytics';
@@ -43,7 +44,7 @@ const CREDENTIALS = {
   host: { apiHost: 'https://us.i.posthog.com' },
 } as unknown as Credentials;
 
-const PROGRAM = { id: 'posthog-integration', scansCodebase: true };
+const PROGRAM = { id: 'posthog-integration' };
 
 describe('reportDiscovery', () => {
   let tmpDir: string;
@@ -101,8 +102,12 @@ describe('reportDiscovery', () => {
       program: PROGRAM.id,
       discoveredAt: '2026-10-12T00:00:00.000Z',
       rootDir: tmpDir,
+      runDir: tmpDir,
+      runProject: '.',
+      mode: 'off',
       files: walkRepo(tmpDir),
       tools: { tools: [], complete: false, failed: true },
+      projects: discoverProjects(walkRepo(tmpDir)),
     } satisfies Discovery);
     store.setCredentials(CREDENTIALS);
 

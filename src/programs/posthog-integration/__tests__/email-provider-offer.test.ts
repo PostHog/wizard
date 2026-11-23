@@ -20,24 +20,15 @@ function detected(kind: string, label: string) {
   };
 }
 
-function scanFinding(...tools: ReturnType<typeof detected>[]): Discovery {
-  return {
-    program: 'posthog-integration',
-    discoveredAt: '2026-10-26T09:30:00.000Z',
-    rootDir: '/tmp/app',
-    files: {
-      dir: '/tmp/app',
-      files: [],
-      manifests: [],
-      lockfiles: [],
-      envKeys: [],
-    },
-    tools: { tools, complete: true },
-  };
+/** The offer reads only the tool match, so the fixture holds nothing else of the discovery. */
+type Finding = Pick<Discovery, 'tools'>;
+
+function scanFinding(...tools: ReturnType<typeof detected>[]): Finding {
+  return { tools: { tools, complete: true } };
 }
 
 function finishedRun(
-  scan: Discovery,
+  scan: Finding,
   overrides: Partial<ProgramSession> = {},
 ): ProgramSession {
   const session = buildSession({ installDir: '/tmp/app' });
@@ -136,7 +127,7 @@ describe('emailProviderOffer', () => {
     },
   );
 
-  it.each<[string, (scan: Discovery) => ProgramSession]>([
+  it.each<[string, (scan: Finding) => ProgramSession]>([
     ['a CI run', (scan) => finishedRun(scan, { ci: true })],
     ['telemetry is off', (scan) => finishedRun(scan, { noTelemetry: true })],
     [

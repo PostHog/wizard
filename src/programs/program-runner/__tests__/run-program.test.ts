@@ -81,6 +81,16 @@ vi.mock(import('@shared/oauth-tokens'), () => ({
   missingOAuthScopes: vi.fn(() => []),
 }));
 vi.mock('@utils/debug');
+// Every run discovers, and discovery downloads the tool catalog.
+vi.mock(
+  import('@services/warehouse-sources/registry'),
+  async (importOriginal) =>
+    (
+      await import(
+        '@services/warehouse-sources/__tests__/helpers/tool-catalog.no-jest'
+      )
+    ).withFixtureCatalog(await importOriginal()),
+);
 vi.mock(import('@utils/cleanup'), () => ({
   registerCleanup: vi.fn(() => () => undefined),
 }));

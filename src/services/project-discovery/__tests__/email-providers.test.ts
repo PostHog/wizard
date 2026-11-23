@@ -29,7 +29,7 @@ const CREDENTIALS = {
   host: { apiHost: 'https://us.i.posthog.com' },
 } as unknown as Credentials;
 
-const PROGRAM = { id: 'posthog-integration', scansCodebase: true };
+const PROGRAM = { id: 'posthog-integration' };
 
 const ingested = recordAnalyticsIngestion().events;
 

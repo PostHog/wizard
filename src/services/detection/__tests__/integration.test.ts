@@ -71,6 +71,7 @@ function makeCtx(session: WizardSession): ProgramReadyContext {
     setDetectedFramework: vi.fn(),
     setPosthogSdkDetected: vi.fn(),
     setMcpServerCandidates: vi.fn(),
+    setProjects: vi.fn(),
     setSkillId: vi.fn(),
     setUnsupportedVersion: vi.fn(),
     addDiscoveredFeature: vi.fn(),
@@ -80,7 +81,7 @@ function makeCtx(session: WizardSession): ProgramReadyContext {
 
 /** Detection as the runner does it: the shared scan, then the program's onReady. */
 async function detect(ctx: ProgramReadyContext): Promise<void> {
-  await runDiscovery({ id: 'posthog-integration', scansCodebase: true }, ctx);
+  await runDiscovery({ id: 'posthog-integration' }, ctx);
   await detectPostHogIntegration(ctx);
 }
 

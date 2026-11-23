@@ -18,5 +18,5 @@ export type Traits = {
 
 export type TraitName = keyof Traits;
 
-/** A directory in the repo with its traits. `.` is the directory the run works in. */
+/** A directory in the repo with its traits. Its path is relative to the workspace root, so `.` is that root. */
 export type Project = { path: string; traits: Traits };
