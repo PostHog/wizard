@@ -1,5 +1,23 @@
 # Changelog
 
+## [2.100.0](https://github.com/PostHog/wizard/compare/v2.99.0...v2.100.0) (2026-11-23)
+
+
+### Features
+
+* **cli:** add a test discovery mode ([#1590](https://github.com/PostHog/wizard/issues/1590)) ([831708e](https://github.com/PostHog/wizard/commit/831708e024aab98b31363bc1628d306c8e40fc00))
+* **decisions:** run Decisions as a trait source, behind its flag ([#1589](https://github.com/PostHog/wizard/issues/1589)) ([1510a8f](https://github.com/PostHog/wizard/commit/1510a8f7afae55ec810f3eec8d2ce1ce42b7eee3))
+* **discovery:** find the workspace root and the projects in one walk ([#1585](https://github.com/PostHog/wizard/issues/1585)) ([bf30229](https://github.com/PostHog/wizard/commit/bf30229526e80c342d907b5bd720783fd875cd17))
+* **discovery:** pick one project per run on a plan screen ([#1588](https://github.com/PostHog/wizard/issues/1588)) ([c0e337a](https://github.com/PostHog/wizard/commit/c0e337a75d1772a8489270d1081acaf4eeaaf8b1))
+* **discovery:** settle traits per project from every source ([#1586](https://github.com/PostHog/wizard/issues/1586)) ([77f1448](https://github.com/PostHog/wizard/commit/77f1448b2bdb807517e728774675f33213aa576f))
+* **runner:** resolve skills for the run's own project ([#1587](https://github.com/PostHog/wizard/issues/1587)) ([79c2f45](https://github.com/PostHog/wizard/commit/79c2f455a7c533ffce61c550decc674ea25c20b8))
+
+
+### Bug Fixes
+
+* **detection:** read BOM package.json and stop malformed-file errors ([#1594](https://github.com/PostHog/wizard/issues/1594)) ([49df352](https://github.com/PostHog/wizard/commit/49df352a214ecc30965f6e0b421745dac878e506))
+* **integration:** capture docs-site actions and declare packages an install couldn't add ([#1595](https://github.com/PostHog/wizard/issues/1595)) ([b55d176](https://github.com/PostHog/wizard/commit/b55d17668c2602be6507a390ba92ba092adb0641))
+
 ## [2.99.0](https://github.com/PostHog/wizard/compare/v2.98.0...v2.99.0) (2026-11-23)
 
 
