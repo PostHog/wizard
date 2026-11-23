@@ -9,6 +9,7 @@
  * Discovery always runs; consent only gates reporting (see `report.ts`).
  */
 
+import fs from 'fs';
 import path from 'path';
 import type { Integration } from '@shared/constants';
 import { analytics } from '@utils/analytics';
@@ -368,6 +369,15 @@ async function discover(
   );
 }
 
+/** `dir` with its links resolved, or as given when it cannot be read. */
+function realDir(dir: string): string {
+  try {
+    return fs.realpathSync(dir);
+  } catch {
+    return path.resolve(dir);
+  }
+}
+
 /** The path of `dir` from the discovery root, as a project is named. Undefined before discovery, and for a directory outside the root. */
 export function projectPathOf(
   session: Pick<ProgramSession, 'frameworkContext'>,
@@ -375,7 +385,8 @@ export function projectPathOf(
 ): string | undefined {
   const rootDir = getDiscovery(session)?.rootDir;
   if (!rootDir) return undefined;
-  const relative = path.relative(rootDir, dir);
+  // Real paths on both sides: one caller resolves its directory and another reads it through a link.
+  const relative = path.relative(realDir(rootDir), realDir(dir));
   if (relative.startsWith('..') || path.isAbsolute(relative)) return undefined;
   return relative === '' ? '.' : relative.split(path.sep).join('/');
 }

@@ -33,6 +33,7 @@ import {
   getTools,
   getTraitClaims,
   getTraits,
+  projectPathOf,
   runDiscovery,
   selectProjects,
   setTrait,
@@ -131,6 +132,22 @@ describe('static detection in each project', () => {
     // The root still reads its own detection through the scoped copy.
     expect(getTraits(scoped, '.').callsLlmApi).toBe('yes');
   });
+
+  it.skipIf(process.platform === 'win32')(
+    'names a folder reached through a link by its real path',
+    async () => {
+      const { session } = await discoveredMonorepo();
+      const link = `${repo}-link`;
+      fs.symlinkSync(repo, link);
+      try {
+        expect(projectPathOf(session, path.join(link, 'apps/web'))).toBe(
+          'apps/web',
+        );
+      } finally {
+        fs.unlinkSync(link);
+      }
+    },
+  );
 
   it('gives each project that shares a package the tool', async () => {
     write('apps/api/package.json', pkg({ express: '^4.0.0', stripe: '^14' }));
