@@ -333,7 +333,7 @@ describe('PostHogDestination', () => {
       fetchImpl,
     });
 
-    await dest.sendScan({
+    await dest.sendDiscovery({
       session_id: SAMPLE_PAYLOAD.session_id,
       program: 'posthog-integration',
       wizard_version: '0.0.0',

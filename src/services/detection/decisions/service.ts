@@ -13,8 +13,8 @@ import type { CloudRegion } from '@utils/types';
 import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
 import type { ProgramSession } from '@programs/program-contract';
-import { getDecisionsScan } from './scan';
-import { maySendScanResults } from '../../codebase-scan/tags';
+import { getRepoFiles } from '../../project-discovery/discover';
+import { maySendDiscovery } from '../../project-discovery/tags';
 import { askDecisions } from './ask';
 import { renderDecisionState } from './input';
 import type {
@@ -109,7 +109,7 @@ export async function runDecisionSpecs(
   ctx: RunDecisionsContext,
 ): Promise<DecisionsResult | null> {
   const mode = getDecisionsMode(ctx.flags);
-  const sharing = maySendScanResults(ctx.session);
+  const sharing = maySendDiscovery(ctx.session);
   const specs = questions.filter((spec) => sharing || !spec.shared);
   if (specs.length === 0) return null;
   if (mode === 'off') {
@@ -135,7 +135,7 @@ export async function runDecisionSpecs(
     };
   } else {
     const input = renderDecisionState(
-      getDecisionsScan(ctx.session, ctx.setFrameworkContext),
+      getRepoFiles(ctx.session, ctx.setFrameworkContext),
     );
     result = {
       mode,

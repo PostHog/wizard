@@ -8,7 +8,7 @@ export {
 } from './framework-config';
 export { ProgramAbort } from './program-abort';
 export type { ProgramRun } from './program-run';
-export type { ProgramSession, ScanReport } from './program-session';
+export type { ProgramSession, DiscoveryReport } from './program-session';
 export type { Project, TraitName, Traits } from './project-traits';
 export type {
   DecisionQuestionKey,

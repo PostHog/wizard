@@ -28,13 +28,13 @@ vi.mock(
 
 import { analytics } from '@utils/analytics';
 import { detectPostHogIntegration } from '@services/detection';
-import { reportCodebaseScan, scanCodebaseFor } from '@services/codebase-scan';
+import { reportDiscovery, runDiscovery } from '@services/project-discovery';
 import { DETECTED_WAREHOUSE_SOURCES_KEY } from '@services/warehouse-sources';
 import type { DetectedSource } from '@services/warehouse-sources';
 import { SessionStore } from '@services/session';
 import { buildSession } from '@services/session';
 import { testRunnerContext } from '@programs/shared/__tests__/runner-context.no-jest';
-import { ScanConsent } from '@shared/run-state';
+import { DiscoveryConsent } from '@shared/run-state';
 import { config as posthogIntegration } from '../index';
 import {
   CREDENTIALS,
@@ -64,9 +64,18 @@ describe('the full decline contract, end to end', () => {
   afterEach(() => cleanup(tmpDir));
 
   it.each([
-    ['declined', { scanConsent: ScanConsent.Declined, noTelemetry: false }],
-    ['undecided', { scanConsent: ScanConsent.Undecided, noTelemetry: false }],
-    ['--no-telemetry', { scanConsent: ScanConsent.Granted, noTelemetry: true }],
+    [
+      'declined',
+      { discoveryConsent: DiscoveryConsent.Declined, noTelemetry: false },
+    ],
+    [
+      'undecided',
+      { discoveryConsent: DiscoveryConsent.Undecided, noTelemetry: false },
+    ],
+    [
+      '--no-telemetry',
+      { discoveryConsent: DiscoveryConsent.Granted, noTelemetry: true },
+    ],
   ])(
     'sets the key, keeps the outro suggestion, and reports nothing, for a %s run',
     async (_label, overrides) => {
@@ -78,10 +87,10 @@ describe('the full decline contract, end to end', () => {
       session.credentials = CREDENTIALS as any;
 
       const store = new SessionStore(session);
-      await scanCodebaseFor(posthogIntegration, store.readyContext());
+      await runDiscovery(posthogIntegration, store.readyContext());
       await detectPostHogIntegration(store.readyContext());
-      reportCodebaseScan(store);
-      expect(store.session.codebaseScanReport).toBeNull();
+      reportDiscovery(store);
+      expect(store.session.discoveryReport).toBeNull();
 
       const sources = store.session.frameworkContext[
         DETECTED_WAREHOUSE_SOURCES_KEY

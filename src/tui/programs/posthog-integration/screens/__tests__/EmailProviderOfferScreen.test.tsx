@@ -12,7 +12,7 @@ import { HostResolution } from '@shared/host-resolution';
 import type { ApiUser } from '@shared/api';
 import { RunPhase } from '@shared/run-state';
 import { WizardReadiness } from '@shared/health-checks/readiness';
-import { CODEBASE_SCAN_KEY } from '@services/codebase-scan';
+import { DISCOVERY_KEY } from '@services/project-discovery';
 import { analytics } from '@utils/analytics';
 import { recordAnalyticsIngestion } from '@shared/utils/__tests__/helpers/analytics-ingestion.no-jest';
 import { PostHogIntegrationScreenId } from '@tui/programs/posthog-integration/screen-ids';
@@ -90,21 +90,30 @@ function storeAtOutroWithResend(
     distinct_id: 'user-distinct-id',
     organization: { is_ai_data_processing_approved: true },
   } as ApiUser);
-  store.setFrameworkContext(CODEBASE_SCAN_KEY, {
+  store.setFrameworkContext(DISCOVERY_KEY, {
     program: 'posthog-integration',
-    scannedAt: '2026-10-26T09:30:00.000Z',
-    scannedDir: '/tmp/app',
-    complete: true,
-    tools: [
-      {
-        kind: 'Resend',
-        label: 'Resend',
-        warehouseSourceType: null,
-        mode: null,
-        matchedSignal: 'package resend',
-        signals: [],
-      },
-    ],
+    discoveredAt: '2026-10-26T09:30:00.000Z',
+    rootDir: '/tmp/app',
+    files: {
+      dir: '/tmp/app',
+      files: [],
+      manifests: [],
+      lockfiles: [],
+      envKeys: [],
+    },
+    tools: {
+      complete: true,
+      tools: [
+        {
+          kind: 'Resend',
+          label: 'Resend',
+          warehouseSourceType: null,
+          mode: null,
+          matchedSignal: 'package resend',
+          signals: [],
+        },
+      ],
+    },
   });
   store.setRunPhase(RunPhase.Running);
   store.setRunPhase(RunPhase.Completed);

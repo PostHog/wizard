@@ -48,8 +48,8 @@ import { analytics, sessionProperties } from '@utils/analytics';
 import {
   buildSession,
   findProgramConfig,
-  reportCodebaseScan,
-  scanCodebaseFor,
+  reportDiscovery,
+  runDiscovery,
   SessionStore,
 } from '@programs';
 import type { PlannedEvent, TaskItem, WizardSession } from '@programs/types';
@@ -221,7 +221,7 @@ export class WizardStore implements TuiView {
   async runReadyHooks(): Promise<void> {
     const config = findProgramConfig(this.router.activeProgram);
     const ctx = this.sessions.readyContext();
-    if (config) await scanCodebaseFor(config, ctx);
+    if (config) await runDiscovery(config, ctx);
     await config?.onReady?.(ctx);
     this.sessions.setDetectionComplete();
   }
@@ -510,7 +510,7 @@ export class WizardStore implements TuiView {
     // Reports first: analytics merges tags into an event as it is sent, so
     // `setup confirmed` only carries the warehouse tags if they are already
     // set. On main they were, because reporting happened back in detect.
-    reportCodebaseScan(this.sessions);
+    reportDiscovery(this.sessions);
     analytics.wizardCapture('setup confirmed', sessionProperties(this.session));
     this._write({ setupConfirmed: true });
   }
@@ -527,7 +527,7 @@ export class WizardStore implements TuiView {
   /**
    * Sharing is off. Suppresses reporting only — local detection still ran and
    * the results stay in the session, so the outro suggestion and the warehouse
-   * task are unaffected; see `scanConsent` on `WizardSession`.
+   * task are unaffected; see `discoveryConsent` on `WizardSession`.
    *
    * Deliberately does not report. The panel's toggle can come back here, so
    * marking the run reported would strand a user who turns sharing off and

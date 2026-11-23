@@ -25,7 +25,7 @@ import {
 } from '@programs/self-driving/detect';
 import { getDetectedWarehouseSources } from '@services/warehouse-sources';
 import { SessionStore } from '@services/session';
-import { reportCodebaseScan, scanCodebaseFor } from '@services/codebase-scan';
+import { reportDiscovery, runDiscovery } from '@services/project-discovery';
 import { analytics } from '@utils/analytics';
 import type { DetectedSource } from '@services/warehouse-sources';
 import { toIntegrationReport } from '@programs/self-driving/detect-agentic';
@@ -88,7 +88,7 @@ describe('detectSelfDrivingPrerequisites', () => {
       JSON.stringify({ dependencies: deps }),
     );
     const session = buildSession({ installDir: tmpDir });
-    await scanCodebaseFor(selfDriving, {
+    await runDiscovery(selfDriving, {
       session,
       setFrameworkContext: (key, value) => {
         session.frameworkContext[key] = value;
@@ -125,7 +125,7 @@ describe('detectSelfDrivingPrerequisites', () => {
     );
     const store = new SessionStore(buildSession({ installDir: tmpDir }));
     const ready = store.readyContext();
-    await scanCodebaseFor(selfDriving, ready);
+    await runDiscovery(selfDriving, ready);
     await detectSelfDrivingPrerequisites(
       ready.session,
       ready.setFrameworkContext,
@@ -140,7 +140,7 @@ describe('detectSelfDrivingPrerequisites', () => {
     );
 
     store.grantSharing();
-    reportCodebaseScan(store);
+    reportDiscovery(store);
 
     expect(setTag).toHaveBeenCalledWith('connected_tools_detected', 'Sentry');
     setTag.mockRestore();
@@ -173,7 +173,7 @@ describe('the detect step does not leak into the composed integration run', () =
 
   it('stashes under its own key and leaves the warehouse key untouched', async () => {
     const store = new SessionStore(buildSession({ installDir: tmpDir }));
-    await scanCodebaseFor(selfDriving, store.readyContext());
+    await runDiscovery(selfDriving, store.readyContext());
     await selfDriving.onReady?.(store.readyContext());
 
     // Self-driving sees its tools...

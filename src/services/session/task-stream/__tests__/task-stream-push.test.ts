@@ -1,8 +1,8 @@
 import { TaskStreamPush } from '../task-stream-push';
 import { StreamEvent, StreamTaskStatus } from '../types';
 import type {
-  ScanReport,
-  ScanReportPayload,
+  DiscoveryReport,
+  DiscoveryReportPayload,
   TaskStreamDestination,
   TaskStreamUpdate,
 } from '../types';
@@ -26,7 +26,7 @@ interface MockStoreState {
   handoffText?: string | null;
   installDir?: string;
   pendingQuestion?: PendingQuestion | null;
-  codebaseScanReport?: ScanReport | null;
+  discoveryReport?: DiscoveryReport | null;
 }
 
 function createMockStore(overrides: Partial<MockStoreState> = {}) {
@@ -50,7 +50,7 @@ function createMockStore(overrides: Partial<MockStoreState> = {}) {
         outroData: null,
         installDir: state.installDir,
         pendingQuestion: state.pendingQuestion ?? null,
-        codebaseScanReport: state.codebaseScanReport ?? null,
+        discoveryReport: state.discoveryReport ?? null,
         frameworkContext,
       };
     },
@@ -730,16 +730,16 @@ describe('TaskStreamPush', () => {
     it('attaches a shared scan to the session once, and shutdown waits for it', async () => {
       const store = createMockStore({ runPhase: RunPhase.Running });
       let release!: () => void;
-      const sendScan = vi.fn(
-        (_payload: ScanReportPayload) =>
+      const sendDiscovery = vi.fn(
+        (_payload: DiscoveryReportPayload) =>
           new Promise<void>((resolve) => (release = resolve)),
       );
-      const dest = { ...createMockDestination(), sendScan };
+      const dest = { ...createMockDestination(), sendDiscovery };
       const { push } = createPush(store, { dest });
       push.attach();
 
       store._setAndEmit({
-        codebaseScanReport: {
+        discoveryReport: {
           program: 'posthog-integration',
           wizard_version: '0.0.0',
           workspace_fingerprint: 'f'.repeat(64),
@@ -750,8 +750,8 @@ describe('TaskStreamPush', () => {
       });
       store._emit();
 
-      expect(sendScan).toHaveBeenCalledTimes(1);
-      expect(sendScan.mock.calls[0][0]).toMatchObject({
+      expect(sendDiscovery).toHaveBeenCalledTimes(1);
+      expect(sendDiscovery.mock.calls[0][0]).toMatchObject({
         session_id: expect.stringMatching(/^test-program-test-skill-/),
       });
 

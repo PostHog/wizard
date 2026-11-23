@@ -185,7 +185,7 @@ export interface ProgramConfig {
   /**
    * Scan the codebase for catalog tools before `onReady`, once per run. The
    * result feeds local suggestions, and is reported to PostHog when the user
-   * shares it; see `@services/codebase-scan`.
+   * shares it; see `@services/project-discovery`.
    */
   scansCodebase?: boolean;
   /**

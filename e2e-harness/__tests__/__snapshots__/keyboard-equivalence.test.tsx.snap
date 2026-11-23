@@ -20,7 +20,7 @@ exports[`keyboard commit vs control action commit > intro: enter on Continue vs 
     "setupConfirmed": true,
   },
   "keyboard": {
-    "scanConsent": "granted",
+    "discoveryConsent": "granted",
     "screen": "health-check",
     "setupConfirmed": true,
     "warehouseSourcesReported": true,

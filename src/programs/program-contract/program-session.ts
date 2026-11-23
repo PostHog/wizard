@@ -6,7 +6,7 @@
 import type { Harness, Integration } from '@shared/constants';
 import type { ApiUser, Credentials } from '@shared/api';
 import type { DiscoveredFeature } from '@shared/discovered-feature';
-import type { ScanConsent } from '@shared/run-state';
+import type { DiscoveryConsent } from '@shared/run-state';
 import type { FrameworkConfig } from './framework-config';
 import type { OutroData } from '@agent/types';
 
@@ -56,13 +56,13 @@ export interface ProgramSession {
    * 'undecided' as 'declined', so a path that reports before the user was
    * asked sends nothing rather than everything.
    */
-  scanConsent: ScanConsent;
+  discoveryConsent: DiscoveryConsent;
   /** `--no-telemetry`: nothing about the run leaves the machine, whatever the consent. */
   noTelemetry: boolean;
   /** Guards against reporting twice; consent resolves from two paths. */
   warehouseSourcesReported: boolean;
-  /** The scan the user agreed to share. Set once per run; the task stream sends it. */
-  codebaseScanReport: ScanReport | null;
+  /** The discovery report the user agreed to share. Set once per run; the task stream sends it. */
+  discoveryReport: DiscoveryReport | null;
   integration: Integration | null;
   frameworkContext: Record<string, unknown>;
   typescript: boolean;
@@ -100,16 +100,16 @@ export interface ProgramSession {
 }
 
 /**
- * The codebase scan the user agreed to share, without its session. The stream
- * adds its own `session_id`, so the scan joins the session it came from.
+ * The discovery the user agreed to share, without its session. The stream
+ * adds its own `session_id`, so the report joins the session it came from.
  */
-export type ScanReport = {
+export type DiscoveryReport = {
   program: string;
   wizard_version: string;
   workspace_fingerprint: string;
   scanned_at: string;
   /**
-   * False when the scan could not see the whole project. PostHog then records
+   * False when discovery could not see the whole project. PostHog then records
    * the tools it saw but marks none removed.
    */
   complete: boolean;

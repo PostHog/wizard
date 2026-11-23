@@ -9,7 +9,7 @@ import {
   reportableDiscoveredFeatures,
   reportableDetections,
   type RunPhase,
-  type ScanConsent,
+  type DiscoveryConsent,
 } from '@shared/run-state';
 import type { DiscoveredFeature } from '@shared/discovered-feature';
 import type { Integration } from '@shared/constants';
@@ -47,7 +47,7 @@ export type SessionFacts = {
   typescript: boolean;
   credentials: { projectId: number } | null;
   discoveredFeatures: DiscoveredFeature[];
-  scanConsent: ScanConsent;
+  discoveryConsent: DiscoveryConsent;
   runPhase: RunPhase;
   posthogSdkDetected: boolean;
   mcpServerCandidates: readonly string[];
@@ -61,7 +61,7 @@ export function sessionProperties(
   session: SessionFacts,
 ): Record<string, unknown> {
   // reportableDiscoveredFeatures() owns the consent decision; this file
-  // never needs to know what `scanConsent` means, only that the result
+  // never needs to know what `discoveryConsent` means, only that the result
   // might be absent. An absent key is unambiguous, while an empty array
   // would read as "we looked and found nothing" instead of "not reported".
   const discoveredFeatures = reportableDiscoveredFeatures(session);
@@ -78,7 +78,7 @@ export function sessionProperties(
     ...(discoveredFeatures !== undefined
       ? { discovered_features: discoveredFeatures }
       : {}),
-    scan_consent: session.scanConsent,
+    scan_consent: session.discoveryConsent,
     run_phase: session.runPhase,
     ...(detections
       ? {

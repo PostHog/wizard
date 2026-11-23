@@ -1,9 +1,9 @@
 import {
   detectedEmailProviders,
-  getCodebaseScan,
-  maySendScanResults,
+  getDiscovery,
+  maySendDiscovery,
   type EmailProviderKind,
-} from '@services/codebase-scan';
+} from '@services/project-discovery';
 import { WIZARD_EMAIL_PROVIDER_OFFER_FLAG_KEY } from '@shared/constants';
 import { OutroKind } from '@shared/outro';
 import { analytics } from '@utils/analytics';
@@ -29,7 +29,7 @@ type OfferSession = Pick<
   ProgramSession,
   | 'ci'
   | 'noTelemetry'
-  | 'scanConsent'
+  | 'discoveryConsent'
   | 'outroData'
   | 'credentials'
   | 'apiUser'
@@ -61,7 +61,7 @@ function mayAsk(session: OfferSession): boolean {
   return (
     !session.ci &&
     session.apiUser !== null &&
-    maySendScanResults(session) &&
+    maySendDiscovery(session) &&
     session.outroData?.kind === OutroKind.Success &&
     analytics.getCachedWizardFlags()?.[WIZARD_EMAIL_PROVIDER_OFFER_FLAG_KEY] ===
       'true'
@@ -71,10 +71,10 @@ function mayAsk(session: OfferSession): boolean {
 export function emailProviderOffer(
   session: OfferSession,
 ): EmailProviderOffer | undefined {
-  const scan = getCodebaseScan(session);
+  const discovery = getDiscovery(session);
   const credentials = session.credentials;
-  if (!scan || !credentials || !mayAsk(session)) return undefined;
-  const [first, ...others] = detectedEmailProviders(scan);
+  if (!discovery || !credentials || !mayAsk(session)) return undefined;
+  const [first, ...others] = detectedEmailProviders(discovery);
   const link = workflowsUrl(credentials.host.appHost, credentials.projectId);
   if (!first || !link) return undefined;
   return {

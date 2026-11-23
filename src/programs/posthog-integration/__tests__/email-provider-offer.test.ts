@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildSession } from '@services/session';
-import { CODEBASE_SCAN_KEY, type CodebaseScan } from '@services/codebase-scan';
+import { DISCOVERY_KEY, type Discovery } from '@services/project-discovery';
 import { HostResolution } from '@shared/host-resolution';
 import { OutroKind } from '@shared/outro';
-import { ScanConsent } from '@shared/run-state';
+import { DiscoveryConsent } from '@shared/run-state';
 import type { ProgramSession } from '@programs/program-contract';
 import type { ApiUser } from '@shared/api';
 import { analytics } from '@utils/analytics';
@@ -20,23 +20,29 @@ function detected(kind: string, label: string) {
   };
 }
 
-function scanFinding(...tools: ReturnType<typeof detected>[]): CodebaseScan {
+function scanFinding(...tools: ReturnType<typeof detected>[]): Discovery {
   return {
     program: 'posthog-integration',
-    scannedAt: '2026-10-26T09:30:00.000Z',
-    scannedDir: '/tmp/app',
-    tools,
-    complete: true,
+    discoveredAt: '2026-10-26T09:30:00.000Z',
+    rootDir: '/tmp/app',
+    files: {
+      dir: '/tmp/app',
+      files: [],
+      manifests: [],
+      lockfiles: [],
+      envKeys: [],
+    },
+    tools: { tools, complete: true },
   };
 }
 
 function finishedRun(
-  scan: CodebaseScan,
+  scan: Discovery,
   overrides: Partial<ProgramSession> = {},
 ): ProgramSession {
   const session = buildSession({ installDir: '/tmp/app' });
-  session.scanConsent = ScanConsent.Granted;
-  session.frameworkContext[CODEBASE_SCAN_KEY] = scan;
+  session.discoveryConsent = DiscoveryConsent.Granted;
+  session.frameworkContext[DISCOVERY_KEY] = scan;
   session.outroData = { kind: OutroKind.Success, message: 'Done' };
   session.credentials = {
     accessToken: 'token',
@@ -130,12 +136,13 @@ describe('emailProviderOffer', () => {
     },
   );
 
-  it.each<[string, (scan: CodebaseScan) => ProgramSession]>([
+  it.each<[string, (scan: Discovery) => ProgramSession]>([
     ['a CI run', (scan) => finishedRun(scan, { ci: true })],
     ['telemetry is off', (scan) => finishedRun(scan, { noTelemetry: true })],
     [
       'sharing was declined',
-      (scan) => finishedRun(scan, { scanConsent: ScanConsent.Declined }),
+      (scan) =>
+        finishedRun(scan, { discoveryConsent: DiscoveryConsent.Declined }),
     ],
     [
       'the install failed',

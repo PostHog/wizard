@@ -1,7 +1,7 @@
 /**
  * Warehouse-destination program detection step.
  *
- * Reads the run's codebase scan for warehouses PostHog can export to, and
+ * Reads the run's discovery for warehouses PostHog can export to, and
  * writes a `detectError` into frameworkContext for the intro screen when the
  * install directory is unusable. Finding no warehouse is not an error: the
  * intro screen asks the user which one they run.
@@ -12,10 +12,10 @@ import { analytics } from '@utils/analytics';
 import type { ProgramSession } from '@programs/program-contract';
 import type { AbortCase } from '@agent/types';
 import {
-  scannedWarehouseDestinations,
-  scannedWarehouseSources,
-  tagScanResults,
-} from '@services/codebase-scan';
+  discoveredWarehouseDestinations,
+  discoveredWarehouseSources,
+  tagDiscovery,
+} from '@services/project-discovery';
 import {
   DETECTED_WAREHOUSE_DESTINATIONS_KEY,
   DETECTED_WAREHOUSE_SOURCES_KEY,
@@ -109,14 +109,14 @@ export async function detectWarehouseDestinationPrerequisites(
     return;
   }
 
-  const destinations = await scannedWarehouseDestinations(session);
-  tagScanResults(session, setFrameworkContext, {
+  const destinations = await discoveredWarehouseDestinations(session);
+  tagDiscovery(session, setFrameworkContext, {
     warehouse_destination_types: destinations.map((d) => d.type).join(','),
     warehouse_destination_count: destinations.length,
   });
   setFrameworkContext(DETECTED_WAREHOUSE_DESTINATIONS_KEY, destinations);
   setFrameworkContext(
     DETECTED_WAREHOUSE_SOURCES_KEY,
-    await scannedWarehouseSources(session),
+    await discoveredWarehouseSources(session),
   );
 }

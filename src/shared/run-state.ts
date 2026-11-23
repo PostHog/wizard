@@ -22,8 +22,8 @@ export enum RunPhase {
   Error = 'error',
 }
 
-/** Consent to report what local detection found (see `scanConsent` below). */
-export enum ScanConsent {
+/** Consent to report what local detection found (see `discoveryConsent` below). */
+export enum DiscoveryConsent {
   Undecided = 'undecided',
   Granted = 'granted',
   Declined = 'declined',
@@ -38,23 +38,23 @@ export enum McpOutcome {
 }
 
 /** One place to ask, so a new consent state does not need three edits. */
-export function mayReportScanResults(session: {
-  scanConsent: ScanConsent;
+export function mayReportDiscovery(session: {
+  discoveryConsent: DiscoveryConsent;
 }): boolean {
-  return session.scanConsent === ScanConsent.Granted;
+  return session.discoveryConsent === DiscoveryConsent.Granted;
 }
 
 /** Lives here so analytics infrastructure never learns what consent means. */
 export function reportableDiscoveredFeatures(session: {
-  scanConsent: ScanConsent;
+  discoveryConsent: DiscoveryConsent;
   discoveredFeatures: DiscoveredFeature[];
 }): DiscoveredFeature[] | undefined {
-  return mayReportScanResults(session) ? session.discoveredFeatures : undefined;
+  return mayReportDiscovery(session) ? session.discoveredFeatures : undefined;
 }
 
-/** Also scan results, so they travel under the same consent as the rest. */
+/** Also discovery results, so they travel under the same consent as the rest. */
 export function reportableDetections(session: {
-  scanConsent: ScanConsent;
+  discoveryConsent: DiscoveryConsent;
   posthogSdkDetected: boolean;
   mcpServerCandidates: readonly string[];
 }):
@@ -64,7 +64,7 @@ export function reportableDetections(session: {
       mcpServerCandidateCount: number;
     }
   | undefined {
-  return mayReportScanResults(session)
+  return mayReportDiscovery(session)
     ? {
         posthogSdkDetected: session.posthogSdkDetected,
         mcpServerDetected: session.mcpServerCandidates.length > 0,
