@@ -380,6 +380,17 @@ export function projectPathOf(
   return relative === '' ? '.' : relative.split(path.sep).join('/');
 }
 
+/** frameworkContext key of a step scoped to another folder: the project its copied detection fields still describe. */
+export const DETECTED_PROJECT_KEY = 'detectedProject';
+
+/** The project the session's own detection fields describe: its run project, unless a step was scoped away from it. */
+export function detectedProjectOf(
+  session: Pick<ProgramSession, 'frameworkContext' | 'runProject'>,
+): string {
+  const scopedFrom = session.frameworkContext[DETECTED_PROJECT_KEY];
+  return typeof scopedFrom === 'string' ? scopedFrom : session.runProject;
+}
+
 /**
  * One project's tools, the run project's by default: the tools found at or
  * below it. Every reader takes tools from here, so a sibling project's tools
