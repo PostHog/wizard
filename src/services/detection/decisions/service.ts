@@ -243,10 +243,16 @@ export function actionableProbability(
   return answer?.kind === 'predicate' ? answer.probability : null;
 }
 
-/** A predicate's `likely` fact applies at or above this; a choice's fact too. */
+/** A predicate reads as yes at or above this probability; a choice's fact applies there too. */
 const LIKELY = 0.6;
-/** A predicate's `unlikely` fact applies at or below this. */
+/** A predicate reads as no at or below this probability. */
 const UNLIKELY = 0.1;
+
+/** What a predicate's probability says. Facts for the agent and traits both read it here, so they agree. */
+export function readPredicate(probability: number): 'yes' | 'no' | 'unsure' {
+  if (probability >= LIKELY) return 'yes';
+  return probability <= UNLIKELY ? 'no' : 'unsure';
+}
 /** Choice values that never become a fact. */
 const NO_FACT_CHOICES: ReadonlySet<string> = new Set(['other', 'none']);
 
@@ -263,9 +269,10 @@ export function questionFacts(
     const answer = actionableAnswer(session, question.name);
     if (!answer) continue;
     if (answer.kind === 'predicate') {
-      if (answer.probability >= LIKELY && question.facts?.likely) {
+      const says = readPredicate(answer.probability);
+      if (says === 'yes' && question.facts?.likely) {
         facts.push(question.facts.likely);
-      } else if (answer.probability <= UNLIKELY && question.facts?.unlikely) {
+      } else if (says === 'no' && question.facts?.unlikely) {
         facts.push(question.facts.unlikely);
       }
     } else if (

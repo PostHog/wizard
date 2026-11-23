@@ -7,17 +7,16 @@ import {
   type TraitSink,
   type TraitWrite,
 } from '../../project-discovery/traits/store';
-import { INTEGRATION_TARGETS } from '../project-scope';
+import { INTEGRATION_SCAN } from '../project-scope';
 import { getDiscovery } from '../../project-discovery/discover';
 import { detectProjectsWithDecisions, PROJECT_CONFIDENCE } from './projects';
 import { QUESTIONS, type QuestionKey } from './questions';
-import { runProgramDecisions, type RunDecisionsContext } from './service';
+import {
+  readPredicate,
+  runProgramDecisions,
+  type RunDecisionsContext,
+} from './service';
 import type { DecisionAnswer, DecisionsResult } from './types';
-
-/** A predicate reads as `yes` at or above this probability. */
-const YES = 0.6;
-/** A predicate reads as `no` at or below this probability. Between the two it says nothing. */
-const NO = 0.1;
 
 type Answers = Readonly<Record<string, DecisionAnswer>>;
 
@@ -28,12 +27,9 @@ function yesNo(
 ): { value: 'yes' | 'no'; confidence: number } | undefined {
   const answer = answers[QUESTIONS[key].name];
   if (answer?.kind !== 'predicate') return undefined;
-  if (answer.probability >= YES) {
-    return { value: 'yes', confidence: answer.probability };
-  }
-  if (answer.probability <= NO) {
-    return { value: 'no', confidence: 1 - answer.probability };
-  }
+  const value = readPredicate(answer.probability);
+  if (value === 'yes') return { value, confidence: answer.probability };
+  if (value === 'no') return { value, confidence: 1 - answer.probability };
   return undefined;
 }
 
@@ -76,8 +72,7 @@ export async function rankProjectsWithDecisions(
   const judged = await detectProjectsWithDecisions(
     sink.session,
     {
-      targets: INTEGRATION_TARGETS,
-      purpose: 'set up a PostHog SDK integration',
+      ...INTEGRATION_SCAN,
       programId,
       recommend: true,
       fetchImpl,
