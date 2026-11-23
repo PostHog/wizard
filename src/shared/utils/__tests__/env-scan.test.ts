@@ -65,6 +65,55 @@ describe('isTemplateEnvFileName', () => {
 });
 
 describe('parseEnvKeyNames', () => {
+  it('closes a double-quoted value that ends in an escaped backslash', () => {
+    // The quote after two backslashes closes the value, so the next key's lines are not read as its value.
+    const keys = parseEnvKeyNames(
+      [
+        'WIN_DIR="C:\\\\app\\\\"',
+        'PRIVATE_KEY="-----BEGIN PRIVATE KEY-----',
+        'c2VjcmV0X2tleV9tYXRlcmlhbA==',
+        '-----END PRIVATE KEY-----"',
+        "SINGLE='ends in a backslash\\'",
+        'AFTER=1',
+        '',
+      ].join('\n'),
+    );
+    expect(keys).toEqual(['WIN_DIR', 'PRIVATE_KEY', 'SINGLE', 'AFTER']);
+  });
+
+  it('reads no key name from the lines of a multi-line quoted value', () => {
+    const keys = parseEnvKeyNames(
+      [
+        'DATABASE_URL=postgres://localhost',
+        'PRIVATE_KEY="-----BEGIN KEY-----',
+        'c2VjcmV0X2tleV9tYXRlcmlhbA==',
+        'tail_of_base64=',
+        '-----END KEY-----"',
+        "NOTE='first line",
+        'inner_name=looks like a key',
+        "last line'",
+        'STRIPE_SECRET_KEY=sk_test_x',
+      ].join('\n'),
+    );
+    expect(keys).toEqual([
+      'DATABASE_URL',
+      'PRIVATE_KEY',
+      'NOTE',
+      'STRIPE_SECRET_KEY',
+    ]);
+  });
+
+  it('reads a quote that never closes as one line, so the keys after it are kept', () => {
+    expect(
+      parseEnvKeyNames('TITLE="unfinished\nAPI_KEY=abc\nOTHER=1\n'),
+    ).toEqual(['TITLE', 'API_KEY', 'OTHER']);
+    expect(parseEnvKeyNames('A="one"\nB=\'two\' # note\nC="x\\"y"\n')).toEqual([
+      'A',
+      'B',
+      'C',
+    ]);
+  });
+
   it('extracts key names and never the values', () => {
     const keys = parseEnvKeyNames(
       [

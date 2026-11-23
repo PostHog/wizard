@@ -1,3 +1,6 @@
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
 // Mock functions are created via vi.hoisted so they exist before the hoisted
 // vi.mock factories that reference them run.
 // NOTE: variable names must be unique across test files because .test.ts
@@ -748,9 +751,55 @@ describe('CLI argument parsing', () => {
           expect.anything(),
           expect.objectContaining({ ci: true }),
           'apps/web',
+          // No gateway token was given, so the preview asks no model.
+          undefined,
         );
       } finally {
         written.mockRestore();
+      }
+    });
+
+    test('--test-discovery hands a pre-issued gateway token to the preview', async () => {
+      mockTestDiscoveryCli.mockResolvedValue({
+        program: 'posthog-integration',
+      });
+      const tokenFile = path.join(
+        fs.mkdtempSync(path.join(os.tmpdir(), 'gateway-token-')),
+        'token',
+      );
+      fs.writeFileSync(tokenFile, 'phs_test');
+      process.env.WIZARD_CI_GATEWAY_TOKEN_FILE = tokenFile;
+      const written = vi.spyOn(process.stdout, 'write').mockImplementation(((
+        _chunk: unknown,
+        ...rest: unknown[]
+      ) => {
+        (
+          rest.find((arg) => typeof arg === 'function') as
+            | (() => void)
+            | undefined
+        )?.();
+        return true;
+      }) as typeof process.stdout.write);
+      try {
+        await runCLI([
+          '--install-dir',
+          '/tmp/test',
+          '--test-discovery',
+          'json',
+        ]);
+        await vi.waitFor(() => expect(process.exit).toHaveBeenCalledWith(0), {
+          timeout: 10_000,
+        });
+        expect(mockTestDiscoveryCli).toHaveBeenCalledWith(
+          expect.anything(),
+          expect.anything(),
+          undefined,
+          { token: 'phs_test', url: 'https://ai-gateway.us.posthog.com' },
+        );
+      } finally {
+        written.mockRestore();
+        delete process.env.WIZARD_CI_GATEWAY_TOKEN_FILE;
+        fs.rmSync(path.dirname(tokenFile), { recursive: true, force: true });
       }
     });
 

@@ -185,20 +185,61 @@ export function isTemplateEnvFileName(name: string): boolean {
   return TEMPLATE_ENV_FILE_NAMES.includes(name);
 }
 
+/** Whether an odd run of backslashes ends just before `index`, which escapes the character there. */
+function isEscaped(text: string, index: number): boolean {
+  let backslashes = 0;
+  for (let i = index - 1; i >= 0 && text[i] === '\\'; i -= 1) {
+    backslashes += 1;
+  }
+  return backslashes % 2 === 1;
+}
+
+/** The index of the first `quote` in `text` at or after `from` that closes a value, or -1. A backslash escapes only inside double quotes, as dotenv reads it. */
+function closingQuoteIndex(text: string, quote: string, from: number): number {
+  for (
+    let i = text.indexOf(quote, from);
+    i !== -1;
+    i = text.indexOf(quote, i + 1)
+  ) {
+    if (quote !== '"' || !isEscaped(text, i)) return i;
+  }
+  return -1;
+}
+
 /**
  * Extract KEY NAMES from a dotenv file's content. Values are intentionally
  * discarded — the right-hand side of `=` is never captured.
  *
  * Handles the `export KEY=value` form, skips comments and blank lines, and
- * tolerates whitespace around the key.
+ * tolerates whitespace around the key. A quoted value can run over several
+ * lines, as a private key does. None of those lines is a key, even one that
+ * looks like `name=`, so no part of a value is ever returned as a name.
  */
 export function parseEnvKeyNames(content: string): string[] {
   const keys: string[] = [];
-  for (const line of content.split('\n')) {
-    const trimmed = line.trim();
+  const lines = content.split('\n');
+  // Quote characters no later line holds, so each is searched for once.
+  const absent = new Set<string>();
+  for (let i = 0; i < lines.length; i += 1) {
+    const trimmed = lines[i].trim();
     if (!trimmed || trimmed.startsWith('#')) continue;
-    const match = trimmed.match(/^(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=/);
-    if (match) keys.push(match[1]);
+    const match = trimmed.match(
+      /^(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/,
+    );
+    if (!match) continue;
+    keys.push(match[1]);
+    const value = match[2];
+    const quote = value[0];
+    if (quote !== '"' && quote !== "'" && quote !== '`') continue;
+    if (closingQuoteIndex(value, quote, 1) !== -1 || absent.has(quote))
+      continue;
+    // The value runs to the line that closes its quote. With no such line it is one line, as dotenv reads it.
+    let end = -1;
+    for (let j = i + 1; j < lines.length && end === -1; j += 1) {
+      if (closingQuoteIndex(lines[j], quote, 0) !== -1) end = j;
+    }
+    if (end === -1) absent.add(quote);
+    else i = end;
   }
   return keys;
 }

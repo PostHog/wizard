@@ -13,6 +13,8 @@ vi.mock('@utils/analytics');
 vi.mock(import('@agent'), async (importOriginal) => ({
   ...(await importOriginal()),
   runAgent: vi.fn(),
+  // Decisions mints through this; no test reaches the gateway.
+  gatewayAuth: vi.fn(() => Promise.reject(new Error('no gateway in tests'))),
 }));
 
 function detectionSession() {

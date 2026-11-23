@@ -260,11 +260,25 @@ The report holds:
 The text report replaces control characters in names from the repo with `?`.
 The JSON report escapes them.
 
-It shows static detection only, since Decisions and agentic detection answer
-after login, and its `Sources` line says so. To see discovery with the flag on, set the flag for this run:
+Its `Sources` line says which sources ran. Without a gateway token that is
+static detection only, since Decisions and agentic detection answer after
+login. To see discovery with the flag on, set the flag for this run:
 
 ```bash
 WIZARD_CI_FLAG_OVERRIDES='{"wizard-project-discovery":"one-project"}' \
+  pnpm try --test-discovery --install-dir=/absolute/path/to/app
+```
+
+With a pre-issued gateway token, test mode also asks Decisions. It asks through
+the gateway with that token, still logs in to nothing, and prints each answer.
+Turn `wizard-decisions-detection` on for the run. At `traits`, with project
+discovery on, an answer that is a trait shows `decisions` and its probability
+in the Source column. The call sends the Decisions input to the gateway: a
+summary of the repo with secret lines removed.
+
+```bash
+WIZARD_CI_GATEWAY_TOKEN_FILE="$HOME/.config/posthog/wizard-gateway-token" \
+WIZARD_CI_FLAG_OVERRIDES='{"wizard-project-discovery":"one-project","wizard-decisions-detection":"traits"}' \
   pnpm try --test-discovery --install-dir=/absolute/path/to/app
 ```
 

@@ -1,18 +1,16 @@
 /**
  * posthog-integration's use of a Decisions answer: the CI framework fill-in.
- * Unused until primary mode has a switch. Loaded only through a dynamic import
- * behind `!IS_PRODUCTION_BUILD`, so production builds don't bundle it.
+ * Unused until primary mode has a switch.
  */
 
 import type { Integration } from '@shared/constants';
 import { logToFile } from '@utils/debug';
 import type { ProgramSession } from '@programs/program-contract';
 import type { CiRunnerContext } from '@programs/program-contract';
-import { loadWizardFlags } from '@shared/wizard-flags';
 import {
   askDecisions,
+  decisionsMode,
   decisionsTransport,
-  getDecisionsMode,
   QUESTIONS,
   renderDecisionState,
   routeIntegration,
@@ -41,10 +39,9 @@ async function askForMissingIntegration(
   session: ProgramSession,
   runner: CiRunnerContext,
 ): Promise<Integration | undefined> {
-  const flags = await loadWizardFlags();
-  if (getDecisionsMode(flags.flags) !== 'primary') return undefined;
+  if (decisionsMode() !== 'primary') return undefined;
   await runner.authenticate('posthog-integration');
-  const transport = decisionsTransport(session);
+  const transport = await decisionsTransport(session, 'posthog-integration');
   if (!transport) return undefined;
   const result = await askDecisions(
     renderDecisionState(getRepoFiles(session)),

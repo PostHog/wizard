@@ -47,10 +47,24 @@ export function chunk<T>(items: readonly T[], size: number): T[][] {
   return batches;
 }
 
+type RedactedState = { state: DecisionState; redactedLines: number };
+
+/** Each state's filtered copy, so a run that asks twice about one walk filters it once. */
+const REDACTED = new WeakMap<DecisionState, Promise<RedactedState>>();
+
+/** {@link filterState}, once per state. A filter that failed is tried again on the next call. */
+function redactState(state: DecisionState): Promise<RedactedState> {
+  let redacted = REDACTED.get(state);
+  if (!redacted) {
+    redacted = filterState(state);
+    REDACTED.set(state, redacted);
+    redacted.catch(() => REDACTED.delete(state));
+  }
+  return redacted;
+}
+
 /** Drop every line with a secret or PII match from each field. Rejects when the scanner can't load. */
-async function redactState(
-  state: DecisionState,
-): Promise<{ state: DecisionState; redactedLines: number }> {
+async function filterState(state: DecisionState): Promise<RedactedState> {
   let redactedLines = 0;
   const redacted = { ...state };
   for (const field of Object.keys(state) as (keyof DecisionState)[]) {
@@ -81,7 +95,7 @@ export async function askDecisions(
   };
   if (questions.length === 0) return empty;
 
-  let redacted: { state: DecisionState; redactedLines: number };
+  let redacted: RedactedState;
   try {
     redacted = await redactState(state);
   } catch (error) {

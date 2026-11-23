@@ -41,8 +41,9 @@ export function applyDetectionReport(
   source: Extract<TraitSource, 'agentic' | 'decisions'>,
   /** The source's probability for one project's answers; agentic detection gives none. */
   confidence?: (project: AgenticProject) => number | undefined,
+  /** The directory the report's paths are from, as a path from the workspace root. The run's install directory by default. */
+  base: string = reportBase(sink),
 ): void {
-  const base = reportBase(sink);
   const writes: TraitWrite[] = [];
   for (const project of report.projects) {
     const projectPath = joinProjectPath(base, project.path);

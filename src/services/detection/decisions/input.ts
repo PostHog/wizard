@@ -83,8 +83,20 @@ export type DecisionState = {
   env_key_names: string;
 };
 
+/** Each walk's state, rendered once: a run asks several times about one walk. */
+const STATES = new WeakMap<RepoFiles, DecisionState>();
+
 /** Render the scan as the Decisions `state`, one field per kind of fact. */
 export function renderDecisionState(scan: RepoFiles): DecisionState {
+  let state = STATES.get(scan);
+  if (!state) {
+    state = renderState(scan);
+    STATES.set(scan, state);
+  }
+  return state;
+}
+
+function renderState(scan: RepoFiles): DecisionState {
   const manifests = scan.manifests.slice(0, MAX_MANIFESTS);
   return {
     file_tree: renderFileTree(scan.files) || '(empty)',

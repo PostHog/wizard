@@ -35,7 +35,7 @@ function ensurePostHogCli(
 }
 
 export const config: ProgramConfig = {
-  rankWith: ['agentic'],
+  rankWith: ['agentic', 'decisions'],
   decisions: ['ships_minified_js', 'build_tool', 'deploy_platform'],
   command: 'upload-source-maps',
   description: 'Upload source maps to PostHog Error Tracking',

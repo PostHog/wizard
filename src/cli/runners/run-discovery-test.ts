@@ -4,7 +4,10 @@ import type {
   DiscoveryTestReport,
   ProgramConfig,
 } from '@programs/types';
+import { runtimeEnv } from '@env';
+import { readCiGatewayCredential } from '@shared/ci-gateway';
 import { replaceUnsafeChars } from '@utils/env-scan';
+import type { CloudRegion } from '@utils/types';
 import { tuiSessionArgs } from './run-wizard';
 import { exitWith } from './signals';
 
@@ -80,6 +83,46 @@ function projectLines(project: DiscoveryTestProject): string[] {
   return lines;
 }
 
+/** Which sources the preview ran, and what the Decisions call did. */
+function sourceLines(decisions: DiscoveryTestReport['decisions']): string[] {
+  const agentic = `  ${pad('Agentic')} not run: it answers after login`;
+  if (!decisions.asked) {
+    return [
+      `  ${pad('Sources')} static only`,
+      `  ${pad('Decisions')} not asked: ${decisions.reason}`,
+      agentic,
+    ];
+  }
+  const outcome = `${decisions.answered} of ${decisions.total} answered in ${
+    decisions.durationMs
+  } ms, ${decisions.inputTokens} input tokens${
+    decisions.error ? `, error: ${decisions.error}` : ''
+  }`;
+  return [
+    `  ${pad('Sources')} ${
+      decisions.answered > 0 ? 'static and decisions' : 'static only'
+    }`,
+    `  ${pad('Decisions')} ${decisions.model}, ${
+      decisions.use === 'traits'
+        ? 'written as traits'
+        : 'compared only, not written as traits'
+    }: ${outcome}`,
+    agentic,
+  ];
+}
+
+/** The Decisions answers, one per line: a predicate's probability, or a choice with its probability. */
+function decisionLines(decisions: DiscoveryTestReport['decisions']): string[] {
+  if (!decisions.asked || decisions.answered === 0) return [];
+  return [
+    '',
+    `Decisions answers (${decisions.model}): a probability, or a choice and its probability`,
+    ...Object.entries(decisions.answers).map(
+      ([name, answer]) => `  ${pad(name, 24)} ${show(answer)}`,
+    ),
+  ];
+}
+
 /** The report as text: the repo, each project's traits with their sources, and the plan. */
 export function formatDiscoveryTest(report: DiscoveryTestReport): string {
   const { walk, detection, plan } = report;
@@ -109,12 +152,11 @@ export function formatDiscoveryTest(report: DiscoveryTestReport): string {
     `  ${pad('Tools')} ${
       report.toolsMatched ? 'matched' : 'not matched: no tool catalog'
     }`,
-    `  ${pad(
-      'Sources',
-    )} static only: Decisions and agentic detection answer after login, and test mode never logs in`,
+    ...sourceLines(report.decisions),
     '',
     `Projects (${report.projects.length}): the value a run uses and the source it came from. A source that said otherwise follows in brackets.`,
     ...report.projects.flatMap(projectLines),
+    ...decisionLines(report.decisions),
     '',
     `Plan for ${report.program}: ${
       report.mode === 'off'
@@ -151,10 +193,17 @@ export function runDiscoveryTest(
     const { testDiscovery } = await import('@programs');
     // As the run would start: its real CI setting and the last `--project`.
     const project = [options.project].flat().at(-1) as string | undefined;
+    // A pre-issued gateway token lets the preview ask Decisions, with no PostHog login.
+    const gateway = runtimeEnv('WIZARD_CI_GATEWAY_TOKEN_FILE')
+      ? readCiGatewayCredential(
+          (options.region as CloudRegion | undefined) ?? 'us',
+        )
+      : undefined;
     const report = await testDiscovery(
       config,
       { ...tuiSessionArgs(options), ci: options.ci === true },
       project,
+      gateway,
     );
     const text =
       options.testDiscovery === 'json'

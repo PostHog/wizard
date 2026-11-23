@@ -24,8 +24,8 @@ import {
   joinProjectPath,
 } from '../project-discovery/traits/adapter';
 
-/** Integration framework targets for the agentic detector (id → display name). */
-const INTEGRATION_TARGETS: DetectTarget[] = Object.entries(
+/** Integration framework targets for a project scan, agentic or Decisions (id → display name). */
+export const INTEGRATION_TARGETS: DetectTarget[] = Object.entries(
   FRAMEWORK_REGISTRY,
 ).map(([id, config]) => ({ id, name: config.metadata.name }));
 
@@ -61,7 +61,13 @@ export function toIntegrationCandidates(
   }));
 }
 
-/** Run the agentic detector for the wizard's integration frameworks — the single home of targets + purpose. */
+/** What every scan for a project to integrate asks about: the one home of its targets and purpose, which key the once-per-run answer. */
+export const INTEGRATION_SCAN = {
+  targets: INTEGRATION_TARGETS,
+  purpose: 'set up a PostHog SDK integration',
+};
+
+/** Run the agentic detector for the wizard's integration frameworks. */
 export async function detectIntegrationProjects(
   session: ProgramSession,
   options: {
@@ -75,8 +81,7 @@ export async function detectIntegrationProjects(
   // Spread first so the targets and purpose this function owns always win.
   return detectProjectsWithAgent(session, {
     ...options,
-    targets: INTEGRATION_TARGETS,
-    purpose: 'set up a PostHog SDK integration',
+    ...INTEGRATION_SCAN,
   });
 }
 

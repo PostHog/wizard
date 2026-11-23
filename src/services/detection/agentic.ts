@@ -39,10 +39,12 @@ import { loadWizardFlags } from '@shared/wizard-flags';
 import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
 import { maySendDiscovery } from '../project-discovery/tags';
-import { IS_PRODUCTION_BUILD } from '@env';
-import type { JudgedProjects } from './decisions/projects';
-
-type DecisionsModule = typeof import('./decisions');
+import {
+  compareProjectReports,
+  detectProjectsWithDecisions,
+  type JudgedProjects,
+} from './decisions/projects';
+import { decisionsMode } from './decisions/service';
 
 /** A category the agent classifies each project into (id the agent returns). */
 export type DetectTarget = { id: string; name: string };
@@ -385,22 +387,17 @@ export async function detectProjectsWithAgent(
     throw new Error('Detection requires authenticated credentials.');
   }
   const flags = await loadWizardFlags();
-  // Production builds drop this import, and with it the Decisions service.
-  const decisions: DecisionsModule | null = IS_PRODUCTION_BUILD
-    ? null
-    : await import('./decisions');
-  const mode = decisions?.getDecisionsMode(flags.flags) ?? 'off';
-  const judging: Promise<JudgedProjects | null> | null =
-    !decisions || mode === 'off'
-      ? null
-      : decisions
-          .detectProjectsWithDecisions(session, options)
-          .catch((error: unknown) => {
-            logToFile(`[decisions] project detection threw: ${String(error)}`);
-            return null;
-          });
+  // Decisions judges the same repo beside the agent scan, for comparison.
+  const mode = decisionsMode();
+  const judging: Promise<JudgedProjects | null> = detectProjectsWithDecisions(
+    session,
+    options,
+  ).catch((error: unknown) => {
+    logToFile(`[decisions] project detection threw: ${String(error)}`);
+    return null;
+  });
 
-  if (mode === 'primary' && judging) {
+  if (mode === 'primary') {
     const judged = await judging;
     if (judged?.confident) {
       logToFile(
@@ -411,18 +408,13 @@ export async function detectProjectsWithAgent(
   }
 
   const report = await scanProjectsWithAgent(session, options, flags);
-  if (decisions && judging) {
-    void judging.then((judged) => {
-      if (judged) {
-        logProjectComparison(decisions, session, options, report, judged, mode);
-      }
-    });
-  }
+  void judging.then((judged) => {
+    if (judged) logProjectComparison(session, options, report, judged, mode);
+  });
   return report;
 }
 
 function logProjectComparison(
-  decisions: DecisionsModule,
   session: ProgramSession,
   options: AgenticDetectOptions,
   agent: AgenticDetectionReport,
@@ -430,7 +422,7 @@ function logProjectComparison(
   mode: string,
 ): void {
   const compared = {
-    ...decisions.compareProjectReports(agent, judged.report),
+    ...compareProjectReports(agent, judged.report),
     decisions_confident: judged.confident,
   };
   logToFile(

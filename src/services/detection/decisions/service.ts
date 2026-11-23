@@ -1,15 +1,12 @@
 /**
  * The Decisions judgment service. A run collects the question keys its programs
- * declare in `ProgramConfig.decisions`, asks them in one call over the decisions
- * scan, and stores the answers. Loaded only through a dynamic import behind
- * `!IS_PRODUCTION_BUILD`, so production builds don't bundle it.
+ * declare in `ProgramConfig.decisions`, asks them in one call over the repo
+ * walk, and stores the answers. It runs for a program whose `rankWith` names
+ * `decisions`, once the AI opt-in gate has cleared.
  */
 
-import { IS_PRODUCTION_BUILD, runtimeEnv } from '@env';
+import { gatewayAuth, isTrustedGatewayUrl } from '@agent';
 import { WIZARD_DECISIONS_DETECTION_FLAG_KEY } from '@shared/constants';
-import type { GatewayCredential } from '@shared/api';
-import { readCiGatewayCredential } from '@shared/ci-gateway';
-import type { CloudRegion } from '@utils/types';
 import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
 import type { ProgramSession } from '@programs/program-contract';
@@ -29,69 +26,89 @@ import { QUESTIONS, type QuestionKey } from './questions';
 /** frameworkContext key holding the run's `DecisionsResult`. */
 export const DECISIONS_KEY = 'decisions';
 
-/**
- * On runs the service in shadow: ask, log, compare, never act. The flag decides;
- * a dev build's `WIZARD_DECISIONS_DETECTION` overrides it. Primary mode has no
- * switch yet, so the code that acts on answers stays unused.
- */
-export function getDecisionsMode(flags: Record<string, string>): DecisionsMode {
-  if (!IS_PRODUCTION_BUILD) {
-    const override = runtimeEnv('WIZARD_DECISIONS_DETECTION');
-    if (override !== undefined) return isOn(override) ? 'shadow' : 'off';
-  }
-  return isOn(flags[WIZARD_DECISIONS_DETECTION_FLAG_KEY]) ? 'shadow' : 'off';
-}
-
-function isOn(value: string | undefined): boolean {
-  return ['true', '1', 'shadow'].includes(value?.trim().toLowerCase() ?? '');
+/** The service's mode. Primary mode has no switch yet, so the code that reads answers as facts stays unused. */
+export function decisionsMode(): DecisionsMode {
+  return 'shadow';
 }
 
 /**
- * The run's pre-issued gateway key (`--ci` runs), else, in a dev build, the key
- * in `WIZARD_CI_GATEWAY_TOKEN_FILE`. Only Decisions uses the second: the
- * agents keep minting from the login. Minted tokens aren't wired for Decisions.
+ * What a run may do with Decisions. `off`: no request leaves the machine.
+ * `compare`: ask, and only log the answers. `traits`: also write the answers
+ * as traits.
  */
-export function decisionsTransport(
+export type DecisionsUse = 'off' | 'compare' | 'traits';
+
+/** The use the `wizard-decisions-detection` flag sets. Anything but its on-values is `off`, a failed flag read included. */
+export function decisionsUse(
+  flags: Readonly<Record<string, string>>,
+): DecisionsUse {
+  const value = flags[WIZARD_DECISIONS_DETECTION_FLAG_KEY];
+  if (value === 'traits') return 'traits';
+  return value === 'compare' || value === 'true' ? 'compare' : 'off';
+}
+
+/** frameworkContext key holding the run's {@link DecisionsUse}. The runner sets it once the logged-in flags are known. */
+export const DECISIONS_USE_KEY = 'decisionsUse';
+
+/** The run's use of Decisions: `off` until the runner sets it, so nothing asks before the flag is read. */
+export function getDecisionsUse(
+  session: Pick<ProgramSession, 'frameworkContext'>,
+): DecisionsUse {
+  const use = session.frameworkContext[DECISIONS_USE_KEY];
+  return use === 'compare' || use === 'traits' ? use : 'off';
+}
+
+/**
+ * The gateway a run's Decisions call goes through: the run's pre-issued
+ * gateway key (`--ci` runs), else the token `gatewayAuth` mints for the
+ * program, as the agents use, so the spend lands on `wizard:<program>`. Null
+ * when the run's flag leaves Decisions off, with no login, when a pre-issued
+ * gateway is no trusted origin, or when the mint fails. Every Decisions
+ * request takes its gateway from here, so a null stops the request.
+ */
+export async function decisionsTransport(
   session: ProgramSession,
-): DecisionsTransport | null {
-  const gateway =
-    session.credentials?.gateway ??
-    devGatewayKey(session.credentials?.host.region);
-  return gateway?.token.trim() ? { gateway } : null;
-}
-
-// Read once: `readCiGatewayCredential` clears the variable after reading it.
-let devGateway: GatewayCredential | null | undefined;
-
-function devGatewayKey(
-  region: CloudRegion | undefined,
-): GatewayCredential | null {
-  if (devGateway !== undefined) return devGateway;
-  devGateway = null;
-  if (IS_PRODUCTION_BUILD || !runtimeEnv('WIZARD_CI_GATEWAY_TOKEN_FILE')) {
-    return devGateway;
+  programId: string,
+): Promise<DecisionsTransport | null> {
+  if (getDecisionsUse(session) === 'off') return null;
+  const { credentials } = session;
+  if (!credentials) return null;
+  if (credentials.gateway?.token.trim()) {
+    // The agent run checks this origin later. The repo summary must not reach an origin it would refuse.
+    const { url } = credentials.gateway;
+    // The same check the agent run applies to a pre-issued gateway.
+    if (!/^https?:\/\//.test(url) || !isTrustedGatewayUrl(url, '')) {
+      logToFile('[decisions] the pre-issued gateway is no trusted origin');
+      return null;
+    }
+    return { gateway: credentials.gateway };
   }
   try {
-    devGateway = readCiGatewayCredential(region ?? 'us');
-    logToFile(
-      '[decisions] using the dev gateway key from WIZARD_CI_GATEWAY_TOKEN_FILE',
+    const auth = await gatewayAuth(
+      credentials.host,
+      credentials.accessToken,
+      programId,
     );
+    return auth.token.trim()
+      ? { gateway: { token: auth.token, url: auth.gatewayUrl } }
+      : null;
   } catch (error) {
-    logToFile(`[decisions] dev gateway key unreadable: ${String(error)}`);
+    logToFile(`[decisions] no gateway token: ${String(error)}`);
+    return null;
   }
-  return devGateway;
 }
 
 export type RunDecisionsContext = {
   session: ProgramSession;
   setFrameworkContext: (key: string, value: unknown) => void;
-  flags: Record<string, string>;
+  /** The program the call bills to. */
+  programId: string;
   fetchImpl?: typeof fetch;
 };
 
 /**
  * Ask the declared questions once, before the first agent run. Never throws;
- * returns null when the mode is off or nothing was declared.
+ * returns null when nothing was declared.
  */
 export function runProgramDecisions(
   keys: readonly QuestionKey[],
@@ -108,19 +125,14 @@ export async function runDecisionSpecs(
   questions: readonly DecisionQuestionSpec[],
   ctx: RunDecisionsContext,
 ): Promise<DecisionsResult | null> {
-  const mode = getDecisionsMode(ctx.flags);
+  // The flag leaves Decisions off: nothing is asked and nothing is stored.
+  if (getDecisionsUse(ctx.session) === 'off') return null;
+  const mode = decisionsMode();
   const sharing = maySendDiscovery(ctx.session);
   const specs = questions.filter((spec) => sharing || !spec.shared);
   if (specs.length === 0) return null;
-  if (mode === 'off') {
-    // Said once, so a run with Decisions off reads differently from one that never reached this hook.
-    logToFile(
-      `[decisions] mode=off: ${specs.length} question(s) not asked. Turn on with the ${WIZARD_DECISIONS_DETECTION_FLAG_KEY} flag, or WIZARD_DECISIONS_DETECTION=true in a dev build.`,
-    );
-    return null;
-  }
 
-  const transport = decisionsTransport(ctx.session);
+  const transport = await decisionsTransport(ctx.session, ctx.programId);
   let result: DecisionsResult;
   if (!transport) {
     result = {
@@ -131,7 +143,7 @@ export async function runDecisionSpecs(
       durationMs: 0,
       inputTokens: 0,
       redactedLines: 0,
-      error: 'no gateway key for this run',
+      error: 'no gateway token for this run',
     };
   } else {
     const input = renderDecisionState(
@@ -231,10 +243,16 @@ export function actionableProbability(
   return answer?.kind === 'predicate' ? answer.probability : null;
 }
 
-/** A predicate's `likely` fact applies at or above this; a choice's fact too. */
+/** A predicate reads as yes at or above this probability; a choice's fact applies there too. */
 const LIKELY = 0.6;
-/** A predicate's `unlikely` fact applies at or below this. */
+/** A predicate reads as no at or below this probability. */
 const UNLIKELY = 0.1;
+
+/** What a predicate's probability says. Facts for the agent and traits both read it here, so they agree. */
+export function readPredicate(probability: number): 'yes' | 'no' | 'unsure' {
+  if (probability >= LIKELY) return 'yes';
+  return probability <= UNLIKELY ? 'no' : 'unsure';
+}
 /** Choice values that never become a fact. */
 const NO_FACT_CHOICES: ReadonlySet<string> = new Set(['other', 'none']);
 
@@ -251,9 +269,10 @@ export function questionFacts(
     const answer = actionableAnswer(session, question.name);
     if (!answer) continue;
     if (answer.kind === 'predicate') {
-      if (answer.probability >= LIKELY && question.facts?.likely) {
+      const says = readPredicate(answer.probability);
+      if (says === 'yes' && question.facts?.likely) {
         facts.push(question.facts.likely);
-      } else if (answer.probability <= UNLIKELY && question.facts?.unlikely) {
+      } else if (says === 'no' && question.facts?.unlikely) {
         facts.push(question.facts.unlikely);
       }
     } else if (

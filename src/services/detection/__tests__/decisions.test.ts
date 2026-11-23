@@ -9,9 +9,10 @@ vi.mock('@agent', async (importOriginal) => ({
   redactSecretLines: vi.fn((text: string) =>
     Promise.resolve({ text, redactedLines: 0 }),
   ),
+  gatewayAuth: vi.fn(),
 }));
 
-import { redactSecretLines } from '@agent';
+import { gatewayAuth, redactSecretLines } from '@agent';
 import { walkRepo, manifestDirs } from '@services/project-discovery/walk';
 import {
   renderDecisionInput,
@@ -25,10 +26,16 @@ import {
   actionableAnswer,
   questionFacts,
   DECISIONS_KEY,
+  decisionsTransport,
   getDecisions,
   runDecisionSpecs,
   summarizeAnswers,
 } from '@services/detection/decisions/service';
+import {
+  decisionTraitWrites,
+  rankProjectsWithDecisions,
+  runDecisionsSource,
+} from '@services/detection/decisions/traits';
 import {
   DECISIONS_ACCEPT_PROBABILITY,
   DECISIONS_AGREE_PROBABILITY,
@@ -37,6 +44,7 @@ import {
 import { QUESTIONS } from '@services/detection/decisions/questions';
 import {
   compareProjectReports,
+  detectProjectsWithDecisions,
   judgeProjects,
 } from '@services/detection/decisions/projects';
 import type {
@@ -45,7 +53,10 @@ import type {
 } from '@services/detection/decisions/types';
 import type { ProgramSession } from '@programs/program-contract';
 
-const GATEWAY = { gateway: { token: 'phs_test', url: 'https://gateway.test' } };
+// A cloud gateway origin: a pre-issued gateway has to be one the agent run would trust.
+const GATEWAY = {
+  gateway: { token: 'phs_test', url: 'https://ai-gateway.us.posthog.com' },
+};
 
 const tmpDirs: string[] = [];
 afterAll(() => {
@@ -76,6 +87,8 @@ function fakeGateway(
   options: {
     choices?: Record<string, string>;
     p?: number;
+    /** The probability of every choice answer. */
+    confidence?: number;
     status?: (call: number) => number | undefined;
   } = {},
 ) {
@@ -99,8 +112,8 @@ function fakeGateway(
             {
               type: 'choice',
               choice,
-              confidence: 0.9,
-              probabilities: { [choice]: 0.9 },
+              confidence: options.confidence ?? 0.9,
+              probabilities: { [choice]: options.confidence ?? 0.9 },
             },
           ];
         }),
@@ -237,7 +250,7 @@ describe('askDecisions', () => {
     });
     expect(result.unanswered).toEqual([]);
     expect(String(fetchImpl.mock.calls[0][0])).toBe(
-      'https://gateway.test/v1/systemone',
+      'https://ai-gateway.us.posthog.com/v1/systemone',
     );
   });
 
@@ -289,21 +302,21 @@ describe('askDecisions', () => {
 });
 
 describe('runProgramDecisions', () => {
-  const envMode = process.env.WIZARD_DECISIONS_DETECTION;
-  afterEach(() => {
-    if (envMode === undefined) delete process.env.WIZARD_DECISIONS_DETECTION;
-    else process.env.WIZARD_DECISIONS_DETECTION = envMode;
-  });
-
   function session(overrides: Partial<ProgramSession> = {}): ProgramSession {
     return {
       installDir: project({
         'package.json': JSON.stringify({ dependencies: { next: '15' } }),
       }),
-      frameworkContext: {},
+      // The run's flag lets Decisions ask.
+      frameworkContext: { decisionsUse: 'traits' },
       credentials: { gateway: GATEWAY.gateway },
       discoveryConsent: DiscoveryConsent.Granted,
       noTelemetry: false,
+      projects: [],
+      runProject: '.',
+      discoveredFeatures: [],
+      mcpServerCandidates: [],
+      integration: null,
       ...overrides,
     } as unknown as ProgramSession;
   }
@@ -314,7 +327,7 @@ describe('runProgramDecisions', () => {
       setFrameworkContext: (key: string, value: unknown) => {
         sess.frameworkContext[key] = value;
       },
-      flags: {},
+      programId: 'posthog-integration',
       fetchImpl,
     };
   }
@@ -324,38 +337,26 @@ describe('runProgramDecisions', () => {
     { ...predicate('market'), shared: true as const },
   ];
 
-  it('makes no call when the mode is off', async () => {
-    process.env.WIZARD_DECISIONS_DETECTION = 'off';
-    const fetchImpl = fakeGateway();
-    const sess = session();
-    expect(await runDecisionSpecs(specs, ctx(sess, fetchImpl))).toBeNull();
-    expect(fetchImpl).not.toHaveBeenCalled();
-    expect(getDecisions(sess)).toBeUndefined();
-  });
-
   it('stores shadow answers that programs may not act on', async () => {
-    process.env.WIZARD_DECISIONS_DETECTION = 'shadow';
     const sess = session();
     await runDecisionSpecs(specs, ctx(sess, fakeGateway()));
+    expect(getDecisions(sess)?.mode).toBe('shadow');
     expect(getDecisions(sess)?.answers.uses_x).toBeDefined();
     expect(actionableAnswer(sess, 'uses_x')).toBeUndefined();
   });
 
-  it('runs in shadow for true, and treats primary as off', async () => {
-    process.env.WIZARD_DECISIONS_DETECTION = 'true';
-    const on = session();
-    await runDecisionSpecs(specs, ctx(on, fakeGateway()));
-    expect(getDecisions(on)?.mode).toBe('shadow');
-    expect(actionableAnswer(on, 'uses_x')).toBeUndefined();
-
-    process.env.WIZARD_DECISIONS_DETECTION = 'primary';
+  it('asks nothing and stores nothing while the flag leaves Decisions off', async () => {
     const fetchImpl = fakeGateway();
-    expect(await runDecisionSpecs(specs, ctx(session(), fetchImpl))).toBeNull();
+    const sess = session({ frameworkContext: {} });
+    expect(await runDecisionSpecs(specs, ctx(sess, fetchImpl))).toBeNull();
+    expect(
+      await runDecisionsSource(['calls_llm_api'], ctx(sess, fetchImpl)),
+    ).toBeNull();
     expect(fetchImpl).not.toHaveBeenCalled();
+    expect(getDecisions(sess)).toBeUndefined();
   });
 
   it('leaves out shared questions when the user declined sharing', async () => {
-    process.env.WIZARD_DECISIONS_DETECTION = 'shadow';
     const fetchImpl = fakeGateway();
     const sess = session({ discoveryConsent: DiscoveryConsent.Declined });
     await runDecisionSpecs(specs, ctx(sess, fetchImpl));
@@ -365,15 +366,94 @@ describe('runProgramDecisions', () => {
     expect(Object.keys(body.questions)).toEqual(['uses_x']);
   });
 
-  it('records why nothing was asked without a gateway key', async () => {
-    process.env.WIZARD_DECISIONS_DETECTION = 'shadow';
+  it('records why nothing was asked without a login', async () => {
     const fetchImpl = fakeGateway();
     const sess = session({ credentials: null } as Partial<ProgramSession>);
     await runDecisionSpecs(specs, ctx(sess, fetchImpl));
     expect(fetchImpl).not.toHaveBeenCalled();
     expect(
       (sess.frameworkContext[DECISIONS_KEY] as { error: string }).error,
-    ).toMatch(/no gateway key/);
+    ).toMatch(/no gateway token/);
+  });
+
+  describe('as a trait source', () => {
+    const sink = (sess: ProgramSession) => ({
+      session: sess,
+      setProjects: (projects: ProgramSession['projects']) => {
+        sess.projects = projects;
+      },
+    });
+
+    it('writes nothing without a sink, so the answers reach only the log', async () => {
+      const sess = session();
+      await runDecisionsSource(['calls_llm_api'], ctx(sess, fakeGateway()));
+      expect(getDecisions(sess)?.answers.calls_llm_api).toBeDefined();
+      expect(sess.projects).toEqual([]);
+    });
+
+    it('writes its answers as traits of the run project', async () => {
+      const sess = session();
+      await runDecisionsSource(['calls_llm_api', 'web_frontend'], {
+        ...ctx(sess, fakeGateway()),
+        sink: sink(sess),
+      });
+      const claims = sess.projects.find((p) => p.path === '.')?.claims;
+      for (const claim of [
+        claims?.callsLlmApi?.[0],
+        claims?.webFrontend?.[0],
+      ]) {
+        expect(claim).toMatchObject({ source: 'decisions' });
+        expect(claim?.confidence).toBeGreaterThan(0);
+      }
+    });
+  });
+});
+
+describe('decisionTraitWrites', () => {
+  const answers = (probability: number): Record<string, DecisionAnswer> => ({
+    calls_llm_api: { kind: 'predicate', probability },
+    web_frontend: { kind: 'predicate', probability },
+    is_mcp_server: { kind: 'predicate', probability },
+    owns_database: { kind: 'predicate', probability },
+  });
+
+  it('reads a likely answer as yes, with its probability as confidence', () => {
+    expect(decisionTraitWrites('apps/web', answers(0.9))).toEqual([
+      {
+        projectPath: 'apps/web',
+        source: 'decisions',
+        name: 'callsLlmApi',
+        value: 'yes',
+        confidence: 0.9,
+      },
+      {
+        projectPath: 'apps/web',
+        source: 'decisions',
+        name: 'webFrontend',
+        value: 'yes',
+        confidence: 0.9,
+      },
+      {
+        projectPath: 'apps/web',
+        source: 'decisions',
+        name: 'mcpServers',
+        value: ['.'],
+        confidence: 0.9,
+      },
+    ]);
+  });
+
+  it('reads an unlikely answer as no, and names no MCP server', () => {
+    const writes = decisionTraitWrites('.', answers(0.05));
+    expect(writes.map((write) => [write.name, write.value])).toEqual([
+      ['callsLlmApi', 'no'],
+      ['webFrontend', 'no'],
+    ]);
+    expect(writes[0].confidence).toBeCloseTo(0.95);
+  });
+
+  it('says nothing for an unsure answer', () => {
+    expect(decisionTraitWrites('.', answers(0.4))).toEqual([]);
   });
 });
 
@@ -496,6 +576,200 @@ describe('judgeProjects', () => {
   });
 });
 
+describe('the folder paths a project judgment sends', () => {
+  afterEach(() => {
+    vi.mocked(redactSecretLines).mockImplementation((text: string) =>
+      Promise.resolve({ text, redactedLines: 0 }),
+    );
+  });
+
+  it('leaves out a folder whose path the secret filter flags, from the whole request', async () => {
+    const TOKEN = 'phx_live_0123456789abcdef';
+    // The filter replaces a whole line that holds a match, as the real one does.
+    vi.mocked(redactSecretLines).mockImplementation((text: string) => {
+      const lines = text.split('\n');
+      const kept = lines.map((line) =>
+        line.includes(TOKEN) ? '[redacted]' : line,
+      );
+      return Promise.resolve({
+        text: kept.join('\n'),
+        redactedLines: kept.filter((line, i) => line !== lines[i]).length,
+      });
+    });
+    const fetchImpl = fakeGateway({
+      choices: { project_0_target: 'nextjs', primary_app: 'apps/web' },
+    });
+    const judged = await judgeProjects(
+      walkRepo(
+        project({
+          'apps/web/package.json': JSON.stringify({ dependencies: {} }),
+          [`apps/${TOKEN}/package.json`]: JSON.stringify({ dependencies: {} }),
+        }),
+      ),
+      GATEWAY,
+      {
+        targets: [{ id: 'nextjs', name: 'Next.js' }],
+        recommend: true,
+        fetchImpl,
+      },
+    );
+    const sent = String(
+      (fetchImpl.mock.calls[0][1] as Parameters<typeof fetch>[1])?.body,
+    );
+    expect(sent).not.toContain(TOKEN);
+    expect(sent).toContain('apps/web');
+    expect(judged?.report.projects.map((p) => p.path)).toEqual(['apps/web']);
+  });
+
+  it('sends nothing when the secret filter cannot load', async () => {
+    vi.mocked(redactSecretLines).mockRejectedValue(new Error('no scanner'));
+    const fetchImpl = fakeGateway();
+    const onError = vi.fn();
+    expect(
+      await judgeProjects(
+        walkRepo(project({ 'go.mod': 'module x' })),
+        GATEWAY,
+        {
+          targets: [{ id: 'nextjs', name: 'Next.js' }],
+          fetchImpl,
+          onError,
+        },
+      ),
+    ).toBeNull();
+    expect(fetchImpl).not.toHaveBeenCalled();
+    expect(onError).toHaveBeenCalledWith(
+      expect.stringContaining('nothing sent'),
+    );
+  });
+});
+
+describe('ranking projects as a trait source', () => {
+  const monorepo = () =>
+    project({
+      'package.json': JSON.stringify({ workspaces: ['apps/*'] }),
+      'apps/web/package.json': JSON.stringify({ dependencies: { next: '15' } }),
+      'apps/api/requirements.txt': 'django\n',
+    });
+
+  function ranking(installDir: string, context: Record<string, unknown> = {}) {
+    const session = {
+      installDir,
+      frameworkContext: { decisionsUse: 'traits', ...context },
+      credentials: { gateway: GATEWAY.gateway },
+      discoveryConsent: DiscoveryConsent.Granted,
+      noTelemetry: false,
+      projects: [],
+      runProject: '.',
+      discoveredFeatures: [],
+      mcpServerCandidates: [],
+      integration: null,
+    } as unknown as ProgramSession;
+    const sink = {
+      session,
+      setProjects: (projects: ProgramSession['projects']) => {
+        session.projects = projects;
+      },
+    };
+    const claims = (projectPath: string) =>
+      session.projects.find((p) => p.path === projectPath)?.claims;
+    return { session, sink, claims };
+  }
+
+  const ANSWERS = {
+    project_0_target: 'none',
+    project_1_target: 'django',
+    project_2_target: 'nextjs',
+    primary_app: 'apps/api',
+  };
+
+  it('writes each confident target and the main app as traits, with their probability', async () => {
+    const { sink, claims } = ranking(monorepo());
+    await rankProjectsWithDecisions(
+      sink,
+      'posthog-integration',
+      fakeGateway({ choices: ANSWERS }),
+    );
+    expect(claims('apps/api')).toMatchObject({
+      framework: [
+        { value: Integration.django, source: 'decisions', confidence: 0.9 },
+      ],
+      mainApp: [{ value: 'yes', source: 'decisions' }],
+    });
+    expect(claims('apps/web')?.framework?.[0].value).toBe(Integration.nextjs);
+    expect(claims('apps/web')?.mainApp).toBeUndefined();
+  });
+
+  it('writes nothing for a guess below the confidence threshold', async () => {
+    const { session, sink } = ranking(monorepo());
+    await rankProjectsWithDecisions(
+      sink,
+      'posthog-integration',
+      fakeGateway({ choices: ANSWERS, confidence: 0.25 }),
+    );
+    expect(session.projects).toEqual([]);
+
+    // One folder is the main app only when its own target is confident.
+    const single = ranking(
+      project({ 'package.json': JSON.stringify({ dependencies: {} }) }),
+    );
+    await rankProjectsWithDecisions(
+      single.sink,
+      'posthog-integration',
+      fakeGateway({ choices: { project_0_target: 'nextjs' }, confidence: 0.4 }),
+    );
+    expect(single.session.projects).toEqual([]);
+  });
+
+  it('ranks the whole workspace when the run started in one member of it', async () => {
+    const root = monorepo();
+    const { session, sink, claims } = ranking(path.join(root, 'apps/web'), {
+      // What discovery leaves with the flag on: the walk of the workspace root.
+      discovery: {
+        rootDir: root,
+        files: walkRepo(root),
+        mode: 'one-project',
+        runProject: 'apps/web',
+        detected: {},
+        projects: { workspaces: [] },
+      },
+    });
+    session.runProject = 'apps/web';
+    const fetchImpl = fakeGateway({ choices: ANSWERS });
+    await rankProjectsWithDecisions(sink, 'posthog-integration', fetchImpl);
+
+    // Paths are from the workspace root, and the sibling is ranked too.
+    expect(session.projects.map((p) => p.path).sort()).toEqual([
+      'apps/api',
+      'apps/web',
+    ]);
+    expect(claims('apps/api')?.mainApp?.[0].value).toBe('yes');
+    expect(claims('apps/web')?.mainApp).toBeUndefined();
+  });
+
+  it('asks the same question of the same walk once in a run', async () => {
+    const dir = monorepo();
+    const { session } = ranking(dir);
+    // One walk, as a run holds: the trait source and the agent scan's comparison both judge it.
+    const scan = walkRepo(dir);
+    const gateway = fakeGateway({ choices: ANSWERS });
+    vi.stubGlobal('fetch', gateway);
+    try {
+      const options = {
+        targets: [{ id: 'nextjs', name: 'Next.js' }],
+        programId: 'posthog-integration',
+        recommend: true,
+      };
+      const first = await detectProjectsWithDecisions(session, options, scan);
+      const second = await detectProjectsWithDecisions(session, options, scan);
+      expect(first).not.toBeNull();
+      expect(second).toBe(first);
+      expect(gateway).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});
+
 describe('judgeProjects with one folder', () => {
   it('recommends it without asking a one-value choice', async () => {
     const fetchImpl = fakeGateway({ choices: { project_0_target: 'nextjs' } });
@@ -577,37 +851,77 @@ describe('questionFacts', () => {
 });
 
 describe('decisionsTransport', () => {
-  afterEach(() => {
-    delete process.env.WIZARD_CI_GATEWAY_TOKEN_FILE;
-    vi.resetModules();
+  const login = {
+    accessToken: 'pha_oauth',
+    host: { region: 'us', apiHost: 'https://us.posthog.com' },
+  };
+
+  beforeEach(() => {
+    vi.mocked(gatewayAuth).mockReset();
   });
 
-  it('uses the dev key file when the run has no pre-issued key', async () => {
-    const tokenFile = path.join(project({ token: 'phs_dev_key\n' }), 'token');
-    process.env.WIZARD_CI_GATEWAY_TOKEN_FILE = tokenFile;
-    vi.resetModules();
-    const { decisionsTransport } = await import(
-      '@services/detection/decisions/service'
-    );
+  const ON = { frameworkContext: { decisionsUse: 'compare' } };
+
+  it("uses the run's pre-issued key without minting", async () => {
     const session = {
-      credentials: { accessToken: 'pha_oauth', host: { region: 'us' } },
+      ...ON,
+      credentials: { ...login, gateway: GATEWAY.gateway },
     } as unknown as ProgramSession;
-    expect(decisionsTransport(session)).toEqual({
-      gateway: {
-        token: 'phs_dev_key\n',
-        url: 'https://ai-gateway.us.posthog.com',
-      },
+    expect(await decisionsTransport(session, 'metrics')).toEqual(GATEWAY);
+    expect(gatewayAuth).not.toHaveBeenCalled();
+  });
+
+  it('gives no transport, and so sends nothing, while the flag leaves Decisions off', async () => {
+    for (const frameworkContext of [{}, { decisionsUse: 'off' }]) {
+      const session = {
+        frameworkContext,
+        credentials: { ...login, gateway: GATEWAY.gateway },
+      } as unknown as ProgramSession;
+      expect(await decisionsTransport(session, 'metrics')).toBeNull();
+    }
+    expect(gatewayAuth).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    'https://gateway.attacker.test',
+    'http://ai-gateway.us.posthog.com',
+    'https://ai-gateway.us.posthog.com/v1',
+    'not a url',
+  ])(
+    'sends nothing to a pre-issued gateway that is no trusted origin: %s',
+    async (url) => {
+      const session = {
+        ...ON,
+        credentials: { ...login, gateway: { token: 'phs_test', url } },
+      } as unknown as ProgramSession;
+      expect(await decisionsTransport(session, 'metrics')).toBeNull();
+      expect(gatewayAuth).not.toHaveBeenCalled();
+    },
+  );
+
+  it('mints a token for the program, as the agents do', async () => {
+    vi.mocked(gatewayAuth).mockResolvedValue({
+      gatewayUrl: 'https://gateway.test',
+      token: 'phs_minted',
+      refreshAtMs: 0,
     });
+    const session = { ...ON, credentials: login } as unknown as ProgramSession;
+    expect(await decisionsTransport(session, 'metrics')).toEqual({
+      gateway: { token: 'phs_minted', url: 'https://gateway.test' },
+    });
+    expect(gatewayAuth).toHaveBeenCalledWith(
+      login.host,
+      login.accessToken,
+      'metrics',
+    );
   });
 
-  it('has no transport without a pre-issued key or a dev key file', async () => {
-    vi.resetModules();
-    const { decisionsTransport } = await import(
-      '@services/detection/decisions/service'
-    );
-    const session = {
-      credentials: { accessToken: 'pha_oauth', host: { region: 'us' } },
-    } as unknown as ProgramSession;
-    expect(decisionsTransport(session)).toBeNull();
+  it('has no transport without a login, or when the mint fails', async () => {
+    const loggedOut = { ...ON, credentials: null } as unknown as ProgramSession;
+    expect(await decisionsTransport(loggedOut, 'metrics')).toBeNull();
+
+    vi.mocked(gatewayAuth).mockRejectedValue(new Error('mint refused'));
+    const session = { ...ON, credentials: login } as unknown as ProgramSession;
+    expect(await decisionsTransport(session, 'metrics')).toBeNull();
   });
 });

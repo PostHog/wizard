@@ -84,6 +84,7 @@ export const config: ProgramConfig = {
     model: DEFAULT_AGENT_MODEL,
   },
   skillId: SKILL_ID,
+  rankWith: ['decisions'],
   decisions: ['runs_data_warehouse'],
   onReady: (ctx) =>
     detectWarehouseDestinationPrerequisites(

@@ -1,5 +1,4 @@
 /** Public runtime entry for the programs surface. */
-import { IS_PRODUCTION_BUILD } from '@env';
 export type * from './types';
 export { runProgram, TASK_OUTCOMES_KEY } from './program-runner/run-program';
 export { testDiscovery } from './program-runner/discovery-test';
@@ -55,14 +54,11 @@ export type {
   DecisionsResult,
   DecisionsTransport,
 } from '@services/detection/decisions';
-/**
- * The Decisions service, for the decisions-detect script. Null in production
- * builds, which drop the import and don't bundle the service.
- */
-export async function loadDecisionsService(): Promise<
-  typeof import('@services/detection/decisions') | null
+/** The Decisions service, for the decisions-detect script. */
+export function loadDecisionsService(): Promise<
+  typeof import('@services/detection/decisions')
 > {
-  return IS_PRODUCTION_BUILD ? null : import('@services/detection/decisions');
+  return import('@services/detection/decisions');
 }
 export { createSkillProgram } from './shared/skill-program';
 /** The audit ledger's checks as the session holds them, for a host's task stream. */
