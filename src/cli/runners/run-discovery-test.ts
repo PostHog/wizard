@@ -21,28 +21,59 @@ const clean = (value: unknown): string => replaceUnsafeChars(String(value));
 const show = (value: unknown): string =>
   Array.isArray(value) ? value.map(clean).join(', ') : clean(value);
 
+type Claims = NonNullable<
+  DiscoveryTestProject['sources'][keyof DiscoveryTestProject['sources']]
+>;
+
+/** One source as the report names it: its name, and its confidence when it gives one. */
+const sourceLabel = (claim: Claims[number]): string =>
+  claim.confidence === undefined
+    ? claim.source
+    : `${claim.source} ${claim.confidence.toFixed(2)}`;
+
+/** Where a trait's value came from: the sources that gave it, then in brackets any source that said otherwise. */
+function sourceColumn(value: unknown, claims: Claims): string {
+  const used = show(value);
+  const gave = claims.filter((claim) => show(claim.value) === used);
+  const others = claims.filter((claim) => show(claim.value) !== used);
+  return [
+    gave.map(sourceLabel).join(', ') || '-',
+    ...others.map((claim) => {
+      const said = `${claim.source} said ${show(claim.value)}`;
+      return claim.confidence === undefined
+        ? `[${said}]`
+        : `[${said}, ${claim.confidence.toFixed(2)}]`;
+    }),
+  ].join('  ');
+}
+
+/** The widest value column the report gives a project's traits. */
+const MAX_VALUE_WIDTH = 44;
+
 function projectLines(project: DiscoveryTestProject): string[] {
   const title = project.path === '.' ? '. (root)' : clean(project.path);
   const lines = [`  ${title}${project.isRunProject ? '  <- run project' : ''}`];
-  for (const [name, value] of Object.entries(project.traits)) {
+  const traits = Object.entries(project.traits);
+  const width = Math.min(
+    MAX_VALUE_WIDTH,
+    Math.max('Value'.length, ...traits.map(([, value]) => show(value).length)),
+  );
+  if (traits.length > 0) {
+    lines.push(`    ${pad('Trait')} ${pad('Value', width)}  Source`);
+  }
+  for (const [name, value] of traits) {
     const claims = project.sources[name as keyof typeof project.sources] ?? [];
-    const sources = claims
-      .map((claim) =>
-        claim.confidence === undefined
-          ? `${claim.source}=${show(claim.value)}`
-          : `${claim.source}=${show(claim.value)}@${claim.confidence.toFixed(
-              2,
-            )}`,
-      )
-      .join('  ');
     const unsettled = project.unsettled?.includes(name as never)
       ? '  (unsettled)'
       : '';
     lines.push(
-      `    ${pad(name)} ${pad(show(value), 22)} ${sources}${unsettled}`,
+      `    ${pad(name)} ${pad(show(value), width)}  ${sourceColumn(
+        value,
+        claims,
+      )}${unsettled}`,
     );
   }
-  if (Object.keys(project.traits).length === 0) lines.push('    (no traits)');
+  if (traits.length === 0) lines.push('    (no traits)');
   if (project.tools.length > 0) {
     lines.push(`    ${pad('tools')} ${project.tools.join(', ')}`);
   }
@@ -78,8 +109,11 @@ export function formatDiscoveryTest(report: DiscoveryTestReport): string {
     `  ${pad('Tools')} ${
       report.toolsMatched ? 'matched' : 'not matched: no tool catalog'
     }`,
+    `  ${pad(
+      'Sources',
+    )} static only: Decisions and agentic detection answer after login, and test mode never logs in`,
     '',
-    `Projects (${report.projects.length}): trait, value a run uses, then each source's value`,
+    `Projects (${report.projects.length}): the value a run uses and the source it came from. A source that said otherwise follows in brackets.`,
     ...report.projects.flatMap(projectLines),
     '',
     `Plan for ${report.program}: ${

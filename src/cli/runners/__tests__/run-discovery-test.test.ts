@@ -100,12 +100,38 @@ describe('test discovery mode', () => {
     const text = formatDiscoveryTest(report);
     expect(text).toContain('wizard-project-discovery = one-project');
     expect(text).toContain('apps/web  <- run project');
+    expect(text).toMatch(/Trait\s+Value\s+Source/);
     expect(text).toMatch(
-      /framework\s+nextjs\s+static=nextjs {2}decisions=vue@0\.70 {2}\(unsettled\)/,
+      /framework\s+nextjs\s+static {2}\[decisions said vue, 0\.70\] {2}\(unsettled\)/,
     );
+    expect(text).toMatch(/posthogInstalled\s+no\s+static\n/);
     expect(text).toMatch(/tools\s+Stripe/);
     expect(text).toContain('asks after login, picks apps/web');
     expect(text).toMatch(/packages\/ui\s+not offered: library/);
+  });
+
+  it('names every source that gave the value a run uses, with its confidence', () => {
+    const text = formatDiscoveryTest({
+      ...report,
+      projects: [
+        {
+          ...report.projects[0],
+          traits: { webFrontend: 'yes' },
+          unsettled: [],
+          sources: {
+            webFrontend: [
+              { value: 'yes', source: 'static' },
+              { value: 'yes', source: 'decisions', confidence: 0.91 },
+            ],
+          },
+        },
+      ],
+    });
+    expect(text).toMatch(/webFrontend\s+yes\s+static, decisions 0\.91\n/);
+  });
+
+  it('says which sources test mode ran', () => {
+    expect(formatDiscoveryTest(report)).toMatch(/Sources\s+static only/);
   });
 
   it('says the plan is unused while the flag is off', () => {
