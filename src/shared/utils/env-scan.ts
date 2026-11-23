@@ -185,14 +185,23 @@ export function isTemplateEnvFileName(name: string): boolean {
   return TEMPLATE_ENV_FILE_NAMES.includes(name);
 }
 
-/** The index of the first `quote` in `text` at or after `from` that no backslash escapes, or -1. */
+/** Whether an odd run of backslashes ends just before `index`, which escapes the character there. */
+function isEscaped(text: string, index: number): boolean {
+  let backslashes = 0;
+  for (let i = index - 1; i >= 0 && text[i] === '\\'; i -= 1) {
+    backslashes += 1;
+  }
+  return backslashes % 2 === 1;
+}
+
+/** The index of the first `quote` in `text` at or after `from` that closes a value, or -1. A backslash escapes only inside double quotes, as dotenv reads it. */
 function closingQuoteIndex(text: string, quote: string, from: number): number {
   for (
     let i = text.indexOf(quote, from);
     i !== -1;
     i = text.indexOf(quote, i + 1)
   ) {
-    if (text[i - 1] !== '\\') return i;
+    if (quote !== '"' || !isEscaped(text, i)) return i;
   }
   return -1;
 }

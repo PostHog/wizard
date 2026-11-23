@@ -65,6 +65,22 @@ describe('isTemplateEnvFileName', () => {
 });
 
 describe('parseEnvKeyNames', () => {
+  it('closes a double-quoted value that ends in an escaped backslash', () => {
+    // The quote after two backslashes closes the value, so the next key's lines are not read as its value.
+    const keys = parseEnvKeyNames(
+      [
+        'WIN_DIR="C:\\\\app\\\\"',
+        'PRIVATE_KEY="-----BEGIN PRIVATE KEY-----',
+        'c2VjcmV0X2tleV9tYXRlcmlhbA==',
+        '-----END PRIVATE KEY-----"',
+        "SINGLE='ends in a backslash\\'",
+        'AFTER=1',
+        '',
+      ].join('\n'),
+    );
+    expect(keys).toEqual(['WIN_DIR', 'PRIVATE_KEY', 'SINGLE', 'AFTER']);
+  });
+
   it('reads no key name from the lines of a multi-line quoted value', () => {
     const keys = parseEnvKeyNames(
       [
