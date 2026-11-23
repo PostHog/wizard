@@ -115,7 +115,13 @@ export function runDiscoveryTest(
 ): void {
   exitWith(async () => {
     const { testDiscovery } = await import('@programs');
-    const report = await testDiscovery(config, tuiSessionArgs(options));
+    // As the run would start: its real CI setting and the last `--project`.
+    const project = [options.project].flat().at(-1) as string | undefined;
+    const report = await testDiscovery(
+      config,
+      { ...tuiSessionArgs(options), ci: options.ci === true },
+      project,
+    );
     const text =
       options.testDiscovery === 'json'
         ? JSON.stringify(report, null, 2)

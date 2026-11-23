@@ -20,6 +20,7 @@ import {
   type PlanOffer,
   type ProjectDiscoveryMode,
 } from '@services/project-discovery';
+import { scopeToRunProject } from './detect-program';
 import {
   buildSession,
   SessionStore,
@@ -72,10 +73,14 @@ export type DiscoveryTestReport = {
 export async function testDiscovery(
   config: ProgramConfig,
   args: SessionArgs,
+  /** The caller's `--project`, as a path from the workspace root. */
+  project?: string,
 ): Promise<DiscoveryTestReport> {
   const store = new SessionStore(buildSession({ ...args, noTelemetry: true }));
   const ctx = store.readyContext();
   await runDiscovery(config, ctx);
+  // As a run does: detection reads the project the run works in, not the folder it started in.
+  scopeToRunProject(store, project);
   await config.onReady?.(ctx);
   settleProjects(ctx);
 
@@ -83,7 +88,8 @@ export async function testDiscovery(
   const discovery = getDiscovery(session);
   const projects = getProjects(session);
   const tools = toolsByProject(discovery?.tools.tools ?? [], projects);
-  const plan = buildPlan(session, config);
+  const requested = project === undefined ? undefined : session.runProject;
+  const plan = buildPlan(session, config, requested);
   // A program that picks no project works where the run started.
   const picked = picksProject(session, config)
     ? plan.picked
@@ -114,7 +120,11 @@ export async function testDiscovery(
       tools: (tools.get(project.path) ?? []).map((tool) => tool.kind),
     })),
     toolsMatched: discovery?.tools.failed !== true,
-    plan: { ...plan, picked, asks: planAsks(session, config, plan) },
+    plan: {
+      ...plan,
+      picked,
+      asks: planAsks(session, config, plan, requested),
+    },
     matchKeys: toMatchKeys(
       projects.find((project) => project.path === session.runProject)?.traits ??
         {},

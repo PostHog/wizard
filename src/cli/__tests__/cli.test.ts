@@ -714,6 +714,46 @@ describe('CLI argument parsing', () => {
       expect(mockRunTuiCli).not.toHaveBeenCalled();
     });
 
+    test('--test-discovery previews the run as asked: its CI setting and the last --project', async () => {
+      mockTestDiscoveryCli.mockResolvedValue({
+        program: 'posthog-integration',
+      });
+      const written = vi.spyOn(process.stdout, 'write').mockImplementation(((
+        _chunk: unknown,
+        ...rest: unknown[]
+      ) => {
+        (
+          rest.find((arg) => typeof arg === 'function') as
+            | (() => void)
+            | undefined
+        )?.();
+        return true;
+      }) as typeof process.stdout.write);
+      try {
+        await runCLI([
+          '--ci',
+          '--install-dir',
+          '/tmp/test',
+          '--project',
+          'apps/api',
+          '--project',
+          'apps/web',
+          '--test-discovery',
+          'json',
+        ]);
+        await vi.waitFor(() => expect(process.exit).toHaveBeenCalledWith(0), {
+          timeout: 10_000,
+        });
+        expect(mockTestDiscoveryCli).toHaveBeenCalledWith(
+          expect.anything(),
+          expect.objectContaining({ ci: true }),
+          'apps/web',
+        );
+      } finally {
+        written.mockRestore();
+      }
+    });
+
     test('requires --email when --ci --signup is set', async () => {
       await runCLI(['--ci', '--signup', '--install-dir', '/tmp/test']);
       expect(process.exit).toHaveBeenCalledWith(1);
