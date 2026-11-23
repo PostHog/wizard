@@ -87,7 +87,9 @@ here: if the install fails because a declared version does not exist (npm `ETARG
 package by bare name and let the package manager pick, matching the framework
 reference example's spec only if that also fails. If the failure is the environment, not the
 integration's own change (a pre-existing broken dependency, a package manager that
-cannot provision), note it and move on; do not spiral. When you revert a
+cannot provision), note it and move on; do not spiral. Still declare every package
+an upstream handoff names in the manifest, at the version it gives, so the code that
+uses it doesn't ship without its dependency. When you revert a
 task's instrumentation because its packages could not be installed, record the
 failed command and its error as the reason, not a version minimum: the report
 should send the user to the install problem. A build that then fails against an
