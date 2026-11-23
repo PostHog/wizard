@@ -10,6 +10,7 @@
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { readProjectFile } from '@utils/bounded-fs';
 import {
   detectNodePackageManagers,
   type DetectedPackageManager,
@@ -135,12 +136,37 @@ const SPM: DetectedPackageManager = {
   installCommand: 'swift package add-dependency',
 };
 
-export function swiftPackageManager(): Promise<PackageManagerInfo> {
+const COCOAPODS: DetectedPackageManager = {
+  name: 'cocoapods',
+  label: 'CocoaPods',
+  installCommand: 'pod install',
+};
+
+// `pod 'PostHog'` or `pod "PostHog", '~> 3.0'`, on a line that isn't commented out.
+const POSTHOG_POD = /^\s*pod\s+['"]PostHog['"]/m;
+
+function podfileHasPostHog(installDir: string): boolean {
+  const content = readProjectFile(path.join(installDir, 'Podfile'));
+  return content !== null && POSTHOG_POD.test(content);
+}
+
+// posthog-ios 4.x isn't on CocoaPods, so an app that already has the PostHog pod keeps it instead of adding SPM.
+export function swiftPackageManager(
+  installDir?: string,
+): Promise<PackageManagerInfo> {
+  if (installDir && podfileHasPostHog(installDir)) {
+    return Promise.resolve({
+      detected: [COCOAPODS],
+      primary: COCOAPODS,
+      recommendation:
+        "This app already installs PostHog with CocoaPods. Keep the PostHog pod and its version in the Podfile, then run pod install. Don't add the posthog-ios Swift package: posthog-ios 4.x isn't on CocoaPods, and the pod and the package together link two copies of the SDK.",
+    });
+  }
   return Promise.resolve({
     detected: [SPM],
     primary: SPM,
     recommendation:
-      'Use Swift Package Manager. Add the dependency to Package.swift or via Xcode.',
+      "Use Swift Package Manager. Add the dependency to Package.swift or via Xcode. posthog-ios 4.x isn't on CocoaPods, so don't add a PostHog pod.",
   });
 }
 

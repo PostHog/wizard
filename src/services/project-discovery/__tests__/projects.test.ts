@@ -291,16 +291,15 @@ describe('the walk budget', () => {
 });
 
 describe('the walk bounds', () => {
-  it('reports malformed manifests once, however many there are', () => {
+  it('skips malformed manifests and sends no event', () => {
     write('package.json', pkg());
     for (const app of ['a', 'b', 'c']) write(`apps/${app}/package.json`, '{');
     vi.mocked(analytics.captureException).mockClear();
-    walkRepo(repo);
-    expect(analytics.captureException).toHaveBeenCalledTimes(1);
-    expect(analytics.captureException).toHaveBeenCalledWith(
-      expect.objectContaining({ message: 'Malformed package.json' }),
-      expect.objectContaining({ count: 3 }),
-    );
+    const found = walkRepo(repo);
+    expect(found.manifests.map((manifest) => manifest.path)).toEqual([
+      'package.json',
+    ]);
+    expect(analytics.captureException).not.toHaveBeenCalled();
   });
 
   it('keeps a bounded number of files for one env key', () => {
