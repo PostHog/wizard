@@ -659,6 +659,10 @@ describe('gatewayAuth', () => {
     // A token is pinned to one program's node at mint, so reusing it across
     // programs would bill the wrong budget.
     expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    // Each program keeps its token, so going back to the first mints nothing.
+    await gatewayAuth(host, 'pha_oauth', 'audit');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it('fails the run when the mint returns an unparseable expiry', async () => {

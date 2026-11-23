@@ -32,18 +32,18 @@ export interface GatewayAuth {
 }
 
 interface CachedAuth {
-  key: string;
   auth: GatewayAuth;
   /** Re-resolve once past this instant. */
   staleAtMs: number;
 }
 
-let cached: CachedAuth | null = null;
+/** One entry per host, login and program, so a run that mints for two programs keeps both tokens. */
+const cached = new Map<string, CachedAuth>();
 /**
  * Shared so concurrent callers mint once. The orchestrator starts every runnable
  * task at once, and each would otherwise take its own token and its own cap.
  */
-let inFlight: { key: string; promise: Promise<GatewayAuth> } | null = null;
+const inFlight = new Map<string, Promise<GatewayAuth>>();
 let ciAuth: GatewayAuth | null = null;
 
 // Snapshot CI supplies a gateway bearer without minting or re-minting.
@@ -112,16 +112,16 @@ export async function gatewayAuth(
   const key = `${host.apiHost}\n${oauthLoginKey(accessToken)}\n${
     program ?? ''
   }`;
-  if (cached && cached.key === key && Date.now() < cached.staleAtMs) {
-    return cached.auth;
-  }
-  if (inFlight && inFlight.key === key) return inFlight.promise;
+  const held = cached.get(key);
+  if (held && Date.now() < held.staleAtMs) return held.auth;
+  const minting = inFlight.get(key);
+  if (minting) return minting;
   const promise = resolveGatewayAuth(host, accessToken, key, program);
-  inFlight = { key, promise };
+  inFlight.set(key, promise);
   try {
     return await promise;
   } finally {
-    if (inFlight?.promise === promise) inFlight = null;
+    if (inFlight.get(key) === promise) inFlight.delete(key);
   }
 }
 
@@ -174,14 +174,14 @@ async function resolveGatewayAuth(
     teamId: minted.teamId,
     refreshAtMs: staleAtMs,
   };
-  cached = { key, auth, staleAtMs };
+  cached.set(key, { auth, staleAtMs });
   return auth;
 }
 
 /** Test hook: drop the cached auth so the next call re-resolves. */
 export function resetGatewaySession(): void {
-  cached = null;
-  inFlight = null;
+  cached.clear();
+  inFlight.clear();
   ciAuth = null;
 }
 
