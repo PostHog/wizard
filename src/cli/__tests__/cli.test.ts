@@ -754,6 +754,18 @@ describe('CLI argument parsing', () => {
       }
     });
 
+    test('an empty POSTHOG_WIZARD_TEST_DISCOVERY does not turn a run into a preview', async () => {
+      process.env.POSTHOG_WIZARD_TEST_DISCOVERY = '';
+      try {
+        await runCLI(['--ci', '--signup', '--install-dir', '/tmp/test']);
+      } finally {
+        delete process.env.POSTHOG_WIZARD_TEST_DISCOVERY;
+      }
+      // The CI path ran, and stopped where it does without --email.
+      expect(process.exit).toHaveBeenCalledWith(1);
+      expect(mockTestDiscoveryCli).not.toHaveBeenCalled();
+    });
+
     test('requires --email when --ci --signup is set', async () => {
       await runCLI(['--ci', '--signup', '--install-dir', '/tmp/test']);
       expect(process.exit).toHaveBeenCalledWith(1);
