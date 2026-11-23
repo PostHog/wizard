@@ -8,7 +8,7 @@ import {
 } from './package-manager';
 import type { WizardRunOptions } from './types';
 import type { PackageJson } from './package-json';
-import { getDeclaredVersion } from './package-json';
+import { getDeclaredVersion, parsePackageJson } from './package-json';
 import { analytics } from './analytics';
 import { versionSatisfiesRange } from './semver';
 import { findTrustedCommand } from '@shared/trusted-command';
@@ -137,7 +137,7 @@ export async function tryGetPackageJson({
       join(installDir, 'package.json'),
       'utf8',
     );
-    return JSON.parse(packageJsonFileContents) as PackageJson;
+    return parsePackageJson(packageJsonFileContents);
   } catch {
     return null;
   }

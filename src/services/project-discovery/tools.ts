@@ -10,7 +10,6 @@
  * Note we only read `.env` KEY NAMES, never values.
  */
 
-import { analytics } from '@utils/analytics';
 import { walkProjectFiles, safeReadFile } from '@utils/bounded-fs';
 import {
   ENV_SCAN_MAX_DEPTH,
@@ -19,7 +18,6 @@ import {
   parseEnvKeyNames,
   toPromptSafeRelativePath,
 } from '@utils/env-scan';
-import type { PackageJson } from '@utils/package-json';
 import type {
   SourceCreationMode,
   SourceDetector,
@@ -276,8 +274,6 @@ function ingestorFor(name: string, readTemplates: boolean): Ingestor | null {
   if (isEnvFileName(name))
     return (c, s, relativePath) => addEnvKeys(c, s, relativePath);
   if (readTemplates && isTemplateFileName(name)) return addScriptHosts;
-  // Kept apart from the table: a malformed `package.json` is reported.
-  if (name === 'package.json') return addNpmDeps;
   const manifest = MANIFEST_PARSERS.get(name);
   if (manifest)
     return (c, s, file) =>
@@ -432,28 +428,6 @@ function addEnvKeys(
     if (signals.envKeys.has(key)) continue;
     if (signals.envKeys.size >= MAX_SIGNAL_SET) return;
     signals.envKeys.set(key, relativePath);
-  }
-}
-
-function addNpmDeps(
-  content: string,
-  signals: ProjectSignals,
-  file: string,
-): void {
-  try {
-    const pkg = JSON.parse(content) as PackageJson;
-    for (const dep of Object.keys({
-      ...pkg.dependencies,
-      ...pkg.devDependencies,
-    })) {
-      addPackage(signals, 'npm', dep, file);
-    }
-  } catch (error) {
-    // Malformed package.json — skip it, but record that we hit it.
-    analytics.captureException(
-      error instanceof Error ? error : new Error(String(error)),
-      { step: 'detectWarehouseSources.parsePackageJson' },
-    );
   }
 }
 

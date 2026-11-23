@@ -5,6 +5,7 @@ import { discoverTools, parseEnvKeys } from '@services/project-discovery/tools';
 import { parseGemfile } from '@services/project-discovery/manifests';
 import { walkRepo } from '@services/project-discovery/walk';
 import { toWarehouseSources } from '@services/warehouse-sources/detect';
+import { analytics } from '@utils/analytics';
 import { MAX_REPORTED_PATH_LENGTH } from '@utils/env-scan';
 import { toSourceDetectors } from '@services/warehouse-sources/registry';
 import type { DetectedSource } from '@services/warehouse-sources/types';
@@ -101,6 +102,42 @@ describe('discoverTools', () => {
     fs.writeFileSync(path.join(tmpDir, 'Gemfile'), "gem 'pg'\n");
     fs.writeFileSync(path.join(tmpDir, '.env'), 'OPENAI_API_KEY=x\n');
     expect(kinds(tmpDir)).toEqual(['Mixpanel', 'OpenAI', 'Postgres', 'Stripe']);
+  });
+
+  it('reads a package.json that starts with a byte order mark', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      '\uFEFF' + JSON.stringify({ dependencies: { pg: '^8.0.0' } }, null, 2),
+    );
+    expect(kinds(tmpDir)).toEqual(['Postgres']);
+  });
+
+  describe('a malformed package.json', () => {
+    afterEach(() => vi.restoreAllMocks());
+
+    it.each([
+      ['a trailing comma', '{"dependencies": {"pg": "^8.0.0"},}'],
+      ['a missing comma', '{"name": "app" "dependencies": {"pg": "^8.0.0"}}'],
+      [
+        'content after the root object',
+        '{"dependencies": {"pg": "^8.0.0"}}\n}',
+      ],
+      ['a null root', 'null'],
+      ['an array root', '[]'],
+      ['an empty file', ''],
+    ])(
+      'with %s is skipped without an exception and other signals still match',
+      (_label, content) => {
+        const exceptionSpy = vi
+          .spyOn(analytics, 'captureException')
+          .mockImplementation(() => undefined);
+        fs.writeFileSync(path.join(tmpDir, 'package.json'), content);
+        fs.writeFileSync(path.join(tmpDir, 'Gemfile'), "gem 'stripe'\n");
+
+        expect(kinds(tmpDir)).toEqual(['Stripe']);
+        expect(exceptionSpy).not.toHaveBeenCalled();
+      },
+    );
   });
 
   it('never offers a tool without a setup mode as a warehouse source', () => {

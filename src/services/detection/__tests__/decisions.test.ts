@@ -161,6 +161,15 @@ describe('walkRepo', () => {
     expect(JSON.stringify(snapshot)).not.toContain('postgres://secret');
     expect(manifestDirs(snapshot)).toEqual(['.', 'apps/api']);
   });
+  it('reads a package.json that starts with a byte order mark', () => {
+    const dir = project({
+      'package.json':
+        '\uFEFF' + JSON.stringify({ dependencies: { next: '15' } }),
+    });
+    expect(walkRepo(dir).manifests).toEqual([
+      { path: 'package.json', ecosystem: 'npm', packages: ['next'] },
+    ]);
+  });
 });
 
 describe('renderDecisionInput', () => {

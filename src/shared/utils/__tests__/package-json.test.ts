@@ -6,6 +6,7 @@ import {
   getInstalledPackageVersion,
   hasDeclaredDependency,
   findDeclaredPackage,
+  parsePackageJson,
   type PackageJson,
 } from '@utils/package-json';
 
@@ -214,5 +215,36 @@ describe('findDeclaredPackage', () => {
     const pkg: PackageJson = { dependencies: { react: '19.0.0' } };
     const result = findDeclaredPackage(['vue', 'next'], pkg);
     expect(result).toBeUndefined();
+  });
+});
+
+describe('parsePackageJson', () => {
+  const deps = { dependencies: { stripe: '^14.0.0' } };
+
+  it.each([
+    ['plain JSON', JSON.stringify(deps)],
+    ['a leading byte order mark', '\uFEFF' + JSON.stringify(deps)],
+    [
+      'a byte order mark and pretty print',
+      '\uFEFF' + JSON.stringify(deps, null, 2) + '\n',
+    ],
+  ])('parses %s', (_label, content) => {
+    expect(parsePackageJson(content)).toEqual(deps);
+  });
+
+  it.each([
+    ['an empty file', ''],
+    ['only a byte order mark', '\uFEFF'],
+    ['a trailing comma', '{"dependencies": {"stripe": "1"},}'],
+    ['a missing comma', '{"name": "a" "version": "1"}'],
+    ['content after the root object', '{"name": "a"}\n{"name": "b"}'],
+    ['a byte order mark in the middle', '{"name": "a"\uFEFF\uFEFF,}'],
+    ['two byte order marks', '\uFEFF\uFEFF{}'],
+    ['a null root', 'null'],
+    ['an array root', '[]'],
+    ['a string root', '"package"'],
+    ['a number root', '42'],
+  ])('returns null for %s', (_label, content) => {
+    expect(parsePackageJson(content)).toBeNull();
   });
 });
