@@ -101,7 +101,8 @@ export function formatDiscoveryTest(report: DiscoveryTestReport): string {
       return `  ${mark} ${pad(clean(project.path), 24)} ${detail.join(', ')}`;
     }),
   ];
-  return lines.join('\n');
+  // Every line: the run directory and the workspace root come from the machine too.
+  return lines.map(clean).join('\n');
 }
 
 /**

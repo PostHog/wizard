@@ -63,6 +63,8 @@ describe('test discovery mode', () => {
     const escape = '\u001b[2J\u001b]0;owned\u0007';
     const text = formatDiscoveryTest({
       ...report,
+      runDir: `/work/${escape}repo/apps/web`,
+      rootDir: `/work/${escape}repo`,
       runProject: `apps/${escape}web`,
       projects: [
         {
