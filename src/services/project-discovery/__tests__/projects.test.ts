@@ -405,6 +405,13 @@ describe('runDiscovery', () => {
       workspaceFingerprint(7, path.join(repo, 'apps/api')),
     );
 
+    // A run started below a project reports that project's tools under the folder it started in.
+    const below = await reportFrom(path.join(repo, 'apps/web/app'));
+    expect(below.tools.map((tool) => tool.kind)).toEqual(['Stripe']);
+    expect(below.workspace_fingerprint).toBe(
+      workspaceFingerprint(7, path.join(repo, 'apps/web/app')),
+    );
+
     const web = await reportFrom(path.join(repo, 'apps/web'));
     expect(web.tools).toEqual([
       expect.objectContaining({

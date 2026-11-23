@@ -128,9 +128,10 @@ started in.
   `projects` whole.
 - [`report.ts`](project-discovery/report.ts) is the one place discovery leaves
   the machine, as a `DiscoveryReport`. It carries the tools found at or below
-  the run project, under that project's fingerprint. It needs discovery consent
-  (`maySendDiscovery`) and telemetry. [`tags.ts`](project-discovery/tags.ts)
-  holds the analytics tags under the same consent.
+  the run project, under the fingerprint of the folder the run started in. It
+  needs discovery consent (`maySendDiscovery`) and telemetry.
+  [`tags.ts`](project-discovery/tags.ts) holds the analytics tags under the same
+  consent.
 - [`fingerprint.ts`](project-discovery/fingerprint.ts) hashes the workspace for
   the report, from `runDir`.
 
