@@ -7,6 +7,7 @@ export {
   getDiscovery,
   getRepoFiles,
   getTools,
+  projectFromWorkspaceRoot,
   projectPathOf,
   rediscoverAfterLogin,
   runDiscovery,

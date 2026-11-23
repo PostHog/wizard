@@ -43,9 +43,11 @@ import {
   getTraits,
   DETECTED_PROJECT_KEY,
   detectedProjectOf,
+  getDiscovery,
   picksProject,
   planNeedsPick,
   projectDiscoveryMode,
+  projectFromWorkspaceRoot,
   projectPathOf,
   rediscoverAfterLogin,
   reportDiscovery,
@@ -206,6 +208,8 @@ async function invokeProgram(
       }),
     );
 
+  /** Discovery changed mode after the program's detection ran. */
+  let redetect = false;
   /**
    * Discovery under the mode the run now knows. Discovery first runs before
    * login, as an anonymous user. A mode or a flag snapshot the caller gave the
@@ -217,7 +221,10 @@ async function invokeProgram(
       input.discoveryMode ??
       (input.wizardFlags && projectDiscoveryMode(input.wizardFlags));
     if (known === undefined && !store.session.credentials) return;
+    const before = getDiscovery(store.session)?.mode;
     await park(rediscoverAfterLogin(config, store.readyContext(), known));
+    // What detection read under the old mode is read again before any agent runs.
+    if (getDiscovery(store.session)?.mode !== before) redetect = true;
   };
   /**
    * The picker can still move the run: no caller named a project, and the
@@ -244,7 +251,8 @@ async function invokeProgram(
     if (
       !store.session.detectionComplete ||
       (input.project !== undefined &&
-        input.project !== store.session.runProject)
+        projectFromWorkspaceRoot(store.session, input.project) !==
+          store.session.runProject)
     ) {
       await detectProgram(
         config,
@@ -424,7 +432,8 @@ async function invokeProgram(
     }
 
     // One project per run: with discovery on, the host picks among the projects the program is offered.
-    if (picksProject(store.session, config)) {
+    const picks = picksProject(store.session, config);
+    if (picks || redetect) {
       const ciRunner = {
         log: runner.log,
         authenticate: async () => {
@@ -433,27 +442,50 @@ async function invokeProgram(
         onProgress: emit,
       } satisfies CiRunnerContext;
       try {
-        const picked = await park(
-          pickProject(config, store, {
-            requested: input.project,
-            workflow: options.workflow,
-            emit,
-            signal,
-          }),
-        );
-        if (picked === null) return abort('Project selection cancelled.');
-        if (picked !== store.session.runProject) {
-          // The settings were checked for the directory the run started in.
-          if (plainSettings?.backedUp) restoreClaudeSettings(installDir);
-          plainSettings = undefined;
-          // The run moves: what stopped it where it started no longer applies.
+        let target: string | null = store.session.runProject;
+        if (picks) {
+          target = await park(
+            pickProject(config, store, {
+              requested:
+                input.project === undefined
+                  ? undefined
+                  : projectFromWorkspaceRoot(store.session, input.project),
+              workflow: options.workflow,
+              emit,
+              signal,
+            }),
+          );
+          if (target === null) return abort('Project selection cancelled.');
+        }
+        const moves = target !== store.session.runProject;
+        // A pick elsewhere moves the run. A mode that changed reads the same project again under the new one.
+        if (moves || redetect) {
+          redetect = false;
+          const detectedIn = store.session.installDir;
+          const resetSettings = (): void => {
+            // The settings were checked for the directory the run started in.
+            if (plainSettings?.backedUp) restoreClaudeSettings(installDir);
+            plainSettings = undefined;
+          };
+          if (moves) resetSettings();
+          // What stopped the run where it was first detected no longer applies.
           stopped = null;
-          await detectProgram(config, store, ciRunner, picked);
+          // Only a pick names a project; without one the run stays in the project it started in.
+          await detectProgram(
+            config,
+            store,
+            ciRunner,
+            moves ? target : undefined,
+          );
+          // A run that started below its project moves up to it without a pick.
+          if (!moves && store.session.installDir !== detectedIn) {
+            resetSettings();
+          }
           const unmet = detectionFailure(config, store.session);
           if (unmet) return settle(RunOutcome.Failed, unmet);
           run = await resolveRun(config, store, runner);
           started(run, !reportedStart);
-          pair.project.path = picked;
+          pair.project.path = target;
         }
       } catch (error) {
         if (signal.aborted) return cancelled();

@@ -393,6 +393,28 @@ export function projectPathOf(
   return relative === '' ? '.' : relative.split(path.sep).join('/');
 }
 
+/**
+ * A caller's `--project`, which is a path from the workspace root, as the
+ * session names that project. Discovery roots at the run directory while its
+ * flag is off, so there the path is taken from the workspace root above it.
+ */
+export function projectFromWorkspaceRoot(
+  session: Pick<ProgramSession, 'frameworkContext'>,
+  project: string,
+): string {
+  const discovery = getDiscovery(session);
+  if (!discovery || discovery.mode !== 'off') return project;
+  const workspaceRoot = guarded(
+    'findWorkspaceRoot',
+    () => findWorkspaceRoot(discovery.runDir).rootDir,
+    () => discovery.rootDir,
+  );
+  // A project outside the run directory keeps its name, which no project matches.
+  return (
+    projectPathOf(session, path.resolve(workspaceRoot, project)) ?? project
+  );
+}
+
 /** frameworkContext key of a step scoped to another folder: the project its copied detection fields still describe. */
 export const DETECTED_PROJECT_KEY = 'detectedProject';
 
