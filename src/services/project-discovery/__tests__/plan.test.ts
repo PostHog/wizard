@@ -279,6 +279,7 @@ describe('plan events', () => {
       'projects selected',
       expect.objectContaining({
         picked: 'apps/admin',
+        picked_framework: 'vue',
         picked_by: 'person',
         default: 'apps/web',
         kept_default: false,

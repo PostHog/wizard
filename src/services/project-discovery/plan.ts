@@ -257,6 +257,10 @@ export function reportProjectsSelected(
   analytics.wizardCapture('projects selected', {
     program_id: programId,
     picked,
+    // The run reports its start before the pick, so the picked project's framework travels here.
+    picked_framework:
+      getProjects(session).find((project) => project.path === picked)?.traits
+        .framework ?? null,
     picked_by: pickedBy,
     default: plan.picked,
     kept_default: picked === plan.picked,
