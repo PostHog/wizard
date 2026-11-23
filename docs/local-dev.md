@@ -248,8 +248,9 @@ The report holds:
   workspace root, the run project, `repoType` and the workspace tool
 - what the program's detection read in the run project, and the run project's
   match keys
-- every project with its traits: the value a run uses, then each source's
-  value, and `(unsettled)` where the sources disagree
+- every project with its traits in three columns: the trait, the value a run
+  uses, and the source that value came from. A source that said otherwise
+  follows in brackets, and `(unsettled)` marks a trait whose sources disagree
 - the catalog tools found in each project
 - the plan the program would open after login: the projects offered, a reason
   for each of the others, the one that starts picked, and whether the run would
@@ -260,7 +261,7 @@ The text report replaces control characters in names from the repo with `?`.
 The JSON report escapes them.
 
 It shows static detection only, since Decisions and agentic detection answer
-after login. To see discovery with the flag on, set the flag for this run:
+after login, and its `Sources` line says so. To see discovery with the flag on, set the flag for this run:
 
 ```bash
 WIZARD_CI_FLAG_OVERRIDES='{"wizard-project-discovery":"one-project"}' \
