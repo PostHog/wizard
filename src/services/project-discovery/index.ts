@@ -24,6 +24,7 @@ export {
   buildPlan,
   pickLeavesRunProject,
   picksProject,
+  planAsks,
   planNeedsPick,
   reportProjectsDiscovered,
   reportProjectsSelected,

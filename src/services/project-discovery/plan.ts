@@ -173,6 +173,25 @@ export function picksProject(
 }
 
 /**
+ * Whether a host is asked to pick: the program picks its project, no caller
+ * named one, the run is interactive and the plan has a choice to make. The
+ * runner and the test discovery preview both read this.
+ */
+export function planAsks(
+  session: ProgramSession,
+  config: Applies,
+  plan: PlanOffer,
+  requested?: string,
+): boolean {
+  return (
+    picksProject(session, config) &&
+    requested === undefined &&
+    !session.ci &&
+    planNeedsPick(plan)
+  );
+}
+
+/**
  * Whether the pick takes the run out of the project it started in: the plan
  * does not offer that project, and it asks for a pick or its default is
  * another one. A host that shows the plan reads this before login, to ask
@@ -189,7 +208,7 @@ export function pickLeavesRunProject(
     (project) => project.offered && project.path === runProject,
   );
   if (staysOffered) return false;
-  return (!session.ci && planNeedsPick(plan)) || plan.picked !== runProject;
+  return planAsks(session, config, plan) || plan.picked !== runProject;
 }
 
 /** The event carries at most this many projects; `project_count` is the true total. */

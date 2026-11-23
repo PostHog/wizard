@@ -5,6 +5,7 @@ import {
   isHeadless,
   regionOption,
 } from '@shared/headless-mode';
+import { wantsDiscoveryTest } from '@cli/runners';
 import { provisionCommand } from '../provision';
 import type { Command } from '../command';
 
@@ -39,6 +40,8 @@ export const basicIntegrationCommand: Command = {
     ...regionOption,
   },
   check: (argv) => {
+    // Test discovery mode only prints, so no mode it would refuse matters.
+    if (wantsDiscoveryTest(argv)) return true;
     // --playground is the standalone TUI demo; it can't combine with a
     // non-interactive run (either --ci or the experimental headless flag).
     if (argv.playground && (argv.ci || isHeadless(argv))) {
@@ -52,6 +55,11 @@ export const basicIntegrationCommand: Command = {
     // Each mode file is loaded only when its branch is taken, so a plain
     // `npx @posthog/wizard` never pulls in the CI or playground paths.
     void (async () => {
+      // Test discovery mode only reads the repo, prints and exits. It comes before every path that checks CI credentials, signs up or opens a screen.
+      if (wantsDiscoveryTest(argv)) {
+        const { runInteractive } = await import('./interactive');
+        return runInteractive(argv);
+      }
       // ── The CI / headless division ───────────────────────────────────
       // --ci (dev/test only) and the experimental headless flag (the
       // published-build, non-interactive path; see @shared/headless-mode) both

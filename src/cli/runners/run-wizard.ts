@@ -4,6 +4,7 @@ import type { Harness, Sequence } from '@shared/constants';
 import { resolve } from 'node:path';
 import { runtimeEnv } from '@env';
 import { resolveNoTelemetry } from './resolve-no-telemetry';
+import { runDiscoveryTest, wantsDiscoveryTest } from './run-discovery-test';
 import { withSignals } from './signals';
 
 /** The TUI session a command's parsed options launch: a program's run or a tool's screens. */
@@ -38,6 +39,7 @@ export function runWizard(
   config: ProgramConfig,
   options: Record<string, unknown>,
 ): void {
+  if (wantsDiscoveryTest(options)) return runDiscoveryTest(config, options);
   withSignals(async (signal) => {
     // Loaded here, not at startup: a headless run never loads the TUI.
     const { runTui } = await import('@tui');

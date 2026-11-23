@@ -6,6 +6,9 @@ const { mockRunWizard, mockRunWizardCI } = vi.hoisted(() => ({
 vi.mock(import('@cli/runners'), () => ({
   runWizard: mockRunWizard,
   runWizardCI: mockRunWizardCI,
+  // As the real one: the flag, alone or with a format.
+  wantsDiscoveryTest: (options: Record<string, unknown>) =>
+    options.testDiscovery !== undefined,
 }));
 
 vi.mock('@shared/skill-menu', async (importOriginal) => {
@@ -356,6 +359,15 @@ describe('self-driving rejects unsupported modes', () => {
   test('accepts a plain run', async () => {
     await expect(
       parseCommand(selfDrivingCommand, 'self-driving --install-dir /tmp/app'),
+    ).resolves.toBeDefined();
+  });
+
+  test('accepts both in test discovery mode, which only prints', async () => {
+    await expect(
+      parseCommand(
+        selfDrivingCommand,
+        'self-driving --ci --signup --test-discovery',
+      ),
     ).resolves.toBeDefined();
   });
 });

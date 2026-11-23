@@ -114,6 +114,10 @@ export class Wizard {
   private cli: Argv;
 
   private constructor() {
+    // An empty variable would read as a bare `--test-discovery`, which turns a run into a printout.
+    if (process.env.POSTHOG_WIZARD_TEST_DISCOVERY === '') {
+      delete process.env.POSTHOG_WIZARD_TEST_DISCOVERY;
+    }
     let cli: Argv = yargs(hideBin(process.argv))
       .env('POSTHOG_WIZARD')
       .options(GLOBAL_OPTIONS);
@@ -164,6 +168,12 @@ export class Wizard {
             "Capture wizard LLM calls as $ai_generation events in the authenticated project's AI Observability tab.\nenv: POSTHOG_WIZARD_CAPTURE_AIO",
           type: 'boolean',
           hidden: true,
+        })
+        .option('test-discovery', {
+          describe:
+            'Test discovery mode: print the projects, traits and plan a run finds before login, then exit. Pass json for JSON.',
+          type: 'string',
+          choices: ['', 'text', 'json'],
         })
         // Rides beside the PostHog destination rather than replacing it, so a
         // logged run is the same run the backend sees.

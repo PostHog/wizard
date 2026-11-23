@@ -45,6 +45,7 @@ import {
   detectedProjectOf,
   getDiscovery,
   picksProject,
+  planAsks,
   planNeedsPick,
   projectDiscoveryMode,
   projectFromWorkspaceRoot,
@@ -754,10 +755,7 @@ async function pickProject(
   let pickedBy: 'person' | 'caller' | 'default' =
     requested === undefined ? 'default' : 'caller';
   const asks =
-    workflow !== undefined &&
-    requested === undefined &&
-    !store.session.ci &&
-    planNeedsPick(offer);
+    workflow !== undefined && planAsks(store.session, config, offer, requested);
   if (asks) {
     const go = await workflow.confirmStep(
       {

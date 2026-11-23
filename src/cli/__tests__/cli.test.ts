@@ -7,8 +7,10 @@ const {
   mockRunHeadlessCli,
   mockProvisionNewAccountCli,
   mockConfigureLogFileCli,
+  mockTestDiscoveryCli,
 } = vi.hoisted(() => ({
   mockConfigureLogFileCli: vi.fn(),
+  mockTestDiscoveryCli: vi.fn(),
   // The TUI host parks on its intro; headless resolves 0.
   mockRunTuiCli: vi.fn(
     (..._args: Parameters<typeof import('@tui').runTui>) =>
@@ -30,6 +32,12 @@ vi.mock(import('@tui'), async (importOriginal) => ({
 vi.mock(import('@headless'), async (importOriginal) => ({
   ...(await importOriginal()),
   runHeadless: mockRunHeadlessCli,
+}));
+
+// Test discovery mode reads the repo; this stands in for that read.
+vi.mock(import('@programs'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  testDiscovery: mockTestDiscoveryCli,
 }));
 
 vi.mock('semver', () => ({ satisfies: () => true }));
@@ -664,6 +672,99 @@ describe('CLI argument parsing', () => {
         await new Promise((resolve) => setImmediate(resolve));
       }
     }
+
+    test('--test-discovery previews before any credential check, signup or host', async () => {
+      mockTestDiscoveryCli.mockResolvedValue({
+        program: 'posthog-integration',
+      });
+      // Stands in for the terminal; the exit waits for each write's callback.
+      const written = vi.spyOn(process.stdout, 'write').mockImplementation(((
+        _chunk: unknown,
+        ...rest: unknown[]
+      ) => {
+        const done = rest.find((arg) => typeof arg === 'function') as
+          | (() => void)
+          | undefined;
+        done?.();
+        return true;
+      }) as typeof process.stdout.write);
+      try {
+        // No --email: the CI path would stop on that before it could sign up.
+        await runCLI([
+          '--ci',
+          '--signup',
+          '--install-dir',
+          '/tmp/test',
+          '--test-discovery',
+          'json',
+        ]);
+        await vi.waitFor(() => expect(process.exit).toHaveBeenCalledWith(0), {
+          timeout: 10_000,
+        });
+        expect(mockTestDiscoveryCli).toHaveBeenCalledTimes(1);
+        expect(written).toHaveBeenCalledWith(
+          expect.stringContaining('"program": "posthog-integration"'),
+        );
+      } finally {
+        written.mockRestore();
+      }
+      expect(process.exit).not.toHaveBeenCalledWith(1);
+      expect(mockProvisionNewAccountCli).not.toHaveBeenCalled();
+      expect(mockRunHeadlessCli).not.toHaveBeenCalled();
+      expect(mockRunTuiCli).not.toHaveBeenCalled();
+    });
+
+    test('--test-discovery previews the run as asked: its CI setting and the last --project', async () => {
+      mockTestDiscoveryCli.mockResolvedValue({
+        program: 'posthog-integration',
+      });
+      const written = vi.spyOn(process.stdout, 'write').mockImplementation(((
+        _chunk: unknown,
+        ...rest: unknown[]
+      ) => {
+        (
+          rest.find((arg) => typeof arg === 'function') as
+            | (() => void)
+            | undefined
+        )?.();
+        return true;
+      }) as typeof process.stdout.write);
+      try {
+        await runCLI([
+          '--ci',
+          '--install-dir',
+          '/tmp/test',
+          '--project',
+          'apps/api',
+          '--project',
+          'apps/web',
+          '--test-discovery',
+          'json',
+        ]);
+        await vi.waitFor(() => expect(process.exit).toHaveBeenCalledWith(0), {
+          timeout: 10_000,
+        });
+        expect(mockTestDiscoveryCli).toHaveBeenCalledWith(
+          expect.anything(),
+          expect.objectContaining({ ci: true }),
+          'apps/web',
+        );
+      } finally {
+        written.mockRestore();
+      }
+    });
+
+    test('an empty POSTHOG_WIZARD_TEST_DISCOVERY does not turn a run into a preview', async () => {
+      process.env.POSTHOG_WIZARD_TEST_DISCOVERY = '';
+      try {
+        await runCLI(['--ci', '--signup', '--install-dir', '/tmp/test']);
+      } finally {
+        delete process.env.POSTHOG_WIZARD_TEST_DISCOVERY;
+      }
+      // The CI path ran, and stopped where it does without --email.
+      expect(process.exit).toHaveBeenCalledWith(1);
+      expect(mockTestDiscoveryCli).not.toHaveBeenCalled();
+    });
 
     test('requires --email when --ci --signup is set', async () => {
       await runCLI(['--ci', '--signup', '--install-dir', '/tmp/test']);
