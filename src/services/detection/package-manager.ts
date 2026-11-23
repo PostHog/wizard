@@ -10,6 +10,7 @@
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { readProjectFile } from '@utils/bounded-fs';
 import {
   detectNodePackageManagers,
   type DetectedPackageManager,
@@ -145,13 +146,8 @@ const COCOAPODS: DetectedPackageManager = {
 const POSTHOG_POD = /^\s*pod\s+['"]PostHog['"]/m;
 
 function podfileHasPostHog(installDir: string): boolean {
-  try {
-    return POSTHOG_POD.test(
-      fs.readFileSync(path.join(installDir, 'Podfile'), 'utf8'),
-    );
-  } catch {
-    return false;
-  }
+  const content = readProjectFile(path.join(installDir, 'Podfile'));
+  return content !== null && POSTHOG_POD.test(content);
 }
 
 // posthog-ios 4.x isn't on CocoaPods, so an app that already has the PostHog pod keeps it instead of adding SPM.

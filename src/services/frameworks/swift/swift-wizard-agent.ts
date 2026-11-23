@@ -89,7 +89,7 @@ export const SWIFT_AGENT_CONFIG: FrameworkConfig<SwiftContext> = {
     projectTypeDetection:
       'This is a Swift project. Look for .xcodeproj directories, Package.swift, and .swift source files to confirm. Check for SwiftUI or UIKit imports to determine the UI framework.',
     packageInstallation:
-      'Add the posthog-ios package via Swift Package Manager. For Xcode projects, add XCRemoteSwiftPackageReference and XCSwiftPackageProductDependency to the .pbxproj file. For Swift packages, add the dependency to Package.swift. If the Podfile already has the PostHog pod, keep CocoaPods and its version; posthog-ios 4.x.x is not on CocoaPods.',
+      'Add the posthog-ios package via Swift Package Manager at the version the iOS SDK docs pin. If the app already depends on posthog-ios via Swift Package Manager, keep its version. For Xcode projects, add XCRemoteSwiftPackageReference and XCSwiftPackageProductDependency to the .pbxproj file. For Swift packages, add the dependency to Package.swift. If the Podfile already has the PostHog pod, keep CocoaPods and its version; posthog-ios 4.x.x is not on CocoaPods.',
     getAdditionalContextLines: (context) => {
       const projectTypeName = context.projectType
         ? getSwiftProjectTypeName(context.projectType)
