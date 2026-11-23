@@ -12,10 +12,13 @@ import { setTraits, type TraitSink, type TraitWrite } from './store';
 
 const INTEGRATIONS = new Set<string>(Object.values(Integration));
 
-/** A project path from one directory as a path from the directory `base` is relative to. */
+/** A project path from one directory as a path from the directory `base` is relative to. Backslashes and a trailing slash name the same project. */
 export function joinProjectPath(base: string, projectPath: string): string {
-  const joined = path.posix.normalize(path.posix.join(base, projectPath));
-  return joined === '' ? '.' : joined;
+  const joined = path.posix.normalize(
+    path.posix.join(base, projectPath.replaceAll('\\', '/')),
+  );
+  const trimmed = joined.endsWith('/') ? joined.slice(0, -1) : joined;
+  return trimmed === '' ? '.' : trimmed;
 }
 
 /** The directory a report's paths are relative to, as a path from the workspace root. */

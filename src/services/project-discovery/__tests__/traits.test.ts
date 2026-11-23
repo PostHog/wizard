@@ -10,11 +10,25 @@ import { DETECTED_WAREHOUSE_SOURCES_KEY } from '@services/warehouse-sources/dete
 import {
   getProject,
   getTraits,
+  joinProjectPath,
   toMatchKeys,
 } from '@services/project-discovery';
 
 const session = (overrides: Parameters<typeof buildSession>[0] = {}) =>
   buildSession({ installDir: '/repo', ...overrides });
+
+describe('joinProjectPath', () => {
+  it.each([
+    ['.', 'apps/web', 'apps/web'],
+    ['.', 'apps/web/', 'apps/web'],
+    ['.', './', '.'],
+    ['.', 'apps\\web', 'apps/web'],
+    ['apps', 'web/', 'apps/web'],
+    ['apps/web', '.', 'apps/web'],
+  ])('joins %s and %s as %s', (base, projectPath, expected) => {
+    expect(joinProjectPath(base, projectPath)).toBe(expected);
+  });
+});
 
 describe('getTraits', () => {
   it('has no traits before detection settles anything', () => {
