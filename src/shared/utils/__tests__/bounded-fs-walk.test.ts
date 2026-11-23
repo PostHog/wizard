@@ -79,7 +79,10 @@ describe('reportFsError (via walkProjectFiles / safeReadFile)', () => {
   it.each(['UNKNOWN', 'EBUSY', 'ECANCELED'])(
     'safeReadFile does not capture environmental read error %s',
     (code) => {
-      vi.spyOn(fs, 'statSync').mockReturnValue({ size: 1 } as fs.Stats);
+      vi.spyOn(fs, 'statSync').mockReturnValue({
+        size: 1,
+        isFile: () => true,
+      } as fs.Stats);
       vi.spyOn(fs, 'readFileSync').mockImplementation(() => {
         throw errnoError(code);
       });
