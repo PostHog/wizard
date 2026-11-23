@@ -40,6 +40,8 @@ export const basicIntegrationCommand: Command = {
     ...regionOption,
   },
   check: (argv) => {
+    // Test discovery mode only prints, so no mode it would refuse matters.
+    if (wantsDiscoveryTest(argv)) return true;
     // --playground is the standalone TUI demo; it can't combine with a
     // non-interactive run (either --ci or the experimental headless flag).
     if (argv.playground && (argv.ci || isHeadless(argv))) {

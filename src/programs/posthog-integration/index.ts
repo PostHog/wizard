@@ -21,6 +21,7 @@ import { judgeMissingIntegration } from './decisions';
 import { gatherFrameworkContext } from '@services/detection';
 import { noteDetectedFramework } from '@services/detection';
 import { scopeInstallDirToProject } from '@services/detection';
+import { picksProject } from '@services/project-discovery';
 import type {
   CiRunnerContext,
   RunnerContext,
@@ -348,7 +349,12 @@ export const config: ProgramConfig = {
     session: ProgramSession,
     runner: CiRunnerContext,
   ): Promise<void> => {
-    await scopeInstallDirToProject(session, runner);
+    // With project discovery on, this program's plan picks the project.
+    await scopeInstallDirToProject(
+      session,
+      runner,
+      picksProject(session, config),
+    );
     // The scan reads source files, so it runs beside framework detection.
     const mcpServer = detectMcpServer(
       {

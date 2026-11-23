@@ -52,6 +52,14 @@ describe('discoverFeatures', () => {
     expect(discoverFeatures(tmpDir)).toEqual([]);
   });
 
+  it('reads a package.json that starts with a byte order mark', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      '\uFEFF' + JSON.stringify({ dependencies: { stripe: '13.0.0' } }),
+    );
+    expect(discoverFeatures(tmpDir)).toEqual([DiscoveredFeature.Stripe]);
+  });
+
   it('handles malformed package.json gracefully', () => {
     fs.writeFileSync(path.join(tmpDir, 'package.json'), 'not valid json');
     expect(discoverFeatures(tmpDir)).toEqual([]);

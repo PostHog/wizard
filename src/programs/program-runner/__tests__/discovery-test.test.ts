@@ -65,6 +65,33 @@ describe('the plan a test discovery previews', () => {
     expect(report.plan.picked).toBe('.');
   });
 
+  it('previews the project a caller names, and asks nothing', async () => {
+    const report = await testDiscovery(
+      program({ appliesTo: () => true }),
+      { installDir: repo },
+      'apps/admin',
+    );
+    expect(report.runProject).toBe('apps/admin');
+    expect(report.plan.picked).toBe('apps/admin');
+    expect(report.plan.asks).toBe(false);
+  });
+
+  it('detects in the project a run moves up to, not the folder it started in', async () => {
+    fs.mkdirSync(path.join(repo, 'apps/web/src'));
+    const detectedIn: string[] = [];
+    const report = await testDiscovery(
+      program({
+        onReady: (ctx) => {
+          detectedIn.push(ctx.session.installDir);
+          return Promise.resolve();
+        },
+      }),
+      { installDir: path.join(repo, 'apps/web/src') },
+    );
+    expect(report.runProject).toBe('apps/web');
+    expect(detectedIn).toEqual([path.join(repo, 'apps/web')]);
+  });
+
   it('asks nothing in a CI run or with the flag off', async () => {
     const picks = program({ appliesTo: () => true });
     const ci = await testDiscovery(picks, { installDir: repo, ci: true });

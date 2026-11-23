@@ -109,16 +109,62 @@ const JS_RERANK_VARIANTS: readonly SkillVariant[] = [
   'web',
 ];
 
-/** Comment-stripped substring check for the Rust SDK in one manifest. */
+/** Section-aware, comment-stripped check for the Rust SDK crate (`posthog-rs` 0.x or `posthog` 1.x) in one manifest. */
 function manifestMentionsSdk(manifestPath: string): boolean {
   const content = readProjectFile(manifestPath);
-  return (
-    content != null &&
-    content.split('\n').some((line) => {
-      const code = line.split('#', 1)[0];
-      return code.includes(RUST_SDK_CRATE);
-    })
-  );
+  if (content == null) return false;
+  let inDeps = false;
+  let inDepSubtable = false;
+  for (const rawLine of content.split('\n')) {
+    const code = rawLine.split('#', 1)[0].trim();
+    if (!code) continue;
+    const header = code.match(/^\[\[?([^\]]+?)\]\]?$/);
+    if (header) {
+      const section = header[1].trim();
+      const depSubtable =
+        /^(?:(?:workspace\.)?(?:dev-|build-)?dependencies|target\.[^[\]]+\.(?:dev-|build-)?dependencies)\.([^.]+)$/i.exec(
+          section,
+        );
+      if (depSubtable) {
+        const crate = depSubtable[1].trim().replace(/^["']|["']$/g, '');
+        if (crate === RUST_SDK_CRATE || crate === 'posthog') return true;
+        inDeps = false;
+        inDepSubtable = true;
+        continue;
+      }
+      inDepSubtable = false;
+      inDeps =
+        /^(?:workspace\.)?(?:dev-|build-)?dependencies$/i.test(section) ||
+        /^target\.[^[\]]+\.(?:dev-|build-)?dependencies$/i.test(section);
+      continue;
+    }
+    const pkgMatch = /package\s*=\s*(?:"([^"]+)"|'([^']+)')/.exec(code);
+    if (inDepSubtable) {
+      if (pkgMatch) {
+        const targetCrate = pkgMatch[1] ?? pkgMatch[2];
+        if (targetCrate === RUST_SDK_CRATE || targetCrate === 'posthog') {
+          return true;
+        }
+      }
+      continue;
+    }
+    if (!inDeps) continue;
+    if (pkgMatch) {
+      const targetCrate = pkgMatch[1] ?? pkgMatch[2];
+      if (targetCrate === RUST_SDK_CRATE || targetCrate === 'posthog') {
+        return true;
+      }
+      continue;
+    }
+    if (
+      /^(?:posthog-rs|posthog)(?:\.(?:version|workspace|git|path|features|default-features|optional))?\s*=/.test(
+        code,
+      )
+    ) {
+      return true;
+    }
+  }
+  return false;
 }
 
 /**

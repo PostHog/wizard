@@ -114,6 +114,10 @@ export class Wizard {
   private cli: Argv;
 
   private constructor() {
+    // An empty variable would read as a bare `--test-discovery`, which turns a run into a printout.
+    if (process.env.POSTHOG_WIZARD_TEST_DISCOVERY === '') {
+      delete process.env.POSTHOG_WIZARD_TEST_DISCOVERY;
+    }
     let cli: Argv = yargs(hideBin(process.argv))
       .env('POSTHOG_WIZARD')
       .options(GLOBAL_OPTIONS);

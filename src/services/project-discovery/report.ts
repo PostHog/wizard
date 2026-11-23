@@ -37,14 +37,14 @@ export function buildDiscoveryReport(
   return {
     program: discovery.program,
     wizard_version: VERSION,
-    // The project the run started in, which a CI run's install dir may no longer be.
+    // The folder the run started in, in every flag mode. A CI run's install dir may no longer be it.
     workspace_fingerprint: workspaceFingerprint(
       projectId,
-      path.resolve(discovery.rootDir, discovery.runProject),
+      path.resolve(discovery.runDir),
     ),
     scanned_at: discovery.discoveredAt,
     complete: discovery.tools.complete,
-    // Only that project's tools: a sibling's never travel under its fingerprint.
+    // Only the run project's tools: a sibling's never travel under this fingerprint.
     tools: toolsUnder(discovery.tools.tools, discovery.runProject).map(
       (tool) => ({ kind: tool.kind, signals: tool.signals }),
     ),

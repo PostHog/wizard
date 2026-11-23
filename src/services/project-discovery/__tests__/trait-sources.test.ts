@@ -23,13 +23,17 @@ vi.mock(
 );
 
 import { Integration } from '@shared/constants';
+import { DiscoveredFeature } from '@shared/discovered-feature';
 import {
+  DETECTED_PROJECT_KEY,
   applyDetectionReport,
+  detectedProjectOf,
   discoveredWarehouseSources,
   getProjects,
   getTools,
   getTraitClaims,
   getTraits,
+  projectPathOf,
   runDiscovery,
   selectProjects,
   setTrait,
@@ -106,6 +110,44 @@ describe('static detection in each project', () => {
     // The root is its own workspace root.
     expect(getTraits(session, '.').workspaceRoot).toBe('.');
   });
+
+  it("reads a step scoped to another project from that project's own detection", async () => {
+    const { session } = await discoveredMonorepo();
+    // The run started at the root, where the program's detection found an LLM SDK.
+    const live = { ...session, discoveredFeatures: [DiscoveredFeature.LLM] };
+    expect(getTraits(live, '.').callsLlmApi).toBe('yes');
+    const scoped = {
+      ...live,
+      runProject: 'apps/web',
+      frameworkContext: {
+        ...live.frameworkContext,
+        [DETECTED_PROJECT_KEY]: detectedProjectOf(live),
+      },
+    };
+    expect(getTraits(scoped)).toMatchObject({
+      framework: Integration.nextjs,
+      frameworkVariant: 'app-router',
+    });
+    expect(getTraits(scoped).callsLlmApi).toBeUndefined();
+    // The root still reads its own detection through the scoped copy.
+    expect(getTraits(scoped, '.').callsLlmApi).toBe('yes');
+  });
+
+  it.skipIf(process.platform === 'win32')(
+    'names a folder reached through a link by its real path',
+    async () => {
+      const { session } = await discoveredMonorepo();
+      const link = `${repo}-link`;
+      fs.symlinkSync(repo, link);
+      try {
+        expect(projectPathOf(session, path.join(link, 'apps/web'))).toBe(
+          'apps/web',
+        );
+      } finally {
+        fs.unlinkSync(link);
+      }
+    },
+  );
 
   it('gives each project that shares a package the tool', async () => {
     write('apps/api/package.json', pkg({ express: '^4.0.0', stripe: '^14' }));

@@ -101,7 +101,8 @@ export function formatDiscoveryTest(report: DiscoveryTestReport): string {
       return `  ${mark} ${pad(clean(project.path), 24)} ${detail.join(', ')}`;
     }),
   ];
-  return lines.join('\n');
+  // Every line: the run directory and the workspace root come from the machine too.
+  return lines.map(clean).join('\n');
 }
 
 /**
@@ -114,7 +115,13 @@ export function runDiscoveryTest(
 ): void {
   exitWith(async () => {
     const { testDiscovery } = await import('@programs');
-    const report = await testDiscovery(config, tuiSessionArgs(options));
+    // As the run would start: its real CI setting and the last `--project`.
+    const project = [options.project].flat().at(-1) as string | undefined;
+    const report = await testDiscovery(
+      config,
+      { ...tuiSessionArgs(options), ci: options.ci === true },
+      project,
+    );
     const text =
       options.testDiscovery === 'json'
         ? JSON.stringify(report, null, 2)

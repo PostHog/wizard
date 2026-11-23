@@ -39,12 +39,16 @@ import { FRAMEWORK_REGISTRY } from '@services/frameworks';
 import {
   applyDetectionReport,
   buildPlan,
-  getDiscovery,
   getProjects,
   getTraits,
+  DETECTED_PROJECT_KEY,
+  detectedProjectOf,
+  getDiscovery,
   picksProject,
   planAsks,
+  planNeedsPick,
   projectDiscoveryMode,
+  projectFromWorkspaceRoot,
   projectPathOf,
   rediscoverAfterLogin,
   reportDiscovery,
@@ -213,6 +217,8 @@ async function invokeProgram(
       }),
     );
 
+  /** Discovery changed mode after the program's detection ran. */
+  let redetect = false;
   /**
    * Discovery under the mode the run now knows. Discovery first runs before
    * login, as an anonymous user. A mode or a flag snapshot the caller gave the
@@ -224,7 +230,10 @@ async function invokeProgram(
       input.discoveryMode ??
       (input.wizardFlags && projectDiscoveryMode(input.wizardFlags));
     if (known === undefined && !store.session.credentials) return;
+    const before = getDiscovery(store.session)?.mode;
     await park(rediscoverAfterLogin(config, store.readyContext(), known));
+    // What detection read under the old mode is read again before any agent runs.
+    if (getDiscovery(store.session)?.mode !== before) redetect = true;
   };
   /**
    * The picker can still move the run: no caller named a project, and the
@@ -251,7 +260,8 @@ async function invokeProgram(
     if (
       !store.session.detectionComplete ||
       (input.project !== undefined &&
-        input.project !== store.session.runProject)
+        projectFromWorkspaceRoot(store.session, input.project) !==
+          store.session.runProject)
     ) {
       await detectProgram(
         config,
@@ -447,7 +457,8 @@ async function invokeProgram(
     }
 
     // One project per run: with discovery on, the host picks among the projects the program is offered.
-    if (picksProject(store.session, config)) {
+    const picks = picksProject(store.session, config);
+    if (picks || redetect) {
       const ciRunner = {
         log: runner.log,
         authenticate: async () => {
@@ -456,27 +467,50 @@ async function invokeProgram(
         onProgress: emit,
       } satisfies CiRunnerContext;
       try {
-        const picked = await park(
-          pickProject(config, store, {
-            requested: input.project,
-            workflow: options.workflow,
-            emit,
-            signal,
-          }),
-        );
-        if (picked === null) return abort('Project selection cancelled.');
-        if (picked !== store.session.runProject) {
-          // The settings were checked for the directory the run started in.
-          if (plainSettings?.backedUp) restoreClaudeSettings(installDir);
-          plainSettings = undefined;
-          // The run moves: what stopped it where it started no longer applies.
+        let target: string | null = store.session.runProject;
+        if (picks) {
+          target = await park(
+            pickProject(config, store, {
+              requested:
+                input.project === undefined
+                  ? undefined
+                  : projectFromWorkspaceRoot(store.session, input.project),
+              workflow: options.workflow,
+              emit,
+              signal,
+            }),
+          );
+          if (target === null) return abort('Project selection cancelled.');
+        }
+        const moves = target !== store.session.runProject;
+        // A pick elsewhere moves the run. A mode that changed reads the same project again under the new one.
+        if (moves || redetect) {
+          redetect = false;
+          const detectedIn = store.session.installDir;
+          const resetSettings = (): void => {
+            // The settings were checked for the directory the run started in.
+            if (plainSettings?.backedUp) restoreClaudeSettings(installDir);
+            plainSettings = undefined;
+          };
+          if (moves) resetSettings();
+          // What stopped the run where it was first detected no longer applies.
           stopped = null;
-          await detectProgram(config, store, ciRunner, picked);
+          // Only a pick names a project; without one the run stays in the project it started in.
+          await detectProgram(
+            config,
+            store,
+            ciRunner,
+            moves ? target : undefined,
+          );
+          // A run that started below its project moves up to it without a pick.
+          if (!moves && store.session.installDir !== detectedIn) {
+            resetSettings();
+          }
           const unmet = detectionFailure(config, store.session);
           if (unmet) return settle(RunOutcome.Failed, unmet);
           run = await resolveRun(config, store, runner);
           started(run, !reportedStart);
-          pair.project.path = picked;
+          pair.project.path = target;
           // The questions were asked of the project the run started in; the pair's project gets its own answers.
           if (decisionsAsTraits) {
             await park(
@@ -714,9 +748,10 @@ async function invokeProgram(
 }
 
 /**
- * The project the run works in. Ranks the projects with the program's model
- * sources when a host will show them, asks the host when there is a choice,
- * and reports the list and the pick. Null when the host declined.
+ * The project the run works in. Asks the host when there is a choice, with
+ * the program's model sources ranking the projects. A run with no host to ask
+ * takes the ranking's pick. Reports the list and the pick. Null when the host
+ * declined.
  */
 async function pickProject(
   config: ProgramConfig,
@@ -730,7 +765,7 @@ async function pickProject(
 ): Promise<string | null> {
   const { requested, workflow, emit, signal } = context;
   const plan = (): PlanOffer => buildPlan(store.session, config, requested);
-  // Agentic detection ranks only where a person will look at its answer, and only once.
+  // Agentic detection ranks only where there is a choice to make, and only once.
   const ranked = getProjects(store.session).some((project) =>
     Object.values(project.claims ?? {}).some((claims) =>
       claims.some((claim) => claim.source === 'agentic'),
@@ -780,6 +815,10 @@ async function pickProject(
     );
     if (!go) return null;
     offer = plan();
+  } else if (requested === undefined && planNeedsPick(offer) && rank) {
+    // Nobody to ask: the ranking picks, as a person reading it would.
+    offer = await rank();
+    picked = offer.picked;
   }
   reportProjectsDiscovered(store.session, offer, config.id);
   reportProjectsSelected(store.session, offer, picked, config.id, pickedBy);
@@ -858,12 +897,19 @@ async function scopeSession(
   const installDir = runStep.targetDir
     ? runStep.targetDir(live)
     : live.installDir;
+  const runProject = projectPathOf(live, installDir) ?? live.runProject;
   const session: WizardSession = {
     ...live,
     installDir,
     // The step's directory is its run project, so its traits are that directory's.
-    runProject: projectPathOf(live, installDir) ?? live.runProject,
-    frameworkContext: { ...live.frameworkContext },
+    runProject,
+    frameworkContext: {
+      ...live.frameworkContext,
+      // The detection fields copied here still describe the project they were read in.
+      ...(runProject !== live.runProject && {
+        [DETECTED_PROJECT_KEY]: detectedProjectOf(live),
+      }),
+    },
   };
   if (runStep.onRunPrep) await runStep.onRunPrep(session, runner.log);
   return session;

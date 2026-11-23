@@ -462,7 +462,9 @@ export class WizardStore implements TuiView {
 
   /** The model sources answered: the plan screen takes their plan. */
   setPlanRanked(offer: PlanOffer): void {
-    this._write({ plan: { offer, ranking: false, confirmed: null } });
+    // A pick made while the sources still answered stands.
+    const confirmed = this.plan?.confirmed ?? null;
+    this._write({ plan: { offer, ranking: false, confirmed } });
   }
 
   /** The person's pick on the plan screen. */

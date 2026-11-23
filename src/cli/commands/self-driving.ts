@@ -1,4 +1,4 @@
-import { runWizard, runWizardCI } from '@cli/runners';
+import { runWizard, runWizardCI, wantsDiscoveryTest } from '@cli/runners';
 import { config as selfDrivingConfig } from '@programs/self-driving';
 import { skillProgramOptions } from './skill-program-options';
 import type { Command } from './command';
@@ -17,6 +17,8 @@ export const selfDrivingCommand: Command = {
     ...(selfDrivingConfig.cliOptions ?? {}),
   },
   check: (argv) => {
+    // Test discovery mode only prints, so no mode it would refuse matters.
+    if (wantsDiscoveryTest(argv)) return true;
     // self-driving builds on an existing integration and is fully interactive,
     // so the modes that break it are rejected before the TUI/agent loop spins
     // up rather than failing late (a 403 on the first MCP probe under --signup,

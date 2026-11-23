@@ -9,6 +9,7 @@ import { ProgramAbort } from '@programs/program-contract';
 import {
   DISCOVERY_KEY,
   getDiscovery,
+  projectFromWorkspaceRoot,
   runDiscovery,
   settleProjects,
 } from '@services/project-discovery';
@@ -71,9 +72,20 @@ export function scopeToProject(store: SessionStore, project: string): void {
   store.scopeToProject(target, project, [DISCOVERY_KEY, DECISIONS_USE_KEY]);
 }
 
+/** Scope the store to the project a run works in: the one the caller names by its path from the workspace root, else the one it started in. */
+export function scopeToRunProject(store: SessionStore, project?: string): void {
+  scopeToProject(
+    store,
+    project === undefined
+      ? store.session.runProject
+      : projectFromWorkspaceRoot(store.session, project),
+  );
+}
+
 /**
  * Scan the project for `config`: discovery, then the pair's project when the
- * caller names one, then the program's own detection in it. A CI session runs
+ * caller names one by its path from the workspace root, then the program's
+ * own detection in it. A CI session runs
  * the program's `ciPreRun` when it has one, anything else its `onReady`. Marks
  * detection complete.
  */
@@ -84,8 +96,7 @@ export async function detectProgram(
   project?: string,
 ): Promise<void> {
   await runDiscovery(config, store.readyContext());
-  // With no project named, the run works in the project it started in.
-  scopeToProject(store, project ?? store.session.runProject);
+  scopeToRunProject(store, project);
   const ciPreRun = config.ciPreRun;
   if (store.session.ci && ciPreRun) {
     await store.edit((draft) =>

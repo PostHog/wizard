@@ -417,9 +417,9 @@ export function createWizardPiTools(ctx: PiToolsContext): ToolDefinition[] {
     name: 'detect_package_manager',
     label: 'Detect package manager',
     description:
-      "Detect the project's package manager(s). Returns the name and the install command for each. Call this before installing a dependency, then RUN the returned install command (with the posthog package) via bash — the SDK package must end up in the project manifest, or the app will not build.",
+      "Detect the project's package manager(s). Returns the name and install command for each, and a recommendation. Call this before installing a dependency and follow the recommendation. When the install command takes a package name (such as `npm add` or `pip install`), RUN it via bash with the posthog package. When it takes none (such as `pod install`), make the manifest change the recommendation describes, then run the command as is. The SDK package must end up in the project manifest, or the app will not build.",
     promptSnippet:
-      'detect_package_manager() — find the PM + install command, then run it via bash to add the SDK',
+      'detect_package_manager() — find the PM and follow its recommendation to add the SDK to the manifest',
     parameters: Type.Object({}),
     async execute() {
       const result = await detectPackageManager(workingDirectory);
