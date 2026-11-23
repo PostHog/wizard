@@ -85,8 +85,8 @@ skill in `.claude/skills`. A run with no framework gets an error that says so,
 and nothing is installed.
 
 A run pinned to a context-mill release with `--context-mill-version` reads its
-skills from that release. The oldest release a pin may name is 1.66.0, the
-first that publishes the skills the bundled prompts name. Its prompts are the
+skills from that release. The oldest release a pin may name is 1.67.0, the
+first whose menu lists every skill as its own entry. Its prompts are the
 bundled ones, as in any run.
 
 Before the tasks run, the runner installs the framework's `integration` skill as

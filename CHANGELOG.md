@@ -1,5 +1,30 @@
 # Changelog
 
+## [2.98.0](https://github.com/PostHog/wizard/compare/v2.97.0...v2.98.0) (2026-11-19)
+
+
+### Features
+
+* **switchboard:** make the orchestrator permanent for the default flow ([#1561](https://github.com/PostHog/wizard/issues/1561)) ([2885dcb](https://github.com/PostHog/wizard/commit/2885dcb1211af4157fee6638d60e77754d43c831))
+
+
+### Bug Fixes
+
+* **wizard:** ignore quoted aborts and scope migration analytics ([#1575](https://github.com/PostHog/wizard/issues/1575)) ([0e1ea8c](https://github.com/PostHog/wizard/commit/0e1ea8c0fc89fbe2765e636ab4e16cbed8e34223))
+
+## [2.97.0](https://github.com/PostHog/wizard/compare/v2.96.0...v2.97.0) (2026-11-18)
+
+
+### Features
+
+* **transactional-email:** add a command that sets up the first email send ([#1507](https://github.com/PostHog/wizard/issues/1507)) ([6bd1a27](https://github.com/PostHog/wizard/commit/6bd1a279335ad95daef7398b63e36a92c1537661))
+
+
+### Bug Fixes
+
+* **rust:** add the tls feature to the blocking-client install ([#1572](https://github.com/PostHog/wizard/issues/1572)) ([b779973](https://github.com/PostHog/wizard/commit/b7799730366f95c14b8db8e3a4e7e0ea98999716))
+* **skills:** refuse a context-mill pin older than 1.67.0 ([#1576](https://github.com/PostHog/wizard/issues/1576)) ([e0cb6f4](https://github.com/PostHog/wizard/commit/e0cb6f4ecfd847325788a3f568b76243ff3f5a53))
+
 ## [2.96.0](https://github.com/PostHog/wizard/compare/v2.95.0...v2.96.0) (2026-11-17)
 
 

@@ -68,6 +68,7 @@ vi.mock('@utils/analytics', async (importOriginal) => ({
     runId: 'analytics-run-id',
     build: 'test',
     setTag: vi.fn(),
+    setProgramTags: vi.fn(),
     wizardCapture: vi.fn(),
     captureException: vi.fn(),
     identifyUser: vi.fn(),
@@ -1195,7 +1196,12 @@ describe('runProgram', () => {
       'metrics',
       input({
         config: {
-          run: { ...run, integrationLabel: 'custom-label', skillId: 'skill-x' },
+          run: {
+            ...run,
+            integrationLabel: 'custom-label',
+            skillId: 'skill-x',
+            analyticsTags: { example: 'program-tag' },
+          },
         },
       }),
       {
@@ -1223,6 +1229,10 @@ describe('runProgram', () => {
       'refresh',
       'runAgent',
     ]);
+    expect(analytics.setProgramTags).toHaveBeenCalledWith();
+    expect(analytics.setProgramTags).toHaveBeenLastCalledWith({
+      example: 'program-tag',
+    });
     expect(analytics.wizardCapture).toHaveBeenCalledWith('agent started', {
       integration: 'custom-label',
       program_id: 'metrics',

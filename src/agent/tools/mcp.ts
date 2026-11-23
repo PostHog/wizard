@@ -27,6 +27,13 @@ import {
   PUBLISH_HANDOFF_TOOL_NAME,
   publishHandoff,
 } from './handoff';
+import {
+  PUBLISH_PROGRAM_RESULT_DESCRIPTION,
+  PUBLISH_PROGRAM_RESULT_PARAM_DESCRIPTION,
+  PUBLISH_PROGRAM_RESULT_TOOL_NAME,
+  allowsPublishProgramResult,
+  publishProgramResult,
+} from './program-result';
 import { createSecretVault, type SecretVault } from '@shared/secret-vault';
 import type { ProgressEmitter } from '../progress';
 import {
@@ -144,10 +151,9 @@ export interface WizardToolsOptions {
   secretVault?: SecretVault;
 
   /**
-   * Orchestrator queue context. Present only when the `wizard-orchestrator`
-   * flag routes the run to the orchestrator; when set, the orchestrator tools
-   * (enqueue_task, complete_task, read_handoffs) are registered. Absent on the
-   * linear path.
+   * Orchestrator queue context. Present only on an orchestrator run; when set,
+   * the orchestrator tools (enqueue_task, complete_task, read_handoffs) are
+   * registered. Absent on the linear path.
    */
   orchestrator?: OrchestratorToolsContext;
 
@@ -165,6 +171,9 @@ export interface WizardToolsOptions {
 
   /** The program mirrors the handoff report into a PostHog notebook. */
   handoffNotebook?: boolean;
+
+  /** The run's allow list; opt-in tools such as `publish_program_result` register only when it names them. */
+  allowedTools?: readonly string[];
 }
 
 /** Default per-run cap on wizard_ask calls when no override is provided. */
@@ -189,6 +198,7 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
     emit,
     programId,
     handoffNotebook,
+    allowedTools,
   } = options;
   const sdk = await getSDKModule();
   const { tool, createSdkMcpServer } = sdk;
@@ -804,6 +814,26 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
     },
   );
 
+  // -- publish_program_result -------------------------------------------------------
+
+  const publishProgramResultTool = tool(
+    PUBLISH_PROGRAM_RESULT_TOOL_NAME,
+    PUBLISH_PROGRAM_RESULT_DESCRIPTION,
+    {
+      result: z.unknown().describe(PUBLISH_PROGRAM_RESULT_PARAM_DESCRIPTION),
+    },
+    (args: { result: unknown }) => {
+      const result = publishProgramResult(args.result, {
+        taskAgent: orchestrator?.currentTaskId !== undefined,
+      });
+      logToFile(`publish_program_result: ${result.message}`);
+      return {
+        content: [{ type: 'text' as const, text: result.message }],
+        ...(result.ok ? {} : { isError: true }),
+      };
+    },
+  );
+
   // -- Assemble server ------------------------------------------------------
 
   const orchestratorTools = orchestrator
@@ -824,6 +854,10 @@ export async function createWizardToolsServer(options: WizardToolsOptions) {
       auditResolveChecks,
       wizardAsk,
       publishHandoffTool,
+      // Opt-in: only a program or task whose allow list names it writes the result file.
+      ...(allowsPublishProgramResult(allowedTools)
+        ? [publishProgramResultTool]
+        : []),
       ...orchestratorTools,
     ],
   });

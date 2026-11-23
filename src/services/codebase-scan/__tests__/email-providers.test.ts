@@ -1,7 +1,6 @@
 import fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { gunzipSync } from 'zlib';
 
 vi.mock(
   import('@services/warehouse-sources/registry'),
@@ -17,14 +16,11 @@ import { reportCodebaseScan, scanCodebaseFor } from '@services/codebase-scan';
 import { SessionStore } from '@services/session/session-store';
 import { buildSession } from '@services/session/wizard-session';
 import { analytics } from '@utils/analytics';
-import { ANALYTICS_HOST_URL } from '@shared/constants';
+import {
+  recordAnalyticsIngestion,
+  type IngestedEvent,
+} from '@shared/utils/__tests__/helpers/analytics-ingestion.no-jest';
 import type { ApiUser, Credentials } from '@shared/api';
-
-type IngestedEvent = {
-  event: string;
-  distinct_id: string;
-  properties: Record<string, unknown>;
-};
 
 const CREDENTIALS = {
   accessToken: 'pha_test',
@@ -35,33 +31,7 @@ const CREDENTIALS = {
 
 const PROGRAM = { id: 'posthog-integration', scansCodebase: true };
 
-/** What PostHog ingestion receives from the Wizard's analytics client. */
-const ingested: IngestedEvent[] = [];
-
-async function readBatch(body: unknown): Promise<IngestedEvent[]> {
-  const bytes = Buffer.from(
-    await new Response(
-      body as ConstructorParameters<typeof Response>[0],
-    ).arrayBuffer(),
-  );
-  const text = (
-    bytes[0] === 0x1f && bytes[1] === 0x8b ? gunzipSync(bytes) : bytes
-  ).toString('utf8');
-  return (JSON.parse(text) as { batch: IngestedEvent[] }).batch;
-}
-
-const realFetch = global.fetch;
-vi.stubGlobal(
-  'fetch',
-  async (...[input, init]: Parameters<typeof fetch>): Promise<Response> => {
-    const url = new URL(input instanceof Request ? input.url : String(input));
-    if (url.origin !== ANALYTICS_HOST_URL) return realFetch(input, init);
-    if (url.pathname.startsWith('/batch')) {
-      ingested.push(...(await readBatch(init?.body)));
-    }
-    return new Response('{"status":1}', { status: 200 });
-  },
-);
+const ingested = recordAnalyticsIngestion().events;
 
 async function providerEvents(): Promise<IngestedEvent[]> {
   await analytics.flush();

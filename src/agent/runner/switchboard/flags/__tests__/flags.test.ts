@@ -10,21 +10,15 @@ import {
   GPT5_6_TERRA_MODEL,
   Harness,
   Sequence,
-  WIZARD_ORCHESTRATOR_FLAG_KEY,
   WIZARD_ORCHESTRATOR_OVERRIDE_FLAG_KEY,
   WIZARD_SELF_DRIVING_USE_PI_HARNESS_FLAG_KEY,
 } from '@shared/constants';
 import {
-  areSeededTasksEnabled,
   DEFAULT_BINDING,
   resolveBinding,
   resolveStageOverrides,
   type SwitchboardCtx,
 } from '@agent/runner/switchboard';
-import {
-  ORCHESTRATOR_SEQUENCE_ROUTE,
-  ORCHESTRATOR_HARNESS_ROUTE,
-} from '@agent/runner/switchboard/flags/orchestrator';
 import { SELF_DRIVING_EXPERIMENT } from '@agent/runner/switchboard/flags/self-driving';
 import { runBindingCases } from './binding-cases.no-jest';
 
@@ -39,7 +33,6 @@ vi.mock('@env', async (importOriginal) => ({
 }));
 const setSurface = (s: 'cloud' | 'local') => (envState.runSurface = s);
 
-const ORCH = WIZARD_ORCHESTRATOR_FLAG_KEY;
 const SD = WIZARD_SELF_DRIVING_USE_PI_HARNESS_FLAG_KEY;
 
 const LINEAR_DEFAULT = {
@@ -56,49 +49,10 @@ const ORCHESTRATOR_PI_DEFAULT = {
 } as const;
 
 describe('flag declarations', () => {
-  it('wizard-orchestrator covers exactly posthog-integration, both axes, one flag', () => {
-    expect(ORCHESTRATOR_SEQUENCE_ROUTE.programs).toEqual([
-      'posthog-integration',
-    ]);
-    expect(ORCHESTRATOR_HARNESS_ROUTE.program).toBe('posthog-integration');
-    expect(ORCHESTRATOR_SEQUENCE_ROUTE.flag).toBe(ORCH);
-    expect(ORCHESTRATOR_HARNESS_ROUTE.flags.useFlag).toBe(ORCH);
-  });
-
   it('self-driving pi covers exactly self-driving', () => {
     expect(SELF_DRIVING_EXPERIMENT.program).toBe('self-driving');
     expect(SELF_DRIVING_EXPERIMENT.flags.useFlag).toBe(SD);
   });
-});
-
-describe('the truth table — posthog-integration × wizard-orchestrator', () => {
-  runBindingCases(
-    [
-      {
-        name: 'off/absent → linear on anthropic, default model',
-        ctx: { program: 'posthog-integration', flags: {} },
-        binding: LINEAR_DEFAULT,
-        trace: { harness: 'binding', model: 'binding', sequence: 'binding' },
-      },
-      {
-        name: "'false' → identical to absent",
-        ctx: { program: 'posthog-integration', flags: { [ORCH]: 'false' } },
-        binding: LINEAR_DEFAULT,
-      },
-      {
-        name: "garbage ('banana') → identical to absent",
-        ctx: { program: 'posthog-integration', flags: { [ORCH]: 'banana' } },
-        binding: LINEAR_DEFAULT,
-      },
-      {
-        name: "'true' → orchestrator on pi; model stays the binding default (frontmatter decides per task)",
-        ctx: { program: 'posthog-integration', flags: { [ORCH]: 'true' } },
-        binding: ORCHESTRATOR_PI_DEFAULT,
-        trace: { harness: 'flag', model: 'binding', sequence: 'flag' },
-      },
-    ],
-    setSurface,
-  );
 });
 
 describe('the truth table — self-driving × its pi payload flag', () => {
@@ -258,25 +212,19 @@ describe('isolation — everything on at once', () => {
     ]),
   );
 
-  it('only the two covered programs move; every other program keeps its own binding', () => {
-    for (const program of ['posthog-integration', 'self-driving']) {
-      const ctx: SwitchboardCtx = {
-        program,
-        binding: DEFAULT_BINDING,
-        flags,
-        flagPayloads,
-      };
-      expect(resolveBinding(ctx)).toEqual(
-        program === 'posthog-integration'
-          ? ORCHESTRATOR_PI_DEFAULT
-          : {
-              sequence: Sequence.orchestrator, // from its own payload only
-              harness: Harness.pi,
-              model: GPT5_6_TERRA_MODEL,
-              thinkingLevel: 'high',
-            },
-      );
-    }
+  it('only self-driving moves; every other program keeps its own binding', () => {
+    const covered: SwitchboardCtx = {
+      program: 'self-driving',
+      binding: DEFAULT_BINDING,
+      flags,
+      flagPayloads,
+    };
+    expect(resolveBinding(covered)).toEqual({
+      sequence: Sequence.orchestrator, // from its own payload only
+      harness: Harness.pi,
+      model: GPT5_6_TERRA_MODEL,
+      thinkingLevel: 'high',
+    });
     // Uncovered programs land on their declared binding whatever the flags say.
     const uncovered: Array<[SwitchboardCtx['binding'], object]> = [
       [DEFAULT_BINDING, LINEAR_DEFAULT],
@@ -330,16 +278,6 @@ describe('isolation — everything on at once', () => {
       });
     }
   });
-
-  it('regression (2026-07-17): self-driving never rides the global orchestrator flag into the orchestrator', () => {
-    const binding = resolveBinding({
-      program: 'self-driving',
-      binding: DEFAULT_BINDING,
-      flags: { [ORCH]: 'true', [SD]: 'true' },
-      flagPayloads: { [SD]: { model: 'gpt-5-6-terra' } },
-    });
-    expect(binding.sequence).toBe(Sequence.linear);
-  });
 });
 
 describe('seam scan — routing reads live only in flags/', () => {
@@ -363,17 +301,4 @@ describe('seam scan — routing reads live only in flags/', () => {
       expect(src).not.toMatch(/WIZARD_\w+_FLAG_KEY/);
     });
   }
-});
-
-describe('areSeededTasksEnabled', () => {
-  // Off or unset, the orchestrator queues no runner-seeded task at all.
-  it("only literal 'true' enables the runner-seeded mechanism", () => {
-    expect(constants.WIZARD_ORCHESTRATOR_SEEDED_TASKS_FLAG_KEY).toBeTruthy();
-    const key = constants.WIZARD_ORCHESTRATOR_SEEDED_TASKS_FLAG_KEY;
-    expect(areSeededTasksEnabled({ [key]: 'true' })).toBe(true);
-    expect(areSeededTasksEnabled({ [key]: 'false' })).toBe(false);
-    expect(areSeededTasksEnabled({ [key]: 'banana' })).toBe(false);
-    expect(areSeededTasksEnabled({})).toBe(false);
-    expect(areSeededTasksEnabled()).toBe(false);
-  });
 });

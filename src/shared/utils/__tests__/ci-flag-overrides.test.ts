@@ -19,22 +19,22 @@ describe('applyCiFlagOverrides', () => {
   // override path is live — the same shape a `build:ci` bundle has.
   describe('in CI builds', () => {
     it('returns the flags untouched when no override is set', () => {
-      const flags = { 'wizard-orchestrator': 'false' };
+      const flags = { 'wizard-default-aio-logs': 'false' };
       expect(applyCiFlagOverrides(flags)).toEqual({ flags, payloads: {} });
     });
 
     it('merges overrides over the fetched flags, stringifying values', () => {
       process.env[ENV_KEY] = JSON.stringify({
-        'wizard-orchestrator': true,
+        'wizard-default-aio-logs': true,
         'wizard-next-v2': 'legacy',
       });
       expect(
         applyCiFlagOverrides({
-          'wizard-orchestrator': 'false',
+          'wizard-default-aio-logs': 'false',
           'wizard-react-router': 'true',
         }).flags,
       ).toEqual({
-        'wizard-orchestrator': 'true',
+        'wizard-default-aio-logs': 'true',
         'wizard-next-v2': 'legacy',
         'wizard-react-router': 'true',
       });
@@ -59,7 +59,7 @@ describe('applyCiFlagOverrides', () => {
     });
 
     it('fails loudly on malformed JSON instead of testing live flags', () => {
-      process.env[ENV_KEY] = 'wizard-orchestrator=true';
+      process.env[ENV_KEY] = 'wizard-default-aio-logs=true';
       expect(() => applyCiFlagOverrides({})).toThrow(/not valid JSON/);
     });
   });
@@ -68,7 +68,9 @@ describe('applyCiFlagOverrides', () => {
     it('is inert: overrides are ignored even when the env var is set', async () => {
       const prevNodeEnv = process.env.NODE_ENV;
       process.env.NODE_ENV = 'production';
-      process.env[ENV_KEY] = JSON.stringify({ 'wizard-orchestrator': true });
+      process.env[ENV_KEY] = JSON.stringify({
+        'wizard-default-aio-logs': true,
+      });
       // Re-import fresh so the module re-reads NODE_ENV at load time (the
       // vitest equivalent of jest.isolateModules).
       vi.resetModules();
@@ -76,11 +78,11 @@ describe('applyCiFlagOverrides', () => {
         applyCiFlagOverrides: typeof applyCiFlagOverrides;
       };
       const result = prod.applyCiFlagOverrides({
-        'wizard-orchestrator': 'false',
+        'wizard-default-aio-logs': 'false',
       });
       process.env.NODE_ENV = prevNodeEnv;
       expect(result).toEqual({
-        flags: { 'wizard-orchestrator': 'false' },
+        flags: { 'wizard-default-aio-logs': 'false' },
         payloads: {},
       });
     });

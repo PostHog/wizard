@@ -130,8 +130,9 @@ any structural change; then load the relevant procedural skill:
 
 Default new work to **Pi**, and prefer the **orchestrator** sequence. Linear
 execution remains useful for very simple tasks and legacy support. The Anthropic
-Agent SDK is a supported legacy fallback, deprecated as the default; retain it
-for major Pi vulnerabilities or gaps in support for new Anthropic models.
+Agent SDK harness is deprecated and unused: no program binds it and no run falls
+back to it. Its code is retained for a major Pi vulnerability or a gap in Pi's
+support for a new Anthropic model.
 
 This is the contribution policy; existing programs' bindings vary, and
 `DEFAULT_BINDING` is Pi + linear. Set new bindings
@@ -168,6 +169,7 @@ aliases.
 | `wizard audit identify`       | `$identify` implementation                           |
 | `wizard audit session-replay` | session replay setup                                 |
 | `wizard audit web-analytics`  | web analytics setup (**wizard-native**, not a skill) |
+| `wizard audit spend`          | spend: volume that buys nothing, fixed in a PR and a notebook (**wizard-native** orchestrator) |
 
 ### Commands vs. skills (the `audit [skill]` gotcha)
 

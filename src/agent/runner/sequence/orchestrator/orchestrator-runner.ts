@@ -1,7 +1,7 @@
 /**
- * Experimental task-queue orchestrator runner.
+ * Task-queue orchestrator runner.
  *
- * Branches from the linear runner when the `wizard-orchestrator` flag is on. An
+ * Runs a program whose route resolves to the orchestrator sequence. An
  * orchestrator agent inspects the repo and seeds an in-memory task queue; an
  * executor drains it, running one fresh agent per task.
  *
@@ -62,7 +62,6 @@ import { runMatchKeys } from '../../shared/match-keys';
 import { createEmitSpinner } from '../../shared/progress-collector';
 import { createAskBridge } from '../../shared/ask';
 import {
-  areSeededTasksEnabled,
   getHarness,
   resolveHarness,
   resolveStageOverrides,
@@ -111,6 +110,7 @@ import {
   ASK_TOOL,
   type AgentPrompt,
   type OrchestratorPromptContext,
+  accountOwnerFromEnv,
 } from '../../../agent-prompt-loader';
 
 /** Docs page (`django.md`, `nuxt-js-3-6.md`) — steps start with a digit, agent artifacts (`SKILL.md`, `EXAMPLE*`, `COMMANDMENTS.md`) have uppercase. */
@@ -997,6 +997,9 @@ async function executeOrchestrator(
     examplePath,
     commandmentsPath,
     facts: config.projectFacts?.() ?? [],
+    accountOwner: config.accountOwnerContext
+      ? accountOwnerFromEnv()
+      : undefined,
   };
 
   logToFile(
@@ -1049,11 +1052,7 @@ async function executeOrchestrator(
   // Tasks the wizard queues itself, from what detection found. They exist
   // before the planner runs, so the sink guard forces the reporting task to
   // depend on them, and no prompt has to remember they are there.
-  // Kill switch: off (or unset), the wizard queues nothing itself and the run
-  // is byte-identical to a project with no detected sources.
-  const seedEntries = areSeededTasksEnabled(boot.wizardFlags)
-    ? config.seedTasks?.() ?? []
-    : [];
+  const seedEntries = config.seedTasks?.() ?? [];
   const seededTypes: string[] = [];
   // Kept so their dependencies can be resolved once the planner has run — they
   // are queued before it, so they cannot name what they wait for yet.

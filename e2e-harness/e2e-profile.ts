@@ -90,10 +90,10 @@ export const DEFAULT_E2E_PROFILE: WizardE2eProfile = {
 
 /**
  * A switchboard configuration to snapshot for a program — the same `profile`/
- * `path` run once per variation. Omitted fields fall back to the resolved
- * default (linear / anthropic / sonnet), so `{ name: 'default' }` is the
- * no-override baseline. The harness maps each field to its `--harness` /
- * `--sequence` / `--model` override.
+ * `path` run once per variation. Omitted fields fall back to the program's
+ * resolved binding, so `{ name: 'default' }` is the no-override baseline. The
+ * harness maps each field to its `--harness` / `--sequence` / `--model`
+ * override.
  */
 export interface WizardE2eVariation {
   /** Snapshot id, e.g. `pi-openai-linear`. */
@@ -108,7 +108,7 @@ export interface WizardE2eVariation {
 /** The baseline variation when a program declares none: no overrides. */
 export const DEFAULT_E2E_VARIATION: WizardE2eVariation = {
   name: 'default',
-  summary: 'linear / anthropic / sonnet — parity with main',
+  summary: "the program's resolved binding, with no switchboard override",
 };
 
 /**

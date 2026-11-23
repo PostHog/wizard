@@ -25,6 +25,8 @@ const state = vi.hoisted(() => ({
   // The reply to the remark ask, when it differs from `text`.
   remark: undefined as string | undefined,
   prompts: [] as string[],
+  // Runs as each prompt arrives, with the prompts sent so far.
+  onPrompt: undefined as ((prompts: string[]) => void) | undefined,
   request: undefined as unknown,
   tools: [] as { name: string }[],
   tasks: new Map<string, { status: string }>(),
@@ -160,6 +162,7 @@ vi.mock('@earendil-works/pi-coding-agent', () => ({
         },
         prompt: (prompt: string) => {
           state.prompts.push(prompt);
+          state.onPrompt?.(state.prompts);
           if (!state.noTools)
             state.listener?.({
               type: 'tool_execution_start',
@@ -313,6 +316,7 @@ function runInputs(
 
 beforeEach(() => {
   state.prompts = [];
+  state.onPrompt = undefined;
   state.tasks.clear();
   state.hang = false;
   state.release = undefined;
@@ -609,6 +613,108 @@ describe.each(['linear', 'task'] as const)('%s setup signals', (mode) => {
     state.text = `${AgentSignals.SKILL_INSTALL_FAILED} integration-test — unavailable; completed without the skill.`;
 
     await expect(run(runInputs(vi.fn(), null))).resolves.toEqual({
+      kind: 'success',
+    });
+  });
+});
+
+describe("a program's [ABORT] on the linear Pi run", () => {
+  const withAbortCases = () => {
+    const inputs = runInputs(vi.fn(), null);
+    inputs.config.run.abortCases = [
+      {
+        match: /^no server code found$/i,
+        message: 'No server code found',
+        body: 'Run this command again from the project that runs your server.',
+      },
+    ];
+    return inputs;
+  };
+
+  it('ends the run with the reason, with a task still open', async () => {
+    state.hang = true;
+    state.tasks.set('1', { status: 'in_progress' });
+    state.text = 'Checked the project.\n[ABORT] no server code found';
+
+    await expect(piBackend.run(withAbortCases())).resolves.toEqual({
+      kind: 'abort',
+      classification: AgentErrorType.ABORT,
+      message: 'no server code found',
+    });
+  });
+
+  it('reads the reason from its own text block', async () => {
+    state.preamble = ['Checked the project.\n[ABORT] no server code found'];
+    state.text = "I'll stop here.";
+
+    await expect(piBackend.run(withAbortCases())).resolves.toEqual({
+      kind: 'abort',
+      classification: AgentErrorType.ABORT,
+      message: 'no server code found',
+    });
+  });
+
+  it('reads a reason on the line after a bare [ABORT]', async () => {
+    state.text = 'Checked the project.\n[ABORT]\nno server code found';
+
+    await expect(piBackend.run(withAbortCases())).resolves.toEqual({
+      kind: 'abort',
+      classification: AgentErrorType.ABORT,
+      message: 'no server code found',
+    });
+  });
+
+  it('ignores an [ABORT] the reply only mentions mid-line', async () => {
+    state.text =
+      "If there's no server code I'll stop with `[ABORT] no server code found`.\nWrote the first send.";
+
+    await expect(piBackend.run(withAbortCases())).resolves.toEqual({
+      kind: 'success',
+    });
+  });
+
+  it.each([
+    '> [ABORT] no server code found',
+    '```text\n[ABORT] no server code found\n```',
+    '~~~~\n~~~\n[ABORT] no server code found\n~~~~',
+  ])('ignores an [ABORT] example in %j', async (example) => {
+    state.text = `The docs show this example:\n${example}\nI found server code and added the send.`;
+
+    await expect(piBackend.run(withAbortCases())).resolves.toEqual({
+      kind: 'success',
+    });
+  });
+
+  it('reads a real abort after a fenced example', async () => {
+    state.text =
+      '```\n[ABORT] example reason\n```\n[ABORT] no server code found';
+
+    await expect(piBackend.run(withAbortCases())).resolves.toEqual({
+      kind: 'abort',
+      classification: AgentErrorType.ABORT,
+      message: 'no server code found',
+    });
+  });
+
+  it('runs a program without abort cases on to its open tasks', async () => {
+    state.tasks.set('1', { status: 'in_progress' });
+    state.text = 'Checked the project.\n[ABORT] no server code found';
+    // The agent finishes its task once Pi asks it to carry on.
+    state.onPrompt = (prompts) => {
+      if (prompts.length > 1) state.tasks.set('1', { status: 'completed' });
+    };
+
+    await expect(piBackend.run(runInputs(vi.fn(), null))).resolves.toEqual({
+      kind: 'success',
+    });
+    expect(state.prompts.length).toBeGreaterThan(1);
+  });
+
+  it('ignores an [ABORT] line in the remark reply', async () => {
+    state.text = 'Wrote the first send.';
+    state.remark = '[ABORT] no server code found';
+
+    await expect(piBackend.run(withAbortCases())).resolves.toEqual({
       kind: 'success',
     });
   });

@@ -21,12 +21,14 @@ import type {
   RunInput,
 } from '@agent/types';
 import { isAbsolute, resolve, sep } from 'path';
+import { setTimeout as sleep } from 'node:timers/promises';
 import { z } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 import { ErrorCodes } from '@shared/errors';
 import { detectNodePackageManagers } from './package-manager';
 import {
   AGENTIC_DETECTION_FIRST_ATTEMPT_TIMEOUT_MS,
+  AGENTIC_DETECTION_RETRY_BACKOFF_MS,
   AGENTIC_DETECTION_RETRY_TIMEOUT_MS,
   CallType,
   getSkillsBaseUrl,
@@ -477,6 +479,7 @@ async function scanProjectsWithAgent(
       binding: DEFAULT_BINDING,
       overrides: { harness: session.harness },
       record: false,
+      scan: true,
     },
     skillsBaseUrl: getSkillsBaseUrl(),
     wizardFlags: flags.flags,
@@ -516,10 +519,6 @@ async function scanProjectsWithAgent(
     const result = await runAgent(
       {
         ...config,
-        routing: {
-          ...config.routing,
-          scan: attempt === 0 ? 'first' : 'retry',
-        },
         run: { ...config.run, structured: { schema, timeoutMs } },
       },
       input,
@@ -532,6 +531,8 @@ async function scanProjectsWithAgent(
     ) {
       if (attempt === 0) {
         onEvent?.('Project scan timed out; retrying...');
+        // The retry runs on the same model, so a jittered pause keeps timed-out scans from re-hitting it in step.
+        await sleep(AGENTIC_DETECTION_RETRY_BACKOFF_MS * (1 + Math.random()));
         continue;
       }
       throw new AgenticDetectionTimeoutError(attempt + 1, timeoutMs);

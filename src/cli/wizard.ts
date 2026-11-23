@@ -82,7 +82,7 @@ export const GLOBAL_OPTIONS = {
   },
   'context-mill-version': {
     describe:
-      'Fetch skills from this context-mill release (e.g. 1.66.0) instead of the latest\nenv: POSTHOG_WIZARD_CONTEXT_MILL_VERSION',
+      'Fetch skills from this context-mill release (e.g. 1.67.0) instead of the latest\nenv: POSTHOG_WIZARD_CONTEXT_MILL_VERSION',
     type: 'string' as const,
     coerce: parseContextMillVersion,
     hidden: true,
@@ -133,14 +133,14 @@ export class Wizard {
         // Runner overrides — dev/test only, same lifecycle as --ci.
         .option('harness', {
           describe:
-            'Override the agent harness (anthropic | pi). Wins over the PostHog runner flag.\nenv: POSTHOG_WIZARD_HARNESS',
+            'Override the agent harness (pi | anthropic, deprecated). Wins over the PostHog runner flag.\nenv: POSTHOG_WIZARD_HARNESS',
           choices: Object.values(Harness),
           type: 'string',
           hidden: true,
         })
         .option('sequence', {
           describe:
-            'Override the runner sequence (linear | orchestrator). Wins over the PostHog orchestrator flag.\nenv: POSTHOG_WIZARD_SEQUENCE',
+            "Override the runner sequence (linear | orchestrator). Wins over the program's binding.\nenv: POSTHOG_WIZARD_SEQUENCE",
           choices: Object.values(Sequence),
           type: 'string',
           hidden: true,

@@ -159,12 +159,8 @@ export interface AgentRouting {
   overrides?: { harness?: Harness; sequence?: Sequence; model?: string };
   /** Record the decision in analytics tags and the `switchboard resolved` event. Default true. */
   record?: boolean;
-  /**
-   * A project scan: linear, on the triage model of the harness it runs on.
-   * `first` takes the harness the routing resolves to; `retry` runs the SDK, a
-   * second provider, whatever the flags say.
-   */
-  scan?: 'first' | 'retry';
+  /** A project scan: linear, on the triage model of the harness the routing resolves to. */
+  scan?: boolean;
 }
 
 /**
@@ -214,6 +210,8 @@ export interface ResolvedRunConfig {
   posthogTools?: readonly string[];
   /** Context-mill flow the orchestrator loads. Defaults to `programId`. */
   agentFlow?: string;
+  /** Orchestrator tasks see the account owner from the run's env in their project context. */
+  accountOwnerContext?: boolean;
   /** The flow's agent prompts by task type, bundled by the caller; the orchestrator fetches context-mill's otherwise. */
   agentPrompts?: () => Promise<Readonly<Record<string, string>>>;
   /** Task types the program excludes for these flags. The orchestrator adds the CI gates. */

@@ -42,9 +42,10 @@ infrastructure should consume those boundaries.
 - **Linear is for very simple tasks and legacy support.** Composed program
   sub-runs are also structurally clamped to linear; orchestration cannot nest
   through that seam.
-- **Anthropic Agent SDK remains supported as a legacy fallback, deprecated as
-  the default.** Retain it for major Pi vulnerabilities or missing support for
-  new Anthropic models.
+- **The Anthropic Agent SDK harness is deprecated and unused.** No program
+  binds it and no run falls back to it. Its code is retained for a major Pi
+  vulnerability or missing support for a new Anthropic model; a development
+  build reaches it with `--harness anthropic`.
 
 [DEFAULT_BINDING](../../../src/agent/runner/switchboard/index.ts) selects
 Pi + linear for a program whose config sets no `binding`; flags and development

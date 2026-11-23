@@ -65,7 +65,10 @@ describe('program bindings', () => {
       PROGRAM_REGISTRY.map((c) => [c.id, c.binding ?? DEFAULT_BINDING]),
     );
     expect(routes).toEqual({
-      'posthog-integration': linearOnSol,
+      'posthog-integration': {
+        ...linearOnSol,
+        sequence: Sequence.orchestrator,
+      },
       'mcp-analytics': linearOnSol,
       'replay-vision': {
         sequence: Sequence.orchestrator,
@@ -82,6 +85,7 @@ describe('program bindings', () => {
       audit: linearOnSol,
       'events-audit': linearOnSol,
       'web-analytics-doctor': linearOnSol,
+      'spend-audit': orchestratorOnPi,
       migration: linearOnSol,
       'revenue-analytics-setup': linearOnSol,
       'warehouse-source': linearOnSol,
@@ -95,6 +99,7 @@ describe('program bindings', () => {
       'error-tracking': orchestratorOnPi,
       'feature-flags': orchestratorOnPi,
       'agent-skill': linearOnSol,
+      'transactional-email': linearOnSol,
       support: orchestratorOnPi,
     });
   });
@@ -137,10 +142,18 @@ describe('getCommandPath', () => {
     );
   });
 
+  it('reaches the spend audit through the audit family', () => {
+    expect(getCommandPath(subcommand('spend-audit'))).toBe('audit spend');
+  });
+
   it('leaves a top-level program alone', () => {
     expect(getCommandPath(subcommand('revenue-analytics-setup'))).toBe(
       'revenue-analytics',
     );
+  });
+
+  it('runs transactional email as the flat `email` command', () => {
+    expect(getCommandPath(subcommand('transactional-email'))).toBe('email');
   });
 
   it('keeps `metrics` a flat command', () => {

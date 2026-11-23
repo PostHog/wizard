@@ -56,6 +56,30 @@ export function publishBlockingMatch(matches: ScanMatch[]): ScanMatch | null {
   return isTerminalMatch(match) ? match : null;
 }
 
+/**
+ * Every key and leaf value of a JSON value, one per line, as text for the
+ * scanner. A string's own newlines stay real for `\b`-anchored rules, where
+ * `JSON.stringify` would escape them to `\n` and hide what follows.
+ */
+export function flattenJsonForScan(json: unknown): string {
+  if (typeof json === 'string') return json;
+  const parts: string[] = [];
+  const visit = (value: unknown): void => {
+    if (typeof value === 'string') parts.push(value);
+    else if (typeof value === 'number' || typeof value === 'boolean') {
+      parts.push(String(value));
+    } else if (Array.isArray(value)) value.forEach(visit);
+    else if (value !== null && typeof value === 'object') {
+      for (const [key, child] of Object.entries(value)) {
+        parts.push(key);
+        visit(child);
+      }
+    }
+  };
+  visit(json);
+  return parts.join('\n');
+}
+
 export interface ScanVerdict {
   /** The match worth reporting: the highest-severity one. */
   match: ScanMatch;

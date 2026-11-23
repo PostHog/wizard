@@ -115,7 +115,7 @@ export async function scannedWarehouseDestinations(
 }
 
 export function getCodebaseScan(
-  session: ProgramSession,
+  session: Pick<ProgramSession, 'frameworkContext'>,
 ): CodebaseScan | undefined {
   return session.frameworkContext[CODEBASE_SCAN_KEY] as
     | CodebaseScan

@@ -63,6 +63,12 @@ const BLOCKED_OFF_NAMESPACE_KEYS = new Set(['AWS_BEARER_TOKEN_BEDROCK']);
  */
 const HOST_ONLY_ENV_KEYS = new Set([
   'POSTHOG_HANDOFF_OUTPUT_PATH',
+  // Same disposition as the handoff path: the wizard's publish_program_result tool
+  // writes it; the agent has no business knowing the destination.
+  'POSTHOG_RESULT_OUTPUT_PATH',
+  // Read by the wizard into the prompt context; the subprocess never needs them.
+  'POSTHOG_ACCOUNT_OWNER_NAME',
+  'POSTHOG_ACCOUNT_OWNER_EMAIL',
   'POSTHOG_TASK_RUN_ID',
   'POSTHOG_WIZARD_RUN_ID',
   'POSTHOG_TASK_ID',

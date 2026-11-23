@@ -65,7 +65,7 @@
   "variations": [
     {
       "name": "default",
-      "summary": "linear / anthropic / sonnet — parity with main"
+      "summary": "the program's resolved binding, with no switchboard override"
     }
   ],
   "path": [

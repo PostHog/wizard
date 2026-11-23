@@ -2,6 +2,9 @@ import { randomUUID } from 'node:crypto';
 /**
  * Shared agent interface for PostHog wizards
  * Uses Claude Agent SDK directly with PostHog LLM gateway
+ *
+ * The SDK run path (`initializeAgent`, `runAgent`) is deprecated and unused for
+ * now; the helpers Pi shares stay live.
  */
 
 import path from 'path';
@@ -254,9 +257,8 @@ export type AgentConfig = {
    */
   getPendingQuestion?: () => import('./progress').PendingQuestion | null;
   /**
-   * Orchestrator queue context. Present only when the `wizard-orchestrator`
-   * flag routes the run here; threaded into wizard-tools so the orchestrator
-   * tools register.
+   * Orchestrator queue context. Present only on an orchestrator run; threaded
+   * into wizard-tools so the orchestrator tools register.
    */
   orchestrator?: import('./runner/sequence/orchestrator/queue-tools').OrchestratorToolsContext;
   /**
@@ -716,6 +718,7 @@ export async function initializeAgent(
       emit: config.emit,
       programId: config.programId,
       handoffNotebook: config.handoffNotebook,
+      allowedTools: config.allowedTools,
     });
     mcpServers['wizard-tools'] = wizardToolsServer;
 
@@ -1923,7 +1926,10 @@ export const BASE_ALLOWED_TOOLS: readonly string[] = [
   // the agent to call TaskCreate/TaskUpdate to surface progress in the TUI.
   ...Object.values(TaskTool),
   'ListMcpResourcesTool',
-  ...Object.values(WIZARD_TOOL_NAMES),
+  // publish_program_result is opt-in: a program that writes the result lists it in allowedTools.
+  ...Object.values(WIZARD_TOOL_NAMES).filter(
+    (name) => name !== WIZARD_TOOL_NAMES.publishProgramResult,
+  ),
 ];
 
 type TaskEntry = {
