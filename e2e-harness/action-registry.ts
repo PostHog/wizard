@@ -226,6 +226,28 @@ export const ACTION_REGISTRY: Partial<Record<string, DriverAction[]>> = {
     },
   ],
 
+  // ── Project pick ──────────────────────────────────────────────────────
+  [ScreenId.Plan]: [
+    {
+      id: 'pick_project',
+      description:
+        'Pick the project the run works in, by its path from the workspace root. ' +
+        'Read read_state for the offered projects.',
+      params: { project: 'project path, such as apps/web' },
+      apply: (store, params) => {
+        const project = requireString('pick_project', params, 'project');
+        const plan = store.plan;
+        if (!plan || plan.ranking) {
+          throw new Error('pick_project: the plan is still ranking projects');
+        }
+        if (!plan.offer.projects.some((p) => p.offered && p.path === project)) {
+          throw new Error(`pick_project: the plan does not offer "${project}"`);
+        }
+        store.confirmPlan(project);
+      },
+    },
+  ],
+
   // ── Framework disambiguation ──────────────────────────────────────────
   [ScreenId.Setup]: [
     {

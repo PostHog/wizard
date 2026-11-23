@@ -11,7 +11,9 @@ import {
   createFileDestination,
   createWizardRunSync,
   getAuditChecks,
+  getDiscovery,
   getProgramConfig,
+  pickLeavesRunProject,
   PostHogDestination,
   ProgramAbort,
   RunOutcome,
@@ -236,7 +238,9 @@ export async function runTui(
       }),
       destinations,
       eventPlanPath: programConfig.eventPlanFile
-        ? join(session.installDir, programConfig.eventPlanFile)
+        ? // Read from the live session: the plan can move the run to another project.
+          () =>
+            join(store.session.installDir, programConfig.eventPlanFile ?? '')
         : undefined,
       auditChecks: programConfig.auditLedgerFile
         ? () => getAuditChecks(store.session)
@@ -352,9 +356,13 @@ export async function runProgramOnScreens(
       capabilityFailure ??= { error };
       throw error;
     });
+  // The intro showed the person that a project is picked after login, so the run keeps that mode.
+  const discoveryMode = pickLeavesRunProject(store.session, config)
+    ? getDiscovery(store.session)?.mode
+    : undefined;
   const result = await runProgram(
     config.id,
-    { store: store.sessions, config },
+    { store: store.sessions, config, discoveryMode },
     {
       credentials: {
         resolve: (programId, context) =>

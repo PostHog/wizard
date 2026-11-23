@@ -6,7 +6,9 @@ import {
   introEntries,
   introHeadline,
   introMenuOptions,
+  introProjectsRow,
 } from '@tui/programs/posthog-integration/intro-menu';
+import type { PlanOffer } from '@programs/types';
 
 const valuesFor = (args: {
   view?: 'default' | 'more-info' | 'commands';
@@ -147,5 +149,43 @@ describe('introEntries', () => {
       .map((entry) => `${entry.id} (${entry.description.length})`);
 
     expect(tooLong).toEqual([]);
+  });
+});
+
+describe('a run that picks its project after login', () => {
+  const plan = (offered: string[]): PlanOffer => ({
+    repoType: 'monorepo',
+    picked: offered[0],
+    complete: true,
+    projects: [
+      { path: '.', offered: false, reason: 'workspace-root', mainApp: false },
+      ...offered.map((path) => ({ path, offered: true, mainApp: false })),
+    ],
+  });
+
+  it('offers no change of framework for a project the run leaves', () => {
+    const values = (
+      introMenuOptions({
+        view: 'default',
+        showContinue: true,
+        posthogSdkDetected: false,
+        changeFramework: false,
+      }) ?? []
+    ).map((option) => option.value);
+    expect(values).toEqual(['continue', 'more-info', 'cancel']);
+  });
+
+  it('names the one project the run takes', () => {
+    expect(introProjectsRow(plan(['apps/web']))).toEqual({
+      label: 'Project',
+      value: 'apps/web',
+    });
+  });
+
+  it('counts the projects offered when there are several', () => {
+    expect(introProjectsRow(plan(['apps/web', 'apps/admin']))).toMatchObject({
+      label: 'Projects',
+      value: '2 found',
+    });
   });
 });

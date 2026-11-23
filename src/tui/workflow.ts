@@ -21,6 +21,15 @@ export function tuiWorkflow(
         case 'settings-conflict':
           await store.showSettingsOverride(step.conflicts, step.fix);
           return true;
+        case 'plan': {
+          // The plan screen holds here until the person picks a project.
+          store.showPlan(step.plan, step.rank !== undefined);
+          if (step.rank) store.setPlanRanked(await step.rank());
+          await store.waitUntil((view) => view.plan?.confirmed != null);
+          const picked = store.plan?.confirmed;
+          if (picked) step.pick(picked);
+          return true;
+        }
         case 'run':
           // Each screen before the run's step settles first; a hidden step doesn't run.
           return store.reachStep(step.stepId);

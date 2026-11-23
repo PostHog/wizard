@@ -60,6 +60,7 @@ export type HeadlessLaunch = {
   mode: NonInteractiveMode;
   session: SessionArgs; // launch values, flags already merged over the environment
   taskStreamLog?: string; // --task-stream-log: a path, or '' for the default one
+  project?: string; // --project: the project the run works in, as a path from the workspace root
   runId?: string; // the cloud WizardRun this run reports under
   signal: AbortSignal; // the CLI aborts it on SIGINT, SIGTERM or SIGHUP, with the signal name as the reason
 };
@@ -138,7 +139,8 @@ async function main(
     }),
     destinations,
     eventPlanPath: config.eventPlanFile
-      ? join(session.installDir, config.eventPlanFile)
+      ? // Read from the live session: the plan can move the run to another project.
+        () => join(store.session.installDir, config.eventPlanFile ?? '')
       : undefined,
     auditChecks: config.auditLedgerFile
       ? () => getAuditChecks(store.session)
@@ -193,7 +195,7 @@ async function main(
 
     const result = await runProgram(
       config.id,
-      { store, config },
+      { store, config, project: launch.project },
       {
         credentials,
         onProgress: logProgress(log),

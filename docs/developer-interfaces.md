@@ -87,6 +87,7 @@ export const signature: (
 | `input.wizardFlags`, `input.wizardFlagPayloads` | `Record` | A flag snapshot. Without `wizardFlags` the run calls `options.featureFlags`, if you pass it. |
 | `input.runId` | `string` | Labels the program's own agent run in progress events. Generated when absent. |
 | `input.composed` | `boolean` | A run inside another's: its caller writes the outro. `runProgram` still settles the phase. |
+| `input.discoveryMode` | `ProjectDiscoveryMode` | The project discovery mode the host already showed the person. The run keeps it through login, where it otherwise reads the flag again. |
 | `input.project` | `string` | The pair's project, as a path from the workspace root. The run works in that project's directory and resolves skills from its traits. Without it the run works in the project it started in. |
 | [`options`](../src/programs/program-runner/program-input.ts)                | `ProgramOptions`    | The login, the answerer, the workflow, flags, progress and cancellation.         |
 | `options.credentials` | `CredentialsProvider` | Resolves the login when neither `input` nor the store has one. |
@@ -127,6 +128,7 @@ that needs a decision, and continues on `true`:
 | `ai-approval`       | The organization hasn't approved AI data processing                   | The run fails                       |
 | `service-outage`    | A service the run needs is down; `step.readiness` says which          | The run goes on and logs the outage |
 | `settings-conflict` | A Claude settings file redirects the agent; `step.fix()` removes it   | The run fails closed                |
+| `plan`              | After login, when the program is offered several projects: `step.plan` lists them, `step.rank()` waits for the model sources and `step.pick(path)` names the one the run works in | The run takes `step.plan.picked` |
 | `run`               | Before each agent run: a composed sub-run from `runSteps`, then `run` | Only the program's own run runs     |
 
 `finishStep(step, result)` reports each agent run step once it settles. The TUI

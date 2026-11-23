@@ -54,7 +54,12 @@ import {
   SessionStore,
   settleProjects,
 } from '@programs';
-import type { PlannedEvent, TaskItem, WizardSession } from '@programs/types';
+import type {
+  PlannedEvent,
+  PlanOffer,
+  TaskItem,
+  WizardSession,
+} from '@programs/types';
 import {
   addTokenUsage,
   EMPTY_TOKEN_USAGE,
@@ -444,6 +449,29 @@ export class WizardStore implements TuiView {
 
   get mintHandoff(): TuiState['mintHandoff'] {
     return this.$tui.get().mintHandoff;
+  }
+
+  get plan(): TuiState['plan'] {
+    return this.$tui.get().plan;
+  }
+
+  /** Open the plan screen on the projects the run offers. `ranking` while a model source still answers. */
+  showPlan(offer: PlanOffer, ranking: boolean): void {
+    this._write({ plan: { offer, ranking, confirmed: null } });
+  }
+
+  /** The model sources answered: the plan screen takes their plan. */
+  setPlanRanked(offer: PlanOffer): void {
+    // A pick made while the sources still answered stands.
+    const confirmed = this.plan?.confirmed ?? null;
+    this._write({ plan: { offer, ranking: false, confirmed } });
+  }
+
+  /** The person's pick on the plan screen. */
+  confirmPlan(projectPath: string): void {
+    const plan = this.plan;
+    if (!plan) return;
+    this._write({ plan: { ...plan, confirmed: projectPath } });
   }
 
   /** Write TUI state, then `sessionWrites`' session fields, with one notification either way. */

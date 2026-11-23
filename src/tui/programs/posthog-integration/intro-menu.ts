@@ -1,6 +1,8 @@
 import { getCommandPath, getSubcommandPrograms } from '@programs';
 import { getTool } from '@tools';
+import type { PlanOffer } from '@programs/types';
 import type { PickerOption } from '@tui/primitives/index';
+import type { DetectionRow } from '@tui/screens/IntroScreenLayout';
 
 export type IntroMenuView = 'default' | 'more-info' | 'commands';
 
@@ -48,14 +50,30 @@ export function introEntries(): IntroEntry[] {
   });
 }
 
+/** The intro's row for a workspace whose project is picked after login, in place of a framework. */
+export function introProjectsRow(plan: PlanOffer): DetectionRow {
+  const offered = plan.projects.filter((project) => project.offered);
+  // One project offered is the one the run takes; several are chosen among.
+  return offered.length === 1
+    ? { label: 'Project', value: offered[0].path }
+    : {
+        label: 'Projects',
+        value: `${offered.length} found`,
+        suffix: '(one is chosen after login)',
+      };
+}
+
 export function introMenuOptions({
   view,
   showContinue,
   posthogSdkDetected,
+  changeFramework = true,
 }: {
   view: IntroMenuView;
   showContinue: boolean;
   posthogSdkDetected: boolean;
+  /** False when the run leaves this project, so its framework is not the run's. */
+  changeFramework?: boolean;
 }): PickerOption<string>[] | null {
   // Its body is a picker, and a second menu here would move both cursors.
   if (view === 'commands') return null;
@@ -73,7 +91,9 @@ export function introMenuOptions({
         label: posthogSdkDetected ? CONTINUE_ANYWAY_LABEL : CONTINUE_LABEL,
         value: 'continue',
       },
-      { label: 'Change framework', value: 'framework' },
+      ...(changeFramework
+        ? [{ label: 'Change framework', value: 'framework' }]
+        : []),
       { label: 'More info', value: 'more-info' },
       { label: 'Cancel', value: 'cancel' },
     ];

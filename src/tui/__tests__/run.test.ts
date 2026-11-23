@@ -1,5 +1,11 @@
 import { vi, it, expect, afterEach } from 'vitest';
-import { ProgramAbort, RunOutcome, runProgram } from '@programs';
+import {
+  getDiscovery,
+  pickLeavesRunProject,
+  ProgramAbort,
+  RunOutcome,
+  runProgram,
+} from '@programs';
 import type { TuiLaunch } from '@tui/launch';
 import { runTui } from '@tui/run';
 import { runTuiTool } from '@tui/run-tool';
@@ -19,16 +25,21 @@ import { Tool } from '@tools';
 
 const streamShutdown = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 
-vi.mock(import('@programs'), async (original) => ({
-  ...(await original()),
-  runProgram: vi.fn(),
-  TaskStreamPush: class {
-    attach = vi.fn();
-    finishRun = vi.fn().mockResolvedValue(undefined);
-    shutdown = streamShutdown;
-  } as never,
-  PostHogDestination: class {} as never,
-}));
+vi.mock(import('@programs'), async (original) => {
+  const real = await original();
+  return {
+    ...real,
+    getDiscovery: vi.fn(real.getDiscovery),
+    pickLeavesRunProject: vi.fn(real.pickLeavesRunProject),
+    runProgram: vi.fn(),
+    TaskStreamPush: class {
+      attach = vi.fn();
+      finishRun = vi.fn().mockResolvedValue(undefined);
+      shutdown = streamShutdown;
+    } as never,
+    PostHogDestination: class {} as never,
+  };
+});
 vi.mock(import('@tui/start-tui'), () => ({ startTUI: vi.fn() }));
 vi.mock(import('@shared/local-dev'), async (original) => ({
   ...(await original()),
@@ -433,6 +444,25 @@ it("hands the intro's switch to a tool over to its screens, with no program run"
   expect(streamShutdown).not.toHaveBeenCalled();
   expect(unmount).toHaveBeenCalledOnce();
   expect(analytics.flush).toHaveBeenCalled();
+});
+
+it('hands the run the discovery mode the intro showed, only when the pick leaves the launch project', async () => {
+  vi.mocked(runProgram).mockReturnValue(new Promise(() => undefined));
+  const modeGiven = async (leaves: boolean) => {
+    vi.mocked(runProgram).mockClear();
+    mountedStore();
+    vi.mocked(pickLeavesRunProject).mockReturnValueOnce(leaves);
+    vi.mocked(getDiscovery).mockReturnValueOnce({
+      mode: 'one-project',
+    } as never);
+    void runTui(posthogIntegration, launch('/tmp/discovery-mode-test'));
+    await vi.waitFor(() => expect(runProgram).toHaveBeenCalled());
+    return vi.mocked(runProgram).mock.calls[0][1].discoveryMode;
+  };
+
+  expect(await modeGiven(true)).toBe('one-project');
+  // Otherwise login may still turn discovery on for the person.
+  expect(await modeGiven(false)).toBeUndefined();
 });
 
 it('logs in with launch.credentials, not OAuth, for the run', async () => {

@@ -60,6 +60,8 @@ export function runNonInteractive(
 
   const env = readEnvironment();
   const installDir = path.resolve(options.installDir as string);
+  // One project per run: a repeated flag keeps the last one, as yargs reads a repeated string.
+  const project = [options.project].flat().at(-1) as string | undefined;
   withSignals(async (signal) => {
     const { runHeadless } = await import('@headless');
     return runHeadless(config, {
@@ -89,6 +91,7 @@ export function runNonInteractive(
         region: (options.region ?? env.region) as CloudRegion | undefined,
       },
       taskStreamLog: options.taskStreamLog as string | undefined,
+      project,
       runId:
         (options.runId as string | undefined) ??
         runtimeEnv('POSTHOG_WIZARD_RUN_ID'),

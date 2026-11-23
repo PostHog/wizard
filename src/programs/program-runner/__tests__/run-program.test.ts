@@ -52,6 +52,7 @@ import type {
 } from '@programs/program-contract';
 import type { WizardSession } from '@services/session';
 import { runDiscovery } from '@services/project-discovery';
+import { detectIntegrationProjects } from '@services/detection';
 import { AUDIT_CHECKS_KEY } from '@programs/audit';
 import { FRAMEWORK_REGISTRY } from '@services/frameworks';
 import { detectErrorCode } from '../detect-map';
@@ -88,6 +89,11 @@ vi.mock(import('@shared/oauth-tokens'), () => ({
   missingOAuthScopes: vi.fn(() => []),
 }));
 vi.mock('@utils/debug');
+// The plan's agentic ranking is one model call; everything else in detection runs real.
+vi.mock(import('@services/detection'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  detectIntegrationProjects: vi.fn(),
+}));
 // Every run discovers, and discovery downloads the tool catalog.
 vi.mock(
   import('@services/warehouse-sources/registry'),
@@ -1626,6 +1632,313 @@ describe('runProgram', () => {
 
       expect(agentInput().installDir).toBe(repo);
       expect(s.session.runProject).toBe('.');
+    });
+
+    const DISCOVERY_ON = { 'wizard-project-discovery': 'one-project' };
+    const everyProject = { run, appliesTo: () => true };
+
+    it('asks the host which project to work in, and works in the pick', async () => {
+      const s = pairStore();
+      const host = workflow();
+      host.confirmStep.mockImplementation((step: ProgramStep) => {
+        host.steps.push(step);
+        if (step.kind === 'plan') step.pick('apps/api');
+        return Promise.resolve(true);
+      });
+
+      const result = await runProgram(
+        'metrics',
+        input({ store: s, config: everyProject, wizardFlags: DISCOVERY_ON }),
+        { credentials: login(), workflow: host },
+      );
+
+      expect(result.outcome).toBe(RunOutcome.Success);
+      const plan = host.steps.find((step) => step.kind === 'plan');
+      expect(plan).toMatchObject({
+        plan: { repoType: 'monorepo', picked: '.' },
+      });
+      expect(agentInput().installDir).toBe(path.join(repo, 'apps/api'));
+      expect(s.session.runProject).toBe('apps/api');
+    });
+
+    it('stays in the project the run started in when the person keeps the default', async () => {
+      const s = pairStore();
+      const host = workflow();
+      host.confirmStep.mockImplementation((step: ProgramStep) => {
+        if (step.kind === 'plan') step.pick(step.plan.picked);
+        return Promise.resolve(true);
+      });
+
+      await runProgram(
+        'metrics',
+        input({ store: s, config: everyProject, wizardFlags: DISCOVERY_ON }),
+        { credentials: login(), workflow: host },
+      );
+
+      expect(agentInput().installDir).toBe(repo);
+    });
+
+    describe('at a workspace root with no framework of its own', () => {
+      /** A program that cannot run in the root, as posthog-integration cannot with no framework there. */
+      const noFrameworkAtRoot = {
+        appliesTo: () => true,
+        run: (session: ProgramSession) =>
+          session.installDir === repo
+            ? Promise.reject(
+                new ProgramAbort({
+                  message: 'No framework detected',
+                  code: ErrorCodes.DetectNoFramework,
+                }),
+              )
+            : Promise.resolve(run),
+      };
+      const picking = (projectPath: string | undefined) => {
+        const host = workflow();
+        host.confirmStep.mockImplementation((step: ProgramStep) => {
+          host.steps.push(step);
+          if (step.kind === 'plan') step.pick(projectPath ?? step.plan.picked);
+          return Promise.resolve(true);
+        });
+        return host;
+      };
+      const started = () =>
+        vi
+          .mocked(analytics.wizardCapture)
+          .mock.calls.filter(([event]) => event === 'agent started');
+
+      it('reaches the plan, and runs in the app the person picks', async () => {
+        const host = picking('apps/api');
+        const s = pairStore();
+        const result = await runProgram(
+          'metrics',
+          input({
+            store: s,
+            config: noFrameworkAtRoot,
+            wizardFlags: DISCOVERY_ON,
+          }),
+          { credentials: login(), workflow: host },
+        );
+
+        expect(host.steps.some((step) => step.kind === 'plan')).toBe(true);
+        expect(result.outcome).toBe(RunOutcome.Success);
+        expect(agentInput().installDir).toBe(path.join(repo, 'apps/api'));
+        expect(s.session.runProject).toBe('apps/api');
+        // The start is reported once, for the project the run works in.
+        expect(started()).toHaveLength(1);
+      });
+
+      it('stops with the root\u2019s own failure when the run stays there', async () => {
+        const result = await runProgram(
+          'metrics',
+          input({
+            store: pairStore(),
+            config: noFrameworkAtRoot,
+            wizardFlags: DISCOVERY_ON,
+          }),
+          { credentials: login(), workflow: picking(undefined) },
+        );
+
+        expect(result.outcome).toBe(RunOutcome.Failed);
+        expect(result.failure?.code).toBe(ErrorCodes.DetectNoFramework);
+        expect(runAgent).not.toHaveBeenCalled();
+      });
+
+      it('keeps the mode the host showed the person, whatever the flag says after login', async () => {
+        const flagOnThenOff = () =>
+          vi
+            .mocked(analytics.getAllFlagsForWizard)
+            .mockResolvedValueOnce(DISCOVERY_ON);
+        // Without the host's mode, login turns discovery off and the root's failure stands.
+        flagOnThenOff();
+        const unpinned = await runProgram(
+          'metrics',
+          input({ store: pairStore(), config: noFrameworkAtRoot }),
+          { credentials: login(), workflow: picking('apps/api') },
+        );
+        expect(unpinned.failure?.code).toBe(ErrorCodes.DetectNoFramework);
+
+        flagOnThenOff();
+        const s = pairStore();
+        const pinned = await runProgram(
+          'metrics',
+          input({
+            store: s,
+            config: noFrameworkAtRoot,
+            discoveryMode: 'one-project',
+          }),
+          { credentials: login(), workflow: picking('apps/api') },
+        );
+        expect(pinned.outcome).toBe(RunOutcome.Success);
+        expect(s.session.runProject).toBe('apps/api');
+      });
+
+      it('stops at once with the flag off, as before', async () => {
+        const host = picking('apps/api');
+        const result = await runProgram(
+          'metrics',
+          input({ store: pairStore(), config: noFrameworkAtRoot }),
+          { credentials: login(), workflow: host },
+        );
+
+        expect(result.failure?.code).toBe(ErrorCodes.DetectNoFramework);
+        expect(host.steps).toEqual([]);
+        expect(runAgent).not.toHaveBeenCalled();
+      });
+    });
+
+    it('ranks the projects with agentic detection when the plan screen asks, and starts on its main app', async () => {
+      vi.mocked(detectIntegrationProjects).mockResolvedValue({
+        repoType: 'monorepo',
+        projects: [
+          {
+            path: 'apps/api',
+            framework: 'Express',
+            targetId: 'javascript_node',
+            hasPostHog: false,
+            recommended: true,
+          },
+        ],
+      });
+      const host = workflow();
+      host.confirmStep.mockImplementation(async (step: ProgramStep) => {
+        if (step.kind !== 'plan') return true;
+        // What the plan screen does: rank once it opens, then confirm the project that starts picked.
+        const ranked = await step.rank?.();
+        step.pick(ranked?.picked ?? step.plan.picked);
+        return true;
+      });
+      const s = pairStore();
+
+      const result = await runProgram(
+        'metrics',
+        input({
+          store: s,
+          config: { ...everyProject, rankWith: ['agentic'] },
+          wizardFlags: DISCOVERY_ON,
+        }),
+        { credentials: login(), workflow: host },
+      );
+
+      expect(result.outcome).toBe(RunOutcome.Success);
+      expect(detectIntegrationProjects).toHaveBeenCalledTimes(1);
+      expect(s.session.runProject).toBe('apps/api');
+      expect(agentInput().installDir).toBe(path.join(repo, 'apps/api'));
+    });
+
+    it("takes the ranking's pick when there is nobody to ask", async () => {
+      vi.mocked(detectIntegrationProjects).mockResolvedValue({
+        repoType: 'monorepo',
+        projects: [
+          {
+            path: 'apps/api',
+            framework: 'Express',
+            targetId: 'javascript_node',
+            hasPostHog: false,
+            recommended: true,
+          },
+        ],
+      });
+      const s = pairStore();
+
+      const result = await runProgram(
+        'metrics',
+        input({
+          store: s,
+          config: { ...everyProject, rankWith: ['agentic'] },
+          wizardFlags: DISCOVERY_ON,
+        }),
+        { credentials: login() },
+      );
+
+      expect(result.outcome).toBe(RunOutcome.Success);
+      expect(detectIntegrationProjects).toHaveBeenCalledTimes(1);
+      expect(agentInput().installDir).toBe(path.join(repo, 'apps/api'));
+    });
+
+    it('reads the project again when login turns discovery on', async () => {
+      fs.mkdirSync(path.join(repo, 'apps/web/src'));
+      vi.mocked(analytics.getAllFlagsForWizard)
+        .mockResolvedValueOnce({})
+        .mockResolvedValueOnce(DISCOVERY_ON);
+      const onReady = vi.fn();
+      const s = new SessionStore(
+        buildSession({ installDir: path.join(repo, 'apps/web/src') }),
+      );
+
+      const result = await runProgram(
+        'metrics',
+        input({ store: s, config: { run, onReady } }),
+        { credentials: login() },
+      );
+
+      expect(result.outcome).toBe(RunOutcome.Success);
+      // Once before login, in the folder the run started in, and once after, in its project.
+      expect(onReady).toHaveBeenCalledTimes(2);
+      expect(s.session.runProject).toBe('apps/web');
+      expect(agentInput().installDir).toBe(path.join(repo, 'apps/web'));
+    });
+
+    it('reads --project from the workspace root with the flag off too', async () => {
+      // Discovery roots at the run directory here, so the member is its `.`.
+      const inMember = () =>
+        new SessionStore(
+          buildSession({ installDir: path.join(repo, 'apps/web') }),
+        );
+      const s = inMember();
+      const result = await runProgram(
+        'metrics',
+        input({ store: s, project: 'apps/web' }),
+        { credentials: login() },
+      );
+      expect(result.outcome).toBe(RunOutcome.Success);
+      expect(s.session.runProject).toBe('.');
+      expect(agentInput().installDir).toBe(path.join(repo, 'apps/web'));
+
+      // A sibling is outside the run directory, which a run with the flag off never leaves.
+      const sibling = await runProgram(
+        'metrics',
+        input({ store: inMember(), project: 'apps/api' }),
+        { credentials: login() },
+      );
+      expect(sibling.failure?.code).toBe(ErrorCodes.DetectBadDirectory);
+    });
+
+    it('asks nobody without a host, or with the flag off', async () => {
+      await runProgram(
+        'metrics',
+        input({
+          store: pairStore(),
+          config: everyProject,
+          wizardFlags: DISCOVERY_ON,
+        }),
+        { credentials: login() },
+      );
+      expect(agentInput().installDir).toBe(repo);
+
+      const host = workflow();
+      await runProgram(
+        'metrics',
+        input({ store: pairStore(), config: everyProject }),
+        { credentials: login(), workflow: host },
+      );
+      expect(host.steps.some((step) => step.kind === 'plan')).toBe(false);
+    });
+
+    it('stops when the host declines the plan', async () => {
+      const result = await runProgram(
+        'metrics',
+        input({
+          store: pairStore(),
+          config: everyProject,
+          wizardFlags: DISCOVERY_ON,
+        }),
+        {
+          credentials: login(),
+          workflow: workflow((step) => step.kind !== 'plan'),
+        },
+      );
+      expect(result.outcome).toBe(RunOutcome.Aborted);
+      expect(runAgent).not.toHaveBeenCalled();
     });
 
     it('works in the project a launch below it started in', async () => {

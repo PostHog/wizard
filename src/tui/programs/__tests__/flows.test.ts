@@ -37,6 +37,7 @@ describe('program flows', () => {
       'health-check',
       'setup',
       'auth',
+      'plan',
       'run',
       'outro',
       'mcp',

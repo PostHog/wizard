@@ -37,13 +37,27 @@ import { logToFile } from '@utils/debug';
 import { removeAuditLedger, startAuditLedgerWatcher } from '@programs/audit';
 import { FRAMEWORK_REGISTRY } from '@services/frameworks';
 import {
+  applyDetectionReport,
+  buildPlan,
+  getProjects,
   getTraits,
   DETECTED_PROJECT_KEY,
   detectedProjectOf,
+  getDiscovery,
+  picksProject,
+  planNeedsPick,
+  projectDiscoveryMode,
+  projectFromWorkspaceRoot,
   projectPathOf,
+  rediscoverAfterLogin,
+  reportDiscovery,
+  reportProjectsDiscovered,
+  reportProjectsSelected,
   toMatchKeys,
   toTraitKeys,
+  type PlanOffer,
 } from '@services/project-discovery';
+import { detectIntegrationProjects } from '@services/detection';
 import { findProgramConfig, getProgramConfig } from './program-registry';
 import { ProgramAbort } from '@programs/program-contract';
 import { detectionFailure, detectProgram } from './detect-program';
@@ -51,10 +65,6 @@ import {
   rotateCredentials,
   type ResolvedProgramCredentials,
 } from './credentials';
-import {
-  rediscoverAfterLogin,
-  reportDiscovery,
-} from '@services/project-discovery';
 import { IS_PRODUCTION_BUILD } from '@env';
 import type { QuestionKey } from '@services/detection/decisions';
 import { logIn } from './login';
@@ -198,12 +208,51 @@ async function invokeProgram(
       }),
     );
 
+  /** Discovery changed mode after the program's detection ran. */
+  let redetect = false;
+  /**
+   * Discovery under the mode the run now knows. Discovery first runs before
+   * login, as an anonymous user. A mode or a flag snapshot the caller gave the
+   * run says the mode at once, and otherwise the flag is read again once
+   * someone is logged in. A no-op when the mode did not change.
+   */
+  const settleDiscoveryMode = async (): Promise<void> => {
+    const known =
+      input.discoveryMode ??
+      (input.wizardFlags && projectDiscoveryMode(input.wizardFlags));
+    if (known === undefined && !store.session.credentials) return;
+    const before = getDiscovery(store.session)?.mode;
+    await park(rediscoverAfterLogin(config, store.readyContext(), known));
+    // What detection read under the old mode is read again before any agent runs.
+    if (getDiscovery(store.session)?.mode !== before) redetect = true;
+  };
+  /**
+   * The picker can still move the run: no caller named a project, and the
+   * plan offers one other than the project the run started in. What stops the
+   * run in that first project then waits for the pick, so a workspace root with
+   * no framework of its own still reaches the plan.
+   */
+  const mayMove = async (): Promise<boolean> => {
+    if (!config.appliesTo || input.project !== undefined) return false;
+    await settleDiscoveryMode();
+    return (
+      picksProject(store.session, config) &&
+      buildPlan(store.session, config).projects.some(
+        (project) =>
+          project.offered && project.path !== store.session.runProject,
+      )
+    );
+  };
+  /** What stopped the run in the project it started in, kept while the picker can move it. */
+  let stopped: (() => ProgramRunOutcome) | null = null;
+
   try {
     // A pair's project the store is not scoped to yet needs its own detection.
     if (
       !store.session.detectionComplete ||
       (input.project !== undefined &&
-        input.project !== store.session.runProject)
+        projectFromWorkspaceRoot(store.session, input.project) !==
+          store.session.runProject)
     ) {
       await detectProgram(
         config,
@@ -221,22 +270,30 @@ async function invokeProgram(
   } catch (error) {
     // A decided stop ends the run cancelled, as main's wizardAbort({ code, message }) did.
     if (error instanceof ProgramAbort) {
-      return settle(RunOutcome.Aborted, {
-        code: error.code,
-        message: error.message,
+      const stop = () =>
+        settle(RunOutcome.Aborted, {
+          code: error.code,
+          message: error.message,
+        });
+      if (!(await mayMove())) return stop();
+      stopped = stop;
+    } else if (signal.aborted) return cancelled();
+    else {
+      // A crash keeps its error, so the host reports its stack.
+      const { code, message } = classifyRunFailure(error);
+      return settle(RunOutcome.Crashed, {
+        code,
+        message,
+        error: error instanceof Error ? error : new Error(message),
       });
     }
-    if (signal.aborted) return cancelled();
-    // A crash keeps its error, so the host reports its stack.
-    const { code, message } = classifyRunFailure(error);
-    return settle(RunOutcome.Crashed, {
-      code,
-      message,
-      error: error instanceof Error ? error : new Error(message),
-    });
   }
-  const blocked = detectionFailure(config, store.session);
-  if (blocked) return settle(RunOutcome.Failed, blocked);
+  const blocked = stopped ? null : detectionFailure(config, store.session);
+  if (blocked) {
+    const stop = () => settle(RunOutcome.Failed, blocked);
+    if (!(await mayMove())) return stop();
+    stopped = stop;
+  }
   // The run is one (program, project) pair: its skills resolve for its own project.
   const pair = {
     program: programId,
@@ -268,15 +325,28 @@ async function invokeProgram(
   const unregisterLedger = ledger ? registerCleanup(releaseLedger) : undefined;
   let plainSettings: { backedUp: boolean } | undefined;
   try {
-    let run: ProgramRun;
-    try {
-      run = await resolveRun(config, store, runner);
-    } catch (error) {
-      if (error instanceof ProgramAbort) return fail(error.message, error.code);
-      throw error;
+    let run: ProgramRun | undefined;
+    /** The run is resolved: tag the analytics, name the skill and report the start, once. */
+    const started = (resolved: ProgramRun, report: boolean): void => {
+      analytics.setProgramTags(resolved.analyticsTags);
+      store.setSkillId(resolved.skillId ?? resolved.integrationLabel);
+      if (!report) return;
+      analytics.wizardCapture('agent started', {
+        integration: resolved.integrationLabel,
+        program_id: programId,
+        skill_id: resolved.skillId ?? null,
+      });
+    };
+    if (!stopped) {
+      try {
+        run = await resolveRun(config, store, runner);
+      } catch (error) {
+        if (!(error instanceof ProgramAbort)) throw error;
+        const stop = () => fail(error.message, error.code);
+        if (!(await mayMove())) return stop();
+        stopped = stop;
+      }
     }
-    analytics.setProgramTags(run.analyticsTags);
-    store.setSkillId(run.skillId ?? run.integrationLabel);
 
     const plannedRuns = planRuns(config, options);
     const outage = await checkReadiness(programId, config, store, {
@@ -287,11 +357,9 @@ async function invokeProgram(
     });
     if (outage) return settle(RunOutcome.Failed, outage);
 
-    analytics.wizardCapture('agent started', {
-      integration: run.integrationLabel,
-      program_id: programId,
-      skill_id: run.skillId ?? null,
-    });
+    // A run whose start waits for the pick reports it once the pick resolves it.
+    const reportedStart = run !== undefined;
+    if (run) started(run, true);
 
     // Everything before the first agent run: a rejection fails the run, unless the caller aborted.
     let credentials: ResolvedProgramCredentials;
@@ -314,7 +382,7 @@ async function invokeProgram(
       }
       credentials = await login();
       // Discovery ran before login; the flag can answer differently for the person.
-      await park(rediscoverAfterLogin(config, store.readyContext()));
+      await settleDiscoveryMode();
       reportDiscovery(store);
       if (needsAiApproval(store.session, credentials)) {
         if (!options.workflow) {
@@ -362,6 +430,75 @@ async function invokeProgram(
         logToFile(`[decisions] skipped: ${String(error)}`);
       }
     }
+
+    // One project per run: with discovery on, the host picks among the projects the program is offered.
+    const picks = picksProject(store.session, config);
+    if (picks || redetect) {
+      const ciRunner = {
+        log: runner.log,
+        authenticate: async () => {
+          await login();
+        },
+        onProgress: emit,
+      } satisfies CiRunnerContext;
+      try {
+        let target: string | null = store.session.runProject;
+        if (picks) {
+          target = await park(
+            pickProject(config, store, {
+              requested:
+                input.project === undefined
+                  ? undefined
+                  : projectFromWorkspaceRoot(store.session, input.project),
+              workflow: options.workflow,
+              emit,
+              signal,
+            }),
+          );
+          if (target === null) return abort('Project selection cancelled.');
+        }
+        const moves = target !== store.session.runProject;
+        // A pick elsewhere moves the run. A mode that changed reads the same project again under the new one.
+        if (moves || redetect) {
+          redetect = false;
+          const detectedIn = store.session.installDir;
+          const resetSettings = (): void => {
+            // The settings were checked for the directory the run started in.
+            if (plainSettings?.backedUp) restoreClaudeSettings(installDir);
+            plainSettings = undefined;
+          };
+          if (moves) resetSettings();
+          // What stopped the run where it was first detected no longer applies.
+          stopped = null;
+          // Only a pick names a project; without one the run stays in the project it started in.
+          await detectProgram(
+            config,
+            store,
+            ciRunner,
+            moves ? target : undefined,
+          );
+          // A run that started below its project moves up to it without a pick.
+          if (!moves && store.session.installDir !== detectedIn) {
+            resetSettings();
+          }
+          const unmet = detectionFailure(config, store.session);
+          if (unmet) return settle(RunOutcome.Failed, unmet);
+          run = await resolveRun(config, store, runner);
+          started(run, !reportedStart);
+          pair.project.path = target;
+        }
+      } catch (error) {
+        if (signal.aborted) return cancelled();
+        if (error instanceof ProgramAbort)
+          return fail(error.message, error.code);
+        throw error;
+      }
+    }
+
+    // The run stayed in the project it started in, so what stopped it there stands.
+    if (stopped) return stopped();
+    if (!run) return fail(`Program "${programId}" resolved no run.`);
+    const ownRunDefinition = run;
 
     // Every rotation of this login, before or during a run, lands in the store.
     configureOAuthSession(credentials.posthog, {
@@ -542,7 +679,7 @@ async function invokeProgram(
         }
         result = await runOne(
           planned,
-          planned.own ? run : undefined,
+          planned.own ? ownRunDefinition : undefined,
           planned.runStep ? undefined : plainSettings,
         );
       } catch (error) {
@@ -565,6 +702,87 @@ async function invokeProgram(
     releaseLedger();
     unregisterLedger?.();
   }
+}
+
+/**
+ * The project the run works in. Asks the host when there is a choice, with
+ * the program's model sources ranking the projects. A run with no host to ask
+ * takes the ranking's pick. Reports the list and the pick. Null when the host
+ * declined.
+ */
+async function pickProject(
+  config: ProgramConfig,
+  store: SessionStore,
+  context: {
+    requested?: string;
+    workflow?: ProgramOptions['workflow'];
+    emit: (event: AgentProgress) => void;
+    signal: AbortSignal;
+  },
+): Promise<string | null> {
+  const { requested, workflow, emit, signal } = context;
+  const plan = (): PlanOffer => buildPlan(store.session, config, requested);
+  // Agentic detection ranks only where there is a choice to make, and only once.
+  const ranked = getProjects(store.session).some((project) =>
+    Object.values(project.claims ?? {}).some((claims) =>
+      claims.some((claim) => claim.source === 'agentic'),
+    ),
+  );
+  const rank =
+    config.rankWith?.includes('agentic') && !ranked
+      ? async (): Promise<PlanOffer> => {
+          try {
+            const report = await detectIntegrationProjects(store.session, {
+              programId: config.id,
+              recommend: true,
+              onEvent: (line) => logToFile('[agentic detect]', line),
+              onProgress: emit,
+            });
+            applyDetectionReport(store.readyContext(), report, 'agentic');
+          } catch (error) {
+            // No answer: the plan opens on static detection alone.
+            logToFile(
+              `[agent-runner] project ranking failed: ${String(error)}`,
+            );
+          }
+          return plan();
+        }
+      : undefined;
+
+  let offer = plan();
+  let picked = offer.picked;
+  let pickedBy: 'person' | 'caller' | 'default' =
+    requested === undefined ? 'default' : 'caller';
+  const asks =
+    workflow !== undefined &&
+    requested === undefined &&
+    !store.session.ci &&
+    planNeedsPick(offer);
+  if (asks) {
+    const go = await workflow.confirmStep(
+      {
+        kind: 'plan',
+        programId: config.id,
+        installDir: store.session.installDir,
+        plan: offer,
+        rank,
+        pick: (projectPath) => {
+          picked = projectPath;
+          pickedBy = 'person';
+        },
+      },
+      { signal },
+    );
+    if (!go) return null;
+    offer = plan();
+  } else if (requested === undefined && planNeedsPick(offer) && rank) {
+    // Nobody to ask: the ranking picks, as a person reading it would.
+    offer = await rank();
+    picked = offer.picked;
+  }
+  reportProjectsDiscovered(store.session, offer, config.id);
+  reportProjectsSelected(store.session, offer, picked, config.id, pickedBy);
+  return picked;
 }
 
 /** The program's own run, and before it every composed sub-run a host workflow can confirm. */

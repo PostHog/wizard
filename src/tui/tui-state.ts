@@ -3,7 +3,7 @@
 import type { AuthErrorDetail } from '@agent/types';
 import type { SettingsConflict } from '@shared/claude-settings';
 import type { McpOutcome } from '@shared/run-state';
-import type { WizardSession } from '@programs/types';
+import type { PlanOffer, WizardSession } from '@programs/types';
 
 /** The launch choices only the TUI takes. */
 export type TuiLaunchChoices = {
@@ -75,6 +75,17 @@ export type TuiState = {
   spellbook: { path: string; skillsIncluded: boolean } | null;
   /** How the user left the mint-failure screen; null until then. */
   mintHandoff: 'continue' | 'exit' | null;
+  /** The plan screen's state; null until the run offers several projects. */
+  plan: PlanView | null;
+};
+
+/** What the plan screen shows: the projects offered, and the person's pick once they confirm. */
+export type PlanView = {
+  offer: PlanOffer;
+  /** A model source is still answering, so the main app is not marked yet. */
+  ranking: boolean;
+  /** The project the person confirmed; null until they do. */
+  confirmed: string | null;
 };
 
 /** What a step predicate reads: the shared session and the TUI's own state. A `WizardStore` is one. */
@@ -115,5 +126,6 @@ export function initialTuiState(
     portConflictProcess: null,
     spellbook: null,
     mintHandoff: null,
+    plan: null,
   };
 }

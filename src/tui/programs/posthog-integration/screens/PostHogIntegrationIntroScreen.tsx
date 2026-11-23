@@ -6,12 +6,14 @@
  *   2. Detection failed: framework picker
  *   3. Unsupported version: upgrade prompt
  *   4. Detection succeeded: continue/change-framework/cancel
+ *   5. The run picks its project after login: continue/cancel, no framework
  */
 
 import { Box, Text } from 'ink';
 import type { ReactNode } from 'react';
 import { useState, useSyncExternalStore } from 'react';
 import type { WizardStore } from '@tui/store';
+import { buildPlan, findProgramConfig, pickLeavesRunProject } from '@programs';
 import { Integration } from '@shared/constants';
 import { PickerMenu, LoadingBox } from '@tui/primitives/index';
 import {
@@ -33,6 +35,7 @@ import {
   introEntries,
   introHeadline,
   introMenuOptions,
+  introProjectsRow,
 } from '@tui/programs/posthog-integration/intro-menu';
 
 /**
@@ -102,16 +105,25 @@ export const PostHogIntegrationIntroScreen = ({
 
   const { session } = store;
   const sharing = isSharing(store);
-  const config = session.frameworkConfig;
-  const frameworkLabel =
-    session.detectedFrameworkLabel ?? config?.metadata.name;
   const { skillEntry, fetchFailed } = useSkillEntry(session.skillId);
   const detecting = !session.detectionComplete;
+  const program = findProgramConfig(store.router.activeProgram);
+  const plan = program && !detecting ? buildPlan(session, program) : null;
+  // The pick after login takes the run elsewhere, so this project's detection is not the run's.
+  const picksLater =
+    program !== undefined &&
+    plan !== null &&
+    pickLeavesRunProject(session, program, plan);
+  const config = picksLater ? null : session.frameworkConfig;
+  const frameworkLabel = picksLater
+    ? undefined
+    : session.detectedFrameworkLabel ?? config?.metadata.name;
+  const posthogSdkDetected = !picksLater && session.posthogSdkDetected;
   const needsFrameworkPick =
-    session.detectionComplete && !session.frameworkConfig;
-  const unsupported = session.unsupportedVersion;
+    session.detectionComplete && !session.frameworkConfig && !picksLater;
+  const unsupported = picksLater ? null : session.unsupportedVersion;
   const showContinue =
-    session.frameworkConfig !== null &&
+    (session.frameworkConfig !== null || picksLater) &&
     !detecting &&
     !pickingFramework &&
     view === 'default' &&
@@ -216,7 +228,7 @@ export const PostHogIntegrationIntroScreen = ({
       />
     );
   } else if (showContinue) {
-    const paragraphs = introHeadline(session.posthogSdkDetected);
+    const paragraphs = introHeadline(posthogSdkDetected);
     body = (
       <Box
         flexDirection="column"
@@ -237,6 +249,7 @@ export const PostHogIntegrationIntroScreen = ({
   // ── Detection rows ─────────────────────────────────────────────────
 
   const detectionRows: DetectionRow[] = [];
+  if (picksLater && plan) detectionRows.push(introProjectsRow(plan));
   if (frameworkLabel) {
     const suffixParts: string[] = [];
     if (!manuallySelected) suffixParts.push('(detected)');
@@ -251,7 +264,7 @@ export const PostHogIntegrationIntroScreen = ({
     });
   }
 
-  if (session.posthogSdkDetected) {
+  if (posthogSdkDetected) {
     detectionRows.push({
       label: 'PostHog',
       value: 'detected in package.json',
@@ -303,7 +316,8 @@ export const PostHogIntegrationIntroScreen = ({
   const menuOptions = introMenuOptions({
     view,
     showContinue,
-    posthogSdkDetected: session.posthogSdkDetected,
+    posthogSdkDetected,
+    changeFramework: !picksLater,
   });
 
   const handleSelect = (value: string) => {

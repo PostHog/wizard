@@ -44,6 +44,14 @@ export const POSTHOG_INTEGRATION_FLOW: FlowStep[] = [
     isComplete: ({ session }) => session.credentials !== null,
   },
   {
+    // Shown once the run offers several projects; a run with one never opens it.
+    id: 'plan',
+    label: 'Project',
+    screenId: 'plan',
+    show: (tui) => tui.plan !== null,
+    isComplete: (tui) => tui.plan?.confirmed != null,
+  },
+  {
     id: 'run',
     label: 'Integration',
     screenId: 'run',

@@ -110,7 +110,11 @@ function captureOutcome(
 export async function scopeInstallDirToProject(
   session: ProgramSession,
   runner: CiRunnerContext,
+  /** True for a program whose plan picks its project, which needs no scan here. */
+  planPicks = false,
 ): Promise<void> {
+  // A run already moved off its start has its project too: the caller named it.
+  if (planPicks || session.runProject !== '.') return;
   // Idempotent early auth: the detector needs credentials and the flag must evaluate as the logged-in user.
   await runner.authenticate('posthog-integration');
   const flags = await analytics.getAllFlagsForWizard();

@@ -7,6 +7,7 @@ export {
   getDiscovery,
   getRepoFiles,
   getTools,
+  projectFromWorkspaceRoot,
   projectPathOf,
   rediscoverAfterLogin,
   runDiscovery,
@@ -20,6 +21,17 @@ export {
   type ProjectDiscoveryMode,
 } from './flag';
 export {
+  buildPlan,
+  pickLeavesRunProject,
+  picksProject,
+  planNeedsPick,
+  reportProjectsDiscovered,
+  reportProjectsSelected,
+  type PlanOffer,
+  type PlanProject,
+  type PlanReason,
+} from './plan';
+export {
   discoverProjects,
   parentOf,
   type DiscoveredProjects,
@@ -30,7 +42,7 @@ export {
   type EmailProviderKind,
 } from './email-providers';
 export { reportDiscovery } from './report';
-export { maySendDiscovery, tagDiscovery } from './tags';
+export { DISCOVERY_TAGS_KEY, maySendDiscovery, tagDiscovery } from './tags';
 export type { DetectedTool, DiscoveredTools } from './tools';
 export { applyDetectionReport, joinProjectPath } from './traits/adapter';
 export { toMatchKeys, toTraitKeys } from './traits/match-keys';

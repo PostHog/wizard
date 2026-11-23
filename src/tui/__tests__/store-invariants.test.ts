@@ -13,7 +13,7 @@ import {
 } from '@tui/store';
 import { McpOutcome, RunPhase } from '@shared/run-state';
 import { TaskStatus } from '@shared/task-status';
-import type { WizardSession } from '@programs/types';
+import type { PlanOffer, WizardSession } from '@programs/types';
 import {
   tuiView,
   type TestTuiView,
@@ -146,6 +146,13 @@ interface MutationCase {
   emits: number;
 }
 
+const PLAN_OFFER: PlanOffer = {
+  repoType: 'single',
+  projects: [{ path: '.', offered: true, mainApp: false }],
+  picked: '.',
+  complete: true,
+};
+
 const MUTATIONS: MutationCase[] = [
   {
     name: 'setCurrentStage',
@@ -215,6 +222,24 @@ const MUTATIONS: MutationCase[] = [
     name: 'setSpellbook',
     invoke: (s) => s.setSpellbook({ path: '/app/skill', skillsIncluded: true }),
     emits: 1,
+  },
+  {
+    name: 'showPlan',
+    invoke: (s) => s.showPlan(PLAN_OFFER, true),
+    emits: 1,
+  },
+  {
+    name: 'setPlanRanked',
+    invoke: (s) => s.setPlanRanked(PLAN_OFFER),
+    emits: 1,
+  },
+  {
+    name: 'confirmPlan',
+    invoke: (s) => {
+      s.showPlan(PLAN_OFFER, false);
+      s.confirmPlan('.');
+    },
+    emits: 2,
   },
   {
     name: 'setMintHandoff',
@@ -639,6 +664,16 @@ describe('store invariants', () => {
       expect(countEmissions(store, () => store.setHandoffText('handoff'))).toBe(
         0,
       );
+    });
+  });
+
+  describe('the plan', () => {
+    it('keeps a pick made while the sources still ranked', () => {
+      const s = createStore();
+      s.showPlan(PLAN_OFFER, true);
+      s.confirmPlan('.');
+      s.setPlanRanked(PLAN_OFFER);
+      expect(s.plan).toMatchObject({ ranking: false, confirmed: '.' });
     });
   });
 
