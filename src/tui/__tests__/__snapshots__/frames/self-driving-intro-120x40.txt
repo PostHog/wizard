@@ -20,7 +20,7 @@
                   PostHog watches how people really use your product, finds issues, and proposes fixes.
 
                         An agent wAbout 10 minutes, with a few questions along the way.our scouts.
-                                   Agents charge a flat $15 per pull request they ship.
+                              Pricing for agent work: posthog.com/docs/self-driving/pricing
                                                     Directory ✔ /app
 
                                                 ▸ Continue

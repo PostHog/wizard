@@ -1,4 +1,4 @@
-import { NO_DEFAULT_LIMIT, PRICING_LONG } from '@programs/self-driving';
+import { SPEND_LIMIT, PRICING_LONG } from '@programs/self-driving';
 
 /**
  * Sidebar tips for the self-driving run — short footnotes on the
@@ -46,7 +46,7 @@ export const SELF_DRIVING_TIPS: Tip[] = [
   {
     id: 'pricing',
     title: 'What it costs',
-    description: `${PRICING_LONG} ${NO_DEFAULT_LIMIT}`,
+    description: `${PRICING_LONG} ${SPEND_LIMIT}`,
   },
   {
     id: 'work-anywhere',
