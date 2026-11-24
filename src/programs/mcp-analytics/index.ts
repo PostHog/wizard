@@ -36,7 +36,7 @@ export const MCP_ANALYTICS_ABORT_CASES: AbortCase[] = [
       '(`posthog.mcp`, shipped inside the `posthog` package), Go ' +
       '(`posthogmcpsdk`, for servers built on the official go-sdk), Ruby ' +
       '(`PostHog::MCP`, shipped inside the `posthog-ruby` gem, experimental), ' +
-      'and Rust (`posthog_rs::mcp`, shipped inside the `posthog-rs` crate, ' +
+      'and Rust (`posthog::mcp`, shipped inside the `posthog` crate, ' +
       'for servers built on rmcp, experimental). ' +
       "This project doesn't look like any of them, so there's nothing to " +
       'instrument. ' +
@@ -103,14 +103,14 @@ export const MCP_ANALYTICS_ABORT_CASES: AbortCase[] = [
     match: /^rmcp older than 3\.7$/i,
     message: 'rmcp older than 3.7',
     body:
-      "`posthog_rs::mcp` needs `rmcp` 3.7 or later. The wizard doesn't " +
+      "`posthog::mcp` needs `rmcp` 3.7 or later. The wizard doesn't " +
       'change your `rmcp` version. Upgrade it, then run the command again.',
   },
   {
     match: /^rust toolchain older than 1\.88$/i,
     message: 'Rust toolchain older than 1.88',
     body:
-      '`posthog-rs` with the `mcp` feature needs Rust 1.88 or later. ' +
+      '`posthog` with the `mcp` feature needs Rust 1.88 or later. ' +
       'Upgrade Rust, then run the command again.',
   },
   {
@@ -150,7 +150,7 @@ const skillProgram = createSkillProgram({
     '`mcp-analytics` skill end-to-end: detect the language and server ' +
     'style, install the PostHog MCP SDK for that language (`@posthog/mcp` for ' +
     'TypeScript, `posthog` for Python, `posthogmcpsdk` for Go, `posthog-ruby` ' +
-    'for Ruby, `posthog-rs` for Rust), wrap the server ' +
+    'for Ruby, `posthog` (with `mcp` feature) for Rust), wrap the server ' +
     '(or use the custom-dispatcher client where the skill says so), wire the ' +
     'project API key and host, and verify. ' +
     'Make only additive changes — do not alter tool behavior. For a Ruby or ' +
