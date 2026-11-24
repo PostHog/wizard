@@ -46,7 +46,7 @@ import {
   getDiscovery,
   picksProject,
   planAsks,
-  planNeedsPick,
+  planRanksUnasked,
   projectDiscoveryMode,
   projectFromWorkspaceRoot,
   projectPathOf,
@@ -814,7 +814,11 @@ async function pickProject(
     );
     if (!go) return null;
     offer = plan();
-  } else if (requested === undefined && planNeedsPick(offer) && rank) {
+  } else if (
+    requested === undefined &&
+    rank &&
+    planRanksUnasked(store.session, offer)
+  ) {
     // Nobody to ask: the ranking picks, as a person reading it would.
     offer = await rank();
     picked = offer.picked;

@@ -26,6 +26,7 @@ export {
   picksProject,
   planAsks,
   planNeedsPick,
+  planRanksUnasked,
   reportProjectsDiscovered,
   reportProjectsSelected,
   type PlanOffer,

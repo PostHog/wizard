@@ -6,12 +6,12 @@ import type {
   ProgramConfig,
   ProgramSession,
   Project,
-  TraitSource,
   Traits,
 } from '@programs/program-contract';
 import { FRAMEWORK_REGISTRY } from '../frameworks/registry';
 import { getDiscovery } from './discover';
 import { maySendDiscovery } from './tags';
+import { getModelRepoTypes, type ModelSource } from './traits/adapter';
 import { isLanguageFallback } from './traits/registry';
 import { getProjects, getTraitClaims } from './traits/store';
 
@@ -47,6 +47,8 @@ export type PlanOffer = {
   picked: string;
   /** False when the walk hit a cap, so some projects may be missing. */
   complete: boolean;
+  /** A model source sees several apps: it called the repo a monorepo, or named a main app other than the run project. */
+  modelMonorepo?: true;
 };
 
 type Applies = Pick<ProgramConfig, 'appliesTo'>;
@@ -101,9 +103,10 @@ function toPlanProject(
 
 /**
  * The project that starts picked. A run that started inside a project keeps
- * it, and so does a run at a workspace root that is an app itself. A run at
- * any other workspace root takes the main app, else the only app offered, else
- * stays where it started, though that root is not offered.
+ * it. A run at the root takes the main app a source named. With none named, a
+ * root that is an app itself keeps the run, and a workspace root that only
+ * holds the apps takes the only app offered, else stays where it started,
+ * though that root is not offered.
  */
 function defaultPick(
   session: ProgramSession,
@@ -111,14 +114,44 @@ function defaultPick(
   atHub: boolean,
 ): string {
   const { runProject } = session;
-  if (!atHub) return runProject;
   const apps = projects.filter(
     (project) => project.offered && project.path !== runProject,
   );
   const mainApp = apps.find((project) => project.mainApp);
+  if (!atHub) return runProject === '.' && mainApp ? mainApp.path : runProject;
   if (mainApp) return mainApp.path;
   return apps.length === 1 ? apps[0].path : runProject;
 }
+
+const MODEL_SOURCES: readonly ModelSource[] = ['agentic', 'decisions'];
+
+/** A model source sees several apps: it called the repo a monorepo, or named a main app other than the run project. */
+function modelSeesMonorepo(
+  session: ProgramSession,
+  projects: readonly PlanProject[],
+): boolean {
+  return (
+    Object.values(getModelRepoTypes(session)).includes('monorepo') ||
+    projects.some(
+      (project) => project.mainApp && project.path !== session.runProject,
+    )
+  );
+}
+
+/** Whether a model source has answered about this repo's projects. */
+function modelAnswered(session: ProgramSession): boolean {
+  if (Object.keys(getModelRepoTypes(session)).length > 0) return true;
+  return getProjects(session).some((project) =>
+    Object.values(project.claims ?? {}).some((claims) =>
+      claims.some((claim) =>
+        MODEL_SOURCES.includes(claim.source as ModelSource),
+      ),
+    ),
+  );
+}
+
+const offeredCount = (plan: PlanOffer): number =>
+  plan.projects.filter((project) => project.offered).length;
 
 /** The plan for one program: every project, the ones it is offered, and the one that starts picked. */
 export function buildPlan(
@@ -146,19 +179,34 @@ export function buildPlan(
     projects,
     picked: requested ?? defaultPick(session, projects, atHub),
     complete: discovered?.complete ?? true,
+    ...(modelSeesMonorepo(session, projects) && { modelMonorepo: true }),
   };
 }
 
 /**
- * Whether there is a choice to make: the repo is a monorepo and more than one
- * project is offered. A single app is one project, whatever manifests sit
- * below it, such as an Android module or a Swift package.
+ * Whether there is a choice to make: more than one project is offered, and
+ * the repo is a monorepo to static discovery or to a model source. A single
+ * app is one project, whatever manifests sit below it, such as an Android
+ * module or a Swift package.
  */
 export function planNeedsPick(plan: PlanOffer): boolean {
   return (
-    plan.repoType === 'monorepo' &&
-    plan.projects.filter((project) => project.offered).length > 1
+    (plan.repoType === 'monorepo' || plan.modelMonorepo === true) &&
+    offeredCount(plan) > 1
   );
+}
+
+/**
+ * Whether a run that asks nobody ranks its projects first. It does where there
+ * is a choice. A CI run also does where several projects are offered and no
+ * model source has answered, since only a ranking can name a main app there.
+ */
+export function planRanksUnasked(
+  session: ProgramSession,
+  plan: PlanOffer,
+): boolean {
+  if (planNeedsPick(plan)) return true;
+  return session.ci && offeredCount(plan) > 1 && !modelAnswered(session);
 }
 
 /** Whether the program works in one picked project: it says which projects it applies to, and discovery ran with the flag on. */
@@ -214,8 +262,6 @@ export function pickLeavesRunProject(
 /** The event carries at most this many projects; `project_count` is the true total. */
 const MAX_PROJECTS_CAPTURED = 25;
 
-const MODEL_SOURCES: readonly TraitSource[] = ['agentic', 'decisions'];
-
 /** The project each model source picked as the main app, for the sources that answered. */
 function sourcePicks(session: ProgramSession): Record<string, string | null> {
   const picks: Record<string, string | null> = {};
@@ -246,6 +292,7 @@ export function reportProjectsDiscovered(
   analytics.wizardCapture('projects discovered', {
     program_id: programId,
     repo_type: plan.repoType,
+    model_monorepo: plan.modelMonorepo === true,
     workspace_tool: plan.workspaceTool ?? null,
     complete: plan.complete,
     project_count: projects.length,

@@ -1862,6 +1862,38 @@ describe('runProgram', () => {
       expect(agentInput().installDir).toBe(path.join(repo, 'apps/api'));
     });
 
+    it('ranks a CI run with several projects and no workspace marker, and takes the main app', async () => {
+      fs.rmSync(path.join(repo, 'pnpm-workspace.yaml'));
+      vi.mocked(detectIntegrationProjects).mockResolvedValue({
+        repoType: 'single',
+        projects: [
+          {
+            path: 'apps/api',
+            framework: 'Express',
+            targetId: 'javascript_node',
+            hasPostHog: false,
+            recommended: true,
+          },
+        ],
+      });
+      const s = new SessionStore(buildSession({ installDir: repo, ci: true }));
+
+      const result = await runProgram(
+        'metrics',
+        input({
+          store: s,
+          config: { ...everyProject, rankWith: ['agentic'] },
+          wizardFlags: DISCOVERY_ON,
+        }),
+        { credentials: login() },
+      );
+
+      expect(result.outcome).toBe(RunOutcome.Success);
+      expect(detectIntegrationProjects).toHaveBeenCalledTimes(1);
+      expect(s.session.runProject).toBe('apps/api');
+      expect(agentInput().installDir).toBe(path.join(repo, 'apps/api'));
+    });
+
     it('reads the project again when login turns discovery on', async () => {
       fs.mkdirSync(path.join(repo, 'apps/web/src'));
       vi.mocked(analytics.getAllFlagsForWizard)

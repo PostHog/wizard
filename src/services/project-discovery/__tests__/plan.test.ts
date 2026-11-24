@@ -29,9 +29,11 @@ import {
 import { analytics } from '@utils/analytics';
 import type { ProgramConfig } from '@programs/program-contract';
 import {
+  applyDetectionReport,
   buildPlan,
   pickLeavesRunProject,
   planNeedsPick,
+  planRanksUnasked,
   reportProjectsDiscovered,
   reportProjectsSelected,
   runDiscovery,
@@ -74,6 +76,15 @@ async function discovered(
   const store = new SessionStore(
     buildSession({ installDir: path.join(repo, runFrom), ...args }),
   );
+  await runDiscovery({ id: 'posthog-integration' }, store.readyContext());
+  return store;
+}
+
+/** Two apps side by side with no workspace marker, which static discovery reads as a `single` repo. */
+async function unmarked(args: { ci?: boolean } = {}): Promise<SessionStore> {
+  write('web/package.json', pkg({ next: '15.0.0' }));
+  write('admin/package.json', pkg({ vue: '^3.4.0' }));
+  const store = new SessionStore(buildSession({ installDir: repo, ...args }));
   await runDiscovery({ id: 'posthog-integration' }, store.readyContext());
   return store;
 }
@@ -187,6 +198,83 @@ describe('buildPlan', () => {
     expect(plan.projects.map((project) => project.path)).toEqual(['.']);
     expect(plan.picked).toBe('.');
     expect(planNeedsPick(plan)).toBe(false);
+  });
+
+  it('offers a choice with no workspace marker, once a model names a main app elsewhere', async () => {
+    const store = await unmarked();
+    const before = buildPlan(store.session, PROGRAM);
+    expect(before.repoType).toBe('single');
+    expect(planNeedsPick(before)).toBe(false);
+    expect(before.picked).toBe('.');
+
+    setTrait(store.readyContext(), 'web', 'mainApp', 'yes', 'decisions');
+    const plan = buildPlan(store.session, PROGRAM);
+    expect(plan.repoType).toBe('single');
+    expect(planNeedsPick(plan)).toBe(true);
+    expect(plan.picked).toBe('web');
+  });
+
+  it('offers a choice where a model calls the repo a monorepo and names no main app', async () => {
+    const store = await unmarked();
+    applyDetectionReport(
+      store.readyContext(),
+      { repoType: 'monorepo', projects: [] },
+      'agentic',
+    );
+    const plan = buildPlan(store.session, PROGRAM);
+    expect(planNeedsPick(plan)).toBe(true);
+    expect(plan.picked).toBe('.');
+  });
+
+  it('asks nothing where a model calls the repo single and names the run project', async () => {
+    write('package.json', pkg({ next: '15.0.0' }));
+    write('app/layout.tsx');
+    write('docs/package.json', pkg({ vue: '^3.4.0' }));
+    const store = new SessionStore(buildSession({ installDir: repo }));
+    await runDiscovery({ id: 'posthog-integration' }, store.readyContext());
+    applyDetectionReport(
+      store.readyContext(),
+      {
+        repoType: 'single',
+        projects: [
+          {
+            path: '.',
+            framework: 'Next.js',
+            targetId: 'nextjs',
+            hasPostHog: false,
+            recommended: true,
+          },
+        ],
+      },
+      'agentic',
+    );
+    const plan = buildPlan(store.session, PROGRAM);
+    expect(plan.projects.filter((project) => project.offered)).toHaveLength(2);
+    expect(planNeedsPick(plan)).toBe(false);
+    expect(plan.picked).toBe('.');
+  });
+});
+
+describe('planRanksUnasked', () => {
+  it('ranks a CI run with several projects and no workspace marker, until a model answers', async () => {
+    const store = await unmarked({ ci: true });
+    const ranks = () =>
+      planRanksUnasked(store.session, buildPlan(store.session, PROGRAM));
+    expect(ranks()).toBe(true);
+
+    applyDetectionReport(
+      store.readyContext(),
+      { repoType: 'single', projects: [] },
+      'agentic',
+    );
+    expect(ranks()).toBe(false);
+  });
+
+  it('leaves an interactive run unranked where there is no choice', async () => {
+    const store = await unmarked();
+    expect(
+      planRanksUnasked(store.session, buildPlan(store.session, PROGRAM)),
+    ).toBe(false);
   });
 });
 
