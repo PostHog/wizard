@@ -20,11 +20,7 @@ import {
   resolveSharingOnContinue,
   sharingOptions,
 } from '@tui/components/sharing-options';
-import {
-  NO_DEFAULT_LIMIT,
-  PRICING_LONG,
-  PRICING_SHORT,
-} from '@programs/self-driving';
+import { PRICING_LONG, PRICING_SHORT, SPEND_CAP } from '@programs/self-driving';
 import type { SelfDrivingDetectError } from '@programs/self-driving';
 
 interface SelfDrivingIntroScreenProps {
@@ -84,7 +80,7 @@ export const SelfDrivingIntroScreen = ({
       </Box>
       <Box flexDirection="column" marginTop={1}>
         <Text>{PRICING_LONG}</Text>
-        <Text>{NO_DEFAULT_LIMIT}</Text>
+        <Text>{SPEND_CAP}</Text>
       </Box>
     </Box>
   ) : (
