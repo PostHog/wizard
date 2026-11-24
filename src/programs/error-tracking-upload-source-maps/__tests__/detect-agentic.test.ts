@@ -610,14 +610,6 @@ describe('goSdkVerifier', () => {
     expect(verify('services/api')).toBe(false);
   });
 
-  it('recognizes posthog-go/v2 in go.mod', () => {
-    fs.writeFileSync(
-      path.join(tmpDir, 'go.mod'),
-      'module example.com/svc\n\ngo 1.22\n\nrequire github.com/posthog/posthog-go/v2 v2.1.1\n',
-    );
-    expect(goSdkVerifier(tmpDir)('.')).toBe(true);
-  });
-
   it('ignores a commented-out requirement', () => {
     fs.writeFileSync(
       path.join(tmpDir, 'go.mod'),

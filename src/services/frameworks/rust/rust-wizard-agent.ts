@@ -80,7 +80,7 @@ export const RUST_AGENT_CONFIG: FrameworkConfig<RustContext> = {
         );
       } else {
         lines.push(
-          'No async runtime was detected — follow the Rust SDK docs for the blocking client and required feature flags for the installed or pinned crate version.',
+          "No async runtime was detected — follow the Rust SDK docs for the blocking client and required feature flags for the installed or pinned crate version. If you turn off the crate's default features, add its `tls` feature back when it has one, or captures to an https host never send.",
         );
       }
       return lines;
