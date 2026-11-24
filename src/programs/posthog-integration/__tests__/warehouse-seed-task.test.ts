@@ -33,6 +33,12 @@ function session(over: Partial<WizardSession> = {}): WizardSession {
   } as WizardSession;
 }
 
+type Login = NonNullable<WizardSession['credentials']>;
+
+function loginMissing(missingScopes?: string[]): Login {
+  return { missingScopes } as Partial<Login> as Login;
+}
+
 function seed(sess: WizardSession) {
   return posthogIntegration.seedTasks?.(sess) ?? [];
 }
@@ -96,6 +102,37 @@ describe('warehouse seed task', () => {
     );
     expect(tasks).toEqual([]);
   });
+
+  it.each([
+    [['external_data_source:read', 'external_data_source:write']],
+    [['external_data_source:write']],
+    [['external_data_source:read']],
+    [['notebook:write', 'external_data_source:write']],
+  ])(
+    'queues nothing when the login lacks a warehouse scope (%j)',
+    (missingScopes) => {
+      const tasks = seed(
+        session({
+          credentials: loginMissing(missingScopes),
+          frameworkContext: { [DETECTED_WAREHOUSE_SOURCES_KEY]: [POSTGRES] },
+        }),
+      );
+      expect(tasks).toEqual([]);
+    },
+  );
+
+  it.each<[string[] | undefined]>([[[]], [['notebook:write']], [undefined]])(
+    'queues the task when the login has the warehouse scopes (missing %j)',
+    (missingScopes) => {
+      const tasks = seed(
+        session({
+          credentials: loginMissing(missingScopes),
+          frameworkContext: { [DETECTED_WAREHOUSE_SOURCES_KEY]: [POSTGRES] },
+        }),
+      );
+      expect(tasks).toHaveLength(1);
+    },
+  );
 
   it('queues the task in an e2e run, where the harness answers', () => {
     // The e2e host runs a `ci` session but drives the ask overlay itself, so
