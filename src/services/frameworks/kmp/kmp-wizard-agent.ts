@@ -9,10 +9,7 @@ export const KMP_AGENT_CONFIG: FrameworkConfig = {
   metadata: {
     name: 'Kotlin Multiplatform',
     integration: Integration.kmp,
-    beta: true,
     docsUrl: 'https://posthog.com/docs/libraries/kmp',
-    preRunNotice:
-      'The PostHog Kotlin Multiplatform SDK is in early access (0.x pre-release). The API may change between minor versions.',
   },
 
   detection: {

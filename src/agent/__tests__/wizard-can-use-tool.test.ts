@@ -329,6 +329,10 @@ describe('bash fence — allows real toolchain commands (from skills + field log
   });
 
   it('rust ecosystem', () => {
+    expect(allow('cargo add posthog')).toBe('allow');
+    expect(
+      allow('cargo add posthog --no-default-features --features tls'),
+    ).toBe('allow');
     expect(allow('cargo add posthog-rs')).toBe('allow');
     expect(allow('cargo add posthog-rs --no-default-features')).toBe('allow');
     expect(allow('cargo build')).toBe('allow');
@@ -360,6 +364,7 @@ describe('bash fence — allows real toolchain commands (from skills + field log
 
   it('go ecosystem', () => {
     expect(allow('go get github.com/posthog/posthog-go')).toBe('allow');
+    expect(allow('go get github.com/posthog/posthog-go/v2')).toBe('allow');
     expect(allow('go mod tidy')).toBe('allow');
     expect(allow('go mod download')).toBe('allow');
     expect(allow('go build ./...')).toBe('allow');

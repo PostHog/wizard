@@ -60,7 +60,7 @@ the distinct ID and trace the wrapper was given, without changing the calls: one
 one `$ai_embedding` per embedding call, without the output fields. Record that manual
 capture replaced the wrapper, and why.
 A handoff that names a package with a feature or an exact pin (`cargo add
-posthog-rs --features mcp`, `@posthog/mcp@latest` saved exact) gets installed that
+posthog --features mcp`, `@posthog/mcp@latest` saved exact) gets installed that
 way. A minimum version is a floor, not the version to install: install the latest
 unless a peer conflict forces an older one, and never go below the minimum. Install an exact-pinned package in its own command, so the pin doesn't
 spread to packages named without one. In a workspace, install each package into the

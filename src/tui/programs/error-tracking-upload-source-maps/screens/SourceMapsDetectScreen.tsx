@@ -244,7 +244,7 @@ const BlockedSummary = ({ blocked }: { blocked: DetectedProject[] }) => {
       {manualSdk > 0 && (
         <Text dimColor>
           (… {manualSdk} supported but missing the PostHog SDK — add it to the
-          project first (posthog-go / posthog-rs), then re-run)
+          project first (posthog-go / posthog), then re-run)
         </Text>
       )}
     </Box>

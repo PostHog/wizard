@@ -102,12 +102,12 @@ export const VARIANTS_REQUIRING_POSTHOG_CLI: ReadonlySet<SkillVariant> =
 /**
  * Automatable variants whose SDK the wizard's default flow cannot install —
  * remediation for a missing SDK is a manual install (posthog-go /
- * posthog-rs), not `npx @posthog/wizard`. Drives the missing-SDK copy in the
+ * posthog), not `npx @posthog/wizard`. Drives the missing-SDK copy in the
  * picker and the classifier.
  */
 export const MANUAL_SDK_INSTALL: Partial<Record<SkillVariant, string>> = {
   go: 'add the posthog-go module first',
-  rust: 'add the posthog-rs crate first',
+  rust: 'add the posthog (or posthog-rs) crate first',
 };
 
 export const MANUAL_SDK_VARIANTS: readonly SkillVariant[] = Object.keys(
@@ -159,7 +159,7 @@ export const SOURCE_MAPS_ABORT_CASES: AbortCase[] = [
       'The agent could not find a PostHog SDK in your project. ' +
       'Source map upload requires the SDK to already be installed so it can ' +
       'report errors. Run `npx @posthog/wizard` first to install the SDK ' +
-      '(for Go and Rust, add posthog-go / posthog-rs by hand first — the ' +
+      '(for Go and Rust, add posthog-go / posthog by hand first — the ' +
       'wizard cannot install the SDK for those stacks yet).',
     docsUrl: 'https://posthog.com/docs/error-tracking',
   },

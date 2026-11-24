@@ -296,6 +296,8 @@ describe('detectPostHogPresent', () => {
       ['requirements.txt', 'flask==3.0\nposthog==3.7.0\n'],
       ['Gemfile', "source 'https://rubygems.org'\ngem 'posthog'\n"],
       ['go.mod', 'module x\nrequire github.com/posthog/posthog-go v1.2.0\n'],
+      ['go.mod', 'module x\nrequire github.com/posthog/posthog-go/v2 v2.1.1\n'],
+      ['Cargo.toml', '[dependencies]\nposthog = "1.3"\n'],
       ['pubspec.yaml', 'dependencies:\n  posthog: ^4.0.0\n'],
     ];
     for (const [name, contents] of cases) {

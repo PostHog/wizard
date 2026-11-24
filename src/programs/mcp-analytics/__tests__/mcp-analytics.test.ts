@@ -72,7 +72,7 @@ describe('MCP_ANALYTICS_ABORT_CASES', () => {
 
   it('frames the unsupported-language abort as TypeScript, Python, Go, Ruby, and Rust supported', () => {
     // Python (`posthog.mcp`), Go (`posthogmcpsdk`), Ruby (`PostHog::MCP`), and
-    // Rust (`posthog_rs::mcp`)
+    // Rust (`posthog::mcp`)
     // have shipped — the copy must name every supported language and not call
     // any of them "on the roadmap".
     const [langCase] = MCP_ANALYTICS_ABORT_CASES.filter((c) =>
@@ -88,7 +88,7 @@ describe('MCP_ANALYTICS_ABORT_CASES', () => {
       'posthog.mcp',
       'posthogmcpsdk',
       'PostHog::MCP',
-      'posthog_rs::mcp',
+      'posthog::mcp',
     ]) {
       expect(copy).toContain(sdk);
     }
