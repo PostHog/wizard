@@ -69,7 +69,7 @@ export const KMP_AGENT_CONFIG: FrameworkConfig = {
     projectTypeDetection:
       'This is a Kotlin Multiplatform (KMP) project. Look for a build.gradle.kts (or build.gradle) that applies the Kotlin Multiplatform plugin (kotlin("multiplatform") or org.jetbrains.kotlin.multiplatform) and a shared module with a src/commonMain source set.',
     packageInstallation:
-      'Add the PostHog KMP SDK to the shared module\'s commonMain dependencies in build.gradle.kts: within the kotlin { sourceSets { ... } } block, add implementation("com.posthog:posthog-kmp:<VERSION>") to commonMain.dependencies. Match the existing dependency format (Groovy vs Kotlin DSL).',
+      'Add the PostHog KMP SDK to the shared module\'s commonMain dependencies in build.gradle.kts: within the kotlin { sourceSets { ... } } block, add implementation("com.posthog:posthog-kmp:<VERSION>") with the version the KMP SDK docs pin. If the project already depends on posthog-kmp, keep its version. Match the existing dependency format (Groovy vs Kotlin DSL).',
     getAdditionalContextLines: () => [
       'Framework docs ID: kmp (use posthog://docs/frameworks/kmp for documentation)',
       'Initialize once, early in the app lifecycle, from shared code. All PostHog APIs live in the com.posthog.kmp package.',

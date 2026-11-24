@@ -197,6 +197,32 @@ describe('static detection in each project', () => {
     expect(getTraits(session, 'apps/docs').posthogInstalled).toBe('yes');
   });
 
+  it.each([
+    [
+      'KMP Gradle dependency',
+      'build.gradle.kts',
+      'plugins { kotlin("multiplatform") }\nkotlin { sourceSets { commonMain.dependencies { implementation("com.posthog:posthog-kmp:1.0.0") } } }\n',
+    ],
+    [
+      'Go v2 module',
+      'go.mod',
+      'module example.com/svc\n\ngo 1.22\n\nrequire github.com/posthog/posthog-go/v2 v2.1.1\n',
+    ],
+    [
+      'Rust posthog crate',
+      'Cargo.toml',
+      '[package]\nname = "svc"\n\n[dependencies]\nposthog = "1.3"\n',
+    ],
+  ])('detects PostHog from %s', async (_label, manifest, content) => {
+    write(manifest, content);
+    const store = new SessionStore(buildSession({ installDir: repo }));
+    await runDiscovery({ id: 'posthog-integration' }, store.readyContext());
+    expect(getTraits(store.session, '.')).toMatchObject({
+      posthogInstalled: 'yes',
+      installedSdks: ['posthog'],
+    });
+  });
+
   it('still knows the first run project once the run moves to another', async () => {
     const store = await discoveredMonorepo();
     await store.edit((draft) => {

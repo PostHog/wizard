@@ -27,7 +27,6 @@ const POSTHOG_SDK_PACKAGES: ReadonlySet<string> = new Set([
   'posthog-rails',
   'posthog/posthog-php',
   'github.com/posthog/posthog-go',
-  'github.com/posthog/posthog-go/v2',
   'posthog-rs',
   'com.posthog:posthog',
   'com.posthog:posthog-android',

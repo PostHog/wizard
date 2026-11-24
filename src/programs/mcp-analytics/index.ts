@@ -103,7 +103,7 @@ export const MCP_ANALYTICS_ABORT_CASES: AbortCase[] = [
     match: /^rmcp older than 3\.7$/i,
     message: 'rmcp older than 3.7',
     body:
-      "`posthog_rs::mcp` needs `rmcp` 3.7 or later. The wizard doesn't " +
+      "`posthog::mcp` needs `rmcp` 3.7 or later. The wizard doesn't " +
       'change your `rmcp` version. Upgrade it, then run the command again.',
   },
   {

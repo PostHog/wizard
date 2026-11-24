@@ -477,3 +477,50 @@ describe('kmp detect', () => {
     await expect(detect(opts)).resolves.toBe(false);
   });
 });
+
+describe('SDK doc-pinning prompts and metadata', () => {
+  test('Go prompt defers module path and version to Go SDK docs and preserves existing go.mod deps', () => {
+    const install = GO_AGENT_CONFIG.prompts.packageInstallation ?? '';
+    expect(install).toContain('Go SDK docs pin');
+    expect(install).toMatch(/keep that existing module path and version/i);
+    expect(install).not.toMatch(/\bv\d+\b/i);
+  });
+
+  test('Rust prompt and async/blocking context lines defer crate, version, and features to Rust SDK docs', () => {
+    const install = RUST_AGENT_CONFIG.prompts.packageInstallation ?? '';
+    expect(install).toContain('Rust SDK docs pin');
+    expect(install).toMatch(/keep that existing crate and version/i);
+    expect(install).not.toMatch(/\b\d+\.x\b/i);
+    expect(install).not.toMatch(/cargo add posthog/i);
+
+    const asyncLines =
+      RUST_AGENT_CONFIG.prompts.getAdditionalContextLines?.({
+        asyncRuntime: true,
+      }) ?? [];
+    const blockingLines =
+      RUST_AGENT_CONFIG.prompts.getAdditionalContextLines?.({
+        asyncRuntime: false,
+      }) ?? [];
+
+    expect(asyncLines.join('\n')).toMatch(/async runtime was detected/i);
+    expect(asyncLines.join('\n')).toMatch(/async client/i);
+    expect(asyncLines.join('\n')).toMatch(/Rust SDK docs/i);
+    expect(blockingLines.join('\n')).toMatch(/no async runtime was detected/i);
+    expect(blockingLines.join('\n')).toMatch(/blocking client/i);
+    expect(blockingLines.join('\n')).toMatch(/Rust SDK docs/i);
+
+    for (const text of [asyncLines.join('\n'), blockingLines.join('\n')]) {
+      expect(text).not.toMatch(/\b\d+\.x\b/i);
+      expect(text).not.toMatch(/cargo add posthog/i);
+    }
+  });
+
+  test('KMP metadata marks 1.0 GA and prompt defers version to KMP SDK docs', () => {
+    expect(KMP_AGENT_CONFIG.metadata.beta).toBeUndefined();
+    expect(KMP_AGENT_CONFIG.metadata.preRunNotice).toBeUndefined();
+
+    const install = KMP_AGENT_CONFIG.prompts.packageInstallation ?? '';
+    expect(install).toContain('KMP SDK docs pin');
+    expect(install).toMatch(/keep its version/i);
+  });
+});

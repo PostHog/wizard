@@ -93,6 +93,19 @@ describe('MCP_ANALYTICS_ABORT_CASES', () => {
       expect(copy).toContain(sdk);
     }
   });
+
+  it('names posthog::mcp and the posthog crate across Rust abort cases', () => {
+    const rmcpCase = MCP_ANALYTICS_ABORT_CASES.find((c) =>
+      c.match.test('rmcp older than 3.7'),
+    );
+    const rustCase = MCP_ANALYTICS_ABORT_CASES.find((c) =>
+      c.match.test('rust toolchain older than 1.88'),
+    );
+    expect(rmcpCase?.body).toContain('`posthog::mcp`');
+    expect(rmcpCase?.body).not.toContain('posthog_rs');
+    expect(rustCase?.body).toContain('`posthog`');
+    expect(rustCase?.body).not.toContain('posthog-rs');
+  });
 });
 
 describe('mcp-analytics config', () => {

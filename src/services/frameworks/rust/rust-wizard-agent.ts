@@ -18,7 +18,7 @@ function readCargoToml(installDir: string): string | undefined {
   return fs.readFileSync(cargoTomlPath, 'utf-8');
 }
 
-/** The Rust SDK (`posthog` 1.x / legacy `posthog-rs` 0.x) defaults to its async client; projects without an async runtime need the blocking one. */
+/** The PostHog Rust SDK defaults to its async client; projects without an async runtime need the blocking one. */
 function hasAsyncRuntime(installDir: string): boolean {
   const cargoToml = readCargoToml(installDir);
   return !!cargoToml && /^\s*(tokio|async-std|smol)\s*[=.]/m.test(cargoToml);
@@ -68,7 +68,7 @@ export const RUST_AGENT_CONFIG: FrameworkConfig<RustContext> = {
     projectTypeDetection:
       'This is a Rust project. Look for Cargo.toml with a [package] section, src/main.rs or src/lib.rs, and Cargo.lock to confirm.',
     packageInstallation:
-      'If Cargo.toml already depends on `posthog-rs`, keep that version and do not add `posthog`. Otherwise install the PostHog Rust SDK with `cargo add posthog`. Do not manually edit Cargo.toml; cargo updates it automatically.',
+      'Install the PostHog Rust SDK with `cargo add` using the crate name, version, and features the Rust SDK docs pin. If Cargo.toml already depends on a PostHog Rust SDK crate, keep that existing crate and version. Do not manually edit Cargo.toml; cargo updates it automatically.',
     getAdditionalContextLines: (context) => {
       const lines = [
         `Framework docs ID: rust (use posthog://docs/frameworks/rust for documentation)`,
@@ -76,11 +76,11 @@ export const RUST_AGENT_CONFIG: FrameworkConfig<RustContext> = {
       ];
       if (context.asyncRuntime) {
         lines.push(
-          'An async runtime is present — use the default async client (`posthog`, or `posthog-rs` if Cargo.toml already depends on 0.x).',
+          'An async runtime was detected — follow the Rust SDK docs for the async client and required feature flags for the installed or pinned crate version.',
         );
       } else {
         lines.push(
-          'No async runtime detected — for a fresh install run `cargo add posthog --no-default-features --features tls` and use the blocking client. `posthog` 1.x has no TLS without the `tls` feature, so captures to an https host never send. If Cargo.toml already depends on `posthog-rs` 0.x, it has no `tls` feature and keeps TLS on, so leave `--features tls` out.',
+          'No async runtime was detected — follow the Rust SDK docs for the blocking client and required feature flags for the installed or pinned crate version.',
         );
       }
       return lines;
