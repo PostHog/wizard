@@ -60,6 +60,10 @@ export function buildGatewayHeaders(
       wizardFlags,
       teamId,
     ),
+    // One provider per run: only the issuer can read its encrypted reasoning.
+    ...(wizardMetadata.run_id
+      ? { 'X-PostHog-Session-Id': wizardMetadata.run_id }
+      : {}),
   };
 }
 
