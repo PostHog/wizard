@@ -50,6 +50,18 @@ export function versionSatisfiesRange({
   return subset(userRange, acceptableVersions);
 }
 
+/** The one major every version in `range` has, or undefined when the range spans several or is not semver. */
+export function rangeMajor(range: string): number | undefined {
+  if (isNonSemverVersion(range)) return undefined;
+  const normalized = validRange(range);
+  const min = normalized === null ? null : minVersion(normalized);
+  if (normalized === null || !min) return undefined;
+  const sameMajor = `>=${min.major}.0.0-0 <${min.major + 1}.0.0`;
+  return subset(normalized, sameMajor, { includePrerelease: true })
+    ? min.major
+    : undefined;
+}
+
 /**
  * Creates a version bucket function for analytics.
  * Converts versions like "1.2.3" to "1.x" for grouping in analytics.

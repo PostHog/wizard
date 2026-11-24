@@ -607,6 +607,30 @@ describe('assembleTaskPrompt', () => {
     );
   });
 
+  it('injects sdkSkillPaths before task skills and is byte-identical when empty or absent', () => {
+    const withoutSdk = assembleTaskPrompt(ctx, 'do the task', [
+      '.posthog-wizard-cache/skills/capture/SKILL.md',
+    ]);
+    const withEmptySdk = assembleTaskPrompt(
+      { ...ctx, sdkSkillPaths: [] },
+      'do the task',
+      ['.posthog-wizard-cache/skills/capture/SKILL.md'],
+    );
+    expect(withEmptySdk).toBe(withoutSdk);
+
+    const sdkPath = '.posthog-wizard-cache/sdk/sdk-posthog-python-v7/SKILL.md';
+    const taskPath = '.posthog-wizard-cache/skills/capture/SKILL.md';
+    const withSdk = assembleTaskPrompt(
+      { ...ctx, sdkSkillPaths: [sdkPath] },
+      'do the task',
+      [taskPath],
+    );
+    expect(withSdk).toContain(sdkPath);
+    expect(withSdk).toContain('feature-minimums.md');
+    expect(withSdk).toContain('keep the declared major and keep any exact pin');
+    expect(withSdk.indexOf(sdkPath)).toBeLessThan(withSdk.indexOf(taskPath));
+  });
+
   it('does not embed a tool inventory — the harness renders it from its real set', () => {
     const assembled = assembleTaskPrompt(ctx, 'do the task', []);
     expect(assembled).not.toContain('Your tools for this task');

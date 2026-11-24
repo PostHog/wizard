@@ -10,6 +10,8 @@
  * arguments, so the caller's exit sequence is unchanged.
  */
 
+import * as fs from 'fs';
+import * as path from 'path';
 import { OutroKind, type OutroData } from '@shared/outro';
 import { AgentErrorType } from '../../agent-interface';
 import { logToFile } from '@utils/debug';
@@ -24,11 +26,51 @@ import type { SequenceResult, SequenceContext } from '../shared/types';
 import { failed, installFailure } from '../shared/errors';
 import { RunOutcome } from '../shared/types';
 import { runOptions } from '../shared/bootstrap';
+import {
+  fetchSkillMenuEntries,
+  hasNonFrameworkMatchKeys,
+  installTraitSkills,
+  isContainedWizardCacheDir,
+} from '../shared/trait-skills';
+import { WIZARD_CACHE_DIR_NAME } from '@shared/constants';
 import { shouldDisableAsk } from '@shared/ask-policy';
+import { registerCleanup } from '@utils/cleanup';
 import { createEmitSpinner } from '../shared/progress-collector';
 import { createAskBridge } from '../shared/ask';
 import { withTranscript } from '../shared/transcript-tail';
 import { getHarness } from '../switchboard';
+
+function cleanupSdkCache(installDir: string): void {
+  if (!isContainedWizardCacheDir(installDir)) return;
+  let realInstall: string;
+  try {
+    realInstall = fs.realpathSync(installDir);
+  } catch {
+    return;
+  }
+  const queueDir = path.join(realInstall, WIZARD_CACHE_DIR_NAME);
+  const sdkDir = path.join(queueDir, 'sdk');
+  try {
+    const sdkStat = fs.lstatSync(sdkDir);
+    if (!sdkStat.isSymbolicLink()) {
+      fs.rmSync(sdkDir, { recursive: true, force: true });
+    }
+  } catch {
+    // Missing sdk dir or mock path; still check empty queueDir below.
+  }
+  try {
+    const queueStat = fs.lstatSync(queueDir);
+    if (
+      !queueStat.isSymbolicLink() &&
+      queueStat.isDirectory() &&
+      fs.readdirSync(queueDir).length === 0
+    ) {
+      fs.rmdirSync(queueDir);
+    }
+  } catch {
+    // Cleanup is best-effort so mock paths never overwrite the run result.
+  }
+}
 
 export async function runLinearProgram(
   context: SequenceContext,
@@ -38,11 +80,24 @@ export async function runLinearProgram(
   const abortFromHost = () => controller.abort();
   context.signal?.addEventListener('abort', abortFromHost, { once: true });
   if (context.signal?.aborted) abortFromHost();
+  // Clean `.posthog-wizard-cache/sdk` only when this linear run claimed it, so sibling orchestrator caches survive.
+  let unregisterSdkCleanup: (() => void) | undefined;
+  const releaseSdkCache = () => {
+    cleanupSdkCache(context.input.installDir);
+  };
+  const claimSdkCache = () => {
+    if (unregisterSdkCleanup) return;
+    unregisterSdkCleanup = registerCleanup(releaseSdkCache);
+  };
   try {
-    return await executeLinear(context, controller.signal);
+    return await executeLinear(context, controller.signal, claimSdkCache);
   } finally {
     context.signal?.removeEventListener('abort', abortFromHost);
     controller.abort();
+    if (unregisterSdkCleanup) {
+      unregisterSdkCleanup();
+      releaseSdkCache();
+    }
   }
 }
 
@@ -58,6 +113,7 @@ async function executeLinear(
     transcript,
   }: SequenceContext,
   runSignal: AbortSignal,
+  claimSdkCache: () => void,
 ): Promise<SequenceResult> {
   const { run, composed } = config;
   const { skillsBaseUrl, credentials, project } = boot;
@@ -84,6 +140,24 @@ async function executeLinear(
     }
     skillPath = installResult.path;
     logToFile(`[agent-runner] skill installed at ${skillPath}`);
+  }
+
+  let sdkSkillPaths: string[] = [];
+  const matchKeys =
+    !run.readOnly && !run.structured ? boot.matchKeys() : undefined;
+  if (matchKeys && hasNonFrameworkMatchKeys(matchKeys)) {
+    claimSdkCache();
+    const menuEntries = await fetchSkillMenuEntries(skillsBaseUrl);
+    if (signal?.aborted) return aborted();
+    const traitInstall = await installTraitSkills({
+      entries: menuEntries,
+      matchKeys,
+      installDir: input.installDir,
+      triageProvider: boot.triageProvider,
+      signal,
+    });
+    if (traitInstall.aborted) return aborted();
+    sdkSkillPaths = traitInstall.paths;
   }
 
   // 6. Initialize agent
@@ -120,6 +194,7 @@ async function executeLinear(
     projectApiKey,
     host,
     skillPath,
+    sdkSkillPaths,
     facts: config.projectFacts?.() ?? [],
     orgAiDataProcessingApproved:
       input.apiUser?.organization?.is_ai_data_processing_approved ?? null,

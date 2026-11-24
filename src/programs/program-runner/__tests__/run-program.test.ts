@@ -7,6 +7,7 @@ import {
   Integration,
   Sequence,
   WIZARD_PROJECT_DISCOVERY_FLAG_KEY,
+  WIZARD_VERSIONED_SDK_SKILLS_FLAG_KEY,
 } from '@shared/constants';
 import { HostResolution } from '@shared/host-resolution';
 import type { ApiUser } from '@shared/api';
@@ -54,8 +55,11 @@ import type {
 import type { WizardSession } from '@services/session';
 import {
   buildProjectSelection,
+  getTraits,
   runDiscovery,
+  VERSIONED_SDK_SKILLS_ENABLED_KEY,
 } from '@services/project-discovery';
+import { scopeToProject } from '../detect-program';
 import { detectIntegrationProjects } from '@services/detection';
 import { AUDIT_CHECKS_KEY } from '@programs/audit';
 import { FRAMEWORK_REGISTRY } from '@services/frameworks';
@@ -88,6 +92,7 @@ vi.mock('@utils/analytics', async (importOriginal) => ({
     setGroups: vi.fn(),
     groupIdentify: vi.fn(),
     getAllFlagsForWizard: vi.fn().mockResolvedValue({}),
+    getCachedWizardFlags: vi.fn(() => null),
   },
 }));
 vi.mock(import('@shared/oauth-tokens'), () => ({
@@ -2083,6 +2088,73 @@ describe('runProgram', () => {
         posthogInstalled: ['yes'],
       });
       expect(s.session.runProject).toBe('.');
+    });
+
+    it('wires wizard-versioned-sdk-skills into session context, scopeToProject, and matchKeys only when true', async () => {
+      fs.writeFileSync(
+        path.join(repo, 'apps/api/package.json'),
+        JSON.stringify({ dependencies: { 'posthog-node': '^5.4.0' } }),
+      );
+      vi.mocked(analytics.getCachedWizardFlags).mockReturnValue({
+        [WIZARD_VERSIONED_SDK_SKILLS_FLAG_KEY]: 'true',
+      });
+
+      const offStore = new SessionStore(
+        buildSession({ installDir: path.join(repo, 'apps/api') }),
+      );
+      await runProgram(
+        'metrics',
+        input({
+          store: offStore,
+          wizardFlags: { [WIZARD_VERSIONED_SDK_SKILLS_FLAG_KEY]: 'false' },
+        }),
+        { credentials: login() },
+      );
+      expect(agentConfig(0).matchKeys?.()).not.toHaveProperty('sdkNode');
+      expect(
+        offStore.session.projects.find(
+          (p) => p.path === offStore.session.runProject,
+        )?.traits,
+      ).not.toHaveProperty('sdkNode');
+
+      vi.mocked(runAgent).mockClear();
+      const onStore = pairStore();
+      await runDiscovery({ id: 'self-driving' }, onStore.readyContext());
+      onStore.setDetectionComplete();
+      const composed = {
+        run,
+        runSteps: {
+          'integrate-api': {
+            runProgramId: 'metrics' as const,
+            targetDir: () => path.join(repo, 'apps/api'),
+          },
+        },
+      };
+      await runProgram(
+        'self-driving',
+        input({
+          store: onStore,
+          config: composed,
+          wizardFlags: { [WIZARD_VERSIONED_SDK_SKILLS_FLAG_KEY]: 'true' },
+        }),
+        { credentials: login(), workflow: workflow() },
+      );
+      expect(agentConfig(0).matchKeys?.()).toMatchObject({
+        sdkNode: ['5'],
+      });
+      expect(
+        onStore.session.projects.find((p) => p.path === 'apps/api')?.traits,
+      ).toMatchObject({ sdkNode: '5' });
+
+      // scopeToProject preserves VERSIONED_SDK_SKILLS_ENABLED_KEY when scoping to a discovered member.
+      const scopedStore = pairStore();
+      await runDiscovery({ id: 'metrics' }, scopedStore.readyContext());
+      scopedStore.setFrameworkContext(VERSIONED_SDK_SKILLS_ENABLED_KEY, true);
+      scopeToProject(scopedStore, 'apps/api');
+      expect(
+        scopedStore.session.frameworkContext[VERSIONED_SDK_SKILLS_ENABLED_KEY],
+      ).toBe(true);
+      expect(getTraits(scopedStore.session, 'apps/api').sdkNode).toBe('5');
     });
 
     it('stops on a project whose real directory is outside the workspace', async () => {

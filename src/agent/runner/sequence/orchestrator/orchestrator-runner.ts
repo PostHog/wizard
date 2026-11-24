@@ -32,7 +32,11 @@ import {
   scanInstalledSkill,
   scanInstalledSkillFile,
 } from '../../../yara-hooks';
-import { fetchSkillMenu, type SkillEntry } from '@shared/skill-menu';
+import {
+  fetchSkillMenuEntries,
+  hasNonFrameworkMatchKeys,
+  installTraitSkills,
+} from '../../shared/trait-skills';
 import { FRAMEWORK_KEY, resolveSkill } from '@shared/skill-resolution';
 import { analytics } from '@utils/analytics';
 import { ciExcludedTaskTypes } from '@utils/ci-flag-overrides';
@@ -240,15 +244,6 @@ function cancelledRun(): SequenceResult {
     outcome: RunOutcome.Aborted,
     failure: { code: ErrorCodes.AgentAbort, message: 'Agent run cancelled' },
   };
-}
-
-/** Every skill entry the menu knows, across categories. */
-async function fetchSkillMenuEntries(
-  skillsBaseUrl: string,
-): Promise<SkillEntry[]> {
-  const menu = await fetchSkillMenu(skillsBaseUrl);
-  if (!menu) return [];
-  return Object.values(menu.categories).flat();
 }
 
 /**
@@ -941,6 +936,19 @@ async function executeOrchestrator(
     );
   }
 
+  let sdkSkillPaths: string[] = [];
+  if (hasNonFrameworkMatchKeys(matchKeys)) {
+    const traitInstall = await installTraitSkills({
+      entries: menuSkillEntries,
+      matchKeys,
+      installDir: input.installDir,
+      triageProvider: boot.triageProvider,
+      signal,
+    });
+    if (traitInstall.aborted) return cancelledRun();
+    sdkSkillPaths = traitInstall.paths;
+  }
+
   // Preflight every task's mini-skills: a miss would run tasks skill-less, so fail properly instead.
   const missingVariants: string[] = [];
   const missingSkills = new Set<string>();
@@ -1009,6 +1017,7 @@ async function executeOrchestrator(
     host: boot.credentials.host,
     examplePath,
     commandmentsPath,
+    sdkSkillPaths,
     facts: config.projectFacts?.() ?? [],
     accountOwner: config.accountOwnerContext
       ? accountOwnerFromEnv()

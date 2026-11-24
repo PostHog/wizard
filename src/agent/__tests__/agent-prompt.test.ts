@@ -78,4 +78,19 @@ describe('assemblePrompt', () => {
     });
     expect(prompt.length).toBeLessThan(full.length);
   });
+
+  it('includes sdkSkillPaths when provided and stays byte-identical when empty', () => {
+    const baseline = assemblePrompt(makeRunDef(), baseCtx);
+    expect(
+      assemblePrompt(makeRunDef(), { ...baseCtx, sdkSkillPaths: [] }),
+    ).toBe(baseline);
+
+    const sdkPath = '.posthog-wizard-cache/sdk/sdk-posthog-node-v5/SKILL.md';
+    const withSdk = assemblePrompt(makeRunDef(), {
+      ...baseCtx,
+      sdkSkillPaths: [sdkPath],
+    });
+    expect(withSdk).toContain(sdkPath);
+    expect(withSdk).toContain('keep the declared major');
+  });
 });

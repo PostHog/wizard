@@ -16,6 +16,7 @@ import * as path from 'path';
 import { randomUUID } from 'crypto';
 import { writeJsonAtomic } from '@utils/atomic-ledger';
 import { analytics } from '@utils/analytics';
+import { WIZARD_CACHE_DIR_NAME } from '@shared/constants';
 
 export const TaskStatus = {
   Pending: 'pending',
@@ -167,7 +168,7 @@ export interface EnqueueInput {
   optional?: boolean;
 }
 
-export const QUEUE_DIR_NAME = '.posthog-wizard-cache';
+export const QUEUE_DIR_NAME = WIZARD_CACHE_DIR_NAME;
 const DEFAULT_MAX_ATTEMPTS = 2;
 
 function nowIso(): string {

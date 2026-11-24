@@ -9,7 +9,11 @@ import type {
   RunInput,
   RunResult,
 } from '@agent/types';
-import { getSkillsBaseUrl, type Integration } from '@shared/constants';
+import {
+  getSkillsBaseUrl,
+  WIZARD_VERSIONED_SDK_SKILLS_FLAG_KEY,
+  type Integration,
+} from '@shared/constants';
 import { listSkillFolders, removeRunSkills } from '@shared/skill-install';
 import { classifyRunFailure, ErrorCodes, type ErrorCode } from '@shared/errors';
 import {
@@ -53,9 +57,11 @@ import {
   reportDiscovery,
   reportProjectsDiscovered,
   reportProjectsSelected,
+  settleProjects,
   toMatchKeys,
   toTraitKeys,
   type ProjectSelection,
+  VERSIONED_SDK_SKILLS_ENABLED_KEY,
 } from '@services/project-discovery';
 import { detectIntegrationProjects } from '@services/detection';
 import { findProgramConfig, getProgramConfig } from './program-registry';
@@ -427,6 +433,13 @@ async function invokeProgram(
       : 'off';
     // Every Decisions request reads this, so `off` stops them all.
     store.setFrameworkContext(DECISIONS_USE_KEY, use);
+    const versionedSdkSkills =
+      flags.flags[WIZARD_VERSIONED_SDK_SKILLS_FLAG_KEY] === 'true';
+    store.setFrameworkContext(
+      VERSIONED_SDK_SKILLS_ENABLED_KEY,
+      versionedSdkSkills,
+    );
+    if (versionedSdkSkills) settleProjects(store.readyContext());
     // The answers become traits only when the flag says so and project discovery is on.
     const decisionsAsTraits =
       use === 'traits' &&

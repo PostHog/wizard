@@ -4,6 +4,10 @@
  * collects, and how the SDK's results come back. Detection's own retry and
  * report logic is locked in `services/detection/__tests__`.
  */
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
+import { zipSync } from 'fflate';
 import { runAgent } from '@agent/runner';
 import { RunOutcome } from '@agent/runner/shared/types';
 import type { AgentProgress, RunConfig, RunInput } from '@agent/types';
@@ -12,8 +16,9 @@ import {
   initializeAgent,
   runAgent as executeAgent,
 } from '@agent/agent-interface';
-import { flushScanReport } from '@agent/yara-hooks';
+import { flushScanReport, scanInstalledSkill } from '@agent/yara-hooks';
 import { HostResolution } from '@shared/host-resolution';
+import { runCleanups } from '@utils/cleanup';
 import {
   CallType,
   getSkillsBaseUrl,
@@ -33,6 +38,7 @@ vi.mock(import('@agent/agent-interface'), async (importOriginal) => ({
 vi.mock(import('@agent/yara-hooks'), async (importOriginal) => ({
   ...(await importOriginal()),
   flushScanReport: vi.fn(),
+  scanInstalledSkill: vi.fn(() => Promise.resolve(null)),
 }));
 // The runner mints before each run; no mint may leave the process.
 vi.mock(import('@agent/gateway-session'), async (importOriginal) => ({
@@ -312,4 +318,227 @@ it('reports each assistant step of a collected transcript as an activity line', 
     'Reading the root manifest.',
     'Read package.json',
   ]);
+});
+
+describe('linear trait SDK skill installation', () => {
+  const sdkZip = zipSync({
+    'SKILL.md': new TextEncoder().encode(
+      '# PostHog Node 5.x\nKeep the declared major and existing client.\n',
+    ),
+  });
+
+  function mockSdkFetch() {
+    const fetchMock = vi.fn((target: string | URL | Request) => {
+      const url = typeof target === 'string' ? target : target.toString();
+      if (url.endsWith('/skill-menu.json')) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              categories: {
+                'sdk/posthog-node': [
+                  {
+                    id: 'sdk-posthog-node-v5',
+                    name: 'PostHog Node 5.x',
+                    downloadUrl: 'https://skills.test/sdk-posthog-node-v5.zip',
+                    tags: ['sdkNode:4', 'sdkNode:5'],
+                  },
+                  {
+                    id: 'sdk-posthog-node-v6',
+                    name: 'PostHog Node 6.x',
+                    downloadUrl: 'https://skills.test/sdk-posthog-node-v6.zip',
+                    tags: ['sdkNode:6', 'default'],
+                  },
+                ],
+              },
+            }),
+            { status: 200, headers: { 'content-type': 'application/json' } },
+          ),
+        );
+      }
+      if (url === 'https://skills.test/sdk-posthog-node-v5.zip') {
+        return Promise.resolve(new Response(sdkZip, { status: 200 }));
+      }
+      return Promise.resolve(new Response('not found', { status: 404 }));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    return fetchMock;
+  }
+
+  it('skips menu fetch and keeps existing sdk cache on readOnly, structured, or non-trait linear runs', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'linear-sdk-ro-'));
+    const sentinel = path.join(dir, '.posthog-wizard-cache', 'sdk', 'sentinel');
+    fs.mkdirSync(path.dirname(sentinel), { recursive: true });
+    fs.writeFileSync(sentinel, 'keep', 'utf8');
+    const fetchSpy = mockSdkFetch();
+    try {
+      emitResult(verdict);
+      await runAgent(
+        { ...config, matchKeys: () => ({ sdkNode: ['5'] }) },
+        { ...input, installDir: dir },
+      );
+
+      execute.mockResolvedValueOnce({
+        kind: 'success',
+        structuredOutput: { ok: true },
+      });
+      await runAgent(
+        {
+          ...config,
+          run: {
+            ...config.run,
+            readOnly: false,
+            structured: { schema: { type: 'object' }, timeoutMs: 10_000 },
+          },
+          matchKeys: () => ({ sdkNode: ['5'] }),
+        },
+        { ...input, installDir: dir },
+      );
+
+      emitResult('Done.');
+      await runAgent(
+        {
+          ...config,
+          run: { ...config.run, readOnly: false },
+          matchKeys: () => ({ framework: ['express'] }),
+        },
+        { ...input, installDir: dir },
+      );
+
+      expect(fetchSpy).not.toHaveBeenCalled();
+      expect(fs.readFileSync(sentinel, 'utf8')).toBe('keep');
+      expect(execute.mock.calls[2][1]).not.toContain(
+        '.posthog-wizard-cache/sdk',
+      );
+    } finally {
+      vi.unstubAllGlobals();
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('installs matching SDK trait skill, forwards triageProvider, injects prompt path, and cleans cache after linear run', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'linear-sdk-live-'));
+    const fetchSpy = mockSdkFetch();
+    const expectedPath = path.join(
+      '.posthog-wizard-cache',
+      'sdk',
+      'sdk-posthog-node-v5',
+      'SKILL.md',
+    );
+    let installedDuringRun = false;
+    let promptSeen = '';
+    try {
+      execute.mockImplementationOnce(
+        (_agent, prompt, _opts, _spin, _msg, mw) => {
+          installedDuringRun = fs.existsSync(path.join(dir, expectedPath));
+          promptSeen = prompt;
+          mw?.onMessage({ type: 'result', result: 'Done.' });
+          return Promise.resolve({ kind: 'success' });
+        },
+      );
+
+      const result = await runAgent(
+        {
+          ...config,
+          run: {
+            ...config.run,
+            readOnly: false,
+            prompt: undefined,
+            customPrompt: () => 'CUSTOM',
+          },
+          matchKeys: () => ({ sdkNode: ['5'] }),
+        },
+        { ...input, installDir: dir },
+      );
+
+      expect(result.outcome).toBe(RunOutcome.Success);
+      expect(installedDuringRun).toBe(true);
+      expect(promptSeen).toContain(expectedPath);
+      expect(scanInstalledSkill).toHaveBeenCalledWith(
+        expect.stringContaining('sdk-posthog-node-v5'),
+        expect.any(Function),
+      );
+      expect(
+        fs.existsSync(path.join(dir, '.posthog-wizard-cache', 'sdk')),
+      ).toBe(false);
+      expect(fetchSpy).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.unstubAllGlobals();
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('refuses symlinked cache and sdk subdirs and removes .posthog-wizard-cache/sdk on signal cleanup', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'linear-sdk-sym-'));
+    const subDir = fs.mkdtempSync(path.join(os.tmpdir(), 'linear-sdk-sub-'));
+    const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'linear-sdk-out-'));
+    const keepFile = path.join(outside, 'sdk', 'keep.txt');
+    fs.mkdirSync(path.dirname(keepFile), { recursive: true });
+    fs.writeFileSync(keepFile, 'do-not-delete', 'utf8');
+    fs.symlinkSync(outside, path.join(dir, '.posthog-wizard-cache'));
+    fs.mkdirSync(path.join(subDir, '.posthog-wizard-cache'), {
+      recursive: true,
+    });
+    fs.symlinkSync(
+      path.join(outside, 'sdk'),
+      path.join(subDir, '.posthog-wizard-cache', 'sdk'),
+    );
+    mockSdkFetch();
+    try {
+      emitResult('Done.');
+      await runAgent(
+        {
+          ...config,
+          run: { ...config.run, readOnly: false },
+          matchKeys: () => ({ sdkNode: ['5'] }),
+        },
+        { ...input, installDir: dir },
+      );
+      expect(fs.readFileSync(keepFile, 'utf8')).toBe('do-not-delete');
+
+      emitResult('Done.');
+      await runAgent(
+        {
+          ...config,
+          run: { ...config.run, readOnly: false },
+          matchKeys: () => ({ sdkNode: ['5'] }),
+        },
+        { ...input, installDir: subDir },
+      );
+      expect(fs.readFileSync(keepFile, 'utf8')).toBe('do-not-delete');
+
+      // Signal cleanup removes the SDK cache synchronously mid-run when registered.
+      const cleanDir = fs.mkdtempSync(
+        path.join(os.tmpdir(), 'linear-sdk-sig-'),
+      );
+      try {
+        let cacheExistedBeforeCleanup = false;
+        let cacheExistsAfterCleanup = true;
+        execute.mockImplementationOnce((_a, _p, _o, _s, _m, mw) => {
+          const cacheDir = path.join(cleanDir, '.posthog-wizard-cache', 'sdk');
+          cacheExistedBeforeCleanup = fs.existsSync(cacheDir);
+          runCleanups();
+          cacheExistsAfterCleanup = fs.existsSync(cacheDir);
+          mw?.onMessage({ type: 'result', result: 'Done.' });
+          return Promise.resolve({ kind: 'success' });
+        });
+        await runAgent(
+          {
+            ...config,
+            run: { ...config.run, readOnly: false },
+            matchKeys: () => ({ sdkNode: ['5'] }),
+          },
+          { ...input, installDir: cleanDir },
+        );
+        expect(cacheExistedBeforeCleanup).toBe(true);
+        expect(cacheExistsAfterCleanup).toBe(false);
+      } finally {
+        fs.rmSync(cleanDir, { recursive: true, force: true });
+      }
+    } finally {
+      vi.unstubAllGlobals();
+      fs.rmSync(dir, { recursive: true, force: true });
+      fs.rmSync(subDir, { recursive: true, force: true });
+      fs.rmSync(outside, { recursive: true, force: true });
+    }
+  });
 });

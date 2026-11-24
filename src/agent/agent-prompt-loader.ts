@@ -45,6 +45,8 @@ export interface OrchestratorPromptContext {
   examplePath?: string;
   /** Path to the framework's rules (COMMANDMENTS.md), if available. */
   commandmentsPath?: string;
+  /** The SKILL.md of each SDK skill installed for the major the project declares. */
+  sdkSkillPaths?: readonly string[];
   /** Detected facts about the project, one line each. */
   facts?: readonly string[];
   /** The organization's PostHog account owner, when the host knows one. */
@@ -110,6 +112,15 @@ function exampleReference(ctx: OrchestratorPromptContext): string | null {
 function commandmentsReference(ctx: OrchestratorPromptContext): string | null {
   if (!ctx.commandmentsPath) return null;
   return `Framework rules for this integration are at \`${ctx.commandmentsPath}\`. Read them before you edit and follow them.`;
+}
+
+/** The SDK skill for the installed major outranks task skills, examples, and framework rules. */
+export function sdkSkillReference(
+  paths: readonly string[] | undefined,
+): string | null {
+  if (!paths?.length) return null;
+  const list = paths.map((p) => `\`${p}\``).join(', ');
+  return `This project declared its PostHog SDK before this run started, and the SDK skill for that version is at ${list}. Read it (and its \`feature-minimums.md\` reference) before you write PostHog SDK code or touch any dependency manifest or lockfile, and follow it over any task skill, example, or framework rule: keep the declared major and keep any exact pin unchanged.`;
 }
 
 /**
@@ -188,6 +199,7 @@ export function assembleTaskPrompt(
     projectContext(ctx),
     exampleReference(ctx),
     commandmentsReference(ctx),
+    sdkSkillReference(ctx.sdkSkillPaths),
     skillReference(skillPaths),
     TASK_BASICS,
     body,
