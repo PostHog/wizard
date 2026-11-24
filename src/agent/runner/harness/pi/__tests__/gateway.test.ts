@@ -118,6 +118,7 @@ describe('buildGatewayHeaders', () => {
       run_id: 'r1',
       'wizard_flag_wizard-default-aio-logs': 'test',
     });
+    expect(headers['X-PostHog-Session-Id']).toBe('r1');
     expect(headers['x-posthog-use-bedrock-fallback']).toBeUndefined();
     expect(headers['X-POSTHOG-PROPERTY-run_id']).toBeUndefined();
   });
