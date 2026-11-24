@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { Integration } from '@shared/constants';
 import type { DiscoveryTestReport } from '@programs/types';
-import { formatDiscoveryTest, wantsDiscoveryTest } from '../run-discovery-test';
+import {
+  discoveryTestFiles,
+  discoveryTestFormat,
+  formatDiscoveryTest,
+  wantsDiscoveryTest,
+} from '../run-discovery-test';
 
 const report: DiscoveryTestReport = {
   program: 'posthog-integration',
@@ -98,6 +103,23 @@ describe('test discovery mode', () => {
     expect(wantsDiscoveryTest({})).toBe(false);
     expect(wantsDiscoveryTest({ testDiscovery: '' })).toBe(true);
     expect(wantsDiscoveryTest({ testDiscovery: 'json' })).toBe(true);
+  });
+
+  it('saves JSON when the mode or the file name asks for it, and text otherwise', () => {
+    expect(discoveryTestFormat('')).toBe('text');
+    expect(discoveryTestFormat('json')).toBe('json');
+    expect(discoveryTestFormat('', 'a/b.JSON')).toBe('json');
+    expect(discoveryTestFormat('', 'a/b.txt')).toBe('text');
+  });
+
+  it('saves to every file the option names', () => {
+    expect(discoveryTestFiles({})).toEqual([]);
+    expect(discoveryTestFiles({ testDiscoveryOut: 'a.txt' })).toEqual([
+      'a.txt',
+    ]);
+    expect(
+      discoveryTestFiles({ testDiscoveryOut: ['a.txt', 'a.json'] }),
+    ).toEqual(['a.txt', 'a.json']);
   });
 
   it('prints each trait with the value a run uses and what every source said', () => {

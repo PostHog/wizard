@@ -242,6 +242,17 @@ pnpm try error-tracking --test-discovery --install-dir=/absolute/path/to/app
 pnpm try --test-discovery=json --install-dir=/absolute/path/to/app
 ```
 
+`--test-discovery-out <path>` saves the report to a file instead of printing it,
+and prints where it saved it. A relative path is from the directory the command
+ran in. A path that ends in `.json` saves the JSON report; any other path saves
+the text report, unless the mode is `json`. Repeat the option to save one run to
+more than one file.
+
+```bash
+pnpm try --test-discovery --test-discovery-out scratch/discovery.txt --install-dir=/absolute/path/to/app
+pnpm try --test-discovery --test-discovery-out scratch/discovery.txt --test-discovery-out scratch/discovery.json --install-dir=/absolute/path/to/app
+```
+
 The report holds:
 
 - the `wizard-project-discovery` value the run read, the run directory, the

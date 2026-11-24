@@ -175,6 +175,11 @@ export class Wizard {
           type: 'string',
           choices: ['', 'text', 'json'],
         })
+        .option('test-discovery-out', {
+          describe:
+            'With --test-discovery: save the report to this file instead of printing it. A .json path saves JSON. Repeat it to save more than one file.\nenv: POSTHOG_WIZARD_TEST_DISCOVERY_OUT',
+          type: 'string',
+        })
         // Rides beside the PostHog destination rather than replacing it, so a
         // logged run is the same run the backend sees.
         .option('task-stream-log', {
