@@ -79,7 +79,7 @@ export async function refreshAccessToken(
       {
         grant_type: 'refresh_token',
         refresh_token: refreshToken,
-        // The grant only refreshes under its minting app — provisioning signups pass their regional client.
+        // The grant only refreshes under its minting app, so a grant from another app passes its client.
         client_id: clientId ?? getOAuthClientId(baseUrl),
       },
       {

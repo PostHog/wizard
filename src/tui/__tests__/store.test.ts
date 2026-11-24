@@ -1313,16 +1313,14 @@ describe('WizardStore', () => {
     });
   });
 
-  describe('chooseProvisionAccount (self-driving "no account" branch)', () => {
-    it('flips signup and records email + region, and integrates', () => {
+  describe('chooseSignup (self-driving "no account" branch)', () => {
+    it('makes the login open the sign-up page, and integrates', () => {
       const store = createStore(Program.SelfDriving);
       store.session = buildSession({});
 
-      store.chooseProvisionAccount('dev@example.com', 'eu');
+      store.chooseSignup();
 
-      expect(store.session.signup).toBe(true);
-      expect(store.session.email).toBe('dev@example.com');
-      expect(store.session.region).toBe('eu');
+      expect(store.signup).toBe(true);
       expect(store.integrate).toBe(true);
     });
 
@@ -1332,7 +1330,7 @@ describe('WizardStore', () => {
       const cb = vi.fn();
       store.subscribe(cb);
 
-      store.chooseProvisionAccount('dev@example.com', 'us');
+      store.chooseSignup();
 
       expect(cb).toHaveBeenCalledTimes(1);
     });

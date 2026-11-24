@@ -63,7 +63,6 @@ async function initializeHarness(
       installDir: '/test',
       flags: {
         ci: false,
-        signup: false,
         debug: false,
         e2eAsk: false,
         localMcp: false,
@@ -248,7 +247,6 @@ describe('Anthropic runTask detectPackageManager forwarding', () => {
       installDir: '/test',
       flags: {
         ci: false,
-        signup: false,
         debug: false,
         e2eAsk: false,
         localMcp: false,

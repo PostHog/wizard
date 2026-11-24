@@ -125,7 +125,7 @@ export class PostHogDestination implements TaskStreamDestination {
     const creds = this.getCredentials();
     if (!creds) return;
 
-    // A rejected scan, such as a --signup token without `wizard_session:write`,
+    // A rejected scan, such as a token without `wizard_session:write`,
     // leaves session pushes on.
     await this.postScan(creds, payload);
   }

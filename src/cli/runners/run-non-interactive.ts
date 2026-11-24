@@ -3,7 +3,7 @@ import path from 'path';
 import type { ProgramConfig } from '@programs/types';
 import { modeLabel, type NonInteractiveMode } from '@headless';
 import type { Harness, Sequence } from '@shared/constants';
-import { ErrorCodes, emitWizardError } from '@shared/errors';
+import { ErrorCodes, emitWizardError, type ErrorCode } from '@shared/errors';
 import type { CloudRegion } from '@utils/types';
 import { readEnvironment } from '@utils/environment';
 import { readApiKeyFromEnv } from '@utils/env-api-key';
@@ -19,35 +19,45 @@ export const API_KEY_HINT =
   'personal API key phx_xxx or wizard-app OAuth access token pha_xxx';
 
 /**
- * The single non-interactive validation layer: requires api-key and
- * install-dir. Every non-interactive entry point routes through
- * `runNonInteractive`, so this is the one place these checks live.
+ * The single non-interactive validation layer: refuses `--signup`, and
+ * requires api-key and install-dir. Every non-interactive entry point routes
+ * through `runNonInteractive`, so this is the one place these checks live.
+ * Exits 1 on the first failure; true when the options can run.
  */
 export function validateNonInteractiveOptions(
   options: Record<string, unknown>,
   mode: NonInteractiveMode,
-): void {
+): boolean {
   const label = modeLabel(mode);
+  if (options.signup) {
+    return refuse(
+      ErrorCodes.ArgsSignupNonInteractive,
+      `${label} mode can't sign up: sign-up needs a browser, so --signup only works in an interactive run. ` +
+        'Sign up for PostHog in a browser, then run the Wizard again with --api-key.',
+    );
+  }
   if (!options.apiKey) {
-    consoleLog.intro('PostHog Wizard');
-    consoleLog.log.error(`${label} mode requires --api-key (${API_KEY_HINT})`);
-    emitWizardError({
-      code: ErrorCodes.ArgsMissingApiKey,
-      message: `${label} mode requires --api-key (${API_KEY_HINT})`,
-    });
-    process.exit(1);
+    return refuse(
+      ErrorCodes.ArgsMissingApiKey,
+      `${label} mode requires --api-key (${API_KEY_HINT})`,
+    );
   }
   if (!options.installDir) {
-    consoleLog.intro('PostHog Wizard');
-    consoleLog.log.error(
+    return refuse(
+      ErrorCodes.ArgsMissingInstallDir,
+      `${label} mode requires --install-dir`,
       `${label} mode requires --install-dir (directory to install in)`,
     );
-    emitWizardError({
-      code: ErrorCodes.ArgsMissingInstallDir,
-      message: `${label} mode requires --install-dir`,
-    });
-    process.exit(1);
   }
+  return true;
+}
+
+/** Print the refusal and exit 1; it only returns where `process.exit` is stubbed. */
+function refuse(code: ErrorCode, message: string, shown = message): false {
+  consoleLog.intro('PostHog Wizard');
+  consoleLog.log.error(shown);
+  emitWizardError({ code, message });
+  process.exit(1);
 }
 
 /** Run `config` in the headless host, for CI (`runWizardCI`) and headless (`runWizardHeadless`) runs. */
@@ -57,7 +67,7 @@ export function runNonInteractive(
   mode: NonInteractiveMode,
 ): void {
   if (wantsDiscoveryTest(options)) return runDiscoveryTest(config, options);
-  validateNonInteractiveOptions(options, mode);
+  if (!validateNonInteractiveOptions(options, mode)) return;
   configureLogFileFromEnvironment();
 
   const env = readEnvironment();
@@ -72,12 +82,10 @@ export function runNonInteractive(
         debug: options.debug as boolean | undefined,
         installDir,
         ci: true,
-        signup: options.signup as boolean | undefined,
         localDev: options.localDev as boolean | undefined,
         localMcp: options.localMcp as boolean | undefined,
         localPosthog: options.localPosthog as boolean | undefined,
         apiKey: (options.apiKey as string) ?? readApiKeyFromEnv() ?? undefined,
-        email: options.email as string | undefined,
         projectId: options.projectId as string | undefined,
         baseUrl: options.baseUrl as string | undefined,
         benchmark: options.benchmark as boolean | undefined,

@@ -10,7 +10,7 @@
   PostHog — do you already have an account?
 
  ▸ Yes, log me in (opens PostHog to authorize)
-   No, create one for me (we'll email you a login link)
+   No, sign me up (opens PostHog to sign up)
 
  [I] Privacy & data
 

@@ -26,7 +26,6 @@ export function runOptions(input: RunInput): WizardRunOptions {
   return {
     installDir: input.installDir,
     debug: input.flags.debug,
-    signup: input.flags.signup,
     ci: input.flags.ci,
     benchmark: input.flags.benchmark,
     projectId: input.host.projectId,

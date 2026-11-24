@@ -3,14 +3,13 @@
 /** The run flags the ask policy reads. */
 export interface AskPolicyFlags {
   ci: boolean;
-  signup: boolean;
   /** Harness-only: keep the ask bridge in a `ci` run that has an answerer. */
   e2eAsk: boolean;
 }
 
 /**
  * Decide whether the `wizard_ask` overlay should be wired for this run.
- * Disabled in non-interactive modes (CI, signup) — there's no human to
+ * Disabled in non-interactive (CI) runs — there's no human to
  * answer. Per-program disabling is done by adding WIZARD_ASK_TOOL_NAME to
  * the program's `disallowedTools` so the SDK rejects calls outright.
  * Extracted so the policy can be unit-tested directly.
@@ -22,10 +21,10 @@ export interface AskPolicyFlags {
  * orchestrator's seeded warehouse task) stays unreachable from a test.
  *
  * Only the e2e TUI host sets the flag, from the `E2E_ASK` env var. No CLI flag
- * populates it, so plain `--ci` and `--signup` runs behave exactly as before.
+ * populates it, so a plain `--ci` run behaves exactly as before.
  */
 export function shouldDisableAsk(flags: AskPolicyFlags): boolean {
-  return (flags.ci || flags.signup) && !flags.e2eAsk;
+  return flags.ci && !flags.e2eAsk;
 }
 
 /** Default per-question timeout (5 minutes). */

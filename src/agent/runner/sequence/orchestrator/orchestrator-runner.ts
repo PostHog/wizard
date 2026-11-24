@@ -27,8 +27,7 @@ import type { AgentProgress, TaskNotice } from '../../../progress';
 import {
   POSTHOG_DOCS_URL,
   WIZARD_CONTACT_EMAIL,
-  WIZARD_OAUTH_SCOPES,
-  WIZARD_PROVISIONING_SCOPES,
+  WIZARD_NON_SETUP_SCOPES,
 } from '@shared/constants';
 import { installSkillById } from '@shared/skill-install';
 import {
@@ -1152,7 +1151,7 @@ async function executeOrchestrator(
   }
 
   // One bridge for the run, handed only to a task whose prompt allows asking.
-  // Absent in CI and signup, where nobody can answer.
+  // Absent in CI, where nobody can answer.
   const askBridge = shouldDisableAsk(input.flags)
     ? undefined
     : createAskBridge(interaction, {
@@ -1744,9 +1743,7 @@ async function executeOrchestrator(
     // alone — lead with the fix, and only fall back to the report-a-bug line
     // when trying again doesn't work.
     const missingScopes = (boot.credentials.missingScopes ?? []).filter(
-      (scope) =>
-        WIZARD_PROVISIONING_SCOPES.some((required) => required === scope) ||
-        !WIZARD_OAUTH_SCOPES.some((requested) => requested === scope),
+      (scope) => !WIZARD_NON_SETUP_SCOPES.includes(scope),
     );
     const reason =
       missingScopes.length > 0

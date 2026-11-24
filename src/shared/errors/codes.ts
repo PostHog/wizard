@@ -5,8 +5,12 @@ export const ErrorCodes = {
   CliInteractiveRequired: 'PHW_CLI_INTERACTIVE_REQUIRED',
   ArgsMissingApiKey: 'PHW_ARGS_MISSING_API_KEY',
   ArgsMissingInstallDir: 'PHW_ARGS_MISSING_INSTALL_DIR',
+  /** Retired: sign-up no longer takes an email. Kept because codes are append-only. */
   ArgsMissingEmail: 'PHW_ARGS_MISSING_EMAIL',
+  /** Retired: sign-up no longer provisions accounts. Kept because codes are append-only. */
   ArgsSignupProvisionFailed: 'PHW_ARGS_SIGNUP_PROVISION_FAILED',
+  /** `--signup` in a run with no browser to sign up in. */
+  ArgsSignupNonInteractive: 'PHW_ARGS_SIGNUP_NON_INTERACTIVE',
   AuthKeyType: 'PHW_AUTH_KEY_TYPE',
   AuthMissingScope: 'PHW_AUTH_MISSING_SCOPE',
   AuthRegionMismatch: 'PHW_AUTH_REGION_MISMATCH',
@@ -16,6 +20,7 @@ export const ErrorCodes = {
   AuthSettingsConflict: 'PHW_AUTH_SETTINGS_CONFLICT',
   AuthStoredLoginConflict: 'PHW_AUTH_STORED_LOGIN_CONFLICT',
   AuthProjectFetchFailed: 'PHW_AUTH_PROJECT_FETCH_FAILED',
+  AuthSignupBrowserUnavailable: 'PHW_AUTH_SIGNUP_BROWSER_UNAVAILABLE',
   EnvLocalServicesDown: 'PHW_ENV_LOCAL_SERVICES_DOWN',
   EnvServiceOutage: 'PHW_ENV_SERVICE_OUTAGE',
   DetectBadDirectory: 'PHW_DETECT_BAD_DIRECTORY',

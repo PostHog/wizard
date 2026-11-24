@@ -31,7 +31,7 @@ The wizard uses **AI models from Anthropic or OpenAI**, routed through PostHog's
 - **Source files** are sent to the selected model provider as part of the agent's context.
 - **`.env*` files and secrets** stay on your machine. The wizard's security scanner blocks anything it identifies as a secret from being read by the agent.
 - **Telemetry** (run metadata — phase, task list, planned events) is sent to PostHog by default. Pass `--no-telemetry` (or set `POSTHOG_WIZARD_NO_TELEMETRY=1`) to disable.
-- **AI opt-in**: for existing organizations in interactive runs, the wizard checks `is_ai_data_processing_approved` and waits for approval before agent work. CI and signup runs bypass this interactive gate.
+- **AI opt-in**: for existing organizations in interactive runs, the wizard checks `is_ai_data_processing_approved` and waits for approval before agent work. CI runs bypass this interactive gate.
 - **Prefer your own AI?** The wizard's integration knowledge ships as a context-mill skill you can download and run inside your own agent.
 
 The wizard's "Privacy & data" menu (intro screen) and the `[I]` shortcut on the auth screen surface the same information in-terminal.
@@ -52,7 +52,7 @@ npx @posthog/wizard@latest mcp remove
 npx @posthog/wizard@latest mcp tutorial
 ```
 
-These, `slack`, `doctor`, `provision`, `cli add` and `skill list` are tools:
+These, `slack`, `doctor`, `cli add` and `skill list` are tools:
 commands that do their job without an agent run. See
 [src/tools](src/tools/README.md).
 
@@ -185,50 +185,22 @@ npx @posthog/wizard@latest skill <skill-name>      # run one by name
 
 [`.github/CODEOWNERS`](.github/CODEOWNERS) is the source of truth, and auto-requests reviews from each owner. The [wizard handbook](https://posthog.com/handbook/wizard-and-docs/wizard#who-owns-what) explains who owns what.
 
-## Headless signup + install (agents / CI)
+## Sign up during setup
 
-> ⚠️ `--ci` is **not currently supported in published builds** (see [CI Mode](#ci-mode)).
-> This flow works in development builds only.
-
-For a fully non-interactive first-run (no existing PostHog account, no TTY,
-no browser), combine `--ci --signup --email`. The wizard provisions a new
-account, uses the returned personal API key to run the normal CI install,
-and wires PostHog into the project at `--install-dir`. Like every `--ci` run, it
-needs the gateway token file from [local
-credentials](docs/local-dev.md#credentials-for-local-ci-and-headless-runs):
+No PostHog account yet? Pass `--signup` (or set `POSTHOG_WIZARD_SIGNUP=true`):
 
 ```bash
-npx @posthog/wizard@latest --ci --signup \
-  --email you@example.com \
-  --install-dir .
+npx @posthog/wizard@latest --signup
 ```
 
-Optional flags: `--name "Your Name"`, `--region eu` (default `us`).
+The wizard opens PostHog's sign-up page in your browser. Once you've signed up,
+PostHog asks you to authorize the wizard, and setup continues as it does after a
+login.
 
-### Provision only
-
-If you just want credentials — for tests, pre-flight checks, or wiring up
-PostHog yourself — use the `provision` subcommand, which emits a structured
-`ProvisioningResult` and does nothing else:
-
-```bash
-# Human-readable (when stdout is a TTY)
-npx @posthog/wizard@latest provision --email user@example.com --region us
-
-# Machine-readable — auto when stdout is piped, or force with --json
-npx @posthog/wizard@latest provision --email user@example.com --region eu --json
-```
-
-Success prints `projectApiKey`, `host`, `projectId`, `accountId`, `accessToken`,
-`refreshToken`, and `personalApiKey` if present. `--json` prints the full
-`ProvisioningResult`, which also has `expiresAt` and `oauthClientId`. Failure
-exits 1; in `--json` mode the error is emitted to stderr as
-`{"error":"...","code":"..."}`, with `code` set to `email_exists` when the
-address is already registered.
-
-> ⚠️ **Output contains live credentials.** Pipe it into a secrets store —
-> do not let it be captured by shared CI logs. Mask the step output or
-> redirect stdout to a file your job reads and discards.
+Sign-up needs a browser on the machine that runs the wizard. When the wizard
+can't open one, it stops: sign up for PostHog in a browser, then run the wizard
+again without `--signup`. CI and headless runs refuse `--signup`; sign up
+first, then pass `--api-key`.
 
 # Options
 
@@ -239,7 +211,7 @@ The following CLI arguments are available:
 | `--help`          | Show help                                                        | boolean |         |                                                      |                                |
 | `--version`       | Show version number                                              | boolean |         |                                                      |                                |
 | `--debug`         | Enable verbose logging                                           | boolean | `false` |                                                      | `POSTHOG_WIZARD_DEBUG`         |
-| `--signup`        | Create a new PostHog account during setup                        | boolean | `false` |                                                      | `POSTHOG_WIZARD_SIGNUP`        |
+| `--signup`        | Sign up for PostHog in your browser during setup                 | boolean | `false` |                                                      | `POSTHOG_WIZARD_SIGNUP`        |
 | `--install-dir`   | Directory to install PostHog in                                  | string  |         |                                                      | `POSTHOG_WIZARD_INSTALL_DIR`   |
 | `--ci`            | Enable CI mode for non-interactive execution (dev and test builds only) | boolean | `false` |                                                      | `POSTHOG_WIZARD_CI`            |
 | `--api-key`       | PostHog personal API key (phx_xxx) for authentication            | string  |         |                                                      | `POSTHOG_WIZARD_API_KEY`       |
@@ -496,7 +468,7 @@ program at all.
 | `runTui`                          | The full-screen wizard: OAuth login, the WizardAsk screen as the answerer, the flow's screens as the workflow           | [src/tui/run.ts](src/tui/run.ts)                                       |
 | `runHeadless`                     | A run with no screens: API-key login, no answerer, log lines and the task stream                                        | [src/headless/run.ts](src/headless/run.ts)                             |
 | `runTuiTool`                      | Shows a tool's screens on their own store and resolves the code a screen exits with; it runs no program                 | [src/tui/run-tool.ts](src/tui/run-tool.ts)                             |
-| `@tools` runner                   | A tool that runs on the console, such as `addMCPServerToClientsStep`, `runDoctorReport`, `runProvision` or `listSkills` | [src/tools](src/tools/README.md)                                       |
+| `@tools` runner                   | A tool that runs on the console, such as `addMCPServerToClientsStep`, `runDoctorReport`, `runCliAdd` or `listSkills`    | [src/tools](src/tools/README.md)                                       |
 | `WizardStore`                     | The TUI's own state (the screens' answers), router, gates, overlays and display state, over its session store           | [src/tui/store.ts](src/tui/store.ts)                                   |
 | `SessionStore`                    | Launch values, detection, the login and the run's progress; each host builds its own                                    | [src/services/session](src/services/session)                           |
 | `runProgram`                      | Runs a registered program: detection, readiness, login, the host's steps, then each agent run                           | [src/programs/program-runner/run-program.ts](src/programs/program-runner/run-program.ts)             |
@@ -799,7 +771,7 @@ has two arrays, and the default sets only `downBlocksRun`:
 downBlocksRun: ['skillsOrigin'],
 ```
 
-The same policy applies during signup. Third-party status pages are not queried.
+Third-party status pages are not queried.
 After minting a token, `gateway-session.ts` checks `/readyz` on the returned
 gateway URL and reports an unavailable gateway through the existing error path.
 

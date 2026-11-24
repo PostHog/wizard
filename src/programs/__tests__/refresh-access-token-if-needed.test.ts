@@ -90,7 +90,7 @@ describe('rotateCredentials through the OAuth session', () => {
     expect(refreshed.projectId).toBe(7);
   });
 
-  it('refreshes under the minting client id when the credential carries one (provisioning signups)', async () => {
+  it('refreshes under the minting client id when the credential carries one', async () => {
     mockedRefresh.mockResolvedValueOnce({
       access_token: 'pha_new',
       expires_in: 3600,
@@ -98,12 +98,12 @@ describe('rotateCredentials through the OAuth session', () => {
       scope: 'project:read',
     });
 
-    await refresh(aging({ oauthClientId: 'client_us_provisioning' }));
+    await refresh(aging({ oauthClientId: 'client_other_app' }));
 
     expect(mockedRefresh).toHaveBeenCalledWith(
       'phr_old',
       undefined,
-      'client_us_provisioning',
+      'client_other_app',
     );
   });
 

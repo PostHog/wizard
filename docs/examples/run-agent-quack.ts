@@ -75,7 +75,6 @@ const input: RunInput = {
   apiUser,
   flags: {
     ci: false,
-    signup: false,
     debug: false,
     e2eAsk: false,
     localMcp: true,

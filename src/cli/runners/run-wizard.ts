@@ -10,7 +10,7 @@ import { withSignals } from './signals';
 /** The TUI session a command's parsed options launch: a program's run or a tool's screens. */
 export function tuiSessionArgs(
   options: Record<string, unknown>,
-): SessionArgs & { integrate?: boolean } {
+): SessionArgs & { integrate?: boolean; signup?: boolean } {
   return {
     debug: options.debug as boolean | undefined,
     localDev: options.localDev as boolean | undefined,
@@ -21,7 +21,6 @@ export function tuiSessionArgs(
     signup: options.signup as boolean | undefined,
     apiKey: options.apiKey as string | undefined,
     projectId: options.projectId as string | undefined,
-    email: options.email as string | undefined,
     baseUrl: options.baseUrl as string | undefined,
     benchmark: options.benchmark as boolean | undefined,
     yaraReport: options.yaraReport as boolean | undefined,

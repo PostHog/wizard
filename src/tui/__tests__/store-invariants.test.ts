@@ -64,8 +64,6 @@ vi.mock('@shared/health-checks/readiness.js', () => ({
     YesWithWarnings: 'yes-with-warnings',
   },
   SERVICE_LABELS: {},
-  // Generated signup sessions reach the branch that reads this config.
-  SIGNUP_WIZARD_READINESS_CONFIG: {},
   getBlockingServiceKeys: vi.fn(() => []),
 }));
 
@@ -412,8 +410,8 @@ const MUTATIONS: MutationCase[] = [
     emits: 1,
   },
   {
-    name: 'chooseProvisionAccount',
-    invoke: (s) => s.chooseProvisionAccount('a@b.com', 'us'),
+    name: 'chooseSignup',
+    invoke: (s) => s.chooseSignup(),
     emits: 1,
   },
   {
@@ -846,7 +844,7 @@ describe('store invariants', () => {
       if (flip()) view.session.frameworkContext = { postHogPresent: flip() };
       view.completedRuns = flip() ? ['integrate-run'] : [];
       view.session.detectionComplete = flip();
-      view.session.signup = flip();
+      view.signup = flip();
       return view;
     }
 
