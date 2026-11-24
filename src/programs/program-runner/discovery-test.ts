@@ -66,15 +66,16 @@ export type DiscoveryTestReport = {
     posthogSdkDetected: boolean;
     discoveredFeatures: string[];
   };
-  projects: DiscoveryTestProject[];
-  /** False when the tool catalog could not be loaded, so no tool was matched. */
-  toolsMatched: boolean;
-  /** The plan the program would open after login, and whether it would ask. */
-  plan: PlanOffer & { asks: boolean };
   /** The run project's match keys, which pick each skill. */
   matchKeys: MatchKeys;
+  /** False when the tool catalog could not be loaded, so no tool was matched. */
+  toolsMatched: boolean;
   /** What the Decisions call did, or why none was made. */
   decisions: DecisionsPreview;
+  /** The plan the program would open after login, and whether it would ask. */
+  plan: PlanOffer & { asks: boolean };
+  /** Every project with its traits. Last, as the longest part of the report. */
+  projects: DiscoveryTestProject[];
 };
 
 /** A Decisions call a preview made with a pre-issued gateway token, or the reason it made none. */
@@ -186,6 +187,8 @@ export async function testDiscovery(
   const picked = picksProject(session, config)
     ? plan.picked
     : session.runProject;
+  // The report reads top down: short facts first, each long list last.
+  const { projects: planProjects, ...planFacts } = plan;
   return {
     program: config.id,
     mode: discovery?.mode ?? 'off',
@@ -205,22 +208,23 @@ export async function testDiscovery(
       posthogSdkDetected: session.posthogSdkDetected,
       discoveredFeatures: [...session.discoveredFeatures],
     },
+    matchKeys: toMatchKeys(
+      projects.find((project) => project.path === session.runProject)?.traits ??
+        {},
+    ),
+    toolsMatched: discovery?.tools.failed !== true,
+    decisions,
+    plan: {
+      ...planFacts,
+      picked,
+      asks: planAsks(session, config, plan, requested),
+      projects: planProjects,
+    },
     projects: projects.map((project) => ({
       ...project,
       isRunProject: project.path === session.runProject,
       sources: getTraitClaims(session, project.path),
       tools: (tools.get(project.path) ?? []).map((tool) => tool.kind),
     })),
-    toolsMatched: discovery?.tools.failed !== true,
-    plan: {
-      ...plan,
-      picked,
-      asks: planAsks(session, config, plan, requested),
-    },
-    matchKeys: toMatchKeys(
-      projects.find((project) => project.path === session.runProject)?.traits ??
-        {},
-    ),
-    decisions,
   };
 }

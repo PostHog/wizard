@@ -1,4 +1,6 @@
 /** Test discovery mode (`--test-discovery`): print what a run knows about the repo before login, then exit. */
+import fs from 'fs';
+import path from 'path';
 import type {
   DiscoveryTestProject,
   DiscoveryTestReport,
@@ -14,6 +16,23 @@ import { exitWith } from './signals';
 /** Whether the command line asked for test discovery mode. */
 export function wantsDiscoveryTest(options: Record<string, unknown>): boolean {
   return options.testDiscovery !== undefined;
+}
+
+/** The report's format: JSON when the mode asks for it, or when the file it is saved to is a `.json` one. */
+export function discoveryTestFormat(
+  mode: unknown,
+  file?: string,
+): 'json' | 'text' {
+  return mode === 'json' || file?.toLowerCase().endsWith('.json')
+    ? 'json'
+    : 'text';
+}
+
+/** The files to save the report to: `--test-discovery-out`, once or repeated. */
+export function discoveryTestFiles(options: Record<string, unknown>): string[] {
+  return [options.testDiscoveryOut]
+    .flat()
+    .filter((out): out is string => typeof out === 'string' && out !== '');
 }
 
 const pad = (label: string, width = 18): string => label.padEnd(width);
@@ -183,7 +202,8 @@ export function formatDiscoveryTest(report: DiscoveryTestReport): string {
 
 /**
  * Run discovery and the program's own detection with no login and no agent,
- * print the report as text or JSON, and exit. Nothing is set up.
+ * print the report as text or JSON, or save it to a file, and exit. Nothing is
+ * set up.
  */
 export function runDiscoveryTest(
   config: ProgramConfig,
@@ -205,11 +225,19 @@ export function runDiscoveryTest(
       project,
       gateway,
     );
-    const text =
-      options.testDiscovery === 'json'
+    const render = (file?: string): string =>
+      discoveryTestFormat(options.testDiscovery, file) === 'json'
         ? JSON.stringify(report, null, 2)
         : formatDiscoveryTest(report);
-    process.stdout.write(`${text}\n`);
+    const files = discoveryTestFiles(options);
+    for (const out of files) {
+      // A relative path is from the directory the command ran in.
+      const file = path.resolve(out);
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      fs.writeFileSync(file, `${render(file)}\n`);
+      process.stdout.write(`Saved the report to ${file}\n`);
+    }
+    if (files.length === 0) process.stdout.write(`${render()}\n`);
     return 0;
   });
 }
