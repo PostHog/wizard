@@ -65,7 +65,8 @@ hoisting and breaks in a focused install or a container build.
 Once your edits are in, run the project's build, or its typecheck when that
 covers your files and is quicker, and fix what your edits broke. A failure
 that was there before your edits is not yours: note it in your handoff and
-leave it. Only a build the project defines in this checkout counts: a package
+leave it. A failure in a file you edited is yours, unless you saw it before
+your first edit. Only a build the project defines in this checkout counts: a package
 script or a compiler. Most Python, Ruby, and PHP apps have none, and then
 there is nothing to run: do not create environments, install packages, or
 reach for Docker to check your edit. Let the build check API names and types: write from the docs and
@@ -115,4 +116,9 @@ did before your edits. You installed nothing but the server library your
 capture imports, and did not run tests, search outside the project, or read
 through the whole app or hand-wrap individual components or routes. Your handoff names the files you changed, the capture mechanism, and
 the build command you ran with its result, so the report can explain it to the
-user.
+user. For each runtime, name the capture mechanism and the errors it still
+misses: global autocapture (`window.onerror`, `uncaughtException`,
+`sys.excepthook`) never sees an error a framework handler caught first, so name
+each such handler you could not wire. When server code reads its token from the
+environment at run time, name the variables and say whether the production
+start command loads `.env`.
