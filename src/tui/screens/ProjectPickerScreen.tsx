@@ -29,8 +29,9 @@ const REASONS: Record<ProjectExclusionReason, string> = {
   'not-applicable': 'not set up by this command',
 };
 
+/** The project's path from the repo root, written as a relative path. */
 const where = (project: ProjectOption): string =>
-  project.path === '.' ? 'repo root' : project.path;
+  project.path === '.' ? './' : `./${project.path}`;
 
 /** One project as a picker row: its path, its framework, and why it is greyed out. */
 export function pickerOption(
@@ -39,6 +40,10 @@ export function pickerOption(
 ): PickerOption<string> {
   const isSelected = project.path === selectedProjectPath;
   const hints = [
+    // The root's reason already names it when it is listed as a workspace root.
+    project.path === '.' && project.exclusionReason !== 'workspace-root'
+      ? 'repo root'
+      : undefined,
     project.frameworkName,
     project.isMainApp ? 'main app' : undefined,
     project.exclusionReason ? REASONS[project.exclusionReason] : undefined,
