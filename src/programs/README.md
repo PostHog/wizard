@@ -231,12 +231,12 @@ The session store and the task stream that pushes it to PostHog are services.
 See
 [session store and task streams](../services/README.md#session-store-and-task-streams).
 
-## Login and signup
+## Login
 
 [`login.ts`](program-runner/login.ts) logs in once per store. The root README
 covers [scopes](../../README.md#required-api-key-scopes), the
 [OAuth app scope ceiling](../../README.md#oauth-app-scope-ceiling), and
-[sign-up](../../README.md#sign-up-during-setup).
+[what happens without an account](../../README.md#no-posthog-account-yet).
 
 ## Add a program
 

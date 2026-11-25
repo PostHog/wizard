@@ -18,7 +18,7 @@ import { abortOnScreens } from '@tui/abort';
 import type { WizardStore } from '@tui/store';
 import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
-import { openTrackedLink, openTrackedLinkOrFail, withUtm } from '@utils/links';
+import { openTrackedLink, withUtm } from '@utils/links';
 import {
   OAuthError,
   buildCallbackErrorHtml,
@@ -27,8 +27,6 @@ import {
   oauthErrorFromTokenBody,
 } from '@utils/oauth-errors';
 import { getOAuthUrl, resolveBaseUrl } from '@utils/urls';
-import { ErrorCodes } from '@shared/errors';
-import { OutroKind } from '@shared/outro';
 
 const OAUTH_CALLBACK_STYLES = `
   <style>
@@ -74,11 +72,6 @@ export function isAuthorizationTimeout(error: Error): boolean {
 
 interface OAuthConfig {
   scopes: string[];
-  /**
-   * A `--signup` run. It opens the same login page, which sends a new email to sign-up, but stops when no browser
-   * opens instead of offering the manual paste.
-   */
-  signup?: boolean;
   /** Project to pre-select on the consent screen (the `--project-id` flag). */
   projectId?: number;
   /**
@@ -157,8 +150,8 @@ export async function startCallbackServer(
   return new Promise((resolve, reject) => {
     let callbackResolve: (code: string) => void = () => undefined;
     let callbackReject: (error: Error) => void = () => undefined;
-    // Created before the server listens, because a callback can arrive before anyone waits: sign-up
-    // first waits to see whether the browser opened.
+    // Created before the server listens, so that a callback that arrives before the caller
+    // waits still resolves the promise instead of a resolver that does not exist yet.
     const callback = new Promise<string>((res, rej) => {
       callbackResolve = res;
       callbackReject = rej;
@@ -458,25 +451,6 @@ function reportNarrowedGrant(
   );
 }
 
-/** End a sign-up that could not open a browser; signing up happens on PostHog's website. */
-function abortSignupWithoutBrowser(store: WizardStore): Promise<never> {
-  const message = "Couldn't open a browser on this machine to sign up.";
-  return abortOnScreens(store, {
-    code: ErrorCodes.AuthSignupBrowserUnavailable,
-    message,
-    error: new Error(message),
-    outroData: {
-      kind: OutroKind.Error,
-      message: 'Sign-up needs a browser',
-      body: [
-        "Sign-up opens PostHog in a browser, and the Wizard couldn't open one on this machine.",
-        '',
-        'Sign up for PostHog in a browser, then run the Wizard again without --signup.',
-      ].join('\n'),
-    },
-  });
-}
-
 export async function performOAuthFlow(
   config: OAuthConfig,
   store: WizardStore,
@@ -547,21 +521,7 @@ export async function performOAuthFlow(
 
       // The localhost proxy URL stays untagged — the PostHog destination
       // it redirects to carries the UTMs.
-      if (config.signup) {
-        // Sign-up stops when no browser opens here; only the login falls back to the manual paste.
-        const opened = await openTrackedLinkOrFail(urlToOpen, 'oauth', {
-          auto: true,
-          skipUtm: true,
-        });
-        if (!opened) {
-          server.close();
-          store.setLoginUrl(null);
-          store.setAuthorizeUrl(null);
-          await abortSignupWithoutBrowser(store);
-        }
-      } else {
-        openTrackedLink(urlToOpen, 'oauth', { auto: true, skipUtm: true });
-      }
+      openTrackedLink(urlToOpen, 'oauth', { auto: true, skipUtm: true });
 
       store.pushStatus('Waiting for authorization...');
 

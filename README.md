@@ -185,22 +185,13 @@ npx @posthog/wizard@latest skill <skill-name>      # run one by name
 
 [`.github/CODEOWNERS`](.github/CODEOWNERS) is the source of truth, and auto-requests reviews from each owner. The [wizard handbook](https://posthog.com/handbook/wizard-and-docs/wizard#who-owns-what) explains who owns what.
 
-## Sign up during setup
+## No PostHog account yet
 
-No PostHog account yet? Pass `--signup` (or set `POSTHOG_WIZARD_SIGNUP=true`):
-
-```bash
-npx @posthog/wizard@latest --signup
-```
-
-The wizard opens PostHog's login page in your browser. Enter your email there
-and PostHog takes you to sign-up when it's new. Once you've signed up, PostHog
-asks you to authorize the wizard, and setup continues as it does after a login.
-
-Sign-up needs a browser on the machine that runs the wizard. When the wizard
-can't open one, it stops: sign up for PostHog in a browser, then run the wizard
-again without `--signup`. CI and headless runs refuse `--signup`; sign up
-first, then pass `--api-key`.
+Run the wizard as usual. It opens PostHog's login page in your browser, and
+when you enter an email with no account, PostHog takes you to sign-up. Once
+you've signed up, PostHog asks you to authorize the wizard, and setup
+continues as it does after a login. CI and headless runs need an existing
+account: sign up in a browser first, then pass `--api-key`.
 
 # Options
 
@@ -211,7 +202,6 @@ The following CLI arguments are available:
 | `--help`          | Show help                                                        | boolean |         |                                                      |                                |
 | `--version`       | Show version number                                              | boolean |         |                                                      |                                |
 | `--debug`         | Enable verbose logging                                           | boolean | `false` |                                                      | `POSTHOG_WIZARD_DEBUG`         |
-| `--signup`        | Sign up for PostHog in your browser during setup                 | boolean | `false` |                                                      | `POSTHOG_WIZARD_SIGNUP`        |
 | `--install-dir`   | Directory to install PostHog in                                  | string  |         |                                                      | `POSTHOG_WIZARD_INSTALL_DIR`   |
 | `--ci`            | Enable CI mode for non-interactive execution (dev and test builds only) | boolean | `false` |                                                      | `POSTHOG_WIZARD_CI`            |
 | `--api-key`       | PostHog personal API key (phx_xxx) for authentication            | string  |         |                                                      | `POSTHOG_WIZARD_API_KEY`       |

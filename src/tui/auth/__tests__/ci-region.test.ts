@@ -133,7 +133,7 @@ describe('getOrAskForProjectData OAuth scopes', () => {
   });
 });
 
-describe('getOrAskForProjectData sign-up', () => {
+describe('getOrAskForProjectData program login', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockedFetchProject.mockResolvedValue(project);
@@ -149,11 +149,9 @@ describe('getOrAskForProjectData sign-up', () => {
     });
   });
 
-  // Sign-up is the browser login started on the sign-up page, so it keeps the program's scopes and project.
-  it("opens the sign-up page with the program's login scopes", async () => {
+  it("logs in with the program's scopes and the requested project", async () => {
     const result = await getOrAskForProjectData({
       store,
-      signup: true,
       projectId: 123,
       programId: 'self-driving',
     });
@@ -161,21 +159,11 @@ describe('getOrAskForProjectData sign-up', () => {
     expect(mockedOAuthFlow).toHaveBeenCalledWith(
       {
         scopes: [...getOAuthScopesForProgram('self-driving')],
-        signup: true,
         projectId: 123,
         baseUrl: undefined,
       },
       store,
     );
     expect(result.projectApiKey).toBe('phc_test');
-  });
-
-  it('opens the login page when the run does not sign up', async () => {
-    await getOrAskForProjectData({ store, projectId: 123 });
-
-    expect(mockedOAuthFlow).toHaveBeenCalledWith(
-      expect.objectContaining({ signup: undefined }),
-      store,
-    );
   });
 });

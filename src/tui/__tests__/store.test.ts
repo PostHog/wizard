@@ -1312,27 +1312,4 @@ describe('WizardStore', () => {
       expect(store.integrate).toBe(true);
     });
   });
-
-  describe('chooseSignup (self-driving "no account" branch)', () => {
-    it('makes the login open the sign-up page, and integrates', () => {
-      const store = createStore(Program.SelfDriving);
-      store.session = buildSession({});
-
-      store.chooseSignup();
-
-      expect(store.signup).toBe(true);
-      expect(store.integrate).toBe(true);
-    });
-
-    it('emits exactly one change event', () => {
-      const store = createStore(Program.SelfDriving);
-      store.session = buildSession({});
-      const cb = vi.fn();
-      store.subscribe(cb);
-
-      store.chooseSignup();
-
-      expect(cb).toHaveBeenCalledTimes(1);
-    });
-  });
 });

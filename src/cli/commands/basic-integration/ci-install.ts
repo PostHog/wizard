@@ -23,8 +23,8 @@ export function runHeadlessInstall(argv: Arguments): void {
 
 /**
  * Non-interactive install shared by CI and headless. The runner validates the
- * options (`--signup`, `--api-key`, `--install-dir`) and warns on an unexpected
- * key prefix; `mode` only changes user-facing labels and which runner is invoked.
+ * options (`--api-key`, `--install-dir`) and warns on an unexpected key
+ * prefix; `mode` only changes user-facing labels and which runner is invoked.
  */
 function runNonInteractiveInstall(
   argv: Arguments,

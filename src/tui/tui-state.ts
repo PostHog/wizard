@@ -11,8 +11,6 @@ export type TuiLaunchChoices = {
   mcpFeatures?: string[];
   /** `--integrate`: integrate PostHog without asking. */
   integrate?: boolean;
-  /** `--signup`: the login opens PostHog's sign-up instead. */
-  signup?: boolean;
 };
 
 export type TuiState = {
@@ -24,9 +22,6 @@ export type TuiState = {
 
   // From detection + screens
   setupConfirmed: boolean;
-
-  /** The login opens PostHog's sign-up, from `--signup` or the self-driving account question. */
-  signup: boolean;
 
   // Login overlays
   /** The localhost login URL the auth screen shows while the OAuth flow waits. */
@@ -105,7 +100,6 @@ export function initialTuiState(
     mcpFeatures: choices.mcpFeatures,
     programLabel,
     setupConfirmed: false,
-    signup: choices.signup === true,
     loginUrl: null,
     authorizeUrl: null,
     mcpComplete: false,

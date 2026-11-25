@@ -1,6 +1,6 @@
 /**
  * Login: resolve the PostHog credentials and project for a run, through the
- * browser OAuth flow, which can start with a sign-up. UI-bound, so it lives
+ * browser OAuth flow. UI-bound, so it lives
  * with the TUI's store; programs receive credentials, never log in.
  */
 
@@ -72,8 +72,6 @@ export async function getOrAskForProjectData(
   _options: Pick<WizardRunOptions, 'projectId'> & {
     /** Where login progress and errors are shown. */
     store: WizardStore;
-    /** Open PostHog's sign-up instead of its login; the run fails when no browser opens. */
-    signup?: boolean;
     /** Explicit base URL override (`--base-url`, from `session.baseUrl`). When
      *  set, pins every PostHog origin and bypasses region resolution. */
     baseUrl?: string;
@@ -117,7 +115,6 @@ export async function getOrAskForProjectData(
   } = await withProgress('login', () =>
     askForWizardLogin({
       store,
-      signup: _options.signup,
       baseUrl: _options.baseUrl,
       programId: _options.programId,
       scopeAdditions: _options.scopeAdditions,
@@ -155,7 +152,6 @@ ${cloudUrl}/settings/project#variables`);
 
 async function askForWizardLogin(options: {
   store: WizardStore;
-  signup?: boolean;
   /** Explicit base URL override (`--base-url`); pins every PostHog origin. */
   baseUrl?: string;
   /** Used to pick the right scope set via `getOAuthScopesForProgram`.
@@ -175,11 +171,9 @@ async function askForWizardLogin(options: {
       ? withScopeAdditions(WIZARD_OAUTH_SCOPES, options.scopeAdditions)
       : getOAuthScopesForProgram(options.programId)),
   ];
-  if (options.signup) analytics.setTag('browser-signup', true);
   const tokenResponse = await performOAuthFlow(
     {
       scopes: requestedScopes,
-      signup: options.signup,
       projectId: options.projectId,
       baseUrl: options.baseUrl,
     },

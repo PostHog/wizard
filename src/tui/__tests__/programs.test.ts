@@ -167,16 +167,6 @@ describe('programSequence', () => {
       expect(entry.show?.(view)).toBe(false);
       expect(entry.isComplete?.(view)).toBe(true);
     });
-
-    it('shows the gate on a sign-up run whose new org has not approved AI', () => {
-      // A browser sign-up logs in with the full scopes, so the org's approval is read like any login's.
-      const view = tuiView({}, { signup: true });
-      view.session.apiUser = orgWith(false);
-      const entry = getEntry(Program.SelfDriving, ScreenId.AiOptIn);
-
-      expect(entry.show?.(view)).toBe(true);
-      expect(entry.isComplete?.(view)).toBe(false);
-    });
   });
 
   describe('Wizard run predicate', () => {

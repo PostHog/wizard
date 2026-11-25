@@ -1,14 +1,9 @@
 /**
- * SelfDrivingIntegrationCheckScreen — shown only when detection found no
- * PostHog in the project. Self-driving needs a PostHog SDK, so we always
- * integrate first; but a project with no SDK is often a project with no PostHog
- * account either, so this screen first asks whether the user already has one:
+ * SelfDrivingIntegrationCheckScreen: shown only when detection found no
+ * PostHog in the project. Self-driving needs a PostHog SDK, so the run
+ * integrates first. "Continue" calls setIntegrate(true), and auth then opens
+ * PostHog's login, which also lets a person without an account sign up.
  *
- *   - "Yes, log me in"         → setIntegrate(true); auth opens the login.
- *   - "No, sign me up"         → chooseSignup(); auth opens PostHog's sign-up
- *                                in the browser, then the consent screen.
- *
- * Both answers integrate the SDK; they only differ in which page auth opens.
  * Skipped entirely when PostHog is already present (or under `--integrate`,
  * which forces integration + the default OAuth login).
  */
@@ -77,11 +72,10 @@ export const SelfDrivingIntegrationCheckScreen = ({
 
       <Box marginTop={1} flexDirection="column">
         <Text dimColor>
-          This will kick off an agent to explore your project and find existing
-          PostHog integrations. Self-driving reads PostHog data, so we&apos;ll
-          set that up first: it gives your signal sources something to watch. To
-          do that we need to connect to PostHog — do you already have an
-          account?
+          Self-driving reads PostHog data, so the setup agent adds PostHog to
+          your project first. That gives your signal sources something to watch.
+          PostHog opens in your browser next: log in, or create an account if
+          you don&apos;t have one.
         </Text>
       </Box>
 
@@ -89,24 +83,12 @@ export const SelfDrivingIntegrationCheckScreen = ({
         <PickerMenu
           options={[
             {
-              label: 'Yes, log me in',
-              value: 'login',
-              hint: 'opens PostHog to authorize',
-            },
-            {
-              label: 'No, sign me up',
-              value: 'signup',
-              hint: 'opens PostHog to sign up',
+              label: 'Continue',
+              value: 'continue',
+              hint: 'opens PostHog to log in or sign up',
             },
           ]}
-          onSelect={(value) => {
-            const choice = Array.isArray(value) ? value[0] : value;
-            if (choice === 'login') {
-              store.setIntegrate(true);
-            } else {
-              store.chooseSignup();
-            }
-          }}
+          onSelect={() => store.setIntegrate(true)}
         />
       </Box>
 
