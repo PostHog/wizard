@@ -9,7 +9,7 @@ import { logToFile } from '@utils/debug';
 import type { WizardStore } from '@tui/store';
 import { getOrAskForProjectData } from './project-data.js';
 
-/** Log in once through OAuth for the session's launch values. */
+/** Log in once through OAuth for the session's launch values, starting with a sign-up when the TUI chose one. */
 export async function oauthLogin(
   session: WizardSession,
   programId: string,
@@ -19,10 +19,8 @@ export async function oauthLogin(
   logToFile('[agent-runner] starting OAuth');
   const data = await getOrAskForProjectData({
     store,
-    signup: session.signup,
+    signup: store.signup,
     projectId: session.projectId,
-    email: session.email,
-    region: session.region,
     baseUrl: session.baseUrl,
     localMcp: session.localMcp,
     programId,
@@ -34,7 +32,6 @@ export async function oauthLogin(
       accessToken: data.accessToken,
       refreshToken: data.refreshToken,
       expiresAt: data.expiresAt,
-      oauthClientId: data.oauthClientId,
       projectApiKey: data.projectApiKey,
       host: data.host,
       projectId: data.projectId,

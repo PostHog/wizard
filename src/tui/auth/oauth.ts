@@ -18,7 +18,7 @@ import { abortOnScreens } from '@tui/abort';
 import type { WizardStore } from '@tui/store';
 import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
-import { openTrackedLink, withUtm } from '@utils/links';
+import { openTrackedLink, openTrackedLinkOrFail, withUtm } from '@utils/links';
 import {
   OAuthError,
   buildCallbackErrorHtml,
@@ -27,6 +27,8 @@ import {
   oauthErrorFromTokenBody,
 } from '@utils/oauth-errors';
 import { getOAuthUrl, resolveBaseUrl } from '@utils/urls';
+import { ErrorCodes } from '@shared/errors';
+import { OutroKind } from '@shared/outro';
 
 const OAUTH_CALLBACK_STYLES = `
   <style>
@@ -72,6 +74,10 @@ export function isAuthorizationTimeout(error: Error): boolean {
 
 interface OAuthConfig {
   scopes: string[];
+  /**
+   * A `--signup` run. It opens the same login page, which sends a new email to sign-up, but stops when no browser
+   * opens instead of offering the manual paste.
+   */
   signup?: boolean;
   /** Project to pre-select on the consent screen (the `--project-id` flag). */
   projectId?: number;
@@ -92,10 +98,6 @@ function getCallbackUrl(port: number): string {
 
 function getLocalLoginUrl(port: number): string {
   return `${getLocalOAuthOrigin(port)}/authorize`;
-}
-
-function getLocalSignupUrl(port: number): string {
-  return `${getLocalLoginUrl(port)}?signup=true`;
 }
 
 /**
@@ -146,7 +148,6 @@ function generateCodeChallenge(verifier: string): string {
 
 export async function startCallbackServer(
   authUrl: string,
-  signupUrl: string,
   port: number,
 ): Promise<{
   port: number;
@@ -154,14 +155,17 @@ export async function startCallbackServer(
   waitForCallback: () => Promise<string>;
 }> {
   return new Promise((resolve, reject) => {
-    let callbackResolve: (code: string) => void;
-    let callbackReject: (error: Error) => void;
-
-    const waitForCallback = () =>
-      new Promise<string>((res, rej) => {
-        callbackResolve = res;
-        callbackReject = rej;
-      });
+    let callbackResolve: (code: string) => void = () => undefined;
+    let callbackReject: (error: Error) => void = () => undefined;
+    // Created before the server listens, because a callback can arrive before anyone waits: sign-up
+    // first waits to see whether the browser opened.
+    const callback = new Promise<string>((res, rej) => {
+      callbackResolve = res;
+      callbackReject = rej;
+    });
+    // An error callback that arrives before anyone waits would otherwise be an unhandled rejection.
+    callback.catch(() => undefined);
+    const waitForCallback = () => callback;
 
     const server = http.createServer((req, res) => {
       if (!req.url) {
@@ -172,9 +176,7 @@ export async function startCallbackServer(
       const url = new URL(req.url, getLocalOAuthOrigin(port));
 
       if (url.pathname === '/authorize') {
-        const isSignup = url.searchParams.get('signup') === 'true';
-        const redirectUrl = isSignup ? signupUrl : authUrl;
-        res.writeHead(302, { Location: redirectUrl });
+        res.writeHead(302, { Location: authUrl });
         res.end();
         return;
       }
@@ -456,6 +458,25 @@ function reportNarrowedGrant(
   );
 }
 
+/** End a sign-up that could not open a browser; signing up happens on PostHog's website. */
+function abortSignupWithoutBrowser(store: WizardStore): Promise<never> {
+  const message = "Couldn't open a browser on this machine to sign up.";
+  return abortOnScreens(store, {
+    code: ErrorCodes.AuthSignupBrowserUnavailable,
+    message,
+    error: new Error(message),
+    outroData: {
+      kind: OutroKind.Error,
+      message: 'Sign-up needs a browser',
+      body: [
+        "Sign-up opens PostHog in a browser, and the Wizard couldn't open one on this machine.",
+        '',
+        'Sign up for PostHog in a browser, then run the Wizard again without --signup.',
+      ].join('\n'),
+    },
+  });
+}
+
 export async function performOAuthFlow(
   config: OAuthConfig,
   store: WizardStore,
@@ -495,18 +516,10 @@ export async function performOAuthFlow(
         authUrl.searchParams.set('team_id', String(config.projectId));
       }
 
-      // UTM-tag both kickoff URLs so the journey into the app is
+      // UTM-tag the kickoff URL so the journey into the app is
       // attributable to the wizard command that started it.
       const taggedAuthUrl = withUtm(authUrl.toString(), 'oauth-authorize');
-      const signupUrl = new URL(
-        withUtm(
-          `${oauthUrl}/signup?next=${encodeURIComponent(taggedAuthUrl)}`,
-          'oauth-signup',
-        ),
-      );
-      const localSignupUrl = getLocalSignupUrl(port);
-      const localLoginUrl = getLocalLoginUrl(port);
-      const urlToOpen = config.signup ? localSignupUrl : localLoginUrl;
+      const urlToOpen = getLocalLoginUrl(port);
 
       logToFile(`[oauth] attempting callback server on port ${port}`);
 
@@ -515,7 +528,6 @@ export async function performOAuthFlow(
       try {
         ({ server, waitForCallback } = await startCallbackServer(
           taggedAuthUrl,
-          signupUrl.toString(),
           port,
         ));
       } catch (e) {
@@ -531,13 +543,25 @@ export async function performOAuthFlow(
       // direct PostHog authorize URL too, for the manual-paste modal — on a
       // remote/headless box the user opens it from another machine, where
       // localhost:<port> is unreachable.
-      store.setAuthorizeUrl(
-        config.signup ? signupUrl.toString() : taggedAuthUrl,
-      );
+      store.setAuthorizeUrl(taggedAuthUrl);
 
       // The localhost proxy URL stays untagged — the PostHog destination
       // it redirects to carries the UTMs.
-      openTrackedLink(urlToOpen, 'oauth', { auto: true, skipUtm: true });
+      if (config.signup) {
+        // Sign-up stops when no browser opens here; only the login falls back to the manual paste.
+        const opened = await openTrackedLinkOrFail(urlToOpen, 'oauth', {
+          auto: true,
+          skipUtm: true,
+        });
+        if (!opened) {
+          server.close();
+          store.setLoginUrl(null);
+          store.setAuthorizeUrl(null);
+          await abortSignupWithoutBrowser(store);
+        }
+      } else {
+        openTrackedLink(urlToOpen, 'oauth', { auto: true, skipUtm: true });
+      }
 
       store.pushStatus('Waiting for authorization...');
 

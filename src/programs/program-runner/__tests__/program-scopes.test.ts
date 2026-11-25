@@ -3,10 +3,7 @@
  * source creation 403s without the external-data-source pair, on a consent
  * the user already granted.
  */
-import {
-  getOAuthScopesForProgram,
-  getProvisioningScopesForProgram,
-} from '../program-registry';
+import { getOAuthScopesForProgram } from '../program-registry';
 
 describe('posthog-integration scopes', () => {
   it('includes the warehouse pair for the orchestrator warehouse task', () => {
@@ -75,24 +72,13 @@ describe('audit scopes', () => {
   });
 });
 
-/**
- * The signup path mints a token from these scopes. A program's additions
- * must reach its own provisioned tokens and no one else's.
- */
-describe('provisioning scopes', () => {
-  it('layers replay-vision additions on the provisioning base', () => {
-    const scopes = getProvisioningScopesForProgram('replay-vision');
-    expect(scopes).toContain('replay_scanner:write');
-    expect(scopes).toContain('session_recording:read');
-    expect(scopes).toContain('product_enablement:write');
-    expect(scopes).toContain('project:read');
-  });
-
+/** A program's additions reach its own login, sign-up included, and no one else's. */
+describe('scope additions', () => {
   it('keeps other programs on the unmodified base', () => {
-    expect(getProvisioningScopesForProgram(null)).not.toContain(
+    expect(getOAuthScopesForProgram(null)).not.toContain(
       'replay_scanner:write',
     );
-    expect(getProvisioningScopesForProgram('metrics')).not.toContain(
+    expect(getOAuthScopesForProgram('metrics')).not.toContain(
       'replay_scanner:write',
     );
   });

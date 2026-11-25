@@ -8,7 +8,6 @@ import * as path from 'node:path';
 const {
   mockRunTuiCli,
   mockRunHeadlessCli,
-  mockProvisionNewAccountCli,
   mockConfigureLogFileCli,
   mockTestDiscoveryCli,
 } = vi.hoisted(() => ({
@@ -23,7 +22,6 @@ const {
     (..._args: Parameters<typeof import('@headless').runHeadless>) =>
       Promise.resolve(0),
   ),
-  mockProvisionNewAccountCli: vi.fn(),
 }));
 
 // The CLI's job ends at the host: it parses arguments, picks the TUI or the
@@ -44,9 +42,6 @@ vi.mock(import('@programs'), async (importOriginal) => ({
 }));
 
 vi.mock('semver', () => ({ satisfies: () => true }));
-vi.mock('@utils/provisioning', () => ({
-  provisionNewAccount: mockProvisionNewAccountCli,
-}));
 vi.mock(import('@programs/posthog-integration'), () => ({
   config: {
     id: 'posthog-integration',
@@ -641,8 +636,8 @@ describe('CLI argument parsing', () => {
     });
   });
 
-  describe('--ci --signup flow', () => {
-    // Exits inside the async provisioning IIFE become unhandled rejections if
+  describe('--signup in a non-interactive run', () => {
+    // Exits inside the async handler become unhandled rejections if
     // process.exit throws. Override to a silent no-op for this block — the
     // handler's exit calls are always terminal, so "continuing" past them is
     // harmless and lets us assert on both the exit code and mock state.
@@ -650,31 +645,35 @@ describe('CLI argument parsing', () => {
       process.exit = vi.fn() as unknown as typeof process.exit;
     });
 
-    const successResult = {
-      projectApiKey: 'phc_new',
-      host: 'https://us.posthog.com',
-      projectId: 'proj_42',
-      accountId: 'acc_1',
-      accessToken: 'at',
-      refreshToken: 'rt',
-      personalApiKey: 'phx_from_signup',
-    };
+    // Sign-up happens in a browser, so a run with no screens refuses it even with a key.
+    test.each(['--ci', '--headless-DONOTUSE-EXPERIMENTAL'])(
+      'refuses --signup under %s before starting the host',
+      async (mode) => {
+        const stderr = vi
+          .spyOn(process.stderr, 'write')
+          .mockImplementation(() => true);
+        try {
+          await runCLI([
+            mode,
+            '--signup',
+            '--api-key',
+            'phx_existing',
+            '--install-dir',
+            '/tmp/test',
+          ]);
 
-    async function runCISignup(extra: string[] = []) {
-      await runCLI([
-        '--ci',
-        '--signup',
-        '--email',
-        'new@example.com',
-        '--install-dir',
-        '/tmp/test',
-        ...extra,
-      ]);
-      // Let the async provisioning and the host's start settle
-      for (let i = 0; i < 5; i++) {
-        await new Promise((resolve) => setImmediate(resolve));
-      }
-    }
+          expect(process.exit).toHaveBeenCalledWith(1);
+          expect(mockRunHeadlessCli).not.toHaveBeenCalled();
+          expect(stderr).toHaveBeenCalledWith(
+            expect.stringMatching(
+              /phw-error:.*PHW_ARGS_SIGNUP_NON_INTERACTIVE.*--api-key/,
+            ),
+          );
+        } finally {
+          stderr.mockRestore();
+        }
+      },
+    );
 
     test('--test-discovery previews before any credential check, signup or host', async () => {
       mockTestDiscoveryCli.mockResolvedValue({
@@ -692,7 +691,7 @@ describe('CLI argument parsing', () => {
         return true;
       }) as typeof process.stdout.write);
       try {
-        // No --email: the CI path would stop on that before it could sign up.
+        // --signup alone stops a CI run, so the preview must come first.
         await runCLI([
           '--ci',
           '--signup',
@@ -712,7 +711,6 @@ describe('CLI argument parsing', () => {
         written.mockRestore();
       }
       expect(process.exit).not.toHaveBeenCalledWith(1);
-      expect(mockProvisionNewAccountCli).not.toHaveBeenCalled();
       expect(mockRunHeadlessCli).not.toHaveBeenCalled();
       expect(mockRunTuiCli).not.toHaveBeenCalled();
     });
@@ -810,93 +808,14 @@ describe('CLI argument parsing', () => {
       } finally {
         delete process.env.POSTHOG_WIZARD_TEST_DISCOVERY;
       }
-      // The CI path ran, and stopped where it does without --email.
+      // The CI path ran, and stopped on --signup.
       expect(process.exit).toHaveBeenCalledWith(1);
       expect(mockTestDiscoveryCli).not.toHaveBeenCalled();
     });
 
-    test('requires --email when --ci --signup is set', async () => {
-      await runCLI(['--ci', '--signup', '--install-dir', '/tmp/test']);
-      expect(process.exit).toHaveBeenCalledWith(1);
-      expect(mockProvisionNewAccountCli).not.toHaveBeenCalled();
-    });
-
-    test('rejects --ci without --api-key and without --signup', async () => {
+    test('rejects --ci without --api-key', async () => {
       await runCLI(['--ci', '--install-dir', '/tmp/test']);
       expect(process.exit).toHaveBeenCalledWith(1);
-      expect(mockProvisionNewAccountCli).not.toHaveBeenCalled();
-    });
-
-    test('provisions a new account and feeds personalApiKey into the CI flow', async () => {
-      mockProvisionNewAccountCli.mockResolvedValue(successResult);
-      await runCISignup();
-      expect(mockProvisionNewAccountCli).toHaveBeenCalledWith(
-        'new@example.com',
-        '',
-        'US',
-        { baseUrl: undefined },
-      );
-      const args = getLastBuildSessionArgs();
-      expect(args.apiKey).toBe('phx_from_signup');
-    });
-
-    test('forwards --name to provisionNewAccount', async () => {
-      mockProvisionNewAccountCli.mockResolvedValue(successResult);
-      await runCISignup(['--name', 'Test User']);
-      expect(mockProvisionNewAccountCli).toHaveBeenCalledWith(
-        'new@example.com',
-        'Test User',
-        'US',
-        { baseUrl: undefined },
-      );
-    });
-
-    test('uppercases --region before provisioning', async () => {
-      mockProvisionNewAccountCli.mockResolvedValue(successResult);
-      await runCISignup(['--region', 'eu']);
-      expect(mockProvisionNewAccountCli).toHaveBeenCalledWith(
-        'new@example.com',
-        '',
-        'EU',
-        { baseUrl: undefined },
-      );
-    });
-
-    test('exits non-zero when provisioning rejects', async () => {
-      mockProvisionNewAccountCli.mockRejectedValue(new Error('network fail'));
-      await runCISignup();
-      expect(mockProvisionNewAccountCli).toHaveBeenCalled();
-      expect(process.exit).toHaveBeenCalledWith(1);
-      expect(mockRunHeadlessCli).not.toHaveBeenCalled();
-    });
-
-    test('exits non-zero when provisioning returns no personal API key', async () => {
-      mockProvisionNewAccountCli.mockResolvedValue({
-        ...successResult,
-        personalApiKey: undefined,
-      });
-      await runCISignup();
-      expect(process.exit).toHaveBeenCalledWith(1);
-      expect(mockRunHeadlessCli).not.toHaveBeenCalled();
-    });
-
-    test('existing --api-key takes precedence over --signup', async () => {
-      await runCLI([
-        '--ci',
-        '--signup',
-        '--email',
-        'new@example.com',
-        '--api-key',
-        'phx_existing',
-        '--install-dir',
-        '/tmp/test',
-      ]);
-      for (let i = 0; i < 3; i++) {
-        await new Promise((resolve) => setImmediate(resolve));
-      }
-      expect(mockProvisionNewAccountCli).not.toHaveBeenCalled();
-      const args = getLastBuildSessionArgs();
-      expect(args.apiKey).toBe('phx_existing');
     });
   });
 });

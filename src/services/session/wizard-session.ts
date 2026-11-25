@@ -25,7 +25,6 @@ function parseProjectIdArg(value: string | undefined): number | undefined {
 export interface WizardSession extends ProgramSession {
   /** A pre-issued gateway token a dev or test `--ci` run logs in with; the login puts it on the credentials. */
   ciGateway: GatewayCredential | null;
-  email?: string;
   region?: CloudRegion;
 
   /**
@@ -81,14 +80,12 @@ export type SessionArgs = {
   debug?: boolean;
   installDir?: string;
   ci?: boolean;
-  signup?: boolean;
   /** Harness-only. Set by the e2e TUI host from `E2E_ASK`, never by a flag. */
   e2eAsk?: boolean;
   localDev?: boolean;
   localMcp?: boolean;
   localPosthog?: boolean;
   apiKey?: string;
-  email?: string;
   region?: CloudRegion;
   baseUrl?: string;
   integration?: Integration;
@@ -109,12 +106,10 @@ export function buildSession(args: SessionArgs): WizardSession {
     debug: args.debug ?? false,
     installDir: args.installDir ?? process.cwd(),
     ci: args.ci ?? false,
-    signup: args.signup ?? false,
     e2eAsk: args.e2eAsk ?? false,
     ciGateway: null,
     localMcp: local.localMcp,
     apiKey: args.apiKey,
-    email: args.email,
     region: args.region,
     // `--local-posthog` is sugar over `--base-url`, which every downstream URL
     // helper already honours. An explicit `--base-url` is more specific, so it wins.
@@ -129,9 +124,7 @@ export function buildSession(args: SessionArgs): WizardSession {
     sequence: args.sequence,
     model: args.model,
     // No screen can ask in a scripted CI run, so granting keeps CI's
-    // telemetry as it was. --signup alone still provisions a brand-new
-    // account headlessly, and that user has never seen the disclosure — a
-    // headless `--ci --signup` run stays covered by the ci branch above.
+    // telemetry as it was. An interactive run, sign-up included, asks.
     discoveryConsent: args.ci
       ? DiscoveryConsent.Granted
       : DiscoveryConsent.Undecided,

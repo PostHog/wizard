@@ -22,7 +22,6 @@ import {
   evaluateWizardReadiness,
   getBlockingServiceKeys,
   SERVICE_LABELS,
-  SIGNUP_WIZARD_READINESS_CONFIG,
   WizardReadiness,
 } from '@shared/health-checks/readiness';
 import { OutroKind } from '@shared/outro';
@@ -678,7 +677,6 @@ async function invokeProgram(
               apiKey: current.apiKey,
               baseUrl: current.baseUrl,
               region: current.region,
-              email: current.email,
             },
           },
           {
@@ -920,7 +918,6 @@ function needsAiApproval(
 ): boolean {
   return (
     !session.ci &&
-    !session.signup &&
     credentials.apiUser?.organization?.is_ai_data_processing_approved !== true
   );
 }
@@ -994,7 +991,6 @@ function sessionHooks(
 function runFlags(session: WizardSession): RunInput['flags'] {
   return {
     ci: session.ci,
-    signup: session.signup,
     debug: session.debug,
     e2eAsk: session.e2eAsk,
     localMcp: session.localMcp,
@@ -1073,19 +1069,15 @@ async function checkReadiness(
   }
   if (config.healthCheck === false) return null;
   logToFile('[agent-runner] evaluating wizard readiness');
-  const readinessConfig = store.session.signup
-    ? SIGNUP_WIZARD_READINESS_CONFIG
-    : undefined;
-  const readiness = await evaluateWizardReadiness(readinessConfig);
+  const readiness = await evaluateWizardReadiness();
   logToFile(`[agent-runner] readiness=${readiness.decision}`);
   store.setReadinessResult(readiness);
   const warn = (message: string) =>
     context.emit({ kind: 'log', level: 'warn', message });
   if (readiness.decision === WizardReadiness.No) {
-    const blockingLabels = getBlockingServiceKeys(
-      readiness.health,
-      readinessConfig,
-    ).map((k) => `${SERVICE_LABELS[k]} (${readiness.health[k].status})`);
+    const blockingLabels = getBlockingServiceKeys(readiness.health).map(
+      (k) => `${SERVICE_LABELS[k]} (${readiness.health[k].status})`,
+    );
     logToFile(`[agent-runner] blocked by: ${blockingLabels.join(', ')}`);
     const go = context.workflow
       ? await context.park(

@@ -6,24 +6,15 @@ import {
   regionOption,
 } from '@shared/headless-mode';
 import { wantsDiscoveryTest } from '@cli/runners';
-import { provisionCommand } from '../provision';
 import type { Command } from '../command';
 
 export const basicIntegrationCommand: Command = {
   name: ['$0'],
   description: 'Run the PostHog setup wizard',
-  // provision is a one-shot HTTP call tied to the base flow, not a wizard
-  // program — it rides under the base command rather than as a peer.
-  children: [provisionCommand],
   options: {
     'install-dir': {
       describe:
         'Directory to install PostHog in\nenv: POSTHOG_WIZARD_INSTALL_DIR',
-      type: 'string',
-    },
-    name: {
-      describe:
-        'Name for account creation with --ci --signup\nenv: POSTHOG_WIZARD_NAME',
       type: 'string',
     },
     // ── Internal modes ───────────────────────────────────────────────

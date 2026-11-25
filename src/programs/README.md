@@ -236,7 +236,7 @@ See
 [`login.ts`](program-runner/login.ts) logs in once per store. The root README
 covers [scopes](../../README.md#required-api-key-scopes), the
 [OAuth app scope ceiling](../../README.md#oauth-app-scope-ceiling), and
-[signup](../../README.md#headless-signup--install-agents--ci).
+[sign-up](../../README.md#sign-up-during-setup).
 
 ## Add a program
 

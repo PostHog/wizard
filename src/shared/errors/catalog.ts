@@ -36,12 +36,19 @@ export const ERROR_CATALOG: Record<ErrorCode, ErrorCatalogEntry> = {
   [ErrorCodes.ArgsMissingEmail]: {
     group: 'args',
     retry: 'no',
-    description: 'Signup run without --email.',
+    description:
+      'No longer emitted. Signup run without --email, before account provisioning was removed.',
   },
   [ErrorCodes.ArgsSignupProvisionFailed]: {
     group: 'args',
     retry: 'yes',
-    description: 'Account provisioning for --signup failed.',
+    description:
+      'No longer emitted. Account provisioning for --signup failed, before it was removed.',
+  },
+  [ErrorCodes.ArgsSignupNonInteractive]: {
+    group: 'args',
+    retry: 'no',
+    description: 'Non-interactive run with --signup, which needs a browser.',
   },
   [ErrorCodes.AuthKeyType]: {
     group: 'auth',
@@ -84,6 +91,11 @@ export const ERROR_CATALOG: Record<ErrorCode, ErrorCatalogEntry> = {
     group: 'auth',
     retry: 'yes',
     description: 'Fetching user or project data from the PostHog API failed.',
+  },
+  [ErrorCodes.AuthSignupBrowserUnavailable]: {
+    group: 'auth',
+    retry: 'no',
+    description: 'Sign-up could not open a browser on this machine.',
   },
   [ErrorCodes.EnvLocalServicesDown]: {
     group: 'env',

@@ -80,7 +80,6 @@ const input: RunInput = {
   apiUser: null,
   flags: {
     ci: true,
-    signup: false,
     debug: false,
     e2eAsk: false,
     localMcp: true,

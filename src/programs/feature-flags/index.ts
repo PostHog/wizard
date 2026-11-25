@@ -101,7 +101,6 @@ export const config: ProgramConfig = {
     const context = await gatherFrameworkContext(frameworkConfig, {
       installDir: session.installDir,
       debug: session.debug,
-      signup: session.signup,
       ci: true,
       benchmark: session.benchmark,
       yaraReport: session.yaraReport,

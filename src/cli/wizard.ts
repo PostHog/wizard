@@ -41,7 +41,7 @@ export const GLOBAL_OPTIONS = {
   signup: {
     default: false,
     describe:
-      'Create a new PostHog account during setup\nenv: POSTHOG_WIZARD_SIGNUP',
+      'Sign up for a new PostHog account in your browser during setup\nenv: POSTHOG_WIZARD_SIGNUP',
     type: 'boolean' as const,
   },
   telemetry: {
@@ -58,11 +58,6 @@ export const GLOBAL_OPTIONS = {
   'project-id': {
     describe:
       'PostHog project ID to use (optional; when not set, uses default from API key or OAuth)\nenv: POSTHOG_WIZARD_PROJECT_ID',
-    type: 'string' as const,
-  },
-  email: {
-    describe:
-      'Email address for signup (used with --signup)\nenv: POSTHOG_WIZARD_EMAIL',
     type: 'string' as const,
   },
   // Hidden while `wizard-project-discovery` rolls out.

@@ -236,7 +236,6 @@ const input = (over: Partial<RunInput> = {}): RunInput => ({
   skillId: 'test-integration',
   flags: {
     ci: false,
-    signup: false,
     debug: false,
     e2eAsk: false,
     localMcp: false,
@@ -858,7 +857,6 @@ describe('runAgent standalone', () => {
       input({
         flags: {
           ci: true,
-          signup: false,
           debug: false,
           e2eAsk: false,
           localMcp: false,

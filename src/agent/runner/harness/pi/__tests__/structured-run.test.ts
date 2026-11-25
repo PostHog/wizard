@@ -285,7 +285,6 @@ function runInputs(
       apiUser: null,
       flags: {
         ci: true,
-        signup: false,
         debug: false,
         captureAio: false,
         benchmark: false,

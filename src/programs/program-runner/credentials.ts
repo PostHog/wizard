@@ -36,11 +36,7 @@ export async function rotateCredentials(
 ): Promise<Credentials> {
   if (!credentials.refreshToken) return credentials;
   try {
-    const token = await refreshAccessToken(
-      credentials.refreshToken,
-      baseUrl,
-      credentials.oauthClientId,
-    );
+    const token = await refreshAccessToken(credentials.refreshToken, baseUrl);
     return {
       ...credentials,
       accessToken: token.access_token,
