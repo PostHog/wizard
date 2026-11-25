@@ -158,8 +158,9 @@ flow; the picked project comes first, so Enter keeps the default. A headless or
 workspace root in every mode, else the ranking's pick, else the default. A
 program's `rankWith: ['agentic']` runs agentic detection where there is a choice
 to make, so the main app is marked. A CI run also runs it where several projects
-are offered and no model source has answered, and a run at the root then takes
-the main app it names. A pick other than the run project points the session at
+are offered and no model source has ranked them, and a run at the root then
+takes the main app it names. With no workspace marker, the run directory is that
+root. A pick other than the run project points the session at
 it and runs the program's detection again there. When the flag answers
 differently after login, the program's detection also runs again under the new
 mode, before any agent runs.

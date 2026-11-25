@@ -102,8 +102,9 @@ function toPlanProject(
 }
 
 /**
- * The project that starts picked. A run that started inside a project keeps
- * it. A run at the root takes the main app a source named. With none named, a
+ * The project that starts picked. A run that started inside a workspace
+ * member keeps it. A run at the root takes the main app a source named, and
+ * with no workspace marker the run directory is that root. With none named, a
  * root that is an app itself keeps the run, and a workspace root that only
  * holds the apps takes the only app offered, else stays where it started,
  * though that root is not offered.
@@ -138,16 +139,9 @@ function modelSeesMonorepo(
   );
 }
 
-/** Whether a model source has answered about this repo's projects. */
-function modelAnswered(session: ProgramSession): boolean {
-  if (Object.keys(getModelRepoTypes(session)).length > 0) return true;
-  return getProjects(session).some((project) =>
-    Object.values(project.claims ?? {}).some((claims) =>
-      claims.some((claim) =>
-        MODEL_SOURCES.includes(claim.source as ModelSource),
-      ),
-    ),
-  );
+/** Whether a model source has ranked this repo's projects: a ranking records what it called the repo, a program's own answers do not. */
+function modelRanked(session: ProgramSession): boolean {
+  return Object.keys(getModelRepoTypes(session)).length > 0;
 }
 
 const offeredCount = (plan: PlanOffer): number =>
@@ -199,14 +193,14 @@ export function planNeedsPick(plan: PlanOffer): boolean {
 /**
  * Whether a run that asks nobody ranks its projects first. It does where there
  * is a choice. A CI run also does where several projects are offered and no
- * model source has answered, since only a ranking can name a main app there.
+ * model source has ranked them, since only a ranking can name a main app there.
  */
 export function planRanksUnasked(
   session: ProgramSession,
   plan: PlanOffer,
 ): boolean {
   if (planNeedsPick(plan)) return true;
-  return session.ci && offeredCount(plan) > 1 && !modelAnswered(session);
+  return session.ci && offeredCount(plan) > 1 && !modelRanked(session);
 }
 
 /** Whether the program works in one picked project: it says which projects it applies to, and discovery ran with the flag on. */

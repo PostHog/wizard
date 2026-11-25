@@ -270,6 +270,15 @@ describe('planRanksUnasked', () => {
     expect(ranks()).toBe(false);
   });
 
+  it("still ranks a CI run when a model answered only the program's questions", async () => {
+    const store = await unmarked({ ci: true });
+    // What Decisions leaves when its program answers land and its ranking fails.
+    setTrait(store.readyContext(), '.', 'callsLlmApi', 'no', 'decisions', 0.9);
+    expect(
+      planRanksUnasked(store.session, buildPlan(store.session, PROGRAM)),
+    ).toBe(true);
+  });
+
   it('leaves an interactive run unranked where there is no choice', async () => {
     const store = await unmarked();
     expect(

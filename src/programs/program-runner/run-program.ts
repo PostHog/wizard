@@ -780,6 +780,8 @@ async function pickProject(
               onEvent: (line) => logToFile('[agentic detect]', line),
               onProgress: emit,
             });
+            // A reply that lands after a cancel is dropped, so the session stays as the run left it.
+            if (signal.aborted) return plan();
             applyDetectionReport(store.readyContext(), report, 'agentic');
           } catch (error) {
             // No answer: the plan opens on static detection alone.
@@ -821,6 +823,8 @@ async function pickProject(
   ) {
     // Nobody to ask: the ranking picks, as a person reading it would.
     offer = await rank();
+    // A run cancelled during the ranking reports no pick.
+    if (signal.aborted) return null;
     picked = offer.picked;
   }
   reportProjectsDiscovered(store.session, offer, config.id);

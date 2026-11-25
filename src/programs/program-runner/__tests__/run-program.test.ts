@@ -52,7 +52,7 @@ import type {
   RunnerContext,
 } from '@programs/program-contract';
 import type { WizardSession } from '@services/session';
-import { runDiscovery } from '@services/project-discovery';
+import { buildPlan, runDiscovery } from '@services/project-discovery';
 import { detectIntegrationProjects } from '@services/detection';
 import { AUDIT_CHECKS_KEY } from '@programs/audit';
 import { FRAMEWORK_REGISTRY } from '@services/frameworks';
@@ -1892,6 +1892,49 @@ describe('runProgram', () => {
       expect(detectIntegrationProjects).toHaveBeenCalledTimes(1);
       expect(s.session.runProject).toBe('apps/api');
       expect(agentInput().installDir).toBe(path.join(repo, 'apps/api'));
+    });
+
+    it('drops a ranking reply that lands after the run was cancelled', async () => {
+      fs.rmSync(path.join(repo, 'pnpm-workspace.yaml'));
+      const controller = new AbortController();
+      type Report = Awaited<ReturnType<typeof detectIntegrationProjects>>;
+      let reply: (report: Report) => void = () => undefined;
+      vi.mocked(detectIntegrationProjects).mockImplementation(
+        () =>
+          new Promise<Report>((resolve) => {
+            reply = resolve;
+            controller.abort();
+          }),
+      );
+      const s = new SessionStore(buildSession({ installDir: repo, ci: true }));
+      const config = { ...everyProject, rankWith: ['agentic' as const] };
+
+      const result = await runProgram(
+        'metrics',
+        input({ store: s, config, wizardFlags: DISCOVERY_ON }),
+        { credentials: login(), signal: controller.signal },
+      );
+      vi.mocked(analytics.wizardCapture).mockClear();
+      reply({
+        repoType: 'single',
+        projects: [
+          {
+            path: 'apps/api',
+            framework: 'Express',
+            targetId: 'javascript_node',
+            hasPostHog: false,
+            recommended: true,
+          },
+        ],
+      });
+      await new Promise((resolve) => setImmediate(resolve));
+
+      expect(result.outcome).toBe(RunOutcome.Aborted);
+      expect(buildPlan(s.session, config).picked).toBe('.');
+      expect(analytics.wizardCapture).not.toHaveBeenCalledWith(
+        'projects selected',
+        expect.anything(),
+      );
     });
 
     it('reads the project again when login turns discovery on', async () => {
