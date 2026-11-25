@@ -1,4 +1,4 @@
-import { appendFileSync, mkdirSync, statSync } from 'fs';
+import { appendFileSync, mkdirSync } from 'fs';
 import path from 'path';
 import { inspect } from 'node:util';
 import { IS_DEV, runtimeEnv } from '@env';
@@ -10,8 +10,6 @@ let logFilePath =
 let fileLoggingEnabled = true;
 // An explicit --log-file wins over every later path change while pinned.
 let logFilePinned = false;
-// Byte offset of this process's first line, since every run appends to one shared file.
-let processLogStart: number | null = null;
 
 function stringify(value: unknown): string {
   if (typeof value === 'string') return value;
@@ -43,7 +41,6 @@ export function configureLogFile(opts: {
   if (opts.path !== undefined && !logFilePinned) {
     logFilePath = opts.path;
     ensuredLogDir = false;
-    processLogStart = null;
   }
   if (opts.pin === true) logFilePinned = true;
   if (opts.enabled !== undefined) fileLoggingEnabled = opts.enabled;
@@ -75,20 +72,23 @@ function reportLogFailureOnce(err: unknown): void {
 
 // The log's directory isn't guaranteed to exist (Windows %TEMP%,
 // POSTHOG_WIZARD_LOG_DIR) — create it on first failure.
-function currentLogSize(): number {
-  try {
-    return statSync(logFilePath).size;
-  } catch {
-    return 0;
-  }
+// Every run appends to one shared file, so a failure report reads this process's own lines from memory.
+const PROCESS_LOG_TAIL_CHARS = 64 * 1024;
+let processLogTail = '';
+
+export function getProcessLogTail(): string {
+  return processLogTail;
 }
 
-export function getProcessLogStart(): number | null {
-  return fileLoggingEnabled ? processLogStart : null;
+function keepInProcessTail(text: string): void {
+  processLogTail += text;
+  if (processLogTail.length <= PROCESS_LOG_TAIL_CHARS) return;
+  const kept = processLogTail.slice(-PROCESS_LOG_TAIL_CHARS);
+  processLogTail = kept.slice(kept.indexOf('\n') + 1);
 }
 
 function appendLine(text: string): void {
-  processLogStart ??= currentLogSize();
+  keepInProcessTail(text);
   try {
     appendFileSync(logFilePath, text);
   } catch (err) {

@@ -10,6 +10,11 @@ import { OutroKind } from '@shared/outro';
 import { ErrorCodes, type ErrorCode } from '@shared/errors';
 import { HostResolution } from '@shared/host-resolution';
 import { ScreenId } from '../router';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
+import { configureLogFile, logToFile } from '@utils/debug';
+import { failureReportProperties } from '../mint-failure';
 
 const wizardCapture = vi.hoisted(() => vi.fn());
 
@@ -148,4 +153,19 @@ it('routes a failed login here and offers only Exit after the log question', asy
   expect(screenText).not.toContain('Open in Claude Code');
   await choose(0);
   expect(store.mintHandoff).toBe('exit');
+});
+
+it("reports only this run's log lines when another run shares the log file", () => {
+  const logPath = path.join(
+    fs.mkdtempSync(path.join(os.tmpdir(), 'wizard-log-')),
+    'posthog-wizard.log',
+  );
+  configureLogFile({ path: logPath, enabled: true });
+  logToFile('this run started');
+  fs.appendFileSync(logPath, 'another run read its secret source\n');
+  logToFile('this run failed');
+  const { store } = setup();
+  const logTail = String(failureReportProperties(store.session).log_tail);
+  expect(logTail).toContain('this run failed');
+  expect(logTail).not.toContain('another run');
 });

@@ -1,7 +1,6 @@
 import { ErrorCodes } from '@shared/errors';
 import { redactSecrets, scrubHomePaths } from '@shared/mcp-clients/results';
-import { getLogFilePath, getProcessLogStart } from '@utils/debug';
-import { readFileTail } from '@utils/bounded-fs';
+import { getProcessLogTail } from '@utils/debug';
 import { OutroKind } from '@shared/outro';
 import type { WizardSession } from '@programs/types';
 
@@ -116,17 +115,6 @@ export function isCapacityFailure(
   );
 }
 
-const LOG_TAIL_BYTES = 64 * 1024;
-
-function readRunLog(): string {
-  const start = getProcessLogStart();
-  if (start === null) return '';
-  const tail = readFileTail(getLogFilePath(), LOG_TAIL_BYTES, start);
-  if (tail === null) return '[log unreadable]';
-  if (!tail.truncated) return tail.text;
-  return tail.text.slice(tail.text.indexOf('\n') + 1);
-}
-
 export function failureReportProperties(
   session: Pick<WizardSession, 'outroData' | 'credentials'>,
 ): Record<string, unknown> {
@@ -134,7 +122,7 @@ export function failureReportProperties(
     error_code: session.outroData?.errorCode,
     message: scrubHomePaths(redactSecrets(session.outroData?.message ?? '')),
     is_capacity: isCapacityFailure(session),
-    log_tail: scrubHomePaths(redactSecrets(readRunLog())),
+    log_tail: scrubHomePaths(redactSecrets(getProcessLogTail())),
   };
 }
 
