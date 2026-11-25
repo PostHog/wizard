@@ -65,6 +65,7 @@ function extractZipArchive(zip: Uint8Array, destDir: string): number {
     throw new Error(`destination is not a plain folder: ${destDir}`);
   }
   // Pre-validate every entry before writing anything so a late failure leaves no unscanned files behind.
+  const markerTarget = path.resolve(root, WIZARD_MARKER);
   const entries = Object.entries(unzipSync(zip)).map(([entryPath, data]) => {
     const isDir = entryPath.endsWith('/');
     const target = path.resolve(root, entryPath);
@@ -74,9 +75,24 @@ function extractZipArchive(zip: Uint8Array, destDir: string): number {
     if (!isDir && target === root) {
       throw new Error(`zip entry overwrites destination: ${entryPath}`);
     }
+    if (target === markerTarget || target.startsWith(markerTarget + path.sep)) {
+      throw new Error(`zip entry conflicts with wizard marker: ${entryPath}`);
+    }
     plainTarget(root, target, isDir ? 'folder' : 'file');
     return { isDir, target, data };
   });
+  const fileTargets = new Set(
+    entries.filter((e) => !e.isDir).map((e) => e.target.toLowerCase()),
+  );
+  for (const e of entries) {
+    let p = e.isDir ? e.target : path.dirname(e.target);
+    while (p !== root) {
+      if (fileTargets.has(p.toLowerCase())) {
+        throw new Error(`zip entry conflicts with a file entry: ${p}`);
+      }
+      p = path.dirname(p);
+    }
+  }
   let written = 0;
   for (const { isDir, target, data } of entries) {
     if (isDir) {
@@ -135,8 +151,7 @@ export async function downloadSkill(
   }
   const absInstallDir = path.resolve(installDir);
   let skillDir: string;
-  let boundary: string;
-  // Only a wizard-owned `skillsRoot` is held link-free from installDir down; `.claude/skills` may be shared.
+  const boundary = absInstallDir;
   try {
     if (skillsRoot !== undefined && path.isAbsolute(skillsRoot)) {
       throw new Error(`path escapes destination: ${skillsRoot}`);
@@ -144,7 +159,6 @@ export async function downloadSkill(
     skillDir = skillsRoot
       ? path.resolve(absInstallDir, skillsRoot, skillEntry.id)
       : path.resolve(absInstallDir, '.claude', 'skills', skillEntry.id);
-    boundary = skillsRoot ? absInstallDir : path.dirname(skillDir);
     plainTarget(boundary, skillDir, 'folder');
   } catch (err: any) {
     logToFile(`downloadSkill: refusing unsafe path: ${err.message}`);
@@ -157,18 +171,21 @@ export async function downloadSkill(
     return { success: false, error: err.message };
   }
   let step: 'download' | 'extract' | 'scan' = 'download';
-  // A failed install removes only a folder it made, so files that were there first stay.
-  const existed =
-    fs.lstatSync(skillDir, { throwIfNoEntry: false }) !== undefined;
+  let stagingDir: string | undefined;
 
   try {
     const data = await downloadWithRetry(skillEntry.downloadUrl);
     step = 'extract';
+    const parentDir = path.dirname(skillDir);
     plainTarget(boundary, skillDir, 'folder');
-    plainTarget(skillDir, WIZARD_MARKER, 'file');
-    fs.mkdirSync(skillDir, { recursive: true });
-    const fileCount = extractZipArchive(data, skillDir);
-    writeFileNoFollow(plainTarget(skillDir, WIZARD_MARKER, 'file'), '');
+    if (fs.lstatSync(skillDir, { throwIfNoEntry: false })) {
+      plainTarget(skillDir, WIZARD_MARKER, 'file');
+    }
+    fs.mkdirSync(parentDir, { recursive: true });
+    // Stage into a fresh sibling dir so failed extracts or scans never leave unscanned files in skillDir.
+    stagingDir = fs.mkdtempSync(path.join(parentDir, `.${skillEntry.id}.tmp-`));
+    const fileCount = extractZipArchive(data, stagingDir);
+    writeFileNoFollow(plainTarget(stagingDir, WIZARD_MARKER, 'file'), '');
 
     // Same scan the Bash-install hook runs — TS-path installs (linear
     // pre-install, MCP/pi install_skill, orchestrator cache + reference)
@@ -178,9 +195,10 @@ export async function downloadSkill(
     // that fails to load throws from here. Left as `extract` that lands on the
     // event as an unzip failure, which the pure-JS unzip cannot produce.
     step = 'scan';
-    const poisonReason = await scan(skillDir);
+    const poisonReason = await scan(stagingDir);
     if (poisonReason) {
-      fs.rmSync(skillDir, { recursive: true, force: true });
+      fs.rmSync(stagingDir, { recursive: true, force: true });
+      stagingDir = undefined;
       logToFile(`downloadSkill: ${poisonReason}`);
       analytics.wizardCapture('skill install failed', {
         skill_id: skillEntry.id,
@@ -190,6 +208,13 @@ export async function downloadSkill(
       });
       return { success: false, error: poisonReason };
     }
+
+    plainTarget(boundary, skillDir, 'folder');
+    if (fs.lstatSync(skillDir, { throwIfNoEntry: false })) {
+      fs.rmSync(skillDir, { recursive: true, force: true });
+    }
+    fs.renameSync(stagingDir, skillDir);
+    stagingDir = undefined;
 
     logToFile(
       `downloadSkill: installed ${skillEntry.id} from ${skillEntry.downloadUrl} (${fileCount} files)`,
@@ -202,9 +227,9 @@ export async function downloadSkill(
     return { success: true };
   } catch (err: any) {
     logToFile(`downloadSkill: error: ${err.message}`);
-    if (!existed) {
+    if (stagingDir) {
       try {
-        fs.rmSync(skillDir, { recursive: true, force: true });
+        fs.rmSync(stagingDir, { recursive: true, force: true });
       } catch {
         // The install has failed either way.
       }

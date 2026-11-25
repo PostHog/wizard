@@ -328,17 +328,39 @@ describe('downloadSkill and symlinks', () => {
     expect(fs.readdirSync(outside)).toEqual([]);
   });
 
-  it('installs through a symlinked .claude, which belongs to the user', async () => {
+  it('refuses a symlinked .claude directory and writes nothing outside', async () => {
     fs.symlinkSync(outside, path.join(installDir, '.claude'));
 
     const result = await downloadSkill(entry, installDir, {
       scan: () => Promise.resolve(null),
     });
 
-    expect(result.success).toBe(true);
-    expect(
-      fs.existsSync(path.join(outside, 'skills', 'dummy', 'SKILL.md')),
-    ).toBe(true);
+    expect(result.success).toBe(false);
+    expect(fs.readdirSync(outside)).toEqual([]);
+  });
+
+  it('rejects intra-archive file/dir clashes and leaves existing skillDir untouched', async () => {
+    const skillDir = path.join(installDir, '.claude', 'skills', 'dummy');
+    fs.mkdirSync(skillDir, { recursive: true });
+    fs.writeFileSync(path.join(skillDir, 'SKILL.md'), 'ORIGINAL');
+    const clashingZip = zipSync({
+      'SKILL.md': new TextEncoder().encode('POISONED'),
+      x: new TextEncoder().encode('file'),
+      'x/': new Uint8Array(),
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.resolve(new Response(Buffer.from(clashingZip)))),
+    );
+    const scan = vi.fn(() => Promise.resolve(null));
+
+    const result = await downloadSkill(entry, installDir, { scan });
+
+    expect(result.success).toBe(false);
+    expect(scan).not.toHaveBeenCalled();
+    expect(fs.readFileSync(path.join(skillDir, 'SKILL.md'), 'utf8')).toBe(
+      'ORIGINAL',
+    );
   });
 
   it('refuses a symlinked skill folder under the default root', async () => {
