@@ -53,8 +53,8 @@ copy-pasteable:
 
 Then cover, briefly and concretely:
 
-- How uncaught errors reach PostHog now: per runtime, the capture mechanism,
-  the files that carry it, and the errors that runtime still misses.
+- How uncaught errors reach PostHog now — the capture mechanism and the files
+  that carry it.
 - If the run also installed and initialized the SDK, say so — the user
   started this command without PostHog and now has it.
 - When source-map upload was wired and neither the credentials nor the wire-ci
