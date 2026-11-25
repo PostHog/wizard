@@ -5,7 +5,7 @@ export const ErrorCodes = {
   CliInteractiveRequired: 'PHW_CLI_INTERACTIVE_REQUIRED',
   ArgsMissingApiKey: 'PHW_ARGS_MISSING_API_KEY',
   ArgsMissingInstallDir: 'PHW_ARGS_MISSING_INSTALL_DIR',
-  /** `--signup` in a run with no browser to sign up in. */
+  /** No longer emitted: `--signup` is gone. Kept because released codes stay in the catalog. */
   ArgsSignupNonInteractive: 'PHW_ARGS_SIGNUP_NON_INTERACTIVE',
   AuthKeyType: 'PHW_AUTH_KEY_TYPE',
   AuthMissingScope: 'PHW_AUTH_MISSING_SCOPE',
@@ -16,6 +16,7 @@ export const ErrorCodes = {
   AuthSettingsConflict: 'PHW_AUTH_SETTINGS_CONFLICT',
   AuthStoredLoginConflict: 'PHW_AUTH_STORED_LOGIN_CONFLICT',
   AuthProjectFetchFailed: 'PHW_AUTH_PROJECT_FETCH_FAILED',
+  /** No longer emitted: `--signup` is gone. Kept because released codes stay in the catalog. */
   AuthSignupBrowserUnavailable: 'PHW_AUTH_SIGNUP_BROWSER_UNAVAILABLE',
   EnvLocalServicesDown: 'PHW_ENV_LOCAL_SERVICES_DOWN',
   EnvServiceOutage: 'PHW_ENV_SERVICE_OUTAGE',

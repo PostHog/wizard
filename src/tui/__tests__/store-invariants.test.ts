@@ -410,11 +410,6 @@ const MUTATIONS: MutationCase[] = [
     emits: 1,
   },
   {
-    name: 'chooseSignup',
-    invoke: (s) => s.chooseSignup(),
-    emits: 1,
-  },
-  {
     name: 'confirmSelfDrivingHandoff',
     invoke: (s) => s.confirmSelfDrivingHandoff(),
     emits: 1,
@@ -844,7 +839,6 @@ describe('store invariants', () => {
       if (flip()) view.session.frameworkContext = { postHogPresent: flip() };
       view.completedRuns = flip() ? ['integrate-run'] : [];
       view.session.detectionComplete = flip();
-      view.signup = flip();
       return view;
     }
 

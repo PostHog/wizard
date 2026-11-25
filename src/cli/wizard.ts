@@ -38,12 +38,6 @@ export const GLOBAL_OPTIONS = {
       'Write the debug log to this file (default: posthog-wizard.log in the temp dir)\nenv: POSTHOG_WIZARD_LOG_FILE',
     type: 'string' as const,
   },
-  signup: {
-    default: false,
-    describe:
-      'Sign up for a new PostHog account in your browser during setup\nenv: POSTHOG_WIZARD_SIGNUP',
-    type: 'boolean' as const,
-  },
   telemetry: {
     default: true,
     describe:

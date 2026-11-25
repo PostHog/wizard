@@ -19,17 +19,9 @@ export const selfDrivingCommand: Command = {
   check: (argv) => {
     // Test discovery mode only prints, so no mode it would refuse matters.
     if (wantsDiscoveryTest(argv)) return true;
-    // self-driving asks about the account itself and is fully interactive, so
-    // --signup and --ci are rejected before the TUI/agent loop spins up rather
-    // than failing late (a stalled `wizard_ask` with no bridge under --ci).
-    if (argv.signup) {
-      throw new Error(
-        '`self-driving` cannot run with --signup. Just run `wizard ' +
-          'self-driving`: when your project has no PostHog, it asks whether ' +
-          'you already have an account and offers to sign you up ' +
-          '(no flag needed).',
-      );
-    }
+    // self-driving is fully interactive, so --ci is rejected before the
+    // TUI/agent loop spins up rather than failing late (a stalled
+    // `wizard_ask` with no bridge under --ci).
     if (argv.ci) {
       throw new Error(
         '`self-driving` cannot run in CI mode — it requires interactive steps ' +

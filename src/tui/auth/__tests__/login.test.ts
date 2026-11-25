@@ -60,17 +60,3 @@ it("passes the program's completion-scope opt-out to the login", async () => {
     }),
   );
 });
-
-it('opens the sign-up page when the TUI chose a sign-up', async () => {
-  vi.mocked(getOrAskForProjectData).mockResolvedValue(projectData);
-  const store = {
-    session: buildSession({ installDir: '/project' }),
-    signup: true,
-  } as WizardStore;
-  await oauthCredentials(store).resolve('posthog-integration', {
-    signal: new AbortController().signal,
-  });
-  expect(getOrAskForProjectData).toHaveBeenCalledWith(
-    expect.objectContaining({ signup: true }),
-  );
-});

@@ -5,20 +5,20 @@ local, and this doc is the catalog of how to control each.
 
 ## Credentials for local CI and headless runs
 
-Local `--ci` runs, smoke tests, and full headless/snapshot agent runs need
-**two separate secrets**, plus the target project ID:
+Local `--ci` runs, smoke tests, and full headless/snapshot agent runs need **two
+separate secrets**, plus the target project ID:
 
-| Input | Purpose | How to pass it |
-|---|---|---|
-| PostHog personal API key (`phx_...`) | PostHog API and MCP authentication | CLI: `--api-key` / `POSTHOG_WIZARD_API_KEY`; smoke helper: `POSTHOG_PERSONAL_API_KEY`; TUI e2e host (`scripts/tui-host.no-jest.ts`): `POSTHOG_PERSONAL_API_KEY` or `POSTHOG_KEY_FILE` |
-| Gateway service key (`phs_...`, in 1Password) | Model calls | `WIZARD_CI_GATEWAY_TOKEN_FILE`, an absolute path to a file containing only the key |
-| Target project ID | Project selection and gateway attribution | CLI: `--project-id` / `POSTHOG_WIZARD_PROJECT_ID`; TUI e2e host: `PROJECT_ID` (MCP: `projectId`) |
+| Input                                         | Purpose                                   | How to pass it                                                                                                                                                                        |
+| --------------------------------------------- | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| PostHog personal API key (`phx_...`)          | PostHog API and MCP authentication        | CLI: `--api-key` / `POSTHOG_WIZARD_API_KEY`; smoke helper: `POSTHOG_PERSONAL_API_KEY`; TUI e2e host (`scripts/tui-host.no-jest.ts`): `POSTHOG_PERSONAL_API_KEY` or `POSTHOG_KEY_FILE` |
+| Gateway service key (`phs_...`, in 1Password) | Model calls                               | `WIZARD_CI_GATEWAY_TOKEN_FILE`, an absolute path to a file containing only the key                                                                                                    |
+| Target project ID                             | Project selection and gateway attribution | CLI: `--project-id` / `POSTHOG_WIZARD_PROJECT_ID`; TUI e2e host: `PROJECT_ID` (MCP: `projectId`)                                                                                      |
 
-The personal API key is not the gateway token. CI reads the gateway token
-from the file and uses it directly; it does not mint or refresh one. Keep the
-file outside the repo, restrict its permissions (`chmod 600`), and supply a
-valid token for the gateway being used. Missing, expired, or rejected tokens
-fail the run.
+The personal API key is not the gateway token. CI reads the gateway token from
+the file and uses it directly; it does not mint or refresh one. Keep the file
+outside the repo, restrict its permissions (`chmod 600`), and supply a valid
+token for the gateway being used. Missing, expired, or rejected tokens fail the
+run.
 
 Pass both keys when you develop: the personal API key for MCP access and the
 gateway service key. The gateway service key is in 1Password. Save it to the
@@ -41,9 +41,9 @@ pnpm try --ci --api-key "$POSTHOG_PERSONAL_API_KEY" \
   --region "$POSTHOG_WIZARD_REGION" --install-dir=/absolute/path/to/test-app
 ```
 
-`WIZARD_CI_GATEWAY_URL` optionally sets the gateway origin (no `/v1`);
-otherwise CI uses `https://ai-gateway.<region>.posthog.com`. The local service
-flags below do not override this CI gateway setting.
+`WIZARD_CI_GATEWAY_URL` optionally sets the gateway origin (no `/v1`); otherwise
+CI uses `https://ai-gateway.<region>.posthog.com`. The local service flags below
+do not override this CI gateway setting.
 
 For the `wizard-ci` MCP server, set `WIZARD_CI_GATEWAY_TOKEN_FILE` in the
 server's environment before launch; restart an existing server after changing
@@ -56,50 +56,49 @@ it. It is not an `open_app` argument. Pass the personal key via `keyFile` or
 `POSTHOG_PERSONAL_API_KEY`, while
 `GH_APP_POSTHOG_WIZARD_CI_BOT_POSTHOG_GATEWAY_TOKEN` is written to a temporary
 file referenced by `WIZARD_CI_GATEWAY_TOKEN_FILE`. CI also supplies
-`GH_APP_POSTHOG_WIZARD_CI_BOT_TARGET_PROJECT_ID` as
-`POSTHOG_WIZARD_PROJECT_ID`.
+`GH_APP_POSTHOG_WIZARD_CI_BOT_TARGET_PROJECT_ID` as `POSTHOG_WIZARD_PROJECT_ID`.
 
 Interactive runs authenticate normally and mint their gateway token through
-PostHog; they do not require this CI token file. Published builds reject
-`--ci`; use source, a development build, or `pnpm build:ci` for these recipes.
+PostHog; they do not require this CI token file. Published builds reject `--ci`;
+use source, a development build, or `pnpm build:ci` for these recipes.
 
 ## The four dimensions
 
-| # | What | Local target | How you control it |
-|---|---|---|---|
-| 1 | The wizard binary | your checkout | how you invoke it — see [Running the wizard](#running-the-wizard) |
-| 2 | context-mill (skills) | `http://localhost:8765` | `--local-context-mill` |
-| 3 | PostHog MCP server | `http://localhost:8787/mcp` | `--local-mcp` |
-| 4 | PostHog app / API | `http://localhost:8010` | `--local-posthog` |
+| #   | What                  | Local target                | How you control it                                                |
+| --- | --------------------- | --------------------------- | ----------------------------------------------------------------- |
+| 1   | The wizard binary     | your checkout               | how you invoke it — see [Running the wizard](#running-the-wizard) |
+| 2   | context-mill (skills) | `http://localhost:8765`     | `--local-context-mill`                                            |
+| 3   | PostHog MCP server    | `http://localhost:8787/mcp` | `--local-mcp`                                                     |
+| 4   | PostHog app / API     | `http://localhost:8010`     | `--local-posthog`                                                 |
 
-Select the skills, MCP, and PostHog servers independently. For example, CI
-runs local skills against production MCP and PostHog.
+Select the skills, MCP, and PostHog servers independently. For example, CI runs
+local skills against production MCP and PostHog.
 
 ## Flags
 
 These flags are available in non-production builds, such as `pnpm try` and
 `pnpm build:ci`. Production builds, including `pnpm dev`, reject them.
 
-| Flag | Env | Effect |
-|---|---|---|
-| `--local-dev` | `POSTHOG_WIZARD_LOCAL_DEV` | all three below |
-| `--local-context-mill` | `POSTHOG_WIZARD_LOCAL_CONTEXT_MILL` | skills → `:8765` |
-| `--local-mcp` | `POSTHOG_WIZARD_LOCAL_MCP` | MCP → `:8787` |
-| `--local-posthog` | `POSTHOG_WIZARD_LOCAL_POSTHOG` | PostHog origins → `:8010` |
-| `--task-stream-log[=path]` | `POSTHOG_WIZARD_TASK_STREAM_LOG` | dump every attempted task-stream sync as JSONL (default `/tmp/posthog-wizard-task-stream.jsonl`) |
+| Flag                       | Env                                 | Effect                                                                                           |
+| -------------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `--local-dev`              | `POSTHOG_WIZARD_LOCAL_DEV`          | all three below                                                                                  |
+| `--local-context-mill`     | `POSTHOG_WIZARD_LOCAL_CONTEXT_MILL` | skills → `:8765`                                                                                 |
+| `--local-mcp`              | `POSTHOG_WIZARD_LOCAL_MCP`          | MCP → `:8787`                                                                                    |
+| `--local-posthog`          | `POSTHOG_WIZARD_LOCAL_POSTHOG`      | PostHog origins → `:8010`                                                                        |
+| `--task-stream-log[=path]` | `POSTHOG_WIZARD_TASK_STREAM_LOG`    | dump every attempted task-stream sync as JSONL (default `/tmp/posthog-wizard-task-stream.jsonl`) |
 
 `--local-posthog` is sugar over `--base-url`. It pins the API host, app host,
 and OAuth server. The backend supplies the LLM gateway URL when it mints a
-token. If a local PostHog API advertises `host.docker.internal`, the Wizard
-uses `localhost` on the same gateway port for its host-side model calls.
+token. If a local PostHog API advertises `host.docker.internal`, the Wizard uses
+`localhost` on the same gateway port for its host-side model calls.
 
 `--task-stream-log` records what the run published, one JSON line per push,
-truncated per run. It rides beside the PostHog destination rather than
-replacing it, so a logged run is the same run the backend sees. A line means
-the payload was attempted, not accepted — `[task-stream] wizard/sessions push
-ok: 201` in the debug log is the delivery signal. `--ci` dumps to the default
-path on every run and never pushes, since a synthetic run would otherwise
-create a session row in a real project.
+truncated per run. It rides beside the PostHog destination rather than replacing
+it, so a logged run is the same run the backend sees. A line means the payload
+was attempted, not accepted — `[task-stream] wizard/sessions push ok: 201` in
+the debug log is the delivery signal. `--ci` dumps to the default path on every
+run and never pushes, since a synthetic run would otherwise create a session row
+in a real project.
 
 ### Precedence
 
@@ -142,27 +141,25 @@ requested it, and how to start it:
 Start the missing services, or drop the flag to use production.
 ```
 
-Preflight runs **before authentication** and stops both interactive and CI
-runs when a requested local service is unreachable.
+Preflight runs **before authentication** and stops both interactive and CI runs
+when a requested local service is unreachable.
 
 Only reachability is checked. Any HTTP reply counts, including 404 and 405.
 
 ## Selecting local MCP and skills servers
 
-`--local-mcp` selects the MCP server at `localhost:8787`.
-`--local-context-mill` selects the skills server at `localhost:8765`.
-Pass both flags to use both local services, or `--local-dev` to include local
-PostHog as well.
+`--local-mcp` selects the MCP server at `localhost:8787`. `--local-context-mill`
+selects the skills server at `localhost:8765`. Pass both flags to use both local
+services, or `--local-dev` to include local PostHog as well.
 
 ## Pinning a context-mill release
 
-`--context-mill-version` fetches the skills and their menu from one
-context-mill release instead of the latest. It is a hidden global
-option: every command accepts it in every build, including published builds and
-headless runs.
+`--context-mill-version` fetches the skills and their menu from one context-mill
+release instead of the latest. It is a hidden global option: every command
+accepts it in every build, including published builds and headless runs.
 
-| Flag | Env | Effect |
-|---|---|---|
+| Flag                               | Env                                   | Effect                |
+| ---------------------------------- | ------------------------------------- | --------------------- |
 | `--context-mill-version <version>` | `POSTHOG_WIZARD_CONTEXT_MILL_VERSION` | skills → that release |
 
 ```bash
@@ -181,10 +178,10 @@ fails when the run first fetches a menu. The `[agent-runner] targets` line in
 the debug log shows the release a run used.
 
 The oldest release a pin may name is 1.67.0, the first whose menu lists every
-skill as its own entry. An older version, or a prerelease of
-1.67.0 itself, stops the run with `PHW_CLI_BAD_ARGS` and a message that names
-that release. A pinned run's agent
-prompts are the ones the wizard bundles, as in any run; see the
+skill as its own entry. An older version, or a prerelease of 1.67.0 itself,
+stops the run with `PHW_CLI_BAD_ARGS` and a message that names that release. A
+pinned run's agent prompts are the ones the wizard bundles, as in any run; see
+the
 [orchestrator sequence](../src/agent/runner/sequence/README.md#orchestrator).
 
 The pin cannot be combined with `--local-context-mill` or `--local-dev`. Pass
@@ -211,12 +208,12 @@ builds and independent of the wizard run's `--local-*` flags.
 
 Choose the wizard binary through its invocation:
 
-| Mode | Command | Build |
-|---|---|---|
-| From source | `pnpm try --install-dir=<path>` | non-production: accepts the dev-only flags; `IS_DEV` needs `NODE_ENV=development` |
-| Globally linked | `pnpm dev`, then `wizard` | production, rebuilt on change; rejects the dev-only flags |
-| Workbench harness | `WIZARD_PATH=<repo>` → `$WIZARD_PATH/dist/bin.js` | whatever you last built |
-| Published | `npx @posthog/wizard` | production |
+| Mode              | Command                                           | Build                                                                             |
+| ----------------- | ------------------------------------------------- | --------------------------------------------------------------------------------- |
+| From source       | `pnpm try --install-dir=<path>`                   | non-production: accepts the dev-only flags; `IS_DEV` needs `NODE_ENV=development` |
+| Globally linked   | `pnpm dev`, then `wizard`                         | production, rebuilt on change; rejects the dev-only flags                         |
+| Workbench harness | `WIZARD_PATH=<repo>` → `$WIZARD_PATH/dist/bin.js` | whatever you last built                                                           |
+| Published         | `npx @posthog/wizard`                             | production                                                                        |
 
 To confirm what a run actually used, look for the `[agent-runner] targets` line
 in the debug log — it prints the build, skills url, MCP url, and PostHog host
@@ -227,14 +224,13 @@ together. The log is `posthog-wizard.log` in the temp directory
 ## Test discovery mode
 
 `--test-discovery` runs project discovery and the program's own detection as a
-run does before login, prints what they found, and exits. It logs in to
-nothing, runs no agent and changes no file. It works on any program command,
-with or without a terminal, in non-production builds such as `pnpm try`. It
-comes before every other mode: with `--ci`, `--signup` or `--playground` on the
-same command it still only prints and exits. It previews the run as asked, so
-`--ci` and `--project` change the plan it prints. It sends no discovery report
-and no usage events; an error event can still be sent when something fails, as
-in any run.
+run does before login, prints what they found, and exits. It logs in to nothing,
+runs no agent and changes no file. It works on any program command, with or
+without a terminal, in non-production builds such as `pnpm try`. It comes before
+every other mode: with `--ci` or `--playground` on the same command it still
+only prints and exits. It previews the run as asked, so `--ci` and `--project`
+change the plan it prints. It sends no discovery report and no usage events; an
+error event can still be sent when something fails, as in any run.
 
 ```bash
 pnpm try --test-discovery --install-dir=/absolute/path/to/app
@@ -257,12 +253,12 @@ The report holds:
   ask. A program that picks no project, a CI run and a run with the flag off all
   ask nothing and work in the run project
 
-The text report replaces control characters in names from the repo with `?`.
-The JSON report escapes them.
+The text report replaces control characters in names from the repo with `?`. The
+JSON report escapes them.
 
 Its `Sources` line says which sources ran. Without a gateway token that is
-static detection only, since Decisions and agentic detection answer after
-login. To see discovery with the flag on, set the flag for this run:
+static detection only, since Decisions and agentic detection answer after login.
+To see discovery with the flag on, set the flag for this run:
 
 ```bash
 WIZARD_CI_FLAG_OVERRIDES='{"wizard-project-discovery":"one-project"}' \
@@ -272,9 +268,9 @@ WIZARD_CI_FLAG_OVERRIDES='{"wizard-project-discovery":"one-project"}' \
 With a pre-issued gateway token, test mode also asks Decisions. It asks through
 the gateway with that token, still logs in to nothing, and prints each answer.
 Turn `wizard-decisions-detection` on for the run. At `traits`, with project
-discovery on, an answer that is a trait shows `decisions` and its probability
-in the Source column. The call sends the Decisions input to the gateway: a
-summary of the repo with secret lines removed.
+discovery on, an answer that is a trait shows `decisions` and its probability in
+the Source column. The call sends the Decisions input to the gateway: a summary
+of the repo with secret lines removed.
 
 ```bash
 WIZARD_CI_GATEWAY_TOKEN_FILE="$HOME/.config/posthog/wizard-gateway-token" \
@@ -284,16 +280,16 @@ WIZARD_CI_FLAG_OVERRIDES='{"wizard-project-discovery":"one-project","wizard-deci
 
 ## Run the full stack locally
 
-1. Clone [ai-gateway](https://github.com/PostHog/ai-gateway) next to posthog,
-   or point `AI_GATEWAY_REPO` at your clone.
+1. Clone [ai-gateway](https://github.com/PostHog/ai-gateway) next to posthog, or
+   point `AI_GATEWAY_REPO` at your clone.
 2. In posthog's `.env.local`, set `WIZARD_GATEWAY_URL=http://localhost:8080`,
    `WIZARD_GATEWAY_MINT_KEY`, and `WIZARD_GATEWAY_CLIENT_IDS`. Local PostHog
    then mints wizard tokens for the local gateway, and the mint response tells
    the wizard which gateway URL to call.
 3. Add the gateway unit and start PostHog:
    `bin/hogli dev:apply <intents> --include ai-gateway`, then `bin/hogli up`.
-   The unit runs `bin/start-ai-gateway`, which provisions a local key and
-   serves the gateway on `:8080`.
+   The unit runs `bin/start-ai-gateway`, which provisions a local key and serves
+   the gateway on `:8080`.
 4. Start the [workbench](https://github.com/PostHog/wizard-workbench) with
    `phrocs` for the context mill and the wizard build.
 5. Run the wizard with the local flags:
@@ -310,8 +306,8 @@ show which servers the run used.
 `src/shared/local-dev.ts` defines the endpoints and precedence. Downstream code
 reads the resolved targets.
 
-The three service flags have no yargs default. An absent flag is `undefined`
-and inherits the umbrella setting; an explicit `false` overrides it.
+The three service flags have no yargs default. An absent flag is `undefined` and
+inherits the umbrella setting; an explicit `false` overrides it.
 
 ## WizardRun synchronization
 
@@ -323,11 +319,10 @@ and fixes the selection for the execution; there is no extra flag request or
 polling. A synchronization failure does not switch transports. File output is
 independent of the flag.
 
-The CLI evaluates this flag in PostHog's internal flags project. A local
-PostHog web app evaluates its own copy, so changing the flag in the local app
-does not change the CLI's selection. To exercise WizardRun from a development
-build without changing the internal flag, start an interactive workbench run
-with:
+The CLI evaluates this flag in PostHog's internal flags project. A local PostHog
+web app evaluates its own copy, so changing the flag in the local app does not
+change the CLI's selection. To exercise WizardRun from a development build
+without changing the internal flag, start an interactive workbench run with:
 
 ```bash
 WIZARD_CI_FLAG_OVERRIDES='{"wizard-run-sync":"wizard-run"}' pnpm exec tsx services/wizard-run/index.ts
@@ -340,11 +335,11 @@ override.
 With `wizard-run`, an authenticated interactive execution creates one local
 WizardRun when the agent starts. Creation uses the selected top-level
 `ProgramConfig.id`, the credentials' app host (`credentials.host.appHost`) and
-project, the target folder's
-basename as its display name, and the package version. Program IDs must exist in the backend registry and
-support local folders; a rejected configuration disables run synchronization
-without selecting a different program. The analytics `run_id`, session
-`session_id`, and cloud analytics `task_run_id` remain separate identities.
+project, the target folder's basename as its display name, and the package
+version. Program IDs must exist in the backend registry and support local
+folders; a rejected configuration disables run synchronization without selecting
+a different program. The analytics `run_id`, session `session_id`, and cloud
+analytics `task_run_id` remain separate identities.
 
 The shared task publisher sends ordered, immutable full snapshots to
 `PUT /api/projects/{project_id}/wizard/runs/{run_id}/tasks/`. Only task names
@@ -361,11 +356,11 @@ empty snapshot. Unavailable state does not clear it.
 Snapshots support at most 100 tasks. Oversized lists, blank names, duplicate
 identities, and unexpected statuses reject that snapshot with a sanitized
 file-log diagnostic; no partial list is sent. Later valid snapshots can still
-sync. `pending` maps to `created`,
-`in_progress` to `running`, and `skipped` to `completed`. Completed and failed
-states retain their meaning. Cancellation preserves unfinished task states.
-Identical snapshots are skipped; distinct transitions are queued before the
-legacy session publisher's debounce, so a brief running state is retained.
+sync. `pending` maps to `created`, `in_progress` to `running`, and `skipped` to
+`completed`. Completed and failed states retain their meaning. Cancellation
+preserves unfinished task states. Identical snapshots are skipped; distinct
+transitions are queued before the legacy session publisher's debounce, so a
+brief running state is retained.
 
 At execution completion, the CLI drains run tasks and sends one local terminal
 status: `completed`, `failed`, or `cancelled`. The existing signal and abort
@@ -389,19 +384,19 @@ serializer help text describes cloud creation. No run ID is persisted for reuse.
 `POSTHOG_WIZARD_RUN_ID` is the explicit UUID assignment for a WizardRun-backed
 cloud execution. The strict CLI parser accepts it as the hidden `--run-id`
 option. The authenticated launcher's app host (`credentials.host.appHost`) and
-project are fixed for that
-execution. Invalid assignments stop synchronization; they never trigger a local
-POST or session fallback. Assigned cloud executions only publish tasks: the
-worker owns terminal status after artifact publication. The assignment is not
-written to project files or passed to nested agent environments.
+project are fixed for that execution. Invalid assignments stop synchronization;
+they never trigger a local POST or session fallback. Assigned cloud executions
+only publish tasks: the worker owns terminal status after artifact publication.
+The assignment is not written to project files or passed to nested agent
+environments.
 
 Headless invocations without an assignment remain on the legacy WizardSession
 transport. `POSTHOG_TASK_RUN_ID` is an analytics compatibility alias and is
 **never** interpreted as a WizardRun assignment. Headless mode alone cannot
 create a local run. The flag selects one remote transport for local and assigned
 cloud executions. Legacy headless launches retain session publishing regardless
-of the variant. `--no-telemetry` disables both remote transports; synthetic `--ci`
-uses local output only.
+of the variant. `--no-telemetry` disables both remote transports; synthetic
+`--ci` uses local output only.
 
 The PostHog worker now supplies `POSTHOG_WIZARD_RUN_ID` alongside the existing
 analytics alias and handoff path. Its default Wizard version is still 2.74.1,

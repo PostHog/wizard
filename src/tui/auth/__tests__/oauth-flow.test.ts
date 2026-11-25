@@ -1,7 +1,6 @@
 vi.mock(import('@utils/links'), async (importOriginal) => ({
   ...(await importOriginal()),
   openTrackedLink: vi.fn(),
-  openTrackedLinkOrFail: vi.fn(),
 }));
 vi.mock(import('@tui/abort'), () => ({
   abortOnScreens: vi.fn(() => Promise.reject(new Error('aborted'))),
@@ -12,10 +11,9 @@ vi.mock(import('@utils/analytics'), () => ({
 vi.mock(import('@utils/debug'));
 
 import axios from 'axios';
-import { ErrorCodes } from '@shared/errors';
 import { abortOnScreens } from '@tui/abort';
 import type { WizardStore } from '@tui/store';
-import { openTrackedLink, openTrackedLinkOrFail } from '@utils/links';
+import { openTrackedLink } from '@utils/links';
 import { performOAuthFlow } from '../oauth';
 
 const TOKEN = {
@@ -52,7 +50,7 @@ function shownLoginUrl(store: { loginUrl: string | null }): Promise<string> {
   });
 }
 
-describe('the OAuth flow when it signs up', () => {
+describe('the OAuth flow', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.spyOn(axios, 'post').mockResolvedValue({ data: TOKEN });
@@ -62,35 +60,10 @@ describe('the OAuth flow when it signs up', () => {
     vi.restoreAllMocks();
   });
 
-  it('stops with the sign-up error when no browser opens', async () => {
-    vi.mocked(openTrackedLinkOrFail).mockResolvedValue(false);
-    const { store, wizardStore } = fakeStore();
-
-    await expect(
-      performOAuthFlow({ scopes: ['user:read'], signup: true }, wizardStore),
-    ).rejects.toThrow('aborted');
-
-    expect(abortOnScreens).toHaveBeenCalledWith(
-      wizardStore,
-      expect.objectContaining({
-        code: ErrorCodes.AuthSignupBrowserUnavailable,
-        outroData: expect.objectContaining({
-          body: expect.stringContaining('without --signup'),
-        }),
-      }),
-    );
-    expect(store.loginUrl).toBeNull();
-    expect(axios.post).not.toHaveBeenCalled();
-  });
-
   it('sends the browser to the login page, then logs in from its callback', async () => {
-    vi.mocked(openTrackedLinkOrFail).mockResolvedValue(true);
     const { store, wizardStore } = fakeStore();
 
-    const flow = performOAuthFlow(
-      { scopes: ['user:read'], signup: true },
-      wizardStore,
-    );
+    const flow = performOAuthFlow({ scopes: ['user:read'] }, wizardStore);
     const loginUrl = await shownLoginUrl(store);
     const opened = await fetch(loginUrl, { redirect: 'manual' });
     await fetch(new URL('/callback?code=abc', loginUrl));
@@ -111,7 +84,6 @@ describe('the OAuth flow when it signs up', () => {
 
     await expect(flow).resolves.toMatchObject({ access_token: 'pha_new' });
     expect(openTrackedLink).toHaveBeenCalled();
-    expect(openTrackedLinkOrFail).not.toHaveBeenCalled();
     expect(abortOnScreens).not.toHaveBeenCalled();
   });
 });

@@ -42,12 +42,11 @@ each program's and tool's screen ids) and the store helpers `tuiScreenIds`,
 declarations never reach React. Each function loads its module on first call, so
 importing the entry loads only the screen-id modules. The CLI imports it; the
 e2e harness imports it too, to host a real run and to drive and read its
-screens.
-`startTUI(version, flowId, onInterrupt)` in [`start-tui.ts`](start-tui.ts)
-creates the store and renders the app, and calls `onInterrupt` when Ink tears
-itself down on Ctrl+C. It throws `CliInteractiveRequired` first when stdin is not
-a TTY, since Ink needs raw mode: `runTuiTool` rejects with it, and `runTui`
-prints it and resolves 1.
+screens. `startTUI(version, flowId, onInterrupt)` in
+[`start-tui.ts`](start-tui.ts) creates the store and renders the app, and calls
+`onInterrupt` when Ink tears itself down on Ctrl+C. It throws
+`CliInteractiveRequired` first when stdin is not a TTY, since Ink needs raw
+mode: `runTuiTool` rejects with it, and `runTui` prints it and resolves 1.
 
 `runTui` logs in with `launch.credentials`, the browser OAuth login when it is
 absent. `launch.onStore` receives the run's store once it exists, which is how
@@ -88,7 +87,7 @@ every folder's entry; the core can't import the entry. See
 | One tool's flow and screens                      | `tools/<id>/`, registered in [`tools/index.ts`](tools/index.ts), run by [`run-tool.ts`](run-tool.ts)       |
 | The generic skill program                        | [`programs/shared/skill-program.tsx`](programs/shared/skill-program.tsx)                                   |
 | Screens, components, primitives and hooks        | [`screens`](screens), [`components`](components), [`primitives`](primitives/index.ts) and [`hooks`](hooks) |
-| The login: browser OAuth, from login or sign-up  | [`auth`](auth/login.ts)                                                                                    |
+| The login: browser OAuth                         | [`auth`](auth/login.ts)                                                                                    |
 | Effects screens call, such as the MCP installer  | [`services`](services), over [`@shared/mcp-clients/install`](../shared/mcp-clients/install.ts)             |
 | Primitive demos (`pnpm try --playground`)        | [`playground`](playground/PlaygroundApp.tsx)                                                               |
 

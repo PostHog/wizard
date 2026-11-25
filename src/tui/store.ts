@@ -402,10 +402,6 @@ export class WizardStore implements TuiView {
     return this.$tui.get().emailSetup;
   }
 
-  get signup(): TuiState['signup'] {
-    return this.$tui.get().signup;
-  }
-
   get integrate(): TuiState['integrate'] {
     return this.$tui.get().integrate;
   }
@@ -910,22 +906,6 @@ export class WizardStore implements TuiView {
       ...sessionProperties(this.session),
     });
     this._write({ integrate });
-  }
-
-  /**
-   * Self-driving "no PostHog account" branch of the integration check. The
-   * project has no SDK, so we always integrate (`integrate = true`); and since
-   * the user has no account, the login opens PostHog's sign-up in the browser
-   * (`signup = true`). The "yes, I have an account" branch uses
-   * `setIntegrate(true)` and leaves `signup` false, so auth opens the login.
-   */
-  chooseSignup(): void {
-    analytics.wizardCapture('self-driving integration check', {
-      self_driving_integrate: true,
-      self_driving_has_account: false,
-      ...sessionProperties(this.session),
-    });
-    this._write({ integrate: true, signup: true });
   }
 
   /**

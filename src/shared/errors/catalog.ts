@@ -36,7 +36,8 @@ export const ERROR_CATALOG: Record<ErrorCode, ErrorCatalogEntry> = {
   [ErrorCodes.ArgsSignupNonInteractive]: {
     group: 'args',
     retry: 'no',
-    description: 'Non-interactive run with --signup, which needs a browser.',
+    description:
+      'No longer emitted. Non-interactive run with --signup, before --signup was removed.',
   },
   [ErrorCodes.AuthKeyType]: {
     group: 'auth',
@@ -83,7 +84,8 @@ export const ERROR_CATALOG: Record<ErrorCode, ErrorCatalogEntry> = {
   [ErrorCodes.AuthSignupBrowserUnavailable]: {
     group: 'auth',
     retry: 'no',
-    description: 'Sign-up could not open a browser on this machine.',
+    description:
+      'No longer emitted. --signup could not open a browser, before --signup was removed.',
   },
   [ErrorCodes.EnvLocalServicesDown]: {
     group: 'env',

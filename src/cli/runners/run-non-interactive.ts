@@ -19,8 +19,8 @@ export const API_KEY_HINT =
   'personal API key phx_xxx or wizard-app OAuth access token pha_xxx';
 
 /**
- * The single non-interactive validation layer: refuses `--signup`, and
- * requires api-key and install-dir. Every non-interactive entry point routes
+ * The single non-interactive validation layer: requires api-key and
+ * install-dir. Every non-interactive entry point routes
  * through `runNonInteractive`, so this is the one place these checks live.
  * Exits 1 on the first failure; true when the options can run.
  */
@@ -29,13 +29,6 @@ export function validateNonInteractiveOptions(
   mode: NonInteractiveMode,
 ): boolean {
   const label = modeLabel(mode);
-  if (options.signup) {
-    return refuse(
-      ErrorCodes.ArgsSignupNonInteractive,
-      `${label} mode can't sign up: sign-up needs a browser, so --signup only works in an interactive run. ` +
-        'Sign up for PostHog in a browser, then run the Wizard again with --api-key.',
-    );
-  }
   if (!options.apiKey) {
     return refuse(
       ErrorCodes.ArgsMissingApiKey,
