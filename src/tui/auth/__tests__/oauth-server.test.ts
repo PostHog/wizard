@@ -93,6 +93,24 @@ describe('OAuth callback HTTP server', () => {
     await expect(callback).resolves.toBe('test-code');
   });
 
+  it.each([
+    ['a code', '/callback?code=early-code', 200],
+    ['an error', '/callback?error=access_denied', 200],
+  ])(
+    'keeps %s that arrives before the flow waits for it',
+    async (_kind, path, status) => {
+      const response = await request(port, path);
+
+      expect(response.statusCode).toBe(status);
+      const callback = callbackServer.waitForCallback();
+      if (path.includes('code=')) {
+        await expect(callback).resolves.toBe('early-code');
+      } else {
+        await expect(callback).rejects.toMatchObject({ code: 'access_denied' });
+      }
+    },
+  );
+
   it.each(['/authorize', '/callback?code=private-authorization-code'])(
     'explains oversized headers on %s and allows a retry without logging secrets',
     async (path) => {

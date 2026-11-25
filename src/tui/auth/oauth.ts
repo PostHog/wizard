@@ -157,14 +157,17 @@ export async function startCallbackServer(
   waitForCallback: () => Promise<string>;
 }> {
   return new Promise((resolve, reject) => {
-    let callbackResolve: (code: string) => void;
-    let callbackReject: (error: Error) => void;
-
-    const waitForCallback = () =>
-      new Promise<string>((res, rej) => {
-        callbackResolve = res;
-        callbackReject = rej;
-      });
+    let callbackResolve: (code: string) => void = () => undefined;
+    let callbackReject: (error: Error) => void = () => undefined;
+    // Created before the server listens, because a callback can arrive before anyone waits: sign-up
+    // first waits to see whether the browser opened.
+    const callback = new Promise<string>((res, rej) => {
+      callbackResolve = res;
+      callbackReject = rej;
+    });
+    // An error callback that arrives before anyone waits would otherwise be an unhandled rejection.
+    callback.catch(() => undefined);
+    const waitForCallback = () => callback;
 
     const server = http.createServer((req, res) => {
       if (!req.url) {
