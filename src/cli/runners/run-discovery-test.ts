@@ -297,10 +297,10 @@ export function runDiscoveryTest(
       } catch (error) {
         // A refused or failed save is the caller's to fix, not an internal error.
         const message = error instanceof Error ? error.message : String(error);
-        process.stderr.write(`${message}\n`);
+        process.stderr.write(`${clean(message)}\n`);
         return 1;
       }
-      process.stdout.write(`Saved the report to ${file}\n`);
+      process.stdout.write(`Saved the report to ${clean(file)}\n`);
     }
     if (files.length === 0) process.stdout.write(`${render()}\n`);
     return 0;
