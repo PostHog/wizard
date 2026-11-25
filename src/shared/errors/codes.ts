@@ -25,6 +25,7 @@ export const ErrorCodes = {
   DetectUnsupportedVersion: 'PHW_DETECT_UNSUPPORTED_VERSION',
   DetectUnsupportedPlatform: 'PHW_DETECT_UNSUPPORTED_PLATFORM',
   DetectNoPosthogSdk: 'PHW_DETECT_NO_POSTHOG_SDK',
+  DetectSdkTooOld: 'PHW_DETECT_SDK_TOO_OLD',
   DetectNoProjectFiles: 'PHW_DETECT_NO_PROJECT_FILES',
   DetectNoSources: 'PHW_DETECT_NO_SOURCES',
   DetectNoPackageJson: 'PHW_DETECT_NO_PACKAGE_JSON',

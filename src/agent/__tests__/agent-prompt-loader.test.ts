@@ -626,7 +626,7 @@ describe('assembleTaskPrompt', () => {
       [taskPath],
     );
     expect(withSdk).toContain(sdkPath);
-    expect(withSdk).toContain('feature-minimums.md');
+    expect(withSdk).toContain('api-notes.md');
     expect(withSdk).toContain('keep the declared major and keep any exact pin');
     expect(withSdk.indexOf(sdkPath)).toBeLessThan(withSdk.indexOf(taskPath));
   });

@@ -8,18 +8,14 @@ import {
   getInstalledPackageVersion,
   parsePackageJson,
 } from '@utils/package-json';
-import { rangeMajor } from '@utils/semver';
+import type { PostHogSdk } from '@shared/sdk-features';
+import { rangeFloor, rangeMajor } from '@utils/semver';
 import { tomlArrayStrings } from '../toml';
 
-export type PostHogSdk =
-  | 'python'
-  | 'node'
-  | 'go'
-  | 'rust'
-  | 'ios'
-  | 'android'
-  | 'flutter'
-  | 'kmp';
+export type { PostHogSdk };
+
+/** A declared SDK's major and, when it is known, its installed version. */
+export type DeclaredSdk = { major: string; version?: string };
 
 type Declared = { range: string; resolved: () => string | undefined };
 
@@ -1103,15 +1099,16 @@ const DETECTORS: Record<
 };
 
 /**
- * Major version of `sdk` declared in `dir` (with `workspaceDir` checked for shared
- * lockfiles or catalogs). Undefined when absent, ambiguous, or malformed; never throws.
+ * The SDK declared in `dir` (with `workspaceDir` checked for shared lockfiles
+ * or catalogs): its major, and the lockfile's version, else the lowest the
+ * manifest allows. Undefined when absent, ambiguous, or malformed; never throws.
  */
-export function declaredSdkMajor(
+export function declaredSdk(
   dir: string,
   sdk: PostHogSdk,
   workspaceDir?: string,
   catalogCache?: GradleCatalogCache,
-): string | undefined {
+): DeclaredSdk | undefined {
   try {
     if (!fs.statSync(dir).isDirectory()) return undefined;
     const dirs = searchDirs(dir, workspaceDir);
@@ -1125,10 +1122,24 @@ export function declaredSdkMajor(
       catalogCache,
     );
     if (!declared) return undefined;
-    const major =
-      rangeMajor(declared.range) ?? rangeMajor(declared.resolved() ?? '');
-    return major === undefined ? undefined : String(major);
+    const resolved = declared.resolved();
+    const major = rangeMajor(declared.range) ?? rangeMajor(resolved ?? '');
+    if (major === undefined) return undefined;
+    const version = [resolved, declared.range]
+      .map((v) => (v ? rangeFloor(v) : undefined))
+      .find((v) => v !== undefined && rangeMajor(v) === major);
+    return { major: String(major), ...(version && { version }) };
   } catch {
     return undefined;
   }
+}
+
+/** Major version of `sdk` declared in `dir`; see `declaredSdk`. */
+export function declaredSdkMajor(
+  dir: string,
+  sdk: PostHogSdk,
+  workspaceDir?: string,
+  catalogCache?: GradleCatalogCache,
+): string | undefined {
+  return declaredSdk(dir, sdk, workspaceDir, catalogCache)?.major;
 }

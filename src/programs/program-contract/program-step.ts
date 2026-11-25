@@ -3,6 +3,7 @@ import type { DiscoveredFeature } from '@shared/discovered-feature';
 import type { ProgramBinding, TaskNotice } from '@agent/types';
 import type { ProgramRun } from './program-run';
 import type { Integration } from '@shared/constants';
+import type { SdkFeature } from '@shared/sdk-features';
 import type { FrameworkConfig } from './framework-config';
 import type { CiRunnerContext, RunnerContext } from './runner-context';
 import type { Project, Traits } from './project-traits';
@@ -336,6 +337,8 @@ export interface ProgramConfig {
    * the run fails with `unavailableMessage` before any agent starts.
    */
   rolloutGate?: { flagKey: string; unavailableMessage: string };
+  /** The product this program sets up. The run fails before any agent starts when the project's PostHog SDK is below its minimum. */
+  sdkFeature?: SdkFeature;
   /** The run creates no event definitions, so login doesn't require `event_definition:write`. */
   completionScopeOptional?: boolean;
 }

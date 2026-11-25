@@ -120,7 +120,7 @@ export function sdkSkillReference(
 ): string | null {
   if (!paths?.length) return null;
   const list = paths.map((p) => `\`${p}\``).join(', ');
-  return `This project declared its PostHog SDK before this run started, and the SDK skill for that version is at ${list}. Read it (and its \`feature-minimums.md\` reference) before you write PostHog SDK code or touch any dependency manifest or lockfile, and follow it over any task skill, example, or framework rule: keep the declared major and keep any exact pin unchanged.`;
+  return `This project declared its PostHog SDK before this run started, and the SDK skill for that version is at ${list}. Read it (and its \`api-notes.md\` reference) before you write PostHog SDK code or touch any dependency manifest or lockfile, and follow it over any task skill, example, or framework rule: keep the declared major and keep any exact pin unchanged.`;
 }
 
 /**

@@ -62,6 +62,13 @@ export function rangeMajor(range: string): number | undefined {
     : undefined;
 }
 
+/** The lowest version `range` allows (a plain version is its own floor), or undefined when it is not semver. */
+export function rangeFloor(range: string): string | undefined {
+  if (isNonSemverVersion(range)) return undefined;
+  const normalized = validRange(range);
+  return (normalized && minVersion(normalized)?.version) || undefined;
+}
+
 /**
  * Creates a version bucket function for analytics.
  * Converts versions like "1.2.3" to "1.x" for grouping in analytics.

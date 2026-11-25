@@ -24,6 +24,8 @@ import { analytics } from '@utils/analytics';
 import { ProgramAbort } from '@programs/program-contract';
 import { ErrorCodes } from '@shared/errors';
 import { abortNoFrameworkDetected } from '../shared/abort-no-framework';
+import { sdkUpgradeNextSteps } from '../shared/sdk-upgrade-steps';
+import { sdkFeatureGaps } from '@services/project-discovery';
 
 const ERROR_TRACKING_REPORT_FILE = 'posthog-error-tracking-report.md';
 const ERROR_TRACKING_DOCS_URL = 'https://posthog.com/docs/error-tracking';
@@ -129,6 +131,8 @@ const ERROR_TRACKING_RUN: ProgramRun = {
   // error). The orchestrator caps per-task asks itself; this covers the
   // linear fallback.
   askTimeoutMs: 30 * 60 * 1000,
+  buildOutroNextSteps: (session) =>
+    sdkUpgradeNextSteps(session, ['releaseLinking']),
 };
 
 /**
@@ -177,6 +181,12 @@ export const config: ProgramConfig = {
   agentFlow: 'error-tracking',
   agentPrompts: () => import('./agent-prompts').then((m) => m.AGENT_PROMPTS),
   reportFile: ERROR_TRACKING_REPORT_FILE,
+  sdkFeature: 'errorTracking',
+  // Release linking waits for a PostHog SDK that has it.
+  excludedTaskTypes: (_flags, session) =>
+    sdkFeatureGaps(session, ['releaseLinking']).length > 0
+      ? ['link-releases']
+      : [],
   // The run is scoped to the project the user picks after login.
   runSteps: {
     run: {

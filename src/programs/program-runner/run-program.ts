@@ -57,6 +57,7 @@ import {
   reportDiscovery,
   reportProjectsDiscovered,
   reportProjectsSelected,
+  sdkFeatureGaps,
   settleProjects,
   toMatchKeys,
   toTraitKeys,
@@ -545,6 +546,11 @@ async function invokeProgram(
     // The run stayed in the project it started in, so what stopped it there stands.
     if (stopped) return stopped();
     if (!run) return fail(`Program "${programId}" resolved no run.`);
+    // The project is settled, so a PostHog SDK too old for this program stops it before any agent starts.
+    const sdkGap = config.sdkFeature
+      ? sdkFeatureGaps(store.session, [config.sdkFeature])[0]
+      : undefined;
+    if (sdkGap) return fail(sdkGap.message, ErrorCodes.DetectSdkTooOld);
     const ownRunDefinition = run;
     // The pick is settled, so the comparison runs beside the agent run for the project it works in.
     if (compareAfterPick) comparing = askDecisions(false);

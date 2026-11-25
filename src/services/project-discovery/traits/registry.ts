@@ -15,7 +15,8 @@ import { getDetectedWarehouseSources } from '../../warehouse-sources/detect';
 import { detectedProjectOf, getDiscovery, projectPathOf } from '../discover';
 import { findWorkspaceRoot, type RepoFiles } from '../walk';
 import {
-  declaredSdkMajor,
+  declaredSdk,
+  type DeclaredSdk,
   type GradleCatalogCache,
   type PostHogSdk,
 } from './sdk-major';
@@ -63,16 +64,16 @@ const WORKSPACE_ROOT_BY_CONTEXT = new WeakMap<
   Map<string, string | undefined>
 >();
 
-/** Declared SDK major results memoized per discovery walk (`RepoFiles`). */
-const SDK_MAJORS_BY_WALK = new WeakMap<
+/** Declared SDK results memoized per discovery walk (`RepoFiles`). */
+const SDKS_BY_WALK = new WeakMap<
   RepoFiles,
-  Map<string, string | undefined>
+  Map<string, DeclaredSdk | undefined>
 >();
 
 /** Fallback cache when a session has no `RepoFiles` walk attached, keyed by `frameworkContext`. */
-const SDK_MAJORS_BY_CONTEXT = new WeakMap<
+const SDKS_BY_CONTEXT = new WeakMap<
   FrameworkContext,
-  Map<string, string | undefined>
+  Map<string, DeclaredSdk | undefined>
 >();
 
 /** Parsed Gradle version catalogs memoized per discovery walk (`RepoFiles`). */
@@ -122,24 +123,24 @@ function sdkWorkspaceDir(
   return resolved;
 }
 
-function cachedSdkMajor(
+function cachedSdk(
   session: ProgramSession,
   dir: string,
   sdk: PostHogSdk,
-): string | undefined {
+): DeclaredSdk | undefined {
   const workspaceDir = sdkWorkspaceDir(session, dir);
   const files = getDiscovery(session)?.files;
   const cache = files
-    ? getOrCreateCache(SDK_MAJORS_BY_WALK, files)
-    : getOrCreateCache(SDK_MAJORS_BY_CONTEXT, session.frameworkContext);
+    ? getOrCreateCache(SDKS_BY_WALK, files)
+    : getOrCreateCache(SDKS_BY_CONTEXT, session.frameworkContext);
   const catalogCache = files
     ? getOrCreateCache(GRADLE_CATALOGS_BY_WALK, files)
     : getOrCreateCache(GRADLE_CATALOGS_BY_CONTEXT, session.frameworkContext);
   const key = `${dir}\0${workspaceDir ?? ''}\0${sdk}`;
   if (cache.has(key)) return cache.get(key);
-  const major = declaredSdkMajor(dir, sdk, workspaceDir, catalogCache);
-  cache.set(key, major);
-  return major;
+  const declared = declaredSdk(dir, sdk, workspaceDir, catalogCache);
+  cache.set(key, declared);
+  return declared;
 }
 
 function projectDirOf(
@@ -159,11 +160,21 @@ function projectDirOf(
   return path.resolve(discovery.rootDir, projectPath);
 }
 
+/** The `sdk` the run project declares, while versioned SDK skills are on. */
+export function runProjectSdk(
+  session: ProgramSession,
+  sdk: PostHogSdk,
+): DeclaredSdk | undefined {
+  if (!isVersionedSdkSkillsEnabled(session)) return undefined;
+  const dir = projectDirOf(session, session.runProject);
+  return dir ? cachedSdk(session, dir, sdk) : undefined;
+}
+
 const sdkMajor = (sdk: PostHogSdk) => ({
   detect: (session: ProgramSession, projectPath: string) => {
     if (!isVersionedSdkSkillsEnabled(session)) return undefined;
     const dir = projectDirOf(session, projectPath);
-    return dir ? cachedSdkMajor(session, dir, sdk) : undefined;
+    return dir ? cachedSdk(session, dir, sdk)?.major : undefined;
   },
   fallback: STATIC,
   matchKey: true as const,

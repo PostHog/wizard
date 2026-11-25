@@ -49,6 +49,7 @@ export type { DetectedTool, DiscoveredTools } from './tools';
 export { applyDetectionReport, joinProjectPath } from './traits/adapter';
 export { toMatchKeys, toTraitKeys } from './traits/match-keys';
 export { TRAITS, VERSIONED_SDK_SKILLS_ENABLED_KEY } from './traits/registry';
+export { sdkFeatureGaps, type SdkFeatureGap } from './traits/sdk-features';
 export { selectProjects, type ProjectPredicate } from './traits/select';
 export {
   getProject,

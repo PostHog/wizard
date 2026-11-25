@@ -287,6 +287,13 @@ ranges first and falls back to lockfiles, installed `node_modules`, or catalog
 versions when a single major cannot be settled from the manifest alone;
 malformed manifests return `undefined` without throwing.
 
+`sdkFeatureGaps`, in
+[`traits/sdk-features.ts`](project-discovery/traits/sdk-features.ts), compares
+the run project's installed SDK version (the lockfile's, else the manifest's
+floor) with `SDK_FEATURE_MINIMUMS` in `@shared/sdk-features`. A program's
+`sdkFeature` fails the run before any agent starts when the SDK is below it; the
+main run drops the matching task and names the upgrade in its outro.
+
 A program's `rankWith` names the model sources that rank its projects beside
 static detection: `decisions`, `agentic`, both or neither.
 
