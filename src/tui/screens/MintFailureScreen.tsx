@@ -4,7 +4,15 @@ import type { WizardStore } from '@tui/store';
 import { PickerMenu } from '@tui/primitives/index';
 import { useStdoutDimensions } from '@tui/hooks/useStdoutDimensions';
 import { Colors, Icons } from '@tui/styles';
-import { LOG_SENT_NOTE, REPORTED_NOTE, failureCopy } from '@tui/mint-failure';
+import {
+  AGENT_HANDOFF_STEP,
+  LOG_PROMPT,
+  LOG_SENT_NOTE,
+  REPORTED_NOTE,
+  RERUN_COMMAND,
+  RETRY_HEADLINE,
+  failureCopy,
+} from '@tui/mint-failure';
 import type { WizardSpellbook } from '@tui/services/wizard-spellbook';
 import type { CodingAgent } from '../services/coding-agent-launcher';
 
@@ -13,7 +21,16 @@ export type MintFailureServices = {
   openAgent: (agent: CodingAgent, spellbookPath: string) => Promise<void>;
 };
 
-type Action = 'save' | CodingAgent | 'send-log' | 'continue' | 'exit' | 'retry';
+type Action =
+  | 'save'
+  | CodingAgent
+  | 'send-log'
+  | 'keep-log'
+  | 'continue'
+  | 'exit'
+  | 'retry';
+
+type LogChoice = 'unanswered' | 'sent' | 'kept';
 
 export function MintFailureScreen({
   store,
@@ -30,7 +47,7 @@ export function MintFailureScreen({
   const busy = useRef(false);
   const [working, setWorking] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [isLogSent, setIsLogSent] = useState(false);
+  const [logChoice, setLogChoice] = useState<LogChoice>('unanswered');
   const [retry, setRetry] = useState<'save' | CodingAgent>('save');
   const { spellbook } = store;
   const copy = failureCopy(store.session);
@@ -39,9 +56,10 @@ export function MintFailureScreen({
     if (busy.current) return;
     if (action === 'exit' || action === 'continue')
       return store.setMintHandoff(action);
+    if (action === 'keep-log') return setLogChoice('kept');
     if (action === 'send-log') {
       store.sendFailureReport();
-      return setIsLogSent(true);
+      return setLogChoice('sent');
     }
     const task = action === 'retry' ? retry : action;
     setRetry(task);
@@ -70,7 +88,14 @@ export function MintFailureScreen({
     }
   };
 
-  const options: { label: string; value: Action; disabled?: boolean }[] = error
+  const isAskingAboutLog = logChoice === 'unanswered' && !spellbook && !error;
+
+  const options: { label: string; value: Action }[] = isAskingAboutLog
+    ? [
+        { label: 'Send log', value: 'send-log' },
+        { label: "Don't send", value: 'keep-log' },
+      ]
+    : error
     ? [
         { label: 'Try again', value: 'retry' },
         ...(spellbook
@@ -84,11 +109,6 @@ export function MintFailureScreen({
         { label: 'Exit', value: 'exit' },
       ]
     : [
-        {
-          label: 'Send log to the wizard team',
-          value: 'send-log',
-          disabled: isLogSent,
-        },
         { label: 'Open in Claude Code', value: 'claude' },
         { label: 'Open in Codex', value: 'codex' },
         { label: 'Save skill', value: 'save' },
@@ -120,28 +140,34 @@ export function MintFailureScreen({
               </Text>
             </Box>
           </>
-        ) : (
+        ) : isAskingAboutLog ? (
           <Box flexDirection="column" width="100%">
             <Text color={Colors.error} bold>
               ✘ {copy.headline}
             </Text>
-            <Text wrap="wrap">{copy.cause}</Text>
+            <Text wrap="wrap">
+              {copy.cause} {REPORTED_NOTE}
+            </Text>
             <Box marginTop={1}>
-              <Text wrap="wrap">{copy.fix}</Text>
+              <Text wrap="wrap">{LOG_PROMPT}</Text>
             </Box>
           </Box>
-        )}
-        {!spellbook && (
-          <Box marginTop={1} width="100%">
-            {isLogSent ? (
-              <Text color={Colors.success}>
-                {Icons.check} {LOG_SENT_NOTE}
-              </Text>
-            ) : (
-              <Text dimColor wrap="wrap">
-                {REPORTED_NOTE}
-              </Text>
+        ) : (
+          <Box flexDirection="column" width="100%">
+            {logChoice === 'sent' && (
+              <Box marginBottom={1}>
+                <Text color={Colors.success}>
+                  {Icons.check} {LOG_SENT_NOTE}
+                </Text>
+              </Box>
             )}
+            <Text bold>{RETRY_HEADLINE}</Text>
+            <Box marginTop={1}>
+              <Text wrap="wrap">
+                1. {copy.rerun} <Text color="cyan">{RERUN_COMMAND}</Text>
+              </Text>
+            </Box>
+            <Text wrap="wrap">2. {AGENT_HANDOFF_STEP}</Text>
           </Box>
         )}
         {spellbook && (
@@ -161,7 +187,7 @@ export function MintFailureScreen({
             <Text>{working}</Text>
           ) : (
             <PickerMenu
-              key={[isLogSent, Boolean(spellbook), Boolean(error)].join('-')}
+              key={[logChoice, Boolean(spellbook), Boolean(error)].join('-')}
               options={options}
               onSelect={(action) => void select(action as Action)}
             />

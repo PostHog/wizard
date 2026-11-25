@@ -5,25 +5,34 @@ import { readFileTail } from '@utils/bounded-fs';
 import { OutroKind } from '@shared/outro';
 import type { WizardSession } from '@programs/types';
 
-export type FailureCopy = { headline: string; cause: string; fix: string };
+export type FailureCopy = { headline: string; cause: string; rerun: string };
 
 const CAPACITY_COPY: FailureCopy = {
   headline: 'The wizard is busy right now',
   cause: "The wizard's AI service is busy, so setup stopped before finishing.",
-  fix: 'Try this: run the wizard again in a few minutes, or hand the setup to your own agent with the saved skill.',
+  rerun: 'Run the wizard again in a few minutes:',
 };
 
 const RUN_FAILURE_COPY: FailureCopy = {
   headline: "PostHog isn't set up yet",
   cause:
     'The wizard ran into a problem partway through and stopped before finishing.',
-  fix: 'Try this: run the wizard again, or hand the setup to your own agent with the saved skill.',
+  rerun: 'Run the wizard again:',
 };
 
-export const REPORTED_NOTE =
-  'We got the error automatically, but not your log. Sending it helps us find the cause.';
+export const REPORTED_NOTE = 'We got the error automatically.';
+
+export const LOG_PROMPT =
+  'Send your log too? It helps us find the cause. We mask the keys and tokens we recognize.';
 
 export const LOG_SENT_NOTE = 'Log sent. Thanks, it helps us fix this.';
+
+export const RETRY_HEADLINE = 'Finish setting up PostHog';
+
+export const RERUN_COMMAND = 'npx @posthog/wizard@latest';
+
+export const AGENT_HANDOFF_STEP =
+  'Or hand the setup to your own agent. The saved skill has every step.';
 
 // A security stop or the agent's own [ABORT] is a decision, not an outage:
 // it shows its own outro, never the busy handoff.

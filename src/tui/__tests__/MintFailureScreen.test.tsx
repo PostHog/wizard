@@ -76,6 +76,7 @@ it('sends the log, saves the skill, then continues setup', async () => {
     expect.objectContaining({ message: 'agent failed', is_capacity: false }),
   );
   expect(app.lastFrame()).toContain('Log sent.');
+  expect(app.lastFrame()).toContain('Finish setting up PostHog');
   await choose(2);
   expect(app.lastFrame()).toContain(saved.path);
   expect(store.mintHandoff).toBeNull();
@@ -91,7 +92,8 @@ it.each(['save', 'open'] as const)(
     vi.mocked(
       failure === 'save' ? services.leaveSpellbook : services.openAgent,
     ).mockRejectedValueOnce(new Error('Unavailable'));
-    await choose(2);
+    await choose(1);
+    await choose(1);
     expect(app.lastFrame()).toContain(
       failure === 'save' ? 'Could not save' : 'Unavailable',
     );
@@ -107,8 +109,10 @@ it.each(['save', 'open'] as const)(
 );
 
 it('exits without sending the log, saving or launching', async () => {
-  const { store, services, choose } = setup();
-  await choose(4);
+  const { app, store, services, choose } = setup();
+  await choose(1);
+  expect(app.lastFrame()).not.toContain('Log sent.');
+  await choose(3);
   expect(store.mintHandoff).toBe('exit');
   expect(wizardCapture).not.toHaveBeenCalledWith(
     'failure reported',
@@ -121,12 +125,15 @@ it('exits without sending the log, saving or launching', async () => {
 it.each([
   [ErrorCodes.AgentOrchestratorTasksFailed, "PostHog isn't set up yet"],
   [ErrorCodes.GatewayMintRefused, 'The wizard is busy right now'],
-])('heads a %s failure with %s, no error text', async (errorCode, headline) => {
-  const { app } = setup(errorCode);
-  await delay();
-  expect(app.lastFrame()).toContain(headline);
-  expect(app.lastFrame()).toContain(
-    'We got the error automatically, but not your log.',
-  );
-  expect(app.lastFrame()).not.toContain('agent failed');
-});
+])(
+  'asks about the log under a %s headline of %s, no error text',
+  async (errorCode, headline) => {
+    const { app } = setup(errorCode);
+    await delay();
+    const screenText = app.lastFrame()?.replace(/\s+/g, ' ');
+    expect(screenText).toContain(headline);
+    expect(screenText).toContain('We got the error automatically.');
+    expect(screenText).toContain('Send your log too?');
+    expect(screenText).not.toContain('agent failed');
+  },
+);
