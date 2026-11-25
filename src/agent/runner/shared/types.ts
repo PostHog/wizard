@@ -232,7 +232,6 @@ export interface ResolvedRunConfig {
 /** Invocation flags the agent reads. */
 export interface RunFlags {
   ci: boolean;
-  signup: boolean;
   debug: boolean;
   /** Harness-only: keep the ask bridge in a `ci` run that has an answerer. */
   e2eAsk: boolean;
@@ -265,7 +264,6 @@ export interface RunInput {
   host: {
     baseUrl?: string;
     region?: CloudRegion;
-    email?: string;
     /** `--project-id`, for the auth-error classifier. */
     projectId?: number;
     /** `--api-key`, for the auth-error classifier. */

@@ -37,15 +37,12 @@ import {
   WIZARD_DEFAULT_MCP_ANALYTICS_FLAG_KEY,
   WIZARD_INTERACTION_EVENT_NAME,
 } from '@shared/constants';
-import { requestDeepLink } from '@utils/provisioning';
-import { openTrackedLink, withUtm } from '@utils/links';
+import { withUtm } from '@utils/links';
 import type { HostResolution } from '@shared/host-resolution';
 import { getDetectedWarehouseSources } from '@services/warehouse-sources';
 import { buildCodingAgentPrompt } from './handoff.js';
 import { EVENT_PLAN_FILE } from './constants.js';
 import { WAREHOUSE_SOURCE_SCOPE_ADDITIONS } from '../shared/program-scopes';
-
-const DASHBOARD_DEEP_LINK_KEY = 'dashboardDeepLink';
 
 const WAREHOUSE_SOURCES_DOCS_URL =
   'https://posthog.com/docs/data-warehouse/sources';
@@ -80,16 +77,6 @@ function mcpServerFact(candidates: readonly string[]): string {
   return `MCP server candidates from the wizard's scan, examples last: ${shown}${
     more > 0 ? ` (and ${more} more)` : ''
   }`;
-}
-
-function resolveContinueUrl(
-  sess: ProgramSession,
-  host: HostResolution,
-  deepLink: unknown,
-): string | undefined {
-  if (!sess.signup) return undefined;
-  if (typeof deepLink === 'string' && deepLink) return deepLink;
-  return withUtm(`${host.appHost}/products?source=wizard`, 'outro-continue');
 }
 
 /** Sources listed with their own link before the outro falls back to a summary line. */
@@ -210,7 +197,7 @@ function warehouseReportInstruction(sess: ProgramSession): string {
  * by `seeded-deps.ts` once the planner has run) — this file only decides whether
  * the task belongs in the run at all.
  *
- * Empty when detection found no `in-cli` source, and in CI, signup, and any
+ * Empty when detection found no `in-cli` source, and in CI and any
  * other run where `wizard_ask` is disabled — a credential prompt nobody can
  * answer would burn the task's whole timeout and then fail the run. Capped at
  * {@link WAREHOUSE_SEED_LIMIT} sources; {@link buildWarehouseNextSteps} hands
@@ -380,7 +367,6 @@ export const config: ProgramConfig = {
     const context = await gatherFrameworkContext(frameworkConfig, {
       installDir: session.installDir,
       debug: session.debug,
-      signup: session.signup,
       ci: true,
       benchmark: session.benchmark,
       yaraReport: session.yaraReport,
@@ -559,20 +545,6 @@ ${warehouseReportInstruction(session)}
             });
           }
         }
-
-        if (sess.signup) {
-          const deepLink = await requestDeepLink(
-            credentials.accessToken,
-            credentials.host,
-          );
-          if (deepLink) {
-            const taggedDeepLink = withUtm(deepLink, 'dashboard-deeplink');
-            sess.frameworkContext[DASHBOARD_DEEP_LINK_KEY] = taggedDeepLink;
-            openTrackedLink(taggedDeepLink, 'dashboard-deeplink', {
-              auto: true,
-            });
-          }
-        }
       },
 
       buildOutroNextSteps: (sess, credentials) =>
@@ -583,13 +555,6 @@ ${warehouseReportInstruction(session)}
           credentials.projectApiKey,
           credentials.host.apiHost,
         );
-        const deepLink = sess.frameworkContext[DASHBOARD_DEEP_LINK_KEY];
-        const continueUrl = resolveContinueUrl(
-          sess,
-          credentials.host,
-          deepLink,
-        );
-
         const changes = [
           ...config.ui.getOutroChanges(frameworkContext),
           Object.keys(envVars).length > 0
@@ -602,7 +567,6 @@ ${warehouseReportInstruction(session)}
           message: 'Successfully installed PostHog!',
           changes,
           docsUrl: config.metadata.docsUrl,
-          continueUrl,
           // `buildOutroNextSteps` carries the orchestrated case.
           nextSteps: buildWarehouseNextSteps(
             sess,

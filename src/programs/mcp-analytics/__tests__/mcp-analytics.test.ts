@@ -72,7 +72,7 @@ describe('MCP_ANALYTICS_ABORT_CASES', () => {
 
   it('frames the unsupported-language abort as TypeScript, Python, Go, Ruby, and Rust supported', () => {
     // Python (`posthog.mcp`), Go (`posthogmcpsdk`), Ruby (`PostHog::MCP`), and
-    // Rust (`posthog_rs::mcp`)
+    // Rust (`posthog::mcp`)
     // have shipped — the copy must name every supported language and not call
     // any of them "on the roadmap".
     const [langCase] = MCP_ANALYTICS_ABORT_CASES.filter((c) =>
@@ -88,10 +88,23 @@ describe('MCP_ANALYTICS_ABORT_CASES', () => {
       'posthog.mcp',
       'posthogmcpsdk',
       'PostHog::MCP',
-      'posthog_rs::mcp',
+      'posthog::mcp',
     ]) {
       expect(copy).toContain(sdk);
     }
+  });
+
+  it('names posthog::mcp and the posthog crate across Rust abort cases', () => {
+    const rmcpCase = MCP_ANALYTICS_ABORT_CASES.find((c) =>
+      c.match.test('rmcp older than 3.7'),
+    );
+    const rustCase = MCP_ANALYTICS_ABORT_CASES.find((c) =>
+      c.match.test('rust toolchain older than 1.88'),
+    );
+    expect(rmcpCase?.body).toContain('`posthog::mcp`');
+    expect(rmcpCase?.body).not.toContain('posthog_rs');
+    expect(rustCase?.body).toContain('`posthog`');
+    expect(rustCase?.body).not.toContain('posthog-rs');
   });
 });
 

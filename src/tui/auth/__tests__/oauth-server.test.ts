@@ -6,7 +6,6 @@ import { logToFile } from '@utils/debug';
 vi.mock(import('@utils/debug'), () => ({ logToFile: vi.fn() }));
 
 const authUrl = 'https://oauth.example.test/authorize';
-const signupUrl = 'https://oauth.example.test/signup';
 
 function request(port: number, path: string, cookie?: string) {
   return new Promise<{
@@ -61,7 +60,7 @@ describe('OAuth callback HTTP server', () => {
 
   beforeEach(async () => {
     vi.clearAllMocks();
-    callbackServer = await startCallbackServer(authUrl, signupUrl, 0);
+    callbackServer = await startCallbackServer(authUrl, 0);
     port = (callbackServer.server.address() as net.AddressInfo).port;
   });
 
@@ -75,23 +74,38 @@ describe('OAuth callback HTTP server', () => {
     });
   });
 
-  it.each([
-    ['/authorize', authUrl],
-    ['/authorize?signup=true', signupUrl],
-  ])('redirects %s and accepts its callback', async (path, redirectUrl) => {
+  it('redirects /authorize and accepts its callback', async () => {
     const cookie = 'local-dev-session=test-session';
     const callback = callbackServer.waitForCallback();
 
-    const redirect = await request(port, path, cookie);
+    const redirect = await request(port, '/authorize', cookie);
 
     expect(redirect.statusCode).toBe(302);
-    expect(redirect.headers.location).toBe(redirectUrl);
+    expect(redirect.headers.location).toBe(authUrl);
 
     const response = await request(port, '/callback?code=test-code', cookie);
 
     expect(response.statusCode).toBe(200);
     await expect(callback).resolves.toBe('test-code');
   });
+
+  it.each([
+    ['a code', '/callback?code=early-code', 200],
+    ['an error', '/callback?error=access_denied', 200],
+  ])(
+    'keeps %s that arrives before the flow waits for it',
+    async (_kind, path, status) => {
+      const response = await request(port, path);
+
+      expect(response.statusCode).toBe(status);
+      const callback = callbackServer.waitForCallback();
+      if (path.includes('code=')) {
+        await expect(callback).resolves.toBe('early-code');
+      } else {
+        await expect(callback).rejects.toMatchObject({ code: 'access_denied' });
+      }
+    },
+  );
 
   it.each(['/authorize', '/callback?code=private-authorization-code'])(
     'explains oversized headers on %s and allows a retry without logging secrets',

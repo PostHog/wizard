@@ -36,7 +36,6 @@ export {
 export {
   /** OAuth scopes a program's login asks for. */
   getOAuthScopesForProgram,
-  getProvisioningScopesForProgram,
   Program,
   PROGRAM_REGISTRY,
   getProgramConfig,

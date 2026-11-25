@@ -5,10 +5,7 @@
  */
 
 import type { ProgramConfig, ProgramId } from '@programs/program-contract';
-import {
-  WIZARD_OAUTH_SCOPES,
-  WIZARD_PROVISIONING_SCOPES,
-} from '@shared/constants';
+import { WIZARD_OAUTH_SCOPES } from '@shared/constants';
 import { withScopeAdditions } from '@shared/oauth-scopes';
 import { config as posthogIntegration } from '@programs/posthog-integration';
 import { config as mcpAnalytics } from '@programs/mcp-analytics';
@@ -142,20 +139,6 @@ export function getOAuthScopesForProgram(
 ): readonly string[] {
   return withScopeAdditions(
     WIZARD_OAUTH_SCOPES,
-    findProgramConfig(programId)?.oauthScopeAdditions,
-  );
-}
-
-/**
- * The scopes for the signup provisioning path. Same shape as
- * `getOAuthScopesForProgram`, on `WIZARD_PROVISIONING_SCOPES`, so a
- * program's extra scopes only reach tokens provisioned for that program.
- */
-export function getProvisioningScopesForProgram(
-  programId: ProgramId | null | undefined,
-): readonly string[] {
-  return withScopeAdditions(
-    WIZARD_PROVISIONING_SCOPES,
     findProgramConfig(programId)?.oauthScopeAdditions,
   );
 }

@@ -38,12 +38,6 @@ export const GLOBAL_OPTIONS = {
       'Write the debug log to this file (default: posthog-wizard.log in the temp dir)\nenv: POSTHOG_WIZARD_LOG_FILE',
     type: 'string' as const,
   },
-  signup: {
-    default: false,
-    describe:
-      'Create a new PostHog account during setup\nenv: POSTHOG_WIZARD_SIGNUP',
-    type: 'boolean' as const,
-  },
   telemetry: {
     default: true,
     describe:
@@ -58,11 +52,6 @@ export const GLOBAL_OPTIONS = {
   'project-id': {
     describe:
       'PostHog project ID to use (optional; when not set, uses default from API key or OAuth)\nenv: POSTHOG_WIZARD_PROJECT_ID',
-    type: 'string' as const,
-  },
-  email: {
-    describe:
-      'Email address for signup (used with --signup)\nenv: POSTHOG_WIZARD_EMAIL',
     type: 'string' as const,
   },
   // Hidden while `wizard-project-discovery` rolls out.

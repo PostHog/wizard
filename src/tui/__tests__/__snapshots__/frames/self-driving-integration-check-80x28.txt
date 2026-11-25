@@ -4,15 +4,15 @@
 
  No PostHog integration found
 
- This will kick off an agent to explore your project and find existing PostHog
- integrations. Self-driving reads PostHog data, so we'll set that up first: it
- gives your signal sources something to watch. To do that we need to connect to
-  PostHog — do you already have an account?
+ Self-driving reads PostHog data, so the setup agent adds PostHog to your
+ project first. That gives your signal sources something to watch. PostHog
+ opens in your browser next: log in, or create an account if you don't have
+ one.
 
- ▸ Yes, log me in (opens PostHog to authorize)
-   No, create one for me (we'll email you a login link)
+ ▸ Continue (opens PostHog to log in or sign up)
 
  [I] Privacy & data
+
 
 
 

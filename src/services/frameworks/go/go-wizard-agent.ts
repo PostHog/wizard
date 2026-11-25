@@ -67,7 +67,7 @@ export const GO_AGENT_CONFIG: FrameworkConfig<GoContext> = {
     projectTypeDetection:
       'This is a Go project. Look for go.mod, go.sum, cmd/, internal/, and main packages to confirm.',
     packageInstallation:
-      'Install the PostHog Go SDK with `go get github.com/posthog/posthog-go`. Do not manually edit go.mod or go.sum; the go tool updates them automatically. Run `go mod tidy` afterwards if imports change.',
+      'Install the PostHog Go SDK with `go get` using the module path and version the Go SDK docs pin, and match that import path in Go code. If go.mod already requires a PostHog Go SDK module, keep that existing module path and version. Do not manually edit go.mod or go.sum; the go tool updates them automatically. Run `go mod tidy` afterwards if imports change.',
     getAdditionalContextLines: (context) => {
       const lines = [
         `Framework docs ID: go (use posthog://docs/frameworks/go for documentation)`,

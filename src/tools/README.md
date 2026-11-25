@@ -1,8 +1,7 @@
 # Tools
 
 A tool is a command that does its job without an agent run: `mcp add`,
-`mcp remove`, `mcp tutorial`, `slack`, `doctor`, `provision`, `cli add` and
-`skill list`. No tool goes through `runProgram`, and no program imports a tool.
+`mcp remove`, `mcp tutorial`, `slack`, `doctor`, `cli add` and `skill list`. No tool goes through `runProgram`, and no program imports a tool.
 
 Every tool runner resolves an exit code and never exits: the CLI exits with the
 code. A runner flushes its analytics events before it resolves.
@@ -31,7 +30,6 @@ tag and the gateway cost attribution.
 | `mcp add`, `mcp remove` | The TUI's `runTuiTool`. `--headless`, or a terminal with no raw mode, runs `addMCPServerToClientsStep` or `removeMCPServerFromClientsStep` and prints the outcome instead |
 | `mcp tutorial`, `slack` | `runTuiTool`                                                                                                                                  |
 | `doctor`                | `runTuiTool`. `--ci` runs `runDoctorReport`: an API-key login and the active health issues, printed                                           |
-| `provision`             | `runProvision`                                                                                                                                |
 | `cli add`               | `runCliAdd`                                                                                                                                   |
 | `skill list`            | `listSkills`                                                                                                                                  |
 

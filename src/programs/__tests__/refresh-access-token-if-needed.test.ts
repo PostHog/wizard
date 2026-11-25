@@ -82,29 +82,11 @@ describe('rotateCredentials through the OAuth session', () => {
     expect(mockedRefresh).toHaveBeenCalledWith(
       'phr_old',
       'https://posthog.example',
-      undefined,
     );
     expect(refreshed.accessToken).toBe('pha_new');
     expect(refreshed.refreshToken).toBe('phr_rotated');
     // Unrelated fields survive the swap.
     expect(refreshed.projectId).toBe(7);
-  });
-
-  it('refreshes under the minting client id when the credential carries one (provisioning signups)', async () => {
-    mockedRefresh.mockResolvedValueOnce({
-      access_token: 'pha_new',
-      expires_in: 3600,
-      token_type: 'Bearer',
-      scope: 'project:read',
-    });
-
-    await refresh(aging({ oauthClientId: 'client_us_provisioning' }));
-
-    expect(mockedRefresh).toHaveBeenCalledWith(
-      'phr_old',
-      undefined,
-      'client_us_provisioning',
-    );
   });
 
   it('replaces the credentials object rather than mutating it in place', async () => {

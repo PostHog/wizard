@@ -112,7 +112,8 @@ export async function getReactRouterMode(
     return ReactRouterMode.V6;
   }
 
-  if (majorVersion === 7) {
+  // React Router 8 keeps the three modes of 7 and detects them the same way.
+  if (majorVersion !== null && majorVersion >= 7) {
     const hasConfig = await hasReactRouterConfig({ installDir });
     if (hasConfig) return ReactRouterMode.V7_FRAMEWORK;
 
@@ -122,7 +123,7 @@ export async function getReactRouterMode(
     const hasDeclarative = await hasDeclarativeRouter({ installDir });
     if (hasDeclarative) return ReactRouterMode.V7_DECLARATIVE;
 
-    // v7 but can't detect mode
+    // v7 or later, but no mode detected
     return null;
   }
 
@@ -134,10 +135,10 @@ export function getReactRouterModeName(mode: ReactRouterMode): string {
     case ReactRouterMode.V6:
       return 'v6';
     case ReactRouterMode.V7_FRAMEWORK:
-      return 'v7 Framework mode';
+      return 'Framework mode';
     case ReactRouterMode.V7_DATA:
-      return 'v7 Data mode';
+      return 'Data mode';
     case ReactRouterMode.V7_DECLARATIVE:
-      return 'v7 Declarative mode';
+      return 'Declarative mode';
   }
 }

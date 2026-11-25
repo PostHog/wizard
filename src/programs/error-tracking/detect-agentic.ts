@@ -104,7 +104,6 @@ export async function gatherErrorTrackingContext(
   const context = await gatherFrameworkContext(frameworkConfig, {
     installDir: session.installDir,
     debug: session.debug,
-    signup: session.signup,
     ci: session.ci,
     benchmark: session.benchmark,
     yaraReport: session.yaraReport,

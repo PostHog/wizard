@@ -815,7 +815,6 @@ describe('runProgram', () => {
           FRAMEWORK_REGISTRY[Integration.nextjs].metadata.docsUrl,
         flags: {
           ci: true,
-          signup: false,
           debug: true,
           yaraReport: true,
           e2eAsk: true,
@@ -1032,19 +1031,16 @@ describe('runProgram', () => {
     },
   );
 
-  it.each([{ ci: true }, { signup: true }])(
-    'skips the AI approval for a %o session',
-    async (fields) => {
-      const result = await runProgram(
-        'metrics',
-        input({ store: store(fields) }),
-        { credentials: login(null) },
-      );
+  it('skips the AI approval for a CI session', async () => {
+    const result = await runProgram(
+      'metrics',
+      input({ store: store({ ci: true }) }),
+      { credentials: login(null) },
+    );
 
-      expect(result.outcome).toBe(RunOutcome.Success);
-      expect(runAgent).toHaveBeenCalledTimes(1);
-    },
-  );
+    expect(result.outcome).toBe(RunOutcome.Success);
+    expect(runAgent).toHaveBeenCalledTimes(1);
+  });
 
   it.each<[RunOutcome, RunResult['failure']]>([
     [
@@ -1336,7 +1332,6 @@ describe('runProgram', () => {
     expect(refreshAccessToken).toHaveBeenCalledExactlyOnceWith(
       'phr_aging',
       'https://posthog.example',
-      undefined,
     );
     expect(agentInput().credentials.accessToken).toBe('pha_refreshed');
     expect(s.session).toMatchObject({

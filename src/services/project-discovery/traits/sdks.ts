@@ -30,6 +30,7 @@ const POSTHOG_SDK_PACKAGES: ReadonlySet<string> = new Set([
   'posthog-rs',
   'com.posthog:posthog',
   'com.posthog:posthog-android',
+  'com.posthog:posthog-kmp',
   'com.posthog:posthog-server',
   'github.com/posthog/posthog-ios',
   'posthog_flutter',

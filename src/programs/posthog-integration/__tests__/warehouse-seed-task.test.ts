@@ -87,16 +87,6 @@ describe('warehouse seed task', () => {
     expect(tasks).toEqual([]);
   });
 
-  it('queues nothing during signup, where asking is disabled', () => {
-    const tasks = seed(
-      session({
-        signup: true,
-        frameworkContext: { [DETECTED_WAREHOUSE_SOURCES_KEY]: [POSTGRES] },
-      }),
-    );
-    expect(tasks).toEqual([]);
-  });
-
   it('queues the task in an e2e run, where the harness answers', () => {
     // The e2e host runs a `ci` session but drives the ask overlay itself, so
     // the seeded-task path gets pre-merge coverage instead of none.

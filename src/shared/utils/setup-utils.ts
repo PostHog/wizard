@@ -1,6 +1,5 @@
-import * as childProcess from 'node:child_process';
 import * as fs from 'node:fs';
-import { basename, join } from 'node:path';
+import { join } from 'node:path';
 import {
   type PackageManager,
   detectAllPackageManagers,
@@ -11,7 +10,6 @@ import type { PackageJson } from './package-json';
 import { getDeclaredVersion, parsePackageJson } from './package-json';
 import { analytics } from './analytics';
 import { versionSatisfiesRange } from './semver';
-import { findTrustedCommand } from '@shared/trusted-command';
 
 export interface CliSetupConfig {
   filename: string;
@@ -33,74 +31,6 @@ export interface CliSetupConfigContent {
   org?: string;
   project?: string;
   url?: string;
-}
-
-const FREEMAIL_DOMAINS = new Set([
-  'gmail.com',
-  'googlemail.com',
-  'hotmail.com',
-  'outlook.com',
-  'yahoo.com',
-  'icloud.com',
-  'me.com',
-  'mail.com',
-  'protonmail.com',
-  'proton.me',
-  'live.com',
-  'aol.com',
-  'yandex.com',
-  'zoho.com',
-  'gmx.com',
-  'fastmail.com',
-]);
-
-function parseGitRemote(): { org: string; repo: string } | null {
-  try {
-    const command = findTrustedCommand('git');
-    if (!command) return null;
-    const url = childProcess
-      .execFileSync(
-        command.executable,
-        [...command.prefixArgs, 'remote', 'get-url', 'origin'],
-        {
-          cwd: process.cwd(),
-          env: command.env,
-          timeout: 5000,
-          stdio: ['ignore', 'pipe', 'ignore'],
-        },
-      )
-      .toString()
-      .trim();
-    // git@github.com:acme-corp/my-app.git or https://github.com/acme-corp/my-app.git
-    const match = url.match(/[/:]([\w.-]+)\/([\w.-]+?)(?:\.git)?$/);
-    if (match) return { org: match[1], repo: match[2] };
-  } catch {
-    // not in a git repo or no remote
-  }
-  return null;
-}
-
-export function detectOrgAndProject(email: string): {
-  orgName: string | undefined;
-  projectName: string | undefined;
-} {
-  const remote = parseGitRemote();
-
-  // Project name: git repo name > directory name
-  const projectName = remote?.repo || basename(process.cwd()) || undefined;
-
-  // Org name: git remote org > email domain (skip freemail)
-  let orgName: string | undefined;
-  if (remote?.org) {
-    orgName = remote.org;
-  } else {
-    const domain = email.split('@')[1]?.toLowerCase();
-    if (domain && !FREEMAIL_DOMAINS.has(domain)) {
-      orgName = domain.split('.')[0];
-    }
-  }
-
-  return { orgName, projectName };
 }
 
 export async function isReact19Installed({

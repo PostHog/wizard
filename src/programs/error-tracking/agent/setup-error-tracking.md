@@ -58,14 +58,19 @@ and pick at most one, by this precedence (first match wins):
   build routinely emits a `.map` with no `.js` beside it, and the upload step
   then fails the whole build. This rule wins over every `package.json` match
   below — an Astro project that also depends on `vite` is still **none**.
-- otherwise read `package.json` dependencies, first match wins:
-  `nuxt` → `nuxt`; `next` → `nextjs`;
-  `@angular/core` → `angular`; `vite` → `vite`; `webpack` → `webpack`;
-  `rollup` → `rollup`; `react` → `react`; server-only Node → `node`;
-  any other browser JS → `web`. Server-only Node is `node` only when a
-  build compiles or bundles it (a `build` script running `tsc`, esbuild, or
-  another bundler), in this directory or in a package nested below it.
-  Server JavaScript that no build touches runs as written: **none**.
+- otherwise decide by the tool the production `build` script runs, in this
+  directory or in a package nested below it, first match wins: `nuxt build` →
+  `nuxt`; `next build` → `nextjs`; `ng build` → `angular`; `vite build` or a
+  CLI built on Vite (`react-router build`, `vp build`) → `vite`; `webpack` →
+  `webpack`; `rollup` → `rollup`; `tsc`, `nest build`, or esbuild on
+  server-only code → `node`. Only when the script names none of these, read
+  `package.json` `dependencies` and `devDependencies`, first match wins:
+  `nuxt` → `nuxt`; `next` → `nextjs`; `@angular/core` → `angular`; `vite` →
+  `vite`; `webpack` → `webpack`; `rollup` → `rollup`; `react` → `react`; any
+  other browser JS → `web`. A test runner or dev server does not count: a
+  `vite` that only runs vitest, or a `webpack` that only serves hot reload,
+  builds nothing that ships. Server JavaScript that no build touches runs as
+  written: **none**.
 - **none** for platforms whose stack traces are already readable: plain
   Python (Django, Flask, FastAPI), Ruby, PHP, Elixir, JVM servers, .NET.
   Skip the whole upload subgraph for them — a skipped upload on such a

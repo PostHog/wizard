@@ -93,7 +93,7 @@ async function executeLinear(
 
   // wizard_ask needs an answerer. A human answers at the keyboard; the e2e
   // snapshot/MCP host answers via its driver and sets WIZARD_ASK_AUTODRIVE.
-  // CI/signup with neither has no answerer, so we omit the bridge and the tool
+  // CI with neither has no answerer, so we omit the bridge and the tool
   // returns an actionable error rather than hanging on a never-resolving prompt.
   const askDisabled =
     !!run.structured ||
@@ -325,9 +325,6 @@ async function executeLinear(
         message: run.successMessage,
         reportFile: run.reportFile,
         docsUrl: run.docsUrl,
-        continueUrl: input.flags.signup
-          ? `${host.appHost}/products?source=wizard`
-          : undefined,
       };
   if (outroData) {
     emit({ kind: 'completion', outro: outroData });

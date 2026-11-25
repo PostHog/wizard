@@ -4,10 +4,7 @@ import {
   isAuthorizationTimeout,
 } from '../oauth';
 import { parseOAuthScopes, getOAuthScopesForProgram } from '@programs';
-import {
-  WIZARD_OAUTH_SCOPES,
-  WIZARD_PROVISIONING_SCOPES,
-} from '@shared/constants';
+import { WIZARD_OAUTH_SCOPES } from '@shared/constants';
 
 describe('extractOAuthCode', () => {
   it('extracts the code from a full callback URL', () => {
@@ -77,8 +74,18 @@ describe('wizard OAuth scopes', () => {
 
     expect(scopes).toContain('wizard_session:write');
     expect(scopes).toContain('event_definition:write');
+    // The agent's setup calls: without one, a step of the run 401s or 403s.
     expect(WIZARD_OAUTH_SCOPES).toEqual(
-      expect.arrayContaining([...WIZARD_PROVISIONING_SCOPES]),
+      expect.arrayContaining([
+        'user:read',
+        'project:read',
+        'llm_gateway:read',
+        'dashboard:write',
+        'insight:write',
+        'query:read',
+        'notebook:write',
+        'event_definition:write',
+      ]),
     );
   });
 

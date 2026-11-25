@@ -167,30 +167,6 @@ describe('programSequence', () => {
       expect(entry.show?.(view)).toBe(false);
       expect(entry.isComplete?.(view)).toBe(true);
     });
-
-    it('skips the gate in signup mode regardless of opt-in state', () => {
-      // A provisioned account's token omits `organization:read`, so the org's
-      // AI approval can never be read back. Creating an account through the
-      // wizard to run the agent is itself the consent — signup auto-consents
-      // like CI, so the gate must never block it.
-      const view = tuiView({});
-      view.session.signup = true;
-      view.session.apiUser = orgWith(false);
-      const entry = getEntry(Program.SelfDriving, ScreenId.AiOptIn);
-
-      expect(entry.show?.(view)).toBe(false);
-      expect(entry.isComplete?.(view)).toBe(true);
-    });
-
-    it('skips the gate in signup mode even when apiUser is null', () => {
-      const view = tuiView({});
-      view.session.signup = true;
-      const entry = getEntry(Program.SelfDriving, ScreenId.AiOptIn);
-
-      expect(view.session.apiUser).toBeNull();
-      expect(entry.show?.(view)).toBe(false);
-      expect(entry.isComplete?.(view)).toBe(true);
-    });
   });
 
   describe('Wizard run predicate', () => {

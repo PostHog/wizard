@@ -531,7 +531,9 @@ describe('coerceReport', () => {
       expect.objectContaining({
         variant: 'rust',
         instrumentable: false,
-        reason: expect.stringMatching(/add the posthog-rs crate/i),
+        reason: expect.stringMatching(
+          /add the posthog \(or posthog-rs\) crate/i,
+        ),
       }),
     );
   });
