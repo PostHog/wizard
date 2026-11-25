@@ -2165,6 +2165,36 @@ describe('runProgram', () => {
       ]);
     });
 
+    it('checks SDK minimums against the scoped runStep target directory', async () => {
+      fs.writeFileSync(
+        path.join(repo, 'apps/api/package.json'),
+        JSON.stringify({ dependencies: { 'posthog-node': '^4.3.0' } }),
+      );
+      const s = pairStore();
+      await runDiscovery({ id: 'metrics' }, s.readyContext());
+      s.setDetectionComplete();
+      const result = await runProgram(
+        'metrics',
+        input({
+          store: s,
+          config: {
+            run,
+            sdkFeature: 'errorTracking',
+            runSteps: {
+              run: { targetDir: () => path.join(repo, 'apps/api') },
+            },
+          },
+          wizardFlags: { [WIZARD_VERSIONED_SDK_SKILLS_FLAG_KEY]: 'true' },
+        }),
+        { credentials: login(), workflow: workflow() },
+      );
+      expect(result).toMatchObject({
+        outcome: RunOutcome.Failed,
+        failure: { code: ErrorCodes.DetectSdkTooOld },
+      });
+      expect(runAgent).not.toHaveBeenCalled();
+    });
+
     it('stops on a project whose real directory is outside the workspace', async () => {
       const outside = fs.realpathSync(
         fs.mkdtempSync(path.join(os.tmpdir(), 'outside-')),

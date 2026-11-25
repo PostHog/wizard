@@ -8,7 +8,7 @@ function normalizePyName(name: string): string {
 /** A PEP 508 requirement as name and specifier: `posthog[sentry]>=7.40,<8; python_version>"3"` is `posthog`, `>=7.40,<8`. */
 function requirement(spec: string): Array<[string, string]> {
   const bare = spec
-    .replace(/\[[^\]]*\]/, '')
+    .replace(/\[[^\]\n]{0,200}\]/, '')
     .split(';')[0]
     .trim();
   const name = bare.split(/[<>=!~\s]/)[0];

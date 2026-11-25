@@ -109,6 +109,15 @@ describe('PostHog SDK versions', () => {
     ).toEqual([]);
   });
 
+  it('catches PEP 440 prerelease pins below a product minimum', async () => {
+    const session = await discovered({
+      'requirements.txt': 'posthog==7.40.0rc1\n',
+    });
+    expect(
+      sdkFeatureGaps(session, ['mcpAnalytics']).map((g) => g.feature),
+    ).toEqual(['mcpAnalytics']);
+  });
+
   it('changes nothing while versioned SDK skills are off', async () => {
     const session = await nodeProject('^4.3.0', false);
     expect(getTraits(session).posthogSdks).toBeUndefined();

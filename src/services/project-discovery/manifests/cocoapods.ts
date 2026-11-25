@@ -3,7 +3,7 @@ export function parsePodfile(content: string): Record<string, string> {
   return Object.fromEntries(
     [
       ...content.matchAll(
-        /^\s*pod\s+['"]([^'"/]+)[^'"]*['"](?:\s*,\s*['"]([^'"]+)['"])?/gm,
+        /^[ \t]*pod[ \t]+['"]([^'"/\n]+)(?:\/[^'"\n]*)?['"](?:[ \t]*,[ \t]*['"]([^'"\n]+)['"])?/gm,
       ),
     ].map((m) => [m[1], m[2] ?? '']),
   );

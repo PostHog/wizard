@@ -63,7 +63,12 @@ export function declaredFloor(spec: string): string | undefined {
       .replace(/~=/g, '~')
       .replace(/==/g, '=')
       .replace(/,/g, ' ')
-      .replace(/\.\+/g, '.x'),
+      .replace(/\.\+/g, '.x')
+      .replace(/(\d+\.\d+\.\d+)\.?post\d+/gi, '$1')
+      .replace(
+        /(\d+\.\d+\.\d+)\.?(alpha|beta|rc|dev|a|b)\.?(\d+)/gi,
+        '$1-$2.$3',
+      ),
   );
   const floor = range === null ? null : minVersion(range);
   return floor && floor.version !== '0.0.0' ? floor.version : undefined;
