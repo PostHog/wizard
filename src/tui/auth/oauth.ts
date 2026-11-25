@@ -74,7 +74,10 @@ export function isAuthorizationTimeout(error: Error): boolean {
 
 interface OAuthConfig {
   scopes: string[];
-  /** Open PostHog's sign-up page, which continues to the consent screen, instead of the login. */
+  /**
+   * A `--signup` run. It opens the same login page, which sends a new email to sign-up, but stops when no browser
+   * opens instead of offering the manual paste.
+   */
   signup?: boolean;
   /** Project to pre-select on the consent screen (the `--project-id` flag). */
   projectId?: number;
@@ -95,10 +98,6 @@ function getCallbackUrl(port: number): string {
 
 function getLocalLoginUrl(port: number): string {
   return `${getLocalOAuthOrigin(port)}/authorize`;
-}
-
-function getLocalSignupUrl(port: number): string {
-  return `${getLocalLoginUrl(port)}?signup=true`;
 }
 
 /**
@@ -149,7 +148,6 @@ function generateCodeChallenge(verifier: string): string {
 
 export async function startCallbackServer(
   authUrl: string,
-  signupUrl: string,
   port: number,
 ): Promise<{
   port: number;
@@ -178,9 +176,7 @@ export async function startCallbackServer(
       const url = new URL(req.url, getLocalOAuthOrigin(port));
 
       if (url.pathname === '/authorize') {
-        const isSignup = url.searchParams.get('signup') === 'true';
-        const redirectUrl = isSignup ? signupUrl : authUrl;
-        res.writeHead(302, { Location: redirectUrl });
+        res.writeHead(302, { Location: authUrl });
         res.end();
         return;
       }
@@ -520,18 +516,10 @@ export async function performOAuthFlow(
         authUrl.searchParams.set('team_id', String(config.projectId));
       }
 
-      // UTM-tag both kickoff URLs so the journey into the app is
+      // UTM-tag the kickoff URL so the journey into the app is
       // attributable to the wizard command that started it.
       const taggedAuthUrl = withUtm(authUrl.toString(), 'oauth-authorize');
-      const signupUrl = new URL(
-        withUtm(
-          `${oauthUrl}/signup?next=${encodeURIComponent(taggedAuthUrl)}`,
-          'oauth-signup',
-        ),
-      );
-      const localSignupUrl = getLocalSignupUrl(port);
-      const localLoginUrl = getLocalLoginUrl(port);
-      const urlToOpen = config.signup ? localSignupUrl : localLoginUrl;
+      const urlToOpen = getLocalLoginUrl(port);
 
       logToFile(`[oauth] attempting callback server on port ${port}`);
 
@@ -540,7 +528,6 @@ export async function performOAuthFlow(
       try {
         ({ server, waitForCallback } = await startCallbackServer(
           taggedAuthUrl,
-          signupUrl.toString(),
           port,
         ));
       } catch (e) {
@@ -556,9 +543,7 @@ export async function performOAuthFlow(
       // direct PostHog authorize URL too, for the manual-paste modal — on a
       // remote/headless box the user opens it from another machine, where
       // localhost:<port> is unreachable.
-      store.setAuthorizeUrl(
-        config.signup ? signupUrl.toString() : taggedAuthUrl,
-      );
+      store.setAuthorizeUrl(taggedAuthUrl);
 
       // The localhost proxy URL stays untagged — the PostHog destination
       // it redirects to carries the UTMs.

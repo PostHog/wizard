@@ -193,9 +193,9 @@ No PostHog account yet? Pass `--signup` (or set `POSTHOG_WIZARD_SIGNUP=true`):
 npx @posthog/wizard@latest --signup
 ```
 
-The wizard opens PostHog's sign-up page in your browser. Once you've signed up,
-PostHog asks you to authorize the wizard, and setup continues as it does after a
-login.
+The wizard opens PostHog's login page in your browser. Enter your email there
+and PostHog takes you to sign-up when it's new. Once you've signed up, PostHog
+asks you to authorize the wizard, and setup continues as it does after a login.
 
 Sign-up needs a browser on the machine that runs the wizard. When the wizard
 can't open one, it stops: sign up for PostHog in a browser, then run the wizard

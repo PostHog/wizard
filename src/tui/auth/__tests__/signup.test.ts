@@ -83,7 +83,7 @@ describe('the OAuth flow when it signs up', () => {
     expect(axios.post).not.toHaveBeenCalled();
   });
 
-  it('sends the browser to the sign-up page, then logs in from its callback', async () => {
+  it('sends the browser to the login page, then logs in from its callback', async () => {
     vi.mocked(openTrackedLinkOrFail).mockResolvedValue(true);
     const { store, wizardStore } = fakeStore();
 
@@ -96,7 +96,9 @@ describe('the OAuth flow when it signs up', () => {
     await fetch(new URL('/callback?code=abc', loginUrl));
 
     await expect(flow).resolves.toMatchObject({ access_token: 'pha_new' });
-    expect(opened.headers.get('location')).toMatch(/\/signup\?next=/);
+    const authorize = new URL(opened.headers.get('location') ?? '');
+    // The OAuth proxy serves only `/oauth/authorize`; its login page sends a new email to sign-up.
+    expect(authorize.pathname).toBe('/oauth/authorize');
     expect(abortOnScreens).not.toHaveBeenCalled();
   });
 
