@@ -50,5 +50,4 @@ export {
   type HealthIssueSeverity,
 } from './doctor';
 export { runCliAdd } from './cli-steering';
-export { runProvision } from './provision';
 export { listSkills } from './skill-list';

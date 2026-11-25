@@ -34,7 +34,6 @@ import {
 import { type DiscoveredFeature } from '@shared/discovered-feature';
 import { McpOutcome, RunPhase } from '@shared/run-state';
 import type { SettingsConflict } from '@shared/claude-settings';
-import type { CloudRegion } from '@utils/types';
 import { type WizardReadinessResult } from '@shared/health-checks/readiness';
 import {
   WizardRouter,
@@ -915,27 +914,6 @@ export class WizardStore implements TuiView {
       ...sessionProperties(this.session),
     });
     this._write({ integrate });
-  }
-
-  /**
-   * Self-driving "no PostHog account" branch of the integration check. The
-   * project has no SDK, so we always integrate (`integrate = true`); and since
-   * the user has no account, we flip `signup` and record the `email` / `region`
-   * collected on the screen so `authenticate` → `getOrAskForProjectData` takes
-   * the provisioning path (create account + email a login link) instead of
-   * OAuth. The "yes, I have an account" branch uses `setIntegrate(true)` and
-   * leaves `signup` false so auth runs the normal OAuth login.
-   */
-  chooseProvisionAccount(email: string, region: CloudRegion): void {
-    analytics.wizardCapture('self-driving integration check', {
-      self_driving_integrate: true,
-      self_driving_has_account: false,
-      provision_region: region,
-      ...sessionProperties(this.session),
-    });
-    this._write({ integrate: true }, () =>
-      this.sessions.update({ signup: true, email, region }),
-    );
   }
 
   /**

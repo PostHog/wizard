@@ -24,12 +24,8 @@ import {
 import * as path from 'path';
 import { OutroKind } from '@shared/outro';
 import type { AgentProgress, TaskNotice } from '../../../progress';
-import {
-  POSTHOG_DOCS_URL,
-  WIZARD_CONTACT_EMAIL,
-  WIZARD_OAUTH_SCOPES,
-  WIZARD_PROVISIONING_SCOPES,
-} from '@shared/constants';
+import { POSTHOG_DOCS_URL, WIZARD_CONTACT_EMAIL } from '@shared/constants';
+import { missingSetupScopes } from '@shared/oauth-tokens';
 import { installSkillById } from '@shared/skill-install';
 import {
   formatYaraAbortMessage,
@@ -1152,7 +1148,7 @@ async function executeOrchestrator(
   }
 
   // One bridge for the run, handed only to a task whose prompt allows asking.
-  // Absent in CI and signup, where nobody can answer.
+  // Absent in CI, where nobody can answer.
   const askBridge = shouldDisableAsk(input.flags)
     ? undefined
     : createAskBridge(interaction, {
@@ -1743,10 +1739,8 @@ async function executeOrchestrator(
     // A grant narrowed at login is the one failure cause the user can fix
     // alone — lead with the fix, and only fall back to the report-a-bug line
     // when trying again doesn't work.
-    const missingScopes = (boot.credentials.missingScopes ?? []).filter(
-      (scope) =>
-        WIZARD_PROVISIONING_SCOPES.some((required) => required === scope) ||
-        !WIZARD_OAUTH_SCOPES.some((requested) => requested === scope),
+    const missingScopes = missingSetupScopes(
+      boot.credentials.missingScopes ?? [],
     );
     const reason =
       missingScopes.length > 0

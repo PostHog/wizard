@@ -125,7 +125,6 @@ describe('the Nuxt variant', () => {
       (await FRAMEWORK_REGISTRY[Integration.nuxt].metadata.gatherContext?.({
         installDir: dir,
         debug: false,
-        signup: false,
         ci: false,
         benchmark: false,
         yaraReport: false,

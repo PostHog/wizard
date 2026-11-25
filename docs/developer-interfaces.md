@@ -101,8 +101,8 @@ export const signature: (
 The store holds PostHog tokens, including the refresh token, once the run logs
 in. Don't log or serialize its credentials.
 
-A `ci` or `signup` session skips the AI-processing approval. Set them only
-when consent is already settled.
+A `ci` session skips the AI-processing approval. Set it only when consent is
+already settled.
 
 ### The session store
 

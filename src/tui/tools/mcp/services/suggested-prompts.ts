@@ -99,10 +99,7 @@ export function createMcpSuggestedPromptsServices(
     performLogin: async () => {
       const result = await getOrAskForProjectData({
         store,
-        signup: false,
         projectId: undefined,
-        email: undefined,
-        region: undefined,
         baseUrl: store.session.baseUrl,
         // Widens the OAuth scope grant: base `WIZARD_OAUTH_SCOPES` plus
         // read on every product surface (flags, experiments, surveys,

@@ -36,12 +36,14 @@ export const ERROR_CATALOG: Record<ErrorCode, ErrorCatalogEntry> = {
   [ErrorCodes.ArgsMissingEmail]: {
     group: 'args',
     retry: 'no',
-    description: 'Signup run without --email.',
+    description:
+      'No longer emitted. Signup run without --email, before account provisioning was removed.',
   },
   [ErrorCodes.ArgsSignupProvisionFailed]: {
     group: 'args',
     retry: 'yes',
-    description: 'Account provisioning for --signup failed.',
+    description:
+      'No longer emitted. Account provisioning for --signup failed, before it was removed.',
   },
   [ErrorCodes.AuthKeyType]: {
     group: 'auth',

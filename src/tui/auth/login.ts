@@ -19,10 +19,7 @@ export async function oauthLogin(
   logToFile('[agent-runner] starting OAuth');
   const data = await getOrAskForProjectData({
     store,
-    signup: session.signup,
     projectId: session.projectId,
-    email: session.email,
-    region: session.region,
     baseUrl: session.baseUrl,
     localMcp: session.localMcp,
     programId,
@@ -34,7 +31,6 @@ export async function oauthLogin(
       accessToken: data.accessToken,
       refreshToken: data.refreshToken,
       expiresAt: data.expiresAt,
-      oauthClientId: data.oauthClientId,
       projectApiKey: data.projectApiKey,
       host: data.host,
       projectId: data.projectId,

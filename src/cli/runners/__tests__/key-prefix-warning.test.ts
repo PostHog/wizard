@@ -1,4 +1,4 @@
-import { keyPrefixWarning } from '../ci-install';
+import { keyPrefixWarning } from '../run-non-interactive';
 
 /**
  * `--ci` and headless accept the same credentials: a personal API key and a

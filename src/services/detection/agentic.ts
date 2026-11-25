@@ -488,7 +488,6 @@ async function scanProjectsWithAgent(
     // No benchmark pipeline and no AIO capture: the scan never had either.
     flags: {
       ci: session.ci,
-      signup: session.signup,
       debug: session.debug,
       e2eAsk: false,
       localMcp: session.localMcp,

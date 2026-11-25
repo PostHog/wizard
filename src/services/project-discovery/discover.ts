@@ -157,7 +157,6 @@ async function detectFrameworkIn(dir: string): Promise<DetectedProject> {
     debug: false,
     benchmark: false,
     yaraReport: false,
-    signup: false,
   });
   const frameworkVariant = metadata.getVariant(context);
   return { framework, ...(frameworkVariant && { frameworkVariant }) };

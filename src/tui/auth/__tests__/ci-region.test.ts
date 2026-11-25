@@ -2,9 +2,9 @@ import { getOrAskForProjectData } from '@tui/auth/project-data';
 import { detectRegion } from '@utils/urls';
 import { fetchProjectData, fetchUserData } from '@shared/api';
 import { performOAuthFlow } from '../oauth';
-import { provisionNewAccount } from '@utils/provisioning';
 import type { WizardStore } from '@tui/store';
 import { WIZARD_OAUTH_SCOPES } from '@shared/constants';
+import { getOAuthScopesForProgram } from '@programs';
 import { CONNECT_SLACK_SCOPE_ADDITIONS } from '@shared/oauth-scopes';
 
 vi.mock('@utils/urls', () => ({
@@ -29,10 +29,6 @@ vi.mock(import('../oauth'), () => ({
   performOAuthFlow: vi.fn(),
   assertWizardCompletionScope: vi.fn(),
   missingOAuthScopes: vi.fn(() => []),
-}));
-vi.mock(import('@utils/provisioning'), async (importOriginal) => ({
-  ...(await importOriginal()),
-  provisionNewAccount: vi.fn(),
 }));
 
 const mockedDetect = detectRegion as unknown as ReturnType<typeof vi.fn>;
@@ -72,7 +68,6 @@ describe('getOrAskForProjectData OAuth login region', () => {
 
     const result = await getOrAskForProjectData({
       store,
-      signup: false,
       projectId: 123,
     });
 
@@ -95,7 +90,6 @@ describe('getOrAskForProjectData OAuth login region', () => {
 
     await getOrAskForProjectData({
       store,
-      signup: false,
       projectId: 123,
     });
 
@@ -128,7 +122,6 @@ describe('getOrAskForProjectData OAuth scopes', () => {
   it("asks for the base set widened by the login's scope additions", async () => {
     await getOrAskForProjectData({
       store,
-      signup: false,
       projectId: 123,
       scopeAdditions: CONNECT_SLACK_SCOPE_ADDITIONS,
     });
@@ -140,13 +133,9 @@ describe('getOrAskForProjectData OAuth scopes', () => {
   });
 });
 
-describe('getOrAskForProjectData signup fallback', () => {
-  // An existing account falls back to login, which must keep the run's scopes and project.
-  it('logs in with the scope additions and project id when the email already has an account', async () => {
+describe('getOrAskForProjectData program login', () => {
+  beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(provisionNewAccount).mockRejectedValue(
-      new Error('Email is already associated with an account'),
-    );
     mockedFetchProject.mockResolvedValue(project);
     mockedFetchUser.mockResolvedValue({
       distinct_id: 'user-1',
@@ -158,21 +147,23 @@ describe('getOrAskForProjectData signup fallback', () => {
       scoped_teams: [123],
       posthog_region: 'us',
     });
+  });
 
-    await getOrAskForProjectData({
+  it("logs in with the program's scopes and the requested project", async () => {
+    const result = await getOrAskForProjectData({
       store,
-      signup: true,
-      email: 'dev@example.com',
       projectId: 123,
-      scopeAdditions: CONNECT_SLACK_SCOPE_ADDITIONS,
+      programId: 'self-driving',
     });
 
     expect(mockedOAuthFlow).toHaveBeenCalledWith(
-      expect.objectContaining({
-        scopes: [...WIZARD_OAUTH_SCOPES, 'integration:read'],
+      {
+        scopes: [...getOAuthScopesForProgram('self-driving')],
         projectId: 123,
-      }),
+        baseUrl: undefined,
+      },
       store,
     );
+    expect(result.projectApiKey).toBe('phc_test');
   });
 });

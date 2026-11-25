@@ -10,7 +10,6 @@ import {
   checkLlmGatewayHealth,
   fetchEndpointHealth,
 } from '@shared/health-checks/endpoints';
-import { SIGNUP_WIZARD_READINESS_CONFIG } from '@shared/health-checks/readiness';
 
 const URLS = {
   githubSkillMenu:
@@ -407,18 +406,13 @@ describe('health-checks', () => {
             new Response(null, { status: healthy ? 200 : 503 }),
           );
         });
-        const results = await Promise.all([
-          evaluateWizardReadiness(),
-          evaluateWizardReadiness(SIGNUP_WIZARD_READINESS_CONFIG),
-        ]);
-        for (const result of results) {
-          expect(result.decision).toBe(decision);
-          expect(result.reasons).toHaveLength(
-            decision === WizardReadiness.No ? 1 : 0,
-          );
-          if (decision === WizardReadiness.No) {
-            expect(result.reasons[0]).toContain('Skills download');
-          }
+        const result = await evaluateWizardReadiness();
+        expect(result.decision).toBe(decision);
+        expect(result.reasons).toHaveLength(
+          decision === WizardReadiness.No ? 1 : 0,
+        );
+        if (decision === WizardReadiness.No) {
+          expect(result.reasons[0]).toContain('Skills download');
         }
       },
     );

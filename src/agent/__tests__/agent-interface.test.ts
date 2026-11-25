@@ -53,7 +53,6 @@ describe('runAgent', () => {
   const defaultOptions: WizardRunOptions = {
     debug: false,
     installDir: '/test/dir',
-    signup: false,
     ci: false,
     benchmark: false,
     yaraReport: false,
@@ -1280,7 +1279,6 @@ describe('subprocess gateway credentials', () => {
   const options: WizardRunOptions = {
     debug: false,
     installDir: '/test/dir',
-    signup: false,
     ci: false,
     benchmark: false,
     yaraReport: false,
@@ -1361,7 +1359,6 @@ describe('gateway re-mint on 401', () => {
   const options: WizardRunOptions = {
     debug: false,
     installDir: '/test/dir',
-    signup: false,
     ci: false,
     benchmark: false,
     yaraReport: false,

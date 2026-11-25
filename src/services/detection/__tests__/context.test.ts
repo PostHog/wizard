@@ -8,7 +8,6 @@ import type { WizardRunOptions } from '@utils/types';
 const baseOptions: WizardRunOptions = {
   installDir: '/test/dir',
   debug: false,
-  signup: false,
   ci: false,
   benchmark: false,
   yaraReport: false,
