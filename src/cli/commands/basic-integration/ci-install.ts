@@ -31,8 +31,9 @@ function runNonInteractiveInstall(
   argv: Arguments,
   mode: NonInteractiveMode,
 ): void {
-  const runWizard = mode === 'headless' ? runWizardHeadless : runWizardCI;
   warnOnUnexpectedKeyPrefix(argv.apiKey as string | undefined);
+
+  const runWizard = mode === 'headless' ? runWizardHeadless : runWizardCI;
   runWizard(posthogIntegrationConfig, argv);
 }
 
