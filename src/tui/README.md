@@ -42,11 +42,12 @@ each program's and tool's screen ids) and the store helpers `tuiScreenIds`,
 declarations never reach React. Each function loads its module on first call, so
 importing the entry loads only the screen-id modules. The CLI imports it; the
 e2e harness imports it too, to host a real run and to drive and read its
-screens. `startTUI(version, flowId, onInterrupt)` in
-[`start-tui.ts`](start-tui.ts) creates the store and renders the app, and calls
-`onInterrupt` when Ink tears itself down on Ctrl+C. It throws
-`CliInteractiveRequired` first when stdin is not a TTY, since Ink needs raw
-mode: `runTuiTool` rejects with it, and `runTui` prints it and resolves 1.
+screens.
+`startTUI(version, flowId, onInterrupt)` in [`start-tui.ts`](start-tui.ts)
+creates the store and renders the app, and calls `onInterrupt` when Ink tears
+itself down on Ctrl+C. It throws `CliInteractiveRequired` first when stdin is not
+a TTY, since Ink needs raw mode: `runTuiTool` rejects with it, and `runTui`
+prints it and resolves 1.
 
 `runTui` logs in with `launch.credentials`, the browser OAuth login when it is
 absent. `launch.onStore` receives the run's store once it exists, which is how
