@@ -557,6 +557,8 @@ const NON_MUTATING = [
   'noteAskProgress',
   // Captures the MCP outcome; holds no session state.
   'reportMcpOutcome',
+  // Captures the failure report; holds no session state.
+  'sendFailureReport',
   'getSnapshot',
   'getVersion',
   'runInitHooks',

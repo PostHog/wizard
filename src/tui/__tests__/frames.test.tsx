@@ -120,6 +120,7 @@ import { listTuiTools } from '@tui/tools/index';
 import { ScreenId, Overlay } from '@tui/router';
 import { createServices, type ScreenServices } from '@tui/screen-registry';
 import { OutroKind } from '@shared/outro';
+import { ErrorCodes } from '@shared/errors';
 import { RunPhase } from '@shared/run-state';
 import { HostResolution } from '@shared/host-resolution';
 import { Integration } from '@shared/constants';
@@ -665,6 +666,7 @@ const FIXTURES: Record<string, Fixture> = {
       s.setOutroData({
         kind: OutroKind.Error,
         message: 'The agent run failed',
+        errorCode: ErrorCodes.GatewayMintRefused,
       });
     },
   },

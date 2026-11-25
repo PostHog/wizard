@@ -53,7 +53,7 @@ export interface InstallResult {
 export const redactSecrets = (raw: string): string =>
   raw
     .replace(/Bearer\s+\S+/gi, 'Bearer [redacted]')
-    .replace(/ph[xspc]_[A-Za-z0-9_-]+/g, '[redacted]')
+    .replace(/ph[xspcar]_[A-Za-z0-9_-]+/g, '[redacted]')
     // `https://user:token@github.com/...` — git prints the whole remote back;
     // `postgres://user:password@host/db` is the same shape for a database.
     .replace(/(\b[a-z][a-z0-9+.-]*:\/\/)[^/\s:@]+:[^/\s@]+@/gi, '$1[redacted]@')
@@ -73,6 +73,11 @@ export const redactSecrets = (raw: string): string =>
     .replace(
       /\b([A-Za-z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIALS?)[A-Za-z0-9_]*)(\s*[=:]\s*)["']?[A-Za-z0-9_\-./+]{8,}["']?/gi,
       '$1$2[redacted]',
+    )
+    // The same names as JSON keys, raw or escaped, as tool inputs reach the log.
+    .replace(
+      /("[A-Za-z0-9_-]*(?:KEY|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIALS?)[A-Za-z0-9_-]*\\?"\s*:\s*\\?")[^"\\]{4,}/gi,
+      '$1[redacted]',
     );
 
 /**
@@ -83,7 +88,7 @@ export const redactSecrets = (raw: string): string =>
 export const scrubHomePaths = (raw: string): string =>
   raw
     .replace(/\/(?:Users|home)\/[^/\s'"]+/g, '~')
-    .replace(/[A-Za-z]:\\Users\\[^\\\s'"]+/gi, '~');
+    .replace(/[A-Za-z]:\\{1,2}Users\\{1,2}[^\\\s'"]+/gi, '~');
 
 /**
  * A failure that lives entirely in the user's environment: a CLI too old, a

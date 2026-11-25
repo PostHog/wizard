@@ -1,4 +1,4 @@
-import { appendFileSync, mkdirSync } from 'fs';
+import { appendFileSync, mkdirSync, statSync } from 'fs';
 import path from 'path';
 import { inspect } from 'node:util';
 import { IS_DEV, runtimeEnv } from '@env';
@@ -10,6 +10,8 @@ let logFilePath =
 let fileLoggingEnabled = true;
 // An explicit --log-file wins over every later path change while pinned.
 let logFilePinned = false;
+// Byte offset of this process's first line, since every run appends to one shared file.
+let processLogStart: number | null = null;
 
 function stringify(value: unknown): string {
   if (typeof value === 'string') return value;
@@ -41,6 +43,7 @@ export function configureLogFile(opts: {
   if (opts.path !== undefined && !logFilePinned) {
     logFilePath = opts.path;
     ensuredLogDir = false;
+    processLogStart = null;
   }
   if (opts.pin === true) logFilePinned = true;
   if (opts.enabled !== undefined) fileLoggingEnabled = opts.enabled;
@@ -72,7 +75,20 @@ function reportLogFailureOnce(err: unknown): void {
 
 // The log's directory isn't guaranteed to exist (Windows %TEMP%,
 // POSTHOG_WIZARD_LOG_DIR) — create it on first failure.
+function currentLogSize(): number {
+  try {
+    return statSync(logFilePath).size;
+  } catch {
+    return 0;
+  }
+}
+
+export function getProcessLogStart(): number | null {
+  return fileLoggingEnabled ? processLogStart : null;
+}
+
 function appendLine(text: string): void {
+  processLogStart ??= currentLogSize();
   try {
     appendFileSync(logFilePath, text);
   } catch (err) {

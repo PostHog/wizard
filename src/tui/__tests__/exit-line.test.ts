@@ -5,6 +5,7 @@ import { getExitLine } from '@tui/exit-line';
 import { buildSession } from '@programs';
 import { WizardStore, Program } from '@tui/store';
 import { OutroKind } from '@shared/outro';
+import { ErrorCodes } from '@shared/errors';
 import { HostResolution } from '@shared/host-resolution';
 
 vi.mock('@utils/analytics.js', () => ({
@@ -35,7 +36,7 @@ function setHudVisible(store: WizardStore, visible: boolean): void {
 }
 
 describe('getExitLine', () => {
-  it('keeps the saved skill path and contact in scrollback after a failed run', () => {
+  it('keeps the saved skill path and log path in scrollback after a failed run', () => {
     const path = '/project/.posthog/wizard-spellbook-123/README.md';
     const store = storeWithOutro({ kind: OutroKind.Error, message: 'boom' });
     store.setCredentials({
@@ -48,9 +49,8 @@ describe('getExitLine', () => {
     const line = stripAnsi(getExitLine(store));
     const lines = line.split('\n');
     expect(lines).toContain(path);
-    expect(line).toContain('wizard@posthog.com');
-    // The log path sits on the line after the contact copy.
-    expect(lines[lines.indexOf(path) + 3]).toMatch(/\S/);
+    expect(line).not.toContain('wizard@posthog.com');
+    expect(lines[lines.indexOf(path) + 2]).toMatch(/^Wizard log: \S/);
     expect(line).not.toContain('successfully');
   });
 
@@ -252,12 +252,19 @@ describe('getExitLine needs-attention block', () => {
     expect(stripAnsi(getExitLine(store))).not.toContain('Needs your attention');
   });
 
-  it('skips the warning block on a run failure', () => {
-    const store = storeWithOutro({ kind: OutroKind.Error, message: 'boom' });
+  it.each([
+    [ErrorCodes.AgentOrchestratorTasksFailed, 'Setup did not finish: boom'],
+    [ErrorCodes.AgentRateLimit, 'The wizard is unavailable'],
+  ])('skips the warning block on a %s run failure', (errorCode, summary) => {
+    const store = storeWithOutro({
+      kind: OutroKind.Error,
+      message: 'boom',
+      errorCode,
+    });
     store.session = { ...store.session, credentials: {} as never };
     store.setHandoffText(block);
     const line = stripAnsi(getExitLine(store));
-    expect(line).toContain('The wizard is unavailable');
+    expect(line).toContain(summary);
     expect(line).not.toContain('Needs your attention');
   });
 });

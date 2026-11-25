@@ -8,16 +8,16 @@
 
 
 
+
                           ✘ The Wizard's a little busy
 
-    The wizard can still share spells. Grab a skill and let your agent take
-    over.
+    Send this failure and this run's wizard log to the wizard team? Keys and
+    tokens we recognize, and your home folder, are masked first.
 
-                              ▸ Save skill
-                                Open in Claude Code
-                                Open in Codex
-                                Report this issue
-                                Exit
+                                  ▸ Send report
+                                    Don't send
+
+
 
 
 

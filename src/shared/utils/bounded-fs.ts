@@ -329,6 +329,32 @@ export function safeReadFile(
   }
 }
 
+/** The last `bytes` of a file from offset `from` on, without materializing the rest. */
+export function readFileTail(
+  filePath: string,
+  bytes: number,
+  from = 0,
+): { text: string; truncated: boolean } | null {
+  try {
+    const fd = fs.openSync(filePath, 'r');
+    try {
+      const size = fs.fstatSync(fd).size;
+      const start = Math.max(from, size - bytes);
+      const length = Math.max(0, size - start);
+      const buffer = Buffer.alloc(length);
+      const read = fs.readSync(fd, buffer, 0, length, start);
+      return {
+        text: buffer.toString('utf-8', 0, read),
+        truncated: start > from,
+      };
+    } finally {
+      fs.closeSync(fd);
+    }
+  } catch {
+    return null;
+  }
+}
+
 /**
  * The first `bytes` of a file without materializing the rest.
  */

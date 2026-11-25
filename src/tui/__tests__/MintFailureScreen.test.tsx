@@ -7,13 +7,16 @@ import {
 } from '../screens/MintFailureScreen';
 import { KeyboardHintsProvider } from '../hooks/useKeyboardHints';
 import { OutroKind } from '@shared/outro';
+import { ErrorCodes, type ErrorCode } from '@shared/errors';
 import { HostResolution } from '@shared/host-resolution';
 import { ScreenId } from '../router';
+
+const wizardCapture = vi.hoisted(() => vi.fn());
 
 vi.mock('ink', () => vi.importActual<typeof import('ink')>('ink-actual'));
 vi.mock('@utils/analytics', () => ({
   analytics: {
-    wizardCapture: vi.fn(),
+    wizardCapture,
     capture: vi.fn(),
     setTag: vi.fn(),
   } as never,
@@ -26,7 +29,7 @@ const saved = {
 };
 const delay = () => new Promise((resolve) => setTimeout(resolve, 30));
 
-function setup() {
+function setup(errorCode?: ErrorCode) {
   const store = new WizardStore();
   store.setCredentials({
     accessToken: 'tok',
@@ -34,11 +37,14 @@ function setup() {
     host: HostResolution.fromApiHost('https://app.posthog.com'),
     projectId: 1,
   });
-  store.setOutroData({ kind: OutroKind.Error, message: 'agent failed' });
+  store.setOutroData({
+    kind: OutroKind.Error,
+    message: 'agent failed',
+    errorCode,
+  });
   const services: MintFailureServices = {
     leaveSpellbook: vi.fn().mockResolvedValue(saved),
     openAgent: vi.fn().mockResolvedValue(undefined),
-    logPath: '/tmp/posthog-wizard.log',
   };
   const app = render(
     <KeyboardHintsProvider>
@@ -57,12 +63,19 @@ function setup() {
   return { store, services, app, choose };
 }
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.clearAllMocks();
+});
 
-it('reports the log, saves the skill, then continues setup', async () => {
-  const { app, store, services, choose } = setup();
-  await choose(3);
-  expect(app.lastFrame()).toContain(services.logPath);
+it('sends the report, saves the skill, then continues setup', async () => {
+  const { app, store, choose } = setup();
+  await choose(0);
+  expect(wizardCapture).toHaveBeenCalledWith(
+    'failure reported',
+    expect.objectContaining({ message: 'agent failed', is_capacity: false }),
+  );
+  expect(app.lastFrame()).toContain('Report sent to the wizard team.');
   await choose(0);
   expect(app.lastFrame()).toContain(saved.path);
   expect(store.mintHandoff).toBeNull();
@@ -78,6 +91,7 @@ it.each(['save', 'open'] as const)(
     vi.mocked(
       failure === 'save' ? services.leaveSpellbook : services.openAgent,
     ).mockRejectedValueOnce(new Error('Unavailable'));
+    await choose(1);
     await choose(2);
     expect(app.lastFrame()).toContain(
       failure === 'save' ? 'Could not save' : 'Unavailable',
@@ -95,8 +109,27 @@ it.each(['save', 'open'] as const)(
 
 it('exits without saving or launching', async () => {
   const { store, services, choose } = setup();
-  await choose(4);
+  await choose(1);
+  await choose(3);
   expect(store.mintHandoff).toBe('exit');
+  expect(wizardCapture).not.toHaveBeenCalledWith(
+    'failure reported',
+    expect.anything(),
+  );
   expect(services.leaveSpellbook).not.toHaveBeenCalled();
   expect(services.openAgent).not.toHaveBeenCalled();
+});
+
+it.each([
+  [
+    ErrorCodes.AgentOrchestratorTasksFailed,
+    "The wizard couldn't finish setup",
+    true,
+  ],
+  [ErrorCodes.GatewayMintRefused, "The Wizard's a little busy", false],
+])('heads a %s failure with %s', async (errorCode, headline, showsMessage) => {
+  const { app } = setup(errorCode);
+  await delay();
+  expect(app.lastFrame()).toContain(headline);
+  expect(app.lastFrame()?.includes('agent failed')).toBe(showsMessage);
 });

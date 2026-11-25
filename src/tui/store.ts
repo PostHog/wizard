@@ -45,6 +45,7 @@ import {
   type ProgramId,
 } from './router.js';
 import { analytics, sessionProperties } from '@utils/analytics';
+import { failureReportProperties } from './mint-failure.js';
 import {
   buildSession,
   findProgramConfig,
@@ -622,6 +623,13 @@ export class WizardStore implements TuiView {
       this.cancelPendingQuestion();
       if (this.session.taskNotice) this.resolveTaskNotice(false);
     });
+  }
+
+  sendFailureReport(): void {
+    analytics.wizardCapture(
+      'failure reported',
+      failureReportProperties(this.session),
+    );
   }
 
   setSkillId(skillId: string | null): void {

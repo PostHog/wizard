@@ -51,6 +51,15 @@ describe('isOk', () => {
 });
 
 describe('redactSecrets', () => {
+  it('masks secrets logged as JSON tool inputs, raw and escaped', () => {
+    const logged =
+      '{"values": {"DB_PASSWORD": "hunter2hunter2"}} {\\"api_key\\": \\"abcd1234efgh\\"} pha_oauthtoken123';
+    const out = redactSecrets(logged);
+    expect(out).not.toContain('hunter2hunter2');
+    expect(out).not.toContain('abcd1234efgh');
+    expect(out).not.toContain('pha_oauthtoken123');
+  });
+
   it('masks the bearer token the CLIs echo back in their error output', () => {
     expect(
       redactSecrets(
@@ -175,6 +184,12 @@ describe('namesWithStatus', () => {
 });
 
 describe('scrubHomePaths', () => {
+  it('scrubs a Windows home path that JSON escaping doubled', () => {
+    expect(
+      scrubHomePaths('"cwd": "C:\\\\Users\\\\alice\\\\proj"'),
+    ).not.toContain('alice');
+  });
+
   it('replaces a unix home directory with ~ so one cause groups as one issue', () => {
     expect(scrubHomePaths('spawn /Users/ada/.bun/bin/codex ENOENT')).toBe(
       'spawn ~/.bun/bin/codex ENOENT',

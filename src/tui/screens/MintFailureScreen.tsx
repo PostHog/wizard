@@ -7,7 +7,11 @@ import { Colors, Icons } from '@tui/styles';
 import {
   MINT_FAILURE_MESSAGE,
   MINT_FAILURE_BODY,
-  MINT_FAILURE_CONTACT,
+  REPORT_PROMPT,
+  REPORT_SENT,
+  RUN_FAILURE_BODY,
+  RUN_FAILURE_HEADLINE,
+  isCapacityFailure,
 } from '@tui/mint-failure';
 import type { WizardSpellbook } from '@tui/services/wizard-spellbook';
 import type { CodingAgent } from '../services/coding-agent-launcher';
@@ -15,10 +19,16 @@ import type { CodingAgent } from '../services/coding-agent-launcher';
 export type MintFailureServices = {
   leaveSpellbook: () => Promise<WizardSpellbook>;
   openAgent: (agent: CodingAgent, spellbookPath: string) => Promise<void>;
-  logPath: string;
 };
 
-type Action = 'save' | CodingAgent | 'report' | 'continue' | 'exit' | 'retry';
+type Action =
+  | 'save'
+  | CodingAgent
+  | 'send-report'
+  | 'skip-report'
+  | 'continue'
+  | 'exit'
+  | 'retry';
 
 export function MintFailureScreen({
   store,
@@ -35,15 +45,23 @@ export function MintFailureScreen({
   const busy = useRef(false);
   const [working, setWorking] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [report, setReport] = useState(false);
+  const [reportChoice, setReportChoice] = useState<'sent' | 'skipped' | null>(
+    null,
+  );
   const [retry, setRetry] = useState<'save' | CodingAgent>('save');
   const { spellbook } = store;
+  const isCapacity = isCapacityFailure(store.session);
+  const failureMessage = store.session.outroData?.message;
 
   const select = async (action: Action) => {
     if (busy.current) return;
     if (action === 'exit' || action === 'continue')
       return store.setMintHandoff(action);
-    if (action === 'report') return setReport(true);
+    if (action === 'skip-report') return setReportChoice('skipped');
+    if (action === 'send-report') {
+      store.sendFailureReport();
+      return setReportChoice('sent');
+    }
     const task = action === 'retry' ? retry : action;
     setRetry(task);
     busy.current = true;
@@ -84,16 +102,15 @@ export function MintFailureScreen({
         { label: 'Continue', value: 'continue' },
         { label: 'Exit', value: 'exit' },
       ]
-    : report
+    : reportChoice === null
     ? [
-        { label: 'Save skill', value: 'save' },
-        { label: 'Exit', value: 'exit' },
+        { label: 'Send report', value: 'send-report' },
+        { label: "Don't send", value: 'skip-report' },
       ]
     : [
         { label: 'Save skill', value: 'save' },
         { label: 'Open in Claude Code', value: 'claude' },
         { label: 'Open in Codex', value: 'codex' },
-        { label: 'Report this issue', value: 'report' },
         { label: 'Exit', value: 'exit' },
       ];
 
@@ -115,8 +132,13 @@ export function MintFailureScreen({
           </Text>
         ) : (
           <Text color={Colors.error} bold>
-            ✘ {MINT_FAILURE_MESSAGE}
+            ✘ {isCapacity ? MINT_FAILURE_MESSAGE : RUN_FAILURE_HEADLINE}
           </Text>
+        )}
+        {!spellbook && !isCapacity && failureMessage && (
+          <Box marginTop={1}>
+            <Text wrap="wrap">{failureMessage}</Text>
+          </Box>
         )}
         <Box marginTop={1}>
           <Text>
@@ -124,16 +146,16 @@ export function MintFailureScreen({
               ? spellbook.skillsIncluded
                 ? 'Ask your agent to read this file and complete the task.'
                 : 'The skill could not be downloaded. This file has instructions and links for your agent.'
-              : report
-              ? MINT_FAILURE_CONTACT
-              : MINT_FAILURE_BODY}
+              : reportChoice === null
+              ? REPORT_PROMPT
+              : isCapacity
+              ? MINT_FAILURE_BODY
+              : RUN_FAILURE_BODY}
           </Text>
         </Box>
-        {report && !spellbook && (
+        {reportChoice === 'sent' && !spellbook && (
           <Box marginTop={1}>
-            <Text color="cyan" wrap="wrap">
-              {services.logPath}
-            </Text>
+            <Text dimColor>{REPORT_SENT}</Text>
           </Box>
         )}
         {spellbook && (
@@ -153,7 +175,7 @@ export function MintFailureScreen({
             <Text>{working}</Text>
           ) : (
             <PickerMenu
-              key={[report, Boolean(spellbook), Boolean(error)].join('-')}
+              key={[reportChoice, Boolean(spellbook), Boolean(error)].join('-')}
               options={options}
               onSelect={(action) => void select(action as Action)}
             />
