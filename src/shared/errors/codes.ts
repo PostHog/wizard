@@ -5,6 +5,10 @@ export const ErrorCodes = {
   CliInteractiveRequired: 'PHW_CLI_INTERACTIVE_REQUIRED',
   ArgsMissingApiKey: 'PHW_ARGS_MISSING_API_KEY',
   ArgsMissingInstallDir: 'PHW_ARGS_MISSING_INSTALL_DIR',
+  /** No longer emitted: account provisioning is gone. Kept because released codes stay in the catalog. */
+  ArgsMissingEmail: 'PHW_ARGS_MISSING_EMAIL',
+  /** No longer emitted: account provisioning is gone. Kept because released codes stay in the catalog. */
+  ArgsSignupProvisionFailed: 'PHW_ARGS_SIGNUP_PROVISION_FAILED',
   AuthKeyType: 'PHW_AUTH_KEY_TYPE',
   AuthMissingScope: 'PHW_AUTH_MISSING_SCOPE',
   AuthRegionMismatch: 'PHW_AUTH_REGION_MISMATCH',

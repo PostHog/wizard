@@ -1,5 +1,4 @@
 import type { Arguments } from 'yargs';
-import { consoleLog } from '@shared/console-log';
 import { runWizardCI, runWizardHeadless } from '@cli/runners';
 import type { NonInteractiveMode } from '@headless';
 import { config as posthogIntegrationConfig } from '@programs/posthog-integration';
@@ -24,43 +23,13 @@ export function runHeadlessInstall(argv: Arguments): void {
 
 /**
  * Non-interactive install shared by CI and headless. The runner validates the
- * options (`--api-key`, `--install-dir`); `mode` only changes
- * user-facing labels and which runner is invoked.
+ * options (`--api-key`, `--install-dir`) and warns on an unexpected key
+ * prefix; `mode` only changes user-facing labels and which runner is invoked.
  */
 function runNonInteractiveInstall(
   argv: Arguments,
   mode: NonInteractiveMode,
 ): void {
-  warnOnUnexpectedKeyPrefix(argv.apiKey as string | undefined);
-
   const runWizard = mode === 'headless' ? runWizardHeadless : runWizardCI;
   runWizard(posthogIntegrationConfig, argv);
-}
-
-/**
- * Decide whether to warn about an unexpected `--api-key` prefix, and with what
- * message. Returns `null` when the key is acceptable.
- *
- * CI and headless accept the same two credentials: a personal API key (`phx_`)
- * and a `pha_` OAuth access token minted under the wizard's own OAuth
- * application (cloud runs, and the CI bot). Both authenticate the mint the
- * same way. Anything else is unexpected and warns.
- *
- * Extracted as a pure predicate so it can be unit-tested without a UI.
- */
-export function keyPrefixWarning(apiKey: string | undefined): string | null {
-  if (!apiKey || apiKey.startsWith('phx_') || apiKey.startsWith('pha_')) {
-    return null;
-  }
-  const hint = apiKey.startsWith('phc_')
-    ? ' (phc_ is a project/client key; expected a personal API key or a wizard-app token)'
-    : '';
-  return `--api-key does not start with "phx_" or "pha_"${hint}. Continuing anyway, but the LLM Gateway may reject it with a 401.`;
-}
-
-function warnOnUnexpectedKeyPrefix(apiKey: string | undefined): void {
-  const message = keyPrefixWarning(apiKey);
-  if (!message) return;
-  consoleLog.intro('PostHog Wizard');
-  consoleLog.log.warn(message);
 }

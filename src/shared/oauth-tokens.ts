@@ -4,6 +4,7 @@ import { z } from 'zod';
 import {
   POSTHOG_DEV_CLIENT_ID,
   POSTHOG_PROXY_CLIENT_ID,
+  WIZARD_NON_SETUP_SCOPES,
   WIZARD_USER_AGENT,
 } from '@shared/constants';
 import { logToFile } from '@utils/debug';
@@ -49,6 +50,12 @@ export function missingOAuthScopes(
   return requested.filter((scope) => !granted.has(scope));
 }
 
+/** The missing scopes a setup task could have needed, so a failed setup can name the ones worth granting. */
+export function missingSetupScopes(missing: readonly string[]): string[] {
+  const nonSetup = new Set<string>(WIZARD_NON_SETUP_SCOPES);
+  return missing.filter((scope) => !nonSetup.has(scope));
+}
+
 /**
  * OAuth client ID for the current target. A pinned base URL (`--base-url`, or
  * IS_DEV's implicit localhost) means we're talking to a dev-seeded stack, which
@@ -69,7 +76,6 @@ export function getOAuthClientId(baseUrl?: string): string {
 export async function refreshAccessToken(
   refreshToken: string,
   baseUrl?: string,
-  clientId?: string,
 ): Promise<OAuthTokenResponse> {
   const oauthUrl = getOAuthUrl(baseUrl);
   logToFile(`[oauth] refreshing access token at ${oauthUrl}/oauth/token`);
@@ -79,8 +85,7 @@ export async function refreshAccessToken(
       {
         grant_type: 'refresh_token',
         refresh_token: refreshToken,
-        // The grant only refreshes under its minting app, so a grant from another app passes its client.
-        client_id: clientId ?? getOAuthClientId(baseUrl),
+        client_id: getOAuthClientId(baseUrl),
       },
       {
         headers: {
