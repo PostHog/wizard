@@ -72,7 +72,6 @@ export function isAuthorizationTimeout(error: Error): boolean {
 
 interface OAuthConfig {
   scopes: string[];
-  signup?: boolean;
   /** Project to pre-select on the consent screen (the `--project-id` flag). */
   projectId?: number;
   /**
@@ -92,10 +91,6 @@ function getCallbackUrl(port: number): string {
 
 function getLocalLoginUrl(port: number): string {
   return `${getLocalOAuthOrigin(port)}/authorize`;
-}
-
-function getLocalSignupUrl(port: number): string {
-  return `${getLocalLoginUrl(port)}?signup=true`;
 }
 
 /**
@@ -146,7 +141,6 @@ function generateCodeChallenge(verifier: string): string {
 
 export async function startCallbackServer(
   authUrl: string,
-  signupUrl: string,
   port: number,
 ): Promise<{
   port: number;
@@ -154,14 +148,17 @@ export async function startCallbackServer(
   waitForCallback: () => Promise<string>;
 }> {
   return new Promise((resolve, reject) => {
-    let callbackResolve: (code: string) => void;
-    let callbackReject: (error: Error) => void;
-
-    const waitForCallback = () =>
-      new Promise<string>((res, rej) => {
-        callbackResolve = res;
-        callbackReject = rej;
-      });
+    let callbackResolve: (code: string) => void = () => undefined;
+    let callbackReject: (error: Error) => void = () => undefined;
+    // Created before the server listens, so that a callback that arrives before the caller
+    // waits still resolves the promise instead of a resolver that does not exist yet.
+    const callback = new Promise<string>((res, rej) => {
+      callbackResolve = res;
+      callbackReject = rej;
+    });
+    // An error callback that arrives before anyone waits would otherwise be an unhandled rejection.
+    callback.catch(() => undefined);
+    const waitForCallback = () => callback;
 
     const server = http.createServer((req, res) => {
       if (!req.url) {
@@ -172,9 +169,7 @@ export async function startCallbackServer(
       const url = new URL(req.url, getLocalOAuthOrigin(port));
 
       if (url.pathname === '/authorize') {
-        const isSignup = url.searchParams.get('signup') === 'true';
-        const redirectUrl = isSignup ? signupUrl : authUrl;
-        res.writeHead(302, { Location: redirectUrl });
+        res.writeHead(302, { Location: authUrl });
         res.end();
         return;
       }
@@ -495,18 +490,10 @@ export async function performOAuthFlow(
         authUrl.searchParams.set('team_id', String(config.projectId));
       }
 
-      // UTM-tag both kickoff URLs so the journey into the app is
+      // UTM-tag the kickoff URL so the journey into the app is
       // attributable to the wizard command that started it.
       const taggedAuthUrl = withUtm(authUrl.toString(), 'oauth-authorize');
-      const signupUrl = new URL(
-        withUtm(
-          `${oauthUrl}/signup?next=${encodeURIComponent(taggedAuthUrl)}`,
-          'oauth-signup',
-        ),
-      );
-      const localSignupUrl = getLocalSignupUrl(port);
-      const localLoginUrl = getLocalLoginUrl(port);
-      const urlToOpen = config.signup ? localSignupUrl : localLoginUrl;
+      const urlToOpen = getLocalLoginUrl(port);
 
       logToFile(`[oauth] attempting callback server on port ${port}`);
 
@@ -515,7 +502,6 @@ export async function performOAuthFlow(
       try {
         ({ server, waitForCallback } = await startCallbackServer(
           taggedAuthUrl,
-          signupUrl.toString(),
           port,
         ));
       } catch (e) {
@@ -531,9 +517,7 @@ export async function performOAuthFlow(
       // direct PostHog authorize URL too, for the manual-paste modal — on a
       // remote/headless box the user opens it from another machine, where
       // localhost:<port> is unreachable.
-      store.setAuthorizeUrl(
-        config.signup ? signupUrl.toString() : taggedAuthUrl,
-      );
+      store.setAuthorizeUrl(taggedAuthUrl);
 
       // The localhost proxy URL stays untagged — the PostHog destination
       // it redirects to carries the UTMs.

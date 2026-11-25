@@ -88,7 +88,7 @@ every folder's entry; the core can't import the entry. See
 | One tool's flow and screens                      | `tools/<id>/`, registered in [`tools/index.ts`](tools/index.ts), run by [`run-tool.ts`](run-tool.ts)       |
 | The generic skill program                        | [`programs/shared/skill-program.tsx`](programs/shared/skill-program.tsx)                                   |
 | Screens, components, primitives and hooks        | [`screens`](screens), [`components`](components), [`primitives`](primitives/index.ts) and [`hooks`](hooks) |
-| The login: browser OAuth or signup               | [`auth`](auth/login.ts)                                                                                    |
+| The login: browser OAuth                         | [`auth`](auth/login.ts)                                                                                    |
 | Effects screens call, such as the MCP installer  | [`services`](services), over [`@shared/mcp-clients/install`](../shared/mcp-clients/install.ts)             |
 | Primitive demos (`pnpm try --playground`)        | [`playground`](playground/PlaygroundApp.tsx)                                                               |
 

@@ -38,7 +38,6 @@ describe('createBenchmarkPipeline', () => {
         debug: false,
         benchmark: true,
         yaraReport: false,
-        signup: false,
       },
       config,
     );
@@ -81,7 +80,6 @@ describe('createBenchmarkPipeline', () => {
         debug: false,
         benchmark: true,
         yaraReport: false,
-        signup: false,
       },
       config,
     );

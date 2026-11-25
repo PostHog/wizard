@@ -31,7 +31,6 @@ export interface ProgramSession {
   debug: boolean;
   installDir: string;
   ci: boolean;
-  signup: boolean;
   apiKey?: string;
   benchmark: boolean;
   yaraReport: boolean;

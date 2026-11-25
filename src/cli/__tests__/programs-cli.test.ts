@@ -344,12 +344,6 @@ describe('pickerChildrenToShow (today: picker shows only the default leaf)', () 
 describe('self-driving rejects unsupported modes', () => {
   // The guard lives in selfDrivingCommand.check, so it runs at the yargs layer
   // before the handler — parseCommand exercises that real path.
-  test('rejects --signup', async () => {
-    await expect(
-      parseCommand(selfDrivingCommand, 'self-driving --signup'),
-    ).rejects.toThrow(/--signup/i);
-  });
-
   test('rejects --ci', async () => {
     await expect(
       parseCommand(selfDrivingCommand, 'self-driving --ci'),
@@ -362,12 +356,9 @@ describe('self-driving rejects unsupported modes', () => {
     ).resolves.toBeDefined();
   });
 
-  test('accepts both in test discovery mode, which only prints', async () => {
+  test('accepts --ci in test discovery mode, which only prints', async () => {
     await expect(
-      parseCommand(
-        selfDrivingCommand,
-        'self-driving --ci --signup --test-discovery',
-      ),
+      parseCommand(selfDrivingCommand, 'self-driving --ci --test-discovery'),
     ).resolves.toBeDefined();
   });
 });

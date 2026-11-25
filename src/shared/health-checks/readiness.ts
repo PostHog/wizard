@@ -31,8 +31,6 @@ export const DEFAULT_WIZARD_READINESS_CONFIG: WizardReadinessConfig = {
   downBlocksRun: ['skillsOrigin'],
 };
 
-export const SIGNUP_WIZARD_READINESS_CONFIG = DEFAULT_WIZARD_READINESS_CONFIG;
-
 // ---------------------------------------------------------------------------
 // Aggregate check
 // ---------------------------------------------------------------------------

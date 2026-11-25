@@ -15,28 +15,14 @@ import { useEffect } from 'react';
 import axios from 'axios';
 
 import type { WizardStore } from '@tui/store';
-import type { WizardSession } from '@programs/types';
 import { fetchGithubConnected, type Credentials } from '@shared/api';
 import {
   currentCredentials,
   rotateAfterUnauthorized,
 } from '@shared/oauth-session';
-import { requestDeepLink } from '@utils/provisioning';
 import { analytics } from '@utils/analytics';
 
 const POLL_INTERVAL_MS = 3000;
-
-// Provisioned signups have no browser session for the install link; deep link when the partner tier grants one, else the login page.
-export async function fetchLoginUrl(
-  session: WizardSession,
-): Promise<string | null> {
-  if (!session.signup || !session.credentials) return null;
-  const deepLink = await requestDeepLink(
-    session.credentials.accessToken,
-    session.credentials.host,
-  );
-  return deepLink ?? `${session.credentials.host.appHost}/login`;
-}
 
 const isUnauthorized = (err: unknown): boolean =>
   axios.isAxiosError(err) && err.response?.status === 401;

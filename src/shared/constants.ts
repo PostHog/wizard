@@ -242,23 +242,20 @@ export const ANALYTICS_TEAM_TAG = 'docs-and-wizard';
 
 export const OAUTH_PORTS = [8239, 8238, 8240, 8237, 8236, 8235] as const;
 export const POSTHOG_US_CLIENT_ID = 'c4Rdw8DIxgtQfA80IiSnGKlNX8QN00cFWF00QQhM';
-export const POSTHOG_EU_CLIENT_ID = 'bx2C5sZRN03TkdjraCcetvQFPGH6N2Y9vRLkcKEy';
 export const POSTHOG_DEV_CLIENT_ID = 'DC5uRLVbGI02YQ82grxgnK6Qn12SXWpCqdPb60oZ';
 export const POSTHOG_PROXY_CLIENT_ID = POSTHOG_US_CLIENT_ID;
 export const DUMMY_PROJECT_API_KEY = '_YOUR_POSTHOG_PROJECT_TOKEN_';
 
 /**
- * Scopes the wizard requests during the agentic provisioning signup flow.
- *
- * Each entry is justified by what the wizard's agent step does after signup:
+ * Scopes the wizard requests during the OAuth login flow:
  * - user:read         identify the user for analytics + agent context
- * - project:read      look up the freshly-provisioned project
+ * - project:read      look up the project the user granted
  * - llm_gateway:read  authenticate to gateway.{us,eu}.posthog.com/wizard
  *                     (the agent's LLM calls — without this scope, every
  *                     agent message returns 401)
- * - query:read        run HogQL queries when the agent needs data
  * - dashboard:write   create the onboarding dashboard during setup
  * - insight:write     create the onboarding insights during setup
+ * - query:read        run HogQL queries when the agent needs data
  * - notebook:write    upload the events-audit report as a PostHog notebook
  *                     in step 6 of the events-audit skill (notebooks-create
  *                     MCP tool requires this scope), and mirror the handoff
@@ -266,30 +263,10 @@ export const DUMMY_PROJECT_API_KEY = '_YOUR_POSTHOG_PROJECT_TOKEN_';
  * - event_definition:write
  *                     create event definitions from the completed wizard
  *                     session's event plan
- *
- * Must be a subset of `ALLOWED_PROVISIONING_SCOPES` in
- * `ee/api/agentic_provisioning/views.py` on the backend.
- */
-export const WIZARD_PROVISIONING_SCOPES = [
-  'user:read',
-  'project:read',
-  'llm_gateway:read',
-  'dashboard:write',
-  'insight:write',
-  'query:read',
-  'notebook:write',
-  'event_definition:write',
-] as const;
-
-/**
- * Scopes the wizard requests during the OAuth login flow. Superset of
- * `WIZARD_PROVISIONING_SCOPES` with scopes that only apply to the login
- * path and are not in the provisioning allowlist:
  * - health_issue:read     used by `wizard doctor`
  * - wizard_session:read   list / retrieve / stream sessions
  * - wizard_session:write  stream run state to /api/projects/{id}/wizard/sessions/
- * - event_definition:write
- *                          create event definitions when a session completes
+ * - wizard_run:write      publish run state to the project's wizard runs
  * - organization:read     read `organization.is_ai_data_processing_approved`
  *                         from /api/users/@me/ for the AI opt-in gate
  *
@@ -308,13 +285,29 @@ export const WIZARD_PROVISIONING_SCOPES = [
  * list changes.
  */
 export const WIZARD_OAUTH_SCOPES = [
-  ...WIZARD_PROVISIONING_SCOPES,
+  'user:read',
+  'project:read',
+  'llm_gateway:read',
+  'dashboard:write',
+  'insight:write',
+  'query:read',
+  'notebook:write',
+  'event_definition:write',
   'health_issue:read',
   'wizard_session:read',
   'wizard_session:write',
   'wizard_run:write',
   'organization:read',
 ] as const;
+
+/** Login scopes no setup task needs, so a grant without one never explains a failed setup. */
+export const WIZARD_NON_SETUP_SCOPES = [
+  'health_issue:read',
+  'wizard_session:read',
+  'wizard_session:write',
+  'wizard_run:write',
+  'organization:read',
+] as const satisfies readonly (typeof WIZARD_OAUTH_SCOPES)[number][];
 
 // ── Wizard run / variants ───────────────────────────────────────────
 

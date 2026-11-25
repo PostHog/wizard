@@ -76,9 +76,6 @@ Project context:
 
       buildOutroData: (sess, credentials) => {
         const cloudUrl = credentials.host.appHost;
-        const continueUrl = sess.signup
-          ? `${cloudUrl}/products?source=wizard`
-          : undefined;
         // The agent emits `[DASHBOARD_URL] <url>` once it creates the
         // dashboard; the SDK-message interceptor stores it on the session.
         // Fall back to the dashboards index if nothing was emitted.
@@ -96,7 +93,6 @@ Project context:
           reportFile: SETUP_REPORT_FILE,
           changes: [],
           docsUrl: DOCS_URL,
-          continueUrl,
           dashboardUrl,
           notebookUrl,
         };

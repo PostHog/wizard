@@ -91,7 +91,10 @@ that on with the SDK's own option — `capture_exceptions`,
 `enableExceptionAutocapture`, `enable_exception_autocapture`, `capture_panics`,
 `errorTrackingConfig.autoCapture` — and register none of those handlers
 yourself. A second listener on the same event sends every error twice, and it
-stops matching the SDK's handling the moment the SDK changes.
+stops matching the SDK's handling the moment the SDK changes. The handlers
+exist only once the client does: when the app creates its server client lazily,
+on first use, create it when the server starts instead, or an error before the
+first request is lost.
 
 What the SDK cannot see is yours to add: errors a framework catches before any
 global handler fires. Express error middleware, Fastify `setErrorHandler`, Hono

@@ -339,20 +339,6 @@ describe('only a scripted CI run starts with consent already granted', () => {
     expect(session.discoveryConsent).toBe(DiscoveryConsent.Granted);
   });
 
-  it('signup: true alone starts undecided: the new account never saw the disclosure', () => {
-    const session = buildSession({ installDir: '/tmp/app', signup: true });
-    expect(session.discoveryConsent).toBe(DiscoveryConsent.Undecided);
-  });
-
-  it('ci: true with signup: true still builds discoveryConsent as granted', () => {
-    const session = buildSession({
-      installDir: '/tmp/app',
-      ci: true,
-      signup: true,
-    });
-    expect(session.discoveryConsent).toBe(DiscoveryConsent.Granted);
-  });
-
   it('a plain interactive session starts undecided', () => {
     const session = buildSession({ installDir: '/tmp/app' });
     expect(session.discoveryConsent).toBe(DiscoveryConsent.Undecided);
