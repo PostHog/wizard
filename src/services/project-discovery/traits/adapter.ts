@@ -59,7 +59,7 @@ function reportBase(sink: TraitSink): string {
  * Write a detection report's answers as traits: `targetId` as `framework`,
  * `recommended` as the main-app mark and `hasPostHog` as `posthogInstalled`.
  * A path the session has no project for becomes one. What the report calls the
- * repo is kept beside them, for the plan.
+ * repo is kept beside them, for the project selection.
  */
 export function applyDetectionReport(
   sink: ReportSink,

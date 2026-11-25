@@ -8,7 +8,7 @@ import {
   introMenuOptions,
   introProjectsRow,
 } from '@tui/programs/posthog-integration/intro-menu';
-import type { PlanOffer } from '@programs/types';
+import type { ProjectSelection } from '@programs/types';
 
 const valuesFor = (args: {
   view?: 'default' | 'more-info' | 'commands';
@@ -153,7 +153,7 @@ describe('introEntries', () => {
 });
 
 describe('a run that picks its project after login', () => {
-  const plan = (offered: string[]): PlanOffer => ({
+  const selection = (offered: string[]): ProjectSelection => ({
     repoType: 'monorepo',
     picked: offered[0],
     complete: true,
@@ -176,14 +176,16 @@ describe('a run that picks its project after login', () => {
   });
 
   it('names the one project the run takes', () => {
-    expect(introProjectsRow(plan(['apps/web']))).toEqual({
+    expect(introProjectsRow(selection(['apps/web']))).toEqual({
       label: 'Project',
       value: 'apps/web',
     });
   });
 
   it('counts the projects offered when there are several', () => {
-    expect(introProjectsRow(plan(['apps/web', 'apps/admin']))).toMatchObject({
+    expect(
+      introProjectsRow(selection(['apps/web', 'apps/admin'])),
+    ).toMatchObject({
       label: 'Projects',
       value: '2 found',
     });

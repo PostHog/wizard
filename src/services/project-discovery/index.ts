@@ -21,18 +21,18 @@ export {
   type ProjectDiscoveryMode,
 } from './flag';
 export {
-  buildPlan,
+  buildProjectSelection,
   pickLeavesRunProject,
   picksProject,
-  planAsks,
-  planNeedsPick,
-  planRanksUnasked,
+  askUserToSelectProject,
+  hasMultipleEligibleProjects,
+  shouldRankProjects,
   reportProjectsDiscovered,
   reportProjectsSelected,
-  type PlanOffer,
-  type PlanProject,
-  type PlanReason,
-} from './plan';
+  type ProjectSelection,
+  type ProjectOption,
+  type ProjectExclusionReason,
+} from './project-selection';
 export {
   discoverProjects,
   parentOf,

@@ -40,7 +40,7 @@ const report: DiscoveryTestReport = {
     },
   ],
   toolsMatched: true,
-  plan: {
+  projectSelection: {
     repoType: 'monorepo',
     complete: true,
     picked: 'apps/web',
@@ -88,10 +88,12 @@ describe('test discovery mode', () => {
           unsettled: [],
         },
       ],
-      plan: {
-        ...report.plan,
+      projectSelection: {
+        ...report.projectSelection,
         picked: `apps/${escape}web`,
-        projects: [{ ...report.plan.projects[0], path: `apps/${escape}web` }],
+        projects: [
+          { ...report.projectSelection.projects[0], path: `apps/${escape}web` },
+        ],
       },
     });
     // eslint-disable-next-line no-control-regex
@@ -186,7 +188,7 @@ describe('test discovery mode', () => {
     expect(text).toMatch(/framework\s+nextjs@0\.88/);
   });
 
-  it('says the plan is unused while the flag is off', () => {
+  it('says the project selection is unused while the flag is off', () => {
     expect(formatDiscoveryTest({ ...report, mode: 'off' })).toContain(
       'not used while the flag is off',
     );

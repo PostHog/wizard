@@ -232,7 +232,7 @@ nothing, runs no agent and changes no file. It works on any program command,
 with or without a terminal, in non-production builds such as `pnpm try`. It
 comes before every other mode: with `--ci`, `--signup` or `--playground` on the
 same command it still only prints and exits. It previews the run as asked, so
-`--ci` and `--project` change the plan it prints. It sends no discovery report
+`--ci` and `--project` change the project selection it prints. It sends no discovery report
 and no usage events; an error event can still be sent when something fails, as
 in any run.
 
@@ -263,7 +263,7 @@ The report holds:
   uses, and the source that value came from. A source that said otherwise
   follows in brackets, and `(unsettled)` marks a trait whose sources disagree
 - the catalog tools found in each project
-- the plan the program would open after login: the projects offered, a reason
+- the project selection the program would open after login: the projects offered, a reason
   for each of the others, the one that starts picked, and whether the run would
   ask. A program that picks no project, a CI run and a run with the flag off all
   ask nothing and work in the run project

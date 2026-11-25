@@ -129,7 +129,7 @@ import {
   Program,
   type ProgramId,
 } from '@programs';
-import type { FrameworkConfig, PlanOffer } from '@programs/types';
+import type { FrameworkConfig, ProjectSelection } from '@programs/types';
 import {
   WizardReadiness,
   type WizardReadinessResult,
@@ -274,8 +274,8 @@ interface Fixture {
   arrange?: (store: WizardStore) => void;
 }
 
-/** A pnpm monorepo's plan: two apps offered, the rest listed with a reason. */
-const PLAN_OFFER: PlanOffer = {
+/** A pnpm monorepo's project selection: two apps offered, the rest listed with a reason. */
+const PLAN_OFFER: ProjectSelection = {
   repoType: 'monorepo',
   workspaceTool: 'pnpm',
   complete: true,
@@ -569,11 +569,11 @@ const FIXTURES: Record<string, Fixture> = {
       s.setApiUser(apiUser(false));
     },
   },
-  [ScreenId.Plan]: {
+  [ScreenId.ProjectPicker]: {
     program: Program.PostHogIntegration,
     arrange: (s) => {
       authed(s);
-      s.showPlan(PLAN_OFFER, false);
+      s.showProjectPicker(PLAN_OFFER, false);
     },
   },
   [ScreenId.Run]: {

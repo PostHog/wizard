@@ -56,7 +56,7 @@ import {
 } from '@programs';
 import type {
   PlannedEvent,
-  PlanOffer,
+  ProjectSelection,
   TaskItem,
   WizardSession,
 } from '@programs/types';
@@ -451,27 +451,27 @@ export class WizardStore implements TuiView {
     return this.$tui.get().mintHandoff;
   }
 
-  get plan(): TuiState['plan'] {
-    return this.$tui.get().plan;
+  get projectPicker(): TuiState['projectPicker'] {
+    return this.$tui.get().projectPicker;
   }
 
-  /** Open the plan screen on the projects the run offers. `ranking` while a model source still answers. */
-  showPlan(offer: PlanOffer, ranking: boolean): void {
-    this._write({ plan: { offer, ranking, confirmed: null } });
+  /** Open the project picker on the projects the run offers. `ranking` while a model source still answers. */
+  showProjectPicker(selection: ProjectSelection, ranking: boolean): void {
+    this._write({ projectPicker: { selection, ranking, confirmed: null } });
   }
 
-  /** The model sources answered: the plan screen takes their plan. */
-  setPlanRanked(offer: PlanOffer): void {
+  /** The model sources answered: the project picker takes their selection. */
+  setProjectsRanked(selection: ProjectSelection): void {
     // A pick made while the sources still answered stands.
-    const confirmed = this.plan?.confirmed ?? null;
-    this._write({ plan: { offer, ranking: false, confirmed } });
+    const confirmed = this.projectPicker?.confirmed ?? null;
+    this._write({ projectPicker: { selection, ranking: false, confirmed } });
   }
 
-  /** The person's pick on the plan screen. */
-  confirmPlan(projectPath: string): void {
-    const plan = this.plan;
-    if (!plan) return;
-    this._write({ plan: { ...plan, confirmed: projectPath } });
+  /** The person's pick on the project picker. */
+  confirmProjectPick(projectPath: string): void {
+    const picker = this.projectPicker;
+    if (!picker) return;
+    this._write({ projectPicker: { ...picker, confirmed: projectPath } });
   }
 
   /** Write TUI state, then `sessionWrites`' session fields, with one notification either way. */

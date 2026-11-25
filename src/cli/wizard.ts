@@ -171,7 +171,7 @@ export class Wizard {
         })
         .option('test-discovery', {
           describe:
-            'Test discovery mode: print the projects, traits and plan a run finds before login, then exit. Pass json for JSON.',
+            'Test discovery mode: print the projects, traits and project selection a run finds before login, then exit. Pass json for JSON.',
           type: 'string',
           choices: ['', 'text', 'json'],
         })

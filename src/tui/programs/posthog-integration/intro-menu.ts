@@ -1,6 +1,6 @@
 import { getCommandPath, getSubcommandPrograms } from '@programs';
 import { getTool } from '@tools';
-import type { PlanOffer } from '@programs/types';
+import type { ProjectSelection } from '@programs/types';
 import type { PickerOption } from '@tui/primitives/index';
 import type { DetectionRow } from '@tui/screens/IntroScreenLayout';
 
@@ -51,8 +51,8 @@ export function introEntries(): IntroEntry[] {
 }
 
 /** The intro's row for a workspace whose project is picked after login, in place of a framework. */
-export function introProjectsRow(plan: PlanOffer): DetectionRow {
-  const offered = plan.projects.filter((project) => project.offered);
+export function introProjectsRow(selection: ProjectSelection): DetectionRow {
+  const offered = selection.projects.filter((project) => project.offered);
   // One project offered is the one the run takes; several are chosen among.
   return offered.length === 1
     ? { label: 'Project', value: offered[0].path }

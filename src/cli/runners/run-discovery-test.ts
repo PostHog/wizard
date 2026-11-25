@@ -142,9 +142,9 @@ function decisionLines(decisions: DiscoveryTestReport['decisions']): string[] {
   ];
 }
 
-/** The report as text: the repo, each project's traits with their sources, and the plan. */
+/** The report as text: the repo, each project's traits with their sources, and the project selection. */
 export function formatDiscoveryTest(report: DiscoveryTestReport): string {
-  const { walk, detection, plan } = report;
+  const { walk, detection, projectSelection } = report;
   const lines = [
     `Project discovery, test mode: ${report.program}`,
     '',
@@ -177,17 +177,17 @@ export function formatDiscoveryTest(report: DiscoveryTestReport): string {
     ...report.projects.flatMap(projectLines),
     ...decisionLines(report.decisions),
     '',
-    `Plan for ${report.program}: ${
+    `Project selection for ${report.program}: ${
       report.mode === 'off'
         ? `not used while the flag is off; the run works in ${clean(
-            plan.picked,
+            projectSelection.picked,
           )}`
-        : `${plan.asks ? 'asks after login' : 'asks nothing'}, picks ${clean(
-            plan.picked,
-          )}`
+        : `${
+            projectSelection.asks ? 'asks after login' : 'asks nothing'
+          }, picks ${clean(projectSelection.picked)}`
     }`,
-    ...plan.projects.map((project) => {
-      const mark = project.path === plan.picked ? '*' : ' ';
+    ...projectSelection.projects.map((project) => {
+      const mark = project.path === projectSelection.picked ? '*' : ' ';
       const detail = [
         project.frameworkName,
         project.mainApp ? 'main app' : undefined,

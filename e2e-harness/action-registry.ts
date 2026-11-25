@@ -227,7 +227,7 @@ export const ACTION_REGISTRY: Partial<Record<string, DriverAction[]>> = {
   ],
 
   // ── Project pick ──────────────────────────────────────────────────────
-  [ScreenId.Plan]: [
+  [ScreenId.ProjectPicker]: [
     {
       id: 'pick_project',
       description:
@@ -236,14 +236,22 @@ export const ACTION_REGISTRY: Partial<Record<string, DriverAction[]>> = {
       params: { project: 'project path, such as apps/web' },
       apply: (store, params) => {
         const project = requireString('pick_project', params, 'project');
-        const plan = store.plan;
-        if (!plan || plan.ranking) {
-          throw new Error('pick_project: the plan is still ranking projects');
+        const picker = store.projectPicker;
+        if (!picker || picker.ranking) {
+          throw new Error(
+            'pick_project: the project picker is still ranking projects',
+          );
         }
-        if (!plan.offer.projects.some((p) => p.offered && p.path === project)) {
-          throw new Error(`pick_project: the plan does not offer "${project}"`);
+        if (
+          !picker.selection.projects.some(
+            (p) => p.offered && p.path === project,
+          )
+        ) {
+          throw new Error(
+            `pick_project: the project picker does not offer "${project}"`,
+          );
         }
-        store.confirmPlan(project);
+        store.confirmProjectPick(project);
       },
     },
   ],

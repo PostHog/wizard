@@ -10,17 +10,17 @@ import type {
   TraitClaims,
 } from '@programs/program-contract';
 import {
-  buildPlan,
+  buildProjectSelection,
   getDiscovery,
   getProjects,
   getTraitClaims,
   picksProject,
-  planAsks,
+  askUserToSelectProject,
   runDiscovery,
   settleProjects,
   toMatchKeys,
   toolsByProject,
-  type PlanOffer,
+  type ProjectSelection,
   type ProjectDiscoveryMode,
 } from '@services/project-discovery';
 import { scopeToRunProject } from './detect-program';
@@ -72,8 +72,8 @@ export type DiscoveryTestReport = {
   toolsMatched: boolean;
   /** What the Decisions call did, or why none was made. */
   decisions: DecisionsPreview;
-  /** The plan the program would open after login, and whether it would ask. */
-  plan: PlanOffer & { asks: boolean };
+  /** The project selection the program would open after login, and whether it would ask. */
+  projectSelection: ProjectSelection & { asks: boolean };
   /** Every project with its traits. Last, as the longest part of the report. */
   projects: DiscoveryTestProject[];
 };
@@ -182,13 +182,13 @@ export async function testDiscovery(
   const projects = getProjects(session);
   const tools = toolsByProject(discovery?.tools.tools ?? [], projects);
   const requested = project === undefined ? undefined : session.runProject;
-  const plan = buildPlan(session, config, requested);
+  const selection = buildProjectSelection(session, config, requested);
   // A program that picks no project works where the run started.
   const picked = picksProject(session, config)
-    ? plan.picked
+    ? selection.picked
     : session.runProject;
   // The report reads top down: short facts first, each long list last.
-  const { projects: planProjects, ...planFacts } = plan;
+  const { projects: options, ...facts } = selection;
   return {
     program: config.id,
     mode: discovery?.mode ?? 'off',
@@ -214,11 +214,11 @@ export async function testDiscovery(
     ),
     toolsMatched: discovery?.tools.failed !== true,
     decisions,
-    plan: {
-      ...planFacts,
+    projectSelection: {
+      ...facts,
       picked,
-      asks: planAsks(session, config, plan, requested),
-      projects: planProjects,
+      asks: askUserToSelectProject(session, config, selection, requested),
+      projects: options,
     },
     projects: projects.map((project) => ({
       ...project,

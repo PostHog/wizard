@@ -13,7 +13,11 @@ import { Box, Text } from 'ink';
 import type { ReactNode } from 'react';
 import { useState, useSyncExternalStore } from 'react';
 import type { WizardStore } from '@tui/store';
-import { buildPlan, findProgramConfig, pickLeavesRunProject } from '@programs';
+import {
+  buildProjectSelection,
+  findProgramConfig,
+  pickLeavesRunProject,
+} from '@programs';
 import { Integration } from '@shared/constants';
 import { PickerMenu, LoadingBox } from '@tui/primitives/index';
 import {
@@ -108,12 +112,13 @@ export const PostHogIntegrationIntroScreen = ({
   const { skillEntry, fetchFailed } = useSkillEntry(session.skillId);
   const detecting = !session.detectionComplete;
   const program = findProgramConfig(store.router.activeProgram);
-  const plan = program && !detecting ? buildPlan(session, program) : null;
+  const selection =
+    program && !detecting ? buildProjectSelection(session, program) : null;
   // The pick after login takes the run elsewhere, so this project's detection is not the run's.
   const picksLater =
     program !== undefined &&
-    plan !== null &&
-    pickLeavesRunProject(session, program, plan);
+    selection !== null &&
+    pickLeavesRunProject(session, program, selection);
   const config = picksLater ? null : session.frameworkConfig;
   const frameworkLabel = picksLater
     ? undefined
@@ -249,7 +254,7 @@ export const PostHogIntegrationIntroScreen = ({
   // ── Detection rows ─────────────────────────────────────────────────
 
   const detectionRows: DetectionRow[] = [];
-  if (picksLater && plan) detectionRows.push(introProjectsRow(plan));
+  if (picksLater && selection) detectionRows.push(introProjectsRow(selection));
   if (frameworkLabel) {
     const suffixParts: string[] = [];
     if (!manuallySelected) suffixParts.push('(detected)');

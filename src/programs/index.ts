@@ -4,7 +4,7 @@ export { runProgram, TASK_OUTCOMES_KEY } from './program-runner/run-program';
 export { testDiscovery } from './program-runner/discovery-test';
 export { scopeToProject } from './program-runner/detect-program';
 export {
-  buildPlan,
+  buildProjectSelection,
   getDiscovery,
   pickLeavesRunProject,
   reportDiscovery,
