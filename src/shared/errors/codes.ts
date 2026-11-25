@@ -5,10 +5,6 @@ export const ErrorCodes = {
   CliInteractiveRequired: 'PHW_CLI_INTERACTIVE_REQUIRED',
   ArgsMissingApiKey: 'PHW_ARGS_MISSING_API_KEY',
   ArgsMissingInstallDir: 'PHW_ARGS_MISSING_INSTALL_DIR',
-  /** Retired: sign-up no longer takes an email. Kept because codes are append-only. */
-  ArgsMissingEmail: 'PHW_ARGS_MISSING_EMAIL',
-  /** Retired: sign-up no longer provisions accounts. Kept because codes are append-only. */
-  ArgsSignupProvisionFailed: 'PHW_ARGS_SIGNUP_PROVISION_FAILED',
   /** `--signup` in a run with no browser to sign up in. */
   ArgsSignupNonInteractive: 'PHW_ARGS_SIGNUP_NON_INTERACTIVE',
   AuthKeyType: 'PHW_AUTH_KEY_TYPE',

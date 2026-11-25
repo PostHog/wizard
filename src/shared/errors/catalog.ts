@@ -33,16 +33,6 @@ export const ERROR_CATALOG: Record<ErrorCode, ErrorCatalogEntry> = {
     retry: 'no',
     description: 'Non-interactive run without --install-dir.',
   },
-  [ErrorCodes.ArgsMissingEmail]: {
-    group: 'args',
-    retry: 'no',
-    description: 'Retired. Signup run without --email.',
-  },
-  [ErrorCodes.ArgsSignupProvisionFailed]: {
-    group: 'args',
-    retry: 'yes',
-    description: 'Retired. Account provisioning for --signup failed.',
-  },
   [ErrorCodes.ArgsSignupNonInteractive]: {
     group: 'args',
     retry: 'no',
