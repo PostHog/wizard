@@ -150,8 +150,8 @@ export async function startCallbackServer(
   return new Promise((resolve, reject) => {
     let callbackResolve: (code: string) => void = () => undefined;
     let callbackReject: (error: Error) => void = () => undefined;
-    // Created before the server listens, because a callback can arrive before anyone waits: sign-up
-    // first waits to see whether the browser opened.
+    // Created before the server listens, so that a callback that arrives before the caller
+    // waits still resolves the promise instead of a resolver that does not exist yet.
     const callback = new Promise<string>((res, rej) => {
       callbackResolve = res;
       callbackReject = rej;

@@ -10,7 +10,7 @@ export const selfDrivingCommand: Command = {
     ...skillProgramOptions,
     integrate: {
       describe:
-        'Integrate the PostHog SDK first, then set up Self-driving — skips the integration prompt and logs you in via OAuth (no "create an account?" question). Use when the project isn\'t set up yet but you already have a PostHog account.',
+        'Integrate the PostHog SDK first, then set up Self-driving. Skips the integration prompt and opens PostHog in the browser to log in or sign up.',
       type: 'boolean',
       default: false,
     },

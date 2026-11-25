@@ -11,6 +11,7 @@ vi.mock(import('@utils/analytics'), () => ({
 vi.mock(import('@utils/debug'));
 
 import axios from 'axios';
+import * as net from 'node:net';
 import { abortOnScreens } from '@tui/abort';
 import type { WizardStore } from '@tui/store';
 import { openTrackedLink } from '@utils/links';
@@ -69,9 +70,15 @@ describe('the OAuth flow', () => {
     await fetch(new URL('/callback?code=abc', loginUrl));
 
     await expect(flow).resolves.toMatchObject({ access_token: 'pha_new' });
-    const authorize = new URL(opened.headers.get('location') ?? '');
+    const authorize = opened.headers.get('location') ?? '';
     // The OAuth proxy serves only `/oauth/authorize`; its login page sends a new email to sign-up.
-    expect(authorize.pathname).toBe('/oauth/authorize');
+    expect(new URL(authorize).pathname).toBe('/oauth/authorize');
+    expect(openTrackedLink).toHaveBeenCalledWith(loginUrl, 'oauth', {
+      auto: true,
+      skipUtm: true,
+    });
+    // A remote shell cannot reach localhost, so the paste modal links PostHog directly.
+    expect(store.setAuthorizeUrl).toHaveBeenNthCalledWith(1, authorize);
     expect(abortOnScreens).not.toHaveBeenCalled();
   });
 
@@ -83,7 +90,27 @@ describe('the OAuth flow', () => {
     pasteCode('abc');
 
     await expect(flow).resolves.toMatchObject({ access_token: 'pha_new' });
-    expect(openTrackedLink).toHaveBeenCalled();
     expect(abortOnScreens).not.toHaveBeenCalled();
+  });
+
+  it('stops the login and frees its port when the callback carries an error', async () => {
+    const { store, wizardStore } = fakeStore();
+
+    const flow = performOAuthFlow({ scopes: ['user:read'] }, wizardStore);
+    // Attached before the callback, because the flow rejects while the fetch is still in flight.
+    const failed = expect(flow).rejects.toThrow('aborted');
+    const loginUrl = await shownLoginUrl(store);
+    await fetch(new URL('/callback?error=access_denied', loginUrl));
+
+    await failed;
+    expect(abortOnScreens).toHaveBeenCalledWith(wizardStore);
+    expect(axios.post).not.toHaveBeenCalled();
+    // The next login listens on the same port, so the failed one must have released it.
+    const reuse = net.createServer();
+    await new Promise<void>((resolve, reject) => {
+      reuse.once('error', reject);
+      reuse.listen(Number(new URL(loginUrl).port), resolve);
+    });
+    reuse.close();
   });
 });

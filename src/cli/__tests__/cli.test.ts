@@ -446,18 +446,6 @@ describe('CLI argument parsing', () => {
       expect(process.exit).not.toHaveBeenCalledWith(1);
     });
 
-    test('requires --api-key when --ci is set', async () => {
-      await runCLI(['--ci', '--region', 'us', '--install-dir', '/tmp/test']);
-
-      expect(process.exit).toHaveBeenCalledWith(1);
-    });
-
-    test('requires --install-dir when --ci is set', async () => {
-      await runCLI(['--ci', '--region', 'us', '--api-key', 'phx_test']);
-
-      expect(process.exit).toHaveBeenCalledWith(1);
-    });
-
     test('leaves region unset when --region is not passed', async () => {
       await runCLI([
         '--ci',
@@ -563,12 +551,6 @@ describe('CLI argument parsing', () => {
       ]);
 
       expect(process.exit).not.toHaveBeenCalledWith(1);
-    });
-
-    test('requires --api-key when headless is set', async () => {
-      await runCLI([headlessFlag, '--install-dir', '/tmp/test']);
-
-      expect(process.exit).toHaveBeenCalledWith(1);
     });
   });
 
@@ -677,6 +659,39 @@ describe('CLI argument parsing', () => {
     beforeEach(() => {
       process.exit = vi.fn() as unknown as typeof process.exit;
     });
+
+    test.each([
+      ['--ci', ['--install-dir', '/tmp/test'], 'PHW_ARGS_MISSING_API_KEY'],
+      ['--ci', ['--api-key', 'phx_test'], 'PHW_ARGS_MISSING_INSTALL_DIR'],
+      [
+        '--headless-DONOTUSE-EXPERIMENTAL',
+        ['--install-dir', '/tmp/test'],
+        'PHW_ARGS_MISSING_API_KEY',
+      ],
+      [
+        '--headless-DONOTUSE-EXPERIMENTAL',
+        ['--api-key', 'phx_test'],
+        'PHW_ARGS_MISSING_INSTALL_DIR',
+      ],
+    ])(
+      'refuses %s with %j as %s before starting the host',
+      async (mode, args, code) => {
+        const stderr = vi
+          .spyOn(process.stderr, 'write')
+          .mockImplementation(() => true);
+        try {
+          await runCLI([mode, ...args]);
+
+          expect(process.exit).toHaveBeenCalledWith(1);
+          expect(mockRunHeadlessCli).not.toHaveBeenCalled();
+          expect(stderr).toHaveBeenCalledWith(
+            expect.stringMatching(new RegExp(`phw-error:.*${code}`)),
+          );
+        } finally {
+          stderr.mockRestore();
+        }
+      },
+    );
 
     test('--test-discovery previews before any credential check or host', async () => {
       mockTestDiscoveryCli.mockResolvedValue({

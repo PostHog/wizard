@@ -33,12 +33,6 @@ export const ERROR_CATALOG: Record<ErrorCode, ErrorCatalogEntry> = {
     retry: 'no',
     description: 'Non-interactive run without --install-dir.',
   },
-  [ErrorCodes.ArgsSignupNonInteractive]: {
-    group: 'args',
-    retry: 'no',
-    description:
-      'No longer emitted. Non-interactive run with --signup, before --signup was removed.',
-  },
   [ErrorCodes.AuthKeyType]: {
     group: 'auth',
     retry: 'no',
@@ -80,12 +74,6 @@ export const ERROR_CATALOG: Record<ErrorCode, ErrorCatalogEntry> = {
     group: 'auth',
     retry: 'yes',
     description: 'Fetching user or project data from the PostHog API failed.',
-  },
-  [ErrorCodes.AuthSignupBrowserUnavailable]: {
-    group: 'auth',
-    retry: 'no',
-    description:
-      'No longer emitted. --signup could not open a browser, before --signup was removed.',
   },
   [ErrorCodes.EnvLocalServicesDown]: {
     group: 'env',
