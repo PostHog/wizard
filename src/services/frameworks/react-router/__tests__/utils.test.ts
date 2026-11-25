@@ -23,7 +23,6 @@ describe('getReactRouterMode', () => {
       debug: false,
       benchmark: false,
       yaraReport: false,
-      signup: false,
     });
   };
 
