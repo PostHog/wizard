@@ -14,6 +14,7 @@ import {
   OAUTH_TIMEOUT_MS,
   WIZARD_USER_AGENT,
 } from '@shared/constants';
+import { ErrorCodes } from '@shared/errors';
 import { abortOnScreens } from '@tui/abort';
 import type { WizardStore } from '@tui/store';
 import { analytics } from '@utils/analytics';
@@ -539,7 +540,7 @@ export async function performOAuthFlow(
               OAUTH_TIMEOUT_MS,
             ),
           ),
-        ]);
+        ]).finally(() => store.closeManualAuthCode());
 
         const token = await exchangeCodeForToken(
           code,
@@ -577,29 +578,28 @@ export async function performOAuthFlow(
           ? flowError.code === 'access_denied'
           : error.message.includes('access_denied');
 
+        // The outro shows this, because the status line is gone once the run aborts.
+        let failureMessage: string | undefined;
         if (timedOut) {
           // Overlay bypasses the auth-step gating (which never completes
           // without credentials), so the user sees the failure instead of a
           // spinner that never stops; any key exits.
           store.showSessionTimeout();
         } else if (accessDenied) {
-          store.pushStatus(
-            `Authorization was cancelled.\n\nYou denied access to PostHog. To use the wizard, you need to authorize access to your PostHog account.\n\nYou can try again by re-running the wizard.`,
-          );
+          failureMessage = `Authorization was cancelled.\n\nYou denied access to PostHog. To use the wizard, you need to authorize access to your PostHog account.\n\nYou can try again by re-running the wizard.`;
         } else {
-          store.pushStatus(
-            buildOAuthFailureMessage({
-              error,
-              requestedScopes: config.scopes,
-              clientId,
-              oauthUrl,
-              // Same condition that selects the dev client ID: a resolvable
-              // base URL means a dev-seeded stack, where "fix your local
-              // OAuth app" beats pointing at the production runbook.
-              isDevStack: resolveBaseUrl(config.baseUrl) !== undefined,
-            }),
-          );
+          failureMessage = buildOAuthFailureMessage({
+            error,
+            requestedScopes: config.scopes,
+            clientId,
+            oauthUrl,
+            // Same condition that selects the dev client ID: a resolvable
+            // base URL means a dev-seeded stack, where "fix your local
+            // OAuth app" beats pointing at the production runbook.
+            isDevStack: resolveBaseUrl(config.baseUrl) !== undefined,
+          });
         }
+        if (failureMessage) store.pushStatus(failureMessage);
 
         const oauthErrorCode = flowError
           ? flowError.code
@@ -620,7 +620,17 @@ export async function performOAuthFlow(
           $exception_fingerprint: `wizard_oauth_${oauthErrorCode}`,
         });
 
-        await abortOnScreens(store);
+        await abortOnScreens(
+          store,
+          failureMessage
+            ? {
+                message: failureMessage,
+                code: accessDenied
+                  ? ErrorCodes.AuthAccessDenied
+                  : ErrorCodes.AuthLoginFailed,
+              }
+            : undefined,
+        );
         throw error;
       }
     }

@@ -7,6 +7,8 @@ import type {
 import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
 import type { WizardStore } from '@tui/store';
+import { ErrorCodes, WizardError } from '@shared/errors';
+import { abortOnScreens } from '@tui/abort';
 import { getOrAskForProjectData } from './project-data.js';
 
 /** Log in once through OAuth for the session's launch values. */
@@ -24,6 +26,18 @@ export async function oauthLogin(
     localMcp: session.localMcp,
     programId,
     completionScopeOptional,
+  }).catch(async (error: unknown) => {
+    if (
+      !(error instanceof WizardError) ||
+      error.code !== ErrorCodes.AuthProjectFetchFailed
+    )
+      throw error;
+    // Without this abort the error reaches the TUI host with no credentials set, which ends the run as completed.
+    return abortOnScreens(store, {
+      code: error.code,
+      message: error.message,
+      error,
+    });
   });
   analytics.wizardCapture('auth complete', { project_id: data.projectId });
   return {

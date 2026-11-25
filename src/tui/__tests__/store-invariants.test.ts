@@ -328,6 +328,12 @@ const MUTATIONS: MutationCase[] = [
     emits: 1,
   },
   {
+    name: 'closeManualAuthCode',
+    prepare: (s) => s.showManualAuthCode(),
+    invoke: (s) => s.closeManualAuthCode(),
+    emits: 1,
+  },
+  {
     name: 'submitManualAuthCode',
     prepare: (s) => s.showManualAuthCode(),
     invoke: (s) => s.submitManualAuthCode('code'),

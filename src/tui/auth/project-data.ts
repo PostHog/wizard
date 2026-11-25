@@ -28,6 +28,7 @@ import {
 } from '@shared/api';
 import { abortOnScreens } from '@tui/abort';
 import { OutroKind } from '@shared/outro';
+import { ErrorCodes, WizardError } from '@shared/errors';
 
 interface ProjectData {
   projectApiKey: string;
@@ -245,23 +246,31 @@ async function askForWizardLogin(options: {
     await abortOnScreens(store, { message: error.message });
   }
 
-  // The issuing region comes with the token; the us/eu @me probe only runs when omitted.
-  const host = await HostResolution.fromAccessToken(
-    tokenResponse.access_token,
-    {
+  let host: HostResolution;
+  let projectData: ApiProject;
+  let userData: ApiUser;
+  try {
+    // The issuing region comes with the token; the us/eu @me probe only runs when omitted.
+    host = await HostResolution.fromAccessToken(tokenResponse.access_token, {
       region: tokenResponse.posthog_region,
       localMcp: options.localMcp,
       baseUrl: options.baseUrl,
-    },
-  );
-  const cloudUrl = host.appHost;
-
-  const projectData = await fetchProjectData(
-    tokenResponse.access_token,
-    projectId!,
-    cloudUrl,
-  );
-  const userData = await fetchUserData(tokenResponse.access_token, cloudUrl);
+    });
+    projectData = await fetchProjectData(
+      tokenResponse.access_token,
+      projectId!,
+      host.appHost,
+    );
+    userData = await fetchUserData(tokenResponse.access_token, host.appHost);
+  } catch (e) {
+    const reason = e instanceof Error ? e.message : String(e);
+    // The run's login aborts on this code; tool screens show the message inline and retry.
+    throw new WizardError(
+      `You logged in, but the wizard couldn't load your PostHog project: ${reason}\n\nCheck your connection and run the wizard again.`,
+      undefined,
+      ErrorCodes.AuthProjectFetchFailed,
+    );
+  }
 
   const data = {
     accessToken: tokenResponse.access_token,
