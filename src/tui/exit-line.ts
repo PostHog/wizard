@@ -16,7 +16,7 @@
 import { type WizardStore } from './store.js';
 import { totalTokenCount } from '@tui/token-usage';
 import { OutroKind } from '@shared/outro';
-import { isCapacityFailure, isRunFailure } from '@tui/mint-failure';
+import { failureCopy, isRunFailure } from '@tui/mint-failure';
 import { formatTokenCount, formatCostUsd } from '@shared/token-pricing';
 import { getLogFilePath } from '@utils/debug';
 import { readFileHead } from '@utils/bounded-fs';
@@ -121,13 +121,12 @@ function exitSummary(store: WizardStore): string {
 
   if (isRunFailure(store.session)) {
     const spellbook = store.spellbook;
+    const { headline, cause } = failureCopy(store.session);
     return [
-      isCapacityFailure(store.session)
-        ? 'The wizard is unavailable. Setup has not been completed.'
-        : `Setup did not finish: ${outro?.message ?? 'the agent run failed.'}`,
+      `${headline}. ${cause}`,
       spellbook &&
         `${DIM}Point your agent at this skill (triple-click to select):${RESET_ATTRS}\n${spellbook.path}`,
-      `${DIM}Wizard log:${RESET_ATTRS} ${getLogFilePath()}`,
+      `We've let the wizard team know.\n${DIM}Wizard log:${RESET_ATTRS} ${getLogFilePath()}`,
       loginBlock,
       costLine,
     ]

@@ -68,15 +68,15 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-it('sends the report, saves the skill, then continues setup', async () => {
+it('sends the log, saves the skill, then continues setup', async () => {
   const { app, store, choose } = setup();
   await choose(0);
   expect(wizardCapture).toHaveBeenCalledWith(
     'failure reported',
     expect.objectContaining({ message: 'agent failed', is_capacity: false }),
   );
-  expect(app.lastFrame()).toContain('Report sent to the wizard team.');
-  await choose(0);
+  expect(app.lastFrame()).toContain('Log sent.');
+  await choose(2);
   expect(app.lastFrame()).toContain(saved.path);
   expect(store.mintHandoff).toBeNull();
   await choose(0);
@@ -91,7 +91,6 @@ it.each(['save', 'open'] as const)(
     vi.mocked(
       failure === 'save' ? services.leaveSpellbook : services.openAgent,
     ).mockRejectedValueOnce(new Error('Unavailable'));
-    await choose(1);
     await choose(2);
     expect(app.lastFrame()).toContain(
       failure === 'save' ? 'Could not save' : 'Unavailable',
@@ -107,10 +106,9 @@ it.each(['save', 'open'] as const)(
   },
 );
 
-it('exits without saving or launching', async () => {
+it('exits without sending the log, saving or launching', async () => {
   const { store, services, choose } = setup();
-  await choose(1);
-  await choose(3);
+  await choose(4);
   expect(store.mintHandoff).toBe('exit');
   expect(wizardCapture).not.toHaveBeenCalledWith(
     'failure reported',
@@ -121,15 +119,12 @@ it('exits without saving or launching', async () => {
 });
 
 it.each([
-  [
-    ErrorCodes.AgentOrchestratorTasksFailed,
-    "The wizard couldn't finish setup",
-    true,
-  ],
-  [ErrorCodes.GatewayMintRefused, "The Wizard's a little busy", false],
-])('heads a %s failure with %s', async (errorCode, headline, showsMessage) => {
+  [ErrorCodes.AgentOrchestratorTasksFailed, "PostHog isn't set up yet"],
+  [ErrorCodes.GatewayMintRefused, 'The wizard is busy right now'],
+])('heads a %s failure with %s, no error text', async (errorCode, headline) => {
   const { app } = setup(errorCode);
   await delay();
   expect(app.lastFrame()).toContain(headline);
-  expect(app.lastFrame()?.includes('agent failed')).toBe(showsMessage);
+  expect(app.lastFrame()).toContain("We've let the wizard team know.");
+  expect(app.lastFrame()).not.toContain('agent failed');
 });

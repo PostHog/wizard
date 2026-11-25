@@ -37,6 +37,9 @@ export interface InstallResult {
   reason?: string;
 }
 
+const SECRET_NAME =
+  '[A-Za-z0-9_-]*(?:KEY|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIALS?)[A-Za-z0-9_-]*';
+
 /**
  * Failure text comes from CLIs we invoke with the user's personal API key on the
  * command line (`--header "Authorization: Bearer phx_..."`), so it can carry the
@@ -76,7 +79,14 @@ export const redactSecrets = (raw: string): string =>
     )
     // The same names as JSON keys, raw or escaped, as tool inputs reach the log.
     .replace(
-      /("[A-Za-z0-9_-]*(?:KEY|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIALS?)[A-Za-z0-9_-]*\\?"\s*:\s*\\?")[^"\\]{4,}/gi,
+      new RegExp(
+        String.raw`(\\"${SECRET_NAME}\\"\s*:\s*\\")(?:\\\\(?:\\.|[^\\])|\\[^"\\]|[^\\])+`,
+        'gi',
+      ),
+      '$1[redacted]',
+    )
+    .replace(
+      new RegExp(String.raw`("${SECRET_NAME}"\s*:\s*")(?:[^"\\]|\\.)+`, 'gi'),
       '$1[redacted]',
     );
 

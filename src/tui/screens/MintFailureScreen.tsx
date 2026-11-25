@@ -4,15 +4,7 @@ import type { WizardStore } from '@tui/store';
 import { PickerMenu } from '@tui/primitives/index';
 import { useStdoutDimensions } from '@tui/hooks/useStdoutDimensions';
 import { Colors, Icons } from '@tui/styles';
-import {
-  MINT_FAILURE_MESSAGE,
-  MINT_FAILURE_BODY,
-  REPORT_PROMPT,
-  REPORT_SENT,
-  RUN_FAILURE_BODY,
-  RUN_FAILURE_HEADLINE,
-  isCapacityFailure,
-} from '@tui/mint-failure';
+import { LOG_SENT_NOTE, REPORTED_NOTE, failureCopy } from '@tui/mint-failure';
 import type { WizardSpellbook } from '@tui/services/wizard-spellbook';
 import type { CodingAgent } from '../services/coding-agent-launcher';
 
@@ -21,14 +13,7 @@ export type MintFailureServices = {
   openAgent: (agent: CodingAgent, spellbookPath: string) => Promise<void>;
 };
 
-type Action =
-  | 'save'
-  | CodingAgent
-  | 'send-report'
-  | 'skip-report'
-  | 'continue'
-  | 'exit'
-  | 'retry';
+type Action = 'save' | CodingAgent | 'send-log' | 'continue' | 'exit' | 'retry';
 
 export function MintFailureScreen({
   store,
@@ -45,22 +30,18 @@ export function MintFailureScreen({
   const busy = useRef(false);
   const [working, setWorking] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [reportChoice, setReportChoice] = useState<'sent' | 'skipped' | null>(
-    null,
-  );
+  const [isLogSent, setIsLogSent] = useState(false);
   const [retry, setRetry] = useState<'save' | CodingAgent>('save');
   const { spellbook } = store;
-  const isCapacity = isCapacityFailure(store.session);
-  const failureMessage = store.session.outroData?.message;
+  const copy = failureCopy(store.session);
 
   const select = async (action: Action) => {
     if (busy.current) return;
     if (action === 'exit' || action === 'continue')
       return store.setMintHandoff(action);
-    if (action === 'skip-report') return setReportChoice('skipped');
-    if (action === 'send-report') {
+    if (action === 'send-log') {
       store.sendFailureReport();
-      return setReportChoice('sent');
+      return setIsLogSent(true);
     }
     const task = action === 'retry' ? retry : action;
     setRetry(task);
@@ -89,7 +70,7 @@ export function MintFailureScreen({
     }
   };
 
-  const options: { label: string; value: Action }[] = error
+  const options: { label: string; value: Action; disabled?: boolean }[] = error
     ? [
         { label: 'Try again', value: 'retry' },
         ...(spellbook
@@ -102,15 +83,15 @@ export function MintFailureScreen({
         { label: 'Continue', value: 'continue' },
         { label: 'Exit', value: 'exit' },
       ]
-    : reportChoice === null
-    ? [
-        { label: 'Send report', value: 'send-report' },
-        { label: "Don't send", value: 'skip-report' },
-      ]
     : [
-        { label: 'Save skill', value: 'save' },
+        {
+          label: 'Send log to the wizard team',
+          value: 'send-log',
+          disabled: isLogSent,
+        },
         { label: 'Open in Claude Code', value: 'claude' },
         { label: 'Open in Codex', value: 'codex' },
+        { label: 'Save skill', value: 'save' },
         { label: 'Exit', value: 'exit' },
       ];
 
@@ -127,35 +108,46 @@ export function MintFailureScreen({
         alignItems="center"
       >
         {spellbook ? (
-          <Text color={Colors.success} bold>
-            {Icons.check} Skill saved
-          </Text>
+          <>
+            <Text color={Colors.success} bold>
+              {Icons.check} Skill saved
+            </Text>
+            <Box marginTop={1}>
+              <Text>
+                {spellbook.skillsIncluded
+                  ? 'Ask your agent to read this file and complete the task.'
+                  : 'The skill could not be downloaded. This file has instructions and links for your agent.'}
+              </Text>
+            </Box>
+          </>
         ) : (
-          <Text color={Colors.error} bold>
-            ✘ {isCapacity ? MINT_FAILURE_MESSAGE : RUN_FAILURE_HEADLINE}
-          </Text>
-        )}
-        {!spellbook && !isCapacity && failureMessage && (
-          <Box marginTop={1}>
-            <Text wrap="wrap">{failureMessage}</Text>
+          <Box
+            borderStyle="round"
+            borderColor={Colors.error}
+            flexDirection="column"
+            paddingX={1}
+            width="100%"
+          >
+            <Text color={Colors.error} bold>
+              ✘ {copy.headline}
+            </Text>
+            <Text wrap="wrap">{copy.cause}</Text>
+            <Box marginTop={1}>
+              <Text wrap="wrap">{copy.fix}</Text>
+            </Box>
           </Box>
         )}
-        <Box marginTop={1}>
-          <Text>
-            {spellbook
-              ? spellbook.skillsIncluded
-                ? 'Ask your agent to read this file and complete the task.'
-                : 'The skill could not be downloaded. This file has instructions and links for your agent.'
-              : reportChoice === null
-              ? REPORT_PROMPT
-              : isCapacity
-              ? MINT_FAILURE_BODY
-              : RUN_FAILURE_BODY}
-          </Text>
-        </Box>
-        {reportChoice === 'sent' && !spellbook && (
-          <Box marginTop={1}>
-            <Text dimColor>{REPORT_SENT}</Text>
+        {!spellbook && (
+          <Box marginTop={1} width="100%">
+            {isLogSent ? (
+              <Text color={Colors.success}>
+                {Icons.check} {LOG_SENT_NOTE}
+              </Text>
+            ) : (
+              <Text dimColor wrap="wrap">
+                {REPORTED_NOTE}
+              </Text>
+            )}
           </Box>
         )}
         {spellbook && (
@@ -175,7 +167,7 @@ export function MintFailureScreen({
             <Text>{working}</Text>
           ) : (
             <PickerMenu
-              key={[reportChoice, Boolean(spellbook), Boolean(error)].join('-')}
+              key={[isLogSent, Boolean(spellbook), Boolean(error)].join('-')}
               options={options}
               onSelect={(action) => void select(action as Action)}
             />

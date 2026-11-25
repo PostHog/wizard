@@ -50,7 +50,10 @@ describe('getExitLine', () => {
     const lines = line.split('\n');
     expect(lines).toContain(path);
     expect(line).not.toContain('wizard@posthog.com');
-    expect(lines[lines.indexOf(path) + 2]).toMatch(/^Wizard log: \S/);
+    expect(lines[lines.indexOf(path) + 2]).toBe(
+      "We've let the wizard team know.",
+    );
+    expect(lines[lines.indexOf(path) + 3]).toMatch(/^Wizard log: \S/);
     expect(line).not.toContain('successfully');
   });
 
@@ -253,8 +256,8 @@ describe('getExitLine needs-attention block', () => {
   });
 
   it.each([
-    [ErrorCodes.AgentOrchestratorTasksFailed, 'Setup did not finish: boom'],
-    [ErrorCodes.AgentRateLimit, 'The wizard is unavailable'],
+    [ErrorCodes.AgentOrchestratorTasksFailed, "PostHog isn't set up yet."],
+    [ErrorCodes.AgentRateLimit, 'The wizard is busy right now.'],
   ])('skips the warning block on a %s run failure', (errorCode, summary) => {
     const store = storeWithOutro({
       kind: OutroKind.Error,

@@ -60,6 +60,18 @@ describe('redactSecrets', () => {
     expect(out).not.toContain('pha_oauthtoken123');
   });
 
+  it('masks a whole JSON secret value, escapes and newlines included', () => {
+    const raw = JSON.stringify({
+      password: 'abc\\remaining-secret',
+      api_key: 'pa"leaked-after-quote',
+      private_key: '-----BEGIN KEY-----\nkeymaterial\n-----END KEY-----',
+    });
+    const out = redactSecrets(`${raw} ${JSON.stringify(raw)}`);
+    expect(out).not.toContain('remaining-secret');
+    expect(out).not.toContain('keymaterial');
+    expect(out).not.toContain('leaked-after-quote');
+  });
+
   it('masks the bearer token the CLIs echo back in their error output', () => {
     expect(
       redactSecrets(

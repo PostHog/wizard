@@ -5,19 +5,25 @@ import { readFileTail } from '@utils/bounded-fs';
 import { OutroKind } from '@shared/outro';
 import type { WizardSession } from '@programs/types';
 
-export const MINT_FAILURE_MESSAGE = "The Wizard's a little busy";
+export type FailureCopy = { headline: string; cause: string; fix: string };
 
-export const MINT_FAILURE_BODY =
-  'The wizard can still share spells. Grab a skill and let your agent take over.';
+const CAPACITY_COPY: FailureCopy = {
+  headline: 'The wizard is busy right now',
+  cause: "The wizard's AI service is busy, so setup stopped before finishing.",
+  fix: 'Try this: run the wizard again in a few minutes, or hand the setup to your own agent with the saved skill.',
+};
 
-export const RUN_FAILURE_HEADLINE = "The wizard couldn't finish setup";
+const RUN_FAILURE_COPY: FailureCopy = {
+  headline: "PostHog isn't set up yet",
+  cause:
+    'The wizard ran into a problem partway through and stopped before finishing.',
+  fix: 'Try this: run the wizard again, or hand the setup to your own agent with the saved skill.',
+};
 
-export const RUN_FAILURE_BODY = 'Grab a skill and let your agent take over.';
+export const REPORTED_NOTE =
+  "We've let the wizard team know. Your log stays on this computer unless you send it.";
 
-export const REPORT_PROMPT =
-  "Send this failure and this run's wizard log to the wizard team? Keys and tokens we recognize, and your home folder, are masked first.";
-
-export const REPORT_SENT = 'Report sent to the wizard team.';
+export const LOG_SENT_NOTE = 'Log sent. Thanks, it helps us fix this.';
 
 // A security stop or the agent's own [ABORT] is a decision, not an outage:
 // it shows its own outro, never the busy handoff.
@@ -71,8 +77,14 @@ export function failureReportProperties(
 ): Record<string, unknown> {
   return {
     error_code: session.outroData?.errorCode,
-    message: session.outroData?.message,
+    message: scrubHomePaths(redactSecrets(session.outroData?.message ?? '')),
     is_capacity: isCapacityFailure(session),
     log_tail: scrubHomePaths(redactSecrets(readRunLog())),
   };
+}
+
+export function failureCopy(
+  session: Pick<WizardSession, 'outroData' | 'credentials'>,
+): FailureCopy {
+  return isCapacityFailure(session) ? CAPACITY_COPY : RUN_FAILURE_COPY;
 }
