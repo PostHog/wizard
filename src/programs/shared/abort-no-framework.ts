@@ -1,4 +1,5 @@
 import { ErrorCodes } from '@shared/errors';
+import { POSTHOG_INSTALL_DOCS_URL } from '@shared/constants';
 import { OutroKind, type OutroData } from '@shared/outro';
 import { ProgramAbort } from '@programs/program-contract';
 
@@ -17,7 +18,7 @@ export function abortNoFrameworkDetected(
     instruction: 'Run the wizard from an app root directory.',
     body: "That's the folder containing package.json or an equivalent project file.",
     docsLabel: 'Supported frameworks and manual setup:',
-    docsUrl: 'https://posthog.com/docs/libraries',
+    docsUrl: POSTHOG_INSTALL_DOCS_URL,
     ...overrides,
   };
   // Hosts without an outro screen (CI) only see the message, so it carries the
