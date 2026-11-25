@@ -51,7 +51,7 @@ describe('getExitLine', () => {
     expect(lines).toContain(path);
     expect(line).not.toContain('wizard@posthog.com');
     expect(lines[lines.indexOf(path) + 2]).toBe(
-      "We've let the wizard team know.",
+      'We got the error automatically.',
     );
     expect(lines[lines.indexOf(path) + 3]).toMatch(/^Wizard log: \S/);
     expect(line).not.toContain('successfully');

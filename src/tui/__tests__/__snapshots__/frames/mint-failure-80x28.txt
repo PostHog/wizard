@@ -5,22 +5,22 @@
 
 
 
-  ╭──────────────────────────────────────────────────────────────────────────╮
-  │ ✘ The wizard is busy right now                                           │
-  │ The wizard's AI service is busy, so setup stopped before finishing.      │
-  │                                                                          │
-  │ Try this: run the wizard again in a few minutes, or hand the setup to    │
-  │ your own agent with the saved skill.                                     │
-  ╰──────────────────────────────────────────────────────────────────────────╯
 
-  We've let the wizard team know. Your log stays on this computer unless you
-  send it.
+  ✘ The wizard is busy right now
+  The wizard's AI service is busy, so setup stopped before finishing.
+
+  Try this: run the wizard again in a few minutes, or hand the setup to your
+  own agent with the saved skill.
+
+  We got the error automatically, but not your log. Sending it helps us find
+  the cause.
 
                           ▸ Send log to the wizard team
                             Open in Claude Code
                             Open in Codex
                             Save skill
                             Exit
+
 
 
 

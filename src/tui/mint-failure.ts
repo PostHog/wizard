@@ -21,7 +21,7 @@ const RUN_FAILURE_COPY: FailureCopy = {
 };
 
 export const REPORTED_NOTE =
-  "We've let the wizard team know. Your log stays on this computer unless you send it.";
+  'We got the error automatically, but not your log. Sending it helps us find the cause.';
 
 export const LOG_SENT_NOTE = 'Log sent. Thanks, it helps us fix this.';
 

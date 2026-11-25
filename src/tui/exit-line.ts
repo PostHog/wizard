@@ -126,7 +126,7 @@ function exitSummary(store: WizardStore): string {
       `${headline}. ${cause}`,
       spellbook &&
         `${DIM}Point your agent at this skill (triple-click to select):${RESET_ATTRS}\n${spellbook.path}`,
-      `We've let the wizard team know.\n${DIM}Wizard log:${RESET_ATTRS} ${getLogFilePath()}`,
+      `We got the error automatically.\n${DIM}Wizard log:${RESET_ATTRS} ${getLogFilePath()}`,
       loginBlock,
       costLine,
     ]

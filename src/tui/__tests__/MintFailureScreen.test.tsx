@@ -125,6 +125,8 @@ it.each([
   const { app } = setup(errorCode);
   await delay();
   expect(app.lastFrame()).toContain(headline);
-  expect(app.lastFrame()).toContain("We've let the wizard team know.");
+  expect(app.lastFrame()).toContain(
+    'We got the error automatically, but not your log.',
+  );
   expect(app.lastFrame()).not.toContain('agent failed');
 });

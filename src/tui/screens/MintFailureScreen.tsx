@@ -121,13 +121,7 @@ export function MintFailureScreen({
             </Box>
           </>
         ) : (
-          <Box
-            borderStyle="round"
-            borderColor={Colors.error}
-            flexDirection="column"
-            paddingX={1}
-            width="100%"
-          >
+          <Box flexDirection="column" width="100%">
             <Text color={Colors.error} bold>
               ✘ {copy.headline}
             </Text>
