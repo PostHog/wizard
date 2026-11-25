@@ -63,10 +63,6 @@ two run in parallel. So never invent a name that already exists somewhere else
   names, not secrets.
 - **Only when nothing references them yet** are you the one deciding. Use the
   names your skill documents for the mechanism that was actually wired.
-- **Never write upload credentials to a name the app's own code reads.**
-  `POSTHOG_API_KEY`, `POSTHOG_HOST` and `POSTHOG_PROJECT_TOKEN` belong to the
-  app's PostHog SDKs: the personal key written there replaces the project
-  token, and the app's events stop arriving.
 - **Either way, say which set you chose in your handoff, in full.** That is how
   `configure` and `wire-ci` learn what to match. A handoff that says "the usual
   variables" hands the next task the same guess you just made.
