@@ -20,12 +20,17 @@ import { PostHogIntegrationIntroScreen } from '../PostHogIntegrationIntroScreen'
 
 const PLAN: ProjectSelection = {
   repoType: 'monorepo',
-  picked: '.',
-  complete: true,
+  selectedProjectPath: '.',
+  isDiscoveryComplete: true,
   projects: [
-    { path: '.', offered: false, reason: 'workspace-root', mainApp: false },
-    { path: 'apps/web', offered: true, mainApp: false },
-    { path: 'apps/admin', offered: true, mainApp: false },
+    {
+      path: '.',
+      eligible: false,
+      exclusionReason: 'workspace-root',
+      isMainApp: false,
+    },
+    { path: 'apps/web', eligible: true, isMainApp: false },
+    { path: 'apps/admin', eligible: true, isMainApp: false },
   ],
 };
 

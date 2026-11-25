@@ -236,7 +236,7 @@ export const ACTION_REGISTRY: Partial<Record<string, DriverAction[]>> = {
       params: { project: 'project path, such as apps/web' },
       apply: (store, params) => {
         const project = requireString('pick_project', params, 'project');
-        const picker = store.projectPicker;
+        const picker = store.projectSelection;
         if (!picker || picker.ranking) {
           throw new Error(
             'pick_project: the project picker is still ranking projects',
@@ -244,12 +244,10 @@ export const ACTION_REGISTRY: Partial<Record<string, DriverAction[]>> = {
         }
         if (
           !picker.selection.projects.some(
-            (p) => p.offered && p.path === project,
+            (p) => p.eligible && p.path === project,
           )
         ) {
-          throw new Error(
-            `pick_project: the project picker does not offer "${project}"`,
-          );
+          throw new Error(`pick_project: "${project}" is not eligible`);
         }
         store.confirmProjectPick(project);
       },

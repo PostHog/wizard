@@ -181,14 +181,19 @@ export async function testDiscovery(
   const discovery = getDiscovery(session);
   const projects = getProjects(session);
   const tools = toolsByProject(discovery?.tools.tools ?? [], projects);
-  const requested = project === undefined ? undefined : session.runProject;
-  const selection = buildProjectSelection(session, config, requested);
+  const requestedProjectPath =
+    project === undefined ? undefined : session.runProject;
+  const projectSelection = buildProjectSelection(
+    session,
+    config,
+    requestedProjectPath,
+  );
   // A program that picks no project works where the run started.
-  const picked = picksProject(session, config)
-    ? selection.picked
+  const selectedProjectPath = picksProject(session, config)
+    ? projectSelection.selectedProjectPath
     : session.runProject;
   // The report reads top down: short facts first, each long list last.
-  const { projects: options, ...facts } = selection;
+  const { projects: options, ...facts } = projectSelection;
   return {
     program: config.id,
     mode: discovery?.mode ?? 'off',
@@ -216,8 +221,13 @@ export async function testDiscovery(
     decisions,
     projectSelection: {
       ...facts,
-      picked,
-      asks: askUserToSelectProject(session, config, selection, requested),
+      selectedProjectPath,
+      asks: askUserToSelectProject(
+        session,
+        config,
+        projectSelection,
+        requestedProjectPath,
+      ),
       projects: options,
     },
     projects: projects.map((project) => ({

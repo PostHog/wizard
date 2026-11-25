@@ -451,27 +451,34 @@ export class WizardStore implements TuiView {
     return this.$tui.get().mintHandoff;
   }
 
-  get projectPicker(): TuiState['projectPicker'] {
-    return this.$tui.get().projectPicker;
+  get projectSelection(): TuiState['projectSelection'] {
+    return this.$tui.get().projectSelection;
   }
 
   /** Open the project picker on the projects the run offers. `ranking` while a model source still answers. */
   showProjectPicker(selection: ProjectSelection, ranking: boolean): void {
-    this._write({ projectPicker: { selection, ranking, confirmed: null } });
+    this._write({
+      projectSelection: { selection, ranking, confirmedProjectPath: null },
+    });
   }
 
   /** The model sources answered: the project picker takes their selection. */
   setProjectsRanked(selection: ProjectSelection): void {
     // A pick made while the sources still answered stands.
-    const confirmed = this.projectPicker?.confirmed ?? null;
-    this._write({ projectPicker: { selection, ranking: false, confirmed } });
+    const confirmedProjectPath =
+      this.projectSelection?.confirmedProjectPath ?? null;
+    this._write({
+      projectSelection: { selection, ranking: false, confirmedProjectPath },
+    });
   }
 
   /** The person's pick on the project picker. */
   confirmProjectPick(projectPath: string): void {
-    const picker = this.projectPicker;
+    const picker = this.projectSelection;
     if (!picker) return;
-    this._write({ projectPicker: { ...picker, confirmed: projectPath } });
+    this._write({
+      projectSelection: { ...picker, confirmedProjectPath: projectPath },
+    });
   }
 
   /** Write TUI state, then `sessionWrites`' session fields, with one notification either way. */

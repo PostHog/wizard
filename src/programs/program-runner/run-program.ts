@@ -237,9 +237,9 @@ async function invokeProgram(
   };
   /**
    * The picker can still move the run: no caller named a project, and the
-   * selection offers one other than the project the run started in. What stops the
-   * run in that first project then waits for the pick, so a workspace root with
-   * no framework of its own still reaches the picker.
+   * selection has an eligible one other than the project the run started in.
+   * What stops the run in that first project then waits for the pick, so a
+   * workspace root with no framework of its own still reaches the picker.
    */
   const mayMove = async (): Promise<boolean> => {
     if (!config.appliesTo || input.project !== undefined) return false;
@@ -248,7 +248,7 @@ async function invokeProgram(
       picksProject(store.session, config) &&
       buildProjectSelection(store.session, config).projects.some(
         (project) =>
-          project.offered && project.path !== store.session.runProject,
+          project.eligible && project.path !== store.session.runProject,
       )
     );
   };
@@ -479,7 +479,7 @@ async function invokeProgram(
         if (picks) {
           target = await park(
             pickProject(config, store, {
-              requested:
+              requestedProjectPath:
                 input.project === undefined
                   ? undefined
                   : projectFromWorkspaceRoot(store.session, input.project),
@@ -756,22 +756,22 @@ async function pickProject(
   config: ProgramConfig,
   store: SessionStore,
   context: {
-    requested?: string;
+    requestedProjectPath?: string;
     workflow?: ProgramOptions['workflow'];
     emit: (event: AgentProgress) => void;
     signal: AbortSignal;
   },
 ): Promise<string | null> {
-  const { requested, workflow, emit, signal } = context;
+  const { requestedProjectPath, workflow, emit, signal } = context;
   const buildSelection = (): ProjectSelection =>
-    buildProjectSelection(store.session, config, requested);
+    buildProjectSelection(store.session, config, requestedProjectPath);
   // Agentic detection ranks only where there is a choice to make, and only once.
   const ranked = getProjects(store.session).some((project) =>
     Object.values(project.claims ?? {}).some((claims) =>
       claims.some((claim) => claim.source === 'agentic'),
     ),
   );
-  const rank =
+  const rankProjects =
     config.rankWith?.includes('agentic') && !ranked
       ? async (): Promise<ProjectSelection> => {
           try {
@@ -794,22 +794,27 @@ async function pickProject(
         }
       : undefined;
 
-  let selection = buildSelection();
-  let picked = selection.picked;
+  let projectSelection = buildSelection();
+  let picked = projectSelection.selectedProjectPath;
   let pickedBy: 'person' | 'caller' | 'default' =
-    requested === undefined ? 'default' : 'caller';
+    requestedProjectPath === undefined ? 'default' : 'caller';
   const asks =
     workflow !== undefined &&
-    askUserToSelectProject(store.session, config, selection, requested);
+    askUserToSelectProject(
+      store.session,
+      config,
+      projectSelection,
+      requestedProjectPath,
+    );
   if (asks) {
     const go = await workflow.confirmStep(
       {
         kind: 'project-selection',
         programId: config.id,
         installDir: store.session.installDir,
-        selection,
-        rank,
-        pick: (projectPath) => {
+        projectSelection,
+        rankProjects,
+        selectProject: (projectPath) => {
           picked = projectPath;
           pickedBy = 'person';
         },
@@ -817,20 +822,26 @@ async function pickProject(
       { signal },
     );
     if (!go) return null;
-    selection = buildSelection();
+    projectSelection = buildSelection();
   } else if (
-    requested === undefined &&
-    rank &&
-    shouldRankProjects(store.session, selection)
+    requestedProjectPath === undefined &&
+    rankProjects &&
+    shouldRankProjects(store.session, projectSelection)
   ) {
     // Nobody to ask: the ranking picks, as a person reading it would.
-    selection = await rank();
+    projectSelection = await rankProjects();
     // A run cancelled during the ranking reports no pick.
     if (signal.aborted) return null;
-    picked = selection.picked;
+    picked = projectSelection.selectedProjectPath;
   }
-  reportProjectsDiscovered(store.session, selection, config.id);
-  reportProjectsSelected(store.session, selection, picked, config.id, pickedBy);
+  reportProjectsDiscovered(store.session, projectSelection, config.id);
+  reportProjectsSelected(
+    store.session,
+    projectSelection,
+    picked,
+    config.id,
+    pickedBy,
+  );
   return picked;
 }
 

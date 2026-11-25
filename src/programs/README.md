@@ -149,16 +149,16 @@ is that directory, so it reads that directory's traits.
 With `wizard-project-discovery` on, a program with `appliesTo` picks its project
 after login. The mode is the one discovery ran in, `Discovery.mode`, so
 discovery and the picker always agree. `runProgram` builds the project selection,
-and when more than one project is offered in a monorepo it asks the host through
+and when more than one project is eligible in a monorepo it asks the host through
 the `project-selection` workflow step. A repo is a monorepo when static discovery finds a
 workspace, when a model source calls it one, or when a model source names a main
 app other than the run project. The TUI shows the project picker in the default
-flow; the picked project comes first, so Enter keeps the default. A headless or
+flow; the selected project comes first, so Enter keeps the default. A headless or
 `--ci` run asks nobody: it takes `--project <path>`, which is a path from the
 workspace root in every mode, else the ranking's pick, else the default. A
 program's `rankWith: ['agentic']` runs agentic detection where there is a choice
 to make, so the main app is marked. A CI run also runs it where several projects
-are offered and no model source has ranked them, and a run at the root then
+are eligible and no model source has ranked them, and a run at the root then
 takes the main app it names. With no workspace marker, the run directory is that
 root. A pick other than the run project points the session at
 it and runs the program's detection again there. When the flag answers

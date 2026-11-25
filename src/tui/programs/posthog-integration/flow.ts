@@ -48,8 +48,8 @@ export const POSTHOG_INTEGRATION_FLOW: FlowStep[] = [
     id: 'project-selection',
     label: 'Project',
     screenId: 'project-picker',
-    show: (tui) => tui.projectPicker !== null,
-    isComplete: (tui) => tui.projectPicker?.confirmed != null,
+    show: (tui) => tui.projectSelection !== null,
+    isComplete: (tui) => tui.projectSelection?.confirmedProjectPath != null,
   },
   {
     id: 'run',

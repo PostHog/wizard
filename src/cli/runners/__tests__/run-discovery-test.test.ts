@@ -42,21 +42,21 @@ const report: DiscoveryTestReport = {
   toolsMatched: true,
   projectSelection: {
     repoType: 'monorepo',
-    complete: true,
-    picked: 'apps/web',
+    isDiscoveryComplete: true,
+    selectedProjectPath: 'apps/web',
     asks: true,
     projects: [
       {
         path: 'apps/web',
         frameworkName: 'Next.js',
-        offered: true,
-        mainApp: true,
+        eligible: true,
+        isMainApp: true,
       },
       {
         path: 'packages/ui',
-        offered: false,
-        reason: 'library',
-        mainApp: false,
+        eligible: false,
+        exclusionReason: 'library',
+        isMainApp: false,
       },
     ],
   },
@@ -90,7 +90,7 @@ describe('test discovery mode', () => {
       ],
       projectSelection: {
         ...report.projectSelection,
-        picked: `apps/${escape}web`,
+        selectedProjectPath: `apps/${escape}web`,
         projects: [
           { ...report.projectSelection.projects[0], path: `apps/${escape}web` },
         ],
@@ -135,7 +135,7 @@ describe('test discovery mode', () => {
     expect(text).toMatch(/posthogInstalled\s+no\s+static\n/);
     expect(text).toMatch(/tools\s+Stripe/);
     expect(text).toContain('asks after login, picks apps/web');
-    expect(text).toMatch(/packages\/ui\s+not offered: library/);
+    expect(text).toMatch(/packages\/ui\s+not eligible: library/);
   });
 
   it('names every source that gave the value a run uses, with its confidence', () => {

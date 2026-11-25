@@ -274,37 +274,47 @@ interface Fixture {
   arrange?: (store: WizardStore) => void;
 }
 
-/** A pnpm monorepo's project selection: two apps offered, the rest listed with a reason. */
+/** A pnpm monorepo's project selection: two apps eligible, the rest listed with a reason. */
 const PLAN_OFFER: ProjectSelection = {
   repoType: 'monorepo',
   workspaceTool: 'pnpm',
-  complete: true,
-  picked: 'apps/web',
+  isDiscoveryComplete: true,
+  selectedProjectPath: 'apps/web',
   projects: [
-    { path: '.', offered: false, reason: 'workspace-root', mainApp: false },
+    {
+      path: '.',
+      eligible: false,
+      exclusionReason: 'workspace-root',
+      isMainApp: false,
+    },
     {
       path: 'apps/web',
       framework: Integration.nextjs,
       frameworkName: 'Next.js',
-      offered: true,
-      mainApp: true,
+      eligible: true,
+      isMainApp: true,
     },
     {
       path: 'apps/docs',
       framework: Integration.vue,
       frameworkName: 'Vue',
-      offered: false,
-      reason: 'has-posthog',
-      mainApp: false,
+      eligible: false,
+      exclusionReason: 'has-posthog',
+      isMainApp: false,
     },
     {
       path: 'apps/api',
       framework: Integration.javascriptNode,
       frameworkName: 'Node.js',
-      offered: true,
-      mainApp: false,
+      eligible: true,
+      isMainApp: false,
     },
-    { path: 'packages/ui', offered: false, reason: 'library', mainApp: false },
+    {
+      path: 'packages/ui',
+      eligible: false,
+      exclusionReason: 'library',
+      isMainApp: false,
+    },
   ],
 };
 

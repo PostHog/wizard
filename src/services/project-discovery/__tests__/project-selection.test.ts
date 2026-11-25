@@ -90,12 +90,14 @@ async function unmarked(args: { ci?: boolean } = {}): Promise<SessionStore> {
 }
 
 const row = (
-  selection: ReturnType<typeof buildProjectSelection>,
+  projectSelection: ReturnType<typeof buildProjectSelection>,
   projectPath: string,
-) => selection.projects.find((project) => project.path === projectPath);
+) => projectSelection.projects.find((project) => project.path === projectPath);
 
 beforeEach(() => {
-  repo = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'selection-')));
+  repo = fs.realpathSync(
+    fs.mkdtempSync(path.join(os.tmpdir(), 'project-selection-')),
+  );
   vi.mocked(analytics.wizardCapture).mockClear();
   vi.mocked(analytics.getAllFlagsForWizard).mockResolvedValue({
     [WIZARD_PROJECT_DISCOVERY_FLAG_KEY]: 'one-project',
@@ -105,29 +107,29 @@ beforeEach(() => {
 afterEach(() => fs.rmSync(repo, { recursive: true, force: true }));
 
 describe('buildProjectSelection', () => {
-  it('offers the apps and gives a reason for every other project', async () => {
+  it('marks the apps eligible and gives a reason for every other project', async () => {
     const { session } = await discovered();
-    const selection = buildProjectSelection(session, PROGRAM);
-    expect(selection.repoType).toBe('monorepo');
-    expect(row(selection, 'apps/web')).toMatchObject({
-      offered: true,
+    const projectSelection = buildProjectSelection(session, PROGRAM);
+    expect(projectSelection.repoType).toBe('monorepo');
+    expect(row(projectSelection, 'apps/web')).toMatchObject({
+      eligible: true,
       frameworkName: 'Next.js',
     });
-    expect(row(selection, 'apps/admin')?.offered).toBe(true);
-    expect(row(selection, 'apps/docs')).toMatchObject({
-      offered: false,
-      reason: 'has-posthog',
+    expect(row(projectSelection, 'apps/admin')?.eligible).toBe(true);
+    expect(row(projectSelection, 'apps/docs')).toMatchObject({
+      eligible: false,
+      exclusionReason: 'has-posthog',
     });
-    expect(row(selection, 'packages/ui')).toMatchObject({
-      offered: false,
-      reason: 'library',
+    expect(row(projectSelection, 'packages/ui')).toMatchObject({
+      eligible: false,
+      exclusionReason: 'library',
     });
     // The root only holds the apps, so the run starting there does not offer it.
-    expect(row(selection, '.')).toMatchObject({
-      offered: false,
-      reason: 'workspace-root',
+    expect(row(projectSelection, '.')).toMatchObject({
+      eligible: false,
+      exclusionReason: 'workspace-root',
     });
-    expect(hasMultipleEligibleProjects(selection)).toBe(true);
+    expect(hasMultipleEligibleProjects(projectSelection)).toBe(true);
   });
 
   it('asks nothing at a workspace root that holds one app, and takes that app', async () => {
@@ -137,33 +139,37 @@ describe('buildProjectSelection', () => {
     write('apps/web/package.json', pkg({ next: '15.0.0' }));
     const store = new SessionStore(buildSession({ installDir: repo }));
     await runDiscovery({ id: 'posthog-integration' }, store.readyContext());
-    const selection = buildProjectSelection(store.session, PROGRAM);
-    expect(hasMultipleEligibleProjects(selection)).toBe(false);
-    expect(selection.picked).toBe('apps/web');
+    const projectSelection = buildProjectSelection(store.session, PROGRAM);
+    expect(hasMultipleEligibleProjects(projectSelection)).toBe(false);
+    expect(projectSelection.selectedProjectPath).toBe('apps/web');
   });
 
   it('keeps the project the run started in', async () => {
     const { session } = await discovered('apps/admin');
     expect(session.runProject).toBe('apps/admin');
-    expect(buildProjectSelection(session, PROGRAM).picked).toBe('apps/admin');
+    expect(buildProjectSelection(session, PROGRAM).selectedProjectPath).toBe(
+      'apps/admin',
+    );
   });
 
   it('takes the main app at a workspace root, once a source names one', async () => {
     const store = await discovered();
     // No model answered: several apps, so the run stays where it started.
-    expect(buildProjectSelection(store.session, PROGRAM).picked).toBe('.');
+    expect(
+      buildProjectSelection(store.session, PROGRAM).selectedProjectPath,
+    ).toBe('.');
 
     setTrait(store.readyContext(), 'apps/web', 'mainApp', 'yes', 'agentic');
-    const selection = buildProjectSelection(store.session, PROGRAM);
-    expect(selection.picked).toBe('apps/web');
-    expect(row(selection, 'apps/web')?.mainApp).toBe(true);
+    const projectSelection = buildProjectSelection(store.session, PROGRAM);
+    expect(projectSelection.selectedProjectPath).toBe('apps/web');
+    expect(row(projectSelection, 'apps/web')?.isMainApp).toBe(true);
   });
 
   it('starts on the project the caller asked for', async () => {
     const { session } = await discovered();
-    expect(buildProjectSelection(session, PROGRAM, 'apps/admin').picked).toBe(
-      'apps/admin',
-    );
+    expect(
+      buildProjectSelection(session, PROGRAM, 'apps/admin').selectedProjectPath,
+    ).toBe('apps/admin');
   });
 
   it('asks nothing in a single app that holds manifests below it', async () => {
@@ -172,11 +178,11 @@ describe('buildProjectSelection', () => {
     write('tools/seed/package.json', pkg());
     const store = new SessionStore(buildSession({ installDir: repo }));
     await runDiscovery({ id: 'posthog-integration' }, store.readyContext());
-    const selection = buildProjectSelection(store.session, PROGRAM);
-    expect(selection.repoType).toBe('single');
-    expect(selection.projects).toHaveLength(2);
-    expect(selection.picked).toBe('.');
-    expect(hasMultipleEligibleProjects(selection)).toBe(false);
+    const projectSelection = buildProjectSelection(store.session, PROGRAM);
+    expect(projectSelection.repoType).toBe('single');
+    expect(projectSelection.projects).toHaveLength(2);
+    expect(projectSelection.selectedProjectPath).toBe('.');
+    expect(hasMultipleEligibleProjects(projectSelection)).toBe(false);
   });
 
   it('keeps a workspace root that is an app itself', async () => {
@@ -187,21 +193,23 @@ describe('buildProjectSelection', () => {
     const store = new SessionStore(buildSession({ installDir: repo }));
     await runDiscovery({ id: 'posthog-integration' }, store.readyContext());
     store.setFrameworkConfig(Integration.nextjs, null);
-    const selection = buildProjectSelection(store.session, PROGRAM);
-    expect(selection.repoType).toBe('monorepo');
-    expect(row(selection, '.')).toMatchObject({ offered: true });
-    expect(row(selection, '.')?.reason).toBeUndefined();
-    expect(selection.picked).toBe('.');
+    const projectSelection = buildProjectSelection(store.session, PROGRAM);
+    expect(projectSelection.repoType).toBe('monorepo');
+    expect(row(projectSelection, '.')).toMatchObject({ eligible: true });
+    expect(row(projectSelection, '.')?.exclusionReason).toBeUndefined();
+    expect(projectSelection.selectedProjectPath).toBe('.');
   });
 
   it('has no choice to offer in a single-app repo', async () => {
     write('package.json', pkg({ next: '15.0.0' }));
     const store = new SessionStore(buildSession({ installDir: repo }));
     await runDiscovery({ id: 'posthog-integration' }, store.readyContext());
-    const selection = buildProjectSelection(store.session, PROGRAM);
-    expect(selection.projects.map((project) => project.path)).toEqual(['.']);
-    expect(selection.picked).toBe('.');
-    expect(hasMultipleEligibleProjects(selection)).toBe(false);
+    const projectSelection = buildProjectSelection(store.session, PROGRAM);
+    expect(projectSelection.projects.map((project) => project.path)).toEqual([
+      '.',
+    ]);
+    expect(projectSelection.selectedProjectPath).toBe('.');
+    expect(hasMultipleEligibleProjects(projectSelection)).toBe(false);
   });
 
   it('offers a choice with no workspace marker, once a model names a main app elsewhere', async () => {
@@ -209,13 +217,13 @@ describe('buildProjectSelection', () => {
     const before = buildProjectSelection(store.session, PROGRAM);
     expect(before.repoType).toBe('single');
     expect(hasMultipleEligibleProjects(before)).toBe(false);
-    expect(before.picked).toBe('.');
+    expect(before.selectedProjectPath).toBe('.');
 
     setTrait(store.readyContext(), 'web', 'mainApp', 'yes', 'decisions');
-    const selection = buildProjectSelection(store.session, PROGRAM);
-    expect(selection.repoType).toBe('single');
-    expect(hasMultipleEligibleProjects(selection)).toBe(true);
-    expect(selection.picked).toBe('web');
+    const projectSelection = buildProjectSelection(store.session, PROGRAM);
+    expect(projectSelection.repoType).toBe('single');
+    expect(hasMultipleEligibleProjects(projectSelection)).toBe(true);
+    expect(projectSelection.selectedProjectPath).toBe('web');
   });
 
   it('offers a choice where a model calls the repo a monorepo and names no main app', async () => {
@@ -225,9 +233,9 @@ describe('buildProjectSelection', () => {
       { repoType: 'monorepo', projects: [] },
       'agentic',
     );
-    const selection = buildProjectSelection(store.session, PROGRAM);
-    expect(hasMultipleEligibleProjects(selection)).toBe(true);
-    expect(selection.picked).toBe('.');
+    const projectSelection = buildProjectSelection(store.session, PROGRAM);
+    expect(hasMultipleEligibleProjects(projectSelection)).toBe(true);
+    expect(projectSelection.selectedProjectPath).toBe('.');
   });
 
   it('asks nothing where a model calls the repo single and names the run project', async () => {
@@ -252,12 +260,12 @@ describe('buildProjectSelection', () => {
       },
       'agentic',
     );
-    const selection = buildProjectSelection(store.session, PROGRAM);
+    const projectSelection = buildProjectSelection(store.session, PROGRAM);
     expect(
-      selection.projects.filter((project) => project.offered),
+      projectSelection.projects.filter((project) => project.eligible),
     ).toHaveLength(2);
-    expect(hasMultipleEligibleProjects(selection)).toBe(false);
-    expect(selection.picked).toBe('.');
+    expect(hasMultipleEligibleProjects(projectSelection)).toBe(false);
+    expect(projectSelection.selectedProjectPath).toBe('.');
   });
 });
 
@@ -344,11 +352,11 @@ describe('pickLeavesRunProject', () => {
 describe('project selection events', () => {
   it('sends nothing before the person agrees to share discovery', async () => {
     const { session } = await discovered();
-    const selection = buildProjectSelection(session, PROGRAM);
-    reportProjectsDiscovered(session, selection, 'posthog-integration');
+    const projectSelection = buildProjectSelection(session, PROGRAM);
+    reportProjectsDiscovered(session, projectSelection, 'posthog-integration');
     reportProjectsSelected(
       session,
-      selection,
+      projectSelection,
       '.',
       'posthog-integration',
       'default',
@@ -359,11 +367,15 @@ describe('project selection events', () => {
   it('reports the list and grades each source against the pick', async () => {
     const store = await discovered('.', { ci: true });
     setTrait(store.readyContext(), 'apps/web', 'mainApp', 'yes', 'agentic');
-    const selection = buildProjectSelection(store.session, PROGRAM);
-    reportProjectsDiscovered(store.session, selection, 'posthog-integration');
+    const projectSelection = buildProjectSelection(store.session, PROGRAM);
+    reportProjectsDiscovered(
+      store.session,
+      projectSelection,
+      'posthog-integration',
+    );
     reportProjectsSelected(
       store.session,
-      selection,
+      projectSelection,
       'apps/admin',
       'posthog-integration',
       'person',

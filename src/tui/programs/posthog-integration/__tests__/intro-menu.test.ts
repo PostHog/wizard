@@ -153,13 +153,18 @@ describe('introEntries', () => {
 });
 
 describe('a run that picks its project after login', () => {
-  const selection = (offered: string[]): ProjectSelection => ({
+  const selection = (eligible: string[]): ProjectSelection => ({
     repoType: 'monorepo',
-    picked: offered[0],
-    complete: true,
+    selectedProjectPath: eligible[0],
+    isDiscoveryComplete: true,
     projects: [
-      { path: '.', offered: false, reason: 'workspace-root', mainApp: false },
-      ...offered.map((path) => ({ path, offered: true, mainApp: false })),
+      {
+        path: '.',
+        eligible: false,
+        exclusionReason: 'workspace-root',
+        isMainApp: false,
+      },
+      ...eligible.map((path) => ({ path, eligible: true, isMainApp: false })),
     ],
   });
 
@@ -182,7 +187,7 @@ describe('a run that picks its project after login', () => {
     });
   });
 
-  it('counts the projects offered when there are several', () => {
+  it('counts the eligible projects when there are several', () => {
     expect(
       introProjectsRow(selection(['apps/web', 'apps/admin'])),
     ).toMatchObject({

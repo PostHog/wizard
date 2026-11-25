@@ -1,7 +1,7 @@
 /**
  * ProjectPickerScreen: after login, lists the repo's projects and lets the person pick
- * the one the run works in. The project that starts picked comes first, so
- * Enter keeps the run's default. A project the program is not offered stays
+ * the one the run works in. The project that starts selected comes first, so
+ * Enter keeps the run's default. A project that is not eligible stays
  * listed, greyed, with its reason.
  */
 
@@ -35,37 +35,37 @@ const where = (project: ProjectOption): string =>
 /** One project as a picker row: its path, its framework, and why it is greyed out. */
 export function pickerOption(
   project: ProjectOption,
-  picked: string,
+  selectedProjectPath: string,
 ): PickerOption<string> {
-  const isPicked = project.path === picked;
+  const isSelected = project.path === selectedProjectPath;
   const hints = [
     project.frameworkName,
-    project.mainApp ? 'main app' : undefined,
-    project.reason ? REASONS[project.reason] : undefined,
+    project.isMainApp ? 'main app' : undefined,
+    project.exclusionReason ? REASONS[project.exclusionReason] : undefined,
   ].filter((hint): hint is string => hint !== undefined);
   return {
     label: where(project),
     value: project.path,
     hint: hints.join(` ${Icons.bullet} `) || undefined,
-    disabled: !project.offered,
-    icon: project.offered
-      ? { glyph: isPicked ? Icons.diamond : Icons.diamondOpen }
+    disabled: !project.eligible,
+    icon: project.eligible
+      ? { glyph: isSelected ? Icons.diamond : Icons.diamondOpen }
       : undefined,
   };
 }
 
-/** The picker's rows: the picked project first when it is offered, then the others offered, then the rest. */
+/** The picker's rows: the selected project first when it is eligible, then the other eligible ones, then the rest. */
 export function pickerOptions(
   projects: readonly ProjectOption[],
-  picked: string,
+  selectedProjectPath: string,
 ): PickerOption<string>[] {
   const rank = (project: ProjectOption): number => {
-    if (!project.offered) return 2;
-    return project.path === picked ? 0 : 1;
+    if (!project.eligible) return 2;
+    return project.path === selectedProjectPath ? 0 : 1;
   };
   return [...projects]
     .sort((a, b) => rank(a) - rank(b))
-    .map((project) => pickerOption(project, picked));
+    .map((project) => pickerOption(project, selectedProjectPath));
 }
 
 export const ProjectPickerScreen = ({ store }: ProjectPickerScreenProps) => {
@@ -74,7 +74,7 @@ export const ProjectPickerScreen = ({ store }: ProjectPickerScreenProps) => {
     () => store.getSnapshot(),
   );
 
-  const picker = store.projectPicker;
+  const picker = store.projectSelection;
   if (!picker) return <LoadingBox message="Looking for your projects..." />;
   const { selection, ranking } = picker;
 
@@ -87,7 +87,7 @@ export const ProjectPickerScreen = ({ store }: ProjectPickerScreenProps) => {
             ? `a ${selection.workspaceTool ?? ''} monorepo`.replace('  ', ' ')
             : 'several projects'}
         </Text>
-        {!selection.complete && (
+        {!selection.isDiscoveryComplete && (
           <Text dimColor>
             This repo is large, so some projects may be missing.
           </Text>
@@ -99,7 +99,10 @@ export const ProjectPickerScreen = ({ store }: ProjectPickerScreenProps) => {
       ) : (
         <PickerMenu
           message="Which project should PostHog be set up in?"
-          options={pickerOptions(selection.projects, selection.picked)}
+          options={pickerOptions(
+            selection.projects,
+            selection.selectedProjectPath,
+          )}
           onSelect={(value) => {
             const projectPath = Array.isArray(value) ? value[0] : value;
             store.confirmProjectPick(projectPath);

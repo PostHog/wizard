@@ -76,7 +76,7 @@ export type TuiState = {
   /** How the user left the mint-failure screen; null until then. */
   mintHandoff: 'continue' | 'exit' | null;
   /** The project picker's state; null until the run offers several projects. */
-  projectPicker: ProjectPickerView | null;
+  projectSelection: ProjectPickerView | null;
 };
 
 /** What the project picker shows: the projects offered, and the person's pick once they confirm. */
@@ -85,7 +85,7 @@ export type ProjectPickerView = {
   /** A model source is still answering, so the main app is not marked yet. */
   ranking: boolean;
   /** The project the person confirmed; null until they do. */
-  confirmed: string | null;
+  confirmedProjectPath: string | null;
 };
 
 /** What a step predicate reads: the shared session and the TUI's own state. A `WizardStore` is one. */
@@ -126,6 +126,6 @@ export function initialTuiState(
     portConflictProcess: null,
     spellbook: null,
     mintHandoff: null,
-    projectPicker: null,
+    projectSelection: null,
   };
 }

@@ -180,18 +180,21 @@ export function formatDiscoveryTest(report: DiscoveryTestReport): string {
     `Project selection for ${report.program}: ${
       report.mode === 'off'
         ? `not used while the flag is off; the run works in ${clean(
-            projectSelection.picked,
+            projectSelection.selectedProjectPath,
           )}`
         : `${
             projectSelection.asks ? 'asks after login' : 'asks nothing'
-          }, picks ${clean(projectSelection.picked)}`
+          }, picks ${clean(projectSelection.selectedProjectPath)}`
     }`,
     ...projectSelection.projects.map((project) => {
-      const mark = project.path === projectSelection.picked ? '*' : ' ';
+      const mark =
+        project.path === projectSelection.selectedProjectPath ? '*' : ' ';
       const detail = [
         project.frameworkName,
-        project.mainApp ? 'main app' : undefined,
-        project.offered ? undefined : `not offered: ${project.reason ?? ''}`,
+        project.isMainApp ? 'main app' : undefined,
+        project.eligible
+          ? undefined
+          : `not eligible: ${project.exclusionReason ?? ''}`,
       ].filter((part): part is string => part !== undefined);
       return `  ${mark} ${pad(clean(project.path), 24)} ${detail.join(', ')}`;
     }),

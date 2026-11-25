@@ -263,8 +263,8 @@ The report holds:
   uses, and the source that value came from. A source that said otherwise
   follows in brackets, and `(unsettled)` marks a trait whose sources disagree
 - the catalog tools found in each project
-- the project selection the program would open after login: the projects offered, a reason
-  for each of the others, the one that starts picked, and whether the run would
+- the project selection the program would open after login: the eligible projects, an exclusion
+  reason for each of the others, the one that starts selected, and whether the run would
   ask. A program that picks no project, a CI run and a run with the flag off all
   ask nothing and work in the run project
 

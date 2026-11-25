@@ -112,13 +112,13 @@ export const PostHogIntegrationIntroScreen = ({
   const { skillEntry, fetchFailed } = useSkillEntry(session.skillId);
   const detecting = !session.detectionComplete;
   const program = findProgramConfig(store.router.activeProgram);
-  const selection =
+  const projectSelection =
     program && !detecting ? buildProjectSelection(session, program) : null;
   // The pick after login takes the run elsewhere, so this project's detection is not the run's.
   const picksLater =
     program !== undefined &&
-    selection !== null &&
-    pickLeavesRunProject(session, program, selection);
+    projectSelection !== null &&
+    pickLeavesRunProject(session, program, projectSelection);
   const config = picksLater ? null : session.frameworkConfig;
   const frameworkLabel = picksLater
     ? undefined
@@ -254,7 +254,9 @@ export const PostHogIntegrationIntroScreen = ({
   // ── Detection rows ─────────────────────────────────────────────────
 
   const detectionRows: DetectionRow[] = [];
-  if (picksLater && selection) detectionRows.push(introProjectsRow(selection));
+  if (picksLater && projectSelection) {
+    detectionRows.push(introProjectsRow(projectSelection));
+  }
   if (frameworkLabel) {
     const suffixParts: string[] = [];
     if (!manuallySelected) suffixParts.push('(detected)');

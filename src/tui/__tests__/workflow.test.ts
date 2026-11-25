@@ -117,17 +117,20 @@ describe('tuiWorkflow', () => {
   it('holds the project selection step on the project picker until the person picks, then holds the run behind it', async () => {
     const store = new WizardStore('posthog-integration');
     loggedIn(store);
-    const selection: ProjectSelection = {
+    const projectSelection: ProjectSelection = {
       repoType: 'monorepo',
-      complete: true,
-      picked: 'apps/web',
+      isDiscoveryComplete: true,
+      selectedProjectPath: 'apps/web',
       projects: [
-        { path: 'apps/web', offered: true, mainApp: false },
-        { path: 'apps/api', offered: true, mainApp: false },
+        { path: 'apps/web', eligible: true, isMainApp: false },
+        { path: 'apps/api', eligible: true, isMainApp: false },
       ],
     };
-    const ranked: ProjectSelection = { ...selection, picked: 'apps/api' };
-    const pick = vi.fn();
+    const ranked: ProjectSelection = {
+      ...projectSelection,
+      selectedProjectPath: 'apps/api',
+    };
+    const selectProject = vi.fn();
     const signal = new AbortController().signal;
     const host = tuiWorkflow(store, 'posthog-integration');
 
@@ -136,26 +139,26 @@ describe('tuiWorkflow', () => {
         kind: 'project-selection',
         programId: 'posthog-integration',
         installDir: '/repo',
-        selection,
-        rank: () => Promise.resolve(ranked),
-        pick,
+        projectSelection,
+        rankProjects: () => Promise.resolve(ranked),
+        selectProject,
       },
       { signal },
     );
     expect(await settles(step)).toBe(false);
     // The model sources answered: the screen shows their selection.
-    expect(store.projectPicker).toEqual({
+    expect(store.projectSelection).toEqual({
       selection: ranked,
       ranking: false,
-      confirmed: null,
+      confirmedProjectPath: null,
     });
     expect(store.currentScreen).toBe('project-picker');
 
     store.confirmProjectPick('apps/api');
     expect(await step).toBe(true);
-    expect(pick).toHaveBeenCalledWith('apps/api');
-    expect(pickerOptions(ranked.projects, ranked.picked)[0].value).toBe(
-      'apps/api',
-    );
+    expect(selectProject).toHaveBeenCalledWith('apps/api');
+    expect(
+      pickerOptions(ranked.projects, ranked.selectedProjectPath)[0].value,
+    ).toBe('apps/api');
   });
 });

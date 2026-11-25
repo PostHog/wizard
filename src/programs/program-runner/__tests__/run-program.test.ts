@@ -1652,7 +1652,7 @@ describe('runProgram', () => {
       const host = workflow();
       host.confirmStep.mockImplementation((step: ProgramStep) => {
         host.steps.push(step);
-        if (step.kind === 'project-selection') step.pick('apps/api');
+        if (step.kind === 'project-selection') step.selectProject('apps/api');
         return Promise.resolve(true);
       });
 
@@ -1667,7 +1667,7 @@ describe('runProgram', () => {
         (step) => step.kind === 'project-selection',
       );
       expect(selectionStep).toMatchObject({
-        selection: { repoType: 'monorepo', picked: '.' },
+        projectSelection: { repoType: 'monorepo', selectedProjectPath: '.' },
       });
       expect(agentInput().installDir).toBe(path.join(repo, 'apps/api'));
       expect(s.session.runProject).toBe('apps/api');
@@ -1677,7 +1677,8 @@ describe('runProgram', () => {
       const s = pairStore();
       const host = workflow();
       host.confirmStep.mockImplementation((step: ProgramStep) => {
-        if (step.kind === 'project-selection') step.pick(step.selection.picked);
+        if (step.kind === 'project-selection')
+          step.selectProject(step.projectSelection.selectedProjectPath);
         return Promise.resolve(true);
       });
 
@@ -1709,7 +1710,9 @@ describe('runProgram', () => {
         host.confirmStep.mockImplementation((step: ProgramStep) => {
           host.steps.push(step);
           if (step.kind === 'project-selection')
-            step.pick(projectPath ?? step.selection.picked);
+            step.selectProject(
+              projectPath ?? step.projectSelection.selectedProjectPath,
+            );
           return Promise.resolve(true);
         });
         return host;
@@ -1818,8 +1821,11 @@ describe('runProgram', () => {
       host.confirmStep.mockImplementation(async (step: ProgramStep) => {
         if (step.kind !== 'project-selection') return true;
         // What the project picker does: rank once it opens, then confirm the project that starts picked.
-        const ranked = await step.rank?.();
-        step.pick(ranked?.picked ?? step.selection.picked);
+        const ranked = await step.rankProjects?.();
+        step.selectProject(
+          ranked?.selectedProjectPath ??
+            step.projectSelection.selectedProjectPath,
+        );
         return true;
       });
       const s = pairStore();
@@ -1938,7 +1944,9 @@ describe('runProgram', () => {
       await new Promise((resolve) => setImmediate(resolve));
 
       expect(result.outcome).toBe(RunOutcome.Aborted);
-      expect(buildProjectSelection(s.session, config).picked).toBe('.');
+      expect(buildProjectSelection(s.session, config).selectedProjectPath).toBe(
+        '.',
+      );
       expect(analytics.wizardCapture).not.toHaveBeenCalledWith(
         'projects selected',
         expect.anything(),
@@ -2210,7 +2218,7 @@ describe('runProgram', () => {
         }
         const host = workflow();
         host.confirmStep.mockImplementation((step: ProgramStep) => {
-          if (step.kind === 'project-selection') step.pick('apps/api');
+          if (step.kind === 'project-selection') step.selectProject('apps/api');
           return Promise.resolve(true);
         });
 

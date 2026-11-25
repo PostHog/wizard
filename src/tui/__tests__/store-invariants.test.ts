@@ -148,9 +148,9 @@ interface MutationCase {
 
 const PLAN_OFFER: ProjectSelection = {
   repoType: 'single',
-  projects: [{ path: '.', offered: true, mainApp: false }],
-  picked: '.',
-  complete: true,
+  projects: [{ path: '.', eligible: true, isMainApp: false }],
+  selectedProjectPath: '.',
+  isDiscoveryComplete: true,
 };
 
 const MUTATIONS: MutationCase[] = [
@@ -673,7 +673,10 @@ describe('store invariants', () => {
       s.showProjectPicker(PLAN_OFFER, true);
       s.confirmProjectPick('.');
       s.setProjectsRanked(PLAN_OFFER);
-      expect(s.projectPicker).toMatchObject({ ranking: false, confirmed: '.' });
+      expect(s.projectSelection).toMatchObject({
+        ranking: false,
+        confirmedProjectPath: '.',
+      });
     });
   });
 

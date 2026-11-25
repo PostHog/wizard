@@ -51,14 +51,18 @@ export function introEntries(): IntroEntry[] {
 }
 
 /** The intro's row for a workspace whose project is picked after login, in place of a framework. */
-export function introProjectsRow(selection: ProjectSelection): DetectionRow {
-  const offered = selection.projects.filter((project) => project.offered);
-  // One project offered is the one the run takes; several are chosen among.
-  return offered.length === 1
-    ? { label: 'Project', value: offered[0].path }
+export function introProjectsRow(
+  projectSelection: ProjectSelection,
+): DetectionRow {
+  const eligible = projectSelection.projects.filter(
+    (project) => project.eligible,
+  );
+  // One eligible project is the one the run takes; several are chosen among.
+  return eligible.length === 1
+    ? { label: 'Project', value: eligible[0].path }
     : {
         label: 'Projects',
-        value: `${offered.length} found`,
+        value: `${eligible.length} found`,
         suffix: '(one is chosen after login)',
       };
 }

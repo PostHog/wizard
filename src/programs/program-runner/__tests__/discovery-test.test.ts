@@ -68,7 +68,7 @@ describe('the project selection a test discovery previews', () => {
   it('asks nothing for a program that picks no project, and stays where the run started', async () => {
     const report = await testDiscovery(program(), { installDir: repo });
     expect(report.projectSelection.asks).toBe(false);
-    expect(report.projectSelection.picked).toBe('.');
+    expect(report.projectSelection.selectedProjectPath).toBe('.');
   });
 
   it('previews the project a caller names, and asks nothing', async () => {
@@ -78,7 +78,7 @@ describe('the project selection a test discovery previews', () => {
       'apps/admin',
     );
     expect(report.runProject).toBe('apps/admin');
-    expect(report.projectSelection.picked).toBe('apps/admin');
+    expect(report.projectSelection.selectedProjectPath).toBe('apps/admin');
     expect(report.projectSelection.asks).toBe(false);
   });
 
@@ -107,7 +107,7 @@ describe('the project selection a test discovery previews', () => {
     const off = await testDiscovery(picks, { installDir: repo });
     expect(off.mode).toBe('off');
     expect(off.projectSelection.asks).toBe(false);
-    expect(off.projectSelection.picked).toBe('.');
+    expect(off.projectSelection.selectedProjectPath).toBe('.');
   });
 });
 
