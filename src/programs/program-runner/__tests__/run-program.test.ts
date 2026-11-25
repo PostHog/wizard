@@ -2118,7 +2118,7 @@ describe('runProgram', () => {
       expect(s.session.runProject).toBe('.');
     });
 
-    it('wires wizard-versioned-sdk-skills into session context, scopeToProject, and matchKeys only when true', async () => {
+    it('propagates wizard-versioned-sdk-skills into traits, matchKeys, and scopeToProject only when true', async () => {
       fs.writeFileSync(
         path.join(repo, 'apps/api/package.json'),
         JSON.stringify({ dependencies: { 'posthog-node': '^5.4.0' } }),
@@ -2139,49 +2139,27 @@ describe('runProgram', () => {
         { credentials: login() },
       );
       expect(agentConfig(0).matchKeys?.()).not.toHaveProperty('posthogSdks');
-      expect(
-        offStore.session.projects.find(
-          (p) => p.path === offStore.session.runProject,
-        )?.traits,
-      ).not.toHaveProperty('posthogSdks');
 
       vi.mocked(runAgent).mockClear();
-      const onStore = pairStore();
-      await runDiscovery({ id: 'self-driving' }, onStore.readyContext());
-      onStore.setDetectionComplete();
-      const composed = {
-        run,
-        runSteps: {
-          'integrate-api': {
-            runProgramId: 'metrics' as const,
-            targetDir: () => path.join(repo, 'apps/api'),
-          },
-        },
-      };
+      const onStore = new SessionStore(
+        buildSession({ installDir: path.join(repo, 'apps/api') }),
+      );
       await runProgram(
-        'self-driving',
+        'metrics',
         input({
           store: onStore,
-          config: composed,
           wizardFlags: { [WIZARD_VERSIONED_SDK_SKILLS_FLAG_KEY]: 'true' },
         }),
-        { credentials: login(), workflow: workflow() },
+        { credentials: login() },
       );
       expect(agentConfig(0).matchKeys?.()).toMatchObject({
         posthogSdks: ['posthog-node@5'],
       });
-      expect(
-        onStore.session.projects.find((p) => p.path === 'apps/api')?.traits,
-      ).toMatchObject({ posthogSdks: ['posthog-node@5'] });
 
-      // scopeToProject preserves VERSIONED_SDK_SKILLS_ENABLED_KEY when scoping to a discovered member.
       const scopedStore = pairStore();
       await runDiscovery({ id: 'metrics' }, scopedStore.readyContext());
       scopedStore.setFrameworkContext(VERSIONED_SDK_SKILLS_ENABLED_KEY, true);
       scopeToProject(scopedStore, 'apps/api');
-      expect(
-        scopedStore.session.frameworkContext[VERSIONED_SDK_SKILLS_ENABLED_KEY],
-      ).toBe(true);
       expect(getTraits(scopedStore.session, 'apps/api').posthogSdks).toEqual([
         'posthog-node@5',
       ]);

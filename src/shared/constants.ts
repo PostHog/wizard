@@ -372,9 +372,6 @@ export function wizardUserAgentForProgram(programId?: string): string {
     : WIZARD_USER_AGENT;
 }
 
-/** Run-scoped wizard cache directory under a project root (`.posthog-wizard-cache`). */
-export const WIZARD_CACHE_DIR_NAME = '.posthog-wizard-cache';
-
 // ── Timeouts ─────────────────────────────────────────────────────────
 
 /** Timeout for framework / project detection probes (ms). */

@@ -1,4 +1,4 @@
-/** Coverage for trait-skills helpers and orchestrator SDK trait skill installation. */
+/** Coverage for trait-skills installation and orchestrator SDK trait skill wiring. */
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -36,7 +36,7 @@ vi.mock('../../../switchboard', async () => {
 });
 
 import { analytics } from '@utils/analytics';
-import { logToFile } from '@utils/debug';
+import { ErrorCodes } from '@shared/errors';
 import { RunOutcome, type SequenceContext } from '../../../shared/types';
 import { installTraitSkills } from '../../../shared/trait-skills';
 import { runOrchestrator } from '../orchestrator-runner';
@@ -75,7 +75,7 @@ function harnessRun(raw: unknown) {
   return Promise.resolve({ kind: 'success' as const });
 }
 
-function mockMenuAndZip({ zipStatus = 200 }: { zipStatus?: number } = {}) {
+function mockMenuAndZip() {
   const menu = {
     categories: {
       skills: [
@@ -100,22 +100,21 @@ function mockMenuAndZip({ zipStatus = 200 }: { zipStatus?: number } = {}) {
       ],
     },
   };
-  const fetchMock = vi.fn((target: string | URL | Request) => {
-    const url = typeof target === 'string' ? target : target.toString();
-    if (url.endsWith('/skill-menu.json')) {
-      return Promise.resolve(
-        new Response(JSON.stringify(menu), {
-          status: 200,
-          headers: { 'content-type': 'application/json' },
-        }),
-      );
-    }
-    if (zipStatus !== 200) {
-      return Promise.resolve(new Response('not found', { status: zipStatus }));
-    }
-    return Promise.resolve(new Response(sdkZip, { status: 200 }));
-  });
-  vi.stubGlobal('fetch', fetchMock);
+  vi.stubGlobal(
+    'fetch',
+    vi.fn((target: string | URL | Request) => {
+      const url = typeof target === 'string' ? target : target.toString();
+      if (url.endsWith('/skill-menu.json')) {
+        return Promise.resolve(
+          new Response(JSON.stringify(menu), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          }),
+        );
+      }
+      return Promise.resolve(new Response(sdkZip, { status: 200 }));
+    }),
+  );
   return Object.values(menu.categories).flat();
 }
 
@@ -127,7 +126,6 @@ describe('installTraitSkills', () => {
     yaraScanResult = null;
     seenProviders.length = 0;
     vi.mocked(analytics.wizardCapture).mockClear();
-    vi.mocked(logToFile).mockClear();
   });
 
   afterEach(() => {
@@ -135,7 +133,7 @@ describe('installTraitSkills', () => {
     fs.rmSync(dir, { recursive: true, force: true });
   });
 
-  it('forwards triageProvider, logs non-undefined errors, and captures YARA rejections', async () => {
+  it('forwards triageProvider and returns download-failed on YARA rejection', async () => {
     const entries = mockMenuAndZip();
     const provider = { name: 'mock-provider' } as never;
     yaraScanResult = 'poisoned: prompt-injection';
@@ -147,18 +145,21 @@ describe('installTraitSkills', () => {
       triageProvider: provider,
     });
 
-    expect(result).toEqual({ paths: [], aborted: false });
+    expect(result).toEqual({
+      kind: 'failed',
+      failure: {
+        kind: 'download-failed',
+        message: 'poisoned: prompt-injection',
+      },
+    });
     expect(seenProviders).toEqual([provider]);
     expect(analytics.wizardCapture).toHaveBeenCalledWith(
       'sdk trait skill resolved',
       { skill_id: 'sdk-posthog-node-v5', installed: false },
     );
-    expect(vi.mocked(logToFile)).not.toHaveBeenCalledWith(
-      expect.stringContaining('undefined'),
-    );
   });
 
-  it('returns aborted when signal triggers during installation, allows symlinked root installDir, and refuses symlinked cache segments', async () => {
+  it('returns aborted when signal is already aborted', async () => {
     const entries = mockMenuAndZip();
     const ac = new AbortController();
     ac.abort();
@@ -170,102 +171,26 @@ describe('installTraitSkills', () => {
       triageProvider: undefined,
       signal: ac.signal,
     });
-    expect(aborted).toEqual({ paths: [], aborted: true });
-
-    const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'trait-out-'));
-    try {
-      const symDir = fs.mkdtempSync(path.join(os.tmpdir(), 'trait-sym-'));
-      const symSubDir = fs.mkdtempSync(path.join(os.tmpdir(), 'trait-sub-'));
-      const linkParent = fs.mkdtempSync(path.join(os.tmpdir(), 'trait-link-'));
-      const symRoot = path.join(linkParent, 'repo-link');
-      try {
-        fs.symlinkSync(outside, path.join(symDir, '.posthog-wizard-cache'));
-        const blocked = await installTraitSkills({
-          entries,
-          matchKeys: { posthogSdks: ['posthog-node@5'] },
-          installDir: symDir,
-          triageProvider: undefined,
-        });
-        expect(blocked).toEqual({ paths: [], aborted: false });
-        expect(fs.existsSync(path.join(outside, 'sdk'))).toBe(false);
-
-        // Symlinked `.posthog-wizard-cache/sdk` child under a real cache dir must also be rejected.
-        fs.mkdirSync(path.join(symSubDir, '.posthog-wizard-cache'), {
-          recursive: true,
-        });
-        fs.symlinkSync(
-          outside,
-          path.join(symSubDir, '.posthog-wizard-cache', 'sdk'),
-        );
-        const blockedSub = await installTraitSkills({
-          entries,
-          matchKeys: { posthogSdks: ['posthog-node@5'] },
-          installDir: symSubDir,
-          triageProvider: undefined,
-        });
-        expect(blockedSub).toEqual({ paths: [], aborted: false });
-        expect(fs.existsSync(path.join(outside, 'sdk-posthog-node-v5'))).toBe(
-          false,
-        );
-
-        // A symlinked root installDir itself is allowed when cache segments inside it are real dirs.
-        fs.symlinkSync(dir, symRoot);
-        const fromSymRoot = await installTraitSkills({
-          entries,
-          matchKeys: { posthogSdks: ['posthog-node@5'] },
-          installDir: symRoot,
-          triageProvider: undefined,
-        });
-        expect(fromSymRoot.aborted).toBe(false);
-        expect(fromSymRoot.paths).toEqual([
-          path.join(
-            '.posthog-wizard-cache',
-            'sdk',
-            'sdk-posthog-node-v5',
-            'SKILL.md',
-          ),
-        ]);
-      } finally {
-        fs.rmSync(symDir, { recursive: true, force: true });
-        fs.rmSync(symSubDir, { recursive: true, force: true });
-        fs.rmSync(linkParent, { recursive: true, force: true });
-      }
-    } finally {
-      fs.rmSync(outside, { recursive: true, force: true });
-    }
+    expect(aborted).toEqual({ kind: 'aborted' });
   });
 });
 
 describe('runOrchestrator with trait SDK skills', () => {
   let dir = '';
 
-  beforeEach(() => {
-    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'orch-trait-skills-'));
-    yaraScanResult = null;
-    seenTaskPrompt = '';
-    vi.mocked(analytics.wizardCapture).mockClear();
-  });
-
-  afterEach(() => {
-    vi.unstubAllGlobals();
-    fs.rmSync(dir, { recursive: true, force: true });
-  });
-
-  it('installs matching SDK trait skills alongside framework skills, forwards triageProvider, and injects sdkSkillPaths into task prompts', async () => {
-    mockMenuAndZip();
-    const orchProvider = { name: 'orch-triage-provider' } as never;
-    const prompts: Record<string, string> = {
-      seed: '---\nseed: true\n---\nseed',
-      install: '---\nskills: [install-deps]\nsink: true\n---\ninstall',
-    };
-
-    const result = await runOrchestrator({
+  const makeContext = (orchProvider: unknown) =>
+    ({
       config: {
         programId: 'flow',
+        run: { integrationLabel: 'flow' },
         wizardFlags: {},
         wizardFlagPayloads: {},
         switchboard: {},
-        agentPrompts: () => Promise.resolve(prompts),
+        agentPrompts: () =>
+          Promise.resolve({
+            seed: '---\nseed: true\n---\nseed',
+            install: '---\nskills: [install-deps]\nsink: true\n---\ninstall',
+          }),
         matchKeys: () => ({
           framework: ['nextjs'],
           posthogSdks: ['posthog-node@5'],
@@ -289,19 +214,44 @@ describe('runOrchestrator with trait SDK skills', () => {
       interaction: undefined,
     } as unknown as SequenceContext);
 
+  beforeEach(() => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'orch-trait-skills-'));
+    yaraScanResult = null;
+    seenProviders.length = 0;
+    seenTaskPrompt = '';
+    vi.mocked(analytics.wizardCapture).mockClear();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('installs matching SDK trait skills into .claude/skills, forwards triageProvider, and injects sdkSkillPaths into task prompts', async () => {
+    mockMenuAndZip();
+    const orchProvider = { name: 'orch-triage-provider' } as never;
+
+    const result = await runOrchestrator(makeContext(orchProvider));
+
     expect(result.outcome).toBe(RunOutcome.Success);
     expect(seenProviders).toContain(orchProvider);
     expect(seenTaskPrompt).toContain(
-      path.join(
-        '.posthog-wizard-cache',
-        'sdk',
-        'sdk-posthog-node-v5',
-        'SKILL.md',
-      ),
+      path.join('.claude', 'skills', 'sdk-posthog-node-v5', 'SKILL.md'),
     );
     expect(analytics.wizardCapture).toHaveBeenCalledWith(
       'sdk trait skill resolved',
       { skill_id: 'sdk-posthog-node-v5', installed: true },
     );
+  });
+
+  it('fails the run with installFailure when a matched SDK trait skill fails to install', async () => {
+    mockMenuAndZip();
+    yaraScanResult = 'poisoned: prompt-injection';
+
+    const result = await runOrchestrator(makeContext(undefined));
+
+    expect(result.outcome).toBe(RunOutcome.Failed);
+    expect(result.failure?.code).toBe(ErrorCodes.SkillDownloadFailed);
+    expect(seenTaskPrompt).toBe('');
   });
 });

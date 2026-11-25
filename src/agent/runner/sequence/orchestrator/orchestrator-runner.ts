@@ -10,7 +10,7 @@
  * context-mill. The runner stays product-ignorant: it is the queue, the
  * executor, and the loader.
  */
-import { failed } from '../../shared/errors';
+import { failed, installFailure } from '../../shared/errors';
 import { RunOutcome } from '../../shared/types';
 import { randomUUID } from 'crypto';
 import {
@@ -32,11 +32,7 @@ import {
   scanInstalledSkill,
   scanInstalledSkillFile,
 } from '../../../yara-hooks';
-import {
-  fetchSkillMenuEntries,
-  hasNonFrameworkMatchKeys,
-  installTraitSkills,
-} from '../../shared/trait-skills';
+import { fetchSkillMenu } from '@shared/skill-menu';
 import { FRAMEWORK_KEY, resolveSkill } from '@shared/skill-resolution';
 import { analytics } from '@utils/analytics';
 import { ciExcludedTaskTypes } from '@utils/ci-flag-overrides';
@@ -59,6 +55,10 @@ import type {
   SequenceContext,
 } from '../../shared/types';
 import { runMatchKeys } from '../../shared/match-keys';
+import {
+  hasNonFrameworkMatchKeys,
+  installTraitSkills,
+} from '../../shared/trait-skills';
 import { createEmitSpinner } from '../../shared/progress-collector';
 import { createAskBridge } from '../../shared/ask';
 import {
@@ -887,8 +887,9 @@ async function executeOrchestrator(
   let examplePath: string | undefined;
   let commandmentsPath: string | undefined;
   let referenceInstallPath: string | undefined;
-  const menuSkillEntries = await fetchSkillMenuEntries(boot.skillsBaseUrl);
+  const menu = await fetchSkillMenu(boot.skillsBaseUrl);
   if (signal?.aborted) return cancelledRun();
+  const menuSkillEntries = menu ? Object.values(menu.categories).flat() : [];
   // The project's traits are the match keys; their framework is the one the pack resolves for.
   const matchKeys = runMatchKeys(config);
   const framework = matchKeys[FRAMEWORK_KEY]?.[0];
@@ -945,7 +946,15 @@ async function executeOrchestrator(
       triageProvider: boot.triageProvider,
       signal,
     });
-    if (traitInstall.aborted) return cancelledRun();
+    if (traitInstall.kind === 'aborted') return cancelledRun();
+    if (traitInstall.kind === 'failed') {
+      return failed(
+        installFailure(
+          config.run?.integrationLabel ?? config.programId,
+          traitInstall.failure,
+        ),
+      );
+    }
     sdkSkillPaths = traitInstall.paths;
   }
 
