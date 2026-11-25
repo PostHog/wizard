@@ -220,27 +220,20 @@ A project is a directory in the repo with its traits. A trait is one thing the
 wizard knows about the project's code. Traits describe the code, never the
 person.
 
-| Trait              | What it says                                                                            | Static detector                                                |
-| ------------------ | --------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
-| `framework`        | The framework the wizard integrates                                                     | `detectFramework` and the framework configs                    |
-| `frameworkVariant` | The framework's variant, such as `pages-router`                                         | The framework config's `getVariant`                            |
-| `callsLlmApi`      | `yes` when an LLM SDK is a dependency                                                   | Manifest lookup                                                |
-| `mcpServers`       | Paths the MCP scan suggests as servers                                                  | The MCP scan, in the run project                               |
-| `warehouseSources` | The kinds of data source found                                                          | The tool match, assigned by path                               |
-| `posthogInstalled` | Whether a PostHog SDK is a dependency                                                   | Manifest lookup                                                |
-| `installedSdks`    | The SDKs in [`traits/sdks.ts`](project-discovery/traits/sdks.ts) the project depends on | Manifest lookup                                                |
-| `projectRole`      | `app`, `library` or `tooling`                                                           | The framework, the workspace and the package name              |
-| `workspaceRoot`    | The path of the workspace root the project belongs to; its own path on a root           | Workspace markers                                              |
-| `webFrontend`      | `yes` when the project serves a web UI                                                  | The framework config's `webFrontend`                           |
-| `mainApp`          | `yes` on the project a source picked as the repo's main app                             | None                                                           |
-| `sdkPython`        | Declared `posthog` Python SDK major when `wizard-versioned-sdk-skills` is `true`        | [`traits/sdk-major.ts`](project-discovery/traits/sdk-major.ts) |
-| `sdkNode`          | Declared `posthog-node` SDK major when `wizard-versioned-sdk-skills` is `true`          | [`traits/sdk-major.ts`](project-discovery/traits/sdk-major.ts) |
-| `sdkGo`            | Declared `posthog-go` SDK major when `wizard-versioned-sdk-skills` is `true`            | [`traits/sdk-major.ts`](project-discovery/traits/sdk-major.ts) |
-| `sdkRust`          | Declared `posthog`/`posthog-rs` SDK major when `wizard-versioned-sdk-skills` is `true`  | [`traits/sdk-major.ts`](project-discovery/traits/sdk-major.ts) |
-| `sdkIos`           | Declared `posthog-ios` SDK major when `wizard-versioned-sdk-skills` is `true`           | [`traits/sdk-major.ts`](project-discovery/traits/sdk-major.ts) |
-| `sdkAndroid`       | Declared `posthog-android` SDK major when `wizard-versioned-sdk-skills` is `true`       | [`traits/sdk-major.ts`](project-discovery/traits/sdk-major.ts) |
-| `sdkFlutter`       | Declared `posthog_flutter` SDK major when `wizard-versioned-sdk-skills` is `true`       | [`traits/sdk-major.ts`](project-discovery/traits/sdk-major.ts) |
-| `sdkKmp`           | Declared `posthog-kmp` SDK major when `wizard-versioned-sdk-skills` is `true`           | [`traits/sdk-major.ts`](project-discovery/traits/sdk-major.ts) |
+| Trait              | What it says                                                                            | Static detector                                   |
+| ------------------ | --------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| `framework`        | The framework the wizard integrates                                                     | `detectFramework` and the framework configs       |
+| `frameworkVariant` | The framework's variant, such as `pages-router`                                         | The framework config's `getVariant`               |
+| `callsLlmApi`      | `yes` when an LLM SDK is a dependency                                                   | Manifest lookup                                   |
+| `mcpServers`       | Paths the MCP scan suggests as servers                                                  | The MCP scan, in the run project                  |
+| `warehouseSources` | The kinds of data source found                                                          | The tool match, assigned by path                  |
+| `posthogInstalled` | Whether a PostHog SDK is a dependency                                                   | Manifest lookup                                   |
+| `installedSdks`    | The SDKs in [`traits/sdks.ts`](project-discovery/traits/sdks.ts) the project depends on | Manifest lookup                                   |
+| `posthogSdks`      | Each declared PostHog SDK as `<package>@<major>`, behind `wizard-versioned-sdk-skills`  | Manifest lookup                                   |
+| `projectRole`      | `app`, `library` or `tooling`                                                           | The framework, the workspace and the package name |
+| `workspaceRoot`    | The path of the workspace root the project belongs to; its own path on a root           | Workspace markers                                 |
+| `webFrontend`      | `yes` when the project serves a web UI                                                  | The framework config's `webFrontend`              |
+| `mainApp`          | `yes` on the project a source picked as the repo's main app                             | None                                              |
 
 [`traits/registry.ts`](project-discovery/traits/registry.ts) declares every
 trait once in `TRAITS`: its static detector, its fallback source and its match
@@ -277,22 +270,16 @@ detection and the `person`. No source outranks another.
 `toMatchKeys`, in
 [`traits/match-keys.ts`](project-discovery/traits/match-keys.ts), turns the
 traits skills can match on into match keys. A trait's `matchKey` is `true` to
-key by its own name, or the key to use: `framework` keys as `framework`,
-`frameworkVariant` as `frameworkVariant`, and the `sdk*` traits (`sdkPython`,
-`sdkNode`, `sdkGo`, `sdkRust`, `sdkIos`, `sdkAndroid`, `sdkFlutter`, `sdkKmp`)
-key by their own name when `wizard-versioned-sdk-skills` is `'true'`, the tags
-context-mill puts on a skill. `declaredSdkMajor`, in
-[`traits/sdk-major.ts`](project-discovery/traits/sdk-major.ts), reads manifest
-ranges first and falls back to lockfiles, installed `node_modules`, or catalog
-versions when a single major cannot be settled from the manifest alone;
-malformed manifests return `undefined` without throwing.
+key by its own name, or the key to use: `framework` keys as `framework` and
+`frameworkVariant` as `frameworkVariant`, the tags context-mill puts on a skill.
 
 `sdkFeatureGaps`, in
 [`traits/sdk-features.ts`](project-discovery/traits/sdk-features.ts), compares
-the run project's installed SDK version (the lockfile's, else the manifest's
-floor) with `SDK_FEATURE_MINIMUMS` in `@shared/sdk-features`. A program's
-`sdkFeature` fails the run before any agent starts when the SDK is below it; the
-main run drops the matching task and names the upgrade in its outro.
+the lowest version the run project's manifest allows for each PostHog SDK with
+`SDK_FEATURE_MINIMUMS` in [`traits/sdks.ts`](project-discovery/traits/sdks.ts).
+A program's `sdkFeature` fails the run before any agent starts when the SDK is
+below it; the main run drops the matching task and names the upgrade in its
+outro.
 
 A program's `rankWith` names the model sources that rank its projects beside
 static detection: `decisions`, `agentic`, both or neither.

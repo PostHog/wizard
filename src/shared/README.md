@@ -1,9 +1,6 @@
 # Shared
 
-Library code every surface may import: constants, the API and host types, error
-codes, fetch retry, the skill menu, Claude settings handling, the secret vault,
-health checks and the utilities under `utils/`. Nothing here depends on the host
-layer, the agent, the programs, the TUI, headless or the CLI.
+Library code every surface may import: constants, the API and host types, error codes, fetch retry, the skill menu, Claude settings handling, the secret vault, health checks and the utilities under `utils/`. Nothing here depends on the host layer, the agent, the programs, the TUI, headless or the CLI.
 
 Shared also holds process-global state, one copy per process for every layer
 that imports it:
@@ -25,77 +22,30 @@ that imports it:
 
 ## Signatures
 
-Import by path: `@shared/<module>` for the singles and `@utils/<module>` for
-`src/shared/utils`. There is no barrel; a shared library loads what a caller
-names and nothing else.
+Import by path: `@shared/<module>` for the singles and `@utils/<module>` for `src/shared/utils`. There is no barrel; a shared library loads what a caller names and nothing else.
 
 Modules callers reach most:
 
-- `@shared/constants`: integrations, harnesses, sequences, URLs and
-  `getSkillsBaseUrl()`.
-- `@shared/errors`: `ErrorCodes`, `WizardError`, `emitWizardError`,
-  `classifyRunFailure`, `classifyAuthFailure`, the catalog.
+- `@shared/constants`: integrations, harnesses, sequences, URLs and `getSkillsBaseUrl()`.
+- `@shared/errors`: `ErrorCodes`, `WizardError`, `emitWizardError`, `classifyRunFailure`, `classifyAuthFailure`, the catalog.
 - `@shared/api`: `Credentials`, `ApiUser`, `ApiProject`.
-- `@shared/host-resolution`: `HostResolution`, the immutable snapshot of where
-  the wizard talks to.
-- `@shared/fetch-retry`:
-  `fetchWithRetry(url, { fetchImpl?, sleepImpl?, maxAttempts? })`, one retry and
-  failover policy for every critical-path fetch.
-- `@shared/skill-menu`: `fetchSkillMenu(skillsBaseUrl, retryOpts?)` returns the
-  parsed `SkillMenu` or `null`; `prepareSkillMenu`, `SkillEntry`, `CliEntry`.
-  Each entry of a fetched menu carries its `family`: the key of the category the
-  menu lists it under, with `/` as `-`, so an entry under `integration/install`
-  is in the family `integration-install`.
-- `@shared/skill-resolution`: `resolveSkill(entries, name, matchKeys)` returns
-  the menu skill a name stands for in one run. A menu id is that skill. Any
-  other name is a skill family, an entry's `family`. A `key:value` tag is a
-  match key: it says which projects a skill is written for, and the run supplies
-  its values as `MatchKeys`. Among a family's skills, one whose match key
-  disagrees with the run's value is dropped, one with no `framework` key is
-  dropped, and the rest rank by keys that agree, then the `default` tag, then
-  menu order. A key the run has no value for never disagrees. A run with no
-  `framework` value resolves no family. A trait family is one whose skills
-  declare match keys but never `framework`, such as `sdk-posthog-python` on
-  `sdkPython`: it needs no `framework` value and keeps its skills that have
-  none. `resolveTraitSkills(entries, matchKeys)` returns one skill for each
-  trait family the run has a value for; both the orchestrator and non-read-only
-  linear sequences install each resolved trait skill under
-  `.posthog-wizard-cache/sdk/` and point prompts at it.
-- `@shared/skill-composition`:
-  `completeSkillFromPack(skillDir, packDir, product, boundaryDir)` completes a
-  step skill written once for every framework from that framework's pack. The
-  pack's `variant.json` lists its rules file and each product's pages. Those
-  files are copied into the skill's `references/`, and in `SKILL.md`
-  `{framework_name}` becomes the pack's name while the `{framework_docs}` and
-  `{framework_rules}` lines become the lines that list them.
-  `composeStepSkill(stepFiles, packFiles, product)` is the same on files in
-  memory. Both throw when the pack cannot complete the skill, and both refuse a
-  pack page whose path has a part that is not a plain name or that does not end
-  in `.md`: the install scan reads lowercase extensions and skips dotfiles, so
-  such a page would reach a task unscanned. A `variant.json` with no `rules`
-  reads as one with none. `completeSkillFromPack` checks every target before its
-  first write and throws, writing nothing, when a file would leave `boundaryDir`
-  or pass through a link below it: a folder on the way that is a link, or a file
-  that is one. It does not scan what it writes; the caller scans the `SKILL.md`
-  it rewrites. It takes every file in the skill's folder as the skill's own, so
-  the caller completes a skill in a folder that holds nothing else.
-  `skillFolder(skillsRoot, id, boundaryDir)` is the folder of skill `id` under
-  `skillsRoot`. It refuses an `id` that is not one plain name, since the id
-  comes from the menu, and it reaches `skillsRoot` through no link below
-  `boundaryDir`.
+- `@shared/host-resolution`: `HostResolution`, the immutable snapshot of where the wizard talks to.
+- `@shared/fetch-retry`: `fetchWithRetry(url, { fetchImpl?, sleepImpl?, maxAttempts? })`, one retry and failover policy for every critical-path fetch.
+- `@shared/skill-menu`: `fetchSkillMenu(skillsBaseUrl, retryOpts?)` returns the parsed `SkillMenu` or `null`; `prepareSkillMenu`, `SkillEntry`, `CliEntry`. Each entry of a fetched menu carries its `family`: the key of the category the menu lists it under, with `/` as `-`, so an entry under `integration/install` is in the family `integration-install`.
+- `@shared/skill-resolution`: `resolveSkill(entries, name, matchKeys)` returns the menu skill a name stands for in one run. A menu id is that skill. Any other name is a skill family, an entry's `family`. A `key:value` tag is a match key: it says which projects a skill is written for, and the run supplies its values as `MatchKeys`. Among a family's skills, one whose match key disagrees with the run's value is dropped, one with no `framework` key is dropped, and the rest rank by keys that agree, then the `default` tag, then menu order. A key the run has no value for never disagrees. A run with no `framework` value resolves no family. A trait family is one whose skills declare match keys but never `framework`, such as `sdk-posthog-node` on `posthogSdks`: it needs no `framework` value. `resolveTraitSkills(entries, matchKeys)` returns one skill for each trait family the run has a value for; the orchestrator and non-read-only linear sequences install each under `.posthog-wizard-cache/sdk/` and point prompts at it.
+- `@shared/skill-composition`: `completeSkillFromPack(skillDir, packDir, product, boundaryDir)` completes a step skill written once for every framework from that framework's pack. The pack's `variant.json` lists its rules file and each product's pages. Those files are copied into the skill's `references/`, and in `SKILL.md` `{framework_name}` becomes the pack's name while the `{framework_docs}` and `{framework_rules}` lines become the lines that list them. `composeStepSkill(stepFiles, packFiles, product)` is the same on files in memory. Both throw when the pack cannot complete the skill, and both refuse a pack page whose path has a part that is not a plain name or that does not end in `.md`: the install scan reads lowercase extensions and skips dotfiles, so such a page would reach a task unscanned. A `variant.json` with no `rules` reads as one with none. `completeSkillFromPack` checks every target before its first write and throws, writing nothing, when a file would leave `boundaryDir` or pass through a link below it: a folder on the way that is a link, or a file that is one. It does not scan what it writes; the caller scans the `SKILL.md` it rewrites. It takes every file in the skill's folder as the skill's own, so the caller completes a skill in a folder that holds nothing else. `skillFolder(skillsRoot, id, boundaryDir)` is the folder of skill `id` under `skillsRoot`. It refuses an `id` that is not one plain name, since the id comes from the menu, and it reaches `skillsRoot` through no link below `boundaryDir`.
 - `@shared/skill-install`: `downloadSkill(entry, installDir, options?)` and
   `installSkillById(skillId, installDir, skillsBaseUrl, options?)` install a
   skill into a project; `InstallSkillResult`, `isSkillInstallCommand`. An
   install that fails removes the folder it made and keeps one that was there
-  first, and an entry whose id is not one plain name is refused before a folder
-  is made. `WIZARD_MARKER` is the file every installed skill folder carries.
+  first, and an entry whose id is not one plain name is refused before a
+  folder is made. `WIZARD_MARKER` is the file every installed skill folder
+  carries.
 - `@shared/ask-policy`: `shouldDisableAsk(flags)` and `LONGER_ASK_TIMEOUT_MS`,
   when `wizard_ask` may reach a human and how long an errand question waits.
 - `@shared/claude-settings`: settings conflict detection, backup and restore.
-- `@shared/secret-vault`: the session-scoped vault the tools resolve secret
-  references through.
-- `@shared/health-checks`: `evaluateWizardReadiness`, `checkAllExternalServices`
-  and the gateway and skills-origin endpoint checks.
+- `@shared/secret-vault`: the session-scoped vault the tools resolve secret references through.
+- `@shared/health-checks`: `evaluateWizardReadiness`, `checkAllExternalServices` and the gateway and skills-origin endpoint checks.
 - `@shared/mcp-clients/install`: detect the supported MCP clients, and add,
   remove or check the PostHog MCP server and plugin in each, one result per
   client. The TUI's MCP screen and the `mcp` tools share it.
@@ -116,16 +66,12 @@ Modules callers reach most:
   `printAbortOutro`, the abort presenter for a run that prints.
 - `@utils/debug`: `logToFile`, `initLogFile`, `getLogFilePath`,
   `configureLogFile` and `formatLogLine`, the line format `logToFile` writes.
-- `@utils/analytics`: the `analytics` client (`wizardCapture`,
-  `captureException`, `setTag`, `flush`, `shutdown`). `@utils/flush-analytics`:
-  `flushAnalytics()`, a flush that never fails the caller.
-- `@utils/telemetry`: `withProgress(step, fn)` tags analytics with the current
-  step and runs `fn`.
-- `@utils/package-manager`, `@utils/env-scan`, `@utils/bounded-fs`,
-  `@utils/atomic-ledger`, `@utils/semver`, `@utils/urls`, `@utils/links`.
+- `@utils/analytics`: the `analytics` client (`wizardCapture`, `captureException`, `setTag`, `flush`, `shutdown`).
+  `@utils/flush-analytics`: `flushAnalytics()`, a flush that never fails the caller.
+- `@utils/telemetry`: `withProgress(step, fn)` tags analytics with the current step and runs `fn`.
+- `@utils/package-manager`, `@utils/env-scan`, `@utils/bounded-fs`, `@utils/atomic-ledger`, `@utils/semver`, `@utils/urls`, `@utils/links`.
 
-Callback convention: a shared helper that needs to show something takes a sink
-or returns data. It never looks the UI up, and no shared module holds a sink.
+Callback convention: a shared helper that needs to show something takes a sink or returns data. It never looks the UI up, and no shared module holds a sink.
 
 ```ts
 import { resolveApiKeyProject } from '@shared/api-key-login';
@@ -144,11 +90,7 @@ install [context-mill](https://github.com/PostHog/context-mill) skills.
 
 ## Intent
 
-Shared exists so the agent, programs, TUI, headless and CLI code can use one
-implementation of the things they all need without importing each other. A
-helper belongs here when it needs no surface-specific dependency and would
-otherwise be copied. Module state belongs here only when the whole process
-shares one copy of it, as in the list above.
+Shared exists so the agent, programs, TUI, headless and CLI code can use one implementation of the things they all need without importing each other. A helper belongs here when it needs no surface-specific dependency and would otherwise be copied. Module state belongs here only when the whole process shares one copy of it, as in the list above.
 
 ## Architecture
 

@@ -50,23 +50,23 @@ export function versionSatisfiesRange({
   return subset(userRange, acceptableVersions);
 }
 
-/** The one major every version in `range` has, or undefined when the range spans several or is not semver. */
-export function rangeMajor(range: string): number | undefined {
-  if (isNonSemverVersion(range)) return undefined;
-  const normalized = validRange(range);
-  const min = normalized === null ? null : minVersion(normalized);
-  if (normalized === null || !min) return undefined;
-  const sameMajor = `>=${min.major}.0.0-0 <${min.major + 1}.0.0`;
-  return subset(normalized, sameMajor, { includePrerelease: true })
-    ? min.major
-    : undefined;
-}
-
-/** The lowest version `range` allows (a plain version is its own floor), or undefined when it is not semver. */
-export function rangeFloor(range: string): string | undefined {
-  if (isNonSemverVersion(range)) return undefined;
-  const normalized = validRange(range);
-  return (normalized && minVersion(normalized)?.version) || undefined;
+/**
+ * The lowest version a manifest's version text allows, in npm, PEP 440, Cargo,
+ * Go, Gradle, CocoaPods or SwiftPM notation. Undefined when it sets no lower
+ * bound or is no version, such as `*`, a tag or a URL.
+ */
+export function declaredFloor(spec: string): string | undefined {
+  if (isNonSemverVersion(spec)) return undefined;
+  const range = validRange(
+    spec
+      .replace(/!=[^,\s]*/g, '')
+      .replace(/~=/g, '~')
+      .replace(/==/g, '=')
+      .replace(/,/g, ' ')
+      .replace(/\.\+/g, '.x'),
+  );
+  const floor = range === null ? null : minVersion(range);
+  return floor && floor.version !== '0.0.0' ? floor.version : undefined;
 }
 
 /**

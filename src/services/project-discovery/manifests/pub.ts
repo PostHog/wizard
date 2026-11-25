@@ -1,6 +1,6 @@
-/** Package names under the top-level `dependencies` and `dev_dependencies` of a `pubspec.yaml`. */
-export function parsePubspecYaml(content: string): string[] {
-  const names: string[] = [];
+/** Package constraints under the top-level `dependencies` and `dev_dependencies` of a `pubspec.yaml`, by name. */
+export function parsePubspecYaml(content: string): Record<string, string> {
+  const packages: Record<string, string> = {};
   let inDeps = false;
   let entryIndent: number | null = null;
   for (const raw of content.split('\n')) {
@@ -14,8 +14,8 @@ export function parsePubspecYaml(content: string): string[] {
     if (!inDeps) continue;
     entryIndent ??= indent;
     if (indent !== entryIndent) continue;
-    const key = /^([A-Za-z0-9_]+)\s*:/.exec(raw.trim());
-    if (key) names.push(key[1]);
+    const entry = /^([A-Za-z0-9_]+)\s*:\s*['"]?([^'"#\s]*)/.exec(raw.trim());
+    if (entry) packages[entry[1]] = entry[2];
   }
-  return names;
+  return packages;
 }

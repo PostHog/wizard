@@ -3,7 +3,6 @@ import type { DiscoveredFeature } from '@shared/discovered-feature';
 import type { ProgramBinding, TaskNotice } from '@agent/types';
 import type { ProgramRun } from './program-run';
 import type { Integration } from '@shared/constants';
-import type { SdkFeature } from '@shared/sdk-features';
 import type { FrameworkConfig } from './framework-config';
 import type { CiRunnerContext, RunnerContext } from './runner-context';
 import type { Project, Traits } from './project-traits';
@@ -139,6 +138,13 @@ export type RankSource = 'decisions' | 'agentic';
 
 /** A program's `id`. */
 export type ProgramId = string;
+
+/** A product whose lowest supported PostHog SDK version the wizard checks before a run. */
+export type SdkFeature =
+  | 'errorTracking'
+  | 'releaseLinking'
+  | 'mcpAnalytics'
+  | 'aiObservability';
 
 /**
  * Uniform configuration for a wizard program.

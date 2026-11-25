@@ -1,11 +1,12 @@
 /**
- * Module paths from `go.mod` `require` lines and blocks, without `// indirect`
- * requirements (a dependency of a dependency says little about the project).
- * A final `/vN` major-version element is dropped, so `stripe-go/v82` matches
- * the catalog's `stripe-go`. Case is kept: Go module paths are case-sensitive.
+ * Module versions from `go.mod` `require` lines and blocks, by module path,
+ * without `// indirect` requirements (a dependency of a dependency says little
+ * about the project). A final `/vN` major-version element is dropped, so
+ * `stripe-go/v82` matches the catalog's `stripe-go`. Case is kept: Go module
+ * paths are case-sensitive.
  */
-export function parseGoMod(content: string): string[] {
-  const names: string[] = [];
+export function parseGoMod(content: string): Record<string, string> {
+  const modules: Record<string, string> = {};
   let inBlock = false;
   for (const raw of content.split('\n')) {
     const line = raw.trim();
@@ -14,18 +15,18 @@ export function parseGoMod(content: string): string[] {
         inBlock = false;
         continue;
       }
-      addGoRequirement(line, names);
+      addGoRequirement(line, modules);
     } else if (/^require\s*\(\s*(?:\/\/.*)?$/.test(line)) {
       inBlock = true;
     } else if (line.startsWith('require ')) {
-      addGoRequirement(line.slice('require '.length).trim(), names);
+      addGoRequirement(line.slice('require '.length).trim(), modules);
     }
   }
-  return names;
+  return modules;
 }
 
-function addGoRequirement(line: string, names: string[]): void {
+function addGoRequirement(line: string, modules: Record<string, string>): void {
   if (!line || line.startsWith('//') || /\/\/\s*indirect\b/.test(line)) return;
-  const modulePath = line.split(/\s+/)[0];
-  names.push(modulePath.replace(/\/v\d+$/, ''));
+  const [modulePath, version = ''] = line.split(/\s+/);
+  modules[modulePath.replace(/\/v\d+$/, '')] = version;
 }

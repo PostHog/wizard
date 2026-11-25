@@ -463,6 +463,34 @@ describe('runProgram', () => {
     });
   });
 
+  it('fails before any agent when the PostHog SDK is too old for the program', async () => {
+    const dir = fs.realpathSync(
+      fs.mkdtempSync(path.join(os.tmpdir(), 'sdk-too-old-')),
+    );
+    fs.writeFileSync(
+      path.join(dir, 'package.json'),
+      JSON.stringify({ dependencies: { 'posthog-node': '^4.3.0' } }),
+    );
+    try {
+      const result = await runProgram(
+        'metrics',
+        input({
+          store: store({ installDir: dir }),
+          config: { run, sdkFeature: 'errorTracking' },
+          wizardFlags: { [WIZARD_VERSIONED_SDK_SKILLS_FLAG_KEY]: 'true' },
+        }),
+        { credentials: login() },
+      );
+      expect(result).toMatchObject({
+        outcome: RunOutcome.Failed,
+        failure: { code: ErrorCodes.DetectSdkTooOld },
+      });
+      expect(runAgent).not.toHaveBeenCalled();
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('fails a program with no run configuration before anything starts', async () => {
     const s = store();
     const result = await runProgram('not-registered', {
@@ -2110,12 +2138,12 @@ describe('runProgram', () => {
         }),
         { credentials: login() },
       );
-      expect(agentConfig(0).matchKeys?.()).not.toHaveProperty('sdkNode');
+      expect(agentConfig(0).matchKeys?.()).not.toHaveProperty('posthogSdks');
       expect(
         offStore.session.projects.find(
           (p) => p.path === offStore.session.runProject,
         )?.traits,
-      ).not.toHaveProperty('sdkNode');
+      ).not.toHaveProperty('posthogSdks');
 
       vi.mocked(runAgent).mockClear();
       const onStore = pairStore();
@@ -2140,11 +2168,11 @@ describe('runProgram', () => {
         { credentials: login(), workflow: workflow() },
       );
       expect(agentConfig(0).matchKeys?.()).toMatchObject({
-        sdkNode: ['5'],
+        posthogSdks: ['posthog-node@5'],
       });
       expect(
         onStore.session.projects.find((p) => p.path === 'apps/api')?.traits,
-      ).toMatchObject({ sdkNode: '5' });
+      ).toMatchObject({ posthogSdks: ['posthog-node@5'] });
 
       // scopeToProject preserves VERSIONED_SDK_SKILLS_ENABLED_KEY when scoping to a discovered member.
       const scopedStore = pairStore();
@@ -2154,7 +2182,9 @@ describe('runProgram', () => {
       expect(
         scopedStore.session.frameworkContext[VERSIONED_SDK_SKILLS_ENABLED_KEY],
       ).toBe(true);
-      expect(getTraits(scopedStore.session, 'apps/api').sdkNode).toBe('5');
+      expect(getTraits(scopedStore.session, 'apps/api').posthogSdks).toEqual([
+        'posthog-node@5',
+      ]);
     });
 
     it('stops on a project whose real directory is outside the workspace', async () => {

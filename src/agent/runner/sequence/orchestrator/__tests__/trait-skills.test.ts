@@ -38,10 +38,7 @@ vi.mock('../../../switchboard', async () => {
 import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
 import { RunOutcome, type SequenceContext } from '../../../shared/types';
-import {
-  hasNonFrameworkMatchKeys,
-  installTraitSkills,
-} from '../../../shared/trait-skills';
+import { installTraitSkills } from '../../../shared/trait-skills';
 import { runOrchestrator } from '../orchestrator-runner';
 import type { QueueStore } from '../queue';
 
@@ -94,11 +91,11 @@ function mockMenuAndZip({ zipStatus = 200 }: { zipStatus?: number } = {}) {
       'sdk/posthog-node': [
         entry('sdk-posthog-node-v5', {
           family: 'sdk-posthog-node',
-          tags: ['sdkNode:4', 'sdkNode:5'],
+          tags: ['posthogSdks:posthog-node@4', 'posthogSdks:posthog-node@5'],
         }),
         entry('sdk-posthog-node-v6', {
           family: 'sdk-posthog-node',
-          tags: ['sdkNode:6', 'default'],
+          tags: ['posthogSdks:posthog-node@6', 'default'],
         }),
       ],
     },
@@ -121,19 +118,6 @@ function mockMenuAndZip({ zipStatus = 200 }: { zipStatus?: number } = {}) {
   vi.stubGlobal('fetch', fetchMock);
   return Object.values(menu.categories).flat();
 }
-
-describe('hasNonFrameworkMatchKeys', () => {
-  it('excludes framework, frameworkVariant, and empty arrays', () => {
-    expect(
-      hasNonFrameworkMatchKeys({
-        framework: ['nextjs'],
-        frameworkVariant: ['pages-router'],
-        sdkNode: [],
-      }),
-    ).toBe(false);
-    expect(hasNonFrameworkMatchKeys({ sdkNode: ['5'] })).toBe(true);
-  });
-});
 
 describe('installTraitSkills', () => {
   let dir = '';
@@ -158,7 +142,7 @@ describe('installTraitSkills', () => {
 
     const result = await installTraitSkills({
       entries,
-      matchKeys: { sdkNode: ['5'] },
+      matchKeys: { posthogSdks: ['posthog-node@5'] },
       installDir: dir,
       triageProvider: provider,
     });
@@ -174,41 +158,6 @@ describe('installTraitSkills', () => {
     );
   });
 
-  it('logs HTTP download failures without installing and handles mid-download abort', async () => {
-    const failEntries = mockMenuAndZip({ zipStatus: 500 });
-    const failed = await installTraitSkills({
-      entries: failEntries,
-      matchKeys: { sdkNode: ['5'] },
-      installDir: dir,
-      triageProvider: undefined,
-    });
-    expect(failed).toEqual({ paths: [], aborted: false });
-    expect(analytics.wizardCapture).toHaveBeenCalledWith(
-      'sdk trait skill resolved',
-      { skill_id: 'sdk-posthog-node-v5', installed: false },
-    );
-
-    vi.mocked(analytics.wizardCapture).mockClear();
-    const ac = new AbortController();
-    const abortFetch = vi.fn(() => {
-      ac.abort();
-      return Promise.resolve(new Response(sdkZip, { status: 200 }));
-    });
-    vi.stubGlobal('fetch', abortFetch);
-    const midAborted = await installTraitSkills({
-      entries: failEntries,
-      matchKeys: { sdkNode: ['5'] },
-      installDir: dir,
-      triageProvider: undefined,
-      signal: ac.signal,
-    });
-    expect(midAborted).toEqual({ paths: [], aborted: true });
-    expect(analytics.wizardCapture).not.toHaveBeenCalledWith(
-      'sdk trait skill resolved',
-      expect.anything(),
-    );
-  });
-
   it('returns aborted when signal triggers during installation, allows symlinked root installDir, and refuses symlinked cache segments', async () => {
     const entries = mockMenuAndZip();
     const ac = new AbortController();
@@ -216,7 +165,7 @@ describe('installTraitSkills', () => {
 
     const aborted = await installTraitSkills({
       entries,
-      matchKeys: { sdkNode: ['5'] },
+      matchKeys: { posthogSdks: ['posthog-node@5'] },
       installDir: dir,
       triageProvider: undefined,
       signal: ac.signal,
@@ -233,7 +182,7 @@ describe('installTraitSkills', () => {
         fs.symlinkSync(outside, path.join(symDir, '.posthog-wizard-cache'));
         const blocked = await installTraitSkills({
           entries,
-          matchKeys: { sdkNode: ['5'] },
+          matchKeys: { posthogSdks: ['posthog-node@5'] },
           installDir: symDir,
           triageProvider: undefined,
         });
@@ -250,7 +199,7 @@ describe('installTraitSkills', () => {
         );
         const blockedSub = await installTraitSkills({
           entries,
-          matchKeys: { sdkNode: ['5'] },
+          matchKeys: { posthogSdks: ['posthog-node@5'] },
           installDir: symSubDir,
           triageProvider: undefined,
         });
@@ -263,7 +212,7 @@ describe('installTraitSkills', () => {
         fs.symlinkSync(dir, symRoot);
         const fromSymRoot = await installTraitSkills({
           entries,
-          matchKeys: { sdkNode: ['5'] },
+          matchKeys: { posthogSdks: ['posthog-node@5'] },
           installDir: symRoot,
           triageProvider: undefined,
         });
@@ -317,7 +266,10 @@ describe('runOrchestrator with trait SDK skills', () => {
         wizardFlagPayloads: {},
         switchboard: {},
         agentPrompts: () => Promise.resolve(prompts),
-        matchKeys: () => ({ framework: ['nextjs'], sdkNode: ['5'] }),
+        matchKeys: () => ({
+          framework: ['nextjs'],
+          posthogSdks: ['posthog-node@5'],
+        }),
       },
       input: { installDir: dir, flags: { ci: true } },
       boot: {

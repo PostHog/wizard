@@ -1,5 +1,4 @@
-import type { ProgramSession } from '@programs/program-contract';
-import type { SdkFeature } from '@shared/sdk-features';
+import type { ProgramSession, SdkFeature } from '@programs/program-contract';
 import { sdkFeatureGaps } from '@services/project-discovery';
 
 /** The outro's next steps for the products a too-old PostHog SDK kept out of this run. */

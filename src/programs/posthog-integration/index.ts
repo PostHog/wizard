@@ -26,11 +26,11 @@ import {
   picksProject,
   sdkFeatureGaps,
 } from '@services/project-discovery';
-import type { SdkFeature } from '@shared/sdk-features';
 import { sdkUpgradeNextSteps } from '../shared/sdk-upgrade-steps';
 import type {
   CiRunnerContext,
   RunnerContext,
+  SdkFeature,
 } from '@programs/program-contract';
 import { FRAMEWORK_REGISTRY } from '@services/frameworks';
 import { abortNoFrameworkDetected } from '../shared/abort-no-framework';

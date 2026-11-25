@@ -12,15 +12,14 @@ import type {
 import { usesLlmSdk } from '../../detection/features';
 import { FRAMEWORK_REGISTRY } from '../../frameworks/registry';
 import { getDetectedWarehouseSources } from '../../warehouse-sources/detect';
-import { detectedProjectOf, getDiscovery, projectPathOf } from '../discover';
-import { findWorkspaceRoot, type RepoFiles } from '../walk';
+import { detectedProjectOf, getDiscovery } from '../discover';
+import type { RepoFiles } from '../walk';
 import {
-  declaredSdk,
+  POSTHOG_SDK,
+  posthogSdkVersions,
+  sdksIn,
   type DeclaredSdk,
-  type GradleCatalogCache,
-  type PostHogSdk,
-} from './sdk-major';
-import { POSTHOG_SDK, sdksIn } from './sdks';
+} from './sdks';
 
 export type TraitDefinition<K extends TraitName> = {
   /**
@@ -41,144 +40,10 @@ export type TraitDefinition<K extends TraitName> = {
   matchKey?: true | string;
 };
 
-/** FrameworkContext key caching whether declared SDK majors should be read as traits. */
-export const VERSIONED_SDK_SKILLS_ENABLED_KEY = 'versionedSdkSkillsEnabled';
-
 const STATIC: readonly TraitSource[] = ['static'];
 
-function isVersionedSdkSkillsEnabled(session: ProgramSession): boolean {
-  return session.frameworkContext[VERSIONED_SDK_SKILLS_ENABLED_KEY] === true;
-}
-
-type FrameworkContext = ProgramSession['frameworkContext'];
-
-/** Workspace root resolved upward per directory when `discovery.mode === 'off'`, keyed by stable `RepoFiles`. */
-const WORKSPACE_ROOT_BY_WALK = new WeakMap<
-  RepoFiles,
-  Map<string, string | undefined>
->();
-
-/** Workspace root resolved upward per directory when discovery has not run, keyed by `frameworkContext`. */
-const WORKSPACE_ROOT_BY_CONTEXT = new WeakMap<
-  FrameworkContext,
-  Map<string, string | undefined>
->();
-
-/** Declared SDK results memoized per discovery walk (`RepoFiles`). */
-const SDKS_BY_WALK = new WeakMap<
-  RepoFiles,
-  Map<string, DeclaredSdk | undefined>
->();
-
-/** Fallback cache when a session has no `RepoFiles` walk attached, keyed by `frameworkContext`. */
-const SDKS_BY_CONTEXT = new WeakMap<
-  FrameworkContext,
-  Map<string, DeclaredSdk | undefined>
->();
-
-/** Parsed Gradle version catalogs memoized per discovery walk (`RepoFiles`). */
-const GRADLE_CATALOGS_BY_WALK = new WeakMap<RepoFiles, GradleCatalogCache>();
-
-/** Fallback Gradle catalog cache when a session has no `RepoFiles` walk attached. */
-const GRADLE_CATALOGS_BY_CONTEXT = new WeakMap<
-  FrameworkContext,
-  GradleCatalogCache
->();
-
-function getOrCreateCache<K extends object, V>(
-  store: WeakMap<K, Map<string, V>>,
-  owner: K,
-): Map<string, V> {
-  let cache = store.get(owner);
-  if (!cache) {
-    cache = new Map();
-    store.set(owner, cache);
-  }
-  return cache;
-}
-
-function resolveWorkspaceRootSafe(targetDir: string): string | undefined {
-  try {
-    const resolvedTarget = path.resolve(targetDir);
-    const { rootDir } = findWorkspaceRoot(resolvedTarget);
-    return path.resolve(rootDir) !== resolvedTarget ? rootDir : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-function sdkWorkspaceDir(
-  session: ProgramSession,
-  dir: string,
-): string | undefined {
-  const discovery = getDiscovery(session);
-  if (discovery && discovery.mode !== 'off') return discovery.rootDir;
-  const resolvedDir = path.resolve(dir);
-  const byDir = discovery
-    ? getOrCreateCache(WORKSPACE_ROOT_BY_WALK, discovery.files)
-    : getOrCreateCache(WORKSPACE_ROOT_BY_CONTEXT, session.frameworkContext);
-  if (byDir.has(resolvedDir)) return byDir.get(resolvedDir);
-  const resolved = resolveWorkspaceRootSafe(resolvedDir);
-  byDir.set(resolvedDir, resolved);
-  return resolved;
-}
-
-function cachedSdk(
-  session: ProgramSession,
-  dir: string,
-  sdk: PostHogSdk,
-): DeclaredSdk | undefined {
-  const workspaceDir = sdkWorkspaceDir(session, dir);
-  const files = getDiscovery(session)?.files;
-  const cache = files
-    ? getOrCreateCache(SDKS_BY_WALK, files)
-    : getOrCreateCache(SDKS_BY_CONTEXT, session.frameworkContext);
-  const catalogCache = files
-    ? getOrCreateCache(GRADLE_CATALOGS_BY_WALK, files)
-    : getOrCreateCache(GRADLE_CATALOGS_BY_CONTEXT, session.frameworkContext);
-  const key = `${dir}\0${workspaceDir ?? ''}\0${sdk}`;
-  if (cache.has(key)) return cache.get(key);
-  const declared = declaredSdk(dir, sdk, workspaceDir, catalogCache);
-  cache.set(key, declared);
-  return declared;
-}
-
-function projectDirOf(
-  session: ProgramSession,
-  projectPath: string,
-): string | undefined {
-  const discovery = getDiscovery(session);
-  if (!discovery) {
-    return projectPath === session.runProject ? session.installDir : undefined;
-  }
-  if (
-    projectPath === session.runProject &&
-    projectPathOf(session, session.installDir) !== projectPath
-  ) {
-    return session.installDir;
-  }
-  return path.resolve(discovery.rootDir, projectPath);
-}
-
-/** The `sdk` the run project declares, while versioned SDK skills are on. */
-export function runProjectSdk(
-  session: ProgramSession,
-  sdk: PostHogSdk,
-): DeclaredSdk | undefined {
-  if (!isVersionedSdkSkillsEnabled(session)) return undefined;
-  const dir = projectDirOf(session, session.runProject);
-  return dir ? cachedSdk(session, dir, sdk) : undefined;
-}
-
-const sdkMajor = (sdk: PostHogSdk) => ({
-  detect: (session: ProgramSession, projectPath: string) => {
-    if (!isVersionedSdkSkillsEnabled(session)) return undefined;
-    const dir = projectDirOf(session, projectPath);
-    return dir ? cachedSdk(session, dir, sdk)?.major : undefined;
-  },
-  fallback: STATIC,
-  matchKey: true as const,
-});
+/** FrameworkContext key: whether the run reads PostHog SDK versions, set from `wizard-versioned-sdk-skills`. */
+export const VERSIONED_SDK_SKILLS_ENABLED_KEY = 'versionedSdkSkillsEnabled';
 
 const nonEmpty = <T>(list: readonly T[]): readonly T[] | undefined =>
   list.length > 0 ? list : undefined;
@@ -210,6 +75,16 @@ function manifestsOf(session: ProgramSession, projectPath: string): Manifests {
 
 const packagesOf = (session: ProgramSession, projectPath: string): string[] =>
   manifestsOf(session, projectPath).flatMap((m) => m.packages);
+
+/** The PostHog SDKs one project declares, while versioned SDK skills are on. */
+export function declaredSdks(
+  session: ProgramSession,
+  projectPath: string = session.runProject,
+): DeclaredSdk[] {
+  return session.frameworkContext[VERSIONED_SDK_SKILLS_ENABLED_KEY] === true
+    ? posthogSdkVersions(manifestsOf(session, projectPath))
+    : [];
+}
 
 function frameworkOf(session: ProgramSession, projectPath: string) {
   if (isRunProject(session, projectPath)) {
@@ -321,6 +196,16 @@ export const TRAITS: { readonly [K in TraitName]: TraitDefinition<K> } = {
       nonEmpty(sdksIn(packagesOf(session, projectPath))),
     fallback: STATIC,
   },
+  posthogSdks: {
+    detect: (session, projectPath) =>
+      nonEmpty(
+        declaredSdks(session, projectPath).map(
+          ({ name, version }) => `${name}@${version.split('.')[0]}`,
+        ),
+      ),
+    fallback: STATIC,
+    matchKey: true,
+  },
   projectRole: {
     detect: (session, projectPath) => {
       const framework = frameworkOf(session, projectPath);
@@ -354,14 +239,6 @@ export const TRAITS: { readonly [K in TraitName]: TraitDefinition<K> } = {
     detect: () => undefined,
     fallback: ['agentic', 'decisions'],
   },
-  sdkPython: sdkMajor('python'),
-  sdkNode: sdkMajor('node'),
-  sdkGo: sdkMajor('go'),
-  sdkRust: sdkMajor('rust'),
-  sdkIos: sdkMajor('ios'),
-  sdkAndroid: sdkMajor('android'),
-  sdkFlutter: sdkMajor('flutter'),
-  sdkKmp: sdkMajor('kmp'),
 };
 
 /** Every trait name, in registry order. */

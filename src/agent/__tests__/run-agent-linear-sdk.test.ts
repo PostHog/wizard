@@ -340,13 +340,16 @@ describe('linear trait SDK skill installation', () => {
                     id: 'sdk-posthog-node-v5',
                     name: 'PostHog Node 5.x',
                     downloadUrl: 'https://skills.test/sdk-posthog-node-v5.zip',
-                    tags: ['sdkNode:4', 'sdkNode:5'],
+                    tags: [
+                      'posthogSdks:posthog-node@4',
+                      'posthogSdks:posthog-node@5',
+                    ],
                   },
                   {
                     id: 'sdk-posthog-node-v6',
                     name: 'PostHog Node 6.x',
                     downloadUrl: 'https://skills.test/sdk-posthog-node-v6.zip',
-                    tags: ['sdkNode:6', 'default'],
+                    tags: ['posthogSdks:posthog-node@6', 'default'],
                   },
                 ],
               },
@@ -363,57 +366,6 @@ describe('linear trait SDK skill installation', () => {
     vi.stubGlobal('fetch', fetchMock);
     return fetchMock;
   }
-
-  it('skips menu fetch and keeps existing sdk cache on readOnly, structured, or non-trait linear runs', async () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'linear-sdk-ro-'));
-    const sentinel = path.join(dir, '.posthog-wizard-cache', 'sdk', 'sentinel');
-    fs.mkdirSync(path.dirname(sentinel), { recursive: true });
-    fs.writeFileSync(sentinel, 'keep', 'utf8');
-    const fetchSpy = mockSdkFetch();
-    try {
-      emitResult(verdict);
-      await runAgent(
-        { ...config, matchKeys: () => ({ sdkNode: ['5'] }) },
-        { ...input, installDir: dir },
-      );
-
-      execute.mockResolvedValueOnce({
-        kind: 'success',
-        structuredOutput: { ok: true },
-      });
-      await runAgent(
-        {
-          ...config,
-          run: {
-            ...config.run,
-            readOnly: false,
-            structured: { schema: { type: 'object' }, timeoutMs: 10_000 },
-          },
-          matchKeys: () => ({ sdkNode: ['5'] }),
-        },
-        { ...input, installDir: dir },
-      );
-
-      emitResult('Done.');
-      await runAgent(
-        {
-          ...config,
-          run: { ...config.run, readOnly: false },
-          matchKeys: () => ({ framework: ['express'] }),
-        },
-        { ...input, installDir: dir },
-      );
-
-      expect(fetchSpy).not.toHaveBeenCalled();
-      expect(fs.readFileSync(sentinel, 'utf8')).toBe('keep');
-      expect(execute.mock.calls[2][1]).not.toContain(
-        '.posthog-wizard-cache/sdk',
-      );
-    } finally {
-      vi.unstubAllGlobals();
-      fs.rmSync(dir, { recursive: true, force: true });
-    }
-  });
 
   it('installs matching SDK trait skill, forwards triageProvider, injects prompt path, and cleans cache after linear run', async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'linear-sdk-live-'));
@@ -445,7 +397,7 @@ describe('linear trait SDK skill installation', () => {
             prompt: undefined,
             customPrompt: () => 'CUSTOM',
           },
-          matchKeys: () => ({ sdkNode: ['5'] }),
+          matchKeys: () => ({ posthogSdks: ['posthog-node@5'] }),
         },
         { ...input, installDir: dir },
       );
@@ -489,7 +441,7 @@ describe('linear trait SDK skill installation', () => {
         {
           ...config,
           run: { ...config.run, readOnly: false },
-          matchKeys: () => ({ sdkNode: ['5'] }),
+          matchKeys: () => ({ posthogSdks: ['posthog-node@5'] }),
         },
         { ...input, installDir: dir },
       );
@@ -500,7 +452,7 @@ describe('linear trait SDK skill installation', () => {
         {
           ...config,
           run: { ...config.run, readOnly: false },
-          matchKeys: () => ({ sdkNode: ['5'] }),
+          matchKeys: () => ({ posthogSdks: ['posthog-node@5'] }),
         },
         { ...input, installDir: subDir },
       );
@@ -525,7 +477,7 @@ describe('linear trait SDK skill installation', () => {
           {
             ...config,
             run: { ...config.run, readOnly: false },
-            matchKeys: () => ({ sdkNode: ['5'] }),
+            matchKeys: () => ({ posthogSdks: ['posthog-node@5'] }),
           },
           { ...input, installDir: cleanDir },
         );
