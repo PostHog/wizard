@@ -52,6 +52,34 @@ export function validateNonInteractiveOptions(
   return true;
 }
 
+/**
+ * Decide whether to warn about an unexpected `--api-key` prefix, and with what
+ * message. Returns `null` when the key is acceptable.
+ *
+ * CI and headless accept the same two credentials: a personal API key (`phx_`)
+ * and a `pha_` OAuth access token minted under the wizard's own OAuth
+ * application (cloud runs, and the CI bot). Both authenticate the mint the
+ * same way. Anything else is unexpected and warns.
+ *
+ * Extracted as a pure predicate so it can be unit-tested without a UI.
+ */
+export function keyPrefixWarning(apiKey: string | undefined): string | null {
+  if (!apiKey || apiKey.startsWith('phx_') || apiKey.startsWith('pha_')) {
+    return null;
+  }
+  const hint = apiKey.startsWith('phc_')
+    ? ' (phc_ is a project/client key; expected a personal API key or a wizard-app token)'
+    : '';
+  return `--api-key does not start with "phx_" or "pha_"${hint}. Continuing anyway, but the LLM Gateway may reject it with a 401.`;
+}
+
+function warnOnUnexpectedKeyPrefix(apiKey: string | undefined): void {
+  const message = keyPrefixWarning(apiKey);
+  if (!message) return;
+  consoleLog.intro('PostHog Wizard');
+  consoleLog.log.warn(message);
+}
+
 /** Print the refusal and exit 1; it only returns where `process.exit` is stubbed. */
 function refuse(code: ErrorCode, message: string, shown = message): false {
   consoleLog.intro('PostHog Wizard');
@@ -68,6 +96,7 @@ export function runNonInteractive(
 ): void {
   if (wantsDiscoveryTest(options)) return runDiscoveryTest(config, options);
   if (!validateNonInteractiveOptions(options, mode)) return;
+  warnOnUnexpectedKeyPrefix(options.apiKey as string | undefined);
   configureLogFileFromEnvironment();
 
   const env = readEnvironment();

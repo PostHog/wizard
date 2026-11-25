@@ -301,13 +301,13 @@ export const WIZARD_OAUTH_SCOPES = [
 ] as const;
 
 /** Login scopes no setup task needs, so a grant without one never explains a failed setup. */
-export const WIZARD_NON_SETUP_SCOPES: readonly string[] = [
+export const WIZARD_NON_SETUP_SCOPES = [
   'health_issue:read',
   'wizard_session:read',
   'wizard_session:write',
   'wizard_run:write',
   'organization:read',
-];
+] as const satisfies readonly (typeof WIZARD_OAUTH_SCOPES)[number][];
 
 // ── Wizard run / variants ───────────────────────────────────────────
 

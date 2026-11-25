@@ -1329,7 +1329,6 @@ describe('runProgram', () => {
     expect(refreshAccessToken).toHaveBeenCalledExactlyOnceWith(
       'phr_aging',
       'https://posthog.example',
-      undefined,
     );
     expect(agentInput().credentials.accessToken).toBe('pha_refreshed');
     expect(s.session).toMatchObject({
