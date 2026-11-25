@@ -85,6 +85,18 @@ export const ERROR_CATALOG: Record<ErrorCode, ErrorCatalogEntry> = {
     retry: 'yes',
     description: 'Fetching user or project data from the PostHog API failed.',
   },
+  [ErrorCodes.AuthLoginFailed]: {
+    group: 'auth',
+    retry: 'yes',
+    description:
+      'The OAuth login failed for a reason other than a timeout or a denial.',
+  },
+  [ErrorCodes.AuthAccessDenied]: {
+    group: 'auth',
+    retry: 'no',
+    description:
+      'The user denied the wizard access on the OAuth consent screen.',
+  },
   [ErrorCodes.EnvLocalServicesDown]: {
     group: 'env',
     retry: 'yes',

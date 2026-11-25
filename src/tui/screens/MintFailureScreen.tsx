@@ -7,10 +7,10 @@ import { Colors, Icons } from '@tui/styles';
 import {
   AGENT_HANDOFF_STEP,
   LOG_PROMPT,
+  LOG_QUESTION,
   LOG_SENT_NOTE,
   REPORTED_NOTE,
   RERUN_COMMAND,
-  RETRY_HEADLINE,
   failureCopy,
 } from '@tui/mint-failure';
 import type { WizardSpellbook } from '@tui/services/wizard-spellbook';
@@ -88,12 +88,13 @@ export function MintFailureScreen({
     }
   };
 
-  const isAskingAboutLog = logChoice === 'unanswered' && !spellbook && !error;
+  const isAskingAboutLog =
+    copy.asksAboutLog && logChoice === 'unanswered' && !spellbook && !error;
 
   const options: { label: string; value: Action }[] = isAskingAboutLog
     ? [
-        { label: 'Send log', value: 'send-log' },
-        { label: "Don't send", value: 'keep-log' },
+        { label: 'Send log and continue', value: 'send-log' },
+        { label: 'Continue without sending', value: 'keep-log' },
       ]
     : error
     ? [
@@ -109,9 +110,13 @@ export function MintFailureScreen({
         { label: 'Exit', value: 'exit' },
       ]
     : [
-        { label: 'Open in Claude Code', value: 'claude' },
-        { label: 'Open in Codex', value: 'codex' },
-        { label: 'Save skill', value: 'save' },
+        ...(copy.canHandOffToAgent
+          ? [
+              { label: 'Open in Claude Code', value: 'claude' as const },
+              { label: 'Open in Codex', value: 'codex' as const },
+              { label: 'Save skill', value: 'save' as const },
+            ]
+          : []),
         { label: 'Exit', value: 'exit' },
       ];
 
@@ -140,34 +145,45 @@ export function MintFailureScreen({
               </Text>
             </Box>
           </>
-        ) : isAskingAboutLog ? (
+        ) : (
           <Box flexDirection="column" width="100%">
+            {copy.asksAboutLog && (
+              <Box marginBottom={1}>
+                <Text dimColor>Step {isAskingAboutLog ? 1 : 2} of 2</Text>
+              </Box>
+            )}
             <Text color={Colors.error} bold>
               ✘ {copy.headline}
             </Text>
-            <Text wrap="wrap">
-              {copy.cause} {REPORTED_NOTE}
-            </Text>
-            <Box marginTop={1}>
-              <Text wrap="wrap">{LOG_PROMPT}</Text>
-            </Box>
-          </Box>
-        ) : (
-          <Box flexDirection="column" width="100%">
+            <Text wrap="wrap">{copy.cause}</Text>
+            {copy.asksAboutLog && (
+              <Text dimColor wrap="wrap">
+                {REPORTED_NOTE}
+              </Text>
+            )}
             {logChoice === 'sent' && (
-              <Box marginBottom={1}>
+              <Box marginTop={1}>
                 <Text color={Colors.success}>
                   {Icons.check} {LOG_SENT_NOTE}
                 </Text>
               </Box>
             )}
-            <Text bold>{RETRY_HEADLINE}</Text>
-            <Box marginTop={1}>
-              <Text wrap="wrap">
-                1. {copy.rerun} <Text color="cyan">{RERUN_COMMAND}</Text>
-              </Text>
-            </Box>
-            <Text wrap="wrap">2. {AGENT_HANDOFF_STEP}</Text>
+            {isAskingAboutLog ? (
+              <Box flexDirection="column" marginTop={1}>
+                <Text>{LOG_QUESTION}</Text>
+                <Text dimColor wrap="wrap">
+                  {LOG_PROMPT}
+                </Text>
+              </Box>
+            ) : (
+              <Box flexDirection="column" marginTop={1}>
+                <Text wrap="wrap">• {copy.rerun}</Text>
+                <Text bold>{`    ${RERUN_COMMAND}`}</Text>
+                {copy.canHandOffToAgent && (
+                  <Text wrap="wrap">• {AGENT_HANDOFF_STEP}</Text>
+                )}
+              </Box>
+            )}
           </Box>
         )}
         {spellbook && (

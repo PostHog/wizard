@@ -13,17 +13,17 @@
 
 
 
+                     Step 1 of 2
 
                      ✘ The wizard is busy right now
-                     The wizard's AI service is busy, so setup stopped before finishing. We got the
-                      error automatically.
+                     The wizard's AI service is busy, so setup stopped before finishing.
+                     We got the error automatically.
 
-                     Send your log too? It helps us find the cause. We mask the keys and tokens we
-                     recognize.
+                     Send your log too?
+                     It helps us find the cause. We mask the keys and tokens we recognize.
 
-                                                      ▸ Send log
-                                                        Don't send
-
+                                               ▸ Send log and continue
+                                                 Continue without sending
 
 
 

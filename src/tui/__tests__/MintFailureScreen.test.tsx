@@ -29,14 +29,15 @@ const saved = {
 };
 const delay = () => new Promise((resolve) => setTimeout(resolve, 30));
 
-function setup(errorCode?: ErrorCode) {
+function setup(errorCode?: ErrorCode, isLoggedIn = true) {
   const store = new WizardStore();
-  store.setCredentials({
-    accessToken: 'tok',
-    projectApiKey: 'pk',
-    host: HostResolution.fromApiHost('https://app.posthog.com'),
-    projectId: 1,
-  });
+  if (isLoggedIn)
+    store.setCredentials({
+      accessToken: 'tok',
+      projectApiKey: 'pk',
+      host: HostResolution.fromApiHost('https://app.posthog.com'),
+      projectId: 1,
+    });
   store.setOutroData({
     kind: OutroKind.Error,
     message: 'agent failed',
@@ -76,7 +77,7 @@ it('sends the log, saves the skill, then continues setup', async () => {
     expect.objectContaining({ message: 'agent failed', is_capacity: false }),
   );
   expect(app.lastFrame()).toContain('Log sent.');
-  expect(app.lastFrame()).toContain('Finish setting up PostHog');
+  expect(app.lastFrame()).toContain('Step 2 of 2');
   await choose(2);
   expect(app.lastFrame()).toContain(saved.path);
   expect(store.mintHandoff).toBeNull();
@@ -137,3 +138,14 @@ it.each([
     expect(screenText).not.toContain('agent failed');
   },
 );
+
+it('routes a failed login here and offers only Exit after the log question', async () => {
+  const { app, store, choose } = setup(ErrorCodes.AuthLoginFailed, false);
+  expect(store.router.resolve(store)).toBe(ScreenId.MintFailure);
+  await choose(1);
+  const screenText = app.lastFrame()?.replace(/\s+/g, ' ');
+  expect(screenText).toContain("You're not logged in yet");
+  expect(screenText).not.toContain('Open in Claude Code');
+  await choose(0);
+  expect(store.mintHandoff).toBe('exit');
+});

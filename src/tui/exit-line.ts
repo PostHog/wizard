@@ -121,12 +121,17 @@ function exitSummary(store: WizardStore): string {
 
   if (isRunFailure(store.session)) {
     const spellbook = store.spellbook;
-    const { headline, cause } = failureCopy(store.session);
+    const { headline, cause, asksAboutLog } = failureCopy(store.session);
     return [
       `${headline}. ${cause}`,
       spellbook &&
         `${DIM}Point your agent at this skill (triple-click to select):${RESET_ATTRS}\n${spellbook.path}`,
-      `We got the error automatically.\n${DIM}Wizard log:${RESET_ATTRS} ${getLogFilePath()}`,
+      [
+        asksAboutLog && 'We got the error automatically.',
+        `${DIM}Wizard log:${RESET_ATTRS} ${getLogFilePath()}`,
+      ]
+        .filter(Boolean)
+        .join('\n'),
       loginBlock,
       costLine,
     ]

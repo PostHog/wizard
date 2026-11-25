@@ -16,6 +16,8 @@ export const ErrorCodes = {
   AuthSettingsConflict: 'PHW_AUTH_SETTINGS_CONFLICT',
   AuthStoredLoginConflict: 'PHW_AUTH_STORED_LOGIN_CONFLICT',
   AuthProjectFetchFailed: 'PHW_AUTH_PROJECT_FETCH_FAILED',
+  AuthLoginFailed: 'PHW_AUTH_LOGIN_FAILED',
+  AuthAccessDenied: 'PHW_AUTH_ACCESS_DENIED',
   EnvLocalServicesDown: 'PHW_ENV_LOCAL_SERVICES_DOWN',
   EnvServiceOutage: 'PHW_ENV_SERVICE_OUTAGE',
   DetectBadDirectory: 'PHW_DETECT_BAD_DIRECTORY',
