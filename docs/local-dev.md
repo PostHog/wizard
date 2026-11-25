@@ -246,7 +246,9 @@ pnpm try --test-discovery=json --install-dir=/absolute/path/to/app
 and prints where it saved it. A relative path is from the directory the command
 ran in. A path that ends in `.json` saves the JSON report; any other path saves
 the text report, unless the mode is `json`. Repeat the option to save one run to
-more than one file.
+more than one file. The save follows no link: it stops with a message when the
+file is a link, or when a folder on the way is a link below the repo or below
+the directory the command ran in.
 
 ```bash
 pnpm try --test-discovery --test-discovery-out scratch/discovery.txt --install-dir=/absolute/path/to/app

@@ -35,6 +35,58 @@ export function discoveryTestFiles(options: Record<string, unknown>): string[] {
     .filter((out): out is string => typeof out === 'string' && out !== '');
 }
 
+/** Opens a file for writing and refuses a link at its last part, where the platform can. */
+const WRITE_NO_FOLLOW =
+  fs.constants.O_WRONLY |
+  fs.constants.O_CREAT |
+  fs.constants.O_TRUNC |
+  (fs.constants.O_NOFOLLOW ?? 0);
+
+/** Refuses a path below `boundary` that passes through a link there: a repo's files can hold a link to anywhere on the machine. */
+function refuseLinksBelow(boundary: string, file: string): void {
+  const base = path.resolve(boundary);
+  const below = path.relative(base, file).split(path.sep);
+  // Elsewhere on the machine, or on another drive: not this boundary's to check.
+  if (below[0] === '..' || path.isAbsolute(below.join(path.sep))) return;
+  let current = base;
+  // The folders on the way; the last part is checked where the file is opened.
+  for (const part of below.slice(0, -1)) {
+    current = path.join(current, part);
+    const found = fs.lstatSync(current, { throwIfNoEntry: false });
+    if (found && !found.isDirectory()) {
+      throw new Error(
+        `--test-discovery-out: ${current} is a link or not a folder, so the report was not saved to ${file}.`,
+      );
+    }
+  }
+}
+
+/**
+ * Save the report to `file`. Its last part is a plain file or a new one, and
+ * below each of `boundaries` it passes through no link, so a link in a repo
+ * cannot send the write to another file.
+ */
+export function saveDiscoveryReport(
+  file: string,
+  text: string,
+  boundaries: readonly string[],
+): void {
+  for (const boundary of boundaries) refuseLinksBelow(boundary, file);
+  const found = fs.lstatSync(file, { throwIfNoEntry: false });
+  if (found && !found.isFile()) {
+    throw new Error(
+      `--test-discovery-out: ${file} is a link or not a plain file, so the report was not saved.`,
+    );
+  }
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const fd = fs.openSync(file, WRITE_NO_FOLLOW, 0o666);
+  try {
+    fs.writeSync(fd, text);
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
 const pad = (label: string, width = 18): string => label.padEnd(width);
 
 /** A value from the repo as terminal text: control characters replaced, so a file name cannot send an escape sequence. JSON output escapes them itself. */
@@ -236,8 +288,18 @@ export function runDiscoveryTest(
     for (const out of files) {
       // A relative path is from the directory the command ran in.
       const file = path.resolve(out);
-      fs.mkdirSync(path.dirname(file), { recursive: true });
-      fs.writeFileSync(file, `${render(file)}\n`);
+      try {
+        // The repo and that directory are where a link could come from a checkout.
+        saveDiscoveryReport(file, `${render(file)}\n`, [
+          process.cwd(),
+          report.rootDir,
+        ]);
+      } catch (error) {
+        // A refused or failed save is the caller's to fix, not an internal error.
+        const message = error instanceof Error ? error.message : String(error);
+        process.stderr.write(`${message}\n`);
+        return 1;
+      }
       process.stdout.write(`Saved the report to ${file}\n`);
     }
     if (files.length === 0) process.stdout.write(`${render()}\n`);
