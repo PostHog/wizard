@@ -739,6 +739,12 @@ export class WizardStore implements TuiView {
     this.popOverlay();
   }
 
+  /** Close the paste-code overlay if it is open, because the login settled without it. */
+  closeManualAuthCode(): void {
+    this._resolveManualAuthCode = null;
+    if (this.router.activeScreen === Overlay.ManualAuthCode) this.popOverlay();
+  }
+
   /**
    * Submit a manually-entered authorization code: dismiss the overlay and
    * resolve the in-flight OAuth flow so it can exchange the code for a token.

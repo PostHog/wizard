@@ -6,6 +6,7 @@ import type { WizardStore } from '@tui/store';
 import { WIZARD_OAUTH_SCOPES } from '@shared/constants';
 import { getOAuthScopesForProgram } from '@programs';
 import { CONNECT_SLACK_SCOPE_ADDITIONS } from '@shared/oauth-scopes';
+import { abortOnScreens } from '@tui/abort';
 
 vi.mock('@utils/urls', () => ({
   detectRegion: vi.fn(),
@@ -24,6 +25,9 @@ vi.mock('@utils/analytics', () => ({
     captureException: vi.fn(),
     setTag: vi.fn(),
   },
+}));
+vi.mock(import('@tui/abort'), () => ({
+  abortOnScreens: vi.fn(() => Promise.reject(new Error('aborted'))),
 }));
 vi.mock(import('../oauth'), () => ({
   performOAuthFlow: vi.fn(),
@@ -166,4 +170,44 @@ describe('getOrAskForProjectData program login', () => {
     );
     expect(result.projectApiKey).toBe('phc_test');
   });
+});
+
+// A failure after the browser login must end the run as failed: the TUI host reads a missing login as a finished run.
+describe('getOrAskForProjectData after a failed fetch', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockedFetchProject.mockResolvedValue(project);
+    mockedFetchUser.mockResolvedValue({
+      distinct_id: 'user-1',
+      role_at_organization: null,
+    });
+    mockedOAuthFlow.mockResolvedValue({
+      access_token: 'pha_test',
+      scope: 'event_definition:write',
+      scoped_teams: [123],
+      posthog_region: 'us',
+    });
+  });
+
+  it.each([
+    ['project', mockedFetchProject],
+    ['user', mockedFetchUser],
+  ])(
+    'aborts with the fetch error when the %s fetch fails',
+    async (_, fetch) => {
+      fetch.mockRejectedValue(new Error('Request failed with status code 503'));
+
+      await expect(
+        getOrAskForProjectData({ store, projectId: 123 }),
+      ).rejects.toThrow('aborted');
+
+      expect(abortOnScreens).toHaveBeenCalledWith(
+        store,
+        expect.objectContaining({
+          code: 'PHW_AUTH_PROJECT_FETCH_FAILED',
+          message: expect.stringContaining('status code 503'),
+        }),
+      );
+    },
+  );
 });
