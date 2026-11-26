@@ -67,6 +67,7 @@ describe('Analytics', () => {
       alias: vi.fn(),
       identify: vi.fn(),
       groupIdentify: vi.fn(),
+      on: vi.fn(),
       shutdown: vi.fn().mockResolvedValue(undefined),
     } as any;
 
@@ -82,10 +83,9 @@ describe('Analytics', () => {
 
       analytics.captureException(error, properties);
 
-      expect(mockPostHogInstance.captureException).toHaveBeenCalledWith(
-        error,
-        'test-uuid',
-        {
+      expect(mockPostHogInstance.captureException).toHaveBeenCalledWith(error, {
+        distinctId: 'test-uuid',
+        properties: {
           team: ANALYTICS_TEAM_TAG,
           $app_name: 'wizard',
           build: 'dev',
@@ -94,7 +94,7 @@ describe('Analytics', () => {
           version: VERSION,
           ...properties,
         },
-      );
+      });
     });
 
     it('fingerprints a coded error by its code, whatever its stack', () => {
@@ -106,13 +106,12 @@ describe('Analytics', () => {
 
       analytics.captureException(error);
 
-      expect(mockPostHogInstance.captureException).toHaveBeenCalledWith(
-        error,
-        'test-uuid',
-        expect.objectContaining({
+      expect(mockPostHogInstance.captureException).toHaveBeenCalledWith(error, {
+        distinctId: 'test-uuid',
+        properties: expect.objectContaining({
           $exception_fingerprint: 'wizard_PHW_AGENT_ORCHESTRATOR_TASKS_FAILED',
         }),
-      );
+      });
     });
 
     it('fingerprints a plain error by the error_code it is captured with', () => {
@@ -122,10 +121,12 @@ describe('Analytics', () => {
 
       expect(mockPostHogInstance.captureException).toHaveBeenCalledWith(
         expect.any(Error),
-        'test-uuid',
-        expect.objectContaining({
-          $exception_fingerprint: 'wizard_PHW_AGENT_YARA_VIOLATION',
-        }),
+        {
+          distinctId: 'test-uuid',
+          properties: expect.objectContaining({
+            $exception_fingerprint: 'wizard_PHW_AGENT_YARA_VIOLATION',
+          }),
+        },
       );
     });
 
@@ -137,10 +138,12 @@ describe('Analytics', () => {
 
       expect(mockPostHogInstance.captureException).toHaveBeenCalledWith(
         expect.any(Error),
-        'test-uuid',
-        expect.objectContaining({
-          $exception_fingerprint: 'wizard_oauth_invalid_grant',
-        }),
+        {
+          distinctId: 'test-uuid',
+          properties: expect.objectContaining({
+            $exception_fingerprint: 'wizard_oauth_invalid_grant',
+          }),
+        },
       );
     });
 
@@ -151,10 +154,9 @@ describe('Analytics', () => {
       analytics.setTag('testTag', 'testValue');
       analytics.captureException(error, properties);
 
-      expect(mockPostHogInstance.captureException).toHaveBeenCalledWith(
-        error,
-        'test-uuid',
-        {
+      expect(mockPostHogInstance.captureException).toHaveBeenCalledWith(error, {
+        distinctId: 'test-uuid',
+        properties: {
           team: ANALYTICS_TEAM_TAG,
           $app_name: 'wizard',
           build: 'dev',
@@ -164,7 +166,7 @@ describe('Analytics', () => {
           testTag: 'testValue',
           ...properties,
         },
-      );
+      });
     });
 
     it('should capture exception with distinct ID when set', () => {
@@ -174,10 +176,9 @@ describe('Analytics', () => {
       analytics.identifyUser({ distinct_id: distinctId } as unknown as ApiUser);
       analytics.captureException(error);
 
-      expect(mockPostHogInstance.captureException).toHaveBeenCalledWith(
-        error,
+      expect(mockPostHogInstance.captureException).toHaveBeenCalledWith(error, {
         distinctId,
-        {
+        properties: {
           team: ANALYTICS_TEAM_TAG,
           $app_name: 'wizard',
           build: 'dev',
@@ -186,7 +187,7 @@ describe('Analytics', () => {
           version: VERSION,
           $session_id: 'session-uuid',
         },
-      );
+      });
     });
 
     it('should capture exception without properties when not provided', () => {
@@ -194,10 +195,9 @@ describe('Analytics', () => {
 
       analytics.captureException(error);
 
-      expect(mockPostHogInstance.captureException).toHaveBeenCalledWith(
-        error,
-        'test-uuid',
-        {
+      expect(mockPostHogInstance.captureException).toHaveBeenCalledWith(error, {
+        distinctId: 'test-uuid',
+        properties: {
           team: ANALYTICS_TEAM_TAG,
           $app_name: 'wizard',
           build: 'dev',
@@ -205,7 +205,7 @@ describe('Analytics', () => {
           run_surface: 'local',
           version: VERSION,
         },
-      );
+      });
     });
 
     it('should merge tags with provided properties', () => {
@@ -217,10 +217,9 @@ describe('Analytics', () => {
       analytics.setTag('framework_version', '1.0.0');
       analytics.captureException(error, properties);
 
-      expect(mockPostHogInstance.captureException).toHaveBeenCalledWith(
-        error,
-        'test-uuid',
-        {
+      expect(mockPostHogInstance.captureException).toHaveBeenCalledWith(error, {
+        distinctId: 'test-uuid',
+        properties: {
           team: ANALYTICS_TEAM_TAG,
           $app_name: 'wizard',
           build: 'dev',
@@ -232,7 +231,7 @@ describe('Analytics', () => {
           integration: 'nextjs',
           step: 'installation',
         },
-      );
+      });
     });
 
     it('should override tags with properties when keys conflict', () => {
@@ -242,10 +241,9 @@ describe('Analytics', () => {
       analytics.setTag('integration', 'nextjs');
       analytics.captureException(error, properties);
 
-      expect(mockPostHogInstance.captureException).toHaveBeenCalledWith(
-        error,
-        'test-uuid',
-        {
+      expect(mockPostHogInstance.captureException).toHaveBeenCalledWith(error, {
+        distinctId: 'test-uuid',
+        properties: {
           team: ANALYTICS_TEAM_TAG,
           $app_name: 'wizard',
           build: 'dev',
@@ -254,7 +252,7 @@ describe('Analytics', () => {
           version: VERSION,
           integration: 'react',
         },
-      );
+      });
     });
 
     it('should always include team property in exceptions', () => {
@@ -262,10 +260,9 @@ describe('Analytics', () => {
 
       analytics.captureException(error);
 
-      expect(mockPostHogInstance.captureException).toHaveBeenCalledWith(
-        error,
-        'test-uuid',
-        {
+      expect(mockPostHogInstance.captureException).toHaveBeenCalledWith(error, {
+        distinctId: 'test-uuid',
+        properties: {
           team: ANALYTICS_TEAM_TAG,
           $app_name: 'wizard',
           build: 'dev',
@@ -273,7 +270,7 @@ describe('Analytics', () => {
           run_surface: 'local',
           version: VERSION,
         },
-      );
+      });
     });
   });
 
@@ -371,7 +368,7 @@ describe('Analytics', () => {
     });
 
     it("tags the SDK's exposure event", () => {
-      const beforeSend = MockedPostHog.mock.calls[0][1]!.before_send as (
+      const beforeSend = MockedPostHog.mock.calls[0][1]!.beforeSend as (
         e: any,
       ) => any;
       const sent = beforeSend({
@@ -417,7 +414,8 @@ describe('Analytics', () => {
       analytics.captureException(new Error('e'));
 
       expect(
-        (mockPostHogInstance.captureException as Mock).mock.calls.at(-1)?.[2],
+        (mockPostHogInstance.captureException as Mock).mock.calls.at(-1)?.[1]
+          ?.properties,
       ).toMatchObject({ build: 'dev' });
     });
 
@@ -428,7 +426,8 @@ describe('Analytics', () => {
       prodAnalytics.captureException(new Error('e'));
 
       expect(
-        (mockPostHogInstance.captureException as Mock).mock.calls.at(-1)?.[2],
+        (mockPostHogInstance.captureException as Mock).mock.calls.at(-1)?.[1]
+          ?.properties,
       ).toMatchObject({ build: 'prod' });
     });
   });
@@ -438,7 +437,8 @@ describe('Analytics', () => {
       analytics.captureException(new Error('e'));
 
       expect(
-        (mockPostHogInstance.captureException as Mock).mock.calls.at(-1)?.[2],
+        (mockPostHogInstance.captureException as Mock).mock.calls.at(-1)?.[1]
+          ?.properties,
       ).toMatchObject({ run_surface: 'local' });
     });
 
@@ -449,7 +449,8 @@ describe('Analytics', () => {
         cloud.captureException(new Error('e'));
 
         expect(
-          (mockPostHogInstance.captureException as Mock).mock.calls.at(-1)?.[2],
+          (mockPostHogInstance.captureException as Mock).mock.calls.at(-1)?.[1]
+            ?.properties,
         ).toMatchObject({ run_surface: 'cloud' });
       } finally {
         envState.runSurface = 'local';
@@ -482,7 +483,8 @@ describe('Analytics', () => {
         (mockPostHogInstance.capture as Mock).mock.calls.at(-1)?.[0].properties,
       ).toMatchObject({ task_run_id: 'task-run-uuid', task_id: 'task-uuid' });
       expect(
-        (mockPostHogInstance.captureException as Mock).mock.calls.at(-1)?.[2],
+        (mockPostHogInstance.captureException as Mock).mock.calls.at(-1)?.[1]
+          ?.properties,
       ).toMatchObject({ task_run_id: 'task-run-uuid', task_id: 'task-uuid' });
     });
   });
@@ -539,7 +541,7 @@ describe('Analytics', () => {
       // Pre-login: run_id is present, $session_id is not.
       analytics.captureException(error);
       const beforeLogin = (mockPostHogInstance.captureException as Mock).mock
-        .calls[0][2];
+        .calls[0][1].properties;
       expect(beforeLogin).toMatchObject({ run_id: 'run-uuid' });
       expect(beforeLogin).not.toHaveProperty('$session_id');
 
@@ -547,7 +549,8 @@ describe('Analytics', () => {
       analytics.identifyUser({ distinct_id: 'user-123' } as unknown as ApiUser);
       analytics.captureException(error);
       expect(
-        (mockPostHogInstance.captureException as Mock).mock.calls[1][2],
+        (mockPostHogInstance.captureException as Mock).mock.calls[1][1]
+          .properties,
       ).toMatchObject({ run_id: 'run-uuid', $session_id: 'session-uuid' });
     });
 
@@ -563,16 +566,17 @@ describe('Analytics', () => {
     });
   });
 
-  describe('exception repair (before_send)', () => {
+  describe('exception repair (beforeSend)', () => {
     type TestEvent = Record<string, unknown> & {
       distinctId?: string;
       properties?: Record<string, unknown>;
+      options?: Record<string, unknown>;
     };
     type BeforeSendFn = (event: TestEvent | null) => TestEvent | null;
 
     const getBeforeSend = (): BeforeSendFn =>
-      (MockedPostHog.mock.calls[0][1] as { before_send: BeforeSendFn })
-        .before_send;
+      (MockedPostHog.mock.calls[0][1] as { beforeSend: BeforeSendFn })
+        .beforeSend;
 
     it('reattaches identity and tags to autocaptured exceptions', () => {
       analytics.setTag('command', 'slack');
@@ -581,6 +585,9 @@ describe('Analytics', () => {
       const result = beforeSend({
         event: '$exception',
         distinctId: 'random-uuidv7',
+        options: {
+          process_person_profile: false,
+        },
         properties: {
           $exception_list: [{ type: 'Error' }],
           $process_person_profile: false,
@@ -588,6 +595,7 @@ describe('Analytics', () => {
       });
 
       expect(result?.distinctId).toBe('test-uuid');
+      expect(result?.options).toEqual({});
       expect(result?.properties).toEqual({
         $app_name: 'wizard',
         build: 'dev',
@@ -640,22 +648,22 @@ describe('Analytics', () => {
     });
   });
 
-  describe('groups (before_send injection)', () => {
+  describe('groups (beforeSend injection)', () => {
     type TestEvent = Record<string, unknown> & {
-      groups?: Record<string, string>;
+      properties?: Record<string, unknown>;
     };
     type BeforeSendFn = (event: TestEvent | null) => TestEvent | null;
 
     const getBeforeSend = (): BeforeSendFn =>
-      (MockedPostHog.mock.calls[0][1] as { before_send: BeforeSendFn })
-        .before_send;
+      (MockedPostHog.mock.calls[0][1] as { beforeSend: BeforeSendFn })
+        .beforeSend;
 
     it('does not attach groups before setGroups is called', () => {
       const beforeSend = getBeforeSend();
       const event = { event: 'x', distinctId: 'd', properties: {} };
 
       expect(beforeSend(event)).toBe(event);
-      expect(event).not.toHaveProperty('groups');
+      expect(event.properties).not.toHaveProperty('$groups');
     });
 
     it('injects the active group map into every event', () => {
@@ -672,7 +680,7 @@ describe('Analytics', () => {
         properties: {},
       });
 
-      expect(result?.groups).toEqual({
+      expect(result?.properties?.$groups).toEqual({
         instance: 'https://us.posthog.com',
         organization: 'org-1',
         project: 'team-uuid',
@@ -686,11 +694,10 @@ describe('Analytics', () => {
       const result = beforeSend({
         event: 'x',
         distinctId: 'd',
-        properties: {},
-        groups: { project: 'override' },
+        properties: { $groups: { project: 'override' } },
       });
 
-      expect(result?.groups).toEqual({
+      expect(result?.properties?.$groups).toEqual({
         instance: 'https://us.posthog.com',
         project: 'override',
       });
@@ -781,10 +788,9 @@ describe('Analytics', () => {
         step: 'wizard-execution',
       });
 
-      expect(mockPostHogInstance.captureException).toHaveBeenCalledWith(
-        error,
-        'test-uuid',
-        {
+      expect(mockPostHogInstance.captureException).toHaveBeenCalledWith(error, {
+        distinctId: 'test-uuid',
+        properties: {
           team: ANALYTICS_TEAM_TAG,
           $app_name: 'wizard',
           build: 'dev',
@@ -797,7 +803,7 @@ describe('Analytics', () => {
           arguments: JSON.stringify({ installDir: '/test' }),
           step: 'wizard-execution',
         },
-      );
+      });
     });
 
     it('attributes exceptions to the identified user', () => {
@@ -808,10 +814,9 @@ describe('Analytics', () => {
       analytics.setTag('integration', 'svelte');
       analytics.captureException(error);
 
-      expect(mockPostHogInstance.captureException).toHaveBeenCalledWith(
-        error,
+      expect(mockPostHogInstance.captureException).toHaveBeenCalledWith(error, {
         distinctId,
-        {
+        properties: {
           team: ANALYTICS_TEAM_TAG,
           $app_name: 'wizard',
           build: 'dev',
@@ -821,7 +826,7 @@ describe('Analytics', () => {
           $session_id: 'session-uuid',
           integration: 'svelte',
         },
-      );
+      });
     });
   });
 });

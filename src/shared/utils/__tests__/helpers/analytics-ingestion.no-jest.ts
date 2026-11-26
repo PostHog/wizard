@@ -28,7 +28,12 @@ async function readBatch(body: unknown): Promise<IngestedEvent[]> {
 }
 
 export const accepted = (): Promise<Response> =>
-  Promise.resolve(new Response('{"status":1}', { status: 200 }));
+  Promise.resolve(
+    new Response('{"results":{}}', {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    }),
+  );
 
 export function recordAnalyticsIngestion(): Ingestion {
   const ingestion: Ingestion = { events: [], respond: accepted };
@@ -38,7 +43,7 @@ export function recordAnalyticsIngestion(): Ingestion {
     async (...[input, init]: Parameters<typeof fetch>): Promise<Response> => {
       const url = new URL(input instanceof Request ? input.url : String(input));
       if (url.origin !== ANALYTICS_HOST_URL) return realFetch(input, init);
-      if (!url.pathname.startsWith('/batch')) return accepted();
+      if (!url.pathname.startsWith('/i/v1/analytics/events')) return accepted();
       const response = await ingestion.respond();
       if (response.ok) ingestion.events.push(...(await readBatch(init?.body)));
       return response;

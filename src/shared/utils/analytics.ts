@@ -140,16 +140,28 @@ export class Analytics {
       flushAt: 1,
       flushInterval: 0,
       enableExceptionAutocapture: true,
-      before_send: (event) => {
+      beforeSend: (event) => {
         if (!event) return event;
         if (Object.keys(this.groups).length > 0) {
-          event.groups = { ...this.groups, ...event.groups };
+          const existingGroups =
+            event.properties?.$groups &&
+            typeof event.properties.$groups === 'object' &&
+            !Array.isArray(event.properties.$groups)
+              ? (event.properties.$groups as Record<string, string>)
+              : {};
+          event.properties = {
+            ...(event.properties ?? {}),
+            $groups: { ...this.groups, ...existingGroups },
+          };
         }
         // Autocaptured exceptions arrive with a random uuid and
-        // `$process_person_profile: false` — reattach the run's identity
+        // `options.process_person_profile: false` — reattach the run's identity
         // and tags so they land on the same person as everything else.
         if (event.event === '$exception') {
           event.distinctId = this.distinctId ?? this.anonymousId;
+          if (event.options) {
+            delete event.options.process_person_profile;
+          }
           const { $process_person_profile, ...properties } =
             event.properties ?? {};
           void $process_person_profile;
@@ -169,6 +181,12 @@ export class Analytics {
         }
         return event;
       },
+    });
+
+    // In posthog-node v6, unhandled delivery failures log to console.warn,
+    // which corrupts the Ink TUI and headless output. Route them to the log file.
+    this.client.on('error', (error) => {
+      logToFile('[analytics] delivery error:', error);
     });
 
     this.tags = { $app_name: this.appName };
@@ -297,13 +315,16 @@ export class Analytics {
     const code =
       (error instanceof WizardError && error.code) ||
       (typeof properties.error_code === 'string' ? properties.error_code : '');
-    this.client.captureException(error, this.distinctId ?? this.anonymousId, {
-      team: ANALYTICS_TEAM_TAG,
-      // One issue per error code: the stack's install path and chunk hash otherwise split it per route and release.
-      ...(code ? { $exception_fingerprint: `wizard_${code}` } : {}),
-      ...this.tags,
-      ...this.programTags,
-      ...properties,
+    this.client.captureException(error, {
+      distinctId: this.distinctId ?? this.anonymousId,
+      properties: {
+        team: ANALYTICS_TEAM_TAG,
+        // One issue per error code: the stack's install path and chunk hash otherwise split it per route and release.
+        ...(code ? { $exception_fingerprint: `wizard_${code}` } : {}),
+        ...this.tags,
+        ...this.programTags,
+        ...properties,
+      },
     });
   }
 

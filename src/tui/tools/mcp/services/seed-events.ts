@@ -186,6 +186,14 @@ export async function seedDemoEvents(args: {
     disableGeoip: true,
   });
 
+  // posthog-node v6 resolves shutdown() even when delivery fails or events
+  // are dropped, reporting failures via 'error'. Capture the first one so
+  // callers still see a rejected send.
+  let deliveryError: unknown;
+  client.on('error', (err) => {
+    deliveryError ??= err;
+  });
+
   try {
     for (const e of events) {
       client.capture({
@@ -206,6 +214,8 @@ export async function seedDemoEvents(args: {
     }
     throw err;
   }
+
+  if (deliveryError) throw deliveryError;
 
   if (signal?.aborted) throw new Error('Seeding aborted');
 
