@@ -15,7 +15,6 @@ import {
   DEFAULT_AGENT_MODEL,
   GPT5_6_SOL_MODEL,
   GPT6_SOL_MODEL,
-  GPT5_6_TERRA_MODEL,
   Harness,
   Sequence,
 } from '@shared/constants';
@@ -78,8 +77,8 @@ describe('program bindings', () => {
       'ai-observability': {
         sequence: Sequence.linear,
         harness: Harness.pi,
-        model: GPT5_6_TERRA_MODEL,
-        thinkingLevel: 'high',
+        model: GPT6_SOL_MODEL,
+        thinkingLevel: 'medium',
       },
       metrics: orchestratorOnPi,
       audit: linearOnSol,

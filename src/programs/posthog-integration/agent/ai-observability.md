@@ -2,8 +2,8 @@
 type: ai-observability
 flow: integration-v2
 label: Add AI Observability
-model_pi: openai/gpt-5.6-terra
-effort_pi: high
+model_pi: openai/gpt-6-sol
+effort_pi: medium
 model_sdk: claude-sonnet-5
 effort_sdk: high
 skills: []

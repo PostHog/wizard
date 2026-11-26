@@ -1,4 +1,4 @@
-import { Harness, Sequence, GPT5_6_TERRA_MODEL } from '@shared/constants';
+import { Harness, Sequence, GPT6_SOL_MODEL } from '@shared/constants';
 import type { ProgramConfig } from '@programs/program-contract';
 import { headlessOption, regionOption } from '@shared/headless-mode';
 import { detectUnambiguousAioSkill } from './detect-skill';
@@ -30,8 +30,12 @@ function buildAioPrompt(preinstalledSkillId?: string): string {
 ${skillStep}
 
 Make only additive changes — do not touch existing PostHog init, identify
-calls, event capture, or dashboards. Those belong to other skills. The
-final report is written to ./${AI_OBSERVABILITY_REPORT_FILE}.`;
+calls, event capture, or dashboards. Those belong to other skills. Keep every
+existing dependency in the project manifest at its current version (never
+upgrade an already-installed package or vendor SDK). Instrument only the
+production application's LLM calls — leave developer tooling such as
+benchmarks, evals, and model comparison scripts untouched. The final report
+is written to ./${AI_OBSERVABILITY_REPORT_FILE}.`;
 }
 
 /**
@@ -49,8 +53,8 @@ export const config: ProgramConfig = {
   binding: {
     sequence: Sequence.linear,
     harness: Harness.pi,
-    model: GPT5_6_TERRA_MODEL,
-    thinkingLevel: 'high',
+    model: GPT6_SOL_MODEL,
+    thinkingLevel: 'medium',
   },
   command: 'ai-observability',
   description: 'Add PostHog AI Observability to your LLM calls',
