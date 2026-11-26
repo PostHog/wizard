@@ -116,6 +116,7 @@ describe("posthog-integration's bundled graph", () => {
   ];
   const AIO_LOGS = ['ai-observability', 'logs'];
   const MCP = 'mcp-analytics';
+  const TRACING = 'tracing';
   const types = (exclude: string[]) =>
     plan(prompts, FLOW, exclude)
       .map((task) => task.type)
@@ -127,10 +128,11 @@ describe("posthog-integration's bundled graph", () => {
 
   // The task sets a run queues, by what the program excludes. `warehouse` is the wizard's own to queue.
   it.each([
-    ['the default run', [MCP], [...CORE, ...AIO_LOGS]],
-    ['a project with an MCP server', [], [...CORE, ...AIO_LOGS, MCP]],
-    ['AI Observability and Logs off', [MCP, ...AIO_LOGS], CORE],
-    ['both', AIO_LOGS, [...CORE, MCP]],
+    ['the default run', [MCP, TRACING], [...CORE, ...AIO_LOGS]],
+    ['a project with an MCP server', [TRACING], [...CORE, ...AIO_LOGS, MCP]],
+    ['tracing on', [MCP], [...CORE, ...AIO_LOGS, TRACING]],
+    ['AI Observability and Logs off', [MCP, TRACING, ...AIO_LOGS], CORE],
+    ['both', [TRACING, ...AIO_LOGS], [...CORE, MCP]],
   ])('queues the task set for %s', (_, exclude, expected) => {
     expect(types(exclude)).toEqual([...expected].sort());
   });
@@ -145,6 +147,7 @@ describe("posthog-integration's bundled graph", () => {
       capture: ['install', 'init', 'identify', 'mcp-analytics'],
       'ai-observability': ['capture'],
       logs: ['ai-observability'],
+      tracing: ['logs'],
       dashboard: ['capture', 'mcp-analytics'],
       review: [
         'install',
@@ -155,13 +158,14 @@ describe("posthog-integration's bundled graph", () => {
         'capture',
         'ai-observability',
         'logs',
+        'tracing',
       ],
       report: ['dashboard', 'review'],
     });
   });
 
   it('keeps the order around the tasks a run leaves out', () => {
-    const left = edges([MCP, ...AIO_LOGS]);
+    const left = edges([MCP, TRACING, ...AIO_LOGS]);
     expect(left.capture).toEqual(['install', 'init', 'identify']);
     expect(left.dashboard).toEqual(['capture', 'install', 'init', 'identify']);
     expect(left.review).toEqual([

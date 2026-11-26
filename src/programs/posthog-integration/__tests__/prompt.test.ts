@@ -10,6 +10,7 @@
 import {
   WIZARD_DEFAULT_AIO_LOGS_FLAG_KEY,
   WIZARD_DEFAULT_MCP_ANALYTICS_FLAG_KEY,
+  WIZARD_DEFAULT_TRACING_FLAG_KEY,
 } from '@shared/constants';
 import { config as posthogIntegration } from '@programs/posthog-integration';
 import { buildSession } from '@services/session';
@@ -67,10 +68,14 @@ function sessionWithServers(candidates: string[]) {
 }
 
 describe('default observability flag gating', () => {
-  // A project with a server and the MCP flag on, so the MCP step's own gate stays out of these cases.
+  // A project with a server and the MCP and tracing flags on, so their own gates stay out of these cases.
   const excluded = (flags: Record<string, string>) =>
     posthogIntegration.excludedTaskTypes!(
-      { [WIZARD_DEFAULT_MCP_ANALYTICS_FLAG_KEY]: 'true', ...flags },
+      {
+        [WIZARD_DEFAULT_MCP_ANALYTICS_FLAG_KEY]: 'true',
+        [WIZARD_DEFAULT_TRACING_FLAG_KEY]: 'true',
+        ...flags,
+      },
       sessionWithServers(['src/server.ts']),
     );
 
@@ -86,6 +91,21 @@ describe('default observability flag gating', () => {
       [],
     );
     expect(excluded({})).toEqual([]);
+  });
+
+  it("keeps tracing only when its flag is 'true'", () => {
+    const excludesTracing = (flags: Record<string, string>) =>
+      posthogIntegration.excludedTaskTypes!(
+        flags,
+        sessionWithServers([]),
+      ).includes('tracing');
+    expect(excludesTracing({ [WIZARD_DEFAULT_TRACING_FLAG_KEY]: 'true' })).toBe(
+      false,
+    );
+    expect(excludesTracing({})).toBe(true);
+    expect(
+      excludesTracing({ [WIZARD_DEFAULT_TRACING_FLAG_KEY]: 'false' }),
+    ).toBe(true);
   });
 });
 
