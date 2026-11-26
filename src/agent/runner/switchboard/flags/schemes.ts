@@ -9,6 +9,7 @@ import {
   GPT5_6_LUNA_MODEL,
   GPT5_6_SOL_MODEL,
   GPT5_6_TERRA_MODEL,
+  GPT6_2_SOL_MODEL,
   Harness,
   Sequence,
   SONNET_5_MODEL,
@@ -25,6 +26,7 @@ const MODEL_FLAG_VARIANTS: Record<string, string> = {
   'gpt-5-6-luna': GPT5_6_LUNA_MODEL,
   'gpt-5-6-terra': GPT5_6_TERRA_MODEL,
   'gpt-5-6-sol': GPT5_6_SOL_MODEL,
+  'gpt-6-2-sol': GPT6_2_SOL_MODEL,
   'sonnet-5': SONNET_5_MODEL,
 };
 

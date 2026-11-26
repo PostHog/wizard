@@ -98,6 +98,15 @@ describe('allowedPiCodingTools', () => {
       allowedPiCodingTools(['Read', 'mcp__posthog-wizard__complete_task']),
     ).toEqual(new Set(['read']));
   });
+
+  it('never admits linear Task* tools into orchestrator task tool sets', () => {
+    const linearTasks = ['TaskCreate', 'TaskUpdate', 'TaskGet', 'TaskList'];
+    for (const name of linearTasks) {
+      expect(allowedPiCodingTools(linearTasks).has(name)).toBe(false);
+      expect(allowedPiWizardTools(linearTasks).has(name)).toBe(false);
+      expect(allowedOrchestratorTools([]).has(name)).toBe(false);
+    }
+  });
 });
 
 describe('allowedOrchestratorTools', () => {

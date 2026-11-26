@@ -1080,12 +1080,7 @@ export async function runAgent(
     // Per-program allow/disallow lists tweak BASE_ALLOWED_TOOLS. Skills are
     // enabled via the `skills` query option; PostHog MCP tools come through
     // `mcpServers`. Neither belongs in this list.
-    const disallow = new Set(agentConfig.disallowedTools ?? []);
-    const allowedTools = (
-      agentConfig.readOnly
-        ? READ_ONLY_TOOLS
-        : [...BASE_ALLOWED_TOOLS, ...(agentConfig.allowedTools ?? [])]
-    ).filter((t) => !disallow.has(t) && !CAN_USE_TOOL_FILE_TOOLS.has(t));
+    const { allowedTools, disallowedTools } = resolveRunToolLists(agentConfig);
 
     // Subagents dispatched via the Agent tool don't inherit the parent's
     // MCP servers by default — so general-purpose subagents can't see the
@@ -1148,9 +1143,8 @@ export async function runAgent(
                   // (sdk.d.ts: AgentDefinition has its own disallowedTools, and
                   // `tools: undefined` means "inherit all"). Without this, a program
                   // that disallows wizard_ask still leaks it to dispatched subagents.
-                  disallowedTools: agentConfig.disallowedTools
-                    ? [...agentConfig.disallowedTools]
-                    : undefined,
+                  disallowedTools:
+                    disallowedTools.length > 0 ? disallowedTools : undefined,
                 },
               },
           // Load skills from project's .claude/skills/ directory
@@ -1168,6 +1162,7 @@ export async function runAgent(
           // 'Skill' in allowedTools in favor of this option.)
           skills: agentConfig.readOnly ? [] : 'all',
           allowedTools,
+          ...(disallowedTools.length > 0 ? { disallowedTools } : {}),
           sandbox: {
             enabled: true,
             // SDK 0.2.91 made failIfUnavailable default to true when enabled is
@@ -1275,7 +1270,7 @@ export async function runAgent(
               {
                 readOnly: agentConfig.readOnly,
                 wizardAskPending: agentConfig.getPendingQuestion?.() != null,
-                disallowedTools: agentConfig.disallowedTools,
+                disallowedTools,
                 onDebug: (line) => debugLine(emit, options, line),
               },
             );
@@ -1923,7 +1918,7 @@ export const BASE_ALLOWED_TOOLS: readonly string[] = [
   'Glob',
   'Bash',
   // Task list tools (replaced TodoWrite in 0.3.142). Commandments instruct
-  // the agent to call TaskCreate/TaskUpdate to surface progress in the TUI.
+  // linear agents to call TaskCreate/TaskUpdate to surface progress in the TUI.
   ...Object.values(TaskTool),
   'ListMcpResourcesTool',
   // publish_program_result is opt-in: a program that writes the result lists it in allowedTools.
@@ -1931,6 +1926,34 @@ export const BASE_ALLOWED_TOOLS: readonly string[] = [
     (name) => name !== WIZARD_TOOL_NAMES.publishProgramResult,
   ),
 ];
+
+/**
+ * Resolve effective allow/disallow tool lists for an Anthropic SDK run.
+ * Linear Task* tools are stripped and disallowed on orchestrator runs so
+ * linear todo tools never pollute task sessions or their subagents.
+ */
+export function resolveRunToolLists(config: {
+  sequence: Sequence;
+  readOnly?: boolean;
+  allowedTools?: readonly string[];
+  disallowedTools?: readonly string[];
+}): { allowedTools: string[]; disallowedTools: string[] } {
+  const disallowedTools = [
+    ...new Set([
+      ...(config.disallowedTools ?? []),
+      ...(config.sequence === Sequence.orchestrator
+        ? Object.values(TaskTool)
+        : []),
+    ]),
+  ];
+  const disallow = new Set(disallowedTools);
+  const allowedTools = (
+    config.readOnly
+      ? READ_ONLY_TOOLS
+      : [...BASE_ALLOWED_TOOLS, ...(config.allowedTools ?? [])]
+  ).filter((t) => !disallow.has(t) && !CAN_USE_TOOL_FILE_TOOLS.has(t));
+  return { allowedTools, disallowedTools };
+}
 
 type TaskEntry = {
   id?: string;

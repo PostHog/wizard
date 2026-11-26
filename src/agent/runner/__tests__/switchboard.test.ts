@@ -352,6 +352,7 @@ describe('switchboard model allow-list', () => {
     'gpt-5.6-sol',
     'gpt-5.6-terra',
     'gpt-6-sol',
+    'gpt-6.2-sol',
   ];
   const bare = (model: string): string => model.replace(/^openai\//, '');
 
