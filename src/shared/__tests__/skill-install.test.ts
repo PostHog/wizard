@@ -328,15 +328,50 @@ describe('downloadSkill and symlinks', () => {
     expect(fs.readdirSync(outside)).toEqual([]);
   });
 
-  it('refuses a symlinked .claude directory and writes nothing outside', async () => {
+  it('refuses a symlinked .claude directory pointing outside installDir, and allows one inside installDir', async () => {
     fs.symlinkSync(outside, path.join(installDir, '.claude'));
 
-    const result = await downloadSkill(entry, installDir, {
+    const blocked = await downloadSkill(entry, installDir, {
       scan: () => Promise.resolve(null),
     });
 
-    expect(result.success).toBe(false);
+    expect(blocked.success).toBe(false);
     expect(fs.readdirSync(outside)).toEqual([]);
+
+    fs.rmSync(path.join(installDir, '.claude'));
+    const sharedSkills = path.join(installDir, 'shared-skills');
+    fs.mkdirSync(sharedSkills, { recursive: true });
+    fs.mkdirSync(path.join(installDir, '.claude'), { recursive: true });
+    fs.symlinkSync(sharedSkills, path.join(installDir, '.claude', 'skills'));
+
+    const allowed = await downloadSkill(entry, installDir, {
+      scan: () => Promise.resolve(null),
+    });
+    expect(allowed.success).toBe(true);
+    expect(fs.existsSync(path.join(sharedSkills, 'dummy', 'SKILL.md'))).toBe(
+      true,
+    );
+  });
+
+  it('refuses to replace an existing unmarked skill folder unless ownsSkillsRoot is true', async () => {
+    const skillDir = path.join(installDir, '.claude', 'skills', 'dummy');
+    fs.mkdirSync(skillDir, { recursive: true });
+    fs.writeFileSync(path.join(skillDir, 'USER.md'), 'keep me');
+
+    const refused = await downloadSkill(entry, installDir, {
+      scan: () => Promise.resolve(null),
+    });
+    expect(refused.success).toBe(false);
+    expect(fs.readFileSync(path.join(skillDir, 'USER.md'), 'utf8')).toBe(
+      'keep me',
+    );
+
+    const owned = await downloadSkill(entry, installDir, {
+      ownsSkillsRoot: true,
+      scan: () => Promise.resolve(null),
+    });
+    expect(owned.success).toBe(true);
+    expect(fs.existsSync(path.join(skillDir, 'SKILL.md'))).toBe(true);
   });
 
   it('rejects intra-archive file/dir clashes and leaves existing skillDir untouched', async () => {

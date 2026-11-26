@@ -36,11 +36,12 @@ Modules callers reach most:
 - `@shared/skill-composition`: `completeSkillFromPack(skillDir, packDir, product, boundaryDir)` completes a step skill written once for every framework from that framework's pack. The pack's `variant.json` lists its rules file and each product's pages. Those files are copied into the skill's `references/`, and in `SKILL.md` `{framework_name}` becomes the pack's name while the `{framework_docs}` and `{framework_rules}` lines become the lines that list them. `composeStepSkill(stepFiles, packFiles, product)` is the same on files in memory. Both throw when the pack cannot complete the skill, and both refuse a pack page whose path has a part that is not a plain name or that does not end in `.md`: the install scan reads lowercase extensions and skips dotfiles, so such a page would reach a task unscanned. A `variant.json` with no `rules` reads as one with none. `completeSkillFromPack` checks every target before its first write and throws, writing nothing, when a file would leave `boundaryDir` or pass through a link below it: a folder on the way that is a link, or a file that is one. It does not scan what it writes; the caller scans the `SKILL.md` it rewrites. It takes every file in the skill's folder as the skill's own, so the caller completes a skill in a folder that holds nothing else. `skillFolder(skillsRoot, id, boundaryDir)` is the folder of skill `id` under `skillsRoot`. It refuses an `id` that is not one plain name, since the id comes from the menu, and it reaches `skillsRoot` through no link below `boundaryDir`.
 - `@shared/skill-install`: `downloadSkill(entry, installDir, options?)` and
   `installSkillById(skillId, installDir, skillsBaseUrl, options?)` install a
-  skill into a project; `InstallSkillResult`, `isSkillInstallCommand`. An
-  install that fails removes the folder it made and keeps one that was there
-  first, and an entry whose id is not one plain name is refused before a
-  folder is made. `WIZARD_MARKER` is the file every installed skill folder
-  carries.
+  skill into a project; `InstallSkillResult`, `isSkillInstallCommand`. Each
+  install extracts and scans in a fresh sibling staging folder and replaces
+  the target folder only after the scan passes, refusing an existing unmarked
+  folder unless `ownsSkillsRoot` is set. An entry whose id is not one plain
+  name is refused before a folder is made. `WIZARD_MARKER` is the file every
+  installed skill folder carries.
 - `@shared/ask-policy`: `shouldDisableAsk(flags)` and `LONGER_ASK_TIMEOUT_MS`,
   when `wizard_ask` may reach a human and how long an errand question waits.
 - `@shared/claude-settings`: settings conflict detection, backup and restore.

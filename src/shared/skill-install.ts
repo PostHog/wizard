@@ -125,7 +125,71 @@ export type SkillScanner = (skillDir: string) => Promise<string | null>;
 export interface SkillInstallOptions {
   /** Base directory override, e.g. `.posthog/skills`. Default `.claude/skills`. */
   skillsRoot?: string;
+  /** True when the caller owns `skillsRoot` and may replace an existing folder lacking `WIZARD_MARKER`. */
+  ownsSkillsRoot?: boolean;
   scan: SkillScanner;
+}
+
+/**
+ * Resolve the target skill folder inside `absInstallDir`.
+ * - Custom `skillsRoot`: refuses any link from `absInstallDir` down.
+ * - Default `.claude/skills`: allows `.claude` or `.claude/skills` links whose
+ *   canonical target stays strictly inside `absInstallDir` (matching `listSkillFolders`),
+ *   and still refuses a symlinked `<id>` folder.
+ */
+function resolveSkillTarget(
+  absInstallDir: string,
+  skillsRoot: string | undefined,
+  skillId: string,
+): { boundary: string; parentDir: string; skillDir: string } {
+  if (skillsRoot !== undefined) {
+    if (path.isAbsolute(skillsRoot)) {
+      throw new Error(`path escapes destination: ${skillsRoot}`);
+    }
+    const skillDir = path.resolve(absInstallDir, skillsRoot, skillId);
+    plainTarget(absInstallDir, skillDir, 'folder');
+    return {
+      boundary: absInstallDir,
+      parentDir: path.dirname(skillDir),
+      skillDir,
+    };
+  }
+  const realRoot = fs.realpathSync(absInstallDir);
+  const claudeDir = path.join(absInstallDir, '.claude');
+  const skillsDir = path.join(claudeDir, 'skills');
+  for (const dir of [claudeDir, skillsDir]) {
+    const st = fs.lstatSync(dir, { throwIfNoEntry: false });
+    if (!st) break;
+    const real = fs.realpathSync(dir);
+    if (!real.startsWith(realRoot + path.sep)) {
+      throw new Error(`path escapes destination: ${dir}`);
+    }
+    if (!fs.statSync(real).isDirectory()) {
+      throw new Error(`path passes through a link: ${dir}`);
+    }
+  }
+  const skillDir = path.join(skillsDir, skillId);
+  plainTarget(skillsDir, skillDir, 'folder');
+  return { boundary: skillsDir, parentDir: skillsDir, skillDir };
+}
+
+function assertReplaceableSkillDir(
+  skillDir: string,
+  ownsSkillsRoot: boolean,
+): void {
+  const existing = fs.lstatSync(skillDir, { throwIfNoEntry: false });
+  if (!existing) return;
+  const markerPath = path.join(skillDir, WIZARD_MARKER);
+  const marker = fs.lstatSync(markerPath, { throwIfNoEntry: false });
+  if (marker) {
+    plainTarget(skillDir, WIZARD_MARKER, 'file');
+    return;
+  }
+  if (!ownsSkillsRoot) {
+    throw new Error(
+      `${skillDir} already exists and was not installed by the wizard`,
+    );
+  }
 }
 
 /**
@@ -135,7 +199,7 @@ export interface SkillInstallOptions {
 export async function downloadSkill(
   skillEntry: SkillEntry,
   installDir: string,
-  { skillsRoot, scan }: SkillInstallOptions,
+  { skillsRoot, ownsSkillsRoot = false, scan }: SkillInstallOptions,
 ): Promise<{ success: boolean; error?: string }> {
   // The id comes from the menu and names the folder written to, so it is one plain name.
   if (!PLAIN_NAME.test(skillEntry.id)) {
@@ -150,16 +214,10 @@ export async function downloadSkill(
     return { success: false, error };
   }
   const absInstallDir = path.resolve(installDir);
-  let skillDir: string;
-  const boundary = absInstallDir;
+  let target: { boundary: string; parentDir: string; skillDir: string };
   try {
-    if (skillsRoot !== undefined && path.isAbsolute(skillsRoot)) {
-      throw new Error(`path escapes destination: ${skillsRoot}`);
-    }
-    skillDir = skillsRoot
-      ? path.resolve(absInstallDir, skillsRoot, skillEntry.id)
-      : path.resolve(absInstallDir, '.claude', 'skills', skillEntry.id);
-    plainTarget(boundary, skillDir, 'folder');
+    target = resolveSkillTarget(absInstallDir, skillsRoot, skillEntry.id);
+    assertReplaceableSkillDir(target.skillDir, ownsSkillsRoot);
   } catch (err: any) {
     logToFile(`downloadSkill: refusing unsafe path: ${err.message}`);
     analytics.wizardCapture('skill install failed', {
@@ -170,17 +228,15 @@ export async function downloadSkill(
     });
     return { success: false, error: err.message };
   }
+  const { boundary, parentDir, skillDir } = target;
   let step: 'download' | 'extract' | 'scan' = 'download';
   let stagingDir: string | undefined;
 
   try {
     const data = await downloadWithRetry(skillEntry.downloadUrl);
     step = 'extract';
-    const parentDir = path.dirname(skillDir);
-    plainTarget(boundary, skillDir, 'folder');
-    if (fs.lstatSync(skillDir, { throwIfNoEntry: false })) {
-      plainTarget(skillDir, WIZARD_MARKER, 'file');
-    }
+    resolveSkillTarget(absInstallDir, skillsRoot, skillEntry.id);
+    assertReplaceableSkillDir(skillDir, ownsSkillsRoot);
     fs.mkdirSync(parentDir, { recursive: true });
     // Stage into a fresh sibling dir so failed extracts or scans never leave unscanned files in skillDir.
     stagingDir = fs.mkdtempSync(path.join(parentDir, `.${skillEntry.id}.tmp-`));
@@ -210,11 +266,29 @@ export async function downloadSkill(
     }
 
     plainTarget(boundary, skillDir, 'folder');
+    assertReplaceableSkillDir(skillDir, ownsSkillsRoot);
     if (fs.lstatSync(skillDir, { throwIfNoEntry: false })) {
-      fs.rmSync(skillDir, { recursive: true, force: true });
+      const backupDir = path.join(
+        parentDir,
+        `.${skillEntry.id}.bak-${process.pid}-${Date.now()}`,
+      );
+      fs.renameSync(skillDir, backupDir);
+      try {
+        fs.renameSync(stagingDir, skillDir);
+        stagingDir = undefined;
+      } catch (swapErr) {
+        try {
+          fs.renameSync(backupDir, skillDir);
+        } catch {
+          // Best-effort restore of previous folder.
+        }
+        throw swapErr;
+      }
+      fs.rmSync(backupDir, { recursive: true, force: true });
+    } else {
+      fs.renameSync(stagingDir, skillDir);
+      stagingDir = undefined;
     }
-    fs.renameSync(stagingDir, skillDir);
-    stagingDir = undefined;
 
     logToFile(
       `downloadSkill: installed ${skillEntry.id} from ${skillEntry.downloadUrl} (${fileCount} files)`,
