@@ -2,7 +2,7 @@
 type: dashboard
 flow: integration-v2
 label: Create a starter dashboard
-model_pi: openai/gpt-5.6-terra
+model_pi: openai/gpt-6.2-sol
 effort_pi: low
 model_sdk: claude-sonnet-5
 effort_sdk: high

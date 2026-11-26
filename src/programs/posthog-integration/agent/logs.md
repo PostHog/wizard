@@ -2,8 +2,8 @@
 type: logs
 flow: integration-v2
 label: Add log capture
-model_pi: openai/gpt-5.6-terra
-effort_pi: medium
+model_pi: openai/gpt-6.2-sol
+effort_pi: low
 model_sdk: claude-sonnet-5
 effort_sdk: high
 skills: []

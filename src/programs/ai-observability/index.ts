@@ -1,4 +1,4 @@
-import { Harness, Sequence, GPT6_SOL_MODEL } from '@shared/constants';
+import { Harness, Sequence, GPT6_2_SOL_MODEL } from '@shared/constants';
 import type { ProgramConfig } from '@programs/program-contract';
 import { headlessOption, regionOption } from '@shared/headless-mode';
 import { detectUnambiguousAioSkill } from './detect-skill';
@@ -53,8 +53,8 @@ export const config: ProgramConfig = {
   binding: {
     sequence: Sequence.linear,
     harness: Harness.pi,
-    model: GPT6_SOL_MODEL,
-    thinkingLevel: 'medium',
+    model: GPT6_2_SOL_MODEL,
+    thinkingLevel: 'low',
   },
   command: 'ai-observability',
   description: 'Add PostHog AI Observability to your LLM calls',
