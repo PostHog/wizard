@@ -10,17 +10,17 @@ import type {
   TraitClaims,
 } from '@programs/program-contract';
 import {
-  buildPlan,
+  buildProjectSelection,
   getDiscovery,
   getProjects,
   getTraitClaims,
   picksProject,
-  planAsks,
+  askUserToSelectProject,
   runDiscovery,
   settleProjects,
   toMatchKeys,
   toolsByProject,
-  type PlanOffer,
+  type ProjectSelection,
   type ProjectDiscoveryMode,
 } from '@services/project-discovery';
 import { scopeToRunProject } from './detect-program';
@@ -66,15 +66,16 @@ export type DiscoveryTestReport = {
     posthogSdkDetected: boolean;
     discoveredFeatures: string[];
   };
-  projects: DiscoveryTestProject[];
-  /** False when the tool catalog could not be loaded, so no tool was matched. */
-  toolsMatched: boolean;
-  /** The plan the program would open after login, and whether it would ask. */
-  plan: PlanOffer & { asks: boolean };
   /** The run project's match keys, which pick each skill. */
   matchKeys: MatchKeys;
+  /** False when the tool catalog could not be loaded, so no tool was matched. */
+  toolsMatched: boolean;
   /** What the Decisions call did, or why none was made. */
   decisions: DecisionsPreview;
+  /** The project selection the program would open after login, and whether it would ask. */
+  projectSelection: ProjectSelection & { asks: boolean };
+  /** Every project with its traits. Last, as the longest part of the report. */
+  projects: DiscoveryTestProject[];
 };
 
 /** A Decisions call a preview made with a pre-issued gateway token, or the reason it made none. */
@@ -180,12 +181,19 @@ export async function testDiscovery(
   const discovery = getDiscovery(session);
   const projects = getProjects(session);
   const tools = toolsByProject(discovery?.tools.tools ?? [], projects);
-  const requested = project === undefined ? undefined : session.runProject;
-  const plan = buildPlan(session, config, requested);
+  const requestedProjectPath =
+    project === undefined ? undefined : session.runProject;
+  const projectSelection = buildProjectSelection(
+    session,
+    config,
+    requestedProjectPath,
+  );
   // A program that picks no project works where the run started.
-  const picked = picksProject(session, config)
-    ? plan.picked
+  const selectedProjectPath = picksProject(session, config)
+    ? projectSelection.selectedProjectPath
     : session.runProject;
+  // The report reads top down: short facts first, each long list last.
+  const { projects: options, ...facts } = projectSelection;
   return {
     program: config.id,
     mode: discovery?.mode ?? 'off',
@@ -205,22 +213,28 @@ export async function testDiscovery(
       posthogSdkDetected: session.posthogSdkDetected,
       discoveredFeatures: [...session.discoveredFeatures],
     },
+    matchKeys: toMatchKeys(
+      projects.find((project) => project.path === session.runProject)?.traits ??
+        {},
+    ),
+    toolsMatched: discovery?.tools.failed !== true,
+    decisions,
+    projectSelection: {
+      ...facts,
+      selectedProjectPath,
+      asks: askUserToSelectProject(
+        session,
+        config,
+        projectSelection,
+        requestedProjectPath,
+      ),
+      projects: options,
+    },
     projects: projects.map((project) => ({
       ...project,
       isRunProject: project.path === session.runProject,
       sources: getTraitClaims(session, project.path),
       tools: (tools.get(project.path) ?? []).map((tool) => tool.kind),
     })),
-    toolsMatched: discovery?.tools.failed !== true,
-    plan: {
-      ...plan,
-      picked,
-      asks: planAsks(session, config, plan, requested),
-    },
-    matchKeys: toMatchKeys(
-      projects.find((project) => project.path === session.runProject)?.traits ??
-        {},
-    ),
-    decisions,
   };
 }

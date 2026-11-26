@@ -1,4 +1,4 @@
-/** The plan: the projects a program is offered, which one starts picked, and why the others are not offered. */
+/** The project selection: every project, whether the program is eligible to run in it, the one that starts selected, and why the others are excluded. */
 
 import type { Integration } from '@shared/constants';
 import { analytics } from '@utils/analytics';
@@ -6,17 +6,17 @@ import type {
   ProgramConfig,
   ProgramSession,
   Project,
-  TraitSource,
   Traits,
 } from '@programs/program-contract';
 import { FRAMEWORK_REGISTRY } from '../frameworks/registry';
 import { getDiscovery } from './discover';
 import { maySendDiscovery } from './tags';
+import { getModelRepoTypes, type ModelSource } from './traits/adapter';
 import { isLanguageFallback } from './traits/registry';
 import { getProjects, getTraitClaims } from './traits/store';
 
-/** Why a project is listed but not offered. */
-export type PlanReason =
+/** Why a project is listed but not eligible. */
+export type ProjectExclusionReason =
   | 'has-posthog'
   | 'unsupported-framework'
   | 'library'
@@ -24,34 +24,39 @@ export type PlanReason =
   | 'workspace-root'
   | 'not-applicable';
 
-/** One project on the plan. */
-export type PlanProject = {
+/** One project in the project selection. */
+export type ProjectOption = {
   /** The project's path from the workspace root; `.` is that root. */
   path: string;
   framework?: Integration;
   /** The framework's display name, such as `Next.js`. */
   frameworkName?: string;
-  /** Whether the person can pick it. */
-  offered: boolean;
-  /** Why it is not offered. */
-  reason?: PlanReason;
+  /** Whether it can be selected. */
+  eligible: boolean;
+  /** Why it is not eligible. */
+  exclusionReason?: ProjectExclusionReason;
   /** A source picked it as the repo's main app. */
-  mainApp: boolean;
+  isMainApp: boolean;
 };
 
-export type PlanOffer = {
+export type ProjectSelection = {
   repoType: 'monorepo' | 'single';
   workspaceTool?: string;
-  projects: PlanProject[];
-  /** The project that starts picked: the run's default when nobody picks. */
-  picked: string;
+  projects: ProjectOption[];
+  /** The project that starts selected: the run's default when nobody selects another. */
+  selectedProjectPath: string;
   /** False when the walk hit a cap, so some projects may be missing. */
-  complete: boolean;
+  isDiscoveryComplete: boolean;
+  /** A model source sees several apps: it called the repo a monorepo, or named a main app other than the run project. */
+  isMonorepoByModel?: true;
 };
 
 type Applies = Pick<ProgramConfig, 'appliesTo'>;
 
-function reasonFor(traits: Traits, projectPath: string): PlanReason {
+function exclusionReasonFor(
+  traits: Traits,
+  projectPath: string,
+): ProjectExclusionReason {
   if (traits.posthogInstalled === 'yes') return 'has-posthog';
   if (traits.projectRole === 'library') return 'library';
   if (traits.projectRole === 'tooling') return 'tooling';
@@ -73,64 +78,91 @@ function isApp(traits: Traits): boolean {
   );
 }
 
-function toPlanProject(
+function toProjectOption(
   session: ProgramSession,
   config: Applies,
   project: Project,
-): PlanProject {
+): ProjectOption {
   const { traits } = project;
   const isRunProject = project.path === session.runProject;
   // A workspace root that is no app itself is where the apps live, not one to pick.
   const root = isWorkspaceRoot(session, project) && !isApp(traits);
   const applies = !root && (config.appliesTo?.(traits) ?? true);
   // The project the run started in is a choice, as today's default, unless it only holds the apps.
-  const offered = applies || (isRunProject && !root);
+  const eligible = applies || (isRunProject && !root);
   return {
     path: project.path,
     ...(traits.framework && {
       framework: traits.framework,
       frameworkName: FRAMEWORK_REGISTRY[traits.framework].metadata.name,
     }),
-    offered,
-    ...(!offered && {
-      reason: root ? 'workspace-root' : reasonFor(traits, project.path),
+    eligible,
+    ...(!eligible && {
+      exclusionReason: root
+        ? 'workspace-root'
+        : exclusionReasonFor(traits, project.path),
     }),
-    mainApp: traits.mainApp === 'yes',
+    isMainApp: traits.mainApp === 'yes',
   };
 }
 
 /**
- * The project that starts picked. A run that started inside a project keeps
- * it, and so does a run at a workspace root that is an app itself. A run at
- * any other workspace root takes the main app, else the only app offered, else
- * stays where it started, though that root is not offered.
+ * The project that starts selected. A run that started inside a workspace
+ * member keeps it. A run at the root takes the main app a source named, and
+ * with no workspace marker the run directory is that root. With none named, a
+ * root that is an app itself keeps the run, and a workspace root that only
+ * holds the apps takes the only eligible app, else stays where it started,
+ * though that root is not eligible.
  */
 function defaultPick(
   session: ProgramSession,
-  projects: readonly PlanProject[],
+  projects: readonly ProjectOption[],
   atHub: boolean,
 ): string {
   const { runProject } = session;
-  if (!atHub) return runProject;
   const apps = projects.filter(
-    (project) => project.offered && project.path !== runProject,
+    (project) => project.eligible && project.path !== runProject,
   );
-  const mainApp = apps.find((project) => project.mainApp);
+  const mainApp = apps.find((project) => project.isMainApp);
+  if (!atHub) return runProject === '.' && mainApp ? mainApp.path : runProject;
   if (mainApp) return mainApp.path;
   return apps.length === 1 ? apps[0].path : runProject;
 }
 
-/** The plan for one program: every project, the ones it is offered, and the one that starts picked. */
-export function buildPlan(
+const MODEL_SOURCES: readonly ModelSource[] = ['agentic', 'decisions'];
+
+/** A model source sees several apps: it called the repo a monorepo, or named a main app other than the run project. */
+function modelSeesMonorepo(
+  session: ProgramSession,
+  projects: readonly ProjectOption[],
+): boolean {
+  return (
+    Object.values(getModelRepoTypes(session)).includes('monorepo') ||
+    projects.some(
+      (project) => project.isMainApp && project.path !== session.runProject,
+    )
+  );
+}
+
+/** Whether a model source has ranked this repo's projects: a ranking records what it called the repo, a program's own answers do not. */
+function modelRanked(session: ProgramSession): boolean {
+  return Object.keys(getModelRepoTypes(session)).length > 0;
+}
+
+const eligibleCount = (projectSelection: ProjectSelection): number =>
+  projectSelection.projects.filter((project) => project.eligible).length;
+
+/** The project selection for one program: every project, the eligible ones, and the one that starts selected. */
+export function buildProjectSelection(
   session: ProgramSession,
   config: Applies,
-  /** A project the caller asked for, such as `--project`. It starts picked. */
-  requested?: string,
-): PlanOffer {
+  /** A project the caller asked for, such as `--project`. It starts selected. */
+  requestedProjectPath?: string,
+): ProjectSelection {
   const discovered = getDiscovery(session)?.projects;
   const all = getProjects(session);
   const projects = all.map((project) =>
-    toPlanProject(session, config, project),
+    toProjectOption(session, config, project),
   );
   const runProject = all.find((project) => project.path === session.runProject);
   // The run started at a workspace root that is no app itself.
@@ -144,20 +176,41 @@ export function buildPlan(
       workspaceTool: discovered.workspaceTool,
     }),
     projects,
-    picked: requested ?? defaultPick(session, projects, atHub),
-    complete: discovered?.complete ?? true,
+    selectedProjectPath:
+      requestedProjectPath ?? defaultPick(session, projects, atHub),
+    isDiscoveryComplete: discovered?.complete ?? true,
+    ...(modelSeesMonorepo(session, projects) && { isMonorepoByModel: true }),
   };
 }
 
 /**
- * Whether there is a choice to make: the repo is a monorepo and more than one
- * project is offered. A single app is one project, whatever manifests sit
- * below it, such as an Android module or a Swift package.
+ * Whether there is a choice to make: more than one project is eligible, and
+ * the repo is a monorepo to static discovery or to a model source. A single
+ * app is one project, whatever manifests sit below it, such as an Android
+ * module or a Swift package.
  */
-export function planNeedsPick(plan: PlanOffer): boolean {
+export function hasMultipleEligibleProjects(
+  projectSelection: ProjectSelection,
+): boolean {
   return (
-    plan.repoType === 'monorepo' &&
-    plan.projects.filter((project) => project.offered).length > 1
+    (projectSelection.repoType === 'monorepo' ||
+      projectSelection.isMonorepoByModel === true) &&
+    eligibleCount(projectSelection) > 1
+  );
+}
+
+/**
+ * Whether a run that asks nobody ranks its projects first. It does where there
+ * is a choice. A CI run also does where several projects are eligible and no
+ * model source has ranked them, since only a ranking can name a main app there.
+ */
+export function shouldRankProjects(
+  session: ProgramSession,
+  projectSelection: ProjectSelection,
+): boolean {
+  if (hasMultipleEligibleProjects(projectSelection)) return true;
+  return (
+    session.ci && eligibleCount(projectSelection) > 1 && !modelRanked(session)
   );
 }
 
@@ -174,47 +227,48 @@ export function picksProject(
 
 /**
  * Whether a host is asked to pick: the program picks its project, no caller
- * named one, the run is interactive and the plan has a choice to make. The
+ * named one, the run is interactive and there is a choice to make. The
  * runner and the test discovery preview both read this.
  */
-export function planAsks(
+export function askUserToSelectProject(
   session: ProgramSession,
   config: Applies,
-  plan: PlanOffer,
-  requested?: string,
+  projectSelection: ProjectSelection,
+  requestedProjectPath?: string,
 ): boolean {
   return (
     picksProject(session, config) &&
-    requested === undefined &&
+    requestedProjectPath === undefined &&
     !session.ci &&
-    planNeedsPick(plan)
+    hasMultipleEligibleProjects(projectSelection)
   );
 }
 
 /**
- * Whether the pick takes the run out of the project it started in: the plan
- * does not offer that project, and it asks for a pick or its default is
- * another one. A host that shows the plan reads this before login, to ask
- * nothing about a project the run leaves.
+ * Whether the pick takes the run out of the project it started in: that
+ * project is not eligible, and the run asks for a pick or its default is
+ * another one. A host that shows the project selection reads this before
+ * login, to ask nothing about a project the run leaves.
  */
 export function pickLeavesRunProject(
   session: ProgramSession,
   config: Applies,
-  plan: PlanOffer = buildPlan(session, config),
+  projectSelection: ProjectSelection = buildProjectSelection(session, config),
 ): boolean {
   if (!picksProject(session, config)) return false;
   const { runProject } = session;
-  const staysOffered = plan.projects.some(
-    (project) => project.offered && project.path === runProject,
+  const staysEligible = projectSelection.projects.some(
+    (project) => project.eligible && project.path === runProject,
   );
-  if (staysOffered) return false;
-  return planAsks(session, config, plan) || plan.picked !== runProject;
+  if (staysEligible) return false;
+  return (
+    askUserToSelectProject(session, config, projectSelection) ||
+    projectSelection.selectedProjectPath !== runProject
+  );
 }
 
 /** The event carries at most this many projects; `project_count` is the true total. */
 const MAX_PROJECTS_CAPTURED = 25;
-
-const MODEL_SOURCES: readonly TraitSource[] = ['agentic', 'decisions'];
 
 /** The project each model source picked as the main app, for the sources that answered. */
 function sourcePicks(session: ProgramSession): Record<string, string | null> {
@@ -238,18 +292,21 @@ function sourcePicks(session: ProgramSession): Record<string, string | null> {
 /** Report the project list once the sources have answered. Leaves the machine only under discovery consent. */
 export function reportProjectsDiscovered(
   session: ProgramSession,
-  plan: PlanOffer,
+  projectSelection: ProjectSelection,
   programId: string,
 ): void {
   if (!maySendDiscovery(session)) return;
   const projects = getProjects(session);
   analytics.wizardCapture('projects discovered', {
     program_id: programId,
-    repo_type: plan.repoType,
-    workspace_tool: plan.workspaceTool ?? null,
-    complete: plan.complete,
+    repo_type: projectSelection.repoType,
+    model_monorepo: projectSelection.isMonorepoByModel === true,
+    workspace_tool: projectSelection.workspaceTool ?? null,
+    complete: projectSelection.isDiscoveryComplete,
     project_count: projects.length,
-    offered_count: plan.projects.filter((project) => project.offered).length,
+    offered_count: projectSelection.projects.filter(
+      (project) => project.eligible,
+    ).length,
     projects: projects.slice(0, MAX_PROJECTS_CAPTURED).map((project) => ({
       path: project.path,
       framework: project.traits.framework ?? null,
@@ -263,15 +320,16 @@ export function reportProjectsDiscovered(
 /** Report the pick beside the default and each source's main app, so the sources can be graded against it. */
 export function reportProjectsSelected(
   session: ProgramSession,
-  plan: PlanOffer,
+  projectSelection: ProjectSelection,
   picked: string,
   programId: string,
-  /** Who picked: the person on the plan screen, a caller's `--project`, or nobody. */
+  /** Who picked: the person on the project picker, a caller's `--project`, or nobody. */
   pickedBy: 'person' | 'caller' | 'default',
 ): void {
   if (!maySendDiscovery(session)) return;
   const mainApp =
-    plan.projects.find((project) => project.mainApp)?.path ?? null;
+    projectSelection.projects.find((project) => project.isMainApp)?.path ??
+    null;
   const sources = sourcePicks(session);
   analytics.wizardCapture('projects selected', {
     program_id: programId,
@@ -281,8 +339,8 @@ export function reportProjectsSelected(
       getProjects(session).find((project) => project.path === picked)?.traits
         .framework ?? null,
     picked_by: pickedBy,
-    default: plan.picked,
-    kept_default: picked === plan.picked,
+    default: projectSelection.selectedProjectPath,
+    kept_default: picked === projectSelection.selectedProjectPath,
     main_app: mainApp,
     kept_main_app: mainApp !== null && picked === mainApp,
     run_project: session.runProject,

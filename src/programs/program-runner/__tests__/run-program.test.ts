@@ -52,7 +52,10 @@ import type {
   RunnerContext,
 } from '@programs/program-contract';
 import type { WizardSession } from '@services/session';
-import { runDiscovery } from '@services/project-discovery';
+import {
+  buildProjectSelection,
+  runDiscovery,
+} from '@services/project-discovery';
 import { detectIntegrationProjects } from '@services/detection';
 import { AUDIT_CHECKS_KEY } from '@programs/audit';
 import { FRAMEWORK_REGISTRY } from '@services/frameworks';
@@ -96,7 +99,7 @@ vi.mock('@services/detection/decisions', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@services/detection/decisions')>()),
   runDecisionsSource: vi.fn(() => Promise.resolve(null)),
 }));
-// The plan's agentic ranking is one model call; everything else in detection runs real.
+// The project selection's agentic ranking is one model call; everything else in detection runs real.
 vi.mock(import('@services/detection'), async (importOriginal) => ({
   ...(await importOriginal()),
   detectIntegrationProjects: vi.fn(),
@@ -1644,7 +1647,7 @@ describe('runProgram', () => {
       const host = workflow();
       host.confirmStep.mockImplementation((step: ProgramStep) => {
         host.steps.push(step);
-        if (step.kind === 'plan') step.pick('apps/api');
+        if (step.kind === 'project-selection') step.selectProject('apps/api');
         return Promise.resolve(true);
       });
 
@@ -1655,9 +1658,11 @@ describe('runProgram', () => {
       );
 
       expect(result.outcome).toBe(RunOutcome.Success);
-      const plan = host.steps.find((step) => step.kind === 'plan');
-      expect(plan).toMatchObject({
-        plan: { repoType: 'monorepo', picked: '.' },
+      const selectionStep = host.steps.find(
+        (step) => step.kind === 'project-selection',
+      );
+      expect(selectionStep).toMatchObject({
+        projectSelection: { repoType: 'monorepo', selectedProjectPath: '.' },
       });
       expect(agentInput().installDir).toBe(path.join(repo, 'apps/api'));
       expect(s.session.runProject).toBe('apps/api');
@@ -1667,7 +1672,8 @@ describe('runProgram', () => {
       const s = pairStore();
       const host = workflow();
       host.confirmStep.mockImplementation((step: ProgramStep) => {
-        if (step.kind === 'plan') step.pick(step.plan.picked);
+        if (step.kind === 'project-selection')
+          step.selectProject(step.projectSelection.selectedProjectPath);
         return Promise.resolve(true);
       });
 
@@ -1698,7 +1704,10 @@ describe('runProgram', () => {
         const host = workflow();
         host.confirmStep.mockImplementation((step: ProgramStep) => {
           host.steps.push(step);
-          if (step.kind === 'plan') step.pick(projectPath ?? step.plan.picked);
+          if (step.kind === 'project-selection')
+            step.selectProject(
+              projectPath ?? step.projectSelection.selectedProjectPath,
+            );
           return Promise.resolve(true);
         });
         return host;
@@ -1708,7 +1717,7 @@ describe('runProgram', () => {
           .mocked(analytics.wizardCapture)
           .mock.calls.filter(([event]) => event === 'agent started');
 
-      it('reaches the plan, and runs in the app the person picks', async () => {
+      it('reaches the project picker, and runs in the app the person picks', async () => {
         const host = picking('apps/api');
         const s = pairStore();
         const result = await runProgram(
@@ -1721,7 +1730,9 @@ describe('runProgram', () => {
           { credentials: login(), workflow: host },
         );
 
-        expect(host.steps.some((step) => step.kind === 'plan')).toBe(true);
+        expect(
+          host.steps.some((step) => step.kind === 'project-selection'),
+        ).toBe(true);
         expect(result.outcome).toBe(RunOutcome.Success);
         expect(agentInput().installDir).toBe(path.join(repo, 'apps/api'));
         expect(s.session.runProject).toBe('apps/api');
@@ -1788,7 +1799,7 @@ describe('runProgram', () => {
       });
     });
 
-    it('ranks the projects with agentic detection when the plan screen asks, and starts on its main app', async () => {
+    it('ranks the projects with agentic detection when the project picker asks, and starts on its main app', async () => {
       vi.mocked(detectIntegrationProjects).mockResolvedValue({
         repoType: 'monorepo',
         projects: [
@@ -1803,10 +1814,13 @@ describe('runProgram', () => {
       });
       const host = workflow();
       host.confirmStep.mockImplementation(async (step: ProgramStep) => {
-        if (step.kind !== 'plan') return true;
-        // What the plan screen does: rank once it opens, then confirm the project that starts picked.
-        const ranked = await step.rank?.();
-        step.pick(ranked?.picked ?? step.plan.picked);
+        if (step.kind !== 'project-selection') return true;
+        // What the project picker does: rank once it opens, then confirm the project that starts picked.
+        const ranked = await step.rankProjects?.();
+        step.selectProject(
+          ranked?.selectedProjectPath ??
+            step.projectSelection.selectedProjectPath,
+        );
         return true;
       });
       const s = pairStore();
@@ -1855,6 +1869,83 @@ describe('runProgram', () => {
       expect(result.outcome).toBe(RunOutcome.Success);
       expect(detectIntegrationProjects).toHaveBeenCalledTimes(1);
       expect(agentInput().installDir).toBe(path.join(repo, 'apps/api'));
+    });
+
+    it('ranks a CI run with several projects and no workspace marker, and takes the main app', async () => {
+      fs.rmSync(path.join(repo, 'pnpm-workspace.yaml'));
+      vi.mocked(detectIntegrationProjects).mockResolvedValue({
+        repoType: 'single',
+        projects: [
+          {
+            path: 'apps/api',
+            framework: 'Express',
+            targetId: 'javascript_node',
+            hasPostHog: false,
+            recommended: true,
+          },
+        ],
+      });
+      const s = new SessionStore(buildSession({ installDir: repo, ci: true }));
+
+      const result = await runProgram(
+        'metrics',
+        input({
+          store: s,
+          config: { ...everyProject, rankWith: ['agentic'] },
+          wizardFlags: DISCOVERY_ON,
+        }),
+        { credentials: login() },
+      );
+
+      expect(result.outcome).toBe(RunOutcome.Success);
+      expect(detectIntegrationProjects).toHaveBeenCalledTimes(1);
+      expect(s.session.runProject).toBe('apps/api');
+      expect(agentInput().installDir).toBe(path.join(repo, 'apps/api'));
+    });
+
+    it('drops a ranking reply that lands after the run was cancelled', async () => {
+      fs.rmSync(path.join(repo, 'pnpm-workspace.yaml'));
+      const controller = new AbortController();
+      type Report = Awaited<ReturnType<typeof detectIntegrationProjects>>;
+      let reply: (report: Report) => void = () => undefined;
+      vi.mocked(detectIntegrationProjects).mockImplementation(
+        () =>
+          new Promise<Report>((resolve) => {
+            reply = resolve;
+            controller.abort();
+          }),
+      );
+      const s = new SessionStore(buildSession({ installDir: repo, ci: true }));
+      const config = { ...everyProject, rankWith: ['agentic' as const] };
+
+      const result = await runProgram(
+        'metrics',
+        input({ store: s, config, wizardFlags: DISCOVERY_ON }),
+        { credentials: login(), signal: controller.signal },
+      );
+      vi.mocked(analytics.wizardCapture).mockClear();
+      reply({
+        repoType: 'single',
+        projects: [
+          {
+            path: 'apps/api',
+            framework: 'Express',
+            targetId: 'javascript_node',
+            hasPostHog: false,
+            recommended: true,
+          },
+        ],
+      });
+      await new Promise((resolve) => setImmediate(resolve));
+
+      expect(result.outcome).toBe(RunOutcome.Aborted);
+      expect(buildProjectSelection(s.session, config).selectedProjectPath).toBe(
+        '.',
+      );
+      expect(analytics.wizardCapture).not.toHaveBeenCalledWith(
+        'projects selected',
+        expect.anything(),
+      );
     });
 
     it('reads the project again when login turns discovery on', async () => {
@@ -1923,10 +2014,12 @@ describe('runProgram', () => {
         input({ store: pairStore(), config: everyProject }),
         { credentials: login(), workflow: host },
       );
-      expect(host.steps.some((step) => step.kind === 'plan')).toBe(false);
+      expect(host.steps.some((step) => step.kind === 'project-selection')).toBe(
+        false,
+      );
     });
 
-    it('stops when the host declines the plan', async () => {
+    it('stops when the host declines the project selection', async () => {
       const result = await runProgram(
         'metrics',
         input({
@@ -1936,7 +2029,7 @@ describe('runProgram', () => {
         }),
         {
           credentials: login(),
-          workflow: workflow((step) => step.kind !== 'plan'),
+          workflow: workflow((step) => step.kind !== 'project-selection'),
         },
       );
       expect(result.outcome).toBe(RunOutcome.Aborted);
@@ -2104,7 +2197,7 @@ describe('runProgram', () => {
       expect(asked.rankProjects).toBe(false);
     });
 
-    it("asks the questions again for the pair's project when the plan moves the run", async () => {
+    it("asks the questions again for the pair's project when the pick moves the run", async () => {
       const repo = fs.realpathSync(
         fs.mkdtempSync(path.join(os.tmpdir(), 'decisions-pair-')),
       );
@@ -2120,7 +2213,7 @@ describe('runProgram', () => {
         }
         const host = workflow();
         host.confirmStep.mockImplementation((step: ProgramStep) => {
-          if (step.kind === 'plan') step.pick('apps/api');
+          if (step.kind === 'project-selection') step.selectProject('apps/api');
           return Promise.resolve(true);
         });
 

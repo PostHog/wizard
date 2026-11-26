@@ -56,19 +56,19 @@ beforeEach(() => {
 
 afterEach(() => fs.rmSync(repo, { recursive: true, force: true }));
 
-describe('the plan a test discovery previews', () => {
+describe('the project selection a test discovery previews', () => {
   it('asks for a program that picks its project, as the run would', async () => {
     const report = await testDiscovery(program({ appliesTo: () => true }), {
       installDir: repo,
     });
     expect(report.mode).toBe('one-project');
-    expect(report.plan.asks).toBe(true);
+    expect(report.projectSelection.asks).toBe(true);
   });
 
   it('asks nothing for a program that picks no project, and stays where the run started', async () => {
     const report = await testDiscovery(program(), { installDir: repo });
-    expect(report.plan.asks).toBe(false);
-    expect(report.plan.picked).toBe('.');
+    expect(report.projectSelection.asks).toBe(false);
+    expect(report.projectSelection.selectedProjectPath).toBe('.');
   });
 
   it('previews the project a caller names, and asks nothing', async () => {
@@ -78,8 +78,8 @@ describe('the plan a test discovery previews', () => {
       'apps/admin',
     );
     expect(report.runProject).toBe('apps/admin');
-    expect(report.plan.picked).toBe('apps/admin');
-    expect(report.plan.asks).toBe(false);
+    expect(report.projectSelection.selectedProjectPath).toBe('apps/admin');
+    expect(report.projectSelection.asks).toBe(false);
   });
 
   it('detects in the project a run moves up to, not the folder it started in', async () => {
@@ -101,13 +101,13 @@ describe('the plan a test discovery previews', () => {
   it('asks nothing in a CI run or with the flag off', async () => {
     const picks = program({ appliesTo: () => true });
     const ci = await testDiscovery(picks, { installDir: repo, ci: true });
-    expect(ci.plan.asks).toBe(false);
+    expect(ci.projectSelection.asks).toBe(false);
 
     vi.mocked(analytics.getAllFlagsForWizard).mockResolvedValue({});
     const off = await testDiscovery(picks, { installDir: repo });
     expect(off.mode).toBe('off');
-    expect(off.plan.asks).toBe(false);
-    expect(off.plan.picked).toBe('.');
+    expect(off.projectSelection.asks).toBe(false);
+    expect(off.projectSelection.selectedProjectPath).toBe('.');
   });
 });
 

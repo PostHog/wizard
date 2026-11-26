@@ -99,7 +99,7 @@ and only as far as its flag allows.
   filter flags is left out of the questions and of the choices. The same
   question of the same walk is asked once in a run, and the summary is filtered
   once.
-- **Per pair.** The questions are asked of the run project. When the plan moves
+- **Per pair.** The questions are asked of the run project. When the pick moves
   the run to another project, the run asks them again there, without ranking the
   repo a second time.
 - **Comparing.** At `compare`, and at `traits` with project discovery off, the
@@ -175,14 +175,15 @@ started in.
   the run project's by default. The warehouse lists, the email provider offer,
   the report and each project's `warehouseSources` all read that, so a sibling
   project's tools never reach the run.
-- [`plan.ts`](project-discovery/plan.ts) builds the plan for one program: every
-  project, the ones `appliesTo` offers, a reason for each of the others (already
-  has PostHog, unsupported framework, library, tooling, workspace root), and the
-  project that starts picked. A run that started inside a project keeps it, and
+- [`project-selection.ts`](project-discovery/project-selection.ts) builds the
+  project selection for one program: every project, the ones eligible under
+  `appliesTo`, an exclusion reason for each of the others (already has PostHog,
+  unsupported framework, library, tooling, workspace root), and the project that
+  starts selected. A run that started inside a project keeps it, and
   so does a run at a workspace root that is an app itself. A run at any other
-  workspace root takes the main app, else the only app offered, else stays where
-  it started. That root is listed with the reason `workspace-root` and is not
-  offered, so one app below it is no choice to make. There is a choice to make
+  workspace root takes the main app, else the only eligible app, else stays where
+  it started. That root is listed with the exclusion reason `workspace-root` and
+  is not eligible, so one app below it is no choice to make. There is a choice to make
   only in a monorepo: a single app is one project, whatever manifests sit below
   it. `reportProjectsDiscovered` and `reportProjectsSelected` send the
   `wizard: projects discovered` and `wizard: projects selected` events under
@@ -203,7 +204,7 @@ flag:
 | Value         | What runs                                                                                                       |
 | ------------- | --------------------------------------------------------------------------------------------------------------- |
 | `off`         | Discovery walks from the run directory, so `rootDir` is the run directory and the run project is `.`            |
-| `one-project` | The walk up to the workspace root, and the plan: a program with `appliesTo` works in one picked project per run |
+| `one-project` | The walk up to the workspace root, and the project selection: a program with `appliesTo` works in one picked project per run |
 | `run-lists`   | Everything in `one-project`                                                                                     |
 
 Any other value, or a failed flag read, is `off`.

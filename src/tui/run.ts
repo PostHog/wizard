@@ -238,7 +238,7 @@ export async function runTui(
       }),
       destinations,
       eventPlanPath: programConfig.eventPlanFile
-        ? // Read from the live session: the plan can move the run to another project.
+        ? // Read from the live session: the project pick can move the run to another project.
           () =>
             join(store.session.installDir, programConfig.eventPlanFile ?? '')
         : undefined,
