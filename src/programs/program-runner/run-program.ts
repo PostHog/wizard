@@ -587,7 +587,9 @@ async function invokeProgram(
       }
       const session = (): WizardSession => scoped ?? store.session;
       const sdkGap = planned.config.sdkFeature
-        ? sdkFeatureGaps(session(), [planned.config.sdkFeature])[0]
+        ? sdkFeatureGaps(session(), [planned.config.sdkFeature]).find(
+            (gap) => gap.blocking,
+          )
         : undefined;
       if (sdkGap) {
         return settle(RunOutcome.Failed, {

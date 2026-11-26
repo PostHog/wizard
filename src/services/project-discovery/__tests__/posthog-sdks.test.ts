@@ -81,26 +81,38 @@ describe('PostHog SDK versions', () => {
         '.package(url: "https://github.com/PostHog/posthog-ios.git", from: "3.1.0")',
     });
     expect([...(getTraits(session).posthogSdks ?? [])].sort()).toEqual([
-      'PostHog@3',
-      'com.posthog:posthog-android@3',
-      'github.com/posthog/posthog-go@1',
-      'github.com/posthog/posthog-ios@3',
-      'posthog-node@4',
-      'posthog-rs@0',
-      'posthog@7',
-      'posthog_flutter@4',
+      'cargo:posthog-rs@0',
+      'cocoapods:posthog@3',
+      'go:github.com/posthog/posthog-go@1',
+      'maven:com.posthog:posthog-android@3',
+      'npm:posthog-node@4',
+      'pub:posthog_flutter@4',
+      'pypi:posthog@7',
+      'swiftpm:github.com/posthog/posthog-ios@3',
     ]);
   });
 
-  it('reports each product the declared SDK is below the minimum for', async () => {
+  it('distinguishes blocking vs in-range SDK feature gaps and keys minimums by ecosystem', async () => {
     const gaps = sdkFeatureGaps(await nodeProject('^4.3.0'), [
       'errorTracking',
       'mcpAnalytics',
     ]);
-    expect(gaps.map((g) => [g.feature, g.version, g.minimum])).toEqual([
-      ['errorTracking', '4.3.0', '4.5.0'],
-      ['mcpAnalytics', '4.3.0', '5.0.0'],
+    expect(
+      gaps.map((g) => [g.feature, g.version, g.minimum, g.blocking]),
+    ).toEqual([
+      ['errorTracking', '4.3.0', '4.5.0', false],
+      ['mcpAnalytics', '4.3.0', '5.0.0', true],
     ]);
+
+    const rustSession = await discovered({
+      'Cargo.toml': '[dependencies]\nposthog = "0.5"\n',
+    });
+    expect(getTraits(rustSession).posthogSdks).toEqual(['cargo:posthog@0']);
+    expect(
+      sdkFeatureGaps(rustSession, ['mcpAnalytics', 'releaseLinking']).map(
+        (g) => [g.feature, g.minimum],
+      ),
+    ).toEqual([['mcpAnalytics', '0.29.0']]);
   });
 
   it('passes a product once the declared SDK reaches its minimum', async () => {

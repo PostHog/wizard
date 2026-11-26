@@ -362,8 +362,8 @@ export const config: ProgramConfig = {
       ? ['ai-observability', 'logs']
       : []),
     ...(mcpAnalyticsStepOn(flags, sess) ? [] : [MCP_ANALYTICS_TASK_TYPE]),
-    ...SDK_FEATURE_TASKS.filter(
-      ([, feature]) => sdkFeatureGaps(sess, [feature]).length > 0,
+    ...SDK_FEATURE_TASKS.filter(([, feature]) =>
+      sdkFeatureGaps(sess, [feature]).some((gap) => gap.blocking),
     ).map(([type]) => type),
   ],
   // The fact exists only beside the task, so no other task acts on it alone.

@@ -1,7 +1,7 @@
 /** The SDK registry: the SDKs `installedSdks` names, each with the package names that show it. */
 
 import type { SdkFeature } from '@programs/program-contract';
-import { declaredFloor } from '@utils/semver';
+import { declaredFloor, declaredRange } from '@utils/semver';
 import { POSTHOG_SDKS } from '../../detection/package-scanning';
 import type { DiscoveredManifest } from '../walk';
 
@@ -59,8 +59,13 @@ export function sdksIn(packages: readonly string[]): string[] {
     .map(([id]) => id);
 }
 
-/** A PostHog SDK package a manifest declares, with the lowest version it allows. */
-export type DeclaredSdk = { name: string; version: string };
+/** A PostHog SDK package a manifest declares, with its ecosystem, normalized range and lowest allowed version. */
+export type DeclaredSdk = {
+  ecosystem: string;
+  name: string;
+  version: string;
+  range: string;
+};
 
 /** The ecosystems whose PostHog SDK versions pick a skill. Hex is left out: its `posthog` is not PyPI's. */
 const VERSIONED_ECOSYSTEMS = new Set([
@@ -82,18 +87,20 @@ export function posthogSdkVersions(
     .filter((m) => VERSIONED_ECOSYSTEMS.has(m.ecosystem))
     .flatMap((m) =>
       Object.entries(m.versions).flatMap(([name, spec]) => {
-        const version = POSTHOG_SDK_PACKAGES.has(name.toLowerCase())
-          ? declaredFloor(spec)
-          : undefined;
-        return version ? [{ name, version }] : [];
+        if (!POSTHOG_SDK_PACKAGES.has(name.toLowerCase())) return [];
+        const range = declaredRange(spec);
+        const version = range ? declaredFloor(spec) : undefined;
+        return range && version
+          ? [{ ecosystem: m.ecosystem, name, version, range }]
+          : [];
       }),
     );
 }
 
 /**
  * The lowest version of each PostHog SDK package that each product works on,
- * by package name. A package a product names no minimum for works on every
- * version.
+ * keyed by `<ecosystem>:<lowercased package name>`. A package a product names
+ * no minimum for works on every version.
  */
 export const SDK_FEATURE_MINIMUMS: {
   readonly [F in SdkFeature]: {
@@ -104,25 +111,27 @@ export const SDK_FEATURE_MINIMUMS: {
   errorTracking: {
     label: 'Error tracking',
     minimums: {
-      'posthog-node': '4.5.0',
-      'posthog-rs': '0.12.0',
-      posthog_flutter: '5.7.0',
+      'npm:posthog-node': '4.5.0',
+      'cargo:posthog-rs': '0.12.0',
+      'cargo:posthog': '0.12.0',
+      'pub:posthog_flutter': '5.7.0',
     },
   },
   releaseLinking: {
     label: 'Release linking',
-    minimums: { posthog: '7.59.0' },
+    minimums: { 'pypi:posthog': '7.59.0' },
   },
   mcpAnalytics: {
     label: 'MCP analytics',
     minimums: {
-      posthog: '7.62.0',
-      'posthog-node': '5.0.0',
-      'posthog-rs': '0.29.0',
+      'pypi:posthog': '7.62.0',
+      'npm:posthog-node': '5.0.0',
+      'cargo:posthog-rs': '0.29.0',
+      'cargo:posthog': '0.29.0',
     },
   },
   aiObservability: {
     label: 'AI Observability',
-    minimums: { 'posthog-node': '5.0.0' },
+    minimums: { 'npm:posthog-node': '5.0.0' },
   },
 };

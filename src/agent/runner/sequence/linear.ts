@@ -97,23 +97,17 @@ async function executeLinear(
   if (matchKeys && hasNonFrameworkMatchKeys(matchKeys)) {
     const menu = await fetchSkillMenu(skillsBaseUrl);
     if (signal?.aborted) return aborted();
-    if (!menu) {
-      return failed(
-        installFailure(run.integrationLabel, { kind: 'menu-fetch-failed' }),
-      );
+    if (menu) {
+      const traitInstall = await installTraitSkills({
+        entries: Object.values(menu.categories).flat(),
+        matchKeys,
+        installDir: input.installDir,
+        triageProvider: boot.triageProvider,
+        signal,
+      });
+      if (traitInstall.aborted) return aborted();
+      sdkSkillPaths = traitInstall.paths;
     }
-    const traitInstall = await installTraitSkills({
-      entries: Object.values(menu.categories).flat(),
-      matchKeys,
-      installDir: input.installDir,
-      triageProvider: boot.triageProvider,
-      signal,
-    });
-    if (traitInstall.kind === 'aborted') return aborted();
-    if (traitInstall.kind === 'failed') {
-      return failed(installFailure(run.integrationLabel, traitInstall.failure));
-    }
-    sdkSkillPaths = traitInstall.paths;
   }
 
   // 6. Initialize agent

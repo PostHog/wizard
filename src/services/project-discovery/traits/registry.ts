@@ -200,7 +200,8 @@ export const TRAITS: { readonly [K in TraitName]: TraitDefinition<K> } = {
     detect: (session, projectPath) =>
       nonEmpty(
         declaredSdks(session, projectPath).map(
-          ({ name, version }) => `${name}@${version.split('.')[0]}`,
+          ({ ecosystem, name, version }) =>
+            `${ecosystem}:${name.toLowerCase()}@${version.split('.')[0]}`,
         ),
       ),
     fallback: STATIC,

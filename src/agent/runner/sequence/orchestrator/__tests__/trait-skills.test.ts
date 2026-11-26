@@ -6,6 +6,7 @@ import { zipSync } from 'fflate';
 import type { SkillEntry } from '@shared/skill-menu';
 
 let yaraScanResult: string | null = null;
+let yaraRejectOnlySdk = false;
 const seenProviders: unknown[] = [];
 
 vi.mock('@utils/analytics', () => ({
@@ -21,8 +22,11 @@ vi.mock('@utils/debug', () => ({
 }));
 vi.mock('@agent/yara-hooks', async (importActual) => ({
   ...(await importActual<typeof import('@agent/yara-hooks')>()),
-  scanInstalledSkill: (_dir: string, triageProvider?: unknown) => {
+  scanInstalledSkill: (dir: string, triageProvider?: unknown) => {
     seenProviders.push(triageProvider);
+    if (yaraRejectOnlySdk && !dir.includes('sdk-posthog-node-v5')) {
+      return Promise.resolve(null);
+    }
     return Promise.resolve(yaraScanResult);
   },
 }));
@@ -36,7 +40,6 @@ vi.mock('../../../switchboard', async () => {
 });
 
 import { analytics } from '@utils/analytics';
-import { ErrorCodes } from '@shared/errors';
 import { RunOutcome, type SequenceContext } from '../../../shared/types';
 import { installTraitSkills } from '../../../shared/trait-skills';
 import { runOrchestrator } from '../orchestrator-runner';
@@ -133,7 +136,7 @@ describe('installTraitSkills', () => {
     fs.rmSync(dir, { recursive: true, force: true });
   });
 
-  it('forwards triageProvider and returns download-failed on YARA rejection', async () => {
+  it('forwards triageProvider and fails open on YARA rejection', async () => {
     const entries = mockMenuAndZip();
     const provider = { name: 'mock-provider' } as never;
     yaraScanResult = 'poisoned: prompt-injection';
@@ -145,13 +148,7 @@ describe('installTraitSkills', () => {
       triageProvider: provider,
     });
 
-    expect(result).toEqual({
-      kind: 'failed',
-      failure: {
-        kind: 'download-failed',
-        message: 'poisoned: prompt-injection',
-      },
-    });
+    expect(result).toEqual({ paths: [], aborted: false });
     expect(seenProviders).toEqual([provider]);
     expect(analytics.wizardCapture).toHaveBeenCalledWith(
       'sdk trait skill resolved',
@@ -171,7 +168,7 @@ describe('installTraitSkills', () => {
       triageProvider: undefined,
       signal: ac.signal,
     });
-    expect(aborted).toEqual({ kind: 'aborted' });
+    expect(aborted).toEqual({ paths: [], aborted: true });
   });
 });
 
@@ -217,6 +214,7 @@ describe('runOrchestrator with trait SDK skills', () => {
   beforeEach(() => {
     dir = fs.mkdtempSync(path.join(os.tmpdir(), 'orch-trait-skills-'));
     yaraScanResult = null;
+    yaraRejectOnlySdk = false;
     seenProviders.length = 0;
     seenTaskPrompt = '';
     vi.mocked(analytics.wizardCapture).mockClear();
@@ -244,14 +242,14 @@ describe('runOrchestrator with trait SDK skills', () => {
     );
   });
 
-  it('fails the run with installFailure when a matched SDK trait skill fails to install', async () => {
+  it('continues the run without sdkSkillPaths when a matched SDK trait skill fails to install', async () => {
     mockMenuAndZip();
     yaraScanResult = 'poisoned: prompt-injection';
+    yaraRejectOnlySdk = true;
 
     const result = await runOrchestrator(makeContext(undefined));
 
-    expect(result.outcome).toBe(RunOutcome.Failed);
-    expect(result.failure?.code).toBe(ErrorCodes.SkillDownloadFailed);
-    expect(seenTaskPrompt).toBe('');
+    expect(result.outcome).toBe(RunOutcome.Success);
+    expect(seenTaskPrompt).not.toContain('sdk-posthog-node-v5');
   });
 });

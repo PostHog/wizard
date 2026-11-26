@@ -184,7 +184,7 @@ export const config: ProgramConfig = {
   sdkFeature: 'errorTracking',
   // Release linking waits for a PostHog SDK that has it.
   excludedTaskTypes: (_flags, session) =>
-    sdkFeatureGaps(session, ['releaseLinking']).length > 0
+    sdkFeatureGaps(session, ['releaseLinking']).some((gap) => gap.blocking)
       ? ['link-releases']
       : [],
   // The run is scoped to the project the user picks after login.

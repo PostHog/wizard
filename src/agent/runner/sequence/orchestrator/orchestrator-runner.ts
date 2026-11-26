@@ -10,7 +10,7 @@
  * context-mill. The runner stays product-ignorant: it is the queue, the
  * executor, and the loader.
  */
-import { failed, installFailure } from '../../shared/errors';
+import { failed } from '../../shared/errors';
 import { RunOutcome } from '../../shared/types';
 import { randomUUID } from 'crypto';
 import {
@@ -946,15 +946,7 @@ async function executeOrchestrator(
       triageProvider: boot.triageProvider,
       signal,
     });
-    if (traitInstall.kind === 'aborted') return cancelledRun();
-    if (traitInstall.kind === 'failed') {
-      return failed(
-        installFailure(
-          config.run?.integrationLabel ?? config.programId,
-          traitInstall.failure,
-        ),
-      );
-    }
+    if (traitInstall.aborted) return cancelledRun();
     sdkSkillPaths = traitInstall.paths;
   }
 

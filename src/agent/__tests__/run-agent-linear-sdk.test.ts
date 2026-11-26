@@ -17,7 +17,6 @@ import {
   runAgent as executeAgent,
 } from '@agent/agent-interface';
 import { flushScanReport, scanInstalledSkill } from '@agent/yara-hooks';
-import { ErrorCodes } from '@shared/errors';
 import { HostResolution } from '@shared/host-resolution';
 import {
   CallType,
@@ -423,10 +422,11 @@ describe('linear trait SDK skill installation', () => {
     expect(fetchSpy).toHaveBeenCalledTimes(2);
   });
 
-  it('fails the linear run with installFailure when a matched SDK trait skill fails to install', async () => {
+  it('continues the linear run without sdkSkillPaths when a matched SDK trait skill fails to install', async () => {
     const dir = makeTmpDir('linear-sdk-fail-');
     mockSdkFetch();
     vi.mocked(scanInstalledSkill).mockResolvedValueOnce('poisoned');
+    emitResult('Done.');
 
     const result = await runAgent(
       {
@@ -437,8 +437,7 @@ describe('linear trait SDK skill installation', () => {
       { ...input, installDir: dir },
     );
 
-    expect(result.outcome).toBe(RunOutcome.Failed);
-    expect(result.failure?.code).toBe(ErrorCodes.SkillDownloadFailed);
-    expect(execute).not.toHaveBeenCalled();
+    expect(result.outcome).toBe(RunOutcome.Success);
+    expect(execute).toHaveBeenCalledTimes(1);
   });
 });

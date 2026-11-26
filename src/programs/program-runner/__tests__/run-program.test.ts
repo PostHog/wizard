@@ -469,7 +469,7 @@ describe('runProgram', () => {
     );
     fs.writeFileSync(
       path.join(dir, 'package.json'),
-      JSON.stringify({ dependencies: { 'posthog-node': '^4.3.0' } }),
+      JSON.stringify({ dependencies: { 'posthog-node': '4.3.0' } }),
     );
     try {
       const result = await runProgram(
@@ -2153,7 +2153,7 @@ describe('runProgram', () => {
         { credentials: login() },
       );
       expect(agentConfig(0).matchKeys?.()).toMatchObject({
-        posthogSdks: ['posthog-node@5'],
+        posthogSdks: ['npm:posthog-node@5'],
       });
 
       const scopedStore = pairStore();
@@ -2161,14 +2161,14 @@ describe('runProgram', () => {
       scopedStore.setFrameworkContext(VERSIONED_SDK_SKILLS_ENABLED_KEY, true);
       scopeToProject(scopedStore, 'apps/api');
       expect(getTraits(scopedStore.session, 'apps/api').posthogSdks).toEqual([
-        'posthog-node@5',
+        'npm:posthog-node@5',
       ]);
     });
 
     it('checks SDK minimums against the scoped runStep target directory', async () => {
       fs.writeFileSync(
         path.join(repo, 'apps/api/package.json'),
-        JSON.stringify({ dependencies: { 'posthog-node': '^4.3.0' } }),
+        JSON.stringify({ dependencies: { 'posthog-node': '4.3.0' } }),
       );
       const s = pairStore();
       await runDiscovery({ id: 'metrics' }, s.readyContext());
