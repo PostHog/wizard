@@ -84,10 +84,13 @@ function summarizeRunSdks(session: WizardSession, discovery: Discovery) {
 }
 
 function applySdkTags(summary: ReturnType<typeof summarizePosthogSdks>): void {
-  analytics.setTag('sdk_mode', summary.sdk_mode);
+  analytics.setTag('has_existing_sdk', summary.has_existing_sdk);
   analytics.setTag('detected_sdk_count', summary.detected_sdk_count);
-  if (summary.detected_sdk_majors) {
-    analytics.setTag('detected_sdk_majors', summary.detected_sdk_majors);
+  if (summary.sdk_version_found) {
+    analytics.setTag('sdk_version_found', summary.sdk_version_found);
+  }
+  if (summary.sdk_version_pin) {
+    analytics.setTag('sdk_version_pin', summary.sdk_version_pin);
   }
 }
 

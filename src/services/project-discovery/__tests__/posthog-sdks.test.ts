@@ -137,10 +137,30 @@ describe('PostHog SDK versions', () => {
     expect(sdkFeatureGaps(session, ['errorTracking'])).toEqual([]);
   });
 
-  it('summarizes pinned, wide-range, and unversioned SDKs for telemetry', () => {
-    expect(summarizePosthogSdks([])).toMatchObject({
-      sdk_mode: 'greenfield',
+  it('summarizes existing SDK presence, minor versions, and pin styles for telemetry', () => {
+    expect(summarizePosthogSdks([])).toEqual({
+      has_existing_sdk: false,
       detected_sdk_count: 0,
+      unversioned_sdk_count: 0,
+      detected_sdks: [],
+    });
+    expect(
+      summarizePosthogSdks([
+        {
+          dir: '.',
+          path: 'package.json',
+          ecosystem: 'npm',
+          packages: ['posthog-node'],
+          versions: { 'posthog-node': '^4.3.2' },
+        },
+      ]),
+    ).toEqual({
+      has_existing_sdk: true,
+      sdk_version_found: 'npm:posthog-node@4.3',
+      sdk_version_pin: 'major_range',
+      detected_sdk_count: 1,
+      unversioned_sdk_count: 0,
+      detected_sdks: ['npm:posthog-node'],
     });
     expect(
       summarizePosthogSdks([
@@ -167,13 +187,16 @@ describe('PostHog SDK versions', () => {
         },
       ]),
     ).toEqual({
-      sdk_mode: 'versioned',
+      has_existing_sdk: true,
+      sdk_version_found: 'npm:posthog-node@4.3,pypi:posthog@6.0',
+      sdk_version_pin: 'mixed',
       detected_sdk_count: 3,
-      unknown_sdk_count: 1,
-      detected_sdk_majors: 'npm:posthog-node@4,pypi:posthog@6',
-      has_unversioned_sdk: true,
-      has_pinned_sdk: true,
-      has_wide_range_sdk: true,
+      unversioned_sdk_count: 1,
+      detected_sdks: [
+        'npm:posthog-node',
+        'pypi:posthog',
+        'rubygems:posthog-ruby',
+      ],
     });
   });
 });
