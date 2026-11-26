@@ -21,6 +21,7 @@ import { workspaceFingerprint } from './fingerprint';
 import { getDiscovery, type Discovery } from './discover';
 import { applyDiscoveryTags } from './tags';
 import { toolsUnder } from './tools';
+import { summarizePosthogSdks } from './traits/sdks';
 import type { DiscoveryReport } from '../session/task-stream/types';
 
 /** The store surface reporting needs; `SessionStore` provides it. */
@@ -60,16 +61,34 @@ export function reportDiscovery(store: DiscoveryReportStore): void {
   store.markWarehouseSourcesReportedIfNeeded();
 
   if (!mayReportDiscovery(session)) return;
+  const discovery = getDiscovery(session);
+  const sdkSummary = discovery ? summarizeRunSdks(session, discovery) : null;
+  if (sdkSummary) applySdkTags(sdkSummary);
+
   const { credentials } = session;
   if (!credentials) return;
 
   if (session.discoveryReport) return;
-  const discovery = getDiscovery(session);
   // A failed tool match found nothing because it could not look. Posting its
   // empty list would read as "every tool was removed".
   if (!discovery || discovery.tools.failed) return;
   if (session.apiUser) reportEmailProviders(discovery);
+  if (sdkSummary) analytics.wizardCapture('posthog sdks detected', sdkSummary);
   store.shareDiscovery(buildDiscoveryReport(discovery, credentials.projectId));
+}
+
+function summarizeRunSdks(session: WizardSession, discovery: Discovery) {
+  return summarizePosthogSdks(
+    discovery.files.manifests.filter((m) => m.dir === session.runProject),
+  );
+}
+
+function applySdkTags(summary: ReturnType<typeof summarizePosthogSdks>): void {
+  analytics.setTag('sdk_mode', summary.sdk_mode);
+  analytics.setTag('detected_sdk_count', summary.detected_sdk_count);
+  if (summary.detected_sdk_majors) {
+    analytics.setTag('detected_sdk_majors', summary.detected_sdk_majors);
+  }
 }
 
 function reportEmailProviders(discovery: Discovery): void {

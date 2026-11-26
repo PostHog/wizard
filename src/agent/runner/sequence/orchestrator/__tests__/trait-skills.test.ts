@@ -151,8 +151,13 @@ describe('installTraitSkills', () => {
     expect(result).toEqual({ paths: [], aborted: false });
     expect(seenProviders).toEqual([provider]);
     expect(analytics.wizardCapture).toHaveBeenCalledWith(
-      'sdk trait skill resolved',
-      { skill_id: 'sdk-posthog-node-v5', installed: false },
+      'sdk skills resolved',
+      {
+        resolved_sdk_skill_ids: [],
+        non_default_sdk_skill_ids: [],
+        failed_sdk_skill_ids: ['sdk-posthog-node-v5'],
+        unmatched_sdks: [],
+      },
     );
   });
 
@@ -237,8 +242,13 @@ describe('runOrchestrator with trait SDK skills', () => {
       path.join('.claude', 'skills', 'sdk-posthog-node-v5', 'SKILL.md'),
     );
     expect(analytics.wizardCapture).toHaveBeenCalledWith(
-      'sdk trait skill resolved',
-      { skill_id: 'sdk-posthog-node-v5', installed: true },
+      'sdk skills resolved',
+      {
+        resolved_sdk_skill_ids: ['sdk-posthog-node-v5'],
+        non_default_sdk_skill_ids: ['sdk-posthog-node-v5'],
+        failed_sdk_skill_ids: [],
+        unmatched_sdks: [],
+      },
     );
   });
 

@@ -28,6 +28,7 @@ import {
   sdkFeatureGaps,
   VERSIONED_SDK_SKILLS_ENABLED_KEY,
 } from '@services/project-discovery';
+import { summarizePosthogSdks } from '@services/project-discovery/traits/sdks';
 import { SessionStore } from '@services/session/session-store';
 import { buildSession } from '@services/session/wizard-session';
 
@@ -134,5 +135,45 @@ describe('PostHog SDK versions', () => {
     const session = await nodeProject('^4.3.0', false);
     expect(getTraits(session).posthogSdks).toBeUndefined();
     expect(sdkFeatureGaps(session, ['errorTracking'])).toEqual([]);
+  });
+
+  it('summarizes pinned, wide-range, and unversioned SDKs for telemetry', () => {
+    expect(summarizePosthogSdks([])).toMatchObject({
+      sdk_mode: 'greenfield',
+      detected_sdk_count: 0,
+    });
+    expect(
+      summarizePosthogSdks([
+        {
+          dir: '.',
+          path: 'package.json',
+          ecosystem: 'npm',
+          packages: ['posthog-node'],
+          versions: { 'posthog-node': '4.3.0' },
+        },
+        {
+          dir: '.',
+          path: 'requirements.txt',
+          ecosystem: 'pypi',
+          packages: ['posthog'],
+          versions: { posthog: '>=6' },
+        },
+        {
+          dir: '.',
+          path: 'Gemfile',
+          ecosystem: 'rubygems',
+          packages: ['posthog-ruby'],
+          versions: {},
+        },
+      ]),
+    ).toEqual({
+      sdk_mode: 'versioned',
+      detected_sdk_count: 3,
+      unknown_sdk_count: 1,
+      detected_sdk_majors: 'npm:posthog-node@4,pypi:posthog@6',
+      has_unversioned_sdk: true,
+      has_pinned_sdk: true,
+      has_wide_range_sdk: true,
+    });
   });
 });

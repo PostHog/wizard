@@ -1,5 +1,6 @@
 /** The SDK registry: the SDKs `installedSdks` names, each with the package names that show it. */
 
+import { intersects } from 'semver';
 import type { SdkFeature } from '@programs/program-contract';
 import { declaredFloor, declaredRange } from '@utils/semver';
 import { POSTHOG_SDKS } from '../../detection/package-scanning';
@@ -135,3 +136,70 @@ export const SDK_FEATURE_MINIMUMS: {
     minimums: { 'npm:posthog-node': '5.0.0' },
   },
 };
+
+export type SdkTelemetryMode = 'greenfield' | 'versioned' | 'unversioned_only';
+
+/** Closed-schema, path-free SDK version summary for discovery telemetry. */
+export type PosthogSdkSummary = {
+  sdk_mode: SdkTelemetryMode;
+  detected_sdk_count: number;
+  unknown_sdk_count: number;
+  /** Comma-joined sorted unique `<ecosystem>:<lowercased-pkg>@<major>` tokens, or empty string. */
+  detected_sdk_majors: string;
+  has_unversioned_sdk: boolean;
+  has_pinned_sdk: boolean;
+  has_wide_range_sdk: boolean;
+};
+
+const EXACT_PIN_SPEC =
+  /^\s*(?:==|=)?\s*v?\d+(?:\.\d+){1,2}(?:[-+.a-zA-Z0-9]+)?\s*$/;
+
+/** Summarize every PostHog SDK across `manifests` (all ecosystems, including unversioned entries) without paths or raw specs. */
+export function summarizePosthogSdks(
+  manifests: readonly DiscoveredManifest[],
+): PosthogSdkSummary {
+  let detectedCount = 0;
+  let unknownCount = 0;
+  let hasPinned = false;
+  let hasWideRange = false;
+  const majors = new Set<string>();
+
+  for (const manifest of manifests) {
+    for (const pkg of manifest.packages) {
+      const lower = pkg.toLowerCase();
+      if (!POSTHOG_SDK_PACKAGES.has(lower)) continue;
+      detectedCount += 1;
+      const spec = manifest.versions[pkg] ?? '';
+      const range = declaredRange(spec);
+      const floor = range ? declaredFloor(spec) : undefined;
+      if (!range || !floor) {
+        unknownCount += 1;
+        continue;
+      }
+      const majorNum = Number(floor.split('.')[0]);
+      majors.add(`${manifest.ecosystem}:${lower}@${majorNum}`);
+      if (EXACT_PIN_SPEC.test(spec)) {
+        hasPinned = true;
+      } else if (intersects(range, `>=${majorNum + 1}.0.0`)) {
+        hasWideRange = true;
+      }
+    }
+  }
+
+  const sdkMode: SdkTelemetryMode =
+    detectedCount === 0
+      ? 'greenfield'
+      : majors.size > 0
+      ? 'versioned'
+      : 'unversioned_only';
+
+  return {
+    sdk_mode: sdkMode,
+    detected_sdk_count: detectedCount,
+    unknown_sdk_count: unknownCount,
+    detected_sdk_majors: [...majors].sort().join(','),
+    has_unversioned_sdk: unknownCount > 0,
+    has_pinned_sdk: hasPinned,
+    has_wide_range_sdk: hasWideRange,
+  };
+}
