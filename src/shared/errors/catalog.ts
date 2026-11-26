@@ -125,6 +125,12 @@ export const ERROR_CATALOG: Record<ErrorCode, ErrorCatalogEntry> = {
     description:
       'The program requires an installed PostHog SDK and none was found.',
   },
+  [ErrorCodes.DetectSdkTooOld]: {
+    group: 'detect',
+    retry: 'no',
+    description:
+      "The project's PostHog SDK is below the program's minimum version.",
+  },
   [ErrorCodes.DetectNoProjectFiles]: {
     group: 'detect',
     retry: 'no',

@@ -24,7 +24,7 @@ dependencies = [
 
 [tool.other]
 unrelated = ["not-a-dependency"]`;
-    expect(parsePyprojectToml(content)).toEqual([
+    expect(Object.keys(parsePyprojectToml(content))).toEqual([
       'fastapi',
       'posthog',
       'openai',
@@ -33,7 +33,9 @@ unrelated = ["not-a-dependency"]`;
 
   it('pyproject.toml: a dependencies array that never closes is not read', () => {
     expect(
-      parsePyprojectToml('[project]\ndependencies = ["posthog", "openai"'),
+      Object.keys(
+        parsePyprojectToml('[project]\ndependencies = ["posthog", "openai"'),
+      ),
     ).toEqual([]);
   });
 
@@ -58,7 +60,7 @@ name = "not-a-dependency"
 [workspace.dependencies]
 serde = "1"
 `;
-    expect(parseCargoToml(content)).toEqual([
+    expect(Object.keys(parseCargoToml(content))).toEqual([
       'sentry',
       'tokio',
       'async-stripe',
@@ -80,7 +82,7 @@ stripe.version = "0.34"
 package = "reqwest"
 version = "0.12"
 `;
-    expect(parseCargoToml(content)).toEqual([
+    expect(Object.keys(parseCargoToml(content))).toEqual([
       'sentry',
       'tokio',
       'async-stripe',
@@ -93,7 +95,7 @@ version = "0.12"
   pod 'Sentry', '~> 8.0'
   pod "Firebase/Analytics"
 end`;
-    expect(parsePodfile(content)).toEqual(['Sentry', 'Firebase']);
+    expect(Object.keys(parsePodfile(content))).toEqual(['Sentry', 'Firebase']);
   });
 
   it('composer.json: require and require-dev, without php or extensions', () => {
@@ -101,7 +103,7 @@ end`;
       require: { php: '^8.2', 'ext-json': '*', 'Sentry/Sentry-Laravel': '^4' },
       'require-dev': { 'mixpanel/mixpanel-php': '^2' },
     });
-    expect(parseComposerJson(content)).toEqual([
+    expect(Object.keys(parseComposerJson(content))).toEqual([
       'sentry/sentry-laravel',
       'mixpanel/mixpanel-php',
     ]);
@@ -120,7 +122,7 @@ require ( // direct
 \tgithub.com/Masterminds/semver/v3 v3.2.1 // indirect
 )
 `;
-    expect(parseGoMod(content)).toEqual([
+    expect(Object.keys(parseGoMod(content))).toEqual([
       'github.com/getsentry/sentry-go',
       'github.com/stripe/stripe-go',
       'gopkg.in/DataDog/dd-trace-go.v1',
@@ -135,7 +137,11 @@ require ( // direct
     { :hackney, "~> 1.8", only: :prod }
   ]
 end`;
-    expect(parseMixExs(content)).toEqual(['phoenix', 'sentry', 'hackney']);
+    expect(Object.keys(parseMixExs(content))).toEqual([
+      'phoenix',
+      'sentry',
+      'hackney',
+    ]);
   });
 
   it('build.gradle(.kts): string coordinates and map notation', () => {
@@ -146,7 +152,7 @@ end`;
     implementation(libs.posthog)
 }
 repositories { maven { url "https://jitpack.io" } }`;
-    expect(parseGradleBuild(content)).toEqual([
+    expect(Object.keys(parseGradleBuild(content))).toEqual([
       'io.sentry:sentry-android',
       'com.mixpanel.android:mixpanel-android',
       'com.amplitude:analytics-android',
@@ -162,7 +168,7 @@ sentry = { module = "io.sentry:sentry-android", version.ref = "sentry" }
 amplitude = { group = "com.amplitude", name = "analytics-android", version = "1.16.0" }
 mixpanel = "com.mixpanel.android:mixpanel-android:7.5.2"
 `;
-    expect(parseGradleVersionCatalog(content)).toEqual([
+    expect(Object.keys(parseGradleVersionCatalog(content))).toEqual([
       'io.sentry:sentry-android',
       'com.amplitude:analytics-android',
       'com.mixpanel.android:mixpanel-android',
@@ -177,7 +183,7 @@ mixpanel = "com.mixpanel.android:mixpanel-android:7.5.2"
     <version>7.14.0</version>
   </dependency>
 </dependencies></project>`;
-    expect(parsePomXml(content)).toEqual([
+    expect(Object.keys(parsePomXml(content))).toEqual([
       'io.sentry:sentry-spring-boot-starter',
     ]);
   });
@@ -190,7 +196,7 @@ mixpanel = "com.mixpanel.android:mixpanel-android:7.5.2"
     <artifactId>sentry</artifactId>
   </dependency>
 </dependencies>`;
-    expect(parsePomXml(content)).toEqual(['io.sentry:sentry']);
+    expect(Object.keys(parsePomXml(content))).toEqual(['io.sentry:sentry']);
   });
 
   it('pubspec.yaml: top-level dependencies and dev_dependencies only', () => {
@@ -204,7 +210,7 @@ dev_dependencies:
 flutter:
   uses-material-design: true
 `;
-    expect(parsePubspecYaml(content)).toEqual([
+    expect(Object.keys(parsePubspecYaml(content))).toEqual([
       'flutter',
       'sentry_flutter',
       'mixpanel_flutter',
@@ -216,7 +222,7 @@ flutter:
     .package(url: "https://github.com/getsentry/sentry-cocoa.git", from: "8.0.0"),
     .package(url: "git@github.com:Amplitude/Amplitude-Swift.git", from: "1.0.0"),
 ]`;
-    expect(parsePackageSwift(content)).toEqual([
+    expect(Object.keys(parsePackageSwift(content))).toEqual([
       'github.com/getsentry/sentry-cocoa',
       'github.com/amplitude/amplitude-swift',
     ]);

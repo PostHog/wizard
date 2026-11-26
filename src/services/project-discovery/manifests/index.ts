@@ -1,9 +1,11 @@
 /**
- * Dependency-name parsers for the manifests of every ecosystem the wizard
- * installs into, one ecosystem per file. Each returns package names in the
- * form the PostHog tool catalog lists them for that ecosystem. Regex-based on
- * purpose: a manifest is read for names only, so a full parser per language
- * buys nothing, and a malformed file yields fewer names instead of an error.
+ * Dependency parsers for the manifests of every ecosystem the wizard installs
+ * into, one ecosystem per file. Each returns the version text the manifest
+ * declares per package, empty when it names none, by package names in the form
+ * the PostHog tool catalog lists them for that ecosystem. Regex-based on
+ * purpose: a manifest is read for names and versions only, so a full parser
+ * per language buys nothing, and a malformed file yields fewer names instead
+ * of an error.
  */
 
 import { parseCargoToml } from './cargo';
@@ -26,7 +28,7 @@ import { parsePackageSwift } from './swiftpm';
 export type ManifestParser = {
   /** Package ecosystem: `npm`, `pypi`, `rubygems`, `cargo`, ... */
   ecosystem: string;
-  parse: (content: string) => string[] | null;
+  parse: (content: string) => Record<string, string> | null;
 };
 
 /** Every manifest the wizard reads, by file name. A map, so a file named `constructor` finds no parser. */

@@ -7,6 +7,7 @@ import {
   Integration,
   Sequence,
   WIZARD_PROJECT_DISCOVERY_FLAG_KEY,
+  WIZARD_VERSIONED_SDK_SKILLS_FLAG_KEY,
 } from '@shared/constants';
 import { HostResolution } from '@shared/host-resolution';
 import type { ApiUser } from '@shared/api';
@@ -54,8 +55,11 @@ import type {
 import type { WizardSession } from '@services/session';
 import {
   buildProjectSelection,
+  getTraits,
   runDiscovery,
+  VERSIONED_SDK_SKILLS_ENABLED_KEY,
 } from '@services/project-discovery';
+import { scopeToProject } from '../detect-program';
 import { detectIntegrationProjects } from '@services/detection';
 import { AUDIT_CHECKS_KEY } from '@programs/audit';
 import { FRAMEWORK_REGISTRY } from '@services/frameworks';
@@ -88,6 +92,7 @@ vi.mock('@utils/analytics', async (importOriginal) => ({
     setGroups: vi.fn(),
     groupIdentify: vi.fn(),
     getAllFlagsForWizard: vi.fn().mockResolvedValue({}),
+    getCachedWizardFlags: vi.fn(() => null),
   },
 }));
 vi.mock(import('@shared/oauth-tokens'), () => ({
@@ -456,6 +461,34 @@ describe('runProgram', () => {
       expect(order).toEqual(['login', 'flags']);
       expect(runAgent).toHaveBeenCalledOnce();
     });
+  });
+
+  it('fails before any agent when the PostHog SDK is too old for the program', async () => {
+    const dir = fs.realpathSync(
+      fs.mkdtempSync(path.join(os.tmpdir(), 'sdk-too-old-')),
+    );
+    fs.writeFileSync(
+      path.join(dir, 'package.json'),
+      JSON.stringify({ dependencies: { 'posthog-node': '4.3.0' } }),
+    );
+    try {
+      const result = await runProgram(
+        'metrics',
+        input({
+          store: store({ installDir: dir }),
+          config: { run, sdkFeature: 'errorTracking' },
+          wizardFlags: { [WIZARD_VERSIONED_SDK_SKILLS_FLAG_KEY]: 'true' },
+        }),
+        { credentials: login() },
+      );
+      expect(result).toMatchObject({
+        outcome: RunOutcome.Failed,
+        failure: { code: ErrorCodes.DetectSdkTooOld },
+      });
+      expect(runAgent).not.toHaveBeenCalled();
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it('fails a program with no run configuration before anything starts', async () => {
@@ -2083,6 +2116,83 @@ describe('runProgram', () => {
         posthogInstalled: ['yes'],
       });
       expect(s.session.runProject).toBe('.');
+    });
+
+    it('propagates wizard-versioned-sdk-skills into traits, matchKeys, and scopeToProject only when true', async () => {
+      fs.writeFileSync(
+        path.join(repo, 'apps/api/package.json'),
+        JSON.stringify({ dependencies: { 'posthog-node': '^5.4.0' } }),
+      );
+      vi.mocked(analytics.getCachedWizardFlags).mockReturnValue({
+        [WIZARD_VERSIONED_SDK_SKILLS_FLAG_KEY]: 'true',
+      });
+
+      const offStore = new SessionStore(
+        buildSession({ installDir: path.join(repo, 'apps/api') }),
+      );
+      await runProgram(
+        'metrics',
+        input({
+          store: offStore,
+          wizardFlags: { [WIZARD_VERSIONED_SDK_SKILLS_FLAG_KEY]: 'false' },
+        }),
+        { credentials: login() },
+      );
+      expect(agentConfig(0).matchKeys?.()).not.toHaveProperty('posthogSdks');
+
+      vi.mocked(runAgent).mockClear();
+      const onStore = new SessionStore(
+        buildSession({ installDir: path.join(repo, 'apps/api') }),
+      );
+      await runProgram(
+        'metrics',
+        input({
+          store: onStore,
+          wizardFlags: { [WIZARD_VERSIONED_SDK_SKILLS_FLAG_KEY]: 'true' },
+        }),
+        { credentials: login() },
+      );
+      expect(agentConfig(0).matchKeys?.()).toMatchObject({
+        posthogSdks: ['npm:posthog-node@5'],
+      });
+
+      const scopedStore = pairStore();
+      await runDiscovery({ id: 'metrics' }, scopedStore.readyContext());
+      scopedStore.setFrameworkContext(VERSIONED_SDK_SKILLS_ENABLED_KEY, true);
+      scopeToProject(scopedStore, 'apps/api');
+      expect(getTraits(scopedStore.session, 'apps/api').posthogSdks).toEqual([
+        'npm:posthog-node@5',
+      ]);
+    });
+
+    it('checks SDK minimums against the scoped runStep target directory', async () => {
+      fs.writeFileSync(
+        path.join(repo, 'apps/api/package.json'),
+        JSON.stringify({ dependencies: { 'posthog-node': '4.3.0' } }),
+      );
+      const s = pairStore();
+      await runDiscovery({ id: 'metrics' }, s.readyContext());
+      s.setDetectionComplete();
+      const result = await runProgram(
+        'metrics',
+        input({
+          store: s,
+          config: {
+            run,
+            sdkFeature: 'errorTracking',
+            runSteps: {
+              run: { targetDir: () => path.join(repo, 'apps/api') },
+            },
+          },
+          wizardFlags: { [WIZARD_VERSIONED_SDK_SKILLS_FLAG_KEY]: 'true' },
+        }),
+        { credentials: login(), workflow: workflow() },
+      );
+      expect(result).toMatchObject({
+        outcome: RunOutcome.Failed,
+        failure: { code: ErrorCodes.DetectSdkTooOld },
+      });
+      expect(runAgent).not.toHaveBeenCalled();
     });
 
     it('stops on a project whose real directory is outside the workspace', async () => {

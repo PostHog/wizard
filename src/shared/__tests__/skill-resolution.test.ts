@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { SkillEntry } from '@shared/skill-menu';
-import { resolveSkill } from '@shared/skill-resolution';
+import { prepareSkillMenu, type SkillEntry } from '@shared/skill-menu';
+import { resolveSkill, resolveTraitSkills } from '@shared/skill-resolution';
 
 const entry = (id: string, rest: Partial<SkillEntry> = {}): SkillEntry => ({
   id,
@@ -110,5 +110,31 @@ describe('resolveSkill', () => {
     expect(resolveSkill(twins, 'step', { framework: ['rails'] })?.id).toBe(
       'first',
     );
+  });
+});
+
+describe('resolveTraitSkills', () => {
+  const sdkMenu = Object.values(
+    prepareSkillMenu({
+      categories: {
+        'sdk/posthog-node': [
+          entry('sdk-posthog-node-v5', {
+            tags: ['posthogSdks:posthog-node@4', 'posthogSdks:posthog-node@5'],
+          }),
+          entry('sdk-posthog-node-v6', {
+            tags: ['posthogSdks:posthog-node@6', 'default'],
+          }),
+        ],
+      },
+    }).categories,
+  ).flat();
+  const resolved = (posthogSdks: string[]) =>
+    resolveTraitSkills(sdkMenu, { posthogSdks }).map((e) => e.id);
+
+  it('loads the skill for the installed major, and none for a major or SDK it has no skill for', () => {
+    expect(resolved(['posthog-node@5'])).toEqual(['sdk-posthog-node-v5']);
+    expect(resolved(['posthog-node@6'])).toEqual(['sdk-posthog-node-v6']);
+    expect(resolved(['posthog-node@3'])).toEqual([]);
+    expect(resolved(['posthog-js@1'])).toEqual([]);
   });
 });

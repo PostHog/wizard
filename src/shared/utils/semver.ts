@@ -51,6 +51,40 @@ export function versionSatisfiesRange({
 }
 
 /**
+ * A manifest's version text normalized to a semver range, in npm, PEP 440,
+ * Cargo, Go, Gradle, CocoaPods or SwiftPM notation. Undefined when it is no
+ * version, such as a tag or a URL.
+ */
+export function declaredRange(spec: string): string | undefined {
+  if (isNonSemverVersion(spec)) return undefined;
+  const range = validRange(
+    spec
+      .replace(/!=[^,\s]*/g, '')
+      .replace(/~=/g, '~')
+      .replace(/==/g, '=')
+      .replace(/,/g, ' ')
+      .replace(/\.\+/g, '.x')
+      .replace(/(\d+\.\d+\.\d+)\.?post\d+/gi, '$1')
+      .replace(
+        /(\d+\.\d+\.\d+)\.?(alpha|beta|rc|dev|a|b)\.?(\d+)/gi,
+        '$1-$2.$3',
+      ),
+  );
+  return range ?? undefined;
+}
+
+/**
+ * The lowest version a manifest's version text allows, in npm, PEP 440, Cargo,
+ * Go, Gradle, CocoaPods or SwiftPM notation. Undefined when it sets no lower
+ * bound or is no version, such as `*`, a tag or a URL.
+ */
+export function declaredFloor(spec: string): string | undefined {
+  const range = declaredRange(spec);
+  const floor = range === undefined ? null : minVersion(range);
+  return floor && floor.version !== '0.0.0' ? floor.version : undefined;
+}
+
+/**
  * Creates a version bucket function for analytics.
  * Converts versions like "1.2.3" to "1.x" for grouping in analytics.
  *

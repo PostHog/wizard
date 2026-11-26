@@ -14,7 +14,12 @@ import { FRAMEWORK_REGISTRY } from '../../frameworks/registry';
 import { getDetectedWarehouseSources } from '../../warehouse-sources/detect';
 import { detectedProjectOf, getDiscovery } from '../discover';
 import type { RepoFiles } from '../walk';
-import { POSTHOG_SDK, sdksIn } from './sdks';
+import {
+  POSTHOG_SDK,
+  posthogSdkVersions,
+  sdksIn,
+  type DeclaredSdk,
+} from './sdks';
 
 export type TraitDefinition<K extends TraitName> = {
   /**
@@ -36,6 +41,9 @@ export type TraitDefinition<K extends TraitName> = {
 };
 
 const STATIC: readonly TraitSource[] = ['static'];
+
+/** FrameworkContext key: whether the run reads PostHog SDK versions, set from `wizard-versioned-sdk-skills`. */
+export const VERSIONED_SDK_SKILLS_ENABLED_KEY = 'versionedSdkSkillsEnabled';
 
 const nonEmpty = <T>(list: readonly T[]): readonly T[] | undefined =>
   list.length > 0 ? list : undefined;
@@ -67,6 +75,16 @@ function manifestsOf(session: ProgramSession, projectPath: string): Manifests {
 
 const packagesOf = (session: ProgramSession, projectPath: string): string[] =>
   manifestsOf(session, projectPath).flatMap((m) => m.packages);
+
+/** The PostHog SDKs one project declares, while versioned SDK skills are on. */
+export function declaredSdks(
+  session: ProgramSession,
+  projectPath: string = session.runProject,
+): DeclaredSdk[] {
+  return session.frameworkContext[VERSIONED_SDK_SKILLS_ENABLED_KEY] === true
+    ? posthogSdkVersions(manifestsOf(session, projectPath))
+    : [];
+}
 
 function frameworkOf(session: ProgramSession, projectPath: string) {
   if (isRunProject(session, projectPath)) {
@@ -177,6 +195,17 @@ export const TRAITS: { readonly [K in TraitName]: TraitDefinition<K> } = {
     detect: (session, projectPath) =>
       nonEmpty(sdksIn(packagesOf(session, projectPath))),
     fallback: STATIC,
+  },
+  posthogSdks: {
+    detect: (session, projectPath) =>
+      nonEmpty(
+        declaredSdks(session, projectPath).map(
+          ({ ecosystem, name, version }) =>
+            `${ecosystem}:${name.toLowerCase()}@${version.split('.')[0]}`,
+        ),
+      ),
+    fallback: STATIC,
+    matchKey: true,
   },
   projectRole: {
     detect: (session, projectPath) => {
