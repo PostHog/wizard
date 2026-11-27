@@ -1,5 +1,20 @@
 # Changelog
 
+## [3.1.0](https://github.com/PostHog/wizard/compare/v3.0.0...v3.1.0) (2026-11-27)
+
+
+### Features
+
+* **skills:** load the SDK skill for the installed PostHog major, behind a flag ([#1580](https://github.com/PostHog/wizard/issues/1580)) ([974ba69](https://github.com/PostHog/wizard/commit/974ba695b3b888ee866c7760cb84392973a04c89))
+* **telemetry:** track SDK version traits and upgrade posthog-node to v6 ([#1616](https://github.com/PostHog/wizard/issues/1616)) ([d78c285](https://github.com/PostHog/wizard/commit/d78c28590f4b28cbff013069cc060a764a2cd647))
+
+
+### Bug Fixes
+
+* **skills:** refuse skill installs that pass through a link ([#1579](https://github.com/PostHog/wizard/issues/1579)) ([b4c7c61](https://github.com/PostHog/wizard/commit/b4c7c6173f49796bbe0c538566c061cc90940a37))
+* **tui:** give the no-framework screen a way out and a manual setup link ([#1611](https://github.com/PostHog/wizard/issues/1611)) ([1f07684](https://github.com/PostHog/wizard/commit/1f07684bb1504621316458bf887efb53503540fe))
+* **tui:** two-step failure screen for runs and logins, opt-in log report ([#1612](https://github.com/PostHog/wizard/issues/1612)) ([ae3685b](https://github.com/PostHog/wizard/commit/ae3685bc72782495854d184f188d63ac36adb674))
+
 ## [3.0.0](https://github.com/PostHog/wizard/compare/v2.100.0...v3.0.0) (2026-11-26)
 
 
