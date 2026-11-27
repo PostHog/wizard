@@ -676,7 +676,7 @@ const FIXTURES: Record<string, Fixture> = {
       s.setOutroData({
         kind: OutroKind.Error,
         message: 'The agent run failed',
-        errorCode: ErrorCodes.GatewayMintRefused,
+        errorCode: ErrorCodes.AgentRateLimit,
       });
     },
   },

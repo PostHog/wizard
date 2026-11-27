@@ -106,7 +106,7 @@ function needsAttentionBlock(store: WizardStore): string | null {
 
 export function getExitLine(store: WizardStore): string {
   // A failed run prints its own unavailable notice; the report's warnings don't apply.
-  const attention = isRunFailure(store.session)
+  const attention = isRunFailure(store.session, store.router.activeProgram)
     ? null
     : needsAttentionBlock(store);
   const body = exitSummary(store);
@@ -119,9 +119,12 @@ function exitSummary(store: WizardStore): string {
   const costLine = tokenCostLine(store);
   const loginBlock = mcpLoginBlock(store);
 
-  if (isRunFailure(store.session)) {
+  if (isRunFailure(store.session, store.router.activeProgram)) {
     const spellbook = store.spellbook;
-    const { headline, cause, asksAboutLog } = failureCopy(store.session);
+    const { headline, cause, asksAboutLog } = failureCopy(
+      store.session,
+      store.router.activeProgram,
+    );
     return [
       `${headline}. ${cause}`,
       spellbook &&

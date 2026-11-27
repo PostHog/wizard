@@ -634,7 +634,7 @@ export class WizardStore implements TuiView {
   sendFailureReport(): void {
     analytics.wizardCapture(
       'failure reported',
-      failureReportProperties(this.session),
+      failureReportProperties(this.session, this.router.activeProgram),
     );
   }
 

@@ -60,13 +60,13 @@ export class WizardRouter {
     const { session } = view;
     // A failed agent run interrupts every program until the user leaves the
     // handoff screen: exit, or continue through the post-run steps.
-    const runFailed = isRunFailure(session);
-    if (runFailed && view.mintHandoff === 'exit') return ScreenId.Exit;
-    if (runFailed && !view.mintHandoff) return ScreenId.MintFailure;
-
     if (this.overlays.length > 0) {
       return this.overlays[this.overlays.length - 1];
     }
+
+    const runFailed = isRunFailure(session, this.programId);
+    if (runFailed && view.mintHandoff === 'exit') return ScreenId.Exit;
+    if (runFailed && !view.mintHandoff) return ScreenId.MintFailure;
 
     // Early aborts must be dismissible even when intro, setup, or auth is incomplete.
     if (

@@ -8,6 +8,7 @@ import {
 import { KeyboardHintsProvider } from '../hooks/useKeyboardHints';
 import { OutroKind } from '@shared/outro';
 import { ErrorCodes, type ErrorCode } from '@shared/errors';
+import { Program, type ProgramId } from '@programs';
 import { HostResolution } from '@shared/host-resolution';
 import { ScreenId } from '../router';
 import fs from 'fs';
@@ -34,8 +35,12 @@ const saved = {
 };
 const delay = () => new Promise((resolve) => setTimeout(resolve, 30));
 
-function setup(errorCode?: ErrorCode, isLoggedIn = true) {
-  const store = new WizardStore();
+function setup(
+  errorCode?: ErrorCode,
+  isLoggedIn = true,
+  program: ProgramId = Program.PostHogIntegration,
+) {
+  const store = new WizardStore(program);
   if (isLoggedIn)
     store.setCredentials({
       accessToken: 'tok',
@@ -128,9 +133,31 @@ it('exits without sending the log, saving or launching', async () => {
   expect(services.openAgent).not.toHaveBeenCalled();
 });
 
+it('names the program it reruns when the run was not the integration', async () => {
+  const { app, choose } = setup(ErrorCodes.AgentApiError, true, Program.Audit);
+  await delay();
+  expect(app.lastFrame()).toContain("The wizard didn't finish");
+  await choose(1);
+  const screenText = app.lastFrame()?.replace(/\s+/g, ' ');
+  expect(screenText).toContain('npx @posthog/wizard@latest audit');
+});
+
+it('asks for the same command when the program has none of its own', async () => {
+  const { app, choose } = setup(
+    ErrorCodes.AgentApiError,
+    true,
+    Program.AgentSkill,
+  );
+  await delay();
+  await choose(1);
+  const screenText = app.lastFrame()?.replace(/\s+/g, ' ');
+  expect(screenText).toContain('Run the same wizard command again.');
+  expect(screenText).not.toContain('npx @posthog/wizard@latest');
+});
+
 it.each([
   [ErrorCodes.AgentOrchestratorTasksFailed, "PostHog isn't set up yet"],
-  [ErrorCodes.GatewayMintRefused, 'The wizard is busy right now'],
+  [ErrorCodes.AgentRateLimit, 'The wizard is busy right now'],
 ])(
   'asks about the log under a %s headline of %s, no error text',
   async (errorCode, headline) => {
@@ -165,7 +192,9 @@ it("reports only this run's log lines when another run shares the log file", () 
   fs.appendFileSync(logPath, 'another run read its secret source\n');
   logToFile('this run failed');
   const { store } = setup();
-  const logTail = String(failureReportProperties(store.session).log_tail);
+  const logTail = String(
+    failureReportProperties(store.session, store.router.activeProgram).log_tail,
+  );
   expect(logTail).toContain('this run failed');
   expect(logTail).not.toContain('another run');
 });

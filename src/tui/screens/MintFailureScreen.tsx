@@ -10,8 +10,8 @@ import {
   LOG_QUESTION,
   LOG_SENT_NOTE,
   REPORTED_NOTE,
-  RERUN_COMMAND,
   failureCopy,
+  rerunCommand,
 } from '@tui/mint-failure';
 import type { WizardSpellbook } from '@tui/services/wizard-spellbook';
 import type { CodingAgent } from '../services/coding-agent-launcher';
@@ -50,7 +50,8 @@ export function MintFailureScreen({
   const [logChoice, setLogChoice] = useState<LogChoice>('unanswered');
   const [retry, setRetry] = useState<'save' | CodingAgent>('save');
   const { spellbook } = store;
-  const copy = failureCopy(store.session);
+  const copy = failureCopy(store.session, store.router.activeProgram);
+  const command = rerunCommand(store.router.activeProgram);
 
   const select = async (action: Action) => {
     if (busy.current) return;
@@ -178,7 +179,7 @@ export function MintFailureScreen({
             ) : (
               <Box flexDirection="column" marginTop={1}>
                 <Text wrap="wrap">• {copy.rerun}</Text>
-                <Text bold>{`    ${RERUN_COMMAND}`}</Text>
+                {command && <Text bold>{`    ${command}`}</Text>}
                 {copy.canHandOffToAgent && (
                   <Text wrap="wrap">• {AGENT_HANDOFF_STEP}</Text>
                 )}

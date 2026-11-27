@@ -282,7 +282,7 @@ export async function runTui(
     }
 
     if (signalled) return;
-    const runFailed = isRunFailure(store.session);
+    const runFailed = isRunFailure(store.session, store.router.activeProgram);
     await activeStream.finishRun(runFailed ? 'failed' : 'completed');
     // After a failed run the host owns the end: the user leaves the handoff, or
     // continues through the post-run steps to the exit screen.
