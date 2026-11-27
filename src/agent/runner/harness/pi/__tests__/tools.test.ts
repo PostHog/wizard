@@ -224,6 +224,7 @@ describe('pi wizard_ask — sensitive answers are vaulted', () => {
     expect(desc).toBe(WIZARD_ASK_SENSITIVE_DESCRIPTION);
     expect(desc).toMatch(/data-warehouse tools/);
     expect(desc).toMatch(/reject it/);
+    expect(desc).toMatch(/passed in that tool's arguments/);
   });
 });
 
